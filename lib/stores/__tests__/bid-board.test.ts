@@ -5,7 +5,7 @@ import type { BidNote } from '@/lib/types/bid-note';
 
 const baseBid: Bid = {
   id: 'bid-1',
-  rfqId: 'rfq-1',
+  rfpId: 'rfp-1',
   pgWsId: 'pg-1',
   invitationId: 'inv-1',
   settleCycle: 'D+1',

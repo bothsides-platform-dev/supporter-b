@@ -18,7 +18,7 @@ export const gradeSourceEnum = pgEnum('grade_source', [
 export const taxTypeEnum = pgEnum('tax_type', ['general', 'simple', 'exempt']);
 export const bizStatusEnum = pgEnum('biz_status', ['active', 'suspended', 'closed']);
 
-export const rfqStatusEnum = pgEnum('rfq_status', [
+export const rfpStatusEnum = pgEnum('rfp_status', [
   'draft',
   'sent',
   'closed',
@@ -61,10 +61,10 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'auth.verify',
   'auth.reset',
   'auth.email-change',
-  'rfq.invited',
-  'rfq.sent',
+  'rfp.invited',
+  'rfp.sent',
   'bid.submitted',
-  'rfq.awarded',
+  'rfp.awarded',
   'workspace.invited',
 ]);
 
@@ -81,6 +81,6 @@ export const verificationPurposeEnum = pgEnum('verification_purpose', [
 ]);
 
 export const attachmentOwnerKindEnum = pgEnum('attachment_owner_kind', [
-  'rfq_rfp',
+  'rfp',
   'bid_proposal',
 ]);

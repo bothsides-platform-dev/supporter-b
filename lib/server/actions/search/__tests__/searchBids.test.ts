@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { bids, rfqInvitations, rfqs } from '@/lib/db/schema';
+import { bids, rfpInvitations, rfps } from '@/lib/db/schema';
 import {
   seedBuyerWorkspace,
   seedPgWorkspace,
@@ -8,9 +8,9 @@ import {
   seedMembership,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
-  setupRfqActionEnv,
-  teardownRfqActionEnv,
-} from '../../rfq/__tests__/_setup';
+  setupRfpActionEnv,
+  teardownRfpActionEnv,
+} from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 const sessionRef: {
@@ -44,21 +44,21 @@ import { searchBidsAction } from '../searchBidsAction';
 let db: PgliteDB;
 
 beforeEach(async () => {
-  db = await setupRfqActionEnv();
+  db = await setupRfpActionEnv();
   sessionRef.value = null;
 });
 
 afterEach(() => {
-  teardownRfqActionEnv();
+  teardownRfpActionEnv();
 });
 
-async function seedRfq(opts: {
+async function seedRfp(opts: {
   id: string;
   buyerWsId: string;
   title: string;
   createdBy: string;
 }) {
-  await db.insert(rfqs).values({
+  await db.insert(rfps).values({
     id: opts.id,
     buyerWsId: opts.buyerWsId,
     title: opts.title,
@@ -72,7 +72,7 @@ async function seedRfq(opts: {
 }
 
 async function seedBid(opts: {
-  rfqId: string;
+  rfpId: string;
   pgWsId: string;
   invitationId: string;
   submittedBy: string;
@@ -82,7 +82,7 @@ async function seedBid(opts: {
   const bidId = randomUUID();
   await db.insert(bids).values({
     id: bidId,
-    rfqId: opts.rfqId,
+    rfpId: opts.rfpId,
     pgWsId: opts.pgWsId,
     invitationId: opts.invitationId,
     settleCycle: 'D+1',
@@ -100,13 +100,13 @@ async function seedBid(opts: {
 }
 
 async function seedInvitation(opts: {
-  rfqId: string;
+  rfpId: string;
   pgWsId: string;
 }) {
   const id = randomUUID();
-  await db.insert(rfqInvitations).values({
+  await db.insert(rfpInvitations).values({
     id,
-    rfqId: opts.rfqId,
+    rfpId: opts.rfpId,
     pgWsId: opts.pgWsId,
     tokenHash: randomUUID(),
     sentAt: new Date(),
@@ -123,7 +123,7 @@ describe('searchBidsAction', () => {
     expect(result).toEqual([]);
   });
 
-  it('buyer: 자신의 RFQ에 달린 submitted 견적서를 PG사명·메모와 함께 반환', async () => {
+  it('buyer: 자신의 RFP에 달린 submitted 제안서를 PG사명·메모와 함께 반환', async () => {
     const buyer = await seedUser(db, { email: 'buyer@co.com' });
     const buyerWs = await seedBuyerWorkspace(db);
     await seedMembership(db, buyerWs.id, buyer.id, 'admin');
@@ -132,22 +132,22 @@ describe('searchBidsAction', () => {
     const pgUser = await seedUser(db, { email: 'pg@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-    await seedRfq({ id: 'Q-2605-0001', buyerWsId: buyerWs.id, title: '수수료 문의', createdBy: buyer.id });
-    const invId = await seedInvitation({ rfqId: 'Q-2605-0001', pgWsId: pgWs.id });
-    await seedBid({ rfqId: 'Q-2605-0001', pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id, memo: '정산 협의 가능' });
+    await seedRfp({ id: 'P-2605-0001', buyerWsId: buyerWs.id, title: '수수료 문의', createdBy: buyer.id });
+    const invId = await seedInvitation({ rfpId: 'P-2605-0001', pgWsId: pgWs.id });
+    await seedBid({ rfpId: 'P-2605-0001', pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id, memo: '정산 협의 가능' });
 
     sessionRef.value = { user: { id: buyer.id, workspaceId: buyerWs.id, workspaceType: 'buyer', role: 'admin' } };
 
     const result = await searchBidsAction();
 
     expect(result).toHaveLength(1);
-    expect(result[0].rfqTitle).toBe('수수료 문의');
+    expect(result[0].rfpTitle).toBe('수수료 문의');
     expect(result[0].pgWsName).toBe('토스페이먼츠');
     expect(result[0].memo).toBe('정산 협의 가능');
-    expect(result[0].href).toBe('/rfq/Q-2605-0001');
+    expect(result[0].href).toBe('/rfp/P-2605-0001');
   });
 
-  it('buyer: draft·withdrawn 견적서는 제외', async () => {
+  it('buyer: draft·withdrawn 제안서는 제외', async () => {
     const buyer = await seedUser(db, { email: 'buyer@co.com' });
     const buyerWs = await seedBuyerWorkspace(db);
     await seedMembership(db, buyerWs.id, buyer.id, 'admin');
@@ -156,9 +156,9 @@ describe('searchBidsAction', () => {
     const pgUser = await seedUser(db, { email: 'pg@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-    await seedRfq({ id: 'Q-2605-0002', buyerWsId: buyerWs.id, title: 'Draft Test', createdBy: buyer.id });
-    const invId = await seedInvitation({ rfqId: 'Q-2605-0002', pgWsId: pgWs.id });
-    await seedBid({ rfqId: 'Q-2605-0002', pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id, status: 'draft' });
+    await seedRfp({ id: 'P-2605-0002', buyerWsId: buyerWs.id, title: 'Draft Test', createdBy: buyer.id });
+    const invId = await seedInvitation({ rfpId: 'P-2605-0002', pgWsId: pgWs.id });
+    await seedBid({ rfpId: 'P-2605-0002', pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id, status: 'draft' });
 
     sessionRef.value = { user: { id: buyer.id, workspaceId: buyerWs.id, workspaceType: 'buyer', role: 'admin' } };
 
@@ -166,7 +166,7 @@ describe('searchBidsAction', () => {
     expect(result).toHaveLength(0);
   });
 
-  it('pg: 자신이 제출한 견적서를 /inbox/[rfqId] href와 함께 반환', async () => {
+  it('pg: 자신이 제출한 제안서를 /inbox/[rfpId] href와 함께 반환', async () => {
     const buyer = await seedUser(db, { email: 'buyer@co.com' });
     const buyerWs = await seedBuyerWorkspace(db);
     await seedMembership(db, buyerWs.id, buyer.id, 'admin');
@@ -175,16 +175,16 @@ describe('searchBidsAction', () => {
     const pgUser = await seedUser(db, { email: 'sales@kakao.com' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-    await seedRfq({ id: 'Q-2605-0003', buyerWsId: buyerWs.id, title: 'PG Test RFQ', createdBy: buyer.id });
-    const invId = await seedInvitation({ rfqId: 'Q-2605-0003', pgWsId: pgWs.id });
-    await seedBid({ rfqId: 'Q-2605-0003', pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id });
+    await seedRfp({ id: 'P-2605-0003', buyerWsId: buyerWs.id, title: 'PG Test RFP', createdBy: buyer.id });
+    const invId = await seedInvitation({ rfpId: 'P-2605-0003', pgWsId: pgWs.id });
+    await seedBid({ rfpId: 'P-2605-0003', pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id });
 
     sessionRef.value = { user: { id: pgUser.id, workspaceId: pgWs.id, workspaceType: 'pg', role: 'admin' } };
 
     const result = await searchBidsAction();
 
     expect(result).toHaveLength(1);
-    expect(result[0].rfqTitle).toBe('PG Test RFQ');
-    expect(result[0].href).toBe('/inbox/Q-2605-0003');
+    expect(result[0].rfpTitle).toBe('PG Test RFP');
+    expect(result[0].href).toBe('/inbox/P-2605-0003');
   });
 });

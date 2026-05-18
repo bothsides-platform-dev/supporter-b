@@ -5,7 +5,7 @@
  *   - Pretendard / JetBrains Mono fallback stack (real woff2 self-hosting is
  *     web-only; mail clients fall back to system mono — that's fine).
  *   - All numerics rendered through `<Mono />` use `font-variant-numeric:
- *     tabular-nums` so RFQ ids, currencies, dates align by digit.
+ *     tabular-nums` so RFP ids, currencies, dates align by digit.
  *   - 1px hairlines via `<hr style="border:0;border-top:1px solid #ddd" />`.
  *     No filled status badges, no purple/blue gradients, no glassmorphism,
  *     no rounded corners > 12px.
@@ -26,7 +26,7 @@ export const HAIRLINE = (
   <hr style={{ border: 0, borderTop: '1px solid #ddd', margin: '20px 0' }} />
 );
 
-// Inline numeric — all currencies / RFQ ids / dates / counts go through this.
+// Inline numeric — all currencies / RFP ids / dates / counts go through this.
 export function Mono({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <span

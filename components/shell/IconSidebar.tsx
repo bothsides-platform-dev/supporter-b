@@ -22,8 +22,8 @@ export function IconSidebar({ workspaceType }: Props) {
   const navItems: NavItem[] = [
     { href: '/home', icon: <HomeIcon />, label: '홈' },
     workspaceType === 'buyer'
-      ? { href: '/rfq', icon: <FileTextIcon />, label: '견적' }
-      : { href: '/inbox', icon: <FileTextIcon />, label: '견적' },
+      ? { href: '/rfp', icon: <FileTextIcon />, label: '제안' }
+      : { href: '/inbox', icon: <FileTextIcon />, label: '제안' },
     { href: '/settings/profile', icon: <SettingsIcon />, label: '설정' },
   ];
 

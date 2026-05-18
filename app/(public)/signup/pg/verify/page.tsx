@@ -12,8 +12,6 @@ export default function PgVerifyPage() {
 
   const draft = readSignupDraft();
   const isInvite = !!draft.inviteToken;
-  const current = isInvite ? 1 : 2;
-  const total = isInvite ? 3 : 4;
   const displayEmail = draft.email ?? '';
 
   const handleResend = async () => {

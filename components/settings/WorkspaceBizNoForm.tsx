@@ -7,11 +7,11 @@ import { Label } from '@/components/primitives/Label';
 import {
   BizLookupField,
   type BizLookupResult,
-} from '@/components/rfq/BizLookupField';
+} from '@/components/rfp/BizLookupField';
 import {
   lookupBizNoAction,
   updateWorkspaceBizProfileAction,
-} from '@/lib/server/actions/rfq';
+} from '@/lib/server/actions/rfp';
 
 const ntsLookup = async (bizNo: string) => {
   const r = await lookupBizNoAction(bizNo);
@@ -26,7 +26,7 @@ const ntsLookup = async (bizNo: string) => {
 type Props = {
   /** null = 사업자번호 미등록 (초기 등록 모드로 진입) */
   currentBizNo: string | null;
-  /** 초기 등록 성공 후 이동할 URL (biz_required 흐름에서 /rfq/new 등) */
+  /** 초기 등록 성공 후 이동할 URL (biz_required 흐름에서 /rfp/new 등) */
   returnUrl?: string;
 };
 

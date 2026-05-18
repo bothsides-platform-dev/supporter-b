@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { classifyBuyerRfq } from '../buyer-kanban';
-import type { RFQ } from '@/lib/types/rfq';
+import { classifyBuyerRfp } from '../buyer-kanban';
+import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
-import type { RfqInvitation } from '@/lib/types/invitation';
+import type { RfpInvitation } from '@/lib/types/invitation';
 
 const FROZEN_NOW = new Date('2026-05-10T00:00:00Z');
 const FUTURE = new Date('2026-05-20T00:00:00Z').toISOString();
 const PAST = new Date('2026-05-01T00:00:00Z').toISOString();
 
-function makeRfq(overrides: Partial<RFQ> = {}): RFQ {
+function makeRfp(overrides: Partial<RFP> = {}): RFP {
   return {
-    id: 'Q-2605-0001',
+    id: 'P-2605-0001',
     buyerWsId: 'ws-buyer',
-    title: 'RFQ 1',
+    title: 'RFP 1',
     memo: '',
     rfpFiles: [],
     allowedPgWorkspaceIds: [],
@@ -26,11 +26,11 @@ function makeRfq(overrides: Partial<RFQ> = {}): RFQ {
 
 function makeInv(
   id: string,
-  status: RfqInvitation['status'] = 'sent',
-): RfqInvitation {
+  status: RfpInvitation['status'] = 'sent',
+): RfpInvitation {
   return {
     id,
-    rfqId: 'Q-2605-0001',
+    rfpId: 'P-2605-0001',
     pgWsId: `ws-pg-${id}`,
     uniqueToken: '',
     sentAt: '2026-05-01T00:00:00Z',
@@ -42,7 +42,7 @@ function makeInv(
 function makeBid(id: string, status: Bid['status'] = 'submitted'): Bid {
   return {
     id,
-    rfqId: 'Q-2605-0001',
+    rfpId: 'P-2605-0001',
     pgWsId: `ws-pg-${id}`,
     invitationId: `inv-${id}`,
     settleCycle: 'D+1',
@@ -58,10 +58,10 @@ function makeBid(id: string, status: Bid['status'] = 'submitted'): Bid {
   };
 }
 
-describe('classifyBuyerRfq', () => {
+describe('classifyBuyerRfp', () => {
   it('draft: status=draft', () => {
-    const stage = classifyBuyerRfq({
-      rfq: makeRfq({ status: 'draft' }),
+    const stage = classifyBuyerRfp({
+      rfp: makeRfp({ status: 'draft' }),
       bids: [],
       invitations: [],
       now: FROZEN_NOW,
@@ -70,8 +70,8 @@ describe('classifyBuyerRfq', () => {
   });
 
   it('sent: status=sent + 제출 bid 0', () => {
-    const stage = classifyBuyerRfq({
-      rfq: makeRfq({ status: 'sent' }),
+    const stage = classifyBuyerRfp({
+      rfp: makeRfp({ status: 'sent' }),
       bids: [makeBid('b1', 'draft')], // PG WIP — buyer 한테 안 보임
       invitations: [makeInv('i1')],
       now: FROZEN_NOW,
@@ -80,8 +80,8 @@ describe('classifyBuyerRfq', () => {
   });
 
   it('collecting: status=sent + 제출 bid≥1 + deadline 미경과 + 일부만 응답', () => {
-    const stage = classifyBuyerRfq({
-      rfq: makeRfq({ status: 'sent', deadline: FUTURE }),
+    const stage = classifyBuyerRfp({
+      rfp: makeRfp({ status: 'sent', deadline: FUTURE }),
       bids: [makeBid('b1', 'submitted')],
       invitations: [makeInv('i1'), makeInv('i2'), makeInv('i3')],
       now: FROZEN_NOW,
@@ -90,8 +90,8 @@ describe('classifyBuyerRfq', () => {
   });
 
   it('comparing: deadline 경과', () => {
-    const stage = classifyBuyerRfq({
-      rfq: makeRfq({ status: 'sent', deadline: PAST }),
+    const stage = classifyBuyerRfp({
+      rfp: makeRfp({ status: 'sent', deadline: PAST }),
       bids: [makeBid('b1', 'submitted')],
       invitations: [makeInv('i1'), makeInv('i2')],
       now: FROZEN_NOW,
@@ -100,8 +100,8 @@ describe('classifyBuyerRfq', () => {
   });
 
   it('comparing: 모든 활성 초대 PG 가 응답 제출', () => {
-    const stage = classifyBuyerRfq({
-      rfq: makeRfq({ status: 'sent', deadline: FUTURE }),
+    const stage = classifyBuyerRfp({
+      rfp: makeRfp({ status: 'sent', deadline: FUTURE }),
       bids: [makeBid('b1', 'submitted'), makeBid('b2', 'submitted')],
       invitations: [
         makeInv('i1', 'accepted'),
@@ -114,8 +114,8 @@ describe('classifyBuyerRfq', () => {
   });
 
   it('awarded: status=awarded', () => {
-    const stage = classifyBuyerRfq({
-      rfq: makeRfq({ status: 'awarded', awardedBidId: 'b1' }),
+    const stage = classifyBuyerRfp({
+      rfp: makeRfp({ status: 'awarded', awardedBidId: 'b1' }),
       bids: [makeBid('b1', 'submitted')],
       invitations: [makeInv('i1')],
       now: FROZEN_NOW,
@@ -124,8 +124,8 @@ describe('classifyBuyerRfq', () => {
   });
 
   it('closed: status=closed', () => {
-    const stage = classifyBuyerRfq({
-      rfq: makeRfq({ status: 'closed' }),
+    const stage = classifyBuyerRfp({
+      rfp: makeRfp({ status: 'closed' }),
       bids: [],
       invitations: [],
       now: FROZEN_NOW,
@@ -134,8 +134,8 @@ describe('classifyBuyerRfq', () => {
   });
 
   it('closed: status=cancelled', () => {
-    const stage = classifyBuyerRfq({
-      rfq: makeRfq({ status: 'cancelled' }),
+    const stage = classifyBuyerRfp({
+      rfp: makeRfp({ status: 'cancelled' }),
       bids: [],
       invitations: [],
       now: FROZEN_NOW,
@@ -144,8 +144,8 @@ describe('classifyBuyerRfq', () => {
   });
 
   it('withdrawn bid 는 응답 카운트에서 제외 — 다른 bid 가 submitted 면 collecting 유지', () => {
-    const stage = classifyBuyerRfq({
-      rfq: makeRfq({ status: 'sent', deadline: FUTURE }),
+    const stage = classifyBuyerRfp({
+      rfp: makeRfp({ status: 'sent', deadline: FUTURE }),
       bids: [makeBid('b1', 'submitted'), makeBid('b2', 'withdrawn')],
       invitations: [makeInv('i1'), makeInv('i2'), makeInv('i3')],
       now: FROZEN_NOW,
@@ -156,8 +156,8 @@ describe('classifyBuyerRfq', () => {
   it('invitation 0건 + 제출 bid 0건 + status=sent → sent', () => {
     // 엣지 케이스: 발송 직후 아직 클레임 전. (실제로는 invitedActive=0 이어도 submittedBids=0
     // 이라 sent 로 판정.)
-    const stage = classifyBuyerRfq({
-      rfq: makeRfq({ status: 'sent' }),
+    const stage = classifyBuyerRfp({
+      rfp: makeRfp({ status: 'sent' }),
       bids: [],
       invitations: [],
       now: FROZEN_NOW,

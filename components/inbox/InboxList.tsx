@@ -28,9 +28,9 @@ const invStatusColor: Record<string, ChipColor> = {
 export type InboxRow = {
   invitationId: string;
   invitationStatus: string;
-  rfqId: string;
-  rfqTitle: string;
-  rfqDeadline: string;
+  rfpId: string;
+  rfpTitle: string;
+  rfpDeadline: string;
   grade: string;
 };
 
@@ -39,8 +39,8 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
   const { active } = useListNavigation(rows.length, {
-    onEnter: (i) => router.push(`/inbox/${rows[i].rfqId}`),
-    onEdit: (i) => router.push(`/inbox/${rows[i].rfqId}`),
+    onEnter: (i) => router.push(`/inbox/${rows[i].rfpId}`),
+    onEdit: (i) => router.push(`/inbox/${rows[i].rfpId}`),
   });
 
   useEffect(() => {
@@ -51,9 +51,9 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-8 py-5 border-b border-[var(--md-sys-color-outline-variant)]">
         <div>
-          <Label size="md" muted={false}>수신함 — PG 견적 요청</Label>
+          <Label size="md" muted={false}>수신함 — PG 제안 요청</Label>
           <h1 className="text-[20px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] mt-1">
-            받은 견적 요청
+            받은 제안 요청
           </h1>
         </div>
         <span className="font-mono tabular-nums text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -64,8 +64,8 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
       {rows.length === 0 ? (
         <EmptyState
           icon={<InboxIcon size={32} />}
-          title="받은 견적 요청이 없습니다."
-          description="구매사가 초대한 RFQ가 이 화면에 표시됩니다."
+          title="받은 제안 요청이 없습니다."
+          description="구매사가 초대한 RFP가 이 화면에 표시됩니다."
         />
       ) : (
         <div className="flex-1 overflow-y-auto">
@@ -81,7 +81,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
             </thead>
             <tbody>
               {rows.map((row, i) => {
-                const daysLeft = formatDeadline(row.rfqDeadline);
+                const daysLeft = formatDeadline(row.rfpDeadline);
                 const isUrgent =
                   daysLeft.startsWith('D-') &&
                   parseInt(daysLeft.slice(2)) <= 3;
@@ -91,14 +91,14 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                     ref={(el) => {
                       rowRefs.current[i] = el;
                     }}
-                    onClick={() => router.push(`/inbox/${row.rfqId}`)}
+                    onClick={() => router.push(`/inbox/${row.rfpId}`)}
                     data-active={active === i}
                     className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer transition-colors"
                   >
                     <td className="relative px-8 py-4 font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-2 group-hover:before:bg-[var(--md-sys-color-on-surface)] group-data-[active=true]:before:absolute group-data-[active=true]:before:left-0 group-data-[active=true]:before:top-0 group-data-[active=true]:before:bottom-0 group-data-[active=true]:before:w-2 group-data-[active=true]:before:bg-[var(--md-sys-color-on-surface)]">
-                      {row.rfqId}
+                      {row.rfpId}
                     </td>
-                    <td className="px-3 py-4 text-[13px] text-[var(--md-sys-color-on-surface)] font-medium">{row.rfqTitle}</td>
+                    <td className="px-3 py-4 text-[13px] text-[var(--md-sys-color-on-surface)] font-medium">{row.rfpTitle}</td>
                     <td className="px-3 py-4 font-mono text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
                       {row.grade}
                     </td>

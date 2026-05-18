@@ -76,7 +76,7 @@ const PAIN_ITEMS = [
 const HOW_STEPS = [
   {
     num: '01',
-    title: 'RFQ 작성',
+    title: 'RFP 작성',
     desc: 'PG사 이메일 입력 + 거래 조건 기입\n5분이면 충분합니다',
   },
   {
@@ -184,8 +184,8 @@ export function LandingHero() {
               transition={{ duration: 0.36, delay: 0.46, ease: EASE_OUT }}
               className="flex flex-col items-start gap-[var(--s-4)]"
             >
-              <Link href="/rfq/new">
-                <Button size="lg">RFQ 무료로 시작하기 →</Button>
+              <Link href="/rfp/new">
+                <Button size="lg">RFP 무료로 시작하기 →</Button>
               </Link>
               <span className="font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-outline)]">
                 신용카드 불필요 — 입찰 시작까지 5분
@@ -253,7 +253,7 @@ export function LandingHero() {
                     transition={{ duration: 0.36, ease: EASE_OUT }}
                     className="text-[clamp(22px,3vw,40px)] leading-[1.1] tracking-[-0.022em] font-medium text-[var(--md-sys-color-on-surface)]"
                   >
-                    한 번의 요청으로, 모든 PG사 견적을 한눈에.
+                    한 번의 요청으로, 모든 PG사 제안을 한눈에.
                   </motion.h2>
 
 
@@ -368,9 +368,9 @@ export function LandingHero() {
               transition={{ duration: 0.36, delay: 0.2, ease: EASE_OUT }}
               className="flex flex-col items-start gap-[var(--s-5)]"
             >
-              <Link href="/rfq/new">
+              <Link href="/rfp/new">
                 <button className="inline-flex items-center gap-2 h-12 px-6 rounded-md bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] font-mono text-[13px] tracking-[0.06em] uppercase transition-opacity duration-[140ms] hover:opacity-85 active:scale-[0.98]">
-                  RFQ 무료로 시작하기 →
+                  RFP 무료로 시작하기 →
                 </button>
               </Link>
             </motion.div>

@@ -66,7 +66,7 @@ describe('signup flow integration (no UI)', () => {
     });
     expect(c.ok).toBe(true);
     if (!c.ok) return;
-    expect(c.redirectTo).toBe('/rfq');
+    expect(c.redirectTo).toBe('/rfp');
 
     // Sanity on the persisted graph.
     const [u] = await db.select().from(users).where(eq(users.email, 'kim@example.com'));

@@ -5,15 +5,15 @@ import { Layout, Mono } from './_layout';
 import type { BidSubmittedProps } from './types';
 
 export function BidSubmitted({
-  rfqId,
-  rfqTitle,
+  rfpId,
+  rfpTitle,
   pgName,
   submittedAt,
 }: BidSubmittedProps): React.JSX.Element {
   return (
     <Layout
-      preheader={`${pgName}이(가) ${rfqId} RFQ에 견적을 제출했습니다.`}
-      serial={`RFQ / ${rfqId}`}
+      preheader={`${pgName}이(가) ${rfpId} RFP에 제안을 제출했습니다.`}
+      serial={`RFP / ${rfpId}`}
     >
       <h1
         style={{
@@ -23,10 +23,10 @@ export function BidSubmitted({
           letterSpacing: '-0.01em',
         }}
       >
-        새 견적 도착
+        새 제안 도착
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
-        <strong>{pgName}</strong>이(가) 견적을 제출했습니다.
+        <strong>{pgName}</strong>이(가) 제안을 제출했습니다.
       </p>
 
       <table
@@ -38,17 +38,17 @@ export function BidSubmitted({
         <tbody>
           <tr>
             <td style={{ color: '#777', paddingRight: '16px', paddingBottom: '6px' }}>
-              RFQ
+              RFP
             </td>
             <td style={{ paddingBottom: '6px' }}>
-              <Mono>{rfqId}</Mono>
+              <Mono>{rfpId}</Mono>
             </td>
           </tr>
           <tr>
             <td style={{ color: '#777', paddingRight: '16px', paddingBottom: '6px' }}>
               제목
             </td>
-            <td style={{ paddingBottom: '6px' }}>{rfqTitle}</td>
+            <td style={{ paddingBottom: '6px' }}>{rfpTitle}</td>
           </tr>
           <tr>
             <td style={{ color: '#777', paddingRight: '16px' }}>제출 시각</td>

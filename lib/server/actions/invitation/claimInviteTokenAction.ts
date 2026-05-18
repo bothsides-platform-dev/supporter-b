@@ -5,11 +5,11 @@ import { getInvitationRepo } from '@/lib/server/repositories/factory';
 import { hashToken } from '@/lib/server/token';
 
 export type ClaimInviteTokenResult =
-  | { ok: true; rfqId: string; alreadyClaimed?: boolean }
+  | { ok: true; rfpId: string; alreadyClaimed?: boolean }
   | { ok: false; error: string };
 
 /**
- * RFQ 초대 토큰 클레임 — 인증된 사용자가 raw 토큰을 제시.
+ * RFP 초대 토큰 클레임 — 인증된 사용자가 raw 토큰을 제시.
  *
  * 흐름:
  *   1) requireSession().
@@ -54,10 +54,10 @@ export async function claimInviteTokenAction(
     if (claim.reason === 'expired') return { ok: false, error: 'INVITE_EXPIRED' };
     if (claim.reason === 'used') {
       // 동료가 이미 클레임 — 같은 ws 라면 그대로 인박스로 안내(에러 X).
-      return { ok: true, rfqId: inv.rfqId, alreadyClaimed: true };
+      return { ok: true, rfpId: inv.rfpId, alreadyClaimed: true };
     }
     return { ok: false, error: 'INVITE_INVALID' };
   }
 
-  return { ok: true, rfqId: claim.invitation.rfqId };
+  return { ok: true, rfpId: claim.invitation.rfpId };
 }

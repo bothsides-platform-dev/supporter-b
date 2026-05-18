@@ -21,15 +21,15 @@ export type WithdrawBidInput = z.infer<typeof Input>;
 export type WithdrawBidResult = BidActionResult;
 
 /**
- * PG 견적 철회 — bid.status='withdrawn'.
+ * PG 제안 철회 — bid.status='withdrawn'.
  *
  * 가드:
  *   1) requirePgSession.
  *   2) bid 조회 → bid.pgWsId === session.workspaceId (제출 워크스페이스 일치).
- *   3) canAccess(rfqId, pgWsId) — 초대된 워크스페이스 멤버라면 동료 견적도 철회 가능.
+ *   3) canAccess(rfpId, pgWsId) — 초대된 워크스페이스 멤버라면 동료 제안도 철회 가능.
  *
  * NOTE (advisor pin 4): withdrawn 이후 재제출은 v0에서 막는다 — submitBid가 다시
- * UNIQUE(rfqId, pgWsId) 충돌로 'BID_ALREADY_SUBMITTED' 반환.
+ * UNIQUE(rfpId, pgWsId) 충돌로 'BID_ALREADY_SUBMITTED' 반환.
  */
 export async function withdrawBidAction(
   input: WithdrawBidInput,
@@ -56,7 +56,7 @@ export async function withdrawBidAction(
   // canAccess — 워크스페이스 단위 가드. bid.pgWsId 일치 검증과 더불어 invitation
   // row 가 active 상태인지 더블체크.
   const invRepo = await getInvitationRepo();
-  const ok = await invRepo.canAccess(bid.rfqId, session.user.workspaceId);
+  const ok = await invRepo.canAccess(bid.rfpId, session.user.workspaceId);
   if (!ok) return { ok: false, error: 'FORBIDDEN' };
 
   if (bid.status === 'withdrawn') return { ok: true };

@@ -2,10 +2,10 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import { eq } from 'drizzle-orm';
-import { rfqInvitations, rfqs } from '@/lib/db/schema';
+import { rfpInvitations, rfps } from '@/lib/db/schema';
 import { DrizzleInvitationRepository } from '../invitation';
 import { generateToken, addMinutes, hashToken } from '../../../token';
-import type { RfqInvitation } from '@/lib/types/invitation';
+import type { RfpInvitation } from '@/lib/types/invitation';
 import {
   seedBizProfile,
   seedBuyerWorkspace,
@@ -19,10 +19,10 @@ async function setup() {
   const biz = await seedBizProfile(db);
   const ws = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
   const pgWs = await seedPgWorkspace(db, '토스페이먼츠');
-  // Insert one RFQ to FK against.
-  const rfqId = 'Q-2605-0001';
-  await db.insert(rfqs).values({
-    id: rfqId,
+  // Insert one RFP to FK against.
+  const rfpId = 'P-2605-0001';
+  await db.insert(rfps).values({
+    id: rfpId,
     buyerWsId: ws.id,
     bizProfileId: biz.id,
     title: 'T',
@@ -33,13 +33,13 @@ async function setup() {
     createdBy: buyer.id,
   });
   const repo = new DrizzleInvitationRepository(db);
-  return { db, repo, buyer, ws, pgWs, rfqId };
+  return { db, repo, buyer, ws, pgWs, rfpId };
 }
 
-function makeInvitation(rfqId: string, pgWsId: string, overrides?: Partial<RfqInvitation>): RfqInvitation {
+function makeInvitation(rfpId: string, pgWsId: string, overrides?: Partial<RfpInvitation>): RfpInvitation {
   return {
     id: randomUUID(),
-    rfqId,
+    rfpId,
     pgWsId,
     uniqueToken: 'placeholder',
     sentAt: new Date().toISOString(),
@@ -60,7 +60,7 @@ describe('DrizzleInvitationRepository', () => {
 
   it('claims a valid token and sets acceptedByUserId', async () => {
     const raw = generateToken();
-    await repo.save(makeInvitation(ctx.rfqId, ctx.pgWs.id), raw);
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), raw);
     const claimer = await seedUser(ctx.db, { email: 'pg-1@toss.im' });
 
     const result = await repo.claimToken(raw, claimer.id);
@@ -80,7 +80,7 @@ describe('DrizzleInvitationRepository', () => {
   it('returns expired for past expiresAt', async () => {
     const raw = generateToken();
     await repo.save(
-      makeInvitation(ctx.rfqId, ctx.pgWs.id, { expiresAt: new Date(Date.now() - 1000).toISOString() }),
+      makeInvitation(ctx.rfpId, ctx.pgWs.id, { expiresAt: new Date(Date.now() - 1000).toISOString() }),
       raw,
     );
     const claimer = await seedUser(ctx.db);
@@ -92,7 +92,7 @@ describe('DrizzleInvitationRepository', () => {
 
   it('second claim returns used', async () => {
     const raw = generateToken();
-    await repo.save(makeInvitation(ctx.rfqId, ctx.pgWs.id), raw);
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), raw);
     const a = await seedUser(ctx.db, { email: 'a@toss.im' });
     const b = await seedUser(ctx.db, { email: 'b@toss.im' });
     await repo.claimToken(raw, a.id);
@@ -101,34 +101,34 @@ describe('DrizzleInvitationRepository', () => {
 
   it('canAccess passes any member of the invited PG workspace', async () => {
     const raw = generateToken();
-    await repo.save(makeInvitation(ctx.rfqId, ctx.pgWs.id), raw);
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), raw);
     // canAccess is keyed by pgWsId — any member of the invited ws passes,
     // regardless of who (or whether anyone) claimed the token.
-    expect(await repo.canAccess(ctx.rfqId, ctx.pgWs.id)).toBe(true);
+    expect(await repo.canAccess(ctx.rfpId, ctx.pgWs.id)).toBe(true);
 
     const otherPgWs = await seedPgWorkspace(ctx.db, '이니시스');
-    expect(await repo.canAccess(ctx.rfqId, otherPgWs.id)).toBe(false);
+    expect(await repo.canAccess(ctx.rfpId, otherPgWs.id)).toBe(false);
   });
 
   it('canAccess remains true after claim transitions invitation to accepted/opened', async () => {
     const raw = generateToken();
-    await repo.save(makeInvitation(ctx.rfqId, ctx.pgWs.id), raw);
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), raw);
     const accepter = await seedUser(ctx.db, { email: 'sales@toss.im' });
     await repo.claimToken(raw, accepter.id);
-    expect(await repo.canAccess(ctx.rfqId, ctx.pgWs.id)).toBe(true);
+    expect(await repo.canAccess(ctx.rfpId, ctx.pgWs.id)).toBe(true);
   });
 
   it('markOpened transitions pending → opened (non-claimer first visit) and is idempotent', async () => {
     const raw = generateToken();
-    const inv = makeInvitation(ctx.rfqId, ctx.pgWs.id);
+    const inv = makeInvitation(ctx.rfpId, ctx.pgWs.id);
     await repo.save(inv, raw);
 
     // Pre-claim ('sent' / DB pending) — first ws-member visit advances kanban.
     await repo.markOpened(inv.id, new Date());
     let [row] = await ctx.db
       .select()
-      .from(rfqInvitations)
-      .where(eq(rfqInvitations.id, inv.id));
+      .from(rfpInvitations)
+      .where(eq(rfpInvitations.id, inv.id));
     expect(row.status).toBe('opened');
     const firstOpenedAt = row.openedAt;
 
@@ -137,15 +137,15 @@ describe('DrizzleInvitationRepository', () => {
     await repo.markOpened(inv.id, new Date());
     [row] = await ctx.db
       .select()
-      .from(rfqInvitations)
-      .where(eq(rfqInvitations.id, inv.id));
+      .from(rfpInvitations)
+      .where(eq(rfpInvitations.id, inv.id));
     expect(row.status).toBe('opened');
     expect(row.openedAt).toEqual(firstOpenedAt);
   });
 
   it('parallel claimToken: one wins, the other returns used (atomic UPDATE WHERE)', async () => {
     const raw = generateToken();
-    await repo.save(makeInvitation(ctx.rfqId, ctx.pgWs.id), raw);
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), raw);
     const a = await seedUser(ctx.db, { email: 'a@toss.im' });
     const b = await seedUser(ctx.db, { email: 'b@toss.im' });
 
@@ -165,19 +165,19 @@ describe('DrizzleInvitationRepository', () => {
     expect(useds).toHaveLength(1);
   });
 
-  it('findByRfq returns invitations for the RFQ', async () => {
+  it('findByRfp returns invitations for the RFP', async () => {
     const pgWs2 = await seedPgWorkspace(ctx.db, '이니시스');
     const r1 = generateToken();
     const r2 = generateToken();
-    await repo.save(makeInvitation(ctx.rfqId, ctx.pgWs.id), r1);
-    await repo.save(makeInvitation(ctx.rfqId, pgWs2.id), r2);
-    const list = await repo.findByRfq(ctx.rfqId);
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), r1);
+    await repo.save(makeInvitation(ctx.rfpId, pgWs2.id), r2);
+    const list = await repo.findByRfp(ctx.rfpId);
     expect(list).toHaveLength(2);
   });
 
   it('findByTokenHash returns the row before claim', async () => {
     const raw = generateToken();
-    const inv = makeInvitation(ctx.rfqId, ctx.pgWs.id);
+    const inv = makeInvitation(ctx.rfpId, ctx.pgWs.id);
     await repo.save(inv, raw);
 
     const found = await repo.findByTokenHash(hashToken(raw));
@@ -191,12 +191,12 @@ describe('DrizzleInvitationRepository', () => {
     expect(missing).toBeUndefined();
   });
 
-  it('findByPgWorkspace returns active invitation+RFQ pairs for the ws regardless of claim state', async () => {
+  it('findByPgWorkspace returns active invitation+RFP pairs for the ws regardless of claim state', async () => {
     const pgWs2 = await seedPgWorkspace(ctx.db, '이니시스');
     const r1 = generateToken();
     const r2 = generateToken();
-    await repo.save(makeInvitation(ctx.rfqId, ctx.pgWs.id), r1);
-    await repo.save(makeInvitation(ctx.rfqId, pgWs2.id), r2);
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), r1);
+    await repo.save(makeInvitation(ctx.rfpId, pgWs2.id), r2);
 
     // Neither claimed yet — both 'sent' (DB: pending). findByPgWorkspace must
     // include them so the inbox/kanban surface invitations to ws members

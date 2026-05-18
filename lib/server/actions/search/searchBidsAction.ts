@@ -1,17 +1,17 @@
 'use server';
 
 import { and, eq } from 'drizzle-orm';
-import { bids, rfqs, workspaces } from '@/lib/db/schema';
+import { bids, rfps, workspaces } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth/session';
 import { actionDb } from '../auth/_shared';
 
 export type BidSearchItem = {
   bidId: string;
-  rfqId: string;
-  rfqTitle: string;
+  rfpId: string;
+  rfpTitle: string;
   pgWsName: string;   // buyer에서만 채워짐, PG는 ''
   memo: string;
-  href: string;       // buyer → /rfq/[rfqId], pg → /inbox/[rfqId]
+  href: string;       // buyer → /rfp/[rfpId], pg → /inbox/[rfpId]
 };
 
 export async function searchBidsAction(): Promise<BidSearchItem[]> {
@@ -37,34 +37,34 @@ export async function searchBidsAction(): Promise<BidSearchItem[]> {
     const rows = await db
       .select({
         bidId: bids.id,
-        rfqId: rfqs.id,
-        rfqTitle: rfqs.title,
+        rfpId: rfps.id,
+        rfpTitle: rfps.title,
         pgWsName: workspaces.name,
         memo: bids.memo,
       })
       .from(bids)
-      .innerJoin(rfqs, eq(bids.rfqId, rfqs.id))
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
       .innerJoin(workspaces, eq(bids.pgWsId, workspaces.id))
-      .where(and(eq(rfqs.buyerWsId, workspaceId), eq(bids.status, 'submitted')))
+      .where(and(eq(rfps.buyerWsId, workspaceId), eq(bids.status, 'submitted')))
       .limit(30);
 
-    return rows.map((r: typeof rows[number]) => ({ ...r, href: `/rfq/${r.rfqId}` }));
+    return rows.map((r: typeof rows[number]) => ({ ...r, href: `/rfp/${r.rfpId}` }));
   }
 
   if (workspaceType === 'pg') {
     const rows = await db
       .select({
         bidId: bids.id,
-        rfqId: rfqs.id,
-        rfqTitle: rfqs.title,
+        rfpId: rfps.id,
+        rfpTitle: rfps.title,
         memo: bids.memo,
       })
       .from(bids)
-      .innerJoin(rfqs, eq(bids.rfqId, rfqs.id))
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
       .where(and(eq(bids.pgWsId, workspaceId), eq(bids.status, 'submitted')))
       .limit(30);
 
-    return rows.map((r: typeof rows[number]) => ({ ...r, pgWsName: '', href: `/inbox/${r.rfqId}` }));
+    return rows.map((r: typeof rows[number]) => ({ ...r, pgWsName: '', href: `/inbox/${r.rfpId}` }));
   }
 
   return [];

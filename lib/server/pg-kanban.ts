@@ -1,12 +1,12 @@
-// PG 홈 칸반 — 초대받은 RFQ 1건 = 카드 1장. 6개 컬럼.
-// 분류는 (invitation, optional bid, parent rfq) 트리플로부터 결정. 결과 단계(낙찰/실패)
-// 가 bid 단계보다 우선 — RFQ 가 awarded/closed 면 즉시 결과 컬럼으로 들어감.
+// PG 홈 칸반 — 초대받은 RFP 1건 = 카드 1장. 6개 컬럼.
+// 분류는 (invitation, optional bid, parent rfp) 트리플로부터 결정. 결과 단계(낙찰/실패)
+// 가 bid 단계보다 우선 — RFP 가 awarded/closed 면 즉시 결과 컬럼으로 들어감.
 //
 // 이 파일은 client component 에서도 import 가능 — repo / DB import 없이 순수 도메인.
 // 데이터 로더는 ./pg-kanban-loader.ts 참조.
 import type { Bid } from '@/lib/types/bid';
-import type { RFQ } from '@/lib/types/rfq';
-import type { RfqInvitation } from '@/lib/types/invitation';
+import type { RFP } from '@/lib/types/rfp';
+import type { RfpInvitation } from '@/lib/types/invitation';
 
 export type PgKanbanStage =
   | 'received'
@@ -36,7 +36,7 @@ export const PG_KANBAN_LABEL: Record<PgKanbanStage, string> = {
 
 export type PgKanbanCard = {
   invitationId: string;
-  rfqId: string;
+  rfpId: string;
   title: string;
   stage: PgKanbanStage;
   deadline: string;
@@ -47,17 +47,17 @@ export type PgKanbanCard = {
 
 // pure — 단위 테스트 가능.
 export function classifyPgInvitation(args: {
-  invitation: RfqInvitation;
+  invitation: RfpInvitation;
   bid?: Bid;
-  rfq: RFQ;
+  rfp: RFP;
 }): PgKanbanStage {
-  const { invitation, bid, rfq } = args;
+  const { invitation, bid, rfp } = args;
 
   // 결과 단계는 bid 단계보다 우선.
-  if (rfq.status === 'awarded') {
-    return bid && rfq.awardedBidId === bid.id ? 'won' : 'lost';
+  if (rfp.status === 'awarded') {
+    return bid && rfp.awardedBidId === bid.id ? 'won' : 'lost';
   }
-  if (rfq.status === 'closed' || rfq.status === 'cancelled') return 'lost';
+  if (rfp.status === 'closed' || rfp.status === 'cancelled') return 'lost';
 
   // bid 단계.
   if (bid?.status === 'withdrawn') return 'lost';
@@ -79,19 +79,19 @@ const GRADE_LABEL: Record<string, string> = {
 };
 
 export function toPgCard(args: {
-  invitation: RfqInvitation;
+  invitation: RfpInvitation;
   bid?: Bid;
-  rfq: RFQ;
+  rfp: RFP;
   stage: PgKanbanStage;
 }): PgKanbanCard {
-  const { invitation, bid, rfq, stage } = args;
-  const grade = rfq.bizProfile?.grade;
+  const { invitation, bid, rfp, stage } = args;
+  const grade = rfp.bizProfile?.grade;
   return {
     invitationId: invitation.id,
-    rfqId: rfq.id,
-    title: rfq.title,
+    rfpId: rfp.id,
+    title: rfp.title,
     stage,
-    deadline: rfq.deadline,
+    deadline: rfp.deadline,
     bizGradeLabel: grade ? GRADE_LABEL[grade] : undefined,
     bidId: bid?.id,
     submittedAt: bid?.submittedAt,

@@ -6,7 +6,7 @@ import type { AttachmentRepo, Tx } from '../types';
 
 type AttachRow = typeof attachments.$inferSelect;
 type AttachmentView = Attachment & {
-  ownerKind: 'rfq_rfp' | 'bid_proposal';
+  ownerKind: 'rfp' | 'bid_proposal';
   ownerId: string;
   storagePath: string;
   uploadedBy: string;

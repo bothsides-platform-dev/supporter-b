@@ -6,7 +6,7 @@ import { users } from './users';
 export const attachments = pgTable('attachments', {
   id: uuid('id').primaryKey().defaultRandom(),
   ownerKind: attachmentOwnerKindEnum('owner_kind').notNull(),
-  // Polymorphic owner — owner_id is a string because RFQ ids are text (Q-YYMM-NNNN).
+  // Polymorphic owner — owner_id is a string because RFP ids are text (P-YYMM-NNNN).
   ownerId: text('owner_id').notNull(),
   name: text('name').notNull(),
   size: integer('size').notNull(),

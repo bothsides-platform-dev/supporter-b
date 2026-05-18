@@ -4,10 +4,10 @@ export type OutboxEvent =
   | 'auth.verify'
   | 'auth.reset'
   | 'auth.email-change'
-  | 'rfq.invited'
-  | 'rfq.sent'
+  | 'rfp.invited'
+  | 'rfp.sent'
   | 'bid.submitted'
-  | 'rfq.awarded'
+  | 'rfp.awarded'
   | 'workspace.invited';
 
 export type OutboxEntry = {

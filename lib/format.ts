@@ -23,7 +23,7 @@ export function formatDeadline(iso: string): string {
   return `D-${diff}`;
 }
 
-export function rfqSerial(index: number): string {
+export function rfpSerial(index: number): string {
   const now = new Date();
   const ym = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
   return `Q-${ym}-${String(index).padStart(4, '0')}`;

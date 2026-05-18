@@ -1,12 +1,12 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { InMemoryInvitationRepository } from '../repositories/in-memory/invitation';
 import { generateToken, addMinutes } from '../token';
-import type { RfqInvitation } from '@/lib/types/invitation';
+import type { RfpInvitation } from '@/lib/types/invitation';
 
-function makeInvitation(rawToken: string, overrides?: Partial<RfqInvitation>): RfqInvitation {
+function makeInvitation(rawToken: string, overrides?: Partial<RfpInvitation>): RfpInvitation {
   return {
     id: 'inv-1',
-    rfqId: 'rfq-1',
+    rfpId: 'rfp-1',
     pgWsId: 'ws-toss',
     uniqueToken: rawToken,
     sentAt: new Date().toISOString(),
@@ -67,12 +67,12 @@ describe('InMemoryInvitationRepository', () => {
     await repo.save(makeInvitation(raw), raw);
 
     // Pre-claim ('sent' / DB pending) — workspace id passes.
-    expect(await repo.canAccess('rfq-1', 'ws-toss')).toBe(true);
+    expect(await repo.canAccess('rfp-1', 'ws-toss')).toBe(true);
     // A different ws never passes.
-    expect(await repo.canAccess('rfq-1', 'ws-other')).toBe(false);
+    expect(await repo.canAccess('rfp-1', 'ws-other')).toBe(false);
 
     // Claim transitions to 'accepted' — still passes for the same ws.
     await repo.claimToken(raw, 'user-pg');
-    expect(await repo.canAccess('rfq-1', 'ws-toss')).toBe(true);
+    expect(await repo.canAccess('rfp-1', 'ws-toss')).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 // Smoke renders for the 7 outbox email templates. Each test injects realistic
 // props and asserts:
-//   1. Core dynamic fields land in the rendered HTML (rfqId / urls / counts).
+//   1. Core dynamic fields land in the rendered HTML (rfpId / urls / counts).
 //   2. The Korean Editorial visual rules survive: font-mono span on numerics,
 //      hairline divider, button radius ≤ 12px.
 //
@@ -11,9 +11,9 @@ import { renderAuthEmailChange } from '../authEmailChange';
 import { renderAuthReset } from '../authReset';
 import { renderAuthVerify } from '../authVerify';
 import { renderBidSubmitted } from '../bidSubmitted';
-import { renderRfqAwarded } from '../rfqAwarded';
-import { renderRfqInvited } from '../rfqInvited';
-import { renderRfqSent } from '../rfqSent';
+import { renderRfpAwarded } from '../rfpAwarded';
+import { renderRfpInvited } from '../rfpInvited';
+import { renderRfpSent } from '../rfpSent';
 
 // Korean Editorial assertions every template must satisfy.
 function expectEditorialRules(html: string): void {
@@ -62,56 +62,56 @@ describe('outbox email templates / render', () => {
     expectEditorialRules(html);
   });
 
-  it('rfqInvited includes RFQ id, title, buyer, deadline and invite URL', async () => {
-    const html = await renderRfqInvited({
-      rfqId: 'Q-2605-0042',
-      rfqTitle: '결제대행 서비스 견적',
+  it('rfpInvited includes RFP id, title, buyer, deadline and invite URL', async () => {
+    const html = await renderRfpInvited({
+      rfpId: 'P-2605-0042',
+      rfpTitle: '결제대행 서비스 제안',
       buyerName: '바이딧 주식회사',
       deadline: '2026-05-20 18:00',
-      inviteUrl: 'https://bidit.test/invite/rfq/raw-token-x',
+      inviteUrl: 'https://bidit.test/invite/rfp/raw-token-x',
     });
-    expect(html).toContain('Q-2605-0042');
-    expect(html).toContain('결제대행 서비스 견적');
+    expect(html).toContain('P-2605-0042');
+    expect(html).toContain('결제대행 서비스 제안');
     expect(html).toContain('바이딧 주식회사');
     expect(html).toContain('2026-05-20 18:00');
-    expect(html).toContain('https://bidit.test/invite/rfq/raw-token-x');
+    expect(html).toContain('https://bidit.test/invite/rfp/raw-token-x');
     expectEditorialRules(html);
   });
 
-  it('rfqSent includes RFQ id, title and invite count', async () => {
-    const html = await renderRfqSent({
-      rfqId: 'Q-2605-0042',
-      rfqTitle: '결제대행 서비스 견적',
+  it('rfpSent includes RFP id, title and invite count', async () => {
+    const html = await renderRfpSent({
+      rfpId: 'P-2605-0042',
+      rfpTitle: '결제대행 서비스 제안',
       inviteCount: 5,
     });
-    expect(html).toContain('Q-2605-0042');
-    expect(html).toContain('결제대행 서비스 견적');
+    expect(html).toContain('P-2605-0042');
+    expect(html).toContain('결제대행 서비스 제안');
     expect(html).toMatch(/>5</);
     expectEditorialRules(html);
   });
 
-  it('bidSubmitted includes RFQ id, title, PG name and submitted timestamp', async () => {
+  it('bidSubmitted includes RFP id, title, PG name and submitted timestamp', async () => {
     const html = await renderBidSubmitted({
-      rfqId: 'Q-2605-0042',
-      rfqTitle: '결제대행 서비스 견적',
+      rfpId: 'P-2605-0042',
+      rfpTitle: '결제대행 서비스 제안',
       pgName: '토스페이먼츠',
       submittedAt: '2026-05-06 22:31',
     });
-    expect(html).toContain('Q-2605-0042');
-    expect(html).toContain('결제대행 서비스 견적');
+    expect(html).toContain('P-2605-0042');
+    expect(html).toContain('결제대행 서비스 제안');
     expect(html).toContain('토스페이먼츠');
     expect(html).toContain('2026-05-06 22:31');
     expectEditorialRules(html);
   });
 
-  it('rfqAwarded includes RFQ id, title, bid id and settlement cycle', async () => {
-    const html = await renderRfqAwarded({
-      rfqId: 'Q-2605-0042',
-      rfqTitle: '결제대행 서비스 견적',
+  it('rfpAwarded includes RFP id, title, bid id and settlement cycle', async () => {
+    const html = await renderRfpAwarded({
+      rfpId: 'P-2605-0042',
+      rfpTitle: '결제대행 서비스 제안',
       bidId: '1f4c7a2e-1234-4abc-9def-0123456789ab',
       settlementCycle: 'D+1',
     });
-    expect(html).toContain('Q-2605-0042');
+    expect(html).toContain('P-2605-0042');
     expect(html).toContain('1f4c7a2e-1234-4abc-9def-0123456789ab');
     expect(html).toContain('D+1');
     expectEditorialRules(html);

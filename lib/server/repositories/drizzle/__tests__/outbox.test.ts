@@ -46,16 +46,16 @@ const okSender: Sender = async () => ({ ok: true });
 describe('DrizzleOutboxRepository / Step 10', () => {
   it('enqueue dedupes by dedupeKey (partial unique index)', async () => {
     const { repo } = await setup();
-    const dedupeKey = 'rfq:Q-2605-0042:invite:pg@toss.im';
+    const dedupeKey = 'rfp:P-2605-0042:invite:pg@toss.im';
     const first = await repo.enqueue({
-      event: 'rfq.invited',
+      event: 'rfp.invited',
       to: 'pg@toss.im',
       subject: 'S',
       html: '<a>x</a>',
       dedupeKey,
     });
     const second = await repo.enqueue({
-      event: 'rfq.invited',
+      event: 'rfp.invited',
       to: 'pg@toss.im',
       subject: 'S',
       html: '<a>x</a>',

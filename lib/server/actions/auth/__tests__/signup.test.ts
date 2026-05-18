@@ -152,7 +152,7 @@ describe('signupCompleteAction — buyer branch', () => {
   });
   afterEach(teardownActionEnv);
 
-  it('creates user + biz_profile + workspace + admin member, returns /rfq', async () => {
+  it('creates user + biz_profile + workspace + admin member, returns /rfp', async () => {
     const r = await signupCompleteAction({
       email: 'kim@example.com',
       name: '김구매',
@@ -169,7 +169,7 @@ describe('signupCompleteAction — buyer branch', () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.redirectTo).toBe('/rfq');
+    expect(r.redirectTo).toBe('/rfp');
     expect(r.password).toBe('Password123!');
 
     const [u] = await db

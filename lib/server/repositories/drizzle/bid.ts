@@ -27,7 +27,7 @@ function asAttachment(att: AttachmentRow | null | undefined): Attachment {
 function rowToBid(row: BidRow, att: AttachmentRow | null | undefined): Bid {
   return {
     id: row.id,
-    rfqId: row.rfqId,
+    rfpId: row.rfpId,
     pgWsId: row.pgWsId,
     invitationId: row.invitationId,
     settleCycle: row.settleCycle,
@@ -64,7 +64,7 @@ export class DrizzleBidRepository implements BidRepo {
       .insert(bids)
       .values({
         id: bid.id,
-        rfqId: bid.rfqId,
+        rfpId: bid.rfpId,
         pgWsId: bid.pgWsId,
         invitationId: bid.invitationId,
         settleCycle: bid.settleCycle,
@@ -116,9 +116,9 @@ export class DrizzleBidRepository implements BidRepo {
     return row ? rowToBid(row.b, row.a) : undefined;
   }
 
-  async findByRfq(rfqId: string, tx?: Tx): Promise<Bid[]> {
+  async findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]> {
     const db = this.h(tx);
-    const rows = await this.fetchOne(db, eq(bids.rfqId, rfqId));
+    const rows = await this.fetchOne(db, eq(bids.rfpId, rfpId));
     return rows.map((r: { b: BidRow; a: AttachmentRow | null }) =>
       rowToBid(r.b, r.a),
     );

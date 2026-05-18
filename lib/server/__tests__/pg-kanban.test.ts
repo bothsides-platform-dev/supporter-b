@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { classifyPgInvitation } from '../pg-kanban';
-import type { RFQ } from '@/lib/types/rfq';
+import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
-import type { RfqInvitation } from '@/lib/types/invitation';
+import type { RfpInvitation } from '@/lib/types/invitation';
 
-function makeRfq(overrides: Partial<RFQ> = {}): RFQ {
+function makeRfp(overrides: Partial<RFP> = {}): RFP {
   return {
-    id: 'Q-2605-0001',
+    id: 'P-2605-0001',
     buyerWsId: 'ws-buyer',
-    title: 'RFQ 1',
+    title: 'RFP 1',
     memo: '',
     rfpFiles: [],
     allowedPgWorkspaceIds: [],
@@ -20,10 +20,10 @@ function makeRfq(overrides: Partial<RFQ> = {}): RFQ {
   };
 }
 
-function makeInv(status: RfqInvitation['status'] = 'accepted'): RfqInvitation {
+function makeInv(status: RfpInvitation['status'] = 'accepted'): RfpInvitation {
   return {
     id: 'inv-1',
-    rfqId: 'Q-2605-0001',
+    rfpId: 'P-2605-0001',
     pgWsId: 'ws-pg',
     acceptedByUserId: 'user-pg',
     uniqueToken: '',
@@ -36,7 +36,7 @@ function makeInv(status: RfqInvitation['status'] = 'accepted'): RfqInvitation {
 function makeBid(id: string, status: Bid['status'] = 'submitted'): Bid {
   return {
     id,
-    rfqId: 'Q-2605-0001',
+    rfpId: 'P-2605-0001',
     pgWsId: 'ws-pg',
     invitationId: 'inv-1',
     settleCycle: 'D+1',
@@ -57,7 +57,7 @@ describe('classifyPgInvitation', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('accepted'),
       bid: undefined,
-      rfq: makeRfq(),
+      rfp: makeRfp(),
     });
     expect(stage).toBe('received');
   });
@@ -66,7 +66,7 @@ describe('classifyPgInvitation', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: undefined,
-      rfq: makeRfq(),
+      rfp: makeRfp(),
     });
     expect(stage).toBe('reviewing');
   });
@@ -75,25 +75,25 @@ describe('classifyPgInvitation', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: makeBid('b1', 'draft'),
-      rfq: makeRfq(),
+      rfp: makeRfp(),
     });
     expect(stage).toBe('drafting');
   });
 
-  it('submitted: bid=submitted + rfq=sent', () => {
+  it('submitted: bid=submitted + rfp=sent', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: makeBid('b1', 'submitted'),
-      rfq: makeRfq({ status: 'sent' }),
+      rfp: makeRfp({ status: 'sent' }),
     });
     expect(stage).toBe('submitted');
   });
 
-  it('won: rfq.awardedBidId == thisBid.id', () => {
+  it('won: rfp.awardedBidId == thisBid.id', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: makeBid('b1', 'submitted'),
-      rfq: makeRfq({ status: 'awarded', awardedBidId: 'b1' }),
+      rfp: makeRfp({ status: 'awarded', awardedBidId: 'b1' }),
     });
     expect(stage).toBe('won');
   });
@@ -102,7 +102,7 @@ describe('classifyPgInvitation', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: makeBid('b1', 'submitted'),
-      rfq: makeRfq({ status: 'awarded', awardedBidId: 'b-other' }),
+      rfp: makeRfp({ status: 'awarded', awardedBidId: 'b-other' }),
     });
     expect(stage).toBe('lost');
   });
@@ -111,25 +111,25 @@ describe('classifyPgInvitation', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: makeBid('b1', 'withdrawn'),
-      rfq: makeRfq({ status: 'sent' }),
+      rfp: makeRfp({ status: 'sent' }),
     });
     expect(stage).toBe('lost');
   });
 
-  it('lost: rfq=closed', () => {
+  it('lost: rfp=closed', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: makeBid('b1', 'submitted'),
-      rfq: makeRfq({ status: 'closed' }),
+      rfp: makeRfp({ status: 'closed' }),
     });
     expect(stage).toBe('lost');
   });
 
-  it('lost: rfq=cancelled', () => {
+  it('lost: rfp=cancelled', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: makeBid('b1', 'submitted'),
-      rfq: makeRfq({ status: 'cancelled' }),
+      rfp: makeRfp({ status: 'cancelled' }),
     });
     expect(stage).toBe('lost');
   });
@@ -139,16 +139,16 @@ describe('classifyPgInvitation', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: makeBid('b1', 'withdrawn'),
-      rfq: makeRfq({ status: 'awarded', awardedBidId: 'b1' }),
+      rfp: makeRfp({ status: 'awarded', awardedBidId: 'b1' }),
     });
     expect(stage).toBe('won');
   });
 
-  it('lost: rfq=awarded + no bid (응답 안 한 채로 타사 낙찰됨)', () => {
+  it('lost: rfp=awarded + no bid (응답 안 한 채로 타사 낙찰됨)', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: undefined,
-      rfq: makeRfq({ status: 'awarded', awardedBidId: 'b-other' }),
+      rfp: makeRfp({ status: 'awarded', awardedBidId: 'b-other' }),
     });
     expect(stage).toBe('lost');
   });

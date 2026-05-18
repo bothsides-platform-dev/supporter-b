@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, rfqs, rfqInvitations } from '@/lib/db/schema';
+import { attachments, rfps, rfpInvitations } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { eq } from 'drizzle-orm';
 import {
@@ -94,14 +94,14 @@ async function callUpload(form: FormData) {
   return POST(req);
 }
 
-async function seedBuyerSession(rfqId?: string) {
+async function seedBuyerSession(rfpId?: string) {
   const buyer = await seedUser(db, { email: 'buyer@buy.com' });
   const biz = await seedBizProfile(db);
   const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
   await seedMembership(db, buyerWs.id, buyer.id, 'admin');
-  if (rfqId) {
-    await db.insert(rfqs).values({
-      id: rfqId,
+  if (rfpId) {
+    await db.insert(rfps).values({
+      id: rfpId,
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 'upload test',
@@ -124,7 +124,7 @@ async function seedBuyerSession(rfqId?: string) {
   return { buyer, buyerWs };
 }
 
-async function seedPgSession(rfqId: string) {
+async function seedPgSession(rfpId: string) {
   // Buyer side
   const buyer = await seedUser(db, { email: 'b@buy.com' });
   const biz = await seedBizProfile(db);
@@ -134,9 +134,9 @@ async function seedPgSession(rfqId: string) {
   const pgWs = await seedPgWorkspace(db, 'toss.im');
   const pg = await seedUser(db, { email: 'sales@toss.im' });
   await seedMembership(db, pgWs.id, pg.id, 'admin');
-  // RFQ
-  await db.insert(rfqs).values({
-    id: rfqId,
+  // RFP
+  await db.insert(rfps).values({
+    id: rfpId,
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'pg upload test',
@@ -147,10 +147,10 @@ async function seedPgSession(rfqId: string) {
     createdBy: buyer.id,
     sentAt: new Date(),
   });
-  // Accepted invitation linking pg user to RFQ
-  await db.insert(rfqInvitations).values({
+  // Accepted invitation linking pg user to RFP
+  await db.insert(rfpInvitations).values({
     id: randomUUID(),
-    rfqId,
+    rfpId,
     pgWsId: pgWs.id,
     acceptedByUserId: pg.id,
     tokenHash: hashToken(generateToken()),
@@ -174,7 +174,7 @@ describe('POST /api/files/upload', () => {
   it('401 when unauthenticated', async () => {
     const f = new FormData();
     f.append('file', makeFile('a.pdf', 'application/pdf', PDF_HEAD));
-    f.append('ownerKind', 'rfq_rfp');
+    f.append('ownerKind', 'rfp');
     f.append('ownerId', '__draft__');
     const r = await callUpload(f);
     expect(r.status).toBe(401);
@@ -183,7 +183,7 @@ describe('POST /api/files/upload', () => {
   it('400 when file is missing', async () => {
     await seedBuyerSession();
     const f = new FormData();
-    f.append('ownerKind', 'rfq_rfp');
+    f.append('ownerKind', 'rfp');
     f.append('ownerId', '__draft__');
     const r = await callUpload(f);
     expect(r.status).toBe(400);
@@ -204,7 +204,7 @@ describe('POST /api/files/upload', () => {
       'file',
       makeFile('a.docx', 'application/vnd.ms-word', Buffer.from('xxxx')),
     );
-    f.append('ownerKind', 'rfq_rfp');
+    f.append('ownerKind', 'rfp');
     f.append('ownerId', '__draft__');
     const r = await callUpload(f);
     expect(r.status).toBe(415);
@@ -214,7 +214,7 @@ describe('POST /api/files/upload', () => {
     await seedBuyerSession();
     const f = new FormData();
     f.append('file', makeFile('fake.pdf', 'application/pdf', PNG_HEAD));
-    f.append('ownerKind', 'rfq_rfp');
+    f.append('ownerKind', 'rfp');
     f.append('ownerId', '__draft__');
     const r = await callUpload(f);
     expect(r.status).toBe(415);
@@ -228,7 +228,7 @@ describe('POST /api/files/upload', () => {
     ]);
     const f = new FormData();
     f.append('file', makeFile('big.pdf', 'application/pdf', big));
-    f.append('ownerKind', 'rfq_rfp');
+    f.append('ownerKind', 'rfp');
     f.append('ownerId', '__draft__');
     const r = await callUpload(f);
     expect(r.status).toBe(413);
@@ -239,26 +239,26 @@ describe('POST /api/files/upload', () => {
     const f = new FormData();
     f.append('file', makeFile('a.pdf', 'application/pdf', PDF_HEAD));
     f.append('ownerKind', 'bid_proposal');
-    f.append('ownerId', 'Q-2605-0099');
+    f.append('ownerId', 'P-2605-0099');
     const r = await callUpload(f);
     expect(r.status).toBe(403);
   });
 
-  it('403 when PG uploads bid_proposal for an RFQ they were not invited to', async () => {
-    await seedPgSession('Q-2605-0001');
+  it('403 when PG uploads bid_proposal for an RFP they were not invited to', async () => {
+    await seedPgSession('P-2605-0001');
     const f = new FormData();
     f.append('file', makeFile('a.pdf', 'application/pdf', PDF_HEAD));
     f.append('ownerKind', 'bid_proposal');
-    f.append('ownerId', 'Q-9999-9999');
+    f.append('ownerId', 'P-9999-9999');
     const r = await callUpload(f);
     expect(r.status).toBe(403);
   });
 
-  it('happy path — rfq_rfp draft: row inserted + file on disk', async () => {
+  it('happy path — rfp draft: row inserted + file on disk', async () => {
     const { buyer } = await seedBuyerSession();
     const f = new FormData();
     f.append('file', makeFile('rfp.pdf', 'application/pdf', PDF_HEAD));
-    f.append('ownerKind', 'rfq_rfp');
+    f.append('ownerKind', 'rfp');
     f.append('ownerId', '__draft__');
     const r = await callUpload(f);
     expect(r.status).toBe(200);
@@ -282,12 +282,12 @@ describe('POST /api/files/upload', () => {
   });
 
   it('happy path — bid_proposal: invitation gates upload', async () => {
-    const rfqId = 'Q-2605-0002';
-    await seedPgSession(rfqId);
+    const rfpId = 'P-2605-0002';
+    await seedPgSession(rfpId);
     const f = new FormData();
     f.append('file', makeFile('proposal.pdf', 'application/pdf', PDF_HEAD));
     f.append('ownerKind', 'bid_proposal');
-    f.append('ownerId', rfqId);
+    f.append('ownerId', rfpId);
     const r = await callUpload(f);
     expect(r.status).toBe(200);
     const body = (await r.json()) as { id: string };
@@ -298,7 +298,7 @@ describe('POST /api/files/upload', () => {
       .where(eq(attachments.id, body.id))
       .limit(1);
     expect(row?.ownerKind).toBe('bid_proposal');
-    expect(row?.ownerId).toBe(rfqId);
+    expect(row?.ownerId).toBe(rfpId);
   });
 
   it('cleanup ordering — repo.save throws → disk file deleted (F-6)', async () => {
@@ -336,7 +336,7 @@ describe('POST /api/files/upload', () => {
 
       const form = new FormData();
       form.append('file', makeFile('a.pdf', 'application/pdf', PDF_HEAD));
-      form.append('ownerKind', 'rfq_rfp');
+      form.append('ownerKind', 'rfp');
       form.append('ownerId', '__draft__');
       const req = new Request('http://localhost/api/files/upload', {
         method: 'POST',

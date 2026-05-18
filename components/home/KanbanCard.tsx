@@ -35,7 +35,7 @@ function ddayChipColor(deadline: string): ChipColor {
 export function KanbanCard(props: Props) {
   const cardId =
     props.role === 'buyer'
-      ? `card:${props.card.rfqId}`
+      ? `card:${props.card.rfpId}`
       : `card:${props.card.invitationId}`;
 
   const frozen =
@@ -92,7 +92,7 @@ function BuyerCardBody({ card }: { card: BuyerCard }) {
     <div className="space-y-2">
       <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
         <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] tracking-[0.04em]">
-          {card.rfqId}
+          {card.rfpId}
         </span>
         {card.stage === 'draft' ? null : (
           <Chip label={dday} color={ddayChipColor(card.deadline)} />
@@ -125,7 +125,7 @@ function PgCardBody({ card }: { card: PgCard }) {
     <div className="space-y-2">
       <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
         <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] tracking-[0.04em]">
-          {card.rfqId}
+          {card.rfpId}
         </span>
         {!isResultColumn && (
           <Chip label={dday} color={ddayChipColor(card.deadline)} />

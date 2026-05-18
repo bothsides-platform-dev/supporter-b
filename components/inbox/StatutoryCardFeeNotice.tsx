@@ -4,7 +4,7 @@ import { GRADE_LABELS, type MerchantGrade } from '@/lib/types/biz-profile';
 type Props = { grade: MerchantGrade | null };
 
 export function StatutoryCardFeeNotice({ grade }: Props) {
-  // 등급 미입력 RFQ — 일반 가정으로 9개 카드사별 입력 모드. notice 없음.
+  // 등급 미입력 RFP — 일반 가정으로 9개 카드사별 입력 모드. notice 없음.
   if (grade === null) return null;
   const fee = STATUTORY_CARD_FEE[grade];
   if (isNaN(fee)) return null;

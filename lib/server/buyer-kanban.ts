@@ -1,13 +1,13 @@
-// Buyer 홈 칸반 — RFQ 1건 = 카드 1장. 6개 컬럼.
-// 분류는 `RFQ.status` + 응답 상태(submitted bid 수) + deadline 으로 도출되는 derived 값.
+// Buyer 홈 칸반 — RFP 1건 = 카드 1장. 6개 컬럼.
+// 분류는 `RFP.status` + 응답 상태(submitted bid 수) + deadline 으로 도출되는 derived 값.
 // 사용자가 임의로 컬럼을 옮기는 건 plan 의 드래그 매트릭스가 허락하는 전이만 가능 (각각이
-// 도메인 액션을 트리거 — sendDraftInvitationsAction / awardRfqAction / cancelRfqAction).
+// 도메인 액션을 트리거 — sendDraftInvitationsAction / awardRfpAction / cancelRfpAction).
 //
 // 이 파일은 client component 에서도 import 가능 — repo / DB import 없이 순수 도메인.
 // 데이터 로더는 ./buyer-kanban-loader.ts 참조.
-import type { RFQ } from '@/lib/types/rfq';
+import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
-import type { RfqInvitation } from '@/lib/types/invitation';
+import type { RfpInvitation } from '@/lib/types/invitation';
 
 export type BuyerKanbanStage =
   | 'draft'
@@ -36,7 +36,7 @@ export const BUYER_KANBAN_LABEL: Record<BuyerKanbanStage, string> = {
 };
 
 export type BuyerKanbanCard = {
-  rfqId: string;
+  rfpId: string;
   title: string;
   stage: BuyerKanbanStage;
   deadline: string;
@@ -47,24 +47,24 @@ export type BuyerKanbanCard = {
 };
 
 // pure — 단위 테스트 가능.
-export function classifyBuyerRfq(args: {
-  rfq: RFQ;
+export function classifyBuyerRfp(args: {
+  rfp: RFP;
   bids: Bid[];
-  invitations: RfqInvitation[];
+  invitations: RfpInvitation[];
   now: Date;
 }): BuyerKanbanStage {
-  const { rfq, bids, invitations, now } = args;
+  const { rfp, bids, invitations, now } = args;
 
-  if (rfq.status === 'awarded') return 'awarded';
-  if (rfq.status === 'closed' || rfq.status === 'cancelled') return 'closed';
-  if (rfq.status === 'draft') return 'draft';
+  if (rfp.status === 'awarded') return 'awarded';
+  if (rfp.status === 'closed' || rfp.status === 'cancelled') return 'closed';
+  if (rfp.status === 'draft') return 'draft';
 
   // status === 'sent'
   // PG 의 draft bid 는 buyer 에게 보이지 않는 WIP — '응답수집' 판정에서 제외.
   const submittedBids = bids.filter((b) => b.status === 'submitted');
   if (submittedBids.length === 0) return 'sent';
 
-  const deadlinePassed = new Date(rfq.deadline).getTime() <= now.getTime();
+  const deadlinePassed = new Date(rfp.deadline).getTime() <= now.getTime();
   if (deadlinePassed) return 'comparing';
 
   // 초대된 PG 가 모두 응답을 제출했으면 더 받을 게 없으니 '비교·협상' 으로.
@@ -81,23 +81,23 @@ export function classifyBuyerRfq(args: {
 }
 
 export function toBuyerCard(args: {
-  rfq: RFQ;
+  rfp: RFP;
   bids: Bid[];
-  invitations: RfqInvitation[];
+  invitations: RfpInvitation[];
   stage: BuyerKanbanStage;
 }): BuyerKanbanCard {
-  const { rfq, bids, invitations, stage } = args;
+  const { rfp, bids, invitations, stage } = args;
   // 카드의 'invited PG 수' 는 도메인적으로 '실제 발송 대상'을 의미해야 함 — draft 는 제외.
   const invitedActive = invitations.filter((i) => i.status !== 'draft').length;
   return {
-    rfqId: rfq.id,
-    title: rfq.title,
+    rfpId: rfp.id,
+    title: rfp.title,
     stage,
-    deadline: rfq.deadline,
-    createdAt: rfq.createdAt,
+    deadline: rfp.deadline,
+    createdAt: rfp.createdAt,
     invitedPgCount: invitedActive,
     submittedBidCount: bids.filter((b) => b.status === 'submitted').length,
-    awardedBidId: rfq.awardedBidId,
+    awardedBidId: rfp.awardedBidId,
   };
 }
 

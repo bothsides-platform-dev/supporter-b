@@ -4,7 +4,7 @@
 //   - submitBidAction 성공 시 bus.subscribe handler가 buyer 멤버 수만큼 호출
 //   - submitBidAction 실패 시(BID_ALREADY_SUBMITTED) handler 추가 호출 없음
 //     (rollback과 emit 정합)
-//   - awardRfqAction 성공 시 winner+loser 멤버 수만큼 handler 호출
+//   - awardRfpAction 성공 시 winner+loser 멤버 수만큼 handler 호출
 //
 // 이 테스트는 “일부만 wrapper로 가고 나머지 raw 호출 남는” 일관성 깨짐을
 // 발견하기 위한 안전망. raw notifRepo.save로 회귀하면 emit 카운트가 0 →
@@ -12,7 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { rfqs, rfqInvitations, bids } from '@/lib/db/schema';
+import { rfps, rfpInvitations, bids } from '@/lib/db/schema';
 import {
   seedBizProfile,
   seedBuyerWorkspace,
@@ -21,9 +21,9 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
-  setupRfqActionEnv,
-  teardownRfqActionEnv,
-} from '../../rfq/__tests__/_setup';
+  setupRfpActionEnv,
+  teardownRfpActionEnv,
+} from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetBusForTest,
@@ -61,17 +61,17 @@ vi.mock('@/lib/auth/session', () => ({
 }));
 
 import { submitBidAction } from '../../bid/submitBidAction';
-import { awardRfqAction } from '../../rfq/awardRfqAction';
+import { awardRfpAction } from '../../rfp/awardRfpAction';
 
 let db: PgliteDB;
 
 describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
   beforeEach(async () => {
-    db = await setupRfqActionEnv();
+    db = await setupRfpActionEnv();
     __resetBusForTest();
   });
   afterEach(() => {
-    teardownRfqActionEnv();
+    teardownRfpActionEnv();
     __resetBusForTest();
     sessionRef.value = null;
   });
@@ -90,9 +90,9 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     const pgUser = await seedUser(db, { email: 'sales@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-    const rfqId = 'Q-2605-9001';
-    await db.insert(rfqs).values({
-      id: rfqId,
+    const rfpId = 'P-2605-9001';
+    await db.insert(rfps).values({
+      id: rfpId,
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 't',
@@ -104,9 +104,9 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
       sentAt: new Date(),
     });
     const invId = randomUUID();
-    await db.insert(rfqInvitations).values({
+    await db.insert(rfpInvitations).values({
       id: invId,
-      rfqId,
+      rfpId,
       pgWsId: pgWs.id,
       acceptedByUserId: pgUser.id,
       tokenHash: randomUUID(),
@@ -131,7 +131,7 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     };
 
     const r = await submitBidAction({
-      rfqId,
+      rfpId,
       settleCycle: 'D+1',
       deposit: 0,
       setupFee: 0,
@@ -158,9 +158,9 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     const pgUser = await seedUser(db, { email: 'sales@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-    const rfqId = 'Q-2605-9002';
-    await db.insert(rfqs).values({
-      id: rfqId,
+    const rfpId = 'P-2605-9002';
+    await db.insert(rfps).values({
+      id: rfpId,
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 't',
@@ -172,9 +172,9 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
       sentAt: new Date(),
     });
     const invId = randomUUID();
-    await db.insert(rfqInvitations).values({
+    await db.insert(rfpInvitations).values({
       id: invId,
-      rfqId,
+      rfpId,
       pgWsId: pgWs.id,
       acceptedByUserId: pgUser.id,
       tokenHash: randomUUID(),
@@ -196,7 +196,7 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
       },
     };
     const input = {
-      rfqId,
+      rfpId,
       settleCycle: 'D+1' as const,
       deposit: 0,
       setupFee: 0,
@@ -214,7 +214,7 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     expect(recv).toHaveLength(1);
   });
 
-  it('awardRfqAction emits winner + loser notifications after commit', async () => {
+  it('awardRfpAction emits winner + loser notifications after commit', async () => {
     const buyer = await seedUser(db, { email: 'b@x.com' });
     const biz = await seedBizProfile(db);
     const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
@@ -228,9 +228,9 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     const loserUser = await seedUser(db, { email: 'l@inicis.com' });
     await seedMembership(db, loserWs.id, loserUser.id);
 
-    const rfqId = 'Q-2605-9003';
-    await db.insert(rfqs).values({
-      id: rfqId,
+    const rfpId = 'P-2605-9003';
+    await db.insert(rfps).values({
+      id: rfpId,
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 't',
@@ -247,9 +247,9 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
       submittedBy: string,
     ): Promise<string> {
       const invId = randomUUID();
-      await db.insert(rfqInvitations).values({
+      await db.insert(rfpInvitations).values({
         id: invId,
-        rfqId,
+        rfpId,
         pgWsId,
         tokenHash: randomUUID(),
         sentAt: new Date(),
@@ -259,7 +259,7 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
       const bidId = randomUUID();
       await db.insert(bids).values({
         id: bidId,
-        rfqId,
+        rfpId,
         pgWsId,
         invitationId: invId,
         settleCycle: 'D+1',
@@ -292,12 +292,12 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
       },
     };
 
-    const r = await awardRfqAction({ rfqId, awardedBidId: winnerBidId });
+    const r = await awardRfpAction({ rfpId, awardedBidId: winnerBidId });
     expect(r.ok).toBe(true);
 
     expect(recvWinner).toHaveLength(1);
-    expect(recvWinner[0].type).toBe('rfq.awarded');
+    expect(recvWinner[0].type).toBe('rfp.awarded');
     expect(recvLoser).toHaveLength(1);
-    expect(recvLoser[0].type).toBe('rfq.rejected');
+    expect(recvLoser[0].type).toBe('rfp.rejected');
   });
 });

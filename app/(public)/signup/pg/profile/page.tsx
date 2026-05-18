@@ -9,6 +9,10 @@ import {
   readSignupDraft,
   writeSignupDraft,
 } from '@/lib/auth/signup-storage';
+import {
+  isPasswordValid,
+  validatePasswordConfirm,
+} from '@/lib/auth/password-validation';
 
 export default function PgProfilePage() {
   const router = useRouter();
@@ -17,29 +21,28 @@ export default function PgProfilePage() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
-  const draft = readSignupDraft();
-  const isInvite = !!draft.inviteToken;
-  const current = isInvite ? 2 : 3;
-  const total = isInvite ? 3 : 4;
-
-  const validate = (): boolean => {
-    const errs: Record<string, string> = {};
-    if (!name.trim()) errs.name = '이름을 입력해주세요.';
-    if (password.length < 10) errs.password = 'MIN 10';
-    else if (!/[A-Za-z]/.test(password)) errs.password = 'A-Z 1+';
-    else if (!/\d/.test(password)) errs.password = '0-9 1+';
-    else if (!/[^A-Za-z0-9]/.test(password)) errs.password = '!@# 1+';
-    if (password !== passwordConfirm)
-      errs.passwordConfirm = '비밀번호가 일치하지 않습니다.';
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
+  const passwordError =
+    attemptedSubmit && !password ? '비밀번호를 입력해주세요.' : null;
+  const confirmError =
+    passwordConfirm.length > 0
+      ? validatePasswordConfirm(password, passwordConfirm)
+      : attemptedSubmit
+        ? '비밀번호 확인을 입력해주세요.'
+        : null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+    setAttemptedSubmit(true);
+    if (!name.trim()) {
+      setNameError('이름을 입력해주세요.');
+      return;
+    }
+    setNameError(null);
+    if (!password || !isPasswordValid(password)) return;
+    if (!passwordConfirm || confirmError) return;
     setProfile(name.trim(), phone.trim() || undefined);
     const currentDraft = readSignupDraft();
     writeSignupDraft({
@@ -74,9 +77,9 @@ export default function PgProfilePage() {
             autoComplete="name"
             className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
           />
-          {errors.name && (
-            <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]">
-              {errors.name}
+          {nameError && (
+            <p className="text-[11px] text-[var(--md-sys-color-error)]">
+              {nameError}
             </p>
           )}
         </div>
@@ -85,7 +88,7 @@ export default function PgProfilePage() {
           value={password}
           onChange={setPassword}
           showStrength
-          error={errors.password}
+          error={passwordError ?? undefined}
         />
         <PasswordField
           label="비밀번호 확인"
@@ -93,7 +96,7 @@ export default function PgProfilePage() {
           value={passwordConfirm}
           onChange={setPasswordConfirm}
           autoComplete="new-password"
-          error={errors.passwordConfirm}
+          error={confirmError ?? undefined}
         />
         <div className="space-y-1">
           <label

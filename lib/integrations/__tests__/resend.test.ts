@@ -58,11 +58,11 @@ describe('ResendSender', () => {
     __resetResendClientForTest();
 
     const entry = makeEntry({
-      event: 'rfq.invited',
+      event: 'rfp.invited',
       to: 'pg@toss.im',
-      subject: '[Q-2605-0042] 견적 요청 도착',
+      subject: '[P-2605-0042] 제안 요청 도착',
       html: '<a href="https://example.com/very-long-html">x</a>',
-      dedupeKey: 'rfq:Q-2605-0042:invite:pg@toss.im',
+      dedupeKey: 'rfp:P-2605-0042:invite:pg@toss.im',
     });
     const result = await ResendSender(entry);
 
@@ -71,10 +71,10 @@ describe('ResendSender', () => {
     expect(logSpy).toHaveBeenCalledTimes(1);
     const line = logSpy.mock.calls[0][0] as string;
     expect(line).toContain('[email DEV]');
-    expect(line).toContain('event=rfq.invited');
+    expect(line).toContain('event=rfp.invited');
     expect(line).toContain('to=pg@toss.im');
-    expect(line).toContain('subject=[Q-2605-0042] 견적 요청 도착');
-    expect(line).toContain('dedupeKey=rfq:Q-2605-0042:invite:pg@toss.im');
+    expect(line).toContain('subject=[P-2605-0042] 제안 요청 도착');
+    expect(line).toContain('dedupeKey=rfp:P-2605-0042:invite:pg@toss.im');
     // html intentionally excluded from the dev line.
     expect(line).not.toContain('<a href');
     logSpy.mockRestore();

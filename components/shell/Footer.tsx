@@ -23,7 +23,7 @@ export function Footer() {
             >
               PG사 영업담당자와 구매사를 연결하는
               <br />
-              비공개 1:N RFQ 플랫폼
+              비공개 1:N RFP 플랫폼
             </p>
           </div>
 

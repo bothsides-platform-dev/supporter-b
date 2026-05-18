@@ -19,30 +19,30 @@ export interface AuthEmailChangeProps {
   expiresHours: number;
 }
 
-export interface RfqInvitedProps {
-  rfqId: string;
-  rfqTitle: string;
+export interface RfpInvitedProps {
+  rfpId: string;
+  rfpTitle: string;
   buyerName: string;
   deadline: string;
   inviteUrl: string;
 }
 
-export interface RfqSentProps {
-  rfqId: string;
-  rfqTitle: string;
+export interface RfpSentProps {
+  rfpId: string;
+  rfpTitle: string;
   inviteCount: number;
 }
 
 export interface BidSubmittedProps {
-  rfqId: string;
-  rfqTitle: string;
+  rfpId: string;
+  rfpTitle: string;
   pgName: string;
   submittedAt: string;
 }
 
-export interface RfqAwardedProps {
-  rfqId: string;
-  rfqTitle: string;
+export interface RfpAwardedProps {
+  rfpId: string;
+  rfpTitle: string;
   bidId: string;
   settlementCycle: string;
 }

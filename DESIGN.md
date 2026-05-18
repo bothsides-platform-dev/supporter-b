@@ -11,7 +11,7 @@ B2B 결제 플랫폼에 적합한 MD3 — Google의 2021년 디자인 시스템�
 
 **3대 원칙**
 1. **톤·온·톤 표면 계층** — 5단계 surface-container 계층으로 UI 깊이를 표현. 그림자보다 색조가 주도한다.
-2. **수치는 모노** — 금융 값(₩, %, 건수, 날짜, 견적번호)은 `.md-numeric` 클래스(JetBrains Mono + tabular-nums). 수치 정렬이 신뢰의 시각이다.
+2. **수치는 모노** — 금융 값(₩, %, 건수, 날짜, 제안번호)은 `.md-numeric` 클래스(JetBrains Mono + tabular-nums). 수치 정렬이 신뢰의 시각이다.
 3. **MD3 상태 레이어** — 호버 8%, 프레스 12% `color-mix(in srgb, ...)` 오버레이로 일관된 상호작용 피드백.
 
 **제거된 Korean Editorial 요소**
@@ -107,7 +107,7 @@ surface-container-highest #E2E2E8   → filled 카드
 }
 ```
 
-적용 대상: ₩ 금액 셀, % 수수료 값, 건수 카운터, 견적번호(`Q-2605-0042`), 날짜. **내비게이션·라벨·버튼 텍스트에는 절대 적용하지 않는다.**
+적용 대상: ₩ 금액 셀, % 수수료 값, 건수 카운터, 제안번호(`P-2605-0042`), 날짜. **내비게이션·라벨·버튼 텍스트에는 절대 적용하지 않는다.**
 
 ---
 
@@ -158,7 +158,7 @@ Elevation 5: 0px 4px 4px rgba(0,0,0,.30), 0px 8px 12px 6px rgba(0,0,0,.15) ← �
 
 | Variant | 외관 | 용도 |
 |---|---|---|
-| `filled` | Primary/Error 배경 | 주요 CTA (RFQ 발송, 낙찰) |
+| `filled` | Primary/Error 배경 | 주요 CTA (RFP 발송, 낙찰) |
 | `outlined` | 테두리만 | 보조 액션 |
 | `text` | 텍스트만 | 3차 액션, 취소 |
 | `elevated` | surface-low 배경 + 그림자 | 카드 위 액션 |
@@ -204,7 +204,7 @@ Elevation 5: 0px 4px 4px rgba(0,0,0,.30), 0px 8px 12px 6px rgba(0,0,0,.15) ← �
 ```
 --shell-rail:    80px   ← MD3 Navigation Rail 너비
 --shell-topbar:  64px   ← MD3 Small Top App Bar 높이
---shell-subnav:  244px  ← 서브 내비게이션 (RFQ 상세 등)
+--shell-subnav:  244px  ← 서브 내비게이션 (RFP 상세 등)
 ```
 
 **Navigation Rail** (`IconSidebar`): inverse-surface 배경 (다크). 활성 아이템은 secondary-container 알약(pill) 인디케이터 + on-secondary-container 색상. 비활성은 inverse-on-surface 60% 투명도.

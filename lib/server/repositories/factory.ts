@@ -10,14 +10,14 @@ import type {
   InvitationRepo,
   NotificationRepo,
   OutboxRepo,
-  RfqRepo,
+  RfpRepo,
   UserRepo,
   VerificationTokenRepo,
   WorkspaceRepo,
 } from './types';
 
 type RepoBundle = {
-  rfq: RfqRepo;
+  rfp: RfpRepo;
   invitation: InvitationRepo;
   workspace: WorkspaceRepo;
   user: UserRepo;
@@ -46,13 +46,13 @@ function shouldUseInMemory(): boolean {
 
 async function buildBundle(): Promise<RepoBundle> {
   if (shouldUseInMemory()) {
-    const { InMemoryRfqRepository } = await import('./in-memory/rfq');
+    const { InMemoryRfpRepository } = await import('./in-memory/rfp');
     const { InMemoryInvitationRepository } = await import('./in-memory/invitation');
     const { InMemoryWorkspaceRepository } = await import('./in-memory/workspace');
     const { InMemoryOutboxRepository } = await import('./in-memory/outbox');
-    const rfq = new InMemoryRfqRepository();
+    const rfp = new InMemoryRfpRepository();
     const invitation = new InMemoryInvitationRepository();
-    invitation.setRfqRepoRef(() => rfq);
+    invitation.setRfpRepoRef(() => rfp);
     const workspace = new InMemoryWorkspaceRepository();
     const outbox = new InMemoryOutboxRepository();
     // The 7 still-forward-declared repos return a Proxy that throws on any
@@ -70,7 +70,7 @@ async function buildBundle(): Promise<RepoBundle> {
         },
       );
     return {
-      rfq,
+      rfp,
       invitation,
       workspace,
       user: notImplemented('user') as UserRepo,
@@ -90,7 +90,7 @@ async function buildBundle(): Promise<RepoBundle> {
   // Lazy import the postgres-js client so missing DATABASE_URL doesn't crash
   // tests that only exercise the in-memory branch.
   const { db } = await import('@/lib/db/client');
-  const { DrizzleRfqRepository } = await import('./drizzle/rfq');
+  const { DrizzleRfpRepository } = await import('./drizzle/rfp');
   const { DrizzleInvitationRepository } = await import('./drizzle/invitation');
   const { DrizzleWorkspaceRepository } = await import('./drizzle/workspace');
   const { DrizzleUserRepository } = await import('./drizzle/user');
@@ -105,7 +105,7 @@ async function buildBundle(): Promise<RepoBundle> {
   const { DrizzleOutboxRepository } = await import('./drizzle/outbox');
 
   return {
-    rfq: new DrizzleRfqRepository(db),
+    rfp: new DrizzleRfpRepository(db),
     invitation: new DrizzleInvitationRepository(db),
     workspace: new DrizzleWorkspaceRepository(db),
     user: new DrizzleUserRepository(db),
@@ -127,8 +127,8 @@ async function getBundle(): Promise<RepoBundle> {
   return globalThis.__bidit_repos__;
 }
 
-export async function getRfqRepo(): Promise<RfqRepo> {
-  return (await getBundle()).rfq;
+export async function getRfpRepo(): Promise<RfpRepo> {
+  return (await getBundle()).rfp;
 }
 export async function getInvitationRepo(): Promise<InvitationRepo> {
   return (await getBundle()).invitation;
@@ -180,7 +180,7 @@ export async function __useDrizzleWithDbForTest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,
 ): Promise<void> {
-  const { DrizzleRfqRepository } = await import('./drizzle/rfq');
+  const { DrizzleRfpRepository } = await import('./drizzle/rfp');
   const { DrizzleInvitationRepository } = await import('./drizzle/invitation');
   const { DrizzleWorkspaceRepository } = await import('./drizzle/workspace');
   const { DrizzleUserRepository } = await import('./drizzle/user');
@@ -194,7 +194,7 @@ export async function __useDrizzleWithDbForTest(
   const { DrizzleAttachmentRepository } = await import('./drizzle/attachment');
   const { DrizzleOutboxRepository } = await import('./drizzle/outbox');
   globalThis.__bidit_repos__ = {
-    rfq: new DrizzleRfqRepository(db),
+    rfp: new DrizzleRfpRepository(db),
     invitation: new DrizzleInvitationRepository(db),
     workspace: new DrizzleWorkspaceRepository(db),
     user: new DrizzleUserRepository(db),

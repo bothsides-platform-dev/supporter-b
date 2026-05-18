@@ -3,10 +3,10 @@ import { decideRoute } from '../route-decision';
 
 describe('decideRoute — Step 3 four cases', () => {
   it('case 1: unauth + (app)/* redirects to /login?next=<encoded>', () => {
-    const result = decideRoute('/rfq/q-2605-0042', '?tab=bids', false);
+    const result = decideRoute('/rfp/q-2605-0042', '?tab=bids', false);
     expect(result).toEqual({
       kind: 'redirect',
-      to: `/login?next=${encodeURIComponent('/rfq/q-2605-0042?tab=bids')}`,
+      to: `/login?next=${encodeURIComponent('/rfp/q-2605-0042?tab=bids')}`,
     });
   });
 
@@ -32,9 +32,9 @@ describe('decideRoute — Step 3 four cases', () => {
     });
   });
 
-  it('case 3: any + /invite/rfq/<token> passes through', () => {
-    expect(decideRoute('/invite/rfq/abc123', '', false)).toEqual({ kind: 'next' });
-    expect(decideRoute('/invite/rfq/abc123', '', true)).toEqual({ kind: 'next' });
+  it('case 3: any + /invite/rfp/<token> passes through', () => {
+    expect(decideRoute('/invite/rfp/abc123', '', false)).toEqual({ kind: 'next' });
+    expect(decideRoute('/invite/rfp/abc123', '', true)).toEqual({ kind: 'next' });
   });
 
   it('case 4: any + /logout passes through (does not redirect to /home)', () => {

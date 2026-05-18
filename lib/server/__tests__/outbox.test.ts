@@ -34,16 +34,16 @@ describe('InMemoryOutboxRepository (Step 10 swap of NotificationOutboxAdapter)',
   });
 
   it('suppresses duplicate by dedupeKey', async () => {
-    const key = 'invite-rfq1-pg1';
+    const key = 'invite-rfp1-pg1';
     const first = await repo.enqueue({
-      event: 'rfq.invited',
+      event: 'rfp.invited',
       to: 'a@b.com',
       subject: 'X',
       html: '',
       dedupeKey: key,
     });
     const second = await repo.enqueue({
-      event: 'rfq.invited',
+      event: 'rfp.invited',
       to: 'a@b.com',
       subject: 'X',
       html: '',

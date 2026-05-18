@@ -9,7 +9,7 @@ type ContractRow = typeof contracts.$inferSelect;
 function rowToContract(row: ContractRow): Contract {
   return {
     id: row.id,
-    rfqId: row.rfqId,
+    rfpId: row.rfpId,
     bidId: row.bidId,
     awardedAt: new Date(row.awardedAt).toISOString(),
     awardedBy: row.awardedBy,
@@ -31,7 +31,7 @@ export class DrizzleContractRepository implements ContractRepo {
       .insert(contracts)
       .values({
         id: c.id,
-        rfqId: c.rfqId,
+        rfpId: c.rfpId,
         bidId: c.bidId,
         awardedAt: new Date(c.awardedAt),
         awardedBy: c.awardedBy,
@@ -39,12 +39,12 @@ export class DrizzleContractRepository implements ContractRepo {
       .onConflictDoNothing({ target: contracts.id });
   }
 
-  async findByRfq(rfqId: string, tx?: Tx): Promise<Contract | undefined> {
+  async findByRfp(rfpId: string, tx?: Tx): Promise<Contract | undefined> {
     const db = this.h(tx);
     const [row] = await db
       .select()
       .from(contracts)
-      .where(eq(contracts.rfqId, rfqId))
+      .where(eq(contracts.rfpId, rfpId))
       .limit(1);
     return row ? rowToContract(row) : undefined;
   }

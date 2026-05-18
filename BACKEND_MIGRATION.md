@@ -1,16 +1,16 @@
 # Mock 제거 + 백엔드/DB 설계
 
-**현 진행 상태 (2026-05-08)**: 14-step cutover 중 인프라 구축 — `auth.ts`, `lib/db/`, drizzle 마이그레이션, `lib/server/repositories/*`, outbox, NTS enrichment, 서버 액션, Resend 이메일, Sentry 모두 가동. `lib/mock/` 디렉토리 제거됨, repositories는 Drizzle 구현으로 swap-in 완료. 잔여: Step 13 mock 잔재 grep 게이트 최종 검증, Zustand 캐시 스토어(`rfq-list`/`bid-list`/`notifications`) 잔존 여부 확인.
+**현 진행 상태 (2026-05-08)**: 14-step cutover 중 인프라 구축 — `auth.ts`, `lib/db/`, drizzle 마이그레이션, `lib/server/repositories/*`, outbox, NTS enrichment, 서버 액션, Resend 이메일, Sentry 모두 가동. `lib/mock/` 디렉토리 제거됨, repositories는 Drizzle 구현으로 swap-in 완료. 잔여: Step 13 mock 잔재 grep 게이트 최종 검증, Zustand 캐시 스토어(`rfp-list`/`bid-list`/`notifications`) 잔존 여부 확인.
 
 ## Context
 
-bidit는 M0~M7 종료 시점의 v0 UI 구현체로, 모든 도메인 데이터가 `lib/mock/*` 하드코딩 + `lib/stores/{rfq-list,bid-list,notifications}.ts`의 Zustand 메모리 캐시에 갇혀 있다. 화면 흐름과 도메인 모델은 안정됐으니 mock을 떼고 Postgres + 서버 액션 + Auth.js 기반 실제 백엔드로 교체할 단계다.
+bidit는 M0~M7 종료 시점의 v0 UI 구현체로, 모든 도메인 데이터가 `lib/mock/*` 하드코딩 + `lib/stores/{rfp-list,bid-list,notifications}.ts`의 Zustand 메모리 캐시에 갇혀 있다. 화면 흐름과 도메인 모델은 안정됐으니 mock을 떼고 Postgres + 서버 액션 + Auth.js 기반 실제 백엔드로 교체할 단계다.
 
 목표:
 - mock 데이터/스토어 일괄 제거, DB 기반으로 교체
 - 사업자번호 enrichment는 NTS(국세청)만 실연동, NICE/공정위는 v0 제외
-- 화면 명세(`SCREEN_DESIGN.md` §1 P1~P11)와 `PG_RFQ_SPEC.md` 15개 정책을 그대로 보존
-- `lib/server/repositories/*`·`lib/server/outbox/*`·`lib/server/{token,rfq-state}.ts`의 의미론(`assertTransition`, sha256 토큰, `claimToken` 단일성, `canAccess` 정책)을 인터페이스째로 보존하고 Drizzle 구현을 swap-in
+- 화면 명세(`SCREEN_DESIGN.md` §1 P1~P11)와 `PG_RFP_SPEC.md` 15개 정책을 그대로 보존
+- `lib/server/repositories/*`·`lib/server/outbox/*`·`lib/server/{token,rfp-state}.ts`의 의미론(`assertTransition`, sha256 토큰, `claimToken` 단일성, `canAccess` 정책)을 인터페이스째로 보존하고 Drizzle 구현을 swap-in
 
 ## 코드베이스 검증 결과 (2026-05-06)
 
@@ -18,7 +18,7 @@ bidit는 M0~M7 종료 시점의 v0 UI 구현체로, 모든 도메인 데이터�
 |---|---|---|
 | Mock import touch ~88 | grep 카운트: `@/lib/mock` 25 + `MOCK_*` 40 + store hooks 36 + `useMockSession` 2 = **~103** | 보강(Step 13 grep 게이트 항목에 4종 모두 포함) |
 | Repo 인터페이스(`assertTransition`/`claimToken`/`canAccess`/`autoJoinPg`) 존재 | 존재 | OK |
-| `proxy.ts` 루트 + PUBLIC_PREFIXES 분기 | 존재 (PUBLIC_PREFIXES=`['/login','/signup','/password','/invite','/auth','/logout']`, CLAIMABLE_PUBLIC_PREFIXES=`['/invite/rfq']`) | OK |
+| `proxy.ts` 루트 + PUBLIC_PREFIXES 분기 | 존재 (PUBLIC_PREFIXES=`['/login','/signup','/password','/invite','/auth','/logout']`, CLAIMABLE_PUBLIC_PREFIXES=`['/invite/rfp']`) | OK |
 | `BizProfile` 14필드 → 7필드 슬림화 가능 | 14필드 확인(bizNo/name/ceoName/ksic/taxType/status/mailOrderNo/estimatedRevenue/revenueYear/niceLookedUpAt/grade/gradeSource/gradeConfirmedBy/gradeConfirmedAt) | OK |
 | `STATUTORY_CARD_FEE`로 영세/중소 카드료 강제 | 존재. **general=NaN** (입력 받는 신호) → 계획의 "general 등급만 cardFees NOT NULL" 일관 | OK |
 | Backend deps(drizzle/postgres/next-auth/bcrypt/resend/react-email/pglite/tsx) 일부 존재 | **전부 미설치** — Step 1에서 모두 신규 추가 | 보강 |
@@ -33,12 +33,12 @@ bidit는 M0~M7 종료 시점의 v0 UI 구현체로, 모든 도메인 데이터�
 | ORM | Drizzle ORM + drizzle-kit. **prod=`drizzle-orm/postgres-js`, test=`drizzle-orm/pglite`** |
 | 인증 | Auth.js v5, Credentials Provider 단일, JWT 세션. Next 16 컨벤션상 `proxy.ts` 유지(rename 안 함) |
 | 외부 연동 | NTS(국세청 사업자등록 상태조회)만. NICE/공정위 제거 |
-| **Buyer/PG 분기** | **P6에서 사용자가 라디오로 직접 선택**. 도메인 자동 추론 없음. `/invite/rfq/:token` 경유는 P6 전체 스킵 + 강제 PG 경로. 클레임 시 `session.user.workspaceId === inv.pgWsId` 멤버십 검사 (도메인 auto-join 없음) |
-| **bizProfile 보관** | Workspace 생성 시 1회 캡처(buyer만), RFQ 생성 시마다 스냅샷 row 신규 insert. `biz_profiles`는 immutable rows |
+| **Buyer/PG 분기** | **P6에서 사용자가 라디오로 직접 선택**. 도메인 자동 추론 없음. `/invite/rfp/:token` 경유는 P6 전체 스킵 + 강제 PG 경로. 클레임 시 `session.user.workspaceId === inv.pgWsId` 멤버십 검사 (도메인 auto-join 없음) |
+| **bizProfile 보관** | Workspace 생성 시 1회 캡처(buyer만), RFP 생성 시마다 스냅샷 row 신규 insert. `biz_profiles`는 immutable rows |
 | `BizProfile` 슬림화 | `bizNo`/`taxType`/`status`/`grade`/`gradeSource`/`gradeConfirmedBy`/`gradeConfirmedAt`만. `name`/`ceoName`/`ksic`/`mailOrderNo`/`estimatedRevenue`/`revenueYear`/`niceLookedUpAt` 제거. **`bizNo`/`taxType`/`status` nullable**, `grade` 옵셔널. CHECK: `bizNo IS NOT NULL OR grade IS NOT NULL` (의미 없는 빈 row 금지) |
 | 회사명 | `Workspace.name` 사용 |
 | Grade 입력 | 사용자 5단계 직접 선택 **(선택 — 미입력 시 PG 가 일반 등급 가정)**. `gradeSource ∈ {'user_confirmed', 'user_overridden', 'unset'}` (`auto_nice` 제거, `'unset'` 추가) |
-| **bizProfile 옵셔널** | Workspace 생성 시 buyer 도 스킵 가능 (`workspaces.biz_profile_id` NULL). RFQ 생성 시 옵션 `bizProfileMode: 'inherit' \| 'override' \| 'none'` 으로 분기 |
+| **bizProfile 옵셔널** | Workspace 생성 시 buyer 도 스킵 가능 (`workspaces.biz_profile_id` NULL). RFP 생성 시 옵션 `bizProfileMode: 'inherit' \| 'override' \| 'none'` 으로 분기 |
 | 파일 스토리지 | 로컬 디스크 + 인증 라우트 핸들러. v1에 S3/Supabase Storage swap |
 | Outbox 플러시 | 액션 트랜잭션 내 enqueue + 커밋 후 fire-and-forget + 60s cron 안전망 |
 | SSE | 단일 인스턴스 in-process EventEmitter (NOTIFICATION.md §4 그대로). prod 시 LISTEN/NOTIFY 업그레이드 |
@@ -56,7 +56,7 @@ bidit는 M0~M7 종료 시점의 v0 UI 구현체로, 모든 도메인 데이터�
                                                                        │
                                        ┌───────────────────────────────┼─────────────────────────┐
                                        v                               v                         v
-                  [Step 6 P6 buyer/PG radio + WS biz capture]   [Step 7 createRfq snapshots]   [Step 9 SSE + notif actions]
+                  [Step 6 P6 buyer/PG radio + WS biz capture]   [Step 7 createRfp snapshots]   [Step 9 SSE + notif actions]
                                        │                               │                         │
                                        v                               v                         v
                                                   [Step 8 PG invite claim + bid submit]
@@ -100,31 +100,31 @@ bidit는 M0~M7 종료 시점의 v0 UI 구현체로, 모든 도메인 데이터�
 - `workspaces` (id, type `workspace_type`, name, biz_profile_id FK→`biz_profiles.id` nullable, created_at)
 - `workspace_members` (workspace_id FK, user_id FK, role `member_role`, joined_at, last_seen_at; PK(ws,user))
 - `biz_profiles` (id, biz_no **nullable**, tax_type `tax_type` **nullable**, status `biz_status` **nullable**, grade `merchant_grade` nullable, grade_source `grade_source` NOT NULL (`unset` 포함), grade_confirmed_by FK→users nullable, grade_confirmed_at, created_at) + CHECK `biz_no IS NOT NULL OR grade IS NOT NULL` — **immutable: 변경 시 새 row insert + workspace.biz_profile_id 갱신**
-- `rfqs` (id text PK = `Q-YYMM-NNNN`, buyer_ws_id FK, biz_profile_id FK **nullable** → 스냅샷 (사업자번호·등급 모두 미입력 RFQ는 NULL), title, memo, allowed_pg_workspace_ids uuid[], deadline timestamptz, status `rfq_status`, awarded_bid_id FK→bids nullable, created_by FK→users, created_at, sent_at)
-- `rfq_invitations` (id, rfq_id FK, pg_ws_id FK→workspaces NOT NULL, accepted_by_user_id FK→users nullable, token_hash UNIQUE, sent_at, opened_at, expires_at, status `invitation_status`; UNIQUE(rfq_id, pg_ws_id))
+- `rfps` (id text PK = `P-YYMM-NNNN`, buyer_ws_id FK, biz_profile_id FK **nullable** → 스냅샷 (사업자번호·등급 모두 미입력 RFP는 NULL), title, memo, allowed_pg_workspace_ids uuid[], deadline timestamptz, status `rfp_status`, awarded_bid_id FK→bids nullable, created_by FK→users, created_at, sent_at)
+- `rfp_invitations` (id, rfp_id FK, pg_ws_id FK→workspaces NOT NULL, accepted_by_user_id FK→users nullable, token_hash UNIQUE, sent_at, opened_at, expires_at, status `invitation_status`; UNIQUE(rfp_id, pg_ws_id))
 - `workspace_invitations` (id, workspace_id FK, invited_email, invited_by_user_id FK→users, token_hash UNIQUE, status `workspace_invitation_status`, expires_at, accepted_by_user_id FK→users nullable, created_at; UNIQUE(workspace_id, lower(invited_email)))
-- `bids` (id, rfq_id FK, pg_ws_id FK, invitation_id FK, settle_cycle `settle_cycle`, deposit numeric, setup_fee numeric, monthly_min numeric, bank_transfer_fee_pct numeric, easy_pay_fee_pct numeric, card_fees_by_issuer jsonb null, overseas_card_fee_pct numeric null, proposal_attachment_id FK→attachments, memo, status `bid_status`, submitted_by FK→users, submitted_at; UNIQUE(rfq_id, pg_ws_id))
-- `contracts` (id, rfq_id FK UNIQUE, bid_id FK, awarded_at, awarded_by FK→users)
+- `bids` (id, rfp_id FK, pg_ws_id FK, invitation_id FK, settle_cycle `settle_cycle`, deposit numeric, setup_fee numeric, monthly_min numeric, bank_transfer_fee_pct numeric, easy_pay_fee_pct numeric, card_fees_by_issuer jsonb null, overseas_card_fee_pct numeric null, proposal_attachment_id FK→attachments, memo, status `bid_status`, submitted_by FK→users, submitted_at; UNIQUE(rfp_id, pg_ws_id))
+- `contracts` (id, rfp_id FK UNIQUE, bid_id FK, awarded_at, awarded_by FK→users)
 - `notifications` (id, user_id FK, workspace_id FK, type, title, body, channel `notification_channel`, status `notification_status`, link_url, created_at, sent_at, read_at)
 - `outbox_entries` (id, event `outbox_event`, to_addr, subject, html, dedupe_key UNIQUE WHERE NOT NULL, status `outbox_status`, attempts, max_attempts, scheduled_at, sent_at, last_error)
 - `verification_tokens` (id, purpose `verification_purpose`, email, token_hash UNIQUE, issued_at, expires_at, consumed_at, meta jsonb; INDEX(email, purpose))
 - `attachments` (id, owner_kind `attachment_owner_kind`, owner_id, name, size, mime_type, storage_path, uploaded_by FK, uploaded_at)
-- `rfq_counters` (year_month text PK, last_seq integer)
+- `rfp_counters` (year_month text PK, last_seq integer)
 
-Enums: `rfq_status`, `invitation_status`, `bid_status`(draft/submitted/withdrawn), `settle_cycle`, `notification_status`, `notification_channel`, `outbox_status`, `outbox_event`, `workspace_type`, `merchant_grade`, `grade_source`(user_confirmed/user_overridden), `tax_type`(general/simple/exempt), `biz_status`(active/suspended/closed), `verification_purpose`, `member_role`(admin/member), `attachment_owner_kind`(rfq_rfp/bid_proposal).
+Enums: `rfp_status`, `invitation_status`, `bid_status`(draft/submitted/withdrawn), `settle_cycle`, `notification_status`, `notification_channel`, `outbox_status`, `outbox_event`, `workspace_type`, `merchant_grade`, `grade_source`(user_confirmed/user_overridden), `tax_type`(general/simple/exempt), `biz_status`(active/suspended/closed), `verification_purpose`, `member_role`(admin/member), `attachment_owner_kind`(rfp/bid_proposal).
 
 CHECK 제약:
-- `rfqs`: `awarded_bid_id IS NULL OR status='awarded'`
-- `bids.card_fees_by_issuer`는 `general` 등급 RFQ에서만 NOT NULL — DB CHECK는 어렵고 액션 레이어 검증 + 테스트로 보강
+- `rfps`: `awarded_bid_id IS NULL OR status='awarded'`
+- `bids.card_fees_by_issuer`는 `general` 등급 RFP에서만 NOT NULL — DB CHECK는 어렵고 액션 레이어 검증 + 테스트로 보강
 - `workspaces`: `(type='pg' AND domain IS NOT NULL) OR (type='buyer')` — buyer는 domain 무관
 
-RFQ ID 생성 (`lib/server/rfq-id.ts`):
+RFP ID 생성 (`lib/server/rfp-id.ts`):
 ```ts
-export async function nextRfqId(tx: Tx): Promise<string> {
+export async function nextRfpId(tx: Tx): Promise<string> {
   const yymm = format(new Date(), 'yyMM');
   const [row] = await tx.execute(sql`
-    INSERT INTO rfq_counters(year_month, last_seq) VALUES (${yymm}, 1)
-    ON CONFLICT (year_month) DO UPDATE SET last_seq = rfq_counters.last_seq + 1
+    INSERT INTO rfp_counters(year_month, last_seq) VALUES (${yymm}, 1)
+    ON CONFLICT (year_month) DO UPDATE SET last_seq = rfp_counters.last_seq + 1
     RETURNING last_seq
   `);
   return `Q-${yymm}-${String(row.last_seq).padStart(4, '0')}`;
@@ -134,9 +134,9 @@ export async function nextRfqId(tx: Tx): Promise<string> {
 동반 수정:
 - `lib/types/biz-profile.ts`: 슬림 타입으로 재작성 (제거 필드 7개: `name`/`ceoName`/`ksic`/`mailOrderNo`/`estimatedRevenue`/`revenueYear`/`niceLookedUpAt`). `gradeSource` union 좁히기 (`'auto_nice'` 제거)
 - `lib/types/workspace.ts`: `bizProfile?: BizProfile` 유지 (workspace 도메인 객체에서는 1:1 관계)
-- `lib/types/rfq.ts`: 그대로 (`bizProfile: BizProfile` 임베드)
-- `lib/server/__tests__/rfq-repo.test.ts`: 픽스처에서 제거된 필드 삭제, `gradeSource: 'user_confirmed'`로 갱신 (line 9-17)
-- `lib/mock/biz-lookup.ts`/`workspaces.ts`/`rfqs.ts`/`users.ts`/`bids.ts`/`invitations.ts`/`notifications.ts`: 임시 보정 (final 삭제는 Step 13)
+- `lib/types/rfp.ts`: 그대로 (`bizProfile: BizProfile` 임베드)
+- `lib/server/__tests__/rfp-repo.test.ts`: 픽스처에서 제거된 필드 삭제, `gradeSource: 'user_confirmed'`로 갱신 (line 9-17)
+- `lib/mock/biz-lookup.ts`/`workspaces.ts`/`rfps.ts`/`users.ts`/`bids.ts`/`invitations.ts`/`notifications.ts`: 임시 보정 (final 삭제는 Step 13)
 
 검증: `pnpm db:migrate` 클린, `psql -c '\d biz_profiles'`로 슬림 컬럼 확인, `pnpm test` 그린.
 
@@ -162,28 +162,28 @@ export async function nextRfqId(tx: Tx): Promise<string> {
   ```
 - `app/logout/route.ts`: `await signOut({ redirect: false })` 후 `/login` 302
 - 세션 타입 augmentation: `types/next-auth.d.ts`에 `workspaceId`, `workspaceType`, `role` 추가
-- 검증: `/login` POST → 세션 쿠키 발급, `/inbox` 비로그인 → `/login` 리다이렉트, 로그인 상태 `/login` → `/home`. `/invite/rfq/:token`은 비로그인이어도 통과 (CLAIMABLE_PUBLIC_PREFIXES 보존)
+- 검증: `/login` POST → 세션 쿠키 발급, `/inbox` 비로그인 → `/login` 리다이렉트, 로그인 상태 `/login` → `/home`. `/invite/rfp/:token`은 비로그인이어도 통과 (CLAIMABLE_PUBLIC_PREFIXES 보존)
 
 위험: Auth.js v5 + Next 16 호환성. 만약 호환 이슈 발생 시 `next-auth@5.0.0-beta.X` 핀 후 노트 — Step 3 PR에서 즉시 결정.
 
 ## Step 4 — Repository 인터페이스 + Drizzle 구현 + pglite 테스트
 
-- `lib/server/repositories/types.ts`: 인터페이스 정의 — `RfqRepo`, `InvitationRepo`, `WorkspaceRepo`, `BidRepo`, `NotificationRepo`, `UserRepo`, `BizProfileRepo`, `ContractRepo`, `VerificationTokenRepo`, `AttachmentRepo`, `OutboxRepo`. 모든 메서드 첫 인자에 옵션 `tx?: Tx` 받아서 트랜잭션 합성 가능하게.
-- `lib/server/repositories/in-memory/{rfq,invitation,workspace}.ts`: 기존 3개 파일 이동 (테스트 더블로 보존). 인터페이스 implement.
+- `lib/server/repositories/types.ts`: 인터페이스 정의 — `RfpRepo`, `InvitationRepo`, `WorkspaceRepo`, `BidRepo`, `NotificationRepo`, `UserRepo`, `BizProfileRepo`, `ContractRepo`, `VerificationTokenRepo`, `AttachmentRepo`, `OutboxRepo`. 모든 메서드 첫 인자에 옵션 `tx?: Tx` 받아서 트랜잭션 합성 가능하게.
+- `lib/server/repositories/in-memory/{rfp,invitation,workspace}.ts`: 기존 3개 파일 이동 (테스트 더블로 보존). 인터페이스 implement.
 - `lib/server/repositories/drizzle/*.ts`: 11개 신규 구현. 핵심 불변식:
-  - **token**: raw 비저장. `verification_tokens.token_hash`/`rfq_invitations.token_hash`만 저장 (sha256, `lib/server/token.ts:hashToken` 재사용)
+  - **token**: raw 비저장. `verification_tokens.token_hash`/`rfp_invitations.token_hash`만 저장 (sha256, `lib/server/token.ts:hashToken` 재사용)
   - **claimToken (invitations)**:
     ```ts
-    UPDATE rfq_invitations
+    UPDATE rfp_invitations
        SET accepted_by_user_id=$1, status='accepted'
      WHERE token_hash=$2 AND accepted_by_user_id IS NULL AND expires_at > now()
      RETURNING *
     ```
     rowCount 0이면 만료/사용/무효 분기 (DB 재조회로 reason 결정)
-  - **canAccess**: `SELECT EXISTS(SELECT 1 FROM rfq_invitations WHERE rfq_id=$1 AND pg_ws_id=$2 AND status IN ('pending','opened','accepted'))` — 초대된 PG 워크스페이스 멤버 모두 통과 (2026-05-10 정책 변경)
-  - **transition**: 액션 레이어에서 `assertTransition` (`lib/server/rfq-state.ts`) + DB layer에서 `WHERE status=$prev` 가드 → 동시성 안전
-- `lib/server/repositories/factory.ts`: `getRfqRepo()` 등 — `process.env.NODE_ENV==='test' || process.env.REPO_BACKEND==='memory'` 시 in-memory, else drizzle
-- `lib/server/__tests__/drizzle/*.test.ts`: pglite 기반 (`@electric-sql/pglite` + `drizzle-orm/pglite`). 기존 `rfq-repo.test.ts`/`invitation.test.ts`/`workspace.test.ts`의 어서션 그대로 복제. 각 테스트 격리는 매 테스트 `BEGIN`/`ROLLBACK`로
+  - **canAccess**: `SELECT EXISTS(SELECT 1 FROM rfp_invitations WHERE rfp_id=$1 AND pg_ws_id=$2 AND status IN ('pending','opened','accepted'))` — 초대된 PG 워크스페이스 멤버 모두 통과 (2026-05-10 정책 변경)
+  - **transition**: 액션 레이어에서 `assertTransition` (`lib/server/rfp-state.ts`) + DB layer에서 `WHERE status=$prev` 가드 → 동시성 안전
+- `lib/server/repositories/factory.ts`: `getRfpRepo()` 등 — `process.env.NODE_ENV==='test' || process.env.REPO_BACKEND==='memory'` 시 in-memory, else drizzle
+- `lib/server/__tests__/drizzle/*.test.ts`: pglite 기반 (`@electric-sql/pglite` + `drizzle-orm/pglite`). 기존 `rfp-repo.test.ts`/`invitation.test.ts`/`workspace.test.ts`의 어서션 그대로 복제. 각 테스트 격리는 매 테스트 `BEGIN`/`ROLLBACK`로
 - 검증: `pnpm test` 그린 (in-memory + pglite 양쪽)
 
 ## Step 5 — 인증 플로우 액션 (P1~P11 실배선)
@@ -192,7 +192,7 @@ export async function nextRfqId(tx: Tx): Promise<string> {
 - `signupEmailAction.ts`: zod 검증 → `verification_tokens(purpose='signup_email')` 발급 (token=`generateToken()`, hash 저장, exp=15분) → `auth.verify` outbox enqueue (메일에는 raw token URL: `${BASE_URL}/auth/verify?token=...`)
 - `verifyEmailAction.ts`: `UPDATE verification_tokens SET consumed_at=now() WHERE token_hash=$1 AND consumed_at IS NULL AND expires_at>now() RETURNING email, meta` — atomic 소비. 성공 시 sessionStorage signupDraft에 `emailVerified=true` + `email` 세팅 후 P5로 redirect. meta에 `inviteToken` 보존 가능.
 - `signupCompleteAction.ts`: tx 내 user insert + password_hash + `emailVerified=true` 검증. **Workspace 결정 분기**:
-  - `inviteToken` 있음 → invitation lookup → 도메인의 `type='pg'` ws 검색 → 있으면 `workspace_members` insert (autoJoinPg), 없으면 신규 `type='pg'` ws 생성 (name=도메인, domain=도메인) + member insert. `claimToken` 호출. 반환 `{ redirectTo: '/inbox/'+rfqId }`
+  - `inviteToken` 있음 → invitation lookup → 도메인의 `type='pg'` ws 검색 → 있으면 `workspace_members` insert (autoJoinPg), 없으면 신규 `type='pg'` ws 생성 (name=도메인, domain=도메인) + member insert. `claimToken` 호출. 반환 `{ redirectTo: '/inbox/'+rfpId }`
   - 그 외 (P6 데이터 동봉 — `wsKind: 'buyer' | 'pg'`, name, optional bizProfile)
     - `wsKind==='buyer'`: `biz_profiles` insert → `workspaces(type='buyer', name, biz_profile_id)` insert → member insert (role=admin)
     - `wsKind==='pg'`: 도메인 충돌 검사 (`domain` UNIQUE) → 신규 PG ws 또는 join. domain 자동 유도(이메일 도메인)
@@ -222,7 +222,7 @@ export async function nextRfqId(tx: Tx): Promise<string> {
 
   [BUYER 분기]
     워크스페이스 이름 ____________________
-    [ ] 사업자번호·등급 나중에 입력하기 (사전 견적 모드)
+    [ ] 사업자번호·등급 나중에 입력하기 (사전 제안 모드)
     BizLookupField (bizNo 입력 → NTS 조회 → status/taxType 표시) — 토글 OFF 시 노출
     GradeConfirmPanel (5단계 라디오, source='user_confirmed') — 토글 OFF 시 노출
     [만들기]
@@ -234,18 +234,18 @@ export async function nextRfqId(tx: Tx): Promise<string> {
 ```
 
 컴포넌트 변경:
-- `components/rfq/BizLookupField.tsx`: NTS 호출로 변경(액션 `lookupBizNoAction` 사용). 슬림 BizProfile 만 반환 (`{ bizNo, taxType, status }`). 회사명/대표자/KSIC/통신판매업 표시 제거. **이 파일은 P6와 RFQ 작성 화면 모두에서 재사용**되지만 P6에서 grade와 함께 묶여 호출되는 게 다름
-- `components/rfq/GradeConfirmPanel.tsx`: NICE 호출 제거(`lookupNiceGrade` 의존 삭제), 5단계 라디오만 + **"선택 안 함" 옵션** (등급 미입력 = `gradeSource='unset'`). 각 등급 옆에 법정 매출 구간 도움말(`STATUTORY_CARD_FEE`로 카드료 자동 표시 — `general`/미입력은 "협상" 표시). source는 사용자 선택 시 `'user_confirmed'`, RFQ 작성 시점 변경은 `'user_overridden'`
+- `components/rfp/BizLookupField.tsx`: NTS 호출로 변경(액션 `lookupBizNoAction` 사용). 슬림 BizProfile 만 반환 (`{ bizNo, taxType, status }`). 회사명/대표자/KSIC/통신판매업 표시 제거. **이 파일은 P6와 RFP 작성 화면 모두에서 재사용**되지만 P6에서 grade와 함께 묶여 호출되는 게 다름
+- `components/rfp/GradeConfirmPanel.tsx`: NICE 호출 제거(`lookupNiceGrade` 의존 삭제), 5단계 라디오만 + **"선택 안 함" 옵션** (등급 미입력 = `gradeSource='unset'`). 각 등급 옆에 법정 매출 구간 도움말(`STATUTORY_CARD_FEE`로 카드료 자동 표시 — `general`/미입력은 "협상" 표시). source는 사용자 선택 시 `'user_confirmed'`, RFP 작성 시점 변경은 `'user_overridden'`
 - `components/auth/WorkspaceTypeRadio.tsx` 신규: buyer/PG 라디오 (Korean Editorial 스타일)
 
 P6 submit → `signupCompleteAction({ wsKind, name, bizProfile? })`. **buyer 분기에서 토글 ON 또는 입력 모두 비어있으면 `bizProfile=undefined`** → workspace 생성 시 `biz_profile_id=NULL`. PG 분기 시도 bizProfile undefined. PG 도메인이 이미 PG ws로 존재하면 join + 안내 ("toss.im 워크스페이스에 합류했습니다").
 
-`/invite/rfq/:token` 신규 가입 플로우:
-- `app/(public)/invite/rfq/[token]/page.tsx` (비인증)에서 token을 sessionStorage `signupDraft.inviteToken`에 저장 → `/login?next=/invite/rfq/[token]` 또는 가입 시작 시 `signupEmailAction({ inviteToken })` 으로 동봉 → meta에 보존 → P6 자동 스킵 (액션이 PG 결정)
+`/invite/rfp/:token` 신규 가입 플로우:
+- `app/(public)/invite/rfp/[token]/page.tsx` (비인증)에서 token을 sessionStorage `signupDraft.inviteToken`에 저장 → `/login?next=/invite/rfp/[token]` 또는 가입 시작 시 `signupEmailAction({ inviteToken })` 으로 동봉 → meta에 보존 → P6 자동 스킵 (액션이 PG 결정)
 
 검증: 시나리오 D-buyer (직접 가입 → P6 buyer 선택 → bizNo 입력 → grade 선택 → 만들기 → /home), 시나리오 D-pg-direct (직접 PG), 시나리오 E (초대 → P6 스킵 → /inbox).
 
-## Step 7 — 구매사 RFQ 액션: createRfq, awardRfq, NTS 조회
+## Step 7 — 구매사 RFP 액션: createRfp, awardRfp, NTS 조회
 
 `lib/integrations/nts.ts`:
 - `NtsClient` 인터페이스 (`lookup(bizNo): Promise<{ valid; taxType; status }>`)
@@ -253,53 +253,53 @@ P6 submit → `signupCompleteAction({ wsKind, name, bizProfile? })`. **buyer 분
 - 타입드 에러: `NTS_INVALID_KEY` / `NTS_RATE_LIMIT` / `NTS_NOT_FOUND` / `NTS_NETWORK`
 - `lib/integrations/nts.mock.ts`: 테스트 전용 (이전 `lib/mock/biz-lookup.ts`의 BIZ_DB 3개 활용)
 
-`lib/server/actions/rfq/`:
+`lib/server/actions/rfp/`:
 - `lookupBizNoAction.ts`: `requireSession()` (모든 회원). NTS 호출 → `{ valid, taxType, status }`. mock 폴백 없음
-- `createRfqAction.ts`: `requireBuyerSession()`. 입력 = `{ title, memo, deadline, allowedPgEmails, rfpAttachmentIds, bizProfileMode: 'inherit' | 'override' | 'none', bizNoOverride?, gradeOverride? }`. tx:
-  1. `nextRfqId(tx)`로 ID 발급
+- `createRfpAction.ts`: `requireBuyerSession()`. 입력 = `{ title, memo, deadline, allowedPgEmails, rfpAttachmentIds, bizProfileMode: 'inherit' | 'override' | 'none', bizNoOverride?, gradeOverride? }`. tx:
+  1. `nextRfpId(tx)`로 ID 발급
   2. **bizProfile 분기**:
      - `'inherit'` (기본): workspace.biz_profile 스냅샷 새 row insert. workspace에 biz_profile 없으면 자동으로 `'none'`으로 폴백.
      - `'override'`: 입력값(`bizNoOverride` 또는 `gradeOverride` 또는 둘 다)으로 새 biz_profiles row insert. CHECK 위반(둘 다 NULL) 시 `INVALID_BIZ_PROFILE` 에러. `gradeSource='user_overridden'`, `gradeConfirmedBy/At` 기록.
-     - `'none'`: biz_profiles row 생성 안 함, `rfqs.biz_profile_id=NULL`.
-  3. `rfqs` insert (status='draft' 또는 'sent'에 따라 분기 — 입력에 `send: true` 옵션)
-  4. send 시 `rfq_invitations` N개 + `rfq.invited` outbox N개 (`dedupeKey=rfq:{id}:invite:{email}`) + `rfq.sent` outbox 1
-- `awardRfqAction.ts`: 해당 RFQ의 buyer ws만. tx에서 `rfqRepo.transition('awarded', { awardedBidId })` (드라이즐 `WHERE status='sent'` 가드) + `contracts` insert + winner에게 `rfq.awarded` 알림 + 패자 PG들에게 reject 알림(인앱 only)
-- `cancelRfqAction.ts`/`closeRfqAction.ts`
+     - `'none'`: biz_profiles row 생성 안 함, `rfps.biz_profile_id=NULL`.
+  3. `rfps` insert (status='draft' 또는 'sent'에 따라 분기 — 입력에 `send: true` 옵션)
+  4. send 시 `rfp_invitations` N개 + `rfp.invited` outbox N개 (`dedupeKey=rfp:{id}:invite:{email}`) + `rfp.sent` outbox 1
+- `awardRfpAction.ts`: 해당 RFP의 buyer ws만. tx에서 `rfpRepo.transition('awarded', { awardedBidId })` (드라이즐 `WHERE status='sent'` 가드) + `contracts` insert + winner에게 `rfp.awarded` 알림 + 패자 PG들에게 reject 알림(인앱 only)
+- `cancelRfpAction.ts`/`closeRfpAction.ts`
 
 화면 수정:
-- `components/rfq/RfqCreateForm.tsx`: BizLookupField 단계 제거 (workspace bizProfile 표시만, read-only). GradeConfirmPanel은 "RFQ별 등급 재확인/오버라이드" 용도로 유지. `useRfqDraftStore`는 UI 단계 state로만 유지(서버에 send 시 비움)
-- `app/(app)/home/page.tsx`: RSC. `auth()` → `getRfqRepo().findByBuyerWs(session.workspaceId)` 직접 fetch. `MOCK_RFQS` 제거
-- `app/(app)/rfq/page.tsx`/`[id]/page.tsx`/`[id]/award/page.tsx`: RSC + 액션. `useRfqListStore` 제거
+- `components/rfp/RfpCreateForm.tsx`: BizLookupField 단계 제거 (workspace bizProfile 표시만, read-only). GradeConfirmPanel은 "RFP별 등급 재확인/오버라이드" 용도로 유지. `useRfpDraftStore`는 UI 단계 state로만 유지(서버에 send 시 비움)
+- `app/(app)/home/page.tsx`: RSC. `auth()` → `getRfpRepo().findByBuyerWs(session.workspaceId)` 직접 fetch. `MOCK_RFPS` 제거
+- `app/(app)/rfp/page.tsx`/`[id]/page.tsx`/`[id]/award/page.tsx`: RSC + 액션. `useRfpListStore` 제거
 - `app/(app)/settings/profile/page.tsx`: workspace bizProfile 표시 + grade 갱신 액션 (새 biz_profiles row insert + workspace.biz_profile_id 갱신)
 
-검증: 시나리오 A 그린. `psql -c "SELECT id, status, biz_profile_id FROM rfqs"`로 스냅샷 row 확인.
+검증: 시나리오 A 그린. `psql -c "SELECT id, status, biz_profile_id FROM rfps"`로 스냅샷 row 확인.
 
 ## Step 8 — PG: invite 클레임 + 입찰 제출
 
 `lib/server/actions/`:
-- `invitation/claimInviteTokenAction.ts`: 세션 필요. 미가입자는 Step 5 흐름으로 가입(inviteToken 동봉). 가입자는 직접 클레임 → `invitationRepo.claimToken(rawToken, userId)` → 도메인의 PG ws auto-join (`workspaceRepo.autoJoinPg`) → 반환 `{ rfqId }`
-- `bid/submitBidAction.ts`: `requirePgSession()` + `invitationRepo.canAccess(rfqId, pgWsId)` 가드(워크스페이스 단위). **STATUTORY_CARD_FEE 서버 강제** (등급 미입력 RFQ는 일반 폴백):
+- `invitation/claimInviteTokenAction.ts`: 세션 필요. 미가입자는 Step 5 흐름으로 가입(inviteToken 동봉). 가입자는 직접 클레임 → `invitationRepo.claimToken(rawToken, userId)` → 도메인의 PG ws auto-join (`workspaceRepo.autoJoinPg`) → 반환 `{ rfpId }`
+- `bid/submitBidAction.ts`: `requirePgSession()` + `invitationRepo.canAccess(rfpId, pgWsId)` 가드(워크스페이스 단위). **STATUTORY_CARD_FEE 서버 강제** (등급 미입력 RFP는 일반 폴백):
   ```ts
-  const rfq = await rfqRepo.findById(rfqId);
-  const bizProfile = rfq.bizProfileId
-    ? await bizProfileRepo.findById(rfq.bizProfileId)
+  const rfp = await rfpRepo.findById(rfpId);
+  const bizProfile = rfp.bizProfileId
+    ? await bizProfileRepo.findById(rfp.bizProfileId)
     : null;
-  const grade = bizProfile?.grade ?? null; // null = 등급 미입력 RFQ
+  const grade = bizProfile?.grade ?? null; // null = 등급 미입력 RFP
   const cardFees = (grade === null || grade === 'general')
     ? input.cardFeesByIssuer
     : null;
   // 영세/중소1~3에서만 클라이언트 입력 무시. NULL/일반은 9개 카드사 입력 허용.
   ```
-  tx로 `bids` insert (UNIQUE(rfq_id, pg_ws_id) 위반 시 `BID_ALREADY_SUBMITTED` 에러) + 초대 `status='accepted'` + buyer에게 `bid.submitted` 알림 (`dedupeKey=bid:{rfqId}:{pgWsId}`)
+  tx로 `bids` insert (UNIQUE(rfp_id, pg_ws_id) 위반 시 `BID_ALREADY_SUBMITTED` 에러) + 초대 `status='accepted'` + buyer에게 `bid.submitted` 알림 (`dedupeKey=bid:{rfpId}:{pgWsId}`)
 - `bid/withdrawBidAction.ts`: `bids.status='withdrawn'`
 
 화면 수정:
-- `app/(public)/invite/rfq/[token]/page.tsx`: 액션 사용, 가입/로그인 분기 보존
-- `app/(app)/inbox/page.tsx`: RSC. `invitationRepo.findByPgWorkspace(session.workspaceId)` → 본인 워크스페이스로 발송된 모든 활성 invitation+RFQ 페어. 미클레임 'pending' 도 표시(알림 딥링크와 일관)
-- `app/(app)/inbox/[rfqId]/page.tsx`: RSC + `canAccess` 가드. 미통과 시 404
+- `app/(public)/invite/rfp/[token]/page.tsx`: 액션 사용, 가입/로그인 분기 보존
+- `app/(app)/inbox/page.tsx`: RSC. `invitationRepo.findByPgWorkspace(session.workspaceId)` → 본인 워크스페이스로 발송된 모든 활성 invitation+RFP 페어. 미클레임 'pending' 도 표시(알림 딥링크와 일관)
+- `app/(app)/inbox/[rfpId]/page.tsx`: RSC + `canAccess` 가드. 미통과 시 404
 - `components/inbox/BidForm.tsx`: `useBidListStore`/`useNotificationsStore`/`MOCK_SESSION_PG`/`MOCK_WORKSPACES`/`MOCK_SESSION_BUYER` 제거 → `submitBidAction` 호출. proposalPdf는 attachment id로 전달
 
-검증: 시나리오 B/C 그린. **초대된 PG 워크스페이스의 모든 멤버**가 같은 RFQ에 접근 가능 — 알림 딥링크(미클레임 멤버 클릭) 정상 동작 회귀 가드. 다른 워크스페이스 사용자는 `canAccess` 차단(404).
+검증: 시나리오 B/C 그린. **초대된 PG 워크스페이스의 모든 멤버**가 같은 RFP에 접근 가능 — 알림 딥링크(미클레임 멤버 클릭) 정상 동작 회귀 가드. 다른 워크스페이스 사용자는 `canAccess` 차단(404).
 
 ## Step 9 — 알림: SSE + actions
 
@@ -317,7 +317,7 @@ P6 submit → `signupCompleteAction({ wsKind, name, bizProfile? })`. **buyer 분
 ## Step 10 — Resend + 이메일 템플릿 + Outbox Drizzle 어댑터
 
 - `lib/integrations/resend.ts`: `ResendSender: Sender` (기존 `lib/server/outbox/types.ts:Sender` 그대로 구현). `RESEND_API_KEY` 부재 시 dev 모드는 console 폴백
-- `lib/server/outbox/templates/{authVerify,authReset,authEmailChange,rfqInvited,rfqSent,bidSubmitted,rfqAwarded}.tsx`: react-email. 모든 numeric은 mono+tabular-nums (DESIGN.md), 본문 헤어라인
+- `lib/server/outbox/templates/{authVerify,authReset,authEmailChange,rfpInvited,rfpSent,bidSubmitted,rfpAwarded}.tsx`: react-email. 모든 numeric은 mono+tabular-nums (DESIGN.md), 본문 헤어라인
 - `lib/server/outbox/drizzle-adapter.ts`: 기존 `NotificationOutboxAdapter` API 모방 (enqueue/flush/getPending/getAll). enqueue는 `INSERT ... ON CONFLICT (dedupe_key) DO NOTHING`. flush는 `SELECT ... FOR UPDATE SKIP LOCKED LIMIT 50` 후 attempt+1 + sender 호출 + status 갱신
 - `app/api/cron/flush-outbox/route.ts`: `Authorization: Bearer ${CRON_SECRET}` 검증 후 flush. 외부 cron(Vercel cron 또는 GH Actions schedule) 60s 주기
 - `lib/server/outbox/post-commit.ts`: `enqueueAndFlushAfterCommit(actionTx, entries)` — 액션이 tx 종료 후 `Promise.resolve().then(()=>adapter.flush())`. Vercel 환경 detect 시 Next 15+ `after()` API로 swap
@@ -330,11 +330,11 @@ P6 submit → `signupCompleteAction({ wsKind, name, bizProfile? })`. **buyer 분
 - `lib/server/storage/local.ts`: `saveFile`/`readFile`/`deleteFile`. `STORAGE_ROOT = process.env.UPLOAD_DIR ?? './uploads'`. 스토리지 인터페이스 `Storage`로 추상화 (v1에 S3 클래스 swap)
 - `app/api/files/upload/route.ts`: POST multipart. `auth()` 필수. mime 화이트리스트 (`application/pdf`, `image/png`, `image/jpeg`), 20MB 제한. `${STORAGE_ROOT}/{yyyy}/{mm}/{uuid}.{ext}` 저장 후 `attachments` insert. 응답 `{ id, name, size, mimeType }`
 - `app/api/files/[id]/route.ts`: GET. 권한 검사 — owner_kind에 따라:
-  - `rfq_rfp`: rfq의 buyer ws 멤버 OR `canAccess(rfqId, pgWsId)` PG (초대된 ws 멤버 모두)
-  - `bid_proposal`: rfq의 buyer ws 멤버 OR 업로드한 PG ws 멤버
+  - `rfp`: rfp의 buyer ws 멤버 OR `canAccess(rfpId, pgWsId)` PG (초대된 ws 멤버 모두)
+  - `bid_proposal`: rfp의 buyer ws 멤버 OR 업로드한 PG ws 멤버
   - 그 외 401/403. stream으로 응답, `Cache-Control: private, no-store`
 - `.gitignore`에 `uploads/` 추가
-- 화면: `components/rfq/RfpAttachmentDropzone.tsx`/`components/inbox/BidForm.tsx` proposal PDF — 업로드 후 attachment id 사용. preview iframe `src=/api/files/{id}`
+- 화면: `components/rfp/RfpAttachmentDropzone.tsx`/`components/inbox/BidForm.tsx` proposal PDF — 업로드 후 attachment id 사용. preview iframe `src=/api/files/{id}`
 
 검증: PDF 업로드 → 디스크에 파일 존재, preview 동작, 무관 사용자는 403.
 
@@ -346,7 +346,7 @@ P6 submit → `signupCompleteAction({ wsKind, name, bizProfile? })`. **buyer 분
   - idempotent (TRUNCATE all RESTART IDENTITY → INSERT)
   - buyer ws `(주)샘플테크` (도메인 없음, biz_profile = 123-45-67890 / sme2 / user_confirmed) + 사용자 `yeonseong.dev@gmail.com` (admin)
   - PG ws toss.im / inicis.com / kakaopay.com (domain 셋팅) + 각각 사용자 1명
-  - sent RFQ `Q-2604-0001` (초대 3, 입찰 2 — toss/inicis 제출, kakao 미제출) + draft `Q-2605-0001`
+  - sent RFP `P-2604-0001` (초대 3, 입찰 2 — toss/inicis 제출, kakao 미제출) + draft `P-2605-0001`
 - `package.json`에 `db:seed` 스크립트
 
 검증: 시드 후 `yeonseong.dev@gmail.com` 로그인 시 기존 mock 홈 대시보드와 동등한 화면.
@@ -354,16 +354,16 @@ P6 submit → `signupCompleteAction({ wsKind, name, bizProfile? })`. **buyer 분
 ## Step 13 — Mock & 스토어 일괄 삭제 (컷오버 커밋)
 
 삭제:
-- `lib/mock/` 전체 (8 파일: bids/biz-lookup/invitations/notifications/rfqs/session/users/workspaces)
-- `lib/stores/{rfq-list,bid-list,notifications}.ts` (3 파일)
+- `lib/mock/` 전체 (8 파일: bids/biz-lookup/invitations/notifications/rfps/session/users/workspaces)
+- `lib/stores/{rfp-list,bid-list,notifications}.ts` (3 파일)
 
 유지:
-- `lib/stores/{rfq-draft,signup-draft,ui}.ts` — 순수 UI 상태
+- `lib/stores/{rfp-draft,signup-draft,ui}.ts` — 순수 UI 상태
 
 컷오버 전 grep 게이트 (모두 0이어야 함):
 ```bash
 grep -r "from '@/lib/mock" app components lib
-grep -r "useRfqListStore\|useBidListStore\|useNotificationsStore" app components lib
+grep -r "useRfpListStore\|useBidListStore\|useNotificationsStore" app components lib
 grep -r "MOCK_\|useMockSession" app components lib
 grep -r "lookupNiceGrade\|niceLookedUpAt\|estimatedRevenue\|revenueYear\|mailOrderNo" app components lib
 ```
@@ -374,7 +374,7 @@ grep -r "lookupNiceGrade\|niceLookedUpAt\|estimatedRevenue\|revenueYear\|mailOrd
 
 - `vitest.config.ts`: drizzle 테스트는 pglite 환경, 컴포넌트는 jsdom (workspace projects 분리)
 - `playwright.config.ts`: `webServer: pnpm dev` + `DATABASE_URL=$DATABASE_URL_TEST` (5433 docker pg). `globalSetup`이 `scripts/test-db-reset.ts`(TRUNCATE+seed) 호출
-- `e2e/{scenario-a-buyer-rfq,scenario-b-pg-bid,scenario-c-buyer-award}.spec.ts`: `PG_RFQ_SPEC.md` §6 시나리오 A/B/C와 1:1 매핑
+- `e2e/{scenario-a-buyer-rfp,scenario-b-pg-bid,scenario-c-buyer-award}.spec.ts`: `PG_RFP_SPEC.md` §6 시나리오 A/B/C와 1:1 매핑
 - `scripts/test-db-reset.ts`: TRUNCATE + 재시드
 
 ---
@@ -385,10 +385,10 @@ grep -r "lookupNiceGrade\|niceLookedUpAt\|estimatedRevenue\|revenueYear\|mailOrd
 - `<repo>/proxy.ts` — auth() wrapping (수정, rename 안 함)
 - `<repo>/drizzle.config.ts` (신규)
 - `<repo>/docker-compose.yml` (신규)
-- `<repo>/lib/db/client.ts` + `lib/db/client-pglite.ts` + `lib/db/schema/{index,_enums,users,workspaces,workspace_members,biz_profiles,rfqs,rfq_invitations,bids,contracts,notifications,outbox_entries,verification_tokens,attachments,rfq_counters}.ts` (신규)
+- `<repo>/lib/db/client.ts` + `lib/db/client-pglite.ts` + `lib/db/schema/{index,_enums,users,workspaces,workspace_members,biz_profiles,rfps,rfp_invitations,bids,contracts,notifications,outbox_entries,verification_tokens,attachments,rfp_counters}.ts` (신규)
 - `<repo>/lib/types/biz-profile.ts` — 슬림화 (수정)
-- `<repo>/lib/server/repositories/types.ts` (신규) + `in-memory/{rfq,invitation,workspace}.ts` (이동) + `drizzle/*.ts` (신규 11) + `factory.ts` (신규)
-- `<repo>/lib/server/actions/{auth,rfq,bid,invitation,notifications}/*.ts` (신규)
+- `<repo>/lib/server/repositories/types.ts` (신규) + `in-memory/{rfp,invitation,workspace}.ts` (이동) + `drizzle/*.ts` (신규 11) + `factory.ts` (신규)
+- `<repo>/lib/server/actions/{auth,rfp,bid,invitation,notifications}/*.ts` (신규)
 - `<repo>/lib/integrations/{nts.ts,nts.mock.ts,resend.ts}` (신규)
 - `<repo>/lib/server/outbox/{drizzle-adapter,post-commit}.ts` + `templates/*.tsx` (신규)
 - `<repo>/lib/server/storage/local.ts` (신규)
@@ -398,19 +398,19 @@ grep -r "lookupNiceGrade\|niceLookedUpAt\|estimatedRevenue\|revenueYear\|mailOrd
 - `<repo>/app/(public)/auth/verify/page.tsx` — 토큰 검증 본체로 일원화 (수정)
 - `<repo>/app/(public)/signup/verify/page.tsx` — `/auth/verify`로 redirect 셸로 축소 또는 삭제 (수정/삭제)
 - `<repo>/components/auth/WorkspaceTypeRadio.tsx` (신규)
-- `<repo>/components/rfq/{BizLookupField,GradeConfirmPanel}.tsx` — NTS만 / 5단계 라디오 (수정)
-- `<repo>/components/rfq/RfqCreateForm.tsx` — bizProfile 캡처 단계 제거 (수정)
+- `<repo>/components/rfp/{BizLookupField,GradeConfirmPanel}.tsx` — NTS만 / 5단계 라디오 (수정)
+- `<repo>/components/rfp/RfpCreateForm.tsx` — bizProfile 캡처 단계 제거 (수정)
 - `<repo>/components/inbox/BidForm.tsx` — 액션 호출 (수정)
 - `<repo>/components/shell/{Topbar,NotificationDrawer}.tsx` — 디목 (수정)
 - `<repo>/scripts/{seed,test-db-reset}.ts` (신규)
 
 ## 재사용 가능한 기존 자산
 
-- `lib/server/repositories/{rfq,invitation,workspace}.ts` — 의미론(`assertTransition`, `claimToken`, `canAccess`, `autoJoinPg`) 그대로 인터페이스로 승격
+- `lib/server/repositories/{rfp,invitation,workspace}.ts` — 의미론(`assertTransition`, `claimToken`, `canAccess`, `autoJoinPg`) 그대로 인터페이스로 승격
 - `lib/server/outbox/{adapter,types}.ts` — `Sender` 인터페이스, dedupe/retry/maxAttempts 모델 그대로
 - `lib/server/token.ts` — `generateToken`/`hashToken`/`isExpired`/`addMinutes` 그대로
-- `lib/server/rfq-state.ts` — `assertTransition` 상태 전이 검증 로직 그대로 (draft→sent, sent→{closed/cancelled/awarded})
-- `lib/server/__tests__/{rfq-repo,invitation,workspace,outbox,token,rfq-state}.test.ts` — 어서션 보존, repo 백엔드만 pglite로 swap
+- `lib/server/rfp-state.ts` — `assertTransition` 상태 전이 검증 로직 그대로 (draft→sent, sent→{closed/cancelled/awarded})
+- `lib/server/__tests__/{rfp-repo,invitation,workspace,outbox,token,rfp-state}.test.ts` — 어서션 보존, repo 백엔드만 pglite로 swap
 - `lib/types/bid.ts:STATUTORY_CARD_FEE` — 영세/중소 카드료 강제 적용 시 import (`general`은 `NaN`이므로 `Number.isNaN`으로 분기)
 - `lib/mock/biz-lookup.ts:BIZ_DB` — 테스트 픽스처(`lib/integrations/nts.mock.ts`)로 이전한 뒤 Step 13에서 본 파일은 삭제
 
@@ -432,13 +432,13 @@ DATABASE_URL=$DATABASE_URL_TEST pnpm e2e   # Playwright A/B/C
 수동 클릭 검증:
 - **D-buyer (직접가입 → buyer)**: `/signup` → 메일 verify → P5 → P6 buyer 라디오 → 워크스페이스 이름 + bizNo NTS 조회 + grade 5단계 선택 → 만들기 → `/home`
 - **D-pg-direct (드물지만 직접가입 → PG)**: P6 PG 라디오 → 만들기 → `/home` (도메인 자동 PG ws 신규 또는 join)
-- **E (초대로 PG)**: 메일 `/invite/rfq/Q-xxxx` 클릭 → 가입 분기 (P5만 거치고 P6 스킵) → `/inbox/Q-xxxx`
+- **E (초대로 PG)**: 메일 `/invite/rfp/Q-xxxx` 클릭 → 가입 분기 (P5만 거치고 P6 스킵) → `/inbox/Q-xxxx`
 - **F (비밀번호 분실)**: `/login` → forgot → 메일 → reset → 자동 로그인
-- **시나리오 A (buyer)**: `/rfq/new` → workspace bizProfile 표시 + grade 재확인 → 메모/마감일/허용 PG 이메일 → 발송 → 초대 메일 N건
-- **시나리오 B (PG)**: 초대 클릭 → 클레임 → `/inbox/:rfqId` → 입찰(영세/중소면 카드 입력란 비활성, 일반이면 9개 카드 입력) → 제출
+- **시나리오 A (buyer)**: `/rfp/new` → workspace bizProfile 표시 + grade 재확인 → 메모/마감일/허용 PG 이메일 → 발송 → 초대 메일 N건
+- **시나리오 B (PG)**: 초대 클릭 → 클레임 → `/inbox/:rfpId` → 입찰(영세/중소면 카드 입력란 비활성, 일반이면 9개 카드 입력) → 제출
 - **시나리오 C (낙찰)**: buyer 비교표 → 낙찰 → winner/패자 알림 (인앱 + 이메일)
 - **알림 SSE**: 입찰 제출 → buyer 드로어 ~1초 내 갱신
-- **권한**: PG 동료(같은 도메인 다른 사용자)가 같은 RFQ 직접 URL 접근 → 404
+- **권한**: PG 동료(같은 도메인 다른 사용자)가 같은 RFP 직접 URL 접근 → 404
 
 ## 남은 보류 사항 (v1)
 
@@ -451,7 +451,7 @@ DATABASE_URL=$DATABASE_URL_TEST pnpm e2e   # Playwright A/B/C
   - `bids.buyer_stage` 컬럼 추가 (enum: `pending|negotiating|decided`, default `'pending'`)
   - `bid_notes` 테이블 신설 (`id`, `bid_id` fk, `author_id` fk users, `body` text, `created_at`)
   - `attachments.owner_kind` enum에 `'bid_note'` 추가 + 업로드 라우트 권한 분기
-  - 서버 액션: `updateBuyerStageAction(bidId, to)` (auth: rfq.buyerWsId === session.workspaceId), `addBidNoteAction(bidId, body, attachmentIds[])`, `removeBidNoteAction(noteId)` — 모두 author 검증
+  - 서버 액션: `updateBuyerStageAction(bidId, to)` (auth: rfp.buyerWsId === session.workspaceId), `addBidNoteAction(bidId, body, attachmentIds[])`, `removeBidNoteAction(noteId)` — 모두 author 검증
   - Repo: `BidRepo.updateBuyerStage`, `BidNoteRepo.{save,findByBid,delete}`
   - 클라이언트: `lib/stores/bid-board.ts` 폐기 후 server-component fetch + optimistic mutation으로 교체. 기존 localStorage 데이터는 의도적 폐기 (v0 데모용)
 

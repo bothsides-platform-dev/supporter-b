@@ -1,15 +1,15 @@
 import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { rfqs } from './rfqs';
+import { rfps } from './rfps';
 import { bids } from './bids';
 import { users } from './users';
 
 export const contracts = pgTable('contracts', {
   id: uuid('id').primaryKey().defaultRandom(),
-  rfqId: text('rfq_id')
+  rfpId: text('rfp_id')
     .notNull()
     .unique()
-    .references(() => rfqs.id),
+    .references(() => rfps.id),
   bidId: uuid('bid_id')
     .notNull()
     .references(() => bids.id),

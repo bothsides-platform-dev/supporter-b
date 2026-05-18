@@ -18,8 +18,6 @@ import { GRADE_LABELS } from '@/lib/types/biz-profile';
 
 export const dynamic = 'force-dynamic';
 
-const VALID_AVATAR = ['ink', 'accent', 'lavender', 'amber', 'moss', 'terra'] as const;
-
 type Props = { searchParams: Promise<{ biz_required?: string }> };
 
 export default async function ProfilePage({ searchParams }: Props) {
@@ -162,13 +160,13 @@ export default async function ProfilePage({ searchParams }: Props) {
                     role="alert"
                     className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
                   >
-                    견적 생성을 위해 사업자번호 등록이 필요합니다.
+                    제안 생성을 위해 사업자번호 등록이 필요합니다.
                   </p>
                 </>
               )}
               <WorkspaceBizNoForm
                 currentBizNo={biz?.bizNo ?? null}
-                returnUrl={biz_required === '1' && !biz ? '/rfq/new' : undefined}
+                returnUrl={biz_required === '1' && !biz ? '/rfp/new' : undefined}
               />
               {biz && <WorkspaceBizProfileForm currentGrade={grade} />}
             </div>

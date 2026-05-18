@@ -6,7 +6,7 @@ const lookupBizNoAction = vi.fn();
 const updateWorkspaceBizProfileAction = vi.fn();
 const refresh = vi.fn();
 
-vi.mock('@/lib/server/actions/rfq', () => ({
+vi.mock('@/lib/server/actions/rfp', () => ({
   lookupBizNoAction: (bizNo: string) => lookupBizNoAction(bizNo),
   updateWorkspaceBizProfileAction: (input: unknown) =>
     updateWorkspaceBizProfileAction(input),

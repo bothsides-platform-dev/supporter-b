@@ -33,7 +33,7 @@ export type SignupEmailResult = AuthActionResult<{ email: string }>;
  * P2 — issue a signup_email verification token and enqueue the outbox mail.
  *
  * - Token TTL: 15 minutes.
- * - meta.inviteToken (if present) is the only carrier of the RFQ invite
+ * - meta.inviteToken (if present) is the only carrier of the RFP invite
  *   across the verify hop — the client puts it back into sessionStorage
  *   from `verifyEmailAction`'s response.
  * - Outbox dedupe key bucketed per 15-minute window so resend taps in the

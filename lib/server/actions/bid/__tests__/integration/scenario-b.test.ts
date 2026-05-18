@@ -1,10 +1,10 @@
-// PG_RFQ_SPEC.md §6 시나리오 B — PG 영업담당 입찰 (action-only e2e).
+// PG_RFP_SPEC.md §6 시나리오 B — PG 영업담당 입찰 (action-only e2e).
 //
-// PG signup → buyer signup → createRfq(send=true, pgWsId) → PG claim invite →
+// PG signup → buyer signup → createRfp(send=true, pgWsId) → PG claim invite →
 // submitBid → buyer 알림 row + outbox row 검증.
 //
 // 새 모델: PG 워크스페이스가 먼저 존재해야 buyer가 초대할 수 있다.
-// PG signups → PG workspace 생성 → buyer가 workspace ID로 RFQ 발송.
+// PG signups → PG workspace 생성 → buyer가 workspace ID로 RFP 발송.
 //
 // 인증 모킹: requireSession/requireBuyerSession/requirePgSession 모두 sessionRef.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,12 +14,12 @@ import {
   bids,
   notifications,
   outboxEntries,
-  rfqInvitations,
+  rfpInvitations,
   workspaces,
   workspaceMembers,
   users,
 } from '@/lib/db/schema';
-import { setupRfqActionEnv, teardownRfqActionEnv } from '../../../rfq/__tests__/_setup';
+import { setupRfpActionEnv, teardownRfpActionEnv } from '../../../rfp/__tests__/_setup';
 import { signupCompleteAction } from '@/lib/server/actions/auth/signupCompleteAction';
 import { signupEmailAction } from '@/lib/server/actions/auth/signupEmailAction';
 import { verifyEmailAction } from '@/lib/server/actions/auth/verifyEmailAction';
@@ -53,15 +53,15 @@ vi.mock('@/lib/auth/session', () => ({
   },
 }));
 
-import { createRfqAction } from '../../../rfq/createRfqAction';
+import { createRfpAction } from '../../../rfp/createRfpAction';
 import { claimInviteTokenAction } from '../../../invitation/claimInviteTokenAction';
 import { submitBidAction } from '../../submitBidAction';
 
 let db: PgliteDB;
 
 function tokenFromInviteUrl(html: string): string {
-  // createRfqAction outbox HTML 형식: <a href="${baseUrl}/invite/rfq/${rawToken}">…
-  const m = html.match(/\/invite\/rfq\/([^"]+)"/);
+  // createRfpAction outbox HTML 형식: <a href="${baseUrl}/invite/rfp/${rawToken}">…
+  const m = html.match(/\/invite\/rfp\/([^"]+)"/);
   return m?.[1] ?? '';
 }
 
@@ -102,11 +102,11 @@ async function pgSignup(email: string): Promise<{ id: string; email: string; wsI
   return { id: u.id, email: u.email, wsId: ws.id };
 }
 
-async function buyerSignupAndCreateRfq(pgWsId: string): Promise<{
+async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
   buyerUserId: string;
   buyerEmail: string;
   buyerWsId: string;
-  rfqId: string;
+  rfpId: string;
   pgInviteToken: string;
 }> {
   // P2 — buyer email
@@ -156,7 +156,7 @@ async function buyerSignupAndCreateRfq(pgWsId: string): Promise<{
     .from(workspaces)
     .where(eq(workspaces.name, '(주)샘플테크'));
 
-  // Buyer creates+sends RFQ targeting the PG workspace that already exists.
+  // Buyer creates+sends RFP targeting the PG workspace that already exists.
   sessionRef.value = {
     user: {
       id: u.id,
@@ -166,21 +166,21 @@ async function buyerSignupAndCreateRfq(pgWsId: string): Promise<{
       role: 'admin',
     },
   };
-  const created = await createRfqAction({
-    title: 'PG 견적',
+  const created = await createRfpAction({
+    title: 'PG 제안',
     memo: '',
     deadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
     allowedPgWorkspaceIds: [pgWsId],
     send: true,
   });
   expect(created.ok).toBe(true);
-  if (!created.ok) throw new Error('createRfq failed');
+  if (!created.ok) throw new Error('createRfp failed');
 
   // Pull invite raw token from outbox HTML (PG admin gets the email).
   const [inviteRow] = await db
     .select({ html: outboxEntries.html })
     .from(outboxEntries)
-    .where(eq(outboxEntries.event, 'rfq.invited'))
+    .where(eq(outboxEntries.event, 'rfp.invited'))
     .limit(1);
   const pgInviteToken = tokenFromInviteUrl(inviteRow.html);
   expect(pgInviteToken).toBeTruthy();
@@ -189,26 +189,26 @@ async function buyerSignupAndCreateRfq(pgWsId: string): Promise<{
     buyerUserId: u.id,
     buyerEmail: u.email,
     buyerWsId: ws.id,
-    rfqId: created.rfqId,
+    rfpId: created.rfpId,
     pgInviteToken,
   };
 }
 
 describe('scenario B — PG signup → claim invite → submitBid → buyer notified', () => {
   beforeEach(async () => {
-    db = await setupRfqActionEnv();
+    db = await setupRfpActionEnv();
   });
   afterEach(() => {
-    teardownRfqActionEnv();
+    teardownRfpActionEnv();
     sessionRef.value = null;
   });
 
-  it('end-to-end: buyer creates RFQ → PG claims & submits → buyer ws gets in_app + outbox row', async () => {
+  it('end-to-end: buyer creates RFP → PG claims & submits → buyer ws gets in_app + outbox row', async () => {
     // 1. PG signs up first (workspace must exist before buyer can invite)
     const pgUser = await pgSignup('sales@toss.im');
 
-    // 2. Buyer signs up and creates+sends RFQ targeting the PG workspace
-    const setup = await buyerSignupAndCreateRfq(pgUser.wsId);
+    // 2. Buyer signs up and creates+sends RFP targeting the PG workspace
+    const setup = await buyerSignupAndCreateRfp(pgUser.wsId);
 
     // 3. PG user claims invite (workspaceId already known from signup)
     sessionRef.value = {
@@ -224,7 +224,7 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     const claim = await claimInviteTokenAction(setup.pgInviteToken);
     expect(claim.ok).toBe(true);
     if (!claim.ok) return;
-    expect(claim.rfqId).toBe(setup.rfqId);
+    expect(claim.rfpId).toBe(setup.rfpId);
 
     // Workspace + membership exist from PG signup.
     const [pgWs] = await db
@@ -248,14 +248,14 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
 
     // 4. PG submits a bid.
     const bid = await submitBidAction({
-      rfqId: setup.rfqId,
+      rfpId: setup.rfpId,
       settleCycle: 'D+1',
       deposit: 1_000_000,
       setupFee: 500_000,
       monthlyMin: 100_000,
       bankTransferFeePct: 0.001,
       easyPayFeePct: 0.018,
-      // sme2 RFQ → 서버에서 cardFees null로 강제. 클라이언트 입력은 무시되어야.
+      // sme2 RFP → 서버에서 cardFees null로 강제. 클라이언트 입력은 무시되어야.
       cardFeesByIssuer: {
         BC: 0.005,
         SHINHAN: 0.005,
@@ -282,8 +282,8 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     // — invitation now accepted with this user.
     const [inv] = await db
       .select()
-      .from(rfqInvitations)
-      .where(eq(rfqInvitations.rfqId, setup.rfqId));
+      .from(rfpInvitations)
+      .where(eq(rfpInvitations.rfpId, setup.rfpId));
     expect(inv.acceptedByUserId).toBe(pgUser.id);
     expect(inv.status).toBe('accepted');
 
@@ -303,7 +303,7 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     expect(notifs[0].channel).toBe('in_app');
 
     // Assertion 3 — outbox row(bid.submitted) for the buyer with member-keyed
-    //   dedupe `bid:{rfqId}:{pgWsId}:{userId}`.
+    //   dedupe `bid:{rfpId}:{pgWsId}:{userId}`.
     const submittedOutbox = await db
       .select()
       .from(outboxEntries)
@@ -311,7 +311,7 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     expect(submittedOutbox).toHaveLength(1);
     expect(submittedOutbox[0].toAddr).toBe(setup.buyerEmail);
     expect(submittedOutbox[0].dedupeKey).toBe(
-      `bid:${setup.rfqId}:${pgUser.wsId}:${setup.buyerUserId}`,
+      `bid:${setup.rfpId}:${pgUser.wsId}:${setup.buyerUserId}`,
     );
   });
 });

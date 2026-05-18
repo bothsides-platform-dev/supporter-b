@@ -1,7 +1,7 @@
 // PG 수신함 (RSC).
 //
 // - `auth()` 후 `getInvitationRepo().findByPgWorkspace(workspaceId)` — 본인이
-//   소속한 PG 워크스페이스로 발송된 모든 활성 invitation + RFQ pair.
+//   소속한 PG 워크스페이스로 발송된 모든 활성 invitation + RFP pair.
 // - 정책: 초대된 워크스페이스 멤버 모두 접근. 미클레임 invitation 도 표시(알림
 //   딥링크와 일관). 클레임 자체는 첫 진입자가 처리(감사용).
 import { redirect } from 'next/navigation';
@@ -22,14 +22,14 @@ export default async function InboxPage() {
   const pairs = await invRepo.findByPgWorkspace(session.user.workspaceId);
 
   // RSC → client component로 직렬화 가능한 plain object만 전달.
-  const rows = pairs.map(({ invitation, rfq }) => ({
+  const rows = pairs.map(({ invitation, rfp }) => ({
     invitationId: invitation.id,
     invitationStatus: invitation.status,
-    rfqId: rfq.id,
-    rfqTitle: rfq.title,
-    rfqDeadline: rfq.deadline,
-    grade: rfq.bizProfile?.grade
-      ? GRADE_LABELS[rfq.bizProfile.grade]
+    rfpId: rfp.id,
+    rfpTitle: rfp.title,
+    rfpDeadline: rfp.deadline,
+    grade: rfp.bizProfile?.grade
+      ? GRADE_LABELS[rfp.bizProfile.grade]
       : '—',
   }));
 

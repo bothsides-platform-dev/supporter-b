@@ -54,7 +54,7 @@ async function resetTestDatabase(): Promise<void> {
 
   const result = await runSeed(db);
   console.log(
-    `[test-db-reset] seeded ${result.rfqs} rfqs, ${result.invitations} invitations, ${result.bids} bids`,
+    `[test-db-reset] seeded ${result.rfps} rfps, ${result.invitations} invitations, ${result.bids} bids`,
   );
 }
 

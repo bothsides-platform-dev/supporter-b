@@ -33,7 +33,7 @@ export const BUYER_STAGE_LABEL: Record<BuyerStage, string> = {
 
 export type Bid = {
   id: string;
-  rfqId: string;
+  rfpId: string;
   pgWsId: string;
   invitationId: string;
   settleCycle: SettlementCycle;

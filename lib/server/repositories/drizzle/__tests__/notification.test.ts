@@ -33,7 +33,7 @@ function buildNotification(
 ): Notification {
   return {
     id: randomUUID(),
-    type: 'RFQ_SENT',
+    type: 'RFP_SENT',
     title: 't',
     body: 'b',
     status: 'sent',
@@ -99,7 +99,7 @@ describe('DrizzleNotificationRepository.findRecentForUser', () => {
         id: randomUUID(),
         userId: user.id,
         workspaceId: ws.id,
-        type: 'RFQ_SENT',
+        type: 'RFP_SENT',
         title: `n${i}`,
         body: '',
         channel: 'in_app',

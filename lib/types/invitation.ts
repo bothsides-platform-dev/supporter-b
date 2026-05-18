@@ -6,9 +6,9 @@ export type InvitationStatus =
   | 'declined'
   | 'expired';
 
-export type RfqInvitation = {
+export type RfpInvitation = {
   id: string;
-  rfqId: string;
+  rfpId: string;
   pgWsId: string;
   acceptedByUserId?: string;
   uniqueToken: string;

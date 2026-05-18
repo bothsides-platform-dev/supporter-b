@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
-import { updateWorkspaceBizProfileAction } from '@/lib/server/actions/rfq';
+import { updateWorkspaceBizProfileAction } from '@/lib/server/actions/rfp';
 import { GRADE_LABELS, type MerchantGrade } from '@/lib/types/biz-profile';
 
 const ALL_GRADES: MerchantGrade[] = [
@@ -96,7 +96,7 @@ export function WorkspaceBizProfileForm({ currentGrade }: Props) {
       </div>
       <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
         새 등급은 새로운 사업자 프로필 row로 저장되며 워크스페이스에 반영됩니다.
-        과거 RFQ는 발송 시점 스냅샷을 그대로 유지합니다.
+        과거 RFP는 발송 시점 스냅샷을 그대로 유지합니다.
       </p>
     </form>
   );

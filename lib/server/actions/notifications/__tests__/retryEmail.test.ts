@@ -3,7 +3,7 @@
 // 검증:
 //   - 미인증 → UNAUTHENTICATED
 //   - 타인 notification → NOT_FOUND
-//   - notification.type이 outbox enum에 없는 경우(rfq.rejected 등) → NO_EMAIL
+//   - notification.type이 outbox enum에 없는 경우(rfp.rejected 등) → NO_EMAIL
 //   - 매칭 outbox row 없음 → NO_FAILED_OUTBOX
 //   - 정상 케이스: status 'failed' → 'pending', attempts 보존
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -90,11 +90,11 @@ describe('retryEmailNotificationAction', () => {
     if (!r.ok) expect(r.error).toBe('NOT_FOUND');
   });
 
-  it('returns NO_EMAIL when notification.type is not in outbox enum (e.g. rfq.rejected)', async () => {
+  it('returns NO_EMAIL when notification.type is not in outbox enum (e.g. rfp.rejected)', async () => {
     const u = await seedUser(db, { email: 'u@x.com' });
     const ws = await seedBuyerWorkspace(db);
     await seedMembership(db, ws.id, u.id, 'admin');
-    const nid = await insertNotif(u.id, ws.id, 'rfq.rejected');
+    const nid = await insertNotif(u.id, ws.id, 'rfp.rejected');
 
     sessionRef.value = { user: { id: u.id, email: u.email } };
     const r = await retryEmailNotificationAction({ notificationId: nid });

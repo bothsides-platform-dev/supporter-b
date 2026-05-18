@@ -22,15 +22,15 @@ export async function getPgKanbanData(
     bidRepo.findByPgWs(workspaceId),
   ]);
 
-  // (rfqId, pgWsId) → 본인 워크스페이스의 bid. PG 워크스페이스는 RFQ 당 1개 bid 만 가짐
+  // (rfpId, pgWsId) → 본인 워크스페이스의 bid. PG 워크스페이스는 RFP 당 1개 bid 만 가짐
   // (sendDraftInvitations 의 unique constraint).
-  const bidByRfq = new Map<string, Bid>();
-  for (const b of bids) bidByRfq.set(b.rfqId, b);
+  const bidByRfp = new Map<string, Bid>();
+  for (const b of bids) bidByRfp.set(b.rfpId, b);
 
-  const cards = pairs.map(({ invitation, rfq }) => {
-    const bid = bidByRfq.get(rfq.id);
-    const stage = classifyPgInvitation({ invitation, bid, rfq });
-    return toPgCard({ invitation, bid, rfq, stage });
+  const cards = pairs.map(({ invitation, rfp }) => {
+    const bid = bidByRfp.get(rfp.id);
+    const stage = classifyPgInvitation({ invitation, bid, rfp });
+    return toPgCard({ invitation, bid, rfp, stage });
   });
 
   return cards.sort(comparePgCards);

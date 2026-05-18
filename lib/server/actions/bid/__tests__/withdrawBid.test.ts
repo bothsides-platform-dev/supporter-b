@@ -2,9 +2,9 @@
 //
 // Coverage:
 //   - 같은 ws 가드: 다른 ws bid 철회 차단
-//   - 워크스페이스 동료가 동료 견적 철회 가능 (협업 정책)
+//   - 워크스페이스 동료가 동료 제안 철회 가능 (협업 정책)
 //   - 멱등성: 이미 withdrawn 인 bid 재호출 ok
-//   - withdrawn 후 같은 (rfqId, pgWsId)로 다시 submit → BID_ALREADY_SUBMITTED
+//   - withdrawn 후 같은 (rfpId, pgWsId)로 다시 submit → BID_ALREADY_SUBMITTED
 //     (advisor pin 4: v0 단순화)
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
@@ -12,8 +12,8 @@ import { eq } from 'drizzle-orm';
 
 import {
   bids,
-  rfqs,
-  rfqInvitations,
+  rfps,
+  rfpInvitations,
 } from '@/lib/db/schema';
 import {
   seedBizProfile,
@@ -23,7 +23,7 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
-import { setupRfqActionEnv, teardownRfqActionEnv } from '../../rfq/__tests__/_setup';
+import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 const sessionRef: {
@@ -69,9 +69,9 @@ async function setup() {
   const pgUser = await seedUser(db, { email: 'sales@toss.im' });
   await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-  const rfqId = 'Q-2605-0001';
-  await db.insert(rfqs).values({
-    id: rfqId,
+  const rfpId = 'P-2605-0001';
+  await db.insert(rfps).values({
+    id: rfpId,
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'withdraw test',
@@ -84,9 +84,9 @@ async function setup() {
   });
 
   const invId = randomUUID();
-  await db.insert(rfqInvitations).values({
+  await db.insert(rfpInvitations).values({
     id: invId,
-    rfqId,
+    rfpId,
     pgWsId: pgWs.id,
     acceptedByUserId: pgUser.id,
     tokenHash: hashToken(generateToken()),
@@ -95,7 +95,7 @@ async function setup() {
     status: 'accepted',
   });
 
-  return { rfqId, buyerWsId: buyerWs.id, pgWsId: pgWs.id, pgUser, invId };
+  return { rfpId, buyerWsId: buyerWs.id, pgWsId: pgWs.id, pgUser, invId };
 }
 
 const submitInput = {
@@ -109,10 +109,10 @@ const submitInput = {
 
 describe('withdrawBidAction', () => {
   beforeEach(async () => {
-    db = await setupRfqActionEnv();
+    db = await setupRfpActionEnv();
   });
   afterEach(() => {
-    teardownRfqActionEnv();
+    teardownRfpActionEnv();
     sessionRef.value = null;
   });
 
@@ -150,7 +150,7 @@ describe('withdrawBidAction', () => {
       },
     };
 
-    const r1 = await submitBidAction({ rfqId: s.rfqId, ...submitInput });
+    const r1 = await submitBidAction({ rfpId: s.rfpId, ...submitInput });
     expect(r1.ok).toBe(true);
     if (!r1.ok) return;
 
@@ -172,7 +172,7 @@ describe('withdrawBidAction', () => {
         role: 'admin',
       },
     };
-    const r1 = await submitBidAction({ rfqId: s.rfqId, ...submitInput });
+    const r1 = await submitBidAction({ rfpId: s.rfpId, ...submitInput });
     expect(r1.ok).toBe(true);
     if (!r1.ok) return;
     const r2 = await withdrawBidAction({ bidId: r1.bidId });
@@ -192,7 +192,7 @@ describe('withdrawBidAction', () => {
         role: 'admin',
       },
     };
-    const r1 = await submitBidAction({ rfqId: s.rfqId, ...submitInput });
+    const r1 = await submitBidAction({ rfpId: s.rfpId, ...submitInput });
     expect(r1.ok).toBe(true);
     if (!r1.ok) return;
 
@@ -228,7 +228,7 @@ describe('withdrawBidAction', () => {
         role: 'admin',
       },
     };
-    const r1 = await submitBidAction({ rfqId: s.rfqId, ...submitInput });
+    const r1 = await submitBidAction({ rfpId: s.rfpId, ...submitInput });
     expect(r1.ok).toBe(true);
     if (!r1.ok) return;
 
@@ -254,7 +254,7 @@ describe('withdrawBidAction', () => {
     expect(row.status).toBe('submitted');
   });
 
-  it('after withdraw, re-submit same (rfqId, pgWsId) returns BID_ALREADY_SUBMITTED (v0 simplification, advisor pin 4)', async () => {
+  it('after withdraw, re-submit same (rfpId, pgWsId) returns BID_ALREADY_SUBMITTED (v0 simplification, advisor pin 4)', async () => {
     const s = await setup();
     sessionRef.value = {
       user: {
@@ -265,12 +265,12 @@ describe('withdrawBidAction', () => {
         role: 'admin',
       },
     };
-    const r1 = await submitBidAction({ rfqId: s.rfqId, ...submitInput });
+    const r1 = await submitBidAction({ rfpId: s.rfpId, ...submitInput });
     expect(r1.ok).toBe(true);
     if (!r1.ok) return;
     await withdrawBidAction({ bidId: r1.bidId });
 
-    const r2 = await submitBidAction({ rfqId: s.rfqId, ...submitInput });
+    const r2 = await submitBidAction({ rfpId: s.rfpId, ...submitInput });
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.error).toBe('BID_ALREADY_SUBMITTED');
   });

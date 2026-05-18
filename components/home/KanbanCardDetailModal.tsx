@@ -72,7 +72,7 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <span className="font-mono text-[11px] tabular-nums tracking-[0.04em] text-[var(--md-sys-color-on-surface-variant)]">
-            {card.rfqId}
+            {card.rfpId}
           </span>
           <DialogTitle className="text-[18px] font-[600] tracking-[-0.01em] text-[var(--md-sys-color-on-surface)] mt-1">
             {card.title}
@@ -83,7 +83,7 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
           color={buyerStageColor[card.stage]}
         />
       </div>
-      <DialogDescription className="sr-only">RFQ 상세</DialogDescription>
+      <DialogDescription className="sr-only">RFP 상세</DialogDescription>
 
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 mt-2">
         <Field label="마감" value={`${dday} · ${formatDate(card.deadline)}`} />
@@ -96,7 +96,7 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
       </dl>
 
       <div className="flex justify-end gap-2 mt-2">
-        <Link href={`/rfq/${card.rfqId}`}>
+        <Link href={`/rfp/${card.rfpId}`}>
           <Button size="sm">상세 페이지로 →</Button>
         </Link>
       </div>
@@ -111,7 +111,7 @@ function PgBody({ card }: { card: PgKanbanCard }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <span className="font-mono text-[11px] tabular-nums tracking-[0.04em] text-[var(--md-sys-color-on-surface-variant)]">
-            {card.rfqId}
+            {card.rfpId}
           </span>
           <DialogTitle className="text-[18px] font-[600] tracking-[-0.01em] text-[var(--md-sys-color-on-surface)] mt-1">
             {card.title}
@@ -122,7 +122,7 @@ function PgBody({ card }: { card: PgKanbanCard }) {
           color={pgStageColor[card.stage]}
         />
       </div>
-      <DialogDescription className="sr-only">초대받은 RFQ 상세</DialogDescription>
+      <DialogDescription className="sr-only">초대받은 RFP 상세</DialogDescription>
 
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 mt-2">
         <Field label="마감" value={`${dday} · ${formatDate(card.deadline)}`} />
@@ -135,7 +135,7 @@ function PgBody({ card }: { card: PgKanbanCard }) {
       </dl>
 
       <div className="flex justify-end gap-2 mt-2">
-        <Link href={`/inbox/${card.rfqId}`}>
+        <Link href={`/inbox/${card.rfpId}`}>
           <Button size="sm">상세 페이지로 →</Button>
         </Link>
       </div>

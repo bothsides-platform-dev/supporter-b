@@ -50,7 +50,7 @@ export type SignupCompleteResult = AuthActionResult<{
  *
  * Branches:
  *   - wsKind='buyer' → insert biz_profiles + workspaces(type='buyer') +
- *     member(role='admin'). Returns redirectTo=/rfq.
+ *     member(role='admin'). Returns redirectTo=/rfp.
  *   - wsKind='pg' → create new PG workspace with wsName +
  *     member(role='admin'). Returns redirectTo=/inbox.
  *
@@ -128,7 +128,7 @@ export async function signupCompleteAction(
 
         return {
           ok: true,
-          redirectTo: '/rfq',
+          redirectTo: '/rfp',
           email,
           password: parsed.data.password,
         };

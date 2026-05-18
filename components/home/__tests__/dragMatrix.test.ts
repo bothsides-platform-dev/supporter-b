@@ -2,18 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { resolveDrag } from '../dragMatrix';
 
 describe('resolveDrag — buyer', () => {
-  it('draft → sent: send-rfq', () => {
+  it('draft → sent: send-rfp', () => {
     const a = resolveDrag({
       role: 'buyer',
       from: 'draft',
       to: 'sent',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toEqual({
-      kind: 'send-rfq',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      kind: 'send-rfp',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
   });
 
@@ -22,10 +22,10 @@ describe('resolveDrag — buyer', () => {
       role: 'buyer',
       from: 'collecting',
       to: 'awarded',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
-    expect(a).toEqual({ kind: 'navigate-rfq-detail', rfqId: 'Q-2605-0001' });
+    expect(a).toEqual({ kind: 'navigate-rfp-detail', rfpId: 'P-2605-0001' });
   });
 
   it('comparing → awarded: navigate-award', () => {
@@ -33,39 +33,39 @@ describe('resolveDrag — buyer', () => {
       role: 'buyer',
       from: 'comparing',
       to: 'awarded',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
-    expect(a).toEqual({ kind: 'navigate-rfq-detail', rfqId: 'Q-2605-0001' });
+    expect(a).toEqual({ kind: 'navigate-rfp-detail', rfpId: 'P-2605-0001' });
   });
 
-  it('sent → closed: cancel-rfq', () => {
+  it('sent → closed: cancel-rfp', () => {
     const a = resolveDrag({
       role: 'buyer',
       from: 'sent',
       to: 'closed',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toEqual({
-      kind: 'cancel-rfq',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      kind: 'cancel-rfp',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
   });
 
-  it('draft → closed: cancel-rfq', () => {
+  it('draft → closed: cancel-rfp', () => {
     const a = resolveDrag({
       role: 'buyer',
       from: 'draft',
       to: 'closed',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toEqual({
-      kind: 'cancel-rfq',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      kind: 'cancel-rfp',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
   });
 
@@ -74,8 +74,8 @@ describe('resolveDrag — buyer', () => {
       role: 'buyer',
       from: 'sent',
       to: 'awarded',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toBeNull();
   });
@@ -85,8 +85,8 @@ describe('resolveDrag — buyer', () => {
       role: 'buyer',
       from: 'draft',
       to: 'awarded',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toBeNull();
   });
@@ -96,8 +96,8 @@ describe('resolveDrag — buyer', () => {
       role: 'buyer',
       from: 'collecting',
       to: 'sent',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toBeNull();
   });
@@ -107,8 +107,8 @@ describe('resolveDrag — buyer', () => {
       role: 'buyer',
       from: 'collecting',
       to: 'collecting',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toBeNull();
   });
@@ -120,10 +120,10 @@ describe('resolveDrag — pg', () => {
       role: 'pg',
       from: 'received',
       to: 'drafting',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
-    expect(a).toEqual({ kind: 'navigate-inbox', rfqId: 'Q-2605-0001' });
+    expect(a).toEqual({ kind: 'navigate-inbox', rfpId: 'P-2605-0001' });
   });
 
   it('reviewing → drafting: navigate-inbox', () => {
@@ -131,10 +131,10 @@ describe('resolveDrag — pg', () => {
       role: 'pg',
       from: 'reviewing',
       to: 'drafting',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
-    expect(a).toEqual({ kind: 'navigate-inbox', rfqId: 'Q-2605-0001' });
+    expect(a).toEqual({ kind: 'navigate-inbox', rfpId: 'P-2605-0001' });
   });
 
   it('drafting → submitted: navigate-inbox (form 작성 필요)', () => {
@@ -142,10 +142,10 @@ describe('resolveDrag — pg', () => {
       role: 'pg',
       from: 'drafting',
       to: 'submitted',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
-    expect(a).toEqual({ kind: 'navigate-inbox', rfqId: 'Q-2605-0001' });
+    expect(a).toEqual({ kind: 'navigate-inbox', rfpId: 'P-2605-0001' });
   });
 
   it('submitted → lost: withdraw-bid', () => {
@@ -153,15 +153,15 @@ describe('resolveDrag — pg', () => {
       role: 'pg',
       from: 'submitted',
       to: 'lost',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
       bidId: 'bid-uuid-1',
     });
     expect(a).toEqual({
       kind: 'withdraw-bid',
       bidId: 'bid-uuid-1',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
   });
 
@@ -170,8 +170,8 @@ describe('resolveDrag — pg', () => {
       role: 'pg',
       from: 'submitted',
       to: 'lost',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toBeNull();
   });
@@ -181,8 +181,8 @@ describe('resolveDrag — pg', () => {
       role: 'pg',
       from: 'received',
       to: 'submitted',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toBeNull();
   });
@@ -192,8 +192,8 @@ describe('resolveDrag — pg', () => {
       role: 'pg',
       from: 'drafting',
       to: 'won',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toBeNull();
   });
@@ -203,8 +203,8 @@ describe('resolveDrag — pg', () => {
       role: 'pg',
       from: 'drafting',
       to: 'drafting',
-      rfqId: 'Q-2605-0001',
-      title: 'RFQ 1',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
     });
     expect(a).toBeNull();
   });

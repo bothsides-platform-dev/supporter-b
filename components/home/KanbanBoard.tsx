@@ -52,7 +52,7 @@ const pgDotColor: Record<PgKanbanStage, DotColor> = {
   lost: 'error',
 };
 
-// 드롭 타깃에서 제외할 finality 컬럼. 'closed'/'lost' 는 cancel-rfq / withdraw-bid
+// 드롭 타깃에서 제외할 finality 컬럼. 'closed'/'lost' 는 cancel-rfp / withdraw-bid
 // 의 드롭 타깃으로 살려둠. 'awarded'/'won' 만 진짜 닫힘.
 const FROZEN_DROP_BUYER: ReadonlySet<BuyerKanbanStage> = new Set(['awarded']);
 const FROZEN_DROP_PG: ReadonlySet<PgKanbanStage> = new Set(['won']);
@@ -90,7 +90,7 @@ export function KanbanBoard(props: Props) {
         role: 'buyer',
         from: card.stage,
         to: toStage as BuyerKanbanStage,
-        rfqId: card.rfqId,
+        rfpId: card.rfpId,
         title: card.title,
       });
       dispatch(action);
@@ -101,7 +101,7 @@ export function KanbanBoard(props: Props) {
         role: 'pg',
         from: card.stage,
         to: toStage as PgKanbanStage,
-        rfqId: card.rfqId,
+        rfpId: card.rfpId,
         title: card.title,
         bidId: card.bidId,
       });
@@ -114,13 +114,13 @@ export function KanbanBoard(props: Props) {
       toast('이 단계로는 이동할 수 없습니다.', { type: 'info' });
       return;
     }
-    if (action.kind === 'navigate-rfq-detail') {
+    if (action.kind === 'navigate-rfp-detail') {
       toast('낙찰할 PG를 선택하세요.');
-      router.push(`/rfq/${action.rfqId}`);
+      router.push(`/rfp/${action.rfpId}`);
       return;
     }
     if (action.kind === 'navigate-inbox') {
-      router.push(`/inbox/${action.rfqId}`);
+      router.push(`/inbox/${action.rfpId}`);
       return;
     }
     setPendingAction(action);
@@ -137,7 +137,7 @@ export function KanbanBoard(props: Props) {
         >
           <div
             role="region"
-            aria-label="견적 칸반"
+            aria-label="제안 칸반"
             className="flex lg:grid lg:grid-cols-6 gap-3 overflow-x-auto lg:overflow-x-visible snap-x snap-mandatory pb-4"
           >
             {BUYER_KANBAN_ORDER.map((stage) => {
@@ -153,17 +153,17 @@ export function KanbanBoard(props: Props) {
                   cta={
                     stage === 'draft' ? (
                       <Link
-                        href="/rfq/new"
+                        href="/rfp/new"
                         className="block text-center py-3 rounded-[var(--md-sys-shape-medium)] border border-dashed border-[var(--md-sys-color-outline-variant)] text-[12px] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
                       >
-                        + 새 RFQ
+                        + 새 RFP
                       </Link>
                     ) : undefined
                   }
                 >
                   {cards.map((card) => (
                     <KanbanCard
-                      key={card.rfqId}
+                      key={card.rfpId}
                       role="buyer"
                       card={card}
                       onSelect={() => setSelectedBuyer(card)}
@@ -201,7 +201,7 @@ export function KanbanBoard(props: Props) {
       >
         <div
           role="region"
-          aria-label="초대받은 RFQ 칸반"
+          aria-label="초대받은 RFP 칸반"
           className="flex lg:grid lg:grid-cols-6 gap-3 overflow-x-auto lg:overflow-x-visible snap-x snap-mandatory pb-4"
         >
           {PG_KANBAN_ORDER.map((stage) => {

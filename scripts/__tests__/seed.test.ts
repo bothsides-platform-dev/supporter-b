@@ -27,7 +27,7 @@ describe('scripts/seed.ts', () => {
     expect(result.users).toBe(4);
     expect(result.members).toBe(4);
     expect(result.bizProfiles).toBe(2);
-    expect(result.rfqs).toBe(3);
+    expect(result.rfps).toBe(3);
     expect(result.invitations).toBe(4);
     expect(result.bids).toBe(2);
     expect(result.contracts).toBe(0);
@@ -35,7 +35,7 @@ describe('scripts/seed.ts', () => {
     expect(result.outbox).toBe(0);
     expect(result.attachments).toBe(0);
     expect(result.verificationTokens).toBe(0);
-    expect(result.rfqCounters).toBe(2);
+    expect(result.rfpCounters).toBe(2);
     expect(result.loginCredentials).toHaveLength(4);
   });
 
@@ -60,17 +60,17 @@ describe('scripts/seed.ts', () => {
     expect(await count(db, 'workspace_members')).toBe(4);
   });
 
-  it('inserts 2 biz_profiles (buyer + RFQ snapshot)', async () => {
+  it('inserts 2 biz_profiles (buyer + RFP snapshot)', async () => {
     expect(await count(db, 'biz_profiles')).toBe(2);
   });
 
-  it('inserts 3 RFQs (2 sent + 1 draft)', async () => {
-    expect(await count(db, 'rfqs')).toBe(3);
+  it('inserts 3 RFPs (2 sent + 1 draft)', async () => {
+    expect(await count(db, 'rfps')).toBe(3);
     const sent = await db.execute(
-      sql`SELECT count(*)::int AS c FROM rfqs WHERE status = 'sent'`,
+      sql`SELECT count(*)::int AS c FROM rfps WHERE status = 'sent'`,
     );
     const draft = await db.execute(
-      sql`SELECT count(*)::int AS c FROM rfqs WHERE status = 'draft'`,
+      sql`SELECT count(*)::int AS c FROM rfps WHERE status = 'draft'`,
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sentRows: any[] = Array.isArray(sent) ? sent : (sent as any).rows ?? [];
@@ -80,13 +80,13 @@ describe('scripts/seed.ts', () => {
     expect(draftRows[0].c).toBe(1);
   });
 
-  it('inserts 4 invitations (3 accepted: toss/inicis on Q-2604, toss on Q-2605-0002; kakao pending)', async () => {
-    expect(await count(db, 'rfq_invitations')).toBe(4);
+  it('inserts 4 invitations (3 accepted: toss/inicis on P-2604, toss on P-2605-0002; kakao pending)', async () => {
+    expect(await count(db, 'rfp_invitations')).toBe(4);
     const accepted = await db.execute(
-      sql`SELECT count(*)::int AS c FROM rfq_invitations WHERE status = 'accepted'`,
+      sql`SELECT count(*)::int AS c FROM rfp_invitations WHERE status = 'accepted'`,
     );
     const pending = await db.execute(
-      sql`SELECT count(*)::int AS c FROM rfq_invitations WHERE status = 'pending'`,
+      sql`SELECT count(*)::int AS c FROM rfp_invitations WHERE status = 'pending'`,
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const acceptedRows: any[] = Array.isArray(accepted) ? accepted : (accepted as any).rows ?? [];
@@ -108,9 +108,9 @@ describe('scripts/seed.ts', () => {
     expect(await count(db, 'verification_tokens')).toBe(0);
   });
 
-  it('inserts rfq_counters with 2604=1 and 2605=2', async () => {
+  it('inserts rfp_counters with 2604=1 and 2605=2', async () => {
     const rows = await db.execute(
-      sql`SELECT year_month, last_seq FROM rfq_counters ORDER BY year_month`,
+      sql`SELECT year_month, last_seq FROM rfp_counters ORDER BY year_month`,
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const arr: any[] = Array.isArray(rows) ? rows : (rows as any).rows ?? [];
@@ -127,6 +127,6 @@ describe('scripts/seed.ts', () => {
     expect(second.workspaces).toBe(4);
     expect(await count(db, 'workspaces')).toBe(4);
     expect(await count(db, 'users')).toBe(4);
-    expect(await count(db, 'rfq_invitations')).toBe(4);
+    expect(await count(db, 'rfp_invitations')).toBe(4);
   });
 });

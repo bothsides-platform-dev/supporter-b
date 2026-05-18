@@ -16,8 +16,8 @@ export async function PgHome({
       <PageEnter className="px-8 py-10">
         <EmptyState
           icon={<InboxIcon size={32} />}
-          title="받은 견적 요청이 없습니다."
-          description="구매사가 초대한 RFQ가 이 화면에 표시됩니다."
+          title="받은 제안 요청이 없습니다."
+          description="구매사가 초대한 RFP가 이 화면에 표시됩니다."
         />
       </PageEnter>
     );

@@ -1,6 +1,6 @@
 export type Contract = {
   id: string;
-  rfqId: string;
+  rfpId: string;
   bidId: string;
   awardedAt: string;
   awardedBy: string;

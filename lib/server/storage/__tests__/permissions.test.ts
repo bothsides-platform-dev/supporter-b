@@ -1,12 +1,12 @@
 // canAccessAttachment matrix:
-//   rfq_rfp:
-//     - buyer ws member of the owning RFQ → ALLOW
+//   rfp:
+//     - buyer ws member of the owning RFP → ALLOW
 //     - any member of an invited PG ws (claim-state agnostic) → ALLOW
 //     - PG user from a different ws (not invited) → DENY
 //     - random user → DENY
 //     - uploader (own row, e.g. draft window) → ALLOW
 //   bid_proposal:
-//     - buyer ws member of underlying RFQ → ALLOW
+//     - buyer ws member of underlying RFP → ALLOW
 //     - PG ws peer (same workspace as bid submitter) → ALLOW
 //     - PG ws other (different workspace, even if invited) → DENY
 //     - random user → DENY
@@ -14,7 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, bids, rfqInvitations, rfqs } from '@/lib/db/schema';
+import { attachments, bids, rfpInvitations, rfps } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { __useDrizzleWithDbForTest, __resetForTest, getInvitationRepo } from '@/lib/server/repositories/factory';
 import {
@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 type Scenario = {
-  rfqId: string;
+  rfpId: string;
   buyerWsId: string;
   buyerUserId: string;
   pgWsId: string;
@@ -72,9 +72,9 @@ async function seedScenario(): Promise<Scenario> {
 
   const random = await seedUser(db, { email: 'rando@x.com' });
 
-  const rfqId = 'Q-2605-0010';
-  await db.insert(rfqs).values({
-    id: rfqId,
+  const rfpId = 'P-2605-0010';
+  await db.insert(rfps).values({
+    id: rfpId,
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'perm test',
@@ -87,9 +87,9 @@ async function seedScenario(): Promise<Scenario> {
   });
 
   const invForToss = randomUUID();
-  await db.insert(rfqInvitations).values({
+  await db.insert(rfpInvitations).values({
     id: invForToss,
-    rfqId,
+    rfpId,
     pgWsId: pgWs.id,
     acceptedByUserId: pgUser.id,
     tokenHash: hashToken(generateToken()),
@@ -98,9 +98,9 @@ async function seedScenario(): Promise<Scenario> {
     status: 'accepted',
   });
   // Other PG invited but not part of acceptance for the bid we'll create.
-  await db.insert(rfqInvitations).values({
+  await db.insert(rfpInvitations).values({
     id: randomUUID(),
-    rfqId,
+    rfpId,
     pgWsId: otherPgWs.id,
     acceptedByUserId: otherPg.id,
     tokenHash: hashToken(generateToken()),
@@ -110,11 +110,11 @@ async function seedScenario(): Promise<Scenario> {
   });
 
   // RFP attachment — uploaded by buyer.
-  const rfpId = randomUUID();
+  const rfpAttId = randomUUID();
   await db.insert(attachments).values({
-    id: rfpId,
-    ownerKind: 'rfq_rfp',
-    ownerId: rfqId,
+    id: rfpAttId,
+    ownerKind: 'rfp',
+    ownerId: rfpId,
     name: 'rfp.pdf',
     size: 100,
     mimeType: 'application/pdf',
@@ -127,7 +127,7 @@ async function seedScenario(): Promise<Scenario> {
   await db.insert(attachments).values({
     id: proposalId,
     ownerKind: 'bid_proposal',
-    ownerId: rfqId,
+    ownerId: rfpId,
     name: 'proposal.pdf',
     size: 200,
     mimeType: 'application/pdf',
@@ -137,7 +137,7 @@ async function seedScenario(): Promise<Scenario> {
   const bidId = randomUUID();
   await db.insert(bids).values({
     id: bidId,
-    rfqId,
+    rfpId,
     pgWsId: pgWs.id,
     invitationId: invForToss,
     settleCycle: 'D+1',
@@ -151,9 +151,9 @@ async function seedScenario(): Promise<Scenario> {
   });
 
   const rfpAttachment: AttachmentRow = {
-    id: rfpId,
-    ownerKind: 'rfq_rfp',
-    ownerId: rfqId,
+    id: rfpAttId,
+    ownerKind: 'rfp',
+    ownerId: rfpId,
     name: 'rfp.pdf',
     size: 100,
     mimeType: 'application/pdf',
@@ -165,7 +165,7 @@ async function seedScenario(): Promise<Scenario> {
   const bidAttachment: AttachmentRow = {
     id: proposalId,
     ownerKind: 'bid_proposal',
-    ownerId: rfqId,
+    ownerId: rfpId,
     name: 'proposal.pdf',
     size: 200,
     mimeType: 'application/pdf',
@@ -175,7 +175,7 @@ async function seedScenario(): Promise<Scenario> {
   };
 
   return {
-    rfqId,
+    rfpId,
     buyerWsId: buyerWs.id,
     buyerUserId: buyer.id,
     pgWsId: pgWs.id,
@@ -194,7 +194,7 @@ async function repos() {
   return { invitation: await getInvitationRepo() };
 }
 
-describe('canAccessAttachment — rfq_rfp', () => {
+describe('canAccessAttachment — rfp', () => {
   it('ALLOW for buyer ws member', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
@@ -263,7 +263,7 @@ describe('canAccessAttachment — rfq_rfp', () => {
 });
 
 describe('canAccessAttachment — bid_proposal', () => {
-  it('ALLOW for buyer ws member of underlying RFQ', async () => {
+  it('ALLOW for buyer ws member of underlying RFP', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
       db,

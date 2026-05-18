@@ -16,7 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, rfqs, rfqInvitations } from '@/lib/db/schema';
+import { attachments, rfps, rfpInvitations } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
@@ -94,9 +94,9 @@ async function seedScenario() {
   await seedMembership(db, pgWs.id, pg.id, 'admin');
   const stranger = await seedUser(db, { email: 'rando@x.com' });
 
-  const rfqId = 'Q-2605-0050';
-  await db.insert(rfqs).values({
-    id: rfqId,
+  const rfpId = 'P-2605-0050';
+  await db.insert(rfps).values({
+    id: rfpId,
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'get test',
@@ -107,9 +107,9 @@ async function seedScenario() {
     createdBy: buyer.id,
     sentAt: new Date(),
   });
-  await db.insert(rfqInvitations).values({
+  await db.insert(rfpInvitations).values({
     id: randomUUID(),
-    rfqId,
+    rfpId,
     pgWsId: pgWs.id,
     acceptedByUserId: pg.id,
     tokenHash: hashToken(generateToken()),
@@ -125,8 +125,8 @@ async function seedScenario() {
   const id = randomUUID();
   await db.insert(attachments).values({
     id,
-    ownerKind: 'rfq_rfp',
-    ownerId: rfqId,
+    ownerKind: 'rfp',
+    ownerId: rfpId,
     name: 'rfp.pdf',
     size: PDF_HEAD.length,
     mimeType: 'application/pdf',
@@ -135,7 +135,7 @@ async function seedScenario() {
   });
 
   return {
-    rfqId,
+    rfpId,
     attachmentId: id,
     storageKey: key,
     buyerWsId: buyerWs.id,

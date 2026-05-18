@@ -27,8 +27,8 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   // Scenarios A/B/C share the seeded buyer (yeonseong.dev@gmail.com) and
-  // the seeded RFQ Q-2604-0001 — running them in parallel workers races
-  // on row state (B rotates toss invitation; C resets RFQ to 'sent').
+  // the seeded RFP P-2604-0001 — running them in parallel workers races
+  // on row state (B rotates toss invitation; C resets RFP to 'sent').
   // One worker keeps the §6 chain deterministic. fullyParallel:false also
   // serialises projects (we only have chromium today, but defensive).
   workers: 1,
@@ -56,7 +56,7 @@ export default defineConfig({
       // RESEND_API_KEY '': console fallback in lib/integrations/resend.ts.
       // NTS_SERVICE_KEY '': RealNtsClient throws NTS_NO_KEY — scenario A
       //   uses the seeded buyer workspace whose bizProfile is already
-      //   captured, so /rfq/new never re-calls NTS. If a future spec
+      //   captured, so /rfp/new never re-calls NTS. If a future spec
       //   needs lookup, inject MockNtsClient via __setNtsClientForTest.
       RESEND_API_KEY: '',
       NTS_SERVICE_KEY: '',

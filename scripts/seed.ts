@@ -22,9 +22,9 @@ import { pathToFileURL } from 'node:url';
 import {
   bids,
   bizProfiles,
-  rfqCounters,
-  rfqInvitations,
-  rfqs,
+  rfpCounters,
+  rfpInvitations,
+  rfps,
   users,
   workspaceMembers,
   workspaces,
@@ -43,7 +43,7 @@ export type SeedResult = {
   users: number;
   members: number;
   bizProfiles: number;
-  rfqs: number;
+  rfps: number;
   invitations: number;
   bids: number;
   contracts: number;
@@ -51,7 +51,7 @@ export type SeedResult = {
   outbox: number;
   attachments: number;
   verificationTokens: number;
-  rfqCounters: number;
+  rfpCounters: number;
   loginCredentials: { email: string; password: string }[];
 };
 
@@ -59,19 +59,19 @@ const PASSWORD_PLAINTEXT = 'password123';
 
 export async function runSeed(db: AnyDb): Promise<SeedResult> {
   // 1. TRUNCATE everything in one CASCADE — FK order doesn't matter.
-  // RESTART IDENTITY also covers the rfq_counters integer (though the table
+  // RESTART IDENTITY also covers the rfp_counters integer (though the table
   // has no serial). All 13 tables explicitly listed for grep visibility.
   await db.execute(sql`
     TRUNCATE TABLE
       contracts,
       bids,
-      rfq_invitations,
-      rfqs,
+      rfp_invitations,
+      rfps,
       attachments,
       notifications,
       outbox_entries,
       verification_tokens,
-      rfq_counters,
+      rfp_counters,
       workspace_members,
       biz_profiles,
       users,
@@ -124,12 +124,12 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
   ]);
 
-  // 4. Biz profiles — buyer ws bizProfile + 1 shared RFQ snapshot.
+  // 4. Biz profiles — buyer ws bizProfile + 1 shared RFP snapshot.
   // Note: bizProfile rows are immutable. The same snapshot row is referenced
-  // by both the sent RFQ and the draft RFQ since the underlying biz state
+  // by both the sent RFP and the draft RFP since the underlying biz state
   // didn't change between them — saves a row at no semantic cost.
   const buyerBizId = randomUUID();
-  const rfqSnapshotBizId = randomUUID();
+  const rfpSnapshotBizId = randomUUID();
 
   await db.insert(bizProfiles).values([
     {
@@ -143,7 +143,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       gradeConfirmedAt: new Date(),
     },
     {
-      id: rfqSnapshotBizId,
+      id: rfpSnapshotBizId,
       bizNo: '123-45-67890',
       taxType: 'general',
       status: 'active',
@@ -193,9 +193,9 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     { workspaceId: kakaoWsId, userId: kakaoUserId, role: 'admin' },
   ]);
 
-  // 7. RFQs — counters first so the FK / numbering is consistent on direct
-  // inserts (we bypass nextRfqId() because it derives YYMM from `now()`).
-  await db.insert(rfqCounters).values([
+  // 7. RFPs — counters first so the FK / numbering is consistent on direct
+  // inserts (we bypass nextRfpId() because it derives YYMM from `now()`).
+  await db.insert(rfpCounters).values([
     { yearMonth: '2604', lastSeq: 1 },
     { yearMonth: '2605', lastSeq: 2 },
   ]);
@@ -204,11 +204,11 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   const sevenDays = new Date(now.getTime() + 7 * 24 * 3_600_000);
   const sentAt = new Date(now.getTime() - 24 * 3_600_000); // sent yesterday
 
-  await db.insert(rfqs).values([
+  await db.insert(rfps).values([
     {
-      id: 'Q-2604-0001',
+      id: 'P-2604-0001',
       buyerWsId,
-      bizProfileId: rfqSnapshotBizId,
+      bizProfileId: rfpSnapshotBizId,
       title: '2026년 4월 PG 입찰',
       memo: '월 매출 1억 규모, 카드 + 간편결제 위주',
       allowedPgWorkspaceIds: [tossWsId, inicisWsId, kakaoWsId],
@@ -218,9 +218,9 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       sentAt,
     },
     {
-      id: 'Q-2605-0001',
+      id: 'P-2605-0001',
       buyerWsId,
-      bizProfileId: rfqSnapshotBizId,
+      bizProfileId: rfpSnapshotBizId,
       title: '2026년 5월 PG 입찰 (초안)',
       memo: '',
       allowedPgWorkspaceIds: [],
@@ -229,13 +229,13 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       createdBy: buyerUserId,
       sentAt: null,
     },
-    // 사전 견적 RFQ — bizProfileId NULL. PG가 일반 등급 가정으로 9개 카드사 입력.
+    // 사전 제안 RFP — bizProfileId NULL. PG가 일반 등급 가정으로 9개 카드사 입력.
     {
-      id: 'Q-2605-0002',
+      id: 'P-2605-0002',
       buyerWsId,
       bizProfileId: null,
-      title: '사전 견적 (법인 설립 전)',
-      memo: '월 예상 매출 5천만원 규모, 일반 등급 가정 견적 부탁드립니다.',
+      title: '사전 제안 (법인 설립 전)',
+      memo: '월 예상 매출 5천만원 규모, 일반 등급 가정 제안 부탁드립니다.',
       allowedPgWorkspaceIds: [tossWsId],
       deadline: sevenDays,
       status: 'sent',
@@ -244,17 +244,17 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
   ]);
 
-  // 8. Invitations for the sent RFQ. toss/inicis are accepted (PG admin
+  // 8. Invitations for the sent RFP. toss/inicis are accepted (PG admin
   // claimed token + submitted bid); kakao stays pending (still 'sent').
   const tossInviteId = randomUUID();
   const inicisInviteId = randomUUID();
   const kakaoInviteId = randomUUID();
 
   // Raw tokens are seed-only — discarded after hashing.
-  await db.insert(rfqInvitations).values([
+  await db.insert(rfpInvitations).values([
     {
       id: tossInviteId,
-      rfqId: 'Q-2604-0001',
+      rfpId: 'P-2604-0001',
       pgWsId: tossWsId,
       acceptedByUserId: tossUserId,
       tokenHash: hashToken(generateToken()),
@@ -264,7 +264,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
     {
       id: inicisInviteId,
-      rfqId: 'Q-2604-0001',
+      rfpId: 'P-2604-0001',
       pgWsId: inicisWsId,
       acceptedByUserId: inicisUserId,
       tokenHash: hashToken(generateToken()),
@@ -274,7 +274,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
     {
       id: kakaoInviteId,
-      rfqId: 'Q-2604-0001',
+      rfpId: 'P-2604-0001',
       pgWsId: kakaoWsId,
       acceptedByUserId: null,
       tokenHash: hashToken(generateToken()),
@@ -282,10 +282,10 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       expiresAt: sevenDays,
       status: 'pending',
     },
-    // 사전 견적 RFQ Q-2605-0002 — toss 만 초대됨. accepted 상태로 시드.
+    // 사전 제안 RFP P-2605-0002 — toss 만 초대됨. accepted 상태로 시드.
     {
       id: randomUUID(),
-      rfqId: 'Q-2605-0002',
+      rfpId: 'P-2605-0002',
       pgWsId: tossWsId,
       acceptedByUserId: tossUserId,
       tokenHash: hashToken(generateToken()),
@@ -300,7 +300,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   await db.insert(bids).values([
     {
       id: randomUUID(),
-      rfqId: 'Q-2604-0001',
+      rfpId: 'P-2604-0001',
       pgWsId: tossWsId,
       invitationId: tossInviteId,
       settleCycle: 'D+1',
@@ -319,7 +319,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
     {
       id: randomUUID(),
-      rfqId: 'Q-2604-0001',
+      rfpId: 'P-2604-0001',
       pgWsId: inicisWsId,
       invitationId: inicisInviteId,
       settleCycle: 'D+2',
@@ -343,7 +343,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     users: 4,
     members: 4,
     bizProfiles: 2,
-    rfqs: 3,
+    rfps: 3,
     invitations: 4,
     bids: 2,
     contracts: 0,
@@ -351,7 +351,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     outbox: 0,
     attachments: 0,
     verificationTokens: 0,
-    rfqCounters: 2,
+    rfpCounters: 2,
     loginCredentials: [
       { email: buyerEmail, password: PASSWORD_PLAINTEXT },
       { email: tossEmail, password: PASSWORD_PLAINTEXT },
@@ -372,15 +372,15 @@ async function main() {
   console.log(`users                : ${result.users}`);
   console.log(`workspace_members    : ${result.members}`);
   console.log(`biz_profiles         : ${result.bizProfiles}`);
-  console.log(`rfqs                 : ${result.rfqs}`);
-  console.log(`rfq_invitations      : ${result.invitations}`);
+  console.log(`rfps                 : ${result.rfps}`);
+  console.log(`rfp_invitations      : ${result.invitations}`);
   console.log(`bids                 : ${result.bids}`);
   console.log(`contracts            : ${result.contracts}`);
   console.log(`notifications        : ${result.notifications}`);
   console.log(`outbox_entries       : ${result.outbox}`);
   console.log(`attachments          : ${result.attachments}`);
   console.log(`verification_tokens  : ${result.verificationTokens}`);
-  console.log(`rfq_counters         : ${result.rfqCounters}`);
+  console.log(`rfp_counters         : ${result.rfpCounters}`);
   console.log('');
   console.log('— LOGIN CREDENTIALS (dev only) —');
   for (const c of result.loginCredentials) {

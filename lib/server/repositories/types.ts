@@ -5,8 +5,8 @@ import type { PgTransaction } from 'drizzle-orm/pg-core';
 import type { DB } from '@/lib/db/client';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
-import type { RFQ, RfqStatus } from '@/lib/types/rfq';
-import type { RfqInvitation } from '@/lib/types/invitation';
+import type { RFP, RfpStatus } from '@/lib/types/rfp';
+import type { RfpInvitation } from '@/lib/types/invitation';
 import type { Workspace } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { BizProfile } from '@/lib/types/biz-profile';
@@ -23,44 +23,44 @@ import type { OutboxEntry, OutboxEvent, Sender } from '../outbox/types';
 export type Tx = DB | PgliteDB | PgTransaction<any, any, any>;
 
 export type TokenClaimResult =
-  | { ok: true; invitation: RfqInvitation }
+  | { ok: true; invitation: RfpInvitation }
   | { ok: false; reason: 'expired' | 'used' | 'invalid' };
 
-// ── RFQ ───────────────────────────────────────────────────────────────
-export interface RfqRepo {
-  /** RFQ insert/upsert(by id). 호출자가 id 미리 발급(`rfq-id.ts`). */
-  save(rfq: RFQ, tx?: Tx): Promise<void>;
+// ── RFP ───────────────────────────────────────────────────────────────
+export interface RfpRepo {
+  /** RFP insert/upsert(by id). 호출자가 id 미리 발급(`rfp-id.ts`). */
+  save(rfp: RFP, tx?: Tx): Promise<void>;
   /** id 단건 조회. 없으면 undefined. */
-  findById(id: string, tx?: Tx): Promise<RFQ | undefined>;
-  /** 한 구매사 워크스페이스의 모든 RFQ. */
-  findByBuyerWs(wsId: string, tx?: Tx): Promise<RFQ[]>;
-  /** raw share token → RFQ. 공유 링크 클레임 시 사용. 없으면 undefined. */
-  findByShareToken(token: string, tx?: Tx): Promise<RFQ | undefined>;
+  findById(id: string, tx?: Tx): Promise<RFP | undefined>;
+  /** 한 구매사 워크스페이스의 모든 RFP. */
+  findByBuyerWs(wsId: string, tx?: Tx): Promise<RFP[]>;
+  /** raw share token → RFP. 공유 링크 클레임 시 사용. 없으면 undefined. */
+  findByShareToken(token: string, tx?: Tx): Promise<RFP | undefined>;
   /** 상태 전이 + 패치. DB 레이어에서 `WHERE status=$prev` 동시성 가드. */
-  transition(id: string, to: RfqStatus, patch?: Partial<RFQ>, tx?: Tx): Promise<RFQ>;
+  transition(id: string, to: RfpStatus, patch?: Partial<RFP>, tx?: Tx): Promise<RFP>;
 }
 
 // ── Invitation ────────────────────────────────────────────────────────
 export interface InvitationRepo {
   /** 초대 발송 — raw 토큰을 hash로 변환해 저장. raw 비저장. */
-  save(inv: RfqInvitation, rawToken: string, tx?: Tx): Promise<void>;
+  save(inv: RfpInvitation, rawToken: string, tx?: Tx): Promise<void>;
   /** id 조회. */
-  findById(id: string, tx?: Tx): Promise<RfqInvitation | undefined>;
+  findById(id: string, tx?: Tx): Promise<RfpInvitation | undefined>;
   /** raw 토큰의 sha256 hash로 조회. claim 전 email 매칭 검사용. */
-  findByTokenHash(tokenHash: string, tx?: Tx): Promise<RfqInvitation | undefined>;
-  /** 한 RFQ의 초대 목록. */
-  findByRfq(rfqId: string, tx?: Tx): Promise<RfqInvitation[]>;
-  /** 한 RFQ의 draft 상태 초대만 조회 — sendDraftInvitationsAction 일괄 발송용. */
-  findDraftsByRfq(rfqId: string, tx?: Tx): Promise<RfqInvitation[]>;
-  /** PG 워크스페이스에 발송된 활성 초대 + RFQ pair — 인박스/칸반 공통 fetcher. */
+  findByTokenHash(tokenHash: string, tx?: Tx): Promise<RfpInvitation | undefined>;
+  /** 한 RFP의 초대 목록. */
+  findByRfp(rfpId: string, tx?: Tx): Promise<RfpInvitation[]>;
+  /** 한 RFP의 draft 상태 초대만 조회 — sendDraftInvitationsAction 일괄 발송용. */
+  findDraftsByRfp(rfpId: string, tx?: Tx): Promise<RfpInvitation[]>;
+  /** PG 워크스페이스에 발송된 활성 초대 + RFP pair — 인박스/칸반 공통 fetcher. */
   findByPgWorkspace(
     pgWsId: string,
     tx?: Tx,
-  ): Promise<{ invitation: RfqInvitation; rfq: RFQ }[]>;
+  ): Promise<{ invitation: RfpInvitation; rfp: RFP }[]>;
   /** 토큰 atomic claim — 만료/사용/무효 분기. 동일 raw 토큰 동시 진입 가드. */
   claimToken(rawToken: string, userId: string, tx?: Tx): Promise<TokenClaimResult>;
   /** 워크스페이스 멤버십 단위 접근권 — 초대된 PG ws의 모든 멤버 통과. */
-  canAccess(rfqId: string, pgWsId: string, tx?: Tx): Promise<boolean>;
+  canAccess(rfpId: string, pgWsId: string, tx?: Tx): Promise<boolean>;
   /**
    * `accepted` 상태의 초대를 `opened` 로 한 번만 전이. 이미 `opened` 이상이면 no-op.
    * inbox 상세 RSC 진입 시 호출 — PG 칸반의 '검토중' 컬럼을 활성화하기 위한 시그널.
@@ -99,12 +99,12 @@ export interface BizProfileRepo {
 
 // ── Bid ───────────────────────────────────────────────────────────────
 export interface BidRepo {
-  /** 입찰 저장 — `(rfqId, pgWsId)` UNIQUE 위배 시 throw. */
+  /** 입찰 저장 — `(rfpId, pgWsId)` UNIQUE 위배 시 throw. */
   save(bid: Bid, tx?: Tx): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<Bid | undefined>;
-  /** 한 RFQ의 모든 입찰. */
-  findByRfq(rfqId: string, tx?: Tx): Promise<Bid[]>;
+  /** 한 RFP의 모든 입찰. */
+  findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]>;
   /** 한 PG 워크스페이스의 모든 입찰. */
   findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]>;
 }
@@ -128,10 +128,10 @@ export interface NotificationRepo {
 
 // ── Contract ──────────────────────────────────────────────────────────
 export interface ContractRepo {
-  /** 수주 확정. RFQ에 1:1 unique. */
+  /** 수주 확정. RFP에 1:1 unique. */
   save(c: Contract, tx?: Tx): Promise<void>;
-  /** RFQ 조회 — 수주 행 단건. */
-  findByRfq(rfqId: string, tx?: Tx): Promise<Contract | undefined>;
+  /** RFP 조회 — 수주 행 단건. */
+  findByRfp(rfpId: string, tx?: Tx): Promise<Contract | undefined>;
 }
 
 // ── VerificationToken ─────────────────────────────────────────────────
@@ -160,7 +160,7 @@ export interface AttachmentRepo {
   /** 첨부 row 저장 — 파일 본체는 다른 스토리지. */
   save(
     a: Attachment & {
-      ownerKind: 'rfq_rfp' | 'bid_proposal';
+      ownerKind: 'rfp' | 'bid_proposal';
       ownerId: string;
       storagePath: string;
       uploadedBy: string;
@@ -173,7 +173,7 @@ export interface AttachmentRepo {
     tx?: Tx,
   ): Promise<
     | (Attachment & {
-        ownerKind: 'rfq_rfp' | 'bid_proposal';
+        ownerKind: 'rfp' | 'bid_proposal';
         ownerId: string;
         storagePath: string;
         uploadedBy: string;

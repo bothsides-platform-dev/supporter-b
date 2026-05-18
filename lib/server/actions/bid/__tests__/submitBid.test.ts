@@ -3,9 +3,9 @@
 // Coverage:
 //   - canAccess 가드: 초대된 PG 워크스페이스 멤버 누구나 통과
 //   - STATUTORY_CARD_FEE 강제 (advisor pin 1): sme 등급에서 cardFees=null 강제
-//   - UNIQUE(rfqId, pgWsId) 위반 → BID_ALREADY_SUBMITTED (advisor pin 4)
+//   - UNIQUE(rfpId, pgWsId) 위반 → BID_ALREADY_SUBMITTED (advisor pin 4)
 //   - bid.submitted 알림 — buyer ws 전 멤버 인앱 + 메일 (advisor pin 6)
-//   - dedupeKey 형식: bid:{rfqId}:{pgWsId}:{userId}
+//   - dedupeKey 형식: bid:{rfpId}:{pgWsId}:{userId}
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
@@ -15,8 +15,8 @@ import {
   bizProfiles,
   notifications,
   outboxEntries,
-  rfqs,
-  rfqInvitations,
+  rfps,
+  rfpInvitations,
   workspaceMembers,
 } from '@/lib/db/schema';
 import {
@@ -27,7 +27,7 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
-import { setupRfqActionEnv, teardownRfqActionEnv } from '../../rfq/__tests__/_setup';
+import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 const sessionRef: {
@@ -63,7 +63,7 @@ import { submitBidAction } from '../submitBidAction';
 let db: PgliteDB;
 
 type Setup = {
-  rfqId: string;
+  rfpId: string;
   buyerWsId: string;
   buyerUserIds: string[];
   buyerEmails: string[];
@@ -91,9 +91,9 @@ async function seedSetup(grade: 'sme2' | 'general' = 'sme2'): Promise<Setup> {
   const pgUser = await seedUser(db, { email: 'sales@toss.im' });
   await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-  const rfqId = 'Q-2605-0001';
-  await db.insert(rfqs).values({
-    id: rfqId,
+  const rfpId = 'P-2605-0001';
+  await db.insert(rfps).values({
+    id: rfpId,
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'bid test',
@@ -107,9 +107,9 @@ async function seedSetup(grade: 'sme2' | 'general' = 'sme2'): Promise<Setup> {
 
   const invId = randomUUID();
   const rawToken = generateToken();
-  await db.insert(rfqInvitations).values({
+  await db.insert(rfpInvitations).values({
     id: invId,
-    rfqId,
+    rfpId,
     pgWsId: pgWs.id,
     acceptedByUserId: pgUser.id, // 이미 클레임된 상태로 시드.
     tokenHash: hashToken(rawToken),
@@ -119,7 +119,7 @@ async function seedSetup(grade: 'sme2' | 'general' = 'sme2'): Promise<Setup> {
   });
 
   return {
-    rfqId,
+    rfpId,
     buyerWsId: buyerWs.id,
     buyerUserIds: [buyer1.id, buyer2.id],
     buyerEmails: ['b1@buyer.com', 'b2@buyer.com'],
@@ -141,17 +141,17 @@ const baseInput = {
 
 describe('submitBidAction', () => {
   beforeEach(async () => {
-    db = await setupRfqActionEnv();
+    db = await setupRfpActionEnv();
   });
   afterEach(() => {
-    teardownRfqActionEnv();
+    teardownRfpActionEnv();
     sessionRef.value = null;
   });
 
   it('rejects without PG session', async () => {
     const s = await seedSetup();
     sessionRef.value = null;
-    const r = await submitBidAction({ rfqId: s.rfqId, ...baseInput });
+    const r = await submitBidAction({ rfpId: s.rfpId, ...baseInput });
     expect(r.ok).toBe(false);
   });
 
@@ -170,7 +170,7 @@ describe('submitBidAction', () => {
         role: 'member',
       },
     };
-    const r = await submitBidAction({ rfqId: s.rfqId, ...baseInput });
+    const r = await submitBidAction({ rfpId: s.rfpId, ...baseInput });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
@@ -178,7 +178,7 @@ describe('submitBidAction', () => {
     const [row] = await db
       .select()
       .from(bids)
-      .where(eq(bids.rfqId, s.rfqId));
+      .where(eq(bids.rfpId, s.rfpId));
     expect(row).toBeDefined();
     expect(row.pgWsId).toBe(s.pgWsId);
     expect(row.submittedBy).toBe(peer.id);
@@ -196,9 +196,9 @@ describe('submitBidAction', () => {
       },
     };
 
-    // Malicious client passes cardFeesByIssuer for an sme2 RFQ.
+    // Malicious client passes cardFeesByIssuer for an sme2 RFP.
     const r = await submitBidAction({
-      rfqId: s.rfqId,
+      rfpId: s.rfpId,
       ...baseInput,
       cardFeesByIssuer: {
         BC: 0.005,
@@ -225,10 +225,10 @@ describe('submitBidAction', () => {
     expect(row.overseasCardFeePct).toBeNull();
   });
 
-  it('null grade (사업자번호 미입력 RFQ) preserves cardFeesByIssuer (general fallback)', async () => {
+  it('null grade (사업자번호 미입력 RFP) preserves cardFeesByIssuer (general fallback)', async () => {
     const s = await seedSetup('general');
-    // Drop bizProfile entirely — RFQ created in 사전 견적 mode.
-    await db.update(rfqs).set({ bizProfileId: null }).where(eq(rfqs.id, s.rfqId));
+    // Drop bizProfile entirely — RFP created in 사전 제안 mode.
+    await db.update(rfps).set({ bizProfileId: null }).where(eq(rfps.id, s.rfpId));
 
     sessionRef.value = {
       user: {
@@ -252,7 +252,7 @@ describe('submitBidAction', () => {
       WOORI: 0.013,
     } as const;
     const r = await submitBidAction({
-      rfqId: s.rfqId,
+      rfpId: s.rfpId,
       ...baseInput,
       cardFeesByIssuer: cardFees,
     });
@@ -290,7 +290,7 @@ describe('submitBidAction', () => {
       WOORI: 0.013,
     } as const;
     const r = await submitBidAction({
-      rfqId: s.rfqId,
+      rfpId: s.rfpId,
       ...baseInput,
       cardFeesByIssuer: cardFees,
     });
@@ -304,7 +304,7 @@ describe('submitBidAction', () => {
     expect(row.cardFeesByIssuer).toEqual(cardFees);
   });
 
-  it('🚨 second submit returns BID_ALREADY_SUBMITTED on UNIQUE(rfqId, pgWsId) (advisor pin 4)', async () => {
+  it('🚨 second submit returns BID_ALREADY_SUBMITTED on UNIQUE(rfpId, pgWsId) (advisor pin 4)', async () => {
     const s = await seedSetup();
     sessionRef.value = {
       user: {
@@ -316,10 +316,10 @@ describe('submitBidAction', () => {
       },
     };
 
-    const r1 = await submitBidAction({ rfqId: s.rfqId, ...baseInput });
+    const r1 = await submitBidAction({ rfpId: s.rfpId, ...baseInput });
     expect(r1.ok).toBe(true);
 
-    const r2 = await submitBidAction({ rfqId: s.rfqId, ...baseInput });
+    const r2 = await submitBidAction({ rfpId: s.rfpId, ...baseInput });
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.error).toBe('BID_ALREADY_SUBMITTED');
   });
@@ -336,7 +336,7 @@ describe('submitBidAction', () => {
       },
     };
 
-    const r = await submitBidAction({ rfqId: s.rfqId, ...baseInput });
+    const r = await submitBidAction({ rfpId: s.rfpId, ...baseInput });
     expect(r.ok).toBe(true);
 
     // — In-app notifications: one per buyer member.
@@ -355,7 +355,7 @@ describe('submitBidAction', () => {
     for (const n of notifs) expect(n.channel).toBe('in_app');
 
     // — Outbox: one bid.submitted entry per buyer member email,
-    //   dedupeKey = bid:{rfqId}:{pgWsId}:{userId}.
+    //   dedupeKey = bid:{rfpId}:{pgWsId}:{userId}.
     const outbox = await db
       .select()
       .from(outboxEntries)
@@ -366,14 +366,14 @@ describe('submitBidAction', () => {
     );
     expect(outbox.map((o) => o.dedupeKey).sort()).toEqual(
       [...s.buyerUserIds]
-        .map((u) => `bid:${s.rfqId}:${s.pgWsId}:${u}`)
+        .map((u) => `bid:${s.rfpId}:${s.pgWsId}:${u}`)
         .sort(),
     );
   });
 
-  it('rejects when RFQ is not in sent state', async () => {
+  it('rejects when RFP is not in sent state', async () => {
     const s = await seedSetup();
-    await db.update(rfqs).set({ status: 'closed' }).where(eq(rfqs.id, s.rfqId));
+    await db.update(rfps).set({ status: 'closed' }).where(eq(rfps.id, s.rfpId));
 
     sessionRef.value = {
       user: {
@@ -385,14 +385,14 @@ describe('submitBidAction', () => {
       },
     };
 
-    const r = await submitBidAction({ rfqId: s.rfqId, ...baseInput });
+    const r = await submitBidAction({ rfpId: s.rfpId, ...baseInput });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('RFQ_NOT_OPEN');
+    if (!r.ok) expect(r.error).toBe('RFP_NOT_OPEN');
 
     const [bid] = await db
       .select()
       .from(bids)
-      .where(eq(bids.rfqId, s.rfqId));
+      .where(eq(bids.rfpId, s.rfpId));
     expect(bid).toBeUndefined();
 
     const [member] = await db

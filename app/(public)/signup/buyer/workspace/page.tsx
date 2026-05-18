@@ -63,10 +63,10 @@ export default function BuyerWorkspacePage() {
       return;
     }
 
-    const rfqNext = localStorage.getItem('bidit-rfq-next');
-    if (rfqNext) {
-      localStorage.removeItem('bidit-rfq-next');
-      router.push(rfqNext);
+    const rfpNext = localStorage.getItem('bidit-rfp-next');
+    if (rfpNext) {
+      localStorage.removeItem('bidit-rfp-next');
+      router.push(rfpNext);
     } else {
       router.push(r.redirectTo);
     }

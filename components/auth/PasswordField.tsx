@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Check, Eye, EyeOff, X } from 'lucide-react';
 import { passwordStrength } from '@/lib/auth/strength';
+import { getPasswordRuleChecks } from '@/lib/auth/password-validation';
 import { cn } from '@/lib/utils';
 
 const strengthColor = [
@@ -68,7 +69,7 @@ export function PasswordField({
       </div>
 
       {showStrength && value.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-2">
           <div className="flex gap-1">
             {[1, 2, 3, 4].map((bar) => (
               <div
@@ -80,14 +81,31 @@ export function PasswordField({
               />
             ))}
           </div>
-          <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            MIN 10 · A-Z · 0-9 · !@#
-          </p>
+          <ul className="space-y-1">
+            {getPasswordRuleChecks(value).map((rule) => (
+              <li
+                key={rule.id}
+                className={cn(
+                  'flex items-center gap-1.5 text-[11px] transition-colors',
+                  rule.satisfied
+                    ? 'text-[var(--md-sys-color-tertiary)]'
+                    : 'text-[var(--md-sys-color-on-surface-variant)]',
+                )}
+              >
+                {rule.satisfied ? (
+                  <Check size={14} strokeWidth={1.5} />
+                ) : (
+                  <X size={14} strokeWidth={1.5} />
+                )}
+                <span>{rule.label}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
       {error && (
-        <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]">
+        <p className="text-[11px] text-[var(--md-sys-color-error)]">
           {error}
         </p>
       )}

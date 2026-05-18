@@ -37,12 +37,12 @@ const inputBase =
 
 const ERROR_LABELS: Record<string, string> = {
   FORBIDDEN_PG: 'PG 사용자 권한이 필요합니다.',
-  FORBIDDEN: '이 RFQ에 입찰할 권한이 없습니다.',
+  FORBIDDEN: '이 RFP에 입찰할 권한이 없습니다.',
   INVALID_INPUT: '입력 값을 확인해주세요.',
-  RFQ_NOT_FOUND: 'RFQ를 찾을 수 없습니다.',
-  RFQ_NOT_OPEN: '마감되었거나 이미 종료된 RFQ입니다.',
+  RFP_NOT_FOUND: 'RFP를 찾을 수 없습니다.',
+  RFP_NOT_OPEN: '마감되었거나 이미 종료된 RFP입니다.',
   INVITATION_NOT_FOUND: '초대 내역을 찾을 수 없습니다.',
-  BID_ALREADY_SUBMITTED: '이미 견적을 제출하셨습니다.',
+  BID_ALREADY_SUBMITTED: '이미 제안을 제출하셨습니다.',
 };
 
 function PctInput({
@@ -106,13 +106,13 @@ function KrwInput({
 }
 
 type Props = {
-  rfqId: string;
+  rfpId: string;
   // invitationId는 prop으로 받지 않는다 — 서버 액션이 session.userId 기반으로
-  // findByRfq 후 고유 invitation을 픽업한다(canAccess 가드 포함).
+  // findByRfp 후 고유 invitation을 픽업한다(canAccess 가드 포함).
   grade: MerchantGrade | undefined;
 };
 
-export function BidForm({ rfqId, grade }: Props) {
+export function BidForm({ rfpId, grade }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -149,7 +149,7 @@ export function BidForm({ rfqId, grade }: Props) {
     const form = new FormData();
     form.append('file', file);
     form.append('ownerKind', 'bid_proposal');
-    form.append('ownerId', rfqId);
+    form.append('ownerId', rfpId);
     try {
       const r = await fetch('/api/files/upload', {
         method: 'POST',
@@ -183,7 +183,7 @@ export function BidForm({ rfqId, grade }: Props) {
   const proposalReady = proposal && 'id' in proposal;
   const proposalUploading = proposal && 'status' in proposal && proposal.status === 'uploading';
 
-  // 등급 미입력 RFQ 는 일반 가정 폴백 — 9개 카드사 입력 모드 활성.
+  // 등급 미입력 RFP 는 일반 가정 폴백 — 9개 카드사 입력 모드 활성.
   // (서버에서도 grade ∈ {null, 'general'} 일 때만 cardFeesByIssuer 채택)
   const allowCardFees = grade === undefined || grade === 'general';
   const cardFeeStatutory =
@@ -213,7 +213,7 @@ export function BidForm({ rfqId, grade }: Props) {
 
     startTransition(async () => {
       const r = await submitBidAction({
-        rfqId,
+        rfpId,
         settleCycle,
         deposit: parseInt(deposit) || 0,
         setupFee: parseInt(setupFee) || 0,
@@ -226,7 +226,7 @@ export function BidForm({ rfqId, grade }: Props) {
         memo: memo.trim() || undefined,
       });
       if (r.ok) {
-        router.push(`/inbox/${rfqId}/submitted`);
+        router.push(`/inbox/${rfpId}/submitted`);
         router.refresh();
       } else {
         setSubmitError(r.error);
@@ -243,10 +243,10 @@ export function BidForm({ rfqId, grade }: Props) {
       {grade === undefined && (
         <div className="border border-[var(--md-sys-color-outline-variant)] px-4 py-3 space-y-1">
           <p className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            [ 등급 미입력 ] 일반 가정 견적
+            [ 등급 미입력 ] 일반 가정 제안
           </p>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-            구매사가 가맹점 등급을 입력하지 않은 사전 견적 RFQ 입니다. 일반 등급 가정으로 9개 카드사별 수수료를 직접 입력해주세요.
+            구매사가 가맹점 등급을 입력하지 않은 사전 제안 RFP 입니다. 일반 등급 가정으로 9개 카드사별 수수료를 직접 입력해주세요.
           </p>
         </div>
       )}
@@ -404,7 +404,7 @@ export function BidForm({ rfqId, grade }: Props) {
       )}
 
       <Button type="submit" fullWidth size="lg" disabled={!canSubmit}>
-        {pending ? '제출 중…' : '견적 제출'}
+        {pending ? '제출 중…' : '제안 제출'}
       </Button>
     </form>
   );

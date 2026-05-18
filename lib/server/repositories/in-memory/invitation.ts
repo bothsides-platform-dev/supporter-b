@@ -1,50 +1,50 @@
-import type { RfqInvitation } from '@/lib/types/invitation';
-import type { RFQ } from '@/lib/types/rfq';
+import type { RfpInvitation } from '@/lib/types/invitation';
+import type { RFP } from '@/lib/types/rfp';
 import { hashToken, isExpired } from '../../token';
-import type { InvitationRepo, RfqRepo, TokenClaimResult, Tx } from '../types';
+import type { InvitationRepo, RfpRepo, TokenClaimResult, Tx } from '../types';
 
 export class InMemoryInvitationRepository implements InvitationRepo {
-  private store = new Map<string, RfqInvitation>();
+  private store = new Map<string, RfpInvitation>();
   private tokenHashIndex = new Map<string, string>(); // hash → id
-  // Optional getter for the RFQ repo so findByPgWorkspace can hydrate the
+  // Optional getter for the RFP repo so findByPgWorkspace can hydrate the
   // JOIN shape without inverting factory ordering. Wired by the factory;
   // tests that only exercise invitation-only methods can leave it unset.
-  private rfqRepoRef?: () => RfqRepo;
+  private rfpRepoRef?: () => RfpRepo;
 
-  setRfqRepoRef(getter: () => RfqRepo): void {
-    this.rfqRepoRef = getter;
+  setRfpRepoRef(getter: () => RfpRepo): void {
+    this.rfpRepoRef = getter;
   }
 
-  async save(inv: RfqInvitation, rawToken: string, _tx?: Tx): Promise<void> {
+  async save(inv: RfpInvitation, rawToken: string, _tx?: Tx): Promise<void> {
     void _tx;
     this.store.set(inv.id, { ...inv });
     this.tokenHashIndex.set(hashToken(rawToken), inv.id);
   }
 
-  async findById(id: string, _tx?: Tx): Promise<RfqInvitation | undefined> {
+  async findById(id: string, _tx?: Tx): Promise<RfpInvitation | undefined> {
     void _tx;
     const inv = this.store.get(id);
     return inv ? { ...inv } : undefined;
   }
 
-  async findByRfq(rfqId: string, _tx?: Tx): Promise<RfqInvitation[]> {
+  async findByRfp(rfpId: string, _tx?: Tx): Promise<RfpInvitation[]> {
     void _tx;
     return [...this.store.values()]
-      .filter((i) => i.rfqId === rfqId)
+      .filter((i) => i.rfpId === rfpId)
       .map((i) => ({ ...i }));
   }
 
-  async findDraftsByRfq(rfqId: string, _tx?: Tx): Promise<RfqInvitation[]> {
+  async findDraftsByRfp(rfpId: string, _tx?: Tx): Promise<RfpInvitation[]> {
     void _tx;
     return [...this.store.values()]
-      .filter((i) => i.rfqId === rfqId && i.status === 'draft')
+      .filter((i) => i.rfpId === rfpId && i.status === 'draft')
       .map((i) => ({ ...i }));
   }
 
   async findByTokenHash(
     tokenHash: string,
     _tx?: Tx,
-  ): Promise<RfqInvitation | undefined> {
+  ): Promise<RfpInvitation | undefined> {
     void _tx;
     const id = this.tokenHashIndex.get(tokenHash);
     if (!id) return undefined;
@@ -55,19 +55,19 @@ export class InMemoryInvitationRepository implements InvitationRepo {
   async findByPgWorkspace(
     pgWsId: string,
     _tx?: Tx,
-  ): Promise<{ invitation: RfqInvitation; rfq: RFQ }[]> {
+  ): Promise<{ invitation: RfpInvitation; rfp: RFP }[]> {
     void _tx;
-    if (!this.rfqRepoRef) return [];
-    const rfqRepo = this.rfqRepoRef();
+    if (!this.rfpRepoRef) return [];
+    const rfpRepo = this.rfpRepoRef();
     const active = [...this.store.values()].filter(
       (i) =>
         i.pgWsId === pgWsId &&
         (i.status === 'sent' || i.status === 'opened' || i.status === 'accepted'),
     );
-    const out: { invitation: RfqInvitation; rfq: RFQ }[] = [];
+    const out: { invitation: RfpInvitation; rfp: RFP }[] = [];
     for (const inv of active) {
-      const rfq = await rfqRepo.findById(inv.rfqId);
-      if (rfq) out.push({ invitation: { ...inv }, rfq });
+      const rfp = await rfpRepo.findById(inv.rfpId);
+      if (rfp) out.push({ invitation: { ...inv }, rfp });
     }
     return out;
   }
@@ -86,7 +86,7 @@ export class InMemoryInvitationRepository implements InvitationRepo {
     if (isExpired(inv.expiresAt)) return { ok: false, reason: 'expired' };
     if (inv.acceptedByUserId) return { ok: false, reason: 'used' };
 
-    const updated: RfqInvitation = {
+    const updated: RfpInvitation = {
       ...inv,
       acceptedByUserId: userId,
       status: 'accepted',
@@ -113,11 +113,11 @@ export class InMemoryInvitationRepository implements InvitationRepo {
   }
 
   // 워크스페이스 멤버십 단위 접근권 — 초대된 PG ws의 모든 멤버가 통과.
-  async canAccess(rfqId: string, pgWsId: string, _tx?: Tx): Promise<boolean> {
+  async canAccess(rfpId: string, pgWsId: string, _tx?: Tx): Promise<boolean> {
     void _tx;
     return [...this.store.values()].some(
       (i) =>
-        i.rfqId === rfqId &&
+        i.rfpId === rfpId &&
         i.pgWsId === pgWsId &&
         (i.status === 'sent' ||
           i.status === 'opened' ||

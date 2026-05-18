@@ -11,7 +11,7 @@ import {
   getBidRepo,
   getInvitationRepo,
   getOutboxRepo,
-  getRfqRepo,
+  getRfpRepo,
 } from '@/lib/server/repositories/factory';
 import {
   dispatchNotification,
@@ -37,7 +37,7 @@ const CardIssuerEnum = z.enum([
 
 const Input = z
   .object({
-    rfqId: z.string().min(1),
+    rfpId: z.string().min(1),
     settleCycle: z.enum(['D+0', 'D+1', 'D+2', 'weekly', 'monthly']),
     deposit: z.number().nonnegative(),
     setupFee: z.number().nonnegative(),
@@ -55,18 +55,18 @@ export type SubmitBidInput = z.input<typeof Input>;
 export type SubmitBidResult = BidActionResult<{ bidId: string }>;
 
 /**
- * PG 견적 제출.
+ * PG 제안 제출.
  *
  * 트랜잭션 단계:
  *   1) requirePgSession — workspace_type='pg' 게이트.
  *   2) zod 검증.
  *   3) **canAccess 가드**: 초대된 PG 워크스페이스 멤버라면 누구나 통과.
  *      acceptedByUserId 는 첫 클레임자 감사용으로만 유지.
- *   4) RFQ + 스냅샷 BizProfile 조회 → grade 추출.
+ *   4) RFP + 스냅샷 BizProfile 조회 → grade 추출.
  *   5) **STATUTORY_CARD_FEE 서버 강제 (advisor pin 1)**:
  *      grade !== 'general' 이면 cardFeesByIssuer = null. 영세/중소 1~3은 법정 고정.
  *   6) invitation 조회 → 본인 워크스페이스 row 픽업(invitationId).
- *   7) BidRepo.save (id 호출자 발급) — UNIQUE(rfqId, pgWsId) 위반은 'BID_ALREADY_SUBMITTED'.
+ *   7) BidRepo.save (id 호출자 발급) — UNIQUE(rfpId, pgWsId) 위반은 'BID_ALREADY_SUBMITTED'.
  *   8) buyer ws 멤버 each → notifications.in_app + outbox.bid.submitted.
  */
 export async function submitBidAction(
@@ -88,19 +88,19 @@ export async function submitBidAction(
 
   // canAccess 가드 — 워크스페이스 멤버십 단위. 초대된 PG ws 멤버는 모두 통과.
   const invRepo = await getInvitationRepo();
-  const ok = await invRepo.canAccess(data.rfqId, pgWsId);
+  const ok = await invRepo.canAccess(data.rfpId, pgWsId);
   if (!ok) return { ok: false, error: 'FORBIDDEN' };
 
-  const rfqRepo = await getRfqRepo();
-  const rfq = await rfqRepo.findById(data.rfqId);
-  if (!rfq) return { ok: false, error: 'RFQ_NOT_FOUND' };
-  if (rfq.status !== 'sent') return { ok: false, error: 'RFQ_NOT_OPEN' };
+  const rfpRepo = await getRfpRepo();
+  const rfp = await rfpRepo.findById(data.rfpId);
+  if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+  if (rfp.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
 
   // STATUTORY_CARD_FEE 서버 강제 (advisor pin 1):
   // grade 가 영세/중소1~3 인 경우 cardFeesByIssuer 입력은 무시되고 null 로 강제.
   // 일반(general) 또는 등급 미입력(NULL) 일 때만 클라이언트 입력 채택 — 등급 미입력
-  // RFQ 는 PG 가 일반 등급 가정으로 9개 카드사 직접 견적.
-  const grade = rfq.bizProfile?.grade ?? null;
+  // RFP 는 PG 가 일반 등급 가정으로 9개 카드사 직접 제안.
+  const grade = rfp.bizProfile?.grade ?? null;
   const allowCardFees = grade === null || grade === 'general';
   const cardFees = allowCardFees ? (data.cardFeesByIssuer ?? null) : null;
   const overseasCardFeePct = allowCardFees
@@ -108,13 +108,13 @@ export async function submitBidAction(
     : undefined;
 
   // 본인 워크스페이스의 invitation row 픽업 — bid.invitationId FK.
-  const allInvs = await invRepo.findByRfq(data.rfqId);
+  const allInvs = await invRepo.findByRfp(data.rfpId);
   const myInv = allInvs.find((i) => i.pgWsId === pgWsId);
   if (!myInv) return { ok: false, error: 'INVITATION_NOT_FOUND' };
 
   // proposalAttachmentId가 있다면 같은 워크스페이스 멤버가 업로드한 첨부인지 검증
-  // (다른 PG ws의 attachment id로 자기 견적을 만드는 spoofing 방지). canAccess는
-  // 같은 RFQ에 초대된 다른 PG ws 도 통과시키지만, 첨부는 본인 ws 단위로 격리.
+  // (다른 PG ws의 attachment id로 자기 제안을 만드는 spoofing 방지). canAccess는
+  // 같은 RFP에 초대된 다른 PG ws 도 통과시키지만, 첨부는 본인 ws 단위로 격리.
   // 같은 ws 의 동료가 업로드한 PDF는 허용.
   if (data.proposalAttachmentId) {
     const att = await (await getAttachmentRepo()).findById(
@@ -123,7 +123,7 @@ export async function submitBidAction(
     if (
       !att ||
       att.ownerKind !== 'bid_proposal' ||
-      att.ownerId !== data.rfqId
+      att.ownerId !== data.rfpId
     ) {
       return { ok: false, error: 'INVALID_ATTACHMENT' };
     }
@@ -147,12 +147,12 @@ export async function submitBidAction(
   const bidId = randomUUID();
   const now = new Date();
 
-  // UNIQUE(rfqId, pgWsId) 사전 검사 — pglite는 23505가 트랜잭션을 abort 시키므로
+  // UNIQUE(rfpId, pgWsId) 사전 검사 — pglite는 23505가 트랜잭션을 abort 시키므로
   // try/catch 후 commit이 불가능. 트랜잭션 진입 전 1회 read-check로 막고,
   // 동시성 race로 들어온 두 번째 요청은 트랜잭션 안에서 try/catch + 재throw.
   // (advisor pin 4: withdrawn 행이 있어도 재시도 차단 — 같은 단순화 흐름.)
   const bidRepo = await getBidRepo();
-  const existingBids = await bidRepo.findByRfq(data.rfqId);
+  const existingBids = await bidRepo.findByRfp(data.rfpId);
   if (existingBids.some((b) => b.pgWsId === pgWsId)) {
     return { ok: false, error: 'BID_ALREADY_SUBMITTED' };
   }
@@ -164,7 +164,7 @@ export async function submitBidAction(
     async (tx: any): Promise<SubmitBidResult> => {
       const bid: Bid = {
         id: bidId,
-        rfqId: data.rfqId,
+        rfpId: data.rfpId,
         pgWsId,
         invitationId: myInv.id,
         settleCycle: data.settleCycle,
@@ -202,7 +202,7 @@ export async function submitBidAction(
         .select({ userId: workspaceMembers.userId, email: users.email })
         .from(workspaceMembers)
         .innerJoin(users, eq(workspaceMembers.userId, users.id))
-        .where(eq(workspaceMembers.workspaceId, rfq.buyerWsId))) as {
+        .where(eq(workspaceMembers.workspaceId, rfp.buyerWsId))) as {
         userId: string;
         email: string;
       }[];
@@ -217,11 +217,11 @@ export async function submitBidAction(
 
       const outbox = await getOutboxRepo();
 
-      // 같은 RFQ × pgWs 조합의 메일 본문은 모든 buyer 멤버에게 동일 — 한 번만
+      // 같은 RFP × pgWs 조합의 메일 본문은 모든 buyer 멤버에게 동일 — 한 번만
       // 렌더해 재사용.
       const submittedHtml = await renderBidSubmitted({
-        rfqId: data.rfqId,
-        rfqTitle: rfq.title,
+        rfpId: data.rfpId,
+        rfpTitle: rfp.title,
         pgName: pgWsLabel,
         submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
       });
@@ -230,13 +230,13 @@ export async function submitBidAction(
         const notif: Notification = {
           id: randomUUID(),
           userId: m.userId,
-          workspaceId: rfq.buyerWsId,
+          workspaceId: rfp.buyerWsId,
           type: 'bid.submitted',
-          title: `[${data.rfqId}] ${pgWsLabel} 견적 도착`,
-          body: `${pgWsLabel}가 견적을 제출했습니다.`,
+          title: `[${data.rfpId}] ${pgWsLabel} 제안 도착`,
+          body: `${pgWsLabel}가 제안을 제출했습니다.`,
           channel: 'inapp',
           status: 'pending',
-          linkUrl: `/rfq/${data.rfqId}`,
+          linkUrl: `/rfp/${data.rfpId}`,
           createdAt: now.toISOString(),
         };
         await dispatchNotification(tx, notif);
@@ -245,10 +245,10 @@ export async function submitBidAction(
           {
             event: 'bid.submitted',
             to: m.email,
-            subject: `[BIDIT · ${data.rfqId}] ${pgWsLabel} 견적 도착`,
+            subject: `[BIDIT · ${data.rfpId}] ${pgWsLabel} 제안 도착`,
             html: submittedHtml,
             // 멤버별 dedupe — 같은 멤버 중복 enqueue를 collapse.
-            dedupeKey: `bid:${data.rfqId}:${pgWsId}:${m.userId}`,
+            dedupeKey: `bid:${data.rfpId}:${pgWsId}:${m.userId}`,
           },
           tx,
         );

@@ -3,15 +3,15 @@
  *
  * Rules per ownerKind:
  *
- *   `rfq_rfp` (RFP PDFs attached to a buyer-side RFQ)
- *     - Buyer ws members of the RFQ owner: ALLOW
- *     - PG ws members where `invitationRepo.canAccess(rfqId, pgWsId)` is true: ALLOW
- *     - Uploader themselves (covers pre-RFQ-create draft window where
- *       `ownerId` may not yet resolve to an `rfqs` row): ALLOW
+ *   `rfp` (RFP PDFs attached to a buyer-side RFP)
+ *     - Buyer ws members of the RFP owner: ALLOW
+ *     - PG ws members where `invitationRepo.canAccess(rfpId, pgWsId)` is true: ALLOW
+ *     - Uploader themselves (covers pre-RFP-create draft window where
+ *       `ownerId` may not yet resolve to an `rfps` row): ALLOW
  *     - Otherwise: DENY
  *
  *   `bid_proposal` (proposal PDF attached to a PG-side bid)
- *     - Buyer ws members of the underlying RFQ: ALLOW
+ *     - Buyer ws members of the underlying RFP: ALLOW
  *     - Same-PG-workspace as the bid that references this attachment:
  *       ALLOW (so PG ws peers can view what was submitted)
  *     - Uploader themselves: ALLOW (pre-bid-create draft window)
@@ -19,7 +19,7 @@
  *
  * Cross-PG isolation is preserved — a PG user from a different ws
  * cannot read another PG's bid_proposal even if they were also invited
- * to the same RFQ.
+ * to the same RFP.
  *
  * Lookups are direct DB reads (not through repos) for the join-heavy
  * queries that don't have repo methods today; the repo-shaped check
@@ -27,12 +27,12 @@
  * action's gate.
  */
 import { and, eq } from 'drizzle-orm';
-import { rfqs, bids, workspaceMembers } from '@/lib/db/schema';
+import { rfps, bids, workspaceMembers } from '@/lib/db/schema';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationRepo, Tx } from '@/lib/server/repositories/types';
 
 export type AttachmentRow = Attachment & {
-  ownerKind: 'rfq_rfp' | 'bid_proposal';
+  ownerKind: 'rfp' | 'bid_proposal';
   ownerId: string;
   storagePath: string;
   uploadedBy: string;
@@ -61,23 +61,23 @@ export async function canAccessAttachment(
 
   // Uploader themselves can always read their own upload — covers the
   // narrow window between upload and the form action that links the
-  // row to a real RFQ/bid.
+  // row to a real RFP/bid.
   if (att.uploadedBy === userId) return true;
 
-  if (att.ownerKind === 'rfq_rfp') {
-    // Look up the RFQ owner. ownerId may not resolve if upload landed
-    // before the RFQ row was created (uploader path above already
+  if (att.ownerKind === 'rfp') {
+    // Look up the RFP owner. ownerId may not resolve if upload landed
+    // before the RFP row was created (uploader path above already
     // covered that case); a missing row from here means we can't ACL
     // and must deny.
-    const [rfq] = await h
-      .select({ buyerWsId: rfqs.buyerWsId })
-      .from(rfqs)
-      .where(eq(rfqs.id, att.ownerId))
+    const [rfp] = await h
+      .select({ buyerWsId: rfps.buyerWsId })
+      .from(rfps)
+      .where(eq(rfps.id, att.ownerId))
       .limit(1);
-    if (!rfq) return false;
+    if (!rfp) return false;
 
     // Buyer ws membership — any member (admin/member) of the owning ws.
-    if (wsId && rfq.buyerWsId === wsId) {
+    if (wsId && rfp.buyerWsId === wsId) {
       const [member] = await h
         .select({ userId: workspaceMembers.userId })
         .from(workspaceMembers)
@@ -109,7 +109,7 @@ export async function canAccessAttachment(
   const [bid] = await h
     .select({
       pgWsId: bids.pgWsId,
-      rfqId: bids.rfqId,
+      rfpId: bids.rfpId,
     })
     .from(bids)
     .where(eq(bids.proposalAttachmentId, att.id))
@@ -120,14 +120,14 @@ export async function canAccessAttachment(
   // PG workspace peers — same workspace as the bid submitter.
   if (wsId && bid.pgWsId === wsId) return true;
 
-  // Buyer ws — RFQ's owning workspace.
-  const [rfqRow] = await h
-    .select({ buyerWsId: rfqs.buyerWsId })
-    .from(rfqs)
-    .where(eq(rfqs.id, bid.rfqId))
+  // Buyer ws — RFP's owning workspace.
+  const [rfpRow] = await h
+    .select({ buyerWsId: rfps.buyerWsId })
+    .from(rfps)
+    .where(eq(rfps.id, bid.rfpId))
     .limit(1);
-  if (!rfqRow) return false;
-  if (wsId && rfqRow.buyerWsId === wsId) {
+  if (!rfpRow) return false;
+  if (wsId && rfpRow.buyerWsId === wsId) {
     const [member] = await h
       .select({ userId: workspaceMembers.userId })
       .from(workspaceMembers)

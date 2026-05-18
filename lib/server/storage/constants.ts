@@ -5,10 +5,10 @@
  */
 
 /**
- * Sentinel `ownerId` for `rfq_rfp` attachments uploaded before the RFQ
- * row exists. The dropzone uploads on file-select; the RFQ id is only
- * minted at form submit. `createRfqAction` patches matching rows to
- * the real `Q-YYMM-NNNN` id, scoped by `uploadedBy` + `ownerKind`.
+ * Sentinel `ownerId` for `rfp` attachments uploaded before the RFP
+ * row exists. The dropzone uploads on file-select; the RFP id is only
+ * minted at form submit. `createRfpAction` patches matching rows to
+ * the real `P-YYMM-NNNN` id, scoped by `uploadedBy` + `ownerKind`.
  *
  * Drift between the dropzone, upload route, and action would silently
  * break the link-up query — every site uses this constant.

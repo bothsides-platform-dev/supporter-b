@@ -31,8 +31,8 @@ export type RetryEmailNotificationResult = NotificationActionResult<{
  * 가장 최근 'failed' outbox row를 찾아 status='pending'으로 reset.
  * - **attempts 보존**(스펙 명시) — 재시도 횟수 누적이 outbox dispatcher 로직
  *   `attempts >= maxAttempts` 가드와 정합.
- * - notification.type이 outbox_event_enum에 없는 값(예: rfq.rejected,
- *   rfq.cancelled, rfq.closed)이면 이메일이 원래 발송되지 않으니 NO_EMAIL.
+ * - notification.type이 outbox_event_enum에 없는 값(예: rfp.rejected,
+ *   rfp.cancelled, rfp.closed)이면 이메일이 원래 발송되지 않으니 NO_EMAIL.
  *
  * Step 10 시점에 이메일 발송 결과를 직접 notification row에 반영하면 이
  * 휴리스틱은 더 단순한 (notification → outbox FK) 조회로 swap.
@@ -41,10 +41,10 @@ const ALLOWED_OUTBOX_EVENTS = new Set<string>([
   'auth.verify',
   'auth.reset',
   'auth.email-change',
-  'rfq.invited',
-  'rfq.sent',
+  'rfp.invited',
+  'rfp.sent',
   'bid.submitted',
-  'rfq.awarded',
+  'rfp.awarded',
 ]);
 
 export async function retryEmailNotificationAction(

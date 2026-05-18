@@ -11,8 +11,8 @@ import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 
 import {
-  rfqs,
-  rfqInvitations,
+  rfps,
+  rfpInvitations,
 } from '@/lib/db/schema';
 import {
   seedBizProfile,
@@ -22,7 +22,7 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
-import { setupRfqActionEnv, teardownRfqActionEnv } from '../../rfq/__tests__/_setup';
+import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 const sessionRef: {
@@ -63,9 +63,9 @@ async function setup() {
   const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
   const pgWs = await seedPgWorkspace(db, '토스페이먼츠');
 
-  const rfqId = 'Q-2605-0001';
-  await db.insert(rfqs).values({
-    id: rfqId,
+  const rfpId = 'P-2605-0001';
+  await db.insert(rfps).values({
+    id: rfpId,
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'invite test',
@@ -79,9 +79,9 @@ async function setup() {
 
   const rawToken = generateToken();
   const invId = randomUUID();
-  await db.insert(rfqInvitations).values({
+  await db.insert(rfpInvitations).values({
     id: invId,
-    rfqId,
+    rfpId,
     pgWsId: pgWs.id,
     tokenHash: hashToken(rawToken),
     sentAt: new Date(),
@@ -89,15 +89,15 @@ async function setup() {
     status: 'pending',
   });
 
-  return { rfqId, invId, rawToken, buyerWsId: buyerWs.id, pgWsId: pgWs.id };
+  return { rfpId, invId, rawToken, buyerWsId: buyerWs.id, pgWsId: pgWs.id };
 }
 
 describe('claimInviteTokenAction', () => {
   beforeEach(async () => {
-    db = await setupRfqActionEnv();
+    db = await setupRfpActionEnv();
   });
   afterEach(() => {
-    teardownRfqActionEnv();
+    teardownRfpActionEnv();
     sessionRef.value = null;
   });
 
@@ -154,7 +154,7 @@ describe('claimInviteTokenAction', () => {
 
     const r = await claimInviteTokenAction(ctx.rawToken);
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.rfqId).toBe(ctx.rfqId);
+    if (r.ok) expect(r.rfpId).toBe(ctx.rfpId);
   });
 
   it('successful claim sets acceptedByUserId on invitation row', async () => {
@@ -169,8 +169,8 @@ describe('claimInviteTokenAction', () => {
 
     const [row] = await db
       .select()
-      .from(rfqInvitations)
-      .where(eq(rfqInvitations.id, ctx.invId));
+      .from(rfpInvitations)
+      .where(eq(rfpInvitations.id, ctx.invId));
     expect(row.acceptedByUserId).toBe(u.id);
     expect(row.status).toBe('accepted');
   });
@@ -193,7 +193,7 @@ describe('claimInviteTokenAction', () => {
     expect(r2.ok).toBe(true);
     if (r2.ok) {
       expect(r2.alreadyClaimed).toBe(true);
-      expect(r2.rfqId).toBe(ctx.rfqId);
+      expect(r2.rfpId).toBe(ctx.rfpId);
     }
   });
 
@@ -203,9 +203,9 @@ describe('claimInviteTokenAction', () => {
     const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
     const pgWs = await seedPgWorkspace(db, '만료테스트PG');
 
-    const rfqId = 'Q-2605-0099';
-    await db.insert(rfqs).values({
-      id: rfqId,
+    const rfpId = 'P-2605-0099';
+    await db.insert(rfps).values({
+      id: rfpId,
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 'expired invite test',
@@ -217,9 +217,9 @@ describe('claimInviteTokenAction', () => {
     });
 
     const rawToken = generateToken();
-    await db.insert(rfqInvitations).values({
+    await db.insert(rfpInvitations).values({
       id: randomUUID(),
-      rfqId,
+      rfpId,
       pgWsId: pgWs.id,
       tokenHash: hashToken(rawToken),
       sentAt: new Date(Date.now() - 8 * 86_400_000),

@@ -10,7 +10,7 @@
 //      subject=... dedupeKey=...` and resolves `{ ok: true }`. **html is never
 //      logged** — it's verbose and contains links not safe to dump in shared
 //      terminal scrollback. The console line replaces the legacy
-//      `devLogVerifyLink` / `devLogRfqInviteLink` helpers (now deleted).
+//      `devLogVerifyLink` / `devLogRfpInviteLink` helpers (now deleted).
 //
 // `from` defaults to `send@bidit.store` (override with `RESEND_FROM`). For
 // production sending, the resolved `from` MUST be on a domain verified in the
@@ -46,7 +46,7 @@ export const ResendSender: Sender = async (entry) => {
 
   if (!apiKey) {
     // Format intentionally distinct from the deleted
-    // `[DEV signup-verify]` / `[DEV rfq-invite]` lines so the
+    // `[DEV signup-verify]` / `[DEV rfp-invite]` lines so the
     // `grep -rn "[DEV " lib/server` regression gate stays at 0 hits.
     // dedupeKey included per Step 10 spec, html intentionally excluded.
     console.log(

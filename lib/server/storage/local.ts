@@ -45,7 +45,6 @@ export class LocalStorage implements Storage {
     return resolveRoot();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async save(key: string, buffer: Buffer, _mime: string): Promise<void> {
     const full = path.join(this.root(), key);
     await fsp.mkdir(path.dirname(full), { recursive: true });

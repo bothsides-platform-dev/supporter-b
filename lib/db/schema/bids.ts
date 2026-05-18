@@ -9,9 +9,9 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { bidStatusEnum, settleCycleEnum } from './_enums';
-import { rfqs } from './rfqs';
+import { rfps } from './rfps';
 import { workspaces } from './workspaces';
-import { rfqInvitations } from './rfq-invitations';
+import { rfpInvitations } from './rfp-invitations';
 import { attachments } from './attachments';
 import { users } from './users';
 
@@ -19,15 +19,15 @@ export const bids = pgTable(
   'bids',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    rfqId: text('rfq_id')
+    rfpId: text('rfp_id')
       .notNull()
-      .references(() => rfqs.id),
+      .references(() => rfps.id),
     pgWsId: uuid('pg_ws_id')
       .notNull()
       .references(() => workspaces.id),
     invitationId: uuid('invitation_id')
       .notNull()
-      .references(() => rfqInvitations.id),
+      .references(() => rfpInvitations.id),
     settleCycle: settleCycleEnum('settle_cycle').notNull(),
     deposit: numeric('deposit', { precision: 14, scale: 2 }).notNull(),
     setupFee: numeric('setup_fee', { precision: 14, scale: 2 }).notNull(),
@@ -47,6 +47,6 @@ export const bids = pgTable(
     submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
-    unique('bids_rfq_pg_unique').on(t.rfqId, t.pgWsId),
+    unique('bids_rfp_pg_unique').on(t.rfpId, t.pgWsId),
   ],
 );

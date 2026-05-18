@@ -1,13 +1,13 @@
 export const siteConfig = {
   name: 'bidit',
-  title: 'bidit — PG 비공개 1:N RFQ 플랫폼',
+  title: 'bidit — PG 비공개 1:N RFP 플랫폼',
   description:
-    '구매사가 사업자번호로 PG 견적을 비교하고 수주하는 비공개 1:N RFQ 플랫폼.',
+    '구매사가 사업자번호로 PG 제안을 비교하고 수주하는 비공개 1:N RFP 플랫폼.',
   url:
     process.env.NEXT_PUBLIC_BASE_URL ??
     process.env.AUTH_URL ??
     'http://localhost:3000',
   locale: 'ko_KR',
-  ogImageAlt: 'bidit — 결제대행사 비공개 1:N RFQ 플랫폼',
-  keywords: ['PG', '결제대행사', '견적', 'RFQ', '입찰', 'bidit'],
+  ogImageAlt: 'bidit — 결제대행사 비공개 1:N RFP 플랫폼',
+  keywords: ['PG', '결제대행사', '제안', 'RFP', '입찰', 'bidit'],
 } as const;

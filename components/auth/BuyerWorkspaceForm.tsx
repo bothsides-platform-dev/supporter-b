@@ -6,9 +6,9 @@ import { Label } from '@/components/primitives/Label';
 import {
   BizLookupField,
   type BizLookupResult,
-} from '@/components/rfq/BizLookupField';
-import { GradeConfirmPanel } from '@/components/rfq/GradeConfirmPanel';
-import { lookupBizNoAction } from '@/lib/server/actions/rfq';
+} from '@/components/rfp/BizLookupField';
+import { GradeConfirmPanel } from '@/components/rfp/GradeConfirmPanel';
+import { lookupBizNoAction } from '@/lib/server/actions/rfp';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 // Adapter: BizLookupField expects { valid, taxType?, status? }
@@ -95,7 +95,7 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
         <span className="text-[13px] leading-snug text-[var(--md-sys-color-on-surface)]">
           사업자번호·등급 나중에 입력하기
           <span className="block mt-0.5 font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            법인 미설립 사전 견적 또는 보완 예정 케이스. 설정에서 추후 추가 가능.
+            법인 미설립 사전 제안 또는 보완 예정 케이스. 설정에서 추후 추가 가능.
           </span>
         </span>
       </label>

@@ -20,8 +20,8 @@ type CommandItem = {
 };
 
 const COMMANDS: CommandItem[] = [
-  { group: 'RFQ', id: 'rfq-list', label: 'RFQ 목록', href: '/rfq' },
-  { group: 'RFQ', id: 'rfq-new', label: '신규 견적 요청', shortcut: '⌘N', href: '/rfq/new' },
+  { group: 'RFP', id: 'rfp-list', label: 'RFP 목록', href: '/rfp' },
+  { group: 'RFP', id: 'rfp-new', label: '신규 제안 요청', shortcut: '⌘N', href: '/rfp/new' },
   { group: '수신함', id: 'inbox', label: '수신함', href: '/inbox' },
   { group: '설정', id: 'settings-profile', label: '프로필 설정', href: '/settings/profile' },
   { group: '설정', id: 'settings-members', label: '멤버 관리', href: '/settings/members' },
@@ -131,7 +131,7 @@ export function CommandPalette() {
                   <Command.Group
                     heading={
                       <span className="px-4 py-1 block font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                        견적서
+                        제안서
                       </span>
                     }
                   >
@@ -145,7 +145,7 @@ export function CommandPalette() {
                       bidItems.map((item) => (
                         <Command.Item
                           key={item.bidId}
-                          value={[item.rfqTitle, item.pgWsName, item.memo].filter(Boolean).join(' ')}
+                          value={[item.rfpTitle, item.pgWsName, item.memo].filter(Boolean).join(' ')}
                           onSelect={() => {
                             router.push(item.href);
                             closeCommandPalette();
@@ -153,7 +153,7 @@ export function CommandPalette() {
                           className="flex flex-col items-start gap-0.5 px-4 py-2.5 cursor-pointer aria-selected:bg-[var(--md-sys-color-surface-container-high)]"
                         >
                           <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
-                            {item.rfqTitle}
+                            {item.rfpTitle}
                             {item.pgWsName && (
                               <span className="ml-2 text-[var(--md-sys-color-on-surface-variant)]">
                                 {item.pgWsName}

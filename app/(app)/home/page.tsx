@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { BuyerHome } from '@/components/home/BuyerHome';
 import { PgHome } from '@/components/home/PgHome';
-import { PgRfqBlockedToast } from '@/components/home/PgRfqBlockedToast';
+import { PgRfpBlockedToast } from '@/components/home/PgRfpBlockedToast';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +19,7 @@ export default async function HomePage({
   if (session.user.workspaceType === 'pg' && session.user.workspaceId) {
     return (
       <>
-        {notice === 'pg-rfq-blocked' && <PgRfqBlockedToast />}
+        {notice === 'pg-rfp-blocked' && <PgRfpBlockedToast />}
         <PgHome workspaceId={session.user.workspaceId} />
       </>
     );

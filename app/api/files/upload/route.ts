@@ -8,12 +8,12 @@
  *   2. Stated mime: must be one of pdf/png/jpeg.
  *   3. Magic-byte sniff: file head must match the stated mime.
  *
- * For `bid_proposal`: only PG sessions with `canAccess(rfqId, userId)`
- *   may upload (and `ownerId` must reference an existing RFQ).
- * For `rfq_rfp`: buyer sessions only. `ownerId` may be a placeholder
- *   (`__draft__`) when the RFQ is still being authored — the action
- *   `createRfqAction` later patches the row's `ownerId` to the real
- *   RFQ id once the form is submitted.
+ * For `bid_proposal`: only PG sessions with `canAccess(rfpId, userId)`
+ *   may upload (and `ownerId` must reference an existing RFP).
+ * For `rfp`: buyer sessions only. `ownerId` may be a placeholder
+ *   (`__draft__`) when the RFP is still being authored — the action
+ *   `createRfpAction` later patches the row's `ownerId` to the real
+ *   RFP id once the form is submitted.
  *
  * Disk-then-DB ordering (advisor pin 6):
  *   1. Sniff + validate buffer.
@@ -33,7 +33,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { auth } from '@/auth';
-import { rfqs } from '@/lib/db/schema';
+import { rfps } from '@/lib/db/schema';
 import { db as prodDb } from '@/lib/db/client';
 import {
   getAttachmentRepo,
@@ -55,7 +55,7 @@ const ALLOWED_MIMES = new Set<AcceptedMime>([
 
 const MetaInput = z
   .object({
-    ownerKind: z.enum(['rfq_rfp', 'bid_proposal']),
+    ownerKind: z.enum(['rfp', 'bid_proposal']),
     ownerId: z.string().min(1).max(64),
   })
   .strict();
@@ -128,18 +128,18 @@ export async function POST(req: Request): Promise<Response> {
   const wsType = (session.user as { workspaceType?: 'buyer' | 'pg' })
     .workspaceType;
 
-  if (meta.data.ownerKind === 'rfq_rfp') {
+  if (meta.data.ownerKind === 'rfp') {
     // Buyer-only upload path. Draft window: ownerId may be a placeholder
-    // (literal '__draft__') because the RFQ is still being authored.
+    // (literal '__draft__') because the RFP is still being authored.
     if (wsType !== 'buyer' || !wsId) return fail(403, 'FORBIDDEN');
     if (meta.data.ownerId !== DRAFT_OWNER_ID) {
-      const [rfq] = await routeDb()
-        .select({ buyerWsId: rfqs.buyerWsId })
-        .from(rfqs)
-        .where(eq(rfqs.id, meta.data.ownerId))
+      const [rfp] = await routeDb()
+        .select({ buyerWsId: rfps.buyerWsId })
+        .from(rfps)
+        .where(eq(rfps.id, meta.data.ownerId))
         .limit(1);
-      if (!rfq) return fail(404, 'RFQ_NOT_FOUND');
-      if (rfq.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
+      if (!rfp) return fail(404, 'RFP_NOT_FOUND');
+      if (rfp.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
     }
   } else {
     // bid_proposal — PG-only, must be a member of an invited PG ws for ownerId.

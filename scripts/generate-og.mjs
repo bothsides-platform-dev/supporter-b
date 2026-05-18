@@ -96,7 +96,7 @@ const html = `<!DOCTYPE html>
   </div>
   <div class="wordmark">
     <span class="name">bidit</span>
-    <span class="sub">결제대행사 비공개 RFQ 플랫폼</span>
+    <span class="sub">결제대행사 비공개 RFP 플랫폼</span>
   </div>
 </body>
 </html>`;

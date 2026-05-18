@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   __getBackend,
   __resetForTest,
-  getRfqRepo,
+  getRfpRepo,
   getInvitationRepo,
   getWorkspaceRepo,
 } from '../factory';
-import { InMemoryRfqRepository } from '../in-memory/rfq';
+import { InMemoryRfpRepository } from '../in-memory/rfp';
 import { InMemoryInvitationRepository } from '../in-memory/invitation';
 import { InMemoryWorkspaceRepository } from '../in-memory/workspace';
 
@@ -26,7 +26,7 @@ describe('repository factory', () => {
     vi.stubEnv('NODE_ENV', 'test');
     const backend = await __getBackend();
     expect(backend).toBe('memory');
-    expect(await getRfqRepo()).toBeInstanceOf(InMemoryRfqRepository);
+    expect(await getRfpRepo()).toBeInstanceOf(InMemoryRfpRepository);
     expect(await getInvitationRepo()).toBeInstanceOf(InMemoryInvitationRepository);
     expect(await getWorkspaceRepo()).toBeInstanceOf(InMemoryWorkspaceRepository);
   });
@@ -50,8 +50,8 @@ describe('repository factory', () => {
 
   it('caches the bundle on globalThis (same instance across calls)', async () => {
     vi.stubEnv('NODE_ENV', 'test');
-    const a = await getRfqRepo();
-    const b = await getRfqRepo();
+    const a = await getRfpRepo();
+    const b = await getRfpRepo();
     expect(a).toBe(b);
   });
 });

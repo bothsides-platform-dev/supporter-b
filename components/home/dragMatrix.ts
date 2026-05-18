@@ -6,17 +6,17 @@ import type { BuyerKanbanStage } from '@/lib/server/buyer-kanban';
 import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 
 export type DragAction =
-  | { kind: 'send-rfq'; rfqId: string; title: string }
-  | { kind: 'cancel-rfq'; rfqId: string; title: string }
-  | { kind: 'navigate-rfq-detail'; rfqId: string }
-  | { kind: 'navigate-inbox'; rfqId: string }
-  | { kind: 'withdraw-bid'; bidId: string; rfqId: string; title: string };
+  | { kind: 'send-rfp'; rfpId: string; title: string }
+  | { kind: 'cancel-rfp'; rfpId: string; title: string }
+  | { kind: 'navigate-rfp-detail'; rfpId: string }
+  | { kind: 'navigate-inbox'; rfpId: string }
+  | { kind: 'withdraw-bid'; bidId: string; rfpId: string; title: string };
 
 type BuyerInput = {
   role: 'buyer';
   from: BuyerKanbanStage;
   to: BuyerKanbanStage;
-  rfqId: string;
+  rfpId: string;
   title: string;
 };
 
@@ -24,7 +24,7 @@ type PgInput = {
   role: 'pg';
   from: PgKanbanStage;
   to: PgKanbanStage;
-  rfqId: string;
+  rfpId: string;
   title: string;
   bidId?: string;
 };
@@ -41,16 +41,16 @@ function resolveBuyer(i: BuyerInput): DragAction | null {
 
   // draft → sent
   if (i.from === 'draft' && i.to === 'sent') {
-    return { kind: 'send-rfq', rfqId: i.rfqId, title: i.title };
+    return { kind: 'send-rfp', rfpId: i.rfpId, title: i.title };
   }
 
-  // {collecting, comparing} → awarded — 낙찰은 PG 선택이 필요하므로 RFQ 상세(BidBoard)로
+  // {collecting, comparing} → awarded — 낙찰은 PG 선택이 필요하므로 RFP 상세(BidBoard)로
   // 보낸다. award 페이지는 ?bidId= 필수라서 home 카드에서 직접 호출 불가.
   if (
     (i.from === 'collecting' || i.from === 'comparing') &&
     i.to === 'awarded'
   ) {
-    return { kind: 'navigate-rfq-detail', rfqId: i.rfqId };
+    return { kind: 'navigate-rfp-detail', rfpId: i.rfpId };
   }
 
   // 활성 컬럼 → closed: 취소
@@ -63,7 +63,7 @@ function resolveBuyer(i: BuyerInput): DragAction | null {
       i.from === 'collecting' ||
       i.from === 'comparing')
   ) {
-    return { kind: 'cancel-rfq', rfqId: i.rfqId, title: i.title };
+    return { kind: 'cancel-rfp', rfpId: i.rfpId, title: i.title };
   }
 
   return null;
@@ -78,12 +78,12 @@ function resolvePg(i: PgInput): DragAction | null {
       i.from === 'reviewing') &&
     i.to === 'drafting'
   ) {
-    return { kind: 'navigate-inbox', rfqId: i.rfqId };
+    return { kind: 'navigate-inbox', rfpId: i.rfpId };
   }
 
   // drafting → submitted: 폼 채워서 제출해야 함 — navigate.
   if (i.from === 'drafting' && i.to === 'submitted') {
-    return { kind: 'navigate-inbox', rfqId: i.rfqId };
+    return { kind: 'navigate-inbox', rfpId: i.rfpId };
   }
 
   // submitted → lost: 철회.
@@ -91,7 +91,7 @@ function resolvePg(i: PgInput): DragAction | null {
     return {
       kind: 'withdraw-bid',
       bidId: i.bidId,
-      rfqId: i.rfqId,
+      rfpId: i.rfpId,
       title: i.title,
     };
   }
