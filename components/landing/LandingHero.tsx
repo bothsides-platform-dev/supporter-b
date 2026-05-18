@@ -20,9 +20,9 @@ const TYPING_VALUES = [
 ];
 
 const STEP_TOASTS: Record<1 | 2 | 3, Omit<LandingToastItem, 'id'>> = {
-  1: { title: '토스페이먼츠 응답', fee: '1.95%' },
-  2: { title: 'KG이니시스 응답', fee: '2.10%' },
-  3: { title: 'NHN KCP 응답 · 최저가 🎉', fee: '1.85%', isBest: true },
+  1: { title: 'PG A 응답', fee: '1.95%' },
+  2: { title: 'PG B 응답', fee: '2.10%' },
+  3: { title: 'PG C 응답 · 최저가 🎉', fee: '1.85%', isBest: true },
 };
 
 function useTypewriter(values: string[], typingMs = 60, deletingMs = 30, holdMs = 1800): string {

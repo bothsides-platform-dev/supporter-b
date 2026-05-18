@@ -11,9 +11,9 @@ type PGEntry = {
 };
 
 const PG_DATA: PGEntry[] = [
-  { name: '토스페이먼츠', cardRate: '1.95', settlement: 'D+1', deposit: '—' },
-  { name: 'KG이니시스', cardRate: '2.10', settlement: 'D+2', deposit: '50만원' },
-  { name: 'NHN KCP', cardRate: '1.85', settlement: 'D+1', deposit: '—', best: true },
+  { name: 'PG A', cardRate: '1.95', settlement: 'D+1', deposit: '—' },
+  { name: 'PG B', cardRate: '2.10', settlement: 'D+2', deposit: '50만원' },
+  { name: 'PG C', cardRate: '1.85', settlement: 'D+1', deposit: '—', best: true },
 ];
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
