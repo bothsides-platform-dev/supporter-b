@@ -15,8 +15,8 @@ export const STATUTORY_CARD_FEE: Record<MerchantGrade, number> = {
 };
 
 // Buyer-side kanban classification. Independent of `Bid.status` (PG lifecycle).
-// In mock/v0 the canonical value lives in lib/stores/bid-board.ts; the field
-// here is the eventual DB-backed source after M8 (BACKEND_MIGRATION.md).
+// Canonical value lives in lib/stores/bid-board.ts (localStorage). The field
+// here is the eventual DB-backed source after the post-v0 server-side cutover.
 export type BuyerStage = 'pending' | 'negotiating' | 'decided';
 
 export const BUYER_STAGE_ORDER: readonly BuyerStage[] = [
@@ -49,6 +49,6 @@ export type Bid = {
   status: 'draft' | 'submitted' | 'withdrawn';
   submittedBy: string;
   submittedAt?: string;
-  // optional until M8 schema migration adds bids.buyer_stage
+  // optional until bids.buyer_stage column is added in the post-v0 cutover
   buyerStage?: BuyerStage;
 };

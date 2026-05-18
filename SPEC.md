@@ -241,7 +241,7 @@ export type User = {
 // lib/types/biz-profile.ts
 export type MerchantGrade = 'small' | 'sme1' | 'sme2' | 'sme3' | 'general';
 
-// 슬림화 (BACKEND_MIGRATION 반영): name/ceoName/ksic/mailOrderNo/estimatedRevenue/revenueYear/niceLookedUpAt 제거.
+// 슬림화 (M8 적용 완료): name/ceoName/ksic/mailOrderNo/estimatedRevenue/revenueYear/niceLookedUpAt 제거.
 // 회사명은 Workspace.name 사용. NICE/공정위 enrichment 는 v0 제외.
 // 사업자번호·등급 모두 옵셔널. 둘 다 NULL 인 row 는 DB CHECK 로 금지.
 export type BizProfile = {

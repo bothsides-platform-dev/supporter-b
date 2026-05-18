@@ -8,12 +8,12 @@
 // URL.createObjectURL — blob URLs do not survive a page reload, so the modal
 // renders a fallback for entries whose `Attachment.url` is unreachable.
 //
-// M8 cutover: replace this store with server actions
+// Post-v0 cutover: replace this store with server actions
 //   updateBuyerStageAction(bidId, to)
 //   addBidNoteAction(bidId, body, attachmentIds[])
 //   removeBidNoteAction(noteId)
 // backed by BidRepo.updateBuyerStage + BidNoteRepo + AttachmentRepo
-// (owner_kind='bid_note'). See BACKEND_MIGRATION.md.
+// (owner_kind='bid_note').
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';

@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repository State (2026-05-08)
+## Repository State (2026-05-19)
 
-**M0~M7 완료, M8 부분 완료.** 풀스택 가동 중 — Next.js 16.2 + Auth.js v5 + Drizzle 0.45 + Postgres + Resend + Sentry. AppShell, 16 primitives, 9 shell components, BidBoard, outbox, Toaster, notifications activity list, RFP 작성/비교/award, PG inbox/응답이 모두 구현됨. 잔여 M8 작업: mock/store 잔재 grep 검증, Step 13 정리(BACKEND_MIGRATION.md 참조).
+**M0~M8 완료.** 풀스택 가동 중 — Next.js 16.2 + Auth.js v5 + Drizzle 0.45 + Postgres + Resend + Sentry. AppShell, 16 primitives, 9 shell components, BidBoard, outbox, Toaster, notifications activity list, RFP 작성/비교/award, PG inbox/응답이 모두 구현됨. `lib/stores/bid-board.ts`는 B4 칸반 + Bid 메모용 localStorage store로 잔존 (v0 이후 server action 컷오버 예정).
 
 ## Document Hierarchy (read in this order to gain context)
 
@@ -14,7 +14,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 4. **SPEC.md** — Tech spec. Stack, directory layout, domain TypeScript types, App Router strategy, public-vs-app route groups.
 5. **IMPLEMENTATION.md** — Milestones M0~M8 + M1.5 (auth), bootstrap commands, verification checklists, work order.
 6. **[NOTIFICATION.md](./NOTIFICATION.md)** — 알림 시스템. 이메일(Resend) + 인앱(SSE + Drawer) 채널, NotificationService 모듈 구조, 이벤트→알림 매핑.
-7. **[BACKEND_MIGRATION.md](./BACKEND_MIGRATION.md)** — M8 백엔드 마이그레이션 계획 + 진행 상태. mock/Zustand → Postgres + Drizzle + Auth.js v5 + 서버 액션 14-step 컷오버.
 
 If these conflict, **PG_RFP_SPEC.md wins** (newest, post-pivot). Distribute its §8 changes back into the other four files when implementing — do not let them drift.
 
@@ -93,6 +92,8 @@ Follow IMPLEMENTATION.md milestones strictly: **M0 → M1 → M1.5 → M2 → ..
 
 Per-PR verification checklist lives in IMPLEMENTATION.md §4. Copy it into PR body. Three end-to-end scenarios (A/B/C in PG_RFP_SPEC.md §6) are the ultimate clickthrough acceptance tests.
 
+**모든 구현·버그픽스 작업은 "TDD — Hard Rules" 섹션에 따라 failing test부터 시작한다.** 코드 작성 전 `superpowers:test-driven-development` 스킬을 발동했는지 먼저 확인.
+
 ## When Editing Documentation
 
 The 7 docs cross-reference each other heavily. After any change:
@@ -103,8 +104,9 @@ The 7 docs cross-reference each other heavily. After any change:
 
 ## Skill routing (project-specific only)
 
-대부분의 스킬은 description 자동 매칭에 의존한다. 아래 4개만 프로젝트 특수 라우팅:
+대부분의 스킬은 description 자동 매칭에 의존한다. 아래는 프로젝트 특수 라우팅:
 
+- `superpowers:test-driven-development` — **모든 신규 코드/버그픽스/리팩터링 직전 필수**. 면제 범위는 "TDD — Hard Rules" 참조.
 - `/plan-eng-review` — M2 이후 새 기능 코딩 시작 전 (아키텍처 락인)
 - `/design-review` — 화면 시각 폴리시 (MD3 디자인 시스템 정합 검증)
 - `/investigate` — 버그·에러·예상치 못한 동작
@@ -117,3 +119,5 @@ The 7 docs cross-reference each other heavily. After any change:
 - typecheck: `pnpm tsc --noEmit`
 - lint: `pnpm lint`
 - test: `pnpm test`
+
+TDD 사이클 중 단일 파일만 실행: `pnpm test <path-to-test>` — RED/GREEN 확인은 항상 단일 파일로 빠르게, 전체 그린 확인은 `pnpm test`.

@@ -62,7 +62,7 @@ type Workspace = {
   createdAt: string;
 };
 
-// 슬림화: name/ceoName/ksic/mailOrderNo/estimatedRevenue/revenueYear/niceLookedUpAt 는 BACKEND_MIGRATION 에서 제거.
+// 슬림화 (M8 적용 완료): name/ceoName/ksic/mailOrderNo/estimatedRevenue/revenueYear/niceLookedUpAt 제거.
 // 회사명은 Workspace.name 사용. NICE/공정위는 v0 제외.
 // bizNo·grade 모두 옵셔널 — 둘 다 NULL 인 row 는 의미 없으므로 DB CHECK 로 금지(`bizNo IS NOT NULL OR grade IS NOT NULL`).
 type BizProfile = {

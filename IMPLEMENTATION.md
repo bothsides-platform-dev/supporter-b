@@ -3,7 +3,7 @@
 > 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) (화면·IA) · [DESIGN.md](./DESIGN.md) (디자인 시스템) · [SPEC.md](./SPEC.md) (기술 스펙)
 > 본 문서: 마일스톤, 부트스트랩 절차, 핵심 파일, 검증 체크리스트
 
-**Status (2026-05-08)**: M0~M7 완료, M8 부분 완료 (인프라 가동 — Auth.js v5 + Drizzle + Postgres + Resend + Sentry, `lib/mock/` 제거됨; 잔여는 BACKEND_MIGRATION.md 참조).
+**Status (2026-05-19)**: M0~M8 완료 (Auth.js v5 + Drizzle + Postgres + Resend + Sentry 가동 중, `lib/mock/` · `lib/stores/{rfp-list,bid-list,notifications}.ts` 제거됨). `lib/stores/bid-board.ts`는 B4 칸반 + Bid 메모용 localStorage store로 잔존 (v0 이후 server action 컷오버 예정).
 
 ---
 
@@ -23,7 +23,7 @@
 | **M5** | 수주 처리 (`/rfp/:id/award`) + 계약 레코드/알림 상태 반영 ([NOTIFICATION.md](./NOTIFICATION.md)) | 시나리오 C 클릭스루, RFP `awarded` 전이 확인 |
 | **M6** | 워크스페이스 운영 최소 설정 (프로필/멤버) + 알림 상태 마감 ([NOTIFICATION.md](./NOTIFICATION.md)) | buyer/pg 프로필·멤버 화면, outbox 재시도, 알림 Drawer 검증 |
 | **M7** | v0 하드닝: 단축키, 빈 상태, 페이지 stagger 모션, 접근성·반응형 보강 | 시나리오 A·B·C 클릭스루 + §4 전체 체크리스트 통과 |
-| **M8** | 백엔드 마이그레이션: mock/Zustand 캐시 → Postgres + Drizzle + Auth.js v5 + 서버 액션. 14-step 컷오버 ([BACKEND_MIGRATION.md](./BACKEND_MIGRATION.md)) | docker compose + db:migrate + db:seed 그린, A/B/C E2E를 실 DB로 통과, mock/store 컷오버 게이트 4종 모두 0 |
+| **M8** | 백엔드 마이그레이션: mock/Zustand 캐시 → Postgres + Drizzle + Auth.js v5 + 서버 액션 14-step 컷오버 | docker compose + db:migrate + db:seed 그린, A/B/C E2E를 실 DB로 통과, mock/store 컷오버 게이트 4종 모두 0 |
 
 **시각적 임팩트 우선순위**: M2(RFP 작성) → M3(PG 응답) → M4(비교 화면). 구매사-공급사 왕복 흐름이 데모에서 끊기지 않도록 M2~M4 를 먼저 마치는 것을 권장.
 
@@ -158,7 +158,7 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 - 정산·매출 추적 — 계약 이후 운영 분석 영역으로 v0 클릭스루를 막지 않는다.
 - SMS/Slack/KakaoWork/Push 알림 — 이메일 + 인앱만 v0 채널.
 - 계약서 전자서명/결제 연동 — 수주 마킹 이후 오프라인 계약으로 처리.
-- 실제 DB/ORM 선택 — M1.6은 in-memory repository 계약으로 테스트하고, 영속 DB 도입은 **M8(백엔드 마이그레이션)** 으로 분리 — [BACKEND_MIGRATION.md](./BACKEND_MIGRATION.md) 참조.
+- 실제 DB/ORM 선택 — M1.6은 in-memory repository 계약으로 테스트하고, 영속 DB 도입은 M8에서 완료.
 - Recharts 기반 분석 차트, 시나리오 토글, 수수료 워터폴 — v0는 6개 정형 수치 비교표와 PDF 프리뷰로 의사결정 검증.
 
 ---
@@ -170,7 +170,8 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 - 2026-05-05 v0.3 — 권장 조합 동기화: shadcn/ui+Radix, TanStack Table, cmdk 설치/적용 기준 반영.
 - 2026-05-05 v0.4 — PG_RFP_SPEC 기준 M2~M5 재정렬(구매사 RFP 작성→PG 응답→비교→수주), 클릭스루/검증 기준 동기화.
 - 2026-05-05 v0.5 — M6/M7을 v0 운영·하드닝으로 정리하고 결재선·카탈로그·거래처 관리 등을 v0 범위 외로 명시.
-- 2026-05-06 v0.6 — M8(백엔드 마이그레이션) 추가. mock/Zustand 캐시를 Postgres + Drizzle + Auth.js v5 + 서버 액션으로 컷오버. 상세 14-step + Subagent develop → Step-별 commit 워크플로우는 [BACKEND_MIGRATION.md](./BACKEND_MIGRATION.md).
+- 2026-05-06 v0.6 — M8(백엔드 마이그레이션) 추가. mock/Zustand 캐시를 Postgres + Drizzle + Auth.js v5 + 서버 액션으로 컷오버.
+- 2026-05-19 v0.7 — M8 완료. BACKEND_MIGRATION.md 폐기 (계획 문서 역할 종료). `lib/stores/bid-board.ts`는 B4 칸반·Bid 메모 구동용 localStorage store로 의도적 잔존.
 
 ---
 
