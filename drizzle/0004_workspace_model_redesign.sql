@@ -5,15 +5,15 @@ ALTER TABLE "workspaces" DROP CONSTRAINT IF EXISTS "pg_domain_required";--> stat
 DROP INDEX IF EXISTS "workspaces_domain_unique";--> statement-breakpoint
 ALTER TABLE "workspaces" DROP COLUMN IF EXISTS "domain";--> statement-breakpoint
 
--- 2. rfq_invitations: pg_email 제거, pg_ws_id NOT NULL 전환, 인덱스 재생성
-DROP INDEX IF EXISTS "rfq_invitations_rfq_email_uniq";--> statement-breakpoint
-ALTER TABLE "rfq_invitations" DROP COLUMN IF EXISTS "pg_email";--> statement-breakpoint
-ALTER TABLE "rfq_invitations" ALTER COLUMN "pg_ws_id" SET NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "rfq_invitations_rfq_ws_uniq" ON "rfq_invitations" USING btree ("rfq_id","pg_ws_id");--> statement-breakpoint
+-- 2. rfp_invitations: pg_email 제거, pg_ws_id NOT NULL 전환, 인덱스 재생성
+DROP INDEX IF EXISTS "rfp_invitations_rfp_email_uniq";--> statement-breakpoint
+ALTER TABLE "rfp_invitations" DROP COLUMN IF EXISTS "pg_email";--> statement-breakpoint
+ALTER TABLE "rfp_invitations" ALTER COLUMN "pg_ws_id" SET NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "rfp_invitations_rfp_ws_uniq" ON "rfp_invitations" USING btree ("rfp_id","pg_ws_id");--> statement-breakpoint
 
--- 3. rfqs: allowed_pg_emails → allowed_pg_workspace_ids (uuid[])
-ALTER TABLE "rfqs" DROP COLUMN IF EXISTS "allowed_pg_emails";--> statement-breakpoint
-ALTER TABLE "rfqs" ADD COLUMN IF NOT EXISTS "allowed_pg_workspace_ids" uuid[] NOT NULL DEFAULT '{}'::uuid[];--> statement-breakpoint
+-- 3. rfps: allowed_pg_emails → allowed_pg_workspace_ids (uuid[])
+ALTER TABLE "rfps" DROP COLUMN IF EXISTS "allowed_pg_emails";--> statement-breakpoint
+ALTER TABLE "rfps" ADD COLUMN IF NOT EXISTS "allowed_pg_workspace_ids" uuid[] NOT NULL DEFAULT '{}'::uuid[];--> statement-breakpoint
 
 -- 4. outbox_event enum에 workspace.invited 추가
 ALTER TYPE "public"."outbox_event" ADD VALUE IF NOT EXISTS 'workspace.invited';--> statement-breakpoint

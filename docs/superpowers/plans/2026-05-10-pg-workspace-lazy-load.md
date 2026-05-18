@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** RFQ 작성/편집 화면에서 PG 워크스페이스 선택 시 키 입력마다 API를 호출하는 방식 대신, 첫 드롭다운 열람 시 전체 목록을 1회 fetch하고 이후 클라이언트에서 cmdk로 필터링한다.
+**Goal:** RFP 작성/편집 화면에서 PG 워크스페이스 선택 시 키 입력마다 API를 호출하는 방식 대신, 첫 드롭다운 열람 시 전체 목록을 1회 fetch하고 이후 클라이언트에서 cmdk로 필터링한다.
 
-**Architecture:** `/api/workspaces/search`의 `q` 파라미터를 선택적으로 변경 → `useLazyPgWorkspaces` 훅이 첫 `load()` 호출 시에만 전체 fetch → `RfqCreateForm`·`RfqInviteManager` 두 컴포넌트의 커스텀 드롭다운을 Radix Popover + cmdk Command로 교체.
+**Architecture:** `/api/workspaces/search`의 `q` 파라미터를 선택적으로 변경 → `useLazyPgWorkspaces` 훅이 첫 `load()` 호출 시에만 전체 fetch → `RfpCreateForm`·`RfpInviteManager` 두 컴포넌트의 커스텀 드롭다운을 Radix Popover + cmdk Command로 교체.
 
 **Tech Stack:** Next.js App Router, TypeScript, `@radix-ui/react-popover@^1.1.15`, `cmdk@^1.1.1`, Tailwind v4 + MD3 CSS 변수
 
@@ -174,10 +174,10 @@
 
 ---
 
-### Task 3: `RfqCreateForm` — cmdk Combobox 적용
+### Task 3: `RfpCreateForm` — cmdk Combobox 적용
 
 **Files:**
-- Modify: `components/rfq/RfqCreateForm.tsx`
+- Modify: `components/rfp/RfpCreateForm.tsx`
 
 현재 PG 검색 관련 상태: `wsQuery`, `wsResults`, `isSearching`, `showDropdown`, `wsInputError`, `dropdownRef`, `searchTimerRef`.  
 제거 대상: `wsQuery`, `wsResults`, `isSearching`, `showDropdown`, `dropdownRef`, `searchTimerRef`, click-outside `useEffect`, `handleWsQueryChange`.  
@@ -197,17 +197,17 @@
   import { Button } from '@/components/primitives/Button';
   import { Label } from '@/components/primitives/Label';
   import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
-  import { useRfqDraftStore } from '@/lib/stores/rfq-draft';
+  import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
   import { useLazyPgWorkspaces } from '@/hooks/useLazyPgWorkspaces';
   import type { PgWorkspace } from '@/hooks/useLazyPgWorkspaces';
   import { useShortcut } from '@/lib/hooks/useShortcut';
-  import { createRfqAction } from '@/lib/server/actions/rfq';
+  import { createRfpAction } from '@/lib/server/actions/rfp';
   import type { BizProfile } from '@/lib/types/biz-profile';
   ```
 
 - [ ] **Step 2: 컴포넌트 상태 교체**
 
-  `export function RfqCreateForm(...)` 함수 본문에서 기존 workspace search 관련 state/ref/effect를 모두 제거하고 아래로 교체:
+  `export function RfpCreateForm(...)` 함수 본문에서 기존 workspace search 관련 state/ref/effect를 모두 제거하고 아래로 교체:
 
   기존 (제거):
   ```ts
@@ -341,16 +341,16 @@
 - [ ] **Step 6: 커밋**
 
   ```bash
-  git add components/rfq/RfqCreateForm.tsx
-  git commit -m "feat(rfq): replace debounced search with lazy-load cmdk combobox in RfqCreateForm"
+  git add components/rfp/RfpCreateForm.tsx
+  git commit -m "feat(rfp): replace debounced search with lazy-load cmdk combobox in RfpCreateForm"
   ```
 
 ---
 
-### Task 4: `RfqInviteManager` — cmdk Combobox 적용
+### Task 4: `RfpInviteManager` — cmdk Combobox 적용
 
 **Files:**
-- Modify: `components/rfq/RfqInviteManager.tsx`
+- Modify: `components/rfp/RfpInviteManager.tsx`
 
 현재 PG 검색 관련 상태: `query`, `results`, `isSearching`, `showDropdown`, `inputError`, `dropdownRef`, `searchTimerRef`.  
 제거: `query`, `results`, `isSearching`, `showDropdown`, `dropdownRef`, `searchTimerRef`, click-outside `useEffect`, `handleQueryChange`.  
@@ -372,9 +372,9 @@
   import { Chip } from '@/components/primitives/Chip';
   import type { ChipColor } from '@/components/primitives/Chip';
   import {
-    addPgWorkspacesToRfqAction,
+    addPgWorkspacesToRfpAction,
     sendDraftInvitationsAction,
-  } from '@/lib/server/actions/rfq';
+  } from '@/lib/server/actions/rfp';
   import { useLazyPgWorkspaces } from '@/hooks/useLazyPgWorkspaces';
   import type { PgWorkspace } from '@/hooks/useLazyPgWorkspaces';
   import { toast } from '@/lib/toast';
@@ -385,7 +385,7 @@
 
 - [ ] **Step 2: 컴포넌트 상태 교체**
 
-  `export function RfqInviteManager(...)` 함수 본문에서 기존 search 관련 state/ref/effect 제거하고 교체:
+  `export function RfpInviteManager(...)` 함수 본문에서 기존 search 관련 state/ref/effect 제거하고 교체:
 
   기존 (제거):
   ```ts
@@ -433,7 +433,7 @@
     }
 
     startTransition(async () => {
-      const r = await addPgWorkspacesToRfqAction({ rfqId, workspaceIds: [ws.id] });
+      const r = await addPgWorkspacesToRfpAction({ rfpId, workspaceIds: [ws.id] });
       if (!r.ok) {
         toast(`추가 실패 — ${r.error}`, { type: 'error' });
         return;
@@ -452,7 +452,7 @@
       return;
     }
     startTransition(async () => {
-      const r = await addPgWorkspacesToRfqAction({ rfqId, workspaceIds: [ws.id] });
+      const r = await addPgWorkspacesToRfpAction({ rfpId, workspaceIds: [ws.id] });
       if (!r.ok) {
         toast(`추가 실패 — ${r.error}`, { type: 'error' });
         return;
@@ -533,8 +533,8 @@
 - [ ] **Step 6: 커밋**
 
   ```bash
-  git add components/rfq/RfqInviteManager.tsx
-  git commit -m "feat(rfq): replace debounced search with lazy-load cmdk combobox in RfqInviteManager"
+  git add components/rfp/RfpInviteManager.tsx
+  git commit -m "feat(rfp): replace debounced search with lazy-load cmdk combobox in RfpInviteManager"
   ```
 
 ---
@@ -549,9 +549,9 @@
 
   Expected: 오류 없음.
 
-- [ ] **Step 2: 브라우저 검증 — RFQ 작성 (`/rfq/new`)**
+- [ ] **Step 2: 브라우저 검증 — RFP 작성 (`/rfp/new`)**
 
-  1. `/rfq/new` 접속
+  1. `/rfp/new` 접속
   2. "초대할 PG 워크스페이스" 섹션의 "PG사 검색…" 버튼 클릭
   3. 드롭다운이 열리면서 `LOADING…` 표시 후 전체 PG 목록 로드 확인
   4. 텍스트 입력 시 클라이언트 필터링 동작 확인 (네트워크 탭에 추가 API 요청 없음)
@@ -559,12 +559,12 @@
   6. 같은 항목 재선택 시 비활성화(opacity 감소) 확인
   7. 드롭다운 재열람 시 `LOADING…` 없이 즉시 목록 표시 (캐시 동작)
 
-- [ ] **Step 3: 브라우저 검증 — RFQ 상세 (`/rfq/[id]`)**
+- [ ] **Step 3: 브라우저 검증 — RFP 상세 (`/rfp/[id]`)**
 
-  1. 기존 RFQ 상세 페이지 접속 (status=sent인 RFQ)
-  2. `RfqInviteManager`의 "PG사 검색…" 버튼 클릭
+  1. 기존 RFP 상세 페이지 접속 (status=sent인 RFP)
+  2. `RfpInviteManager`의 "PG사 검색…" 버튼 클릭
   3. 동일 동작 확인 (로드, 필터링, 중복 비활성화)
-  4. 항목 선택 후 `addPgWorkspacesToRfqAction` 호출 및 페이지 새로고침 확인
+  4. 항목 선택 후 `addPgWorkspacesToRfpAction` 호출 및 페이지 새로고침 확인
 
 - [ ] **Step 4: 최종 커밋 (변경 없으면 생략)**
 
@@ -572,5 +572,5 @@
 
   ```bash
   git add -p
-  git commit -m "fix(rfq): post-verification adjustments for pg lazy-load combobox"
+  git commit -m "fix(rfp): post-verification adjustments for pg lazy-load combobox"
   ```

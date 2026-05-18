@@ -4,7 +4,7 @@
 
 **Goal:** Split the single `/signup → /signup/workspace` flow into two fully separate paths: `/signup/buyer/*` (Bs1-Bs4) for merchants and `/signup/pg/*` (Gs1-Gs4) for PG sales reps, with role selection at `/signup` (Rs1).
 
-**Architecture:** Role is chosen at `/signup` (Rs1) before email entry. Each role writes `workspaceType` into `SignupClientDraft` (sessionStorage). The shared `/auth/verify?token=...` routes to the correct profile page after reading `workspaceType` from the action result (token meta carries it cross-device). PG invite flow (`/invite/rfq/:token`) auto-resolves the email server-side and skips Gs1.
+**Architecture:** Role is chosen at `/signup` (Rs1) before email entry. Each role writes `workspaceType` into `SignupClientDraft` (sessionStorage). The shared `/auth/verify?token=...` routes to the correct profile page after reading `workspaceType` from the action result (token meta carries it cross-device). PG invite flow (`/invite/rfp/:token`) auto-resolves the email server-side and skips Gs1.
 
 **Tech Stack:** Next.js 16 App Router (RSC + Server Actions), Zustand (signup-draft store), `lib/auth/signup-storage` (sessionStorage), Auth.js v5, Vitest + React Testing Library, zod
 
@@ -19,11 +19,11 @@
 - `lib/server/actions/auth/signupEmailAction.ts` — accept `workspaceType`, store in token meta
 - `lib/server/actions/auth/verifyEmailAction.ts` — return `workspaceType` from token meta
 - `lib/server/actions/auth/__tests__/signup.test.ts` — update redirectTo assertions + add workspaceType tests
-- `lib/server/actions/auth/signupCompleteAction.ts` — `/home` → `/rfq` (buyer), `/inbox` (pg)
+- `lib/server/actions/auth/signupCompleteAction.ts` — `/home` → `/rfp` (buyer), `/inbox` (pg)
 - `app/(public)/signup/page.tsx` — transform to Rs1 role chooser
 - `app/(public)/auth/verify/page.tsx` — route to `/signup/{kind}/profile` based on `workspaceType`
-- `app/(public)/invite/rfq/[token]/page.tsx` — resolve invite email in RSC
-- `app/(public)/invite/rfq/[token]/InviteUnauthClient.tsx` — prefill draft, call `signupEmailAction`, redirect to Gs2
+- `app/(public)/invite/rfp/[token]/page.tsx` — resolve invite email in RSC
+- `app/(public)/invite/rfp/[token]/InviteUnauthClient.tsx` — prefill draft, call `signupEmailAction`, redirect to Gs2
 
 **Create:**
 - `components/auth/RoleChooser.tsx`
@@ -185,7 +185,7 @@ Also update the buyer redirectTo assertion (will fail after step 2.5):
 
 ```ts
 // In signupCompleteAction — buyer branch test:
-expect(r.redirectTo).toBe('/rfq');   // was '/home'
+expect(r.redirectTo).toBe('/rfp');   // was '/home'
 
 // In signupCompleteAction — pg branch test (creates new PG ws):
 expect(r.redirectTo).toBe('/inbox');  // was '/home'
@@ -281,7 +281,7 @@ Buyer branch (currently returns `/home`):
 ```ts
 return {
   ok: true,
-  redirectTo: '/rfq',   // was '/home'
+  redirectTo: '/rfp',   // was '/home'
   email,
   password: parsed.data.password,
 };
@@ -309,7 +309,7 @@ return {
 };
 ```
 
-(The invite branch already returns `/inbox/${claim.invitation.rfqId}` — no change needed.)
+(The invite branch already returns `/inbox/${claim.invitation.rfpId}` — no change needed.)
 
 - [ ] **Step 2.6: Run tests to confirm they pass**
 
@@ -326,7 +326,7 @@ git add lib/server/actions/auth/signupEmailAction.ts \
         lib/server/actions/auth/verifyEmailAction.ts \
         lib/server/actions/auth/signupCompleteAction.ts \
         lib/server/actions/auth/__tests__/signup.test.ts
-git commit -m "feat: thread workspaceType through signup email/verify, fix redirectTo /rfq and /inbox"
+git commit -m "feat: thread workspaceType through signup email/verify, fix redirectTo /rfp and /inbox"
 ```
 
 ---
@@ -403,13 +403,13 @@ const OPTIONS: Option[] = [
   {
     role: 'buyer',
     title: '구매사',
-    description: '결제대행사에 견적을 요청하는 사업자입니다.',
+    description: '결제대행사에 제안을 요청하는 사업자입니다.',
     badge: 'BUYER',
   },
   {
     role: 'pg',
     title: 'PG사 영업담당',
-    description: '구매사 RFQ를 받아 견적을 제출하는 영업담당입니다.',
+    description: '구매사 RFP를 받아 제안을 제출하는 영업담당입니다.',
     badge: 'PG',
   },
 ];
@@ -821,9 +821,9 @@ import { Eyebrow } from '@/components/primitives/Eyebrow';
 import {
   BizLookupField,
   type BizLookupResult,
-} from '@/components/rfq/BizLookupField';
-import { GradeConfirmPanel } from '@/components/rfq/GradeConfirmPanel';
-import { lookupBizNoAction } from '@/lib/server/actions/rfq';
+} from '@/components/rfp/BizLookupField';
+import { GradeConfirmPanel } from '@/components/rfp/GradeConfirmPanel';
+import { lookupBizNoAction } from '@/lib/server/actions/rfp';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 const ntsLookup = async (bizNo: string) => {
@@ -1561,12 +1561,12 @@ git commit -m "feat: route /auth/verify token success to /signup/{kind}/profile 
 ## Task 7: Update invite flow — PG invite → Gs2 (skip Rs1 + Gs1)
 
 **Files:**
-- Modify: `app/(public)/invite/rfq/[token]/page.tsx`
-- Modify: `app/(public)/invite/rfq/[token]/InviteUnauthClient.tsx`
+- Modify: `app/(public)/invite/rfp/[token]/page.tsx`
+- Modify: `app/(public)/invite/rfp/[token]/InviteUnauthClient.tsx`
 
 - [ ] **Step 7.1: Resolve invite email in the RSC**
 
-In `app/(public)/invite/rfq/[token]/page.tsx`, add invitation lookup for unauthenticated users:
+In `app/(public)/invite/rfp/[token]/page.tsx`, add invitation lookup for unauthenticated users:
 
 ```tsx
 import { auth } from '@/auth';
@@ -1577,7 +1577,7 @@ import { InviteAuthedClient } from './InviteAuthedClient';
 
 type Props = { params: Promise<{ token: string }> };
 
-export default async function InviteRfqPage({ params }: Props) {
+export default async function InviteRfpPage({ params }: Props) {
   const { token } = await params;
   const session = await auth();
 
@@ -1599,7 +1599,7 @@ export default async function InviteRfqPage({ params }: Props) {
 
 - [ ] **Step 7.2: Update `InviteUnauthClient` to call `signupEmailAction` and route to Gs2**
 
-Replace the contents of `app/(public)/invite/rfq/[token]/InviteUnauthClient.tsx`:
+Replace the contents of `app/(public)/invite/rfp/[token]/InviteUnauthClient.tsx`:
 
 ```tsx
 'use client';
@@ -1665,14 +1665,14 @@ export function InviteUnauthClient({ token, inviteEmail }: Props) {
 - [ ] **Step 7.3: Smoke-test invite flow**
 
 With `pnpm dev` running:
-1. Simulate `/invite/rfq/mock-token` with a seeded invitation (or check logs)
+1. Simulate `/invite/rfp/mock-token` with a seeded invitation (or check logs)
 2. Confirm redirect: unauthenticated user lands on Gs2, email pre-filled
 
 - [ ] **Step 7.4: Commit**
 
 ```bash
-git add 'app/(public)/invite/rfq/[token]/page.tsx' \
-        'app/(public)/invite/rfq/[token]/InviteUnauthClient.tsx'
+git add 'app/(public)/invite/rfp/[token]/page.tsx' \
+        'app/(public)/invite/rfp/[token]/InviteUnauthClient.tsx'
 git commit -m "feat: update invite flow — resolve email in RSC, route unauthenticated PG to Gs2"
 ```
 
@@ -1733,21 +1733,21 @@ git commit -m "chore: remove old single-flow signup pages and WorkspaceTypeRadio
 → enter email + check terms → [인증 메일 받기] → /signup/buyer/verify (Bs2)
 → open email link → /auth/verify?token=... → /signup/buyer/profile (Bs3)
 → fill name + password → [다음] → /signup/buyer/workspace (Bs4)
-→ enter ws name + biz lookup + grade confirm → [만들기] → /rfq
+→ enter ws name + biz lookup + grade confirm → [만들기] → /rfp
 ```
 
-Expected: landing at `/rfq` as admin.
+Expected: landing at `/rfp` as admin.
 
 - [ ] **Step 9.2: Scenario E — PG invite**
 
 ```
-/invite/rfq/:token → (unauthenticated) → loading → /signup/pg/verify (Gs2, email pre-filled)
+/invite/rfp/:token → (unauthenticated) → loading → /signup/pg/verify (Gs2, email pre-filled)
 → open email link → /auth/verify?token=... → /signup/pg/profile (Gs3)
 → fill name + password → [다음] → /signup/pg/workspace (Gs4)
-→ see domain card → [합류하기] → /inbox/:rfqId
+→ see domain card → [합류하기] → /inbox/:rfpId
 ```
 
-Expected: landing at `/inbox/:rfqId` as member.
+Expected: landing at `/inbox/:rfpId` as member.
 
 - [ ] **Step 9.3: Scenario F — PG direct signup**
 
@@ -1798,8 +1798,8 @@ git commit --allow-empty -m "chore: verified PG/buyer signup split E2E — scena
 | `workspaceType` in `SignupDraft` / `SignupClientDraft` | Task 1 |
 | `workspaceType` threaded through email verify token | Task 2 |
 | `/auth/verify` routes to buyer/pg profile | Task 6 |
-| `/invite/rfq/:token` → Gs2 (skip Rs1+Gs1) | Task 7 |
-| `redirectTo` → `/rfq` (buyer), `/inbox` (pg) | Task 2 |
+| `/invite/rfp/:token` → Gs2 (skip Rs1+Gs1) | Task 7 |
+| `redirectTo` → `/rfp` (buyer), `/inbox` (pg) | Task 2 |
 | Old P6 workspace chooser removed | Task 8 |
 | `WorkspaceTypeRadio` removed | Task 8 |
 

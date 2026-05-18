@@ -1,13 +1,13 @@
 # PG 워크스페이스 Lazy Load + cmdk 설계
 
 **날짜**: 2026-05-10  
-**범위**: RFQ 작성/편집 화면의 PG 워크스페이스 선택 UI
+**범위**: RFP 작성/편집 화면의 PG 워크스페이스 선택 UI
 
 ---
 
 ## 배경
 
-`RfqCreateForm`과 `RfqInviteManager`는 PG 워크스페이스 검색 시 키 입력마다 `/api/workspaces/search?q=...&type=pg`를 250ms 디바운스로 호출한다. 한국 PG사 수는 수십 개 수준으로, 전체 목록을 한 번 받아 클라이언트에서 필터링하는 편이 UX와 서버 부하 면에서 유리하다.
+`RfpCreateForm`과 `RfpInviteManager`는 PG 워크스페이스 검색 시 키 입력마다 `/api/workspaces/search?q=...&type=pg`를 250ms 디바운스로 호출한다. 한국 PG사 수는 수십 개 수준으로, 전체 목록을 한 번 받아 클라이언트에서 필터링하는 편이 UX와 서버 부하 면에서 유리하다.
 
 ---
 
@@ -103,8 +103,8 @@ function useLazyPgWorkspaces(): {
 cmdk의 내장 fuzzy filter가 `CommandInput` 값을 기준으로 `CommandItem[value]`를 자동 필터링. 별도 `useState` + `filter()` 로직 불필요.
 
 ### 이미 선택된 PG 처리
-- `RfqCreateForm`: `selectedIds` 배열에 있으면 `CommandItem disabled`
-- `RfqInviteManager`: 기존 `rfqInvitation` 목록에 있으면 `CommandItem disabled`
+- `RfpCreateForm`: `selectedIds` 배열에 있으면 `CommandItem disabled`
+- `RfpInviteManager`: 기존 `rfpInvitation` 목록에 있으면 `CommandItem disabled`
 
 ### 로딩·오류 상태
 | 상태 | CommandEmpty 표시 |
@@ -121,14 +121,14 @@ cmdk의 내장 fuzzy filter가 `CommandInput` 값을 기준으로 `CommandItem[v
 |------|-----------|
 | `app/api/workspaces/search/route.ts` | `q` 선택적으로, 전체 조회 시 limit 500 |
 | `hooks/useLazyPgWorkspaces.ts` | 신규 — lazy fetch 훅 |
-| `components/rfq/RfqCreateForm.tsx` | 커스텀 드롭다운 → cmdk Combobox |
-| `components/rfq/RfqInviteManager.tsx` | 커스텀 드롭다운 → cmdk Combobox |
+| `components/rfp/RfpCreateForm.tsx` | 커스텀 드롭다운 → cmdk Combobox |
+| `components/rfp/RfpInviteManager.tsx` | 커스텀 드롭다운 → cmdk Combobox |
 
 ---
 
 ## 5. 제거되는 코드
 
-- `RfqCreateForm`과 `RfqInviteManager`의 `debounce` 로직 (250ms setTimeout)
+- `RfpCreateForm`과 `RfpInviteManager`의 `debounce` 로직 (250ms setTimeout)
 - 두 컴포넌트의 `searchQuery` state, click-outside ref, 드롭다운 open/close state (Radix Popover로 대체)
 - 두 컴포넌트의 인라인 fetch + 결과 state (훅으로 이동)
 
@@ -136,6 +136,6 @@ cmdk의 내장 fuzzy filter가 `CommandInput` 값을 기준으로 `CommandItem[v
 
 ## 6. 미변경 사항
 
-- 선택 후 처리 로직 (`addPgWorkspacesToRfqAction`, Zustand `useRfqDraftStore`) 그대로 유지
+- 선택 후 처리 로직 (`addPgWorkspacesToRfpAction`, Zustand `useRfpDraftStore`) 그대로 유지
 - `/api/workspaces/search?q=...` ILIKE 검색 동작 하위 호환 유지
 - MD3 디자인 시스템 토큰·타이포그래피 규칙 준수

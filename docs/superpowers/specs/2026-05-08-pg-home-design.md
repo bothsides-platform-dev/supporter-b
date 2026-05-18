@@ -36,7 +36,7 @@ page.tsx
 
 PgHome (RSC)  — 두 repo 병렬 호출
   getInvitationRepo().findByPgUser(userId)
-    → pairs (invitation + rfq)
+    → pairs (invitation + rfp)
   getBidRepo().findByPgWs(workspaceId)
     → bids (submitted 상태, submittedAt 내림차순)
 
@@ -45,7 +45,7 @@ PgHome (RSC)  — 두 repo 병렬 호출
   KPI 집계: total, pending, submitted, won
 ```
 
-`won` KPI: `bids`에서 `rfq.awardedBidId === bid.id`인 것의 개수. `findByPgWs` 반환값에 RFQ 정보가 없으면 `won = 0` 플레이스홀더로 처리 후 추후 연결.
+`won` KPI: `bids`에서 `rfp.awardedBidId === bid.id`인 것의 개수. `findByPgWs` 반환값에 RFP 정보가 없으면 `won = 0` 플레이스홀더로 처리 후 추후 연결.
 
 "최근 제출" 섹션은 `Bid.submittedAt`(정렬 기준)과 `Bid.buyerStage`(상태 표시)가 필요하므로 invitation repo가 아닌 bid repo 데이터를 사용한다.
 
@@ -56,7 +56,7 @@ PgHome (RSC)  — 두 repo 병렬 호출
 | 전체 수신 | A | `pairs.length` |
 | 응답 대기 | B | `pairs.filter(p => ['sent','opened'].includes(p.invitation.status)).length` |
 | 제출 완료 | C | `pairs.filter(p => p.invitation.status === 'accepted').length` |
-| 수주 | D | RFQ `awardedBidId`가 자사 bid인 건 수 (v0 플레이스홀더 가능) |
+| 수주 | D | RFP `awardedBidId`가 자사 bid인 건 수 (v0 플레이스홀더 가능) |
 
 ### 리스트 섹션
 
@@ -64,21 +64,21 @@ PgHome (RSC)  — 두 repo 병렬 호출
 
 각 행:
 - 제목 (13px medium)
-- 서브: `rfqId · grade` (mono 11px, ink-soft)
+- 서브: `rfpId · grade` (mono 11px, ink-soft)
 - 우측: deadline D-day (≤3일이면 terracotta, 나머지 ink-muted)
 
-빈 상태: `EmptyState` — "응답 대기 중인 견적이 없습니다." / "구매사가 초대한 RFQ가 /inbox에 표시됩니다."
+빈 상태: `EmptyState` — "응답 대기 중인 제안이 없습니다." / "구매사가 초대한 RFP가 /inbox에 표시됩니다."
 
 **오른쪽 — 최근 제출** (status: `accepted`, `submittedAt` 내림차순, 최근 3건)
 
 각 행:
 - 제목 (13px medium)
-- 서브: `rfqId · 제출일` (mono 11px, ink-soft)
+- 서브: `rfpId · 제출일` (mono 11px, ink-soft)
 - 우측: buyerStage 텍스트 태그 (`[ 검토중 ]` / `[ 수주 ]` / `[ 미선정 ]`, 괄호 텍스트 컬러만, 필드 플레이스홀더)
 
-빈 상태: `EmptyState` — "제출한 견적이 없습니다."
+빈 상태: `EmptyState` — "제출한 제안이 없습니다."
 
-각 행은 `/inbox/[rfqId]`로 링크.
+각 행은 `/inbox/[rfpId]`로 링크.
 
 ### `home/page.tsx` 변경
 

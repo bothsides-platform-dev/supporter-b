@@ -1,4 +1,4 @@
-CREATE TYPE "public"."attachment_owner_kind" AS ENUM('rfq_rfp', 'bid_proposal');--> statement-breakpoint
+CREATE TYPE "public"."attachment_owner_kind" AS ENUM('rfp', 'bid_proposal');--> statement-breakpoint
 CREATE TYPE "public"."bid_status" AS ENUM('draft', 'submitted', 'withdrawn');--> statement-breakpoint
 CREATE TYPE "public"."biz_status" AS ENUM('active', 'suspended', 'closed');--> statement-breakpoint
 CREATE TYPE "public"."grade_source" AS ENUM('user_confirmed', 'user_overridden');--> statement-breakpoint
@@ -7,9 +7,9 @@ CREATE TYPE "public"."member_role" AS ENUM('admin', 'member');--> statement-brea
 CREATE TYPE "public"."merchant_grade" AS ENUM('small', 'sme1', 'sme2', 'sme3', 'general');--> statement-breakpoint
 CREATE TYPE "public"."notification_channel" AS ENUM('email', 'in_app');--> statement-breakpoint
 CREATE TYPE "public"."notification_status" AS ENUM('queued', 'sent', 'failed', 'read');--> statement-breakpoint
-CREATE TYPE "public"."outbox_event" AS ENUM('auth.verify', 'auth.reset', 'auth.email-change', 'rfq.invited', 'rfq.sent', 'bid.submitted', 'rfq.awarded');--> statement-breakpoint
+CREATE TYPE "public"."outbox_event" AS ENUM('auth.verify', 'auth.reset', 'auth.email-change', 'rfp.invited', 'rfp.sent', 'bid.submitted', 'rfp.awarded');--> statement-breakpoint
 CREATE TYPE "public"."outbox_status" AS ENUM('pending', 'sent', 'failed');--> statement-breakpoint
-CREATE TYPE "public"."rfq_status" AS ENUM('draft', 'sent', 'closed', 'cancelled', 'awarded');--> statement-breakpoint
+CREATE TYPE "public"."rfp_status" AS ENUM('draft', 'sent', 'closed', 'cancelled', 'awarded');--> statement-breakpoint
 CREATE TYPE "public"."settle_cycle" AS ENUM('D+0', 'D+1', 'D+2', 'weekly', 'monthly');--> statement-breakpoint
 CREATE TYPE "public"."tax_type" AS ENUM('general', 'simple', 'exempt');--> statement-breakpoint
 CREATE TYPE "public"."verification_purpose" AS ENUM('signup_email', 'password_reset', 'email_change');--> statement-breakpoint
@@ -28,7 +28,7 @@ CREATE TABLE "attachments" (
 --> statement-breakpoint
 CREATE TABLE "bids" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"rfq_id" text NOT NULL,
+	"rfp_id" text NOT NULL,
 	"pg_ws_id" uuid NOT NULL,
 	"invitation_id" uuid NOT NULL,
 	"settle_cycle" "settle_cycle" NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE "bids" (
 	"status" "bid_status" DEFAULT 'submitted' NOT NULL,
 	"submitted_by" uuid NOT NULL,
 	"submitted_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "bids_rfq_pg_unique" UNIQUE("rfq_id","pg_ws_id")
+	CONSTRAINT "bids_rfp_pg_unique" UNIQUE("rfp_id","pg_ws_id")
 );
 --> statement-breakpoint
 CREATE TABLE "biz_profiles" (
@@ -61,11 +61,11 @@ CREATE TABLE "biz_profiles" (
 --> statement-breakpoint
 CREATE TABLE "contracts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"rfq_id" text NOT NULL,
+	"rfp_id" text NOT NULL,
 	"bid_id" uuid NOT NULL,
 	"awarded_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"awarded_by" uuid NOT NULL,
-	CONSTRAINT "contracts_rfq_id_unique" UNIQUE("rfq_id")
+	CONSTRAINT "contracts_rfp_id_unique" UNIQUE("rfp_id")
 );
 --> statement-breakpoint
 CREATE TABLE "users" (
@@ -99,7 +99,7 @@ CREATE TABLE "workspace_members" (
 	CONSTRAINT "workspace_members_workspace_id_user_id_pk" PRIMARY KEY("workspace_id","user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "rfqs" (
+CREATE TABLE "rfps" (
 	"id" text PRIMARY KEY NOT NULL,
 	"buyer_ws_id" uuid NOT NULL,
 	"biz_profile_id" uuid NOT NULL,
@@ -107,17 +107,17 @@ CREATE TABLE "rfqs" (
 	"memo" text DEFAULT '' NOT NULL,
 	"allowed_pg_emails" text[] DEFAULT '{}'::text[] NOT NULL,
 	"deadline" timestamp with time zone NOT NULL,
-	"status" "rfq_status" DEFAULT 'draft' NOT NULL,
+	"status" "rfp_status" DEFAULT 'draft' NOT NULL,
 	"awarded_bid_id" uuid,
 	"created_by" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"sent_at" timestamp with time zone,
-	CONSTRAINT "awarded_consistency" CHECK (("rfqs"."awarded_bid_id" IS NULL) OR ("rfqs"."status" = 'awarded'))
+	CONSTRAINT "awarded_consistency" CHECK (("rfps"."awarded_bid_id" IS NULL) OR ("rfps"."status" = 'awarded'))
 );
 --> statement-breakpoint
-CREATE TABLE "rfq_invitations" (
+CREATE TABLE "rfp_invitations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"rfq_id" text NOT NULL,
+	"rfp_id" text NOT NULL,
 	"pg_email" text NOT NULL,
 	"pg_ws_id" uuid,
 	"accepted_by_user_id" uuid,
@@ -126,7 +126,7 @@ CREATE TABLE "rfq_invitations" (
 	"opened_at" timestamp with time zone,
 	"expires_at" timestamp with time zone NOT NULL,
 	"status" "invitation_status" DEFAULT 'pending' NOT NULL,
-	CONSTRAINT "rfq_invitations_token_hash_unique" UNIQUE("token_hash")
+	CONSTRAINT "rfp_invitations_token_hash_unique" UNIQUE("token_hash")
 );
 --> statement-breakpoint
 CREATE TABLE "notifications" (
@@ -171,31 +171,31 @@ CREATE TABLE "verification_tokens" (
 	CONSTRAINT "verification_tokens_token_hash_unique" UNIQUE("token_hash")
 );
 --> statement-breakpoint
-CREATE TABLE "rfq_counters" (
+CREATE TABLE "rfp_counters" (
 	"year_month" text PRIMARY KEY NOT NULL,
 	"last_seq" integer DEFAULT 0 NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "bids" ADD CONSTRAINT "bids_rfq_id_rfqs_id_fk" FOREIGN KEY ("rfq_id") REFERENCES "public"."rfqs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bids" ADD CONSTRAINT "bids_rfp_id_rfps_id_fk" FOREIGN KEY ("rfp_id") REFERENCES "public"."rfps"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bids" ADD CONSTRAINT "bids_pg_ws_id_workspaces_id_fk" FOREIGN KEY ("pg_ws_id") REFERENCES "public"."workspaces"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "bids" ADD CONSTRAINT "bids_invitation_id_rfq_invitations_id_fk" FOREIGN KEY ("invitation_id") REFERENCES "public"."rfq_invitations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bids" ADD CONSTRAINT "bids_invitation_id_rfp_invitations_id_fk" FOREIGN KEY ("invitation_id") REFERENCES "public"."rfp_invitations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bids" ADD CONSTRAINT "bids_proposal_attachment_id_attachments_id_fk" FOREIGN KEY ("proposal_attachment_id") REFERENCES "public"."attachments"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bids" ADD CONSTRAINT "bids_submitted_by_users_id_fk" FOREIGN KEY ("submitted_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "biz_profiles" ADD CONSTRAINT "biz_profiles_grade_confirmed_by_users_id_fk" FOREIGN KEY ("grade_confirmed_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "contracts" ADD CONSTRAINT "contracts_rfq_id_rfqs_id_fk" FOREIGN KEY ("rfq_id") REFERENCES "public"."rfqs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "contracts" ADD CONSTRAINT "contracts_rfp_id_rfps_id_fk" FOREIGN KEY ("rfp_id") REFERENCES "public"."rfps"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contracts" ADD CONSTRAINT "contracts_bid_id_bids_id_fk" FOREIGN KEY ("bid_id") REFERENCES "public"."bids"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contracts" ADD CONSTRAINT "contracts_awarded_by_users_id_fk" FOREIGN KEY ("awarded_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "workspaces" ADD CONSTRAINT "workspaces_biz_profile_id_biz_profiles_id_fk" FOREIGN KEY ("biz_profile_id") REFERENCES "public"."biz_profiles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "workspace_members" ADD CONSTRAINT "workspace_members_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "workspace_members" ADD CONSTRAINT "workspace_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rfqs" ADD CONSTRAINT "rfqs_buyer_ws_id_workspaces_id_fk" FOREIGN KEY ("buyer_ws_id") REFERENCES "public"."workspaces"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rfqs" ADD CONSTRAINT "rfqs_biz_profile_id_biz_profiles_id_fk" FOREIGN KEY ("biz_profile_id") REFERENCES "public"."biz_profiles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rfqs" ADD CONSTRAINT "rfqs_awarded_bid_id_bids_id_fk" FOREIGN KEY ("awarded_bid_id") REFERENCES "public"."bids"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rfqs" ADD CONSTRAINT "rfqs_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rfq_invitations" ADD CONSTRAINT "rfq_invitations_rfq_id_rfqs_id_fk" FOREIGN KEY ("rfq_id") REFERENCES "public"."rfqs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rfq_invitations" ADD CONSTRAINT "rfq_invitations_pg_ws_id_workspaces_id_fk" FOREIGN KEY ("pg_ws_id") REFERENCES "public"."workspaces"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "rfq_invitations" ADD CONSTRAINT "rfq_invitations_accepted_by_user_id_users_id_fk" FOREIGN KEY ("accepted_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "rfps" ADD CONSTRAINT "rfps_buyer_ws_id_workspaces_id_fk" FOREIGN KEY ("buyer_ws_id") REFERENCES "public"."workspaces"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "rfps" ADD CONSTRAINT "rfps_biz_profile_id_biz_profiles_id_fk" FOREIGN KEY ("biz_profile_id") REFERENCES "public"."biz_profiles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "rfps" ADD CONSTRAINT "rfps_awarded_bid_id_bids_id_fk" FOREIGN KEY ("awarded_bid_id") REFERENCES "public"."bids"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "rfps" ADD CONSTRAINT "rfps_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "rfp_invitations" ADD CONSTRAINT "rfp_invitations_rfp_id_rfps_id_fk" FOREIGN KEY ("rfp_id") REFERENCES "public"."rfps"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "rfp_invitations" ADD CONSTRAINT "rfp_invitations_pg_ws_id_workspaces_id_fk" FOREIGN KEY ("pg_ws_id") REFERENCES "public"."workspaces"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "rfp_invitations" ADD CONSTRAINT "rfp_invitations_accepted_by_user_id_users_id_fk" FOREIGN KEY ("accepted_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "workspaces_domain_unique" ON "workspaces" USING btree ("domain") WHERE "workspaces"."domain" IS NOT NULL;--> statement-breakpoint

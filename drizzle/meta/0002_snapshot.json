@@ -99,8 +99,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "rfq_id": {
-          "name": "rfq_id",
+        "rfp_id": {
+          "name": "rfp_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -203,12 +203,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "bids_rfq_id_rfqs_id_fk": {
-          "name": "bids_rfq_id_rfqs_id_fk",
+        "bids_rfp_id_rfps_id_fk": {
+          "name": "bids_rfp_id_rfps_id_fk",
           "tableFrom": "bids",
-          "tableTo": "rfqs",
+          "tableTo": "rfps",
           "columnsFrom": [
-            "rfq_id"
+            "rfp_id"
           ],
           "columnsTo": [
             "id"
@@ -229,10 +229,10 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "bids_invitation_id_rfq_invitations_id_fk": {
-          "name": "bids_invitation_id_rfq_invitations_id_fk",
+        "bids_invitation_id_rfp_invitations_id_fk": {
+          "name": "bids_invitation_id_rfp_invitations_id_fk",
           "tableFrom": "bids",
-          "tableTo": "rfq_invitations",
+          "tableTo": "rfp_invitations",
           "columnsFrom": [
             "invitation_id"
           ],
@@ -271,11 +271,11 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "bids_rfq_pg_unique": {
-          "name": "bids_rfq_pg_unique",
+        "bids_rfp_pg_unique": {
+          "name": "bids_rfp_pg_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "rfq_id",
+            "rfp_id",
             "pg_ws_id"
           ]
         }
@@ -387,8 +387,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "rfq_id": {
-          "name": "rfq_id",
+        "rfp_id": {
+          "name": "rfp_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -415,12 +415,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "contracts_rfq_id_rfqs_id_fk": {
-          "name": "contracts_rfq_id_rfqs_id_fk",
+        "contracts_rfp_id_rfps_id_fk": {
+          "name": "contracts_rfp_id_rfps_id_fk",
           "tableFrom": "contracts",
-          "tableTo": "rfqs",
+          "tableTo": "rfps",
           "columnsFrom": [
-            "rfq_id"
+            "rfp_id"
           ],
           "columnsTo": [
             "id"
@@ -457,11 +457,11 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "contracts_rfq_id_unique": {
-          "name": "contracts_rfq_id_unique",
+        "contracts_rfp_id_unique": {
+          "name": "contracts_rfp_id_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "rfq_id"
+            "rfp_id"
           ]
         }
       },
@@ -711,8 +711,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.rfqs": {
-      "name": "rfqs",
+    "public.rfps": {
+      "name": "rfps",
       "schema": "",
       "columns": {
         "id": {
@@ -761,7 +761,7 @@
         },
         "status": {
           "name": "status",
-          "type": "rfq_status",
+          "type": "rfp_status",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
@@ -795,9 +795,9 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "rfqs_buyer_ws_id_workspaces_id_fk": {
-          "name": "rfqs_buyer_ws_id_workspaces_id_fk",
-          "tableFrom": "rfqs",
+        "rfps_buyer_ws_id_workspaces_id_fk": {
+          "name": "rfps_buyer_ws_id_workspaces_id_fk",
+          "tableFrom": "rfps",
           "tableTo": "workspaces",
           "columnsFrom": [
             "buyer_ws_id"
@@ -808,9 +808,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "rfqs_biz_profile_id_biz_profiles_id_fk": {
-          "name": "rfqs_biz_profile_id_biz_profiles_id_fk",
-          "tableFrom": "rfqs",
+        "rfps_biz_profile_id_biz_profiles_id_fk": {
+          "name": "rfps_biz_profile_id_biz_profiles_id_fk",
+          "tableFrom": "rfps",
           "tableTo": "biz_profiles",
           "columnsFrom": [
             "biz_profile_id"
@@ -821,9 +821,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "rfqs_awarded_bid_id_bids_id_fk": {
-          "name": "rfqs_awarded_bid_id_bids_id_fk",
-          "tableFrom": "rfqs",
+        "rfps_awarded_bid_id_bids_id_fk": {
+          "name": "rfps_awarded_bid_id_bids_id_fk",
+          "tableFrom": "rfps",
           "tableTo": "bids",
           "columnsFrom": [
             "awarded_bid_id"
@@ -834,9 +834,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "rfqs_created_by_users_id_fk": {
-          "name": "rfqs_created_by_users_id_fk",
-          "tableFrom": "rfqs",
+        "rfps_created_by_users_id_fk": {
+          "name": "rfps_created_by_users_id_fk",
+          "tableFrom": "rfps",
           "tableTo": "users",
           "columnsFrom": [
             "created_by"
@@ -854,13 +854,13 @@
       "checkConstraints": {
         "awarded_consistency": {
           "name": "awarded_consistency",
-          "value": "(\"rfqs\".\"awarded_bid_id\" IS NULL) OR (\"rfqs\".\"status\" = 'awarded')"
+          "value": "(\"rfps\".\"awarded_bid_id\" IS NULL) OR (\"rfps\".\"status\" = 'awarded')"
         }
       },
       "isRLSEnabled": false
     },
-    "public.rfq_invitations": {
-      "name": "rfq_invitations",
+    "public.rfp_invitations": {
+      "name": "rfp_invitations",
       "schema": "",
       "columns": {
         "id": {
@@ -870,8 +870,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "rfq_id": {
-          "name": "rfq_id",
+        "rfp_id": {
+          "name": "rfp_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -930,12 +930,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "rfq_invitations_rfq_id_rfqs_id_fk": {
-          "name": "rfq_invitations_rfq_id_rfqs_id_fk",
-          "tableFrom": "rfq_invitations",
-          "tableTo": "rfqs",
+        "rfp_invitations_rfp_id_rfps_id_fk": {
+          "name": "rfp_invitations_rfp_id_rfps_id_fk",
+          "tableFrom": "rfp_invitations",
+          "tableTo": "rfps",
           "columnsFrom": [
-            "rfq_id"
+            "rfp_id"
           ],
           "columnsTo": [
             "id"
@@ -943,9 +943,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "rfq_invitations_pg_ws_id_workspaces_id_fk": {
-          "name": "rfq_invitations_pg_ws_id_workspaces_id_fk",
-          "tableFrom": "rfq_invitations",
+        "rfp_invitations_pg_ws_id_workspaces_id_fk": {
+          "name": "rfp_invitations_pg_ws_id_workspaces_id_fk",
+          "tableFrom": "rfp_invitations",
           "tableTo": "workspaces",
           "columnsFrom": [
             "pg_ws_id"
@@ -956,9 +956,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "rfq_invitations_accepted_by_user_id_users_id_fk": {
-          "name": "rfq_invitations_accepted_by_user_id_users_id_fk",
-          "tableFrom": "rfq_invitations",
+        "rfp_invitations_accepted_by_user_id_users_id_fk": {
+          "name": "rfp_invitations_accepted_by_user_id_users_id_fk",
+          "tableFrom": "rfp_invitations",
           "tableTo": "users",
           "columnsFrom": [
             "accepted_by_user_id"
@@ -972,8 +972,8 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "rfq_invitations_token_hash_unique": {
-          "name": "rfq_invitations_token_hash_unique",
+        "rfp_invitations_token_hash_unique": {
+          "name": "rfp_invitations_token_hash_unique",
           "nullsNotDistinct": false,
           "columns": [
             "token_hash"
@@ -1328,8 +1328,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.rfq_counters": {
-      "name": "rfq_counters",
+    "public.rfp_counters": {
+      "name": "rfp_counters",
       "schema": "",
       "columns": {
         "year_month": {
@@ -1360,7 +1360,7 @@
       "name": "attachment_owner_kind",
       "schema": "public",
       "values": [
-        "rfq_rfp",
+        "rfp",
         "bid_proposal"
       ]
     },
@@ -1445,10 +1445,10 @@
         "auth.verify",
         "auth.reset",
         "auth.email-change",
-        "rfq.invited",
-        "rfq.sent",
+        "rfp.invited",
+        "rfp.sent",
         "bid.submitted",
-        "rfq.awarded"
+        "rfp.awarded"
       ]
     },
     "public.outbox_status": {
@@ -1460,8 +1460,8 @@
         "failed"
       ]
     },
-    "public.rfq_status": {
-      "name": "rfq_status",
+    "public.rfp_status": {
+      "name": "rfp_status",
       "schema": "public",
       "values": [
         "draft",
