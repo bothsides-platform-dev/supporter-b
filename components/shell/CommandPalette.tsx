@@ -46,14 +46,26 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (!commandPaletteOpen) {
-      setBidItems([]);
-      return;
+      const clear = setTimeout(() => setBidItems([]), 0);
+      return () => clearTimeout(clear);
     }
-    setBidsLoading(true);
-    searchBidsAction()
-      .then(setBidItems)
-      .catch(() => {})
-      .finally(() => setBidsLoading(false));
+    let cancelled = false;
+    const start = setTimeout(() => {
+      if (cancelled) return;
+      setBidsLoading(true);
+      searchBidsAction()
+        .then((items) => {
+          if (!cancelled) setBidItems(items);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setBidsLoading(false);
+        });
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(start);
+    };
   }, [commandPaletteOpen]);
 
   const groups = [...new Set(COMMANDS.map((c) => c.group))];

@@ -39,9 +39,11 @@ function useTypewriter(values: string[], typingMs = 60, deletingMs = 30, holdMs 
     }
 
     if (isDeleting && displayText === '') {
-      setIsDeleting(false);
-      setIndex((i) => (i + 1) % values.length);
-      return;
+      const advance = setTimeout(() => {
+        setIsDeleting(false);
+        setIndex((i) => (i + 1) % values.length);
+      }, 0);
+      return () => clearTimeout(advance);
     }
 
     const speed = isDeleting ? deletingMs : typingMs;
