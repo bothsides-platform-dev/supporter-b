@@ -10,9 +10,8 @@ export default function robots(): MetadataRoute.Robots {
         disallow: [
           '/home',
           '/inbox',
-          '/rfq',
+          '/rfp',
           '/settings',
-          '/playground',
           '/api/',
           '/invite/',
           '/auth/',

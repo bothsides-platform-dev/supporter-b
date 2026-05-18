@@ -14,18 +14,18 @@
 | M | 산출물 | 검증 |
 |---|---|---|
 | **M0** | Next.js 16 + TS + Tailwind v4 + ESLint + 폰트 + 토큰 부트스트랩 | `pnpm dev` 정상, `/` 페이지에 Pretendard 적용 |
-| **M1** | AppShell + 공통 컴포넌트 12종 (primitives) | `/playground` 페이지에서 모든 컴포넌트 표시 |
+| **M1** | AppShell + 공통 컴포넌트 12종 (primitives) | 모든 primitive가 실 페이지에서 동작 |
 | **M1.5** | Public 영역 — 역할 선택(Rs1), 구매사 가입(Bs1~Bs4), PG사 가입(Gs1~Gs4) + AuthShell + middleware + mock 인증 | 시나리오 D·E·F·G 클릭스루, 60초 재발송 카운트다운, 비밀번호 강도 인디케이터, PG 초대 핸드오프 |
 | **M1.6** | 서버 계약 골격: in-memory repositories, token hash, 상태 정책, notification outbox adapter | 상태 전이/토큰/권한/outbox Vitest 통과, DB 없이 API 계약 테스트 가능 |
-| **M2** | 구매사 RFQ 작성 (`/rfq/new`) + 사업자번호 enrichment + PG 이메일 allowlist | 시나리오 A 1~6단계 클릭스루 |
-| **M3** | PG 수신함/응답 (`/inbox`, `/inbox/:rfqId`) + 등급별 정형 6필드/카드사 9필드 | 시나리오 B 클릭스루, 일반등급 조건부 필드 노출 |
-| **M4** | 구매사 비교 화면 (`/rfq/:id`) + 6컬럼 비교표 + PDF 프리뷰 | 3개 Bid 비교/정렬/프리뷰 정상 |
-| **M5** | 수주 처리 (`/rfq/:id/award`) + 계약 레코드/알림 상태 반영 ([NOTIFICATION.md](./NOTIFICATION.md)) | 시나리오 C 클릭스루, RFQ `awarded` 전이 확인 |
+| **M2** | 구매사 RFP 작성 (`/rfp/new`) + 사업자번호 enrichment + PG 이메일 allowlist | 시나리오 A 1~6단계 클릭스루 |
+| **M3** | PG 수신함/응답 (`/inbox`, `/inbox/:rfpId`) + 등급별 정형 6필드/카드사 9필드 | 시나리오 B 클릭스루, 일반등급 조건부 필드 노출 |
+| **M4** | 구매사 비교 화면 (`/rfp/:id`) + 6컬럼 비교표 + PDF 프리뷰 | 3개 Bid 비교/정렬/프리뷰 정상 |
+| **M5** | 수주 처리 (`/rfp/:id/award`) + 계약 레코드/알림 상태 반영 ([NOTIFICATION.md](./NOTIFICATION.md)) | 시나리오 C 클릭스루, RFP `awarded` 전이 확인 |
 | **M6** | 워크스페이스 운영 최소 설정 (프로필/멤버) + 알림 상태 마감 ([NOTIFICATION.md](./NOTIFICATION.md)) | buyer/pg 프로필·멤버 화면, outbox 재시도, 알림 Drawer 검증 |
 | **M7** | v0 하드닝: 단축키, 빈 상태, 페이지 stagger 모션, 접근성·반응형 보강 | 시나리오 A·B·C 클릭스루 + §4 전체 체크리스트 통과 |
 | **M8** | 백엔드 마이그레이션: mock/Zustand 캐시 → Postgres + Drizzle + Auth.js v5 + 서버 액션. 14-step 컷오버 ([BACKEND_MIGRATION.md](./BACKEND_MIGRATION.md)) | docker compose + db:migrate + db:seed 그린, A/B/C E2E를 실 DB로 통과, mock/store 컷오버 게이트 4종 모두 0 |
 
-**시각적 임팩트 우선순위**: M2(RFQ 작성) → M3(PG 응답) → M4(비교 화면). 구매사-공급사 왕복 흐름이 데모에서 끊기지 않도록 M2~M4 를 먼저 마치는 것을 권장.
+**시각적 임팩트 우선순위**: M2(RFP 작성) → M3(PG 응답) → M4(비교 화면). 구매사-공급사 왕복 흐름이 데모에서 끊기지 않도록 M2~M4 를 먼저 마치는 것을 권장.
 
 **라이브러리 적용 기준**
 - M1: shadcn + Radix 기반 primitives 동작 계층 확정
@@ -48,9 +48,9 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 | 2 | `components/shell/AppShell.tsx` | 모든 화면의 외곽. CSS Grid 4영역 |
 | 3 | `components/primitives/Tag.tsx` | 브래킷 상태 태그. 모든 목록·상세에서 재사용 |
 | 4 | `components/primitives/DataTable.tsx` | 헤어라인 테이블. 목록 6종에서 재사용 |
-| 5 | `components/rfq/RfqCreateForm.tsx` | 사업자 enrichment + allowlist 입력 중심 화면 |
-| 6 | `components/inbox/BidForm.tsx` | PG 정형 견적 입력(등급별 분기) 핵심 |
-| 7 | `lib/mock/rfq.ts` | RFQ/Invitation/Bid 시드 단일 출처 |
+| 5 | `components/rfp/RfpCreateForm.tsx` | 사업자 enrichment + allowlist 입력 중심 화면 |
+| 6 | `components/inbox/BidForm.tsx` | PG 정형 제안 입력(등급별 분기) 핵심 |
+| 7 | `lib/mock/rfp.ts` | RFP/Invitation/Bid 시드 단일 출처 |
 | 8 | `lib/stores/bid-board.ts` | B4 칸반 stage(buyerStage) + BidNote 단일 출처. mock 단계 localStorage persist; M8에서 server action으로 컷오버 |
 
 이 7개의 품질이 나머지 80%의 인상을 결정한다. 마일스톤 안에서도 이 파일들에 가장 많은 시간을 쓴다.
@@ -70,18 +70,18 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 
 ### 4.1.1 자동화 테스트 범위
 - [ ] `STATUTORY_CARD_FEE` — 영세/중소1~3 고정, 일반등급·등급 미입력(NULL)은 카드사별 입력 허용
-- [ ] RFQ 상태 전이 — `draft -> sent -> closed|cancelled|awarded`, 역방향/중복 전이 차단
+- [ ] RFP 상태 전이 — `draft -> sent -> closed|cancelled|awarded`, 역방향/중복 전이 차단
 - [ ] Invitation 토큰 — 해시 저장, 만료, atomic 1회 claim. 첫 클레임자만 `acceptedByUserId` 세팅(감사). 'used' token 을 같은 ws 동료가 클릭 시 인박스로 redirect
-- [ ] Invitation 접근권 — 초대된 PG 워크스페이스의 모든 멤버가 `/inbox/:rfqId` 접근 가능. `acceptedByUserId` 는 첫 클레임자 감사용
+- [ ] Invitation 접근권 — 초대된 PG 워크스페이스의 모든 멤버가 `/inbox/:rfpId` 접근 가능. `acceptedByUserId` 는 첫 클레임자 감사용
 - [ ] PG 워크스페이스 — 명시적 생성(이름 입력), 멤버 초대(`workspace_invitations`), buyer/pg route guard
 - [ ] Notification outbox — Resend 실패 retry, 성공 시 `sent`, 중복 발송 방지
 - [ ] Auth forms — 이메일/비밀번호/약관/토큰 만료 검증
 
-### 4.2 클릭스루 시나리오 (PG_RFQ_SPEC §6 — M5 이후 적용)
-- [ ] **A** 구매사 RFQ 발송: `/rfq/new` → 사업자 조회/등급 확인 → PG 워크스페이스 검색·선택 → 발송
-- [ ] **A'** 사업자번호 미입력 RFQ 발송: 사업자번호·등급 모두 스킵 → PG 이메일 입력 → 발송 (사전 견적 케이스)
-- [ ] **B** PG 견적 응답: `/invite/rfq/:token` → 가입/로그인 → `/inbox/:rfqId` 제출. 사업자번호 미입력 RFQ는 배너, 등급 미입력은 9개 카드사 입력 모드 진입
-- [ ] **C** 구매사 비교·수주: `/rfq/:id` 비교표 확인 → 수주 처리 → 상태 `계약완료`
+### 4.2 클릭스루 시나리오 (PG_RFP_SPEC §6 — M5 이후 적용)
+- [ ] **A** 구매사 RFP 발송: `/rfp/new` → 사업자 조회/등급 확인 → PG 워크스페이스 검색·선택 → 발송
+- [ ] **A'** 사업자번호 미입력 RFP 발송: 사업자번호·등급 모두 스킵 → PG 이메일 입력 → 발송 (사전 제안 케이스)
+- [ ] **B** PG 제안 응답: `/invite/rfp/:token` → 가입/로그인 → `/inbox/:rfpId` 제출. 사업자번호 미입력 RFP는 배너, 등급 미입력은 9개 카드사 입력 모드 진입
+- [ ] **C** 구매사 비교·수주: `/rfp/:id` 비교표 확인 → 수주 처리 → 상태 `계약완료`
 
 ### 4.3 반응형
 - [ ] 1280px — 풀 그리드
@@ -98,7 +98,7 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 
 ### 4.5 단축키 (M7)
 - [ ] ⌘K — 글로벌 검색 (Command Palette)
-- [ ] ⌘N — 신규 견적
+- [ ] ⌘N — 신규 제안
 - [ ] ⌘S — 임시 저장 (작성/편집)
 - [ ] J / K — 행 이동
 - [ ] Enter — 상세 진입
@@ -111,7 +111,7 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 
 ### 4.7 비교/PDF 프리뷰 (M4)
 - [ ] 6개 정형 수치 컬럼 정렬/비교 정상
-- [ ] 일반등급 또는 등급 미입력 RFQ일 때 카드사 9개 수수료 컬럼 노출
+- [ ] 일반등급 또는 등급 미입력 RFP일 때 카드사 9개 수수료 컬럼 노출
 - [ ] 선택한 Bid의 제안서 PDF 프리뷰 즉시 전환
 - [ ] 카드 우대수수료(영세/중소1~3) 값 수정 UI가 노출되지 않음
 - [ ] `[ 표 ] [ 보드 ]` 토글로 BidComparisonTable ↔ BidBoard 전환, 토글 후 데이터 보존
@@ -130,7 +130,7 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 2. DESIGN.md 의 관련 컴포넌트 시각 원칙을 확인한다.
 3. SPEC.md 의 디렉토리 구조에 명시된 파일 경로로 빈 컴포넌트를 먼저 만든다.
 4. `lib/mock/*` 시드 데이터를 채운다 (실제 콘텐츠로 시각 결정).
-5. 컴포넌트 구현 → playground 에서 확인 → 페이지에 배선.
+5. 컴포넌트 구현 → 실 페이지에 배선 후 시각 확인.
 
 ### 5.2 PR 단위
 - 마일스톤당 1 PR
@@ -140,8 +140,8 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 ### 5.3 데모 순서
 1. 로그인·가입 (M1.5) — 첫 진입, 시스템 외곽 노출
 2. 서버 계약 골격 (M1.6) — token hash, 상태 정책, in-memory outbox 검증
-3. 구매사 RFQ 작성 (M2) — 사업자 enrichment + allowlist 입력
-4. PG 수신/응답 (M3) — 초대 토큰 진입부터 견적 제출까지
+3. 구매사 RFP 작성 (M2) — 사업자 enrichment + allowlist 입력
+4. PG 수신/응답 (M3) — 초대 토큰 진입부터 제안 제출까지
 5. 구매사 비교 화면 (M4) — 6컬럼 비교 + PDF 프리뷰
 6. 수주 처리 (M5) — 계약 상태 전이 확인
 7. 설정/알림 (M6) — 워크스페이스 프로필·멤버와 알림 재시도 확인
@@ -152,9 +152,9 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 
 아래 항목은 설계 참고로 남길 수 있지만 M0~M7 구현 범위에는 포함하지 않는다.
 
-- 결재선/승인 워크플로우 — PG_RFQ_SPEC 정책 #15 기준 v0는 단일 결정자 모델.
-- 상품/카탈로그 설정 — PG RFQ 비교에는 필요하지 않으며 일반 B2B 견적 시스템 잔재.
-- 거래처 관리/캘린더/템플릿 — PG_RFQ_SPEC §5 IA에 없는 일반 견적 도메인 화면.
+- 결재선/승인 워크플로우 — PG_RFP_SPEC 정책 #15 기준 v0는 단일 결정자 모델.
+- 상품/카탈로그 설정 — PG RFP 비교에는 필요하지 않으며 일반 B2B 제안 시스템 잔재.
+- 거래처 관리/캘린더/템플릿 — PG_RFP_SPEC §5 IA에 없는 일반 제안 도메인 화면.
 - 정산·매출 추적 — 계약 이후 운영 분석 영역으로 v0 클릭스루를 막지 않는다.
 - SMS/Slack/KakaoWork/Push 알림 — 이메일 + 인앱만 v0 채널.
 - 계약서 전자서명/결제 연동 — 수주 마킹 이후 오프라인 계약으로 처리.
@@ -168,7 +168,7 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 - 2026-05-05 v0.1 — 초안. 마일스톤 M0~M7, 부트스트랩 절차, 검증 체크리스트 정리.
 - 2026-05-05 v0.2 — M1.5 (인증/가입 11종 화면) 신규 추가. §8 토큰 정책·시나리오 D·E·F 추가.
 - 2026-05-05 v0.3 — 권장 조합 동기화: shadcn/ui+Radix, TanStack Table, cmdk 설치/적용 기준 반영.
-- 2026-05-05 v0.4 — PG_RFQ_SPEC 기준 M2~M5 재정렬(구매사 RFQ 작성→PG 응답→비교→수주), 클릭스루/검증 기준 동기화.
+- 2026-05-05 v0.4 — PG_RFP_SPEC 기준 M2~M5 재정렬(구매사 RFP 작성→PG 응답→비교→수주), 클릭스루/검증 기준 동기화.
 - 2026-05-05 v0.5 — M6/M7을 v0 운영·하드닝으로 정리하고 결재선·카탈로그·거래처 관리 등을 v0 범위 외로 명시.
 - 2026-05-06 v0.6 — M8(백엔드 마이그레이션) 추가. mock/Zustand 캐시를 Postgres + Drizzle + Auth.js v5 + 서버 액션으로 컷오버. 상세 14-step + Subagent develop → Step-별 commit 워크플로우는 [BACKEND_MIGRATION.md](./BACKEND_MIGRATION.md).
 
@@ -198,12 +198,12 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 1. `/login` → `회원가입` → Rs1 역할 선택 → "구매사" 카드
 2. Bs1 이메일 + 약관 → [인증 메일 받기] → Bs2 대기
 3. (mock) 토큰 URL → `/auth/verify` 스플래시 → Bs3 자동 이동
-4. 프로필 입력 → Bs4 워크스페이스 이름·산업 → [만들기] → `/rfq` (관리자)
+4. 프로필 입력 → Bs4 워크스페이스 이름·산업 → [만들기] → `/rfp` (관리자)
 
 **E · PG 초대 진입**
-1. (mock) `/invite/rfq/:token` 진입 — `SignupDraft` 선 채움 (workspaceType='pg', email, rfqInviteToken)
+1. (mock) `/invite/rfp/:token` 진입 — `SignupDraft` 선 채움 (workspaceType='pg', email, rfpInviteToken)
 2. Rs1 건너뜀 → Gs2 (이메일 자동 채움, 인증 메일 즉시 발송)
-3. (mock) 토큰 → Gs3 프로필 → Gs4 워크스페이스 자동 합류 → [합류하기] → `/inbox/:rfqId` (멤버)
+3. (mock) 토큰 → Gs3 프로필 → Gs4 워크스페이스 자동 합류 → [합류하기] → `/inbox/:rfpId` (멤버)
 
 **F · PG 직접 가입**
 1. `/signup` → Rs1 → "PG사 영업담당" 카드 → Gs1 이메일
@@ -221,19 +221,19 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 #### 라우팅 가드
 - [ ] 비인증 사용자가 `/home` 진입 → `/login?next=/home` redirect
 - [ ] 인증 사용자가 `/login` 진입 → `/home` redirect
-- [ ] 인증 사용자가 `/invite/rfq/:token` 진입 → `/home` redirect 없이 token claim 처리
+- [ ] 인증 사용자가 `/invite/rfp/:token` 진입 → `/home` redirect 없이 token claim 처리
 - [ ] `/logout` POST → 세션 삭제 → `/login`
 
 #### 시나리오
-- [ ] 시나리오 D 클릭스루 (Rs1 → Bs1 → Bs2 → Bs3 → Bs4 → /rfq)
-- [ ] 시나리오 E 클릭스루 (`/invite/rfq/:token` → Gs2 → Gs3 → Gs4 → /inbox/:rfqId)
+- [ ] 시나리오 D 클릭스루 (Rs1 → Bs1 → Bs2 → Bs3 → Bs4 → /rfp)
+- [ ] 시나리오 E 클릭스루 (`/invite/rfp/:token` → Gs2 → Gs3 → Gs4 → /inbox/:rfpId)
 - [ ] 시나리오 F 클릭스루 (Rs1 → Gs1 → Gs2 → Gs3 → Gs4 → /inbox)
 - [ ] 시나리오 G 클릭스루 (/password/forgot → /password/reset → /home)
 - [ ] 역할 선택 랜딩(Rs1) — 두 카드 클릭 시 각 경로로 이동
 - [ ] PG 초대 토큰 진입 — 이메일 자동 채움 + Rs1/Gs1 건너뜀 + Gs2 진입
 - [ ] SignupDraft.workspaceType — Rs1 선택 후 Bs4/Gs4까지 보존
-- [ ] 구매사 완료 후 `/rfq` 이동 확인
-- [ ] PG 완료 후 `/inbox` 이동 (초대 있으면 `/inbox/:rfqId`)
+- [ ] 구매사 완료 후 `/rfp` 이동 확인
+- [ ] PG 완료 후 `/inbox` 이동 (초대 있으면 `/inbox/:rfpId`)
 - [ ] Stepper 단계 수: 구매사 04/04, PG 직접 04/04, PG 초대 03/03
 
 #### 폼 검증 (zod)

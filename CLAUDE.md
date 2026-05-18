@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository State (2026-05-08)
 
-**M0~M7 완료, M8 부분 완료.** 풀스택 가동 중 — Next.js 16.2 + Auth.js v5 + Drizzle 0.45 + Postgres + Resend + Sentry. AppShell, 16 primitives, 9 shell components, BidBoard, outbox, Toaster, notifications activity list, RFQ 작성/비교/award, PG inbox/응답이 모두 구현됨. 잔여 M8 작업: mock/store 잔재 grep 검증, Step 13 정리(BACKEND_MIGRATION.md 참조).
+**M0~M7 완료, M8 부분 완료.** 풀스택 가동 중 — Next.js 16.2 + Auth.js v5 + Drizzle 0.45 + Postgres + Resend + Sentry. AppShell, 16 primitives, 9 shell components, BidBoard, outbox, Toaster, notifications activity list, RFP 작성/비교/award, PG inbox/응답이 모두 구현됨. 잔여 M8 작업: mock/store 잔재 grep 검증, Step 13 정리(BACKEND_MIGRATION.md 참조).
 
 ## Document Hierarchy (read in this order to gain context)
 
-1. **PG_RFQ_SPEC.md** — Product spec (v0). The most authoritative document. 15 policy decisions, domain model, screen IA, scenarios. **Read this first.** Result of a brainstorming pivot from generic B2B quotation system to a **PG (Korean Payment Gateway) -focused private 1:N RFQ platform**.
+1. **PG_RFP_SPEC.md** — Product spec (v0). The most authoritative document. 15 policy decisions, domain model, screen IA, scenarios. **Read this first.** Result of a brainstorming pivot from generic B2B quotation system to a **PG (Korean Payment Gateway) -focused private 1:N RFP platform**.
 2. **SCREEN_DESIGN.md** — Screens, IA, UX flows. §0 PG v0 화면 IA(B1~B7, P1~P6) + §1 인증/가입(P1~P11).
 3. **DESIGN.md** — Design system (*Material Design 3*). MD3 tokens, typography, color roles, component visual rules, motion, anti-clichés. **Single source of truth for visual decisions** — `styles/tokens.css` syncs from here unidirectionally.
 4. **SPEC.md** — Tech spec. Stack, directory layout, domain TypeScript types, App Router strategy, public-vs-app route groups.
@@ -16,15 +16,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 6. **[NOTIFICATION.md](./NOTIFICATION.md)** — 알림 시스템. 이메일(Resend) + 인앱(SSE + Drawer) 채널, NotificationService 모듈 구조, 이벤트→알림 매핑.
 7. **[BACKEND_MIGRATION.md](./BACKEND_MIGRATION.md)** — M8 백엔드 마이그레이션 계획 + 진행 상태. mock/Zustand → Postgres + Drizzle + Auth.js v5 + 서버 액션 14-step 컷오버.
 
-If these conflict, **PG_RFQ_SPEC.md wins** (newest, post-pivot). Distribute its §8 changes back into the other four files when implementing — do not let them drift.
+If these conflict, **PG_RFP_SPEC.md wins** (newest, post-pivot). Distribute its §8 changes back into the other four files when implementing — do not let them drift.
 
 ## Domain Context (memorize)
 
-- **Two-sided platform**: `buyer` workspace (구매사) sends RFQs; `pg` workspace (결제대행사 영업담당) responds with bids
-- **Private 1:N RFQ, NOT a marketplace**: matching is by buyer-supplied PG email allowlist. PGs don't see each other (완전 비공개 — `Bid.competitorCount` etc. do not exist by design)
+- **Two-sided platform**: `buyer` workspace (구매사) sends RFPs; `pg` workspace (결제대행사 영업담당) responds with bids
+- **Private 1:N RFP, NOT a marketplace**: matching is by buyer-supplied PG email allowlist. PGs don't see each other (완전 비공개 — `Bid.competitorCount` etc. do not exist by design)
 - **PG workspace identity = email domain** (e.g. `@toss.im` → 토스페이먼츠 workspace, auto-merge on signup)
-- **Per-RFQ unique URL + token** in invitation email; token authoritative only for first entry, then workspace membership takes over
-- **사업자번호 → automatic enrichment** at RFQ creation: 국세청 (free, mandatory). 공정위·NICE는 v0 제외.
+- **Per-RFP unique URL + token** in invitation email; token authoritative only for first entry, then workspace membership takes over
+- **사업자번호 → automatic enrichment** at RFP creation: 국세청 (free, mandatory). 공정위·NICE는 v0 제외.
 - **가맹점 등급 = 카드 우대수수료 등급** (영세/중소1~3/일반). Card fees for 영세·중소 are **statutorily fixed** — `STATUTORY_CARD_FEE` in SPEC.md §4 — PGs cannot quote different card rates for these grades. Competition shifts to settlement cycle, deposit, setup fee, monthly minimum, bank transfer %, easy-pay %. Only 일반 grade negotiates card fees per issuer (9 cards: BC/SHINHAN/SAMSUNG/HYUNDAI/KB/LOTTE/NH/HANA/WOORI).
 - **v0 has NO 결재선** on either side. Single-decider model. Don't add approval flow components even though SCREEN_DESIGN.md still describes them.
 
@@ -54,13 +54,12 @@ If these conflict, **PG_RFQ_SPEC.md wins** (newest, post-pivot). Distribute its 
 
 ```
 app/
-├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/rfq/[token], /auth/*
+├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/rfp/[token], /auth/*
 ├─ (app)/       # Authenticated, AppShell wrapped
 │  ├─ home/
-│  ├─ rfq/                    # buyer workspace pages (B1~B7)
+│  ├─ rfp/                    # buyer workspace pages (B1~B7)
 │  ├─ inbox/                  # pg workspace pages (P2~P4)
-│  ├─ settings/{profile,members,notifications}/
-│  └─ playground/             # 컴포넌트 쇼케이스
+│  └─ settings/{profile,members,notifications}/
 ├─ logout/route.ts            # POST handler
 └─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리
 ```
@@ -79,7 +78,7 @@ These are non-negotiable visual decisions enforced across all screens.
 - **No** glassmorphism, neon accents, blurred 3D orbs/blobs, chrome AI imagery.
 - **No** skeuomorphic excessive shadow — most surfaces use elevation-1 or none.
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.
-- **All** numerics (₩, qty, dates, RFQ numbers like `Q-2605-0042`) use `.md-numeric` class (JetBrains Mono + tabular-nums). Never on nav/labels/buttons.
+- **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (JetBrains Mono + tabular-nums). Never on nav/labels/buttons.
 - **Status** uses Chip component — never bracketed plain text `[ 결재중 ]`.
 - **Typography** uses MD3 typescale tokens — no `font-mono uppercase tracking` on labels/nav.
 - **Chip color** mapping: 성공/완료→tertiary, 실패/오류→error, 보류/신규→warning, 중립→surface, 주요→primary.
@@ -92,15 +91,15 @@ Current milestone (2026-05-08): M7 종료, M8 진행 중 (인프라 가동, mock
 
 Follow IMPLEMENTATION.md milestones strictly: **M0 → M1 → M1.5 → M2 → ... → M8**. Don't skip M1 primitives to start a feature page — primitives must exist first or the feature page will reinvent them off-spec.
 
-Per-PR verification checklist lives in IMPLEMENTATION.md §4. Copy it into PR body. Three end-to-end scenarios (A/B/C in PG_RFQ_SPEC.md §6) are the ultimate clickthrough acceptance tests.
+Per-PR verification checklist lives in IMPLEMENTATION.md §4. Copy it into PR body. Three end-to-end scenarios (A/B/C in PG_RFP_SPEC.md §6) are the ultimate clickthrough acceptance tests.
 
 ## When Editing Documentation
 
 The 7 docs cross-reference each other heavily. After any change:
 - If you edit DESIGN.md tokens → also bump `styles/tokens.css`
-- If you edit PG_RFQ_SPEC.md §4 (domain types) → also update SPEC.md §5 to match
+- If you edit PG_RFP_SPEC.md §4 (domain types) → also update SPEC.md §5 to match
 - If you add a screen → register it in both SCREEN_DESIGN.md (IA) and IMPLEMENTATION.md (milestone)
-- If a decision contradicts the 15 policies in PG_RFQ_SPEC.md §3, **stop and ask** — that table is the canonical product definition.
+- If a decision contradicts the 15 policies in PG_RFP_SPEC.md §3, **stop and ask** — that table is the canonical product definition.
 
 ## Skill routing (project-specific only)
 
