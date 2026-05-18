@@ -1,0 +1,17 @@
+{
+  "entry": [
+    "scripts/**/*.{ts,mjs}",
+    "playwright.config.ts",
+    "e2e/**/*.ts"
+  ],
+  "project": ["**/*.{ts,tsx}"],
+  "ignoreDependencies": [
+    "shadcn",
+    "@types/bcryptjs",
+    "prettier",
+    "prettier-plugin-tailwindcss",
+    "tailwindcss",
+    "tw-animate-css",
+    "server-only"
+  ]
+}
