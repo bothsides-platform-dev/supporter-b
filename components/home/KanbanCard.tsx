@@ -90,7 +90,7 @@ function BuyerCardBody({ card }: { card: BuyerCard }) {
   const dday = formatDeadline(card.deadline);
   return (
     <div className="space-y-2">
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
         <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] tracking-[0.04em]">
           {card.rfqId}
         </span>
@@ -102,7 +102,7 @@ function BuyerCardBody({ card }: { card: BuyerCard }) {
         {card.title}
       </p>
       {card.invitedPgCount > 0 && (
-        <div className="pt-2 border-t border-[var(--md-sys-color-outline-variant)] flex items-center justify-between gap-2">
+        <div className="pt-2 border-t border-[var(--md-sys-color-outline-variant)] flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
             초대 PG
             <span className="font-mono tabular-nums ml-1">
@@ -123,7 +123,7 @@ function PgCardBody({ card }: { card: PgCard }) {
   const dday = formatDeadline(card.deadline);
   return (
     <div className="space-y-2">
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
         <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] tracking-[0.04em]">
           {card.rfqId}
         </span>

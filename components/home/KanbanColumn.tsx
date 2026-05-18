@@ -41,7 +41,7 @@ export function KanbanColumn({
     <section
       ref={setNodeRef}
       className={cn(
-        'flex flex-col w-72 md:w-auto shrink-0 snap-start bg-[var(--md-sys-color-surface-container)] rounded-[var(--md-sys-shape-medium)] p-3 min-h-[400px] transition-colors',
+        'flex flex-col w-72 lg:w-auto lg:min-w-[160px] shrink-0 snap-start bg-[var(--md-sys-color-surface-container)] rounded-[var(--md-sys-shape-medium)] p-3 min-h-[400px] transition-colors',
         isOver &&
           !frozen &&
           'bg-[var(--md-sys-color-surface-container-high)] outline outline-1 outline-dashed outline-[var(--md-sys-color-outline)]',

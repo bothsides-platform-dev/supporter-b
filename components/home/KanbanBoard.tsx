@@ -138,7 +138,7 @@ export function KanbanBoard(props: Props) {
           <div
             role="region"
             aria-label="견적 칸반"
-            className="flex md:grid md:grid-cols-6 gap-3 overflow-x-auto md:overflow-x-visible snap-x snap-mandatory pb-4"
+            className="flex lg:grid lg:grid-cols-6 gap-3 overflow-x-auto lg:overflow-x-visible snap-x snap-mandatory pb-4"
           >
             {BUYER_KANBAN_ORDER.map((stage) => {
               const cards = props.cards.filter((c) => c.stage === stage);
@@ -202,7 +202,7 @@ export function KanbanBoard(props: Props) {
         <div
           role="region"
           aria-label="초대받은 RFQ 칸반"
-          className="flex md:grid md:grid-cols-6 gap-3 overflow-x-auto md:overflow-x-visible snap-x snap-mandatory pb-4"
+          className="flex lg:grid lg:grid-cols-6 gap-3 overflow-x-auto lg:overflow-x-visible snap-x snap-mandatory pb-4"
         >
           {PG_KANBAN_ORDER.map((stage) => {
             const cards = props.cards.filter((c) => c.stage === stage);
