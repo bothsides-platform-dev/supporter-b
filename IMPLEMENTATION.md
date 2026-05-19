@@ -17,7 +17,7 @@
 | **M1** | AppShell + 공통 컴포넌트 12종 (primitives) | 모든 primitive가 실 페이지에서 동작 |
 | **M1.5** | Public 영역 — 역할 선택(Rs1), 구매사 가입(Bs1~Bs4), PG사 가입(Gs1~Gs4) + AuthShell + middleware + mock 인증 | 시나리오 D·E·F·G 클릭스루, 60초 재발송 카운트다운, 비밀번호 강도 인디케이터, PG 초대 핸드오프 |
 | **M1.6** | 서버 계약 골격: in-memory repositories, token hash, 상태 정책, notification outbox adapter | 상태 전이/토큰/권한/outbox Vitest 통과, DB 없이 API 계약 테스트 가능 |
-| **M2** | 구매사 RFP 작성 (`/rfp/new`) + 사업자번호 enrichment + PG 이메일 allowlist | 시나리오 A 1~6단계 클릭스루 |
+| **M2** | 구매사 RFP 작성 (`/rfp/new`) + 사업자번호 enrichment + PG 워크스페이스 검색·선택 | 시나리오 A 1~6단계 클릭스루 |
 | **M3** | PG 수신함/응답 (`/inbox`, `/inbox/:rfpId`) + 등급별 정형 6필드/카드사 9필드 | 시나리오 B 클릭스루, 일반등급 조건부 필드 노출 |
 | **M4** | 구매사 비교 화면 (`/rfp/:id`) + 6컬럼 비교표 + PDF 프리뷰 | 3개 Bid 비교/정렬/프리뷰 정상 |
 | **M5** | 수주 처리 (`/rfp/:id/award`) + 계약 레코드/알림 상태 반영 ([NOTIFICATION.md](./NOTIFICATION.md)) | 시나리오 C 클릭스루, RFP `awarded` 전이 확인 |
@@ -79,7 +79,7 @@ M0은 2026-04에 완료됐다. 부트스트랩 산출물은 `package.json`, `nex
 
 ### 4.2 클릭스루 시나리오 (PG_RFP_SPEC §6 — M5 이후 적용)
 - [ ] **A** 구매사 RFP 발송: `/rfp/new` → 사업자 조회/등급 확인 → PG 워크스페이스 검색·선택 → 발송
-- [ ] **A'** 사업자번호 미입력 RFP 발송: 사업자번호·등급 모두 스킵 → PG 이메일 입력 → 발송 (사전 제안 케이스)
+- [ ] **A'** 사업자번호 미입력 RFP 발송: 사업자번호·등급 모두 스킵 → PG 워크스페이스 검색·선택 → 발송 (사전 제안 케이스)
 - [ ] **B** PG 제안 응답: `/invite/rfp/:token` → 가입/로그인 → `/inbox/:rfpId` 제출. 사업자번호 미입력 RFP는 배너, 등급 미입력은 9개 카드사 입력 모드 진입
 - [ ] **C** 구매사 비교·수주: `/rfp/:id` 비교표 확인 → 수주 처리 → 상태 `계약완료`
 

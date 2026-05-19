@@ -1,7 +1,7 @@
 # 알림 시스템 설계 (Notification System Design)
 
 **작성일**: 2026-05-05 (마지막 업데이트 2026-05-08)  
-**상태**: M7 시점 구현 가동 — outbox(`lib/server/outbox/*`), Toaster shell, activity list (Drawer + bell), Resend 이메일, Vercel `after()` flush 모두 작동. 잔여 검증: AUTH_EMAIL_VERIFY · AUTH_PASSWORD_RESET 핸들러 e2e 정합성, 중복 알림 dedup 회귀.
+**상태**: M7 시점 구현 가동 — outbox(`lib/server/outbox/*`), Toaster shell, activity list (Drawer + bell), Resend 이메일, Vercel `after()` flush 모두 작동. 잔여 검증: `auth.verify`·`auth.reset` 핸들러 e2e 정합성, 중복 알림 dedup 회귀.
 
 ---
 
@@ -29,149 +29,190 @@ bidit는 buyer(구매사)와 PG(결제대행사) 간의 private 1:N RFP 플랫�
 
 ### `Notification` 타입 (`lib/types/notification.ts`)
 
-```ts
-export type NotificationEvent =
-  | 'RFP_SENT'
-  | 'RFP_MODIFIED'
-  | 'RFP_CANCELLED'
-  | 'BID_SUBMITTED'
-  | 'BID_WITHDRAWN'
-  | 'AWARD_SELECTED'
-  | 'AWARD_REJECTED'
-  | 'AUTH_EMAIL_VERIFY'
-  | 'AUTH_PASSWORD_RESET';
+채널은 단일 — 한 row가 in-app 또는 email 하나만 담는다. 같은 이벤트가 두 채널로 가야 할 때는 row를 2개 만든다.
 
+```ts
 export type NotificationChannel = 'email' | 'inapp';
+// DB enum 표기는 'in_app' (드라이버 변환). UI 코드는 'inapp' 그대로 사용.
+export type NotificationStatus = 'pending' | 'sent' | 'failed' | 'read';
+// DB enum은 'queued|sent|failed|read'. 신규 row가 'pending'으로 들어와
+// 즉시 'sent'로 전이되는 인앱 경로가 일반적.
 
 export type Notification = {
   id: string;
-  recipientId: string | null;      // 미가입자(PG 초대) 시 null 가능
-  recipientEmail: string;
-  event: NotificationEvent;
+  userId: string;             // 수신자 (notNull)
+  workspaceId: string;        // 수신자 워크스페이스 (notNull, 권한 라우팅용)
+  type: string;               // 'bid.submitted', 'rfp.awarded', 'rfp.rejected' 등
   title: string;
   body: string;
-  metadata: Record<string, unknown>; // rfpId, bidId, rfpNumber, pgName 등
-  channels: NotificationChannel[];
-  readAt: string | null;
-  emailSentAt: string | null;
-  emailMessageId: string | null;   // Resend message ID
+  channel: NotificationChannel;
+  status: NotificationStatus;
+  linkUrl?: string;           // 예: '/rfp/P-2604-0001', '/inbox/P-2604-0001'
   createdAt: string;
+  sentAt?: string;
+  readAt?: string;
 };
 ```
 
-### DB 스키마
+### DB 스키마 (`lib/db/schema/notifications.ts`)
 
 ```sql
 CREATE TABLE notifications (
-  id               TEXT PRIMARY KEY,
-  recipient_id     TEXT,              -- users.id (nullable: 미가입자)
-  recipient_email  TEXT NOT NULL,
-  event            TEXT NOT NULL,
-  title            TEXT NOT NULL,
-  body             TEXT NOT NULL,
-  metadata         JSONB NOT NULL DEFAULT '{}',
-  channels         TEXT[] NOT NULL,
-  read_at          TIMESTAMPTZ,
-  email_sent_at    TIMESTAMPTZ,
-  email_message_id TEXT,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID NOT NULL REFERENCES users(id),
+  workspace_id  UUID NOT NULL REFERENCES workspaces(id),
+  type          TEXT NOT NULL,
+  title         TEXT NOT NULL,
+  body          TEXT NOT NULL DEFAULT '',
+  channel       notification_channel NOT NULL,  -- enum: email | in_app
+  status        notification_status  NOT NULL DEFAULT 'queued',
+                                                -- enum: queued | sent | failed | read
+  link_url      TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at       TIMESTAMPTZ,
+  read_at       TIMESTAMPTZ
 );
 
-CREATE INDEX notifications_recipient_id_idx ON notifications(recipient_id);
-CREATE INDEX notifications_created_at_idx   ON notifications(created_at DESC);
+CREATE INDEX notifications_user_created_idx
+  ON notifications(user_id, created_at DESC);
 ```
 
-### `outbox_event` 타입
+미가입자(PG 초대) 알림은 `notifications` 테이블에 들어가지 않는다 — `userId` notNull이라 row를 만들 수 없다. 이메일만 보내야 하는 경우는 `outbox_entries`에 직접 enqueue한다 (`workspace.invited`, `rfp.invited`의 초대 단계 등).
 
-```ts
-export type OutboxEvent = {
-  id: string;
-  type: 'notification.dispatch';
-  payload: DispatchInput;
-  status: 'pending' | 'processing' | 'sent' | 'failed';
-  attempts: number;
-  nextAttemptAt: string;
-  lastError: string | null;
-  createdAt: string;
-  processedAt: string | null;
-};
+### `outbox_entries` 테이블 (`lib/db/schema/outbox-entries.ts`)
+
+이메일 큐. 렌더된 HTML을 직접 저장 — JSONB payload + dispatcher가 템플릿 lookup 하는 옛 모델 대신, 액션 안에서 react-email로 렌더한 후 row에 넣는다.
+
+```sql
+CREATE TABLE outbox_entries (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event         outbox_event NOT NULL,  -- enum (아래)
+  to_addr       TEXT NOT NULL,
+  subject       TEXT NOT NULL,
+  html          TEXT NOT NULL,
+  dedupe_key    TEXT,                   -- 동일 이벤트 중복 enqueue collapse
+  status        outbox_status NOT NULL DEFAULT 'pending',
+                                        -- enum: pending | sent | failed
+  attempts      INTEGER NOT NULL DEFAULT 0,
+  max_attempts  INTEGER NOT NULL DEFAULT 5,
+  scheduled_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at       TIMESTAMPTZ,
+  last_error    TEXT
+);
+
+CREATE UNIQUE INDEX outbox_dedupe_key_unique
+  ON outbox_entries(dedupe_key)
+  WHERE dedupe_key IS NOT NULL;
 ```
+
+`outbox_event` enum (`lib/db/schema/_enums.ts`):
+
+```
+auth.verify | auth.reset | auth.email-change
+rfp.invited | rfp.sent | bid.submitted | rfp.awarded
+workspace.invited
+```
+
+`dedupe_key` 규칙 (액션별 — 동일 사건 재실행 시 row 1개로 collapse):
+
+| 이벤트 | dedupe_key 패턴 | 발행 위치 |
+|---|---|---|
+| `rfp.sent` | `rfp:{rfpId}:sent` | `createRfpAction` |
+| `rfp.invited` | `rfp:{rfpId}:invite:ws:{pgWsId}:user:{adminUserId}` | `createRfpAction`, `sendDraftInvitationsAction` |
+| `bid.submitted` | `bid:{rfpId}:{pgWsId}:{userId}` | `submitBidAction` |
+| `rfp.awarded` | `rfp:{rfpId}:awarded:{email}` | `awardRfpAction` |
+| `auth.verify` / `auth.reset` / `auth.email-change` | 토큰 hash 기반 | `signupEmailAction`, `requestPasswordResetAction` 등 |
+| `workspace.invited` | `ws:{workspaceId}:invite:{email}` | `inviteWorkspaceMemberAction` |
 
 **설계 근거**
-- `recipientEmail` 분리: PG 담당자가 아직 미가입인 RFP 초대 시나리오 대응
-- `channels` 배열: 이벤트마다 이메일만/인앱만/둘 다 유연하게 지정
-- `metadata JSONB`: 링크 생성, 이메일 템플릿 변수 주입에 사용
-- `AUTH_*` 이벤트는 인앱 알림 없이 이메일만 (`channels: ['email']`)
+- 단일 채널 row + dedupe_key collapse: 메시지 큐 일반화 대신 이메일 발송에 맞춘 단순화. dispatcher가 템플릿 lookup 하지 않아도 됨.
+- 미가입자 알림은 outbox만 사용: `notifications.user_id`가 FK·notNull이라 익명 수신자 표현 불가. 초대 이메일은 outbox 직접 enqueue.
+- `notifications`는 인앱 채널 진실, `outbox_entries`는 이메일 채널 진실 — 두 테이블이 같은 이벤트에 대해 별도 row를 가진다 (`emitAfterCommit`은 인앱, `flushAfterCommit`은 이메일).
+- 인증류는 인앱 알림 없이 outbox 이메일만 (가입 funnel 단계라 인앱 SSE 연결 없음).
 
 ---
 
 ## 모듈 구조
 
 ```
-lib/
-└─ notifications/
-   ├─ service.ts           # dispatch() — 진입점
-   ├─ outbox.ts            # enqueue(), claimPending(), markSent(), markFailed()
-   ├─ dispatcher.ts        # pending outbox 처리 + 재시도
-   ├─ events.ts            # 이벤트 → 채널·제목·본문 매핑 테이블
-   ├─ channels/
-   │  ├─ email.ts          # Resend 호출, react-email 렌더
-   │  └─ inapp.ts          # DB INSERT + SSE broadcast
-   └─ templates/           # react-email 컴포넌트
-      ├─ rfp-sent.tsx
-      ├─ rfp-modified.tsx
-      ├─ rfp-cancelled.tsx
-      ├─ bid-submitted.tsx
-      ├─ bid-withdrawn.tsx
-      ├─ award-selected.tsx
-      ├─ award-rejected.tsx
-      └─ auth-verify.tsx
+lib/server/
+├─ notifications/
+│  ├─ bus.ts                       # 인앱 SSE EventEmitter
+│  └─ dispatch.ts                  # dispatchNotification(tx, n), emitAfterCommit(n[])
+└─ outbox/
+   ├─ types.ts                     # OutboxEntry 타입
+   ├─ post-commit.ts               # flushAfterCommit() — Next after() 기반
+   └─ templates/                   # react-email 컴포넌트 (액션 안에서 직접 렌더)
+      ├─ authVerify.tsx
+      ├─ authReset.tsx
+      ├─ authEmailChange.tsx
+      ├─ rfpInvited.tsx
+      ├─ rfpSent.tsx
+      ├─ bidSubmitted.tsx
+      ├─ rfpAwarded.tsx
+      └─ workspaceInvited.tsx
+
+lib/server/repositories/
+├─ types.ts                        # NotificationRepo / OutboxRepo 인터페이스
+└─ drizzle/
+   ├─ notification.ts              # save(notification, tx) 구현
+   └─ outbox.ts                    # enqueue(input, tx) + flush(sender, batch) 구현
 ```
 
-### `service.ts` 인터페이스
+### 호출 패턴 (액션 안에서)
+
+옛 `dispatch(input)` 진입점은 사라졌다. 액션이 트랜잭션 안에서 인앱 row insert + outbox row enqueue를 *직접* 수행하고, 트랜잭션 커밋 후에 SSE emit + 이메일 flush를 호출한다. 캐노니컬 예시 (`lib/server/actions/bid/submitBidAction.ts`):
 
 ```ts
-export interface DispatchInput {
-  event: NotificationEvent;
-  recipientId?: string;
-  recipientEmail: string;
-  metadata: Record<string, unknown>;
+import { dispatchNotification, emitAfterCommit }
+  from '@/lib/server/notifications/dispatch';
+import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
+import { getOutboxRepo } from '@/lib/server/repositories/factory';
+import { renderBidSubmitted } from '@/lib/server/outbox/templates/bidSubmitted';
+
+const pendingEmits: Notification[] = [];
+
+const result = await db.transaction(async (tx) => {
+  // ... 도메인 mutation (예: bid insert)
+  const outbox = await getOutboxRepo();
+  const html = await renderBidSubmitted({ rfpId, rfpTitle, pgName, submittedAt });
+
+  for (const m of buyerMembers) {
+    const notif: Notification = {
+      id: randomUUID(), userId: m.userId, workspaceId: buyerWsId,
+      type: 'bid.submitted',
+      title: `[${rfpId}] ${pgName} 제안 도착`,
+      body: `${pgName}가 제안을 제출했습니다.`,
+      channel: 'inapp', status: 'pending',
+      linkUrl: `/rfp/${rfpId}`,
+      createdAt: now.toISOString(),
+    };
+    await dispatchNotification(tx, notif);   // notifications row insert
+    pendingEmits.push(notif);
+    await outbox.enqueue({
+      event: 'bid.submitted',
+      to: m.email,
+      subject: `[Supporter B · ${rfpId}] ${pgName} 제안 도착`,
+      html,
+      dedupeKey: `bid:${rfpId}:${pgWsId}:${m.userId}`,
+    }, tx);
+  }
+  return { ok: true, bidId };
+});
+
+if (result.ok) {
+  emitAfterCommit(pendingEmits);  // 인앱 SSE 브로드캐스트 (bus.ts)
+  flushAfterCommit();             // 이메일 flush — Next after()로 응답 후 실행
 }
-
-export async function dispatch(input: DispatchInput): Promise<void>
 ```
 
-`dispatch()` 내부 흐름:
-1. 도메인 mutation 트랜잭션 안에서 `outbox_event(type='notification.dispatch')` row INSERT
-2. dispatcher가 pending event를 claim하고 `events.ts`에서 `channels`, `titleFn(metadata)`, `bodyFn(metadata)` 조회
-3. DB `notifications` 테이블에 row INSERT
-4. `channels`에 `'email'` 포함 → `channels/email.ts` 호출
-5. `channels`에 `'inapp'` 포함 → `channels/inapp.ts`가 SSE 연결 맵에서 해당 `recipientId` 조회 후 push
-6. 성공 시 outbox `sent`, 실패 시 `attempts + 1`, `lastError`, exponential backoff 기반 `nextAttemptAt` 기록
+### 두 단계 분리 이유 (`dispatch.ts` 문서주석)
 
-RFP 초대(`RFP_SENT`)와 수주 통보(`AWARD_SELECTED`/`AWARD_REJECTED`)는 사용자가 다음 행동을 시작하는 접근 경로이므로 console-only 실패 처리를 금지한다.
+- **트랜잭션 안**: `dispatchNotification(tx, n)`이 `notifications` row를 insert만 한다. SSE emit는 하지 않는다 — tx가 rollback 되면 row도 사라지는데 SSE만 떠나면 클라이언트가 "환영 row" 보러 갔다가 404 나는 정합 깨짐.
+- **커밋 후**: `emitAfterCommit(pendingEmits)`가 inapp channel만 SSE emit. email channel notification은 outbox에서 따로 관리되므로 SSE는 인앱 화면 채널에만 의미가 있다.
+- **이메일 flush**: `flushAfterCommit()`이 `next/server`의 `after()`로 응답 반환 이후 `getOutboxRepo().flush(sender, BATCH)`를 호출. 실패는 console + Sentry로 swallowing — 액션 결과에는 영향 X. Next 요청 scope 밖에서 호출되면(예: vitest) no-op.
 
-### `events.ts` 매핑 테이블 구조
-
-```ts
-type EventConfig = {
-  channels: NotificationChannel[];
-  titleFn: (meta: Record<string, unknown>) => string;
-  bodyFn:  (meta: Record<string, unknown>) => string;
-};
-
-export const EVENT_CONFIG: Record<NotificationEvent, EventConfig> = {
-  RFP_SENT:            { channels: ['email'],          titleFn: ..., bodyFn: ... },
-  RFP_MODIFIED:        { channels: ['email', 'inapp'], titleFn: ..., bodyFn: ... },
-  RFP_CANCELLED:       { channels: ['email', 'inapp'], titleFn: ..., bodyFn: ... },
-  BID_SUBMITTED:       { channels: ['email', 'inapp'], titleFn: ..., bodyFn: ... },
-  BID_WITHDRAWN:       { channels: ['email', 'inapp'], titleFn: ..., bodyFn: ... },
-  AWARD_SELECTED:      { channels: ['email', 'inapp'], titleFn: ..., bodyFn: ... },
-  AWARD_REJECTED:      { channels: ['email', 'inapp'], titleFn: ..., bodyFn: ... },
-  AUTH_EMAIL_VERIFY:   { channels: ['email'],          titleFn: ..., bodyFn: ... },
-  AUTH_PASSWORD_RESET: { channels: ['email'],          titleFn: ..., bodyFn: ... },
-};
-```
+Drizzle pglite/postgres-js에 commit hook이 없어서 caller가 이 분리를 책임진다. `tx throw → emit 미발생` 이라 rollback과 SSE가 정합.
 
 ---
 
@@ -179,24 +220,34 @@ export const EVENT_CONFIG: Record<NotificationEvent, EventConfig> = {
 
 ### `channels/email.ts`
 
+실제 sender는 outbox row의 `html`을 직접 발송한다 — 템플릿 lookup도, metadata 변환도 없다. 액션이 렌더한 결과를 그대로 전송할 뿐이다.
+
 ```ts
+// lib/integrations/resend.ts (개략)
 import { Resend } from 'resend';
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function sendEmail(notification: Notification): Promise<void> {
-  const template = resolveTemplate(notification.event, notification.metadata);
-  const { data, error } = await resend.emails.send({
-    from: 'Support B <noreply@bidit.kr>',
-    to: notification.recipientEmail,
-    subject: notification.title,
-    react: template,
-  });
-  if (data) {
-    // DB: emailSentAt, emailMessageId 업데이트
-  }
-  if (error) throw error;
+export function getResendSender(): OutboxSender {
+  return async (entry: OutboxEntry) => {
+    if (!process.env.RESEND_API_KEY) {
+      // dev fallback — 콘솔에 한 줄 로깅 후 success로 처리
+      console.log(`[email DEV] event=${entry.event} to=${entry.toAddr} ` +
+        `subject=${entry.subject} dedupeKey=${entry.dedupeKey}`);
+      return { ok: true };
+    }
+    const { error } = await resend.emails.send({
+      from: 'Supporter B <noreply@supporter-b.store>',
+      to: entry.toAddr,
+      subject: entry.subject,
+      html: entry.html,
+    });
+    if (error) return { ok: false, error: String(error) };
+    return { ok: true };
+  };
 }
 ```
+
+`flushAfterCommit`이 이 sender를 `outbox.flush(sender, BATCH)`에 주입하면 repo가 `status='pending' AND scheduled_at <= now()`인 row를 batch로 claim, sender 호출 후 결과에 따라 `sent` 또는 `attempts+1 / lastError`로 마킹한다.
 
 ### react-email 템플릿 원칙 (Korean Editorial Modernism)
 
@@ -309,37 +360,38 @@ SSE route constraints:
 
 | 이벤트 | 트리거 위치 | 수신자 | 채널 | 이메일 제목 |
 |---|---|---|---|---|
-| `RFP_SENT` | RFP 발송 Action | 초대 PG 이메일 | email | `[Support B] {buyer}가 RFP를 보냈습니다` |
-| `RFP_MODIFIED` | RFP 수정 Action | 참여 PG 담당자 전체 | email + inapp | `[Support B] RFP Q-{no} 내용이 변경되었습니다` |
-| `RFP_CANCELLED` | RFP 취소 Action | 참여 PG 담당자 전체 | email + inapp | `[Support B] RFP Q-{no}이 취소되었습니다` |
-| `BID_SUBMITTED` | 입찰 제출 Action | buyer | email + inapp | `[Support B] {pg}이 입찰서를 제출했습니다` |
-| `BID_WITHDRAWN` | 입찰 철회 Action | buyer | email + inapp | `[Support B] {pg}이 입찰서를 철회했습니다` |
-| `AWARD_SELECTED` | 수주 확정 Action | 선택된 PG | email + inapp | `[Support B] 수주가 확정되었습니다 — {rfpTitle}` |
-| `AWARD_REJECTED` | 수주 확정 Action | 비선택 PG 전체 | email + inapp | `[Support B] 이번 RFP는 다른 PG가 선택되었습니다` |
-| `AUTH_EMAIL_VERIFY` | 이메일 인증 Action | 가입 시도 이메일 | email | `[Support B] 이메일 인증 코드: {code}` |
-| `AUTH_PASSWORD_RESET` | 비밀번호 재설정 Action | 요청 이메일 | email | `[Support B] 비밀번호 재설정 링크` |
+| outbox event | trigger action | 수신자 | 채널 | 이메일 제목 (이벤트 enum 값 = `type` 컬럼 값) |
+|---|---|---|---|---|
+| `rfp.sent` | `createRfpAction` | buyer admin | email | `[Supporter B · {rfpId}] 발송 완료` |
+| `rfp.invited` | `createRfpAction`, `sendDraftInvitationsAction` | 초대된 각 PG ws의 admin들 | email | `[Supporter B · {rfpId}] 제안 요청 도착` |
+| `bid.submitted` | `submitBidAction` | buyer ws 멤버 전원 | email + inapp(`type='bid.submitted'`) | `[Supporter B · {rfpId}] {pgName} 제안 도착` |
+| `rfp.awarded` (winner) | `awardRfpAction` | 낙찰 PG ws 멤버 전원 | email + inapp(`type='rfp.awarded'`) | `[Supporter B · {rfpId}] 낙찰 결과` |
+| `rfp.awarded` (loser → 인앱 only) | `awardRfpAction` | 비낙찰 PG ws 멤버 전원 | inapp(`type='rfp.rejected'`) | (이메일 없음 — advisor pin 6) |
+| `auth.verify` | `signupEmailAction` | 가입 시도 이메일 | email | `[Supporter B] 이메일 인증 코드` |
+| `auth.reset` | `requestPasswordResetAction` | 요청 이메일 | email | `[Supporter B] 비밀번호 재설정 링크` |
+| `auth.email-change` | `requestEmailChangeAction` | 신규 이메일 | email | `[Supporter B] 이메일 변경 확인` |
+| `workspace.invited` | `inviteWorkspaceMemberAction` | 초대 이메일 | email | `[Supporter B] 워크스페이스 초대` |
 
 ---
 
 ## 구현 순서 (Milestone 연계)
 
 ### M1.5 (Auth 플로우)와 함께
-- `lib/notifications/` 모듈 골격 생성
-- `AUTH_EMAIL_VERIFY`, `AUTH_PASSWORD_RESET` 이벤트 + 이메일 템플릿
-- Resend 연동 및 환경변수 설정 (`RESEND_API_KEY`)
-- outbox 테이블/dispatcher 골격 + 실패 재시도 테스트
+- `lib/server/outbox/` + `lib/server/notifications/` 모듈 골격 생성
+- `auth.verify`, `auth.reset` 이벤트 + 이메일 템플릿 (`templates/authVerify.tsx`, `authReset.tsx`)
+- Resend 연동 및 환경변수 설정 (`RESEND_API_KEY`) — 미설정 시 콘솔 fallback
+- outbox 테이블/`flush(sender, batch)` 골격 + 실패 재시도 (attempts/maxAttempts) 테스트
 
 ### M3 (RFP 발송)
-- `RFP_SENT` 이벤트 — PG 초대 이메일
-- `RFP_MODIFIED`, `RFP_CANCELLED` 이벤트
+- `rfp.sent` (buyer 확인) + `rfp.invited` (초대된 PG ws admin들) 이벤트
 
 ### M4 (입찰)
-- `BID_SUBMITTED`, `BID_WITHDRAWN` 이벤트
-- SSE Route 구현 (`stream/route.ts`)
+- `bid.submitted` 이벤트 — buyer ws 멤버 전원에게 email + inapp
+- SSE Route 구현 (`/api/notifications/stream`)
 - Notification Drawer UI 컴포넌트
 
 ### M6 (수주 확정)
-- `AWARD_SELECTED`, `AWARD_REJECTED` 이벤트
+- `rfp.awarded` 이벤트 — winner 멤버에게 email + inapp(`type='rfp.awarded'`), loser 멤버에게는 inapp(`type='rfp.rejected'`)만
 
 ---
 

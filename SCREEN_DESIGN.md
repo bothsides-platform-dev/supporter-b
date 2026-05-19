@@ -13,8 +13,8 @@
 
 **확정 결정 (PG_RFP_SPEC 기준)**
 - 메인 IA: 홈 / RFP / 받은 RFP / 설정
-- RFP 작성 워크플로우: **(선택)** 사업자번호 조회 → **(선택)** 등급 확인 → 자유 메모·첨부 → PG 이메일 allowlist → 발송 (사업자번호·등급 모두 옵셔널)
-- PG 응답 워크플로우: 초대 URL → 가입/로그인 → 도메인 기반 PG 워크스페이스 → 정형 Bid 제출
+- RFP 작성 워크플로우: **(선택)** 사업자번호 조회 → **(선택)** 등급 확인 → 자유 메모·첨부 → PG 워크스페이스 검색·선택 → 발송 (사업자번호·등급 모두 옵셔널)
+- PG 응답 워크플로우: 초대 URL → 가입/로그인 → 워크스페이스 이름 입력(신규) 또는 기존 합류 → 정형 Bid 제출
 - v0 결재선 없음. 승인 UI를 만들지 않는다.
 
 ---
@@ -60,7 +60,7 @@ Authenticated AppShell
 |---|---|---|---|
 | B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget` |
 | B2 | `/rfp` | RFP 목록. 작성중/진행중/마감/계약완료 탭 | `RfpList`, `DataTable`, `Tag` |
-| B3 | `/rfp/new` | 사업자 조회 (선택), 등급 확인 (선택), RFP 첨부, PG 이메일 allowlist, 발송 | `BizLookupField`, `GradeConfirmPanel`, `PgEmailAllowlist`, `RfpAttachmentDropzone` |
+| B3 | `/rfp/new` | 사업자 조회 (선택), 등급 확인 (선택), RFP 첨부, PG 워크스페이스 검색·선택, 발송 | `BizLookupField`, `GradeConfirmPanel`, `RfpCreateForm` (인라인 Popover+cmdk PG 검색), `RfpAttachmentDropzone` |
 | B4 | `/rfp/:id` | RFP 상세 + 받은 Bid 비교 + PDF 프리뷰. 표↔보드 토글로 칸반(진행전/협상중/결정) 전환, 카드 모달에 메모/첨부 히스토리 누적 | `InvitationStatusPanel`, `BidComparisonView`, `BidComparisonTable`, `BidViewToggle`, `BidBoard`, `BidBoardCard`, `BidDetailModal`, `ProposalPdfPreview` |
 | B5 | `/rfp/:id/award` | Bid 선택, 계약 레코드 생성, 선택/미선택 PG 통보 | `AwardFlow`, `DecisionTimeline` |
 | B6 | `/settings/profile` | 구매사 사업자 프로필과 등급 갱신 상태 | `WorkspaceProfileForm` |
@@ -74,8 +74,8 @@ Authenticated AppShell
 | P2 | `/inbox` | 받은 RFP 함. 신규/작성중/제출완료/마감 탭 | `InboxList`, `DataTable`, `Tag` |
 | P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성. 사업자번호 미입력 시 안내 배너. 등급 미입력 시 일반 폴백(9개 카드사 입력) | `RfpBriefPanel`, `BidForm`, `StatutoryCardFeeNotice` |
 | P4 | `/inbox/:rfpId/submitted` | 제출 완료, 결과 대기, 수정/철회 정책 안내 | `SubmittedState` |
-| P5 | `/settings/profile` | PG 회사 정보와 도메인 검증 | `WorkspaceProfileForm` |
-| P6 | `/settings/members` | 같은 이메일 도메인 멤버 관리 | `MemberTable` |
+| P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처) | `WorkspaceProfileForm` |
+| P6 | `/settings/members` | 같은 워크스페이스 멤버 관리 (도메인 자동 합류 없음 — 초대만) | `MemberTable` |
 
 ### 0.4 Core Flow Diagrams
 
@@ -85,8 +85,8 @@ Buyer RFP
   ├─ (선택) bizNo 입력 → NTS lookup → taxType/status 표시
   ├─ (선택) grade 5단계 라디오 선택 → gradeSource='user_confirmed'
   ├─ memo + RFP PDF 첨부
-  ├─ PG email allowlist 입력
-  └─ send → Invitation + outbox email
+  ├─ PG 워크스페이스 검색·선택 (Popover + cmdk Command)
+  └─ send → Invitation(per pgWsId) + outbox email(per ws admin)
         └─ bizNo·grade 모두 미입력 시 bizProfile=undefined 스냅샷
 ```
 
@@ -94,9 +94,10 @@ Buyer RFP
 PG Entry
 email unique URL
   ├─ /invite/rfp/:token 검증
-  ├─ 로그인/가입
-  ├─ email domain → PG workspace 자동 합류
-  └─ /inbox/:rfpId → Bid 제출
+  ├─ 기 가입자 → /login(next 보존) 후 /inbox/:rfpId
+  └─ 미가입자 → /signup/pg/verify funnel
+        └─ Gs4: 워크스페이스 이름 입력 → 신규 생성 또는 기존 ws 합류 신청
+              └─ /inbox/:rfpId → Bid 제출
 ```
 
 ```
@@ -171,7 +172,7 @@ Award
 | Gs1 | `/signup/pg` | `01 / 04 — EMAIL` | 이메일 + 약관. PG 컨텍스트. 초대 없이 직접 접근 시 보조 안내 |
 | Gs2 | `/signup/pg/verify` | `01 / 03 — VERIFY`* | 인증 대기. 초대 진입 시 이메일 자동 채움 |
 | Gs3 | `/signup/pg/profile` | `02 / 03 — PROFILE`* | 이름·비밀번호·휴대전화(선택) |
-| Gs4 | `/signup/pg/workspace` | `03 / 03 — WORKSPACE`* | 도메인 자동 합류 확인. 읽기 전용 → [합류하기] → `/inbox` |
+| Gs4 | `/signup/pg/workspace` | `03 / 03 — WORKSPACE`* | 워크스페이스 이름 입력. 동일명 존재 시 합류 신청 / 신규 생성 분기 → `/inbox` |
 
 > \* 초대 토큰 진입 시 Gs1(이메일 입력) 건너뜀 → 스텝 카운트 03/03. 직접 가입 시 04/04.
 
@@ -242,13 +243,14 @@ Award
 - `02 / 03 — PROFILE` 또는 `03 / 04 — PROFILE`
 - Bs3과 동일 필드/패턴
 
-#### Gs4 PG사 — 워크스페이스 확인 `/signup/pg/workspace`
+#### Gs4 PG사 — 워크스페이스 입력 `/signup/pg/workspace`
 - `03 / 03 — WORKSPACE` 또는 `04 / 04 — WORKSPACE`
-- 헤드라인: `워크스페이스에 합류합니다`
-- 읽기 전용 카드: 이메일 도메인으로 resolve된 PG 워크스페이스 이름·로고
-- 안내: "회사 이메일 도메인(`@{domain}`)이 **{PG사명}** 워크스페이스와 연결됩니다."
-- 1차 [합류하기] → `Workspace.type='pg'`에 멤버로 추가 → `/inbox` (초대 있으면 `/inbox/:rfpId`)
-- 도메인 미매핑 시: "관리자에게 초대 요청을 보내세요." 안내 + [초대 요청] 버튼
+- 헤드라인: `워크스페이스를 선택하세요`
+- 입력 필드: 회사명 (예: "토스페이먼츠") — 직접 입력
+- 동작 분기:
+  - 입력 이름과 동일한 `Workspace.type='pg'`가 이미 존재 → "이미 등록된 워크스페이스가 있습니다. 합류 신청을 보내시겠어요?" → [합류 신청]
+  - 신규 → [워크스페이스 만들기] → `Workspace.type='pg'` 신규 생성 + 본인이 첫 admin → `/inbox` (초대 있으면 `/inbox/:rfpId`)
+- 도메인 자동 라우팅 없음 — 이름 입력만으로 합류/생성을 결정.
 
 #### 인증 처리 스플래시 `/auth/verify?token=...`
 - 모노 `LOADING…` 한 줄
@@ -319,7 +321,7 @@ PG 영업담당의 1차 진입 경로. 토큰 검증 후 인증 상태에 따라
 - SAML/SCIM (엔터프라이즈) — 별도 스펙
 - 2FA (TOTP/SMS) — 후속
 - 디바이스 신뢰 / 의심 로그인 알림 — 후속
-- 회사 도메인 자동 합류 — 옵션 기능, 후속
+- 회사 도메인 자동 합류 — v1 옵션 기능, 본 v0 범위 외
 - 감사 로그 — 백엔드 영역
 
 > 시각 디자인 규칙은 [DESIGN.md §5.11](./DESIGN.md), 도메인 타입·검증·라우팅 가드는 [SPEC.md §8](./SPEC.md), 토큰 정책·마일스톤 M1.5 는 [IMPLEMENTATION.md §8](./IMPLEMENTATION.md) 참조.

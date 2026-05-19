@@ -182,7 +182,7 @@ M0~M5의 비교 UI는 `PG_RFP_SPEC.md §6` 시나리오 C 기준으로 6개 정�
 
 - `/rfp`: RFP 상태 탭 + 초대 PG 진행 상태 요약
 - `/rfp/[id]`: `BidComparisonTable` + `ProposalPdfPreview` + `DecisionTimeline`
-- `/rfp/new`: `BizLookupField` + `GradeConfirmPanel` + `PgEmailAllowlist`
+- `/rfp/new`: `BizLookupField` + `GradeConfirmPanel` + 인라인 PG 워크스페이스 검색 (`useLazyPgWorkspaces` + Radix Popover + cmdk Command — `components/rfp/RfpCreateForm.tsx`)
 - `/inbox/[rfpId]`: `RfpBriefPanel` + `BidForm` + `StatutoryCardFeeNotice`
 
 비교 화면의 CTA(요청/결재/확정)는 동일 viewport 내에 유지하여, 비교 후 추가 이동 없이 행동으로 이어지게 한다.
@@ -212,8 +212,7 @@ export type WorkspaceType = 'buyer' | 'pg';
 export type Workspace = {
   id: string;
   type: WorkspaceType;
-  name: string;
-  domain?: string;          // pg 워크스페이스만. toss.im, inicis.com 등
+  name: string;             // pg: 가입 시 사용자가 입력. v0 도메인 컬럼 없음.
   bizProfile?: BizProfile;  // buyer 워크스페이스의 사업자 프로필
   members: User[];
   createdAt: string;
@@ -263,13 +262,13 @@ import type { BizProfile } from './biz-profile';
 export type RfpStatus = 'draft' | 'sent' | 'closed' | 'cancelled' | 'awarded';
 
 export type RFP = {
-  id: string;                 // RFP-2605-0001
+  id: string;                       // P-2605-0001 (P- 프리픽스)
   buyerWsId: string;
-  bizProfile?: BizProfile;    // 발송 시점 스냅샷. bizNo·grade 모두 미입력 시 undefined.
+  bizProfile?: BizProfile;          // 발송 시점 스냅샷. bizNo·grade 모두 미입력 시 undefined.
   title: string;
   memo: string;
   rfpFiles: Attachment[];
-  allowedPgEmails: string[];
+  allowedPgWorkspaceIds: string[];  // 구매사가 검색·선택한 PG ws ID 목록 (uuid[])
   deadline: string;
   status: RfpStatus;
   awardedBidId?: string;
@@ -281,18 +280,17 @@ export type RFP = {
 
 ```ts
 // lib/types/invitation.ts
-export type InvitationStatus = 'sent' | 'opened' | 'accepted' | 'declined' | 'expired';
+export type InvitationStatus = 'draft' | 'pending' | 'opened' | 'accepted' | 'declined' | 'expired';
 
 export type RfpInvitation = {
   id: string;
   rfpId: string;
-  pgEmail: string;
-  pgWsId?: string;
-  acceptedByUserId?: string; // v0 RFP 접근 권한 주체
-  uniqueToken: string;        // 원문은 발송 시점에만 사용. 저장은 해시.
+  pgWsId: string;            // FK, notNull — 발송 대상 PG 워크스페이스
+  acceptedByUserId?: string; // 첫 클레임자 감사용. 접근권은 ws 단위 (§5.1).
+  uniqueToken: string;       // 발송 시점에만 사용. 저장은 `tokenHash` 컬럼 (`lib/db/schema/rfp-invitations.ts:19`).
   sentAt: string;
   openedAt?: string;
-  expiresAt: string;          // RFP.deadline
+  expiresAt: string;         // RFP.deadline
   status: InvitationStatus;
 };
 ```
@@ -351,17 +349,18 @@ export type Contract = {
 
 ### 5.1 RFP 접근 권한 원칙
 
-PG 워크스페이스는 이메일 도메인 기반 인증/소속 컨테이너다. 그러나 v0 RFP 접근권은 워크스페이스 전체가 아니라 `RfpInvitation.acceptedByUserId` 에 묶는다.
+v0 RFP 접근권은 **초대된 PG 워크스페이스에 소속된 모든 멤버**에게 부여된다 (PG_RFP_SPEC.md §3 #11). `RfpInvitation.acceptedByUserId`는 첫 클레임자 감사용일 뿐 접근 게이트가 아니다 — `acceptedByUserId IS NULL`이어도 ws 멤버이고 invitation status가 `pending|opened|accepted` 중 하나면 통과한다.
 
 ```
 RFP invitation
-  ├─ pgEmail matches authenticated user email
-  ├─ domain creates/joins pg workspace
-  ├─ invitation.acceptedByUserId = user.id
-  └─ `/inbox/:rfpId` allows only acceptedByUserId for this invitation
+  ├─ invitation.pgWsId = session.user.workspaceId
+  ├─ invitation.status ∈ {pending, opened, accepted}
+  └─ `/inbox/:rfpId` allows any member of pgWsId
 ```
 
-같은 PG 도메인의 다른 멤버는 해당 RFP를 자동으로 볼 수 없다. 공유/위임은 v0 이후 별도 기능으로 설계한다.
+구현 진실: `lib/server/repositories/drizzle/invitation.ts`의 `canAccess(rfpId, pgWsId, tx?)`가 `(rfp_id, pg_ws_id)` + status whitelist EXISTS 검사만 수행. 동료가 토큰 링크를 클릭하면 같은 ws 멤버이므로 인박스로 자동 redirect (PG_RFP_SPEC.md §7 토큰 정책).
+
+> 변경 이력: v0.6 — `acceptedByUserId` 단위 접근권 제거. 워크스페이스 단위로 단일화.
 
 ---
 
@@ -424,7 +423,7 @@ app/
 │  │     ├─ page.tsx                    # Gs1 — PG사 이메일 + 약관
 │  │     ├─ verify/page.tsx             # Gs2 — 인증 대기
 │  │     ├─ profile/page.tsx            # Gs3 — 프로필
-│  │     └─ workspace/page.tsx          # Gs4 — 도메인 자동 합류 확인
+│  │     └─ workspace/page.tsx          # Gs4 — 워크스페이스 이름 입력 (신규 생성 / 기존 합류)
 │  ├─ password/
 │  │  ├─ forgot/page.tsx                # P7
 │  │  └─ reset/page.tsx                 # P8
@@ -448,7 +447,7 @@ components/auth/
 ├─ InvitationCard.tsx
 ├─ RoleChooser.tsx                      # Rs1 — 구매사/PG사 두 카드
 ├─ BuyerWorkspaceForm.tsx               # Bs4 — 워크스페이스 생성 폼
-└─ PgWorkspaceConfirm.tsx               # Gs4 — 도메인 자동 합류 확인 카드
+└─ PgWorkspaceConfirm.tsx               # Gs4 — 워크스페이스 이름 입력 / 기존 합류 카드
 
 lib/
 ├─ types/auth.ts
@@ -723,3 +722,4 @@ M1.6에서는 실제 DB를 선택하지 않고 위 경계를 in-memory repositor
 - 2026-05-05 v0.3 — 디자인 컴포넌트 검토 반영(§4.1), PG 비교 도메인 컴포넌트 계약(§4.2~§4.3), `lib/types/comparison.ts` 타입 스펙 추가.
 - 2026-05-05 v0.4 — 권장 라이브러리 조합 채택(§2): shadcn/ui+Radix, TanStack Table, cmdk, Recharts 반영.
 - 2026-05-05 v0.5 — PG_RFP_SPEC 기준 백엔드 설계 섹션(§8) 추가: 모듈 경계, 상태 전이, 저장 계약, API, 연동, 감사 정책.
+- 2026-05-20 v0.6 — **도메인 모델: 이메일 allowlist → 워크스페이스 선택**. §5 RFP 타입 `allowedPgWorkspaceIds`, RfpInvitation `pgWsId` notNull, Workspace.domain 컬럼 제거, InvitationStatus enum에 `'draft'` 추가. §5.1 접근권을 워크스페이스 단위로 단일화 (acceptedByUserId 감사 전용). §4.3 `/rfp/new` 컴포넌트 인용을 인라인 워크스페이스 검색 UI로 갱신. PG_RFP_SPEC.md §3 #7·#11과 동기화.
