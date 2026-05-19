@@ -28,15 +28,12 @@
  */
 import { and, eq } from 'drizzle-orm';
 import { rfps, bids, workspaceMembers } from '@/lib/db/schema';
-import type { Attachment } from '@/lib/types/common';
+import type { AttachmentRecord } from '@/lib/server/repositories/attachment-record';
 import type { InvitationRepo, Tx } from '@/lib/server/repositories/types';
 
-export type AttachmentRow = Attachment & {
-  ownerKind: 'rfp' | 'bid_proposal';
-  ownerId: string;
-  storagePath: string;
-  uploadedBy: string;
-};
+// Re-export under the legacy name so call sites that import { AttachmentRow }
+// from this module keep compiling (test files mirror this name).
+export type AttachmentRow = AttachmentRecord;
 
 export type AttachmentSession = {
   user: { id: string; workspaceId?: string; workspaceType?: 'buyer' | 'pg' };

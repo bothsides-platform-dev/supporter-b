@@ -1,26 +1,20 @@
 import { eq } from 'drizzle-orm';
 import { attachments } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
-import type { Attachment } from '@/lib/types/common';
+import type { AttachmentRecord } from '../attachment-record';
 import type { AttachmentRepo, Tx } from '../types';
 
 type AttachRow = typeof attachments.$inferSelect;
-type AttachmentView = Attachment & {
-  ownerKind: 'rfp' | 'bid_proposal';
-  ownerId: string;
-  storagePath: string;
-  uploadedBy: string;
-};
 
-function rowToAttachment(row: AttachRow): AttachmentView {
+function rowToAttachment(row: AttachRow): AttachmentRecord {
   return {
     id: row.id,
     name: row.name,
     size: row.size,
     mimeType: row.mimeType,
-    // url is exposed as storage path; the file route layer (Step 11) will
-    // resolve to a signed/authenticated URL.
-    url: row.storagePath,
+    // Public `url` is the authenticated route — never the storage key. See
+    // contract in app/api/files/upload/route.ts:169.
+    url: `/api/files/${row.id}`,
     ownerKind: row.ownerKind,
     ownerId: row.ownerId,
     storagePath: row.storagePath,
@@ -37,7 +31,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
     return tx ?? this._db;
   }
 
-  async save(a: AttachmentView, tx?: Tx): Promise<void> {
+  async save(a: AttachmentRecord, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.insert(attachments).values({
       id: a.id,
@@ -51,7 +45,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
     });
   }
 
-  async findById(id: string, tx?: Tx): Promise<AttachmentView | undefined> {
+  async findById(id: string, tx?: Tx): Promise<AttachmentRecord | undefined> {
     const db = this.h(tx);
     const [row] = await db
       .select()

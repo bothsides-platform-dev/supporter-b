@@ -13,7 +13,7 @@ import type { BizProfile } from '@/lib/types/biz-profile';
 import type { Bid } from '@/lib/types/bid';
 import type { Contract } from '@/lib/types/contract';
 import type { Notification, NotificationChannel } from '@/lib/types/notification';
-import type { Attachment } from '@/lib/types/common';
+import type { AttachmentRecord } from './attachment-record';
 import type { VerificationToken } from '@/lib/types/auth';
 import type { OutboxEntry, OutboxEvent, Sender } from '../outbox/types';
 
@@ -158,28 +158,9 @@ export interface VerificationTokenRepo {
 // ── Attachment ────────────────────────────────────────────────────────
 export interface AttachmentRepo {
   /** 첨부 row 저장 — 파일 본체는 다른 스토리지. */
-  save(
-    a: Attachment & {
-      ownerKind: 'rfp' | 'bid_proposal';
-      ownerId: string;
-      storagePath: string;
-      uploadedBy: string;
-    },
-    tx?: Tx,
-  ): Promise<void>;
-  /** id 조회. */
-  findById(
-    id: string,
-    tx?: Tx,
-  ): Promise<
-    | (Attachment & {
-        ownerKind: 'rfp' | 'bid_proposal';
-        ownerId: string;
-        storagePath: string;
-        uploadedBy: string;
-      })
-    | undefined
-  >;
+  save(a: AttachmentRecord, tx?: Tx): Promise<void>;
+  /** id 조회 — 서버 전용 record (storagePath 포함) 반환. */
+  findById(id: string, tx?: Tx): Promise<AttachmentRecord | undefined>;
 }
 
 // ── Outbox ────────────────────────────────────────────────────────────

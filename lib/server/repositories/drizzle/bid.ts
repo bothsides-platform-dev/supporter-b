@@ -20,7 +20,9 @@ function asAttachment(att: AttachmentRow | null | undefined): Attachment {
     name: att.name,
     size: att.size,
     mimeType: att.mimeType,
-    url: att.storagePath,
+    // Public `url` is the authenticated route — never the storage key. See
+    // contract in app/api/files/upload/route.ts:169.
+    url: `/api/files/${att.id}`,
   };
 }
 
