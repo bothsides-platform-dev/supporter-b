@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
-import { outboxEntries, users } from '@/lib/db/schema';
+import { outboxEntries, users, verificationTokens } from '@/lib/db/schema';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { passwordForgotAction } from '../passwordForgotAction';
 import { passwordResetAction } from '../passwordResetAction';
@@ -52,6 +52,79 @@ describe('passwordForgotAction', () => {
       .where(eq(outboxEntries.toAddr, 'kim@example.com'));
     expect(out).toHaveLength(1);
     expect(out[0].event).toBe('auth.reset');
+  });
+
+  it('두 번째 forgot 가 같은 15분 버킷이면 이전 토큰을 burn 하지 않는다 (UX 함정 회귀 가드)', async () => {
+    await seedUser('kim@example.com');
+
+    await passwordForgotAction({ email: 'kim@example.com' });
+    const rows1 = await db
+      .select({ html: outboxEntries.html })
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'auth.reset'))
+      .limit(1);
+    const firstToken = tokenFromOutbox(rows1[0].html);
+
+    // 같은 버킷 내 두 번째 호출 — outbox dedupe 가 enqueue 를 막아야 함
+    await passwordForgotAction({ email: 'kim@example.com' });
+
+    // outbox row 는 여전히 1개
+    const outboxRows = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'auth.reset'));
+    expect(outboxRows).toHaveLength(1);
+
+    // verification_tokens 도 1개여야 함 — 두 번째 save 가 skip 되었어야
+    const tokenRows = await db
+      .select()
+      .from(verificationTokens)
+      .where(eq(verificationTokens.email, 'kim@example.com'));
+    expect(tokenRows).toHaveLength(1);
+
+    // 첫 토큰으로 reset 이 성공해야 함 (burn 되지 않았다는 증거)
+    const r = await passwordResetAction({
+      rawToken: firstToken,
+      password: 'NewPassword2@',
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('두 번째 forgot 가 다른 15분 버킷이면 이전 토큰이 무효화된다', async () => {
+    await seedUser('kim@example.com');
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-05-19T10:00:00Z'));
+      await passwordForgotAction({ email: 'kim@example.com' });
+      const rows1 = await db
+        .select({ html: outboxEntries.html, scheduledAt: outboxEntries.scheduledAt })
+        .from(outboxEntries)
+        .where(eq(outboxEntries.event, 'auth.reset'))
+        .orderBy(outboxEntries.scheduledAt);
+      expect(rows1).toHaveLength(1);
+      const firstToken = tokenFromOutbox(rows1[0].html);
+
+      // 20분 뒤 → 다른 15분 버킷
+      vi.setSystemTime(new Date('2026-05-19T10:20:00Z'));
+      await passwordForgotAction({ email: 'kim@example.com' });
+
+      // outbox 에 두 번째 row 가 추가
+      const outboxRows = await db
+        .select()
+        .from(outboxEntries)
+        .where(eq(outboxEntries.event, 'auth.reset'));
+      expect(outboxRows).toHaveLength(2);
+
+      // 첫 토큰은 이제 거부되어야 함 (invalidatePending 으로 burn)
+      const r = await passwordResetAction({
+        rawToken: firstToken,
+        password: 'NewPassword2@',
+      });
+      expect(r.ok).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -114,5 +187,25 @@ describe('passwordResetAction', () => {
       password: 'NewPassword2@',
     });
     expect(r.ok).toBe(false);
+  });
+
+  it('rejects a weak new password with WEAK_PASSWORD (rules apply server-side too)', async () => {
+    await seedUser('kim@example.com');
+    await passwordForgotAction({ email: 'kim@example.com' });
+    const rows = await db
+      .select({ html: outboxEntries.html })
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'auth.reset'))
+      .limit(1);
+    const token = tokenFromOutbox(rows[0].html);
+
+    // 10+ chars but missing digit/special — passes legacy min(10) check but
+    // must be blocked by the shared policy schema.
+    const r = await passwordResetAction({
+      rawToken: token,
+      password: 'aaaaaaaaaa',
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('WEAK_PASSWORD');
   });
 });
