@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
 
 import { requirePgSession } from '@/lib/auth/session';
 import { workspaceMembers, users, workspaces } from '@/lib/db/schema';
@@ -262,6 +263,12 @@ export async function submitBidAction(
   if (result.ok) {
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
+    // /inbox/<rfpId> RSC cache 무효화 — 사용자가 redirect 후 뒤로가기 또는
+    // 다른 경로로 다시 진입하면 BidForm 대신 "제출 완료" 분기가 나오도록.
+    // client에서 router.push + router.refresh를 동시 호출하면 useTransition
+    // pending이 영구히 잡히는 Next 16 버그(vercel/next.js#86055)를 피하기
+    // 위해 server-side revalidation + client-side router.push만 사용한다.
+    revalidatePath(`/inbox/${data.rfpId}`);
   }
   return result;
 }

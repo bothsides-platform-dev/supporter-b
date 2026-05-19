@@ -226,8 +226,11 @@ export function BidForm({ rfpId, grade }: Props) {
         memo: memo.trim() || undefined,
       });
       if (r.ok) {
+        // server action이 revalidatePath(`/inbox/${rfpId}`)를 호출하므로
+        // 클라이언트는 router.push만으로 충분. router.refresh()를 같은 tick에
+        // 동시 호출하면 startTransition pending이 영구히 안 풀린다
+        // (vercel/next.js#86055 — Next 16 useTransition + router 레이스).
         router.push(`/inbox/${rfpId}/submitted`);
-        router.refresh();
       } else {
         setSubmitError(r.error);
       }

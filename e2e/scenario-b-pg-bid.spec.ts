@@ -113,31 +113,27 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
       .fill('e2e B: D+1, bank 0.5%, easy 2.5%');
 
     // ── 5. Submit ────────────────────────────────────────────────
-    // Wait on the DB commit, not the client-side `router.push` redirect.
-    // Observed reliably under Playwright + Next dev webServer: the
-    // `submitBidAction` inserts the bid row and enqueues the email
-    // (visible in the dev `[email DEV] event=bid.submitted ...` log), but
-    // the BidForm's `useTransition` pending state never resolves and the
-    // URL stays on `/inbox/<rfpId>` past the 15s wait window. We have NOT
-    // verified whether the same hang reproduces in a production build —
-    // if a user reports the submit button stuck on "제출 중…" after a
-    // successful submit, suspect this and reproduce against `pnpm build
-    // && pnpm start` before chasing it as a regression.
+    // 액션 성공 → /inbox/<rfpId>/submitted로 redirect되어야 한다.
+    // (server action에서 revalidatePath + client에서 router.push,
+    //  router.push + router.refresh 동시 호출은 Next 16 useTransition
+    //  hang 패턴이라 금지 — vercel/next.js#86055 참조.)
     await page.getByRole('button', { name: /제안 제출/ }).click();
+    await page.waitForURL(new RegExp(`/inbox/${RFP_ID}/submitted$`), {
+      timeout: 15_000,
+    });
 
     // ── 6. DB-of-record: bid row inserted with status='submitted' ──
-    const bidCount = async (): Promise<number> => {
-      const rows = await db.execute<{ c: number }>(
-        sql`SELECT count(*)::int AS c FROM bids
-            WHERE rfp_id = ${RFP_ID}
-              AND pg_ws_id = ${tossWsId}
-              AND status = 'submitted'`,
-      );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const arr: any[] = Array.isArray(rows) ? rows : ((rows as any).rows ?? []);
-      return arr[0]?.c ?? 0;
-    };
-    await expect.poll(bidCount, { timeout: 15_000 }).toBe(1);
+    const bidRows = await db.execute<{ c: number }>(
+      sql`SELECT count(*)::int AS c FROM bids
+          WHERE rfp_id = ${RFP_ID}
+            AND pg_ws_id = ${tossWsId}
+            AND status = 'submitted'`,
+    );
+    const bidArr = Array.isArray(bidRows)
+      ? bidRows
+      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ((bidRows as any).rows ?? []);
+    expect(bidArr[0].c).toBe(1);
 
     // Buyer notification fired (bid.submitted → buyer workspace).
     // notifications schema carries `type` (text) + `link_url` — no JSONB
@@ -166,13 +162,8 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
         ((outboxRows as any).rows ?? []);
     expect(outboxArr[0].c).toBeGreaterThanOrEqual(1);
 
-    // The action's DB-of-record commit (asserted above via expect.poll on
-    // bidCount) is the canonical success signal. We deliberately don't
-    // assert the /submitted UI here: in the Next dev webServer the form's
-    // `useTransition` pending state never resolves when `router.push`
-    // races with SSE/notification re-renders, even though the server
-    // already committed the row. The transition quirk is a dev-mode-only
-    // artifact (prod uses RSC streaming + a different scheduler) and not
-    // worth gating the regression check on.
+    // /submitted 페이지의 "✓ 제출 완료" 헤더가 보이는지로 redirect 후의 RSC
+    // 렌더링이 정상 완료됐는지까지 검증.
+    await expect(page.getByText(/✓ 제출 완료|제안이 제출/)).toBeVisible();
   });
 });
