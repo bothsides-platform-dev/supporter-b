@@ -69,6 +69,31 @@ describe('LocalStorage', () => {
     expect(got.equals(body as unknown as Uint8Array)).toBe(true);
   });
 
+  it('read(key, { start, end }) returns inclusive partial bytes and total file size', async () => {
+    const ls = new LocalStorage();
+    const key = newAttachmentPath('range.pdf');
+    const body = Buffer.from('0123456789abcdef', 'utf8'); // 16 bytes
+    await ls.save(key, body, 'application/pdf');
+
+    // Inclusive HTTP semantics: bytes=4-9 → "456789" (6 bytes)
+    const { stream, size } = await ls.read(key, { start: 4, end: 9 });
+    expect(size).toBe(body.length); // total file size, not range length
+    const got = await readAllToBuffer(stream);
+    expect(got.toString('utf8')).toBe('456789');
+  });
+
+  it('read(key, { start }) reads to end of file', async () => {
+    const ls = new LocalStorage();
+    const key = newAttachmentPath('open-end.pdf');
+    const body = Buffer.from('0123456789', 'utf8');
+    await ls.save(key, body, 'application/pdf');
+
+    const { stream, size } = await ls.read(key, { start: 7 });
+    expect(size).toBe(body.length);
+    const got = await readAllToBuffer(stream);
+    expect(got.toString('utf8')).toBe('789');
+  });
+
   it('delete() removes the file and is idempotent on missing files', async () => {
     const ls = new LocalStorage();
     const key = newAttachmentPath('throwaway.jpg');

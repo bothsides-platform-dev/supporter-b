@@ -17,14 +17,26 @@ import { promises as fsp, createReadStream } from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 
+/** Range slice for partial reads. `start`/`end` are HTTP-inclusive byte
+ *  offsets, mirroring the `Range: bytes=N-M` header semantics. */
+export interface ReadRange {
+  start?: number;
+  end?: number;
+}
+
 export interface Storage {
   /** Persist `buffer` at `key`. Mime is recorded in the attachment row,
    *  not on disk; carrying it through here is informational only and
    *  lets future S3 impls thread `Content-Type` to the put request. */
   save(key: string, buffer: Buffer, mime: string): Promise<void>;
   /** Open a streaming reader. Caller composes `Content-Type` from the
-   *  attachment row's mime_type, not from disk inspection. */
-  read(key: string): Promise<{ stream: ReadableStream<Uint8Array>; size: number }>;
+   *  attachment row's mime_type, not from disk inspection. When `range`
+   *  is supplied the stream emits only that slice; `size` always carries
+   *  the **total** file size so the caller can compose `Content-Range`. */
+  read(
+    key: string,
+    range?: ReadRange,
+  ): Promise<{ stream: ReadableStream<Uint8Array>; size: number }>;
   /** Best-effort delete; ENOENT is swallowed so cleanup paths after
    *  failed inserts don't double-fault. */
   delete(key: string): Promise<void>;
@@ -54,10 +66,18 @@ export class LocalStorage implements Storage {
     await fsp.writeFile(full, buffer as unknown as Uint8Array);
   }
 
-  async read(key: string): Promise<{ stream: ReadableStream<Uint8Array>; size: number }> {
+  async read(
+    key: string,
+    range?: ReadRange,
+  ): Promise<{ stream: ReadableStream<Uint8Array>; size: number }> {
     const full = path.join(this.root(), key);
     const stat = await fsp.stat(full);
-    const node = createReadStream(full);
+    // createReadStream accepts inclusive start/end, matching HTTP Range
+    // semantics — pass through untouched when range is supplied.
+    const node =
+      range && (range.start !== undefined || range.end !== undefined)
+        ? createReadStream(full, { start: range.start, end: range.end })
+        : createReadStream(full);
     // Next 16's Response body wants Web ReadableStream — Readable.toWeb
     // bridges Node streams without buffering the whole file.
     const stream = Readable.toWeb(node) as ReadableStream<Uint8Array>;

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Storage } from './local';
+import type { ReadRange, Storage } from './local';
 
 const BUCKET = 'attachments';
 
@@ -16,18 +16,33 @@ export class SupabaseStorage implements Storage {
     if (error) throw error;
   }
 
-  async read(key: string): Promise<{ stream: ReadableStream<Uint8Array>; size: number }> {
+  async read(
+    key: string,
+    range?: ReadRange,
+  ): Promise<{ stream: ReadableStream<Uint8Array>; size: number }> {
+    // v0: Supabase JS download doesn't expose Range — fetch the whole blob,
+    // slice in memory, and report the total size for Content-Range. Heavy
+    // for large files; v1 should swap to a signed-URL passthrough with
+    // proper Range support.
     const { data, error } = await this.sb.storage.from(BUCKET).download(key);
     if (error) throw error;
     const buf = await data!.arrayBuffer();
     const bytes = new Uint8Array(buf);
+    const total = bytes.byteLength;
+    const slice =
+      range && (range.start !== undefined || range.end !== undefined)
+        ? bytes.slice(
+            range.start ?? 0,
+            range.end === undefined ? total : range.end + 1,
+          )
+        : bytes;
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(bytes);
+        controller.enqueue(slice);
         controller.close();
       },
     });
-    return { stream, size: bytes.byteLength };
+    return { stream, size: total };
   }
 
   async delete(key: string): Promise<void> {

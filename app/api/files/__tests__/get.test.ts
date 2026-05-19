@@ -73,9 +73,9 @@ afterEach(async () => {
 
 const PDF_HEAD = Buffer.from('%PDF-1.7 hello payload', 'utf8');
 
-async function callGet(id: string) {
+async function callGet(id: string, headers?: HeadersInit) {
   const { GET } = await import('../[id]/route');
-  const req = new Request(`http://localhost/api/files/${id}`);
+  const req = new Request(`http://localhost/api/files/${id}`, { headers });
   return GET(req, { params: Promise.resolve({ id }) });
 }
 
@@ -192,15 +192,140 @@ describe('GET /api/files/[id]', () => {
     expect(r.status).toBe(200);
     expect(r.headers.get('content-type')).toBe('application/pdf');
     expect(r.headers.get('content-length')).toBe(String(PDF_HEAD.length));
+    // ACL revalidation via ETag — browser may cache (private only) but must
+    // re-check on every use. no-store dropped so If-None-Match works.
     expect(r.headers.get('cache-control')).toBe(
-      'private, no-store, max-age=0',
+      'private, max-age=0, must-revalidate',
     );
-    expect(r.headers.get('pragma')).toBe('no-cache');
+    expect(r.headers.get('etag')).toBe(`"${s.attachmentId}"`);
+    expect(r.headers.get('accept-ranges')).toBe('bytes');
     expect(r.headers.get('content-disposition')).toContain(
       'inline; filename="rfp.pdf"',
     );
     const body = await readBody(r);
     expect(body.equals(PDF_HEAD as unknown as Uint8Array)).toBe(true);
+  });
+
+  it('304 when If-None-Match matches and user still has access', async () => {
+    const s = await seedScenario();
+    sessionRef.value = {
+      user: {
+        id: s.buyerUserId,
+        email: 'buyer@buy.com',
+        workspaceId: s.buyerWsId,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    const r = await callGet(s.attachmentId, {
+      'If-None-Match': `"${s.attachmentId}"`,
+    });
+    expect(r.status).toBe(304);
+    // 304 must not carry a body (browser revalidates from its cache).
+    const body = await readBody(r);
+    expect(body.length).toBe(0);
+    // ETag echoed so the browser can keep its cached representation.
+    expect(r.headers.get('etag')).toBe(`"${s.attachmentId}"`);
+  });
+
+  it('403 wins over 304 — ACL is enforced before If-None-Match', async () => {
+    const s = await seedScenario();
+    // Stranger with a (somehow) valid ETag for someone else's attachment
+    // must still get 403. Caching can never widen access.
+    sessionRef.value = {
+      user: { id: s.strangerId, email: 'rando@x.com' },
+    };
+    const r = await callGet(s.attachmentId, {
+      'If-None-Match': `"${s.attachmentId}"`,
+    });
+    expect(r.status).toBe(403);
+  });
+
+  it('206 with Content-Range for valid Range request', async () => {
+    const s = await seedScenario();
+    sessionRef.value = {
+      user: {
+        id: s.buyerUserId,
+        email: 'buyer@buy.com',
+        workspaceId: s.buyerWsId,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    // bytes=0-4 → first 5 bytes (HTTP inclusive end)
+    const r = await callGet(s.attachmentId, { Range: 'bytes=0-4' });
+    expect(r.status).toBe(206);
+    expect(r.headers.get('content-range')).toBe(
+      `bytes 0-4/${PDF_HEAD.length}`,
+    );
+    expect(r.headers.get('content-length')).toBe('5');
+    expect(r.headers.get('accept-ranges')).toBe('bytes');
+    const body = await readBody(r);
+    expect(body.equals(PDF_HEAD.subarray(0, 5) as unknown as Uint8Array)).toBe(
+      true,
+    );
+  });
+
+  it('206 with suffix Range (bytes=-N → last N bytes)', async () => {
+    const s = await seedScenario();
+    sessionRef.value = {
+      user: {
+        id: s.buyerUserId,
+        email: 'buyer@buy.com',
+        workspaceId: s.buyerWsId,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    const r = await callGet(s.attachmentId, { Range: 'bytes=-7' });
+    expect(r.status).toBe(206);
+    const len = PDF_HEAD.length;
+    expect(r.headers.get('content-range')).toBe(
+      `bytes ${len - 7}-${len - 1}/${len}`,
+    );
+    expect(r.headers.get('content-length')).toBe('7');
+    const body = await readBody(r);
+    expect(
+      body.equals(PDF_HEAD.subarray(len - 7) as unknown as Uint8Array),
+    ).toBe(true);
+  });
+
+  it('clamps Range end to file size (bytes=N-huge → bytes N-(size-1))', async () => {
+    const s = await seedScenario();
+    sessionRef.value = {
+      user: {
+        id: s.buyerUserId,
+        email: 'buyer@buy.com',
+        workspaceId: s.buyerWsId,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    const r = await callGet(s.attachmentId, { Range: 'bytes=3-9999' });
+    expect(r.status).toBe(206);
+    const len = PDF_HEAD.length;
+    expect(r.headers.get('content-range')).toBe(`bytes 3-${len - 1}/${len}`);
+    expect(r.headers.get('content-length')).toBe(String(len - 3));
+  });
+
+  it('416 when Range is unsatisfiable (start beyond size)', async () => {
+    const s = await seedScenario();
+    sessionRef.value = {
+      user: {
+        id: s.buyerUserId,
+        email: 'buyer@buy.com',
+        workspaceId: s.buyerWsId,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    const r = await callGet(s.attachmentId, {
+      Range: `bytes=${PDF_HEAD.length + 100}-`,
+    });
+    expect(r.status).toBe(416);
+    expect(r.headers.get('content-range')).toBe(
+      `bytes */${PDF_HEAD.length}`,
+    );
   });
 
   it('200 for accepted PG invitation user', async () => {
