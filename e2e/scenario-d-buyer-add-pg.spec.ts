@@ -19,7 +19,7 @@ import { test, expect } from 'playwright/test';
 import { sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '@/lib/db/client';
-import { users, workspaceMembers, workspaces } from '@/lib/db/schema';
+import { users, workspaces } from '@/lib/db/schema';
 import { resetRfpForKanban } from './_helpers';
 import { hashPassword } from '@/lib/auth/password';
 
