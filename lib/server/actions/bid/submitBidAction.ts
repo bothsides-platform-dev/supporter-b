@@ -188,6 +188,7 @@ export async function submitBidAction(
           : { id: '', name: '', size: 0, mimeType: 'application/pdf', url: '' },
         memo: data.memo,
         status: 'submitted',
+        buyerStage: 'pending',
         submittedBy: userId,
         submittedAt: now.toISOString(),
       };

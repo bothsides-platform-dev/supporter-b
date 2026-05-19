@@ -8,11 +8,13 @@ import { BidComparisonView } from '@/components/rfp/BidComparisonView';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { auth } from '@/auth';
 import {
+  getBidNoteRepo,
   getBidRepo,
   getInvitationRepo,
   getRfpRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
+import type { BidNote } from '@/lib/types/bid-note';
 import { baseUrl } from '@/lib/server/actions/auth/_shared';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
@@ -58,6 +60,23 @@ export default async function RfpDetailPage({ params }: Props) {
 
   const allBids = await (await getBidRepo()).findByRfp(id);
   const rfpBids = allBids.filter((b) => b.status === 'submitted');
+
+  // Stage 3c cutover — notes live in the DB now (bid_notes + attachments).
+  // Fetch them once per RFP and serialize Date → ISO for the client tree.
+  const noteRepo = await getBidNoteRepo();
+  const notesByBid: Record<string, BidNote[]> = {};
+  for (const bid of rfpBids) {
+    const records = await noteRepo.findByBid(bid.id);
+    notesByBid[bid.id] = records.map((n) => ({
+      id: n.id,
+      bidId: n.bidId,
+      authorId: n.authorId,
+      authorName: n.authorName,
+      body: n.body,
+      attachments: n.attachments,
+      createdAt: n.createdAt.toISOString(),
+    }));
+  }
 
   const wsRepo = await getWorkspaceRepo();
   const ws = await wsRepo.findById(rfp.buyerWsId);
@@ -143,6 +162,7 @@ export default async function RfpDetailPage({ params }: Props) {
         <BidComparisonView
           rfpId={id}
           bids={rfpBids}
+          notesByBid={notesByBid}
           grade={bizProfile?.grade}
           rfpStatus={rfp.status}
           awardedBidId={rfp.awardedBidId}

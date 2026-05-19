@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  useMemo,
+  useOptimistic,
+  useState,
+  useTransition,
+} from 'react';
+import { useRouter } from 'next/navigation';
 import {
   DndContext,
   PointerSensor,
@@ -13,17 +19,19 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { BidBoardColumn } from './BidBoardColumn';
 import { BidDetailModal } from './BidDetailModal';
-import { useBidBoardStore, seedDemoBidBoard } from '@/lib/stores/bid-board';
+import { updateBuyerStageAction } from '@/lib/server/actions/bid/updateBuyerStageAction';
 import {
   BUYER_STAGE_ORDER,
   type Bid,
   type BuyerStage,
 } from '@/lib/types/bid';
+import type { BidNote } from '@/lib/types/bid-note';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 type Props = {
   rfpId: string;
   bids: Bid[];
+  notesByBid: Record<string, BidNote[]>;
   grade: MerchantGrade | undefined;
   rfpStatus: string;
   awardedBidId?: string;
@@ -32,9 +40,11 @@ type Props = {
   authorName: string;
 };
 
+type StageOverride = { bidId: string; to: BuyerStage };
+
 export function BidBoard({
-  rfpId,
   bids,
+  notesByBid,
   grade,
   rfpStatus,
   awardedBidId,
@@ -42,57 +52,24 @@ export function BidBoard({
   authorId,
   authorName,
 }: Props) {
-  const stages = useBidBoardStore((s) => s.stages);
-  const notes = useBidBoardStore((s) => s.notes);
-  const moveStage = useBidBoardStore((s) => s.moveStage);
+  const router = useRouter();
+  const [, startTransition] = useTransition();
 
-  // SSR-safe hydration: store has skipHydration=true. We trigger rehydrate on
-  // mount and observe completion via persist.onFinishHydration so we never
-  // call setState synchronously inside an effect.
-  const hydrated = useSyncExternalStore(
-    (cb) => useBidBoardStore.persist.onFinishHydration(cb),
-    () => useBidBoardStore.persist.hasHydrated(),
-    () => false,
-  );
-  useEffect(() => {
-    if (!useBidBoardStore.persist.hasHydrated()) {
-      void useBidBoardStore.persist.rehydrate();
-    }
-  }, []);
-
-  // Demo seed (dev-only; idempotent inside the helper). One-shot on first
-  // post-hydration render — the seed reads bids/pgWsNameMap as a snapshot,
-  // we don't want to re-fire when those references change between RSC passes.
-  useEffect(() => {
-    if (!hydrated) return;
-    seedDemoBidBoard({
-      bids: bids.map((b) => ({ id: b.id, pgWsId: b.pgWsId })),
-      pgWsNameMap,
-      authorId,
-      authorName,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
-
-  // Force awarded bid into "decided" once we know about it (one-shot).
-  useEffect(() => {
-    if (!hydrated || !awardedBidId) return;
-    const current = stages[awardedBidId];
-    if (current !== 'decided') {
-      moveStage(awardedBidId, 'decided');
-    }
-    // we intentionally only react to awardedBidId changes here
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, awardedBidId]);
+  // Optimistic stage overlay — the action result lands via router.refresh()
+  // after the server commit, but the drag visual must reflect the move
+  // immediately. The overlay is keyed per bidId; a fresh `bids` prop from
+  // the RSC tree resets any stale entry because the reducer reads from props.
+  const [optimisticStages, applyStage] = useOptimistic<
+    Record<string, BuyerStage>,
+    StageOverride
+  >({}, (state, patch) => ({ ...state, [patch.bidId]: patch.to }));
 
   const canAward = rfpStatus === 'sent';
   const disabled = !canAward;
 
   const stageOf = (bid: Bid): BuyerStage =>
-    stages[bid.id] ?? bid.buyerStage ?? 'pending';
+    optimisticStages[bid.id] ?? bid.buyerStage;
 
-  // Group bids per stage in their input order. awardedBidId is already
-  // forced to 'decided' by the effect above.
   const grouped = useMemo<Record<BuyerStage, Bid[]>>(() => {
     const acc: Record<BuyerStage, Bid[]> = {
       pending: [],
@@ -104,15 +81,15 @@ export function BidBoard({
     }
     return acc;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bids, stages]);
+  }, [bids, optimisticStages]);
 
   const noteCounts = useMemo<Record<string, number>>(() => {
     const acc: Record<string, number> = {};
     for (const bid of bids) {
-      acc[bid.id] = notes[bid.id]?.length ?? 0;
+      acc[bid.id] = notesByBid[bid.id]?.length ?? 0;
     }
     return acc;
-  }, [bids, notes]);
+  }, [bids, notesByBid]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -120,6 +97,21 @@ export function BidBoard({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  const commitStage = (bidId: string, to: BuyerStage) => {
+    startTransition(async () => {
+      applyStage({ bidId, to });
+      const r = await updateBuyerStageAction({ bidId, to });
+      if (!r.ok) {
+        // Optimistic state is React-managed; a refresh re-reads the server
+        // truth which the user can retry from. We could surface a toast
+        // here in a follow-up.
+        router.refresh();
+        return;
+      }
+      router.refresh();
+    });
+  };
 
   const handleDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
@@ -132,14 +124,16 @@ export function BidBoard({
           const overBid = bids.find((b) => b.id === overId);
           return overBid ? stageOf(overBid) : stageOf(bids.find((b) => b.id === bidId)!);
         })();
-    const sourceStage = stageOf(bids.find((b) => b.id === bidId)!);
-    if (targetStage !== sourceStage) {
-      moveStage(bidId, targetStage);
+    const sourceBid = bids.find((b) => b.id === bidId);
+    if (!sourceBid) return;
+    if (targetStage !== stageOf(sourceBid)) {
+      commitStage(bidId, targetStage);
     }
   };
 
   const [openBidId, setOpenBidId] = useState<string | null>(null);
   const openBid = openBidId ? bids.find((b) => b.id === openBidId) ?? null : null;
+  const openNotes = openBidId ? notesByBid[openBidId] ?? [] : [];
 
   const pgName = (wsId: string): string => pgWsNameMap[wsId] ?? wsId;
 
@@ -159,11 +153,11 @@ export function BidBoard({
               bids={grouped[stage]}
               pgName={pgName}
               onCardClick={setOpenBidId}
-              onMoveStage={moveStage}
+              onMoveStage={commitStage}
               noteCounts={noteCounts}
               awardedBidId={awardedBidId}
               canAward={canAward}
-              rfpId={rfpId}
+              rfpId=""
               disabled={disabled}
             />
           ))}
@@ -174,6 +168,7 @@ export function BidBoard({
         open={openBidId !== null}
         onOpenChange={(o) => !o && setOpenBidId(null)}
         bid={openBid}
+        notes={openNotes}
         pgName={openBid ? pgName(openBid.pgWsId) : ''}
         stage={openBid ? stageOf(openBid) : 'pending'}
         grade={grade}

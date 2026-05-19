@@ -1,11 +1,36 @@
-import { afterEach, beforeEach, describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { render, screen, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BidBoard } from '../BidBoard';
-import { useBidBoardStore } from '@/lib/stores/bid-board';
 import type { Bid } from '@/lib/types/bid';
 
-function buildBid(overrides: Partial<Bid> & Pick<Bid, 'id' | 'pgWsId'>): Bid {
+// next/navigation mock — kanban triggers router.refresh() post-action.
+const refresh = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh }),
+}));
+
+// Mock the server action that the kanban calls on drag/menu moves.
+const updateStageMock = vi.fn(
+  async (_input: unknown) => ({ ok: true as const }),
+);
+vi.mock('@/lib/server/actions/bid/updateBuyerStageAction', () => ({
+  updateBuyerStageAction: (input: unknown) => updateStageMock(input),
+}));
+
+// BidBoard transitively imports BidDetailModal, which imports the note actions
+// — short-circuit them too so the next-auth chain stays out of jsdom.
+vi.mock('@/lib/server/actions/bid/addBidNoteAction', () => ({
+  addBidNoteAction: async () => ({ ok: true as const, noteId: 'unused' }),
+}));
+vi.mock('@/lib/server/actions/bid/removeBidNoteAction', () => ({
+  removeBidNoteAction: async () => ({ ok: true as const }),
+}));
+
+import { BidBoard } from '../BidBoard';
+
+function buildBid(
+  overrides: Partial<Bid> & Pick<Bid, 'id' | 'pgWsId'>,
+): Bid {
   return {
     rfpId: 'rfp-1',
     invitationId: 'inv-' + overrides.id,
@@ -23,18 +48,24 @@ function buildBid(overrides: Partial<Bid> & Pick<Bid, 'id' | 'pgWsId'>): Bid {
       url: '',
     },
     status: 'submitted',
+    buyerStage: 'pending',
     submittedBy: 'pg-user',
     submittedAt: '2026-05-01T00:00:00Z',
     ...overrides,
   };
 }
 
-const TOSS = buildBid({ id: 'b-toss', pgWsId: 'ws-toss' });
+const TOSS = buildBid({
+  id: 'b-toss',
+  pgWsId: 'ws-toss',
+  buyerStage: 'negotiating',
+});
 const INICIS = buildBid({ id: 'b-inicis', pgWsId: 'ws-inicis' });
 
-const props = {
+const baseProps = {
   rfpId: 'P-2604-0001',
   bids: [TOSS, INICIS],
+  notesByBid: { 'b-toss': [], 'b-inicis': [] },
   grade: 'sme1' as const,
   rfpStatus: 'sent',
   awardedBidId: undefined,
@@ -45,56 +76,41 @@ const props = {
 
 describe('BidBoard', () => {
   beforeEach(() => {
-    localStorage.clear();
-    useBidBoardStore.setState({ stages: {}, notes: {} });
+    updateStageMock.mockClear();
+    refresh.mockClear();
   });
   afterEach(() => {
-    useBidBoardStore.setState({ stages: {}, notes: {} });
+    cleanup();
   });
 
-  it('renders three columns and seeds 토스 into 협상중 (dev demo seed)', async () => {
-    render(<BidBoard {...props} />);
+  it('renders three columns and groups bids by bid.buyerStage', () => {
+    render(<BidBoard {...baseProps} />);
 
-    // Column tags
     expect(screen.getAllByText('진행전').length).toBeGreaterThan(0);
     expect(screen.getAllByText('협상중').length).toBeGreaterThan(0);
     expect(screen.getAllByText('결정').length).toBeGreaterThan(0);
 
-    // Cards
     expect(screen.getByText('토스페이먼츠')).toBeInTheDocument();
     expect(screen.getByText('이니시스')).toBeInTheDocument();
 
-    // Demo seed pushes 토스 to negotiating; ini-icis stays in pending. The card
-    // body is a <button> containing the PG name; closest() walks up to it from
-    // the visible text node, sidestepping the separate ⋯ menu trigger button.
+    // Note counts come from props, not localStorage.
     const tossCard = screen.getByText('토스페이먼츠').closest('button')!;
     const inicisCard = screen.getByText('이니시스').closest('button')!;
-    expect(within(tossCard).getByText(/메모 1/)).toBeInTheDocument();
+    expect(within(tossCard).getByText(/메모 0/)).toBeInTheDocument();
     expect(within(inicisCard).getByText(/메모 0/)).toBeInTheDocument();
   });
 
-  it('moves a card via the ⋯ menu', async () => {
+  it('moves a card via the ⋯ menu — calls updateBuyerStageAction', async () => {
     const user = userEvent.setup();
-    render(<BidBoard {...props} />);
+    render(<BidBoard {...baseProps} />);
 
-    // Open 이니시스 ⋯ menu
     await user.click(screen.getByRole('button', { name: '이니시스 메뉴' }));
-    // The base-ui menu portals items into the document; pick the "결정" target.
     const menuItem = await screen.findByText(/결정으로/);
     await user.click(menuItem);
 
-    // Store should reflect the move.
-    expect(useBidBoardStore.getState().stages['b-inicis']).toBe('decided');
-  });
-
-  it('forces awarded bid into decided regardless of override', () => {
-    // Pre-seed 토스 into pending; awardedBidId must override.
-    useBidBoardStore.setState({
-      stages: { 'b-toss': 'pending' },
-      notes: {},
+    expect(updateStageMock).toHaveBeenCalledWith({
+      bidId: 'b-inicis',
+      to: 'decided',
     });
-    render(<BidBoard {...props} awardedBidId="b-toss" rfpStatus="awarded" />);
-    // Effect runs synchronously after mount; assert state.
-    expect(useBidBoardStore.getState().stages['b-toss']).toBe('decided');
   });
 });

@@ -5,11 +5,13 @@ import { BidComparisonTable } from './BidComparisonTable';
 import { BidBoard } from './BidBoard';
 import { BidViewToggle, type BidView } from './BidViewToggle';
 import type { Bid } from '@/lib/types/bid';
+import type { BidNote } from '@/lib/types/bid-note';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 type Props = {
   rfpId: string;
   bids: Bid[];
+  notesByBid: Record<string, BidNote[]>;
   grade: MerchantGrade | undefined;
   rfpStatus: string;
   awardedBidId?: string;
@@ -39,6 +41,7 @@ export function BidComparisonView(props: Props) {
         <BidBoard
           rfpId={props.rfpId}
           bids={props.bids}
+          notesByBid={props.notesByBid}
           grade={props.grade}
           rfpStatus={props.rfpStatus}
           awardedBidId={props.awardedBidId}

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,8 @@ import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
 import { IconButton } from '@/components/primitives/IconButton';
 import { PaperclipIcon, XIcon, FileTextIcon } from '@/components/icons';
-import { useBidBoardStore } from '@/lib/stores/bid-board';
+import { addBidNoteAction } from '@/lib/server/actions/bid/addBidNoteAction';
+import { removeBidNoteAction } from '@/lib/server/actions/bid/removeBidNoteAction';
 import { formatKRW, formatPct } from '@/lib/format';
 import { STATUTORY_CARD_FEE, type Bid, type BuyerStage } from '@/lib/types/bid';
 import {
@@ -53,6 +55,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   bid: Bid | null;
+  notes: BidNote[];
   pgName: string;
   stage: BuyerStage;
   grade: MerchantGrade | undefined;
@@ -64,11 +67,12 @@ export function BidDetailModal({
   open,
   onOpenChange,
   bid,
+  notes,
   pgName,
   stage,
   grade,
-  authorId,
-  authorName,
+  authorId: _authorId,
+  authorName: _authorName,
 }: Props) {
   if (!bid) {
     return (
@@ -170,12 +174,8 @@ export function BidDetailModal({
               <div className="flex items-center justify-between mb-3">
                 <SectionLabel>히스토리</SectionLabel>
               </div>
-              <NoteForm
-                bidId={bid.id}
-                authorId={authorId}
-                authorName={authorName}
-              />
-              <NoteTimeline bidId={bid.id} />
+              <NoteForm bidId={bid.id} />
+              <NoteTimeline notes={notes} />
             </section>
           </div>
         </div>
@@ -259,75 +259,89 @@ function Kpi({
   );
 }
 
-type StagedFile = { id: string; file: File; url: string };
+type StagedAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: string;
+};
 
-function NoteForm({
-  bidId,
-  authorId,
-  authorName,
-}: {
-  bidId: string;
-  authorId: string;
-  authorName: string;
-}) {
-  const addNote = useBidBoardStore((s) => s.addNote);
+function NoteForm({ bidId }: { bidId: string }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [body, setBody] = useState('');
-  const [files, setFiles] = useState<StagedFile[]>([]);
+  const [files, setFiles] = useState<StagedAttachment[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Revoke any blob URLs that didn't make it into a submitted note when the
-  // form unmounts (modal close) — submitted ones are intentionally kept alive
-  // for the modal's session lifetime; they expire on full reload regardless.
-  useEffect(() => {
-    return () => {
-      for (const f of files) URL.revokeObjectURL(f.url);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleFiles = (list: FileList | null) => {
-    if (!list) return;
-    const arr: StagedFile[] = [];
-    for (const file of Array.from(list)) {
-      arr.push({
-        id: crypto.randomUUID(),
-        file,
-        url: URL.createObjectURL(file),
-      });
+  const handleFiles = async (list: FileList | null) => {
+    if (!list || list.length === 0) return;
+    setError(null);
+    setBusy(true);
+    try {
+      // Eager upload — each picked file lands on the server immediately with
+      // ownerKind='bid_note', ownerId=bidId. addBidNoteAction will re-parent
+      // the attachment's owner_id to the new noteId after the note row is
+      // created. This keeps the staging window short and the iframe preview
+      // (in NoteAttachment after submit) authenticated.
+      const uploaded: StagedAttachment[] = [];
+      for (const file of Array.from(list)) {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('ownerKind', 'bid_note');
+        form.append('ownerId', bidId);
+        const res = await fetch('/api/files/upload', {
+          method: 'POST',
+          body: form,
+        });
+        if (!res.ok) {
+          const payload = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          throw new Error(payload.error ?? `UPLOAD_${res.status}`);
+        }
+        const body = (await res.json()) as {
+          id: string;
+          name: string;
+          size: number;
+          mimeType: string;
+        };
+        uploaded.push(body);
+      }
+      setFiles((prev) => [...prev, ...uploaded]);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-    setFiles((prev) => [...prev, ...arr]);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const removeFile = (id: string) => {
-    setFiles((prev) => {
-      const target = prev.find((p) => p.id === id);
-      if (target) URL.revokeObjectURL(target.url);
-      return prev.filter((p) => p.id !== id);
-    });
+    // Server orphan — Stage 3 v0 has no sweeper, so the row stays until the
+    // next milestone. The user-facing UX still pretends it's gone.
+    setFiles((prev) => prev.filter((p) => p.id !== id));
   };
 
   const submit = () => {
+    if (busy) return;
     if (!body.trim() && files.length === 0) return;
-    const attachments: Attachment[] = files.map((f) => ({
-      id: f.id,
-      name: f.file.name,
-      size: f.file.size,
-      mimeType: f.file.type,
-      url: f.url,
-    }));
-    const note: BidNote = {
-      id: crypto.randomUUID(),
-      bidId,
-      authorId,
-      authorName,
-      body: body.trim(),
-      attachments,
-      createdAt: new Date().toISOString(),
-    };
-    addNote(note);
-    setBody('');
-    setFiles([]);
+    setError(null);
+    startTransition(async () => {
+      const r = await addBidNoteAction({
+        bidId,
+        body: body.trim(),
+        attachmentIds: files.map((f) => f.id),
+      });
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      setBody('');
+      setFiles([]);
+      router.refresh();
+    });
   };
 
   return (
@@ -344,21 +358,27 @@ function NoteForm({
           {files.map((f) => (
             <FileChip
               key={f.id}
-              name={f.file.name}
-              size={f.file.size}
-              mimeType={f.file.type}
-              url={f.url}
+              name={f.name}
+              size={f.size}
+              mimeType={f.mimeType}
+              url={`/api/files/${f.id}`}
               onRemove={() => removeFile(f.id)}
             />
           ))}
         </div>
+      )}
+      {error && (
+        <p className="mt-2 font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-error)]">
+          {error}
+        </p>
       )}
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1 font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors cursor-pointer"
+            disabled={busy}
+            className="inline-flex items-center gap-1 font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors cursor-pointer disabled:opacity-50"
           >
             <PaperclipIcon size={12} /> + 첨부
           </button>
@@ -367,7 +387,7 @@ function NoteForm({
             type="file"
             multiple
             accept={ACCEPT}
-            onChange={(e) => handleFiles(e.target.files)}
+            onChange={(e) => void handleFiles(e.target.files)}
             className="hidden"
           />
         </div>
@@ -378,7 +398,7 @@ function NoteForm({
           <Button
             size="sm"
             onClick={submit}
-            disabled={!body.trim() && files.length === 0}
+            disabled={busy || (!body.trim() && files.length === 0)}
           >
             기록
           </Button>
@@ -388,18 +408,25 @@ function NoteForm({
   );
 }
 
-const EMPTY_NOTES: BidNote[] = [];
+function NoteTimeline({ notes }: { notes: BidNote[] }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
-function NoteTimeline({ bidId }: { bidId: string }) {
-  // selector must return a stable reference; coalesce outside.
-  const stored = useBidBoardStore((s) => s.notes[bidId]);
-  const notes = stored ?? EMPTY_NOTES;
-  const removeNote = useBidBoardStore((s) => s.removeNote);
-
-  // Notes stored in creation order; serial = creation index. Display reversed.
+  // Notes arrive oldest → newest from the server. Display reversed but
+  // keep the creation index as the serial label.
   const display = useMemo(() => {
     return notes.map((note, i) => ({ note, serial: i + 1 })).reverse();
   }, [notes]);
+
+  const onRemove = (noteId: string) => {
+    setRemovingId(noteId);
+    startTransition(async () => {
+      await removeBidNoteAction({ noteId });
+      router.refresh();
+      setRemovingId(null);
+    });
+  };
 
   if (notes.length === 0) {
     return (
@@ -422,8 +449,9 @@ function NoteTimeline({ bidId }: { bidId: string }) {
             </span>
             <button
               type="button"
-              onClick={() => removeNote(bidId, note.id)}
-              className="font-mono text-[9px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-error)] transition-colors cursor-pointer"
+              onClick={() => onRemove(note.id)}
+              disabled={removingId === note.id}
+              className="font-mono text-[9px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-error)] transition-colors cursor-pointer disabled:opacity-50"
               aria-label="삭제"
             >
               삭제
@@ -454,7 +482,7 @@ function NoteAttachment({ attachment }: { attachment: Attachment }) {
   if (broken || !attachment.url) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-[var(--md-sys-color-outline-variant)] rounded-md font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--md-sys-color-outline)]">
-        {attachment.name} · 미리보기 만료
+        {attachment.name} · 미리보기 불가
       </span>
     );
   }

@@ -15,8 +15,7 @@ export const STATUTORY_CARD_FEE: Record<MerchantGrade, number> = {
 };
 
 // Buyer-side kanban classification. Independent of `Bid.status` (PG lifecycle).
-// Canonical value lives in lib/stores/bid-board.ts (localStorage). The field
-// here is the eventual DB-backed source after the post-v0 server-side cutover.
+// DB-backed from Stage 3 onward — bids.buyer_stage (default 'pending').
 export type BuyerStage = 'pending' | 'negotiating' | 'decided';
 
 export const BUYER_STAGE_ORDER: readonly BuyerStage[] = [
@@ -49,6 +48,5 @@ export type Bid = {
   status: 'draft' | 'submitted' | 'withdrawn';
   submittedBy: string;
   submittedAt?: string;
-  // optional until bids.buyer_stage column is added in the post-v0 cutover
-  buyerStage?: BuyerStage;
+  buyerStage: BuyerStage;
 };

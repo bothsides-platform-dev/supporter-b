@@ -53,6 +53,7 @@ function makeBid(id: string, status: Bid['status'] = 'submitted'): Bid {
     easyPayFeePct: 0.015,
     proposalPdf: { id: '', name: '', size: 0, mimeType: '', url: '' },
     status,
+    buyerStage: 'pending',
     submittedBy: 'user-1',
     submittedAt: status === 'submitted' ? '2026-05-05T00:00:00Z' : undefined,
   };

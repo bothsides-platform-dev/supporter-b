@@ -1,9 +1,28 @@
-import { afterEach, beforeEach, describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { render, screen, within, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BidDetailModal } from '../BidDetailModal';
-import { useBidBoardStore } from '@/lib/stores/bid-board';
 import type { Bid } from '@/lib/types/bid';
+import type { BidNote } from '@/lib/types/bid-note';
+
+// next/navigation mock — modal uses router.refresh() after action calls.
+const refresh = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh }),
+}));
+
+// Mock the server actions so we can assert on call shape + UI side effects.
+const addMock = vi.fn(
+  async (_input: unknown) => ({ ok: true as const, noteId: 'note-new' }),
+);
+const removeMock = vi.fn(async (_input: unknown) => ({ ok: true as const }));
+vi.mock('@/lib/server/actions/bid/addBidNoteAction', () => ({
+  addBidNoteAction: (input: unknown) => addMock(input),
+}));
+vi.mock('@/lib/server/actions/bid/removeBidNoteAction', () => ({
+  removeBidNoteAction: (input: unknown) => removeMock(input),
+}));
+
+import { BidDetailModal } from '../BidDetailModal';
 
 const bid: Bid = {
   id: 'bid-toss',
@@ -16,19 +35,27 @@ const bid: Bid = {
   monthlyMin: 100_000,
   bankTransferFeePct: 0.005,
   easyPayFeePct: 0.025,
-  proposalPdf: { id: 'pdf', name: '제안서.pdf', size: 1024, mimeType: 'application/pdf', url: '' },
+  proposalPdf: {
+    id: 'pdf',
+    name: '제안서.pdf',
+    size: 1024,
+    mimeType: 'application/pdf',
+    url: '/api/files/pdf',
+  },
   status: 'submitted',
+  buyerStage: 'pending',
   submittedBy: 'pg-user',
   submittedAt: '2026-05-01T00:00:00Z',
 };
 
 describe('BidDetailModal', () => {
   beforeEach(() => {
-    localStorage.clear();
-    useBidBoardStore.setState({ stages: {}, notes: {} });
+    addMock.mockClear();
+    removeMock.mockClear();
+    refresh.mockClear();
   });
   afterEach(() => {
-    useBidBoardStore.setState({ stages: {}, notes: {} });
+    cleanup();
   });
 
   it('renders the 6-figure KPI grid and stage tag when open', () => {
@@ -37,6 +64,7 @@ describe('BidDetailModal', () => {
         open
         onOpenChange={() => {}}
         bid={bid}
+        notes={[]}
         pgName="토스페이먼츠"
         stage="negotiating"
         grade="sme1"
@@ -55,13 +83,14 @@ describe('BidDetailModal', () => {
     expect(screen.getByText(/1\.10% 고정/)).toBeInTheDocument();
   });
 
-  it('records a memo and shows it newest-first with serial 01', async () => {
+  it('submitting a memo calls addBidNoteAction with body + empty attachments + triggers refresh', async () => {
     const user = userEvent.setup();
     render(
       <BidDetailModal
         open
         onOpenChange={() => {}}
         bid={bid}
+        notes={[]}
         pgName="토스페이먼츠"
         stage="pending"
         grade="sme1"
@@ -74,24 +103,44 @@ describe('BidDetailModal', () => {
     await user.type(textarea, '셋업비 0원 컨펌');
     await user.click(screen.getByRole('button', { name: '기록' }));
 
-    // Store side effect.
-    const stored = useBidBoardStore.getState().notes['bid-toss'];
-    expect(stored).toHaveLength(1);
-    expect(stored[0].body).toBe('셋업비 0원 컨펌');
-    expect(stored[0].authorName).toBe('김구매');
-
-    // UI side: serial 01 + body visible.
-    expect(screen.getByText(/\b01\b/)).toBeInTheDocument();
-    expect(screen.getByText('셋업비 0원 컨펌')).toBeInTheDocument();
+    expect(addMock).toHaveBeenCalledWith({
+      bidId: 'bid-toss',
+      body: '셋업비 0원 컨펌',
+      attachmentIds: [],
+    });
+    expect(refresh).toHaveBeenCalled();
   });
 
-  it('reverses display order: newest first, serials count up by creation', async () => {
-    const user = userEvent.setup();
+  it('renders notes from props newest-first with creation-index serials', () => {
+    // Createdat picked to avoid digit collisions with the serial label
+    // (the date format is yyyy-mm-dd hh:mi — values can otherwise match the
+    // "01 —" / "02 —" prefix the timeline emits).
+    const notes: BidNote[] = [
+      {
+        id: 'n-1',
+        bidId: 'bid-toss',
+        authorId: 'u-1',
+        authorName: '김구매',
+        body: 'first',
+        attachments: [],
+        createdAt: '2026-07-15T03:00:00Z',
+      },
+      {
+        id: 'n-2',
+        bidId: 'bid-toss',
+        authorId: 'u-1',
+        authorName: '김구매',
+        body: 'second',
+        attachments: [],
+        createdAt: '2026-08-17T03:00:00Z',
+      },
+    ];
     render(
       <BidDetailModal
         open
         onOpenChange={() => {}}
         bid={bid}
+        notes={notes}
         pgName="토스페이먼츠"
         stage="pending"
         grade="sme1"
@@ -100,17 +149,40 @@ describe('BidDetailModal', () => {
       />,
     );
 
-    const textarea = screen.getByPlaceholderText(/협상 진행/);
-    await user.type(textarea, 'first');
-    await user.click(screen.getByRole('button', { name: '기록' }));
-    await user.type(textarea, 'second');
-    await user.click(screen.getByRole('button', { name: '기록' }));
-
     const items = screen.getAllByRole('listitem');
-    // Newest (second) appears first; 02 is its serial.
     expect(within(items[0]).getByText('second')).toBeInTheDocument();
-    expect(within(items[0]).getByText(/\b02\b/)).toBeInTheDocument();
+    expect(within(items[0]).getByText(/^02 —/)).toBeInTheDocument();
     expect(within(items[1]).getByText('first')).toBeInTheDocument();
-    expect(within(items[1]).getByText(/\b01\b/)).toBeInTheDocument();
+    expect(within(items[1]).getByText(/^01 —/)).toBeInTheDocument();
+  });
+
+  it('clicking 삭제 invokes removeBidNoteAction with the note id', async () => {
+    const user = userEvent.setup();
+    const notes: BidNote[] = [
+      {
+        id: 'n-keep',
+        bidId: 'bid-toss',
+        authorId: 'u-1',
+        authorName: '김구매',
+        body: 'first',
+        attachments: [],
+        createdAt: '2026-05-01T00:00:00Z',
+      },
+    ];
+    render(
+      <BidDetailModal
+        open
+        onOpenChange={() => {}}
+        bid={bid}
+        notes={notes}
+        pgName="토스페이먼츠"
+        stage="pending"
+        grade="sme1"
+        authorId="u-1"
+        authorName="김구매"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '삭제' }));
+    expect(removeMock).toHaveBeenCalledWith({ noteId: 'n-keep' });
   });
 });

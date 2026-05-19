@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository State (2026-05-19)
 
-**M0~M8 완료.** 풀스택 가동 중 — Next.js 16.2 + Auth.js v5 + Drizzle 0.45 + Postgres + Resend + Sentry. AppShell, 16 primitives, 9 shell components, BidBoard, outbox, Toaster, notifications activity list, RFP 작성/비교/award, PG inbox/응답이 모두 구현됨. `lib/stores/bid-board.ts`는 B4 칸반 + Bid 메모용 localStorage store로 잔존 (v0 이후 server action 컷오버 예정).
+**M0~M8 완료, M9 (server cutover) 진행.** 풀스택 가동 중 — Next.js 16.2 + Auth.js v5 + Drizzle 0.45 + Postgres + Resend + Sentry. AppShell, 16 primitives, 9 shell components, BidBoard, outbox, Toaster, notifications activity list, RFP 작성/비교/award, PG inbox/응답이 모두 구현됨. **Bid 칸반 stage + 메모/첨부는 Stage 3 (M9) 에서 server로 cutover 완료** — `bids.buyer_stage` 컬럼 + `bid_notes` 테이블 + `addBidNoteAction` / `removeBidNoteAction` / `updateBuyerStageAction` 가 캐노니컬 소스. localStorage 기반 `lib/stores/bid-board.ts` 는 제거됨.
 
 ## Document Hierarchy (read in this order to gain context)
 
