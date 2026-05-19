@@ -86,4 +86,26 @@ export class DrizzleVerificationTokenRepository implements VerificationTokenRepo
       .limit(1);
     return row ? rowToToken(row) : undefined;
   }
+
+  async invalidatePending(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(verificationTokens)
+      .set({ consumedAt: sql`now()` })
+      .where(
+        and(
+          eq(verificationTokens.email, params.email),
+          eq(verificationTokens.purpose, params.purpose),
+          isNull(verificationTokens.consumedAt),
+          gt(verificationTokens.expiresAt, params.now),
+        ),
+      );
+  }
 }

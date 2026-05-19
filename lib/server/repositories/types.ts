@@ -182,6 +182,20 @@ export interface VerificationTokenRepo {
     now: Date,
     tx?: Tx,
   ): Promise<(Omit<VerificationToken, 'token'> & { tokenHash: string }) | undefined>;
+  /**
+   * 같은 (email, purpose) 의 미사용·미만료 토큰을 일괄 burn. passwordForgotAction
+   * 등 새 토큰을 발급하는 동일 transaction 안에서 호출해 OWASP Forgot Password
+   * 권장(prior token invalidation)을 구현. 이미 consumed 인 row 는 건드리지 않아
+   * 원래의 consumedAt 타임스탬프를 보존함.
+   */
+  invalidatePending(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<void>;
 }
 
 // ── Attachment ────────────────────────────────────────────────────────

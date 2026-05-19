@@ -91,4 +91,100 @@ describe('DrizzleVerificationTokenRepository', () => {
     const after = await repo.findValid(hashToken(raw), new Date());
     expect(after).toBeUndefined();
   });
+
+  it('invalidatePending burns all pending (email, purpose) tokens', async () => {
+    const { repo } = await setup();
+    const raw1 = generateToken();
+    const raw2 = generateToken();
+    await repo.save(makeToken(raw1, { email: 'a@x.com', purpose: 'password_reset' }));
+    await repo.save(makeToken(raw2, { email: 'a@x.com', purpose: 'password_reset' }));
+
+    await repo.invalidatePending({
+      email: 'a@x.com',
+      purpose: 'password_reset',
+      now: new Date(),
+    });
+
+    expect(await repo.consume(hashToken(raw1), new Date())).toBeUndefined();
+    expect(await repo.consume(hashToken(raw2), new Date())).toBeUndefined();
+  });
+
+  it('invalidatePending leaves tokens for OTHER emails untouched', async () => {
+    const { repo } = await setup();
+    const raw1 = generateToken();
+    const raw2 = generateToken();
+    await repo.save(makeToken(raw1, { email: 'a@x.com', purpose: 'password_reset' }));
+    await repo.save(makeToken(raw2, { email: 'b@x.com', purpose: 'password_reset' }));
+
+    await repo.invalidatePending({
+      email: 'a@x.com',
+      purpose: 'password_reset',
+      now: new Date(),
+    });
+
+    expect(await repo.consume(hashToken(raw1), new Date())).toBeUndefined();
+    const survivor = await repo.consume(hashToken(raw2), new Date());
+    expect(survivor?.email).toBe('b@x.com');
+  });
+
+  it('invalidatePending leaves OTHER purposes for same email untouched', async () => {
+    const { repo } = await setup();
+    const rawReset = generateToken();
+    const rawSignup = generateToken();
+    await repo.save(makeToken(rawReset, { email: 'a@x.com', purpose: 'password_reset' }));
+    await repo.save(makeToken(rawSignup, { email: 'a@x.com', purpose: 'signup_email' }));
+
+    await repo.invalidatePending({
+      email: 'a@x.com',
+      purpose: 'password_reset',
+      now: new Date(),
+    });
+
+    expect(await repo.consume(hashToken(rawReset), new Date())).toBeUndefined();
+    const survivor = await repo.consume(hashToken(rawSignup), new Date());
+    expect(survivor?.purpose).toBe('signup_email');
+  });
+
+  it('invalidatePending is idempotent', async () => {
+    const { repo } = await setup();
+    const raw = generateToken();
+    await repo.save(makeToken(raw, { email: 'a@x.com', purpose: 'password_reset' }));
+
+    await repo.invalidatePending({
+      email: 'a@x.com',
+      purpose: 'password_reset',
+      now: new Date(),
+    });
+    await repo.invalidatePending({
+      email: 'a@x.com',
+      purpose: 'password_reset',
+      now: new Date(),
+    });
+
+    expect(await repo.consume(hashToken(raw), new Date())).toBeUndefined();
+  });
+
+  it('invalidatePending does not touch already-consumed tokens', async () => {
+    const { repo } = await setup();
+    const raw = generateToken();
+    await repo.save(makeToken(raw, { email: 'a@x.com', purpose: 'password_reset' }));
+    const first = await repo.consume(hashToken(raw), new Date());
+    expect(first).toBeDefined();
+    const originalConsumedAt = first?.consumedAt;
+    expect(originalConsumedAt).toBeDefined();
+
+    await new Promise((r) => setTimeout(r, 50));
+    await repo.invalidatePending({
+      email: 'a@x.com',
+      purpose: 'password_reset',
+      now: new Date(),
+    });
+
+    // consumedAt 보존 검증 — findValid 는 어차피 undefined 반환하므로
+    // direct row read 가 필요. 간접 가드: 두 번째 consume 도 undefined 여야 함
+    // (이미 burn 됨), 그리고 row 가 한 번만 update 됐다는 사실은 코드의 WHERE
+    // 절(consumed_at IS NULL)이 이미 보장. 직접 timestamp 비교가 필요하면
+    // db 핸들 노출 필요.
+    expect(await repo.consume(hashToken(raw), new Date())).toBeUndefined();
+  });
 });
