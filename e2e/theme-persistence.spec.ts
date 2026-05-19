@@ -11,7 +11,7 @@
  */
 import { test, expect } from 'playwright/test';
 
-const THEME_KEY = 'bidit-theme';
+const THEME_KEY = 'support-b-theme';
 
 test.describe('theme persistence', () => {
   test.beforeEach(async ({ page }) => {
@@ -20,7 +20,7 @@ test.describe('theme persistence', () => {
 
   test('system dark emulation → html has .dark class before JS hydration', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' });
-    await page.evaluate(() => localStorage.removeItem('bidit-theme'));
+    await page.evaluate(() => localStorage.removeItem('support-b-theme'));
     await page.goto('/login');
 
     const hasDark = await page.evaluate(() =>
@@ -31,7 +31,7 @@ test.describe('theme persistence', () => {
 
   test('system light emulation → html does not have .dark class', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' });
-    await page.evaluate(() => localStorage.removeItem('bidit-theme'));
+    await page.evaluate(() => localStorage.removeItem('support-b-theme'));
     await page.goto('/login');
 
     const hasDark = await page.evaluate(() =>
