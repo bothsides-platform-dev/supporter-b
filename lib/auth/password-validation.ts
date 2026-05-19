@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export type PasswordRuleCheck = {
   id: 'length' | 'letter' | 'digit' | 'special';
   label: string;
@@ -24,3 +26,13 @@ export function validatePasswordConfirm(
   if (password !== confirm) return '비밀번호가 일치하지 않습니다.';
   return null;
 }
+
+// Shared by server actions (signupCompleteAction, passwordResetAction) and
+// any future API surface — keep this as the *single source of truth* for the
+// 4 password rules. The min/max bounds run first; only valid-length strings
+// reach the refinement so the WEAK_PASSWORD message implies length passed.
+export const passwordSchema = z
+  .string()
+  .min(10)
+  .max(200)
+  .refine(isPasswordValid, { message: 'WEAK_PASSWORD' });

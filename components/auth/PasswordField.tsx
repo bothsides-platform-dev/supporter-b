@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Check, Eye, EyeOff, X } from 'lucide-react';
 import { passwordStrength } from '@/lib/auth/strength';
 import { getPasswordRuleChecks } from '@/lib/auth/password-validation';
@@ -37,20 +37,30 @@ export function PasswordField({
 }: PasswordFieldProps) {
   const [visible, setVisible] = useState(false);
   const strength = showStrength ? passwordStrength(value) : 0;
+  // useId gives a stable SSR/CSR matching id even when the same PasswordField
+  // is rendered multiple times on the page (e.g. signup uses two — password
+  // and confirm). htmlFor + aria-invalid wire up assistive tech beyond the
+  // visual error border.
+  const inputId = useId();
 
   return (
     <div className="space-y-2">
-      <label className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+      <label
+        htmlFor={inputId}
+        className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+      >
         {label}
       </label>
       <div className="relative">
         <input
+          id={inputId}
           type={visible ? 'text' : 'password'}
           name={name}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           autoComplete={autoComplete}
           placeholder={placeholder}
+          aria-invalid={error ? 'true' : 'false'}
           className={cn(
             'block w-full bg-transparent border-0 border-b py-2 pr-10 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none transition-colors',
             error

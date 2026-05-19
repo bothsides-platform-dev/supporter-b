@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 
 import { hashPassword } from '@/lib/auth/password';
+import { passwordSchema } from '@/lib/auth/password-validation';
 import { users } from '@/lib/db/schema';
 import { getVerificationTokenRepo } from '@/lib/server/repositories/factory';
 import { hashToken } from '@/lib/server/token';
@@ -11,7 +12,7 @@ import { actionDb, type AuthActionResult } from './_shared';
 
 const Input = z.object({
   rawToken: z.string().min(1).max(256),
-  password: z.string().min(10).max(200),
+  password: passwordSchema,
 });
 
 export type PasswordResetInput = z.infer<typeof Input>;
@@ -30,7 +31,12 @@ export async function passwordResetAction(
   input: PasswordResetInput,
 ): Promise<PasswordResetResult> {
   const parsed = Input.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
+  if (!parsed.success) {
+    const weak = parsed.error.issues.some(
+      (i) => i.path[0] === 'password' && i.message === 'WEAK_PASSWORD',
+    );
+    return { ok: false, error: weak ? 'WEAK_PASSWORD' : 'INVALID_INPUT' };
+  }
 
   const repo = await getVerificationTokenRepo();
   const consumed = await repo.consume(

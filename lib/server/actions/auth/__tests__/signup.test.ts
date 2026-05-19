@@ -297,3 +297,58 @@ describe('signupCompleteAction — pg branch', () => {
     expect(pgWss).toHaveLength(2);
   });
 });
+
+describe('signupCompleteAction — password policy (server-side)', () => {
+  beforeEach(async () => {
+    db = await setupActionEnv();
+  });
+  afterEach(teardownActionEnv);
+
+  it('rejects a 10-char letter-only password with WEAK_PASSWORD', async () => {
+    const r = await signupCompleteAction({
+      email: 'weak@example.com',
+      name: '약한사용자',
+      password: 'aaaaaaaaaa',
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('WEAK_PASSWORD');
+  });
+
+  it('rejects a 10-char digit-only password with WEAK_PASSWORD', async () => {
+    const r = await signupCompleteAction({
+      email: 'weak2@example.com',
+      name: '약한사용자',
+      password: '1234567890',
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('WEAK_PASSWORD');
+  });
+
+  it('rejects when special character is missing', async () => {
+    const r = await signupCompleteAction({
+      email: 'weak3@example.com',
+      name: '약한사용자',
+      password: 'Password123', // letter+digit but no special
+      wsKind: 'pg',
+      wsName: '약한PG',
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('WEAK_PASSWORD');
+  });
+
+  it('still surfaces INVALID_INPUT for non-password schema failures (bad email)', async () => {
+    const r = await signupCompleteAction({
+      email: 'not-an-email',
+      name: '약한사용자',
+      password: 'Password123!',
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+});

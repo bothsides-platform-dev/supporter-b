@@ -7,6 +7,7 @@ import { Button } from '@/components/primitives/Button';
 import { PasswordField } from '@/components/auth/PasswordField';
 import { CheckSvg } from '@/components/auth/EnvelopeSvg';
 import { passwordResetAction } from '@/lib/server/actions/auth';
+import { isPasswordValid } from '@/lib/auth/password-validation';
 
 function ResetContent() {
   const router = useRouter();
@@ -28,6 +29,10 @@ function ResetContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isPasswordValid(password)) {
+      setError('비밀번호 규칙을 모두 충족해야 합니다.');
+      return;
+    }
     if (password !== passwordConfirm) {
       setError('비밀번호가 일치하지 않습니다.');
       return;
@@ -37,7 +42,14 @@ function ResetContent() {
     const r = await passwordResetAction({ rawToken: token, password });
     if (!r.ok) {
       setSubmitting(false);
-      setError('재설정 링크가 만료되었거나 유효하지 않습니다.');
+      // Server-side policy enforcement uses the same rule set as the client
+      // guard above, so WEAK_PASSWORD here is the rare bypass case (direct
+      // API call). Token failures stay generic to avoid token-state leakage.
+      setError(
+        r.error === 'WEAK_PASSWORD'
+          ? '비밀번호 규칙을 모두 충족해야 합니다.'
+          : '재설정 링크가 만료되었거나 유효하지 않습니다.',
+      );
       return;
     }
     // Auto-login per advisor block C — server action returns the plaintext

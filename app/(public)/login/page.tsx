@@ -1,11 +1,27 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
 import { PasswordField } from '@/components/auth/PasswordField';
 import { loginAction } from '@/lib/server/actions/auth';
+import {
+  CAPTCHA_THRESHOLD,
+  LOCK_THRESHOLD,
+  getState,
+  recordFailure,
+  resetAttempts,
+} from '@/lib/auth/login-attempts';
+
+function formatRemaining(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const mm = Math.floor(total / 60)
+    .toString()
+    .padStart(2, '0');
+  const ss = (total % 60).toString().padStart(2, '0');
+  return `${mm}:${ss}`;
+}
 
 function LoginContent() {
   const router = useRouter();
@@ -18,22 +34,68 @@ function LoginContent() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [captchaChecked, setCaptchaChecked] = useState(false);
+  // React 19 strict purity rules forbid Date.now() in the render body, so the
+  // clock is pulled from state and bumped on each tick / after every failure.
+  // The lazy initializer keeps SSR/CSR boundary clean.
+  const [now, setNow] = useState<number>(() => Date.now());
+
+  const attempts = getState(email, undefined, now);
+  const locked =
+    attempts.lockedUntilTs !== null && now < attempts.lockedUntilTs;
+  const remainingMs = locked
+    ? (attempts.lockedUntilTs as number) - now
+    : 0;
+  const captchaNeeded = attempts.captchaRequired && !locked;
+
+  useEffect(() => {
+    if (!locked) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [locked]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (locked) return;
+    if (captchaNeeded && !captchaChecked) {
+      setError('자동 가입 방지 체크를 완료해주세요.');
+      return;
+    }
     setError('');
     setSubmitting(true);
     const r = await loginAction({ email, password });
     setSubmitting(false);
     if (!r.ok) {
-      setError('이메일 또는 비밀번호가 일치하지 않습니다.');
+      const after = recordFailure(email);
+      setCaptchaChecked(false);
+      // Force re-render so the freshly minted lock/captcha state takes effect.
+      setNow(Date.now());
+      if (after.lockedUntilTs !== null) {
+        setError(
+          `로그인 시도가 ${LOCK_THRESHOLD}회 초과되어 15분간 잠겼습니다.`,
+        );
+      } else if (after.captchaRequired) {
+        setError(
+          `이메일 또는 비밀번호가 일치하지 않습니다. (${after.count}/${LOCK_THRESHOLD})`,
+        );
+      } else {
+        setError('이메일 또는 비밀번호가 일치하지 않습니다.');
+      }
       return;
     }
+    resetAttempts(email);
     // Auth.js v5 sets the cookie inside the server action's signIn() call;
     // a router.push is enough to land on the protected route.
     router.push(next);
     router.refresh();
   }
+
+  const submitDisabled =
+    submitting ||
+    !email ||
+    !password ||
+    locked ||
+    (captchaNeeded && !captchaChecked);
 
   return (
     <div className="space-y-8">
@@ -45,7 +107,10 @@ function LoginContent() {
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         <div className="space-y-1">
-          <label htmlFor="email" className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <label
+            htmlFor="email"
+            className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+          >
             이메일
           </label>
           <input
@@ -76,18 +141,65 @@ function LoginContent() {
             onChange={(e) => setRememberMe(e.target.checked)}
             className="w-3.5 h-3.5 accent-[var(--md-sys-color-on-surface)]"
           />
-          <label htmlFor="rememberMe" className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] cursor-pointer">
+          <label
+            htmlFor="rememberMe"
+            className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] cursor-pointer"
+          >
             로그인 유지
           </label>
         </div>
 
-        {error && (
+        {captchaNeeded && (
+          <div
+            data-testid="captcha-mock"
+            className="border border-[var(--md-sys-color-outline)] rounded-[8px] p-3 flex items-center gap-2"
+          >
+            <input
+              id="captcha"
+              type="checkbox"
+              checked={captchaChecked}
+              onChange={(e) => setCaptchaChecked(e.target.checked)}
+              className="w-3.5 h-3.5 accent-[var(--md-sys-color-on-surface)]"
+            />
+            <label
+              htmlFor="captcha"
+              className="text-[12px] text-[var(--md-sys-color-on-surface)] cursor-pointer"
+            >
+              사람입니다
+            </label>
+            <span className="ml-auto font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              MOCK · {CAPTCHA_THRESHOLD}회 실패 후 노출
+            </span>
+          </div>
+        )}
+
+        {locked && (
+          <div
+            role="alert"
+            data-testid="login-lock"
+            className="border border-[var(--md-sys-color-error)] rounded-[8px] p-3 space-y-1"
+          >
+            <p className="text-[12px] text-[var(--md-sys-color-error)]">
+              로그인이 잠겼습니다. 잠시 후 다시 시도해주세요.
+            </p>
+            <p className="font-mono tabular-nums text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              남은 시간 {formatRemaining(remainingMs)}
+            </p>
+          </div>
+        )}
+
+        {error && !locked && (
           <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]">
             {error}
           </p>
         )}
 
-        <Button type="submit" fullWidth size="lg" disabled={submitting || !email || !password}>
+        <Button
+          type="submit"
+          fullWidth
+          size="lg"
+          disabled={submitDisabled}
+        >
           {submitting ? 'LOADING…' : '로그인'}
         </Button>
       </form>
@@ -106,14 +218,19 @@ function LoginContent() {
           회원가입 →
         </Link>
       </div>
-
     </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">LOADING…</p>}>
+    <Suspense
+      fallback={
+        <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">
+          LOADING…
+        </p>
+      }
+    >
       <LoginContent />
     </Suspense>
   );

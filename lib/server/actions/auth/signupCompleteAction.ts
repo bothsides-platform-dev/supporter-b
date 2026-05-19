@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '@/lib/auth/password';
+import { passwordSchema } from '@/lib/auth/password-validation';
 import {
   bizProfiles,
   users,
@@ -31,7 +32,7 @@ const Input = z
   .object({
     email: z.string().email(),
     name: z.string().min(1).max(100),
-    password: z.string().min(10).max(200),
+    password: passwordSchema,
     wsKind: z.enum(['buyer', 'pg']).optional(),
     wsName: z.string().min(1).max(200).optional(),
     bizProfile: BizProfileInput.optional(),
@@ -66,7 +67,15 @@ export async function signupCompleteAction(
   input: SignupCompleteInput,
 ): Promise<SignupCompleteResult> {
   const parsed = Input.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
+  if (!parsed.success) {
+    // passwordSchema's refine() carries message 'WEAK_PASSWORD' so policy
+    // violations surface a dedicated error code the form can map to inline
+    // rule guidance — distinct from generic INVALID_INPUT (bad email etc).
+    const weak = parsed.error.issues.some(
+      (i) => i.path[0] === 'password' && i.message === 'WEAK_PASSWORD',
+    );
+    return { ok: false, error: weak ? 'WEAK_PASSWORD' : 'INVALID_INPUT' };
+  }
 
   const email = normalizeEmail(parsed.data.email);
 
