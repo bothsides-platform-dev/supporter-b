@@ -51,6 +51,7 @@ export function BidBoardColumn({
   return (
     <div
       ref={setNodeRef}
+      data-stage={stage}
       className={cn(
         'flex flex-col min-h-[200px] rounded-md transition-colors',
         isOver

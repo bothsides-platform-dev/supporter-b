@@ -17,9 +17,12 @@ import 'dotenv/config';
 
 import { sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
+import { promises as fsp } from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
+  attachments,
   bids,
   bizProfiles,
   rfpCounters,
@@ -57,7 +60,49 @@ export type SeedResult = {
 
 const PASSWORD_PLAINTEXT = 'password123';
 
-export async function runSeed(db: AnyDb): Promise<SeedResult> {
+// Minimal valid PDF — used by `runSeed({ withAttachment: true })` to give
+// E2E specs (and a curious dev) an iframe-loadable file behind the toss
+// bid on P-2604-0001. Browsers render this as a blank page but the
+// /api/files/[id] route serves it with Content-Type: application/pdf,
+// which is all the iframe + ETag tests assert.
+const MINIMAL_PDF = Buffer.from(
+  [
+    '%PDF-1.4',
+    '1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj',
+    '2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>> endobj',
+    '3 0 obj <</Type /Page /Parent 2 0 R /MediaBox [0 0 100 100]>> endobj',
+    'xref',
+    '0 4',
+    '0000000000 65535 f',
+    '0000000009 00000 n',
+    '0000000056 00000 n',
+    '0000000111 00000 n',
+    'trailer <</Size 4 /Root 1 0 R>>',
+    'startxref',
+    '177',
+    '%%EOF',
+    '',
+  ].join('\n'),
+  'utf8',
+);
+
+function uploadDirAbs(): string {
+  const raw = process.env.UPLOAD_DIR ?? './uploads';
+  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+}
+
+export type RunSeedOptions = {
+  /** When true, seeds a bid_proposal attachment for the toss bid on
+   *  P-2604-0001 and writes the PDF body to `${UPLOAD_DIR}/2026/05/<uuid>.pdf`.
+   *  E2E uses this; the pglite unit test in scripts/__tests__/seed.test.ts
+   *  defaults to false so its existing row-count assertions still hold. */
+  withAttachment?: boolean;
+};
+
+export async function runSeed(
+  db: AnyDb,
+  options: RunSeedOptions = {},
+): Promise<SeedResult> {
   // 1. TRUNCATE everything in one CASCADE — FK order doesn't matter.
   // RESTART IDENTITY also covers the rfp_counters integer (though the table
   // has no serial). All 13 tables explicitly listed for grep visibility.
@@ -295,7 +340,31 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
   ]);
 
-  // 9. Bids — toss/inicis submitted, kakao did not bid.
+  // 9. Optional: bid_proposal attachment for the toss bid on P-2604-0001.
+  // Inserted before bids so the bid row can carry the FK in a single shot.
+  let tossProposalAttachmentId: string | null = null;
+  let attachmentCount = 0;
+  if (options.withAttachment) {
+    tossProposalAttachmentId = randomUUID();
+    const storageKey = `2026/05/${tossProposalAttachmentId}.pdf`;
+    const fullPath = path.join(uploadDirAbs(), storageKey);
+    await fsp.mkdir(path.dirname(fullPath), { recursive: true });
+    await fsp.writeFile(fullPath, MINIMAL_PDF as unknown as Uint8Array);
+
+    await db.insert(attachments).values({
+      id: tossProposalAttachmentId,
+      ownerKind: 'bid_proposal',
+      ownerId: 'P-2604-0001',
+      name: '제안서_토스.pdf',
+      size: MINIMAL_PDF.length,
+      mimeType: 'application/pdf',
+      storagePath: storageKey,
+      uploadedBy: tossUserId,
+    });
+    attachmentCount = 1;
+  }
+
+  // 10. Bids — toss/inicis submitted, kakao did not bid.
   // sme2 grade ⇒ card fees are statutory; cardFeesByIssuer is omitted.
   await db.insert(bids).values([
     {
@@ -311,7 +380,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       easyPayFeePct: '2.500',
       cardFeesByIssuer: null,
       overseasCardFeePct: '3.500',
-      proposalAttachmentId: null,
+      proposalAttachmentId: tossProposalAttachmentId,
       memo: '월 결제액 1억 기준 D+1 정산',
       status: 'submitted',
       submittedBy: tossUserId,
@@ -349,7 +418,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     contracts: 0,
     notifications: 0,
     outbox: 0,
-    attachments: 0,
+    attachments: attachmentCount,
     verificationTokens: 0,
     rfpCounters: 2,
     loginCredentials: [

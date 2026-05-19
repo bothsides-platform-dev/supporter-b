@@ -24,10 +24,18 @@
  */
 import 'dotenv/config';
 
+import { promises as fsp } from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const TEST_DB_FALLBACK =
   'postgres://bidit:bidit@localhost:5433/bidit_test';
+
+// Must match `playwright.config.ts:webServer.env.UPLOAD_DIR`. test-db-reset
+// is invoked by global-setup BEFORE the webServer starts, so we own the
+// directory lifecycle here — wipe + recreate so stale uploads from prior
+// runs can't satisfy assertions in fresh specs.
+const E2E_UPLOAD_DIR = './uploads-e2e';
 
 async function resetTestDatabase(): Promise<void> {
   const testUrl = process.env.DATABASE_URL_TEST ?? TEST_DB_FALLBACK;
@@ -48,13 +56,22 @@ async function resetTestDatabase(): Promise<void> {
   // Force the seed module to pick up the test URL when it imports
   // `lib/db/client.ts`. Must happen before the dynamic import below.
   process.env.DATABASE_URL = testUrl;
+  // Pin upload dir so seed's attachment write + the webServer's storage
+  // reads point at the same place regardless of CI vs local.
+  process.env.UPLOAD_DIR = E2E_UPLOAD_DIR;
+
+  // Wipe + recreate the upload root so seed's attachment file is the only
+  // artifact in there.
+  const abs = path.resolve(process.cwd(), E2E_UPLOAD_DIR);
+  await fsp.rm(abs, { recursive: true, force: true });
+  await fsp.mkdir(abs, { recursive: true });
 
   const { runSeed } = await import('./seed');
   const { db } = await import('@/lib/db/client');
 
-  const result = await runSeed(db);
+  const result = await runSeed(db, { withAttachment: true });
   console.log(
-    `[test-db-reset] seeded ${result.rfps} rfps, ${result.invitations} invitations, ${result.bids} bids`,
+    `[test-db-reset] seeded ${result.rfps} rfps, ${result.invitations} invitations, ${result.bids} bids, ${result.attachments} attachments`,
   );
 }
 
