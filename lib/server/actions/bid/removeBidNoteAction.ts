@@ -63,7 +63,8 @@ export async function removeBidNoteAction(
     return { ok: false, error: 'FORBIDDEN' };
   }
 
-  // Gather attachments before deleting rows so we know which disk files to drop.
+  // Gather attachments before deleting rows so we know which storage
+  // objects to drop.
   const attRows = await db
     .select({
       id: attachments.id,
@@ -80,7 +81,7 @@ export async function removeBidNoteAction(
   const storage = getStorage();
   for (const att of attRows) {
     await storage.delete(att.storagePath).catch(() => {
-      // orphan disk file — v1 sweeper picks it up. Don't block the action.
+      // orphan storage object — v1 sweeper picks it up. Don't block the action.
     });
   }
 

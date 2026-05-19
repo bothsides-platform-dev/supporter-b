@@ -1,0 +1,37 @@
+# Supabase local stack config. Subset of `supabase init` output —
+# only the surface the project actually uses is pinned here. Add
+# more sections when you start using them; the CLI fills in
+# sensible defaults for anything omitted.
+#
+# Boot the stack: `supabase start` (Docker required).
+# Reset DB + re-run seed.sql: `supabase db reset`.
+
+project_id = "bidit"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+[storage]
+enabled = true
+# 20MB matches the upload route's MAX_FILE_SIZE (app/api/files/upload).
+file_size_limit = "20MiB"
+
+[auth]
+enabled = false
+
+[inbucket]
+enabled = false

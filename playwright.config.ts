@@ -60,7 +60,11 @@ export default defineConfig({
       //   needs lookup, inject MockNtsClient via __setNtsClientForTest.
       RESEND_API_KEY: '',
       NTS_SERVICE_KEY: '',
-      UPLOAD_DIR: './uploads-e2e',
+      // Pass the operator's Supabase env through to the webServer so its
+      // `getStorage()` talks to the same bucket the spec helpers (running
+      // in the Playwright process) wipe + populate in global-setup.
+      SUPABASE_URL: process.env.SUPABASE_URL ?? '',
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
       // Default Drizzle backend. Empty string preserves the default
       // (matches the spec's `REPO_BACKEND: ''` literal).
       REPO_BACKEND: '',

@@ -7,13 +7,14 @@
  * two together — the only path that exercises both at runtime through a
  * real browser.
  *
- * The seed (with `withAttachment: true`) attaches a tiny PDF to the toss
- * bid on P-2604-0001 so the buyer has something to preview.
+ * `attachTossProposalPdf` uploads a tiny PDF to the toss bid on
+ * P-2604-0001 (via the same Supabase Storage backend the route reads
+ * from) so the buyer has something to preview.
  */
 import { test, expect } from 'playwright/test';
 
 import {
-  findSeededProposalAttachmentId,
+  attachTossProposalPdf,
   loginAs,
   resetRfpForKanban,
 } from './_helpers';
@@ -21,12 +22,14 @@ import {
 const RFP_ID = 'P-2604-0001';
 
 test.describe.serial('BidDetailModal — PDF preview iframe', () => {
+  let attachmentId: string;
+
   test.beforeAll(async () => {
     await resetRfpForKanban(RFP_ID);
+    attachmentId = await attachTossProposalPdf(RFP_ID);
   });
 
   test('first open → 200 + ETag; second open → 304', async ({ page }) => {
-    const attachmentId = await findSeededProposalAttachmentId(RFP_ID);
 
     await loginAs(page, 'buyer');
     await page.goto(`/rfp/${RFP_ID}`);

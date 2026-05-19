@@ -9,11 +9,8 @@
 //   - 403 authenticated but not allowed
 //   - 200 + Content-Type / Content-Length / Cache-Control / Content-Disposition
 //   - 200 body bytes equal stored bytes
-//   - 410 when row exists but disk file missing (advisor pin: orphan path)
+//   - 410 when row exists but storage object is missing (advisor pin: orphan path)
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { promises as fsp } from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import { attachments, rfps, rfpInvitations } from '@/lib/db/schema';
@@ -34,7 +31,7 @@ import {
   __resetStorageForTest,
   __setStorageForTest,
 } from '@/lib/server/storage';
-import { LocalStorage } from '@/lib/server/storage/local';
+import { InMemoryStorage } from '@/lib/server/storage/memory';
 import { newAttachmentPath } from '@/lib/server/storage/path';
 
 const sessionRef: { value: unknown | null } = { value: null };
@@ -43,8 +40,7 @@ vi.mock('@/auth', () => ({
 }));
 
 let db: PgliteDB;
-let scratch: string;
-const ORIGINAL_UPLOAD_DIR = process.env.UPLOAD_DIR;
+let storage: InMemoryStorage;
 
 beforeEach(async () => {
   __resetForTest();
@@ -54,9 +50,8 @@ beforeEach(async () => {
   // The GET route shares the same global override key as the upload route.
   const upload = await import('../upload/route');
   upload.__setFilesDbForTest(db);
-  scratch = path.join(os.tmpdir(), `bidit-get-${randomUUID()}`);
-  process.env.UPLOAD_DIR = scratch;
-  __setStorageForTest(new LocalStorage());
+  storage = new InMemoryStorage();
+  __setStorageForTest(storage);
   sessionRef.value = null;
 });
 
@@ -66,9 +61,6 @@ afterEach(async () => {
   __setStorageForTest(undefined);
   __resetStorageForTest();
   __resetForTest();
-  if (ORIGINAL_UPLOAD_DIR === undefined) delete process.env.UPLOAD_DIR;
-  else process.env.UPLOAD_DIR = ORIGINAL_UPLOAD_DIR;
-  await fsp.rm(scratch, { recursive: true, force: true });
 });
 
 const PDF_HEAD = Buffer.from('%PDF-1.7 hello payload', 'utf8');
@@ -118,10 +110,9 @@ async function seedScenario() {
     status: 'accepted',
   });
 
-  // Persist a real file via LocalStorage and an attachments row pointing at it.
-  const ls = new LocalStorage();
+  // Persist the bytes via the test storage and an attachments row pointing at it.
   const key = newAttachmentPath('rfp.pdf');
-  await ls.save(key, PDF_HEAD, 'application/pdf');
+  await storage.save(key, PDF_HEAD, 'application/pdf');
   const id = randomUUID();
   await db.insert(attachments).values({
     id,
@@ -343,10 +334,10 @@ describe('GET /api/files/[id]', () => {
     expect(r.status).toBe(200);
   });
 
-  it('410 when row exists but disk file is missing', async () => {
+  it('410 when row exists but storage object is missing', async () => {
     const s = await seedScenario();
-    // Delete the on-disk file but keep the row.
-    await fsp.rm(path.join(scratch, s.storageKey), { force: true });
+    // Delete the stored bytes but keep the row.
+    await storage.delete(s.storageKey);
     sessionRef.value = {
       user: {
         id: s.buyerUserId,

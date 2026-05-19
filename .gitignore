@@ -41,11 +41,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local file storage (Step 11 LocalStorage). Prod swaps to S3/Supabase Storage.
-/uploads
-# e2e UPLOAD_DIR (Step 14 Playwright config) — wiped between runs.
-/uploads-e2e
-
 # Playwright artifacts (Step 14)
 /test-results
 /playwright-report

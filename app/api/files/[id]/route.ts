@@ -32,8 +32,8 @@
  *     loading. Multi-range (comma-separated) falls through to 200.
  *
  * v0 limits:
- *   - No orphan cleanup — rows whose disk file is missing return 410
- *     so the UI can render a "missing" state (rare; v1 cron sweeper).
+ *   - No orphan cleanup — rows whose storage object is missing return
+ *     410 so the UI can render a "missing" state (rare; v1 cron sweeper).
  */
 import { auth } from '@/auth';
 import { getAttachmentRepo } from '@/lib/server/repositories/factory';

@@ -15,7 +15,8 @@ PG(결제대행사) 1:N 비공개 RFP 플랫폼.
 | **Node.js 20 이상** | JavaScript 실행 환경 | [nodejs.org](https://nodejs.org/ko) → "LTS" 버전 다운로드 후 실행 (다음·다음·완료) |
 | **Git** | 소스 코드 받기 + Git Bash 터미널 | [git-scm.com/download/win](https://git-scm.com/download/win) → 다운로드 후 실행 (옵션 그대로 다음·다음·완료) |
 | **pnpm** | 패키지 매니저 | Node 설치 후 PowerShell 또는 Git Bash 에서 `npm install -g pnpm` 실행 |
-| **Docker Desktop** | 데이터베이스(Postgres) 띄우는 데 사용 | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) 다운로드 → 설치 → **반드시 한 번 실행해서 시작 상태로 둡니다** (작업 표시줄에 🐳 고래 아이콘이 보이면 OK) |
+| **Docker Desktop** | 데이터베이스(Postgres) + Supabase 로컬 스택을 띄우는 데 사용 | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) 다운로드 → 설치 → **반드시 한 번 실행해서 시작 상태로 둡니다** (작업 표시줄에 🐳 고래 아이콘이 보이면 OK) |
+| **Supabase CLI** | 로컬 Supabase(첨부파일 저장) 띄우기 | `npm install -g supabase` (또는 macOS: `brew install supabase/tap/supabase`) |
 
 설치가 끝나면 **Git Bash** (시작 메뉴에서 "Git Bash" 검색) 를 열고 아래 명령으로 확인합니다:
 
@@ -70,7 +71,8 @@ Copy-Item .env.example .env.local
 | `NTS_SERVICE_KEY` | (선택) 비워둬도 됨. 사업자번호 자동 조회를 쓰려면 [data.go.kr](https://www.data.go.kr) 에서 "국세청 사업자등록 상태조회" API 신청 |
 | `NEXT_PUBLIC_BASE_URL` | 그대로 두기 (`http://localhost:3000`) |
 | `CRON_SECRET` | 아무 문자열이나 입력. 예: `changeme` |
-| `UPLOAD_DIR` | 그대로 두기 (`./uploads`) |
+| `SUPABASE_URL` | 로컬: `http://127.0.0.1:54321`. (4단계에서 `supabase start` 출력으로 확정) |
+| `SUPABASE_SERVICE_ROLE_KEY` | 로컬: 4단계에서 `supabase status` 출력에 표시되는 `service_role key` 값 |
 
 > 외부 키(`RESEND_API_KEY`, `NTS_SERVICE_KEY`) 가 비어 있어도 앱은 정상적으로 떠서 화면 클릭은 가능합니다. 다만 실제 이메일 발송과 사업자번호 자동 조회는 동작하지 않습니다.
 
@@ -90,13 +92,25 @@ openssl rand -base64 32
 
 **또는** [generate-secret.vercel.app/32](https://generate-secret.vercel.app/32) 에서 나오는 값을 복사해 넣어도 됩니다.
 
-## 4. 데이터베이스 띄우기
+## 4. 데이터베이스 + Supabase 띄우기
 
 **Docker Desktop 이 실행 중인지** 먼저 확인하세요. (작업 표시줄에 🐳 고래 아이콘이 보여야 합니다. 안 보이면 시작 메뉴에서 "Docker Desktop" 을 실행하고 1~2분 기다리세요.)
 
 ```bash
 docker compose up -d pg
+supabase start
 ```
+
+- `docker compose up -d pg` 는 메인 Postgres(5432) 를 띄웁니다.
+- `supabase start` 는 첨부파일을 저장할 로컬 Supabase Storage 스택(54321/54322/54323) 을 띄웁니다. 첫 실행 시 이미지 다운로드로 수 분 걸릴 수 있습니다.
+
+기동이 끝나면 다음 명령으로 Supabase 접속 정보를 확인합니다:
+
+```bash
+supabase status
+```
+
+출력에 표시된 `API URL` 과 `service_role key` 값을 `.env.local` 의 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` 에 채워 넣습니다. (대개 첫 부팅 이후 값이 바뀌지 않으니 한 번만 채우면 됩니다.)
 
 정상 기동 확인:
 
@@ -113,7 +127,7 @@ pnpm db:migrate
 pnpm db:seed
 ```
 
-`db:migrate` 는 테이블을 만들고, `db:seed` 는 테스트용 사용자·워크스페이스·RFP 데이터를 넣습니다.
+`db:migrate` 는 테이블을 만들고, `db:seed` 는 테스트용 사용자·워크스페이스·RFP 데이터를 넣습니다. 첨부파일 저장용 `attachments` 버킷은 `supabase start` 시 `supabase/seed.sql` 에 의해 자동 생성됩니다.
 
 ## 6. 개발 서버 실행
 

@@ -15,14 +15,15 @@
  *   `createRfpAction` later patches the row's `ownerId` to the real
  *   RFP id once the form is submitted.
  *
- * Disk-then-DB ordering (advisor pin 6):
+ * Storage-then-DB ordering (advisor pin 6):
  *   1. Sniff + validate buffer.
  *   2. Compute key via `newAttachmentPath(filename)`.
  *   3. `storage.save(key, buffer, mime)`.
  *   4. `attachmentRepo.save({...})`.
- *   5. If step 4 throws — best-effort `storage.delete(key)`. The disk
- *      file is the orphan, not the row; deleting the disk first means
- *      the system can never claim a row whose payload is missing.
+ *   5. If step 4 throws — best-effort `storage.delete(key)`. The stored
+ *      object is the orphan, not the row; deleting the storage entry
+ *      first means the system can never claim a row whose payload is
+ *      missing.
  *
  * Orphan rows from interrupted uploads are NOT cleaned up in v0. v1
  * cron sweeper deletes attachments older than 24h with no parent row.
@@ -203,7 +204,7 @@ export async function POST(req: Request): Promise<Response> {
       mimeType: sniffed,
     });
   } catch (err) {
-    // Best-effort cleanup so the disk file doesn't outlive the failed row.
+    // Best-effort cleanup so the stored object doesn't outlive the failed row.
     await storage.delete(key).catch(() => {});
     throw err;
   }

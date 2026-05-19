@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { ReadRange, Storage } from './local';
+import type { ReadRange, Storage } from './types';
 
 const BUCKET = 'attachments';
 

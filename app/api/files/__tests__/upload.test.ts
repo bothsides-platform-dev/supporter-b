@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-// POST /api/files/upload — auth/validation matrix + disk-DB ordering
+// POST /api/files/upload — auth/validation matrix + storage-DB ordering
 // (advisor pin 6 — F-6).
 //
 // Coverage:
@@ -11,12 +11,9 @@
 //   - 413 too large
 //   - 400 empty file / no file
 //   - 403 wrong workspaceType for ownerKind
-//   - happy path: row inserted, file on disk
-//   - F-6: row insert fails → file on disk is cleaned up
+//   - happy path: row inserted, bytes in storage
+//   - F-6: row insert fails → storage object is cleaned up
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { promises as fsp } from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import { attachments, bids, rfps, rfpInvitations } from '@/lib/db/schema';
@@ -38,7 +35,7 @@ import {
   __resetStorageForTest,
   __setStorageForTest,
 } from '@/lib/server/storage';
-import { LocalStorage } from '@/lib/server/storage/local';
+import { InMemoryStorage } from '@/lib/server/storage/memory';
 
 // auth() mocked via a settable session ref — same pattern as the bid action tests.
 const sessionRef: { value: unknown | null } = { value: null };
@@ -47,8 +44,7 @@ vi.mock('@/auth', () => ({
 }));
 
 let db: PgliteDB;
-let scratch: string;
-const ORIGINAL_UPLOAD_DIR = process.env.UPLOAD_DIR;
+let storage: InMemoryStorage;
 
 beforeEach(async () => {
   __resetForTest();
@@ -58,10 +54,8 @@ beforeEach(async () => {
   // Install pglite handle for the route's `routeDb()`.
   const filesRoute = await import('../upload/route');
   filesRoute.__setFilesDbForTest(db);
-  // Real LocalStorage on a per-test scratch dir.
-  scratch = path.join(os.tmpdir(), `bidit-upload-${randomUUID()}`);
-  process.env.UPLOAD_DIR = scratch;
-  __setStorageForTest(new LocalStorage());
+  storage = new InMemoryStorage();
+  __setStorageForTest(storage);
   sessionRef.value = null;
 });
 
@@ -71,9 +65,6 @@ afterEach(async () => {
   __setStorageForTest(undefined);
   __resetStorageForTest();
   __resetForTest();
-  if (ORIGINAL_UPLOAD_DIR === undefined) delete process.env.UPLOAD_DIR;
-  else process.env.UPLOAD_DIR = ORIGINAL_UPLOAD_DIR;
-  await fsp.rm(scratch, { recursive: true, force: true });
 });
 
 const PDF_HEAD = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
@@ -254,7 +245,7 @@ describe('POST /api/files/upload', () => {
     expect(r.status).toBe(403);
   });
 
-  it('happy path — rfp draft: row inserted + file on disk', async () => {
+  it('happy path — rfp draft: row inserted + bytes in storage', async () => {
     const { buyer } = await seedBuyerSession();
     const f = new FormData();
     f.append('file', makeFile('rfp.pdf', 'application/pdf', PDF_HEAD));
@@ -266,7 +257,7 @@ describe('POST /api/files/upload', () => {
     expect(body.name).toBe('rfp.pdf');
     expect(body.size).toBe(PDF_HEAD.length);
 
-    // Row + on-disk file
+    // Row + storage payload
     const [row] = await db
       .select()
       .from(attachments)
@@ -276,9 +267,8 @@ describe('POST /api/files/upload', () => {
     expect(row?.ownerId).toBe('__draft__');
     expect(row?.mimeType).toBe('application/pdf');
 
-    const fullPath = path.join(scratch, row!.storagePath);
-    const stat = await fsp.stat(fullPath);
-    expect(stat.size).toBe(PDF_HEAD.length);
+    const { size } = await storage.read(row!.storagePath);
+    expect(size).toBe(PDF_HEAD.length);
   });
 
   it('happy path — bid_proposal: invitation gates upload', async () => {
@@ -438,11 +428,11 @@ describe('POST /api/files/upload', () => {
     expect(row?.uploadedBy).toBe(buyer.id);
   });
 
-  it('cleanup ordering — repo.save throws → disk file deleted (F-6)', async () => {
+  it('cleanup ordering — repo.save throws → storage object deleted (F-6)', async () => {
     await seedBuyerSession();
 
-    // Real storage with a spy on delete.
-    const realStorage = new LocalStorage();
+    // Real (in-memory) storage with a spy on delete.
+    const realStorage = new InMemoryStorage();
     const deleteSpy = vi.spyOn(realStorage, 'delete');
     __setStorageForTest(realStorage);
 
@@ -483,8 +473,9 @@ describe('POST /api/files/upload', () => {
 
       expect(savedKey).toBeDefined();
       expect(deleteSpy).toHaveBeenCalledWith(savedKey);
-      const fullPath = path.join(scratch, savedKey!);
-      await expect(fsp.stat(fullPath)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(realStorage.read(savedKey!)).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
     } finally {
       vi.doUnmock('@/lib/server/repositories/factory');
       vi.resetModules();

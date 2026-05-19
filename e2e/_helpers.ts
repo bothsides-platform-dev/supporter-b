@@ -9,10 +9,13 @@
  * for any direct DB access (see scenario-a/b/c). We mirror that pattern.
  */
 import type { Page } from 'playwright/test';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 
 import { db } from '@/lib/db/client';
-import { bids, bidNotes } from '@/lib/db/schema';
+import { attachments, bids, bidNotes } from '@/lib/db/schema';
+import { getStorage } from '@/lib/server/storage';
+import { newAttachmentPath } from '@/lib/server/storage/path';
 import type { BuyerStage } from '@/lib/types/bid';
 
 process.env.DATABASE_URL =
@@ -109,27 +112,69 @@ export async function findSeededBidIds(rfpId: string): Promise<{
   return { toss: toss.id, inicis: inicis.id };
 }
 
-/** Look up the seeded bid_proposal attachment for the toss bid on the given
- *  RFP. Throws if not present — specs that need it should run after
- *  `withAttachment: true` seed (which test-db-reset enforces). */
-export async function findSeededProposalAttachmentId(
-  rfpId: string,
-): Promise<string> {
-  const [row] = await db
-    .select({ id: bids.proposalAttachmentId })
+// Minimal valid PDF — small enough to inline, big enough that the browser
+// renders it as an empty page in the iframe preview. Specs that need an
+// attached file (e.g. bid-detail-pdf-preview.spec.ts) upload these bytes
+// via `attachTossProposalPdf` so the storage backend (Supabase locally,
+// Supabase in prod) actually carries the object.
+const MINIMAL_PDF = Buffer.from(
+  [
+    '%PDF-1.4',
+    '1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj',
+    '2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>> endobj',
+    '3 0 obj <</Type /Page /Parent 2 0 R /MediaBox [0 0 100 100]>> endobj',
+    'xref',
+    '0 4',
+    '0000000000 65535 f',
+    '0000000009 00000 n',
+    '0000000056 00000 n',
+    '0000000111 00000 n',
+    'trailer <</Size 4 /Root 1 0 R>>',
+    'startxref',
+    '177',
+    '%%EOF',
+    '',
+  ].join('\n'),
+  'utf8',
+);
+
+/** Idempotently attach a fresh bid_proposal PDF to the toss bid on the given
+ *  RFP. Replaces the seed's old `withAttachment: true` path — the seed no
+ *  longer creates attachments, so specs that need iframe-renderable bytes
+ *  call this in their `beforeAll`. Writes to whatever Storage backend
+ *  `getStorage()` returns (Supabase locally + prod). Returns the new
+ *  attachment id, which `bids.proposalAttachmentId` is also updated to. */
+export async function attachTossProposalPdf(rfpId: string): Promise<string> {
+  const [tossBid] = await db
+    .select({ id: bids.id, submittedBy: bids.submittedBy })
     .from(bids)
     .where(
-      and(
-        eq(bids.rfpId, rfpId),
-        sql`${bids.proposalAttachmentId} IS NOT NULL`,
-      ),
+      sql`${bids.rfpId} = ${rfpId} AND ${bids.pgWsId} = (
+        SELECT id FROM workspaces WHERE name = '토스페이먼츠'
+      )`,
     )
     .limit(1);
-  if (!row?.id) {
-    throw new Error(
-      `[e2e helpers] no seeded bid_proposal attachment on ${rfpId}`,
-    );
+  if (!tossBid) {
+    throw new Error(`[e2e helpers] toss bid not found on ${rfpId}`);
   }
-  return row.id;
+
+  const attachmentId = randomUUID();
+  const storageKey = newAttachmentPath('제안서_토스.pdf');
+  await getStorage().save(storageKey, MINIMAL_PDF, 'application/pdf');
+  await db.insert(attachments).values({
+    id: attachmentId,
+    ownerKind: 'bid_proposal',
+    ownerId: rfpId,
+    name: '제안서_토스.pdf',
+    size: MINIMAL_PDF.length,
+    mimeType: 'application/pdf',
+    storagePath: storageKey,
+    uploadedBy: tossBid.submittedBy!,
+  });
+  await db
+    .update(bids)
+    .set({ proposalAttachmentId: attachmentId })
+    .where(eq(bids.id, tossBid.id));
+  return attachmentId;
 }
 

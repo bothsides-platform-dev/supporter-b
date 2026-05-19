@@ -1,5 +1,7 @@
 /**
- * scripts/test-db-reset.ts — TRUNCATE + reseed against $DATABASE_URL_TEST.
+ * scripts/test-db-reset.ts — TRUNCATE + reseed against $DATABASE_URL_TEST,
+ * and wipe the Supabase Storage `attachments` bucket so stale uploads from
+ * prior runs can't satisfy fresh-spec assertions.
  *
  * Used by `e2e/global-setup.ts` (Playwright) before any spec runs, and
  * exposed as `pnpm e2e:reset` for manual local recovery between e2e
@@ -12,9 +14,13 @@
  *   - Reuses `runSeed()` from `scripts/seed.ts`, which begins with a
  *     `TRUNCATE … CASCADE` of all 13 tables — so this is also the
  *     canonical "reset" path. No separate truncate step needed.
+ *   - Empties the Supabase `attachments` bucket via recursive list + remove,
+ *     replacing the old fs `./uploads-e2e` rm/mkdir.
  *
  * Pre-conditions
  *   - `docker compose --profile test up -d pg-test` is running.
+ *   - `supabase start` is running (local Storage) OR `SUPABASE_URL` /
+ *     `SUPABASE_SERVICE_ROLE_KEY` point at a dedicated test project.
  *   - `pnpm db:migrate` (with DATABASE_URL=$DATABASE_URL_TEST) has been
  *     run at least once so the test DB has the schema.
  *
@@ -24,18 +30,50 @@
  */
 import 'dotenv/config';
 
-import { promises as fsp } from 'node:fs';
-import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const TEST_DB_FALLBACK =
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
-// Must match `playwright.config.ts:webServer.env.UPLOAD_DIR`. test-db-reset
-// is invoked by global-setup BEFORE the webServer starts, so we own the
-// directory lifecycle here — wipe + recreate so stale uploads from prior
-// runs can't satisfy assertions in fresh specs.
-const E2E_UPLOAD_DIR = './uploads-e2e';
+const BUCKET = 'attachments';
+
+/**
+ * Recursively walk the `attachments` bucket and remove every object.
+ * Exported for unit testing — the real call path is from
+ * `resetTestDatabase()` which constructs the client from env.
+ *
+ * The storage scheme is `{yyyy}/{mm}/{uuid}.{ext}` (see
+ * `lib/server/storage/path.ts`) so the recursion only ever needs to
+ * descend two levels in practice, but the implementation is generic
+ * over arbitrary nesting.
+ */
+export async function truncateAttachmentsBucket(
+  sb: SupabaseClient,
+): Promise<void> {
+  const bucket = sb.storage.from(BUCKET);
+
+  const fileKeys: string[] = [];
+  async function walk(prefix: string): Promise<void> {
+    const { data, error } = await bucket.list(prefix);
+    if (error) throw error;
+    if (!data) return;
+    for (const entry of data) {
+      const key = prefix ? `${prefix}/${entry.name}` : entry.name;
+      // Supabase reports folders with `id: null`; files carry a uuid id.
+      if (entry.id === null) {
+        await walk(key);
+      } else {
+        fileKeys.push(key);
+      }
+    }
+  }
+  await walk('');
+
+  if (fileKeys.length === 0) return;
+  const { error } = await bucket.remove(fileKeys);
+  if (error) throw error;
+}
 
 async function resetTestDatabase(): Promise<void> {
   const testUrl = process.env.DATABASE_URL_TEST ?? TEST_DB_FALLBACK;
@@ -56,22 +94,27 @@ async function resetTestDatabase(): Promise<void> {
   // Force the seed module to pick up the test URL when it imports
   // `lib/db/client.ts`. Must happen before the dynamic import below.
   process.env.DATABASE_URL = testUrl;
-  // Pin upload dir so seed's attachment write + the webServer's storage
-  // reads point at the same place regardless of CI vs local.
-  process.env.UPLOAD_DIR = E2E_UPLOAD_DIR;
 
-  // Wipe + recreate the upload root so seed's attachment file is the only
-  // artifact in there.
-  const abs = path.resolve(process.cwd(), E2E_UPLOAD_DIR);
-  await fsp.rm(abs, { recursive: true, force: true });
-  await fsp.mkdir(abs, { recursive: true });
+  // Empty the Supabase Storage bucket. We build a client here (not via
+  // `getStorage()`) so this script has an explicit, mockable surface
+  // and so a missing env var fails loud at the entry point rather than
+  // deep in `resetTestDatabase` -> seed.
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error(
+      '[test-db-reset] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set',
+    );
+  }
+  const sb = createClient(supabaseUrl, serviceRoleKey);
+  await truncateAttachmentsBucket(sb);
 
   const { runSeed } = await import('./seed');
   const { db } = await import('@/lib/db/client');
 
-  const result = await runSeed(db, { withAttachment: true });
+  const result = await runSeed(db);
   console.log(
-    `[test-db-reset] seeded ${result.rfps} rfps, ${result.invitations} invitations, ${result.bids} bids, ${result.attachments} attachments`,
+    `[test-db-reset] seeded ${result.rfps} rfps, ${result.invitations} invitations, ${result.bids} bids`,
   );
 }
 
