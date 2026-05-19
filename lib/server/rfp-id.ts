@@ -24,5 +24,5 @@ export async function nextRfpId(tx: DB): Promise<string> {
     ? (r as Array<{ last_seq: number }>)
     : (r?.rows ?? []);
   const seq = rows[0].last_seq;
-  return `Q-${yymm}-${String(seq).padStart(4, '0')}`;
+  return `P-${yymm}-${String(seq).padStart(4, '0')}`;
 }

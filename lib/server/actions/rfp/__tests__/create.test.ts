@@ -106,7 +106,7 @@ describe('createRfpAction', () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.rfpId).toMatch(/^Q-\d{4}-\d{4}$/);
+    expect(r.rfpId).toMatch(/^P-\d{4}-\d{4}$/);
 
     const [row] = await db.select().from(rfps).where(eq(rfps.id, r.rfpId));
     expect(row.status).toBe('draft');
