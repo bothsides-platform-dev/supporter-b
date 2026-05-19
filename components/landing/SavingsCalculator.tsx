@@ -46,12 +46,12 @@ export function SavingsCalculator() {
   const volume = useMemo(() => tToVolume(volT), [volT]);
   const currentRate = rateBp / 10000;
   const grade = gradeFromVolume(volume);
-  const biditRate = SUPPORTER_B_RATE[grade];
+  const supporterBRate = SUPPORTER_B_RATE[grade];
   const savings = annualMaxSavings(volume, currentRate);
   const currentCost = Math.round(currentRate * volume);
-  const biditCost = Math.round(biditRate * volume);
+  const supporterBCost = Math.round(supporterBRate * volume);
 
-  const baselineRate = grade === 'general' ? GENERAL_ASSUMED_RATE : biditRate;
+  const baselineRate = grade === 'general' ? GENERAL_ASSUMED_RATE : supporterBRate;
   const baselineNote = `최저가능 ${(baselineRate * 100).toFixed(2)}%`;
 
   return (
@@ -123,9 +123,9 @@ export function SavingsCalculator() {
       <div className="mt-[var(--s-9)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)]">
         <CostComparisonChart
           currentCost={currentCost}
-          biditCost={biditCost}
+          supporterBCost={supporterBCost}
           currentRatePct={currentRate * 100}
-          biditRatePct={biditRate * 100}
+          supporterBRatePct={supporterBRate * 100}
         />
       </div>
 

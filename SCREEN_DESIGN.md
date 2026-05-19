@@ -178,7 +178,7 @@ Award
 ### 1.3 화면 명세
 
 #### 로그인 `/login`
-- 좌상단 워드마크 `B  BIDIT` + serial `EDITION 01`
+- 좌상단 워드마크 `B  Support B` + serial `EDITION 01`
 - 중앙 카드 max-w 380, 헤어라인 외곽
 - 필드: 이메일(`autocomplete=email`) / 비밀번호(`autocomplete=current-password`, 보기 토글)
 - "로그인 유지" 체크박스 (30일 세션)

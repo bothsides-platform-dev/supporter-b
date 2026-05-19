@@ -186,7 +186,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export async function sendEmail(notification: Notification): Promise<void> {
   const template = resolveTemplate(notification.event, notification.metadata);
   const { data, error } = await resend.emails.send({
-    from: 'bidit <noreply@bidit.kr>',
+    from: 'Support B <noreply@bidit.kr>',
     to: notification.recipientEmail,
     subject: notification.title,
     react: template,
@@ -309,15 +309,15 @@ SSE route constraints:
 
 | 이벤트 | 트리거 위치 | 수신자 | 채널 | 이메일 제목 |
 |---|---|---|---|---|
-| `RFP_SENT` | RFP 발송 Action | 초대 PG 이메일 | email | `[bidit] {buyer}가 RFP를 보냈습니다` |
-| `RFP_MODIFIED` | RFP 수정 Action | 참여 PG 담당자 전체 | email + inapp | `[bidit] RFP Q-{no} 내용이 변경되었습니다` |
-| `RFP_CANCELLED` | RFP 취소 Action | 참여 PG 담당자 전체 | email + inapp | `[bidit] RFP Q-{no}이 취소되었습니다` |
-| `BID_SUBMITTED` | 입찰 제출 Action | buyer | email + inapp | `[bidit] {pg}이 입찰서를 제출했습니다` |
-| `BID_WITHDRAWN` | 입찰 철회 Action | buyer | email + inapp | `[bidit] {pg}이 입찰서를 철회했습니다` |
-| `AWARD_SELECTED` | 수주 확정 Action | 선택된 PG | email + inapp | `[bidit] 수주가 확정되었습니다 — {rfpTitle}` |
-| `AWARD_REJECTED` | 수주 확정 Action | 비선택 PG 전체 | email + inapp | `[bidit] 이번 RFP는 다른 PG가 선택되었습니다` |
-| `AUTH_EMAIL_VERIFY` | 이메일 인증 Action | 가입 시도 이메일 | email | `[bidit] 이메일 인증 코드: {code}` |
-| `AUTH_PASSWORD_RESET` | 비밀번호 재설정 Action | 요청 이메일 | email | `[bidit] 비밀번호 재설정 링크` |
+| `RFP_SENT` | RFP 발송 Action | 초대 PG 이메일 | email | `[Support B] {buyer}가 RFP를 보냈습니다` |
+| `RFP_MODIFIED` | RFP 수정 Action | 참여 PG 담당자 전체 | email + inapp | `[Support B] RFP Q-{no} 내용이 변경되었습니다` |
+| `RFP_CANCELLED` | RFP 취소 Action | 참여 PG 담당자 전체 | email + inapp | `[Support B] RFP Q-{no}이 취소되었습니다` |
+| `BID_SUBMITTED` | 입찰 제출 Action | buyer | email + inapp | `[Support B] {pg}이 입찰서를 제출했습니다` |
+| `BID_WITHDRAWN` | 입찰 철회 Action | buyer | email + inapp | `[Support B] {pg}이 입찰서를 철회했습니다` |
+| `AWARD_SELECTED` | 수주 확정 Action | 선택된 PG | email + inapp | `[Support B] 수주가 확정되었습니다 — {rfpTitle}` |
+| `AWARD_REJECTED` | 수주 확정 Action | 비선택 PG 전체 | email + inapp | `[Support B] 이번 RFP는 다른 PG가 선택되었습니다` |
+| `AUTH_EMAIL_VERIFY` | 이메일 인증 Action | 가입 시도 이메일 | email | `[Support B] 이메일 인증 코드: {code}` |
+| `AUTH_PASSWORD_RESET` | 비밀번호 재설정 Action | 요청 이메일 | email | `[Support B] 비밀번호 재설정 링크` |
 
 ---
 

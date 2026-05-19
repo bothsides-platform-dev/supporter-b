@@ -5,21 +5,21 @@ import { formatKRW } from '@/lib/format';
 
 type CostComparisonChartProps = {
   currentCost: number;
-  biditCost: number;
+  supporterBCost: number;
   currentRatePct: number;
-  biditRatePct: number;
+  supporterBRatePct: number;
 };
 
 export function CostComparisonChart({
   currentCost,
-  biditCost,
+  supporterBCost,
   currentRatePct,
-  biditRatePct,
+  supporterBRatePct,
 }: CostComparisonChartProps) {
-  const max = Math.max(currentCost, biditCost, 1);
+  const max = Math.max(currentCost, supporterBCost, 1);
   const currentRatio = currentCost / max;
-  const biditRatio = biditCost / max;
-  const savings = Math.max(0, currentCost - biditCost);
+  const supporterBRatio = supporterBCost / max;
+  const savings = Math.max(0, currentCost - supporterBCost);
   const savingsPct = currentCost > 0 ? (savings / currentCost) * 100 : 0;
 
   return (
@@ -43,9 +43,9 @@ export function CostComparisonChart({
         />
         <BarRow
           label="Supporter B"
-          rateNote={`${biditRatePct.toFixed(2)}%`}
-          ratio={biditRatio}
-          cost={biditCost}
+          rateNote={`${supporterBRatePct.toFixed(2)}%`}
+          ratio={supporterBRatio}
+          cost={supporterBCost}
           variant="supporter-b"
         />
       </div>
