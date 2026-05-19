@@ -83,4 +83,14 @@ export const verificationPurposeEnum = pgEnum('verification_purpose', [
 export const attachmentOwnerKindEnum = pgEnum('attachment_owner_kind', [
   'rfp',
   'bid_proposal',
+  'bid_note',
+]);
+
+// Buyer-side kanban stage for a bid. Independent of bid.status (PG lifecycle).
+// Canonical column from Stage 3 onward — replaces the localStorage label that
+// lib/stores/bid-board.ts persisted in v0.
+export const buyerStageEnum = pgEnum('buyer_stage', [
+  'pending',
+  'negotiating',
+  'decided',
 ]);

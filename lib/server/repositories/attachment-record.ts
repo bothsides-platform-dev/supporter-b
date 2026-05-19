@@ -8,8 +8,10 @@ import type { Attachment } from '@/lib/types/common';
 // Repositories return this expanded record for server-internal callers (ACL,
 // file route, storage). Client-facing repos (BidRepo) project to plain
 // `Attachment` before returning.
+export type AttachmentOwnerKind = 'rfp' | 'bid_proposal' | 'bid_note';
+
 export type AttachmentRecord = Attachment & {
-  ownerKind: 'rfp' | 'bid_proposal';
+  ownerKind: AttachmentOwnerKind;
   ownerId: string;
   storagePath: string;
   uploadedBy: string;

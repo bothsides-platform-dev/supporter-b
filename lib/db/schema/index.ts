@@ -7,6 +7,7 @@ export * from './workspace-invitations';
 export * from './rfps';
 export * from './rfp-invitations';
 export * from './bids';
+export * from './bid-notes';
 export * from './contracts';
 export * from './notifications';
 export * from './outbox-entries';

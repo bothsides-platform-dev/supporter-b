@@ -8,7 +8,7 @@ import {
   unique,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { bidStatusEnum, settleCycleEnum } from './_enums';
+import { bidStatusEnum, buyerStageEnum, settleCycleEnum } from './_enums';
 import { rfps } from './rfps';
 import { workspaces } from './workspaces';
 import { rfpInvitations } from './rfp-invitations';
@@ -41,6 +41,7 @@ export const bids = pgTable(
     proposalAttachmentId: uuid('proposal_attachment_id').references(() => attachments.id),
     memo: text('memo').notNull().default(''),
     status: bidStatusEnum('status').notNull().default('submitted'),
+    buyerStage: buyerStageEnum('buyer_stage').notNull().default('pending'),
     submittedBy: uuid('submitted_by')
       .notNull()
       .references(() => users.id),
