@@ -151,3 +151,20 @@ export function GripIcon({ size = 16, ...p }: IconProps) {
     </svg>
   );
 }
+
+export function SunIcon({ size = 20, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
+      <circle cx="10" cy="10" r="3.5" />
+      <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M14.36 5.64l1.42-1.42M4.22 15.78l1.42-1.42" />
+    </svg>
+  );
+}
+
+export function MoonIcon({ size = 20, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
+      <path d="M17 10.5A7 7 0 019.5 3a7.002 7.002 0 000 14 7 7 0 007.5-6.5z" />
+    </svg>
+  );
+}

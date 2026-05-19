@@ -5,6 +5,7 @@ import { useUIStore } from '@/lib/stores/ui';
 import { useNotifications } from '@/lib/hooks/useNotifications';
 import { IconButton } from '@/components/primitives/IconButton';
 import { BellIcon, SearchIcon } from '@/components/icons';
+import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { Avatar } from '@/components/primitives/Avatar';
 import {
   DropdownMenu,
@@ -57,6 +58,8 @@ export function Topbar({ user, workspaceType }: TopbarProps) {
             <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[var(--md-sys-color-warning)]" />
           )}
         </div>
+
+        <ThemeToggle />
 
         {/* User avatar + profile dropdown */}
         <DropdownMenu>

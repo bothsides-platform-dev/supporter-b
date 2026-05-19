@@ -49,7 +49,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#faf7f0",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F9F9FF" },
+    { media: "(prefers-color-scheme: dark)",  color: "#1A1C1E" },
+  ],
   width: "device-width",
   initialScale: 1,
 };
@@ -64,8 +67,17 @@ export default async function RootLayout({
   return (
     <html
       lang="ko"
+      suppressHydrationWarning
       className={`${pretendard.variable} h-full antialiased`}
     >
+      <head>
+        {/* Inline script prevents theme flash (FOUC) before React hydration */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var s=localStorage.getItem('bidit-theme');var t=s?JSON.parse(s)?.state?.theme:null;var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark');})();`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
         <ChannelTalk pluginKey={pluginKey} member={member} />

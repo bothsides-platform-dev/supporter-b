@@ -210,6 +210,10 @@
   /* backward compat alias */
   --shell-sidebar: var(--shell-rail);
 
+  /* Rail stays dark anchor in both modes (light: inverse-surface, dark: overridden below) */
+  --shell-rail-bg: var(--md-sys-color-inverse-surface);
+  --shell-rail-fg: var(--md-sys-color-inverse-on-surface);
+
   /* ── Spacing — backward-compat aliases (landing/* components) ─── */
   --s-1:   4px;
   --s-2:   8px;
@@ -222,4 +226,68 @@
   --s-9:   56px;
   --s-10:  80px;
   --s-11:  120px;
+}
+
+/* ── Dark Theme — MD3 dark tone values ───────────────── */
+.dark {
+  /* Primary */
+  --md-sys-color-primary:                  #9ECAFF;
+  --md-sys-color-on-primary:               #003258;
+  --md-sys-color-primary-container:        #004A77;
+  --md-sys-color-on-primary-container:     #D1E4FF;
+
+  /* Secondary */
+  --md-sys-color-secondary:                #BBC7DB;
+  --md-sys-color-on-secondary:             #253140;
+  --md-sys-color-secondary-container:      #3C4858;
+  --md-sys-color-on-secondary-container:   #D7E3F7;
+
+  /* Tertiary */
+  --md-sys-color-tertiary:                 #6FDA9E;
+  --md-sys-color-on-tertiary:              #003920;
+  --md-sys-color-tertiary-container:       #005231;
+  --md-sys-color-on-tertiary-container:    #8DF6BC;
+
+  /* Error */
+  --md-sys-color-error:                    #FFB4AB;
+  --md-sys-color-on-error:                 #690005;
+  --md-sys-color-error-container:          #93000A;
+  --md-sys-color-on-error-container:       #FFDAD6;
+
+  /* Warning */
+  --md-sys-color-warning:                  #FFB951;
+  --md-sys-color-on-warning:               #422C00;
+  --md-sys-color-warning-container:        #5F4200;
+  --md-sys-color-on-warning-container:     #FFDDB3;
+
+  /* Surface container hierarchy */
+  --md-sys-color-surface-dim:              #111316;
+  --md-sys-color-surface:                  #1A1C1E;
+  --md-sys-color-surface-bright:           #37393C;
+  --md-sys-color-surface-container-lowest: #0C0E11;
+  --md-sys-color-surface-container-low:    #191C1E;
+  --md-sys-color-surface-container:        #1D2024;
+  --md-sys-color-surface-container-high:   #282A2D;
+  --md-sys-color-surface-container-highest:#323537;
+
+  --md-sys-color-on-surface:               #E2E2E6;
+  --md-sys-color-on-surface-variant:       #C3C7CF;
+  --md-sys-color-outline:                  #8D9199;
+  --md-sys-color-outline-variant:          #43474E;
+
+  /* Background */
+  --md-sys-color-background:               #1A1C1E;
+  --md-sys-color-on-background:            #E2E2E6;
+
+  /* Inverse — flips relative to light */
+  --md-sys-color-inverse-surface:          #E2E2E6;
+  --md-sys-color-inverse-on-surface:       #2F3033;
+  --md-sys-color-inverse-primary:          #0061A4;
+
+  /* Utility */
+  --md-sys-color-surface-tint:             #9ECAFF;
+
+  /* Rail stays dark anchor in dark mode */
+  --shell-rail-bg: #323537;
+  --shell-rail-fg: #E2E2E6;
 }

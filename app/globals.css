@@ -37,9 +37,9 @@
   --color-input:              var(--md-sys-color-outline);
   --color-ring:               var(--md-sys-color-primary);
 
-  /* Navigation Rail = dark inverse surface */
-  --color-sidebar:                   var(--md-sys-color-inverse-surface);
-  --color-sidebar-foreground:        var(--md-sys-color-inverse-on-surface);
+  /* Navigation Rail — uses shell-rail tokens so both themes keep dark anchor */
+  --color-sidebar:                   var(--shell-rail-bg);
+  --color-sidebar-foreground:        var(--shell-rail-fg);
   --color-sidebar-border:            rgb(0 0 0 / 0);
   --color-sidebar-accent:            var(--sidebar-accent-computed);
   --color-sidebar-accent-foreground: var(--md-sys-color-inverse-primary);
@@ -60,6 +60,11 @@
 }
 
 :root {
+  color-scheme: light;
+  --sidebar-accent-computed: color-mix(in srgb, var(--md-sys-color-inverse-primary) 16%, var(--md-sys-color-inverse-surface));
+}
+.dark {
+  color-scheme: dark;
   --sidebar-accent-computed: color-mix(in srgb, var(--md-sys-color-inverse-primary) 16%, var(--md-sys-color-inverse-surface));
 }
 
