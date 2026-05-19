@@ -73,49 +73,63 @@ export async function addBidNoteAction(
     return { ok: false, error: 'FORBIDDEN' };
   }
 
-  // Verify every attachment is a valid bid_note draft pointing at this bid.
-  if (attIds.length > 0) {
-    const db = actionDb();
-    const rows = await db
-      .select({
-        id: attachments.id,
-        ownerKind: attachments.ownerKind,
-        ownerId: attachments.ownerId,
-      })
-      .from(attachments)
-      .where(inArray(attachments.id, attIds));
-    if (rows.length !== attIds.length) {
-      return { ok: false, error: 'INVALID_ATTACHMENT' };
-    }
-    for (const r of rows) {
-      if (r.ownerKind !== 'bid_note' || r.ownerId !== parsed.data.bidId) {
-        return { ok: false, error: 'INVALID_ATTACHMENT' };
+  const db = actionDb();
+  const noteRepo = await getBidNoteRepo();
+  const noteId = randomUUID();
+
+  // Save the note row and re-parent its attachments atomically. If the
+  // UPDATE fails (concurrent owner_id change, stricter ACL, FK violation)
+  // the note insert rolls back too — preventing a half-stored note with
+  // orphan attachments that would error on retry (INVALID_ATTACHMENT
+  // because the staged rows no longer point at this bid).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await db.transaction(async (tx: any) => {
+    if (attIds.length > 0) {
+      // Verify inside the transaction so a racing patch can't slip through.
+      const rows = await tx
+        .select({
+          id: attachments.id,
+          ownerKind: attachments.ownerKind,
+          ownerId: attachments.ownerId,
+        })
+        .from(attachments)
+        .where(inArray(attachments.id, attIds));
+      if (rows.length !== attIds.length) return 'INVALID_ATTACHMENT' as const;
+      for (const r of rows) {
+        if (r.ownerKind !== 'bid_note' || r.ownerId !== parsed.data.bidId) {
+          return 'INVALID_ATTACHMENT' as const;
+        }
       }
     }
-  }
 
-  const noteId = randomUUID();
-  const noteRepo = await getBidNoteRepo();
-  await noteRepo.save({
-    id: noteId,
-    bidId: parsed.data.bidId,
-    authorId: session.user.id,
-    body,
-    createdAt: new Date(),
+    await noteRepo.save(
+      {
+        id: noteId,
+        bidId: parsed.data.bidId,
+        authorId: session.user.id,
+        body,
+        createdAt: new Date(),
+      },
+      tx,
+    );
+
+    if (attIds.length > 0) {
+      await tx
+        .update(attachments)
+        .set({ ownerId: noteId })
+        .where(
+          and(
+            inArray(attachments.id, attIds),
+            eq(attachments.ownerKind, 'bid_note'),
+            eq(attachments.ownerId, parsed.data.bidId),
+          ),
+        );
+    }
+    return 'ok' as const;
   });
 
-  if (attIds.length > 0) {
-    const db = actionDb();
-    await db
-      .update(attachments)
-      .set({ ownerId: noteId })
-      .where(
-        and(
-          inArray(attachments.id, attIds),
-          eq(attachments.ownerKind, 'bid_note'),
-          eq(attachments.ownerId, parsed.data.bidId),
-        ),
-      );
+  if (result === 'INVALID_ATTACHMENT') {
+    return { ok: false, error: 'INVALID_ATTACHMENT' };
   }
 
   return { ok: true, noteId };
