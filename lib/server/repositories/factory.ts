@@ -4,6 +4,7 @@
 // Cache lives on globalThis so Next dev HMR doesn't multiply instances.
 import type {
   AttachmentRepo,
+  BidNoteRepo,
   BidRepo,
   BizProfileRepo,
   ContractRepo,
@@ -23,6 +24,7 @@ type RepoBundle = {
   user: UserRepo;
   bizProfile: BizProfileRepo;
   bid: BidRepo;
+  bidNote: BidNoteRepo;
   notification: NotificationRepo;
   contract: ContractRepo;
   verificationToken: VerificationTokenRepo;
@@ -76,6 +78,7 @@ async function buildBundle(): Promise<RepoBundle> {
       user: notImplemented('user') as UserRepo,
       bizProfile: notImplemented('bizProfile') as BizProfileRepo,
       bid: notImplemented('bid') as BidRepo,
+      bidNote: notImplemented('bidNote') as BidNoteRepo,
       notification: notImplemented('notification') as NotificationRepo,
       contract: notImplemented('contract') as ContractRepo,
       verificationToken: notImplemented(
@@ -96,6 +99,7 @@ async function buildBundle(): Promise<RepoBundle> {
   const { DrizzleUserRepository } = await import('./drizzle/user');
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
   const { DrizzleBidRepository } = await import('./drizzle/bid');
+  const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
   const { DrizzleVerificationTokenRepository } = await import(
@@ -111,6 +115,7 @@ async function buildBundle(): Promise<RepoBundle> {
     user: new DrizzleUserRepository(db),
     bizProfile: new DrizzleBizProfileRepository(db),
     bid: new DrizzleBidRepository(db),
+    bidNote: new DrizzleBidNoteRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),
     verificationToken: new DrizzleVerificationTokenRepository(db),
@@ -144,6 +149,9 @@ export async function getBizProfileRepo(): Promise<BizProfileRepo> {
 }
 export async function getBidRepo(): Promise<BidRepo> {
   return (await getBundle()).bid;
+}
+export async function getBidNoteRepo(): Promise<BidNoteRepo> {
+  return (await getBundle()).bidNote;
 }
 export async function getNotificationRepo(): Promise<NotificationRepo> {
   return (await getBundle()).notification;
@@ -186,6 +194,7 @@ export async function __useDrizzleWithDbForTest(
   const { DrizzleUserRepository } = await import('./drizzle/user');
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
   const { DrizzleBidRepository } = await import('./drizzle/bid');
+  const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
   const { DrizzleVerificationTokenRepository } = await import(
@@ -200,6 +209,7 @@ export async function __useDrizzleWithDbForTest(
     user: new DrizzleUserRepository(db),
     bizProfile: new DrizzleBizProfileRepository(db),
     bid: new DrizzleBidRepository(db),
+    bidNote: new DrizzleBidNoteRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),
     verificationToken: new DrizzleVerificationTokenRepository(db),

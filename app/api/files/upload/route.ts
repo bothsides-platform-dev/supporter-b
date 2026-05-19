@@ -30,10 +30,10 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { auth } from '@/auth';
-import { rfps } from '@/lib/db/schema';
+import { bids, rfps, workspaceMembers } from '@/lib/db/schema';
 import { db as prodDb } from '@/lib/db/client';
 import {
   getAttachmentRepo,
@@ -55,7 +55,7 @@ const ALLOWED_MIMES = new Set<AcceptedMime>([
 
 const MetaInput = z
   .object({
-    ownerKind: z.enum(['rfp', 'bid_proposal']),
+    ownerKind: z.enum(['rfp', 'bid_proposal', 'bid_note']),
     ownerId: z.string().min(1).max(64),
   })
   .strict();
@@ -141,6 +141,34 @@ export async function POST(req: Request): Promise<Response> {
       if (!rfp) return fail(404, 'RFP_NOT_FOUND');
       if (rfp.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
     }
+  } else if (meta.data.ownerKind === 'bid_note') {
+    // Buyer-only memo attachment. ownerId here is the *bid id* (the parent
+    // bid_notes row may not exist yet — the action layer creates it and
+    // re-points owner_id to the new bid_notes.id after this row lands).
+    // Gate: user must be a member of the buyer ws that owns the RFP behind
+    // this bid.
+    if (wsType !== 'buyer' || !wsId) return fail(403, 'FORBIDDEN');
+    const [row] = await routeDb()
+      .select({ buyerWsId: rfps.buyerWsId })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .where(eq(bids.id, meta.data.ownerId))
+      .limit(1);
+    if (!row) return fail(404, 'BID_NOT_FOUND');
+    if (row.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
+    // Workspace membership — match the post-cutover bid_note ACL in
+    // storage/permissions.ts so the upload and the read share one matrix.
+    const [member] = await routeDb()
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, wsId),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
+      .limit(1);
+    if (!member) return fail(403, 'FORBIDDEN');
   } else {
     // bid_proposal — PG-only, must be a member of an invited PG ws for ownerId.
     if (wsType !== 'pg' || !wsId) return fail(403, 'FORBIDDEN');

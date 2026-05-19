@@ -14,7 +14,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, bids, rfpInvitations, rfps } from '@/lib/db/schema';
+import {
+  attachments,
+  bidNotes,
+  bids,
+  rfpInvitations,
+  rfps,
+} from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { __useDrizzleWithDbForTest, __resetForTest, getInvitationRepo } from '@/lib/server/repositories/factory';
 import {
@@ -43,6 +49,7 @@ type Scenario = {
   rfpId: string;
   buyerWsId: string;
   buyerUserId: string;
+  buyerPeerUserId: string; // same buyer ws, different user — note ACL needs this
   pgWsId: string;
   pgUserId: string; // claimed the invitation
   pgPeerUserId: string; // same pg ws, different user
@@ -52,13 +59,16 @@ type Scenario = {
   uploaderId: string; // happens to be buyerUserId for rfp; pgUserId for bid_proposal
   rfpAttachment: AttachmentRow;
   bidAttachment: AttachmentRow;
+  bidNoteAttachment: AttachmentRow;
 };
 
 async function seedScenario(): Promise<Scenario> {
   const buyer = await seedUser(db, { email: 'buyer@buy.com' });
+  const buyerPeer = await seedUser(db, { email: 'buyer-peer@buy.com' });
   const biz = await seedBizProfile(db);
   const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
   await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+  await seedMembership(db, buyerWs.id, buyerPeer.id, 'member');
 
   const pgWs = await seedPgWorkspace(db, 'toss.im');
   const pgUser = await seedUser(db, { email: 'pg@toss.im' });
@@ -174,10 +184,43 @@ async function seedScenario(): Promise<Scenario> {
     uploadedBy: pgUser.id,
   };
 
+  // bid_note + attachment: a buyer-side note attached to the toss bid above,
+  // authored by the buyer with an attachment uploaded by the same buyer.
+  const noteId = randomUUID();
+  await db.insert(bidNotes).values({
+    id: noteId,
+    bidId,
+    authorId: buyer.id,
+    body: 'memo body',
+  });
+  const noteAttId = randomUUID();
+  await db.insert(attachments).values({
+    id: noteAttId,
+    ownerKind: 'bid_note',
+    ownerId: noteId,
+    name: 'memo.pdf',
+    size: 50,
+    mimeType: 'application/pdf',
+    storagePath: '2026/05/dummy-note.pdf',
+    uploadedBy: buyer.id,
+  });
+  const bidNoteAttachment: AttachmentRow = {
+    id: noteAttId,
+    ownerKind: 'bid_note',
+    ownerId: noteId,
+    name: 'memo.pdf',
+    size: 50,
+    mimeType: 'application/pdf',
+    url: '',
+    storagePath: '2026/05/dummy-note.pdf',
+    uploadedBy: buyer.id,
+  };
+
   return {
     rfpId,
     buyerWsId: buyerWs.id,
     buyerUserId: buyer.id,
+    buyerPeerUserId: buyerPeer.id,
     pgWsId: pgWs.id,
     pgUserId: pgUser.id,
     pgPeerUserId: pgPeer.id,
@@ -187,6 +230,7 @@ async function seedScenario(): Promise<Scenario> {
     uploaderId: buyer.id,
     rfpAttachment,
     bidAttachment,
+    bidNoteAttachment,
   };
 }
 
@@ -323,5 +367,82 @@ describe('canAccessAttachment — bid_proposal', () => {
       await repos(),
     );
     expect(ok).toBe(false);
+  });
+});
+
+describe('canAccessAttachment — bid_note', () => {
+  it('ALLOW for buyer ws member who is not the uploader', async () => {
+    const s = await seedScenario();
+    // buyerPeer is a member of the buyer ws but DID NOT upload the note —
+    // bypasses the uploader early-allow and exercises the real bid_note
+    // branch in canAccessAttachment.
+    const ok = await canAccessAttachment(
+      db,
+      s.bidNoteAttachment,
+      {
+        user: {
+          id: s.buyerPeerUserId,
+          workspaceId: s.buyerWsId,
+          workspaceType: 'buyer',
+        },
+      },
+      await repos(),
+    );
+    expect(ok).toBe(true);
+  });
+
+  it('DENY for any PG user (buyer-private memos)', async () => {
+    const s = await seedScenario();
+    // The PG that submitted the bid this note attaches to — still DENY.
+    const okSubmitter = await canAccessAttachment(
+      db,
+      s.bidNoteAttachment,
+      {
+        user: {
+          id: s.pgUserId,
+          workspaceId: s.pgWsId,
+          workspaceType: 'pg',
+        },
+      },
+      await repos(),
+    );
+    expect(okSubmitter).toBe(false);
+
+    const okPeer = await canAccessAttachment(
+      db,
+      s.bidNoteAttachment,
+      {
+        user: {
+          id: s.pgPeerUserId,
+          workspaceId: s.pgWsId,
+          workspaceType: 'pg',
+        },
+      },
+      await repos(),
+    );
+    expect(okPeer).toBe(false);
+  });
+
+  it('DENY for random unrelated user', async () => {
+    const s = await seedScenario();
+    const ok = await canAccessAttachment(
+      db,
+      s.bidNoteAttachment,
+      { user: { id: s.randomUserId } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+
+  it('ALLOW for uploader (draft window — first attachment before note row)', async () => {
+    const s = await seedScenario();
+    // Uploader (buyer) regardless of ws claim.
+    const ok = await canAccessAttachment(
+      db,
+      s.bidNoteAttachment,
+      { user: { id: s.uploaderId } },
+      await repos(),
+    );
+    expect(ok).toBe(true);
   });
 });

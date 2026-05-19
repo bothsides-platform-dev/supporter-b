@@ -17,6 +17,12 @@
  *     - Uploader themselves: ALLOW (pre-bid-create draft window)
  *     - Otherwise: DENY
  *
+ *   `bid_note` (buyer-private memo attachment on a bid)
+ *     - Buyer ws members of the RFP behind the bid: ALLOW
+ *     - Uploader themselves: ALLOW (pre-note draft window — first
+ *       attachment uploaded before the bid_notes row exists)
+ *     - **All PG users: DENY** — notes are internal to the buyer.
+ *
  * Cross-PG isolation is preserved — a PG user from a different ws
  * cannot read another PG's bid_proposal even if they were also invited
  * to the same RFP.
@@ -27,7 +33,7 @@
  * action's gate.
  */
 import { and, eq } from 'drizzle-orm';
-import { rfps, bids, workspaceMembers } from '@/lib/db/schema';
+import { bidNotes, bids, rfps, workspaceMembers } from '@/lib/db/schema';
 import type { AttachmentRecord } from '@/lib/server/repositories/attachment-record';
 import type { InvitationRepo, Tx } from '@/lib/server/repositories/types';
 
@@ -98,6 +104,45 @@ export async function canAccessAttachment(
     }
 
     return false;
+  }
+
+  if (att.ownerKind === 'bid_note') {
+    // bid_note attachments: hop owner_id → bid_notes.bid_id → bids.rfp_id →
+    // rfps.buyer_ws_id and require user to be a member of that buyer ws.
+    // PG users are denied unconditionally — notes are buyer-internal.
+    const [note] = await h
+      .select({ bidId: bidNotes.bidId })
+      .from(bidNotes)
+      .where(eq(bidNotes.id, att.ownerId))
+      .limit(1);
+    if (!note) return false;
+
+    const [bidRow] = await h
+      .select({ rfpId: bids.rfpId })
+      .from(bids)
+      .where(eq(bids.id, note.bidId))
+      .limit(1);
+    if (!bidRow) return false;
+
+    const [rfpRow] = await h
+      .select({ buyerWsId: rfps.buyerWsId })
+      .from(rfps)
+      .where(eq(rfps.id, bidRow.rfpId))
+      .limit(1);
+    if (!rfpRow) return false;
+    if (!wsId || rfpRow.buyerWsId !== wsId) return false;
+
+    const [member] = await h
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, wsId),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
+      .limit(1);
+    return Boolean(member);
   }
 
   // bid_proposal — find the bid that points at this attachment id.

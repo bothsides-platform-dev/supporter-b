@@ -19,7 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, rfps, rfpInvitations } from '@/lib/db/schema';
+import { attachments, bids, rfps, rfpInvitations } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { eq } from 'drizzle-orm';
 import {
@@ -299,6 +299,143 @@ describe('POST /api/files/upload', () => {
       .limit(1);
     expect(row?.ownerKind).toBe('bid_proposal');
     expect(row?.ownerId).toBe(rfpId);
+  });
+
+  it('403 when PG tries to upload bid_note (buyer-private)', async () => {
+    await seedPgSession('P-2605-0011');
+    const f = new FormData();
+    f.append('file', makeFile('memo.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'bid_note');
+    f.append('ownerId', randomUUID());
+    const r = await callUpload(f);
+    expect(r.status).toBe(403);
+  });
+
+  it('403 when buyer uploads bid_note for a bid outside their workspace', async () => {
+    // Seed a foreign bid (different buyer ws) and try to attach a note.
+    const { buyer: otherBuyer } = await seedBuyerSession();
+    // Spin up a second buyer ws + RFP + bid; the current session's buyer is
+    // member of the first ws but not the second.
+    const foreignBuyer = await seedUser(db, { email: 'b2@buy.com' });
+    const foreignBiz = await seedBizProfile(db, { bizNo: '9876543210' });
+    const foreignWs = await seedBuyerWorkspace(db, {
+      bizProfileId: foreignBiz.id,
+    });
+    await seedMembership(db, foreignWs.id, foreignBuyer.id, 'admin');
+    const pgWs = await seedPgWorkspace(db, 'inicis.com');
+    const pgUser = await seedUser(db, { email: 'p@inicis.com' });
+    const foreignRfpId = 'P-2605-0099';
+    await db.insert(rfps).values({
+      id: foreignRfpId,
+      buyerWsId: foreignWs.id,
+      bizProfileId: foreignBiz.id,
+      title: 'foreign',
+      memo: '',
+      allowedPgWorkspaceIds: [pgWs.id],
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: foreignBuyer.id,
+      sentAt: new Date(),
+    });
+    const invId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: invId,
+      rfpId: foreignRfpId,
+      pgWsId: pgWs.id,
+      acceptedByUserId: pgUser.id,
+      tokenHash: hashToken(generateToken()),
+      sentAt: new Date(),
+      expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
+      status: 'accepted',
+    });
+    const foreignBidId = randomUUID();
+    await db.insert(bids).values({
+      id: foreignBidId,
+      rfpId: foreignRfpId,
+      pgWsId: pgWs.id,
+      invitationId: invId,
+      settleCycle: 'D+1',
+      deposit: '0',
+      setupFee: '0',
+      monthlyMin: '0',
+      bankTransferFeePct: '0.015',
+      easyPayFeePct: '0.018',
+      proposalAttachmentId: null,
+      submittedBy: pgUser.id,
+    });
+    // Quieten the unused-var lint: confirm seedBuyerSession returned the
+    // outer buyer; their identity is what differentiates ws membership.
+    expect(otherBuyer.id).not.toBe(foreignBuyer.id);
+
+    const f = new FormData();
+    f.append('file', makeFile('m.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'bid_note');
+    f.append('ownerId', foreignBidId);
+    const r = await callUpload(f);
+    expect(r.status).toBe(403);
+  });
+
+  it('happy path — bid_note: buyer ws member uploads attachment for own bid', async () => {
+    const { buyer, buyerWs } = await seedBuyerSession();
+    const ownBiz = await seedBizProfile(db, { bizNo: '5555555555' });
+    const pgWs = await seedPgWorkspace(db, 'toss.im');
+    const pg = await seedUser(db, { email: 'p@toss.im' });
+    const ownRfpId = 'P-2605-0070';
+    await db.insert(rfps).values({
+      id: ownRfpId,
+      buyerWsId: buyerWs.id,
+      bizProfileId: ownBiz.id,
+      title: 'own',
+      memo: '',
+      allowedPgWorkspaceIds: [pgWs.id],
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: buyer.id,
+      sentAt: new Date(),
+    });
+    const invId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: invId,
+      rfpId: ownRfpId,
+      pgWsId: pgWs.id,
+      acceptedByUserId: pg.id,
+      tokenHash: hashToken(generateToken()),
+      sentAt: new Date(),
+      expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
+      status: 'accepted',
+    });
+    const ownBidId = randomUUID();
+    await db.insert(bids).values({
+      id: ownBidId,
+      rfpId: ownRfpId,
+      pgWsId: pgWs.id,
+      invitationId: invId,
+      settleCycle: 'D+1',
+      deposit: '0',
+      setupFee: '0',
+      monthlyMin: '0',
+      bankTransferFeePct: '0.015',
+      easyPayFeePct: '0.018',
+      proposalAttachmentId: null,
+      submittedBy: pg.id,
+    });
+
+    const f = new FormData();
+    f.append('file', makeFile('note.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'bid_note');
+    f.append('ownerId', ownBidId);
+    const r = await callUpload(f);
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { id: string };
+
+    const [row] = await db
+      .select()
+      .from(attachments)
+      .where(eq(attachments.id, body.id))
+      .limit(1);
+    expect(row?.ownerKind).toBe('bid_note');
+    expect(row?.ownerId).toBe(ownBidId);
+    expect(row?.uploadedBy).toBe(buyer.id);
   });
 
   it('cleanup ordering — repo.save throws → disk file deleted (F-6)', async () => {

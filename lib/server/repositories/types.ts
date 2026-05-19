@@ -10,7 +10,8 @@ import type { RfpInvitation } from '@/lib/types/invitation';
 import type { Workspace } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { BizProfile } from '@/lib/types/biz-profile';
-import type { Bid } from '@/lib/types/bid';
+import type { Bid, BuyerStage } from '@/lib/types/bid';
+import type { Attachment } from '@/lib/types/common';
 import type { Contract } from '@/lib/types/contract';
 import type { Notification, NotificationChannel } from '@/lib/types/notification';
 import type { AttachmentRecord } from './attachment-record';
@@ -107,6 +108,34 @@ export interface BidRepo {
   findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]>;
   /** 한 PG 워크스페이스의 모든 입찰. */
   findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]>;
+  /** Stage 3 cutover: buyer 측 칸반 stage 갱신. 없는 bidId면 throw. */
+  updateBuyerStage(bidId: string, to: BuyerStage, tx?: Tx): Promise<void>;
+}
+
+// ── BidNote ───────────────────────────────────────────────────────────
+/** 저장/조회용 BidNote 모양 — DB 컬럼 + 조회 시 hydrated 필드(authorName,
+ *  attachments). lib/types/bid-note.ts 는 Date를 string으로 직렬화한
+ *  클라이언트용 모양이라 분리. */
+export type BidNoteRecord = {
+  id: string;
+  bidId: string;
+  authorId: string;
+  body: string;
+  createdAt: Date;
+  /** findByBid 가 users 와 join 해 채움. save 시점에는 사용되지 않음. */
+  authorName?: string;
+  /** findByBid 가 attachments(owner_kind='bid_note') 로 join 해 채움. */
+  attachments?: Attachment[];
+};
+
+export interface BidNoteRepo {
+  /** 노트 row 저장 — 첨부는 별도 attachments 테이블에 polymorphic 연결. */
+  save(note: BidNoteRecord, tx?: Tx): Promise<void>;
+  /** 한 bid의 노트 — 생성 순서(오래된 → 최신). authorName, attachments
+   *  hydrated. */
+  findByBid(bidId: string, tx?: Tx): Promise<Required<BidNoteRecord>[]>;
+  /** 단건 삭제 — 첨부는 별도 정리 책임(액션 레이어). */
+  remove(noteId: string, tx?: Tx): Promise<void>;
 }
 
 // ── Notification ──────────────────────────────────────────────────────
