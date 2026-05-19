@@ -1,6 +1,5 @@
-// Repository interfaces for Step 4 — backend-agnostic contracts.
-// Drizzle implementations live in ./drizzle/*. In-memory implementations
-// live in ./in-memory/* and are used as test doubles.
+// Repository interfaces — backend-agnostic contracts.
+// Drizzle implementations live in ./drizzle/*.
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 import type { DB } from '@/lib/db/client';
 import type { PgliteDB } from '@/lib/db/client-pglite';

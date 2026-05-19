@@ -164,7 +164,7 @@ export function SunIcon({ size = 20, ...p }: IconProps) {
 export function MoonIcon({ size = 20, ...p }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
-      <path d="M17 10.5A7 7 0 019.5 3a7.002 7.002 0 000 14 7 7 0 007.5-6.5z" />
+      <path d="M17.5 11.05A7.5 7.5 0 117.95 2.5a5.85 5.85 0 009.55 8.55z" />
     </svg>
   );
 }

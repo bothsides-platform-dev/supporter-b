@@ -39,59 +39,9 @@ declare global {
   var __bidit_repos__: RepoBundle | undefined;
 }
 
-function shouldUseInMemory(): boolean {
-  // Single source of truth — if either condition holds, use in-memory.
-  return (
-    process.env.NODE_ENV === 'test' || process.env.REPO_BACKEND === 'memory'
-  );
-}
-
 async function buildBundle(): Promise<RepoBundle> {
-  if (shouldUseInMemory()) {
-    const { InMemoryRfpRepository } = await import('./in-memory/rfp');
-    const { InMemoryInvitationRepository } = await import('./in-memory/invitation');
-    const { InMemoryWorkspaceRepository } = await import('./in-memory/workspace');
-    const { InMemoryOutboxRepository } = await import('./in-memory/outbox');
-    const rfp = new InMemoryRfpRepository();
-    const invitation = new InMemoryInvitationRepository();
-    invitation.setRfpRepoRef(() => rfp);
-    const workspace = new InMemoryWorkspaceRepository();
-    const outbox = new InMemoryOutboxRepository();
-    // The 7 still-forward-declared repos return a Proxy that throws on any
-    // method call. Construction stays cheap; the gap surfaces loudly only
-    // if Step 5+ code reaches for a not-yet-implemented in-memory repo.
-    const notImplemented = (name: string) =>
-      new Proxy(
-        {},
-        {
-          get() {
-            throw new Error(
-              `${name} not implemented for in-memory backend (Step 4). Set REPO_BACKEND=drizzle or implement in lib/server/repositories/in-memory/${name}.ts.`,
-            );
-          },
-        },
-      );
-    return {
-      rfp,
-      invitation,
-      workspace,
-      user: notImplemented('user') as UserRepo,
-      bizProfile: notImplemented('bizProfile') as BizProfileRepo,
-      bid: notImplemented('bid') as BidRepo,
-      bidNote: notImplemented('bidNote') as BidNoteRepo,
-      notification: notImplemented('notification') as NotificationRepo,
-      contract: notImplemented('contract') as ContractRepo,
-      verificationToken: notImplemented(
-        'verificationToken',
-      ) as VerificationTokenRepo,
-      attachment: notImplemented('attachment') as AttachmentRepo,
-      outbox,
-      __backend: 'memory',
-    };
-  }
-
   // Lazy import the postgres-js client so missing DATABASE_URL doesn't crash
-  // tests that only exercise the in-memory branch.
+  // tests that inject a pglite db via __useDrizzleWithDbForTest.
   const { db } = await import('@/lib/db/client');
   const { DrizzleRfpRepository } = await import('./drizzle/rfp');
   const { DrizzleInvitationRepository } = await import('./drizzle/invitation');
