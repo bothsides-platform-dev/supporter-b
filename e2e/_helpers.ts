@@ -5,7 +5,7 @@
  * boilerplate into one source so future specs stay focused on assertions.
  *
  * Test DB resolution: playwright.config.ts:webServer pins DATABASE_URL to
- * 5433/bidit_test, and individual specs also set `process.env.DATABASE_URL`
+ * 5433/supporter_b_test, and individual specs also set `process.env.DATABASE_URL`
  * for any direct DB access (see scenario-a/b/c). We mirror that pattern.
  */
 import type { Page } from 'playwright/test';
@@ -20,7 +20,19 @@ import type { BuyerStage } from '@/lib/types/bid';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
-  'postgres://bidit:bidit@localhost:5433/bidit_test';
+  'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
+
+// Mirror the DB pattern for Supabase Storage. `getStorage()` constructs
+// SupabaseStorage lazily, which reads SUPABASE_URL / SERVICE_ROLE_KEY at
+// construction time — so we have to set them before any spec helper that
+// calls getStorage() executes (e.g. attachTossProposalPdf).
+if (process.env.SUPABASE_URL_TEST) {
+  process.env.SUPABASE_URL = process.env.SUPABASE_URL_TEST;
+}
+if (process.env.SUPABASE_SERVICE_ROLE_KEY_TEST) {
+  process.env.SUPABASE_SERVICE_ROLE_KEY =
+    process.env.SUPABASE_SERVICE_ROLE_KEY_TEST;
+}
 
 // Plaintext credentials from scripts/seed.ts:58, 91-94. Centralised so
 // future spec churn (e.g. renaming a workspace) needs one edit.

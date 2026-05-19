@@ -1,13 +1,18 @@
 /**
- * Buyer kanban board — DB-backed roundtrip (Stage 3 cutover verification).
+ * Buyer kanban board — DB-backed stage-change roundtrip (Stage 3 cutover).
  *
  * Pre-Stage 3 the kanban persisted to localStorage (Zustand `bid-board:v1`).
- * After the server cutover (Stage 3c), drag/drop hits `updateBuyerStageAction`
- * → `bids.buyer_stage`. This spec asserts the actual server roundtrip:
- *   1. Toggle to board, verify all bids start in 진행전 (seed default).
- *   2. Drag inicis card to 협상중.
- *   3. Reload the page (kills any optimistic React state).
- *   4. DB row for the inicis bid is now `buyer_stage='negotiating'`.
+ * After the server cutover (Stage 3c), stage moves hit
+ * `updateBuyerStageAction` → `bids.buyer_stage`. The spec exercises the
+ * card-menu path (per-card dropdown → "협상중으로") instead of the @dnd-kit
+ * drag — the two share the same `commitStage` server-call boundary, but
+ * Playwright's synthetic pointer events flake against @dnd-kit's
+ * `PointerSensor activationConstraint` and the menu is the canonical
+ * keyboard/a11y-friendly equivalent.
+ *   1. Toggle to board, verify the three stage columns mount.
+ *   2. Open the inicis card menu, choose "협상중으로".
+ *   3. Poll the DB until `buyer_stage='negotiating'`.
+ *   4. Reload the page (kills any optimistic React state).
  *   5. UI re-renders inicis under 협상중.
  */
 import { test, expect } from 'playwright/test';
@@ -40,10 +45,15 @@ test.describe.serial('Buyer kanban board (DB-backed)', () => {
     await expect(page.getByText('협상중').first()).toBeVisible();
     await expect(page.getByText('결정').first()).toBeVisible();
 
-    // 2. Drag inicis to 협상중. Cards render as <button>s by PG name.
-    const inicisCard = page.getByRole('button', { name: /이니시스/ }).first();
-    const negotiatingHeader = page.getByText('협상중').first();
-    await inicisCard.dragTo(negotiatingHeader);
+    // 2. Move inicis card to 협상중 via the per-card dropdown menu.
+    //    Drag (`@dnd-kit` PointerSensor) is too flaky under Playwright's
+    //    synthetic events — different runs intermittently fail the
+    //    `pointermove` activation threshold even with stepped moves. The
+    //    menu path hits `onMoveStage(stage)` directly via the same
+    //    `commitStage` → `updateBuyerStageAction` server call, so we still
+    //    exercise the canonical write path the kanban relies on.
+    await page.getByRole('button', { name: 'KG이니시스 메뉴' }).click();
+    await page.getByRole('menuitem', { name: /협상중으로/ }).click();
 
     // 3. Wait for the server commit. dragTo only fires DOM events; the
     //    `commitStage` handler then runs updateBuyerStageAction inside a
@@ -60,11 +70,14 @@ test.describe.serial('Buyer kanban board (DB-backed)', () => {
 
     // 5. UI re-render — inicis card is *inside* the negotiating column.
     //    BidBoardColumn renders `data-stage="<stage>"` on its root for
-    //    exactly this kind of stable test traversal.
+    //    exactly this kind of stable test traversal. The card button
+    //    carries `aria-roledescription="제안 카드, 드래그 가능"`; targeting
+    //    that attribute avoids the per-card `KG이니시스 메뉴` dropdown trigger.
     await expect(
-      page
-        .locator('[data-stage="negotiating"]')
-        .getByRole('button', { name: /이니시스/ }),
+      page.locator(
+        '[data-stage="negotiating"] button[aria-roledescription="제안 카드, 드래그 가능"]',
+        { hasText: '이니시스' },
+      ),
     ).toBeVisible();
   });
 });

@@ -3,8 +3,8 @@
  *
  * Boots `pnpm dev` on port 3001 (not 3000 — keeps the e2e webServer from
  * stomping on a developer's local dev session) with DATABASE_URL pinned
- * to the test DB on 5433. globalSetup migrates + reseeds before any spec
- * runs.
+ * to the test DB on 5433 (supporter_b_test). globalSetup migrates + reseeds
+ * before any spec runs.
  *
  * Import note: the project pulls in the `playwright` package directly.
  * The conventional `@playwright/test` import path is just a re-export
@@ -48,7 +48,7 @@ export default defineConfig({
     env: {
       DATABASE_URL:
         process.env.DATABASE_URL_TEST ??
-        'postgres://bidit:bidit@localhost:5433/bidit_test',
+        'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test',
       // Auth.js requires AUTH_SECRET ≥ 32 bytes. Deterministic for e2e.
       AUTH_SECRET: 'e2e-test-secret-' + 'a'.repeat(32),
       NEXT_PUBLIC_BASE_URL: 'http://localhost:3001',
@@ -63,8 +63,15 @@ export default defineConfig({
       // Pass the operator's Supabase env through to the webServer so its
       // `getStorage()` talks to the same bucket the spec helpers (running
       // in the Playwright process) wipe + populate in global-setup.
-      SUPABASE_URL: process.env.SUPABASE_URL ?? '',
-      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+      // Prefer the *_TEST overrides so e2e can target a local
+      // `supabase start` stack without touching whatever the dev `.env`
+      // points at (typically the production project).
+      SUPABASE_URL:
+        process.env.SUPABASE_URL_TEST ?? process.env.SUPABASE_URL ?? '',
+      SUPABASE_SERVICE_ROLE_KEY:
+        process.env.SUPABASE_SERVICE_ROLE_KEY_TEST ??
+        process.env.SUPABASE_SERVICE_ROLE_KEY ??
+        '',
       // Default Drizzle backend. Empty string preserves the default
       // (matches the spec's `REPO_BACKEND: ''` literal).
       REPO_BACKEND: '',

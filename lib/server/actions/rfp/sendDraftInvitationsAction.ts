@@ -29,7 +29,7 @@ import {
 
 const Input = z
   .object({
-    rfpId: z.string().regex(/^Q-\d{4}-\d{4}$/),
+    rfpId: z.string().regex(/^P-\d{4}-\d{4}$/),
   })
   .strict();
 

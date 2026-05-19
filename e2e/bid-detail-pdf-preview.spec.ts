@@ -51,16 +51,16 @@ test.describe.serial('BidDetailModal — PDF preview iframe', () => {
     const iframe = page.locator(`iframe[src*="/api/files/${attachmentId}"]`);
     await expect(iframe).toBeVisible();
 
-    // Close the modal and re-open — the browser should fire a conditional
-    // GET with If-None-Match and our route should return 304 (Stage 2).
-    await page.getByRole('button', { name: '닫기' }).click();
-
-    const secondReq = page.waitForResponse((r) =>
-      r.url().includes(`/api/files/${attachmentId}`),
+    // Stage 2 contract — conditional GET. We can't reliably exercise this
+    // through the iframe (chromium/Playwright doesn't always revalidate
+    // iframe sources on modal re-mount; If-None-Match never leaves the
+    // browser). Issue the request directly with `If-None-Match` set, so
+    // the route's 304 branch (route.ts:152) has actual coverage.
+    const conditional = await page.request.get(
+      `/api/files/${attachmentId}`,
+      { headers: { 'If-None-Match': `"${attachmentId}"` } },
     );
-    await page.getByRole('button', { name: /토스페이먼츠/ }).first().click();
-    const second = await secondReq;
-    expect(second.status()).toBe(304);
-    expect(second.headers()['etag']).toBe(`"${attachmentId}"`);
+    expect(conditional.status()).toBe(304);
+    expect(conditional.headers()['etag']).toBe(`"${attachmentId}"`);
   });
 });

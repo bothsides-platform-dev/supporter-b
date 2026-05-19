@@ -62,11 +62,17 @@ function fail(status: number, msg: string): Response {
   return new Response(msg, { status });
 }
 
-// RFC 5987 / 6266 — escape filename for Content-Disposition. We strip
-// double-quotes/backslashes/control bytes and emit the cleaned name as
-// the standard `filename="..."` form. Browsers handle the rest.
-function safeDispositionFilename(name: string): string {
-  return name.replace(/[\x00-\x1f"\\]/g, '').slice(0, 200) || 'file';
+// RFC 5987 / 6266 — emit a Content-Disposition value that survives both
+// HTTP header (ByteString-only) and non-ASCII filenames. We always pair
+// an ASCII fallback (`filename="..."`) with a percent-encoded UTF-8
+// `filename*` so modern browsers display the original name. Without the
+// `filename*` arm, fetch's `Response` constructor throws
+// `Cannot convert argument to a ByteString` for any Korean/CJK name.
+function dispositionFilenameHeader(name: string): string {
+  const safe = name.replace(/[\x00-\x1f"\\]/g, '').slice(0, 200) || 'file';
+  const ascii = safe.replace(/[^\x20-\x7E]/g, '_');
+  const utf8 = encodeURIComponent(safe);
+  return `inline; filename="${ascii}"; filename*=UTF-8''${utf8}`;
 }
 
 // Parse a single-range `Range: bytes=N-M` header. Returns:
@@ -187,7 +193,7 @@ export async function GET(
 
   const sharedHeaders = {
     'Content-Type': att.mimeType,
-    'Content-Disposition': `inline; filename="${safeDispositionFilename(att.name)}"`,
+    'Content-Disposition': dispositionFilenameHeader(att.name),
     ETag: etag,
     'Accept-Ranges': 'bytes',
     // Browser may keep the bytes (private — never shared caches), but

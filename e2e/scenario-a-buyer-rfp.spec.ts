@@ -23,7 +23,7 @@ import { db } from '@/lib/db/client';
 // ensures any worker that re-imports the module also uses the test URL.
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
-  'postgres://bidit:bidit@localhost:5433/bidit_test';
+  'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
 const BUYER_EMAIL = 'yeonseong.dev@gmail.com';
 const BUYER_PASSWORD = 'password123';
@@ -56,16 +56,23 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
       .getByPlaceholder(/카드결제·간편결제 통합 솔루션 검토 중입니다/)
       .fill('e2e scenario A — automated send');
 
-    // Allowed PG emails: type each, press Enter to commit chip.
-    const pgEmails = [
-      'sales@toss.im',
-      'biz@inicis.com',
-      'partner@kakaopay.com',
-    ];
-    const emailField = page.getByPlaceholder(/sales@/);
-    for (const email of pgEmails) {
-      await emailField.fill(email);
-      await emailField.press('Enter');
+    // Pick a future deadline (input[type=date] — required to enable send).
+    const tomorrow = new Date(Date.now() + 7 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    await page.locator('input[type="date"]').fill(tomorrow);
+
+    // ── 3b. Pick PG workspaces via the Popover + cmdk Command ────
+    // RFP invite model is workspace-based (post email-allowlist):
+    // click "PG사 검색…" trigger → list loads via /api/workspaces/search
+    // → click each workspace name → Popover closes → re-open for next.
+    // Seed workspaces: '토스페이먼츠', 'KG이니시스', '카카오페이'.
+    const pgNames = ['토스페이먼츠', 'KG이니시스', '카카오페이'];
+    for (const name of pgNames) {
+      await page.getByRole('button', { name: 'PG사 검색…' }).click();
+      // CommandItem renders with role 'option'; wait for the item to
+      // appear (proxy for the lazy /api/workspaces/search response).
+      await page.getByRole('option', { name }).click();
     }
 
     // ── 4. Submit ────────────────────────────────────────────────
@@ -73,10 +80,10 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await page.getByRole('button', { name: /3개 PG사에 발송|발송/ }).click();
 
     // ── 5. Land on /rfp/<rfpId> ──────────────────────────────────
-    await page.waitForURL(/\/rfp\/Q-\d{4}-\d{4}$/, { timeout: 15_000 });
+    await page.waitForURL(/\/rfp\/P-\d{4}-\d{4}$/, { timeout: 15_000 });
     const url = new URL(page.url());
     const rfpId = url.pathname.split('/').pop()!;
-    expect(rfpId).toMatch(/^Q-\d{4}-\d{4}$/);
+    expect(rfpId).toMatch(/^P-\d{4}-\d{4}$/);
 
     // Comparison table shows zero bids since no PG has submitted.
     // BidComparisonTable renders an EmptyState with this exact copy when
@@ -106,12 +113,13 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     expect(inviteArr[0].c).toBe(3);
 
     // Outbox: 1 rfp.sent + 3 rfp.invited = 4 entries scoped to this RFP.
-    // The outbox payload references rfpId in its JSONB; we filter by
-    // event_type to keep the assertion precise.
+    // The current schema has no `payload` JSONB; we filter by `dedupe_key`
+    // which encodes the rfpId by convention (createRfpAction uses
+    // `rfp:{rfpId}:sent` and `rfp:{rfpId}:invite:ws:{pgWsId}:user:{u}`).
     const outboxRows = await db.execute<{ c: number }>(
       sql`SELECT count(*)::int AS c FROM outbox_entries
-          WHERE event_type IN ('rfp.sent', 'rfp.invited')
-            AND payload->>'rfpId' = ${rfpId}`,
+          WHERE event IN ('rfp.sent', 'rfp.invited')
+            AND dedupe_key LIKE ${'rfp:' + rfpId + ':%'}`,
     );
     const outboxArr = Array.isArray(outboxRows)
       ? outboxRows

@@ -18,7 +18,7 @@ import { db } from '@/lib/db/client';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
-  'postgres://bidit:bidit@localhost:5433/bidit_test';
+  'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
 const TOSS_EMAIL = 'ws-toss-admin@toss.im';
 const TOSS_PASSWORD = 'password123';

@@ -83,11 +83,11 @@ async function resetTestDatabase(): Promise<void> {
   // row, so a misconfigured run would silently nuke dev data.
   if (
     testUrl.includes(':5432/') ||
-    !/[/?]bidit_test(\?|$)/.test(testUrl)
+    !/[/?]supporter_b_test(\?|$)/.test(testUrl)
   ) {
     throw new Error(
       `[test-db-reset] refusing to reset non-test DB url: ${testUrl}\n` +
-        `expected port 5433 and database name "bidit_test".`,
+        `expected port 5433 and database name "supporter_b_test".`,
     );
   }
 
