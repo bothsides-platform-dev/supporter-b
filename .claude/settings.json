@@ -2,5 +2,19 @@
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,
     "serena@claude-plugins-official": true
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/auto-commit.sh",
+            "timeout": 120,
+            "statusMessage": "자동 commit 중…"
+          }
+        ]
+      }
+    ]
   }
 }
