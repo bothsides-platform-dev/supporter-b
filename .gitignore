@@ -55,3 +55,8 @@ next-env.d.ts
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Local agent/skill tool state (per-machine, never source)
+/.claude/scheduled_tasks.lock
+/.serena/memories/
+/.superpowers/
