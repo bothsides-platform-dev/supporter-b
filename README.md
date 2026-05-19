@@ -1,4 +1,4 @@
-# bidit
+# Supporter B
 
 PG(결제대행사) 1:N 비공개 RFP 플랫폼.
 
@@ -104,7 +104,7 @@ docker compose up -d pg
 docker compose ps
 ```
 
-`bidit-pg` 가 `running (healthy)` 으로 보이면 성공입니다.
+`supporter-b-pg` 가 `running (healthy)` 으로 보이면 성공입니다.
 
 ## 5. DB 초기 데이터 채우기
 

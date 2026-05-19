@@ -1,8 +1,8 @@
-# bidit PG RFP 화면 설계
+# Supporter B PG RFP 화면 설계
 
 ## Context
 
-본 문서는 PG(결제대행사) 비공개 1:N RFP 플랫폼 **bidit** 의 화면 설계 명세이다.
+본 문서는 PG(결제대행사) 비공개 1:N RFP 플랫폼 **Supporter B** 의 화면 설계 명세이다.
 
 `PG_RFP_SPEC.md` 가 v0 제품 정의의 최상위 기준이며, 본 문서 **§0 PG v0 화면 IA** 가 구현 대상이다.
 

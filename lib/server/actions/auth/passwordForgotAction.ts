@@ -66,7 +66,7 @@ export async function passwordForgotAction(
         {
           event: 'auth.reset',
           to: email,
-          subject: '[BIDIT] 비밀번호 재설정 안내',
+          subject: '[Supporter B] 비밀번호 재설정 안내',
           html,
           dedupeKey,
         },

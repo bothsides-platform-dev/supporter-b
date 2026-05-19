@@ -48,7 +48,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       reset: () => set(defaultState),
     }),
     {
-      name: 'bidit-rfp-draft',
+      name: 'supporter-b-rfp-draft',
       storage: createJSONStorage(() => localStorage),
       // Only persist form data fields, not UI/method state
       partialize: (state) => ({

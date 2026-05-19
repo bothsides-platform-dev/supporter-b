@@ -95,7 +95,7 @@ export async function inviteWorkspaceMemberAction(input: {
         {
           event: 'workspace.invited',
           to: normalizedEmail,
-          subject: '[BIDIT] 워크스페이스 초대장',
+          subject: '[Supporter B] 워크스페이스 초대장',
           html,
           dedupeKey: `ws-invite:${workspaceId}:${normalizedEmail}`,
         },

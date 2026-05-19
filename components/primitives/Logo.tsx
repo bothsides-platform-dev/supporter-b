@@ -13,7 +13,7 @@ export function Logo({ variant = 'default', className }: LogoProps) {
     return (
       <Link
         href="/home"
-        aria-label="bidit 홈"
+        aria-label="Supporter B 홈"
         className={cn(
           'group flex items-center justify-center',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-surface)]',
@@ -43,7 +43,7 @@ export function Logo({ variant = 'default', className }: LogoProps) {
   return (
     <Link
       href="/"
-      aria-label="bidit 홈"
+      aria-label="Supporter B 홈"
       className={cn(
         'group inline-flex items-center gap-3',
         'opacity-100 hover:opacity-70 transition-opacity duration-[140ms]',
@@ -64,7 +64,7 @@ export function Logo({ variant = 'default', className }: LogoProps) {
         <circle cx="21" cy="16" r="9" fill="var(--md-sys-color-on-surface)" />
       </svg>
       <span className="font-sans font-extrabold text-[22px] leading-none tracking-[-0.04em] text-[var(--md-sys-color-on-surface)]">
-        bidit
+        Supporter B
       </span>
     </Link>
   )

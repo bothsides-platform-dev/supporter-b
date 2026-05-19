@@ -163,7 +163,7 @@ export function LandingHero() {
                 transition={{ duration: 0.44, delay: 0.08, ease: EASE_OUT }}
                 className="text-[clamp(30px,5.5vw,72px)] leading-[1.06] tracking-[-0.028em] font-medium text-[var(--md-sys-color-on-surface)]"
               >
-                bidit을 통해
+                Supporter B를 통해
               </motion.h1>
               <motion.div
                 initial={{ opacity: 0, y: 28 }}

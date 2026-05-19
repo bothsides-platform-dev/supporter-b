@@ -1,4 +1,4 @@
-# bidit — 구현 계획
+# Supporter B — 구현 계획
 
 > 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) (화면·IA) · [DESIGN.md](./DESIGN.md) (디자인 시스템) · [SPEC.md](./SPEC.md) (기술 스펙)
 > 본 문서: 마일스톤, 부트스트랩 절차, 핵심 파일, 검증 체크리스트

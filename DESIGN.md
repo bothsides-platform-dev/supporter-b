@@ -1,4 +1,4 @@
-# bidit — 디자인 시스템 (Material Design 3)
+# Supporter B — 디자인 시스템 (Material Design 3)
 
 > 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) (화면·IA·UX) · [SPEC.md](./SPEC.md) (기술 스펙)
 > 본 문서: MD3 토큰, 타이포그래피, 컬러, 컴포넌트 시각 원칙

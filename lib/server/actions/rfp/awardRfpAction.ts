@@ -179,7 +179,7 @@ export async function awardRfpAction(
           {
             event: 'rfp.awarded',
             to: row.email,
-            subject: `[BIDIT · ${rfpId}] 낙찰 결과`,
+            subject: `[Supporter B · ${rfpId}] 낙찰 결과`,
             html: awardedHtml,
             dedupeKey: `rfp:${rfpId}:awarded:${row.email}`,
           },

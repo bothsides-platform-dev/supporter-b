@@ -1,6 +1,6 @@
 export const siteConfig = {
-  name: 'bidit',
-  title: 'bidit — PG 비공개 1:N RFP 플랫폼',
+  name: 'Supporter B',
+  title: 'Supporter B — PG 비공개 1:N RFP 플랫폼',
   description:
     '구매사가 사업자번호로 PG 제안을 비교하고 수주하는 비공개 1:N RFP 플랫폼.',
   url:
@@ -8,6 +8,6 @@ export const siteConfig = {
     process.env.AUTH_URL ??
     'http://localhost:3000',
   locale: 'ko_KR',
-  ogImageAlt: 'bidit — 결제대행사 비공개 1:N RFP 플랫폼',
-  keywords: ['PG', '결제대행사', '제안', 'RFP', '입찰', 'bidit'],
+  ogImageAlt: 'Supporter B — 결제대행사 비공개 1:N RFP 플랫폼',
+  keywords: ['PG', '결제대행사', '제안', 'RFP', '입찰', 'Supporter B'],
 } as const;

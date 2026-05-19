@@ -14,7 +14,7 @@ const pretendard = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
-  title: { default: siteConfig.title, template: "%s — bidit" },
+  title: { default: siteConfig.title, template: "%s — Supporter B" },
   description: siteConfig.description,
   keywords: [...siteConfig.keywords],
   applicationName: siteConfig.name,

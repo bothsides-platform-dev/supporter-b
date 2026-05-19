@@ -253,7 +253,7 @@ export async function createRfpAction(
               {
                 event: 'rfp.invited',
                 to: admin.email,
-                subject: `[BIDIT · ${rfpId}] 제안 요청 도착`,
+                subject: `[Supporter B · ${rfpId}] 제안 요청 도착`,
                 html,
                 dedupeKey: `rfp:${rfpId}:invite:ws:${pgWsId}:user:${admin.userId}`,
               },
@@ -296,7 +296,7 @@ export async function createRfpAction(
           {
             event: 'rfp.sent',
             to: session.user.email ?? '',
-            subject: `[BIDIT · ${rfpId}] 발송 완료`,
+            subject: `[Supporter B · ${rfpId}] 발송 완료`,
             html: sentHtml,
             dedupeKey: `rfp:${rfpId}:sent`,
           },

@@ -15,7 +15,7 @@ export function Footer() {
               className="text-[11px] tracking-[0.18em] uppercase"
               style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-on-surface-variant)' }}
             >
-              BIDIT CORP.
+              SUPPORTER B CORP.
             </span>
             <p
               className="text-[13px] leading-relaxed max-w-[260px]"
@@ -90,7 +90,7 @@ export function Footer() {
               </span>
               {[
                 { label: '공지사항', href: '#' },
-                { label: '문의하기', href: 'mailto:support@bidit.io' },
+                { label: '문의하기', href: 'mailto:support@supporter-b.io' },
               ].map((link) => (
                 <a
                   key={link.label}
@@ -120,7 +120,7 @@ export function Footer() {
               className="text-[11px]"
               style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-outline)' }}
             >
-              © {year} BIDIT CORP. ALL RIGHTS RESERVED.
+              © {year} SUPPORTER B CORP. ALL RIGHTS RESERVED.
             </span>
             <span
               className="text-[10px] tracking-[0.15em]"

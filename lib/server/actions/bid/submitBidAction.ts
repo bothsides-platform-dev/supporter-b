@@ -246,7 +246,7 @@ export async function submitBidAction(
           {
             event: 'bid.submitted',
             to: m.email,
-            subject: `[BIDIT · ${data.rfpId}] ${pgWsLabel} 제안 도착`,
+            subject: `[Supporter B · ${data.rfpId}] ${pgWsLabel} 제안 도착`,
             html: submittedHtml,
             // 멤버별 dedupe — 같은 멤버 중복 enqueue를 collapse.
             dedupeKey: `bid:${data.rfpId}:${pgWsId}:${m.userId}`,

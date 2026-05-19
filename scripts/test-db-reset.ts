@@ -29,7 +29,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const TEST_DB_FALLBACK =
-  'postgres://bidit:bidit@localhost:5433/bidit_test';
+  'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
 // Must match `playwright.config.ts:webServer.env.UPLOAD_DIR`. test-db-reset
 // is invoked by global-setup BEFORE the webServer starts, so we own the

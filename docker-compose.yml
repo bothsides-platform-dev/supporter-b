@@ -1,39 +1,39 @@
 services:
   pg:
     image: postgres:16-alpine
-    container_name: bidit-pg
+    container_name: supporter-b-pg
     restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: bidit
-      POSTGRES_PASSWORD: bidit
-      POSTGRES_DB: bidit
+      POSTGRES_USER: supporter_b
+      POSTGRES_PASSWORD: supporter_b
+      POSTGRES_DB: supporter_b
     volumes:
-      - bidit_pgdata:/var/lib/postgresql/data
+      - supporter_b_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bidit -d bidit"]
+      test: ["CMD-SHELL", "pg_isready -U supporter_b -d supporter_b"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   pg-test:
     image: postgres:16-alpine
-    container_name: bidit-pg-test
+    container_name: supporter-b-pg-test
     profiles: ["test"]
     ports:
       - "5433:5432"
     environment:
-      POSTGRES_USER: bidit
-      POSTGRES_PASSWORD: bidit
-      POSTGRES_DB: bidit_test
+      POSTGRES_USER: supporter_b
+      POSTGRES_PASSWORD: supporter_b
+      POSTGRES_DB: supporter_b_test
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bidit -d bidit_test"]
+      test: ["CMD-SHELL", "pg_isready -U supporter_b -d supporter_b_test"]
       interval: 5s
       timeout: 3s
       retries: 10
 
 volumes:
-  bidit_pgdata: {}
+  supporter_b_pgdata: {}

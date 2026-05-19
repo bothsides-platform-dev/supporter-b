@@ -8,7 +8,7 @@ import { CostComparisonChart } from '@/components/landing/CostComparisonChart';
 import { formatKRW } from '@/lib/format';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import {
-  BIDIT_RATE,
+  SUPPORTER_B_RATE,
   GENERAL_ASSUMED_RATE,
   annualMaxSavings,
   gradeFromVolume,
@@ -46,7 +46,7 @@ export function SavingsCalculator() {
   const volume = useMemo(() => tToVolume(volT), [volT]);
   const currentRate = rateBp / 10000;
   const grade = gradeFromVolume(volume);
-  const biditRate = BIDIT_RATE[grade];
+  const biditRate = SUPPORTER_B_RATE[grade];
   const savings = annualMaxSavings(volume, currentRate);
   const currentCost = Math.round(currentRate * volume);
   const biditCost = Math.round(biditRate * volume);

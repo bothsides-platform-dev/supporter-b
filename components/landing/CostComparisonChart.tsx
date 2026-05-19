@@ -42,11 +42,11 @@ export function CostComparisonChart({
           variant="current"
         />
         <BarRow
-          label="bidit"
+          label="Supporter B"
           rateNote={`${biditRatePct.toFixed(2)}%`}
           ratio={biditRatio}
           cost={biditCost}
-          variant="bidit"
+          variant="supporter-b"
         />
       </div>
 
@@ -74,7 +74,7 @@ type BarRowProps = {
   rateNote: string;
   ratio: number;
   cost: number;
-  variant: 'current' | 'bidit';
+  variant: 'current' | 'supporter-b';
 };
 
 function BarRow({ label, rateNote, ratio, cost, variant }: BarRowProps) {

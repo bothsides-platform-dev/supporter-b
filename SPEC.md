@@ -1,4 +1,4 @@
-# bidit — 기술 스펙 (Next.js 16)
+# Supporter B — 기술 스펙 (Next.js 16)
 
 > 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) (화면·IA·UX) · [DESIGN.md](./DESIGN.md) (디자인 시스템) · [IMPLEMENTATION.md](./IMPLEMENTATION.md) (구현 계획)
 > 본 문서: 기술 스택, 디렉토리, 도메인 타입, 라우팅 전략

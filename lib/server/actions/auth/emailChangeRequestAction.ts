@@ -67,7 +67,7 @@ export async function emailChangeRequestAction(
   await outbox.enqueue({
     event: 'auth.email-change',
     to: newEmail,
-    subject: '[BIDIT] 이메일 변경 확인',
+    subject: '[Supporter B] 이메일 변경 확인',
     html,
     dedupeKey: `email-change:${session.user.id}:${newEmail}:${bucket15Min()}`,
   });

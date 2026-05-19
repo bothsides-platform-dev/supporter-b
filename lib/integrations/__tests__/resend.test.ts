@@ -24,7 +24,7 @@ function makeEntry(overrides?: Partial<OutboxEntry>): OutboxEntry {
     id: 'entry-id',
     event: 'auth.verify',
     to: 'kim@toss.im',
-    subject: 'BIDIT 인증',
+    subject: 'Supporter B 인증',
     html: '<a href="https://x.test/v?t=1">click</a>',
     dedupeKey: 'signup-verify:kim@toss.im:0',
     status: 'pending',
@@ -94,7 +94,7 @@ describe('ResendSender', () => {
     expect(sendMock).toHaveBeenCalledWith({
       from: 'noreply@bidit.test',
       to: 'kim@toss.im',
-      subject: 'BIDIT 인증',
+      subject: 'Supporter B 인증',
       html: expect.stringContaining('<a'),
     });
   });
@@ -108,7 +108,7 @@ describe('ResendSender', () => {
     await ResendSender(makeEntry());
 
     expect(sendMock).toHaveBeenCalledWith(
-      expect.objectContaining({ from: 'send@bidit.store' }),
+      expect.objectContaining({ from: 'send@supporter-b.store' }),
     );
   });
 

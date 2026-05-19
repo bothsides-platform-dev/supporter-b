@@ -12,7 +12,7 @@
 //      terminal scrollback. The console line replaces the legacy
 //      `devLogVerifyLink` / `devLogRfpInviteLink` helpers (now deleted).
 //
-// `from` defaults to `send@bidit.store` (override with `RESEND_FROM`). For
+// `from` defaults to `send@supporter-b.store` (override with `RESEND_FROM`). For
 // production sending, the resolved `from` MUST be on a domain verified in the
 // Resend dashboard — Resend rejects `from` addresses on unverified domains
 // with HTTP 403.
@@ -21,7 +21,7 @@ import * as Sentry from '@sentry/nextjs';
 import { Resend } from 'resend';
 import type { Sender } from '@/lib/server/outbox/types';
 
-const DEFAULT_FROM = 'send@bidit.store';
+const DEFAULT_FROM = 'send@supporter-b.store';
 
 function resolveFrom(): string {
   return process.env.RESEND_FROM ?? DEFAULT_FROM;

@@ -63,9 +63,9 @@ export default function BuyerWorkspacePage() {
       return;
     }
 
-    const rfpNext = localStorage.getItem('bidit-rfp-next');
+    const rfpNext = localStorage.getItem('supporter-b-rfp-next');
     if (rfpNext) {
-      localStorage.removeItem('bidit-rfp-next');
+      localStorage.removeItem('supporter-b-rfp-next');
       router.push(rfpNext);
     } else {
       router.push(r.redirectTo);

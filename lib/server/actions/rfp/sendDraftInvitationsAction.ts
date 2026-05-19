@@ -200,7 +200,7 @@ export async function sendDraftInvitationsAction(
             {
               event: 'rfp.invited',
               to: admin.email,
-              subject: `[BIDIT · ${rfpRow.id}] 제안 요청 도착`,
+              subject: `[Supporter B · ${rfpRow.id}] 제안 요청 도착`,
               html,
               dedupeKey: `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${admin.userId}`,
             },

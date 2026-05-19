@@ -104,11 +104,11 @@ function ogHtml(pretendard: string, jetbrains: string) {
   <div class="frame"></div>
 
   <div class="hero">
-    <div class="wordmark">bidit</div>
+    <div class="wordmark">Supporter B</div>
     <div class="subline">결제대행사 비공개 1:N RFP 플랫폼</div>
   </div>
 
-  <div class="corner bot-right mono"><span class="b">[</span>&nbsp;BIDIT.STORE&nbsp;<span class="b">]</span></div>
+  <div class="corner bot-right mono"><span class="b">[</span>&nbsp;SUPPORTER-B.STORE&nbsp;<span class="b">]</span></div>
 </body>
 </html>`;
 }

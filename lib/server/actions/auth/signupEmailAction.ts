@@ -80,7 +80,7 @@ export async function signupEmailAction(
   await outbox.enqueue({
     event: 'auth.verify',
     to: email,
-    subject: '[BIDIT] 이메일 인증을 완료해 주세요',
+    subject: '[Supporter B] 이메일 인증을 완료해 주세요',
     html,
     dedupeKey: `signup-verify:${email}:${bucket15Min()}`,
   });
