@@ -162,8 +162,11 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
         ((outboxRows as any).rows ?? []);
     expect(outboxArr[0].c).toBeGreaterThanOrEqual(1);
 
-    // /submitted 페이지의 "✓ 제출 완료" 헤더가 보이는지로 redirect 후의 RSC
-    // 렌더링이 정상 완료됐는지까지 검증.
-    await expect(page.getByText(/✓ 제출 완료|제안이 제출/)).toBeVisible();
+    // /submitted 페이지의 헤딩으로 redirect 후 RSC 렌더링 완료를 검증.
+    // 같은 페이지에 "✓ 제출 완료" 에어브로우 paragraph가 또 있어 strict-mode
+    // 위반을 피하려면 heading role로 좁혀야 한다.
+    await expect(
+      page.getByRole('heading', { name: /제안이 제출/ }),
+    ).toBeVisible();
   });
 });
