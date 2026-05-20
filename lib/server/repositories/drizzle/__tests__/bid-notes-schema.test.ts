@@ -1,10 +1,10 @@
-// Schema-level smoke test for Stage 3a.
-// Confirms three drift-prone surfaces of the cutover are wired:
-//   1. attachments.owner_kind accepts 'bid_note'
+// Schema-level smoke test for bid notes + buyer stage.
+// Confirms three drift-prone surfaces are wired:
+//   1. attachments.bid_note_id exclusive-arc FK links a note attachment
 //   2. bid_notes table exists with the expected columns/FKs
 //   3. bids.buyer_stage column accepts the buyer_stage enum values
 // If any of these is missing in the migration the test will fail at SQL
-// time — keeping the schema diff honest before we wire repos/actions.
+// time — keeping the schema diff honest.
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
@@ -34,14 +34,14 @@ async function setup() {
   const pgWs = await seedPgWorkspace(db, 'toss.im');
   const pgUser = await seedUser(db, { email: 'pg@toss.im' });
 
-  const rfpId = 'P-2605-9001';
+  const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
+    code: 'P-2605-9001',
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'schema test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,
@@ -72,7 +72,6 @@ async function setup() {
     monthlyMin: '0',
     bankTransferFeePct: '0.015',
     easyPayFeePct: '0.018',
-    proposalAttachmentId: null,
     submittedBy: pgUser.id,
   });
 
@@ -95,16 +94,14 @@ describe('Stage 3a schema — bid notes + buyer stage', () => {
       body: '협상 진행 메모',
     });
 
-    // owner_kind='bid_note' must be accepted by attachments.
+    // bid_note_id exclusive-arc FK must link the attachment to the note.
     const attId = randomUUID();
     await ctx.db.insert(attachments).values({
       id: attId,
-      ownerKind: 'bid_note',
-      ownerId: noteId,
+      bidNoteId: noteId,
       name: 'memo.pdf',
       size: 100,
       mimeType: 'application/pdf',
-      storagePath: '2026/05/memo-x.pdf',
       uploadedBy: ctx.buyer.id,
     });
 
@@ -114,8 +111,7 @@ describe('Stage 3a schema — bid notes + buyer stage', () => {
     expect(fetched[0].bidId).toBe(ctx.bidId);
 
     const fetchedAtt = await ctx.db.select().from(attachments);
-    expect(fetchedAtt[0].ownerKind).toBe('bid_note');
-    expect(fetchedAtt[0].ownerId).toBe(noteId);
+    expect(fetchedAtt[0].bidNoteId).toBe(noteId);
   });
 
   it('bids.buyer_stage defaults to pending and accepts negotiating/decided', async () => {

@@ -1,19 +1,17 @@
 import type { Attachment } from '@/lib/types/common';
 
-// Server-only attachment row shape — adds owner polymorphism, storagePath, and
-// uploader to the public `Attachment` contract. Never imported by client code:
-// `storagePath` is the storage-backend key and must not leak to the browser
-// (the public `url` field carries the route-resolved `/api/files/{id}`
-// instead).
+// Server-only attachment row shape — adds exclusive-arc owner FKs and uploader
+// to the public `Attachment` contract. Never imported by client code: the
+// public `url` field carries the route-resolved `/api/files/{id}` instead of
+// any storage key.
 //
-// Repositories return this expanded record for server-internal callers (ACL,
-// file route, storage). Client-facing repos (BidRepo) project to plain
-// `Attachment` before returning.
-export type AttachmentOwnerKind = 'rfp' | 'bid_proposal' | 'bid_note';
-
+// Exclusive-arc ownership (C3): at most one of rfpId / bidId / bidNoteId is set
+// once linked; all undefined is a valid draft (uploaded before its owner row
+// exists). Storage bytes live 1:1 in attachment_blobs keyed by `id` (C4) — no
+// separate storage path.
 export type AttachmentRecord = Attachment & {
-  ownerKind: AttachmentOwnerKind;
-  ownerId: string;
-  storagePath: string;
+  rfpId?: string;
+  bidId?: string;
+  bidNoteId?: string;
   uploadedBy: string;
 };
