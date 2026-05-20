@@ -51,7 +51,9 @@ export SUPPRESS_LABEL_WARNING=True
 
 # 이 스크립트의 절대경로 — crontab 줄과 가드 매칭에 쓴다.
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
-CRON_LINE="0 * * * * $SELF run"
+# 정각(:00)은 다들 launch 를 몰아쳐 용량 경쟁·레이트리밋이 가장 심하다. 살짝 비켜선 분에 돈다.
+CRON_MIN="${CRON_MIN:-14}"
+CRON_LINE="$CRON_MIN * * * * $SELF run"
 
 # run 경로 로그는 파일 + 화면 둘 다(cron 은 화면이 없으니 파일이 본체).
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOGFILE"; }
@@ -143,7 +145,7 @@ do_install() {
   else
     printf '%s\n%s\n' "$current" "$CRON_LINE" | crontab -
   fi
-  echo "✅ cron 등록 완료: 매시 정각 launch 1회 시도"
+  echo "✅ cron 등록 완료: 매시 ${CRON_MIN}분 launch 1회 시도"
   echo "   $CRON_LINE"
   echo "   로그: $LOGFILE   (실시간: tail -f \"$LOGFILE\")"
   echo
@@ -172,8 +174,10 @@ do_uninstall() {
 
 # ---- 상태 ----
 do_status() {
-  if crontab -l 2>/dev/null | grep -qF "$SELF"; then
-    echo "cron: 등록됨 (매시 정각)"
+  local line
+  line=$(crontab -l 2>/dev/null | grep -F "$SELF" | head -1)
+  if [[ -n "$line" ]]; then
+    echo "cron: 등록됨 (매시 ${line%% *}분)"
   else
     echo "cron: 미등록  ($SELF install 로 등록)"
   fi
@@ -185,7 +189,7 @@ usage() {
   cat <<EOF
 oci-a1-retry.sh — OCI A1 용량 추첨 단발 launch (cron 매시 1회용)
 
-  $SELF install     매시 정각 cron 등록
+  $SELF install     매시 cron 등록 (기본 :14분, CRON_MIN 으로 조정)
   $SELF status      cron/인스턴스 상태 확인
   $SELF uninstall   cron 해제
   $SELF run         지금 1회만 launch 시도 (cron 이 부르는 기본 동작)

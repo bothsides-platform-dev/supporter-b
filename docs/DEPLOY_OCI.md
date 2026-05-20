@@ -171,7 +171,8 @@ nc -vz <예약공인IP> 443
   > On-demand인데도 A1이 안 잡히는 게 그 유명한 `Out of host capacity`다. 해결은 ③의 3단계
   > (AD 변경 → 오프피크 재시도 → x86 폴백). **cron 기반 자동 재시도 런처가 준비돼 있다**:
   > [`scripts/deploy/oci-a1-retry.sh`](../scripts/deploy/oci-a1-retry.sh) — `install` 하면 매시
-  > 정각에 `launch`를 **딱 1회** 시도하고, 용량이 잡히는 순간 **성공 즉시 멈추고**(중복 생성 방지)
+  > 1회(기본 :14분, 정각 혼잡 회피 — `CRON_MIN` 으로 조정) `launch`를 **딱 1회** 시도하고, 용량이
+  > 잡히는 순간 **성공 즉시 멈추고**(중복 생성 방지)
   > 예약 IP(168.107.39.155)까지 연결한다.
   > 등록: `./scripts/deploy/oci-a1-retry.sh install` · 상태: `… status` · 정리: `… uninstall`
   > (로그는 `~/oci-a1-retry.log`).
