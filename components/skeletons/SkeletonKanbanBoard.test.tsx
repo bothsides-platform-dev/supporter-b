@@ -16,4 +16,9 @@ describe('SkeletonKanbanBoard', () => {
     render(<SkeletonKanbanBoard cols={2} cardsPerCol={2} />)
     expect(screen.getAllByTestId('skeleton-kanban-card')).toHaveLength(4)
   })
+
+  it('defaults to 3 cards per column', () => {
+    render(<SkeletonKanbanBoard cols={1} />)
+    expect(screen.getAllByTestId('skeleton-kanban-card')).toHaveLength(3)
+  })
 })

@@ -5,6 +5,11 @@ interface Props {
   cardsPerCol?: number
 }
 
+/**
+ * Skeleton placeholder for kanban boards.
+ * Default cols=6 matches the home KanbanBoard (6 stages).
+ * Pass cols={3} for BidBoard (3 stages: pending/negotiating/decided).
+ */
 export function SkeletonKanbanBoard({ cols = 6, cardsPerCol = 3 }: Props) {
   return (
     <div
@@ -13,7 +18,7 @@ export function SkeletonKanbanBoard({ cols = 6, cardsPerCol = 3 }: Props) {
     >
       {Array.from({ length: cols }).map((_, ci) => (
         <div
-          key={ci}
+          key={`col-${ci}`}
           data-testid="skeleton-kanban-col"
           className="flex flex-col gap-2 rounded-md bg-[var(--md-sys-color-surface-container)] p-3"
         >
@@ -23,7 +28,7 @@ export function SkeletonKanbanBoard({ cols = 6, cardsPerCol = 3 }: Props) {
           </div>
           {Array.from({ length: cardsPerCol }).map((_, ki) => (
             <div
-              key={ki}
+              key={`card-${ci}-${ki}`}
               data-testid="skeleton-kanban-card"
               className="rounded-md bg-[var(--md-sys-color-surface)] p-2 flex flex-col gap-1"
             >
