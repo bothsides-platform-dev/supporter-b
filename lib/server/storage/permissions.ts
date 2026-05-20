@@ -1,36 +1,31 @@
 /**
  * `canAccessAttachment` — single source of truth for file route ACLs.
  *
- * Rules per ownerKind:
+ * Ownership is exclusive-arc (C3): an attachment carries at most one of
+ * rfpId / bidId / bidNoteId. Rules per owner column:
  *
- *   `rfp` (RFP PDFs attached to a buyer-side RFP)
+ *   `rfpId` set (RFP PDFs attached to a buyer-side RFP)
  *     - Buyer ws members of the RFP owner: ALLOW
  *     - PG ws members where `invitationRepo.canAccess(rfpId, pgWsId)` is true: ALLOW
- *     - Uploader themselves (covers pre-RFP-create draft window where
- *       `ownerId` may not yet resolve to an `rfps` row): ALLOW
+ *     - Uploader themselves: ALLOW
  *     - Otherwise: DENY
  *
- *   `bid_proposal` (proposal PDF attached to a PG-side bid)
+ *   `bidId` set (proposal PDF attached to a PG-side bid)
  *     - Buyer ws members of the underlying RFP: ALLOW
- *     - Same-PG-workspace as the bid that references this attachment:
- *       ALLOW (so PG ws peers can view what was submitted)
- *     - Uploader themselves: ALLOW (pre-bid-create draft window)
+ *     - Same-PG-workspace as the bid: ALLOW (PG ws peers view submissions)
+ *     - Uploader themselves: ALLOW
  *     - Otherwise: DENY
  *
- *   `bid_note` (buyer-private memo attachment on a bid)
+ *   `bidNoteId` set (buyer-private memo attachment on a bid)
  *     - Buyer ws members of the RFP behind the bid: ALLOW
- *     - Uploader themselves: ALLOW (pre-note draft window — first
- *       attachment uploaded before the bid_notes row exists)
+ *     - Uploader themselves: ALLOW
  *     - **All PG users: DENY** — notes are internal to the buyer.
  *
- * Cross-PG isolation is preserved — a PG user from a different ws
- * cannot read another PG's bid_proposal even if they were also invited
- * to the same RFP.
+ *   None set (draft, uploaded before its owner row exists)
+ *     - Only the uploader: ALLOW
  *
- * Lookups are direct DB reads (not through repos) for the join-heavy
- * queries that don't have repo methods today; the repo-shaped check
- * (`invitationRepo.canAccess`) is delegated for parity with the bid
- * action's gate.
+ * Cross-PG isolation is preserved — a PG user from a different ws cannot
+ * read another PG's proposal even if invited to the same RFP.
  */
 import { and, eq } from 'drizzle-orm';
 import { bidNotes, bids, rfps, workspaceMembers } from '@/lib/db/schema';
@@ -64,56 +59,49 @@ export async function canAccessAttachment(
 
   // Uploader themselves can always read their own upload — covers the
   // narrow window between upload and the form action that links the
-  // row to a real RFP/bid.
+  // row to a real RFP/bid (draft: all owner FKs null).
   if (att.uploadedBy === userId) return true;
 
-  if (att.ownerKind === 'rfp') {
-    // Look up the RFP owner. ownerId may not resolve if upload landed
-    // before the RFP row was created (uploader path above already
-    // covered that case); a missing row from here means we can't ACL
-    // and must deny.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isMember = async (workspaceId: string): Promise<boolean> => {
+    const [member] = await h
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
+      .limit(1);
+    return Boolean(member);
+  };
+
+  if (att.rfpId) {
     const [rfp] = await h
       .select({ buyerWsId: rfps.buyerWsId })
       .from(rfps)
-      .where(eq(rfps.id, att.ownerId))
+      .where(eq(rfps.id, att.rfpId))
       .limit(1);
     if (!rfp) return false;
 
     // Buyer ws membership — any member (admin/member) of the owning ws.
-    if (wsId && rfp.buyerWsId === wsId) {
-      const [member] = await h
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, wsId),
-            eq(workspaceMembers.userId, userId),
-          ),
-        )
-        .limit(1);
-      if (member) return true;
-    }
+    if (wsId && rfp.buyerWsId === wsId && (await isMember(wsId))) return true;
 
-    // PG side — invitation gates by workspace membership (any member of an
-    // invited PG ws may read the RFP PDF).
-    if (
-      wsId &&
-      (await repos.invitation.canAccess(att.ownerId, wsId, tx))
-    ) {
+    // PG side — invitation gates by workspace membership.
+    if (wsId && (await repos.invitation.canAccess(att.rfpId, wsId, tx))) {
       return true;
     }
-
     return false;
   }
 
-  if (att.ownerKind === 'bid_note') {
-    // bid_note attachments: hop owner_id → bid_notes.bid_id → bids.rfp_id →
-    // rfps.buyer_ws_id and require user to be a member of that buyer ws.
-    // PG users are denied unconditionally — notes are buyer-internal.
+  if (att.bidNoteId) {
+    // bid_note → bid_notes.bid_id → bids.rfp_id → rfps.buyer_ws_id; require
+    // membership of that buyer ws. PG users denied (notes are buyer-internal).
     const [note] = await h
       .select({ bidId: bidNotes.bidId })
       .from(bidNotes)
-      .where(eq(bidNotes.id, att.ownerId))
+      .where(eq(bidNotes.id, att.bidNoteId))
       .limit(1);
     if (!note) return false;
 
@@ -131,57 +119,32 @@ export async function canAccessAttachment(
       .limit(1);
     if (!rfpRow) return false;
     if (!wsId || rfpRow.buyerWsId !== wsId) return false;
-
-    const [member] = await h
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, wsId),
-          eq(workspaceMembers.userId, userId),
-        ),
-      )
-      .limit(1);
-    return Boolean(member);
+    return isMember(wsId);
   }
 
-  // bid_proposal — find the bid that points at this attachment id.
-  // If no bid yet (pre-submit draft window), only the uploader can read,
-  // which was already handled above.
-  const [bid] = await h
-    .select({
-      pgWsId: bids.pgWsId,
-      rfpId: bids.rfpId,
-    })
-    .from(bids)
-    .where(eq(bids.proposalAttachmentId, att.id))
-    .limit(1);
-
-  if (!bid) return false;
-
-  // PG workspace peers — same workspace as the bid submitter.
-  if (wsId && bid.pgWsId === wsId) return true;
-
-  // Buyer ws — RFP's owning workspace.
-  const [rfpRow] = await h
-    .select({ buyerWsId: rfps.buyerWsId })
-    .from(rfps)
-    .where(eq(rfps.id, bid.rfpId))
-    .limit(1);
-  if (!rfpRow) return false;
-  if (wsId && rfpRow.buyerWsId === wsId) {
-    const [member] = await h
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, wsId),
-          eq(workspaceMembers.userId, userId),
-        ),
-      )
+  if (att.bidId) {
+    // bid_proposal — the attachment carries bid_id directly (exclusive-arc).
+    const [bid] = await h
+      .select({ pgWsId: bids.pgWsId, rfpId: bids.rfpId })
+      .from(bids)
+      .where(eq(bids.id, att.bidId))
       .limit(1);
-    if (member) return true;
+    if (!bid) return false;
+
+    // PG workspace peers — same workspace as the bid submitter.
+    if (wsId && bid.pgWsId === wsId) return true;
+
+    // Buyer ws — RFP's owning workspace.
+    const [rfpRow] = await h
+      .select({ buyerWsId: rfps.buyerWsId })
+      .from(rfps)
+      .where(eq(rfps.id, bid.rfpId))
+      .limit(1);
+    if (!rfpRow) return false;
+    if (wsId && rfpRow.buyerWsId === wsId && (await isMember(wsId))) return true;
+    return false;
   }
 
+  // Draft with no owner linked — only the uploader (handled above) may read.
   return false;
 }
