@@ -43,7 +43,8 @@ export type Bid = {
   easyPayFeePct: number;
   cardFeesByIssuer?: Record<CardIssuer, number>;
   overseasCardFeePct?: number;
-  proposalPdf: Attachment;
+  // 제안서 첨부 — bid당 여러 개 가능(attachments.bid_id 1..N). 없으면 빈 배열.
+  proposalPdfs: Attachment[];
   memo?: string;
   status: 'draft' | 'submitted' | 'withdrawn';
   submittedBy: string;

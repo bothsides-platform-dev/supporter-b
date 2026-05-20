@@ -23,14 +23,14 @@ async function setup() {
   const pgWs = await seedPgWorkspace(db, 'toss.im');
   const pgUser = await seedUser(db, { email: 'pg@toss.im' });
 
-  const rfpId = 'P-2605-9201';
+  const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
+    code: 'P-2605-9201',
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'stage test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,
@@ -59,7 +59,6 @@ async function setup() {
     monthlyMin: '0',
     bankTransferFeePct: '0.015',
     easyPayFeePct: '0.018',
-    proposalAttachmentId: null,
     submittedBy: pgUser.id,
   });
 
