@@ -15,7 +15,7 @@
  */
 import 'dotenv/config';
 
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
@@ -189,13 +189,37 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
   ]);
 
-  // 6. Memberships — each user is admin of their own workspace.
+  // 6. Memberships — each user is admin of their own workspace. The buyer admin
+  //    is ALSO a member of the 서포터 B 페이 PG workspace, demonstrating one user
+  //    across workspaces of different types (the multi-workspace switcher).
   await db.insert(workspaceMembers).values([
     { workspaceId: buyerWsId, userId: buyerUserId, role: 'admin' },
     { workspaceId: tossWsId, userId: tossUserId, role: 'admin' },
     { workspaceId: inicisWsId, userId: inicisUserId, role: 'admin' },
     { workspaceId: kakaoWsId, userId: kakaoUserId, role: 'admin' },
+    // cross-type second membership for the buyer admin.
+    { workspaceId: tossWsId, userId: buyerUserId, role: 'member' },
   ]);
+
+  // 6b. Remembered active workspace per user (FK requires workspaces to exist,
+  //     so this runs after the inserts above). Each lands in their primary ws;
+  //     the buyer admin lands in the buyer ws and can switch to 서포터 B 페이.
+  await db
+    .update(users)
+    .set({ lastActiveWorkspaceId: buyerWsId })
+    .where(eq(users.id, buyerUserId));
+  await db
+    .update(users)
+    .set({ lastActiveWorkspaceId: tossWsId })
+    .where(eq(users.id, tossUserId));
+  await db
+    .update(users)
+    .set({ lastActiveWorkspaceId: inicisWsId })
+    .where(eq(users.id, inicisUserId));
+  await db
+    .update(users)
+    .set({ lastActiveWorkspaceId: kakaoWsId })
+    .where(eq(users.id, kakaoUserId));
 
   // 7. RFPs — counters first so the FK / numbering is consistent on direct
   // inserts (we bypass nextRfpId() because it derives YYMM from `now()`).
@@ -362,7 +386,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   return {
     workspaces: 4,
     users: 4,
-    members: 4,
+    members: 5,
     bizProfiles: 2,
     rfps: 3,
     invitations: 4,

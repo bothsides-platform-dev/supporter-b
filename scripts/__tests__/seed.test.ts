@@ -25,7 +25,7 @@ describe('scripts/seed.ts', () => {
   it('returns the documented summary counts', () => {
     expect(result.workspaces).toBe(4);
     expect(result.users).toBe(4);
-    expect(result.members).toBe(4);
+    expect(result.members).toBe(5);
     expect(result.bizProfiles).toBe(2);
     expect(result.rfps).toBe(3);
     expect(result.invitations).toBe(4);
@@ -55,9 +55,30 @@ describe('scripts/seed.ts', () => {
     expect(pgRows[0].c).toBe(3);
   });
 
-  it('inserts 4 users + 4 workspace_members', async () => {
+  it('inserts 4 users + 5 workspace_members', async () => {
     expect(await count(db, 'users')).toBe(4);
-    expect(await count(db, 'workspace_members')).toBe(4);
+    expect(await count(db, 'workspace_members')).toBe(5);
+  });
+
+  it('makes the buyer admin a member of 2 workspaces (multi-workspace demo)', async () => {
+    const rows = await db.execute(sql`
+      SELECT count(*)::int AS c
+      FROM workspace_members m
+      JOIN users u ON u.id = m.user_id
+      WHERE u.email = 'yeonseong.dev@gmail.com'
+    `);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const arr: any[] = Array.isArray(rows) ? rows : (rows as any).rows ?? [];
+    expect(arr[0].c).toBe(2);
+  });
+
+  it('sets a non-null lastActiveWorkspaceId for every seeded user', async () => {
+    const rows = await db.execute(
+      sql`SELECT count(*)::int AS c FROM users WHERE last_active_workspace_id IS NOT NULL`,
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const arr: any[] = Array.isArray(rows) ? rows : (rows as any).rows ?? [];
+    expect(arr[0].c).toBe(4);
   });
 
   it('inserts 2 biz_profiles (buyer + RFP snapshot)', async () => {
