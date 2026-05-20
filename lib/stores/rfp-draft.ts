@@ -6,7 +6,7 @@ import type { BizProfile } from '@/lib/types/biz-profile';
 
 // `id` is the attachment row id returned by POST /api/files/upload
 // (Step 11). Pre-Step 11 the dropzone carried only name/size in
-// memory; the file now lives in Supabase Storage + the `attachments`
+// memory; the file now lives in the storage backend + the `attachments`
 // row at upload time (`ownerId='__draft__'`), and `createRfpAction`
 // patches the row's ownerId to the freshly minted RFP id at form
 // submit.

@@ -13,9 +13,9 @@ class EnoentError extends Error {
 /**
  * Postgres bytea-backed Storage. Attachment bytes live in `attachment_blobs`
  * keyed by storage path, so the whole stack runs on one Postgres with no
- * external object store. Like the former Supabase backend, `read()`
- * materialises the whole blob and slices in memory — fine under the route's
- * 20MB cap, and keeps `size` reporting the total byte count for Content-Range.
+ * external object store. `read()` materialises the whole blob and slices in
+ * memory — fine under the route's 20MB cap, and keeps `size` reporting the
+ * total byte count for Content-Range.
  */
 export class PostgresStorage implements Storage {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -21,8 +21,9 @@ export interface ReadRange {
 
 export interface Storage {
   /** Persist `buffer` at `key`. Mime is recorded in the attachment row
-   *  (not in storage metadata); backends that support per-object
-   *  Content-Type (Supabase) may thread it through. */
+   *  (not relied on at read time); the Postgres backend stores it on the
+   *  blob row too, but the route composes Content-Type from the attachment
+   *  row's `mime_type`. */
   save(key: string, buffer: Buffer, mime: string): Promise<void>;
   /** Open a streaming reader. When `range` is supplied the stream emits
    *  only that slice; `size` always carries the **total** file size.

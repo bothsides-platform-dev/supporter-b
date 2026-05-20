@@ -1,4 +1,4 @@
-// InMemoryStorage round-trip — mirrors the SupabaseStorage contract
+// InMemoryStorage round-trip — mirrors the PostgresStorage contract
 // (in-memory slice on Range, `size` is total bytes, missing key throws
 // `ENOENT`). Used as the test-only backend so route + action specs run
 // without disk or network.
