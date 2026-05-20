@@ -5,14 +5,18 @@ Postgres는 같은 인스턴스의 Docker 컨테이너, HTTPS는 도메인 + Cad
 
 | 항목 | 선택 |
 |---|---|
+| 리전 | **ap-chuncheon-1(춘천) / ap-seoul-1(서울)** — KR 사용자 지연 최소화 |
 | 인스턴스 | Ampere A1 (ARM, Always Free) — Ubuntu 24.04. 용량 부족 시 x86 micro 폴백 |
-| 앱 실행 | 네이티브 Node 22 + PM2 (`next start`) |
+| 앱 실행 | 네이티브 Node 22 + PM2 (`next start`) — SSE 알림을 위해 상시 서버 |
 | DB | 같은 인스턴스 Postgres 16 컨테이너 (`docker-compose.prod.yml`, 127.0.0.1 바인딩) |
 | 프록시/TLS | Caddy — 도메인으로 Let's Encrypt 자동 발급/갱신 |
+| 백업 | **nightly `pg_dump` → OCI Object Storage(Always Free 10GB)** — 필수, §7 |
 | 이메일 | Resend **미인증 상태로 배포** → 초대/가입 메일 미발송 (추후 DNS 인증) |
 
 > 산출물: `scripts/deploy/bootstrap.sh`, `scripts/deploy/deploy.sh`, `ecosystem.config.cjs`,
 > `docker-compose.prod.yml`, `deploy/Caddyfile`, `.env.production.example`.
+>
+> 이 구조를 택한 근거·대안 비교(Vercel/관리형 DB/유료 VM)는 [ADR 0001](adr/0001-deployment-architecture.md) 참고.
 
 ---
 
@@ -81,6 +85,11 @@ ssh-add --apple-use-keychain ~/.ssh/bidit_oci
 ---
 
 ## 1. 네트워크 + 인스턴스 생성 (OCI 콘솔)
+
+> **리전 먼저 선택**: 콘솔 우상단에서 **ap-chuncheon-1(춘천)** 또는 **ap-seoul-1(서울)** 로
+> 전환한 뒤 아래 단계를 진행한다. VCN·예약 IP·인스턴스는 모두 같은 리전에 만들어야 한다.
+> KR 사용자 대상이므로 지연이 가장 낮다. (A1 용량은 리전·AD마다 다르니, 한 리전에서 끝내
+> `Out of host capacity`면 다른 KR 리전도 시도해 볼 수 있다.)
 
 ### 1-1. 예약 공인 IP (먼저 확보)
 `Networking → Reserved public IPs → Reserve public IP address`로 IP를 하나 예약한다.
@@ -177,6 +186,11 @@ nc -vz <예약공인IP> 443
     **`Specialty and previous generation` 탭 → VM.Standard.E2.1.Micro**(x86, 1 OCPU/1GB,
     무료). 단 1GB라 `next build`가 OOM 나기 쉬우므로 스왑이 필수인데, 이는 `bootstrap.sh`가
     4GB 스왑으로 처리한다.
+  - **그래도 micro에선 실제 빌드(bytea 번들 + Sentry 소스맵)가 스왑으로도 OOM 날 수 있다.**
+    가장 싼 우회는 **온박스 재빌드 대신 GitHub Actions(무료)에서 빌드** 후 산출물만 인스턴스로
+    옮기는 것: CI에서 `pnpm build` → `.next/`(+필요시 `public/`, `node_modules/`)를 인스턴스로
+    `rsync` → `pm2 reload`. micro에서 `deploy.sh`의 빌드 단계만 건너뛴다. A1(24GB)을 확보하면
+    이 우회는 불필요하다.
 
 > ARM(A1)이어도 스택은 전부 arm64 호환이다: NodeSource Node 22, `postgres:16-alpine`,
 > Caddy, next-swc/sharp 모두 arm64 프리빌트가 있어 추가 작업이 없다.
@@ -322,18 +336,89 @@ docker compose -f docker-compose.prod.yml ps    # pg healthy
 
 ---
 
+## 7. 백업 — pg_dump → Object Storage (필수)
+
+첨부가 Postgres bytea에 들어가므로 **모든 데이터 + 첨부가 이 인스턴스의 부트볼륨 1곳에만**
+존재한다. 인스턴스/볼륨을 잃으면 전부 잃는다 — 이 아키텍처의 유일한 치명적 실패모드다.
+DB 덤프 1개가 곧 전체 백업이므로, nightly 덤프를 **인스턴스 밖(Object Storage)** 으로
+빼는 것이 선택이 아니라 필수다.
+
+### 7-1. Object Storage 버킷
+`Storage → Buckets → Create Bucket`(예: `bidit-backups`). Always Free는 Standard 10GB +
+Archive 10GB. **인스턴스와 같은 리전**에 만든다.
+
+### 7-2. 업로드 인증 (시크릿 없이 권장)
+인스턴스에 API 키 파일을 두지 않으려면 **instance principal**을 쓴다: `Identity → Dynamic
+Groups`로 이 인스턴스를 묶고, Policy에
+`allow dynamic-group <그룹> to manage objects in compartment <c> where target.bucket.name='bidit-backups'`
+를 추가. 그러면 인스턴스에서 OCI CLI가 키 없이 인증된다. (간단히 가려면 API 키로
+`oci setup config`도 가능하나 키 파일이 디스크에 남는다.)
+
+### 7-3. nightly cron
+`/home/ubuntu/backup.sh`:
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+F="bidit-$(date +%F).sql.gz"
+docker compose -f /home/ubuntu/bidit/docker-compose.prod.yml exec -T pg \
+  pg_dump -U supporter_b supporter_b | gzip > "/home/ubuntu/backups/$F"
+oci os object put -bn bidit-backups --file "/home/ubuntu/backups/$F" --force \
+  --auth instance_principal
+find /home/ubuntu/backups -name 'bidit-*.sql.gz' -mtime +7 -delete   # 로컬은 7일치만
+```
+크론 등록 (매일 03:30):
+```bash
+mkdir -p /home/ubuntu/backups && chmod +x /home/ubuntu/backup.sh
+( crontab -l 2>/dev/null; echo "30 3 * * * /home/ubuntu/backup.sh >> /home/ubuntu/backups/cron.log 2>&1" ) | crontab -
+```
+
+### 7-4. 부트볼륨 자동 백업 (2차 안전망)
+`Block Storage → Boot Volumes → (이 인스턴스 볼륨) → 백업 정책 지정`. Always Free 블록
+스토리지 한도(합산 200GB) 안에서 무료. pg_dump가 논리 백업이라면 이건 볼륨 스냅샷이라 복구
+경로가 다르다 — 둘 다 둔다.
+
+### 7-5. 복구 리허설 (분기 1회 권장)
+복구해 본 적 없는 백업은 백업이 아니다. **운영 DB를 덮지 말고** 임시 DB에 복원해 검증:
+```bash
+oci os object get -bn bidit-backups --name bidit-YYYY-MM-DD.sql.gz \
+  --file /tmp/r.sql.gz --auth instance_principal
+# 운영 DB를 건드리지 않도록 throwaway DB를 새로 만들어 복원
+docker compose -f docker-compose.prod.yml exec -T pg createdb -U supporter_b restore_check
+gunzip -c /tmp/r.sql.gz | docker compose -f docker-compose.prod.yml exec -T pg \
+  psql -U supporter_b -d restore_check     # RFP·첨부 다운로드가 되는지 확인
+docker compose -f docker-compose.prod.yml exec -T pg dropdb -U supporter_b restore_check
+```
+
+---
+
+## 8. 관측·복구 (권장)
+
+단일 인스턴스라 장애를 능동적으로 잡지 않으면 사용자가 먼저 발견한다.
+
+- **PM2 로그 로테이션** — 디스크 fill 방지:
+  ```bash
+  pm2 install pm2-logrotate
+  pm2 set pm2-logrotate:max_size 10M
+  pm2 set pm2-logrotate:retain 7
+  ```
+- **업타임 핑** — 무료 외부 모니터(UptimeRobot 등)로 `https://your-domain.com/login`을
+  1~5분 간격 체크, 다운 시 알림. 외부에서 봐야 인스턴스 다운까지 잡힌다.
+- **런타임 에러** — Sentry가 이미 붙어 있다(`SENTRY_*`). 5xx·예외는 여기로 모인다.
+
+---
+
 ## 운영 메모 / 알려진 제약
 
 - **이메일(초대/가입) 미동작**: Resend에서 발신 도메인 DNS 인증(SPF/DKIM)을 하기 전까지
   메일이 나가지 않는다. 도메인이 있으니 Resend 대시보드에서 도메인 추가 → DNS 레코드 등록 →
   `.env.production`의 `RESEND_API_KEY`/`RESEND_FROM` 채우고 `deploy.sh` 재실행하면 활성화된다.
   **이 플랫폼의 PG 초대 흐름(시나리오 A/B/C)은 메일에 의존**하므로 운영 전 반드시 처리.
-- **백업**: 첨부가 Postgres bytea에 들어가므로 DB 덤프가 곧 전체 백업이다. nightly cron 권장:
-  ```bash
-  docker compose -f docker-compose.prod.yml exec -T pg \
-    pg_dump -U supporter_b supporter_b | gzip > /home/ubuntu/backups/bidit-$(date +%F).sql.gz
-  ```
-  (OCI Object Storage Always Free 버킷으로 동기화하면 인스턴스 손실에도 안전.)
+- **백업**: §7 참조 — nightly `pg_dump → Object Storage`는 **필수**다(bytea라 첨부까지 DB에
+  있으므로 인스턴스 손실 = 전손). 운영 전 cron 등록 + 복구 리허설을 끝낼 것.
+- **SSE 알림 헤드룸**: 인앱 알림은 long-lived SSE 연결이다. fork 1개로 동시 수천 연결까지
+  v0 트래픽엔 충분하다. **앱/Caddy 재시작 시 전 연결이 끊기지만** 클라이언트 EventSource가
+  자동 재연결한다. PM2를 `cluster` 다중 인스턴스로 늘리면 인메모리 알림 버스가 fork 간
+  공유되지 않으므로, 그땐 Postgres LISTEN/NOTIFY 등 공유 버스가 필요하다(현재 YAGNI).
 - **재배포**: `git push` 후 인스턴스에서 `bash scripts/deploy/deploy.sh` 한 번.
 - **IP/도메인 변경 시**: `NEXT_PUBLIC_BASE_URL`이 빌드에 박히므로 `.env.production` 수정 후
   `deploy.sh`로 **재빌드** 필요.
