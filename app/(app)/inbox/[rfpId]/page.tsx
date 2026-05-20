@@ -19,28 +19,29 @@ type Props = { params: Promise<{ rfpId: string }> };
 export const dynamic = 'force-dynamic';
 
 export default async function InboxDetailPage({ params }: Props) {
-  const { rfpId } = await params;
+  // URL 파라미터는 사람용 code(P-YYMM-NNNN). 내부 조회는 rfp.id(uuid).
+  const { rfpId: rfpCode } = await params;
 
   const session = await auth();
   if (!session?.user?.id || !session.user.workspaceId) {
-    redirect(`/login?next=/inbox/${rfpId}`);
+    redirect(`/login?next=/inbox/${rfpCode}`);
   }
+
+  const rfpRepo = await getRfpRepo();
+  const rfp = await rfpRepo.findByCode(rfpCode);
+  if (!rfp) notFound();
 
   const invRepo = await getInvitationRepo();
   // canAccess: 초대된 PG 워크스페이스 멤버 모두 통과. false면 404.
-  const ok = await invRepo.canAccess(rfpId, session.user.workspaceId);
+  const ok = await invRepo.canAccess(rfp.id, session.user.workspaceId);
   if (!ok) notFound();
 
   // PG 홈 칸반 '검토중' 컬럼 활성화 — accepted → opened 1회 전이. 이미 opened 이상이면 no-op.
-  await markInvitationOpenedAction({ rfpId });
-
-  const rfpRepo = await getRfpRepo();
-  const rfp = await rfpRepo.findById(rfpId);
-  if (!rfp) notFound();
+  await markInvitationOpenedAction({ rfpId: rfp.id });
 
   // 이미 입찰을 제출했는지 확인 — submitted 상태면 작성 폼 대신 confirm 화면.
   const bidRepo = await getBidRepo();
-  const allBids = await bidRepo.findByRfp(rfpId);
+  const allBids = await bidRepo.findByRfp(rfp.id);
   const myBid = allBids.find(
     (b) =>
       b.pgWsId === session.user!.workspaceId && b.status === 'submitted',
@@ -61,7 +62,7 @@ export default async function InboxDetailPage({ params }: Props) {
               : '—'}
           </p>
           <Link
-            href={`/inbox/${rfpId}/submitted`}
+            href={`/inbox/${rfpCode}/submitted`}
             className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
           >
             제출 내역 보기 →
@@ -88,7 +89,7 @@ export default async function InboxDetailPage({ params }: Props) {
             제안 작성
           </h2>
         </div>
-        <BidForm rfpId={rfpId} grade={rfp.bizProfile?.grade} />
+        <BidForm rfpId={rfp.id} rfpCode={rfp.code} grade={rfp.bizProfile?.grade} />
       </div>
     </div>
   );

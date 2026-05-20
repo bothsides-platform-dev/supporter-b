@@ -47,7 +47,8 @@ export default async function RfpDetailPage({ params }: Props) {
     redirect(`/login?next=/rfp/${id}`);
   }
 
-  const rfp = await (await getRfpRepo()).findById(id);
+  // URL 파라미터 id 는 사람용 code(P-YYMM-NNNN). 내부 조회는 rfp.id(uuid).
+  const rfp = await (await getRfpRepo()).findByCode(id);
   if (!rfp || rfp.buyerWsId !== session.user.workspaceId) {
     return (
       <div className="px-8 py-8">
@@ -58,7 +59,7 @@ export default async function RfpDetailPage({ params }: Props) {
     );
   }
 
-  const allBids = await (await getBidRepo()).findByRfp(id);
+  const allBids = await (await getBidRepo()).findByRfp(rfp.id);
   const rfpBids = allBids.filter((b) => b.status === 'submitted');
 
   // Stage 3c cutover — notes live in the DB now (bid_notes + attachments).
@@ -85,7 +86,7 @@ export default async function RfpDetailPage({ params }: Props) {
   // Invitation status per workspace — `allowedPgWorkspaceIds` is source of truth.
   // addPgWorkspacesToRfpAction creates a 'draft' row per workspace so all appear
   // even before the invite is sent.
-  const invitations = await (await getInvitationRepo()).findByRfp(id);
+  const invitations = await (await getInvitationRepo()).findByRfp(rfp.id);
   const invByWsId = new Map<string, InvitationStatus>();
   for (const inv of invitations) {
     if (inv.pgWsId) invByWsId.set(inv.pgWsId, inv.status);
@@ -127,7 +128,7 @@ export default async function RfpDetailPage({ params }: Props) {
       {/* Header */}
       <div>
         <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
-          {rfp.id}
+          {rfp.code}
         </span>
         <div className="flex items-start justify-between mt-1 gap-4">
           <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">

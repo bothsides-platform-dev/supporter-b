@@ -25,7 +25,8 @@ const SETTLE_LABEL: Record<string, string> = {
 };
 
 type Props = {
-  rfpId: string;
+  rfpId: string; // uuid — awardRfpAction용
+  rfpCode: string; // P-YYMM-NNNN — 표시/링크용
   rfpDeadline: string;
   rfpAllowedCount: number;
   bizProfile: {
@@ -42,6 +43,7 @@ type Props = {
 export function AwardConfirm(props: Props) {
   const {
     rfpId,
+    rfpCode,
     rfpDeadline,
     rfpAllowedCount,
     bizProfile,
@@ -137,7 +139,7 @@ export function AwardConfirm(props: Props) {
       {/* Header */}
       <div>
         <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
-          {rfpId} · 수주 처리
+          {rfpCode} · 수주 처리
         </span>
         <h1 className="mt-1 text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
           {pgName(selected.pgWsId)} 제안을 선택하시겠습니까?
@@ -241,7 +243,7 @@ export function AwardConfirm(props: Props) {
           </ul>
         </div>
         <div className="flex gap-3">
-          <Link href={`/rfp/${rfpId}`} className="flex-1">
+          <Link href={`/rfp/${rfpCode}`} className="flex-1">
             <Button variant="outlined" fullWidth>
               ← 비교로 돌아가기
             </Button>

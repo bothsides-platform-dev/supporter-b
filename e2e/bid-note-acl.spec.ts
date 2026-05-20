@@ -13,7 +13,7 @@
  * page.request. Expect 403.
  */
 import { test, expect } from 'playwright/test';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { db } from '@/lib/db/client';
 import { attachments, bidNotes } from '@/lib/db/schema';
@@ -86,12 +86,7 @@ test.describe.serial('bid_note attachment ACL', () => {
     const [attRow] = await db
       .select({ id: attachments.id })
       .from(attachments)
-      .where(
-        and(
-          eq(attachments.ownerKind, 'bid_note'),
-          eq(attachments.ownerId, noteRow.id),
-        ),
-      )
+      .where(eq(attachments.bidNoteId, noteRow.id))
       .limit(1);
     expect(attRow?.id).toBeDefined();
     const attId = attRow.id;

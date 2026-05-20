@@ -62,7 +62,6 @@ export async function canAccessAttachment(
   // row to a real RFP/bid (draft: all owner FKs null).
   if (att.uploadedBy === userId) return true;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isMember = async (workspaceId: string): Promise<boolean> => {
     const [member] = await h
       .select({ userId: workspaceMembers.userId })

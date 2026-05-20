@@ -88,7 +88,8 @@ export function toPgCard(args: {
   const grade = rfp.bizProfile?.grade;
   return {
     invitationId: invitation.id,
-    rfpId: rfp.id,
+    // 카드 식별자는 URL/표시용 code (PG 칸반 → /inbox/[code]).
+    rfpId: rfp.code,
     title: rfp.title,
     stage,
     deadline: rfp.deadline,
