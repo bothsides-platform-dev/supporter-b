@@ -109,12 +109,15 @@ docker compose ps
 
 ## 5. DB 초기 데이터 채우기
 
+> **스키마 적용은 별도 절차입니다.** 단일 `drizzle/0000_greenfield_schema.sql` 을
+> 대상 DB에 적용해 테이블을 먼저 만들어야 합니다(증분 `db:migrate` 미사용 — 그린필드
+> 단일 스키마). 스키마가 준비된 뒤:
+
 ```bash
-pnpm db:migrate
 pnpm db:seed
 ```
 
-`db:migrate` 는 테이블을 만들고, `db:seed` 는 테스트용 사용자·워크스페이스·RFP 데이터를 넣습니다. 첨부파일 바이트는 `attachment_blobs` 테이블에 저장되며 마이그레이션으로 함께 생성됩니다.
+`db:seed` 는 테스트용 사용자·워크스페이스·RFP 데이터를 넣습니다. 첨부파일 바이트는 `attachment_blobs` 테이블에 저장됩니다.
 
 ## 6. 개발 서버 실행
 
@@ -135,7 +138,6 @@ pnpm dev
 | `pnpm: command not found` | 터미널을 한 번 닫았다 다시 열기. 그래도 안 되면 `npm install -g pnpm` 다시 실행 |
 | `docker: command not found` 또는 `Cannot connect to the Docker daemon` | Docker Desktop 이 꺼져 있음. 시작 메뉴에서 실행 후 🐳 아이콘이 안정될 때까지 대기 |
 | `port 5432 is already allocated` | 컴퓨터에 이미 PostgreSQL 이 돌고 있음. 윈도우 "서비스" 에서 기존 PostgreSQL 을 중지하거나, `docker-compose.yml` 의 `5432:5432` 를 `5433:5432` 로 바꾸고 `.env.local` 의 `DATABASE_URL` 포트도 `5433` 으로 수정 |
-| `pnpm db:migrate` 실패 | DB 가 완전히 뜨기 전이거나 기존 데이터가 깨진 경우. `docker compose down -v` 로 초기화 후 4단계부터 재실행 |
 | PowerShell 에서 "스크립트 실행이 차단됨" | 관리자 권한 PowerShell 에서 한 번만 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` 실행 |
 | `warning: LF will be replaced by CRLF` 같은 경고 | Windows Git 의 정상 동작입니다. 무시해도 됩니다 |
 | 포트 3000 이 이미 사용 중 | 다른 Next.js 가 떠 있음. 끄거나 `pnpm dev -- -p 3001` 로 다른 포트 사용 |

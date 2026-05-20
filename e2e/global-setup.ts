@@ -5,9 +5,10 @@
  *   1. Pin DATABASE_URL to DATABASE_URL_TEST (5433/supporter_b_test) so the dev
  *      Next server, started by `webServer` in playwright.config.ts, talks
  *      to the test DB and not to 5432.
- *   2. Run `drizzle-kit migrate` against the test DB. Idempotent — if
- *      already migrated this is a no-op.
- *   3. TRUNCATE+reseed via `scripts/test-db-reset.ts:resetTestDatabase`.
+ *   2. TRUNCATE+reseed via `scripts/test-db-reset.ts:resetTestDatabase`.
+ *
+ * Schema 적용(db:migrate)은 더 이상 수행하지 않는다 — 테스트 DB에 스키마가
+ * 이미 존재해야 한다(운영자/별도 절차 책임).
  *
  * NOTE: `globalSetup` runs once per `playwright test` invocation. Each
  * spec is responsible for handling its own state if it needs strict
@@ -30,17 +31,10 @@ export default async function globalSetup(): Promise<void> {
   // Attachment bytes live in Postgres (`attachment_blobs`), reached through
   // the same DATABASE_URL — no separate object-store env to propagate.
 
-  // 1. Migrate. drizzle-kit reads DATABASE_URL from env via dotenv +
-  //    drizzle.config.ts. Run as a child process so the kit picks up the
-  //    forced URL cleanly without colliding with the postgres-js client
-  //    cached on globalThis.__bidit_pg__ in this process.
-  console.log('[e2e/global-setup] running drizzle-kit migrate against test DB…');
-  execFileSync('pnpm', ['db:migrate'], {
-    stdio: 'inherit',
-    env: { ...process.env, DATABASE_URL: testUrl },
-  });
+  // NOTE: schema 적용(db:migrate)은 더 이상 여기서 하지 않는다. 테스트 DB에
+  // 스키마가 이미 존재한다는 전제 — 스키마 적용은 운영자/별도 절차 책임.
 
-  // 2. Truncate + reseed via `tsx scripts/test-db-reset.ts` (= the
+  // Truncate + reseed via `tsx scripts/test-db-reset.ts` (= the
   //    `e2e:reset` script). Run as a child process — a dynamic
   //    `import('../scripts/test-db-reset')` from this CJS-loaded
   //    globalSetup only works on Node 22+ (native TS strip); CI runs
