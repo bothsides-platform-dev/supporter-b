@@ -64,9 +64,9 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
         sideOffset={8}
         className="min-w-[240px] rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] p-1 shadow-[var(--md-sys-elevation-2)]"
       >
-        <DropdownMenuLabel className="px-2 py-1.5 text-[length:var(--md-typescale-label-small-size)] text-[var(--md-sys-color-on-surface-variant)]">
+        <div className="px-2 py-1.5 text-[length:var(--md-typescale-label-small-size)] text-[var(--md-sys-color-on-surface-variant)]">
           내 워크스페이스
-        </DropdownMenuLabel>
+        </div>
         {workspaces.map((ws) => {
           const active = ws.id === current.id;
           return (

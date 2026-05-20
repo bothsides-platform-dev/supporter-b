@@ -28,11 +28,16 @@ export default async function AppLayout({
     redirect('/login');
   }
 
-  // Workspace name fetch — one extra DB hit per app-page render. Acceptable
-  // for v0 (single-instance, low traffic). If it becomes hot, wrap with
-  // React `cache()` so multiple components within the same render share it.
-  const ws = await (await getWorkspaceRepo()).findById(session.user.workspaceId);
-  const workspaceName = ws?.name ?? '';
+  // All workspaces the user belongs to — feeds the switcher and re-validates
+  // membership (one DB hit, replacing the old name-only fetch). Empty = the
+  // user belongs to nowhere (no member-removal/ws-delete action exists in v0,
+  // so this is a defensive branch); bounce to re-auth.
+  const workspaces = await (await getWorkspaceRepo()).listForUser(session.user.id);
+  if (workspaces.length === 0) redirect('/login');
+  // Active = the JWT's workspace if still a member, else fall back (render-only;
+  // the token reconciles on the next explicit switch — an RSC can't set cookies).
+  const active =
+    workspaces.find((w) => w.id === session.user.workspaceId) ?? workspaces[0];
 
   return (
     <ToasterProvider>
@@ -41,15 +46,16 @@ export default async function AppLayout({
       className="contents"
     >
       <AppShell>
-        <IconSidebar workspaceType={session.user.workspaceType} />
+        <IconSidebar workspaceType={active.type} />
         <Topbar
           user={{
             id: session.user.id,
             email: session.user.email,
             name: session.user.name ?? session.user.email,
           }}
-          workspaceType={session.user.workspaceType}
-          workspaceName={workspaceName}
+          workspaceType={active.type}
+          workspaces={workspaces}
+          current={{ id: active.id, name: active.name, type: active.type }}
         />
         <main style={{ gridArea: 'content' }} className="overflow-y-auto">
           {children}

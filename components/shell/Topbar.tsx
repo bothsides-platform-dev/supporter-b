@@ -14,14 +14,20 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
+import type {
+  WorkspaceMembershipSummary,
+  WorkspaceType,
+} from '@/lib/types/workspace';
 
 export type TopbarProps = {
   user: { id: string; email: string; name: string };
   workspaceType: 'buyer' | 'pg';
-  workspaceName: string;
+  workspaces: WorkspaceMembershipSummary[];
+  current: { id: string; name: string; type: WorkspaceType };
 };
 
-export function Topbar({ user, workspaceType }: TopbarProps) {
+export function Topbar({ user, workspaceType, workspaces, current }: TopbarProps) {
   const { openNotificationDrawer, openCommandPalette } = useUIStore();
   const { unreadCount } = useNotifications();
   const router = useRouter();
