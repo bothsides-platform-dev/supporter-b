@@ -8,6 +8,13 @@
       "when": 1779200000000,
       "tag": "0000_greenfield_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779279642740,
+      "tag": "0001_flippant_sentinel",
+      "breakpoints": true
     }
   ]
 }
