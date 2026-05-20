@@ -42,17 +42,20 @@ export function Topbar({ user, workspaceType, workspaces, current }: TopbarProps
       style={{ gridArea: 'topbar' }}
       className="fixed top-0 left-[var(--shell-rail)] right-0 z-20 h-[var(--shell-topbar)] flex items-center justify-between px-4 md:px-6 border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]"
     >
-      {/* Search shortcut */}
-      <button
-        type="button"
-        onClick={openCommandPalette}
-        className="flex items-center md:gap-2 h-8 w-8 md:w-72 px-0 md:px-3 justify-center md:justify-start rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]"
-        aria-label="검색 (⌘K)"
-      >
-        <SearchIcon size={14} />
-        <span className="hidden md:inline text-[length:var(--md-typescale-label-large-size)]">검색</span>
-        <kbd className="hidden md:block ml-auto text-[length:var(--md-typescale-label-small-size)] opacity-50">⌘K</kbd>
-      </button>
+      {/* Left cluster — workspace switcher + search shortcut */}
+      <div className="flex items-center gap-2 min-w-0">
+        <WorkspaceSwitcher current={current} workspaces={workspaces} />
+        <button
+          type="button"
+          onClick={openCommandPalette}
+          className="flex items-center md:gap-2 h-8 w-8 md:w-56 px-0 md:px-3 justify-center md:justify-start rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]"
+          aria-label="검색 (⌘K)"
+        >
+          <SearchIcon size={14} />
+          <span className="hidden md:inline text-[length:var(--md-typescale-label-large-size)]">검색</span>
+          <kbd className="hidden md:block ml-auto text-[length:var(--md-typescale-label-small-size)] opacity-50">⌘K</kbd>
+        </button>
+      </div>
 
       <div className="flex items-center gap-2">
         {/* Notification bell */}

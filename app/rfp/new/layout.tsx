@@ -24,8 +24,17 @@ export default async function RfpNewLayout({ children }: { children: React.React
     );
   }
 
-  const ws = await (await getWorkspaceRepo()).findById(session.user.workspaceId);
-  const workspaceName = ws?.name ?? '';
+  const workspaces = await (await getWorkspaceRepo()).listForUser(session.user.id);
+  if (workspaces.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[var(--md-sys-color-background)]">
+        <GuestHeader />
+        <main className="flex-1">{children}</main>
+      </div>
+    );
+  }
+  const active =
+    workspaces.find((w) => w.id === session.user.workspaceId) ?? workspaces[0];
 
   return (
     <ToasterProvider>
@@ -34,15 +43,16 @@ export default async function RfpNewLayout({ children }: { children: React.React
         className="contents"
       >
         <AppShell>
-          <IconSidebar workspaceType={session.user.workspaceType} />
+          <IconSidebar workspaceType={active.type} />
           <Topbar
             user={{
               id: session.user.id,
               email: session.user.email,
               name: session.user.name ?? session.user.email,
             }}
-            workspaceType={session.user.workspaceType}
-            workspaceName={workspaceName}
+            workspaceType={active.type}
+            workspaces={workspaces}
+            current={{ id: active.id, name: active.name, type: active.type }}
           />
           <main style={{ gridArea: 'content' }} className="overflow-y-auto">
             {children}
