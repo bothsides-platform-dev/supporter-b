@@ -1,9 +1,11 @@
 'use server';
 
 import { requireSession } from '@/lib/auth/session';
-import { getInvitationRepo } from '@/lib/server/repositories/factory';
+import { getInvitationRepo, getRfpRepo } from '@/lib/server/repositories/factory';
 import { hashToken } from '@/lib/server/token';
 
+// `rfpId` here is the human RFP code (P-YYMM-NNNN) — the URL identifier the
+// caller redirects to (/inbox/[code]). Internal FKs use the uuid.
 export type ClaimInviteTokenResult =
   | { ok: true; rfpId: string; alreadyClaimed?: boolean }
   | { ok: false; error: string };
@@ -48,16 +50,21 @@ export async function claimInviteTokenAction(
     return { ok: false, error: 'INVITE_NOT_MEMBER' };
   }
 
+  // RFP code(URL 식별자) 해석 — inv.rfpId 는 uuid.
+  const rfpRepo = await getRfpRepo();
+  const rfp = await rfpRepo.findById(inv.rfpId);
+  const rfpCode = rfp?.code ?? inv.rfpId;
+
   // 3. atomic claim.
   const claim = await invRepo.claimToken(rawToken, session.user.id);
   if (!claim.ok) {
     if (claim.reason === 'expired') return { ok: false, error: 'INVITE_EXPIRED' };
     if (claim.reason === 'used') {
       // 동료가 이미 클레임 — 같은 ws 라면 그대로 인박스로 안내(에러 X).
-      return { ok: true, rfpId: inv.rfpId, alreadyClaimed: true };
+      return { ok: true, rfpId: rfpCode, alreadyClaimed: true };
     }
     return { ok: false, error: 'INVITE_INVALID' };
   }
 
-  return { ok: true, rfpId: claim.invitation.rfpId };
+  return { ok: true, rfpId: rfpCode };
 }

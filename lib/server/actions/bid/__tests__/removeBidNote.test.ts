@@ -87,14 +87,14 @@ async function setup() {
   const pgWs = await seedPgWorkspace(db, 'toss.im');
   const pgUser = await seedUser(db, { email: 'sales@toss.im' });
 
-  const rfpId = 'P-2605-5001';
+  const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
+    code: 'P-2605-5001',
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'remove note test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,
@@ -123,7 +123,6 @@ async function setup() {
     monthlyMin: '0',
     bankTransferFeePct: '0.015',
     easyPayFeePct: '0.018',
-    proposalAttachmentId: null,
     submittedBy: pgUser.id,
   });
 
@@ -139,18 +138,16 @@ async function seedNoteWithAttachment(bidId: string, authorId: string) {
     body: 'will delete',
   });
   const attId = randomUUID();
-  const storagePath = `2026/05/${attId}.pdf`;
   await db.insert(attachments).values({
     id: attId,
-    ownerKind: 'bid_note',
-    ownerId: noteId,
+    bidNoteId: noteId,
     name: 'a.pdf',
     size: 100,
     mimeType: 'application/pdf',
-    storagePath,
     uploadedBy: authorId,
   });
-  return { noteId, attId, storagePath };
+  // Storage key is the attachment id (C4).
+  return { noteId, attId };
 }
 
 describe('removeBidNoteAction', () => {
@@ -213,7 +210,7 @@ describe('removeBidNoteAction', () => {
 
   it('happy path: note + attachment rows gone, storage.delete called', async () => {
     const s = await setup();
-    const { noteId, attId, storagePath } = await seedNoteWithAttachment(
+    const { noteId, attId } = await seedNoteWithAttachment(
       s.bidId,
       s.buyer.id,
     );
@@ -241,6 +238,6 @@ describe('removeBidNoteAction', () => {
         .from(attachments)
         .where(eq(attachments.id, attId)),
     ).toHaveLength(0);
-    expect(deleted).toEqual([storagePath]);
+    expect(deleted).toEqual([attId]);
   });
 });

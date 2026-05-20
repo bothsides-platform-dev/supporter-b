@@ -70,14 +70,14 @@ async function setup() {
   const pgWs = await seedPgWorkspace(db, 'toss.im');
   const pgUser = await seedUser(db, { email: 'sales@toss.im' });
 
-  const rfpId = 'P-2605-4001';
+  const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
+    code: 'P-2605-4001',
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'note action test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,
@@ -106,27 +106,24 @@ async function setup() {
     monthlyMin: '0',
     bankTransferFeePct: '0.015',
     easyPayFeePct: '0.018',
-    proposalAttachmentId: null,
     submittedBy: pgUser.id,
   });
 
   return { buyer, buyerWs, bidId, rfpId };
 }
 
+// Draft bid_note attachment — ownerless (exclusive-arc) until the note links it.
 async function preStageAttachment(
-  bidId: string,
+  _bidId: string,
   uploaderId: string,
   name = 'memo.pdf',
 ) {
   const id = randomUUID();
   await db.insert(attachments).values({
     id,
-    ownerKind: 'bid_note',
-    ownerId: bidId, // draft window: owner_id is the bid id until note exists
     name,
     size: 100,
     mimeType: 'application/pdf',
-    storagePath: `2026/05/${id}.pdf`,
     uploadedBy: uploaderId,
   });
   return id;
@@ -228,16 +225,14 @@ describe('addBidNoteAction', () => {
         role: 'admin',
       },
     };
-    // Owner_kind='rfp' attachment — not a bid_note draft; reject.
+    // Already-linked (rfp) attachment — not an unlinked draft; reject.
     const wrongId = randomUUID();
     await db.insert(attachments).values({
       id: wrongId,
-      ownerKind: 'rfp',
-      ownerId: 'P-2605-4001',
+      rfpId: s.rfpId,
       name: 'wrong.pdf',
       size: 10,
       mimeType: 'application/pdf',
-      storagePath: '2026/05/wrong.pdf',
       uploadedBy: s.buyer.id,
     });
     const r = await addBidNoteAction({
@@ -281,16 +276,11 @@ describe('addBidNoteAction', () => {
     expect(note?.body).toBe('본사 컨펌 후 회신');
     expect(note?.authorId).toBe(s.buyer.id);
 
-    // Both attachments now point at noteId.
+    // Both attachments now point at noteId (bid_note_id).
     const rows = await db
       .select()
       .from(attachments)
-      .where(
-        and(
-          eq(attachments.ownerKind, 'bid_note'),
-          eq(attachments.ownerId, r.noteId),
-        ),
-      );
+      .where(eq(attachments.bidNoteId, r.noteId));
     expect(rows.map((r2) => r2.id).sort()).toEqual([att1, att2].sort());
   });
 });

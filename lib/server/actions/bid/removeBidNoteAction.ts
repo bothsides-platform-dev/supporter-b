@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { requireBuyerSession } from '@/lib/auth/session';
 import { attachments, bidNotes } from '@/lib/db/schema';
@@ -25,11 +25,11 @@ export type RemoveBidNoteResult = BidActionResult;
  *   2) note → bid → rfp.buyerWsId === session.workspaceId.
  *
  * 처리:
- *   1) 노트 첨부(owner_kind='bid_note', owner_id=noteId) row 들을 모은다.
- *   2) storage.delete 로 디스크 파일 best-effort 삭제. 실패해도 row 삭제는
- *      계속 진행 — orphan 디스크 파일은 v1 sweeper 의 책임 영역.
- *   3) attachments row 삭제.
- *   4) bid_notes row 삭제.
+ *   1) 노트 첨부(attachments.bid_note_id=noteId) id 들을 모은다.
+ *   2) storage.delete(attachmentId) 로 바이트 best-effort 삭제(메모리 백엔드용 —
+ *      Postgres 백엔드는 아래 cascade 로도 정리됨).
+ *   3) bid_notes row 삭제 → attachments(bid_note_id FK cascade) →
+ *      attachment_blobs(attachment_id FK cascade) 까지 연쇄 삭제(C3·C4).
  */
 export async function removeBidNoteAction(
   input: RemoveBidNoteInput,
@@ -63,36 +63,21 @@ export async function removeBidNoteAction(
     return { ok: false, error: 'FORBIDDEN' };
   }
 
-  // Gather attachments before deleting rows so we know which storage
-  // objects to drop.
+  // Gather attachment ids (storage key = id) before deleting so we can drop
+  // the bytes from the storage backend.
   const attRows = await db
-    .select({
-      id: attachments.id,
-      storagePath: attachments.storagePath,
-    })
+    .select({ id: attachments.id })
     .from(attachments)
-    .where(
-      and(
-        eq(attachments.ownerKind, 'bid_note'),
-        eq(attachments.ownerId, parsed.data.noteId),
-      ),
-    );
+    .where(eq(attachments.bidNoteId, parsed.data.noteId));
 
   const storage = getStorage();
   for (const att of attRows) {
-    await storage.delete(att.storagePath).catch(() => {
+    await storage.delete(att.id).catch(() => {
       // orphan storage object — v1 sweeper picks it up. Don't block the action.
     });
   }
 
-  await db
-    .delete(attachments)
-    .where(
-      and(
-        eq(attachments.ownerKind, 'bid_note'),
-        eq(attachments.ownerId, parsed.data.noteId),
-      ),
-    );
+  // Deleting the note cascades to attachments (bid_note_id FK) and their blobs.
   await db.delete(bidNotes).where(eq(bidNotes.id, parsed.data.noteId));
 
   return { ok: true };
