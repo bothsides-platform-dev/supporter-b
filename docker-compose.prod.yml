@@ -1,0 +1,30 @@
+# Production Postgres — runs on the same OCI instance as the native app.
+# Bound to 127.0.0.1 only: the DB is never exposed to the public internet.
+# The Next.js app runs natively (PM2) and reaches this via localhost:5432.
+#
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Reads POSTGRES_PASSWORD from .env.production (keep it strong).
+services:
+  pg:
+    image: postgres:16-alpine
+    container_name: bidit-pg-prod
+    restart: always
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-supporter_b}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:-supporter_b}
+    volumes:
+      - bidit_pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-supporter_b} -d ${POSTGRES_DB:-supporter_b}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  bidit_pgdata_prod:
+    driver: local
+    name: bidit_pgdata_prod
