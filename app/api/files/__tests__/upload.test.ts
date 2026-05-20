@@ -1,8 +1,7 @@
 /**
  * @vitest-environment node
  */
-// POST /api/files/upload — auth/validation matrix + storage-DB ordering
-// (advisor pin 6 — F-6).
+// POST /api/files/upload — auth/validation matrix + metadata-first ordering.
 //
 // Coverage:
 //   - 401 unauthenticated
@@ -11,8 +10,8 @@
 //   - 413 too large
 //   - 400 empty file / no file
 //   - 403 wrong workspaceType for ownerKind
-//   - happy path: row inserted, bytes in storage
-//   - F-6: row insert fails → storage object is cleaned up
+//   - happy path: ownerless draft row inserted, bytes in storage keyed by id
+//   - cleanup: storage.save throws → orphan metadata row deleted (metadata-first)
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
@@ -51,7 +50,6 @@ beforeEach(async () => {
   __resetStorageForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
-  // Install pglite handle for the route's `routeDb()`.
   const filesRoute = await import('../upload/route');
   filesRoute.__setFilesDbForTest(db);
   storage = new InMemoryStorage();
@@ -71,8 +69,6 @@ const PDF_HEAD = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
 const PNG_HEAD = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 function makeFile(name: string, type: string, body: Buffer): File {
-  // BlobPart wants Uint8Array<ArrayBuffer>; Buffer's typed view is wider
-  // (ArrayBufferLike) so pass the underlying bytes through Uint8Array.
   return new File([new Uint8Array(body)], name, { type });
 }
 
@@ -85,24 +81,11 @@ async function callUpload(form: FormData) {
   return POST(req);
 }
 
-async function seedBuyerSession(rfpId?: string) {
+async function seedBuyerSession() {
   const buyer = await seedUser(db, { email: 'buyer@buy.com' });
   const biz = await seedBizProfile(db);
   const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
   await seedMembership(db, buyerWs.id, buyer.id, 'admin');
-  if (rfpId) {
-    await db.insert(rfps).values({
-      id: rfpId,
-      buyerWsId: buyerWs.id,
-      bizProfileId: biz.id,
-      title: 'upload test',
-      memo: '',
-      allowedPgWorkspaceIds: [],
-      deadline: new Date(Date.now() + 86_400_000),
-      status: 'draft',
-      createdBy: buyer.id,
-    });
-  }
   sessionRef.value = {
     user: {
       id: buyer.id,
@@ -115,30 +98,28 @@ async function seedBuyerSession(rfpId?: string) {
   return { buyer, buyerWs };
 }
 
-async function seedPgSession(rfpId: string) {
-  // Buyer side
+// Returns the RFP's uuid id (used as the bid_proposal upload ownerId).
+async function seedPgSession(rfpCode: string) {
   const buyer = await seedUser(db, { email: 'b@buy.com' });
   const biz = await seedBizProfile(db);
   const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
   await seedMembership(db, buyerWs.id, buyer.id, 'admin');
-  // PG side
   const pgWs = await seedPgWorkspace(db, 'toss.im');
   const pg = await seedUser(db, { email: 'sales@toss.im' });
   await seedMembership(db, pgWs.id, pg.id, 'admin');
-  // RFP
+  const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
+    code: rfpCode,
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'pg upload test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,
     sentAt: new Date(),
   });
-  // Accepted invitation linking pg user to RFP
   await db.insert(rfpInvitations).values({
     id: randomUUID(),
     rfpId,
@@ -158,7 +139,7 @@ async function seedPgSession(rfpId: string) {
       role: 'admin',
     },
   };
-  return { pg, pgWs };
+  return { pg, pgWs, rfpId };
 }
 
 describe('POST /api/files/upload', () => {
@@ -230,7 +211,7 @@ describe('POST /api/files/upload', () => {
     const f = new FormData();
     f.append('file', makeFile('a.pdf', 'application/pdf', PDF_HEAD));
     f.append('ownerKind', 'bid_proposal');
-    f.append('ownerId', 'P-2605-0099');
+    f.append('ownerId', randomUUID());
     const r = await callUpload(f);
     expect(r.status).toBe(403);
   });
@@ -240,12 +221,12 @@ describe('POST /api/files/upload', () => {
     const f = new FormData();
     f.append('file', makeFile('a.pdf', 'application/pdf', PDF_HEAD));
     f.append('ownerKind', 'bid_proposal');
-    f.append('ownerId', 'P-9999-9999');
+    f.append('ownerId', randomUUID()); // unknown rfp uuid → not invited
     const r = await callUpload(f);
     expect(r.status).toBe(403);
   });
 
-  it('happy path — rfp draft: row inserted + bytes in storage', async () => {
+  it('happy path — rfp draft: ownerless row inserted + bytes in storage by id', async () => {
     const { buyer } = await seedBuyerSession();
     const f = new FormData();
     f.append('file', makeFile('rfp.pdf', 'application/pdf', PDF_HEAD));
@@ -257,23 +238,22 @@ describe('POST /api/files/upload', () => {
     expect(body.name).toBe('rfp.pdf');
     expect(body.size).toBe(PDF_HEAD.length);
 
-    // Row + storage payload
     const [row] = await db
       .select()
       .from(attachments)
       .where(eq(attachments.id, body.id))
       .limit(1);
     expect(row?.uploadedBy).toBe(buyer.id);
-    expect(row?.ownerId).toBe('__draft__');
+    expect(row?.rfpId).toBeNull(); // draft — linked later by createRfpAction
     expect(row?.mimeType).toBe('application/pdf');
 
-    const { size } = await storage.read(row!.storagePath);
+    // Storage keyed by attachment id.
+    const { size } = await storage.read(body.id);
     expect(size).toBe(PDF_HEAD.length);
   });
 
-  it('happy path — bid_proposal: invitation gates upload', async () => {
-    const rfpId = 'P-2605-0002';
-    await seedPgSession(rfpId);
+  it('happy path — bid_proposal: invitation gates upload, row is an ownerless draft', async () => {
+    const { pg, rfpId } = await seedPgSession('P-2605-0002');
     const f = new FormData();
     f.append('file', makeFile('proposal.pdf', 'application/pdf', PDF_HEAD));
     f.append('ownerKind', 'bid_proposal');
@@ -287,8 +267,10 @@ describe('POST /api/files/upload', () => {
       .from(attachments)
       .where(eq(attachments.id, body.id))
       .limit(1);
-    expect(row?.ownerKind).toBe('bid_proposal');
-    expect(row?.ownerId).toBe(rfpId);
+    // Draft: bid doesn't exist yet — linked at submitBid.
+    expect(row?.bidId).toBeNull();
+    expect(row?.rfpId).toBeNull();
+    expect(row?.uploadedBy).toBe(pg.id);
   });
 
   it('403 when PG tries to upload bid_note (buyer-private)', async () => {
@@ -302,10 +284,7 @@ describe('POST /api/files/upload', () => {
   });
 
   it('403 when buyer uploads bid_note for a bid outside their workspace', async () => {
-    // Seed a foreign bid (different buyer ws) and try to attach a note.
     const { buyer: otherBuyer } = await seedBuyerSession();
-    // Spin up a second buyer ws + RFP + bid; the current session's buyer is
-    // member of the first ws but not the second.
     const foreignBuyer = await seedUser(db, { email: 'b2@buy.com' });
     const foreignBiz = await seedBizProfile(db, { bizNo: '9876543210' });
     const foreignWs = await seedBuyerWorkspace(db, {
@@ -314,14 +293,14 @@ describe('POST /api/files/upload', () => {
     await seedMembership(db, foreignWs.id, foreignBuyer.id, 'admin');
     const pgWs = await seedPgWorkspace(db, 'inicis.com');
     const pgUser = await seedUser(db, { email: 'p@inicis.com' });
-    const foreignRfpId = 'P-2605-0099';
+    const foreignRfpId = randomUUID();
     await db.insert(rfps).values({
       id: foreignRfpId,
+      code: 'P-2605-0099',
       buyerWsId: foreignWs.id,
       bizProfileId: foreignBiz.id,
       title: 'foreign',
       memo: '',
-      allowedPgWorkspaceIds: [pgWs.id],
       deadline: new Date(Date.now() + 86_400_000),
       status: 'sent',
       createdBy: foreignBuyer.id,
@@ -350,11 +329,8 @@ describe('POST /api/files/upload', () => {
       monthlyMin: '0',
       bankTransferFeePct: '0.015',
       easyPayFeePct: '0.018',
-      proposalAttachmentId: null,
       submittedBy: pgUser.id,
     });
-    // Quieten the unused-var lint: confirm seedBuyerSession returned the
-    // outer buyer; their identity is what differentiates ws membership.
     expect(otherBuyer.id).not.toBe(foreignBuyer.id);
 
     const f = new FormData();
@@ -370,14 +346,14 @@ describe('POST /api/files/upload', () => {
     const ownBiz = await seedBizProfile(db, { bizNo: '5555555555' });
     const pgWs = await seedPgWorkspace(db, 'toss.im');
     const pg = await seedUser(db, { email: 'p@toss.im' });
-    const ownRfpId = 'P-2605-0070';
+    const ownRfpId = randomUUID();
     await db.insert(rfps).values({
       id: ownRfpId,
+      code: 'P-2605-0070',
       buyerWsId: buyerWs.id,
       bizProfileId: ownBiz.id,
       title: 'own',
       memo: '',
-      allowedPgWorkspaceIds: [pgWs.id],
       deadline: new Date(Date.now() + 86_400_000),
       status: 'sent',
       createdBy: buyer.id,
@@ -406,7 +382,6 @@ describe('POST /api/files/upload', () => {
       monthlyMin: '0',
       bankTransferFeePct: '0.015',
       easyPayFeePct: '0.018',
-      proposalAttachmentId: null,
       submittedBy: pg.id,
     });
 
@@ -423,62 +398,35 @@ describe('POST /api/files/upload', () => {
       .from(attachments)
       .where(eq(attachments.id, body.id))
       .limit(1);
-    expect(row?.ownerKind).toBe('bid_note');
-    expect(row?.ownerId).toBe(ownBidId);
+    // Draft: bid_notes row created later by addBidNoteAction.
+    expect(row?.bidNoteId).toBeNull();
     expect(row?.uploadedBy).toBe(buyer.id);
   });
 
-  it('cleanup ordering — repo.save throws → storage object deleted (F-6)', async () => {
-    await seedBuyerSession();
+  it('cleanup ordering — storage.save throws → orphan metadata row deleted', async () => {
+    const { buyer } = await seedBuyerSession();
 
-    // Real (in-memory) storage with a spy on delete.
-    const realStorage = new InMemoryStorage();
-    const deleteSpy = vi.spyOn(realStorage, 'delete');
-    __setStorageForTest(realStorage);
+    // Storage whose save always fails.
+    const failingStorage = new InMemoryStorage();
+    vi.spyOn(failingStorage, 'save').mockRejectedValue(new Error('disk full'));
+    __setStorageForTest(failingStorage);
 
-    // Stub the attachment repo module via vi.doMock + dynamic import of a
-    // fresh route module copy. The other repos still come from the
-    // pglite-backed factory through the route's normal lookup.
-    let savedKey: string | undefined;
-    vi.resetModules();
-    vi.doMock('@/lib/server/repositories/factory', async (importOriginal) => {
-      const actual =
-        await importOriginal<typeof import('@/lib/server/repositories/factory')>();
-      return {
-        ...actual,
-        getAttachmentRepo: async () => ({
-          save: async (a: { storagePath: string }) => {
-            savedKey = a.storagePath;
-            throw new Error('forced failure');
-          },
-          findById: async () => undefined,
-        }),
-      };
+    const form = new FormData();
+    form.append('file', makeFile('a.pdf', 'application/pdf', PDF_HEAD));
+    form.append('ownerKind', 'rfp');
+    form.append('ownerId', '__draft__');
+    const req = new Request('http://localhost/api/files/upload', {
+      method: 'POST',
+      body: form,
     });
+    await expect(callUpload(form)).rejects.toThrow('disk full');
+    void req;
 
-    try {
-      // Re-import the route under the doMock so it picks up the stubbed factory.
-      const { POST, __setFilesDbForTest } = await import('../upload/route');
-      __setFilesDbForTest(db);
-
-      const form = new FormData();
-      form.append('file', makeFile('a.pdf', 'application/pdf', PDF_HEAD));
-      form.append('ownerKind', 'rfp');
-      form.append('ownerId', '__draft__');
-      const req = new Request('http://localhost/api/files/upload', {
-        method: 'POST',
-        body: form,
-      });
-      await expect(POST(req)).rejects.toThrow('forced failure');
-
-      expect(savedKey).toBeDefined();
-      expect(deleteSpy).toHaveBeenCalledWith(savedKey);
-      await expect(realStorage.read(savedKey!)).rejects.toMatchObject({
-        code: 'ENOENT',
-      });
-    } finally {
-      vi.doUnmock('@/lib/server/repositories/factory');
-      vi.resetModules();
-    }
+    // Metadata-first: the row was inserted then removed when the blob failed.
+    const rows = await db
+      .select()
+      .from(attachments)
+      .where(eq(attachments.uploadedBy, buyer.id));
+    expect(rows).toHaveLength(0);
   });
 });
