@@ -1,11 +1,12 @@
-// app/(app)/inbox/loading.tsx
-import { SkeletonTabs, SkeletonInboxList } from '@/components/skeletons'
+import { SkeletonPageHeader, SkeletonInboxList } from '@/components/skeletons'
 
 export default function Loading() {
   return (
-    <>
-      <SkeletonTabs count={4} />
+    <div className="flex flex-col h-full">
+      <div className="px-8 py-5 border-b border-[var(--md-sys-color-outline-variant)]">
+        <SkeletonPageHeader />
+      </div>
       <SkeletonInboxList rows={5} />
-    </>
+    </div>
   )
 }

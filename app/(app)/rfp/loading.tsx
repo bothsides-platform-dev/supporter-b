@@ -1,4 +1,4 @@
-import { SkeletonPageHeader, SkeletonTabs, SkeletonTableRows } from '@/components/skeletons'
+import { SkeletonPageHeader, SkeletonTableRows } from '@/components/skeletons'
 
 export default function Loading() {
   return (
@@ -7,7 +7,6 @@ export default function Loading() {
         <SkeletonPageHeader hasAction />
       </div>
       <div className="flex-1 px-8">
-        <SkeletonTabs count={4} />
         <SkeletonTableRows cols={[1, 4, 2, 1, 1.5]} rows={5} hasChip />
       </div>
     </div>
