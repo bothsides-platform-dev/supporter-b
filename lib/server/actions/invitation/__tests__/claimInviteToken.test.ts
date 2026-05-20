@@ -1,9 +1,11 @@
 // claimInviteTokenAction tests.
 //
-// Coverage:
+// Access is gated by MEMBERSHIP of the invited PG workspace (not by which ws is
+// currently active — a user may belong to several). Coverage:
 //   - UNAUTHENTICATED / INVITE_INVALID for bad/unknown token
-//   - INVITE_NOT_MEMBER when user's workspaceId !== inv.pgWsId
-//   - Successful claim when user is in the invited workspace
+//   - INVITE_NOT_MEMBER when user is not a member of inv.pgWsId
+//   - Successful claim when active ws == invited ws (switchTo undefined)
+//   - Member of invited ws but active elsewhere → ok + switchTo=pgWsId
 //   - INVITE_USED on re-claim
 //   - INVITE_EXPIRED on expired invitation
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -119,9 +121,10 @@ describe('claimInviteTokenAction', () => {
     if (!r.ok) expect(r.error).toBe('INVITE_INVALID');
   });
 
-  it('🚨 rejects user from wrong workspace with INVITE_NOT_MEMBER', async () => {
+  it('rejects a non-member of the invited workspace with INVITE_NOT_MEMBER', async () => {
     const ctx = await setup();
-    // User belongs to a different PG workspace, not the invited one.
+    // User belongs to a different PG workspace and is NOT a member of the
+    // invited one — membership, not active-ws equality, is what gates access.
     const otherWs = await seedPgWorkspace(db, '다른PG');
     const u = await seedUser(db, { email: 'other@pg.com' });
     await seedMembership(db, otherWs.id, u.id, 'admin');
@@ -155,7 +158,31 @@ describe('claimInviteTokenAction', () => {
 
     const r = await claimInviteTokenAction(ctx.rawToken);
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.rfpId).toBe(ctx.rfpCode);
+    if (r.ok) {
+      expect(r.rfpId).toBe(ctx.rfpCode);
+      // Active ws already == invited ws → no switch needed.
+      expect(r.switchTo).toBeUndefined();
+    }
+  });
+
+  it('member of invited ws but active elsewhere → ok + switchTo=pgWsId', async () => {
+    const ctx = await setup();
+    const u = await seedUser(db, { email: 'multi@toss.im' });
+    // Member of the invited PG ws…
+    await seedMembership(db, ctx.pgWsId, u.id, 'member');
+    // …but also of another ws, which is the currently-active one.
+    const otherWs = await seedPgWorkspace(db, '다른PG');
+    await seedMembership(db, otherWs.id, u.id, 'admin');
+    sessionRef.value = {
+      user: { id: u.id, email: u.email, workspaceId: otherWs.id },
+    };
+
+    const r = await claimInviteTokenAction(ctx.rawToken);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.rfpId).toBe(ctx.rfpCode);
+      expect(r.switchTo).toBe(ctx.pgWsId);
+    }
   });
 
   it('successful claim sets acceptedByUserId on invitation row', async () => {

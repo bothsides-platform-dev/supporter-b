@@ -169,10 +169,18 @@ nc -vz <예약공인IP> 443
   | Dedicated virtual machine host | 전용 베어메탈 호스트(유료). | ✗ |
 
   > On-demand인데도 A1이 안 잡히는 게 그 유명한 `Out of host capacity`다. 해결은 ③의 3단계
-  > (AD 변경 → 오프피크 재시도 → x86 폴백). **자동 재시도 런처가 준비돼 있다**:
-  > [`scripts/deploy/oci-a1-retry.sh`](../scripts/deploy/oci-a1-retry.sh) — 용량이 풀리는 순간
-  > `launch`를 잡아 **성공 즉시 멈추고**(중복 생성 방지) 예약 IP(168.107.39.155)까지 연결한다.
-  > 실행: `caffeinate -i ./scripts/deploy/oci-a1-retry.sh 2>&1 | tee oci-a1-retry.log`
+  > (AD 변경 → 오프피크 재시도 → x86 폴백). **cron 기반 자동 재시도 런처가 준비돼 있다**:
+  > [`scripts/deploy/oci-a1-retry.sh`](../scripts/deploy/oci-a1-retry.sh) — `install` 하면 매시
+  > 정각에 `launch`를 **딱 1회** 시도하고, 용량이 잡히는 순간 **성공 즉시 멈추고**(중복 생성 방지)
+  > 예약 IP(168.107.39.155)까지 연결한다.
+  > 등록: `./scripts/deploy/oci-a1-retry.sh install` · 상태: `… status` · 정리: `… uninstall`
+  > (로그는 `~/oci-a1-retry.log`).
+  >
+  > > ⚠️ 한 프로세스로 60초마다 재시도하던 옛 방식은 OCI launchInstance 레이트리밋(`429
+  > > TooManyRequests`)을 건드려 죽었다. 그래서 **호출당 1회 + cron 매시**로 바꿨고, 429와
+  > > `Out of host capacity`는 둘 다 "다음 시도에서 다시"인 정상 사유로 취급한다(스크립트가 안 죽음).
+  > > macOS cron 은 **절전 중엔 안 돈다** — 밤새 시도하려면 `caffeinate -s &` 로 깨워 두거나 launchd 사용.
+  >
   > (OCI CLI 인증 `~/.oci/config` 필요. 춘천은 AD 1개라 재시도는 시간 기반 — 24~48h 무소득이면
   > `ap-seoul-1` 리전 추가 구독 후 seoul 파라미터로 재실행하거나 x86 micro 폴백).
 

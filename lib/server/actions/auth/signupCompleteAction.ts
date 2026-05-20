@@ -4,12 +4,8 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '@/lib/auth/password';
 import { passwordSchema } from '@/lib/auth/password-validation';
-import {
-  bizProfiles,
-  users,
-  workspaceMembers,
-  workspaces,
-} from '@/lib/db/schema';
+import { users } from '@/lib/db/schema';
+import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import {
   actionDb,
   normalizeEmail,
@@ -102,68 +98,22 @@ export async function signupCompleteAction(
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
-      // 2a. Buyer branch.
-      if (parsed.data.wsKind === 'buyer') {
+      // 2. Workspace branch — buyer or pg. Shared creation (workspace + admin
+      //    membership + lastActiveWorkspaceId) lives in createWorkspaceInTx;
+      //    bizProfile is consumed for buyer only. redirectTo differs per kind.
+      if (parsed.data.wsKind === 'buyer' || parsed.data.wsKind === 'pg') {
         if (!parsed.data.wsName) {
           return { ok: false, error: 'MISSING_WS_NAME' };
         }
-        let bizProfileId: string | null = null;
-        if (parsed.data.bizProfile) {
-          bizProfileId = randomUUID();
-          await tx.insert(bizProfiles).values({
-            id: bizProfileId,
-            bizNo: parsed.data.bizProfile.bizNo,
-            taxType: parsed.data.bizProfile.taxType,
-            status: parsed.data.bizProfile.status,
-            grade: parsed.data.bizProfile.grade ?? null,
-            gradeSource: parsed.data.bizProfile.gradeSource,
-            gradeConfirmedBy: userId,
-            gradeConfirmedAt: new Date(),
-          });
-        }
-
-        const wsId = randomUUID();
-        await tx.insert(workspaces).values({
-          id: wsId,
-          type: 'buyer',
-          name: parsed.data.wsName,
-          bizProfileId,
-        });
-        await tx.insert(workspaceMembers).values({
-          workspaceId: wsId,
+        await createWorkspaceInTx(tx, {
           userId,
-          role: 'admin',
+          type: parsed.data.wsKind,
+          name: parsed.data.wsName,
+          bizProfile: parsed.data.bizProfile,
         });
-
         return {
           ok: true,
-          redirectTo: '/rfp',
-          email,
-          password: parsed.data.password,
-        };
-      }
-
-      // 2b. PG branch — create new PG workspace with the provided name.
-      if (parsed.data.wsKind === 'pg') {
-        if (!parsed.data.wsName) {
-          return { ok: false, error: 'MISSING_WS_NAME' };
-        }
-
-        const wsId = randomUUID();
-        await tx.insert(workspaces).values({
-          id: wsId,
-          type: 'pg',
-          name: parsed.data.wsName,
-        });
-        await tx.insert(workspaceMembers).values({
-          workspaceId: wsId,
-          userId,
-          role: 'admin',
-        });
-
-        return {
-          ok: true,
-          redirectTo: '/inbox',
+          redirectTo: parsed.data.wsKind === 'buyer' ? '/rfp' : '/inbox',
           email,
           password: parsed.data.password,
         };

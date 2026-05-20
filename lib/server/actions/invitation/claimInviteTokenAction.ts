@@ -3,11 +3,16 @@
 import { requireSession } from '@/lib/auth/session';
 import { getInvitationRepo, getRfpRepo } from '@/lib/server/repositories/factory';
 import { hashToken } from '@/lib/server/token';
+import { getMembership } from '@/lib/auth/active-workspace';
+import { actionDb } from '../auth/_shared';
 
 // `rfpId` here is the human RFP code (P-YYMM-NNNN) — the URL identifier the
 // caller redirects to (/inbox/[code]). Internal FKs use the uuid.
+// `switchTo` is set when the caller is a member of the invited PG workspace but
+// it is not their currently-active one — the client must switchWorkspaceAction
+// into it before navigating to the inbox (which is scoped to the active ws).
 export type ClaimInviteTokenResult =
-  | { ok: true; rfpId: string; alreadyClaimed?: boolean }
+  | { ok: true; rfpId: string; alreadyClaimed?: boolean; switchTo?: string }
   | { ok: false; error: string };
 
 /**
@@ -43,12 +48,16 @@ export async function claimInviteTokenAction(
   const inv = await invRepo.findByTokenHash(tokenHash);
   if (!inv) return { ok: false, error: 'INVITE_INVALID' };
 
-  // 2. 워크스페이스 멤버십 검사 — 초대된 PG ws 소속 사용자만 통과.
+  // 2. 워크스페이스 멤버십 검사 — 초대된 PG ws 에 '소속된' 사용자만 통과.
+  // (활성 ws 일치가 아니라 멤버십 기준 — 한 유저가 여러 ws 소속 가능. 정책 #11.)
+  if (!inv.pgWsId) return { ok: false, error: 'INVITE_NOT_MEMBER' };
+  const membership = await getMembership(actionDb(), session.user.id, inv.pgWsId);
+  if (!membership) return { ok: false, error: 'INVITE_NOT_MEMBER' };
+
+  // 멤버지만 활성 ws 가 다르면 클라이언트가 인박스 진입 전 전환해야 한다.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const userWsId = (session.user as any).workspaceId as string | undefined;
-  if (!inv.pgWsId || inv.pgWsId !== userWsId) {
-    return { ok: false, error: 'INVITE_NOT_MEMBER' };
-  }
+  const activeWsId = (session.user as any).workspaceId as string | undefined;
+  const switchTo = activeWsId !== inv.pgWsId ? inv.pgWsId : undefined;
 
   // RFP code(URL 식별자) 해석 — inv.rfpId 는 uuid.
   const rfpRepo = await getRfpRepo();
@@ -60,11 +69,11 @@ export async function claimInviteTokenAction(
   if (!claim.ok) {
     if (claim.reason === 'expired') return { ok: false, error: 'INVITE_EXPIRED' };
     if (claim.reason === 'used') {
-      // 동료가 이미 클레임 — 같은 ws 라면 그대로 인박스로 안내(에러 X).
-      return { ok: true, rfpId: rfpCode, alreadyClaimed: true };
+      // 동료가 이미 클레임 — 멤버이므로 인박스로 안내(에러 X).
+      return { ok: true, rfpId: rfpCode, alreadyClaimed: true, switchTo };
     }
     return { ok: false, error: 'INVITE_INVALID' };
   }
 
-  return { ok: true, rfpId: rfpCode };
+  return { ok: true, rfpId: rfpCode, switchTo };
 }

@@ -1,0 +1,62 @@
+'use server';
+
+import { z } from 'zod';
+
+import { requireSession } from '@/lib/auth/session';
+import { actionDb } from '../auth/_shared';
+import { createWorkspaceInTx } from './_createWorkspace';
+
+const BizProfileInput = z
+  .object({
+    bizNo: z.string().min(8).max(20),
+    taxType: z.enum(['general', 'simple', 'exempt']),
+    status: z.enum(['active', 'suspended', 'closed']),
+    grade: z.enum(['small', 'sme1', 'sme2', 'sme3', 'general']).optional(),
+    gradeSource: z
+      .enum(['user_confirmed', 'user_overridden'])
+      .default('user_confirmed'),
+  })
+  .strict();
+
+const Input = z
+  .object({
+    type: z.enum(['buyer', 'pg']),
+    name: z.string().min(1).max(200),
+    bizProfile: BizProfileInput.optional(),
+  })
+  .strict();
+
+export type CreateWorkspaceActionInput = z.input<typeof Input>;
+export type CreateWorkspaceResult =
+  | { ok: true; workspaceId: string }
+  | { ok: false; error: 'UNAUTHENTICATED' | 'INVALID_INPUT' };
+
+/**
+ * Create a new workspace for the logged-in user (in-app, from the switcher).
+ * The user becomes admin. DB-only — the caller follows up with
+ * switchWorkspaceAction(workspaceId) to make the new ws active in the JWT.
+ */
+export async function createWorkspaceAction(
+  input: CreateWorkspaceActionInput,
+): Promise<CreateWorkspaceResult> {
+  const session = await requireSession().catch(() => null);
+  if (!session?.user?.id) return { ok: false, error: 'UNAUTHENTICATED' };
+
+  const parsed = Input.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
+
+  const userId = session.user.id;
+  const db = actionDb();
+  const { workspaceId } = await db.transaction(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async (tx: any) =>
+      createWorkspaceInTx(tx, {
+        userId,
+        type: parsed.data.type,
+        name: parsed.data.name,
+        bizProfile: parsed.data.bizProfile,
+      }),
+  );
+
+  return { ok: true, workspaceId };
+}

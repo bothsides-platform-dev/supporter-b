@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import {
   workspaces,
   workspaceMembers,
@@ -6,7 +6,7 @@ import {
   bizProfiles,
 } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
-import type { Workspace } from '@/lib/types/workspace';
+import type { Workspace, WorkspaceMembershipSummary } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { WorkspaceRepo, Tx } from '../types';
 
@@ -137,6 +137,24 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(eq(workspaces.id, id))
       .limit(1);
     return row ? this.hydrate(db, row) : undefined;
+  }
+
+  async listForUser(
+    userId: string,
+    tx?: Tx,
+  ): Promise<WorkspaceMembershipSummary[]> {
+    const db = this.h(tx);
+    return (await db
+      .select({
+        id: workspaces.id,
+        name: workspaces.name,
+        type: workspaces.type,
+        role: workspaceMembers.role,
+      })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(eq(workspaceMembers.userId, userId))
+      .orderBy(asc(workspaceMembers.joinedAt))) as WorkspaceMembershipSummary[];
   }
 
 }

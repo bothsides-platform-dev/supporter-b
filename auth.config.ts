@@ -22,17 +22,33 @@ export default {
   session: { strategy: 'jwt' },
   pages: { signIn: '/login' },
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.workspaceId = user.workspaceId;
         token.workspaceType = user.workspaceType;
         token.role = user.role;
       }
-      // `trigger === 'update'` re-reads workspace state from DB. Implemented
-      // in Step 5+ via a server action that calls `unstable_update`. For v0
-      // the first-login stamp is sufficient.
-      void trigger;
+      // Active-workspace switch: `switchWorkspaceAction` validates membership in
+      // DB then calls `unstable_update({ user: {...} })`, which re-runs this
+      // callback with trigger==='update'. Merge the (already DB-validated)
+      // workspace id/type/role into the token. No DB access here — this file is
+      // edge-safe (shared with proxy.ts).
+      if (
+        trigger === 'update' &&
+        session &&
+        typeof session === 'object' &&
+        'user' in session
+      ) {
+        const u = (session as { user?: Record<string, unknown> }).user;
+        if (u) {
+          if (typeof u.workspaceId === 'string') token.workspaceId = u.workspaceId;
+          if (u.workspaceType === 'buyer' || u.workspaceType === 'pg') {
+            token.workspaceType = u.workspaceType;
+          }
+          if (u.role === 'admin' || u.role === 'member') token.role = u.role;
+        }
+      }
       return token;
     },
     async session({ session, token }) {

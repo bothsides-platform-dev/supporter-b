@@ -14,16 +14,13 @@ import { auth } from '@/auth';
 import { db as prodDb } from '@/lib/db/client';
 import { workspaceInvitations, workspaces } from '@/lib/db/schema';
 import { hashToken } from '@/lib/server/token';
-import { acceptWorkspaceInviteAction } from '@/lib/server/actions/workspace/acceptWorkspaceInviteAction';
+import { WorkspaceInviteAuthedClient } from './WorkspaceInviteAuthedClient';
 
 type Props = { params: Promise<{ token: string }> };
 
 const ERROR_LABELS: Record<string, string> = {
   INVITE_INVALID: '존재하지 않는 초대 링크입니다.',
   INVITE_EXPIRED: '만료되었거나 이미 사용된 초대 링크입니다.',
-  INVITE_EMAIL_MISMATCH: '초대된 이메일과 로그인 계정이 다릅니다.',
-  UNAUTHENTICATED: '로그인이 필요합니다.',
-  ALREADY_MEMBER: '이미 워크스페이스 멤버입니다.',
 };
 
 export default async function WorkspaceInvitePage({ params }: Props) {
@@ -48,22 +45,11 @@ export default async function WorkspaceInvitePage({ params }: Props) {
   const isAuthed = !!session?.user?.id;
 
   // ── Authenticated path ────────────────────────────────────────────────
+  // Client-driven: accept → switch active ws into the joined workspace → /home.
+  // An RSC can't set the JWT cookie, so the switch must happen client-side or
+  // the new membership stays inert until re-login.
   if (isAuthed) {
-    const r = await acceptWorkspaceInviteAction(token);
-    if (r.ok) {
-      redirect('/home');
-    }
-    const errorLabel = ERROR_LABELS[r.error] ?? r.error;
-    return (
-      <div className="py-12 max-w-[420px] mx-auto text-center space-y-3">
-        <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-error)]">
-          초대 처리 실패
-        </p>
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          {errorLabel}
-        </p>
-      </div>
-    );
+    return <WorkspaceInviteAuthedClient token={token} />;
   }
 
   // ── Unauthenticated path ──────────────────────────────────────────────

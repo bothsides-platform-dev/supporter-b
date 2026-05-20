@@ -11,3 +11,12 @@ export type Workspace = {
   members: User[];
   createdAt: string;
 };
+
+// Lean per-membership summary for the workspace switcher — one row per
+// workspace a user belongs to, with that user's role in it.
+export type WorkspaceMembershipSummary = {
+  id: string;
+  name: string;
+  type: WorkspaceType;
+  role: 'admin' | 'member';
+};

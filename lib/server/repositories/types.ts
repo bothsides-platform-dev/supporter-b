@@ -6,7 +6,7 @@ import type { PgliteDB } from '@/lib/db/client-pglite';
 
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
-import type { Workspace } from '@/lib/types/workspace';
+import type { Workspace, WorkspaceMembershipSummary } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { Bid, BuyerStage } from '@/lib/types/bid';
@@ -78,6 +78,11 @@ export interface WorkspaceRepo {
   save(ws: Workspace, tx?: Tx): Promise<void>;
   /** id 조회 — 멤버/bizProfile hydration 포함. */
   findById(id: string, tx?: Tx): Promise<Workspace | undefined>;
+  /** 유저가 속한 모든 워크스페이스 — 스위처용 경량 projection (hydration 없음). */
+  listForUser(
+    userId: string,
+    tx?: Tx,
+  ): Promise<WorkspaceMembershipSummary[]>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────

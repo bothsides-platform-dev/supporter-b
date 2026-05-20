@@ -16,10 +16,11 @@ import { eq } from 'drizzle-orm';
 
 import authConfig from './auth.config';
 import { db } from '@/lib/db/client';
-import { users, workspaceMembers, workspaces } from '@/lib/db/schema';
+import { users } from '@/lib/db/schema';
 import { verifyPassword } from '@/lib/auth/password';
+import { resolveInitialMembership } from '@/lib/auth/active-workspace';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
   providers: [
     Credentials({
@@ -42,16 +43,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const ok = await verifyPassword(password, user.passwordHash);
         if (!ok) return null;
 
-        const [member] = await db
-          .select({
-            workspaceId: workspaceMembers.workspaceId,
-            role: workspaceMembers.role,
-            workspaceType: workspaces.type,
-          })
-          .from(workspaceMembers)
-          .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-          .where(eq(workspaceMembers.userId, user.id))
-          .limit(1);
+        // Land in the remembered active workspace if still a member, else the
+        // earliest-joined one. A user with no membership gets undefined fields
+        // and is bounced by app/(app)/layout.tsx.
+        const member = await resolveInitialMembership(
+          db,
+          user.id,
+          user.lastActiveWorkspaceId,
+        );
 
         return {
           id: user.id,
