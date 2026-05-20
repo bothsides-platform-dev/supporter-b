@@ -27,8 +27,8 @@ services:
       POSTGRES_USER: supporter_b
       POSTGRES_PASSWORD: supporter_b
       POSTGRES_DB: supporter_b_test
-    tmpfs:
-      - /var/lib/postgresql/data
+    volumes:
+      - supporter_b_pgdata_test:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U supporter_b -d supporter_b_test"]
       interval: 5s
@@ -36,4 +36,9 @@ services:
       retries: 10
 
 volumes:
-  supporter_b_pgdata: {}
+  supporter_b_pgdata:
+    driver: local
+    name: supporter_b_pgdata
+  supporter_b_pgdata_test:
+    driver: local
+    name: supporter_b_pgdata_test
