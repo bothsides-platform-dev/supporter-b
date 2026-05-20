@@ -32,7 +32,7 @@
 
 ```
 GET /api/workspaces/search?type=pg        → 전체 PG 목록 (최대 500건)
-GET /api/workspaces/search?q=토스&type=pg → ILIKE 검색 (기존 동작)
+GET /api/workspaces/search?q=서포터&type=pg → ILIKE 검색 (기존 동작)
 ```
 
 응답 스키마는 기존과 동일:

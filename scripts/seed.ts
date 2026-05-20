@@ -109,7 +109,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       id: tossUserId,
       email: tossEmail,
       passwordHash,
-      name: '토스 관리자',
+      name: '서포터 B 페이 관리자',
       avatarColor: 'lavender',
     },
     {

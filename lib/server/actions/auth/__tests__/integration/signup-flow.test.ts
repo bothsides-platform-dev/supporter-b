@@ -105,7 +105,7 @@ describe('signup flow integration (no UI)', () => {
     // The inviteToken from the draft is NOT passed here; claim is separate.
     const c = await signupCompleteAction({
       email: v.email,
-      name: '토스영업',
+      name: '서포터 B 페이 영업',
       password: 'Password123!',
       wsKind: 'pg',
       wsName: '서포터 B 페이',

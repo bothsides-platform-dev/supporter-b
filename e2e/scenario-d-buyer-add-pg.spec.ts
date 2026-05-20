@@ -40,7 +40,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     await resetRfpForKanban(RFP_ID);
 
     // Seed a 4th PG workspace exclusive to this scenario. The 3 seeded PGs
-    // (토스/이니시스/카카오) are already invited to P-2604-0001 — we need a
+    // (서포터 B 페이/이니시스/카카오) are already invited to P-2604-0001 — we need a
     // workspace that's NOT yet invited so the action takes the insert path.
     // Idempotent: select-or-insert by name. We also attach a single admin
     // user so `sendDraftInvitationsAction` has somebody to enqueue email

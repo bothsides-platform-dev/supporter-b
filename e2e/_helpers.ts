@@ -188,7 +188,7 @@ export async function attachTossProposalPdf(rfpCode: string): Promise<string> {
   await db.insert(attachments).values({
     id: attachmentId,
     bidId: tossBid.id,
-    name: '제안서_토스.pdf',
+    name: '제안서_서포터B.pdf',
     size: MINIMAL_PDF.length,
     mimeType: 'application/pdf',
     uploadedBy: tossBid.submittedBy!,
