@@ -19,9 +19,64 @@ Postgres는 같은 인스턴스의 Docker 컨테이너, HTTPS는 도메인 + Cad
 ## 사전 준비물
 
 - OCI 계정(테넌시) + 결제/Always Free 등록 완료
-- SSH 키페어 (`ssh-keygen -t ed25519`) — 공개키를 인스턴스 생성 시 등록
+- SSH 키페어 — 인스턴스 접속용. 만드는 법은 **§0** 참고
 - 도메인 1개 (DNS A 레코드를 직접 편집할 수 있어야 함)
-- 이 리포 접근권 (private repo → **GitHub deploy key** 권장, 아래 4단계)
+- 이 리포 접근권 (private repo → **GitHub deploy key** 권장, **§2**)
+
+---
+
+## 0. 로컬 SSH 키페어 만들기 (인스턴스 접속용)
+
+> **키가 두 종류라 헷갈리기 쉽다:**
+> - **접속용 키** (지금 여기) — **로컬 맥에서** 만들고 public을 OCI 인스턴스 생성 시(§1-4 ⑤)
+>   등록. 이걸로 `ssh ubuntu@<IP>` 접속.
+> - **deploy key** — **인스턴스 안에서** 만들고 public을 GitHub에 등록(§2). private repo clone용.
+>
+> 둘 다 `ssh-keygen`을 쓰지만 **만드는 위치·등록처가 다르다.**
+
+로컬(맥) 터미널에서:
+```bash
+ssh-keygen -t ed25519 -C "bidit-oci-$(date +%Y%m%d)" -f ~/.ssh/bidit_oci
+```
+플래그 의미:
+- `-t ed25519` — 키 알고리즘. RSA보다 짧고 강하다. (아주 구형 시스템 호환이 필요할 때만 `-t rsa -b 4096`)
+- `-C "..."` — 주석(라벨). 어떤 키인지 식별용일 뿐 보안과 무관.
+- `-f ~/.ssh/bidit_oci` — 저장 경로/이름. 기존 `~/.ssh/id_ed25519`를 덮어쓰지 않도록 **별도 이름 권장**.
+- 실행하면 **passphrase**를 묻는다. 빈 값(엔터)도 되지만, 노트북 분실 대비로 **설정 권장**
+  (아래 ssh-agent로 매번 입력하는 번거로움을 없앤다).
+
+생성 결과 두 파일:
+
+| 파일 | 정체 | 다루는 법 |
+|---|---|---|
+| `~/.ssh/bidit_oci` | **private key** | 절대 노출·업로드 금지. 로컬에만 둔다. |
+| `~/.ssh/bidit_oci.pub` | **public key** | 이걸 OCI 콘솔(§1-4 ⑤)에 붙여넣는다. 공개돼도 안전. |
+
+권한 확인(틀리면 ssh가 키를 거부함):
+```bash
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/bidit_oci
+```
+
+public key 복사 (맥):
+```bash
+pbcopy < ~/.ssh/bidit_oci.pub   # 클립보드에 복사 → OCI 콘솔 "Paste public keys"에 붙여넣기
+cat ~/.ssh/bidit_oci.pub        # 또는 출력해서 확인: 'ssh-ed25519 AAAA... bidit-oci-...' 한 줄
+```
+
+(선택) 접속 별칭 — `~/.ssh/config`에 등록하면 §2에서 `ssh ubuntu@<IP>` 대신 `ssh bidit`:
+```
+Host bidit
+    HostName <예약공인IP>
+    User ubuntu
+    IdentityFile ~/.ssh/bidit_oci
+    IdentitiesOnly yes
+```
+
+(선택) passphrase를 매번 안 묻게 — 맥 keychain에 등록:
+```bash
+ssh-add --apple-use-keychain ~/.ssh/bidit_oci
+```
 
 ---
 
@@ -162,11 +217,15 @@ private repo이므로 클론하기 전에 deploy key부터 등록한다. 안 그
 `Permission denied (publickey)`로 실패한다.
 
 ```bash
-ssh -i ~/.ssh/your_key ubuntu@<예약공인IP>
+ssh -i ~/.ssh/bidit_oci ubuntu@<예약공인IP>   # §0에서 ~/.ssh/config 별칭을 만들었다면 `ssh bidit`
 
+# 인스턴스 안에서 deploy key 생성 (§0의 접속용 키와 다른, 이 서버 전용 키)
 ssh-keygen -t ed25519 -C "oci-bidit-deploy" -f ~/.ssh/id_ed25519 -N ""
 cat ~/.ssh/id_ed25519.pub
 ```
+- `-N ""` — passphrase 없음. `deploy.sh`가 무인으로 `git clone`/`pull` 하려면 키에 암호가
+  없어야 한다. 읽기 전용 deploy key를 서버 안에만 두므로 허용되는 절충이다.
+
 출력된 공개키를 GitHub repo → `Settings → Deploy keys → Add deploy key`에 등록(읽기 전용이면 충분).
 PAT 파일을 디스크에 두는 것보다 범위가 좁아 안전하다.
 
