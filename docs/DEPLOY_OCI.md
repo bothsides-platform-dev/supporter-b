@@ -91,9 +91,23 @@ nc -vz <예약공인IP> 443
 - **Name**: `bidit-prod` 등 알아볼 이름.
 - **Compartment**: VCN을 만든 것과 **같은 컴파트먼트**를 선택(다르면 그 서브넷이 안 보임).
 
-#### ② Placement (Availability Domain)
-- AD가 여러 개면 하나 고른다. **A1 용량은 AD마다 다르므로**, 뒤에서 `Out of host capacity`가
-  나면 여기서 AD를 바꿔가며 재시도하는 게 1차 해법이다.
+#### ② Placement (Availability Domain) + Capacity type
+- **Availability Domain**: AD가 여러 개면 하나 고른다. **A1 용량은 AD마다 다르므로**, 뒤에서
+  `Out of host capacity`가 나면 여기서 AD를 바꿔가며 재시도하는 게 1차 해법이다.
+- **Capacity type**: 같은 Placement 영역에 있는 라디오 선택값. 무료 상시 서비스는 반드시
+  **On-demand**로 둔다:
+
+  | 옵션 | 설명 | 이 배포 |
+  |---|---|---|
+  | **On-demand capacity** | 기본값. 생성 시점에 가용 자원을 그때그때 잡음. Always Free A1도 이걸로 만든다. | ✅ **선택** |
+  | Preemptible capacity | 더 싸지만 Oracle이 언제든 회수 → 인스턴스가 죽음. Always Free 대상도 아님. | ✗ 상시 서비스 부적합 |
+  | Capacity reservation | 미리 만들어 둔 **용량 예약**을 사용. 예약 자체에 가용 용량이 필요해 A1 무료엔 일반적 경로가 아님. | ✗ |
+  | Dedicated virtual machine host | 전용 베어메탈 호스트(유료). | ✗ |
+
+  > On-demand인데도 A1이 안 잡히는 게 그 유명한 `Out of host capacity`다. 해결은 ③의 3단계
+  > (AD 변경 → 오프피크 재시도 → x86 폴백). 자동 재시도가 필요하면 OCI CLI
+  > `oci compute instance launch`를 루프로 돌려 용량이 풀리는 순간 잡는 방법도 있다(OCI CLI
+  > 설정 필요).
 
 #### ③ Image and shape
 - **Image**: `[Edit] → Change image → Canonical Ubuntu → 24.04`. (Oracle Linux가 기본 선택돼
