@@ -84,14 +84,57 @@ nc -vz <예약공인IP> 443
 `80`은 열렸는데 연결이 안 되면 보통 **OS iptables(§3)** 가 막은 것이다.
 
 ### 1-4. Compute 인스턴스
-`Compute → Instances → Create instance`:
-- Image: **Canonical Ubuntu 24.04**
-- Shape: **VM.Standard.A1.Flex** (예: 2 OCPU / 12GB — Always Free 한도 내). 
-  `Out of host capacity` 에러가 흔하다 → 다른 가용 도메인/리전으로 재시도하거나,
-  임시로 `VM.Standard.E2.1.Micro`(x86, 1GB) 폴백 (이 경우 스왑 필수 — 부트스트랩이 처리).
-- SSH key: 위에서 만든 **공개키** 등록
-- Networking: 1-2에서 만든 VCN/퍼블릭 서브넷, **public IP 할당**
-- 생성 후: 1-1의 예약 IP를 이 인스턴스의 VNIC에 연결(`...VNIC → Edit → No public IP 후 Reserved IP 지정`)
+
+`Compute → Instances → [Create instance]`. 생성 폼을 위에서부터 채운다.
+
+#### ① Name / Compartment
+- **Name**: `bidit-prod` 등 알아볼 이름.
+- **Compartment**: VCN을 만든 것과 **같은 컴파트먼트**를 선택(다르면 그 서브넷이 안 보임).
+
+#### ② Placement (Availability Domain)
+- AD가 여러 개면 하나 고른다. **A1 용량은 AD마다 다르므로**, 뒤에서 `Out of host capacity`가
+  나면 여기서 AD를 바꿔가며 재시도하는 게 1차 해법이다.
+
+#### ③ Image and shape
+- **Image**: `[Edit] → Change image → Canonical Ubuntu → 24.04`. (Oracle Linux가 기본 선택돼
+  있을 수 있으니 반드시 Ubuntu로 변경.)
+- **Shape**: `[Change shape] → Ampere` 탭 → **VM.Standard.A1.Flex** 선택 후 슬라이더로
+  OCPU/메모리 지정.
+  - Always Free 한도: A1 인스턴스 합산 **최대 4 OCPU / 24GB RAM**. 단독 인스턴스면
+    **4 OCPU / 24GB**를 다 줘도 무료(빌드가 넉넉해진다). 최소 권장 **2 OCPU / 12GB**.
+  - 무료 대상 shape에는 **"Always Free-eligible"** 배지가 붙는다 — 이걸 확인하고 고른다.
+  - **`Out of host capacity` 대응**: ② AD 변경 → 그래도 안 되면 시간대를 바꿔 재시도(자원 회수가
+    오프피크에 잘 풀림) → 그래도 막히면 폴백:
+    **`Specialty and previous generation` 탭 → VM.Standard.E2.1.Micro**(x86, 1 OCPU/1GB,
+    무료). 단 1GB라 `next build`가 OOM 나기 쉬우므로 스왑이 필수인데, 이는 `bootstrap.sh`가
+    4GB 스왑으로 처리한다.
+
+> ARM(A1)이어도 스택은 전부 arm64 호환이다: NodeSource Node 22, `postgres:16-alpine`,
+> Caddy, next-swc/sharp 모두 arm64 프리빌트가 있어 추가 작업이 없다.
+
+#### ④ Networking
+- **Primary VNIC** 영역에서:
+  - VCN: 1-2에서 만든 VCN
+  - Subnet: 그 VCN의 **public subnet**
+  - **Assign a public IPv4 address: 체크** (지금은 임시 IP가 붙고, 생성 후 ⑦에서 예약 IP로 교체)
+
+#### ⑤ Add SSH keys
+- `Paste public keys` 선택 후 `~/.ssh/your_key.pub` 내용을 붙여넣기(또는 .pub 파일 업로드).
+  여기 등록한 키의 짝(private)으로 §2에서 `ssh ubuntu@...` 접속한다.
+
+#### ⑥ Boot volume
+- 기본 50GB로 충분(Always Free 블록 스토리지 합산 최대 200GB). 첨부가 DB에 쌓이는 만큼
+  여유를 두려면 100GB까지 올려도 무료 한도 안이다. 나머지는 기본값 → **[Create]**.
+
+#### ⑦ 생성 후: 예약 공인 IP 연결
+인스턴스가 `Running`이 되면 임시 공인 IP를 1-1의 **예약 IP로 교체**한다(도메인 A 레코드가
+안정적으로 가리키도록):
+
+`인스턴스 상세 → Resources: Attached VNICs → (Primary VNIC) → Resources: IPv4 Addresses
+→ 현재 Public IP 행의 ⋮ → Edit → Public IP type을 "No public IP"로 저장 → 다시 Edit →
+"Reserved public IP" 선택 → 1-1에서 만든 예약 IP 지정 → 저장`
+
+이후 인스턴스를 재생성/종료해도 그 예약 IP는 유지되므로 DNS·빌드 설정을 다시 안 만져도 된다.
 
 ### 1-5. DNS
 도메인 관리 콘솔에서 **A 레코드** → 예약 공인 IP. (Caddy가 인증서를 받으려면
