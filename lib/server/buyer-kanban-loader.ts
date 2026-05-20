@@ -22,20 +22,22 @@ export async function getBuyerKanbanData(
     getInvitationRepo(),
   ]);
   const rfps = await rfpRepo.findByBuyerWs(workspaceId);
+
+  // RFP 수와 무관한 상수 쿼리 — bid/invitation 을 rfpId별 Map으로 배치 fetch 후
+  // 인메모리 머지(N+1 제거). pg-kanban-loader 와 동일 패턴.
+  const rfpIds = rfps.map((r) => r.id);
+  const [bidsByRfp, invsByRfp] = await Promise.all([
+    bidRepo.findByRfpIds(rfpIds),
+    invRepo.findByRfpIds(rfpIds),
+  ]);
   const now = new Date();
 
-  // 워크스페이스 별 RFP 수가 많지 않은 v0 가정 — RFP 당 bid/invitation 병렬 fetch.
-  // 추후 N+1 가 문제되면 batch 메서드 추가.
-  const cards = await Promise.all(
-    rfps.map(async (rfp) => {
-      const [bids, invitations] = await Promise.all([
-        bidRepo.findByRfp(rfp.id),
-        invRepo.findByRfp(rfp.id),
-      ]);
-      const stage = classifyBuyerRfp({ rfp, bids, invitations, now });
-      return toBuyerCard({ rfp, bids, invitations, stage });
-    }),
-  );
+  const cards = rfps.map((rfp) => {
+    const bids = bidsByRfp.get(rfp.id) ?? [];
+    const invitations = invsByRfp.get(rfp.id) ?? [];
+    const stage = classifyBuyerRfp({ rfp, bids, invitations, now });
+    return toBuyerCard({ rfp, bids, invitations, stage });
+  });
 
   return cards.sort(compareBuyerCards);
 }

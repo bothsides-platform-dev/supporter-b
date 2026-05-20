@@ -52,6 +52,8 @@ export interface InvitationRepo {
   findByTokenHash(tokenHash: string, tx?: Tx): Promise<RfpInvitation | undefined>;
   /** 한 RFP의 초대 목록. */
   findByRfp(rfpId: string, tx?: Tx): Promise<RfpInvitation[]>;
+  /** 여러 RFP의 초대를 rfpId별 Map으로 배치 조회 (buyer 칸반 N+1 제거). */
+  findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, RfpInvitation[]>>;
   /** 한 RFP의 draft 상태 초대만 조회 — sendDraftInvitationsAction 일괄 발송용. */
   findDraftsByRfp(rfpId: string, tx?: Tx): Promise<RfpInvitation[]>;
   /** PG 워크스페이스에 발송된 활성 초대 + RFP pair — 인박스/칸반 공통 fetcher. */
@@ -107,6 +109,8 @@ export interface BidRepo {
   findById(id: string, tx?: Tx): Promise<Bid | undefined>;
   /** 한 RFP의 모든 입찰. */
   findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]>;
+  /** 여러 RFP의 입찰을 rfpId별 Map으로 배치 조회 (buyer 칸반 N+1 제거). */
+  findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, Bid[]>>;
   /** 한 PG 워크스페이스의 모든 입찰. */
   findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]>;
   /** Stage 3 cutover: buyer 측 칸반 stage 갱신. 없는 bidId면 throw. */

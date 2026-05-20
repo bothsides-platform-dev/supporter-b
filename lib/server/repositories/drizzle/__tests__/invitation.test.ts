@@ -33,7 +33,7 @@ async function setup() {
     createdBy: buyer.id,
   });
   const repo = new DrizzleInvitationRepository(db);
-  return { db, repo, buyer, ws, pgWs, rfpId };
+  return { db, repo, buyer, ws, biz, pgWs, rfpId };
 }
 
 function makeInvitation(rfpId: string, pgWsId: string, overrides?: Partial<RfpInvitation>): RfpInvitation {
@@ -215,5 +215,38 @@ describe('DrizzleInvitationRepository', () => {
     const tossPairsAfter = await repo.findByPgWorkspace(ctx.pgWs.id);
     expect(tossPairsAfter).toHaveLength(1);
     expect(tossPairsAfter[0].invitation.acceptedByUserId).toBe(userA.id);
+  });
+
+  it('findByRfpIds: 여러 RFP의 invitation을 rfpId별 Map으로 그룹화', async () => {
+    // 두 번째 RFP(같은 ws) 생성.
+    const rfp2 = randomUUID();
+    await ctx.db.insert(rfps).values({
+      id: rfp2,
+      code: 'P-2605-0002',
+      buyerWsId: ctx.ws.id,
+      bizProfileId: ctx.biz.id,
+      title: 'T2',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: ctx.buyer.id,
+    });
+    const pgWs2 = await seedPgWorkspace(ctx.db, '이니시스');
+    // rfp1: 초대 2개(toss, inicis), rfp2: 초대 1개(toss).
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), generateToken());
+    await repo.save(makeInvitation(ctx.rfpId, pgWs2.id), generateToken());
+    await repo.save(makeInvitation(rfp2, ctx.pgWs.id), generateToken());
+
+    const map = await repo.findByRfpIds([ctx.rfpId, rfp2]);
+
+    expect(map.get(ctx.rfpId)).toHaveLength(2);
+    expect(map.get(ctx.rfpId)!.every((i) => i.rfpId === ctx.rfpId)).toBe(true);
+    expect(map.get(rfp2)).toHaveLength(1);
+    expect(map.get(rfp2)![0].pgWsId).toBe(ctx.pgWs.id);
+  });
+
+  it('findByRfpIds: 빈 입력 → 빈 Map', async () => {
+    const map = await repo.findByRfpIds([]);
+    expect(map.size).toBe(0);
   });
 });

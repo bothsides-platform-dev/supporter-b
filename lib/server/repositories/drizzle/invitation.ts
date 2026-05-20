@@ -142,6 +142,27 @@ export class DrizzleInvitationRepository implements InvitationRepo {
     return rows.map(rowToInvitation);
   }
 
+  // 배치 조회 — 여러 RFP의 invitation을 rfpId별로 그룹화(buyer 칸반 N+1 제거). 1 쿼리.
+  async findByRfpIds(
+    rfpIds: string[],
+    tx?: Tx,
+  ): Promise<Map<string, RfpInvitation[]>> {
+    const db = this.h(tx);
+    const map = new Map<string, RfpInvitation[]>();
+    if (rfpIds.length === 0) return map;
+    const rows = (await db
+      .select()
+      .from(rfpInvitations)
+      .where(inArray(rfpInvitations.rfpId, rfpIds))) as InvRow[];
+    for (const row of rows) {
+      const inv = rowToInvitation(row);
+      const list = map.get(inv.rfpId) ?? [];
+      list.push(inv);
+      map.set(inv.rfpId, list);
+    }
+    return map;
+  }
+
   async findDraftsByRfp(rfpId: string, tx?: Tx): Promise<RfpInvitation[]> {
     const db = this.h(tx);
     const rows = await db
