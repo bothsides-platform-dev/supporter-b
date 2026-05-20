@@ -37,16 +37,51 @@ Postgres는 같은 인스턴스의 Docker 컨테이너, HTTPS는 도메인 + Cad
 인터넷 게이트웨이 + 퍼블릭 서브넷이 자동 생성된다.
 
 ### 1-3. 보안 목록 (Ingress 규칙)
-서브넷의 Security List에 다음 인그레스 규칙(Source `0.0.0.0/0`, TCP) 추가:
 
-| 포트 | 용도 |
-|---|---|
-| 22 | SSH (기본 존재) |
-| 80 | HTTP → HTTPS 리다이렉트 + Let's Encrypt ACME 챌린지 |
-| 443 | HTTPS |
+OCI 방화벽은 **2계층**이다. 여기서는 서브넷 단위인 **Security List**를 쓴다.
+(VNIC 단위인 NSG도 있지만 단일 인스턴스에는 Security List만으로 충분하다. 둘 다 쓰면
+**둘 다 통과**해야 트래픽이 들어오므로 혼용하지 말 것.)
 
-> 5432(Postgres)·3000(앱)은 **절대 열지 않는다.** 컨테이너는 127.0.0.1 바인딩이고
-> 앱은 Caddy 뒤에 있다.
+**열어야 할 것은 여기 Security List + OS의 iptables(§3) 두 군데 모두**다. 한쪽만 열면
+접속이 안 된다 — OCI 초보가 가장 많이 막히는 지점.
+
+#### 콘솔 이동 경로
+`Networking → Virtual Cloud Networks → (방금 만든 VCN) → 좌측 Subnets → (public subnet)
+→ Security Lists → "Default Security List for <VCN>" → Ingress Rules → [Add Ingress Rules]`
+
+#### 추가할 인그레스 규칙
+80과 443을 각각 한 줄씩 추가한다(한 화면에서 "+ Another Ingress Rule"로 동시에 추가 가능).
+각 규칙의 필드:
+
+| 필드 | 80 규칙 값 | 443 규칙 값 |
+|---|---|---|
+| Stateless | **체크 해제** (= Stateful) | **체크 해제** |
+| Source Type | CIDR | CIDR |
+| Source CIDR | `0.0.0.0/0` | `0.0.0.0/0` |
+| IP Protocol | TCP | TCP |
+| Source Port Range | 비움 (= All) | 비움 |
+| Destination Port Range | `80` | `443` |
+| Description | `HTTP (redirect + ACME)` | `HTTPS` |
+
+> **Stateful**(기본)이면 응답 트래픽이 자동 허용되므로 egress 별도 규칙이 필요 없다.
+> Stateless로 만들면 egress까지 직접 열어야 하니 그냥 기본(Stateful)으로 둔다.
+
+#### 이미 있는/유지할 규칙
+- **TCP 22 (SSH)** — VCN 마법사가 기본 인그레스로 넣어준다. 그대로 둔다.
+- **Egress "All / 0.0.0.0/0 Allow"** — 기본값. apt·NodeSource·get.docker.com·GitHub·
+  Let's Encrypt에 나가야 하므로 **삭제하지 말 것**.
+
+#### 열지 말 것
+**5432(Postgres)·3000(앱)은 절대 인그레스에 추가하지 않는다.** Postgres 컨테이너는
+`127.0.0.1`에만 바인딩되고 앱은 Caddy 뒤에 있어 외부 노출이 필요 없다.
+
+#### 적용 확인 (DNS 전파 후, §5 Caddy 기동 전후)
+로컬에서:
+```bash
+nc -vz <예약공인IP> 80     # succeeded 면 Security List 통과
+nc -vz <예약공인IP> 443
+```
+`80`은 열렸는데 연결이 안 되면 보통 **OS iptables(§3)** 가 막은 것이다.
 
 ### 1-4. Compute 인스턴스
 `Compute → Instances → Create instance`:
