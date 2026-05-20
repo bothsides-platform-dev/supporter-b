@@ -43,7 +43,7 @@ test.describe.serial('BidDetailModal — note roundtrip (Stage 3)', () => {
     await page.getByRole('tab', { name: '[ 보드 ]' }).click();
 
     // Open the toss bid modal.
-    await page.getByRole('button', { name: /토스페이먼츠/ }).first().click();
+    await page.getByRole('button', { name: /서포터 B 페이/ }).first().click();
 
     // Fill body + attach a tiny PDF. NoteForm uploads eagerly on file
     // pick — wait for the /api/files/upload success before clicking 기록.
@@ -74,7 +74,7 @@ test.describe.serial('BidDetailModal — note roundtrip (Stage 3)', () => {
     // via RSC, not from any optimistic client state.
     await page.reload();
     await page.getByRole('tab', { name: '[ 보드 ]' }).click();
-    await page.getByRole('button', { name: /토스페이먼츠/ }).first().click();
+    await page.getByRole('button', { name: /서포터 B 페이/ }).first().click();
 
     await expect(
       page.getByText('e2e: 본사 컨펌 후 회신 예정'),
@@ -94,7 +94,7 @@ test.describe.serial('BidDetailModal — note roundtrip (Stage 3)', () => {
     // Reload to ensure the row is really gone from the server view.
     await page.reload();
     await page.getByRole('tab', { name: '[ 보드 ]' }).click();
-    await page.getByRole('button', { name: /토스페이먼츠/ }).first().click();
+    await page.getByRole('button', { name: /서포터 B 페이/ }).first().click();
     await expect(
       page.getByText(/아직 기록된 메모가 없습니다/),
     ).toBeVisible();

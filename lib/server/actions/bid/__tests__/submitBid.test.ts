@@ -87,7 +87,7 @@ async function seedSetup(grade: 'sme2' | 'general' = 'sme2'): Promise<Setup> {
   await seedMembership(db, buyerWs.id, buyer2.id, 'member');
 
   // PG ws + claimer.
-  const pgWs = await seedPgWorkspace(db, 'toss.im', { name: '토스페이먼츠' });
+  const pgWs = await seedPgWorkspace(db, 'toss.im', { name: '서포터 B 페이' });
   const pgUser = await seedUser(db, { email: 'sales@toss.im' });
   await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 

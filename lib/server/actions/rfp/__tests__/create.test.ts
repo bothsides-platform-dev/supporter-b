@@ -126,7 +126,7 @@ describe('createRfpAction', () => {
 
   it('send branch — inserts RFP status=sent, N invitations + N invite outbox + 1 sent outbox', async () => {
     // Seed 3 PG workspaces each with one admin — outbox is per admin member
-    const pg1 = await seedPgWorkspace(db, '토스페이먼츠');
+    const pg1 = await seedPgWorkspace(db, '서포터 B 페이');
     const pg1Admin = await seedUser(db, { email: 'admin@toss.im' });
     await seedMembership(db, pg1.id, pg1Admin.id, 'admin');
 

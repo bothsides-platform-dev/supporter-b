@@ -67,7 +67,7 @@ describe('BidDetailModal', () => {
         onOpenChange={() => {}}
         bid={bid}
         notes={[]}
-        pgName="토스페이먼츠"
+        pgName="서포터 B 페이"
         stage="negotiating"
         grade="sme1"
         authorId="u-1"
@@ -93,7 +93,7 @@ describe('BidDetailModal', () => {
         onOpenChange={() => {}}
         bid={bid}
         notes={[]}
-        pgName="토스페이먼츠"
+        pgName="서포터 B 페이"
         stage="pending"
         grade="sme1"
         authorId="u-1"
@@ -143,7 +143,7 @@ describe('BidDetailModal', () => {
         onOpenChange={() => {}}
         bid={bid}
         notes={notes}
-        pgName="토스페이먼츠"
+        pgName="서포터 B 페이"
         stage="pending"
         grade="sme1"
         authorId="u-1"
@@ -177,7 +177,7 @@ describe('BidDetailModal', () => {
         onOpenChange={() => {}}
         bid={bid}
         notes={notes}
-        pgName="토스페이먼츠"
+        pgName="서포터 B 페이"
         stage="pending"
         grade="sme1"
         authorId="u-1"

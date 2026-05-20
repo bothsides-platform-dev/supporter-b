@@ -243,7 +243,7 @@ describe('signupCompleteAction — pg branch', () => {
       name: '토스영업',
       password: 'Password123!',
       wsKind: 'pg',
-      wsName: '토스페이먼츠',
+      wsName: '서포터 B 페이',
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -252,7 +252,7 @@ describe('signupCompleteAction — pg branch', () => {
     const [ws] = await db
       .select()
       .from(workspaces)
-      .where(eq(workspaces.name, '토스페이먼츠'));
+      .where(eq(workspaces.name, '서포터 B 페이'));
     expect(ws).toBeDefined();
     expect(ws.type).toBe('pg');
 
@@ -280,14 +280,14 @@ describe('signupCompleteAction — pg branch', () => {
       name: '첫번째',
       password: 'Password123!',
       wsKind: 'pg',
-      wsName: '토스페이먼츠 1팀',
+      wsName: '서포터 B 페이 1팀',
     });
     const r2 = await signupCompleteAction({
       email: 'second@toss.im',
       name: '두번째',
       password: 'Password123!',
       wsKind: 'pg',
-      wsName: '토스페이먼츠 2팀',
+      wsName: '서포터 B 페이 2팀',
     });
     expect(r1.ok).toBe(true);
     expect(r2.ok).toBe(true);

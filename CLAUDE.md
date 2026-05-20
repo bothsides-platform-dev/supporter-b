@@ -21,7 +21,7 @@ If these conflict, **PG_RFP_SPEC.md wins** (newest, post-pivot). Distribute its 
 
 - **Two-sided platform**: `buyer` workspace (구매사) sends RFPs; `pg` workspace (결제대행사 영업담당) responds with bids
 - **Private 1:N RFP, NOT a marketplace**: matching is by buyer-supplied PG email allowlist. PGs don't see each other (완전 비공개 — `Bid.competitorCount` etc. do not exist by design)
-- **PG workspace identity = email domain** (e.g. `@toss.im` → 토스페이먼츠 workspace, auto-merge on signup)
+- **PG workspace identity = email domain** (e.g. `@toss.im` → 서포터 B 페이 workspace, auto-merge on signup)
 - **Per-RFP unique URL + token** in invitation email; token authoritative only for first entry, then workspace membership takes over
 - **사업자번호 → automatic enrichment** at RFP creation: 국세청 (free, mandatory). 공정위·NICE는 v0 제외.
 - **가맹점 등급 = 카드 우대수수료 등급** (영세/중소1~3/일반). Card fees for 영세·중소 are **statutorily fixed** — `STATUTORY_CARD_FEE` in SPEC.md §4 — PGs cannot quote different card rates for these grades. Competition shifts to settlement cycle, deposit, setup fee, monthly minimum, bank transfer %, easy-pay %. Only 일반 grade negotiates card fees per issuer (9 cards: BC/SHINHAN/SAMSUNG/HYUNDAI/KB/LOTTE/NH/HANA/WOORI).

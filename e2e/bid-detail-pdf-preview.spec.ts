@@ -40,7 +40,7 @@ test.describe.serial('BidDetailModal — PDF preview iframe', () => {
     const firstReq = page.waitForResponse((r) =>
       r.url().includes(`/api/files/${attachmentId}`),
     );
-    await page.getByRole('button', { name: /토스페이먼츠/ }).first().click();
+    await page.getByRole('button', { name: /서포터 B 페이/ }).first().click();
     const first = await firstReq;
     expect(first.status()).toBe(200);
     expect(first.headers()['content-type']).toBe('application/pdf');

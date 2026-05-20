@@ -13,7 +13,7 @@ describe('DrizzleWorkspaceRepository', () => {
   });
 
   it('findById hydrates members and biz profile when present', async () => {
-    const ws = await seedPgWorkspace(db, '토스페이먼츠');
+    const ws = await seedPgWorkspace(db, '서포터 B 페이');
     const u = await seedUser(db, { email: 'a@toss.im' });
     await seedMembership(db, ws.id, u.id, 'admin');
     const fetched = await repo.findById(ws.id);

@@ -119,7 +119,7 @@ export async function findSeededBidIds(rfpCode: string): Promise<{
     })
     .from(bids)
     .where(eq(bids.rfpId, rfpId));
-  const toss = rows.find((r) => r.pgName === '토스페이먼츠');
+  const toss = rows.find((r) => r.pgName === '서포터 B 페이');
   const inicis = rows.find((r) => r.pgName === 'KG이니시스');
   if (!toss || !inicis) {
     throw new Error(
@@ -175,7 +175,7 @@ export async function attachTossProposalPdf(rfpCode: string): Promise<string> {
     .from(bids)
     .where(
       sql`${bids.rfpId} = ${rfpRow.id} AND ${bids.pgWsId} = (
-        SELECT id FROM workspaces WHERE name = '토스페이먼츠'
+        SELECT id FROM workspaces WHERE name = '서포터 B 페이'
       )`,
     )
     .limit(1);

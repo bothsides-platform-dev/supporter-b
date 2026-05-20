@@ -68,7 +68,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
 
   it('end-to-end: P2→P4→P6 buyer signup → createRfp(send=true) → invitations N + outbox 1+N', async () => {
     // Pre-seed 3 PG workspaces with admin members so outbox entries are generated
-    const pg1 = await seedPgWorkspace(db, '토스페이먼츠');
+    const pg1 = await seedPgWorkspace(db, '서포터 B 페이');
     const pg1Admin = await seedUser(db, { email: 'sales@toss.im' });
     await seedMembership(db, pg1.id, pg1Admin.id, 'admin');
 

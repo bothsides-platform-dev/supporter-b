@@ -93,7 +93,7 @@ export default function PgWorkspacePage() {
             type="text"
             value={wsName}
             onChange={(e) => setWsName(e.target.value)}
-            placeholder="예: 토스페이먼츠 영업팀"
+            placeholder="예: 서포터 B 페이 영업팀"
             disabled={submitting}
             className="w-full px-4 py-3 text-[14px] bg-[var(--md-sys-color-surface-variant)] text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline)] rounded-md placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-primary)] disabled:opacity-50"
           />

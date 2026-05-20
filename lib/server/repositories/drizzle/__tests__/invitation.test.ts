@@ -18,7 +18,7 @@ async function setup() {
   const buyer = await seedUser(db);
   const biz = await seedBizProfile(db);
   const ws = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
-  const pgWs = await seedPgWorkspace(db, '토스페이먼츠');
+  const pgWs = await seedPgWorkspace(db, '서포터 B 페이');
   // Insert one RFP to FK against.
   const rfpId = randomUUID();
   await db.insert(rfps).values({

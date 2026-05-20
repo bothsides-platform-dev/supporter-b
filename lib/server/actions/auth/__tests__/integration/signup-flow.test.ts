@@ -108,7 +108,7 @@ describe('signup flow integration (no UI)', () => {
       name: '토스영업',
       password: 'Password123!',
       wsKind: 'pg',
-      wsName: '토스페이먼츠',
+      wsName: '서포터 B 페이',
     });
     expect(c.ok).toBe(true);
     if (!c.ok) return;
@@ -118,7 +118,7 @@ describe('signup flow integration (no UI)', () => {
     const [pgWs] = await db
       .select()
       .from(workspaces)
-      .where(eq(workspaces.name, '토스페이먼츠'));
+      .where(eq(workspaces.name, '서포터 B 페이'));
     expect(pgWs).toBeDefined();
     expect(pgWs.type).toBe('pg');
 

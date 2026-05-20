@@ -175,7 +175,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     {
       id: tossWsId,
       type: 'pg',
-      name: '토스페이먼츠',
+      name: '서포터 B 페이',
     },
     {
       id: inicisWsId,

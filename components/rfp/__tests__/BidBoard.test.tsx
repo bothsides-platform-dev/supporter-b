@@ -71,7 +71,7 @@ const baseProps = {
   grade: 'sme1' as const,
   rfpStatus: 'sent',
   awardedBidId: undefined,
-  pgWsNameMap: { 'ws-toss': '토스페이먼츠', 'ws-inicis': '이니시스' },
+  pgWsNameMap: { 'ws-toss': '서포터 B 페이', 'ws-inicis': '이니시스' },
   authorId: 'u-buyer',
   authorName: '김구매',
 };
@@ -92,11 +92,11 @@ describe('BidBoard', () => {
     expect(screen.getAllByText('협상중').length).toBeGreaterThan(0);
     expect(screen.getAllByText('결정').length).toBeGreaterThan(0);
 
-    expect(screen.getByText('토스페이먼츠')).toBeInTheDocument();
+    expect(screen.getByText('서포터 B 페이')).toBeInTheDocument();
     expect(screen.getByText('이니시스')).toBeInTheDocument();
 
     // Note counts come from props, not localStorage.
-    const tossCard = screen.getByText('토스페이먼츠').closest('button')!;
+    const tossCard = screen.getByText('서포터 B 페이').closest('button')!;
     const inicisCard = screen.getByText('이니시스').closest('button')!;
     expect(within(tossCard).getByText(/메모 0/)).toBeInTheDocument();
     expect(within(inicisCard).getByText(/메모 0/)).toBeInTheDocument();

@@ -41,7 +41,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     const winnerRows = await db.execute<{ id: string }>(
       sql`SELECT b.id FROM bids b
           JOIN workspaces w ON w.id = b.pg_ws_id
-          WHERE b.rfp_id = ${RFP_ID} AND w.name = '토스페이먼츠'
+          WHERE b.rfp_id = ${RFP_ID} AND w.name = '서포터 B 페이'
           LIMIT 1`,
     );
     const winnerArr = Array.isArray(winnerRows)
@@ -60,10 +60,10 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
 
     // ── 2. Comparison table — assert it lists submitted bids ─────
     await page.goto(`/rfp/${RFP_ID}`);
-    // 토스페이먼츠는 BidComparisonTable 행과 RfpInviteManager 목록 양쪽에
+    // 서포터 B 페이는 BidComparisonTable 행과 RfpInviteManager 목록 양쪽에
     // 렌더되므로 strict 모드 위반을 피하기 위해 비교 테이블 셀을 직접 노린다.
     await expect(
-      page.getByRole('cell', { name: /토스페이먼츠/ }),
+      page.getByRole('cell', { name: /서포터 B 페이/ }),
     ).toBeVisible();
 
     // ── 3. Navigate directly to award flow w/ bidId search param ─
@@ -71,11 +71,11 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     //  we navigate directly to keep the spec robust against table UI
     //  changes — the integration boundary is the action call.)
     await page.goto(`/rfp/${RFP_ID}/award?bidId=${winnerBidId}`);
-    // Award 페이지는 헤딩 "토스페이먼츠 제안을 선택하시겠습니까?"로 시작 —
-    // 같은 페이지에 RFP 번호/탭/리스트 등 토스페이먼츠 키워드가 흩어져 있어
+    // Award 페이지는 헤딩 "서포터 B 페이 제안을 선택하시겠습니까?"로 시작 —
+    // 같은 페이지에 RFP 번호/탭/리스트 등 서포터 B 페이 키워드가 흩어져 있어
     // 헤딩 role 로 좁혀 strict 모드 위반을 피한다.
     await expect(
-      page.getByRole('heading', { name: /토스페이먼츠.*선택하시겠습니까/ }),
+      page.getByRole('heading', { name: /서포터 B 페이.*선택하시겠습니까/ }),
     ).toBeVisible();
 
     // ── 4. Confirm award ─────────────────────────────────────────

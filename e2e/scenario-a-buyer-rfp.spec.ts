@@ -66,8 +66,8 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     // RFP invite model is workspace-based (post email-allowlist):
     // click "PG사 검색…" trigger → list loads via /api/workspaces/search
     // → click each workspace name → Popover closes → re-open for next.
-    // Seed workspaces: '토스페이먼츠', 'KG이니시스', '카카오페이'.
-    const pgNames = ['토스페이먼츠', 'KG이니시스', '카카오페이'];
+    // Seed workspaces: '서포터 B 페이', 'KG이니시스', '카카오페이'.
+    const pgNames = ['서포터 B 페이', 'KG이니시스', '카카오페이'];
     for (const name of pgNames) {
       await page.getByRole('button', { name: 'PG사 검색…' }).click();
       // CommandItem renders with role 'option'; wait for the item to

@@ -94,12 +94,12 @@ describe('outbox email templates / render', () => {
     const html = await renderBidSubmitted({
       rfpId: 'P-2605-0042',
       rfpTitle: '결제대행 서비스 제안',
-      pgName: '토스페이먼츠',
+      pgName: '서포터 B 페이',
       submittedAt: '2026-05-06 22:31',
     });
     expect(html).toContain('P-2605-0042');
     expect(html).toContain('결제대행 서비스 제안');
-    expect(html).toContain('토스페이먼츠');
+    expect(html).toContain('서포터 B 페이');
     expect(html).toContain('2026-05-06 22:31');
     expectEditorialRules(html);
   });

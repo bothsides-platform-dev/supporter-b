@@ -61,7 +61,7 @@ async function setup() {
   const buyer = await seedUser(db, { email: 'buyer@x.com' });
   const biz = await seedBizProfile(db);
   const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
-  const pgWs = await seedPgWorkspace(db, '토스페이먼츠');
+  const pgWs = await seedPgWorkspace(db, '서포터 B 페이');
 
   const rfpId = randomUUID();
   const rfpCode = 'P-2605-0001';

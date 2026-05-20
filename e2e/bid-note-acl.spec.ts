@@ -46,7 +46,7 @@ test.describe.serial('bid_note attachment ACL', () => {
     await loginAs(page, 'buyer');
     await page.goto(`/rfp/${RFP_ID}`);
     await page.getByRole('tab', { name: '[ 보드 ]' }).click();
-    await page.getByRole('button', { name: /토스페이먼츠/ }).first().click();
+    await page.getByRole('button', { name: /서포터 B 페이/ }).first().click();
 
     const uploadResp = page.waitForResponse(
       (r) =>

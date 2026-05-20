@@ -44,7 +44,7 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     const [tossWsRow] = await db
       .select({ id: workspaces.id })
       .from(workspaces)
-      .where(eq(workspaces.name, '토스페이먼츠'))
+      .where(eq(workspaces.name, '서포터 B 페이'))
       .limit(1);
     expect(tossWsRow).toBeDefined();
     const tossWsId = tossWsRow.id;

@@ -131,7 +131,7 @@ describe('searchBidsAction', () => {
     const buyerWs = await seedBuyerWorkspace(db);
     await seedMembership(db, buyerWs.id, buyer.id, 'admin');
 
-    const pgWs = await seedPgWorkspace(db, 'toss.im', { name: '토스페이먼츠' });
+    const pgWs = await seedPgWorkspace(db, 'toss.im', { name: '서포터 B 페이' });
     const pgUser = await seedUser(db, { email: 'pg@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
@@ -145,7 +145,7 @@ describe('searchBidsAction', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].rfpTitle).toBe('수수료 문의');
-    expect(result[0].pgWsName).toBe('토스페이먼츠');
+    expect(result[0].pgWsName).toBe('서포터 B 페이');
     expect(result[0].memo).toBe('정산 협의 가능');
     expect(result[0].href).toBe('/rfp/P-2605-0001');
   });
@@ -155,7 +155,7 @@ describe('searchBidsAction', () => {
     const buyerWs = await seedBuyerWorkspace(db);
     await seedMembership(db, buyerWs.id, buyer.id, 'admin');
 
-    const pgWs = await seedPgWorkspace(db, 'toss.im', { name: '토스페이먼츠' });
+    const pgWs = await seedPgWorkspace(db, 'toss.im', { name: '서포터 B 페이' });
     const pgUser = await seedUser(db, { email: 'pg@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
