@@ -87,14 +87,15 @@ async function seedAwardSetup(): Promise<Setup> {
   await seedMembership(db, loserBWs.id, lb1.id);
 
   // Sent RFP.
-  const rfpId = 'P-2605-0001';
+  const rfpId = randomUUID();
+    const rfpCode = 'P-2605-0001';
   await db.insert(rfps).values({
     id: rfpId,
+    code: rfpCode,
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'award test',
     memo: '',
-    allowedPgWorkspaceIds: [winnerWs.id, loserAWs.id, loserBWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,

@@ -52,23 +52,26 @@ afterEach(() => {
   teardownRfpActionEnv();
 });
 
+// Returns the RFP's uuid id (FK target). `code` is the human display id.
 async function seedRfp(opts: {
-  id: string;
+  code: string;
   buyerWsId: string;
   title: string;
   createdBy: string;
-}) {
+}): Promise<string> {
+  const id = randomUUID();
   await db.insert(rfps).values({
-    id: opts.id,
+    id,
+    code: opts.code,
     buyerWsId: opts.buyerWsId,
     title: opts.title,
     memo: '',
-    allowedPgWorkspaceIds: [],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: opts.createdBy,
     sentAt: new Date(),
   });
+  return id;
 }
 
 async function seedBid(opts: {
@@ -132,9 +135,9 @@ describe('searchBidsAction', () => {
     const pgUser = await seedUser(db, { email: 'pg@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-    await seedRfp({ id: 'P-2605-0001', buyerWsId: buyerWs.id, title: '수수료 문의', createdBy: buyer.id });
-    const invId = await seedInvitation({ rfpId: 'P-2605-0001', pgWsId: pgWs.id });
-    await seedBid({ rfpId: 'P-2605-0001', pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id, memo: '정산 협의 가능' });
+    const rfpId = await seedRfp({ code: 'P-2605-0001', buyerWsId: buyerWs.id, title: '수수료 문의', createdBy: buyer.id });
+    const invId = await seedInvitation({ rfpId, pgWsId: pgWs.id });
+    await seedBid({ rfpId, pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id, memo: '정산 협의 가능' });
 
     sessionRef.value = { user: { id: buyer.id, workspaceId: buyerWs.id, workspaceType: 'buyer', role: 'admin' } };
 
@@ -156,9 +159,9 @@ describe('searchBidsAction', () => {
     const pgUser = await seedUser(db, { email: 'pg@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-    await seedRfp({ id: 'P-2605-0002', buyerWsId: buyerWs.id, title: 'Draft Test', createdBy: buyer.id });
-    const invId = await seedInvitation({ rfpId: 'P-2605-0002', pgWsId: pgWs.id });
-    await seedBid({ rfpId: 'P-2605-0002', pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id, status: 'draft' });
+    const rfpId = await seedRfp({ code: 'P-2605-0002', buyerWsId: buyerWs.id, title: 'Draft Test', createdBy: buyer.id });
+    const invId = await seedInvitation({ rfpId, pgWsId: pgWs.id });
+    await seedBid({ rfpId, pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id, status: 'draft' });
 
     sessionRef.value = { user: { id: buyer.id, workspaceId: buyerWs.id, workspaceType: 'buyer', role: 'admin' } };
 
@@ -175,9 +178,9 @@ describe('searchBidsAction', () => {
     const pgUser = await seedUser(db, { email: 'sales@kakao.com' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-    await seedRfp({ id: 'P-2605-0003', buyerWsId: buyerWs.id, title: 'PG Test RFP', createdBy: buyer.id });
-    const invId = await seedInvitation({ rfpId: 'P-2605-0003', pgWsId: pgWs.id });
-    await seedBid({ rfpId: 'P-2605-0003', pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id });
+    const rfpId = await seedRfp({ code: 'P-2605-0003', buyerWsId: buyerWs.id, title: 'PG Test RFP', createdBy: buyer.id });
+    const invId = await seedInvitation({ rfpId, pgWsId: pgWs.id });
+    await seedBid({ rfpId, pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id });
 
     sessionRef.value = { user: { id: pgUser.id, workspaceId: pgWs.id, workspaceType: 'pg', role: 'admin' } };
 

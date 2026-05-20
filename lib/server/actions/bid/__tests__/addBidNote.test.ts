@@ -9,7 +9,7 @@
 //   - happy path: note row created + attachments re-parented to noteId
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import {
   attachments,

@@ -59,14 +59,15 @@ describe('closeRfpAction', () => {
     const pgWs = await seedPgWorkspace(db, 'toss.im');
     const pgUser = await seedUser(db, { email: 'pg@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id);
-    const rfpId = 'P-2605-0020';
+    const rfpId = randomUUID();
+    const rfpCode = 'P-2605-0020';
     await db.insert(rfps).values({
       id: rfpId,
+      code: rfpCode,
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 'close test',
       memo: '',
-      allowedPgWorkspaceIds: [pgWs.id],
       deadline: new Date(Date.now() + 86_400_000),
       status: 'sent',
       createdBy: buyer.id,
@@ -127,14 +128,15 @@ describe('closeRfpAction', () => {
     const biz = await seedBizProfile(db);
     const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
     await seedMembership(db, buyerWs.id, buyer.id, 'admin');
-    const rfpId = 'P-2605-0021';
+    const rfpId = randomUUID();
+    const rfpCode = 'P-2605-0021';
     await db.insert(rfps).values({
       id: rfpId,
+      code: rfpCode,
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 'x',
       memo: '',
-      allowedPgWorkspaceIds: [],
       deadline: new Date(Date.now() + 86_400_000),
       status: 'sent',
       createdBy: buyer.id,

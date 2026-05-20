@@ -90,14 +90,15 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     const pgUser = await seedUser(db, { email: 'sales@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-    const rfpId = 'P-2605-9001';
+    const rfpId = randomUUID();
+    const rfpCode = 'P-2605-9001';
     await db.insert(rfps).values({
       id: rfpId,
+      code: rfpCode,
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 't',
       memo: '',
-      allowedPgWorkspaceIds: [pgWs.id],
       deadline: new Date(Date.now() + 86_400_000),
       status: 'sent',
       createdBy: b1.id,
@@ -158,14 +159,15 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     const pgUser = await seedUser(db, { email: 'sales@toss.im' });
     await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-    const rfpId = 'P-2605-9002';
+    const rfpId = randomUUID();
+    const rfpCode = 'P-2605-9002';
     await db.insert(rfps).values({
       id: rfpId,
+      code: rfpCode,
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 't',
       memo: '',
-      allowedPgWorkspaceIds: [pgWs.id],
       deadline: new Date(Date.now() + 86_400_000),
       status: 'sent',
       createdBy: b1.id,
@@ -228,14 +230,15 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     const loserUser = await seedUser(db, { email: 'l@inicis.com' });
     await seedMembership(db, loserWs.id, loserUser.id);
 
-    const rfpId = 'P-2605-9003';
+    const rfpId = randomUUID();
+    const rfpCode = 'P-2605-9003';
     await db.insert(rfps).values({
       id: rfpId,
+      code: rfpCode,
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 't',
       memo: '',
-      allowedPgWorkspaceIds: [winnerWs.id, loserWs.id],
       deadline: new Date(Date.now() + 86_400_000),
       status: 'sent',
       createdBy: buyer.id,

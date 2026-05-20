@@ -107,6 +107,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
   buyerUserId: string;
   buyerEmail: string;
   buyerWsId: string;
+  rfpCode: string;
   rfpId: string;
   pgInviteToken: string;
 }> {
