@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  CAPTCHA_THRESHOLD,
   LOCK_THRESHOLD,
   LOGIN_LOCK_DURATION_MS,
   getState,
@@ -33,17 +32,16 @@ beforeEach(() => {
 });
 
 describe('login-attempts constants', () => {
-  it('5회는 캡차, 10회는 락, 15분 락 — SPEC §8.1 정책 표', () => {
-    expect(CAPTCHA_THRESHOLD).toBe(5);
+  it('10회는 락, 15분 락 — SPEC §8.1 정책 표', () => {
     expect(LOCK_THRESHOLD).toBe(10);
     expect(LOGIN_LOCK_DURATION_MS).toBe(15 * 60 * 1000);
   });
 });
 
 describe('getState — fresh user', () => {
-  it('returns count=0, no captcha, no lock', () => {
+  it('returns count=0, no lock', () => {
     const s = getState('kim@example.com', storage, NOW);
-    expect(s).toEqual({ count: 0, lockedUntilTs: null, captchaRequired: false });
+    expect(s).toEqual({ count: 0, lockedUntilTs: null });
   });
 
   it('normalises email so different casing shares one bucket', () => {
@@ -53,27 +51,11 @@ describe('getState — fresh user', () => {
   });
 });
 
-describe('recordFailure — captcha threshold', () => {
-  it('returns captchaRequired=false for first 4 failures', () => {
-    for (let i = 1; i <= 4; i++) {
+describe('recordFailure — before lock', () => {
+  it('increments count without lock for failures 1–9', () => {
+    for (let i = 1; i <= 9; i++) {
       const s = recordFailure('kim@example.com', storage, NOW);
       expect(s.count).toBe(i);
-      expect(s.captchaRequired).toBe(false);
-      expect(s.lockedUntilTs).toBeNull();
-    }
-  });
-
-  it('flips captchaRequired=true on the 5th failure and stays until 10th', () => {
-    for (let i = 1; i <= 4; i++) recordFailure('kim@example.com', storage, NOW);
-    const fifth = recordFailure('kim@example.com', storage, NOW);
-    expect(fifth.count).toBe(5);
-    expect(fifth.captchaRequired).toBe(true);
-    expect(fifth.lockedUntilTs).toBeNull();
-
-    for (let i = 6; i <= 9; i++) {
-      const s = recordFailure('kim@example.com', storage, NOW);
-      expect(s.count).toBe(i);
-      expect(s.captchaRequired).toBe(true);
       expect(s.lockedUntilTs).toBeNull();
     }
   });
@@ -111,7 +93,6 @@ describe('getState — lock expiry auto-resets', () => {
       NOW + LOGIN_LOCK_DURATION_MS + 1,
     );
     expect(justAfter.count).toBe(0);
-    expect(justAfter.captchaRequired).toBe(false);
     expect(justAfter.lockedUntilTs).toBeNull();
   });
 
@@ -134,7 +115,6 @@ describe('resetAttempts', () => {
     expect(getState('kim@example.com', storage, NOW)).toEqual({
       count: 0,
       lockedUntilTs: null,
-      captchaRequired: false,
     });
   });
 });

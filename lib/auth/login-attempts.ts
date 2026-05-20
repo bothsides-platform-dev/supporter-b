@@ -5,14 +5,12 @@
 // clears storage trivially defeats it — that's an accepted v0 trade-off the
 // real Redis/DB implementation lands in v1.
 
-export const CAPTCHA_THRESHOLD = 5; // 5번째 실패부터 캡차 요구
 export const LOCK_THRESHOLD = 10; // 10번째 실패에 15분 락
 export const LOGIN_LOCK_DURATION_MS = 15 * 60 * 1000;
 
 export interface LoginAttemptsState {
   count: number;
   lockedUntilTs: number | null;
-  captchaRequired: boolean;
 }
 
 interface AttemptRecord {
@@ -80,13 +78,11 @@ function browserStorage(): AttemptsStorage {
 
 function toState(record: AttemptRecord | null): LoginAttemptsState {
   if (!record) {
-    return { count: 0, lockedUntilTs: null, captchaRequired: false };
+    return { count: 0, lockedUntilTs: null };
   }
   return {
     count: record.count,
     lockedUntilTs: record.lockedUntilTs,
-    captchaRequired:
-      record.count >= CAPTCHA_THRESHOLD && record.lockedUntilTs === null,
   };
 }
 
@@ -101,7 +97,7 @@ export function getState(
     if (now > rec.lockedUntilTs) {
       // Lock window elapsed — wipe the bucket so the user starts fresh.
       storage.remove(key);
-      return { count: 0, lockedUntilTs: null, captchaRequired: false };
+      return { count: 0, lockedUntilTs: null };
     }
   }
   return toState(rec);
