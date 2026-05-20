@@ -15,6 +15,7 @@
     "e2e:reset": "tsx scripts/test-db-reset.ts",
     "og:generate": "node scripts/generate-og.mjs",
     "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts"
