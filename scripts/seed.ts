@@ -22,6 +22,7 @@ import { pathToFileURL } from 'node:url';
 import {
   bids,
   bizProfiles,
+  rfpAllowedPg,
   rfpCounters,
   rfpInvitations,
   rfps,
@@ -207,26 +208,31 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   const sevenDays = new Date(now.getTime() + 7 * 24 * 3_600_000);
   const sentAt = new Date(now.getTime() - 24 * 3_600_000); // sent yesterday
 
+  // uuid 서로게이트 id + 사람용 code (P-YYMM-NNNN).
+  const rfpAprId = randomUUID();
+  const rfpMayDraftId = randomUUID();
+  const rfpMayPresaleId = randomUUID();
+
   await db.insert(rfps).values([
     {
-      id: 'P-2604-0001',
+      id: rfpAprId,
+      code: 'P-2604-0001',
       buyerWsId,
       bizProfileId: rfpSnapshotBizId,
       title: '2026년 4월 PG 입찰',
       memo: '월 매출 1억 규모, 카드 + 간편결제 위주',
-      allowedPgWorkspaceIds: [tossWsId, inicisWsId, kakaoWsId],
       deadline: sevenDays,
       status: 'sent',
       createdBy: buyerUserId,
       sentAt,
     },
     {
-      id: 'P-2605-0001',
+      id: rfpMayDraftId,
+      code: 'P-2605-0001',
       buyerWsId,
       bizProfileId: rfpSnapshotBizId,
       title: '2026년 5월 PG 입찰 (초안)',
       memo: '',
-      allowedPgWorkspaceIds: [],
       deadline: sevenDays,
       status: 'draft',
       createdBy: buyerUserId,
@@ -234,17 +240,25 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
     // 사전 제안 RFP — bizProfileId NULL. PG가 일반 등급 가정으로 9개 카드사 입력.
     {
-      id: 'P-2605-0002',
+      id: rfpMayPresaleId,
+      code: 'P-2605-0002',
       buyerWsId,
       bizProfileId: null,
       title: '사전 제안 (법인 설립 전)',
       memo: '월 예상 매출 5천만원 규모, 일반 등급 가정 제안 부탁드립니다.',
-      allowedPgWorkspaceIds: [tossWsId],
       deadline: sevenDays,
       status: 'sent',
       createdBy: buyerUserId,
       sentAt,
     },
+  ]);
+
+  // allowlist → rfp_allowed_pg 조인 테이블 (C2).
+  await db.insert(rfpAllowedPg).values([
+    { rfpId: rfpAprId, pgWsId: tossWsId },
+    { rfpId: rfpAprId, pgWsId: inicisWsId },
+    { rfpId: rfpAprId, pgWsId: kakaoWsId },
+    { rfpId: rfpMayPresaleId, pgWsId: tossWsId },
   ]);
 
   // 8. Invitations for the sent RFP. toss/inicis are accepted (PG admin
@@ -257,7 +271,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   await db.insert(rfpInvitations).values([
     {
       id: tossInviteId,
-      rfpId: 'P-2604-0001',
+      rfpId: rfpAprId,
       pgWsId: tossWsId,
       acceptedByUserId: tossUserId,
       tokenHash: hashToken(generateToken()),
@@ -267,7 +281,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
     {
       id: inicisInviteId,
-      rfpId: 'P-2604-0001',
+      rfpId: rfpAprId,
       pgWsId: inicisWsId,
       acceptedByUserId: inicisUserId,
       tokenHash: hashToken(generateToken()),
@@ -277,7 +291,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
     {
       id: kakaoInviteId,
-      rfpId: 'P-2604-0001',
+      rfpId: rfpAprId,
       pgWsId: kakaoWsId,
       acceptedByUserId: null,
       tokenHash: hashToken(generateToken()),
@@ -288,7 +302,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     // 사전 제안 RFP P-2605-0002 — toss 만 초대됨. accepted 상태로 시드.
     {
       id: randomUUID(),
-      rfpId: 'P-2605-0002',
+      rfpId: rfpMayPresaleId,
       pgWsId: tossWsId,
       acceptedByUserId: tossUserId,
       tokenHash: hashToken(generateToken()),
@@ -309,7 +323,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   await db.insert(bids).values([
     {
       id: randomUUID(),
-      rfpId: 'P-2604-0001',
+      rfpId: rfpAprId,
       pgWsId: tossWsId,
       invitationId: tossInviteId,
       settleCycle: 'D+1',
@@ -320,7 +334,6 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       easyPayFeePct: '2.500',
       cardFeesByIssuer: null,
       overseasCardFeePct: '3.500',
-      proposalAttachmentId: null,
       memo: '월 결제액 1억 기준 D+1 정산',
       status: 'submitted',
       submittedBy: tossUserId,
@@ -328,7 +341,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
     {
       id: randomUUID(),
-      rfpId: 'P-2604-0001',
+      rfpId: rfpAprId,
       pgWsId: inicisWsId,
       invitationId: inicisInviteId,
       settleCycle: 'D+2',
@@ -339,7 +352,6 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       easyPayFeePct: '2.700',
       cardFeesByIssuer: null,
       overseasCardFeePct: '3.300',
-      proposalAttachmentId: null,
       memo: '셋업비 있으나 월 최저 낮음',
       status: 'submitted',
       submittedBy: inicisUserId,

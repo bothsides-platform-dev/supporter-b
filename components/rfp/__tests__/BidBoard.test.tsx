@@ -40,13 +40,15 @@ function buildBid(
     monthlyMin: 0,
     bankTransferFeePct: 0.005,
     easyPayFeePct: 0.025,
-    proposalPdf: {
-      id: 'pdf-' + overrides.id,
-      name: '제안서.pdf',
-      size: 1024,
-      mimeType: 'application/pdf',
-      url: '',
-    },
+    proposalPdfs: [
+      {
+        id: 'pdf-' + overrides.id,
+        name: '제안서.pdf',
+        size: 1024,
+        mimeType: 'application/pdf',
+        url: '',
+      },
+    ],
     status: 'submitted',
     buyerStage: 'pending',
     submittedBy: 'pg-user',

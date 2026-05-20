@@ -76,7 +76,7 @@ export function BidBoardCard({
     opacity: isDragging ? 0.4 : 1,
   };
 
-  const hasPdf = bid.proposalPdf?.name && bid.proposalPdf.name !== '제안서 미첨부';
+  const hasPdf = bid.proposalPdfs.length > 0;
 
   return (
     <div
