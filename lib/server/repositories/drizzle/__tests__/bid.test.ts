@@ -52,7 +52,7 @@ async function setup() {
   });
 
   const repo = new DrizzleBidRepository(db);
-  return { db, repo, rfpId, pgWs, pgUser, invitationId };
+  return { db, repo, rfpId, pgWs, pgUser, invitationId, buyer, buyerWs, biz };
 }
 
 async function insertBid(
@@ -136,5 +136,90 @@ describe('DrizzleBidRepository — proposalPdfs url 계약', () => {
 
     expect(bid).toBeDefined();
     expect(bid!.proposalPdfs).toEqual([]);
+  });
+});
+
+describe('DrizzleBidRepository.findByRfpIds — 배치 조회 (N+1 제거)', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  // 두 번째 RFP(같은 buyer ws) + invitation + bid 1개(첨부 1개) 생성.
+  async function secondRfpWithBid() {
+    const rfp2 = randomUUID();
+    await ctx.db.insert(rfps).values({
+      id: rfp2,
+      code: 'P-2605-0043',
+      buyerWsId: ctx.buyerWs.id,
+      bizProfileId: ctx.biz.id,
+      title: 'rfp2',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: ctx.buyer.id,
+      sentAt: new Date(),
+    });
+    const inv2 = randomUUID();
+    await ctx.db.insert(rfpInvitations).values({
+      id: inv2,
+      rfpId: rfp2,
+      pgWsId: ctx.pgWs.id,
+      acceptedByUserId: ctx.pgUser.id,
+      tokenHash: hashToken(generateToken()),
+      sentAt: new Date(),
+      expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
+      status: 'accepted',
+    });
+    const bidId = randomUUID();
+    await ctx.db.insert(bids).values({
+      id: bidId,
+      rfpId: rfp2,
+      pgWsId: ctx.pgWs.id,
+      invitationId: inv2,
+      settleCycle: 'D+1',
+      deposit: '0',
+      setupFee: '0',
+      monthlyMin: '0',
+      bankTransferFeePct: '0.015',
+      easyPayFeePct: '0.018',
+      submittedBy: ctx.pgUser.id,
+    });
+    const attId = randomUUID();
+    await ctx.db.insert(attachments).values({
+      id: attId,
+      bidId,
+      name: 'r2.pdf',
+      size: 1,
+      mimeType: 'application/pdf',
+      uploadedBy: ctx.pgUser.id,
+    });
+    return { rfp2, bidId, attId };
+  }
+
+  it('여러 RFP의 bid를 rfpId별 Map으로 그룹화 + 제안서 하이드레이션', async () => {
+    await insertBid(ctx.db, ctx, 2); // rfp1: bid 1개, 제안서 2개
+    const { rfp2, attId } = await secondRfpWithBid(); // rfp2: bid 1개, 제안서 1개
+
+    const map = await ctx.repo.findByRfpIds([ctx.rfpId, rfp2]);
+
+    expect(map.get(ctx.rfpId)).toHaveLength(1);
+    expect(map.get(ctx.rfpId)![0].rfpId).toBe(ctx.rfpId);
+    expect(map.get(ctx.rfpId)![0].proposalPdfs).toHaveLength(2);
+
+    expect(map.get(rfp2)).toHaveLength(1);
+    expect(map.get(rfp2)![0].rfpId).toBe(rfp2);
+    expect(map.get(rfp2)![0].proposalPdfs.map((p) => p.id)).toEqual([attId]);
+  });
+
+  it('bid 없는 RFP는 Map에 키 없음', async () => {
+    const map = await ctx.repo.findByRfpIds([ctx.rfpId]);
+    expect(map.has(ctx.rfpId)).toBe(false);
+  });
+
+  it('빈 입력 → 빈 Map (쿼리 없이)', async () => {
+    const map = await ctx.repo.findByRfpIds([]);
+    expect(map.size).toBe(0);
   });
 });

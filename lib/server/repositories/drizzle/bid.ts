@@ -128,6 +128,26 @@ export class DrizzleBidRepository implements BidRepo {
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
   }
 
+  // 배치 조회 — 여러 RFP의 bid를 rfpId별로 그룹화(buyer 칸반 N+1 제거). bids 1회 +
+  // proposalsByBid 1회 = 상수 쿼리. bid 없는 rfpId는 Map에 키가 생기지 않음.
+  async findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, Bid[]>> {
+    const db = this.h(tx);
+    const map = new Map<string, Bid[]>();
+    if (rfpIds.length === 0) return map;
+    const rows = (await db
+      .select()
+      .from(bids)
+      .where(inArray(bids.rfpId, rfpIds))) as BidRow[];
+    const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
+    for (const r of rows) {
+      const bid = rowToBid(r, proposals.get(r.id) ?? []);
+      const list = map.get(bid.rfpId) ?? [];
+      list.push(bid);
+      map.set(bid.rfpId, list);
+    }
+    return map;
+  }
+
   async findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]> {
     const db = this.h(tx);
     const rows = (await db.select().from(bids).where(eq(bids.pgWsId, pgWsId))) as BidRow[];
