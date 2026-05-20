@@ -1,7 +1,7 @@
 /**
  * InMemoryStorage — Map-backed `Storage` implementation for tests.
  *
- * Mirrors `SupabaseStorage`'s semantics so a spec that passes against
+ * Mirrors `PostgresStorage`'s semantics so a spec that passes against
  * one passes against the other: `size` is always the **total** byte
  * count (not the range length), Range slicing is HTTP-inclusive, and
  * missing keys throw with `code: 'ENOENT'` so the file route can serve

@@ -43,6 +43,13 @@
       "when": 1779162400000,
       "tag": "0005_bid_notes_buyer_stage",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779200000000,
+      "tag": "0006_attachment_blobs",
+      "breakpoints": true
     }
   ]
 }

@@ -60,7 +60,9 @@ const PASSWORD_PLAINTEXT = 'password123';
 export async function runSeed(db: AnyDb): Promise<SeedResult> {
   // 1. TRUNCATE everything in one CASCADE — FK order doesn't matter.
   // RESTART IDENTITY also covers the rfp_counters integer (though the table
-  // has no serial). All 13 tables explicitly listed for grep visibility.
+  // has no serial). All 14 tables explicitly listed for grep visibility.
+  // attachment_blobs has no FK to attachments (the path is the join key), so
+  // it must be named explicitly — CASCADE from attachments won't reach it.
   await db.execute(sql`
     TRUNCATE TABLE
       contracts,
@@ -68,6 +70,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       rfp_invitations,
       rfps,
       attachments,
+      attachment_blobs,
       notifications,
       outbox_entries,
       verification_tokens,
@@ -299,8 +302,8 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   //
   // Note: this seed does **not** create bid_proposal attachments. Specs
   // that need an attached PDF (e.g. e2e/bid-detail-pdf-preview.spec.ts)
-  // upload one in their setup via `seedTossProposalAttachment` so the
-  // bytes live in the same Supabase Storage backend the route reads
+  // upload one in their setup via `attachTossProposalPdf` so the bytes
+  // live in the same Postgres `attachment_blobs` backend the route reads
   // from at runtime.
   // sme2 grade ⇒ card fees are statutory; cardFeesByIssuer is omitted.
   await db.insert(bids).values([

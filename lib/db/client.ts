@@ -11,7 +11,10 @@ declare global {
 const client =
   globalThis.__bidit_pg__ ??
   postgres(process.env.DATABASE_URL!, {
-    max: 1,
+    // Direct Postgres connection (docker). A small pool lets concurrent route
+    // handlers (upload + get + actions) run in parallel instead of serialising
+    // on a single connection.
+    max: 10,
     idle_timeout: 20,
     connect_timeout: 10,
   });

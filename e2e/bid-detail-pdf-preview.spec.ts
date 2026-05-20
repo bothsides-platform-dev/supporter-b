@@ -8,8 +8,8 @@
  * real browser.
  *
  * `attachTossProposalPdf` uploads a tiny PDF to the toss bid on
- * P-2604-0001 (via the same Supabase Storage backend the route reads
- * from) so the buyer has something to preview.
+ * P-2604-0001 (via the same Postgres `attachment_blobs` backend the route
+ * reads from) so the buyer has something to preview.
  */
 import { test, expect } from 'playwright/test';
 

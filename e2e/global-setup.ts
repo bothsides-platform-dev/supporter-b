@@ -27,19 +27,8 @@ export default async function globalSetup(): Promise<void> {
   const testUrl = process.env.DATABASE_URL_TEST ?? TEST_DB_FALLBACK;
   process.env.DATABASE_URL = testUrl;
 
-  // Mirror for the Supabase Storage stack — `test-db-reset.ts` calls
-  // `createClient(SUPABASE_URL, SERVICE_ROLE_KEY)` directly, so the env
-  // vars must be set before that child process spawns. We propagate via
-  // execFileSync `env` below; here we also pin them on the parent so
-  // any spec helper running in this process (e.g. attachTossProposalPdf)
-  // sees the test backend instead of whatever `.env` had loaded.
-  if (process.env.SUPABASE_URL_TEST) {
-    process.env.SUPABASE_URL = process.env.SUPABASE_URL_TEST;
-  }
-  if (process.env.SUPABASE_SERVICE_ROLE_KEY_TEST) {
-    process.env.SUPABASE_SERVICE_ROLE_KEY =
-      process.env.SUPABASE_SERVICE_ROLE_KEY_TEST;
-  }
+  // Attachment bytes live in Postgres (`attachment_blobs`), reached through
+  // the same DATABASE_URL — no separate object-store env to propagate.
 
   // 1. Migrate. drizzle-kit reads DATABASE_URL from env via dotenv +
   //    drizzle.config.ts. Run as a child process so the kit picks up the

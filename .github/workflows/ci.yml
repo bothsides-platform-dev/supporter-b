@@ -33,7 +33,7 @@ jobs:
       # consistency. The node one-liner enforces that `when` timestamps
       # are strictly increasing by `idx` — without this, a new migration
       # whose `when` is older than an already-applied entry will be
-      # silently skipped by `drizzle-kit migrate` (Supabase prod hit this).
+      # silently skipped by `drizzle-kit migrate` (a prod migration hit this).
       - name: drizzle journal sanity
         run: |
           pnpm exec drizzle-kit check
@@ -83,7 +83,6 @@ jobs:
       NEXT_PUBLIC_BASE_URL: http://localhost:3001
       RESEND_API_KEY: ''
       NTS_SERVICE_KEY: ''
-      UPLOAD_DIR: ./uploads-e2e
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

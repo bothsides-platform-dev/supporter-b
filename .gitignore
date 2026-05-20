@@ -55,7 +55,3 @@ next-env.d.ts
 /.claude/scheduled_tasks.lock
 /.serena/memories/
 /.superpowers/
-
-# Supabase local dev artifacts (Docker-managed, ephemeral)
-/supabase/.branches/
-/supabase/.temp/

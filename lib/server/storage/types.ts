@@ -1,9 +1,9 @@
 /**
- * Storage contract for file uploads. Every backend (Supabase in prod,
- * InMemory in tests) implements this interface — the `getStorage()`
+ * Storage contract for file uploads. Every backend (Postgres bytea in
+ * prod, InMemory in tests) implements this interface — the `getStorage()`
  * factory is the single mutation point that decides which one is in
  * play. Routes / actions only ever talk through this interface, so
- * disk-specific or vendor-specific concerns never leak out of the
+ * storage-specific concerns never leak out of the
  * `lib/server/storage` module.
  *
  * `read` does not return mime — the route layer composes `Content-Type`

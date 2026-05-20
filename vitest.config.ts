@@ -33,6 +33,11 @@ export default defineConfig({
           name: "unit-node",
           environment: "node",
           globals: true,
+          // pglite (WASM compile + migrations + queries) is CPU-heavy; under
+          // the parallel pool both setup hooks and test bodies can exceed the
+          // 10s/5s defaults. Give them room — they pass in <1s uncontended.
+          hookTimeout: 30_000,
+          testTimeout: 30_000,
           setupFiles: ["./vitest.setup.ts"],
           include: [
             "lib/server/**/*.{test,spec}.{ts,tsx}",

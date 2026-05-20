@@ -36,7 +36,7 @@ If these conflict, **PG_RFP_SPEC.md wins** (newest, post-pivot). Distribute its 
 | Language | TypeScript strict | — |
 | Auth | Auth.js v5 (no middleware — guard via `(app)/layout.tsx` redirect) | `next-auth@5.0.0-beta.31` |
 | DB | Drizzle ORM + Postgres | `drizzle-orm@0.45.0`, `postgres@3.4.7` |
-| Storage | Supabase Storage (`attachments` 버킷). 로컬은 `supabase start`(Docker). `lib/server/storage/{supabase,memory}.ts` — 라우트는 `getStorage()` 만 본다 | `@supabase/supabase-js@2.105.3` |
+| Storage | Postgres bytea (`attachment_blobs` 테이블) — 첨부 바이트가 DB에 저장돼 외부 오브젝트 스토어 없음. `lib/server/storage/{postgres,memory}.ts` — 라우트는 `getStorage()` 만 본다 | (postgres-js 공유) |
 | Styling | Tailwind v4 + CSS Variables (`@theme` block) | — |
 | Headless UI | Radix primitives | — |
 | State | Zustand (UI toggles, signup draft) | `zustand@5.0.13` |

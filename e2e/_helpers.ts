@@ -22,17 +22,10 @@ process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
-// Mirror the DB pattern for Supabase Storage. `getStorage()` constructs
-// SupabaseStorage lazily, which reads SUPABASE_URL / SERVICE_ROLE_KEY at
-// construction time — so we have to set them before any spec helper that
-// calls getStorage() executes (e.g. attachTossProposalPdf).
-if (process.env.SUPABASE_URL_TEST) {
-  process.env.SUPABASE_URL = process.env.SUPABASE_URL_TEST;
-}
-if (process.env.SUPABASE_SERVICE_ROLE_KEY_TEST) {
-  process.env.SUPABASE_SERVICE_ROLE_KEY =
-    process.env.SUPABASE_SERVICE_ROLE_KEY_TEST;
-}
+// `getStorage()` (PostgresStorage) reads + writes attachment bytes through
+// the same postgres-js client as the DB, so pinning DATABASE_URL above is
+// all any spec helper that calls getStorage() (e.g. attachTossProposalPdf)
+// needs — there is no separate object store to point at.
 
 // Plaintext credentials from scripts/seed.ts:58, 91-94. Centralised so
 // future spec churn (e.g. renaming a workspace) needs one edit.
@@ -127,8 +120,8 @@ export async function findSeededBidIds(rfpId: string): Promise<{
 // Minimal valid PDF — small enough to inline, big enough that the browser
 // renders it as an empty page in the iframe preview. Specs that need an
 // attached file (e.g. bid-detail-pdf-preview.spec.ts) upload these bytes
-// via `attachTossProposalPdf` so the storage backend (Supabase locally,
-// Supabase in prod) actually carries the object.
+// via `attachTossProposalPdf` so the Postgres storage backend actually
+// carries the object.
 const MINIMAL_PDF = Buffer.from(
   [
     '%PDF-1.4',
@@ -153,8 +146,8 @@ const MINIMAL_PDF = Buffer.from(
 /** Idempotently attach a fresh bid_proposal PDF to the toss bid on the given
  *  RFP. Replaces the seed's old `withAttachment: true` path — the seed no
  *  longer creates attachments, so specs that need iframe-renderable bytes
- *  call this in their `beforeAll`. Writes to whatever Storage backend
- *  `getStorage()` returns (Supabase locally + prod). Returns the new
+ *  call this in their `beforeAll`. Writes to the Storage backend
+ *  `getStorage()` returns (Postgres `attachment_blobs`). Returns the new
  *  attachment id, which `bids.proposalAttachmentId` is also updated to. */
 export async function attachTossProposalPdf(rfpId: string): Promise<string> {
   const [tossBid] = await db

@@ -162,8 +162,8 @@ export async function GET(
   // Parse Range against the attachment row's `size` — the row's size is
   // the authoritative byte count recorded at upload (files are immutable
   // in v0). Reading from the row lets us decide on Range *before* opening
-  // the storage stream, so we never double-fetch (matters for backends
-  // like Supabase whose `read()` materialises the whole blob).
+  // the storage stream, so we never double-fetch (matters because the
+  // Postgres backend's `read()` materialises the whole blob).
   const totalSize = att.size;
   const range = parseRange(req.headers.get('range'), totalSize);
 
