@@ -18,12 +18,11 @@
  *
  * Pre-conditions
  *   - `docker compose --profile test up -d pg-test` is running.
- *   - `pnpm db:migrate` (with DATABASE_URL=$DATABASE_URL_TEST) has been
- *     run at least once so the test DB has the schema.
+ *   - 테스트 DB에 스키마가 이미 적용돼 있어야 한다(단일
+ *     `drizzle/0000_greenfield_schema.sql`을 운영자/별도 절차로 적용).
+ *     증분 `db:migrate`는 더 이상 사용하지 않는다.
  *
- * NOTE: We deliberately do NOT run migrations here — that's a one-time
- * setup performed by the operator (or CI), and re-running it on every
- * test boot doubles boot time. globalSetup calls migrate separately.
+ * NOTE: We deliberately do NOT apply schema here — TRUNCATE+reseed만 수행한다.
  */
 import 'dotenv/config';
 

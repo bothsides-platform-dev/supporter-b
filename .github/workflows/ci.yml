@@ -93,8 +93,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Drizzle migrate against the test DB (service container).
-      - run: pnpm db:migrate
+      # NOTE: db:migrate 제거됨 — e2e 테스트 DB 스키마 적용은 별도 절차로 처리해야 함.
       # Playwright browsers (chromium only — matches projects[] config).
       # `pnpm exec` uses the lockfile-pinned playwright@1.59.1, not a
       # transient dlx fetch.
