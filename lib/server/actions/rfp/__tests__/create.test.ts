@@ -324,6 +324,24 @@ describe('createRfpAction', () => {
     expect(seq2).toBe(seq1 + 1);
   });
 
+  it('concurrent createRfp: atomic counter yields distinct codes (no dupe)', async () => {
+    const mk = (t: string) =>
+      createRfpAction({
+        title: t,
+        deadline: new Date(Date.now() + 86_400_000).toISOString(),
+        allowedPgWorkspaceIds: [pgWsId],
+      });
+    const results = await Promise.allSettled([mk('x'), mk('y')]);
+    const codes = results
+      .filter(
+        (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof createRfpAction>>> =>
+          r.status === 'fulfilled' && r.value.ok,
+      )
+      .map((r) => (r.value.ok ? r.value.rfpId : ''));
+    expect(codes).toHaveLength(2);
+    expect(new Set(codes).size).toBe(2); // atomic upsert → no duplicate code
+  });
+
   it('rejects malformed input', async () => {
     const r = await createRfpAction({
       title: '',
