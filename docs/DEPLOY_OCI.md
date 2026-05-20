@@ -169,9 +169,12 @@ nc -vz <예약공인IP> 443
   | Dedicated virtual machine host | 전용 베어메탈 호스트(유료). | ✗ |
 
   > On-demand인데도 A1이 안 잡히는 게 그 유명한 `Out of host capacity`다. 해결은 ③의 3단계
-  > (AD 변경 → 오프피크 재시도 → x86 폴백). 자동 재시도가 필요하면 OCI CLI
-  > `oci compute instance launch`를 루프로 돌려 용량이 풀리는 순간 잡는 방법도 있다(OCI CLI
-  > 설정 필요).
+  > (AD 변경 → 오프피크 재시도 → x86 폴백). **자동 재시도 런처가 준비돼 있다**:
+  > [`scripts/deploy/oci-a1-retry.sh`](../scripts/deploy/oci-a1-retry.sh) — 용량이 풀리는 순간
+  > `launch`를 잡아 **성공 즉시 멈추고**(중복 생성 방지) 예약 IP(168.107.39.155)까지 연결한다.
+  > 실행: `caffeinate -i ./scripts/deploy/oci-a1-retry.sh 2>&1 | tee oci-a1-retry.log`
+  > (OCI CLI 인증 `~/.oci/config` 필요. 춘천은 AD 1개라 재시도는 시간 기반 — 24~48h 무소득이면
+  > `ap-seoul-1` 리전 추가 구독 후 seoul 파라미터로 재실행하거나 x86 micro 폴백).
 
 #### ③ Image and shape
 - **Image**: `[Edit] → Change image → Canonical Ubuntu → 24.04`. (Oracle Linux가 기본 선택돼
