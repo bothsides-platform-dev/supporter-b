@@ -5,50 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1778054541119,
-      "tag": "0000_fresh_betty_brant",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1778054541120,
-      "tag": "0001_optional_rfp_biz_profile",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1778137283598,
-      "tag": "0002_left_xavin",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1778228907706,
-      "tag": "0003_chubby_cerebro",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1779120000000,
-      "tag": "0004_workspace_model_redesign",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1779162400000,
-      "tag": "0005_bid_notes_buyer_stage",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
       "when": 1779200000000,
-      "tag": "0006_attachment_blobs",
+      "tag": "0000_greenfield_schema",
       "breakpoints": true
     }
   ]

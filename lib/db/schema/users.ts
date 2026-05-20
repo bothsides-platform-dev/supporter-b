@@ -10,4 +10,6 @@ export const users = pgTable('users', {
   avatarColor: text('avatar_color').notNull().default('#000'),
   status: text('status').notNull().default('active'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  // Auto-maintained by the `set_updated_at` trigger (see 0000 migration).
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
 });
