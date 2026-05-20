@@ -91,14 +91,14 @@ async function seedSetup(grade: 'sme2' | 'general' = 'sme2'): Promise<Setup> {
   const pgUser = await seedUser(db, { email: 'sales@toss.im' });
   await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
-  const rfpId = 'P-2605-0001';
+  const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
+    code: 'P-2605-0001',
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'bid test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer1.id,

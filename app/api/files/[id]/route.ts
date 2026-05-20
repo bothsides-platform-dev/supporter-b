@@ -180,7 +180,7 @@ export async function GET(
   let body: ReadableStream<Uint8Array>;
   try {
     const r = await getStorage().read(
-      att.storagePath,
+      att.id,
       range ? { start: range.start, end: range.end } : undefined,
     );
     body = r.stream;

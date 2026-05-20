@@ -106,13 +106,14 @@ function KrwInput({
 }
 
 type Props = {
-  rfpId: string;
+  rfpId: string; // uuid — 액션/업로드 ownerId용
+  rfpCode: string; // P-YYMM-NNNN — 이동 URL용
   // invitationId는 prop으로 받지 않는다 — 서버 액션이 session.userId 기반으로
   // findByRfp 후 고유 invitation을 픽업한다(canAccess 가드 포함).
   grade: MerchantGrade | undefined;
 };
 
-export function BidForm({ rfpId, grade }: Props) {
+export function BidForm({ rfpId, rfpCode, grade }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -230,7 +231,7 @@ export function BidForm({ rfpId, grade }: Props) {
         // 클라이언트는 router.push만으로 충분. router.refresh()를 같은 tick에
         // 동시 호출하면 startTransition pending이 영구히 안 풀린다
         // (vercel/next.js#86055 — Next 16 useTransition + router 레이스).
-        router.push(`/inbox/${rfpId}/submitted`);
+        router.push(`/inbox/${rfpCode}/submitted`);
       } else {
         setSubmitError(r.error);
       }

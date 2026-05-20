@@ -18,8 +18,11 @@ export const workspaceInvitations = pgTable(
     tokenHash: text('token_hash').notNull().unique(),
     status: workspaceInvitationStatusEnum('status').notNull().default('pending'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-    acceptedByUserId: uuid('accepted_by_user_id').references(() => users.id),
+    acceptedByUserId: uuid('accepted_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
     uniqueIndex('workspace_invitations_ws_email_uniq').on(t.workspaceId, sql`lower(${t.invitedEmail})`),

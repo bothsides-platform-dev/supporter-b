@@ -13,9 +13,19 @@ import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
 import { db } from '@/lib/db/client';
-import { attachments, bids, bidNotes } from '@/lib/db/schema';
+import { attachments, bids, bidNotes, rfps } from '@/lib/db/schema';
 import { getStorage } from '@/lib/server/storage';
-import { newAttachmentPath } from '@/lib/server/storage/path';
+
+// Seed/URL identifiers are the human RFP code (P-YYMM-NNNN); FKs use the uuid.
+async function rfpUuidFromCode(code: string): Promise<string> {
+  const [row] = await db
+    .select({ id: rfps.id })
+    .from(rfps)
+    .where(eq(rfps.code, code))
+    .limit(1);
+  if (!row) throw new Error(`[e2e helpers] rfp not found: ${code}`);
+  return row.id;
+}
 import type { BuyerStage } from '@/lib/types/bid';
 
 process.env.DATABASE_URL =
@@ -76,7 +86,8 @@ export async function getNoteCountFromDb(bidId: string): Promise<number> {
 
 /** Reset the seeded P-2604-0001 RFP back to a runnable state for a new spec
  *  run (status='sent', all bids back to 'pending'). Idempotent. */
-export async function resetRfpForKanban(rfpId: string): Promise<void> {
+export async function resetRfpForKanban(rfpCode: string): Promise<void> {
+  const rfpId = await rfpUuidFromCode(rfpCode);
   await db.execute(
     sql`UPDATE rfps SET status='sent', awarded_bid_id=NULL WHERE id=${rfpId}`,
   );
@@ -95,10 +106,11 @@ export async function resetRfpForKanban(rfpId: string): Promise<void> {
 /** Look up the toss/inicis bid ids for P-2604-0001. Stage 3 specs need
  *  the actual UUIDs (the seed generates randomUUID() so they're not
  *  hard-coded). Returns { toss, inicis } both required to exist. */
-export async function findSeededBidIds(rfpId: string): Promise<{
+export async function findSeededBidIds(rfpCode: string): Promise<{
   toss: string;
   inicis: string;
 }> {
+  const rfpId = await rfpUuidFromCode(rfpCode);
   const rows = await db
     .select({
       id: bids.id,
@@ -111,7 +123,7 @@ export async function findSeededBidIds(rfpId: string): Promise<{
   const inicis = rows.find((r) => r.pgName === 'KG이니시스');
   if (!toss || !inicis) {
     throw new Error(
-      `[e2e helpers] expected toss + inicis bids on ${rfpId}; got ${rows.length} bids`,
+      `[e2e helpers] expected toss + inicis bids on ${rfpCode}; got ${rows.length} bids`,
     );
   }
   return { toss: toss.id, inicis: inicis.id };
@@ -149,37 +161,39 @@ const MINIMAL_PDF = Buffer.from(
  *  call this in their `beforeAll`. Writes to the Storage backend
  *  `getStorage()` returns (Postgres `attachment_blobs`). Returns the new
  *  attachment id, which `bids.proposalAttachmentId` is also updated to. */
-export async function attachTossProposalPdf(rfpId: string): Promise<string> {
+export async function attachTossProposalPdf(rfpCode: string): Promise<string> {
+  // URL/seed 식별자는 code — bids.rfpId(uuid) 매칭 위해 먼저 해석.
+  const [rfpRow] = await db
+    .select({ id: rfps.id })
+    .from(rfps)
+    .where(eq(rfps.code, rfpCode))
+    .limit(1);
+  if (!rfpRow) throw new Error(`[e2e helpers] rfp not found: ${rfpCode}`);
+
   const [tossBid] = await db
     .select({ id: bids.id, submittedBy: bids.submittedBy })
     .from(bids)
     .where(
-      sql`${bids.rfpId} = ${rfpId} AND ${bids.pgWsId} = (
+      sql`${bids.rfpId} = ${rfpRow.id} AND ${bids.pgWsId} = (
         SELECT id FROM workspaces WHERE name = '토스페이먼츠'
       )`,
     )
     .limit(1);
   if (!tossBid) {
-    throw new Error(`[e2e helpers] toss bid not found on ${rfpId}`);
+    throw new Error(`[e2e helpers] toss bid not found on ${rfpCode}`);
   }
 
+  // exclusive-arc: 제안서 첨부는 bid_id 로 링크. metadata-먼저 → blob(키=attachment id, C4).
   const attachmentId = randomUUID();
-  const storageKey = newAttachmentPath('제안서_토스.pdf');
-  await getStorage().save(storageKey, MINIMAL_PDF, 'application/pdf');
   await db.insert(attachments).values({
     id: attachmentId,
-    ownerKind: 'bid_proposal',
-    ownerId: rfpId,
+    bidId: tossBid.id,
     name: '제안서_토스.pdf',
     size: MINIMAL_PDF.length,
     mimeType: 'application/pdf',
-    storagePath: storageKey,
     uploadedBy: tossBid.submittedBy!,
   });
-  await db
-    .update(bids)
-    .set({ proposalAttachmentId: attachmentId })
-    .where(eq(bids.id, tossBid.id));
+  await getStorage().save(attachmentId, MINIMAL_PDF, 'application/pdf');
   return attachmentId;
 }
 

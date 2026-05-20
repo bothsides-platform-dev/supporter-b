@@ -63,14 +63,15 @@ async function setup() {
   const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
   const pgWs = await seedPgWorkspace(db, '토스페이먼츠');
 
-  const rfpId = 'P-2605-0001';
+  const rfpId = randomUUID();
+  const rfpCode = 'P-2605-0001';
   await db.insert(rfps).values({
     id: rfpId,
+    code: rfpCode,
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'invite test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,
@@ -89,7 +90,7 @@ async function setup() {
     status: 'pending',
   });
 
-  return { rfpId, invId, rawToken, buyerWsId: buyerWs.id, pgWsId: pgWs.id };
+  return { rfpCode, invId, rawToken, buyerWsId: buyerWs.id, pgWsId: pgWs.id };
 }
 
 describe('claimInviteTokenAction', () => {
@@ -154,7 +155,7 @@ describe('claimInviteTokenAction', () => {
 
     const r = await claimInviteTokenAction(ctx.rawToken);
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.rfpId).toBe(ctx.rfpId);
+    if (r.ok) expect(r.rfpId).toBe(ctx.rfpCode);
   });
 
   it('successful claim sets acceptedByUserId on invitation row', async () => {
@@ -193,7 +194,7 @@ describe('claimInviteTokenAction', () => {
     expect(r2.ok).toBe(true);
     if (r2.ok) {
       expect(r2.alreadyClaimed).toBe(true);
-      expect(r2.rfpId).toBe(ctx.rfpId);
+      expect(r2.rfpId).toBe(ctx.rfpCode);
     }
   });
 
@@ -203,14 +204,14 @@ describe('claimInviteTokenAction', () => {
     const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
     const pgWs = await seedPgWorkspace(db, '만료테스트PG');
 
-    const rfpId = 'P-2605-0099';
+    const rfpId = randomUUID();
     await db.insert(rfps).values({
       id: rfpId,
+      code: 'P-2605-0099',
       buyerWsId: buyerWs.id,
       bizProfileId: biz.id,
       title: 'expired invite test',
       memo: '',
-      allowedPgWorkspaceIds: [pgWs.id],
       deadline: new Date(Date.now() + 86_400_000),
       status: 'sent',
       createdBy: buyer.id,

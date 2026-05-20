@@ -4,7 +4,10 @@ import type { BizProfile } from './biz-profile';
 export type RfpStatus = 'draft' | 'sent' | 'closed' | 'cancelled' | 'awarded';
 
 export type RFP = {
+  // Surrogate uuid (PK). FKs reference this. Use `code` for URLs/display.
   id: string;
+  // Human-facing RFP number P-YYMM-NNNN (unique).
+  code: string;
   buyerWsId: string;
   bizProfile?: BizProfile;
   title: string;

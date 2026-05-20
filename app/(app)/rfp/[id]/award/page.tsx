@@ -22,7 +22,8 @@ export default async function AwardPage({ params, searchParams }: Props) {
     redirect(`/login?next=/rfp/${id}/award`);
   }
 
-  const rfp = await (await getRfpRepo()).findById(id);
+  // URL 파라미터 id 는 사람용 code. 내부 조회는 rfp.id(uuid).
+  const rfp = await (await getRfpRepo()).findByCode(id);
   if (!rfp || rfp.buyerWsId !== session.user.workspaceId) {
     return (
       <div className="px-8 py-8">
@@ -39,7 +40,7 @@ export default async function AwardPage({ params, searchParams }: Props) {
     );
   }
 
-  const allBids = (await (await getBidRepo()).findByRfp(id)).filter(
+  const allBids = (await (await getBidRepo()).findByRfp(rfp.id)).filter(
     (b) => b.status === 'submitted',
   );
   const bidId = sp.bidId;
@@ -75,6 +76,7 @@ export default async function AwardPage({ params, searchParams }: Props) {
   return (
     <AwardConfirm
       rfpId={rfp.id}
+      rfpCode={rfp.code}
       rfpDeadline={rfp.deadline}
       rfpAllowedCount={rfp.allowedPgWorkspaceIds.length}
       bizProfile={{

@@ -90,7 +90,8 @@ export function toBuyerCard(args: {
   // 카드의 'invited PG 수' 는 도메인적으로 '실제 발송 대상'을 의미해야 함 — draft 는 제외.
   const invitedActive = invitations.filter((i) => i.status !== 'draft').length;
   return {
-    rfpId: rfp.id,
+    // 카드 식별자는 URL/표시용 code (홈 칸반 → /rfp/[code]).
+    rfpId: rfp.code,
     title: rfp.title,
     stage,
     deadline: rfp.deadline,

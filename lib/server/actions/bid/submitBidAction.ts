@@ -2,11 +2,11 @@
 
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 import { requirePgSession } from '@/lib/auth/session';
-import { workspaceMembers, users, workspaces } from '@/lib/db/schema';
+import { attachments, workspaceMembers, users, workspaces } from '@/lib/db/schema';
 import {
   getAttachmentRepo,
   getBidRepo,
@@ -121,14 +121,11 @@ export async function submitBidAction(
     const att = await (await getAttachmentRepo()).findById(
       data.proposalAttachmentId,
     );
-    if (
-      !att ||
-      att.ownerKind !== 'bid_proposal' ||
-      att.ownerId !== data.rfpId
-    ) {
+    // Draft proposal (exclusive-arc): must be still-unlinked and uploaded by a
+    // member of this PG ws (본인 또는 동료). Linked to the bid after save.
+    if (!att || att.rfpId || att.bidId || att.bidNoteId) {
       return { ok: false, error: 'INVALID_ATTACHMENT' };
     }
-    // uploader 의 워크스페이스가 본인과 일치해야 한다 — 본인 또는 동료.
     const [uploaderMember] = (await actionDb()
       .select({ workspaceId: workspaceMembers.workspaceId })
       .from(workspaceMembers)
@@ -178,15 +175,8 @@ export async function submitBidAction(
           | Record<CardIssuer, number>
           | undefined,
         overseasCardFeePct,
-        proposalPdf: data.proposalAttachmentId
-          ? {
-              id: data.proposalAttachmentId,
-              name: '',
-              size: 0,
-              mimeType: 'application/pdf',
-              url: '',
-            }
-          : { id: '', name: '', size: 0, mimeType: 'application/pdf', url: '' },
+        // 제안서 첨부는 attachments.bid_id 로 링크(아래) — bid row에는 저장 안 함.
+        proposalPdfs: [],
         memo: data.memo,
         status: 'submitted',
         buyerStage: 'pending',
@@ -198,6 +188,21 @@ export async function submitBidAction(
       // 트랜잭션 외부 사전 check로 99% 케이스를 흡수했고, race 시에는 throw로
       // 자연 rollback. 호출자가 재시도 시 사전 check가 다시 걸려 BID_ALREADY_SUBMITTED.
       await bidRepo.save(bid, tx);
+
+      // 제안서 드래프트 첨부를 이 bid에 링크(set bid_id). 미링크 가드로 재시도/스푸핑 차단.
+      if (data.proposalAttachmentId) {
+        await tx
+          .update(attachments)
+          .set({ bidId })
+          .where(
+            and(
+              inArray(attachments.id, [data.proposalAttachmentId]),
+              isNull(attachments.rfpId),
+              isNull(attachments.bidId),
+              isNull(attachments.bidNoteId),
+            ),
+          );
+      }
 
       // 알림 (advisor pin 6): buyer ws 전 멤버에게 인앱 + 메일 모두.
       const buyerMembers = (await tx
@@ -222,7 +227,7 @@ export async function submitBidAction(
       // 같은 RFP × pgWs 조합의 메일 본문은 모든 buyer 멤버에게 동일 — 한 번만
       // 렌더해 재사용.
       const submittedHtml = await renderBidSubmitted({
-        rfpId: data.rfpId,
+        rfpId: rfp.code,
         rfpTitle: rfp.title,
         pgName: pgWsLabel,
         submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
@@ -234,11 +239,11 @@ export async function submitBidAction(
           userId: m.userId,
           workspaceId: rfp.buyerWsId,
           type: 'bid.submitted',
-          title: `[${data.rfpId}] ${pgWsLabel} 제안 도착`,
+          title: `[${rfp.code}] ${pgWsLabel} 제안 도착`,
           body: `${pgWsLabel}가 제안을 제출했습니다.`,
           channel: 'inapp',
           status: 'pending',
-          linkUrl: `/rfp/${data.rfpId}`,
+          linkUrl: `/rfp/${rfp.code}`,
           createdAt: now.toISOString(),
         };
         await dispatchNotification(tx, notif);
@@ -247,9 +252,9 @@ export async function submitBidAction(
           {
             event: 'bid.submitted',
             to: m.email,
-            subject: `[Supporter B · ${data.rfpId}] ${pgWsLabel} 제안 도착`,
+            subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 제안 도착`,
             html: submittedHtml,
-            // 멤버별 dedupe — 같은 멤버 중복 enqueue를 collapse.
+            // 멤버별 dedupe — uuid rfpId 기준(안정 키).
             dedupeKey: `bid:${data.rfpId}:${pgWsId}:${m.userId}`,
           },
           tx,
@@ -268,7 +273,7 @@ export async function submitBidAction(
     // client에서 router.push + router.refresh를 동시 호출하면 useTransition
     // pending이 영구히 잡히는 Next 16 버그(vercel/next.js#86055)를 피하기
     // 위해 server-side revalidation + client-side router.push만 사용한다.
-    revalidatePath(`/inbox/${data.rfpId}`);
+    revalidatePath(`/inbox/${rfp.code}`);
   }
   return result;
 }

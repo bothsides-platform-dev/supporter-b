@@ -53,14 +53,15 @@ async function seedSentRfpWithBid() {
   const pgUser = await seedUser(db, { email: 'pg@toss.im' });
   await seedMembership(db, pgWs.id, pgUser.id);
 
-  const rfpId = 'P-2605-0010';
+  const rfpId = randomUUID();
+    const rfpCode = 'P-2605-0010';
   await db.insert(rfps).values({
     id: rfpId,
+    code: rfpCode,
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'cancel test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,

@@ -5,6 +5,7 @@ export * from './workspaces';
 export * from './workspace-members';
 export * from './workspace-invitations';
 export * from './rfps';
+export * from './rfp-allowed-pg';
 export * from './rfp-invitations';
 export * from './bids';
 export * from './bid-notes';

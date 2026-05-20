@@ -20,14 +20,14 @@ async function setup() {
   const ws = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
   const pgWs = await seedPgWorkspace(db, '토스페이먼츠');
   // Insert one RFP to FK against.
-  const rfpId = 'P-2605-0001';
+  const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
+    code: 'P-2605-0001',
     buyerWsId: ws.id,
     bizProfileId: biz.id,
     title: 'T',
     memo: '',
-    allowedPgWorkspaceIds: [],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,

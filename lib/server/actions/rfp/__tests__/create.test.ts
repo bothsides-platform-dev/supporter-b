@@ -10,7 +10,6 @@ import {
   rfps,
   workspaces,
 } from '@/lib/db/schema';
-import { DRAFT_OWNER_ID } from '@/lib/server/storage/path';
 import {
   seedBizProfile,
   seedBuyerWorkspace,
@@ -108,14 +107,14 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
     expect(r.rfpId).toMatch(/^P-\d{4}-\d{4}$/);
 
-    const [row] = await db.select().from(rfps).where(eq(rfps.id, r.rfpId));
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
     expect(row.status).toBe('draft');
     expect(row.sentAt).toBeNull();
 
     const invs = await db
       .select()
       .from(rfpInvitations)
-      .where(eq(rfpInvitations.rfpId, r.rfpId));
+      .where(eq(rfpInvitations.rfpId, row.id));
     expect(invs).toHaveLength(0);
 
     const outbox = await db
@@ -155,14 +154,14 @@ describe('createRfpAction', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const [row] = await db.select().from(rfps).where(eq(rfps.id, r.rfpId));
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
     expect(row.status).toBe('sent');
     expect(row.sentAt).not.toBeNull();
 
     const invs = await db
       .select()
       .from(rfpInvitations)
-      .where(eq(rfpInvitations.rfpId, r.rfpId));
+      .where(eq(rfpInvitations.rfpId, row.id));
     expect(invs).toHaveLength(pgWsIds.length);
     for (const inv of invs) {
       expect(inv.tokenHash).toBeTruthy();
@@ -206,7 +205,7 @@ describe('createRfpAction', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.id, r.rfpId));
+    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
     expect(rfpRow.bizProfileId).not.toBe(wsBizBefore);
 
     // Snapshot row is its own biz_profiles id.
@@ -230,7 +229,7 @@ describe('createRfpAction', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.id, r.rfpId));
+    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
     expect(rfpRow.bizProfileId).not.toBeNull();
     if (!rfpRow.bizProfileId) return;
     const [snap] = await db
@@ -254,7 +253,7 @@ describe('createRfpAction', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.id, r.rfpId));
+    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
     expect(rfpRow.bizProfileId).toBeNull();
   });
 
@@ -268,7 +267,7 @@ describe('createRfpAction', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.id, r.rfpId));
+    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
     expect(rfpRow.bizProfileId).toBeNull();
   });
 
@@ -295,7 +294,7 @@ describe('createRfpAction', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.id, r.rfpId));
+    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
     expect(rfpRow.bizProfileId).not.toBeNull();
     if (!rfpRow.bizProfileId) return;
     const [snap] = await db
@@ -325,6 +324,24 @@ describe('createRfpAction', () => {
     expect(seq2).toBe(seq1 + 1);
   });
 
+  it('concurrent createRfp: atomic counter yields distinct codes (no dupe)', async () => {
+    const mk = (t: string) =>
+      createRfpAction({
+        title: t,
+        deadline: new Date(Date.now() + 86_400_000).toISOString(),
+        allowedPgWorkspaceIds: [pgWsId],
+      });
+    const results = await Promise.allSettled([mk('x'), mk('y')]);
+    const codes = results
+      .filter(
+        (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof createRfpAction>>> =>
+          r.status === 'fulfilled' && r.value.ok,
+      )
+      .map((r) => (r.value.ok ? r.value.rfpId : ''));
+    expect(codes).toHaveLength(2);
+    expect(new Set(codes).size).toBe(2); // atomic upsert → no duplicate code
+  });
+
   it('rejects malformed input', async () => {
     const r = await createRfpAction({
       title: '',
@@ -334,32 +351,24 @@ describe('createRfpAction', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('Step 11 — patches __draft__ attachments to the new RFP id', async () => {
-    // Pre-existing RFP attachment row uploaded against the draft sentinel
-    // (mirrors what the dropzone does at file-select time).
+  it('Step 11 — links draft (ownerless) attachments to the new RFP', async () => {
+    // Draft attachment: uploaded before the RFP exists → all owner FKs null.
     const draftAttId = randomUUID();
     await db.insert(attachments).values({
       id: draftAttId,
-      ownerKind: 'rfp',
-      ownerId: DRAFT_OWNER_ID,
       name: 'rfp.pdf',
       size: 100,
       mimeType: 'application/pdf',
-      storagePath: '2026/05/dummy.pdf',
       uploadedBy: buyerUserId,
     });
-    // Plus a foreign attachment that must NOT be touched (uploaded by
-    // another user; same ownerId sentinel by chance).
+    // Foreign draft uploaded by another user — must NOT be linked.
     const otherUser = await seedUser(db, { email: 'other@x.com' });
     const foreignAttId = randomUUID();
     await db.insert(attachments).values({
       id: foreignAttId,
-      ownerKind: 'rfp',
-      ownerId: DRAFT_OWNER_ID,
       name: 'rfp-other.pdf',
       size: 100,
       mimeType: 'application/pdf',
-      storagePath: '2026/05/dummy-other.pdf',
       uploadedBy: otherUser.id,
     });
 
@@ -373,12 +382,14 @@ describe('createRfpAction', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
+    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+
     const [own] = await db
       .select()
       .from(attachments)
       .where(eq(attachments.id, draftAttId))
       .limit(1);
-    expect(own?.ownerId).toBe(r.rfpId);
+    expect(own?.rfpId).toBe(rfpRow.id);
 
     const [foreign] = await db
       .select()
@@ -386,8 +397,8 @@ describe('createRfpAction', () => {
       .where(eq(attachments.id, foreignAttId))
       .limit(1);
     // Cross-user guard: action's WHERE includes uploaded_by — foreign row
-    // stays on the draft sentinel.
-    expect(foreign?.ownerId).toBe(DRAFT_OWNER_ID);
+    // stays unlinked (rfp_id null).
+    expect(foreign?.rfpId).toBeNull();
   });
 
   // _suppress unused import warnings

@@ -1,7 +1,7 @@
 // DrizzleAttachmentRepository — Attachment.url 계약 검증.
-// Repo는 Attachment.url 필드를 `/api/files/{id}` 형태로 노출해야 한다 (계약은
-// app/api/files/upload/route.ts:169 주석 참조). storagePath는 서버 내부용 별도
-// 필드로 유지되어 ACL/스토리지 레이어에서만 사용된다.
+// Repo는 Attachment.url 필드를 `/api/files/{id}` 형태로 노출해야 한다. 스토리지
+// 키는 attachment.id 자체이므로 별도 storagePath 컬럼이 없다(C4). 소유는
+// exclusive-arc(rfpId/bidId/bidNoteId) — 미링크 드래프트는 셋 다 undefined.
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
@@ -18,20 +18,14 @@ async function setup() {
   return { db, uploader, repo };
 }
 
-async function insertAttachment(
-  db: PgliteDB,
-  uploaderId: string,
-  overrides?: { storagePath?: string; ownerKind?: 'rfp' | 'bid_proposal' },
-) {
+// Draft attachment — all owner FKs null (valid: num_nonnulls <= 1).
+async function insertAttachment(db: PgliteDB, uploaderId: string) {
   const id = randomUUID();
   await db.insert(attachments).values({
     id,
-    ownerKind: overrides?.ownerKind ?? 'rfp',
-    ownerId: 'P-2605-0001',
     name: 'spec.pdf',
     size: 1024,
     mimeType: 'application/pdf',
-    storagePath: overrides?.storagePath ?? '2026/05/spec-xyz.pdf',
     uploadedBy: uploaderId,
   });
   return id;
@@ -44,17 +38,18 @@ describe('DrizzleAttachmentRepository.findById', () => {
     ctx = await setup();
   });
 
-  it('exposes url as the authenticated /api/files/{id} route, not the raw storage path', async () => {
-    const id = await insertAttachment(ctx.db, ctx.uploader.id, {
-      storagePath: '2026/05/raw-key.pdf',
-    });
+  it('exposes url as the authenticated /api/files/{id} route', async () => {
+    const id = await insertAttachment(ctx.db, ctx.uploader.id);
 
     const row = await ctx.repo.findById(id);
 
     expect(row).toBeDefined();
     expect(row!.url).toBe(`/api/files/${id}`);
-    // storagePath 는 서버 전용 필드로 row에 그대로 보존되어야 ACL/스토리지가 사용 가능.
-    expect(row!.storagePath).toBe('2026/05/raw-key.pdf');
+    expect(row!.uploadedBy).toBe(ctx.uploader.id);
+    // Draft: no owner linked yet.
+    expect(row!.rfpId).toBeUndefined();
+    expect(row!.bidId).toBeUndefined();
+    expect(row!.bidNoteId).toBeUndefined();
   });
 
   it('returns undefined for unknown id', async () => {

@@ -6,7 +6,8 @@ import type { RfpInvitation } from '@/lib/types/invitation';
 
 function makeRfp(overrides: Partial<RFP> = {}): RFP {
   return {
-    id: 'P-2605-0001',
+    id: 'rfp-uuid-1',
+    code: 'P-2605-0001',
     buyerWsId: 'ws-buyer',
     title: 'RFP 1',
     memo: '',
@@ -45,7 +46,7 @@ function makeBid(id: string, status: Bid['status'] = 'submitted'): Bid {
     monthlyMin: 0,
     bankTransferFeePct: 0.003,
     easyPayFeePct: 0.015,
-    proposalPdf: { id: '', name: '', size: 0, mimeType: '', url: '' },
+    proposalPdfs: [],
     status,
     buyerStage: 'pending',
     submittedBy: 'user-pg',

@@ -132,7 +132,7 @@ export function BidComparisonTable({ rfpId, bids, grade, rfpStatus, awardedBidId
               >
                 <td className="relative px-3 py-4 text-[13px] font-medium text-[var(--md-sys-color-on-surface)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-0.5 group-hover:before:bg-[var(--md-sys-color-warning)]">
                   {pgName(bid.pgWsId)}
-                  {bid.proposalPdf.name !== '제안서 미첨부' && (
+                  {bid.proposalPdfs.length > 0 && (
                     <span className="ml-2 font-mono text-[10px] text-[var(--md-sys-color-outline)]">PDF</span>
                   )}
                 </td>

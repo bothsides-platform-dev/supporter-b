@@ -165,7 +165,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
     const [row] = await db
       .select()
       .from(rfps)
-      .where(eq(rfps.id, created.rfpId));
+      .where(eq(rfps.code, created.rfpId));
     expect(row.status).toBe('sent');
     expect(row.sentAt).not.toBeNull();
     expect(row.bizProfileId).not.toBe(wsBizBefore);
@@ -188,7 +188,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
     const invs = await db
       .select()
       .from(rfpInvitations)
-      .where(eq(rfpInvitations.rfpId, created.rfpId));
+      .where(eq(rfpInvitations.rfpId, row.id));
     expect(invs).toHaveLength(pgWsIds.length);
     expect(invs.map((i) => i.pgWsId).sort()).toEqual([...pgWsIds].sort());
     for (const inv of invs) {
@@ -204,7 +204,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       .where(eq(outboxEntries.event, 'rfp.invited'));
     expect(inviteRows).toHaveLength(pgWsIds.length);
     const expectedKeys = adminEntries
-      .map(({ wsId, userId }) => `rfp:${created.rfpId}:invite:ws:${wsId}:user:${userId}`)
+      .map(({ wsId, userId }) => `rfp:${row.id}:invite:ws:${wsId}:user:${userId}`)
       .sort();
     expect(inviteRows.map((r) => r.dedupeKey).sort()).toEqual(expectedKeys);
 
@@ -213,6 +213,6 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       .from(outboxEntries)
       .where(eq(outboxEntries.event, 'rfp.sent'));
     expect(sentRows).toHaveLength(1);
-    expect(sentRows[0].dedupeKey).toBe(`rfp:${created.rfpId}:sent`);
+    expect(sentRows[0].dedupeKey).toBe(`rfp:${row.id}:sent`);
   });
 });

@@ -82,14 +82,14 @@ async function seedScenario(): Promise<Scenario> {
 
   const random = await seedUser(db, { email: 'rando@x.com' });
 
-  const rfpId = 'P-2605-0010';
+  const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
+    code: 'P-2605-0010',
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'perm test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id, otherPgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,
@@ -119,31 +119,18 @@ async function seedScenario(): Promise<Scenario> {
     status: 'accepted',
   });
 
-  // RFP attachment — uploaded by buyer.
+  // RFP attachment — uploaded by buyer, linked to the RFP (exclusive-arc).
   const rfpAttId = randomUUID();
   await db.insert(attachments).values({
     id: rfpAttId,
-    ownerKind: 'rfp',
-    ownerId: rfpId,
+    rfpId,
     name: 'rfp.pdf',
     size: 100,
     mimeType: 'application/pdf',
-    storagePath: '2026/05/dummy-rfp.pdf',
     uploadedBy: buyer.id,
   });
 
-  // Bid + bid_proposal attachment — bid was submitted by toss PG user.
-  const proposalId = randomUUID();
-  await db.insert(attachments).values({
-    id: proposalId,
-    ownerKind: 'bid_proposal',
-    ownerId: rfpId,
-    name: 'proposal.pdf',
-    size: 200,
-    mimeType: 'application/pdf',
-    storagePath: '2026/05/dummy-prop.pdf',
-    uploadedBy: pgUser.id,
-  });
+  // Bid (created before its proposal attachment — FK ordering).
   const bidId = randomUUID();
   await db.insert(bids).values({
     id: bidId,
@@ -156,31 +143,36 @@ async function seedScenario(): Promise<Scenario> {
     monthlyMin: '0',
     bankTransferFeePct: '0.015',
     easyPayFeePct: '0.018',
-    proposalAttachmentId: proposalId,
     submittedBy: pgUser.id,
+  });
+  // bid_proposal attachment — linked to the bid via bid_id.
+  const proposalId = randomUUID();
+  await db.insert(attachments).values({
+    id: proposalId,
+    bidId,
+    name: 'proposal.pdf',
+    size: 200,
+    mimeType: 'application/pdf',
+    uploadedBy: pgUser.id,
   });
 
   const rfpAttachment: AttachmentRow = {
     id: rfpAttId,
-    ownerKind: 'rfp',
-    ownerId: rfpId,
+    rfpId,
     name: 'rfp.pdf',
     size: 100,
     mimeType: 'application/pdf',
     url: '',
-    storagePath: '2026/05/dummy-rfp.pdf',
     uploadedBy: buyer.id,
   };
 
   const bidAttachment: AttachmentRow = {
     id: proposalId,
-    ownerKind: 'bid_proposal',
-    ownerId: rfpId,
+    bidId,
     name: 'proposal.pdf',
     size: 200,
     mimeType: 'application/pdf',
     url: '',
-    storagePath: '2026/05/dummy-prop.pdf',
     uploadedBy: pgUser.id,
   };
 
@@ -196,23 +188,19 @@ async function seedScenario(): Promise<Scenario> {
   const noteAttId = randomUUID();
   await db.insert(attachments).values({
     id: noteAttId,
-    ownerKind: 'bid_note',
-    ownerId: noteId,
+    bidNoteId: noteId,
     name: 'memo.pdf',
     size: 50,
     mimeType: 'application/pdf',
-    storagePath: '2026/05/dummy-note.pdf',
     uploadedBy: buyer.id,
   });
   const bidNoteAttachment: AttachmentRow = {
     id: noteAttId,
-    ownerKind: 'bid_note',
-    ownerId: noteId,
+    bidNoteId: noteId,
     name: 'memo.pdf',
     size: 50,
     mimeType: 'application/pdf',
     url: '',
-    storagePath: '2026/05/dummy-note.pdf',
     uploadedBy: buyer.id,
   };
 

@@ -26,23 +26,23 @@ const SETTLE_LABEL: Record<string, string> = {
 };
 
 export default async function InboxSubmittedPage({ params }: Props) {
-  const { rfpId } = await params;
+  const { rfpId: rfpCode } = await params; // URL param = 사람용 code
 
   const session = await auth();
   if (!session?.user?.id || !session.user.workspaceId) {
-    redirect(`/login?next=/inbox/${rfpId}/submitted`);
+    redirect(`/login?next=/inbox/${rfpCode}/submitted`);
   }
 
-  const invRepo = await getInvitationRepo();
-  const ok = await invRepo.canAccess(rfpId, session.user.workspaceId);
-  if (!ok) notFound();
-
   const rfpRepo = await getRfpRepo();
-  const rfp = await rfpRepo.findById(rfpId);
+  const rfp = await rfpRepo.findByCode(rfpCode);
   if (!rfp) notFound();
 
+  const invRepo = await getInvitationRepo();
+  const ok = await invRepo.canAccess(rfp.id, session.user.workspaceId);
+  if (!ok) notFound();
+
   const bidRepo = await getBidRepo();
-  const allBids = await bidRepo.findByRfp(rfpId);
+  const allBids = await bidRepo.findByRfp(rfp.id);
   const bid = allBids.find(
     (b) => b.pgWsId === session.user!.workspaceId && b.status === 'submitted',
   );
@@ -54,7 +54,7 @@ export default async function InboxSubmittedPage({ params }: Props) {
           제출된 제안이 없습니다.
         </p>
         <Link
-          href={`/inbox/${rfpId}`}
+          href={`/inbox/${rfpCode}`}
           className="mt-4 block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
           ← 제안 작성으로
@@ -93,7 +93,7 @@ export default async function InboxSubmittedPage({ params }: Props) {
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           {[
-            ['RFP', rfp.id],
+            ['RFP', rfp.code],
             ['제목', rfp.title],
             ['등급', grade ? GRADE_LABELS[grade] : '—'],
             ['마감', formatDate(rfp.deadline)],

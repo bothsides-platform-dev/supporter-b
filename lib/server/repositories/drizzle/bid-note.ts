@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { attachments, bidNotes, users } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { Attachment } from '@/lib/types/common';
@@ -54,24 +54,20 @@ export class DrizzleBidNoteRepository implements BidNoteRepo {
 
     if (noteRows.length === 0) return [];
 
-    // Single batch fetch of attachments for all returned notes — owner_id ∈
-    // {note ids} && owner_kind='bid_note'. Simpler than per-note round-trips.
+    // Single batch fetch of attachments for all returned notes (exclusive-arc,
+    // C3): attachments.bid_note_id ∈ {note ids}. Simpler than per-note trips.
     const noteIds = noteRows.map((r) => r.note.id);
     const attRows: AttRow[] = await db
       .select()
       .from(attachments)
-      .where(
-        and(
-          eq(attachments.ownerKind, 'bid_note'),
-          inArray(attachments.ownerId, noteIds),
-        ),
-      );
+      .where(inArray(attachments.bidNoteId, noteIds));
 
     const byNote = new Map<string, Attachment[]>();
     for (const row of attRows) {
-      const list = byNote.get(row.ownerId) ?? [];
+      if (!row.bidNoteId) continue;
+      const list = byNote.get(row.bidNoteId) ?? [];
       list.push(attRowToAttachment(row));
-      byNote.set(row.ownerId, list);
+      byNote.set(row.bidNoteId, list);
     }
 
     return noteRows.map((r) => ({

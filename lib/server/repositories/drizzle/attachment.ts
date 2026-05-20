@@ -12,12 +12,11 @@ function rowToAttachment(row: AttachRow): AttachmentRecord {
     name: row.name,
     size: row.size,
     mimeType: row.mimeType,
-    // Public `url` is the authenticated route — never the storage key. See
-    // contract in app/api/files/upload/route.ts:169.
+    // Public `url` is the authenticated route — never the storage key.
     url: `/api/files/${row.id}`,
-    ownerKind: row.ownerKind,
-    ownerId: row.ownerId,
-    storagePath: row.storagePath,
+    rfpId: row.rfpId ?? undefined,
+    bidId: row.bidId ?? undefined,
+    bidNoteId: row.bidNoteId ?? undefined,
     uploadedBy: row.uploadedBy,
   };
 }
@@ -35,13 +34,13 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
     const db = this.h(tx);
     await db.insert(attachments).values({
       id: a.id,
-      ownerKind: a.ownerKind,
-      ownerId: a.ownerId,
       name: a.name,
       size: a.size,
       mimeType: a.mimeType,
-      storagePath: a.storagePath,
       uploadedBy: a.uploadedBy,
+      rfpId: a.rfpId ?? null,
+      bidId: a.bidId ?? null,
+      bidNoteId: a.bidNoteId ?? null,
     });
   }
 

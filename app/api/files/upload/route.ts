@@ -34,14 +34,14 @@ import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 
 import { auth } from '@/auth';
-import { bids, rfps, workspaceMembers } from '@/lib/db/schema';
+import { attachments, bids, rfps, workspaceMembers } from '@/lib/db/schema';
 import { db as prodDb } from '@/lib/db/client';
 import {
   getAttachmentRepo,
   getInvitationRepo,
 } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
-import { DRAFT_OWNER_ID, newAttachmentPath } from '@/lib/server/storage/path';
+import { DRAFT_OWNER_ID } from '@/lib/server/storage/path';
 import { sniffMime, type AcceptedMime } from '@/lib/server/storage/sniff';
 
 export const runtime = 'nodejs';
@@ -178,25 +178,32 @@ export async function POST(req: Request): Promise<Response> {
     if (!ok) return fail(403, 'FORBIDDEN');
   }
 
-  // Disk first, DB second — see header note.
-  const key = newAttachmentPath(file.name);
-  const storage = getStorage();
-  await storage.save(key, buffer, sniffed);
+  // DB metadata first, blob second — attachment_blobs.attachment_id FKs the
+  // attachments row (C4), so the metadata must exist before the bytes. The
+  // storage key is the attachment id.
+  const id = randomUUID();
+  const repo = await getAttachmentRepo();
+
+  // Owner link at upload: only the 'rfp' non-draft path links immediately.
+  // bid_proposal/bid_note (and the rfp draft window) start ownerless and are
+  // linked by their action (createRfp / submitBid / addBidNote).
+  const rfpLink =
+    meta.data.ownerKind === 'rfp' && meta.data.ownerId !== DRAFT_OWNER_ID
+      ? { rfpId: meta.data.ownerId }
+      : {};
+
+  await repo.save({
+    id,
+    name: file.name,
+    size: file.size,
+    mimeType: sniffed,
+    uploadedBy: userId,
+    url: '', // url is route-resolved (`/api/files/{id}`) on the client.
+    ...rfpLink,
+  });
 
   try {
-    const id = randomUUID();
-    const repo = await getAttachmentRepo();
-    await repo.save({
-      id,
-      ownerKind: meta.data.ownerKind,
-      ownerId: meta.data.ownerId,
-      name: file.name,
-      size: file.size,
-      mimeType: sniffed,
-      storagePath: key,
-      uploadedBy: userId,
-      url: '', // url is route-resolved (`/api/files/{id}`) on the client.
-    });
+    await getStorage().save(id, buffer, sniffed);
     return NextResponse.json({
       id,
       name: file.name,
@@ -204,8 +211,11 @@ export async function POST(req: Request): Promise<Response> {
       mimeType: sniffed,
     });
   } catch (err) {
-    // Best-effort cleanup so the stored object doesn't outlive the failed row.
-    await storage.delete(key).catch(() => {});
+    // Blob write failed — drop the orphan metadata row (best-effort).
+    await routeDb()
+      .delete(attachments)
+      .where(eq(attachments.id, id))
+      .catch(() => {});
     throw err;
   }
 }

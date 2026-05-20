@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, primaryKey, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { memberRoleEnum } from './_enums';
 import { workspaces } from './workspaces';
@@ -19,5 +19,8 @@ export const workspaceMembers = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.workspaceId, t.userId] }),
+    // PK leftmost-prefix covers (workspace_id); user_id needs its own index so
+    // user-delete cascade and member→user lookups don't seq-scan.
+    index('workspace_members_user_idx').on(t.userId),
   ],
 );

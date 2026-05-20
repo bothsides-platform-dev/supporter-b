@@ -37,7 +37,7 @@ export async function searchBidsAction(): Promise<BidSearchItem[]> {
     const rows = await db
       .select({
         bidId: bids.id,
-        rfpId: rfps.id,
+        rfpId: rfps.code,
         rfpTitle: rfps.title,
         pgWsName: workspaces.name,
         memo: bids.memo,
@@ -55,7 +55,7 @@ export async function searchBidsAction(): Promise<BidSearchItem[]> {
     const rows = await db
       .select({
         bidId: bids.id,
-        rfpId: rfps.id,
+        rfpId: rfps.code,
         rfpTitle: rfps.title,
         memo: bids.memo,
       })

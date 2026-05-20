@@ -2,12 +2,13 @@
 
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { requireBuyerSession } from '@/lib/auth/session';
 import {
   attachments,
   bizProfiles,
+  rfpAllowedPg,
   rfpInvitations,
   rfps,
   users,
@@ -28,7 +29,6 @@ import {
   emitAfterCommit,
 } from '@/lib/server/notifications/dispatch';
 import type { Notification } from '@/lib/types/notification';
-import { DRAFT_OWNER_ID } from '@/lib/server/storage/path';
 import {
   actionDb,
   baseUrl,
@@ -97,8 +97,10 @@ export async function createRfpAction(
   const result = await db.transaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (tx: any): Promise<CreateRfpResult> => {
-      // 1. RFP id 발급 (atomic counter)
-      const rfpId = await nextRfpId(tx);
+      // 1. RFP code(P-YYMM-NNNN) 발급 (atomic counter) + surrogate uuid id.
+      //    code 는 URL/표시용, id 는 FK/내부 키.
+      const code = await nextRfpId(tx);
+      const rfpId = randomUUID();
 
       // 2. workspace name 조회 (rfp.invited 메일 본문의 buyerName) + 현재 biz_profile_id.
       const [wsRow] = await tx
@@ -167,11 +169,11 @@ export async function createRfpAction(
       //    경과 시 claim 단계에서 만료 분기로 차단되므로 별도 회수 정책 없음.)
       await tx.insert(rfps).values({
         id: rfpId,
+        code,
         buyerWsId: wsId,
         bizProfileId: snapshotId,
         title: parsed.data.title.trim(),
         memo: parsed.data.memo?.trim() ?? '',
-        allowedPgWorkspaceIds: parsed.data.allowedPgWorkspaceIds,
         deadline: new Date(parsed.data.deadline),
         shareToken: generateToken(),
         status: send ? 'sent' : 'draft',
@@ -179,22 +181,32 @@ export async function createRfpAction(
         sentAt: send ? now : null,
       });
 
-      // 5-bis. RFP 첨부 link-up (Step 11). 업로드 시점에는 RFP가 없어
-      // ownerId='__draft__' 로 들어가 있던 attachments rows를 새 rfpId로
-      // 갱신한다. uploadedBy + ownerKind 가드로 다른 사용자/유형의 row가
-      // 함께 끌려오지 않도록 좁힌다 — 클라이언트가 보낸 id 배열만 바꾸지
-      // 않는 이유는 합치된 가드(소유자+종류)가 한 곳에 모이는 편이 안전.
+      // 4-bis. allowlist → rfp_allowed_pg 조인 테이블 (정규화, C2).
+      if (parsed.data.allowedPgWorkspaceIds.length > 0) {
+        await tx.insert(rfpAllowedPg).values(
+          parsed.data.allowedPgWorkspaceIds.map((pgWsId) => ({
+            rfpId,
+            pgWsId,
+          })),
+        );
+      }
+
+      // 5-bis. RFP 첨부 link-up (Step 11). 업로드 시점에는 RFP가 없어 owner FK가
+      // 모두 NULL(드래프트)인 attachments rows를 새 rfpId로 링크한다. 클라이언트가
+      // 보낸 id 배열로 좁히고, uploadedBy + (아직 미링크) 가드로 다른 사용자/이미
+      // 링크된 row가 함께 끌려오지 않도록 한다.
       const rfpIds = parsed.data.rfpAttachmentIds ?? [];
       if (rfpIds.length > 0) {
         await tx
           .update(attachments)
-          .set({ ownerId: rfpId })
+          .set({ rfpId })
           .where(
             and(
               inArray(attachments.id, rfpIds),
-              eq(attachments.ownerKind, 'rfp'),
               eq(attachments.uploadedBy, userId),
-              eq(attachments.ownerId, DRAFT_OWNER_ID),
+              isNull(attachments.rfpId),
+              isNull(attachments.bidId),
+              isNull(attachments.bidNoteId),
             ),
           );
       }
@@ -243,7 +255,7 @@ export async function createRfpAction(
           for (const admin of adminRows) {
             const inviteUrl = `${baseUrl()}/invite/rfp/${rawToken}`;
             const html = await renderRfpInvited({
-              rfpId,
+              rfpId: code,
               rfpTitle: parsed.data.title.trim(),
               buyerName,
               deadline: deadlineDisplay,
@@ -253,7 +265,7 @@ export async function createRfpAction(
               {
                 event: 'rfp.invited',
                 to: admin.email,
-                subject: `[Supporter B · ${rfpId}] 제안 요청 도착`,
+                subject: `[Supporter B · ${code}] 제안 요청 도착`,
                 html,
                 dedupeKey: `rfp:${rfpId}:invite:ws:${pgWsId}:user:${admin.userId}`,
               },
@@ -274,11 +286,11 @@ export async function createRfpAction(
               userId: m.userId,
               workspaceId: pgWsId,
               type: 'rfp.invited',
-              title: `[${rfpId}] 제안 요청 도착`,
+              title: `[${code}] 제안 요청 도착`,
               body: `${buyerName}가 제안을 요청했습니다.`,
               channel: 'inapp',
               status: 'pending',
-              linkUrl: `/inbox/${rfpId}`,
+              linkUrl: `/inbox/${code}`,
               createdAt: now.toISOString(),
             };
             await dispatchNotification(tx, notif);
@@ -288,7 +300,7 @@ export async function createRfpAction(
 
         // buyer 본인 발송 알림 (메일 outbox).
         const sentHtml = await renderRfpSent({
-          rfpId,
+          rfpId: code,
           rfpTitle: parsed.data.title.trim(),
           inviteCount: parsed.data.allowedPgWorkspaceIds.length,
         });
@@ -296,7 +308,7 @@ export async function createRfpAction(
           {
             event: 'rfp.sent',
             to: session.user.email ?? '',
-            subject: `[Supporter B · ${rfpId}] 발송 완료`,
+            subject: `[Supporter B · ${code}] 발송 완료`,
             html: sentHtml,
             dedupeKey: `rfp:${rfpId}:sent`,
           },
@@ -308,7 +320,8 @@ export async function createRfpAction(
       // (`token_hash`) 충돌 시 throw — 여기까지 도달했다면 모두 성공.
       void rfpInvitations; // tree-shaken 방지 (schema reference)
 
-      return { ok: true, rfpId };
+      // 반환 rfpId 는 URL/표시용 code (caller가 /rfp/[code] 로 이동).
+      return { ok: true, rfpId: code };
     },
   );
 

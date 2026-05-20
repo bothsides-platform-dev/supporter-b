@@ -1,1 +1,0 @@
-ALTER TABLE rfps ALTER COLUMN biz_profile_id DROP NOT NULL;

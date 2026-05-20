@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { requireBuyerSession } from '@/lib/auth/session';
 import { attachments } from '@/lib/db/schema';
@@ -86,17 +86,22 @@ export async function addBidNoteAction(
   const result = await db.transaction(async (tx: any) => {
     if (attIds.length > 0) {
       // Verify inside the transaction so a racing patch can't slip through.
+      // Drafts are ownerless (exclusive-arc) — accept only this user's
+      // still-unlinked uploads, then link them to the new note.
       const rows = await tx
         .select({
           id: attachments.id,
-          ownerKind: attachments.ownerKind,
-          ownerId: attachments.ownerId,
+          rfpId: attachments.rfpId,
+          bidId: attachments.bidId,
+          bidNoteId: attachments.bidNoteId,
+          uploadedBy: attachments.uploadedBy,
         })
         .from(attachments)
         .where(inArray(attachments.id, attIds));
       if (rows.length !== attIds.length) return 'INVALID_ATTACHMENT' as const;
       for (const r of rows) {
-        if (r.ownerKind !== 'bid_note' || r.ownerId !== parsed.data.bidId) {
+        const unlinked = !r.rfpId && !r.bidId && !r.bidNoteId;
+        if (r.uploadedBy !== session.user.id || !unlinked) {
           return 'INVALID_ATTACHMENT' as const;
         }
       }
@@ -116,12 +121,14 @@ export async function addBidNoteAction(
     if (attIds.length > 0) {
       await tx
         .update(attachments)
-        .set({ ownerId: noteId })
+        .set({ bidNoteId: noteId })
         .where(
           and(
             inArray(attachments.id, attIds),
-            eq(attachments.ownerKind, 'bid_note'),
-            eq(attachments.ownerId, parsed.data.bidId),
+            eq(attachments.uploadedBy, session.user.id),
+            isNull(attachments.rfpId),
+            isNull(attachments.bidId),
+            isNull(attachments.bidNoteId),
           ),
         );
     }

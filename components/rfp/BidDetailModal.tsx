@@ -103,7 +103,7 @@ export function BidDetailModal({
 
         {/* Left: PDF preview */}
         <div className="bg-[var(--md-sys-color-surface-container-high)] border-r border-[var(--md-sys-color-outline-variant)] min-h-[400px] md:min-h-[640px] flex flex-col">
-          <PdfPreview pdf={bid.proposalPdf} />
+          <PdfPreview pdf={bid.proposalPdfs[0]} />
         </div>
 
         {/* Right: meta + history */}
@@ -184,7 +184,7 @@ export function BidDetailModal({
   );
 }
 
-function PdfPreview({ pdf }: { pdf: Attachment }) {
+function PdfPreview({ pdf }: { pdf?: Attachment }) {
   const hasPdf = pdf?.url && pdf.name !== '제안서 미첨부';
   if (!hasPdf) {
     return (

@@ -30,8 +30,10 @@ export type TokenClaimResult =
 export interface RfpRepo {
   /** RFP insert/upsert(by id). 호출자가 id 미리 발급(`rfp-id.ts`). */
   save(rfp: RFP, tx?: Tx): Promise<void>;
-  /** id 단건 조회. 없으면 undefined. */
+  /** id(uuid) 단건 조회. 없으면 undefined. */
   findById(id: string, tx?: Tx): Promise<RFP | undefined>;
+  /** code(P-YYMM-NNNN) 단건 조회 — URL/표시용 식별자. 없으면 undefined. */
+  findByCode(code: string, tx?: Tx): Promise<RFP | undefined>;
   /** 한 구매사 워크스페이스의 모든 RFP. */
   findByBuyerWs(wsId: string, tx?: Tx): Promise<RFP[]>;
   /** raw share token → RFP. 공유 링크 클레임 시 사용. 없으면 undefined. */

@@ -32,7 +32,6 @@ import {
   __setStorageForTest,
 } from '@/lib/server/storage';
 import { InMemoryStorage } from '@/lib/server/storage/memory';
-import { newAttachmentPath } from '@/lib/server/storage/path';
 
 const sessionRef: { value: unknown | null } = { value: null };
 vi.mock('@/auth', () => ({
@@ -86,14 +85,14 @@ async function seedScenario() {
   await seedMembership(db, pgWs.id, pg.id, 'admin');
   const stranger = await seedUser(db, { email: 'rando@x.com' });
 
-  const rfpId = 'P-2605-0050';
+  const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
+    code: 'P-2605-0050',
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'get test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,
@@ -110,25 +109,22 @@ async function seedScenario() {
     status: 'accepted',
   });
 
-  // Persist the bytes via the test storage and an attachments row pointing at it.
-  const key = newAttachmentPath('rfp.pdf');
-  await storage.save(key, PDF_HEAD, 'application/pdf');
+  // Attachment row (linked to RFP) + bytes keyed by the attachment id (C4).
   const id = randomUUID();
   await db.insert(attachments).values({
     id,
-    ownerKind: 'rfp',
-    ownerId: rfpId,
+    rfpId,
     name: 'rfp.pdf',
     size: PDF_HEAD.length,
     mimeType: 'application/pdf',
-    storagePath: key,
     uploadedBy: buyer.id,
   });
+  await storage.save(id, PDF_HEAD, 'application/pdf');
 
   return {
     rfpId,
     attachmentId: id,
-    storageKey: key,
+    storageKey: id,
     buyerWsId: buyerWs.id,
     buyerUserId: buyer.id,
     pgWsId: pgWs.id,

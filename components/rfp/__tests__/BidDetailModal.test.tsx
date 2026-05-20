@@ -35,13 +35,15 @@ const bid: Bid = {
   monthlyMin: 100_000,
   bankTransferFeePct: 0.005,
   easyPayFeePct: 0.025,
-  proposalPdf: {
-    id: 'pdf',
-    name: '제안서.pdf',
-    size: 1024,
-    mimeType: 'application/pdf',
-    url: '/api/files/pdf',
-  },
+  proposalPdfs: [
+    {
+      id: 'pdf',
+      name: '제안서.pdf',
+      size: 1024,
+      mimeType: 'application/pdf',
+      url: '/api/files/pdf',
+    },
+  ],
   status: 'submitted',
   buyerStage: 'pending',
   submittedBy: 'pg-user',

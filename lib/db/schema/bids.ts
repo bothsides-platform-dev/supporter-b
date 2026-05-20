@@ -6,22 +6,22 @@ import {
   numeric,
   jsonb,
   unique,
+  index,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { bidStatusEnum, buyerStageEnum, settleCycleEnum } from './_enums';
 import { rfps } from './rfps';
 import { workspaces } from './workspaces';
 import { rfpInvitations } from './rfp-invitations';
-import { attachments } from './attachments';
 import { users } from './users';
 
 export const bids = pgTable(
   'bids',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    rfpId: text('rfp_id')
+    rfpId: uuid('rfp_id')
       .notNull()
-      .references(() => rfps.id),
+      .references(() => rfps.id, { onDelete: 'cascade' }),
     pgWsId: uuid('pg_ws_id')
       .notNull()
       .references(() => workspaces.id),
@@ -38,7 +38,8 @@ export const bids = pgTable(
     // action layer + tests, not in the DB (cross-table predicate).
     cardFeesByIssuer: jsonb('card_fees_by_issuer'),
     overseasCardFeePct: numeric('overseas_card_fee_pct', { precision: 5, scale: 3 }),
-    proposalAttachmentId: uuid('proposal_attachment_id').references(() => attachments.id),
+    // Proposal attachments are 1..N via attachments.bid_id (C3). No single
+    // designated-proposal pointer — a bid can attach multiple proposal files.
     memo: text('memo').notNull().default(''),
     status: bidStatusEnum('status').notNull().default('submitted'),
     buyerStage: buyerStageEnum('buyer_stage').notNull().default('pending'),
@@ -46,8 +47,12 @@ export const bids = pgTable(
       .notNull()
       .references(() => users.id),
     submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
+    // (rfp_id) 조회는 이 UQ 의 leftmost-prefix 가 커버.
     unique('bids_rfp_pg_unique').on(t.rfpId, t.pgWsId),
+    // P2: PG 칸반/검색 findByPgWs.
+    index('bids_pg_ws_idx').on(t.pgWsId),
   ],
 );

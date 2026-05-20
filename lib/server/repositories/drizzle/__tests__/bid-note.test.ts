@@ -34,14 +34,14 @@ async function setup() {
   const pgWs = await seedPgWorkspace(db, 'toss.im');
   const pgUser = await seedUser(db, { email: 'pg@toss.im' });
 
-  const rfpId = 'P-2605-9101';
+  const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
+    code: 'P-2605-9101',
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'note repo test',
     memo: '',
-    allowedPgWorkspaceIds: [pgWs.id],
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
     createdBy: buyer.id,
@@ -70,7 +70,6 @@ async function setup() {
     monthlyMin: '0',
     bankTransferFeePct: '0.015',
     easyPayFeePct: '0.018',
-    proposalAttachmentId: null,
     submittedBy: pgUser.id,
   });
 
@@ -92,12 +91,10 @@ async function insertAttachment(
   const id = randomUUID();
   await db.insert(attachments).values({
     id,
-    ownerKind: 'bid_note',
-    ownerId: noteId,
+    bidNoteId: noteId,
     name,
     size: 1024,
     mimeType: 'application/pdf',
-    storagePath: `2026/05/${id}.pdf`,
     uploadedBy: uploaderId,
   });
   return id;

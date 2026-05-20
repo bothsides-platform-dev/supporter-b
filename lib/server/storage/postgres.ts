@@ -12,21 +12,24 @@ class EnoentError extends Error {
 
 /**
  * Postgres bytea-backed Storage. Attachment bytes live in `attachment_blobs`
- * keyed by storage path, so the whole stack runs on one Postgres with no
- * external object store. `read()` materialises the whole blob and slices in
- * memory — fine under the route's 20MB cap, and keeps `size` reporting the
- * total byte count for Content-Range.
+ * keyed by `attachment_id` (C4) with a FK cascade, so the whole stack runs on
+ * one Postgres with no external object store and deleting an attachment auto-
+ * removes its bytes. `read()` materialises the whole blob and slices in memory
+ * — fine under the route's 20MB cap, and keeps `size` reporting the total byte
+ * count for Content-Range. The storage `key` is the attachment id.
  */
 export class PostgresStorage implements Storage {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(private readonly _db: DB | any) {}
 
   async save(key: string, buffer: Buffer, mime: string): Promise<void> {
+    // key === attachments.id (C4). The metadata row must already exist (FK),
+    // so callers write the attachment row before saving its bytes.
     await this._db
       .insert(attachmentBlobs)
-      .values({ path: key, mime, bytes: buffer })
+      .values({ attachmentId: key, mime, bytes: buffer })
       .onConflictDoUpdate({
-        target: attachmentBlobs.path,
+        target: attachmentBlobs.attachmentId,
         set: { mime, bytes: buffer },
       });
   }
@@ -38,7 +41,7 @@ export class PostgresStorage implements Storage {
     const [row] = await this._db
       .select({ bytes: attachmentBlobs.bytes })
       .from(attachmentBlobs)
-      .where(eq(attachmentBlobs.path, key))
+      .where(eq(attachmentBlobs.attachmentId, key))
       .limit(1);
     if (!row) throw new EnoentError(key);
 
@@ -61,6 +64,8 @@ export class PostgresStorage implements Storage {
   }
 
   async delete(key: string): Promise<void> {
-    await this._db.delete(attachmentBlobs).where(eq(attachmentBlobs.path, key));
+    await this._db
+      .delete(attachmentBlobs)
+      .where(eq(attachmentBlobs.attachmentId, key));
   }
 }

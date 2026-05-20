@@ -15,6 +15,7 @@ import {
   notifications,
   outboxEntries,
   rfpInvitations,
+  rfps,
   workspaces,
   workspaceMembers,
   users,
@@ -106,6 +107,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
   buyerUserId: string;
   buyerEmail: string;
   buyerWsId: string;
+  rfpCode: string;
   rfpId: string;
   pgInviteToken: string;
 }> {
@@ -185,11 +187,18 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
   const pgInviteToken = tokenFromInviteUrl(inviteRow.html);
   expect(pgInviteToken).toBeTruthy();
 
+  // created.rfpId is the human code; resolve the uuid for action params/FK queries.
+  const [rfpRow] = await db
+    .select({ id: rfps.id })
+    .from(rfps)
+    .where(eq(rfps.code, created.rfpId));
+
   return {
     buyerUserId: u.id,
     buyerEmail: u.email,
     buyerWsId: ws.id,
-    rfpId: created.rfpId,
+    rfpCode: created.rfpId,
+    rfpId: rfpRow.id,
     pgInviteToken,
   };
 }
@@ -224,7 +233,7 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     const claim = await claimInviteTokenAction(setup.pgInviteToken);
     expect(claim.ok).toBe(true);
     if (!claim.ok) return;
-    expect(claim.rfpId).toBe(setup.rfpId);
+    expect(claim.rfpId).toBe(setup.rfpCode); // claim returns the human code
 
     // Workspace + membership exist from PG signup.
     const [pgWs] = await db

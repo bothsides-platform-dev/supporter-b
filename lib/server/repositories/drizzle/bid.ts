@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { bids, attachments } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { Bid, BuyerStage, CardIssuer } from '@/lib/types/bid';
@@ -8,25 +8,18 @@ import type { BidRepo, Tx } from '../types';
 type BidRow = typeof bids.$inferSelect;
 type AttachmentRow = typeof attachments.$inferSelect;
 
-function asAttachment(att: AttachmentRow | null | undefined): Attachment {
-  if (!att) {
-    // Bid.proposalPdf is required in the type — return an empty placeholder for
-    // bids that haven't yet attached a proposal. Callers should treat empty
-    // url as "missing".
-    return { id: '', name: '', size: 0, mimeType: '', url: '' };
-  }
+function asAttachment(att: AttachmentRow): Attachment {
   return {
     id: att.id,
     name: att.name,
     size: att.size,
     mimeType: att.mimeType,
-    // Public `url` is the authenticated route — never the storage key. See
-    // contract in app/api/files/upload/route.ts:169.
+    // Public `url` is the authenticated route — never the storage key.
     url: `/api/files/${att.id}`,
   };
 }
 
-function rowToBid(row: BidRow, att: AttachmentRow | null | undefined): Bid {
+function rowToBid(row: BidRow, proposalPdfs: Attachment[]): Bid {
   return {
     id: row.id,
     rfpId: row.rfpId,
@@ -43,7 +36,7 @@ function rowToBid(row: BidRow, att: AttachmentRow | null | undefined): Bid {
       | undefined,
     overseasCardFeePct:
       row.overseasCardFeePct == null ? undefined : Number(row.overseasCardFeePct),
-    proposalPdf: asAttachment(att),
+    proposalPdfs,
     memo: row.memo,
     status: row.status,
     buyerStage: row.buyerStage,
@@ -59,6 +52,24 @@ export class DrizzleBidRepository implements BidRepo {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private h(tx?: Tx): any {
     return tx ?? this._db;
+  }
+
+  // Batched proposal-attachment hydration — one query for all bid ids (no N+1).
+  // Proposals are 1..N via attachments.bid_id (exclusive-arc, C3).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async proposalsByBid(db: any, bidIds: string[]): Promise<Map<string, Attachment[]>> {
+    const map = new Map<string, Attachment[]>();
+    if (bidIds.length === 0) return map;
+    const rows = (await db
+      .select()
+      .from(attachments)
+      .where(inArray(attachments.bidId, bidIds))) as AttachmentRow[];
+    for (const att of rows) {
+      const list = map.get(att.bidId!) ?? [];
+      list.push(asAttachment(att));
+      map.set(att.bidId!, list);
+    }
+    return map;
   }
 
   async save(bid: Bid, tx?: Tx): Promise<void> {
@@ -79,7 +90,6 @@ export class DrizzleBidRepository implements BidRepo {
         cardFeesByIssuer: bid.cardFeesByIssuer ?? null,
         overseasCardFeePct:
           bid.overseasCardFeePct == null ? null : String(bid.overseasCardFeePct),
-        proposalAttachmentId: bid.proposalPdf?.id || null,
         memo: bid.memo ?? '',
         status: bid.status,
         submittedBy: bid.submittedBy,
@@ -103,36 +113,26 @@ export class DrizzleBidRepository implements BidRepo {
       });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async fetchOne(db: any, where: ReturnType<typeof eq>) {
-    const rows = await db
-      .select({ b: bids, a: attachments })
-      .from(bids)
-      .leftJoin(attachments, eq(bids.proposalAttachmentId, attachments.id))
-      .where(where);
-    return rows;
-  }
-
   async findById(id: string, tx?: Tx): Promise<Bid | undefined> {
     const db = this.h(tx);
-    const [row] = await this.fetchOne(db, eq(bids.id, id));
-    return row ? rowToBid(row.b, row.a) : undefined;
+    const [row] = (await db.select().from(bids).where(eq(bids.id, id)).limit(1)) as BidRow[];
+    if (!row) return undefined;
+    const proposals = await this.proposalsByBid(db, [row.id]);
+    return rowToBid(row, proposals.get(row.id) ?? []);
   }
 
   async findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]> {
     const db = this.h(tx);
-    const rows = await this.fetchOne(db, eq(bids.rfpId, rfpId));
-    return rows.map((r: { b: BidRow; a: AttachmentRow | null }) =>
-      rowToBid(r.b, r.a),
-    );
+    const rows = (await db.select().from(bids).where(eq(bids.rfpId, rfpId))) as BidRow[];
+    const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
+    return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
   }
 
   async findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]> {
     const db = this.h(tx);
-    const rows = await this.fetchOne(db, eq(bids.pgWsId, pgWsId));
-    return rows.map((r: { b: BidRow; a: AttachmentRow | null }) =>
-      rowToBid(r.b, r.a),
-    );
+    const rows = (await db.select().from(bids).where(eq(bids.pgWsId, pgWsId))) as BidRow[];
+    const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
+    return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
   }
 
   async updateBuyerStage(

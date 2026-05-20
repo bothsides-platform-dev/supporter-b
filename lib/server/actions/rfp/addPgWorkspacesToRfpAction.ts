@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { eq, inArray } from 'drizzle-orm';
 
 import { requireBuyerSession } from '@/lib/auth/session';
-import { rfpInvitations, rfps, workspaces } from '@/lib/db/schema';
+import { rfpAllowedPg, rfpInvitations, rfps, workspaces } from '@/lib/db/schema';
 import { actionDb, type RfpActionResult } from './_shared';
 
 const Input = z
@@ -58,17 +58,25 @@ export async function addPgWorkspacesToRfpAction(
   const result = await db.transaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (tx: any): Promise<AddPgWorkspacesResult> => {
+      // rfpId 입력은 사람용 code(P-YYMM-NNNN) — uuid 로 해석.
       const [row] = await tx
         .select({
+          id: rfps.id,
           buyerWsId: rfps.buyerWsId,
           status: rfps.status,
           deadline: rfps.deadline,
-          allowedPgWorkspaceIds: rfps.allowedPgWorkspaceIds,
         })
         .from(rfps)
-        .where(eq(rfps.id, parsed.data.rfpId))
+        .where(eq(rfps.code, parsed.data.rfpId))
         .limit(1);
       if (!row) return { ok: false, error: 'NOT_FOUND' };
+
+      // 현재 allowlist — rfp_allowed_pg 조인 테이블 (C2).
+      const allowedRows: { pgWsId: string }[] = await tx
+        .select({ pgWsId: rfpAllowedPg.pgWsId })
+        .from(rfpAllowedPg)
+        .where(eq(rfpAllowedPg.rfpId, row.id));
+      const currentAllowed = allowedRows.map((r) => r.pgWsId);
       if (row.buyerWsId !== wsId) return { ok: false, error: 'NOT_OWNED' };
       if (row.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
       if (new Date(row.deadline).getTime() <= Date.now()) {
@@ -94,9 +102,7 @@ export async function addPgWorkspacesToRfpAction(
       }
 
       // UUID dedupe vs. existing allowlist (lowercase for canonical comparison).
-      const existing = new Set(
-        (row.allowedPgWorkspaceIds ?? []).map((id: string) => id.toLowerCase()),
-      );
+      const existing = new Set(currentAllowed.map((id) => id.toLowerCase()));
       const seenInBatch = new Set<string>();
       const toAdd: string[] = [];
       const skipped: string[] = [];
@@ -114,20 +120,15 @@ export async function addPgWorkspacesToRfpAction(
         return { ok: true, addedCount: 0, skipped };
       }
 
-      const totalAfter = (row.allowedPgWorkspaceIds ?? []).length + toAdd.length;
+      const totalAfter = currentAllowed.length + toAdd.length;
       if (totalAfter > ALLOWED_PG_WORKSPACES_MAX) {
         return { ok: false, error: 'WORKSPACES_LIMIT_EXCEEDED' };
       }
 
-      // allowlist union update — canonical lowercase UUIDs.
-      const merged = [
-        ...(row.allowedPgWorkspaceIds ?? []).map((id: string) => id.toLowerCase()),
-        ...toAdd,
-      ];
+      // allowlist 추가 — rfp_allowed_pg 조인 행 insert.
       await tx
-        .update(rfps)
-        .set({ allowedPgWorkspaceIds: merged })
-        .where(eq(rfps.id, parsed.data.rfpId));
+        .insert(rfpAllowedPg)
+        .values(toAdd.map((pgWsId) => ({ rfpId: row.id, pgWsId })));
 
       // draft invitation rows. tokenHash placeholder 'draft-{invId}'를 넣어 NOT
       // NULL/UNIQUE 제약을 충족 — sendDraftInvitationsAction이 진짜 hash로 갱신.
@@ -136,7 +137,7 @@ export async function addPgWorkspacesToRfpAction(
         const invId = randomUUID();
         await tx.insert(rfpInvitations).values({
           id: invId,
-          rfpId: parsed.data.rfpId,
+          rfpId: row.id,
           pgWsId: workspaceId,
           tokenHash: `draft-${invId}`,
           sentAt: new Date(),
