@@ -1,4 +1,4 @@
-import { SkeletonPageHeader, SkeletonInboxList } from '@/components/skeletons'
+import { SkeletonPageHeader, SkeletonTableRows } from '@/components/skeletons'
 
 export default function Loading() {
   return (
@@ -6,7 +6,7 @@ export default function Loading() {
       <div className="px-8 py-5 border-b border-[var(--md-sys-color-outline-variant)]">
         <SkeletonPageHeader />
       </div>
-      <SkeletonInboxList rows={5} />
+      <SkeletonTableRows cols={[1.5, 4, 1, 1, 1.5]} rows={5} hasChip />
     </div>
   )
 }
