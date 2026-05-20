@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export function SkeletonBidForm() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="skeleton-bid-form">
       <Skeleton className="h-4 w-24" />
       {/* 정산 섹션 카드 */}
       <div className="border border-[var(--md-sys-color-outline-variant)] rounded-md p-4 space-y-3">

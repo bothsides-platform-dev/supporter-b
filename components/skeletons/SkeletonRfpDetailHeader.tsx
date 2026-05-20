@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export function SkeletonRfpDetailHeader() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-testid="skeleton-rfp-detail-header">
       <Skeleton className="h-2 w-20" />
       <div className="flex items-center gap-3">
         <Skeleton className="h-6 w-48" />

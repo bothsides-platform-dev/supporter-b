@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export function SkeletonBriefPanel() {
   return (
-    <div className="border-r border-[var(--md-sys-color-outline-variant)] pr-12 space-y-4">
+    <div className="border-r border-[var(--md-sys-color-outline-variant)] pr-12 space-y-4" data-testid="skeleton-brief-panel">
       <Skeleton className="h-4 w-3/4" />
       <Skeleton className="h-3 w-1/2" />
       <div className="border-t border-[var(--md-sys-color-outline-variant)] pt-4 space-y-2">
