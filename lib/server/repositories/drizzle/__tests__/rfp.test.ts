@@ -1,8 +1,9 @@
 import { describe, expect, it, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { DrizzleRfpRepository } from '../rfp';
 import type { RFP } from '@/lib/types/rfp';
-import { seedBizProfile, seedBuyerWorkspace, seedUser } from './_seed';
+import { seedBizProfile, seedBuyerWorkspace, seedPgWorkspace, seedUser } from './_seed';
 
 async function setup() {
   const db = await createPgliteDb();
@@ -14,13 +15,15 @@ async function setup() {
 }
 
 function makeRfp(
-  id: string,
+  code: string,
   buyerWsId: string,
   createdBy: string,
   status: RFP['status'] = 'draft',
+  allowedPgWorkspaceIds: string[] = [],
 ): RFP {
   return {
-    id,
+    id: randomUUID(),
+    code,
     buyerWsId,
     bizProfile: {
       bizNo: '1234567890',
@@ -32,7 +35,7 @@ function makeRfp(
     title: 'Test RFP',
     memo: '',
     rfpFiles: [],
-    allowedPgWorkspaceIds: [],
+    allowedPgWorkspaceIds,
     deadline: new Date(Date.now() + 86_400_000).toISOString(),
     status,
     createdBy,
@@ -51,15 +54,43 @@ describe('DrizzleRfpRepository', () => {
     db = ctx.db;
   });
 
-  it('saves and retrieves by id', async () => {
-    await repo.save(makeRfp('P-2605-0001', ctx.ws.id, ctx.user.id));
-    const fetched = await repo.findById('P-2605-0001');
-    expect(fetched).toMatchObject({ id: 'P-2605-0001', status: 'draft' });
+  it('saves and retrieves by uuid id', async () => {
+    const rfp = makeRfp('P-2605-0001', ctx.ws.id, ctx.user.id);
+    await repo.save(rfp);
+    const fetched = await repo.findById(rfp.id);
+    expect(fetched).toMatchObject({ id: rfp.id, code: 'P-2605-0001', status: 'draft' });
     expect(fetched!.bizProfile?.bizNo).toBe('1234567890');
   });
 
-  it('returns undefined for unknown id', async () => {
-    expect(await repo.findById('Q-NONE')).toBeUndefined();
+  it('findByCode retrieves by human code', async () => {
+    const rfp = makeRfp('P-2605-0042', ctx.ws.id, ctx.user.id);
+    await repo.save(rfp);
+    const fetched = await repo.findByCode('P-2605-0042');
+    expect(fetched).toMatchObject({ id: rfp.id, code: 'P-2605-0042' });
+  });
+
+  it('returns undefined for unknown id and code', async () => {
+    expect(await repo.findById(randomUUID())).toBeUndefined();
+    expect(await repo.findByCode('Q-NONE')).toBeUndefined();
+  });
+
+  it('round-trips the allowlist via rfp_allowed_pg', async () => {
+    const pg1 = await seedPgWorkspace(db, 'Toss');
+    const pg2 = await seedPgWorkspace(db, 'Inicis');
+    const rfp = makeRfp('P-2605-0003', ctx.ws.id, ctx.user.id, 'draft', [pg1.id, pg2.id]);
+    await repo.save(rfp);
+    const fetched = await repo.findById(rfp.id);
+    expect(fetched!.allowedPgWorkspaceIds.sort()).toEqual([pg1.id, pg2.id].sort());
+  });
+
+  it('save replaces the allowlist on upsert', async () => {
+    const pg1 = await seedPgWorkspace(db, 'Toss');
+    const pg2 = await seedPgWorkspace(db, 'Inicis');
+    const rfp = makeRfp('P-2605-0004', ctx.ws.id, ctx.user.id, 'draft', [pg1.id]);
+    await repo.save(rfp);
+    await repo.save({ ...rfp, allowedPgWorkspaceIds: [pg2.id] });
+    const fetched = await repo.findById(rfp.id);
+    expect(fetched!.allowedPgWorkspaceIds).toEqual([pg2.id]);
   });
 
   it('findByBuyerWs returns only matching workspace RFPs', async () => {
@@ -80,34 +111,35 @@ describe('DrizzleRfpRepository', () => {
   });
 
   it('transitions draft → sent', async () => {
-    await repo.save(makeRfp('P-2605-0001', ctx.ws.id, ctx.user.id));
-    const updated = await repo.transition('P-2605-0001', 'sent');
+    const rfp = makeRfp('P-2605-0001', ctx.ws.id, ctx.user.id);
+    await repo.save(rfp);
+    const updated = await repo.transition(rfp.id, 'sent');
     expect(updated.status).toBe('sent');
   });
 
   it('throws on invalid transition (draft → awarded)', async () => {
-    await repo.save(makeRfp('P-2605-0001', ctx.ws.id, ctx.user.id));
-    await expect(repo.transition('P-2605-0001', 'awarded')).rejects.toThrow(
+    const rfp = makeRfp('P-2605-0001', ctx.ws.id, ctx.user.id);
+    await repo.save(rfp);
+    await expect(repo.transition(rfp.id, 'awarded')).rejects.toThrow(
       'Invalid RFP transition',
     );
   });
 
   it('throws when RFP not found', async () => {
-    await expect(repo.transition('Q-NONE', 'sent')).rejects.toThrow('not found');
+    await expect(repo.transition(randomUUID(), 'sent')).rejects.toThrow('not found');
   });
 
   it('concurrent transition: only one of two parallel sent->closed wins', async () => {
-    await repo.save(makeRfp('P-2605-0010', ctx.ws.id, ctx.user.id, 'sent'));
+    const rfp = makeRfp('P-2605-0010', ctx.ws.id, ctx.user.id, 'sent');
+    await repo.save(rfp);
     const results = await Promise.allSettled([
-      repo.transition('P-2605-0010', 'closed'),
-      repo.transition('P-2605-0010', 'cancelled'),
+      repo.transition(rfp.id, 'closed'),
+      repo.transition(rfp.id, 'cancelled'),
     ]);
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
     const rejected = results.filter((r) => r.status === 'rejected');
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
-    // The losing call hits either the assertTransition guard (sent->closed
-    // already moved to closed) or the WHERE status=$prev concurrency guard.
     const reason = (rejected[0] as PromiseRejectedResult).reason as Error;
     expect(reason.message).toMatch(/Invalid RFP transition|lost a race/);
   });

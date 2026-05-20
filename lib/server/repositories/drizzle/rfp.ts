@@ -1,5 +1,5 @@
-import { and, eq, sql } from 'drizzle-orm';
-import { rfps, bizProfiles } from '@/lib/db/schema';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { rfps, bizProfiles, rfpAllowedPg } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { BizProfile } from '@/lib/types/biz-profile';
@@ -13,7 +13,7 @@ function toIso(d: Date | null | undefined): string | undefined {
   return d ? new Date(d).toISOString() : undefined;
 }
 
-function rowToRfp(row: RfpRow, biz: BizRow | null): RFP {
+function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
   const profile: BizProfile | undefined = biz
     ? {
         bizNo: biz.bizNo ?? undefined,
@@ -27,12 +27,13 @@ function rowToRfp(row: RfpRow, biz: BizRow | null): RFP {
     : undefined;
   return {
     id: row.id,
+    code: row.code,
     buyerWsId: row.buyerWsId,
     bizProfile: profile,
     title: row.title,
     memo: row.memo,
     rfpFiles: [], // attachments hydrated separately when needed
-    allowedPgWorkspaceIds: row.allowedPgWorkspaceIds ?? [],
+    allowedPgWorkspaceIds: allowed,
     deadline: new Date(row.deadline).toISOString(),
     status: row.status,
     awardedBidId: row.awardedBidId ?? undefined,
@@ -50,6 +51,34 @@ export class DrizzleRfpRepository implements RfpRepo {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private h(tx?: Tx): any {
     return tx ?? this._db;
+  }
+
+  // Batched allowlist hydration — one query for all rfp ids (no N+1).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async allowedByRfp(db: any, rfpIds: string[]): Promise<Map<string, string[]>> {
+    const map = new Map<string, string[]>();
+    if (rfpIds.length === 0) return map;
+    const rows = await db
+      .select({ rfpId: rfpAllowedPg.rfpId, pgWsId: rfpAllowedPg.pgWsId })
+      .from(rfpAllowedPg)
+      .where(inArray(rfpAllowedPg.rfpId, rfpIds));
+    for (const r of rows as { rfpId: string; pgWsId: string }[]) {
+      const list = map.get(r.rfpId) ?? [];
+      list.push(r.pgWsId);
+      map.set(r.rfpId, list);
+    }
+    return map;
+  }
+
+  // Replace the allowlist join rows for one RFP with the given workspace ids.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async syncAllowlist(db: any, rfpId: string, pgWsIds: string[]): Promise<void> {
+    await db.delete(rfpAllowedPg).where(eq(rfpAllowedPg.rfpId, rfpId));
+    if (pgWsIds.length > 0) {
+      // Dedupe to respect the (rfp_id, pg_ws_id) PK.
+      const unique = [...new Set(pgWsIds)];
+      await db.insert(rfpAllowedPg).values(unique.map((pgWsId) => ({ rfpId, pgWsId })));
+    }
   }
 
   async save(rfp: RFP, tx?: Tx): Promise<void> {
@@ -71,16 +100,15 @@ export class DrizzleRfpRepository implements RfpRepo {
       bizProfileId = biz.id;
     }
 
-    // shareToken 미지정 시 DB default(gen_random_uuid()::text)로 폴백 — 호출자가
-    // generateToken()으로 명시 지정해도 되고, 자동 생성도 안전.
+    // shareToken 미지정 시 DB default(gen_random_uuid()::text)로 폴백.
     type Insertable = typeof rfps.$inferInsert;
     const values: Insertable = {
       id: rfp.id,
+      code: rfp.code,
       buyerWsId: rfp.buyerWsId,
       bizProfileId,
       title: rfp.title,
       memo: rfp.memo,
-      allowedPgWorkspaceIds: rfp.allowedPgWorkspaceIds,
       deadline: new Date(rfp.deadline),
       status: rfp.status,
       awardedBidId: rfp.awardedBidId ?? null,
@@ -97,13 +125,15 @@ export class DrizzleRfpRepository implements RfpRepo {
         set: {
           title: rfp.title,
           memo: rfp.memo,
-          allowedPgWorkspaceIds: rfp.allowedPgWorkspaceIds,
           deadline: new Date(rfp.deadline),
           status: rfp.status,
           awardedBidId: rfp.awardedBidId ?? null,
           sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
         },
       });
+
+    // Allowlist is normalized into rfp_allowed_pg (C2).
+    await this.syncAllowlist(db, rfp.id, rfp.allowedPgWorkspaceIds);
   }
 
   async findById(id: string, tx?: Tx): Promise<RFP | undefined> {
@@ -114,7 +144,22 @@ export class DrizzleRfpRepository implements RfpRepo {
       .leftJoin(bizProfiles, eq(rfps.bizProfileId, bizProfiles.id))
       .where(eq(rfps.id, id))
       .limit(1);
-    return row ? rowToRfp(row.rfp, row.biz) : undefined;
+    if (!row) return undefined;
+    const allowed = await this.allowedByRfp(db, [row.rfp.id]);
+    return rowToRfp(row.rfp, row.biz, allowed.get(row.rfp.id) ?? []);
+  }
+
+  async findByCode(code: string, tx?: Tx): Promise<RFP | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ rfp: rfps, biz: bizProfiles })
+      .from(rfps)
+      .leftJoin(bizProfiles, eq(rfps.bizProfileId, bizProfiles.id))
+      .where(eq(rfps.code, code))
+      .limit(1);
+    if (!row) return undefined;
+    const allowed = await this.allowedByRfp(db, [row.rfp.id]);
+    return rowToRfp(row.rfp, row.biz, allowed.get(row.rfp.id) ?? []);
   }
 
   async findByBuyerWs(wsId: string, tx?: Tx): Promise<RFP[]> {
@@ -124,9 +169,12 @@ export class DrizzleRfpRepository implements RfpRepo {
       .from(rfps)
       .leftJoin(bizProfiles, eq(rfps.bizProfileId, bizProfiles.id))
       .where(eq(rfps.buyerWsId, wsId));
-    return rows.map((r: { rfp: RfpRow; biz: BizRow | null }) =>
-      rowToRfp(r.rfp, r.biz),
+    const typed = rows as { rfp: RfpRow; biz: BizRow | null }[];
+    const allowed = await this.allowedByRfp(
+      db,
+      typed.map((r) => r.rfp.id),
     );
+    return typed.map((r) => rowToRfp(r.rfp, r.biz, allowed.get(r.rfp.id) ?? []));
   }
 
   async findByShareToken(token: string, tx?: Tx): Promise<RFP | undefined> {
@@ -137,7 +185,9 @@ export class DrizzleRfpRepository implements RfpRepo {
       .leftJoin(bizProfiles, eq(rfps.bizProfileId, bizProfiles.id))
       .where(eq(rfps.shareToken, token))
       .limit(1);
-    return row ? rowToRfp(row.rfp, row.biz) : undefined;
+    if (!row) return undefined;
+    const allowed = await this.allowedByRfp(db, [row.rfp.id]);
+    return rowToRfp(row.rfp, row.biz, allowed.get(row.rfp.id) ?? []);
   }
 
   async transition(
@@ -165,8 +215,6 @@ export class DrizzleRfpRepository implements RfpRepo {
       setPatch.sentAt = patch.sentAt ? new Date(patch.sentAt) : null;
     if (patch?.title !== undefined) setPatch.title = patch.title;
     if (patch?.memo !== undefined) setPatch.memo = patch.memo;
-    if (patch?.allowedPgWorkspaceIds !== undefined)
-      setPatch.allowedPgWorkspaceIds = patch.allowedPgWorkspaceIds;
     if (patch?.deadline !== undefined) setPatch.deadline = new Date(patch.deadline);
 
     const updated = await db
@@ -177,6 +225,10 @@ export class DrizzleRfpRepository implements RfpRepo {
 
     if (updated.length === 0) {
       throw new Error(`RFP transition lost a race for ${id}`);
+    }
+
+    if (patch?.allowedPgWorkspaceIds !== undefined) {
+      await this.syncAllowlist(db, id, patch.allowedPgWorkspaceIds);
     }
 
     const after = await this.findById(id, tx);
