@@ -29,12 +29,14 @@ function rowToRfp(row: RfpRow, biz: BizRow | null): RFP {
     : undefined;
   return {
     id: row.id,
+    code: row.code,
     buyerWsId: row.buyerWsId,
     bizProfile: profile,
     title: row.title,
     memo: row.memo,
     rfpFiles: [],
-    allowedPgWorkspaceIds: row.allowedPgWorkspaceIds ?? [],
+    // PG-side view (findByPgWorkspace) never exposes the allowlist by design.
+    allowedPgWorkspaceIds: [],
     deadline: new Date(row.deadline).toISOString(),
     status: row.status,
     awardedBidId: row.awardedBidId ?? undefined,

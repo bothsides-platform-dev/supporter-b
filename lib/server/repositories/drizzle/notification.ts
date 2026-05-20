@@ -51,29 +51,21 @@ export class DrizzleNotificationRepository implements NotificationRepo {
 
   async save(n: Notification, tx?: Tx): Promise<void> {
     const db = this.h(tx);
-    await db
-      .insert(notifications)
-      .values({
-        id: n.id,
-        userId: n.userId,
-        workspaceId: n.workspaceId,
-        type: n.type,
-        title: n.title,
-        body: n.body,
-        channel: uiChannel(n.channel),
-        status: uiStatus(n.status),
-        linkUrl: n.linkUrl ?? null,
-        sentAt: n.sentAt ? new Date(n.sentAt) : null,
-        readAt: n.readAt ? new Date(n.readAt) : null,
-      })
-      .onConflictDoUpdate({
-        target: notifications.id,
-        set: {
-          status: uiStatus(n.status),
-          sentAt: n.sentAt ? new Date(n.sentAt) : null,
-          readAt: n.readAt ? new Date(n.readAt) : null,
-        },
-      });
+    // 알림은 append-only(생성 시 고유 uuid). 파티션 테이블은 id 단독 UNIQUE 가
+    // 불가하므로 onConflict(id) 불가 — 평범한 insert. 상태 변경은 markRead 경유.
+    await db.insert(notifications).values({
+      id: n.id,
+      userId: n.userId,
+      workspaceId: n.workspaceId,
+      type: n.type,
+      title: n.title,
+      body: n.body,
+      channel: uiChannel(n.channel),
+      status: uiStatus(n.status),
+      linkUrl: n.linkUrl ?? null,
+      sentAt: n.sentAt ? new Date(n.sentAt) : null,
+      readAt: n.readAt ? new Date(n.readAt) : null,
+    });
   }
 
   async findRecentForUser(
