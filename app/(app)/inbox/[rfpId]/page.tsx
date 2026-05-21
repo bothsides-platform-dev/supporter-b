@@ -1,5 +1,6 @@
 // PG RFP 상세 (RSC). 데이터·소유 가드·markOpened 부수효과는 loadPgRfpDetail 에 위임.
 // auth/redirect 가드만 page shell 책임.
+import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
@@ -18,15 +19,23 @@ export default async function InboxDetailPage({ params }: Props) {
     redirect(`/login?next=/inbox/${rfpCode}`);
   }
 
-  const data = await loadPgRfpDetail({
-    code: rfpCode,
-    workspaceId: session.user.workspaceId,
-  });
-  if (!data) notFound();
-
   return (
     <div className="px-8 py-8">
-      <PgRfpDetailContent data={data} mode="page" />
+      <Suspense fallback={<PgRfpDetailContent.Skeleton />}>
+        <PgRfpDetailLoader rfpCode={rfpCode} wsId={session.user.workspaceId} />
+      </Suspense>
     </div>
   );
+}
+
+async function PgRfpDetailLoader({
+  rfpCode,
+  wsId,
+}: {
+  rfpCode: string;
+  wsId: string;
+}) {
+  const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: wsId });
+  if (!data) notFound();
+  return <PgRfpDetailContent data={data} mode="page" />;
 }
