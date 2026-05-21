@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Label } from '@/components/primitives/Label';
@@ -20,7 +21,7 @@ export default async function RfpListPage() {
     redirect('/login?next=/rfp');
   }
 
-  const rfps = await (await getRfpRepo()).findByBuyerWs(session.user.workspaceId);
+  const wsId = session.user.workspaceId;
 
   return (
     <div className="flex flex-col h-full">
@@ -36,20 +37,30 @@ export default async function RfpListPage() {
         </Link>
       </div>
 
-      {rfps.length === 0 ? (
-        <EmptyState
-          icon={<FileTextIcon size={32} />}
-          title="발송된 제안 요청이 없습니다."
-          description="새로운 제안 요청을 작성해 PG사에 발송하세요."
-          action={
-            <Link href="/rfp/new">
-              <Button size="sm">+ 신규 제안</Button>
-            </Link>
-          }
-        />
-      ) : (
-        <RfpListTable rfps={rfps} />
-      )}
+      <Suspense fallback={<RfpListTable.Skeleton />}>
+        <RfpListTableLoader wsId={wsId} />
+      </Suspense>
     </div>
   );
+}
+
+async function RfpListTableLoader({ wsId }: { wsId: string }) {
+  const rfps = await (await getRfpRepo()).findByBuyerWs(wsId);
+
+  if (rfps.length === 0) {
+    return (
+      <EmptyState
+        icon={<FileTextIcon size={32} />}
+        title="발송된 제안 요청이 없습니다."
+        description="새로운 제안 요청을 작성해 PG사에 발송하세요."
+        action={
+          <Link href="/rfp/new">
+            <Button size="sm">+ 신규 제안</Button>
+          </Link>
+        }
+      />
+    );
+  }
+
+  return <RfpListTable rfps={rfps} />;
 }
