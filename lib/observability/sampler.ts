@@ -8,12 +8,16 @@
 const BASE_SAMPLE_RATE = 0.1;
 const DROP_ROUTES = ['/monitoring', '/api/notifications/stream'];
 
-export function tracesSampler(samplingContext: any): number {
-  const url: string =
-    samplingContext?.attributes?.['http.target'] ??
-    samplingContext?.normalizedRequest?.url ??
-    samplingContext?.name ??
-    '';
+// Sentry's SamplingContext shape varies across v10 transports; we only read a
+// few url-bearing fields, so accept `unknown` and narrow.
+export function tracesSampler(samplingContext: unknown): number {
+  const ctx = samplingContext as {
+    name?: string;
+    attributes?: Record<string, unknown>;
+    normalizedRequest?: { url?: string };
+  };
+  const url: unknown =
+    ctx?.attributes?.['http.target'] ?? ctx?.normalizedRequest?.url ?? ctx?.name ?? '';
 
   if (DROP_ROUTES.some((route) => String(url).includes(route))) return 0;
   return BASE_SAMPLE_RATE;

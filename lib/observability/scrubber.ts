@@ -49,12 +49,13 @@ const SCRUB_FIELDS = ['request', 'extra', 'contexts', 'tags', 'user'] as const;
 // to Sentry's `beforeSend` — `ErrorEvent` is an interface without an index
 // signature. We cast internally to traverse dynamic fields.
 export function scrubEvent<E extends object>(event: E): E {
-  const bag = event as Record<string, any>;
+  const bag = event as Record<string, unknown>;
   for (const field of SCRUB_FIELDS) {
     if (bag[field]) bag[field] = deepScrub(bag[field]);
   }
-  if (Array.isArray(bag.breadcrumbs)) {
-    for (const crumb of bag.breadcrumbs) {
+  const breadcrumbs = bag.breadcrumbs;
+  if (Array.isArray(breadcrumbs)) {
+    for (const crumb of breadcrumbs as Array<{ data?: unknown }>) {
       if (crumb?.data) crumb.data = deepScrub(crumb.data);
     }
   }

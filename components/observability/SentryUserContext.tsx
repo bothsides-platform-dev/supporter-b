@@ -10,6 +10,9 @@ import { setSentryUser, type SentryUserContext as SentryUser } from '@/lib/obser
 export function SentryUserContext({ user }: { user: SentryUser }) {
   useEffect(() => {
     setSentryUser(user);
+    // Re-run only when an identifying field changes — not on every new object
+    // identity the server render hands down.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id, user.workspaceId, user.workspaceType, user.role]);
 
   return null;
