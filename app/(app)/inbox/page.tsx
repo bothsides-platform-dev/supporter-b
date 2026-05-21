@@ -25,7 +25,9 @@ export default async function InboxPage() {
   const rows = pairs.map(({ invitation, rfp }) => ({
     invitationId: invitation.id,
     invitationStatus: invitation.status,
-    rfpId: rfp.id,
+    // 사람용 code — InboxList 가 /inbox/<code> 로 이동(상세는 findByCode)하고 번호로 표시.
+    // uuid(rfp.id)를 쓰면 findByCode 미스로 행 클릭이 404.
+    rfpId: rfp.code,
     rfpTitle: rfp.title,
     rfpDeadline: rfp.deadline,
     grade: rfp.bizProfile?.grade

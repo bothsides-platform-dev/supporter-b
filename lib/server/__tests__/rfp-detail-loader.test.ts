@@ -19,7 +19,11 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
-import { loadBuyerRfpDetail, loadPgRfpDetail } from '../rfp-detail-loader';
+import {
+  loadBuyerAwardData,
+  loadBuyerRfpDetail,
+  loadPgRfpDetail,
+} from '../rfp-detail-loader';
 
 let ctx: Awaited<ReturnType<typeof setup>>;
 
@@ -210,5 +214,49 @@ describe('loadPgRfpDetail', () => {
     const res = await loadPgRfpDetail({ code: 'P-2605-0012', workspaceId: ctx.tossId });
     expect(res).not.toBeNull();
     expect(res!.myBid?.id).toBe(bidId);
+  });
+});
+
+describe('loadBuyerAwardData', () => {
+  it('다른 워크스페이스 소유 → null', async () => {
+    const rfpId = await ctx.seedRfp('P-2605-0020');
+    const inv = await ctx.seedInvitation(rfpId, ctx.tossId);
+    const bidId = await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted');
+    const res = await loadBuyerAwardData({
+      code: 'P-2605-0020',
+      workspaceId: ctx.otherWsId,
+      bidId,
+    });
+    expect(res).toBeNull();
+  });
+
+  it('선택 bid 없음(잘못된 bidId) → null', async () => {
+    await ctx.seedRfp('P-2605-0021');
+    const res = await loadBuyerAwardData({
+      code: 'P-2605-0021',
+      workspaceId: ctx.buyerWsId,
+      bidId: '00000000-0000-0000-0000-000000000000',
+    });
+    expect(res).toBeNull();
+  });
+
+  it('선택 bid + 나머지 + PG명/구매사명 반환', async () => {
+    const rfpId = await ctx.seedRfp('P-2605-0022');
+    const invToss = await ctx.seedInvitation(rfpId, ctx.tossId);
+    const invInicis = await ctx.seedInvitation(rfpId, ctx.inicisId);
+    const tossBid = await ctx.seedBid(rfpId, ctx.tossId, invToss, 'submitted');
+    const inicisBid = await ctx.seedBid(rfpId, ctx.inicisId, invInicis, 'submitted');
+
+    const res = await loadBuyerAwardData({
+      code: 'P-2605-0022',
+      workspaceId: ctx.buyerWsId,
+      bidId: tossBid,
+    });
+
+    expect(res).not.toBeNull();
+    expect(res!.selected.id).toBe(tossBid);
+    expect(res!.others.map((b) => b.id)).toEqual([inicisBid]);
+    expect(res!.pgWsNameById[ctx.tossId]).toBe('toss.im');
+    expect(res!.buyerWorkspaceName).toBe('구매사');
   });
 });

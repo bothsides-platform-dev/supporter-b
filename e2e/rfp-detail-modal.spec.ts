@@ -40,3 +40,20 @@ test.describe('RFP 상세 가로채기 모달 (구매사)', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });
+
+test.describe('RFP 상세 가로채기 모달 (PG)', () => {
+  test('인박스 행 클릭 → 모달, 뒤로가기 → 닫힘', async ({ page }) => {
+    await loginAs(page, 'pg-toss');
+    await page.goto('/inbox');
+
+    // 행 클릭(soft-nav). 인박스 행은 code 로 이동해야 가로채진다(uuid 면 404).
+    await page.getByText(RFP_CODE).click();
+
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`));
+    await expect(page.getByRole('dialog')).toBeVisible();
+
+    await page.goBack();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/inbox$/);
+  });
+});

@@ -15,7 +15,6 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanCard } from './KanbanCard';
-import { KanbanCardDetailModal } from './KanbanCardDetailModal';
 import { KanbanActionDialog } from './KanbanActionDialog';
 import { resolveDrag, type DragAction } from './dragMatrix';
 import { toast } from '@/lib/toast';
@@ -63,10 +62,6 @@ type Props =
 
 export function KanbanBoard(props: Props) {
   const router = useRouter();
-  const [selectedBuyer, setSelectedBuyer] = useState<BuyerKanbanCard | null>(
-    null,
-  );
-  const [selectedPg, setSelectedPg] = useState<PgKanbanCard | null>(null);
   const [pendingAction, setPendingAction] = useState<DragAction | null>(null);
 
   const sensors = useSensors(
@@ -166,7 +161,7 @@ export function KanbanBoard(props: Props) {
                       key={card.rfpId}
                       role="buyer"
                       card={card}
-                      onSelect={() => setSelectedBuyer(card)}
+                      onSelect={() => router.push(`/rfp/${card.rfpId}`)}
                     />
                   ))}
                 </KanbanColumn>
@@ -174,11 +169,6 @@ export function KanbanBoard(props: Props) {
             })}
           </div>
         </DndContext>
-        <KanbanCardDetailModal
-          role="buyer"
-          card={selectedBuyer}
-          onOpenChange={(open) => !open && setSelectedBuyer(null)}
-        />
         <KanbanActionDialog
           action={pendingAction}
           onClose={() => setPendingAction(null)}
@@ -220,7 +210,7 @@ export function KanbanBoard(props: Props) {
                     key={card.invitationId}
                     role="pg"
                     card={card}
-                    onSelect={() => setSelectedPg(card)}
+                    onSelect={() => router.push(`/inbox/${card.rfpId}`)}
                   />
                 ))}
               </KanbanColumn>
@@ -228,11 +218,6 @@ export function KanbanBoard(props: Props) {
           })}
         </div>
       </DndContext>
-      <KanbanCardDetailModal
-        role="pg"
-        card={selectedPg}
-        onOpenChange={(open) => !open && setSelectedPg(null)}
-      />
       <KanbanActionDialog
         action={pendingAction}
         onClose={() => setPendingAction(null)}

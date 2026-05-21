@@ -42,7 +42,8 @@ export default async function RfpDetailModalPage({ params }: Props) {
 
   return (
     <RouteModalShell title={data.rfp.title} size="sm:max-w-[1100px] lg:max-w-[1280px]">
-      <div className="space-y-10 p-2">
+      {/* DialogContent 가 p-4 패딩 제공 — 여기선 섹션 간 수직 간격만. */}
+      <div className="space-y-10">
         <RfpDetailContent data={data} />
       </div>
     </RouteModalShell>
