@@ -59,8 +59,11 @@ CRON_LINE="$CRON_MIN * * * * $SELF run"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOGFILE"; }
 
 count_instances() {
-  oci compute instance list -c "$COMPARTMENT_ID" \
-    --query 'data[?"lifecycle-state"!=`TERMINATED`].id | length(@)' --raw-output 2>/dev/null || echo "ERR"
+  local out
+  out=$(oci compute instance list -c "$COMPARTMENT_ID" \
+    --query 'data[?"lifecycle-state"!=`TERMINATED`].id | length(@)' --raw-output 2>/dev/null) || { echo "ERR"; return; }
+  # OCI CLI returns empty string (not "0") when no instances exist
+  echo "${out:-0}"
 }
 
 attach_reserved_ip() {
