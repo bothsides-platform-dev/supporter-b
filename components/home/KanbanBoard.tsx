@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   DndContext,
   PointerSensor,
@@ -229,3 +230,33 @@ export function KanbanBoard(props: Props) {
     </>
   );
 }
+
+KanbanBoard.Skeleton = function KanbanBoardSkeleton() {
+  return (
+    <div className="flex lg:grid lg:grid-cols-6 gap-3 overflow-x-auto lg:overflow-x-visible snap-x snap-mandatory pb-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex flex-col w-72 lg:w-auto lg:min-w-[160px] shrink-0 snap-start bg-[var(--md-sys-color-surface-container)] rounded-[var(--md-sys-shape-medium)] p-3 min-h-[400px]"
+        >
+          <div className="flex items-center justify-between gap-2 mb-3 px-1">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-2 w-2 rounded-full" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+            <Skeleton className="h-3 w-4" />
+          </div>
+          <div className="flex flex-col gap-2">
+            {i < 2 &&
+              Array.from({ length: 2 }).map((_, j) => (
+                <Skeleton
+                  key={j}
+                  className="h-[80px] rounded-[var(--md-sys-shape-medium)]"
+                />
+              ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
