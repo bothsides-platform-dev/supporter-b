@@ -4,10 +4,12 @@ import { render, screen } from '@testing-library/react'
 import { LandingHero } from './LandingHero'
 
 vi.mock('motion/react', () => {
-  const makeEl =
-    (tag: string) =>
-    ({ children, ...props }: Record<string, unknown>) =>
+  const makeEl = (tag: string) => {
+    const El = ({ children, ...props }: Record<string, unknown>) =>
       React.createElement(tag, props, children as React.ReactNode)
+    El.displayName = `motion.${tag}`
+    return El
+  }
 
   const motion = new Proxy(
     {},
