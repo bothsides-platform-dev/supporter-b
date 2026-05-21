@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Label } from '@/components/primitives/Label';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BidComparisonView } from '@/components/rfp/BidComparisonView';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
@@ -156,3 +157,52 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
     </>
   );
 }
+
+RfpDetailContent.Skeleton = function RfpDetailContentSkeleton() {
+  return (
+    <>
+      <div>
+        <Skeleton className="h-3 w-24 mb-2" />
+        <div className="flex items-start justify-between mt-1 gap-4">
+          <Skeleton className="h-7 w-80" />
+          <Skeleton className="h-5 w-16 rounded-full shrink-0" />
+        </div>
+        <div className="flex items-center gap-4 mt-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      </div>
+
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <Skeleton className="h-2 w-16" />
+          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+        </div>
+        <Skeleton className="h-48 w-full" />
+      </section>
+
+      <Skeleton className="h-16 w-full" />
+
+      <div className="grid grid-cols-2 gap-10 border-t border-[var(--md-sys-color-outline-variant)] pt-8">
+        <section>
+          <div className="flex items-center gap-3 mb-3">
+            <Skeleton className="h-3 w-20" />
+            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          </div>
+          <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="py-2 flex items-baseline justify-between">
+                <Skeleton className="h-2 w-16" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="space-y-6">
+          <Skeleton className="h-32 w-full" />
+        </section>
+      </div>
+    </>
+  );
+};

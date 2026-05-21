@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { RfpDetailContent } from '@/components/rfp/RfpDetailContent';
@@ -19,13 +20,44 @@ export default async function RfpDetailPage({ params }: Props) {
     redirect(`/login?next=/rfp/${id}`);
   }
 
-  // URL 파라미터 id 는 사람용 code(P-YYMM-NNNN). loader 가 내부 조회·소유 가드.
+  const { workspaceId, id: userId, name, email } = session.user;
+
+  return (
+    <Suspense
+      fallback={
+        <PageEnter className="px-8 py-8 space-y-10">
+          <RfpDetailContent.Skeleton />
+        </PageEnter>
+      }
+    >
+      <RfpDetailLoader
+        id={id}
+        wsId={workspaceId}
+        userId={userId}
+        userName={name ?? email ?? '구매사 담당자'}
+      />
+    </Suspense>
+  );
+}
+
+async function RfpDetailLoader({
+  id,
+  wsId,
+  userId,
+  userName,
+}: {
+  id: string;
+  wsId: string;
+  userId: string;
+  userName: string;
+}) {
   const data = await loadBuyerRfpDetail({
     code: id,
-    workspaceId: session.user.workspaceId,
-    userId: session.user.id,
-    userName: session.user.name ?? session.user.email ?? '구매사 담당자',
+    workspaceId: wsId,
+    userId,
+    userName,
   });
+
   if (!data) {
     return (
       <div className="px-8 py-8">
