@@ -89,12 +89,6 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
           <PlusIcon size={14} className="shrink-0" />
           워크스페이스 만들기
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push('/workspace/join')} className={itemCls}>
-          <span className="w-4 shrink-0 text-center text-[var(--md-sys-color-on-surface-variant)]">
-            →
-          </span>
-          초대 링크로 합류
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

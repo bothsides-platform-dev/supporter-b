@@ -6,7 +6,9 @@ import { Label } from '@/components/primitives/Label';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
 import { formatDate } from '@/lib/format';
+import { toast } from '@/lib/toast';
 import { inviteWorkspaceMemberAction } from '@/lib/server/actions/workspace/inviteWorkspaceMemberAction';
+import { regenerateWorkspaceShareTokenAction } from '@/lib/server/actions/workspace/regenerateWorkspaceShareTokenAction';
 import type { User } from '@/lib/types/user';
 
 type PendingInvite = { email: string; createdAt: string };
@@ -16,14 +18,39 @@ type Props = {
   initialMembers: User[];
   userRole: 'admin' | 'member';
   initialPendingInvites: PendingInvite[];
+  /** 공용 초대 링크 — 누구나 이 링크로 워크스페이스에 합류할 수 있다. */
+  shareUrl: string;
 };
 
-export function MembersPanel({ workspaceName, initialMembers, userRole, initialPendingInvites }: Props) {
+export function MembersPanel({ workspaceName, initialMembers, userRole, initialPendingInvites, shareUrl }: Props) {
   const [members] = useState<User[]>(initialMembers);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>(initialPendingInvites);
   const [inviteEmail, setInviteEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [shareLink, setShareLink] = useState(shareUrl);
+  const [isRegenerating, startRegenerate] = useTransition();
+
+  const handleCopyShare = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      toast('초대 링크를 복사했습니다.');
+    } catch {
+      toast('링크 복사에 실패했습니다.', { type: 'error' });
+    }
+  };
+
+  const handleRegenerate = () => {
+    startRegenerate(async () => {
+      const r = await regenerateWorkspaceShareTokenAction();
+      if (r.ok) {
+        setShareLink(r.shareUrl);
+        toast('초대 링크를 새로 발급했습니다. 기존 링크는 더 이상 사용할 수 없습니다.');
+      } else {
+        toast(`재발급 실패 — ${r.error}`, { type: 'error' });
+      }
+    });
+  };
 
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,6 +143,39 @@ export function MembersPanel({ workspaceName, initialMembers, userRole, initialP
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Share link — admin only */}
+      {userRole === 'admin' && (
+        <section>
+          <div className="flex items-center gap-3 mb-4">
+            <Label size="md" muted={false}>초대 링크</Label>
+            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          </div>
+          <div className="flex items-center gap-3 border border-[var(--md-sys-color-outline-variant)] rounded-md px-3 py-2">
+            <input
+              readOnly
+              value={shareLink}
+              onFocus={(e) => e.currentTarget.select()}
+              className="flex-1 bg-transparent text-[12px] font-mono tabular-nums text-[var(--md-sys-color-on-surface-variant)] focus:outline-none truncate"
+            />
+            <Button type="button" variant="outlined" size="sm" onClick={handleCopyShare}>
+              복사
+            </Button>
+            <Button
+              type="button"
+              variant="text"
+              size="sm"
+              onClick={handleRegenerate}
+              disabled={isRegenerating}
+            >
+              {isRegenerating ? '발급 중…' : '재발급'}
+            </Button>
+          </div>
+          <p className="mt-2 font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+            이 링크를 가진 누구나 워크스페이스에 합류할 수 있습니다. 유출 시 재발급하세요.
+          </p>
         </section>
       )}
 

@@ -4,6 +4,7 @@ import { auth } from '@/auth';
 import { db } from '@/lib/db/client';
 import { workspaceInvitations } from '@/lib/db/schema';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import { baseUrl } from '@/lib/server/actions/auth/_shared';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { MembersPanel } from '@/components/settings/MembersPanel';
 
@@ -52,6 +53,7 @@ export default async function MembersPage() {
         initialMembers={ws.members}
         userRole={userRole}
         initialPendingInvites={pendingInvites}
+        shareUrl={`${baseUrl()}/share/workspace/${ws.shareToken}`}
       />
     </PageEnter>
   );
