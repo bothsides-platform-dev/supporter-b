@@ -8,8 +8,10 @@ import { NotificationDrawer } from '@/components/shell/NotificationDrawer';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { GlobalShortcuts } from '@/components/shell/GlobalShortcuts';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { SentryUserContext } from '@/components/observability/SentryUserContext';
 import { auth } from '@/auth';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import { setSentryUser } from '@/lib/observability/sentry-user';
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -42,6 +44,17 @@ export default async function AppLayout({
   const active =
     workspaces.find((w) => w.id === session.user.workspaceId) ?? workspaces[0];
 
+  // Tag the server isolation scope for this request (RSC render errors). Minimal
+  // fields only — see lib/observability/sentry-user. The client mirror below
+  // covers client errors + on-error replays.
+  const sentryUser = {
+    id: session.user.id,
+    workspaceId: active.id,
+    workspaceType: active.type,
+    role: session.user.role,
+  };
+  setSentryUser(sentryUser);
+
   return (
     <ToasterProvider>
     <SidebarProvider
@@ -68,6 +81,7 @@ export default async function AppLayout({
         <NotificationDrawer />
         <CommandPalette />
         <GlobalShortcuts />
+        <SentryUserContext user={sentryUser} />
       </AppShell>
     </SidebarProvider>
     </ToasterProvider>
