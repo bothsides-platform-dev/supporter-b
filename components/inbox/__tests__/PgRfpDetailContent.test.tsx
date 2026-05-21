@@ -1,6 +1,6 @@
-// PgRfpDetailContent — PG 상세 본문(전체 페이지·모달 공유). myBid 유무로 분기:
+// PgRfpDetailContent — PG 상세 본문. myBid 유무로 분기:
 //  - 있으면 "제출 완료" 블록 + 제출내역 링크
-//  - 없으면 브리프 + BidForm(mode 전달)
+//  - 없으면 브리프 + BidForm
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 
@@ -74,17 +74,10 @@ describe('PgRfpDetailContent', () => {
     expect(screen.queryByText(/제안 제출 완료/)).not.toBeInTheDocument();
   });
 
-  it("mode='modal' 을 BidForm 으로 전달", () => {
-    render(<PgRfpDetailContent data={{ rfp, myBid: undefined }} mode="modal" />);
-    expect(bidFormProps).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: 'modal', rfpId: 'rfp-1', rfpCode: 'P-2605-0042' }),
-    );
-  });
-
-  it("기본 mode 는 'page'", () => {
+  it('BidForm 에 rfpId·rfpCode 를 전달', () => {
     render(<PgRfpDetailContent data={{ rfp, myBid: undefined }} />);
     expect(bidFormProps).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: 'page' }),
+      expect.objectContaining({ rfpId: 'rfp-1', rfpCode: 'P-2605-0042' }),
     );
   });
 });

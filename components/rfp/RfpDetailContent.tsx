@@ -1,6 +1,6 @@
-// 구매사 RFP 상세 본문 — 전체 페이지(app/(app)/rfp/[id])와 가로채기 모달이 공유.
+// 구매사 RFP 상세 본문 — 전체 페이지(app/(app)/rfp/[id])가 사용.
 // loader(BuyerRfpDetailData) 산출물만 받는 표현 컴포넌트 — 재fetch 금지.
-// 바깥 패딩/PageEnter·Dialog 래핑은 호출부(page/modal) 책임.
+// 바깥 패딩/PageEnter 래핑은 호출부(page) 책임.
 import Link from 'next/link';
 import { Label } from '@/components/primitives/Label';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';

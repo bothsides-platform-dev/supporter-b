@@ -1,19 +1,13 @@
-// PG RFP 상세 본문 — 전체 페이지(app/(app)/inbox/[rfpId])와 가로채기 모달이 공유.
+// PG RFP 상세 본문 — 전체 페이지(app/(app)/inbox/[rfpId])가 사용.
 // loader(PgRfpDetailData) 산출물만 받는 표현 컴포넌트 — 재fetch 금지.
-// 바깥 패딩은 호출부(page/modal) 책임.
+// 바깥 패딩은 호출부(page) 책임.
 import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RfpBriefPanel } from './RfpBriefPanel';
 import { BidForm } from './BidForm';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
-export function PgRfpDetailContent({
-  data,
-  mode = 'page',
-}: {
-  data: PgRfpDetailData;
-  mode?: 'page' | 'modal';
-}) {
+export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
   const { rfp, myBid } = data;
 
   if (myBid) {
@@ -62,7 +56,6 @@ export function PgRfpDetailContent({
           rfpId={rfp.id}
           rfpCode={rfp.code}
           grade={rfp.bizProfile?.grade}
-          mode={mode}
         />
       </div>
     </div>
