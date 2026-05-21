@@ -1,3 +1,4 @@
+import { auth } from '@/auth';
 import { LandingHero } from '@/components/landing/LandingHero';
 import { siteConfig } from '@/lib/site-config';
 
@@ -10,14 +11,15 @@ const organizationJsonLd = {
   description: siteConfig.description,
 };
 
-export default function RootPage() {
+export default async function RootPage() {
+  const session = await auth();
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
       />
-      <LandingHero />
+      <LandingHero isAuthenticated={!!session} />
     </>
   );
 }

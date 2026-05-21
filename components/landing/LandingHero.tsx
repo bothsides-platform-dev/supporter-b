@@ -91,7 +91,7 @@ const HOW_STEPS = [
   },
 ];
 
-export function LandingHero() {
+export function LandingHero({ isAuthenticated = false }: { isAuthenticated?: boolean }) {
   const displayText = useTypewriter(TYPING_VALUES);
 
   // Scroll-driven simulation
@@ -135,12 +135,21 @@ export function LandingHero() {
       {/* ── Nav ── */}
       <header className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-8 h-[var(--shell-topbar)] border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]">
         <Logo />
-        <Link
-          href="/login"
-          className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]"
-        >
-          Sign in →
-        </Link>
+        {isAuthenticated ? (
+          <Link
+            href="/home"
+            className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]"
+          >
+            앱으로 이동 →
+          </Link>
+        ) : (
+          <Link
+            href="/login"
+            className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]"
+          >
+            Sign in →
+          </Link>
+        )}
       </header>
 
       <main className="flex-1 pt-[var(--shell-topbar)]">
