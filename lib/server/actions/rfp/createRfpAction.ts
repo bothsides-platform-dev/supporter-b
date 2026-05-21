@@ -28,6 +28,7 @@ import {
   dispatchNotification,
   emitAfterCommit,
 } from '@/lib/server/notifications/dispatch';
+import { logBusinessEvent } from '@/lib/observability/log';
 import type { Notification } from '@/lib/types/notification';
 import {
   actionDb,
@@ -331,6 +332,11 @@ export async function createRfpAction(
   if (result.ok && send) {
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
+    // Business milestone — RFP code + fan-out count only (no bizNo/PII).
+    logBusinessEvent('rfp.sent', {
+      rfpId: result.rfpId,
+      inviteCount: parsed.data.allowedPgWorkspaceIds.length,
+    });
   }
   return result;
 }
