@@ -75,8 +75,14 @@ async function buildBundle(): Promise<RepoBundle> {
   };
 }
 
+/** Dev HMR can keep old repo instances after new methods land — rebuild when stale. */
+function isRepoBundleStale(bundle: RepoBundle): boolean {
+  return typeof bundle.workspace.listForUser !== 'function';
+}
+
 async function getBundle(): Promise<RepoBundle> {
-  if (!globalThis.__bidit_repos__) {
+  const cached = globalThis.__bidit_repos__;
+  if (!cached || isRepoBundleStale(cached)) {
     globalThis.__bidit_repos__ = await buildBundle();
   }
   return globalThis.__bidit_repos__;
