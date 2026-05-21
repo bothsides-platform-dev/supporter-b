@@ -56,7 +56,7 @@ export default defineConfig({
       // RESEND_API_KEY '': console fallback in lib/integrations/resend.ts.
       // NTS_SERVICE_KEY '': RealNtsClient throws NTS_NO_KEY — scenario A
       //   uses the seeded buyer workspace whose bizProfile is already
-      //   captured, so /rfp/new never re-calls NTS. If a future spec
+      //   captured, so /rfp-new never re-calls NTS. If a future spec
       //   needs lookup, inject MockNtsClient via __setNtsClientForTest.
       RESEND_API_KEY: '',
       NTS_SERVICE_KEY: '',

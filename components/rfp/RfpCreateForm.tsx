@@ -104,7 +104,7 @@ export function RfpCreateForm({ bizProfile, workspaceName = '', guest = false }:
 
     if (guest) {
       // Save the intent so /signup/buyer/workspace can redirect back here
-      localStorage.setItem('supporter-b-rfp-next', '/rfp/new');
+      localStorage.setItem('supporter-b-rfp-next', '/rfp-new');
       router.push('/signup/buyer');
       return;
     }

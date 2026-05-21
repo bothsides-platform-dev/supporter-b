@@ -149,7 +149,7 @@ export function KanbanBoard(props: Props) {
                   cta={
                     stage === 'draft' ? (
                       <Link
-                        href="/rfp/new"
+                        href="/rfp-new"
                         className="block text-center py-3 rounded-[var(--md-sys-shape-medium)] border border-dashed border-[var(--md-sys-color-outline-variant)] text-[12px] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
                       >
                         + 새 RFP

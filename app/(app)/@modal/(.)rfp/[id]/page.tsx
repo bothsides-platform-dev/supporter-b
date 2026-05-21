@@ -2,6 +2,11 @@
 // 로 /rfp/[code] 에 진입하면 이 슬롯이 전체 페이지 대신 모달로 가로챈다.
 // 새로고침·직접 진입·하드 네비게이션은 가로채지 않고 app/(app)/rfp/[id]/page.tsx
 // (전체 페이지) 가 렌더된다. 둘은 loadBuyerRfpDetail + RfpDetailContent 를 공유.
+//
+// ⚠️ 이 인터셉터는 /rfp/<단일세그먼트> 를 전부 [id] 로 잡는다. 따라서 /rfp/ 하위에
+// static 형제 라우트(/rfp/new, /rfp/import 등)를 두면 안 된다 — soft-nav 시
+// findByCode 가 그 세그먼트를 RFP 코드로 조회해 실패하고 "RFP를 찾을 수 없습니다."
+// 모달만 뜬다. 작성 폼은 /rfp-new (형제 경로, app/rfp-new/) 로 분리돼 있다.
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';

@@ -179,7 +179,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
               transition={{ duration: 0.36, delay: 0.46, ease: EASE_OUT }}
               className="flex flex-col items-start gap-[var(--s-4)]"
             >
-              <Link href="/rfp/new">
+              <Link href="/rfp-new">
                 <Button size="lg">RFP 무료로 시작하기 →</Button>
               </Link>
               <span className="font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-outline)]">
@@ -363,7 +363,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
               transition={{ duration: 0.36, delay: 0.2, ease: EASE_OUT }}
               className="flex flex-col items-start gap-[var(--s-5)]"
             >
-              <Link href="/rfp/new">
+              <Link href="/rfp-new">
                 <button className="inline-flex items-center gap-2 h-12 px-6 rounded-md bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] font-mono text-[13px] tracking-[0.06em] uppercase transition-opacity duration-[140ms] hover:opacity-85 active:scale-[0.98]">
                   RFP 무료로 시작하기 →
                 </button>

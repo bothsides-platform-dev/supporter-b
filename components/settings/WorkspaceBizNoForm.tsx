@@ -26,7 +26,7 @@ const ntsLookup = async (bizNo: string) => {
 type Props = {
   /** null = 사업자번호 미등록 (초기 등록 모드로 진입) */
   currentBizNo: string | null;
-  /** 초기 등록 성공 후 이동할 URL (biz_required 흐름에서 /rfp/new 등) */
+  /** 초기 등록 성공 후 이동할 URL (biz_required 흐름에서 /rfp-new 등) */
   returnUrl?: string;
 };
 

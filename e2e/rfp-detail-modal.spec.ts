@@ -44,6 +44,25 @@ test.describe('RFP 상세 가로채기 모달 (구매사)', () => {
   });
 });
 
+test.describe('RFP 작성 진입은 가로채기되지 않는다 (구매사)', () => {
+  // 회귀 가드: (.)rfp/[id] 인터셉터가 /rfp/<단일세그먼트> 를 전부 잡으므로, 작성
+  // 페이지가 /rfp/new 였을 때 soft-nav 가 가로채여 "RFP를 찾을 수 없습니다." 모달만
+  // 떴다. 작성 라우트를 /rfp-new(형제 경로)로 옮겨 인터셉터가 잡지 않아야 한다.
+  test('목록에서 "신규 제안" soft-nav → 작성 폼(모달·에러 아님)', async ({ page }) => {
+    test.slow();
+    await loginAs(page, 'buyer');
+    await page.goto('/rfp');
+
+    await page.getByRole('link', { name: '신규 제안' }).first().click();
+
+    await expect(
+      page.getByRole('heading', { name: '신규 제안 요청' }),
+    ).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText('RFP를 찾을 수 없습니다.')).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+});
+
 test.describe('RFP 상세 가로채기 모달 (PG)', () => {
   test('인박스 행 클릭 → 모달, 뒤로가기 → 닫힘', async ({ page }) => {
     // dev cold 컴파일 흡수(BidForm 등 무거운 트리 포함) — prod는 사전컴파일.
