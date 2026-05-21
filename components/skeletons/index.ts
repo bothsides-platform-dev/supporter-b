@@ -1,8 +1,0 @@
-export { SkeletonKanbanBoard } from './SkeletonKanbanBoard'
-export { SkeletonPageHeader } from './SkeletonPageHeader'
-export { SkeletonTabs } from './SkeletonTabs'
-export { SkeletonTableRows } from './SkeletonTableRows'
-export { SkeletonInboxList } from './SkeletonInboxList'
-export { SkeletonRfpDetailHeader } from './SkeletonRfpDetailHeader'
-export { SkeletonBriefPanel } from './SkeletonBriefPanel'
-export { SkeletonBidForm } from './SkeletonBidForm'
