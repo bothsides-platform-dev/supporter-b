@@ -1,9 +1,4 @@
-// PG 수신함 (RSC).
-//
-// - `auth()` 후 `getInvitationRepo().findByPgWorkspace(workspaceId)` — 본인이
-//   소속한 PG 워크스페이스로 발송된 모든 활성 invitation + RFP pair.
-// - 정책: 초대된 워크스페이스 멤버 모두 접근. 미클레임 invitation 도 표시(알림
-//   딥링크와 일관). 클레임 자체는 첫 진입자가 처리(감사용).
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { getInvitationRepo } from '@/lib/server/repositories/factory';
@@ -18,15 +13,20 @@ export default async function InboxPage() {
     redirect('/login?next=/inbox');
   }
 
-  const invRepo = await getInvitationRepo();
-  const pairs = await invRepo.findByPgWorkspace(session.user.workspaceId);
+  return (
+    <Suspense fallback={<InboxList.Skeleton />}>
+      <InboxListLoader wsId={session.user.workspaceId} />
+    </Suspense>
+  );
+}
 
-  // RSC → client component로 직렬화 가능한 plain object만 전달.
+async function InboxListLoader({ wsId }: { wsId: string }) {
+  const invRepo = await getInvitationRepo();
+  const pairs = await invRepo.findByPgWorkspace(wsId);
+
   const rows = pairs.map(({ invitation, rfp }) => ({
     invitationId: invitation.id,
     invitationStatus: invitation.status,
-    // 사람용 code — InboxList 가 /inbox/<code> 로 이동(상세는 findByCode)하고 번호로 표시.
-    // uuid(rfp.id)를 쓰면 findByCode 미스로 행 클릭이 404.
     rfpId: rfp.code,
     rfpTitle: rfp.title,
     rfpDeadline: rfp.deadline,

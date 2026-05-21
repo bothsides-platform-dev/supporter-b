@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Label } from '@/components/primitives/Label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { formatDeadline } from '@/lib/format';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
@@ -131,3 +132,43 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
     </div>
   );
 }
+
+InboxList.Skeleton = function InboxListSkeleton() {
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-8 py-5 border-b border-[var(--md-sys-color-outline-variant)]">
+        <div>
+          <Skeleton className="h-3 w-28 mb-2" />
+          <Skeleton className="h-5 w-36 mt-1" />
+        </div>
+        <Skeleton className="h-3 w-8" />
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        <table className="w-full border-collapse">
+          <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
+            <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
+              <th className="px-8 py-3"><Skeleton className="h-2 w-8" /></th>
+              <th className="px-3 py-3"><Skeleton className="h-2 w-12" /></th>
+              <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
+              <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
+              <th className="px-3 py-3 text-right"><Skeleton className="h-2 w-8 ml-auto" /></th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <tr key={i} className="border-b border-[var(--md-sys-color-outline-variant)]">
+                <td className="px-8 py-4"><Skeleton className="h-3 w-20" /></td>
+                <td className="px-3 py-4"><Skeleton className="h-3 w-48" /></td>
+                <td className="px-3 py-4"><Skeleton className="h-3 w-12" /></td>
+                <td className="px-3 py-4"><Skeleton className="h-3 w-16" /></td>
+                <td className="px-3 py-4 text-right">
+                  <Skeleton className="h-5 w-14 rounded-full ml-auto" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
