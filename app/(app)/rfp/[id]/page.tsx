@@ -6,8 +6,10 @@ import { Button } from '@/components/primitives/Button';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { BidComparisonView } from '@/components/rfp/BidComparisonView';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
+import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { auth } from '@/auth';
 import {
+  getAttachmentRepo,
   getBidNoteRepo,
   getBidRepo,
   getInvitationRepo,
@@ -61,6 +63,9 @@ export default async function RfpDetailPage({ params }: Props) {
 
   const allBids = await (await getBidRepo()).findByRfp(rfp.id);
   const rfpBids = allBids.filter((b) => b.status === 'submitted');
+
+  // 구매사가 RFP에 붙인 첨부파일 — 상세에서 미리보기로 노출.
+  const rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);
 
   // Stage 3c cutover — notes live in the DB now (bid_notes + attachments).
   // Fetch them once per RFP and serialize Date → ISO for the client tree.
@@ -172,6 +177,9 @@ export default async function RfpDetailPage({ params }: Props) {
           authorName={session.user.name ?? session.user.email ?? '구매사 담당자'}
         />
       </section>
+
+      {/* RFP attachments — buyer-uploaded requirement docs */}
+      <AttachmentPreviewList files={rfpFiles} />
 
       {/* Meta sidebar */}
       <div className="grid grid-cols-2 gap-10 border-t border-[var(--md-sys-color-outline-variant)] pt-8">

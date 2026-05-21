@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import {
+  getAttachmentRepo,
   getBidRepo,
   getInvitationRepo,
   getRfpRepo,
@@ -38,6 +39,10 @@ export default async function InboxDetailPage({ params }: Props) {
 
   // PG 홈 칸반 '검토중' 컬럼 활성화 — accepted → opened 1회 전이. 이미 opened 이상이면 no-op.
   await markInvitationOpenedAction({ rfpId: rfp.id });
+
+  // 구매사 첨부파일 hydrate — RfpBriefPanel 이 rfp.rfpFiles 로 미리보기를 그린다.
+  // repo 가 요청마다 새 RFP 객체를 만들어 주므로 프로퍼티 변이는 안전.
+  rfp.rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);
 
   // 이미 입찰을 제출했는지 확인 — submitted 상태면 작성 폼 대신 confirm 화면.
   const bidRepo = await getBidRepo();

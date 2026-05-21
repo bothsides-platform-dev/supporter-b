@@ -1,5 +1,6 @@
 import { Chip } from '@/components/primitives/Chip';
 import { Label } from '@/components/primitives/Label';
+import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import { formatDate, formatDeadline } from '@/lib/format';
@@ -109,6 +110,9 @@ export function RfpBriefPanel({ rfp }: Props) {
           </p>
         </div>
       )}
+
+      {/* 구매사 첨부파일 — 미리보기 (없으면 렌더 안 함) */}
+      <AttachmentPreviewList files={rfp.rfpFiles} />
     </div>
   );
 }
