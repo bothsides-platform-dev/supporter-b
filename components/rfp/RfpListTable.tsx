@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
+import { useIsMac, formatModifierShortcut } from '@/lib/hooks/usePlatform';
 import { formatDate } from '@/lib/format';
 import type { RFP } from '@/lib/types/rfp';
 
@@ -27,6 +28,7 @@ type Props = { rfps: RFP[] };
 
 export function RfpListTable({ rfps }: Props) {
   const router = useRouter();
+  const isMac = useIsMac();
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
   const { active } = useListNavigation(rfps.length, {
@@ -99,7 +101,7 @@ export function RfpListTable({ rfps }: Props) {
           <kbd className="text-[var(--md-sys-color-on-surface-variant)]">Enter</kbd> 상세
         </span>
         <span>
-          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">⌘N</kbd> 신규
+          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">{formatModifierShortcut('N', isMac)}</kbd> 신규
         </span>
       </div>
     </div>

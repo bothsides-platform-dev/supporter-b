@@ -6,6 +6,7 @@ import { useUIStore } from '@/lib/stores/ui';
 import { Command } from 'cmdk';
 import { XIcon } from '@/components/icons';
 import { IconButton } from '@/components/primitives/IconButton';
+import { useIsMac, formatModifierShortcut } from '@/lib/hooks/usePlatform';
 import {
   searchBidsAction,
   type BidSearchItem,
@@ -15,13 +16,13 @@ type CommandItem = {
   group: string;
   id: string;
   label: string;
-  shortcut?: string;
+  modKey?: string; // bare key (e.g. 'N'); rendered as ⌘N / Ctrl+N per OS
   href?: string;
 };
 
 const COMMANDS: CommandItem[] = [
   { group: 'RFP', id: 'rfp-list', label: 'RFP 목록', href: '/rfp' },
-  { group: 'RFP', id: 'rfp-new', label: '신규 제안 요청', shortcut: '⌘N', href: '/rfp/new' },
+  { group: 'RFP', id: 'rfp-new', label: '신규 제안 요청', modKey: 'N', href: '/rfp/new' },
   { group: '수신함', id: 'inbox', label: '수신함', href: '/inbox' },
   { group: '설정', id: 'settings-profile', label: '프로필 설정', href: '/settings/profile' },
   { group: '설정', id: 'settings-members', label: '멤버 관리', href: '/settings/members' },
@@ -30,6 +31,7 @@ const COMMANDS: CommandItem[] = [
 export function CommandPalette() {
   const { commandPaletteOpen, closeCommandPalette } = useUIStore();
   const router = useRouter();
+  const isMac = useIsMac();
   const [bidItems, setBidItems] = useState<BidSearchItem[]>([]);
   const [bidsLoading, setBidsLoading] = useState(false);
 
@@ -118,9 +120,9 @@ export function CommandPalette() {
                         className="flex items-center justify-between px-4 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface)] cursor-pointer aria-selected:bg-[var(--md-sys-color-surface-container-high)]"
                       >
                         <span>{cmd.label}</span>
-                        {cmd.shortcut && (
+                        {cmd.modKey && (
                           <kbd className="font-mono text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
-                            {cmd.shortcut}
+                            {formatModifierShortcut(cmd.modKey, isMac)}
                           </kbd>
                         )}
                       </Command.Item>

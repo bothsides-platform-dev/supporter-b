@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/lib/stores/ui';
 import { useNotifications } from '@/lib/hooks/useNotifications';
+import { useIsMac, formatModifierShortcut } from '@/lib/hooks/usePlatform';
 import { IconButton } from '@/components/primitives/IconButton';
 import { BellIcon, SearchIcon } from '@/components/icons';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
@@ -31,6 +32,8 @@ export function Topbar({ user, workspaceType, workspaces, current }: TopbarProps
   const { openNotificationDrawer, openCommandPalette } = useUIStore();
   const { unreadCount } = useNotifications();
   const router = useRouter();
+  const isMac = useIsMac();
+  const searchShortcut = formatModifierShortcut('K', isMac);
 
   async function handleLogout() {
     await fetch('/logout', { method: 'POST' });
@@ -49,11 +52,11 @@ export function Topbar({ user, workspaceType, workspaces, current }: TopbarProps
           type="button"
           onClick={openCommandPalette}
           className="flex items-center md:gap-2 h-8 w-8 md:w-56 px-0 md:px-3 justify-center md:justify-start rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:border-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]"
-          aria-label="검색 (⌘K)"
+          aria-label={`검색 (${searchShortcut})`}
         >
           <SearchIcon size={14} />
           <span className="hidden md:inline text-[length:var(--md-typescale-label-large-size)]">검색</span>
-          <kbd className="hidden md:block ml-auto text-[length:var(--md-typescale-label-small-size)] opacity-50">⌘K</kbd>
+          <kbd className="hidden md:block ml-auto text-[length:var(--md-typescale-label-small-size)] opacity-50">{searchShortcut}</kbd>
         </button>
       </div>
 
