@@ -31,16 +31,14 @@ vi.mock('@/components/landing/LandingToast', () => ({
   LandingToast: () => null,
 }))
 
-describe('LandingHero header nav', () => {
-  it('shows Sign in link when not authenticated', () => {
-    render(<LandingHero isAuthenticated={false} />)
-    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login')
-    expect(screen.queryByRole('link', { name: /앱으로 이동/i })).toBeNull()
+describe('LandingHero nav slot', () => {
+  it('renders whatever is passed as nav prop', () => {
+    render(<LandingHero nav={<a href="/test">Test Nav</a>} />)
+    expect(screen.getByRole('link', { name: 'Test Nav' })).toHaveAttribute('href', '/test')
   })
 
-  it('shows 앱으로 이동 link when authenticated', () => {
-    render(<LandingHero isAuthenticated={true} />)
-    expect(screen.getByRole('link', { name: /앱으로 이동/i })).toHaveAttribute('href', '/home')
-    expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull()
+  it('renders nothing in nav area when nav prop is omitted', () => {
+    render(<LandingHero />)
+    expect(screen.queryByRole('link', { name: 'Test Nav' })).toBeNull()
   })
 })
