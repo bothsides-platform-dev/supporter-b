@@ -1,6 +1,7 @@
-// PG RFP 상세 — 가로채기 모달. /inbox 목록·홈 칸반 등 (app) 내부에서 soft-nav 로
-// /inbox/[code] 진입 시 전체 페이지 대신 모달로 가로챈다. 새로고침·직접 진입은
-// app/(app)/inbox/[rfpId]/page.tsx (전체 페이지). 둘은 loadPgRfpDetail +
+// PG RFP 상세 — 가로채기 모달. 슬롯이 home 세그먼트 아래(home/@modal)에 있어
+// **홈 칸반(/home)에서 soft-nav 로 /inbox/[code] 진입할 때만** 전체 페이지 대신
+// 모달로 가로챈다. /inbox 목록 등 home 밖에서의 진입, 그리고 새로고침·직접 진입은
+// app/(app)/inbox/[rfpId]/page.tsx (전체 페이지) 가 렌더된다. 둘은 loadPgRfpDetail +
 // PgRfpDetailContent 공유. BidForm 은 mode="modal" — 제출 성공 시 router.refresh()
 // 로 같은 모달에 "제출 완료" 인플레이스(전체 페이지로 이탈하지 않음).
 import { redirect } from 'next/navigation';
