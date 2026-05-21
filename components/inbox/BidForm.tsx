@@ -111,9 +111,13 @@ type Props = {
   // invitationId는 prop으로 받지 않는다 — 서버 액션이 session.userId 기반으로
   // findByRfp 후 고유 invitation을 픽업한다(canAccess 가드 포함).
   grade: MerchantGrade | undefined;
+  // 'page'(기본): 제출 후 /submitted 전체 페이지로 이동.
+  // 'modal': 가로채기 모달 안에서 제출 — router.refresh()로 RSC를 재실행해
+  //          같은 모달에 "제출 완료" 블록을 인플레이스로 띄운다.
+  mode?: 'page' | 'modal';
 };
 
-export function BidForm({ rfpId, rfpCode, grade }: Props) {
+export function BidForm({ rfpId, rfpCode, grade, mode = 'page' }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -228,10 +232,16 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
       });
       if (r.ok) {
         // server action이 revalidatePath(`/inbox/${rfpId}`)를 호출하므로
-        // 클라이언트는 router.push만으로 충분. router.refresh()를 같은 tick에
-        // 동시 호출하면 startTransition pending이 영구히 안 풀린다
-        // (vercel/next.js#86055 — Next 16 useTransition + router 레이스).
-        router.push(`/inbox/${rfpCode}/submitted`);
+        // 클라이언트는 단일 네비게이션만으로 충분. refresh()와 push()를 같은
+        // tick에 동시 호출하면 startTransition pending이 영구히 안 풀린다
+        // (vercel/next.js#86055 — Next 16 useTransition + router 레이스) — 모드별로
+        // 정확히 하나만 호출한다.
+        if (mode === 'modal') {
+          // 모달 유지: RSC 재실행 → myBid 생김 → 같은 모달에 "제출 완료" 인플레이스.
+          router.refresh();
+        } else {
+          router.push(`/inbox/${rfpCode}/submitted`);
+        }
       } else {
         setSubmitError(r.error);
       }
