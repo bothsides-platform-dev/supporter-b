@@ -109,7 +109,10 @@ export function RfpListTable({ rfps }: Props) {
   );
 }
 
-RfpListTable.Skeleton = function RfpListTableSkeleton() {
+// Named export so the Server Component app/(app)/rfp/page.tsx can render the
+// skeleton — `RfpListTable.Skeleton` (static on a 'use client' component) is
+// undefined across the RSC boundary. The static below keeps client callers working.
+export function RfpListTableSkeleton() {
   return (
     <div className="flex-1 overflow-y-auto">
       <table className="w-full border-collapse">
@@ -138,4 +141,6 @@ RfpListTable.Skeleton = function RfpListTableSkeleton() {
       </table>
     </div>
   );
-};
+}
+
+RfpListTable.Skeleton = RfpListTableSkeleton;

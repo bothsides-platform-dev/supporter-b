@@ -19,11 +19,8 @@ export const metadata: Metadata = {
 
 export default async function AppLayout({
   children,
-  modal,
 }: {
   children: React.ReactNode;
-  // 가로채기 모달 병렬 슬롯 (app/(app)/@modal/*). 가로채지 않을 땐 default.tsx(null).
-  modal: React.ReactNode;
 }) {
   // Single auth() call at the shell layer. Child RSCs that need session re-call
   // auth() themselves (no prop drilling) — the underlying JWT cookie read is
@@ -76,8 +73,6 @@ export default async function AppLayout({
         <main style={{ gridArea: 'content' }} className="overflow-y-auto">
           {children}
         </main>
-        {/* 가로채기 모달 슬롯 — Dialog 가 body 로 portal 하므로 위치는 무관. */}
-        {modal}
         <NotificationDrawer />
         <CommandPalette />
         <GlobalShortcuts />

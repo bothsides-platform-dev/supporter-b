@@ -231,7 +231,12 @@ export function KanbanBoard(props: Props) {
   );
 }
 
-KanbanBoard.Skeleton = function KanbanBoardSkeleton() {
+// Named export so Server Components (app/(app)/home/page.tsx) can render the
+// skeleton directly. `KanbanBoard.Skeleton` (static on a 'use client' component)
+// resolves to undefined when accessed from a Server Component across the RSC
+// boundary — only client callers can use the static. The assignment below
+// keeps the `Component.Skeleton` convention working for those client callers.
+export function KanbanBoardSkeleton() {
   return (
     <div className="flex lg:grid lg:grid-cols-6 gap-3 overflow-x-auto lg:overflow-x-visible snap-x snap-mandatory pb-4">
       {Array.from({ length: 6 }).map((_, i) => (
@@ -259,4 +264,6 @@ KanbanBoard.Skeleton = function KanbanBoardSkeleton() {
       ))}
     </div>
   );
-};
+}
+
+KanbanBoard.Skeleton = KanbanBoardSkeleton;

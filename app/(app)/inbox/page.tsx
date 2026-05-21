@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { getInvitationRepo } from '@/lib/server/repositories/factory';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
-import { InboxList } from '@/components/inbox/InboxList';
+import { InboxList, InboxListSkeleton } from '@/components/inbox/InboxList';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +14,7 @@ export default async function InboxPage() {
   }
 
   return (
-    <Suspense fallback={<InboxList.Skeleton />}>
+    <Suspense fallback={<InboxListSkeleton />}>
       <InboxListLoader wsId={session.user.workspaceId} />
     </Suspense>
   );

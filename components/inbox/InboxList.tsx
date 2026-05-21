@@ -133,7 +133,10 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
   );
 }
 
-InboxList.Skeleton = function InboxListSkeleton() {
+// Named export so the Server Component app/(app)/inbox/page.tsx can render the
+// skeleton — `InboxList.Skeleton` (static on a 'use client' component) is
+// undefined across the RSC boundary. The static below keeps client callers working.
+export function InboxListSkeleton() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-8 py-5 border-b border-[var(--md-sys-color-outline-variant)]">
@@ -171,4 +174,6 @@ InboxList.Skeleton = function InboxListSkeleton() {
       </div>
     </div>
   );
-};
+}
+
+InboxList.Skeleton = InboxListSkeleton;
