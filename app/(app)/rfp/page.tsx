@@ -5,7 +5,7 @@ import { Label } from '@/components/primitives/Label';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { FileTextIcon } from '@/components/icons';
-import { RfpListTable } from '@/components/rfp/RfpListTable';
+import { RfpListTable, RfpListTableSkeleton } from '@/components/rfp/RfpListTable';
 import { auth } from '@/auth';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
 
@@ -37,7 +37,7 @@ export default async function RfpListPage() {
         </Link>
       </div>
 
-      <Suspense fallback={<RfpListTable.Skeleton />}>
+      <Suspense fallback={<RfpListTableSkeleton />}>
         <RfpListTableLoader wsId={wsId} />
       </Suspense>
     </div>
