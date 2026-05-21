@@ -119,6 +119,14 @@ describe('DrizzleAttachmentRepository.findByRfp', () => {
     expect(files.map((f) => f.id)).toEqual([first, second]);
     expect(files.map((f) => f.name)).toEqual(['first.pdf', 'second.pdf']);
     expect(files[0].url).toBe(`/api/files/${first}`);
+    // 공개 Attachment 필드만 — uploadedBy/rfpId 등 record 전용 필드가 클라이언트로 새지 않게.
+    expect(Object.keys(files[0]).sort()).toEqual([
+      'id',
+      'mimeType',
+      'name',
+      'size',
+      'url',
+    ]);
   });
 
   it('returns [] for an rfp with no attachments', async () => {
