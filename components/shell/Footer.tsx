@@ -63,7 +63,7 @@ export function Footer() {
                 법적 고지
               </span>
               {[
-                { label: '서비스 이용약관', href: '#' },
+                { label: '서비스 이용약관', href: 'https://moingclub.notion.site/Supporter-B-363ef44bd15380199b7bd5c5ba2d900e', external: true },
                 { label: '개인정보 처리방침', href: 'https://moingclub.notion.site/Supporter-B-363ef44bd15380409aa1eabb4ab5b240', external: true },
                 { label: '전자금융거래 약관', href: '#' },
               ].map((link) => (
