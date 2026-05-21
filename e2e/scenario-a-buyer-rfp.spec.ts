@@ -40,7 +40,7 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await expect(page).toHaveURL(/\/home$/, { timeout: 15_000 });
 
     // ── 2. Open the new-RFP form ─────────────────────────────────
-    await page.goto('/rfp-new');
+    await page.goto('/rfp/new');
     await expect(page.getByText('신규 제안 요청')).toBeVisible();
     // Workspace bizProfile (123-45-67890) and grade (sme2) are rendered
     // by the RSC parent — verify the page didn't redirect to "missing

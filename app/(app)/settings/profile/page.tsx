@@ -166,7 +166,7 @@ export default async function ProfilePage({ searchParams }: Props) {
               )}
               <WorkspaceBizNoForm
                 currentBizNo={biz?.bizNo ?? null}
-                returnUrl={biz_required === '1' && !biz ? '/rfp-new' : undefined}
+                returnUrl={biz_required === '1' && !biz ? '/rfp/new' : undefined}
               />
               {biz && <WorkspaceBizProfileForm currentGrade={grade} />}
             </div>
