@@ -23,8 +23,17 @@ vi.mock('@/lib/auth/session', () => ({
 
 import { emailChangeRequestAction } from '../emailChangeRequestAction';
 import { emailChangeConfirmAction } from '../emailChangeConfirmAction';
+import { __setActionDbForTest } from '../_shared';
 
 let db: PgliteDB;
+
+// A fake action-db whose users UPDATE throws a chosen error — lets us drive the
+// confirm action's post-update catch deterministically. The verification-token
+// repo runs on the real pglite handle (separate override), so token consume
+// still succeeds.
+function throwingUpdateDb(error: unknown) {
+  return { update: () => ({ set: () => ({ where: () => { throw error; } }) }) };
+}
 
 async function seedUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
@@ -121,5 +130,36 @@ describe('emailChangeConfirmAction', () => {
     expect(first.ok).toBe(true);
     const second = await emailChangeConfirmAction({ rawToken: token });
     expect(second.ok).toBe(false);
+  });
+
+  // --- update error tightening -------------------------------------------
+  async function issueToken(): Promise<string> {
+    const userId = await seedUser('old@example.com');
+    sessionRef.value = { user: { id: userId } };
+    await emailChangeRequestAction({ newEmail: 'new@example.com' });
+    const rows = await db
+      .select({ html: outboxEntries.html })
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'auth.email-change'))
+      .limit(1);
+    return tokenFromOutbox(rows[0].html);
+  }
+
+  it('maps a pglite-shaped unique violation (err.cause.code) to EMAIL_TAKEN', async () => {
+    const token = await issueToken();
+    __setActionDbForTest(throwingUpdateDb({ cause: { code: '23505' } }));
+    const r = await emailChangeConfirmAction({ rawToken: token });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
+  });
+
+  it('rethrows a non-unique DB error instead of masking it as EMAIL_TAKEN', async () => {
+    const token = await issueToken();
+    __setActionDbForTest(
+      throwingUpdateDb(Object.assign(new Error('not null'), { code: '23502' })),
+    );
+    await expect(emailChangeConfirmAction({ rawToken: token })).rejects.toThrow(
+      'not null',
+    );
   });
 });

@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { users } from '@/lib/db/schema';
 import { getVerificationTokenRepo } from '@/lib/server/repositories/factory';
 import { hashToken } from '@/lib/server/token';
-import { actionDb, type AuthActionResult } from './_shared';
+import { actionDb, isUniqueViolation, type AuthActionResult } from './_shared';
 
 const Input = z.object({ rawToken: z.string().min(1).max(256) });
 
@@ -47,9 +47,11 @@ export async function emailChangeConfirmAction(
   const db = actionDb();
   try {
     await db.update(users).set({ email: newEmail }).where(eq(users.id, userId));
-  } catch (e) {
-    void e;
-    return { ok: false, error: 'EMAIL_TAKEN' };
+  } catch (err) {
+    // New address already in use → expected. Anything else is unexpected and
+    // must propagate (onRequestError → Sentry) rather than read as EMAIL_TAKEN.
+    if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
+    throw err;
   }
   return { ok: true };
 }

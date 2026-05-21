@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { getNtsClient, NtsError, type NtsLookupResult } from '@/lib/integrations/nts';
+import { captureActionError } from '@/lib/observability/capture';
 import type { RfpActionResult } from './_shared';
 
 const Input = z.string().min(8).max(20);
@@ -29,8 +30,12 @@ export async function lookupBizNoAction(
     return { ok: true, ...result };
   } catch (e) {
     if (e instanceof NtsError) {
+      // Expected upstream outcomes (no key, invalid key, network) — categorized,
+      // not reported.
       return { ok: false, error: e.code };
     }
+    // Unexpected (e.g. a parse/contract failure inside the client) — report it.
+    captureActionError('lookupBizNoAction', e);
     return { ok: false, error: 'NTS_NETWORK' };
   }
 }

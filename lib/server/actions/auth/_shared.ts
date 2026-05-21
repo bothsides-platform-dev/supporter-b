@@ -69,3 +69,13 @@ export function emailDomain(email: string): string | null {
   if (at < 0 || at === email.length - 1) return null;
   return email.slice(at + 1);
 }
+
+// Postgres unique-violation (23505) detector that works in BOTH runtimes:
+// postgres-js (prod) exposes `.code` directly; pglite (tests) nests it under
+// `.cause.code`. Use this so a duplicate-key catch maps to a friendly error
+// while genuinely unexpected DB errors are re-thrown (→ onRequestError/Sentry).
+export function isUniqueViolation(err: unknown): boolean {
+  const direct = (err as { code?: unknown } | null)?.code;
+  const nested = (err as { cause?: { code?: unknown } } | null)?.cause?.code;
+  return direct === '23505' || nested === '23505';
+}

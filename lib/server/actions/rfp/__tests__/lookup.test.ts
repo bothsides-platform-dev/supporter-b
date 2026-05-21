@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   __setNtsClientForTest,
@@ -8,11 +8,15 @@ import {
 import { MockNtsClient } from '@/lib/integrations/nts.mock';
 import { setupRfpActionEnv, teardownRfpActionEnv } from './_setup';
 
+const { captureActionError } = vi.hoisted(() => ({ captureActionError: vi.fn() }));
+vi.mock('@/lib/observability/capture', () => ({ captureActionError }));
+
 import { lookupBizNoAction } from '../lookupBizNoAction';
 
 describe('lookupBizNoAction', () => {
   beforeEach(async () => {
     await setupRfpActionEnv();
+    captureActionError.mockReset();
   });
   afterEach(() => {
     teardownRfpActionEnv();
@@ -70,6 +74,25 @@ describe('lookupBizNoAction', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error).toBe('NTS_NETWORK');
+  });
+
+  it('captures unexpected (non-NtsError) failures and returns NTS_NETWORK', async () => {
+    const boom = new Error('unexpected parse failure');
+    __setNtsClientForTest({ lookup: () => Promise.reject(boom) });
+    const r = await lookupBizNoAction('1234567890');
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('NTS_NETWORK');
+    expect(captureActionError).toHaveBeenCalledWith('lookupBizNoAction', boom);
+  });
+
+  it('does not capture expected NtsError failures', async () => {
+    __setNtsClientForTest({
+      lookup: () => Promise.reject(new NtsError('NTS_NETWORK', 'timeout')),
+    });
+    const r = await lookupBizNoAction('1234567890');
+    expect(r.ok).toBe(false);
+    expect(captureActionError).not.toHaveBeenCalled();
   });
 
   it('reuses MockNtsClient default after test override', async () => {

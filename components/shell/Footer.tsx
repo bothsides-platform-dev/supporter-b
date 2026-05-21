@@ -116,20 +116,12 @@ export function Footer() {
         {/* Bottom row: business info + copyright */}
         <div className="flex flex-col gap-4">
           {/* Copyright + editorial mark */}
-          <div className="flex items-center justify-between">
-            <span
-              className="text-[11px]"
-              style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-outline)' }}
-            >
-              © {year} SUPPORTER B CORP. ALL RIGHTS RESERVED.
-            </span>
-            <span
-              className="text-[10px] tracking-[0.15em]"
-              style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-outline)', opacity: 0.6 }}
-            >
-              ISSUE 001 · v0
-            </span>
-          </div>
+          <span
+            className="text-[11px]"
+            style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-outline)' }}
+          >
+            © {year} SUPPORTER B CORP. ALL RIGHTS RESERVED.
+          </span>
         </div>
       </div>
     </footer>

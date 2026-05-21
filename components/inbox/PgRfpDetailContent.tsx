@@ -2,6 +2,7 @@
 // loader(PgRfpDetailData) 산출물만 받는 표현 컴포넌트 — 재fetch 금지.
 // 바깥 패딩은 호출부(page/modal) 책임.
 import Link from 'next/link';
+import { Skeleton } from '@/components/ui/skeleton';
 import { RfpBriefPanel } from './RfpBriefPanel';
 import { BidForm } from './BidForm';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
@@ -67,3 +68,33 @@ export function PgRfpDetailContent({
     </div>
   );
 }
+
+PgRfpDetailContent.Skeleton = function PgRfpDetailContentSkeleton() {
+  return (
+    <div className="grid grid-cols-[340px_1fr] gap-12">
+      <div className="border-r border-[var(--md-sys-color-outline-variant)] pr-10">
+        <Skeleton className="h-5 w-32 mb-2" />
+        <Skeleton className="h-7 w-64 mb-4" />
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex justify-between">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="mb-8">
+          <Skeleton className="h-2 w-20 mb-2" />
+          <Skeleton className="h-6 w-32" />
+        </div>
+        <div className="space-y-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};

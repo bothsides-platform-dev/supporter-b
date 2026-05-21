@@ -8,6 +8,7 @@ import { users } from '@/lib/db/schema';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import {
   actionDb,
+  isUniqueViolation,
   normalizeEmail,
   type AuthActionResult,
 } from './_shared';
@@ -94,8 +95,12 @@ export async function signupCompleteAction(
           avatarColor: 'ink',
           status: 'active',
         });
-      } catch {
-        return { ok: false, error: 'EMAIL_TAKEN' };
+      } catch (err) {
+        // Email UNIQUE collision → expected. Anything else is unexpected and
+        // must propagate (onRequestError → Sentry) rather than masquerade as
+        // EMAIL_TAKEN.
+        if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
+        throw err;
       }
 
       // 2. Workspace branch — buyer or pg. Shared creation (workspace + admin

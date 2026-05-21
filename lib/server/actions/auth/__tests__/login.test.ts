@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 
+// Auth.js's AuthError subclasses (CredentialsSignin, AccessDenied, ...) each set
+// an own `type` field. We duck-type a stand-in here rather than importing
+// `next-auth` (which drags `next/server` into the node test env and explodes).
+function authError(type: string): Error {
+  return Object.assign(new Error(type), { type });
+}
+
 // Auth.js's signIn() reaches for the production postgres client unless
 // stubbed. We mock the entire `@/auth` surface — the action only depends on
 // `signIn`, so no other exports need to round-trip.
@@ -14,12 +21,16 @@ vi.mock('@/auth', () => ({
   handlers: { GET: undefined, POST: undefined },
 }));
 
+const { captureActionError } = vi.hoisted(() => ({ captureActionError: vi.fn() }));
+vi.mock('@/lib/observability/capture', () => ({ captureActionError }));
+
 import { loginAction } from '../loginAction';
 
 describe('loginAction', () => {
   beforeEach(async () => {
     await setupActionEnv();
     signInMock.mockReset();
+    captureActionError.mockReset();
   });
   afterEach(teardownActionEnv);
 
@@ -37,14 +48,27 @@ describe('loginAction', () => {
     });
   });
 
-  it('returns ok:false when signIn throws', async () => {
-    signInMock.mockRejectedValue(new Error('CredentialsSignin'));
+  it('returns ok:false on bad credentials (CredentialsSignin) without capturing', async () => {
+    signInMock.mockRejectedValue(authError('CredentialsSignin'));
     const r = await loginAction({
       email: 'kim@example.com',
       password: 'wrong',
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_CREDENTIALS');
+    expect(captureActionError).not.toHaveBeenCalled();
+  });
+
+  it('captures unexpected errors but still returns INVALID_CREDENTIALS', async () => {
+    const boom = new Error('db connection refused');
+    signInMock.mockRejectedValue(boom);
+    const r = await loginAction({
+      email: 'kim@example.com',
+      password: 'Password123!',
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_CREDENTIALS');
+    expect(captureActionError).toHaveBeenCalledWith('loginAction', boom);
   });
 
   it('rejects malformed input before reaching signIn', async () => {

@@ -44,6 +44,13 @@ vi.mock('@/lib/auth/session', () => ({
   },
 }));
 
+const { logBusinessEvent } = vi.hoisted(() => ({ logBusinessEvent: vi.fn() }));
+vi.mock('@/lib/observability/log', () => ({
+  logBusinessEvent,
+  logBusinessWarn: vi.fn(),
+  logBusinessError: vi.fn(),
+}));
+
 import { createRfpAction } from '../createRfpAction';
 
 let db: PgliteDB;
@@ -79,10 +86,37 @@ describe('createRfpAction', () => {
     // Default PG workspace for draft tests (no members needed — drafts skip invite logic)
     const pgWs = await seedPgWorkspace(db, '테스트PG');
     pgWsId = pgWs.id;
+    logBusinessEvent.mockReset();
   });
   afterEach(() => {
     teardownRfpActionEnv();
     sessionRef.value = null;
+  });
+
+  it('logs an rfp.sent business event on send', async () => {
+    const r = await createRfpAction({
+      title: '로그 검증',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: true,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(logBusinessEvent).toHaveBeenCalledWith('rfp.sent', {
+      rfpId: r.rfpId,
+      inviteCount: 1,
+    });
+  });
+
+  it('does not log a business event for a draft', async () => {
+    const r = await createRfpAction({
+      title: '드래프트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    expect(logBusinessEvent).not.toHaveBeenCalled();
   });
 
   it('rejects without buyer session', async () => {

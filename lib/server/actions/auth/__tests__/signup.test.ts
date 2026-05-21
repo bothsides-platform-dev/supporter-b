@@ -13,7 +13,26 @@ import { signupEmailAction } from '../signupEmailAction';
 import { signupCompleteAction } from '../signupCompleteAction';
 import { verifyEmailAction } from '../verifyEmailAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
+import { __setActionDbForTest } from '../_shared';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+
+// A fake action-db whose user-insert throws a chosen error — lets us drive the
+// post-insert catch without a real constraint. signupCompleteAction calls
+// actionDb().transaction(cb); cb runs tx.insert(users).values(...).
+function throwingInsertDb(error: unknown) {
+  return {
+    transaction: async (cb: (tx: unknown) => unknown) =>
+      cb({ insert: () => ({ values: () => { throw error; } }) }),
+  };
+}
+
+const VALID_SIGNUP = {
+  email: 'tighten@example.com',
+  name: '테스터',
+  password: 'Password123!',
+  wsKind: 'buyer' as const,
+  wsName: '(주)테스트',
+};
 
 let db: PgliteDB;
 
@@ -350,5 +369,37 @@ describe('signupCompleteAction — password policy (server-side)', () => {
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+});
+
+describe('signupCompleteAction — insert error tightening', () => {
+  beforeEach(async () => {
+    db = await setupActionEnv();
+  });
+  afterEach(teardownActionEnv);
+
+  it('maps a postgres-shaped unique violation (err.code) to EMAIL_TAKEN', async () => {
+    __setActionDbForTest(
+      throwingInsertDb(Object.assign(new Error('dup'), { code: '23505' })),
+    );
+    const r = await signupCompleteAction(VALID_SIGNUP);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
+  });
+
+  it('maps a pglite-shaped unique violation (err.cause.code) to EMAIL_TAKEN', async () => {
+    __setActionDbForTest(
+      throwingInsertDb(Object.assign(new Error('dup'), { cause: { code: '23505' } })),
+    );
+    const r = await signupCompleteAction(VALID_SIGNUP);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
+  });
+
+  it('rethrows a non-unique DB error instead of masking it as EMAIL_TAKEN', async () => {
+    __setActionDbForTest(
+      throwingInsertDb(Object.assign(new Error('not null'), { code: '23502' })),
+    );
+    await expect(signupCompleteAction(VALID_SIGNUP)).rejects.toThrow('not null');
   });
 });
