@@ -25,7 +25,7 @@ export const CLAIMABLE_PUBLIC_PREFIXES = ['/invite/rfp'];
 
 // Paths that guests (unauthenticated) may access even though they live outside
 // the (public) route group. Authenticated users pass through too.
-export const GUEST_ACCESSIBLE_PATHS = ['/rfp/new'];
+export const GUEST_ACCESSIBLE_PATHS = ['/rfp-new'];
 
 export type RouteDecision =
   | { kind: 'next' }

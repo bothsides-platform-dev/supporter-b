@@ -22,7 +22,7 @@ type CommandItem = {
 
 const COMMANDS: CommandItem[] = [
   { group: 'RFP', id: 'rfp-list', label: 'RFP 목록', href: '/rfp' },
-  { group: 'RFP', id: 'rfp-new', label: '신규 제안 요청', modKey: 'N', href: '/rfp/new' },
+  { group: 'RFP', id: 'rfp-new', label: '신규 제안 요청', modKey: 'N', href: '/rfp-new' },
   { group: '수신함', id: 'inbox', label: '수신함', href: '/inbox' },
   { group: '설정', id: 'settings-profile', label: '프로필 설정', href: '/settings/profile' },
   { group: '설정', id: 'settings-members', label: '멤버 관리', href: '/settings/members' },

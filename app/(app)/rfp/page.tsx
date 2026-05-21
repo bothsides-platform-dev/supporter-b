@@ -32,7 +32,7 @@ export default async function RfpListPage() {
             제안 요청 목록
           </h1>
         </div>
-        <Link href="/rfp/new">
+        <Link href="/rfp-new">
           <Button size="sm">+ 신규 제안</Button>
         </Link>
       </div>
@@ -54,7 +54,7 @@ async function RfpListTableLoader({ wsId }: { wsId: string }) {
         title="발송된 제안 요청이 없습니다."
         description="새로운 제안 요청을 작성해 PG사에 발송하세요."
         action={
-          <Link href="/rfp/new">
+          <Link href="/rfp-new">
             <Button size="sm">+ 신규 제안</Button>
           </Link>
         }
