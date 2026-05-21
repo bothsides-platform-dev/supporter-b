@@ -15,6 +15,13 @@
       "when": 1779500000000,
       "tag": "0001_multi_workspace",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779800000000,
+      "tag": "0002_workspace_share_token",
+      "breakpoints": true
     }
   ]
 }

@@ -12,6 +12,14 @@ export const workspaces = pgTable(
     bizProfileId: uuid('biz_profile_id').references(() => bizProfiles.id, {
       onDelete: 'set null',
     }),
+    // Generic share link token — admin distributes; anyone with the link joins
+    // as a member. Plaintext (mirrors rfps.share_token); never expires, so
+    // regenerateWorkspaceShareTokenAction is the revocation valve. Default exists
+    // for fixtures/backfill; app overrides via regenerate with generateToken().
+    shareToken: text('share_token')
+      .notNull()
+      .unique()
+      .default(sql`gen_random_uuid()::text`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },

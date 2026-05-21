@@ -93,6 +93,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       name: ws.name,
       bizProfile,
       members,
+      shareToken: ws.shareToken,
       createdAt: new Date(ws.createdAt).toISOString(),
     };
   }
@@ -135,6 +136,19 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .select()
       .from(workspaces)
       .where(eq(workspaces.id, id))
+      .limit(1);
+    return row ? this.hydrate(db, row) : undefined;
+  }
+
+  async findByShareToken(
+    token: string,
+    tx?: Tx,
+  ): Promise<Workspace | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.shareToken, token))
       .limit(1);
     return row ? this.hydrate(db, row) : undefined;
   }
