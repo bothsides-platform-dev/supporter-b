@@ -36,7 +36,7 @@ describe('repository factory', () => {
     } satisfies Omit<WorkspaceRepo, 'listForUser'>;
     globalThis.__bidit_repos__ = {
       ...(globalThis.__bidit_repos__ ?? {}),
-      workspace: staleWorkspace as WorkspaceRepo,
+      workspace: staleWorkspace as unknown as WorkspaceRepo,
       __backend: 'drizzle',
     } as typeof globalThis.__bidit_repos__;
 

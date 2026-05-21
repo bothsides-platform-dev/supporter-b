@@ -83,9 +83,11 @@ function isRepoBundleStale(bundle: RepoBundle): boolean {
 async function getBundle(): Promise<RepoBundle> {
   const cached = globalThis.__bidit_repos__;
   if (!cached || isRepoBundleStale(cached)) {
-    globalThis.__bidit_repos__ = await buildBundle();
+    const bundle = await buildBundle();
+    globalThis.__bidit_repos__ = bundle;
+    return bundle;
   }
-  return globalThis.__bidit_repos__;
+  return cached;
 }
 
 export async function getRfpRepo(): Promise<RfpRepo> {
