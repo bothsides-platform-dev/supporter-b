@@ -36,7 +36,6 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
     setBusy(true);
     const r = await switchWorkspaceAction(id);
     if (r.ok) {
-      router.refresh();
       router.push(r.redirectTo);
     } else {
       setBusy(false);

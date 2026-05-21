@@ -28,6 +28,12 @@ vi.mock('@/auth', () => ({
   unstable_update: (...args: any[]) => unstableUpdate(...args),
 }));
 
+const revalidatePath = vi.fn();
+vi.mock('next/cache', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  revalidatePath: (...args: any[]) => revalidatePath(...args),
+}));
+
 import { switchWorkspaceAction } from '../switchWorkspaceAction';
 
 let db: PgliteDB;
@@ -35,6 +41,7 @@ beforeEach(async () => {
   db = await createPgliteDb();
   __setActionDbForTest(db);
   unstableUpdate.mockClear();
+  revalidatePath.mockClear();
   sessionRef.value = null;
 });
 afterEach(() => {
@@ -88,5 +95,30 @@ describe('switchWorkspaceAction', () => {
     const r = await switchWorkspaceAction('');
     expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
     expect(unstableUpdate).not.toHaveBeenCalled();
+  });
+
+  it('member: calls revalidatePath("/home") to invalidate RSC cache server-side', async () => {
+    const u = await seedUser(db);
+    const wsBuyer = await seedBuyerWorkspace(db);
+    const wsPg = await seedPgWorkspace(db, 'PG');
+    await seedMembership(db, wsBuyer.id, u.id, 'admin');
+    await seedMembership(db, wsPg.id, u.id, 'member');
+    sessionRef.value = { user: { id: u.id } };
+
+    await switchWorkspaceAction(wsPg.id);
+
+    expect(revalidatePath).toHaveBeenCalledWith('/home');
+  });
+
+  it('non-member: does not call revalidatePath', async () => {
+    const u = await seedUser(db);
+    const wsBuyer = await seedBuyerWorkspace(db);
+    await seedMembership(db, wsBuyer.id, u.id, 'admin');
+    const other = await seedPgWorkspace(db, 'Other');
+    sessionRef.value = { user: { id: u.id } };
+
+    await switchWorkspaceAction(other.id);
+
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

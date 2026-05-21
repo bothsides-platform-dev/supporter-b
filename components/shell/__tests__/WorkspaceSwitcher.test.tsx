@@ -56,6 +56,18 @@ describe('WorkspaceSwitcher', () => {
     expect(switchWorkspaceAction).not.toHaveBeenCalled();
   });
 
+  it('successful switch calls only router.push, not router.refresh — avoids Next 16 useTransition hang', async () => {
+    const user = userEvent.setup();
+    switchWorkspaceAction.mockResolvedValue({ ok: true, redirectTo: '/home' });
+
+    render(<WorkspaceSwitcher current={current} workspaces={workspaces} />);
+    await user.click(screen.getByRole('button'));
+    await user.click(await screen.findByText('서포터 B 페이'));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/home'));
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it('footer "워크스페이스 만들기" navigates to /workspace/new', async () => {
     const user = userEvent.setup();
     render(<WorkspaceSwitcher current={current} workspaces={workspaces} />);

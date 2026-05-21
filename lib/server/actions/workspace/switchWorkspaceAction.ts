@@ -1,6 +1,7 @@
 'use server';
 
 import { eq } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
 
 import { requireSession } from '@/lib/auth/session';
 import { unstable_update } from '@/auth';
@@ -49,5 +50,6 @@ export async function switchWorkspaceAction(
     },
   });
 
+  revalidatePath('/home');
   return { ok: true, redirectTo: '/home' };
 }
