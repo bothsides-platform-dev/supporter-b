@@ -64,12 +64,13 @@ export function Footer() {
               </span>
               {[
                 { label: '서비스 이용약관', href: '#' },
-                { label: '개인정보 처리방침', href: '#' },
+                { label: '개인정보 처리방침', href: 'https://moingclub.notion.site/Supporter-B-363ef44bd15380409aa1eabb4ab5b240', external: true },
                 { label: '전자금융거래 약관', href: '#' },
               ].map((link) => (
                 <a
                   key={link.label}
                   href={link.href}
+                  {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   className="text-[13px] transition-opacity duration-150 hover:opacity-100"
                   style={{
                     fontFamily: 'var(--font-sans)',

@@ -79,7 +79,16 @@ export function AgreementCheckboxes({ value, onChange }: AgreementCheckboxesProp
           onChange={(v) => onChange({ ...value, privacy: v })}
           required
         >
-          개인정보 처리방침 동의
+          <a
+            href="https://moingclub.notion.site/Supporter-B-363ef44bd15380409aa1eabb4ab5b240"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:opacity-70"
+            onClick={(e) => e.stopPropagation()}
+          >
+            개인정보 처리방침
+          </a>{' '}
+          동의
         </Checkbox>
         <Checkbox
           id="marketing"

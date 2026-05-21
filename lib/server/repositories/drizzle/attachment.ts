@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { attachments } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
+import type { Attachment } from '@/lib/types/common';
 import type { AttachmentRecord } from '../attachment-record';
 import type { AttachmentRepo, Tx } from '../types';
 
@@ -52,5 +53,19 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       .where(eq(attachments.id, id))
       .limit(1);
     return row ? rowToAttachment(row) : undefined;
+  }
+
+  async findByRfp(rfpId: string, tx?: Tx): Promise<Attachment[]> {
+    const db = this.h(tx);
+    const rows: AttachRow[] = await db
+      .select()
+      .from(attachments)
+      .where(eq(attachments.rfpId, rfpId))
+      .orderBy(asc(attachments.uploadedAt));
+    // 공개 Attachment 필드만 노출 — uploadedBy 등 record 전용 필드는 클라이언트로 안 보냄.
+    return rows.map((row) => {
+      const { id, name, size, mimeType, url } = rowToAttachment(row);
+      return { id, name, size, mimeType, url };
+    });
   }
 }

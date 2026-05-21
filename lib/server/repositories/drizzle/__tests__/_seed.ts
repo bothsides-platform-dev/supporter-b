@@ -5,6 +5,7 @@ import {
   workspaces,
   workspaceMembers,
   bizProfiles,
+  rfps,
 } from '@/lib/db/schema';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -81,4 +82,21 @@ export async function seedMembership(
     userId,
     role,
   });
+}
+
+export async function seedRfp(
+  db: PgliteDB,
+  opts: { buyerWsId: string; createdBy: string; code?: string },
+): Promise<{ id: string; code: string }> {
+  const id = randomUUID();
+  const code = opts.code ?? `P-2605-${Math.floor(1000 + Math.random() * 8999)}`;
+  await db.insert(rfps).values({
+    id,
+    code,
+    buyerWsId: opts.buyerWsId,
+    title: 'RFP',
+    deadline: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+    createdBy: opts.createdBy,
+  });
+  return { id, code };
 }

@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { attachments } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { DrizzleAttachmentRepository } from '../attachment';
-import { seedUser } from './_seed';
+import { seedBuyerWorkspace, seedRfp, seedUser } from './_seed';
 
 async function setup() {
   const db = await createPgliteDb();
@@ -54,5 +54,80 @@ describe('DrizzleAttachmentRepository.findById', () => {
 
   it('returns undefined for unknown id', async () => {
     expect(await ctx.repo.findById(randomUUID())).toBeUndefined();
+  });
+});
+
+// RFP-owned attachment with explicit uploadedAt for deterministic ordering.
+async function insertRfpAttachment(
+  db: PgliteDB,
+  opts: { uploaderId: string; rfpId: string; name: string; uploadedAt: Date },
+) {
+  const id = randomUUID();
+  await db.insert(attachments).values({
+    id,
+    name: opts.name,
+    size: 2048,
+    mimeType: 'application/pdf',
+    uploadedBy: opts.uploaderId,
+    rfpId: opts.rfpId,
+    uploadedAt: opts.uploadedAt,
+  });
+  return id;
+}
+
+describe('DrizzleAttachmentRepository.findByRfp', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('returns only the given rfp attachments, oldest first, with the route url', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, {
+      buyerWsId: ws.id,
+      createdBy: ctx.uploader.id,
+    });
+    const other = await seedRfp(ctx.db, {
+      buyerWsId: ws.id,
+      createdBy: ctx.uploader.id,
+    });
+
+    const second = await insertRfpAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      rfpId: rfp.id,
+      name: 'second.pdf',
+      uploadedAt: new Date('2026-05-02T00:00:00Z'),
+    });
+    const first = await insertRfpAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      rfpId: rfp.id,
+      name: 'first.pdf',
+      uploadedAt: new Date('2026-05-01T00:00:00Z'),
+    });
+    // Noise: another RFP's attachment + a draft (no owner) — must be excluded.
+    await insertRfpAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      rfpId: other.id,
+      name: 'other.pdf',
+      uploadedAt: new Date('2026-05-01T00:00:00Z'),
+    });
+    await insertAttachment(ctx.db, ctx.uploader.id);
+
+    const files = await ctx.repo.findByRfp(rfp.id);
+
+    expect(files.map((f) => f.id)).toEqual([first, second]);
+    expect(files.map((f) => f.name)).toEqual(['first.pdf', 'second.pdf']);
+    expect(files[0].url).toBe(`/api/files/${first}`);
+  });
+
+  it('returns [] for an rfp with no attachments', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, {
+      buyerWsId: ws.id,
+      createdBy: ctx.uploader.id,
+    });
+
+    expect(await ctx.repo.findByRfp(rfp.id)).toEqual([]);
   });
 });

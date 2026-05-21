@@ -214,6 +214,8 @@ export interface AttachmentRepo {
   save(a: AttachmentRecord, tx?: Tx): Promise<void>;
   /** id 조회 — 서버 전용 record (storagePath 포함) 반환. */
   findById(id: string, tx?: Tx): Promise<AttachmentRecord | undefined>;
+  /** RFP 소유 첨부 목록 — 공개 Attachment 필드만, uploadedAt 오름차순. */
+  findByRfp(rfpId: string, tx?: Tx): Promise<Attachment[]>;
 }
 
 // ── Outbox ────────────────────────────────────────────────────────────
