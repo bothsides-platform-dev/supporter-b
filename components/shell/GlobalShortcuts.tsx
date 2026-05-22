@@ -14,7 +14,7 @@ export function GlobalShortcuts() {
   useShortcut('n', (e) => {
     e.preventDefault();
     if (paletteOpen) closePalette();
-    router.push('/rfp-new');
+    router.push('/rfp/new');
   }, { meta: true, preventInInput: false });
 
   useShortcut('Escape', () => {

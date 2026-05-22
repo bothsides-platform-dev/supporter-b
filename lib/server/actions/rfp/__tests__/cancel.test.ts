@@ -92,7 +92,7 @@ async function seedSentRfpWithBid() {
     submittedBy: pgUser.id,
     submittedAt: new Date(),
   });
-  return { buyerUserId: buyer.id, buyerWsId: buyerWs.id, pgWsId: pgWs.id, pgUserId: pgUser.id, rfpId };
+  return { buyerUserId: buyer.id, buyerWsId: buyerWs.id, pgWsId: pgWs.id, pgUserId: pgUser.id, rfpId, rfpCode };
 }
 
 describe('cancelRfpAction', () => {
@@ -115,7 +115,7 @@ describe('cancelRfpAction', () => {
         role: 'admin',
       },
     };
-    const r = await cancelRfpAction({ rfpId: s.rfpId });
+    const r = await cancelRfpAction({ rfpId: s.rfpCode });
     expect(r.ok).toBe(true);
 
     const [row] = await db.select().from(rfps).where(eq(rfps.id, s.rfpId));
@@ -128,6 +128,9 @@ describe('cancelRfpAction', () => {
     expect(ns).toHaveLength(1);
     expect(ns[0].userId).toBe(s.pgUserId);
     expect(ns[0].channel).toBe('in_app');
+    // Notification link must carry the human code (inbox resolves by code).
+    expect(ns[0].linkUrl).toBe(`/inbox/${s.rfpCode}`);
+    expect(ns[0].linkUrl).not.toContain(s.rfpId);
 
     // No email outbox for cancellation.
     const outbox = await db.select().from(outboxEntries);
@@ -145,7 +148,7 @@ describe('cancelRfpAction', () => {
         role: 'admin',
       },
     };
-    const r = await cancelRfpAction({ rfpId: s.rfpId });
+    const r = await cancelRfpAction({ rfpId: s.rfpCode });
     expect(r.ok).toBe(false);
   });
 
@@ -164,7 +167,7 @@ describe('cancelRfpAction', () => {
         role: 'admin',
       },
     };
-    const r = await cancelRfpAction({ rfpId: s.rfpId });
+    const r = await cancelRfpAction({ rfpId: s.rfpCode });
     expect(r.ok).toBe(false);
   });
 });

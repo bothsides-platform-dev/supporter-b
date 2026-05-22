@@ -42,6 +42,14 @@ describe('decideRoute — Step 3 four cases', () => {
     expect(decideRoute('/logout', '', false)).toEqual({ kind: 'next' });
   });
 
+  it('unauth + /rfp/new passes through (게스트 RFP 작성 허용 경로)', () => {
+    expect(decideRoute('/rfp/new', '', false)).toEqual({ kind: 'next' });
+  });
+
+  it('auth + /rfp/new passes through', () => {
+    expect(decideRoute('/rfp/new', '', true)).toEqual({ kind: 'next' });
+  });
+
   it('unauth + /login passes through (no redirect loop)', () => {
     expect(decideRoute('/login', '', false)).toEqual({ kind: 'next' });
   });

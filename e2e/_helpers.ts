@@ -17,7 +17,7 @@ import { attachments, bids, bidNotes, rfps } from '@/lib/db/schema';
 import { getStorage } from '@/lib/server/storage';
 
 // Seed/URL identifiers are the human RFP code (P-YYMM-NNNN); FKs use the uuid.
-async function rfpUuidFromCode(code: string): Promise<string> {
+export async function rfpUuidFromCode(code: string): Promise<string> {
   const [row] = await db
     .select({ id: rfps.id })
     .from(rfps)

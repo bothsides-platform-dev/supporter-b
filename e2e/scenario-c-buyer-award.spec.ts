@@ -14,6 +14,7 @@
 import { test, expect } from 'playwright/test';
 import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
+import { rfpUuidFromCode } from './_helpers';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
@@ -27,13 +28,16 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
   test('buyer logs in, opens comparison, awards toss, confirms', async ({
     page,
   }) => {
+    // RFP_ID is the human code; FK columns + dedupe keys use the uuid.
+    const rfpUuid = await rfpUuidFromCode(RFP_ID);
+
     // ── Pre: ensure the RFP is in 'sent' state (idempotent reset for ─
     // multi-run flakiness — globalSetup reseeds, but if a stale local
     // run left it 'awarded', force back to 'sent' and clear contract).
     await db.execute(
-      sql`UPDATE rfps SET status='sent', awarded_bid_id=NULL WHERE id=${RFP_ID}`,
+      sql`UPDATE rfps SET status='sent', awarded_bid_id=NULL WHERE id=${rfpUuid}`,
     );
-    await db.execute(sql`DELETE FROM contracts WHERE rfp_id=${RFP_ID}`);
+    await db.execute(sql`DELETE FROM contracts WHERE rfp_id=${rfpUuid}`);
 
     // Pick the toss bid (winner) — seeded as 'submitted'. The workspaces
     // table no longer carries a `domain` column (post-schema simplification);
@@ -41,7 +45,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     const winnerRows = await db.execute<{ id: string }>(
       sql`SELECT b.id FROM bids b
           JOIN workspaces w ON w.id = b.pg_ws_id
-          WHERE b.rfp_id = ${RFP_ID} AND w.name = '서포터 B 페이'
+          WHERE b.rfp_id = ${rfpUuid} AND w.name = '서포터 B 페이'
           LIMIT 1`,
     );
     const winnerArr = Array.isArray(winnerRows)
@@ -95,7 +99,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
       status: string;
       awarded_bid_id: string | null;
     }>(
-      sql`SELECT status, awarded_bid_id FROM rfps WHERE id = ${RFP_ID}`,
+      sql`SELECT status, awarded_bid_id FROM rfps WHERE id = ${rfpUuid}`,
     );
     const rfpArr = Array.isArray(rfpRows)
       ? rfpRows
@@ -108,7 +112,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     // uses `bid_id` (single FK, not winning/losing); one row per RFP.
     const contractRows = await db.execute<{ c: number }>(
       sql`SELECT count(*)::int AS c FROM contracts
-          WHERE rfp_id = ${RFP_ID} AND bid_id = ${winnerBidId}`,
+          WHERE rfp_id = ${rfpUuid} AND bid_id = ${winnerBidId}`,
     );
     const contractArr = Array.isArray(contractRows)
       ? contractRows
@@ -122,7 +126,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     const outboxRows = await db.execute<{ c: number }>(
       sql`SELECT count(*)::int AS c FROM outbox_entries
           WHERE event = 'rfp.awarded'
-            AND dedupe_key LIKE ${'rfp:' + RFP_ID + ':awarded:%'}`,
+            AND dedupe_key LIKE ${'rfp:' + rfpUuid + ':awarded:%'}`,
     );
     const outboxArr = Array.isArray(outboxRows)
       ? outboxRows

@@ -108,7 +108,7 @@ describe('closeRfpAction', () => {
         role: 'admin',
       },
     };
-    const r = await closeRfpAction({ rfpId });
+    const r = await closeRfpAction({ rfpId: rfpCode });
     expect(r.ok).toBe(true);
 
     const [row] = await db.select().from(rfps).where(eq(rfps.id, rfpId));
@@ -121,6 +121,9 @@ describe('closeRfpAction', () => {
     expect(ns).toHaveLength(1);
     expect(ns[0].userId).toBe(pgUser.id);
     expect(ns[0].channel).toBe('in_app');
+    // Notification link must carry the human code (inbox resolves by code).
+    expect(ns[0].linkUrl).toBe(`/inbox/${rfpCode}`);
+    expect(ns[0].linkUrl).not.toContain(rfpId);
   });
 
   it('rejects ownership mismatch', async () => {
@@ -151,7 +154,7 @@ describe('closeRfpAction', () => {
         role: 'admin',
       },
     };
-    const r = await closeRfpAction({ rfpId });
+    const r = await closeRfpAction({ rfpId: rfpCode });
     expect(r.ok).toBe(false);
   });
 });

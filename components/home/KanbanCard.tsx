@@ -63,7 +63,7 @@ export function KanbanCard(props: Props) {
       {...attributes}
       {...listeners}
       onClick={(e) => {
-        // dnd-kit pointer activation 4px 안에서는 click 이 통과 — 그 안에서만 모달 오픈.
+        // dnd-kit pointer activation 4px 안에서는 click 이 통과 — 그 안에서만 상세 오픈.
         if (!isDragging) props.onSelect();
         e.stopPropagation();
       }}

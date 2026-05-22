@@ -1,5 +1,5 @@
-// RFP 상세 데이터 로더 — 전체 페이지(app/(app)/rfp/[id], app/(app)/inbox/[rfpId])와
-// 가로채기 모달(@modal/(.)...)이 공유한다. server-only (repo factory import).
+// RFP 상세 데이터 로더 — 전체 페이지(app/(app)/rfp/[id], app/(app)/inbox/[rfpId])가
+// 사용한다. server-only (repo factory import).
 //
 // auth-free: 세션/redirect 가드는 page shell 책임. 로더는 workspaceId 등 이미 해소된
 // 인자만 받아 repo 호출 + 데이터 가공만 한다 (buyer-kanban-loader 컨벤션). 덕분에
@@ -165,7 +165,7 @@ export async function loadPgRfpDetail(args: {
 
 /**
  * 수주 확정 화면 데이터. 소유하지 않거나 선택 입찰(bidId)을 못 찾으면 null.
- * 전체 페이지(app/(app)/rfp/[id]/award)와 가로채기 모달이 공유.
+ * 전체 페이지(app/(app)/rfp/[id]/award)가 사용.
  */
 export async function loadBuyerAwardData(args: {
   code: string;

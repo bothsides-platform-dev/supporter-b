@@ -83,6 +83,7 @@ export async function awardRfpAction(
           buyerWsId: rfps.buyerWsId,
           status: rfps.status,
           title: rfps.title,
+          code: rfps.code,
         })
         .from(rfps)
         .where(eq(rfps.id, rfpId))
@@ -91,6 +92,10 @@ export async function awardRfpAction(
       if (rfpRow.buyerWsId !== wsId) {
         return { ok: false, error: 'FORBIDDEN_BUYER' };
       }
+      // 알림/메일에 노출되는 RFP 식별자는 사람용 code(P-YYMM-NNNN). 특히 linkUrl은
+      // /inbox/<code>여야 한다 — inbox 라우트가 code로 조회하므로 uuid면 깨진 링크.
+      // (dedupeKey 등 내부 키는 계속 uuid 사용.)
+      const rfpCode = rfpRow.code;
 
       // 2. transition — repo가 assertTransition + WHERE status='sent' 가드.
       const rfpRepo = await getRfpRepo();
@@ -149,11 +154,11 @@ export async function awardRfpAction(
           userId: m.userId,
           workspaceId: winner.pgWsId,
           type: 'rfp.awarded',
-          title: `[${rfpId}] 낙찰`,
+          title: `[${rfpCode}] 낙찰`,
           body: '제출하신 제안이 낙찰되었습니다.',
           channel: 'inapp',
           status: 'pending',
-          linkUrl: `/inbox/${rfpId}`,
+          linkUrl: `/inbox/${rfpCode}`,
           createdAt: new Date().toISOString(),
         };
         await dispatchNotification(tx, notif);
@@ -169,7 +174,7 @@ export async function awardRfpAction(
         .innerJoin(users, eq(workspaceMembers.userId, users.id))
         .where(eq(workspaceMembers.workspaceId, winner.pgWsId));
       const awardedHtml = await renderRfpAwarded({
-        rfpId,
+        rfpId: rfpCode,
         rfpTitle: rfpRow.title,
         bidId: awardedBidId,
         settlementCycle: winner.settleCycle,
@@ -179,7 +184,7 @@ export async function awardRfpAction(
           {
             event: 'rfp.awarded',
             to: row.email,
-            subject: `[Supporter B · ${rfpId}] 낙찰 결과`,
+            subject: `[Supporter B · ${rfpCode}] 낙찰 결과`,
             html: awardedHtml,
             dedupeKey: `rfp:${rfpId}:awarded:${row.email}`,
           },
@@ -199,11 +204,11 @@ export async function awardRfpAction(
             userId: m.userId,
             workspaceId: loser.pgWsId,
             type: 'rfp.rejected',
-            title: `[${rfpId}] 미낙찰`,
+            title: `[${rfpCode}] 미낙찰`,
             body: '다른 PG가 선정되었습니다.',
             channel: 'inapp',
             status: 'pending',
-            linkUrl: `/inbox/${rfpId}`,
+            linkUrl: `/inbox/${rfpCode}`,
             createdAt: new Date().toISOString(),
           };
           await dispatchNotification(tx, notif);

@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { PageEnter } from '@/components/primitives/PageEnter';
+import { BackButton } from '@/components/primitives/BackButton';
 import { RfpDetailContent } from '@/components/rfp/RfpDetailContent';
 import { auth } from '@/auth';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
@@ -23,20 +24,25 @@ export default async function RfpDetailPage({ params }: Props) {
   const { workspaceId, id: userId, name, email } = session.user;
 
   return (
-    <Suspense
-      fallback={
-        <PageEnter className="px-8 py-8 space-y-10">
-          <RfpDetailContent.Skeleton />
-        </PageEnter>
-      }
-    >
-      <RfpDetailLoader
-        id={id}
-        wsId={workspaceId}
-        userId={userId}
-        userName={name ?? email ?? '구매사 담당자'}
-      />
-    </Suspense>
+    <>
+      <div className="px-8 pt-6">
+        <BackButton />
+      </div>
+      <Suspense
+        fallback={
+          <PageEnter className="px-8 py-8 space-y-10">
+            <RfpDetailContent.Skeleton />
+          </PageEnter>
+        }
+      >
+        <RfpDetailLoader
+          id={id}
+          wsId={workspaceId}
+          userId={userId}
+          userName={name ?? email ?? '구매사 담당자'}
+        />
+      </Suspense>
+    </>
   );
 }
 
