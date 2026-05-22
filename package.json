@@ -21,6 +21,7 @@
     "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
+    "@axiomhq/pino": "^1.6.1",
     "@base-ui/react": "^1.4.1",
     "@channel.io/channel-web-sdk-loader": "^2.0.2",
     "@dnd-kit/core": "^6.3.1",

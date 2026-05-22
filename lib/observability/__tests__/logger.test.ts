@@ -1,15 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Hoisted so the mock factory can close over them before any import runs.
-const { pinoFactory, pinoInfo, pinoWarn, pinoError, pinoDebug } = vi.hoisted(() => {
+const { pinoFactory, pinoTransport, pinoInfo, pinoWarn, pinoError, pinoDebug } = vi.hoisted(() => {
   const pinoInfo  = vi.fn();
   const pinoWarn  = vi.fn();
   const pinoError = vi.fn();
   const pinoDebug = vi.fn();
+  const pinoTransport = vi.fn().mockReturnValue({});
   const pinoFactory = vi.fn().mockImplementation(() => ({
     info: pinoInfo, warn: pinoWarn, error: pinoError, debug: pinoDebug,
-  }));
-  return { pinoFactory, pinoInfo, pinoWarn, pinoError, pinoDebug };
+  })) as any;
+  pinoFactory.transport = pinoTransport;
+  return { pinoFactory, pinoTransport, pinoInfo, pinoWarn, pinoError, pinoDebug };
 });
 
 vi.mock('pino', () => ({ default: pinoFactory }));
@@ -140,5 +142,46 @@ describe('createLogger — Edge runtime', () => {
     log.info('edge.structured', { userId: 'u1' });
     const parsed = JSON.parse(captured);
     expect(parsed).toMatchObject({ level: 'info', msg: 'edge.structured', userId: 'u1' });
+  });
+});
+
+describe('createLogger — Axiom transport', () => {
+  const origToken   = process.env.AXIOM_TOKEN;
+  const origDataset = process.env.AXIOM_DATASET;
+
+  afterEach(() => {
+    process.env.AXIOM_TOKEN   = origToken;
+    process.env.AXIOM_DATASET = origDataset;
+    pinoFactory.mockClear();
+    pinoTransport.mockClear();
+  });
+
+  it('uses @axiomhq/pino transport when both AXIOM_TOKEN and AXIOM_DATASET are set', () => {
+    process.env.AXIOM_TOKEN   = 'xapt-test-token';
+    process.env.AXIOM_DATASET = 'bidit-prod';
+    createLogger('nodejs');
+    expect(pinoTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: '@axiomhq/pino',
+        options: expect.objectContaining({
+          token:   'xapt-test-token',
+          dataset: 'bidit-prod',
+        }),
+      }),
+    );
+  });
+
+  it('does not use Axiom transport when AXIOM_TOKEN is absent', () => {
+    delete process.env.AXIOM_TOKEN;
+    process.env.AXIOM_DATASET = 'bidit-prod';
+    createLogger('nodejs');
+    expect(pinoTransport).not.toHaveBeenCalled();
+  });
+
+  it('does not use Axiom transport when AXIOM_DATASET is absent', () => {
+    process.env.AXIOM_TOKEN = 'xapt-test-token';
+    delete process.env.AXIOM_DATASET;
+    createLogger('nodejs');
+    expect(pinoTransport).not.toHaveBeenCalled();
   });
 });

@@ -24,9 +24,14 @@ function makeEdgeLogger(): AppLogger {
 
 function makeNodeLogger(): AppLogger {
   const defaultLevel = process.env.NODE_ENV === 'development' ? 'debug' : 'info';
+  const level = process.env.LOG_LEVEL ?? defaultLevel;
   // Development pretty output: pipe stdout through pino-pretty in your terminal.
   //   pnpm dev 2>&1 | pnpm exec pino-pretty
-  const p = pinoLib({ level: process.env.LOG_LEVEL ?? defaultLevel });
+  const { AXIOM_TOKEN, AXIOM_DATASET } = process.env;
+  const transport = (AXIOM_TOKEN && AXIOM_DATASET)
+    ? pinoLib.transport({ target: '@axiomhq/pino', options: { token: AXIOM_TOKEN, dataset: AXIOM_DATASET } })
+    : undefined;
+  const p = transport ? pinoLib({ level }, transport) : pinoLib({ level });
   return {
     info:  (msg, attrs) => { try { p.info( attrs ?? {}, msg); } catch {} },
     warn:  (msg, attrs) => { try { p.warn( attrs ?? {}, msg); } catch {} },
