@@ -138,19 +138,18 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     expect(draftArr).toHaveLength(1);
     expect(draftArr[0].status).toBe('draft');
 
-    // Workspace id appended on the rfps.allowed_pg_workspace_ids column.
-    const allowRow = await db.execute<{ allowed: string[] }>(
-      sql`SELECT allowed_pg_workspace_ids AS allowed
-          FROM rfps WHERE id = ${rfpUuid}`,
+    // Allowlist membership lives in the rfp_allowed_pg join table (replaced the
+    // old rfps.allowed_pg_workspace_ids array column).
+    const allowRow = await db.execute<{ c: number }>(
+      sql`SELECT count(*)::int AS c FROM rfp_allowed_pg
+          WHERE rfp_id = ${rfpUuid} AND pg_ws_id = ${newPgWsId}`,
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allowArr: any[] = Array.isArray(allowRow)
       ? allowRow
       : // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ((allowRow as any).rows ?? []);
-    expect(allowArr[0].allowed).toEqual(
-      expect.arrayContaining([newPgWsId]),
-    );
+    expect(allowArr[0].c).toBe(1);
 
     // ── 5. Click "초대 발송" → outbox + status flip ────────────────
     const sendBtn = page.getByRole('button', { name: /개 PG에 초대 발송/ });

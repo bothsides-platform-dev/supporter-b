@@ -105,5 +105,7 @@ export async function claimShareTokenAction(
     },
   );
 
-  return { ok: true, rfpId: rfp.id };
+  // 클라이언트는 이 값으로 /inbox/<...> 로 이동한다. inbox 라우트는 사람용 code 로
+  // 조회하므로 uuid(rfp.id)가 아니라 code 를 돌려준다(아니면 깨진 링크).
+  return { ok: true, rfpId: rfp.code };
 }
