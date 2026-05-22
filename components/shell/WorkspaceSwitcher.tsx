@@ -36,7 +36,11 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
     setBusy(true);
     const r = await switchWorkspaceAction(id);
     if (r.ok) {
-      router.push(r.redirectTo);
+      // Hard navigation, not router.push: the active workspace is derived in the
+      // shared (app) layout, which a soft navigation preserves (partial
+      // rendering) — so the nav chrome would stay on the old workspace. A full
+      // document load re-renders the layout with the freshly-written JWT cookie.
+      window.location.assign(r.redirectTo);
     } else {
       setBusy(false);
     }

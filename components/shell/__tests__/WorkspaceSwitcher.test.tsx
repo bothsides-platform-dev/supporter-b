@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 const switchWorkspaceAction = vi.fn();
 const push = vi.fn();
 const refresh = vi.fn();
+const assign = vi.fn();
 
 vi.mock('@/lib/server/actions/workspace/switchWorkspaceAction', () => ({
   switchWorkspaceAction: (id: string) => switchWorkspaceAction(id),
@@ -25,6 +26,14 @@ beforeEach(() => {
   switchWorkspaceAction.mockReset();
   push.mockReset();
   refresh.mockReset();
+  assign.mockReset();
+  // jsdom's window.location.assign throws "not implemented"; replace location
+  // with a stub so a hard navigation can be asserted. (.href= is unmockable in
+  // jsdom, hence the component uses .assign().)
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { assign },
+  });
 });
 
 describe('WorkspaceSwitcher', () => {
@@ -34,7 +43,7 @@ describe('WorkspaceSwitcher', () => {
     expect(screen.getByText('구매사')).toBeInTheDocument();
   });
 
-  it('switches to a selected workspace and navigates home', async () => {
+  it('switches to a selected workspace and hard-navigates home', async () => {
     const user = userEvent.setup();
     switchWorkspaceAction.mockResolvedValue({ ok: true, redirectTo: '/home' });
 
@@ -43,7 +52,7 @@ describe('WorkspaceSwitcher', () => {
     await user.click(await screen.findByText('서포터 B 페이'));
 
     await waitFor(() => expect(switchWorkspaceAction).toHaveBeenCalledWith('ws2'));
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/home'));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
   });
 
   it('does not switch when selecting the already-active workspace', async () => {
@@ -56,7 +65,7 @@ describe('WorkspaceSwitcher', () => {
     expect(switchWorkspaceAction).not.toHaveBeenCalled();
   });
 
-  it('successful switch calls only router.push, not router.refresh — avoids Next 16 useTransition hang', async () => {
+  it('successful switch hard-navigates and never uses the soft router (which preserves the shared (app) layout, leaving the workspace chrome stale)', async () => {
     const user = userEvent.setup();
     switchWorkspaceAction.mockResolvedValue({ ok: true, redirectTo: '/home' });
 
@@ -64,7 +73,8 @@ describe('WorkspaceSwitcher', () => {
     await user.click(screen.getByRole('button'));
     await user.click(await screen.findByText('서포터 B 페이'));
 
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/home'));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
+    expect(push).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
 
