@@ -9,6 +9,7 @@ export function MembersPageSkeleton() {
         <Skeleton className="h-3 w-52 mt-1" />
       </div>
 
+      {/* 활성 멤버 */}
       <section>
         <div className="flex items-center gap-3 mb-4">
           <Skeleton className="h-3 w-20" />
@@ -26,6 +27,36 @@ export function MembersPageSkeleton() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* 초대 링크 (admin) */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <Skeleton className="h-3 w-20" />
+          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+        </div>
+        <div className="flex items-center gap-3 border border-[var(--md-sys-color-outline-variant)] rounded-md px-3 py-2">
+          <Skeleton className="flex-1 h-3" />
+          <Skeleton className="h-7 w-10 rounded-sm" />
+          <Skeleton className="h-7 w-12 rounded-sm" />
+        </div>
+        <Skeleton className="h-2.5 w-64 mt-2" />
+      </section>
+
+      {/* 멤버 초대 (admin) */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <Skeleton className="h-3 w-16" />
+          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+        </div>
+        <div className="flex flex-col md:flex-row md:items-end gap-4">
+          <div className="flex-1 space-y-1">
+            <Skeleton className="h-2.5 w-12" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+          <Skeleton className="h-9 w-24 rounded-sm md:ml-4" />
+        </div>
+        <Skeleton className="h-2.5 w-56 mt-4" />
       </section>
     </div>
   );
