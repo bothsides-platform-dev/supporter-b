@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { AxiomWebVitals } from "next-axiom";
 import { siteConfig } from "@/lib/site-config";
 import { getChannelMember } from "@/lib/channel-io/server";
 import { ChannelTalk } from "@/components/shell/ChannelTalk";
@@ -79,6 +80,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
+        <AxiomWebVitals />
         {children}
         <ChannelTalk pluginKey={pluginKey} member={member} />
       </body>
