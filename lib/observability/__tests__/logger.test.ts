@@ -1,3 +1,4 @@
+import path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Hoisted so the mock factory can close over them before any import runs.
@@ -160,15 +161,10 @@ describe('createLogger — Axiom transport', () => {
     process.env.AXIOM_TOKEN   = 'xapt-test-token';
     process.env.AXIOM_DATASET = 'bidit-prod';
     createLogger('nodejs');
-    expect(pinoTransport).toHaveBeenCalledWith(
-      expect.objectContaining({
-        target: '@axiomhq/pino',
-        options: expect.objectContaining({
-          token:   'xapt-test-token',
-          dataset: 'bidit-prod',
-        }),
-      }),
-    );
+    expect(pinoTransport).toHaveBeenCalledOnce();
+    const callArg = pinoTransport.mock.calls[0][0] as { target: string; options: Record<string, string> };
+    expect(path.isAbsolute(callArg.target)).toBe(true);
+    expect(callArg.options).toMatchObject({ token: 'xapt-test-token', dataset: 'bidit-prod' });
   });
 
   it('does not use Axiom transport when AXIOM_TOKEN is absent', () => {

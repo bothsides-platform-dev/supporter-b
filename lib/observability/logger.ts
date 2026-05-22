@@ -1,5 +1,6 @@
 // Operational/infra logging (server start, DB calls, action traces) → stdout → Axiom via Vercel Log Drain.
 // For product/business events (rfp.created, bid.submitted) use lib/observability/log.ts (Sentry Logs) instead.
+import { createRequire } from 'module';
 import pinoLib from 'pino';
 
 type Attrs = Record<string, unknown>;
@@ -28,8 +29,9 @@ function makeNodeLogger(): AppLogger {
   // Development pretty output: pipe stdout through pino-pretty in your terminal.
   //   pnpm dev 2>&1 | pnpm exec pino-pretty
   const { AXIOM_TOKEN, AXIOM_DATASET } = process.env;
+  const axiomPinoPath = createRequire(process.cwd() + '/package.json').resolve('@axiomhq/pino');
   const transport = (AXIOM_TOKEN && AXIOM_DATASET)
-    ? pinoLib.transport({ target: '@axiomhq/pino', options: { token: AXIOM_TOKEN, dataset: AXIOM_DATASET } })
+    ? pinoLib.transport({ target: axiomPinoPath, options: { token: AXIOM_TOKEN, dataset: AXIOM_DATASET } })
     : undefined;
   const p = transport ? pinoLib({ level }, transport) : pinoLib({ level });
   return {
