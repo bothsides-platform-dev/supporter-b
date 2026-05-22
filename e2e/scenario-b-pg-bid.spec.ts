@@ -27,6 +27,7 @@ import { sql, eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
 import { rfpInvitations, bids, workspaces } from '@/lib/db/schema';
 import { generateToken, hashToken } from '@/lib/server/token';
+import { rfpUuidFromCode } from './_helpers';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
@@ -40,6 +41,9 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
   test('toss claims invitation, submits bid, lands on submitted page', async ({
     page,
   }) => {
+    // RFP_ID is the human code; FK columns + dedupe keys use the uuid.
+    const rfpUuid = await rfpUuidFromCode(RFP_ID);
+
     // ── Look up toss workspace by name ───────────────────────────
     const [tossWsRow] = await db
       .select({ id: workspaces.id })
@@ -55,7 +59,7 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
       .delete(bids)
       .where(
         and(
-          eq(bids.rfpId, RFP_ID),
+          eq(bids.rfpId, rfpUuid),
           eq(bids.pgWsId, tossWsId),
         ),
       );
@@ -71,7 +75,7 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
       })
       .where(
         and(
-          eq(rfpInvitations.rfpId, RFP_ID),
+          eq(rfpInvitations.rfpId, rfpUuid),
           eq(rfpInvitations.pgWsId, tossWsId),
         ),
       );
@@ -125,7 +129,7 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     // ── 6. DB-of-record: bid row inserted with status='submitted' ──
     const bidRows = await db.execute<{ c: number }>(
       sql`SELECT count(*)::int AS c FROM bids
-          WHERE rfp_id = ${RFP_ID}
+          WHERE rfp_id = ${rfpUuid}
             AND pg_ws_id = ${tossWsId}
             AND status = 'submitted'`,
     );
@@ -154,7 +158,7 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     const outboxRows = await db.execute<{ c: number }>(
       sql`SELECT count(*)::int AS c FROM outbox_entries
           WHERE event = 'bid.submitted'
-            AND dedupe_key LIKE ${'bid:' + RFP_ID + ':%'}`,
+            AND dedupe_key LIKE ${'bid:' + rfpUuid + ':%'}`,
     );
     const outboxArr = Array.isArray(outboxRows)
       ? outboxRows

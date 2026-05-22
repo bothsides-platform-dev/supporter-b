@@ -52,6 +52,7 @@ type Setup = {
   buyerWsId: string;
   bizId: string;
   rfpId: string;
+  rfpCode: string;
   winnerWsId: string;
   winnerUserIds: string[];
   loserAWsId: string;
@@ -140,6 +141,7 @@ async function seedAwardSetup(): Promise<Setup> {
     buyerWsId: buyerWs.id,
     bizId: biz.id,
     rfpId,
+    rfpCode,
     winnerWsId: winnerWs.id,
     winnerUserIds: [w1.id, w2.id],
     loserAWsId: loserAWs.id,
@@ -294,6 +296,38 @@ describe('awardRfpAction', () => {
     expect(
       allOutboxToLosers.every((o) => !loserEmailRecipients.includes(o.toAddr)),
     ).toBe(true);
+  });
+
+  it('winner/loser notifications link to /inbox/<code> and title shows the code, not the uuid', async () => {
+    const s = await seedAwardSetup();
+    sessionRef.value = {
+      user: {
+        id: s.buyerUserId,
+        email: 'buyer@x.com',
+        workspaceId: s.buyerWsId,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    const r = await awardRfpAction({
+      rfpId: s.rfpId,
+      awardedBidId: s.winnerBidId,
+    });
+    expect(r.ok).toBe(true);
+
+    // Award + reject notifications both point PG members at their inbox; the
+    // inbox route resolves by human code, so the link must carry the code.
+    const all = await db.select().from(notifications);
+    const awardRelated = all.filter(
+      (n) => n.type === 'rfp.awarded' || n.type === 'rfp.rejected',
+    );
+    expect(awardRelated.length).toBeGreaterThan(0);
+    for (const n of awardRelated) {
+      expect(n.linkUrl).toBe(`/inbox/${s.rfpCode}`);
+      expect(n.title).toContain(s.rfpCode);
+      expect(n.linkUrl).not.toContain(s.rfpId);
+      expect(n.title).not.toContain(s.rfpId);
+    }
   });
 
   it('rejects bad transition (e.g. RFP already awarded)', async () => {

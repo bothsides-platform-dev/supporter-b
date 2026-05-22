@@ -80,7 +80,7 @@ export async function sendDraftInvitationsAction(
           title: rfps.title,
         })
         .from(rfps)
-        .where(eq(rfps.id, parsed.data.rfpId))
+        .where(eq(rfps.code, parsed.data.rfpId))
         .limit(1);
       if (!rfpRow) return { ok: false, error: 'NOT_FOUND' };
       if (rfpRow.buyerWsId !== wsId) return { ok: false, error: 'NOT_OWNED' };
@@ -88,13 +88,16 @@ export async function sendDraftInvitationsAction(
       if (new Date(rfpRow.deadline).getTime() <= Date.now()) {
         return { ok: false, error: 'RFP_DEADLINE_PASSED' };
       }
+      // input rfpId 는 사람용 code(P-YYMM-NNNN). FK·dedupeKey 는 uuid(rfpRow.id),
+      // 알림 linkUrl/title/메일 표시는 code 를 쓴다 — inbox 라우트가 code 로 조회.
+      const rfpCode = parsed.data.rfpId;
 
       const drafts = await tx
         .select()
         .from(rfpInvitations)
         .where(
           and(
-            eq(rfpInvitations.rfpId, parsed.data.rfpId),
+            eq(rfpInvitations.rfpId, rfpRow.id),
             eq(rfpInvitations.status, 'draft'),
           ),
         );
@@ -158,11 +161,11 @@ export async function sendDraftInvitationsAction(
             userId: m.userId,
             workspaceId: pgWsId,
             type: 'rfp.invited',
-            title: `[${rfpRow.id}] 제안 요청 도착`,
+            title: `[${rfpCode}] 제안 요청 도착`,
             body: `${buyerName}가 제안을 요청했습니다.`,
             channel: 'inapp',
             status: 'pending',
-            linkUrl: `/inbox/${rfpRow.id}`,
+            linkUrl: `/inbox/${rfpCode}`,
             createdAt: now.toISOString(),
           };
           await dispatchNotification(tx, notif);
@@ -185,7 +188,7 @@ export async function sendDraftInvitationsAction(
 
         const inviteUrl = `${baseUrl()}/invite/rfp/${rawToken}`;
         const html = await renderRfpInvited({
-          rfpId: rfpRow.id,
+          rfpId: rfpCode,
           rfpTitle: rfpRow.title,
           buyerName,
           deadline: deadlineDisplay,
@@ -200,7 +203,7 @@ export async function sendDraftInvitationsAction(
             {
               event: 'rfp.invited',
               to: admin.email,
-              subject: `[Supporter B · ${rfpRow.id}] 제안 요청 도착`,
+              subject: `[Supporter B · ${rfpCode}] 제안 요청 도착`,
               html,
               dedupeKey: `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${admin.userId}`,
             },

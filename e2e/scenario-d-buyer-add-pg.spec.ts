@@ -20,7 +20,7 @@ import { sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { db } from '@/lib/db/client';
 import { users, workspaces } from '@/lib/db/schema';
-import { resetRfpForKanban } from './_helpers';
+import { resetRfpForKanban, rfpUuidFromCode } from './_helpers';
 import { hashPassword } from '@/lib/auth/password';
 
 process.env.DATABASE_URL =
@@ -34,10 +34,13 @@ const NEW_PG_NAME = 'NICE페이먼츠';
 
 test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
   let newPgWsId: string;
+  // RFP_ID is the human code; FK columns + dedupe keys use the uuid.
+  let rfpUuid: string;
 
   test.beforeAll(async () => {
     // Ensure RFP is in editable state (scenario-c may have left it awarded).
     await resetRfpForKanban(RFP_ID);
+    rfpUuid = await rfpUuidFromCode(RFP_ID);
 
     // Seed a 4th PG workspace exclusive to this scenario. The 3 seeded PGs
     // (서포터 B 페이/이니시스/카카오) are already invited to P-2604-0001 — we need a
@@ -92,7 +95,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     // so the addPgWorkspacesToRfpAction insert path actually runs.
     await db.execute(
       sql`DELETE FROM rfp_invitations
-          WHERE rfp_id = ${RFP_ID} AND pg_ws_id = ${newPgWsId}`,
+          WHERE rfp_id = ${rfpUuid} AND pg_ws_id = ${newPgWsId}`,
     );
   });
 
@@ -125,7 +128,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     // DB assertion: invitation row inserted with status='draft'
     const draftRow = await db.execute<{ status: string }>(
       sql`SELECT status::text AS status FROM rfp_invitations
-          WHERE rfp_id = ${RFP_ID} AND pg_ws_id = ${newPgWsId}`,
+          WHERE rfp_id = ${rfpUuid} AND pg_ws_id = ${newPgWsId}`,
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const draftArr: any[] = Array.isArray(draftRow)
@@ -138,7 +141,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     // Workspace id appended on the rfps.allowed_pg_workspace_ids column.
     const allowRow = await db.execute<{ allowed: string[] }>(
       sql`SELECT allowed_pg_workspace_ids AS allowed
-          FROM rfps WHERE id = ${RFP_ID}`,
+          FROM rfps WHERE id = ${rfpUuid}`,
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allowArr: any[] = Array.isArray(allowRow)
@@ -162,7 +165,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     // ── 6. DB: status가 'pending'(DB enum, UI상 '발송됨')으로 전이 ─
     const sentRow = await db.execute<{ status: string }>(
       sql`SELECT status::text AS status FROM rfp_invitations
-          WHERE rfp_id = ${RFP_ID} AND pg_ws_id = ${newPgWsId}`,
+          WHERE rfp_id = ${rfpUuid} AND pg_ws_id = ${newPgWsId}`,
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sentArr: any[] = Array.isArray(sentRow)
@@ -177,7 +180,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     const outboxRow = await db.execute<{ c: number }>(
       sql`SELECT count(*)::int AS c FROM outbox_entries
           WHERE event = 'rfp.invited'
-            AND dedupe_key LIKE ${'rfp:' + RFP_ID + ':invite:ws:' + newPgWsId + ':%'}`,
+            AND dedupe_key LIKE ${'rfp:' + rfpUuid + ':invite:ws:' + newPgWsId + ':%'}`,
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const outboxArr: any[] = Array.isArray(outboxRow)
@@ -192,7 +195,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     // 통째로 숨김.
     await db.execute(
       sql`UPDATE rfps SET deadline = now() - interval '1 hour'
-          WHERE id = ${RFP_ID}`,
+          WHERE id = ${rfpUuid}`,
     );
 
     try {
@@ -211,7 +214,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
       // 복원 — 후속 테스트가 마감 전 상태를 가정할 수 있도록 try/finally.
       await db.execute(
         sql`UPDATE rfps SET deadline = now() + interval '7 days'
-            WHERE id = ${RFP_ID}`,
+            WHERE id = ${rfpUuid}`,
       );
     }
   });

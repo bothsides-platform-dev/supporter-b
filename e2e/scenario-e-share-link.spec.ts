@@ -28,7 +28,7 @@ test.describe.serial('Scenario E — share link claim by allowed domain user', (
   test('toss user opens share URL → lands on inbox', async ({ page }) => {
     // ── Pre: fetch share_token for the seeded RFP ────────────────
     const tokenRow = await db.execute<{ share_token: string }>(
-      sql`SELECT share_token FROM rfps WHERE id = ${RFP_ID}`,
+      sql`SELECT share_token FROM rfps WHERE code = ${RFP_ID}`,
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tokenArr: any[] = Array.isArray(tokenRow)
@@ -59,7 +59,7 @@ test.describe.serial('Scenario E — share link claim by allowed domain user', (
     page,
   }) => {
     const tokenRow = await db.execute<{ share_token: string }>(
-      sql`SELECT share_token FROM rfps WHERE id = ${RFP_ID}`,
+      sql`SELECT share_token FROM rfps WHERE code = ${RFP_ID}`,
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tokenArr: any[] = Array.isArray(tokenRow)

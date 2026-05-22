@@ -17,6 +17,7 @@
 import { test, expect } from 'playwright/test';
 import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
+import { rfpUuidFromCode } from './_helpers';
 
 // Force the DB client to point at the test DB before importing it.
 // playwright globalSetup already set this in the parent process; this
@@ -84,6 +85,8 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     const url = new URL(page.url());
     const rfpId = url.pathname.split('/').pop()!;
     expect(rfpId).toMatch(/^P-\d{4}-\d{4}$/);
+    // URL/seed identifier is the human code; FK columns + dedupe keys use the uuid.
+    const rfpUuid = await rfpUuidFromCode(rfpId);
 
     // Comparison table shows zero bids since no PG has submitted.
     // BidComparisonTable renders an EmptyState with this exact copy when
@@ -94,7 +97,7 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
 
     // ── 6. DB assertions ─────────────────────────────────────────
     const rfpRows = await db.execute<{ id: string; status: string }>(
-      sql`SELECT id, status FROM rfps WHERE id = ${rfpId}`,
+      sql`SELECT id, status FROM rfps WHERE id = ${rfpUuid}`,
     );
     const rfpArr = Array.isArray(rfpRows)
       ? rfpRows
@@ -104,7 +107,7 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     expect(rfpArr[0].status).toBe('sent');
 
     const inviteRows = await db.execute<{ c: number }>(
-      sql`SELECT count(*)::int AS c FROM rfp_invitations WHERE rfp_id = ${rfpId}`,
+      sql`SELECT count(*)::int AS c FROM rfp_invitations WHERE rfp_id = ${rfpUuid}`,
     );
     const inviteArr = Array.isArray(inviteRows)
       ? inviteRows
@@ -119,7 +122,7 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     const outboxRows = await db.execute<{ c: number }>(
       sql`SELECT count(*)::int AS c FROM outbox_entries
           WHERE event IN ('rfp.sent', 'rfp.invited')
-            AND dedupe_key LIKE ${'rfp:' + rfpId + ':%'}`,
+            AND dedupe_key LIKE ${'rfp:' + rfpUuid + ':%'}`,
     );
     const outboxArr = Array.isArray(outboxRows)
       ? outboxRows

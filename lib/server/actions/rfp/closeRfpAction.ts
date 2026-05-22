@@ -44,10 +44,13 @@ export async function closeRfpAction(
   const result: CloseRfpResult = await db.transaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (tx: any): Promise<CloseRfpResult> => {
+      // 호출부는 사람용 code(P-YYMM-NNNN)를 넘긴다. FK·transition은 uuid(rfps.id)
+      // 기준이라 code로 행을 찾아 uuid를 해소한다. 알림 linkUrl/title은 code(=rfpId)
+      // 유지 — inbox 라우트가 code로 조회.
       const [row] = await tx
-        .select({ buyerWsId: rfps.buyerWsId })
+        .select({ id: rfps.id, buyerWsId: rfps.buyerWsId })
         .from(rfps)
-        .where(eq(rfps.id, rfpId))
+        .where(eq(rfps.code, rfpId))
         .limit(1);
       if (!row) return { ok: false, error: 'RFP_NOT_FOUND' };
       if (row.buyerWsId !== wsId) {
@@ -56,7 +59,7 @@ export async function closeRfpAction(
 
       const repo = await getRfpRepo();
       try {
-        await repo.transition(rfpId, 'closed', undefined, tx);
+        await repo.transition(row.id, 'closed', undefined, tx);
       } catch (e) {
         return {
           ok: false,
@@ -67,7 +70,7 @@ export async function closeRfpAction(
       const submittedBids = await tx
         .select({ pgWsId: bids.pgWsId })
         .from(bids)
-        .where(and(eq(bids.rfpId, rfpId), eq(bids.status, 'submitted')));
+        .where(and(eq(bids.rfpId, row.id), eq(bids.status, 'submitted')));
       const wsSet = new Set<string>(
         (submittedBids as { pgWsId: string }[]).map((b) => b.pgWsId),
       );
