@@ -1,1 +1,5 @@
-export { default } from '@/components/ui/RouteLoadingIndicator';
+import { MembersPageSkeleton } from '@/components/skeletons';
+
+export default function Loading() {
+  return <MembersPageSkeleton />;
+}

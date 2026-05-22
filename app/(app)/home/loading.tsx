@@ -1,1 +1,9 @@
-export { default } from '@/components/ui/RouteLoadingIndicator';
+import { KanbanBoardSkeleton } from '@/components/home/KanbanBoard';
+
+export default function Loading() {
+  return (
+    <div className="px-8 py-10">
+      <KanbanBoardSkeleton />
+    </div>
+  );
+}
