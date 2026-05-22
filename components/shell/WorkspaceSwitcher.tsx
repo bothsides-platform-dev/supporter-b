@@ -30,9 +30,20 @@ type Props = {
 export function WorkspaceSwitcher({ current, workspaces }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  // Optimistic display of the workspace being switched to. Plain useState (urgent
+  // update) — not useTransition (would defer the paint, hurting INP) or
+  // useOptimistic (auto-reverts when the action settles, flashing back to the old
+  // workspace just before the reload).
+  const [pending, setPending] = useState<{ name: string; type: WorkspaceType } | null>(null);
 
   async function handleSelect(id: string) {
     if (id === current.id || busy) return;
+    const target = workspaces.find((w) => w.id === id);
+    if (!target) return;
+    // Paint the target in the trigger immediately — before the server round-trip
+    // and hard reload — so the click feels instant instead of "nothing, then a
+    // reload". Stays until the reload on success (no flash); reverted on failure.
+    setPending({ name: target.name, type: target.type });
     setBusy(true);
     const r = await switchWorkspaceAction(id);
     if (r.ok) {
@@ -42,20 +53,27 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
       // document load re-renders the layout with the freshly-written JWT cookie.
       window.location.assign(r.redirectTo);
     } else {
+      setPending(null);
       setBusy(false);
     }
   }
+
+  const display = pending ?? current;
 
   const itemCls =
     'flex items-center gap-2 px-2 py-1.5 rounded-[var(--md-sys-shape-extra-small)] cursor-pointer text-[length:var(--md-typescale-label-large-size)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)]';
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-2 h-9 px-2 max-w-[260px] rounded-[var(--md-sys-shape-extra-small)] hover:bg-[var(--md-sys-color-surface-container-high)] outline-none transition-colors duration-[140ms]">
+      <DropdownMenuTrigger
+        disabled={busy}
+        aria-busy={busy}
+        className={`flex items-center gap-2 h-9 px-2 max-w-[260px] rounded-[var(--md-sys-shape-extra-small)] hover:bg-[var(--md-sys-color-surface-container-high)] outline-none transition-[color,background-color,opacity] duration-[140ms]${busy ? ' opacity-60' : ''}`}
+      >
         <span className="truncate text-[length:var(--md-typescale-label-large-size)] text-[var(--md-sys-color-on-surface)]">
-          {current.name}
+          {display.name}
         </span>
-        <Chip label={TYPE_LABEL[current.type]} color="surface" className="h-6 px-2" />
+        <Chip label={TYPE_LABEL[display.type]} color="surface" className="h-6 px-2" />
         <ChevronsUpDownIcon
           size={14}
           className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]"

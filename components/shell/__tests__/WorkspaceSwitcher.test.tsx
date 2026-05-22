@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const switchWorkspaceAction = vi.fn();
@@ -53,6 +53,46 @@ describe('WorkspaceSwitcher', () => {
 
     await waitFor(() => expect(switchWorkspaceAction).toHaveBeenCalledWith('ws2'));
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
+  });
+
+  it('optimistically swaps the trigger to the selected workspace while the switch is in flight (immediate paint, before navigation)', async () => {
+    const user = userEvent.setup();
+    switchWorkspaceAction.mockReturnValue(new Promise(() => {})); // in flight, never settles
+
+    render(<WorkspaceSwitcher current={current} workspaces={workspaces} />);
+    await user.click(screen.getByRole('button'));
+    await user.click(await screen.findByText('서포터 B 페이'));
+
+    // The trigger reflects the target (name + PG label) before the action settles
+    // and before any navigation — the immediate feedback this change is about.
+    await waitFor(() => expect(screen.getByText('서포터 B 페이')).toBeInTheDocument());
+    expect(screen.queryByText('구매사A')).not.toBeInTheDocument();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('reverts the optimistic trigger to the original workspace when the switch fails', async () => {
+    const user = userEvent.setup();
+    let settle!: (r: { ok: false; error: string }) => void;
+    switchWorkspaceAction.mockReturnValue(
+      new Promise<{ ok: false; error: string }>((res) => {
+        settle = res;
+      }),
+    );
+
+    render(<WorkspaceSwitcher current={current} workspaces={workspaces} />);
+    await user.click(screen.getByRole('button'));
+    await user.click(await screen.findByText('서포터 B 페이'));
+
+    // optimistic swap first
+    await waitFor(() => expect(screen.getByText('서포터 B 페이')).toBeInTheDocument());
+
+    // then the action fails → trigger reverts to the original workspace
+    await act(async () => {
+      settle({ ok: false, error: 'NOT_MEMBER' });
+    });
+    await waitFor(() => expect(screen.getByText('구매사A')).toBeInTheDocument());
+    expect(screen.queryByText('서포터 B 페이')).not.toBeInTheDocument();
+    expect(assign).not.toHaveBeenCalled();
   });
 
   it('does not switch when selecting the already-active workspace', async () => {
