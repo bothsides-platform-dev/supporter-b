@@ -45,11 +45,24 @@ test.describe.serial('Buyer RFP bid board (DB-backed placements)', () => {
     await expect(negotiating).toBeVisible();
     await expect(page.locator('[data-column-title="결정"]')).toBeVisible();
 
-    // 2. Drag the inicis card onto the 협상중 column.
+    // 2. Drag the inicis card onto the 협상중 column. @dnd-kit's PointerSensor
+    //    has a 4px activation constraint that Playwright's `dragTo` (a single
+    //    press→move→up) does not reliably trip — drive the pointer manually
+    //    with intermediate steps so the sensor actually picks up the card.
     const card = page
       .locator('[data-column-title="진행전"] button')
       .filter({ hasText: '이니시스' });
-    await card.dragTo(negotiating);
+    const from = await card.boundingBox();
+    const to = await negotiating.boundingBox();
+    if (!from || !to) throw new Error('drag source/target not visible');
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    // small move to clear the activation threshold, then to the target column.
+    await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2 + 12, {
+      steps: 5,
+    });
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+    await page.mouse.up();
 
     // 3. The drop fires moveCardAction inside a transition — poll the DB until
     //    the placement resolves to 협상중 rather than racing the RSC refetch.

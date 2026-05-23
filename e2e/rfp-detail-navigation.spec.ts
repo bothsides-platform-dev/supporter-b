@@ -21,7 +21,7 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
     test.setTimeout(180_000);
     await loginAs(page, 'buyer'); // /home 착지(칸반)
     // 칸반 렌더 대기(cold-compile 흡수) — 이후 클릭이 컴파일 예산을 잠식하지 않도록.
-    await expect(page.getByRole('region', { name: '제안 칸반' })).toBeVisible({
+    await expect(page.getByRole('region', { name: '칸반 보드' })).toBeVisible({
       timeout: 120_000,
     });
 
