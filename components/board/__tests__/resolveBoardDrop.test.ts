@@ -1,0 +1,102 @@
+import { describe, expect, it } from 'vitest';
+import { resolveBoardDrop } from '../resolveBoardDrop';
+import { DEFAULT_LANDING_KEY } from '@/lib/server/columns/lifecycle-keys';
+import type { BoardColumn } from '@/lib/types/column';
+
+function col(over: Partial<BoardColumn> & { id: string }): BoardColumn {
+  return {
+    workspaceId: 'ws',
+    kind: 'pipeline',
+    title: 't',
+    position: 'a1',
+    color: null,
+    lifecycleKey: null,
+    isSystem: false,
+    ...over,
+  };
+}
+
+describe('resolveBoardDrop', () => {
+  it('custom column → place', () => {
+    const target = col({ id: 'custom', isSystem: false, lifecycleKey: null });
+    expect(resolveBoardDrop({ cardType: 'rfp', toColumn: target, payload: { stage: 'sent' } })).toEqual({
+      kind: 'place',
+    });
+  });
+
+  it('default-landing column → release', () => {
+    const target = col({
+      id: 'landing',
+      kind: 'rfp_bids',
+      isSystem: true,
+      lifecycleKey: DEFAULT_LANDING_KEY,
+    });
+    expect(resolveBoardDrop({ cardType: 'bid', toColumn: target, payload: {} })).toEqual({
+      kind: 'release',
+    });
+  });
+
+  it('rfp draft → sent lifecycle column → send-rfp action', () => {
+    const target = col({ id: 'sent', isSystem: true, lifecycleKey: 'sent' });
+    const r = resolveBoardDrop({
+      cardType: 'rfp',
+      toColumn: target,
+      payload: { stage: 'draft', rfpId: 'P-2605-0001', title: 'RFP' },
+    });
+    expect(r).toEqual({
+      kind: 'lifecycle',
+      action: { kind: 'send-rfp', rfpId: 'P-2605-0001', title: 'RFP' },
+    });
+  });
+
+  it('rfp sent → collecting (no valid transition) → reject', () => {
+    const target = col({ id: 'collecting', isSystem: true, lifecycleKey: 'collecting' });
+    expect(
+      resolveBoardDrop({
+        cardType: 'rfp',
+        toColumn: target,
+        payload: { stage: 'sent', rfpId: 'P-2605-0001', title: 'RFP' },
+      }),
+    ).toEqual({ kind: 'reject' });
+  });
+
+  it('rfp active → closed lifecycle column → cancel-rfp action', () => {
+    const target = col({ id: 'closed', isSystem: true, lifecycleKey: 'closed' });
+    const r = resolveBoardDrop({
+      cardType: 'rfp',
+      toColumn: target,
+      payload: { stage: 'sent', rfpId: 'P-2605-0009', title: 'RFP9' },
+    });
+    expect(r).toEqual({
+      kind: 'lifecycle',
+      action: { kind: 'cancel-rfp', rfpId: 'P-2605-0009', title: 'RFP9' },
+    });
+  });
+
+  it('invitation submitted → lost lifecycle column → withdraw-bid action', () => {
+    const target = col({ id: 'lost', isSystem: true, lifecycleKey: 'lost' });
+    const r = resolveBoardDrop({
+      cardType: 'invitation',
+      toColumn: target,
+      payload: { stage: 'submitted', rfpId: 'P-2605-0002', title: 'inv', bidId: 'bid-1' },
+    });
+    expect(r).toEqual({
+      kind: 'lifecycle',
+      action: { kind: 'withdraw-bid', bidId: 'bid-1', rfpId: 'P-2605-0002', title: 'inv' },
+    });
+  });
+
+  it('bid into a custom column → place; into 진행전 → release', () => {
+    const custom = col({ id: 'nego', kind: 'rfp_bids', isSystem: false, lifecycleKey: null });
+    const landing = col({
+      id: 'landing',
+      kind: 'rfp_bids',
+      isSystem: true,
+      lifecycleKey: DEFAULT_LANDING_KEY,
+    });
+    expect(resolveBoardDrop({ cardType: 'bid', toColumn: custom, payload: {} }).kind).toBe('place');
+    expect(resolveBoardDrop({ cardType: 'bid', toColumn: landing, payload: {} }).kind).toBe(
+      'release',
+    );
+  });
+});

@@ -13,7 +13,14 @@ import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
 import { db } from '@/lib/db/client';
-import { attachments, bids, bidNotes, rfps } from '@/lib/db/schema';
+import {
+  attachments,
+  bids,
+  bidNotes,
+  bidPlacements,
+  columns,
+  rfps,
+} from '@/lib/db/schema';
 import { getStorage } from '@/lib/server/storage';
 
 // Seed/URL identifiers are the human RFP code (P-YYMM-NNNN); FKs use the uuid.
@@ -26,8 +33,6 @@ export async function rfpUuidFromCode(code: string): Promise<string> {
   if (!row) throw new Error(`[e2e helpers] rfp not found: ${code}`);
   return row.id;
 }
-import type { BuyerStage } from '@/lib/types/bid';
-
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
@@ -62,16 +67,24 @@ export async function loginAs(page: Page, role: Role): Promise<void> {
   await page.waitForURL(/\/home$/, { timeout: 15_000 });
 }
 
-/** Strict DB read for kanban stage; throws if the bid doesn't exist so the
- *  spec fails loud instead of silently asserting against undefined. */
-export async function getBuyerStageFromDb(bidId: string): Promise<BuyerStage> {
-  const [row] = await db
-    .select({ buyerStage: bids.buyerStage })
+/** Title of the column a bid currently sits in (unified kanban). A bid with no
+ *  explicit bid_placements row falls back to the default-landing column "진행전".
+ *  Throws if the bid doesn't exist so the spec fails loud. */
+export async function getBidColumnTitleFromDb(bidId: string): Promise<string> {
+  const [bidRow] = await db
+    .select({ id: bids.id })
     .from(bids)
     .where(eq(bids.id, bidId))
     .limit(1);
-  if (!row) throw new Error(`[e2e helpers] bid not found: ${bidId}`);
-  return row.buyerStage;
+  if (!bidRow) throw new Error(`[e2e helpers] bid not found: ${bidId}`);
+
+  const [placed] = await db
+    .select({ title: columns.title })
+    .from(bidPlacements)
+    .innerJoin(columns, eq(bidPlacements.columnId, columns.id))
+    .where(eq(bidPlacements.bidId, bidId))
+    .limit(1);
+  return placed?.title ?? '진행전';
 }
 
 /** Number of bid_notes rows for a given bid. Used by the note roundtrip
@@ -85,17 +98,19 @@ export async function getNoteCountFromDb(bidId: string): Promise<number> {
 }
 
 /** Reset the seeded P-2604-0001 RFP back to a runnable state for a new spec
- *  run (status='sent', all bids back to 'pending'). Idempotent. */
+ *  run (status='sent', all bids back to the default-landing column by clearing
+ *  their bid_placements). Idempotent. */
 export async function resetRfpForKanban(rfpCode: string): Promise<void> {
   const rfpId = await rfpUuidFromCode(rfpCode);
   await db.execute(
     sql`UPDATE rfps SET status='sent', awarded_bid_id=NULL WHERE id=${rfpId}`,
   );
   await db.execute(sql`DELETE FROM contracts WHERE rfp_id=${rfpId}`);
-  await db
-    .update(bids)
-    .set({ buyerStage: 'pending' })
-    .where(eq(bids.rfpId, rfpId));
+  // Clear explicit placements → all bids fall back to "진행전".
+  await db.execute(sql`
+    DELETE FROM bid_placements
+    WHERE bid_id IN (SELECT id FROM bids WHERE rfp_id = ${rfpId})
+  `);
   // Clear any bid_notes rows left over from a previous note spec.
   await db.execute(sql`
     DELETE FROM bid_notes

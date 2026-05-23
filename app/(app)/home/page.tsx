@@ -4,7 +4,7 @@ import { auth } from '@/auth';
 import { BuyerHome } from '@/components/home/BuyerHome';
 import { PgHome } from '@/components/home/PgHome';
 import { PgRfpBlockedToast } from '@/components/home/PgRfpBlockedToast';
-import { KanbanBoardSkeleton } from '@/components/home/KanbanBoard';
+import { KanbanBoardSkeleton } from '@/components/board/KanbanBoard';
 
 export const dynamic = 'force-dynamic';
 

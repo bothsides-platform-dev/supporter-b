@@ -1,7 +1,7 @@
 import { eq, inArray } from 'drizzle-orm';
 import { bids, attachments } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
-import type { Bid, BuyerStage, CardIssuer } from '@/lib/types/bid';
+import type { Bid, CardIssuer } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { BidRepo, Tx } from '../types';
 
@@ -39,7 +39,6 @@ function rowToBid(row: BidRow, proposalPdfs: Attachment[]): Bid {
     proposalPdfs,
     memo: row.memo,
     status: row.status,
-    buyerStage: row.buyerStage,
     submittedBy: row.submittedBy,
     submittedAt: new Date(row.submittedAt).toISOString(),
   };
@@ -153,21 +152,5 @@ export class DrizzleBidRepository implements BidRepo {
     const rows = (await db.select().from(bids).where(eq(bids.pgWsId, pgWsId))) as BidRow[];
     const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
-  }
-
-  async updateBuyerStage(
-    bidId: string,
-    to: BuyerStage,
-    tx?: Tx,
-  ): Promise<void> {
-    const db = this.h(tx);
-    const updated = await db
-      .update(bids)
-      .set({ buyerStage: to })
-      .where(eq(bids.id, bidId))
-      .returning({ id: bids.id });
-    if (updated.length === 0) {
-      throw new Error(`Bid not found: ${bidId}`);
-    }
   }
 }

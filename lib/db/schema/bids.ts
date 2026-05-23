@@ -9,7 +9,7 @@ import {
   index,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { bidStatusEnum, buyerStageEnum, settleCycleEnum } from './_enums';
+import { bidStatusEnum, settleCycleEnum } from './_enums';
 import { rfps } from './rfps';
 import { workspaces } from './workspaces';
 import { rfpInvitations } from './rfp-invitations';
@@ -42,7 +42,6 @@ export const bids = pgTable(
     // designated-proposal pointer — a bid can attach multiple proposal files.
     memo: text('memo').notNull().default(''),
     status: bidStatusEnum('status').notNull().default('submitted'),
-    buyerStage: buyerStageEnum('buyer_stage').notNull().default('pending'),
     submittedBy: uuid('submitted_by')
       .notNull()
       .references(() => users.id),

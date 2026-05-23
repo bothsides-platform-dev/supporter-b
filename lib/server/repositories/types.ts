@@ -9,7 +9,8 @@ import type { RfpInvitation } from '@/lib/types/invitation';
 import type { Workspace, WorkspaceMembershipSummary } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { BizProfile } from '@/lib/types/biz-profile';
-import type { Bid, BuyerStage } from '@/lib/types/bid';
+import type { Bid } from '@/lib/types/bid';
+import type { BoardColumn, ColumnKind, Placement } from '@/lib/types/column';
 import type { Attachment } from '@/lib/types/common';
 import type { Contract } from '@/lib/types/contract';
 import type { Notification, NotificationChannel } from '@/lib/types/notification';
@@ -120,8 +121,40 @@ export interface BidRepo {
   findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, Bid[]>>;
   /** 한 PG 워크스페이스의 모든 입찰. */
   findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]>;
-  /** Stage 3 cutover: buyer 측 칸반 stage 갱신. 없는 bidId면 throw. */
-  updateBuyerStage(bidId: string, to: BuyerStage, tx?: Tx): Promise<void>;
+}
+
+// ── Kanban Column ─────────────────────────────────────────────────────
+export interface ColumnRepo {
+  /** 한 보드 (workspace_id, kind) 의 컬럼 — position 오름차순. */
+  listByBoard(workspaceId: string, kind: ColumnKind, tx?: Tx): Promise<BoardColumn[]>;
+  /** id 단건 조회. 없으면 undefined. */
+  findById(id: string, tx?: Tx): Promise<BoardColumn | undefined>;
+  /** 컬럼 1개 생성. */
+  create(col: BoardColumn, tx?: Tx): Promise<void>;
+  /** 일괄 생성 — 워크스페이스 시드/백필용. */
+  createMany(cols: BoardColumn[], tx?: Tx): Promise<void>;
+  /** 제목/색/위치 패치. */
+  update(
+    id: string,
+    patch: Partial<Pick<BoardColumn, 'title' | 'color' | 'position'>>,
+    tx?: Tx,
+  ): Promise<void>;
+  /** 컬럼 삭제 — placement 는 FK cascade. is_system 가드는 액션 레이어 책임. */
+  remove(id: string, tx?: Tx): Promise<void>;
+}
+
+// ── Kanban Placement ──────────────────────────────────────────────────
+/** rfp/invitation/bid placement 공통 계약. cardId 는 각 구현이 자신의 카드
+ *  컬럼(rfp_id/invitation_id/bid_id)으로 매핑. 카드당 placement 0..1. */
+export interface PlacementRepo {
+  /** 카드 id 집합 → cardId별 placement Map (배치, N+1 제거). */
+  listByCards(cardIds: string[], tx?: Tx): Promise<Map<string, Placement>>;
+  /** 한 컬럼의 placement 목록. */
+  listByColumn(columnId: string, tx?: Tx): Promise<Placement[]>;
+  /** placement upsert(by cardId) — 이미 있으면 컬럼/위치 갱신. */
+  upsert(columnId: string, cardId: string, position: string, tx?: Tx): Promise<void>;
+  /** 카드의 placement 제거 — releaseCard / 라이프사이클 컬럼 드롭. */
+  removeByCard(cardId: string, tx?: Tx): Promise<void>;
 }
 
 // ── BidNote ───────────────────────────────────────────────────────────

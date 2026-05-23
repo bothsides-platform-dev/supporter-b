@@ -5,6 +5,7 @@ import { BackButton } from '@/components/primitives/BackButton';
 import { RfpDetailContent } from '@/components/rfp/RfpDetailContent';
 import { auth } from '@/auth';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
+import { loadBoard } from '@/lib/server/board/loadBoard';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,9 +75,17 @@ async function RfpDetailLoader({
     );
   }
 
+  // rfp_bids board (columns + placement-resolved cards) for the kanban view.
+  const board = await loadBoard({
+    workspaceId: data.rfp.buyerWsId,
+    workspaceType: 'buyer',
+    kind: 'rfp_bids',
+    scope: { rfpId: data.rfp.id },
+  });
+
   return (
     <PageEnter className="px-8 py-8 space-y-10">
-      <RfpDetailContent data={data} />
+      <RfpDetailContent data={data} boardColumns={board.columns} boardCards={board.cards} />
     </PageEnter>
   );
 }

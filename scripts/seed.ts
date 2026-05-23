@@ -22,6 +22,7 @@ import { pathToFileURL } from 'node:url';
 import {
   bids,
   bizProfiles,
+  columns,
   rfpAllowedPg,
   rfpCounters,
   rfpInvitations,
@@ -30,6 +31,7 @@ import {
   workspaceMembers,
   workspaces,
 } from '@/lib/db/schema';
+import { defaultColumns } from '@/lib/server/columns/seed';
 import { hashPassword } from '@/lib/auth/password';
 import { generateToken, hashToken } from '@/lib/server/token';
 import type { DB } from '@/lib/db/client';
@@ -79,6 +81,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       workspace_members,
       biz_profiles,
       users,
+      columns,
       workspaces
     RESTART IDENTITY CASCADE
   `);
@@ -187,6 +190,15 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       type: 'pg',
       name: '카카오페이',
     },
+  ]);
+
+  // 5b. Unified kanban columns — buyer gets pipeline + rfp_bids boards, each PG
+  //     gets the pipeline board (same source as createWorkspaceInTx).
+  await db.insert(columns).values([
+    ...defaultColumns(buyerWsId, 'buyer'),
+    ...defaultColumns(tossWsId, 'pg'),
+    ...defaultColumns(inicisWsId, 'pg'),
+    ...defaultColumns(kakaoWsId, 'pg'),
   ]);
 
   // 6. Memberships — each user is admin of their own workspace. The buyer admin

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
-import { bizProfiles, users, workspaceMembers, workspaces } from '@/lib/db/schema';
+import { bizProfiles, columns, users, workspaceMembers, workspaces } from '@/lib/db/schema';
+import { defaultColumns } from '@/lib/server/columns/seed';
 
 export type CreateWorkspaceBizProfile = {
   bizNo: string;
@@ -63,6 +64,10 @@ export async function createWorkspaceInTx(
     .update(users)
     .set({ lastActiveWorkspaceId: wsId })
     .where(eq(users.id, input.userId));
+
+  // Seed the unified kanban columns (single source: defaultColumns). buyer gets
+  // both pipeline + rfp_bids boards; pg gets only pipeline.
+  await tx.insert(columns).values(defaultColumns(wsId, input.type));
 
   return { workspaceId: wsId };
 }

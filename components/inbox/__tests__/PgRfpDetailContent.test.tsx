@@ -48,7 +48,6 @@ const myBid: Bid = {
   status: 'submitted',
   submittedBy: 'pg-user',
   submittedAt: new Date().toISOString(),
-  buyerStage: 'pending',
 };
 
 afterEach(() => {

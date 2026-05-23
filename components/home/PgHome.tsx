@@ -1,15 +1,15 @@
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { InboxIcon } from '@/components/icons';
-import { getPgKanbanData } from '@/lib/server/pg-kanban-loader';
-import { KanbanBoard } from './KanbanBoard';
+import { loadBoard } from '@/lib/server/board/loadBoard';
+import { PipelineBoard } from '@/components/board/PipelineBoard';
 
-export async function PgHome({
-  workspaceId,
-}: {
-  workspaceId: string;
-}) {
-  const cards = await getPgKanbanData(workspaceId);
+export async function PgHome({ workspaceId }: { workspaceId: string }) {
+  const { columns, cards } = await loadBoard({
+    workspaceId,
+    workspaceType: 'pg',
+    kind: 'pipeline',
+  });
 
   if (cards.length === 0) {
     return (
@@ -25,7 +25,7 @@ export async function PgHome({
 
   return (
     <PageEnter className="px-8 py-10">
-      <KanbanBoard role="pg" cards={cards} />
+      <PipelineBoard cardType="invitation" columns={columns} cards={cards} />
     </PageEnter>
   );
 }

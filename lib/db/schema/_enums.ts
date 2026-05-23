@@ -80,11 +80,15 @@ export const verificationPurposeEnum = pgEnum('verification_purpose', [
   'email_change',
 ]);
 
-// Buyer-side kanban stage for a bid. Independent of bid.status (PG lifecycle).
-// Canonical column from Stage 3 onward — replaces the localStorage label that
-// lib/stores/bid-board.ts persisted in v0.
-export const buyerStageEnum = pgEnum('buyer_stage', [
-  'pending',
-  'negotiating',
-  'decided',
+// Unified kanban: which board a column belongs to. (workspace_id, kind) is the
+// board key — no `boards` table. `rfp_bids` instances are per-RFP views.
+export const columnKindEnum = pgEnum('column_kind', ['pipeline', 'rfp_bids']);
+
+// Column accent color — mirrors the MD3 Chip color roles.
+export const chipColorEnum = pgEnum('chip_color', [
+  'primary',
+  'tertiary',
+  'warning',
+  'error',
+  'surface',
 ]);

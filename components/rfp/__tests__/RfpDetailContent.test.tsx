@@ -48,7 +48,6 @@ const aBid: Bid = {
   proposalPdfs: [],
   status: 'submitted',
   submittedBy: 'pg-user',
-  buyerStage: 'pending',
 };
 
 function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
