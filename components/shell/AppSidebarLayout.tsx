@@ -1,8 +1,10 @@
 'use client';
 
+import { Suspense } from 'react';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Header } from '@/components/shell/Header';
 import { MobileShellBar } from '@/components/shell/MobileShellBar';
+import { NavigationHistoryTracker } from '@/components/shell/NavigationHistoryTracker';
 import { Sidebar, type SidebarProps } from '@/components/shell/Sidebar';
 import { cn } from '@/lib/utils';
 import type { WorkspaceType } from '@/lib/types/workspace';
@@ -31,6 +33,9 @@ export function AppSidebarLayout({
 }: AppSidebarLayoutProps) {
   return (
     <SidebarProvider style={sidebarProviderStyle}>
+      <Suspense fallback={null}>
+        <NavigationHistoryTracker />
+      </Suspense>
       <Sidebar {...sidebar} />
       <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
         <MobileShellBar workspaceName={sidebar.current.name} />

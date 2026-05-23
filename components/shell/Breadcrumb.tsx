@@ -13,6 +13,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { getBreadcrumbSegments } from '@/lib/nav/nav-config';
+import { useNavHistoryStore } from '@/lib/stores/nav-history';
 import { cn } from '@/lib/utils';
 
 type BreadcrumbProps = {
@@ -32,6 +33,10 @@ export function Breadcrumb({ className }: BreadcrumbProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const segments = getBreadcrumbSegments(pathname, searchParams.get('status'));
+  const canGoBack = useNavHistoryStore((s) => s.index > 0);
+  const canGoForward = useNavHistoryStore((s) => s.index < s.entries.length - 1);
+  const markBack = useNavHistoryStore((s) => s.markBack);
+  const markForward = useNavHistoryStore((s) => s.markForward);
 
   return (
     <div
@@ -43,8 +48,12 @@ export function Breadcrumb({ className }: BreadcrumbProps) {
       <button
         type="button"
         aria-label="뒤로"
-        onClick={() => router.back()}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--md-sys-shape-extra-small)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]"
+        disabled={!canGoBack}
+        onClick={() => {
+          markBack();
+          router.back();
+        }}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--md-sys-shape-extra-small)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] disabled:opacity-[0.38] disabled:cursor-not-allowed disabled:pointer-events-none"
       >
         <ChevronLeftIcon size={14} />
       </button>
@@ -52,8 +61,12 @@ export function Breadcrumb({ className }: BreadcrumbProps) {
       <button
         type="button"
         aria-label="앞으로"
-        onClick={() => router.forward()}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--md-sys-shape-extra-small)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]"
+        disabled={!canGoForward}
+        onClick={() => {
+          markForward();
+          router.forward();
+        }}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-[var(--md-sys-shape-extra-small)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] disabled:opacity-[0.38] disabled:cursor-not-allowed disabled:pointer-events-none"
       >
         <ChevronRightIcon size={14} />
       </button>

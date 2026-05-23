@@ -68,26 +68,37 @@ describe('useNavHistoryStore', () => {
     expect(canGoForward()).toBe(false);
   });
 
-  it('disambiguates duplicate neighbors via the direction hint (home→rfp→home)', () => {
+  it('a forward link to the page you just left is a push, not a back (home→rfp→home)', () => {
     const s = useNavHistoryStore.getState();
     s.sync('/home');
     s.sync('/rfp');
-    s.sync('/home'); // entries: [/home, /rfp, /home], index 2
+    s.sync('/home'); // a push (no popstate): entries [/home, /rfp, /home], index 2
+    expect(useNavHistoryStore.getState().entries).toEqual(['/home', '/rfp', '/home']);
     expect(useNavHistoryStore.getState().index).toBe(2);
     s.markBack();
-    s.sync('/rfp'); // -> index 1
+    s.sync('/rfp', true); // -> index 1
     expect(useNavHistoryStore.getState().index).toBe(1);
     s.markForward();
-    s.sync('/home'); // ambiguous: /home is both entries[0] and entries[2]; hint says forward
+    s.sync('/home', true); // ambiguous neighbor, but the forward hint resolves it
     expect(useNavHistoryStore.getState().index).toBe(2);
   });
 
-  it('a browser back (no hint) is detected by matching the previous entry', () => {
+  it('a browser back (viaPop, no hint) is detected by matching the previous entry', () => {
     const s = useNavHistoryStore.getState();
     s.sync('/home');
     s.sync('/rfp'); // index 1
-    s.sync('/home'); // no markBack: matches entries[index-1] -> index 0
+    s.sync('/home', true); // popstate, matches entries[index-1] -> index 0
     expect(useNavHistoryStore.getState().index).toBe(0);
+    expect(useNavHistoryStore.getState().entries).toEqual(['/home', '/rfp']);
+  });
+
+  it('a browser forward (viaPop, no hint) is detected by matching the next entry', () => {
+    const s = useNavHistoryStore.getState();
+    s.sync('/home');
+    s.sync('/rfp');
+    s.sync('/home', true); // back -> index 0
+    s.sync('/rfp', true); // forward -> index 1
+    expect(useNavHistoryStore.getState().index).toBe(1);
     expect(useNavHistoryStore.getState().entries).toEqual(['/home', '/rfp']);
   });
 

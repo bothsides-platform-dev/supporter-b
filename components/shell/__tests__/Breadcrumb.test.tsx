@@ -22,10 +22,12 @@ vi.mock('next/link', () => ({
 }));
 
 import { Breadcrumb } from '../Breadcrumb';
+import { useNavHistoryStore } from '@/lib/stores/nav-history';
 
 beforeEach(() => {
   mockPathname.mockReturnValue('/home');
   mockSearchParams.mockReturnValue(new URLSearchParams(''));
+  useNavHistoryStore.getState().reset();
 });
 
 afterEach(() => {
@@ -92,19 +94,45 @@ describe('Breadcrumb — clickable trail', () => {
 });
 
 describe('Breadcrumb — history navigation', () => {
-  it('back button calls router.back()', async () => {
+  // Seed an in-app stack with somewhere to go both ways: index 1 of 3.
+  const seedMidStack = () =>
+    useNavHistoryStore.setState({ entries: ['/a', '/b', '/c'], index: 1, pendingDir: 0 });
+
+  it('back button calls router.back() and marks the back intent', async () => {
+    seedMidStack();
     const user = userEvent.setup();
     render(<Breadcrumb />);
     await user.click(screen.getByRole('button', { name: /뒤로/ }));
     expect(back).toHaveBeenCalledTimes(1);
     expect(forward).not.toHaveBeenCalled();
+    expect(useNavHistoryStore.getState().pendingDir).toBe(-1);
   });
 
-  it('forward button calls router.forward()', async () => {
+  it('forward button calls router.forward() and marks the forward intent', async () => {
+    seedMidStack();
     const user = userEvent.setup();
     render(<Breadcrumb />);
     await user.click(screen.getByRole('button', { name: /앞으로/ }));
     expect(forward).toHaveBeenCalledTimes(1);
     expect(back).not.toHaveBeenCalled();
+    expect(useNavHistoryStore.getState().pendingDir).toBe(1);
+  });
+
+  it('disables the back button when there is no in-app history to go back to', () => {
+    useNavHistoryStore.setState({ entries: ['/home'], index: 0, pendingDir: 0 });
+    render(<Breadcrumb />);
+    expect(screen.getByRole('button', { name: /뒤로/ })).toBeDisabled();
+  });
+
+  it('disables the forward button at the tip of the in-app history', () => {
+    useNavHistoryStore.setState({ entries: ['/a', '/b'], index: 1, pendingDir: 0 });
+    render(<Breadcrumb />);
+    expect(screen.getByRole('button', { name: /앞으로/ })).toBeDisabled();
+  });
+
+  it('enables the back button once there is a previous in-app page', () => {
+    useNavHistoryStore.setState({ entries: ['/a', '/b'], index: 1, pendingDir: 0 });
+    render(<Breadcrumb />);
+    expect(screen.getByRole('button', { name: /뒤로/ })).toBeEnabled();
   });
 });
