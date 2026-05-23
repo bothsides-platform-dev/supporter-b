@@ -3,7 +3,6 @@ import {
   uuid,
   text,
   timestamp,
-  boolean,
   uniqueIndex,
   index,
 } from 'drizzle-orm/pg-core';
@@ -12,13 +11,13 @@ import { columnKindEnum, chipColorEnum } from './_enums';
 import { workspaces } from './workspaces';
 
 // Unified kanban column. The board is keyed by (workspace_id, kind) — there is
-// no `boards` table. A column is either:
-//   - lifecycle-bound (lifecycle_key != null): cards classify into it; never
-//     holds placement rows; is_system = true (non-deletable skeleton).
-//   - default landing  (lifecycle_key = null, is_system = true): the rfp_bids
-//     "진행전" fallback for unplaced bids.
-//   - custom           (lifecycle_key = null, is_system = false): user-created,
-//     holds explicit placement rows, freely deletable.
+// no `boards` table. A column is one of:
+//   - lifecycle-bound (lifecycle_key != null): cards classify into it; non-
+//     deletable. Includes the rfp_bids default-landing "진행전" (key='inbox').
+//   - custom          (lifecycle_key = null): user-created, freely deletable;
+//     a card sits here via card.board_column_id.
+// "system" (non-deletable) is derived: lifecycle_key IS NOT NULL — no stored
+// is_system flag. See isSystemColumn() in lib/types/column.ts.
 export const columns = pgTable(
   'columns',
   {
@@ -31,10 +30,8 @@ export const columns = pgTable(
     // Fractional index (string) so reorders never re-number siblings.
     position: text('position').notNull(),
     color: chipColorEnum('color'),
-    // Bound lifecycle state/action; null = custom or default-landing column.
+    // Bound lifecycle state/action; null = custom column.
     lifecycleKey: text('lifecycle_key'),
-    // true = non-deletable (cross-side protocol / lifecycle skeleton / default).
-    isSystem: boolean('is_system').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },

@@ -12,7 +12,6 @@ import type {
   InvitationRepo,
   NotificationRepo,
   OutboxRepo,
-  PlacementRepo,
   RfpRepo,
   UserRepo,
   VerificationTokenRepo,
@@ -28,9 +27,6 @@ type RepoBundle = {
   bid: BidRepo;
   bidNote: BidNoteRepo;
   column: ColumnRepo;
-  rfpPlacement: PlacementRepo;
-  invitationPlacement: PlacementRepo;
-  bidPlacement: PlacementRepo;
   notification: NotificationRepo;
   contract: ContractRepo;
   verificationToken: VerificationTokenRepo;
@@ -57,11 +53,6 @@ async function buildBundle(): Promise<RepoBundle> {
   const { DrizzleBidRepository } = await import('./drizzle/bid');
   const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
   const { DrizzleColumnRepository } = await import('./drizzle/column');
-  const { DrizzleRfpPlacementRepository } = await import('./drizzle/rfp-placement');
-  const { DrizzleInvitationPlacementRepository } = await import(
-    './drizzle/invitation-placement'
-  );
-  const { DrizzleBidPlacementRepository } = await import('./drizzle/bid-placement');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
   const { DrizzleVerificationTokenRepository } = await import(
@@ -79,9 +70,6 @@ async function buildBundle(): Promise<RepoBundle> {
     bid: new DrizzleBidRepository(db),
     bidNote: new DrizzleBidNoteRepository(db),
     column: new DrizzleColumnRepository(db),
-    rfpPlacement: new DrizzleRfpPlacementRepository(db),
-    invitationPlacement: new DrizzleInvitationPlacementRepository(db),
-    bidPlacement: new DrizzleBidPlacementRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),
     verificationToken: new DrizzleVerificationTokenRepository(db),
@@ -133,15 +121,6 @@ export async function getBidNoteRepo(): Promise<BidNoteRepo> {
 export async function getColumnRepo(): Promise<ColumnRepo> {
   return (await getBundle()).column;
 }
-export async function getRfpPlacementRepo(): Promise<PlacementRepo> {
-  return (await getBundle()).rfpPlacement;
-}
-export async function getInvitationPlacementRepo(): Promise<PlacementRepo> {
-  return (await getBundle()).invitationPlacement;
-}
-export async function getBidPlacementRepo(): Promise<PlacementRepo> {
-  return (await getBundle()).bidPlacement;
-}
 export async function getNotificationRepo(): Promise<NotificationRepo> {
   return (await getBundle()).notification;
 }
@@ -185,11 +164,6 @@ export async function __useDrizzleWithDbForTest(
   const { DrizzleBidRepository } = await import('./drizzle/bid');
   const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
   const { DrizzleColumnRepository } = await import('./drizzle/column');
-  const { DrizzleRfpPlacementRepository } = await import('./drizzle/rfp-placement');
-  const { DrizzleInvitationPlacementRepository } = await import(
-    './drizzle/invitation-placement'
-  );
-  const { DrizzleBidPlacementRepository } = await import('./drizzle/bid-placement');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
   const { DrizzleVerificationTokenRepository } = await import(
@@ -206,9 +180,6 @@ export async function __useDrizzleWithDbForTest(
     bid: new DrizzleBidRepository(db),
     bidNote: new DrizzleBidNoteRepository(db),
     column: new DrizzleColumnRepository(db),
-    rfpPlacement: new DrizzleRfpPlacementRepository(db),
-    invitationPlacement: new DrizzleInvitationPlacementRepository(db),
-    bidPlacement: new DrizzleBidPlacementRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),
     verificationToken: new DrizzleVerificationTokenRepository(db),

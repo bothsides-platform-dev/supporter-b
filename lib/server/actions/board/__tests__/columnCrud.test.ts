@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 
-import { bids, rfps, rfpInvitations, columns, bidPlacements } from '@/lib/db/schema';
+import { bids, rfps, rfpInvitations, columns } from '@/lib/db/schema';
 import { defaultColumns } from '@/lib/server/columns/seed';
 import {
   seedBizProfile,
@@ -86,7 +86,7 @@ describe('addColumnAction', () => {
     sessionRef.value = null;
   });
 
-  it('creates a custom column (isSystem false, lifecycleKey null)', async () => {
+  it('creates a custom column (lifecycleKey null ⇒ deletable)', async () => {
     const { buyerWs } = await setupBuyer();
     const r = await addColumnAction({ kind: 'pipeline', title: '보류', color: 'warning', position: 'z1' });
     expect(r.ok).toBe(true);
@@ -98,7 +98,6 @@ describe('addColumnAction', () => {
         title: '보류',
         color: 'warning',
         lifecycleKey: null,
-        isSystem: false,
       });
     }
   });
@@ -155,7 +154,6 @@ describe('rename / recolor / reorder', () => {
       title: '남의 컬럼',
       position: 'a1',
       lifecycleKey: null,
-      isSystem: false,
     });
     const r = await renameColumnAction({ columnId: otherCol, title: 'hijack' });
     expect(r.ok).toBe(false);
@@ -248,12 +246,13 @@ describe('deleteColumnAction', () => {
       submittedBy: pgUser.id,
     });
     const nego = await colByTitle(buyerWs.id, '협상중');
-    await db.insert(bidPlacements).values({ id: randomUUID(), columnId: nego, bidId, position: 'a1' });
+    await db.update(bids).set({ boardColumnId: nego }).where(eq(bids.id, bidId));
 
     const r = await deleteColumnAction({ columnId: nego });
     expect(r.ok).toBe(true);
     expect(await (await getColumnRepo()).findById(nego)).toBeUndefined();
-    const left = await db.select().from(bidPlacements).where(eq(bidPlacements.bidId, bidId));
-    expect(left).toHaveLength(0);
+    // ON DELETE SET NULL ⇒ the bid falls back to auto-classification (진행전).
+    const [after] = await db.select().from(bids).where(eq(bids.id, bidId));
+    expect(after.boardColumnId).toBeNull();
   });
 });

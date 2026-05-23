@@ -20,25 +20,25 @@ describe('defaultColumns', () => {
     const rfpBids = cols.filter((c) => c.kind === 'rfp_bids');
 
     expect(pipeline.map((c) => c.lifecycleKey)).toEqual([...BUYER_KANBAN_ORDER]);
-    expect(pipeline.every((c) => c.isSystem)).toBe(true);
+    // system (non-deletable) ⇔ lifecycleKey != null
+    expect(pipeline.every((c) => c.lifecycleKey !== null)).toBe(true);
 
     // rfp_bids: 진행전(default-landing, system) + 협상중/결정(custom)
     expect(rfpBids).toHaveLength(3);
-    const landing = rfpBids.find((c) => c.isSystem);
+    const landing = rfpBids.find((c) => c.lifecycleKey !== null);
     expect(landing?.title).toBe('진행전');
     expect(landing?.lifecycleKey).toBe(DEFAULT_LANDING_KEY);
-    expect(rfpBids.filter((c) => !c.isSystem).map((c) => c.title)).toEqual([
+    expect(rfpBids.filter((c) => c.lifecycleKey === null).map((c) => c.title)).toEqual([
       '협상중',
       '결정',
     ]);
-    expect(rfpBids.filter((c) => !c.isSystem).every((c) => c.lifecycleKey === null)).toBe(true);
   });
 
   it('pg: 6 pipeline lifecycle columns, no rfp_bids board', () => {
     const cols = defaultColumns(WS, 'pg');
     expect(cols.every((c) => c.kind === 'pipeline')).toBe(true);
     expect(cols.map((c) => c.lifecycleKey)).toEqual([...PG_KANBAN_ORDER]);
-    expect(cols.every((c) => c.isSystem)).toBe(true);
+    expect(cols.every((c) => c.lifecycleKey !== null)).toBe(true);
   });
 
   it('positions are unique and ordered within each kind; workspaceId stamped', () => {

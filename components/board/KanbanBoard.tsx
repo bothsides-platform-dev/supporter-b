@@ -29,12 +29,13 @@ import { DEFAULT_LANDING_KEY } from '@/lib/server/columns/lifecycle-keys';
 import { toast } from '@/lib/toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import type {
-  BoardCard,
-  BoardColumn,
-  CardType,
-  ChipColorRole,
-  ColumnKind,
+import {
+  type BoardCard,
+  type BoardColumn,
+  type CardType,
+  type ChipColorRole,
+  type ColumnKind,
+  isSystemColumn,
 } from '@/lib/types/column';
 
 type Props = {
@@ -93,16 +94,12 @@ export function KanbanBoard({ kind, cardType, columns, cards, renderCard }: Prop
   );
 
   const commitPlace = (card: BoardCard, toColumn: BoardColumn) => {
-    const inCol = (grouped.get(toColumn.id) ?? []).filter((c) => c.position != null);
-    const last = inCol.length ? inCol[inCol.length - 1].position : null;
-    const position = generateKeyBetween(last, null);
     startTransition(async () => {
       applyOverride({ cardId: card.cardId, columnId: toColumn.id });
       const r = await moveCardAction({
         cardType,
         cardId: card.cardId,
         toColumnId: toColumn.id,
-        position,
       });
       if (!r.ok) toast(`이동 실패 — ${r.error}`, { type: 'error' });
       router.refresh();
@@ -361,7 +358,7 @@ function ColumnMenu({
         ))}
       </div>
 
-      {column.isSystem ? (
+      {isSystemColumn(column) ? (
         <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
           기본 컬럼 — 삭제할 수 없습니다
         </p>

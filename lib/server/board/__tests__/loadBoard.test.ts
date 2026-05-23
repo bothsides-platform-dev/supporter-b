@@ -10,14 +10,7 @@ import {
 import { loadBoard } from '@/lib/server/board/loadBoard';
 import { defaultColumns } from '@/lib/server/columns/seed';
 import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
-import {
-  bids,
-  rfps,
-  rfpInvitations,
-  columns,
-  bidPlacements,
-  rfpPlacements,
-} from '@/lib/db/schema';
+import { bids, rfps, rfpInvitations, columns } from '@/lib/db/schema';
 import {
   seedBizProfile,
   seedBuyerWorkspace,
@@ -70,7 +63,6 @@ describe('loadBoard — pipeline (buyer)', () => {
     const card = board.cards.find((c) => c.cardId === rfpId);
     expect(card?.cardType).toBe('rfp');
     expect(card?.columnId).toBe(await colByTitle(ws.id, '작성중')); // draft label
-    expect(card?.position).toBeNull(); // classifier-derived, no placement
   });
 
   it('an explicit placement overrides the lifecycle column', async () => {
@@ -85,7 +77,7 @@ describe('loadBoard — pipeline (buyer)', () => {
       status: 'draft',
       createdBy: buyer.id,
     });
-    // Add a custom column and place the RFP there.
+    // Add a custom column and place the RFP there via board_column_id.
     const customId = randomUUID();
     await db.insert(columns).values({
       id: customId,
@@ -94,19 +86,12 @@ describe('loadBoard — pipeline (buyer)', () => {
       title: '보류',
       position: 'z9',
       lifecycleKey: null,
-      isSystem: false,
     });
-    await db.insert(rfpPlacements).values({
-      id: randomUUID(),
-      columnId: customId,
-      rfpId,
-      position: 'a1',
-    });
+    await db.update(rfps).set({ boardColumnId: customId }).where(eq(rfps.id, rfpId));
 
     const board = await loadBoard({ workspaceId: ws.id, workspaceType: 'buyer', kind: 'pipeline' });
     const card = board.cards.find((c) => c.cardId === rfpId);
     expect(card?.columnId).toBe(customId);
-    expect(card?.position).toBe('a1');
   });
 });
 
@@ -167,12 +152,7 @@ describe('loadBoard — rfp_bids (buyer)', () => {
     const unplacedBid = await mkBid();
 
     const negoId = await colByTitle(ws.id, '협상중');
-    await db.insert(bidPlacements).values({
-      id: randomUUID(),
-      columnId: negoId,
-      bidId: placedBid,
-      position: 'a1',
-    });
+    await db.update(bids).set({ boardColumnId: negoId }).where(eq(bids.id, placedBid));
 
     const board = await loadBoard({
       workspaceId: ws.id,

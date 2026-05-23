@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { getColumnRepo } from '@/lib/server/repositories/factory';
 import { isCrossSideLifecycleKey } from '@/lib/server/columns/lifecycle-keys';
+import { isSystemColumn } from '@/lib/types/column';
 import { type BoardActionResult, requireOwnedColumn } from './_shared';
 
 const Input = z.object({ columnId: z.string().uuid() }).strict();
@@ -26,7 +27,7 @@ export async function deleteColumnAction(
   const owned = await requireOwnedColumn(parsed.data.columnId);
   if (!owned.ok) return owned;
 
-  if (owned.column.isSystem) {
+  if (isSystemColumn(owned.column)) {
     return {
       ok: false,
       error: isCrossSideLifecycleKey(owned.column.lifecycleKey)

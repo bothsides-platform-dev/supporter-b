@@ -10,7 +10,7 @@ import type { Workspace, WorkspaceMembershipSummary } from '@/lib/types/workspac
 import type { User } from '@/lib/types/user';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { Bid } from '@/lib/types/bid';
-import type { BoardColumn, ColumnKind, Placement } from '@/lib/types/column';
+import type { BoardColumn, ColumnKind } from '@/lib/types/column';
 import type { Attachment } from '@/lib/types/common';
 import type { Contract } from '@/lib/types/contract';
 import type { Notification, NotificationChannel } from '@/lib/types/notification';
@@ -41,6 +41,8 @@ export interface RfpRepo {
   findByShareToken(token: string, tx?: Tx): Promise<RFP | undefined>;
   /** 상태 전이 + 패치. DB 레이어에서 `WHERE status=$prev` 동시성 가드. */
   transition(id: string, to: RfpStatus, patch?: Partial<RFP>, tx?: Tx): Promise<RFP>;
+  /** 통일 칸반: pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
+  setBoardColumn(rfpId: string, columnId: string | null, tx?: Tx): Promise<void>;
 }
 
 // ── Invitation ────────────────────────────────────────────────────────
@@ -71,6 +73,8 @@ export interface InvitationRepo {
    * inbox 상세 RSC 진입 시 호출 — PG 칸반의 '검토중' 컬럼을 활성화하기 위한 시그널.
    */
   markOpened(invitationId: string, openedAt: Date, tx?: Tx): Promise<void>;
+  /** 통일 칸반: pg pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
+  setBoardColumn(invitationId: string, columnId: string | null, tx?: Tx): Promise<void>;
 }
 
 // ── Workspace ─────────────────────────────────────────────────────────
@@ -121,6 +125,8 @@ export interface BidRepo {
   findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, Bid[]>>;
   /** 한 PG 워크스페이스의 모든 입찰. */
   findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]>;
+  /** 통일 칸반: rfp_bids 보드 커스텀 컬럼 배치. null = 기본착지(진행전) 복귀. */
+  setBoardColumn(bidId: string, columnId: string | null, tx?: Tx): Promise<void>;
 }
 
 // ── Kanban Column ─────────────────────────────────────────────────────
@@ -141,20 +147,6 @@ export interface ColumnRepo {
   ): Promise<void>;
   /** 컬럼 삭제 — placement 는 FK cascade. is_system 가드는 액션 레이어 책임. */
   remove(id: string, tx?: Tx): Promise<void>;
-}
-
-// ── Kanban Placement ──────────────────────────────────────────────────
-/** rfp/invitation/bid placement 공통 계약. cardId 는 각 구현이 자신의 카드
- *  컬럼(rfp_id/invitation_id/bid_id)으로 매핑. 카드당 placement 0..1. */
-export interface PlacementRepo {
-  /** 카드 id 집합 → cardId별 placement Map (배치, N+1 제거). */
-  listByCards(cardIds: string[], tx?: Tx): Promise<Map<string, Placement>>;
-  /** 한 컬럼의 placement 목록. */
-  listByColumn(columnId: string, tx?: Tx): Promise<Placement[]>;
-  /** placement upsert(by cardId) — 이미 있으면 컬럼/위치 갱신. */
-  upsert(columnId: string, cardId: string, position: string, tx?: Tx): Promise<void>;
-  /** 카드의 placement 제거 — releaseCard / 라이프사이클 컬럼 드롭. */
-  removeByCard(cardId: string, tx?: Tx): Promise<void>;
 }
 
 // ── BidNote ───────────────────────────────────────────────────────────

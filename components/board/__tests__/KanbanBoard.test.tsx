@@ -32,17 +32,16 @@ function col(over: Partial<BoardColumn> & { id: string; title: string }): BoardC
     position: 'a1',
     color: null,
     lifecycleKey: null,
-    isSystem: false,
     ...over,
   };
 }
 
-const draftCol = col({ id: 'c-draft', title: '작성중', lifecycleKey: 'draft', isSystem: true, position: 'a1' });
-const customCol = col({ id: 'c-hold', title: '보류', isSystem: false, position: 'a2' });
+const draftCol = col({ id: 'c-draft', title: '작성중', lifecycleKey: 'draft', position: 'a1' });
+const customCol = col({ id: 'c-hold', title: '보류', position: 'a2' });
 
 const cards: BoardCard[] = [
-  { cardType: 'rfp', cardId: 'r1', columnId: 'c-draft', position: null, payload: { rfpId: 'P-2605-0001', title: '결제대행 RFP', stage: 'draft' } },
-  { cardType: 'rfp', cardId: 'r2', columnId: 'c-hold', position: 'a1', payload: { rfpId: 'P-2605-0002', title: '보류된 RFP', stage: 'draft' } },
+  { cardType: 'rfp', cardId: 'r1', columnId: 'c-draft', payload: { rfpId: 'P-2605-0001', title: '결제대행 RFP', stage: 'draft' } },
+  { cardType: 'rfp', cardId: 'r2', columnId: 'c-hold', payload: { rfpId: 'P-2605-0002', title: '보류된 RFP', stage: 'draft' } },
 ];
 
 function renderBoard() {

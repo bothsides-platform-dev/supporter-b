@@ -22,7 +22,6 @@ function customColumn(wsId: string): BoardColumn {
     position: 'a5',
     color: 'warning',
     lifecycleKey: null,
-    isSystem: false,
   };
 }
 
@@ -60,7 +59,6 @@ describe('DrizzleColumnRepository', () => {
       title: '보류',
       color: 'warning',
       lifecycleKey: null,
-      isSystem: false,
     });
   });
 

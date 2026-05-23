@@ -3,11 +3,12 @@
 import { z } from 'zod';
 
 import { getColumnRepo } from '@/lib/server/repositories/factory';
+import { isSystemColumn } from '@/lib/types/column';
 import {
   type BoardActionResult,
   workspaceIdForCard,
   kindForCard,
-  placementRepoFor,
+  setCardBoardColumn,
   cardBelongsToWorkspace,
 } from './_shared';
 
@@ -16,8 +17,6 @@ const Input = z
     cardType: z.enum(['rfp', 'invitation', 'bid']),
     cardId: z.string().uuid(),
     toColumnId: z.string().uuid(),
-    // client-computed fractional index (between drop neighbors).
-    position: z.string().min(1),
   })
   .strict();
 
@@ -34,7 +33,7 @@ export type MoveCardResult = BoardActionResult;
 export async function moveCardAction(input: MoveCardInput): Promise<MoveCardResult> {
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
-  const { cardType, cardId, toColumnId, position } = parsed.data;
+  const { cardType, cardId, toColumnId } = parsed.data;
 
   const ws = await workspaceIdForCard(cardType);
   if (!ws.ok) return ws;
@@ -44,14 +43,13 @@ export async function moveCardAction(input: MoveCardInput): Promise<MoveCardResu
   if (!column) return { ok: false, error: 'COLUMN_NOT_FOUND' };
   if (column.workspaceId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
   if (column.kind !== kindForCard(cardType)) return { ok: false, error: 'CROSS_KIND' };
-  // is_system ⇒ non-deletable AND non-place-target (custom columns only).
-  if (column.isSystem) return { ok: false, error: 'NOT_A_DROP_TARGET' };
+  // system (lifecycle-bound) columns ⇒ non-deletable AND non-place-target.
+  if (isSystemColumn(column)) return { ok: false, error: 'NOT_A_DROP_TARGET' };
 
   if (!(await cardBelongsToWorkspace(cardType, cardId, ws.workspaceId))) {
     return { ok: false, error: 'FORBIDDEN' };
   }
 
-  const placementRepo = await placementRepoFor(cardType);
-  await placementRepo.upsert(toColumnId, cardId, position);
+  await setCardBoardColumn(cardType, cardId, toColumnId);
   return { ok: true };
 }

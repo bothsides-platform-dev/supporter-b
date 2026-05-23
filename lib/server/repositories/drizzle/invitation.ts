@@ -85,6 +85,7 @@ function rowToInvitation(row: InvRow): RfpInvitation {
     openedAt: row.openedAt ? new Date(row.openedAt).toISOString() : undefined,
     expiresAt: new Date(row.expiresAt).toISOString(),
     status: dbStatusToUi(row.status),
+    boardColumnId: row.boardColumnId,
   };
 }
 
@@ -286,5 +287,17 @@ export class DrizzleInvitationRepository implements InvitationRepo {
       })
       .from(sql`(select 1) as _dummy`);
     return Boolean(row?.ok);
+  }
+
+  async setBoardColumn(
+    invitationId: string,
+    columnId: string | null,
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(rfpInvitations)
+      .set({ boardColumnId: columnId })
+      .where(eq(rfpInvitations.id, invitationId));
   }
 }

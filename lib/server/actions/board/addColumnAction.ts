@@ -40,8 +40,7 @@ export async function addColumnAction(input: AddColumnInput): Promise<AddColumnR
     title,
     position,
     color: color ?? null,
-    lifecycleKey: null,
-    isSystem: false,
+    lifecycleKey: null, // custom column ⇒ deletable
   });
   return { ok: true, columnId };
 }

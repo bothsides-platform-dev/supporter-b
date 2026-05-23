@@ -10,11 +10,11 @@ import { BUYER_KANBAN_ORDER, BUYER_KANBAN_LABEL } from '@/lib/server/buyer-kanba
 import { PG_KANBAN_ORDER, PG_KANBAN_LABEL } from '@/lib/server/pg-kanban';
 import { DEFAULT_LANDING_KEY } from './lifecycle-keys';
 
+// lifecycleKey non-null ⇒ system (non-deletable); null ⇒ custom. No isSystem flag.
 type ColumnSpec = {
   kind: ColumnKind;
   title: string;
   lifecycleKey: string | null;
-  isSystem: boolean;
 };
 
 function buyerSpecs(): ColumnSpec[] {
@@ -22,13 +22,12 @@ function buyerSpecs(): ColumnSpec[] {
     kind: 'pipeline',
     title: BUYER_KANBAN_LABEL[key],
     lifecycleKey: key,
-    isSystem: true,
   }));
   const rfpBids: ColumnSpec[] = [
     // 진행전 = default landing for unplaced bids (non-deletable, not cross-side).
-    { kind: 'rfp_bids', title: '진행전', lifecycleKey: DEFAULT_LANDING_KEY, isSystem: true },
-    { kind: 'rfp_bids', title: '협상중', lifecycleKey: null, isSystem: false },
-    { kind: 'rfp_bids', title: '결정', lifecycleKey: null, isSystem: false },
+    { kind: 'rfp_bids', title: '진행전', lifecycleKey: DEFAULT_LANDING_KEY },
+    { kind: 'rfp_bids', title: '협상중', lifecycleKey: null },
+    { kind: 'rfp_bids', title: '결정', lifecycleKey: null },
   ];
   return [...pipeline, ...rfpBids];
 }
@@ -38,7 +37,6 @@ function pgSpecs(): ColumnSpec[] {
     kind: 'pipeline',
     title: PG_KANBAN_LABEL[key],
     lifecycleKey: key,
-    isSystem: true,
   }));
 }
 
@@ -69,7 +67,6 @@ export function defaultColumns(
         position: positions[i],
         color: null,
         lifecycleKey: s.lifecycleKey,
-        isSystem: s.isSystem,
       });
     });
   }

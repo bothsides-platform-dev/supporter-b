@@ -1,21 +1,22 @@
-import type { BoardColumn, Placement } from '@/lib/types/column';
+import { type BoardColumn, isSystemColumn } from '@/lib/types/column';
 
 // Resolve which column a card belongs in (sparse-override):
-//   1. explicit placement (if its column still exists) — the user filed it
+//   1. explicit board_column_id (the user filed it into a custom column)
 //   2. the column bound to the card's lifecycle key — auto-classified
-//   3. defensive fallback: a system column, else the first column
+//   3. defensive fallback: a system (lifecycle-bound) column, else the first
 //
-// Lifecycle columns are mandatory (non-deletable), so step 2 effectively always
-// succeeds for a seeded board; the fallback only guards malformed input.
+// FK ON DELETE SET NULL guarantees board_column_id only ever points at a live
+// column (deleting a custom column nulls it), so no "does it still exist" check
+// is needed beyond a defensive membership test.
 export function resolveCardColumn(args: {
+  boardColumnId: string | null | undefined;
   lifecycleKey: string | null;
-  placement: Placement | undefined;
   columns: BoardColumn[];
 }): string {
-  const { lifecycleKey, placement, columns } = args;
+  const { boardColumnId, lifecycleKey, columns } = args;
 
-  if (placement) {
-    const placed = columns.find((c) => c.id === placement.columnId);
+  if (boardColumnId) {
+    const placed = columns.find((c) => c.id === boardColumnId);
     if (placed) return placed.id;
   }
 
@@ -24,7 +25,7 @@ export function resolveCardColumn(args: {
     if (byKey) return byKey.id;
   }
 
-  const system = columns.find((c) => c.isSystem);
+  const system = columns.find(isSystemColumn);
   if (system) return system.id;
   if (columns.length > 0) return columns[0].id;
   throw new Error('resolveCardColumn: board has no columns');

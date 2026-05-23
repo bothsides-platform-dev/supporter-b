@@ -40,6 +40,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     createdBy: row.createdBy,
     createdAt: new Date(row.createdAt).toISOString(),
     sentAt: toIso(row.sentAt),
+    boardColumnId: row.boardColumnId,
     shareToken: row.shareToken,
   };
 }
@@ -234,5 +235,10 @@ export class DrizzleRfpRepository implements RfpRepo {
     const after = await this.findById(id, tx);
     if (!after) throw new Error(`RFP disappeared after transition: ${id}`);
     return after;
+  }
+
+  async setBoardColumn(rfpId: string, columnId: string | null, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.update(rfps).set({ boardColumnId: columnId }).where(eq(rfps.id, rfpId));
   }
 }

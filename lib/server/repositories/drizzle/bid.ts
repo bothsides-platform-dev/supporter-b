@@ -41,6 +41,7 @@ function rowToBid(row: BidRow, proposalPdfs: Attachment[]): Bid {
     status: row.status,
     submittedBy: row.submittedBy,
     submittedAt: new Date(row.submittedAt).toISOString(),
+    boardColumnId: row.boardColumnId,
   };
 }
 
@@ -152,5 +153,10 @@ export class DrizzleBidRepository implements BidRepo {
     const rows = (await db.select().from(bids).where(eq(bids.pgWsId, pgWsId))) as BidRow[];
     const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
+  }
+
+  async setBoardColumn(bidId: string, columnId: string | null, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.update(bids).set({ boardColumnId: columnId }).where(eq(bids.id, bidId));
   }
 }

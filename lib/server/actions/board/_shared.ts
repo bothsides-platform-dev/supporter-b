@@ -17,11 +17,7 @@ import {
   getRfpRepo,
   getBidRepo,
   getInvitationRepo,
-  getRfpPlacementRepo,
-  getInvitationPlacementRepo,
-  getBidPlacementRepo,
 } from '@/lib/server/repositories/factory';
-import type { PlacementRepo } from '@/lib/server/repositories/types';
 import type { BoardColumn, CardType, ColumnKind } from '@/lib/types/column';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { BidActionResult } from '../bid/_shared';
@@ -82,10 +78,21 @@ export async function requireOwnedColumn(
   return { ok: true, column, workspaceId: ws.workspaceId };
 }
 
-export async function placementRepoFor(cardType: CardType): Promise<PlacementRepo> {
-  if (cardType === 'rfp') return getRfpPlacementRepo();
-  if (cardType === 'invitation') return getInvitationPlacementRepo();
-  return getBidPlacementRepo();
+// Set (or clear, with null) a card's board_column_id via its own card repo.
+export async function setCardBoardColumn(
+  cardType: CardType,
+  cardId: string,
+  columnId: string | null,
+): Promise<void> {
+  if (cardType === 'rfp') {
+    await (await getRfpRepo()).setBoardColumn(cardId, columnId);
+    return;
+  }
+  if (cardType === 'invitation') {
+    await (await getInvitationRepo()).setBoardColumn(cardId, columnId);
+    return;
+  }
+  await (await getBidRepo()).setBoardColumn(cardId, columnId);
 }
 
 // Does this card belong to the given workspace's board? rfp/bid boards are owned

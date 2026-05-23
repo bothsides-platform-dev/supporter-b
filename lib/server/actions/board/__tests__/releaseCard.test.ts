@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 
-import { bids, rfps, rfpInvitations, columns, bidPlacements } from '@/lib/db/schema';
+import { bids, rfps, rfpInvitations, columns } from '@/lib/db/schema';
 import { defaultColumns } from '@/lib/server/columns/seed';
 import {
   seedBizProfile,
@@ -42,7 +42,7 @@ vi.mock('@/lib/auth/session', () => ({
 }));
 
 import { releaseCardAction } from '../releaseCardAction';
-import { getBidPlacementRepo } from '@/lib/server/repositories/factory';
+import { getBidRepo } from '@/lib/server/repositories/factory';
 
 let db: PgliteDB;
 
@@ -97,12 +97,7 @@ async function setup() {
     .select()
     .from(columns)
     .where(and(eq(columns.workspaceId, buyerWs.id), eq(columns.title, '협상중')));
-  await db.insert(bidPlacements).values({
-    id: randomUUID(),
-    columnId: nego.id,
-    bidId,
-    position: 'a1',
-  });
+  await db.update(bids).set({ boardColumnId: nego.id }).where(eq(bids.id, bidId));
 
   return { buyer, buyerWs, bidId };
 }
@@ -152,14 +147,14 @@ describe('releaseCardAction', () => {
     if (!r.ok) expect(r.error).toBe('FORBIDDEN');
   });
 
-  it('removes the placement (returns the card to auto-classification)', async () => {
+  it('clears board_column_id (returns the card to auto-classification)', async () => {
     const s = await setup();
     asBuyer(s);
-    const repo = await getBidPlacementRepo();
-    expect((await repo.listByCards([s.bidId])).size).toBe(1);
+    const repo = await getBidRepo();
+    expect((await repo.findById(s.bidId))?.boardColumnId).toBeTruthy();
 
     const r = await releaseCardAction({ cardType: 'bid', cardId: s.bidId });
     expect(r.ok).toBe(true);
-    expect((await repo.listByCards([s.bidId])).size).toBe(0);
+    expect((await repo.findById(s.bidId))?.boardColumnId).toBeNull();
   });
 });

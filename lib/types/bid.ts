@@ -37,4 +37,7 @@ export type Bid = {
   status: 'draft' | 'submitted' | 'withdrawn';
   submittedBy: string;
   submittedAt?: string;
+  // Unified kanban (rfp_bids board): explicit custom-column placement; null/
+  // undefined ⇒ default-landing "진행전".
+  boardColumnId?: string | null;
 };

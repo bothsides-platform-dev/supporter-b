@@ -5,7 +5,7 @@ import { z } from 'zod';
 import {
   type BoardActionResult,
   workspaceIdForCard,
-  placementRepoFor,
+  setCardBoardColumn,
   cardBelongsToWorkspace,
 } from './_shared';
 
@@ -39,7 +39,6 @@ export async function releaseCardAction(
     return { ok: false, error: 'FORBIDDEN' };
   }
 
-  const placementRepo = await placementRepoFor(cardType);
-  await placementRepo.removeByCard(cardId);
+  await setCardBoardColumn(cardType, cardId, null);
   return { ok: true };
 }

@@ -15,7 +15,6 @@ function rowToColumn(row: ColumnRow): BoardColumn {
     position: row.position,
     color: row.color as ChipColorRole | null,
     lifecycleKey: row.lifecycleKey,
-    isSystem: row.isSystem,
   };
 }
 
@@ -68,7 +67,6 @@ export class DrizzleColumnRepository implements ColumnRepo {
         position: c.position,
         color: c.color,
         lifecycleKey: c.lifecycleKey,
-        isSystem: c.isSystem,
       })),
     );
   }

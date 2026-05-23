@@ -43,7 +43,7 @@ vi.mock('@/lib/auth/session', () => ({
 }));
 
 import { moveCardAction } from '../moveCardAction';
-import { getBidPlacementRepo } from '@/lib/server/repositories/factory';
+import { getBidRepo } from '@/lib/server/repositories/factory';
 
 let db: PgliteDB;
 
@@ -132,7 +132,6 @@ describe('moveCardAction', () => {
       cardType: 'bid',
       cardId: randomUUID(),
       toColumnId: randomUUID(),
-      position: 'a1',
     });
     expect(r.ok).toBe(false);
   });
@@ -150,13 +149,11 @@ describe('moveCardAction', () => {
       title: '협상중',
       position: 'a1',
       lifecycleKey: null,
-      isSystem: false,
     });
     const r = await moveCardAction({
       cardType: 'bid',
       cardId: s.bidId,
       toColumnId: otherCol,
-      position: 'a1',
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('FORBIDDEN');
@@ -173,13 +170,11 @@ describe('moveCardAction', () => {
       title: '보류',
       position: 'z1',
       lifecycleKey: null,
-      isSystem: false,
     });
     const r = await moveCardAction({
       cardType: 'bid',
       cardId: s.bidId,
       toColumnId: pipelineCustom,
-      position: 'a1',
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('CROSS_KIND');
@@ -193,25 +188,22 @@ describe('moveCardAction', () => {
       cardType: 'bid',
       cardId: s.bidId,
       toColumnId: landing,
-      position: 'a1',
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('NOT_A_DROP_TARGET');
   });
 
-  it('places a bid into a custom column, then moves it (one row per card)', async () => {
+  it('places a bid into a custom column, then moves it (board_column_id)', async () => {
     const s = await setup();
     asBuyer(s);
     const nego = await colByTitle(s.buyerWs.id, '협상중');
     const decided = await colByTitle(s.buyerWs.id, '결정');
+    const repo = await getBidRepo();
 
-    expect((await moveCardAction({ cardType: 'bid', cardId: s.bidId, toColumnId: nego, position: 'a1' })).ok).toBe(true);
-    const repo = await getBidPlacementRepo();
-    expect((await repo.listByCards([s.bidId])).get(s.bidId)?.columnId).toBe(nego);
+    expect((await moveCardAction({ cardType: 'bid', cardId: s.bidId, toColumnId: nego })).ok).toBe(true);
+    expect((await repo.findById(s.bidId))?.boardColumnId).toBe(nego);
 
-    expect((await moveCardAction({ cardType: 'bid', cardId: s.bidId, toColumnId: decided, position: 'a2' })).ok).toBe(true);
-    const after = await repo.listByCards([s.bidId]);
-    expect(after.get(s.bidId)?.columnId).toBe(decided);
-    expect(await repo.listByColumn(nego)).toHaveLength(0);
+    expect((await moveCardAction({ cardType: 'bid', cardId: s.bidId, toColumnId: decided })).ok).toBe(true);
+    expect((await repo.findById(s.bidId))?.boardColumnId).toBe(decided);
   });
 });

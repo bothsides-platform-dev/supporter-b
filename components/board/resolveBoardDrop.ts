@@ -3,7 +3,7 @@
 // lifecycle-column → domain-action mapping (send/cancel/withdraw/navigate).
 import { resolveDrag, type DragAction } from '@/components/home/dragMatrix';
 import { DEFAULT_LANDING_KEY } from '@/lib/server/columns/lifecycle-keys';
-import type { BoardColumn, CardType } from '@/lib/types/column';
+import { type BoardColumn, type CardType, isSystemColumn } from '@/lib/types/column';
 import type { BuyerKanbanStage } from '@/lib/server/buyer-kanban';
 import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 
@@ -30,7 +30,7 @@ export function resolveBoardDrop(args: {
   const { cardType, toColumn, payload } = args;
 
   // Custom columns are the only placement targets.
-  if (!toColumn.isSystem) return { kind: 'place' };
+  if (!isSystemColumn(toColumn)) return { kind: 'place' };
 
   // Default-landing column → strip the placement (back to auto-classification).
   if (toColumn.lifecycleKey === DEFAULT_LANDING_KEY) return { kind: 'release' };

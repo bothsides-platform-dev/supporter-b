@@ -13,14 +13,7 @@ import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
 import { db } from '@/lib/db/client';
-import {
-  attachments,
-  bids,
-  bidNotes,
-  bidPlacements,
-  columns,
-  rfps,
-} from '@/lib/db/schema';
+import { attachments, bids, bidNotes, columns, rfps } from '@/lib/db/schema';
 import { getStorage } from '@/lib/server/storage';
 
 // Seed/URL identifiers are the human RFP code (P-YYMM-NNNN); FKs use the uuid.
@@ -68,23 +61,17 @@ export async function loginAs(page: Page, role: Role): Promise<void> {
 }
 
 /** Title of the column a bid currently sits in (unified kanban). A bid with no
- *  explicit bid_placements row falls back to the default-landing column "진행전".
+ *  board_column_id falls back to the default-landing column "진행전".
  *  Throws if the bid doesn't exist so the spec fails loud. */
 export async function getBidColumnTitleFromDb(bidId: string): Promise<string> {
-  const [bidRow] = await db
-    .select({ id: bids.id })
+  const [row] = await db
+    .select({ boardColumnId: bids.boardColumnId, title: columns.title })
     .from(bids)
+    .leftJoin(columns, eq(bids.boardColumnId, columns.id))
     .where(eq(bids.id, bidId))
     .limit(1);
-  if (!bidRow) throw new Error(`[e2e helpers] bid not found: ${bidId}`);
-
-  const [placed] = await db
-    .select({ title: columns.title })
-    .from(bidPlacements)
-    .innerJoin(columns, eq(bidPlacements.columnId, columns.id))
-    .where(eq(bidPlacements.bidId, bidId))
-    .limit(1);
-  return placed?.title ?? '진행전';
+  if (!row) throw new Error(`[e2e helpers] bid not found: ${bidId}`);
+  return row.boardColumnId ? (row.title ?? '진행전') : '진행전';
 }
 
 /** Number of bid_notes rows for a given bid. Used by the note roundtrip
@@ -108,8 +95,7 @@ export async function resetRfpForKanban(rfpCode: string): Promise<void> {
   await db.execute(sql`DELETE FROM contracts WHERE rfp_id=${rfpId}`);
   // Clear explicit placements → all bids fall back to "진행전".
   await db.execute(sql`
-    DELETE FROM bid_placements
-    WHERE bid_id IN (SELECT id FROM bids WHERE rfp_id = ${rfpId})
+    UPDATE bids SET board_column_id = NULL WHERE rfp_id = ${rfpId}
   `);
   // Clear any bid_notes rows left over from a previous note spec.
   await db.execute(sql`

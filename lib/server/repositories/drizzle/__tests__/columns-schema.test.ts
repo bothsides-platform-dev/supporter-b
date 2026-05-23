@@ -1,25 +1,16 @@
-// Schema-level test for the unified kanban tables (M1).
-// Confirms the 0003 migration creates:
-//   1. columns table with the expected columns/enums/nullable lifecycle_key
-//   2. partial unique (workspace_id, kind, lifecycle_key) WHERE lifecycle_key IS NOT NULL
-//      — one lifecycle column per board, but unlimited custom (null) columns
-//   3. rfp/invitation/bid_placements: one placement per card (card_id unique) +
-//      FK cascade from columns
-// If the migration is missing/incorrect the test fails at SQL time.
+// Schema-level test for the unified kanban (embedded placement model).
+// Confirms the generated migration creates:
+//   1. columns table (no is_system) with nullable color/lifecycle_key
+//   2. partial unique (workspace_id, kind, lifecycle_key) WHERE lifecycle_key
+//      IS NOT NULL — one lifecycle column per board, unlimited custom (null)
+//   3. card.board_column_id FK with ON DELETE SET NULL — placing a card then
+//      deleting its column auto-returns the card to auto-classification (null)
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
-import {
-  columns,
-  rfpPlacements,
-  invitationPlacements,
-  bidPlacements,
-  bids,
-  rfps,
-  rfpInvitations,
-} from '@/lib/db/schema';
+import { columns, bids, rfps, rfpInvitations } from '@/lib/db/schema';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
 import {
@@ -50,7 +41,6 @@ async function setup() {
     createdBy: buyer.id,
     sentAt: new Date(),
   });
-
   const invitationId = randomUUID();
   await db.insert(rfpInvitations).values({
     id: invitationId,
@@ -62,7 +52,6 @@ async function setup() {
     expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
     status: 'accepted',
   });
-
   const bidId = randomUUID();
   await db.insert(bids).values({
     id: bidId,
@@ -81,9 +70,8 @@ async function setup() {
   return { db, buyerWs, rfpId, invitationId, bidId };
 }
 
-describe('M1 schema — unified kanban columns + placements', () => {
+describe('M1 schema — unified kanban columns + embedded placement', () => {
   let ctx: Awaited<ReturnType<typeof setup>>;
-
   beforeEach(async () => {
     ctx = await setup();
   });
@@ -97,13 +85,10 @@ describe('M1 schema — unified kanban columns + placements', () => {
       title: '발송',
       position: 'a1',
       lifecycleKey: 'sent',
-      isSystem: true,
     });
     const [row] = await ctx.db.select().from(columns).where(eq(columns.id, id));
     expect(row.kind).toBe('pipeline');
-    expect(row.title).toBe('발송');
     expect(row.lifecycleKey).toBe('sent');
-    expect(row.isSystem).toBe(true);
     expect(row.color).toBeNull();
   });
 
@@ -115,9 +100,7 @@ describe('M1 schema — unified kanban columns + placements', () => {
       title: '발송',
       position: 'a1',
       lifecycleKey: 'sent',
-      isSystem: true,
     });
-
     await expect(
       ctx.db.insert(columns).values({
         id: randomUUID(),
@@ -126,11 +109,9 @@ describe('M1 schema — unified kanban columns + placements', () => {
         title: '발송 중복',
         position: 'a2',
         lifecycleKey: 'sent',
-        isSystem: true,
       }),
     ).rejects.toThrow();
 
-    // Two custom (null lifecycle_key) columns on the same (ws, kind) are allowed.
     await ctx.db.insert(columns).values({
       id: randomUUID(),
       workspaceId: ctx.buyerWs.id,
@@ -149,7 +130,7 @@ describe('M1 schema — unified kanban columns + placements', () => {
     expect(all.filter((c) => c.lifecycleKey === null)).toHaveLength(2);
   });
 
-  it('bid_placements: one placement per bid, cascades when its column is deleted', async () => {
+  it('bids.board_column_id resets to NULL when the column is deleted (ON DELETE SET NULL)', async () => {
     const colId = randomUUID();
     await ctx.db.insert(columns).values({
       id: colId,
@@ -158,41 +139,17 @@ describe('M1 schema — unified kanban columns + placements', () => {
       title: '협상중',
       position: 'a1',
     });
-    await ctx.db.insert(bidPlacements).values({
-      id: randomUUID(),
-      columnId: colId,
-      bidId: ctx.bidId,
-      position: 'a1',
-    });
+    await ctx.db.update(bids).set({ boardColumnId: colId }).where(eq(bids.id, ctx.bidId));
+    expect((await ctx.db.select().from(bids).where(eq(bids.id, ctx.bidId)))[0].boardColumnId).toBe(
+      colId,
+    );
 
-    // Second placement for the same bid is rejected (card_id unique).
-    const colId2 = randomUUID();
-    await ctx.db.insert(columns).values({
-      id: colId2,
-      workspaceId: ctx.buyerWs.id,
-      kind: 'rfp_bids',
-      title: '결정',
-      position: 'a2',
-    });
-    await expect(
-      ctx.db.insert(bidPlacements).values({
-        id: randomUUID(),
-        columnId: colId2,
-        bidId: ctx.bidId,
-        position: 'a1',
-      }),
-    ).rejects.toThrow();
-
-    // Deleting the column cascades its placements.
     await ctx.db.delete(columns).where(eq(columns.id, colId));
-    const left = await ctx.db
-      .select()
-      .from(bidPlacements)
-      .where(eq(bidPlacements.bidId, ctx.bidId));
-    expect(left).toHaveLength(0);
+    const [after] = await ctx.db.select().from(bids).where(eq(bids.id, ctx.bidId));
+    expect(after.boardColumnId).toBeNull();
   });
 
-  it('rfp_placements and invitation_placements round-trip', async () => {
+  it('rfp/invitation board_column_id round-trip', async () => {
     const colId = randomUUID();
     await ctx.db.insert(columns).values({
       id: colId,
@@ -201,19 +158,17 @@ describe('M1 schema — unified kanban columns + placements', () => {
       title: '보류',
       position: 'a1',
     });
-    await ctx.db.insert(rfpPlacements).values({
-      id: randomUUID(),
-      columnId: colId,
-      rfpId: ctx.rfpId,
-      position: 'a1',
-    });
-    await ctx.db.insert(invitationPlacements).values({
-      id: randomUUID(),
-      columnId: colId,
-      invitationId: ctx.invitationId,
-      position: 'a1',
-    });
-    expect(await ctx.db.select().from(rfpPlacements)).toHaveLength(1);
-    expect(await ctx.db.select().from(invitationPlacements)).toHaveLength(1);
+    await ctx.db.update(rfps).set({ boardColumnId: colId }).where(eq(rfps.id, ctx.rfpId));
+    await ctx.db
+      .update(rfpInvitations)
+      .set({ boardColumnId: colId })
+      .where(eq(rfpInvitations.id, ctx.invitationId));
+    expect((await ctx.db.select().from(rfps).where(eq(rfps.id, ctx.rfpId)))[0].boardColumnId).toBe(
+      colId,
+    );
+    expect(
+      (await ctx.db.select().from(rfpInvitations).where(eq(rfpInvitations.id, ctx.invitationId)))[0]
+        .boardColumnId,
+    ).toBe(colId);
   });
 });
