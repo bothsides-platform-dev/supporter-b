@@ -1,4 +1,4 @@
-import { KanbanBoardSkeleton } from '@/components/home/KanbanBoard';
+import { KanbanBoardSkeleton } from '@/components/board/KanbanBoard';
 
 export default function Loading() {
   return (

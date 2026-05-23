@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 1. **PG_RFP_SPEC.md** — Product spec (v0). The most authoritative document. 15 policy decisions, domain model, screen IA, scenarios. **Read this first.** Result of a brainstorming pivot from generic B2B quotation system to a **PG (Korean Payment Gateway) -focused private 1:N RFP platform**.
 2. **SCREEN_DESIGN.md** — Screens, IA, UX flows. §0 PG v0 화면 IA(B1~B7, P1~P6) + §1 인증/가입(P1~P11).
-3. **DESIGN.md** — Design system (*Material Design 3*). MD3 tokens, typography, color roles, component visual rules, motion, anti-clichés. **Single source of truth for visual decisions** — `styles/tokens.css` syncs from here unidirectionally.
+3. **DESIGN.md** — Design system (*Linear*). Tokens, typography, color roles, component visual rules, motion, anti-clichés. **Single source of truth for visual decisions** — `styles/tokens.css` syncs from here unidirectionally. (Token names keep the `--md-sys-*` prefix; values are Linear.)
 4. **SPEC.md** — Tech spec. Stack, directory layout, domain TypeScript types, App Router strategy, public-vs-app route groups.
 5. **IMPLEMENTATION.md** — Milestones M0~M8 + M1.5 (auth), bootstrap commands, verification checklists, work order.
 6. **[NOTIFICATION.md](./NOTIFICATION.md)** — 알림 시스템. 이메일(Resend) + 인앱(SSE + Drawer) 채널, NotificationService 모듈 구조, 이벤트→알림 매핑.
@@ -66,22 +66,25 @@ app/
 
 Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation.
 
-## Material Design 3 — Hard Rules
+## Linear Design Language — Hard Rules
 
-These are non-negotiable visual decisions enforced across all screens.
+These are non-negotiable visual decisions enforced across all screens. The design language is **Linear** — dense, fast, structure carried by low-contrast borders not shadows. Light-first; dark mode is Linear's signature near-black (`#08090A`). **Note:** token *names* keep the `--md-sys-*` prefix from the prior MD3 system — only the values are Linear. `md-sys` in the name does not mean MD3. DESIGN.md is the canonical source.
 
-- **No** Inter/Roboto/Arial. Pretendard Variable (KR + Latin) + JetBrains Mono only.
-- **No** purple-to-blue gradients. Use MD3 tonal color roles.
-- **No** shape > 12px except dialogs (28px) and pills (9999px). Use MD3 shape scale.
+- **No** Inter/Roboto/Arial direct import. Pretendard Variable (KR + Latin, Inter-derived) + JetBrains Mono only.
+- **No** pill buttons. Interactive elements are 6px (`shape-small`). `shape-full` (9999px) only for Avatars, status dots, pills indicators.
+- **No** hover shadow promotion — hover is a background-lightness shift only.
+- **No** heavy/skeuomorphic shadows — most surfaces use a 1px border or elevation-1; big shadows only on floating elements (popover, dropdown, toast, dialog, command palette).
+- **No** high-contrast dividers — default to `outline-variant` (the deliberately low-contrast border). The faint border IS the Linear look, not a bug.
+- **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28px buttons).
+- **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`.
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
 - **No** pulse/spinner loading. Use `LOADING…` text (body-medium type).
-- **No** glassmorphism, neon accents, blurred 3D orbs/blobs, chrome AI imagery.
-- **No** skeuomorphic excessive shadow — most surfaces use elevation-1 or none.
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.
-- **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (JetBrains Mono + tabular-nums). Never on nav/labels/buttons.
+- **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (mono + tabular-nums). Never on nav/labels/buttons.
 - **Status** uses Chip component — never bracketed plain text `[ 결재중 ]`.
-- **Typography** uses MD3 typescale tokens — no `font-mono uppercase tracking` on labels/nav.
+- **Typography** uses the typescale tokens — no `font-mono uppercase tracking` on labels/nav; sentence case with slight negative tracking.
 - **Chip color** mapping: 성공/완료→tertiary, 실패/오류→error, 보류/신규→warning, 중립→surface, 주요→primary.
+- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`).
 
 If frontend code looks "generic SaaS", check DESIGN.md §9 (anti-patterns) before defending it.
 

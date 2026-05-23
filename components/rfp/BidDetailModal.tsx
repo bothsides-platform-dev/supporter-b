@@ -8,14 +8,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
 import { IconButton } from '@/components/primitives/IconButton';
 import { PaperclipIcon, XIcon, FileTextIcon } from '@/components/icons';
 import { addBidNoteAction } from '@/lib/server/actions/bid/addBidNoteAction';
 import { removeBidNoteAction } from '@/lib/server/actions/bid/removeBidNoteAction';
 import { formatKRW, formatPct } from '@/lib/format';
-import { STATUTORY_CARD_FEE, type Bid, type BuyerStage } from '@/lib/types/bid';
+import { STATUTORY_CARD_FEE, type Bid } from '@/lib/types/bid';
 import {
   GRADE_LABELS,
   type MerchantGrade,
@@ -29,18 +28,6 @@ const SETTLE_LABEL: Record<string, string> = {
   'D+2': 'D+2',
   weekly: '주1회',
   monthly: '월1회',
-};
-
-const stageChipColor: Record<BuyerStage, ChipColor> = {
-  pending: 'surface',
-  negotiating: 'warning',
-  decided: 'tertiary',
-};
-
-const stageLabel: Record<BuyerStage, string> = {
-  pending: '진행전',
-  negotiating: '협상중',
-  decided: '결정',
 };
 
 const ISSUER_LABEL: Record<string, string> = {
@@ -57,7 +44,6 @@ type Props = {
   bid: Bid | null;
   notes: BidNote[];
   pgName: string;
-  stage: BuyerStage;
   grade: MerchantGrade | undefined;
   authorId: string;
   authorName: string;
@@ -69,7 +55,6 @@ export function BidDetailModal({
   bid,
   notes,
   pgName,
-  stage,
   grade,
   authorId: _authorId,
   authorName: _authorName,
@@ -116,9 +101,6 @@ export function BidDetailModal({
               <h2 className="text-[20px] font-[600] tracking-[-0.01em] text-[var(--md-sys-color-on-surface)] mt-1">
                 {pgName}
               </h2>
-              <div className="mt-2">
-                <Chip label={stageLabel[stage]} color={stageChipColor[stage]} />
-              </div>
             </div>
             <IconButton
               label="닫기"

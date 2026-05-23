@@ -2,15 +2,18 @@
 
 import { useState } from 'react';
 import { BidComparisonTable } from './BidComparisonTable';
-import { BidBoard } from './BidBoard';
+import { RfpBidsBoard } from '@/components/board/RfpBidsBoard';
 import { BidViewToggle, type BidView } from './BidViewToggle';
 import type { Bid } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
+import type { BoardCard, BoardColumn } from '@/lib/types/column';
 
 type Props = {
   rfpId: string;
   bids: Bid[];
+  boardColumns: BoardColumn[];
+  boardCards: BoardCard[];
   notesByBid: Record<string, BidNote[]>;
   grade: MerchantGrade | undefined;
   rfpStatus: string;
@@ -38,12 +41,11 @@ export function BidComparisonView(props: Props) {
           pgWsNameMap={props.pgWsNameMap}
         />
       ) : (
-        <BidBoard
-          rfpId={props.rfpId}
-          bids={props.bids}
+        <RfpBidsBoard
+          columns={props.boardColumns}
+          cards={props.boardCards}
           notesByBid={props.notesByBid}
           grade={props.grade}
-          rfpStatus={props.rfpStatus}
           awardedBidId={props.awardedBidId}
           pgWsNameMap={props.pgWsNameMap}
           authorId={props.authorId}

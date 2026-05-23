@@ -20,6 +20,9 @@ export type RFP = {
   createdBy: string;
   createdAt: string;
   sentAt?: string;
+  // Unified kanban (buyer pipeline board): explicit custom-column placement;
+  // null/undefined ⇒ classifier-derived lifecycle column.
+  boardColumnId?: string | null;
   // RFP-scoped permanent share token (raw). Populated by the repo layer; only
   // surfaced server-side for the buyer's detail page → never serialised to PG
   // clients. Optional on type so PG-side renders that omit it stay sound.

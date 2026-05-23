@@ -1,0 +1,42 @@
+import { describe, expect, it } from 'vitest';
+import {
+  CROSS_SIDE_LIFECYCLE_KEYS,
+  isCrossSideLifecycleKey,
+} from '@/lib/server/columns/lifecycle-keys';
+import { BUYER_KANBAN_ORDER } from '@/lib/server/buyer-kanban';
+import { PG_KANBAN_ORDER } from '@/lib/server/pg-kanban';
+
+describe('cross-side lifecycle keys', () => {
+  it('locks exactly the buyer↔PG protocol stages', () => {
+    expect([...CROSS_SIDE_LIFECYCLE_KEYS].sort()).toEqual(
+      [
+        // buyer side
+        'sent',
+        'collecting',
+        'comparing',
+        'awarded',
+        'closed',
+        // pg side
+        'received',
+        'submitted',
+        'won',
+        'lost',
+      ].sort(),
+    );
+  });
+
+  it('every cross-side key is a real lifecycle stage (no typos drift)', () => {
+    const all = new Set<string>([...BUYER_KANBAN_ORDER, ...PG_KANBAN_ORDER]);
+    for (const k of CROSS_SIDE_LIFECYCLE_KEYS) {
+      expect(all.has(k)).toBe(true);
+    }
+  });
+
+  it('private skeleton stages are NOT cross-side', () => {
+    expect(isCrossSideLifecycleKey('draft')).toBe(false); // buyer-private
+    expect(isCrossSideLifecycleKey('drafting')).toBe(false); // pg-private
+    expect(isCrossSideLifecycleKey('reviewing')).toBe(false); // pg-private
+    expect(isCrossSideLifecycleKey('sent')).toBe(true);
+    expect(isCrossSideLifecycleKey(null)).toBe(false); // custom / default-landing
+  });
+});

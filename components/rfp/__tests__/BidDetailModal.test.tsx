@@ -45,7 +45,6 @@ const bid: Bid = {
     },
   ],
   status: 'submitted',
-  buyerStage: 'pending',
   submittedBy: 'pg-user',
   submittedAt: '2026-05-01T00:00:00Z',
 };
@@ -60,7 +59,7 @@ describe('BidDetailModal', () => {
     cleanup();
   });
 
-  it('renders the 6-figure KPI grid and stage tag when open', () => {
+  it('renders the 6-figure KPI grid when open', () => {
     render(
       <BidDetailModal
         open
@@ -68,7 +67,6 @@ describe('BidDetailModal', () => {
         bid={bid}
         notes={[]}
         pgName="서포터 B 페이"
-        stage="negotiating"
         grade="sme1"
         authorId="u-1"
         authorName="김구매"
@@ -80,7 +78,6 @@ describe('BidDetailModal', () => {
     expect(screen.getByText('월최저')).toBeInTheDocument();
     expect(screen.getByText('계좌이체')).toBeInTheDocument();
     expect(screen.getByText('간편결제')).toBeInTheDocument();
-    expect(screen.getByText('협상중')).toBeInTheDocument();
     // Statutory card fee row for sme1 (1.10% fixed).
     expect(screen.getByText(/1\.10% 고정/)).toBeInTheDocument();
   });
@@ -94,7 +91,6 @@ describe('BidDetailModal', () => {
         bid={bid}
         notes={[]}
         pgName="서포터 B 페이"
-        stage="pending"
         grade="sme1"
         authorId="u-1"
         authorName="김구매"
@@ -144,7 +140,6 @@ describe('BidDetailModal', () => {
         bid={bid}
         notes={notes}
         pgName="서포터 B 페이"
-        stage="pending"
         grade="sme1"
         authorId="u-1"
         authorName="김구매"
@@ -178,7 +173,6 @@ describe('BidDetailModal', () => {
         bid={bid}
         notes={notes}
         pgName="서포터 B 페이"
-        stage="pending"
         grade="sme1"
         authorId="u-1"
         authorName="김구매"

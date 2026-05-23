@@ -15,31 +15,28 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const base =
-  'inline-flex items-center justify-center gap-2 ' +
-  'rounded-[var(--md-sys-shape-full)] ' +
-  'font-sans select-none cursor-pointer ' +
-  'transition-all duration-[var(--md-sys-motion-duration-short-4)] ' +
-  'focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--md-sys-color-primary)]/50 ' +
+  'inline-flex items-center justify-center gap-1.5 ' +
+  'rounded-[var(--md-sys-shape-small)] ' +
+  'font-sans font-medium select-none cursor-pointer ' +
+  'transition-colors duration-[var(--md-sys-motion-duration-short-4)] ' +
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 ' +
   'disabled:opacity-38 disabled:cursor-not-allowed disabled:pointer-events-none';
 
 const sizeMap: Record<ButtonSize, string> = {
   sm: [
-    'h-8 px-4',
+    'h-7 px-2.5',
     'text-[length:var(--md-typescale-label-medium-size)]',
-    'font-[number:var(--md-typescale-label-medium-weight)]',
     'tracking-[var(--md-typescale-label-medium-tracking)]',
   ].join(' '),
   md: [
-    'h-10 px-6',
+    'h-8 px-3',
     'text-[length:var(--md-typescale-label-large-size)]',
-    'font-[number:var(--md-typescale-label-large-weight)]',
     'tracking-[var(--md-typescale-label-large-tracking)]',
   ].join(' '),
   lg: [
-    'h-12 px-8',
-    'text-[length:var(--md-typescale-title-medium-size)]',
-    'font-[number:var(--md-typescale-title-medium-weight)]',
-    'tracking-[var(--md-typescale-title-medium-tracking)]',
+    'h-9 px-4',
+    'text-[length:var(--md-typescale-title-small-size)]',
+    'tracking-[var(--md-typescale-title-small-tracking)]',
   ].join(' '),
 };
 
@@ -55,37 +52,37 @@ function variantClasses(variant: ButtonVariant, color: ButtonColor): string {
     case 'filled':
       return [
         `bg-[${bg}] text-[${onBg}]`,
-        `hover:shadow-[var(--md-sys-elevation-1)]`,
-        `hover:bg-[color-mix(in_srgb,${onBg}_8%,${bg})]`,
-        `active:shadow-none active:bg-[color-mix(in_srgb,${onBg}_12%,${bg})]`,
+        `hover:bg-[color-mix(in_srgb,${onBg}_10%,${bg})]`,
+        `active:bg-[color-mix(in_srgb,${onBg}_16%,${bg})]`,
       ].join(' ');
     case 'outlined':
       return [
         `bg-transparent text-[${txt}]`,
-        'border border-[var(--md-sys-color-outline)]',
-        `hover:bg-[color-mix(in_srgb,${bg}_8%,transparent)]`,
-        `active:bg-[color-mix(in_srgb,${bg}_12%,transparent)]`,
+        'border border-[var(--md-sys-color-outline-variant)]',
+        `hover:bg-[var(--md-sys-color-surface-container)] hover:border-[var(--md-sys-color-outline)]`,
+        `active:bg-[var(--md-sys-color-surface-container-high)]`,
         `focus-visible:border-[${bg}]`,
       ].join(' ');
     case 'text':
       return [
-        `bg-transparent text-[${txt}] px-3`,
-        `hover:bg-[color-mix(in_srgb,${bg}_8%,transparent)]`,
-        `active:bg-[color-mix(in_srgb,${bg}_12%,transparent)]`,
+        `bg-transparent text-[${txt}] px-2`,
+        `hover:bg-[var(--md-sys-color-surface-container)]`,
+        `active:bg-[var(--md-sys-color-surface-container-high)]`,
       ].join(' ');
     case 'elevated':
       return [
         'bg-[var(--md-sys-color-surface-container-low)]',
+        'border border-[var(--md-sys-color-outline-variant)]',
         `text-[${txt}]`,
         'shadow-[var(--md-sys-elevation-1)]',
-        `hover:shadow-[var(--md-sys-elevation-2)] hover:bg-[color-mix(in_srgb,${bg}_8%,var(--md-sys-color-surface-container-low))]`,
-        `active:shadow-[var(--md-sys-elevation-1)] active:bg-[color-mix(in_srgb,${bg}_12%,var(--md-sys-color-surface-container-low))]`,
+        `hover:bg-[var(--md-sys-color-surface-container)]`,
+        `active:bg-[var(--md-sys-color-surface-container-high)]`,
       ].join(' ');
     case 'tonal':
       return [
         `bg-[${ctr}] text-[${onCtr}]`,
-        `hover:shadow-[var(--md-sys-elevation-1)] hover:bg-[color-mix(in_srgb,${onCtr}_8%,${ctr})]`,
-        `active:shadow-none active:bg-[color-mix(in_srgb,${onCtr}_12%,${ctr})]`,
+        `hover:bg-[color-mix(in_srgb,${onCtr}_8%,${ctr})]`,
+        `active:bg-[color-mix(in_srgb,${onCtr}_14%,${ctr})]`,
       ].join(' ');
   }
 }
@@ -112,9 +109,9 @@ export function Button({
       )}
       {...props}
     >
-      {icon && <span className="[&_svg]:size-[18px] shrink-0">{icon}</span>}
+      {icon && <span className="[&_svg]:size-4 shrink-0">{icon}</span>}
       {children}
-      {trailingIcon && <span className="[&_svg]:size-[18px] shrink-0">{trailingIcon}</span>}
+      {trailingIcon && <span className="[&_svg]:size-4 shrink-0">{trailingIcon}</span>}
     </button>
   );
 }

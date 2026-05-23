@@ -7,7 +7,7 @@ import { and, eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
 import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { users, workspaces, workspaceMembers, bizProfiles } from '@/lib/db/schema';
+import { users, workspaces, workspaceMembers, bizProfiles, columns } from '@/lib/db/schema';
 
 const sessionRef: { value: { user: { id: string } } | null } = { value: null };
 vi.mock('@/lib/auth/session', () => ({
@@ -80,6 +80,39 @@ describe('createWorkspaceInTx', () => {
       .from(bizProfiles)
       .where(eq(bizProfiles.id, ws.bizProfileId as string));
     expect(biz.bizNo).toBe('1112223334');
+  });
+
+  it('seeds default kanban columns: buyer gets pipeline + rfp_bids boards', async () => {
+    const u = await seedUser(db);
+    const { workspaceId } = await createWorkspaceInTx(db, {
+      userId: u.id,
+      type: 'buyer',
+      name: 'BuyerCo',
+      bizProfile: {
+        bizNo: '2223334445',
+        taxType: 'general',
+        status: 'active',
+        grade: 'general',
+        gradeSource: 'user_confirmed',
+      },
+    });
+
+    const cols = await db.select().from(columns).where(eq(columns.workspaceId, workspaceId));
+    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(6);
+    expect(cols.filter((c) => c.kind === 'rfp_bids')).toHaveLength(3);
+  });
+
+  it('seeds default kanban columns: pg gets only the pipeline board', async () => {
+    const u = await seedUser(db);
+    const { workspaceId } = await createWorkspaceInTx(db, {
+      userId: u.id,
+      type: 'pg',
+      name: 'NewPG',
+    });
+
+    const cols = await db.select().from(columns).where(eq(columns.workspaceId, workspaceId));
+    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(6);
+    expect(cols.filter((c) => c.kind === 'rfp_bids')).toHaveLength(0);
   });
 });
 

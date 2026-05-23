@@ -14,21 +14,9 @@ export const STATUTORY_CARD_FEE: Record<MerchantGrade, number> = {
   general: Number.NaN,
 };
 
-// Buyer-side kanban classification. Independent of `Bid.status` (PG lifecycle).
-// DB-backed from Stage 3 onward — bids.buyer_stage (default 'pending').
-export type BuyerStage = 'pending' | 'negotiating' | 'decided';
-
-export const BUYER_STAGE_ORDER: readonly BuyerStage[] = [
-  'pending',
-  'negotiating',
-  'decided',
-] as const;
-
-export const BUYER_STAGE_LABEL: Record<BuyerStage, string> = {
-  pending: '진행전',
-  negotiating: '협상중',
-  decided: '결정',
-};
+// Buyer-side kanban placement is now the unified columns + bid_placements model
+// (see lib/types/column.ts). The legacy BuyerStage enum/labels were removed in
+// the unified-kanban cutover.
 
 export type Bid = {
   id: string;
@@ -49,5 +37,7 @@ export type Bid = {
   status: 'draft' | 'submitted' | 'withdrawn';
   submittedBy: string;
   submittedAt?: string;
-  buyerStage: BuyerStage;
+  // Unified kanban (rfp_bids board): explicit custom-column placement; null/
+  // undefined ⇒ default-landing "진행전".
+  boardColumnId?: string | null;
 };

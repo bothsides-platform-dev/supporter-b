@@ -1,16 +1,9 @@
-import { Subnav } from '@/components/shell/Subnav';
-
-const items = [
-  { href: '/settings/profile', label: '프로필' },
-  { href: '/settings/members', label: '멤버' },
-  { href: '/settings/notifications', label: '알림' },
-];
-
+// Settings layout — sub-navigation now lives in the Sidebar "설정" section.
+// Subnav was removed in Wave 2; this is a simple passthrough wrapper.
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col md:flex-row h-full">
-      <Subnav title="SETTINGS" items={items} />
-      <div className="flex-1 overflow-y-auto">{children}</div>
+    <div className="flex flex-col h-full overflow-y-auto">
+      {children}
     </div>
   );
 }

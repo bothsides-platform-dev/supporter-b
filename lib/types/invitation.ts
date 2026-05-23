@@ -16,4 +16,7 @@ export type RfpInvitation = {
   openedAt?: string;
   expiresAt: string;
   status: InvitationStatus;
+  // Unified kanban (pg pipeline board): explicit custom-column placement;
+  // null/undefined ⇒ classifier-derived lifecycle column.
+  boardColumnId?: string | null;
 };

@@ -3,12 +3,9 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
-import { Label } from '@/components/primitives/Label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { EmptyState } from '@/components/primitives/EmptyState';
 import { formatDeadline } from '@/lib/format';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
-import { InboxIcon } from '@/components/icons';
 
 const invStatusLabel: Record<string, string> = {
   sent: '신규',
@@ -29,6 +26,8 @@ const invStatusColor: Record<string, ChipColor> = {
 export type InboxRow = {
   invitationId: string;
   invitationStatus: string;
+  /** Domain status of the parent RFP — used by the closed-filter mapping. */
+  rfpStatus: string;
   rfpId: string;
   rfpTitle: string;
   rfpDeadline: string;
@@ -49,86 +48,64 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
   }, [active]);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-8 py-5 border-b border-[var(--md-sys-color-outline-variant)]">
-        <div>
-          <Label size="md" muted={false}>수신함 — PG 제안 요청</Label>
-          <h1 className="text-[20px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] mt-1">
-            받은 제안 요청
-          </h1>
-        </div>
-        <span className="font-mono tabular-nums text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-          {rows.length}건
+    <div className="flex-1 overflow-y-auto">
+      <table className="w-full border-collapse">
+        <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
+          <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
+            <th className="px-8 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">번호</th>
+            <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">제목</th>
+            <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">등급</th>
+            <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">마감</th>
+            <th className="px-3 py-3 text-right font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => {
+            const daysLeft = formatDeadline(row.rfpDeadline);
+            const isUrgent =
+              daysLeft.startsWith('D-') &&
+              parseInt(daysLeft.slice(2)) <= 3;
+            return (
+              <tr
+                key={row.invitationId}
+                ref={(el) => {
+                  rowRefs.current[i] = el;
+                }}
+                onClick={() => router.push(`/inbox/${row.rfpId}`)}
+                data-active={active === i}
+                className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer transition-colors"
+              >
+                <td className="relative px-8 py-4 font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-2 group-hover:before:bg-[var(--md-sys-color-on-surface)] group-data-[active=true]:before:absolute group-data-[active=true]:before:left-0 group-data-[active=true]:before:top-0 group-data-[active=true]:before:bottom-0 group-data-[active=true]:before:w-2 group-data-[active=true]:before:bg-[var(--md-sys-color-on-surface)]">
+                  {row.rfpId}
+                </td>
+                <td className="px-3 py-4 text-[13px] text-[var(--md-sys-color-on-surface)] font-medium">{row.rfpTitle}</td>
+                <td className="px-3 py-4 font-mono text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                  {row.grade}
+                </td>
+                <td className={`px-3 py-4 font-mono text-[12px] tabular-nums ${isUrgent ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
+                  {daysLeft}
+                </td>
+                <td className="px-3 py-4 text-right">
+                  <Chip
+                    label={invStatusLabel[row.invitationStatus] ?? row.invitationStatus}
+                    color={invStatusColor[row.invitationStatus] ?? 'surface'}
+                  />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="px-8 py-3 border-t border-[var(--md-sys-color-outline-variant)] flex items-center gap-4 font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-outline)]">
+        <span>
+          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">J</kbd> /{' '}
+          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">K</kbd> 이동
+        </span>
+        <span>
+          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">Enter</kbd> 응답
+          작성
         </span>
       </div>
-
-      {rows.length === 0 ? (
-        <EmptyState
-          icon={<InboxIcon size={32} />}
-          title="받은 제안 요청이 없습니다."
-          description="구매사가 초대한 RFP가 이 화면에 표시됩니다."
-        />
-      ) : (
-        <div className="flex-1 overflow-y-auto">
-          <table className="w-full border-collapse">
-            <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
-              <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
-                <th className="px-8 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">번호</th>
-                <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">제목</th>
-                <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">등급</th>
-                <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">마감</th>
-                <th className="px-3 py-3 text-right font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">상태</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => {
-                const daysLeft = formatDeadline(row.rfpDeadline);
-                const isUrgent =
-                  daysLeft.startsWith('D-') &&
-                  parseInt(daysLeft.slice(2)) <= 3;
-                return (
-                  <tr
-                    key={row.invitationId}
-                    ref={(el) => {
-                      rowRefs.current[i] = el;
-                    }}
-                    onClick={() => router.push(`/inbox/${row.rfpId}`)}
-                    data-active={active === i}
-                    className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer transition-colors"
-                  >
-                    <td className="relative px-8 py-4 font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-2 group-hover:before:bg-[var(--md-sys-color-on-surface)] group-data-[active=true]:before:absolute group-data-[active=true]:before:left-0 group-data-[active=true]:before:top-0 group-data-[active=true]:before:bottom-0 group-data-[active=true]:before:w-2 group-data-[active=true]:before:bg-[var(--md-sys-color-on-surface)]">
-                      {row.rfpId}
-                    </td>
-                    <td className="px-3 py-4 text-[13px] text-[var(--md-sys-color-on-surface)] font-medium">{row.rfpTitle}</td>
-                    <td className="px-3 py-4 font-mono text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                      {row.grade}
-                    </td>
-                    <td className={`px-3 py-4 font-mono text-[12px] tabular-nums ${isUrgent ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
-                      {daysLeft}
-                    </td>
-                    <td className="px-3 py-4 text-right">
-                      <Chip
-                        label={invStatusLabel[row.invitationStatus] ?? row.invitationStatus}
-                        color={invStatusColor[row.invitationStatus] ?? 'surface'}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="px-8 py-3 border-t border-[var(--md-sys-color-outline-variant)] flex items-center gap-4 font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-outline)]">
-            <span>
-              <kbd className="text-[var(--md-sys-color-on-surface-variant)]">J</kbd> /{' '}
-              <kbd className="text-[var(--md-sys-color-on-surface-variant)]">K</kbd> 이동
-            </span>
-            <span>
-              <kbd className="text-[var(--md-sys-color-on-surface-variant)]">Enter</kbd> 응답
-              작성
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -138,40 +115,31 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
 // undefined across the RSC boundary. The static below keeps client callers working.
 export function InboxListSkeleton() {
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-8 py-5 border-b border-[var(--md-sys-color-outline-variant)]">
-        <div>
-          <Skeleton className="h-3 w-28 mb-2" />
-          <Skeleton className="h-5 w-36 mt-1" />
-        </div>
-        <Skeleton className="h-3 w-8" />
-      </div>
-      <div className="flex-1 overflow-y-auto">
-        <table className="w-full border-collapse">
-          <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
-            <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
-              <th className="px-8 py-3"><Skeleton className="h-2 w-8" /></th>
-              <th className="px-3 py-3"><Skeleton className="h-2 w-12" /></th>
-              <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
-              <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
-              <th className="px-3 py-3 text-right"><Skeleton className="h-2 w-8 ml-auto" /></th>
+    <div className="flex-1 overflow-y-auto">
+      <table className="w-full border-collapse">
+        <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
+          <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
+            <th className="px-8 py-3"><Skeleton className="h-2 w-8" /></th>
+            <th className="px-3 py-3"><Skeleton className="h-2 w-12" /></th>
+            <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
+            <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
+            <th className="px-3 py-3 text-right"><Skeleton className="h-2 w-8 ml-auto" /></th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <tr key={i} className="border-b border-[var(--md-sys-color-outline-variant)]">
+              <td className="px-8 py-4"><Skeleton className="h-3 w-20" /></td>
+              <td className="px-3 py-4"><Skeleton className="h-3 w-48" /></td>
+              <td className="px-3 py-4"><Skeleton className="h-3 w-12" /></td>
+              <td className="px-3 py-4"><Skeleton className="h-3 w-16" /></td>
+              <td className="px-3 py-4 text-right">
+                <Skeleton className="h-5 w-14 rounded-full ml-auto" />
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} className="border-b border-[var(--md-sys-color-outline-variant)]">
-                <td className="px-8 py-4"><Skeleton className="h-3 w-20" /></td>
-                <td className="px-3 py-4"><Skeleton className="h-3 w-48" /></td>
-                <td className="px-3 py-4"><Skeleton className="h-3 w-12" /></td>
-                <td className="px-3 py-4"><Skeleton className="h-3 w-16" /></td>
-                <td className="px-3 py-4 text-right">
-                  <Skeleton className="h-5 w-14 rounded-full ml-auto" />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

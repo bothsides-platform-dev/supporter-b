@@ -179,7 +179,6 @@ export async function submitBidAction(
         proposalPdfs: [],
         memo: data.memo,
         status: 'submitted',
-        buyerStage: 'pending',
         submittedBy: userId,
         submittedAt: now.toISOString(),
       };

@@ -4,6 +4,7 @@ import { invitationStatusEnum } from './_enums';
 import { rfps } from './rfps';
 import { workspaces } from './workspaces';
 import { users } from './users';
+import { columns } from './columns';
 
 export const rfpInvitations = pgTable(
   'rfp_invitations',
@@ -23,6 +24,11 @@ export const rfpInvitations = pgTable(
     openedAt: timestamp('opened_at', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     status: invitationStatusEnum('status').notNull().default('pending'),
+    // Unified kanban (pg pipeline board): explicit placement into a custom
+    // column. null ⇒ classifier-derived. ON DELETE SET NULL ⇒ auto-fallback.
+    boardColumnId: uuid('board_column_id').references(() => columns.id, {
+      onDelete: 'set null',
+    }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
@@ -31,5 +37,6 @@ export const rfpInvitations = pgTable(
     uniqueIndex('rfp_invitations_rfp_ws_uniq').on(t.rfpId, t.pgWsId),
     // P2: PG 칸반 findByPgWorkspace (pg_ws_id + status IN [...]).
     index('rfp_invitations_pg_ws_status_idx').on(t.pgWsId, t.status),
+    index('rfp_invitations_board_column_idx').on(t.boardColumnId),
   ],
 );

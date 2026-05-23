@@ -9,7 +9,8 @@ import type { RfpInvitation } from '@/lib/types/invitation';
 import type { Workspace, WorkspaceMembershipSummary } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { BizProfile } from '@/lib/types/biz-profile';
-import type { Bid, BuyerStage } from '@/lib/types/bid';
+import type { Bid } from '@/lib/types/bid';
+import type { BoardColumn, ColumnKind } from '@/lib/types/column';
 import type { Attachment } from '@/lib/types/common';
 import type { Contract } from '@/lib/types/contract';
 import type { Notification, NotificationChannel } from '@/lib/types/notification';
@@ -40,6 +41,8 @@ export interface RfpRepo {
   findByShareToken(token: string, tx?: Tx): Promise<RFP | undefined>;
   /** 상태 전이 + 패치. DB 레이어에서 `WHERE status=$prev` 동시성 가드. */
   transition(id: string, to: RfpStatus, patch?: Partial<RFP>, tx?: Tx): Promise<RFP>;
+  /** 통일 칸반: pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
+  setBoardColumn(rfpId: string, columnId: string | null, tx?: Tx): Promise<void>;
 }
 
 // ── Invitation ────────────────────────────────────────────────────────
@@ -70,6 +73,8 @@ export interface InvitationRepo {
    * inbox 상세 RSC 진입 시 호출 — PG 칸반의 '검토중' 컬럼을 활성화하기 위한 시그널.
    */
   markOpened(invitationId: string, openedAt: Date, tx?: Tx): Promise<void>;
+  /** 통일 칸반: pg pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
+  setBoardColumn(invitationId: string, columnId: string | null, tx?: Tx): Promise<void>;
 }
 
 // ── Workspace ─────────────────────────────────────────────────────────
@@ -120,8 +125,28 @@ export interface BidRepo {
   findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, Bid[]>>;
   /** 한 PG 워크스페이스의 모든 입찰. */
   findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]>;
-  /** Stage 3 cutover: buyer 측 칸반 stage 갱신. 없는 bidId면 throw. */
-  updateBuyerStage(bidId: string, to: BuyerStage, tx?: Tx): Promise<void>;
+  /** 통일 칸반: rfp_bids 보드 커스텀 컬럼 배치. null = 기본착지(진행전) 복귀. */
+  setBoardColumn(bidId: string, columnId: string | null, tx?: Tx): Promise<void>;
+}
+
+// ── Kanban Column ─────────────────────────────────────────────────────
+export interface ColumnRepo {
+  /** 한 보드 (workspace_id, kind) 의 컬럼 — position 오름차순. */
+  listByBoard(workspaceId: string, kind: ColumnKind, tx?: Tx): Promise<BoardColumn[]>;
+  /** id 단건 조회. 없으면 undefined. */
+  findById(id: string, tx?: Tx): Promise<BoardColumn | undefined>;
+  /** 컬럼 1개 생성. */
+  create(col: BoardColumn, tx?: Tx): Promise<void>;
+  /** 일괄 생성 — 워크스페이스 시드/백필용. */
+  createMany(cols: BoardColumn[], tx?: Tx): Promise<void>;
+  /** 제목/색/위치 패치. */
+  update(
+    id: string,
+    patch: Partial<Pick<BoardColumn, 'title' | 'color' | 'position'>>,
+    tx?: Tx,
+  ): Promise<void>;
+  /** 컬럼 삭제 — placement 는 FK cascade. is_system 가드는 액션 레이어 책임. */
+  remove(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── BidNote ───────────────────────────────────────────────────────────

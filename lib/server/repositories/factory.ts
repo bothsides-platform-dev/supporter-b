@@ -7,6 +7,7 @@ import type {
   BidNoteRepo,
   BidRepo,
   BizProfileRepo,
+  ColumnRepo,
   ContractRepo,
   InvitationRepo,
   NotificationRepo,
@@ -25,6 +26,7 @@ type RepoBundle = {
   bizProfile: BizProfileRepo;
   bid: BidRepo;
   bidNote: BidNoteRepo;
+  column: ColumnRepo;
   notification: NotificationRepo;
   contract: ContractRepo;
   verificationToken: VerificationTokenRepo;
@@ -50,6 +52,7 @@ async function buildBundle(): Promise<RepoBundle> {
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
   const { DrizzleBidRepository } = await import('./drizzle/bid');
   const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
+  const { DrizzleColumnRepository } = await import('./drizzle/column');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
   const { DrizzleVerificationTokenRepository } = await import(
@@ -66,6 +69,7 @@ async function buildBundle(): Promise<RepoBundle> {
     bizProfile: new DrizzleBizProfileRepository(db),
     bid: new DrizzleBidRepository(db),
     bidNote: new DrizzleBidNoteRepository(db),
+    column: new DrizzleColumnRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),
     verificationToken: new DrizzleVerificationTokenRepository(db),
@@ -77,7 +81,10 @@ async function buildBundle(): Promise<RepoBundle> {
 
 /** Dev HMR can keep old repo instances after new methods land — rebuild when stale. */
 function isRepoBundleStale(bundle: RepoBundle): boolean {
-  return typeof bundle.workspace.listForUser !== 'function';
+  return (
+    typeof bundle.workspace.listForUser !== 'function' ||
+    typeof bundle.column?.listByBoard !== 'function'
+  );
 }
 
 async function getBundle(): Promise<RepoBundle> {
@@ -110,6 +117,9 @@ export async function getBidRepo(): Promise<BidRepo> {
 }
 export async function getBidNoteRepo(): Promise<BidNoteRepo> {
   return (await getBundle()).bidNote;
+}
+export async function getColumnRepo(): Promise<ColumnRepo> {
+  return (await getBundle()).column;
 }
 export async function getNotificationRepo(): Promise<NotificationRepo> {
   return (await getBundle()).notification;
@@ -153,6 +163,7 @@ export async function __useDrizzleWithDbForTest(
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
   const { DrizzleBidRepository } = await import('./drizzle/bid');
   const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
+  const { DrizzleColumnRepository } = await import('./drizzle/column');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
   const { DrizzleVerificationTokenRepository } = await import(
@@ -168,6 +179,7 @@ export async function __useDrizzleWithDbForTest(
     bizProfile: new DrizzleBizProfileRepository(db),
     bid: new DrizzleBidRepository(db),
     bidNote: new DrizzleBidNoteRepository(db),
+    column: new DrizzleColumnRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),
     verificationToken: new DrizzleVerificationTokenRepository(db),

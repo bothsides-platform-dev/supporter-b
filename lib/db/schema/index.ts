@@ -9,6 +9,7 @@ export * from './rfp-allowed-pg';
 export * from './rfp-invitations';
 export * from './bids';
 export * from './bid-notes';
+export * from './columns';
 export * from './contracts';
 export * from './notifications';
 export * from './outbox-entries';

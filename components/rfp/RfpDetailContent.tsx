@@ -13,6 +13,7 @@ import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { formatDate } from '@/lib/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
+import type { BoardCard, BoardColumn } from '@/lib/types/column';
 
 const statusLabel: Record<string, string> = {
   draft: '임시저장',
@@ -29,7 +30,15 @@ const statusColor: Record<string, ChipColor> = {
   cancelled: 'error',
 };
 
-export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
+export function RfpDetailContent({
+  data,
+  boardColumns = [],
+  boardCards = [],
+}: {
+  data: BuyerRfpDetailData;
+  boardColumns?: BoardColumn[];
+  boardCards?: BoardCard[];
+}) {
   const {
     rfp,
     bids,
@@ -86,6 +95,8 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
         <BidComparisonView
           rfpId={rfp.code}
           bids={bids}
+          boardColumns={boardColumns}
+          boardCards={boardCards}
           notesByBid={notesByBid}
           grade={bizProfile?.grade}
           rfpStatus={rfp.status}

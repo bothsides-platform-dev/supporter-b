@@ -1,14 +1,13 @@
-// Schema-level smoke test for bid notes + buyer stage.
-// Confirms three drift-prone surfaces are wired:
+// Schema-level smoke test for bid notes.
+// Confirms two drift-prone surfaces are wired:
 //   1. attachments.bid_note_id exclusive-arc FK links a note attachment
 //   2. bid_notes table exists with the expected columns/FKs
-//   3. bids.buyer_stage column accepts the buyer_stage enum values
 // If any of these is missing in the migration the test will fail at SQL
 // time — keeping the schema diff honest.
+// (buyer_stage was dropped in the unified-kanban cutover — migration 0004.)
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
 
 import {
   attachments,
@@ -112,18 +111,5 @@ describe('Stage 3a schema — bid notes + buyer stage', () => {
 
     const fetchedAtt = await ctx.db.select().from(attachments);
     expect(fetchedAtt[0].bidNoteId).toBe(noteId);
-  });
-
-  it('bids.buyer_stage defaults to pending and accepts negotiating/decided', async () => {
-    const [row] = await ctx.db.select().from(bids);
-    expect(row.buyerStage).toBe('pending');
-
-    await ctx.db
-      .update(bids)
-      .set({ buyerStage: 'negotiating' })
-      .where(eq(bids.id, ctx.bidId));
-
-    const [updated] = await ctx.db.select().from(bids);
-    expect(updated.buyerStage).toBe('negotiating');
   });
 });

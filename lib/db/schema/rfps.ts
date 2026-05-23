@@ -13,6 +13,7 @@ import { workspaces } from './workspaces';
 import { bizProfiles } from './biz-profiles';
 import { users } from './users';
 import { bids } from './bids';
+import { columns } from './columns';
 
 export const rfps = pgTable(
   'rfps',
@@ -47,6 +48,12 @@ export const rfps = pgTable(
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
+    // Unified kanban (pipeline board): explicit placement into a custom column.
+    // null ⇒ classifier-derived. ON DELETE SET NULL ⇒ deleting a custom column
+    // auto-returns its cards to auto-classification.
+    boardColumnId: uuid('board_column_id').references(() => columns.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
     sentAt: timestamp('sent_at', { withTimezone: true }),
@@ -58,5 +65,6 @@ export const rfps = pgTable(
     ),
     index('rfps_buyer_ws_idx').on(t.buyerWsId),
     index('rfps_awarded_bid_idx').on(t.awardedBidId),
+    index('rfps_board_column_idx').on(t.boardColumnId),
   ],
 );
