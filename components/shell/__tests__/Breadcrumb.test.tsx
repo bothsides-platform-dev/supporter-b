@@ -13,6 +13,14 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams(),
 }));
 
+vi.mock('next/link', () => ({
+  default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 import { Breadcrumb } from '../Breadcrumb';
 
 beforeEach(() => {
@@ -45,6 +53,41 @@ describe('Breadcrumb — URL-derived segments', () => {
     mockPathname.mockReturnValue('/rfp/new');
     render(<Breadcrumb />);
     expect(screen.queryByText('RFP')).not.toBeInTheDocument();
+  });
+});
+
+describe('Breadcrumb — clickable trail', () => {
+  it('renders the parent RFP segment as a link to /rfp', () => {
+    mockPathname.mockReturnValue('/rfp');
+    mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
+    render(<Breadcrumb />);
+    expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('href', '/rfp');
+  });
+
+  it('renders the current segment as the page (aria-current, not a navigable link)', () => {
+    mockPathname.mockReturnValue('/rfp');
+    mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
+    render(<Breadcrumb />);
+    const current = screen.getByText('진행중');
+    expect(current).toHaveAttribute('aria-current', 'page');
+    expect(current).not.toHaveAttribute('href');
+  });
+
+  it('marks a single-segment current page with aria-current and no link', () => {
+    mockPathname.mockReturnValue('/home');
+    render(<Breadcrumb />);
+    const current = screen.getByText('홈');
+    expect(current).toHaveAttribute('aria-current', 'page');
+    expect(current).not.toHaveAttribute('href');
+  });
+
+  it('links the 설정 parent to /settings/profile from a sub-page', () => {
+    mockPathname.mockReturnValue('/settings/members');
+    render(<Breadcrumb />);
+    expect(screen.getByRole('link', { name: '설정' })).toHaveAttribute(
+      'href',
+      '/settings/profile',
+    );
   });
 });
 

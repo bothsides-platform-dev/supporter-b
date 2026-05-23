@@ -1,7 +1,17 @@
 'use client';
 
+import { Fragment } from 'react';
+import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/components/icons';
+import {
+  Breadcrumb as BreadcrumbRoot,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import { getBreadcrumbSegments } from '@/lib/nav/nav-config';
 import { cn } from '@/lib/utils';
 
@@ -10,9 +20,10 @@ type BreadcrumbProps = {
 };
 
 /**
- * Breadcrumb — history navigation + current-path label, derived from the URL.
- * `‹ ›` buttons call router.back() / router.forward(); the path label comes from
- * `getBreadcrumbSegments(pathname, status)` so pages don't pass segments.
+ * Breadcrumb — history navigation + clickable current-path trail, derived from
+ * the URL. `‹ ›` buttons call router.back() / router.forward(); the trail comes
+ * from `getBreadcrumbSegments(pathname, status)` so pages don't pass segments.
+ * Ancestor segments link to their page; the last segment is the current page.
  *
  * Reads `useSearchParams()`, so render this inside a <Suspense> boundary.
  */
@@ -23,8 +34,7 @@ export function Breadcrumb({ className }: BreadcrumbProps) {
   const segments = getBreadcrumbSegments(pathname, searchParams.get('status'));
 
   return (
-    <nav
-      aria-label="브레드크럼"
+    <div
       className={cn(
         'flex h-8 items-center gap-1 text-[length:var(--md-typescale-label-medium-size)] text-[var(--md-sys-color-on-surface-variant)]',
         className,
@@ -49,27 +59,28 @@ export function Breadcrumb({ className }: BreadcrumbProps) {
       </button>
 
       {segments.length > 0 && (
-        <ol className="ml-1 flex items-center gap-1">
-          {segments.map((segment, i) => (
-            <li key={i} className="flex items-center gap-1">
-              {i > 0 && (
-                <span aria-hidden className="text-[var(--md-sys-color-outline)]">
-                  /
-                </span>
-              )}
-              <span
-                className={
-                  i === segments.length - 1
-                    ? 'text-[var(--md-sys-color-on-surface)]'
-                    : 'text-[var(--md-sys-color-on-surface-variant)]'
-                }
-              >
-                {segment}
-              </span>
-            </li>
-          ))}
-        </ol>
+        <BreadcrumbRoot aria-label="브레드크럼" className="ml-1">
+          <BreadcrumbList>
+            {segments.map((segment, i) => {
+              const isLast = i === segments.length - 1;
+              return (
+                <Fragment key={i}>
+                  {i > 0 && <BreadcrumbSeparator />}
+                  <BreadcrumbItem>
+                    {segment.href && !isLast ? (
+                      <BreadcrumbLink render={<Link href={segment.href} />}>
+                        {segment.label}
+                      </BreadcrumbLink>
+                    ) : (
+                      <BreadcrumbPage>{segment.label}</BreadcrumbPage>
+                    )}
+                  </BreadcrumbItem>
+                </Fragment>
+              );
+            })}
+          </BreadcrumbList>
+        </BreadcrumbRoot>
       )}
-    </nav>
+    </div>
   );
 }

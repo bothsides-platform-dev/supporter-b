@@ -122,24 +122,32 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   return { top: TOP, sections: [workspaceSection, SETTINGS_SECTION] };
 }
 
+// One breadcrumb segment. The current page (last segment) has no `href`; every
+// ancestor segment carries the `href` to navigate to when clicked.
+export type BreadcrumbSegment = { label: string; href?: string };
+
 // Derive breadcrumb segments from the current path (+ optional status param).
 // Path-based, so it works regardless of workspace type. Unknown paths → [].
 export function getBreadcrumbSegments(
   pathname: string,
   status?: string | null,
-): string[] {
-  if (pathname === '/home') return ['홈'];
-  if (pathname === '/notifications') return ['알림'];
+): BreadcrumbSegment[] {
+  if (pathname === '/home') return [{ label: '홈' }];
+  if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/rfp') {
     const label = status ? STATUS_LABELS['/rfp'][status as keyof typeof STATUS_LABELS['/rfp']] : undefined;
-    return label ? ['RFP', label] : ['RFP'];
+    return label ? [{ label: 'RFP', href: '/rfp' }, { label }] : [{ label: 'RFP' }];
   }
   if (pathname === '/inbox') {
     const label = status ? STATUS_LABELS['/inbox'][status as keyof typeof STATUS_LABELS['/inbox']] : undefined;
-    return label ? ['받은 RFP', label] : ['받은 RFP'];
+    return label ? [{ label: '받은 RFP', href: '/inbox' }, { label }] : [{ label: '받은 RFP' }];
   }
-  if (pathname === '/settings/profile') return ['설정', '프로필'];
-  if (pathname === '/settings/members') return ['설정', '멤버'];
+  if (pathname === '/settings/profile') {
+    return [{ label: '설정', href: '/settings/profile' }, { label: '프로필' }];
+  }
+  if (pathname === '/settings/members') {
+    return [{ label: '설정', href: '/settings/profile' }, { label: '멤버' }];
+  }
   return [];
 }
 

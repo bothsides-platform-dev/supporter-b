@@ -68,24 +68,36 @@ describe('getNavConfig — settings section (both)', () => {
 });
 
 describe('getBreadcrumbSegments', () => {
-  it('maps /home and /notifications to single labels', () => {
-    expect(getBreadcrumbSegments('/home')).toEqual(['홈']);
-    expect(getBreadcrumbSegments('/notifications')).toEqual(['알림']);
+  it('maps /home and /notifications to a single current-page segment (no href)', () => {
+    expect(getBreadcrumbSegments('/home')).toEqual([{ label: '홈' }]);
+    expect(getBreadcrumbSegments('/notifications')).toEqual([{ label: '알림' }]);
   });
 
-  it('maps /rfp with a status to RFP / <label>', () => {
-    expect(getBreadcrumbSegments('/rfp', 'active')).toEqual(['RFP', '진행중']);
-    expect(getBreadcrumbSegments('/rfp')).toEqual(['RFP']);
+  it('makes the parent RFP segment a link to /rfp and the status the current page', () => {
+    expect(getBreadcrumbSegments('/rfp', 'active')).toEqual([
+      { label: 'RFP', href: '/rfp' },
+      { label: '진행중' },
+    ]);
+    expect(getBreadcrumbSegments('/rfp')).toEqual([{ label: 'RFP' }]);
   });
 
-  it('maps /inbox with a status to 받은 RFP / <label>', () => {
-    expect(getBreadcrumbSegments('/inbox', 'new')).toEqual(['받은 RFP', '신규']);
-    expect(getBreadcrumbSegments('/inbox')).toEqual(['받은 RFP']);
+  it('makes the parent 받은 RFP segment a link to /inbox and the status the current page', () => {
+    expect(getBreadcrumbSegments('/inbox', 'new')).toEqual([
+      { label: '받은 RFP', href: '/inbox' },
+      { label: '신규' },
+    ]);
+    expect(getBreadcrumbSegments('/inbox')).toEqual([{ label: '받은 RFP' }]);
   });
 
-  it('maps settings sub-pages to 설정 / <label>', () => {
-    expect(getBreadcrumbSegments('/settings/profile')).toEqual(['설정', '프로필']);
-    expect(getBreadcrumbSegments('/settings/members')).toEqual(['설정', '멤버']);
+  it('links the 설정 parent to /settings/profile with the sub-page as the current page', () => {
+    expect(getBreadcrumbSegments('/settings/profile')).toEqual([
+      { label: '설정', href: '/settings/profile' },
+      { label: '프로필' },
+    ]);
+    expect(getBreadcrumbSegments('/settings/members')).toEqual([
+      { label: '설정', href: '/settings/profile' },
+      { label: '멤버' },
+    ]);
   });
 
   it('returns an empty array for unknown paths', () => {
