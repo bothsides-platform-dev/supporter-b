@@ -37,35 +37,35 @@
   --color-input:              var(--md-sys-color-outline);
   --color-ring:               var(--md-sys-color-primary);
 
-  /* Navigation Rail — uses shell-rail tokens so both themes keep dark anchor */
+  /* Sidebar — follows surface in both themes (light sidebar in light mode) */
   --color-sidebar:                   var(--shell-rail-bg);
   --color-sidebar-foreground:        var(--shell-rail-fg);
-  --color-sidebar-border:            rgb(0 0 0 / 0);
+  --color-sidebar-border:            var(--md-sys-color-outline-variant);
   --color-sidebar-accent:            var(--sidebar-accent-computed);
-  --color-sidebar-accent-foreground: var(--md-sys-color-inverse-primary);
-  --color-sidebar-primary:           var(--md-sys-color-inverse-primary);
-  --color-sidebar-primary-foreground: var(--md-sys-color-inverse-surface);
-  --color-sidebar-ring:              var(--md-sys-color-inverse-primary);
+  --color-sidebar-accent-foreground: var(--md-sys-color-on-surface);
+  --color-sidebar-primary:           var(--md-sys-color-primary);
+  --color-sidebar-primary-foreground: var(--md-sys-color-on-primary);
+  --color-sidebar-ring:              var(--md-sys-color-primary);
 
   --font-sans:    var(--font-sans);
   --font-mono:    var(--font-mono);
   --font-heading: var(--font-sans);
 
-  /* Shape → Tailwind radius aliases */
+  /* Shape → Tailwind radius aliases (6px dominant) */
   --radius-sm: var(--md-sys-shape-extra-small);
   --radius-md: var(--md-sys-shape-small);
   --radius-lg: var(--md-sys-shape-medium);
-  --radius-xl: var(--md-sys-shape-medium); /* hard rule: max 12px */
+  --radius-xl: var(--md-sys-shape-large);
   --radius:    var(--md-sys-shape-small);
 }
 
 :root {
   color-scheme: light;
-  --sidebar-accent-computed: color-mix(in srgb, var(--md-sys-color-inverse-primary) 16%, var(--md-sys-color-inverse-surface));
+  --sidebar-accent-computed: var(--md-sys-color-surface-container-high);
 }
 .dark {
   color-scheme: dark;
-  --sidebar-accent-computed: color-mix(in srgb, var(--md-sys-color-inverse-primary) 16%, var(--md-sys-color-inverse-surface));
+  --sidebar-accent-computed: var(--md-sys-color-surface-container-high);
 }
 
 @layer base {

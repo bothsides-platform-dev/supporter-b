@@ -11,15 +11,15 @@ type IconButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const sizeClasses = {
-  sm: 'w-8 h-8 [&_svg]:size-[18px]',
-  md: 'w-10 h-10 [&_svg]:size-[24px]',
+  sm: 'w-7 h-7 [&_svg]:size-4',
+  md: 'w-8 h-8 [&_svg]:size-[18px]',
 } as const;
 
 const variantClasses: Record<IconButtonVariant, string> = {
-  standard: 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-surface-variant)_8%,transparent)] active:bg-[color-mix(in_srgb,var(--md-sys-color-on-surface-variant)_12%,transparent)]',
-  outlined: 'border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-surface-variant)_8%,transparent)]',
-  filled: 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:shadow-[var(--md-sys-elevation-1)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_8%,var(--md-sys-color-primary))] active:shadow-none active:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_12%,var(--md-sys-color-primary))]',
-  tonal: 'bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)] hover:shadow-[var(--md-sys-elevation-1)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-secondary-container)_8%,var(--md-sys-color-secondary-container))] active:shadow-none active:bg-[color-mix(in_srgb,var(--md-sys-color-on-secondary-container)_12%,var(--md-sys-color-secondary-container))]',
+  standard: 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] active:bg-[var(--md-sys-color-surface-container-high)]',
+  outlined: 'border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
+  filled: 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))] active:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_16%,var(--md-sys-color-primary))]',
+  tonal: 'bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-secondary-container)_8%,var(--md-sys-color-secondary-container))] active:bg-[color-mix(in_srgb,var(--md-sys-color-on-secondary-container)_14%,var(--md-sys-color-secondary-container))]',
 };
 
 const activeClasses: Record<IconButtonVariant, string> = {
@@ -44,8 +44,8 @@ export function IconButton({
       aria-label={label}
       className={cn(
         'inline-flex items-center justify-center',
-        'rounded-[var(--md-sys-shape-full)] transition-all cursor-pointer',
-        'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--md-sys-color-primary)]/50',
+        'rounded-[var(--md-sys-shape-small)] transition-colors cursor-pointer',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
         'disabled:opacity-[0.38] disabled:cursor-not-allowed disabled:pointer-events-none',
         sizeClasses[size],
         variantClasses[variant],

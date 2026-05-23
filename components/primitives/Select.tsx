@@ -21,11 +21,12 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cn(
-            'block w-full appearance-none bg-transparent',
-            'border border-[var(--md-sys-color-outline)] rounded-[var(--md-sys-shape-extra-small)]',
-            'py-2 px-3 pr-8',
-            'text-[length:var(--md-typescale-body-large-size)] text-[var(--md-sys-color-on-surface)]',
-            'focus:outline-none focus:border-[var(--md-sys-color-primary)] transition-colors',
+            'block w-full appearance-none bg-[var(--md-sys-color-surface-container-low)]',
+            'border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-small)]',
+            'h-8 px-2.5 pr-8',
+            'text-[length:var(--md-typescale-body-medium-size)] text-[var(--md-sys-color-on-surface)]',
+            'hover:border-[var(--md-sys-color-outline)]',
+            'focus:outline-none focus:border-[var(--md-sys-color-primary)] focus:ring-2 focus:ring-[var(--md-sys-color-primary)]/40 transition-colors',
             'cursor-pointer',
             className,
           )}

@@ -5,22 +5,15 @@ type AppShellProps = {
   className?: string;
 };
 
+// Single Linear-style sidebar + content. On mobile the shell stacks (sticky
+// mobile header above content); on md+ the sidebar and content sit side by side.
 export function AppShell({ children, className }: AppShellProps) {
   return (
     <div
       className={cn(
-        'min-h-svh bg-[var(--md-sys-color-background)]',
-        'grid',
+        'min-h-svh bg-[var(--md-sys-color-background)] md:flex',
         className,
       )}
-      style={{
-        gridTemplateColumns: 'var(--shell-rail) 1fr',
-        gridTemplateRows: 'var(--shell-topbar) 1fr',
-        gridTemplateAreas: `
-          "sidebar topbar"
-          "sidebar content"
-        `,
-      }}
     >
       {children}
     </div>

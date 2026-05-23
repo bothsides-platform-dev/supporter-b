@@ -1,13 +1,11 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/shell/AppShell';
-import { IconSidebar } from '@/components/shell/IconSidebar';
-import { Topbar } from '@/components/shell/Topbar';
+import { Sidebar } from '@/components/shell/Sidebar';
 import { ToasterProvider } from '@/components/shell/Toaster';
 import { NotificationDrawer } from '@/components/shell/NotificationDrawer';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { GlobalShortcuts } from '@/components/shell/GlobalShortcuts';
-import { SidebarProvider } from '@/components/ui/sidebar';
 import { SentryUserContext } from '@/components/observability/SentryUserContext';
 import { auth } from '@/auth';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
@@ -54,13 +52,8 @@ export default async function AppLayout({
 
   return (
     <ToasterProvider>
-    <SidebarProvider
-      style={{ '--sidebar-width': 'var(--shell-sidebar)', '--sidebar-width-icon': 'var(--shell-sidebar)' } as React.CSSProperties}
-      className="contents"
-    >
       <AppShell>
-        <IconSidebar workspaceType={active.type} />
-        <Topbar
+        <Sidebar
           user={{
             id: session.user.id,
             email: session.user.email,
@@ -70,7 +63,7 @@ export default async function AppLayout({
           workspaces={workspaces}
           current={{ id: active.id, name: active.name, type: active.type }}
         />
-        <main style={{ gridArea: 'content' }} className="overflow-y-auto">
+        <main className="min-w-0 flex-1">
           {children}
         </main>
         <NotificationDrawer />
@@ -78,7 +71,6 @@ export default async function AppLayout({
         <GlobalShortcuts />
         <SentryUserContext user={sentryUser} />
       </AppShell>
-    </SidebarProvider>
     </ToasterProvider>
   );
 }

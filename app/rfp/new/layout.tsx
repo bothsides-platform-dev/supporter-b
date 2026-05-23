@@ -1,13 +1,11 @@
 import { auth } from '@/auth';
 import { AppShell } from '@/components/shell/AppShell';
-import { IconSidebar } from '@/components/shell/IconSidebar';
-import { Topbar } from '@/components/shell/Topbar';
+import { Sidebar } from '@/components/shell/Sidebar';
 import { ToasterProvider } from '@/components/shell/Toaster';
 import { NotificationDrawer } from '@/components/shell/NotificationDrawer';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { GlobalShortcuts } from '@/components/shell/GlobalShortcuts';
 import { GuestHeader } from '@/components/shell/GuestHeader';
-import { SidebarProvider } from '@/components/ui/sidebar';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 
 export const dynamic = 'force-dynamic';
@@ -38,30 +36,24 @@ export default async function RfpNewLayout({ children }: { children: React.React
 
   return (
     <ToasterProvider>
-      <SidebarProvider
-        style={{ '--sidebar-width': 'var(--shell-sidebar)', '--sidebar-width-icon': 'var(--shell-sidebar)' } as React.CSSProperties}
-        className="contents"
-      >
-        <AppShell>
-          <IconSidebar workspaceType={active.type} />
-          <Topbar
-            user={{
-              id: session.user.id,
-              email: session.user.email,
-              name: session.user.name ?? session.user.email,
-            }}
-            workspaceType={active.type}
-            workspaces={workspaces}
-            current={{ id: active.id, name: active.name, type: active.type }}
-          />
-          <main style={{ gridArea: 'content' }} className="overflow-y-auto">
-            {children}
-          </main>
-          <NotificationDrawer />
-          <CommandPalette />
-          <GlobalShortcuts />
-        </AppShell>
-      </SidebarProvider>
+      <AppShell>
+        <Sidebar
+          user={{
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.name ?? session.user.email,
+          }}
+          workspaceType={active.type}
+          workspaces={workspaces}
+          current={{ id: active.id, name: active.name, type: active.type }}
+        />
+        <main className="min-w-0 flex-1">
+          {children}
+        </main>
+        <NotificationDrawer />
+        <CommandPalette />
+        <GlobalShortcuts />
+      </AppShell>
     </ToasterProvider>
   );
 }

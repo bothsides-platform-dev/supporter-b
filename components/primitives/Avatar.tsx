@@ -12,9 +12,9 @@ const colorMap: Record<AvatarColor, string> = {
 };
 
 const sizeMap: Record<AvatarSize, string> = {
-  sm: 'w-8 h-8 text-[length:var(--md-typescale-label-medium-size)]',
-  md: 'w-10 h-10 text-[length:var(--md-typescale-title-medium-size)]',
-  lg: 'w-12 h-12 text-[length:var(--md-typescale-title-large-size)]',
+  sm: 'w-6 h-6 text-[length:var(--md-typescale-label-small-size)]',
+  md: 'w-8 h-8 text-[length:var(--md-typescale-label-large-size)]',
+  lg: 'w-10 h-10 text-[length:var(--md-typescale-title-small-size)]',
 };
 
 type AvatarProps = { name: string; color?: AvatarColor; size?: AvatarSize; className?: string };

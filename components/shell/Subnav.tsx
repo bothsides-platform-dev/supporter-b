@@ -24,7 +24,7 @@ export function Subnav({ title, items, action }: SubnavProps) {
         <Label size="md" muted={false}>{title}</Label>
         {action}
       </div>
-      <nav className="flex flex-row md:flex-col md:py-2">
+      <nav className="flex flex-row gap-0.5 p-2 md:flex-col md:px-2 md:py-2">
         {items.map((item) => {
           const active = pathname === item.href;
           return (
@@ -32,10 +32,10 @@ export function Subnav({ title, items, action }: SubnavProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                'relative whitespace-nowrap transition-colors duration-[140ms] px-4 md:px-5 h-11 md:h-auto md:py-2.5 flex items-center font-mono text-[11px] tracking-[0.14em] uppercase md:font-sans md:text-[13px] md:tracking-normal md:normal-case',
+                'relative flex h-8 items-center whitespace-nowrap rounded-[var(--md-sys-shape-small)] px-2.5 text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors duration-[var(--md-sys-motion-duration-short-4)]',
                 active
-                  ? 'text-[var(--md-sys-color-on-surface)] md:bg-[var(--md-sys-color-surface-container-high)] md:font-medium after:absolute after:left-0 after:right-0 after:bottom-0 after:h-px after:bg-[var(--md-sys-color-on-surface)] md:after:hidden md:border-l-2 md:border-[var(--md-sys-color-warning)] md:pl-[calc(1.25rem-2px)]'
-                  : 'text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] md:hover:bg-[var(--md-sys-color-surface-container-high)]',
+                  ? 'bg-[var(--md-sys-color-surface-container-high)] font-medium text-[var(--md-sys-color-on-surface)]'
+                  : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
               )}
             >
               {item.label}

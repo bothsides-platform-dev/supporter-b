@@ -43,11 +43,11 @@ export function Chip({
   const isInteractive = !!onClick;
 
   const sharedClass = cn(
-    'inline-flex items-center gap-1.5 h-8 px-3',
-    'rounded-[var(--md-sys-shape-small)]',
-    'text-[length:var(--md-typescale-label-large-size)]',
-    'font-[number:var(--md-typescale-label-large-weight)]',
-    'tracking-[var(--md-typescale-label-large-tracking)]',
+    'inline-flex items-center gap-1.5 h-6 px-2',
+    'rounded-[var(--md-sys-shape-extra-small)]',
+    'text-[length:var(--md-typescale-label-medium-size)]',
+    'font-[number:var(--md-typescale-label-medium-weight)]',
+    'tracking-[var(--md-typescale-label-medium-tracking)]',
     'border select-none',
     useTonal ? tonalClasses[color] : outlineClass,
     isInteractive
@@ -58,7 +58,7 @@ export function Chip({
 
   const content = (
     <>
-      {icon && <span className="[&_svg]:size-[18px] shrink-0 -ml-1">{icon}</span>}
+      {icon && <span className="[&_svg]:size-3.5 shrink-0 -ml-0.5">{icon}</span>}
       <span>{label}</span>
       {variant === 'input' && onDelete && (
         <span

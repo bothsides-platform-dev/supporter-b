@@ -37,7 +37,7 @@ function ActionButton({
       : 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]'
     : 'border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)]';
 
-  const className = `px-6 py-2.5 rounded-full text-[length:var(--md-typescale-label-large-size)] font-[number:var(--md-typescale-label-large-weight)] transition-opacity hover:opacity-90 ${filledClass}`;
+  const className = `px-4 h-8 inline-flex items-center rounded-[var(--md-sys-shape-small)] text-[length:var(--md-typescale-label-large-size)] font-[number:var(--md-typescale-label-large-weight)] transition-opacity hover:opacity-90 ${filledClass}`;
 
   if (config.href) {
     return (
@@ -90,7 +90,7 @@ export function ErrorPageLayout({
       </div>
 
       {chip && (
-        <span className="px-3 py-1 rounded-full text-[length:var(--md-typescale-label-medium-size)] bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)]">
+        <span className="px-2 py-0.5 rounded-[var(--md-sys-shape-extra-small)] text-[length:var(--md-typescale-label-medium-size)] bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)]">
           {chip}
         </span>
       )}
