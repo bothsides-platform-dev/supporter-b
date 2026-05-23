@@ -7,7 +7,6 @@ import { requireSession } from '@/lib/auth/session';
 import { getNotificationRepo } from '@/lib/server/repositories/factory';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import type { Notification } from '@/lib/types/notification';
-import { Breadcrumb } from '@/components/shell/Breadcrumb';
 import { PageHeader } from '@/components/shell/PageHeader';
 
 import { MarkAllReadButton } from '@/app/(app)/settings/notifications/MarkAllReadButton';
@@ -27,9 +26,6 @@ export default async function NotificationsPage() {
 
   return (
     <PageEnter className="flex flex-col h-full">
-      <div className="px-6 pt-4">
-        <Breadcrumb segments={['알림']} />
-      </div>
       <PageHeader
         title="알림"
         count={notifications.length}

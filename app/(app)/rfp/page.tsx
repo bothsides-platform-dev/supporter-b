@@ -5,7 +5,6 @@ import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { FileTextIcon } from '@/components/icons';
 import { RfpListTable, RfpListTableSkeleton } from '@/components/rfp/RfpListTable';
-import { Breadcrumb } from '@/components/shell/Breadcrumb';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { auth } from '@/auth';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
@@ -38,10 +37,6 @@ export default async function RfpListPage({ searchParams }: Props) {
   const { status } = await searchParams;
   const statusLabel = status ? RFP_STATUS_LABELS[status] : undefined;
 
-  const breadcrumbSegments = statusLabel
-    ? ['RFP', statusLabel]
-    : ['RFP'];
-
   const newRfpAction = (
     <Link href="/rfp/new">
       <Button size="sm">새 RFP</Button>
@@ -52,9 +47,6 @@ export default async function RfpListPage({ searchParams }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-4">
-        <Breadcrumb segments={breadcrumbSegments} />
-      </div>
       <Suspense
         fallback={
           <>

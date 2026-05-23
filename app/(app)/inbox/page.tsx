@@ -4,7 +4,6 @@ import { auth } from '@/auth';
 import { getInvitationRepo } from '@/lib/server/repositories/factory';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { InboxList, InboxListSkeleton } from '@/components/inbox/InboxList';
-import { Breadcrumb } from '@/components/shell/Breadcrumb';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { InboxIcon } from '@/components/icons';
@@ -33,15 +32,8 @@ export default async function InboxPage({ searchParams }: Props) {
   const { status } = await searchParams;
   const statusLabel = status ? INBOX_STATUS_LABELS[status] : undefined;
 
-  const breadcrumbSegments = statusLabel
-    ? ['받은 RFP', statusLabel]
-    : ['받은 RFP'];
-
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-4">
-        <Breadcrumb segments={breadcrumbSegments} />
-      </div>
       <Suspense
         fallback={
           <>

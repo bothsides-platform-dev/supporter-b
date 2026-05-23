@@ -1,0 +1,89 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+
+const mockPathname = vi.fn(() => '/rfp');
+const mockSearchParams = vi.fn(() => new URLSearchParams(''));
+vi.mock('next/navigation', () => ({
+  usePathname: () => mockPathname(),
+  useSearchParams: () => mockSearchParams(),
+}));
+
+vi.mock('next/link', () => ({
+  default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
+vi.mock('@/lib/hooks/usePlatform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/hooks/usePlatform')>()),
+  useIsMac: () => false,
+}));
+
+import { SidebarSection } from '../sidebar/SidebarSection';
+import { useSidebarSectionsStore } from '@/lib/stores/sidebar-sections';
+import { getNavConfig } from '@/lib/nav/nav-config';
+
+const rfpSection = getNavConfig('buyer').sections.find((s) => s.id === 'rfp')!;
+const settingsSection = getNavConfig('buyer').sections.find((s) => s.id === 'settings')!;
+
+beforeEach(() => {
+  mockPathname.mockReturnValue('/rfp');
+  mockSearchParams.mockReturnValue(new URLSearchParams(''));
+  useSidebarSectionsStore.setState({ collapsed: {} });
+});
+
+afterEach(() => cleanup());
+
+describe('SidebarSection — status section (RFP)', () => {
+  it('renders the section header link to its base path', () => {
+    render(<SidebarSection section={rfpSection} />);
+    expect(screen.getByRole('link', { name: /RFP/ })).toHaveAttribute('href', '/rfp');
+  });
+
+  it('renders status sub-items linking to status search params', () => {
+    render(<SidebarSection section={rfpSection} />);
+    expect(screen.getByRole('link', { name: '작성중' })).toHaveAttribute('href', '/rfp?status=draft');
+    expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('href', '/rfp?status=active');
+  });
+
+  it('marks the matching status sub-item as active', () => {
+    mockPathname.mockReturnValue('/rfp');
+    mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
+    render(<SidebarSection section={rfpSection} />);
+    expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: '작성중' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('collapses sub-items when the toggle is clicked', async () => {
+    const user = userEvent.setup();
+    render(<SidebarSection section={rfpSection} />);
+    expect(screen.getByRole('link', { name: '진행중' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /RFP 섹션/ }));
+    expect(screen.queryByRole('link', { name: '진행중' })).not.toBeInTheDocument();
+  });
+});
+
+describe('SidebarSection — links section (설정)', () => {
+  it('renders the settings sub-links', () => {
+    mockPathname.mockReturnValue('/settings/profile');
+    render(<SidebarSection section={settingsSection} />);
+    expect(screen.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/settings/profile');
+    expect(screen.getByRole('link', { name: '멤버' })).toHaveAttribute('href', '/settings/members');
+  });
+
+  it('marks the active settings sub-link', () => {
+    mockPathname.mockReturnValue('/settings/members');
+    render(<SidebarSection section={settingsSection} />);
+    expect(screen.getByRole('link', { name: '멤버' })).toHaveAttribute('aria-current', 'page');
+  });
+});

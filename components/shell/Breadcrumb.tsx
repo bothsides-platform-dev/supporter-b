@@ -1,21 +1,26 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/components/icons';
+import { getBreadcrumbSegments } from '@/lib/nav/nav-config';
 import { cn } from '@/lib/utils';
 
 type BreadcrumbProps = {
-  segments: string[];
   className?: string;
 };
 
 /**
- * Breadcrumb — history navigation + current-path label.
- * `‹ ›` buttons call router.back() / router.forward().
- * Segments joined by "/" separator.
+ * Breadcrumb — history navigation + current-path label, derived from the URL.
+ * `‹ ›` buttons call router.back() / router.forward(); the path label comes from
+ * `getBreadcrumbSegments(pathname, status)` so pages don't pass segments.
+ *
+ * Reads `useSearchParams()`, so render this inside a <Suspense> boundary.
  */
-export function Breadcrumb({ segments, className }: BreadcrumbProps) {
+export function Breadcrumb({ className }: BreadcrumbProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const segments = getBreadcrumbSegments(pathname, searchParams.get('status'));
 
   return (
     <nav
@@ -43,26 +48,28 @@ export function Breadcrumb({ segments, className }: BreadcrumbProps) {
         <ChevronRightIcon size={14} />
       </button>
 
-      <ol className="ml-1 flex items-center gap-1">
-        {segments.map((segment, i) => (
-          <li key={i} className="flex items-center gap-1">
-            {i > 0 && (
-              <span aria-hidden className="text-[var(--md-sys-color-outline)]">
-                /
+      {segments.length > 0 && (
+        <ol className="ml-1 flex items-center gap-1">
+          {segments.map((segment, i) => (
+            <li key={i} className="flex items-center gap-1">
+              {i > 0 && (
+                <span aria-hidden className="text-[var(--md-sys-color-outline)]">
+                  /
+                </span>
+              )}
+              <span
+                className={
+                  i === segments.length - 1
+                    ? 'text-[var(--md-sys-color-on-surface)]'
+                    : 'text-[var(--md-sys-color-on-surface-variant)]'
+                }
+              >
+                {segment}
               </span>
-            )}
-            <span
-              className={
-                i === segments.length - 1
-                  ? 'text-[var(--md-sys-color-on-surface)]'
-                  : 'text-[var(--md-sys-color-on-surface-variant)]'
-              }
-            >
-              {segment}
-            </span>
-          </li>
-        ))}
-      </ol>
+            </li>
+          ))}
+        </ol>
+      )}
     </nav>
   );
 }
