@@ -68,7 +68,7 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
       <DropdownMenuTrigger
         disabled={busy}
         aria-busy={busy}
-        className={`flex size-8 min-w-0 items-center justify-center gap-2 rounded-[var(--md-sys-shape-extra-small)] px-2 hover:bg-[var(--md-sys-color-surface-container-high)] outline-none transition-[color,background-color,opacity] duration-[140ms] group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:px-0 md:h-9 md:w-full md:justify-start${busy ? ' opacity-60' : ''}`}
+        className={`flex h-9 w-full min-w-0 flex-nowrap items-center justify-start gap-2 rounded-[var(--md-sys-shape-extra-small)] px-2 hover:bg-[var(--md-sys-color-surface-container-high)] outline-none transition-[color,background-color,opacity] duration-[140ms] group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0${busy ? ' opacity-60' : ''}`}
       >
         <span className="min-w-0 flex-1 truncate text-[length:var(--md-typescale-label-large-size)] text-[var(--md-sys-color-on-surface)] group-data-[collapsible=icon]:sr-only">
           {display.name}
@@ -76,7 +76,7 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
         <Chip
           label={TYPE_LABEL[display.type]}
           color="surface"
-          className="h-6 px-2 group-data-[collapsible=icon]:hidden"
+          className="h-6 shrink-0 whitespace-nowrap px-2 group-data-[collapsible=icon]:hidden"
         />
         <ChevronsUpDownIcon
           size={14}

@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -22,6 +23,26 @@ const workspaces = [
 ];
 const current = { id: 'ws1', name: '구매사A', type: 'buyer' as const };
 
+function renderInSidebarGroup(
+  collapsible: 'expanded' | 'icon',
+  ui: ReactElement = (
+    <WorkspaceSwitcher current={current} workspaces={workspaces} />
+  ),
+) {
+  return render(
+    <div
+      className="group w-64"
+      {...(collapsible === 'icon' ? { 'data-collapsible': 'icon' } : {})}
+    >
+      {ui}
+    </div>,
+  );
+}
+
+function triggerClassTokens() {
+  return screen.getByRole('button').className.split(/\s+/);
+}
+
 beforeEach(() => {
   switchWorkspaceAction.mockReset();
   push.mockReset();
@@ -41,6 +62,25 @@ describe('WorkspaceSwitcher', () => {
     render(<WorkspaceSwitcher current={current} workspaces={workspaces} />);
     expect(screen.getByText('구매사A')).toBeInTheDocument();
     expect(screen.getByText('구매사')).toBeInTheDocument();
+  });
+
+  it('uses full-width row layout when the sidebar is expanded (mobile sheet or desktop open)', () => {
+    renderInSidebarGroup('expanded');
+    const tokens = triggerClassTokens();
+    expect(tokens).toContain('w-full');
+    expect(tokens).toContain('h-9');
+    expect(tokens).not.toContain('size-8');
+  });
+
+  it('uses icon-only layout when the sidebar is collapsed to the icon rail', () => {
+    renderInSidebarGroup('icon');
+    const tokens = triggerClassTokens();
+    expect(tokens).toContain('group-data-[collapsible=icon]:size-8');
+    expect(screen.getByText('구매사A').className).toContain(
+      'group-data-[collapsible=icon]:sr-only',
+    );
+    const chip = screen.getByText('구매사').parentElement;
+    expect(chip?.className).toContain('group-data-[collapsible=icon]:hidden');
   });
 
   it('switches to a selected workspace and hard-navigates home', async () => {
