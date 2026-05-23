@@ -76,7 +76,7 @@ These are non-negotiable visual decisions enforced across all screens. The desig
 - **No** heavy/skeuomorphic shadows — most surfaces use a 1px border or elevation-1; big shadows only on floating elements (popover, dropdown, toast, dialog, command palette).
 - **No** high-contrast dividers — default to `outline-variant` (the deliberately low-contrast border). The faint border IS the Linear look, not a bug.
 - **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28px buttons).
-- **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid indigo `#5E6AD2`.
+- **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`.
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
 - **No** pulse/spinner loading. Use `LOADING…` text (body-medium type).
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.

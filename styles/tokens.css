@@ -1,5 +1,5 @@
 /* bidit design tokens — Linear design language
-   Accent: #5E6AD2 (indigo). Dark-mode signature surface: #08090A.
+   Accent: #0061A4 (trust blue). Dark-mode signature surface: #08090A.
    Variable names retained from the prior MD3 system so components need
    no churn — only the *values* changed. DESIGN.md is the source of
    truth for these decisions; this file syncs from it (one-way).
@@ -8,11 +8,11 @@
 @theme {
   /* ── Color System — Light Theme ───────────────────── */
 
-  /* Primary — Indigo accent */
-  --md-sys-color-primary:                  #5E6AD2;
+  /* Primary — Trust blue accent */
+  --md-sys-color-primary:                  #0061A4;
   --md-sys-color-on-primary:               #FFFFFF;
-  --md-sys-color-primary-container:        #E8EAFB;
-  --md-sys-color-on-primary-container:     #2A2F6B;
+  --md-sys-color-primary-container:        #D1E4FF;
+  --md-sys-color-on-primary-container:     #001D36;
 
   /* Secondary — Neutral slate */
   --md-sys-color-secondary:                #6B7079;
@@ -60,12 +60,12 @@
   /* Inverse (tooltips, snackbars) */
   --md-sys-color-inverse-surface:          #1F2023;
   --md-sys-color-inverse-on-surface:       #F7F8F8;
-  --md-sys-color-inverse-primary:          #7C8AF5;
+  --md-sys-color-inverse-primary:          #9ECAFF;
 
   /* Utility */
   --md-sys-color-shadow:                   #000000;
   --md-sys-color-scrim:                    #000000;
-  --md-sys-color-surface-tint:             #5E6AD2;
+  --md-sys-color-surface-tint:             #0061A4;
 
   /* ── Typography ─────────────────────────────────── */
   --font-sans: 'Pretendard Variable', system-ui, -apple-system, sans-serif;
@@ -230,11 +230,11 @@
 
 /* ── Dark Theme — Linear signature near-black ───────────── */
 .dark {
-  /* Primary — brighter indigo for contrast on dark */
-  --md-sys-color-primary:                  #7C8AF5;
-  --md-sys-color-on-primary:               #FFFFFF;
-  --md-sys-color-primary-container:        #2B2F52;
-  --md-sys-color-on-primary-container:     #C5CBFF;
+  /* Primary — lighter trust blue for contrast on dark */
+  --md-sys-color-primary:                  #9ECAFF;
+  --md-sys-color-on-primary:               #003258;
+  --md-sys-color-primary-container:        #004A77;
+  --md-sys-color-on-primary-container:     #D1E4FF;
 
   /* Secondary */
   --md-sys-color-secondary:                #C0C4CC;
@@ -282,10 +282,10 @@
   /* Inverse — flips relative to light */
   --md-sys-color-inverse-surface:          #F7F8F8;
   --md-sys-color-inverse-on-surface:       #1F2023;
-  --md-sys-color-inverse-primary:          #5E6AD2;
+  --md-sys-color-inverse-primary:          #0061A4;
 
   /* Utility */
-  --md-sys-color-surface-tint:             #7C8AF5;
+  --md-sys-color-surface-tint:             #9ECAFF;
 
   /* Elevation — deeper shadows on dark for floating surfaces */
   --md-sys-elevation-1: 0px 1px 2px 0px rgba(0,0,0,0.40);

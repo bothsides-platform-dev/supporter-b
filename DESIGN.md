@@ -21,15 +21,15 @@
 
 ## 2. 컬러 시스템
 
-액센트: primary `#5E6AD2` (인디고). 다크 캔버스: `#08090A`. 색은 라이트 기본값이며, `.dark` 가 Linear 시그니처 다크로 오버라이드한다.
+액센트: primary `#0061A4` (신뢰 블루). 다크 캔버스: `#08090A`. 색은 라이트 기본값이며, `.dark` 가 Linear 시그니처 다크로 오버라이드한다.
 
-### Primary — 인디고 액센트
+### Primary — 신뢰 블루 액센트
 | 토큰 | 라이트 | 다크 | 용도 |
 |---|---|---|---|
-| `--md-sys-color-primary` | `#5E6AD2` | `#7C8AF5` | 주요 버튼, 포커스 링, 선택 |
-| `--md-sys-color-on-primary` | `#FFFFFF` | `#FFFFFF` | primary 위 텍스트 |
-| `--md-sys-color-primary-container` | `#E8EAFB` | `#2B2F52` | 선택된 nav 행, 연한 액센트 틴트 |
-| `--md-sys-color-on-primary-container` | `#2A2F6B` | `#C5CBFF` | 위 텍스트 |
+| `--md-sys-color-primary` | `#0061A4` | `#9ECAFF` | 주요 버튼, 포커스 링, 선택 |
+| `--md-sys-color-on-primary` | `#FFFFFF` | `#003258` | primary 위 텍스트 |
+| `--md-sys-color-primary-container` | `#D1E4FF` | `#004A77` | 선택된 nav 행, 연한 액센트 틴트 |
+| `--md-sys-color-on-primary-container` | `#001D36` | `#D1E4FF` | 위 텍스트 |
 
 ### Tertiary / Error / Warning
 | 토큰 | 라이트 | 용도 |
