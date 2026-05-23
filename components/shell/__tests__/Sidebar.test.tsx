@@ -134,6 +134,15 @@ describe('Sidebar — settings section', () => {
   });
 });
 
+describe('Sidebar — user menu (mobile reachability)', () => {
+  it('renders a user menu so logout/settings stay reachable in the mobile drawer', () => {
+    // Regression: the user menu (settings/logout + identity) moved to the
+    // desktop-only Header; the mobile drawer must still expose it.
+    renderSidebar(buyerProps);
+    expect(screen.getByRole('button', { name: '사용자 메뉴' })).toBeInTheDocument();
+  });
+});
+
 describe('Sidebar — notification badge', () => {
   it('hides the unread badge when count is 0', () => {
     mockUnread.value = 0;

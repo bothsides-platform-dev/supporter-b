@@ -8,6 +8,7 @@ import { ComposeIcon } from '@/components/icons';
 import { Logo } from '@/components/primitives/Logo';
 import { IconButton } from '@/components/primitives/IconButton';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
+import { UserMenu } from '@/components/shell/UserMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { NavItem } from '@/components/shell/sidebar/NavItem';
 import { SidebarSection } from '@/components/shell/sidebar/SidebarSection';
@@ -79,6 +80,7 @@ function SidebarNav({
 // ── sidebar body (shared by desktop rail and mobile drawer) ─────────────────
 
 function SidebarBody({
+  user,
   workspaceType,
   workspaces,
   current,
@@ -109,9 +111,16 @@ function SidebarBody({
         </Suspense>
       </nav>
 
-      {/* Footer — theme toggle (user menu lives in the header). */}
+      {/* Footer — theme toggle. The user menu (settings/logout) lives in the
+          header on desktop; mirror it here on mobile, where the header is hidden. */}
       <div className="mt-auto flex items-center gap-1 border-t border-[var(--md-sys-color-outline-variant)] pt-2">
         <ThemeToggle />
+        <div className="ml-auto md:hidden">
+          <UserMenu
+            user={{ name: user.name, email: user.email }}
+            workspaceType={workspaceType}
+          />
+        </div>
       </div>
     </div>
   );

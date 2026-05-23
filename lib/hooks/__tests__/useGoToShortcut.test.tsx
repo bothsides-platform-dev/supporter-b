@@ -49,6 +49,14 @@ describe('useGoToShortcut', () => {
     input.remove();
   });
 
+  it('survives autorepeat on the lead key (holding "g") and still fires the chord', () => {
+    renderHook(() => useGoToShortcut(map));
+    fireEvent.keyDown(document, { key: 'g' });
+    fireEvent.keyDown(document, { key: 'g', repeat: true });
+    fireEvent.keyDown(document, { key: 'h' });
+    expect(push).toHaveBeenCalledWith('/home');
+  });
+
   it('does not fire when the chord window has expired', () => {
     vi.useFakeTimers();
     renderHook(() => useGoToShortcut(map));

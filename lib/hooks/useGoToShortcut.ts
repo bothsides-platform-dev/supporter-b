@@ -43,6 +43,9 @@ export function useGoToShortcut(
 
     const onKey = (e: KeyboardEvent) => {
       if (typeof e.key !== 'string') return;
+      // Ignore autorepeat (held key) — otherwise repeated lead-key keydowns
+      // oscillate the armed flag and drop the chord non-deterministically.
+      if (e.repeat) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (isEditable(e.target)) return;
 
