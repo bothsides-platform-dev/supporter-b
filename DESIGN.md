@@ -171,8 +171,8 @@ surface-container-highest #E4E5E9               #202123
 ## 8. 쉘 레이아웃 — 단일 Linear 사이드바
 
 ```
---shell-sidebar: 240px   ← 좌측 사이드바 (텍스트+아이콘 nav)
---shell-subnav:  240px   ← 섹션 내 보조 nav (설정 등)
+--shell-sidebar: 200px   ← 좌측 사이드바 (텍스트+아이콘 nav, nav 라벨 기준 타이트)
+--shell-subnav:  200px   ← 섹션 내 보조 nav (설정 등)
 --content-max:   1280px
 ```
 

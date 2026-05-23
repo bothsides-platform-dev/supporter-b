@@ -202,9 +202,9 @@
   --md-sys-state-focused-opacity:  0.12;
 
   /* ── Shell Layout — single Linear sidebar + content ── */
-  --shell-sidebar: 240px;
+  --shell-sidebar: 200px;
   --shell-topbar:  48px;
-  --shell-subnav:  240px;
+  --shell-subnav:  200px;
   --content-max:   1280px;
 
   /* backward-compat aliases */

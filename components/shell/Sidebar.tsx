@@ -85,7 +85,7 @@ function SidebarBody({
   onNavigate,
 }: SidebarProps & { onNavigate?: () => void }) {
   return (
-    <div className="flex h-full flex-col gap-1 px-2.5 py-3">
+    <div className="flex h-full flex-col gap-1 px-2 py-3">
       <WorkspaceSwitcher current={current} workspaces={workspaces} />
 
       <nav aria-label="기본 내비게이션" className="mt-2 flex flex-col gap-0.5">

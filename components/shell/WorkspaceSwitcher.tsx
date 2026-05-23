@@ -68,9 +68,9 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
       <DropdownMenuTrigger
         disabled={busy}
         aria-busy={busy}
-        className={`flex items-center gap-2 h-9 px-2 max-w-[260px] rounded-[var(--md-sys-shape-extra-small)] hover:bg-[var(--md-sys-color-surface-container-high)] outline-none transition-[color,background-color,opacity] duration-[140ms]${busy ? ' opacity-60' : ''}`}
+        className={`flex w-full min-w-0 items-center gap-2 h-9 px-2 rounded-[var(--md-sys-shape-extra-small)] hover:bg-[var(--md-sys-color-surface-container-high)] outline-none transition-[color,background-color,opacity] duration-[140ms]${busy ? ' opacity-60' : ''}`}
       >
-        <span className="truncate text-[length:var(--md-typescale-label-large-size)] text-[var(--md-sys-color-on-surface)]">
+        <span className="min-w-0 flex-1 truncate text-[length:var(--md-typescale-label-large-size)] text-[var(--md-sys-color-on-surface)]">
           {display.name}
         </span>
         <Chip label={TYPE_LABEL[display.type]} color="surface" className="h-6 px-2" />
@@ -83,7 +83,7 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
         side="bottom"
         align="start"
         sideOffset={8}
-        className="min-w-[240px] rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] p-1 shadow-[var(--md-sys-elevation-2)]"
+        className="w-[var(--shell-sidebar)] min-w-[var(--shell-sidebar)] rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] p-1 shadow-[var(--md-sys-elevation-2)]"
       >
         <div className="px-2 py-1.5 text-[length:var(--md-typescale-label-small-size)] text-[var(--md-sys-color-on-surface-variant)]">
           내 워크스페이스
