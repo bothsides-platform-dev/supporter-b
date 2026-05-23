@@ -86,11 +86,10 @@ async function RfpListPageLoader({
         <EmptyState
           icon={<FileTextIcon size={32} />}
           title={status ? '해당 상태의 제안 요청이 없습니다.' : '발송된 제안 요청이 없습니다.'}
-          description={status ? '다른 상태를 선택하거나 새 RFP를 작성하세요.' : '새로운 제안 요청을 작성해 PG사에 발송하세요.'}
-          action={
-            <Link href="/rfp/new">
-              <Button size="sm">새 RFP</Button>
-            </Link>
+          description={
+            status
+              ? '다른 상태를 선택하세요.'
+              : '새로운 제안 요청을 작성해 PG사에 발송하세요.'
           }
         />
       ) : (
