@@ -31,8 +31,6 @@ import type {
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { Bid } from '@/lib/types/bid';
 
-export type { BoardCard, BoardData };
-
 // Bids in the default-landing / custom columns have no domain stage — newest first.
 function compareBids(a: Bid, b: Bid): number {
   const ta = a.submittedAt ?? '';
