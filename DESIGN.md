@@ -176,13 +176,22 @@ surface-container-highest #E4E5E9               #202123
 --content-max:   1280px
 ```
 
-**Sidebar** (`components/shell/Sidebar.tsx`): 라이트=밝은 surface, 다크=`#0F1011`. 콘텐츠보다 한 톤 dim, 우측 1px 저대비 보더.
+**Chrome 프레임 vs 메인 패널** — 사이드바·헤더는 하나의 가라앉은 "프레임" 색(`--shell-chrome-bg`)으로 통일되고, 메인 콘텐츠는 그 위에 한 톤 떠 있는 패널 색(`--shell-main-bg`)으로 강조된다. 두 변수는 **테마별로 다른 토큰을 가리킨다** — 라이트/다크에서 명도 방향이 반대라 단일 토큰으론 "메인이 항상 떠 보이게"가 불가능하기 때문(`styles/tokens.css`):
+
+| | 라이트 | 다크 |
+|---|---|---|
+| `--shell-chrome-bg` (사이드바·헤더·프레임) | `surface-container-low` `#F7F8F9` | `background` `#08090A` |
+| `--shell-main-bg` (메인 패널) | `background` `#FFFFFF` | `surface` `#0F1011` |
+
+메인은 항상 한 단계 elevated(§2 명도 계층). 색차는 subtle하게 두고 구조는 보더 + radius가 담당한다. 메인은 **네이티브 턱** 형태 — 우측·하단은 화면 끝까지 닿고, 좌상단 한 모서리만 `shape-large`(10px) radius + top/left 1px 저대비 보더로 L자 프레임 안쪽에 끼워진다(md+ 한정, 모바일은 full-bleed). 프레임이 통합되므로 사이드바 우측 보더·헤더 하단 보더는 없다(메인의 top/left 보더가 단일 경계선).
+
+**Sidebar** (`components/shell/Sidebar.tsx`): `--shell-chrome-bg` 프레임 색.
 - 상단: 로고 + 워크스페이스 스위처, 검색 버튼(⌘K).
 - 본문: 텍스트+아이콘 nav. 활성 행 = `primary-container` 연한 틴트 + on-primary-container, 비활성 = on-surface-variant + 호버 시 surface-container.
 - 하단(footer): 알림 / 테마 토글 / 사용자 아바타 드롭다운.
 - 모바일(<md): 사이드바 숨김 → 슬림 상단 바(햄버거)가 사이드바를 Sheet 드로어로 연다.
 
-별도 글로벌 톱바는 없다(스위처·검색·알림·테마·아바타가 사이드바로 통합됨).
+**Header** (`components/shell/Header.tsx`): 사이드바와 동일한 `--shell-chrome-bg`. 메인 위가 아니라 콘텐츠 컬럼 상단 스트립(Linear "정통"). 별도 글로벌 톱바는 없다(스위처·검색은 사이드바, 브레드크럼·검색·아바타는 헤더).
 
 ---
 

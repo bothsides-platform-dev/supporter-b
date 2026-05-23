@@ -122,12 +122,12 @@ export function Sidebar(props: SidebarProps) {
   return (
     <TooltipProvider delay={300}>
       {/* Desktop rail */}
-      <aside className="hidden md:flex md:sticky md:top-0 md:h-svh md:w-[var(--shell-sidebar)] md:shrink-0 md:flex-col md:overflow-y-auto md:border-r md:border-[var(--md-sys-color-outline-variant)] md:bg-[var(--md-sys-color-surface)]">
+      <aside className="hidden md:flex md:sticky md:top-0 md:h-svh md:w-[var(--shell-sidebar)] md:shrink-0 md:flex-col md:overflow-y-auto md:bg-[var(--shell-chrome-bg)]">
         <SidebarBody {...props} />
       </aside>
 
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 md:hidden">
+      <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--shell-chrome-bg)] px-3 md:hidden">
         <IconButton label="메뉴 열기" size="sm" onClick={() => setMobileOpen(true)}>
           <MenuIcon size={18} />
         </IconButton>
@@ -142,7 +142,7 @@ export function Sidebar(props: SidebarProps) {
         <SheetContent
           side="left"
           showCloseButton={false}
-          className="w-[var(--shell-sidebar)] max-w-[80vw] border-r border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-0"
+          className="w-[var(--shell-sidebar)] max-w-[80vw] border-r border-[var(--md-sys-color-outline-variant)] bg-[var(--shell-chrome-bg)] p-0"
         >
           <SidebarBody {...props} onNavigate={() => setMobileOpen(false)} />
         </SheetContent>

@@ -64,7 +64,7 @@ export default async function AppLayout({
           workspaces={workspaces}
           current={{ id: active.id, name: active.name, type: active.type }}
         />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
           <Header
             user={{
               name: session.user.name ?? session.user.email,
@@ -73,7 +73,9 @@ export default async function AppLayout({
             workspaceType={active.type}
             className="hidden md:flex"
           />
-          <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+          <main className="min-w-0 flex-1 overflow-y-auto bg-[var(--shell-main-bg)] md:rounded-tl-xl md:border-l md:border-t md:border-[var(--md-sys-color-outline-variant)]">
+            {children}
+          </main>
         </div>
         <NotificationDrawer />
         <CommandPalette />

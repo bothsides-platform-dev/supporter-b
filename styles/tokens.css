@@ -57,6 +57,12 @@
   --md-sys-color-background:               #FFFFFF;
   --md-sys-color-on-background:            #1F2023;
 
+  /* Shell surfaces — 프레임(가라앉음) vs 메인 패널(떠 있음).
+     테마별로 다른 *토큰*을 가리킨다 (명도 방향이 라이트/다크 반대이므로
+     단일 토큰으로는 "메인이 항상 떠 보이게"를 만들 수 없음). */
+  --shell-chrome-bg: var(--md-sys-color-surface-container-low);
+  --shell-main-bg:   var(--md-sys-color-background);
+
   /* Inverse (tooltips, snackbars) */
   --md-sys-color-inverse-surface:          #1F2023;
   --md-sys-color-inverse-on-surface:       #F7F8F8;
@@ -210,8 +216,8 @@
   /* backward-compat aliases */
   --shell-rail:    var(--shell-sidebar);
 
-  /* Sidebar follows surface in both themes (no dark anchor) */
-  --shell-rail-bg: var(--md-sys-color-surface);
+  /* Sidebar는 chrome 프레임 색을 따른다 (사이드바·헤더·프레임 통일) */
+  --shell-rail-bg: var(--shell-chrome-bg);
   --shell-rail-fg: var(--md-sys-color-on-surface);
 
   /* ── Spacing — backward-compat aliases (landing/* components) ─── */
@@ -278,6 +284,11 @@
   /* Background — canvas */
   --md-sys-color-background:               #08090A;
   --md-sys-color-on-background:            #F7F8F8;
+
+  /* Shell surfaces — 다크에선 프레임이 near-black(가장 가라앉음),
+     메인 패널이 한 톤 밝은 surface(떠 있음)로 역전된다. */
+  --shell-chrome-bg: var(--md-sys-color-background);
+  --shell-main-bg:   var(--md-sys-color-surface);
 
   /* Inverse — flips relative to light */
   --md-sys-color-inverse-surface:          #F7F8F8;

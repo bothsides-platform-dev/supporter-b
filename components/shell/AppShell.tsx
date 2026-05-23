@@ -11,7 +11,7 @@ export function AppShell({ children, className }: AppShellProps) {
   return (
     <div
       className={cn(
-        'min-h-svh bg-[var(--md-sys-color-background)] md:flex',
+        'min-h-svh bg-[var(--shell-chrome-bg)] md:flex',
         className,
       )}
     >

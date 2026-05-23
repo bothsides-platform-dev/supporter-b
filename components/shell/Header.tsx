@@ -21,7 +21,7 @@ export function Header({ user, workspaceType, className }: HeaderProps) {
   return (
     <header
       className={cn(
-        'flex h-12 shrink-0 items-center gap-3 border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-4',
+        'flex h-12 shrink-0 items-center gap-3 bg-[var(--shell-chrome-bg)] px-4',
         className,
       )}
     >
