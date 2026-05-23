@@ -37,5 +37,8 @@ export default async function HomePage({
     );
   }
 
-  redirect('/login');
+  // Authenticated (passed the user.id guard above) but no usable workspace →
+  // /logout, NOT /login. Middleware bounces authenticated users off /login back
+  // to /home, so /login here would loop forever (ERR_TOO_MANY_REDIRECTS).
+  redirect('/logout');
 }

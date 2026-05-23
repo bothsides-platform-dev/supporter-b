@@ -64,8 +64,8 @@ export default defineConfig({
           include: [
             "components/**/*.{test,spec}.{ts,tsx}",
             "app/__tests__/**/*.{test,spec}.{ts,tsx}",
-            "app/(app)/**/*.{test,spec}.{ts,tsx}",
-            "app/(public)/**/*.{test,spec}.{ts,tsx}",
+            "app/\\(app\\)/**/*.{test,spec}.{ts,tsx}",
+            "app/\\(public\\)/**/*.{test,spec}.{ts,tsx}",
             "lib/hooks/**/*.{test,spec}.{ts,tsx}",
             "lib/stores/**/*.{test,spec}.{ts,tsx}",
             "lib/nav/**/*.{test,spec}.{ts,tsx}",

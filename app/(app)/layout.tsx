@@ -23,8 +23,17 @@ export default async function AppLayout({
   // auth() themselves (no prop drilling) — the underlying JWT cookie read is
   // cheap and React/Next dedupe identical fetches inside one render.
   const session = await auth();
-  if (!session?.user?.id || !session.user.workspaceId || !session.user.workspaceType) {
+  // Genuinely unauthenticated → /login (middleware lets unauth users stay there).
+  if (!session?.user?.id) {
     redirect('/login');
+  }
+  // Authenticated JWT but no workspace in the token → /logout, NOT /login.
+  // Middleware (proxy.ts) treats any session-user as authenticated and bounces
+  // them off /login back to /home, so redirecting an incomplete-but-authenticated
+  // session to /login loops forever (ERR_TOO_MANY_REDIRECTS). /logout clears the
+  // cookie so the next /login request lands.
+  if (!session.user.workspaceId || !session.user.workspaceType) {
+    redirect('/logout');
   }
 
   // All workspaces the user belongs to — feeds the switcher and re-validates
@@ -32,7 +41,9 @@ export default async function AppLayout({
   // user belongs to nowhere (no member-removal/ws-delete action exists in v0,
   // so this is a defensive branch); bounce to re-auth.
   const workspaces = await (await getWorkspaceRepo()).listForUser(session.user.id);
-  if (workspaces.length === 0) redirect('/login');
+  // Authenticated JWT but DB says no live membership → /logout (same loop reason
+  // as above: /login would bounce this authenticated session straight back).
+  if (workspaces.length === 0) redirect('/logout');
   // Active = the JWT's workspace if still a member, else fall back (render-only;
   // the token reconciles on the next explicit switch — an RSC can't set cookies).
   const active =
