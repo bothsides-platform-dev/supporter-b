@@ -1,16 +1,20 @@
 'use client';
 
-import { useState, useMemo, Suspense } from 'react';
+import { useMemo, Suspense } from 'react';
 import { usePathname } from 'next/navigation';
-import { MenuIcon } from 'lucide-react';
-import { Logo } from '@/components/primitives/Logo';
-import { IconButton } from '@/components/primitives/IconButton';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { UserMenu } from '@/components/shell/UserMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { NavItem } from '@/components/shell/sidebar/NavItem';
 import { SidebarSection } from '@/components/shell/sidebar/SidebarSection';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import {
+  Sidebar as ShadcnSidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarRail,
+  useSidebar,
+} from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useNotifications } from '@/lib/hooks/useNotifications';
 import { useGoToShortcut } from '@/lib/hooks/useGoToShortcut';
@@ -26,8 +30,6 @@ export type SidebarProps = {
   workspaces: WorkspaceMembershipSummary[];
   current: { id: string; name: string; type: WorkspaceType };
 };
-
-// ── active-state-aware nav (uses useSearchParams via SidebarSection — keep in Suspense) ──
 
 function SidebarNav({
   workspaceType,
@@ -59,7 +61,7 @@ function SidebarNav({
               <span
                 data-testid="unread-badge"
                 aria-label={`미읽음 ${unreadCount}건`}
-                className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[var(--md-sys-color-warning)] px-1 text-[10px] font-medium text-white md-numeric"
+                className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[var(--md-sys-color-warning)] px-1 text-[10px] font-medium text-white md-numeric group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-0 group-data-[collapsible=icon]:right-0 group-data-[collapsible=icon]:ml-0"
               >
                 {unreadCount}
               </span>
@@ -75,8 +77,6 @@ function SidebarNav({
   );
 }
 
-// ── sidebar body (shared by desktop rail and mobile drawer) ─────────────────
-
 function SidebarBody({
   user,
   workspaceType,
@@ -85,18 +85,20 @@ function SidebarBody({
   onNavigate,
 }: SidebarProps & { onNavigate?: () => void }) {
   return (
-    <div className="flex h-full flex-col gap-1 px-2 py-3">
-      <WorkspaceSwitcher current={current} workspaces={workspaces} />
+    <>
+      <SidebarHeader className="p-2">
+        <WorkspaceSwitcher current={current} workspaces={workspaces} />
+      </SidebarHeader>
 
-      <nav aria-label="기본 내비게이션" className="mt-2 flex flex-col gap-0.5">
-        <Suspense fallback={null}>
-          <SidebarNav workspaceType={workspaceType} onNavigate={onNavigate} />
-        </Suspense>
-      </nav>
+      <SidebarContent className="px-2">
+        <nav aria-label="기본 내비게이션" className="flex flex-col gap-0.5">
+          <Suspense fallback={null}>
+            <SidebarNav workspaceType={workspaceType} onNavigate={onNavigate} />
+          </Suspense>
+        </nav>
+      </SidebarContent>
 
-      {/* Footer — theme toggle. The user menu (settings/logout) lives in the
-          header on desktop; mirror it here on mobile, where the header is hidden. */}
-      <div className="mt-auto flex items-center gap-1 border-t border-[var(--md-sys-color-outline-variant)] pt-2">
+      <SidebarFooter className="flex-row items-center gap-1 border-t border-[var(--md-sys-color-outline-variant)] p-2">
         <ThemeToggle />
         <div className="ml-auto md:hidden">
           <UserMenu
@@ -104,49 +106,31 @@ function SidebarBody({
             workspaceType={workspaceType}
           />
         </div>
-      </div>
-    </div>
+      </SidebarFooter>
+    </>
   );
 }
 
-// ── exported Sidebar ────────────────────────────────────────────────────────
-
 export function Sidebar(props: SidebarProps) {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const { setOpenMobile } = useSidebar();
   const chordMap = useMemo(
     () => getChordMap(props.workspaceType),
     [props.workspaceType],
   );
   useGoToShortcut(chordMap);
 
+  const closeMobile = () => setOpenMobile(false);
+
   return (
     <TooltipProvider delay={300}>
-      {/* Desktop rail */}
-      <aside className="hidden md:flex md:sticky md:top-0 md:h-svh md:w-[var(--shell-sidebar)] md:shrink-0 md:flex-col md:overflow-y-auto md:bg-[var(--shell-chrome-bg)]">
-        <SidebarBody {...props} />
-      </aside>
-
-      {/* Mobile top bar */}
-      <header className="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--shell-chrome-bg)] px-3 md:hidden">
-        <IconButton label="메뉴 열기" size="sm" onClick={() => setMobileOpen(true)}>
-          <MenuIcon size={18} />
-        </IconButton>
-        <Logo variant="compact" className="size-6 [&_svg]:size-6" />
-        <span className="truncate text-[length:var(--md-typescale-label-large-size)] font-medium text-[var(--md-sys-color-on-surface)]">
-          {props.current.name}
-        </span>
-      </header>
-
-      {/* Mobile drawer */}
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent
-          side="left"
-          showCloseButton={false}
-          className="w-[var(--shell-sidebar)] max-w-[80vw] border-r border-[var(--md-sys-color-outline-variant)] bg-[var(--shell-chrome-bg)] p-0"
-        >
-          <SidebarBody {...props} onNavigate={() => setMobileOpen(false)} />
-        </SheetContent>
-      </Sheet>
+      <ShadcnSidebar
+        collapsible="icon"
+        variant="sidebar"
+        className="border-[var(--md-sys-color-outline-variant)]"
+      >
+        <SidebarBody {...props} onNavigate={closeMobile} />
+        <SidebarRail />
+      </ShadcnSidebar>
     </TooltipProvider>
   );
 }

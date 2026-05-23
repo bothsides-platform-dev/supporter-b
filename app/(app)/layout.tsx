@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { AppShell } from '@/components/shell/AppShell';
-import { Sidebar } from '@/components/shell/Sidebar';
-import { Header } from '@/components/shell/Header';
+import { AppSidebarLayout } from '@/components/shell/AppSidebarLayout';
 import { ToasterProvider } from '@/components/shell/Toaster';
 import { NotificationDrawer } from '@/components/shell/NotificationDrawer';
 import { CommandPalette } from '@/components/shell/CommandPalette';
@@ -53,35 +51,32 @@ export default async function AppLayout({
 
   return (
     <ToasterProvider>
-      <AppShell>
-        <Sidebar
-          user={{
+      <AppSidebarLayout
+        sidebar={{
+          user: {
             id: session.user.id,
             email: session.user.email,
             name: session.user.name ?? session.user.email,
-          }}
-          workspaceType={active.type}
-          workspaces={workspaces}
-          current={{ id: active.id, name: active.name, type: active.type }}
-        />
-        <div className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
-          <Header
-            user={{
-              name: session.user.name ?? session.user.email,
-              email: session.user.email,
-            }}
-            workspaceType={active.type}
-            className="hidden md:flex"
-          />
-          <main className="min-w-0 flex-1 overflow-y-auto bg-[var(--shell-main-bg)] md:rounded-tl-xl md:border-l md:border-t md:border-[var(--md-sys-color-outline-variant)]">
-            {children}
-          </main>
-        </div>
-        <NotificationDrawer />
-        <CommandPalette />
-        <GlobalShortcuts />
-        <SentryUserContext user={sentryUser} />
-      </AppShell>
+          },
+          workspaceType: active.type,
+          workspaces,
+          current: { id: active.id, name: active.name, type: active.type },
+        }}
+        header={{
+          user: {
+            name: session.user.name ?? session.user.email,
+            email: session.user.email,
+          },
+          workspaceType: active.type,
+        }}
+        mainClassName="bg-[var(--shell-main-bg)] md:rounded-tl-xl md:border-l md:border-t md:border-[var(--md-sys-color-outline-variant)]"
+      >
+        {children}
+      </AppSidebarLayout>
+      <NotificationDrawer />
+      <CommandPalette />
+      <GlobalShortcuts />
+      <SentryUserContext user={sentryUser} />
     </ToasterProvider>
   );
 }

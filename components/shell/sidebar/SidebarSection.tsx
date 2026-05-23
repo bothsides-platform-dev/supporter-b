@@ -40,14 +40,14 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
   const headerActive = section.base ? onBase && !status : false;
 
   return (
-    <div className="mt-3">
+    <div className="mt-3 group-data-[collapsible=icon]:mt-1">
       <div className="flex items-center">
         <button
           type="button"
           aria-label={`${section.label} 섹션`}
           aria-expanded={!collapsed}
           onClick={() => toggle(section.id)}
-          className="inline-flex h-8 w-6 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]"
+          className="inline-flex h-8 w-6 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] group-data-[collapsible=icon]:hidden"
         >
           {collapsed ? <ChevronRightIcon size={14} /> : <ChevronDownIcon size={14} />}
         </button>
@@ -63,7 +63,7 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
       </div>
 
       {!collapsed && (
-        <div className="mt-0.5 flex flex-col gap-0.5">
+        <div className="mt-0.5 flex flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
           {section.statuses?.map(({ status: s, label }) => {
             const active = onBase && status === s;
             return (

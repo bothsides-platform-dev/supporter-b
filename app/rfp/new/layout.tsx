@@ -1,6 +1,5 @@
 import { auth } from '@/auth';
-import { AppShell } from '@/components/shell/AppShell';
-import { Sidebar } from '@/components/shell/Sidebar';
+import { AppSidebarLayout } from '@/components/shell/AppSidebarLayout';
 import { ToasterProvider } from '@/components/shell/Toaster';
 import { NotificationDrawer } from '@/components/shell/NotificationDrawer';
 import { CommandPalette } from '@/components/shell/CommandPalette';
@@ -36,24 +35,23 @@ export default async function RfpNewLayout({ children }: { children: React.React
 
   return (
     <ToasterProvider>
-      <AppShell>
-        <Sidebar
-          user={{
+      <AppSidebarLayout
+        sidebar={{
+          user: {
             id: session.user.id,
             email: session.user.email,
             name: session.user.name ?? session.user.email,
-          }}
-          workspaceType={active.type}
-          workspaces={workspaces}
-          current={{ id: active.id, name: active.name, type: active.type }}
-        />
-        <main className="min-w-0 flex-1">
-          {children}
-        </main>
-        <NotificationDrawer />
-        <CommandPalette />
-        <GlobalShortcuts />
-      </AppShell>
+          },
+          workspaceType: active.type,
+          workspaces,
+          current: { id: active.id, name: active.name, type: active.type },
+        }}
+      >
+        {children}
+      </AppSidebarLayout>
+      <NotificationDrawer />
+      <CommandPalette />
+      <GlobalShortcuts />
     </ToasterProvider>
   );
 }

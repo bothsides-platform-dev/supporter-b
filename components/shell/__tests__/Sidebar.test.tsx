@@ -45,7 +45,8 @@ vi.mock('@/hooks/use-mobile', () => ({
   useIsMobile: () => false,
 }));
 
-import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import { ShellSidebarTrigger } from '../ShellSidebarTrigger';
 import { Sidebar } from '../Sidebar';
 
 const buyerProps = {
@@ -70,7 +71,7 @@ const sidebarProviderStyle = {
 function renderSidebar(props: typeof buyerProps | typeof pgProps) {
   return render(
     <SidebarProvider style={sidebarProviderStyle}>
-      <SidebarTrigger aria-label="사이드바 접기" />
+      <ShellSidebarTrigger />
       <Suspense fallback={null}>
         <Sidebar {...props} />
       </Suspense>

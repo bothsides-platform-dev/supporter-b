@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { useSidebar } from '@/components/ui/sidebar';
 import { ShortcutHint } from '@/components/shell/ShortcutHint';
 import type { IconComponent, NavShortcut } from '@/lib/nav/nav-config';
 import { cn } from '@/lib/utils';
 
 const navItemBase =
-  'flex h-8 items-center gap-2.5 rounded-[var(--md-sys-shape-small)] px-2.5 text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors duration-[var(--md-sys-motion-duration-short-4)] [&_svg]:size-[18px] [&_svg]:shrink-0';
+  'relative flex h-8 items-center gap-2.5 rounded-[var(--md-sys-shape-small)] px-2.5 text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors duration-[var(--md-sys-motion-duration-short-4)] group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 [&_svg]:size-[18px] [&_svg]:shrink-0';
 
 const navItemActive =
   'bg-[var(--md-sys-color-primary-container)] font-medium text-[var(--md-sys-color-on-primary-container)]';
@@ -41,6 +42,9 @@ export function NavItem({
   className,
   onNavigate,
 }: NavItemProps) {
+  const { state, isMobile } = useSidebar();
+  const showCollapsedTooltip = state === 'collapsed' && !isMobile;
+
   const link = (
     <Link
       href={href}
@@ -49,19 +53,19 @@ export function NavItem({
       className={cn(navItemBase, active ? navItemActive : navItemInactive, className)}
     >
       {Icon && <Icon size={18} />}
-      <span>{label}</span>
-      {badge && <span className="ml-auto">{badge}</span>}
+      <span className="group-data-[collapsible=icon]:sr-only">{label}</span>
+      {badge && <span className="ml-auto group-data-[collapsible=icon]:ml-0">{badge}</span>}
     </Link>
   );
 
-  if (!shortcut) return link;
+  if (!showCollapsedTooltip) return link;
 
   return (
     <Tooltip>
       <TooltipTrigger render={link} />
       <TooltipContent side="right" sideOffset={8} className="gap-2">
         <span>{label}</span>
-        <ShortcutHint shortcut={shortcut} />
+        {shortcut ? <ShortcutHint shortcut={shortcut} /> : null}
       </TooltipContent>
     </Tooltip>
   );
