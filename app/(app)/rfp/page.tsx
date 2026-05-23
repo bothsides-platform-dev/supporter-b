@@ -1,17 +1,31 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Label } from '@/components/primitives/Label';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { FileTextIcon } from '@/components/icons';
 import { RfpListTable, RfpListTableSkeleton } from '@/components/rfp/RfpListTable';
+import { Breadcrumb } from '@/components/shell/Breadcrumb';
+import { PageHeader } from '@/components/shell/PageHeader';
 import { auth } from '@/auth';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
+import { filterRfpsByParam } from '@/lib/server/status-filter';
 
 export const dynamic = 'force-dynamic';
 
-export default async function RfpListPage() {
+// Sidebar token → label map (buyer workspace)
+const RFP_STATUS_LABELS: Record<string, string> = {
+  draft: '작성중',
+  active: '진행중',
+  closed: '마감',
+  awarded: '계약완료',
+};
+
+type Props = {
+  searchParams: Promise<{ status?: string }>;
+};
+
+export default async function RfpListPage({ searchParams }: Props) {
   const session = await auth();
   if (
     !session?.user?.id ||
@@ -21,46 +35,75 @@ export default async function RfpListPage() {
     redirect('/login?next=/rfp');
   }
 
+  const { status } = await searchParams;
+  const statusLabel = status ? RFP_STATUS_LABELS[status] : undefined;
+
+  const breadcrumbSegments = statusLabel
+    ? ['RFP', statusLabel]
+    : ['RFP'];
+
+  const newRfpAction = (
+    <Link href="/rfp/new">
+      <Button size="sm">새 RFP</Button>
+    </Link>
+  );
+
   const wsId = session.user.workspaceId;
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-8 py-5 border-b border-[var(--md-sys-color-outline-variant)]">
-        <div>
-          <Label size="md" muted={false}>RFP — 제안 요청</Label>
-          <h1 className="text-[20px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] mt-1">
-            제안 요청 목록
-          </h1>
-        </div>
-        <Link href="/rfp/new">
-          <Button size="sm">+ 신규 제안</Button>
-        </Link>
+      <div className="px-6 pt-4">
+        <Breadcrumb segments={breadcrumbSegments} />
       </div>
-
-      <Suspense fallback={<RfpListTableSkeleton />}>
-        <RfpListTableLoader wsId={wsId} />
+      <Suspense
+        fallback={
+          <>
+            <PageHeader title={statusLabel ?? 'RFP'} action={newRfpAction} />
+            <RfpListTableSkeleton />
+          </>
+        }
+      >
+        <RfpListPageLoader wsId={wsId} status={status} statusLabel={statusLabel} newRfpAction={newRfpAction} />
       </Suspense>
     </div>
   );
 }
 
-async function RfpListTableLoader({ wsId }: { wsId: string }) {
-  const rfps = await (await getRfpRepo()).findByBuyerWs(wsId);
+async function RfpListPageLoader({
+  wsId,
+  status,
+  statusLabel,
+  newRfpAction,
+}: {
+  wsId: string;
+  status: string | undefined;
+  statusLabel: string | undefined;
+  newRfpAction: React.ReactNode;
+}) {
+  const allRfps = await (await getRfpRepo()).findByBuyerWs(wsId);
+  const rfps = filterRfpsByParam(allRfps, status);
 
-  if (rfps.length === 0) {
-    return (
-      <EmptyState
-        icon={<FileTextIcon size={32} />}
-        title="발송된 제안 요청이 없습니다."
-        description="새로운 제안 요청을 작성해 PG사에 발송하세요."
-        action={
-          <Link href="/rfp/new">
-            <Button size="sm">+ 신규 제안</Button>
-          </Link>
-        }
+  return (
+    <>
+      <PageHeader
+        title={statusLabel ?? 'RFP'}
+        count={rfps.length}
+        action={newRfpAction}
       />
-    );
-  }
-
-  return <RfpListTable rfps={rfps} />;
+      {rfps.length === 0 ? (
+        <EmptyState
+          icon={<FileTextIcon size={32} />}
+          title={status ? '해당 상태의 제안 요청이 없습니다.' : '발송된 제안 요청이 없습니다.'}
+          description={status ? '다른 상태를 선택하거나 새 RFP를 작성하세요.' : '새로운 제안 요청을 작성해 PG사에 발송하세요.'}
+          action={
+            <Link href="/rfp/new">
+              <Button size="sm">새 RFP</Button>
+            </Link>
+          }
+        />
+      ) : (
+        <RfpListTable rfps={rfps} />
+      )}
+    </>
+  );
 }

@@ -1,16 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { MenuIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   HomeIcon,
-  FileTextIcon,
-  SettingsIcon,
   BellIcon,
   SearchIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ComposeIcon,
 } from '@/components/icons';
 import { Logo } from '@/components/primitives/Logo';
 import { Avatar } from '@/components/primitives/Avatar';
@@ -26,6 +27,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useUIStore } from '@/lib/stores/ui';
+import { useSidebarSectionsStore } from '@/lib/stores/sidebar-sections';
 import { useNotifications } from '@/lib/hooks/useNotifications';
 import { useIsMac, formatModifierShortcut } from '@/lib/hooks/usePlatform';
 import type {
@@ -40,27 +42,213 @@ export type SidebarProps = {
   current: { id: string; name: string; type: WorkspaceType };
 };
 
-type NavItem = { href: string; icon: React.ReactNode; label: string; match: string };
+// ── nav item classes ───────────────────────────────────────────────────────
 
-function navItemsFor(workspaceType: 'buyer' | 'pg'): NavItem[] {
-  return [
-    { href: '/home', icon: <HomeIcon />, label: '홈', match: '/home' },
-    workspaceType === 'buyer'
-      ? { href: '/rfp', icon: <FileTextIcon />, label: '제안', match: '/rfp' }
-      : { href: '/inbox', icon: <FileTextIcon />, label: '제안', match: '/inbox' },
-    { href: '/settings/profile', icon: <SettingsIcon />, label: '설정', match: '/settings' },
-  ];
+const navItemBase =
+  'flex h-8 items-center gap-2.5 rounded-[var(--md-sys-shape-small)] px-2.5 text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors duration-[var(--md-sys-motion-duration-short-4)] [&_svg]:size-[18px] [&_svg]:shrink-0';
+
+const navItemActive =
+  'bg-[var(--md-sys-color-primary-container)] font-medium text-[var(--md-sys-color-on-primary-container)]';
+
+const navItemInactive =
+  'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]';
+
+// Sub-item (status items) are slightly indented
+const subItemBase =
+  'flex h-7 items-center gap-2 rounded-[var(--md-sys-shape-small)] pl-7 pr-2.5 text-[length:var(--md-typescale-label-medium-size)] tracking-[var(--md-typescale-label-medium-tracking)] transition-colors duration-[var(--md-sys-motion-duration-short-4)]';
+
+const subItemActive =
+  'bg-[var(--md-sys-color-primary-container)] font-medium text-[var(--md-sys-color-on-primary-container)]';
+
+const subItemInactive =
+  'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]';
+
+// ── section header ─────────────────────────────────────────────────────────
+
+type SectionHeaderProps = {
+  label: string;
+  sectionId: string;
+};
+
+function SectionHeader({ label, sectionId }: SectionHeaderProps) {
+  const isCollapsed = useSidebarSectionsStore((s) => s.isCollapsed(sectionId));
+  const toggle = useSidebarSectionsStore((s) => s.toggle);
+
+  return (
+    <button
+      type="button"
+      onClick={() => toggle(sectionId)}
+      className="flex h-6 w-full items-center gap-1 px-2.5 text-[length:var(--md-typescale-label-small-size)] font-medium uppercase tracking-[0.08em] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:text-[var(--md-sys-color-on-surface)]"
+    >
+      {isCollapsed ? (
+        <ChevronRightIcon size={12} className="shrink-0 opacity-60" />
+      ) : (
+        <ChevronDownIcon size={12} className="shrink-0 opacity-60" />
+      )}
+      <span>{label}</span>
+    </button>
+  );
 }
 
-/** The sidebar's inner content — shared by the desktop rail and the mobile drawer. */
-function SidebarBody({ user, workspaceType, workspaces, current, onNavigate }: SidebarProps & { onNavigate?: () => void }) {
+// ── active-state-aware nav content (uses useSearchParams — wrapped in Suspense) ──
+
+type ActiveNavProps = SidebarProps & { onNavigate?: () => void };
+
+function ActiveNav({ workspaceType, onNavigate }: ActiveNavProps) {
   const pathname = usePathname();
-  const router = useRouter();
-  const { openNotificationDrawer, openCommandPalette } = useUIStore();
+  const searchParams = useSearchParams();
   const { unreadCount } = useNotifications();
+
+  const rfpSectionCollapsed = useSidebarSectionsStore((s) => s.isCollapsed('rfp'));
+  const inboxSectionCollapsed = useSidebarSectionsStore((s) => s.isCollapsed('inbox'));
+  const settingsSectionCollapsed = useSidebarSectionsStore((s) => s.isCollapsed('settings'));
+
+  function isActive(href: string) {
+    return pathname === href || pathname.startsWith(href + '/');
+  }
+
+  function isStatusActive(basePath: string, status: string) {
+    return pathname === basePath && searchParams.get('status') === status;
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {/* Ungrouped top items */}
+      <Link
+        href="/home"
+        aria-current={isActive('/home') ? 'page' : undefined}
+        onClick={onNavigate}
+        className={cn(navItemBase, isActive('/home') ? navItemActive : navItemInactive)}
+      >
+        <HomeIcon size={18} />
+        <span>홈</span>
+      </Link>
+
+      <Link
+        href="/notifications"
+        aria-current={isActive('/notifications') ? 'page' : undefined}
+        onClick={onNavigate}
+        className={cn(navItemBase, isActive('/notifications') ? navItemActive : navItemInactive)}
+      >
+        <BellIcon size={18} />
+        <span>알림</span>
+        {unreadCount > 0 && (
+          <span
+            data-testid="unread-badge"
+            aria-label={`미읽음 ${unreadCount}건`}
+            className="ml-auto inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[var(--md-sys-color-warning)] px-1 text-[10px] font-medium text-white md-numeric"
+          >
+            {unreadCount}
+          </span>
+        )}
+      </Link>
+
+      {/* Workspace-specific section */}
+      {workspaceType === 'buyer' && (
+        <div className="mt-3">
+          <SectionHeader label="RFP" sectionId="rfp" />
+          {!rfpSectionCollapsed && (
+            <div className="mt-0.5 flex flex-col gap-0.5">
+              {(
+                [
+                  { status: 'draft', label: '작성중' },
+                  { status: 'active', label: '진행중' },
+                  { status: 'closed', label: '마감' },
+                  { status: 'awarded', label: '계약완료' },
+                ] as const
+              ).map(({ status, label }) => {
+                const active = isStatusActive('/rfp', status);
+                return (
+                  <Link
+                    key={status}
+                    href={`/rfp?status=${status}`}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={onNavigate}
+                    className={cn(subItemBase, active ? subItemActive : subItemInactive)}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {workspaceType === 'pg' && (
+        <div className="mt-3">
+          <SectionHeader label="받은 RFP" sectionId="inbox" />
+          {!inboxSectionCollapsed && (
+            <div className="mt-0.5 flex flex-col gap-0.5">
+              {(
+                [
+                  { status: 'new', label: '신규' },
+                  { status: 'draft', label: '작성중' },
+                  { status: 'submitted', label: '제출완료' },
+                  { status: 'closed', label: '마감' },
+                ] as const
+              ).map(({ status, label }) => {
+                const active = isStatusActive('/inbox', status);
+                return (
+                  <Link
+                    key={status}
+                    href={`/inbox?status=${status}`}
+                    aria-current={active ? 'page' : undefined}
+                    onClick={onNavigate}
+                    className={cn(subItemBase, active ? subItemActive : subItemInactive)}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Settings section — both workspaces */}
+      <div className="mt-3">
+        <SectionHeader label="설정" sectionId="settings" />
+        {!settingsSectionCollapsed && (
+          <div className="mt-0.5 flex flex-col gap-0.5">
+            <Link
+              href="/settings/profile"
+              aria-current={isActive('/settings/profile') ? 'page' : undefined}
+              onClick={onNavigate}
+              className={cn(subItemBase, isActive('/settings/profile') ? subItemActive : subItemInactive)}
+            >
+              프로필
+            </Link>
+            <Link
+              href="/settings/members"
+              aria-current={isActive('/settings/members') ? 'page' : undefined}
+              onClick={onNavigate}
+              className={cn(subItemBase, isActive('/settings/members') ? subItemActive : subItemInactive)}
+            >
+              멤버
+            </Link>
+            <Link
+              href="/settings/notifications"
+              aria-current={isActive('/settings/notifications') ? 'page' : undefined}
+              onClick={onNavigate}
+              className={cn(subItemBase, isActive('/settings/notifications') ? subItemActive : subItemInactive)}
+            >
+              알림 설정
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── main sidebar body ──────────────────────────────────────────────────────
+
+function SidebarBody({ user, workspaceType, workspaces, current, onNavigate }: SidebarProps & { onNavigate?: () => void }) {
+  const router = useRouter();
+  const { openCommandPalette } = useUIStore();
   const isMac = useIsMac();
   const searchShortcut = formatModifierShortcut('K', isMac);
-  const navItems = navItemsFor(workspaceType);
 
   async function handleLogout() {
     await fetch('/logout', { method: 'POST' });
@@ -69,60 +257,58 @@ function SidebarBody({ user, workspaceType, workspaces, current, onNavigate }: S
 
   return (
     <div className="flex h-full flex-col gap-1 px-2.5 py-3">
-      {/* Header — logo + workspace switcher */}
-      <div className="flex items-center gap-2 px-1">
-        <Logo variant="compact" className="size-6 [&_svg]:size-6" />
+      {/* Top row: workspace switcher + search icon + compose icon (buyer only) */}
+      <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1">
           <WorkspaceSwitcher current={current} workspaces={workspaces} />
         </div>
+        <IconButton
+          label={`검색 (${searchShortcut})`}
+          size="sm"
+          onClick={() => { openCommandPalette(); onNavigate?.(); }}
+        >
+          <SearchIcon size={16} />
+        </IconButton>
+        {workspaceType === 'buyer' && (
+          <Link
+            href="/rfp/new"
+            aria-label="새 RFP 작성"
+            onClick={onNavigate}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] [&_svg]:size-4"
+          >
+            <ComposeIcon size={16} />
+          </Link>
+        )}
       </div>
 
-      {/* Search (command palette) */}
-      <button
-        type="button"
-        onClick={() => { openCommandPalette(); onNavigate?.(); }}
-        aria-label={`검색 (${searchShortcut})`}
-        className="mt-2 flex h-8 w-full items-center gap-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2.5 text-[var(--md-sys-color-on-surface-variant)] transition-colors duration-[var(--md-sys-motion-duration-short-4)] hover:border-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface)]"
-      >
-        <SearchIcon size={14} />
-        <span className="text-[length:var(--md-typescale-label-large-size)]">검색</span>
-        <kbd className="ml-auto text-[length:var(--md-typescale-label-small-size)] opacity-60">{searchShortcut}</kbd>
-      </button>
-
-      {/* Primary navigation */}
+      {/* Navigation — wrapped in Suspense for useSearchParams */}
       <nav aria-label="기본 내비게이션" className="mt-2 flex flex-col gap-0.5">
-        {navItems.map((item) => {
-          const active = pathname === item.match || pathname.startsWith(item.match + '/');
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? 'page' : undefined}
-              onClick={onNavigate}
-              className={cn(
-                'flex h-8 items-center gap-2.5 rounded-[var(--md-sys-shape-small)] px-2.5 text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors duration-[var(--md-sys-motion-duration-short-4)] [&_svg]:size-[18px] [&_svg]:shrink-0',
-                active
-                  ? 'bg-[var(--md-sys-color-primary-container)] font-medium text-[var(--md-sys-color-on-primary-container)]'
-                  : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
-              )}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+        <Suspense
+          fallback={
+            <div className="flex flex-col gap-0.5">
+              <div className={cn(navItemBase, navItemInactive)}>
+                <HomeIcon size={18} />
+                <span>홈</span>
+              </div>
+              <div className={cn(navItemBase, navItemInactive)}>
+                <BellIcon size={18} />
+                <span>알림</span>
+              </div>
+            </div>
+          }
+        >
+          <ActiveNav
+            user={user}
+            workspaceType={workspaceType}
+            workspaces={workspaces}
+            current={current}
+            onNavigate={onNavigate}
+          />
+        </Suspense>
       </nav>
 
-      {/* Footer — notifications, theme, user */}
+      {/* Footer — theme + user dropdown (bell removed; 알림 is now a top nav item) */}
       <div className="mt-auto flex items-center gap-1 border-t border-[var(--md-sys-color-outline-variant)] pt-2">
-        <div className="relative">
-          <IconButton label="알림" size="sm" onClick={() => { openNotificationDrawer(); onNavigate?.(); }}>
-            <BellIcon size={18} />
-          </IconButton>
-          {unreadCount > 0 && (
-            <span className="absolute right-1 top-1 size-1.5 rounded-full bg-[var(--md-sys-color-warning)]" />
-          )}
-        </div>
         <ThemeToggle />
         <div className="ml-auto">
           <DropdownMenu>
@@ -166,6 +352,8 @@ function SidebarBody({ user, workspaceType, workspaces, current, onNavigate }: S
     </div>
   );
 }
+
+// ── exported Sidebar component ─────────────────────────────────────────────
 
 export function Sidebar(props: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);

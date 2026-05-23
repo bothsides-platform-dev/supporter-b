@@ -56,6 +56,14 @@ export function SearchIcon({ size = 20, ...p }: IconProps) {
   );
 }
 
+export function ChevronLeftIcon({ size = 16, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
+      <path d="M10 4L6 8l4 4" />
+    </svg>
+  );
+}
+
 export function ChevronRightIcon({ size = 16, ...p }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
@@ -165,6 +173,15 @@ export function MoonIcon({ size = 20, ...p }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
       <path d="M17.5 11.05A7.5 7.5 0 117.95 2.5a5.85 5.85 0 009.55 8.55z" />
+    </svg>
+  );
+}
+
+export function ComposeIcon({ size = 16, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
+      <path d="M11 2l3 3-8 8H3v-3l8-8z" />
+      <path d="M9.5 3.5l3 3" />
     </svg>
   );
 }
