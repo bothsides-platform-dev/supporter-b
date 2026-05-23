@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
-import { FileTextIcon } from '@/components/icons';
+import { FileTextIcon, PlusIcon } from '@/components/icons';
 import { RfpListTable, RfpListTableSkeleton } from '@/components/rfp/RfpListTable';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { auth } from '@/auth';
@@ -39,7 +39,9 @@ export default async function RfpListPage({ searchParams }: Props) {
 
   const newRfpAction = (
     <Link href="/rfp/new">
-      <Button size="sm">새 RFP</Button>
+      <Button size="sm" icon={<PlusIcon />}>
+        새 RFP
+      </Button>
     </Link>
   );
 
