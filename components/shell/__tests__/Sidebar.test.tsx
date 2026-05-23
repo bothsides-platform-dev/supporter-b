@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Suspense } from 'react';
 
 class ResizeObserverStub {
@@ -40,6 +41,11 @@ vi.mock('@/lib/hooks/usePlatform', async (importOriginal) => ({
   useIsMac: () => false,
 }));
 
+vi.mock('@/hooks/use-mobile', () => ({
+  useIsMobile: () => false,
+}));
+
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { Sidebar } from '../Sidebar';
 
 const buyerProps = {
@@ -56,11 +62,19 @@ const pgProps = {
   current: { id: 'ws2', name: '서포터페이', type: 'pg' as const },
 };
 
+const sidebarProviderStyle = {
+  '--sidebar-width': 'var(--shell-sidebar)',
+  '--sidebar-width-icon': '3rem',
+} as React.CSSProperties;
+
 function renderSidebar(props: typeof buyerProps | typeof pgProps) {
   return render(
-    <Suspense fallback={null}>
-      <Sidebar {...props} />
-    </Suspense>,
+    <SidebarProvider style={sidebarProviderStyle}>
+      <SidebarTrigger aria-label="사이드바 접기" />
+      <Suspense fallback={null}>
+        <Sidebar {...props} />
+      </Suspense>
+    </SidebarProvider>,
   );
 }
 
@@ -72,6 +86,19 @@ beforeEach(() => {
 });
 
 afterEach(() => cleanup());
+
+describe('Sidebar — icon toggle', () => {
+  it('collapses when SidebarTrigger is clicked on desktop', async () => {
+    const user = userEvent.setup();
+    renderSidebar(buyerProps);
+    const rail = document.querySelector('[data-slot="sidebar"]');
+    expect(rail).toHaveAttribute('data-state', 'expanded');
+
+    await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
+
+    expect(rail).toHaveAttribute('data-state', 'collapsed');
+  });
+});
 
 describe('Sidebar — top nav items', () => {
   it('renders 홈 and 알림 links', () => {
