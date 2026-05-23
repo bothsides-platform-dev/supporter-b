@@ -123,11 +123,7 @@ export function Sidebar(props: SidebarProps) {
 
   return (
     <TooltipProvider delay={300}>
-      <ShadcnSidebar
-        collapsible="icon"
-        variant="sidebar"
-        className="border-[var(--md-sys-color-outline-variant)]"
-      >
+      <ShadcnSidebar collapsible="icon" variant="sidebar">
         <SidebarBody {...props} onNavigate={closeMobile} />
         <SidebarRail />
       </ShadcnSidebar>
