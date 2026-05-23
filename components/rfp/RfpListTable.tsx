@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
-import { useIsMac, formatModifierShortcut } from '@/lib/hooks/usePlatform';
 import { formatDate } from '@/lib/format';
 import type { RFP } from '@/lib/types/rfp';
 
@@ -29,7 +28,6 @@ type Props = { rfps: RFP[] };
 
 export function RfpListTable({ rfps }: Props) {
   const router = useRouter();
-  const isMac = useIsMac();
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
   const { active } = useListNavigation(rfps.length, {
@@ -93,18 +91,6 @@ export function RfpListTable({ rfps }: Props) {
           ))}
         </tbody>
       </table>
-      <div className="px-8 py-3 border-t border-[var(--md-sys-color-outline-variant)] flex items-center gap-4 font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-outline)]">
-        <span>
-          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">J</kbd> /{' '}
-          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">K</kbd> 이동
-        </span>
-        <span>
-          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">Enter</kbd> 상세
-        </span>
-        <span>
-          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">{formatModifierShortcut('N', isMac)}</kbd> 신규
-        </span>
-      </div>
     </div>
   );
 }

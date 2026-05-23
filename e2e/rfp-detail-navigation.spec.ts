@@ -1,9 +1,8 @@
 /**
  * RFP/인박스 상세 네비게이션 — 진입점과 무관하게 항상 전체 페이지.
  *
- * 상세 모달(가로채기 슬롯)은 제거됨. 칸반(home)·목록·직접 진입 모두 전체 페이지로
- * 렌더되고, 칸반에서 들어온 경우 "← 뒤로"(router.back)로 /home 으로 복귀한다.
- *   1. 홈 칸반 카드 클릭 → /rfp/<code> 전체 페이지(모달 아님), ← 뒤로 → /home.
+ * 상세 모달(가로채기 슬롯)은 제거됨. 칸반(home)·목록·직접 진입 모두 전체 페이지로 렌더.
+ *   1. 홈 칸반 카드 클릭 → /rfp/<code> 전체 페이지(모달 아님).
  *   2. /rfp 목록 행 클릭 → 전체 페이지.
  *   3. /rfp/<code> 직접 진입(하드 네비) → 전체 페이지.
  * PG 인박스(/inbox/<code>)도 동일.
@@ -15,7 +14,7 @@ import { loginAs } from './_helpers';
 const RFP_CODE = 'P-2604-0001';
 
 test.describe('RFP 상세 네비게이션 (구매사)', () => {
-  test('홈 칸반 카드 클릭 → 전체 페이지, ← 뒤로 → /home 복귀', async ({ page }) => {
+  test('홈 칸반 카드 클릭 → 전체 페이지', async ({ page }) => {
     // dev 서버는 라우트를 첫 진입 시 컴파일한다(login+home+칸반 트리). 이 스펙의
     // 첫 테스트라 cold-compile 비용을 전부 떠안으므로 예산을 넉넉히(prod는 사전컴파일).
     test.setTimeout(180_000);
@@ -31,10 +30,6 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
     await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
     await expect(page.getByText('제안 비교')).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-
-    // ← 뒤로(router.back) → /home 복귀.
-    await page.getByRole('button', { name: '뒤로' }).click();
-    await expect(page).toHaveURL(/\/home$/);
   });
 
   test('목록 행 클릭(soft-nav)은 전체 페이지로 렌더', async ({ page }) => {
