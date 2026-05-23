@@ -227,14 +227,7 @@ function ActiveNav({ workspaceType, onNavigate }: ActiveNavProps) {
             >
               멤버
             </Link>
-            <Link
-              href="/settings/notifications"
-              aria-current={isActive('/settings/notifications') ? 'page' : undefined}
-              onClick={onNavigate}
-              className={cn(subItemBase, isActive('/settings/notifications') ? subItemActive : subItemInactive)}
-            >
-              알림 설정
-            </Link>
+            {/* 알림 설정 항목 제거 — 별도 알림 설정 UI가 생기면 다시 추가. 알림 피드는 상단 '알림' 항목(/notifications). */}
           </div>
         )}
       </div>

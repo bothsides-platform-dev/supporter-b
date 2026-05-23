@@ -156,7 +156,8 @@ describe('Sidebar — settings section (both workspaces)', () => {
     expect(screen.getByText('설정')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '프로필' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '멤버' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '알림 설정' })).toBeInTheDocument();
+    // 알림 설정 항목은 제거됨 — 별도 설정 UI가 생기기 전까지 노출하지 않는다.
+    expect(screen.queryByRole('link', { name: '알림 설정' })).not.toBeInTheDocument();
   });
 
   it('renders settings section for pg', () => {

@@ -42,20 +42,28 @@ export default async function InboxPage({ searchParams }: Props) {
       <div className="px-6 pt-4">
         <Breadcrumb segments={breadcrumbSegments} />
       </div>
-      <PageHeader title={statusLabel ?? '받은 RFP'} />
-      <Suspense fallback={<InboxListSkeleton />}>
-        <InboxListLoader wsId={session.user.workspaceId} status={status} />
+      <Suspense
+        fallback={
+          <>
+            <PageHeader title={statusLabel ?? '받은 RFP'} />
+            <InboxListSkeleton />
+          </>
+        }
+      >
+        <InboxListPageLoader wsId={session.user.workspaceId} status={status} statusLabel={statusLabel} />
       </Suspense>
     </div>
   );
 }
 
-async function InboxListLoader({
+async function InboxListPageLoader({
   wsId,
   status,
+  statusLabel,
 }: {
   wsId: string;
   status: string | undefined;
+  statusLabel: string | undefined;
 }) {
   const invRepo = await getInvitationRepo();
   const pairs = await invRepo.findByPgWorkspace(wsId);
@@ -74,19 +82,22 @@ async function InboxListLoader({
 
   const rows = filterInboxRowsByParam(allRows, status);
 
-  if (rows.length === 0) {
-    return (
-      <EmptyState
-        icon={<InboxIcon size={32} />}
-        title="받은 제안 요청이 없습니다."
-        description={
-          status
-            ? '해당 상태의 제안 요청이 없습니다.'
-            : '구매사가 초대한 RFP가 이 화면에 표시됩니다.'
-        }
-      />
-    );
-  }
-
-  return <InboxList rows={rows} />;
+  return (
+    <>
+      <PageHeader title={statusLabel ?? '받은 RFP'} count={rows.length} />
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={<InboxIcon size={32} />}
+          title="받은 제안 요청이 없습니다."
+          description={
+            status
+              ? '해당 상태의 제안 요청이 없습니다.'
+              : '구매사가 초대한 RFP가 이 화면에 표시됩니다.'
+          }
+        />
+      ) : (
+        <InboxList rows={rows} />
+      )}
+    </>
+  );
 }
