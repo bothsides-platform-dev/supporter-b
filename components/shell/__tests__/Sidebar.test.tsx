@@ -95,9 +95,9 @@ describe('Sidebar — buyer workspace', () => {
     expect(screen.getByRole('link', { name: '계약완료' })).toBeInTheDocument();
   });
 
-  it('renders the compose link for buyer', () => {
+  it('does NOT render the sidebar compose shortcut', () => {
     renderSidebar(buyerProps);
-    expect(screen.getByRole('link', { name: /새 RFP 작성/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /새 RFP 작성/ })).not.toBeInTheDocument();
   });
 
   it('does NOT render the inbox section for buyer', () => {
@@ -113,10 +113,6 @@ describe('Sidebar — pg workspace', () => {
     expect(screen.getByRole('link', { name: '제출완료' })).toBeInTheDocument();
   });
 
-  it('does NOT render the compose link for pg', () => {
-    renderSidebar(pgProps);
-    expect(screen.queryByRole('link', { name: /새 RFP 작성/ })).not.toBeInTheDocument();
-  });
 });
 
 describe('Sidebar — search moved to header', () => {

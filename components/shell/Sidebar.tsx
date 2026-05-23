@@ -1,10 +1,8 @@
 'use client';
 
 import { useState, useMemo, Suspense } from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { MenuIcon } from 'lucide-react';
-import { ComposeIcon } from '@/components/icons';
 import { Logo } from '@/components/primitives/Logo';
 import { IconButton } from '@/components/primitives/IconButton';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
@@ -88,22 +86,7 @@ function SidebarBody({
 }: SidebarProps & { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col gap-1 px-2.5 py-3">
-      {/* Top row: workspace switcher + compose (buyer only). Search lives in the header now. */}
-      <div className="flex items-center gap-1">
-        <div className="min-w-0 flex-1">
-          <WorkspaceSwitcher current={current} workspaces={workspaces} />
-        </div>
-        {workspaceType === 'buyer' && (
-          <Link
-            href="/rfp/new"
-            aria-label="새 RFP 작성"
-            onClick={onNavigate}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] [&_svg]:size-4"
-          >
-            <ComposeIcon size={16} />
-          </Link>
-        )}
-      </div>
+      <WorkspaceSwitcher current={current} workspaces={workspaces} />
 
       <nav aria-label="기본 내비게이션" className="mt-2 flex flex-col gap-0.5">
         <Suspense fallback={null}>
