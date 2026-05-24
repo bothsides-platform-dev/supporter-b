@@ -105,6 +105,25 @@ describe('Sidebar — icon toggle', () => {
 
     expect(rail).toHaveAttribute('data-state', 'collapsed');
   });
+
+  it('trigger is located in the sidebar footer', () => {
+    renderSidebar(buyerProps);
+    const footer = document.querySelector('[data-slot="sidebar-footer"]');
+    const trigger = screen.getByRole('button', { name: '사이드바 접기' });
+    expect(footer).toContainElement(trigger);
+  });
+
+  it('shows "접기" text label when sidebar is expanded', () => {
+    renderSidebar(buyerProps);
+    expect(screen.getByText('접기')).toBeInTheDocument();
+  });
+
+  it('shows "열기" text label after sidebar is collapsed', async () => {
+    const user = userEvent.setup();
+    renderSidebar(buyerProps);
+    await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
+    expect(screen.getByText('열기')).toBeInTheDocument();
+  });
 });
 
 describe('Sidebar — top nav items', () => {

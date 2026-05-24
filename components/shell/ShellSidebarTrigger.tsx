@@ -1,7 +1,7 @@
 'use client';
 
 import { PanelLeftIcon } from 'lucide-react';
-import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 
 type ShellSidebarTriggerProps = {
@@ -9,19 +9,30 @@ type ShellSidebarTriggerProps = {
 };
 
 export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
-  const { state } = useSidebar();
-  const label = state === 'expanded' ? '사이드바 접기' : '사이드바 펼치기';
+  const { state, toggleSidebar } = useSidebar();
+  const isExpanded = state === 'expanded';
+  const label = isExpanded ? '사이드바 접기' : '사이드바 펼치기';
 
   return (
-    <SidebarTrigger
+    <button
+      type="button"
+      data-sidebar="trigger"
+      data-slot="sidebar-trigger"
       aria-label={label}
+      onClick={toggleSidebar}
       className={cn(
-        'size-8 shrink-0 rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
+        'flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--md-sys-shape-small)] px-2 text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
         className,
       )}
     >
-      <PanelLeftIcon size={18} />
-      <span className="sr-only">{label}</span>
-    </SidebarTrigger>
+      <PanelLeftIcon
+        size={16}
+        aria-hidden="true"
+        className={cn('transition-transform duration-200', !isExpanded && 'rotate-180')}
+      />
+      <span aria-hidden="true" className="text-sm group-data-[collapsible=icon]:hidden">
+        {isExpanded ? '접기' : '열기'}
+      </span>
+    </button>
   );
 }

@@ -91,7 +91,6 @@ function SidebarBody({
         <div className="min-w-0 flex-1">
           <WorkspaceSwitcher current={current} workspaces={workspaces} />
         </div>
-        <ShellSidebarTrigger className="hidden shrink-0 md:inline-flex" />
       </SidebarHeader>
 
       <SidebarContent className="px-2">
@@ -104,6 +103,7 @@ function SidebarBody({
 
       <SidebarFooter className="flex-row items-center gap-1 border-t border-[var(--md-sys-color-outline-variant)] p-2">
         <ThemeToggle />
+        <ShellSidebarTrigger className="ml-auto hidden md:flex" />
         <div className="ml-auto md:hidden">
           <UserMenu
             user={{ name: user.name, email: user.email }}
