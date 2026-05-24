@@ -63,18 +63,16 @@ describe('createLogger — Node.js runtime', () => {
 });
 
 describe('createLogger — log level selection', () => {
-  const origNodeEnv = process.env.NODE_ENV;
-  const origLogLevel = process.env.LOG_LEVEL;
-
+  // NODE_ENV is typed read-only by @types/node — use vi.stubEnv (not direct
+  // assignment) and restore via unstubAllEnvs.
   afterEach(() => {
-    process.env.NODE_ENV  = origNodeEnv;
-    process.env.LOG_LEVEL = origLogLevel;
+    vi.unstubAllEnvs();
     pinoFactory.mockClear();
   });
 
   it('uses debug level in development', () => {
-    process.env.NODE_ENV  = 'development';
-    delete process.env.LOG_LEVEL;
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('LOG_LEVEL', undefined);
     createLogger('nodejs');
     expect(pinoFactory).toHaveBeenLastCalledWith(
       expect.objectContaining({ level: 'debug' }),
@@ -82,8 +80,8 @@ describe('createLogger — log level selection', () => {
   });
 
   it('uses info level in production', () => {
-    process.env.NODE_ENV  = 'production';
-    delete process.env.LOG_LEVEL;
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('LOG_LEVEL', undefined);
     createLogger('nodejs');
     expect(pinoFactory).toHaveBeenLastCalledWith(
       expect.objectContaining({ level: 'info' }),
@@ -91,8 +89,8 @@ describe('createLogger — log level selection', () => {
   });
 
   it('LOG_LEVEL env var overrides NODE_ENV default', () => {
-    process.env.NODE_ENV  = 'production';
-    process.env.LOG_LEVEL = 'warn';
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('LOG_LEVEL', 'warn');
     createLogger('nodejs');
     expect(pinoFactory).toHaveBeenLastCalledWith(
       expect.objectContaining({ level: 'warn' }),

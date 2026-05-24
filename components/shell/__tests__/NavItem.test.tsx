@@ -15,6 +15,10 @@ vi.mock('@/lib/hooks/usePlatform', async (importOriginal) => ({
   useIsMac: () => false,
 }));
 
+vi.mock('@/hooks/use-mobile', () => ({
+  useIsMobile: () => false,
+}));
+
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
     <a href={href} {...props}>
@@ -23,12 +27,19 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { NavItem } from '../sidebar/NavItem';
 import { HomeIcon } from '@/components/icons';
 
+// NavItem reads the sidebar context (useSidebar) for collapsed/icon state, so it
+// must render under a SidebarProvider — same harness as SidebarSection.test.
 function renderItem(ui: React.ReactElement) {
-  return render(<TooltipProvider delay={0}>{ui}</TooltipProvider>);
+  return render(
+    <SidebarProvider>
+      <TooltipProvider delay={0}>{ui}</TooltipProvider>
+    </SidebarProvider>,
+  );
 }
 
 afterEach(() => cleanup());
