@@ -14,7 +14,7 @@ function positionsStrictlyIncreasing(cols: BoardColumn[]): boolean {
 }
 
 describe('defaultColumns', () => {
-  it('buyer: 6 pipeline lifecycle columns + 3 rfp_bids columns', () => {
+  it('buyer: 4 pipeline lifecycle columns + 3 rfp_bids columns', () => {
     const cols = defaultColumns(WS, 'buyer');
     const pipeline = cols.filter((c) => c.kind === 'pipeline');
     const rfpBids = cols.filter((c) => c.kind === 'rfp_bids');

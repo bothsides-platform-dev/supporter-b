@@ -30,8 +30,8 @@ describe('resolveBoardDrop', () => {
     });
   });
 
-  it('rfp draft → sent lifecycle column → send-rfp action', () => {
-    const target = col({ id: 'sent', lifecycleKey: 'sent' });
+  it('rfp draft → active lifecycle column → send-rfp action', () => {
+    const target = col({ id: 'active', lifecycleKey: 'active' });
     expect(
       resolveBoardDrop({
         cardType: 'rfp',
@@ -41,13 +41,13 @@ describe('resolveBoardDrop', () => {
     ).toEqual({ kind: 'lifecycle', action: { kind: 'send-rfp', rfpId: 'P-2605-0001', title: 'RFP' } });
   });
 
-  it('rfp sent → collecting (no valid transition) → reject', () => {
-    const target = col({ id: 'collecting', lifecycleKey: 'collecting' });
+  it('rfp draft → awarded (no valid transition) → reject', () => {
+    const target = col({ id: 'awarded', lifecycleKey: 'awarded' });
     expect(
       resolveBoardDrop({
         cardType: 'rfp',
         toColumn: target,
-        payload: { stage: 'sent', rfpId: 'P-2605-0001', title: 'RFP' },
+        payload: { stage: 'draft', rfpId: 'P-2605-0001', title: 'RFP' },
       }),
     ).toEqual({ kind: 'reject' });
   });
@@ -58,7 +58,7 @@ describe('resolveBoardDrop', () => {
       resolveBoardDrop({
         cardType: 'rfp',
         toColumn: target,
-        payload: { stage: 'sent', rfpId: 'P-2605-0009', title: 'RFP9' },
+        payload: { stage: 'active', rfpId: 'P-2605-0009', title: 'RFP9' },
       }),
     ).toEqual({ kind: 'lifecycle', action: { kind: 'cancel-rfp', rfpId: 'P-2605-0009', title: 'RFP9' } });
   });

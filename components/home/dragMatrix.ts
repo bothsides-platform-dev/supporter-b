@@ -39,30 +39,18 @@ export function resolveDrag(input: BuyerInput | PgInput): DragAction | null {
 function resolveBuyer(i: BuyerInput): DragAction | null {
   if (i.from === i.to) return null;
 
-  // draft → sent
-  if (i.from === 'draft' && i.to === 'sent') {
+  // draft → active: 발송
+  if (i.from === 'draft' && i.to === 'active') {
     return { kind: 'send-rfp', rfpId: i.rfpId, title: i.title };
   }
 
-  // {collecting, comparing} → awarded — 낙찰은 PG 선택이 필요하므로 RFP 상세(BidBoard)로
-  // 보낸다. award 페이지는 ?bidId= 필수라서 home 카드에서 직접 호출 불가.
-  if (
-    (i.from === 'collecting' || i.from === 'comparing') &&
-    i.to === 'awarded'
-  ) {
+  // active → awarded: 낙찰은 PG 선택 필요 → RFP 상세(BidBoard)로 이동
+  if (i.from === 'active' && i.to === 'awarded') {
     return { kind: 'navigate-rfp-detail', rfpId: i.rfpId };
   }
 
-  // 활성 컬럼 → closed: 취소
-  // ('awarded' / 'closed' 자체는 finality — drop target 이 아니지만 from 이 될 수 없게
-  //  KanbanColumn 의 useDroppable disabled 로 차단)
-  if (
-    i.to === 'closed' &&
-    (i.from === 'draft' ||
-      i.from === 'sent' ||
-      i.from === 'collecting' ||
-      i.from === 'comparing')
-  ) {
+  // {draft, active} → closed: 취소
+  if (i.to === 'closed' && (i.from === 'draft' || i.from === 'active')) {
     return { kind: 'cancel-rfp', rfpId: i.rfpId, title: i.title };
   }
 

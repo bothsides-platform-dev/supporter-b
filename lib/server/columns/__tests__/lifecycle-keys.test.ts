@@ -11,9 +11,7 @@ describe('cross-side lifecycle keys', () => {
     expect([...CROSS_SIDE_LIFECYCLE_KEYS].sort()).toEqual(
       [
         // buyer side
-        'sent',
-        'collecting',
-        'comparing',
+        'active',
         'awarded',
         'closed',
         // pg side
@@ -35,8 +33,7 @@ describe('cross-side lifecycle keys', () => {
   it('private skeleton stages are NOT cross-side', () => {
     expect(isCrossSideLifecycleKey('draft')).toBe(false); // buyer-private
     expect(isCrossSideLifecycleKey('drafting')).toBe(false); // pg-private
-    expect(isCrossSideLifecycleKey('reviewing')).toBe(false); // pg-private
-    expect(isCrossSideLifecycleKey('sent')).toBe(true);
+    expect(isCrossSideLifecycleKey('active')).toBe(true);
     expect(isCrossSideLifecycleKey(null)).toBe(false); // custom / default-landing
   });
 });

@@ -37,9 +37,7 @@ describe('DrizzleColumnRepository', () => {
     const pipeline = await ctx.repo.listByBoard(ctx.ws.id, 'pipeline');
     expect(pipeline.map((c) => c.lifecycleKey)).toEqual([
       'draft',
-      'sent',
-      'collecting',
-      'comparing',
+      'active',
       'awarded',
       'closed',
     ]);
