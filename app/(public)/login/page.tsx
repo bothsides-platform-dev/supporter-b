@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
+import { Checkbox } from '@/components/primitives/Checkbox';
 import { PasswordField } from '@/components/auth/PasswordField';
 import { loginAction } from '@/lib/server/actions/auth';
 import {
@@ -116,12 +117,11 @@ function LoginContent() {
         />
 
         <div className="flex items-center gap-2">
-          <input
+          <Checkbox
             id="rememberMe"
-            type="checkbox"
             checked={rememberMe}
-            onChange={(e) => setRememberMe(e.target.checked)}
-            className="w-3.5 h-3.5 accent-[var(--md-sys-color-on-surface)]"
+            onCheckedChange={setRememberMe}
+            aria-label="로그인 유지"
           />
           <label
             htmlFor="rememberMe"

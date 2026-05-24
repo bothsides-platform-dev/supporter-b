@@ -1,6 +1,6 @@
 'use client';
 
-import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/primitives/Checkbox';
 
 type AgreementState = {
   terms: boolean;
@@ -13,7 +13,7 @@ type AgreementCheckboxesProps = {
   onChange: (v: AgreementState) => void;
 };
 
-function Checkbox({
+function AgreementRow({
   id,
   checked,
   onChange,
@@ -28,21 +28,7 @@ function Checkbox({
 }) {
   return (
     <label htmlFor={id} className="flex items-start gap-3 cursor-pointer group">
-      <div
-        className={cn(
-          'mt-0.5 w-4 h-4 border rounded-md flex items-center justify-center transition-colors shrink-0',
-          checked
-            ? 'border-[var(--md-sys-color-on-surface)] bg-[var(--md-sys-color-on-surface)]'
-            : 'border-[var(--md-sys-color-outline)] group-hover:border-[var(--md-sys-color-on-surface)]',
-        )}
-      >
-        {checked && (
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M2 5l2.5 2.5 3.5-4" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </div>
-      <input id={id} type="checkbox" className="sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <Checkbox id={id} checked={checked} onCheckedChange={onChange} className="mt-0.5" />
       <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] leading-snug">
         {children}
         {required && <span className="ml-1 text-[var(--md-sys-color-error)]">*</span>}
@@ -61,11 +47,11 @@ export function AgreementCheckboxes({ value, onChange }: AgreementCheckboxesProp
 
   return (
     <div className="space-y-3">
-      <Checkbox id="all" checked={allChecked} onChange={toggleAll}>
+      <AgreementRow id="all" checked={allChecked} onChange={toggleAll}>
         <span className="font-medium">전체 동의</span>
-      </Checkbox>
+      </AgreementRow>
       <div className="ml-7 space-y-2.5 border-t border-[var(--md-sys-color-outline-variant)] pt-3">
-        <Checkbox
+        <AgreementRow
           id="terms"
           checked={value.terms}
           onChange={(v) => onChange({ ...value, terms: v })}
@@ -81,8 +67,8 @@ export function AgreementCheckboxes({ value, onChange }: AgreementCheckboxesProp
             이용약관
           </a>{' '}
           동의
-        </Checkbox>
-        <Checkbox
+        </AgreementRow>
+        <AgreementRow
           id="privacy"
           checked={value.privacy}
           onChange={(v) => onChange({ ...value, privacy: v })}
@@ -98,14 +84,14 @@ export function AgreementCheckboxes({ value, onChange }: AgreementCheckboxesProp
             개인정보 처리방침
           </a>{' '}
           동의
-        </Checkbox>
-        <Checkbox
+        </AgreementRow>
+        <AgreementRow
           id="marketing"
           checked={value.marketing}
           onChange={(v) => onChange({ ...value, marketing: v })}
         >
           마케팅 수신 동의 (선택)
-        </Checkbox>
+        </AgreementRow>
       </div>
     </div>
   );

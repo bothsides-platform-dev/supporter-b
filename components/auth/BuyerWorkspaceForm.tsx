@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
+import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import {
   BizLookupField,
@@ -79,18 +80,18 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
         />
       </div>
 
-      <label className="flex items-start gap-3 cursor-pointer select-none">
-        <input
-          type="checkbox"
+      <label htmlFor="skipBiz" className="flex items-start gap-3 cursor-pointer select-none">
+        <Checkbox
+          id="skipBiz"
           checked={skipBiz}
-          onChange={(e) => {
-            setSkipBiz(e.target.checked);
-            if (e.target.checked) {
+          onCheckedChange={(checked) => {
+            setSkipBiz(checked);
+            if (checked) {
               setBizProfile(null);
               setGrade(null);
             }
           }}
-          className="mt-1 h-3 w-3 accent-[var(--md-sys-color-on-surface)]"
+          className="mt-0.5"
         />
         <span className="text-[13px] leading-snug text-[var(--md-sys-color-on-surface)]">
           사업자번호·등급 나중에 입력하기
