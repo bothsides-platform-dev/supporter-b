@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion, useScroll, useMotionValueEvent } from 'motion/react';
 import { Logo } from '@/components/primitives/Logo';
 import { Button } from '@/components/primitives/Button';
+import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
 import { LiveBidSimulation } from '@/components/landing/LiveBidSimulation';
 import { LandingToast, type LandingToastItem } from '@/components/landing/LandingToast';
@@ -135,7 +136,10 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
       {/* ── Nav ── */}
       <header className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-8 h-[var(--shell-topbar)] border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]">
         <Logo />
-        {nav}
+        <div className="flex items-center gap-[var(--s-3)]">
+          {nav}
+          <ThemeToggle />
+        </div>
       </header>
 
       <main className="flex-1 pt-[var(--shell-topbar)]">
