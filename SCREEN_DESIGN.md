@@ -324,4 +324,4 @@ PG 영업담당의 1차 진입 경로. 토큰 검증 후 인증 상태에 따라
 - 회사 도메인 자동 합류 — v1 옵션 기능, 본 v0 범위 외
 - 감사 로그 — 백엔드 영역
 
-> 시각 디자인 규칙은 [DESIGN.md §5.11](./DESIGN.md), 도메인 타입·검증·라우팅 가드는 [SPEC.md §8](./SPEC.md), 토큰 정책·마일스톤 M1.5 는 [IMPLEMENTATION.md §8](./IMPLEMENTATION.md) 참조.
+> 시각 디자인 규칙은 [DESIGN.md §5.11](./DESIGN.md), 도메인 타입·검증·라우팅 가드는 [SPEC.md §8](./SPEC.md) 참조.

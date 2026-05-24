@@ -1,6 +1,6 @@
 # Supporter B — 기술 스펙 (Next.js 16)
 
-> 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) (화면·IA·UX) · [DESIGN.md](./DESIGN.md) (디자인 시스템) · [IMPLEMENTATION.md](./IMPLEMENTATION.md) (구현 계획)
+> 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) (화면·IA·UX) · [DESIGN.md](./DESIGN.md) (디자인 시스템)
 > 본 문서: 기술 스택, 디렉토리, 도메인 타입, 라우팅 전략
 
 ---
@@ -10,7 +10,6 @@
 `PG_RFP_SPEC.md`의 PG 비공개 1:N RFP 흐름과 `DESIGN.md`의 디자인 시스템을 **Next.js 16 기반 프로덕션 코드**로 구현하기 위한 기술 스펙. M0~M5 범위는 구매사 RFP 작성 → PG 초대/응답 → 구매사 비교/수주 처리까지를 mock 데이터로 클릭스루하고, API/DB 연결 시에도 동일한 도메인 계약을 유지하는 것이 1차 목표다.
 
 - 미적 방향·토큰·컴포넌트 시각 원칙은 [DESIGN.md](./DESIGN.md) 참조
-- 마일스톤·부트스트랩 절차·검증 체크리스트는 [IMPLEMENTATION.md](./IMPLEMENTATION.md) 참조
 
 **범위 외**
 - v0 결재선/승인 워크플로우 (단일 결정자)
@@ -403,7 +402,7 @@ PG 워크스페이스는 같은 `AppShell`을 쓰되 `inbox/` 중심 Subnav를 �
 
 ## 7. Public 영역 라우팅 (인증/가입)
 
-화면 명세는 [SCREEN_DESIGN.md §1](./SCREEN_DESIGN.md), 시각 규칙은 [DESIGN.md §5.11](./DESIGN.md), 토큰 정책·마일스톤은 [IMPLEMENTATION.md §8](./IMPLEMENTATION.md).
+화면 명세는 [SCREEN_DESIGN.md §1](./SCREEN_DESIGN.md), 시각 규칙은 [DESIGN.md §5.11](./DESIGN.md).
 
 ### 7.1 라우트 그룹 분리
 

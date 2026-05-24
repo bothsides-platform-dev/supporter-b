@@ -12,8 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. **SCREEN_DESIGN.md** — Screens, IA, UX flows. §0 PG v0 화면 IA(B1~B7, P1~P6) + §1 인증/가입(P1~P11).
 3. **DESIGN.md** — Design system (*Linear*). Tokens, typography, color roles, component visual rules, motion, anti-clichés. **Single source of truth for visual decisions** — `styles/tokens.css` syncs from here unidirectionally. (Token names keep the `--md-sys-*` prefix; values are Linear.)
 4. **SPEC.md** — Tech spec. Stack, directory layout, domain TypeScript types, App Router strategy, public-vs-app route groups.
-5. **IMPLEMENTATION.md** — Milestones M0~M8 + M1.5 (auth), bootstrap commands, verification checklists, work order.
-6. **[NOTIFICATION.md](./NOTIFICATION.md)** — 알림 시스템. 이메일(Resend) + 인앱(SSE + Drawer) 채널, NotificationService 모듈 구조, 이벤트→알림 매핑.
+5. **[NOTIFICATION.md](./NOTIFICATION.md)** — 알림 시스템. 이메일(Resend) + 인앱(SSE + Drawer) 채널, NotificationService 모듈 구조, 이벤트→알림 매핑.
 
 If these conflict, **PG_RFP_SPEC.md wins** (newest, post-pivot). Distribute its §8 changes back into the other four files when implementing — do not let them drift.
 
@@ -112,22 +111,12 @@ If frontend code looks "generic SaaS", check DESIGN.md §9 (anti-patterns) befor
 
 세부 RED-Flag 합리화 패턴(예: "이건 너무 사소해서…", "이미 수동으로 확인했어")과 cycle 가이드는 `superpowers:test-driven-development` 스킬 본문 참조.
 
-## Work Order
-
-Current milestone (2026-05-08): M7 종료, M8 진행 중 (인프라 가동, mock 정리 잔여).
-
-Follow IMPLEMENTATION.md milestones strictly: **M0 → M1 → M1.5 → M2 → ... → M8**. Don't skip M1 primitives to start a feature page — primitives must exist first or the feature page will reinvent them off-spec.
-
-Per-PR verification checklist lives in IMPLEMENTATION.md §4. Copy it into PR body. Three end-to-end scenarios (A/B/C in PG_RFP_SPEC.md §6) are the ultimate clickthrough acceptance tests.
-
-**모든 구현·버그픽스 작업은 "TDD — Hard Rules" 섹션에 따라 failing test부터 시작한다.** 코드 작성 전 `superpowers:test-driven-development` 스킬을 발동했는지 먼저 확인.
-
 ## When Editing Documentation
 
-The 7 docs cross-reference each other heavily. After any change:
+The 6 docs cross-reference each other heavily. After any change:
 - If you edit DESIGN.md tokens → also bump `styles/tokens.css`
 - If you edit PG_RFP_SPEC.md §4 (domain types) → also update SPEC.md §5 to match
-- If you add a screen → register it in both SCREEN_DESIGN.md (IA) and IMPLEMENTATION.md (milestone)
+- If you add a screen → register it in SCREEN_DESIGN.md (IA)
 - If a decision contradicts the 15 policies in PG_RFP_SPEC.md §3, **stop and ask** — that table is the canonical product definition.
 
 ## Skill routing (project-specific only)
