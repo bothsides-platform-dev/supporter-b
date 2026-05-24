@@ -13,7 +13,8 @@ const { pinoFactory, pinoTransport, pinoInfo, pinoWarn, pinoError, pinoDebug } =
       info: pinoInfo, warn: pinoWarn, error: pinoError, debug: pinoDebug,
     })),
     { transport: pinoTransport },
-  ) as typeof import('pino').default;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock is used both as the pino fn and a vitest Mock (mockClear); no single precise type fits.
+  ) as any;
   return { pinoFactory, pinoTransport, pinoInfo, pinoWarn, pinoError, pinoDebug };
 });
 
