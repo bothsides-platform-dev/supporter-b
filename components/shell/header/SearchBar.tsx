@@ -1,9 +1,9 @@
 'use client';
 
 import { SearchIcon } from '@/components/icons';
-import { Kbd } from '@/components/ui/Kbd';
+import { ModifierShortcut } from '@/components/ui/ModifierShortcut';
 import { useUIStore } from '@/lib/stores/ui';
-import { useIsMac, formatModifierShortcut } from '@/lib/hooks/usePlatform';
+import { useIsMac } from '@/lib/hooks/usePlatform';
 import { cn } from '@/lib/utils';
 
 type SearchBarProps = {
@@ -12,7 +12,7 @@ type SearchBarProps = {
 
 /**
  * SearchBar — header search trigger. Button-styled (not a real input): clicking
- * it (or ⌘K) opens the command palette. Shows the platform-aware ⌘K hint.
+ * it (or ⌘ K) opens the command palette. Shows the platform-aware modifier hint.
  * Linear: 1px outline-variant border, hover = background shift only (no shadow).
  */
 export function SearchBar({ className }: SearchBarProps) {
@@ -34,7 +34,7 @@ export function SearchBar({ className }: SearchBarProps) {
     >
       <SearchIcon size={16} className="shrink-0" />
       <span className="flex-1 text-left">검색…</span>
-      <Kbd className="shrink-0">{formatModifierShortcut('K', isMac)}</Kbd>
+      <ModifierShortcut shortcutKey="K" isMac={isMac} className="shrink-0" />
     </button>
   );
 }

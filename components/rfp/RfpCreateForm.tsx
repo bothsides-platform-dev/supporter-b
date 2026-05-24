@@ -11,7 +11,8 @@ import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { useLazyPgWorkspaces } from '@/hooks/useLazyPgWorkspaces';
 import type { PgWorkspace } from '@/hooks/useLazyPgWorkspaces';
 import { useShortcut } from '@/lib/hooks/useShortcut';
-import { useIsMac, formatModifierShortcut } from '@/lib/hooks/usePlatform';
+import { ModifierShortcut } from '@/components/ui/ModifierShortcut';
+import { useIsMac } from '@/lib/hooks/usePlatform';
 import { createRfpAction } from '@/lib/server/actions/rfp';
 import type { BizProfile } from '@/lib/types/biz-profile';
 
@@ -386,7 +387,7 @@ export function RfpCreateForm({ bizProfile, workspaceName = '', guest = false }:
 
             <div className="flex items-center justify-between font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-outline)]">
               <span>
-                <kbd className="text-[var(--md-sys-color-on-surface-variant)]">{formatModifierShortcut('S', isMac)}</kbd> 임시 저장
+                <ModifierShortcut shortcutKey="S" isMac={isMac} /> 임시 저장
               </span>
               {savedAt && (
                 <span className="text-[var(--md-sys-color-tertiary)]">✓ 저장됨 {savedAt}</span>

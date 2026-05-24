@@ -11,9 +11,15 @@ export function isMacPlatform(nav?: NavLike): boolean {
   return /Mac|iPhone|iPad|iPod/i.test(hay);
 }
 
-// Render a modifier shortcut for display: '⌘K' on Mac, 'Ctrl+K' elsewhere.
-export function formatModifierShortcut(key: string, isMac: boolean): string {
-  return isMac ? `⌘${key}` : `Ctrl+${key}`;
+// Split a modifier combo into separate keycap labels (⌘ + K, Ctrl + K).
+export function getModifierShortcutParts(
+  key: string,
+  isMac: boolean,
+): { modifier: string; key: string } {
+  return {
+    modifier: isMac ? '⌘' : 'Ctrl',
+    key: key.toUpperCase(),
+  };
 }
 
 function getSnapshot(): boolean {
