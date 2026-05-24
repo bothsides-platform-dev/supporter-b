@@ -34,9 +34,9 @@ import { HomeIcon } from '@/components/icons';
 
 // NavItem reads the sidebar context (useSidebar) for collapsed/icon state, so it
 // must render under a SidebarProvider — same harness as SidebarSection.test.
-function renderItem(ui: React.ReactElement) {
+function renderItem(ui: React.ReactElement, { open = true }: { open?: boolean } = {}) {
   return render(
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={open}>
       <TooltipProvider delay={0}>{ui}</TooltipProvider>
     </SidebarProvider>,
   );
@@ -75,6 +75,7 @@ describe('NavItem', () => {
 
   it('reveals the keyboard shortcut in a tooltip on hover', async () => {
     const user = userEvent.setup();
+    // The shortcut tooltip only renders when the sidebar is collapsed.
     renderItem(
       <NavItem
         href="/home"
@@ -82,6 +83,7 @@ describe('NavItem', () => {
         icon={HomeIcon}
         shortcut={{ kind: 'chord', lead: 'g', key: 'h' }}
       />,
+      { open: false },
     );
     await user.hover(screen.getByRole('link', { name: /홈/ }));
     expect(await screen.findByText('H')).toBeInTheDocument();
