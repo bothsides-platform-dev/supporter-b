@@ -18,15 +18,7 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
   const isMac = useIsMac();
   const isExpanded = state === 'expanded';
   const label = isExpanded ? '사이드바 접기' : '사이드바 펼치기';
-  const showCollapsedTooltip = state === 'collapsed' && !isMobile;
-
-  const shortcutHint = (
-    <ModifierShortcut
-      shortcutKey={SIDEBAR_TOGGLE_SHORTCUT_KEY}
-      isMac={isMac}
-      className="shrink-0 group-data-[collapsible=icon]:hidden"
-    />
-  );
+  const showTooltip = !isMobile;
 
   const button = (
     <button
@@ -46,15 +38,12 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
         className={cn('transition-transform duration-200', !isExpanded && 'rotate-180')}
       />
       {isExpanded ? (
-        <>
-          <span
-            aria-hidden="true"
-            className="text-sm text-[length:var(--md-typescale-label-large-size)] group-data-[collapsible=icon]:hidden"
-          >
-            사이드바 접기
-          </span>
-          {shortcutHint}
-        </>
+        <span
+          aria-hidden="true"
+          className="text-sm text-[length:var(--md-typescale-label-large-size)] group-data-[collapsible=icon]:hidden"
+        >
+          사이드바 접기
+        </span>
       ) : null}
     </button>
   );
@@ -62,9 +51,9 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
   // Always wrap in Tooltip so the trigger button stays mounted; otherwise
   // toggling expanded ↔ collapsed remounts the button and skips rotate-180 transition.
   return (
-    <Tooltip disabled={!showCollapsedTooltip}>
-      <TooltipTrigger disabled={!showCollapsedTooltip} render={button} />
-      {showCollapsedTooltip ? (
+    <Tooltip disabled={!showTooltip}>
+      <TooltipTrigger disabled={!showTooltip} render={button} />
+      {showTooltip ? (
         <TooltipContent side="right" sideOffset={8} className="gap-2">
           <span>{label}</span>
           <ModifierShortcut shortcutKey={SIDEBAR_TOGGLE_SHORTCUT_KEY} isMac={isMac} />

@@ -695,7 +695,11 @@ CLAUDE.md 규칙: 스펙이 정본. PG 칸반이 5컬럼(낙찰/실패 분리)�
 
 - [ ] **Step 2: SCREEN_DESIGN.md 에 동일 주석 추가**
 
-B2(62줄)/P2(74줄) 근처에 같은 취지의 한 줄을 추가(칸반 컬럼 = 구매사 4 / PG 5, PG 는 마감을 낙찰·실패로 분리).
+B2(62줄)·P2(74줄) 표 아래(또는 §0 IA 블록 끝)에 다음 한 줄을 추가:
+
+```markdown
+> 칸반 뷰 컬럼: 구매사 `작성중 / 진행중 / 계약완료 / 마감`(4, 표 탭과 동일), PG `신규 / 작성중 / 제출완료 / 낙찰 / 실패`(5 — 표 탭 `마감`을 보드에서 `낙찰`/`실패`로 분리).
+```
 
 - [ ] **Step 3: 커밋**
 
@@ -750,9 +754,9 @@ Expected: `migrate-pipeline-columns-trim: done.`
 
 - [ ] **Step 7: 최종 커밋(필요 시)**
 
-e2e 라벨 수정 등 변경이 있었다면:
+e2e 라벨 수정 등 변경이 있었다면 (변경된 e2e 파일만 명시적으로 add — 무관한 작업트리 변경 `components/shell/WorkspaceSwitcher.tsx` 등을 쓸어담지 않도록 `git add -A` 금지):
 
 ```bash
-git add -A
+git add e2e/
 git commit -m "test(kanban): e2e 칸반 컬럼 라벨 셀렉터 정합"
 ```

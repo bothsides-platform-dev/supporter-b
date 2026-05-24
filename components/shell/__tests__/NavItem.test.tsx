@@ -100,9 +100,10 @@ describe('NavItem', () => {
       { open: true },
     );
     const link = screen.getByRole('link', { name: /홈/ });
-    expect(link.querySelector('[data-slot="kbd"]')).not.toBeInTheDocument();
+    const shortcutWrapper = link.querySelector('.opacity-0');
+    expect(shortcutWrapper).toBeInTheDocument();
+    expect(shortcutWrapper?.querySelectorAll('[data-slot="kbd"]')).toHaveLength(2);
     await user.hover(link);
-    expect(link.querySelectorAll('[data-slot="kbd"]')).toHaveLength(2);
     expect(screen.getByText('G')).toBeInTheDocument();
     expect(screen.getByText('H')).toBeInTheDocument();
   });

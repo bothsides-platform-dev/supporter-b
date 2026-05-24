@@ -78,18 +78,32 @@ describe('ShellSidebarTrigger', () => {
     expect(document.querySelector('[data-slot="tooltip-content"]')).not.toBeInTheDocument();
   });
 
-  it('shows Ctrl and B keycaps next to the collapse label when expanded on non-Mac', () => {
+  it('does not show inline shortcut keycaps when expanded', () => {
     stubUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
     renderTrigger(true);
-    expect(screen.getByText('Ctrl')).toBeVisible();
-    expect(screen.getByText('B')).toBeVisible();
+    expect(screen.queryByText('Ctrl')).not.toBeInTheDocument();
+    expect(screen.queryByText('B')).not.toBeInTheDocument();
   });
 
-  it('shows ⌘ and B keycaps next to the collapse label when expanded on Mac', () => {
-    stubUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
+  it('shows the toggle shortcut in the tooltip when expanded', async () => {
+    stubUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+    const user = userEvent.setup();
     renderTrigger(true);
-    expect(screen.getByText('⌘')).toBeVisible();
-    expect(screen.getByText('B')).toBeVisible();
+    await user.hover(screen.getByRole('button', { name: '사이드바 접기' }));
+    const tooltip = document.querySelector('[data-slot="tooltip-content"]');
+    expect(tooltip).toHaveTextContent('사이드바 접기');
+    expect(tooltip).toHaveTextContent('Ctrl');
+    expect(tooltip).toHaveTextContent('B');
+  });
+
+  it('shows ⌘ and B in the tooltip when expanded on Mac', async () => {
+    stubUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
+    const user = userEvent.setup();
+    renderTrigger(true);
+    await user.hover(screen.getByRole('button', { name: '사이드바 접기' }));
+    const tooltip = document.querySelector('[data-slot="tooltip-content"]');
+    expect(tooltip).toHaveTextContent('⌘');
+    expect(tooltip).toHaveTextContent('B');
   });
 
   it('shows the toggle shortcut in the tooltip when collapsed', async () => {

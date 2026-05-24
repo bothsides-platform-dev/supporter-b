@@ -29,8 +29,8 @@ type NavItemProps = {
 
 /**
  * NavItem — a top-level sidebar nav link (icon + label). When a shortcut is
- * supplied it gets a Linear-style hover tooltip showing the keyboard hint.
- * Active state is computed by the caller and passed in.
+ * supplied, expanded sidebar shows an inline keycap hint on hover; collapsed
+ * sidebar shows label + hint in a tooltip. Active state is computed by the caller.
  */
 export function NavItem({
   href,
@@ -44,17 +44,27 @@ export function NavItem({
 }: NavItemProps) {
   const { state, isMobile } = useSidebar();
   const showCollapsedTooltip = state === 'collapsed' && !isMobile;
+  const showInlineShortcut = state === 'expanded' && !isMobile && shortcut != null;
 
   const link = (
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
-      className={cn(navItemBase, active ? navItemActive : navItemInactive, className)}
+      className={cn(navItemBase, active ? navItemActive : navItemInactive, 'group', className)}
     >
       {Icon && <Icon size={18} />}
       <span className="group-data-[collapsible=icon]:sr-only">{label}</span>
-      {badge && <span className="ml-auto group-data-[collapsible=icon]:ml-0">{badge}</span>}
+      {(showInlineShortcut || badge) && (
+        <span className="ml-auto flex items-center gap-1.5 group-data-[collapsible=icon]:ml-0">
+          {showInlineShortcut && (
+            <span className="opacity-0 transition-opacity duration-[var(--md-sys-motion-duration-short-4)] group-hover:opacity-100 group-data-[collapsible=icon]:hidden">
+              <ShortcutHint shortcut={shortcut} />
+            </span>
+          )}
+          {badge}
+        </span>
+      )}
     </Link>
   );
 
