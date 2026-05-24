@@ -267,7 +267,7 @@ const STATUTORY_CARD_FEE: Record<Grade, number> = {
 | 파일 | 변경 |
 |---|---|
 | `SCREEN_DESIGN.md` | **§0 도메인 컨텍스트(PG 특화)** 추가, §3 화면 명세를 본 §5 IA 로 교체. 기존 결재선·캘린더·템플릿은 v0 범위 외로 마킹. §11.5 인증/가입은 유지하되 워크스페이스 선택 단계(C2)에 buyer/pg 분기 추가. |
-| `DESIGN.md` | Korean Editorial Modernism 디자인 시스템 그대로 유지. PG 도메인 특수 컴포넌트(BizLookupField, GradeBadge, CardFeeMatrix, BidComparisonTable, A4PdfPreview) 만 §5 컴포넌트 사양에 추가. |
+| `DESIGN.md` | Linear 디자인 시스템 유지. PG 도메인 특수 컴포넌트(BizLookupField, GradeBadge, CardFeeMatrix, BidComparisonTable, A4PdfPreview) 만 §5 컴포넌트 사양에 추가. |
 | `SPEC.md` | §5 도메인 타입을 본 §4 로 교체. §3 디렉토리 구조에 `app/(app)/rfp/`·`app/(app)/inbox/` 추가, 기존 `quote/`·`account/`·`approval/` 는 archive. lib/types 에 `bizProfile.ts`, `rfp.ts`, `bid.ts`, `invitation.ts` 추가. |
 
 ---

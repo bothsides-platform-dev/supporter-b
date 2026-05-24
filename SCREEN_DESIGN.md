@@ -292,13 +292,13 @@ Award
 **시나리오 D — 구매사 신규 가입(셀프서비스)**
 1. `/login` → `회원가입` → Rs1 역할 선택 → "구매사" 카드
 2. Bs1 이메일 + 약관 동의 → [인증 메일 받기]
-3. Bs2 대기 → (mock) 토큰 URL → `/auth/verify` 스플래시 → Bs3 자동 이동
+3. Bs2 대기 → 이메일 토큰 URL → `/auth/verify` 스플래시 → Bs3 자동 이동
 4. 프로필 입력 → Bs4 워크스페이스 이름·산업 → [만들기] → `/rfp` (관리자)
 
 **시나리오 E — PG 초대 진입**
-1. (mock) `/invite/rfp/:token` 진입 — `SignupDraft` 선 채움 (workspaceType='pg', email, rfpInviteToken)
+1. `/invite/rfp/:token` 진입 — `SignupDraft` 선 채움 (workspaceType='pg', email, rfpInviteToken)
 2. Rs1 건너뜀 → Gs2 인증 대기 (이메일 자동 채움, 메일 즉시 발송)
-3. (mock) 토큰 → Gs3 프로필 → Gs4 워크스페이스 자동 합류 확인 → [합류하기] → `/inbox/:rfpId`
+3. 이메일 토큰 → Gs3 프로필 → Gs4 워크스페이스 자동 합류 확인 → [합류하기] → `/inbox/:rfpId`
 
 **시나리오 F — PG 직접 가입**
 1. `/signup` → Rs1 → "PG사 영업담당" 카드 → Gs1 이메일
@@ -306,7 +306,7 @@ Award
 
 **시나리오 G — 비밀번호 분실**
 1. `/login` → `비밀번호를 잊으셨나요?` → `/password/forgot`
-2. (mock) 토큰 → `/password/reset` → 새 비밀번호 → 자동 로그인 → `/home`
+2. 이메일 토큰 → `/password/reset` → 새 비밀번호 → 자동 로그인 → `/home`
 
 ### 1.5 `/invite/rfp/:token` → PG 플로우 핸드오프
 
