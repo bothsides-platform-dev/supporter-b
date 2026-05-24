@@ -9,16 +9,15 @@ type SidebarFooterControlsProps = {
 };
 
 /**
- * Footer utility cluster — theme toggle + sidebar collapse (desktop).
- * Icon-only controls; collapse label is exposed via aria-label and tooltip on icon rail.
+ * Footer utilities — theme toggle (left) and sidebar collapse (right) on desktop.
+ * Icon rail: vertical stack; collapse label hidden, tooltip only.
  */
 export function SidebarFooterControls({ className }: SidebarFooterControlsProps) {
   return (
     <div
       data-testid="sidebar-footer-toolbar"
       className={cn(
-        'flex flex-row items-center gap-0.5',
-        'md:ml-auto md:justify-end',
+        'flex w-full flex-row items-center justify-between gap-2',
         'group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1',
         className,
       )}

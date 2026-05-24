@@ -107,7 +107,7 @@ function SidebarBody({
       </SidebarContent>
 
       <SidebarFooter className="flex-row items-center gap-1 border-t border-[var(--md-sys-color-outline-variant)] p-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1">
-        <SidebarFooterControls />
+        <SidebarFooterControls className="min-w-0 flex-1" />
         <div className="ml-auto md:hidden">
           <UserMenu
             user={{ name: user.name, email: user.email }}

@@ -37,6 +37,17 @@ describe('ShellSidebarTrigger', () => {
     expect(screen.getByRole('button', { name: '사이드바 접기' })).toBeInTheDocument();
   });
 
+  it('shows visible "사이드바 접기" text when expanded', () => {
+    renderTrigger(true);
+    expect(screen.getByText('사이드바 접기')).toBeVisible();
+  });
+
+  it('hides visible collapse label text when collapsed', () => {
+    renderTrigger(false);
+    expect(screen.queryByText('사이드바 접기')).not.toBeInTheDocument();
+    expect(screen.queryByText('사이드바 펼치기')).not.toBeInTheDocument();
+  });
+
   it('shows a tooltip with the expand label when the sidebar is collapsed', async () => {
     const user = userEvent.setup();
     renderTrigger(false);
