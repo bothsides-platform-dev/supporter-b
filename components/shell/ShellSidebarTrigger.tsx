@@ -1,19 +1,32 @@
 'use client';
 
 import { PanelLeftIcon } from 'lucide-react';
+import { ModifierShortcut } from '@/components/ui/ModifierShortcut';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSidebar } from '@/components/ui/sidebar';
+import { useIsMac } from '@/lib/hooks/usePlatform';
 import { cn } from '@/lib/utils';
 
 type ShellSidebarTriggerProps = {
   className?: string;
 };
 
+const SIDEBAR_TOGGLE_SHORTCUT_KEY = 'B';
+
 export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
   const { state, isMobile, toggleSidebar } = useSidebar();
+  const isMac = useIsMac();
   const isExpanded = state === 'expanded';
   const label = isExpanded ? '사이드바 접기' : '사이드바 펼치기';
   const showCollapsedTooltip = state === 'collapsed' && !isMobile;
+
+  const shortcutHint = (
+    <ModifierShortcut
+      shortcutKey={SIDEBAR_TOGGLE_SHORTCUT_KEY}
+      isMac={isMac}
+      className="shrink-0 group-data-[collapsible=icon]:hidden"
+    />
+  );
 
   const button = (
     <button
@@ -33,12 +46,15 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
         className={cn('transition-transform duration-200', !isExpanded && 'rotate-180')}
       />
       {isExpanded ? (
-        <span
-          aria-hidden="true"
-          className="text-sm text-[length:var(--md-typescale-label-large-size)] group-data-[collapsible=icon]:hidden"
-        >
-          사이드바 접기
-        </span>
+        <>
+          <span
+            aria-hidden="true"
+            className="text-sm text-[length:var(--md-typescale-label-large-size)] group-data-[collapsible=icon]:hidden"
+          >
+            사이드바 접기
+          </span>
+          {shortcutHint}
+        </>
       ) : null}
     </button>
   );
@@ -49,8 +65,9 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
     <Tooltip disabled={!showCollapsedTooltip}>
       <TooltipTrigger disabled={!showCollapsedTooltip} render={button} />
       {showCollapsedTooltip ? (
-        <TooltipContent side="right" sideOffset={8}>
-          {label}
+        <TooltipContent side="right" sideOffset={8} className="gap-2">
+          <span>{label}</span>
+          <ModifierShortcut shortcutKey={SIDEBAR_TOGGLE_SHORTCUT_KEY} isMac={isMac} />
         </TooltipContent>
       ) : null}
     </Tooltip>

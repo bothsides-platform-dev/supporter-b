@@ -73,9 +73,8 @@ describe('NavItem', () => {
     expect(link).toContainElement(screen.getByTestId('unread-badge'));
   });
 
-  it('reveals the keyboard shortcut in a tooltip on hover', async () => {
+  it('reveals the keyboard shortcut in a tooltip on hover when collapsed', async () => {
     const user = userEvent.setup();
-    // The shortcut tooltip only renders when the sidebar is collapsed.
     renderItem(
       <NavItem
         href="/home"
@@ -87,5 +86,24 @@ describe('NavItem', () => {
     );
     await user.hover(screen.getByRole('link', { name: /홈/ }));
     expect(await screen.findByText('H')).toBeInTheDocument();
+  });
+
+  it('reveals the keyboard shortcut inline on hover when expanded', async () => {
+    const user = userEvent.setup();
+    renderItem(
+      <NavItem
+        href="/home"
+        label="홈"
+        icon={HomeIcon}
+        shortcut={{ kind: 'chord', lead: 'g', key: 'h' }}
+      />,
+      { open: true },
+    );
+    const link = screen.getByRole('link', { name: /홈/ });
+    expect(link.querySelector('[data-slot="kbd"]')).not.toBeInTheDocument();
+    await user.hover(link);
+    expect(link.querySelectorAll('[data-slot="kbd"]')).toHaveLength(2);
+    expect(screen.getByText('G')).toBeInTheDocument();
+    expect(screen.getByText('H')).toBeInTheDocument();
   });
 });

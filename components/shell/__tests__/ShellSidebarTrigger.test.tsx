@@ -1,9 +1,20 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ShellSidebarTrigger } from '../ShellSidebarTrigger';
+
+function stubUserAgent(ua: string) {
+  Object.defineProperty(window.navigator, 'userAgent', {
+    configurable: true,
+    value: ua,
+  });
+}
+
+afterEach(() => {
+  delete (window.navigator as unknown as Record<string, unknown>).userAgent;
+});
 
 class ResizeObserverStub {
   observe() {}
@@ -65,5 +76,30 @@ describe('ShellSidebarTrigger', () => {
     renderTrigger(true);
     fireEvent.focus(screen.getByRole('button', { name: '사이드바 접기' }));
     expect(document.querySelector('[data-slot="tooltip-content"]')).not.toBeInTheDocument();
+  });
+
+  it('shows Ctrl and B keycaps next to the collapse label when expanded on non-Mac', () => {
+    stubUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+    renderTrigger(true);
+    expect(screen.getByText('Ctrl')).toBeVisible();
+    expect(screen.getByText('B')).toBeVisible();
+  });
+
+  it('shows ⌘ and B keycaps next to the collapse label when expanded on Mac', () => {
+    stubUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
+    renderTrigger(true);
+    expect(screen.getByText('⌘')).toBeVisible();
+    expect(screen.getByText('B')).toBeVisible();
+  });
+
+  it('shows the toggle shortcut in the tooltip when collapsed', async () => {
+    stubUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+    const user = userEvent.setup();
+    renderTrigger(false);
+    await user.hover(screen.getByRole('button', { name: '사이드바 펼치기' }));
+    const tooltip = document.querySelector('[data-slot="tooltip-content"]');
+    expect(tooltip).toHaveTextContent('사이드바 펼치기');
+    expect(tooltip).toHaveTextContent('Ctrl');
+    expect(tooltip).toHaveTextContent('B');
   });
 });
