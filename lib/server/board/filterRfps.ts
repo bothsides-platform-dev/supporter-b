@@ -1,8 +1,9 @@
 // Pure board filtering + view resolution. Composes the existing status-filter
-// mapping with deadline-bucket and grade predicates. Server-importable (type-only
-// component import is erased — see status-filter.ts precedent).
+// mapping with deadline-bucket and grade predicates.
+// Pure (no DB/IO). Importing TYPES from 'use client' files (InboxRow) is erased at compile time, so this stays server-safe — see status-filter.ts.
 import type { RFP } from '@/lib/types/rfp';
-import { filterRfpsByParam } from '@/lib/server/status-filter';
+import { filterRfpsByParam, filterInboxRowsByParam } from '@/lib/server/status-filter';
+import type { InboxRow } from '@/components/inbox/InboxList';
 
 export type BoardView = 'table' | 'board';
 
@@ -51,4 +52,10 @@ export function filterRfps(rfps: RFP[], params: BoardFilterParams, now: Date): R
   return filterRfpsByParam(rfps, params.status)
     .filter((r) => matchesDeadlineBucket(r.deadline, params.deadline, now))
     .filter((r) => matchesGrade(r.bizProfile?.grade, params.grade));
+}
+
+export function filterInboxRows(rows: InboxRow[], params: BoardFilterParams, now: Date): InboxRow[] {
+  return filterInboxRowsByParam(rows, params.status)
+    .filter((r) => matchesDeadlineBucket(r.rfpDeadline, params.deadline, now))
+    .filter((r) => matchesGrade(r.gradeRaw, params.grade));
 }

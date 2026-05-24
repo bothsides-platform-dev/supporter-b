@@ -4,8 +4,10 @@ import {
   matchesGrade,
   resolveBoardView,
   filterRfps,
+  filterInboxRows,
 } from '../filterRfps';
 import type { RFP } from '@/lib/types/rfp';
+import type { InboxRow } from '@/components/inbox/InboxList';
 
 // Fixed "now": 2026-05-24 (local).
 const NOW = new Date(2026, 4, 24, 9, 0, 0);
@@ -97,5 +99,31 @@ describe('filterRfps (status + deadline + grade, AND)', () => {
   });
   it('combined status=active & grade=sme1 & deadline=d7', () => {
     expect(filterRfps(rows, { status: 'active', grade: 'sme1', deadline: 'd7' }, NOW).map((r) => r.id)).toEqual(['a']);
+  });
+});
+
+describe('filterInboxRows (status + deadline + grade, AND)', () => {
+  const row = (over: Partial<InboxRow>): InboxRow => ({
+    invitationId: 'i', invitationStatus: 'sent', rfpStatus: 'sent',
+    rfpId: 'P-1', rfpTitle: 't', rfpDeadline: iso(2026, 5, 27), grade: '중소1', gradeRaw: 'sme1',
+    ...over,
+  });
+  const rows: InboxRow[] = [
+    row({ invitationId: 'a', invitationStatus: 'sent', rfpDeadline: iso(2026, 5, 27), gradeRaw: 'sme1' }),
+    row({ invitationId: 'b', invitationStatus: 'opened', rfpDeadline: iso(2026, 6, 10), gradeRaw: 'general' }),
+    row({ invitationId: 'c', invitationStatus: 'accepted', rfpDeadline: iso(2026, 6, 10), gradeRaw: 'sme1' }),
+  ];
+
+  it('no params → all', () => {
+    expect(filterInboxRows(rows, {}, NOW).map((r) => r.invitationId)).toEqual(['a', 'b', 'c']);
+  });
+  it('status=new (→ invitation sent)', () => {
+    expect(filterInboxRows(rows, { status: 'new' }, NOW).map((r) => r.invitationId)).toEqual(['a']);
+  });
+  it('deadline=d7', () => {
+    expect(filterInboxRows(rows, { deadline: 'd7' }, NOW).map((r) => r.invitationId)).toEqual(['a']);
+  });
+  it('grade=sme1', () => {
+    expect(filterInboxRows(rows, { grade: 'sme1' }, NOW).map((r) => r.invitationId)).toEqual(['a', 'c']);
   });
 });
