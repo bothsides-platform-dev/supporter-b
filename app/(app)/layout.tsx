@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { AppSidebarLayout } from '@/components/shell/AppSidebarLayout';
 import { ToasterProvider } from '@/components/shell/Toaster';
-import { NotificationDrawer } from '@/components/shell/NotificationDrawer';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { GlobalShortcuts } from '@/components/shell/GlobalShortcuts';
 import { SentryUserContext } from '@/components/observability/SentryUserContext';
@@ -84,7 +83,6 @@ export default async function AppLayout({
       >
         {children}
       </AppSidebarLayout>
-      <NotificationDrawer />
       <CommandPalette />
       <GlobalShortcuts />
       <SentryUserContext user={sentryUser} />

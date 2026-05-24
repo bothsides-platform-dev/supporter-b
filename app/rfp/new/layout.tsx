@@ -1,7 +1,6 @@
 import { auth } from '@/auth';
 import { AppSidebarLayout } from '@/components/shell/AppSidebarLayout';
 import { ToasterProvider } from '@/components/shell/Toaster';
-import { NotificationDrawer } from '@/components/shell/NotificationDrawer';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { GlobalShortcuts } from '@/components/shell/GlobalShortcuts';
 import { GuestHeader } from '@/components/shell/GuestHeader';
@@ -49,7 +48,6 @@ export default async function RfpNewLayout({ children }: { children: React.React
       >
         {children}
       </AppSidebarLayout>
-      <NotificationDrawer />
       <CommandPalette />
       <GlobalShortcuts />
     </ToasterProvider>

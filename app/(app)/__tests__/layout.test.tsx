@@ -27,9 +27,6 @@ vi.mock('@/components/shell/AppSidebarLayout', () => ({
 vi.mock('@/components/shell/Toaster', () => ({
   ToasterProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock('@/components/shell/NotificationDrawer', () => ({
-  NotificationDrawer: () => null,
-}));
 vi.mock('@/components/shell/CommandPalette', () => ({
   CommandPalette: () => null,
 }));

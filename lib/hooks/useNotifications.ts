@@ -1,11 +1,11 @@
 'use client';
 
 /**
- * useNotifications — Topbar 배지와 Drawer 리스트가 같은 알림 상태를 공유하는
- * 클라이언트 훅. 핵심 결정(advisor):
+ * useNotifications — Sidebar 배지와 알림 페이지 리스트가 같은 알림 상태를
+ * 공유하는 클라이언트 훅. 핵심 결정(advisor):
  *
- *   1) **module-scoped Zustand store** — 같은 페이지에 여러 consumer(Topbar +
- *      Drawer)가 있어도 상태는 단일 인스턴스.
+ *   1) **module-scoped Zustand store** — 같은 페이지에 여러 consumer(Sidebar
+ *      배지 + 알림 리스트)가 있어도 상태는 단일 인스턴스.
  *   2) **EventSource ref-count singleton** — 첫 mount 시 1회 open, 마지막
  *      consumer가 unmount 될 때 close. 탭당 SSE 연결 1개 보장.
  *      cookie 자동 동봉(advisor pin 7: same-origin) — auth 별도 처리 불필요.
