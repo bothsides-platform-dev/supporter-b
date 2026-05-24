@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useThemeStore } from '@/lib/stores/theme';
 import { IconButton } from '@/components/primitives/IconButton';
 import { SunIcon, MoonIcon } from '@/components/icons';
@@ -7,8 +8,16 @@ import { SunIcon, MoonIcon } from '@/components/icons';
 export function ThemeToggle() {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
   const setTheme = useThemeStore((s) => s.setTheme);
+  const [mounted, setMounted] = useState(false);
 
-  const isDark = resolvedTheme === 'dark';
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Before mount: always render light-mode icon so server and client HTML match.
+  // Zustand persist rehydrates from localStorage synchronously, which would
+  // produce a different icon on the client → hydration mismatch without this guard.
+  const isDark = mounted && resolvedTheme === 'dark';
 
   return (
     <IconButton

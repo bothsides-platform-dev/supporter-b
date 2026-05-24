@@ -20,15 +20,13 @@ describe('ThemeToggle', () => {
   it('shows MoonIcon and aria-label "다크 모드로 전환" when resolvedTheme is light', () => {
     mockResolvedTheme = 'light';
     render(<ThemeToggle />);
-    const btn = screen.getByRole('button', { name: '다크 모드로 전환' });
-    expect(btn).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다크 모드로 전환' })).toBeInTheDocument();
   });
 
   it('shows SunIcon and aria-label "라이트 모드로 전환" when resolvedTheme is dark', () => {
     mockResolvedTheme = 'dark';
     render(<ThemeToggle />);
-    const btn = screen.getByRole('button', { name: '라이트 모드로 전환' });
-    expect(btn).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '라이트 모드로 전환' })).toBeInTheDocument();
   });
 
   it('calls setTheme("dark") when clicked in light mode', async () => {
@@ -47,3 +45,4 @@ describe('ThemeToggle', () => {
     expect(mockSetTheme).toHaveBeenCalledWith('light');
   });
 });
+
