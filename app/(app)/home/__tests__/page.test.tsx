@@ -21,9 +21,6 @@ vi.mock('@/components/home/PgHome', () => ({ PgHome: () => null }));
 vi.mock('@/components/home/PgRfpBlockedToast', () => ({
   PgRfpBlockedToast: () => null,
 }));
-vi.mock('@/components/board/KanbanBoard', () => ({
-  KanbanBoardSkeleton: () => null,
-}));
 
 import HomePage from '../page';
 
