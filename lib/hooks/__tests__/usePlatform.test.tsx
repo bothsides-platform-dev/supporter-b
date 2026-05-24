@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import {
   isMacPlatform,
-  formatModifierShortcut,
+  getModifierShortcutParts,
   useIsMac,
 } from '@/lib/hooks/usePlatform';
 
@@ -32,17 +32,26 @@ describe('isMacPlatform', () => {
   });
 });
 
-describe('formatModifierShortcut', () => {
-  it('uses the ⌘ symbol on Mac', () => {
-    expect(formatModifierShortcut('K', true)).toBe('⌘K');
+describe('getModifierShortcutParts', () => {
+  it('returns ⌘ and uppercased key on Mac', () => {
+    expect(getModifierShortcutParts('k', true)).toEqual({
+      modifier: '⌘',
+      key: 'K',
+    });
   });
 
-  it('uses Ctrl+ on non-Mac', () => {
-    expect(formatModifierShortcut('K', false)).toBe('Ctrl+K');
+  it('returns Ctrl and uppercased key on non-Mac', () => {
+    expect(getModifierShortcutParts('k', false)).toEqual({
+      modifier: 'Ctrl',
+      key: 'K',
+    });
   });
 
-  it('formats other keys on non-Mac', () => {
-    expect(formatModifierShortcut('N', false)).toBe('Ctrl+N');
+  it('uppercases other keys on non-Mac', () => {
+    expect(getModifierShortcutParts('n', false)).toEqual({
+      modifier: 'Ctrl',
+      key: 'N',
+    });
   });
 });
 

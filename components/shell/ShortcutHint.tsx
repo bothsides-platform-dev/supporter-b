@@ -1,7 +1,8 @@
 'use client';
 
+import { ModifierShortcut } from '@/components/ui/ModifierShortcut';
 import { Kbd } from '@/components/ui/Kbd';
-import { useIsMac, formatModifierShortcut } from '@/lib/hooks/usePlatform';
+import { useIsMac } from '@/lib/hooks/usePlatform';
 import type { NavShortcut } from '@/lib/nav/nav-config';
 
 type ShortcutHintProps = {
@@ -10,7 +11,7 @@ type ShortcutHintProps = {
 
 /**
  * ShortcutHint — renders a NavShortcut as keycap(s). Chords show two caps
- * ("G" "H", Linear-style); modifier combos show one platform-aware cap (⌘K / Ctrl+K).
+ * ("G" "H", Linear-style); modifier combos show separate keycaps (⌘ K / Ctrl K).
  */
 export function ShortcutHint({ shortcut }: ShortcutHintProps) {
   const isMac = useIsMac();
@@ -24,5 +25,5 @@ export function ShortcutHint({ shortcut }: ShortcutHintProps) {
     );
   }
 
-  return <Kbd>{formatModifierShortcut(shortcut.key, isMac)}</Kbd>;
+  return <ModifierShortcut shortcutKey={shortcut.key} isMac={isMac} />;
 }

@@ -24,15 +24,17 @@ describe('ShortcutHint — chord', () => {
 });
 
 describe('ShortcutHint — modifier', () => {
-  it('renders Ctrl+<key> on non-Mac', () => {
+  it('renders Ctrl and key as separate keycaps on non-Mac', () => {
     mockIsMac.value = false;
     render(<ShortcutHint shortcut={{ kind: 'modifier', key: 'K' }} />);
-    expect(screen.getByText('Ctrl+K')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl')).toBeInTheDocument();
+    expect(screen.getByText('K')).toBeInTheDocument();
   });
 
-  it('renders ⌘<key> on Mac', () => {
+  it('renders ⌘ and key as separate keycaps on Mac', () => {
     mockIsMac.value = true;
     render(<ShortcutHint shortcut={{ kind: 'modifier', key: 'K' }} />);
-    expect(screen.getByText('⌘K')).toBeInTheDocument();
+    expect(screen.getByText('⌘')).toBeInTheDocument();
+    expect(screen.getByText('K')).toBeInTheDocument();
   });
 });

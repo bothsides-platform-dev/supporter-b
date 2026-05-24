@@ -6,7 +6,8 @@ import { useUIStore } from '@/lib/stores/ui';
 import { Command } from 'cmdk';
 import { XIcon } from '@/components/icons';
 import { IconButton } from '@/components/primitives/IconButton';
-import { useIsMac, formatModifierShortcut } from '@/lib/hooks/usePlatform';
+import { ModifierShortcut } from '@/components/ui/ModifierShortcut';
+import { useIsMac } from '@/lib/hooks/usePlatform';
 import {
   searchBidsAction,
   type BidSearchItem,
@@ -121,9 +122,7 @@ export function CommandPalette() {
                       >
                         <span>{cmd.label}</span>
                         {cmd.modKey && (
-                          <kbd className="font-mono text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
-                            {formatModifierShortcut(cmd.modKey, isMac)}
-                          </kbd>
+                          <ModifierShortcut shortcutKey={cmd.modKey} isMac={isMac} />
                         )}
                       </Command.Item>
                     ))}
