@@ -65,6 +65,7 @@ const SETTINGS_SECTION: NavSection = {
   id: 'settings',
   label: '설정',
   href: '/settings/profile',
+  base: '/settings',
   icon: SettingsIcon,
   shortcut: { kind: 'chord', lead: 'g', key: 's' },
   links: [

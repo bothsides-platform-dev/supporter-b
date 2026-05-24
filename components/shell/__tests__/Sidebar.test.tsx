@@ -183,6 +183,20 @@ describe('Sidebar — top nav items', () => {
   });
 });
 
+describe('Sidebar — child routes', () => {
+  it('activates RFP when pathname is a child of /rfp', () => {
+    mockPathname.mockReturnValue('/rfp/rfp-1');
+    renderSidebar(buyerProps);
+    expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('activates 받은 RFP when pathname is a child of /inbox', () => {
+    mockPathname.mockReturnValue('/inbox/rfp-1');
+    renderSidebar(pgProps);
+    expect(screen.getByRole('link', { name: '받은 RFP' })).toHaveAttribute('aria-current', 'page');
+  });
+});
+
 describe('Sidebar — buyer workspace', () => {
   it('renders RFP as a top nav link without status sub-items', () => {
     renderSidebar(buyerProps);

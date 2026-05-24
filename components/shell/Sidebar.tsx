@@ -20,6 +20,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useNotifications } from '@/lib/hooks/useNotifications';
 import { useGoToShortcut } from '@/lib/hooks/useGoToShortcut';
 import { getNavConfig, getChordMap } from '@/lib/nav/nav-config';
+import { isNavHrefActive } from '@/lib/nav/is-nav-active';
 import type {
   WorkspaceMembershipSummary,
   WorkspaceType,
@@ -43,9 +44,6 @@ function SidebarNav({
   const { unreadCount } = useNotifications();
   const { top, sections } = getNavConfig(workspaceType);
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + '/');
-
   return (
     <div className="flex flex-col gap-0.5">
       {top.map((item) => (
@@ -55,7 +53,7 @@ function SidebarNav({
           label={item.label}
           icon={item.icon}
           shortcut={item.shortcut}
-          active={isActive(item.href)}
+          active={isNavHrefActive(pathname, item.href)}
           onNavigate={onNavigate}
           badge={
             item.id === 'notifications' && unreadCount > 0 ? (

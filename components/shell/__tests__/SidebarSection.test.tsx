@@ -87,6 +87,14 @@ describe('SidebarSection — status section (RFP)', () => {
     renderSection(rfpSection);
     expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: '작성중' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: /RFP/ })).not.toHaveAttribute('aria-current');
+  });
+
+  it('marks the section header active on child routes', () => {
+    mockPathname.mockReturnValue('/rfp/rfp-1');
+    mockSearchParams.mockReturnValue(new URLSearchParams(''));
+    renderSection(rfpSection);
+    expect(screen.getByRole('link', { name: /RFP/ })).toHaveAttribute('aria-current', 'page');
   });
 
   it('collapses sub-items when the toggle is clicked', async () => {
@@ -110,5 +118,11 @@ describe('SidebarSection — links section (설정)', () => {
     mockPathname.mockReturnValue('/settings/members');
     renderSection(settingsSection);
     expect(screen.getByRole('link', { name: '멤버' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('marks the settings section header active on child routes', () => {
+    mockPathname.mockReturnValue('/settings/members');
+    renderSection(settingsSection);
+    expect(screen.getByRole('link', { name: /설정/ })).toHaveAttribute('aria-current', 'page');
   });
 });

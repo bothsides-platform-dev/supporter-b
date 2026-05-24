@@ -6,6 +6,7 @@ import { ChevronDownIcon, ChevronRightIcon } from '@/components/icons';
 import { NavItem } from '@/components/shell/sidebar/NavItem';
 import { useSidebarSectionsStore } from '@/lib/stores/sidebar-sections';
 import type { NavSection } from '@/lib/nav/nav-config';
+import { isNavHrefActive, isNavSectionHeaderActive } from '@/lib/nav/is-nav-active';
 import { cn } from '@/lib/utils';
 
 const subItemBase =
@@ -35,9 +36,10 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
   const toggle = useSidebarSectionsStore((s) => s.toggle);
 
   const status = searchParams.get('status');
-  const onBase = pathname === section.base;
-  // Header highlights only when on the bare list (no status, no sub-link).
-  const headerActive = section.base ? onBase && !status : false;
+  const headerActive =
+    section.base != null &&
+    isNavSectionHeaderActive(pathname, section.base, status);
+  const onListBase = section.base != null && pathname === section.base;
 
   return (
     <div className="mt-3 group-data-[collapsible=icon]:mt-1">
@@ -65,7 +67,7 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
       {!collapsed && (
         <div className="mt-0.5 flex flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
           {section.statuses?.map(({ status: s, label }) => {
-            const active = onBase && status === s;
+            const active = onListBase && status === s;
             return (
               <Link
                 key={s}
@@ -79,8 +81,7 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
             );
           })}
           {section.links?.map((link) => {
-            const active =
-              pathname === link.href || pathname.startsWith(link.href + '/');
+            const active = isNavHrefActive(pathname, link.href);
             return (
               <Link
                 key={link.href}
