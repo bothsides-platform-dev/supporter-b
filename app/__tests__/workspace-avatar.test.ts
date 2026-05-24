@@ -66,4 +66,7 @@ describe('getWorkspaceColor', () => {
     expect(color).toHaveProperty('bg');
     expect(color).toHaveProperty('fg');
   });
+  it('(주) 접두어가 있는 이름과 없는 이름은 다른 색상 (raw name 해싱)', () => {
+    expect(getWorkspaceColor('(주)토스페이먼츠')).not.toBe(getWorkspaceColor('토스페이먼츠'));
+  });
 });

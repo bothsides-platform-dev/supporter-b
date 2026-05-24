@@ -30,6 +30,7 @@ function djb2(str: string): number {
   return hash;
 }
 
+// Hashes the raw (unstripped) stored name — '(주)토스페이먼츠' and '토스페이먼츠' get different colors by design.
 export function getWorkspaceColor(name: string): WorkspaceAvatarColor {
   const idx = djb2(name) % WORKSPACE_AVATAR_COLORS.length;
   return WORKSPACE_AVATAR_COLORS[idx];

@@ -14,6 +14,7 @@ export function WorkspaceAvatar({ name, size = 'sm', className }: Props) {
   const color = getWorkspaceColor(name);
   return (
     <div
+      role="img"
       aria-label={name}
       className={cn(
         'inline-flex items-center justify-center shrink-0',
