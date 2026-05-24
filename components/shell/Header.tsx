@@ -3,7 +3,6 @@
 import { Suspense } from 'react';
 import { Breadcrumb } from '@/components/shell/Breadcrumb';
 import { SearchBar } from '@/components/shell/header/SearchBar';
-import { ShellSidebarTrigger } from '@/components/shell/ShellSidebarTrigger';
 import { UserMenu } from '@/components/shell/UserMenu';
 import { cn } from '@/lib/utils';
 import type { WorkspaceType } from '@/lib/types/workspace';
@@ -26,7 +25,6 @@ export function Header({ user, workspaceType, className }: HeaderProps) {
         className,
       )}
     >
-      <ShellSidebarTrigger />
       <div className="min-w-0 flex-1">
         <Suspense fallback={null}>
           <Breadcrumb />
