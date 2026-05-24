@@ -76,6 +76,8 @@ describe('WorkspaceSwitcher', () => {
     renderInSidebarGroup('icon');
     const tokens = triggerClassTokens();
     expect(tokens).toContain('group-data-[collapsible=icon]:size-8');
+    expect(tokens).toContain('group-data-[collapsible=icon]:justify-center');
+    expect(tokens).not.toContain('group-data-[collapsible=icon]:w-auto');
     expect(screen.getByText('구매사A').className).toContain(
       'group-data-[collapsible=icon]:sr-only',
     );
