@@ -8,10 +8,12 @@ const { pinoFactory, pinoTransport, pinoInfo, pinoWarn, pinoError, pinoDebug } =
   const pinoError = vi.fn();
   const pinoDebug = vi.fn();
   const pinoTransport = vi.fn().mockReturnValue({});
-  const pinoFactory = vi.fn().mockImplementation(() => ({
-    info: pinoInfo, warn: pinoWarn, error: pinoError, debug: pinoDebug,
-  })) as any;
-  pinoFactory.transport = pinoTransport;
+  const pinoFactory = Object.assign(
+    vi.fn().mockImplementation(() => ({
+      info: pinoInfo, warn: pinoWarn, error: pinoError, debug: pinoDebug,
+    })),
+    { transport: pinoTransport },
+  ) as typeof import('pino').default;
   return { pinoFactory, pinoTransport, pinoInfo, pinoWarn, pinoError, pinoDebug };
 });
 
