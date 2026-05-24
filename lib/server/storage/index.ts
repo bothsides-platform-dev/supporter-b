@@ -23,7 +23,7 @@ export type { Storage };
 export type { ReadRange } from './types';
 
 declare global {
-
+  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_storage__: Storage | undefined;
 }
 

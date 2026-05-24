@@ -151,7 +151,7 @@ export class RealNtsClient implements NtsClient {
 // 액션 레이어는 `getNtsClient()` 만 호출. 테스트는 `__setNtsClientForTest`로
 // MockNtsClient를 갈아끼운다 (auth/_shared.ts:actionDb 패턴 미러).
 declare global {
-   
+  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_nts_client__: NtsClient | undefined;
 }
 

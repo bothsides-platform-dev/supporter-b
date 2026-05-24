@@ -22,7 +22,7 @@ import { EventEmitter } from 'node:events';
 import type { Notification } from '@/lib/types/notification';
 
 declare global {
-   
+  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_notif_buses__: Map<string, EventEmitter> | undefined;
 }
 
