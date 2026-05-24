@@ -1,6 +1,7 @@
 'use client';
 
 import { PanelLeftIcon } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 
@@ -9,11 +10,12 @@ type ShellSidebarTriggerProps = {
 };
 
 export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
-  const { state, toggleSidebar } = useSidebar();
+  const { state, isMobile, toggleSidebar } = useSidebar();
   const isExpanded = state === 'expanded';
   const label = isExpanded ? '사이드바 접기' : '사이드바 펼치기';
+  const showCollapsedTooltip = state === 'collapsed' && !isMobile;
 
-  return (
+  const button = (
     <button
       type="button"
       data-sidebar="trigger"
@@ -21,18 +23,26 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
       aria-label={label}
       onClick={toggleSidebar}
       className={cn(
-        'flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--md-sys-shape-small)] px-2 text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
+        'flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] p-0 text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
         className,
       )}
     >
       <PanelLeftIcon
-        size={16}
+        size={18}
         aria-hidden="true"
         className={cn('transition-transform duration-200', !isExpanded && 'rotate-180')}
       />
-      <span aria-hidden="true" className="text-sm group-data-[collapsible=icon]:hidden">
-        {isExpanded ? '접기' : '열기'}
-      </span>
     </button>
+  );
+
+  if (!showCollapsedTooltip) return button;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={button} />
+      <TooltipContent side="right" sideOffset={8}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   );
 }

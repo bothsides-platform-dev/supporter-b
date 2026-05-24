@@ -2,8 +2,7 @@
 
 import { useMemo, Suspense } from 'react';
 import { usePathname } from 'next/navigation';
-import { ShellSidebarTrigger } from '@/components/shell/ShellSidebarTrigger';
-import { ThemeToggle } from '@/components/shell/ThemeToggle';
+import { SidebarFooterControls } from '@/components/shell/SidebarFooterControls';
 import { UserMenu } from '@/components/shell/UserMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { NavItem } from '@/components/shell/sidebar/NavItem';
@@ -107,9 +106,8 @@ function SidebarBody({
         </nav>
       </SidebarContent>
 
-      <SidebarFooter className="flex-row items-center gap-1 border-t border-[var(--md-sys-color-outline-variant)] p-2">
-        <ThemeToggle />
-        <ShellSidebarTrigger className="ml-auto hidden md:flex" />
+      <SidebarFooter className="flex-row items-center gap-1 border-t border-[var(--md-sys-color-outline-variant)] p-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1">
+        <SidebarFooterControls />
         <div className="ml-auto md:hidden">
           <UserMenu
             user={{ name: user.name, email: user.email }}

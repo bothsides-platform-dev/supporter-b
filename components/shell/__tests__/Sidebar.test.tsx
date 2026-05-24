@@ -113,16 +113,50 @@ describe('Sidebar — icon toggle', () => {
     expect(footer).toContainElement(trigger);
   });
 
-  it('shows "접기" text label when sidebar is expanded', () => {
+  it('does not show visible "접기" / "열기" text labels (icon-only + tooltip)', () => {
     renderSidebar(buyerProps);
-    expect(screen.getByText('접기')).toBeInTheDocument();
+    expect(screen.queryByText('접기')).not.toBeInTheDocument();
+    expect(screen.queryByText('열기')).not.toBeInTheDocument();
   });
 
-  it('shows "열기" text label after sidebar is collapsed', async () => {
+  it('keeps collapse accessible via aria-label when expanded and after collapse', async () => {
     const user = userEvent.setup();
     renderSidebar(buyerProps);
+    expect(screen.getByRole('button', { name: '사이드바 접기' })).toBeInTheDocument();
+
     await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
-    expect(screen.getByText('열기')).toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: '사이드바 펼치기' })).toBeInTheDocument();
+  });
+});
+
+describe('Sidebar — footer utility toolbar', () => {
+  it('groups theme and collapse controls in a footer toolbar', () => {
+    renderSidebar(buyerProps);
+    const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
+    expect(toolbar).not.toBeNull();
+    const footer = document.querySelector('[data-slot="sidebar-footer"]');
+    expect(footer).toContainElement(toolbar);
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: '다크 모드로 전환' }));
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: '사이드바 접기' }));
+  });
+
+  it('uses a vertical stack layout class when sidebar is collapsed', async () => {
+    const user = userEvent.setup();
+    renderSidebar(buyerProps);
+    const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
+    expect(toolbar?.className).toMatch(/flex-row/);
+
+    await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
+
+    expect(toolbar?.className).toMatch(/group-data-\[collapsible=icon\]:flex-col/);
+  });
+
+  it('renders icon-only collapse control sizing', () => {
+    renderSidebar(buyerProps);
+    const trigger = screen.getByRole('button', { name: '사이드바 접기' });
+    expect(trigger.className).toMatch(/\bh-8\b/);
+    expect(trigger.className).toMatch(/\bw-8\b/);
   });
 });
 

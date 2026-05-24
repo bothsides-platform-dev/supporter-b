@@ -22,7 +22,7 @@ export function ThemeToggle() {
   return (
     <IconButton
       label={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}
-      size="sm"
+      size="md"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
     >
       {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
