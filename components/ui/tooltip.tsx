@@ -17,8 +17,19 @@ function TooltipProvider({
   )
 }
 
-function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+function Tooltip({ onOpenChange, ...props }: TooltipPrimitive.Root.Props) {
+  return (
+    <TooltipPrimitive.Root
+      data-slot="tooltip"
+      onOpenChange={(open, details) => {
+        if (open && details.reason === "trigger-focus") {
+          details.cancel()
+        }
+        onOpenChange?.(open, details)
+      }}
+      {...props}
+    />
+  )
 }
 
 function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {

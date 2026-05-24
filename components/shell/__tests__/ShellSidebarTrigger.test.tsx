@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -53,5 +53,17 @@ describe('ShellSidebarTrigger', () => {
     renderTrigger(false);
     await user.hover(screen.getByRole('button', { name: '사이드바 펼치기' }));
     expect(await screen.findByText('사이드바 펼치기')).toBeInTheDocument();
+  });
+
+  it('does not show tooltip on keyboard focus when collapsed', () => {
+    renderTrigger(false);
+    fireEvent.focus(screen.getByRole('button', { name: '사이드바 펼치기' }));
+    expect(document.querySelector('[data-slot="tooltip-content"]')).not.toBeInTheDocument();
+  });
+
+  it('does not show tooltip on focus when expanded', () => {
+    renderTrigger(true);
+    fireEvent.focus(screen.getByRole('button', { name: '사이드바 접기' }));
+    expect(document.querySelector('[data-slot="tooltip-content"]')).not.toBeInTheDocument();
   });
 });

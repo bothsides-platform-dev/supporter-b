@@ -46,8 +46,8 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
   // Always wrap in Tooltip so the trigger button stays mounted; otherwise
   // toggling expanded ↔ collapsed remounts the button and skips rotate-180 transition.
   return (
-    <Tooltip>
-      <TooltipTrigger render={button} />
+    <Tooltip disabled={!showCollapsedTooltip}>
+      <TooltipTrigger disabled={!showCollapsedTooltip} render={button} />
       {showCollapsedTooltip ? (
         <TooltipContent side="right" sideOffset={8}>
           {label}
