@@ -3,6 +3,7 @@
 // is not injectable, so we use a local now-based badge helper instead).
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
+import type { InvitationStatus } from '@/lib/types/invitation';
 import { matchesDeadlineBucket } from '@/lib/server/board/filterRfps';
 
 export type DashboardKpi = { id: string; label: string; value: number; href: string };
@@ -73,7 +74,7 @@ export function buildBuyerDashboard(
 
 export type PgDashRow = {
   invitationId: string;
-  invitationStatus: string;
+  invitationStatus: InvitationStatus;
   rfpCode: string;
   rfpTitle: string;
   rfpDeadline: string;
