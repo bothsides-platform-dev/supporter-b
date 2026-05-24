@@ -8,10 +8,13 @@ const { pinoFactory, pinoTransport, pinoInfo, pinoWarn, pinoError, pinoDebug } =
   const pinoError = vi.fn();
   const pinoDebug = vi.fn();
   const pinoTransport = vi.fn().mockReturnValue({});
-  const pinoFactory = vi.fn().mockImplementation(() => ({
-    info: pinoInfo, warn: pinoWarn, error: pinoError, debug: pinoDebug,
-  })) as any;
-  pinoFactory.transport = pinoTransport;
+  const pinoFactory = Object.assign(
+    vi.fn().mockImplementation(() => ({
+      info: pinoInfo, warn: pinoWarn, error: pinoError, debug: pinoDebug,
+    })),
+    { transport: pinoTransport },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock is used both as the pino fn and a vitest Mock (mockClear); no single precise type fits.
+  ) as any;
   return { pinoFactory, pinoTransport, pinoInfo, pinoWarn, pinoError, pinoDebug };
 });
 

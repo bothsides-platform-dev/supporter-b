@@ -33,6 +33,11 @@ vi.mock('@/components/landing/LandingToast', () => ({
   LandingToast: () => null,
 }))
 
+vi.mock('@/lib/stores/theme', () => ({
+  useThemeStore: (selector: (s: { resolvedTheme: string; setTheme: (t: string) => void }) => unknown) =>
+    selector({ resolvedTheme: 'light', setTheme: vi.fn() }),
+}))
+
 describe('LandingHero nav slot', () => {
   it('renders whatever is passed as nav prop', () => {
     render(<LandingHero nav={<a href="/test">Test Nav</a>} />)
@@ -43,4 +48,5 @@ describe('LandingHero nav slot', () => {
     render(<LandingHero />)
     expect(screen.queryByRole('link', { name: 'Test Nav' })).toBeNull()
   })
+
 })

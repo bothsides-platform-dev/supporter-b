@@ -4,7 +4,7 @@ import { auth } from '@/auth';
 import { BuyerHome } from '@/components/home/BuyerHome';
 import { PgHome } from '@/components/home/PgHome';
 import { PgRfpBlockedToast } from '@/components/home/PgRfpBlockedToast';
-import { KanbanBoardSkeleton } from '@/components/board/KanbanBoard';
+import { HomeDashboardSkeleton } from '@/components/home/HomeDashboard';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ export default async function HomePage({
     return (
       <>
         {notice === 'pg-rfp-blocked' && <PgRfpBlockedToast />}
-        <Suspense fallback={<div className="px-8 py-10"><KanbanBoardSkeleton /></div>}>
+        <Suspense fallback={<div className="px-8 py-10"><HomeDashboardSkeleton /></div>}>
           <PgHome workspaceId={session.user.workspaceId} />
         </Suspense>
       </>
@@ -31,7 +31,7 @@ export default async function HomePage({
 
   if (session.user.workspaceType === 'buyer' && session.user.workspaceId) {
     return (
-      <Suspense fallback={<div className="px-8 py-10"><KanbanBoardSkeleton /></div>}>
+      <Suspense fallback={<div className="px-8 py-10"><HomeDashboardSkeleton /></div>}>
         <BuyerHome workspaceId={session.user.workspaceId} />
       </Suspense>
     );

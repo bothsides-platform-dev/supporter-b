@@ -20,7 +20,7 @@ export type AuthActionResult<T extends object = {}> =
 // emailChangeConfirmAction) can run against the test schema without
 // reaching for the prod postgres-js client. Production reads prodDb.
 declare global {
-   
+  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_action_db_override__: unknown | undefined;
 }
 

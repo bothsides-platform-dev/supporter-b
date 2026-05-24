@@ -20,22 +20,16 @@ export function Checkbox({
   'aria-label': ariaLabel,
 }: CheckboxProps) {
   return (
-    <span className={cn('relative inline-flex shrink-0', className)}>
-      <input
-        id={id}
-        type="checkbox"
-        className="sr-only peer"
-        checked={checked}
-        disabled={disabled}
-        aria-label={ariaLabel}
-        onChange={(e) => onCheckedChange(e.target.checked)}
-      />
+    <span
+      data-testid="checkbox-root"
+      className={cn('relative inline-flex h-4 w-4 shrink-0', className)}
+    >
       <span
         data-testid="checkbox-box"
         data-state={checked ? 'checked' : 'unchecked'}
         aria-hidden
         className={cn(
-          'w-4 h-4 rounded-md border flex items-center justify-center transition-colors',
+          'pointer-events-none absolute inset-0 flex items-center justify-center rounded-md border transition-colors',
           'peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--md-sys-color-primary)]/30',
           checked
             ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary)]'
@@ -43,7 +37,7 @@ export function Checkbox({
                 'border-[var(--md-sys-color-on-surface-variant)] bg-transparent',
                 'peer-enabled:peer-hover:border-[var(--md-sys-color-on-surface)]',
               ),
-          disabled && 'opacity-50 cursor-not-allowed',
+          disabled && 'opacity-50',
         )}
       >
         {checked && (
@@ -65,6 +59,18 @@ export function Checkbox({
           </svg>
         )}
       </span>
+      <input
+        id={id}
+        type="checkbox"
+        className={cn(
+          'peer absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none opacity-0',
+          disabled && 'cursor-not-allowed',
+        )}
+        checked={checked}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        onChange={(e) => onCheckedChange(e.target.checked)}
+      />
     </span>
   );
 }

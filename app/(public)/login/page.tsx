@@ -116,20 +116,19 @@ function LoginContent() {
           autoComplete="current-password"
         />
 
-        <div className="flex items-center gap-2">
+        <label
+          htmlFor="rememberMe"
+          className="flex items-center gap-2 cursor-pointer"
+        >
           <Checkbox
             id="rememberMe"
             checked={rememberMe}
             onCheckedChange={setRememberMe}
-            aria-label="로그인 유지"
           />
-          <label
-            htmlFor="rememberMe"
-            className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] cursor-pointer"
-          >
+          <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
             로그인 유지
-          </label>
-        </div>
+          </span>
+        </label>
 
         {locked && (
           <div

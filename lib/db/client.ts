@@ -4,7 +4,7 @@ import postgres from 'postgres';
 import * as schema from './schema';
 
 declare global {
-   
+  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_pg__: ReturnType<typeof postgres> | undefined;
 }
 

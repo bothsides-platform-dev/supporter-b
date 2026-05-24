@@ -29,6 +29,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Claude worktrees are separate checkouts — not part of this workspace's lint surface.
+    ".claude/**",
   ]),
 ]);
 

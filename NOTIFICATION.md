@@ -1,13 +1,13 @@
 # 알림 시스템 설계 (Notification System Design)
 
-**작성일**: 2026-05-05 (마지막 업데이트 2026-05-08)  
-**상태**: M7 시점 구현 가동 — outbox(`lib/server/outbox/*`), Toaster shell, activity list (Drawer + bell), Resend 이메일, Vercel `after()` flush 모두 작동. 잔여 검증: `auth.verify`·`auth.reset` 핸들러 e2e 정합성, 중복 알림 dedup 회귀.
+**작성일**: 2026-05-05 (마지막 업데이트 2026-05-25)  
+**상태**: 구현 가동 — outbox(`lib/server/outbox/*`), Toaster shell, 사이드바 알림 배지 + `/notifications` 활동 페이지, Resend 이메일, Vercel `after()` flush 모두 작동. (알림 Drawer 는 제거됨 — 사이드바 배지·알림 페이지로 대체.) 잔여 검증: `auth.verify`·`auth.reset` 핸들러 e2e 정합성, 중복 알림 dedup 회귀.
 
 ---
 
 ## Context
 
-bidit는 buyer(구매사)와 PG(결제대행사) 간의 private 1:N RFP 플랫폼이다. 알림은 두 가지 채널로 동작한다: **이메일** (Resend + react-email)과 **인앱** (bell 아이콘 + Notification Drawer). 실시간 인앱 알림은 SSE(Server-Sent Events)로 구현한다. v0에서는 SMS/Slack/KakaoWork는 지원하지 않는다.
+bidit는 buyer(구매사)와 PG(결제대행사) 간의 private 1:N RFP 플랫폼이다. 알림은 두 가지 채널로 동작한다: **이메일** (Resend + react-email)과 **인앱** (사이드바 알림 배지 + `/notifications` 활동 페이지). 실시간 인앱 알림은 SSE(Server-Sent Events)로 사이드바 배지 카운트에 push 된다. v0에서는 SMS/Slack/KakaoWork는 지원하지 않는다.
 
 아키텍처는 **중앙 NotificationService + outbox-backed dispatch** 방식: Server Action 내에서 도메인 상태 전이와 `outbox_event` 기록을 같은 트랜잭션으로 커밋하고, dispatcher가 DB 저장 → 이메일 발송 → SSE 브로드캐스트를 처리한다. 이메일 실패는 콘솔 로그로 끝내지 않고 retry 가능한 상태로 남긴다.
 
@@ -249,29 +249,30 @@ export function getResendSender(): OutboxSender {
 
 `flushAfterCommit`이 이 sender를 `outbox.flush(sender, BATCH)`에 주입하면 repo가 `status='pending' AND scheduled_at <= now()`인 row를 batch로 claim, sender 호출 후 결과에 따라 `sent` 또는 `attempts+1 / lastError`로 마킹한다.
 
-### react-email 템플릿 원칙 (Korean Editorial Modernism)
+### react-email 템플릿 원칙 (Linear · 이메일 호환)
 
-- `font-family: 'Pretendard Variable', -apple-system, sans-serif`
-- 배경: 흰색 (`#FFFFFF`), 텍스트: 먹 (`#0D0D0D`)
-- 버튼: 채워진 색 없이 테두리 스타일, `[ 확인하기 ]` 형태
-- RFP 번호/금액 등 수치: 모노스페이스 폰트 + `font-variant-numeric: tabular-nums`
+- 공유 레이아웃 `lib/server/outbox/templates/_layout.tsx` 의 `Layout` / `Button` / `Mono` 컴포넌트로 조립.
+- `font-family: 'Pretendard Variable', -apple-system, sans-serif`; 본문 14px, 제목 ~20px / 600, 약한 음수 자간(`-0.01em`).
+- 상단 serial eyebrow (예: `EMAIL / VERIFY`), 1차 CTA 는 solid `Button` (예: `인증하기`).
+- RFP 번호/금액/만료 분 등 수치는 `Mono` 컴포넌트 (모노스페이스 + tabular-nums).
 
 ---
 
-## 인앱 채널 (SSE + Drawer UI)
+## 인앱 채널 (SSE + 사이드바 배지 + 알림 페이지)
 
-### Route 구조
+### Route 구조 + UI 표면
 
 ```
 app/
-└─ (app)/
-   └─ api/
-      └─ notifications/
-         ├─ stream/route.ts   # GET — SSE 연결 (인증 필수)
-         └─ route.ts          # GET 목록, PATCH 읽음 처리
+├─ api/notifications/
+│  ├─ stream/route.ts          # GET — SSE (신규 emit만 push, 인증 필수)
+│  └─ route.ts                 # GET — mount 시 최근 50건 hydrate (history)
+└─ (app)/notifications/page.tsx # 인앱 알림 활동 페이지 (RSC)
 ```
 
-### `channels/inapp.ts` — SSE 연결 관리
+읽음 처리는 PATCH 엔드포인트가 아니라 server action `markNotificationReadAction`(행 클릭) / `MarkAllReadButton`(전체) 로 한다.
+
+### SSE 연결 관리 (`lib/server/notifications/bus.ts`)
 
 ```ts
 // 서버 메모리 내 SSE 연결 맵 (단일 인스턴스 환경 기준, v0)
@@ -327,32 +328,19 @@ SSE route constraints:
 - 25초 heartbeat를 보내 중간 프록시 idle timeout과 죽은 연결을 조기에 드러낸다.
 - `abort` 이벤트에서 heartbeat와 연결 맵을 반드시 정리한다.
 
-### Notification Drawer UI (`components/NotificationDrawer.tsx`)
+### 인앱 UI — 사이드바 배지 + 알림 페이지
 
-```
-┌─────────────────────────── w=420px ───────┐
-│ 알림                                    ⚙ │
-│ ─────────────────────────────────────── │
-│ [ 모든 알림  3 ]  [ 발송·조회 ]           │
-│ ─────────────────────────────────────── │
-│ ● BID  서포터 B 페이가 입찰서를 제출했습니다 │
-│        P-2605-0042 · 3분 전              │
-│ ─────────────────────────────────────── │
-│   RFP  요청서 내용이 수정되었습니다         │
-│        P-2605-0041 · 1시간 전            │
-│ ─────────────────────────────────────── │
-│                                          │
-│         새로운 알림이 없습니다.             │
-│                                          │
-└───────────────────────────────────────────┘
-```
+Drawer 는 제거됐다 (commit `ca697c6`). 인앱 알림은 두 표면으로 노출된다.
 
-- 읽지 않은 알림: 왼쪽 `●` 마커, `font-weight: 600`
-- 상대 시각: `Intl.RelativeTimeFormat('ko', { numeric: 'auto' })`
-- 클릭: 해당 RFP 페이지로 이동 + `PATCH /api/notifications/:id` 읽음 처리
-- 탭 v0 구현: `모든 알림` + `발송·조회`
-- 탭 v0 제외: `결재 요청` (결재선 기능 도입 시 추가)
-- 빈 상태: 텍스트 + 라인 SVG (stroke 1.4)
+**1. 사이드바 알림 배지** — `components/shell/Sidebar.tsx` 의 `NavItem id="notifications"`
+- `lib/hooks/useNotifications` 가 mount 시 `GET /api/notifications` 로 hydrate, 이후 `EventSource('/api/notifications/stream')` 로 신규 emit prepend → `unreadCount` 유지.
+- `unreadCount > 0` 이면 nav 항목에 warning 색 카운트 배지(`data-testid="unread-badge"`). 접힌(icon) 사이드바에서는 우상단 표시.
+
+**2. 알림 활동 페이지** — `/notifications` (`app/(app)/notifications/page.tsx`, RSC)
+- `getNotificationRepo().findRecentForUser(userId, 100, 'inapp')` 로 목록 로드.
+- `NotificationActivityList` (`app/(app)/settings/notifications/NotificationActivityList.tsx`) 가 행 렌더 — 상태 Chip(미읽음→error, 읽음→surface, 대기→warning), 행 클릭 시 `markNotificationReadAction` 으로 읽음 처리.
+- `PageHeader`(title 알림 + count) + 미읽음 있을 때 `MarkAllReadButton`. 빈 상태: "아직 받은 알림이 없습니다."
+- 같은 컴포넌트를 `/settings/notifications`(알림 설정 stub)에서도 재사용.
 
 ---
 
@@ -388,7 +376,7 @@ SSE route constraints:
 ### M4 (입찰)
 - `bid.submitted` 이벤트 — buyer ws 멤버 전원에게 email + inapp
 - SSE Route 구현 (`/api/notifications/stream`)
-- Notification Drawer UI 컴포넌트
+- 사이드바 알림 배지 + `/notifications` 활동 페이지
 
 ### M6 (수주 확정)
 - `rfp.awarded` 이벤트 — winner 멤버에게 email + inapp(`type='rfp.awarded'`), loser 멤버에게는 inapp(`type='rfp.rejected'`)만
@@ -399,17 +387,17 @@ SSE route constraints:
 
 1. **이메일 발송**: Resend 대시보드에서 각 이벤트 이메일 수신 확인
 2. **SSE 연결**: DevTools Network 탭 → `/api/notifications/stream` EventStream 확인
-3. **인앱 Drawer**: 입찰 제출 시 bell 배지 숫자 증가 + Drawer 카드 표시
-4. **읽음 처리**: 알림 클릭 후 `●` 마커 소멸 + DB `read_at` 업데이트 확인
+3. **인앱 배지/페이지**: 입찰 제출 시 사이드바 배지 숫자 증가 + `/notifications` 목록에 카드 표시
+4. **읽음 처리**: 알림 행 클릭 후 상태 Chip 읽음 전환 + DB `read_at` 업데이트 확인
 5. **End-to-end**: PG_RFP_SPEC.md §6 시나리오 A (RFP 발송 → 입찰 → 수주 확정) 전 과정 알림 검증
 6. **재시도**: Resend 실패 mock → outbox `failed/pending` 전이 → 재시도 성공 시 `sent` 확인
-7. **SSE 안정성**: heartbeat 수신, 탭 종료 시 연결 정리, proxy buffering 없이 즉시 Drawer 반영 확인
+7. **SSE 안정성**: heartbeat 수신, 탭 종료 시 연결 정리, proxy buffering 없이 즉시 사이드바 배지 반영 확인
 
 ---
 
 ## v0 이후 로드맵
 
 - **Redis Pub/Sub**: 다중 인스턴스 배포 시 SSE 브로드캐스트 동기화
-- **결재 요청 탭**: 결재선 기능 도입 시 Drawer 탭 추가
+- **결재 요청 알림**: 결재선 기능 도입 시 알림 타입/탭 추가
 - **알림 설정 (⚙)**: 이벤트별 채널 구독 on/off
 - **다이제스트**: 일별/주별 요약 이메일
