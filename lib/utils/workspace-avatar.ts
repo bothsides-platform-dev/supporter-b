@@ -1,12 +1,12 @@
 export type WorkspaceAvatarColor = { bg: string; fg: string };
 
 export const WORKSPACE_AVATAR_COLORS: WorkspaceAvatarColor[] = [
-  { bg: '#162236', fg: '#6aadff' }, // blue
-  { bg: '#231a45', fg: '#b59fff' }, // purple
-  { bg: '#0e2e25', fg: '#4fd1a8' }, // teal
-  { bg: '#2a1a10', fg: '#f5a05a' }, // orange
-  { bg: '#2e1029', fg: '#f07bb8' }, // pink
-  { bg: '#1c2030', fg: '#8aabcf' }, // slate
+  { bg: 'var(--workspace-avatar-blue-bg)',   fg: 'var(--workspace-avatar-blue-fg)'   },
+  { bg: 'var(--workspace-avatar-purple-bg)', fg: 'var(--workspace-avatar-purple-fg)' },
+  { bg: 'var(--workspace-avatar-teal-bg)',   fg: 'var(--workspace-avatar-teal-fg)'   },
+  { bg: 'var(--workspace-avatar-orange-bg)', fg: 'var(--workspace-avatar-orange-fg)' },
+  { bg: 'var(--workspace-avatar-pink-bg)',   fg: 'var(--workspace-avatar-pink-fg)'   },
+  { bg: 'var(--workspace-avatar-slate-bg)',  fg: 'var(--workspace-avatar-slate-fg)'  },
 ];
 
 const LEGAL_PREFIX_RE = /^\([주유합사재]\)\s*/;
