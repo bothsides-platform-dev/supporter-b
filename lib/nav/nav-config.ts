@@ -73,13 +73,6 @@ const SETTINGS_SECTION: NavSection = {
   ],
 };
 
-function statusItems(base: '/rfp' | '/inbox'): NavStatusItem[] {
-  return Object.entries(STATUS_LABELS[base]).map(([status, label]) => ({
-    status,
-    label,
-  }));
-}
-
 const TOP: NavLeaf[] = [
   {
     id: 'home',
@@ -98,7 +91,7 @@ const TOP: NavLeaf[] = [
 ];
 
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
-  const workspaceSection: NavSection =
+  const workspaceLeaf: NavLeaf =
     workspaceType === 'buyer'
       ? {
           id: 'rfp',
@@ -106,8 +99,6 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
           href: '/rfp',
           icon: FileTextIcon,
           shortcut: { kind: 'chord', lead: 'g', key: 'r' },
-          base: '/rfp',
-          statuses: statusItems('/rfp'),
         }
       : {
           id: 'inbox',
@@ -115,11 +106,9 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
           href: '/inbox',
           icon: InboxIcon,
           shortcut: { kind: 'chord', lead: 'g', key: 'i' },
-          base: '/inbox',
-          statuses: statusItems('/inbox'),
         };
 
-  return { top: TOP, sections: [workspaceSection, SETTINGS_SECTION] };
+  return { top: [...TOP, workspaceLeaf], sections: [SETTINGS_SECTION] };
 }
 
 // One breadcrumb segment. The current page (last segment) has no `href`; every

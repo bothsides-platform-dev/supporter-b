@@ -6,6 +6,7 @@ import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDeadline } from '@/lib/format';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
+import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 const invStatusLabel: Record<string, string> = {
   sent: '신규',
@@ -32,6 +33,8 @@ export type InboxRow = {
   rfpTitle: string;
   rfpDeadline: string;
   grade: string;
+  /** Raw merchant-grade enum for the grade filter (label lives in `grade`). */
+  gradeRaw?: MerchantGrade;
 };
 
 export function InboxList({ rows }: { rows: InboxRow[] }) {

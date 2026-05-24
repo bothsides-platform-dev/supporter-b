@@ -19,38 +19,27 @@ describe('getNavConfig — top items', () => {
   });
 });
 
-describe('getNavConfig — buyer sections', () => {
-  it('has an RFP section (g r) with the four buyer statuses and a settings section', () => {
-    const { sections } = getNavConfig('buyer');
-    const rfp = sections.find((s) => s.id === 'rfp');
+describe('getNavConfig — buyer workspace leaf', () => {
+  it('puts RFP (g r) in top, leaves only the settings section', () => {
+    const { top, sections } = getNavConfig('buyer');
+    const rfp = top.find((i) => i.id === 'rfp');
     expect(rfp?.label).toBe('RFP');
     expect(rfp?.href).toBe('/rfp');
     expect(rfp?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'r' });
-    expect(rfp?.statuses?.map((s) => s.label)).toEqual([
-      '작성중',
-      '진행중',
-      '마감',
-      '계약완료',
-    ]);
-    expect(sections.some((s) => s.id === 'inbox')).toBe(false);
-    expect(sections.some((s) => s.id === 'settings')).toBe(true);
+    expect(top.some((i) => i.id === 'inbox')).toBe(false);
+    expect(sections.map((s) => s.id)).toEqual(['settings']);
   });
 });
 
-describe('getNavConfig — pg sections', () => {
-  it('has a 받은 RFP section (g i) with the four inbox statuses, no RFP section', () => {
-    const { sections } = getNavConfig('pg');
-    const inbox = sections.find((s) => s.id === 'inbox');
+describe('getNavConfig — pg workspace leaf', () => {
+  it('puts 받은 RFP (g i) in top, no RFP, only the settings section', () => {
+    const { top, sections } = getNavConfig('pg');
+    const inbox = top.find((i) => i.id === 'inbox');
     expect(inbox?.label).toBe('받은 RFP');
     expect(inbox?.href).toBe('/inbox');
     expect(inbox?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'i' });
-    expect(inbox?.statuses?.map((s) => s.status)).toEqual([
-      'new',
-      'draft',
-      'submitted',
-      'closed',
-    ]);
-    expect(sections.some((s) => s.id === 'rfp')).toBe(false);
+    expect(top.some((i) => i.id === 'rfp')).toBe(false);
+    expect(sections.map((s) => s.id)).toEqual(['settings']);
   });
 });
 

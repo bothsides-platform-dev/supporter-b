@@ -37,8 +37,20 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { SidebarSection } from '../sidebar/SidebarSection';
 import { useSidebarSectionsStore } from '@/lib/stores/sidebar-sections';
 import { getNavConfig } from '@/lib/nav/nav-config';
+import type { NavSection } from '@/lib/nav/nav-config';
 
-const rfpSection = getNavConfig('buyer').sections.find((s) => s.id === 'rfp')!;
+const rfpSection: NavSection = {
+  id: 'rfp',
+  label: 'RFP',
+  href: '/rfp',
+  base: '/rfp',
+  statuses: [
+    { status: 'draft', label: '작성중' },
+    { status: 'active', label: '진행중' },
+    { status: 'closed', label: '마감' },
+    { status: 'awarded', label: '계약완료' },
+  ],
+};
 const settingsSection = getNavConfig('buyer').sections.find((s) => s.id === 'settings')!;
 
 function renderSection(section: typeof rfpSection) {

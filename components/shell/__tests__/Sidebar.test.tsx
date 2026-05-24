@@ -122,11 +122,11 @@ describe('Sidebar — top nav items', () => {
 });
 
 describe('Sidebar — buyer workspace', () => {
-  it('renders the RFP section header as a navigable link plus status items', () => {
+  it('renders RFP as a top nav link without status sub-items', () => {
     renderSidebar(buyerProps);
     expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('href', '/rfp');
-    expect(screen.getByRole('link', { name: '진행중' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '계약완료' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '진행중' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '계약완료' })).not.toBeInTheDocument();
   });
 
   it('does NOT render the sidebar compose shortcut', () => {
@@ -141,10 +141,10 @@ describe('Sidebar — buyer workspace', () => {
 });
 
 describe('Sidebar — pg workspace', () => {
-  it('renders the 받은 RFP section header as a link plus status items', () => {
+  it('renders 받은 RFP as a top nav link without status sub-items', () => {
     renderSidebar(pgProps);
     expect(screen.getByRole('link', { name: '받은 RFP' })).toHaveAttribute('href', '/inbox');
-    expect(screen.getByRole('link', { name: '제출완료' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '제출완료' })).not.toBeInTheDocument();
   });
 
 });
