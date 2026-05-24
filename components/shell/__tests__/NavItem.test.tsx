@@ -88,7 +88,7 @@ describe('NavItem', () => {
     expect(await screen.findByText('H')).toBeInTheDocument();
   });
 
-  it('reveals the keyboard shortcut inline on hover when expanded', async () => {
+  it('reveals the keyboard shortcut in a tooltip on hover when expanded', async () => {
     const user = userEvent.setup();
     renderItem(
       <NavItem
@@ -100,11 +100,9 @@ describe('NavItem', () => {
       { open: true },
     );
     const link = screen.getByRole('link', { name: /홈/ });
-    const shortcutWrapper = link.querySelector('.opacity-0');
-    expect(shortcutWrapper).toBeInTheDocument();
-    expect(shortcutWrapper?.querySelectorAll('[data-slot="kbd"]')).toHaveLength(2);
+    expect(link.querySelector('[data-slot="kbd"]')).not.toBeInTheDocument();
     await user.hover(link);
+    expect(await screen.findByText('H')).toBeInTheDocument();
     expect(screen.getByText('G')).toBeInTheDocument();
-    expect(screen.getByText('H')).toBeInTheDocument();
   });
 });
