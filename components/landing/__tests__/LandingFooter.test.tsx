@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { LandingHero } from '../LandingHero';
@@ -25,8 +26,6 @@ vi.mock('@/lib/stores/theme', () => ({
   useThemeStore: (selector: (s: { resolvedTheme: string; setTheme: (t: string) => void }) => unknown) =>
     selector({ resolvedTheme: 'light', setTheme: vi.fn() }),
 }));
-
-import React from 'react';
 
 describe('LandingHero footer', () => {
   it('renders site footer with theme toggle and not in the header', () => {

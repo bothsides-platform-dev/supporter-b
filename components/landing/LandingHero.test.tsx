@@ -49,8 +49,4 @@ describe('LandingHero nav slot', () => {
     expect(screen.queryByRole('link', { name: 'Test Nav' })).toBeNull()
   })
 
-  it('renders theme toggle in the header', () => {
-    render(<LandingHero nav={<a href="/test">Test Nav</a>} />)
-    expect(screen.getByRole('button', { name: '다크 모드로 전환' })).toBeInTheDocument()
-  })
 })

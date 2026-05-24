@@ -1,8 +1,11 @@
+import { ThemeToggle } from '@/components/shell/ThemeToggle';
+
 export function Footer() {
   const year = new Date().getFullYear();
 
   return (
     <footer
+      role="contentinfo"
       className="w-full border-t border-[var(--md-sys-color-outline-variant)]"
       style={{ backgroundColor: 'var(--md-sys-color-surface)' }}
     >
@@ -113,15 +116,15 @@ export function Footer() {
         {/* Divider */}
         <div className="mt-10 mb-6 border-t border-[var(--md-sys-color-outline-variant)]" />
 
-        {/* Bottom row: business info + copyright */}
-        <div className="flex flex-col gap-4">
-          {/* Copyright + editorial mark */}
+        {/* Bottom row: copyright + theme */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <span
             className="text-[11px]"
             style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-outline)' }}
           >
             © {year} SUPPORTER B CORP. ALL RIGHTS RESERVED.
           </span>
+          <ThemeToggle />
         </div>
       </div>
     </footer>
