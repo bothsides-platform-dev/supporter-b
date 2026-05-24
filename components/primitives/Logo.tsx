@@ -25,8 +25,8 @@ export function Logo({ variant = 'default', className, href }: LogoProps) {
         {/* "b" icon — paper background with ink mark, matches apple-icon */}
         <svg
           viewBox="0 0 32 32"
-          width="32"
-          height="32"
+          width="22"
+          height="22"
           aria-hidden="true"
           xmlns="http://www.w3.org/2000/svg"
           className="opacity-[0.82] group-hover:opacity-100 transition-opacity duration-[140ms]"
