@@ -73,22 +73,21 @@ const SETTINGS_SECTION: NavSection = {
   ],
 };
 
-const TOP: NavLeaf[] = [
-  {
-    id: 'home',
-    label: '홈',
-    href: '/home',
-    icon: HomeIcon,
-    shortcut: { kind: 'chord', lead: 'g', key: 'h' },
-  },
-  {
-    id: 'notifications',
-    label: '알림',
-    href: '/notifications',
-    icon: BellIcon,
-    shortcut: { kind: 'chord', lead: 'g', key: 'n' },
-  },
-];
+const HOME: NavLeaf = {
+  id: 'home',
+  label: '홈',
+  href: '/home',
+  icon: HomeIcon,
+  shortcut: { kind: 'chord', lead: 'g', key: 'h' },
+};
+
+const NOTIFICATIONS: NavLeaf = {
+  id: 'notifications',
+  label: '알림',
+  href: '/notifications',
+  icon: BellIcon,
+  shortcut: { kind: 'chord', lead: 'g', key: 'n' },
+};
 
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   const workspaceLeaf: NavLeaf =
@@ -108,7 +107,10 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
           shortcut: { kind: 'chord', lead: 'g', key: 'i' },
         };
 
-  return { top: [...TOP, workspaceLeaf], sections: [SETTINGS_SECTION] };
+  return {
+    top: [HOME, workspaceLeaf, NOTIFICATIONS],
+    sections: [SETTINGS_SECTION],
+  };
 }
 
 // One breadcrumb segment. The current page (last segment) has no `href`; every

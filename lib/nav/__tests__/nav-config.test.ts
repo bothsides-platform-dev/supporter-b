@@ -5,6 +5,21 @@ import {
   getChordMap,
 } from '../nav-config';
 
+describe('getNavConfig — top item order', () => {
+  it('lists 홈, workspace leaf, then 알림', () => {
+    expect(getNavConfig('buyer').top.map((i) => i.id)).toEqual([
+      'home',
+      'rfp',
+      'notifications',
+    ]);
+    expect(getNavConfig('pg').top.map((i) => i.id)).toEqual([
+      'home',
+      'inbox',
+      'notifications',
+    ]);
+  });
+});
+
 describe('getNavConfig — top items', () => {
   it('exposes 홈 and 알림 with chord shortcuts for both workspace types', () => {
     for (const ws of ['buyer', 'pg'] as const) {

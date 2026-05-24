@@ -88,8 +88,19 @@ function SidebarBody({
 }: SidebarProps & { onNavigate?: () => void }) {
   return (
     <>
-      <SidebarHeader className="flex-row items-center gap-1 p-2">
-        <div className="min-w-0 flex-1">
+      <SidebarHeader className="flex flex-col gap-0 p-2 pb-1">
+        <div className="flex items-center px-1 py-1.5 group-data-[collapsible=icon]:justify-center">
+          <Logo
+            variant="default"
+            href="/home"
+            className="group-data-[collapsible=icon]:hidden"
+          />
+          <div className="hidden group-data-[collapsible=icon]:flex justify-center w-full">
+            <Logo variant="compact" />
+          </div>
+        </div>
+        <div className="border-b border-[var(--md-sys-color-outline-variant)] group-data-[collapsible=icon]:hidden mb-1" />
+        <div className="min-w-0">
           <WorkspaceSwitcher current={current} workspaces={workspaces} />
         </div>
       </SidebarHeader>
