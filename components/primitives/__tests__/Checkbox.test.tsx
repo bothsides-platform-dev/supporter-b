@@ -30,7 +30,7 @@ describe('Checkbox', () => {
     expect(check?.getAttribute('stroke')).toBe('var(--md-sys-color-on-primary)');
   });
 
-  it('calls onCheckedChange when clicked', async () => {
+  it('calls onCheckedChange when the native checkbox is clicked', async () => {
     const user = userEvent.setup();
     const onCheckedChange = vi.fn();
     render(<Checkbox id="terms" checked={false} onCheckedChange={onCheckedChange} aria-label="이용약관 동의" />);
@@ -38,4 +38,19 @@ describe('Checkbox', () => {
     await user.click(screen.getByRole('checkbox', { name: '이용약관 동의' }));
     expect(onCheckedChange).toHaveBeenCalledWith(true);
   });
+
+  it('calls onCheckedChange when the visible checkbox box is clicked inside a label', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    render(
+      <label htmlFor="terms">
+        <Checkbox id="terms" checked={false} onCheckedChange={onCheckedChange} />
+        <span>이용약관 동의</span>
+      </label>,
+    );
+
+    await user.click(screen.getByTestId('checkbox-box'));
+    expect(onCheckedChange).toHaveBeenCalledWith(true);
+  });
+
 });
