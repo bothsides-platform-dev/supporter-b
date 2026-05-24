@@ -1,7 +1,7 @@
 // RfpListTable — 행 클릭은 사람용 code(P-YYMM-NNNN)로 이동해야 한다. 상세 라우트가
 // findByCode 로 조회하므로 uuid(rfp.id)로 push 하면 "RFP를 찾을 수 없습니다" 가 뜬다
 // (회귀 가드 + 모달 가로채기 진입점 정합).
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 

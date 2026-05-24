@@ -15,6 +15,10 @@ vi.mock('@/lib/hooks/usePlatform', async (importOriginal) => ({
   useIsMac: () => false,
 }));
 
+vi.mock('@/hooks/use-mobile', () => ({
+  useIsMobile: () => false,
+}));
+
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
     <a href={href} {...props}>
@@ -23,12 +27,19 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { NavItem } from '../sidebar/NavItem';
 import { HomeIcon } from '@/components/icons';
 
-function renderItem(ui: React.ReactElement) {
-  return render(<TooltipProvider delay={0}>{ui}</TooltipProvider>);
+// NavItem reads the sidebar context (useSidebar) for collapsed/icon state, so it
+// must render under a SidebarProvider — same harness as SidebarSection.test.
+function renderItem(ui: React.ReactElement, { open = true }: { open?: boolean } = {}) {
+  return render(
+    <SidebarProvider defaultOpen={open}>
+      <TooltipProvider delay={0}>{ui}</TooltipProvider>
+    </SidebarProvider>,
+  );
 }
 
 afterEach(() => cleanup());
@@ -64,6 +75,7 @@ describe('NavItem', () => {
 
   it('reveals the keyboard shortcut in a tooltip on hover', async () => {
     const user = userEvent.setup();
+    // The shortcut tooltip only renders when the sidebar is collapsed.
     renderItem(
       <NavItem
         href="/home"
@@ -71,6 +83,7 @@ describe('NavItem', () => {
         icon={HomeIcon}
         shortcut={{ kind: 'chord', lead: 'g', key: 'h' }}
       />,
+      { open: false },
     );
     await user.hover(screen.getByRole('link', { name: /홈/ }));
     expect(await screen.findByText('H')).toBeInTheDocument();
