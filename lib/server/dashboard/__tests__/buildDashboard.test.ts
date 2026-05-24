@@ -3,7 +3,9 @@ import {
   buildBuyerDashboard,
   countSubmittedBids,
   UNANSWERED_DAYS,
+  buildPgDashboard,
 } from '../buildDashboard';
+import type { PgDashRow } from '../buildDashboard';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 
@@ -68,5 +70,36 @@ describe('buildBuyerDashboard', () => {
 
   it('exposes the tunable unanswered threshold', () => {
     expect(UNANSWERED_DAYS).toBe(3);
+  });
+});
+
+describe('buildPgDashboard', () => {
+  const row = (over: Partial<PgDashRow>): PgDashRow => ({
+    invitationId: 'i', invitationStatus: 'sent', rfpCode: 'P-0', rfpTitle: 't', rfpDeadline: fromNow(20),
+    ...over,
+  });
+  const rows: PgDashRow[] = [
+    row({ invitationId: 'n', invitationStatus: 'sent', rfpCode: 'P-N', rfpTitle: 'N', rfpDeadline: fromNow(3) }),
+    row({ invitationId: 'o', invitationStatus: 'opened', rfpCode: 'P-O', rfpTitle: 'O', rfpDeadline: fromNow(20) }),
+    row({ invitationId: 'a', invitationStatus: 'accepted', rfpCode: 'P-A', rfpTitle: 'A', rfpDeadline: fromNow(20) }),
+    row({ invitationId: 'o2', invitationStatus: 'opened', rfpCode: 'P-O2', rfpTitle: 'O2', rfpDeadline: fromNow(2) }),
+  ];
+  const dash = buildPgDashboard(rows, NOW);
+
+  it('computes PG KPI values and deep links', () => {
+    const byId = Object.fromEntries(dash.kpis.map((k) => [k.id, k]));
+    expect(byId.new.value).toBe(1);
+    expect(byId.new.href).toBe('/inbox?status=new');
+    expect(byId.due.value).toBe(2);
+    expect(byId.drafting.value).toBe(2);
+    expect(byId.submitted.value).toBe(1);
+  });
+
+  it('builds PG action groups (href uses rfp code), omitting empty', () => {
+    const byId = Object.fromEntries(dash.groups.map((g) => [g.id, g]));
+    expect(byId.new.items.map((i) => i.id)).toEqual(['n']);
+    expect(byId.new.items[0].href).toBe('/inbox/P-N');
+    expect(byId.due.items.map((i) => i.id)).toEqual(['o2', 'n']);
+    expect(byId.drafting.items.map((i) => i.id)).toEqual(['o', 'o2']);
   });
 });
