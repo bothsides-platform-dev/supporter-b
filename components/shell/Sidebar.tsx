@@ -15,7 +15,7 @@ import {
   SidebarRail,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { Logo } from '@/components/primitives/Logo';
+import { SidebarBrand } from '@/components/shell/SidebarBrand';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useNotifications } from '@/lib/hooks/useNotifications';
 import { useGoToShortcut } from '@/lib/hooks/useGoToShortcut';
@@ -88,9 +88,9 @@ function SidebarBody({
   return (
     <>
       <SidebarHeader className="flex flex-col gap-0 p-2 pb-1">
-        {/* 아이콘은 좌측 고정(접어도 안 움직임), 접힐 때 워드마크 텍스트(span)만 즉시 사라짐 */}
-        <div className="flex h-9 items-center px-1 group-data-[collapsible=icon]:[&_span]:hidden">
-          <Logo variant="default" href="/home" />
+        {/* 아이콘 고정 + 워드마크는 글자 단위 stagger 애니메이션 (SidebarBrand). overflow-hidden으로 접힘 시 글자 spill 방지 */}
+        <div className="flex h-9 items-center px-1 overflow-hidden">
+          <SidebarBrand />
         </div>
         <div className="border-b border-[var(--md-sys-color-outline-variant)] group-data-[collapsible=icon]:hidden mb-1" />
         <div className="min-w-0">
