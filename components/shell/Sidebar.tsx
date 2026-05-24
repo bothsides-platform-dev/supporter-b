@@ -89,16 +89,9 @@ function SidebarBody({
   return (
     <>
       <SidebarHeader className="flex flex-col gap-0 p-2 pb-1">
-        {/* 고정 높이 래퍼 → 수직 cascade 제거. 두 로고를 겹쳐 opacity로 크로스페이드 */}
-        <div className="relative h-9 px-1">
-          {/* 펼침: 워드마크 로고 — 좌측 고정, 수직 중앙. 접힐 때는 즉시 사라지고(duration-0) 펼칠 때만 페이드 인 */}
-          <div className="absolute left-1 top-1/2 -translate-y-1/2 transition-opacity duration-200 group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:duration-0">
-            <Logo variant="default" href="/home" />
-          </div>
-          {/* 접힘: compact 배지 — 중앙 */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-0 transition-opacity duration-200 group-data-[collapsible=icon]:pointer-events-auto group-data-[collapsible=icon]:opacity-100">
-            <Logo variant="compact" href="/home" />
-          </div>
+        {/* 아이콘은 좌측 고정(접어도 안 움직임), 접힐 때 워드마크 텍스트(span)만 즉시 사라짐 */}
+        <div className="flex h-9 items-center px-1 group-data-[collapsible=icon]:[&_span]:hidden">
+          <Logo variant="default" href="/home" />
         </div>
         <div className="border-b border-[var(--md-sys-color-outline-variant)] group-data-[collapsible=icon]:hidden mb-1" />
         <div className="min-w-0">
