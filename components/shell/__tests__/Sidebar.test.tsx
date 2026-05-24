@@ -46,7 +46,6 @@ vi.mock('@/hooks/use-mobile', () => ({
 }));
 
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { ShellSidebarTrigger } from '../ShellSidebarTrigger';
 import { Sidebar } from '../Sidebar';
 
 const buyerProps = {
@@ -71,7 +70,6 @@ const sidebarProviderStyle = {
 function renderSidebar(props: typeof buyerProps | typeof pgProps) {
   return render(
     <SidebarProvider style={sidebarProviderStyle}>
-      <ShellSidebarTrigger />
       <Suspense fallback={null}>
         <Sidebar {...props} />
       </Suspense>
@@ -89,6 +87,14 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('Sidebar — icon toggle', () => {
+  it('renders the collapse trigger inside the sidebar', () => {
+    renderSidebar(buyerProps);
+    const inner = document.querySelector('[data-slot="sidebar-inner"]');
+    expect(inner).not.toBeNull();
+    const trigger = screen.getByRole('button', { name: '사이드바 접기' });
+    expect(inner).toContainElement(trigger);
+  });
+
   it('collapses when SidebarTrigger is clicked on desktop', async () => {
     const user = userEvent.setup();
     renderSidebar(buyerProps);

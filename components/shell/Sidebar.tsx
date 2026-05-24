@@ -2,6 +2,7 @@
 
 import { useMemo, Suspense } from 'react';
 import { usePathname } from 'next/navigation';
+import { ShellSidebarTrigger } from '@/components/shell/ShellSidebarTrigger';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 import { UserMenu } from '@/components/shell/UserMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
@@ -86,8 +87,11 @@ function SidebarBody({
 }: SidebarProps & { onNavigate?: () => void }) {
   return (
     <>
-      <SidebarHeader className="p-2">
-        <WorkspaceSwitcher current={current} workspaces={workspaces} />
+      <SidebarHeader className="flex-row items-center gap-1 p-2">
+        <div className="min-w-0 flex-1">
+          <WorkspaceSwitcher current={current} workspaces={workspaces} />
+        </div>
+        <ShellSidebarTrigger className="hidden shrink-0 md:inline-flex" />
       </SidebarHeader>
 
       <SidebarContent className="px-2">

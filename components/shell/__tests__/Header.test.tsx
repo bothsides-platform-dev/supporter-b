@@ -54,6 +54,12 @@ describe('Header', () => {
     expect(screen.getByText('진행중')).toBeInTheDocument();
   });
 
+  it('does not render the sidebar collapse trigger', () => {
+    render(<Header user={user} workspaceType="buyer" />);
+    expect(screen.queryByRole('button', { name: '사이드바 접기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '사이드바 펼치기' })).not.toBeInTheDocument();
+  });
+
   it('renders the search bar', () => {
     render(<Header user={user} workspaceType="buyer" />);
     expect(screen.getByRole('button', { name: /검색/ })).toBeInTheDocument();
