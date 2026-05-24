@@ -16,6 +16,7 @@ import {
   SidebarRail,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { Logo } from '@/components/primitives/Logo';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useNotifications } from '@/lib/hooks/useNotifications';
 import { useGoToShortcut } from '@/lib/hooks/useGoToShortcut';

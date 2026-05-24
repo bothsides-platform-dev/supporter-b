@@ -6,13 +6,14 @@ type LogoVariant = 'default' | 'compact'
 type LogoProps = {
   variant?: LogoVariant
   className?: string
+  href?: string
 }
 
-export function Logo({ variant = 'default', className }: LogoProps) {
+export function Logo({ variant = 'default', className, href }: LogoProps) {
   if (variant === 'compact') {
     return (
       <Link
-        href="/home"
+        href={href ?? '/home'}
         aria-label="Supporter B 홈"
         className={cn(
           'group flex items-center justify-center',
@@ -42,7 +43,7 @@ export function Logo({ variant = 'default', className }: LogoProps) {
 
   return (
     <Link
-      href="/"
+      href={href ?? '/'}
       aria-label="Supporter B 홈"
       className={cn(
         'group inline-flex items-center gap-3',
