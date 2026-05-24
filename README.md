@@ -4,7 +4,7 @@ PG(결제대행사) 1:N 비공개 RFP 플랫폼.
 
 이 가이드는 **Windows / macOS / Linux 어디서든** 처음 보는 분도 순서대로 따라 하면 로컬에서 실행할 수 있도록 정리한 것입니다. **Windows 사용자는 [Git Bash](https://git-scm.com/download/win) 를 켜고 따라 하세요** — Mac/Linux 와 똑같은 명령어로 진행할 수 있습니다. PowerShell 로만 가능한 부분은 별도 표기했습니다.
 
-자세한 도메인·디자인·기술 스펙은 [`PG_RFP_SPEC.md`](./PG_RFP_SPEC.md) → [`SCREEN_DESIGN.md`](./SCREEN_DESIGN.md) → [`DESIGN.md`](./DESIGN.md) → [`SPEC.md`](./SPEC.md) → [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) 순으로 읽으세요.
+자세한 도메인·디자인·기술 스펙은 [`PG_RFP_SPEC.md`](./PG_RFP_SPEC.md) → [`SCREEN_DESIGN.md`](./SCREEN_DESIGN.md) → [`DESIGN.md`](./DESIGN.md) → [`SPEC.md`](./SPEC.md) 순으로 읽으세요.
 
 ---
 

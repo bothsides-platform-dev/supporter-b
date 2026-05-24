@@ -1,8 +1,8 @@
 # Supporter B · PG 비공개 RFP 플랫폼 — Design Spec (v0)
 
-> **피벗 노트**: 본 spec 은 기존 일반 B2B 제안 시스템(`SCREEN_DESIGN.md`·`DESIGN.md`·`SPEC.md`·`IMPLEMENTATION.md`)에서 **PG(결제대행사) 도메인 특화**로 좁힌 v0 디자인. 일반 시스템의 IA·디자인 시스템·인증 흐름은 베이스로 유지되되, 도메인 객체·핵심 시나리오·결재 흐름은 본 spec 으로 대체된다.
+> **피벗 노트**: 본 spec 은 기존 일반 B2B 제안 시스템(`SCREEN_DESIGN.md`·`DESIGN.md`·`SPEC.md`)에서 **PG(결제대행사) 도메인 특화**로 좁힌 v0 디자인. 일반 시스템의 IA·디자인 시스템·인증 흐름은 베이스로 유지되되, 도메인 객체·핵심 시나리오·결재 흐름은 본 spec 으로 대체된다.
 
-> 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) · [DESIGN.md](./DESIGN.md) · [SPEC.md](./SPEC.md) · [IMPLEMENTATION.md](./IMPLEMENTATION.md)
+> 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) · [DESIGN.md](./DESIGN.md) · [SPEC.md](./SPEC.md)
 
 ---
 
@@ -267,9 +267,8 @@ const STATUTORY_CARD_FEE: Record<Grade, number> = {
 | 파일 | 변경 |
 |---|---|
 | `SCREEN_DESIGN.md` | **§0 도메인 컨텍스트(PG 특화)** 추가, §3 화면 명세를 본 §5 IA 로 교체. 기존 결재선·캘린더·템플릿은 v0 범위 외로 마킹. §11.5 인증/가입은 유지하되 워크스페이스 선택 단계(C2)에 buyer/pg 분기 추가. |
-| `DESIGN.md` | Korean Editorial Modernism 디자인 시스템 그대로 유지. PG 도메인 특수 컴포넌트(BizLookupField, GradeBadge, CardFeeMatrix, BidComparisonTable, A4PdfPreview) 만 §5 컴포넌트 사양에 추가. |
+| `DESIGN.md` | Linear 디자인 시스템 유지. PG 도메인 특수 컴포넌트(BizLookupField, GradeBadge, CardFeeMatrix, BidComparisonTable, A4PdfPreview) 만 §5 컴포넌트 사양에 추가. |
 | `SPEC.md` | §5 도메인 타입을 본 §4 로 교체. §3 디렉토리 구조에 `app/(app)/rfp/`·`app/(app)/inbox/` 추가, 기존 `quote/`·`account/`·`approval/` 는 archive. lib/types 에 `bizProfile.ts`, `rfp.ts`, `bid.ts`, `invitation.ts` 추가. |
-| `IMPLEMENTATION.md` | M0~M1.5 유지, M2 이후 마일스톤을 본 spec 의 화면 IA 로 재정렬. 새 마일스톤: M2(구매사 RFP 작성), M3(PG 수신·응답), M4(비교 화면), M5(수주 처리). |
 
 ---
 
