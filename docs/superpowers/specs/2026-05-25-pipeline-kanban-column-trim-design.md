@@ -91,18 +91,17 @@ drift 다. 이 세션의 목표는 **불필요한 라이프사이클(필수) 컬
      `submitted→lost`(withdraw-bid)
    - (DnD 자체는 유지 — 컬럼 집합에만 맞춤)
 
-6. **DB 백필 마이그레이션** (기존 워크스페이스는 6 파이프라인 컬럼이 시드돼 있음)
-   - 각 워크스페이스에 대해 파이프라인 컬럼을 새 집합으로 재조정:
-     - buyer: `sent`·`collecting`·`comparing` 컬럼 삭제 + `active`(진행중) 컬럼 1개
-       삽입(올바른 position), `awarded`→title 계약완료, `closed`→title 마감
-     - pg: `reviewing` 컬럼 삭제, `received`→title 신규
-   - 카드는 `board_column_id` 가 거의 항상 null → `resolveCardColumn` 의 lifecycleKey
-     매칭으로 새 컬럼에 **자동 재분류**. 커스텀 파이프라인 컬럼은 보존.
-   - `seed.ts` 주석이 언급한 기존 백필 스크립트 경로를 확장/추가.
+6. **스키마/마이그레이션 — 별도 데이터 마이그레이션 없음 (from-scratch).**
+   `columns` 테이블 DDL 은 변경 없음 — 컬럼 트림은 **시드 데이터** 변화이지 스키마
+   변화가 아니다(`lifecycle_key` 는 enum 이 아닌 `text`). `pnpm db:generate` 결과
+   "No schema changes, nothing to migrate". DB 는 **처음부터 생성**한다고 가정:
+   `drizzle/0000_*.sql` 로 스키마 생성 → 워크스페이스 생성 시 `defaultColumns`(buyer
+   4 / pg 5)가 시드. 기존 워크스페이스용 reconcile/백필 스크립트는 **두지 않는다**
+   (변경 반영이 필요하면 DB 를 재생성).
 
 7. **테스트(TDD — RED 먼저)**: `buyer-kanban`·`pg-kanban`·`lifecycle-keys`·
-   `seed.test.ts`·`loadBoard.test.ts`·`dragMatrix`/`resolveBoardDrop` 테스트 갱신
-   + 백필 마이그레이션 테스트 추가.
+   `seed.test.ts`·`createWorkspace.test.ts`·`columnCrud.test.ts`·
+   `dragMatrix`/`resolveBoardDrop` 테스트 갱신.
 
 ## 4. 부수 고려 (코어 아님)
 
@@ -116,6 +115,6 @@ drift 다. 이 세션의 목표는 **불필요한 라이프사이클(필수) 컬
 ## 5. 완료 기준
 
 - 구매사 칸반 = 4컬럼, PG 칸반 = 5컬럼. 표 뷰·필터와 정합(승/패 제외).
-- 기존 워크스페이스 백필 후 모든 카드가 올바른 새 컬럼에 표시(유실 카드 없음).
+- 새 워크스페이스는 시드(`defaultColumns`)로 4/5 컬럼 생성. `db:generate` = 스키마 변화 없음 → 별도 데이터 마이그레이션 불필요.
 - 커스텀 컬럼 기능·DnD 동작은 회귀 없음(범위 밖이나 깨지지 않아야 함).
 - `pnpm test` 전체 그린, `tsc --noEmit`·`lint` 클린.

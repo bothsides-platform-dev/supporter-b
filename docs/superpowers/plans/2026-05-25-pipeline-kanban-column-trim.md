@@ -4,7 +4,7 @@
 
 **Goal:** 파이프라인 칸반을 스펙의 정규 상태 모델에 맞춰 라이프사이클 컬럼을 줄인다 — 구매사 6→4, PG 6→5.
 
-**Architecture:** 칸반 단계는 순수 도메인 함수(`classifyBuyerRfp`/`classifyPgInvitation`)가 RFP/입찰/초대로부터 **derive** 한다. 컬럼 DB 행은 `defaultColumns`(시드)가 `*_KANBAN_ORDER` 에서 생성한다. 따라서 ORDER/LABEL/분류 함수만 바꾸면 시드는 자동으로 따라오고, 기존 워크스페이스는 일회성 reconcile 스크립트로 정리한다. 카드는 `board_column_id`(파이프라인에선 거의 항상 null) → `resolveCardColumn` 의 lifecycleKey 매칭으로 새 컬럼에 자동 재분류된다.
+**Architecture:** 칸반 단계는 순수 도메인 함수(`classifyBuyerRfp`/`classifyPgInvitation`)가 RFP/입찰/초대로부터 **derive** 한다. 컬럼 DB 행은 `defaultColumns`(시드)가 `*_KANBAN_ORDER` 에서 생성한다. 따라서 ORDER/LABEL/분류 함수만 바꾸면 시드가 자동으로 따라온다. **DB 는 처음부터 생성한다고 가정** — 컬럼 트림은 스키마 변화가 아닌 시드 데이터 변화라(`db:generate` = "No schema changes") 별도 데이터 마이그레이션은 두지 않는다(필요 시 DB 재생성). 카드는 `board_column_id`(파이프라인에선 거의 항상 null) → `resolveCardColumn` 의 lifecycleKey 매칭으로 새 컬럼에 자동 분류된다.
 
 **Tech Stack:** TypeScript strict · Vitest · Drizzle ORM + Postgres(postgres-js) / PGlite(테스트) · Next.js App Router.
 
@@ -503,7 +503,14 @@ git commit -m "refactor(kanban): PG 파이프라인 컬럼 6→5 (검토중 제�
 
 ---
 
-### Task 3: 기존 워크스페이스 reconcile 마이그레이션 (TDD)
+### Task 3: 기존 워크스페이스 reconcile 마이그레이션 (TDD) — ❌ SUPERSEDED / 제거됨
+
+> **이 태스크는 폐기됨 (2026-05-25 결정).** DB 를 처음부터 생성한다고 가정 — 컬럼
+> 트림은 스키마 변화가 아닌 **시드 데이터** 변화이고(`pnpm db:generate` = "No schema
+> changes, nothing to migrate"), 신규 워크스페이스는 `defaultColumns`(buyer 4 / pg 5)
+> 로 시드된다. 별도 데이터 마이그레이션을 두지 않으며 `reconcile-pipeline-trim.ts` /
+> 그 테스트 / `scripts/migrate-pipeline-columns-trim.ts` 는 **생성하지 않는다**(이미
+> 만들었다면 삭제). 아래 원본 내용은 기록용으로만 남김.
 
 신규 워크스페이스는 시드로 새 컬럼을 받지만, 기존 워크스페이스는 레거시 6컬럼이 DB 에 남아 있다. 일회성·idempotent reconcile 로 정리한다. 로직을 테스트 가능한 순수 함수로 분리하고 스크립트는 얇게.
 
@@ -710,7 +717,7 @@ git commit -m "docs(kanban): 파이프라인 칸반 컬럼(구매사 4/PG 5) IA 
 
 ---
 
-### Task 5: 헬스 게이트 · 마이그레이션 실행 · 검증
+### Task 5: 헬스 게이트 · 스키마 확인 · 검증
 
 **Files:** (코드 변경 없음 — 검증/실행)
 
@@ -739,14 +746,16 @@ Run: `rtk proxy grep -rnE "발송|응답수집|비교·협상|종료|검토중|�
 Run: `pnpm e2e`
 Expected: PASS (또는 라벨 수정 후 PASS).
 
-- [ ] **Step 5: 마이그레이션 실행 (로컬 → 이후 prod)**
+- [ ] **Step 5: 스키마 확인 (별도 데이터 마이그레이션 없음 — from-scratch)**
 
-로컬 DB 에 적용:
+컬럼 트림은 시드 데이터 변화이지 스키마 변화가 아니다. 스키마 파일이 최신인지 확인:
 
-Run: `pnpm tsx scripts/migrate-pipeline-columns-trim.ts`
-Expected: `migrate-pipeline-columns-trim: done.`
+Run: `pnpm db:generate`
+Expected: `No schema changes, nothing to migrate`.
 
-> prod 적용: 동일 스크립트를 prod `DATABASE_URL` 로 1회 실행(idempotent). 배포(Vercel)와 별개의 운영 스텝.
+> DB 는 처음부터 생성한다고 가정 — `drizzle/0000_*.sql` 로 스키마 생성 후 워크스페이스
+> 생성 시 `defaultColumns`(buyer 4 / pg 5)가 시드. 기존 DB 에 반영하려면 재생성(별도
+> reconcile/마이그레이션 스크립트 없음).
 
 - [ ] **Step 6: 수동 시각 확인 (회귀 테스트 아님)**
 
