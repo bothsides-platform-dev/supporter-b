@@ -37,6 +37,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null): RFP {
     rfpFiles: [],
     // PG-side view (findByPgWorkspace) never exposes the allowlist by design.
     allowedPgWorkspaceIds: [],
+    requiredPaymentMethods: [],
     deadline: new Date(row.deadline).toISOString(),
     status: row.status,
     awardedBidId: row.awardedBidId ?? undefined,

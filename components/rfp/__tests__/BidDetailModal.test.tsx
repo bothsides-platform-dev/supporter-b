@@ -37,11 +37,9 @@ const bid: Bid = {
   pgWsId: 'ws-toss',
   invitationId: 'inv-1',
   settleCycle: 'D+1',
-  deposit: 5_000_000,
-  setupFee: 0,
-  monthlyMin: 100_000,
-  bankTransferFeePct: 0.005,
-  easyPayFeePct: 0.025,
+  settleLimit: 0,
+  guaranteeInsurance: 0,
+  paymentFees: {},
   proposalPdfs: [
     {
       id: 'pdf',
@@ -80,11 +78,8 @@ describe('BidDetailModal', () => {
       />,
     );
     expect(screen.getByText('정산주기')).toBeInTheDocument();
-    expect(screen.getByText('보증금')).toBeInTheDocument();
-    expect(screen.getByText('셋업비')).toBeInTheDocument();
-    expect(screen.getByText('월최저')).toBeInTheDocument();
-    expect(screen.getByText('계좌이체')).toBeInTheDocument();
-    expect(screen.getByText('간편결제')).toBeInTheDocument();
+    expect(screen.getByText('정산한도')).toBeInTheDocument();
+    expect(screen.getByText('월 보증보험')).toBeInTheDocument();
     // Statutory card fee row for sme1 (1.10% fixed).
     expect(screen.getByText(/1\.10% 고정/)).toBeInTheDocument();
   });

@@ -8,30 +8,15 @@ import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
 import { StatutoryCardFeeNotice } from './StatutoryCardFeeNotice';
 import { submitBidAction } from '@/lib/server/actions/bid';
-import { STATUTORY_CARD_FEE, type CardIssuer } from '@/lib/types/bid';
+import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
-import type { SettlementCycle } from '@/lib/types/bid';
 import { cn } from '@/lib/utils';
 
-const CARD_ISSUERS: { key: CardIssuer; label: string }[] = [
-  { key: 'BC', label: 'BC카드' },
-  { key: 'SHINHAN', label: '신한카드' },
-  { key: 'SAMSUNG', label: '삼성카드' },
-  { key: 'HYUNDAI', label: '현대카드' },
-  { key: 'KB', label: 'KB국민카드' },
-  { key: 'LOTTE', label: '롯데카드' },
-  { key: 'NH', label: 'NH농협카드' },
-  { key: 'HANA', label: '하나카드' },
-  { key: 'WOORI', label: '우리카드' },
-];
-
-const SETTLE_CYCLES: { value: SettlementCycle; label: string }[] = [
-  { value: 'D+0', label: 'D+0 (당일)' },
-  { value: 'D+1', label: 'D+1 (익일)' },
-  { value: 'D+2', label: 'D+2 (2영업일)' },
-  { value: 'weekly', label: '주 1회 정산' },
-  { value: 'monthly', label: '월 1회 정산' },
-];
+const CYCLE_UNITS = [
+  { value: 'D', label: 'D+' },
+  { value: 'W', label: 'W+' },
+  { value: 'M', label: 'M+' },
+] as const;
 
 const inputBase =
   'block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors';
@@ -44,6 +29,7 @@ const ERROR_LABELS: Record<string, string> = {
   RFP_NOT_OPEN: '마감되었거나 이미 종료된 RFP입니다.',
   INVITATION_NOT_FOUND: '초대 내역을 찾을 수 없습니다.',
   BID_ALREADY_SUBMITTED: '이미 제안을 제출하셨습니다.',
+  CARD_FEE_EXCEEDS_STATUTORY_CAP: '카드 수수료가 법정 상한을 초과합니다.',
 };
 
 function PctInput({
@@ -107,10 +93,8 @@ function KrwInput({
 }
 
 type Props = {
-  rfpId: string; // uuid — 액션/업로드 ownerId용
-  rfpCode: string; // P-YYMM-NNNN — 이동 URL용
-  // invitationId는 prop으로 받지 않는다 — 서버 액션이 session.userId 기반으로
-  // findByRfp 후 고유 invitation을 픽업한다(canAccess 가드 포함).
+  rfpId: string;
+  rfpCode: string;
   grade: MerchantGrade | undefined;
 };
 
@@ -120,21 +104,17 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
 
-  const [settleCycle, setSettleCycle] = useState<SettlementCycle>('D+1');
-  const [deposit, setDeposit] = useState('0');
-  const [setupFee, setSetupFee] = useState('0');
-  const [monthlyMin, setMonthlyMin] = useState('0');
+  // 정산 조건
+  const [cycleUnit, setCycleUnit] = useState<'D' | 'W' | 'M'>('D');
+  const [cycleNum, setCycleNum] = useState('1');
+  const [settleLimit, setSettleLimit] = useState('0');
+  const [guaranteeInsurance, setGuaranteeInsurance] = useState('0');
+
+  // 수수료
   const [bankPct, setBankPct] = useState('0.50');
-  const [easyPayPct, setEasyPayPct] = useState('1.50');
-  const [cardFees, setCardFees] = useState<Record<CardIssuer, string>>({
-    BC: '1.50', SHINHAN: '1.50', SAMSUNG: '1.50', HYUNDAI: '1.50', KB: '1.50', LOTTE: '1.50', NH: '1.50', HANA: '1.50', WOORI: '1.50',
-  });
-  const [overseasPct, setOverseasPct] = useState('3.00');
+  const [cardPct, setCardPct] = useState('');
   const [memo, setMemo] = useState('');
 
-  // Proposal PDF state — uploaded eagerly to /api/files/upload (Step 11)
-  // so the bid action only sees the resulting attachment id. The preview
-  // iframe targets /api/files/{id} which carries the user's session cookie.
   const proposalInputRef = useRef<HTMLInputElement>(null);
   const [proposal, setProposal] = useState<
     | { id: string; name: string; size: number }
@@ -186,18 +166,16 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
   const proposalReady = proposal && 'id' in proposal;
   const proposalUploading = proposal && 'status' in proposal && proposal.status === 'uploading';
 
-  // 등급 미입력 RFP 는 일반 가정 폴백 — 9개 카드사 입력 모드 활성.
-  // (서버에서도 grade ∈ {null, 'general'} 일 때만 cardFeesByIssuer 채택)
-  const allowCardFees = grade === undefined || grade === 'general';
-  const cardFeeStatutory =
-    grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
+  const allowCardInput = grade === undefined || grade === 'general';
+  const cardFeeStatutory = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
+
+  const settleCycle = `${cycleUnit}+${cycleNum || '1'}`;
 
   const canSubmit =
     !pending &&
     !proposalUploading &&
-    bankPct !== '' && parseFloat(bankPct) >= 0 &&
-    easyPayPct !== '' && parseFloat(easyPayPct) >= 0 &&
-    (!allowCardFees || CARD_ISSUERS.every((c) => cardFees[c.key] !== ''));
+    cycleNum !== '' && parseInt(cycleNum) > 0 &&
+    bankPct !== '' && parseFloat(bankPct) >= 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,33 +189,24 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
 
     const pct = (s: string) => parseFloat(s) / 100;
 
-    // 영세/중소 1~3 등급은 클라이언트가 cardFeesByIssuer 생략(서버도 강제로 null
-    // 처리 — advisor pin 1). 일반·등급 미입력에서만 9개 카드사 입력.
-    const cardFeesByIssuer = allowCardFees
-      ? (Object.fromEntries(
-          CARD_ISSUERS.map((c) => [c.key, pct(cardFees[c.key])]),
-        ) as Record<CardIssuer, number>)
-      : undefined;
+    const paymentFees: Record<string, number> = {
+      bank_transfer: pct(bankPct),
+    };
+    if (allowCardInput && cardPct !== '') {
+      paymentFees.card = pct(cardPct);
+    }
 
     startTransition(async () => {
       const r = await submitBidAction({
         rfpId,
         settleCycle,
-        deposit: parseInt(deposit) || 0,
-        setupFee: parseInt(setupFee) || 0,
-        monthlyMin: parseInt(monthlyMin) || 0,
-        bankTransferFeePct: pct(bankPct),
-        easyPayFeePct: pct(easyPayPct),
-        cardFeesByIssuer,
-        overseasCardFeePct: allowCardFees && overseasPct ? pct(overseasPct) : undefined,
+        settleLimit: parseInt(settleLimit) || 0,
+        guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
+        paymentFees,
         proposalAttachmentId: proposalReady ? proposal.id : undefined,
         memo: memo.trim() || undefined,
       });
       if (r.ok) {
-        // server action이 revalidatePath(`/inbox/${rfpId}`)를 호출하므로
-        // 클라이언트는 단일 네비게이션만으로 충분. refresh()와 push()를 같은
-        // tick에 동시 호출하면 startTransition pending이 영구히 안 풀린다
-        // (vercel/next.js#86055 — Next 16 useTransition + router 레이스).
         router.push(`/inbox/${rfpCode}/submitted`);
       } else {
         setSubmitError(r.error);
@@ -258,7 +227,6 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
         loading={pending}
       />
     <form className="space-y-10" onSubmit={handleSubmit}>
-      {/* 법정 수수료 안내 (영세/중소1~3 만). 일반·등급 미입력은 9개 카드사 입력 모드. */}
       {grade && grade !== 'general' && cardFeeStatutory !== null && (
         <StatutoryCardFeeNotice grade={grade} />
       )}
@@ -268,7 +236,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
             [ 등급 미입력 ] 일반 가정 제안
           </p>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-            구매사가 가맹점 등급을 입력하지 않은 사전 제안 RFP 입니다. 일반 등급 가정으로 9개 카드사별 수수료를 직접 입력해주세요.
+            구매사가 가맹점 등급을 입력하지 않은 사전 제안 RFP입니다. 카드 수수료를 직접 입력하세요.
           </p>
         </div>
       )}
@@ -283,16 +251,31 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
           <div className="col-span-2 space-y-1">
-            <Label size="md" muted={false}>정산 주기</Label>
-            <Select
-              options={SETTLE_CYCLES.map((c) => ({ value: c.value, label: c.label }))}
-              value={settleCycle}
-              onChange={(v) => setSettleCycle(v as SettlementCycle)}
-            />
+            <Label size="md" muted={false}>정산 주기 *</Label>
+            <div className="flex items-end gap-2">
+              <div className="w-28">
+                <Select
+                  options={CYCLE_UNITS.map((u) => ({ value: u.value, label: u.label }))}
+                  value={cycleUnit}
+                  onChange={(v) => setCycleUnit(v as 'D' | 'W' | 'M')}
+                />
+              </div>
+              <input
+                type="number"
+                min="1"
+                max="99"
+                value={cycleNum}
+                onChange={(e) => setCycleNum(e.target.value)}
+                placeholder="1"
+                className={cn(inputBase, 'flex-1')}
+              />
+            </div>
+            <p className="font-mono text-[10px] text-[var(--md-sys-color-outline)]">
+              예: D+1, W+2, M+1
+            </p>
           </div>
-          <KrwInput label="보증금" value={deposit} onChange={setDeposit} />
-          <KrwInput label="셋업비" value={setupFee} onChange={setSetupFee} />
-          <KrwInput label="월최저수수료" value={monthlyMin} onChange={setMonthlyMin} />
+          <KrwInput label="정산한도 (원/월)" value={settleLimit} onChange={setSettleLimit} placeholder="0" />
+          <KrwInput label="월 보증보험 (원/연)" value={guaranteeInsurance} onChange={setGuaranteeInsurance} placeholder="0" />
         </div>
       </section>
 
@@ -305,21 +288,9 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-          <PctInput label="계좌이체 수수료 *" value={bankPct} onChange={setBankPct} placeholder="1.50" />
-          <PctInput label="간편결제 수수료 *" value={easyPayPct} onChange={setEasyPayPct} placeholder="1.80" />
-          {allowCardFees && (
-            <>
-              {CARD_ISSUERS.map((c) => (
-                <PctInput
-                  key={c.key}
-                  label={`${c.label} *`}
-                  value={cardFees[c.key]}
-                  onChange={(v) => setCardFees((prev) => ({ ...prev, [c.key]: v }))}
-                  placeholder="1.50"
-                />
-              ))}
-              <PctInput label="해외카드 수수료" value={overseasPct} onChange={setOverseasPct} placeholder="3.00" />
-            </>
+          <PctInput label="계좌이체 수수료 *" value={bankPct} onChange={setBankPct} placeholder="0.50" />
+          {allowCardInput && (
+            <PctInput label="카드 수수료" value={cardPct} onChange={setCardPct} placeholder="1.25" />
           )}
         </div>
       </section>
@@ -414,8 +385,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
 
       {!canSubmit && !pending && (
         <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-          · 계좌이체·간편결제 수수료 입력 필요
-          {allowCardFees && ' · 카드사 9개 수수료 모두 입력 필요'}
+          · 정산주기 및 계좌이체 수수료 입력 필요
         </p>
       )}
 

@@ -23,18 +23,6 @@ import {
 import type { Attachment } from '@/lib/types/common';
 import type { BidNote } from '@/lib/types/bid-note';
 
-const SETTLE_LABEL: Record<string, string> = {
-  'D+0': 'D+0',
-  'D+1': 'D+1',
-  'D+2': 'D+2',
-  weekly: '주1회',
-  monthly: '월1회',
-};
-
-const ISSUER_LABEL: Record<string, string> = {
-  BC: 'BC', SHINHAN: '신한', SAMSUNG: '삼성', HYUNDAI: '현대',
-  KB: 'KB', LOTTE: '롯데', NH: 'NH', HANA: '하나', WOORI: '우리',
-};
 
 const MAX_BODY = 2000;
 const ACCEPT = 'image/*,application/pdf';
@@ -70,9 +58,6 @@ export function BidDetailModal({
 
   const cardFee = grade ? STATUTORY_CARD_FEE[grade] : NaN;
   const showStatutoryCard = grade && grade !== 'general' && !Number.isNaN(cardFee);
-  const issuerEntries = bid.cardFeesByIssuer
-    ? Object.entries(bid.cardFeesByIssuer)
-    : [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,12 +102,9 @@ export function BidDetailModal({
             <section className="px-5 py-4 border-b border-[var(--md-sys-color-outline-variant)]">
               <SectionLabel>정형 수치</SectionLabel>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-3 mt-3">
-                <Kpi label="정산주기" value={SETTLE_LABEL[bid.settleCycle] ?? bid.settleCycle} />
-                <Kpi label="보증금" value={formatKRW(bid.deposit)} />
-                <Kpi label="셋업비" value={formatKRW(bid.setupFee)} />
-                <Kpi label="월최저" value={formatKRW(bid.monthlyMin)} />
-                <Kpi label="계좌이체" value={formatPct(bid.bankTransferFeePct)} />
-                <Kpi label="간편결제" value={formatPct(bid.easyPayFeePct)} />
+                <Kpi label="정산주기" value={bid.settleCycle} />
+                <Kpi label="정산한도" value={formatKRW(bid.settleLimit)} />
+                <Kpi label="월 보증보험" value={formatKRW(bid.guaranteeInsurance)} />
                 {showStatutoryCard && (
                   <Kpi
                     label={`카드 (${GRADE_LABELS[grade!]})`}
@@ -130,26 +112,34 @@ export function BidDetailModal({
                     muted
                   />
                 )}
-                {bid.overseasCardFeePct !== undefined && (
-                  <Kpi label="해외 카드" value={formatPct(bid.overseasCardFeePct)} />
+                {bid.paymentFees.card !== undefined && !showStatutoryCard && (
+                  <Kpi label="카드" value={formatPct(bid.paymentFees.card)} />
+                )}
+                {bid.paymentFees.overseas_card !== undefined && (
+                  <Kpi label="해외카드" value={formatPct(bid.paymentFees.overseas_card)} />
+                )}
+                {bid.paymentFees.bank_transfer !== undefined && (
+                  <Kpi label="계좌이체" value={formatPct(bid.paymentFees.bank_transfer)} />
+                )}
+                {bid.paymentFees.virtual_account !== undefined && (
+                  <Kpi label="가상계좌" value={formatPct(bid.paymentFees.virtual_account)} />
+                )}
+                {bid.paymentFees.naver_pay !== undefined && (
+                  <Kpi label="네이버페이" value={formatPct(bid.paymentFees.naver_pay)} />
+                )}
+                {bid.paymentFees.kakao_pay !== undefined && (
+                  <Kpi label="카카오페이" value={formatPct(bid.paymentFees.kakao_pay)} />
+                )}
+                {bid.paymentFees.toss_pay !== undefined && (
+                  <Kpi label="토스페이" value={formatPct(bid.paymentFees.toss_pay)} />
+                )}
+                {bid.paymentFees.mobile !== undefined && (
+                  <Kpi label="휴대폰결제" value={formatPct(bid.paymentFees.mobile)} />
+                )}
+                {bid.paymentFees.gift_card !== undefined && (
+                  <Kpi label="상품권" value={formatPct(bid.paymentFees.gift_card)} />
                 )}
               </dl>
-              {grade === 'general' && issuerEntries.length > 0 && (
-                <details className="mt-3 group">
-                  <summary className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] cursor-pointer hover:text-[var(--md-sys-color-on-surface)] select-none">
-                    카드사별 수수료 9개사 ▾
-                  </summary>
-                  <dl className="grid grid-cols-3 gap-x-4 gap-y-2 mt-3">
-                    {issuerEntries.map(([issuer, pct]) => (
-                      <Kpi
-                        key={issuer}
-                        label={ISSUER_LABEL[issuer] ?? issuer}
-                        value={formatPct(pct)}
-                      />
-                    ))}
-                  </dl>
-                </details>
-              )}
             </section>
 
             {/* History form + timeline */}

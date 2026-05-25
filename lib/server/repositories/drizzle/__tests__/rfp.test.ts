@@ -36,6 +36,7 @@ function makeRfp(
     memo: '',
     rfpFiles: [],
     allowedPgWorkspaceIds,
+    requiredPaymentMethods: [],
     deadline: new Date(Date.now() + 86_400_000).toISOString(),
     status,
     createdBy,

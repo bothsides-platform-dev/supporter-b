@@ -17,14 +17,6 @@ type Props = { params: Promise<{ rfpId: string }> };
 
 export const dynamic = 'force-dynamic';
 
-const SETTLE_LABEL: Record<string, string> = {
-  'D+0': 'D+0 (당일)',
-  'D+1': 'D+1 (익일)',
-  'D+2': 'D+2 (2영업일)',
-  weekly: '주 1회',
-  monthly: '월 1회',
-};
-
 export default async function InboxSubmittedPage({ params }: Props) {
   const { rfpId: rfpCode } = await params; // URL param = 사람용 code
 
@@ -114,12 +106,15 @@ export default async function InboxSubmittedPage({ params }: Props) {
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           {[
-            ['정산 주기', SETTLE_LABEL[bid.settleCycle] ?? bid.settleCycle],
-            ['보증금', formatKRW(bid.deposit)],
-            ['셋업비', formatKRW(bid.setupFee)],
-            ['월최저수수료', formatKRW(bid.monthlyMin)],
-            ['계좌이체', formatPct(bid.bankTransferFeePct)],
-            ['간편결제', formatPct(bid.easyPayFeePct)],
+            ['정산 주기', bid.settleCycle],
+            ['정산한도', formatKRW(bid.settleLimit)],
+            ['월 보증보험', formatKRW(bid.guaranteeInsurance)],
+            ...(bid.paymentFees.card !== undefined
+              ? ([['카드', formatPct(bid.paymentFees.card)]] as [string, string][])
+              : []),
+            ...(bid.paymentFees.bank_transfer !== undefined
+              ? ([['계좌이체', formatPct(bid.paymentFees.bank_transfer)]] as [string, string][])
+              : []),
           ].map(([label, value]) => (
             <div key={label} className="py-2.5 flex items-baseline justify-between">
               <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">{label}</span>

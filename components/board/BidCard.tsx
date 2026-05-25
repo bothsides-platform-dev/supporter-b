@@ -5,14 +5,6 @@ import { FileTextIcon } from '@/components/icons';
 import { formatKRW, formatPct } from '@/lib/format';
 import type { Bid } from '@/lib/types/bid';
 
-const SETTLE_LABEL: Record<string, string> = {
-  'D+0': 'D+0',
-  'D+1': 'D+1',
-  'D+2': 'D+2',
-  weekly: '주1회',
-  monthly: '월1회',
-};
-
 // Presentational bid card for the rfp_bids board's renderCard slot. Drag is the
 // board's DraggableCard wrapper; awarded state shows a "낙찰" chip (decoupled
 // from columns — see spec §A). Click opens the detail modal.
@@ -44,9 +36,9 @@ export function BidCard({
       </div>
 
       <div className="space-y-1.5">
-        <KpiLine label="정산" value={SETTLE_LABEL[bid.settleCycle] ?? bid.settleCycle} />
-        <KpiLine label="월최저" value={formatKRW(bid.monthlyMin)} />
-        <KpiLine label="간편결제" value={formatPct(bid.easyPayFeePct)} />
+        <KpiLine label="정산" value={bid.settleCycle} />
+        <KpiLine label="정산한도" value={formatKRW(bid.settleLimit)} />
+        <KpiLine label="계좌이체" value={bid.paymentFees.bank_transfer !== undefined ? formatPct(bid.paymentFees.bank_transfer) : '—'} />
       </div>
 
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">

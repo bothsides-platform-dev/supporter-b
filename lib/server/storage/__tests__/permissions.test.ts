@@ -138,11 +138,9 @@ async function seedScenario(): Promise<Scenario> {
     pgWsId: pgWs.id,
     invitationId: invForToss,
     settleCycle: 'D+1',
-    deposit: '0',
-    setupFee: '0',
-    monthlyMin: '0',
-    bankTransferFeePct: '0.015',
-    easyPayFeePct: '0.018',
+    settleLimit: '0',
+    guaranteeInsurance: '0',
+    paymentFees: {},
     submittedBy: pgUser.id,
   });
   // bid_proposal attachment — linked to the bid via bid_id.

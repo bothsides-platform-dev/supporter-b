@@ -324,11 +324,9 @@ describe('POST /api/files/upload', () => {
       pgWsId: pgWs.id,
       invitationId: invId,
       settleCycle: 'D+1',
-      deposit: '0',
-      setupFee: '0',
-      monthlyMin: '0',
-      bankTransferFeePct: '0.015',
-      easyPayFeePct: '0.018',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
       submittedBy: pgUser.id,
     });
     expect(otherBuyer.id).not.toBe(foreignBuyer.id);
@@ -377,11 +375,9 @@ describe('POST /api/files/upload', () => {
       pgWsId: pgWs.id,
       invitationId: invId,
       settleCycle: 'D+1',
-      deposit: '0',
-      setupFee: '0',
-      monthlyMin: '0',
-      bankTransferFeePct: '0.015',
-      easyPayFeePct: '0.018',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
       submittedBy: pg.id,
     });
 

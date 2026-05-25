@@ -67,11 +67,9 @@ async function insertBid(
     pgWsId: ctx.pgWs.id,
     invitationId: ctx.invitationId,
     settleCycle: 'D+1',
-    deposit: '0',
-    setupFee: '0',
-    monthlyMin: '0',
-    bankTransferFeePct: '0.015',
-    easyPayFeePct: '0.018',
+    settleLimit: '0',
+    guaranteeInsurance: '0',
+    paymentFees: {},
     submittedBy: ctx.pgUser.id,
   });
 
@@ -179,11 +177,9 @@ describe('DrizzleBidRepository.findByRfpIds — 배치 조회 (N+1 제거)', () 
       pgWsId: ctx.pgWs.id,
       invitationId: inv2,
       settleCycle: 'D+1',
-      deposit: '0',
-      setupFee: '0',
-      monthlyMin: '0',
-      bankTransferFeePct: '0.015',
-      easyPayFeePct: '0.018',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
       submittedBy: ctx.pgUser.id,
     });
     const attId = randomUUID();

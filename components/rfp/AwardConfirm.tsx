@@ -163,14 +163,17 @@ export function AwardConfirm(props: Props) {
               '정산 주기',
               SETTLE_LABEL[selected.settleCycle] ?? selected.settleCycle,
             ],
-            ['보증금', formatKRW(selected.deposit)],
-            ['셋업비', formatKRW(selected.setupFee)],
-            ['월최저수수료', formatKRW(selected.monthlyMin)],
+            ['정산한도', formatKRW(selected.settleLimit)],
+            ['월 보증보험', formatKRW(selected.guaranteeInsurance)],
             ...(cardFee !== null
               ? ([['카드 (법정)', formatPct(cardFee)]] as [string, string][])
               : []),
-            ['계좌이체', formatPct(selected.bankTransferFeePct)],
-            ['간편결제', formatPct(selected.easyPayFeePct)],
+            ...(selected.paymentFees.card !== undefined
+              ? ([['카드', formatPct(selected.paymentFees.card)]] as [string, string][])
+              : []),
+            ...(selected.paymentFees.bank_transfer !== undefined
+              ? ([['계좌이체', formatPct(selected.paymentFees.bank_transfer)]] as [string, string][])
+              : []),
           ].map(([label, value]) => (
             <div key={label} className="py-2.5 flex items-baseline justify-between">
               <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">

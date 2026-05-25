@@ -66,11 +66,9 @@ async function setup() {
     pgWsId: pgWs.id,
     invitationId,
     settleCycle: 'D+1',
-    deposit: '0',
-    setupFee: '0',
-    monthlyMin: '0',
-    bankTransferFeePct: '0.015',
-    easyPayFeePct: '0.018',
+    settleLimit: '0',
+    guaranteeInsurance: '0',
+    paymentFees: {},
     submittedBy: pgUser.id,
   });
 

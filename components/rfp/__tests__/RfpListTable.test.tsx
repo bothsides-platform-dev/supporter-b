@@ -20,6 +20,7 @@ function makeRfp(overrides: Partial<RFP> & Pick<RFP, 'code' | 'title'>): RFP {
     memo: '',
     rfpFiles: [],
     allowedPgWorkspaceIds: [],
+    requiredPaymentMethods: [],
     deadline: new Date(Date.now() + 86_400_000).toISOString(),
     status: 'sent',
     createdBy: 'u1',

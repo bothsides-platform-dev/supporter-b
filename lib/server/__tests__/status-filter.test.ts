@@ -54,6 +54,7 @@ function makeRfp(status: RFP['status']): RFP {
     memo: '',
     rfpFiles: [],
     allowedPgWorkspaceIds: [],
+    requiredPaymentMethods: [],
     deadline: new Date(Date.now() + 86_400_000).toISOString(),
     status,
     createdBy: 'u1',

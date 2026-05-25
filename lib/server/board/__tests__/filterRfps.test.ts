@@ -74,6 +74,7 @@ describe('filterRfps (status + deadline + grade, AND)', () => {
     memo: '',
     rfpFiles: [],
     allowedPgWorkspaceIds: [],
+    requiredPaymentMethods: [],
     createdBy: 'u1',
     createdAt: iso(2026, 5, 1),
   };

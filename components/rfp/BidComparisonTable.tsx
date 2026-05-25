@@ -8,16 +8,12 @@ import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import { formatKRW, formatPct } from '@/lib/format';
 import type { Bid } from '@/lib/types/bid';
 import { GRADE_LABELS, type MerchantGrade } from '@/lib/types/biz-profile';
+import { compareSettleCycle } from '@/lib/utils/settle-cycle';
 import { EnvelopeIcon } from '@/components/icons';
 import Link from 'next/link';
 
-type SortKey = 'name' | 'settle' | 'deposit' | 'setupFee' | 'monthlyMin' | 'bankPct' | 'easyPayPct';
+type SortKey = 'name' | 'settle' | 'settleLimit' | 'guaranteeInsurance' | 'bankPct';
 type SortDir = 'asc' | 'desc';
-
-const SETTLE_ORDER: Record<string, number> = { 'D+0': 0, 'D+1': 1, 'D+2': 2, weekly: 3, monthly: 4 };
-const SETTLE_LABEL: Record<string, string> = {
-  'D+0': 'D+0', 'D+1': 'D+1', 'D+2': 'D+2', weekly: '주1회', monthly: '월1회',
-};
 
 function min(bids: Bid[], key: (b: Bid) => number): number {
   return Math.min(...bids.map(key));
@@ -83,21 +79,17 @@ export function BidComparisonTable({ rfpId, bids, grade, rfpStatus, awardedBidId
     const mul = sortDir === 'asc' ? 1 : -1;
     switch (sortKey) {
       case 'name': return mul * pgName(a.pgWsId).localeCompare(pgName(b.pgWsId), 'ko');
-      case 'settle': return mul * (SETTLE_ORDER[a.settleCycle] - SETTLE_ORDER[b.settleCycle]);
-      case 'deposit': return mul * (a.deposit - b.deposit);
-      case 'setupFee': return mul * (a.setupFee - b.setupFee);
-      case 'monthlyMin': return mul * (a.monthlyMin - b.monthlyMin);
-      case 'bankPct': return mul * (a.bankTransferFeePct - b.bankTransferFeePct);
-      case 'easyPayPct': return mul * (a.easyPayFeePct - b.easyPayFeePct);
+      case 'settle': return mul * compareSettleCycle(a.settleCycle, b.settleCycle);
+      case 'settleLimit': return mul * (a.settleLimit - b.settleLimit);
+      case 'guaranteeInsurance': return mul * (a.guaranteeInsurance - b.guaranteeInsurance);
+      case 'bankPct': return mul * ((a.paymentFees.bank_transfer ?? 0) - (b.paymentFees.bank_transfer ?? 0));
     }
   });
 
-  const minDeposit = min(bids, (b) => b.deposit);
-  const minSetup = min(bids, (b) => b.setupFee);
-  const minMonthly = min(bids, (b) => b.monthlyMin);
-  const minBank = min(bids, (b) => b.bankTransferFeePct);
-  const minEasyPay = min(bids, (b) => b.easyPayFeePct);
-  const minSettle = min(bids, (b) => SETTLE_ORDER[b.settleCycle]);
+  const minSettleLimit = min(bids, (b) => b.settleLimit);
+  const minGuarantee = min(bids, (b) => b.guaranteeInsurance);
+  const minBank = min(bids, (b) => b.paymentFees.bank_transfer ?? Infinity);
+  const bestSettle = sorted[0]?.settleCycle ?? '';
 
   const cardFee = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
   const canAward = rfpStatus === 'sent';
@@ -109,22 +101,19 @@ export function BidComparisonTable({ rfpId, bids, grade, rfpStatus, awardedBidId
           <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
             <SortTh label="PG사" sortId="name" active={sortKey === 'name'} dir={sortDir} onSort={handleSort} />
             <SortTh label="정산주기" sortId="settle" active={sortKey === 'settle'} dir={sortDir} onSort={handleSort} />
-            <SortTh label="보증금" sortId="deposit" active={sortKey === 'deposit'} dir={sortDir} onSort={handleSort} />
-            <SortTh label="셋업비" sortId="setupFee" active={sortKey === 'setupFee'} dir={sortDir} onSort={handleSort} />
-            <SortTh label="월최저" sortId="monthlyMin" active={sortKey === 'monthlyMin'} dir={sortDir} onSort={handleSort} />
+            <SortTh label="정산한도" sortId="settleLimit" active={sortKey === 'settleLimit'} dir={sortDir} onSort={handleSort} />
+            <SortTh label="보증보험" sortId="guaranteeInsurance" active={sortKey === 'guaranteeInsurance'} dir={sortDir} onSort={handleSort} />
             {cardFee !== null && (
               <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">
                 카드
               </th>
             )}
             <SortTh label="계좌이체" sortId="bankPct" active={sortKey === 'bankPct'} dir={sortDir} onSort={handleSort} />
-            <SortTh label="간편결제" sortId="easyPayPct" active={sortKey === 'easyPayPct'} dir={sortDir} onSort={handleSort} />
             <th className="px-3 py-3" />
           </tr>
         </thead>
         <tbody>
           {sorted.map((bid) => {
-            const isMinSettle = SETTLE_ORDER[bid.settleCycle] === minSettle;
             return (
               <tr
                 key={bid.id}
@@ -136,17 +125,15 @@ export function BidComparisonTable({ rfpId, bids, grade, rfpStatus, awardedBidId
                     <span className="ml-2 font-mono text-[10px] text-[var(--md-sys-color-outline)]">PDF</span>
                   )}
                 </td>
-                <Num label={SETTLE_LABEL[bid.settleCycle]} best={isMinSettle} />
-                <Num label={formatKRW(bid.deposit)} best={bid.deposit === minDeposit} />
-                <Num label={formatKRW(bid.setupFee)} best={bid.setupFee === minSetup} />
-                <Num label={formatKRW(bid.monthlyMin)} best={bid.monthlyMin === minMonthly} />
+                <Num label={bid.settleCycle} best={sortKey === 'settle' && bid.settleCycle === bestSettle} />
+                <Num label={formatKRW(bid.settleLimit)} best={bid.settleLimit === minSettleLimit} />
+                <Num label={formatKRW(bid.guaranteeInsurance)} best={bid.guaranteeInsurance === minGuarantee} />
                 {cardFee !== null && (
                   <td className="px-3 py-4 font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
                     {formatPct(cardFee)}
                   </td>
                 )}
-                <Num label={formatPct(bid.bankTransferFeePct)} best={bid.bankTransferFeePct === minBank} />
-                <Num label={formatPct(bid.easyPayFeePct)} best={bid.easyPayFeePct === minEasyPay} />
+                <Num label={bid.paymentFees.bank_transfer !== undefined ? formatPct(bid.paymentFees.bank_transfer) : '—'} best={(bid.paymentFees.bank_transfer ?? Infinity) === minBank} />
                 <td className="px-3 py-4 text-right">
                   {canAward && (
                     <Link href={`/rfp/${rfpId}/award?bidId=${bid.id}`}>

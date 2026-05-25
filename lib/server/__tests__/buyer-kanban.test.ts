@@ -11,6 +11,7 @@ function makeRfp(overrides: Partial<RFP> = {}): RFP {
     memo: '',
     rfpFiles: [],
     allowedPgWorkspaceIds: [],
+    requiredPaymentMethods: [],
     deadline: '2026-05-20T00:00:00Z',
     status: 'sent',
     createdBy: 'user-1',
