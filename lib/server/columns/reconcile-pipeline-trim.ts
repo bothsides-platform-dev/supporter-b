@@ -12,30 +12,30 @@ import type { Tx } from '@/lib/server/repositories/types';
 
 export async function reconcilePipelineColumnTrim(db: Tx): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const h = db as any;
+  const anyDb = db as any;
   // buyer: 발송 컬럼을 진행중으로 전환 (기존 'sent' 행 rename)
-  await h
+  await anyDb
     .update(columns)
     .set({ lifecycleKey: 'active', title: '진행중' })
     .where(and(eq(columns.kind, 'pipeline'), eq(columns.lifecycleKey, 'sent')));
   // buyer: 응답수집·비교협상중 컬럼 삭제 (카드는 active 로 재분류)
-  await h
+  await anyDb
     .delete(columns)
     .where(and(eq(columns.kind, 'pipeline'), inArray(columns.lifecycleKey, ['collecting', 'comparing'])));
   // buyer: 라벨 정렬
-  await h
+  await anyDb
     .update(columns)
     .set({ title: '계약완료' })
     .where(and(eq(columns.kind, 'pipeline'), eq(columns.lifecycleKey, 'awarded')));
-  await h
+  await anyDb
     .update(columns)
     .set({ title: '마감' })
     .where(and(eq(columns.kind, 'pipeline'), eq(columns.lifecycleKey, 'closed')));
   // pg: 검토중 컬럼 삭제 (카드는 received 로 재분류), 수신→신규 라벨
-  await h
+  await anyDb
     .delete(columns)
     .where(and(eq(columns.kind, 'pipeline'), eq(columns.lifecycleKey, 'reviewing')));
-  await h
+  await anyDb
     .update(columns)
     .set({ title: '신규' })
     .where(and(eq(columns.kind, 'pipeline'), eq(columns.lifecycleKey, 'received')));

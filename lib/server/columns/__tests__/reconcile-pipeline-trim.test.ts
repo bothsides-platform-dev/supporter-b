@@ -6,7 +6,9 @@ import { reconcilePipelineColumnTrim } from '@/lib/server/columns/reconcile-pipe
 import { seedBuyerWorkspace } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import type { BoardColumn } from '@/lib/types/column';
 
-// 레거시 키(구매사 6 + PG 6) — 단위 테스트에서는 한 워크스페이스에 공존시켜 변환만 검증.
+// 레거시 키(구매사 6 + PG 6) — 마이그레이션은 워크스페이스 타입과 무관하므로
+// 단위 테스트에서는 한 워크스페이스에 공존시켜 키 변환만 검증한다.
+// (실제 데이터는 buyer/pg 키가 서로 다른 워크스페이스에 분리되어 있음.)
 const LEGACY = [
   'draft', 'sent', 'collecting', 'comparing', 'awarded', 'closed',
   'received', 'reviewing', 'drafting', 'submitted', 'won', 'lost',
