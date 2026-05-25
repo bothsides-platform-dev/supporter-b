@@ -9,7 +9,7 @@ import {
   index,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { bidStatusEnum, settleCycleEnum } from './_enums';
+import { bidStatusEnum } from './_enums';
 import { rfps } from './rfps';
 import { workspaces } from './workspaces';
 import { rfpInvitations } from './rfp-invitations';
@@ -29,23 +29,16 @@ export const bids = pgTable(
     invitationId: uuid('invitation_id')
       .notNull()
       .references(() => rfpInvitations.id),
-    settleCycle: settleCycleEnum('settle_cycle').notNull(),
-    deposit: numeric('deposit', { precision: 14, scale: 2 }).notNull(),
-    setupFee: numeric('setup_fee', { precision: 14, scale: 2 }).notNull(),
-    monthlyMin: numeric('monthly_min', { precision: 14, scale: 2 }).notNull(),
-    bankTransferFeePct: numeric('bank_transfer_fee_pct', { precision: 5, scale: 3 }).notNull(),
-    easyPayFeePct: numeric('easy_pay_fee_pct', { precision: 5, scale: 3 }).notNull(),
-    // CHECK: card_fees_by_issuer NOT NULL when buyer grade='general' is enforced at the
-    // action layer + tests, not in the DB (cross-table predicate).
-    cardFeesByIssuer: jsonb('card_fees_by_issuer'),
-    overseasCardFeePct: numeric('overseas_card_fee_pct', { precision: 5, scale: 3 }),
-    // Proposal attachments are 1..N via attachments.bid_id (C3). No single
-    // designated-proposal pointer — a bid can attach multiple proposal files.
+    // 정산주기: 자유 텍스트 (예: "D+1", "W+2", "M+1"). 이전 enum 제거.
+    settleCycle: text('settle_cycle').notNull(),
+    // 정산한도 (원/월)
+    settleLimit: numeric('settle_limit', { precision: 14, scale: 2 }).notNull().default('0'),
+    // 월 보증보험 (원/연)
+    guaranteeInsurance: numeric('guarantee_insurance', { precision: 14, scale: 2 }).notNull().default('0'),
+    // 결제수단별 수수료 JSONB: { card: 0.0125, virtual_account: 0.005, ... }
+    paymentFees: jsonb('payment_fees').notNull().default(sql`'{}'::jsonb`),
     memo: text('memo').notNull().default(''),
     status: bidStatusEnum('status').notNull().default('submitted'),
-    // Unified kanban (rfp_bids board): explicit placement into a custom column
-    // (협상중/결정). null ⇒ default-landing "진행전". ON DELETE SET NULL ⇒ deleting
-    // a custom column returns its bids to the default. Replaces buyer_stage.
     boardColumnId: uuid('board_column_id').references(() => columns.id, {
       onDelete: 'set null',
     }),
@@ -56,9 +49,7 @@ export const bids = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
-    // (rfp_id) 조회는 이 UQ 의 leftmost-prefix 가 커버.
     unique('bids_rfp_pg_unique').on(t.rfpId, t.pgWsId),
-    // P2: PG 칸반/검색 findByPgWs.
     index('bids_pg_ws_idx').on(t.pgWsId),
     index('bids_board_column_idx').on(t.boardColumnId),
   ],

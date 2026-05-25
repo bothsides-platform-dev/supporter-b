@@ -1,5 +1,5 @@
 {
-  "id": "e50d4631-e0aa-4bd1-b1dd-ebf0f80f1982",
+  "id": "1be45819-25af-4213-b294-5537087b0777",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -365,52 +365,30 @@
         },
         "settle_cycle": {
           "name": "settle_cycle",
-          "type": "settle_cycle",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "deposit": {
-          "name": "deposit",
+        "settle_limit": {
+          "name": "settle_limit",
           "type": "numeric(14, 2)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'0'"
         },
-        "setup_fee": {
-          "name": "setup_fee",
+        "guarantee_insurance": {
+          "name": "guarantee_insurance",
           "type": "numeric(14, 2)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'0'"
         },
-        "monthly_min": {
-          "name": "monthly_min",
-          "type": "numeric(14, 2)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "bank_transfer_fee_pct": {
-          "name": "bank_transfer_fee_pct",
-          "type": "numeric(5, 3)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "easy_pay_fee_pct": {
-          "name": "easy_pay_fee_pct",
-          "type": "numeric(5, 3)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "card_fees_by_issuer": {
-          "name": "card_fees_by_issuer",
+        "payment_fees": {
+          "name": "payment_fees",
           "type": "jsonb",
           "primaryKey": false,
-          "notNull": false
-        },
-        "overseas_card_fee_pct": {
-          "name": "overseas_card_fee_pct",
-          "type": "numeric(5, 3)",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "memo": {
           "name": "memo",
@@ -1451,6 +1429,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "required_payment_methods": {
+          "name": "required_payment_methods",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2420,17 +2405,6 @@
         "closed",
         "cancelled",
         "awarded"
-      ]
-    },
-    "public.settle_cycle": {
-      "name": "settle_cycle",
-      "schema": "public",
-      "values": [
-        "D+0",
-        "D+1",
-        "D+2",
-        "weekly",
-        "monthly"
       ]
     },
     "public.tax_type": {

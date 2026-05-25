@@ -134,11 +134,9 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     const r = await submitBidAction({
       rfpId,
       settleCycle: 'D+1',
-      deposit: 0,
-      setupFee: 0,
-      monthlyMin: 0,
-      bankTransferFeePct: 0.001,
-      easyPayFeePct: 0.018,
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: { bank_transfer: 0.001 },
     });
     expect(r.ok).toBe(true);
 
@@ -199,12 +197,10 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     };
     const input = {
       rfpId,
-      settleCycle: 'D+1' as const,
-      deposit: 0,
-      setupFee: 0,
-      monthlyMin: 0,
-      bankTransferFeePct: 0.001,
-      easyPayFeePct: 0.018,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: { bank_transfer: 0.001 },
     };
     const r1 = await submitBidAction(input);
     expect(r1.ok).toBe(true);
@@ -266,11 +262,9 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
         pgWsId,
         invitationId: invId,
         settleCycle: 'D+1',
-        deposit: '0',
-        setupFee: '0',
-        monthlyMin: '0',
-        bankTransferFeePct: '0.001',
-        easyPayFeePct: '0.025',
+        settleLimit: '0',
+        guaranteeInsurance: '0',
+        paymentFees: {},
         status: 'submitted',
         submittedBy,
         submittedAt: new Date(),

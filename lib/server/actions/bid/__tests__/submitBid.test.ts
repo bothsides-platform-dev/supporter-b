@@ -131,12 +131,10 @@ async function seedSetup(grade: 'sme2' | 'general' = 'sme2'): Promise<Setup> {
 }
 
 const baseInput = {
-  settleCycle: 'D+1' as const,
-  deposit: 0,
-  setupFee: 0,
-  monthlyMin: 0,
-  bankTransferFeePct: 0.001,
-  easyPayFeePct: 0.018,
+  settleCycle: 'D+1',
+  settleLimit: 0,
+  guaranteeInsurance: 0,
+  paymentFees: { bank_transfer: 0.001 },
 };
 
 describe('submitBidAction', () => {
@@ -184,7 +182,7 @@ describe('submitBidAction', () => {
     expect(row.submittedBy).toBe(peer.id);
   });
 
-  it('🚨 STATUTORY_CARD_FEE forced null for sme2 grade (advisor pin 1)', async () => {
+  it('🚨 STATUTORY_CARD_FEE enforced for sme2 — card fee above cap is rejected', async () => {
     const s = await seedSetup('sme2');
     sessionRef.value = {
       user: {
@@ -196,36 +194,20 @@ describe('submitBidAction', () => {
       },
     };
 
-    // Malicious client passes cardFeesByIssuer for an sme2 RFP.
+    // sme2 cap is 1.25% (0.0125). Submitting 2% must be rejected.
     const r = await submitBidAction({
       rfpId: s.rfpId,
       ...baseInput,
-      cardFeesByIssuer: {
-        BC: 0.005,
-        SHINHAN: 0.005,
-        SAMSUNG: 0.005,
-        HYUNDAI: 0.005,
-        KB: 0.005,
-        LOTTE: 0.005,
-        NH: 0.005,
-        HANA: 0.005,
-        WOORI: 0.005,
-      },
-      overseasCardFeePct: 0.03,
+      paymentFees: { card: 0.02 },
     });
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('CARD_FEE_EXCEEDS_STATUTORY_CAP');
 
-    // Server-enforced — DB row has card_fees_by_issuer = NULL.
-    const [row] = await db
-      .select()
-      .from(bids)
-      .where(eq(bids.id, r.bidId));
-    expect(row.cardFeesByIssuer).toBeNull();
-    expect(row.overseasCardFeePct).toBeNull();
+    const rows = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
+    expect(rows).toHaveLength(0);
   });
 
-  it('null grade (사업자번호 미입력 RFP) preserves cardFeesByIssuer (general fallback)', async () => {
+  it('null grade (no bizProfile) allows any card fee rate', async () => {
     const s = await seedSetup('general');
     // Drop bizProfile entirely — RFP created in 사전 제안 mode.
     await db.update(rfps).set({ bizProfileId: null }).where(eq(rfps.id, s.rfpId));
@@ -240,33 +222,20 @@ describe('submitBidAction', () => {
       },
     };
 
-    const cardFees = {
-      BC: 0.012,
-      SHINHAN: 0.013,
-      SAMSUNG: 0.013,
-      HYUNDAI: 0.013,
-      KB: 0.013,
-      LOTTE: 0.013,
-      NH: 0.013,
-      HANA: 0.013,
-      WOORI: 0.013,
-    } as const;
+    // 5% card fee — allowed because null grade maps to 'general' (no cap).
     const r = await submitBidAction({
       rfpId: s.rfpId,
       ...baseInput,
-      cardFeesByIssuer: cardFees,
+      paymentFees: { card: 0.05 },
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const [row] = await db
-      .select()
-      .from(bids)
-      .where(eq(bids.id, r.bidId));
-    expect(row.cardFeesByIssuer).toEqual(cardFees);
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect((row.paymentFees as { card?: number })?.card).toBe(0.05);
   });
 
-  it('general grade preserves cardFeesByIssuer', async () => {
+  it('general grade allows any card fee rate — no statutory cap', async () => {
     const s = await seedSetup('general');
     sessionRef.value = {
       user: {
@@ -278,30 +247,17 @@ describe('submitBidAction', () => {
       },
     };
 
-    const cardFees = {
-      BC: 0.012,
-      SHINHAN: 0.013,
-      SAMSUNG: 0.013,
-      HYUNDAI: 0.013,
-      KB: 0.013,
-      LOTTE: 0.013,
-      NH: 0.013,
-      HANA: 0.013,
-      WOORI: 0.013,
-    } as const;
+    // 5% card fee — general grade has no statutory cap (NaN).
     const r = await submitBidAction({
       rfpId: s.rfpId,
       ...baseInput,
-      cardFeesByIssuer: cardFees,
+      paymentFees: { card: 0.05 },
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    const [row] = await db
-      .select()
-      .from(bids)
-      .where(eq(bids.id, r.bidId));
-    expect(row.cardFeesByIssuer).toEqual(cardFees);
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect((row.paymentFees as { card?: number })?.card).toBe(0.05);
   });
 
   it('🚨 second submit returns BID_ALREADY_SUBMITTED on UNIQUE(rfpId, pgWsId) (advisor pin 4)', async () => {

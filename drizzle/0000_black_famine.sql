@@ -13,7 +13,6 @@ CREATE TYPE "public"."notification_status" AS ENUM('queued', 'sent', 'failed', '
 CREATE TYPE "public"."outbox_event" AS ENUM('auth.verify', 'auth.reset', 'auth.email-change', 'rfp.invited', 'rfp.sent', 'bid.submitted', 'rfp.awarded', 'workspace.invited');--> statement-breakpoint
 CREATE TYPE "public"."outbox_status" AS ENUM('pending', 'sent', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."rfp_status" AS ENUM('draft', 'sent', 'closed', 'cancelled', 'awarded');--> statement-breakpoint
-CREATE TYPE "public"."settle_cycle" AS ENUM('D+0', 'D+1', 'D+2', 'weekly', 'monthly');--> statement-breakpoint
 CREATE TYPE "public"."tax_type" AS ENUM('general', 'simple', 'exempt');--> statement-breakpoint
 CREATE TYPE "public"."verification_purpose" AS ENUM('signup_email', 'password_reset', 'email_change');--> statement-breakpoint
 CREATE TYPE "public"."workspace_invitation_status" AS ENUM('pending', 'accepted', 'expired');--> statement-breakpoint
@@ -52,14 +51,10 @@ CREATE TABLE "bids" (
 	"rfp_id" uuid NOT NULL,
 	"pg_ws_id" uuid NOT NULL,
 	"invitation_id" uuid NOT NULL,
-	"settle_cycle" "settle_cycle" NOT NULL,
-	"deposit" numeric(14, 2) NOT NULL,
-	"setup_fee" numeric(14, 2) NOT NULL,
-	"monthly_min" numeric(14, 2) NOT NULL,
-	"bank_transfer_fee_pct" numeric(5, 3) NOT NULL,
-	"easy_pay_fee_pct" numeric(5, 3) NOT NULL,
-	"card_fees_by_issuer" jsonb,
-	"overseas_card_fee_pct" numeric(5, 3),
+	"settle_cycle" text NOT NULL,
+	"settle_limit" numeric(14, 2) DEFAULT '0' NOT NULL,
+	"guarantee_insurance" numeric(14, 2) DEFAULT '0' NOT NULL,
+	"payment_fees" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"memo" text DEFAULT '' NOT NULL,
 	"status" "bid_status" DEFAULT 'submitted' NOT NULL,
 	"board_column_id" uuid,
@@ -170,6 +165,7 @@ CREATE TABLE "rfps" (
 	"awarded_bid_id" uuid,
 	"created_by" uuid NOT NULL,
 	"board_column_id" uuid,
+	"required_payment_methods" text[] DEFAULT '{}' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"sent_at" timestamp with time zone,

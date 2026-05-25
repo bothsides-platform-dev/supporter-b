@@ -44,6 +44,7 @@ export default defineConfig({
             "lib/integrations/**/*.{test,spec}.{ts,tsx}",
             "lib/auth/**/*.{test,spec}.{ts,tsx}",
             "lib/observability/**/*.{test,spec}.{ts,tsx}",
+            "lib/utils/**/*.{test,spec}.{ts,tsx}",
             "scripts/**/*.{test,spec}.{ts,tsx}",
             "app/api/**/*.{test,spec}.{ts,tsx}",
           ],

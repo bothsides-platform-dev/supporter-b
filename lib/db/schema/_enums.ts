@@ -33,13 +33,6 @@ export const invitationStatusEnum = pgEnum('invitation_status', [
   'expired',
 ]);
 export const bidStatusEnum = pgEnum('bid_status', ['draft', 'submitted', 'withdrawn']);
-export const settleCycleEnum = pgEnum('settle_cycle', [
-  'D+0',
-  'D+1',
-  'D+2',
-  'weekly',
-  'monthly',
-]);
 
 export const notificationStatusEnum = pgEnum('notification_status', [
   'queued',

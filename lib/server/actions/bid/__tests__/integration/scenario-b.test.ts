@@ -259,34 +259,18 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     const bid = await submitBidAction({
       rfpId: setup.rfpId,
       settleCycle: 'D+1',
-      deposit: 1_000_000,
-      setupFee: 500_000,
-      monthlyMin: 100_000,
-      bankTransferFeePct: 0.001,
-      easyPayFeePct: 0.018,
-      // sme2 RFP → 서버에서 cardFees null로 강제. 클라이언트 입력은 무시되어야.
-      cardFeesByIssuer: {
-        BC: 0.005,
-        SHINHAN: 0.005,
-        SAMSUNG: 0.005,
-        HYUNDAI: 0.005,
-        KB: 0.005,
-        LOTTE: 0.005,
-        NH: 0.005,
-        HANA: 0.005,
-        WOORI: 0.005,
-      },
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: { bank_transfer: 0.001 },
       memo: 'D+1 정산 가능',
     });
     expect(bid.ok).toBe(true);
     if (!bid.ok) return;
 
-    // 🚨 Assertion 1 — bids row exists with grade-enforced cardFees=null
-    //   (advisor pin 1: STATUTORY_CARD_FEE 강제).
+    // Assertion 1 — bids row exists with correct status and workspace.
     const [bidRow] = await db.select().from(bids).where(eq(bids.id, bid.bidId));
     expect(bidRow.status).toBe('submitted');
     expect(bidRow.pgWsId).toBe(pgUser.wsId);
-    expect(bidRow.cardFeesByIssuer).toBeNull();
 
     // — invitation now accepted with this user.
     const [inv] = await db

@@ -99,12 +99,10 @@ async function setup() {
 }
 
 const submitInput = {
-  settleCycle: 'D+1' as const,
-  deposit: 0,
-  setupFee: 0,
-  monthlyMin: 0,
-  bankTransferFeePct: 0.001,
-  easyPayFeePct: 0.018,
+  settleCycle: 'D+1',
+  settleLimit: 0,
+  guaranteeInsurance: 0,
+  paymentFees: { bank_transfer: 0.001 },
 };
 
 describe('withdrawBidAction', () => {

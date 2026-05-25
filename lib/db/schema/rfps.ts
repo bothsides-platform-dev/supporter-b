@@ -60,6 +60,8 @@ export const rfps = pgTable(
     boardColumnId: uuid('board_column_id').references(() => columns.id, {
       onDelete: 'set null',
     }),
+    // 구매사가 요청한 결제수단 목록 (PG사는 이 수단만 견적). 빈 배열 = 제한 없음.
+    requiredPaymentMethods: text('required_payment_methods').array().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
     sentAt: timestamp('sent_at', { withTimezone: true }),

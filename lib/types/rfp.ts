@@ -1,5 +1,6 @@
 import type { Attachment } from './common';
 import type { BizProfile } from './biz-profile';
+import type { PaymentMethod } from './bid';
 
 export type RfpStatus = 'draft' | 'sent' | 'closed' | 'cancelled' | 'awarded';
 
@@ -29,6 +30,8 @@ export type RFP = {
   // Unified kanban (buyer pipeline board): explicit custom-column placement;
   // null/undefined ⇒ classifier-derived lifecycle column.
   boardColumnId?: string | null;
+  // 구매사가 요청한 결제수단 목록. PG사는 이 수단만 견적. 빈 배열 = 제한 없음.
+  requiredPaymentMethods: PaymentMethod[];
   // RFP-scoped permanent share token (raw). Populated by the repo layer; only
   // surfaced server-side for the buyer's detail page → never serialised to PG
   // clients. Optional on type so PG-side renders that omit it stay sound.
