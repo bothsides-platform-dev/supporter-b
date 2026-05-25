@@ -114,6 +114,12 @@ export function RfpCreateForm({ bizProfile, workspaceName = '', guest = false }:
     setServerError('');
     const r = await createRfpAction({
       title: draft.title.trim(),
+      websiteUrl: draft.websiteUrl.trim() || undefined,
+      mainProducts: draft.mainProducts.trim() || undefined,
+      annualPgVolume: draft.annualPgVolume.trim() || undefined,
+      currentFeeRate: draft.currentFeeRate.trim() || undefined,
+      currentSettlementLimit: draft.currentSettlementLimit.trim() || undefined,
+      currentGuaranteeInsurance: draft.currentGuaranteeInsurance.trim() || undefined,
       memo: draft.memo.trim() || undefined,
       deadline: draft.deadline,
       allowedPgWorkspaceIds: draft.allowedPgWorkspaceIds.map((w) => w.id),
@@ -224,12 +230,72 @@ export function RfpCreateForm({ bizProfile, workspaceName = '', guest = false }:
                 type="text"
                 value={draft.title}
                 onChange={(e) => draft.setField('title', e.target.value)}
-                placeholder="2026 결제 인프라 제안"
+                placeholder="2026 서포트쇼핑몰 결제 인프라 제안건"
                 className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
               />
             </div>
             <div className="space-y-1">
-              <Label size="md" muted={false}>자유 메모 (RFP)</Label>
+              <Label size="md" muted={false}>사업 운영 홈페이지</Label>
+              <input
+                type="text"
+                value={draft.websiteUrl}
+                onChange={(e) => draft.setField('websiteUrl', e.target.value)}
+                placeholder="https://bidit.store/"
+                className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label size="md" muted={false}>주요 판매 상품</Label>
+              <input
+                type="text"
+                value={draft.mainProducts}
+                onChange={(e) => draft.setField('mainProducts', e.target.value)}
+                placeholder="의류"
+                className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label size="md" muted={false}>전년도 연간 PG 총 거래액</Label>
+              <input
+                type="text"
+                value={draft.annualPgVolume}
+                onChange={(e) => draft.setField('annualPgVolume', e.target.value)}
+                placeholder="10억"
+                className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label size="md" muted={false}>현재 카드 수수료</Label>
+              <input
+                type="text"
+                value={draft.currentFeeRate}
+                onChange={(e) => draft.setField('currentFeeRate', e.target.value)}
+                placeholder="3.4%"
+                className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label size="md" muted={false}>현재 정산한도</Label>
+              <input
+                type="text"
+                value={draft.currentSettlementLimit}
+                onChange={(e) => draft.setField('currentSettlementLimit', e.target.value)}
+                placeholder="월 1억"
+                className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label size="md" muted={false}>현재 보증보험</Label>
+              <input
+                type="text"
+                value={draft.currentGuaranteeInsurance}
+                onChange={(e) => draft.setField('currentGuaranteeInsurance', e.target.value)}
+                placeholder="3000만원"
+                className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label size="md" muted={false}>제안서 요청 세부 내용</Label>
               <textarea
                 value={draft.memo}
                 onChange={(e) => draft.setField('memo', e.target.value)}

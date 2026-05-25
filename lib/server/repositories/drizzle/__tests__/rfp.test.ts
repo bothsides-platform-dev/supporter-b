@@ -129,6 +129,38 @@ describe('DrizzleRfpRepository', () => {
     await expect(repo.transition(randomUUID(), 'sent')).rejects.toThrow('not found');
   });
 
+  it('round-trips the 6 new optional fields', async () => {
+    const rfp: RFP = {
+      ...makeRfp('P-2605-0099', ctx.ws.id, ctx.user.id),
+      websiteUrl: 'https://bidit.store/',
+      mainProducts: '의류',
+      annualPgVolume: '10억',
+      currentFeeRate: '3.4%',
+      currentSettlementLimit: '월 1억',
+      currentGuaranteeInsurance: '3000만원',
+    };
+    await repo.save(rfp);
+    const fetched = await repo.findById(rfp.id);
+    expect(fetched!.websiteUrl).toBe('https://bidit.store/');
+    expect(fetched!.mainProducts).toBe('의류');
+    expect(fetched!.annualPgVolume).toBe('10억');
+    expect(fetched!.currentFeeRate).toBe('3.4%');
+    expect(fetched!.currentSettlementLimit).toBe('월 1억');
+    expect(fetched!.currentGuaranteeInsurance).toBe('3000만원');
+  });
+
+  it('omitted optional fields hydrate as undefined', async () => {
+    const rfp = makeRfp('P-2605-0100', ctx.ws.id, ctx.user.id);
+    await repo.save(rfp);
+    const fetched = await repo.findById(rfp.id);
+    expect(fetched!.websiteUrl).toBeUndefined();
+    expect(fetched!.mainProducts).toBeUndefined();
+    expect(fetched!.annualPgVolume).toBeUndefined();
+    expect(fetched!.currentFeeRate).toBeUndefined();
+    expect(fetched!.currentSettlementLimit).toBeUndefined();
+    expect(fetched!.currentGuaranteeInsurance).toBeUndefined();
+  });
+
   it('concurrent transition: only one of two parallel sent->closed wins', async () => {
     const rfp = makeRfp('P-2605-0010', ctx.ws.id, ctx.user.id, 'sent');
     await repo.save(rfp);

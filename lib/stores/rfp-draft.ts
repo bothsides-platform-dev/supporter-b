@@ -19,6 +19,12 @@ type RfpDraftStore = {
   step: number;
   bizProfile: BizProfile | null;
   title: string;
+  websiteUrl: string;
+  mainProducts: string;
+  annualPgVolume: string;
+  currentFeeRate: string;
+  currentSettlementLimit: string;
+  currentGuaranteeInsurance: string;
   memo: string;
   rfpFiles: RfpMockFile[];
   allowedPgWorkspaceIds: PgWorkspaceItem[];
@@ -33,6 +39,12 @@ const defaultState = {
   step: 0,
   bizProfile: null,
   title: '',
+  websiteUrl: '',
+  mainProducts: '',
+  annualPgVolume: '',
+  currentFeeRate: '',
+  currentSettlementLimit: '',
+  currentGuaranteeInsurance: '',
   memo: '',
   rfpFiles: [] as RfpMockFile[],
   allowedPgWorkspaceIds: [] as PgWorkspaceItem[],
@@ -54,6 +66,12 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       // Only persist form data fields, not UI/method state
       partialize: (state) => ({
         title: state.title,
+        websiteUrl: state.websiteUrl,
+        mainProducts: state.mainProducts,
+        annualPgVolume: state.annualPgVolume,
+        currentFeeRate: state.currentFeeRate,
+        currentSettlementLimit: state.currentSettlementLimit,
+        currentGuaranteeInsurance: state.currentGuaranteeInsurance,
         memo: state.memo,
         rfpFiles: state.rfpFiles,
         allowedPgWorkspaceIds: state.allowedPgWorkspaceIds,

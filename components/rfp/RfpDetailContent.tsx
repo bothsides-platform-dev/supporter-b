@@ -152,10 +152,46 @@ export function RfpDetailContent({
             shareUrl={shareUrl}
             canEdit={canEdit}
           />
+          {[
+            ['사업 운영 홈페이지', rfp.websiteUrl],
+            ['주요 판매 상품', rfp.mainProducts],
+            ['전년도 연간 PG 거래액', rfp.annualPgVolume],
+            ['현재 카드 수수료', rfp.currentFeeRate],
+            ['현재 정산한도', rfp.currentSettlementLimit],
+            ['현재 보증보험', rfp.currentGuaranteeInsurance],
+          ].some(([, v]) => v) && (
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <Label size="md" muted={false}>사업 운영 정보</Label>
+                <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+              </div>
+              <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
+                {(
+                  [
+                    ['사업 운영 홈페이지', rfp.websiteUrl],
+                    ['주요 판매 상품', rfp.mainProducts],
+                    ['전년도 연간 PG 거래액', rfp.annualPgVolume],
+                    ['현재 카드 수수료', rfp.currentFeeRate],
+                    ['현재 정산한도', rfp.currentSettlementLimit],
+                    ['현재 보증보험', rfp.currentGuaranteeInsurance],
+                  ] as [string, string | undefined][]
+                )
+                  .filter(([, v]) => v)
+                  .map(([label, value]) => (
+                    <div key={label} className="py-2 flex items-baseline justify-between">
+                      <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                        {label}
+                      </span>
+                      <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">{value}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
           {rfp.memo && (
             <div>
               <div className="flex items-center gap-3 mb-3">
-                <Label size="md" muted={false}>메모</Label>
+                <Label size="md" muted={false}>제안서 요청 세부 내용</Label>
                 <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
               </div>
               <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed whitespace-pre-wrap">

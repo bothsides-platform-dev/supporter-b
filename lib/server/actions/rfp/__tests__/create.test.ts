@@ -435,6 +435,50 @@ describe('createRfpAction', () => {
     expect(foreign?.rfpId).toBeNull();
   });
 
+  it('persists the 6 new optional fields when supplied', async () => {
+    const r = await createRfpAction({
+      title: '신규 필드 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      websiteUrl: 'https://bidit.store/',
+      mainProducts: '의류',
+      annualPgVolume: '10억',
+      currentFeeRate: '3.4%',
+      currentSettlementLimit: '월 1억',
+      currentGuaranteeInsurance: '3000만원',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.websiteUrl).toBe('https://bidit.store/');
+    expect(row.mainProducts).toBe('의류');
+    expect(row.annualPgVolume).toBe('10억');
+    expect(row.currentFeeRate).toBe('3.4%');
+    expect(row.currentSettlementLimit).toBe('월 1억');
+    expect(row.currentGuaranteeInsurance).toBe('3000만원');
+  });
+
+  it('omitting the 6 new optional fields stores NULL in DB', async () => {
+    const r = await createRfpAction({
+      title: '옵셔널 생략 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.websiteUrl).toBeNull();
+    expect(row.mainProducts).toBeNull();
+    expect(row.annualPgVolume).toBeNull();
+    expect(row.currentFeeRate).toBeNull();
+    expect(row.currentSettlementLimit).toBeNull();
+    expect(row.currentGuaranteeInsurance).toBeNull();
+  });
+
   // _suppress unused import warnings
   void and;
 });

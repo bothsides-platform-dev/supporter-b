@@ -32,6 +32,12 @@ export const rfps = pgTable(
     }),
     title: text('title').notNull(),
     memo: text('memo').notNull().default(''),
+    websiteUrl: text('website_url'),
+    mainProducts: text('main_products'),
+    annualPgVolume: text('annual_pg_volume'),
+    currentFeeRate: text('current_fee_rate'),
+    currentSettlementLimit: text('current_settlement_limit'),
+    currentGuaranteeInsurance: text('current_guarantee_insurance'),
     deadline: timestamp('deadline', { withTimezone: true }).notNull(),
     // RFP-scoped permanent share URL token — buyer distributes to PG workspaces.
     // Plaintext; auto-expires at deadline; default exists for fixtures/backfill,

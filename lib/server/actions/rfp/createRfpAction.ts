@@ -54,6 +54,12 @@ const Input = z
       .default('inherit'),
     bizNoOverride: z.string().min(1).max(50).optional(),
     gradeOverride: z.enum(MERCHANT_GRADES).optional(),
+    websiteUrl: z.string().max(500).optional(),
+    mainProducts: z.string().max(200).optional(),
+    annualPgVolume: z.string().max(100).optional(),
+    currentFeeRate: z.string().max(50).optional(),
+    currentSettlementLimit: z.string().max(100).optional(),
+    currentGuaranteeInsurance: z.string().max(100).optional(),
   })
   .strict();
 
@@ -175,6 +181,12 @@ export async function createRfpAction(
         bizProfileId: snapshotId,
         title: parsed.data.title.trim(),
         memo: parsed.data.memo?.trim() ?? '',
+        websiteUrl: parsed.data.websiteUrl?.trim() ?? null,
+        mainProducts: parsed.data.mainProducts?.trim() ?? null,
+        annualPgVolume: parsed.data.annualPgVolume?.trim() ?? null,
+        currentFeeRate: parsed.data.currentFeeRate?.trim() ?? null,
+        currentSettlementLimit: parsed.data.currentSettlementLimit?.trim() ?? null,
+        currentGuaranteeInsurance: parsed.data.currentGuaranteeInsurance?.trim() ?? null,
         deadline: new Date(parsed.data.deadline),
         shareToken: generateToken(),
         status: send ? 'sent' : 'draft',

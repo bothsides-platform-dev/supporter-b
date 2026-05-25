@@ -12,6 +12,12 @@ export type RFP = {
   bizProfile?: BizProfile;
   title: string;
   memo: string;
+  websiteUrl?: string;
+  mainProducts?: string;
+  annualPgVolume?: string;
+  currentFeeRate?: string;
+  currentSettlementLimit?: string;
+  currentGuaranteeInsurance?: string;
   rfpFiles: Attachment[];
   allowedPgWorkspaceIds: string[];
   deadline: string;
