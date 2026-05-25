@@ -1,5 +1,5 @@
 {
-  "id": "91837ddc-40df-4acd-bb58-1362db2dd890",
+  "id": "118617d3-dbbb-40b0-95ed-6f21623ecf8e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1375,6 +1375,42 @@
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "website_url": {
+          "name": "website_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "main_products": {
+          "name": "main_products",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "annual_pg_volume": {
+          "name": "annual_pg_volume",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_fee_rate": {
+          "name": "current_fee_rate",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_settlement_limit": {
+          "name": "current_settlement_limit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_guarantee_insurance": {
+          "name": "current_guarantee_insurance",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "deadline": {
           "name": "deadline",

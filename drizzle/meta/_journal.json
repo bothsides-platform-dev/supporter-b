@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1779547945954,
-      "tag": "0000_simple_mikhail_rasputin",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1779704776856,
-      "tag": "0001_serious_goblin_queen",
+      "when": 1779709615205,
+      "tag": "0000_thankful_zodiak",
       "breakpoints": true
     }
   ]
