@@ -1,3 +1,5 @@
+CREATE SCHEMA IF NOT EXISTS public;
+--> statement-breakpoint
 CREATE TYPE "public"."bid_status" AS ENUM('draft', 'submitted', 'withdrawn');--> statement-breakpoint
 CREATE TYPE "public"."biz_status" AS ENUM('active', 'suspended', 'closed');--> statement-breakpoint
 CREATE TYPE "public"."chip_color" AS ENUM('primary', 'tertiary', 'warning', 'error', 'surface');--> statement-breakpoint
