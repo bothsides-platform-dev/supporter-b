@@ -73,7 +73,7 @@ afterEach(() => cleanup());
 describe('SidebarSection — status section (RFP)', () => {
   it('renders the section header link to its base path', () => {
     renderSection(rfpSection);
-    expect(screen.getByRole('link', { name: 'RFP', exact: true })).toHaveAttribute('href', '/rfp');
+    expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('href', '/rfp');
   });
 
   it('renders action links before status sub-items', () => {
@@ -98,14 +98,14 @@ describe('SidebarSection — status section (RFP)', () => {
     renderSection(rfpSection);
     expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: '작성중' })).not.toHaveAttribute('aria-current');
-    expect(screen.getByRole('link', { name: 'RFP', exact: true })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'RFP' })).not.toHaveAttribute('aria-current');
   });
 
   it('marks the section header active on child routes', () => {
     mockPathname.mockReturnValue('/rfp/rfp-1');
     mockSearchParams.mockReturnValue(new URLSearchParams(''));
     renderSection(rfpSection);
-    expect(screen.getByRole('link', { name: 'RFP', exact: true })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('collapses sub-items when the toggle is clicked', async () => {
