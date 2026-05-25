@@ -1,13 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/primitives/Button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
 import { sendDraftInvitationsAction } from '@/lib/server/actions/rfp/sendDraftInvitationsAction';
 import { cancelRfpAction } from '@/lib/server/actions/rfp/cancelRfpAction';
@@ -92,33 +86,16 @@ export function KanbanActionDialog({ action, onClose, onCommitted }: Props) {
   };
 
   return (
-    <Dialog open onOpenChange={(o) => !o && !submitting && onClose()}>
-      <DialogContent className="sm:max-w-[420px]">
-        <DialogTitle className="text-[16px] font-[600] text-[var(--md-sys-color-on-surface)]">
-          {copy.title}
-        </DialogTitle>
-        <DialogDescription className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
-          {heading}
-        </DialogDescription>
-        <div className="flex justify-end gap-2 mt-4">
-          <Button
-            variant="text"
-            size="sm"
-            onClick={onClose}
-            disabled={submitting}
-          >
-            돌아가기
-          </Button>
-          <Button
-            size="sm"
-            onClick={onConfirm}
-            disabled={submitting}
-            color={copy.danger ? 'error' : 'primary'}
-          >
-            {submitting ? 'LOADING…' : copy.cta}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open
+      onOpenChange={(o) => !o && !submitting && onClose()}
+      title={copy.title}
+      description={heading || undefined}
+      confirmLabel={copy.cta}
+      cancelLabel="돌아가기"
+      variant={copy.danger ? 'danger' : 'default'}
+      onConfirm={onConfirm}
+      loading={submitting}
+    />
   );
 }

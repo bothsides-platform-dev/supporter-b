@@ -27,6 +27,7 @@ import { renameColumnAction } from '@/lib/server/actions/board/renameColumnActio
 import { recolorColumnAction } from '@/lib/server/actions/board/recolorColumnAction';
 import { DEFAULT_LANDING_KEY } from '@/lib/server/columns/lifecycle-keys';
 import { toast } from '@/lib/toast';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
@@ -307,6 +308,7 @@ function ColumnMenu({
 }) {
   const [title, setTitle] = useState(column.title);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const run = async (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setBusy(true);
@@ -324,56 +326,68 @@ function ColumnMenu({
   };
 
   return (
-    <div className="absolute right-0 top-7 z-10 w-56 rounded-[var(--md-sys-shape-medium)] bg-[var(--md-sys-color-surface-container-high)] shadow-[var(--md-sys-elevation-2)] p-3 flex flex-col gap-3">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (title.trim() && title !== column.title)
-            run(() => renameColumnAction({ columnId: column.id, title: title.trim() }));
-          else onClose();
-        }}
-      >
-        <input
-          aria-label="컬럼 이름"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          disabled={busy}
-          className="w-full text-[13px] bg-[var(--md-sys-color-surface)] rounded-[var(--md-sys-shape-small)] px-2 py-1 border border-[var(--md-sys-color-outline-variant)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/40"
-        />
-      </form>
-
-      <div className="flex items-center gap-1.5">
-        {COLOR_CHOICES.map((c) => (
-          <button
-            key={c ?? 'none'}
-            type="button"
-            aria-label={`색상 ${c ?? '없음'}`}
-            disabled={busy}
-            onClick={() => run(() => recolorColumnAction({ columnId: column.id, color: c }))}
-            className={cn(
-              'h-4 w-4 rounded-full border border-[var(--md-sys-color-outline-variant)]',
-              dotClass[c ?? 'surface'],
-            )}
-          />
-        ))}
-      </div>
-
-      {isSystemColumn(column) ? (
-        <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-          기본 컬럼 — 삭제할 수 없습니다
-        </p>
-      ) : (
-        <button
-          type="button"
-          aria-label="컬럼 삭제"
-          disabled={busy}
-          onClick={() => run(() => deleteColumnAction({ columnId: column.id }))}
-          className="text-left text-[12px] text-[var(--md-sys-color-error)] hover:underline"
+    <>
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={(o) => !o && setConfirmDelete(false)}
+        title="컬럼을 삭제할까요?"
+        description="컬럼 안의 카드는 자동 분류로 되돌아갑니다."
+        confirmLabel="삭제"
+        variant="danger"
+        onConfirm={() => run(() => deleteColumnAction({ columnId: column.id }))}
+        loading={busy}
+      />
+      <div className="absolute right-0 top-7 z-10 w-56 rounded-[var(--md-sys-shape-medium)] bg-[var(--md-sys-color-surface-container-high)] shadow-[var(--md-sys-elevation-2)] p-3 flex flex-col gap-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (title.trim() && title !== column.title)
+              run(() => renameColumnAction({ columnId: column.id, title: title.trim() }));
+            else onClose();
+          }}
         >
-          컬럼 삭제
-        </button>
-      )}
-    </div>
+          <input
+            aria-label="컬럼 이름"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            disabled={busy}
+            className="w-full text-[13px] bg-[var(--md-sys-color-surface)] rounded-[var(--md-sys-shape-small)] px-2 py-1 border border-[var(--md-sys-color-outline-variant)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/40"
+          />
+        </form>
+
+        <div className="flex items-center gap-1.5">
+          {COLOR_CHOICES.map((c) => (
+            <button
+              key={c ?? 'none'}
+              type="button"
+              aria-label={`색상 ${c ?? '없음'}`}
+              disabled={busy}
+              onClick={() => run(() => recolorColumnAction({ columnId: column.id, color: c }))}
+              className={cn(
+                'h-4 w-4 rounded-full border border-[var(--md-sys-color-outline-variant)]',
+                dotClass[c ?? 'surface'],
+              )}
+            />
+          ))}
+        </div>
+
+        {isSystemColumn(column) ? (
+          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+            기본 컬럼 — 삭제할 수 없습니다
+          </p>
+        ) : (
+          <button
+            type="button"
+            aria-label="컬럼 삭제"
+            disabled={busy}
+            onClick={() => setConfirmDelete(true)}
+            className="text-left text-[12px] text-[var(--md-sys-color-error)] hover:underline"
+          >
+            컬럼 삭제
+          </button>
+        )}
+      </div>
+    </>
   );
 }
 

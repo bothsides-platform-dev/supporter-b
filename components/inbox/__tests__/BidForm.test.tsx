@@ -3,6 +3,13 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
@@ -28,13 +35,34 @@ function renderForm() {
 }
 
 describe('BidForm 제출 후 네비게이션', () => {
-  it('제출 성공 시 /submitted 로 push 한다', async () => {
+  it('제출 버튼 클릭 시 confirm 다이얼로그가 열리고 action은 호출되지 않는다', async () => {
     const user = userEvent.setup();
     renderForm();
     await user.click(screen.getByRole('button', { name: /제안 제출/ }));
 
+    expect(submitBidMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('confirm 다이얼로그에서 취소하면 action이 호출되지 않는다', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.click(screen.getByRole('button', { name: /제안 제출/ }));
+    await user.click(screen.getByRole('button', { name: '취소' }));
+
+    expect(submitBidMock).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('confirm 다이얼로그에서 확인하면 submitBidAction을 호출하고 /submitted 로 push한다', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.click(screen.getByRole('button', { name: /제안 제출/ }));
+    await user.click(screen.getByRole('button', { name: '제안 제출', hidden: false }));
+
     await waitFor(() =>
       expect(push).toHaveBeenCalledWith('/inbox/P-2605-0042/submitted'),
     );
+    expect(submitBidMock).toHaveBeenCalledOnce();
   });
 });

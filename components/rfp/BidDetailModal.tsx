@@ -8,6 +8,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/primitives/Button';
 import { IconButton } from '@/components/primitives/IconButton';
 import { PaperclipIcon, XIcon, FileTextIcon } from '@/components/icons';
@@ -394,6 +395,7 @@ function NoteTimeline({ notes }: { notes: BidNote[] }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
 
   // Notes arrive oldest → newest from the server. Display reversed but
   // keep the creation index as the serial label.
@@ -401,10 +403,13 @@ function NoteTimeline({ notes }: { notes: BidNote[] }) {
     return notes.map((note, i) => ({ note, serial: i + 1 })).reverse();
   }, [notes]);
 
-  const onRemove = (noteId: string) => {
-    setRemovingId(noteId);
+  const confirmRemove = () => {
+    if (!noteToDelete) return;
+    const id = noteToDelete;
+    setNoteToDelete(null);
+    setRemovingId(id);
     startTransition(async () => {
-      await removeBidNoteAction({ noteId });
+      await removeBidNoteAction({ noteId: id });
       router.refresh();
       setRemovingId(null);
     });
@@ -419,26 +424,37 @@ function NoteTimeline({ notes }: { notes: BidNote[] }) {
   }
 
   return (
-    <ol className="mt-5 space-y-5">
-      {display.map(({ note, serial }) => (
-        <li key={note.id} className="border-t border-[var(--md-sys-color-outline-variant)] pt-3">
-          <div className="flex items-baseline justify-between gap-3 mb-2">
-            <span className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              {String(serial).padStart(2, '0')} —{' '}
-              <span className="text-[var(--md-sys-color-on-surface-variant)]">
-                {formatNoteTime(note.createdAt)} · {note.authorName}
+    <>
+      <ConfirmDialog
+        open={noteToDelete !== null}
+        onOpenChange={(o) => !o && setNoteToDelete(null)}
+        title="메모를 삭제할까요?"
+        description="첨부파일을 포함해 영구 삭제됩니다."
+        confirmLabel="삭제"
+        variant="danger"
+        onConfirm={confirmRemove}
+        loading={removingId !== null}
+      />
+      <ol className="mt-5 space-y-5">
+        {display.map(({ note, serial }) => (
+          <li key={note.id} className="border-t border-[var(--md-sys-color-outline-variant)] pt-3">
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <span className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                {String(serial).padStart(2, '0')} —{' '}
+                <span className="text-[var(--md-sys-color-on-surface-variant)]">
+                  {formatNoteTime(note.createdAt)} · {note.authorName}
+                </span>
               </span>
-            </span>
-            <button
-              type="button"
-              onClick={() => onRemove(note.id)}
-              disabled={removingId === note.id}
-              className="font-mono text-[9px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-error)] transition-colors cursor-pointer disabled:opacity-50"
-              aria-label="삭제"
-            >
-              삭제
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setNoteToDelete(note.id)}
+                disabled={removingId === note.id}
+                className="font-mono text-[9px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-error)] transition-colors cursor-pointer disabled:opacity-50"
+                aria-label="삭제"
+              >
+                삭제
+              </button>
+            </div>
           {note.body && (
             <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap">
               {note.body}
@@ -451,9 +467,10 @@ function NoteTimeline({ notes }: { notes: BidNote[] }) {
               ))}
             </div>
           )}
-        </li>
-      ))}
-    </ol>
+          </li>
+        ))}
+      </ol>
+    </>
   );
 }
 

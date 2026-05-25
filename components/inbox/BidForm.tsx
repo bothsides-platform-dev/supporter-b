@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
 import { StatutoryCardFeeNotice } from './StatutoryCardFeeNotice';
@@ -117,6 +118,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
 
   const [settleCycle, setSettleCycle] = useState<SettlementCycle>('D+1');
   const [deposit, setDeposit] = useState('0');
@@ -201,6 +203,11 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitError(null);
+    setSubmitConfirmOpen(true);
+  };
+
+  const doSubmit = () => {
+    setSubmitConfirmOpen(false);
 
     const pct = (s: string) => parseFloat(s) / 100;
 
@@ -239,6 +246,17 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
   };
 
   return (
+    <>
+      <ConfirmDialog
+        open={submitConfirmOpen}
+        onOpenChange={(o) => !o && setSubmitConfirmOpen(false)}
+        title="제안을 제출할까요?"
+        description="제출 후에는 수정할 수 없습니다."
+        confirmLabel="제안 제출"
+        variant="default"
+        onConfirm={doSubmit}
+        loading={pending}
+      />
     <form className="space-y-10" onSubmit={handleSubmit}>
       {/* 법정 수수료 안내 (영세/중소1~3 만). 일반·등급 미입력은 9개 카드사 입력 모드. */}
       {grade && grade !== 'general' && cardFeeStatutory !== null && (
@@ -411,5 +429,6 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
         {pending ? '제출 중…' : '제안 제출'}
       </Button>
     </form>
+    </>
   );
 }

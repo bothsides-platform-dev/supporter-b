@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, within, cleanup } from '@testing-library/react';
+import { render, screen, within, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 import type { Bid } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
 
@@ -153,7 +160,7 @@ describe('BidDetailModal', () => {
     expect(within(items[1]).getByText(/^01 —/)).toBeInTheDocument();
   });
 
-  it('clicking 삭제 invokes removeBidNoteAction with the note id', async () => {
+  it('clicking 삭제 opens confirm dialog and does not call action yet', async () => {
     const user = userEvent.setup();
     const notes: BidNote[] = [
       {
@@ -179,6 +186,69 @@ describe('BidDetailModal', () => {
       />,
     );
     await user.click(screen.getByRole('button', { name: '삭제' }));
-    expect(removeMock).toHaveBeenCalledWith({ noteId: 'n-keep' });
+    expect(removeMock).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('confirming the delete dialog calls removeBidNoteAction', async () => {
+    const user = userEvent.setup();
+    const notes: BidNote[] = [
+      {
+        id: 'n-keep',
+        bidId: 'bid-toss',
+        authorId: 'u-1',
+        authorName: '김구매',
+        body: 'first',
+        attachments: [],
+        createdAt: '2026-05-01T00:00:00Z',
+      },
+    ];
+    render(
+      <BidDetailModal
+        open
+        onOpenChange={() => {}}
+        bid={bid}
+        notes={notes}
+        pgName="서포터 B 페이"
+        grade="sme1"
+        authorId="u-1"
+        authorName="김구매"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '삭제' }));
+    await user.click(screen.getByRole('button', { name: '삭제', hidden: false }));
+    await waitFor(() =>
+      expect(removeMock).toHaveBeenCalledWith({ noteId: 'n-keep' }),
+    );
+  });
+
+  it('canceling the delete dialog does not call removeBidNoteAction', async () => {
+    const user = userEvent.setup();
+    const notes: BidNote[] = [
+      {
+        id: 'n-keep',
+        bidId: 'bid-toss',
+        authorId: 'u-1',
+        authorName: '김구매',
+        body: 'first',
+        attachments: [],
+        createdAt: '2026-05-01T00:00:00Z',
+      },
+    ];
+    render(
+      <BidDetailModal
+        open
+        onOpenChange={() => {}}
+        bid={bid}
+        notes={notes}
+        pgName="서포터 B 페이"
+        grade="sme1"
+        authorId="u-1"
+        authorName="김구매"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '삭제' }));
+    await user.click(screen.getByRole('button', { name: '취소' }));
+    expect(removeMock).not.toHaveBeenCalled();
   });
 });
