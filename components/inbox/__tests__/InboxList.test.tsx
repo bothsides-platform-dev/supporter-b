@@ -56,4 +56,10 @@ describe('InboxList', () => {
     // invStatusLabel for 'sent' = '신규'
     expect(screen.getByText('신규')).toBeInTheDocument();
   });
+
+  it('하단 키보드 힌트 문구를 표시하지 않는다', () => {
+    const { container } = render(<InboxList rows={[row]} />);
+    expect(container.textContent).not.toContain('J / K 이동');
+    expect(container.textContent).not.toMatch(/Enter[\s\S]*응답[\s\S]*작성/);
+  });
 });

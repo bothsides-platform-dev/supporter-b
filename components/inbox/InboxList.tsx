@@ -99,16 +99,6 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
           })}
         </tbody>
       </table>
-      <div className="px-8 py-3 border-t border-[var(--md-sys-color-outline-variant)] flex items-center gap-4 font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-outline)]">
-        <span>
-          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">J</kbd> /{' '}
-          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">K</kbd> 이동
-        </span>
-        <span>
-          <kbd className="text-[var(--md-sys-color-on-surface-variant)]">Enter</kbd> 응답
-          작성
-        </span>
-      </div>
     </div>
   );
 }
