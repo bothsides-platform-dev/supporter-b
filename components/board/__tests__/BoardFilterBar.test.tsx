@@ -20,6 +20,12 @@ const GRADE = [
   { value: 'general', label: '일반' },
 ];
 
+const STATUS = [
+  { value: 'draft', label: '작성중' },
+  { value: 'active', label: '진행중' },
+  { value: 'closed', label: '마감' },
+];
+
 beforeEach(() => {
   replace.mockClear();
   mockPathname.mockReturnValue('/rfp');
@@ -28,15 +34,31 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('BoardFilterBar', () => {
-  it('does not render status filter chips (status is sidebar-only)', () => {
-    render(<BoardFilterBar gradeOptions={GRADE} />);
-    expect(screen.queryByRole('button', { name: '진행중' })).not.toBeInTheDocument();
-    expect(screen.getByRole('group', { name: '마감일' })).toBeInTheDocument();
+  it('renders status filter chips', () => {
+    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
+    expect(screen.getByRole('group', { name: '상태' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '진행중' })).toBeInTheDocument();
+  });
+
+  it('selecting a status chip pushes ?status=active', async () => {
+    const user = userEvent.setup();
+    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
+    await user.click(screen.getByRole('button', { name: '진행중' }));
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace.mock.calls[0][0]).toContain('status=active');
+  });
+
+  it('selecting an active status chip clears ?status', async () => {
+    const user = userEvent.setup();
+    mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
+    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
+    await user.click(screen.getByRole('button', { name: '진행중' }));
+    expect(replace.mock.calls[0][0]).not.toContain('status=');
   });
 
   it('selecting a deadline bucket pushes ?deadline=d7', async () => {
     const user = userEvent.setup();
-    render(<BoardFilterBar gradeOptions={GRADE} />);
+    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
     await user.click(screen.getByRole('button', { name: '마감임박' }));
     expect(replace).toHaveBeenCalledTimes(1);
     expect(replace.mock.calls[0][0]).toContain('deadline=d7');
@@ -45,7 +67,7 @@ describe('BoardFilterBar', () => {
   it('selecting a grade pushes ?grade=sme1 and preserves existing params', async () => {
     const user = userEvent.setup();
     mockSearchParams.mockReturnValue(new URLSearchParams('view=board'));
-    render(<BoardFilterBar gradeOptions={GRADE} />);
+    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
     await user.selectOptions(screen.getByLabelText('가맹점 등급'), 'sme1');
     const url = replace.mock.calls[0][0] as string;
     expect(url).toContain('grade=sme1');
@@ -55,7 +77,7 @@ describe('BoardFilterBar', () => {
   it('preserves status param when changing grade', async () => {
     const user = userEvent.setup();
     mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
-    render(<BoardFilterBar gradeOptions={GRADE} />);
+    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
     await user.selectOptions(screen.getByLabelText('가맹점 등급'), 'sme1');
     const url = replace.mock.calls[0][0] as string;
     expect(url).toContain('status=active');

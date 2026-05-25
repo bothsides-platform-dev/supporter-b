@@ -11,7 +11,13 @@ const DEADLINE_OPTIONS: Option[] = [
   { value: 'overdue', label: '지난마감' },
 ];
 
-export function BoardFilterBar({ gradeOptions }: { gradeOptions: Option[] }) {
+export function BoardFilterBar({
+  statusOptions,
+  gradeOptions,
+}: {
+  statusOptions: Option[];
+  gradeOptions: Option[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -28,6 +34,13 @@ export function BoardFilterBar({ gradeOptions }: { gradeOptions: Option[] }) {
 
   return (
     <div className="flex items-center gap-3 flex-wrap" role="group" aria-label="필터">
+      <ChipGroup
+        param="status"
+        label="상태"
+        options={statusOptions}
+        current={current('status')}
+        onSelect={setParam}
+      />
       <ChipGroup
         param="deadline"
         label="마감일"
