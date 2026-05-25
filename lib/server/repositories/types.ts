@@ -70,7 +70,7 @@ export interface InvitationRepo {
   canAccess(rfpId: string, pgWsId: string, tx?: Tx): Promise<boolean>;
   /**
    * `accepted` 상태의 초대를 `opened` 로 한 번만 전이. 이미 `opened` 이상이면 no-op.
-   * inbox 상세 RSC 진입 시 호출 — PG 칸반의 '검토중' 컬럼을 활성화하기 위한 시그널.
+   * inbox 상세 RSC 진입 시 호출 — 열람 기록(read-receipt) 목적. 칸반 분류에는 영향 없음 (검토중 단계 제거 후 sent/opened 모두 신규(received) 로 분류).
    */
   markOpened(invitationId: string, openedAt: Date, tx?: Tx): Promise<void>;
   /** 통일 칸반: pg pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */

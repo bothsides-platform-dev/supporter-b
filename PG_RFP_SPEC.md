@@ -197,6 +197,8 @@ const STATUTORY_CARD_FEE: Record<Grade, number> = {
 | P5 | `/settings/profile` | PG 회사 정보 (도메인 검증·로고) |
 | P6 | `/settings/members` | 같은 워크스페이스 멤버 |
 
+> 칸반 뷰 컬럼: 구매사 `작성중 / 진행중 / 계약완료 / 마감`(4) — 표 탭과 동일. PG `신규 / 작성중 / 제출완료 / 낙찰 / 실패`(5) — 표 탭의 `마감`을 보드에서는 영업 관점상 `낙찰`/`실패`로 분리(의도된 refinement, drift 아님).
+
 ---
 
 ## 6. 핵심 사용자 시나리오 (v0 검증)

@@ -77,6 +77,8 @@ Authenticated AppShell
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처) | `WorkspaceProfileForm` |
 | P6 | `/settings/members` | 같은 워크스페이스 멤버 관리 (도메인 자동 합류 없음 — 초대만) | `MemberTable` |
 
+> 칸반 뷰 컬럼: 구매사 `작성중 / 진행중 / 계약완료 / 마감`(4, 표 탭과 동일), PG `신규 / 작성중 / 제출완료 / 낙찰 / 실패`(5 — 표 탭 `마감`을 보드에서 `낙찰`/`실패`로 분리).
+
 ### 0.4 Core Flow Diagrams
 
 ```
