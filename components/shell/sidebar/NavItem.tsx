@@ -28,9 +28,9 @@ type NavItemProps = {
 };
 
 /**
- * NavItem — a top-level sidebar nav link (icon + label). When a shortcut is
- * supplied it gets a Linear-style hover tooltip showing the keyboard hint.
- * Active state is computed by the caller and passed in.
+ * NavItem — a top-level sidebar nav link (icon + label). Collapsed sidebar
+ * shows label (+ shortcut) in a hover tooltip; expanded sidebar does the same
+ * when a shortcut is configured. Active state is computed by the caller.
  */
 export function NavItem({
   href,
@@ -43,7 +43,9 @@ export function NavItem({
   onNavigate,
 }: NavItemProps) {
   const { state, isMobile } = useSidebar();
-  const showCollapsedTooltip = state === 'collapsed' && !isMobile;
+  const isCollapsed = state === 'collapsed' && !isMobile;
+  const showShortcutTooltip = state === 'expanded' && !isMobile && shortcut != null;
+  const showTooltip = isCollapsed || showShortcutTooltip;
 
   const link = (
     <Link
@@ -58,7 +60,7 @@ export function NavItem({
     </Link>
   );
 
-  if (!showCollapsedTooltip) return link;
+  if (!showTooltip) return link;
 
   return (
     <Tooltip>

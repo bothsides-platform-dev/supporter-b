@@ -1,4 +1,4 @@
-// PG 홈 칸반 — 초대받은 RFP 1건 = 카드 1장. 6개 컬럼.
+// PG 홈 칸반 — 초대받은 RFP 1건 = 카드 1장. 5개 컬럼.
 // 분류는 (invitation, optional bid, parent rfp) 트리플로부터 결정. 결과 단계(낙찰/실패)
 // 가 bid 단계보다 우선 — RFP 가 awarded/closed 면 즉시 결과 컬럼으로 들어감.
 //
@@ -8,17 +8,10 @@ import type { Bid } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
 
-export type PgKanbanStage =
-  | 'received'
-  | 'reviewing'
-  | 'drafting'
-  | 'submitted'
-  | 'won'
-  | 'lost';
+export type PgKanbanStage = 'received' | 'drafting' | 'submitted' | 'won' | 'lost';
 
 export const PG_KANBAN_ORDER: readonly PgKanbanStage[] = [
   'received',
-  'reviewing',
   'drafting',
   'submitted',
   'won',
@@ -26,8 +19,7 @@ export const PG_KANBAN_ORDER: readonly PgKanbanStage[] = [
 ] as const;
 
 export const PG_KANBAN_LABEL: Record<PgKanbanStage, string> = {
-  received: '수신',
-  reviewing: '검토중',
+  received: '신규',
   drafting: '작성중',
   submitted: '제출완료',
   won: '낙찰',
@@ -45,13 +37,13 @@ export type PgKanbanCard = {
   submittedAt?: string;
 };
 
-// pure — 단위 테스트 가능.
+// pure — 단위 테스트 가능. 검토중(reviewing) 제거 — 열람 여부와 무관하게 신규(received).
 export function classifyPgInvitation(args: {
   invitation: RfpInvitation;
   bid?: Bid;
   rfp: RFP;
 }): PgKanbanStage {
-  const { invitation, bid, rfp } = args;
+  const { bid, rfp } = args;
 
   // 결과 단계는 bid 단계보다 우선.
   if (rfp.status === 'awarded') {
@@ -59,14 +51,11 @@ export function classifyPgInvitation(args: {
   }
   if (rfp.status === 'closed' || rfp.status === 'cancelled') return 'lost';
 
-  // bid 단계.
   if (bid?.status === 'withdrawn') return 'lost';
   if (bid?.status === 'submitted') return 'submitted';
   if (bid?.status === 'draft') return 'drafting';
 
-  // bid 가 아직 없음 — invitation 상태로 판정.
-  // findByPgWorkspace 는 sent/opened/accepted 를 반환. sent → received, opened → reviewing.
-  if (invitation.status === 'opened') return 'reviewing';
+  // bid 없음 — sent/opened 모두 신규(received).
   return 'received';
 }
 

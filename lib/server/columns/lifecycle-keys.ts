@@ -1,17 +1,15 @@
 // Single source of truth for which lifecycle columns encode the buyer↔PG
 // protocol. These are the columns where one workspace's action changes the
-// other's board state (send→received, submit→collecting, award→won/lost,
+// other's board state (send→received, submit→active, award→won/lost,
 // close→lost, withdraw→lost). They are mandatory (non-deletable) by user
-// directive. The remaining lifecycle stages (draft/drafting/reviewing) are also
+// directive. The remaining lifecycle stages (draft/drafting) are also
 // non-deletable, but as a private skeleton — see deleteColumnAction for the
 // distinct error messages.
 //
 // Pure, no DB import — usable from client components.
 export const CROSS_SIDE_LIFECYCLE_KEYS: ReadonlySet<string> = new Set([
   // buyer side
-  'sent',
-  'collecting',
-  'comparing',
+  'active',
   'awarded',
   'closed',
   // pg side

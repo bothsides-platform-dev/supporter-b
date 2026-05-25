@@ -1,5 +1,5 @@
-// Buyer 홈 칸반 — RFP 1건 = 카드 1장. 6개 컬럼.
-// 분류는 `RFP.status` + 응답 상태(submitted bid 수) + deadline 으로 도출되는 derived 값.
+// Buyer 홈 칸반 — RFP 1건 = 카드 1장. 4개 컬럼.
+// 분류는 `RFP.status` 로 도출되는 derived 값.
 // 사용자가 임의로 컬럼을 옮기는 건 plan 의 드래그 매트릭스가 허락하는 전이만 가능 (각각이
 // 도메인 액션을 트리거 — sendDraftInvitationsAction / awardRfpAction / cancelRfpAction).
 //
@@ -9,30 +9,20 @@ import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { RfpInvitation } from '@/lib/types/invitation';
 
-export type BuyerKanbanStage =
-  | 'draft'
-  | 'sent'
-  | 'collecting'
-  | 'comparing'
-  | 'awarded'
-  | 'closed';
+export type BuyerKanbanStage = 'draft' | 'active' | 'awarded' | 'closed';
 
 export const BUYER_KANBAN_ORDER: readonly BuyerKanbanStage[] = [
   'draft',
-  'sent',
-  'collecting',
-  'comparing',
+  'active',
   'awarded',
   'closed',
 ] as const;
 
 export const BUYER_KANBAN_LABEL: Record<BuyerKanbanStage, string> = {
   draft: '작성중',
-  sent: '발송',
-  collecting: '응답수집',
-  comparing: '비교·협상중',
-  awarded: '낙찰',
-  closed: '종료',
+  active: '진행중',
+  awarded: '계약완료',
+  closed: '마감',
 };
 
 export type BuyerKanbanCard = {
@@ -46,38 +36,13 @@ export type BuyerKanbanCard = {
   awardedBidId?: string;
 };
 
-// pure — 단위 테스트 가능.
-export function classifyBuyerRfp(args: {
-  rfp: RFP;
-  bids: Bid[];
-  invitations: RfpInvitation[];
-  now: Date;
-}): BuyerKanbanStage {
-  const { rfp, bids, invitations, now } = args;
-
+// pure — 단위 테스트 가능. status 만으로 4단계 분류 (스펙 §5 IA: 작성중/진행중/마감/계약완료).
+export function classifyBuyerRfp(args: { rfp: RFP }): BuyerKanbanStage {
+  const { rfp } = args;
   if (rfp.status === 'awarded') return 'awarded';
   if (rfp.status === 'closed' || rfp.status === 'cancelled') return 'closed';
   if (rfp.status === 'draft') return 'draft';
-
-  // status === 'sent'
-  // PG 의 draft bid 는 buyer 에게 보이지 않는 WIP — '응답수집' 판정에서 제외.
-  const submittedBids = bids.filter((b) => b.status === 'submitted');
-  if (submittedBids.length === 0) return 'sent';
-
-  const deadlinePassed = new Date(rfp.deadline).getTime() <= now.getTime();
-  if (deadlinePassed) return 'comparing';
-
-  // 초대된 PG 가 모두 응답을 제출했으면 더 받을 게 없으니 '비교·협상' 으로.
-  // 'draft'/'expired'/'declined' 상태 invitation 은 발송이 안 됐거나 무효화 — 모수에서 제외.
-  const invitedActive = invitations.filter(
-    (i) =>
-      i.status === 'sent' || i.status === 'opened' || i.status === 'accepted',
-  ).length;
-  if (invitedActive > 0 && submittedBids.length >= invitedActive) {
-    return 'comparing';
-  }
-
-  return 'collecting';
+  return 'active'; // status === 'sent'
 }
 
 export function toBuyerCard(args: {

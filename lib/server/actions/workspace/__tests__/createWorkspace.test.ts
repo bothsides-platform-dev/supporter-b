@@ -98,7 +98,7 @@ describe('createWorkspaceInTx', () => {
     });
 
     const cols = await db.select().from(columns).where(eq(columns.workspaceId, workspaceId));
-    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(6);
+    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(4);
     expect(cols.filter((c) => c.kind === 'rfp_bids')).toHaveLength(3);
   });
 
@@ -111,7 +111,7 @@ describe('createWorkspaceInTx', () => {
     });
 
     const cols = await db.select().from(columns).where(eq(columns.workspaceId, workspaceId));
-    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(6);
+    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(5);
     expect(cols.filter((c) => c.kind === 'rfp_bids')).toHaveLength(0);
   });
 });

@@ -34,17 +34,19 @@ afterEach(() => {
 });
 
 describe('CommandPalette shortcut hint', () => {
-  it('shows Ctrl+N for the new-RFP command on non-Mac', () => {
+  it('shows Ctrl and N as separate keycaps for the new-RFP command on non-Mac', () => {
     stubUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
     useUIStore.setState({ commandPaletteOpen: true });
     render(<CommandPalette />);
-    expect(screen.getByText('Ctrl+N')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl')).toBeInTheDocument();
+    expect(screen.getByText('N')).toBeInTheDocument();
   });
 
-  it('shows ⌘N for the new-RFP command on Mac', () => {
+  it('shows ⌘ and N as separate keycaps for the new-RFP command on Mac', () => {
     stubUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
     useUIStore.setState({ commandPaletteOpen: true });
     render(<CommandPalette />);
-    expect(screen.getByText('⌘N')).toBeInTheDocument();
+    expect(screen.getByText('⌘')).toBeInTheDocument();
+    expect(screen.getByText('N')).toBeInTheDocument();
   });
 });

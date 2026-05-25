@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Suspense } from 'react';
 
@@ -105,6 +105,68 @@ describe('Sidebar — icon toggle', () => {
 
     expect(rail).toHaveAttribute('data-state', 'collapsed');
   });
+
+  it('trigger is located in the sidebar footer', () => {
+    renderSidebar(buyerProps);
+    const footer = document.querySelector('[data-slot="sidebar-footer"]');
+    const trigger = screen.getByRole('button', { name: '사이드바 접기' });
+    expect(footer).toContainElement(trigger);
+  });
+
+  it('shows "사이드바 접기" visible label when sidebar is expanded', () => {
+    renderSidebar(buyerProps);
+    expect(screen.getByText('사이드바 접기')).toBeVisible();
+  });
+
+  it('keeps collapse accessible via aria-label when expanded and after collapse', async () => {
+    const user = userEvent.setup();
+    renderSidebar(buyerProps);
+    expect(screen.getByRole('button', { name: '사이드바 접기' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
+
+    expect(screen.getByRole('button', { name: '사이드바 펼치기' })).toBeInTheDocument();
+  });
+});
+
+describe('Sidebar — footer utility toolbar', () => {
+  it('groups theme and collapse controls in a footer toolbar', () => {
+    renderSidebar(buyerProps);
+    const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
+    expect(toolbar).not.toBeNull();
+    const footer = document.querySelector('[data-slot="sidebar-footer"]');
+    expect(footer).toContainElement(toolbar);
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: '다크 모드로 전환' }));
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: '사이드바 접기' }));
+  });
+
+  it('spreads theme and collapse controls with justify-between', () => {
+    renderSidebar(buyerProps);
+    const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
+    expect(toolbar?.className).toMatch(/justify-between/);
+    expect(toolbar?.className).toMatch(/\bw-full\b/);
+  });
+
+  it('uses a vertical stack layout class when sidebar is collapsed', async () => {
+    const user = userEvent.setup();
+    renderSidebar(buyerProps);
+    const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
+    expect(toolbar?.className).toMatch(/flex-row/);
+
+    await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
+
+    expect(toolbar?.className).toMatch(/group-data-\[collapsible=icon\]:flex-col/);
+    const trigger = screen.getByRole('button', { name: '사이드바 펼치기' });
+    expect(within(trigger).queryByText('사이드바 접기')).not.toBeInTheDocument();
+    expect(within(trigger).queryByText('사이드바 펼치기')).not.toBeInTheDocument();
+  });
+
+  it('renders collapse control as icon + label row when expanded', () => {
+    renderSidebar(buyerProps);
+    const trigger = screen.getByRole('button', { name: '사이드바 접기' });
+    expect(trigger.className).toMatch(/\bpx-2\b/);
+    expect(trigger.className).toMatch(/\bgap-1\.5\b/);
+  });
 });
 
 describe('Sidebar — top nav items', () => {
@@ -118,6 +180,20 @@ describe('Sidebar — top nav items', () => {
     mockPathname.mockReturnValue('/home');
     renderSidebar(buyerProps);
     expect(screen.getByRole('link', { name: '홈' })).toHaveAttribute('aria-current', 'page');
+  });
+});
+
+describe('Sidebar — child routes', () => {
+  it('activates RFP when pathname is a child of /rfp', () => {
+    mockPathname.mockReturnValue('/rfp/rfp-1');
+    renderSidebar(buyerProps);
+    expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('activates 받은 RFP when pathname is a child of /inbox', () => {
+    mockPathname.mockReturnValue('/inbox/rfp-1');
+    renderSidebar(pgProps);
+    expect(screen.getByRole('link', { name: '받은 RFP' })).toHaveAttribute('aria-current', 'page');
   });
 });
 

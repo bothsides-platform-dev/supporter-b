@@ -26,9 +26,10 @@ describe('SearchBar', () => {
     expect(screen.getByText(/검색/)).toBeInTheDocument();
   });
 
-  it('shows the ⌘K / Ctrl+K hint', () => {
+  it('shows Ctrl and K as separate keycaps on non-Mac', () => {
     render(<SearchBar />);
-    expect(screen.getByText('Ctrl+K')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl')).toBeInTheDocument();
+    expect(screen.getByText('K')).toBeInTheDocument();
   });
 
   it('opens the command palette when clicked', async () => {

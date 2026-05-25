@@ -232,6 +232,14 @@
   --s-9:   56px;
   --s-10:  80px;
   --s-11:  120px;
+
+  /* Workspace avatar — 라이트 팔레트 */
+  --workspace-avatar-blue-bg:   #D8EAFF;  --workspace-avatar-blue-fg:   #003258;
+  --workspace-avatar-purple-bg: #E8E0FF;  --workspace-avatar-purple-fg: #2A1255;
+  --workspace-avatar-teal-bg:   #C8F5E8;  --workspace-avatar-teal-fg:   #0A3025;
+  --workspace-avatar-orange-bg: #FFE8CC;  --workspace-avatar-orange-fg: #4A2A00;
+  --workspace-avatar-pink-bg:   #FFD5EE;  --workspace-avatar-pink-fg:   #4A0825;
+  --workspace-avatar-slate-bg:  #DDE3EF;  --workspace-avatar-slate-fg:  #1C2030;
 }
 
 /* ── Dark Theme — Linear signature near-black ───────────── */
@@ -304,4 +312,12 @@
   --md-sys-elevation-3: 0px 4px 16px 0px rgba(0,0,0,0.55);
   --md-sys-elevation-4: 0px 8px 24px 0px rgba(0,0,0,0.60);
   --md-sys-elevation-5: 0px 8px 32px 0px rgba(0,0,0,0.60);
+
+  /* Workspace avatar — 다크 팔레트 */
+  --workspace-avatar-blue-bg:   #162236;  --workspace-avatar-blue-fg:   #6aadff;
+  --workspace-avatar-purple-bg: #231a45;  --workspace-avatar-purple-fg: #b59fff;
+  --workspace-avatar-teal-bg:   #0e2e25;  --workspace-avatar-teal-fg:   #4fd1a8;
+  --workspace-avatar-orange-bg: #2a1a10;  --workspace-avatar-orange-fg: #f5a05a;
+  --workspace-avatar-pink-bg:   #2e1029;  --workspace-avatar-pink-fg:   #f07bb8;
+  --workspace-avatar-slate-bg:  #1c2030;  --workspace-avatar-slate-fg:  #8aabcf;
 }

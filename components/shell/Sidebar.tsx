@@ -2,8 +2,7 @@
 
 import { useMemo, Suspense } from 'react';
 import { usePathname } from 'next/navigation';
-import { ShellSidebarTrigger } from '@/components/shell/ShellSidebarTrigger';
-import { ThemeToggle } from '@/components/shell/ThemeToggle';
+import { SidebarFooterControls } from '@/components/shell/SidebarFooterControls';
 import { UserMenu } from '@/components/shell/UserMenu';
 import { WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
 import { NavItem } from '@/components/shell/sidebar/NavItem';
@@ -16,10 +15,12 @@ import {
   SidebarRail,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { SidebarBrand } from '@/components/shell/SidebarBrand';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useNotifications } from '@/lib/hooks/useNotifications';
 import { useGoToShortcut } from '@/lib/hooks/useGoToShortcut';
 import { getNavConfig, getChordMap } from '@/lib/nav/nav-config';
+import { isNavHrefActive } from '@/lib/nav/is-nav-active';
 import type {
   WorkspaceMembershipSummary,
   WorkspaceType,
@@ -43,9 +44,6 @@ function SidebarNav({
   const { unreadCount } = useNotifications();
   const { top, sections } = getNavConfig(workspaceType);
 
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(href + '/');
-
   return (
     <div className="flex flex-col gap-0.5">
       {top.map((item) => (
@@ -55,7 +53,7 @@ function SidebarNav({
           label={item.label}
           icon={item.icon}
           shortcut={item.shortcut}
-          active={isActive(item.href)}
+          active={isNavHrefActive(pathname, item.href)}
           onNavigate={onNavigate}
           badge={
             item.id === 'notifications' && unreadCount > 0 ? (
@@ -87,11 +85,15 @@ function SidebarBody({
 }: SidebarProps & { onNavigate?: () => void }) {
   return (
     <>
-      <SidebarHeader className="flex-row items-center gap-1 p-2">
-        <div className="min-w-0 flex-1">
+      <SidebarHeader className="flex flex-col gap-0 p-2 pb-1">
+        {/* 아이콘 고정 + 워드마크는 글자 단위 stagger 애니메이션 (SidebarBrand). overflow-hidden으로 접힘 시 글자 spill 방지 */}
+        <div className="flex h-9 items-center px-1 overflow-hidden">
+          <SidebarBrand />
+        </div>
+        <div className="border-b border-[var(--md-sys-color-outline-variant)] group-data-[collapsible=icon]:hidden mb-1" />
+        <div className="min-w-0">
           <WorkspaceSwitcher current={current} workspaces={workspaces} />
         </div>
-        <ShellSidebarTrigger className="hidden shrink-0 md:inline-flex" />
       </SidebarHeader>
 
       <SidebarContent className="px-2">
@@ -102,8 +104,8 @@ function SidebarBody({
         </nav>
       </SidebarContent>
 
-      <SidebarFooter className="flex-row items-center gap-1 border-t border-[var(--md-sys-color-outline-variant)] p-2">
-        <ThemeToggle />
+      <SidebarFooter className="flex-row items-center gap-1 border-t border-[var(--md-sys-color-outline-variant)] p-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1">
+        <SidebarFooterControls className="min-w-0 flex-1" />
         <div className="ml-auto md:hidden">
           <UserMenu
             user={{ name: user.name, email: user.email }}
