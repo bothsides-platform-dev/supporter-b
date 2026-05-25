@@ -14,12 +14,6 @@ vi.mock('next/navigation', () => ({
 
 import { BoardFilterBar } from '../BoardFilterBar';
 
-const STATUS = [
-  { value: 'draft', label: '작성중' },
-  { value: 'active', label: '진행중' },
-  { value: 'closed', label: '마감' },
-  { value: 'awarded', label: '계약완료' },
-];
 const GRADE = [
   { value: 'small', label: '영세' },
   { value: 'sme1', label: '중소1' },
@@ -34,38 +28,37 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('BoardFilterBar', () => {
-  it('selecting a status pushes ?status=active', async () => {
-    const user = userEvent.setup();
-    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
-    await user.click(screen.getByRole('button', { name: '진행중' }));
-    expect(replace).toHaveBeenCalledTimes(1);
-    expect(replace.mock.calls[0][0]).toContain('status=active');
+  it('does not render status filter chips (status is sidebar-only)', () => {
+    render(<BoardFilterBar gradeOptions={GRADE} />);
+    expect(screen.queryByRole('button', { name: '진행중' })).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '마감일' })).toBeInTheDocument();
   });
 
-  it('clicking the active status again removes the param', async () => {
+  it('selecting a deadline bucket pushes ?deadline=d7', async () => {
     const user = userEvent.setup();
-    mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
-    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
-    await user.click(screen.getByRole('button', { name: '진행중' }));
-    const url = replace.mock.calls[0][0] as string;
-    expect(url).not.toContain('status=active');
+    render(<BoardFilterBar gradeOptions={GRADE} />);
+    await user.click(screen.getByRole('button', { name: '마감임박' }));
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace.mock.calls[0][0]).toContain('deadline=d7');
   });
 
   it('selecting a grade pushes ?grade=sme1 and preserves existing params', async () => {
     const user = userEvent.setup();
     mockSearchParams.mockReturnValue(new URLSearchParams('view=board'));
-    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
+    render(<BoardFilterBar gradeOptions={GRADE} />);
     await user.selectOptions(screen.getByLabelText('가맹점 등급'), 'sme1');
     const url = replace.mock.calls[0][0] as string;
     expect(url).toContain('grade=sme1');
     expect(url).toContain('view=board');
   });
 
-  it('clearing the only param pushes the bare pathname (no trailing ?)', async () => {
+  it('preserves status param when changing grade', async () => {
     const user = userEvent.setup();
     mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
-    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
-    await user.click(screen.getByRole('button', { name: '진행중' }));
-    expect(replace).toHaveBeenCalledWith('/rfp');
+    render(<BoardFilterBar gradeOptions={GRADE} />);
+    await user.selectOptions(screen.getByLabelText('가맹점 등급'), 'sme1');
+    const url = replace.mock.calls[0][0] as string;
+    expect(url).toContain('status=active');
+    expect(url).toContain('grade=sme1');
   });
 });

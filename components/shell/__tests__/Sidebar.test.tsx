@@ -191,7 +191,7 @@ describe('Sidebar — child routes', () => {
   it('activates RFP when pathname is a child of /rfp', () => {
     mockPathname.mockReturnValue('/rfp/rfp-1');
     renderSidebar(buyerProps);
-    expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'RFP', exact: true })).toHaveAttribute('aria-current', 'page');
   });
 
   it('activates 받은 RFP when pathname is a child of /inbox', () => {
@@ -202,16 +202,20 @@ describe('Sidebar — child routes', () => {
 });
 
 describe('Sidebar — buyer workspace', () => {
-  it('renders RFP as a top nav link without status sub-items', () => {
+  it('renders RFP section with status sub-items and 새 RFP link', () => {
     renderSidebar(buyerProps);
-    expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('href', '/rfp');
-    expect(screen.queryByRole('link', { name: '진행중' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '계약완료' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'RFP', exact: true })).toHaveAttribute('href', '/rfp');
+    expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('href', '/rfp?status=active');
+    expect(screen.getByRole('link', { name: '계약완료' })).toHaveAttribute('href', '/rfp?status=awarded');
+    expect(screen.getByRole('link', { name: '새 RFP' })).toHaveAttribute('href', '/rfp/new');
   });
 
-  it('does NOT render the sidebar compose shortcut', () => {
+  it('activates the matching status sub-item on /rfp?status=active', () => {
+    mockPathname.mockReturnValue('/rfp');
+    mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
     renderSidebar(buyerProps);
-    expect(screen.queryByRole('link', { name: /새 RFP 작성/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'RFP', exact: true })).not.toHaveAttribute('aria-current');
   });
 
   it('does NOT render the inbox section for buyer', () => {
@@ -221,12 +225,12 @@ describe('Sidebar — buyer workspace', () => {
 });
 
 describe('Sidebar — pg workspace', () => {
-  it('renders 받은 RFP as a top nav link without status sub-items', () => {
+  it('renders 받은 RFP section with status sub-items and no 새 RFP link', () => {
     renderSidebar(pgProps);
-    expect(screen.getByRole('link', { name: '받은 RFP' })).toHaveAttribute('href', '/inbox');
-    expect(screen.queryByRole('link', { name: '제출완료' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /받은 RFP/ })).toHaveAttribute('href', '/inbox');
+    expect(screen.getByRole('link', { name: '제출완료' })).toHaveAttribute('href', '/inbox?status=submitted');
+    expect(screen.queryByRole('link', { name: '새 RFP' })).not.toBeInTheDocument();
   });
-
 });
 
 describe('Sidebar — search moved to header', () => {

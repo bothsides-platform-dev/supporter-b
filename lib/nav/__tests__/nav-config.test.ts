@@ -6,15 +6,13 @@ import {
 } from '../nav-config';
 
 describe('getNavConfig — top item order', () => {
-  it('lists 홈, workspace leaf, then 알림', () => {
+  it('lists 홈 then 알림 (workspace nav is a section)', () => {
     expect(getNavConfig('buyer').top.map((i) => i.id)).toEqual([
       'home',
-      'rfp',
       'notifications',
     ]);
     expect(getNavConfig('pg').top.map((i) => i.id)).toEqual([
       'home',
-      'inbox',
       'notifications',
     ]);
   });
@@ -34,27 +32,59 @@ describe('getNavConfig — top items', () => {
   });
 });
 
-describe('getNavConfig — buyer workspace leaf', () => {
-  it('puts RFP (g r) in top, leaves only the settings section', () => {
+describe('getNavConfig — buyer RFP section', () => {
+  it('puts RFP in sections with status sub-items and 새 RFP link', () => {
     const { top, sections } = getNavConfig('buyer');
-    const rfp = top.find((i) => i.id === 'rfp');
+    expect(top.some((i) => i.id === 'rfp')).toBe(false);
+    expect(sections.map((s) => s.id)).toEqual(['rfp', 'settings']);
+
+    const rfp = sections.find((s) => s.id === 'rfp');
     expect(rfp?.label).toBe('RFP');
     expect(rfp?.href).toBe('/rfp');
+    expect(rfp?.base).toBe('/rfp');
     expect(rfp?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'r' });
-    expect(top.some((i) => i.id === 'inbox')).toBe(false);
-    expect(sections.map((s) => s.id)).toEqual(['settings']);
+    expect(rfp?.statuses?.map((s) => s.status)).toEqual([
+      'draft',
+      'active',
+      'closed',
+      'awarded',
+    ]);
+    expect(rfp?.statuses?.map((s) => s.label)).toEqual([
+      '작성중',
+      '진행중',
+      '마감',
+      '계약완료',
+    ]);
+    expect(rfp?.links?.map((l) => l.href)).toEqual(['/rfp/new']);
+    expect(rfp?.links?.[0]?.label).toBe('새 RFP');
   });
 });
 
-describe('getNavConfig — pg workspace leaf', () => {
-  it('puts 받은 RFP (g i) in top, no RFP, only the settings section', () => {
+describe('getNavConfig — pg inbox section', () => {
+  it('puts 받은 RFP in sections with status sub-items and no 새 RFP link', () => {
     const { top, sections } = getNavConfig('pg');
-    const inbox = top.find((i) => i.id === 'inbox');
+    expect(top.some((i) => i.id === 'inbox')).toBe(false);
+    expect(sections.map((s) => s.id)).toEqual(['inbox', 'settings']);
+
+    const inbox = sections.find((s) => s.id === 'inbox');
     expect(inbox?.label).toBe('받은 RFP');
     expect(inbox?.href).toBe('/inbox');
+    expect(inbox?.base).toBe('/inbox');
     expect(inbox?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'i' });
+    expect(inbox?.statuses?.map((s) => s.status)).toEqual([
+      'new',
+      'draft',
+      'submitted',
+      'closed',
+    ]);
+    expect(inbox?.statuses?.map((s) => s.label)).toEqual([
+      '신규',
+      '작성중',
+      '제출완료',
+      '마감',
+    ]);
+    expect(inbox?.links).toBeUndefined();
     expect(top.some((i) => i.id === 'rfp')).toBe(false);
-    expect(sections.map((s) => s.id)).toEqual(['settings']);
   });
 });
 

@@ -66,20 +66,6 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
 
       {!collapsed && (
         <div className="mt-0.5 flex flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
-          {section.statuses?.map(({ status: s, label }) => {
-            const active = onListBase && status === s;
-            return (
-              <Link
-                key={s}
-                href={`${section.base}?status=${s}`}
-                aria-current={active ? 'page' : undefined}
-                onClick={onNavigate}
-                className={cn(subItemBase, active ? subItemActive : subItemInactive)}
-              >
-                {label}
-              </Link>
-            );
-          })}
           {section.links?.map((link) => {
             const active = isNavHrefActive(pathname, link.href);
             return (
@@ -91,6 +77,20 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
                 className={cn(subItemBase, active ? subItemActive : subItemInactive)}
               >
                 {link.label}
+              </Link>
+            );
+          })}
+          {section.statuses?.map(({ status: s, label }) => {
+            const active = onListBase && status === s;
+            return (
+              <Link
+                key={s}
+                href={`${section.base}?status=${s}`}
+                aria-current={active ? 'page' : undefined}
+                onClick={onNavigate}
+                className={cn(subItemBase, active ? subItemActive : subItemInactive)}
+              >
+                {label}
               </Link>
             );
           })}

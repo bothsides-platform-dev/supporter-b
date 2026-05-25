@@ -21,12 +21,6 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-const STATUS_OPTIONS = [
-  { value: 'new', label: '신규' },
-  { value: 'draft', label: '작성중' },
-  { value: 'submitted', label: '제출완료' },
-  { value: 'closed', label: '마감' },
-];
 const GRADE_OPTIONS = Object.entries(GRADE_LABELS).map(([value, label]) => ({ value, label }));
 
 type Props = {
@@ -88,7 +82,7 @@ async function InboxListPageLoader({
     <>
       <PageHeader title="받은 RFP" count={rows.length} />
       <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
-        <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
+        <BoardFilterBar gradeOptions={GRADE_OPTIONS} />
         <BoardViewToggle view={view} cookieName="inboxBoardView" tableCount={rows.length} />
       </div>
       {view === 'board' ? (

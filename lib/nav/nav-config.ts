@@ -61,6 +61,34 @@ const STATUS_LABELS = {
   },
 } as const;
 
+function statusItems(base: '/rfp' | '/inbox'): NavStatusItem[] {
+  return Object.entries(STATUS_LABELS[base]).map(([status, label]) => ({
+    status,
+    label,
+  }));
+}
+
+const RFP_SECTION: NavSection = {
+  id: 'rfp',
+  label: 'RFP',
+  href: '/rfp',
+  base: '/rfp',
+  icon: FileTextIcon,
+  shortcut: { kind: 'chord', lead: 'g', key: 'r' },
+  statuses: statusItems('/rfp'),
+  links: [{ id: 'rfp-new', label: '새 RFP', href: '/rfp/new' }],
+};
+
+const INBOX_SECTION: NavSection = {
+  id: 'inbox',
+  label: '받은 RFP',
+  href: '/inbox',
+  base: '/inbox',
+  icon: InboxIcon,
+  shortcut: { kind: 'chord', lead: 'g', key: 'i' },
+  statuses: statusItems('/inbox'),
+};
+
 const SETTINGS_SECTION: NavSection = {
   id: 'settings',
   label: '설정',
@@ -91,26 +119,11 @@ const NOTIFICATIONS: NavLeaf = {
 };
 
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
-  const workspaceLeaf: NavLeaf =
-    workspaceType === 'buyer'
-      ? {
-          id: 'rfp',
-          label: 'RFP',
-          href: '/rfp',
-          icon: FileTextIcon,
-          shortcut: { kind: 'chord', lead: 'g', key: 'r' },
-        }
-      : {
-          id: 'inbox',
-          label: '받은 RFP',
-          href: '/inbox',
-          icon: InboxIcon,
-          shortcut: { kind: 'chord', lead: 'g', key: 'i' },
-        };
+  const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : INBOX_SECTION;
 
   return {
-    top: [HOME, workspaceLeaf, NOTIFICATIONS],
-    sections: [SETTINGS_SECTION],
+    top: [HOME, NOTIFICATIONS],
+    sections: [workspaceSection, SETTINGS_SECTION],
   };
 }
 

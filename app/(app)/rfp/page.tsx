@@ -18,12 +18,6 @@ import { GRADE_LABELS } from '@/lib/types/biz-profile';
 
 export const dynamic = 'force-dynamic';
 
-const STATUS_OPTIONS = [
-  { value: 'draft', label: '작성중' },
-  { value: 'active', label: '진행중' },
-  { value: 'closed', label: '마감' },
-  { value: 'awarded', label: '계약완료' },
-];
 const GRADE_OPTIONS = Object.entries(GRADE_LABELS).map(([value, label]) => ({ value, label }));
 
 type Props = {
@@ -88,7 +82,7 @@ async function RfpListPageLoader({
     <>
       <PageHeader title="RFP" count={rfps.length} action={newRfpAction} />
       <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
-        <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
+        <BoardFilterBar gradeOptions={GRADE_OPTIONS} />
         <BoardViewToggle view={view} cookieName="rfpBoardView" tableCount={rfps.length} />
       </div>
       {view === 'board' ? (
