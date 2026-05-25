@@ -26,7 +26,11 @@ export type NavLeaf = {
   shortcut?: NavShortcut;
 };
 
-export type NavStatusItem = { status: string; label: string };
+export type NavStatusItem = {
+  status: string;
+  label: string;
+  shortcut?: NavShortcut;
+};
 
 export type NavSection = {
   id: 'rfp' | 'inbox' | 'settings';
@@ -61,10 +65,13 @@ const STATUS_LABELS = {
   },
 } as const;
 
+// Status sub-items get sequential "G then 1..4" chords by display order. The
+// two workspace types never co-exist, so /rfp and /inbox reuse 1-4 freely.
 function statusItems(base: '/rfp' | '/inbox'): NavStatusItem[] {
-  return Object.entries(STATUS_LABELS[base]).map(([status, label]) => ({
+  return Object.entries(STATUS_LABELS[base]).map(([status, label], i) => ({
     status,
     label,
+    shortcut: { kind: 'chord', lead: 'g', key: String(i + 1) },
   }));
 }
 
@@ -76,7 +83,15 @@ const RFP_SECTION: NavSection = {
   icon: FileTextIcon,
   shortcut: { kind: 'chord', lead: 'g', key: 'r' },
   statuses: statusItems('/rfp'),
-  links: [{ id: 'rfp-new', label: '새 RFP', href: '/rfp/new' }],
+  links: [
+    {
+      id: 'rfp-new',
+      label: '새 RFP',
+      href: '/rfp/new',
+      // G then C (Create). Replaces ⌘N, which the browser claims for "new window".
+      shortcut: { kind: 'chord', lead: 'g', key: 'c' },
+    },
+  ],
 };
 
 const INBOX_SECTION: NavSection = {
@@ -97,8 +112,18 @@ const SETTINGS_SECTION: NavSection = {
   icon: SettingsIcon,
   shortcut: { kind: 'chord', lead: 'g', key: 's' },
   links: [
-    { id: 'settings-profile', label: '프로필', href: '/settings/profile' },
-    { id: 'settings-members', label: '멤버', href: '/settings/members' },
+    {
+      id: 'settings-profile',
+      label: '프로필',
+      href: '/settings/profile',
+      shortcut: { kind: 'chord', lead: 'g', key: 'p' },
+    },
+    {
+      id: 'settings-members',
+      label: '멤버',
+      href: '/settings/members',
+      shortcut: { kind: 'chord', lead: 'g', key: 'm' },
+    },
   ],
 };
 
@@ -162,6 +187,16 @@ export function getChordMap(workspaceType: WorkspaceType): Record<string, string
   const map: Record<string, string> = {};
   for (const item of [...top, ...sections]) {
     if (item.shortcut?.kind === 'chord') map[item.shortcut.key] = item.href;
+  }
+  for (const section of sections) {
+    for (const link of section.links ?? []) {
+      if (link.shortcut?.kind === 'chord') map[link.shortcut.key] = link.href;
+    }
+    for (const s of section.statuses ?? []) {
+      if (s.shortcut?.kind === 'chord') {
+        map[s.shortcut.key] = `${section.base}?status=${s.status}`;
+      }
+    }
   }
   return map;
 }

@@ -34,6 +34,7 @@ vi.mock('@/hooks/use-mobile', () => ({
 }));
 
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { SidebarSection } from '../sidebar/SidebarSection';
 import { useSidebarSectionsStore } from '@/lib/stores/sidebar-sections';
 import { getNavConfig } from '@/lib/nav/nav-config';
@@ -114,6 +115,31 @@ describe('SidebarSection — status section (RFP)', () => {
     expect(screen.getByRole('link', { name: '진행중' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /RFP 섹션/ }));
     expect(screen.queryByRole('link', { name: '진행중' })).not.toBeInTheDocument();
+  });
+});
+
+describe('SidebarSection — sub-item shortcuts', () => {
+  it('reveals a status sub-item chord in a tooltip on hover', async () => {
+    const user = userEvent.setup();
+    const section: NavSection = {
+      id: 'rfp',
+      label: 'RFP',
+      href: '/rfp',
+      base: '/rfp',
+      statuses: [
+        { status: 'draft', label: '작성중', shortcut: { kind: 'chord', lead: 'g', key: '1' } },
+      ],
+    };
+    render(
+      <SidebarProvider>
+        <TooltipProvider delay={0}>
+          <SidebarSection section={section} />
+        </TooltipProvider>
+      </SidebarProvider>,
+    );
+    await user.hover(screen.getByRole('link', { name: '작성중' }));
+    expect(await screen.findByText('G')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
   });
 });
 

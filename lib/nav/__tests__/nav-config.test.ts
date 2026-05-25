@@ -140,21 +140,69 @@ describe('getBreadcrumbSegments', () => {
 });
 
 describe('getChordMap', () => {
-  it('routes the buyer "g" chords to their destinations', () => {
+  it('routes the buyer "g" chords incl. submenu (statuses 1-4, 새 RFP c, settings p/m)', () => {
     expect(getChordMap('buyer')).toEqual({
       h: '/home',
       n: '/notifications',
       r: '/rfp',
       s: '/settings/profile',
+      '1': '/rfp?status=draft',
+      '2': '/rfp?status=active',
+      '3': '/rfp?status=closed',
+      '4': '/rfp?status=awarded',
+      c: '/rfp/new',
+      p: '/settings/profile',
+      m: '/settings/members',
     });
   });
 
-  it('routes the pg "g" chords (i for inbox, no r)', () => {
+  it('routes the pg "g" chords (i for inbox, no r/c) incl. inbox statuses 1-4', () => {
     expect(getChordMap('pg')).toEqual({
       h: '/home',
       n: '/notifications',
       i: '/inbox',
       s: '/settings/profile',
+      '1': '/inbox?status=new',
+      '2': '/inbox?status=draft',
+      '3': '/inbox?status=submitted',
+      '4': '/inbox?status=closed',
+      p: '/settings/profile',
+      m: '/settings/members',
     });
+  });
+});
+
+describe('submenu shortcuts', () => {
+  it('assigns buyer RFP status sub-items numeric chords by display order', () => {
+    const rfp = getNavConfig('buyer').sections.find((s) => s.id === 'rfp');
+    expect(rfp?.statuses?.map((s) => s.shortcut)).toEqual([
+      { kind: 'chord', lead: 'g', key: '1' },
+      { kind: 'chord', lead: 'g', key: '2' },
+      { kind: 'chord', lead: 'g', key: '3' },
+      { kind: 'chord', lead: 'g', key: '4' },
+    ]);
+  });
+
+  it('assigns the 새 RFP link a G C chord (⌘N replacement)', () => {
+    const rfp = getNavConfig('buyer').sections.find((s) => s.id === 'rfp');
+    expect(rfp?.links?.[0]?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'c' });
+  });
+
+  it('assigns settings sub-links G P (프로필) and G M (멤버)', () => {
+    const settings = getNavConfig('buyer').sections.find((s) => s.id === 'settings');
+    expect(settings?.links?.map((l) => l.shortcut)).toEqual([
+      { kind: 'chord', lead: 'g', key: 'p' },
+      { kind: 'chord', lead: 'g', key: 'm' },
+    ]);
+  });
+
+  it('assigns pg inbox status sub-items numeric chords by display order', () => {
+    const inbox = getNavConfig('pg').sections.find((s) => s.id === 'inbox');
+    expect(inbox?.statuses?.map((s) => s.shortcut)).toEqual([
+      { kind: 'chord', lead: 'g', key: '1' },
+      { kind: 'chord', lead: 'g', key: '2' },
+      { kind: 'chord', lead: 'g', key: '3' },
+      { kind: 'chord', lead: 'g', key: '4' },
+    ]);
   });
 });

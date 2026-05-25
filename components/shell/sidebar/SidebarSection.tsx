@@ -1,22 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { ChevronDownIcon, ChevronRightIcon } from '@/components/icons';
 import { NavItem } from '@/components/shell/sidebar/NavItem';
+import { SidebarSubItem } from '@/components/shell/sidebar/SidebarSubItem';
 import { useSidebarSectionsStore } from '@/lib/stores/sidebar-sections';
 import type { NavSection } from '@/lib/nav/nav-config';
 import { isNavHrefActive, isNavSectionHeaderActive } from '@/lib/nav/is-nav-active';
-import { cn } from '@/lib/utils';
-
-const subItemBase =
-  'flex h-7 items-center gap-2 rounded-[var(--md-sys-shape-small)] pl-9 pr-2.5 text-[length:var(--md-typescale-label-medium-size)] tracking-[var(--md-typescale-label-medium-tracking)] transition-colors duration-[var(--md-sys-motion-duration-short-4)]';
-
-const subItemActive =
-  'bg-[var(--md-sys-color-primary-container)] font-medium text-[var(--md-sys-color-on-primary-container)]';
-
-const subItemInactive =
-  'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]';
 
 type SidebarSectionProps = {
   section: NavSection;
@@ -66,34 +56,26 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
 
       {!collapsed && (
         <div className="mt-0.5 flex flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
-          {section.links?.map((link) => {
-            const active = isNavHrefActive(pathname, link.href);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={active ? 'page' : undefined}
-                onClick={onNavigate}
-                className={cn(subItemBase, active ? subItemActive : subItemInactive)}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-          {section.statuses?.map(({ status: s, label }) => {
-            const active = onListBase && status === s;
-            return (
-              <Link
-                key={s}
-                href={`${section.base}?status=${s}`}
-                aria-current={active ? 'page' : undefined}
-                onClick={onNavigate}
-                className={cn(subItemBase, active ? subItemActive : subItemInactive)}
-              >
-                {label}
-              </Link>
-            );
-          })}
+          {section.links?.map((link) => (
+            <SidebarSubItem
+              key={link.href}
+              href={link.href}
+              label={link.label}
+              shortcut={link.shortcut}
+              active={isNavHrefActive(pathname, link.href)}
+              onNavigate={onNavigate}
+            />
+          ))}
+          {section.statuses?.map(({ status: s, label, shortcut }) => (
+            <SidebarSubItem
+              key={s}
+              href={`${section.base}?status=${s}`}
+              label={label}
+              shortcut={shortcut}
+              active={onListBase && status === s}
+              onNavigate={onNavigate}
+            />
+          ))}
         </div>
       )}
     </div>

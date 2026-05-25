@@ -6,8 +6,8 @@ import { useUIStore } from '@/lib/stores/ui';
 import { Command } from 'cmdk';
 import { XIcon } from '@/components/icons';
 import { IconButton } from '@/components/primitives/IconButton';
-import { ModifierShortcut } from '@/components/ui/ModifierShortcut';
-import { useIsMac } from '@/lib/hooks/usePlatform';
+import { ShortcutHint } from '@/components/shell/ShortcutHint';
+import type { NavShortcut } from '@/lib/nav/nav-config';
 import {
   searchBidsAction,
   type BidSearchItem,
@@ -17,13 +17,19 @@ type CommandItem = {
   group: string;
   id: string;
   label: string;
-  modKey?: string; // bare key (e.g. 'N'); rendered as ⌘N / Ctrl+N per OS
+  shortcut?: NavShortcut; // rendered as keycaps via ShortcutHint
   href?: string;
 };
 
 const COMMANDS: CommandItem[] = [
   { group: 'RFP', id: 'rfp-list', label: 'RFP 목록', href: '/rfp' },
-  { group: 'RFP', id: 'rfp-new', label: '신규 제안 요청', modKey: 'N', href: '/rfp/new' },
+  {
+    group: 'RFP',
+    id: 'rfp-new',
+    label: '신규 제안 요청',
+    shortcut: { kind: 'chord', lead: 'g', key: 'c' },
+    href: '/rfp/new',
+  },
   { group: '수신함', id: 'inbox', label: '수신함', href: '/inbox' },
   { group: '설정', id: 'settings-profile', label: '프로필 설정', href: '/settings/profile' },
   { group: '설정', id: 'settings-members', label: '멤버 관리', href: '/settings/members' },
@@ -32,7 +38,6 @@ const COMMANDS: CommandItem[] = [
 export function CommandPalette() {
   const { commandPaletteOpen, closeCommandPalette } = useUIStore();
   const router = useRouter();
-  const isMac = useIsMac();
   const [bidItems, setBidItems] = useState<BidSearchItem[]>([]);
   const [bidsLoading, setBidsLoading] = useState(false);
 
@@ -121,9 +126,7 @@ export function CommandPalette() {
                         className="flex items-center justify-between px-4 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface)] cursor-pointer aria-selected:bg-[var(--md-sys-color-surface-container-high)]"
                       >
                         <span>{cmd.label}</span>
-                        {cmd.modKey && (
-                          <ModifierShortcut shortcutKey={cmd.modKey} isMac={isMac} />
-                        )}
+                        {cmd.shortcut && <ShortcutHint shortcut={cmd.shortcut} />}
                       </Command.Item>
                     ))}
                   </Command.Group>
