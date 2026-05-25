@@ -1,23 +1,33 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { useThemeStore } from '@/lib/stores/theme';
 import { IconButton } from '@/components/primitives/IconButton';
 import { SunIcon, MoonIcon } from '@/components/icons';
 
+const noopSubscribe = () => () => {};
+
+// Returns false during SSR and the initial client render, then true once
+// hydrated. Using useSyncExternalStore (instead of a setState-in-effect mount
+// flag) keeps the value out of React's render cascade.
+function useHydrated() {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
+}
+
 export function ThemeToggle() {
   const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
   const setTheme = useThemeStore((s) => s.setTheme);
-  const [mounted, setMounted] = useState(false);
+  const hydrated = useHydrated();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Before mount: always render light-mode icon so server and client HTML match.
-  // Zustand persist rehydrates from localStorage synchronously, which would
-  // produce a different icon on the client → hydration mismatch without this guard.
-  const isDark = mounted && resolvedTheme === 'dark';
+  // Before hydration: always render light-mode icon so server and client HTML
+  // match. Zustand persist rehydrates from localStorage synchronously, which
+  // would produce a different icon on the client → hydration mismatch without
+  // this guard.
+  const isDark = hydrated && resolvedTheme === 'dark';
 
   return (
     <IconButton

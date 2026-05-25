@@ -2,29 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repository State (2026-05-25)
-
-**M0~M8 완료, M9 (server cutover) 진행.** 풀스택 가동 중 — Next.js 16.2 + Auth.js v5 + Drizzle 0.45 + Postgres + Resend + Sentry. AppShell, 16 primitives, 9 shell components, BidBoard, outbox, Toaster, notifications activity list, RFP 작성/비교/award, PG inbox/응답이 모두 구현됨. **Bid 칸반 stage + 메모/첨부는 Stage 3 (M9) 에서 server로 cutover 완료** — `bids.buyer_stage` 컬럼 + `bid_notes` 테이블 + `addBidNoteAction` / `removeBidNoteAction` / `updateBuyerStageAction` 가 캐노니컬 소스. localStorage 기반 `lib/stores/bid-board.ts` 는 제거됨.
-
-## Document Hierarchy (read in this order to gain context)
-
-1. **PG_RFP_SPEC.md** — Product spec (v0). The most authoritative document. 15 policy decisions, domain model, screen IA, scenarios. **Read this first.** Result of a brainstorming pivot from generic B2B quotation system to a **PG (Korean Payment Gateway) -focused private 1:N RFP platform**.
-2. **SCREEN_DESIGN.md** — Screens, IA, UX flows. §0 PG v0 화면 IA(B1~B7, P1~P6) + §1 인증/가입(P1~P11).
-3. **DESIGN.md** — Design system (*Linear*). Tokens, typography, color roles, component visual rules, motion, anti-clichés. **Single source of truth for visual decisions** — `styles/tokens.css` syncs from here unidirectionally. (Token names keep the `--md-sys-*` prefix; values are Linear.)
-4. **SPEC.md** — Tech spec. Stack, directory layout, domain TypeScript types, App Router strategy, public-vs-app route groups.
-5. **[NOTIFICATION.md](./NOTIFICATION.md)** — 알림 시스템. 이메일(Resend) + 인앱(SSE + 사이드바 배지/알림 페이지) 채널, NotificationService 모듈 구조, 이벤트→알림 매핑.
-
-If these conflict, **PG_RFP_SPEC.md wins** (newest, post-pivot). Distribute its §8 changes back into the other four files when implementing — do not let them drift.
 
 ## Domain Context (memorize)
 
 - **Two-sided platform**: `buyer` workspace (구매사) sends RFPs; `pg` workspace (결제대행사 영업담당) responds with bids
 - **Private 1:N RFP, NOT a marketplace**: matching is by buyer-supplied PG email allowlist. PGs don't see each other (완전 비공개 — `Bid.competitorCount` etc. do not exist by design)
-- **PG workspace identity = email domain** (e.g. `@toss.im` → 서포터 B 페이 workspace, auto-merge on signup)
 - **Per-RFP unique URL + token** in invitation email; token authoritative only for first entry, then workspace membership takes over
-- **사업자번호 → automatic enrichment** at RFP creation: 국세청 (free, mandatory). 공정위·NICE는 v0 제외.
-- **가맹점 등급 = 카드 우대수수료 등급** (영세/중소1~3/일반). Card fees for 영세·중소 are **statutorily fixed** — `STATUTORY_CARD_FEE` in SPEC.md §5 — PGs cannot quote different card rates for these grades. Competition shifts to settlement cycle, deposit, setup fee, monthly minimum, bank transfer %, easy-pay %. Only 일반 grade negotiates card fees per issuer (9 cards: BC/SHINHAN/SAMSUNG/HYUNDAI/KB/LOTTE/NH/HANA/WOORI).
-- **v0 has NO 결재선** on either side. Single-decider model. Don't add approval flow components even though SCREEN_DESIGN.md still describes them.
 
 ## Current Stack
 
@@ -32,19 +15,25 @@ If these conflict, **PG_RFP_SPEC.md wins** (newest, post-pivot). Distribute its 
 |---|---|---|
 | Framework | Next.js App Router, Turbopack default, async `params`/`searchParams` | `next@16.2.4` |
 | Runtime | React | `react@19.2.4` |
-| Language | TypeScript strict | — |
+| Language | TypeScript strict | `typescript@6.0.3` |
 | Auth | Auth.js v5 (no middleware — guard via `(app)/layout.tsx` redirect) | `next-auth@5.0.0-beta.31` |
 | DB | Drizzle ORM + Postgres | `drizzle-orm@0.45.0`, `postgres@3.4.7` |
 | Storage | Postgres bytea (`attachment_blobs` 테이블) — 첨부 바이트가 DB에 저장돼 외부 오브젝트 스토어 없음. `lib/server/storage/{postgres,memory}.ts` — 라우트는 `getStorage()` 만 본다 | (postgres-js 공유) |
-| Styling | Tailwind v4 + CSS Variables (`@theme` block) | — |
-| Headless UI | Radix primitives | — |
+| Styling | Tailwind v4 + CSS Variables (`@theme` block) | `tailwindcss@4.2.4` |
+| Headless UI | `@base-ui/react` (shadcn base-nova style) + Radix 일부 (`@radix-ui/react-popover`, `@radix-ui/react-slider`) | `@base-ui/react@1.4.1` |
+| Component tooling | shadcn (base-nova) — 컴포넌트 scaffolding 전용 | `shadcn@4.6.0` |
 | State | Zustand (UI toggles, signup draft) | `zustand@5.0.13` |
-| Forms | zod 검증 + Server Actions (react-hook-form 미사용 — 폼은 useState + zod) | — |
+| Forms | zod v4 검증 + Server Actions (react-hook-form 미사용 — 폼은 useState + zod) | `zod@4.4.3` |
+| Icons | lucide-react | `lucide-react@1.14.0` |
 | Fonts | `next/font/local` — Pretendard Variable + JetBrains Mono Variable, self-hosted in `public/fonts/` | — |
-| Motion | `motion` (구 Framer Motion). 임포트는 `motion/react`. | — |
-| Email | Resend + react-email | `resend@6.4.0` |
+| Motion | `motion` (구 Framer Motion). 임포트는 `motion/react`. | `motion@12.38.0` |
+| DnD | @dnd-kit — 칸반 보드 드래그·정렬 (`fractional-indexing` 병용) | `@dnd-kit/core@6.3.1` |
+| Email | Resend + `@react-email/render` | `resend@6.4.0` |
+| Logging | Pino + Axiom (`next-axiom`) | `pino@10.3.1`, `next-axiom@1.10.0` |
 | Observability | Sentry | `@sentry/nextjs@10.51.0` |
-| Tables / Cmdk | `@tanstack/react-table`, `cmdk` | — |
+| Support | Channel.io | `@channel.io/channel-web-sdk-loader@2.0.2` |
+| Cmdk | `cmdk` | `cmdk@1.1.1` |
+| Testing | Vitest + PGlite (단위), Playwright (e2e) | `vitest@4.1.5`, `@electric-sql/pglite@0.3.13` |
 | Package mgr | pnpm | — |
 
 상세 버전·스크립트는 `package.json` 참조. 부트스트랩은 완료 (M0).

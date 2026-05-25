@@ -1,0 +1,22 @@
+#!/bin/sh
+# 재발방지 게이트 — 커밋 전에 CI 의 "lint + tsc" 잡과 동일한 검사를 로컬에서
+# 먼저 돌린다. react-hooks/set-state-in-effect 류의 lint 에러나 타입 에러가
+# 커밋에 섞여 들어가는 것을 막는다 (이 훅이 추가된 계기).
+#
+# 활성화: git 의 core.hooksPath=.githooks (package.json 의 prepare 스크립트가
+#         pnpm install 시 자동 설정). 수동: git config core.hooksPath .githooks
+# 우회:   git commit --no-verify
+#
+# 주의: 훅은 Claude Code 의 RTK 프록시를 거치지 않으므로 raw eslint 가 돈다.
+#       raw eslint 는 no-var 를 declare global 에 발동하지 않아, 8개의
+#       eslint-disable 주석을 "unused directive" 경고로 보고한다 (RTK 와의
+#       알려진 불일치, 에러 아님 → 커밋은 통과). 자세한 내용은 lib/db/client.ts 등 참조.
+set -e
+
+echo "[pre-commit] pnpm lint"
+pnpm lint
+
+echo "[pre-commit] pnpm typecheck"
+pnpm typecheck
+
+echo "[pre-commit] passed"
