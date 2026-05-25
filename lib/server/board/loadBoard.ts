@@ -109,11 +109,10 @@ export async function loadBoard(args: {
       bidRepo.findByRfpIds(rfpIds),
       invRepo.findByRfpIds(rfpIds),
     ]);
-    const now = new Date();
     const cards: BoardCard[] = rfpList.map((rfp) => {
       const b = bidsByRfp.get(rfp.id) ?? [];
       const invitations = invsByRfp.get(rfp.id) ?? [];
-      const stage = classifyBuyerRfp({ rfp, bids: b, invitations, now });
+      const stage = classifyBuyerRfp({ rfp });
       return {
         cardType: 'rfp',
         cardId: rfp.id,

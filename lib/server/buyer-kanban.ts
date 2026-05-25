@@ -37,12 +37,7 @@ export type BuyerKanbanCard = {
 };
 
 // pure — 단위 테스트 가능. status 만으로 4단계 분류 (스펙 §5 IA: 작성중/진행중/마감/계약완료).
-export function classifyBuyerRfp(args: {
-  rfp: RFP;
-  bids: Bid[];
-  invitations: RfpInvitation[];
-  now: Date;
-}): BuyerKanbanStage {
+export function classifyBuyerRfp(args: { rfp: RFP }): BuyerKanbanStage {
   const { rfp } = args;
   if (rfp.status === 'awarded') return 'awarded';
   if (rfp.status === 'closed' || rfp.status === 'cancelled') return 'closed';

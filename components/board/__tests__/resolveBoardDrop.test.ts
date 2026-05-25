@@ -18,7 +18,7 @@ function col(over: Partial<BoardColumn> & { id: string }): BoardColumn {
 describe('resolveBoardDrop', () => {
   it('custom column → place', () => {
     const target = col({ id: 'custom', lifecycleKey: null });
-    expect(resolveBoardDrop({ cardType: 'rfp', toColumn: target, payload: { stage: 'sent' } })).toEqual({
+    expect(resolveBoardDrop({ cardType: 'rfp', toColumn: target, payload: { stage: 'draft' } })).toEqual({
       kind: 'place',
     });
   });
