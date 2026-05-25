@@ -63,13 +63,13 @@ describe('classifyPgInvitation', () => {
     expect(stage).toBe('received');
   });
 
-  it('reviewing: invitation=opened + no bid', () => {
+  it('received: invitation=opened + no bid (열람도 신규로 — 검토중 단계 제거)', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: undefined,
       rfp: makeRfp(),
     });
-    expect(stage).toBe('reviewing');
+    expect(stage).toBe('received');
   });
 
   it('drafting: bid=draft', () => {

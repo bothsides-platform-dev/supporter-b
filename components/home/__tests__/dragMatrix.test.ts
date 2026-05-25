@@ -50,17 +50,6 @@ describe('resolveDrag — pg', () => {
     expect(a).toEqual({ kind: 'navigate-inbox', rfpId: 'P-2605-0001' });
   });
 
-  it('reviewing → drafting: navigate-inbox', () => {
-    const a = resolveDrag({
-      role: 'pg',
-      from: 'reviewing',
-      to: 'drafting',
-      rfpId: 'P-2605-0001',
-      title: 'RFP 1',
-    });
-    expect(a).toEqual({ kind: 'navigate-inbox', rfpId: 'P-2605-0001' });
-  });
-
   it('drafting → submitted: navigate-inbox (form 작성 필요)', () => {
     const a = resolveDrag({
       role: 'pg',

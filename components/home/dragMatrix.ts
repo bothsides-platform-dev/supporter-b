@@ -61,11 +61,7 @@ function resolvePg(i: PgInput): DragAction | null {
   if (i.from === i.to) return null;
 
   // 작성 단계로 이동 — v0 는 form 이 inbox 페이지에 있어 navigate.
-  if (
-    (i.from === 'received' ||
-      i.from === 'reviewing') &&
-    i.to === 'drafting'
-  ) {
+  if (i.from === 'received' && i.to === 'drafting') {
     return { kind: 'navigate-inbox', rfpId: i.rfpId };
   }
 
@@ -76,12 +72,7 @@ function resolvePg(i: PgInput): DragAction | null {
 
   // submitted → lost: 철회.
   if (i.from === 'submitted' && i.to === 'lost' && i.bidId) {
-    return {
-      kind: 'withdraw-bid',
-      bidId: i.bidId,
-      rfpId: i.rfpId,
-      title: i.title,
-    };
+    return { kind: 'withdraw-bid', bidId: i.bidId, rfpId: i.rfpId, title: i.title };
   }
 
   return null;
