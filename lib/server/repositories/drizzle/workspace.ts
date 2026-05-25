@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import {
   workspaces,
   workspaceMembers,
@@ -164,6 +164,14 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         name: workspaces.name,
         type: workspaces.type,
         role: workspaceMembers.role,
+        unreadCount: sql<number>`(
+          SELECT COALESCE(COUNT(*)::int, 0)
+          FROM notifications
+          WHERE workspace_id = ${workspaces.id}
+            AND user_id = ${userId}
+            AND channel = 'in_app'
+            AND read_at IS NULL
+        )`,
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))

@@ -20,4 +20,5 @@ export type WorkspaceMembershipSummary = {
   name: string;
   type: WorkspaceType;
   role: 'admin' | 'member';
+  unreadCount: number;
 };

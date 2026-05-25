@@ -52,7 +52,7 @@ describe('DrizzleNotificationRepository.findRecentForUser', () => {
       buildNotification({ userId: user.id, workspaceId: ws.id, channel: 'email' }),
     );
 
-    const rows = await repo.findRecentForUser(user.id, 10);
+    const rows = await repo.findRecentForUser(user.id, ws.id, 10);
     expect(rows).toHaveLength(2);
     expect(new Set(rows.map((r) => r.channel))).toEqual(new Set(['inapp', 'email']));
   });
@@ -69,7 +69,7 @@ describe('DrizzleNotificationRepository.findRecentForUser', () => {
       buildNotification({ userId: user.id, workspaceId: ws.id, channel: 'inapp' }),
     );
 
-    const rows = await repo.findRecentForUser(user.id, 10, 'inapp');
+    const rows = await repo.findRecentForUser(user.id, ws.id, 10, 'inapp');
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.channel === 'inapp')).toBe(true);
   });
@@ -83,7 +83,7 @@ describe('DrizzleNotificationRepository.findRecentForUser', () => {
       buildNotification({ userId: user.id, workspaceId: ws.id, channel: 'email' }),
     );
 
-    const rows = await repo.findRecentForUser(user.id, 10, 'email');
+    const rows = await repo.findRecentForUser(user.id, ws.id, 10, 'email');
     expect(rows).toHaveLength(1);
     expect(rows[0].channel).toBe('email');
   });
@@ -108,7 +108,7 @@ describe('DrizzleNotificationRepository.findRecentForUser', () => {
       });
     }
 
-    const rows = await repo.findRecentForUser(user.id, 3, 'inapp');
+    const rows = await repo.findRecentForUser(user.id, ws.id, 3, 'inapp');
     expect(rows).toHaveLength(3);
     expect(rows.map((r) => r.title)).toEqual(['n4', 'n3', 'n2']);
   });
@@ -124,8 +124,46 @@ describe('DrizzleNotificationRepository.findRecentForUser', () => {
       buildNotification({ userId: other.id, workspaceId: ws.id, channel: 'inapp' }),
     );
 
-    const rows = await repo.findRecentForUser(user.id, 10, 'inapp');
+    const rows = await repo.findRecentForUser(user.id, ws.id, 10, 'inapp');
     expect(rows).toHaveLength(1);
     expect(rows[0].userId).toBe(user.id);
+  });
+});
+
+describe('DrizzleNotificationRepository — workspace isolation', () => {
+  it('findRecentForUser: 같은 userId라도 다른 workspaceId 알림은 반환하지 않는다', async () => {
+    const { db, repo, user, ws } = await setup();
+    const ws2 = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws2.id, user.id);
+
+    await repo.save(buildNotification({ userId: user.id, workspaceId: ws.id, channel: 'inapp' }));
+    await repo.save(buildNotification({ userId: user.id, workspaceId: ws2.id, channel: 'inapp' }));
+
+    const rowsWs1 = await repo.findRecentForUser(user.id, ws.id, 10);
+    expect(rowsWs1).toHaveLength(1);
+    expect(rowsWs1[0].workspaceId).toBe(ws.id);
+
+    const rowsWs2 = await repo.findRecentForUser(user.id, ws2.id, 10);
+    expect(rowsWs2).toHaveLength(1);
+    expect(rowsWs2[0].workspaceId).toBe(ws2.id);
+  });
+
+  it('markAllRead: workspaceId 기준으로만 읽음 처리 — 다른 ws 알림은 유지된다', async () => {
+    const { db, repo, user, ws } = await setup();
+    const ws2 = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws2.id, user.id);
+
+    const n1 = buildNotification({ userId: user.id, workspaceId: ws.id, channel: 'inapp', status: 'sent' });
+    const n2 = buildNotification({ userId: user.id, workspaceId: ws2.id, channel: 'inapp', status: 'sent' });
+    await repo.save(n1);
+    await repo.save(n2);
+
+    await repo.markAllRead(user.id, ws.id);
+
+    const ws1Rows = await repo.findRecentForUser(user.id, ws.id, 10);
+    expect(ws1Rows[0].status).toBe('read');
+
+    const ws2Rows = await repo.findRecentForUser(user.id, ws2.id, 10);
+    expect(ws2Rows[0].status).toBe('sent');
   });
 });

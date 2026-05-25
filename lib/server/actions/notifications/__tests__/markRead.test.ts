@@ -16,7 +16,7 @@ import {
 } from './_setup';
 
 const sessionRef: {
-  value: { user: { id: string; email: string } } | null;
+  value: { user: { id: string; email: string; workspaceId?: string } } | null;
 } = { value: null };
 
 vi.mock('@/lib/auth/session', () => ({
@@ -117,6 +117,14 @@ describe('markAllReadAction', () => {
     expect(r.ok).toBe(false);
   });
 
+  it('rejects with FORBIDDEN when workspaceId is missing from session', async () => {
+    const u = await seedUser(db, { email: 'u@x.com' });
+    sessionRef.value = { user: { id: u.id, email: u.email } }; // workspaceId 없음
+    const r = await markAllReadAction();
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN');
+  });
+
   it('marks all unread for the caller, leaves others alone', async () => {
     const u1 = await seedUser(db, { email: 'u1@x.com' });
     const u2 = await seedUser(db, { email: 'u2@x.com' });
@@ -128,7 +136,7 @@ describe('markAllReadAction', () => {
     await seedNotif(u1.id, ws.id);
     await seedNotif(u2.id, ws.id);
 
-    sessionRef.value = { user: { id: u1.id, email: u1.email } };
+    sessionRef.value = { user: { id: u1.id, email: u1.email, workspaceId: ws.id } };
     const r = await markAllReadAction();
     expect(r.ok).toBe(true);
 
@@ -149,5 +157,31 @@ describe('markAllReadAction', () => {
       .where(eq(notifTable.userId, u2.id));
     expect(u2Rows[0].readAt).toBeNull();
     expect(u2Rows[0].status).toBe('queued');
+  });
+
+  it('다른 워크스페이스의 알림은 읽음 처리하지 않는다', async () => {
+    const u = await seedUser(db, { email: 'u@x.com' });
+    const wsA = await seedBuyerWorkspace(db);
+    const wsB = await seedBuyerWorkspace(db);
+    await seedMembership(db, wsA.id, u.id, 'admin');
+    await seedMembership(db, wsB.id, u.id, 'member');
+
+    await seedNotif(u.id, wsA.id);
+    await seedNotif(u.id, wsB.id);
+
+    sessionRef.value = { user: { id: u.id, email: u.email, workspaceId: wsA.id } };
+    const r = await markAllReadAction();
+    expect(r.ok).toBe(true);
+
+    const wsARows = await db.select().from(notifTable).where(
+      and(eq(notifTable.userId, u.id), eq(notifTable.workspaceId, wsA.id)),
+    );
+    expect(wsARows[0].status).toBe('read');
+
+    const wsBRows = await db.select().from(notifTable).where(
+      and(eq(notifTable.userId, u.id), eq(notifTable.workspaceId, wsB.id)),
+    );
+    expect(wsBRows[0].status).toBe('queued');
+    expect(wsBRows[0].readAt).toBeNull();
   });
 });

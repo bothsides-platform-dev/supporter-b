@@ -96,6 +96,9 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
               </span>
               <WorkspaceAvatar name={ws.name} size="sm" />
               <span className="flex-1 truncate">{ws.name}</span>
+              {ws.unreadCount > 0 && (
+                <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--md-sys-color-error)]" />
+              )}
               <span className="shrink-0 text-[length:var(--md-typescale-label-small-size)] text-[var(--md-sys-color-on-surface-variant)]">
                 {TYPE_LABEL[ws.type]}
               </span>

@@ -27,7 +27,11 @@ export async function GET(req: Request): Promise<Response> {
   if (!session?.user?.id) {
     return new Response('Unauthorized', { status: 401 });
   }
+  if (!session.user.workspaceId) {
+    return new Response('Forbidden', { status: 403 });
+  }
   const userId = session.user.id;
+  const currentWorkspaceId = session.user.workspaceId;
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
@@ -43,8 +47,9 @@ export async function GET(req: Request): Promise<Response> {
         }
       };
 
-      // 신규 알림 구독.
+      // 신규 알림 구독 — 현재 워크스페이스 알림만 전달.
       const unsubscribe = subscribe(userId, (n) => {
+        if (n.workspaceId !== currentWorkspaceId) return;
         safeEnqueue(`data: ${JSON.stringify(n)}\n\n`);
       });
 

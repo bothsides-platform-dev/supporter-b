@@ -179,17 +179,18 @@ export interface BidNoteRepo {
 export interface NotificationRepo {
   /** 인앱/이메일 알림 저장. */
   save(n: Notification, tx?: Tx): Promise<void>;
-  /** 사용자 최근 알림(생성 역순) — limit 제한. `channel` 지정 시 SQL에서 필터. */
+  /** 사용자+워크스페이스 최근 알림(생성 역순) — limit 제한. `channel` 지정 시 SQL에서 필터. */
   findRecentForUser(
     userId: string,
+    workspaceId: string,
     limit: number,
     channel?: NotificationChannel,
     tx?: Tx,
   ): Promise<Notification[]>;
   /** 단건 읽음 처리. */
   markRead(id: string, tx?: Tx): Promise<void>;
-  /** 사용자 전부 읽음 처리. */
-  markAllRead(userId: string, tx?: Tx): Promise<void>;
+  /** 사용자+워크스페이스 전부 읽음 처리. */
+  markAllRead(userId: string, workspaceId: string, tx?: Tx): Promise<void>;
 }
 
 // ── Contract ──────────────────────────────────────────────────────────

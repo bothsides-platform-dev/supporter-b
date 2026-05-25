@@ -17,11 +17,9 @@ export const dynamic = 'force-dynamic';
 export default async function NotificationsPage() {
   const session = await requireSession();
   const repo = await getNotificationRepo();
-  const notifications: Notification[] = await repo.findRecentForUser(
-    session.user.id,
-    100,
-    'inapp',
-  );
+  const notifications: Notification[] = session.user.workspaceId
+    ? await repo.findRecentForUser(session.user.id, session.user.workspaceId, 100, 'inapp')
+    : [];
   const unreadCount = notifications.filter((n) => n.status !== 'read').length;
 
   return (

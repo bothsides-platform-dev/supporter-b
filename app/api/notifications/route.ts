@@ -20,7 +20,10 @@ export async function GET() {
   if (!session?.user?.id) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
+  if (!session.user.workspaceId) {
+    return new NextResponse('Forbidden', { status: 403 });
+  }
   const repo = await getNotificationRepo();
-  const list = await repo.findRecentForUser(session.user.id, 50);
+  const list = await repo.findRecentForUser(session.user.id, session.user.workspaceId, 50);
   return NextResponse.json({ notifications: list });
 }

@@ -70,17 +70,17 @@ export class DrizzleNotificationRepository implements NotificationRepo {
 
   async findRecentForUser(
     userId: string,
+    workspaceId: string,
     limit: number,
     channel?: NotificationChannel,
     tx?: Tx,
   ): Promise<Notification[]> {
     const db = this.h(tx);
-    const where = channel
-      ? and(
-          eq(notifications.userId, userId),
-          eq(notifications.channel, uiChannel(channel)),
-        )
-      : eq(notifications.userId, userId);
+    const base = and(
+      eq(notifications.userId, userId),
+      eq(notifications.workspaceId, workspaceId),
+    );
+    const where = channel ? and(base, eq(notifications.channel, uiChannel(channel))) : base;
     const rows = await db
       .select()
       .from(notifications)
@@ -98,11 +98,17 @@ export class DrizzleNotificationRepository implements NotificationRepo {
       .where(eq(notifications.id, id));
   }
 
-  async markAllRead(userId: string, tx?: Tx): Promise<void> {
+  async markAllRead(userId: string, workspaceId: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db
       .update(notifications)
       .set({ status: 'read', readAt: sql`now()` })
-      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.workspaceId, workspaceId),
+          isNull(notifications.readAt),
+        ),
+      );
   }
 }

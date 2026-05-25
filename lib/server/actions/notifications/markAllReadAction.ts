@@ -6,7 +6,7 @@ import { type NotificationActionResult } from './_shared';
 
 export type MarkAllReadResult = NotificationActionResult;
 
-/** 사용자 본인의 미읽음 알림 일괄 읽음 처리. */
+/** 현재 워크스페이스의 미읽음 알림 일괄 읽음 처리. */
 export async function markAllReadAction(): Promise<MarkAllReadResult> {
   let session;
   try {
@@ -14,7 +14,10 @@ export async function markAllReadAction(): Promise<MarkAllReadResult> {
   } catch {
     return { ok: false, error: 'UNAUTHENTICATED' };
   }
+  if (!session.user.workspaceId) {
+    return { ok: false, error: 'FORBIDDEN' };
+  }
   const repo = await getNotificationRepo();
-  await repo.markAllRead(session.user.id);
+  await repo.markAllRead(session.user.id, session.user.workspaceId);
   return { ok: true };
 }

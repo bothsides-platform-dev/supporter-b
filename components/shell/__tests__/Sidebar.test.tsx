@@ -51,14 +51,14 @@ import { Sidebar } from '../Sidebar';
 const buyerProps = {
   user: { id: 'u1', email: 'buyer@test.com', name: '홍길동' },
   workspaceType: 'buyer' as const,
-  workspaces: [{ id: 'ws1', name: '구매사A', type: 'buyer' as const, role: 'admin' as const }],
+  workspaces: [{ id: 'ws1', name: '구매사A', type: 'buyer' as const, role: 'admin' as const, unreadCount: 0 }],
   current: { id: 'ws1', name: '구매사A', type: 'buyer' as const },
 };
 
 const pgProps = {
   user: { id: 'u2', email: 'pg@test.com', name: '이순신' },
   workspaceType: 'pg' as const,
-  workspaces: [{ id: 'ws2', name: '서포터페이', type: 'pg' as const, role: 'admin' as const }],
+  workspaces: [{ id: 'ws2', name: '서포터페이', type: 'pg' as const, role: 'admin' as const, unreadCount: 0 }],
   current: { id: 'ws2', name: '서포터페이', type: 'pg' as const },
 };
 
