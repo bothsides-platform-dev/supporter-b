@@ -132,9 +132,13 @@ describe('Sidebar — icon toggle', () => {
 describe('Sidebar — footer utility toolbar', () => {
   it('groups theme and collapse controls in a footer toolbar', () => {
     renderSidebar(buyerProps);
-    const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
+    const toolbar = document.querySelector(
+      '[data-testid="sidebar-footer-toolbar"]',
+    ) as HTMLElement | null;
     expect(toolbar).not.toBeNull();
-    const footer = document.querySelector('[data-slot="sidebar-footer"]');
+    const footer = document.querySelector(
+      '[data-slot="sidebar-footer"]',
+    ) as HTMLElement | null;
     expect(footer).toContainElement(toolbar);
     expect(toolbar).toContainElement(screen.getByRole('button', { name: '다크 모드로 전환' }));
     expect(toolbar).toContainElement(screen.getByRole('button', { name: '사이드바 접기' }));
