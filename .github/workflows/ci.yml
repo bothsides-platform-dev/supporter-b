@@ -66,19 +66,19 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: bidit
-          POSTGRES_PASSWORD: bidit
-          POSTGRES_DB: bidit_test
+          POSTGRES_USER: supporter_b
+          POSTGRES_PASSWORD: supporter_b
+          POSTGRES_DB: supporter_b_test
         ports:
           - 5433:5432
         options: >-
-          --health-cmd "pg_isready -U bidit -d bidit_test"
+          --health-cmd "pg_isready -U supporter_b -d supporter_b_test"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://bidit:bidit@localhost:5433/bidit_test
-      DATABASE_URL_TEST: postgres://bidit:bidit@localhost:5433/bidit_test
+      DATABASE_URL: postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test
+      DATABASE_URL_TEST: postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test
       AUTH_SECRET: e2e-test-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       NEXT_PUBLIC_BASE_URL: http://localhost:3001
       RESEND_API_KEY: ''
@@ -93,7 +93,14 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # NOTE: db:migrate 제거됨 — e2e 테스트 DB 스키마 적용은 별도 절차로 처리해야 함.
+      # Apply the schema to the fresh Postgres service before e2e.
+      # e2e/global-setup.ts only TRUNCATE+reseeds (no schema step), so the
+      # tables must already exist. `drizzle-kit push` syncs lib/db/schema → DB
+      # directly (journal-free, matching the project's move off db:migrate);
+      # --force skips the interactive data-loss prompt (a no-op on a fresh DB
+      # that only receives CREATEs). DATABASE_URL is read from the job env above.
+      - name: apply schema to test DB
+        run: pnpm exec drizzle-kit push --force
       # Playwright browsers (chromium only — matches projects[] config).
       # `pnpm exec` uses the lockfile-pinned playwright@1.59.1, not a
       # transient dlx fetch.
