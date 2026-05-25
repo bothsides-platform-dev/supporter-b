@@ -137,10 +137,10 @@ describe('rename / recolor / reorder', () => {
 
   it('rename is allowed on a system column', async () => {
     const { buyerWs } = await setupBuyer();
-    const sent = await colByTitle(buyerWs.id, '발송');
-    const r = await renameColumnAction({ columnId: sent, title: '발송완료' });
+    const active = await colByTitle(buyerWs.id, '진행중');
+    const r = await renameColumnAction({ columnId: active, title: '진행중-수정' });
     expect(r.ok).toBe(true);
-    expect((await (await getColumnRepo()).findById(sent))?.title).toBe('발송완료');
+    expect((await (await getColumnRepo()).findById(active))?.title).toBe('진행중-수정');
   });
 
   it('rejects mutating a column in another workspace', async () => {
@@ -162,10 +162,10 @@ describe('rename / recolor / reorder', () => {
 
   it('recolor and reorder patch the column', async () => {
     const { buyerWs } = await setupBuyer();
-    const sent = await colByTitle(buyerWs.id, '발송');
-    expect((await recolorColumnAction({ columnId: sent, color: 'primary' })).ok).toBe(true);
-    expect((await reorderColumnAction({ columnId: sent, position: 'm5' })).ok).toBe(true);
-    const col = await (await getColumnRepo()).findById(sent);
+    const active = await colByTitle(buyerWs.id, '진행중');
+    expect((await recolorColumnAction({ columnId: active, color: 'primary' })).ok).toBe(true);
+    expect((await reorderColumnAction({ columnId: active, position: 'm5' })).ok).toBe(true);
+    const col = await (await getColumnRepo()).findById(active);
     expect(col?.color).toBe('primary');
     expect(col?.position).toBe('m5');
   });
@@ -182,8 +182,8 @@ describe('deleteColumnAction', () => {
 
   it('rejects a cross-side lifecycle column', async () => {
     const { buyerWs } = await setupBuyer();
-    const sent = await colByTitle(buyerWs.id, '발송'); // lifecycleKey='sent' (cross-side)
-    const r = await deleteColumnAction({ columnId: sent });
+    const active = await colByTitle(buyerWs.id, '진행중'); // lifecycleKey='active' (cross-side)
+    const r = await deleteColumnAction({ columnId: active });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('COLUMN_CROSS_SIDE_LOCKED');
   });
