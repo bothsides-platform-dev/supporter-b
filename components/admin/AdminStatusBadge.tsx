@@ -8,13 +8,19 @@ function statusToColor(status: string): ChipColor {
     case 'review_pending':
     case 'needs_more_info':
     case 'pending':
+    case 'draft':
       return 'warning';
     case 'approved':
     case 'active':
+    case 'sent':
+    case 'awarded':
       return 'tertiary';
     case 'rejected':
     case 'suspended':
+    case 'cancelled':
       return 'error';
+    case 'closed':
+      return 'surface';
     default:
       return 'surface';
   }
@@ -30,6 +36,12 @@ function statusToLabel(status: string): string {
     case 'active': return '활성';
     case 'rejected': return '반려';
     case 'suspended': return '정지';
+    // RFP statuses
+    case 'draft': return '초안';
+    case 'sent': return '발송됨';
+    case 'closed': return '마감';
+    case 'cancelled': return '취소';
+    case 'awarded': return '낙찰';
     default: return status;
   }
 }
