@@ -1,5 +1,5 @@
 /**
- * scripts/test-db-reset.ts — schema recreation + reseed against $DATABASE_URL_TEST.
+ * scripts/test-db-reset.ts — schema sync + reseed against $DATABASE_URL_TEST.
  *
  * Used by `e2e/global-setup.ts` (Playwright) before any spec runs, and
  * exposed as `pnpm e2e:reset` for manual local recovery between e2e
@@ -9,20 +9,17 @@
  *   - Forces `DATABASE_URL` to `DATABASE_URL_TEST` for this process so the
  *     transitively-imported `lib/db/client.ts` connects to 5433. NEVER
  *     touches the dev DB on 5432, even if the caller mis-set env.
- *   - DROP SCHEMA public CASCADE → re-applies drizzle/0000_*.sql from
- *     scratch so the test DB always matches the current Drizzle schema.
- *     No manual "push" step required after schema changes.
+ *   - Computes a SHA-256 hash of the migration file and compares it against
+ *     the hash stored in `__e2e_schema_version`. Recreates the schema only
+ *     when the hash differs (i.e. migration file changed). Otherwise skips
+ *     straight to seed — keeping repeated runs fast.
  *   - Reuses `runSeed()` from `scripts/seed.ts` to populate test fixtures.
- *   - Attachment bytes live in the `attachment_blobs` table (Postgres
- *     backend) — recreated with the schema, no external object store to wipe.
- *
- * Pre-conditions
- *   - `docker compose --profile test up -d pg-test` is running.
  *   - `supporter_b` is the DB superuser (POSTGRES_USER in docker-compose),
  *     so DROP SCHEMA is permitted.
  */
 import 'dotenv/config';
 
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -31,6 +28,11 @@ import postgres from 'postgres';
 
 const TEST_DB_FALLBACK =
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
+
+const MIGRATION_FILE = join(
+  process.cwd(),
+  'drizzle/0000_hesitant_fantastic_four.sql',
+);
 
 async function resetTestDatabase(): Promise<void> {
   const testUrl = process.env.DATABASE_URL_TEST ?? TEST_DB_FALLBACK;
@@ -51,21 +53,38 @@ async function resetTestDatabase(): Promise<void> {
   // `lib/db/client.ts`. Must happen before the dynamic import below.
   process.env.DATABASE_URL = testUrl;
 
-  // ── Schema recreation ────────────────────────────────────────────────────
-  // Wipe and rebuild from the single canonical migration file so the test DB
-  // always matches the current Drizzle schema, even after column additions.
+  // ── Schema sync (only when migration file changed) ───────────────────────
+  const migrationSql = readFileSync(MIGRATION_FILE, 'utf-8');
+  const hash = createHash('sha256').update(migrationSql).digest('hex');
+
   const sql = postgres(testUrl);
   try {
-    await sql`DROP SCHEMA public CASCADE`;
+    let storedHash: string | null = null;
+    try {
+      const rows =
+        await sql`SELECT hash FROM __e2e_schema_version LIMIT 1`;
+      storedHash = rows[0]?.hash ?? null;
+    } catch {
+      // Table doesn't exist yet — treat as stale.
+    }
 
-    const migrationFile = join(process.cwd(), 'drizzle/0000_hesitant_fantastic_four.sql');
-    const migrationSql = readFileSync(migrationFile, 'utf-8');
-    const statements = migrationSql
-      .split('--> statement-breakpoint')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    for (const statement of statements) {
-      await sql.unsafe(statement);
+    if (storedHash !== hash) {
+      console.log('[test-db-reset] migration changed — recreating schema…');
+      await sql`DROP SCHEMA public CASCADE`;
+
+      const statements = migrationSql
+        .split('--> statement-breakpoint')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const statement of statements) {
+        await sql.unsafe(statement);
+      }
+
+      // Store hash outside the Drizzle schema so it survives TRUNCATE.
+      await sql`CREATE TABLE __e2e_schema_version (hash text NOT NULL)`;
+      await sql`INSERT INTO __e2e_schema_version (hash) VALUES (${hash})`;
+    } else {
+      console.log('[test-db-reset] schema up to date — skipping recreation');
     }
   } finally {
     await sql.end();
