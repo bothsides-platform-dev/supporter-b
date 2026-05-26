@@ -48,6 +48,15 @@ export default async function AppLayout({
   const active =
     workspaces.find((w) => w.id === session.user.workspaceId) ?? workspaces[0];
 
+  // Workspace status gate — block access until the workspace is approved or if
+  // it has been suspended. Both pages live in (public) to avoid AppShell noise.
+  if (active.status === 'pending') {
+    redirect('/pending-approval');
+  }
+  if (active.status === 'suspended') {
+    redirect('/suspended');
+  }
+
   // Tag the server isolation scope for this request (RSC render errors). Minimal
   // fields only — see lib/observability/sentry-user. The client mirror below
   // covers client errors + on-error replays.

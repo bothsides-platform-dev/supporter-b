@@ -19,6 +19,7 @@ export type WorkspaceMembershipSummary = {
   id: string;
   name: string;
   type: WorkspaceType;
+  status: 'pending' | 'active' | 'suspended';
   role: 'admin' | 'member';
   unreadCount: number;
 };

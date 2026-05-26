@@ -163,6 +163,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         id: workspaces.id,
         name: workspaces.name,
         type: workspaces.type,
+        status: workspaces.status,
         role: workspaceMembers.role,
         unreadCount: sql<number>`(
           SELECT COALESCE(COUNT(*)::int, 0)

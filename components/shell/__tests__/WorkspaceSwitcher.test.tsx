@@ -18,8 +18,8 @@ vi.mock('next/navigation', () => ({
 import { WorkspaceSwitcher } from '../WorkspaceSwitcher';
 
 const workspaces = [
-  { id: 'ws1', name: '구매사A', type: 'buyer' as const, role: 'admin' as const, unreadCount: 0 },
-  { id: 'ws2', name: '서포터 B 페이', type: 'pg' as const, role: 'member' as const, unreadCount: 0 },
+  { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, unreadCount: 0 },
+  { id: 'ws2', name: '서포터 B 페이', type: 'pg' as const, status: 'active' as const, role: 'member' as const, unreadCount: 0 },
 ];
 const current = { id: 'ws1', name: '구매사A', type: 'buyer' as const };
 
