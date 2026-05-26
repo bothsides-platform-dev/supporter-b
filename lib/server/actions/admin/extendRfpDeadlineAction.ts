@@ -20,14 +20,14 @@ export async function extendRfpDeadlineAction(
   const session = await requireAdminSession();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [rfp] = await (db as any).select({ deadline: rfps.deadline }).from(rfps).where(eq(rfps.id, rfpId));
+  const [rfp] = await (db as ReturnType<typeof actionDb>).select({ deadline: rfps.deadline }).from(rfps).where(eq(rfps.id, rfpId));
   if (!rfp) return { ok: false, error: 'NOT_FOUND' };
 
   const oldDeadline = rfp.deadline;
   const newDeadline = new Date(new Date(oldDeadline).getTime() + days * 86_400_000);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (db as any).transaction(async (tx: any) => {
+  await (db as ReturnType<typeof actionDb>).transaction(async (tx: any) => {
     await tx.update(rfps).set({ deadline: newDeadline }).where(eq(rfps.id, rfpId));
     await tx.insert(adminAuditLogs).values({
       actor: session.adminId,
