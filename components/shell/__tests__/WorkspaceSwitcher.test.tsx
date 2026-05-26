@@ -160,19 +160,19 @@ describe('WorkspaceSwitcher', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it('footer "워크스페이스 만들기" navigates to /workspace/new', async () => {
+  it('does not show "워크스페이스 만들기" in the dropdown', async () => {
     const user = userEvent.setup();
     render(<WorkspaceSwitcher current={current} workspaces={workspaces} />);
     await user.click(screen.getByRole('button'));
-    await user.click(await screen.findByText('워크스페이스 만들기'));
-    expect(push).toHaveBeenCalledWith('/workspace/new');
+    await screen.findByText('내 워크스페이스'); // dropdown is open
+    expect(screen.queryByText('워크스페이스 만들기')).not.toBeInTheDocument();
   });
 
   it('no longer offers the "초대 링크로 합류" entry point', async () => {
     const user = userEvent.setup();
     render(<WorkspaceSwitcher current={current} workspaces={workspaces} />);
     await user.click(screen.getByRole('button'));
-    await screen.findByText('워크스페이스 만들기'); // dropdown is open
+    await screen.findByText('내 워크스페이스'); // dropdown is open
     expect(screen.queryByText('초대 링크로 합류')).not.toBeInTheDocument();
   });
 });

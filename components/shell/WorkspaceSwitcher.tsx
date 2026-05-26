@@ -2,14 +2,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ChevronsUpDownIcon, CheckIcon, PlusIcon } from 'lucide-react';
+import { ChevronsUpDownIcon, CheckIcon } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Chip } from '@/components/primitives/Chip';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
@@ -27,7 +25,6 @@ type Props = {
 };
 
 export function WorkspaceSwitcher({ current, workspaces }: Props) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{ name: string; type: WorkspaceType } | null>(null);
 
@@ -105,11 +102,6 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
             </DropdownMenuItem>
           );
         })}
-        <DropdownMenuSeparator className="bg-[var(--md-sys-color-outline-variant)]" />
-        <DropdownMenuItem onClick={() => router.push('/workspace/new')} className={itemCls}>
-          <PlusIcon size={14} className="shrink-0" />
-          워크스페이스 만들기
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
