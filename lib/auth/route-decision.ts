@@ -21,6 +21,16 @@ export const PUBLIC_PREFIXES = [
   '/logout',
 ];
 
+// Paths that always pass through regardless of auth state.
+// These are NOT subject to the "authenticated user on public page → /home" redirect.
+// /admin is gated by its own JWT check in proxy.ts (not NextAuth).
+// /pending-approval and /suspended are gate states reachable by logged-in users.
+export const ALWAYS_PASSTHROUGH_PREFIXES = [
+  '/admin',
+  '/pending-approval',
+  '/suspended',
+];
+
 export const CLAIMABLE_PUBLIC_PREFIXES = ['/invite/rfp'];
 
 // Paths that guests (unauthenticated) may access even though they live outside
@@ -37,6 +47,10 @@ export function decideRoute(
   isAuthenticated: boolean,
 ): RouteDecision {
   if (pathname === '/') {
+    return { kind: 'next' };
+  }
+
+  if (ALWAYS_PASSTHROUGH_PREFIXES.some((p) => pathname.startsWith(p))) {
     return { kind: 'next' };
   }
 

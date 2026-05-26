@@ -66,3 +66,20 @@ describe('decideRoute — Step 3 four cases', () => {
     expect(decideRoute('/', '', true)).toEqual({ kind: 'next' });
   });
 });
+
+describe('admin + gate 라우트 패스스루', () => {
+  it('/admin/* 는 인증 여부와 무관하게 pass-through', () => {
+    expect(decideRoute('/admin', '', false)).toEqual({ kind: 'next' });
+    expect(decideRoute('/admin/review', '', true)).toEqual({ kind: 'next' });
+    expect(decideRoute('/admin/login', '', false)).toEqual({ kind: 'next' });
+  });
+
+  it('/pending-approval 은 로그인된 사용자도 접근 가능 (home 리다이렉트 없음)', () => {
+    expect(decideRoute('/pending-approval', '', true)).toEqual({ kind: 'next' });
+    expect(decideRoute('/pending-approval', '', false)).toEqual({ kind: 'next' });
+  });
+
+  it('/suspended 는 로그인된 사용자도 접근 가능', () => {
+    expect(decideRoute('/suspended', '', true)).toEqual({ kind: 'next' });
+  });
+});
