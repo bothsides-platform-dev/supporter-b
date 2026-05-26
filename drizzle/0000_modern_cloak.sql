@@ -19,6 +19,61 @@ CREATE TYPE "public"."verification_status" AS ENUM('submitted', 'review_pending'
 CREATE TYPE "public"."workspace_invitation_status" AS ENUM('pending', 'accepted', 'expired');--> statement-breakpoint
 CREATE TYPE "public"."workspace_status" AS ENUM('pending', 'active', 'suspended');--> statement-breakpoint
 CREATE TYPE "public"."workspace_type" AS ENUM('buyer', 'pg');--> statement-breakpoint
+CREATE TABLE "admin_audit_logs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"actor" text NOT NULL,
+	"action" text NOT NULL,
+	"entity_type" text NOT NULL,
+	"entity_id" uuid NOT NULL,
+	"payload_json" jsonb,
+	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "admin_notes" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"entity_type" text NOT NULL,
+	"entity_id" uuid NOT NULL,
+	"body" text NOT NULL,
+	"created_by" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "pg_profiles" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"workspace_id" uuid NOT NULL,
+	"biz_no" text,
+	"service_scope" jsonb,
+	"sla_days" integer,
+	"sales_contact" jsonb,
+	"backup_contact" jsonb,
+	"license_doc_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "pg_profiles_workspace_id_unique" UNIQUE("workspace_id")
+);
+--> statement-breakpoint
+CREATE TABLE "risk_flags" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"entity_type" text NOT NULL,
+	"entity_id" uuid NOT NULL,
+	"flag_type" text NOT NULL,
+	"severity" text NOT NULL,
+	"resolved_at" timestamp with time zone,
+	"resolved_by" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "verification_applications" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"workspace_id" uuid NOT NULL,
+	"org_type" text NOT NULL,
+	"status" "verification_status" DEFAULT 'submitted' NOT NULL,
+	"reviewed_by" text,
+	"reason" text,
+	"submitted_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"reviewed_at" timestamp with time zone
+);
+--> statement-breakpoint
 CREATE TABLE "attachment_blobs" (
 	"attachment_id" uuid PRIMARY KEY NOT NULL,
 	"mime" text NOT NULL,
@@ -259,6 +314,9 @@ CREATE TABLE "phone_otps" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "pg_profiles" ADD CONSTRAINT "pg_profiles_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "pg_profiles" ADD CONSTRAINT "pg_profiles_license_doc_id_attachments_id_fk" FOREIGN KEY ("license_doc_id") REFERENCES "public"."attachments"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "verification_applications" ADD CONSTRAINT "verification_applications_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attachment_blobs" ADD CONSTRAINT "attachment_blobs_attachment_id_attachments_id_fk" FOREIGN KEY ("attachment_id") REFERENCES "public"."attachments"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_rfp_id_rfps_id_fk" FOREIGN KEY ("rfp_id") REFERENCES "public"."rfps"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -295,6 +353,11 @@ ALTER TABLE "rfp_invitations" ADD CONSTRAINT "rfp_invitations_accepted_by_user_i
 ALTER TABLE "rfp_invitations" ADD CONSTRAINT "rfp_invitations_board_column_id_columns_id_fk" FOREIGN KEY ("board_column_id") REFERENCES "public"."columns"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "admin_audit_logs_entity_idx" ON "admin_audit_logs" USING btree ("entity_type","entity_id");--> statement-breakpoint
+CREATE INDEX "admin_notes_entity_idx" ON "admin_notes" USING btree ("entity_type","entity_id");--> statement-breakpoint
+CREATE INDEX "pg_profiles_workspace_idx" ON "pg_profiles" USING btree ("workspace_id");--> statement-breakpoint
+CREATE INDEX "risk_flags_entity_idx" ON "risk_flags" USING btree ("entity_type","entity_id");--> statement-breakpoint
+CREATE INDEX "verification_applications_workspace_idx" ON "verification_applications" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX "attachments_rfp_idx" ON "attachments" USING btree ("rfp_id") WHERE "attachments"."rfp_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "attachments_bid_idx" ON "attachments" USING btree ("bid_id") WHERE "attachments"."bid_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "attachments_bid_note_idx" ON "attachments" USING btree ("bid_note_id") WHERE "attachments"."bid_note_id" IS NOT NULL;--> statement-breakpoint

@@ -18,3 +18,4 @@ export * from './attachments';
 export * from './attachment-blobs';
 export * from './rfp-counters';
 export * from './phone-otps';
+export * from './admin';
