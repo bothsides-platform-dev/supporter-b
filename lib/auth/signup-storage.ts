@@ -18,6 +18,7 @@ export type SignupClientDraft = {
   inviteToken?: string;
   name?: string;
   phone?: string;
+  phoneVerificationId?: string;
   password?: string;
   agreedAt?: string;
 };

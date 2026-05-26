@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 
 import {
   bizProfiles,
   outboxEntries,
+  phoneOtps,
   users,
   verificationTokens,
   workspaceMembers,
   workspaces,
 } from '@/lib/db/schema';
+import { hashOtpCode } from '../sendPhoneOtpAction';
 import { signupEmailAction } from '../signupEmailAction';
 import { signupCompleteAction } from '../signupCompleteAction';
 import { verifyEmailAction } from '../verifyEmailAction';
@@ -16,11 +19,21 @@ import { setupActionEnv, teardownActionEnv } from './_setup';
 import { __setActionDbForTest } from '../_shared';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
-// A fake action-db whose user-insert throws a chosen error — lets us drive the
-// post-insert catch without a real constraint. signupCompleteAction calls
-// actionDb().transaction(cb); cb runs tx.insert(users).values(...).
+const DEFAULT_PHONE = '01099999999';
+// Fixed UUID used by throwingInsertDb so VALID_SIGNUP can be a static constant.
+const FAKE_OTP_ID = randomUUID();
+
+// Fake action-db for error-tightening tests. Stubs the phoneOtps select so the
+// phone pre-check passes, then throws from the user INSERT inside the transaction.
 function throwingInsertDb(error: unknown) {
   return {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: () => [{ id: FAKE_OTP_ID, phone: DEFAULT_PHONE, verifiedAt: new Date() }],
+        }),
+      }),
+    }),
     transaction: async (cb: (tx: unknown) => unknown) =>
       cb({ insert: () => ({ values: () => { throw error; } }) }),
   };
@@ -30,11 +43,26 @@ const VALID_SIGNUP = {
   email: 'tighten@example.com',
   name: '테스터',
   password: 'Password123!',
+  phone: DEFAULT_PHONE,
+  phoneVerificationId: FAKE_OTP_ID,
   wsKind: 'buyer' as const,
   wsName: '(주)테스트',
 };
 
 let db: PgliteDB;
+
+async function seedVerifiedOtp(phone: string = DEFAULT_PHONE): Promise<string> {
+  const [row] = await db
+    .insert(phoneOtps)
+    .values({
+      phone,
+      codeHash: hashOtpCode('000000'),
+      expiresAt: new Date(Date.now() + 5 * 60_000),
+      verifiedAt: new Date(),
+    })
+    .returning();
+  return row.id;
+}
 
 describe('signupEmailAction + verifyEmailAction', () => {
   beforeEach(async () => {
@@ -147,10 +175,13 @@ describe('signupEmailAction + verifyEmailAction', () => {
   });
 
   it('returns EMAIL_TAKEN if user with that email already exists', async () => {
+    const vid = await seedVerifiedOtp('01011112222');
     await signupCompleteAction({
       email: 'existing@example.com',
       name: '기존사용자',
       password: 'Password123!',
+      phone: '01011112222',
+      phoneVerificationId: vid,
       wsKind: 'buyer',
       wsName: '테스트워크스페이스',
     });
@@ -166,8 +197,11 @@ function tokenFromHtml(html: string): string {
 }
 
 describe('signupCompleteAction — buyer branch', () => {
+  let verificationId: string;
+
   beforeEach(async () => {
     db = await setupActionEnv();
+    verificationId = await seedVerifiedOtp();
   });
   afterEach(teardownActionEnv);
 
@@ -176,6 +210,8 @@ describe('signupCompleteAction — buyer branch', () => {
       email: 'kim@example.com',
       name: '김구매',
       password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
       wsKind: 'buyer',
       wsName: '(주)샘플테크',
       bizProfile: {
@@ -224,6 +260,8 @@ describe('signupCompleteAction — buyer branch', () => {
       email: 'kim@example.com',
       name: '김구매',
       password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
       wsKind: 'buyer',
     });
     expect(r.ok).toBe(false);
@@ -234,14 +272,19 @@ describe('signupCompleteAction — buyer branch', () => {
       email: 'kim@example.com',
       name: '김구매',
       password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
       wsKind: 'buyer',
       wsName: 'A',
     });
     expect(ok.ok).toBe(true);
+    // Second signup with same email — phone OTP is already verified so reuse is fine.
     const dup = await signupCompleteAction({
       email: 'kim@example.com',
       name: '다른사람',
       password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
       wsKind: 'buyer',
       wsName: 'B',
     });
@@ -251,8 +294,11 @@ describe('signupCompleteAction — buyer branch', () => {
 });
 
 describe('signupCompleteAction — pg branch', () => {
+  let verificationId: string;
+
   beforeEach(async () => {
     db = await setupActionEnv();
+    verificationId = await seedVerifiedOtp();
   });
   afterEach(teardownActionEnv);
 
@@ -261,6 +307,8 @@ describe('signupCompleteAction — pg branch', () => {
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
       wsKind: 'pg',
       wsName: '서포터 B 페이',
     });
@@ -287,6 +335,8 @@ describe('signupCompleteAction — pg branch', () => {
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
       wsKind: 'pg',
     });
     expect(r.ok).toBe(false);
@@ -294,10 +344,13 @@ describe('signupCompleteAction — pg branch', () => {
   });
 
   it('each PG signup creates its own workspace (no auto-join by domain)', async () => {
+    const vid2 = await seedVerifiedOtp('01088880001');
     const r1 = await signupCompleteAction({
       email: 'first@toss.im',
       name: '첫번째',
       password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
       wsKind: 'pg',
       wsName: '서포터 B 페이 1팀',
     });
@@ -305,6 +358,8 @@ describe('signupCompleteAction — pg branch', () => {
       email: 'second@toss.im',
       name: '두번째',
       password: 'Password123!',
+      phone: '01088880001',
+      phoneVerificationId: vid2,
       wsKind: 'pg',
       wsName: '서포터 B 페이 2팀',
     });
@@ -328,6 +383,8 @@ describe('signupCompleteAction — password policy (server-side)', () => {
       email: 'weak@example.com',
       name: '약한사용자',
       password: 'aaaaaaaaaa',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: randomUUID(),
       wsKind: 'buyer',
       wsName: '(주)샘플',
     });
@@ -340,6 +397,8 @@ describe('signupCompleteAction — password policy (server-side)', () => {
       email: 'weak2@example.com',
       name: '약한사용자',
       password: '1234567890',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: randomUUID(),
       wsKind: 'buyer',
       wsName: '(주)샘플',
     });
@@ -352,6 +411,8 @@ describe('signupCompleteAction — password policy (server-side)', () => {
       email: 'weak3@example.com',
       name: '약한사용자',
       password: 'Password123', // letter+digit but no special
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: randomUUID(),
       wsKind: 'pg',
       wsName: '약한PG',
     });
@@ -364,6 +425,8 @@ describe('signupCompleteAction — password policy (server-side)', () => {
       email: 'not-an-email',
       name: '약한사용자',
       password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: randomUUID(),
       wsKind: 'buyer',
       wsName: '(주)샘플',
     });

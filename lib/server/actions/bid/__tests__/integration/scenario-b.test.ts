@@ -14,12 +14,14 @@ import {
   bids,
   notifications,
   outboxEntries,
+  phoneOtps,
   rfpInvitations,
   rfps,
   workspaces,
   workspaceMembers,
   users,
 } from '@/lib/db/schema';
+import { hashOtpCode } from '@/lib/server/actions/auth/sendPhoneOtpAction';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../../rfp/__tests__/_setup';
 import { signupCompleteAction } from '@/lib/server/actions/auth/signupCompleteAction';
 import { signupEmailAction } from '@/lib/server/actions/auth/signupEmailAction';
@@ -89,10 +91,19 @@ async function pgSignup(email: string): Promise<{ id: string; email: string; wsI
 
   // PG signup — wsKind='pg' creates a new PG workspace with the given name.
   const wsName = `${email.split('@')[1]} 워크스페이스`;
+  const pgPhone = `010${Math.floor(10000000 + Math.random() * 89999999)}`;
+  const [pgOtp] = await db.insert(phoneOtps).values({
+    phone: pgPhone,
+    codeHash: hashOtpCode('000000'),
+    expiresAt: new Date(Date.now() + 5 * 60_000),
+    verifiedAt: new Date(),
+  }).returning();
   const p6 = await signupCompleteAction({
     email: p4.email,
     name: '박판매',
     password: 'Password123!',
+    phone: pgPhone,
+    phoneVerificationId: pgOtp.id,
     wsKind: 'pg',
     wsName,
   });
@@ -133,10 +144,18 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
   expect(p4.ok).toBe(true);
   if (!p4.ok) throw new Error('verify failed');
 
+  const [buyerOtp] = await db.insert(phoneOtps).values({
+    phone: '01044440001',
+    codeHash: hashOtpCode('000000'),
+    expiresAt: new Date(Date.now() + 5 * 60_000),
+    verifiedAt: new Date(),
+  }).returning();
   const p6 = await signupCompleteAction({
     email: p4.email,
     name: '김구매',
     password: 'Password123!',
+    phone: '01044440001',
+    phoneVerificationId: buyerOtp.id,
     wsKind: 'buyer',
     wsName: '(주)샘플테크',
     bizProfile: {

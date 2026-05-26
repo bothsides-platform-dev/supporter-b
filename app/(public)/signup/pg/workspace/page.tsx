@@ -23,7 +23,7 @@ export default function PgWorkspacePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const d = readSignupDraft();
-    if (!d.email || !d.password || !d.name) {
+    if (!d.email || !d.password || !d.name || !d.phone || !d.phoneVerificationId) {
       setError('세션이 만료되었습니다. 처음부터 다시 시도해주세요.');
       return;
     }
@@ -38,6 +38,8 @@ export default function PgWorkspacePage() {
       email: d.email,
       name: d.name,
       password: d.password,
+      phone: d.phone,
+      phoneVerificationId: d.phoneVerificationId,
       wsKind: 'pg',
       wsName: wsName.trim(),
     });

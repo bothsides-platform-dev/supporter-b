@@ -244,6 +244,16 @@ CREATE TABLE "rfp_counters" (
 	"last_seq" integer DEFAULT 0 NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "phone_otps" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"phone" text NOT NULL,
+	"code_hash" text NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"verified_at" timestamp with time zone,
+	"attempts" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 ALTER TABLE "attachment_blobs" ADD CONSTRAINT "attachment_blobs_attachment_id_attachments_id_fk" FOREIGN KEY ("attachment_id") REFERENCES "public"."attachments"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_uploaded_by_users_id_fk" FOREIGN KEY ("uploaded_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_rfp_id_rfps_id_fk" FOREIGN KEY ("rfp_id") REFERENCES "public"."rfps"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -302,4 +312,5 @@ CREATE INDEX "rfp_invitations_board_column_idx" ON "rfp_invitations" USING btree
 CREATE INDEX "notifications_user_created_idx" ON "notifications" USING btree ("user_id","created_at" desc);--> statement-breakpoint
 CREATE UNIQUE INDEX "outbox_dedupe_key_unique" ON "outbox_entries" USING btree ("dedupe_key") WHERE "outbox_entries"."dedupe_key" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "outbox_pending_idx" ON "outbox_entries" USING btree ("scheduled_at") WHERE "outbox_entries"."status" = 'pending';--> statement-breakpoint
-CREATE INDEX "verification_email_purpose_idx" ON "verification_tokens" USING btree ("email","purpose");
+CREATE INDEX "verification_email_purpose_idx" ON "verification_tokens" USING btree ("email","purpose");--> statement-breakpoint
+CREATE INDEX "phone_otps_phone_created_at_idx" ON "phone_otps" USING btree ("phone","created_at");

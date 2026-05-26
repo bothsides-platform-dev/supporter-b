@@ -2,9 +2,10 @@
 
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/password';
 import { passwordSchema } from '@/lib/auth/password-validation';
-import { users } from '@/lib/db/schema';
+import { users, phoneOtps } from '@/lib/db/schema';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import {
   actionDb,
@@ -30,6 +31,8 @@ const Input = z
     email: z.string().email(),
     name: z.string().min(1).max(100),
     password: passwordSchema,
+    phone: z.string().min(9).max(15),
+    phoneVerificationId: z.string().uuid(),
     wsKind: z.enum(['buyer', 'pg']).optional(),
     wsName: z.string().min(1).max(200).optional(),
     bizProfile: BizProfileInput.optional(),
@@ -76,10 +79,25 @@ export async function signupCompleteAction(
 
   const email = normalizeEmail(parsed.data.email);
 
+  const db = actionDb();
+
+  // Verify phone OTP before starting the user-creation transaction.
+  const [otpRow] = await db
+    .select()
+    .from(phoneOtps)
+    .where(
+      and(
+        eq(phoneOtps.id, parsed.data.phoneVerificationId),
+        eq(phoneOtps.phone, parsed.data.phone),
+        isNotNull(phoneOtps.verifiedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
+
   const passwordHash = await hashPassword(parsed.data.password);
   const userId = randomUUID();
-
-  const db = actionDb();
 
   return await db.transaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,6 +110,7 @@ export async function signupCompleteAction(
           email,
           passwordHash,
           name: parsed.data.name,
+          phone: parsed.data.phone,
           avatarColor: 'ink',
           status: 'active',
         });

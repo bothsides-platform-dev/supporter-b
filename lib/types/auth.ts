@@ -20,6 +20,7 @@ export type SignupDraft = {
   emailVerified: boolean;
   name?: string;
   phone?: string;
+  phoneVerificationId?: string;
   agreedAt?: string;
 };
 

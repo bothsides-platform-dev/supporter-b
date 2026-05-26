@@ -26,7 +26,7 @@ export default function BuyerWorkspacePage() {
 
   const handleSubmit = async (payload: { wsName: string; bizProfile?: BizProfilePayload }) => {
     const d = readSignupDraft();
-    if (!d.email || !d.password || !d.name) {
+    if (!d.email || !d.password || !d.name || !d.phone || !d.phoneVerificationId) {
       setError('세션이 만료되었습니다. 처음부터 다시 시도해주세요.');
       return;
     }
@@ -37,6 +37,8 @@ export default function BuyerWorkspacePage() {
       email: d.email,
       name: d.name,
       password: d.password,
+      phone: d.phone,
+      phoneVerificationId: d.phoneVerificationId,
       wsKind: 'buyer',
       wsName: payload.wsName,
       ...(payload.bizProfile ? { bizProfile: payload.bizProfile } : {}),

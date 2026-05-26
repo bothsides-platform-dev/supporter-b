@@ -9,12 +9,14 @@ import { eq } from 'drizzle-orm';
 import {
   bizProfiles,
   outboxEntries,
+  phoneOtps,
   rfpInvitations,
   rfps,
   workspaceMembers,
   workspaces,
   users,
 } from '@/lib/db/schema';
+import { hashOtpCode } from '@/lib/server/actions/auth/sendPhoneOtpAction';
 import {
   seedMembership,
   seedPgWorkspace,
@@ -105,10 +107,18 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
     if (!p4.ok) return;
 
     // P6 — finish signup as buyer with bizProfile capture
+    const [otpRow] = await db.insert(phoneOtps).values({
+      phone: '01033333001',
+      codeHash: hashOtpCode('000000'),
+      expiresAt: new Date(Date.now() + 5 * 60_000),
+      verifiedAt: new Date(),
+    }).returning();
     const p6 = await signupCompleteAction({
       email: p4.email,
       name: '김구매',
       password: 'Password123!',
+      phone: '01033333001',
+      phoneVerificationId: otpRow.id,
       wsKind: 'buyer',
       wsName: '(주)샘플테크',
       bizProfile: {

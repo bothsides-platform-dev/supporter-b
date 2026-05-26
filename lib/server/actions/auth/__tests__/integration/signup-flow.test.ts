@@ -9,14 +9,29 @@ import { eq } from 'drizzle-orm';
 
 import {
   outboxEntries,
+  phoneOtps,
   users,
   workspaces,
 } from '@/lib/db/schema';
+import { hashOtpCode } from '../../sendPhoneOtpAction';
 import { signupEmailAction } from '../../signupEmailAction';
 import { verifyEmailAction } from '../../verifyEmailAction';
 import { signupCompleteAction } from '../../signupCompleteAction';
 import { setupActionEnv, teardownActionEnv } from '../_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+
+async function seedVerifiedOtp(db: PgliteDB, phone: string): Promise<string> {
+  const [row] = await db
+    .insert(phoneOtps)
+    .values({
+      phone,
+      codeHash: hashOtpCode('000000'),
+      expiresAt: new Date(Date.now() + 5 * 60_000),
+      verifiedAt: new Date(),
+    })
+    .returning();
+  return row.id;
+}
 
 let db: PgliteDB;
 
@@ -50,10 +65,13 @@ describe('signup flow integration (no UI)', () => {
     expect(v.email).toBe('kim@example.com');
 
     // P5/P6 — finalise signup as buyer
+    const buyerVid = await seedVerifiedOtp(db, '01011111001');
     const c = await signupCompleteAction({
       email: v.email,
       name: '김구매',
       password: 'Password123!',
+      phone: '01011111001',
+      phoneVerificationId: buyerVid,
       wsKind: 'buyer',
       wsName: '(주)샘플테크',
       bizProfile: {
@@ -103,10 +121,13 @@ describe('signup flow integration (no UI)', () => {
 
     // P5/P6 — finalise as PG with explicit workspace name.
     // The inviteToken from the draft is NOT passed here; claim is separate.
+    const pgVid = await seedVerifiedOtp(db, '01022222001');
     const c = await signupCompleteAction({
       email: v.email,
       name: '서포터 B 페이 영업',
       password: 'Password123!',
+      phone: '01022222001',
+      phoneVerificationId: pgVid,
       wsKind: 'pg',
       wsName: '서포터 B 페이',
     });
