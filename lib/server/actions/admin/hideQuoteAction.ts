@@ -20,6 +20,11 @@ export async function hideQuoteAction(
   const session = await requireAdminSession();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [bid] = await (db as any).select({ rfpId: bids.rfpId }).from(bids).where(eq(bids.id, bidId));
+  if (!bid) return { ok: false, error: 'NOT_FOUND' };
+  const rfpId = bid.rfpId;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (db as any).transaction(async (tx: any) => {
     await tx.update(bids).set({ status: 'withdrawn' }).where(eq(bids.id, bidId));
     await tx.insert(adminAuditLogs).values({
@@ -34,6 +39,7 @@ export async function hideQuoteAction(
     });
   });
 
+  revalidatePath(`/admin/rfps/${rfpId}`);
   revalidatePath('/admin/rfps');
   return { ok: true };
 }

@@ -43,17 +43,16 @@ export async function getRfpDetail(rfpId: string) {
     .where(eq(rfps.id, rfpId));
   if (!rfp) return null;
 
-  const pgWorkspaces = workspaces;
   const rfpBids: BidDetailRow[] = await actionDb()
     .select({
       id: bids.id,
       pgWsId: bids.pgWsId,
-      pgWsName: pgWorkspaces.name,
+      pgWsName: workspaces.name,
       status: bids.status,
       submittedAt: bids.submittedAt,
     })
     .from(bids)
-    .innerJoin(pgWorkspaces, eq(bids.pgWsId, pgWorkspaces.id))
+    .innerJoin(workspaces, eq(bids.pgWsId, workspaces.id))
     .where(eq(bids.rfpId, rfpId));
 
   return { rfp, bids: rfpBids };

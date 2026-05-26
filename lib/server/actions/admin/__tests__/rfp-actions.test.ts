@@ -87,6 +87,12 @@ describe('extendRfpDeadlineAction', () => {
     expect(logs[0].entityId).toBe(rfpId);
     expect(logs[0].actor).toBe('admin');
   });
+
+  it('존재하지 않는 rfpId → NOT_FOUND 반환', async () => {
+    const { extendRfpDeadlineAction } = await import('../extendRfpDeadlineAction');
+    const result = await extendRfpDeadlineAction(db, '00000000-0000-0000-0000-000000000000', 7);
+    expect(result).toEqual({ ok: false, error: 'NOT_FOUND' });
+  });
 });
 
 // ---------------------------------------------------------------------------
