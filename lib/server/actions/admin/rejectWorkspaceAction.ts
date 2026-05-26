@@ -36,5 +36,6 @@ export async function rejectWorkspaceAction(
   });
 
   revalidatePath('/admin/review');
+  revalidatePath('/admin');
   return { ok: true };
 }

@@ -1,5 +1,6 @@
 import { listPendingApplications } from '@/lib/server/queries/admin/review';
 import Link from 'next/link';
+import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 
 export default async function ReviewListPage() {
   const apps = await listPendingApplications();
@@ -40,9 +41,7 @@ export default async function ReviewListPage() {
                   {new Date(app.submittedAt).toLocaleString('ko-KR')}
                 </td>
                 <td className="px-4 py-3">
-                  <span className="text-label-small rounded bg-surface-container px-2 py-0.5">
-                    {app.status}
-                  </span>
+                  <AdminStatusBadge status={app.status} />
                 </td>
               </tr>
             ))}

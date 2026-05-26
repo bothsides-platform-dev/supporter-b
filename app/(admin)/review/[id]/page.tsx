@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getApplicationDetail } from '@/lib/server/queries/admin/review';
+import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { approveWorkspaceAction } from '@/lib/server/actions/admin/approveWorkspaceAction';
 import { rejectWorkspaceAction } from '@/lib/server/actions/admin/rejectWorkspaceAction';
 import { requestMoreInfoAction } from '@/lib/server/actions/admin/requestMoreInfoAction';
@@ -58,11 +59,11 @@ export default async function ReviewDetailPage({
           </div>
           <div>
             <span className="text-on-surface-variant">상태</span>
-            <span className="ml-3">{application.status}</span>
+            <span className="ml-3"><AdminStatusBadge status={application.status} /></span>
           </div>
           <div>
             <span className="text-on-surface-variant">워크스페이스 상태</span>
-            <span className="ml-3">{workspace.status}</span>
+            <span className="ml-3"><AdminStatusBadge status={workspace.status} /></span>
           </div>
         </div>
       </section>

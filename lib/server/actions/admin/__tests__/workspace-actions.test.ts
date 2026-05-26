@@ -91,4 +91,11 @@ describe('requestMoreInfoAction', () => {
     expect(app.status).toBe('needs_more_info');
     expect(app.reason).toBe('추가 서류 필요');
   });
+
+  it('admin_audit_log에 workspace.needs_more_info 이벤트 기록', async () => {
+    const { requestMoreInfoAction } = await import('../requestMoreInfoAction');
+    await requestMoreInfoAction(db, wsId, '추가 서류 필요');
+    const logs = await db.select().from(adminAuditLogs);
+    expect(logs[0].action).toBe('workspace.needs_more_info');
+  });
 });
