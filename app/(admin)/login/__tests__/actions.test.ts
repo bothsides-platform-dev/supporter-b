@@ -35,3 +35,15 @@ describe('loginAction', () => {
     expect(result).toEqual({ ok: false, error: 'INVALID_CREDENTIALS' });
   });
 });
+
+describe('logoutAction', () => {
+  it('쿠키 삭제 후 /admin/login으로 리다이렉트', async () => {
+    const deleteMock = vi.fn();
+    const { cookies } = await import('next/headers');
+    vi.mocked(cookies).mockResolvedValue({ delete: deleteMock } as never);
+
+    const { logoutAction } = await import('../actions');
+    await expect(logoutAction()).rejects.toThrow('REDIRECT:/admin/login');
+    expect(deleteMock).toHaveBeenCalledWith(expect.stringContaining('admin'));
+  });
+});

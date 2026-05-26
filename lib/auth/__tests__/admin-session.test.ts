@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { signAdminToken, verifyAdminToken } from '../admin-session';
 
+vi.mock('next/headers', () => ({
+  cookies: vi.fn().mockResolvedValue({
+    get: () => undefined,
+  }),
+}));
+vi.mock('next/navigation', () => ({
+  redirect: vi.fn((url: string) => { throw new Error(`REDIRECT:${url}`); }),
+}));
+
 beforeEach(() => {
   vi.stubEnv('ADMIN_SESSION_SECRET', 'test-secret-min-32-characters-long!!');
 });
@@ -33,16 +42,6 @@ describe('signAdminToken / verifyAdminToken', () => {
 
 describe('requireAdminSession', () => {
   it('쿠키 없으면 /admin/login으로 redirect', async () => {
-    vi.resetModules();
-    vi.mock('next/headers', () => ({
-      cookies: vi.fn().mockResolvedValue({
-        get: () => undefined,
-      }),
-    }));
-    vi.mock('next/navigation', () => ({
-      redirect: vi.fn((url: string) => { throw new Error(`REDIRECT:${url}`); }),
-    }));
-
     const { requireAdminSession } = await import('../admin-session');
     await expect(requireAdminSession()).rejects.toThrow('REDIRECT:/admin/login');
   });

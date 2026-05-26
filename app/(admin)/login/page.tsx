@@ -24,13 +24,13 @@ export default function AdminLoginPage() {
       <form onSubmit={handleSubmit} className="w-80 space-y-4 rounded border border-outline-variant bg-surface p-6">
         <h1 className="text-title-large font-semibold">Admin 로그인</h1>
         <div>
-          <label className="text-label-medium">아이디</label>
-          <input name="adminId" autoComplete="username" required
+          <label htmlFor="adminId" className="text-label-medium">아이디</label>
+          <input id="adminId" name="adminId" autoComplete="username" required
             className="mt-1 w-full rounded border border-outline px-3 py-2 text-body-medium bg-surface-container outline-none focus:border-primary" />
         </div>
         <div>
-          <label className="text-label-medium">비밀번호</label>
-          <input name="password" type="password" autoComplete="current-password" required
+          <label htmlFor="adminPassword" className="text-label-medium">비밀번호</label>
+          <input id="adminPassword" name="password" type="password" autoComplete="current-password" required
             className="mt-1 w-full rounded border border-outline px-3 py-2 text-body-medium bg-surface-container outline-none focus:border-primary" />
         </div>
         {error && <p className="text-body-small text-error">{error}</p>}
