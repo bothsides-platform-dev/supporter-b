@@ -82,10 +82,15 @@ test.describe.serial('BidDetailModal — note roundtrip (Stage 3)', () => {
     // Attachment chip rendered with the original filename.
     await expect(page.getByText('e2e-memo.pdf')).toBeVisible();
 
-    // Now delete the note. Multiple 삭제 buttons may exist in the future
-    // (timeline of notes); for this spec we only have one note, so first()
-    // is unambiguous.
+    // Now delete the note. 삭제 UI 는 2-step:
+    //   (1) 노트 항목의 '삭제' 버튼 → ConfirmDialog("메모를 삭제할까요?") 오픈
+    //   (2) 다이얼로그 안의 '삭제' 확인 버튼 → 실제 deleteBidNoteAction 호출
+    // 첫 클릭만으로는 noteCountFromDb 가 줄지 않는다(다이얼로그 미확인 상태).
     await page.getByRole('button', { name: '삭제' }).first().click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: '삭제' })
+      .click();
 
     await expect
       .poll(() => getNoteCountFromDb(tossBidId), { timeout: 5_000 })

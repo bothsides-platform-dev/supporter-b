@@ -11,8 +11,15 @@
  * 재설계됨. 칸반은 /rfp(구매사) / /inbox(PG) 에서만 렌더된다.
  */
 import { test, expect } from 'playwright/test';
+import { eq, and } from 'drizzle-orm';
 
-import { loginAs } from './_helpers';
+import { db } from '@/lib/db/client';
+import { rfpInvitations, workspaces } from '@/lib/db/schema';
+import { loginAs, rfpUuidFromCode } from './_helpers';
+
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL_TEST ??
+  'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
 const RFP_CODE = 'P-2604-0001';
 
@@ -79,6 +86,28 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
   test('홈 대시보드 RFP 링크 클릭 → 전체 페이지, ← 뒤로 → /home 복귀', async ({ page }) => {
     // dev cold 컴파일 흡수(BidForm 등 무거운 트리 포함) — prod는 사전컴파일.
     test.slow();
+
+    // PG 대시보드 ActionQueue 는 invitation.status ∈ ('pending','opened') 인
+    // 항목만 렌더한다(이미 응답한 RFP 는 액션 큐에서 제외 — 의도된 디자인).
+    // 시드된 toss 초대는 P-2604-0001 에서 'accepted' 라 액션 큐에 안 잡힌다.
+    // 이 테스트는 '홈에서 상세로의 진입 동선' 을 검증하므로, 토스 초대를
+    // 'pending' 으로 되돌려 대시보드 링크가 그려지게 한다.
+    const rfpUuid = await rfpUuidFromCode(RFP_CODE);
+    const [toss] = await db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.name, '서포터 B 페이'))
+      .limit(1);
+    await db
+      .update(rfpInvitations)
+      .set({ status: 'pending', acceptedByUserId: null })
+      .where(
+        and(
+          eq(rfpInvitations.rfpId, rfpUuid),
+          eq(rfpInvitations.pgWsId, toss.id),
+        ),
+      );
+
     await loginAs(page, 'pg-toss'); // /home 착지(PG 대시보드)
 
     // PG 대시보드의 ActionQueue 링크는 a[href="/inbox/<code>"] 로 그려진다.
