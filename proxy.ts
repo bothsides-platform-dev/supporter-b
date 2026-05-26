@@ -16,7 +16,12 @@ export default auth(async (req) => {
   // Admin JWT gate — must run before NextAuth session check.
   // /admin/login is the only admin path that's unconditionally open.
   if (pathname.startsWith('/admin')) {
-    if (pathname === '/admin/login') return NextResponse.next();
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set('x-pathname', pathname);
+
+    if (pathname === '/admin/login') {
+      return NextResponse.next({ request: { headers: requestHeaders } });
+    }
 
     // Fail-closed: misconfigured secret denies all admin access
     const adminSecret = process.env.ADMIN_SESSION_SECRET;
@@ -28,7 +33,7 @@ export default auth(async (req) => {
     if (!token) return NextResponse.redirect(new URL('/admin/login', req.url));
     try {
       await jwtVerify(token, new TextEncoder().encode(adminSecret));
-      return NextResponse.next();
+      return NextResponse.next({ request: { headers: requestHeaders } });
     } catch {
       return NextResponse.redirect(new URL('/admin/login', req.url));
     }

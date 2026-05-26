@@ -48,6 +48,7 @@ export default defineConfig({
             "lib/db/**/*.{test,spec}.{ts,tsx}",
             "scripts/**/*.{test,spec}.{ts,tsx}",
             "app/api/**/*.{test,spec}.{ts,tsx}",
+            "app/\\(admin\\)/**/*.{test,spec}.{ts,tsx}",
           ],
         },
       },
