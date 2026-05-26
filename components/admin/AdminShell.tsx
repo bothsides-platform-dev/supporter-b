@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { logoutAction } from '@/app/(admin)/login/actions';
+import { logoutAction } from '@/app/admin/login/actions';
 
 const NAV = [
   { href: '/admin', label: '대시보드' },
