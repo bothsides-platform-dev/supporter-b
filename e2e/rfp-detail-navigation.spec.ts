@@ -39,7 +39,12 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
 
     await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
     await expect(page.getByText('제안 비교')).toBeVisible();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
+     // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
+     // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
+    await expect(
+      page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
+    ).toHaveCount(0);
   });
 
   test('목록 행 클릭(soft-nav)은 전체 페이지로 렌더', async ({ page }) => {
@@ -51,7 +56,12 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
 
     await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
     await expect(page.getByText('제안 비교')).toBeVisible();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
+     // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
+     // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
+    await expect(
+      page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
+    ).toHaveCount(0);
   });
 
   test('직접 진입(하드 네비)은 전체 페이지로 렌더', async ({ page }) => {
@@ -59,7 +69,12 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
     await page.goto(`/rfp/${RFP_CODE}`);
 
     await expect(page.getByText('제안 비교')).toBeVisible();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
+     // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
+     // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
+    await expect(
+      page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
+    ).toHaveCount(0);
   });
 });
 
@@ -117,9 +132,16 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
     await inboxLink.click();
 
     await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
+     // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
+     // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
+    await expect(
+      page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
+    ).toHaveCount(0);
 
-    await page.getByRole('button', { name: '뒤로' }).click();
+    // 인박스 상세 페이지 본문에도 '← 뒤로' 텍스트 버튼이 있어 헤더의
+    // aria-label='뒤로' 와 부분 일치한다. 헤더 백버튼만 정확히 타겟팅.
+    await page.getByRole('button', { name: '뒤로', exact: true }).click();
     await expect(page).toHaveURL(/\/home$/);
   });
 
@@ -132,6 +154,11 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
     await page.getByText(RFP_CODE).click();
 
     await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
+     // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
+     // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
+    await expect(
+      page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
+    ).toHaveCount(0);
   });
 });
