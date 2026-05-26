@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getDashboardStats, getHotlist } from '@/lib/server/queries/admin/dashboard';
 
 export default async function AdminDashboardPage() {
@@ -18,7 +19,7 @@ export default async function AdminDashboardPage() {
           <h2 className="text-title-medium font-semibold mb-3">핫리스트</h2>
           <div className="rounded border border-outline-variant overflow-hidden">
             {hotlist.map((item) => (
-              <a
+              <Link
                 key={`${item.type}-${item.entityId}`}
                 href={item.href}
                 className="flex items-center justify-between px-4 py-3 border-b border-outline-variant last:border-0 hover:bg-surface-container-low"
@@ -28,7 +29,7 @@ export default async function AdminDashboardPage() {
                   <span className="ml-3 text-body-small text-on-surface-variant">{item.subLabel}</span>
                 </div>
                 <span className="text-label-small text-primary">→</span>
-              </a>
+              </Link>
             ))}
           </div>
         </section>
@@ -49,7 +50,7 @@ function StatCard({
   alert?: boolean;
 }) {
   return (
-    <a
+    <Link
       href={href}
       className="block rounded border border-outline-variant bg-surface p-4 hover:bg-surface-container-low"
     >
@@ -59,6 +60,6 @@ function StatCard({
       >
         {value}
       </div>
-    </a>
+    </Link>
   );
 }

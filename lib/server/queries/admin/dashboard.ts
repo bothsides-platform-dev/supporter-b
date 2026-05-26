@@ -1,4 +1,4 @@
-import { count, eq, and, lt, lte, gt, sql } from 'drizzle-orm';
+import { count, eq, and, lt, lte, gt, sql, asc } from 'drizzle-orm';
 import { actionDb } from '@/lib/server/actions/auth/_shared';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import { workspaces, rfps, verificationApplications } from '@/lib/db/schema';
@@ -80,7 +80,8 @@ export async function getHotlist(db: DB = actionDb()): Promise<HotlistItem[]> {
           lt(verificationApplications.submittedAt, cutoff24h),
         ),
       )
-      .orderBy(verificationApplications.submittedAt),
+      .orderBy(asc(verificationApplications.submittedAt))
+      .limit(10),
 
     // 마감 임박 RFP: sent, deadline within 48h (미래), 마감 순 정렬
     db
@@ -98,7 +99,8 @@ export async function getHotlist(db: DB = actionDb()): Promise<HotlistItem[]> {
           lte(rfps.deadline, cutoff48h),
         ),
       )
-      .orderBy(rfps.deadline),
+      .orderBy(rfps.deadline)
+      .limit(10),
   ]);
 
   const items: HotlistItem[] = [];

@@ -64,7 +64,7 @@ describe('getDashboardStats', () => {
   it('slaOverdueCount: 24시간 초과된 submitted 심사 수를 반환한다', async () => {
     const ws = await seedBuyerWorkspace(db);
 
-    // submittedAt > 24h ago → overdue
+    // submitted 25h ago (past 24h SLA cutoff) → overdue
     const overdueTime = new Date(Date.now() - 25 * 3600 * 1000);
     await db.insert(verificationApplications).values({
       workspaceId: ws.id,
@@ -73,7 +73,7 @@ describe('getDashboardStats', () => {
       submittedAt: overdueTime,
     });
 
-    // submittedAt < 24h ago → not overdue
+    // submitted 12h ago (within 24h SLA) → not overdue
     const recentTime = new Date(Date.now() - 1 * 3600 * 1000);
     await db.insert(verificationApplications).values({
       workspaceId: ws.id,
