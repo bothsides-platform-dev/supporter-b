@@ -85,3 +85,17 @@ export const chipColorEnum = pgEnum('chip_color', [
   'error',
   'surface',
 ]);
+
+export const workspaceStatusEnum = pgEnum('workspace_status', [
+  'pending',
+  'active',
+  'suspended',
+]);
+
+export const verificationStatusEnum = pgEnum('verification_status', [
+  'submitted',
+  'review_pending',
+  'needs_more_info',
+  'approved',
+  'rejected',
+]);

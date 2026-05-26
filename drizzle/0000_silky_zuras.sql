@@ -15,7 +15,9 @@ CREATE TYPE "public"."outbox_status" AS ENUM('pending', 'sent', 'failed');--> st
 CREATE TYPE "public"."rfp_status" AS ENUM('draft', 'sent', 'closed', 'cancelled', 'awarded');--> statement-breakpoint
 CREATE TYPE "public"."tax_type" AS ENUM('general', 'simple', 'exempt');--> statement-breakpoint
 CREATE TYPE "public"."verification_purpose" AS ENUM('signup_email', 'password_reset', 'email_change');--> statement-breakpoint
+CREATE TYPE "public"."verification_status" AS ENUM('submitted', 'review_pending', 'needs_more_info', 'approved', 'rejected');--> statement-breakpoint
 CREATE TYPE "public"."workspace_invitation_status" AS ENUM('pending', 'accepted', 'expired');--> statement-breakpoint
+CREATE TYPE "public"."workspace_status" AS ENUM('pending', 'active', 'suspended');--> statement-breakpoint
 CREATE TYPE "public"."workspace_type" AS ENUM('buyer', 'pg');--> statement-breakpoint
 CREATE TABLE "attachment_blobs" (
 	"attachment_id" uuid PRIMARY KEY NOT NULL,
@@ -118,6 +120,9 @@ CREATE TABLE "workspaces" (
 	"name" text NOT NULL,
 	"biz_profile_id" uuid,
 	"share_token" text DEFAULT gen_random_uuid()::text NOT NULL,
+	"status" "workspace_status" DEFAULT 'pending' NOT NULL,
+	"status_reason" text,
+	"reviewed_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "workspaces_share_token_unique" UNIQUE("share_token")
