@@ -30,3 +30,20 @@ describe('signAdminToken / verifyAdminToken', () => {
     expect(result).toBeNull();
   });
 });
+
+describe('requireAdminSession', () => {
+  it('쿠키 없으면 /admin/login으로 redirect', async () => {
+    vi.resetModules();
+    vi.mock('next/headers', () => ({
+      cookies: vi.fn().mockResolvedValue({
+        get: () => undefined,
+      }),
+    }));
+    vi.mock('next/navigation', () => ({
+      redirect: vi.fn((url: string) => { throw new Error(`REDIRECT:${url}`); }),
+    }));
+
+    const { requireAdminSession } = await import('../admin-session');
+    await expect(requireAdminSession()).rejects.toThrow('REDIRECT:/admin/login');
+  });
+});

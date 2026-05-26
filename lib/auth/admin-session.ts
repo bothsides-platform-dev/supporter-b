@@ -1,4 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 const COOKIE_NAME = 'admin-token';
 const EXPIRY = '8h';
@@ -39,3 +41,12 @@ export const ADMIN_COOKIE_OPTIONS = {
 };
 
 export type AdminCookieOptions = typeof ADMIN_COOKIE_OPTIONS;
+
+export async function requireAdminSession(): Promise<{ adminId: string }> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+  if (!token) redirect('/admin/login');
+  const session = await verifyAdminToken(token);
+  if (!session) redirect('/admin/login');
+  return session;
+}
