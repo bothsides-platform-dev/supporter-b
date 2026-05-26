@@ -23,7 +23,7 @@ export async function suspendWorkspaceAction(
   await (db as ReturnType<typeof actionDb>).transaction(async (tx: any) => {
     await tx
       .update(workspaces)
-      .set({ status: 'suspended', statusReason: reason, reviewedAt: new Date() })
+      .set({ status: 'suspended', statusReason: reason.trim(), reviewedAt: new Date() })
       .where(eq(workspaces.id, workspaceId));
 
     await tx.insert(adminAuditLogs).values({
@@ -31,10 +31,11 @@ export async function suspendWorkspaceAction(
       action: 'workspace.suspend',
       entityType: 'workspace',
       entityId: workspaceId,
-      payloadJson: { after: { status: 'suspended' }, reason },
+      payloadJson: { after: { status: 'suspended' }, reason: reason.trim() },
     });
   });
 
+  revalidatePath('/admin/review');
   revalidatePath('/admin');
   return { ok: true };
 }

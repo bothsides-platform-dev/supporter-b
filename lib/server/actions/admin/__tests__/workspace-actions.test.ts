@@ -114,6 +114,7 @@ describe('suspendWorkspaceAction', () => {
     const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, wsId));
     expect(ws.status).toBe('suspended');
     expect(ws.statusReason).toBe('약관 위반');
+    expect(ws.reviewedAt).not.toBeNull();
   });
 
   it('admin_audit_log에 workspace.suspend 이벤트 기록', async () => {
@@ -133,6 +134,7 @@ describe('unsuspendWorkspaceAction', () => {
     const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, wsId));
     expect(ws.status).toBe('active');
     expect(ws.statusReason).toBeNull();
+    expect(ws.reviewedAt).not.toBeNull();
   });
 
   it('admin_audit_log에 workspace.unsuspend 이벤트 기록', async () => {

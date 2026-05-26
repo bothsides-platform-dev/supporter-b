@@ -31,5 +31,6 @@ export async function unsuspendWorkspaceAction(
     });
   });
 
+  revalidatePath('/admin/review');
   revalidatePath('/admin');
 }
