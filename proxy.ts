@@ -17,13 +17,17 @@ export default auth(async (req) => {
   // /admin/login is the only admin path that's unconditionally open.
   if (pathname.startsWith('/admin')) {
     if (pathname === '/admin/login') return NextResponse.next();
+
+    // Fail-closed: misconfigured secret denies all admin access
+    const adminSecret = process.env.ADMIN_SESSION_SECRET;
+    if (!adminSecret || adminSecret.length < 32) {
+      return NextResponse.redirect(new URL('/admin/login', req.url));
+    }
+
     const token = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
     if (!token) return NextResponse.redirect(new URL('/admin/login', req.url));
     try {
-      await jwtVerify(
-        token,
-        new TextEncoder().encode(process.env.ADMIN_SESSION_SECRET ?? ''),
-      );
+      await jwtVerify(token, new TextEncoder().encode(adminSecret));
       return NextResponse.next();
     } catch {
       return NextResponse.redirect(new URL('/admin/login', req.url));
