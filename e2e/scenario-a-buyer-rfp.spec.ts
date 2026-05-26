@@ -49,10 +49,15 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await expect(page.getByText('123-45-67890')).toBeVisible();
 
     // ── 3. Fill form fields ──────────────────────────────────────
-    // Title input — only text input on the form (memo is textarea).
+    // 02 — 제안 내용 섹션. 필수 필드는 '제목' 하나(스냅샷의 §04 발송 조건
+    // 안내가 '제안 제목·PG 워크스페이스·마감일' 3개만 요구). 나머지 7개의
+    // 사업 컨텍스트 input(홈페이지/주판/거래액/…)은 모두 optional 이므로
+    // 발송 가능 상태로 만드는 데 필요한 만큼만 채운다.
     await page
-      .getByPlaceholder('2026 결제 인프라 제안')
+      .getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 제안건')
       .fill('e2e-A-2026 결제 인프라 제안');
+    // 메모 placeholder — 정규식 매치는 새 placeholder("…검토 중입니다. 정산주기
+    // D+1 이내 희망.") 와도 그대로 통과.
     await page
       .getByPlaceholder(/카드결제·간편결제 통합 솔루션 검토 중입니다/)
       .fill('e2e scenario A — automated send');
