@@ -18,6 +18,7 @@ function statusToColor(status: string): ChipColor {
     case 'rejected':
     case 'suspended':
     case 'cancelled':
+    case 'withdrawn':
       return 'error';
     case 'closed':
       return 'surface';
@@ -41,6 +42,7 @@ function statusToLabel(status: string): string {
     case 'sent': return '발송됨';
     case 'closed': return '마감';
     case 'cancelled': return '취소';
+    case 'withdrawn': return '철회';
     case 'awarded': return '낙찰';
     default: return status;
   }

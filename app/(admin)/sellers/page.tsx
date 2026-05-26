@@ -25,7 +25,7 @@ export default async function SellersPage() {
                 <td className="px-4 py-3">
                   <AdminStatusBadge status={s.status} />
                 </td>
-                <td className="px-4 py-3 font-mono text-label-small text-on-surface-variant">
+                <td className="px-4 py-3 md-numeric text-label-small text-on-surface-variant">
                   {new Date(s.createdAt).toLocaleDateString('ko-KR')}
                 </td>
               </tr>

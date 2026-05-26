@@ -24,7 +24,7 @@ export default async function SellerDetailPage({ params }: { params: Promise<{ i
             {pgProfile.bizNo && (
               <div className="px-4 py-3 flex gap-4">
                 <span className="text-label-small text-on-surface-variant w-32 shrink-0">사업자번호</span>
-                <span className="text-body-small font-mono">{pgProfile.bizNo}</span>
+                <span className="text-body-small md-numeric">{pgProfile.bizNo}</span>
               </div>
             )}
             {pgProfile.serviceScope?.paymentMethods && pgProfile.serviceScope.paymentMethods.length > 0 && (
@@ -43,9 +43,9 @@ export default async function SellerDetailPage({ params }: { params: Promise<{ i
               <div className="px-4 py-3 flex gap-4">
                 <span className="text-label-small text-on-surface-variant w-32 shrink-0">영업 담당자</span>
                 <span className="text-body-small">
-                  {pgProfile.salesContact.name}
-                  {pgProfile.salesContact.email && (
-                    <span className="text-on-surface-variant ml-2">({pgProfile.salesContact.email})</span>
+                  {pgProfile.salesContact.name ?? '—'}
+                  {(pgProfile.salesContact.email ?? null) !== null && (
+                    <span className="text-on-surface-variant ml-2">({pgProfile.salesContact.email ?? '—'})</span>
                   )}
                 </span>
               </div>
@@ -75,14 +75,14 @@ export default async function SellerDetailPage({ params }: { params: Promise<{ i
               {bids.map((bid) => (
                 <tr key={bid.id} className="border-b border-outline-variant last:border-0 hover:bg-surface-container-low">
                   <td className="px-4 py-3">
-                    <Link href={`/admin/rfps/${bid.rfpId}`} className="text-primary hover:underline font-mono text-label-small">
+                    <Link href={`/admin/rfps/${bid.rfpId}`} className="text-primary hover:underline md-numeric text-label-small">
                       {bid.rfpId.slice(0, 8)}…
                     </Link>
                   </td>
                   <td className="px-4 py-3">
                     <AdminStatusBadge status={bid.status} />
                   </td>
-                  <td className="px-4 py-3 font-mono text-label-small text-on-surface-variant">
+                  <td className="px-4 py-3 md-numeric text-label-small text-on-surface-variant">
                     {new Date(bid.submittedAt).toLocaleDateString('ko-KR')}
                   </td>
                 </tr>

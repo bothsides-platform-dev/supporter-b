@@ -32,15 +32,15 @@ export default async function BuyerDetailPage({ params }: { params: Promise<{ id
             <tbody>
               {rfps.map((rfp) => (
                 <tr key={rfp.id} className="border-b border-outline-variant last:border-0 hover:bg-surface-container-low">
-                  <td className="px-4 py-3 font-mono text-label-small">{rfp.code}</td>
+                  <td className="px-4 py-3 md-numeric text-label-small">{rfp.code}</td>
                   <td className="px-4 py-3">
                     <Link href={`/admin/rfps/${rfp.id}`} className="text-primary hover:underline">{rfp.title}</Link>
                   </td>
                   <td className="px-4 py-3">
                     <AdminStatusBadge status={rfp.status} />
                   </td>
-                  <td className="px-4 py-3 font-mono text-label-small text-on-surface-variant">
-                    {rfp.deadline ? new Date(rfp.deadline).toLocaleDateString('ko-KR') : '—'}
+                  <td className="px-4 py-3 md-numeric text-label-small text-on-surface-variant">
+                    {new Date(rfp.deadline).toLocaleDateString('ko-KR')}
                   </td>
                 </tr>
               ))}
