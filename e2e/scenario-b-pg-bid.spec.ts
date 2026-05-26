@@ -102,26 +102,35 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
 
     // ── 4. Fill the BidForm ──────────────────────────────────────
     // sme2 grade ⇒ card fees by issuer are STATUTORY and the form
-    // disables the 9-card panel. We just fill the negotiable fields.
-    // Selects use native <select>; numeric inputs are font-mono.
-    await page.locator('select').first().selectOption('D+1');
+    // disables the card-input panel; only bankPct(계좌이체) remains.
+    //
+    // 정산 주기는 단일 <select value='D+1'> 에서 unit Select(D|W|M) +
+    // 숫자 input 의 조합으로 분리됨. 두 필드를 합쳐 settleCycle = 'D+1'.
+    // BidForm 최상단 첫 <select> 가 unit, 첫 <input type=number> 가 cycleNum.
+    await page.locator('select').first().selectOption('D');
+    await page.locator('input[type="number"]').first().fill('1');
 
-    // Numeric placeholders are unique enough to target. Order in form
-    // is: deposit, setupFee, monthlyMin, bankPct(1.50), easyPayPct(1.80),
-    // overseasPct(3.00).
-    await page.getByPlaceholder('1.50').first().fill('0.50');
-    await page.getByPlaceholder('1.80').first().fill('2.50');
+    // 계좌이체 수수료(bankPct) — sme2 폼에서 placeholder '0.50' 인 단 하나의
+    // PctInput. 옛 BidForm 의 'easyPay'(1.80) / 'overseas'(3.00) 필드는 제거됨.
+    await page.getByPlaceholder('0.50').fill('0.50');
 
     await page
       .getByPlaceholder(/추가 안내 사항이 있으면/)
-      .fill('e2e B: D+1, bank 0.5%, easy 2.5%');
+      .fill('e2e B: D+1, bank 0.5%');
 
     // ── 5. Submit ────────────────────────────────────────────────
+    // BidForm 의 제출 버튼은 ConfirmDialog 를 띄우고, 다이얼로그의 '제안 제출'
+    // 확인 버튼이 실제 server action 을 트리거한다. role=dialog 로 좁혀
+    // 같은 라벨의 form 버튼과 충돌하지 않게 한다.
     // 액션 성공 → /inbox/<rfpId>/submitted로 redirect되어야 한다.
     // (server action에서 revalidatePath + client에서 router.push,
     //  router.push + router.refresh 동시 호출은 Next 16 useTransition
     //  hang 패턴이라 금지 — vercel/next.js#86055 참조.)
-    await page.getByRole('button', { name: /제안 제출/ }).click();
+    await page.getByRole('button', { name: /^제안 제출$/ }).first().click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: /제안 제출/ })
+      .click();
     await page.waitForURL(new RegExp(`/inbox/${RFP_ID}/submitted$`), {
       timeout: 15_000,
     });
