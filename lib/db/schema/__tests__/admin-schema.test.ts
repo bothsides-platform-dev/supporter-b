@@ -23,4 +23,13 @@ describe('workspaces.status', () => {
     }).returning();
     expect(ws.status).toBe('active');
   });
+
+  it('allows suspended value', async () => {
+    const [ws] = await db.insert(workspaces).values({
+      type: 'buyer',
+      name: '테스트정지',
+      status: 'suspended',
+    }).returning();
+    expect(ws.status).toBe('suspended');
+  });
 });
