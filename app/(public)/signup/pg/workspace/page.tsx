@@ -1,13 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { signIn } from 'next-auth/react';
 import { useState } from 'react';
-import { signupCompleteAction } from '@/lib/server/actions/auth';
-import {
-  clearSignupDraft,
-  readSignupDraft,
-} from '@/lib/auth/signup-storage';
+import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 
 export default function PgWorkspacePage() {
   const router = useRouter();
@@ -18,7 +13,7 @@ export default function PgWorkspacePage() {
   const draft = readSignupDraft();
   const isInvite = !!draft.inviteToken;
   const current = isInvite ? 3 : 4;
-  const total = isInvite ? 3 : 4;
+  const total = isInvite ? 4 : 5;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,38 +29,8 @@ export default function PgWorkspacePage() {
     setSubmitting(true);
     setError('');
 
-    const r = await signupCompleteAction({
-      email: d.email,
-      name: d.name,
-      password: d.password,
-      phone: d.phone,
-      phoneVerificationId: d.phoneVerificationId,
-      wsKind: 'pg',
-      wsName: wsName.trim(),
-    });
-
-    if (!r.ok) {
-      setSubmitting(false);
-      setError(`가입을 완료하지 못했습니다. (${r.error})`);
-      return;
-    }
-
-    const signInResult = await signIn('credentials', {
-      email: r.email,
-      password: r.password,
-      redirect: false,
-    });
-
-    clearSignupDraft();
-
-    if (signInResult && signInResult.error) {
-      setSubmitting(false);
-      setError('로그인에 실패했습니다. 로그인 페이지에서 다시 시도해주세요.');
-      router.push('/login');
-      return;
-    }
-
-    router.push(r.redirectTo);
+    writeSignupDraft({ ...d, wsName: wsName.trim() });
+    router.push('/signup/pg/biz');
   };
 
   return (
@@ -115,7 +80,7 @@ export default function PgWorkspacePage() {
           disabled={submitting || !wsName.trim()}
           className="w-full py-3 text-[14px] font-[600] tracking-[-0.01em] bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
         >
-          {submitting ? 'LOADING…' : '워크스페이스 만들기'}
+          {submitting ? 'LOADING…' : '다음'}
         </button>
       </form>
     </div>

@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/password';
 import { passwordSchema } from '@/lib/auth/password-validation';
-import { users, phoneOtps } from '@/lib/db/schema';
+import { users, phoneOtps, pgProfiles } from '@/lib/db/schema';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import {
   actionDb,
@@ -13,6 +13,31 @@ import {
   normalizeEmail,
   type AuthActionResult,
 } from './_shared';
+
+const PgProfileInput = z
+  .object({
+    bizNo: z.string().optional(),
+    serviceScope: z.object({
+      paymentMethods: z.array(z.string()),
+      industries: z.array(z.string()),
+      volumeRange: z.string(),
+      integrationTypes: z.array(z.string()),
+    }),
+    salesContact: z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+      phone: z.string().min(9),
+    }),
+    backupContact: z
+      .object({
+        name: z.string(),
+        email: z.string(),
+        phone: z.string(),
+      })
+      .optional(),
+    slaDays: z.number().int().min(1).max(30).optional(),
+  })
+  .strict();
 
 const BizProfileInput = z
   .object({
@@ -36,6 +61,7 @@ const Input = z
     wsKind: z.enum(['buyer', 'pg']).optional(),
     wsName: z.string().min(1).max(200).optional(),
     bizProfile: BizProfileInput.optional(),
+    pgProfile: PgProfileInput.optional(),
   })
   .strict();
 
@@ -129,12 +155,24 @@ export async function signupCompleteAction(
         if (!parsed.data.wsName) {
           return { ok: false, error: 'MISSING_WS_NAME' };
         }
-        await createWorkspaceInTx(tx, {
+        const { workspaceId } = await createWorkspaceInTx(tx, {
           userId,
           type: parsed.data.wsKind,
           name: parsed.data.wsName,
           bizProfile: parsed.data.bizProfile,
         });
+
+        if (parsed.data.wsKind === 'pg' && parsed.data.pgProfile) {
+          await tx.insert(pgProfiles).values({
+            workspaceId,
+            bizNo: parsed.data.pgProfile.bizNo ?? null,
+            serviceScope: parsed.data.pgProfile.serviceScope,
+            salesContact: parsed.data.pgProfile.salesContact,
+            backupContact: parsed.data.pgProfile.backupContact ?? null,
+            slaDays: parsed.data.pgProfile.slaDays ?? null,
+          });
+        }
+
         return {
           ok: true,
           redirectTo: parsed.data.wsKind === 'buyer' ? '/rfp' : '/inbox',

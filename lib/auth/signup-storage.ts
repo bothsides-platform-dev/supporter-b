@@ -21,6 +21,7 @@ export type SignupClientDraft = {
   phoneVerificationId?: string;
   password?: string;
   agreedAt?: string;
+  wsName?: string;
 };
 
 export function readSignupDraft(): SignupClientDraft {
