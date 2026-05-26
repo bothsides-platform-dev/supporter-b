@@ -53,6 +53,7 @@ export async function seedBuyerWorkspace(
     type: 'buyer',
     name: overrides?.name ?? '구매사',
     bizProfileId: overrides?.bizProfileId ?? null,
+    status: 'active', // explicit: test seeds are pre-approved workspaces
   });
   return { id };
 }
@@ -67,6 +68,7 @@ export async function seedPgWorkspace(
     id,
     type: 'pg',
     name: overrides?.name ?? name,
+    status: 'active', // explicit: test seeds are pre-approved workspaces
   });
   return { id };
 }
