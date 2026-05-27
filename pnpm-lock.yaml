@@ -59,6 +59,9 @@ dependencies:
   jose:
     specifier: '6'
     version: 6.2.3
+  ky:
+    specifier: ^2.0.2
+    version: 2.0.2
   lucide-react:
     specifier: ^1.14.0
     version: 1.16.0(react@19.2.4)
@@ -7769,6 +7772,11 @@ packages:
       - '@emnapi/core'
       - '@emnapi/runtime'
     dev: true
+
+  /ky@2.0.2:
+    resolution: {integrity: sha512-/GmXpo9F9W+f8n4Ivr2iH+7h7wL7jLbLKWkMlpflcCRb6kGjBfTlASEXaZ9qUgNTn4VgS0P2pwxxzQ4EM6Ulgg==}
+    engines: {node: '>=22'}
+    dev: false
 
   /language-subtag-registry@0.3.23:
     resolution: {integrity: sha512-0K65Lea881pHotoGEa5gDlMxt3pctLi2RplBb7Ezh4rRdLEOtgi7n4EwK9lamnUCkKBqaeKRVebTq6BAxSkpXQ==}
