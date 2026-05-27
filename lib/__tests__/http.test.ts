@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 describe('http 인스턴스', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
 
   describe('401 afterResponse hook', () => {
     it('401 응답 시 window.location.assign(/login) 호출', async () => {
