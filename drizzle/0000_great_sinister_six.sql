@@ -219,6 +219,8 @@ CREATE TABLE "rfps" (
 	"current_fee_rate" text,
 	"current_settlement_limit" text,
 	"current_guarantee_insurance" text,
+	"current_solution" text,
+	"current_solution_detail" text,
 	"deadline" timestamp with time zone NOT NULL,
 	"share_token" text DEFAULT gen_random_uuid()::text NOT NULL,
 	"status" "rfp_status" DEFAULT 'draft' NOT NULL,

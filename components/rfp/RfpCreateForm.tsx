@@ -16,6 +16,15 @@ import { useIsMac } from '@/lib/hooks/usePlatform';
 import { createRfpAction } from '@/lib/server/actions/rfp';
 import type { BizProfile } from '@/lib/types/biz-profile';
 
+const SOLUTION_OPTIONS = [
+  { value: 'cafe24', label: '카페24' },
+  { value: 'imweb', label: '아임웹' },
+  { value: 'makeshop', label: '메이크샵' },
+  { value: 'godo', label: '고도몰' },
+  { value: 'self', label: '자체 개발' },
+  { value: 'other', label: '기타' },
+] as const;
+
 function SectionHeader({ num, label }: { num: string; label: string }) {
   return (
     <div className="flex items-center gap-3 mb-6">
@@ -120,6 +129,8 @@ export function RfpCreateForm({ bizProfile, workspaceName = '', guest = false }:
       currentFeeRate: draft.currentFeeRate.trim() || undefined,
       currentSettlementLimit: draft.currentSettlementLimit.trim() || undefined,
       currentGuaranteeInsurance: draft.currentGuaranteeInsurance.trim() || undefined,
+      currentSolution: (draft.currentSolution as 'cafe24' | 'imweb' | 'makeshop' | 'godo' | 'self' | 'other') || undefined,
+      currentSolutionDetail: draft.currentSolutionDetail.trim() || undefined,
       memo: draft.memo.trim() || undefined,
       deadline: draft.deadline,
       allowedPgWorkspaceIds: draft.allowedPgWorkspaceIds.map((w) => w.id),
@@ -275,7 +286,7 @@ export function RfpCreateForm({ bizProfile, workspaceName = '', guest = false }:
               />
             </div>
             <div className="space-y-1">
-              <Label size="md" muted={false}>현재 정산한도</Label>
+              <Label size="md" muted={false}>현재 월 정산한도</Label>
               <input
                 type="text"
                 value={draft.currentSettlementLimit}
@@ -293,6 +304,40 @@ export function RfpCreateForm({ bizProfile, workspaceName = '', guest = false }:
                 placeholder="3000만원"
                 className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
               />
+            </div>
+            <div className="space-y-2">
+              <Label size="md" muted={false}>현재 운영 솔루션 유무</Label>
+              <div className="flex flex-wrap gap-2">
+                {SOLUTION_OPTIONS.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={draft.currentSolution === value}
+                    onClick={() => {
+                      draft.setField('currentSolution', draft.currentSolution === value ? '' : value);
+                      if (value !== 'self' && value !== 'other') {
+                        draft.setField('currentSolutionDetail', '');
+                      }
+                    }}
+                    className={
+                      draft.currentSolution === value
+                        ? 'rounded-[var(--md-sys-shape-small)] px-3 h-7 text-[13px] bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]'
+                        : 'rounded-[var(--md-sys-shape-small)] px-3 h-7 text-[13px] border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)]'
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {(draft.currentSolution === 'self' || draft.currentSolution === 'other') && (
+                <input
+                  type="text"
+                  value={draft.currentSolutionDetail}
+                  onChange={(e) => draft.setField('currentSolutionDetail', e.target.value)}
+                  placeholder={draft.currentSolution === 'self' ? '독립몰 이름' : '솔루션 이름'}
+                  className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+                />
+              )}
             </div>
             <div className="space-y-1">
               <Label size="md" muted={false}>제안서 요청 세부 내용</Label>

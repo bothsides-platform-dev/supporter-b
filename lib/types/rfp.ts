@@ -19,6 +19,8 @@ export type RFP = {
   currentFeeRate?: string;
   currentSettlementLimit?: string;
   currentGuaranteeInsurance?: string;
+  currentSolution?: string;
+  currentSolutionDetail?: string;
   rfpFiles: Attachment[];
   allowedPgWorkspaceIds: string[];
   deadline: string;

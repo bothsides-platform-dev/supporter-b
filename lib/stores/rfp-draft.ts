@@ -25,6 +25,8 @@ type RfpDraftStore = {
   currentFeeRate: string;
   currentSettlementLimit: string;
   currentGuaranteeInsurance: string;
+  currentSolution: string;
+  currentSolutionDetail: string;
   memo: string;
   rfpFiles: RfpMockFile[];
   allowedPgWorkspaceIds: PgWorkspaceItem[];
@@ -45,6 +47,8 @@ const defaultState = {
   currentFeeRate: '',
   currentSettlementLimit: '',
   currentGuaranteeInsurance: '',
+  currentSolution: '',
+  currentSolutionDetail: '',
   memo: '',
   rfpFiles: [] as RfpMockFile[],
   allowedPgWorkspaceIds: [] as PgWorkspaceItem[],
@@ -72,6 +76,8 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         currentFeeRate: state.currentFeeRate,
         currentSettlementLimit: state.currentSettlementLimit,
         currentGuaranteeInsurance: state.currentGuaranteeInsurance,
+        currentSolution: state.currentSolution,
+        currentSolutionDetail: state.currentSolutionDetail,
         memo: state.memo,
         rfpFiles: state.rfpFiles,
         allowedPgWorkspaceIds: state.allowedPgWorkspaceIds,

@@ -479,6 +479,51 @@ describe('createRfpAction', () => {
     expect(row.currentGuaranteeInsurance).toBeNull();
   });
 
+  it('persists currentSolution and currentSolutionDetail when supplied', async () => {
+    const r = await createRfpAction({
+      title: '솔루션 필드 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      currentSolution: 'self',
+      currentSolutionDetail: 'ABC몰',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.currentSolution).toBe('self');
+    expect(row.currentSolutionDetail).toBe('ABC몰');
+  });
+
+  it('stores NULL for currentSolution / currentSolutionDetail when omitted', async () => {
+    const r = await createRfpAction({
+      title: '솔루션 생략 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.currentSolution).toBeNull();
+    expect(row.currentSolutionDetail).toBeNull();
+  });
+
+  it('rejects invalid currentSolution value via Zod', async () => {
+    const r = await createRfpAction({
+      title: 't',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      currentSolution: 'unknown_platform' as any,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('INVALID_INPUT');
+  });
+
   // _suppress unused import warnings
   void and;
 });

@@ -60,6 +60,8 @@ const Input = z
     currentFeeRate: z.string().max(50).optional(),
     currentSettlementLimit: z.string().max(100).optional(),
     currentGuaranteeInsurance: z.string().max(100).optional(),
+    currentSolution: z.enum(['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other']).optional(),
+    currentSolutionDetail: z.string().max(100).optional(),
   })
   .strict();
 
@@ -187,6 +189,8 @@ export async function createRfpAction(
         currentFeeRate: parsed.data.currentFeeRate?.trim() ?? null,
         currentSettlementLimit: parsed.data.currentSettlementLimit?.trim() ?? null,
         currentGuaranteeInsurance: parsed.data.currentGuaranteeInsurance?.trim() ?? null,
+        currentSolution: parsed.data.currentSolution ?? null,
+        currentSolutionDetail: parsed.data.currentSolutionDetail?.trim() ?? null,
         deadline: new Date(parsed.data.deadline),
         shareToken: generateToken(),
         status: send ? 'sent' : 'draft',

@@ -13,6 +13,23 @@ import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { formatDate } from '@/lib/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
+
+const SOLUTION_LABELS: Record<string, string> = {
+  cafe24: '카페24',
+  imweb: '아임웹',
+  makeshop: '메이크샵',
+  godo: '고도몰',
+  self: '자체 개발',
+  other: '기타',
+};
+
+function formatSolution(solution?: string | null, detail?: string | null): string | undefined {
+  if (!solution) return undefined;
+  const label = SOLUTION_LABELS[solution] ?? solution;
+  return (solution === 'self' || solution === 'other') && detail
+    ? `${label} (${detail})`
+    : label;
+}
 import type { BoardCard, BoardColumn } from '@/lib/types/column';
 
 const statusLabel: Record<string, string> = {
@@ -157,8 +174,9 @@ export function RfpDetailContent({
             ['주요 판매 상품', rfp.mainProducts],
             ['전년도 연간 PG 거래액', rfp.annualPgVolume],
             ['현재 카드 수수료', rfp.currentFeeRate],
-            ['현재 정산한도', rfp.currentSettlementLimit],
+            ['현재 월 정산한도', rfp.currentSettlementLimit],
             ['현재 보증보험', rfp.currentGuaranteeInsurance],
+            ['현재 운영 솔루션', formatSolution(rfp.currentSolution, rfp.currentSolutionDetail)],
           ].some(([, v]) => v) && (
             <div>
               <div className="flex items-center gap-3 mb-3">
@@ -172,8 +190,9 @@ export function RfpDetailContent({
                     ['주요 판매 상품', rfp.mainProducts],
                     ['전년도 연간 PG 거래액', rfp.annualPgVolume],
                     ['현재 카드 수수료', rfp.currentFeeRate],
-                    ['현재 정산한도', rfp.currentSettlementLimit],
+                    ['현재 월 정산한도', rfp.currentSettlementLimit],
                     ['현재 보증보험', rfp.currentGuaranteeInsurance],
+                    ['현재 운영 솔루션', formatSolution(rfp.currentSolution, rfp.currentSolutionDetail)],
                   ] as [string, string | undefined][]
                 )
                   .filter(([, v]) => v)

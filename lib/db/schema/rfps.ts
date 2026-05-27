@@ -38,6 +38,8 @@ export const rfps = pgTable(
     currentFeeRate: text('current_fee_rate'),
     currentSettlementLimit: text('current_settlement_limit'),
     currentGuaranteeInsurance: text('current_guarantee_insurance'),
+    currentSolution: text('current_solution'),
+    currentSolutionDetail: text('current_solution_detail'),
     deadline: timestamp('deadline', { withTimezone: true }).notNull(),
     // RFP-scoped permanent share URL token — buyer distributes to PG workspaces.
     // Plaintext; auto-expires at deadline; default exists for fixtures/backfill,

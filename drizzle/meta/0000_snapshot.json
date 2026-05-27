@@ -1,5 +1,5 @@
 {
-  "id": "76aee602-4b93-49f8-9180-3cd496bff89c",
+  "id": "7d277d8e-8a8c-4c46-8270-548ea8449fac",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1866,6 +1866,18 @@
         },
         "current_guarantee_insurance": {
           "name": "current_guarantee_insurance",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_solution": {
+          "name": "current_solution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "current_solution_detail": {
+          "name": "current_solution_detail",
           "type": "text",
           "primaryKey": false,
           "notNull": false

@@ -86,4 +86,30 @@ describe('RfpDetailContent', () => {
     render(<RfpDetailContent data={buildData({ bids: [] })} />);
     expect(screen.queryByText(/수주 처리/)).not.toBeInTheDocument();
   });
+
+  it('"현재 정산한도" 라벨이 "현재 월 정산한도"로 변경됐다', () => {
+    render(<RfpDetailContent data={buildData({ rfp: { ...baseRfp, currentSettlementLimit: '월 1억' } })} />);
+    expect(screen.queryByText('현재 정산한도')).not.toBeInTheDocument();
+    expect(screen.getByText('현재 월 정산한도')).toBeInTheDocument();
+  });
+
+  it('currentSolution=cafe24 이면 "카페24" 텍스트를 렌더한다', () => {
+    render(<RfpDetailContent data={buildData({ rfp: { ...baseRfp, currentSolution: 'cafe24' } })} />);
+    expect(screen.getByText('카페24')).toBeInTheDocument();
+  });
+
+  it('currentSolution=self + detail 이면 "자체 개발 (ABC몰)"을 렌더한다', () => {
+    render(<RfpDetailContent data={buildData({ rfp: { ...baseRfp, currentSolution: 'self', currentSolutionDetail: 'ABC몰' } })} />);
+    expect(screen.getByText('자체 개발 (ABC몰)')).toBeInTheDocument();
+  });
+
+  it('currentSolution=other + detail 이면 "기타 (커스텀솔루션)"을 렌더한다', () => {
+    render(<RfpDetailContent data={buildData({ rfp: { ...baseRfp, currentSolution: 'other', currentSolutionDetail: '커스텀솔루션' } })} />);
+    expect(screen.getByText('기타 (커스텀솔루션)')).toBeInTheDocument();
+  });
+
+  it('currentSolution 이 없으면 "현재 운영 솔루션" 행을 렌더하지 않는다', () => {
+    render(<RfpDetailContent data={buildData()} />);
+    expect(screen.queryByText('현재 운영 솔루션')).not.toBeInTheDocument();
+  });
 });
