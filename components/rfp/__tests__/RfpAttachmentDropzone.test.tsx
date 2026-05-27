@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HTTPError } from 'ky'
+import type { NormalizedOptions, ResponsePromise } from 'ky'
 
 vi.mock('@/lib/http', () => ({
   http: { post: vi.fn() },
@@ -22,7 +23,7 @@ describe('RfpAttachmentDropzone 파일 업로드', () => {
     const user = userEvent.setup()
     vi.mocked(http.post).mockReturnValue({
       json: vi.fn().mockResolvedValue({ id: 'att-1', name: 'doc.pdf', size: 2048 }),
-    } as any)
+    } as unknown as ResponsePromise)
 
     render(<RfpAttachmentDropzone value={[]} onChange={vi.fn()} />)
 
@@ -42,11 +43,11 @@ describe('RfpAttachmentDropzone 파일 업로드', () => {
     const error415 = new HTTPError(
       new Response('', { status: 415 }),
       new Request('http://localhost/api/files/upload'),
-      {} as any,
+      {} as unknown as NormalizedOptions,
     )
     vi.mocked(http.post).mockReturnValue({
       json: vi.fn().mockRejectedValue(error415),
-    } as any)
+    } as unknown as ResponsePromise)
 
     render(<RfpAttachmentDropzone value={[]} onChange={vi.fn()} />)
 

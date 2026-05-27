@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ResponsePromise } from 'ky'
 
 // Static mocks — these run before module loading
 vi.mock('@/lib/http', () => ({
@@ -44,7 +45,7 @@ describe('useNotifications — loadHistory', () => {
     const { http } = await import('@/lib/http')
     vi.mocked(http.get).mockReturnValue({
       json: vi.fn().mockResolvedValue({ notifications }),
-    } as any)
+    } as unknown as ResponsePromise)
 
     const { renderHook, act } = await import('@testing-library/react')
     const { useNotifications } = await import('@/lib/hooks/useNotifications')
@@ -61,7 +62,7 @@ describe('useNotifications — loadHistory', () => {
     const { http } = await import('@/lib/http')
     vi.mocked(http.get).mockReturnValue({
       json: vi.fn().mockRejectedValue(new Error('network error')),
-    } as any)
+    } as unknown as ResponsePromise)
 
     const { renderHook, act } = await import('@testing-library/react')
     const { useNotifications } = await import('@/lib/hooks/useNotifications')

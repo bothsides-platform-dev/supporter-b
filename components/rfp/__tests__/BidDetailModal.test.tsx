@@ -15,6 +15,7 @@ vi.mock('@/lib/http', () => ({
 vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')))
 import type { Bid } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
+import type { ResponsePromise } from 'ky';
 
 // next/navigation mock — modal uses router.refresh() after action calls.
 const refresh = vi.fn();
@@ -269,7 +270,7 @@ describe('BidDetailModal 첨부파일 업로드', () => {
     const user = userEvent.setup()
     vi.mocked(http.post).mockReturnValue({
       json: vi.fn().mockResolvedValue({ id: 'att-1', name: 'note.pdf', size: 1024, mimeType: 'application/pdf' }),
-    } as any)
+    } as unknown as ResponsePromise)
     addMock.mockResolvedValue({ ok: true as const, noteId: 'note-new' })
 
     render(

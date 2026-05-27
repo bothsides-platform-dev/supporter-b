@@ -31,6 +31,7 @@ vi.mock('@/lib/http', () => ({
 
 import { Header } from '../Header';
 import { http } from '@/lib/http';
+import type { ResponsePromise } from 'ky';
 
 const user = { name: '홍길동', email: 'gildong@test.com' };
 
@@ -44,7 +45,7 @@ beforeEach(() => {
     value: { assign },
   });
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true } as Response)));
-  vi.mocked(http.post).mockResolvedValue(new Response('', { status: 200 }) as any);
+  vi.mocked(http.post).mockReturnValue({ json: vi.fn().mockResolvedValue({}) } as unknown as ResponsePromise);
 });
 
 afterEach(() => {

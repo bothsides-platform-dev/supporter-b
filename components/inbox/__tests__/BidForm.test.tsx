@@ -4,6 +4,7 @@ import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from '@/lib/http';
 import { HTTPError } from 'ky';
+import type { NormalizedOptions, ResponsePromise } from 'ky';
 
 class ResizeObserverStub {
   observe() {}
@@ -46,7 +47,7 @@ describe('BidForm 제안서 업로드', () => {
     const user = userEvent.setup()
     vi.mocked(http.post).mockReturnValue({
       json: vi.fn().mockResolvedValue({ id: 'att-1', name: 'proposal.pdf', size: 1024 }),
-    } as any)
+    } as unknown as ResponsePromise)
 
     renderForm()
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
@@ -65,11 +66,11 @@ describe('BidForm 제안서 업로드', () => {
     const error413 = new HTTPError(
       new Response('', { status: 413 }),
       new Request('http://localhost/api/files/upload'),
-      {} as any,
+      {} as unknown as NormalizedOptions,
     )
     vi.mocked(http.post).mockReturnValue({
       json: vi.fn().mockRejectedValue(error413),
-    } as any)
+    } as unknown as ResponsePromise)
 
     renderForm()
     const input = document.querySelector('input[type="file"]') as HTMLInputElement

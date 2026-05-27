@@ -19,6 +19,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 import { http } from '@/lib/http'
+import type { ResponsePromise } from 'ky'
 import { UserMenu } from '../UserMenu'
 
 afterEach(() => {
@@ -34,7 +35,7 @@ describe('UserMenu 로그아웃', () => {
       configurable: true,
       value: { assign: assignMock },
     })
-    vi.mocked(http.post).mockResolvedValue(new Response('', { status: 200 }) as any)
+    vi.mocked(http.post).mockReturnValue({ json: vi.fn().mockResolvedValue({}) } as unknown as ResponsePromise)
 
     const user = userEvent.setup()
     render(

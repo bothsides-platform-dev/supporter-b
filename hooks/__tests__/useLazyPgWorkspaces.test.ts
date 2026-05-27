@@ -7,6 +7,7 @@ vi.mock('@/lib/http', () => ({
 vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')))
 
 import { http } from '@/lib/http'
+import type { ResponsePromise } from 'ky'
 import { useLazyPgWorkspaces } from '@/hooks/useLazyPgWorkspaces'
 
 afterEach(() => {
@@ -19,7 +20,7 @@ describe('useLazyPgWorkspaces', () => {
     const workspaces = [{ id: 'ws-1', name: 'toss', displayName: '토스페이먼츠' }]
     vi.mocked(http.get).mockReturnValue({
       json: vi.fn().mockResolvedValue({ workspaces }),
-    } as any)
+    } as unknown as ResponsePromise)
 
     const { result } = renderHook(() => useLazyPgWorkspaces())
     await act(() => result.current.load())
@@ -34,7 +35,7 @@ describe('useLazyPgWorkspaces', () => {
   it('요청 실패 시 error 상태 설정 및 재시도 허용', async () => {
     vi.mocked(http.get).mockReturnValue({
       json: vi.fn().mockRejectedValue(new Error('network error')),
-    } as any)
+    } as unknown as ResponsePromise)
 
     const { result } = renderHook(() => useLazyPgWorkspaces())
     await act(() => result.current.load())
