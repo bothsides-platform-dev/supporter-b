@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { HTTPError } from 'ky';
+import { http } from '@/lib/http';
 import { Label } from '@/components/primitives/Label';
 import type { RfpMockFile } from '@/lib/stores/rfp-draft';
 import { DRAFT_OWNER_ID } from '@/lib/server/storage/constants';
@@ -72,45 +74,32 @@ export function RfpAttachmentDropzone({ value, onChange }: Props) {
     form.append('ownerId', DRAFT_OWNER_ID);
 
     try {
-      const r = await fetch('/api/files/upload', {
-        method: 'POST',
-        body: form,
-        credentials: 'same-origin',
-      });
-      if (!r.ok) {
-        const msg =
-          r.status === 413
-            ? '파일이 너무 큽니다 (최대 20MB)'
-            : r.status === 415
-              ? '지원되지 않는 파일 형식입니다 (PDF/PNG/JPEG만 허용)'
-              : `업로드 실패 (${r.status})`;
-        setRows((prev) =>
-          prev.map((row) =>
-            row.id === tempId ? { ...row, status: 'error' as const, error: msg } : row,
-          ),
-        );
-        return;
-      }
-      const body = (await r.json()) as { id: string; name: string; size: number };
+      const body = await http
+        .post('/api/files/upload', { body: form })
+        .json<{ id: string; name: string; size: number }>()
       setRows((prev) =>
         prev.map((row) =>
           row.id === tempId
-            ? {
-                id: body.id,
-                name: body.name,
-                size: body.size,
-                status: 'ready' as const,
-              }
+            ? { id: body.id, name: body.name, size: body.size, status: 'ready' as const }
             : row,
         ),
-      );
+      )
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '네트워크 오류';
+      let msg = err instanceof Error ? err.message : '네트워크 오류'
+      if (err instanceof HTTPError) {
+        const { status } = err.response
+        msg =
+          status === 413
+            ? '파일이 너무 큽니다 (최대 20MB)'
+            : status === 415
+              ? '지원되지 않는 파일 형식입니다 (PDF/PNG/JPEG만 허용)'
+              : `업로드 실패 (${status})`
+      }
       setRows((prev) =>
         prev.map((row) =>
           row.id === tempId ? { ...row, status: 'error' as const, error: msg } : row,
         ),
-      );
+      )
     }
   };
 
