@@ -2,6 +2,8 @@
 
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { HTTPError } from 'ky';
+import { http } from '@/lib/http';
 import {
   Dialog,
   DialogContent,
@@ -264,22 +266,18 @@ function NoteForm({ bidId }: { bidId: string }) {
         form.append('file', file);
         form.append('ownerKind', 'bid_note');
         form.append('ownerId', bidId);
-        const res = await fetch('/api/files/upload', {
-          method: 'POST',
-          body: form,
-        });
-        if (!res.ok) {
-          const payload = (await res.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          throw new Error(payload.error ?? `UPLOAD_${res.status}`);
+        let body: { id: string; name: string; size: number; mimeType: string }
+        try {
+          body = await http
+            .post('/api/files/upload', { body: form })
+            .json<{ id: string; name: string; size: number; mimeType: string }>()
+        } catch (err) {
+          if (err instanceof HTTPError) {
+            const payload = (await err.response.json().catch(() => ({}))) as { error?: string }
+            throw new Error(payload.error ?? `UPLOAD_${err.response.status}`)
+          }
+          throw err
         }
-        const body = (await res.json()) as {
-          id: string;
-          name: string;
-          size: number;
-          mimeType: string;
-        };
         uploaded.push(body);
       }
       setFiles((prev) => [...prev, ...uploaded]);
