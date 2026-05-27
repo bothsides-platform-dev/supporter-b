@@ -49,7 +49,7 @@ describe('useNotifications — loadHistory', () => {
     const { renderHook, act } = await import('@testing-library/react')
     const { useNotifications } = await import('@/lib/hooks/useNotifications')
 
-    const { result } = renderHook(() => useNotifications())
+    renderHook(() => useNotifications())
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50))
     })
