@@ -16,6 +16,7 @@ export type SignupClientDraft = {
   email?: string;
   emailVerified?: boolean;
   inviteToken?: string;
+  wsInviteToken?: string;
   name?: string;
   phone?: string;
   phoneVerificationId?: string;

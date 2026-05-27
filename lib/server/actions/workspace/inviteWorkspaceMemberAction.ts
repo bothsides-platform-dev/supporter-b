@@ -9,7 +9,7 @@ import { getOutboxRepo } from '@/lib/server/repositories/factory';
 import { generateToken, hashToken } from '@/lib/server/token';
 import { renderWorkspaceInvited } from '@/lib/server/outbox/templates/workspaceInvited';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
-import { actionDb, baseUrl, normalizeEmail } from '@/lib/server/actions/auth/_shared';
+import { actionDb, baseUrl, bucket15Min, isUniqueViolation, normalizeEmail } from '@/lib/server/actions/auth/_shared';
 
 const Input = z
   .object({
@@ -80,8 +80,7 @@ export async function inviteWorkspaceMemberAction(input: {
           status: 'pending',
         });
       } catch (err) {
-        const code = (err as { code?: string }).code;
-        if (code === '23505') return { ok: false, error: 'ALREADY_INVITED' };
+        if (isUniqueViolation(err)) return { ok: false, error: 'ALREADY_INVITED' };
         throw err;
       }
 
@@ -97,7 +96,7 @@ export async function inviteWorkspaceMemberAction(input: {
           to: normalizedEmail,
           subject: '[Supporter B] 워크스페이스 초대장',
           html,
-          dedupeKey: `ws-invite:${workspaceId}:${normalizedEmail}`,
+          dedupeKey: `ws-invite:${workspaceId}:${normalizedEmail}:${bucket15Min()}`,
         },
         tx,
       );

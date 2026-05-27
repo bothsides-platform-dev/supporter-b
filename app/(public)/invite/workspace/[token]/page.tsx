@@ -7,7 +7,6 @@
 // 인증: acceptWorkspaceInviteAction 서버 사이드 호출.
 //   - ok → /home redirect
 //   - error → 인라인 오류 메시지
-import { redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
 
 import { auth } from '@/auth';
@@ -15,6 +14,7 @@ import { db as prodDb } from '@/lib/db/client';
 import { workspaceInvitations, workspaces } from '@/lib/db/schema';
 import { hashToken } from '@/lib/server/token';
 import { WorkspaceInviteAuthedClient } from './WorkspaceInviteAuthedClient';
+import { WorkspaceInviteUnauthClient } from './WorkspaceInviteUnauthClient';
 
 type Props = { params: Promise<{ token: string }> };
 
@@ -68,8 +68,7 @@ export default async function WorkspaceInvitePage({ params }: Props) {
     );
   }
 
-  // Valid invite — redirect to signup with email prefilled
-  redirect(
-    `/signup/pg?inviteEmail=${encodeURIComponent(row.invitedEmail)}`,
-  );
+  // Valid invite — hand off to client component so the token can be stored
+  // in sessionStorage before routing to signup (server redirect loses the token)
+  return <WorkspaceInviteUnauthClient token={token} inviteEmail={row.invitedEmail} />;
 }

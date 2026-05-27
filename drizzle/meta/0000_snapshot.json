@@ -1,5 +1,5 @@
 {
-  "id": "a9e431f3-fc64-499a-bf3d-054e99002d97",
+  "id": "76aee602-4b93-49f8-9180-3cd496bff89c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1714,8 +1714,8 @@
         }
       },
       "indexes": {
-        "workspace_invitations_ws_email_uniq": {
-          "name": "workspace_invitations_ws_email_uniq",
+        "workspace_invitations_ws_email_pending_uidx": {
+          "name": "workspace_invitations_ws_email_pending_uidx",
           "columns": [
             {
               "expression": "workspace_id",
@@ -1731,6 +1731,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"workspace_invitations\".\"status\" = 'pending'",
           "concurrently": false,
           "method": "btree",
           "with": {}

@@ -25,6 +25,8 @@ export const workspaceInvitations = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
-    uniqueIndex('workspace_invitations_ws_email_uniq').on(t.workspaceId, sql`lower(${t.invitedEmail})`),
+    uniqueIndex('workspace_invitations_ws_email_pending_uidx')
+      .on(t.workspaceId, sql`lower(${t.invitedEmail})`)
+      .where(sql`${t.status} = 'pending'`),
   ],
 );

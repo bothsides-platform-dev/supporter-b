@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { acceptWorkspaceInviteAction } from '@/lib/server/actions/workspace/acceptWorkspaceInviteAction';
 import { switchWorkspaceAction } from '@/lib/server/actions/workspace/switchWorkspaceAction';
 
@@ -18,7 +17,6 @@ const ERROR_LABELS: Record<string, string> = {
 // the joined ws via the JWT — an RSC cannot set cookies. Without this the new
 // membership would be inert until re-login (the bug this fixes).
 export function WorkspaceInviteAuthedClient({ token }: { token: string }) {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,8 +27,8 @@ export function WorkspaceInviteAuthedClient({ token }: { token: string }) {
       if (r.ok) {
         await switchWorkspaceAction(r.workspaceId);
         if (cancelled) return;
-        router.refresh();
-        router.replace('/home');
+        // Hard navigation: revalidatePath + router.refresh() causes Next.js 16 hang (#86055)
+        window.location.replace('/home');
       } else {
         setError(r.error);
       }
@@ -38,7 +36,7 @@ export function WorkspaceInviteAuthedClient({ token }: { token: string }) {
     return () => {
       cancelled = true;
     };
-  }, [token, router]);
+  }, [token]);
 
   if (error) {
     return (

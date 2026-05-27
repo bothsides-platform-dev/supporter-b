@@ -97,6 +97,7 @@ export default function PgBizPage() {
         redirect: false,
       });
 
+      const wsInviteToken = d.wsInviteToken;
       clearSignupDraft();
 
       if (signInResult && signInResult.error) {
@@ -105,7 +106,9 @@ export default function PgBizPage() {
         return;
       }
 
-      router.push(r.redirectTo);
+      // If user arrived via a workspace invite, redirect back to the invite URL
+      // so WorkspaceInviteAuthedClient can accept it now that they're signed in.
+      router.push(wsInviteToken ? `/invite/workspace/${wsInviteToken}` : r.redirectTo);
     } finally {
       setLoading(false);
     }

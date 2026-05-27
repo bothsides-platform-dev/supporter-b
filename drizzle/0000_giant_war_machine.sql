@@ -369,7 +369,7 @@ CREATE INDEX "columns_ws_kind_idx" ON "columns" USING btree ("workspace_id","kin
 CREATE INDEX "contracts_bid_idx" ON "contracts" USING btree ("bid_id");--> statement-breakpoint
 CREATE INDEX "workspaces_biz_profile_idx" ON "workspaces" USING btree ("biz_profile_id");--> statement-breakpoint
 CREATE INDEX "workspace_members_user_idx" ON "workspace_members" USING btree ("user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "workspace_invitations_ws_email_uniq" ON "workspace_invitations" USING btree ("workspace_id",lower("invited_email"));--> statement-breakpoint
+CREATE UNIQUE INDEX "workspace_invitations_ws_email_pending_uidx" ON "workspace_invitations" USING btree ("workspace_id",lower("invited_email")) WHERE "workspace_invitations"."status" = 'pending';--> statement-breakpoint
 CREATE INDEX "rfps_buyer_ws_idx" ON "rfps" USING btree ("buyer_ws_id");--> statement-breakpoint
 CREATE INDEX "rfps_awarded_bid_idx" ON "rfps" USING btree ("awarded_bid_id");--> statement-breakpoint
 CREATE INDEX "rfps_board_column_idx" ON "rfps" USING btree ("board_column_id");--> statement-breakpoint
