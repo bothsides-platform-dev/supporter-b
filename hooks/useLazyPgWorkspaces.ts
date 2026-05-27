@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import { http } from '@/lib/http';
 
 export type PgWorkspace = { id: string; name: string; displayName: string };
 
@@ -16,10 +17,10 @@ export function useLazyPgWorkspaces() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/workspaces/search?type=pg');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { workspaces: PgWorkspace[] };
-      setPgList(data.workspaces);
+      const data = await http
+        .get('/api/workspaces/search', { searchParams: { type: 'pg' } })
+        .json<{ workspaces: PgWorkspace[] }>()
+      setPgList(data.workspaces)
     } catch {
       loadedRef.current = false;
       setError('불러오기 실패. 다시 시도해주세요.');
