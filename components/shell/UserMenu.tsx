@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { http } from '@/lib/http';
 import { Avatar } from '@/components/primitives/Avatar';
 import {
   DropdownMenu,
@@ -29,7 +30,7 @@ export function UserMenu({ user, workspaceType, className }: UserMenuProps) {
   const router = useRouter();
 
   async function handleLogout() {
-    await fetch('/logout', { method: 'POST' });
+    await http.post('/logout');
     window.location.assign('/login');
   }
 
