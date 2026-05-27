@@ -19,7 +19,6 @@ export async function hideQuoteAction(
 
   const session = await requireAdminSession();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [bid] = await (db as ReturnType<typeof actionDb>).select({ rfpId: bids.rfpId }).from(bids).where(eq(bids.id, bidId));
   if (!bid) return { ok: false, error: 'NOT_FOUND' };
   const rfpId = bid.rfpId;
