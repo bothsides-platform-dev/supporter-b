@@ -17,6 +17,7 @@ import { useCallback, useEffect } from 'react';
 import { create } from 'zustand';
 
 import type { Notification } from '@/lib/types/notification';
+import { http } from '@/lib/http';
 import { markNotificationReadAction } from '@/lib/server/actions/notifications/markNotificationReadAction';
 import { markAllReadAction } from '@/lib/server/actions/notifications/markAllReadAction';
 import { retryEmailNotificationAction } from '@/lib/server/actions/notifications/retryEmailNotificationAction';
@@ -68,20 +69,14 @@ async function loadHistory(): Promise<void> {
   if (historyLoaded) return;
   historyLoaded = true;
   try {
-    useStore.getState().setStatus('loading');
-    const res = await fetch('/api/notifications', {
-      credentials: 'same-origin',
-    });
-    if (!res.ok) {
-      useStore.getState().setStatus('error');
-      historyLoaded = false; // allow retry on next consumer mount
-      return;
-    }
-    const data = (await res.json()) as { notifications: Notification[] };
-    useStore.getState().setAll(data.notifications);
+    useStore.getState().setStatus('loading')
+    const data = await http
+      .get('/api/notifications')
+      .json<{ notifications: Notification[] }>()
+    useStore.getState().setAll(data.notifications)
   } catch {
-    useStore.getState().setStatus('error');
-    historyLoaded = false;
+    useStore.getState().setStatus('error')
+    historyLoaded = false
   }
 }
 
