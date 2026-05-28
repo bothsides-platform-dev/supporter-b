@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
-import { RfpCreateForm } from '@/components/rfp/RfpCreateForm';
+import { RfpCreateWizard } from '@/components/rfp/RfpCreateWizard';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +23,7 @@ export default async function RfpNewPage() {
           </h1>
         </div>
         <div className="lg:flex-1 lg:min-h-0">
-          <RfpCreateForm guest />
+          <RfpCreateWizard guest />
         </div>
       </div>
     );
@@ -39,8 +39,8 @@ export default async function RfpNewPage() {
         </h1>
       </div>
       <div className="lg:flex-1 lg:min-h-0">
-        <RfpCreateForm
-          bizProfile={ws?.bizProfile}
+        <RfpCreateWizard
+          bizProfile={ws?.bizProfile ?? undefined}
           workspaceName={ws?.name ?? ''}
         />
       </div>
