@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
 import { StatutoryCardFeeNotice } from './StatutoryCardFeeNotice';
+import { useBidDraft } from './useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
 import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
@@ -45,6 +46,12 @@ function PctInput({
   onChange: (v: string) => void;
   placeholder?: string;
 }) {
+  const numVal = parseFloat(value);
+  const hint =
+    !isNaN(numVal) && numVal > 0
+      ? `= 1만원 결제 시 ${Math.round(numVal * 100).toLocaleString()}원`
+      : null;
+
   return (
     <div className="space-y-1">
       <Label size="md" muted={false}>{label}</Label>
@@ -60,6 +67,11 @@ function PctInput({
         />
         <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
       </div>
+      {hint && (
+        <p className="font-mono text-[11px] text-[var(--md-sys-color-tertiary)] mt-1">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
@@ -116,6 +128,31 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
   const [bankPct, setBankPct] = useState('0.50');
   const [cardPct, setCardPct] = useState('');
   const [memo, setMemo] = useState('');
+
+  // 임시 저장
+  const { draft, saveDraft, clearDraft } = useBidDraft(rfpId);
+  const [showRestoreBanner, setShowRestoreBanner] = useState(draft !== null);
+
+  useEffect(() => {
+    saveDraft({ cycleUnit, cycleNum, settleLimit, guaranteeInsurance, bankPct, cardPct, memo });
+  }, [cycleUnit, cycleNum, settleLimit, guaranteeInsurance, bankPct, cardPct, memo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleRestore() {
+    if (!draft) return;
+    setCycleUnit(draft.cycleUnit);
+    setCycleNum(draft.cycleNum);
+    setSettleLimit(draft.settleLimit);
+    setGuaranteeInsurance(draft.guaranteeInsurance);
+    setBankPct(draft.bankPct);
+    setCardPct(draft.cardPct);
+    setMemo(draft.memo);
+    setShowRestoreBanner(false);
+  }
+
+  function handleDismiss() {
+    clearDraft();
+    setShowRestoreBanner(false);
+  }
 
   const proposalInputRef = useRef<HTMLInputElement>(null);
   const [proposal, setProposal] = useState<
@@ -199,6 +236,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
         memo: memo.trim() || undefined,
       });
       if (r.ok) {
+        clearDraft();
         router.push(`/inbox/${rfpCode}/submitted`);
       } else {
         setSubmitError(r.error);
@@ -219,6 +257,29 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
         loading={pending}
       />
     <form className="space-y-10" onSubmit={handleSubmit}>
+      {showRestoreBanner && (
+        <div className="flex items-center justify-between px-4 py-2.5 border border-[var(--md-sys-color-secondary-container)] rounded-[6px] bg-[var(--md-sys-color-secondary-container)]">
+          <span className="text-[13px] text-[var(--md-sys-color-on-secondary-container)]">
+            이전에 작성 중이던 내용이 있습니다
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleRestore}
+              className="text-[12px] text-[var(--md-sys-color-on-secondary-container)] underline underline-offset-2"
+            >
+              불러오기
+            </button>
+            <button
+              type="button"
+              onClick={handleDismiss}
+              className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]"
+            >
+              무시
+            </button>
+          </div>
+        </div>
+      )}
       {grade && grade !== 'general' && cardFeeStatutory !== null && (
         <StatutoryCardFeeNotice grade={grade} />
       )}
