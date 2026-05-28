@@ -2,9 +2,9 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { STEP_LABELS, WIZARD_STEPS } from './wizard-steps';
 
-const STEP_LABELS = ['사업자 확인', '제안 내용', 'PG 선택', '발송 확인'] as const;
-const TOTAL = 4;
+const TOTAL = WIZARD_STEPS.length;
 
 type WizardProgressBarProps = {
   currentStep: number;    // 1-4

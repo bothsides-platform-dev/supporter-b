@@ -1,13 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-
-const STEPS = [
-  { num: 1, label: '사업자 확인' },
-  { num: 2, label: '제안 내용' },
-  { num: 3, label: 'PG 선택' },
-  { num: 4, label: '발송 확인' },
-] as const;
+import { WIZARD_STEPS } from './wizard-steps';
 
 type WizardStepSidebarProps = {
   currentStep: number;
@@ -21,7 +15,7 @@ export function WizardStepSidebar({ currentStep, maxReachedStep, onStepClick }: 
       <span className="font-mono text-[9px] tracking-[0.14em] uppercase text-[var(--md-sys-color-outline)] mb-4">
         신규 제안 요청
       </span>
-      {STEPS.map(({ num, label }) => {
+      {WIZARD_STEPS.map(({ num, label }) => {
         const isDone = num < currentStep && num <= maxReachedStep;
         const isActive = num === currentStep;
         const isClickable = num <= maxReachedStep;

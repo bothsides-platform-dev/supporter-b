@@ -5,6 +5,15 @@ import { RfpCreateWizard } from '../RfpCreateWizard';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 
 // Step child component mocks — keeps wizard tests focused on orchestration logic
+vi.mock('../RfpStep1BizProfile', () => ({
+  RfpStep1BizProfile: ({ onNext }: { onNext: () => void }) => (
+    <div>
+      <span>사업자 확인</span>
+      <button type="button" onClick={onNext}>다음</button>
+    </div>
+  ),
+}));
+
 vi.mock('../RfpStep2Content', () => ({
   RfpStep2Content: ({ onBack, onNext }: { onBack: () => void; onNext: () => void }) => (
     <div>
@@ -36,7 +45,7 @@ vi.mock('../RfpStep4Review', () => ({
     submitting: boolean;
     serverError: string;
   }) => {
-    const draft = useRfpDraftStore.getState();
+    const draft = useRfpDraftStore();
     const pgCount = draft.allowedPgWorkspaceIds.length;
     return (
       <div>
@@ -99,7 +108,7 @@ describe('RfpCreateWizard', () => {
 
   it('초기 렌더 시 Step 1이 표시된다', () => {
     render(<RfpCreateWizard />);
-    expect(screen.getByText('사업자 확인')).toBeInTheDocument();
+    expect(screen.getAllByText('사업자 확인').length).toBeGreaterThan(0);
     expect(screen.queryByPlaceholderText(/서포트쇼핑몰/)).not.toBeInTheDocument();
   });
 

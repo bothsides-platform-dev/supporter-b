@@ -15,8 +15,10 @@ import { createRfpAction } from '@/lib/server/actions/rfp';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { toast } from '@/lib/toast';
 import type { BizProfile } from '@/lib/types/biz-profile';
+import { STEP_LABELS } from './wizard-steps';
 
-const STEP_LABELS = ['사업자 확인', '제안 내용', 'PG 선택', '발송 확인'] as const;
+const SOLUTION_VALUES = ['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other'] as const;
+type SolutionValue = (typeof SOLUTION_VALUES)[number];
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -51,6 +53,12 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
     setSubmitting(true);
     setServerError('');
 
+    const solutionRaw = draft.currentSolution;
+    const currentSolution: SolutionValue | undefined =
+      (SOLUTION_VALUES as readonly string[]).includes(solutionRaw) && solutionRaw !== ''
+        ? (solutionRaw as SolutionValue)
+        : undefined;
+
     const result = await createRfpAction({
       title: draft.title.trim(),
       websiteUrl: draft.websiteUrl.trim() || undefined,
@@ -59,7 +67,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
       currentFeeRate: draft.currentFeeRate.trim() || undefined,
       currentSettlementLimit: draft.currentSettlementLimit.trim() || undefined,
       currentGuaranteeInsurance: draft.currentGuaranteeInsurance.trim() || undefined,
-      currentSolution: (draft.currentSolution as 'cafe24' | 'imweb' | 'makeshop' | 'godo' | 'self' | 'other') || undefined,
+      currentSolution,
       currentSolutionDetail: draft.currentSolutionDetail.trim() || undefined,
       memo: draft.memo.trim() || undefined,
       deadline: draft.deadline,
