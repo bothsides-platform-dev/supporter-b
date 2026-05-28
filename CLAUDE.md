@@ -139,3 +139,15 @@ The content docs (this file, `README.md`, `DESIGN.md`, `SCREEN_DESIGN.md`) cross
 - test: `pnpm test`
 
 TDD 사이클 중 단일 파일만 실행: `pnpm test <path-to-test>` — RED/GREEN 확인은 항상 단일 파일로 빠르게, 전체 그린 확인은 `pnpm test`.
+
+## Worktree Workflow
+
+모든 기능 개발·버그픽스는 **worktree 브랜치**에서 진행한다. main은 항상 clean 상태 유지.
+
+- 새 작업 시작 시 `EnterWorktree` (네이티브 도구)로 `.worktrees/<branch-name>` 생성
+- Worktree 디렉터리: `.worktrees/` (`.gitignore`에 등록됨)
+- 브랜치 명명: `feat/<slug>`, `fix/<slug>`, `chore/<slug>`
+- PR은 `/ship` 스킬로 생성
+- PR 머지 후 `git worktree remove .worktrees/<name> && git branch -d <name>` 정리
+
+**동의 없이 worktree를 자동 생성해도 된다.** 별도 확인 불필요.
