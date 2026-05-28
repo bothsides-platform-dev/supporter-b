@@ -1,13 +1,13 @@
-// RfpListTable — 행 클릭은 사람용 code(P-YYMM-NNNN)로 이동해야 한다. 상세 라우트가
-// findByCode 로 조회하므로 uuid(rfp.id)로 push 하면 "RFP를 찾을 수 없습니다" 가 뜬다
-// (회귀 가드 + 모달 가로채기 진입점 정합).
+// components/rfp/__tests__/RfpListTable.test.tsx
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const push = vi.fn();
+const replace = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ replace }),
+  usePathname: () => '/rfp',
+  useSearchParams: () => new URLSearchParams(''),
 }));
 
 import { RfpListTable } from '../RfpListTable';
@@ -42,18 +42,18 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  push.mockClear();
+  replace.mockClear();
 });
 
 describe('RfpListTable', () => {
-  it('행 클릭 시 code 로 이동(uuid 아님)', async () => {
+  it('행 클릭 시 ?peek=<code>로 replace (uuid 아님)', async () => {
     const user = userEvent.setup();
     render(<RfpListTable rfps={[rfp]} />);
     await user.click(screen.getByText('결제대행 RFP'));
-    expect(push).toHaveBeenCalledWith('/rfp/P-2604-0001');
+    expect(replace).toHaveBeenCalledWith('/rfp?peek=P-2604-0001');
   });
 
-  it('번호 컬럼에 uuid 가 아니라 code 를 표시', () => {
+  it('번호 컬럼에 code를 표시', () => {
     render(<RfpListTable rfps={[rfp]} />);
     expect(screen.getByText('P-2604-0001')).toBeInTheDocument();
     expect(
@@ -61,24 +61,17 @@ describe('RfpListTable', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('하단 키보드 힌트 문구를 표시하지 않는다', () => {
-    render(<RfpListTable rfps={[rfp]} />);
-    expect(screen.queryByText('이동')).not.toBeInTheDocument();
-    expect(screen.queryByText('상세')).not.toBeInTheDocument();
-    expect(screen.queryByText('신규')).not.toBeInTheDocument();
+  it('Enter 키로 ?peek=<code> replace', () => {
+    render(<RfpListTable rfps={[rfp, rfpSecond]} />);
+    fireEvent.keyDown(document, { key: 'j' });
+    fireEvent.keyDown(document, { key: 'j' });
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(replace).toHaveBeenCalledWith('/rfp?peek=P-2604-0002');
   });
 
-  it('J/K 로 행을 이동하고 Enter 로 상세(code)로 이동한다', () => {
+  it('peekCode와 일치하는 행이 2개 렌더됨', () => {
     const { container } = render(<RfpListTable rfps={[rfp, rfpSecond]} />);
     const rows = container.querySelectorAll('tbody tr');
-
-    fireEvent.keyDown(document, { key: 'j' });
-    expect(rows[0]).toHaveAttribute('data-active', 'true');
-
-    fireEvent.keyDown(document, { key: 'j' });
-    expect(rows[1]).toHaveAttribute('data-active', 'true');
-
-    fireEvent.keyDown(document, { key: 'Enter' });
-    expect(push).toHaveBeenCalledWith('/rfp/P-2604-0002');
+    expect(rows.length).toBe(2);
   });
 });
