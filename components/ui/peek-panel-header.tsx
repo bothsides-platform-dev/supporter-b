@@ -32,14 +32,14 @@ export function PeekPanelHeader({ rfpCode, fullscreenHref }: PeekPanelHeaderProp
         <button
           onClick={handleFullscreen}
           aria-label="전체화면"
-          className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-[var(--md-sys-color-on-surface-variant)] border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
+          className="flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] text-[var(--md-sys-color-on-surface-variant)] border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
         >
           ⤢ 전체화면
         </button>
         <button
           onClick={handleClose}
           aria-label="닫기"
-          className="flex h-6 w-6 items-center justify-center rounded text-[12px] text-[var(--md-sys-color-on-surface-variant)] border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
+          className="flex h-6 w-6 items-center justify-center rounded-sm text-[12px] text-[var(--md-sys-color-on-surface-variant)] border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
         >
           ✕
         </button>
