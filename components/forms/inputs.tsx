@@ -14,33 +14,6 @@ export const underlineInputClass =
 
 export const numericInputClass = cn(underlineInputClass, 'font-mono tabular-nums');
 
-type TextFieldProps = {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  type?: 'text';
-  className?: string;
-};
-
-/** Plain underline text input. */
-export function TextField({
-  value,
-  onChange,
-  placeholder,
-  type = 'text',
-  className,
-}: TextFieldProps) {
-  return (
-    <input
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className={cn(underlineInputClass, className)}
-    />
-  );
-}
-
 type NumericFieldProps = {
   label: string;
   value: string;

@@ -3,7 +3,7 @@
 
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
-import { TextField, underlineInputClass } from '@/components/forms/inputs';
+import { underlineInputClass } from '@/components/forms/inputs';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { cn } from '@/lib/utils';
@@ -35,7 +35,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.title}
           onChange={(e) => draft.setField('title', e.target.value)}
           placeholder="2026 서포트쇼핑몰 결제 인프라 제안건"
-          className={INPUT_CLASS}
+          className={underlineInputClass}
         />
       </div>
       <div className="space-y-1">
@@ -45,7 +45,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.websiteUrl}
           onChange={(e) => draft.setField('websiteUrl', e.target.value)}
           placeholder="https://bidit.store/"
-          className={INPUT_CLASS}
+          className={underlineInputClass}
         />
       </div>
       <div className="space-y-1">
@@ -55,7 +55,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.mainProducts}
           onChange={(e) => draft.setField('mainProducts', e.target.value)}
           placeholder="의류"
-          className={INPUT_CLASS}
+          className={underlineInputClass}
         />
       </div>
       <div className="space-y-1">
@@ -65,7 +65,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.annualPgVolume}
           onChange={(e) => draft.setField('annualPgVolume', e.target.value)}
           placeholder="10억"
-          className={INPUT_CLASS}
+          className={underlineInputClass}
         />
       </div>
       <div className="space-y-1">
@@ -75,7 +75,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.currentFeeRate}
           onChange={(e) => draft.setField('currentFeeRate', e.target.value)}
           placeholder="3.4%"
-          className={INPUT_CLASS}
+          className={underlineInputClass}
         />
       </div>
       <div className="space-y-1">
@@ -85,7 +85,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.currentSettlementLimit}
           onChange={(e) => draft.setField('currentSettlementLimit', e.target.value)}
           placeholder="월 1억"
-          className={INPUT_CLASS}
+          className={underlineInputClass}
         />
       </div>
       <div className="space-y-1">
@@ -95,7 +95,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.currentGuaranteeInsurance}
           onChange={(e) => draft.setField('currentGuaranteeInsurance', e.target.value)}
           placeholder="3000만원"
-          className={INPUT_CLASS}
+          className={underlineInputClass}
         />
       </div>
       <div className="space-y-2">
@@ -129,7 +129,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
             value={draft.currentSolutionDetail}
             onChange={(e) => draft.setField('currentSolutionDetail', e.target.value)}
             placeholder={draft.currentSolution === 'self' ? '독립몰 이름' : '솔루션 이름'}
-            className={INPUT_CLASS}
+            className={underlineInputClass}
           />
         )}
       </div>
@@ -140,7 +140,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           onChange={(e) => draft.setField('memo', e.target.value)}
           rows={4}
           placeholder="카드결제·간편결제 통합 솔루션 검토 중입니다. 정산주기 D+1 이내 희망."
-          className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors resize-none"
+          className={cn(underlineInputClass, 'resize-none')}
         />
       </div>
       <RfpAttachmentDropzone
