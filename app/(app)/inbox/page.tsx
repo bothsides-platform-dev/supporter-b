@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { auth } from '@/auth';
+import { requirePgPage } from '@/lib/auth/page-guards';
 import { getInvitationRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
@@ -36,10 +35,7 @@ type Props = {
 };
 
 export default async function InboxPage({ searchParams }: Props) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.workspaceId) {
-    redirect('/login?next=/inbox');
-  }
+  const session = await requirePgPage('/inbox');
 
   const sp = await searchParams;
   const cookieStore = await cookies();

@@ -13,6 +13,12 @@ import { useBidDraft } from './useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
 import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
+import {
+  PercentInput,
+  CurrencyInput,
+  underlineInputClass,
+  numericInputClass,
+} from '@/components/forms/inputs';
 import { cn } from '@/lib/utils';
 
 const CYCLE_UNITS = [
@@ -20,9 +26,6 @@ const CYCLE_UNITS = [
   { value: 'W', label: 'W+' },
   { value: 'M', label: 'M+' },
 ] as const;
-
-const inputBase =
-  'block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors';
 
 const ERROR_LABELS: Record<string, string> = {
   FORBIDDEN_PG: 'PG 사용자 권한이 필요합니다.',
@@ -34,77 +37,6 @@ const ERROR_LABELS: Record<string, string> = {
   BID_ALREADY_SUBMITTED: '이미 제안을 제출하셨습니다.',
   CARD_FEE_EXCEEDS_STATUTORY_CAP: '카드 수수료가 법정 상한을 초과합니다.',
 };
-
-function PctInput({
-  label,
-  value,
-  onChange,
-  placeholder = '0.00',
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  const numVal = parseFloat(value);
-  const hint =
-    !isNaN(numVal) && numVal > 0
-      ? `= 1만원 결제 시 ${Math.round(numVal * 100).toLocaleString()}원`
-      : null;
-
-  return (
-    <div className="space-y-1">
-      <Label size="md" muted={false}>{label}</Label>
-      <div className="flex items-end gap-1">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={cn(inputBase, 'flex-1')}
-        />
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
-      </div>
-      {hint && (
-        <p className="font-mono text-[11px] text-[var(--md-sys-color-tertiary)] mt-1">
-          {hint}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function KrwInput({
-  label,
-  value,
-  onChange,
-  placeholder = '0',
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label size="md" muted={false}>{label}</Label>
-      <div className="flex items-end gap-1">
-        <input
-          type="number"
-          min="0"
-          step="1000"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={cn(inputBase, 'flex-1')}
-        />
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">원</span>
-      </div>
-    </div>
-  );
-}
 
 type Props = {
   rfpId: string;
@@ -320,15 +252,15 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
                 value={cycleNum}
                 onChange={(e) => setCycleNum(e.target.value)}
                 placeholder="1"
-                className={cn(inputBase, 'flex-1')}
+                className={cn(numericInputClass, 'flex-1')}
               />
             </div>
             <p className="font-mono text-[10px] text-[var(--md-sys-color-outline)]">
               예: D+1, W+2, M+1
             </p>
           </div>
-          <KrwInput label="정산한도 (원/월)" value={settleLimit} onChange={setSettleLimit} placeholder="0" />
-          <KrwInput label="월 보증보험 (원/연)" value={guaranteeInsurance} onChange={setGuaranteeInsurance} placeholder="0" />
+          <CurrencyInput label="정산한도 (원/월)" value={settleLimit} onChange={setSettleLimit} placeholder="0" />
+          <CurrencyInput label="월 보증보험 (원/연)" value={guaranteeInsurance} onChange={setGuaranteeInsurance} placeholder="0" />
         </div>
       </section>
 
@@ -341,9 +273,9 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-          <PctInput label="계좌이체 수수료 *" value={bankPct} onChange={setBankPct} placeholder="0.50" />
+          <PercentInput label="계좌이체 수수료 *" value={bankPct} onChange={setBankPct} placeholder="0.50" />
           {allowCardInput && (
-            <PctInput label="카드 수수료" value={cardPct} onChange={setCardPct} placeholder="1.25" />
+            <PercentInput label="카드 수수료" value={cardPct} onChange={setCardPct} placeholder="1.25" />
           )}
         </div>
       </section>
@@ -430,7 +362,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
               onChange={(e) => setMemo(e.target.value)}
               rows={3}
               placeholder="추가 안내 사항이 있으면 입력하세요."
-              className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors resize-none"
+              className={cn(underlineInputClass, 'resize-none')}
             />
           </div>
         </div>

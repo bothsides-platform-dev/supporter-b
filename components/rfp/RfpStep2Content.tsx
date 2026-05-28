@@ -3,6 +3,7 @@
 
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
+import { TextField, underlineInputClass } from '@/components/forms/inputs';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { cn } from '@/lib/utils';
@@ -15,9 +16,6 @@ const SOLUTION_OPTIONS = [
   { value: 'self', label: '자체 개발' },
   { value: 'other', label: '기타' },
 ] as const;
-
-const INPUT_CLASS =
-  'block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors';
 
 type Props = {
   onBack: () => void;

@@ -1,8 +1,7 @@
 import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { RfpDetailContent } from '@/components/rfp/RfpDetailContent';
-import { auth } from '@/auth';
+import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { loadBoard } from '@/lib/server/board/loadBoard';
 
@@ -12,14 +11,7 @@ type Props = { params: Promise<{ id: string }> };
 
 export default async function RfpDetailPage({ params }: Props) {
   const { id } = await params;
-  const session = await auth();
-  if (
-    !session?.user?.id ||
-    session.user.workspaceType !== 'buyer' ||
-    !session.user.workspaceId
-  ) {
-    redirect(`/login?next=/rfp/${id}`);
-  }
+  const session = await requireBuyerPage(`/rfp/${id}`);
 
   const { workspaceId, id: userId, name, email } = session.user;
 
