@@ -22,7 +22,6 @@ import {
 import { nextRfpId } from '@/lib/server/rfp-id';
 import { addMinutes, generateToken } from '@/lib/server/token';
 import { renderRfpInvited } from '@/lib/server/outbox/templates/rfpInvited';
-import { renderRfpSent } from '@/lib/server/outbox/templates/rfpSent';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import {
   dispatchNotification,
@@ -315,22 +314,6 @@ export async function createRfpAction(
           }
         }
 
-        // buyer 본인 발송 알림 (메일 outbox).
-        const sentHtml = await renderRfpSent({
-          rfpId: code,
-          rfpTitle: parsed.data.title.trim(),
-          inviteCount: parsed.data.allowedPgWorkspaceIds.length,
-        });
-        await outbox.enqueue(
-          {
-            event: 'rfp.sent',
-            to: session.user.email ?? '',
-            subject: `[Supporter B · ${code}] 발송 완료`,
-            html: sentHtml,
-            dedupeKey: `rfp:${rfpId}:sent`,
-          },
-          tx,
-        );
       }
 
       // 빠른 확인: 같은 tx에서 invitation row 추가가 hashToken UNIQUE
