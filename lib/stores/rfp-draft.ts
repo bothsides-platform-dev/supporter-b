@@ -16,7 +16,6 @@ export type RfpMockFile = { id: string; name: string; size: number };
 export type PgWorkspaceItem = { id: string; displayName: string };
 
 type RfpDraftStore = {
-  step: number;
   bizProfile: BizProfile | null;
   title: string;
   websiteUrl: string;
@@ -31,14 +30,12 @@ type RfpDraftStore = {
   rfpFiles: RfpMockFile[];
   allowedPgWorkspaceIds: PgWorkspaceItem[];
   deadline: string;
-  setStep: (step: number) => void;
   setBizProfile: (biz: BizProfile | null) => void;
   setField: <K extends keyof RfpDraftStore>(key: K, value: RfpDraftStore[K]) => void;
   reset: () => void;
 };
 
 const defaultState = {
-  step: 0,
   bizProfile: null,
   title: '',
   websiteUrl: '',
@@ -59,7 +56,6 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
   persist(
     (set) => ({
       ...defaultState,
-      setStep: (step) => set({ step }),
       setBizProfile: (bizProfile) => set({ bizProfile }),
       setField: (key, value) => set({ [key]: value } as Partial<RfpDraftStore>),
       reset: () => set(defaultState),
