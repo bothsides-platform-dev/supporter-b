@@ -10,6 +10,8 @@ import { PipelineBoard } from '@/components/board/PipelineBoard';
 import { BoardViewToggle } from '@/components/board/BoardViewToggle';
 import { BoardFilterBar } from '@/components/board/BoardFilterBar';
 import { PageHeader } from '@/components/shell/PageHeader';
+import { RfpPeekPanel, RfpPeekPanelSkeleton } from '@/components/rfp/RfpPeekPanel';
+import { SplitView } from '@/components/ui/split-view';
 import { auth } from '@/auth';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
@@ -27,7 +29,7 @@ const STATUS_OPTIONS = [
 const GRADE_OPTIONS = Object.entries(GRADE_LABELS).map(([value, label]) => ({ value, label }));
 
 type Props = {
-  searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string }>;
+  searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string; peek?: string }>;
 };
 
 export default async function RfpListPage({ searchParams }: Props) {
@@ -44,6 +46,8 @@ export default async function RfpListPage({ searchParams }: Props) {
   const cookieStore = await cookies();
   const view = resolveBoardView(sp.view, cookieStore.get('rfpBoardView')?.value);
   const wsId = session.user.workspaceId;
+  const userId = session.user.id;
+  const userName = session.user.name ?? session.user.email ?? '구매사 담당자';
 
   const newRfpAction = (
     <Link href="/rfp/new">
@@ -63,7 +67,15 @@ export default async function RfpListPage({ searchParams }: Props) {
           </>
         }
       >
-        <RfpListPageLoader wsId={wsId} params={sp} view={view} newRfpAction={newRfpAction} />
+        <RfpListPageLoader
+          wsId={wsId}
+          userId={userId}
+          userName={userName}
+          params={sp}
+          view={view}
+          newRfpAction={newRfpAction}
+          peek={sp.peek}
+        />
       </Suspense>
     </div>
   );
@@ -71,20 +83,26 @@ export default async function RfpListPage({ searchParams }: Props) {
 
 async function RfpListPageLoader({
   wsId,
+  userId,
+  userName,
   params,
   view,
   newRfpAction,
+  peek,
 }: {
   wsId: string;
+  userId: string;
+  userName: string;
   params: BoardFilterParams;
   view: BoardView;
   newRfpAction: React.ReactNode;
+  peek?: string;
 }) {
   const now = new Date();
   const allRfps = await (await getRfpRepo()).findByBuyerWs(wsId);
   const rfps = filterRfps(allRfps, params, now);
 
-  return (
+  const listContent = (
     <>
       <PageHeader title="RFP" count={rfps.length} action={newRfpAction} />
       <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
@@ -104,6 +122,14 @@ async function RfpListPageLoader({
       )}
     </>
   );
+
+  const panel = peek ? (
+    <Suspense fallback={<RfpPeekPanelSkeleton rfpCode={peek} />}>
+      <RfpPeekPanel rfpCode={peek} wsId={wsId} userId={userId} userName={userName} />
+    </Suspense>
+  ) : undefined;
+
+  return <SplitView list={listContent} panel={panel} />;
 }
 
 async function RfpBoardView({ wsId, visibleIds }: { wsId: string; visibleIds: Set<string> }) {
