@@ -168,27 +168,35 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   const inicisWsId = randomUUID();
   const kakaoWsId = randomUUID();
 
+  // status: 'active' — the schema defaults workspaces to 'pending', and the
+  // (app) shell gate redirects pending/suspended workspaces to /pending-approval
+  // (lib/auth/shell-access.ts). Without this, every seeded user bounces off
+  // /home and the whole app (incl. all e2e scenarios) is unreachable.
   await db.insert(workspaces).values([
     {
       id: buyerWsId,
       type: 'buyer',
       name: '(주)샘플테크',
       bizProfileId: buyerBizId,
+      status: 'active',
     },
     {
       id: tossWsId,
       type: 'pg',
       name: '서포터 B 페이',
+      status: 'active',
     },
     {
       id: inicisWsId,
       type: 'pg',
       name: 'KG이니시스',
+      status: 'active',
     },
     {
       id: kakaoWsId,
       type: 'pg',
       name: '카카오페이',
+      status: 'active',
     },
   ]);
 
