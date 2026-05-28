@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { KanbanBoard } from './KanbanBoard';
 import { PipelineCard } from './PipelineCard';
 import type { BoardCard, BoardColumn } from '@/lib/types/column';
@@ -17,6 +17,15 @@ export function PipelineBoard({
   cards: BoardCard[];
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  function handleCardSelect(code: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('peek', code);
+    router.replace(`${pathname}?${params.toString()}`);
+  }
+
   return (
     <KanbanBoard
       kind="pipeline"
@@ -25,8 +34,7 @@ export function PipelineBoard({
       cards={cards}
       renderCard={(card) => {
         const code = (card.payload as { rfpId: string }).rfpId;
-        const href = cardType === 'rfp' ? `/rfp/${code}` : `/inbox/${code}`;
-        return <PipelineCard card={card} onSelect={() => router.push(href)} />;
+        return <PipelineCard card={card} onSelect={() => handleCardSelect(code)} />;
       }}
     />
   );
