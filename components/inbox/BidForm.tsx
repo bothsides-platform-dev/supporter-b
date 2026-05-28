@@ -9,7 +9,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
 import { StatutoryCardFeeNotice } from './StatutoryCardFeeNotice';
-import { useBidDraft } from './useBidDraft';
+import { useBidDraft, type BidDraft } from './useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
 import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
@@ -50,34 +50,33 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
 
-  // 정산 조건
-  const [cycleUnit, setCycleUnit] = useState<'D' | 'W' | 'M'>('D');
-  const [cycleNum, setCycleNum] = useState('1');
-  const [settleLimit, setSettleLimit] = useState('0');
-  const [guaranteeInsurance, setGuaranteeInsurance] = useState('0');
-
-  // 수수료
-  const [bankPct, setBankPct] = useState('0.50');
-  const [cardPct, setCardPct] = useState('');
-  const [memo, setMemo] = useState('');
+  // 정산 조건 + 수수료 — single draft-fields object (synced to useBidDraft).
+  // Destructured below so read sites stay `cycleUnit`/`settleLimit`/…; writes go
+  // through setField, which keeps the save-effect dependency a single value.
+  const [fields, setFields] = useState<BidDraft>({
+    cycleUnit: 'D',
+    cycleNum: '1',
+    settleLimit: '0',
+    guaranteeInsurance: '0',
+    bankPct: '0.50',
+    cardPct: '',
+    memo: '',
+  });
+  const setField = <K extends keyof BidDraft>(key: K, value: BidDraft[K]) =>
+    setFields((f) => ({ ...f, [key]: value }));
+  const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, bankPct, cardPct, memo } = fields;
 
   // 임시 저장
   const { draft, saveDraft, clearDraft } = useBidDraft(rfpId);
   const [showRestoreBanner, setShowRestoreBanner] = useState(draft !== null);
 
   useEffect(() => {
-    saveDraft({ cycleUnit, cycleNum, settleLimit, guaranteeInsurance, bankPct, cardPct, memo });
-  }, [cycleUnit, cycleNum, settleLimit, guaranteeInsurance, bankPct, cardPct, memo]); // eslint-disable-line react-hooks/exhaustive-deps
+    saveDraft(fields);
+  }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleRestore() {
     if (!draft) return;
-    setCycleUnit(draft.cycleUnit);
-    setCycleNum(draft.cycleNum);
-    setSettleLimit(draft.settleLimit);
-    setGuaranteeInsurance(draft.guaranteeInsurance);
-    setBankPct(draft.bankPct);
-    setCardPct(draft.cardPct);
-    setMemo(draft.memo);
+    setFields(draft);
     setShowRestoreBanner(false);
   }
 
@@ -242,7 +241,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
                 <Select
                   options={CYCLE_UNITS.map((u) => ({ value: u.value, label: u.label }))}
                   value={cycleUnit}
-                  onChange={(v) => setCycleUnit(v as 'D' | 'W' | 'M')}
+                  onChange={(v) => setField('cycleUnit', v as 'D' | 'W' | 'M')}
                 />
               </div>
               <input
@@ -250,7 +249,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
                 min="1"
                 max="99"
                 value={cycleNum}
-                onChange={(e) => setCycleNum(e.target.value)}
+                onChange={(e) => setField('cycleNum', e.target.value)}
                 placeholder="1"
                 className={cn(numericInputClass, 'flex-1')}
               />
@@ -259,8 +258,8 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
               예: D+1, W+2, M+1
             </p>
           </div>
-          <CurrencyInput label="정산한도 (원/월)" value={settleLimit} onChange={setSettleLimit} placeholder="0" />
-          <CurrencyInput label="월 보증보험 (원/연)" value={guaranteeInsurance} onChange={setGuaranteeInsurance} placeholder="0" />
+          <CurrencyInput label="정산한도 (원/월)" value={settleLimit} onChange={(v) => setField('settleLimit', v)} placeholder="0" />
+          <CurrencyInput label="월 보증보험 (원/연)" value={guaranteeInsurance} onChange={(v) => setField('guaranteeInsurance', v)} placeholder="0" />
         </div>
       </section>
 
@@ -273,9 +272,9 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-          <PercentInput label="계좌이체 수수료 *" value={bankPct} onChange={setBankPct} placeholder="0.50" />
+          <PercentInput label="계좌이체 수수료 *" value={bankPct} onChange={(v) => setField('bankPct', v)} placeholder="0.50" />
           {allowCardInput && (
-            <PercentInput label="카드 수수료" value={cardPct} onChange={setCardPct} placeholder="1.25" />
+            <PercentInput label="카드 수수료" value={cardPct} onChange={(v) => setField('cardPct', v)} placeholder="1.25" />
           )}
         </div>
       </section>
@@ -359,7 +358,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
             <Label size="md" muted={false}>메모</Label>
             <textarea
               value={memo}
-              onChange={(e) => setMemo(e.target.value)}
+              onChange={(e) => setField('memo', e.target.value)}
               rows={3}
               placeholder="추가 안내 사항이 있으면 입력하세요."
               className={cn(underlineInputClass, 'resize-none')}
