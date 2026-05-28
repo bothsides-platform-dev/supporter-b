@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDeadline } from '@/lib/format';
@@ -39,11 +39,20 @@ export type InboxRow = {
 
 export function InboxList({ rows }: { rows: InboxRow[] }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const peekCode = searchParams.get('peek');
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
+  function handlePeek(rfpId: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('peek', rfpId);
+    router.replace(`${pathname}?${params.toString()}`);
+  }
+
   const { active } = useListNavigation(rows.length, {
-    onEnter: (i) => router.push(`/inbox/${rows[i].rfpId}`),
-    onEdit: (i) => router.push(`/inbox/${rows[i].rfpId}`),
+    onEnter: (i) => handlePeek(rows[i].rfpId),
+    onEdit: (i) => handlePeek(rows[i].rfpId),
   });
 
   useEffect(() => {
@@ -74,11 +83,12 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                 ref={(el) => {
                   rowRefs.current[i] = el;
                 }}
-                onClick={() => router.push(`/inbox/${row.rfpId}`)}
+                onClick={() => handlePeek(row.rfpId)}
                 data-active={active === i}
-                className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer transition-colors"
+                data-peeked={row.rfpId === peekCode}
+                className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] data-[peeked=true]:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer transition-colors"
               >
-                <td className="relative px-8 py-4 font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-2 group-hover:before:bg-[var(--md-sys-color-on-surface)] group-data-[active=true]:before:absolute group-data-[active=true]:before:left-0 group-data-[active=true]:before:top-0 group-data-[active=true]:before:bottom-0 group-data-[active=true]:before:w-2 group-data-[active=true]:before:bg-[var(--md-sys-color-on-surface)]">
+                <td className="relative px-8 py-4 font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-2 group-hover:before:bg-[var(--md-sys-color-on-surface)] group-data-[active=true]:before:absolute group-data-[active=true]:before:left-0 group-data-[active=true]:before:top-0 group-data-[active=true]:before:bottom-0 group-data-[active=true]:before:w-2 group-data-[active=true]:before:bg-[var(--md-sys-color-on-surface)] group-data-[peeked=true]:before:absolute group-data-[peeked=true]:before:left-0 group-data-[peeked=true]:before:top-0 group-data-[peeked=true]:before:bottom-0 group-data-[peeked=true]:before:w-0.5 group-data-[peeked=true]:before:bg-[var(--md-sys-color-primary)]">
                   {row.rfpId}
                 </td>
                 <td className="px-3 py-4 text-[13px] text-[var(--md-sys-color-on-surface)] font-medium">{row.rfpTitle}</td>

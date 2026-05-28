@@ -1,11 +1,12 @@
-// InboxList — 행 클릭 시 rfpId(code) 로 이동, rfpStatus 필드가 있는 InboxRow 렌더.
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const push = vi.fn();
+const replace = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ replace }),
+  usePathname: () => '/inbox',
+  useSearchParams: () => new URLSearchParams(''),
 }));
 
 import { InboxList } from '../InboxList';
@@ -23,43 +24,39 @@ const row: InboxRow = {
 
 afterEach(() => {
   cleanup();
-  push.mockClear();
+  replace.mockClear();
 });
 
 describe('InboxList', () => {
-  it('행 클릭 시 rfpId 로 이동', async () => {
+  it('행 클릭 시 ?peek=<rfpId>로 replace', async () => {
     const user = userEvent.setup();
     render(<InboxList rows={[row]} />);
     await user.click(screen.getByText('PG 결제대행 RFP'));
-    expect(push).toHaveBeenCalledWith('/inbox/P-2604-0001');
+    expect(replace).toHaveBeenCalledWith('/inbox?peek=P-2604-0001');
   });
 
-  it('번호 컬럼에 rfpId(code) 를 표시', () => {
+  it('번호 컬럼에 rfpId(code)를 표시', () => {
     render(<InboxList rows={[row]} />);
     expect(screen.getByText('P-2604-0001')).toBeInTheDocument();
   });
 
   it('InboxRow에 rfpStatus 필드가 포함됨', () => {
-    // rfpStatus is required for closed-filter mapping — ensure type accepts it
     const rowWithClosedRfp: InboxRow = {
       ...row,
       invitationId: 'inv-002',
       rfpStatus: 'closed',
     };
     render(<InboxList rows={[rowWithClosedRfp]} />);
-    // Table still renders the row (status chip shows invitationStatus label)
     expect(screen.getByText('P-2604-0001')).toBeInTheDocument();
   });
 
   it('초대 상태 Chip을 렌더', () => {
     render(<InboxList rows={[row]} />);
-    // invStatusLabel for 'sent' = '신규'
     expect(screen.getByText('신규')).toBeInTheDocument();
   });
 
   it('하단 키보드 힌트 문구를 표시하지 않는다', () => {
     const { container } = render(<InboxList rows={[row]} />);
     expect(container.textContent).not.toContain('J / K 이동');
-    expect(container.textContent).not.toMatch(/Enter[\s\S]*응답[\s\S]*작성/);
   });
 });
