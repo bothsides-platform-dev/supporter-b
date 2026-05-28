@@ -10,6 +10,8 @@ import { PipelineBoard } from '@/components/board/PipelineBoard';
 import { BoardViewToggle } from '@/components/board/BoardViewToggle';
 import { BoardFilterBar } from '@/components/board/BoardFilterBar';
 import { PageHeader } from '@/components/shell/PageHeader';
+import { RfpPeekPanel, RfpPeekPanelSkeleton } from '@/components/rfp/RfpPeekPanel';
+import { SplitView } from '@/components/ui/split-view';
 import { auth } from '@/auth';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
@@ -27,7 +29,7 @@ const STATUS_OPTIONS = [
 const GRADE_OPTIONS = Object.entries(GRADE_LABELS).map(([value, label]) => ({ value, label }));
 
 type Props = {
-  searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string }>;
+  searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string; peek?: string }>;
 };
 
 export default async function RfpListPage({ searchParams }: Props) {
@@ -44,6 +46,8 @@ export default async function RfpListPage({ searchParams }: Props) {
   const cookieStore = await cookies();
   const view = resolveBoardView(sp.view, cookieStore.get('rfpBoardView')?.value);
   const wsId = session.user.workspaceId;
+  const userId = session.user.id;
+  const userName = session.user.name ?? session.user.email ?? '구매사 담당자';
 
   const newRfpAction = (
     <Link href="/rfp/new">
@@ -63,7 +67,15 @@ export default async function RfpListPage({ searchParams }: Props) {
           </>
         }
       >
-        <RfpListPageLoader wsId={wsId} params={sp} view={view} newRfpAction={newRfpAction} />
+        <RfpListPageLoader
+          wsId={wsId}
+          userId={userId}
+          userName={userName}
+          params={sp}
+          view={view}
+          newRfpAction={newRfpAction}
+          peek={sp.peek}
+        />
       </Suspense>
     </div>
   );
@@ -71,18 +83,43 @@ export default async function RfpListPage({ searchParams }: Props) {
 
 async function RfpListPageLoader({
   wsId,
+  userId,
+  userName,
   params,
   view,
   newRfpAction,
+  peek,
 }: {
   wsId: string;
+  userId: string;
+  userName: string;
   params: BoardFilterParams;
   view: BoardView;
   newRfpAction: React.ReactNode;
+  peek?: string;
 }) {
   const now = new Date();
   const allRfps = await (await getRfpRepo()).findByBuyerWs(wsId);
   const rfps = filterRfps(allRfps, params, now);
+
+  const listContent =
+    view === 'board' ? (
+      <RfpBoardView wsId={wsId} visibleIds={new Set(rfps.map((r) => r.id))} />
+    ) : rfps.length === 0 ? (
+      <EmptyState
+        icon={<FileTextIcon size={32} />}
+        title="조건에 맞는 제안 요청이 없습니다."
+        description="필터를 바꾸거나 새 제안 요청을 작성하세요."
+      />
+    ) : (
+      <RfpListTable rfps={rfps} />
+    );
+
+  const panel = peek ? (
+    <Suspense fallback={<RfpPeekPanelSkeleton rfpCode={peek} />}>
+      <RfpPeekPanel rfpCode={peek} wsId={wsId} userId={userId} userName={userName} />
+    </Suspense>
+  ) : undefined;
 
   return (
     <>
@@ -91,17 +128,7 @@ async function RfpListPageLoader({
         <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
         <BoardViewToggle view={view} cookieName="rfpBoardView" tableCount={rfps.length} />
       </div>
-      {view === 'board' ? (
-        <RfpBoardView wsId={wsId} visibleIds={new Set(rfps.map((r) => r.id))} />
-      ) : rfps.length === 0 ? (
-        <EmptyState
-          icon={<FileTextIcon size={32} />}
-          title="조건에 맞는 제안 요청이 없습니다."
-          description="필터를 바꾸거나 새 제안 요청을 작성하세요."
-        />
-      ) : (
-        <RfpListTable rfps={rfps} />
-      )}
+      <SplitView list={listContent} panel={panel} />
     </>
   );
 }

@@ -6,12 +6,14 @@ import { getInvitationRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { InboxList, InboxListSkeleton, type InboxRow } from '@/components/inbox/InboxList';
+import { InboxPeekPanel, InboxPeekPanelSkeleton } from '@/components/inbox/InboxPeekPanel';
 import { PipelineBoard } from '@/components/board/PipelineBoard';
 import { BoardViewToggle } from '@/components/board/BoardViewToggle';
 import { BoardFilterBar } from '@/components/board/BoardFilterBar';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { InboxIcon } from '@/components/icons';
+import { SplitView } from '@/components/ui/split-view';
 import {
   filterInboxRows,
   resolveBoardView,
@@ -30,7 +32,7 @@ const STATUS_OPTIONS = [
 const GRADE_OPTIONS = Object.entries(GRADE_LABELS).map(([value, label]) => ({ value, label }));
 
 type Props = {
-  searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string }>;
+  searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string; peek?: string }>;
 };
 
 export default async function InboxPage({ searchParams }: Props) {
@@ -53,7 +55,7 @@ export default async function InboxPage({ searchParams }: Props) {
           </>
         }
       >
-        <InboxListPageLoader wsId={session.user.workspaceId} params={sp} view={view} />
+        <InboxListPageLoader wsId={session.user.workspaceId} params={sp} view={view} peek={sp.peek} />
       </Suspense>
     </div>
   );
@@ -63,10 +65,12 @@ async function InboxListPageLoader({
   wsId,
   params,
   view,
+  peek,
 }: {
   wsId: string;
   params: BoardFilterParams;
   view: BoardView;
+  peek?: string;
 }) {
   const now = new Date();
   const invRepo = await getInvitationRepo();
@@ -84,6 +88,25 @@ async function InboxListPageLoader({
   }));
   const rows = filterInboxRows(allRows, params, now);
 
+  const panel = peek ? (
+    <Suspense fallback={<InboxPeekPanelSkeleton rfpCode={peek} />}>
+      <InboxPeekPanel rfpCode={peek} wsId={wsId} />
+    </Suspense>
+  ) : undefined;
+
+  const listContent =
+    view === 'board' ? (
+      <InboxBoardView wsId={wsId} visibleIds={new Set(rows.map((r) => r.invitationId))} />
+    ) : rows.length === 0 ? (
+      <EmptyState
+        icon={<InboxIcon size={32} />}
+        title="조건에 맞는 제안 요청이 없습니다."
+        description="필터를 바꾸세요. 구매사가 초대한 RFP가 여기에 표시됩니다."
+      />
+    ) : (
+      <InboxList rows={rows} />
+    );
+
   return (
     <>
       <PageHeader title="받은 RFP" count={rows.length} />
@@ -91,17 +114,7 @@ async function InboxListPageLoader({
         <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
         <BoardViewToggle view={view} cookieName="inboxBoardView" tableCount={rows.length} />
       </div>
-      {view === 'board' ? (
-        <InboxBoardView wsId={wsId} visibleIds={new Set(rows.map((r) => r.invitationId))} />
-      ) : rows.length === 0 ? (
-        <EmptyState
-          icon={<InboxIcon size={32} />}
-          title="조건에 맞는 제안 요청이 없습니다."
-          description="필터를 바꾸세요. 구매사가 초대한 RFP가 여기에 표시됩니다."
-        />
-      ) : (
-        <InboxList rows={rows} />
-      )}
+      <SplitView list={listContent} panel={panel} />
     </>
   );
 }
