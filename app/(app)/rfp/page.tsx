@@ -102,26 +102,18 @@ async function RfpListPageLoader({
   const allRfps = await (await getRfpRepo()).findByBuyerWs(wsId);
   const rfps = filterRfps(allRfps, params, now);
 
-  const listContent = (
-    <>
-      <PageHeader title="RFP" count={rfps.length} action={newRfpAction} />
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
-        <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
-        <BoardViewToggle view={view} cookieName="rfpBoardView" tableCount={rfps.length} />
-      </div>
-      {view === 'board' ? (
-        <RfpBoardView wsId={wsId} visibleIds={new Set(rfps.map((r) => r.id))} />
-      ) : rfps.length === 0 ? (
-        <EmptyState
-          icon={<FileTextIcon size={32} />}
-          title="조건에 맞는 제안 요청이 없습니다."
-          description="필터를 바꾸거나 새 제안 요청을 작성하세요."
-        />
-      ) : (
-        <RfpListTable rfps={rfps} />
-      )}
-    </>
-  );
+  const listContent =
+    view === 'board' ? (
+      <RfpBoardView wsId={wsId} visibleIds={new Set(rfps.map((r) => r.id))} />
+    ) : rfps.length === 0 ? (
+      <EmptyState
+        icon={<FileTextIcon size={32} />}
+        title="조건에 맞는 제안 요청이 없습니다."
+        description="필터를 바꾸거나 새 제안 요청을 작성하세요."
+      />
+    ) : (
+      <RfpListTable rfps={rfps} />
+    );
 
   const panel = peek ? (
     <Suspense fallback={<RfpPeekPanelSkeleton rfpCode={peek} />}>
@@ -129,7 +121,16 @@ async function RfpListPageLoader({
     </Suspense>
   ) : undefined;
 
-  return <SplitView list={listContent} panel={panel} />;
+  return (
+    <>
+      <PageHeader title="RFP" count={rfps.length} action={newRfpAction} />
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
+        <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
+        <BoardViewToggle view={view} cookieName="rfpBoardView" tableCount={rfps.length} />
+      </div>
+      <SplitView list={listContent} panel={panel} />
+    </>
+  );
 }
 
 async function RfpBoardView({ wsId, visibleIds }: { wsId: string; visibleIds: Set<string> }) {

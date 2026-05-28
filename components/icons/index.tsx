@@ -96,6 +96,14 @@ export function XIcon({ size = 20, ...p }: IconProps) {
   );
 }
 
+export function MaximizeIcon({ size = 20, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
+      <path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ size = 20, ...p }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>

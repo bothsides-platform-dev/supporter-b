@@ -9,7 +9,7 @@ export function SplitView({ list, panel }: SplitViewProps) {
   if (!panel) return <>{list}</>;
   return (
     <div className="flex flex-1 overflow-hidden">
-      <div className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-[var(--md-sys-color-outline-variant)]">
+      <div className="flex w-60 shrink-0 flex-col overflow-x-auto border-r border-[var(--md-sys-color-outline-variant)]">
         {list}
       </div>
       <div className="flex-1 overflow-y-auto">
