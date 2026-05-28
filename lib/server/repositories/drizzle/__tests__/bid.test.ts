@@ -137,6 +137,52 @@ describe('DrizzleBidRepository — proposalPdfs url 계약', () => {
   });
 });
 
+describe('DrizzleBidRepository — 전체 필드 라운드트립 (명시적 projection 회귀 방지)', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  // rowToBid 가 소비하는 모든 컬럼이 findById projection 으로 누락 없이
+  // 읽혀야 한다. 명시적 select({...}) 로 전환할 때 컬럼 하나라도 빠지면
+  // 이 테스트가 빨갛게 떨어진다.
+  it('findById 가 모든 스칼라 필드를 누락 없이 반환한다', async () => {
+    const bidId = randomUUID();
+    await ctx.db.insert(bids).values({
+      id: bidId,
+      rfpId: ctx.rfpId,
+      pgWsId: ctx.pgWs.id,
+      invitationId: ctx.invitationId,
+      settleCycle: 'W+2',
+      settleLimit: '15000.50',
+      guaranteeInsurance: '300000.00',
+      paymentFees: { card: 0.0125, bank_transfer: 0.005 },
+      memo: 'round trip memo',
+      status: 'submitted',
+      submittedBy: ctx.pgUser.id,
+      submittedAt: new Date('2026-01-15T08:30:00.000Z'),
+    });
+
+    const bid = await ctx.repo.findById(bidId);
+
+    expect(bid).toBeDefined();
+    expect(bid!.id).toBe(bidId);
+    expect(bid!.rfpId).toBe(ctx.rfpId);
+    expect(bid!.pgWsId).toBe(ctx.pgWs.id);
+    expect(bid!.invitationId).toBe(ctx.invitationId);
+    expect(bid!.settleCycle).toBe('W+2');
+    expect(bid!.settleLimit).toBe(15000.5);
+    expect(bid!.guaranteeInsurance).toBe(300000);
+    expect(bid!.paymentFees).toEqual({ card: 0.0125, bank_transfer: 0.005 });
+    expect(bid!.memo).toBe('round trip memo');
+    expect(bid!.status).toBe('submitted');
+    expect(bid!.submittedBy).toBe(ctx.pgUser.id);
+    expect(bid!.submittedAt).toBe('2026-01-15T08:30:00.000Z');
+    expect(bid!.boardColumnId).toBeNull();
+  });
+});
+
 describe('DrizzleBidRepository.findByRfpIds — 배치 조회 (N+1 제거)', () => {
   let ctx: Awaited<ReturnType<typeof setup>>;
 

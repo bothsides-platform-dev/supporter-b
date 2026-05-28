@@ -5,8 +5,43 @@ import type { Bid, PaymentMethod } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { BidRepo, Tx } from '../types';
 
-type BidRow = typeof bids.$inferSelect;
-type AttachmentRow = typeof attachments.$inferSelect;
+// Explicit column projections. `select().from(t)` compiles the FULL column list,
+// so a future migration that adds a sensitive/large/unserialisable column to
+// `bids` or `attachments` would silently flow into — or break — every read here
+// (the #419 class already seen on `rfps`). Listing exactly the columns rowToBid /
+// asAttachment consume makes the read drift-proof: new columns are ignored until
+// added here on purpose.
+const BID_COLUMNS = {
+  id: bids.id,
+  rfpId: bids.rfpId,
+  pgWsId: bids.pgWsId,
+  invitationId: bids.invitationId,
+  settleCycle: bids.settleCycle,
+  settleLimit: bids.settleLimit,
+  guaranteeInsurance: bids.guaranteeInsurance,
+  paymentFees: bids.paymentFees,
+  memo: bids.memo,
+  status: bids.status,
+  boardColumnId: bids.boardColumnId,
+  submittedBy: bids.submittedBy,
+  submittedAt: bids.submittedAt,
+} as const;
+
+const ATTACHMENT_COLUMNS = {
+  id: attachments.id,
+  bidId: attachments.bidId,
+  name: attachments.name,
+  size: attachments.size,
+  mimeType: attachments.mimeType,
+} as const;
+
+type BidRow = {
+  [K in keyof typeof BID_COLUMNS]: (typeof bids.$inferSelect)[K];
+};
+type AttachmentRow = Pick<
+  typeof attachments.$inferSelect,
+  'id' | 'bidId' | 'name' | 'size' | 'mimeType'
+>;
 
 function asAttachment(att: AttachmentRow): Attachment {
   return {
@@ -54,7 +89,7 @@ export class DrizzleBidRepository implements BidRepo {
     const map = new Map<string, Attachment[]>();
     if (bidIds.length === 0) return map;
     const rows = (await db
-      .select()
+      .select(ATTACHMENT_COLUMNS)
       .from(attachments)
       .where(inArray(attachments.bidId, bidIds))) as AttachmentRow[];
     for (const att of rows) {
@@ -98,7 +133,11 @@ export class DrizzleBidRepository implements BidRepo {
 
   async findById(id: string, tx?: Tx): Promise<Bid | undefined> {
     const db = this.h(tx);
-    const [row] = (await db.select().from(bids).where(eq(bids.id, id)).limit(1)) as BidRow[];
+    const [row] = (await db
+      .select(BID_COLUMNS)
+      .from(bids)
+      .where(eq(bids.id, id))
+      .limit(1)) as BidRow[];
     if (!row) return undefined;
     const proposals = await this.proposalsByBid(db, [row.id]);
     return rowToBid(row, proposals.get(row.id) ?? []);
@@ -106,7 +145,10 @@ export class DrizzleBidRepository implements BidRepo {
 
   async findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]> {
     const db = this.h(tx);
-    const rows = (await db.select().from(bids).where(eq(bids.rfpId, rfpId))) as BidRow[];
+    const rows = (await db
+      .select(BID_COLUMNS)
+      .from(bids)
+      .where(eq(bids.rfpId, rfpId))) as BidRow[];
     const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
   }
