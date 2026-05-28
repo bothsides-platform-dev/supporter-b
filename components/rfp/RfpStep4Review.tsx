@@ -53,7 +53,8 @@ export function RfpStep4Review({
   );
 
   const pgCount = draft.allowedPgWorkspaceIds.length;
-  const canSend = draft.deadline !== '' && !submitting;
+  const canSend =
+    draft.deadline !== '' && !isNaN(new Date(draft.deadline).getTime()) && !submitting;
 
   return (
     <div className="space-y-6">

@@ -41,7 +41,7 @@ const Input = z
   .object({
     title: z.string().min(1).max(200),
     memo: z.string().max(2000).optional(),
-    deadline: z.string().min(1), // ISO timestamp
+    deadline: z.string().datetime({ offset: true }), // ISO 8601 with timezone
     allowedPgWorkspaceIds: z.array(z.string().uuid()).max(50),
     rfpAttachmentIds: z.array(z.string().uuid()).optional(),
     send: z.boolean().optional().default(false),

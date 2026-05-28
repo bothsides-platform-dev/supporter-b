@@ -66,22 +66,29 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
         ? (solutionRaw as SolutionValue)
         : undefined;
 
-    const result = await createRfpAction({
-      title: draft.title.trim(),
-      websiteUrl: draft.websiteUrl.trim() || undefined,
-      mainProducts: draft.mainProducts.trim() || undefined,
-      annualPgVolume: draft.annualPgVolume.trim() || undefined,
-      currentFeeRate: draft.currentFeeRate.trim() || undefined,
-      currentSettlementLimit: draft.currentSettlementLimit.trim() || undefined,
-      currentGuaranteeInsurance: draft.currentGuaranteeInsurance.trim() || undefined,
-      currentSolution,
-      currentSolutionDetail: draft.currentSolutionDetail.trim() || undefined,
-      memo: draft.memo.trim() || undefined,
-      deadline: draft.deadline,
-      allowedPgWorkspaceIds: draft.allowedPgWorkspaceIds.map((w) => w.id),
-      rfpAttachmentIds: draft.rfpFiles.map((f) => f.id),
-      send: true,
-    });
+    let result: Awaited<ReturnType<typeof createRfpAction>>;
+    try {
+      result = await createRfpAction({
+        title: draft.title.trim(),
+        websiteUrl: draft.websiteUrl.trim() || undefined,
+        mainProducts: draft.mainProducts.trim() || undefined,
+        annualPgVolume: draft.annualPgVolume.trim() || undefined,
+        currentFeeRate: draft.currentFeeRate.trim() || undefined,
+        currentSettlementLimit: draft.currentSettlementLimit.trim() || undefined,
+        currentGuaranteeInsurance: draft.currentGuaranteeInsurance.trim() || undefined,
+        currentSolution,
+        currentSolutionDetail: draft.currentSolutionDetail.trim() || undefined,
+        memo: draft.memo.trim() || undefined,
+        deadline: draft.deadline,
+        allowedPgWorkspaceIds: draft.allowedPgWorkspaceIds.map((w) => w.id),
+        rfpAttachmentIds: draft.rfpFiles.map((f) => f.id),
+        send: true,
+      });
+    } catch {
+      setSubmitting(false);
+      setServerError('NETWORK_ERROR');
+      return;
+    }
 
     setSubmitting(false);
 
