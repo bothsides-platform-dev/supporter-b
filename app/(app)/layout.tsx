@@ -8,6 +8,7 @@ import { SentryUserContext } from '@/components/observability/SentryUserContext'
 import { ChannelTalkHideButton } from '@/components/shell/ChannelTalkHideButton';
 import { auth } from '@/auth';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import { resolveShellAccess } from '@/lib/auth/shell-access';
 import { setSentryUser } from '@/lib/observability/sentry-user';
 
 export const metadata: Metadata = {
@@ -23,49 +24,35 @@ export default async function AppLayout({
   // auth() themselves (no prop drilling) — the underlying JWT cookie read is
   // cheap and React/Next dedupe identical fetches inside one render.
   const session = await auth();
-  // Genuinely unauthenticated → /login (middleware lets unauth users stay there).
-  if (!session?.user?.id) {
-    redirect('/login');
-  }
-  // Authenticated JWT but no workspace in the token → /logout, NOT /login.
-  // Middleware (proxy.ts) treats any session-user as authenticated and bounces
-  // them off /login back to /home, so redirecting an incomplete-but-authenticated
-  // session to /login loops forever (ERR_TOO_MANY_REDIRECTS). /logout clears the
-  // cookie so the next /login request lands.
-  if (!session.user.workspaceId || !session.user.workspaceType) {
-    redirect('/logout');
-  }
 
-  // All workspaces the user belongs to — feeds the switcher and re-validates
-  // membership (one DB hit, replacing the old name-only fetch). Empty = the
-  // user belongs to nowhere (no member-removal/ws-delete action exists in v0,
-  // so this is a defensive branch); bounce to re-auth.
-  const workspaces = await (await getWorkspaceRepo()).listForUser(session.user.id);
-  // Authenticated JWT but DB says no live membership → /logout (same loop reason
-  // as above: /login would bounce this authenticated session straight back).
-  if (workspaces.length === 0) redirect('/logout');
-  // Active = the JWT's workspace if still a member, else fall back (render-only;
-  // the token reconciles on the next explicit switch — an RSC can't set cookies).
-  const active =
-    workspaces.find((w) => w.id === session.user.workspaceId) ?? workspaces[0];
+  // Membership list — feeds the switcher AND re-validates membership (one DB
+  // hit). Only fetched when the JWT carries a complete workspace claim; an
+  // incomplete/unauth session never touches the DB (resolveShellAccess decides
+  // the redirect from the empty list).
+  const workspaces =
+    session?.user?.id && session.user.workspaceId && session.user.workspaceType
+      ? await (await getWorkspaceRepo()).listForUser(session.user.id)
+      : [];
 
-  // Workspace status gate — block access until the workspace is approved or if
-  // it has been suspended. Both pages live in (public) to avoid AppShell noise.
-  if (active.status === 'pending') {
-    redirect('/pending-approval');
+  // The redirect-loop contract (incomplete-but-authenticated → /logout, never
+  // /login) lives in lib/auth/shell-access.ts and is enforced by its unit test.
+  const decision = resolveShellAccess(session, workspaces);
+  if (decision.kind === 'redirect') {
+    redirect(decision.to);
   }
-  if (active.status === 'suspended') {
-    redirect('/suspended');
-  }
+  const active = decision.active;
+  // A 'render' decision guarantees a complete authenticated session (see
+  // resolveShellAccess) — TS can't link the two, so narrow once here.
+  const user = session!.user!;
 
   // Tag the server isolation scope for this request (RSC render errors). Minimal
   // fields only — see lib/observability/sentry-user. The client mirror below
   // covers client errors + on-error replays.
   const sentryUser = {
-    id: session.user.id,
+    id: user.id,
     workspaceId: active.id,
     workspaceType: active.type,
-    role: session.user.role,
+    role: user.role,
   };
   setSentryUser(sentryUser);
 
@@ -75,9 +62,9 @@ export default async function AppLayout({
       <AppSidebarLayout
         sidebar={{
           user: {
-            id: session.user.id,
-            email: session.user.email,
-            name: session.user.name ?? session.user.email,
+            id: user.id,
+            email: user.email,
+            name: user.name ?? user.email,
           },
           workspaceType: active.type,
           workspaces,
@@ -85,8 +72,8 @@ export default async function AppLayout({
         }}
         header={{
           user: {
-            name: session.user.name ?? session.user.email,
-            email: session.user.email,
+            name: user.name ?? user.email,
+            email: user.email,
           },
           workspaceType: active.type,
         }}

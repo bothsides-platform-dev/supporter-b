@@ -4,7 +4,7 @@ PG(결제대행사) 1:N 비공개 RFP 플랫폼.
 
 이 가이드는 **Windows / macOS / Linux 어디서든** 처음 보는 분도 순서대로 따라 하면 로컬에서 실행할 수 있도록 정리한 것입니다. **Windows 사용자는 [Git Bash](https://git-scm.com/download/win) 를 켜고 따라 하세요** — Mac/Linux 와 똑같은 명령어로 진행할 수 있습니다. PowerShell 로만 가능한 부분은 별도 표기했습니다.
 
-자세한 도메인·디자인·기술 스펙은 [`PG_RFP_SPEC.md`](./PG_RFP_SPEC.md) → [`SCREEN_DESIGN.md`](./SCREEN_DESIGN.md) → [`DESIGN.md`](./DESIGN.md) → [`SPEC.md`](./SPEC.md) 순으로 읽으세요.
+자세한 도메인·라우팅·디자인 스펙은 [`CLAUDE.md`](./CLAUDE.md) → [`SCREEN_DESIGN.md`](./SCREEN_DESIGN.md) → [`DESIGN.md`](./DESIGN.md) 순으로 읽으세요.
 
 ---
 
@@ -109,7 +109,8 @@ docker compose ps
 
 ## 5. DB 초기 데이터 채우기
 
-> **스키마 적용은 별도 절차입니다.** 단일 `drizzle/0000_greenfield_schema.sql` 을
+> **스키마 적용은 별도 절차입니다.** `drizzle/` 아래의 단일 그린필드 스키마 SQL
+> (`drizzle/0000_*.sql` — `pnpm db:generate` 로 재생성되며 파일명은 바뀔 수 있음) 을
 > 대상 DB에 적용해 테이블을 먼저 만들어야 합니다(증분 `db:migrate` 미사용 — 그린필드
 > 단일 스키마). 스키마가 준비된 뒤:
 
@@ -176,5 +177,7 @@ DB 도구·기타:
 pnpm build
 pnpm start            # 기본 포트 3000
 ```
+
+> **배포**: 라이브 배포는 **Vercel** (region `icn1` — `vercel.json`). 자세한 결정 기록은 [`docs/adr/0002-vercel-deployment.md`](./docs/adr/0002-vercel-deployment.md). (`docs/DEPLOY_OCI.md` 의 OCI 런북은 아카이브 — 현행 아님.)
 
 이메일이 안 올 때: `RESEND_API_KEY` 미설정이거나 outbox flush 가 안 도는 경우입니다. `pnpm db:studio` 로 `outbox` 테이블을 확인하고, 필요하면 `/api/cron/flush-outbox` 라우트를 호출(헤더 `x-cron-secret: <CRON_SECRET>`)합니다.

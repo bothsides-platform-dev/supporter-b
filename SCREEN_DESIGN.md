@@ -4,14 +4,14 @@
 
 본 문서는 PG(결제대행사) 비공개 1:N RFP 플랫폼 **Supporter B** 의 화면 설계 명세이다.
 
-`PG_RFP_SPEC.md` 가 v0 제품 정의의 최상위 기준이며, 본 문서 **§0 PG v0 화면 IA** 가 구현 대상이다.
+본 문서 **§0 PG v0 화면 IA** 가 v0 제품 정의이자 구현 대상의 최상위 기준이다 (레거시 `PG_RFP_SPEC.md` 는 제거됨 — 제품 규칙은 아래 "확정 결정" 블록 + 코드·테스트가 캐노니컬).
 
 **왜 만드는가**
 - 구매사가 이미 아는 PG 영업담당에게만 RFP를 보내고, PG가 서로의 존재를 모르는 private 1:N 입찰을 만든다.
 - 사업자번호 enrichment, 카드 우대수수료 등급, 6개 정형 수치를 한 화면에서 비교해 결제 인프라 선택 시간을 줄인다.
 - 초대 이메일의 고유 URL이 첫 진입 경로이므로 인증·가입·워크스페이스 라우팅이 RFP 흐름과 끊기지 않아야 한다.
 
-**확정 결정 (PG_RFP_SPEC 기준)**
+**확정 결정 (v0 제품 정의 — 본 절이 캐노니컬 기준)**
 - 메인 IA: 홈 / RFP / 받은 RFP / 설정
 - RFP 작성 워크플로우: **(선택)** 사업자번호 조회 → **(선택)** 등급 확인 → 자유 메모·첨부 → PG 워크스페이스 검색·선택 → 발송 (사업자번호·등급 모두 옵셔널)
 - PG 응답 워크플로우: 초대 URL → 가입/로그인 → 워크스페이스 이름 입력(신규) 또는 기존 합류 → 정형 Bid 제출
@@ -33,12 +33,20 @@ Public
 ├─ /signup/buyer/workspace       (Bs4)
 ├─ /signup/pg                    (Gs1 — PG사 이메일)
 ├─ /signup/pg/verify             (Gs2)
+├─ /signup/pg/biz                (Gs — 사업자번호 조회)
 ├─ /signup/pg/profile            (Gs3)
 ├─ /signup/pg/workspace          (Gs4)
 ├─ /password/forgot
 ├─ /password/reset
 ├─ /auth/verify
-└─ /invite/rfp/:token
+├─ /auth/email-change
+├─ /invite                       (토큰 없는 진입 안내)
+├─ /invite/rfp/:token
+├─ /invite/workspace/:token
+├─ /share/rfp/:token
+├─ /share/workspace/:token
+├─ /pending-approval
+└─ /suspended
 
 Authenticated AppShell
 ├─ /home
@@ -49,9 +57,21 @@ Authenticated AppShell
 ├─ /inbox
 │  ├─ /inbox/:rfpId
 │  └─ /inbox/:rfpId/submitted
+├─ /notifications
+├─ /workspace/new
 └─ /settings
    ├─ /settings/profile
-   └─ /settings/members
+   ├─ /settings/members
+   └─ /settings/notifications
+
+Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.tsx)
+├─ /admin/login
+└─ /admin                        (protected — 대시보드 index)
+   ├─ /admin/buyers   · /admin/buyers/:id
+   ├─ /admin/sellers  · /admin/sellers/:id
+   ├─ /admin/rfps     · /admin/rfps/:id
+   ├─ /admin/review   · /admin/review/:id
+   └─ /admin/audit-log
 ```
 
 ### 0.2 Buyer Workspace Screens
@@ -326,4 +346,4 @@ PG 영업담당의 1차 진입 경로. 토큰 검증 후 인증 상태에 따라
 - 회사 도메인 자동 합류 — v1 옵션 기능, 본 v0 범위 외
 - 감사 로그 — 백엔드 영역
 
-> 시각 디자인 규칙은 [DESIGN.md §5.11](./DESIGN.md), 도메인 타입·검증·라우팅 가드는 [SPEC.md §8](./SPEC.md) 참조.
+> 시각 디자인 규칙은 [DESIGN.md](./DESIGN.md) 참조. 도메인 타입·검증·라우팅 가드는 코드가 캐노니컬 — `lib/` Server Actions + zod 스키마, 인증 가드는 `app/(app)/layout.tsx` 의 서버 redirect 참조.

@@ -9,7 +9,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(''),
 }));
 
-import { InboxList } from '../InboxList';
+import { InboxList, InboxListSkeleton } from '../InboxList';
 import type { InboxRow } from '../InboxList';
 
 const row: InboxRow = {
@@ -58,5 +58,18 @@ describe('InboxList', () => {
   it('하단 키보드 힌트 문구를 표시하지 않는다', () => {
     const { container } = render(<InboxList rows={[row]} />);
     expect(container.textContent).not.toContain('J / K 이동');
+  });
+});
+
+describe('InboxListSkeleton — RSC fallback 회귀 방지', () => {
+  // 서버 컴포넌트 app/(app)/inbox/page.tsx 는 named export InboxListSkeleton 을
+  // import 해 Suspense fallback 으로 쓴다. 'use client' 컴포넌트의 static
+  // InboxList.Skeleton 은 RSC 경계 너머에서 undefined 라(fallback 렌더 시점에만
+  // 크래시) named export 가 standalone 으로 반드시 살아 있어야 한다. 이 named
+  // export 를 지우고 static 으로만 되돌리면 이 테스트가 빨갛게 떨어진다.
+  it('standalone named export 로 존재하고 단독 렌더된다', () => {
+    expect(typeof InboxListSkeleton).toBe('function');
+    const { container } = render(<InboxListSkeleton />);
+    expect(container.firstChild).not.toBeNull();
   });
 });

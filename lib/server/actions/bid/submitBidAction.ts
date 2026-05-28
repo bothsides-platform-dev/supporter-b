@@ -13,6 +13,7 @@ import {
   getInvitationRepo,
   getOutboxRepo,
   getRfpRepo,
+  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
   dispatchNotification,
@@ -116,17 +117,11 @@ export async function submitBidAction(
     if (!att || att.rfpId || att.bidId || att.bidNoteId) {
       return { ok: false, error: 'INVALID_ATTACHMENT' };
     }
-    const [uploaderMember] = (await actionDb()
-      .select({ workspaceId: workspaceMembers.workspaceId })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.userId, att.uploadedBy),
-          eq(workspaceMembers.workspaceId, pgWsId),
-        ),
-      )
-      .limit(1)) as { workspaceId: string }[];
-    if (!uploaderMember) {
+    const uploaderIsMember = await (await getWorkspaceRepo()).isMember(
+      att.uploadedBy,
+      pgWsId,
+    );
+    if (!uploaderIsMember) {
       return { ok: false, error: 'INVALID_ATTACHMENT' };
     }
   }

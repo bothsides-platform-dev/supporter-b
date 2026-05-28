@@ -1,5 +1,7 @@
 # OCI 배포 런북 — bidit (Supporter B)
 
+> ⚠️ **ARCHIVED — 현행 배포가 아님.** 라이브 배포는 Vercel(region `icn1`)이다. [ADR 0002](./adr/0002-vercel-deployment.md) 참조. 본 런북은 자체 호스팅 폴백 옵션으로만 보존되며, 현 운영 환경을 설명하지 않는다.
+
 Oracle Cloud Infrastructure **Compute 인스턴스**에 네이티브(Node + PM2)로 배포하고,
 Postgres는 같은 인스턴스의 Docker 컨테이너, HTTPS는 도메인 + Caddy 자동 TLS로 띄운다.
 

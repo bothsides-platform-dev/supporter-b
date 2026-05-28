@@ -158,7 +158,7 @@ export class DrizzleBidRepository implements BidRepo {
     const map = new Map<string, Bid[]>();
     if (rfpIds.length === 0) return map;
     const rows = (await db
-      .select()
+      .select(BID_COLUMNS)
       .from(bids)
       .where(inArray(bids.rfpId, rfpIds))) as BidRow[];
     const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
@@ -173,7 +173,10 @@ export class DrizzleBidRepository implements BidRepo {
 
   async findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]> {
     const db = this.h(tx);
-    const rows = (await db.select().from(bids).where(eq(bids.pgWsId, pgWsId))) as BidRow[];
+    const rows = (await db
+      .select(BID_COLUMNS)
+      .from(bids)
+      .where(eq(bids.pgWsId, pgWsId))) as BidRow[];
     const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
   }

@@ -27,10 +27,10 @@
  * Cross-PG isolation is preserved — a PG user from a different ws cannot
  * read another PG's proposal even if invited to the same RFP.
  */
-import { and, eq } from 'drizzle-orm';
-import { bidNotes, bids, rfps, workspaceMembers } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
+import { bidNotes, bids, rfps } from '@/lib/db/schema';
 import type { AttachmentRecord } from '@/lib/server/repositories/attachment-record';
-import type { InvitationRepo, Tx } from '@/lib/server/repositories/types';
+import type { InvitationRepo, WorkspaceRepo, Tx } from '@/lib/server/repositories/types';
 
 // Re-export under the legacy name so call sites that import { AttachmentRow }
 // from this module keep compiling (test files mirror this name).
@@ -42,6 +42,7 @@ export type AttachmentSession = {
 
 export type RepoBundleForAttachment = {
   invitation: InvitationRepo;
+  workspace: WorkspaceRepo;
 };
 
 export async function canAccessAttachment(
@@ -62,19 +63,9 @@ export async function canAccessAttachment(
   // row to a real RFP/bid (draft: all owner FKs null).
   if (att.uploadedBy === userId) return true;
 
-  const isMember = async (workspaceId: string): Promise<boolean> => {
-    const [member] = await h
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaceId),
-          eq(workspaceMembers.userId, userId),
-        ),
-      )
-      .limit(1);
-    return Boolean(member);
-  };
+  // Membership boolean — single source of truth in WorkspaceRepo.isMember.
+  const isMember = (workspaceId: string): Promise<boolean> =>
+    repos.workspace.isMember(userId, workspaceId, tx);
 
   if (att.rfpId) {
     const [rfp] = await h

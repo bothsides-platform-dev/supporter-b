@@ -79,4 +79,27 @@ describe('DrizzleWorkspaceRepository', () => {
     const list = await repo.listForUser(u.id);
     expect(list[0].hasLogo).toBe(true);
   });
+
+  describe('isMember', () => {
+    it('returns true when the user is a member of the workspace', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const u = await seedUser(db, { email: 'member@buy.com' });
+      await seedMembership(db, ws.id, u.id);
+      expect(await repo.isMember(u.id, ws.id)).toBe(true);
+    });
+
+    it('returns false when the user is not a member', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const outsider = await seedUser(db, { email: 'outsider@buy.com' });
+      expect(await repo.isMember(outsider.id, ws.id)).toBe(false);
+    });
+
+    it('returns false when the user is a member of a different workspace', async () => {
+      const wsA = await seedBuyerWorkspace(db);
+      const wsB = await seedPgWorkspace(db, 'other.im');
+      const u = await seedUser(db, { email: 'a-only@buy.com' });
+      await seedMembership(db, wsA.id, u.id);
+      expect(await repo.isMember(u.id, wsB.id)).toBe(false);
+    });
+  });
 });

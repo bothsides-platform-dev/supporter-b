@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import {
   workspaces,
   workspaceMembers,
@@ -191,4 +191,18 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .orderBy(asc(workspaceMembers.joinedAt))) as WorkspaceMembershipSummary[];
   }
 
+  async isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  }
 }

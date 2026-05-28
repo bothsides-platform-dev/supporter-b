@@ -22,7 +22,7 @@ import {
   rfps,
 } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import { __useDrizzleWithDbForTest, __resetForTest, getInvitationRepo } from '@/lib/server/repositories/factory';
+import { __useDrizzleWithDbForTest, __resetForTest, getInvitationRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import {
   seedBizProfile,
   seedBuyerWorkspace,
@@ -221,7 +221,10 @@ async function seedScenario(): Promise<Scenario> {
 }
 
 async function repos() {
-  return { invitation: await getInvitationRepo() };
+  return {
+    invitation: await getInvitationRepo(),
+    workspace: await getWorkspaceRepo(),
+  };
 }
 
 describe('canAccessAttachment — rfp', () => {

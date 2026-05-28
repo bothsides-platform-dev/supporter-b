@@ -90,6 +90,8 @@ export interface WorkspaceRepo {
     userId: string,
     tx?: Tx,
   ): Promise<WorkspaceMembershipSummary[]>;
+  /** 유저가 해당 워크스페이스의 멤버인지 여부 (boolean). 권한 게이트 단일 소스. */
+  isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────
