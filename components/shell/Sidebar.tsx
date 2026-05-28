@@ -30,7 +30,7 @@ export type SidebarProps = {
   user: { id: string; email: string; name: string };
   workspaceType: 'buyer' | 'pg';
   workspaces: WorkspaceMembershipSummary[];
-  current: { id: string; name: string; type: WorkspaceType };
+  current: { id: string; name: string; type: WorkspaceType; hasLogo: boolean };
 };
 
 function SidebarNav({

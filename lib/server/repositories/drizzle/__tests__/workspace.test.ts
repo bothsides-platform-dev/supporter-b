@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { createPgliteDb } from '@/lib/db/client-pglite';
+import { workspaceLogoBlobs } from '@/lib/db/schema';
 import { DrizzleWorkspaceRepository } from '../workspace';
-import { seedPgWorkspace, seedUser, seedMembership } from './_seed';
+import { seedBuyerWorkspace, seedPgWorkspace, seedUser, seedMembership } from './_seed';
 
 describe('DrizzleWorkspaceRepository', () => {
   let repo: DrizzleWorkspaceRepository;
@@ -37,5 +38,45 @@ describe('DrizzleWorkspaceRepository', () => {
 
   it('findByShareToken returns undefined for unknown token', async () => {
     expect(await repo.findByShareToken('no-such-token')).toBeUndefined();
+  });
+
+  it('findById returns hasLogo: false when no logo blob exists', async () => {
+    const ws = await seedBuyerWorkspace(db);
+    const fetched = await repo.findById(ws.id);
+    expect(fetched).toBeDefined();
+    expect(fetched!.hasLogo).toBe(false);
+  });
+
+  it('findById returns hasLogo: true when logo blob exists', async () => {
+    const ws = await seedBuyerWorkspace(db);
+    await db.insert(workspaceLogoBlobs).values({
+      workspaceId: ws.id,
+      bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+      mime: 'image/png',
+    });
+    const fetched = await repo.findById(ws.id);
+    expect(fetched!.hasLogo).toBe(true);
+  });
+
+  it('listForUser includes hasLogo for each workspace', async () => {
+    const ws = await seedBuyerWorkspace(db);
+    const u = await seedUser(db);
+    await seedMembership(db, ws.id, u.id);
+    const list = await repo.listForUser(u.id);
+    expect(list).toHaveLength(1);
+    expect(list[0].hasLogo).toBe(false);
+  });
+
+  it('listForUser returns hasLogo: true when logo blob exists', async () => {
+    const ws = await seedBuyerWorkspace(db);
+    const u = await seedUser(db);
+    await seedMembership(db, ws.id, u.id);
+    await db.insert(workspaceLogoBlobs).values({
+      workspaceId: ws.id,
+      bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+      mime: 'image/png',
+    });
+    const list = await repo.listForUser(u.id);
+    expect(list[0].hasLogo).toBe(true);
   });
 });

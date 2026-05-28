@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { workspaceTypeEnum, workspaceStatusEnum } from './_enums';
 import { bizProfiles } from './biz-profiles';
@@ -22,6 +22,7 @@ export const workspaces = pgTable(
       .default(sql`gen_random_uuid()::text`),
     status: workspaceStatusEnum('status').notNull().default('pending'),
     statusReason: text('status_reason'),
+    hasLogo: boolean('has_logo').notNull().default(false),
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),

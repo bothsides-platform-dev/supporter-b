@@ -177,6 +177,7 @@ CREATE TABLE "workspaces" (
 	"share_token" text DEFAULT gen_random_uuid()::text NOT NULL,
 	"status" "workspace_status" DEFAULT 'pending' NOT NULL,
 	"status_reason" text,
+	"has_logo" boolean DEFAULT false NOT NULL,
 	"reviewed_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -301,6 +302,13 @@ CREATE TABLE "verification_tokens" (
 	CONSTRAINT "verification_tokens_token_hash_unique" UNIQUE("token_hash")
 );
 --> statement-breakpoint
+CREATE TABLE "workspace_logo_blobs" (
+	"workspace_id" uuid PRIMARY KEY NOT NULL,
+	"bytes" "bytea" NOT NULL,
+	"mime" text NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "rfp_counters" (
 	"year_month" text PRIMARY KEY NOT NULL,
 	"last_seq" integer DEFAULT 0 NOT NULL
@@ -355,6 +363,7 @@ ALTER TABLE "rfp_invitations" ADD CONSTRAINT "rfp_invitations_accepted_by_user_i
 ALTER TABLE "rfp_invitations" ADD CONSTRAINT "rfp_invitations_board_column_id_columns_id_fk" FOREIGN KEY ("board_column_id") REFERENCES "public"."columns"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "workspace_logo_blobs" ADD CONSTRAINT "workspace_logo_blobs_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "admin_audit_logs_entity_idx" ON "admin_audit_logs" USING btree ("entity_type","entity_id");--> statement-breakpoint
 CREATE INDEX "admin_notes_entity_idx" ON "admin_notes" USING btree ("entity_type","entity_id");--> statement-breakpoint
 CREATE INDEX "pg_profiles_workspace_idx" ON "pg_profiles" USING btree ("workspace_id");--> statement-breakpoint

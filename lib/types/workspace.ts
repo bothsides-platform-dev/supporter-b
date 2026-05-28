@@ -10,6 +10,7 @@ export type Workspace = {
   bizProfile?: BizProfile;
   members: User[];
   shareToken: string;
+  hasLogo: boolean;
   createdAt: string;
 };
 
@@ -22,4 +23,5 @@ export type WorkspaceMembershipSummary = {
   status: 'pending' | 'active' | 'suspended';
   role: 'admin' | 'member';
   unreadCount: number;
+  hasLogo: boolean;
 };

@@ -6,6 +6,7 @@ import { PageEnter } from '@/components/primitives/PageEnter';
 import { WorkspaceBizProfileForm } from '@/components/settings/WorkspaceBizProfileForm';
 import { WorkspaceBizNoForm } from '@/components/settings/WorkspaceBizNoForm';
 import { WorkspaceNameForm } from '@/components/settings/WorkspaceNameForm';
+import { WorkspaceLogoForm } from '@/components/settings/WorkspaceLogoForm';
 import { BizRequiredToast } from '@/components/settings/BizRequiredToast';
 import { auth } from '@/auth';
 import {
@@ -138,6 +139,7 @@ export default async function ProfilePage({ searchParams }: Props) {
         >
           {/* Left: meta KV (이름 폼 포함) */}
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
+            <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} hasLogo={ws.hasLogo} />
             <WorkspaceNameForm
               currentName={ws.name}
               canEdit={memberMeta?.role === 'admin'}

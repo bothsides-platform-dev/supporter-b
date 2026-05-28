@@ -43,7 +43,7 @@ export default async function RfpNewLayout({ children }: { children: React.React
           },
           workspaceType: active.type,
           workspaces,
-          current: { id: active.id, name: active.name, type: active.type },
+          current: { id: active.id, name: active.name, type: active.type, hasLogo: active.hasLogo },
         }}
       >
         {children}

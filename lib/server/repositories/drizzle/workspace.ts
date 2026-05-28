@@ -2,6 +2,7 @@ import { asc, eq, sql } from 'drizzle-orm';
 import {
   workspaces,
   workspaceMembers,
+  workspaceLogoBlobs,
   users as usersTable,
   bizProfiles,
 } from '@/lib/db/schema';
@@ -87,6 +88,12 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       }
     }
 
+    const [logoRow] = await db
+      .select({ workspaceId: workspaceLogoBlobs.workspaceId })
+      .from(workspaceLogoBlobs)
+      .where(eq(workspaceLogoBlobs.workspaceId, ws.id))
+      .limit(1);
+
     return {
       id: ws.id,
       type: ws.type,
@@ -94,6 +101,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       bizProfile,
       members,
       shareToken: ws.shareToken,
+      hasLogo: !!logoRow,
       createdAt: new Date(ws.createdAt).toISOString(),
     };
   }
@@ -172,6 +180,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
             AND user_id = ${userId}
             AND channel = 'in_app'
             AND read_at IS NULL
+        )`,
+        hasLogo: sql<boolean>`EXISTS (
+          SELECT 1 FROM workspace_logo_blobs WHERE workspace_id = ${workspaces.id}
         )`,
       })
       .from(workspaceMembers)

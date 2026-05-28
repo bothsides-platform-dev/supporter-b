@@ -20,19 +20,19 @@ import type {
 const TYPE_LABEL: Record<WorkspaceType, string> = { buyer: '구매사', pg: 'PG' };
 
 type Props = {
-  current: { id: string; name: string; type: WorkspaceType };
+  current: { id: string; name: string; type: WorkspaceType; hasLogo: boolean };
   workspaces: WorkspaceMembershipSummary[];
 };
 
 export function WorkspaceSwitcher({ current, workspaces }: Props) {
   const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState<{ name: string; type: WorkspaceType } | null>(null);
+  const [pending, setPending] = useState<{ id: string; name: string; type: WorkspaceType; hasLogo: boolean } | null>(null);
 
   async function handleSelect(id: string) {
     if (id === current.id || busy) return;
     const target = workspaces.find((w) => w.id === id);
     if (!target) return;
-    setPending({ name: target.name, type: target.type });
+    setPending({ id: target.id, name: target.name, type: target.type, hasLogo: target.hasLogo });
     setBusy(true);
     const r = await switchWorkspaceAction(id);
     if (r.ok) {
@@ -56,7 +56,7 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
         className={`flex h-9 w-full min-w-0 flex-nowrap items-center justify-start gap-2 rounded-[var(--md-sys-shape-extra-small)] px-2 hover:bg-[var(--md-sys-color-surface-container-high)] outline-none transition-[color,background-color,opacity] duration-[140ms] group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0${busy ? ' opacity-60' : ''}`}
       >
         {/* 접힘/펼침 모두 표시. 접힘 시 이 아이콘만 남음 */}
-        <WorkspaceAvatar name={display.name} size="sm" />
+        <WorkspaceAvatar name={display.name} workspaceId={display.id} hasLogo={display.hasLogo} size="sm" />
         <span className="min-w-0 flex-1 truncate text-[length:var(--md-typescale-label-large-size)] text-[var(--md-sys-color-on-surface)] group-data-[collapsible=icon]:sr-only">
           {display.name}
         </span>
@@ -91,7 +91,7 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
               <span className="w-4 shrink-0 text-[var(--md-sys-color-primary)]">
                 {active && <CheckIcon size={14} />}
               </span>
-              <WorkspaceAvatar name={ws.name} size="sm" />
+              <WorkspaceAvatar name={ws.name} workspaceId={ws.id} hasLogo={ws.hasLogo} size="sm" />
               <span className="flex-1 truncate">{ws.name}</span>
               {ws.unreadCount > 0 && (
                 <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--md-sys-color-error)]" />
