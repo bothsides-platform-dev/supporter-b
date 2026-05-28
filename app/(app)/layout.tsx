@@ -5,6 +5,7 @@ import { ToasterProvider } from '@/components/shell/Toaster';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { GlobalShortcuts } from '@/components/shell/GlobalShortcuts';
 import { SentryUserContext } from '@/components/observability/SentryUserContext';
+import { ChannelTalkHideButton } from '@/components/shell/ChannelTalkHideButton';
 import { auth } from '@/auth';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { setSentryUser } from '@/lib/observability/sentry-user';
@@ -70,6 +71,7 @@ export default async function AppLayout({
 
   return (
     <ToasterProvider>
+      <ChannelTalkHideButton />
       <AppSidebarLayout
         sidebar={{
           user: {

@@ -8,8 +8,14 @@ class ResizeObserverStub {
   disconnect() {}
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+
+vi.mock('@/lib/http', () => ({
+  http: { post: vi.fn() },
+}))
+vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')))
 import type { Bid } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
+import type { ResponsePromise } from 'ky';
 
 // next/navigation mock — modal uses router.refresh() after action calls.
 const refresh = vi.fn();
@@ -30,6 +36,7 @@ vi.mock('@/lib/server/actions/bid/removeBidNoteAction', () => ({
 }));
 
 import { BidDetailModal } from '../BidDetailModal';
+import { http } from '@/lib/http';
 
 const bid: Bid = {
   id: 'bid-toss',
@@ -246,4 +253,47 @@ describe('BidDetailModal', () => {
     await user.click(screen.getByRole('button', { name: '취소' }));
     expect(removeMock).not.toHaveBeenCalled();
   });
+});
+
+describe('BidDetailModal 첨부파일 업로드', () => {
+  beforeEach(() => {
+    addMock.mockClear();
+    removeMock.mockClear();
+    refresh.mockClear();
+    vi.mocked(http.post).mockClear();
+  })
+  afterEach(() => {
+    cleanup();
+  })
+
+  it('파일 선택 시 http.post로 업로드 후 addBidNoteAction에 첨부ID 포함', async () => {
+    const user = userEvent.setup()
+    vi.mocked(http.post).mockReturnValue({
+      json: vi.fn().mockResolvedValue({ id: 'att-1', name: 'note.pdf', size: 1024, mimeType: 'application/pdf' }),
+    } as unknown as ResponsePromise)
+    addMock.mockResolvedValue({ ok: true as const, noteId: 'note-new' })
+
+    render(
+      <BidDetailModal
+        open
+        onOpenChange={() => {}}
+        bid={bid}
+        notes={[]}
+        pgName="서포터 B 페이"
+        grade="sme1"
+        authorId="u-1"
+        authorName="김구매"
+      />,
+    )
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    await user.upload(fileInput, new File(['content'], 'note.pdf', { type: 'application/pdf' }))
+
+    await waitFor(() =>
+      expect(http.post).toHaveBeenCalledWith(
+        '/api/files/upload',
+        expect.objectContaining({ body: expect.any(FormData) }),
+      ),
+    )
+  })
 });

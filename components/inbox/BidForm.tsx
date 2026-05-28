@@ -2,6 +2,8 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { HTTPError } from 'ky';
+import { http } from '@/lib/http';
 import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
@@ -134,32 +136,22 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
     form.append('ownerKind', 'bid_proposal');
     form.append('ownerId', rfpId);
     try {
-      const r = await fetch('/api/files/upload', {
-        method: 'POST',
-        body: form,
-        credentials: 'same-origin',
-      });
-      if (!r.ok) {
-        setProposal({
-          name: file.name,
-          status: 'error',
-          error:
-            r.status === 413
-              ? '파일이 너무 큽니다 (최대 20MB)'
-              : r.status === 415
-                ? '지원되지 않는 파일 형식입니다'
-                : `업로드 실패 (${r.status})`,
-        });
-        return;
-      }
-      const body = (await r.json()) as { id: string; name: string; size: number };
-      setProposal(body);
+      const body = await http
+        .post('/api/files/upload', { body: form })
+        .json<{ id: string; name: string; size: number }>()
+      setProposal(body)
     } catch (err) {
-      setProposal({
-        name: file.name,
-        status: 'error',
-        error: err instanceof Error ? err.message : '네트워크 오류',
-      });
+      let error = err instanceof Error ? err.message : '네트워크 오류'
+      if (err instanceof HTTPError) {
+        const { status } = err.response
+        error =
+          status === 413
+            ? '파일이 너무 큽니다 (최대 20MB)'
+            : status === 415
+              ? '지원되지 않는 파일 형식입니다'
+              : `업로드 실패 (${status})`
+      }
+      setProposal({ name: file.name, status: 'error', error })
     }
   };
 

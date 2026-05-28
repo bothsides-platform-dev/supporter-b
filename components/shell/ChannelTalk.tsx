@@ -36,6 +36,7 @@ export function ChannelTalk({ pluginKey, member }: Props) {
             }
           : {}),
       });
+      window.dispatchEvent(new CustomEvent('channelio:ready'));
     })();
 
     return () => {

@@ -2,6 +2,9 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http } from '@/lib/http';
+import { HTTPError } from 'ky';
+import type { NormalizedOptions, ResponsePromise } from 'ky';
 
 class ResizeObserverStub {
   observe() {}
@@ -9,6 +12,11 @@ class ResizeObserverStub {
   disconnect() {}
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+
+vi.mock('@/lib/http', () => ({
+  http: { post: vi.fn() },
+}))
+vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')))
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -33,6 +41,46 @@ afterEach(() => {
 function renderForm() {
   return render(<BidForm rfpId="rfp-1" rfpCode="P-2605-0042" grade="small" />);
 }
+
+describe('BidForm 제안서 업로드', () => {
+  it('파일 선택 시 http.post로 업로드 후 성공 상태 설정', async () => {
+    const user = userEvent.setup()
+    vi.mocked(http.post).mockReturnValue({
+      json: vi.fn().mockResolvedValue({ id: 'att-1', name: 'proposal.pdf', size: 1024 }),
+    } as unknown as ResponsePromise)
+
+    renderForm()
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await user.upload(input, new File(['content'], 'proposal.pdf', { type: 'application/pdf' }))
+
+    await waitFor(() =>
+      expect(http.post).toHaveBeenCalledWith(
+        '/api/files/upload',
+        expect.objectContaining({ body: expect.any(FormData) }),
+      ),
+    )
+  })
+
+  it('413 응답 시 파일 크기 오류 메시지 표시', async () => {
+    const user = userEvent.setup()
+    const error413 = new HTTPError(
+      new Response('', { status: 413 }),
+      new Request('http://localhost/api/files/upload'),
+      {} as unknown as NormalizedOptions,
+    )
+    vi.mocked(http.post).mockReturnValue({
+      json: vi.fn().mockRejectedValue(error413),
+    } as unknown as ResponsePromise)
+
+    renderForm()
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await user.upload(input, new File(['content'], 'big.pdf', { type: 'application/pdf' }))
+
+    await waitFor(() =>
+      expect(screen.getByText(/파일이 너무 큽니다/)).toBeInTheDocument(),
+    )
+  })
+})
 
 describe('BidForm 제출 후 네비게이션', () => {
   it('제출 버튼 클릭 시 confirm 다이얼로그가 열리고 action은 호출되지 않는다', async () => {

@@ -72,6 +72,8 @@ export default defineConfig({
             "lib/hooks/**/*.{test,spec}.{ts,tsx}",
             "lib/stores/**/*.{test,spec}.{ts,tsx}",
             "lib/nav/**/*.{test,spec}.{ts,tsx}",
+            "lib/__tests__/**/*.{test,spec}.{ts,tsx}",
+            "hooks/**/*.{test,spec}.{ts,tsx}",
           ],
         },
       },

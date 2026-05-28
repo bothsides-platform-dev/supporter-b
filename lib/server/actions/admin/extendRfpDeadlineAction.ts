@@ -19,7 +19,6 @@ export async function extendRfpDeadlineAction(
 
   const session = await requireAdminSession();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [rfp] = await (db as ReturnType<typeof actionDb>).select({ deadline: rfps.deadline }).from(rfps).where(eq(rfps.id, rfpId));
   if (!rfp) return { ok: false, error: 'NOT_FOUND' };
 

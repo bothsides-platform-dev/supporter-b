@@ -25,7 +25,13 @@ vi.mock('@/lib/hooks/usePlatform', async (importOriginal) => ({
   useIsMac: () => false,
 }));
 
+vi.mock('@/lib/http', () => ({
+  http: { post: vi.fn() },
+}));
+
 import { Header } from '../Header';
+import { http } from '@/lib/http';
+import type { ResponsePromise } from 'ky';
 
 const user = { name: '홍길동', email: 'gildong@test.com' };
 
@@ -39,6 +45,7 @@ beforeEach(() => {
     value: { assign },
   });
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true } as Response)));
+  vi.mocked(http.post).mockReturnValue({ json: vi.fn().mockResolvedValue({}) } as unknown as ResponsePromise);
 });
 
 afterEach(() => {
@@ -76,7 +83,7 @@ describe('Header', () => {
     await u.click(screen.getByRole('button', { name: '사용자 메뉴' }));
     await u.click(await screen.findByText('로그아웃'));
     await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith('/logout', { method: 'POST' }),
+      expect(http.post).toHaveBeenCalledWith('/logout'),
     );
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/login'));
   });
