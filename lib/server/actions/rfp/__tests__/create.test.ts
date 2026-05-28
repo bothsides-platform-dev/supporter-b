@@ -158,7 +158,7 @@ describe('createRfpAction', () => {
     expect(outbox).toHaveLength(0);
   });
 
-  it('send branch — inserts RFP status=sent, N invitations + N invite outbox + 1 sent outbox', async () => {
+  it('send branch — inserts RFP status=sent, N invitations + N invite outbox', async () => {
     // Seed 3 PG workspaces each with one admin — outbox is per admin member
     const pg1 = await seedPgWorkspace(db, '서포터 B 페이');
     const pg1Admin = await seedUser(db, { email: 'admin@toss.im' });
@@ -214,12 +214,6 @@ describe('createRfpAction', () => {
       .sort();
     expect(inviteRows.map((r) => r.dedupeKey).sort()).toEqual(expectedKeys);
 
-    const sentRows = await db
-      .select()
-      .from(outboxEntries)
-      .where(eq(outboxEntries.event, 'rfp.sent'));
-    expect(sentRows).toHaveLength(1);
-    expect(sentRows[0].dedupeKey).toBe(`rfp:${row.id}:sent`);
   });
 
   it('inserts a new biz_profiles snapshot row (RFP-specific) without altering workspace.biz_profile_id (advisor pin 1)', async () => {

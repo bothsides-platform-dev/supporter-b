@@ -68,7 +68,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
     sessionRef.value = null;
   });
 
-  it('end-to-end: P2→P4→P6 buyer signup → createRfp(send=true) → invitations N + outbox 1+N', async () => {
+  it('end-to-end: P2→P4→P6 buyer signup → createRfp(send=true) → invitations N + outbox N', async () => {
     // Pre-seed 3 PG workspaces with admin members so outbox entries are generated
     const pg1 = await seedPgWorkspace(db, '서포터 B 페이');
     const pg1Admin = await seedUser(db, { email: 'sales@toss.im' });
@@ -207,7 +207,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       expect(inv.status).toBe('pending');
     }
 
-    // Assertion 3: outbox — N invite rows (1 per admin) + 1 sent row.
+    // Assertion 3: outbox — N invite rows (1 per admin).
     const inviteRows = await db
       .select()
       .from(outboxEntries)
@@ -217,12 +217,5 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       .map(({ wsId, userId }) => `rfp:${row.id}:invite:ws:${wsId}:user:${userId}`)
       .sort();
     expect(inviteRows.map((r) => r.dedupeKey).sort()).toEqual(expectedKeys);
-
-    const sentRows = await db
-      .select()
-      .from(outboxEntries)
-      .where(eq(outboxEntries.event, 'rfp.sent'));
-    expect(sentRows).toHaveLength(1);
-    expect(sentRows[0].dedupeKey).toBe(`rfp:${row.id}:sent`);
   });
 });

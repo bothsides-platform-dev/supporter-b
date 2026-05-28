@@ -151,6 +151,28 @@ describe('RfpCreateWizard', () => {
     });
   });
 
+  it('guest 모드에서 발송 시 /signup/buyer로 이동한다', async () => {
+    useRfpDraftStore.setState({
+      title: '테스트',
+      deadline: '2026-06-30T23:59:59Z',
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+    });
+    const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
+    const user = userEvent.setup();
+    render(<RfpCreateWizard guest />);
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
+
+    expect(localStorageSpy).toHaveBeenCalledWith('supporter-b-rfp-next', '/rfp/new');
+    expect(mockPush).toHaveBeenCalledWith('/signup/buyer');
+    expect(createRfpAction).not.toHaveBeenCalled();
+
+    localStorageSpy.mockRestore();
+  });
+
   it('발송 실패 시 serverError를 표시한다', async () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: false, error: 'INVALID_INPUT' });
     useRfpDraftStore.setState({

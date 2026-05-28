@@ -50,6 +50,13 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
 
   const handleSubmit = async () => {
     if (submitting) return;
+
+    if (guest) {
+      localStorage.setItem('supporter-b-rfp-next', '/rfp/new');
+      router.push('/signup/buyer');
+      return;
+    }
+
     setSubmitting(true);
     setServerError('');
 
