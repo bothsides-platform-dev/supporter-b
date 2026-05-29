@@ -14,8 +14,8 @@ export default async function PendingApprovalPage() {
         </p>
         <p className="text-body-small text-on-surface-variant">
           문의:{' '}
-          <a href="mailto:support@bidit.store" className="underline">
-            support@bidit.store
+          <a href="mailto:support@suppoter-b.com" className="underline">
+            support@suppoter-b.com
           </a>
         </p>
       </div>

@@ -44,7 +44,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           type="text"
           value={draft.websiteUrl}
           onChange={(e) => draft.setField('websiteUrl', e.target.value)}
-          placeholder="https://bidit.store/"
+          placeholder="https://suppoter-b.com/"
           className={underlineInputClass}
         />
       </div>
