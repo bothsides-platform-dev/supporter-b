@@ -51,7 +51,7 @@ export function RfpBriefPanel({ rfp }: Props) {
           <Label size="md" muted={false}>구매사 정보</Label>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
           <MessageComposeButton
-            variant="button"
+            variant="avatar"
             counterparty={{ name: '(주)샘플테크', type: 'buyer', workspaceId: rfp.buyerWsId }}
             rfpContext={{ code: rfp.id, title: rfp.title }}
           />

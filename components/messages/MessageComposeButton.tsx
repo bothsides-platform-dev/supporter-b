@@ -2,6 +2,12 @@
 
 import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/primitives/IconButton';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
@@ -14,10 +20,11 @@ type Props = {
   counterparty: Counterparty;
   rfpContext?: RfpContext;
   /**
-   * 'button' = 텍스트 버튼(프로필 섹션), 'icon' = 아이콘 버튼(모달 헤더 등),
+   * 'avatar' = 프로필 아바타 → 클릭 시 '채팅보내기' 메뉴(프로필 섹션),
+   * 'button' = 텍스트 버튼, 'icon' = 아이콘 버튼(모달 헤더 등),
    * 'profile' = 아바타+상대명 인라인 프로필(표 행 등 — 클릭 시 채팅).
    */
-  variant?: 'button' | 'icon' | 'profile';
+  variant?: 'avatar' | 'button' | 'icon' | 'profile';
 };
 
 const LABEL = '메시지 보내기';
@@ -38,7 +45,32 @@ export function MessageComposeButton({ counterparty, rfpContext, variant = 'butt
 
   return (
     <>
-      {variant === 'profile' ? (
+      {variant === 'avatar' ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                aria-label={`${counterparty.name} 프로필`}
+                className="inline-flex rounded-[var(--md-sys-shape-extra-small)] outline-none transition-shadow hover:ring-2 hover:ring-[var(--md-sys-color-outline-variant)] focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50"
+              />
+            }
+          >
+            <WorkspaceAvatar
+              name={counterparty.name}
+              size="md"
+              workspaceId={counterparty.workspaceId}
+              hasLogo={counterparty.hasLogo}
+            />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto min-w-[140px]">
+            <DropdownMenuItem onClick={() => setSheetOpen(true)}>
+              <ComposeIcon size={14} />
+              채팅보내기
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : variant === 'profile' ? (
         <button
           type="button"
           aria-label={`${counterparty.name} ${LABEL}`}
