@@ -6,7 +6,6 @@ import type { BuyerKanbanStage } from '@/lib/server/buyer-kanban';
 import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 
 export type DragAction =
-  | { kind: 'send-rfp'; rfpId: string; title: string }
   | { kind: 'cancel-rfp'; rfpId: string; title: string }
   | { kind: 'navigate-rfp-detail'; rfpId: string }
   | { kind: 'navigate-inbox'; rfpId: string }
@@ -39,18 +38,13 @@ export function resolveDrag(input: BuyerInput | PgInput): DragAction | null {
 function resolveBuyer(i: BuyerInput): DragAction | null {
   if (i.from === i.to) return null;
 
-  // draft → active: 발송
-  if (i.from === 'draft' && i.to === 'active') {
-    return { kind: 'send-rfp', rfpId: i.rfpId, title: i.title };
-  }
-
   // active → awarded: 낙찰은 PG 선택 필요 → RFP 상세(BidBoard)로 이동
   if (i.from === 'active' && i.to === 'awarded') {
     return { kind: 'navigate-rfp-detail', rfpId: i.rfpId };
   }
 
-  // {draft, active} → closed: 취소
-  if (i.to === 'closed' && (i.from === 'draft' || i.from === 'active')) {
+  // active → closed: 취소
+  if (i.from === 'active' && i.to === 'closed') {
     return { kind: 'cancel-rfp', rfpId: i.rfpId, title: i.title };
   }
 
@@ -60,13 +54,8 @@ function resolveBuyer(i: BuyerInput): DragAction | null {
 function resolvePg(i: PgInput): DragAction | null {
   if (i.from === i.to) return null;
 
-  // 작성 단계로 이동 — v0 는 form 이 inbox 페이지에 있어 navigate.
-  if (i.from === 'received' && i.to === 'drafting') {
-    return { kind: 'navigate-inbox', rfpId: i.rfpId };
-  }
-
-  // drafting → submitted: 폼 채워서 제출해야 함 — navigate.
-  if (i.from === 'drafting' && i.to === 'submitted') {
+  // received → submitted: 폼 작성·제출 필요 — v0 는 form 이 inbox 페이지에 있어 navigate.
+  if (i.from === 'received' && i.to === 'submitted') {
     return { kind: 'navigate-inbox', rfpId: i.rfpId };
   }
 

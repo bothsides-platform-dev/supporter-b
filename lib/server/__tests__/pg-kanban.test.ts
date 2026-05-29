@@ -71,13 +71,13 @@ describe('classifyPgInvitation', () => {
     expect(stage).toBe('received');
   });
 
-  it('drafting: bid=draft', () => {
+  it('received: bid=draft (작성중 컬럼 제거 — 제출 전은 모두 신규)', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: makeBid('b1', 'draft'),
       rfp: makeRfp(),
     });
-    expect(stage).toBe('drafting');
+    expect(stage).toBe('received');
   });
 
   it('submitted: bid=submitted + rfp=sent', () => {

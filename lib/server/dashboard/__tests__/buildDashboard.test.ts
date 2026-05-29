@@ -91,7 +91,7 @@ describe('buildPgDashboard', () => {
     expect(byId.new.value).toBe(1);
     expect(byId.new.href).toBe('/inbox?status=new');
     expect(byId.due.value).toBe(2);
-    expect(byId.drafting.value).toBe(2);
+    expect(byId.drafting).toBeUndefined(); // 작성중 KPI 제거
     expect(byId.submitted.value).toBe(1);
   });
 
@@ -100,6 +100,6 @@ describe('buildPgDashboard', () => {
     expect(byId.new.items.map((i) => i.id)).toEqual(['n']);
     expect(byId.new.items[0].href).toBe('/inbox/P-N');
     expect(byId.due.items.map((i) => i.id)).toEqual(['o2', 'n']);
-    expect(byId.drafting.items.map((i) => i.id)).toEqual(['o', 'o2']);
+    expect(byId.drafting).toBeUndefined(); // 작성중 응답 그룹 제거
   });
 });

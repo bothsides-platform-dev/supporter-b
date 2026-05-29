@@ -47,7 +47,6 @@ const rfpSection: NavSection = {
   base: '/rfp',
   links: [{ id: 'rfp-new', label: '새 RFP', href: '/rfp/new' }],
   statuses: [
-    { status: 'draft', label: '작성중' },
     { status: 'active', label: '진행중' },
     { status: 'closed', label: '마감' },
     { status: 'awarded', label: '계약완료' },
@@ -83,13 +82,13 @@ describe('SidebarSection — status section (RFP)', () => {
     expect(subNav).not.toBeNull();
     const links = Array.from(subNav!.querySelectorAll('a')).map((a) => a.textContent);
     expect(links[0]).toBe('새 RFP');
-    expect(links[1]).toBe('작성중');
+    expect(links[1]).toBe('진행중');
   });
 
   it('renders status sub-items linking to status search params', () => {
     renderSection(rfpSection);
-    expect(screen.getByRole('link', { name: '작성중' })).toHaveAttribute('href', '/rfp?status=draft');
     expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('href', '/rfp?status=active');
+    expect(screen.getByRole('link', { name: '마감' })).toHaveAttribute('href', '/rfp?status=closed');
     expect(screen.getByRole('link', { name: '새 RFP' })).toHaveAttribute('href', '/rfp/new');
   });
 
@@ -98,7 +97,7 @@ describe('SidebarSection — status section (RFP)', () => {
     mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
     renderSection(rfpSection);
     expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: '작성중' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: '마감' })).not.toHaveAttribute('aria-current');
     expect(screen.getByRole('link', { name: 'RFP' })).not.toHaveAttribute('aria-current');
   });
 
@@ -127,7 +126,7 @@ describe('SidebarSection — sub-item shortcuts', () => {
       href: '/rfp',
       base: '/rfp',
       statuses: [
-        { status: 'draft', label: '작성중', shortcut: { kind: 'chord', lead: 'g', key: '1' } },
+        { status: 'active', label: '진행중', shortcut: { kind: 'chord', lead: 'g', key: '1' } },
       ],
     };
     render(
@@ -137,7 +136,7 @@ describe('SidebarSection — sub-item shortcuts', () => {
         </TooltipProvider>
       </SidebarProvider>,
     );
-    await user.hover(screen.getByRole('link', { name: '작성중' }));
+    await user.hover(screen.getByRole('link', { name: '진행중' }));
     expect(await screen.findByText('G')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
   });

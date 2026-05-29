@@ -49,13 +49,11 @@ describe('getNavConfig — buyer RFP section', () => {
     expect(rfp?.base).toBe('/rfp');
     expect(rfp?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'r' });
     expect(rfp?.statuses?.map((s) => s.status)).toEqual([
-      'draft',
       'active',
       'closed',
       'awarded',
     ]);
     expect(rfp?.statuses?.map((s) => s.label)).toEqual([
-      '작성중',
       '진행중',
       '마감',
       '계약완료',
@@ -78,13 +76,11 @@ describe('getNavConfig — pg inbox section', () => {
     expect(inbox?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'i' });
     expect(inbox?.statuses?.map((s) => s.status)).toEqual([
       'new',
-      'draft',
       'submitted',
       'closed',
     ]);
     expect(inbox?.statuses?.map((s) => s.label)).toEqual([
       '신규',
-      '작성중',
       '제출완료',
       '마감',
     ]);
@@ -145,24 +141,23 @@ describe('getBreadcrumbSegments', () => {
 });
 
 describe('getChordMap', () => {
-  it('routes the buyer "g" chords incl. submenu (statuses 1-4, 새 RFP c, messages m, settings p/t)', () => {
+  it('routes the buyer "g" chords incl. submenu (statuses 1-3, 새 RFP c, messages m, settings p/t)', () => {
     expect(getChordMap('buyer')).toEqual({
       h: '/home',
       n: '/notifications',
       m: '/messages',
       r: '/rfp',
       s: '/settings/profile',
-      '1': '/rfp?status=draft',
-      '2': '/rfp?status=active',
-      '3': '/rfp?status=closed',
-      '4': '/rfp?status=awarded',
+      '1': '/rfp?status=active',
+      '2': '/rfp?status=closed',
+      '3': '/rfp?status=awarded',
       c: '/rfp/new',
       p: '/settings/profile',
       t: '/settings/members',
     });
   });
 
-  it('routes the pg "g" chords (i for inbox, no r/c) incl. messages m, inbox statuses 1-4', () => {
+  it('routes the pg "g" chords (i for inbox, no r/c) incl. messages m, inbox statuses 1-3', () => {
     expect(getChordMap('pg')).toEqual({
       h: '/home',
       n: '/notifications',
@@ -170,9 +165,8 @@ describe('getChordMap', () => {
       i: '/inbox',
       s: '/settings/profile',
       '1': '/inbox?status=new',
-      '2': '/inbox?status=draft',
-      '3': '/inbox?status=submitted',
-      '4': '/inbox?status=closed',
+      '2': '/inbox?status=submitted',
+      '3': '/inbox?status=closed',
       p: '/settings/profile',
       t: '/settings/members',
     });
@@ -205,7 +199,6 @@ describe('submenu shortcuts', () => {
       { kind: 'chord', lead: 'g', key: '1' },
       { kind: 'chord', lead: 'g', key: '2' },
       { kind: 'chord', lead: 'g', key: '3' },
-      { kind: 'chord', lead: 'g', key: '4' },
     ]);
   });
 
@@ -228,7 +221,6 @@ describe('submenu shortcuts', () => {
       { kind: 'chord', lead: 'g', key: '1' },
       { kind: 'chord', lead: 'g', key: '2' },
       { kind: 'chord', lead: 'g', key: '3' },
-      { kind: 'chord', lead: 'g', key: '4' },
     ]);
   });
 });

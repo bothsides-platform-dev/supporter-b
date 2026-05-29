@@ -9,17 +9,15 @@ import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { RfpInvitation } from '@/lib/types/invitation';
 
-export type BuyerKanbanStage = 'draft' | 'active' | 'awarded' | 'closed';
+export type BuyerKanbanStage = 'active' | 'awarded' | 'closed';
 
 export const BUYER_KANBAN_ORDER: readonly BuyerKanbanStage[] = [
-  'draft',
   'active',
   'awarded',
   'closed',
 ] as const;
 
 export const BUYER_KANBAN_LABEL: Record<BuyerKanbanStage, string> = {
-  draft: '작성중',
   active: '진행중',
   awarded: '계약완료',
   closed: '마감',
@@ -36,12 +34,12 @@ export type BuyerKanbanCard = {
   awardedBidId?: string;
 };
 
-// pure — 단위 테스트 가능. status 만으로 4단계 분류 (스펙 §5 IA: 작성중/진행중/마감/계약완료).
+// pure — 단위 테스트 가능. status 만으로 3단계 분류 (진행중/계약완료/마감).
+// draft RFP 는 보드에서 제외 (loadBoard 가 필터) — 분류 대상이 아니다.
 export function classifyBuyerRfp(args: { rfp: RFP }): BuyerKanbanStage {
   const { rfp } = args;
   if (rfp.status === 'awarded') return 'awarded';
   if (rfp.status === 'closed' || rfp.status === 'cancelled') return 'closed';
-  if (rfp.status === 'draft') return 'draft';
   return 'active'; // status === 'sent'
 }
 
@@ -72,9 +70,6 @@ export function compareBuyerCards(
   a: BuyerKanbanCard,
   b: BuyerKanbanCard,
 ): number {
-  if (a.stage === 'draft' || b.stage === 'draft') {
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  }
   if (a.stage === 'awarded' || a.stage === 'closed') {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   }
