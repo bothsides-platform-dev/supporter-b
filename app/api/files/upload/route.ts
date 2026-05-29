@@ -31,14 +31,15 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { auth } from '@/auth';
-import { attachments, bids, rfps, workspaceMembers } from '@/lib/db/schema';
+import { attachments, bids, rfps } from '@/lib/db/schema';
 import { db as prodDb } from '@/lib/db/client';
 import {
   getAttachmentRepo,
   getInvitationRepo,
+  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
 import { DRAFT_OWNER_ID } from '@/lib/server/storage/path';
@@ -159,17 +160,9 @@ export async function POST(req: Request): Promise<Response> {
     if (row.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
     // Workspace membership — match the post-cutover bid_note ACL in
     // storage/permissions.ts so the upload and the read share one matrix.
-    const [member] = await routeDb()
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, wsId),
-          eq(workspaceMembers.userId, userId),
-        ),
-      )
-      .limit(1);
-    if (!member) return fail(403, 'FORBIDDEN');
+    if (!(await (await getWorkspaceRepo()).isMember(userId, wsId))) {
+      return fail(403, 'FORBIDDEN');
+    }
   } else {
     // bid_proposal — PG-only, must be a member of an invited PG ws for ownerId.
     if (wsType !== 'pg' || !wsId) return fail(403, 'FORBIDDEN');

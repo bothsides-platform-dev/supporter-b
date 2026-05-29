@@ -34,7 +34,7 @@ describe('repository factory', () => {
       save: async () => {},
       findById: async () => undefined,
       findByShareToken: async () => undefined,
-    } satisfies Omit<WorkspaceRepo, 'listForUser'>;
+    } satisfies Omit<WorkspaceRepo, 'listForUser' | 'isMember'>;
     globalThis.__bidit_repos__ = {
       ...(globalThis.__bidit_repos__ ?? {}),
       workspace: staleWorkspace as unknown as WorkspaceRepo,

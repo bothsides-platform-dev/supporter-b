@@ -45,7 +45,9 @@ export function PhoneVerificationField({ onVerified }: Props) {
       setPhoneError(
         r.error === 'RATE_LIMITED'
           ? '잠시 후 다시 시도해주세요. (10분 내 3회 제한)'
-          : '올바른 휴대전화 번호를 입력해주세요.',
+          : r.error === 'SMS_FAILED'
+            ? '인증번호 발송에 실패했습니다. 잠시 후 다시 시도해주세요.'
+            : '올바른 휴대전화 번호를 입력해주세요.',
       );
       return;
     }

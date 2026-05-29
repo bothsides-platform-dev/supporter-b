@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
@@ -9,9 +9,26 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
 import { StatutoryCardFeeNotice } from './StatutoryCardFeeNotice';
+import { useBidDraft, type BidDraft } from './useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
-import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
+import {
+  PAYMENT_METHOD_CATEGORIES,
+  PAYMENT_METHOD_LABELS,
+  STATUTORY_CARD_FEE,
+  type CustomPaymentMethod,
+  type PaymentMethod,
+} from '@/lib/types/bid';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
+
+const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap(
+  (c) => c.methods,
+);
+import {
+  PercentInput,
+  CurrencyInput,
+  underlineInputClass,
+  numericInputClass,
+} from '@/components/forms/inputs';
 import { cn } from '@/lib/utils';
 
 const CYCLE_UNITS = [
@@ -19,9 +36,6 @@ const CYCLE_UNITS = [
   { value: 'W', label: 'W+' },
   { value: 'M', label: 'M+' },
 ] as const;
-
-const inputBase =
-  'block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors';
 
 const ERROR_LABELS: Record<string, string> = {
   FORBIDDEN_PG: 'PG 사용자 권한이 필요합니다.',
@@ -32,90 +46,65 @@ const ERROR_LABELS: Record<string, string> = {
   INVITATION_NOT_FOUND: '초대 내역을 찾을 수 없습니다.',
   BID_ALREADY_SUBMITTED: '이미 제안을 제출하셨습니다.',
   CARD_FEE_EXCEEDS_STATUTORY_CAP: '카드 수수료가 법정 상한을 초과합니다.',
+  PAYMENT_METHOD_NOT_REQUESTED: '구매사가 요청하지 않은 결제수단입니다.',
 };
-
-function PctInput({
-  label,
-  value,
-  onChange,
-  placeholder = '0.00',
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label size="md" muted={false}>{label}</Label>
-      <div className="flex items-end gap-1">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={cn(inputBase, 'flex-1')}
-        />
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
-      </div>
-    </div>
-  );
-}
-
-function KrwInput({
-  label,
-  value,
-  onChange,
-  placeholder = '0',
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label size="md" muted={false}>{label}</Label>
-      <div className="flex items-end gap-1">
-        <input
-          type="number"
-          min="0"
-          step="1000"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className={cn(inputBase, 'flex-1')}
-        />
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">원</span>
-      </div>
-    </div>
-  );
-}
 
 type Props = {
   rfpId: string;
   rfpCode: string;
   grade: MerchantGrade | undefined;
+  requiredPaymentMethods: PaymentMethod[];
+  customPaymentMethods: CustomPaymentMethod[];
 };
 
-export function BidForm({ rfpId, rfpCode, grade }: Props) {
+export function BidForm({
+  rfpId,
+  rfpCode,
+  grade,
+  requiredPaymentMethods,
+  customPaymentMethods,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
 
-  // 정산 조건
-  const [cycleUnit, setCycleUnit] = useState<'D' | 'W' | 'M'>('D');
-  const [cycleNum, setCycleNum] = useState('1');
-  const [settleLimit, setSettleLimit] = useState('0');
-  const [guaranteeInsurance, setGuaranteeInsurance] = useState('0');
+  // 정산 조건 + 수수료 — single draft-fields object (synced to useBidDraft).
+  // Destructured below so read sites stay `cycleUnit`/`settleLimit`/…; writes go
+  // through setField, which keeps the save-effect dependency a single value.
+  const [fields, setFields] = useState<BidDraft>({
+    __v: 2,
+    cycleUnit: 'D',
+    cycleNum: '1',
+    settleLimit: '0',
+    guaranteeInsurance: '0',
+    fees: {},
+    memo: '',
+  });
+  const setField = <K extends keyof BidDraft>(key: K, value: BidDraft[K]) =>
+    setFields((f) => ({ ...f, [key]: value }));
+  const setFee = (key: string, value: string) =>
+    setFields((f) => ({ ...f, fees: { ...f.fees, [key]: value } }));
+  const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, fees, memo } = fields;
 
-  // 수수료
-  const [bankPct, setBankPct] = useState('0.50');
-  const [cardPct, setCardPct] = useState('');
-  const [memo, setMemo] = useState('');
+  // 임시 저장
+  const { draft, saveDraft, clearDraft } = useBidDraft(rfpId);
+  const [showRestoreBanner, setShowRestoreBanner] = useState(draft !== null);
+
+  useEffect(() => {
+    saveDraft(fields);
+  }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleRestore() {
+    if (!draft) return;
+    setFields(draft);
+    setShowRestoreBanner(false);
+  }
+
+  function handleDismiss() {
+    clearDraft();
+    setShowRestoreBanner(false);
+  }
 
   const proposalInputRef = useRef<HTMLInputElement>(null);
   const [proposal, setProposal] = useState<
@@ -161,13 +150,25 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
   const allowCardInput = grade === undefined || grade === 'general';
   const cardFeeStatutory = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
 
+  // 구매사가 요청한 수단 (빈 배열 = 제한 없음 → 9종 전체). capped 등급의 card는
+  // 법정 고정이라 입력칸을 만들지 않고, paymentFees에도 싣지 않는다(비교표가 등급에서 산출).
+  const enumMethods = requiredPaymentMethods.length > 0 ? requiredPaymentMethods : ALL_PAYMENT_METHODS;
+  const feeInputMethods = enumMethods.filter((m) => !(m === 'card' && !allowCardInput));
+  const hasStatutoryCard = enumMethods.includes('card') && !allowCardInput;
+
   const settleCycle = `${cycleUnit}+${cycleNum || '1'}`;
+
+  const feeFilled = (key: string) => (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
+  const anyFeeFilled =
+    hasStatutoryCard ||
+    feeInputMethods.some((m) => feeFilled(m)) ||
+    customPaymentMethods.some((c) => feeFilled(c.id));
 
   const canSubmit =
     !pending &&
     !proposalUploading &&
     cycleNum !== '' && parseInt(cycleNum) > 0 &&
-    bankPct !== '' && parseFloat(bankPct) >= 0;
+    anyFeeFilled;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,11 +182,15 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
 
     const pct = (s: string) => parseFloat(s) / 100;
 
-    const paymentFees: Record<string, number> = {
-      bank_transfer: pct(bankPct),
-    };
-    if (allowCardInput && cardPct !== '') {
-      paymentFees.card = pct(cardPct);
+    const paymentFees: Partial<Record<PaymentMethod, number>> = {};
+    for (const m of feeInputMethods) {
+      const v = fees[m] ?? '';
+      if (v !== '') paymentFees[m] = pct(v);
+    }
+    const customFees: Record<string, number> = {};
+    for (const c of customPaymentMethods) {
+      const v = fees[c.id] ?? '';
+      if (v !== '') customFees[c.id] = pct(v);
     }
 
     startTransition(async () => {
@@ -195,10 +200,12 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
         settleLimit: parseInt(settleLimit) || 0,
         guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
         paymentFees,
+        customFees,
         proposalAttachmentId: proposalReady ? proposal.id : undefined,
         memo: memo.trim() || undefined,
       });
       if (r.ok) {
+        clearDraft();
         router.push(`/inbox/${rfpCode}/submitted`);
       } else {
         setSubmitError(r.error);
@@ -219,6 +226,29 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
         loading={pending}
       />
     <form className="space-y-10" onSubmit={handleSubmit}>
+      {showRestoreBanner && (
+        <div className="flex items-center justify-between px-4 py-2.5 border border-[var(--md-sys-color-secondary-container)] rounded-[6px] bg-[var(--md-sys-color-secondary-container)]">
+          <span className="text-[13px] text-[var(--md-sys-color-on-secondary-container)]">
+            이전에 작성 중이던 내용이 있습니다
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleRestore}
+              className="text-[12px] text-[var(--md-sys-color-on-secondary-container)] underline underline-offset-2"
+            >
+              불러오기
+            </button>
+            <button
+              type="button"
+              onClick={handleDismiss}
+              className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]"
+            >
+              무시
+            </button>
+          </div>
+        </div>
+      )}
       {grade && grade !== 'general' && cardFeeStatutory !== null && (
         <StatutoryCardFeeNotice grade={grade} />
       )}
@@ -249,7 +279,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
                 <Select
                   options={CYCLE_UNITS.map((u) => ({ value: u.value, label: u.label }))}
                   value={cycleUnit}
-                  onChange={(v) => setCycleUnit(v as 'D' | 'W' | 'M')}
+                  onChange={(v) => setField('cycleUnit', v as 'D' | 'W' | 'M')}
                 />
               </div>
               <input
@@ -257,17 +287,17 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
                 min="1"
                 max="99"
                 value={cycleNum}
-                onChange={(e) => setCycleNum(e.target.value)}
+                onChange={(e) => setField('cycleNum', e.target.value)}
                 placeholder="1"
-                className={cn(inputBase, 'flex-1')}
+                className={cn(numericInputClass, 'flex-1')}
               />
             </div>
             <p className="font-mono text-[10px] text-[var(--md-sys-color-outline)]">
               예: D+1, W+2, M+1
             </p>
           </div>
-          <KrwInput label="정산한도 (원/월)" value={settleLimit} onChange={setSettleLimit} placeholder="0" />
-          <KrwInput label="월 보증보험 (원/연)" value={guaranteeInsurance} onChange={setGuaranteeInsurance} placeholder="0" />
+          <CurrencyInput label="정산한도 (원/월)" value={settleLimit} onChange={(v) => setField('settleLimit', v)} placeholder="0" />
+          <CurrencyInput label="월 보증보험 (원/연)" value={guaranteeInsurance} onChange={(v) => setField('guaranteeInsurance', v)} placeholder="0" />
         </div>
       </section>
 
@@ -280,10 +310,22 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-          <PctInput label="계좌이체 수수료 *" value={bankPct} onChange={setBankPct} placeholder="0.50" />
-          {allowCardInput && (
-            <PctInput label="카드 수수료" value={cardPct} onChange={setCardPct} placeholder="1.25" />
-          )}
+          {feeInputMethods.map((m) => (
+            <PercentInput
+              key={m}
+              label={`${PAYMENT_METHOD_LABELS[m]} 수수료`}
+              value={fees[m] ?? ''}
+              onChange={(v) => setFee(m, v)}
+            />
+          ))}
+          {customPaymentMethods.map((c) => (
+            <PercentInput
+              key={c.id}
+              label={`${c.label} 수수료`}
+              value={fees[c.id] ?? ''}
+              onChange={(v) => setFee(c.id, v)}
+            />
+          ))}
         </div>
       </section>
 
@@ -366,10 +408,10 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
             <Label size="md" muted={false}>메모</Label>
             <textarea
               value={memo}
-              onChange={(e) => setMemo(e.target.value)}
+              onChange={(e) => setField('memo', e.target.value)}
               rows={3}
               placeholder="추가 안내 사항이 있으면 입력하세요."
-              className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors resize-none"
+              className={cn(underlineInputClass, 'resize-none')}
             />
           </div>
         </div>
@@ -377,7 +419,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
 
       {!canSubmit && !pending && (
         <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-          · 정산주기 및 계좌이체 수수료 입력 필요
+          · 정산주기 및 수수료 1개 이상 입력 필요
         </p>
       )}
 

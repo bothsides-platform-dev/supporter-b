@@ -16,7 +16,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <aside className="w-52 flex-shrink-0 border-r border-outline-variant bg-surface flex flex-col">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-outline-variant">
           <div className="h-5 w-5 rounded bg-primary" />
-          <span className="text-label-large font-semibold">BIDIT Admin</span>
+          <span className="text-label-large font-semibold">Supporter B Admin</span>
         </div>
         <nav className="flex-1 overflow-y-auto py-2">
           {NAV.map(({ href, label }) => (

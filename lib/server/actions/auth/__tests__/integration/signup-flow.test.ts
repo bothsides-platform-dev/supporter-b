@@ -13,7 +13,7 @@ import {
   users,
   workspaces,
 } from '@/lib/db/schema';
-import { hashOtpCode } from '../../sendPhoneOtpAction';
+import { hashOtpCode } from '../../phoneOtpUtils';
 import { signupEmailAction } from '../../signupEmailAction';
 import { verifyEmailAction } from '../../verifyEmailAction';
 import { signupCompleteAction } from '../../signupCompleteAction';

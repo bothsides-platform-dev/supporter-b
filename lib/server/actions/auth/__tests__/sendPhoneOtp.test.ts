@@ -73,6 +73,17 @@ describe('sendPhoneOtpAction', () => {
     expect(r.ok).toBe(true);
   });
 
+  it('SMS 발송 실패 → SMS_FAILED + phone_otps 롤백', async () => {
+    vi.mocked(sendSms).mockRejectedValueOnce(new Error('SignatureDoesNotMatch'));
+
+    const r = await sendPhoneOtpAction({ phone: '010-1111-2222' });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('SMS_FAILED');
+    const rows = await db.select().from(phoneOtps).where(eq(phoneOtps.phone, '01011112222'));
+    expect(rows).toHaveLength(0);
+  });
+
   it('OTP 만료 시간이 5분 뒤로 설정됨', async () => {
     const before = new Date();
     await sendPhoneOtpAction({ phone: '010-9999-9999' });

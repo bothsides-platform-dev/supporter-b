@@ -37,6 +37,18 @@ import {
 
 const MERCHANT_GRADES = ['small', 'sme1', 'sme2', 'sme3', 'general'] as const;
 
+const PAYMENT_METHODS = [
+  'card',
+  'overseas_card',
+  'virtual_account',
+  'bank_transfer',
+  'naver_pay',
+  'kakao_pay',
+  'toss_pay',
+  'mobile',
+  'gift_card',
+] as const;
+
 const Input = z
   .object({
     title: z.string().min(1).max(200),
@@ -44,6 +56,14 @@ const Input = z
     deadline: z.string().datetime({ offset: true }), // ISO 8601 with timezone
     allowedPgWorkspaceIds: z.array(z.string().uuid()).max(50),
     rfpAttachmentIds: z.array(z.string().uuid()).optional(),
+    // 구매사가 요청한 결제수단(9종 enum). 발송 시 커스텀과 합산 ≥1 필수.
+    requiredPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).optional().default([]),
+    // 커스텀 결제수단: 클라는 label만 전송, 서버가 id 발급.
+    customPaymentMethods: z
+      .array(z.object({ label: z.string().min(1).max(50) }))
+      .max(20)
+      .optional()
+      .default([]),
     send: z.boolean().optional().default(false),
     // bizProfile 분기 — default 'inherit' 은 워크스페이스 bizProfile 을 스냅샷.
     // 워크스페이스에 bizProfile 이 없으면 자동으로 'none' 으로 폴백.
@@ -62,7 +82,17 @@ const Input = z
     currentSolution: z.enum(['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other']).optional(),
     currentSolutionDetail: z.string().max(100).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((d, ctx) => {
+    // 발송 시 결제수단(enum + 커스텀) 합산 ≥1 필수. 임시저장은 0개 허용.
+    if (d.send && d.requiredPaymentMethods.length + d.customPaymentMethods.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['requiredPaymentMethods'],
+        message: '발송하려면 결제수단을 1개 이상 선택해야 합니다.',
+      });
+    }
+  });
 
 // Public input (callers): `send` 는 zod default 덕에 생략 가능.
 // `z.input` 으로 노출해서 caller가 `send`를 안 적어도 컴파일되게 한다.
@@ -193,6 +223,11 @@ export async function createRfpAction(
         deadline: new Date(parsed.data.deadline),
         shareToken: generateToken(),
         status: send ? 'sent' : 'draft',
+        requiredPaymentMethods: parsed.data.requiredPaymentMethods,
+        customPaymentMethods: parsed.data.customPaymentMethods.map((m) => ({
+          id: randomUUID(),
+          label: m.label.trim(),
+        })),
         createdBy: userId,
         sentAt: send ? now : null,
       });

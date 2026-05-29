@@ -1,6 +1,8 @@
 # ADR 0001 — 배포 아키텍처: 단일 Always Free VM 자체 호스팅
 
-- **상태**: Accepted (2026-05-21)
+> ⚠️ **Superseded by [ADR 0002](./0002-vercel-deployment.md) (2026-05-29).** 실제 라이브 배포는 Vercel(region `icn1`)이다. 본 문서와 [`docs/DEPLOY_OCI.md`](../DEPLOY_OCI.md), `docker-compose.prod.yml` / `ecosystem.config.cjs` / `deploy/Caddyfile` 은 현 운영 환경이 아닌 **역사적 기록 / 폴백 옵션**으로만 본다.
+
+- **상태**: Superseded (2026-05-29; 원래 Accepted 2026-05-21)
 - **결정자**: yeonseong
 - **관련 산출물**: [`docs/DEPLOY_OCI.md`](../DEPLOY_OCI.md) (실행 런북), `docker-compose.prod.yml`, `ecosystem.config.cjs`, `deploy/Caddyfile`, `scripts/deploy/*`
 

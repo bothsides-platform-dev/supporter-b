@@ -1,4 +1,5 @@
 // components/rfp/__tests__/RfpStep4Review.test.tsx
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpStep4Review } from '../RfpStep4Review';
@@ -21,7 +22,7 @@ function resetStore() {
 describe('RfpStep4Review', () => {
   beforeEach(resetStore);
 
-  it('마감일 없으면 발송 버튼이 비활성화된다', () => {
+  it('마감일이 없어도 발송 버튼은 비활성화되지 않는다 (미충족 안내는 클릭 시 토스트로)', () => {
     render(
       <RfpStep4Review
         onBack={vi.fn()}
@@ -30,7 +31,22 @@ describe('RfpStep4Review', () => {
         serverError=""
       />,
     );
-    expect(screen.getByRole('button', { name: /발송/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /발송/ })).not.toBeDisabled();
+  });
+
+  it('마감일이 없어도 발송 버튼 클릭 시 onSubmit이 호출된다', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RfpStep4Review
+        onBack={vi.fn()}
+        onSubmit={onSubmit}
+        submitting={false}
+        serverError=""
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /발송/ }));
+    expect(onSubmit).toHaveBeenCalledOnce();
   });
 
   it('제안 제목이 요약에 표시된다', () => {

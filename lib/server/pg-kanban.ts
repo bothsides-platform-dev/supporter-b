@@ -1,6 +1,7 @@
-// PG 홈 칸반 — 초대받은 RFP 1건 = 카드 1장. 5개 컬럼.
+// PG 홈 칸반 — 초대받은 RFP 1건 = 카드 1장. 4개 컬럼.
 // 분류는 (invitation, optional bid, parent rfp) 트리플로부터 결정. 결과 단계(낙찰/실패)
 // 가 bid 단계보다 우선 — RFP 가 awarded/closed 면 즉시 결과 컬럼으로 들어감.
+// 제출 전(bid 없음 / bid=draft)은 모두 신규(received) — 작성중 단계 제거.
 //
 // 이 파일은 client component 에서도 import 가능 — repo / DB import 없이 순수 도메인.
 // 데이터 로더는 ./pg-kanban-loader.ts 참조.
@@ -8,11 +9,10 @@ import type { Bid } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
 
-export type PgKanbanStage = 'received' | 'drafting' | 'submitted' | 'won' | 'lost';
+export type PgKanbanStage = 'received' | 'submitted' | 'won' | 'lost';
 
 export const PG_KANBAN_ORDER: readonly PgKanbanStage[] = [
   'received',
-  'drafting',
   'submitted',
   'won',
   'lost',
@@ -20,7 +20,6 @@ export const PG_KANBAN_ORDER: readonly PgKanbanStage[] = [
 
 export const PG_KANBAN_LABEL: Record<PgKanbanStage, string> = {
   received: '신규',
-  drafting: '작성중',
   submitted: '제출완료',
   won: '낙찰',
   lost: '실패',
@@ -53,9 +52,8 @@ export function classifyPgInvitation(args: {
 
   if (bid?.status === 'withdrawn') return 'lost';
   if (bid?.status === 'submitted') return 'submitted';
-  if (bid?.status === 'draft') return 'drafting';
 
-  // bid 없음 — sent/opened 모두 신규(received).
+  // 미제출(작성중 draft) 및 bid 없음(sent/opened) — 모두 신규(received). 작성중 단계 제거.
   return 'received';
 }
 

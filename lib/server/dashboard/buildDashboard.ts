@@ -90,7 +90,6 @@ export function buildPgDashboard(rows: PgDashRow[], now: Date): Dashboard {
   const kpis: DashboardKpi[] = [
     { id: 'new', label: '신규', value: rows.filter((r) => r.invitationStatus === 'sent').length, href: '/inbox?status=new' },
     { id: 'due', label: '마감 임박', value: rows.filter((r) => unsubmitted(r) && isUrgent(r)).length, href: '/inbox?deadline=d7' },
-    { id: 'drafting', label: '작성중', value: rows.filter((r) => r.invitationStatus === 'opened').length, href: '/inbox?status=draft' },
     { id: 'submitted', label: '제출완료', value: rows.filter((r) => r.invitationStatus === 'accepted').length, href: '/inbox?status=submitted' },
   ];
 
@@ -99,12 +98,10 @@ export function buildPgDashboard(rows: PgDashRow[], now: Date): Dashboard {
     .filter((r) => unsubmitted(r) && isUrgent(r))
     .sort((a, b) => new Date(a.rfpDeadline).getTime() - new Date(b.rfpDeadline).getTime())
     .map(toItem);
-  const draftingItems = rows.filter((r) => r.invitationStatus === 'opened').map(toItem);
 
   const groups: ActionGroup[] = [
     { id: 'new', label: '신규 받은 RFP', items: newItems },
     { id: 'due', label: '응답 마감 임박', items: dueItems },
-    { id: 'drafting', label: '작성중 응답', items: draftingItems },
   ].filter((g) => g.items.length > 0);
 
   return { kpis, groups };

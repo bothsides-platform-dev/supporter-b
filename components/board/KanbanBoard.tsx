@@ -1,5 +1,8 @@
 'use client';
 
+// Set to true to re-enable the custom-column UI (add/delete column controls).
+const CUSTOM_COLUMNS_ENABLED = false;
+
 import { useMemo, useOptimistic, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -189,11 +192,13 @@ export function KanbanBoard({ kind, cardType, columns, cards, renderCard }: Prop
               ))}
             </ColumnView>
           ))}
-          <AddColumnControl
-            kind={kind}
-            afterPosition={lastColumnPos}
-            onRefresh={() => router.refresh()}
-          />
+          {CUSTOM_COLUMNS_ENABLED && (
+            <AddColumnControl
+              kind={kind}
+              afterPosition={lastColumnPos}
+              onRefresh={() => router.refresh()}
+            />
+          )}
         </div>
       </DndContext>
 
@@ -371,7 +376,7 @@ function ColumnMenu({
           ))}
         </div>
 
-        {isSystemColumn(column) ? (
+        {isSystemColumn(column) || !CUSTOM_COLUMNS_ENABLED ? (
           <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
             기본 컬럼 — 삭제할 수 없습니다
           </p>

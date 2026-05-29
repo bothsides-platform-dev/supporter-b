@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Documentation Map
+
+This file is the agent entry point (`AGENTS.md` only delegates here). The live content docs:
+- `CLAUDE.md` (this file) — stack, routing, design hard-rules, TDD rules, skill routing.
+- `README.md` — local setup / run instructions.
+- `DESIGN.md` — Linear design language: tokens, typography, color, component visual rules.
+- `SCREEN_DESIGN.md` — screen IA, route map, per-screen UX spec.
+
+**Historical / NOT current truth** (verify against code before trusting): `docs/superpowers/**` (point-in-time plan & spec artifacts), `docs/adr/0001-*` (superseded — live deploy is Vercel; see `docs/adr/0002-vercel-deployment.md`). The legacy OCI self-hosting assets (`docs/DEPLOY_OCI.md`, `ecosystem.config.cjs`, `docker-compose.prod.yml`, `deploy/Caddyfile`, `scripts/deploy/*`, `.env.production.example`) and the legacy `PG_RFP_SPEC.md` / `SPEC.md` docs were **removed** — do not reference them; canonical product rules now live in code + tests + SCREEN_DESIGN.md 의 "확정 결정" 블록 (Context 절).
 
 ## Domain Context (memorize)
 
@@ -42,19 +51,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 app/
-├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{rfp,workspace}/[token], /share/{rfp,workspace}, /auth/*
+├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{,rfp,workspace}/[token], /share/{rfp,workspace}/[token], /auth/*, /pending-approval, /suspended
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)
 │  ├─ home/
-│  ├─ rfp/                    # buyer workspace pages (B1~B7)
-│  ├─ inbox/                  # pg workspace pages (P2~P4)
+│  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id], /rfp/[id]/award
+│  ├─ inbox/                  # pg workspace pages (P2~P4): /inbox, /inbox/[rfpId], /inbox/[rfpId]/submitted
 │  ├─ notifications/          # 인앱 알림 목록 페이지
-│  ├─ workspace/              # 워크스페이스 생성·합류
+│  ├─ workspace/new/          # 워크스페이스 생성
 │  └─ settings/{profile,members,notifications}/
+├─ rfp/new/                   # full-screen RFP 작성 플로우 (자체 layout, AppShell 밖)
+├─ admin/                     # 운영자 콘솔 (별도 트리): admin/login + admin/(protected)/{index 대시보드, buyers/[id], sellers/[id], rfps/[id], review/[id], audit-log}; role-guard in admin/(protected)/layout.tsx
 ├─ logout/route.ts            # POST handler
 └─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리
 ```
 
-Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation.
+Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation. The `admin/` console is a separate top-level tree, gated by a role guard in `admin/(protected)/layout.tsx` (not the buyer/pg AppShell).
 
 ## Linear Design Language — Hard Rules
 
@@ -104,11 +115,10 @@ If frontend code looks "generic SaaS", check DESIGN.md §9 (anti-patterns) befor
 
 ## When Editing Documentation
 
-The 6 docs cross-reference each other heavily. After any change:
+The content docs (this file, `README.md`, `DESIGN.md`, `SCREEN_DESIGN.md`) cross-reference each other. After any change:
 - If you edit DESIGN.md tokens → also bump `styles/tokens.css`
-- If you edit PG_RFP_SPEC.md §4 (domain types) → also update SPEC.md §5 to match
-- If you add a screen → register it in SCREEN_DESIGN.md (IA)
-- If a decision contradicts the 15 policies in PG_RFP_SPEC.md §3, **stop and ask** — that table is the canonical product definition.
+- If you add or change a screen/route → register it in SCREEN_DESIGN.md (§0 route map + screen table) and, for new top-level trees, the Routing Architecture block above.
+- Canonical product rules now live in **code + tests + SCREEN_DESIGN.md 의 "확정 결정" 블록** (Context 절; the legacy `PG_RFP_SPEC.md` / `SPEC.md` docs were removed). If a decision contradicts the "확정 결정" rules, **stop and ask**.
 
 ## Skill routing (project-specific only)
 
@@ -129,3 +139,15 @@ The 6 docs cross-reference each other heavily. After any change:
 - test: `pnpm test`
 
 TDD 사이클 중 단일 파일만 실행: `pnpm test <path-to-test>` — RED/GREEN 확인은 항상 단일 파일로 빠르게, 전체 그린 확인은 `pnpm test`.
+
+## Worktree Workflow
+
+모든 기능 개발·버그픽스는 **worktree 브랜치**에서 진행한다. dev는 항상 clean 상태 유지.
+
+- 새 작업 시작 시 `EnterWorktree` (네이티브 도구)로 `.worktrees/<branch-name>` 생성
+- Worktree 디렉터리: `.worktrees/` (`.gitignore`에 등록됨)
+- 브랜치 명명: `feat/<slug>`, `fix/<slug>`, `chore/<slug>`
+- PR은 `/ship` 스킬로 생성
+- PR 머지 후 `git worktree remove .worktrees/<name> && git branch -d <name>` 정리
+
+**동의 없이 worktree를 자동 생성해도 된다.** 별도 확인 불필요.

@@ -43,7 +43,7 @@ import {
 } from '@/lib/server/storage/permissions';
 import { getStorage } from '@/lib/server/storage';
 import { db as prodDb } from '@/lib/db/client';
-import { getInvitationRepo } from '@/lib/server/repositories/factory';
+import { getInvitationRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -124,6 +124,7 @@ export async function GET(
 
   const repos: RepoBundleForAttachment = {
     invitation: await getInvitationRepo(),
+    workspace: await getWorkspaceRepo(),
   };
 
   const allowed = await canAccessAttachment(

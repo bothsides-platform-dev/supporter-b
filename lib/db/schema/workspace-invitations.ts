@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { workspaceInvitationStatusEnum } from './_enums';
+import { memberRoleEnum, workspaceInvitationStatusEnum } from './_enums';
 import { workspaces } from './workspaces';
 import { users } from './users';
 
@@ -15,6 +15,7 @@ export const workspaceInvitations = pgTable(
     invitedByUserId: uuid('invited_by_user_id')
       .notNull()
       .references(() => users.id),
+    role: memberRoleEnum('role').notNull().default('member'),
     tokenHash: text('token_hash').notNull().unique(),
     status: workspaceInvitationStatusEnum('status').notNull().default('pending'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

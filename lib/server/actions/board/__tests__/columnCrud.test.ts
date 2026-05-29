@@ -188,14 +188,6 @@ describe('deleteColumnAction', () => {
     if (!r.ok) expect(r.error).toBe('COLUMN_CROSS_SIDE_LOCKED');
   });
 
-  it('rejects a private-skeleton system column', async () => {
-    const { buyerWs } = await setupBuyer();
-    const draft = await colByTitle(buyerWs.id, '작성중'); // lifecycleKey='draft' (not cross-side)
-    const r = await deleteColumnAction({ columnId: draft });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('COLUMN_SYSTEM_LOCKED');
-  });
-
   it('rejects the default-landing column', async () => {
     const { buyerWs } = await setupBuyer();
     const landing = await colByTitle(buyerWs.id, '진행전');

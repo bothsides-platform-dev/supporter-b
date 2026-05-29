@@ -16,6 +16,9 @@ import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { toast } from '@/lib/toast';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { STEP_LABELS } from './wizard-steps';
+import { getWizardValidity, getFirstIncompleteStep } from './wizard-validation';
+
+const TOTAL_STEPS = STEP_LABELS.length;
 
 const SOLUTION_VALUES = ['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other'] as const;
 type SolutionValue = (typeof SOLUTION_VALUES)[number];
@@ -31,22 +34,17 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
   const draft = useRfpDraftStore();
 
   const [currentStep, setCurrentStep] = useState(1);
-  const [maxReachedStep, setMaxReachedStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
 
-  const advance = () => {
-    const next = currentStep + 1;
-    setCurrentStep(next);
-    setMaxReachedStep((prev) => Math.max(prev, next));
-  };
+  // 각 step의 완료 여부를 실제 입력값으로 독립 판정 — 순서와 무관.
+  const completed = getWizardValidity(draft).map((s) => s.complete);
 
+  // 자유 이동 — 어느 step이든(앞/뒤 무관) 바로 이동. 순서 강제 없음.
+  const advance = () => setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1));
   const back = () => setCurrentStep((s) => Math.max(1, s - 1));
-
-  const goToStep = (step: number) => {
-    if (step > maxReachedStep) return;
-    setCurrentStep(step);
-  };
+  const goToStep = (step: number) =>
+    setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, step)));
 
   const handleSubmit = async () => {
     if (submitting) return;
@@ -54,6 +52,15 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
     if (guest) {
       localStorage.setItem('supporter-b-rfp-next', '/rfp/new');
       router.push('/signup/buyer');
+      return;
+    }
+
+    // 발송 버튼은 막지 않는다. 누른 시점에 미충족 step이 있으면 토스트로
+    // 안내하고 그 step으로 이동(서버 검증은 안전망으로 그대로 유지).
+    const incomplete = getFirstIncompleteStep(draft);
+    if (incomplete) {
+      toast(incomplete.hint, { type: 'error' });
+      setCurrentStep(incomplete.num);
       return;
     }
 
@@ -82,6 +89,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
         deadline: draft.deadline,
         allowedPgWorkspaceIds: draft.allowedPgWorkspaceIds.map((w) => w.id),
         rfpAttachmentIds: draft.rfpFiles.map((f) => f.id),
+        requiredPaymentMethods: draft.requiredPaymentMethods,
+        customPaymentMethods: draft.customPaymentMethods,
         send: true,
       });
     } catch {
@@ -108,14 +117,18 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
       {/* Desktop: left step sidebar (hidden on mobile via WizardStepSidebar internal class) */}
       <WizardStepSidebar
         currentStep={currentStep}
-        maxReachedStep={maxReachedStep}
+        completed={completed}
         onStepClick={goToStep}
       />
 
       {/* Content area */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Mobile: top progress bar (hidden on desktop via WizardProgressBar internal class) */}
-        <WizardProgressBar currentStep={currentStep} maxReachedStep={maxReachedStep} />
+        <WizardProgressBar
+          currentStep={currentStep}
+          completed={completed}
+          onStepClick={goToStep}
+        />
 
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {/* Step header */}

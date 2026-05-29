@@ -98,6 +98,7 @@ describe('createRfpAction', () => {
       title: '로그 검증',
       deadline: new Date(Date.now() + 86_400_000).toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: ['card'],
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -158,6 +159,80 @@ describe('createRfpAction', () => {
     expect(outbox).toHaveLength(0);
   });
 
+  it('send=true 인데 결제수단 0개 → INVALID_INPUT', async () => {
+    const r = await createRfpAction({
+      title: '결제수단 미선택',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: [],
+      send: true,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('draft 는 결제수단 0개여도 허용', async () => {
+    const r = await createRfpAction({
+      title: '드래프트 결제수단 없음',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: [],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('requiredPaymentMethods 를 RFP 행에 저장한다', async () => {
+    const r = await createRfpAction({
+      title: '결제수단 저장',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: ['card', 'bank_transfer'],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.requiredPaymentMethods).toEqual(['card', 'bank_transfer']);
+  });
+
+  it('customPaymentMethods label 입력 → 서버가 {id,label} 발급해 저장', async () => {
+    const r = await createRfpAction({
+      title: '커스텀 결제수단',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: [],
+      customPaymentMethods: [{ label: '포인트결제' }],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    const custom = row.customPaymentMethods as { id: string; label: string }[];
+    expect(custom).toHaveLength(1);
+    expect(custom[0].label).toBe('포인트결제');
+    expect(typeof custom[0].id).toBe('string');
+    expect(custom[0].id.length).toBeGreaterThan(0);
+  });
+
+  it('send=true & enum 0개지만 커스텀 1개 → 허용 (합산 ≥1)', async () => {
+    const pg = await seedPgWorkspace(db, '합산검증PG');
+    const pgAdmin = await seedUser(db, { email: 'admin@sum.test' });
+    await seedMembership(db, pg.id, pgAdmin.id, 'admin');
+
+    const r = await createRfpAction({
+      title: '커스텀만으로 발송',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pg.id],
+      requiredPaymentMethods: [],
+      customPaymentMethods: [{ label: '포인트결제' }],
+      send: true,
+    });
+    expect(r.ok).toBe(true);
+  });
+
   it('send branch — inserts RFP status=sent, N invitations + N invite outbox', async () => {
     // Seed 3 PG workspaces each with one admin — outbox is per admin member
     const pg1 = await seedPgWorkspace(db, '서포터 B 페이');
@@ -183,6 +258,7 @@ describe('createRfpAction', () => {
       title: '결제 인프라 제안',
       deadline: new Date(Date.now() + 86_400_000).toISOString(),
       allowedPgWorkspaceIds: pgWsIds,
+      requiredPaymentMethods: ['card'],
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -434,7 +510,7 @@ describe('createRfpAction', () => {
       title: '신규 필드 테스트',
       deadline: new Date(Date.now() + 86_400_000).toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
-      websiteUrl: 'https://bidit.store/',
+      websiteUrl: 'https://supporter-b.com/',
       mainProducts: '의류',
       annualPgVolume: '10억',
       currentFeeRate: '3.4%',
@@ -446,7 +522,7 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
-    expect(row.websiteUrl).toBe('https://bidit.store/');
+    expect(row.websiteUrl).toBe('https://supporter-b.com/');
     expect(row.mainProducts).toBe('의류');
     expect(row.annualPgVolume).toBe('10억');
     expect(row.currentFeeRate).toBe('3.4%');

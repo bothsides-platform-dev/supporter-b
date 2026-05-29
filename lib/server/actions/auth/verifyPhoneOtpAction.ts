@@ -2,7 +2,7 @@
 
 import { and, eq, isNull, gt } from 'drizzle-orm';
 import { phoneOtps } from '@/lib/db/schema';
-import { normalizePhone, hashOtpCode } from './sendPhoneOtpAction';
+import { hashOtpCode, normalizePhone } from './phoneOtpUtils';
 import { actionDb, type AuthActionResult } from './_shared';
 
 const MAX_ATTEMPTS = 5;

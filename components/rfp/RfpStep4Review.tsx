@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 
 type Props = {
@@ -53,8 +54,10 @@ export function RfpStep4Review({
   );
 
   const pgCount = draft.allowedPgWorkspaceIds.length;
-  const canSend =
-    draft.deadline !== '' && !isNaN(new Date(draft.deadline).getTime()) && !submitting;
+  const paymentMethodSummary = [
+    ...draft.requiredPaymentMethods.map((m) => PAYMENT_METHOD_LABELS[m]),
+    ...draft.customPaymentMethods.map((c) => c.label),
+  ].join(', ');
 
   return (
     <div className="space-y-6">
@@ -112,6 +115,7 @@ export function RfpStep4Review({
               }
             />
           )}
+          <ReviewRow label="견적 결제수단" value={paymentMethodSummary} />
         </div>
       </div>
 
@@ -159,7 +163,7 @@ export function RfpStep4Review({
         <Button
           type="button"
           size="lg"
-          disabled={!canSend}
+          disabled={submitting}
           onClick={onSubmit}
         >
           {submitting

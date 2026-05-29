@@ -45,7 +45,7 @@ afterEach(() => {
 });
 
 describe('loadBoard — pipeline (buyer)', () => {
-  it('classifies a draft RFP into the draft lifecycle column', async () => {
+  it('excludes a draft RFP from the buyer board (작성중 단계 제거 — 테이블에서만 접근)', async () => {
     const { buyer, ws } = await setupBuyer();
     const rfpId = randomUUID();
     await db.insert(rfps).values({
@@ -60,9 +60,7 @@ describe('loadBoard — pipeline (buyer)', () => {
 
     const board = await loadBoard({ workspaceId: ws.id, workspaceType: 'buyer', kind: 'pipeline' });
 
-    const card = board.cards.find((c) => c.cardId === rfpId);
-    expect(card?.cardType).toBe('rfp');
-    expect(card?.columnId).toBe(await colByTitle(ws.id, '작성중')); // draft label
+    expect(board.cards.find((c) => c.cardId === rfpId)).toBeUndefined();
   });
 
   it('an explicit placement overrides the lifecycle column', async () => {
@@ -74,8 +72,9 @@ describe('loadBoard — pipeline (buyer)', () => {
       buyerWsId: ws.id,
       title: 'placed rfp',
       deadline: new Date(Date.now() + 86_400_000),
-      status: 'draft',
+      status: 'sent',
       createdBy: buyer.id,
+      sentAt: new Date(),
     });
     // Add a custom column and place the RFP there via board_column_id.
     const customId = randomUUID();

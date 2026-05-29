@@ -14,6 +14,7 @@ import { actionDb, baseUrl, bucket15Min, isUniqueViolation, normalizeEmail } fro
 const Input = z
   .object({
     email: z.string().email(),
+    role: z.enum(['admin', 'member']).default('member'),
   })
   .strict();
 
@@ -31,6 +32,7 @@ export type InviteWorkspaceMemberResult =
  */
 export async function inviteWorkspaceMemberAction(input: {
   email: string;
+  role?: 'admin' | 'member';
 }): Promise<InviteWorkspaceMemberResult> {
   let session;
   try {
@@ -50,6 +52,7 @@ export async function inviteWorkspaceMemberAction(input: {
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
   const normalizedEmail = normalizeEmail(parsed.data.email);
+  const role = parsed.data.role;
   const workspaceId = session.user.workspaceId;
   const invitedByUserId = session.user.id;
 
@@ -75,6 +78,7 @@ export async function inviteWorkspaceMemberAction(input: {
           workspaceId,
           invitedEmail: normalizedEmail,
           invitedByUserId,
+          role,
           tokenHash,
           expiresAt,
           status: 'pending',

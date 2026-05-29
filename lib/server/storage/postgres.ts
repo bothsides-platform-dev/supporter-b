@@ -17,6 +17,22 @@ class EnoentError extends Error {
  * removes its bytes. `read()` materialises the whole blob and slices in memory
  * — fine under the route's 20MB cap, and keeps `size` reporting the total byte
  * count for Content-Range. The storage `key` is the attachment id.
+ *
+ * ── SCALING CEILING (known debt, acceptable at M0) ───────────────────────────
+ * Every `read()` materialises the FULL blob into a Uint8Array even for Range
+ * requests — there is no streaming straight off bytea. At the 20MB/file cap this
+ * is bounded per request, but the cost is per CONCURRENT request: N simultaneous
+ * 20MB reads ≈ N×20MB of serverless heap, which is the real limit (not file
+ * size). Bytea also bloats the primary DB, inflating backup/restore time and
+ * coupling attachment volume to DB storage.
+ *
+ * MIGRATION TRIGGER — move attachment bytes to an external object store (S3 /
+ * R2 / Supabase Storage, served via signed URL) when ANY of:
+ *   • the attachment_blobs table approaches ~a few GB, or
+ *   • concurrent large-file reads cause function memory pressure / OOM, or
+ *   • the per-file cap is raised above ~20MB.
+ * `getStorage()` already hides the backend, so only this class + the metadata
+ * row's URL resolution change; routes keep calling the Storage interface.
  */
 export class PostgresStorage implements Storage {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

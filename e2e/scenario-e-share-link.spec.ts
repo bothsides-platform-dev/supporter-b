@@ -3,7 +3,7 @@
  *
  * 흐름 (positive):
  *   1. seed RFP `P-2604-0001`의 share_token을 직접 조회.
- *   2. 매칭 도메인 PG 사용자(`ws-toss-admin@toss.im`)로 로그인.
+ *   2. 매칭 도메인 PG 사용자(`ws-toss-admin@example.com`)로 로그인.
  *   3. `/share/rfp/<token>` 진입 → claimShareTokenAction이 도메인 매칭 OK.
  *      이미 invitation을 가진 사용자(seed)이므로 idempotent 분기로 통과.
  *   4. `/inbox/<rfpId>`로 redirect.
@@ -20,7 +20,7 @@ process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
-const TOSS_EMAIL = 'ws-toss-admin@toss.im';
+const TOSS_EMAIL = 'ws-toss-admin@example.com';
 const TOSS_PASSWORD = 'password123';
 const RFP_ID = 'P-2604-0001';
 

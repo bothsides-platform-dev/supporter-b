@@ -1,6 +1,5 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
@@ -12,7 +11,7 @@ import { BoardFilterBar } from '@/components/board/BoardFilterBar';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { RfpPeekPanel, RfpPeekPanelSkeleton } from '@/components/rfp/RfpPeekPanel';
 import { SplitView } from '@/components/ui/split-view';
-import { auth } from '@/auth';
+import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
 import { filterRfps, resolveBoardView, type BoardView, type BoardFilterParams } from '@/lib/server/board/filterRfps';
@@ -21,7 +20,6 @@ import { GRADE_LABELS } from '@/lib/types/biz-profile';
 export const dynamic = 'force-dynamic';
 
 const STATUS_OPTIONS = [
-  { value: 'draft', label: '작성중' },
   { value: 'active', label: '진행중' },
   { value: 'closed', label: '마감' },
   { value: 'awarded', label: '계약완료' },
@@ -33,14 +31,7 @@ type Props = {
 };
 
 export default async function RfpListPage({ searchParams }: Props) {
-  const session = await auth();
-  if (
-    !session?.user?.id ||
-    session.user.workspaceType !== 'buyer' ||
-    !session.user.workspaceId
-  ) {
-    redirect('/login?next=/rfp');
-  }
+  const session = await requireBuyerPage('/rfp');
 
   const sp = await searchParams;
   const cookieStore = await cookies();
@@ -103,14 +94,14 @@ async function RfpListPageLoader({
   const rfps = filterRfps(allRfps, params, now);
 
   const listContent =
-    view === 'board' ? (
-      <RfpBoardView wsId={wsId} visibleIds={new Set(rfps.map((r) => r.id))} />
-    ) : rfps.length === 0 ? (
+    rfps.length === 0 ? (
       <EmptyState
         icon={<FileTextIcon size={32} />}
         title="조건에 맞는 제안 요청이 없습니다."
         description="필터를 바꾸거나 새 제안 요청을 작성하세요."
       />
+    ) : view === 'board' ? (
+      <RfpBoardView wsId={wsId} visibleIds={new Set(rfps.map((r) => r.id))} />
     ) : (
       <RfpListTable rfps={rfps} />
     );

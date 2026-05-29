@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { auth } from '@/auth';
+import { requirePgPage } from '@/lib/auth/page-guards';
 import { getInvitationRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
@@ -25,7 +24,6 @@ export const dynamic = 'force-dynamic';
 
 const STATUS_OPTIONS = [
   { value: 'new', label: '신규' },
-  { value: 'draft', label: '작성중' },
   { value: 'submitted', label: '제출완료' },
   { value: 'closed', label: '마감' },
 ];
@@ -36,10 +34,7 @@ type Props = {
 };
 
 export default async function InboxPage({ searchParams }: Props) {
-  const session = await auth();
-  if (!session?.user?.id || !session.user.workspaceId) {
-    redirect('/login?next=/inbox');
-  }
+  const session = await requirePgPage('/inbox');
 
   const sp = await searchParams;
   const cookieStore = await cookies();
@@ -95,14 +90,14 @@ async function InboxListPageLoader({
   ) : undefined;
 
   const listContent =
-    view === 'board' ? (
-      <InboxBoardView wsId={wsId} visibleIds={new Set(rows.map((r) => r.invitationId))} />
-    ) : rows.length === 0 ? (
+    rows.length === 0 ? (
       <EmptyState
         icon={<InboxIcon size={32} />}
         title="조건에 맞는 제안 요청이 없습니다."
         description="필터를 바꾸세요. 구매사가 초대한 RFP가 여기에 표시됩니다."
       />
+    ) : view === 'board' ? (
+      <InboxBoardView wsId={wsId} visibleIds={new Set(rows.map((r) => r.invitationId))} />
     ) : (
       <InboxList rows={rows} />
     );

@@ -15,8 +15,8 @@ export type DeleteColumnResult = BoardActionResult;
 /**
  * Delete a custom column (its placements cascade — cards fall back to
  * auto-classification). System columns are non-deletable: cross-side protocol
- * columns return COLUMN_CROSS_SIDE_LOCKED, the rest (private lifecycle skeleton
- * + default-landing) return COLUMN_SYSTEM_LOCKED. The two codes drive distinct
+ * columns return COLUMN_CROSS_SIDE_LOCKED, the rest (the rfp_bids
+ * default-landing) return COLUMN_SYSTEM_LOCKED. The two codes drive distinct
  * client messages.
  */
 export async function deleteColumnAction(

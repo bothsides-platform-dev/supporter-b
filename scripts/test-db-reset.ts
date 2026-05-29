@@ -20,7 +20,7 @@
 import 'dotenv/config';
 
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -29,10 +29,22 @@ import postgres from 'postgres';
 const TEST_DB_FALLBACK =
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
-const MIGRATION_FILE = join(
-  process.cwd(),
-  'drizzle/0000_hesitant_fantastic_four.sql',
-);
+// The greenfield migration filename regenerates on every `db:generate`
+// (e.g. 0000_cool_maverick.sql), so a hardcoded name silently ENOENTs the
+// whole e2e suite at globalSetup. Glob the single drizzle/0000_*.sql instead.
+function resolveMigrationFile(): string {
+  const dir = join(process.cwd(), 'drizzle');
+  const matches = readdirSync(dir).filter((f) => /^0000_.*\.sql$/.test(f));
+  if (matches.length !== 1) {
+    throw new Error(
+      `[test-db-reset] expected exactly one drizzle/0000_*.sql, found ` +
+        `${matches.length}: ${matches.join(', ') || '(none)'}`,
+    );
+  }
+  return join(dir, matches[0]);
+}
+
+const MIGRATION_FILE = resolveMigrationFile();
 
 async function resetTestDatabase(): Promise<void> {
   const testUrl = process.env.DATABASE_URL_TEST ?? TEST_DB_FALLBACK;

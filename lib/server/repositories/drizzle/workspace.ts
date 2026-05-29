@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import {
   workspaces,
   workspaceMembers,
@@ -181,9 +181,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
             AND channel = 'in_app'
             AND read_at IS NULL
         )`,
-        hasLogo: sql<boolean>`EXISTS (
-          SELECT 1 FROM workspace_logo_blobs WHERE workspace_id = ${workspaces.id}
-        )`,
+        hasLogo: workspaces.hasLogo,
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
@@ -191,4 +189,18 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .orderBy(asc(workspaceMembers.joinedAt))) as WorkspaceMembershipSummary[];
   }
 
+  async isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  }
 }

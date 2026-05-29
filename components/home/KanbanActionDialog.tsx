@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
-import { sendDraftInvitationsAction } from '@/lib/server/actions/rfp/sendDraftInvitationsAction';
 import { cancelRfpAction } from '@/lib/server/actions/rfp/cancelRfpAction';
 import { withdrawBidAction } from '@/lib/server/actions/bid/withdrawBidAction';
 import type { DragAction } from './dragMatrix';
@@ -18,11 +17,6 @@ const COPY: Record<
   DragAction['kind'],
   { title: string; bodyKey: 'rfp' | 'bid'; cta: string; danger?: boolean }
 > = {
-  'send-rfp': {
-    title: '초대 PG에 RFP를 발송할까요?',
-    bodyKey: 'rfp',
-    cta: '발송',
-  },
   'cancel-rfp': {
     title: 'RFP를 취소(종료)할까요?',
     bodyKey: 'rfp',
@@ -52,21 +46,14 @@ export function KanbanActionDialog({ action, onClose, onCommitted }: Props) {
   }
 
   const copy = COPY[action.kind];
-  const heading =
-    action.kind === 'withdraw-bid' || action.kind === 'cancel-rfp'
-      ? `${'title' in action ? action.title : ''}`
-      : 'title' in action
-        ? action.title
-        : '';
+  // 여기 도달하는 action 은 cancel-rfp | withdraw-bid — 둘 다 title 보유.
+  const heading = action.title;
 
   const onConfirm = async () => {
     setSubmitting(true);
     try {
       let result: { ok: true } | { ok: false; error: string };
-      if (action.kind === 'send-rfp') {
-        const r = await sendDraftInvitationsAction({ rfpId: action.rfpId });
-        result = r.ok ? { ok: true } : { ok: false, error: r.error };
-      } else if (action.kind === 'cancel-rfp') {
+      if (action.kind === 'cancel-rfp') {
         result = await cancelRfpAction({ rfpId: action.rfpId });
       } else if (action.kind === 'withdraw-bid') {
         result = await withdrawBidAction({ bidId: action.bidId });

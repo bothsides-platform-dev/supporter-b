@@ -83,6 +83,7 @@ async function buildBundle(): Promise<RepoBundle> {
 function isRepoBundleStale(bundle: RepoBundle): boolean {
   return (
     typeof bundle.workspace.listForUser !== 'function' ||
+    typeof bundle.workspace.isMember !== 'function' ||
     typeof bundle.column?.listByBoard !== 'function'
   );
 }

@@ -138,4 +138,35 @@ describe('useNavHistoryStore', () => {
     expect(useNavHistoryStore.getState().entries).toEqual([]);
     expect(useNavHistoryStore.getState().index).toBe(0);
   });
+
+  // ── edge branches not covered above ──────────────────────────────────────
+
+  it('a viaPop sync to a non-adjacent url falls back to push (defensive branch)', () => {
+    const s = useNavHistoryStore.getState();
+    s.sync('/home');
+    s.sync('/rfp'); // entries [/home,/rfp], index 1
+    // popstate to a url matching neither neighbor (no multi-step ‹› in-app, so
+    // this is the defensive fallthrough): treated as a push, branch truncated.
+    s.sync('/settings', true);
+    expect(useNavHistoryStore.getState().entries).toEqual([
+      '/home',
+      '/rfp',
+      '/settings',
+    ]);
+    expect(useNavHistoryStore.getState().index).toBe(2);
+  });
+
+  it('the pendingDir hint takes precedence over url matching (hint wins)', () => {
+    const s = useNavHistoryStore.getState();
+    s.sync('/home');
+    s.sync('/rfp'); // index 1
+    s.markBack(); // pendingDir = -1
+    // Next sync decrements by the hint REGARDLESS of url — the hint, not the
+    // url, drives the index when one is pending. Locks this non-obvious order.
+    s.sync('/whatever-unexpected');
+    expect(useNavHistoryStore.getState().index).toBe(0);
+    expect(useNavHistoryStore.getState().pendingDir).toBe(0);
+    // entries untouched: the hint path doesn't append.
+    expect(useNavHistoryStore.getState().entries).toEqual(['/home', '/rfp']);
+  });
 });

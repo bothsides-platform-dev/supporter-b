@@ -7,7 +7,14 @@ import { and, eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
 import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { users, workspaces, workspaceMembers, bizProfiles, columns } from '@/lib/db/schema';
+import {
+  users,
+  workspaces,
+  workspaceMembers,
+  bizProfiles,
+  columns,
+  verificationApplications,
+} from '@/lib/db/schema';
 
 const sessionRef: { value: { user: { id: string } } | null } = { value: null };
 vi.mock('@/lib/auth/session', () => ({
@@ -15,6 +22,14 @@ vi.mock('@/lib/auth/session', () => ({
     sessionRef.value
       ? Promise.resolve(sessionRef.value)
       : Promise.reject(new Error('UNAUTHENTICATED')),
+}));
+
+// Spy on the new-signup admin notifier — assert the action fires it post-create
+// without actually sending email. Lazy closure so the factory eval doesn't
+// touch notifyMock before init (same pattern as the session mock above).
+const notifyMock = vi.fn();
+vi.mock('@/lib/server/notifications/admin-signup', () => ({
+  notifyAdminNewSignupAfterCommit: (...args: unknown[]) => notifyMock(...args),
 }));
 
 import { createWorkspaceInTx } from '../_createWorkspace';
@@ -55,6 +70,22 @@ describe('createWorkspaceInTx', () => {
 
     const [usr] = await db.select().from(users).where(eq(users.id, u.id));
     expect(usr.lastActiveWorkspaceId).toBe(workspaceId);
+  });
+
+  it('returns the verification application id it inserted (for the admin review link)', async () => {
+    const u = await seedUser(db);
+    const { workspaceId, applicationId } = await createWorkspaceInTx(db, {
+      userId: u.id,
+      type: 'pg',
+      name: 'NewPG',
+    });
+
+    expect(applicationId).toBeTruthy();
+    const [app] = await db
+      .select()
+      .from(verificationApplications)
+      .where(eq(verificationApplications.workspaceId, workspaceId));
+    expect(app.id).toBe(applicationId);
   });
 
   it('buyer with bizProfile: creates and links the biz profile', async () => {
@@ -98,7 +129,7 @@ describe('createWorkspaceInTx', () => {
     });
 
     const cols = await db.select().from(columns).where(eq(columns.workspaceId, workspaceId));
-    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(4);
+    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(3);
     expect(cols.filter((c) => c.kind === 'rfp_bids')).toHaveLength(3);
   });
 
@@ -111,7 +142,7 @@ describe('createWorkspaceInTx', () => {
     });
 
     const cols = await db.select().from(columns).where(eq(columns.workspaceId, workspaceId));
-    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(5);
+    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(4);
     expect(cols.filter((c) => c.kind === 'rfp_bids')).toHaveLength(0);
   });
 });
@@ -131,6 +162,25 @@ describe('createWorkspaceAction', () => {
         .where(eq(workspaceMembers.workspaceId, r.workspaceId));
       expect(m).toMatchObject({ userId: u.id, role: 'admin' });
     }
+  });
+
+  it('notifies admin with an /admin/review link after a successful create', async () => {
+    notifyMock.mockClear();
+    const u = await seedUser(db);
+    sessionRef.value = { user: { id: u.id } };
+
+    const r = await createWorkspaceAction({ type: 'pg', name: 'MyPG' });
+
+    expect(r.ok).toBe(true);
+    expect(notifyMock).toHaveBeenCalledTimes(1);
+    const arg = notifyMock.mock.calls[0][0] as {
+      workspaceName: string;
+      orgType: string;
+      reviewUrl: string;
+    };
+    expect(arg.workspaceName).toBe('MyPG');
+    expect(arg.orgType).toBe('pg');
+    expect(arg.reviewUrl).toContain('/admin/review/');
   });
 
   it('unauthenticated → UNAUTHENTICATED', async () => {

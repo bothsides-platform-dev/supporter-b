@@ -1,4 +1,5 @@
 // components/rfp/__tests__/RfpStep3PgSelect.test.tsx
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpStep3PgSelect } from '../RfpStep3PgSelect';
@@ -23,17 +24,17 @@ function resetStore() {
 describe('RfpStep3PgSelect', () => {
   beforeEach(resetStore);
 
-  it('PG가 없으면 다음 버튼이 비활성화된다', () => {
-    render(<RfpStep3PgSelect onBack={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
-  });
-
-  it('PG 추가 후 다음 버튼이 활성화된다', () => {
-    useRfpDraftStore.setState({
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스페이먼츠' }],
-    });
+  it('PG가 없어도 다음 버튼은 비활성화되지 않는다 (순서 무관 입력)', () => {
     render(<RfpStep3PgSelect onBack={vi.fn()} onNext={vi.fn()} />);
     expect(screen.getByRole('button', { name: '다음' })).not.toBeDisabled();
+  });
+
+  it('PG가 없어도 다음 버튼 클릭 시 onNext가 호출된다', async () => {
+    const user = userEvent.setup();
+    const onNext = vi.fn();
+    render(<RfpStep3PgSelect onBack={vi.fn()} onNext={onNext} />);
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    expect(onNext).toHaveBeenCalledOnce();
   });
 
   it('선택된 PG 이름이 목록에 표시된다', () => {

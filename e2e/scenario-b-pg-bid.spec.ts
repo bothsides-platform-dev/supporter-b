@@ -13,7 +13,7 @@
  * `/invite/rfp/:token` claim flow we mint a fresh raw token for the
  * existing pending toss invitation on `P-2604-0001`, persist its hash,
  * and use the raw token in the URL. We log in as toss admin
- * (the seeded `ws-toss-admin@toss.im`) — `claimToken` resolves the
+ * (the seeded `ws-toss-admin@example.com`) — `claimToken` resolves the
  * invitation to the toss PG workspace via workspaceId check.
  *
  * Note: scenario A's seeded RFP `P-2604-0001` already has 2 submitted
@@ -33,7 +33,7 @@ process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
-const TOSS_EMAIL = 'ws-toss-admin@toss.im';
+const TOSS_EMAIL = 'ws-toss-admin@example.com';
 const TOSS_PASSWORD = 'password123';
 const RFP_ID = 'P-2604-0001';
 

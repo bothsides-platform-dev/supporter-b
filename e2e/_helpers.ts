@@ -39,9 +39,9 @@ process.env.DATABASE_URL =
 // future spec churn (e.g. renaming a workspace) needs one edit.
 const CREDENTIALS: Record<Role, { email: string; password: string }> = {
   buyer: { email: 'yeonseong.dev@gmail.com', password: 'password123' },
-  'pg-toss': { email: 'ws-toss-admin@toss.im', password: 'password123' },
-  'pg-inicis': { email: 'ws-inicis-admin@inicis.com', password: 'password123' },
-  'pg-kakao': { email: 'ws-kakao-admin@kakaopay.com', password: 'password123' },
+  'pg-toss': { email: 'ws-toss-admin@example.com', password: 'password123' },
+  'pg-inicis': { email: 'ws-inicis-admin@example.com', password: 'password123' },
+  'pg-kakao': { email: 'ws-kakao-admin@example.com', password: 'password123' },
 };
 
 export type Role = 'buyer' | 'pg-toss' | 'pg-inicis' | 'pg-kakao';

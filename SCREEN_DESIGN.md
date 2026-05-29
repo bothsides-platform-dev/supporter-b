@@ -4,14 +4,14 @@
 
 본 문서는 PG(결제대행사) 비공개 1:N RFP 플랫폼 **Supporter B** 의 화면 설계 명세이다.
 
-`PG_RFP_SPEC.md` 가 v0 제품 정의의 최상위 기준이며, 본 문서 **§0 PG v0 화면 IA** 가 구현 대상이다.
+본 문서 **§0 PG v0 화면 IA** 가 v0 제품 정의이자 구현 대상의 최상위 기준이다 (레거시 `PG_RFP_SPEC.md` 는 제거됨 — 제품 규칙은 아래 "확정 결정" 블록 + 코드·테스트가 캐노니컬).
 
 **왜 만드는가**
 - 구매사가 이미 아는 PG 영업담당에게만 RFP를 보내고, PG가 서로의 존재를 모르는 private 1:N 입찰을 만든다.
 - 사업자번호 enrichment, 카드 우대수수료 등급, 6개 정형 수치를 한 화면에서 비교해 결제 인프라 선택 시간을 줄인다.
 - 초대 이메일의 고유 URL이 첫 진입 경로이므로 인증·가입·워크스페이스 라우팅이 RFP 흐름과 끊기지 않아야 한다.
 
-**확정 결정 (PG_RFP_SPEC 기준)**
+**확정 결정 (v0 제품 정의 — 본 절이 캐노니컬 기준)**
 - 메인 IA: 홈 / RFP / 받은 RFP / 설정
 - RFP 작성 워크플로우: **(선택)** 사업자번호 조회 → **(선택)** 등급 확인 → 자유 메모·첨부 → PG 워크스페이스 검색·선택 → 발송 (사업자번호·등급 모두 옵셔널)
 - PG 응답 워크플로우: 초대 URL → 가입/로그인 → 워크스페이스 이름 입력(신규) 또는 기존 합류 → 정형 Bid 제출
@@ -33,12 +33,20 @@ Public
 ├─ /signup/buyer/workspace       (Bs4)
 ├─ /signup/pg                    (Gs1 — PG사 이메일)
 ├─ /signup/pg/verify             (Gs2)
+├─ /signup/pg/biz                (Gs — 사업자번호 조회)
 ├─ /signup/pg/profile            (Gs3)
 ├─ /signup/pg/workspace          (Gs4)
 ├─ /password/forgot
 ├─ /password/reset
 ├─ /auth/verify
-└─ /invite/rfp/:token
+├─ /auth/email-change
+├─ /invite                       (토큰 없는 진입 안내)
+├─ /invite/rfp/:token
+├─ /invite/workspace/:token
+├─ /share/rfp/:token
+├─ /share/workspace/:token
+├─ /pending-approval
+└─ /suspended
 
 Authenticated AppShell
 ├─ /home
@@ -49,9 +57,21 @@ Authenticated AppShell
 ├─ /inbox
 │  ├─ /inbox/:rfpId
 │  └─ /inbox/:rfpId/submitted
+├─ /notifications
+├─ /workspace/new
 └─ /settings
    ├─ /settings/profile
-   └─ /settings/members
+   ├─ /settings/members
+   └─ /settings/notifications
+
+Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.tsx)
+├─ /admin/login
+└─ /admin                        (protected — 대시보드 index)
+   ├─ /admin/buyers   · /admin/buyers/:id
+   ├─ /admin/sellers  · /admin/sellers/:id
+   ├─ /admin/rfps     · /admin/rfps/:id
+   ├─ /admin/review   · /admin/review/:id
+   └─ /admin/audit-log
 ```
 
 ### 0.2 Buyer Workspace Screens
@@ -59,7 +79,7 @@ Authenticated AppShell
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
 | B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget` |
-| B2 | `/rfp` | RFP 목록. 작성중/진행중/마감/계약완료 탭 | `RfpList`, `DataTable`, `Tag` |
+| B2 | `/rfp` | RFP 목록. 진행중/마감/계약완료 탭 (작성중 단계는 제거 — draft RFP는 `?status=draft` URL/표로만 접근) | `RfpList`, `DataTable`, `Tag` |
 | B3 | `/rfp/new` | 사업자 조회 (선택), 등급 확인 (선택), RFP 첨부, PG 워크스페이스 검색·선택, 발송 | `BizLookupField`, `GradeConfirmPanel`, `RfpCreateForm` (인라인 Popover+cmdk PG 검색), `RfpAttachmentDropzone` |
 | B4 | `/rfp/:id` | RFP 상세 + 받은 Bid 비교 + PDF 프리뷰. 표↔보드 토글로 칸반(진행전/협상중/결정) 전환, 카드 모달에 메모/첨부 히스토리 누적 | `InvitationStatusPanel`, `BidComparisonView`, `BidComparisonTable`, `BidViewToggle`, `BidBoard`, `BidBoardCard`, `BidDetailModal`, `ProposalPdfPreview` |
 | B5 | `/rfp/:id/award` | Bid 선택, 계약 레코드 생성, 선택/미선택 PG 통보 | `AwardFlow`, `DecisionTimeline` |
@@ -71,13 +91,13 @@ Authenticated AppShell
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
 | P1 | `/home` | 신규 RFP, 임박 마감, 제출 완료, 수주율 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget` |
-| P2 | `/inbox` | 받은 RFP 함. 신규/작성중/제출완료/마감 탭 | `InboxList`, `DataTable`, `Tag` |
+| P2 | `/inbox` | 받은 RFP 함. 신규/제출완료/마감 탭 (작성중 단계 제거 — 미제출 응답은 신규로 표시) | `InboxList`, `DataTable`, `Tag` |
 | P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성. 사업자번호 미입력 시 안내 배너. 등급 미입력 시 일반 폴백(9개 카드사 입력) | `RfpBriefPanel`, `BidForm`, `StatutoryCardFeeNotice` |
 | P4 | `/inbox/:rfpId/submitted` | 제출 완료, 결과 대기, 수정/철회 정책 안내 | `SubmittedState` |
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처) | `WorkspaceProfileForm` |
 | P6 | `/settings/members` | 같은 워크스페이스 멤버 관리 (도메인 자동 합류 없음 — 초대만) | `MemberTable` |
 
-> 칸반 뷰 컬럼: 구매사 `작성중 / 진행중 / 계약완료 / 마감`(4, 표 탭과 동일), PG `신규 / 작성중 / 제출완료 / 낙찰 / 실패`(5 — 표 탭 `마감`을 보드에서 `낙찰`/`실패`로 분리).
+> 칸반 뷰 컬럼: 구매사 `진행중 / 계약완료 / 마감`(3, 표 탭과 동일 — 발송 전 draft RFP는 보드에 노출 안 함), PG `신규 / 제출완료 / 낙찰 / 실패`(4 — 표 탭 `마감`을 보드에서 `낙찰`/`실패`로 분리; 미제출 응답은 `신규`). 작성중 단계 제거로 보드 드래그-발송/취소·드래그-작성 전이도 사라졌다(발송은 RFP 상세의 `초대 발송`, 제출은 inbox 폼).
 
 ### 0.4 Core Flow Diagrams
 
@@ -326,4 +346,4 @@ PG 영업담당의 1차 진입 경로. 토큰 검증 후 인증 상태에 따라
 - 회사 도메인 자동 합류 — v1 옵션 기능, 본 v0 범위 외
 - 감사 로그 — 백엔드 영역
 
-> 시각 디자인 규칙은 [DESIGN.md §5.11](./DESIGN.md), 도메인 타입·검증·라우팅 가드는 [SPEC.md §8](./SPEC.md) 참조.
+> 시각 디자인 규칙은 [DESIGN.md](./DESIGN.md) 참조. 도메인 타입·검증·라우팅 가드는 코드가 캐노니컬 — `lib/` Server Actions + zod 스키마, 인증 가드는 `app/(app)/layout.tsx` 의 서버 redirect 참조.

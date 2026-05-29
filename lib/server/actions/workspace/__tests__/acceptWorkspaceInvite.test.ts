@@ -57,6 +57,7 @@ async function seedInvitation(
     invitedEmail?: string;
     status?: 'pending' | 'accepted' | 'expired';
     expiresAt?: Date;
+    role?: 'admin' | 'member';
   },
 ): Promise<{ rawToken: string }> {
   const rawToken = generateToken();
@@ -65,6 +66,7 @@ async function seedInvitation(
     workspaceId: opts.workspaceId,
     invitedEmail: opts.invitedEmail ?? 'invited@example.com',
     invitedByUserId: opts.invitedByUserId,
+    role: opts.role ?? 'member',
     tokenHash,
     status: opts.status ?? 'pending',
     expiresAt: opts.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -166,6 +168,33 @@ describe('acceptWorkspaceInviteAction', () => {
       .where(eq(workspaceInvitations.workspaceId, ws.id));
     expect(inv.status).toBe('accepted');
     expect(inv.acceptedByUserId).toBe(u.id);
+  });
+
+  it('grants the role stored on the invitation when it is admin', async () => {
+    const ws = await seedPgWorkspace(db, 'WS');
+    const admin = await seedUser(db, { email: 'admin@example.com' });
+    const u = await seedUser(db, { email: 'invited@example.com' });
+    sessionRef.value = { user: { id: u.id, email: u.email } };
+
+    const { rawToken } = await seedInvitation({
+      workspaceId: ws.id,
+      invitedByUserId: admin.id,
+      invitedEmail: 'invited@example.com',
+      role: 'admin',
+    });
+    const r = await acceptWorkspaceInviteAction(rawToken);
+    expect(r).toEqual({ ok: true, workspaceId: ws.id });
+
+    const [m] = await db
+      .select()
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, ws.id),
+          eq(workspaceMembers.userId, u.id),
+        ),
+      );
+    expect(m.role).toBe('admin');
   });
 
   it('accepts when invited email and user email differ only by case', async () => {

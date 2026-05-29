@@ -11,7 +11,7 @@ import {
   workspaceMembers,
   workspaces,
 } from '@/lib/db/schema';
-import { hashOtpCode } from '../sendPhoneOtpAction';
+import { hashOtpCode } from '../phoneOtpUtils';
 import { signupEmailAction } from '../signupEmailAction';
 import { signupCompleteAction } from '../signupCompleteAction';
 import { verifyEmailAction } from '../verifyEmailAction';

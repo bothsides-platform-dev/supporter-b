@@ -37,7 +37,7 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
         aria-hidden="true"
         className={cn('transition-transform duration-200', !isExpanded && 'rotate-180')}
       />
-      {isExpanded ? (
+      {isExpanded && !isMobile ? (
         <span
           aria-hidden="true"
           className="text-sm text-[length:var(--md-typescale-label-large-size)] group-data-[collapsible=icon]:hidden"

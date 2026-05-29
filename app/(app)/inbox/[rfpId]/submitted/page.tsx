@@ -11,6 +11,7 @@ import {
   getRfpRepo,
 } from '@/lib/server/repositories/factory';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
 import { formatDate, formatPct, formatKRW } from '@/lib/format';
 
 type Props = { params: Promise<{ rfpId: string }> };
@@ -109,12 +110,18 @@ export default async function InboxSubmittedPage({ params }: Props) {
             ['정산 주기', bid.settleCycle],
             ['정산한도', formatKRW(bid.settleLimit)],
             ['월 보증보험', formatKRW(bid.guaranteeInsurance)],
-            ...(bid.paymentFees.card !== undefined
-              ? ([['카드', formatPct(bid.paymentFees.card)]] as [string, string][])
-              : []),
-            ...(bid.paymentFees.bank_transfer !== undefined
-              ? ([['계좌이체', formatPct(bid.paymentFees.bank_transfer)]] as [string, string][])
-              : []),
+            ...Object.entries(bid.paymentFees).map(
+              ([m, fee]) =>
+                [PAYMENT_METHOD_LABELS[m as PaymentMethod], formatPct(fee as number)] as [
+                  string,
+                  string,
+                ],
+            ),
+            ...Object.entries(bid.customFees).map(([id, fee]) => {
+              const label =
+                rfp.customPaymentMethods.find((c) => c.id === id)?.label ?? id;
+              return [label, formatPct(fee)] as [string, string];
+            }),
           ].map(([label, value]) => (
             <div key={label} className="py-2.5 flex items-baseline justify-between">
               <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">{label}</span>

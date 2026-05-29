@@ -10,7 +10,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(''),
 }));
 
-import { RfpListTable } from '../RfpListTable';
+import { RfpListTable, RfpListTableSkeleton } from '../RfpListTable';
 import type { RFP } from '@/lib/types/rfp';
 
 function makeRfp(overrides: Partial<RFP> & Pick<RFP, 'code' | 'title'>): RFP {
@@ -73,5 +73,17 @@ describe('RfpListTable', () => {
     const { container } = render(<RfpListTable rfps={[rfp, rfpSecond]} />);
     const rows = container.querySelectorAll('tbody tr');
     expect(rows.length).toBe(2);
+  });
+});
+
+describe('RfpListTableSkeleton — RSC fallback 회귀 방지', () => {
+  // app/(app)/rfp/page.tsx 와 rfp/loading.tsx(둘 다 서버) 가 named export
+  // RfpListTableSkeleton 을 Suspense/loading fallback 으로 쓴다. 'use client'
+  // 컴포넌트의 static RfpListTable.Skeleton 은 RSC 경계 너머에서 undefined 이므로
+  // named export 가 standalone 으로 살아 있어야 한다. static 으로만 되돌리면 RED.
+  it('standalone named export 로 존재하고 단독 렌더된다', () => {
+    expect(typeof RfpListTableSkeleton).toBe('function');
+    const { container } = render(<RfpListTableSkeleton />);
+    expect(container.firstChild).not.toBeNull();
   });
 });

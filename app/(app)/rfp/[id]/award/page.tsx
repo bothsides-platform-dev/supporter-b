@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
+import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerAwardData } from '@/lib/server/rfp-detail-loader';
 import { AwardConfirm } from '@/components/rfp/AwardConfirm';
 
@@ -13,14 +12,7 @@ type Props = {
 
 export default async function AwardPage({ params, searchParams }: Props) {
   const [{ id }, sp] = await Promise.all([params, searchParams]);
-  const session = await auth();
-  if (
-    !session?.user?.id ||
-    session.user.workspaceType !== 'buyer' ||
-    !session.user.workspaceId
-  ) {
-    redirect(`/login?next=/rfp/${id}/award`);
-  }
+  const session = await requireBuyerPage(`/rfp/${id}/award`);
 
   const data = await loadBuyerAwardData({
     code: id,

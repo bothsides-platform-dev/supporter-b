@@ -3,6 +3,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { BizProfile } from '@/lib/types/biz-profile';
+import type { PaymentMethod } from '@/lib/types/bid';
+
+// 구매사 직접입력 커스텀 결제수단 (작성 단계 — id는 서버가 발급하므로 label만 보관).
+export type DraftCustomPaymentMethod = { label: string };
 
 // `id` is the attachment row id returned by POST /api/files/upload
 // (Step 11). Pre-Step 11 the dropzone carried only name/size in
@@ -29,6 +33,8 @@ type RfpDraftStore = {
   memo: string;
   rfpFiles: RfpMockFile[];
   allowedPgWorkspaceIds: PgWorkspaceItem[];
+  requiredPaymentMethods: PaymentMethod[];
+  customPaymentMethods: DraftCustomPaymentMethod[];
   deadline: string;
   setBizProfile: (biz: BizProfile | null) => void;
   setField: <K extends keyof RfpDraftStore>(key: K, value: RfpDraftStore[K]) => void;
@@ -49,6 +55,8 @@ const defaultState = {
   memo: '',
   rfpFiles: [] as RfpMockFile[],
   allowedPgWorkspaceIds: [] as PgWorkspaceItem[],
+  requiredPaymentMethods: [] as PaymentMethod[],
+  customPaymentMethods: [] as DraftCustomPaymentMethod[],
   deadline: '',
 };
 
@@ -63,6 +71,20 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
     {
       name: 'supporter-b-rfp-draft',
       storage: createJSONStorage(() => localStorage),
+      // 결제수단 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
+      // 백필하므로 진행 중인 draft가 폐기되지 않는다.
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = (persisted ?? {}) as Partial<RfpDraftStore>;
+        if (version < 1) {
+          return {
+            ...state,
+            requiredPaymentMethods: state.requiredPaymentMethods ?? [],
+            customPaymentMethods: state.customPaymentMethods ?? [],
+          };
+        }
+        return state;
+      },
       // Only persist form data fields, not UI/method state
       partialize: (state) => ({
         title: state.title,
@@ -77,6 +99,8 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         memo: state.memo,
         rfpFiles: state.rfpFiles,
         allowedPgWorkspaceIds: state.allowedPgWorkspaceIds,
+        requiredPaymentMethods: state.requiredPaymentMethods,
+        customPaymentMethods: state.customPaymentMethods,
         deadline: state.deadline,
       }),
     },

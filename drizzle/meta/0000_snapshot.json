@@ -1,5 +1,5 @@
 {
-  "id": "554857fd-c2c9-477e-a3fb-8c10256eda37",
+  "id": "0d48424c-2800-4b92-b2ee-1e0c31383000",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -849,6 +849,13 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
+        "custom_fees": {
+          "name": "custom_fees",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "memo": {
           "name": "memo",
           "type": "text",
@@ -1679,6 +1686,14 @@
           "primaryKey": false,
           "notNull": true
         },
+        "role": {
+          "name": "role",
+          "type": "member_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'member'"
+        },
         "token_hash": {
           "name": "token_hash",
           "type": "text",
@@ -1934,6 +1949,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'"
+        },
+        "custom_payment_methods": {
+          "name": "custom_payment_methods",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         },
         "created_at": {
           "name": "created_at",

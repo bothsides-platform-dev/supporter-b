@@ -22,6 +22,15 @@ export type SwitchWorkspaceResult =
  * into the JWT via `unstable_update` (re-runs the jwt callback's update branch).
  * Caller lands on /home — renders for both workspace types, so it never trips
  * the requireBuyerSession/requirePgSession type guards mid-switch.
+ *
+ * ⚠️ CALLER CONTRACT — HARD NAVIGATION REQUIRED. This action calls
+ * `revalidatePath('/home')` and returns `redirectTo`. The caller MUST perform a
+ * HARD navigation (`window.location.assign(redirectTo)`), NOT a soft
+ * `router.push` / `router.refresh()`. The nav chrome (Sidebar + Header) lives in
+ * the shared (app) layout above the route slot, so a soft refresh both leaves
+ * stale chrome AND `revalidatePath` + `router.refresh()` deadlocks under Next 16
+ * (issue #86055). Do not "clean up" by switching the caller to router.refresh().
+ * See components/shell/WorkspaceSwitcher.tsx.
  */
 export async function switchWorkspaceAction(
   targetWorkspaceId: string,
