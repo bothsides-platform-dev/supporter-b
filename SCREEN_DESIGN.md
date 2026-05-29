@@ -79,7 +79,7 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
 | B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget` |
-| B2 | `/rfp` | RFP 목록. 진행중/마감/계약완료 탭 (임시저장 RFP는 필터 없는 표 전체 목록에서만 노출) | `RfpList`, `DataTable`, `Tag` |
+| B2 | `/rfp` | RFP 목록. 진행중/마감/계약완료 탭 (작성중 단계는 제거 — draft RFP는 `?status=draft` URL/표로만 접근) | `RfpList`, `DataTable`, `Tag` |
 | B3 | `/rfp/new` | 사업자 조회 (선택), 등급 확인 (선택), RFP 첨부, PG 워크스페이스 검색·선택, 발송 | `BizLookupField`, `GradeConfirmPanel`, `RfpCreateForm` (인라인 Popover+cmdk PG 검색), `RfpAttachmentDropzone` |
 | B4 | `/rfp/:id` | RFP 상세 + 받은 Bid 비교 + PDF 프리뷰. 표↔보드 토글로 칸반(진행전/협상중/결정) 전환, 카드 모달에 메모/첨부 히스토리 누적 | `InvitationStatusPanel`, `BidComparisonView`, `BidComparisonTable`, `BidViewToggle`, `BidBoard`, `BidBoardCard`, `BidDetailModal`, `ProposalPdfPreview` |
 | B5 | `/rfp/:id/award` | Bid 선택, 계약 레코드 생성, 선택/미선택 PG 통보 | `AwardFlow`, `DecisionTimeline` |
@@ -91,13 +91,13 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
 | P1 | `/home` | 신규 RFP, 임박 마감, 제출 완료, 수주율 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget` |
-| P2 | `/inbox` | 받은 RFP 함. 신규/제출완료/마감 탭 (조회한 RFP는 '최근 조회' 배지) | `InboxList`, `DataTable`, `Tag` |
+| P2 | `/inbox` | 받은 RFP 함. 신규/제출완료/마감 탭 (작성중 단계 제거 — 미제출 응답은 신규로 표시) | `InboxList`, `DataTable`, `Tag` |
 | P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성. 사업자번호 미입력 시 안내 배너. 등급 미입력 시 일반 폴백(9개 카드사 입력) | `RfpBriefPanel`, `BidForm`, `StatutoryCardFeeNotice` |
 | P4 | `/inbox/:rfpId/submitted` | 제출 완료, 결과 대기, 수정/철회 정책 안내 | `SubmittedState` |
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처) | `WorkspaceProfileForm` |
 | P6 | `/settings/members` | 같은 워크스페이스 멤버 관리 (도메인 자동 합류 없음 — 초대만) | `MemberTable` |
 
-> 칸반 뷰 컬럼: 구매사 `진행중 / 계약완료 / 마감`(3, 임시저장 RFP는 보드에서 숨김 — 표 뷰에서만 노출), PG `신규 / 제출완료 / 낙찰 / 실패`(4 — 제출 전 입찰서는 모두 신규, 작성중 단계 제거; 표 탭 `마감`을 보드에서 `낙찰`/`실패`로 분리).
+> 칸반 뷰 컬럼: 구매사 `진행중 / 계약완료 / 마감`(3, 표 탭과 동일 — 발송 전 draft RFP는 보드에 노출 안 함), PG `신규 / 제출완료 / 낙찰 / 실패`(4 — 표 탭 `마감`을 보드에서 `낙찰`/`실패`로 분리; 미제출 응답은 `신규`). 작성중 단계 제거로 보드 드래그-발송/취소·드래그-작성 전이도 사라졌다(발송은 RFP 상세의 `초대 발송`, 제출은 inbox 폼).
 
 ### 0.4 Core Flow Diagrams
 

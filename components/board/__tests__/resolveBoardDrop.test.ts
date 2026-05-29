@@ -30,8 +30,8 @@ describe('resolveBoardDrop', () => {
     });
   });
 
-  it('rfp awarded → active (no valid transition) → reject', () => {
-    const target = col({ id: 'active', lifecycleKey: 'active' });
+  it('rfp awarded → closed (no valid transition) → reject', () => {
+    const target = col({ id: 'closed', lifecycleKey: 'closed' });
     expect(
       resolveBoardDrop({
         cardType: 'rfp',

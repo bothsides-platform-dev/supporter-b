@@ -43,7 +43,7 @@ function resolveBuyer(i: BuyerInput): DragAction | null {
     return { kind: 'navigate-rfp-detail', rfpId: i.rfpId };
   }
 
-  // active → closed: 취소
+  // active → closed: 취소 (작성중 단계 제거 — draft 발송/취소 드래그 없음)
   if (i.from === 'active' && i.to === 'closed') {
     return { kind: 'cancel-rfp', rfpId: i.rfpId, title: i.title };
   }
@@ -54,10 +54,8 @@ function resolveBuyer(i: BuyerInput): DragAction | null {
 function resolvePg(i: PgInput): DragAction | null {
   if (i.from === i.to) return null;
 
-  // received → submitted: 폼 작성·제출 필요 — v0 는 form 이 inbox 페이지에 있어 navigate.
-  if (i.from === 'received' && i.to === 'submitted') {
-    return { kind: 'navigate-inbox', rfpId: i.rfpId };
-  }
+  // 작성중 단계 제거 — 미제출 응답은 신규(received)에 머문다. 제출은 inbox 폼에서
+  // 직접 하므로 드래그 제출 전이는 없다(received → submitted 무효).
 
   // submitted → lost: 철회.
   if (i.from === 'submitted' && i.to === 'lost' && i.bidId) {

@@ -55,6 +55,13 @@ describe('InboxList', () => {
     expect(screen.getByText('신규')).toBeInTheDocument();
   });
 
+  it('opened 초대는 작성중 대신 신규로 표시', () => {
+    const openedRow: InboxRow = { ...row, invitationId: 'inv-003', invitationStatus: 'opened' };
+    render(<InboxList rows={[openedRow]} />);
+    expect(screen.queryByText('작성중')).not.toBeInTheDocument();
+    expect(screen.getByText('신규')).toBeInTheDocument();
+  });
+
   it('하단 키보드 힌트 문구를 표시하지 않는다', () => {
     const { container } = render(<InboxList rows={[row]} />);
     expect(container.textContent).not.toContain('J / K 이동');

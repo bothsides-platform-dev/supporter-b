@@ -34,8 +34,9 @@ export type BuyerKanbanCard = {
   awardedBidId?: string;
 };
 
-// pure — 단위 테스트 가능. status 만으로 3단계 분류 (진행중/계약완료/마감).
-// draft RFP 는 보드에서 제외 (loadBoard 가 필터) — 분류 대상이 아니다.
+// pure — 단위 테스트 가능. status 만으로 3단계 분류 (진행중/마감/계약완료).
+// draft(작성중)는 보드 단계에서 제거됐다 — draft RFP 는 loadBoard 에서 카드로 만들어지기
+// 전에 걸러지므로, 방어적으로 여기 도달하면 'active' 로 폴백한다(실사용 경로 아님).
 export function classifyBuyerRfp(args: { rfp: RFP }): BuyerKanbanStage {
   const { rfp } = args;
   if (rfp.status === 'awarded') return 'awarded';

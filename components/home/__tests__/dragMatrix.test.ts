@@ -12,8 +12,8 @@ describe('resolveDrag — buyer', () => {
     expect(a).toEqual({ kind: 'cancel-rfp', rfpId: 'P-2605-0001', title: 'RFP 1' });
   });
 
-  it('invalid: awarded → active (역방향)', () => {
-    const a = resolveDrag({ role: 'buyer', from: 'awarded', to: 'active', rfpId: 'P-2605-0001', title: 'RFP 1' });
+  it('invalid: awarded → closed (역방향/응답 후 단계)', () => {
+    const a = resolveDrag({ role: 'buyer', from: 'awarded', to: 'closed', rfpId: 'P-2605-0001', title: 'RFP 1' });
     expect(a).toBeNull();
   });
 
@@ -24,17 +24,6 @@ describe('resolveDrag — buyer', () => {
 });
 
 describe('resolveDrag — pg', () => {
-  it('received → submitted: navigate-inbox (form 작성·제출 필요)', () => {
-    const a = resolveDrag({
-      role: 'pg',
-      from: 'received',
-      to: 'submitted',
-      rfpId: 'P-2605-0001',
-      title: 'RFP 1',
-    });
-    expect(a).toEqual({ kind: 'navigate-inbox', rfpId: 'P-2605-0001' });
-  });
-
   it('submitted → lost: withdraw-bid', () => {
     const a = resolveDrag({
       role: 'pg',
@@ -57,6 +46,17 @@ describe('resolveDrag — pg', () => {
       role: 'pg',
       from: 'submitted',
       to: 'lost',
+      rfpId: 'P-2605-0001',
+      title: 'RFP 1',
+    });
+    expect(a).toBeNull();
+  });
+
+  it('invalid: received → submitted (드래그 제출 불가 — 폼으로 제출)', () => {
+    const a = resolveDrag({
+      role: 'pg',
+      from: 'received',
+      to: 'submitted',
       rfpId: 'P-2605-0001',
       title: 'RFP 1',
     });

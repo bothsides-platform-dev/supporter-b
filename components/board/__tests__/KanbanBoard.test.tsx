@@ -43,12 +43,12 @@ function col(over: Partial<BoardColumn> & { id: string; title: string }): BoardC
   };
 }
 
-const draftCol = col({ id: 'c-draft', title: '작성중', lifecycleKey: 'draft', position: 'a1' });
+const sysCol = col({ id: 'c-active', title: '진행중', lifecycleKey: 'active', position: 'a1' });
 const customCol = col({ id: 'c-hold', title: '보류', position: 'a2' });
 
 const cards: BoardCard[] = [
-  { cardType: 'rfp', cardId: 'r1', columnId: 'c-draft', payload: { rfpId: 'P-2605-0001', title: '결제대행 RFP', stage: 'draft' } },
-  { cardType: 'rfp', cardId: 'r2', columnId: 'c-hold', payload: { rfpId: 'P-2605-0002', title: '보류된 RFP', stage: 'draft' } },
+  { cardType: 'rfp', cardId: 'r1', columnId: 'c-active', payload: { rfpId: 'P-2605-0001', title: '결제대행 RFP', stage: 'active' } },
+  { cardType: 'rfp', cardId: 'r2', columnId: 'c-hold', payload: { rfpId: 'P-2605-0002', title: '보류된 RFP', stage: 'active' } },
 ];
 
 function renderBoard() {
@@ -56,7 +56,7 @@ function renderBoard() {
     <KanbanBoard
       kind="pipeline"
       cardType="rfp"
-      columns={[draftCol, customCol]}
+      columns={[sysCol, customCol]}
       cards={cards}
       renderCard={(c) => <div>{(c.payload as { title: string }).title}</div>}
     />,
@@ -74,7 +74,7 @@ describe('KanbanBoard', () => {
 
   it('renders columns and their cards via renderCard', () => {
     renderBoard();
-    expect(screen.getByText('작성중')).toBeInTheDocument();
+    expect(screen.getByText('진행중')).toBeInTheDocument();
     expect(screen.getByText('보류')).toBeInTheDocument();
     expect(screen.getByText('결제대행 RFP')).toBeInTheDocument();
     expect(screen.getByText('보류된 RFP')).toBeInTheDocument();
@@ -95,7 +95,7 @@ describe('KanbanBoard', () => {
   it('system column menu also does not offer delete', async () => {
     const user = userEvent.setup();
     renderBoard();
-    await user.click(screen.getByRole('button', { name: '작성중 컬럼 메뉴' }));
+    await user.click(screen.getByRole('button', { name: '진행중 컬럼 메뉴' }));
     expect(screen.queryByRole('button', { name: '컬럼 삭제' })).not.toBeInTheDocument();
   });
 });

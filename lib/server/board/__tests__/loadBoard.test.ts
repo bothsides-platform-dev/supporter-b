@@ -45,7 +45,7 @@ afterEach(() => {
 });
 
 describe('loadBoard — pipeline (buyer)', () => {
-  it('hides draft RFPs from the board entirely', async () => {
+  it('excludes a draft RFP from the buyer board (작성중 단계 제거 — 테이블에서만 접근)', async () => {
     const { buyer, ws } = await setupBuyer();
     const rfpId = randomUUID();
     await db.insert(rfps).values({
@@ -61,27 +61,6 @@ describe('loadBoard — pipeline (buyer)', () => {
     const board = await loadBoard({ workspaceId: ws.id, workspaceType: 'buyer', kind: 'pipeline' });
 
     expect(board.cards.find((c) => c.cardId === rfpId)).toBeUndefined();
-  });
-
-  it('classifies a sent RFP into the active lifecycle column', async () => {
-    const { buyer, ws } = await setupBuyer();
-    const rfpId = randomUUID();
-    await db.insert(rfps).values({
-      id: rfpId,
-      code: 'P-2605-0005',
-      buyerWsId: ws.id,
-      title: 'sent rfp',
-      deadline: new Date(Date.now() + 86_400_000),
-      status: 'sent',
-      createdBy: buyer.id,
-      sentAt: new Date(),
-    });
-
-    const board = await loadBoard({ workspaceId: ws.id, workspaceType: 'buyer', kind: 'pipeline' });
-
-    const card = board.cards.find((c) => c.cardId === rfpId);
-    expect(card?.cardType).toBe('rfp');
-    expect(card?.columnId).toBe(await colByTitle(ws.id, '진행중')); // active label
   });
 
   it('an explicit placement overrides the lifecycle column', async () => {

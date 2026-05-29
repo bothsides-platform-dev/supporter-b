@@ -53,7 +53,7 @@ export function classifyPgInvitation(args: {
   if (bid?.status === 'withdrawn') return 'lost';
   if (bid?.status === 'submitted') return 'submitted';
 
-  // 제출 전(bid 없음 / bid=draft) + sent/opened — 모두 신규(received).
+  // 미제출(작성중 draft) 및 bid 없음(sent/opened) — 모두 신규(received). 작성중 단계 제거.
   return 'received';
 }
 

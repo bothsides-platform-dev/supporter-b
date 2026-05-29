@@ -71,7 +71,7 @@ describe('classifyPgInvitation', () => {
     expect(stage).toBe('received');
   });
 
-  it('received: bid=draft (작성중 컬럼 제거 — 제출 전은 모두 신규)', () => {
+  it('received: bid=draft (작성중 단계 제거 — 미제출 응답은 신규로)', () => {
     const stage = classifyPgInvitation({
       invitation: makeInv('opened'),
       bid: makeBid('b1', 'draft'),
