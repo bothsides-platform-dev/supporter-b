@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { User } from '@/lib/types/user';
 
 const toast = vi.fn();
 vi.mock('@/lib/toast', () => ({ toast: (...a: unknown[]) => toast(...a) }));
@@ -11,66 +12,126 @@ vi.mock('@/lib/server/actions/workspace/inviteWorkspaceMemberAction', () => ({
     inviteWorkspaceMemberAction(...a),
 }));
 
-const regenerateWorkspaceShareTokenAction = vi.fn();
+const removeWorkspaceMemberAction = vi.fn();
+vi.mock('@/lib/server/actions/workspace/removeWorkspaceMemberAction', () => ({
+  removeWorkspaceMemberAction: (...a: unknown[]) =>
+    removeWorkspaceMemberAction(...a),
+}));
+
+const changeWorkspaceMemberRoleAction = vi.fn();
 vi.mock(
-  '@/lib/server/actions/workspace/regenerateWorkspaceShareTokenAction',
+  '@/lib/server/actions/workspace/changeWorkspaceMemberRoleAction',
   () => ({
-    regenerateWorkspaceShareTokenAction: () =>
-      regenerateWorkspaceShareTokenAction(),
+    changeWorkspaceMemberRoleAction: (...a: unknown[]) =>
+      changeWorkspaceMemberRoleAction(...a),
   }),
 );
 
 import { MembersPanel } from '../MembersPanel';
 
-const SHARE_URL = 'http://localhost:3000/share/workspace/tok-abc';
+const ADMIN: User = {
+  id: 'u-admin',
+  name: '관리자',
+  email: 'admin@example.com',
+  avatarColor: 'ink',
+  role: 'admin',
+  status: 'active',
+  joinedAt: '2026-01-01T00:00:00.000Z',
+};
+const MEMBER: User = {
+  id: 'u-member',
+  name: '멤버',
+  email: 'member@example.com',
+  avatarColor: 'ink',
+  role: 'member',
+  status: 'active',
+  joinedAt: '2026-01-01T00:00:00.000Z',
+};
 
 const baseProps = {
   workspaceName: '서포터 B 페이',
-  initialMembers: [],
+  initialMembers: [ADMIN, MEMBER],
   initialPendingInvites: [],
-  shareUrl: SHARE_URL,
+  currentUserId: ADMIN.id,
 };
 
 beforeEach(() => {
   toast.mockReset();
-  regenerateWorkspaceShareTokenAction.mockReset();
+  inviteWorkspaceMemberAction.mockReset();
+  removeWorkspaceMemberAction.mockReset();
+  changeWorkspaceMemberRoleAction.mockReset();
 });
 
-describe('MembersPanel share link', () => {
-  it('admin: shows the share URL and copies it to clipboard', async () => {
-    // setup() installs its own navigator.clipboard stub, so override it AFTER.
-    const user = userEvent.setup();
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText },
-      configurable: true,
-    });
+describe('MembersPanel', () => {
+  it('never renders the public share link section', () => {
     render(<MembersPanel {...baseProps} userRole="admin" />);
-
-    expect(screen.getByDisplayValue(SHARE_URL)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '복사' }));
-    expect(writeText).toHaveBeenCalledWith(SHARE_URL);
+    expect(
+      screen.queryByRole('button', { name: '재발급' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '복사' })).not.toBeInTheDocument();
   });
 
-  it('admin: 재발급 swaps in the regenerated URL', async () => {
-    const NEW = 'http://localhost:3000/share/workspace/tok-new';
-    regenerateWorkspaceShareTokenAction.mockResolvedValue({
-      ok: true,
-      shareUrl: NEW,
-    });
+  it('admin: invite sends the selected role', async () => {
+    inviteWorkspaceMemberAction.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
     render(<MembersPanel {...baseProps} userRole="admin" />);
 
-    await user.click(screen.getByRole('button', { name: '재발급' }));
+    await user.type(
+      screen.getByPlaceholderText('member@company.com'),
+      'new@example.com',
+    );
+    await user.selectOptions(screen.getByLabelText('초대 역할'), 'admin');
+    await user.click(screen.getByRole('button', { name: '초대 발송' }));
 
     await waitFor(() =>
-      expect(screen.getByDisplayValue(NEW)).toBeInTheDocument(),
+      expect(inviteWorkspaceMemberAction).toHaveBeenCalledWith({
+        email: 'new@example.com',
+        role: 'admin',
+      }),
     );
   });
 
-  it('member: hides the share link section', () => {
+  it('admin: kicks a member and drops the row', async () => {
+    removeWorkspaceMemberAction.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    expect(screen.getByText('member@example.com')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '멤버 강퇴' }));
+
+    await waitFor(() =>
+      expect(removeWorkspaceMemberAction).toHaveBeenCalledWith({
+        userId: MEMBER.id,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('member@example.com')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('admin: cannot kick themselves (self kick button disabled)', () => {
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+    expect(screen.getByRole('button', { name: '관리자 강퇴' })).toBeDisabled();
+  });
+
+  it('admin: changing a role calls the action', async () => {
+    changeWorkspaceMemberRoleAction.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    await user.selectOptions(screen.getByLabelText('멤버 역할 변경'), 'admin');
+
+    await waitFor(() =>
+      expect(changeWorkspaceMemberRoleAction).toHaveBeenCalledWith({
+        userId: MEMBER.id,
+        role: 'admin',
+      }),
+    );
+  });
+
+  it('member: shows no kick buttons or role controls', () => {
     render(<MembersPanel {...baseProps} userRole="member" />);
-    expect(screen.queryByDisplayValue(SHARE_URL)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /강퇴/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('멤버 역할 변경')).not.toBeInTheDocument();
   });
 });

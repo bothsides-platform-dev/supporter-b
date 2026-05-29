@@ -1,5 +1,5 @@
 {
-  "id": "8ab3ecf6-3de2-4517-888b-8b735bceef6d",
+  "id": "0d48424c-2800-4b92-b2ee-1e0c31383000",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1685,6 +1685,14 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "member_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'member'"
         },
         "token_hash": {
           "name": "token_hash",

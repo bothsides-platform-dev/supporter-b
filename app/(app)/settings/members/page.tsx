@@ -4,7 +4,6 @@ import { auth } from '@/auth';
 import { db } from '@/lib/db/client';
 import { workspaceInvitations } from '@/lib/db/schema';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
-import { baseUrl } from '@/lib/server/actions/auth/_shared';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { MembersPanel } from '@/components/settings/MembersPanel';
 
@@ -31,7 +30,11 @@ export default async function MembersPage() {
   }
 
   const pendingRows = await db
-    .select({ email: workspaceInvitations.invitedEmail, createdAt: workspaceInvitations.createdAt })
+    .select({
+      email: workspaceInvitations.invitedEmail,
+      createdAt: workspaceInvitations.createdAt,
+      role: workspaceInvitations.role,
+    })
     .from(workspaceInvitations)
     .where(
       and(
@@ -44,6 +47,7 @@ export default async function MembersPage() {
   const pendingInvites = pendingRows.map((r) => ({
     email: r.email,
     createdAt: r.createdAt.toISOString(),
+    role: r.role,
   }));
 
   return (
@@ -53,7 +57,7 @@ export default async function MembersPage() {
         initialMembers={ws.members}
         userRole={userRole}
         initialPendingInvites={pendingInvites}
-        shareUrl={`${baseUrl()}/share/workspace/${ws.shareToken}`}
+        currentUserId={session.user.id}
       />
     </PageEnter>
   );
