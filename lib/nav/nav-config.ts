@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from 'react';
 import {
   HomeIcon,
   BellIcon,
+  EnvelopeIcon,
   FileTextIcon,
   InboxIcon,
   SettingsIcon,
@@ -143,11 +144,20 @@ const NOTIFICATIONS: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'n' },
 };
 
+const MESSAGES: NavLeaf = {
+  id: 'messages',
+  label: '메시지',
+  href: '/messages',
+  icon: EnvelopeIcon,
+  // G then E (mEssages) — h/n/r/i/s/c/p/m/1-4 are taken.
+  shortcut: { kind: 'chord', lead: 'g', key: 'e' },
+};
+
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : INBOX_SECTION;
 
   return {
-    top: [HOME, NOTIFICATIONS],
+    top: [HOME, NOTIFICATIONS, MESSAGES],
     sections: [workspaceSection, SETTINGS_SECTION],
   };
 }
@@ -164,6 +174,7 @@ export function getBreadcrumbSegments(
 ): BreadcrumbSegment[] {
   if (pathname === '/home') return [{ label: '홈' }];
   if (pathname === '/notifications') return [{ label: '알림' }];
+  if (pathname === '/messages') return [{ label: '메시지' }];
   if (pathname === '/rfp') {
     const label = status ? STATUS_LABELS['/rfp'][status as keyof typeof STATUS_LABELS['/rfp']] : undefined;
     return label ? [{ label: 'RFP', href: '/rfp' }, { label }] : [{ label: 'RFP' }];

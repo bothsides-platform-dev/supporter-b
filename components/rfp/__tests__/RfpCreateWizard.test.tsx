@@ -120,6 +120,14 @@ describe('RfpCreateWizard', () => {
     expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
   });
 
+  it('사이드바에서 미도달 단계로 자유롭게 점프할 수 있다 (Step 1 → Step 4)', async () => {
+    const user = userEvent.setup();
+    render(<RfpCreateWizard />);
+    // Step 1에서 바로 '발송 확인'(Step 4) 클릭 → 리뷰 단계로 점프
+    await user.click(screen.getByText('발송 확인'));
+    expect(screen.getByRole('button', { name: '발송' })).toBeInTheDocument();
+  });
+
   it('Step 2에서 이전 클릭 시 Step 1로 돌아간다', async () => {
     const user = userEvent.setup();
     render(<RfpCreateWizard />);

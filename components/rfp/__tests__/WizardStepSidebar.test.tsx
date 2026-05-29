@@ -34,13 +34,16 @@ describe('WizardStepSidebar', () => {
     expect(onStepClick).toHaveBeenCalledWith(1);
   });
 
-  it('미도달 미래 단계 클릭해도 onStepClick이 호출되지 않는다', async () => {
+  it('미도달 미래 단계도 자유롭게 클릭해 이동할 수 있다', async () => {
     const user = userEvent.setup();
     const onStepClick = vi.fn();
     render(
       <WizardStepSidebar currentStep={2} maxReachedStep={2} onStepClick={onStepClick} />,
     );
+    // PG 선택(3), 발송 확인(4) 모두 도달 전이어도 클릭 가능
     await user.click(screen.getByText('PG 선택'));
-    expect(onStepClick).not.toHaveBeenCalled();
+    expect(onStepClick).toHaveBeenCalledWith(3);
+    await user.click(screen.getByText('발송 확인'));
+    expect(onStepClick).toHaveBeenCalledWith(4);
   });
 });
