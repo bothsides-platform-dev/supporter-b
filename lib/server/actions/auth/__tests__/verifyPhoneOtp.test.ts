@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { phoneOtps } from '@/lib/db/schema';
-import { hashOtpCode } from '../sendPhoneOtpAction';
+import { hashOtpCode } from '../phoneOtpUtils';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 

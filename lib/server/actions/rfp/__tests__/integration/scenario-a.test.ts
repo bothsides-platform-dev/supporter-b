@@ -16,7 +16,7 @@ import {
   workspaces,
   users,
 } from '@/lib/db/schema';
-import { hashOtpCode } from '@/lib/server/actions/auth/sendPhoneOtpAction';
+import { hashOtpCode } from '@/lib/server/actions/auth/phoneOtpUtils';
 import {
   seedMembership,
   seedPgWorkspace,

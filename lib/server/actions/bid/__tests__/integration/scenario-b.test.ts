@@ -21,7 +21,7 @@ import {
   workspaceMembers,
   users,
 } from '@/lib/db/schema';
-import { hashOtpCode } from '@/lib/server/actions/auth/sendPhoneOtpAction';
+import { hashOtpCode } from '@/lib/server/actions/auth/phoneOtpUtils';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../../rfp/__tests__/_setup';
 import { signupCompleteAction } from '@/lib/server/actions/auth/signupCompleteAction';
 import { signupEmailAction } from '@/lib/server/actions/auth/signupEmailAction';
