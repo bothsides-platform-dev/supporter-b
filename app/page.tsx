@@ -1,5 +1,3 @@
-import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
 import { LandingHero } from '@/components/landing/LandingHero';
 import { LandingHeaderNav } from '@/components/landing/LandingHeaderNav';
 import { siteConfig } from '@/lib/site-config';
@@ -14,11 +12,6 @@ const organizationJsonLd = {
 };
 
 export default async function RootPage() {
-  const session = await auth();
-  if (session?.user?.id && session.user.workspaceId && session.user.workspaceType) {
-    redirect('/home');
-  }
-
   return (
     <>
       <script
