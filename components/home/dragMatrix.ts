@@ -54,13 +54,8 @@ function resolveBuyer(i: BuyerInput): DragAction | null {
 function resolvePg(i: PgInput): DragAction | null {
   if (i.from === i.to) return null;
 
-  // 작성 단계로 이동 — v0 는 form 이 inbox 페이지에 있어 navigate.
-  if (i.from === 'received' && i.to === 'drafting') {
-    return { kind: 'navigate-inbox', rfpId: i.rfpId };
-  }
-
-  // drafting → submitted: 폼 채워서 제출해야 함 — navigate.
-  if (i.from === 'drafting' && i.to === 'submitted') {
+  // received → submitted: 폼 작성·제출 필요 — v0 는 form 이 inbox 페이지에 있어 navigate.
+  if (i.from === 'received' && i.to === 'submitted') {
     return { kind: 'navigate-inbox', rfpId: i.rfpId };
   }
 

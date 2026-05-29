@@ -24,21 +24,10 @@ describe('resolveDrag — buyer', () => {
 });
 
 describe('resolveDrag — pg', () => {
-  it('received → drafting: navigate-inbox', () => {
+  it('received → submitted: navigate-inbox (form 작성·제출 필요)', () => {
     const a = resolveDrag({
       role: 'pg',
       from: 'received',
-      to: 'drafting',
-      rfpId: 'P-2605-0001',
-      title: 'RFP 1',
-    });
-    expect(a).toEqual({ kind: 'navigate-inbox', rfpId: 'P-2605-0001' });
-  });
-
-  it('drafting → submitted: navigate-inbox (form 작성 필요)', () => {
-    const a = resolveDrag({
-      role: 'pg',
-      from: 'drafting',
       to: 'submitted',
       rfpId: 'P-2605-0001',
       title: 'RFP 1',
@@ -74,21 +63,10 @@ describe('resolveDrag — pg', () => {
     expect(a).toBeNull();
   });
 
-  it('invalid: received → submitted', () => {
+  it('invalid: received → won (직접 낙찰 불가)', () => {
     const a = resolveDrag({
       role: 'pg',
       from: 'received',
-      to: 'submitted',
-      rfpId: 'P-2605-0001',
-      title: 'RFP 1',
-    });
-    expect(a).toBeNull();
-  });
-
-  it('invalid: drafting → won (직접 낙찰 불가)', () => {
-    const a = resolveDrag({
-      role: 'pg',
-      from: 'drafting',
       to: 'won',
       rfpId: 'P-2605-0001',
       title: 'RFP 1',
@@ -99,8 +77,8 @@ describe('resolveDrag — pg', () => {
   it('invalid: same column', () => {
     const a = resolveDrag({
       role: 'pg',
-      from: 'drafting',
-      to: 'drafting',
+      from: 'received',
+      to: 'received',
       rfpId: 'P-2605-0001',
       title: 'RFP 1',
     });
