@@ -78,7 +78,7 @@ export function BidDetailModal({
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <MessageComposeButton
-                variant="icon"
+                variant="avatar"
                 counterparty={{ name: pgName, type: 'pg', workspaceId: bid.pgWsId }}
               />
               <IconButton label="닫기" size="sm" onClick={() => onOpenChange(false)}>

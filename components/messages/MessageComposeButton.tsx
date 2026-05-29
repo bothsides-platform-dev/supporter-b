@@ -9,7 +9,6 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { IconButton } from '@/components/primitives/IconButton';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { ComposeIcon, PaperclipIcon } from '@/components/icons';
 import { ComingSoonDialog } from './ComingSoonDialog';
@@ -20,20 +19,20 @@ type Props = {
   counterparty: Counterparty;
   rfpContext?: RfpContext;
   /**
-   * 'avatar' = 프로필 아바타 → 클릭 시 '채팅보내기' 메뉴(프로필 섹션),
-   * 'button' = 텍스트 버튼, 'icon' = 아이콘 버튼(모달 헤더 등),
-   * 'profile' = 아바타+상대명 인라인 프로필(표 행 등 — 클릭 시 채팅).
+   * 진입점 표시 형태(인터랙션은 동일 — 클릭 시 '채팅보내기' 메뉴 → 컴포즈 Sheet):
+   * 'avatar' = 아바타만(헤더·섹션 등), 'profile' = 아바타+상대명(표 행 등 이름 노출 필요).
    */
-  variant?: 'avatar' | 'button' | 'icon' | 'profile';
+  variant?: 'avatar' | 'profile';
 };
 
 const LABEL = '메시지 보내기';
 
 /**
- * 사업자 프로필 진입점 — 클릭 시 우측 컴포즈 Sheet를 연다.
- * Sheet 안의 '채팅보내기'는 백엔드 미구현이라 '구현중' 모달로 귀결(렌더 전용).
+ * 사업자 프로필 진입점 — 프로필(아바타) 클릭 시 '채팅보내기' 메뉴를 열고,
+ * 선택하면 우측 컴포즈 Sheet를 연다. Sheet의 '채팅보내기'는 백엔드 미구현이라
+ * '구현중' 모달로 귀결(렌더 전용). 모든 진입점이 이 컴포넌트로 통일됨.
  */
-export function MessageComposeButton({ counterparty, rfpContext, variant = 'button' }: Props) {
+export function MessageComposeButton({ counterparty, rfpContext, variant = 'avatar' }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [comingSoonOpen, setComingSoonOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -43,60 +42,38 @@ export function MessageComposeButton({ counterparty, rfpContext, variant = 'butt
     setComingSoonOpen(true);
   }
 
+  const triggerClass =
+    variant === 'profile'
+      ? 'group/msg inline-flex items-center gap-2 text-left outline-none rounded-[var(--md-sys-shape-extra-small)] focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50'
+      : 'inline-flex rounded-[var(--md-sys-shape-extra-small)] outline-none transition-shadow hover:ring-2 hover:ring-[var(--md-sys-color-outline-variant)] focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50';
+
   return (
     <>
-      {variant === 'avatar' ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                type="button"
-                aria-label={`${counterparty.name} 프로필`}
-                className="inline-flex rounded-[var(--md-sys-shape-extra-small)] outline-none transition-shadow hover:ring-2 hover:ring-[var(--md-sys-color-outline-variant)] focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50"
-              />
-            }
-          >
-            <WorkspaceAvatar
-              name={counterparty.name}
-              size="md"
-              workspaceId={counterparty.workspaceId}
-              hasLogo={counterparty.hasLogo}
-            />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-auto min-w-[140px]">
-            <DropdownMenuItem onClick={() => setSheetOpen(true)}>
-              <ComposeIcon size={14} />
-              채팅보내기
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : variant === 'profile' ? (
-        <button
-          type="button"
-          aria-label={`${counterparty.name} ${LABEL}`}
-          onClick={() => setSheetOpen(true)}
-          className="group/msg inline-flex items-center gap-2 text-left"
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button type="button" aria-label={`${counterparty.name} 프로필`} className={triggerClass} />
+          }
         >
           <WorkspaceAvatar
             name={counterparty.name}
-            size="sm"
+            size={variant === 'profile' ? 'sm' : 'md'}
             workspaceId={counterparty.workspaceId}
             hasLogo={counterparty.hasLogo}
           />
-          <span className="font-medium text-[13px] text-[var(--md-sys-color-on-surface)] group-hover/msg:text-[var(--md-sys-color-primary)] group-hover/msg:underline">
-            {counterparty.name}
-          </span>
-        </button>
-      ) : variant === 'icon' ? (
-        <IconButton label={LABEL} size="sm" onClick={() => setSheetOpen(true)}>
-          <ComposeIcon size={18} />
-        </IconButton>
-      ) : (
-        <Button variant="outline" size="sm" onClick={() => setSheetOpen(true)}>
-          <ComposeIcon size={14} />
-          {LABEL}
-        </Button>
-      )}
+          {variant === 'profile' && (
+            <span className="font-medium text-[13px] text-[var(--md-sys-color-on-surface)] group-hover/msg:text-[var(--md-sys-color-primary)] group-hover/msg:underline">
+              {counterparty.name}
+            </span>
+          )}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-auto min-w-[140px]">
+          <DropdownMenuItem onClick={() => setSheetOpen(true)}>
+            <ComposeIcon size={14} />
+            채팅보내기
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md">

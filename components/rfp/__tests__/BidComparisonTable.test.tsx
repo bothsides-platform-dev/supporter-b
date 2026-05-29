@@ -9,6 +9,11 @@ class ResizeObserverStub {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
+// base-ui Menu needs these in jsdom.
+if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = () => false;
+if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => {};
+if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+
 afterEach(() => cleanup());
 
 import { BidComparisonTable } from '../BidComparisonTable';
@@ -44,18 +49,18 @@ function renderTable() {
 }
 
 describe('BidComparisonTable — PG 프로필 채팅 진입', () => {
-  it('각 제출 PG가 클릭 가능한 프로필로 표시된다', () => {
+  it('각 제출 PG가 클릭 가능한 프로필(아바타+이름)로 표시된다', () => {
     renderTable();
-    expect(
-      screen.getByRole('button', { name: '에이페이먼츠 메시지 보내기' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '에이페이먼츠 프로필' })).toBeInTheDocument();
+    expect(screen.getByText('에이페이먼츠')).toBeInTheDocument();
   });
 
-  it('PG 프로필 클릭 → 컴포즈 Sheet → 채팅보내기 → 구현중 모달', async () => {
+  it('PG 프로필 클릭 → 채팅보내기 메뉴 → 컴포즈 Sheet → 채팅보내기 → 구현중 모달', async () => {
     const user = userEvent.setup();
     renderTable();
 
-    await user.click(screen.getByRole('button', { name: '에이페이먼츠 메시지 보내기' }));
+    await user.click(screen.getByRole('button', { name: '에이페이먼츠 프로필' }));
+    await user.click(await screen.findByRole('menuitem', { name: '채팅보내기' }));
     expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '채팅보내기' }));
