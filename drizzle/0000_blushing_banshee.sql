@@ -198,6 +198,7 @@ CREATE TABLE "workspace_invitations" (
 	"workspace_id" uuid NOT NULL,
 	"invited_email" text NOT NULL,
 	"invited_by_user_id" uuid NOT NULL,
+	"role" "member_role" DEFAULT 'member' NOT NULL,
 	"token_hash" text NOT NULL,
 	"status" "workspace_invitation_status" DEFAULT 'pending' NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,

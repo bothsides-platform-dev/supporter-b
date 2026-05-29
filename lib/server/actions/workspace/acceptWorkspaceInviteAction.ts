@@ -69,7 +69,7 @@ export async function acceptWorkspaceInviteAction(
         .values({
           workspaceId: invitation.workspaceId,
           userId,
-          role: 'member',
+          role: invitation.role,
         })
         .onConflictDoNothing();
 

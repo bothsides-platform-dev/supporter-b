@@ -132,6 +132,37 @@ describe('inviteWorkspaceMemberAction', () => {
     expect(outbox[0].event).toBe('workspace.invited');
   });
 
+  it('stores the requested role on the invitation row', async () => {
+    const ws = await seedPgWorkspace(db, 'WS');
+    await makeAdminSession(ws.id);
+
+    const r = await inviteWorkspaceMemberAction({
+      email: 'newadmin@example.com',
+      role: 'admin',
+    });
+    expect(r).toEqual({ ok: true });
+
+    const [inv] = await db
+      .select()
+      .from(workspaceInvitations)
+      .where(eq(workspaceInvitations.workspaceId, ws.id));
+    expect(inv.role).toBe('admin');
+  });
+
+  it('defaults the invitation role to member when none is given', async () => {
+    const ws = await seedPgWorkspace(db, 'WS');
+    await makeAdminSession(ws.id);
+
+    const r = await inviteWorkspaceMemberAction({ email: 'plain@example.com' });
+    expect(r).toEqual({ ok: true });
+
+    const [inv] = await db
+      .select()
+      .from(workspaceInvitations)
+      .where(eq(workspaceInvitations.workspaceId, ws.id));
+    expect(inv.role).toBe('member');
+  });
+
   it('allows re-inviting the same email after their previous invitation was accepted', async () => {
     const ws = await seedPgWorkspace(db, 'WS');
     const admin = await makeAdminSession(ws.id);
