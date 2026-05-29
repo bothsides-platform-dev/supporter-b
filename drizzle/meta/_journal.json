@@ -8,6 +8,13 @@
       "when": 1780077148621,
       "tag": "0000_blushing_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780085000000,
+      "tag": "0001_custom_payment_methods",
+      "breakpoints": true
     }
   ]
 }
