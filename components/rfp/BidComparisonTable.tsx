@@ -4,17 +4,38 @@ import { useState } from 'react';
 import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
-import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
+import {
+  PAYMENT_METHOD_CATEGORIES,
+  PAYMENT_METHOD_LABELS,
+  STATUTORY_CARD_FEE,
+} from '@/lib/types/bid';
 import { formatKRW, formatPct } from '@/lib/format';
-import type { Bid } from '@/lib/types/bid';
+import type { Bid, CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import { GRADE_LABELS, type MerchantGrade } from '@/lib/types/biz-profile';
 import { compareSettleCycle } from '@/lib/utils/settle-cycle';
 import { EnvelopeIcon } from '@/components/icons';
 import { MessageComposeButton } from '@/components/messages/MessageComposeButton';
 import Link from 'next/link';
 
-type SortKey = 'name' | 'settle' | 'settleLimit' | 'guaranteeInsurance' | 'bankPct';
+// 'pm:<method>' = enum 결제수단 컬럼, 'cf:<id>' = 커스텀 결제수단 컬럼.
+type SortKey = 'name' | 'settle' | 'settleLimit' | 'guaranteeInsurance' | string;
 type SortDir = 'asc' | 'desc';
+
+const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap(
+  (c) => c.methods,
+);
+
+// 결제수단 컬럼 서술자. 카드는 capped 등급이면 법정 고정값(bid 무관)을 표시.
+type PayCol =
+  | { kind: 'card-statutory'; key: string; label: string; fee: number }
+  | { kind: 'enum'; key: string; label: string; method: PaymentMethod }
+  | { kind: 'custom'; key: string; label: string; id: string };
+
+function feeOf(bid: Bid, col: PayCol): number | undefined {
+  if (col.kind === 'card-statutory') return col.fee;
+  if (col.kind === 'enum') return bid.paymentFees[col.method];
+  return bid.customFees[col.id];
+}
 
 function min(bids: Bid[], key: (b: Bid) => number): number {
   return Math.min(...bids.map(key));
@@ -46,11 +67,22 @@ type Props = {
   grade: MerchantGrade | undefined;
   rfpStatus: string;
   awardedBidId?: string;
+  requiredPaymentMethods: PaymentMethod[];
+  customPaymentMethods: CustomPaymentMethod[];
   /** pgWsId → workspace name. RSC 호출자가 dedup된 id 목록으로 미리 채움. */
   pgWsNameMap: Record<string, string>;
 };
 
-export function BidComparisonTable({ rfpId, bids, grade, rfpStatus, awardedBidId, pgWsNameMap }: Props) {
+export function BidComparisonTable({
+  rfpId,
+  bids,
+  grade,
+  rfpStatus,
+  awardedBidId,
+  requiredPaymentMethods,
+  customPaymentMethods,
+  pgWsNameMap,
+}: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('settle');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -76,6 +108,27 @@ export function BidComparisonTable({ rfpId, bids, grade, rfpStatus, awardedBidId
     else { setSortKey(key); setSortDir('asc'); }
   };
 
+  const cardFee = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
+
+  // 표시할 결제수단 컬럼: 요청 목록(빈 배열=제한 없음→9종 전체) + 커스텀.
+  // 카드는 capped 등급이면 법정 고정값 컬럼으로, 그 외엔 일반 enum 컬럼으로.
+  const enumMethods = requiredPaymentMethods.length > 0 ? requiredPaymentMethods : ALL_PAYMENT_METHODS;
+  const payCols: PayCol[] = [
+    ...enumMethods.map((m): PayCol =>
+      m === 'card' && cardFee !== null
+        ? { kind: 'card-statutory', key: `pm:card`, label: '카드', fee: cardFee }
+        : { kind: 'enum', key: `pm:${m}`, label: PAYMENT_METHOD_LABELS[m], method: m },
+    ),
+    ...customPaymentMethods.map((c): PayCol => ({
+      kind: 'custom',
+      key: `cf:${c.id}`,
+      label: c.label,
+      id: c.id,
+    })),
+  ];
+
+  const colByKey = (key: string) => payCols.find((c) => c.key === key);
+
   const sorted = [...bids].sort((a, b) => {
     const mul = sortDir === 'asc' ? 1 : -1;
     switch (sortKey) {
@@ -83,16 +136,23 @@ export function BidComparisonTable({ rfpId, bids, grade, rfpStatus, awardedBidId
       case 'settle': return mul * compareSettleCycle(a.settleCycle, b.settleCycle);
       case 'settleLimit': return mul * (a.settleLimit - b.settleLimit);
       case 'guaranteeInsurance': return mul * (a.guaranteeInsurance - b.guaranteeInsurance);
-      case 'bankPct': return mul * ((a.paymentFees.bank_transfer ?? 0) - (b.paymentFees.bank_transfer ?? 0));
+      default: {
+        const col = colByKey(sortKey);
+        if (!col) return 0;
+        return mul * ((feeOf(a, col) ?? 0) - (feeOf(b, col) ?? 0));
+      }
     }
   });
 
   const minSettleLimit = min(bids, (b) => b.settleLimit);
   const minGuarantee = min(bids, (b) => b.guaranteeInsurance);
-  const minBank = min(bids, (b) => b.paymentFees.bank_transfer ?? Infinity);
+  const minByCol: Record<string, number> = {};
+  for (const col of payCols) {
+    if (col.kind === 'card-statutory') continue; // 법정 고정값은 강조 대상 아님
+    minByCol[col.key] = min(bids, (b) => feeOf(b, col) ?? Infinity);
+  }
   const bestSettle = sorted[0]?.settleCycle ?? '';
 
-  const cardFee = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
   const canAward = rfpStatus === 'sent';
 
   return (
@@ -104,12 +164,25 @@ export function BidComparisonTable({ rfpId, bids, grade, rfpStatus, awardedBidId
             <SortTh label="정산주기" sortId="settle" active={sortKey === 'settle'} dir={sortDir} onSort={handleSort} />
             <SortTh label="정산한도" sortId="settleLimit" active={sortKey === 'settleLimit'} dir={sortDir} onSort={handleSort} />
             <SortTh label="보증보험" sortId="guaranteeInsurance" active={sortKey === 'guaranteeInsurance'} dir={sortDir} onSort={handleSort} />
-            {cardFee !== null && (
-              <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">
-                카드
-              </th>
+            {payCols.map((col) =>
+              col.kind === 'card-statutory' ? (
+                <th
+                  key={col.key}
+                  className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal"
+                >
+                  {col.label}
+                </th>
+              ) : (
+                <SortTh
+                  key={col.key}
+                  label={col.label}
+                  sortId={col.key}
+                  active={sortKey === col.key}
+                  dir={sortDir}
+                  onSort={handleSort}
+                />
+              ),
             )}
-            <SortTh label="계좌이체" sortId="bankPct" active={sortKey === 'bankPct'} dir={sortDir} onSort={handleSort} />
             <th className="px-3 py-3" />
           </tr>
         </thead>
@@ -134,12 +207,26 @@ export function BidComparisonTable({ rfpId, bids, grade, rfpStatus, awardedBidId
                 <Num label={bid.settleCycle} best={sortKey === 'settle' && bid.settleCycle === bestSettle} />
                 <Num label={formatKRW(bid.settleLimit)} best={bid.settleLimit === minSettleLimit} />
                 <Num label={formatKRW(bid.guaranteeInsurance)} best={bid.guaranteeInsurance === minGuarantee} />
-                {cardFee !== null && (
-                  <td className="px-3 py-4 font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
-                    {formatPct(cardFee)}
-                  </td>
-                )}
-                <Num label={bid.paymentFees.bank_transfer !== undefined ? formatPct(bid.paymentFees.bank_transfer) : '—'} best={(bid.paymentFees.bank_transfer ?? Infinity) === minBank} />
+                {payCols.map((col) => {
+                  if (col.kind === 'card-statutory') {
+                    return (
+                      <td
+                        key={col.key}
+                        className="px-3 py-4 font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]"
+                      >
+                        {formatPct(col.fee)}
+                      </td>
+                    );
+                  }
+                  const fee = feeOf(bid, col);
+                  return (
+                    <Num
+                      key={col.key}
+                      label={fee !== undefined ? formatPct(fee) : '—'}
+                      best={fee !== undefined && fee === minByCol[col.key]}
+                    />
+                  );
+                })}
                 <td className="px-3 py-4 text-right">
                   {canAward && (
                     <Link href={`/rfp/${rfpId}/award?bidId=${bid.id}`}>

@@ -1,7 +1,8 @@
 'use client';
 
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { MaximizeIcon, XIcon } from '@/components/icons';
+import { useClosePeek } from '@/lib/hooks/useClosePeek';
 
 interface PeekPanelHeaderProps {
   rfpCode: string;
@@ -10,15 +11,7 @@ interface PeekPanelHeaderProps {
 
 export function PeekPanelHeader({ rfpCode, fullscreenHref }: PeekPanelHeaderProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  function handleClose() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('peek');
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname);
-  }
+  const handleClose = useClosePeek();
 
   function handleFullscreen() {
     router.push(fullscreenHref);

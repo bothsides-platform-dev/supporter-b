@@ -849,6 +849,13 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
+        "custom_fees": {
+          "name": "custom_fees",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "memo": {
           "name": "memo",
           "type": "text",
@@ -1942,6 +1949,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'"
+        },
+        "custom_payment_methods": {
+          "name": "custom_payment_methods",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         },
         "created_at": {
           "name": "created_at",

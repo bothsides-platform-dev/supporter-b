@@ -37,6 +37,8 @@ export const bids = pgTable(
     guaranteeInsurance: numeric('guarantee_insurance', { precision: 14, scale: 2 }).notNull().default('0'),
     // 결제수단별 수수료 JSONB: { card: 0.0125, virtual_account: 0.005, ... }
     paymentFees: jsonb('payment_fees').notNull().default(sql`'{}'::jsonb`),
+    // 커스텀 결제수단별 수수료 JSONB: { <customId>: 0.02, ... } (rfps.customPaymentMethods.id 기준)
+    customFees: jsonb('custom_fees').notNull().default(sql`'{}'::jsonb`),
     memo: text('memo').notNull().default(''),
     status: bidStatusEnum('status').notNull().default('submitted'),
     boardColumnId: uuid('board_column_id').references(() => columns.id, {

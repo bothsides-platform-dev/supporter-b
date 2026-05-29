@@ -49,6 +49,8 @@ const Input = z
     settleLimit: z.number().nonnegative(),
     guaranteeInsurance: z.number().nonnegative(),
     paymentFees: PaymentFeesSchema,
+    // 커스텀 결제수단 요율: { <customId>: 0..1 }. 키 유효성은 RFP 대조로 검증.
+    customFees: z.record(z.string(), z.number().min(0).max(1)).optional().default({}),
     proposalAttachmentId: z.string().uuid().optional(),
     memo: z.string().max(2000).optional(),
   })
@@ -95,6 +97,24 @@ export async function submitBidAction(
   const rfp = await rfpRepo.findById(data.rfpId);
   if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
   if (rfp.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
+
+  // 결제수단 범위 검증: PG는 구매사가 요청한 수단만 제안할 수 있다.
+  // requiredPaymentMethods 가 비어 있으면 (= 제한 없음) 9종 enum 키는 자유 허용.
+  const required = rfp.requiredPaymentMethods;
+  if (required.length > 0) {
+    for (const method of Object.keys(data.paymentFees)) {
+      if (!required.includes(method as (typeof required)[number])) {
+        return { ok: false, error: 'PAYMENT_METHOD_NOT_REQUESTED' };
+      }
+    }
+  }
+  // 커스텀 수단은 항상 RFP에 선언된 id 집합으로 제한.
+  const customIds = new Set(rfp.customPaymentMethods.map((m) => m.id));
+  for (const id of Object.keys(data.customFees)) {
+    if (!customIds.has(id)) {
+      return { ok: false, error: 'PAYMENT_METHOD_NOT_REQUESTED' };
+    }
+  }
 
   // 카드 법정 상한 검증
   const cardFee = data.paymentFees.card;
@@ -150,6 +170,7 @@ export async function submitBidAction(
         settleLimit: data.settleLimit,
         guaranteeInsurance: data.guaranteeInsurance,
         paymentFees: data.paymentFees,
+        customFees: data.customFees,
         proposalPdfs: [],
         memo: data.memo,
         status: 'submitted',

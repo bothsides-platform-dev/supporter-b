@@ -118,6 +118,8 @@ export function RfpDetailContent({
           grade={bizProfile?.grade}
           rfpStatus={rfp.status}
           awardedBidId={rfp.awardedBidId}
+          requiredPaymentMethods={rfp.requiredPaymentMethods}
+          customPaymentMethods={rfp.customPaymentMethods}
           pgWsNameMap={pgWsNameMap}
           authorId={authorId}
           authorName={authorName}

@@ -2,7 +2,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { rfps, bizProfiles, rfpAllowedPg } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
-import type { PaymentMethod } from '@/lib/types/bid';
+import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { assertTransition } from '../../rfp-state';
 import type { RfpRepo, Tx } from '../types';
@@ -49,6 +49,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     sentAt: toIso(row.sentAt),
     boardColumnId: row.boardColumnId,
     requiredPaymentMethods: (row.requiredPaymentMethods ?? []) as PaymentMethod[],
+    customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
     shareToken: row.shareToken,
   };
 }

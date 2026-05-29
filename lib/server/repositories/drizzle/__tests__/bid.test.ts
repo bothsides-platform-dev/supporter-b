@@ -181,6 +181,35 @@ describe('DrizzleBidRepository — 전체 필드 라운드트립 (명시적 proj
     expect(bid!.submittedAt).toBe('2026-01-15T08:30:00.000Z');
     expect(bid!.boardColumnId).toBeNull();
   });
+
+  it('customFees JSONB 를 누락 없이 라운드트립한다', async () => {
+    const bidId = randomUUID();
+    await ctx.db.insert(bids).values({
+      id: bidId,
+      rfpId: ctx.rfpId,
+      pgWsId: ctx.pgWs.id,
+      invitationId: ctx.invitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      customFees: { 'custom-1': 0.02, 'custom-2': 0.018 },
+      submittedBy: ctx.pgUser.id,
+    });
+
+    const bid = await ctx.repo.findById(bidId);
+
+    expect(bid).toBeDefined();
+    expect(bid!.customFees).toEqual({ 'custom-1': 0.02, 'custom-2': 0.018 });
+  });
+
+  it('customFees 미설정 시 빈 객체', async () => {
+    const { bidId } = await insertBid(ctx.db, ctx, 0);
+
+    const bid = await ctx.repo.findById(bidId);
+
+    expect(bid!.customFees).toEqual({});
+  });
 });
 
 describe('DrizzleBidRepository.findByRfpIds — 배치 조회 (N+1 제거)', () => {

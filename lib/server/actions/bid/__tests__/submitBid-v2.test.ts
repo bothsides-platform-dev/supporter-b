@@ -66,6 +66,7 @@ type Setup = {
 async function seedSetup(
   grade: 'sme2' | 'general' = 'sme2',
   requiredPaymentMethods: string[] = [],
+  customPaymentMethods: { id: string; label: string }[] = [],
 ): Promise<Setup> {
   const buyer = await seedUser(db, { email: 'buyer@test.com' });
   const biz = await seedBizProfile(db);
@@ -92,6 +93,7 @@ async function seedSetup(
     createdBy: buyer.id,
     sentAt: new Date(),
     requiredPaymentMethods,
+    customPaymentMethods,
   });
 
   const invId = randomUUID();
@@ -249,5 +251,85 @@ describe('submitBidAction v2 — payment_fees model', () => {
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  function pgSession(s: Setup) {
+    return {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg' as const,
+        role: 'admin' as const,
+      },
+    };
+  }
+
+  it('요청되지 않은 결제수단에 요율 제출 → PAYMENT_METHOD_NOT_REQUESTED', async () => {
+    const s = await seedSetup('general', ['bank_transfer']);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      paymentFees: { card: 0.01 }, // card는 요청 목록에 없음
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('PAYMENT_METHOD_NOT_REQUESTED');
+  });
+
+  it('요청된 결제수단만 제출 → 허용', async () => {
+    const s = await seedSetup('general', ['card', 'bank_transfer']);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      paymentFees: { card: 0.01, bank_transfer: 0.002 },
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('requiredPaymentMethods 빈 배열 → 모든 결제수단 자유 허용', async () => {
+    const s = await seedSetup('general', []);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      paymentFees: { card: 0.01, naver_pay: 0.02 },
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('커스텀 결제수단 요율 제출 → customFees 저장', async () => {
+    const s = await seedSetup('general', [], [{ id: 'c1', label: '포인트' }]);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      paymentFees: { bank_transfer: 0.001 },
+      customFees: { c1: 0.02 },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(row.customFees).toEqual({ c1: 0.02 });
+  });
+
+  it('선언되지 않은 커스텀 id로 요율 제출 → PAYMENT_METHOD_NOT_REQUESTED', async () => {
+    const s = await seedSetup('general', [], [{ id: 'c1', label: '포인트' }]);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      paymentFees: { bank_transfer: 0.001 },
+      customFees: { unknown: 0.02 },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('PAYMENT_METHOD_NOT_REQUESTED');
   });
 });

@@ -11,8 +11,18 @@ import { Select } from '@/components/primitives/Select';
 import { StatutoryCardFeeNotice } from './StatutoryCardFeeNotice';
 import { useBidDraft, type BidDraft } from './useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
-import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
+import {
+  PAYMENT_METHOD_CATEGORIES,
+  PAYMENT_METHOD_LABELS,
+  STATUTORY_CARD_FEE,
+  type CustomPaymentMethod,
+  type PaymentMethod,
+} from '@/lib/types/bid';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
+
+const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap(
+  (c) => c.methods,
+);
 import {
   PercentInput,
   CurrencyInput,
@@ -36,15 +46,24 @@ const ERROR_LABELS: Record<string, string> = {
   INVITATION_NOT_FOUND: '초대 내역을 찾을 수 없습니다.',
   BID_ALREADY_SUBMITTED: '이미 제안을 제출하셨습니다.',
   CARD_FEE_EXCEEDS_STATUTORY_CAP: '카드 수수료가 법정 상한을 초과합니다.',
+  PAYMENT_METHOD_NOT_REQUESTED: '구매사가 요청하지 않은 결제수단입니다.',
 };
 
 type Props = {
   rfpId: string;
   rfpCode: string;
   grade: MerchantGrade | undefined;
+  requiredPaymentMethods: PaymentMethod[];
+  customPaymentMethods: CustomPaymentMethod[];
 };
 
-export function BidForm({ rfpId, rfpCode, grade }: Props) {
+export function BidForm({
+  rfpId,
+  rfpCode,
+  grade,
+  requiredPaymentMethods,
+  customPaymentMethods,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -54,17 +73,19 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
   // Destructured below so read sites stay `cycleUnit`/`settleLimit`/…; writes go
   // through setField, which keeps the save-effect dependency a single value.
   const [fields, setFields] = useState<BidDraft>({
+    __v: 2,
     cycleUnit: 'D',
     cycleNum: '1',
     settleLimit: '0',
     guaranteeInsurance: '0',
-    bankPct: '0.50',
-    cardPct: '',
+    fees: {},
     memo: '',
   });
   const setField = <K extends keyof BidDraft>(key: K, value: BidDraft[K]) =>
     setFields((f) => ({ ...f, [key]: value }));
-  const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, bankPct, cardPct, memo } = fields;
+  const setFee = (key: string, value: string) =>
+    setFields((f) => ({ ...f, fees: { ...f.fees, [key]: value } }));
+  const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, fees, memo } = fields;
 
   // 임시 저장
   const { draft, saveDraft, clearDraft } = useBidDraft(rfpId);
@@ -129,13 +150,25 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
   const allowCardInput = grade === undefined || grade === 'general';
   const cardFeeStatutory = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
 
+  // 구매사가 요청한 수단 (빈 배열 = 제한 없음 → 9종 전체). capped 등급의 card는
+  // 법정 고정이라 입력칸을 만들지 않고, paymentFees에도 싣지 않는다(비교표가 등급에서 산출).
+  const enumMethods = requiredPaymentMethods.length > 0 ? requiredPaymentMethods : ALL_PAYMENT_METHODS;
+  const feeInputMethods = enumMethods.filter((m) => !(m === 'card' && !allowCardInput));
+  const hasStatutoryCard = enumMethods.includes('card') && !allowCardInput;
+
   const settleCycle = `${cycleUnit}+${cycleNum || '1'}`;
+
+  const feeFilled = (key: string) => (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
+  const anyFeeFilled =
+    hasStatutoryCard ||
+    feeInputMethods.some((m) => feeFilled(m)) ||
+    customPaymentMethods.some((c) => feeFilled(c.id));
 
   const canSubmit =
     !pending &&
     !proposalUploading &&
     cycleNum !== '' && parseInt(cycleNum) > 0 &&
-    bankPct !== '' && parseFloat(bankPct) >= 0;
+    anyFeeFilled;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,11 +182,15 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
 
     const pct = (s: string) => parseFloat(s) / 100;
 
-    const paymentFees: Record<string, number> = {
-      bank_transfer: pct(bankPct),
-    };
-    if (allowCardInput && cardPct !== '') {
-      paymentFees.card = pct(cardPct);
+    const paymentFees: Partial<Record<PaymentMethod, number>> = {};
+    for (const m of feeInputMethods) {
+      const v = fees[m] ?? '';
+      if (v !== '') paymentFees[m] = pct(v);
+    }
+    const customFees: Record<string, number> = {};
+    for (const c of customPaymentMethods) {
+      const v = fees[c.id] ?? '';
+      if (v !== '') customFees[c.id] = pct(v);
     }
 
     startTransition(async () => {
@@ -163,6 +200,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
         settleLimit: parseInt(settleLimit) || 0,
         guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
         paymentFees,
+        customFees,
         proposalAttachmentId: proposalReady ? proposal.id : undefined,
         memo: memo.trim() || undefined,
       });
@@ -272,10 +310,22 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-          <PercentInput label="계좌이체 수수료 *" value={bankPct} onChange={(v) => setField('bankPct', v)} placeholder="0.50" />
-          {allowCardInput && (
-            <PercentInput label="카드 수수료" value={cardPct} onChange={(v) => setField('cardPct', v)} placeholder="1.25" />
-          )}
+          {feeInputMethods.map((m) => (
+            <PercentInput
+              key={m}
+              label={`${PAYMENT_METHOD_LABELS[m]} 수수료`}
+              value={fees[m] ?? ''}
+              onChange={(v) => setFee(m, v)}
+            />
+          ))}
+          {customPaymentMethods.map((c) => (
+            <PercentInput
+              key={c.id}
+              label={`${c.label} 수수료`}
+              value={fees[c.id] ?? ''}
+              onChange={(v) => setFee(c.id, v)}
+            />
+          ))}
         </div>
       </section>
 
@@ -369,7 +419,7 @@ export function BidForm({ rfpId, rfpCode, grade }: Props) {
 
       {!canSubmit && !pending && (
         <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-          · 정산주기 및 계좌이체 수수료 입력 필요
+          · 정산주기 및 수수료 1개 이상 입력 필요
         </p>
       )}
 

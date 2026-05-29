@@ -3,7 +3,7 @@
 import { Chip } from '@/components/primitives/Chip';
 import { FileTextIcon } from '@/components/icons';
 import { formatKRW, formatPct } from '@/lib/format';
-import type { Bid } from '@/lib/types/bid';
+import { PAYMENT_METHOD_LABELS, type Bid, type PaymentMethod } from '@/lib/types/bid';
 
 // Presentational bid card for the rfp_bids board's renderCard slot. Drag is the
 // board's DraggableCard wrapper; awarded state shows a "낙찰" chip (decoupled
@@ -22,6 +22,8 @@ export function BidCard({
   onClick: () => void;
 }) {
   const hasPdf = bid.proposalPdfs.length > 0;
+  // 제출한 enum 결제수단 요율을 요약(카드 teaser라 최대 3개). 커스텀은 상세 모달/표에서.
+  const feeLines = (Object.entries(bid.paymentFees) as [PaymentMethod, number][]).slice(0, 3);
   return (
     <button
       type="button"
@@ -38,7 +40,9 @@ export function BidCard({
       <div className="space-y-1.5">
         <KpiLine label="정산" value={bid.settleCycle} />
         <KpiLine label="정산한도" value={formatKRW(bid.settleLimit)} />
-        <KpiLine label="계좌이체" value={bid.paymentFees.bank_transfer !== undefined ? formatPct(bid.paymentFees.bank_transfer) : '—'} />
+        {feeLines.map(([method, fee]) => (
+          <KpiLine key={method} label={PAYMENT_METHOD_LABELS[method]} value={formatPct(fee)} />
+        ))}
       </div>
 
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--md-sys-color-outline-variant)]">
