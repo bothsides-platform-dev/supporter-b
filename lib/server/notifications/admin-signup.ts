@@ -17,9 +17,11 @@ export type AdminSignupNotice = {
   reviewUrl: string;
 };
 
+// admin review UI(대시보드·심사 페이지)와 동일 라벨을 사용한다 — 운영자가 메일과
+// 클릭 후 도착 화면에서 같은 용어를 보도록(dashboard.ts / review 페이지: buyer→구매사, pg→PG사).
 const ORG_LABEL: Record<AdminSignupNotice['orgType'], string> = {
   buyer: '구매사',
-  pg: '결제대행사',
+  pg: 'PG사',
 };
 
 export function buildAdminSignupSubject(notice: AdminSignupNotice): string {

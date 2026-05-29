@@ -14,13 +14,13 @@ describe('buildAdminSignupSubject', () => {
     expect(subject).toContain('구매사');
   });
 
-  it('labels a pg workspace as 결제대행사', () => {
+  it('labels a pg workspace as PG사 (matching the admin review UI)', () => {
     const subject = buildAdminSignupSubject({
       workspaceName: 'KG이니시스',
       orgType: 'pg',
       reviewUrl: 'https://x.test/admin/review/a2',
     });
     expect(subject).toContain('KG이니시스');
-    expect(subject).toContain('결제대행사');
+    expect(subject).toContain('PG사');
   });
 });

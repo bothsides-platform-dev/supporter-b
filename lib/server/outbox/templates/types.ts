@@ -1,4 +1,6 @@
-// Props for the 7 react-email templates wired to outbox events.
+// Props for the react-email templates. Most are wired to outbox events; the
+// exception is AdminSignupReviewProps, whose template is rendered directly by
+// the admin-signup notifier (sendAdminEmail), not through the outbox dispatcher.
 // Each interface mirrors what the corresponding action passes when it builds
 // the email body. Keep this file dependency-free so it can be imported from
 // templates, actions, and tests without pulling React.
