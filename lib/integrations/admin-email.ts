@@ -15,12 +15,21 @@ import { Resend } from 'resend';
 
 const DEFAULT_FROM = 'send@supporter-b.store';
 
+// ADMIN_NOTIFY_EMAIL 은 ',' 로 구분된 여러 주소를 허용한다. 공백 trim 후 빈 항목 제거.
+function parseRecipients(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 export async function sendAdminEmail(args: {
   subject: string;
   html: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const to = process.env.ADMIN_NOTIFY_EMAIL;
-  if (!to) {
+  const recipients = parseRecipients(process.env.ADMIN_NOTIFY_EMAIL);
+  if (recipients.length === 0) {
     console.log(
       `[admin-email DEV] no ADMIN_NOTIFY_EMAIL set; skipped subject=${args.subject}`,
     );
@@ -30,7 +39,7 @@ export async function sendAdminEmail(args: {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     // html 은 의도적으로 제외 — 공유 터미널 스크롤백에 본문/링크 노출 방지.
-    console.log(`[admin-email DEV] to=${to} subject=${args.subject}`);
+    console.log(`[admin-email DEV] to=${recipients.join(',')} subject=${args.subject}`);
     return { ok: true };
   }
 
@@ -38,7 +47,7 @@ export async function sendAdminEmail(args: {
     const client = new Resend(apiKey);
     const result = await client.emails.send({
       from: process.env.RESEND_FROM ?? DEFAULT_FROM,
-      to,
+      to: recipients,
       subject: args.subject,
       html: args.html,
     });

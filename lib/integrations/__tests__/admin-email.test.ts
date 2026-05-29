@@ -82,10 +82,34 @@ describe('sendAdminEmail', () => {
     expect(result).toEqual({ ok: true });
     expect(sendMock).toHaveBeenCalledWith({
       from: 'noreply@bidit.test',
-      to: 'ops@bidit.test',
+      to: ['ops@bidit.test'],
       subject: '새 심사 요청',
       html: '<p>hi</p>',
     });
+  });
+
+  it('sends to multiple comma-separated recipients (trimmed, blanks dropped)', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    process.env.ADMIN_NOTIFY_EMAIL = 'a@x.test, b@y.test ,, c@z.test';
+    sendMock.mockResolvedValue({ data: { id: 'm1' }, error: null });
+
+    const { sendAdminEmail } = await import('../admin-email');
+    await sendAdminEmail({ subject: 's', html: 'h' });
+
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({ to: ['a@x.test', 'b@y.test', 'c@z.test'] }),
+    );
+  });
+
+  it('skips when ADMIN_NOTIFY_EMAIL has only blanks/commas', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    process.env.ADMIN_NOTIFY_EMAIL = ' , ,';
+    const { sendAdminEmail } = await import('../admin-email');
+
+    const result = await sendAdminEmail({ subject: 's', html: 'h' });
+
+    expect(result).toEqual({ ok: true });
+    expect(sendMock).not.toHaveBeenCalled();
   });
 
   it('maps a Resend API error to { ok:false }', async () => {
