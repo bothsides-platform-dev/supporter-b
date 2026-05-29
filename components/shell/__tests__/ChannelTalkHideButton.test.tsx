@@ -27,6 +27,25 @@ describe('ChannelTalkHideButton', () => {
     expect(() => render(<ChannelTalkHideButton />)).not.toThrow();
   });
 
+  describe('onHideMessenger (re-hide FAB after messenger closes)', () => {
+    it('registers onHideMessenger on mount', () => {
+      render(<ChannelTalkHideButton />);
+      expect(mockChannelIO).toHaveBeenCalledWith('onHideMessenger', expect.any(Function));
+    });
+
+    it('hides the channel button again when the messenger is closed', () => {
+      render(<ChannelTalkHideButton />);
+      const call = mockChannelIO.mock.calls.find(([cmd]) => cmd === 'onHideMessenger');
+      expect(call).toBeDefined();
+      const onHide = call![1] as () => void;
+
+      mockChannelIO.mockClear();
+      onHide();
+
+      expect(mockChannelIO).toHaveBeenCalledWith('hideChannelButton');
+    });
+  });
+
   describe('async boot (channelio:ready event)', () => {
     it('calls hideChannelButton when channelio:ready fires after mount', () => {
       delete (window as unknown as Record<string, unknown>).ChannelIO;
