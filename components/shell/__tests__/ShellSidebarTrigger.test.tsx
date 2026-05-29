@@ -23,9 +23,14 @@ class ResizeObserverStub {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
+let mockIsMobile = false;
 vi.mock('@/hooks/use-mobile', () => ({
-  useIsMobile: () => false,
+  useIsMobile: () => mockIsMobile,
 }));
+
+afterEach(() => {
+  mockIsMobile = false;
+});
 
 const sidebarProviderStyle = {
   '--sidebar-width': 'var(--shell-sidebar)',
@@ -51,6 +56,12 @@ describe('ShellSidebarTrigger', () => {
   it('shows visible "사이드바 접기" text when expanded', () => {
     renderTrigger(true);
     expect(screen.getByText('사이드바 접기')).toBeVisible();
+  });
+
+  it('hides visible "사이드바 접기" text on mobile even when expanded', () => {
+    mockIsMobile = true;
+    renderTrigger(true);
+    expect(screen.queryByText('사이드바 접기')).not.toBeInTheDocument();
   });
 
   it('hides visible collapse label text when collapsed', () => {
