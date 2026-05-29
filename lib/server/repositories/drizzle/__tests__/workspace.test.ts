@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createPgliteDb } from '@/lib/db/client-pglite';
-import { workspaceLogoBlobs } from '@/lib/db/schema';
+import { workspaceLogoBlobs, workspaces } from '@/lib/db/schema';
 import { DrizzleWorkspaceRepository } from '../workspace';
 import { seedBuyerWorkspace, seedPgWorkspace, seedUser, seedMembership } from './_seed';
 
@@ -76,6 +77,17 @@ describe('DrizzleWorkspaceRepository', () => {
       bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
       mime: 'image/png',
     });
+    await db.update(workspaces).set({ hasLogo: true }).where(eq(workspaces.id, ws.id));
+    const list = await repo.listForUser(u.id);
+    expect(list[0].hasLogo).toBe(true);
+  });
+
+  it('listForUser reads hasLogo from workspaces.has_logo (not logo blob join)', async () => {
+    const ws = await seedBuyerWorkspace(db);
+    const u = await seedUser(db);
+    await seedMembership(db, ws.id, u.id);
+    await db.update(workspaces).set({ hasLogo: true }).where(eq(workspaces.id, ws.id));
+
     const list = await repo.listForUser(u.id);
     expect(list[0].hasLogo).toBe(true);
   });

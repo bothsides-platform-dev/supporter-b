@@ -15,6 +15,13 @@
       "when": 1780085000000,
       "tag": "0001_custom_payment_methods",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780090000000,
+      "tag": "0002_workspace_logo_blobs",
+      "breakpoints": true
     }
   ]
 }

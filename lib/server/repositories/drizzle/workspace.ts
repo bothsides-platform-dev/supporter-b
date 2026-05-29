@@ -181,9 +181,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
             AND channel = 'in_app'
             AND read_at IS NULL
         )`,
-        hasLogo: sql<boolean>`EXISTS (
-          SELECT 1 FROM workspace_logo_blobs WHERE workspace_id = ${workspaces.id}
-        )`,
+        hasLogo: workspaces.hasLogo,
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
