@@ -39,7 +39,7 @@ export async function createWorkspaceInTx(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any,
   input: CreateWorkspaceInput,
-): Promise<{ workspaceId: string }> {
+): Promise<{ workspaceId: string; applicationId: string }> {
   let bizProfileId: string | null = null;
   if (input.type === 'buyer' && input.bizProfile) {
     bizProfileId = randomUUID();
@@ -72,8 +72,12 @@ export async function createWorkspaceInTx(
     .set({ lastActiveWorkspaceId: wsId })
     .where(eq(users.id, input.userId));
 
-  // Insert a verification application for admin review.
+  // Insert a verification application for admin review. Its id is returned so
+  // callers can build the admin review link (/admin/review/{applicationId})
+  // for the new-signup notification.
+  const applicationId = randomUUID();
   await tx.insert(verificationApplications).values({
+    id: applicationId,
     workspaceId: wsId,
     orgType: input.type,
   });
@@ -82,5 +86,5 @@ export async function createWorkspaceInTx(
   // both pipeline + rfp_bids boards; pg gets only pipeline.
   await tx.insert(columns).values(defaultColumns(wsId, input.type));
 
-  return { workspaceId: wsId };
+  return { workspaceId: wsId, applicationId };
 }

@@ -51,3 +51,9 @@ export interface WorkspaceInvitedProps {
   workspaceName: string;
   inviteUrl: string;
 }
+
+export interface AdminSignupReviewProps {
+  workspaceName: string;
+  orgLabel: string;
+  reviewUrl: string;
+}

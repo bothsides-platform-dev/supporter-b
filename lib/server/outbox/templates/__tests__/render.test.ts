@@ -7,6 +7,7 @@
 // `render()` is async (react-email v2). Each helper is awaited.
 import { describe, expect, it } from 'vitest';
 
+import { renderAdminSignupReview } from '../adminSignupReview';
 import { renderAuthEmailChange } from '../authEmailChange';
 import { renderAuthReset } from '../authReset';
 import { renderAuthVerify } from '../authVerify';
@@ -114,6 +115,18 @@ describe('outbox email templates / render', () => {
     expect(html).toContain('P-2605-0042');
     expect(html).toContain('1f4c7a2e-1234-4abc-9def-0123456789ab');
     expect(html).toContain('D+1');
+    expectEditorialRules(html);
+  });
+
+  it('adminSignupReview includes workspace name, org label and review URL', async () => {
+    const html = await renderAdminSignupReview({
+      workspaceName: '토스페이먼츠',
+      orgLabel: '결제대행사',
+      reviewUrl: 'https://bidit.test/admin/review/app-123',
+    });
+    expect(html).toContain('토스페이먼츠');
+    expect(html).toContain('결제대행사');
+    expect(html).toContain('https://bidit.test/admin/review/app-123');
     expectEditorialRules(html);
   });
 });
