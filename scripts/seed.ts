@@ -96,9 +96,9 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   const kakaoUserId = randomUUID();
 
   const buyerEmail = 'yeonseong.dev@gmail.com';
-  const tossEmail = 'ws-toss-admin@toss.im';
-  const inicisEmail = 'ws-inicis-admin@inicis.com';
-  const kakaoEmail = 'ws-kakao-admin@kakaopay.com';
+  const tossEmail = 'ws-toss-admin@example.com';
+  const inicisEmail = 'ws-inicis-admin@example.com';
+  const kakaoEmail = 'ws-kakao-admin@example.com';
 
   await db.insert(users).values([
     {
