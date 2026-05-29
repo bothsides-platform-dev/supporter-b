@@ -112,6 +112,26 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     expect(u.phone).toBe(BASE.phone);
   });
 
+  it('하이픈 형식 입력 — 숫자 OTP와 매칭하고 users.phone은 숫자로 저장', async () => {
+    // 프론트는 010-1234-5678 하이픈 형식으로 제출하지만 OTP는 숫자로 저장됨.
+    const verificationId = await seedVerifiedOtp('01012345678');
+
+    const r = await signupCompleteAction({
+      ...BASE,
+      phone: '010-1234-5678',
+      phoneVerificationId: verificationId,
+    });
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [u] = await db
+      .select({ phone: users.phone })
+      .from(users)
+      .where(eq(users.email, BASE.email));
+    expect(u.phone).toBe('01012345678');
+  });
+
   it('정상 가입 시 운영자 이메일 승인요청 알림을 트리거한다', async () => {
     notifyMock.mockClear();
     const verificationId = await seedVerifiedOtp(BASE.phone);

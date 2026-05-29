@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { sendPhoneOtpAction } from '@/lib/server/actions/auth/sendPhoneOtpAction';
 import { verifyPhoneOtpAction } from '@/lib/server/actions/auth/verifyPhoneOtpAction';
+import { formatPhoneInput, isCompletePhone } from '@/lib/phone';
 
 const OTP_TTL_SECONDS = 5 * 60;
 
@@ -20,10 +21,39 @@ export function PhoneVerificationField({ onVerified }: Props) {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const caretRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
+
+  // Restore caret after hyphen masking so editing mid-string doesn't jump the
+  // cursor to the end. caretRef holds the target offset computed in onChange.
+  useLayoutEffect(() => {
+    if (caretRef.current !== null && inputRef.current) {
+      inputRef.current.setSelectionRange(caretRef.current, caretRef.current);
+      caretRef.current = null;
+    }
+  }, [phone]);
+
+  function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const el = e.target;
+    const raw = el.value;
+    const selStart = el.selectionStart ?? raw.length;
+    const digitsBeforeCaret = raw.slice(0, selStart).replace(/\D/g, '').length;
+    const formatted = formatPhoneInput(raw);
+    // Map the digit-count caret back to an offset in the formatted string.
+    let pos = 0;
+    let seen = 0;
+    while (pos < formatted.length && seen < digitsBeforeCaret) {
+      if (/\d/.test(formatted[pos])) seen++;
+      pos++;
+    }
+    caretRef.current = pos;
+    setPhone(formatted);
+    setPhoneError(null);
+  }
 
   function startCountdown() {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -73,9 +103,8 @@ export function PhoneVerificationField({ onVerified }: Props) {
     }
     if (timerRef.current) clearInterval(timerRef.current);
     setStep('verified');
-    // normalize: remove hyphens for storage
-    const normalized = phone.replace(/[\s\-]/g, '');
-    onVerified(normalized, r.verificationId);
+    // Submit the hyphenated format as-is; the server normalizes for storage.
+    onVerified(phone, r.verificationId);
   }
 
   async function handleResend() {
@@ -101,10 +130,12 @@ export function PhoneVerificationField({ onVerified }: Props) {
         </label>
         <div className="flex gap-2 items-end">
           <input
+            ref={inputRef}
             id="phone"
             type="tel"
+            inputMode="numeric"
             value={phone}
-            onChange={(e) => { setPhone(e.target.value); setPhoneError(null); }}
+            onChange={handlePhoneChange}
             autoComplete="tel"
             placeholder="010-0000-0000"
             disabled={step === 'verified' || sending}
@@ -114,7 +145,7 @@ export function PhoneVerificationField({ onVerified }: Props) {
             <button
               type="button"
               onClick={handleSend}
-              disabled={!phone.trim() || sending}
+              disabled={!isCompletePhone(phone) || sending}
               className="shrink-0 px-3 py-1.5 text-[11px] font-mono tracking-[0.1em] uppercase border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] rounded-[6px] disabled:opacity-40 hover:border-[var(--md-sys-color-on-surface)] transition-colors"
             >
               {sending ? 'LOADING…' : step === 'otp' ? '재전송' : '인증하기'}
