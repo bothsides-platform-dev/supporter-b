@@ -1,30 +1,24 @@
 #!/usr/bin/env bash
-# One-time provisioning for a fresh AWS Lightsail "Amazon Linux 2" instance.
+# One-time provisioning for a fresh AWS Lightsail "Amazon Linux 2023" instance.
 # Run as the default `ec2-user` (has passwordless sudo). Idempotent-ish:
 # safe to re-run; existing installs are skipped.
 #
 #   bash scripts/deploy/lightsail-bootstrap.sh
 #
-# Installs: 2GB swap, Node 22 (glibc-217 build — see GLIBC NOTE), pnpm 9
-# (corepack), Docker + compose v2, PM2, Caddy (static binary + systemd unit).
+# Installs: 2GB swap, Node 22 (official binary — AL2023 has glibc 2.34, so no
+# workaround needed), pnpm 9 (corepack), Docker + compose v2, PM2, Caddy
+# (static binary + systemd unit).
 #
 # ── NO host firewall by design ──────────────────────────────────────────────
 # AWS Lightsail's CONSOLE firewall (instance → Networking tab) filters traffic
 # at the AWS edge, exactly like a Security Group. That is the firewall. Open
-# 80 + 443 THERE (22 is open by default). Amazon Linux 2 ships no ufw, and
+# 80 + 443 THERE (22 is open by default). Amazon Linux 2023 ships no ufw, and
 # firewalld is not enabled on the Lightsail image — a host firewall would only
 # duplicate the console rules. Postgres binds 127.0.0.1 only (compose), so the
 # sole public listeners are Caddy (80/443, intentional) and SSH (22). Nothing
 # for a host firewall to protect that the console firewall doesn't already.
 # (This is the Lightsail analogue of the OCI VCN gotcha — different mechanism:
 #  OCI needed iptables surgery; Lightsail needs a console click. See the runbook.)
-#
-# ── GLIBC NOTE ───────────────────────────────────────────────────────────────
-# Amazon Linux 2 ships glibc 2.26; official Node 18+ binaries require glibc 2.28+
-# (`version 'GLIBC_2.28' not found`). We install the nodejs.org *unofficial*
-# glibc-217 build, which runs on 2.26. If you'd rather not depend on an
-# unofficial build, recreate the instance on **Amazon Linux 2023** (glibc 2.34)
-# and swap step 3 for the standard NodeSource install (`dnf` based).
 set -euo pipefail
 
 NODE_VERSION="${NODE_VERSION:-22.11.0}"
@@ -47,16 +41,18 @@ else
   log "Swap already present — skipping"
 fi
 
-# --- 2. Base packages (yum) -------------------------------------------------
-log "yum update + base packages"
-sudo yum update -y
-sudo yum install -y git tar xz gzip curl shadow-utils
+# --- 2. Base packages (dnf) -------------------------------------------------
+# Don't install `curl`: AL2023 ships `curl-minimal` which provides the curl
+# command; `dnf install curl` would hit a file conflict.
+log "dnf update + base packages"
+sudo dnf -y update
+sudo dnf -y install git tar xz gzip shadow-utils
 
-# --- 3. Node 22 (glibc-217 unofficial build — AL2 compatible) ---------------
+# --- 3. Node 22 (official linux-x64 binary; AL2023 glibc 2.34 is fine) -------
 if ! command -v node >/dev/null 2>&1 || [ "$(node -v 2>/dev/null | cut -d. -f1)" != "v22" ]; then
-  log "Installing Node ${NODE_VERSION} (glibc-217 build for AL2)"
+  log "Installing Node ${NODE_VERSION} (official binary) to /usr/local"
   tmp="$(mktemp -d)"
-  url="https://unofficial-builds.nodejs.org/download/release/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64-glibc-217.tar.xz"
+  url="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz"
   curl -fsSL "$url" -o "$tmp/node.tar.xz"
   sudo tar -xJf "$tmp/node.tar.xz" -C /usr/local --strip-components=1
   rm -rf "$tmp"
@@ -81,8 +77,8 @@ fi
 
 # --- 6. Docker + compose v2 (for the same-box Postgres container) -----------
 if ! command -v docker >/dev/null 2>&1; then
-  log "Installing Docker (amazon-linux-extras)"
-  sudo amazon-linux-extras install -y docker
+  log "Installing Docker (dnf)"
+  sudo dnf -y install docker
   sudo systemctl enable --now docker
   sudo usermod -aG docker "$USER"
   echo "NOTE: log out/in (or run 'newgrp docker') for docker group to take effect."
@@ -102,9 +98,9 @@ else
 fi
 
 # --- 7. Caddy (static binary + systemd unit) --------------------------------
-# AL2 has no apt and no official Caddy yum repo, so we drop the static binary in
-# and write the standard systemd unit. CAP_NET_BIND_SERVICE lets the non-root
-# caddy user bind 80/443. {$APP_DOMAIN} in the Caddyfile is read from caddy.env.
+# Distro-agnostic: drop the static binary in and write the standard systemd
+# unit. CAP_NET_BIND_SERVICE lets the non-root caddy user bind 80/443.
+# {$APP_DOMAIN} in the Caddyfile is read from caddy.env.
 if ! command -v caddy >/dev/null 2>&1; then
   log "Installing Caddy (static binary)"
   tmp="$(mktemp -d)"

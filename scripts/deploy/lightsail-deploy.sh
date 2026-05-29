@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build + release the app on an AWS Lightsail "Amazon Linux 2" instance.
+# Build + release the app on an AWS Lightsail "Amazon Linux 2023" instance.
 # Run from the repo root after lightsail-bootstrap.sh and after .env.production
 # is filled in.
 #
