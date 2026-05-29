@@ -5,6 +5,7 @@ import { formatDeadline } from '@/lib/format';
 import type { BoardCard } from '@/lib/types/column';
 import type { BuyerKanbanCard } from '@/lib/server/buyer-kanban';
 import type { PgKanbanCard } from '@/lib/server/pg-kanban';
+import { useRecentlyViewedInbox } from '@/lib/stores/recently-viewed-inbox';
 
 // Presentational pipeline card (RFP for buyer / invitation for pg) for the
 // unified board's renderCard slot. Drag is handled by the board's DraggableCard
@@ -72,9 +73,12 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
 
 function PgBody({ card }: { card: PgKanbanCard }) {
   const isResult = card.stage === 'won' || card.stage === 'lost';
+  const isViewed = useRecentlyViewedInbox((s) => s.isViewed);
+  const showRecentBadge = card.stage === 'received' && isViewed(card.rfpId);
   return (
     <div className="space-y-2">
       <CardHead code={card.rfpId} deadline={card.deadline} hideDday={isResult} />
+      {showRecentBadge && <Chip label="최근 조회" color="surface" />}
       <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)] line-clamp-2">
         {card.title}
       </p>

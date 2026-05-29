@@ -60,7 +60,6 @@ const STATUS_LABELS = {
   },
   '/inbox': {
     new: '신규',
-    draft: '작성중',
     submitted: '제출완료',
     closed: '마감',
   },

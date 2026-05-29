@@ -78,13 +78,11 @@ describe('getNavConfig — pg inbox section', () => {
     expect(inbox?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'i' });
     expect(inbox?.statuses?.map((s) => s.status)).toEqual([
       'new',
-      'draft',
       'submitted',
       'closed',
     ]);
     expect(inbox?.statuses?.map((s) => s.label)).toEqual([
       '신규',
-      '작성중',
       '제출완료',
       '마감',
     ]);
@@ -162,7 +160,7 @@ describe('getChordMap', () => {
     });
   });
 
-  it('routes the pg "g" chords (i for inbox, no r/c) incl. messages m, inbox statuses 1-4', () => {
+  it('routes the pg "g" chords (i for inbox, no r/c) incl. messages m, inbox statuses 1-3', () => {
     expect(getChordMap('pg')).toEqual({
       h: '/home',
       n: '/notifications',
@@ -170,9 +168,8 @@ describe('getChordMap', () => {
       i: '/inbox',
       s: '/settings/profile',
       '1': '/inbox?status=new',
-      '2': '/inbox?status=draft',
-      '3': '/inbox?status=submitted',
-      '4': '/inbox?status=closed',
+      '2': '/inbox?status=submitted',
+      '3': '/inbox?status=closed',
       p: '/settings/profile',
       t: '/settings/members',
     });
@@ -228,7 +225,6 @@ describe('submenu shortcuts', () => {
       { kind: 'chord', lead: 'g', key: '1' },
       { kind: 'chord', lead: 'g', key: '2' },
       { kind: 'chord', lead: 'g', key: '3' },
-      { kind: 'chord', lead: 'g', key: '4' },
     ]);
   });
 });

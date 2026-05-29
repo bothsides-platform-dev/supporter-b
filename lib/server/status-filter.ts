@@ -10,7 +10,6 @@
 //
 // Inbox mapping (invitation-level):
 //   new       → invitation_status 'sent'       (kind: invStatus)
-//   draft     → invitation_status 'opened'     (kind: invStatus)
 //   submitted → invitation_status 'accepted'   (kind: invStatus)
 //   closed    → rfp_status 'closed'            (kind: rfpStatus — no inv enum for this)
 //   undefined / '' → undefined (show all)
@@ -52,7 +51,6 @@ export type InboxFilterMapped =
 
 const INBOX_PARAM_MAP: Record<string, InboxFilterMapped> = {
   new: { kind: 'invStatus', value: 'sent' },
-  draft: { kind: 'invStatus', value: 'opened' },
   submitted: { kind: 'invStatus', value: 'accepted' },
   // 'closed' has no invitation enum value; it means the parent RFP is closed.
   closed: { kind: 'rfpStatus', value: 'closed' },
