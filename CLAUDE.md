@@ -142,7 +142,7 @@ TDD 사이클 중 단일 파일만 실행: `pnpm test <path-to-test>` — RED/GR
 
 ## Worktree Workflow
 
-모든 기능 개발·버그픽스는 **worktree 브랜치**에서 진행한다. main은 항상 clean 상태 유지.
+모든 기능 개발·버그픽스는 **worktree 브랜치**에서 진행한다. dev는 항상 clean 상태 유지.
 
 - 새 작업 시작 시 `EnterWorktree` (네이티브 도구)로 `.worktrees/<branch-name>` 생성
 - Worktree 디렉터리: `.worktrees/` (`.gitignore`에 등록됨)
