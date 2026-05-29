@@ -34,6 +34,12 @@ export const PAYMENT_METHOD_CATEGORIES: {
   { label: '기타', methods: ['mobile', 'gift_card'] },
 ];
 
+// 구매사 직접입력 커스텀 결제수단. id는 서버가 발급(클라는 label만 전송).
+export type CustomPaymentMethod = {
+  id: string;
+  label: string;
+};
+
 export const STATUTORY_CARD_FEE: Record<MerchantGrade, number> = {
   small: 0.005,
   sme1: 0.011,
@@ -55,6 +61,8 @@ export type Bid = {
   guaranteeInsurance: number;
   // 결제수단별 수수료 (key: PaymentMethod, value: 소수 요율)
   paymentFees: Partial<Record<PaymentMethod, number>>;
+  // 커스텀 결제수단별 수수료 (key: CustomPaymentMethod.id, value: 소수 요율)
+  customFees: Record<string, number>;
   proposalPdfs: Attachment[];
   memo?: string;
   status: 'draft' | 'submitted' | 'withdrawn';

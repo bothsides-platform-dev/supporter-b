@@ -1,6 +1,6 @@
 import type { Attachment } from './common';
 import type { BizProfile } from './biz-profile';
-import type { PaymentMethod } from './bid';
+import type { CustomPaymentMethod, PaymentMethod } from './bid';
 
 export type RfpStatus = 'draft' | 'sent' | 'closed' | 'cancelled' | 'awarded';
 
@@ -34,6 +34,8 @@ export type RFP = {
   boardColumnId?: string | null;
   // 구매사가 요청한 결제수단 목록. PG사는 이 수단만 견적. 빈 배열 = 제한 없음.
   requiredPaymentMethods: PaymentMethod[];
+  // 구매사 직접입력 커스텀 결제수단 (id + 라벨). PG는 id로 customFees 제출.
+  customPaymentMethods: CustomPaymentMethod[];
   // RFP-scoped permanent share token (raw). Populated by the repo layer; only
   // surfaced server-side for the buyer's detail page → never serialised to PG
   // clients. Optional on type so PG-side renders that omit it stay sound.

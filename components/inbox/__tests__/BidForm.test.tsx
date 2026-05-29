@@ -1,10 +1,12 @@
-// BidForm 제출 성공 후 네비게이션 — 항상 /inbox/<code>/submitted 로 이동.
+// BidForm — 결제수단 동적 렌더 + 제출 분리(paymentFees / customFees) + 드래프트 복원.
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from '@/lib/http';
 import { HTTPError } from 'ky';
 import type { NormalizedOptions, ResponsePromise } from 'ky';
+import type { MerchantGrade } from '@/lib/types/biz-profile';
+import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 
 class ResizeObserverStub {
   observe() {}
@@ -40,11 +42,39 @@ afterEach(() => {
   submitBidMock.mockClear();
 });
 
-// grade='small' → 법정 카드수수료라 카드사 입력 불필요. 계좌이체·간편결제는
-// 기본값(0.50/1.50)이 채워져 있어 즉시 제출 가능.
-function renderForm() {
-  return render(<BidForm rfpId="rfp-1" rfpCode="P-2605-0042" grade="small" />);
+type FormOverrides = {
+  grade?: MerchantGrade | undefined;
+  requiredPaymentMethods?: PaymentMethod[];
+  customPaymentMethods?: CustomPaymentMethod[];
+};
+
+function renderForm(overrides: FormOverrides = {}) {
+  return render(
+    <BidForm
+      rfpId="rfp-1"
+      rfpCode="P-2605-0042"
+      grade={'grade' in overrides ? overrides.grade : 'general'}
+      requiredPaymentMethods={overrides.requiredPaymentMethods ?? ['bank_transfer']}
+      customPaymentMethods={overrides.customPaymentMethods ?? []}
+    />,
+  );
 }
+
+// PercentInput 은 라벨-input aria 연결이 없어 라벨 텍스트의 컨테이너에서 input 을 찾는다.
+function feeInput(labelText: string): HTMLInputElement {
+  const label = screen.getByText(labelText);
+  return label.closest('.space-y-1')!.querySelector('input[type="number"]') as HTMLInputElement;
+}
+
+const draftV2 = (fees: Record<string, string>, memo = '') => ({
+  __v: 2,
+  cycleUnit: 'D',
+  cycleNum: '1',
+  settleLimit: '0',
+  guaranteeInsurance: '0',
+  fees,
+  memo,
+});
 
 describe('BidForm 제안서 업로드', () => {
   it('파일 선택 시 http.post로 업로드 후 성공 상태 설정', async () => {
@@ -86,6 +116,71 @@ describe('BidForm 제안서 업로드', () => {
   })
 })
 
+describe('BidForm 결제수단 동적 렌더', () => {
+  it('요청된 결제수단마다 수수료 입력칸을 렌더한다', () => {
+    renderForm({ requiredPaymentMethods: ['card', 'bank_transfer'], grade: 'general' });
+    expect(screen.getByText('카드 수수료')).toBeInTheDocument();
+    expect(screen.getByText('계좌이체 수수료')).toBeInTheDocument();
+  });
+
+  it('요청되지 않은 결제수단은 입력칸이 없다', () => {
+    renderForm({ requiredPaymentMethods: ['bank_transfer'], grade: 'general' });
+    expect(screen.queryByText('카드 수수료')).toBeNull();
+    expect(screen.queryByText('가상계좌 수수료')).toBeNull();
+  });
+
+  it('카드 법정상한 등급(capped)이면 카드가 요청돼도 입력칸 대신 법정 안내를 보여준다', () => {
+    renderForm({ requiredPaymentMethods: ['card', 'bank_transfer'], grade: 'sme2' });
+    expect(screen.queryByText('카드 수수료')).toBeNull();
+    expect(screen.getByText(/법정/)).toBeInTheDocument();
+  });
+
+  it('일반(general) 등급이면 카드 입력칸을 렌더한다', () => {
+    renderForm({ requiredPaymentMethods: ['card'], grade: 'general' });
+    expect(screen.getByText('카드 수수료')).toBeInTheDocument();
+  });
+
+  it('커스텀 결제수단마다 라벨로 입력칸을 렌더한다', () => {
+    renderForm({
+      requiredPaymentMethods: ['bank_transfer'],
+      customPaymentMethods: [{ id: 'c1', label: '포인트결제' }],
+      grade: 'general',
+    });
+    expect(screen.getByText('포인트결제 수수료')).toBeInTheDocument();
+  });
+});
+
+describe('BidForm 제출 — paymentFees / customFees 분리', () => {
+  it('enum 요율은 paymentFees, 커스텀 요율은 customFees로 전송한다', async () => {
+    const user = userEvent.setup();
+    renderForm({
+      requiredPaymentMethods: ['bank_transfer'],
+      customPaymentMethods: [{ id: 'c1', label: '포인트결제' }],
+      grade: 'general',
+    });
+
+    await user.type(feeInput('계좌이체 수수료'), '0.50');
+    await user.type(feeInput('포인트결제 수수료'), '2.00');
+
+    await user.click(screen.getByRole('button', { name: /제안 제출/ }));
+    await user.click(screen.getByRole('button', { name: '제안 제출', hidden: false }));
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledOnce());
+    const arg = submitBidMock.mock.calls[0][0] as {
+      paymentFees: Record<string, number>;
+      customFees: Record<string, number>;
+    };
+    expect(arg.paymentFees).toEqual({ bank_transfer: 0.005 });
+    expect(arg.customFees).toEqual({ c1: 0.02 });
+  });
+
+  it('요율을 하나도 입력하지 않으면 제출 버튼이 비활성화된다', () => {
+    renderForm({ requiredPaymentMethods: ['bank_transfer'], grade: 'general' });
+    const submitBtn = screen.getByRole('button', { name: /제안 제출/ });
+    expect(submitBtn).toBeDisabled();
+  });
+});
+
 describe('BidForm 임시 저장 복원 배너', () => {
   it('localStorage에 드래프트가 없으면 복원 배너가 없다', () => {
     renderForm();
@@ -93,57 +188,25 @@ describe('BidForm 임시 저장 복원 배너', () => {
   });
 
   it('localStorage에 드래프트가 있으면 복원 배너를 표시한다', () => {
-    localStorage.setItem(
-      'bid-draft:rfp-1',
-      JSON.stringify({
-        cycleUnit: 'D',
-        cycleNum: '2',
-        settleLimit: '5000000',
-        guaranteeInsurance: '300000',
-        bankPct: '0.30',
-        cardPct: '1.00',
-        memo: '테스트',
-      }),
-    );
+    localStorage.setItem('bid-draft:rfp-1', JSON.stringify(draftV2({ bank_transfer: '0.30' }, '테스트')));
     renderForm();
     expect(screen.getByText(/이전에 작성 중이던 내용이 있습니다/)).toBeInTheDocument();
   });
 
   it('"불러오기" 클릭 시 드래프트 값이 필드에 반영된다', async () => {
     const user = userEvent.setup();
-    localStorage.setItem(
-      'bid-draft:rfp-1',
-      JSON.stringify({
-        cycleUnit: 'W',
-        cycleNum: '2',
-        settleLimit: '5000000',
-        guaranteeInsurance: '300000',
-        bankPct: '0.40',
-        cardPct: '',
-        memo: '복원됨',
-      }),
-    );
+    localStorage.setItem('bid-draft:rfp-1', JSON.stringify(draftV2({ bank_transfer: '0.40' }, '복원됨')));
     renderForm();
     await user.click(screen.getByRole('button', { name: '불러오기' }));
 
     expect(screen.queryByText(/이전에 작성 중이던 내용이 있습니다/)).toBeNull();
     expect((screen.getByPlaceholderText('추가 안내 사항이 있으면 입력하세요.') as HTMLTextAreaElement).value).toBe('복원됨');
+    expect(feeInput('계좌이체 수수료').value).toBe('0.40');
   });
 
   it('"무시" 클릭 시 배너가 사라지고 localStorage 항목이 제거된다', async () => {
     const user = userEvent.setup();
-    localStorage.setItem(
-      'bid-draft:rfp-1',
-      JSON.stringify({
-        cycleUnit: 'D',
-        cycleNum: '1',
-        settleLimit: '0',
-        guaranteeInsurance: '0',
-        bankPct: '0.50',
-        cardPct: '',
-        memo: '',
-      }),
-    );
+    localStorage.setItem('bid-draft:rfp-1', JSON.stringify(draftV2({ bank_transfer: '0.50' })));
     renderForm();
     await user.click(screen.getByRole('button', { name: '무시' }));
 
@@ -153,19 +216,9 @@ describe('BidForm 임시 저장 복원 배너', () => {
 
   it('제출 성공 시 localStorage 드래프트가 제거된다', async () => {
     const user = userEvent.setup();
-    localStorage.setItem(
-      'bid-draft:rfp-1',
-      JSON.stringify({
-        cycleUnit: 'D',
-        cycleNum: '1',
-        settleLimit: '0',
-        guaranteeInsurance: '0',
-        bankPct: '0.50',
-        cardPct: '',
-        memo: '',
-      }),
-    );
+    localStorage.setItem('bid-draft:rfp-1', JSON.stringify(draftV2({ bank_transfer: '0.50' })));
     renderForm();
+    await user.click(screen.getByRole('button', { name: '불러오기' }));
     await user.click(screen.getByRole('button', { name: /제안 제출/ }));
     await user.click(screen.getByRole('button', { name: '제안 제출', hidden: false }));
 
@@ -179,28 +232,13 @@ describe('BidForm 수수료 환산 힌트', () => {
     const user = userEvent.setup();
     renderForm();
 
-    const inputs = screen.getAllByRole('spinbutton');
-    const bankInput = inputs.find(
-      (el) => (el as HTMLInputElement).placeholder === '0.50',
-    ) as HTMLInputElement;
-
-    await user.clear(bankInput);
-    await user.type(bankInput, '0.50');
+    await user.type(feeInput('계좌이체 수수료'), '0.50');
 
     expect(screen.getByText('= 1만원 결제 시 50원')).toBeInTheDocument();
   });
 
-  it('수수료 입력값이 비어있으면 환산 힌트가 표시되지 않는다', async () => {
-    const user = userEvent.setup();
+  it('수수료 입력값이 비어있으면 환산 힌트가 표시되지 않는다', () => {
     renderForm();
-
-    const inputs = screen.getAllByRole('spinbutton');
-    const bankInput = inputs.find(
-      (el) => (el as HTMLInputElement).placeholder === '0.50',
-    ) as HTMLInputElement;
-
-    await user.clear(bankInput);
-
     expect(screen.queryByText(/1만원 결제 시/)).toBeNull();
   });
 });
@@ -209,6 +247,7 @@ describe('BidForm 제출 후 네비게이션', () => {
   it('제출 버튼 클릭 시 confirm 다이얼로그가 열리고 action은 호출되지 않는다', async () => {
     const user = userEvent.setup();
     renderForm();
+    await user.type(feeInput('계좌이체 수수료'), '0.50');
     await user.click(screen.getByRole('button', { name: /제안 제출/ }));
 
     expect(submitBidMock).not.toHaveBeenCalled();
@@ -218,6 +257,7 @@ describe('BidForm 제출 후 네비게이션', () => {
   it('confirm 다이얼로그에서 취소하면 action이 호출되지 않는다', async () => {
     const user = userEvent.setup();
     renderForm();
+    await user.type(feeInput('계좌이체 수수료'), '0.50');
     await user.click(screen.getByRole('button', { name: /제안 제출/ }));
     await user.click(screen.getByRole('button', { name: '취소' }));
 
@@ -228,6 +268,7 @@ describe('BidForm 제출 후 네비게이션', () => {
   it('confirm 다이얼로그에서 확인하면 submitBidAction을 호출하고 /submitted 로 push한다', async () => {
     const user = userEvent.setup();
     renderForm();
+    await user.type(feeInput('계좌이체 수수료'), '0.50');
     await user.click(screen.getByRole('button', { name: /제안 제출/ }));
     await user.click(screen.getByRole('button', { name: '제안 제출', hidden: false }));
 

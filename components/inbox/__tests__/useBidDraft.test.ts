@@ -6,12 +6,12 @@ const RFP_ID = 'rfp-abc';
 const KEY = `bid-draft:${RFP_ID}`;
 
 const SAMPLE_DRAFT = {
+  __v: 2 as const,
   cycleUnit: 'D' as const,
   cycleNum: '1',
   settleLimit: '10000000',
   guaranteeInsurance: '500000',
-  bankPct: '0.50',
-  cardPct: '1.25',
+  fees: { bank_transfer: '0.50', card: '1.25' },
   memo: '메모',
 };
 
@@ -65,6 +65,24 @@ describe('useBidDraft', () => {
 
   it('JSON.parse 실패 시 draft가 null이고 항목이 삭제된다', () => {
     localStorage.setItem(KEY, 'invalid-json{{{');
+    const { result } = renderHook(() => useBidDraft(RFP_ID));
+    expect(result.current.draft).toBeNull();
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('구버전(bankPct/cardPct) 드래프트는 무시하고 항목을 삭제한다', () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        cycleUnit: 'D',
+        cycleNum: '1',
+        settleLimit: '0',
+        guaranteeInsurance: '0',
+        bankPct: '0.50',
+        cardPct: '',
+        memo: '',
+      }),
+    );
     const { result } = renderHook(() => useBidDraft(RFP_ID));
     expect(result.current.draft).toBeNull();
     expect(localStorage.getItem(KEY)).toBeNull();
