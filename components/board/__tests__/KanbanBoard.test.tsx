@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 class ResizeObserverStub {
@@ -80,50 +80,22 @@ describe('KanbanBoard', () => {
     expect(screen.getByText('보류된 RFP')).toBeInTheDocument();
   });
 
-  it('a custom column menu offers delete; a system column does not', async () => {
+  it('does not expose an add-column control', () => {
+    renderBoard();
+    expect(screen.queryByRole('button', { name: /열 추가/ })).not.toBeInTheDocument();
+  });
+
+  it('custom column menu does not offer delete', async () => {
     const user = userEvent.setup();
     renderBoard();
-
-    // custom column → delete available
     await user.click(screen.getByRole('button', { name: '보류 컬럼 메뉴' }));
-    expect(await screen.findByRole('button', { name: '컬럼 삭제' })).toBeInTheDocument();
-
-    // system column → no delete (locked)
-    await user.click(screen.getByRole('button', { name: '작성중 컬럼 메뉴' }));
     expect(screen.queryByRole('button', { name: '컬럼 삭제' })).not.toBeInTheDocument();
   });
 
-  it('exposes an add-column control', () => {
-    renderBoard();
-    expect(screen.getByRole('button', { name: /열 추가/ })).toBeInTheDocument();
-  });
-
-  it('clicking 컬럼 삭제 opens confirm dialog without calling deleteColumnAction', async () => {
+  it('system column menu also does not offer delete', async () => {
     const user = userEvent.setup();
     renderBoard();
-    await user.click(screen.getByRole('button', { name: '보류 컬럼 메뉴' }));
-    await user.click(await screen.findByRole('button', { name: '컬럼 삭제' }));
-    expect(deleteColumn).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
-
-  it('confirming the delete dialog calls deleteColumnAction', async () => {
-    const user = userEvent.setup();
-    renderBoard();
-    await user.click(screen.getByRole('button', { name: '보류 컬럼 메뉴' }));
-    await user.click(await screen.findByRole('button', { name: '컬럼 삭제' }));
-    await user.click(screen.getByRole('button', { name: '삭제' }));
-    await waitFor(() =>
-      expect(deleteColumn).toHaveBeenCalledWith({ columnId: 'c-hold' }),
-    );
-  });
-
-  it('canceling the column delete dialog does not call deleteColumnAction', async () => {
-    const user = userEvent.setup();
-    renderBoard();
-    await user.click(screen.getByRole('button', { name: '보류 컬럼 메뉴' }));
-    await user.click(await screen.findByRole('button', { name: '컬럼 삭제' }));
-    await user.click(screen.getByRole('button', { name: '취소' }));
-    expect(deleteColumn).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '작성중 컬럼 메뉴' }));
+    expect(screen.queryByRole('button', { name: '컬럼 삭제' })).not.toBeInTheDocument();
   });
 });
