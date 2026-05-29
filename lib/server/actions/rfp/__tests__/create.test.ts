@@ -510,7 +510,7 @@ describe('createRfpAction', () => {
       title: '신규 필드 테스트',
       deadline: new Date(Date.now() + 86_400_000).toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
-      websiteUrl: 'https://suppoter-b.com/',
+      websiteUrl: 'https://supporter-b.com/',
       mainProducts: '의류',
       annualPgVolume: '10억',
       currentFeeRate: '3.4%',
@@ -522,7 +522,7 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
-    expect(row.websiteUrl).toBe('https://suppoter-b.com/');
+    expect(row.websiteUrl).toBe('https://supporter-b.com/');
     expect(row.mainProducts).toBe('의류');
     expect(row.annualPgVolume).toBe('10억');
     expect(row.currentFeeRate).toBe('3.4%');

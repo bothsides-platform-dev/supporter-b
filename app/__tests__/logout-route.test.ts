@@ -21,10 +21,10 @@ describe('GET /logout', () => {
   it('세션을 비우고 /login 으로 리다이렉트한다', async () => {
     signOutMock.mockResolvedValue(undefined);
 
-    const res = await GET(new Request('https://suppoter-b.com/logout'));
+    const res = await GET(new Request('https://supporter-b.com/logout'));
 
     expect(signOutMock).toHaveBeenCalledWith({ redirect: false });
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('https://suppoter-b.com/login');
+    expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
   });
 });

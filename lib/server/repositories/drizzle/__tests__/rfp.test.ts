@@ -133,7 +133,7 @@ describe('DrizzleRfpRepository', () => {
   it('round-trips the 6 new optional fields', async () => {
     const rfp: RFP = {
       ...makeRfp('P-2605-0099', ctx.ws.id, ctx.user.id),
-      websiteUrl: 'https://suppoter-b.com/',
+      websiteUrl: 'https://supporter-b.com/',
       mainProducts: '의류',
       annualPgVolume: '10억',
       currentFeeRate: '3.4%',
@@ -142,7 +142,7 @@ describe('DrizzleRfpRepository', () => {
     };
     await repo.save(rfp);
     const fetched = await repo.findById(rfp.id);
-    expect(fetched!.websiteUrl).toBe('https://suppoter-b.com/');
+    expect(fetched!.websiteUrl).toBe('https://supporter-b.com/');
     expect(fetched!.mainProducts).toBe('의류');
     expect(fetched!.annualPgVolume).toBe('10억');
     expect(fetched!.currentFeeRate).toBe('3.4%');

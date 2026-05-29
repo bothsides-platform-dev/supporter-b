@@ -120,7 +120,7 @@ sudo cp "$REPO_ROOT/deploy/Caddyfile" /etc/caddy/Caddyfile
 
 if [ ! -f /etc/caddy/caddy.env ]; then
   log "Writing /etc/caddy/caddy.env (EDIT APP_DOMAIN before starting Caddy)"
-  echo 'APP_DOMAIN=suppoter-b.com' | sudo tee /etc/caddy/caddy.env >/dev/null
+  echo 'APP_DOMAIN=supporter-b.com' | sudo tee /etc/caddy/caddy.env >/dev/null
 fi
 
 log "Writing /etc/systemd/system/caddy.service"

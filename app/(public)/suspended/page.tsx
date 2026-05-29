@@ -14,8 +14,8 @@ export default async function SuspendedPage() {
         </p>
         <p className="text-body-small text-on-surface-variant">
           문의:{' '}
-          <a href="mailto:support@suppoter-b.com" className="underline">
-            support@suppoter-b.com
+          <a href="mailto:support@supporter-b.com" className="underline">
+            support@supporter-b.com
           </a>
         </p>
       </div>

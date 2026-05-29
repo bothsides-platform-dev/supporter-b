@@ -639,7 +639,7 @@ export default async function PendingApprovalPage() {
           계정이 검토 중입니다. 승인 완료 후 이메일로 안내드립니다.
         </p>
         <p className="text-body-small text-on-surface-variant">
-          문의: <a href="mailto:support@suppoter-b.com" className="underline">support@suppoter-b.com</a>
+          문의: <a href="mailto:support@supporter-b.com" className="underline">support@supporter-b.com</a>
         </p>
       </div>
     </div>
@@ -666,7 +666,7 @@ export default async function SuspendedPage() {
           계정 이용이 일시 제한되었습니다.
         </p>
         <p className="text-body-small text-on-surface-variant">
-          문의: <a href="mailto:support@suppoter-b.com" className="underline">support@suppoter-b.com</a>
+          문의: <a href="mailto:support@supporter-b.com" className="underline">support@supporter-b.com</a>
         </p>
       </div>
     </div>
