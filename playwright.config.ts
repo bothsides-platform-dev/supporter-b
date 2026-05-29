@@ -66,6 +66,12 @@ export default defineConfig({
       // Default Drizzle backend. Empty string preserves the default
       // (matches the spec's `REPO_BACKEND: ''` literal).
       REPO_BACKEND: '',
+      // Isolate this dev server's build dir + lock so it can boot alongside a
+      // developer's local `pnpm dev` on :3000. Next 16's `<distDir>/dev/lock`
+      // is per-distDir (not per-port) — sharing `.next` makes the second
+      // `next dev` exit(1) with "Another next dev server is already running".
+      // See next.config.ts (distDir reads NEXT_DIST_DIR).
+      NEXT_DIST_DIR: '.next-e2e',
     },
   },
   globalSetup: './e2e/global-setup.ts',
