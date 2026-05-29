@@ -9,13 +9,9 @@ class ResizeObserverStub {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
-const sendDraftInvitations = vi.fn();
 const cancelRfp = vi.fn();
 const withdrawBid = vi.fn();
 
-vi.mock('@/lib/server/actions/rfp/sendDraftInvitationsAction', () => ({
-  sendDraftInvitationsAction: (i: unknown) => sendDraftInvitations(i),
-}));
 vi.mock('@/lib/server/actions/rfp/cancelRfpAction', () => ({
   cancelRfpAction: (i: unknown) => cancelRfp(i),
 }));
@@ -28,7 +24,6 @@ import { KanbanActionDialog } from '../KanbanActionDialog';
 
 afterEach(() => {
   cleanup();
-  sendDraftInvitations.mockReset();
   cancelRfp.mockReset();
   withdrawBid.mockReset();
 });
@@ -39,18 +34,6 @@ describe('KanbanActionDialog', () => {
       <KanbanActionDialog action={null} onClose={vi.fn()} onCommitted={vi.fn()} />,
     );
     expect(container).toBeEmptyDOMElement();
-  });
-
-  it('shows the send-rfp dialog with 발송 button', () => {
-    render(
-      <KanbanActionDialog
-        action={{ kind: 'send-rfp', rfpId: 'r1', title: 'Test RFP' }}
-        onClose={vi.fn()}
-        onCommitted={vi.fn()}
-      />,
-    );
-    expect(screen.getByText('초대 PG에 RFP를 발송할까요?')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '발송' })).toBeInTheDocument();
   });
 
   it('shows the cancel-rfp dialog with 취소 처리 button', () => {
@@ -75,23 +58,6 @@ describe('KanbanActionDialog', () => {
     );
     expect(screen.getByText('제출한 제안을 철회할까요?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '철회' })).toBeInTheDocument();
-  });
-
-  it('calls sendDraftInvitationsAction and onCommitted on confirm for send-rfp', async () => {
-    const user = userEvent.setup();
-    const onCommitted = vi.fn();
-    sendDraftInvitations.mockResolvedValue({ ok: true });
-
-    render(
-      <KanbanActionDialog
-        action={{ kind: 'send-rfp', rfpId: 'r1', title: 'Test RFP' }}
-        onClose={vi.fn()}
-        onCommitted={onCommitted}
-      />,
-    );
-    await user.click(screen.getByRole('button', { name: '발송' }));
-    await waitFor(() => expect(onCommitted).toHaveBeenCalledOnce());
-    expect(sendDraftInvitations).toHaveBeenCalledWith({ rfpId: 'r1' });
   });
 
   it('calls cancelRfpAction and onCommitted on confirm for cancel-rfp', async () => {

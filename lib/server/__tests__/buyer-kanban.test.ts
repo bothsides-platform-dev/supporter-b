@@ -21,10 +21,6 @@ function makeRfp(overrides: Partial<RFP> = {}): RFP {
 }
 
 describe('classifyBuyerRfp', () => {
-  it('draft: status=draft', () => {
-    expect(classifyBuyerRfp({ rfp: makeRfp({ status: 'draft' }) })).toBe('draft');
-  });
-
   it('active: status=sent', () => {
     expect(classifyBuyerRfp({ rfp: makeRfp({ status: 'sent' }) })).toBe('active');
   });

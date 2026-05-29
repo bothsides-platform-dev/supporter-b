@@ -53,7 +53,6 @@ export type NavConfig = {
 // status sub-items and the breadcrumb. Keyed by section base path.
 const STATUS_LABELS = {
   '/rfp': {
-    draft: '작성중',
     active: '진행중',
     closed: '마감',
     awarded: '계약완료',

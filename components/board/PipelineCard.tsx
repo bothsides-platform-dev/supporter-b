@@ -53,7 +53,7 @@ function CardHead({ code, deadline, hideDday }: { code: string; deadline: string
 function BuyerBody({ card }: { card: BuyerKanbanCard }) {
   return (
     <div className="space-y-2">
-      <CardHead code={card.rfpId} deadline={card.deadline} hideDday={card.stage === 'draft'} />
+      <CardHead code={card.rfpId} deadline={card.deadline} hideDday={false} />
       <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)] line-clamp-2">
         {card.title}
       </p>

@@ -2,11 +2,11 @@
 //
 // Sidebar tokens are user-facing labels; domain enums are the actual DB values.
 // RFP mapping:
-//   draft    → rfp_status 'draft'
 //   active   → rfp_status 'sent'   (sidebar calls in-flight RFPs "active")
 //   closed   → rfp_status 'closed'
 //   awarded  → rfp_status 'awarded'
 //   undefined / '' / unknown → undefined (show all)
+//   (draft RFPs are hidden from the kanban; surfaced only in the unfiltered table)
 //
 // Inbox mapping (invitation-level):
 //   new       → invitation_status 'sent'       (kind: invStatus)
@@ -20,7 +20,6 @@ import type { InboxRow } from '@/components/inbox/InboxList';
 // ── RFP ───────────────────────────────────────────────────────────────────
 
 const RFP_PARAM_MAP: Record<string, RfpStatus> = {
-  draft: 'draft',
   active: 'sent',
   closed: 'closed',
   awarded: 'awarded',

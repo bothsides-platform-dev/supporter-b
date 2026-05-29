@@ -103,7 +103,10 @@ export async function loadBoard(args: {
       getBidRepo(),
       getInvitationRepo(),
     ]);
-    const rfpList = await rfpRepo.findByBuyerWs(workspaceId);
+    // draft RFP 는 칸반에서 숨김 (작성중 컬럼 제거 — 발송 전 RFP 는 표 뷰에서만 노출).
+    const rfpList = (await rfpRepo.findByBuyerWs(workspaceId)).filter(
+      (r) => r.status !== 'draft',
+    );
     const rfpIds = rfpList.map((r) => r.id);
     const [bidsByRfp, invsByRfp] = await Promise.all([
       bidRepo.findByRfpIds(rfpIds),

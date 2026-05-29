@@ -20,7 +20,6 @@ import { GRADE_LABELS } from '@/lib/types/biz-profile';
 export const dynamic = 'force-dynamic';
 
 const STATUS_OPTIONS = [
-  { value: 'draft', label: '작성중' },
   { value: 'active', label: '진행중' },
   { value: 'closed', label: '마감' },
   { value: 'awarded', label: '계약완료' },

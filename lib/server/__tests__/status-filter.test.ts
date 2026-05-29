@@ -20,8 +20,8 @@ import type { InboxRow } from '@/components/inbox/InboxList';
 // ── RFP param mapping ─────────────────────────────────────────────────────
 
 describe('mapRfpParam', () => {
-  it('maps draft → draft', () => {
-    expect(mapRfpParam('draft')).toBe('draft');
+  it('draft is no longer a filter token (작성중 컬럼 제거) → undefined', () => {
+    expect(mapRfpParam('draft')).toBeUndefined();
   });
 
   it('maps active → sent (sidebar token ≠ domain enum)', () => {
@@ -75,10 +75,8 @@ describe('filterRfpsByParam', () => {
     expect(filterRfpsByParam(allRfps, undefined)).toHaveLength(5);
   });
 
-  it('filters to draft only when param=draft', () => {
-    const result = filterRfpsByParam(allRfps, 'draft');
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe('draft');
+  it('param=draft returns empty (draft filter removed — drafts live in the unfiltered table)', () => {
+    expect(filterRfpsByParam(allRfps, 'draft')).toHaveLength(0);
   });
 
   it('filters to sent (domain) when param=active', () => {
