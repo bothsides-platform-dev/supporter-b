@@ -29,21 +29,13 @@ function resetStore() {
 describe('RfpStep2Content', () => {
   beforeEach(resetStore);
 
-  it('제목이 비어있으면 다음 버튼이 비활성화된다', () => {
+  it('제목이 비어있어도 다음 버튼은 비활성화되지 않는다 (순서 무관 입력)', () => {
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
-  });
-
-  it('제목 입력 후 다음 버튼이 활성화된다', async () => {
-    const user = userEvent.setup();
-    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-    await user.type(screen.getByPlaceholderText(/서포트쇼핑몰/), '테스트 제목');
     expect(screen.getByRole('button', { name: '다음' })).not.toBeDisabled();
   });
 
-  it('다음 버튼 클릭 시 onNext가 호출된다', async () => {
+  it('제목이 비어있어도 다음 버튼 클릭 시 onNext가 호출된다', async () => {
     const user = userEvent.setup();
-    useRfpDraftStore.setState({ title: '테스트' });
     const onNext = vi.fn();
     render(<RfpStep2Content onBack={vi.fn()} onNext={onNext} />);
     await user.click(screen.getByRole('button', { name: '다음' }));

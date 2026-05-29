@@ -25,7 +25,6 @@ type Props = {
 
 export function RfpStep2Content({ onBack, onNext }: Props) {
   const draft = useRfpDraftStore();
-  const canNext = draft.title.trim() !== '';
 
   return (
     <div className="space-y-5">
@@ -154,7 +153,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
-        <Button type="button" size="md" disabled={!canNext} onClick={onNext}>
+        <Button type="button" size="md" onClick={onNext}>
           다음
         </Button>
       </div>

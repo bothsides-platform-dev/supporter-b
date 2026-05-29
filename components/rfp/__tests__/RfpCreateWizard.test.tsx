@@ -55,7 +55,7 @@ vi.mock('../RfpStep4Review', () => ({
         <button
           type="button"
           onClick={onSubmit}
-          disabled={!draft.deadline || submitting}
+          disabled={submitting}
         >
           {submitting ? '발송 중…' : pgCount > 0 ? `${pgCount}개 PG사에 발송` : '발송'}
         </button>
@@ -180,6 +180,27 @@ describe('RfpCreateWizard', () => {
     expect(createRfpAction).not.toHaveBeenCalled();
 
     localStorageSpy.mockRestore();
+  });
+
+  it('필수값 미충족 상태에서 발송 클릭 시 토스트로 안내하고 해당 step으로 이동하며 createRfpAction을 호출하지 않는다', async () => {
+    const user = userEvent.setup();
+    // store는 빈 상태(resetStore) — 제목/PG/마감일 모두 비어있음
+    render(<RfpCreateWizard />);
+
+    // 순서 무관 자유 이동: Step1 → 4까지 다음으로 이동
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    // Step 4 발송 버튼 클릭 (미충족이라도 클릭 가능)
+    await user.click(screen.getByRole('button', { name: '발송' }));
+
+    expect(toast).toHaveBeenCalledWith(
+      expect.stringContaining('제목'),
+      { type: 'error' },
+    );
+    expect(createRfpAction).not.toHaveBeenCalled();
+    // 첫 미충족 step(Step 2 제안 내용)으로 이동 → Step 2 입력 필드가 보인다
+    expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
   });
 
   it('발송 실패 시 serverError를 표시한다', async () => {
