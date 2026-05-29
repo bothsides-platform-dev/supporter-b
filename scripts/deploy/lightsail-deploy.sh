@@ -45,7 +45,7 @@ log "Running migrations"
 pnpm db:migrate
 
 # Cap V8 heap below total RAM so the build hits GC before the OOM-killer. On a
-# 2GB box (+2GB swap) 1536MB leaves headroom for Postgres and the OS during build.
+# 2GB box (+4GB swap) 1536MB leaves headroom for Postgres and the OS during build.
 log "Building (NODE_OPTIONS=--max-old-space-size=${NODE_BUILD_HEAP_MB:-1536})"
 NODE_OPTIONS="--max-old-space-size=${NODE_BUILD_HEAP_MB:-1536}" pnpm build
 
