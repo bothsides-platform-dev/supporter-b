@@ -11,6 +11,13 @@ vi.mock('@/lib/server/sms/solapi', () => ({
   sendSms: vi.fn().mockResolvedValue(undefined),
 }));
 
+// New signup → admin email notice. Spy on the notifier (lazy closure so the
+// factory eval doesn't touch notifyMock before init).
+const notifyMock = vi.fn();
+vi.mock('@/lib/server/notifications/admin-signup', () => ({
+  notifyAdminNewSignupAfterCommit: (...args: unknown[]) => notifyMock(...args),
+}));
+
 let db: PgliteDB;
 
 async function seedVerifiedOtp(phone: string): Promise<string> {
@@ -103,5 +110,26 @@ describe('signupCompleteAction — phone 인증 필수', () => {
       .from(users)
       .where(eq(users.email, BASE.email));
     expect(u.phone).toBe(BASE.phone);
+  });
+
+  it('정상 가입 시 운영자 이메일 승인요청 알림을 트리거한다', async () => {
+    notifyMock.mockClear();
+    const verificationId = await seedVerifiedOtp(BASE.phone);
+
+    const r = await signupCompleteAction({
+      ...BASE,
+      phoneVerificationId: verificationId,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(notifyMock).toHaveBeenCalledTimes(1);
+    const arg = notifyMock.mock.calls[0][0] as {
+      workspaceName: string;
+      orgType: string;
+      reviewUrl: string;
+    };
+    expect(arg.workspaceName).toBe(BASE.wsName);
+    expect(arg.orgType).toBe('buyer');
+    expect(arg.reviewUrl).toContain('/admin/review/');
   });
 });

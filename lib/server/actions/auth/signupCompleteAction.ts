@@ -8,7 +8,12 @@ import { passwordSchema } from '@/lib/auth/password-validation';
 import { users, phoneOtps, pgProfiles } from '@/lib/db/schema';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import {
+  notifyAdminNewSignupAfterCommit,
+  type AdminSignupNotice,
+} from '@/lib/server/notifications/admin-signup';
+import {
   actionDb,
+  baseUrl,
   isUniqueViolation,
   normalizeEmail,
   type AuthActionResult,
@@ -125,7 +130,11 @@ export async function signupCompleteAction(
   const passwordHash = await hashPassword(parsed.data.password);
   const userId = randomUUID();
 
-  return await db.transaction(
+  // Captured inside the tx, fired post-commit so the admin email never runs
+  // inside the DB transaction (and a render/send failure can't roll back signup).
+  let adminNotice: AdminSignupNotice | null = null;
+
+  const result = await db.transaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (tx: any): Promise<SignupCompleteResult> => {
       // 1. Insert user. Email UNIQUE — collision means an account already
@@ -155,12 +164,18 @@ export async function signupCompleteAction(
         if (!parsed.data.wsName) {
           return { ok: false, error: 'MISSING_WS_NAME' };
         }
-        const { workspaceId } = await createWorkspaceInTx(tx, {
+        const { workspaceId, applicationId } = await createWorkspaceInTx(tx, {
           userId,
           type: parsed.data.wsKind,
           name: parsed.data.wsName,
           bizProfile: parsed.data.bizProfile,
         });
+
+        adminNotice = {
+          workspaceName: parsed.data.wsName,
+          orgType: parsed.data.wsKind,
+          reviewUrl: `${baseUrl()}/admin/review/${applicationId}`,
+        };
 
         if (parsed.data.wsKind === 'pg' && parsed.data.pgProfile) {
           await tx.insert(pgProfiles).values({
@@ -184,4 +199,12 @@ export async function signupCompleteAction(
       return { ok: false, error: 'MISSING_WS_KIND' };
     },
   );
+
+  // New pending workspace → notify admins by email (post-commit, fire-and-forget).
+  // The /admin review queue is the durable record.
+  if (result.ok && adminNotice) {
+    notifyAdminNewSignupAfterCommit(adminNotice);
+  }
+
+  return result;
 }

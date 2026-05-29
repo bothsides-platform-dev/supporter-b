@@ -3,8 +3,9 @@
 import { z } from 'zod';
 
 import { requireSession } from '@/lib/auth/session';
-import { actionDb } from '../auth/_shared';
+import { actionDb, baseUrl } from '../auth/_shared';
 import { createWorkspaceInTx } from './_createWorkspace';
+import { notifyAdminNewSignupAfterCommit } from '@/lib/server/notifications/admin-signup';
 
 const BizProfileInput = z
   .object({
@@ -47,7 +48,7 @@ export async function createWorkspaceAction(
 
   const userId = session.user.id;
   const db = actionDb();
-  const { workspaceId } = await db.transaction(
+  const { workspaceId, applicationId } = await db.transaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (tx: any) =>
       createWorkspaceInTx(tx, {
@@ -57,6 +58,14 @@ export async function createWorkspaceAction(
         bizProfile: parsed.data.bizProfile,
       }),
   );
+
+  // New pending workspace → notify admins by email (post-commit, fire-and-forget).
+  // The /admin review queue is the durable record; this is a best-effort nudge.
+  notifyAdminNewSignupAfterCommit({
+    workspaceName: parsed.data.name,
+    orgType: parsed.data.type,
+    reviewUrl: `${baseUrl()}/admin/review/${applicationId}`,
+  });
 
   return { ok: true, workspaceId };
 }
