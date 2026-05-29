@@ -178,6 +178,6 @@ pnpm build
 pnpm start            # 기본 포트 3000
 ```
 
-> **배포**: 라이브 배포는 **Vercel** (region `icn1` — `vercel.json`). 자세한 결정 기록은 [`docs/adr/0002-vercel-deployment.md`](./docs/adr/0002-vercel-deployment.md). (`docs/DEPLOY_OCI.md` 의 OCI 런북은 아카이브 — 현행 아님.)
+> **배포**: 라이브 배포는 **Vercel** (region `icn1` — `vercel.json`). 자세한 결정 기록은 [`docs/adr/0002-vercel-deployment.md`](./docs/adr/0002-vercel-deployment.md). (이전 OCI 자체호스팅 런북·스크립트는 제거됨 — 역사적 맥락은 [`docs/adr/0001-deployment-architecture.md`](./docs/adr/0001-deployment-architecture.md).)
 
 이메일이 안 올 때: `RESEND_API_KEY` 미설정이거나 outbox flush 가 안 도는 경우입니다. `pnpm db:studio` 로 `outbox` 테이블을 확인하고, 필요하면 `/api/cron/flush-outbox` 라우트를 호출(헤더 `x-cron-secret: <CRON_SECRET>`)합니다.

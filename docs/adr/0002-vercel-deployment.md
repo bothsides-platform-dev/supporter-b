@@ -4,9 +4,11 @@
 - **결정자**: yeonseong
 - **관련 산출물**: [`vercel.json`](../../vercel.json) (region 고정)
 
+> **갱신 (2026-05-30)**: OCI 자산을 폴백으로 보존하던 결정을 뒤집고 **전부 제거**했다. Vercel 로 완전 전환돼 자체호스팅 폴백이 더는 필요치 않다는 판단. 삭제 대상: `docker-compose.prod.yml`, `ecosystem.config.cjs`, `deploy/Caddyfile`, `scripts/deploy/*`(`bootstrap.sh`/`deploy.sh`/`oci-a1-retry.sh`), `.env.production.example`, `docs/DEPLOY_OCI.md`. 자체호스팅 결정의 역사적 맥락은 [ADR 0001](./0001-deployment-architecture.md) 에만 남는다. 재호스팅이 필요해지면 git 히스토리에서 복원.
+
 ## 컨텍스트
 
-[ADR 0001](./0001-deployment-architecture.md) 은 비용 최소화($0)를 위해 단일 OCI Always Free VM 자체 호스팅을 채택했다. 그러나 **실제 라이브 배포는 Vercel** 로 운영되고 있다 (`vercel.json` 존재, `regions: ["icn1"]`). 문서(ADR 0001 + `docs/DEPLOY_OCI.md`)가 운영 현실과 어긋나 있어, 에이전트·기여자가 잘못된 OCI 런북을 현행으로 오인하는 문제를 바로잡는다.
+[ADR 0001](./0001-deployment-architecture.md) 은 비용 최소화($0)를 위해 단일 OCI Always Free VM 자체 호스팅을 채택했다. 그러나 **실제 라이브 배포는 Vercel** 로 운영되고 있다 (`vercel.json` 존재, `regions: ["icn1"]`). 당시 OCI 런북(`docs/DEPLOY_OCI.md`, 이후 제거됨)이 운영 현실과 어긋나 있어, 에이전트·기여자가 잘못된 OCI 런북을 현행으로 오인하는 문제를 바로잡는다.
 
 이 ADR은 **현 운영 환경을 사실대로 기록**하는 것이 목적이다.
 
@@ -17,7 +19,7 @@
 - 플랫폼: **Vercel**
 - 리전: **`icn1`(서울)** 로 고정 — `vercel.json` 의 `regions`. 미지정 시 `iad1`(US-East)에서 실행돼 KR 지연이 커지므로 명시 고정이 필수다.
 - DB: postgres-js (`DATABASE_URL`) — provider 는 레포에 고정돼 있지 않음(환경변수로 주입).
-- OCI 자산(`docker-compose.prod.yml`, `ecosystem.config.cjs`, `deploy/Caddyfile`, `docs/DEPLOY_OCI.md`)은 삭제하지 않고 **폴백/역사적 기록**으로 보존한다.
+- OCI 자산(`docker-compose.prod.yml`, `ecosystem.config.cjs`, `deploy/Caddyfile`, `scripts/deploy/*`, `docs/DEPLOY_OCI.md`)은 **제거**한다 (위 2026-05-30 갱신 참조). 자체호스팅이 다시 필요하면 ADR 0001 의 맥락 + git 히스토리에서 복원한다.
 
 ## 트레이드오프 (ADR 0001 의 제약 재확인)
 

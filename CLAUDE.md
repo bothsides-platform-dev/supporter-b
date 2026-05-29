@@ -10,7 +10,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 - `DESIGN.md` — Linear design language: tokens, typography, color, component visual rules.
 - `SCREEN_DESIGN.md` — screen IA, route map, per-screen UX spec.
 
-**Historical / NOT current truth** (verify against code before trusting): `docs/superpowers/**` (point-in-time plan & spec artifacts), `docs/DEPLOY_OCI.md` + `docs/adr/0001-*` (superseded — live deploy is Vercel; see `docs/adr/0002-vercel-deployment.md`). The legacy `PG_RFP_SPEC.md` / `SPEC.md` docs were **removed** — do not reference them; canonical product rules now live in code + tests + SCREEN_DESIGN.md 의 "확정 결정" 블록 (Context 절).
+**Historical / NOT current truth** (verify against code before trusting): `docs/superpowers/**` (point-in-time plan & spec artifacts), `docs/adr/0001-*` (superseded — live deploy is Vercel; see `docs/adr/0002-vercel-deployment.md`). The legacy OCI self-hosting assets (`docs/DEPLOY_OCI.md`, `ecosystem.config.cjs`, `docker-compose.prod.yml`, `deploy/Caddyfile`, `scripts/deploy/*`, `.env.production.example`) and the legacy `PG_RFP_SPEC.md` / `SPEC.md` docs were **removed** — do not reference them; canonical product rules now live in code + tests + SCREEN_DESIGN.md 의 "확정 결정" 블록 (Context 절).
 
 ## Domain Context (memorize)
 
