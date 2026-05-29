@@ -9,7 +9,7 @@ afterEach(() => {
 
 describe('WorkspaceAvatar', () => {
   it('renders initials when hasLogo is false', () => {
-    render(<WorkspaceAvatar name="Bidit" workspaceId="ws-1" hasLogo={false} />);
+    render(<WorkspaceAvatar name="Supporter B" workspaceId="ws-1" hasLogo={false} />);
     expect(screen.getByRole('img')).toHaveTextContent('B');
   });
 
@@ -19,15 +19,15 @@ describe('WorkspaceAvatar', () => {
   });
 
   it('renders img element when hasLogo is true and workspaceId is provided', () => {
-    render(<WorkspaceAvatar name="Bidit" workspaceId="ws-123" hasLogo={true} />);
+    render(<WorkspaceAvatar name="Supporter B" workspaceId="ws-123" hasLogo={true} />);
     const img = screen.getByRole('img');
     expect(img.tagName).toBe('IMG');
     expect(img).toHaveAttribute('src', '/api/workspace/ws-123/avatar');
-    expect(img).toHaveAttribute('alt', 'Bidit');
+    expect(img).toHaveAttribute('alt', 'Supporter B');
   });
 
   it('falls back to initials when img onError fires', () => {
-    render(<WorkspaceAvatar name="Bidit" workspaceId="ws-123" hasLogo={true} />);
+    render(<WorkspaceAvatar name="Supporter B" workspaceId="ws-123" hasLogo={true} />);
     const img = screen.getByRole('img');
     expect(img.tagName).toBe('IMG');
 
