@@ -18,6 +18,7 @@ import {
   normalizeEmail,
   type AuthActionResult,
 } from './_shared';
+import { normalizePhone } from './phoneOtpUtils';
 
 const PgProfileInput = z
   .object({
@@ -110,6 +111,11 @@ export async function signupCompleteAction(
 
   const email = normalizeEmail(parsed.data.email);
 
+  // Frontend submits the hyphenated format (e.g. 010-1234-5678); normalize to
+  // the digits-only form used as the canonical key in phone_otps / users.phone.
+  const normalizedPhone = normalizePhone(parsed.data.phone);
+  if (!normalizedPhone) return { ok: false, error: 'INVALID_INPUT' };
+
   const db = actionDb();
 
   // Verify phone OTP before starting the user-creation transaction.
@@ -119,7 +125,7 @@ export async function signupCompleteAction(
     .where(
       and(
         eq(phoneOtps.id, parsed.data.phoneVerificationId),
-        eq(phoneOtps.phone, parsed.data.phone),
+        eq(phoneOtps.phone, normalizedPhone),
         isNotNull(phoneOtps.verifiedAt),
       ),
     )
@@ -145,7 +151,7 @@ export async function signupCompleteAction(
           email,
           passwordHash,
           name: parsed.data.name,
-          phone: parsed.data.phone,
+          phone: normalizedPhone,
           avatarColor: 'ink',
           status: 'active',
         });
