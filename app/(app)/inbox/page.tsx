@@ -24,7 +24,6 @@ export const dynamic = 'force-dynamic';
 
 const STATUS_OPTIONS = [
   { value: 'new', label: '신규' },
-  { value: 'draft', label: '작성중' },
   { value: 'submitted', label: '제출완료' },
   { value: 'closed', label: '마감' },
 ];

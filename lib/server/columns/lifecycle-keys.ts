@@ -2,9 +2,9 @@
 // protocol. These are the columns where one workspace's action changes the
 // other's board state (send→received, submit→active, award→won/lost,
 // close→lost, withdraw→lost). They are mandatory (non-deletable) by user
-// directive. The remaining lifecycle stages (draft/drafting) are also
-// non-deletable, but as a private skeleton — see deleteColumnAction for the
-// distinct error messages.
+// directive. The 작성중(draft/drafting) skeleton stages were removed; the only
+// remaining non-cross-side system column is the rfp_bids default-landing
+// (DEFAULT_LANDING_KEY) — see deleteColumnAction for the distinct error messages.
 //
 // Pure, no DB import — usable from client components.
 export const CROSS_SIDE_LIFECYCLE_KEYS: ReadonlySet<string> = new Set([

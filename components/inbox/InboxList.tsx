@@ -10,7 +10,7 @@ import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 const invStatusLabel: Record<string, string> = {
   sent: '신규',
-  opened: '작성중',
+  opened: '신규',
   accepted: '제출완료',
   declined: '거절',
   expired: '만료',
@@ -18,7 +18,7 @@ const invStatusLabel: Record<string, string> = {
 
 const invStatusColor: Record<string, ChipColor> = {
   sent: 'warning',
-  opened: 'surface',
+  opened: 'warning',
   accepted: 'tertiary',
   declined: 'error',
   expired: 'surface',

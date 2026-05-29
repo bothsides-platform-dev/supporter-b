@@ -103,7 +103,11 @@ export async function loadBoard(args: {
       getBidRepo(),
       getInvitationRepo(),
     ]);
-    const rfpList = await rfpRepo.findByBuyerWs(workspaceId);
+    // draft(작성중) RFP 는 보드 단계에서 제거됨 — 발송 전 초안은 파이프라인에 노출하지
+    // 않는다(테이블/?status=draft 로만 접근). 제거된 작성중 컬럼으로의 폴백을 방지.
+    const rfpList = (await rfpRepo.findByBuyerWs(workspaceId)).filter(
+      (r) => r.status !== 'draft',
+    );
     const rfpIds = rfpList.map((r) => r.id);
     const [bidsByRfp, invsByRfp] = await Promise.all([
       bidRepo.findByRfpIds(rfpIds),

@@ -8,11 +8,10 @@ import type { Bid } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
 
-export type PgKanbanStage = 'received' | 'drafting' | 'submitted' | 'won' | 'lost';
+export type PgKanbanStage = 'received' | 'submitted' | 'won' | 'lost';
 
 export const PG_KANBAN_ORDER: readonly PgKanbanStage[] = [
   'received',
-  'drafting',
   'submitted',
   'won',
   'lost',
@@ -20,7 +19,6 @@ export const PG_KANBAN_ORDER: readonly PgKanbanStage[] = [
 
 export const PG_KANBAN_LABEL: Record<PgKanbanStage, string> = {
   received: '신규',
-  drafting: '작성중',
   submitted: '제출완료',
   won: '낙찰',
   lost: '실패',
@@ -53,9 +51,8 @@ export function classifyPgInvitation(args: {
 
   if (bid?.status === 'withdrawn') return 'lost';
   if (bid?.status === 'submitted') return 'submitted';
-  if (bid?.status === 'draft') return 'drafting';
 
-  // bid 없음 — sent/opened 모두 신규(received).
+  // 미제출(작성중 draft) 및 bid 없음(sent/opened) — 모두 신규(received). 작성중 단계 제거.
   return 'received';
 }
 
