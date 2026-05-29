@@ -1,0 +1,18 @@
+# Caddy reverse proxy with automatic HTTPS (Let's Encrypt).
+#
+# APP_DOMAIN must resolve (A record -> Lightsail static IP) BEFORE Caddy starts,
+# or the ACME challenge fails. Caddy redirects http://->https:// automatically.
+#
+#   sudo APP_DOMAIN=your-domain.com caddy run --config /etc/caddy/Caddyfile
+# or via the systemd service after writing APP_DOMAIN into /etc/caddy/caddy.env.
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# Attachments are stored as Postgres bytea and posted through the app.
+	# Raise the proxy body limit above the default to allow file uploads.
+	request_body {
+		max_size 25MB
+	}
+
+	reverse_proxy 127.0.0.1:3000
+}
