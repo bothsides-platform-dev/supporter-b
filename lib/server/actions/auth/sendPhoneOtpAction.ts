@@ -46,7 +46,7 @@ export async function sendPhoneOtpAction(input: {
     .returning({ id: phoneOtps.id });
 
   try {
-    await sendSms(phone, `bidit 인증번호: ${code} (5분 이내 입력)`);
+    await sendSms(phone, `Supporter B 인증번호: ${code} (5분 이내 입력)`);
   } catch {
     await db.delete(phoneOtps).where(eq(phoneOtps.id, row.id));
     return { ok: false, error: 'SMS_FAILED' };
