@@ -5,6 +5,7 @@ import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { underlineInputClass } from '@/components/forms/inputs';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
+import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { cn } from '@/lib/utils';
 
@@ -143,6 +144,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           className={cn(underlineInputClass, 'resize-none')}
         />
       </div>
+      <RfpPaymentMethodSelect />
       <RfpAttachmentDropzone
         value={draft.rfpFiles}
         onChange={(files) => draft.setField('rfpFiles', files)}

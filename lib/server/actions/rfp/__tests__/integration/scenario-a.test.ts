@@ -165,6 +165,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       memo: 'D+1 정산 희망. RFP 첨부.',
       deadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
       allowedPgWorkspaceIds: pgWsIds,
+      requiredPaymentMethods: ['card', 'bank_transfer'],
       send: true,
     });
     expect(created.ok).toBe(true);

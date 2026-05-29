@@ -192,6 +192,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
     memo: '',
     deadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
     allowedPgWorkspaceIds: [pgWsId],
+    requiredPaymentMethods: ['card', 'bank_transfer'],
     send: true,
   });
   expect(created.ok).toBe(true);

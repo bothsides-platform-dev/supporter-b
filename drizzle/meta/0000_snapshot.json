@@ -1,5 +1,5 @@
 {
-  "id": "554857fd-c2c9-477e-a3fb-8c10256eda37",
+  "id": "8ab3ecf6-3de2-4517-888b-8b735bceef6d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -844,6 +844,13 @@
         },
         "payment_fees": {
           "name": "payment_fees",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "custom_fees": {
+          "name": "custom_fees",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
@@ -1934,6 +1941,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'"
+        },
+        "custom_payment_methods": {
+          "name": "custom_payment_methods",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         },
         "created_at": {
           "name": "created_at",

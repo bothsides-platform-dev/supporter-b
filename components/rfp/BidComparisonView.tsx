@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { BidComparisonTable } from './BidComparisonTable';
 import { RfpBidsBoard } from '@/components/board/RfpBidsBoard';
 import { BidViewToggle, type BidView } from './BidViewToggle';
-import type { Bid } from '@/lib/types/bid';
+import type { Bid, CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
 import type { BoardCard, BoardColumn } from '@/lib/types/column';
@@ -18,6 +18,8 @@ type Props = {
   grade: MerchantGrade | undefined;
   rfpStatus: string;
   awardedBidId?: string;
+  requiredPaymentMethods: PaymentMethod[];
+  customPaymentMethods: CustomPaymentMethod[];
   pgWsNameMap: Record<string, string>;
   authorId: string;
   authorName: string;
@@ -38,6 +40,8 @@ export function BidComparisonView(props: Props) {
           grade={props.grade}
           rfpStatus={props.rfpStatus}
           awardedBidId={props.awardedBidId}
+          requiredPaymentMethods={props.requiredPaymentMethods}
+          customPaymentMethods={props.customPaymentMethods}
           pgWsNameMap={props.pgWsNameMap}
         />
       ) : (

@@ -3,6 +3,7 @@ import {
   uuid,
   text,
   timestamp,
+  jsonb,
   check,
   index,
   type AnyPgColumn,
@@ -64,6 +65,8 @@ export const rfps = pgTable(
     }),
     // 구매사가 요청한 결제수단 목록 (PG사는 이 수단만 견적). 빈 배열 = 제한 없음.
     requiredPaymentMethods: text('required_payment_methods').array().notNull().default([]),
+    // 구매사 직접입력 커스텀 결제수단: [{ id, label }] (id는 서버가 발급). PG는 이 id로 customFees 제출.
+    customPaymentMethods: jsonb('custom_payment_methods').notNull().default(sql`'[]'::jsonb`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
     sentAt: timestamp('sent_at', { withTimezone: true }),

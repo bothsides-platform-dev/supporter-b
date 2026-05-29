@@ -87,6 +87,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
         deadline: draft.deadline,
         allowedPgWorkspaceIds: draft.allowedPgWorkspaceIds.map((w) => w.id),
         rfpAttachmentIds: draft.rfpFiles.map((f) => f.id),
+        requiredPaymentMethods: draft.requiredPaymentMethods,
+        customPaymentMethods: draft.customPaymentMethods,
         send: true,
       });
     } catch {

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 
 type Props = {
@@ -53,6 +54,10 @@ export function RfpStep4Review({
   );
 
   const pgCount = draft.allowedPgWorkspaceIds.length;
+  const paymentMethodSummary = [
+    ...draft.requiredPaymentMethods.map((m) => PAYMENT_METHOD_LABELS[m]),
+    ...draft.customPaymentMethods.map((c) => c.label),
+  ].join(', ');
   const canSend =
     draft.deadline !== '' && !isNaN(new Date(draft.deadline).getTime()) && !submitting;
 
@@ -112,6 +117,7 @@ export function RfpStep4Review({
               }
             />
           )}
+          <ReviewRow label="견적 결제수단" value={paymentMethodSummary} />
         </div>
       </div>
 
