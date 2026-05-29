@@ -3,6 +3,7 @@ import { rfpInvitations, rfps, bizProfiles } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { RfpInvitation, InvitationStatus } from '@/lib/types/invitation';
 import type { RFP } from '@/lib/types/rfp';
+import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { hashToken } from '../../token';
 import type { InvitationRepo, TokenClaimResult, Tx } from '../types';
@@ -37,7 +38,8 @@ function rowToRfp(row: RfpRow, biz: BizRow | null): RFP {
     rfpFiles: [],
     // PG-side view (findByPgWorkspace) never exposes the allowlist by design.
     allowedPgWorkspaceIds: [],
-    requiredPaymentMethods: [],
+    requiredPaymentMethods: (row.requiredPaymentMethods ?? []) as PaymentMethod[],
+    customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
     deadline: new Date(row.deadline).toISOString(),
     status: row.status,
     awardedBidId: row.awardedBidId ?? undefined,
