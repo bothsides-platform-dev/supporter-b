@@ -15,6 +15,10 @@
 
 # next.js
 /.next/
+# Isolated build dir for the e2e webServer (NEXT_DIST_DIR in playwright.config.ts)
+# — lets `pnpm e2e` boot a second `next dev` alongside a local `pnpm dev` on :3000
+# without colliding on Next 16's `<distDir>/dev/lock`.
+/.next-e2e/
 /out/
 
 # production
