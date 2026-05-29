@@ -21,7 +21,6 @@ const GRADE = [
 ];
 
 const STATUS = [
-  { value: 'draft', label: '작성중' },
   { value: 'active', label: '진행중' },
   { value: 'closed', label: '마감' },
 ];

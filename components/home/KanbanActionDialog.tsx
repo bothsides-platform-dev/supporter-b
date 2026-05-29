@@ -46,12 +46,8 @@ export function KanbanActionDialog({ action, onClose, onCommitted }: Props) {
   }
 
   const copy = COPY[action.kind];
-  const heading =
-    action.kind === 'withdraw-bid' || action.kind === 'cancel-rfp'
-      ? `${'title' in action ? action.title : ''}`
-      : 'title' in action
-        ? action.title
-        : '';
+  // 여기 도달하는 action 은 cancel-rfp | withdraw-bid — 둘 다 title 보유.
+  const heading = action.title;
 
   const onConfirm = async () => {
     setSubmitting(true);

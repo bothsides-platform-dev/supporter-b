@@ -6,6 +6,7 @@ import { auth } from '@/auth';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { PgRfpDetailContent } from '@/components/inbox/PgRfpDetailContent';
 import { BackButton } from '@/components/primitives/BackButton';
+import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 
 type Props = { params: Promise<{ rfpId: string }> };
 
@@ -22,6 +23,7 @@ export default async function InboxDetailPage({ params }: Props) {
 
   return (
     <div className="px-8 py-8">
+      <MarkInboxViewed rfpId={rfpCode} />
       <div className="mb-6">
         <BackButton />
       </div>

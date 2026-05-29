@@ -2,15 +2,14 @@
 //
 // Sidebar tokens are user-facing labels; domain enums are the actual DB values.
 // RFP mapping:
-//   draft    → rfp_status 'draft'
 //   active   → rfp_status 'sent'   (sidebar calls in-flight RFPs "active")
 //   closed   → rfp_status 'closed'
 //   awarded  → rfp_status 'awarded'
 //   undefined / '' / unknown → undefined (show all)
+//   (draft RFPs are hidden from the kanban; surfaced only in the unfiltered table)
 //
 // Inbox mapping (invitation-level):
 //   new       → invitation_status 'sent'       (kind: invStatus)
-//   draft     → invitation_status 'opened'     (kind: invStatus)
 //   submitted → invitation_status 'accepted'   (kind: invStatus)
 //   closed    → rfp_status 'closed'            (kind: rfpStatus — no inv enum for this)
 //   undefined / '' → undefined (show all)
@@ -21,7 +20,6 @@ import type { InboxRow } from '@/components/inbox/InboxList';
 // ── RFP ───────────────────────────────────────────────────────────────────
 
 const RFP_PARAM_MAP: Record<string, RfpStatus> = {
-  draft: 'draft',
   active: 'sent',
   closed: 'closed',
   awarded: 'awarded',
@@ -52,7 +50,6 @@ export type InboxFilterMapped =
 
 const INBOX_PARAM_MAP: Record<string, InboxFilterMapped> = {
   new: { kind: 'invStatus', value: 'sent' },
-  draft: { kind: 'invStatus', value: 'opened' },
   submitted: { kind: 'invStatus', value: 'accepted' },
   // 'closed' has no invitation enum value; it means the parent RFP is closed.
   closed: { kind: 'rfpStatus', value: 'closed' },

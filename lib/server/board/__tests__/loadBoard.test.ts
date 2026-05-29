@@ -74,6 +74,7 @@ describe('loadBoard — pipeline (buyer)', () => {
       deadline: new Date(Date.now() + 86_400_000),
       status: 'sent',
       createdBy: buyer.id,
+      sentAt: new Date(),
     });
     // Add a custom column and place the RFP there via board_column_id.
     const customId = randomUUID();

@@ -9,13 +9,9 @@ class ResizeObserverStub {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
-const sendDraftInvitations = vi.fn();
 const cancelRfp = vi.fn();
 const withdrawBid = vi.fn();
 
-vi.mock('@/lib/server/actions/rfp/sendDraftInvitationsAction', () => ({
-  sendDraftInvitationsAction: (i: unknown) => sendDraftInvitations(i),
-}));
 vi.mock('@/lib/server/actions/rfp/cancelRfpAction', () => ({
   cancelRfpAction: (i: unknown) => cancelRfp(i),
 }));
@@ -28,7 +24,6 @@ import { KanbanActionDialog } from '../KanbanActionDialog';
 
 afterEach(() => {
   cleanup();
-  sendDraftInvitations.mockReset();
   cancelRfp.mockReset();
   withdrawBid.mockReset();
 });

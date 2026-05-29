@@ -1,9 +1,9 @@
 // Status filter — param token → domain status mapping.
 // RFP: sidebar uses /rfp?status=draft|active|closed|awarded
 //      'active' is not a domain enum value — it maps to domain 'sent'
-// Inbox: sidebar uses /inbox?status=new|draft|submitted|closed
-//      'new' → invitation 'sent', 'draft' → invitation 'opened',
-//      'submitted' → invitation 'accepted', 'closed' → parent rfp 'closed'
+// Inbox: sidebar uses /inbox?status=new|submitted|closed
+//      'new' → invitation 'sent', 'submitted' → invitation 'accepted',
+//      'closed' → parent rfp 'closed'
 //      (closed = RFP is no longer accepting bids, not an invitation status)
 import { describe, it, expect } from 'vitest';
 
@@ -20,8 +20,8 @@ import type { InboxRow } from '@/components/inbox/InboxList';
 // ── RFP param mapping ─────────────────────────────────────────────────────
 
 describe('mapRfpParam', () => {
-  it('maps draft → draft', () => {
-    expect(mapRfpParam('draft')).toBe('draft');
+  it('draft is no longer a filter token (작성중 컬럼 제거) → undefined', () => {
+    expect(mapRfpParam('draft')).toBeUndefined();
   });
 
   it('maps active → sent (sidebar token ≠ domain enum)', () => {
@@ -75,10 +75,8 @@ describe('filterRfpsByParam', () => {
     expect(filterRfpsByParam(allRfps, undefined)).toHaveLength(5);
   });
 
-  it('filters to draft only when param=draft', () => {
-    const result = filterRfpsByParam(allRfps, 'draft');
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe('draft');
+  it('param=draft returns empty (draft filter removed — drafts live in the unfiltered table)', () => {
+    expect(filterRfpsByParam(allRfps, 'draft')).toHaveLength(0);
   });
 
   it('filters to sent (domain) when param=active', () => {
@@ -110,11 +108,6 @@ describe('mapInboxParam', () => {
   it('maps new → invitation sent', () => {
     const m = mapInboxParam('new');
     expect(m).toEqual({ kind: 'invStatus', value: 'sent' });
-  });
-
-  it('maps draft → invitation opened', () => {
-    const m = mapInboxParam('draft');
-    expect(m).toEqual({ kind: 'invStatus', value: 'opened' });
   });
 
   it('maps submitted → invitation accepted', () => {
@@ -152,7 +145,7 @@ function makeRow(
 
 const allRows: InboxRow[] = [
   makeRow('sent'),     // new in UI
-  makeRow('opened'),   // draft in UI
+  makeRow('opened'),
   makeRow('accepted'), // submitted in UI
   makeRow('draft', 'closed'),  // closed in UI (rfp closed, any inv status)
 ];
@@ -166,12 +159,6 @@ describe('filterInboxRowsByParam', () => {
     const result = filterInboxRowsByParam(allRows, 'new');
     expect(result).toHaveLength(1);
     expect(result[0].invitationStatus).toBe('sent');
-  });
-
-  it('filters to invitation-opened rows when param=draft', () => {
-    const result = filterInboxRowsByParam(allRows, 'draft');
-    expect(result).toHaveLength(1);
-    expect(result[0].invitationStatus).toBe('opened');
   });
 
   it('filters to invitation-accepted rows when param=submitted', () => {

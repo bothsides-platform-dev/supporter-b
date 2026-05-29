@@ -1,11 +1,15 @@
 /**
- * RFP/인박스 상세 네비게이션 — 진입점과 무관하게 항상 전체 페이지.
+ * RFP/인박스 상세 네비게이션 — 진입점별 동작.
  *
- * 상세 모달(가로채기 슬롯)은 제거됨. 홈 대시보드·목록·직접 진입 모두 전체 페이지로 렌더.
- *   1. 홈 대시보드 ActionQueue 링크 클릭 → /rfp/<code> 전체 페이지(모달 아님).
- *   2. /rfp 목록 행 클릭 → 전체 페이지.
+ * 상세는 가로채기 라우트 모달(@modal)로 렌더되지 않는다. 진입점에 따라:
+ *   1. 홈 대시보드 ActionQueue 링크 클릭 → /rfp/<code> 전체 페이지.
+ *   2. /rfp 목록 행 클릭 → ?peek=<code> 사이드 패널(미리보기, SplitView).
+ *      패널의 '전체화면' 버튼 → /rfp/<code> 전체 페이지.
  *   3. /rfp/<code> 직접 진입(하드 네비) → 전체 페이지.
- * PG 인박스(/inbox/<code>)도 동일.
+ * PG 인박스(/inbox/<code>, ?peek=<code>)도 동일.
+ *
+ * 회귀 가드(전 케이스 공통): 상세가 가로채기 라우트 dialog 로 렌더되지 않음
+ * (`getByRole('dialog').toHaveCount(0)`; peek 은 dialog 아닌 사이드 패널).
  *
  * 주의: /home 은 이전 KanbanBoard 에서 KPI strip + ActionQueue 의 대시보드로
  * 재설계됨. 칸반은 /rfp(구매사) / /inbox(PG) 에서만 렌더된다.
@@ -47,21 +51,26 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
     ).toHaveCount(0);
   });
 
-  test('목록 행 클릭(soft-nav)은 전체 페이지로 렌더', async ({ page }) => {
+  test('목록 행 클릭은 peek 사이드 패널을 열고, 전체화면 버튼은 전체 페이지로 렌더', async ({ page }) => {
     test.slow();
     await loginAs(page, 'buyer');
     await page.goto('/rfp');
 
+    // 행 클릭(soft-nav) → ?peek=<code> 사이드 패널(미리보기). 패널은
+    // RfpDetailContent('제안 비교')를 렌더한다.
     await page.getByText(RFP_CODE).click();
-
-    await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
+    await expect(page).toHaveURL(new RegExp(`/rfp\\?peek=${RFP_CODE}$`), { timeout: 60_000 });
     await expect(page.getByText('제안 비교')).toBeVisible();
-    // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
-     // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
-     // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
+    // 회귀 가드: peek 은 SplitView 사이드 패널 — 가로채기 라우트 dialog 가 아니다.
+    // (Channel.io 'Channel Talk pop-up' 다이얼로그는 dev env 에서 함께 잡힐 수 있어 제외.)
     await expect(
       page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
     ).toHaveCount(0);
+
+    // 패널 헤더 '전체화면' 버튼 → /rfp/<code> 전체 페이지(하드 라우트).
+    await page.getByRole('button', { name: '전체화면', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
+    await expect(page.getByText('제안 비교')).toBeVisible();
   });
 
   test('직접 진입(하드 네비)은 전체 페이지로 렌더', async ({ page }) => {
@@ -145,20 +154,22 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
     await expect(page).toHaveURL(/\/home$/);
   });
 
-  test('인박스 목록 행 클릭(soft-nav)은 전체 페이지로 렌더', async ({ page }) => {
+  test('인박스 목록 행 클릭은 peek 사이드 패널을 열고, 전체화면 버튼은 전체 페이지로 렌더', async ({ page }) => {
     test.slow();
     await loginAs(page, 'pg-toss');
     await page.goto('/inbox');
 
-    // 행 클릭(soft-nav). 인박스 행은 code 로 이동(uuid 면 404).
+    // 행 클릭(soft-nav) → ?peek=<code> 사이드 패널(미리보기).
     await page.getByText(RFP_CODE).click();
-
-    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
-    // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
-     // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
-     // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
+    await expect(page).toHaveURL(new RegExp(`/inbox\\?peek=${RFP_CODE}$`), { timeout: 60_000 });
+    // 회귀 가드: peek 은 SplitView 사이드 패널 — 가로채기 라우트 dialog 가 아니다.
+    // (Channel.io 'Channel Talk pop-up' 다이얼로그는 dev env 에서 함께 잡힐 수 있어 제외.)
     await expect(
       page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
     ).toHaveCount(0);
+
+    // 패널 헤더 '전체화면' 버튼 → /inbox/<code> 전체 페이지(하드 라우트).
+    await page.getByRole('button', { name: '전체화면', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
   });
 });
