@@ -1,5 +1,6 @@
 import { Chip } from '@/components/primitives/Chip';
 import { Label } from '@/components/primitives/Label';
+import { MessageComposeButton } from '@/components/messages/MessageComposeButton';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
@@ -49,6 +50,11 @@ export function RfpBriefPanel({ rfp }: Props) {
         <div className="flex items-center gap-3 mb-3">
           <Label size="md" muted={false}>구매사 정보</Label>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <MessageComposeButton
+            variant="avatar"
+            counterparty={{ name: '(주)샘플테크', type: 'buyer', workspaceId: rfp.buyerWsId }}
+            rfpContext={{ code: rfp.id, title: rfp.title }}
+          />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           {[

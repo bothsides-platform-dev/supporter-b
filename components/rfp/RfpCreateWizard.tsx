@@ -17,6 +17,8 @@ import { toast } from '@/lib/toast';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { STEP_LABELS } from './wizard-steps';
 
+const TOTAL_STEPS = STEP_LABELS.length;
+
 const SOLUTION_VALUES = ['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other'] as const;
 type SolutionValue = (typeof SOLUTION_VALUES)[number];
 
@@ -43,9 +45,12 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
 
   const back = () => setCurrentStep((s) => Math.max(1, s - 1));
 
+  // 자유 이동 — 어느 단계든 클릭으로 바로 이동(앞/뒤 무관). 발송 시점의
+  // 필수값 검증은 createRfpAction(서버)에서 수행하므로 단계 게이팅은 불필요.
   const goToStep = (step: number) => {
-    if (step > maxReachedStep) return;
-    setCurrentStep(step);
+    const target = Math.min(TOTAL_STEPS, Math.max(1, step));
+    setCurrentStep(target);
+    setMaxReachedStep((prev) => Math.max(prev, target));
   };
 
   const handleSubmit = async () => {
@@ -115,7 +120,11 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
       {/* Content area */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Mobile: top progress bar (hidden on desktop via WizardProgressBar internal class) */}
-        <WizardProgressBar currentStep={currentStep} maxReachedStep={maxReachedStep} />
+        <WizardProgressBar
+          currentStep={currentStep}
+          maxReachedStep={maxReachedStep}
+          onStepClick={goToStep}
+        />
 
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {/* Step header */}

@@ -16,22 +16,19 @@ export function WizardStepSidebar({ currentStep, maxReachedStep, onStepClick }: 
         신규 제안 요청
       </span>
       {WIZARD_STEPS.map(({ num, label }) => {
+        // 자유 이동 — 모든 단계 클릭 가능. ✓는 거쳐온(도달한) 이전 단계 표시.
         const isDone = num < currentStep && num <= maxReachedStep;
         const isActive = num === currentStep;
-        const isClickable = num <= maxReachedStep;
 
         return (
           <button
             key={num}
             type="button"
-            onClick={() => isClickable && onStepClick(num)}
-            disabled={!isClickable}
+            onClick={() => onStepClick(num)}
             className={cn(
-              'flex items-center gap-2 px-2 py-1.5 rounded-[var(--md-sys-shape-extra-small)] text-left mb-0.5 transition-colors',
+              'flex items-center gap-2 px-2 py-1.5 rounded-[var(--md-sys-shape-extra-small)] text-left mb-0.5 transition-colors cursor-pointer',
               isActive && 'bg-[var(--md-sys-color-surface-container-high)]',
-              isClickable && !isActive && 'hover:bg-[var(--md-sys-color-surface-container)]',
-              !isClickable && 'cursor-default',
-              isClickable && 'cursor-pointer',
+              !isActive && 'hover:bg-[var(--md-sys-color-surface-container)]',
             )}
           >
             <span

@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { IconButton } from '@/components/primitives/IconButton';
 import { XIcon } from '@/components/icons';
+import { MessageComposeButton } from '@/components/messages/MessageComposeButton';
 import type { Bid } from '@/lib/types/bid';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
 import type { BidNote } from '@/lib/types/bid-note';
@@ -75,9 +76,15 @@ export function BidDetailModal({
                 {pgName}
               </h2>
             </div>
-            <IconButton label="닫기" size="sm" onClick={() => onOpenChange(false)}>
-              <XIcon size={18} />
-            </IconButton>
+            <div className="flex shrink-0 items-center gap-1">
+              <MessageComposeButton
+                variant="avatar"
+                counterparty={{ name: pgName, type: 'pg', workspaceId: bid.pgWsId }}
+              />
+              <IconButton label="닫기" size="sm" onClick={() => onOpenChange(false)}>
+                <XIcon size={18} />
+              </IconButton>
+            </div>
           </header>
 
           <div className="overflow-y-auto flex-1">

@@ -10,6 +10,7 @@ import type { Bid } from '@/lib/types/bid';
 import { GRADE_LABELS, type MerchantGrade } from '@/lib/types/biz-profile';
 import { compareSettleCycle } from '@/lib/utils/settle-cycle';
 import { EnvelopeIcon } from '@/components/icons';
+import { MessageComposeButton } from '@/components/messages/MessageComposeButton';
 import Link from 'next/link';
 
 type SortKey = 'name' | 'settle' | 'settleLimit' | 'guaranteeInsurance' | 'bankPct';
@@ -119,11 +120,16 @@ export function BidComparisonTable({ rfpId, bids, grade, rfpStatus, awardedBidId
                 key={bid.id}
                 className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
               >
-                <td className="relative px-3 py-4 text-[13px] font-medium text-[var(--md-sys-color-on-surface)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-0.5 group-hover:before:bg-[var(--md-sys-color-warning)]">
-                  {pgName(bid.pgWsId)}
-                  {bid.proposalPdfs.length > 0 && (
-                    <span className="ml-2 font-mono text-[10px] text-[var(--md-sys-color-outline)]">PDF</span>
-                  )}
+                <td className="relative px-3 py-4 group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-0.5 group-hover:before:bg-[var(--md-sys-color-warning)]">
+                  <div className="flex items-center">
+                    <MessageComposeButton
+                      variant="profile"
+                      counterparty={{ name: pgName(bid.pgWsId), type: 'pg', workspaceId: bid.pgWsId }}
+                    />
+                    {bid.proposalPdfs.length > 0 && (
+                      <span className="ml-2 font-mono text-[10px] text-[var(--md-sys-color-outline)]">PDF</span>
+                    )}
+                  </div>
                 </td>
                 <Num label={bid.settleCycle} best={sortKey === 'settle' && bid.settleCycle === bestSettle} />
                 <Num label={formatKRW(bid.settleLimit)} best={bid.settleLimit === minSettleLimit} />
