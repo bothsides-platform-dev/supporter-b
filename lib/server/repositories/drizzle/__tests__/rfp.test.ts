@@ -37,6 +37,7 @@ function makeRfp(
     rfpFiles: [],
     allowedPgWorkspaceIds,
     requiredPaymentMethods: [],
+    customPaymentMethods: [],
     deadline: new Date(Date.now() + 86_400_000).toISOString(),
     status,
     createdBy,
