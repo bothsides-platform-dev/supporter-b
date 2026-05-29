@@ -19,8 +19,6 @@ export function RfpStep3PgSelect({ onBack, onNext }: Props) {
   const [pgOpen, setPgOpen] = useState(false);
   const [wsInputError, setWsInputError] = useState('');
 
-  const canNext = draft.allowedPgWorkspaceIds.length > 0;
-
   const handleWsSelect = (ws: PgWorkspace) => {
     setWsInputError('');
     if (draft.allowedPgWorkspaceIds.some((w) => w.id === ws.id)) {
@@ -127,7 +125,7 @@ export function RfpStep3PgSelect({ onBack, onNext }: Props) {
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
-        <Button type="button" size="md" disabled={!canNext} onClick={onNext}>
+        <Button type="button" size="md" onClick={onNext}>
           다음
         </Button>
       </div>

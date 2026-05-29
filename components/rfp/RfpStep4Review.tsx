@@ -58,8 +58,6 @@ export function RfpStep4Review({
     ...draft.requiredPaymentMethods.map((m) => PAYMENT_METHOD_LABELS[m]),
     ...draft.customPaymentMethods.map((c) => c.label),
   ].join(', ');
-  const canSend =
-    draft.deadline !== '' && !isNaN(new Date(draft.deadline).getTime()) && !submitting;
 
   return (
     <div className="space-y-6">
@@ -165,7 +163,7 @@ export function RfpStep4Review({
         <Button
           type="button"
           size="lg"
-          disabled={!canSend}
+          disabled={submitting}
           onClick={onSubmit}
         >
           {submitting
