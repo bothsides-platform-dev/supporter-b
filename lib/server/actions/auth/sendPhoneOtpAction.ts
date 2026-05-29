@@ -36,13 +36,21 @@ export async function sendPhoneOtpAction(input: {
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-  await db.insert(phoneOtps).values({
-    phone,
-    codeHash: hashOtpCode(code),
-    expiresAt,
-  });
+  const [row] = await db
+    .insert(phoneOtps)
+    .values({
+      phone,
+      codeHash: hashOtpCode(code),
+      expiresAt,
+    })
+    .returning({ id: phoneOtps.id });
 
-  await sendSms(phone, `bidit 인증번호: ${code} (5분 이내 입력)`);
+  try {
+    await sendSms(phone, `bidit 인증번호: ${code} (5분 이내 입력)`);
+  } catch {
+    await db.delete(phoneOtps).where(eq(phoneOtps.id, row.id));
+    return { ok: false, error: 'SMS_FAILED' };
+  }
 
   return { ok: true };
 }
