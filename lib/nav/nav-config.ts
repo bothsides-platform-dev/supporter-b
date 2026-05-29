@@ -123,7 +123,8 @@ const SETTINGS_SECTION: NavSection = {
       id: 'settings-members',
       label: '멤버',
       href: '/settings/members',
-      shortcut: { kind: 'chord', lead: 'g', key: 'm' },
+      // G then T (Team) — moved off M so 메시지 can claim the mnemonic G M.
+      shortcut: { kind: 'chord', lead: 'g', key: 't' },
     },
   ],
 };
@@ -149,8 +150,8 @@ const MESSAGES: NavLeaf = {
   label: '메시지',
   href: '/messages',
   icon: EnvelopeIcon,
-  // G then E (mEssages) — h/n/r/i/s/c/p/m/1-4 are taken.
-  shortcut: { kind: 'chord', lead: 'g', key: 'e' },
+  // G then M (Messages) — h/n/r/i/s/c/p/t/1-4 are taken.
+  shortcut: { kind: 'chord', lead: 'g', key: 'm' },
 };
 
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
