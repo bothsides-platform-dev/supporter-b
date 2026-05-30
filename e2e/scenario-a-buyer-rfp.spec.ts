@@ -54,14 +54,19 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await expect(page.getByText('123-45-67890')).toBeVisible();
     await page.getByRole('button', { name: '다음' }).click();
 
-    // ── 3. Step 2 제안 내용 — 필수 필드는 '제목' 하나 ───────────
-    // 나머지 사업 컨텍스트 input(홈페이지/주판/거래액/…)은 모두 optional.
+    // ── 3. Step 2 제안 내용 — 필수: 제목 + 견적 받을 결제수단 ────
+    // 나머지 사업 컨텍스트 input(홈페이지/주판/거래액/…)은 optional.
+    // createRfpAction 은 send 시 requiredPaymentMethods+custom ≥1 을 강제하므로
+    // (zod superRefine → 미선택 시 INVALID_INPUT, 발송 차단) 결제수단도 선택.
     await page
       .getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 제안건')
       .fill('e2e-A-2026 결제 인프라 제안');
     await page
       .getByPlaceholder(/카드결제·간편결제 통합 솔루션 검토 중입니다/)
       .fill('e2e scenario A — automated send');
+    // 견적 받을 결제수단 * — RfpPaymentMethodSelect 의 토글 버튼. '카드' 는
+    // '해외카드' 와 부분일치하므로 exact 로 좁힌다.
+    await page.getByRole('button', { name: '카드', exact: true }).click();
     await page.getByRole('button', { name: '다음' }).click();
 
     // ── 3b. Step 3 PG 선택 — Popover + cmdk Command ────────────
@@ -120,10 +125,11 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
         ((inviteRows as any).rows ?? []);
     expect(inviteArr[0].c).toBe(3);
 
-    // Outbox: 1 rfp.sent + 3 rfp.invited = 4 entries scoped to this RFP.
-    // The current schema has no `payload` JSONB; we filter by `dedupe_key`
-    // which encodes the rfpId by convention (createRfpAction uses
-    // `rfp:{rfpId}:sent` and `rfp:{rfpId}:invite:ws:{pgWsId}:user:{u}`).
+    // Outbox: 3 rfp.invited entries (one per PG admin), scoped to this RFP.
+    // createRfpAction enqueues ONLY rfp.invited rows; `rfp.sent` is a
+    // logBusinessEvent(), not an outbox email — see createRfpAction.ts and the
+    // canonical unit contract create.test.ts:184-186 (every row rfp.invited,
+    // no rfp.sent). dedupeKey: `rfp:{rfpId}:invite:ws:{pgWsId}:user:{u}`.
     const outboxRows = await db.execute<{ c: number }>(
       sql`SELECT count(*)::int AS c FROM outbox_entries
           WHERE event IN ('rfp.sent', 'rfp.invited')
@@ -133,6 +139,6 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
       ? outboxRows
       : // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ((outboxRows as any).rows ?? []);
-    expect(outboxArr[0].c).toBe(4);
+    expect(outboxArr[0].c).toBe(3);
   });
 });
