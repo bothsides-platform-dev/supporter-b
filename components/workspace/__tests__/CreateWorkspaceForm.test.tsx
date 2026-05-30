@@ -93,7 +93,7 @@ describe('CreateWorkspaceForm — buyer', () => {
     switchWorkspaceAction.mockResolvedValue({ ok: true, redirectTo: '/home' });
 
     render(<CreateWorkspaceForm />);
-    await user.type(screen.getByLabelText('사업자 등록번호'), '1112223334');
+    await user.type(screen.getByLabelText('사업자 등록번호'), '1248100998');
     await user.click(screen.getByRole('button', { name: '조회' }));
     // GradeConfirmPanel은 가입 폼에서 제거됨 — 등급은 admin 승인 시 지정
     await user.type(screen.getByPlaceholderText('(주)샘플테크'), 'BuyerCo');
@@ -104,7 +104,7 @@ describe('CreateWorkspaceForm — buyer', () => {
         type: 'buyer',
         name: 'BuyerCo',
         bizProfile: {
-          bizNo: '111-22-23334',
+          bizNo: '124-81-00998', // BizLookupField가 하이픈 포맷으로 변환
           taxType: 'general',
           status: 'active',
         },

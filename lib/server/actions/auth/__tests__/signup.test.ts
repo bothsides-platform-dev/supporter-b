@@ -272,8 +272,43 @@ describe('signupCompleteAction — buyer branch', () => {
       phone: DEFAULT_PHONE,
       phoneVerificationId: verificationId,
       wsKind: 'buyer',
+      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
     });
     expect(r.ok).toBe(false);
+  });
+
+  it('bizProfile 없는 buyer 가입은 INVALID_INPUT 반환한다', async () => {
+    const r = await signupCompleteAction({
+      email: 'kim2@example.com',
+      name: '김구매',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+      // bizProfile 없음 — 필수 refine이 거부해야 함
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('체크섬이 틀린 bizNo는 INVALID_INPUT 반환한다', async () => {
+    const r = await signupCompleteAction({
+      email: 'kim3@example.com',
+      name: '김구매',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+      bizProfile: {
+        bizNo: '1234567890', // 10자리이지만 체크섬 불일치
+        taxType: 'general',
+        status: 'active',
+      },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
 
   it('returns EMAIL_TAKEN if a user with the email already exists', async () => {
@@ -404,6 +439,42 @@ describe('signupCompleteAction — pg branch', () => {
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('MISSING_WS_NAME');
+  });
+
+  it('pgProfile.bizNo 없는 PG 가입은 INVALID_INPUT 반환한다', async () => {
+    const r = await signupCompleteAction({
+      email: 'sales2@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '서포터 B 페이',
+      pgProfile: {
+        bizNo: '', // 빈 값 — 필수 min(10)에서 거부
+        serviceScope: { paymentMethods: ['카드'], industries: [], volumeRange: '1억 미만', integrationTypes: [] },
+      },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('체크섬이 틀린 PG bizNo는 INVALID_INPUT 반환한다', async () => {
+    const r = await signupCompleteAction({
+      email: 'sales3@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '서포터 B 페이',
+      pgProfile: {
+        bizNo: '1234567890', // 10자리이지만 체크섬 불일치
+        serviceScope: { paymentMethods: ['카드'], industries: [], volumeRange: '1억 미만', integrationTypes: [] },
+      },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
 
   it('each PG signup creates its own workspace (no auto-join by domain)', async () => {
