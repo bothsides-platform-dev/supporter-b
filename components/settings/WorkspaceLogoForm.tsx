@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
+import { toast } from '@/lib/toast';
 
 type Props = { workspaceId: string; name: string; hasLogo: boolean };
 
@@ -13,19 +14,17 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState<'upload' | 'delete' | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setError(null);
 
     if (!ALLOWED_TYPES.has(file.type)) {
-      setError('PNG 또는 JPEG 파일만 업로드할 수 있습니다.');
+      toast('PNG 또는 JPEG 파일만 업로드할 수 있습니다.', { type: 'error' });
       return;
     }
     if (file.size > MAX_BYTES) {
-      setError('파일 크기는 5MB 이하여야 합니다.');
+      toast('파일 크기는 5MB 이하여야 합니다.', { type: 'error' });
       return;
     }
 
@@ -40,9 +39,10 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        setError(json.error ?? '업로드에 실패했습니다.');
+        toast(json.error ?? '업로드에 실패했습니다.', { type: 'error' });
         return;
       }
+      toast('프로필 사진을 변경했습니다.');
       router.refresh();
     } finally {
       setLoading(null);
@@ -51,7 +51,6 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
   }
 
   async function handleDelete() {
-    setError(null);
     setLoading('delete');
     try {
       const res = await fetch(`/api/workspace/${workspaceId}/avatar`, {
@@ -59,9 +58,10 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        setError(json.error ?? '삭제에 실패했습니다.');
+        toast(json.error ?? '삭제에 실패했습니다.', { type: 'error' });
         return;
       }
+      toast('프로필 사진을 삭제했습니다.');
       router.refresh();
     } finally {
       setLoading(null);
@@ -120,15 +120,6 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
           </div>
         )}
       </div>
-
-      {error && (
-        <p
-          role="alert"
-          className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-error)]"
-        >
-          {error}
-        </p>
-      )}
     </div>
   );
 }

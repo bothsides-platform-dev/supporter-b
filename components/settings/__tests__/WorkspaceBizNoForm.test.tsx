@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+const toast = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (...a: unknown[]) => toast(...a) }));
+
 const lookupBizNoAction = vi.fn();
 const updateWorkspaceBizProfileAction = vi.fn();
 const refresh = vi.fn();
@@ -21,6 +24,7 @@ import { WorkspaceBizNoForm } from '../WorkspaceBizNoForm';
 const CURRENT = '111-11-11111';
 
 beforeEach(() => {
+  toast.mockReset();
   lookupBizNoAction.mockReset();
   updateWorkspaceBizProfileAction.mockReset();
   refresh.mockReset();
@@ -94,7 +98,9 @@ describe('WorkspaceBizNoForm', () => {
       }),
     );
     await waitFor(() => expect(refresh).toHaveBeenCalled());
-    expect(await screen.findByText(/저장됨/)).toBeInTheDocument();
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('사업자번호를 저장했습니다.'));
+    // No inline "✓ 저장됨" text
+    expect(screen.queryByText(/저장됨/)).toBeNull();
   });
 
   it('disables 변경 적용 when the looked-up bizNo equals the current one', async () => {
@@ -161,9 +167,10 @@ describe('WorkspaceBizNoForm', () => {
 
     await user.click(screen.getByRole('button', { name: '변경 적용' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      /WORKSPACE_NOT_FOUND/,
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(expect.stringContaining('WORKSPACE_NOT_FOUND'), { type: 'error' }),
     );
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(refresh).not.toHaveBeenCalled();
   });
 });
