@@ -1,18 +1,35 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import { Avatar } from '@/components/primitives/Avatar';
 import { Label } from '@/components/primitives/Label';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
+import { Select } from '@/components/primitives/Select';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/lib/toast';
 import { inviteWorkspaceMemberAction } from '@/lib/server/actions/workspace/inviteWorkspaceMemberAction';
 import { removeWorkspaceMemberAction } from '@/lib/server/actions/workspace/removeWorkspaceMemberAction';
 import { changeWorkspaceMemberRoleAction } from '@/lib/server/actions/workspace/changeWorkspaceMemberRoleAction';
+import { cancelWorkspaceInviteAction } from '@/lib/server/actions/workspace/cancelWorkspaceInviteAction';
+import { resendWorkspaceInviteAction } from '@/lib/server/actions/workspace/resendWorkspaceInviteAction';
 import type { Role, User } from '@/lib/types/user';
 
 type PendingInvite = { email: string; createdAt: string; role: Role };
+
+type ConfirmState =
+  | { kind: 'remove'; member: User }
+  | { kind: 'cancelInvite'; email: string }
+  | null;
 
 type Props = {
   workspaceName: string;
@@ -25,6 +42,11 @@ type Props = {
 
 const roleLabel: Record<Role, string> = { admin: '관리자', member: '멤버' };
 
+const ROLE_OPTIONS = [
+  { value: 'member', label: '멤버' },
+  { value: 'admin', label: '관리자' },
+];
+
 function mutationErrorMessage(error: string): string {
   switch (error) {
     case 'LAST_ADMIN':
@@ -33,6 +55,10 @@ function mutationErrorMessage(error: string): string {
       return '본인은 내보낼 수 없습니다.';
     case 'FORBIDDEN_NOT_ADMIN':
       return '권한이 없습니다.';
+    case 'INVITE_NOT_FOUND':
+      return '초대를 찾을 수 없습니다.';
+    case 'WORKSPACE_NOT_FOUND':
+      return '워크스페이스를 찾을 수 없습니다.';
     default:
       return `처리 실패 (${error})`;
   }
@@ -52,9 +78,11 @@ export function MembersPanel({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isMutating, startMutate] = useTransition();
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   const isAdmin = userRole === 'admin';
 
+  // ── invite form ──────────────────────────────────────────────────────────
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -87,6 +115,7 @@ export function MembersPanel({
     });
   };
 
+  // ── member mutations ─────────────────────────────────────────────────────
   const handleRemove = (m: User) => {
     startMutate(async () => {
       const result = await removeWorkspaceMemberAction({ userId: m.id });
@@ -95,6 +124,7 @@ export function MembersPanel({
         return;
       }
       setMembers((prev) => prev.filter((x) => x.id !== m.id));
+      setConfirm(null);
       toast(`${m.name}님을 내보냈습니다.`);
     });
   };
@@ -112,8 +142,51 @@ export function MembersPanel({
     });
   };
 
+  // ── pending invite mutations ──────────────────────────────────────────────
+  const handleCancelInvite = (email: string) => {
+    startMutate(async () => {
+      const result = await cancelWorkspaceInviteAction({ email });
+      if (!result.ok) {
+        toast(mutationErrorMessage(result.error), { type: 'error' });
+        return;
+      }
+      setPendingInvites((prev) => prev.filter((p) => p.email !== email));
+      setConfirm(null);
+      toast('초대를 취소했습니다.');
+    });
+  };
+
+  const handleResend = (email: string) => {
+    startMutate(async () => {
+      const result = await resendWorkspaceInviteAction({ email });
+      if (!result.ok) {
+        toast(mutationErrorMessage(result.error), { type: 'error' });
+        return;
+      }
+      toast('초대 메일을 다시 보냈습니다.');
+    });
+  };
+
+  // ── confirm dialog ────────────────────────────────────────────────────────
+  const confirmTitle =
+    confirm?.kind === 'remove'
+      ? `${confirm.member.name}님을 내보낼까요?`
+      : confirm?.kind === 'cancelInvite'
+        ? '초대를 취소할까요?'
+        : '';
+
+  const confirmDescription =
+    confirm?.kind === 'cancelInvite' ? confirm.email : undefined;
+
+  const handleConfirm = () => {
+    if (!confirm) return;
+    if (confirm.kind === 'remove') handleRemove(confirm.member);
+    else if (confirm.kind === 'cancelInvite') handleCancelInvite(confirm.email);
+  };
+
   return (
     <>
+      {/* ── page header ── */}
       <div>
         <Label size="md" muted={false} as="span" className="block mb-2">SETTINGS · MEMBERS</Label>
         <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
@@ -125,7 +198,7 @@ export function MembersPanel({
         </p>
       </div>
 
-      {/* Members list */}
+      {/* ── active members ── */}
       <section>
         <div className="flex items-center gap-3 mb-4">
           <Label size="md" muted={false}>활성 멤버</Label>
@@ -137,42 +210,58 @@ export function MembersPanel({
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
           {members.map((m) => {
             const isSelf = m.id === currentUserId;
+            const oppositeRole: Role = m.role === 'admin' ? 'member' : 'admin';
+            const oppositeRoleLabel = roleLabel[oppositeRole];
+
             return (
-              <div key={m.id} className="py-4 flex items-center gap-4 hover:bg-[var(--md-sys-color-surface-container-high)] -mx-4 px-4 transition-colors">
+              <div
+                key={m.id}
+                className="py-4 flex items-center gap-4 hover:bg-[var(--md-sys-color-surface-container-high)] -mx-4 px-4 transition-colors"
+              >
                 <Avatar name={m.name} color="primary" size="md" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
                     {m.name}
-                    {isSelf && <span className="ml-2 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">(나)</span>}
+                    {isSelf && (
+                      <span className="ml-2 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                        (나)
+                      </span>
+                    )}
                   </p>
-                  <span className="font-mono text-[11px] text-[var(--md-sys-color-on-surface-variant)] tabular-nums">{m.email}</span>
+                  <span className="font-mono text-[11px] text-[var(--md-sys-color-on-surface-variant)] tabular-nums">
+                    {m.email}
+                  </span>
                 </div>
                 <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)] hidden md:inline">
                   {m.lastSeenAt ? formatDate(m.lastSeenAt) : '—'}
                 </span>
+
                 {isAdmin ? (
-                  <div className="flex items-center gap-2">
-                    <select
-                      aria-label={`${m.name} 역할 변경`}
-                      value={m.role}
-                      disabled={isSelf || isMutating}
-                      onChange={(e) => handleRoleChange(m, e.target.value as Role)}
-                      className="bg-transparent border border-[var(--md-sys-color-outline-variant)] rounded-md px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] disabled:opacity-50"
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      aria-label={`${m.name} 관리`}
+                      disabled={isMutating}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 disabled:opacity-[0.38] disabled:cursor-not-allowed disabled:pointer-events-none"
                     >
-                      <option value="member">멤버</option>
-                      <option value="admin">관리자</option>
-                    </select>
-                    <Button
-                      type="button"
-                      variant="text"
-                      size="sm"
-                      aria-label={`${m.name} 강퇴`}
-                      disabled={isSelf || isMutating}
-                      onClick={() => handleRemove(m)}
-                    >
-                      강퇴
-                    </Button>
-                  </div>
+                      <MoreHorizontal className="size-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
+                      <DropdownMenuItem
+                        disabled={isSelf || isMutating}
+                        onClick={() => handleRoleChange(m, oppositeRole)}
+                      >
+                        {oppositeRoleLabel}(으)로 변경
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={isSelf || isMutating}
+                        onClick={() => setConfirm({ kind: 'remove', member: m })}
+                      >
+                        내보내기
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 ) : (
                   <Chip label={roleLabel[m.role]} color={m.role === 'admin' ? 'primary' : 'surface'} />
                 )}
@@ -182,7 +271,7 @@ export function MembersPanel({
         </div>
       </section>
 
-      {/* Pending invites */}
+      {/* ── pending invitations ── */}
       {pendingInvites.length > 0 && (
         <section>
           <div className="flex items-center gap-3 mb-4">
@@ -199,17 +288,42 @@ export function MembersPanel({
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <span className="font-mono text-[13px] tabular-nums text-[var(--md-sys-color-on-surface)]">{p.email}</span>
+                  <span className="font-mono text-[13px] tabular-nums text-[var(--md-sys-color-on-surface)]">
+                    {p.email}
+                  </span>
                 </div>
                 <Chip label={roleLabel[p.role]} color={p.role === 'admin' ? 'primary' : 'surface'} />
                 <Chip label="대기중" color="warning" />
+                {isAdmin && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="text"
+                      size="sm"
+                      disabled={isMutating}
+                      onClick={() => handleResend(p.email)}
+                    >
+                      재발송
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="text"
+                      size="sm"
+                      color="error"
+                      disabled={isMutating}
+                      onClick={() => setConfirm({ kind: 'cancelInvite', email: p.email })}
+                    >
+                      취소
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {/* Invite form — admin only */}
+      {/* ── invite form — admin only ── */}
       {isAdmin && (
         <section>
           <div className="flex items-center gap-3 mb-4">
@@ -224,25 +338,27 @@ export function MembersPanel({
                   type="email"
                   value={inviteEmail}
                   disabled={isPending}
-                  onChange={(e) => { setInviteEmail(e.target.value); setError(null); }}
+                  onChange={(e) => {
+                    setInviteEmail(e.target.value);
+                    setError(null);
+                  }}
                   placeholder="member@company.com"
                   className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors disabled:opacity-50"
                 />
               </div>
               <div className="space-y-1">
                 <Label size="md" muted={false}>역할</Label>
-                <select
-                  aria-label="초대 역할"
+                <Select
+                  options={ROLE_OPTIONS}
                   value={inviteRole}
-                  disabled={isPending}
-                  onChange={(e) => setInviteRole(e.target.value as Role)}
-                  className="block bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors disabled:opacity-50"
-                >
-                  <option value="member">멤버</option>
-                  <option value="admin">관리자</option>
-                </select>
+                  onChange={(v) => setInviteRole(v as Role)}
+                />
               </div>
-              <Button type="submit" disabled={!inviteEmail.trim() || isPending} className="md:ml-4">
+              <Button
+                type="submit"
+                disabled={!inviteEmail.trim() || isPending}
+                className="md:ml-4"
+              >
                 {isPending ? '발송 중…' : '초대 발송'}
               </Button>
             </div>
@@ -257,6 +373,18 @@ export function MembersPanel({
           </form>
         </section>
       )}
+
+      {/* ── confirm dialog (shared for remove + cancel invite) ── */}
+      <ConfirmDialog
+        open={confirm !== null}
+        onOpenChange={(open) => { if (!open) setConfirm(null); }}
+        title={confirmTitle}
+        description={confirmDescription}
+        confirmLabel={confirm?.kind === 'remove' ? '내보내기' : '초대 취소'}
+        variant="danger"
+        onConfirm={handleConfirm}
+        loading={isMutating}
+      />
     </>
   );
 }
