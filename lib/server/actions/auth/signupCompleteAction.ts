@@ -6,6 +6,7 @@ import { and, eq, isNotNull } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/password';
 import { passwordSchema } from '@/lib/auth/password-validation';
 import { users, phoneOtps, pgProfiles } from '@/lib/db/schema';
+import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import {
   notifyAdminNewSignupAfterCommit,
@@ -22,7 +23,7 @@ import { normalizePhone } from './phoneOtpUtils';
 
 const PgProfileInput = z
   .object({
-    bizNo: z.string().optional(),
+    bizNo: z.string().min(10).max(12).refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
     serviceScope: z.object({
       paymentMethods: z.array(z.string()),
       industries: z.array(z.string()),
@@ -35,12 +36,17 @@ const PgProfileInput = z
 
 const BizProfileInput = z
   .object({
-    bizNo: z.string().min(8).max(20),
+    bizNo: z
+      .string()
+      .min(10)
+      .max(12)
+      .refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
     taxType: z.enum(['general', 'simple', 'exempt']),
     status: z.enum(['active', 'suspended', 'closed']),
     grade: z.enum(['small', 'sme1', 'sme2', 'sme3', 'general']).optional(),
-    gradeSource: z.enum(['user_confirmed', 'user_overridden']).default(
-      'user_confirmed',
+    // 가입 시 등급 자기신고 제거 — gradeSource는 항상 'unset'으로 저장됨.
+    gradeSource: z.enum(['user_confirmed', 'user_overridden', 'unset']).default(
+      'unset',
     ),
   })
   .strict();
@@ -57,9 +63,18 @@ const Input = z
     bizProfile: BizProfileInput.optional(),
     pgProfile: PgProfileInput.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (d) => d.wsKind !== 'buyer' || !!d.bizProfile,
+    { message: 'MISSING_BIZ_PROFILE', path: ['bizProfile'] },
+  )
+  .refine(
+    (d) => d.wsKind !== 'pg' || !!d.pgProfile,
+    { message: 'MISSING_PG_PROFILE', path: ['pgProfile'] },
+  );
 
-export type SignupCompleteInput = z.infer<typeof Input>;
+// z.input: default 필드(gradeSource 등)가 optional — 호출자가 생략해도 됨.
+export type SignupCompleteInput = z.input<typeof Input>;
 export type SignupCompleteResult = AuthActionResult<{
   redirectTo: string;
   email: string;
@@ -174,7 +189,7 @@ export async function signupCompleteAction(
         if (parsed.data.wsKind === 'pg' && parsed.data.pgProfile) {
           await tx.insert(pgProfiles).values({
             workspaceId,
-            bizNo: parsed.data.pgProfile.bizNo ?? null,
+            bizNo: parsed.data.pgProfile.bizNo,
             serviceScope: parsed.data.pgProfile.serviceScope,
             slaDays: parsed.data.pgProfile.slaDays ?? null,
           });

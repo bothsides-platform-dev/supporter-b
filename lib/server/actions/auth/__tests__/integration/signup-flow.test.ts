@@ -75,11 +75,9 @@ describe('signup flow integration (no UI)', () => {
       wsKind: 'buyer',
       wsName: '(주)샘플테크',
       bizProfile: {
-        bizNo: '1234567890',
+        bizNo: '1248100998', // 삼성전자: 체크섬 유효
         taxType: 'general',
         status: 'active',
-        grade: 'general',
-        gradeSource: 'user_confirmed',
       },
     });
     expect(c.ok).toBe(true);
@@ -130,6 +128,10 @@ describe('signup flow integration (no UI)', () => {
       phoneVerificationId: pgVid,
       wsKind: 'pg',
       wsName: '서포터 B 페이',
+      pgProfile: {
+        bizNo: '1248100998',
+        serviceScope: { paymentMethods: ['카드'], industries: [], volumeRange: '1억 미만', integrationTypes: [] },
+      },
     });
     expect(c.ok).toBe(true);
     if (!c.ok) return;

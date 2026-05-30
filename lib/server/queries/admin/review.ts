@@ -1,5 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
-import { workspaces, verificationApplications, pgProfiles } from '@/lib/db/schema';
+import { workspaces, verificationApplications, pgProfiles, bizProfiles } from '@/lib/db/schema';
 import { actionDb } from '@/lib/server/actions/auth/_shared';
 import { getWorkspaceAdminUser } from './workspaceOwner';
 import type { PgliteDB } from '@/lib/db/client-pglite';
@@ -51,7 +51,23 @@ export async function getApplicationDetail(applicationId: string, db: DB = actio
     .from(pgProfiles)
     .where(eq(pgProfiles.workspaceId, app.workspaceId));
 
+  // buyer 워크스페이스의 현재 biz_profile — 등급 지정 화면에서 bizNo 표시 + 현재 등급 프리셀렉트용.
+  const currentBizProfile =
+    ws.bizProfileId
+      ? (await db
+          .select()
+          .from(bizProfiles)
+          .where(eq(bizProfiles.id, ws.bizProfileId))
+          .limit(1))[0] ?? null
+      : null;
+
   const ownerContact = await getWorkspaceAdminUser(app.workspaceId, db);
 
-  return { application: app, workspace: ws, pgProfile: profile ?? null, ownerContact };
+  return {
+    application: app,
+    workspace: ws,
+    pgProfile: profile ?? null,
+    bizProfile: currentBizProfile,
+    ownerContact,
+  };
 }

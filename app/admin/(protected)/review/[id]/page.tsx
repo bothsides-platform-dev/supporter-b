@@ -5,6 +5,10 @@ import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { approveWorkspaceAction } from '@/lib/server/actions/admin/approveWorkspaceAction';
 import { rejectWorkspaceAction } from '@/lib/server/actions/admin/rejectWorkspaceAction';
 import { requestMoreInfoAction } from '@/lib/server/actions/admin/requestMoreInfoAction';
+import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import type { MerchantGrade } from '@/lib/types/biz-profile';
+
+const ALL_GRADES: MerchantGrade[] = ['small', 'sme1', 'sme2', 'sme3', 'general'];
 
 export default async function ReviewDetailPage({
   params,
@@ -16,11 +20,13 @@ export default async function ReviewDetailPage({
 
   if (!detail) notFound();
 
-  const { application, workspace, pgProfile, ownerContact } = detail;
+  const { application, workspace, pgProfile, bizProfile, ownerContact } = detail;
 
-  async function approveAction() {
+  async function approveAction(formData: FormData) {
     'use server';
-    await approveWorkspaceAction(undefined, workspace.id);
+    const gradeRaw = formData.get('grade');
+    const grade = gradeRaw ? (gradeRaw as MerchantGrade) : undefined;
+    await approveWorkspaceAction(undefined, workspace.id, grade);
   }
 
   async function rejectAction(formData: FormData) {
@@ -67,6 +73,37 @@ export default async function ReviewDetailPage({
           </div>
         </div>
       </section>
+
+      {/* Buyer biz profile (구매사 only) */}
+      {application.orgType === 'buyer' && bizProfile && (
+        <section className="rounded border border-outline-variant">
+          <div className="border-b border-outline-variant px-4 py-2 bg-surface-container-low">
+            <h2 className="text-title-small font-medium">사업자 정보</h2>
+          </div>
+          <div className="px-4 py-3 grid grid-cols-2 gap-3 text-body-small">
+            {bizProfile.bizNo && (
+              <div>
+                <span className="text-on-surface-variant">사업자번호</span>
+                <span className="ml-3 md-numeric">{bizProfile.bizNo}</span>
+              </div>
+            )}
+            {bizProfile.grade && (
+              <div>
+                <span className="text-on-surface-variant">현재 등급</span>
+                <span className="ml-3">{GRADE_LABELS[bizProfile.grade as MerchantGrade]}</span>
+              </div>
+            )}
+            {ownerContact && (
+              <div className="col-span-2">
+                <span className="text-on-surface-variant">담당자</span>
+                <span className="ml-3">
+                  {ownerContact.name} · {ownerContact.email} · {ownerContact.phone ?? '—'}
+                </span>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* PG Profile (판매사 only) */}
       {application.orgType === 'pg' && pgProfile && (
@@ -117,7 +154,32 @@ export default async function ReviewDetailPage({
           <h2 className="text-title-small font-medium">심사 처리</h2>
 
           {/* Approve */}
-          <form action={approveAction}>
+          <form action={approveAction} className="space-y-3">
+            {/* buyer 승인 시 가맹점 등급 선택 필수 */}
+            {application.orgType === 'buyer' && (
+              <div className="space-y-1">
+                <label
+                  htmlFor="grade-select"
+                  className="block text-body-small text-on-surface-variant"
+                >
+                  가맹점 등급 <span className="text-error">*</span>
+                </label>
+                <select
+                  id="grade-select"
+                  name="grade"
+                  required
+                  defaultValue={bizProfile?.grade ?? ''}
+                  className="rounded border border-outline px-3 py-2 text-body-small bg-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="" disabled>등급 선택</option>
+                  {ALL_GRADES.map((g) => (
+                    <option key={g} value={g}>
+                      {GRADE_LABELS[g]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <button
               type="submit"
               className="rounded bg-primary px-4 py-2 text-label-large text-on-primary hover:bg-primary/90"

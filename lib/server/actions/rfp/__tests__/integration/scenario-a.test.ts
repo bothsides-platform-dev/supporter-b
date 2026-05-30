@@ -122,11 +122,9 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       wsKind: 'buyer',
       wsName: '(주)샘플테크',
       bizProfile: {
-        bizNo: '1234567890',
+        bizNo: '1248100998', // 삼성전자: 체크섬 유효
         taxType: 'general',
         status: 'active',
-        grade: 'sme2',
-        gradeSource: 'user_confirmed',
       },
     });
     expect(p6.ok).toBe(true);

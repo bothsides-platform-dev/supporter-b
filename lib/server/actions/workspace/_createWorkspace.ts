@@ -16,7 +16,7 @@ export type CreateWorkspaceBizProfile = {
   taxType: 'general' | 'simple' | 'exempt';
   status: 'active' | 'suspended' | 'closed';
   grade?: 'small' | 'sme1' | 'sme2' | 'sme3' | 'general';
-  gradeSource: 'user_confirmed' | 'user_overridden';
+  gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset';
 };
 
 export type CreateWorkspaceInput = {
@@ -49,9 +49,11 @@ export async function createWorkspaceInTx(
       taxType: input.bizProfile.taxType,
       status: input.bizProfile.status,
       grade: input.bizProfile.grade ?? null,
-      gradeSource: input.bizProfile.gradeSource,
-      gradeConfirmedBy: input.userId,
-      gradeConfirmedAt: new Date(),
+      // 가입 시엔 등급이 없음(admin이 승인 시 지정) — gradeSource:'unset',
+      // gradeConfirmedBy 없음. grade override 경로는 'user_overridden'으로 별도 처리.
+      gradeSource: input.bizProfile.gradeSource ?? 'unset',
+      gradeConfirmedBy: null,
+      gradeConfirmedAt: null,
     });
   }
 
