@@ -133,6 +133,19 @@ describe('WorkspaceBizNoForm', () => {
     ).toBeDisabled();
   });
 
+  it('shows 사업자 등록번호 label exactly once when editing (no duplicate from outer Label)', async () => {
+    // Regression: ISSUE-001 — duplicate "사업자 등록번호" label rendered when edit mode active
+    // Found by /qa on 2026-05-31
+    // Report: .gstack/qa-reports/qa-report-localhost-2026-05-31.md
+    const user = userEvent.setup();
+    render(<WorkspaceBizNoForm currentBizNo={CURRENT} />);
+
+    await user.click(screen.getByRole('button', { name: '수정' }));
+
+    // BizLookupField renders its own label; the outer Label must not render in edit mode
+    expect(screen.getAllByText('사업자 등록번호')).toHaveLength(1);
+  });
+
   it('renders in initial-registration mode when currentBizNo is null', async () => {
     render(<WorkspaceBizNoForm currentBizNo={null} />);
     // 수정 버튼 없이 곧장 입력 필드 노출.
