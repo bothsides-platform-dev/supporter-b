@@ -20,16 +20,6 @@ export const pgProfiles = pgTable(
       integrationTypes: string[];
     }>(),
     slaDays: integer('sla_days'),
-    salesContact: jsonb('sales_contact').$type<{
-      name: string;
-      email: string;
-      phone: string;
-    }>(),
-    backupContact: jsonb('backup_contact').$type<{
-      name: string;
-      email: string;
-      phone: string;
-    }>(),
     licenseDocId: uuid('license_doc_id').references(() => attachments.id, {
       onDelete: 'set null',
     }),

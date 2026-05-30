@@ -44,8 +44,6 @@ CREATE TABLE "pg_profiles" (
 	"biz_no" text,
 	"service_scope" jsonb,
 	"sla_days" integer,
-	"sales_contact" jsonb,
-	"backup_contact" jsonb,
 	"license_doc_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,

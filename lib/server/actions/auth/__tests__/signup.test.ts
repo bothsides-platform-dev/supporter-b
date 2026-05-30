@@ -5,12 +5,14 @@ import { randomUUID } from 'node:crypto';
 import {
   bizProfiles,
   outboxEntries,
+  pgProfiles,
   phoneOtps,
   users,
   verificationTokens,
   workspaceMembers,
   workspaces,
 } from '@/lib/db/schema';
+import { getWorkspaceAdminUser } from '@/lib/server/queries/admin/workspaceOwner';
 import { hashOtpCode } from '../phoneOtpUtils';
 import { signupEmailAction } from '../signupEmailAction';
 import { signupCompleteAction } from '../signupCompleteAction';
@@ -328,6 +330,50 @@ describe('signupCompleteAction — pg branch', () => {
       .from(workspaceMembers)
       .where(eq(workspaceMembers.workspaceId, ws.id));
     expect(member.role).toBe('admin');
+  });
+
+  it('creates the PG profile (serviceScope) and exposes the owner contact (verified phone) via users — no separate sales input', async () => {
+    const r = await signupCompleteAction({
+      email: 'sales@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '서포터 B 페이',
+      pgProfile: {
+        bizNo: '1112223333',
+        serviceScope: {
+          paymentMethods: ['카드'],
+          industries: [],
+          volumeRange: '1억 미만',
+          integrationTypes: [],
+        },
+      },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [ws] = await db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.name, '서포터 B 페이'));
+    const [profile] = await db
+      .select()
+      .from(pgProfiles)
+      .where(eq(pgProfiles.workspaceId, ws.id));
+    expect(profile).toBeDefined();
+    expect(profile.serviceScope?.paymentMethods).toEqual(['카드']);
+
+    // The PG contact is the registering user — no duplicated salesContact column.
+    // The verified phone lives only on users.phone (digits-only), reachable as
+    // the workspace owner.
+    const owner = await getWorkspaceAdminUser(ws.id, db);
+    expect(owner).toEqual({
+      name: '서포터 B 페이 영업',
+      email: 'sales@toss.im',
+      phone: DEFAULT_PHONE,
+    });
   });
 
   it('rejects when wsKind is pg but wsName missing', async () => {
