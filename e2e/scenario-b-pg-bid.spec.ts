@@ -101,18 +101,23 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     });
 
     // ── 4. Fill the BidForm ──────────────────────────────────────
-    // sme2 grade ⇒ card fees by issuer are STATUTORY and the form
-    // disables the card-input panel; only bankPct(계좌이체) remains.
-    //
     // 정산 주기는 단일 <select value='D+1'> 에서 unit Select(D|W|M) +
     // 숫자 input 의 조합으로 분리됨. 두 필드를 합쳐 settleCycle = 'D+1'.
     // BidForm 최상단 첫 <select> 가 unit, 첫 <input type=number> 가 cycleNum.
     await page.locator('select').first().selectOption('D');
     await page.locator('input[type="number"]').first().fill('1');
 
-    // 계좌이체 수수료(bankPct) — sme2 폼에서 placeholder '0.50' 인 단 하나의
-    // PctInput. 옛 BidForm 의 'easyPay'(1.80) / 'overseas'(3.00) 필드는 제거됨.
-    await page.getByPlaceholder('0.50').fill('0.50');
+    // 결제수단별 수수료 — BidForm(components/inbox/BidForm.tsx) 의 02 수수료
+    // 섹션은 구매사가 요청한 결제수단마다 PercentInput(<input type=number
+    // placeholder='0.00'>) 을 직접 렌더한다(체크박스 없음). 보이는 모든 수수료
+    // input 을 채워 유효한 입찰(anyFeeFilled)을 만든다.
+    // (옛 단일 'easyPay'(1.80)/'overseas'(3.00)/bankPct('0.50') 필드는 제거됨.)
+    const feePctInputs = page.getByPlaceholder('0.00');
+    const feeInputs = await feePctInputs.all();
+    expect(feeInputs.length).toBeGreaterThan(0);
+    for (const feeInput of feeInputs) {
+      await feeInput.fill('0.50');
+    }
 
     await page
       .getByPlaceholder(/추가 안내 사항이 있으면/)

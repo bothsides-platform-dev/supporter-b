@@ -40,50 +40,50 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await page.getByRole('button', { name: '로그인' }).click();
     await expect(page).toHaveURL(/\/home$/, { timeout: 15_000 });
 
-    // ── 2. Open the new-RFP form ─────────────────────────────────
+    // ── 2. Open the new-RFP wizard (step 1 사업자 확인) ──────────
+    // /rfp/new 는 4-step 위저드(1 사업자 확인 · 2 제안 내용 · 3 PG 선택 ·
+    // 4 발송 확인). 각 단계는 'use client' RfpCreateWizard 가 렌더하며 '다음'
+    // 버튼으로 진행한다.
     await page.goto('/rfp/new');
-    await expect(page.getByText('신규 제안 요청')).toBeVisible();
-    // Workspace bizProfile (123-45-67890) and grade (sme2) are rendered
-    // by the RSC parent — verify the page didn't redirect to "missing
-    // workspace bizProfile" branch.
+    await expect(
+      page.getByRole('heading', { name: '신규 제안 요청' }),
+    ).toBeVisible();
+    // Step 1 renders the workspace bizProfile (123-45-67890) — verify the
+    // page didn't redirect to a "missing workspace bizProfile" branch, then
+    // advance to step 2.
     await expect(page.getByText('123-45-67890')).toBeVisible();
+    await page.getByRole('button', { name: '다음' }).click();
 
-    // ── 3. Fill form fields ──────────────────────────────────────
-    // 02 — 제안 내용 섹션. 필수 필드는 '제목' 하나(스냅샷의 §04 발송 조건
-    // 안내가 '제안 제목·PG 워크스페이스·마감일' 3개만 요구). 나머지 7개의
-    // 사업 컨텍스트 input(홈페이지/주판/거래액/…)은 모두 optional 이므로
-    // 발송 가능 상태로 만드는 데 필요한 만큼만 채운다.
+    // ── 3. Step 2 제안 내용 — 필수 필드는 '제목' 하나 ───────────
+    // 나머지 사업 컨텍스트 input(홈페이지/주판/거래액/…)은 모두 optional.
     await page
       .getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 제안건')
       .fill('e2e-A-2026 결제 인프라 제안');
-    // 메모 placeholder — 정규식 매치는 새 placeholder("…검토 중입니다. 정산주기
-    // D+1 이내 희망.") 와도 그대로 통과.
     await page
       .getByPlaceholder(/카드결제·간편결제 통합 솔루션 검토 중입니다/)
       .fill('e2e scenario A — automated send');
+    await page.getByRole('button', { name: '다음' }).click();
 
+    // ── 3b. Step 3 PG 선택 — Popover + cmdk Command ────────────
+    // click "PG사 검색…" trigger → list loads via /api/workspaces/search
+    // → click each workspace (role=option) → Popover closes → re-open.
+    // Seed workspaces: '서포터 B 페이', 'KG이니시스', '카카오페이'.
+    const pgNames = ['서포터 B 페이', 'KG이니시스', '카카오페이'];
+    for (const name of pgNames) {
+      await page.getByRole('button', { name: 'PG사 검색…' }).click();
+      await page.getByRole('option', { name }).click();
+    }
+    await page.getByRole('button', { name: '다음' }).click();
+
+    // ── 4. Step 4 발송 확인 — 마감일(필수) + 발송 ──────────────
     // Pick a future deadline (input[type=date] — required to enable send).
     const tomorrow = new Date(Date.now() + 7 * 86_400_000)
       .toISOString()
       .slice(0, 10);
     await page.locator('input[type="date"]').fill(tomorrow);
-
-    // ── 3b. Pick PG workspaces via the Popover + cmdk Command ────
-    // RFP invite model is workspace-based (post email-allowlist):
-    // click "PG사 검색…" trigger → list loads via /api/workspaces/search
-    // → click each workspace name → Popover closes → re-open for next.
-    // Seed workspaces: '서포터 B 페이', 'KG이니시스', '카카오페이'.
-    const pgNames = ['서포터 B 페이', 'KG이니시스', '카카오페이'];
-    for (const name of pgNames) {
-      await page.getByRole('button', { name: 'PG사 검색…' }).click();
-      // CommandItem renders with role 'option'; wait for the item to
-      // appear (proxy for the lazy /api/workspaces/search response).
-      await page.getByRole('option', { name }).click();
-    }
-
-    // ── 4. Submit ────────────────────────────────────────────────
-    // Button text reflects count: "3개 PG사에 발송"
-    await page.getByRole('button', { name: /3개 PG사에 발송|발송/ }).click();
+    // Send button text reflects count: "3개 PG사에 발송". Anchor the full name so
+    // it doesn't also match the sidebar step button "발송 확인" (strict-mode).
+    await page.getByRole('button', { name: /^\d+개 PG사에 발송$/ }).click();
 
     // ── 5. Land on /rfp/<rfpId> ──────────────────────────────────
     await page.waitForURL(/\/rfp\/P-\d{4}-\d{4}$/, { timeout: 15_000 });
