@@ -14,9 +14,6 @@ const BizSchema = z.object({
   bizNo: z.string().optional(),
   paymentMethods: z.array(z.string()).min(1, '결제수단을 하나 이상 선택하세요'),
   volumeRange: z.string().min(1, '월 거래액 구간을 선택하세요'),
-  salesName: z.string().min(1, '담당자 이름을 입력하세요'),
-  salesEmail: z.string().email('유효한 이메일을 입력하세요'),
-  salesPhone: z.string().min(9, '연락처를 입력하세요'),
 });
 
 export default function PgBizPage() {
@@ -30,9 +27,6 @@ export default function PgBizPage() {
     bizNo: '',
     paymentMethods: [] as string[],
     volumeRange: '',
-    salesName: '',
-    salesEmail: '',
-    salesPhone: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -77,11 +71,6 @@ export default function PgBizPage() {
             industries: [],
             volumeRange: form.volumeRange,
             integrationTypes: [],
-          },
-          salesContact: {
-            name: form.salesName,
-            email: form.salesEmail,
-            phone: form.salesPhone,
           },
         },
       });
@@ -215,88 +204,6 @@ export default function PgBizPage() {
             </p>
           )}
         </div>
-
-        {/* 영업 담당자 */}
-        <fieldset className="space-y-3 border border-[var(--md-sys-color-outline-variant)] rounded-md p-4">
-          <legend className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)] px-1">
-            영업 담당자 *
-          </legend>
-          <div className="space-y-2">
-            <label
-              htmlFor="sales-name"
-              className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
-            >
-              이름
-            </label>
-            <input
-              id="sales-name"
-              type="text"
-              value={form.salesName}
-              onChange={(e) => setForm((p) => ({ ...p, salesName: e.target.value }))}
-              placeholder="홍길동"
-              disabled={loading}
-              className="w-full px-4 py-3 text-[14px] bg-[var(--md-sys-color-surface-variant)] text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline)] rounded-md placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-primary)] disabled:opacity-50"
-            />
-            {errors.salesName && (
-              <p
-                role="alert"
-                className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
-              >
-                {errors.salesName}
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <label
-              htmlFor="sales-email"
-              className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
-            >
-              이메일
-            </label>
-            <input
-              id="sales-email"
-              type="email"
-              value={form.salesEmail}
-              onChange={(e) => setForm((p) => ({ ...p, salesEmail: e.target.value }))}
-              placeholder="sales@example.com"
-              disabled={loading}
-              className="w-full px-4 py-3 text-[14px] bg-[var(--md-sys-color-surface-variant)] text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline)] rounded-md placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-primary)] disabled:opacity-50"
-            />
-            {errors.salesEmail && (
-              <p
-                role="alert"
-                className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
-              >
-                {errors.salesEmail}
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <label
-              htmlFor="sales-phone"
-              className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
-            >
-              전화번호
-            </label>
-            <input
-              id="sales-phone"
-              type="tel"
-              value={form.salesPhone}
-              onChange={(e) => setForm((p) => ({ ...p, salesPhone: e.target.value }))}
-              placeholder="010-1234-5678"
-              disabled={loading}
-              className="w-full px-4 py-3 text-[14px] bg-[var(--md-sys-color-surface-variant)] text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline)] rounded-md placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-primary)] disabled:opacity-50"
-            />
-            {errors.salesPhone && (
-              <p
-                role="alert"
-                className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
-              >
-                {errors.salesPhone}
-              </p>
-            )}
-          </div>
-        </fieldset>
 
         {errors.form && (
           <p

@@ -1,5 +1,5 @@
 {
-  "id": "0d48424c-2800-4b92-b2ee-1e0c31383000",
+  "id": "d3807950-960c-40b7-9ad3-9d60928f007b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -188,18 +188,6 @@
         "sla_days": {
           "name": "sla_days",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sales_contact": {
-          "name": "sales_contact",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "backup_contact": {
-          "name": "backup_contact",
-          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

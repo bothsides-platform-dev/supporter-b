@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 import { workspaces, verificationApplications, pgProfiles } from '@/lib/db/schema';
 import { actionDb } from '@/lib/server/actions/auth/_shared';
+import { getWorkspaceAdminUser } from './workspaceOwner';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 type DB = ReturnType<typeof actionDb> | PgliteDB;
@@ -50,5 +51,7 @@ export async function getApplicationDetail(applicationId: string, db: DB = actio
     .from(pgProfiles)
     .where(eq(pgProfiles.workspaceId, app.workspaceId));
 
-  return { application: app, workspace: ws, pgProfile: profile ?? null };
+  const ownerContact = await getWorkspaceAdminUser(app.workspaceId, db);
+
+  return { application: app, workspace: ws, pgProfile: profile ?? null, ownerContact };
 }

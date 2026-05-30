@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 import { workspaces, bids, pgProfiles } from '@/lib/db/schema';
 import { actionDb } from '@/lib/server/actions/auth/_shared';
+import { getWorkspaceAdminUser } from './workspaceOwner';
 
 export type SellerRow = {
   id: string;
@@ -57,5 +58,7 @@ export async function getSellerDetail(workspaceId: string) {
     .orderBy(desc(bids.submittedAt))
     .limit(20) as Promise<BidRow[]>);
 
-  return { workspace: ws, pgProfile: profile ?? null, bids: sellerBids };
+  const ownerContact = await getWorkspaceAdminUser(workspaceId);
+
+  return { workspace: ws, pgProfile: profile ?? null, bids: sellerBids, ownerContact };
 }

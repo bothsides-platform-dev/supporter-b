@@ -29,18 +29,6 @@ const PgProfileInput = z
       volumeRange: z.string(),
       integrationTypes: z.array(z.string()),
     }),
-    salesContact: z.object({
-      name: z.string().min(1),
-      email: z.string().email(),
-      phone: z.string().min(9),
-    }),
-    backupContact: z
-      .object({
-        name: z.string(),
-        email: z.string(),
-        phone: z.string(),
-      })
-      .optional(),
     slaDays: z.number().int().min(1).max(30).optional(),
   })
   .strict();
@@ -188,8 +176,6 @@ export async function signupCompleteAction(
             workspaceId,
             bizNo: parsed.data.pgProfile.bizNo ?? null,
             serviceScope: parsed.data.pgProfile.serviceScope,
-            salesContact: parsed.data.pgProfile.salesContact,
-            backupContact: parsed.data.pgProfile.backupContact ?? null,
             slaDays: parsed.data.pgProfile.slaDays ?? null,
           });
         }

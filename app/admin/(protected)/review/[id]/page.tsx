@@ -16,7 +16,7 @@ export default async function ReviewDetailPage({
 
   if (!detail) notFound();
 
-  const { application, workspace, pgProfile } = detail;
+  const { application, workspace, pgProfile, ownerContact } = detail;
 
   async function approveAction() {
     'use server';
@@ -99,11 +99,11 @@ export default async function ReviewDetailPage({
                 <span className="ml-3">{pgProfile.serviceScope.industries.join(', ')}</span>
               </div>
             )}
-            {pgProfile.salesContact && (
+            {ownerContact && (
               <div className="col-span-2">
-                <span className="text-on-surface-variant">영업 담당</span>
+                <span className="text-on-surface-variant">담당자</span>
                 <span className="ml-3">
-                  {pgProfile.salesContact.name} · {pgProfile.salesContact.email} · {pgProfile.salesContact.phone}
+                  {ownerContact.name} · {ownerContact.email} · {ownerContact.phone ?? '—'}
                 </span>
               </div>
             )}
