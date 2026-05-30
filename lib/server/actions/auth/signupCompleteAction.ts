@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/password';
 import { passwordSchema } from '@/lib/auth/password-validation';
-import { users, phoneOtps, pgProfiles } from '@/lib/db/schema';
+import { users, phoneOtps, pgProfiles, verificationTokens } from '@/lib/db/schema';
+import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import {
   notifyAdminNewSignupAfterCommit,
@@ -22,37 +23,25 @@ import { normalizePhone } from './phoneOtpUtils';
 
 const PgProfileInput = z
   .object({
-    bizNo: z.string().optional(),
-    serviceScope: z.object({
-      paymentMethods: z.array(z.string()),
-      industries: z.array(z.string()),
-      volumeRange: z.string(),
-      integrationTypes: z.array(z.string()),
-    }),
-    salesContact: z.object({
-      name: z.string().min(1),
-      email: z.string().email(),
-      phone: z.string().min(9),
-    }),
-    backupContact: z
-      .object({
-        name: z.string(),
-        email: z.string(),
-        phone: z.string(),
-      })
-      .optional(),
+    bizNo: z.string().min(10).max(12).refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
+    // serviceScope(결제수단·거래량) 가입 시 수집 제거 — 컬럼은 유지(null 기록).
     slaDays: z.number().int().min(1).max(30).optional(),
   })
   .strict();
 
 const BizProfileInput = z
   .object({
-    bizNo: z.string().min(8).max(20),
+    bizNo: z
+      .string()
+      .min(10)
+      .max(12)
+      .refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
     taxType: z.enum(['general', 'simple', 'exempt']),
     status: z.enum(['active', 'suspended', 'closed']),
     grade: z.enum(['small', 'sme1', 'sme2', 'sme3', 'general']).optional(),
-    gradeSource: z.enum(['user_confirmed', 'user_overridden']).default(
-      'user_confirmed',
+    // 가입 시 등급 자기신고 제거 — gradeSource는 항상 'unset'으로 저장됨.
+    gradeSource: z.enum(['user_confirmed', 'user_overridden', 'unset']).default(
+      'unset',
     ),
   })
   .strict();
@@ -69,9 +58,18 @@ const Input = z
     bizProfile: BizProfileInput.optional(),
     pgProfile: PgProfileInput.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (d) => d.wsKind !== 'buyer' || !!d.bizProfile,
+    { message: 'MISSING_BIZ_PROFILE', path: ['bizProfile'] },
+  )
+  .refine(
+    (d) => d.wsKind !== 'pg' || !!d.pgProfile,
+    { message: 'MISSING_PG_PROFILE', path: ['pgProfile'] },
+  );
 
-export type SignupCompleteInput = z.infer<typeof Input>;
+// z.input: default 필드(gradeSource 등)가 optional — 호출자가 생략해도 됨.
+export type SignupCompleteInput = z.input<typeof Input>;
 export type SignupCompleteResult = AuthActionResult<{
   redirectTo: string;
   email: string;
@@ -133,6 +131,24 @@ export async function signupCompleteAction(
 
   if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
+  // 이메일 인증 확인 — consumedAt IS NOT NULL ⟺ 사용자가 인증 완료.
+  // 새 흐름에서 이메일 인증은 맨 마지막 단계이므로 암묵적 라우팅 게이트가 없어짐.
+  // 기존 signupEmailAction → verifyEmailAction/verifyEmailCodeAction 경로가
+  // consumedAt 을 스탬프 찍어 두므로 여기서 직접 검증한다.
+  const [emailToken] = await db
+    .select({ id: verificationTokens.id })
+    .from(verificationTokens)
+    .where(
+      and(
+        eq(verificationTokens.email, email),
+        eq(verificationTokens.purpose, 'signup_email'),
+        isNotNull(verificationTokens.consumedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!emailToken) return { ok: false, error: 'EMAIL_NOT_VERIFIED' };
+
   const passwordHash = await hashPassword(parsed.data.password);
   const userId = randomUUID();
 
@@ -186,10 +202,8 @@ export async function signupCompleteAction(
         if (parsed.data.wsKind === 'pg' && parsed.data.pgProfile) {
           await tx.insert(pgProfiles).values({
             workspaceId,
-            bizNo: parsed.data.pgProfile.bizNo ?? null,
-            serviceScope: parsed.data.pgProfile.serviceScope,
-            salesContact: parsed.data.pgProfile.salesContact,
-            backupContact: parsed.data.pgProfile.backupContact ?? null,
+            bizNo: parsed.data.pgProfile.bizNo,
+            serviceScope: null, // 가입 시 수집 제거 — 컬럼은 nullable 유지
             slaDays: parsed.data.pgProfile.slaDays ?? null,
           });
         }

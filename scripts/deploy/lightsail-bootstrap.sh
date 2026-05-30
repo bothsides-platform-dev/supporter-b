@@ -27,11 +27,12 @@ COMPOSE_VERSION="${COMPOSE_VERSION:-v2.29.7}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 
-# --- 1. Swap 2GB (next build peaks >1GB; cheap insurance even on a 2GB box) --
+# --- 1. Swap 4GB (next build peaks >1GB and OOM-kills on a 2GB box; give the
+#        build room to spill to disk instead of getting killed) -------------
 if ! sudo swapon --show | grep -q '/swapfile'; then
-  log "Creating 2GB swapfile"
-  sudo fallocate -l 2G /swapfile 2>/dev/null \
-    || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+  log "Creating 4GB swapfile"
+  sudo fallocate -l 4G /swapfile 2>/dev/null \
+    || sudo dd if=/dev/zero of=/swapfile bs=1M count=4096
   sudo chmod 600 /swapfile
   sudo mkswap /swapfile
   sudo swapon /swapfile

@@ -1,5 +1,5 @@
 {
-  "id": "0d48424c-2800-4b92-b2ee-1e0c31383000",
+  "id": "fc60f539-998e-4895-8d9a-e9c3af4301c4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -188,18 +188,6 @@
         "sla_days": {
           "name": "sla_days",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sales_contact": {
-          "name": "sales_contact",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "backup_contact": {
-          "name": "backup_contact",
-          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -2975,7 +2963,8 @@
       "values": [
         "user_confirmed",
         "user_overridden",
-        "unset"
+        "unset",
+        "admin_confirmed"
       ]
     },
     "public.invitation_status": {
@@ -3037,7 +3026,8 @@
         "rfp.sent",
         "bid.submitted",
         "rfp.awarded",
-        "workspace.invited"
+        "workspace.invited",
+        "workspace.approved"
       ]
     },
     "public.outbox_status": {

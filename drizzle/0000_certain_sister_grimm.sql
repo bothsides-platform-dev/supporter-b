@@ -4,13 +4,13 @@ CREATE TYPE "public"."bid_status" AS ENUM('draft', 'submitted', 'withdrawn');-->
 CREATE TYPE "public"."biz_status" AS ENUM('active', 'suspended', 'closed');--> statement-breakpoint
 CREATE TYPE "public"."chip_color" AS ENUM('primary', 'tertiary', 'warning', 'error', 'surface');--> statement-breakpoint
 CREATE TYPE "public"."column_kind" AS ENUM('pipeline', 'rfp_bids');--> statement-breakpoint
-CREATE TYPE "public"."grade_source" AS ENUM('user_confirmed', 'user_overridden', 'unset');--> statement-breakpoint
+CREATE TYPE "public"."grade_source" AS ENUM('user_confirmed', 'user_overridden', 'unset', 'admin_confirmed');--> statement-breakpoint
 CREATE TYPE "public"."invitation_status" AS ENUM('draft', 'pending', 'opened', 'accepted', 'expired');--> statement-breakpoint
 CREATE TYPE "public"."member_role" AS ENUM('admin', 'member');--> statement-breakpoint
 CREATE TYPE "public"."merchant_grade" AS ENUM('small', 'sme1', 'sme2', 'sme3', 'general');--> statement-breakpoint
 CREATE TYPE "public"."notification_channel" AS ENUM('email', 'in_app');--> statement-breakpoint
 CREATE TYPE "public"."notification_status" AS ENUM('queued', 'sent', 'failed', 'read');--> statement-breakpoint
-CREATE TYPE "public"."outbox_event" AS ENUM('auth.verify', 'auth.reset', 'auth.email-change', 'rfp.invited', 'rfp.sent', 'bid.submitted', 'rfp.awarded', 'workspace.invited');--> statement-breakpoint
+CREATE TYPE "public"."outbox_event" AS ENUM('auth.verify', 'auth.reset', 'auth.email-change', 'rfp.invited', 'rfp.sent', 'bid.submitted', 'rfp.awarded', 'workspace.invited', 'workspace.approved');--> statement-breakpoint
 CREATE TYPE "public"."outbox_status" AS ENUM('pending', 'sent', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."rfp_status" AS ENUM('draft', 'sent', 'closed', 'cancelled', 'awarded');--> statement-breakpoint
 CREATE TYPE "public"."tax_type" AS ENUM('general', 'simple', 'exempt');--> statement-breakpoint
@@ -44,8 +44,6 @@ CREATE TABLE "pg_profiles" (
 	"biz_no" text,
 	"service_scope" jsonb,
 	"sla_days" integer,
-	"sales_contact" jsonb,
-	"backup_contact" jsonb,
 	"license_doc_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,

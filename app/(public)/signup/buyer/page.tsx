@@ -5,80 +5,78 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/primitives/Button';
 import { AgreementCheckboxes } from '@/components/auth/AgreementCheckboxes';
+import { PasswordField } from '@/components/auth/PasswordField';
+import { SignupStepper } from '@/components/auth/SignupStepper';
 import { useSignupDraftStore } from '@/lib/stores/signup-draft';
-import { signupEmailAction } from '@/lib/server/actions/auth';
+import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 import {
-  readSignupDraft,
-  writeSignupDraft,
-} from '@/lib/auth/signup-storage';
+  isPasswordValid,
+  validatePasswordConfirm,
+} from '@/lib/auth/password-validation';
 
-type AgreementState = {
-  terms: boolean;
-  privacy: boolean;
-  marketing: boolean;
-};
+type AgreementState = { terms: boolean; privacy: boolean; marketing: boolean };
 
 export default function BuyerSignupEmailPage() {
   const router = useRouter();
   const { setEmail, setAgreedAt, setWorkspaceType } = useSignupDraftStore();
 
   const [emailInput, setEmailInput] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [agreements, setAgreements] = useState<AgreementState>({
     terms: false,
     privacy: false,
     marketing: false,
   });
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+
+  const confirmError =
+    passwordConfirm.length > 0
+      ? validatePasswordConfirm(password, passwordConfirm)
+      : attemptedSubmit
+        ? '비밀번호 확인을 입력해주세요.'
+        : null;
 
   const canSubmit =
     emailInput.trim() !== '' &&
     agreements.terms &&
     agreements.privacy &&
-    !submitting;
+    isPasswordValid(password) &&
+    !confirmError;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setAttemptedSubmit(true);
     if (!canSubmit) return;
-    setError('');
-    setSubmitting(true);
 
-    const normalised = emailInput.trim().toLowerCase();
-    const r = await signupEmailAction({
-      email: normalised,
-      workspaceType: 'buyer',
-    });
-
-    if (!r.ok) {
-      setSubmitting(false);
-      setError(r.error);
-      return;
-    }
-
+    const email = emailInput.trim().toLowerCase();
     const agreedAt = new Date().toISOString();
-    setEmail(normalised);
+    setEmail(email);
     setAgreedAt(agreedAt);
     setWorkspaceType('buyer');
 
     const draft = readSignupDraft();
     writeSignupDraft({
       ...draft,
-      email: normalised,
+      email,
+      password,
       agreedAt,
       workspaceType: 'buyer',
     });
 
-    router.push('/signup/buyer/verify');
+    router.push('/signup/buyer/workspace');
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <SignupStepper current={1} total={4} />
+
       <div>
         <h2 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
           구매사 계정을 만듭니다
         </h2>
         <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          구매사 워크스페이스용 이메일을 입력해주세요.
+          로그인에 사용할 이메일과 비밀번호를 입력해주세요.
         </p>
       </div>
 
@@ -102,31 +100,26 @@ export default function BuyerSignupEmailPage() {
           />
         </div>
 
+        <PasswordField
+          label="비밀번호"
+          value={password}
+          onChange={setPassword}
+          showStrength
+          error={attemptedSubmit && !password ? '비밀번호를 입력해주세요.' : undefined}
+        />
+        <PasswordField
+          label="비밀번호 확인"
+          name="passwordConfirm"
+          value={passwordConfirm}
+          onChange={setPasswordConfirm}
+          autoComplete="new-password"
+          error={confirmError ?? undefined}
+        />
+
         <AgreementCheckboxes value={agreements} onChange={setAgreements} />
 
-        {error === 'EMAIL_TAKEN' ? (
-          <div role="alert" className="space-y-0.5">
-            <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]">
-              이미 가입된 이메일입니다.
-            </p>
-            <Link
-              href={`/login?email=${encodeURIComponent(emailInput)}`}
-              className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface)] underline underline-offset-2 block"
-            >
-              → 로그인하기
-            </Link>
-          </div>
-        ) : error ? (
-          <p
-            role="alert"
-            className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
-          >
-            이메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요.
-          </p>
-        ) : null}
-
-        <Button type="submit" fullWidth size="lg" disabled={!canSubmit}>
-          {submitting ? 'LOADING…' : '인증 메일 받기'}
+        <Button type="submit" fullWidth size="lg" disabled={false}>
+          다음
         </Button>
       </form>
 
@@ -144,7 +137,6 @@ export default function BuyerSignupEmailPage() {
           이미 계정이 있으세요? 로그인 →
         </Link>
       </div>
-
     </div>
   );
 }

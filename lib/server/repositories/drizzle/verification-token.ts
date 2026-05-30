@@ -108,4 +108,61 @@ export class DrizzleVerificationTokenRepository implements VerificationTokenRepo
         ),
       );
   }
+
+  /**
+   * 재전송 전용 — expiresAt=now 로 토큰을 만료시키되 consumedAt 은 NULL 유지.
+   * 불변식: consumedAt IS NOT NULL ⟺ 사용자가 인증 완료.
+   */
+  async expirePendingByEmail(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(verificationTokens)
+      .set({ expiresAt: params.now })
+      .where(
+        and(
+          eq(verificationTokens.email, params.email),
+          eq(verificationTokens.purpose, params.purpose),
+          isNull(verificationTokens.consumedAt),
+          gt(verificationTokens.expiresAt, params.now),
+        ),
+      );
+  }
+
+  /**
+   * 6자리 이메일 코드 해시로 atomic consume.
+   * meta->'emailCode' 가 codeHash 와 일치하는 미사용·미만료 row 를 UPDATE WHERE 로 소비.
+   * 동시 호출 race-safe.
+   */
+  async consumeByEmailCode(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      codeHash: string;
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<VTokenView | undefined> {
+    const db = this.h(tx);
+    const updated = await db
+      .update(verificationTokens)
+      .set({ consumedAt: sql`now()` })
+      .where(
+        and(
+          eq(verificationTokens.email, params.email),
+          eq(verificationTokens.purpose, params.purpose),
+          isNull(verificationTokens.consumedAt),
+          gt(verificationTokens.expiresAt, params.now),
+          sql`${verificationTokens.meta}->>'emailCode' = ${params.codeHash}`,
+        ),
+      )
+      .returning();
+    return updated.length > 0 ? rowToToken(updated[0]) : undefined;
+  }
 }

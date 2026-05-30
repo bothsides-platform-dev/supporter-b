@@ -8,6 +8,8 @@
 export interface AuthVerifyProps {
   verifyUrl: string;
   expiresMinutes: number;
+  /** 링크 클릭 대신 화면에서 직접 입력하는 6자리 폴백 코드. */
+  emailCode?: string;
 }
 
 export interface AuthResetProps {
@@ -58,4 +60,10 @@ export interface AdminSignupReviewProps {
   workspaceName: string;
   orgLabel: string;
   reviewUrl: string;
+}
+
+export interface WorkspaceApprovedProps {
+  workspaceName: string;
+  orgLabel: string;
+  loginUrl: string;
 }

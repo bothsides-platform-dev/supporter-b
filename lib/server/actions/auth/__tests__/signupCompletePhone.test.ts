@@ -1,9 +1,11 @@
 // signupCompleteAction — phone 인증 필수 검증 테스트
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { phoneOtps, users } from '@/lib/db/schema';
+import { outboxEntries, phoneOtps, users } from '@/lib/db/schema';
 import { hashOtpCode } from '../phoneOtpUtils';
 import { signupCompleteAction } from '../signupCompleteAction';
+import { signupEmailAction } from '../signupEmailAction';
+import { verifyEmailAction } from '../verifyEmailAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -20,6 +22,17 @@ vi.mock('@/lib/server/notifications/admin-signup', () => ({
 
 let db: PgliteDB;
 
+async function seedVerifiedEmail(email: string): Promise<void> {
+  await signupEmailAction({ email });
+  const [row] = await db
+    .select({ html: outboxEntries.html })
+    .from(outboxEntries)
+    .where(eq(outboxEntries.toAddr, email.toLowerCase()))
+    .limit(1);
+  const rawToken = decodeURIComponent(row.html.match(/token=([^"]+)"/)?.[1] ?? '');
+  await verifyEmailAction(rawToken);
+}
+
 async function seedVerifiedOtp(phone: string): Promise<string> {
   const [row] = await db
     .insert(phoneOtps)
@@ -33,6 +46,9 @@ async function seedVerifiedOtp(phone: string): Promise<string> {
   return row.id;
 }
 
+// 유효한 체크섬 사업자번호 (삼성전자: 124-81-00998)
+const VALID_BIZ_NO = '1248100998';
+
 const BASE = {
   email: 'phone-test@example.com',
   name: '테스터',
@@ -40,6 +56,11 @@ const BASE = {
   wsKind: 'buyer' as const,
   wsName: '(주)테스트',
   phone: '01099998888',
+  bizProfile: {
+    bizNo: VALID_BIZ_NO,
+    taxType: 'general' as const,
+    status: 'active' as const,
+  },
 };
 
 beforeEach(async () => {
@@ -96,6 +117,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
 
   it('정상 — users.phone에 번호 저장됨', async () => {
     const verificationId = await seedVerifiedOtp(BASE.phone);
+    await seedVerifiedEmail(BASE.email);
 
     const r = await signupCompleteAction({
       ...BASE,
@@ -115,6 +137,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
   it('하이픈 형식 입력 — 숫자 OTP와 매칭하고 users.phone은 숫자로 저장', async () => {
     // 프론트는 010-1234-5678 하이픈 형식으로 제출하지만 OTP는 숫자로 저장됨.
     const verificationId = await seedVerifiedOtp('01012345678');
+    await seedVerifiedEmail(BASE.email);
 
     const r = await signupCompleteAction({
       ...BASE,
@@ -135,6 +158,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
   it('정상 가입 시 운영자 이메일 승인요청 알림을 트리거한다', async () => {
     notifyMock.mockClear();
     const verificationId = await seedVerifiedOtp(BASE.phone);
+    await seedVerifiedEmail(BASE.email);
 
     const r = await signupCompleteAction({
       ...BASE,

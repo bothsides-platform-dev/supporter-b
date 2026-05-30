@@ -106,6 +106,10 @@ async function pgSignup(email: string): Promise<{ id: string; email: string; wsI
     phoneVerificationId: pgOtp.id,
     wsKind: 'pg',
     wsName,
+    pgProfile: {
+      bizNo: '1248100998', // 삼성전자: 체크섬 유효
+      // serviceScope 가입 시 수집 제거 — 컬럼은 nullable 유지
+    },
   });
   expect(p6.ok).toBe(true);
 
@@ -159,11 +163,9 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
     wsKind: 'buyer',
     wsName: '(주)샘플테크',
     bizProfile: {
-      bizNo: '1234567890',
+      bizNo: '1248100998', // 삼성전자: 체크섬 유효
       taxType: 'general',
       status: 'active',
-      grade: 'sme2',
-      gradeSource: 'user_confirmed',
     },
   });
   expect(p6.ok).toBe(true);

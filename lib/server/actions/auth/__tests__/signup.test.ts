@@ -5,12 +5,14 @@ import { randomUUID } from 'node:crypto';
 import {
   bizProfiles,
   outboxEntries,
+  pgProfiles,
   phoneOtps,
   users,
   verificationTokens,
   workspaceMembers,
   workspaces,
 } from '@/lib/db/schema';
+import { getWorkspaceAdminUser } from '@/lib/server/queries/admin/workspaceOwner';
 import { hashOtpCode } from '../phoneOtpUtils';
 import { signupEmailAction } from '../signupEmailAction';
 import { signupCompleteAction } from '../signupCompleteAction';
@@ -23,14 +25,25 @@ const DEFAULT_PHONE = '01099999999';
 // Fixed UUID used by throwingInsertDb so VALID_SIGNUP can be a static constant.
 const FAKE_OTP_ID = randomUUID();
 
-// Fake action-db for error-tightening tests. Stubs the phoneOtps select so the
-// phone pre-check passes, then throws from the user INSERT inside the transaction.
+// Fake action-db for error-tightening tests. Stubs the two pre-checks
+// (phone OTP select + email token select) so both pass, then throws from
+// the user INSERT inside the transaction.
+let _throwingSelectCallCount = 0;
 function throwingInsertDb(error: unknown) {
+  _throwingSelectCallCount = 0;
   return {
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => [{ id: FAKE_OTP_ID, phone: DEFAULT_PHONE, verifiedAt: new Date() }],
+          limit: () => {
+            _throwingSelectCallCount++;
+            if (_throwingSelectCallCount === 1) {
+              // 1st call: phone OTP check
+              return [{ id: FAKE_OTP_ID, phone: DEFAULT_PHONE, verifiedAt: new Date() }];
+            }
+            // 2nd call: email token check
+            return [{ id: FAKE_OTP_ID }];
+          },
         }),
       }),
     }),
@@ -38,6 +51,9 @@ function throwingInsertDb(error: unknown) {
       cb({ insert: () => ({ values: () => { throw error; } }) }),
   };
 }
+
+// 유효한 체크섬 사업자번호 (삼성전자: 124-81-00998)
+const VALID_BIZ_NO = '1248100998';
 
 const VALID_SIGNUP = {
   email: 'tighten@example.com',
@@ -47,6 +63,11 @@ const VALID_SIGNUP = {
   phoneVerificationId: FAKE_OTP_ID,
   wsKind: 'buyer' as const,
   wsName: '(주)테스트',
+  bizProfile: {
+    bizNo: VALID_BIZ_NO,
+    taxType: 'general' as const,
+    status: 'active' as const,
+  },
 };
 
 let db: PgliteDB;
@@ -62,6 +83,18 @@ async function seedVerifiedOtp(phone: string = DEFAULT_PHONE): Promise<string> {
     })
     .returning();
   return row.id;
+}
+
+/** 이메일 발급 + 링크 클릭 소비 — signupCompleteAction의 EMAIL_NOT_VERIFIED 게이트 통과용 */
+async function seedVerifiedEmail(email: string): Promise<void> {
+  await signupEmailAction({ email });
+  const [row] = await db
+    .select({ html: outboxEntries.html })
+    .from(outboxEntries)
+    .where(eq(outboxEntries.toAddr, email.toLowerCase()))
+    .limit(1);
+  const rawToken = decodeURIComponent(row.html.match(/token=([^"]+)"/)?.[1] ?? '');
+  await verifyEmailAction(rawToken);
 }
 
 describe('signupEmailAction + verifyEmailAction', () => {
@@ -176,6 +209,8 @@ describe('signupEmailAction + verifyEmailAction', () => {
 
   it('returns EMAIL_TAKEN if user with that email already exists', async () => {
     const vid = await seedVerifiedOtp('01011112222');
+    // 이메일 인증 완료 후 가입
+    await seedVerifiedEmail('existing@example.com');
     await signupCompleteAction({
       email: 'existing@example.com',
       name: '기존사용자',
@@ -184,6 +219,7 @@ describe('signupEmailAction + verifyEmailAction', () => {
       phoneVerificationId: vid,
       wsKind: 'buyer',
       wsName: '테스트워크스페이스',
+      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
     });
 
     const r = await signupEmailAction({ email: 'existing@example.com' });
@@ -202,6 +238,8 @@ describe('signupCompleteAction — buyer branch', () => {
   beforeEach(async () => {
     db = await setupActionEnv();
     verificationId = await seedVerifiedOtp();
+    // 새 흐름: EMAIL_NOT_VERIFIED 게이트 통과를 위해 이메일 인증 먼저 완료
+    await seedVerifiedEmail('kim@example.com');
   });
   afterEach(teardownActionEnv);
 
@@ -215,11 +253,9 @@ describe('signupCompleteAction — buyer branch', () => {
       wsKind: 'buyer',
       wsName: '(주)샘플테크',
       bizProfile: {
-        bizNo: '1234567890',
+        bizNo: VALID_BIZ_NO,
         taxType: 'general',
         status: 'active',
-        grade: 'general',
-        gradeSource: 'user_confirmed',
       },
     });
     expect(r.ok).toBe(true);
@@ -236,7 +272,7 @@ describe('signupCompleteAction — buyer branch', () => {
     const [biz] = await db
       .select()
       .from(bizProfiles)
-      .where(eq(bizProfiles.bizNo, '1234567890'));
+      .where(eq(bizProfiles.bizNo, VALID_BIZ_NO));
     expect(biz).toBeDefined();
 
     const [ws] = await db
@@ -263,8 +299,43 @@ describe('signupCompleteAction — buyer branch', () => {
       phone: DEFAULT_PHONE,
       phoneVerificationId: verificationId,
       wsKind: 'buyer',
+      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
     });
     expect(r.ok).toBe(false);
+  });
+
+  it('bizProfile 없는 buyer 가입은 INVALID_INPUT 반환한다', async () => {
+    const r = await signupCompleteAction({
+      email: 'kim2@example.com',
+      name: '김구매',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+      // bizProfile 없음 — 필수 refine이 거부해야 함
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('체크섬이 틀린 bizNo는 INVALID_INPUT 반환한다', async () => {
+    const r = await signupCompleteAction({
+      email: 'kim3@example.com',
+      name: '김구매',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+      bizProfile: {
+        bizNo: '1234567890', // 10자리이지만 체크섬 불일치
+        taxType: 'general',
+        status: 'active',
+      },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
 
   it('returns EMAIL_TAKEN if a user with the email already exists', async () => {
@@ -276,6 +347,7 @@ describe('signupCompleteAction — buyer branch', () => {
       phoneVerificationId: verificationId,
       wsKind: 'buyer',
       wsName: 'A',
+      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
     });
     expect(ok.ok).toBe(true);
     // Second signup with same email — phone OTP is already verified so reuse is fine.
@@ -287,6 +359,7 @@ describe('signupCompleteAction — buyer branch', () => {
       phoneVerificationId: verificationId,
       wsKind: 'buyer',
       wsName: 'B',
+      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
     });
     expect(dup.ok).toBe(false);
     if (!dup.ok) expect(dup.error).toBe('EMAIL_TAKEN');
@@ -299,6 +372,8 @@ describe('signupCompleteAction — pg branch', () => {
   beforeEach(async () => {
     db = await setupActionEnv();
     verificationId = await seedVerifiedOtp();
+    // 새 흐름: EMAIL_NOT_VERIFIED 게이트 통과용 (sales@toss.im 공통)
+    await seedVerifiedEmail('sales@toss.im');
   });
   afterEach(teardownActionEnv);
 
@@ -311,6 +386,10 @@ describe('signupCompleteAction — pg branch', () => {
       phoneVerificationId: verificationId,
       wsKind: 'pg',
       wsName: '서포터 B 페이',
+      pgProfile: {
+        bizNo: VALID_BIZ_NO,
+        // serviceScope 제거 — 가입 시 수집 안 함
+      },
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -330,6 +409,43 @@ describe('signupCompleteAction — pg branch', () => {
     expect(member.role).toBe('admin');
   });
 
+  it('creates the PG profile and exposes the owner contact (verified phone) via users — serviceScope is null (not collected at signup)', async () => {
+    const r = await signupCompleteAction({
+      email: 'sales@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '서포터 B 페이',
+      pgProfile: {
+        bizNo: VALID_BIZ_NO,
+        // serviceScope 제거
+      },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [ws] = await db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.name, '서포터 B 페이'));
+    const [profile] = await db
+      .select()
+      .from(pgProfiles)
+      .where(eq(pgProfiles.workspaceId, ws.id));
+    expect(profile).toBeDefined();
+    // serviceScope는 null 로 기록됨 — 가입 시 수집 제거
+    expect(profile.serviceScope).toBeNull();
+
+    const owner = await getWorkspaceAdminUser(ws.id, db);
+    expect(owner).toEqual({
+      name: '서포터 B 페이 영업',
+      email: 'sales@toss.im',
+      phone: DEFAULT_PHONE,
+    });
+  });
+
   it('rejects when wsKind is pg but wsName missing', async () => {
     const r = await signupCompleteAction({
       email: 'sales@toss.im',
@@ -338,13 +454,55 @@ describe('signupCompleteAction — pg branch', () => {
       phone: DEFAULT_PHONE,
       phoneVerificationId: verificationId,
       wsKind: 'pg',
+      pgProfile: {
+        bizNo: VALID_BIZ_NO,
+      },
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('MISSING_WS_NAME');
   });
 
+  it('pgProfile.bizNo 없는 PG 가입은 INVALID_INPUT 반환한다', async () => {
+    // zod에서 먼저 거부 — email verification 없어도 됨
+    const r = await signupCompleteAction({
+      email: 'sales2@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '서포터 B 페이',
+      pgProfile: {
+        bizNo: '', // 빈 값 — 필수 min(10)에서 거부
+      },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('체크섬이 틀린 PG bizNo는 INVALID_INPUT 반환한다', async () => {
+    // zod에서 먼저 거부 — email verification 없어도 됨
+    const r = await signupCompleteAction({
+      email: 'sales3@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '서포터 B 페이',
+      pgProfile: {
+        bizNo: '1234567890', // 10자리이지만 체크섬 불일치
+      },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
   it('each PG signup creates its own workspace (no auto-join by domain)', async () => {
     const vid2 = await seedVerifiedOtp('01088880001');
+    await seedVerifiedEmail('first@toss.im');
+    await seedVerifiedEmail('second@toss.im');
+    // 두 PG가 각각 다른 유효 사업자번호를 사용 (삼성전자, 네이버)
     const r1 = await signupCompleteAction({
       email: 'first@toss.im',
       name: '첫번째',
@@ -353,6 +511,9 @@ describe('signupCompleteAction — pg branch', () => {
       phoneVerificationId: verificationId,
       wsKind: 'pg',
       wsName: '서포터 B 페이 1팀',
+      pgProfile: {
+        bizNo: VALID_BIZ_NO,
+      },
     });
     const r2 = await signupCompleteAction({
       email: 'second@toss.im',
@@ -362,6 +523,9 @@ describe('signupCompleteAction — pg branch', () => {
       phoneVerificationId: vid2,
       wsKind: 'pg',
       wsName: '서포터 B 페이 2팀',
+      pgProfile: {
+        bizNo: '2208104521', // 네이버: 220-81-04521
+      },
     });
     expect(r1.ok).toBe(true);
     expect(r2.ok).toBe(true);

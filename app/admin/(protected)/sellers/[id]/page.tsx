@@ -8,7 +8,7 @@ export default async function SellerDetailPage({ params }: { params: Promise<{ i
   const detail = await getSellerDetail(id);
   if (!detail) notFound();
 
-  const { workspace, pgProfile, bids } = detail;
+  const { workspace, pgProfile, bids, ownerContact } = detail;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -39,14 +39,13 @@ export default async function SellerDetailPage({ params }: { params: Promise<{ i
                 <span className="text-body-small">{pgProfile.serviceScope.volumeRange}</span>
               </div>
             )}
-            {pgProfile.salesContact && (
+            {ownerContact && (
               <div className="px-4 py-3 flex gap-4">
-                <span className="text-label-small text-on-surface-variant w-32 shrink-0">영업 담당자</span>
+                <span className="text-label-small text-on-surface-variant w-32 shrink-0">담당자</span>
                 <span className="text-body-small">
-                  {pgProfile.salesContact.name ?? '—'}
-                  {(pgProfile.salesContact.email ?? null) !== null && (
-                    <span className="text-on-surface-variant ml-2">({pgProfile.salesContact.email ?? '—'})</span>
-                  )}
+                  {ownerContact.name}
+                  <span className="text-on-surface-variant ml-2">({ownerContact.email})</span>
+                  {ownerContact.phone && <span className="ml-2 md-numeric">{ownerContact.phone}</span>}
                 </span>
               </div>
             )}

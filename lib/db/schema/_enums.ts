@@ -14,6 +14,7 @@ export const gradeSourceEnum = pgEnum('grade_source', [
   'user_confirmed',
   'user_overridden',
   'unset',
+  'admin_confirmed',
 ]);
 export const taxTypeEnum = pgEnum('tax_type', ['general', 'simple', 'exempt']);
 export const bizStatusEnum = pgEnum('biz_status', ['active', 'suspended', 'closed']);
@@ -59,6 +60,7 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'bid.submitted',
   'rfp.awarded',
   'workspace.invited',
+  'workspace.approved',
 ]);
 
 export const workspaceInvitationStatusEnum = pgEnum('workspace_invitation_status', [

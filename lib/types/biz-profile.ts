@@ -5,7 +5,7 @@ export type BizProfile = {
   taxType?: 'general' | 'simple' | 'exempt';
   status?: 'active' | 'suspended' | 'closed';
   grade?: MerchantGrade;
-  gradeSource: 'user_confirmed' | 'user_overridden' | 'unset';
+  gradeSource: 'user_confirmed' | 'user_overridden' | 'unset' | 'admin_confirmed';
   gradeConfirmedBy?: string;
   gradeConfirmedAt?: string;
 };
