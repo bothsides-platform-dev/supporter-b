@@ -87,7 +87,7 @@ openssl rand -base64 32
 [Convert]::ToBase64String([byte[]](1..32 | ForEach-Object { Get-Random -Maximum 256 }))
 ```
 
-**또는** [generate-secret.vercel.app/32](https://generate-secret.vercel.app/32) 에서 나오는 값을 복사해 넣어도 됩니다.
+**또는** `openssl rand -base64 32` 의 출력을 복사해 넣어도 됩니다.
 
 ## 4. 데이터베이스 띄우기
 
@@ -178,6 +178,6 @@ pnpm build
 pnpm start            # 기본 포트 3000
 ```
 
-> **배포**: 라이브 배포는 **Vercel** (region `icn1` — `vercel.json`). 자세한 결정 기록은 [`docs/adr/0002-vercel-deployment.md`](./docs/adr/0002-vercel-deployment.md). (이전 OCI 자체호스팅 런북·스크립트는 제거됨 — 역사적 맥락은 [`docs/adr/0001-deployment-architecture.md`](./docs/adr/0001-deployment-architecture.md).)
+> **배포**: 라이브 배포는 **AWS Lightsail** 단일 VM 자체호스팅 (Caddy + PM2 + Docker Postgres). 절차·운영 런북은 [`docs/DEPLOY_LIGHTSAIL.md`](./docs/DEPLOY_LIGHTSAIL.md).
 
 이메일이 안 올 때: `RESEND_API_KEY` 미설정이거나 outbox flush 가 안 도는 경우입니다. `pnpm db:studio` 로 `outbox` 테이블을 확인하고, 필요하면 `/api/cron/flush-outbox` 라우트를 호출(헤더 `x-cron-secret: <CRON_SECRET>`)합니다.

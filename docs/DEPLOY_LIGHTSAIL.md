@@ -2,9 +2,7 @@
 
 단일 Lightsail VM에 앱·DB·리버스프록시를 모두 올리는 **자체 호스팅** 경로다.
 
-> **위치**: 라이브 운영은 Vercel(icn1)이다 — [ADR 0002](./adr/0002-vercel-deployment.md). 이 문서는
-> Vercel 대안/폴백으로서의 Lightsail 자체 호스팅 절차다 ([OCI 폴백](./DEPLOY_OCI.md)과 같은 성격,
-> 다른 클라우드). 어느 쪽이 "현행"인지 헷갈리면 ADR 0002 가 기준.
+> **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
 ## 아키텍처
 
@@ -106,10 +104,10 @@ git pull → install → DB 기동 대기 → migrate → build → `pm2 reload`
 
 ## 방화벽 — 호스트 방화벽을 두지 않는 이유
 
-OCI 런북은 iptables 를 수술했지만 **Lightsail 은 불필요**하다:
+자체호스팅 시 흔히 iptables 를 손대지만 **Lightsail 은 불필요**하다:
 
 - **Lightsail 콘솔 방화벽**(Networking 탭)이 AWS 엣지에서 Security Group 처럼 필터링한다 = 이게 방화벽이다.
-- Amazon Linux 2023 은 ufw 가 없고(Debian 계열 도구), firewalld 도 Lightsail 이미지에서 기본 비활성. nftables 기본 정책은 ACCEPT 라 OCI 식 삽입도 불필요.
+- Amazon Linux 2023 은 ufw 가 없고(Debian 계열 도구), firewalld 도 Lightsail 이미지에서 기본 비활성. nftables 기본 정책은 ACCEPT 라 수동 룰 삽입도 불필요.
 - 외부 리스너는 Caddy(80/443, 의도적 공개)와 SSH(22, 콘솔에서 관리)뿐. Postgres 는 `127.0.0.1` 바인딩이라 외부에서 보이지 않는다 → 호스트 방화벽이 추가로 막을 대상이 없다.
 
 → §사전준비 3번(콘솔에서 443 열기)만 하면 끝. 호스트 방화벽 설치 단계는 의도적으로 없다.
