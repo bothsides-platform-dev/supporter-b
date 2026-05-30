@@ -110,15 +110,10 @@ export default async function ProfilePage({ searchParams }: Props) {
           </div>
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
-          {[
-            ['이메일', me.email],
-            ['가입일', formatDate(memberMeta?.joinedAt ?? me.joinedAt)],
-          ].map(([k, v]) => (
-            <div key={k} className={kvRowClass}>
-              <span className={kvLabelClass}>{k}</span>
-              <span className={kvValueClass}>{v}</span>
-            </div>
-          ))}
+          <div className={kvRowClass}>
+            <span className={kvLabelClass}>가입일</span>
+            <span className={kvValueClass}>{formatDate(memberMeta?.joinedAt ?? me.joinedAt)}</span>
+          </div>
         </div>
       </section>
 

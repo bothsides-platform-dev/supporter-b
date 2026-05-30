@@ -12,6 +12,7 @@ import {
   lookupBizNoAction,
   updateWorkspaceBizProfileAction,
 } from '@/lib/server/actions/rfp';
+import { toast } from '@/lib/toast';
 
 const ntsLookup = async (bizNo: string) => {
   const r = await lookupBizNoAction(bizNo);
@@ -36,8 +37,6 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
   const [editing, setEditing] = useState(currentBizNo === null);
   const [next, setNext] = useState<BizLookupResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [savedAt, setSavedAt] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -45,20 +44,16 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
 
   const handleStartEdit = () => {
     setEditing(true);
-    setError('');
-    setSavedAt(null);
   };
 
   const handleCancel = () => {
     setEditing(false);
     setNext(null);
-    setError('');
   };
 
   const handleSubmit = async () => {
     if (!dirty || submitting || !next) return;
     setSubmitting(true);
-    setError('');
     const r = await updateWorkspaceBizProfileAction({
       bizProfile: {
         bizNo: next.bizNo,
@@ -68,10 +63,10 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
     });
     setSubmitting(false);
     if (!r.ok) {
-      setError(r.error);
+      toast(`저장 실패 — ${r.error}`, { type: 'error' });
       return;
     }
-    setSavedAt(new Date().toLocaleTimeString('ko-KR'));
+    toast('사업자번호를 저장했습니다.');
     setEditing(false);
     setNext(null);
     if (isInitialRegistration && returnUrl) {
@@ -85,7 +80,8 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
 
   return (
     <div className="space-y-4">
-      <Label size="md" muted={false}>사업자 등록번호</Label>
+      {/* read-only 상태에서만 섹션 헤더 렌더 — edit 상태는 BizLookupField 자체 레이블 사용 */}
+      {!editing && <Label size="md" muted={false}>사업자 등록번호</Label>}
       {!editing && currentBizNo !== null ? (
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between border-y border-[var(--md-sys-color-outline-variant)] py-2.5">
           <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
@@ -121,15 +117,6 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
             </p>
           )}
 
-          {error && (
-            <p
-              role="alert"
-              className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
-            >
-              저장 실패 — {error}
-            </p>
-          )}
-
           <div className="flex items-center gap-3">
             <Button
               type="button"
@@ -154,14 +141,6 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
           </div>
         </div>
       )}
-
-      {savedAt && !editing && (
-        <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-tertiary)]">
-          ✓ 저장됨 {savedAt}
-        </span>
-      )}
-
-
     </div>
   );
 }
