@@ -2,15 +2,12 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
-import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import {
   BizLookupField,
   type BizLookupResult,
 } from '@/components/rfp/BizLookupField';
-import { GradeConfirmPanel } from '@/components/rfp/GradeConfirmPanel';
 import { lookupBizNoAction } from '@/lib/server/actions/rfp';
-import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 // Adapter: BizLookupField expects { valid, taxType?, status? }
 // lookupBizNoAction returns { ok, valid?, taxType?, status?, error? }
@@ -28,14 +25,12 @@ type BizProfilePayload = {
   bizNo: string;
   taxType: 'general' | 'simple' | 'exempt';
   status: 'active' | 'suspended' | 'closed';
-  grade: MerchantGrade;
-  gradeSource: 'user_confirmed';
 };
 
 type Props = {
   onSubmit: (payload: {
     wsName: string;
-    bizProfile?: BizProfilePayload;
+    bizProfile: BizProfilePayload;
   }) => Promise<void>;
   submitting: boolean;
   error?: string;
@@ -44,27 +39,21 @@ type Props = {
 export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
   const [wsName, setWsName] = useState('');
   const [bizProfile, setBizProfile] = useState<BizLookupResult | null>(null);
-  const [grade, setGrade] = useState<MerchantGrade | null>(null);
-  const [skipBiz, setSkipBiz] = useState(false);
 
-  const canSubmit =
-    wsName.trim() !== '' &&
-    !submitting &&
-    (skipBiz || bizProfile === null || grade !== null);
+  // 사업자번호 조회 완료 + 워크스페이스 이름 모두 있어야 제출 가능.
+  // 등급(grade)은 admin 승인 시 지정하므로 가입 폼에서 수집하지 않는다.
+  const canSubmit = wsName.trim() !== '' && bizProfile !== null && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
-    const payload: Parameters<typeof onSubmit>[0] = { wsName: wsName.trim() };
-    if (!skipBiz && bizProfile && grade) {
-      payload.bizProfile = {
+    await onSubmit({
+      wsName: wsName.trim(),
+      bizProfile: {
         bizNo: bizProfile.bizNo,
         taxType: bizProfile.taxType,
         status: bizProfile.status,
-        grade,
-        gradeSource: 'user_confirmed',
-      };
-    }
-    await onSubmit(payload);
+      },
+    });
   };
 
   return (
@@ -80,48 +69,15 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
         />
       </div>
 
-      <label htmlFor="skipBiz" className="flex items-start gap-3 cursor-pointer select-none">
-        <Checkbox
-          id="skipBiz"
-          checked={skipBiz}
-          onCheckedChange={(checked) => {
-            setSkipBiz(checked);
-            if (checked) {
-              setBizProfile(null);
-              setGrade(null);
-            }
-          }}
-          className="mt-0.5"
-        />
-        <span className="text-[13px] leading-snug text-[var(--md-sys-color-on-surface)]">
-          사업자번호·등급 나중에 입력하기
-          <span className="block mt-0.5 font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            법인 미설립 사전 제안 또는 보완 예정 케이스. 설정에서 추후 추가 가능.
-          </span>
-        </span>
-      </label>
-
-      {!skipBiz && (
-        <>
-          <BizLookupField
-            onLookup={ntsLookup}
-            onResult={(profile) => {
-              setBizProfile(profile);
-              setGrade(null);
-            }}
-            onReset={() => {
-              setBizProfile(null);
-              setGrade(null);
-            }}
-          />
-
-          {bizProfile && (
-            <GradeConfirmPanel
-              onConfirm={(g) => setGrade(g)}
-            />
-          )}
-        </>
-      )}
+      <BizLookupField
+        onLookup={ntsLookup}
+        onResult={(profile) => {
+          setBizProfile(profile);
+        }}
+        onReset={() => {
+          setBizProfile(null);
+        }}
+      />
 
       {error && (
         <p

@@ -4,7 +4,7 @@ CREATE TYPE "public"."bid_status" AS ENUM('draft', 'submitted', 'withdrawn');-->
 CREATE TYPE "public"."biz_status" AS ENUM('active', 'suspended', 'closed');--> statement-breakpoint
 CREATE TYPE "public"."chip_color" AS ENUM('primary', 'tertiary', 'warning', 'error', 'surface');--> statement-breakpoint
 CREATE TYPE "public"."column_kind" AS ENUM('pipeline', 'rfp_bids');--> statement-breakpoint
-CREATE TYPE "public"."grade_source" AS ENUM('user_confirmed', 'user_overridden', 'unset');--> statement-breakpoint
+CREATE TYPE "public"."grade_source" AS ENUM('user_confirmed', 'user_overridden', 'unset', 'admin_confirmed');--> statement-breakpoint
 CREATE TYPE "public"."invitation_status" AS ENUM('draft', 'pending', 'opened', 'accepted', 'expired');--> statement-breakpoint
 CREATE TYPE "public"."member_role" AS ENUM('admin', 'member');--> statement-breakpoint
 CREATE TYPE "public"."merchant_grade" AS ENUM('small', 'sme1', 'sme2', 'sme3', 'general');--> statement-breakpoint

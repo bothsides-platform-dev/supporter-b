@@ -6,12 +6,17 @@ import { z } from 'zod/v4';
 import { signIn } from 'next-auth/react';
 import { clearSignupDraft, readSignupDraft } from '@/lib/auth/signup-storage';
 import { signupCompleteAction } from '@/lib/server/actions/auth';
+import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
 
 const PAYMENT_METHODS = ['카드', '간편결제', '계좌이체', '휴대폰', '가상계좌', '해외결제'] as const;
 const VOLUME_RANGES = ['1억 미만', '1억~10억', '10억~100억', '100억 이상'] as const;
 
 const BizSchema = z.object({
-  bizNo: z.string().optional(),
+  bizNo: z
+    .string()
+    .min(10, '사업자등록번호 10자리를 입력하세요')
+    .max(12, '사업자등록번호를 확인하세요')
+    .refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
   paymentMethods: z.array(z.string()).min(1, '결제수단을 하나 이상 선택하세요'),
   volumeRange: z.string().min(1, '월 거래액 구간을 선택하세요'),
 });
@@ -65,7 +70,7 @@ export default function PgBizPage() {
         wsKind: 'pg',
         wsName: d.wsName,
         pgProfile: {
-          bizNo: form.bizNo || undefined,
+          bizNo: form.bizNo,
           serviceScope: {
             paymentMethods: form.paymentMethods,
             industries: [],
@@ -124,7 +129,7 @@ export default function PgBizPage() {
             htmlFor="biz-no"
             className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
           >
-            사업자등록번호 (선택)
+            사업자등록번호 *
           </label>
           <input
             id="biz-no"
@@ -135,6 +140,14 @@ export default function PgBizPage() {
             disabled={loading}
             className="w-full px-4 py-3 text-[14px] bg-[var(--md-sys-color-surface-variant)] text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline)] rounded-md placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-primary)] disabled:opacity-50"
           />
+          {errors.bizNo && (
+            <p
+              role="alert"
+              className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
+            >
+              {errors.bizNo}
+            </p>
+          )}
         </div>
 
         {/* 결제수단 */}

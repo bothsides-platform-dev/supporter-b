@@ -9,14 +9,11 @@ import {
   clearSignupDraft,
   readSignupDraft,
 } from '@/lib/auth/signup-storage';
-import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 type BizProfilePayload = {
   bizNo: string;
   taxType: 'general' | 'simple' | 'exempt';
   status: 'active' | 'suspended' | 'closed';
-  grade: MerchantGrade;
-  gradeSource: 'user_confirmed';
 };
 
 export default function BuyerWorkspacePage() {
@@ -24,7 +21,7 @@ export default function BuyerWorkspacePage() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (payload: { wsName: string; bizProfile?: BizProfilePayload }) => {
+  const handleSubmit = async (payload: { wsName: string; bizProfile: BizProfilePayload }) => {
     const d = readSignupDraft();
     if (!d.email || !d.password || !d.name || !d.phone || !d.phoneVerificationId) {
       setError('세션이 만료되었습니다. 처음부터 다시 시도해주세요.');
@@ -41,7 +38,7 @@ export default function BuyerWorkspacePage() {
       phoneVerificationId: d.phoneVerificationId,
       wsKind: 'buyer',
       wsName: payload.wsName,
-      ...(payload.bizProfile ? { bizProfile: payload.bizProfile } : {}),
+      bizProfile: payload.bizProfile,
     });
 
     if (!r.ok) {

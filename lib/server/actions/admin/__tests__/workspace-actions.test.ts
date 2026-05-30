@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createPgliteDb } from '@/lib/db/client-pglite';
-import { workspaces, verificationApplications, adminAuditLogs, adminNotes, outboxEntries, workspaceMembers, users } from '@/lib/db/schema';
+import { workspaces, verificationApplications, adminAuditLogs, adminNotes, outboxEntries, workspaceMembers, users, bizProfiles } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -33,7 +33,7 @@ beforeEach(async () => {
 describe('approveWorkspaceAction', () => {
   it('workspace.status를 active로 변경한다', async () => {
     const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
-    await approveWorkspaceAction(db, wsId);
+    await approveWorkspaceAction(db, wsId, 'sme1');
     const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, wsId));
     expect(ws.status).toBe('active');
     expect(ws.reviewedAt).not.toBeNull();
@@ -41,19 +41,78 @@ describe('approveWorkspaceAction', () => {
 
   it('verification_application.status를 approved로 변경한다', async () => {
     const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
-    await approveWorkspaceAction(db, wsId);
+    await approveWorkspaceAction(db, wsId, 'sme1');
     const [app] = await db.select().from(verificationApplications).where(eq(verificationApplications.id, appId));
     expect(app.status).toBe('approved');
     expect(app.reviewedBy).toBe('admin');
   });
 
-  it('admin_audit_log에 workspace.approve 이벤트를 기록한다', async () => {
+  it('admin_audit_log에 workspace.approve 이벤트와 grade를 기록한다', async () => {
     const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
-    await approveWorkspaceAction(db, wsId);
+    await approveWorkspaceAction(db, wsId, 'sme2');
     const logs = await db.select().from(adminAuditLogs);
     expect(logs).toHaveLength(1);
     expect(logs[0].action).toBe('workspace.approve');
     expect(logs[0].entityId).toBe(wsId);
+    expect((logs[0].payloadJson as Record<string, unknown>).grade).toBe('sme2');
+  });
+
+  it('buyer 승인 시 새 biz_profiles 행이 admin_confirmed gradeSource로 생성된다', async () => {
+    // 사전에 biz_profile 없음 — grade-only INSERT로 CHECK 충족
+    const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
+    await approveWorkspaceAction(db, wsId, 'small');
+
+    const rows = await db.select().from(bizProfiles);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].grade).toBe('small');
+    expect(rows[0].gradeSource).toBe('admin_confirmed');
+    expect(rows[0].gradeConfirmedBy).toBeNull();
+
+    // workspaces.bizProfileId가 새 행을 가리킨다
+    const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, wsId));
+    expect(ws.bizProfileId).toBe(rows[0].id);
+  });
+
+  it('buyer 승인 시 기존 biz_profiles의 bizNo/taxType/status가 새 행에 복사된다', async () => {
+    // 기존 biz_profile 행 삽입
+    const [bp] = await db.insert(bizProfiles).values({
+      bizNo: '1248100998',
+      taxType: 'general',
+      status: 'active',
+      gradeSource: 'unset',
+    }).returning();
+    await db.update(workspaces).set({ bizProfileId: bp.id }).where(eq(workspaces.id, wsId));
+
+    const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
+    await approveWorkspaceAction(db, wsId, 'general');
+
+    const rows = await db.select().from(bizProfiles);
+    // 기존 행 + 새 행 = 2
+    expect(rows).toHaveLength(2);
+    const newRow = rows.find((r) => r.gradeSource === 'admin_confirmed')!;
+    expect(newRow.bizNo).toBe('1248100998');
+    expect(newRow.taxType).toBe('general');
+    expect(newRow.status).toBe('active');
+    expect(newRow.grade).toBe('general');
+  });
+
+  it('buyer 승인 시 grade 없으면 GRADE_REQUIRED 에러', async () => {
+    const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
+    await expect(approveWorkspaceAction(db, wsId, undefined)).rejects.toThrow('GRADE_REQUIRED');
+  });
+
+  it('pg 워크스페이스는 grade 없이도 승인 가능', async () => {
+    // pg 타입 워크스페이스 생성
+    const [pgWs] = await db.insert(workspaces).values({ type: 'pg', name: 'PG사테스트', status: 'pending' }).returning();
+    await db.insert(verificationApplications).values({
+      workspaceId: pgWs.id,
+      orgType: 'pg',
+      status: 'submitted',
+    });
+    const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
+    await approveWorkspaceAction(db, pgWs.id, undefined);
+    const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, pgWs.id));
+    expect(ws.status).toBe('active');
   });
 
   it('admin 멤버가 있으면 workspace.approved outbox 행을 enqueue한다', async () => {
@@ -69,7 +128,7 @@ describe('approveWorkspaceAction', () => {
     });
 
     const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
-    await approveWorkspaceAction(db, wsId);
+    await approveWorkspaceAction(db, wsId, 'sme1');
 
     const rows = await db.select().from(outboxEntries);
     expect(rows).toHaveLength(1);
@@ -82,7 +141,7 @@ describe('approveWorkspaceAction', () => {
   it('admin 멤버가 없으면 outbox 행을 생성하지 않는다', async () => {
     // beforeEach에서 user/member 시드 없음 → 기존 동작 보호
     const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
-    await approveWorkspaceAction(db, wsId);
+    await approveWorkspaceAction(db, wsId, 'sme1');
 
     const rows = await db.select().from(outboxEntries);
     expect(rows).toHaveLength(0);

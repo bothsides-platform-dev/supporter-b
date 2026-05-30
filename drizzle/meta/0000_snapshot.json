@@ -1,5 +1,5 @@
 {
-  "id": "99936cb8-3bf7-468b-abd6-9819c56f20ab",
+  "id": "fc60f539-998e-4895-8d9a-e9c3af4301c4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2963,7 +2963,8 @@
       "values": [
         "user_confirmed",
         "user_overridden",
-        "unset"
+        "unset",
+        "admin_confirmed"
       ]
     },
     "public.invitation_status": {

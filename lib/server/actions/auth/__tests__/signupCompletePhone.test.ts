@@ -33,6 +33,9 @@ async function seedVerifiedOtp(phone: string): Promise<string> {
   return row.id;
 }
 
+// 유효한 체크섬 사업자번호 (삼성전자: 124-81-00998)
+const VALID_BIZ_NO = '1248100998';
+
 const BASE = {
   email: 'phone-test@example.com',
   name: '테스터',
@@ -40,6 +43,11 @@ const BASE = {
   wsKind: 'buyer' as const,
   wsName: '(주)테스트',
   phone: '01099998888',
+  bizProfile: {
+    bizNo: VALID_BIZ_NO,
+    taxType: 'general' as const,
+    status: 'active' as const,
+  },
 };
 
 beforeEach(async () => {

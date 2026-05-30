@@ -12,10 +12,7 @@ const BizProfileInput = z
     bizNo: z.string().min(8).max(20),
     taxType: z.enum(['general', 'simple', 'exempt']),
     status: z.enum(['active', 'suspended', 'closed']),
-    grade: z.enum(['small', 'sme1', 'sme2', 'sme3', 'general']).optional(),
-    gradeSource: z
-      .enum(['user_confirmed', 'user_overridden'])
-      .default('user_confirmed'),
+    // 등급은 admin 승인 시 지정 — 가입/워크스페이스 생성 시 사용자 입력 없음.
   })
   .strict();
 

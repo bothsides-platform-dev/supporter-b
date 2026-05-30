@@ -75,26 +75,13 @@ describe('CreateWorkspaceForm — PG', () => {
 });
 
 describe('CreateWorkspaceForm — buyer', () => {
-  it('creates a buyer workspace with no bizProfile when skipped', async () => {
-    const user = userEvent.setup();
-    createWorkspaceAction.mockResolvedValue({ ok: true, workspaceId: 'ws-b' });
-    switchWorkspaceAction.mockResolvedValue({ ok: true, redirectTo: '/home' });
-
+  it('조회 없이는 제출 버튼이 비활성', async () => {
     render(<CreateWorkspaceForm />); // buyer is the default type
-    await user.click(screen.getByLabelText(/나중에 입력/));
-    await user.type(screen.getByPlaceholderText('(주)샘플테크'), 'BuyerCo');
-    await user.click(screen.getByRole('button', { name: '워크스페이스 만들기' }));
-
-    await waitFor(() =>
-      expect(createWorkspaceAction).toHaveBeenCalledWith({
-        type: 'buyer',
-        name: 'BuyerCo',
-      }),
-    );
-    await waitFor(() => expect(switchWorkspaceAction).toHaveBeenCalledWith('ws-b'));
+    const submit = screen.getByRole('button', { name: '워크스페이스 만들기' });
+    expect(submit).toBeDisabled();
   });
 
-  it('passes the looked-up bizProfile + grade through to createWorkspaceAction', async () => {
+  it('조회된 bizProfile을 createWorkspaceAction에 전달한다', async () => {
     const user = userEvent.setup();
     lookupBizNoAction.mockResolvedValue({
       ok: true,
@@ -108,9 +95,9 @@ describe('CreateWorkspaceForm — buyer', () => {
     render(<CreateWorkspaceForm />);
     await user.type(screen.getByLabelText('사업자 등록번호'), '1112223334');
     await user.click(screen.getByRole('button', { name: '조회' }));
-    await user.click(await screen.findByRole('button', { name: '확인' }));
+    // GradeConfirmPanel은 가입 폼에서 제거됨 — 등급은 admin 승인 시 지정
     await user.type(screen.getByPlaceholderText('(주)샘플테크'), 'BuyerCo');
-    await user.click(screen.getByRole('button', { name: '워크스페이스 만들기' }));
+    await user.click(await screen.findByRole('button', { name: '워크스페이스 만들기' }));
 
     await waitFor(() =>
       expect(createWorkspaceAction).toHaveBeenCalledWith({
@@ -120,8 +107,6 @@ describe('CreateWorkspaceForm — buyer', () => {
           bizNo: '111-22-23334',
           taxType: 'general',
           status: 'active',
-          grade: 'sme1',
-          gradeSource: 'user_confirmed',
         },
       }),
     );
