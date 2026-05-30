@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
+import { Field } from '@/components/primitives/Field';
+import { underlineInputClass } from '@/components/forms/inputs';
 import { renameWorkspaceAction } from '@/lib/server/actions/workspace/renameWorkspaceAction';
+import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 
 type Props = {
   currentName: string;
@@ -20,7 +24,6 @@ export function WorkspaceNameForm({ currentName, canEdit }: Props) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(currentName);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
   const [, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -35,25 +38,23 @@ export function WorkspaceNameForm({ currentName, canEdit }: Props) {
   const handleStart = () => {
     setName(currentName);
     setEditing(true);
-    setError('');
   };
 
   const handleCancel = () => {
     setEditing(false);
     setName(currentName);
-    setError('');
   };
 
   const handleSubmit = async () => {
     if (!dirty || submitting) return;
     setSubmitting(true);
-    setError('');
     const r = await renameWorkspaceAction({ name: trimmed });
     setSubmitting(false);
     if (!r.ok) {
-      setError(ERROR_LABELS[r.error] ?? r.error);
+      toast(ERROR_LABELS[r.error] ?? r.error, { type: 'error' });
       return;
     }
+    toast('워크스페이스 이름을 변경했습니다.');
     setEditing(false);
     startTransition(() => router.refresh());
   };
@@ -84,12 +85,10 @@ export function WorkspaceNameForm({ currentName, canEdit }: Props) {
 
   return (
     <div className="py-3 space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
-        <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-          이름
-        </span>
+      <Field label="이름" htmlFor="workspace-name-input">
         <input
           ref={inputRef}
+          id="workspace-name-input"
           type="text"
           value={name}
           maxLength={200}
@@ -103,18 +102,9 @@ export function WorkspaceNameForm({ currentName, canEdit }: Props) {
               handleCancel();
             }
           }}
-          className="w-full sm:flex-1 sm:max-w-[360px] bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-1 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors text-left sm:text-right"
+          className={cn(underlineInputClass, 'sm:max-w-[360px]')}
         />
-      </div>
-
-      {error && (
-        <p
-          role="alert"
-          className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)] text-right"
-        >
-          {error}
-        </p>
-      )}
+      </Field>
 
       <div className="flex items-center justify-end gap-3">
         <button

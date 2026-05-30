@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+const toast = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (...a: unknown[]) => toast(...a) }));
+
 const refresh = vi.fn();
 const fetchMock = vi.fn();
 
@@ -12,6 +15,7 @@ vi.mock('next/navigation', () => ({
 // Replace global fetch
 beforeEach(() => {
   global.fetch = fetchMock;
+  toast.mockReset();
   fetchMock.mockReset();
   refresh.mockReset();
 });
@@ -51,7 +55,7 @@ describe('WorkspaceLogoForm', () => {
     expect(screen.getByRole('button', { name: '삭제' })).toBeInTheDocument();
   });
 
-  it('rejects file larger than 5MB without calling fetch', async () => {
+  it('rejects file larger than 5MB without calling fetch, shows toast error', async () => {
     const user = userEvent.setup();
     render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" hasLogo={false} />);
 
@@ -63,10 +67,11 @@ describe('WorkspaceLogoForm', () => {
     await user.upload(input, bigFile);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toBeInTheDocument();
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.any(String), { type: 'error' }));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('rejects non-image file without calling fetch', async () => {
+  it('rejects non-image file without calling fetch, shows toast error', async () => {
     render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" hasLogo={false} />);
 
     const pdfFile = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'doc.pdf', {
@@ -79,10 +84,11 @@ describe('WorkspaceLogoForm', () => {
     fireEvent.change(input);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toBeInTheDocument();
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.any(String), { type: 'error' }));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('shows 업로드 중 and calls POST on valid file, then refreshes', async () => {
+  it('calls POST on valid file, then refreshes and shows success toast', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
 
@@ -93,9 +99,10 @@ describe('WorkspaceLogoForm', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/workspace/ws-1/avatar', expect.objectContaining({ method: 'POST' }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.any(String)));
   });
 
-  it('shows 삭제 중 and calls DELETE when 삭제 clicked, then refreshes', async () => {
+  it('calls DELETE when 삭제 clicked, then refreshes and shows success toast', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
 
@@ -104,9 +111,10 @@ describe('WorkspaceLogoForm', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/workspace/ws-1/avatar', expect.objectContaining({ method: 'DELETE' }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.any(String)));
   });
 
-  it('shows error message when upload fails', async () => {
+  it('shows error toast (no inline alert) when upload fails', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'FILE_TOO_LARGE' }) });
 
@@ -115,7 +123,8 @@ describe('WorkspaceLogoForm', () => {
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     await user.upload(input, makePngFile());
 
-    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.any(String), { type: 'error' }));
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(refresh).not.toHaveBeenCalled();
   });
 });
