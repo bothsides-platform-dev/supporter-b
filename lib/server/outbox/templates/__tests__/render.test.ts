@@ -15,6 +15,7 @@ import { renderBidSubmitted } from '../bidSubmitted';
 import { renderRfpAwarded } from '../rfpAwarded';
 import { renderRfpInvited } from '../rfpInvited';
 import { renderRfpSent } from '../rfpSent';
+import { renderWorkspaceApproved } from '../workspaceApproved';
 
 // Korean Editorial assertions every template must satisfy.
 function expectEditorialRules(html: string): void {
@@ -115,6 +116,19 @@ describe('outbox email templates / render', () => {
     expect(html).toContain('P-2605-0042');
     expect(html).toContain('1f4c7a2e-1234-4abc-9def-0123456789ab');
     expect(html).toContain('D+1');
+    expectEditorialRules(html);
+  });
+
+  it('workspaceApproved includes workspace name, org label and login URL', async () => {
+    const html = await renderWorkspaceApproved({
+      workspaceName: '토스페이먼츠',
+      orgLabel: 'PG사',
+      loginUrl: 'https://bidit.test/login',
+    });
+    expect(html).toContain('토스페이먼츠');
+    expect(html).toContain('PG사');
+    expect(html).toContain('https://bidit.test/login');
+    expect(html).toContain('승인');
     expectEditorialRules(html);
   });
 

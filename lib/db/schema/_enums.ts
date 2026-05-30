@@ -59,6 +59,7 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'bid.submitted',
   'rfp.awarded',
   'workspace.invited',
+  'workspace.approved',
 ]);
 
 export const workspaceInvitationStatusEnum = pgEnum('workspace_invitation_status', [

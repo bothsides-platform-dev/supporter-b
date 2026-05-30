@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createPgliteDb } from '@/lib/db/client-pglite';
-import { workspaces, verificationApplications, adminAuditLogs, adminNotes } from '@/lib/db/schema';
+import { workspaces, verificationApplications, adminAuditLogs, adminNotes, outboxEntries, workspaceMembers, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -9,6 +9,9 @@ vi.mock('@/lib/auth/admin-session', () => ({
 }));
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
+}));
+vi.mock('@/lib/server/outbox/templates/workspaceApproved', () => ({
+  renderWorkspaceApproved: async () => '<p>approved</p>',
 }));
 
 let db: PgliteDB;
@@ -51,6 +54,38 @@ describe('approveWorkspaceAction', () => {
     expect(logs).toHaveLength(1);
     expect(logs[0].action).toBe('workspace.approve');
     expect(logs[0].entityId).toBe(wsId);
+  });
+
+  it('admin 멤버가 있으면 workspace.approved outbox 행을 enqueue한다', async () => {
+    const [user] = await db.insert(users).values({
+      email: 'applicant@example.com',
+      passwordHash: 'hash',
+      name: '신청자',
+    }).returning();
+    await db.insert(workspaceMembers).values({
+      workspaceId: wsId,
+      userId: user.id,
+      role: 'admin',
+    });
+
+    const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
+    await approveWorkspaceAction(db, wsId);
+
+    const rows = await db.select().from(outboxEntries);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].event).toBe('workspace.approved');
+    expect(rows[0].toAddr).toBe('applicant@example.com');
+    expect(rows[0].subject).toContain('승인');
+    expect(rows[0].dedupeKey).toBe(`workspace-approved:${wsId}`);
+  });
+
+  it('admin 멤버가 없으면 outbox 행을 생성하지 않는다', async () => {
+    // beforeEach에서 user/member 시드 없음 → 기존 동작 보호
+    const { approveWorkspaceAction } = await import('../approveWorkspaceAction');
+    await approveWorkspaceAction(db, wsId);
+
+    const rows = await db.select().from(outboxEntries);
+    expect(rows).toHaveLength(0);
   });
 });
 

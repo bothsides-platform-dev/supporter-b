@@ -59,3 +59,9 @@ export interface AdminSignupReviewProps {
   orgLabel: string;
   reviewUrl: string;
 }
+
+export interface WorkspaceApprovedProps {
+  workspaceName: string;
+  orgLabel: string;
+  loginUrl: string;
+}
