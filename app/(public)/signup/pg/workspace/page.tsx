@@ -1,59 +1,82 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { z } from 'zod/v4';
+import { Button } from '@/components/primitives/Button';
+import { SignupStepper } from '@/components/auth/SignupStepper';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
+import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
+
+const WorkspaceSchema = z.object({
+  wsName: z.string().min(1, '워크스페이스 이름을 입력해주세요'),
+  bizNo: z
+    .string()
+    .min(10, '사업자등록번호 10자리를 입력하세요')
+    .max(12, '사업자등록번호를 확인하세요')
+    .refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
+});
 
 export default function PgWorkspacePage() {
   const router = useRouter();
+
   const [wsName, setWsName] = useState('');
-  const [error, setError] = useState('');
+  const [bizNo, setBizNo] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
   const draft = readSignupDraft();
-  const isInvite = !!draft.inviteToken;
-  const current = isInvite ? 3 : 4;
-  const total = isInvite ? 4 : 5;
+  const ready = !!draft.email && !!draft.password;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!ready) router.replace('/signup/pg');
+  }, [ready, router]);
+
+  if (!ready) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const d = readSignupDraft();
-    if (!d.email || !d.password || !d.name || !d.phone || !d.phoneVerificationId) {
-      setError('세션이 만료되었습니다. 처음부터 다시 시도해주세요.');
-      return;
-    }
-    if (!wsName.trim()) {
-      setError('워크스페이스 이름을 입력해주세요.');
+    const result = WorkspaceSchema.safeParse({ wsName, bizNo });
+    if (!result.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of result.error.issues) {
+        errs[String(issue.path[0])] = issue.message;
+      }
+      setErrors(errs);
       return;
     }
     setSubmitting(true);
-    setError('');
+    setErrors({});
 
-    writeSignupDraft({ ...d, wsName: wsName.trim() });
-    router.push('/signup/pg/biz');
+    writeSignupDraft({
+      ...readSignupDraft(),
+      wsName: wsName.trim(),
+      bizNo: bizNo.replace(/-/g, ''),
+    });
+
+    router.push('/signup/pg/profile');
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <SignupStepper current={2} total={4} />
+
       <div>
-        <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)] mb-3">
-          {String(current).padStart(2, '0')} / {String(total).padStart(2, '0')}
-        </p>
         <h2 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
           워크스페이스를 만듭니다
         </h2>
         <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          PG 워크스페이스 이름을 입력해주세요. 동료를 나중에 초대할 수 있습니다.
+          PG 워크스페이스 이름과 사업자등록번호를 입력해주세요.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="space-y-2">
+        <div className="space-y-1">
           <label
             htmlFor="ws-name"
-            className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+            className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
           >
-            워크스페이스 이름
+            워크스페이스 이름 *
           </label>
           <input
             id="ws-name"
@@ -62,26 +85,42 @@ export default function PgWorkspacePage() {
             onChange={(e) => setWsName(e.target.value)}
             placeholder="예: 서포터 B 페이 영업팀"
             disabled={submitting}
-            className="w-full px-4 py-3 text-[14px] bg-[var(--md-sys-color-surface-variant)] text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline)] rounded-md placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-primary)] disabled:opacity-50"
+            className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
           />
+          {errors.wsName && (
+            <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
+              {errors.wsName}
+            </p>
+          )}
         </div>
 
-        {error && (
-          <p
-            role="alert"
-            className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
+        <div className="space-y-1">
+          <label
+            htmlFor="biz-no"
+            className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
           >
-            {error}
-          </p>
-        )}
+            사업자등록번호 *
+          </label>
+          <input
+            id="biz-no"
+            type="text"
+            inputMode="numeric"
+            value={bizNo}
+            onChange={(e) => setBizNo(e.target.value)}
+            placeholder="000-00-00000"
+            disabled={submitting}
+            className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] font-mono text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+          />
+          {errors.bizNo && (
+            <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
+              {errors.bizNo}
+            </p>
+          )}
+        </div>
 
-        <button
-          type="submit"
-          disabled={submitting || !wsName.trim()}
-          className="w-full py-3 text-[14px] font-[600] tracking-[-0.01em] bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] rounded-md disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-        >
+        <Button type="submit" fullWidth size="lg" disabled={submitting}>
           {submitting ? 'LOADING…' : '다음'}
-        </button>
+        </Button>
       </form>
     </div>
   );

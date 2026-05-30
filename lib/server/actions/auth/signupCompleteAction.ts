@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/password';
 import { passwordSchema } from '@/lib/auth/password-validation';
-import { users, phoneOtps, pgProfiles } from '@/lib/db/schema';
+import { users, phoneOtps, pgProfiles, verificationTokens } from '@/lib/db/schema';
 import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import {
@@ -24,12 +24,7 @@ import { normalizePhone } from './phoneOtpUtils';
 const PgProfileInput = z
   .object({
     bizNo: z.string().min(10).max(12).refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
-    serviceScope: z.object({
-      paymentMethods: z.array(z.string()),
-      industries: z.array(z.string()),
-      volumeRange: z.string(),
-      integrationTypes: z.array(z.string()),
-    }),
+    // serviceScope(결제수단·거래량) 가입 시 수집 제거 — 컬럼은 유지(null 기록).
     slaDays: z.number().int().min(1).max(30).optional(),
   })
   .strict();
@@ -136,6 +131,24 @@ export async function signupCompleteAction(
 
   if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
+  // 이메일 인증 확인 — consumedAt IS NOT NULL ⟺ 사용자가 인증 완료.
+  // 새 흐름에서 이메일 인증은 맨 마지막 단계이므로 암묵적 라우팅 게이트가 없어짐.
+  // 기존 signupEmailAction → verifyEmailAction/verifyEmailCodeAction 경로가
+  // consumedAt 을 스탬프 찍어 두므로 여기서 직접 검증한다.
+  const [emailToken] = await db
+    .select({ id: verificationTokens.id })
+    .from(verificationTokens)
+    .where(
+      and(
+        eq(verificationTokens.email, email),
+        eq(verificationTokens.purpose, 'signup_email'),
+        isNotNull(verificationTokens.consumedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!emailToken) return { ok: false, error: 'EMAIL_NOT_VERIFIED' };
+
   const passwordHash = await hashPassword(parsed.data.password);
   const userId = randomUUID();
 
@@ -190,7 +203,7 @@ export async function signupCompleteAction(
           await tx.insert(pgProfiles).values({
             workspaceId,
             bizNo: parsed.data.pgProfile.bizNo,
-            serviceScope: parsed.data.pgProfile.serviceScope,
+            serviceScope: null, // 가입 시 수집 제거 — 컬럼은 nullable 유지
             slaDays: parsed.data.pgProfile.slaDays ?? null,
           });
         }

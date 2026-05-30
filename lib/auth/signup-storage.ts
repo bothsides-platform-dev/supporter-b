@@ -11,6 +11,12 @@
 // signIn step clears it.
 const KEY = 'signupDraft';
 
+export type SignupBizProfile = {
+  bizNo: string;
+  taxType: 'general' | 'simple' | 'exempt';
+  status: 'active' | 'suspended' | 'closed';
+};
+
 export type SignupClientDraft = {
   workspaceType?: 'buyer' | 'pg';
   email?: string;
@@ -23,6 +29,10 @@ export type SignupClientDraft = {
   password?: string;
   agreedAt?: string;
   wsName?: string;
+  /** Buyer: NTS 조회로 채워진 사업자 정보 (step 2 → step 4) */
+  bizProfile?: SignupBizProfile;
+  /** PG: 직접 입력한 사업자번호 (step 2 → step 4) */
+  bizNo?: string;
 };
 
 export function readSignupDraft(): SignupClientDraft {

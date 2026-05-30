@@ -1,40 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
-import { PasswordField } from '@/components/auth/PasswordField';
 import { PhoneVerificationField } from '@/components/auth/PhoneVerificationField';
+import { SignupStepper } from '@/components/auth/SignupStepper';
 import { useSignupDraftStore } from '@/lib/stores/signup-draft';
-import {
-  readSignupDraft,
-  writeSignupDraft,
-} from '@/lib/auth/signup-storage';
-import {
-  isPasswordValid,
-  validatePasswordConfirm,
-} from '@/lib/auth/password-validation';
+import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 
 export default function BuyerProfilePage() {
   const router = useRouter();
   const { setProfile } = useSignupDraftStore();
+
   const [name, setName] = useState('');
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
   const [verificationId, setVerificationId] = useState<string | null>(null);
-  const [password, setPassword] = useState('');
-  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
   const [phoneRequired, setPhoneRequired] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
-  const passwordError =
-    attemptedSubmit && !password ? '비밀번호를 입력해주세요.' : null;
-  const confirmError =
-    passwordConfirm.length > 0
-      ? validatePasswordConfirm(password, passwordConfirm)
-      : attemptedSubmit
-        ? '비밀번호 확인을 입력해주세요.'
-        : null;
+  const draft = readSignupDraft();
+  const ready = !!draft.email && !!draft.password && !!draft.wsName && !!draft.bizProfile;
+
+  useEffect(() => {
+    if (!ready) router.replace('/signup/buyer');
+  }, [ready, router]);
+
+  if (!ready) return null;
 
   const handleVerified = (phone: string, vid: string) => {
     setVerifiedPhone(phone);
@@ -54,27 +46,26 @@ export default function BuyerProfilePage() {
       setPhoneRequired(true);
       return;
     }
-    if (!password || !isPasswordValid(password)) return;
-    if (!passwordConfirm || confirmError) return;
     setProfile(name.trim(), verifiedPhone);
-    const draft = readSignupDraft();
     writeSignupDraft({
-      ...draft,
+      ...readSignupDraft(),
       name: name.trim(),
       phone: verifiedPhone,
       phoneVerificationId: verificationId,
-      password,
     });
-    router.push('/signup/buyer/workspace');
+    router.push('/signup/buyer/verify');
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <SignupStepper current={3} total={4} />
+
       <div>
         <h2 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-          프로필 설정
+          담당자 정보
         </h2>
       </div>
+
       <form className="space-y-6" onSubmit={handleSubmit}>
         <div className="space-y-1">
           <label
@@ -92,32 +83,17 @@ export default function BuyerProfilePage() {
             className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
           />
           {nameError && (
-            <p className="text-[11px] text-[var(--md-sys-color-error)]">
-              {nameError}
-            </p>
+            <p className="text-[11px] text-[var(--md-sys-color-error)]">{nameError}</p>
           )}
         </div>
+
         <PhoneVerificationField onVerified={handleVerified} />
-        {phoneRequired && !verifiedPhone && (
+        {attemptedSubmit && phoneRequired && !verifiedPhone && (
           <p className="text-[11px] text-[var(--md-sys-color-error)]">
             휴대전화 인증을 완료해주세요.
           </p>
         )}
-        <PasswordField
-          label="비밀번호"
-          value={password}
-          onChange={setPassword}
-          showStrength
-          error={passwordError ?? undefined}
-        />
-        <PasswordField
-          label="비밀번호 확인"
-          name="passwordConfirm"
-          value={passwordConfirm}
-          onChange={setPasswordConfirm}
-          autoComplete="new-password"
-          error={confirmError ?? undefined}
-        />
+
         <Button type="submit" fullWidth size="lg">
           다음
         </Button>

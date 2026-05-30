@@ -236,6 +236,32 @@ export interface VerificationTokenRepo {
     },
     tx?: Tx,
   ): Promise<void>;
+  /**
+   * 이메일 재전송 시 이전 토큰을 expire(expiresAt=now)만 하고 consumedAt은 NULL
+   * 유지. 불변식: consumedAt IS NOT NULL ⟺ 사용자가 직접 인증 완료.
+   * invalidatePending(consumedAt 스탬프)과 달리 폴링/게이트에서 미인증 상태를 구분 가능.
+   */
+  expirePendingByEmail(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /**
+   * 6자리 코드(해시)로 atomic consume. meta.emailCode와 codeHash가 일치하고
+   * 미사용·미만료인 토큰을 consumedAt 스탬프. 동시 호출 race-safe(UPDATE WHERE).
+   */
+  consumeByEmailCode(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      codeHash: string;
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<(Omit<VerificationToken, 'token'> & { tokenHash: string }) | undefined>;
 }
 
 // ── Attachment ────────────────────────────────────────────────────────

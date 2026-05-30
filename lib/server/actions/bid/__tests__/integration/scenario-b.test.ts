@@ -108,7 +108,7 @@ async function pgSignup(email: string): Promise<{ id: string; email: string; wsI
     wsName,
     pgProfile: {
       bizNo: '1248100998', // 삼성전자: 체크섬 유효
-      serviceScope: { paymentMethods: ['카드'], industries: [], volumeRange: '1억 미만', integrationTypes: [] },
+      // serviceScope 가입 시 수집 제거 — 컬럼은 nullable 유지
     },
   });
   expect(p6.ok).toBe(true);

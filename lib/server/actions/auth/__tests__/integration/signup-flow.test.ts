@@ -130,7 +130,7 @@ describe('signup flow integration (no UI)', () => {
       wsName: '서포터 B 페이',
       pgProfile: {
         bizNo: '1248100998',
-        serviceScope: { paymentMethods: ['카드'], industries: [], volumeRange: '1억 미만', integrationTypes: [] },
+        // serviceScope 가입 시 수집 제거 — 컬럼은 nullable 유지
       },
     });
     expect(c.ok).toBe(true);

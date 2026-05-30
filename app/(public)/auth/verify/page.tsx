@@ -58,7 +58,10 @@ function VerifyContent() {
         inviteToken: r.inviteToken ?? draft.inviteToken,
       });
       setState('success');
-      setTimeout(() => router.push(`/signup/${kind}/profile`), 600);
+      // 새 흐름: 이메일 인증을 마지막(step 4)으로 이동.
+      // emailVerified=true 를 draft 에 기록하고 verify 페이지로 돌아가면
+      // 해당 페이지가 draft.emailVerified 를 감지해 자동으로 완료 처리.
+      setTimeout(() => router.push(`/signup/${kind}/verify`), 600);
     })();
 
     return () => {

@@ -7,6 +7,7 @@ import type { AuthVerifyProps } from './types';
 export function AuthVerify({
   verifyUrl,
   expiresMinutes,
+  emailCode,
 }: AuthVerifyProps): React.JSX.Element {
   return (
     <Layout preheader="이메일 인증을 완료해 주세요." serial="EMAIL / VERIFY">
@@ -27,6 +28,26 @@ export function AuthVerify({
       </p>
 
       <Button href={verifyUrl}>인증하기</Button>
+
+      {emailCode && (
+        <>
+          <p style={{ margin: '24px 0 8px', fontSize: '13px', color: '#555' }}>
+            버튼을 클릭하기 어려운 경우, 아래 6자리 코드를 입력하세요.
+          </p>
+          <p
+            style={{
+              margin: '0 0 0',
+              fontSize: '28px',
+              fontWeight: 700,
+              fontFamily: 'monospace',
+              letterSpacing: '8px',
+              color: '#08090A',
+            }}
+          >
+            {emailCode}
+          </p>
+        </>
+      )}
 
       <p style={{ marginTop: '24px', fontSize: '12px', color: '#666' }}>
         버튼이 동작하지 않으면 다음 주소를 복사해 주세요.

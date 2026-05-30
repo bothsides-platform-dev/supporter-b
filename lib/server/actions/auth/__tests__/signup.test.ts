@@ -25,14 +25,25 @@ const DEFAULT_PHONE = '01099999999';
 // Fixed UUID used by throwingInsertDb so VALID_SIGNUP can be a static constant.
 const FAKE_OTP_ID = randomUUID();
 
-// Fake action-db for error-tightening tests. Stubs the phoneOtps select so the
-// phone pre-check passes, then throws from the user INSERT inside the transaction.
+// Fake action-db for error-tightening tests. Stubs the two pre-checks
+// (phone OTP select + email token select) so both pass, then throws from
+// the user INSERT inside the transaction.
+let _throwingSelectCallCount = 0;
 function throwingInsertDb(error: unknown) {
+  _throwingSelectCallCount = 0;
   return {
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => [{ id: FAKE_OTP_ID, phone: DEFAULT_PHONE, verifiedAt: new Date() }],
+          limit: () => {
+            _throwingSelectCallCount++;
+            if (_throwingSelectCallCount === 1) {
+              // 1st call: phone OTP check
+              return [{ id: FAKE_OTP_ID, phone: DEFAULT_PHONE, verifiedAt: new Date() }];
+            }
+            // 2nd call: email token check
+            return [{ id: FAKE_OTP_ID }];
+          },
         }),
       }),
     }),
@@ -72,6 +83,18 @@ async function seedVerifiedOtp(phone: string = DEFAULT_PHONE): Promise<string> {
     })
     .returning();
   return row.id;
+}
+
+/** 이메일 발급 + 링크 클릭 소비 — signupCompleteAction의 EMAIL_NOT_VERIFIED 게이트 통과용 */
+async function seedVerifiedEmail(email: string): Promise<void> {
+  await signupEmailAction({ email });
+  const [row] = await db
+    .select({ html: outboxEntries.html })
+    .from(outboxEntries)
+    .where(eq(outboxEntries.toAddr, email.toLowerCase()))
+    .limit(1);
+  const rawToken = decodeURIComponent(row.html.match(/token=([^"]+)"/)?.[1] ?? '');
+  await verifyEmailAction(rawToken);
 }
 
 describe('signupEmailAction + verifyEmailAction', () => {
@@ -186,6 +209,8 @@ describe('signupEmailAction + verifyEmailAction', () => {
 
   it('returns EMAIL_TAKEN if user with that email already exists', async () => {
     const vid = await seedVerifiedOtp('01011112222');
+    // 이메일 인증 완료 후 가입
+    await seedVerifiedEmail('existing@example.com');
     await signupCompleteAction({
       email: 'existing@example.com',
       name: '기존사용자',
@@ -213,6 +238,8 @@ describe('signupCompleteAction — buyer branch', () => {
   beforeEach(async () => {
     db = await setupActionEnv();
     verificationId = await seedVerifiedOtp();
+    // 새 흐름: EMAIL_NOT_VERIFIED 게이트 통과를 위해 이메일 인증 먼저 완료
+    await seedVerifiedEmail('kim@example.com');
   });
   afterEach(teardownActionEnv);
 
@@ -345,6 +372,8 @@ describe('signupCompleteAction — pg branch', () => {
   beforeEach(async () => {
     db = await setupActionEnv();
     verificationId = await seedVerifiedOtp();
+    // 새 흐름: EMAIL_NOT_VERIFIED 게이트 통과용 (sales@toss.im 공통)
+    await seedVerifiedEmail('sales@toss.im');
   });
   afterEach(teardownActionEnv);
 
@@ -359,7 +388,7 @@ describe('signupCompleteAction — pg branch', () => {
       wsName: '서포터 B 페이',
       pgProfile: {
         bizNo: VALID_BIZ_NO,
-        serviceScope: { paymentMethods: ['카드'], industries: [], volumeRange: '1억 미만', integrationTypes: [] },
+        // serviceScope 제거 — 가입 시 수집 안 함
       },
     });
     expect(r.ok).toBe(true);
@@ -380,7 +409,7 @@ describe('signupCompleteAction — pg branch', () => {
     expect(member.role).toBe('admin');
   });
 
-  it('creates the PG profile (serviceScope) and exposes the owner contact (verified phone) via users — no separate sales input', async () => {
+  it('creates the PG profile and exposes the owner contact (verified phone) via users — serviceScope is null (not collected at signup)', async () => {
     const r = await signupCompleteAction({
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
@@ -391,12 +420,7 @@ describe('signupCompleteAction — pg branch', () => {
       wsName: '서포터 B 페이',
       pgProfile: {
         bizNo: VALID_BIZ_NO,
-        serviceScope: {
-          paymentMethods: ['카드'],
-          industries: [],
-          volumeRange: '1억 미만',
-          integrationTypes: [],
-        },
+        // serviceScope 제거
       },
     });
     expect(r.ok).toBe(true);
@@ -411,11 +435,9 @@ describe('signupCompleteAction — pg branch', () => {
       .from(pgProfiles)
       .where(eq(pgProfiles.workspaceId, ws.id));
     expect(profile).toBeDefined();
-    expect(profile.serviceScope?.paymentMethods).toEqual(['카드']);
+    // serviceScope는 null 로 기록됨 — 가입 시 수집 제거
+    expect(profile.serviceScope).toBeNull();
 
-    // The PG contact is the registering user — no duplicated salesContact column.
-    // The verified phone lives only on users.phone (digits-only), reachable as
-    // the workspace owner.
     const owner = await getWorkspaceAdminUser(ws.id, db);
     expect(owner).toEqual({
       name: '서포터 B 페이 영업',
@@ -434,7 +456,6 @@ describe('signupCompleteAction — pg branch', () => {
       wsKind: 'pg',
       pgProfile: {
         bizNo: VALID_BIZ_NO,
-        serviceScope: { paymentMethods: ['카드'], industries: [], volumeRange: '1억 미만', integrationTypes: [] },
       },
     });
     expect(r.ok).toBe(false);
@@ -442,6 +463,7 @@ describe('signupCompleteAction — pg branch', () => {
   });
 
   it('pgProfile.bizNo 없는 PG 가입은 INVALID_INPUT 반환한다', async () => {
+    // zod에서 먼저 거부 — email verification 없어도 됨
     const r = await signupCompleteAction({
       email: 'sales2@toss.im',
       name: '서포터 B 페이 영업',
@@ -452,7 +474,6 @@ describe('signupCompleteAction — pg branch', () => {
       wsName: '서포터 B 페이',
       pgProfile: {
         bizNo: '', // 빈 값 — 필수 min(10)에서 거부
-        serviceScope: { paymentMethods: ['카드'], industries: [], volumeRange: '1억 미만', integrationTypes: [] },
       },
     });
     expect(r.ok).toBe(false);
@@ -460,6 +481,7 @@ describe('signupCompleteAction — pg branch', () => {
   });
 
   it('체크섬이 틀린 PG bizNo는 INVALID_INPUT 반환한다', async () => {
+    // zod에서 먼저 거부 — email verification 없어도 됨
     const r = await signupCompleteAction({
       email: 'sales3@toss.im',
       name: '서포터 B 페이 영업',
@@ -470,7 +492,6 @@ describe('signupCompleteAction — pg branch', () => {
       wsName: '서포터 B 페이',
       pgProfile: {
         bizNo: '1234567890', // 10자리이지만 체크섬 불일치
-        serviceScope: { paymentMethods: ['카드'], industries: [], volumeRange: '1억 미만', integrationTypes: [] },
       },
     });
     expect(r.ok).toBe(false);
@@ -479,6 +500,8 @@ describe('signupCompleteAction — pg branch', () => {
 
   it('each PG signup creates its own workspace (no auto-join by domain)', async () => {
     const vid2 = await seedVerifiedOtp('01088880001');
+    await seedVerifiedEmail('first@toss.im');
+    await seedVerifiedEmail('second@toss.im');
     // 두 PG가 각각 다른 유효 사업자번호를 사용 (삼성전자, 네이버)
     const r1 = await signupCompleteAction({
       email: 'first@toss.im',
@@ -490,7 +513,6 @@ describe('signupCompleteAction — pg branch', () => {
       wsName: '서포터 B 페이 1팀',
       pgProfile: {
         bizNo: VALID_BIZ_NO,
-        serviceScope: { paymentMethods: ['카드'], industries: [], volumeRange: '1억 미만', integrationTypes: [] },
       },
     });
     const r2 = await signupCompleteAction({
@@ -503,7 +525,6 @@ describe('signupCompleteAction — pg branch', () => {
       wsName: '서포터 B 페이 2팀',
       pgProfile: {
         bizNo: '2208104521', // 네이버: 220-81-04521
-        serviceScope: { paymentMethods: ['간편결제'], industries: [], volumeRange: '1억~10억', integrationTypes: [] },
       },
     });
     expect(r1.ok).toBe(true);

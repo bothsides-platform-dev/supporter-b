@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import {
@@ -19,6 +19,11 @@ import {
   normalizeEmail,
   type AuthActionResult,
 } from './_shared';
+
+/** 6자리 숫자 OTP 코드 생성 (000000~999999). */
+function generateEmailCode(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, '0');
+}
 
 const Input = z.object({
   email: z.string().email(),
@@ -58,10 +63,26 @@ export async function signupEmailAction(
   const tokenHash = hashToken(rawToken);
   const expiresAt = addMinutes(new Date(), 15);
 
+  // 6자리 코드 — 링크 클릭이 불가한 환경(다른 기기, 웹메일 등)의 인라인 인증 폴백.
+  const emailCode = generateEmailCode();
+  const emailCodeHash = hashToken(emailCode);
+
   const verifications = await getVerificationTokenRepo();
+
+  // 재발송 시 이전 미소비 토큰을 expire(consumedAt NULL 유지).
+  // 불변식: consumedAt IS NOT NULL ⟺ 사용자가 직접 인증 완료.
+  // expirePendingByEmail 은 `signupCompleteAction`의 EMAIL_NOT_VERIFIED 게이트가
+  // 미인증 토큰으로 통과하는 것을 방지하는 단일-라이브-코드 보장 메커니즘.
+  await verifications.expirePendingByEmail({
+    email,
+    purpose: 'signup_email',
+    now: new Date(),
+  });
+
   const metaFields = {
     ...(parsed.data.inviteToken ? { inviteToken: parsed.data.inviteToken } : {}),
     ...(parsed.data.workspaceType ? { workspaceType: parsed.data.workspaceType } : {}),
+    emailCode: emailCodeHash,
   };
   await verifications.save({
     id: randomUUID(),
@@ -70,13 +91,13 @@ export async function signupEmailAction(
     tokenHash,
     issuedAt: new Date().toISOString(),
     expiresAt,
-    meta: Object.keys(metaFields).length ? metaFields : undefined,
+    meta: metaFields,
   });
 
   const verifyUrl = `${baseUrl()}/auth/verify?token=${rawToken}`;
 
   const outbox = await getOutboxRepo();
-  const html = await renderAuthVerify({ verifyUrl, expiresMinutes: 15 });
+  const html = await renderAuthVerify({ verifyUrl, expiresMinutes: 15, emailCode });
   await outbox.enqueue({
     event: 'auth.verify',
     to: email,
