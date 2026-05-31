@@ -2,40 +2,38 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { signupEmailAction } from '@/lib/server/actions/auth';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 
 type Props = {
   token: string;
   inviteEmail: string;
+  workspaceName: string;
 };
 
-// Unauthenticated workspace-invite landing. Mirrors InviteUnauthClient for RFP
-// invites: writes the workspace token to sessionStorage draft so biz/page.tsx
-// can redirect back to the invite URL after signup completes.
-export function WorkspaceInviteUnauthClient({ token, inviteEmail }: Props) {
+// Unauthenticated workspace-invite landing.
+//
+// 새 가입 경로: draft에 { wsInviteToken, email, inviteWorkspaceName } 기록 후
+// /signup/pg(step 1)로 보낸다. signupEmailAction(인증 메일 발송)은 verify 진입 시
+// 호출 — 여기서 미리 호출할 이유가 없음.
+//
+// EMAIL_TAKEN(기존 유저) 처리: step 1의 checkEmailAvailableAction이 담당.
+// 기존 유저는 /login?next=<invite-url>로 유도해 로그인 후 authed path로 합류.
+export function WorkspaceInviteUnauthClient({ token, inviteEmail, workspaceName }: Props) {
   const router = useRouter();
 
   useEffect(() => {
-    void (async () => {
-      const draft = readSignupDraft();
-      writeSignupDraft({ ...draft, workspaceType: 'pg', wsInviteToken: token });
+    const draft = readSignupDraft();
+    writeSignupDraft({
+      ...draft,
+      workspaceType: 'pg',
+      wsInviteToken: token,
+      email: inviteEmail,
+      inviteWorkspaceName: workspaceName,
+    });
 
-      const r = await signupEmailAction({ email: inviteEmail, workspaceType: 'pg' });
-
-      const updated = readSignupDraft();
-      if (r.ok) {
-        writeSignupDraft({ ...updated, email: r.email });
-        router.replace('/signup/pg/verify');
-      } else if (r.error === 'EMAIL_TAKEN') {
-        // Existing user — send them to login with a next= redirect back to the invite
-        router.replace(`/login?next=${encodeURIComponent(`/invite/workspace/${token}`)}`);
-      } else {
-        // Other error (rate limit, etc.) — fall back to manual email entry
-        router.replace('/signup/pg');
-      }
-    })();
-  }, [token, inviteEmail, router]);
+    // step 1로 보낸다. step 1이 wsInviteToken 존재를 감지해 email prefill + skip 라우팅.
+    router.replace('/signup/pg');
+  }, [token, inviteEmail, workspaceName, router]);
 
   return (
     <div className="py-8 text-center">

@@ -1,10 +1,11 @@
 // Workspace invite landing page.
 //
-// 비인증: 워크스페이스 이름 + 초대 이메일을 표시하고
-//   "가입하고 합류하기" → /signup/pg?inviteEmail=<email> 로 redirect.
-//   토큰이 유효하지 않으면 오류 메시지를 표시.
+// 비인증(신규 유저): draft에 { wsInviteToken, email, inviteWorkspaceName } 기록 후
+//   /signup/pg(step 1)로 보낸다. step 1에서 email prefill+lock + 워크스페이스명 안내.
+//   EMAIL_TAKEN → /login?next=... (기존 유저 로그인 후 authed path로 합류).
+//   토큰 유효하지 않으면 오류 메시지 표시.
 //
-// 인증: acceptWorkspaceInviteAction 서버 사이드 호출.
+// 인증(기존 유저): acceptWorkspaceInviteAction 서버 사이드 호출.
 //   - ok → /home redirect
 //   - error → 인라인 오류 메시지
 import { eq } from 'drizzle-orm';
@@ -27,21 +28,22 @@ export default async function WorkspaceInvitePage({ params }: Props) {
   const { token } = await params;
   const tokenHash = hashToken(token);
 
-  // Resolve invitation + workspace name
-  const [row] = await prodDb
-    .select({
-      invitedEmail: workspaceInvitations.invitedEmail,
-      status: workspaceInvitations.status,
-      expiresAt: workspaceInvitations.expiresAt,
-      workspaceName: workspaces.name,
-      workspaceId: workspaceInvitations.workspaceId,
-    })
-    .from(workspaceInvitations)
-    .innerJoin(workspaces, eq(workspaces.id, workspaceInvitations.workspaceId))
-    .where(eq(workspaceInvitations.tokenHash, tokenHash))
-    .limit(1);
-
-  const session = await auth();
+  // Resolve invitation + workspace name and session check in parallel (independent).
+  const [[row], session] = await Promise.all([
+    prodDb
+      .select({
+        invitedEmail: workspaceInvitations.invitedEmail,
+        status: workspaceInvitations.status,
+        expiresAt: workspaceInvitations.expiresAt,
+        workspaceName: workspaces.name,
+        workspaceId: workspaceInvitations.workspaceId,
+      })
+      .from(workspaceInvitations)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceInvitations.workspaceId))
+      .where(eq(workspaceInvitations.tokenHash, tokenHash))
+      .limit(1),
+    auth(),
+  ]);
   const isAuthed = !!session?.user?.id;
 
   // ── Authenticated path ────────────────────────────────────────────────
@@ -69,6 +71,13 @@ export default async function WorkspaceInvitePage({ params }: Props) {
   }
 
   // Valid invite — hand off to client component so the token can be stored
-  // in sessionStorage before routing to signup (server redirect loses the token)
-  return <WorkspaceInviteUnauthClient token={token} inviteEmail={row.invitedEmail} />;
+  // in sessionStorage before routing to signup (server redirect loses the token).
+  // workspaceName is passed so step 1 can show "○○ 워크스페이스에 초대받았습니다".
+  return (
+    <WorkspaceInviteUnauthClient
+      token={token}
+      inviteEmail={row.invitedEmail}
+      workspaceName={row.workspaceName}
+    />
+  );
 }
