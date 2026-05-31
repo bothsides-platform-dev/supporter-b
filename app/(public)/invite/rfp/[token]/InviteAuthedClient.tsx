@@ -6,10 +6,10 @@ import { claimInviteTokenAction } from '@/lib/server/actions/invitation';
 import { switchWorkspaceAction } from '@/lib/server/actions/workspace/switchWorkspaceAction';
 
 const ERROR_LABELS: Record<string, string> = {
-  INVITE_INVALID: '존재하지 않는 초대 링크입니다.',
-  INVITE_EXPIRED: '만료된 초대 링크입니다.',
-  INVITE_NOT_MEMBER: '초대된 워크스페이스의 멤버가 아닙니다.',
-  UNAUTHENTICATED: '로그인이 필요합니다.',
+  INVITE_INVALID: '유효하지 않은 초대 링크예요.',
+  INVITE_EXPIRED: '초대 링크가 만료됐어요. 새 링크를 요청해요.',
+  INVITE_NOT_MEMBER: '초대된 워크스페이스의 멤버가 아니에요.',
+  UNAUTHENTICATED: '로그인이 필요해요.',
 };
 
 // 인증된 사용자 — 액션을 호출해 토큰 클레임 후 /inbox/<rfpId>로 이동.

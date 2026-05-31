@@ -37,10 +37,10 @@ export function WorkspaceBizProfileForm({ currentGrade }: Props) {
     const r = await updateWorkspaceBizProfileAction({ grade });
     setSubmitting(false);
     if (!r.ok) {
-      toast(`저장 실패 — ${r.error}`, { type: 'error' });
+      toast(`저장하지 못했어요 — ${r.error}`, { type: 'error' });
       return;
     }
-    toast('가맹점 등급을 변경했습니다.');
+    toast('가맹점 등급을 변경했어요.');
     startTransition(() => router.refresh());
   };
 

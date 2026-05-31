@@ -31,7 +31,7 @@ export function NotificationActivityList({ items }: { items: Notification[] }) {
     return (
       <div className="py-16 text-center">
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          아직 받은 알림이 없습니다.
+          알림이 오면 여기에 표시돼요.
         </p>
       </div>
     );

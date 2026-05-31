@@ -195,7 +195,7 @@ export default async function ReviewDetailPage({
               name="reason"
               rows={3}
               required
-              placeholder="반려 사유를 입력하세요"
+              placeholder="반려 사유를 입력해요"
               className="w-full rounded border border-outline px-3 py-2 text-body-small bg-surface resize-none focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <button
@@ -213,7 +213,7 @@ export default async function ReviewDetailPage({
               name="reason"
               rows={3}
               required
-              placeholder="요청 사유를 입력하세요"
+              placeholder="요청 사유를 입력해요"
               className="w-full rounded border border-outline px-3 py-2 text-body-small bg-surface resize-none focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <button

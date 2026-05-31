@@ -50,17 +50,17 @@ const ROLE_OPTIONS = [
 function mutationErrorMessage(error: string): string {
   switch (error) {
     case 'LAST_ADMIN':
-      return '마지막 관리자는 내보내거나 권한을 내릴 수 없습니다.';
+      return '마지막 관리자는 내보내거나 권한을 내릴 수 없어요.';
     case 'SELF_REMOVAL':
-      return '본인은 내보낼 수 없습니다.';
+      return '본인은 내보낼 수 없어요.';
     case 'FORBIDDEN_NOT_ADMIN':
-      return '권한이 없습니다.';
+      return '권한이 없어요.';
     case 'INVITE_NOT_FOUND':
-      return '초대를 찾을 수 없습니다.';
+      return '초대를 찾지 못했어요.';
     case 'WORKSPACE_NOT_FOUND':
-      return '워크스페이스를 찾을 수 없습니다.';
+      return '워크스페이스를 찾지 못했어요.';
     default:
-      return `처리 실패 (${error})`;
+      return `처리하지 못했어요 (${error})`;
   }
 }
 
@@ -125,7 +125,7 @@ export function MembersPanel({
       }
       setMembers((prev) => prev.filter((x) => x.id !== m.id));
       setConfirm(null);
-      toast(`${m.name}님을 내보냈습니다.`);
+      toast(`${m.name}님을 내보냈어요.`);
     });
   };
 
@@ -138,7 +138,7 @@ export function MembersPanel({
         return;
       }
       setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, role } : x)));
-      toast(`${m.name}님의 권한을 ${roleLabel[role]}(으)로 변경했습니다.`);
+      toast(`${m.name}님의 권한을 ${roleLabel[role]}(으)로 변경했어요.`);
     });
   };
 
@@ -152,7 +152,7 @@ export function MembersPanel({
       }
       setPendingInvites((prev) => prev.filter((p) => p.email !== email));
       setConfirm(null);
-      toast('초대를 취소했습니다.');
+      toast('초대를 취소했어요.');
     });
   };
 
@@ -163,7 +163,7 @@ export function MembersPanel({
         toast(mutationErrorMessage(result.error), { type: 'error' });
         return;
       }
-      toast('초대 메일을 다시 보냈습니다.');
+      toast('초대 메일을 다시 보냈어요.');
     });
   };
 

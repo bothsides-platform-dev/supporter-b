@@ -79,18 +79,18 @@ export function ApprovalWaitingScreen() {
           <div className="flex flex-col items-center gap-2">
             <h1 className="text-title-large">거의 다 왔어요!</h1>
             <p className="text-body-medium text-on-surface-variant">
-              가입이 완료됐어요.
+              가입을 완료했어요.
               <br />
               지금 입점 심사를 진행하고 있어요.
             </p>
           </div>
-          <Chip color="tertiary" label="✓ 심사는 최대 영업일 2일 이내 완료돼요" />
+          <Chip color="tertiary" label="✓ 심사는 영업일 기준 2일 이내로 완료해요" />
           <div className="flex flex-col items-center gap-1">
             <p className="text-body-small text-on-surface-variant">
               승인되면 이메일로 안내드립니다.
             </p>
             <p className="text-body-small text-on-surface-variant">
-              궁금한 점은 우측 하단 채널톡으로 문의해 주세요.
+              궁금한 점은 우측 하단 채널톡으로 문의해요.
             </p>
           </div>
         </div>

@@ -105,7 +105,7 @@ export function KanbanBoard({ kind, cardType, columns, cards, renderCard }: Prop
         cardId: card.cardId,
         toColumnId: toColumn.id,
       });
-      if (!r.ok) toast(`이동 실패 — ${r.error}`, { type: 'error' });
+      if (!r.ok) toast(`이동하지 못했어요 — ${r.error}`, { type: 'error' });
       router.refresh();
     });
   };
@@ -117,7 +117,7 @@ export function KanbanBoard({ kind, cardType, columns, cards, renderCard }: Prop
     startTransition(async () => {
       if (target) applyOverride({ cardId: card.cardId, columnId: target.id });
       const r = await releaseCardAction({ cardType, cardId: card.cardId });
-      if (!r.ok) toast(`이동 실패 — ${r.error}`, { type: 'error' });
+      if (!r.ok) toast(`이동하지 못했어요 — ${r.error}`, { type: 'error' });
       router.refresh();
     });
   };
@@ -320,7 +320,7 @@ function ColumnMenu({
     try {
       const r = await fn();
       if (!r.ok) {
-        toast(`실패 — ${r.error}`, { type: 'error' });
+        toast(`처리하지 못했어요 — ${r.error}`, { type: 'error' });
         return;
       }
       onClose();
@@ -416,7 +416,7 @@ function AddColumnControl({
       const position = generateKeyBetween(afterPosition, null);
       const r = await addColumnAction({ kind, title: title.trim(), position });
       if (!r.ok) {
-        toast(`추가 실패 — ${r.error}`, { type: 'error' });
+        toast(`추가하지 못했어요 — ${r.error}`, { type: 'error' });
         return;
       }
       setTitle('');

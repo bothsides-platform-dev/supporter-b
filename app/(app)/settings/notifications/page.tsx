@@ -24,7 +24,7 @@ export default function NotificationsSettingsPage() {
         <a href="/notifications" className="text-[var(--md-sys-color-primary)] underline">
           알림 페이지
         </a>
-        에서 확인하세요.
+        에서 확인해요.
       </p>
     </PageEnter>
   );

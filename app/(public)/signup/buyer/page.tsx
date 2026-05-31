@@ -89,7 +89,7 @@ export default function BuyerSignupEmailPage() {
           구매사 계정을 만듭니다
         </h2>
         <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          로그인에 사용할 이메일과 비밀번호를 입력해주세요.
+          이메일과 비밀번호를 입력해요.
         </p>
       </div>
 
@@ -153,13 +153,13 @@ export default function BuyerSignupEmailPage() {
           href="/signup"
           className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
-          ← 역할 선택으로
+          ← 이전으로
         </Link>
         <Link
           href="/login"
           className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
-          이미 계정이 있으세요? 로그인 →
+          이미 계정이 있어요? 로그인 →
         </Link>
       </div>
     </div>

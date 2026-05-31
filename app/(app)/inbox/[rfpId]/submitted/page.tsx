@@ -44,7 +44,7 @@ export default async function InboxSubmittedPage({ params }: Props) {
     return (
       <div className="px-8 py-8">
         <p className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-          제출된 제안이 없습니다.
+          아직 제출한 제안이 없어요.
         </p>
         <Link
           href={`/inbox/${rfpCode}`}
@@ -66,10 +66,10 @@ export default async function InboxSubmittedPage({ params }: Props) {
           ✓ 제출 완료
         </p>
         <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-          제안이 제출되었습니다
+          제안을 제출했어요
         </h1>
         <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          구매사가 마감일까지 비교·검토 후 결과를 알립니다.
+          구매사가 마감일까지 비교·검토 후 결과를 알려드려요.
         </p>
         {bid.submittedAt && (
           <p className="mt-1 font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
