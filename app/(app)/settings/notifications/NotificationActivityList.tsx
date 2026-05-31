@@ -92,11 +92,6 @@ function NotificationRow({
           <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)]">
             {fmtDateTime(notif.createdAt)}
           </span>
-          {notif.linkUrl && (
-            <span className="font-mono text-[10px] text-[var(--md-sys-color-outline)]">
-              → {notif.linkUrl}
-            </span>
-          )}
         </div>
       </div>
       <div className="flex flex-col items-end gap-2 shrink-0">
