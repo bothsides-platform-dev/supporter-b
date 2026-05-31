@@ -16,15 +16,15 @@ export function ApprovalWaitingScreen() {
       getComputedStyle(document.documentElement)
         .getPropertyValue('--md-sys-color-primary')
         .trim() || '#0061A4';
-    run({
-      particleCount: 30,
-      spread: 26,
-      startVelocity: 45,
-      gravity: 1,
-      scalar: 1,
-      origin: { x: 0.5, y: 0.42 },
-      colors: [primary],
-    });
+
+    const shared = { colors: [primary], scalar: 1, ticks: 200 };
+
+    // 좌측에서 안쪽 위로
+    run({ ...shared, particleCount: 60, angle: 60, spread: 55, startVelocity: 55, origin: { x: 0.1, y: 0.65 } });
+    // 우측에서 안쪽 위로
+    run({ ...shared, particleCount: 60, angle: 120, spread: 55, startVelocity: 55, origin: { x: 0.9, y: 0.65 } });
+    // 중앙 와이드 버스트
+    run({ ...shared, particleCount: 80, spread: 120, startVelocity: 45, gravity: 0.8, origin: { x: 0.5, y: 0.55 } });
   }, []);
 
   useEffect(() => {
@@ -42,14 +42,14 @@ export function ApprovalWaitingScreen() {
   }, [fire]);
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center gap-4 px-4">
+    <div className="relative flex min-h-screen flex-col items-center justify-center px-4">
       <canvas
         ref={canvasRef}
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full"
         style={{ pointerEvents: 'none' }}
       />
-      <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-3 text-center">
+      <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-4 text-center">
         <button
           type="button"
           aria-label="축하 효과 다시 보기"
@@ -58,19 +58,23 @@ export function ApprovalWaitingScreen() {
         >
           <PartyPopper className="size-9" strokeWidth={1.5} />
         </button>
-        <h1 className="text-title-large">거의 다 왔어요!</h1>
-        <p className="text-body-medium text-on-surface-variant">
-          가입이 완료됐어요.
-          <br />
-          지금 입점 심사를 진행하고 있어요.
-        </p>
+        <div className="flex flex-col items-center gap-2">
+          <h1 className="text-title-large">거의 다 왔어요!</h1>
+          <p className="text-body-medium text-on-surface-variant">
+            가입이 완료됐어요.
+            <br />
+            지금 입점 심사를 진행하고 있어요.
+          </p>
+        </div>
         <Chip color="tertiary" label="✓ 심사는 최대 영업일 2일 이내 완료돼요" />
-        <p className="text-body-small text-on-surface-variant">
-          승인되면 이메일로 안내드립니다.
-        </p>
-        <p className="text-body-small text-on-surface-variant">
-          궁금한 점은 우측 하단 채널톡으로 문의해 주세요.
-        </p>
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-body-small text-on-surface-variant">
+            승인되면 이메일로 안내드립니다.
+          </p>
+          <p className="text-body-small text-on-surface-variant">
+            궁금한 점은 우측 하단 채널톡으로 문의해 주세요.
+          </p>
+        </div>
       </div>
     </div>
   );

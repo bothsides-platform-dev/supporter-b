@@ -42,17 +42,19 @@ describe('ApprovalWaitingScreen', () => {
     ).toBeInTheDocument();
   });
 
-  it('마운트 시 컨페티를 한 번 발사한다', () => {
+  it('마운트 시 컨페티를 발사한다', () => {
     render(<ApprovalWaitingScreen />);
-    expect(fireMock).toHaveBeenCalledTimes(1);
+    // fire()는 내부적으로 3개 버스트(좌·우·중앙)를 한 번에 발사한다
+    expect(fireMock).toHaveBeenCalledTimes(3);
   });
 
   it('꼬깔 버튼을 클릭하면 컨페티를 다시 발사한다', () => {
     render(<ApprovalWaitingScreen />);
-    expect(fireMock).toHaveBeenCalledTimes(1);
+    const callsAfterMount = fireMock.mock.calls.length; // 3
     fireEvent.click(
       screen.getByRole('button', { name: '축하 효과 다시 보기' }),
     );
-    expect(fireMock).toHaveBeenCalledTimes(2);
+    // 클릭 후 추가로 3버스트 발사됐는지 확인
+    expect(fireMock).toHaveBeenCalledTimes(callsAfterMount * 2);
   });
 });
