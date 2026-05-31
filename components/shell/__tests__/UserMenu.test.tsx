@@ -51,4 +51,31 @@ describe('UserMenu 로그아웃', () => {
     expect(http.post).toHaveBeenCalledWith('/logout')
     expect(assignMock).toHaveBeenCalledWith('/login')
   })
+
+  it('http.post(/logout) 실패해도 /login 으로 이동한다 (try/finally 보장)', async () => {
+    const assignMock = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { assign: assignMock },
+    })
+    // 서버 오류로 POST가 reject되는 상황 — mockImplementation으로 지연 생성해야
+    // 미처리 거부 경고 없이 처리된다
+    vi.mocked(http.post).mockImplementation(
+      () => Promise.reject(new Error('500 Internal Server Error')) as unknown as ResponsePromise,
+    )
+
+    const user = userEvent.setup()
+    render(
+      <UserMenu
+        user={{ name: '홍길동', email: 'test@test.com' }}
+        workspaceType="buyer"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /사용자 메뉴/ }))
+    await user.click(await screen.findByText('로그아웃'))
+
+    // POST가 실패해도 finally 블록이 반드시 실행되어 /login 으로 이동해야 한다
+    expect(assignMock).toHaveBeenCalledWith('/login')
+  })
 })
