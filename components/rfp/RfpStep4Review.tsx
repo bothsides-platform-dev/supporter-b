@@ -31,6 +31,11 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+const ERROR_MESSAGES: Record<string, string> = {
+  INVALID_INPUT: '입력 값을 확인해주세요.',
+  NETWORK_ERROR: '네트워크 오류가 발생했습니다. 다시 시도해주세요.',
+};
+
 const SOLUTION_LABELS: Record<string, string> = {
   cafe24: '카페24',
   imweb: '아임웹',
@@ -144,9 +149,9 @@ export function RfpStep4Review({
       {serverError && (
         <p
           role="alert"
-          className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
+          className="text-[12px] text-[var(--md-sys-color-error)]"
         >
-          {serverError}
+          {ERROR_MESSAGES[serverError] ?? serverError}
         </p>
       )}
 

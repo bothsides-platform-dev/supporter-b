@@ -83,7 +83,7 @@ describe('RfpStep4Review', () => {
         serverError="INVALID_INPUT"
       />,
     );
-    expect(screen.getByRole('alert')).toHaveTextContent('INVALID_INPUT');
+    expect(screen.getByRole('alert')).toHaveTextContent('입력 값을 확인해주세요.');
   });
 
   it('발송 버튼 클릭 시 onSubmit이 호출된다', async () => {
