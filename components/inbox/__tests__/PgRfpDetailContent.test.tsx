@@ -56,7 +56,7 @@ afterEach(() => {
 
 describe('PgRfpDetailContent', () => {
   it('myBid 있으면 제출 완료 블록 + 제출내역 링크, 폼 없음', () => {
-    render(<PgRfpDetailContent data={{ rfp, myBid }} />);
+    render(<PgRfpDetailContent data={{ rfp, myBid, buyerName: '(주)테스트' }} />);
     expect(screen.getByText(/제안 제출 완료/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /제출 내역 보기/ })).toHaveAttribute(
       'href',
@@ -66,14 +66,14 @@ describe('PgRfpDetailContent', () => {
   });
 
   it('myBid 없으면 브리프 + BidForm 노출', () => {
-    render(<PgRfpDetailContent data={{ rfp, myBid: undefined }} />);
+    render(<PgRfpDetailContent data={{ rfp, myBid: undefined, buyerName: '(주)테스트' }} />);
     expect(screen.getByTestId('brief')).toBeInTheDocument();
     expect(screen.getByTestId('bid-form')).toBeInTheDocument();
     expect(screen.queryByText(/제안 제출 완료/)).not.toBeInTheDocument();
   });
 
   it('BidForm 에 rfpId·rfpCode 를 전달', () => {
-    render(<PgRfpDetailContent data={{ rfp, myBid: undefined }} />);
+    render(<PgRfpDetailContent data={{ rfp, myBid: undefined, buyerName: '(주)테스트' }} />);
     expect(bidFormProps).toHaveBeenCalledWith(
       expect.objectContaining({ rfpId: 'rfp-1', rfpCode: 'P-2605-0042' }),
     );

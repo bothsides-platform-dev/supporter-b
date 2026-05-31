@@ -8,12 +8,12 @@ import { BidForm } from './BidForm';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
-  const { rfp, myBid } = data;
+  const { rfp, myBid, buyerName } = data;
 
   if (myBid) {
     return (
       <>
-        <RfpBriefPanel rfp={rfp} />
+        <RfpBriefPanel rfp={rfp} buyerName={buyerName} />
         <div className="mt-10 border-t border-[var(--md-sys-color-outline-variant)] pt-8 space-y-4">
           <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-tertiary)]">
             ✓ 제안 제출 완료
@@ -39,7 +39,7 @@ export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
     <div className="grid grid-cols-[340px_1fr] gap-12">
       {/* Left: RFP brief */}
       <div className="border-r border-[var(--md-sys-color-outline-variant)] pr-10">
-        <RfpBriefPanel rfp={rfp} />
+        <RfpBriefPanel rfp={rfp} buyerName={buyerName} />
       </div>
 
       {/* Right: Bid form */}
