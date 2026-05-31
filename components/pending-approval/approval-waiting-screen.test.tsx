@@ -30,6 +30,11 @@ vi.mock('motion/react', () => ({
 beforeEach(() => {
   fireMock.mockClear();
   animationStartMock.mockClear();
+  // jsdom은 matchMedia를 미지원 — 모션 감소 없음으로 설정
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockReturnValue({ matches: false }),
+  });
 });
 
 afterEach(cleanup);
@@ -68,7 +73,7 @@ describe('ApprovalWaitingScreen', () => {
       screen.getByRole('button', { name: '축하 효과 다시 보기' }),
     );
     // 클릭 후 추가로 3버스트 발사됐는지 확인
-    expect(fireMock).toHaveBeenCalledTimes(callsAfterMount * 2);
+    expect(fireMock).toHaveBeenCalledTimes(callsAfterMount + 3);
   });
 
   it('마운트 시 아이콘 셰이크 애니메이션을 시작한다', () => {

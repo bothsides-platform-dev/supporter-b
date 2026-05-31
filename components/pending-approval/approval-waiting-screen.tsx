@@ -6,6 +6,8 @@ import confetti from 'canvas-confetti';
 import { motion, useAnimation } from 'motion/react';
 import { Chip } from '@/components/primitives/Chip';
 
+const ICON_SPAN_STYLE = { display: 'inline-flex' } as const;
+
 export function ApprovalWaitingScreen() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fireRef = useRef<ReturnType<typeof confetti.create> | null>(null);
@@ -28,12 +30,14 @@ export function ApprovalWaitingScreen() {
     // 중앙 상단에서 180° 전방위 비
     run({ ...shared, particleCount: 120, spread: 180, startVelocity: 40, gravity: 0.6, origin: { x: 0.5, y: 0 } });
 
-    // 아이콘 셰이크
-    iconControls.start({
-      rotate: [-14, 12, -9, 7, -4, 2, 0],
-      scale: [1, 1.3, 1.22, 1.15, 1.1, 1.04, 1],
-      transition: { duration: 0.65, ease: 'easeOut' },
-    });
+    // 아이콘 셰이크 (모션 감소 설정 존중)
+    if (!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+      iconControls.start({
+        rotate: [-14, 12, -9, 7, -4, 2, 0],
+        scale: [1, 1.3, 1.22, 1.15, 1.1, 1.04, 1],
+        transition: { duration: 0.65, ease: 'easeOut' },
+      });
+    }
   }, [iconControls]);
 
   useEffect(() => {
@@ -42,6 +46,7 @@ export function ApprovalWaitingScreen() {
     fireRef.current = confetti.create(canvas, {
       resize: true,
       useWorker: false,
+      disableForReducedMotion: true,
     });
     fire();
     return () => {
@@ -57,7 +62,6 @@ export function ApprovalWaitingScreen() {
         ref={canvasRef}
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full"
-        style={{ pointerEvents: 'none' }}
       />
       {/* 콘텐츠: viewport 정중앙 */}
       <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-4">
@@ -68,7 +72,7 @@ export function ApprovalWaitingScreen() {
             onClick={fire}
             className="rounded-[var(--md-sys-shape-small)] p-2 text-[var(--md-sys-color-primary)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--md-sys-color-primary)]/50"
           >
-            <motion.span animate={iconControls} style={{ display: 'inline-flex' }}>
+            <motion.span animate={iconControls} style={ICON_SPAN_STYLE}>
               <PartyPopper className="size-9" strokeWidth={1.5} />
             </motion.span>
           </button>
