@@ -1,14 +1,15 @@
 // SessionStorage hand-off for the signup flow. Server actions can't read
 // sessionStorage; the client owns the state machine across these hops:
-//   /signup → /auth/verify?email=… → /signup/profile → /signup/workspace
+//   /signup/pg → /signup/pg/workspace → /signup/pg/profile → /signup/pg/verify
+// (워크스페이스 초대 경로는 /workspace 단계를 건너뜀: step 1 → profile → verify)
 // The Zustand store (lib/stores/signup-draft) is the in-memory mirror but
 // gets wiped on reload. sessionStorage is the durable carrier across redirects
 // — including the email-link round-trip when the user opens the verify URL
 // from the same browser session.
 //
 // Keys live under one root so cleanup is a single removeItem(). password is
-// stored briefly between profile submit and signupCompleteAction; the auto-
-// signIn step clears it.
+// stored briefly between profile submit and signupCompleteAction /
+// signupViaWorkspaceInviteAction; the auto-signIn step clears it.
 const KEY = 'signupDraft';
 
 export type SignupBizProfile = {
@@ -23,6 +24,8 @@ export type SignupClientDraft = {
   emailVerified?: boolean;
   inviteToken?: string;
   wsInviteToken?: string;
+  /** 워크스페이스 초대 시 초대한 워크스페이스 이름 — step 1 맥락 안내용 */
+  inviteWorkspaceName?: string;
   name?: string;
   phone?: string;
   phoneVerificationId?: string;

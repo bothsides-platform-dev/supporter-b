@@ -13,17 +13,20 @@ vi.mock('next/navigation', () => ({
 
 const mockSignupEmailAction = vi.fn();
 const mockSignupCompleteAction = vi.fn();
+const mockSignupViaWorkspaceInviteAction = vi.fn();
 vi.mock('@/lib/server/actions/auth', () => ({
   signupEmailAction: (...a: unknown[]) => mockSignupEmailAction(...a),
   signupCompleteAction: (...a: unknown[]) => mockSignupCompleteAction(...a),
+  signupViaWorkspaceInviteAction: (...a: unknown[]) => mockSignupViaWorkspaceInviteAction(...a),
 }));
 
 vi.mock('@/lib/server/actions/auth/verifyEmailCodeAction', () => ({
   verifyEmailCodeAction: vi.fn(),
 }));
 
+const mockSignIn = vi.fn();
 vi.mock('next-auth/react', () => ({
-  signIn: vi.fn(),
+  signIn: (...a: unknown[]) => mockSignIn(...a),
 }));
 
 let mockDraft: Record<string, unknown> = {};
@@ -42,6 +45,17 @@ const PG_DRAFT = {
   wsName: '(주)토스페이먼츠',
   bizNo: '1248100998',
   workspaceType: 'pg',
+};
+
+const INVITE_DRAFT = {
+  email: 'newmember@toss.im',
+  password: 'Password123!',
+  name: '신규영업',
+  phone: '01099998888',
+  phoneVerificationId: 'otp-invite-uuid',
+  wsInviteToken: 'ws-invite-token-abc',
+  workspaceType: 'pg',
+  // wsName, bizNo 없음 — 초대 경로
 };
 
 import PgVerifyPage from '@/app/(public)/signup/pg/verify/page';
@@ -81,6 +95,91 @@ describe('PgVerifyPage — 이메일 인증 step 4', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('인증 메일을 보내지 못했습니다');
+    });
+  });
+});
+
+describe('PgVerifyPage — 워크스페이스 초대 경로 (step 3/3)', () => {
+  beforeEach(() => {
+    mockDraft = { ...INVITE_DRAFT };
+    mockPush.mockReset();
+    mockReplace.mockReset();
+    mockSignupEmailAction.mockReset().mockResolvedValue({ ok: true, email: 'newmember@toss.im' });
+    mockSignupViaWorkspaceInviteAction.mockReset();
+    mockSignIn.mockReset().mockResolvedValue({ ok: true, error: null });
+  });
+
+  it('이메일 인증 완료 후 signupViaWorkspaceInviteAction을 호출한다', async () => {
+    mockDraft = { ...INVITE_DRAFT, emailVerified: true };
+    mockSignupViaWorkspaceInviteAction.mockResolvedValue({
+      ok: true,
+      email: 'newmember@toss.im',
+      password: 'Password123!',
+      redirectTo: '/home',
+    });
+
+    render(<PgVerifyPage />);
+
+    await waitFor(() => {
+      expect(mockSignupViaWorkspaceInviteAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'newmember@toss.im',
+          wsInviteToken: 'ws-invite-token-abc',
+        }),
+      );
+    });
+  });
+
+  it('초대 가입 성공 시 /home 으로 이동한다', async () => {
+    mockDraft = { ...INVITE_DRAFT, emailVerified: true };
+    mockSignupViaWorkspaceInviteAction.mockResolvedValue({
+      ok: true,
+      email: 'newmember@toss.im',
+      password: 'Password123!',
+      redirectTo: '/home',
+    });
+
+    render(<PgVerifyPage />);
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/home');
+    });
+    expect(mockPush).not.toHaveBeenCalledWith('/inbox');
+  });
+
+  it('초대 가입 실패 시 에러 메시지를 표시한다', async () => {
+    mockDraft = { ...INVITE_DRAFT, emailVerified: true };
+    mockSignupViaWorkspaceInviteAction.mockResolvedValue({
+      ok: false,
+      error: 'INVITE_EXPIRED',
+    });
+
+    render(<PgVerifyPage />);
+
+    await waitFor(() => {
+      // codeError 표시: "가입을 완료하지 못했습니다. (INVITE_EXPIRED)"
+      expect(screen.getByRole('alert')).toHaveTextContent('INVITE_EXPIRED');
+    });
+  });
+
+  it('wsInviteToken 없는 draft는 signupCompleteAction을 호출한다 (비초대 경로 유지)', async () => {
+    mockDraft = { ...PG_DRAFT, emailVerified: true };
+    mockSignupCompleteAction.mockResolvedValue({
+      ok: true,
+      email: 'sales@toss.im',
+      password: 'Password123!',
+      redirectTo: '/inbox',
+    });
+
+    render(<PgVerifyPage />);
+
+    await waitFor(() => {
+      expect(mockSignupCompleteAction).toHaveBeenCalledWith(
+        expect.objectContaining({ wsKind: 'pg', wsName: '(주)토스페이먼츠' }),
+      );
+    });
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/inbox');
     });
   });
 });

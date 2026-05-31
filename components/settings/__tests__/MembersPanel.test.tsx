@@ -27,6 +27,18 @@ vi.mock(
   }),
 );
 
+const cancelWorkspaceInviteAction = vi.fn();
+vi.mock('@/lib/server/actions/workspace/cancelWorkspaceInviteAction', () => ({
+  cancelWorkspaceInviteAction: (...a: unknown[]) =>
+    cancelWorkspaceInviteAction(...a),
+}));
+
+const resendWorkspaceInviteAction = vi.fn();
+vi.mock('@/lib/server/actions/workspace/resendWorkspaceInviteAction', () => ({
+  resendWorkspaceInviteAction: (...a: unknown[]) =>
+    resendWorkspaceInviteAction(...a),
+}));
+
 import { MembersPanel } from '../MembersPanel';
 
 const ADMIN: User = {
@@ -80,7 +92,8 @@ describe('MembersPanel', () => {
       screen.getByPlaceholderText('member@company.com'),
       'new@example.com',
     );
-    await user.selectOptions(screen.getByLabelText('초대 역할'), 'admin');
+    // 역할 select — Label이 span으로 렌더되므로 role=combobox 로 찾는다
+    await user.selectOptions(screen.getByRole('combobox'), 'admin');
     await user.click(screen.getByRole('button', { name: '초대 발송' }));
 
     await waitFor(() =>
@@ -91,13 +104,18 @@ describe('MembersPanel', () => {
     );
   });
 
-  it('admin: kicks a member and drops the row', async () => {
+  it('admin: kicks a member via dropdown and drops the row', async () => {
     removeWorkspaceMemberAction.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
     render(<MembersPanel {...baseProps} userRole="admin" />);
 
     expect(screen.getByText('member@example.com')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '멤버 강퇴' }));
+    // 멤버 관리 드롭다운 트리거
+    await user.click(screen.getByRole('button', { name: '멤버 관리' }));
+    // 메뉴 항목 '내보내기' 클릭 → ConfirmDialog 열림
+    await user.click(await screen.findByRole('menuitem', { name: '내보내기' }));
+    // ConfirmDialog 확인 버튼
+    await user.click(await screen.findByRole('button', { name: '내보내기' }));
 
     await waitFor(() =>
       expect(removeWorkspaceMemberAction).toHaveBeenCalledWith({
@@ -109,17 +127,23 @@ describe('MembersPanel', () => {
     );
   });
 
-  it('admin: cannot kick themselves (self kick button disabled)', () => {
+  it('admin: 자신에 대한 내보내기/역할변경 메뉴 항목은 disabled', async () => {
+    const user = userEvent.setup();
     render(<MembersPanel {...baseProps} userRole="admin" />);
-    expect(screen.getByRole('button', { name: '관리자 강퇴' })).toBeDisabled();
+    // 트리거 자체는 enabled (isMutating=false), 항목만 disabled
+    await user.click(screen.getByRole('button', { name: '관리자 관리' }));
+    const kickItem = await screen.findByRole('menuitem', { name: '내보내기' });
+    expect(kickItem).toHaveAttribute('aria-disabled', 'true');
   });
 
-  it('admin: changing a role calls the action', async () => {
+  it('admin: changing a role via dropdown calls the action', async () => {
     changeWorkspaceMemberRoleAction.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
     render(<MembersPanel {...baseProps} userRole="admin" />);
 
-    await user.selectOptions(screen.getByLabelText('멤버 역할 변경'), 'admin');
+    // 멤버 관리 드롭다운 트리거 클릭 → 역할 변경 메뉴 항목 클릭
+    await user.click(screen.getByRole('button', { name: '멤버 관리' }));
+    await user.click(await screen.findByRole('menuitem', { name: /관리자.*변경/ }));
 
     await waitFor(() =>
       expect(changeWorkspaceMemberRoleAction).toHaveBeenCalledWith({

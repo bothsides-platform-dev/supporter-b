@@ -19,6 +19,12 @@ export type {
   SignupCompleteResult,
 } from './signupCompleteAction';
 
+export { signupViaWorkspaceInviteAction } from './signupViaWorkspaceInviteAction';
+export type {
+  SignupViaWorkspaceInviteInput,
+  SignupViaWorkspaceInviteResult,
+} from './signupViaWorkspaceInviteAction';
+
 export { loginAction } from './loginAction';
 export type { LoginInput, LoginResult } from './loginAction';
 
