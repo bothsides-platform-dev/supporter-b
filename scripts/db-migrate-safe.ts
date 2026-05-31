@@ -35,7 +35,8 @@ export async function registerBaselineIfNeeded(
   if (Number(countRow?.count) > 0) return { registered: false, rowsInserted: 0 }
 
   // 3. public 테이블 없으면 (새 DB) skip — drizzle-kit migrate가 처음 실행
-  // pg_catalog.pg_class는 user privilege 무관하게 실제 테이블 수를 반환 (information_schema는 privilege 필터링)
+  // information_schema.tables는 user privilege 필터링으로 운영환경에서 0을 반환할 수 있음
+  // pg_catalog.pg_class는 privilege 무관하게 실제 테이블 수를 반환
   const [publicRow] = await db.query(`
     SELECT COUNT(*) AS count
     FROM pg_catalog.pg_class c
