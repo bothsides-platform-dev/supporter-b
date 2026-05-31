@@ -24,8 +24,9 @@ vi.mock('@/lib/stores/signup-draft', () => ({
   }),
 }));
 
+let mockDraftData: Record<string, unknown> = {};
 vi.mock('@/lib/auth/signup-storage', () => ({
-  readSignupDraft: () => ({}),
+  readSignupDraft: () => mockDraftData,
   writeSignupDraft: (...args: unknown[]) => mockWriteDraft(...args),
 }));
 
@@ -59,7 +60,9 @@ async function fillAndSubmit({
 
 describe('BuyerSignupEmailPage — 새 step 1 흐름', () => {
   beforeEach(() => {
+    mockDraftData = {}; // 비초대 경로
     mockPush.mockReset();
+    mockReplace.mockReset();
     mockWriteDraft.mockReset();
     mockCheckEmailAvailable.mockReset();
     // 기본: 사용 가능한 이메일
@@ -113,7 +116,9 @@ describe('BuyerSignupEmailPage — 새 step 1 흐름', () => {
 
 describe('PgSignupEmailPage — 새 step 1 흐름', () => {
   beforeEach(() => {
+    mockDraftData = {}; // 비초대 경로
     mockPush.mockReset();
+    mockReplace.mockReset();
     mockWriteDraft.mockReset();
     mockCheckEmailAvailable.mockReset();
     mockCheckEmailAvailable.mockResolvedValue({ ok: true });
@@ -139,5 +144,72 @@ describe('PgSignupEmailPage — 새 step 1 흐름', () => {
     expect(screen.getByRole('link', { name: '로그인' })).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
     expect(mockWriteDraft).not.toHaveBeenCalled();
+  });
+});
+
+describe('PgSignupEmailPage — 초대 모드 (wsInviteToken in draft)', () => {
+  const INVITE_DRAFT = {
+    wsInviteToken: 'ws-invite-token-xyz',
+    email: 'sales@toss.im',
+    inviteWorkspaceName: 'TossPayments PG',
+    workspaceType: 'pg',
+  };
+
+  beforeEach(() => {
+    mockDraftData = { ...INVITE_DRAFT };
+    mockPush.mockReset();
+    mockReplace.mockReset();
+    mockWriteDraft.mockReset();
+    mockCheckEmailAvailable.mockReset();
+    mockCheckEmailAvailable.mockResolvedValue({ ok: true });
+  });
+
+  it('초대 이메일이 prefill되어 readOnly 표시된다', () => {
+    render(<PgSignupEmailPage />);
+    const emailInput = screen.getByLabelText('이메일') as HTMLInputElement;
+    expect(emailInput.value).toBe('sales@toss.im');
+    expect(emailInput.readOnly).toBe(true);
+  });
+
+  it('초대 워크스페이스 이름이 안내문에 표시된다', () => {
+    render(<PgSignupEmailPage />);
+    expect(screen.getByText('TossPayments PG')).toBeInTheDocument();
+  });
+
+  it('정상 제출 시 workspace 단계를 건너뛰고 profile로 이동한다', async () => {
+    render(<PgSignupEmailPage />);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('비밀번호'), 'Password123!');
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'Password123!');
+    await user.click(screen.getByRole('checkbox', { name: /이용약관 동의/i }));
+    await user.click(screen.getByRole('checkbox', { name: /개인정보 처리방침 동의/i }));
+    fireEvent.submit(document.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/signup/pg/profile');
+    });
+    expect(mockPush).not.toHaveBeenCalledWith('/signup/pg/workspace');
+  });
+
+  it('초대 EMAIL_TAKEN 시 /login?next=/invite/workspace/<token> 으로 redirect한다', async () => {
+    mockCheckEmailAvailable.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+    render(<PgSignupEmailPage />);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('비밀번호'), 'Password123!');
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'Password123!');
+    await user.click(screen.getByRole('checkbox', { name: /이용약관 동의/i }));
+    await user.click(screen.getByRole('checkbox', { name: /개인정보 처리방침 동의/i }));
+    fireEvent.submit(document.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith(
+        expect.stringContaining('/login?next='),
+      );
+      const callArg = mockReplace.mock.calls[0][0] as string;
+      expect(callArg).toContain('ws-invite-token-xyz');
+    });
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

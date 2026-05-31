@@ -19,6 +19,7 @@ import {
   workspaceMembers,
   workspaces,
   users,
+  verificationTokens,
 } from '@/lib/db/schema';
 import { signupEmailAction } from '../signupEmailAction';
 import { verifyEmailAction } from '../verifyEmailAction';
@@ -304,6 +305,39 @@ describe('signupViaWorkspaceInviteAction — 초대 토큰 검증', () => {
 
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVITE_EMAIL_MISMATCH');
+  });
+});
+
+describe('signupViaWorkspaceInviteAction — 중복 이메일 (EMAIL_TAKEN)', () => {
+  it('EMAIL_TAKEN — 같은 이메일로 이미 계정이 존재하면 거부', async () => {
+    const ws = await seedPgWorkspace(db, 'PG Co');
+    const admin = await seedUser(db, { email: 'admin@pg.co' });
+    // 같은 이메일로 기존 계정을 미리 생성
+    await seedUser(db, { email: TEST_EMAIL });
+    const phoneId = await seedVerifiedOtp();
+    // signupEmailAction을 우회: verification token을 직접 consumed 상태로 삽입
+    const { hashToken, generateToken } = await import('@/lib/server/token');
+    const rawTok = generateToken();
+    await db.insert(verificationTokens).values({
+      purpose: 'signup_email',
+      email: TEST_EMAIL,
+      tokenHash: hashToken(rawTok),
+      expiresAt: new Date(Date.now() + 15 * 60_000),
+      consumedAt: new Date(), // consumed 상태 = 이메일 인증 완료
+    });
+    const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
+
+    const r = await signupViaWorkspaceInviteAction({
+      email: TEST_EMAIL,
+      name: TEST_NAME,
+      password: TEST_PASSWORD,
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: phoneId,
+      wsInviteToken: rawToken,
+    });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
   });
 });
 
