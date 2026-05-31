@@ -84,4 +84,23 @@ describe('registerBaselineIfNeeded', () => {
     const { rows } = await pg.query('SELECT * FROM drizzle.__drizzle_migrations')
     expect(rows).toHaveLength(0)
   })
+
+  it('__drizzle_migrations 테이블 없어도 public 테이블 있으면 생성 후 삽입', async () => {
+    const pg = new PGlite()
+    // drizzle 스키마/테이블 미생성 — setupMigrationsTable 호출 안 함
+    await pg.exec('CREATE TABLE users (id TEXT)') // public 테이블만 존재
+
+    const result = await registerBaselineIfNeeded(makeClient(pg), {
+      journalPath: JOURNAL_PATH,
+      migrationsDir: MIGRATIONS_DIR,
+    })
+
+    expect(result.registered).toBe(true)
+    expect(result.rowsInserted).toBe(1)
+
+    const { rows } = await pg.query<{ hash: string }>(
+      'SELECT hash FROM drizzle.__drizzle_migrations',
+    )
+    expect(rows).toHaveLength(1)
+  })
 })

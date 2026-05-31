@@ -18,29 +18,26 @@ export async function registerBaselineIfNeeded(
   db: DbClient,
   opts: { journalPath: string; migrationsDir: string },
 ): Promise<RegisterResult> {
-  // __drizzle_migrations 테이블 존재 여부 확인
-  const [tableRow] = await db.query(`
-    SELECT EXISTS (
-      SELECT 1 FROM information_schema.tables
-      WHERE table_schema = 'drizzle' AND table_name = '__drizzle_migrations'
-    ) AS "exists"
-  `)
-  if (!tableRow?.exists) return { registered: false, rowsInserted: 0 }
+  // 1. drizzle 스키마 + __drizzle_migrations 테이블 보장 (IF NOT EXISTS — 안전)
+  await db.query(`CREATE SCHEMA IF NOT EXISTS drizzle`)
+  await db.query(
+    `CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (hash TEXT NOT NULL, created_at BIGINT NOT NULL)`,
+  )
 
-  // 이미 레코드 있으면 skip
+  // 2. 이미 레코드 있으면 skip
   const [countRow] = await db.query(
     `SELECT COUNT(*) AS count FROM drizzle.__drizzle_migrations`,
   )
   if (Number(countRow?.count) > 0) return { registered: false, rowsInserted: 0 }
 
-  // public 테이블 없으면 (새 DB) skip
+  // 3. public 테이블 없으면 (새 DB) skip — drizzle-kit migrate가 처음 실행
   const [publicRow] = await db.query(`
     SELECT COUNT(*) AS count FROM information_schema.tables
     WHERE table_schema = 'public'
   `)
   if (Number(publicRow?.count) === 0) return { registered: false, rowsInserted: 0 }
 
-  // journal 기반 baseline 레코드 삽입
+  // 4. journal 기반 baseline 레코드 삽입
   const journal = JSON.parse(fs.readFileSync(opts.journalPath, 'utf8'))
   let rowsInserted = 0
   for (const entry of journal.entries) {
@@ -54,8 +51,11 @@ export async function registerBaselineIfNeeded(
   return { registered: true, rowsInserted }
 }
 
-async function main() {
-  const sql = postgres(process.env.DATABASE_URL!)
+async function main(): Promise<void> {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is not set')
+  }
+  const sql = postgres(process.env.DATABASE_URL)
   const db: DbClient = {
     query: async (q) => {
       const rows = await sql.unsafe(q)
