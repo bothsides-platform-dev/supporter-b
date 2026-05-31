@@ -42,10 +42,6 @@ export async function registerBaselineIfNeeded(
     FROM pg_catalog.pg_class c
     JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND c.relkind = 'r'
-    SELECT COUNT(*) AS count
-    FROM pg_catalog.pg_class c
-    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'public' AND c.relkind = 'r'
   `)
   if (Number(publicRow?.count) === 0) return { registered: false, rowsInserted: 0 }
 
