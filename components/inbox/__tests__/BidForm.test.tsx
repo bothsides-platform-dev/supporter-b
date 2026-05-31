@@ -1,6 +1,6 @@
 // BidForm — 결제수단 동적 렌더 + 제출 분리(paymentFees / customFees) + 드래프트 복원.
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { act, render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from '@/lib/http';
 import { HTTPError } from 'ky';
@@ -224,6 +224,53 @@ describe('BidForm 임시 저장 복원 배너', () => {
 
     await waitFor(() => expect(push).toHaveBeenCalled());
     expect(localStorage.getItem('bid-draft:rfp-1')).toBeNull();
+  });
+});
+
+describe('BidForm UX 개선 — 심리학 법칙', () => {
+  describe('비가역성 경고 (Peak-End / 멘탈 모델 #4/#5)', () => {
+    it('폼 마운트 시 "제출 후 수정 불가" 경고 텍스트가 렌더된다', () => {
+      renderForm();
+      expect(screen.getByText(/제출 후 수정 불가/)).toBeInTheDocument();
+    });
+  });
+
+  describe('섹션 완료 표식 (Zeigarnik #2)', () => {
+    it('cycleNum 기본값(1)이면 01 섹션 헤더에 ✓ 표식이 보인다', () => {
+      renderForm();
+      // default cycleNum = '1', parseInt('1') > 0 → 완료 표식 렌더
+      expect(screen.getByTestId('section01-complete')).toBeInTheDocument();
+    });
+
+    it('수수료 미입력 시 02 섹션 헤더에 "0/N" 카운트가 표시된다', () => {
+      // requiredPaymentMethods = ['bank_transfer'] → 1 fee input, 0 filled
+      renderForm();
+      expect(screen.getByTestId('section02-count')).toHaveTextContent('0/1');
+    });
+
+    it('수수료 입력 후 02 섹션 헤더 카운트가 "1/N"으로 갱신된다', async () => {
+      const user = userEvent.setup();
+      renderForm();
+      await user.type(feeInput('계좌이체 수수료'), '0.50');
+      expect(screen.getByTestId('section02-count')).toHaveTextContent('1/1');
+    });
+  });
+
+  describe('자동저장 신호 (Doherty #1)', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('마운트 후 첫 자동저장(500ms) 뒤에 "저장됨" 텍스트가 렌더된다', async () => {
+      renderForm();
+      // useEffect가 마운트 시 saveDraft를 호출 → 500ms 뒤 savedAt 설정
+      expect(screen.queryByText(/저장됨/)).toBeNull(); // 아직 없음
+
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(screen.getByText(/저장됨/)).toBeInTheDocument();
+    });
   });
 });
 

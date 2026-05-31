@@ -88,7 +88,7 @@ export function BidForm({
   const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, fees, memo } = fields;
 
   // 임시 저장
-  const { draft, saveDraft, clearDraft } = useBidDraft(rfpId);
+  const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
   const [showRestoreBanner, setShowRestoreBanner] = useState(draft !== null);
 
   useEffect(() => {
@@ -163,6 +163,17 @@ export function BidForm({
     hasStatutoryCard ||
     feeInputMethods.some((m) => feeFilled(m)) ||
     customPaymentMethods.some((c) => feeFilled(c.id));
+
+  const totalFeeCount =
+    (hasStatutoryCard ? 1 : 0) +
+    feeInputMethods.length +
+    customPaymentMethods.length;
+  const filledFeeCount =
+    (hasStatutoryCard ? 1 : 0) +
+    feeInputMethods.filter((m) => feeFilled(m)).length +
+    customPaymentMethods.filter((c) => feeFilled(c.id)).length;
+
+  const section01Complete = parseInt(cycleNum) > 0;
 
   const canSubmit =
     !pending &&
@@ -269,6 +280,14 @@ export function BidForm({
           <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
             01 — 정산 조건
           </span>
+          {section01Complete && (
+            <span
+              data-testid="section01-complete"
+              className="font-mono text-[10px] text-[var(--md-sys-color-tertiary)]"
+            >
+              ✓
+            </span>
+          )}
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
@@ -306,6 +325,12 @@ export function BidForm({
         <div className="flex items-center gap-3 mb-5">
           <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
             02 — 수수료
+          </span>
+          <span
+            data-testid="section02-count"
+            className="font-mono text-[10px] text-[var(--md-sys-color-outline)]"
+          >
+            {filledFeeCount}/{totalFeeCount}
           </span>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
@@ -417,6 +442,12 @@ export function BidForm({
         </div>
       </section>
 
+      {savedAt && (
+        <p className="font-mono text-[10px] text-[var(--md-sys-color-outline)]">
+          저장됨 · {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+        </p>
+      )}
+
       {!canSubmit && !pending && (
         <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
           · 정산주기 및 수수료 1개 이상 입력 필요
@@ -428,6 +459,10 @@ export function BidForm({
           {ERROR_LABELS[submitError] ?? submitError}
         </p>
       )}
+
+      <p className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--md-sys-color-outline)]">
+        제출 후 수정 불가 — 한 번만 제출됩니다
+      </p>
 
       <Button type="submit" fullWidth size="lg" disabled={!canSubmit}>
         {pending ? '제출 중…' : '제안 제출'}
