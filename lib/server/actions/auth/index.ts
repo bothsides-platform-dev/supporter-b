@@ -1,3 +1,9 @@
+export { checkEmailAvailableAction } from './checkEmailAvailableAction';
+export type {
+  CheckEmailAvailableInput,
+  CheckEmailAvailableResult,
+} from './checkEmailAvailableAction';
+
 export { signupEmailAction } from './signupEmailAction';
 export type {
   SignupEmailInput,
