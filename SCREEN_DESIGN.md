@@ -285,8 +285,8 @@ Award
 #### 인증 처리 스플래시 `/auth/verify?token=...`
 - 모노 `LOADING…` 한 줄
 - 결과 분기:
-  - 성공 + `workspaceType='buyer'` → Bs3 자동 이동
-  - 성공 + `workspaceType='pg'` → Gs3 자동 이동
+  - 성공 + `workspaceType='buyer'` → `/signup/buyer/verify` (Bs4) 자동 이동 (draft에 emailVerified=true 기록 → Bs4가 감지해 완료 처리)
+  - 성공 + `workspaceType='pg'` → `/signup/pg/verify` (Gs4) 자동 이동 (draft에 emailVerified=true 기록 → Gs4가 감지해 완료 처리)
   - 만료 → "링크가 만료되었습니다." + [재발송] 버튼 (각 verify 페이지로)
   - 무효 → "잘못된 링크입니다." + 로그인 링크
   - 이미 사용됨 → 로그인 안내
@@ -325,7 +325,7 @@ Award
 3. Bs2 대기 → 이메일 토큰 URL → `/auth/verify` 스플래시 → Bs3 자동 이동
 4. 프로필 입력 → Bs4 워크스페이스 이름·산업 → [만들기] → `/rfp` (관리자)
 
-**시나리오 E — PG 워크스페이스 초대 진입(신규 유저)**
+**시나리오 E2 — PG 워크스페이스 초대 진입(신규 유저)**
 1. `/invite/workspace/:token` 진입 — `SignupDraft` 선 채움 (workspaceType='pg', email, wsInviteToken, inviteWorkspaceName)
 2. Rs1 건너뜀 → Gs1 이메일(email prefill + readOnly, 3단계 스텝)
 3. Gs3 프로필(이름 + 비밀번호) → Gs4 인증 메일 대기
