@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/primitives/Button';
 import { ResendCountdown } from '@/components/auth/ResendCountdown';
@@ -74,7 +75,11 @@ export default function BuyerVerifyPage() {
     (async () => {
       const r = await signupEmailAction({ email, workspaceType: 'buyer' });
       if (!r.ok) {
-        setSendError('인증 메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요.');
+        if (!r.ok && r.error === 'EMAIL_TAKEN') {
+          setSendError('EMAIL_TAKEN');
+        } else {
+          setSendError('인증 메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요.');
+        }
       }
     })();
   }, [email]);
@@ -113,7 +118,13 @@ export default function BuyerVerifyPage() {
   const handleResend = async () => {
     setSendError('');
     const r = await signupEmailAction({ email, workspaceType: 'buyer' });
-    if (!r.ok) setSendError('재발송에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    if (!r.ok) {
+      if (r.error === 'EMAIL_TAKEN') {
+        setSendError('EMAIL_TAKEN');
+      } else {
+        setSendError('재발송에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      }
+    }
   };
 
   if (alreadyVerified && submitting) {
@@ -144,11 +155,22 @@ export default function BuyerVerifyPage() {
               <span className="font-mono">{email}</span>으로 인증 메일을 보냈습니다.
             </p>
           )}
-          {sendError && (
+          {sendError === 'EMAIL_TAKEN' ? (
+            <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
+              이미 가입된 이메일입니다.{' '}
+              <Link
+                href={`/login?email=${encodeURIComponent(email)}`}
+                className="underline"
+              >
+                로그인
+              </Link>
+              하시겠어요?
+            </p>
+          ) : sendError ? (
             <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
               {sendError}
             </p>
-          )}
+          ) : null}
         </div>
       </div>
 

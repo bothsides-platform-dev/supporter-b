@@ -1,8 +1,9 @@
 /**
  * 가입 1단계 (계정) — 이메일 + 비밀번호 + 약관.
  *
- * 새 흐름: 이메일 발송은 step 4 에서 이뤄지므로 step 1 페이지는 서버 액션을
- * 호출하지 않는다. draft 저장 후 step 2 로 이동한다.
+ * 새 흐름: 제출 시 checkEmailAvailableAction으로 중복 체크.
+ * - 사용 가능한 이메일 → draft 저장 후 step 2 이동.
+ * - EMAIL_TAKEN → 에러 문구 + 로그인 링크 표시, 이동하지 않음.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
@@ -26,6 +27,11 @@ vi.mock('@/lib/stores/signup-draft', () => ({
 vi.mock('@/lib/auth/signup-storage', () => ({
   readSignupDraft: () => ({}),
   writeSignupDraft: (...args: unknown[]) => mockWriteDraft(...args),
+}));
+
+const mockCheckEmailAvailable = vi.fn();
+vi.mock('@/lib/server/actions/auth', () => ({
+  checkEmailAvailableAction: (...args: unknown[]) => mockCheckEmailAvailable(...args),
 }));
 
 import BuyerSignupEmailPage from '@/app/(public)/signup/buyer/page';
@@ -55,6 +61,9 @@ describe('BuyerSignupEmailPage — 새 step 1 흐름', () => {
   beforeEach(() => {
     mockPush.mockReset();
     mockWriteDraft.mockReset();
+    mockCheckEmailAvailable.mockReset();
+    // 기본: 사용 가능한 이메일
+    mockCheckEmailAvailable.mockResolvedValue({ ok: true });
     render(<BuyerSignupEmailPage />);
   });
 
@@ -88,12 +97,26 @@ describe('BuyerSignupEmailPage — 새 step 1 흐름', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(mockPush).not.toHaveBeenCalled();
   });
+
+  it('이미 가입된 이메일 제출 시 에러 문구와 로그인 링크를 표시하고 이동하지 않는다', async () => {
+    mockCheckEmailAvailable.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+    await fillAndSubmit({ email: 'taken@example.com' });
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('이미 가입된 이메일입니다');
+    });
+    // 에러 문구 내 로그인 링크 (정확한 텍스트 '로그인'만 매칭)
+    expect(screen.getByRole('link', { name: '로그인' })).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockWriteDraft).not.toHaveBeenCalled();
+  });
 });
 
 describe('PgSignupEmailPage — 새 step 1 흐름', () => {
   beforeEach(() => {
     mockPush.mockReset();
     mockWriteDraft.mockReset();
+    mockCheckEmailAvailable.mockReset();
+    mockCheckEmailAvailable.mockResolvedValue({ ok: true });
     render(<PgSignupEmailPage />);
   });
 
@@ -104,5 +127,17 @@ describe('PgSignupEmailPage — 새 step 1 흐름', () => {
     });
     const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
     expect(drafted.workspaceType).toBe('pg');
+  });
+
+  it('이미 가입된 이메일 제출 시 에러 문구와 로그인 링크를 표시하고 이동하지 않는다', async () => {
+    mockCheckEmailAvailable.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+    await fillAndSubmit({ email: 'taken@example.com' });
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('이미 가입된 이메일입니다');
+    });
+    // 에러 문구 내 로그인 링크 (정확한 텍스트 '로그인'만 매칭)
+    expect(screen.getByRole('link', { name: '로그인' })).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockWriteDraft).not.toHaveBeenCalled();
   });
 });
