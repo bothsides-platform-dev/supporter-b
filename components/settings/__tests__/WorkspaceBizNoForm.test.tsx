@@ -98,7 +98,7 @@ describe('WorkspaceBizNoForm', () => {
       }),
     );
     await waitFor(() => expect(refresh).toHaveBeenCalled());
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('사업자번호를 저장했습니다.'));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('사업자번호를 저장했어요.'));
     // No inline "✓ 저장됨" text
     expect(screen.queryByText(/저장됨/)).toBeNull();
   });

@@ -87,7 +87,7 @@ describe('BizLookupField', () => {
     await user.click(screen.getByRole('button', { name: '조회' }));
 
     expect(
-      await screen.findByText(/등록된 사업자번호가 없습니다/),
+      await screen.findByText(/사업자번호를 찾지 못했어요/),
     ).toBeInTheDocument();
   });
 });
