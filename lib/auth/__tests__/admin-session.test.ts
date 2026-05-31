@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { signAdminToken, verifyAdminToken } from '../admin-session';
+import { signAdminToken, verifyAdminToken, requireAdminSession } from '../admin-session';
 
 vi.mock('next/headers', () => ({
   cookies: vi.fn().mockResolvedValue({
@@ -40,9 +40,51 @@ describe('signAdminToken / verifyAdminToken', () => {
   });
 });
 
+describe('verifyAdminToken — 시크릿 설정 오류', () => {
+  it('ADMIN_SESSION_SECRET 미설정 시 null 반환이 아닌 throw한다', async () => {
+    vi.stubEnv('ADMIN_SESSION_SECRET', '');
+    await expect(verifyAdminToken('any.token.here')).rejects.toThrow('ADMIN_SESSION_SECRET');
+  });
+
+  it('ADMIN_SESSION_SECRET 32자 미만 시 null 반환이 아닌 throw한다', async () => {
+    vi.stubEnv('ADMIN_SESSION_SECRET', 'too-short');
+    await expect(verifyAdminToken('any.token.here')).rejects.toThrow('ADMIN_SESSION_SECRET');
+  });
+
+  it('다른 시크릿으로 서명된 토큰(시크릿 회전)은 null을 반환한다', async () => {
+    const { SignJWT } = await import('jose');
+    const otherSecret = new TextEncoder().encode('other-secret-completely-different-value!!');
+    const staleToken = await new SignJWT({ adminId: 'admin' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('8h')
+      .sign(otherSecret);
+    // 현재 시크릿은 beforeEach의 'test-secret-min-32-characters-long!!'
+    const result = await verifyAdminToken(staleToken);
+    expect(result).toBeNull();
+  });
+});
+
 describe('requireAdminSession', () => {
   it('쿠키 없으면 /admin/login으로 redirect', async () => {
-    const { requireAdminSession } = await import('../admin-session');
+    await expect(requireAdminSession()).rejects.toThrow('REDIRECT:/admin/login');
+  });
+
+  it('시크릿 회전 후 stale 쿠키가 있으면 /admin/login으로 redirect한다', async () => {
+    const { SignJWT } = await import('jose');
+    const otherSecret = new TextEncoder().encode('other-secret-completely-different-value!!');
+    const staleToken = await new SignJWT({ adminId: 'admin' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('8h')
+      .sign(otherSecret);
+
+    const { cookies } = await import('next/headers');
+    vi.mocked(cookies).mockResolvedValueOnce({
+      get: (name: string) =>
+        name === 'admin-token' ? { name: 'admin-token', value: staleToken } : undefined,
+    } as Awaited<ReturnType<typeof cookies>>);
+
     await expect(requireAdminSession()).rejects.toThrow('REDIRECT:/admin/login');
   });
 });

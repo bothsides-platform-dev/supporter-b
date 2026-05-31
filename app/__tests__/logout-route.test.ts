@@ -13,7 +13,7 @@ vi.mock('@/auth', () => ({
   signOut: (...args: unknown[]) => signOutMock(...args),
 }));
 
-import { GET } from '../logout/route';
+import { GET, POST } from '../logout/route';
 
 describe('GET /logout', () => {
   beforeEach(() => signOutMock.mockReset());
@@ -26,5 +26,18 @@ describe('GET /logout', () => {
     expect(signOutMock).toHaveBeenCalledWith({ redirect: false });
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
+  });
+});
+
+describe('POST /logout', () => {
+  beforeEach(() => signOutMock.mockReset());
+
+  it('세션을 비우고 204 를 반환한다 (클라이언트가 직접 /login 으로 이동)', async () => {
+    signOutMock.mockResolvedValue(undefined);
+
+    const res = await POST();
+
+    expect(signOutMock).toHaveBeenCalledWith({ redirect: false });
+    expect(res.status).toBe(204);
   });
 });

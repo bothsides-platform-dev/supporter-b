@@ -261,7 +261,6 @@ Award
 - `01 / 04 — EMAIL` (직접 가입) 또는 `01 / 03 — EMAIL` (초대 가입)
 - 헤드라인: `PG사 계정을 만듭니다`
 - 이메일 입력 + 약관 동의 (Bs1과 동일 패턴 — EMAIL_TAKEN 인라인 오류 + 로그인 CTA 포함)
-- 초대 가입 시: 이메일 prefill + readOnly, "○○ 워크스페이스에 초대받았습니다" 안내 배너; EMAIL_TAKEN이면 `/login?next=/invite/workspace/:token`으로 redirect
 - 보조 안내: "초대 이메일을 받으셨나요? — 메일의 링크를 클릭하면 이 단계가 자동으로 건너뛰어집니다."
 - 푸터: `이미 계정이 있으세요? 로그인 →`
 

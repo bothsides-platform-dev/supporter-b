@@ -9,7 +9,8 @@ export type OutboxEvent =
   | 'bid.submitted'
   | 'rfp.awarded'
   | 'workspace.invited'
-  | 'workspace.approved';
+  | 'workspace.approved'
+  | 'workspace.rejected';
 
 export type OutboxEntry = {
   id: string;
