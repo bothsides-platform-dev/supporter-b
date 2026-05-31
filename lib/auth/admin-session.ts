@@ -22,8 +22,11 @@ export async function signAdminToken(adminId: string): Promise<string> {
 export async function verifyAdminToken(
   token: string,
 ): Promise<{ adminId: string } | null> {
+  // getSecret()을 try 바깥에서 호출 — 시크릿 미설정/단축 시 설정 오류가
+  // catch 절에 삼켜져 null로 조용히 반환되는 것을 방지한다.
+  const secret = getSecret();
   try {
-    const { payload } = await jwtVerify(token, getSecret());
+    const { payload } = await jwtVerify(token, secret);
     return { adminId: payload.adminId as string };
   } catch {
     return null;
