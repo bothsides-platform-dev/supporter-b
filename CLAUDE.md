@@ -9,6 +9,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 - `README.md` — local setup / run instructions.
 - `DESIGN.md` — Linear design language: tokens, typography, color, component visual rules.
 - `SCREEN_DESIGN.md` — screen IA, route map, per-screen UX spec.
+- `UX_WRITING.md` — 토스 보이스톤 기반 UX 라이팅 원칙 (해요체·능동형·긍정형·캐주얼 경어·버튼 문구). UI 문구 작성 시 필수 참조.
 
 **라이브 배포**: AWS Lightsail 단일 VM 자체호스팅 (Caddy + PM2 `next start` + Docker Postgres). 현행 런북은 `docs/DEPLOY_LIGHTSAIL.md`, 관련 자산은 `ecosystem.config.cjs`(PM2) · `docker-compose.prod.yml`(운영 Postgres) · `deploy/Caddyfile` · `scripts/deploy/lightsail-*.sh` · `.env.production.example`.
 
