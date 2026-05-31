@@ -20,7 +20,11 @@ export default function PgProfilePage() {
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   const draft = readSignupDraft();
-  const ready = !!draft.email && !!draft.password && !!draft.wsName && !!draft.bizNo;
+  const isInvited = !!draft.wsInviteToken;
+  // 초대 경로: wsName/bizNo 불필요 (step 2 건너뜀)
+  // 일반 경로: wsName + bizNo 필수
+  const ready = !!draft.email && !!draft.password &&
+    (isInvited || (!!draft.wsName && !!draft.bizNo));
 
   useEffect(() => {
     if (!ready) router.replace('/signup/pg');
@@ -58,7 +62,7 @@ export default function PgProfilePage() {
 
   return (
     <div className="space-y-6">
-      <SignupStepper current={3} total={4} />
+      <SignupStepper current={isInvited ? 2 : 3} total={isInvited ? 3 : 4} />
 
       <div>
         <h2 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">

@@ -8,7 +8,7 @@ import { Button } from '@/components/primitives/Button';
 import { ResendCountdown } from '@/components/auth/ResendCountdown';
 import { EnvelopeSvg } from '@/components/auth/EnvelopeSvg';
 import { SignupStepper } from '@/components/auth/SignupStepper';
-import { signupEmailAction, signupCompleteAction } from '@/lib/server/actions/auth';
+import { signupEmailAction, signupCompleteAction, signupViaWorkspaceInviteAction } from '@/lib/server/actions/auth';
 import { verifyEmailCodeAction } from '@/lib/server/actions/auth/verifyEmailCodeAction';
 import { clearSignupDraft, readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 
@@ -23,27 +23,50 @@ export default function PgVerifyPage() {
   const draft = readSignupDraft();
   const email = draft.email ?? '';
   const alreadyVerified = draft.emailVerified === true;
+  const isInvited = !!draft.wsInviteToken;
 
   // handleComplete 를 먼저 선언 (아래 alreadyVerified effect 에서 참조).
   const handleComplete = useCallback(async () => {
     setSubmitting(true);
     const d = readSignupDraft();
-    if (!d.email || !d.password || !d.name || !d.phone || !d.phoneVerificationId || !d.wsName || !d.bizNo) {
+
+    // 공통 필드 검증
+    if (!d.email || !d.password || !d.name || !d.phone || !d.phoneVerificationId) {
       setCodeError('세션이 만료되었습니다. 처음부터 다시 시도해주세요.');
       setSubmitting(false);
       return;
     }
 
-    const r = await signupCompleteAction({
-      email: d.email,
-      name: d.name,
-      password: d.password,
-      phone: d.phone,
-      phoneVerificationId: d.phoneVerificationId,
-      wsKind: 'pg',
-      wsName: d.wsName,
-      pgProfile: { bizNo: d.bizNo },
-    });
+    let r;
+
+    if (d.wsInviteToken) {
+      // ── 초대 경로: 기존 워크스페이스에 member로 합류 ──────────────────
+      r = await signupViaWorkspaceInviteAction({
+        email: d.email,
+        name: d.name,
+        password: d.password,
+        phone: d.phone,
+        phoneVerificationId: d.phoneVerificationId,
+        wsInviteToken: d.wsInviteToken,
+      });
+    } else {
+      // ── 일반 경로: 새 워크스페이스 생성 ──────────────────────────────
+      if (!d.wsName || !d.bizNo) {
+        setCodeError('세션이 만료되었습니다. 처음부터 다시 시도해주세요.');
+        setSubmitting(false);
+        return;
+      }
+      r = await signupCompleteAction({
+        email: d.email,
+        name: d.name,
+        password: d.password,
+        phone: d.phone,
+        phoneVerificationId: d.phoneVerificationId,
+        wsKind: 'pg',
+        wsName: d.wsName,
+        pgProfile: { bizNo: d.bizNo },
+      });
+    }
 
     if (!r.ok) {
       setCodeError(`가입을 완료하지 못했습니다. (${r.error})`);
@@ -57,7 +80,6 @@ export default function PgVerifyPage() {
       redirect: false,
     });
 
-    const wsInviteToken = readSignupDraft().wsInviteToken;
     clearSignupDraft();
 
     if (signInResult?.error) {
@@ -65,7 +87,7 @@ export default function PgVerifyPage() {
       return;
     }
 
-    router.push(wsInviteToken ? `/invite/workspace/${wsInviteToken}` : r.redirectTo);
+    router.push(r.redirectTo);
   }, [router]);
 
   // 진입 시 메일 발송
@@ -136,10 +158,13 @@ export default function PgVerifyPage() {
     }
   };
 
+  const stepperCurrent = isInvited ? 3 : 4;
+  const stepperTotal = isInvited ? 3 : 4;
+
   if (alreadyVerified && submitting) {
     return (
       <div className="space-y-6 text-center">
-        <SignupStepper current={4} total={4} />
+        <SignupStepper current={stepperCurrent} total={stepperTotal} />
         <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-[var(--md-sys-color-tertiary)]">
           인증 완료. 계정 생성 중…
         </p>
@@ -149,7 +174,7 @@ export default function PgVerifyPage() {
 
   return (
     <div className="space-y-6">
-      <SignupStepper current={4} total={4} />
+      <SignupStepper current={stepperCurrent} total={stepperTotal} />
 
       <div className="space-y-4 text-center">
         <div className="flex justify-center text-[var(--md-sys-color-outline)]">
@@ -176,9 +201,7 @@ export default function PgVerifyPage() {
               하시겠어요?
             </p>
           ) : sendError ? (
-            <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
-              {sendError}
-            </p>
+            <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">{sendError}</p>
           ) : null}
         </div>
       </div>

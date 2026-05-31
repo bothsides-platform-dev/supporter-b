@@ -27,12 +27,15 @@ export default function PgWorkspacePage() {
 
   const draft = readSignupDraft();
   const ready = !!draft.email && !!draft.password;
+  const isInvited = !!draft.wsInviteToken;
 
   useEffect(() => {
-    if (!ready) router.replace('/signup/pg');
-  }, [ready, router]);
+    if (!ready) { router.replace('/signup/pg'); return; }
+    // 초대 경로는 워크스페이스 단계를 건너뜀
+    if (isInvited) { router.replace('/signup/pg/profile'); return; }
+  }, [ready, isInvited, router]);
 
-  if (!ready) return null;
+  if (!ready || isInvited) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
