@@ -97,8 +97,8 @@ async function RfpListPageLoader({
     rfps.length === 0 ? (
       <EmptyState
         icon={<FileTextIcon size={32} />}
-        title="조건에 맞는 제안 요청이 없습니다."
-        description="필터를 바꾸거나 새 제안 요청을 작성하세요."
+        title="제안 요청이 없어요."
+        description="필터를 바꾸거나 새 제안 요청을 작성해요."
       />
     ) : view === 'board' ? (
       <RfpBoardView wsId={wsId} visibleIds={new Set(rfps.map((r) => r.id))} />

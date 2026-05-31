@@ -32,7 +32,7 @@ export default function PgVerifyPage() {
 
     // 공통 필드 검증
     if (!d.email || !d.password || !d.name || !d.phone || !d.phoneVerificationId) {
-      setCodeError('세션이 만료되었습니다. 처음부터 다시 시도해주세요.');
+      setCodeError('세션이 만료됐어요. 처음부터 다시 시도해요.');
       setSubmitting(false);
       return;
     }
@@ -52,7 +52,7 @@ export default function PgVerifyPage() {
     } else {
       // ── 일반 경로: 새 워크스페이스 생성 ──────────────────────────────
       if (!d.wsName || !d.bizNo) {
-        setCodeError('세션이 만료되었습니다. 처음부터 다시 시도해주세요.');
+        setCodeError('세션이 만료됐어요. 처음부터 다시 시도해요.');
         setSubmitting(false);
         return;
       }
@@ -69,7 +69,7 @@ export default function PgVerifyPage() {
     }
 
     if (!r.ok) {
-      setCodeError(`가입을 완료하지 못했습니다. (${r.error})`);
+      setCodeError(`가입을 완료하지 못했어요. (${r.error})`);
       setSubmitting(false);
       return;
     }
@@ -105,7 +105,7 @@ export default function PgVerifyPage() {
         if (r.error === 'EMAIL_TAKEN') {
           setSendError('EMAIL_TAKEN');
         } else {
-          setSendError('인증 메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요.');
+          setSendError('인증 메일을 보내지 못했어요. 잠시 후 다시 시도해요.');
         }
       }
     })();
@@ -126,7 +126,7 @@ export default function PgVerifyPage() {
     setCodeError('');
 
     if (!/^\d{6}$/.test(code)) {
-      setCodeError('6자리 숫자를 입력해주세요.');
+      setCodeError('6자리 숫자를 입력해요.');
       return;
     }
 
@@ -153,7 +153,7 @@ export default function PgVerifyPage() {
       if (r.error === 'EMAIL_TAKEN') {
         setSendError('EMAIL_TAKEN');
       } else {
-        setSendError('재발송에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        setSendError('다시 보내지 못했어요. 잠시 후 다시 시도해요.');
       }
     }
   };
@@ -182,11 +182,11 @@ export default function PgVerifyPage() {
         </div>
         <div className="space-y-2">
           <h2 className="text-[20px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-            이메일을 인증해주세요
+            이메일을 인증해요
           </h2>
           {email && (
             <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-              <span className="font-mono">{email}</span>으로 인증 메일을 보냈습니다.
+              <span className="font-mono">{email}</span>으로 인증 메일을 보냈어요.
             </p>
           )}
           {sendError === 'EMAIL_TAKEN' ? (
@@ -208,7 +208,7 @@ export default function PgVerifyPage() {
 
       <div className="space-y-3">
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] text-center">
-          메일의 [인증하기] 버튼을 눌러주세요.
+          메일의 [인증하기] 버튼을 눌러요.
           <br />
           <span className="text-[11px]">버튼이 동작하지 않으면 메일에 적힌 6자리 코드를 입력하세요.</span>
         </p>
@@ -244,7 +244,7 @@ export default function PgVerifyPage() {
       <div className="space-y-3 text-center">
         <ResendCountdown onResend={handleResend} />
         <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-          스팸함을 확인해보세요.
+          스팸함을 확인해요.
         </p>
       </div>
     </div>

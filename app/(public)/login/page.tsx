@@ -67,7 +67,7 @@ function LoginContent() {
           `로그인 시도가 ${LOCK_THRESHOLD}회 초과되어 15분간 잠겼습니다.`,
         );
       } else {
-        setError('이메일 또는 비밀번호가 일치하지 않습니다.');
+        setError('이메일 또는 비밀번호를 확인해요.');
       }
       return;
     }
@@ -137,7 +137,7 @@ function LoginContent() {
             className="border border-[var(--md-sys-color-error)] rounded-[8px] p-3 space-y-1"
           >
             <p className="text-[12px] text-[var(--md-sys-color-error)]">
-              로그인이 잠겼습니다. 잠시 후 다시 시도해주세요.
+              로그인이 잠겼어요. 잠시 후 다시 시도해요.
             </p>
             <p className="font-mono tabular-nums text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
               남은 시간 {formatRemaining(remainingMs)}
@@ -166,7 +166,7 @@ function LoginContent() {
           href="/password/forgot"
           className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
-          비밀번호를 잊으셨나요?
+          비밀번호를 잊었어요?
         </Link>
         <Link
           href="/signup"

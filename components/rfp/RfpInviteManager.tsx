@@ -71,7 +71,7 @@ export function RfpInviteManager({
     startTransition(async () => {
       const r = await addPgWorkspacesToRfpAction({ rfpId, workspaceIds: [ws.id] });
       if (!r.ok) {
-        toast(`추가 실패 — ${r.error}`, { type: 'error' });
+        toast(`추가하지 못했어요 — ${r.error}`, { type: 'error' });
         return;
       }
       router.refresh();
@@ -83,10 +83,10 @@ export function RfpInviteManager({
     startTransition(async () => {
       const r = await sendDraftInvitationsAction({ rfpId });
       if (!r.ok) {
-        toast(`초대 발송 실패 — ${r.error}`, { type: 'error' });
+        toast(`초대 메일을 보내지 못했어요 — ${r.error}`, { type: 'error' });
         return;
       }
-      toast(`${r.sentCount}개 PG에 초대 메일을 보냈습니다.`);
+      toast(`${r.sentCount}개 PG에 초대 메일을 보냈어요.`);
       router.refresh();
     });
   };
@@ -94,9 +94,9 @@ export function RfpInviteManager({
   const handleCopyShare = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
-      toast('공유 링크를 복사했습니다.');
+      toast('공유 링크를 복사했어요.');
     } catch {
-      toast('링크 복사에 실패했습니다.', { type: 'error' });
+      toast('링크를 복사하지 못했어요.', { type: 'error' });
     }
   };
 

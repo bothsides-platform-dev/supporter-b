@@ -93,8 +93,8 @@ async function InboxListPageLoader({
     rows.length === 0 ? (
       <EmptyState
         icon={<InboxIcon size={32} />}
-        title="조건에 맞는 제안 요청이 없습니다."
-        description="필터를 바꾸세요. 구매사가 초대한 RFP가 여기에 표시됩니다."
+        title="받은 제안 요청이 없어요."
+        description="필터를 바꾸면 제안 요청을 볼 수 있어요. 구매사가 초대한 RFP가 여기에 표시돼요."
       />
     ) : view === 'board' ? (
       <InboxBoardView wsId={wsId} visibleIds={new Set(rows.map((r) => r.invitationId))} />

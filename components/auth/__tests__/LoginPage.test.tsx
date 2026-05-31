@@ -49,7 +49,7 @@ describe('LoginPage — 실패 카운트 / 락 mock', () => {
     await waitFor(() => {
       const lockBox = screen.queryByTestId('login-lock');
       if (lockBox) return;
-      const err = screen.queryByText(/일치하지 않습니다|잠겼습니다/);
+      const err = screen.queryByText(/확인해요|잠겼어요/);
       expect(err).not.toBeNull();
     });
   }

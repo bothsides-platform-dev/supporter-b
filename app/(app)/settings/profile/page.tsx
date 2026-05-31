@@ -157,7 +157,7 @@ export default async function ProfilePage({ searchParams }: Props) {
                     role="alert"
                     className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
                   >
-                    제안 생성을 위해 사업자번호 등록이 필요합니다.
+                    사업자번호를 등록하면 제안을 만들 수 있어요.
                   </p>
                 </>
               )}

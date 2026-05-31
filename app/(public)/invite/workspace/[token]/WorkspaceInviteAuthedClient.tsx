@@ -5,11 +5,11 @@ import { acceptWorkspaceInviteAction } from '@/lib/server/actions/workspace/acce
 import { switchWorkspaceAction } from '@/lib/server/actions/workspace/switchWorkspaceAction';
 
 const ERROR_LABELS: Record<string, string> = {
-  INVITE_INVALID: '존재하지 않는 초대 링크입니다.',
-  INVITE_EXPIRED: '만료되었거나 이미 사용된 초대 링크입니다.',
-  INVITE_EMAIL_MISMATCH: '초대된 이메일과 로그인 계정이 다릅니다.',
-  UNAUTHENTICATED: '로그인이 필요합니다.',
-  ALREADY_MEMBER: '이미 워크스페이스 멤버입니다.',
+  INVITE_INVALID: '유효하지 않은 초대 링크예요.',
+  INVITE_EXPIRED: '초대 링크가 만료됐거나 이미 사용됐어요.',
+  INVITE_EMAIL_MISMATCH: '초대된 이메일과 로그인 계정이 달라요.',
+  UNAUTHENTICATED: '로그인이 필요해요.',
+  ALREADY_MEMBER: '이미 워크스페이스 멤버예요.',
 };
 
 // Authenticated workspace-invite accept. Runs client-side (not in the RSC) so

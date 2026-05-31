@@ -48,7 +48,7 @@ describe('ApprovalWaitingScreen', () => {
   it('심사 소요 칩과 채널톡 문의 안내를 렌더한다', () => {
     render(<ApprovalWaitingScreen />);
     expect(
-      screen.getByText(/심사는 최대 영업일 2일 이내/),
+      screen.getByText(/심사는 영업일 기준 2일 이내/),
     ).toBeInTheDocument();
     expect(screen.getByText(/채널톡/)).toBeInTheDocument();
   });
