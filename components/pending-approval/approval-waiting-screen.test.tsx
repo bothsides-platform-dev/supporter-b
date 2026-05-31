@@ -8,6 +8,10 @@ const { fireMock } = vi.hoisted(() => {
   return { fireMock: fn };
 });
 
+const { animationStartMock } = vi.hoisted(() => ({
+  animationStartMock: vi.fn(),
+}));
+
 vi.mock('canvas-confetti', () => ({
   default: Object.assign(vi.fn(), {
     create: vi.fn(() => fireMock),
@@ -15,8 +19,17 @@ vi.mock('canvas-confetti', () => ({
   }),
 }));
 
+vi.mock('motion/react', () => ({
+  motion: {
+    span: ({ children, animate, style, className }: Record<string, unknown>) =>
+      <span style={style as React.CSSProperties} className={className as string}>{children as React.ReactNode}</span>,
+  },
+  useAnimation: vi.fn(() => ({ start: animationStartMock })),
+}));
+
 beforeEach(() => {
   fireMock.mockClear();
+  animationStartMock.mockClear();
 });
 
 afterEach(cleanup);
@@ -56,5 +69,19 @@ describe('ApprovalWaitingScreen', () => {
     );
     // 클릭 후 추가로 3버스트 발사됐는지 확인
     expect(fireMock).toHaveBeenCalledTimes(callsAfterMount * 2);
+  });
+
+  it('마운트 시 아이콘 셰이크 애니메이션을 시작한다', () => {
+    render(<ApprovalWaitingScreen />);
+    expect(animationStartMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('꼬깔 버튼 클릭 시 아이콘 셰이크 애니메이션을 다시 시작한다', () => {
+    render(<ApprovalWaitingScreen />);
+    const callsAfterMount = animationStartMock.mock.calls.length;
+    fireEvent.click(
+      screen.getByRole('button', { name: '축하 효과 다시 보기' }),
+    );
+    expect(animationStartMock).toHaveBeenCalledTimes(callsAfterMount + 1);
   });
 });
