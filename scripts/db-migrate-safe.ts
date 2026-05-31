@@ -4,6 +4,10 @@ import path from 'path'
 import { execSync } from 'child_process'
 import { fileURLToPath } from 'url'
 import postgres from 'postgres'
+import { config as dotenvConfig } from 'dotenv'
+
+dotenvConfig({ path: '.env.production', override: false })
+dotenvConfig({ override: false })
 
 export interface DbClient {
   query(sql: string): Promise<Array<Record<string, unknown>>>
