@@ -64,12 +64,14 @@ export default function PgSignupEmailPage() {
 
     const check = await checkEmailAvailableAction({ email });
     if (!check.ok && check.error === 'EMAIL_TAKEN') {
+      if (isInvited) {
+        // 초대받은 이메일이 이미 가입됨 → 로그인 후 authed path로 합류.
+        // setSubmitting(false) 생략: 곧 navigate하므로 버튼 재활성화 불필요.
+        router.replace(`/login?next=${encodeURIComponent(`/invite/workspace/${draft.wsInviteToken}`)}&email=${encodeURIComponent(email)}`);
+        return;
+      }
       setEmailTaken(true);
       setSubmitting(false);
-      if (isInvited) {
-        // 초대받은 이메일이 이미 가입됨 → 로그인 후 authed path로 합류
-        router.replace(`/login?next=${encodeURIComponent(`/invite/workspace/${draft.wsInviteToken}`)}&email=${encodeURIComponent(email)}`);
-      }
       return;
     }
 
