@@ -153,8 +153,10 @@ Award
 ### 1.1 진입 경로
 
 - **D · 구매사 신규 가입**: `/signup` → 구매사 카드 선택 → Bs1~Bs4 → `/rfp` (관리자)
-- **E · PG 초대 진입**: `/invite/rfp/:token` → (Gs1 건너뜀) → Gs2~Gs4 → `/inbox/:rfpId` (멤버)
-- **F · PG 직접 가입**: `/signup` → PG 카드 선택 → Gs1~Gs4 → `/inbox` (멤버)
+- **E · PG RFP 초대 진입**: `/invite/rfp/:token` → 기존 PG 유저 로그인 → `/inbox/:rfpId` (기존 워크스페이스 전제)
+- **E2 · PG 워크스페이스 초대 진입(신규 유저)**: `/invite/workspace/:token` → Gs1(email 고정) → Gs3(profile) → Gs4(verify, 3단계) → `/home` (기존 ws에 member 합류, 새 워크스페이스 미생성)
+- **E3 · PG 워크스페이스 초대 진입(기존 유저)**: `/invite/workspace/:token` → (authed) → acceptWorkspaceInviteAction → `/home`
+- **F · PG 직접 가입**: `/signup` → PG 카드 선택 → Gs1~Gs2~Gs3~Gs4(4단계) → `/inbox` (새 워크스페이스 생성, 관리자 심사)
 - **G · 비밀번호 분실**: 로그인 화면에서 재설정 요청 → 메일 → 새 비밀번호
 
 ### 1.2 화면 목록
@@ -189,14 +191,20 @@ Award
 
 #### PG사 가입 — Gs 시리즈
 
-| # | 라우트 | 스텝 | 핵심 |
-|---|---|---|---|
-| Gs1 | `/signup/pg` | `01 / 04 — EMAIL` | 이메일 + 약관. PG 컨텍스트. 초대 없이 직접 접근 시 보조 안내 |
-| Gs2 | `/signup/pg/verify` | `01 / 03 — VERIFY`* | 인증 대기. 초대 진입 시 이메일 자동 채움 |
-| Gs3 | `/signup/pg/profile` | `02 / 03 — PROFILE`* | 이름·비밀번호·휴대전화(선택) |
-| Gs4 | `/signup/pg/workspace` | `03 / 03 — WORKSPACE`* | 워크스페이스 이름 입력. 동일명 존재 시 합류 신청 / 신규 생성 분기 → `/inbox` |
+직접 가입(4단계)과 워크스페이스 초대 가입(3단계)은 **동일한 라우트를 재사용**하지만 draft의 `wsInviteToken` 존재 여부로 분기한다.
 
-> \* 초대 토큰 진입 시 Gs1(이메일 입력) 건너뜀 → 스텝 카운트 03/03. 직접 가입 시 04/04.
+| # | 라우트 | 직접 가입 스텝 | 초대 가입 스텝 | 핵심 |
+|---|---|---|---|---|
+| Gs1 | `/signup/pg` | `01 / 04 — EMAIL` | `01 / 03 — EMAIL` | 직접 가입: 이메일 자유 입력 + 약관. 초대 가입: 이메일 **prefill + readOnly** + "○○ 워크스페이스에 초대받았습니다" 안내 |
+| Gs2 | `/signup/pg/workspace` | `02 / 04 — WORKSPACE` | *(건너뜀)* | 직접 가입만: wsName + bizNo 입력. 초대 가입 시 `/signup/pg/profile`로 redirect |
+| Gs3 | `/signup/pg/profile` | `03 / 04 — PROFILE` | `02 / 03 — PROFILE` | 이름 + 휴대전화 OTP |
+| Gs4 | `/signup/pg/verify` | `04 / 04 — VERIFY` | `03 / 03 — VERIFY` | 이메일 인증(6자리 코드 또는 링크). 직접 가입 → `signupCompleteAction`(새 워크스페이스) → `/inbox`. 초대 가입 → `signupViaWorkspaceInviteAction`(기존 ws 합류) → `/home` |
+
+**확정 결정 (2026-05-31)**:
+- 워크스페이스 초대 신규 유저는 **기존(이미 승인된) 워크스페이스에 member로 합류** — `createWorkspaceInTx` 호출 없음, 운영자 심사 없음
+- 고아 워크스페이스 생성 방지: `signupViaWorkspaceInviteAction`이 단일 액션에서 user 생성 + 초대 수락 + 멤버십 추가 + `lastActiveWorkspaceId` 설정을 원자적으로 처리
+- 초대 이메일 불일치 시 `INVITE_EMAIL_MISMATCH` 반환 (대소문자 무시)
+- 초대 토큰 `role`(member/admin)이 `workspace_members.role`에 그대로 반영
 
 ### 1.3 화면 명세
 
