@@ -28,21 +28,22 @@ export default async function WorkspaceInvitePage({ params }: Props) {
   const { token } = await params;
   const tokenHash = hashToken(token);
 
-  // Resolve invitation + workspace name
-  const [row] = await prodDb
-    .select({
-      invitedEmail: workspaceInvitations.invitedEmail,
-      status: workspaceInvitations.status,
-      expiresAt: workspaceInvitations.expiresAt,
-      workspaceName: workspaces.name,
-      workspaceId: workspaceInvitations.workspaceId,
-    })
-    .from(workspaceInvitations)
-    .innerJoin(workspaces, eq(workspaces.id, workspaceInvitations.workspaceId))
-    .where(eq(workspaceInvitations.tokenHash, tokenHash))
-    .limit(1);
-
-  const session = await auth();
+  // Resolve invitation + workspace name and session check in parallel (independent).
+  const [[row], session] = await Promise.all([
+    prodDb
+      .select({
+        invitedEmail: workspaceInvitations.invitedEmail,
+        status: workspaceInvitations.status,
+        expiresAt: workspaceInvitations.expiresAt,
+        workspaceName: workspaces.name,
+        workspaceId: workspaceInvitations.workspaceId,
+      })
+      .from(workspaceInvitations)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceInvitations.workspaceId))
+      .where(eq(workspaceInvitations.tokenHash, tokenHash))
+      .limit(1),
+    auth(),
+  ]);
   const isAuthed = !!session?.user?.id;
 
   // ── Authenticated path ────────────────────────────────────────────────

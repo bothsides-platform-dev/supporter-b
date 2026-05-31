@@ -158,13 +158,13 @@ export default function PgVerifyPage() {
     }
   };
 
-  const stepperCurrent = isInvited ? 3 : 4;
-  const stepperTotal = isInvited ? 3 : 4;
+  // 초대 경로: 3단계 (account → profile → verify). 직접 가입: 4단계.
+  const stepperValue = isInvited ? 3 : 4;
 
   if (alreadyVerified && submitting) {
     return (
       <div className="space-y-6 text-center">
-        <SignupStepper current={stepperCurrent} total={stepperTotal} />
+        <SignupStepper current={stepperValue} total={stepperValue} />
         <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-[var(--md-sys-color-tertiary)]">
           인증 완료. 계정 생성 중…
         </p>
@@ -174,7 +174,7 @@ export default function PgVerifyPage() {
 
   return (
     <div className="space-y-6">
-      <SignupStepper current={stepperCurrent} total={stepperTotal} />
+      <SignupStepper current={stepperValue} total={stepperValue} />
 
       <div className="space-y-4 text-center">
         <div className="flex justify-center text-[var(--md-sys-color-outline)]">

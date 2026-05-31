@@ -3,9 +3,10 @@
 import { eq } from 'drizzle-orm';
 
 import { requireSession } from '@/lib/auth/session';
-import { workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
+import { workspaceInvitations } from '@/lib/db/schema';
 import { hashToken } from '@/lib/server/token';
 import { actionDb, normalizeEmail } from '@/lib/server/actions/auth/_shared';
+import { claimInviteInTx } from './_claimWorkspaceInvite';
 
 export type AcceptWorkspaceInviteResult =
   | { ok: true; workspaceId: string }
@@ -19,6 +20,7 @@ export type AcceptWorkspaceInviteResult =
  *   2. Status/expiry check — INVITE_EXPIRED if not pending or expired
  *   3. Email match — INVITE_EMAIL_MISMATCH (checked before burning the invite)
  *   4. Atomic: mark accepted + insert workspace_members (ON CONFLICT DO NOTHING)
+ *      via claimInviteInTx shared helper (TOCTOU 방지)
  */
 export async function acceptWorkspaceInviteAction(
   rawToken: string,
@@ -54,28 +56,6 @@ export async function acceptWorkspaceInviteAction(
     return { ok: false, error: 'INVITE_EMAIL_MISMATCH' };
   }
 
-  const result = await db.transaction(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (tx: any): Promise<AcceptWorkspaceInviteResult> => {
-      // Mark invitation as accepted
-      await tx
-        .update(workspaceInvitations)
-        .set({ status: 'accepted', acceptedByUserId: userId })
-        .where(eq(workspaceInvitations.id, invitation.id));
-
-      // Add to workspace — ON CONFLICT DO NOTHING handles already-member race
-      await tx
-        .insert(workspaceMembers)
-        .values({
-          workspaceId: invitation.workspaceId,
-          userId,
-          role: invitation.role,
-        })
-        .onConflictDoNothing();
-
-      return { ok: true, workspaceId: invitation.workspaceId };
-    },
-  );
-
-  return result;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return db.transaction(async (tx: any) => claimInviteInTx(tx, invitation, userId));
 }

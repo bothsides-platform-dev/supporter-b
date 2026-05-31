@@ -79,7 +79,7 @@ export default function PgSignupEmailPage() {
     setWorkspaceType('pg');
 
     writeSignupDraft({
-      ...readSignupDraft(),
+      ...draft,
       email,
       password,
       agreedAt,
