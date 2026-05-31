@@ -1,5 +1,8 @@
-import 'dotenv/config';
+import { config as dotenvConfig } from 'dotenv';
 import type { Config } from 'drizzle-kit';
+
+dotenvConfig({ path: '.env.production', override: false });
+dotenvConfig({ override: false });
 
 export default {
   schema: './lib/db/schema',
