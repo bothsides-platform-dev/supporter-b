@@ -1,5 +1,5 @@
 {
-  "id": "fc60f539-998e-4895-8d9a-e9c3af4301c4",
+  "id": "8cf91592-c201-4588-a789-31335bb06cac",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -3027,7 +3027,8 @@
         "bid.submitted",
         "rfp.awarded",
         "workspace.invited",
-        "workspace.approved"
+        "workspace.approved",
+        "workspace.rejected"
       ]
     },
     "public.outbox_status": {

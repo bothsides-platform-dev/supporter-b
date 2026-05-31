@@ -67,3 +67,10 @@ export interface WorkspaceApprovedProps {
   orgLabel: string;
   loginUrl: string;
 }
+
+export interface WorkspaceRejectedProps {
+  workspaceName: string;
+  orgLabel: string;
+  reason: string;
+  reapplyUrl: string;
+}

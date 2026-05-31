@@ -13,6 +13,9 @@ vi.mock('next/cache', () => ({
 vi.mock('@/lib/server/outbox/templates/workspaceApproved', () => ({
   renderWorkspaceApproved: async () => '<p>approved</p>',
 }));
+vi.mock('@/lib/server/outbox/templates/workspaceRejected', () => ({
+  renderWorkspaceRejected: async () => '<p>rejected</p>',
+}));
 
 let db: PgliteDB;
 let wsId: string;
@@ -168,6 +171,36 @@ describe('rejectWorkspaceAction', () => {
     await rejectWorkspaceAction(db, wsId, '서류 미비');
     const logs = await db.select().from(adminAuditLogs);
     expect(logs[0].action).toBe('workspace.reject');
+  });
+
+  it('admin 멤버가 있으면 workspace.rejected outbox 행을 enqueue한다', async () => {
+    const [user] = await db.insert(users).values({
+      email: 'applicant@example.com',
+      passwordHash: 'hash',
+      name: '신청자',
+    }).returning();
+    await db.insert(workspaceMembers).values({
+      workspaceId: wsId,
+      userId: user.id,
+      role: 'admin',
+    });
+
+    const { rejectWorkspaceAction } = await import('../rejectWorkspaceAction');
+    await rejectWorkspaceAction(db, wsId, '서류 미비');
+
+    const rows = await db.select().from(outboxEntries);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].event).toBe('workspace.rejected');
+    expect(rows[0].toAddr).toBe('applicant@example.com');
+    expect(rows[0].subject).toContain('보완');
+    expect(rows[0].dedupeKey).toBe(`workspace-rejected:${wsId}`);
+  });
+
+  it('admin 멤버 없으면 outbox 행을 생성하지 않는다', async () => {
+    const { rejectWorkspaceAction } = await import('../rejectWorkspaceAction');
+    await rejectWorkspaceAction(db, wsId, '서류 미비');
+    const rows = await db.select().from(outboxEntries);
+    expect(rows).toHaveLength(0);
   });
 });
 

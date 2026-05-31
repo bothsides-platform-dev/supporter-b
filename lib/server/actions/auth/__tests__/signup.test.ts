@@ -16,6 +16,7 @@ import { getWorkspaceAdminUser } from '@/lib/server/queries/admin/workspaceOwner
 import { hashOtpCode } from '../phoneOtpUtils';
 import { signupEmailAction } from '../signupEmailAction';
 import { signupCompleteAction } from '../signupCompleteAction';
+import { checkEmailAvailableAction } from '../checkEmailAvailableAction';
 import { verifyEmailAction } from '../verifyEmailAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import { __setActionDbForTest } from '../_shared';
@@ -628,5 +629,71 @@ describe('signupCompleteAction — insert error tightening', () => {
       throwingInsertDb(Object.assign(new Error('not null'), { code: '23502' })),
     );
     await expect(signupCompleteAction(VALID_SIGNUP)).rejects.toThrow('not null');
+  });
+});
+
+describe('checkEmailAvailableAction', () => {
+  beforeEach(async () => {
+    db = await setupActionEnv();
+  });
+  afterEach(teardownActionEnv);
+
+  it('returns ok:true for an email that is not registered', async () => {
+    const r = await checkEmailAvailableAction({ email: 'fresh@example.com' });
+    expect(r.ok).toBe(true);
+  });
+
+  it('returns EMAIL_TAKEN when a user with that email already exists', async () => {
+    // 완전 가입 시드: email 인증 → signupComplete로 users row 생성
+    const vid = await seedVerifiedOtp(DEFAULT_PHONE);
+    await seedVerifiedEmail('taken@example.com');
+    await signupCompleteAction({
+      email: 'taken@example.com',
+      name: '테스터',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: vid,
+      wsKind: 'buyer',
+      wsName: '(주)테스트',
+      bizProfile: {
+        bizNo: VALID_BIZ_NO,
+        taxType: 'general',
+        status: 'active',
+      },
+    });
+
+    const r = await checkEmailAvailableAction({ email: 'taken@example.com' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
+  });
+
+  it('normalises email before checking (case-insensitive)', async () => {
+    const vid = await seedVerifiedOtp(DEFAULT_PHONE);
+    await seedVerifiedEmail('case@example.com');
+    await signupCompleteAction({
+      email: 'case@example.com',
+      name: '테스터',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: vid,
+      wsKind: 'buyer',
+      wsName: '(주)테스트',
+      bizProfile: {
+        bizNo: VALID_BIZ_NO,
+        taxType: 'general',
+        status: 'active',
+      },
+    });
+
+    // 대문자로 전달해도 EMAIL_TAKEN이어야 함
+    const r = await checkEmailAvailableAction({ email: 'CASE@example.com' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
+  });
+
+  it('returns INVALID_INPUT for a malformed email', async () => {
+    const r = await checkEmailAvailableAction({ email: 'not-an-email' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
 });

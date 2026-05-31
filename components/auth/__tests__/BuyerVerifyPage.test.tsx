@@ -136,4 +136,15 @@ describe('BuyerVerifyPage — 이메일 인증 step 4', () => {
       expect(mockPush).toHaveBeenCalledWith('/rfp');
     });
   });
+
+  it('mount 시 signupEmailAction이 EMAIL_TAKEN을 반환하면 전용 안내문과 로그인 링크를 표시한다', async () => {
+    mockSignupEmailAction.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+
+    render(<BuyerVerifyPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('이미 가입된 이메일입니다');
+    });
+    expect(screen.getByRole('link', { name: '로그인' })).toBeInTheDocument();
+  });
 });
