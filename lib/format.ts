@@ -1,3 +1,7 @@
+import { formatInTimeZone } from 'date-fns-tz';
+
+const KST = 'Asia/Seoul';
+
 export function formatKRW(amount: number): string {
   return amount.toLocaleString('ko-KR') + '원';
 }
@@ -7,16 +11,20 @@ export function formatPct(value: number, digits = 2): string {
 }
 
 export function formatDate(iso: string): string {
-  // Use the date portion of the ISO string directly to avoid timezone shift.
-  // Deadlines are stored as T23:59:59Z (UTC), which would roll over to the next
-  // day when converted to KST (UTC+9). Slicing to the date part preserves the
-  // intended calendar date regardless of the server's timezone.
+  // Deadlines are stored as T23:59:59Z (UTC midnight-minus-one).
+  // We want the calendar date the *user intended* (the date portion of the
+  // ISO string), not the KST wall-clock date of that instant.
+  // Slicing to 10 chars extracts that intended date directly.
   const [year, month, day] = iso.slice(0, 10).split('-').map(Number);
   return new Date(year, month - 1, day).toLocaleDateString('ko-KR', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   });
+}
+
+export function formatDateTime(iso: string): string {
+  return formatInTimeZone(new Date(iso), KST, 'yyyy-MM-dd HH:mm');
 }
 
 export function formatDeadline(iso: string): string {
