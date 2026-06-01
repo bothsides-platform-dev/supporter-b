@@ -2,6 +2,7 @@
 // `resend` SDK 를 mock 하여 네트워크 없이 env 모드별 동작을 검증한다.
 // (ResendSender 테스트의 env-mode 패턴 미러)
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { logger } from '@/lib/observability/logger';
 
 const sendMock = vi.fn();
 vi.mock('resend', () => {
@@ -14,6 +15,10 @@ vi.mock('resend', () => {
   return { Resend: FakeResend };
 });
 
+vi.mock('@/lib/observability/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
 const ORIGINAL = {
   key: process.env.RESEND_API_KEY,
   from: process.env.RESEND_FROM,
@@ -22,6 +27,7 @@ const ORIGINAL = {
 
 beforeEach(() => {
   sendMock.mockReset();
+  vi.mocked(logger.info).mockReset();
   delete process.env.RESEND_API_KEY;
   delete process.env.RESEND_FROM;
   delete process.env.ADMIN_NOTIFY_EMAIL;
@@ -86,6 +92,25 @@ describe('sendAdminEmail', () => {
       subject: '새 심사 요청',
       html: '<p>hi</p>',
     });
+  });
+
+  it('emits an admin_email.sent operational log on success (no recipient addresses)', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    process.env.ADMIN_NOTIFY_EMAIL = 'a@x.test, b@y.test';
+    sendMock.mockResolvedValue({ data: { id: 'm1' }, error: null });
+
+    const { sendAdminEmail } = await import('../admin-email');
+    await sendAdminEmail({ subject: '새 심사 요청', html: '<p>hi</p>' });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'admin_email.sent',
+      expect.objectContaining({
+        subject: '새 심사 요청',
+        recipientCount: 2,
+        messageId: 'm1',
+        durationMs: expect.any(Number),
+      }),
+    );
   });
 
   it('sends to multiple comma-separated recipients (trimmed, blanks dropped)', async () => {
