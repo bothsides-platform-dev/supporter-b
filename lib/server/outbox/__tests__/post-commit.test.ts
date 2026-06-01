@@ -8,6 +8,8 @@
 // test stays decoupled from the real Drizzle/pglite stack.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { logger } from '@/lib/observability/logger';
+
 const flushMock = vi.fn();
 
 vi.mock('next/server', () => ({
@@ -24,8 +26,13 @@ vi.mock('@/lib/integrations/resend', () => ({
   getResendSender: () => async () => ({ ok: true }),
 }));
 
+vi.mock('@/lib/observability/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
 beforeEach(() => {
   flushMock.mockReset();
+  vi.mocked(logger.error).mockReset();
 });
 
 afterEach(() => {
@@ -46,16 +53,16 @@ describe('flushAfterCommit', () => {
     expect(flushMock).toHaveBeenCalledWith(expect.any(Function), 50);
   });
 
-  it('swallows flush errors (logs only, does not propagate)', async () => {
+  it('swallows flush errors and logs via logger.error (does not propagate)', async () => {
     flushMock.mockRejectedValue(new Error('db down'));
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { flushAfterCommit } = await import('../post-commit');
 
     expect(() => flushAfterCommit()).not.toThrow();
     await new Promise((r) => setImmediate(r));
-    expect(errSpy).toHaveBeenCalled();
-    const [label, err] = errSpy.mock.calls[0];
-    expect(label).toContain('post-commit flush failed');
-    expect((err as Error).message).toBe('db down');
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'outbox.post_commit_failed',
+      expect.objectContaining({ err: expect.any(Error) }),
+    );
   });
 });
