@@ -21,8 +21,8 @@ export function formatDate(iso: string): string {
   );
 }
 
-export function formatDateTime(iso: string): string {
-  return formatInTimeZone(new Date(iso), KST, 'yyyy-MM-dd HH:mm');
+export function formatDateTime(iso: string, timeZone: string = KST, fmt = 'yyyy-MM-dd HH:mm'): string {
+  return formatInTimeZone(new Date(iso), timeZone, fmt);
 }
 
 export function formatDeadline(iso: string): string {

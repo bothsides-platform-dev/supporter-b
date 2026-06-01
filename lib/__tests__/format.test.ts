@@ -16,7 +16,7 @@ describe('formatDate', () => {
 });
 
 describe('formatDateTime', () => {
-  it('UTC 타임스탬프를 KST 기준 날짜+시각으로 표시한다', () => {
+  it('timezone 미지정 시 KST 기준으로 표시된다', () => {
     // 2026-06-01T05:30:00Z = 2026-06-01 14:30 KST (UTC+9)
     const result = formatDateTime('2026-06-01T05:30:00Z');
     expect(result).toBe('2026-06-01 14:30');
@@ -32,5 +32,16 @@ describe('formatDateTime', () => {
     // 2026-06-30T23:59:59Z = 2026-07-01 08:59 KST
     const result = formatDateTime('2026-06-30T23:59:59Z');
     expect(result).toBe('2026-07-01 08:59');
+  });
+
+  it('명시적 UTC timezone을 따른다', () => {
+    const result = formatDateTime('2026-06-01T05:30:00Z', 'UTC');
+    expect(result).toBe('2026-06-01 05:30');
+  });
+
+  it('명시적 America/New_York timezone을 따른다', () => {
+    // 2026-06-01T05:30:00Z = 2026-06-01 01:30 EDT (UTC-4)
+    const result = formatDateTime('2026-06-01T05:30:00Z', 'America/New_York');
+    expect(result).toBe('2026-06-01 01:30');
   });
 });

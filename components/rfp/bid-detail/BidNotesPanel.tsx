@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/primitives/Button';
 import { PaperclipIcon, XIcon, FileTextIcon } from '@/components/icons';
 import { addBidNoteAction } from '@/lib/server/actions/bid/addBidNoteAction';
-import { formatDateTime } from '@/lib/format';
+import { LocalTime } from '@/components/primitives/LocalTime';
 import { removeBidNoteAction } from '@/lib/server/actions/bid/removeBidNoteAction';
 import type { Attachment } from '@/lib/types/common';
 import type { BidNote } from '@/lib/types/bid-note';
@@ -232,7 +232,7 @@ function NoteTimeline({ notes }: { notes: BidNote[] }) {
               <span className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                 {String(serial).padStart(2, '0')} —{' '}
                 <span className="text-[var(--md-sys-color-on-surface-variant)]">
-                  {formatDateTime(note.createdAt)} · {note.authorName}
+                  <LocalTime iso={note.createdAt} /> · {note.authorName}
                 </span>
               </span>
               <button

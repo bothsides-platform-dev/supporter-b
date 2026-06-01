@@ -12,7 +12,8 @@ import {
 } from '@/lib/server/repositories/factory';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
-import { formatDate, formatDateTime, formatPct, formatKRW } from '@/lib/format';
+import { formatDate, formatPct, formatKRW } from '@/lib/format';
+import { LocalTime } from '@/components/primitives/LocalTime';
 
 type Props = { params: Promise<{ rfpId: string }> };
 
@@ -73,7 +74,7 @@ export default async function InboxSubmittedPage({ params }: Props) {
         </p>
         {bid.submittedAt && (
           <p className="mt-1 font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
-            제출 {formatDateTime(bid.submittedAt)}
+            제출 <LocalTime iso={bid.submittedAt} />
           </p>
         )}
       </div>

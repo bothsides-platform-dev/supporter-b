@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RfpBriefPanel } from './RfpBriefPanel';
 import { BidForm } from './BidForm';
-import { formatDateTime } from '@/lib/format';
+import { LocalTime } from '@/components/primitives/LocalTime';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
@@ -21,7 +21,7 @@ export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
           </p>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
             제출 시각:{' '}
-            {myBid.submittedAt ? formatDateTime(myBid.submittedAt) : '—'}
+            {myBid.submittedAt ? <LocalTime iso={myBid.submittedAt} /> : '—'}
           </p>
           <Link
             href={`/inbox/${rfp.code}/submitted`}
