@@ -13,11 +13,13 @@ afterEach(() => cleanup());
 const withGroups: Dashboard = {
   kpis: [{ id: 'active', label: '진행중', value: 8, href: '/rfp?status=active' }],
   groups: [{ id: 'due', label: '마감 임박', items: [{ id: 'P-A', href: '/rfp/P-A', title: 'A', badge: 'D-3' }] }],
+  onboardingActions: null,
 };
 
 const empty: Dashboard = {
   kpis: [{ id: 'active', label: '진행중', value: 0, href: '/rfp?status=active' }],
   groups: [],
+  onboardingActions: null,
 };
 
 describe('HomeDashboard', () => {

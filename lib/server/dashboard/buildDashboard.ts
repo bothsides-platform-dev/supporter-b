@@ -9,7 +9,13 @@ import { matchesDeadlineBucket } from '@/lib/server/board/filterRfps';
 export type DashboardKpi = { id: string; label: string; value: number; href: string };
 export type ActionItem = { id: string; href: string; title: string; badge: string };
 export type ActionGroup = { id: string; label: string; items: ActionItem[] };
-export type Dashboard = { kpis: DashboardKpi[]; groups: ActionGroup[] };
+export type OnboardingAction = {
+  id: string;
+  href: string;
+  title: string;
+  description: string;
+};
+export type Dashboard = { kpis: DashboardKpi[]; groups: ActionGroup[]; onboardingActions: OnboardingAction[] | null };
 
 const DAY = 86_400_000;
 /** "무응답 경과" 기준일 — 시작값, 튜닝 가능. */
@@ -33,6 +39,12 @@ function deadlineBadge(deadline: string, now: Date): string {
   const diff = Math.ceil((new Date(deadline).getTime() - now.getTime()) / DAY);
   return diff < 0 ? '마감' : `D-${diff}`;
 }
+
+const BUYER_ONBOARDING_ACTIONS: OnboardingAction[] = [
+  { id: 'create-rfp',     href: '/rfp/new',          title: '첫 RFP를 작성해 보세요',  description: 'PG사를 초대하고 수수료 견적을 비교할 수 있어요' },
+  { id: 'setup-profile',  href: '/settings/profile', title: '워크스페이스 프로필 설정', description: '' },
+  { id: 'invite-members', href: '/settings/members', title: '팀원 초대하기',            description: '' },
+];
 
 export function buildBuyerDashboard(
   rfps: RFP[],
@@ -69,7 +81,11 @@ export function buildBuyerDashboard(
     { id: 'unanswered', label: '무응답 경과', items: unansweredItems },
   ].filter((g) => g.items.length > 0);
 
-  return { kpis, groups };
+  return {
+    kpis,
+    groups,
+    onboardingActions: sent.length === 0 ? BUYER_ONBOARDING_ACTIONS : null,
+  };
 }
 
 export type PgDashRow = {
@@ -104,5 +120,5 @@ export function buildPgDashboard(rows: PgDashRow[], now: Date): Dashboard {
     { id: 'due', label: '응답 마감 임박', items: dueItems },
   ].filter((g) => g.items.length > 0);
 
-  return { kpis, groups };
+  return { kpis, groups, onboardingActions: null };
 }
