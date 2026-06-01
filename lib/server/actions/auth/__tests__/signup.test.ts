@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
 import {
@@ -12,7 +12,6 @@ import {
   workspaceMembers,
   workspaces,
 } from '@/lib/db/schema';
-import { getWorkspaceAdminUser } from '@/lib/server/queries/admin/workspaceOwner';
 import { hashOtpCode } from '../phoneOtpUtils';
 import { signupEmailAction } from '../signupEmailAction';
 import { signupCompleteAction } from '../signupCompleteAction';
@@ -439,8 +438,19 @@ describe('signupCompleteAction — pg branch', () => {
     // serviceScope는 null 로 기록됨 — 가입 시 수집 제거
     expect(profile.serviceScope).toBeNull();
 
-    const owner = await getWorkspaceAdminUser(ws.id, db);
-    expect(owner).toEqual({
+    // Inline query: find the workspace admin user contact
+    const [ownerRow] = await db
+      .select({ name: users.name, email: users.email, phone: users.phone })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(workspaceMembers.userId, users.id))
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, ws.id),
+          eq(workspaceMembers.role, 'admin'),
+        ),
+      )
+      .limit(1);
+    expect(ownerRow).toEqual({
       name: '서포터 B 페이 영업',
       email: 'sales@toss.im',
       phone: DEFAULT_PHONE,

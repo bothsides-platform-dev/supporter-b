@@ -63,12 +63,13 @@ app/
 │  ├─ workspace/new/          # 워크스페이스 생성
 │  └─ settings/{profile,members,notifications}/
 ├─ rfp/new/                   # full-screen RFP 작성 플로우 (자체 layout, AppShell 밖)
-├─ admin/                     # 운영자 콘솔 (별도 트리): admin/login + admin/(protected)/{index 대시보드, buyers/[id], sellers/[id], rfps/[id], review/[id], audit-log}; role-guard in admin/(protected)/layout.tsx
 ├─ logout/route.ts            # POST handler
 └─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리
 ```
 
-Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation. The `admin/` console is a separate top-level tree, gated by a role guard in `admin/(protected)/layout.tsx` (not the buyer/pg AppShell).
+Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation.
+
+**Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
 
 ## Linear Design Language — Hard Rules
 
