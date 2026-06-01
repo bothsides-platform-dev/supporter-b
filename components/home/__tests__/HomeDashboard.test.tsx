@@ -13,11 +13,23 @@ afterEach(() => cleanup());
 const withGroups: Dashboard = {
   kpis: [{ id: 'active', label: '진행중', value: 8, href: '/rfp?status=active' }],
   groups: [{ id: 'due', label: '마감 임박', items: [{ id: 'P-A', href: '/rfp/P-A', title: 'A', badge: 'D-3' }] }],
+  onboardingActions: null,
 };
 
 const empty: Dashboard = {
   kpis: [{ id: 'active', label: '진행중', value: 0, href: '/rfp?status=active' }],
   groups: [],
+  onboardingActions: null,
+};
+
+const withOnboarding: Dashboard = {
+  kpis: [{ id: 'active', label: '진행중', value: 0, href: '/rfp?status=active' }],
+  groups: [],
+  onboardingActions: [
+    { id: 'create-rfp',     href: '/rfp/new',          title: '첫 RFP를 작성해 보세요',  description: 'PG사를 초대하고 수수료 견적을 비교할 수 있어요' },
+    { id: 'setup-profile',  href: '/settings/profile', title: '워크스페이스 프로필 설정', description: '' },
+    { id: 'invite-members', href: '/settings/members', title: '팀원 초대하기',            description: '' },
+  ],
 };
 
 describe('HomeDashboard', () => {
@@ -37,5 +49,14 @@ describe('HomeDashboard', () => {
     expect(screen.getByText('지금 처리할 일이 없습니다')).toBeInTheDocument();
     expect(screen.getByText('구매사가 초대한 RFP가 여기에 표시됩니다.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /진행중/ })).toBeInTheDocument();
+  });
+
+  it('shows OnboardingActionList when groups is empty and onboardingActions is set', () => {
+    render(<HomeDashboard dashboard={withOnboarding} workspaceType="buyer" />);
+    expect(screen.getByRole('link', { name: /첫 RFP를 작성해 보세요/ }))
+      .toHaveAttribute('href', '/rfp/new');
+    expect(screen.getByRole('link', { name: /워크스페이스 프로필 설정/ }))
+      .toHaveAttribute('href', '/settings/profile');
+    expect(screen.queryByText('지금 처리할 일이 없습니다')).not.toBeInTheDocument();
   });
 });
