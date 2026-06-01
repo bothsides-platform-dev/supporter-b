@@ -11,16 +11,14 @@ export function formatPct(value: number, digits = 2): string {
 }
 
 export function formatDate(iso: string): string {
-  // Deadlines are stored as T23:59:59Z (UTC midnight-minus-one).
-  // We want the calendar date the *user intended* (the date portion of the
-  // ISO string), not the KST wall-clock date of that instant.
-  // Slicing to 10 chars extracts that intended date directly.
-  const [year, month, day] = iso.slice(0, 10).split('-').map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
+  // Deadlines are stored as T23:59:59Z; the ISO date portion is the
+  // user's intended calendar date. Append T00:00:00Z and format in UTC
+  // to avoid any timezone conversion.
+  return formatInTimeZone(
+    new Date(iso.slice(0, 10) + 'T00:00:00Z'),
+    'UTC',
+    'yyyy. MM. dd.',
+  );
 }
 
 export function formatDateTime(iso: string): string {
