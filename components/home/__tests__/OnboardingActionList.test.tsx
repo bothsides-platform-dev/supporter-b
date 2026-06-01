@@ -21,7 +21,7 @@ describe('OnboardingActionList', () => {
     render(<OnboardingActionList actions={actions} />);
     const banner = screen.getByRole('link', { name: /첫 RFP를 작성해 보세요/ });
     expect(banner).toHaveAttribute('href', '/rfp/new');
-    expect(banner).toHaveTextContent('RFP 작성하기');
+    expect(banner).toHaveTextContent('RFP 작성해요');
   });
 
   it('renders secondary actions as list items with correct hrefs', () => {

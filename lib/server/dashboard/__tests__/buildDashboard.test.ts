@@ -124,6 +124,12 @@ describe('buildBuyerDashboard — onboarding', () => {
     const dash = buildBuyerDashboard(draftOnly, new Map(), NOW);
     expect(dash.onboardingActions).not.toBeNull();
   });
+
+  it('returns null when buyer has awarded RFPs but no sent (returning buyer)', () => {
+    const awardedOnly = [rfp({ id: 'A', status: 'awarded', deadline: fromNow(-1) })];
+    const dash = buildBuyerDashboard(awardedOnly, new Map(), NOW);
+    expect(dash.onboardingActions).toBeNull();
+  });
 });
 
 describe('buildPgDashboard — onboarding', () => {

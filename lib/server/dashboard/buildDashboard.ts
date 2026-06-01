@@ -84,7 +84,7 @@ export function buildBuyerDashboard(
   return {
     kpis,
     groups,
-    onboardingActions: sent.length === 0 ? BUYER_ONBOARDING_ACTIONS : null,
+    onboardingActions: rfps.some(r => r.status !== 'draft') ? null : BUYER_ONBOARDING_ACTIONS,
   };
 }
 
