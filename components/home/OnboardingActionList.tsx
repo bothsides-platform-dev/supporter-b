@@ -10,7 +10,7 @@ export function OnboardingActionList({ actions }: { actions: OnboardingAction[] 
     <div className="flex flex-col gap-2">
       <Link
         href={primary.href}
-        className="flex items-center justify-between gap-4 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-primary-container)] bg-[var(--md-sys-color-primary-container)] px-4 py-3.5 transition-colors hover:brightness-95"
+        className="flex items-center justify-between gap-4 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-primary-container)] bg-[var(--md-sys-color-primary-container)] px-4 py-3.5 transition-colors hover:opacity-90"
       >
         <div className="flex flex-col gap-0.5">
           <span className="text-[14px] font-semibold text-[var(--md-sys-color-on-primary-container)]">
@@ -22,7 +22,7 @@ export function OnboardingActionList({ actions }: { actions: OnboardingAction[] 
             </span>
           )}
         </div>
-        <span className="shrink-0 rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-[13px] font-medium text-white">
+        <span className="shrink-0 rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-[13px] font-medium text-[var(--md-sys-color-on-primary)]">
           RFP 작성하기
         </span>
       </Link>
