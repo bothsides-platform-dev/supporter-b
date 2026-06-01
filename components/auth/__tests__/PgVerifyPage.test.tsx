@@ -94,7 +94,7 @@ describe('PgVerifyPage — 이메일 인증 step 4', () => {
     render(<PgVerifyPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('인증 메일을 보내지 못했습니다');
+      expect(screen.getByRole('alert')).toHaveTextContent('인증 메일을 보내지 못했어요');
     });
   });
 });
