@@ -5,6 +5,8 @@
     "e2e/**/*.ts"
   ],
   "project": ["**/*.{ts,tsx}"],
+  "ignore": [".claude/worktrees/**"],
+  "ignoreExportsUsedInFile": true,
   "ignoreDependencies": [
     "shadcn",
     "@types/bcryptjs",
