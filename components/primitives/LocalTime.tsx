@@ -11,7 +11,7 @@ interface LocalTimeProps {
 }
 
 export function LocalTime({ iso, format = 'yyyy-MM-dd HH:mm', timeZone }: LocalTimeProps) {
-  const [text, setText] = useState(() => formatDateTime(iso, 'UTC', format));
+  const [text, setText] = useState(() => formatDateTime(iso, 'Asia/Seoul', format));
 
   useEffect(() => {
     const tz = timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
