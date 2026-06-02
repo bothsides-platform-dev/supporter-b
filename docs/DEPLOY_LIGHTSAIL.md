@@ -81,7 +81,8 @@ pm2 save
 - `AUTH_SECRET` — `openssl rand -base64 32`
 - `AUTH_TRUST_HOST=true` — 프록시 뒤에서 Auth.js 가 호스트를 신뢰하도록
 - `NEXT_PUBLIC_BASE_URL=https://<YOUR_DOMAIN>` — **빌드 타임에 인라인**되므로 deploy(빌드) 전에 설정
-- `RESEND_*`, `SENTRY_*`, `SOLAPI_*`, `AXIOM_*` 등 — 사용하는 것만
+- `RESEND_*`, `SENTRY_*`, `SOLAPI_*` 등 — 사용하는 것만
+- `AXIOM_TOKEN` / `AXIOM_DATASET` — 둘 다 설정하면 운영 로그(pino)가 Axiom으로 전송된다. 미설정 시 `pm2 logs bidit` 으로만 확인.
 
 ## 갱신 배포 (이후 매번)
 

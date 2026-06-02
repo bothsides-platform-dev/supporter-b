@@ -12,6 +12,7 @@
 
 import * as Sentry from '@sentry/nextjs';
 import { Resend } from 'resend';
+import { logger } from '@/lib/observability/logger';
 
 const DEFAULT_FROM = 'send@supporter-b.store';
 
@@ -45,6 +46,7 @@ export async function sendAdminEmail(args: {
 
   try {
     const client = new Resend(apiKey);
+    const t0 = Date.now();
     const result = await client.emails.send({
       from: process.env.RESEND_FROM ?? DEFAULT_FROM,
       to: recipients,
@@ -61,6 +63,13 @@ export async function sendAdminEmail(args: {
       return { ok: false, error: message };
     }
 
+    // Resend SDK doesn't export the success `data` shape; the cast is safe after the error guard above.
+    logger.info('admin_email.sent', {
+      subject: args.subject,
+      recipientCount: recipients.length,
+      messageId: (result as { data?: { id?: string } | null }).data?.id ?? null,
+      durationMs: Date.now() - t0,
+    });
     return { ok: true };
   } catch (e) {
     Sentry.captureException(e, {
