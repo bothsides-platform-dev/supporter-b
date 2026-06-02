@@ -35,6 +35,13 @@ vi.mock('@/lib/server/actions/bid/removeBidNoteAction', () => ({
   removeBidNoteAction: (input: unknown) => removeMock(input),
 }));
 
+// MessageComposeButton imports 'use server' chat actions whose transitive
+// next-auth → next/server chain fails to resolve in the jsdom env (collection
+// error). Stub it — this modal's tests don't assert the chat compose flow.
+vi.mock('@/components/messages/MessageComposeButton', () => ({
+  MessageComposeButton: () => null,
+}));
+
 import { BidDetailModal } from '../BidDetailModal';
 import { http } from '@/lib/http';
 
