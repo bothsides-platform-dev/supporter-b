@@ -14,7 +14,20 @@
 		max_size 25MB
 	}
 
-	reverse_proxy 127.0.0.1:3000
+	# Realtime chat WebSocket (Centrifugo). The browser connects to
+	# wss://<domain>/connection/websocket; Caddy upgrades transparently and
+	# proxies to the 127.0.0.1-bound Centrifugo container. NEXT_PUBLIC_CENTRIFUGO_WS_URL
+	# points here. This is the ONLY Centrifugo path that is public — the
+	# subscribe proxy (Centrifugo -> app) is server↔server and is NOT routed
+	# here (it stays on the private app endpoint /api/centrifugo/subscribe).
+	handle /connection/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# Everything else -> the Next.js app (PM2).
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
 }
 
 admin.{$APP_DOMAIN} {

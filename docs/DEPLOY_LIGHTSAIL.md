@@ -7,16 +7,22 @@
 ## 아키텍처
 
 ```
-인터넷 ──443──▶ Caddy (systemd, 자동 HTTPS/Let's Encrypt) ──▶ 127.0.0.1:3000
-                                                              Next.js (PM2: `next start`)
-                                                                    │
-                                                              127.0.0.1:5432
-                                                              Postgres 16 (docker compose)
+인터넷 ──443──▶ Caddy (systemd, 자동 HTTPS/Let's Encrypt) ──┬─▶ 127.0.0.1:3000
+                                                            │   Next.js (PM2: `next start`)
+                                                            │         │
+                                                            │   127.0.0.1:5432
+                                                            │   Postgres 16 (docker compose)
+                                                            │         ▲
+                  /connection/* (wss 업그레이드) ───────────┴─▶ 127.0.0.1:8000
+                                                                Centrifugo (docker compose)
+                                                                  │ subscribe proxy
+                                                                  └─(host.docker.internal)→ 앱 /api/centrifugo/subscribe
 ```
 
 - **앱**: 네이티브 `next start`, PM2 가 감독 (`ecosystem.config.cjs`).
 - **DB**: 같은 박스의 Docker Postgres (`docker-compose.prod.yml`), **`127.0.0.1` 에만 바인딩** → 외부 노출 없음. 앱은 `DATABASE_URL` 로 접속.
-- **프록시/TLS**: Caddy 가 도메인으로 Let's Encrypt 인증서를 자동 발급·갱신, 80→443 리다이렉트, 25MB 업로드 허용(`deploy/Caddyfile`).
+- **실시간(채팅)**: 같은 박스의 Docker Centrifugo (`docker-compose.prod.yml`, `deploy/centrifugo/config.json`), **`127.0.0.1:8000` 에만 바인딩**. 브라우저는 Caddy 의 `wss://<도메인>/connection/websocket` 로만 접속(직접 노출 없음). 앱은 `127.0.0.1:8000/api` 로 publish. 메시지 영속은 전적으로 Postgres(자사 보관) — Centrifugo 는 fanout 만, 아무것도 저장 안 함. 단일 PM2 fork → Memory engine, **Redis 불필요**(멀티노드 확장 시에만 Redis/Nats engine 도입).
+- **프록시/TLS**: Caddy 가 도메인으로 Let's Encrypt 인증서를 자동 발급·갱신, 80→443 리다이렉트, 25MB 업로드 허용, `/connection/*` 를 Centrifugo 로 reverse_proxy(WS 업그레이드 투명 처리) (`deploy/Caddyfile`).
 - **방화벽**: **Lightsail 콘솔 방화벽**만 사용. 호스트 방화벽(ufw/firewalld) 미설치 — 아래 §방화벽 참조.
 
 ## 사양 결정 (확정)
@@ -81,8 +87,9 @@ pm2 save
 - `AUTH_SECRET` — `openssl rand -base64 32`
 - `AUTH_TRUST_HOST=true` — 프록시 뒤에서 Auth.js 가 호스트를 신뢰하도록
 - `NEXT_PUBLIC_BASE_URL=https://<YOUR_DOMAIN>` — **빌드 타임에 인라인**되므로 deploy(빌드) 전에 설정
-- `RESEND_*`, `SENTRY_*`, `SOLAPI_*` 등 — 사용하는 것만
+- **Centrifugo(채팅)** — `CENTRIFUGO_TOKEN_HMAC_SECRET`, `CENTRIFUGO_API_KEY` 는 `openssl rand -base64 48` 로 강하게 생성. **이름 브리지 주의**: 이 값들은 `docker-compose.prod.yml` 가 컨테이너에 v6 환경변수명(`CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` / `CENTRIFUGO_HTTP_API_KEY`)으로 다시 주입한다 — **한 번만 설정하면 앱과 컨테이너가 같은 값을 공유**. `CENTRIFUGO_HTTP_API_URL=http://127.0.0.1:8000/api`, `NEXT_PUBLIC_CENTRIFUGO_WS_URL=wss://<YOUR_DOMAIN>/connection/websocket`(빌드 타임 인라인 — deploy 전에 설정). 컨테이너의 `allowed_origins` 는 `APP_DOMAIN` 에서 자동 도출.
 - `AXIOM_TOKEN` / `AXIOM_DATASET` — 둘 다 설정하면 운영 로그(pino)가 Axiom으로 전송된다. 미설정 시 `pm2 logs bidit` 으로만 확인.
+- `RESEND_*`, `SENTRY_*`, `SOLAPI_*` 등 — 사용하는 것만
 
 ## 갱신 배포 (이후 매번)
 
@@ -100,6 +107,8 @@ git pull → install → DB 기동 대기 → migrate → build → `pm2 reload`
 | Caddy 로그/리로드 | `journalctl -u caddy -f` / `sudo systemctl reload caddy` |
 | DB 셸 | `docker compose -f docker-compose.prod.yml exec pg psql -U supporter_b` |
 | DB 백업 | `docker compose -f docker-compose.prod.yml exec -T pg pg_dump -U supporter_b supporter_b > backup-$(date +%F).sql` |
+| Centrifugo 로그 | `docker compose -f docker-compose.prod.yml logs -f centrifugo` |
+| Centrifugo 재시작 | `docker compose -f docker-compose.prod.yml restart centrifugo` (config.json 변경 후) |
 | swap 확인 | `swapon --show` / `free -h` |
 | 롤백 | `git checkout <이전-sha> && bash scripts/deploy/lightsail-deploy.sh` |
 
@@ -112,6 +121,40 @@ git pull → install → DB 기동 대기 → migrate → build → `pm2 reload`
 - 외부 리스너는 Caddy(80/443, 의도적 공개)와 SSH(22, 콘솔에서 관리)뿐. Postgres 는 `127.0.0.1` 바인딩이라 외부에서 보이지 않는다 → 호스트 방화벽이 추가로 막을 대상이 없다.
 
 → §사전준비 3번(콘솔에서 443 열기)만 하면 끝. 호스트 방화벽 설치 단계는 의도적으로 없다.
+
+## Centrifugo (실시간 채팅)
+
+`docker-compose.prod.yml` 의 `centrifugo` 서비스가 `pg` 와 함께 뜬다 (`docker compose -f docker-compose.prod.yml up -d` 가 둘 다 기동). 운영 시 따로 챙길 것:
+
+- **포트 노출 없음**: `127.0.0.1:8000` 바인딩이라 Lightsail 콘솔 방화벽에 **8000 을 열지 않는다**. 외부는 오직 Caddy `wss://<도메인>/connection/websocket` 로만 도달.
+- **subscribe proxy = 보안 경계**: 컨테이너가 구독 시도마다 앱(`host.docker.internal:3000/api/centrifugo/subscribe`)을 server↔server 로 호출해 워크스페이스 멤버십 ACL 로 허용/거부한다. 이 경로는 공개 노출 대상이 **아니다**(Caddy 미경유). `host.docker.internal` 는 compose 의 `extra_hosts: host-gateway` 로 Linux/Lightsail 에서 호스트로 매핑됨.
+- **config.json 변경 후 재시작 필요**: `deploy/centrifugo/config.json` 은 read-only 마운트라 컨테이너 재시작(`docker compose -f docker-compose.prod.yml restart centrifugo`)으로 반영.
+- **시크릿은 env 만**: config.json 에는 시크릿 없음(Centrifugo 는 `${VAR}` 보간 안 함). `.env.production` 의 `CENTRIFUGO_*` 를 compose 가 v6 키명으로 주입. §환경변수 참조.
+
+### 로컬 dev — Centrifugo 한 컨테이너
+
+운영 compose 는 Postgres+Centrifugo 를 묶지만 로컬 dev 에서는 **Centrifugo 만** 따로 띄우면 된다 (앱은 `pnpm dev`, DB 는 기존 로컬 방식). 운영 config 를 재사용해 한 줄로 기동:
+
+```bash
+docker run --rm -p 127.0.0.1:8000:8000 \
+  -v "$PWD/deploy/centrifugo/config.json:/centrifugo/config.json:ro" \
+  -e CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY=dev-secret \
+  -e CENTRIFUGO_HTTP_API_KEY=dev-api-key \
+  -e CENTRIFUGO_CLIENT_ALLOWED_ORIGINS=http://localhost:3000 \
+  --add-host host.docker.internal:host-gateway \
+  centrifugo/centrifugo:v6 centrifugo -c /centrifugo/config.json
+```
+
+그리고 `.env.local` 에:
+
+```
+CENTRIFUGO_TOKEN_HMAC_SECRET=dev-secret
+CENTRIFUGO_API_KEY=dev-api-key
+CENTRIFUGO_HTTP_API_URL=http://127.0.0.1:8000/api
+NEXT_PUBLIC_CENTRIFUGO_WS_URL=ws://localhost:8000/connection/websocket
+```
+
+> macOS Docker Desktop 은 `host.docker.internal` 가 기본 지원되어 subscribe proxy 가 `localhost:3000` 의 `pnpm dev` 앱에 바로 닿는다. env 가 미설정이면 앱은 publish 를 no-op 으로 안전하게 건너뛴다(테스트/오프라인 모드) — 채팅 영속은 동작하고 라이브 fanout 만 비활성.
 
 ## Node 설치 (Amazon Linux 2023)
 
@@ -128,3 +171,4 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 - **빌드 중 OOM/멈춤**: `swapon --show` 로 swap 확인. `NODE_BUILD_HEAP_MB=1280 bash scripts/deploy/lightsail-deploy.sh` 로 더 낮춰 재시도.
 - **`docker: permission denied`**: bootstrap 후 재접속(또는 `newgrp docker`)으로 docker 그룹 반영.
 - **DB 접속 실패**: `DATABASE_URL` 의 자격증명이 `.env.production` 의 `POSTGRES_*` 와 일치하는지, 컨테이너가 떴는지(`docker compose -f docker-compose.prod.yml ps`) 확인.
+- **채팅 메시지가 실시간으로 안 옴(새로고침해야 보임)**: (1) `journalctl`/`docker compose logs centrifugo` 에 `namespace not found` 면 config 의 `chat` 네임스페이스 누락 — 채널은 `chat:conversation:<id>` 라 첫 콜론 앞 `chat` 네임스페이스가 정의돼 있어야 한다. (2) 구독이 전부 거부되면 subscribe proxy 가 앱에 못 닿는 것 — `host.docker.internal` 매핑(`extra_hosts: host-gateway`)과 앱이 3000 에 떠 있는지 확인. (3) WS 연결 자체가 안 되면 Caddy `/connection/*` 라우트와 `NEXT_PUBLIC_CENTRIFUGO_WS_URL`(빌드 타임 인라인 — 바뀌면 재빌드) 확인. (4) `allowed_origins` 불일치(브라우저 Origin ≠ `https://<APP_DOMAIN>`)면 연결 거부 — `APP_DOMAIN` 확인.

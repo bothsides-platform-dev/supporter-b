@@ -169,4 +169,75 @@ describe('POST /api/centrifugo/subscribe (subscribe proxy ACL)', () => {
     expect(json.result).toBeUndefined();
     expect(json.error).toBeDefined();
   });
+
+  // ── Adversarial channel-parse vectors (privacy invariant) ──────────────────
+  // The parse is startsWith(prefix) + slice + z.string().uuid(). These probe
+  // whether a member of a REAL conversation can smuggle a second/foreign id, a
+  // path-like suffix, or shift the prefix off position 0 to reach a channel the
+  // server never publishes to or that names a different conversation. zod's
+  // anchored ^…$ uuid should deny every one; these are regression guards so a
+  // future refactor to .includes()/substring-regex can't silently widen the ACL.
+
+  it('(g1) valid uuid + ":" + second uuid suffix → deny (no trailing smuggle)', async () => {
+    const { buyerUser, conv } = await seedPairWithMembers();
+
+    // Real member of `conv`, but the channel id carries an appended second id.
+    // slice() yields "<conv.id>:<otherUuid>" which must FAIL the uuid gate —
+    // otherwise a loose parser could resolve `conv` while the byte-exact channel
+    // string differs from what the server publishes to.
+    const res = await call({
+      user: buyerUser.id,
+      channel: `${chatChannel(conv.id)}:${randomUUID()}`,
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.result).toBeUndefined();
+    expect(json.error).toBeDefined();
+  });
+
+  it('(g2) valid uuid + path-like suffix ("/x", ".") → deny', async () => {
+    const { buyerUser, conv } = await seedPairWithMembers();
+
+    for (const suffix of ['/x', '.', ' ', '\n', '%00']) {
+      const res = await call({
+        user: buyerUser.id,
+        channel: `${chatChannel(conv.id)}${suffix}`,
+      });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.result, `suffix ${JSON.stringify(suffix)} must not allow`).toBeUndefined();
+      expect(json.error).toBeDefined();
+    }
+  });
+
+  it('(g3) chat prefix not at position 0 ("x:chat:conversation:<uuid>") → deny', async () => {
+    const { buyerUser, conv } = await seedPairWithMembers();
+
+    // startsWith() is anchored at 0, so a shifted prefix must fail the prefix
+    // check (never reaching findById). Guards against a future switch to
+    // .includes()/.indexOf() that would treat a mid-string prefix as a match.
+    const res = await call({
+      user: buyerUser.id,
+      channel: `x:${chatChannel(conv.id)}`,
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.result).toBeUndefined();
+    expect(json.error).toBeDefined();
+  });
+
+  it('(g4) uuid wrapped in another channel namespace suffix → deny', async () => {
+    const { buyerUser, conv } = await seedPairWithMembers();
+
+    // "chat:conversation:<uuid>extra" — no separator, slice yields
+    // "<uuid>extra" which is not a valid uuid → deny.
+    const res = await call({
+      user: buyerUser.id,
+      channel: `${chatChannel(conv.id)}extra`,
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.result).toBeUndefined();
+    expect(json.error).toBeDefined();
+  });
 });
