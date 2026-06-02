@@ -174,4 +174,90 @@ describe('loadConversationThread', () => {
     const thread = await loadConversationThread(sent.conversationId);
     expect(thread).toEqual({ ok: false, error: 'FORBIDDEN' });
   });
+
+  it('readByCounterparty is true for my message once the counterparty has read it', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
+    // buyer sends, then pg reads → pg's last_read_at >= the message.
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'buyer says hi',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    asPg(pgUser, pgWs.id);
+    await markConversationReadAction({ conversationId: sent.conversationId });
+
+    asBuyer(buyerUser, buyerWs.id);
+    const thread = await loadConversationThread(sent.conversationId);
+    expect(thread.ok).toBe(true);
+    if (!thread.ok) return;
+    expect(thread.messages).toHaveLength(1);
+    expect(thread.messages[0].sender).toBe('self');
+    expect(thread.messages[0].readByCounterparty).toBe(true);
+  });
+
+  it('readByCounterparty is false for my message the counterparty has not yet read', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    // buyer sends; pg never reads.
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'buyer says hi',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    const thread = await loadConversationThread(sent.conversationId);
+    expect(thread.ok).toBe(true);
+    if (!thread.ok) return;
+    expect(thread.messages[0].readByCounterparty).toBe(false);
+  });
+
+  it("readByCounterparty is false for a message the counterparty sent (it's the viewer's own read, not the counterparty's)", async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
+    // pg sends to buyer; buyer reads it. The pg-authored message is `other`,
+    // so readByCounterparty must stay false — the viewer's own read doesn't count.
+    asPg(pgUser, pgWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: buyerWs.id,
+      body: 'pg says hi',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    asBuyer(buyerUser, buyerWs.id);
+    await markConversationReadAction({ conversationId: sent.conversationId });
+    const thread = await loadConversationThread(sent.conversationId);
+    expect(thread.ok).toBe(true);
+    if (!thread.ok) return;
+    expect(thread.messages[0].sender).toBe('other');
+    expect(thread.messages[0].readByCounterparty).toBe(false);
+  });
+
+  it('a co-member of the viewer workspace reading does NOT flip readByCounterparty (only the counterparty workspace counts)', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    // Second buyer member joins the viewer's OWN workspace.
+    const buyerUser2 = await seedUser(db, { email: 'buyer2@b.com', name: '구매사담당2' });
+    await seedMembership(db, buyerWs.id, buyerUser2.id, 'member');
+
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'buyer says hi',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    // The OTHER buyer member reads — but the PG side never has.
+    asBuyer(buyerUser2, buyerWs.id);
+    await markConversationReadAction({ conversationId: sent.conversationId });
+
+    asBuyer(buyerUser, buyerWs.id);
+    const thread = await loadConversationThread(sent.conversationId);
+    expect(thread.ok).toBe(true);
+    if (!thread.ok) return;
+    expect(thread.messages[0].readByCounterparty).toBe(false);
+  });
 });

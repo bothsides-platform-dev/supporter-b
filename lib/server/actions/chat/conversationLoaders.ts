@@ -24,6 +24,13 @@ export type ThreadMessage = {
   body: string;
   rfpId: string | null;
   createdAt: string;
+  /**
+   * Read receipt for a `self` message: true when a member of the counterparty
+   * workspace has a last_read_at >= this message's createdAt (i.e. the other
+   * side has read it). Always false for `other` messages — the viewer's own
+   * read does not count.
+   */
+  readByCounterparty: boolean;
 };
 
 export type LoadThreadResult = ChatActionResult<{
@@ -102,17 +109,42 @@ export async function loadConversationThread(
 
   const counterpartyWsId = ws.workspaceType === 'buyer' ? conv.pgWsId : conv.buyerWsId;
   const counterpartyType: WorkspaceType = ws.workspaceType === 'buyer' ? 'pg' : 'buyer';
-  const counterpartyWs = await (await getWorkspaceRepo()).findById(counterpartyWsId);
+  const wsRepo = await getWorkspaceRepo();
+  const counterpartyWs = await wsRepo.findById(counterpartyWsId);
+
+  // Read receipt: the latest last_read_at across the COUNTERPARTY workspace's
+  // members. Constant over the thread, so resolve it once. A co-member of the
+  // viewer's own workspace reading must NOT count — hence membership-scoped,
+  // not "anyone but me".
+  const readRepo = await getChatReadRepo();
+  const counterpartyMemberIds = await wsRepo.memberUserIds(counterpartyWsId);
+  let counterpartyReadAt: Date | null = null;
+  for (const userId of counterpartyMemberIds) {
+    const read = await readRepo.getFor(conversationId, userId);
+    if (read?.lastReadAt) {
+      const at = new Date(read.lastReadAt);
+      if (counterpartyReadAt === null || at > counterpartyReadAt) {
+        counterpartyReadAt = at;
+      }
+    }
+  }
 
   const msgRepo = await getChatMessageRepo();
   const rows = await msgRepo.listByConversation(conversationId);
-  const messages: ThreadMessage[] = rows.map((m) => ({
-    id: m.id,
-    sender: m.authorWsId === ws.workspaceId ? 'self' : 'other',
-    body: m.body,
-    rfpId: m.rfpId,
-    createdAt: new Date(m.createdAt).toISOString(),
-  }));
+  const messages: ThreadMessage[] = rows.map((m) => {
+    const isSelf = m.authorWsId === ws.workspaceId;
+    return {
+      id: m.id,
+      sender: isSelf ? 'self' : 'other',
+      body: m.body,
+      rfpId: m.rfpId,
+      createdAt: new Date(m.createdAt).toISOString(),
+      readByCounterparty:
+        isSelf &&
+        counterpartyReadAt !== null &&
+        counterpartyReadAt >= new Date(m.createdAt),
+    };
+  });
 
   return {
     ok: true,
