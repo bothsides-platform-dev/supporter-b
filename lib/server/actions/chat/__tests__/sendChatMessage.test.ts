@@ -55,6 +55,14 @@ vi.mock('@/lib/auth/session', () => ({
       : Promise.reject(new Error('FORBIDDEN_PG')),
 }));
 
+// Spy the best-effort fanout so we can assert the publish payload shape without
+// a live Centrifugo server (the real impl no-ops when env is unconfigured).
+const publishChatEvent = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/server/realtime/centrifugo', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../realtime/centrifugo')>();
+  return { ...actual, publishChatEvent: (...args: unknown[]) => publishChatEvent(...args) };
+});
+
 import { sendChatMessageAction } from '../sendChatMessageAction';
 import { markConversationReadAction } from '../markConversationReadAction';
 import {
@@ -90,10 +98,40 @@ function asPg(u: { id: string; email: string }, wsId: string) {
 describe('sendChatMessageAction', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
+    publishChatEvent.mockClear();
   });
   afterEach(() => {
     teardownRfpActionEnv();
     sessionRef.value = null;
+  });
+
+  it('publishes a content-bearing live message event so subscribers can append without a refetch', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    const r = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '실시간으로 보여요.',
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    expect(publishChatEvent).toHaveBeenCalledTimes(1);
+    const [convId, payload] = publishChatEvent.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(convId).toBe(r.conversationId);
+    expect(payload).toMatchObject({
+      type: 'message',
+      id: r.messageId,
+      body: '실시간으로 보여요.',
+      authorWsId: buyerWs.id,
+      rfpId: null,
+    });
+    // createdAt must be an ISO string a client can map straight to ThreadMessage.
+    expect(typeof payload.createdAt).toBe('string');
+    expect(Number.isNaN(Date.parse(payload.createdAt as string))).toBe(false);
   });
 
   it('buyer sends to a PG by counterparty workspace id → creates the pair, persists the message', async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { http } from '@/lib/http';
 import { HTTPError } from 'ky';
@@ -10,21 +10,33 @@ import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { PaperclipIcon, ArrowUpIcon, CheckIcon, XIcon } from '@/components/icons';
 import { DRAFT_OWNER_ID } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
+import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
+import { useChatChannel } from '@/lib/hooks/useChatChannel';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 
 type Props = {
   conversationId: string;
   counterparty: { workspaceId: string; name: string; type: 'buyer' | 'pg' };
   messages: ThreadMessage[];
-  /** 상대가 마지막 보낸 메시지까지 읽었는지 — 마지막 self 메시지 하단에 "읽음". */
-  readByCounterparty?: boolean;
-  /** 상대 프레즌스(온라인 점) — 라이브 배선은 후속. */
-  online?: boolean;
-  /** 상대 타이핑 인디케이터("입력 중…") — 라이브 배선은 후속. */
-  typing?: boolean;
   /** rfpId(uuid) → 표시용 코드/제목. 주어진 항목만 RFP 칩을 렌더(uuid 원문 노출 금지). */
   rfpById?: Record<string, { code: string; title: string }>;
 };
+
+/** Live `message` event payload published by sendChatMessageAction. */
+type LiveMessagePayload = {
+  type?: string;
+  id?: string;
+  body?: string;
+  authorWsId?: string;
+  rfpId?: string | null;
+  createdAt?: string;
+  [k: string]: unknown;
+};
+
+// Leading-edge throttle window for typing pings — fire immediately on the first
+// keystroke, then suppress for this long. NOT a trailing debounce (which would
+// only fire after the user *stops* typing — backwards for a live indicator).
+const TYPING_THROTTLE_MS = 2000;
 
 const MAX_FILES = 5;
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -75,20 +87,79 @@ export function ThreadView({
   conversationId,
   counterparty,
   messages,
-  readByCounterparty = false,
-  online = false,
-  typing = false,
   rfpById,
 }: Props) {
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [sending, setSending] = useState(false);
+  // Local copy so live receives + optimistic sends append without a refetch.
+  const [localMessages, setLocalMessages] = useState<ThreadMessage[]>(messages);
+  // Track the messages prop identity to resync local state when it changes
+  // (MessageInbox renders [] first, then the loaded thread for the SAME
+  // conversationId — no remount). Adjusting state during render is React's
+  // documented pattern; it re-renders immediately without a cascade.
+  const [seenMessages, setSeenMessages] = useState<ThreadMessage[]>(messages);
+  if (seenMessages !== messages) {
+    setSeenMessages(messages);
+    setLocalMessages(messages);
+  }
+  // Live read watermark (ms epoch): the counterparty's "read" event carries no
+  // timestamp, so treat its arrival time as "read up to now".
+  const [readAt, setReadAt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastTypingSentAt = useRef(0);
 
-  // 마지막 self 메시지 인덱스 — 읽음 영수증은 여기에만 붙인다.
-  const lastSelfIndex = messages.reduce(
-    (acc, m, i) => (m.sender === 'self' ? i : acc),
+  // Live channel — graceful no-op when realtime is unconfigured (dev/tests):
+  // online stays false, typingUserIds empty, onMessage/onRead never fire, and
+  // the thread runs entirely off the static loader + optimistic local append.
+  const { online, typingUserIds, sendTyping } = useChatChannel(conversationId, {
+    onMessage: (data: LiveMessagePayload) => {
+      if (!data.id || typeof data.body !== 'string' || !data.createdAt) return;
+      const id = data.id;
+      const sender: ThreadMessage['sender'] =
+        data.authorWsId === counterparty.workspaceId ? 'other' : 'self';
+      setLocalMessages((prev) => {
+        // Dedup by id — the sender's own send already appended optimistically,
+        // and Centrifugo recovery can redeliver.
+        if (prev.some((m) => m.id === id)) return prev;
+        return [
+          ...prev,
+          {
+            id,
+            sender,
+            body: data.body as string,
+            rfpId: data.rfpId ?? null,
+            createdAt: data.createdAt as string,
+            readByCounterparty: false,
+          },
+        ];
+      });
+    },
+    onRead: () => {
+      // Counterparty read up to "now" — advance the live watermark.
+      setReadAt(Date.now());
+    },
+  });
+
+  // Mark-read on open: clears my unread + publishes a read receipt to the
+  // counterparty. Once per conversation (MessageInbox keys ThreadView by
+  // conversationId so a switch remounts and re-fires).
+  useEffect(() => {
+    void markConversationReadAction({ conversationId });
+  }, [conversationId]);
+
+  // 읽음 영수증을 붙일 인덱스: 마지막 *읽힌* 보낸 메시지(절대 마지막 보낸
+  // 메시지가 아님). 상대 last_read_at 이 두 발신 사이에 떨어지면 로더가 메시지별
+  // readByCounterparty 를 다르게 매기므로(앞선 건 true, 이후 건 false), "마지막
+  // self" 기준이면 영수증이 통째로 사라진다. 라이브 read 이벤트는 readAt 워터마크로
+  // 그 시점 이하의 메시지를 모두 읽음 처리한다.
+  const receiptIndex = localMessages.reduce(
+    (acc, m, i) =>
+      m.sender === 'self' &&
+      (m.readByCounterparty || (readAt > 0 && Date.parse(m.createdAt) <= readAt))
+        ? i
+        : acc,
     -1,
   );
 
@@ -138,11 +209,38 @@ export function ThreadView({
     });
     setSending(false);
     if (result.ok) {
+      // Optimistic append — in no-op (unconfigured) mode onMessage never fires,
+      // so this is the only way a sent message shows. The live echo dedups by id.
+      const newId = result.messageId;
+      setLocalMessages((prev) =>
+        prev.some((m) => m.id === newId)
+          ? prev
+          : [
+              ...prev,
+              {
+                id: newId,
+                sender: 'self',
+                body,
+                rfpId: null,
+                createdAt: new Date().toISOString(),
+                readByCounterparty: false,
+              },
+            ],
+      );
       setDraft('');
       setAttachments([]);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     }
   }
+
+  // Leading-edge throttle: ping typing on the first keystroke, then suppress
+  // repeats for the window. Avoids one publish per keystroke.
+  const handleTyping = useCallback((): void => {
+    const now = Date.now();
+    if (now - lastTypingSentAt.current < TYPING_THROTTLE_MS) return;
+    lastTypingSentAt.current = now;
+    sendTyping();
+  }, [sendTyping]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -171,7 +269,7 @@ export function ThreadView({
             </span>
             <Chip label={COUNTERPARTY_TYPE_LABEL[counterparty.type]} color="surface" />
           </div>
-          {typing && (
+          {typingUserIds.length > 0 && (
             <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">입력 중…</span>
           )}
         </div>
@@ -179,17 +277,18 @@ export function ThreadView({
 
       {/* 말풍선 목록 */}
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
-        {messages.map((m, i) => {
+        {localMessages.map((m, i) => {
           const isSelf = m.sender === 'self';
           // Group on the *displayed* day label so the divider key and the
           // rendered label can never diverge across a TZ midnight boundary.
           // Derived from the previous message (no mutable outer var) to stay
           // React-Compiler-pure.
           const dayLabel = formatDayLabel(m.createdAt);
-          const prevDayLabel = i > 0 ? formatDayLabel(messages[i - 1].createdAt) : null;
+          const prevDayLabel = i > 0 ? formatDayLabel(localMessages[i - 1].createdAt) : null;
           const showDivider = dayLabel !== prevDayLabel;
           const rfp = m.rfpId ? rfpById?.[m.rfpId] : undefined;
-          const showReceipt = isSelf && i === lastSelfIndex && readByCounterparty;
+          // Receipt only on the last *read* self message (receiptIndex).
+          const showReceipt = i === receiptIndex;
 
           return (
             <div key={m.id} className="flex flex-col gap-3">
@@ -312,6 +411,7 @@ export function ThreadView({
           onChange={(e) => {
             setDraft(e.target.value);
             autoGrow(e.target);
+            handleTyping();
           }}
           onKeyDown={handleKeyDown}
           placeholder="메시지를 입력하세요…"

@@ -30,6 +30,16 @@ vi.mock('@/lib/server/actions/chat/sendChatMessageAction', () => ({
   sendChatMessageAction: vi.fn(),
 }));
 
+// Opening a thread mounts ThreadView, which fires mark-read (a server action,
+// jsdom-unsafe) and subscribes via useChatChannel (real centrifuge SDK) — mock
+// both so the inbox renders without a DB or live transport.
+vi.mock('@/lib/server/actions/chat/markConversationReadAction', () => ({
+  markConversationReadAction: vi.fn().mockResolvedValue({ ok: true }),
+}));
+vi.mock('@/lib/hooks/useChatChannel', () => ({
+  useChatChannel: () => ({ online: false, typingUserIds: [], sendTyping: vi.fn() }),
+}));
+
 afterEach(() => cleanup());
 beforeEach(() => loadConversationThread.mockReset());
 

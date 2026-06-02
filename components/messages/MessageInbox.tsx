@@ -51,7 +51,11 @@ export function MessageInbox({ conversations }: Props) {
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         {selected ? (
+          // Key by conversationId so switching conversations remounts the
+          // thread — resets local message/read state and re-fires mark-read &
+          // the live subscription for the newly opened conversation.
           <ThreadView
+            key={selected.conversationId}
             conversationId={selected.conversationId}
             counterparty={thread?.counterparty ?? selected.counterparty}
             messages={thread?.messages ?? []}

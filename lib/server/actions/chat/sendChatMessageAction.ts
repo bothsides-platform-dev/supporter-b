@@ -234,10 +234,16 @@ export async function sendChatMessageAction(
   if (result.ok) {
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
-    // Best-effort live fanout — never blocks the send.
+    // Best-effort live fanout — never blocks the send. Content-bearing so a
+    // subscriber can append straight to its thread (sender derived from
+    // authorWsId) without a refetch round-trip.
     await publishChatEvent(result.conversationId, {
       type: 'message',
       id: result.messageId,
+      body,
+      authorWsId: ws.workspaceId,
+      rfpId: data.rfpId ?? null,
+      createdAt: now.toISOString(),
     });
   }
   return result;
