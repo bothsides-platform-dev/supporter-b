@@ -1,5 +1,5 @@
 {
-  "id": "8cf91592-c201-4588-a789-31335bb06cac",
+  "id": "f94eef31-ad36-414d-b074-966602e59f5f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -556,6 +556,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "chat_message_id": {
+          "name": "chat_message_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "uploaded_at": {
           "name": "uploaded_at",
           "type": "timestamp with time zone",
@@ -609,6 +615,22 @@
           ],
           "isUnique": false,
           "where": "\"attachments\".\"bid_note_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "attachments_chat_message_idx": {
+          "name": "attachments_chat_message_idx",
+          "columns": [
+            {
+              "expression": "chat_message_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"attachments\".\"chat_message_id\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -666,6 +688,19 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "attachments_chat_message_id_chat_messages_id_fk": {
+          "name": "attachments_chat_message_id_chat_messages_id_fk",
+          "tableFrom": "attachments",
+          "tableTo": "chat_messages",
+          "columnsFrom": [
+            "chat_message_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -674,7 +709,7 @@
       "checkConstraints": {
         "attachments_single_owner": {
           "name": "attachments_single_owner",
-          "value": "num_nonnulls(\"attachments\".\"rfp_id\", \"attachments\".\"bid_id\", \"attachments\".\"bid_note_id\") <= 1"
+          "value": "num_nonnulls(\"attachments\".\"rfp_id\", \"attachments\".\"bid_id\", \"attachments\".\"bid_note_id\", \"attachments\".\"chat_message_id\") <= 1"
         }
       },
       "isRLSEnabled": false
@@ -1090,6 +1125,399 @@
           "value": "\"biz_profiles\".\"biz_no\" IS NOT NULL OR \"biz_profiles\".\"grade\" IS NOT NULL"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.chat_conversation_reads": {
+      "name": "chat_conversation_reads",
+      "schema": "",
+      "columns": {
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_read_at": {
+          "name": "last_read_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "chat_conversation_reads_conversation_id_chat_conversations_id_fk": {
+          "name": "chat_conversation_reads_conversation_id_chat_conversations_id_fk",
+          "tableFrom": "chat_conversation_reads",
+          "tableTo": "chat_conversations",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chat_conversation_reads_user_id_users_id_fk": {
+          "name": "chat_conversation_reads_user_id_users_id_fk",
+          "tableFrom": "chat_conversation_reads",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "chat_conversation_reads_conversation_id_user_id_pk": {
+          "name": "chat_conversation_reads_conversation_id_user_id_pk",
+          "columns": [
+            "conversation_id",
+            "user_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.chat_conversations": {
+      "name": "chat_conversations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "buyer_ws_id": {
+          "name": "buyer_ws_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pg_ws_id": {
+          "name": "pg_ws_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_message_at": {
+          "name": "last_message_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "chat_conversations_pair_uniq": {
+          "name": "chat_conversations_pair_uniq",
+          "columns": [
+            {
+              "expression": "buyer_ws_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "pg_ws_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "chat_conversations_buyer_ws_id_workspaces_id_fk": {
+          "name": "chat_conversations_buyer_ws_id_workspaces_id_fk",
+          "tableFrom": "chat_conversations",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "buyer_ws_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chat_conversations_pg_ws_id_workspaces_id_fk": {
+          "name": "chat_conversations_pg_ws_id_workspaces_id_fk",
+          "tableFrom": "chat_conversations",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "pg_ws_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.chat_message_templates": {
+      "name": "chat_message_templates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "chat_message_templates_ws_idx": {
+          "name": "chat_message_templates_ws_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "chat_message_templates_workspace_id_workspaces_id_fk": {
+          "name": "chat_message_templates_workspace_id_workspaces_id_fk",
+          "tableFrom": "chat_message_templates",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chat_message_templates_created_by_users_id_fk": {
+          "name": "chat_message_templates_created_by_users_id_fk",
+          "tableFrom": "chat_message_templates",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.chat_messages": {
+      "name": "chat_messages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_user_id": {
+          "name": "author_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_ws_id": {
+          "name": "author_ws_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rfp_id": {
+          "name": "rfp_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "chat_messages_conv_created_idx": {
+          "name": "chat_messages_conv_created_idx",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "chat_messages_conversation_id_chat_conversations_id_fk": {
+          "name": "chat_messages_conversation_id_chat_conversations_id_fk",
+          "tableFrom": "chat_messages",
+          "tableTo": "chat_conversations",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chat_messages_author_user_id_users_id_fk": {
+          "name": "chat_messages_author_user_id_users_id_fk",
+          "tableFrom": "chat_messages",
+          "tableTo": "users",
+          "columnsFrom": [
+            "author_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "chat_messages_author_ws_id_workspaces_id_fk": {
+          "name": "chat_messages_author_ws_id_workspaces_id_fk",
+          "tableFrom": "chat_messages",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "author_ws_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "chat_messages_rfp_id_rfps_id_fk": {
+          "name": "chat_messages_rfp_id_rfps_id_fk",
+          "tableFrom": "chat_messages",
+          "tableTo": "rfps",
+          "columnsFrom": [
+            "rfp_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.columns": {
@@ -3028,7 +3456,8 @@
         "rfp.awarded",
         "workspace.invited",
         "workspace.approved",
-        "workspace.rejected"
+        "workspace.rejected",
+        "chat.message"
       ]
     },
     "public.outbox_status": {

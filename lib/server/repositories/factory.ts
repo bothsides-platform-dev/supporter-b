@@ -7,6 +7,10 @@ import type {
   BidNoteRepo,
   BidRepo,
   BizProfileRepo,
+  ChatConversationRepo,
+  ChatMessageRepo,
+  ChatReadRepo,
+  ChatTemplateRepo,
   ColumnRepo,
   ContractRepo,
   InvitationRepo,
@@ -32,6 +36,10 @@ type RepoBundle = {
   verificationToken: VerificationTokenRepo;
   attachment: AttachmentRepo;
   outbox: OutboxRepo;
+  chatTemplate: ChatTemplateRepo;
+  chatConversation: ChatConversationRepo;
+  chatMessage: ChatMessageRepo;
+  chatRead: ChatReadRepo;
   // Backend marker for tests.
   __backend: 'memory' | 'drizzle';
 };
@@ -60,6 +68,12 @@ async function buildBundle(): Promise<RepoBundle> {
   );
   const { DrizzleAttachmentRepository } = await import('./drizzle/attachment');
   const { DrizzleOutboxRepository } = await import('./drizzle/outbox');
+  const { DrizzleChatTemplateRepository } = await import('./drizzle/chat-template');
+  const { DrizzleChatConversationRepository } = await import(
+    './drizzle/chat-conversation'
+  );
+  const { DrizzleChatMessageRepository } = await import('./drizzle/chat-message');
+  const { DrizzleChatReadRepository } = await import('./drizzle/chat-read');
 
   return {
     rfp: new DrizzleRfpRepository(db),
@@ -75,6 +89,10 @@ async function buildBundle(): Promise<RepoBundle> {
     verificationToken: new DrizzleVerificationTokenRepository(db),
     attachment: new DrizzleAttachmentRepository(db),
     outbox: new DrizzleOutboxRepository(db),
+    chatTemplate: new DrizzleChatTemplateRepository(db),
+    chatConversation: new DrizzleChatConversationRepository(db),
+    chatMessage: new DrizzleChatMessageRepository(db),
+    chatRead: new DrizzleChatReadRepository(db),
     __backend: 'drizzle',
   };
 }
@@ -84,7 +102,11 @@ function isRepoBundleStale(bundle: RepoBundle): boolean {
   return (
     typeof bundle.workspace.listForUser !== 'function' ||
     typeof bundle.workspace.isMember !== 'function' ||
-    typeof bundle.column?.listByBoard !== 'function'
+    typeof bundle.column?.listByBoard !== 'function' ||
+    typeof bundle.chatTemplate?.create !== 'function' ||
+    typeof bundle.chatConversation?.findOrCreatePair !== 'function' ||
+    typeof bundle.chatMessage?.save !== 'function' ||
+    typeof bundle.chatRead?.upsert !== 'function'
   );
 }
 
@@ -134,6 +156,18 @@ export async function getAttachmentRepo(): Promise<AttachmentRepo> {
 export async function getOutboxRepo(): Promise<OutboxRepo> {
   return (await getBundle()).outbox;
 }
+export async function getChatTemplateRepo(): Promise<ChatTemplateRepo> {
+  return (await getBundle()).chatTemplate;
+}
+export async function getChatConversationRepo(): Promise<ChatConversationRepo> {
+  return (await getBundle()).chatConversation;
+}
+export async function getChatMessageRepo(): Promise<ChatMessageRepo> {
+  return (await getBundle()).chatMessage;
+}
+export async function getChatReadRepo(): Promise<ChatReadRepo> {
+  return (await getBundle()).chatRead;
+}
 
 // For tests only — read which backend the cache settled on.
 export async function __getBackend(): Promise<'memory' | 'drizzle'> {
@@ -169,6 +203,12 @@ export async function __useDrizzleWithDbForTest(
   );
   const { DrizzleAttachmentRepository } = await import('./drizzle/attachment');
   const { DrizzleOutboxRepository } = await import('./drizzle/outbox');
+  const { DrizzleChatTemplateRepository } = await import('./drizzle/chat-template');
+  const { DrizzleChatConversationRepository } = await import(
+    './drizzle/chat-conversation'
+  );
+  const { DrizzleChatMessageRepository } = await import('./drizzle/chat-message');
+  const { DrizzleChatReadRepository } = await import('./drizzle/chat-read');
   globalThis.__bidit_repos__ = {
     rfp: new DrizzleRfpRepository(db),
     invitation: new DrizzleInvitationRepository(db),
@@ -183,6 +223,10 @@ export async function __useDrizzleWithDbForTest(
     verificationToken: new DrizzleVerificationTokenRepository(db),
     attachment: new DrizzleAttachmentRepository(db),
     outbox: new DrizzleOutboxRepository(db),
+    chatTemplate: new DrizzleChatTemplateRepository(db),
+    chatConversation: new DrizzleChatConversationRepository(db),
+    chatMessage: new DrizzleChatMessageRepository(db),
+    chatRead: new DrizzleChatReadRepository(db),
     __backend: 'drizzle',
   };
 }

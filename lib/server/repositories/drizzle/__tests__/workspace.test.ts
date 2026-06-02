@@ -114,4 +114,35 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(await repo.isMember(u.id, wsB.id)).toBe(false);
     });
   });
+
+  describe('memberUserIds', () => {
+    it('returns every member user id for the workspace', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const u1 = await seedUser(db, { email: 'm1@buy.com' });
+      const u2 = await seedUser(db, { email: 'm2@buy.com' });
+      await seedMembership(db, ws.id, u1.id, 'admin');
+      await seedMembership(db, ws.id, u2.id, 'member');
+
+      const ids = await repo.memberUserIds(ws.id);
+      expect(ids).toHaveLength(2);
+      expect(ids).toEqual(expect.arrayContaining([u1.id, u2.id]));
+    });
+
+    it('returns an empty array for a workspace with no members', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      expect(await repo.memberUserIds(ws.id)).toEqual([]);
+    });
+
+    it('does not include members of a different workspace', async () => {
+      const wsA = await seedBuyerWorkspace(db);
+      const wsB = await seedPgWorkspace(db, 'other.im');
+      const uA = await seedUser(db, { email: 'a@buy.com' });
+      const uB = await seedUser(db, { email: 'b@pg.com' });
+      await seedMembership(db, wsA.id, uA.id);
+      await seedMembership(db, wsB.id, uB.id);
+
+      const ids = await repo.memberUserIds(wsA.id);
+      expect(ids).toEqual([uA.id]);
+    });
+  });
 });

@@ -5,13 +5,14 @@ import type { Attachment } from '@/lib/types/common';
 // public `url` field carries the route-resolved `/api/files/{id}` instead of
 // any storage key.
 //
-// Exclusive-arc ownership (C3): at most one of rfpId / bidId / bidNoteId is set
-// once linked; all undefined is a valid draft (uploaded before its owner row
-// exists). Storage bytes live 1:1 in attachment_blobs keyed by `id` (C4) — no
-// separate storage path.
+// Exclusive-arc ownership (C3): at most one of rfpId / bidId / bidNoteId /
+// chatMessageId is set once linked; all undefined is a valid draft (uploaded
+// before its owner row exists). Storage bytes live 1:1 in attachment_blobs
+// keyed by `id` (C4) — no separate storage path.
 export type AttachmentRecord = Attachment & {
   rfpId?: string;
   bidId?: string;
   bidNoteId?: string;
+  chatMessageId?: string;
   uploadedBy: string;
 };

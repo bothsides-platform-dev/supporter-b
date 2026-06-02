@@ -10,7 +10,7 @@ CREATE TYPE "public"."member_role" AS ENUM('admin', 'member');--> statement-brea
 CREATE TYPE "public"."merchant_grade" AS ENUM('small', 'sme1', 'sme2', 'sme3', 'general');--> statement-breakpoint
 CREATE TYPE "public"."notification_channel" AS ENUM('email', 'in_app');--> statement-breakpoint
 CREATE TYPE "public"."notification_status" AS ENUM('queued', 'sent', 'failed', 'read');--> statement-breakpoint
-CREATE TYPE "public"."outbox_event" AS ENUM('auth.verify', 'auth.reset', 'auth.email-change', 'rfp.invited', 'rfp.sent', 'bid.submitted', 'rfp.awarded', 'workspace.invited', 'workspace.approved', 'workspace.rejected');--> statement-breakpoint
+CREATE TYPE "public"."outbox_event" AS ENUM('auth.verify', 'auth.reset', 'auth.email-change', 'rfp.invited', 'rfp.sent', 'bid.submitted', 'rfp.awarded', 'workspace.invited', 'workspace.approved', 'workspace.rejected', 'chat.message');--> statement-breakpoint
 CREATE TYPE "public"."outbox_status" AS ENUM('pending', 'sent', 'failed');--> statement-breakpoint
 CREATE TYPE "public"."rfp_status" AS ENUM('draft', 'sent', 'closed', 'cancelled', 'awarded');--> statement-breakpoint
 CREATE TYPE "public"."tax_type" AS ENUM('general', 'simple', 'exempt');--> statement-breakpoint
@@ -88,8 +88,9 @@ CREATE TABLE "attachments" (
 	"rfp_id" uuid,
 	"bid_id" uuid,
 	"bid_note_id" uuid,
+	"chat_message_id" uuid,
 	"uploaded_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "attachments_single_owner" CHECK (num_nonnulls("attachments"."rfp_id", "attachments"."bid_id", "attachments"."bid_note_id") <= 1)
+	CONSTRAINT "attachments_single_owner" CHECK (num_nonnulls("attachments"."rfp_id", "attachments"."bid_id", "attachments"."bid_note_id", "attachments"."chat_message_id") <= 1)
 );
 --> statement-breakpoint
 CREATE TABLE "bid_notes" (
@@ -131,6 +132,41 @@ CREATE TABLE "biz_profiles" (
 	"grade_confirmed_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "biz_profile_at_least_one_field" CHECK ("biz_profiles"."biz_no" IS NOT NULL OR "biz_profiles"."grade" IS NOT NULL)
+);
+--> statement-breakpoint
+CREATE TABLE "chat_conversation_reads" (
+	"conversation_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"last_read_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "chat_conversation_reads_conversation_id_user_id_pk" PRIMARY KEY("conversation_id","user_id")
+);
+--> statement-breakpoint
+CREATE TABLE "chat_conversations" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"buyer_ws_id" uuid NOT NULL,
+	"pg_ws_id" uuid NOT NULL,
+	"last_message_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "chat_message_templates" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"workspace_id" uuid NOT NULL,
+	"title" text NOT NULL,
+	"body" text NOT NULL,
+	"created_by" uuid NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "chat_messages" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"conversation_id" uuid NOT NULL,
+	"author_user_id" uuid NOT NULL,
+	"author_ws_id" uuid NOT NULL,
+	"body" text NOT NULL,
+	"rfp_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "columns" (
@@ -333,6 +369,7 @@ ALTER TABLE "attachments" ADD CONSTRAINT "attachments_uploaded_by_users_id_fk" F
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_rfp_id_rfps_id_fk" FOREIGN KEY ("rfp_id") REFERENCES "public"."rfps"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_bid_id_bids_id_fk" FOREIGN KEY ("bid_id") REFERENCES "public"."bids"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attachments" ADD CONSTRAINT "attachments_bid_note_id_bid_notes_id_fk" FOREIGN KEY ("bid_note_id") REFERENCES "public"."bid_notes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "attachments" ADD CONSTRAINT "attachments_chat_message_id_chat_messages_id_fk" FOREIGN KEY ("chat_message_id") REFERENCES "public"."chat_messages"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bid_notes" ADD CONSTRAINT "bid_notes_bid_id_bids_id_fk" FOREIGN KEY ("bid_id") REFERENCES "public"."bids"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bid_notes" ADD CONSTRAINT "bid_notes_author_id_users_id_fk" FOREIGN KEY ("author_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bids" ADD CONSTRAINT "bids_rfp_id_rfps_id_fk" FOREIGN KEY ("rfp_id") REFERENCES "public"."rfps"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -341,6 +378,16 @@ ALTER TABLE "bids" ADD CONSTRAINT "bids_invitation_id_rfp_invitations_id_fk" FOR
 ALTER TABLE "bids" ADD CONSTRAINT "bids_board_column_id_columns_id_fk" FOREIGN KEY ("board_column_id") REFERENCES "public"."columns"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "bids" ADD CONSTRAINT "bids_submitted_by_users_id_fk" FOREIGN KEY ("submitted_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "biz_profiles" ADD CONSTRAINT "biz_profiles_grade_confirmed_by_users_id_fk" FOREIGN KEY ("grade_confirmed_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_conversation_reads" ADD CONSTRAINT "chat_conversation_reads_conversation_id_chat_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."chat_conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_conversation_reads" ADD CONSTRAINT "chat_conversation_reads_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_conversations" ADD CONSTRAINT "chat_conversations_buyer_ws_id_workspaces_id_fk" FOREIGN KEY ("buyer_ws_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_conversations" ADD CONSTRAINT "chat_conversations_pg_ws_id_workspaces_id_fk" FOREIGN KEY ("pg_ws_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_message_templates" ADD CONSTRAINT "chat_message_templates_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_message_templates" ADD CONSTRAINT "chat_message_templates_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_conversation_id_chat_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."chat_conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_author_user_id_users_id_fk" FOREIGN KEY ("author_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_author_ws_id_workspaces_id_fk" FOREIGN KEY ("author_ws_id") REFERENCES "public"."workspaces"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_rfp_id_rfps_id_fk" FOREIGN KEY ("rfp_id") REFERENCES "public"."rfps"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "columns" ADD CONSTRAINT "columns_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contracts" ADD CONSTRAINT "contracts_rfp_id_rfps_id_fk" FOREIGN KEY ("rfp_id") REFERENCES "public"."rfps"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contracts" ADD CONSTRAINT "contracts_bid_id_bids_id_fk" FOREIGN KEY ("bid_id") REFERENCES "public"."bids"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -373,9 +420,13 @@ CREATE INDEX "verification_applications_workspace_idx" ON "verification_applicat
 CREATE INDEX "attachments_rfp_idx" ON "attachments" USING btree ("rfp_id") WHERE "attachments"."rfp_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "attachments_bid_idx" ON "attachments" USING btree ("bid_id") WHERE "attachments"."bid_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "attachments_bid_note_idx" ON "attachments" USING btree ("bid_note_id") WHERE "attachments"."bid_note_id" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "attachments_chat_message_idx" ON "attachments" USING btree ("chat_message_id") WHERE "attachments"."chat_message_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "bid_notes_bid_idx" ON "bid_notes" USING btree ("bid_id","created_at");--> statement-breakpoint
 CREATE INDEX "bids_pg_ws_idx" ON "bids" USING btree ("pg_ws_id");--> statement-breakpoint
 CREATE INDEX "bids_board_column_idx" ON "bids" USING btree ("board_column_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "chat_conversations_pair_uniq" ON "chat_conversations" USING btree ("buyer_ws_id","pg_ws_id");--> statement-breakpoint
+CREATE INDEX "chat_message_templates_ws_idx" ON "chat_message_templates" USING btree ("workspace_id");--> statement-breakpoint
+CREATE INDEX "chat_messages_conv_created_idx" ON "chat_messages" USING btree ("conversation_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "columns_ws_kind_lifecycle_uniq" ON "columns" USING btree ("workspace_id","kind","lifecycle_key") WHERE "columns"."lifecycle_key" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "columns_ws_kind_idx" ON "columns" USING btree ("workspace_id","kind");--> statement-breakpoint
 CREATE INDEX "contracts_bid_idx" ON "contracts" USING btree ("bid_id");--> statement-breakpoint
