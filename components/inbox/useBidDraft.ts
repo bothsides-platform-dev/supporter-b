@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useCallback } from 'react';
 
 // __v 2: 결제수단 동적화로 bankPct/cardPct 고정 필드를 fees 맵으로 교체.
 // 구버전 blob(bankPct/cardPct)은 fees가 없어 폼이 깨지므로 readDraft에서 폐기.
@@ -44,14 +44,16 @@ function readDraft(rfpId: string): BidDraft | null {
 
 export function useBidDraft(rfpId: string) {
   const [draft] = useState<BidDraft | null>(() => readDraft(rfpId));
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function saveDraft(d: BidDraft) {
+  const saveDraft = useCallback((d: BidDraft) => {
     if (timerRef.current !== null) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       localStorage.setItem(draftKey(rfpId), JSON.stringify(d));
+      setSavedAt(new Date());
     }, 500);
-  }
+  }, [rfpId]);
 
   function clearDraft() {
     if (timerRef.current !== null) {
@@ -61,5 +63,5 @@ export function useBidDraft(rfpId: string) {
     localStorage.removeItem(draftKey(rfpId));
   }
 
-  return { draft, saveDraft, clearDraft };
+  return { draft, saveDraft, clearDraft, savedAt };
 }

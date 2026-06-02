@@ -1,4 +1,7 @@
-// Operational/infra logging (server start, DB calls, action traces) → stdout → Axiom via Vercel Log Drain.
+// Operational/infra logging (server start, email sends, outbox failures). When
+// AXIOM_TOKEN+AXIOM_DATASET are set, pino ships directly to Axiom via the
+// @axiomhq/pino transport (self-hosted Lightsail — no Vercel Log Drain); otherwise
+// → stdout, captured by `pm2 logs bidit`.
 // For product/business events (rfp.created, bid.submitted) use lib/observability/log.ts (Sentry Logs) instead.
 import { createRequire } from 'module';
 import pinoLib from 'pino';

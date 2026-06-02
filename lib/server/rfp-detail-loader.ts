@@ -39,6 +39,8 @@ export type PgRfpDetailData = {
   rfp: RFP;
   /** 본인 워크스페이스가 이미 제출한 입찰(있으면). */
   myBid: Bid | undefined;
+  /** 구매사 워크스페이스 상호명 (workspaces.name). */
+  buyerName: string;
 };
 
 export type BuyerAwardData = {
@@ -160,7 +162,12 @@ export async function loadPgRfpDetail(args: {
     (b) => b.pgWsId === args.workspaceId && b.status === 'submitted',
   );
 
-  return { rfp, myBid };
+  // 구매사 상호명 — RfpBriefPanel 에 표시.
+  const wsRepo = await getWorkspaceRepo();
+  const buyerWs = await wsRepo.findById(rfp.buyerWsId);
+  const buyerName = buyerWs?.name ?? '—';
+
+  return { rfp, myBid, buyerName };
 }
 
 /**

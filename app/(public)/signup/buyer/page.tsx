@@ -13,6 +13,7 @@ import {
   isPasswordValid,
   validatePasswordConfirm,
 } from '@/lib/auth/password-validation';
+import { checkEmailAvailableAction } from '@/lib/server/actions/auth';
 
 type AgreementState = { terms: boolean; privacy: boolean; marketing: boolean };
 
@@ -29,6 +30,8 @@ export default function BuyerSignupEmailPage() {
     marketing: false,
   });
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [emailTaken, setEmailTaken] = useState(false);
 
   const confirmError =
     passwordConfirm.length > 0
@@ -44,12 +47,22 @@ export default function BuyerSignupEmailPage() {
     isPasswordValid(password) &&
     !confirmError;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAttemptedSubmit(true);
-    if (!canSubmit) return;
+    setEmailTaken(false);
+    if (!canSubmit || submitting) return;
 
+    setSubmitting(true);
     const email = emailInput.trim().toLowerCase();
+
+    const check = await checkEmailAvailableAction({ email });
+    if (!check.ok && check.error === 'EMAIL_TAKEN') {
+      setEmailTaken(true);
+      setSubmitting(false);
+      return;
+    }
+
     const agreedAt = new Date().toISOString();
     setEmail(email);
     setAgreedAt(agreedAt);
@@ -76,7 +89,7 @@ export default function BuyerSignupEmailPage() {
           구매사 계정을 만듭니다
         </h2>
         <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          로그인에 사용할 이메일과 비밀번호를 입력해주세요.
+          이메일과 비밀번호를 입력해요.
         </p>
       </div>
 
@@ -93,11 +106,23 @@ export default function BuyerSignupEmailPage() {
             type="email"
             name="email"
             value={emailInput}
-            onChange={(e) => setEmailInput(e.target.value)}
+            onChange={(e) => { setEmailInput(e.target.value); setEmailTaken(false); }}
             autoComplete="email"
             placeholder="your@company.com"
             className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
           />
+          {emailTaken && (
+            <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)] mt-1">
+              이미 가입된 이메일입니다.{' '}
+              <Link
+                href={`/login?email=${encodeURIComponent(emailInput.trim().toLowerCase())}`}
+                className="underline"
+              >
+                로그인
+              </Link>
+              하시겠어요?
+            </p>
+          )}
         </div>
 
         <PasswordField
@@ -118,8 +143,8 @@ export default function BuyerSignupEmailPage() {
 
         <AgreementCheckboxes value={agreements} onChange={setAgreements} />
 
-        <Button type="submit" fullWidth size="lg" disabled={false}>
-          다음
+        <Button type="submit" fullWidth size="lg" disabled={submitting}>
+          {submitting ? 'LOADING…' : '다음'}
         </Button>
       </form>
 
@@ -128,13 +153,13 @@ export default function BuyerSignupEmailPage() {
           href="/signup"
           className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
-          ← 역할 선택으로
+          ← 이전으로
         </Link>
         <Link
           href="/login"
           className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
-          이미 계정이 있으세요? 로그인 →
+          이미 계정이 있어요? 로그인 →
         </Link>
       </div>
     </div>

@@ -16,3 +16,9 @@
 
 	reverse_proxy 127.0.0.1:3000
 }
+
+admin.{$APP_DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:4242
+}

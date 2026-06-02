@@ -1,5 +1,6 @@
 import { KpiStrip } from './KpiStrip';
 import { ActionQueue } from './ActionQueue';
+import { OnboardingActionList } from './OnboardingActionList';
 import { ChatPanelPlaceholder } from './ChatPanelPlaceholder';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,6 +25,8 @@ export function HomeDashboard({
         <KpiStrip kpis={dashboard.kpis} />
         {dashboard.groups.length > 0 ? (
           <ActionQueue groups={dashboard.groups} />
+        ) : dashboard.onboardingActions ? (
+          <OnboardingActionList actions={dashboard.onboardingActions} />
         ) : (
           <EmptyState
             icon={<CheckIcon />}

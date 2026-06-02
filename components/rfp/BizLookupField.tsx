@@ -75,7 +75,7 @@ export function BizLookupField({ onLookup, onResult, onReset }: Props) {
     } else {
       setResult(null);
       setStatus('notfound');
-      setError('등록된 사업자번호가 없습니다.');
+      setError('사업자번호를 찾지 못했어요.');
     }
   };
 

@@ -1,3 +1,9 @@
+export { checkEmailAvailableAction } from './checkEmailAvailableAction';
+export type {
+  CheckEmailAvailableInput,
+  CheckEmailAvailableResult,
+} from './checkEmailAvailableAction';
+
 export { signupEmailAction } from './signupEmailAction';
 export type {
   SignupEmailInput,
@@ -12,6 +18,12 @@ export type {
   SignupCompleteInput,
   SignupCompleteResult,
 } from './signupCompleteAction';
+
+export { signupViaWorkspaceInviteAction } from './signupViaWorkspaceInviteAction';
+export type {
+  SignupViaWorkspaceInviteInput,
+  SignupViaWorkspaceInviteResult,
+} from './signupViaWorkspaceInviteAction';
 
 export { loginAction } from './loginAction';
 export type { LoginInput, LoginResult } from './loginAction';

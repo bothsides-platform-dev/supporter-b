@@ -32,10 +32,9 @@ Public
 ├─ /signup/buyer/profile         (Bs3)
 ├─ /signup/buyer/workspace       (Bs4)
 ├─ /signup/pg                    (Gs1 — PG사 이메일)
-├─ /signup/pg/verify             (Gs2)
-├─ /signup/pg/biz                (Gs — 사업자번호 조회)
+├─ /signup/pg/workspace          (Gs2 — 직접 가입만: wsName+bizNo)
 ├─ /signup/pg/profile            (Gs3)
-├─ /signup/pg/workspace          (Gs4)
+├─ /signup/pg/verify             (Gs4)
 ├─ /password/forgot
 ├─ /password/reset
 ├─ /auth/verify
@@ -117,8 +116,8 @@ PG Entry
 email unique URL
   ├─ /invite/rfp/:token 검증
   ├─ 기 가입자 → /login(next 보존) 후 /inbox/:rfpId
-  └─ 미가입자 → /signup/pg/verify funnel
-        └─ Gs4: 워크스페이스 이름 입력 → 신규 생성 또는 기존 ws 합류 신청
+  └─ 미가입자 → /signup/pg funnel
+        └─ Gs4(verify): 이메일 인증 → 계정 생성 + 기존 ws 합류
               └─ /inbox/:rfpId → Bid 제출
 ```
 
@@ -153,8 +152,10 @@ Award
 ### 1.1 진입 경로
 
 - **D · 구매사 신규 가입**: `/signup` → 구매사 카드 선택 → Bs1~Bs4 → `/rfp` (관리자)
-- **E · PG 초대 진입**: `/invite/rfp/:token` → (Gs1 건너뜀) → Gs2~Gs4 → `/inbox/:rfpId` (멤버)
-- **F · PG 직접 가입**: `/signup` → PG 카드 선택 → Gs1~Gs4 → `/inbox` (멤버)
+- **E · PG RFP 초대 진입**: `/invite/rfp/:token` → 기존 PG 유저 로그인 → `/inbox/:rfpId` (기존 워크스페이스 전제)
+- **E2 · PG 워크스페이스 초대 진입(신규 유저)**: `/invite/workspace/:token` → Gs1(email 고정) → Gs3(profile) → Gs4(verify, 3단계) → `/home` (기존 ws에 member 합류, 새 워크스페이스 미생성)
+- **E3 · PG 워크스페이스 초대 진입(기존 유저)**: `/invite/workspace/:token` → (authed) → acceptWorkspaceInviteAction → `/home`
+- **F · PG 직접 가입**: `/signup` → PG 카드 선택 → Gs1~Gs2~Gs3~Gs4(4단계) → `/inbox` (새 워크스페이스 생성, 관리자 심사)
 - **G · 비밀번호 분실**: 로그인 화면에서 재설정 요청 → 메일 → 새 비밀번호
 
 ### 1.2 화면 목록
@@ -189,14 +190,20 @@ Award
 
 #### PG사 가입 — Gs 시리즈
 
-| # | 라우트 | 스텝 | 핵심 |
-|---|---|---|---|
-| Gs1 | `/signup/pg` | `01 / 04 — EMAIL` | 이메일 + 약관. PG 컨텍스트. 초대 없이 직접 접근 시 보조 안내 |
-| Gs2 | `/signup/pg/verify` | `01 / 03 — VERIFY`* | 인증 대기. 초대 진입 시 이메일 자동 채움 |
-| Gs3 | `/signup/pg/profile` | `02 / 03 — PROFILE`* | 이름·비밀번호·휴대전화(선택) |
-| Gs4 | `/signup/pg/workspace` | `03 / 03 — WORKSPACE`* | 워크스페이스 이름 입력. 동일명 존재 시 합류 신청 / 신규 생성 분기 → `/inbox` |
+직접 가입(4단계)과 워크스페이스 초대 가입(3단계)은 **동일한 라우트를 재사용**하지만 draft의 `wsInviteToken` 존재 여부로 분기한다.
 
-> \* 초대 토큰 진입 시 Gs1(이메일 입력) 건너뜀 → 스텝 카운트 03/03. 직접 가입 시 04/04.
+| # | 라우트 | 직접 가입 스텝 | 초대 가입 스텝 | 핵심 |
+|---|---|---|---|---|
+| Gs1 | `/signup/pg` | `01 / 04 — EMAIL` | `01 / 03 — EMAIL` | 직접 가입: 이메일 자유 입력 + 약관. 초대 가입: 이메일 **prefill + readOnly** + "○○ 워크스페이스에 초대받았습니다" 안내 |
+| Gs2 | `/signup/pg/workspace` | `02 / 04 — WORKSPACE` | *(건너뜀)* | 직접 가입만: wsName + bizNo 입력. 초대 가입 시 `/signup/pg/profile`로 redirect |
+| Gs3 | `/signup/pg/profile` | `03 / 04 — PROFILE` | `02 / 03 — PROFILE` | 이름 + 휴대전화 OTP |
+| Gs4 | `/signup/pg/verify` | `04 / 04 — VERIFY` | `03 / 03 — VERIFY` | 이메일 인증(6자리 코드 또는 링크). 직접 가입 → `signupCompleteAction`(새 워크스페이스) → `/inbox`. 초대 가입 → `signupViaWorkspaceInviteAction`(기존 ws 합류) → `/home` |
+
+**확정 결정 (2026-05-31)**:
+- 워크스페이스 초대 신규 유저는 **기존(이미 승인된) 워크스페이스에 member로 합류** — `createWorkspaceInTx` 호출 없음, 운영자 심사 없음
+- 고아 워크스페이스 생성 방지: `signupViaWorkspaceInviteAction`이 단일 액션에서 user 생성 + 초대 수락 + 멤버십 추가 + `lastActiveWorkspaceId` 설정을 원자적으로 처리
+- 초대 이메일 불일치 시 `INVITE_EMAIL_MISMATCH` 반환 (대소문자 무시)
+- 초대 토큰 `role`(member/admin)이 `workspace_members.role`에 그대로 반영
 
 ### 1.3 화면 명세
 
@@ -225,6 +232,7 @@ Award
 - 헤드라인: `구매사 계정을 만듭니다`
 - 이메일 입력, 실시간 형식 검증
 - 약관/개인정보(필수 2종) + 마케팅(선택), 전체 동의 토글
+- [인증 메일 받기] 제출 시: `checkEmailAvailableAction` 으로 이메일 중복 확인 → 이미 가입된 이메일이면 "이미 가입된 이메일입니다. 로그인하시겠어요?" 인라인 오류 + `/login?email=...` 링크 표시 (버튼 비활성 `LOADING…` 후 복귀)
 - 1차 [인증 메일 받기]
 - 푸터: `이미 계정이 있으세요? 로그인 →`
 
@@ -250,35 +258,34 @@ Award
 - 1차 [만들기] → `Workspace.type='buyer'` 생성 → `/rfp` (관리자)
 
 #### Gs1 PG사 — 이메일 `/signup/pg`
-- `01 / 04 — EMAIL`
+- `01 / 04 — EMAIL` (직접 가입) 또는 `01 / 03 — EMAIL` (초대 가입)
 - 헤드라인: `PG사 계정을 만듭니다`
-- 이메일 입력 + 약관 동의 (Bs1과 동일 패턴)
+- 이메일 입력 + 약관 동의 (Bs1과 동일 패턴 — EMAIL_TAKEN 인라인 오류 + 로그인 CTA 포함)
 - 보조 안내: "초대 이메일을 받으셨나요? — 메일의 링크를 클릭하면 이 단계가 자동으로 건너뛰어집니다."
 - 푸터: `이미 계정이 있으세요? 로그인 →`
 
-#### Gs2 PG사 — 인증 대기 `/signup/pg/verify`
-- `01 / 03 — VERIFY` (초대 진입) 또는 `02 / 04 — VERIFY` (직접 가입)
-- Bs2와 동일 패턴
-- 초대 토큰 진입 시: 이메일 필드 자동 채움 + 인증 메일 즉시 발송
+#### Gs2 PG사 — 워크스페이스 생성 정보 `/signup/pg/workspace` (직접 가입 전용)
+- `02 / 04 — WORKSPACE` (직접 가입 전용; 초대 가입은 이 단계를 건너뜀)
+- 헤드라인: `워크스페이스를 만듭니다`
+- 입력 필드: 워크스페이스 이름 + 사업자등록번호(10자리)
+- 제출 → draft에 wsName/bizNo 저장 → `/signup/pg/profile`
+- 초대 경로 진입 시 자동으로 `/signup/pg/profile`로 redirect
 
 #### Gs3 PG사 — 프로필 `/signup/pg/profile`
-- `02 / 03 — PROFILE` 또는 `03 / 04 — PROFILE`
+- `02 / 03 — PROFILE` (초대 가입) 또는 `03 / 04 — PROFILE` (직접 가입)
 - Bs3과 동일 필드/패턴
 
-#### Gs4 PG사 — 워크스페이스 입력 `/signup/pg/workspace`
-- `03 / 03 — WORKSPACE` 또는 `04 / 04 — WORKSPACE`
-- 헤드라인: `워크스페이스를 선택하세요`
-- 입력 필드: 회사명 (예: "서포터 B 페이") — 직접 입력
-- 동작 분기:
-  - 입력 이름과 동일한 `Workspace.type='pg'`가 이미 존재 → "이미 등록된 워크스페이스가 있습니다. 합류 신청을 보내시겠어요?" → [합류 신청]
-  - 신규 → [워크스페이스 만들기] → `Workspace.type='pg'` 신규 생성 + 본인이 첫 admin → `/inbox` (초대 있으면 `/inbox/:rfpId`)
-- 도메인 자동 라우팅 없음 — 이름 입력만으로 합류/생성을 결정.
+#### Gs4 PG사 — 인증 대기 `/signup/pg/verify`
+- `03 / 03 — VERIFY` (초대 가입) 또는 `04 / 04 — VERIFY` (직접 가입)
+- Bs2와 동일 패턴
+- 직접 가입 → `signupCompleteAction`(새 워크스페이스 생성) → `/inbox`
+- 초대 가입 → `signupViaWorkspaceInviteAction`(기존 ws member 합류) → `/home`
 
 #### 인증 처리 스플래시 `/auth/verify?token=...`
 - 모노 `LOADING…` 한 줄
 - 결과 분기:
-  - 성공 + `workspaceType='buyer'` → Bs3 자동 이동
-  - 성공 + `workspaceType='pg'` → Gs3 자동 이동
+  - 성공 + `workspaceType='buyer'` → `/signup/buyer/verify` (Bs4) 자동 이동 (draft에 emailVerified=true 기록 → Bs4가 감지해 완료 처리)
+  - 성공 + `workspaceType='pg'` → `/signup/pg/verify` (Gs4) 자동 이동 (draft에 emailVerified=true 기록 → Gs4가 감지해 완료 처리)
   - 만료 → "링크가 만료되었습니다." + [재발송] 버튼 (각 verify 페이지로)
   - 무효 → "잘못된 링크입니다." + 로그인 링크
   - 이미 사용됨 → 로그인 안내
@@ -317,14 +324,15 @@ Award
 3. Bs2 대기 → 이메일 토큰 URL → `/auth/verify` 스플래시 → Bs3 자동 이동
 4. 프로필 입력 → Bs4 워크스페이스 이름·산업 → [만들기] → `/rfp` (관리자)
 
-**시나리오 E — PG 초대 진입**
-1. `/invite/rfp/:token` 진입 — `SignupDraft` 선 채움 (workspaceType='pg', email, rfpInviteToken)
-2. Rs1 건너뜀 → Gs2 인증 대기 (이메일 자동 채움, 메일 즉시 발송)
-3. 이메일 토큰 → Gs3 프로필 → Gs4 워크스페이스 자동 합류 확인 → [합류하기] → `/inbox/:rfpId`
+**시나리오 E2 — PG 워크스페이스 초대 진입(신규 유저)**
+1. `/invite/workspace/:token` 진입 — `SignupDraft` 선 채움 (workspaceType='pg', email, wsInviteToken, inviteWorkspaceName)
+2. Rs1 건너뜀 → Gs1 이메일(email prefill + readOnly, 3단계 스텝)
+3. Gs3 프로필(이름 + 비밀번호) → Gs4 인증 메일 대기
+4. 이메일 인증 → `signupViaWorkspaceInviteAction` → `/home` (기존 ws에 member 합류)
 
 **시나리오 F — PG 직접 가입**
-1. `/signup` → Rs1 → "PG사 영업담당" 카드 → Gs1 이메일
-2. Gs2 → Gs3 → Gs4 → [합류하기] → `/inbox`
+1. `/signup` → Rs1 → "PG사 영업담당" 카드 → Gs1 이메일(4단계 스텝)
+2. Gs2 워크스페이스 정보 → Gs3 프로필 → Gs4 인증 메일 대기 → `signupCompleteAction` → `/inbox`
 
 **시나리오 G — 비밀번호 분실**
 1. `/login` → `비밀번호를 잊으셨나요?` → `/password/forgot`

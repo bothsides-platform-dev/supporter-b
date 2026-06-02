@@ -213,6 +213,15 @@ describe('loadPgRfpDetail', () => {
     expect(res).not.toBeNull();
     expect(res!.myBid?.id).toBe(bidId);
   });
+
+  it('buyerName에 구매사 워크스페이스 name을 반환', async () => {
+    const rfpId = await ctx.seedRfp('P-2605-0013');
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2605-0013', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.buyerName).toBe('구매사');
+  });
 });
 
 describe('loadBuyerAwardData', () => {

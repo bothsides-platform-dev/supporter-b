@@ -110,9 +110,6 @@ export async function getWorkspaceRepo(): Promise<WorkspaceRepo> {
 export async function getUserRepo(): Promise<UserRepo> {
   return (await getBundle()).user;
 }
-export async function getBizProfileRepo(): Promise<BizProfileRepo> {
-  return (await getBundle()).bizProfile;
-}
 export async function getBidRepo(): Promise<BidRepo> {
   return (await getBundle()).bid;
 }

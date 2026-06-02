@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import { claimShareTokenAction } from '@/lib/server/actions/invitation';
 
 const ERROR_LABELS: Record<string, string> = {
-  SHARE_INVALID: '유효하지 않은 공유 링크입니다.',
-  SHARE_EXPIRED: '이 공유 링크는 마감 또는 종료되어 더 이상 진입할 수 없습니다.',
+  SHARE_INVALID: '유효하지 않은 공유 링크예요.',
+  SHARE_EXPIRED: '이 공유 링크는 마감 또는 종료됐어요.',
   SHARE_BUYER_NOT_ALLOWED:
-    '구매사 계정으로는 공유 링크를 사용할 수 없습니다. PG 계정으로 로그인해주세요.',
+    '구매사 계정으로는 공유 링크를 사용할 수 없어요. PG 계정으로 로그인해요.',
   EMAIL_DOMAIN_MISMATCH:
-    '이 RFP에 초대된 도메인이 아닙니다. 구매사 담당자에게 문의해주세요.',
-  UNAUTHENTICATED: '로그인이 필요합니다.',
+    '이 RFP에 초대된 도메인이 아니에요. 구매사 담당자에게 문의해요.',
+  UNAUTHENTICATED: '로그인이 필요해요.',
 };
 
 export function ShareClaimClient({ token }: { token: string }) {

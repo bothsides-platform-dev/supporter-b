@@ -63,10 +63,10 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
     });
     setSubmitting(false);
     if (!r.ok) {
-      toast(`저장 실패 — ${r.error}`, { type: 'error' });
+      toast(`저장하지 못했어요 — ${r.error}`, { type: 'error' });
       return;
     }
-    toast('사업자번호를 저장했습니다.');
+    toast('사업자번호를 저장했어요.');
     setEditing(false);
     setNext(null);
     if (isInitialRegistration && returnUrl) {

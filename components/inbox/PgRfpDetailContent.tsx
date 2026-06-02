@@ -5,24 +5,23 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RfpBriefPanel } from './RfpBriefPanel';
 import { BidForm } from './BidForm';
+import { LocalTime } from '@/components/primitives/LocalTime';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
-  const { rfp, myBid } = data;
+  const { rfp, myBid, buyerName } = data;
 
   if (myBid) {
     return (
       <>
-        <RfpBriefPanel rfp={rfp} />
+        <RfpBriefPanel rfp={rfp} buyerName={buyerName} />
         <div className="mt-10 border-t border-[var(--md-sys-color-outline-variant)] pt-8 space-y-4">
           <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-tertiary)]">
             ✓ 제안 제출 완료
           </p>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
             제출 시각:{' '}
-            {myBid.submittedAt
-              ? new Date(myBid.submittedAt).toLocaleString('ko-KR')
-              : '—'}
+            {myBid.submittedAt ? <LocalTime iso={myBid.submittedAt} /> : '—'}
           </p>
           <Link
             href={`/inbox/${rfp.code}/submitted`}
@@ -39,7 +38,7 @@ export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
     <div className="grid grid-cols-[340px_1fr] gap-12">
       {/* Left: RFP brief */}
       <div className="border-r border-[var(--md-sys-color-outline-variant)] pr-10">
-        <RfpBriefPanel rfp={rfp} />
+        <RfpBriefPanel rfp={rfp} buyerName={buyerName} />
       </div>
 
       {/* Right: Bid form */}

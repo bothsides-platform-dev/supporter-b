@@ -163,14 +163,3 @@ export function useNotifications() {
     retryEmail,
   };
 }
-
-// 테스트/디버그 — 모듈 상태 강제 초기화. 프로덕션 코드에서 호출하지 않음.
-export function __resetUseNotificationsForTest(): void {
-  subscribers = 0;
-  if (eventSource) {
-    eventSource.close();
-    eventSource = null;
-  }
-  historyLoaded = false;
-  useStore.setState({ notifications: [], status: 'idle' });
-}

@@ -107,7 +107,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
     }
 
     const pgCount = draft.allowedPgWorkspaceIds.length;
-    toast(`${pgCount}개 PG사에 제안서가 발송되었습니다`, { type: 'success' });
+    toast(`${pgCount}개 PG사에 제안서를 보냈어요`, { type: 'success' });
     draft.reset();
     router.push(`/rfp/${result.rfpId}`);
   };

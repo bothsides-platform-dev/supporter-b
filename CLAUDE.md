@@ -9,6 +9,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 - `README.md` — local setup / run instructions.
 - `DESIGN.md` — Linear design language: tokens, typography, color, component visual rules.
 - `SCREEN_DESIGN.md` — screen IA, route map, per-screen UX spec.
+- `UX_WRITING.md` — 토스 보이스톤 기반 UX 라이팅 원칙 (해요체·능동형·긍정형·캐주얼 경어·버튼 문구). UI 문구 작성 시 필수 참조.
 
 **라이브 배포**: AWS Lightsail 단일 VM 자체호스팅 (Caddy + PM2 `next start` + Docker Postgres). 현행 런북은 `docs/DEPLOY_LIGHTSAIL.md`, 관련 자산은 `ecosystem.config.cjs`(PM2) · `docker-compose.prod.yml`(운영 Postgres) · `deploy/Caddyfile` · `scripts/deploy/lightsail-*.sh` · `.env.production.example`.
 
@@ -62,12 +63,13 @@ app/
 │  ├─ workspace/new/          # 워크스페이스 생성
 │  └─ settings/{profile,members,notifications}/
 ├─ rfp/new/                   # full-screen RFP 작성 플로우 (자체 layout, AppShell 밖)
-├─ admin/                     # 운영자 콘솔 (별도 트리): admin/login + admin/(protected)/{index 대시보드, buyers/[id], sellers/[id], rfps/[id], review/[id], audit-log}; role-guard in admin/(protected)/layout.tsx
 ├─ logout/route.ts            # POST handler
 └─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리
 ```
 
-Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation. The `admin/` console is a separate top-level tree, gated by a role guard in `admin/(protected)/layout.tsx` (not the buyer/pg AppShell).
+Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation.
+
+**Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
 
 ## Linear Design Language — Hard Rules
 

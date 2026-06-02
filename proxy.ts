@@ -1,9 +1,7 @@
-import { jwtVerify } from 'jose';
 import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 
 import authConfig from './auth.config';
-import { ADMIN_COOKIE_NAME } from './lib/auth/admin-session';
 import { decideRoute } from './lib/auth/route-decision';
 
 // Edge-runtime-only: instantiated from `auth.config.ts` (no DB, no bcrypt).
@@ -12,32 +10,6 @@ const { auth } = NextAuth(authConfig);
 
 export default auth(async (req) => {
   const { pathname, search } = req.nextUrl;
-
-  // Admin JWT gate — must run before NextAuth session check.
-  // /admin/login is the only admin path that's unconditionally open.
-  if (pathname.startsWith('/admin')) {
-    const requestHeaders = new Headers(req.headers);
-    requestHeaders.set('x-pathname', pathname);
-
-    if (pathname === '/admin/login') {
-      return NextResponse.next({ request: { headers: requestHeaders } });
-    }
-
-    // Fail-closed: misconfigured secret denies all admin access
-    const adminSecret = process.env.ADMIN_SESSION_SECRET;
-    if (!adminSecret || adminSecret.length < 32) {
-      return NextResponse.redirect(new URL('/admin/login', req.url));
-    }
-
-    const token = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
-    if (!token) return NextResponse.redirect(new URL('/admin/login', req.url));
-    try {
-      await jwtVerify(token, new TextEncoder().encode(adminSecret));
-      return NextResponse.next({ request: { headers: requestHeaders } });
-    } catch {
-      return NextResponse.redirect(new URL('/admin/login', req.url));
-    }
-  }
 
   const isAuthenticated = !!req.auth;
   const decision = decideRoute(pathname, search, isAuthenticated);

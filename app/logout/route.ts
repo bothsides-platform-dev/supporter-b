@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { signOut } from '@/auth';
 
-export async function POST(req: Request) {
+export async function POST() {
   await signOut({ redirect: false });
-  return NextResponse.redirect(new URL('/login', req.url), 302);
+  return new NextResponse(null, { status: 204 });
 }
 
 // GET 진입점 — (app) 가드가 "JWT는 유효하지만 워크스페이스를 못 쓰는" 세션을 서버

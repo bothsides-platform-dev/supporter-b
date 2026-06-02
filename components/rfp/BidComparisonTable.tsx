@@ -92,11 +92,11 @@ export function BidComparisonTable({
     return (
       <EmptyState
         icon={<EnvelopeIcon size={32} />}
-        title="아직 받은 제안이 없습니다."
+        title="제안을 기다리는 중이에요."
         description={
           rfpStatus === 'sent'
-            ? '초대된 PG가 제안을 제출하면 비교표가 표시됩니다.'
-            : 'RFP가 아직 발송되지 않았습니다.'
+            ? '초대된 PG가 제안을 제출하면 비교표가 표시돼요.'
+            : 'RFP를 발송하면 제안을 받을 수 있어요.'
         }
         className="py-12"
       />

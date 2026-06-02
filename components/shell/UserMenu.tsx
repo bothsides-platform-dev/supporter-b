@@ -30,7 +30,11 @@ export function UserMenu({ user, workspaceType, className }: UserMenuProps) {
   const router = useRouter();
 
   async function handleLogout() {
-    await http.post('/logout');
+    try {
+      await http.post('/logout');
+    } catch {
+      // 세션 클리어 실패해도 반드시 /login 으로 이동
+    }
     window.location.assign('/login');
   }
 

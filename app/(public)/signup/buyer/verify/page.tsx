@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/primitives/Button';
 import { ResendCountdown } from '@/components/auth/ResendCountdown';
@@ -30,7 +31,7 @@ export default function BuyerVerifyPage() {
     setSubmitting(true);
     const d = readSignupDraft();
     if (!d.email || !d.password || !d.name || !d.phone || !d.phoneVerificationId || !d.wsName || !d.bizProfile) {
-      setCodeError('세션이 만료되었습니다. 처음부터 다시 시도해주세요.');
+      setCodeError('세션이 만료됐어요. 처음부터 다시 시도해요.');
       setSubmitting(false);
       return;
     }
@@ -47,7 +48,7 @@ export default function BuyerVerifyPage() {
     });
 
     if (!r.ok) {
-      setCodeError(`가입을 완료하지 못했습니다. (${r.error})`);
+      setCodeError(`가입을 완료하지 못했어요. (${r.error})`);
       setSubmitting(false);
       return;
     }
@@ -74,7 +75,11 @@ export default function BuyerVerifyPage() {
     (async () => {
       const r = await signupEmailAction({ email, workspaceType: 'buyer' });
       if (!r.ok) {
-        setSendError('인증 메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요.');
+        if (r.error === 'EMAIL_TAKEN') {
+          setSendError('EMAIL_TAKEN');
+        } else {
+          setSendError('인증 메일을 보내지 못했어요. 잠시 후 다시 시도해요.');
+        }
       }
     })();
   }, [email]);
@@ -93,7 +98,7 @@ export default function BuyerVerifyPage() {
     setCodeError('');
 
     if (!/^\d{6}$/.test(code)) {
-      setCodeError('6자리 숫자를 입력해주세요.');
+      setCodeError('6자리 숫자를 입력해요.');
       return;
     }
 
@@ -113,7 +118,13 @@ export default function BuyerVerifyPage() {
   const handleResend = async () => {
     setSendError('');
     const r = await signupEmailAction({ email, workspaceType: 'buyer' });
-    if (!r.ok) setSendError('재발송에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    if (!r.ok) {
+      if (r.error === 'EMAIL_TAKEN') {
+        setSendError('EMAIL_TAKEN');
+      } else {
+        setSendError('다시 보내지 못했어요. 잠시 후 다시 시도해요.');
+      }
+    }
   };
 
   if (alreadyVerified && submitting) {
@@ -137,24 +148,35 @@ export default function BuyerVerifyPage() {
         </div>
         <div className="space-y-2">
           <h2 className="text-[20px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-            이메일을 인증해주세요
+            이메일을 인증해요
           </h2>
           {email && (
             <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-              <span className="font-mono">{email}</span>으로 인증 메일을 보냈습니다.
+              <span className="font-mono">{email}</span>으로 인증 메일을 보냈어요.
             </p>
           )}
-          {sendError && (
+          {sendError === 'EMAIL_TAKEN' ? (
+            <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
+              이미 가입된 이메일입니다.{' '}
+              <Link
+                href={`/login?email=${encodeURIComponent(email)}`}
+                className="underline"
+              >
+                로그인
+              </Link>
+              하시겠어요?
+            </p>
+          ) : sendError ? (
             <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
               {sendError}
             </p>
-          )}
+          ) : null}
         </div>
       </div>
 
       <div className="space-y-3">
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] text-center">
-          메일의 [인증하기] 버튼을 눌러주세요.
+          메일의 [인증하기] 버튼을 눌러요.
           <br />
           <span className="text-[11px]">버튼이 동작하지 않으면 메일에 적힌 6자리 코드를 입력하세요.</span>
         </p>
@@ -192,7 +214,7 @@ export default function BuyerVerifyPage() {
       <div className="space-y-3 text-center">
         <ResendCountdown onResend={handleResend} />
         <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-          스팸함을 확인해보세요.
+          스팸함을 확인해요.
         </p>
       </div>
     </div>

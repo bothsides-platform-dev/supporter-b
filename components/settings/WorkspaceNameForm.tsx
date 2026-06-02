@@ -15,9 +15,9 @@ type Props = {
 };
 
 const ERROR_LABELS: Record<string, string> = {
-  INVALID_INPUT: '1자 이상 200자 이하로 입력해주세요.',
-  FORBIDDEN: '권한이 없습니다.',
-  NOT_FOUND: '워크스페이스를 찾을 수 없습니다.',
+  INVALID_INPUT: '1자 이상 200자 이하로 입력해요.',
+  FORBIDDEN: '권한이 없어요.',
+  NOT_FOUND: '워크스페이스를 찾지 못했어요.',
 };
 
 export function WorkspaceNameForm({ currentName, canEdit }: Props) {
@@ -54,7 +54,7 @@ export function WorkspaceNameForm({ currentName, canEdit }: Props) {
       toast(ERROR_LABELS[r.error] ?? r.error, { type: 'error' });
       return;
     }
-    toast('워크스페이스 이름을 변경했습니다.');
+    toast('이름을 변경했어요.');
     setEditing(false);
     startTransition(() => router.refresh());
   };
