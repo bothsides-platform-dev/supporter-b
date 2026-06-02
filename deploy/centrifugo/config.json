@@ -14,7 +14,8 @@
   "channel": {
     "proxy": {
       "subscribe": {
-        "endpoint": "http://host.docker.internal:3000/api/centrifugo/subscribe"
+        "endpoint": "http://host.docker.internal:3000/api/centrifugo/subscribe",
+        "timeout": "5s"
       }
     },
     "namespaces": [
