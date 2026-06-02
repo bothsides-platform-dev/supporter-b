@@ -14,7 +14,8 @@ import {
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
-import { formatDate } from '@/lib/format';
+import { LocalDate } from '@/components/primitives/LocalTime';
+import type { ReactNode } from 'react';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 
 export const dynamic = 'force-dynamic';
@@ -47,7 +48,7 @@ export default async function ProfilePage({ searchParams }: Props) {
   const cardFee = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
   const memberMeta = ws.members.find((m) => m.id === me.id);
 
-  const wsKvPairs: [string, string][] = [
+  const wsKvPairs: [string, ReactNode][] = [
     ...(biz
       ? ([
           [
@@ -67,11 +68,11 @@ export default async function ProfilePage({ searchParams }: Props) {
                     ? `${(cardFee * 100).toFixed(2)}%`
                     : '카드사별 협의',
                 ],
-              ] as [string, string][])
+              ] as [string, ReactNode][])
             : []),
-        ] as [string, string][])
+        ] as [string, ReactNode][])
       : []),
-    ['생성일', formatDate(ws.createdAt)],
+    ['생성일', <LocalDate iso={ws.createdAt} />],
   ];
 
   const kvRowClass =
@@ -112,7 +113,7 @@ export default async function ProfilePage({ searchParams }: Props) {
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
           <div className={kvRowClass}>
             <span className={kvLabelClass}>가입일</span>
-            <span className={kvValueClass}>{formatDate(memberMeta?.joinedAt ?? me.joinedAt)}</span>
+            <span className={kvValueClass}><LocalDate iso={memberMeta?.joinedAt ?? me.joinedAt} /></span>
           </div>
         </div>
       </section>

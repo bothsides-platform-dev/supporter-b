@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { formatDate } from '@/lib/format';
+import { LocalDate } from '@/components/primitives/LocalTime';
 import { toast } from '@/lib/toast';
 import { inviteWorkspaceMemberAction } from '@/lib/server/actions/workspace/inviteWorkspaceMemberAction';
 import { removeWorkspaceMemberAction } from '@/lib/server/actions/workspace/removeWorkspaceMemberAction';
@@ -233,7 +233,7 @@ export function MembersPanel({
                   </span>
                 </div>
                 <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)] hidden md:inline">
-                  {m.lastSeenAt ? formatDate(m.lastSeenAt) : '—'}
+                  {m.lastSeenAt ? <LocalDate iso={m.lastSeenAt} /> : '—'}
                 </span>
 
                 {isAdmin ? (
