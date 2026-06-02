@@ -282,7 +282,11 @@ export interface AttachmentRepo {
 
 // ── Outbox ────────────────────────────────────────────────────────────
 export interface OutboxRepo {
-  /** 메일 전송 큐 enqueue — dedupeKey UNIQUE 위배 시 null. */
+  /**
+   * 메일 전송 큐 enqueue — dedupeKey UNIQUE 위배 시 null. `scheduledAt` 생략 시
+   * 컬럼 기본값 now()(즉시 발송 대상). 지연 발송(예: chat digest 윈도우 종료
+   * 시각)에는 미래 시각을 명시.
+   */
   enqueue(
     params: {
       event: OutboxEvent;
@@ -291,11 +295,22 @@ export interface OutboxRepo {
       html: string;
       dedupeKey?: string;
       maxAttempts?: number;
+      scheduledAt?: Date;
     },
     tx?: Tx,
   ): Promise<OutboxEntry | null>;
-  /** 송신 대기 batch 조회. */
+  /**
+   * 송신 대기 batch 조회. `chat.message` 행은 전용 chat-digest 처리기 소관이므로
+   * 제외 — generic 메일러가 coalesce 전 raw 메시지 메일을 보내면 안 됨.
+   */
   pending(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
+  /**
+   * Due chat-digest 행: `status='pending' AND event='chat.message' AND
+   * scheduled_at <= now()`, scheduled_at 오름차순. 전용 chat-digest 처리기
+   * (cron + post-commit)가 본문 재계산·읽음 단락 후 markResult 한다. lease/
+   * SKIP-LOCKED 없는 단순 read — 중복발송 가드는 처리기 책임.
+   */
+  dueChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
   /** 전송 결과 반영(성공/실패 + 시도횟수 +1). */
   markResult(
     id: string,

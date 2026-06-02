@@ -9,7 +9,7 @@
 // and maxAttempts → 'failed' transition matches the in-memory adapter test.
 
 import { describe, expect, it, vi } from 'vitest';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import { outboxEntries } from '@/lib/db/schema';
@@ -65,6 +65,29 @@ describe('DrizzleOutboxRepository / Step 10', () => {
     expect(second).toBeNull();
     const pending = await repo.pending(10);
     expect(pending).toHaveLength(1);
+  });
+
+  it('enqueue honours an explicit future scheduledAt (delayed digest)', async () => {
+    const { db, repo } = await setup();
+    const future = new Date(Date.now() + 600_000); // 10 min out
+    const entry = await repo.enqueue({
+      event: 'chat.message',
+      to: 'pg@toss.im',
+      subject: 'S',
+      html: '<a>x</a>',
+      dedupeKey: 'chat-digest:c1:u1:42',
+      scheduledAt: future,
+    });
+    expect(entry).not.toBeNull();
+    // The persisted scheduled_at reflects the explicit future time, NOT now().
+    const [row] = await db
+      .select({ scheduledAt: outboxEntries.scheduledAt })
+      .from(outboxEntries)
+      .where(eq(outboxEntries.id, entry!.id));
+    expect(new Date(row.scheduledAt).getTime()).toBe(future.getTime());
+    // Not yet due — dueChatDigests must not return it.
+    const due = await repo.dueChatDigests(10);
+    expect(due).toHaveLength(0);
   });
 
   it('allows multiple entries with no dedupeKey', async () => {
@@ -180,5 +203,112 @@ describe('DrizzleOutboxRepository / Step 10', () => {
     expect(sender).toHaveBeenCalledTimes(5);
     const pending = await repo.pending(10);
     expect(pending).toHaveLength(0);
+  });
+});
+
+describe('DrizzleOutboxRepository / chat-digest separation', () => {
+  // Seed a chat.message row at an arbitrary scheduled_at. enqueue() always
+  // uses the column default (now()), so future-scheduled rows are written raw.
+  async function seedChat(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    db: any,
+    to: string,
+    dedupeKey: string,
+    scheduledAt: Date,
+  ) {
+    await db.insert(outboxEntries).values({
+      event: 'chat.message',
+      toAddr: to,
+      subject: `[Supporter B] ${to}`,
+      html: '<a>x</a>',
+      dedupeKey,
+      scheduledAt,
+    });
+  }
+
+  it('generic flush does NOT touch chat.message rows', async () => {
+    const { db, repo } = await setup();
+    const sender = vi.fn<Sender>().mockResolvedValue({ ok: true });
+    // Due chat.message row (scheduled now) — generic flush must skip it.
+    await seedChat(db, 'pg@toss.im', 'chat-digest:c1:u1:100', new Date());
+
+    const { ok, failed } = await repo.flush(sender);
+
+    expect(ok).toBe(0);
+    expect(failed).toBe(0);
+    expect(sender).not.toHaveBeenCalled();
+    // Row stays pending, untouched.
+    const rows = await readAll(db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('pending');
+    expect(rows[0].attempts).toBe(0);
+  });
+
+  it('generic flush still drains non-chat rows unchanged', async () => {
+    const { db, repo } = await setup();
+    const sender = vi.fn<Sender>().mockResolvedValue({ ok: true });
+    await repo.enqueue({
+      event: 'auth.verify',
+      to: 'a@e.com',
+      subject: 'S',
+      html: '',
+    });
+    // A chat row alongside it must NOT be drained.
+    await seedChat(db, 'pg@toss.im', 'chat-digest:c1:u1:100', new Date());
+
+    const { ok, failed } = await repo.flush(sender);
+
+    expect(ok).toBe(1);
+    expect(failed).toBe(0);
+    expect(sender).toHaveBeenCalledTimes(1);
+    expect(sender.mock.calls[0][0].event).toBe('auth.verify');
+    // chat row is still pending.
+    const chatStill = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'chat.message'));
+    expect(chatStill).toHaveLength(1);
+    expect(chatStill[0].status).toBe('pending');
+  });
+
+  it('pending() excludes chat.message rows', async () => {
+    const { db, repo } = await setup();
+    await repo.enqueue({
+      event: 'auth.verify',
+      to: 'a@e.com',
+      subject: 'S',
+      html: '',
+    });
+    await seedChat(db, 'pg@toss.im', 'chat-digest:c1:u1:100', new Date());
+
+    const pending = await repo.pending(10);
+
+    expect(pending).toHaveLength(1);
+    expect(pending[0].event).toBe('auth.verify');
+  });
+
+  it('dueChatDigests returns only due chat.message rows', async () => {
+    const { db, repo } = await setup();
+    const now = Date.now();
+    // due chat row (past schedule)
+    await seedChat(db, 'due@toss.im', 'chat-digest:c1:u1:1', new Date(now - 1000));
+    // future-scheduled chat row — not yet due
+    await seedChat(db, 'future@toss.im', 'chat-digest:c1:u2:9', new Date(now + 600_000));
+    // due non-chat row — must NOT be returned by dueChatDigests
+    await repo.enqueue({
+      event: 'auth.verify',
+      to: 'a@e.com',
+      subject: 'S',
+      html: '',
+    });
+
+    const due = await repo.dueChatDigests(10);
+
+    expect(due).toHaveLength(1);
+    expect(due[0].event).toBe('chat.message');
+    expect(due[0].to).toBe('due@toss.im');
+    expect(due[0].dedupeKey).toBe('chat-digest:c1:u1:1');
+    expect(due[0].id).toBeTruthy();
+    expect(due[0].scheduledAt).toBeTruthy();
   });
 });

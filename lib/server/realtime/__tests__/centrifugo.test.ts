@@ -10,7 +10,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { publishChatEvent } from '../centrifugo';
+import { isUserPresentInConversation, publishChatEvent } from '../centrifugo';
 
 describe('publishChatEvent', () => {
   afterEach(() => {
@@ -59,5 +59,85 @@ describe('publishChatEvent', () => {
     await expect(
       publishChatEvent('conv-1', { type: 'message', id: 'm1' }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('isUserPresentInConversation', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('returns false (no fetch) when env is unconfigured — safe default, no suppression', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', '');
+    vi.stubEnv('CENTRIFUGO_API_KEY', '');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(isUserPresentInConversation('conv-1', 'user-1')).resolves.toBe(
+      false,
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns true when the user is present in the channel presence map', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', 'http://localhost:8000/api');
+    vi.stubEnv('CENTRIFUGO_API_KEY', 'secret');
+    const fetchSpy = vi.fn().mockResolvedValue({
+      json: async () => ({
+        result: {
+          presence: {
+            'client-a': { client: 'client-a', user: 'user-2' },
+            'client-b': { client: 'client-b', user: 'user-1' },
+          },
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(isUserPresentInConversation('conv-1', 'user-1')).resolves.toBe(
+      true,
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe('http://localhost:8000/api');
+    const reqBody = JSON.parse(init.body);
+    expect(reqBody.method).toBe('presence');
+    expect(reqBody.params.channel).toBe('chat:conversation:conv-1');
+    expect(init.headers['X-API-Key']).toBe('secret');
+  });
+
+  it('returns false when the user is absent from the presence map', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', 'http://localhost:8000/api');
+    vi.stubEnv('CENTRIFUGO_API_KEY', 'secret');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: async () => ({
+          result: {
+            presence: {
+              'client-a': { client: 'client-a', user: 'user-2' },
+            },
+          },
+        }),
+      }),
+    );
+
+    await expect(isUserPresentInConversation('conv-1', 'user-1')).resolves.toBe(
+      false,
+    );
+  });
+
+  it('returns false when fetch throws (best-effort, never throws)', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', 'http://localhost:8000/api');
+    vi.stubEnv('CENTRIFUGO_API_KEY', 'secret');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new Error('connection refused')),
+    );
+
+    await expect(isUserPresentInConversation('conv-1', 'user-1')).resolves.toBe(
+      false,
+    );
   });
 });

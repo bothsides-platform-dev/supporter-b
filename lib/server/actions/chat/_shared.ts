@@ -73,3 +73,30 @@ export function chatDigestDedupeKey(
 ): string {
   return `chat-digest:${conversationId}:${recipientUserId}:${chatDigestBucket(now)}`;
 }
+
+/**
+ * End of the window bucket containing `now` = `(bucket+1) * WINDOW`. This is the
+ * `scheduledAt` for a coalesced digest: messages enqueued anywhere in the window
+ * share this fire time, so the mail goes out once the window closes. Feed it the
+ * SAME `now` passed to `chatDigestDedupeKey` so the key's bucket and the schedule
+ * agree. */
+export function chatDigestWindowEnd(now: Date = new Date()): Date {
+  return new Date((chatDigestBucket(now) + 1) * CHAT_DIGEST_WINDOW_MS);
+}
+
+/**
+ * Parse a chat-digest dedupeKey back into its `(conversationId, recipientUserId)`.
+ * Shape: `chat-digest:<conversationId>:<recipientUserId>:<bucket>`. UUIDs contain
+ * no colons, so a well-formed key is exactly 4 colon-separated parts. Returns
+ * null on any malformed key (the flush processor treats that as "skip & mark
+ * sent" so a junk row can't wedge the queue). */
+export function parseChatDigestDedupeKey(
+  dedupeKey: string | undefined,
+): { conversationId: string; recipientUserId: string } | null {
+  if (!dedupeKey) return null;
+  const parts = dedupeKey.split(':');
+  if (parts.length !== 4 || parts[0] !== 'chat-digest') return null;
+  const [, conversationId, recipientUserId] = parts;
+  if (!conversationId || !recipientUserId) return null;
+  return { conversationId, recipientUserId };
+}

@@ -8,10 +8,18 @@ export function ChatMessage({
   senderName,
   preview,
   conversationUrl,
+  count,
 }: ChatMessageProps): React.JSX.Element {
+  // Digest phrasing: 2+ unread → "새 메시지 N건". 1 or omitted → single-message
+  // copy (preserves the original mail when there's nothing to coalesce).
+  const isDigest = typeof count === 'number' && count >= 2;
   return (
     <Layout
-      preheader={`${senderName}님이 새 메시지를 보냈어요.`}
+      preheader={
+        isDigest
+          ? `${senderName}님이 새 메시지 ${count}건을 보냈어요.`
+          : `${senderName}님이 새 메시지를 보냈어요.`
+      }
       serial="메시지"
     >
       <h1
@@ -25,7 +33,16 @@ export function ChatMessage({
         새 메시지가 도착했어요
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
-        <strong>{senderName}</strong>님이 메시지를 보냈어요.
+        {isDigest ? (
+          <>
+            <strong>{senderName}</strong>님이 새 메시지{' '}
+            <strong>{count}건</strong>을 보냈어요.
+          </>
+        ) : (
+          <>
+            <strong>{senderName}</strong>님이 메시지를 보냈어요.
+          </>
+        )}
       </p>
       <p
         style={{

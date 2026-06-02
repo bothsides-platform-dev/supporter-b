@@ -156,6 +156,19 @@ NEXT_PUBLIC_CENTRIFUGO_WS_URL=ws://localhost:8000/connection/websocket
 
 > macOS Docker Desktop 은 `host.docker.internal` 가 기본 지원되어 subscribe proxy 가 `localhost:3000` 의 `pnpm dev` 앱에 바로 닿는다. env 가 미설정이면 앱은 publish 를 no-op 으로 안전하게 건너뛴다(테스트/오프라인 모드) — 채팅 영속은 동작하고 라이브 fanout 만 비활성.
 
+## 이메일 큐 주기 flush (outbox cron)
+
+앱은 액션 커밋 직후 outbox 를 즉시 flush(`after()` post-commit)한다. 하지만 채팅 알림 메일은 폭주 방지를 위해 윈도우가 끝나는 미래 시각으로 **지연 예약**(scheduled_at)되며, 그 시점엔 보통 어떤 액션도 돌고 있지 않다 → post-commit flush 가 그 행을 집어 보낼 수 없다. 그래서 **매 1분 crontab** 이 `POST /api/cron/flush-outbox` 를 쳐서 (1) 일반 pending 메일과 (2) due 가 된 chat 다이제스트를 비운다. 라우트는 발송 시점에 본문을 재계산하므로 그 사이 수신자가 온라인이 되거나 다 읽었으면 발송을 취소한다.
+
+crontab 에 1분 주기로 등록 (`crontab -e`). 시크릿은 **crontab 상단에 한 줄로 정의**해야 cron 이 명령 환경으로 export 하고 안쪽 셸이 이를 펼친다:
+
+```cron
+CRON_SECRET=붙여넣을-시크릿
+* * * * * curl -fsS -XPOST localhost:3000/api/cron/flush-outbox -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
+```
+
+> **주의 — cron 은 셸 프로필도 `.env.production` 도 읽지 않는다.** 시크릿은 위처럼 **crontab 상단 한 줄**(또는 `/etc/cron.d/` 파일 상단의 `CRON_SECRET=...`)로 정의한다. ⚠️ `* * * * * CRON_SECRET=… curl … -H "x-cron-secret: $CRON_SECRET"` 처럼 **명령 줄 앞에 인라인 대입**하는 형태는 동작하지 않는다 — POSIX 셸은 대입을 적용하기 *전에* `$CRON_SECRET` 를 (아직 비어 있는) 현재 환경으로 펼치므로 빈 헤더가 간다. 빈 값이면 라우트가 fail-closed 로 401 → **메일이 조용히 안 나간다**(우회는 안 되지만 flush 도 안 됨). 정 인라인 대입이 싫고 변수도 안 쓰고 싶으면 헤더에 시크릿 리터럴을 직접 박아도 된다(시크릿은 어차피 같은 호스트 `.env.production` 에 있다). 값은 `.env.production` 의 `CRON_SECRET` 와 **동일**해야 하고, 헤더 이름은 `x-cron-secret` 로 라우트와 정확히 일치시킬 것.
+
 ## Node 설치 (Amazon Linux 2023)
 
 AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치한다.

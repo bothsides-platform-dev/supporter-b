@@ -19,12 +19,16 @@ import {
 } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderChatMessage } from '@/lib/server/outbox/templates/chatMessage';
-import { publishChatEvent } from '@/lib/server/realtime/centrifugo';
+import {
+  isUserPresentInConversation,
+  publishChatEvent,
+} from '@/lib/server/realtime/centrifugo';
 import type { Notification } from '@/lib/types/notification';
 import {
   actionDb,
   baseUrl,
   chatDigestDedupeKey,
+  chatDigestWindowEnd,
   type ChatActionResult,
   requireActiveWorkspace,
 } from './_shared';
@@ -196,6 +200,10 @@ export async function sendChatMessageAction(
       const conversationUrl = `${baseUrl()}/messages`;
       const html = await renderChatMessage({ senderName, preview, conversationUrl });
 
+      // scheduledAt for every coalesced digest in this window — shared so a
+      // flurry lands on one fire time (the window END).
+      const digestScheduledAt = chatDigestWindowEnd(now);
+
       for (const m of recipients) {
         // sender's own membership never lands in counterparty fanout, but guard
         // anyway in case of shared membership edge cases.
@@ -212,9 +220,21 @@ export async function sendChatMessageAction(
           linkUrl: '/messages',
           createdAt: now.toISOString(),
         };
+        // In-app bell ALWAYS fires (online or not).
         await dispatchNotification(tx, notif);
         pendingEmits.push(notif);
-        // Windowed dedupe — a flurry in one window collapses to one mail.
+
+        // Layer 1 — presence suppression: an online recipient sees the live
+        // fanout, so skip the email enqueue entirely. Best-effort & defaults to
+        // offline when Centrifugo is unconfigured, so we never silently drop a
+        // mail a recipient actually needs.
+        if (await isUserPresentInConversation(conv.id, m.userId)) continue;
+
+        // Layer 2 — windowed coalesce: a flurry in one window collapses to a
+        // single outbox row (dedupeKey holds the time bucket; ON CONFLICT DO
+        // NOTHING). scheduledAt = window END so the mail fires once the window
+        // closes; the body (preview/count) is recomputed at flush time, so the
+        // html enqueued here is only a placeholder for the single-message case.
         await outbox.enqueue(
           {
             event: 'chat.message',
@@ -222,6 +242,7 @@ export async function sendChatMessageAction(
             subject: `[Supporter B] ${senderName}님의 새 메시지`,
             html,
             dedupeKey: chatDigestDedupeKey(conv.id, m.userId, now),
+            scheduledAt: digestScheduledAt,
           },
           tx,
         );

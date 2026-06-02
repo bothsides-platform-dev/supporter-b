@@ -58,13 +58,23 @@ vi.mock('@/lib/auth/session', () => ({
 // Spy the best-effort fanout so we can assert the publish payload shape without
 // a live Centrifugo server (the real impl no-ops when env is unconfigured).
 const publishChatEvent = vi.fn().mockResolvedValue(undefined);
+// Presence gate for email suppression. Defaults to false (offline → mail
+// enqueued) so the existing fanout/outbox tests stay green; flip to true in the
+// suppression test.
+const isUserPresentInConversation = vi.fn().mockResolvedValue(false);
 vi.mock('@/lib/server/realtime/centrifugo', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../realtime/centrifugo')>();
-  return { ...actual, publishChatEvent: (...args: unknown[]) => publishChatEvent(...args) };
+  return {
+    ...actual,
+    publishChatEvent: (...args: unknown[]) => publishChatEvent(...args),
+    isUserPresentInConversation: (...args: unknown[]) =>
+      isUserPresentInConversation(...args),
+  };
 });
 
 import { sendChatMessageAction } from '../sendChatMessageAction';
 import { markConversationReadAction } from '../markConversationReadAction';
+import { CHAT_DIGEST_WINDOW_MS } from '../_shared';
 import {
   getChatConversationRepo,
   getChatReadRepo,
@@ -99,10 +109,59 @@ describe('sendChatMessageAction', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
     publishChatEvent.mockClear();
+    isUserPresentInConversation.mockClear();
+    isUserPresentInConversation.mockResolvedValue(false);
   });
   afterEach(() => {
     teardownRfpActionEnv();
     sessionRef.value = null;
+  });
+
+  it('suppresses the email enqueue for an online recipient (presence gate) but still dispatches the in-app notification', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+    // PG member is live in the conversation → no mail, live fanout only.
+    isUserPresentInConversation.mockResolvedValue(true);
+
+    const r = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '실시간으로 보고 있어요.',
+    });
+    expect(r.ok).toBe(true);
+
+    // No outbox row — the online recipient is suppressed.
+    const outbox = await db.select().from(outboxEntries);
+    expect(outbox).toHaveLength(0);
+
+    // In-app bell still fires.
+    const notifs = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.workspaceId, pgWs.id));
+    expect(notifs.some((n) => n.userId === pgUser.id)).toBe(true);
+  });
+
+  it('enqueues a delayed (window-end) outbox row for an offline recipient; same-window resends stay at one row', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+    const before = Date.now();
+
+    await sendChatMessageAction({ counterpartyWorkspaceId: pgWs.id, body: 'm1' });
+    await sendChatMessageAction({ counterpartyWorkspaceId: pgWs.id, body: 'm2' });
+    const after = Date.now();
+
+    const outbox = await db.select().from(outboxEntries);
+    expect(outbox).toHaveLength(1);
+    // scheduledAt is the WINDOW END: strictly in the future at send time AND
+    // aligned to the window grid (a multiple of CHAT_DIGEST_WINDOW_MS) — which
+    // an immediate now() default would essentially never be.
+    const scheduled = new Date(outbox[0].scheduledAt).getTime();
+    expect(scheduled).toBeGreaterThan(after);
+    // Aligned to the window grid (multiple of WINDOW) — an immediate now()
+    // default would essentially never be.
+    expect(scheduled % CHAT_DIGEST_WINDOW_MS).toBe(0);
+    // Within one window of the send — i.e. the END of the current bucket.
+    expect(scheduled - before).toBeLessThanOrEqual(CHAT_DIGEST_WINDOW_MS);
   });
 
   it('publishes a content-bearing live message event so subscribers can append without a refetch', async () => {

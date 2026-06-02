@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { renderAdminSignupReview } from '../adminSignupReview';
+import { renderChatMessage } from '../chatMessage';
 import { renderAuthEmailChange } from '../authEmailChange';
 import { renderAuthReset } from '../authReset';
 import { renderAuthVerify } from '../authVerify';
@@ -146,6 +147,30 @@ describe('outbox email templates / render', () => {
     expect(html).toContain('https://bidit.test/signup/pg');
     expect(html).toContain('보완');
     expectEditorialRules(html);
+  });
+
+  it('chatMessage with a count renders "N건" digest copy + sender + preview', async () => {
+    const html = await renderChatMessage({
+      senderName: 'OO페이',
+      preview: '제안서 검토 부탁드려요.',
+      conversationUrl: 'https://bidit.test/messages',
+      count: 3,
+    });
+    expect(html).toContain('OO페이');
+    expect(html).toContain('제안서 검토 부탁드려요.');
+    // The unread-count digest phrasing must surface the number.
+    expect(html).toMatch(/3\s*건/);
+    expect(html).toContain('https://bidit.test/messages');
+  });
+
+  it('chatMessage without a count omits the "N건" digest phrasing (single-message fallback)', async () => {
+    const html = await renderChatMessage({
+      senderName: 'OO페이',
+      preview: '안녕하세요.',
+      conversationUrl: 'https://bidit.test/messages',
+    });
+    expect(html).toContain('OO페이');
+    expect(html).not.toMatch(/\d+\s*건/);
   });
 
   it('adminSignupReview includes workspace name, org label and review URL', async () => {
