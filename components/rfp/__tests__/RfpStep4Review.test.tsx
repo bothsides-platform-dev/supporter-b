@@ -5,6 +5,27 @@ import userEvent from '@testing-library/user-event';
 import { RfpStep4Review } from '../RfpStep4Review';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 
+function renderComponent({
+  onBack = vi.fn(),
+  onSubmit = vi.fn().mockResolvedValue(undefined),
+  submitting = false,
+  serverError = '',
+}: {
+  onBack?: () => void;
+  onSubmit?: () => Promise<void>;
+  submitting?: boolean;
+  serverError?: string;
+} = {}) {
+  return render(
+    <RfpStep4Review
+      onBack={onBack}
+      onSubmit={onSubmit}
+      submitting={submitting}
+      serverError={serverError}
+    />,
+  );
+}
+
 function resetStore() {
   useRfpDraftStore.setState({
     title: '테스트 제안건',
@@ -25,66 +46,31 @@ describe('RfpStep4Review', () => {
   beforeEach(resetStore);
 
   it('마감일이 없어도 발송 버튼은 비활성화되지 않는다 (미충족 안내는 클릭 시 토스트로)', () => {
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={vi.fn()}
-        submitting={false}
-        serverError=""
-      />,
-    );
+    renderComponent();
     expect(screen.getByRole('button', { name: /발송/ })).not.toBeDisabled();
   });
 
   it('마감일이 없어도 발송 버튼 클릭 시 onSubmit이 호출된다', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={onSubmit}
-        submitting={false}
-        serverError=""
-      />,
-    );
+    renderComponent({ onSubmit });
     await user.click(screen.getByRole('button', { name: /발송/ }));
     expect(onSubmit).toHaveBeenCalledOnce();
   });
 
   it('제안 제목이 요약에 표시된다', () => {
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={vi.fn()}
-        submitting={false}
-        serverError=""
-      />,
-    );
+    renderComponent();
     expect(screen.getByText('테스트 제안건')).toBeInTheDocument();
   });
 
   it('선택된 PG 수가 발송 버튼 텍스트에 표시된다', () => {
     useRfpDraftStore.setState({ deadline: '2026-06-30T23:59:59Z' });
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={vi.fn()}
-        submitting={false}
-        serverError=""
-      />,
-    );
+    renderComponent();
     expect(screen.getByRole('button', { name: '2개 PG사에 발송' })).toBeInTheDocument();
   });
 
   it('serverError가 있으면 에러 메시지를 표시한다', () => {
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={vi.fn()}
-        submitting={false}
-        serverError="INVALID_INPUT"
-      />,
-    );
+    renderComponent({ serverError: 'INVALID_INPUT' });
     expect(screen.getByRole('alert')).toHaveTextContent('입력 값을 확인해주세요.');
   });
 
@@ -92,41 +78,20 @@ describe('RfpStep4Review', () => {
     useRfpDraftStore.setState({ deadline: '2026-06-30T23:59:59Z' });
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={onSubmit}
-        submitting={false}
-        serverError=""
-      />,
-    );
+    renderComponent({ onSubmit });
     await user.click(screen.getByRole('button', { name: '2개 PG사에 발송' }));
     expect(onSubmit).toHaveBeenCalledOnce();
   });
 
   it('submitting=true면 버튼이 비활성화되고 "발송 중…"을 표시한다', () => {
     useRfpDraftStore.setState({ deadline: '2026-06-30T23:59:59Z' });
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={vi.fn()}
-        submitting={true}
-        serverError=""
-      />,
-    );
+    renderComponent({ submitting: true });
     expect(screen.getByRole('button', { name: '발송 중…' })).toBeDisabled();
   });
 
   it('메모(상세 요청사항)를 입력했으면 본문이 표시된다', () => {
     useRfpDraftStore.setState({ memo: '정산주기 D+1 이내 희망합니다.' });
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={vi.fn()}
-        submitting={false}
-        serverError=""
-      />,
-    );
+    renderComponent();
     expect(screen.getByText('상세 요청사항')).toBeInTheDocument();
     expect(
       screen.getByText('정산주기 D+1 이내 희망합니다.'),
@@ -135,27 +100,13 @@ describe('RfpStep4Review', () => {
 
   it('메모가 비어 있으면 상세 요청사항 섹션을 표시하지 않는다', () => {
     useRfpDraftStore.setState({ memo: '' });
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={vi.fn()}
-        submitting={false}
-        serverError=""
-      />,
-    );
+    renderComponent();
     expect(screen.queryByText('상세 요청사항')).not.toBeInTheDocument();
   });
 
   it('공백뿐인 메모는 상세 요청사항 섹션을 표시하지 않는다 (발송 시 trim되어 빠지므로)', () => {
     useRfpDraftStore.setState({ memo: '   \n  ' });
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={vi.fn()}
-        submitting={false}
-        serverError=""
-      />,
-    );
+    renderComponent();
     expect(screen.queryByText('상세 요청사항')).not.toBeInTheDocument();
   });
 
@@ -166,14 +117,7 @@ describe('RfpStep4Review', () => {
         { id: 'f2', name: '상품목록.xlsx', size: 5_000 },
       ],
     });
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={vi.fn()}
-        submitting={false}
-        serverError=""
-      />,
-    );
+    renderComponent();
     expect(screen.getByText('견적요청서.pdf')).toBeInTheDocument();
     expect(screen.getByText('2.5 MB')).toBeInTheDocument();
     expect(screen.getByText('상품목록.xlsx')).toBeInTheDocument();
@@ -182,14 +126,7 @@ describe('RfpStep4Review', () => {
 
   it('첨부파일이 없으면 첨부파일 섹션을 표시하지 않는다', () => {
     useRfpDraftStore.setState({ rfpFiles: [] });
-    render(
-      <RfpStep4Review
-        onBack={vi.fn()}
-        onSubmit={vi.fn()}
-        submitting={false}
-        serverError=""
-      />,
-    );
+    renderComponent();
     expect(screen.queryByText(/첨부파일/)).not.toBeInTheDocument();
   });
 });
