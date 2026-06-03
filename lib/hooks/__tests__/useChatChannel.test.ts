@@ -270,7 +270,7 @@ describe('useChatChannel — 라이브 연결 (URL 설정)', () => {
     const { unmount } = renderHook(() => useChatChannel(CONV_ID, {}));
     unmount();
 
-    const offCalls = mockClient.off.mock.calls.map(([event]: [string]) => event);
+    const offCalls = mockClient.off.mock.calls.map((args: unknown[]) => args[0] as string);
     expect(offCalls).toContain('connected');
     expect(offCalls).toContain('disconnected');
   });
