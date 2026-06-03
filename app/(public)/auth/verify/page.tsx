@@ -8,7 +8,7 @@ import { EnvelopeSvg } from '@/components/auth/EnvelopeSvg';
 import { verifyEmailAction } from '@/lib/server/actions/auth';
 import { readSignupDraft } from '@/lib/auth/signup-storage';
 
-type TokenState = 'loading' | 'expired' | 'invalid' | 'used';
+type TokenState = 'loading' | 'expired';
 
 // `/auth/verify` is bivalent:
 //   - `?token=…` → consume the verification row and redirect to /pending-approval.
@@ -98,20 +98,7 @@ function VerifyContent() {
       </div>
     );
   }
-  if (state === 'used') {
-    return (
-      <div className="space-y-4 text-center">
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">이미 사용된 링크입니다.</p>
-        <Link href="/login" className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--md-sys-color-on-surface)]">로그인 →</Link>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-4 text-center">
-      <p className="text-[13px] text-[var(--md-sys-color-error)]">잘못된 링크입니다.</p>
-      <Link href="/login" className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--md-sys-color-on-surface)]">로그인 →</Link>
-    </div>
-  );
+  return null;
 }
 
 export default function AuthVerifyPage() {
