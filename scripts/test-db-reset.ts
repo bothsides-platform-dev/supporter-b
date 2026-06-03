@@ -9,10 +9,10 @@
  *   - Forces `DATABASE_URL` to `DATABASE_URL_TEST` for this process so the
  *     transitively-imported `lib/db/client.ts` connects to 5433. NEVER
  *     touches the dev DB on 5432, even if the caller mis-set env.
- *   - Computes a SHA-256 hash of the migration file and compares it against
- *     the hash stored in `__e2e_schema_version`. Recreates the schema only
- *     when the hash differs (i.e. migration file changed). Otherwise skips
- *     straight to seed — keeping repeated runs fast.
+ *   - Generates the schema DDL from `lib/db/schema` (push-style, no migrations
+ *     folder), hashes it, and compares against the hash stored in
+ *     `__e2e_schema_version`. Recreates the schema only when the hash differs
+ *     (i.e. the schema changed). Otherwise skips straight to seed — fast.
  *   - Reuses `runSeed()` from `scripts/seed.ts` to populate test fixtures.
  *   - `supporter_b` is the DB superuser (POSTGRES_USER in docker-compose),
  *     so DROP SCHEMA is permitted.
@@ -20,31 +20,14 @@
 import 'dotenv/config';
 
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import postgres from 'postgres';
 
+import { generateSchemaDDL } from '@/lib/db/schema-ddl';
+
 const TEST_DB_FALLBACK =
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
-
-// The greenfield migration filename regenerates on every `db:generate`
-// (e.g. 0000_cool_maverick.sql), so a hardcoded name silently ENOENTs the
-// whole e2e suite at globalSetup. Glob the single drizzle/0000_*.sql instead.
-function resolveMigrationFile(): string {
-  const dir = join(process.cwd(), 'drizzle');
-  const matches = readdirSync(dir).filter((f) => /^0000_.*\.sql$/.test(f));
-  if (matches.length !== 1) {
-    throw new Error(
-      `[test-db-reset] expected exactly one drizzle/0000_*.sql, found ` +
-        `${matches.length}: ${matches.join(', ') || '(none)'}`,
-    );
-  }
-  return join(dir, matches[0]);
-}
-
-const MIGRATION_FILE = resolveMigrationFile();
 
 async function resetTestDatabase(): Promise<void> {
   const testUrl = process.env.DATABASE_URL_TEST ?? TEST_DB_FALLBACK;
@@ -65,9 +48,9 @@ async function resetTestDatabase(): Promise<void> {
   // `lib/db/client.ts`. Must happen before the dynamic import below.
   process.env.DATABASE_URL = testUrl;
 
-  // ── Schema sync (only when migration file changed) ───────────────────────
-  const migrationSql = readFileSync(MIGRATION_FILE, 'utf-8');
-  const hash = createHash('sha256').update(migrationSql).digest('hex');
+  // ── Schema sync (only when the schema changed) ───────────────────────────
+  const statements = await generateSchemaDDL();
+  const hash = createHash('sha256').update(statements.join('\n')).digest('hex');
 
   const sql = postgres(testUrl);
   try {
@@ -81,13 +64,9 @@ async function resetTestDatabase(): Promise<void> {
     }
 
     if (storedHash !== hash) {
-      console.log('[test-db-reset] migration changed — recreating schema…');
+      console.log('[test-db-reset] schema changed — recreating schema…');
       await sql`DROP SCHEMA public CASCADE`;
 
-      const statements = migrationSql
-        .split('--> statement-breakpoint')
-        .map((s) => s.trim())
-        .filter(Boolean);
       for (const statement of statements) {
         await sql.unsafe(statement);
       }

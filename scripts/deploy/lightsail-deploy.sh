@@ -5,9 +5,10 @@
 #
 #   bash scripts/deploy/lightsail-deploy.sh
 #
-# Re-runnable: pulls latest, installs deps, brings up Postgres, migrates,
-# rebuilds, reloads PM2. Caddy is supervised separately by systemd and is NOT
-# touched here (config changes: edit /etc/caddy and `sudo systemctl reload caddy`).
+# Re-runnable: pulls latest, installs deps, brings up Postgres, rebuilds,
+# reloads PM2. Schema sync is NOT done here — see the "Schema" note below.
+# Caddy is supervised separately by systemd and is NOT touched here (config
+# changes: edit /etc/caddy and `sudo systemctl reload caddy`).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."   # repo root
@@ -18,8 +19,9 @@ if [ ! -f .env.production ]; then
   exit 1
 fi
 
-# Export prod env for drizzle-kit (db:migrate) and to guarantee the build sees
-# NEXT_PUBLIC_* values. Next also auto-loads .env.production; belt-and-suspenders.
+# Export prod env so the build sees NEXT_PUBLIC_* values (and so a manual
+# `pnpm db:push` picks up DATABASE_URL). Next also auto-loads .env.production;
+# belt-and-suspenders.
 log "Loading .env.production"
 set -a; . ./.env.production; set +a
 
@@ -31,7 +33,7 @@ pnpm install --frozen-lockfile
 
 log "Ensuring Postgres container is up"
 docker compose -f docker-compose.prod.yml up -d
-# Wait for Postgres to accept connections before migrating.
+# Wait for Postgres to accept connections before the app starts.
 for i in $(seq 1 30); do
   if docker compose -f docker-compose.prod.yml exec -T pg \
        pg_isready -U "${POSTGRES_USER:-supporter_b}" >/dev/null 2>&1; then
@@ -41,8 +43,19 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-log "Running migrations"
-pnpm db:migrate
+# ── Schema ───────────────────────────────────────────────────────────────
+# No automatic migration here. We run push-only for now, and a non-interactive
+# `drizzle-kit push --force` would apply destructive diffs (DROP / type changes)
+# to prod WITHOUT review. So when the schema changed, sync it MANUALLY *before*
+# deploying and review the plan:
+#
+#     set -a; . ./.env.production; set +a
+#     pnpm db:push        # review: additive → Yes; DROP / data-loss → abort
+#
+# Skipping this when the schema is unchanged is safe (push detects no changes).
+# TODO(추후 과제): restore an append-only `pnpm db:migrate` flow — freeze 0000
+# and stop regenerating its `when` — so schema sync becomes automatic and
+# auditable again. Until then, this manual reviewed push is the contract.
 
 # Cap V8 heap below total RAM so the build hits GC before the OOM-killer. On a
 # 2GB box (+4GB swap) 1536MB leaves headroom for Postgres and the OS during build.

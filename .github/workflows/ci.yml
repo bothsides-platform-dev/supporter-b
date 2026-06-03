@@ -29,15 +29,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm tsc --noEmit
       - run: pnpm lint
-      # Drizzle journal sanity. `drizzle-kit check` validates file/journal
-      # consistency. The node one-liner enforces that `when` timestamps
-      # are strictly increasing by `idx` — without this, a new migration
-      # whose `when` is older than an already-applied entry will be
-      # silently skipped by `drizzle-kit migrate` (a prod migration hit this).
-      - name: drizzle journal sanity
-        run: |
-          pnpm exec drizzle-kit check
-          node -e "const j=require('./drizzle/meta/_journal.json');for(let i=1;i<j.entries.length;i++){const a=j.entries[i-1],b=j.entries[i];if(b.when<=a.when){console.error('drizzle journal out of order:',b.tag,'when',b.when,'<=',a.tag,a.when);process.exit(1)}}console.log('drizzle journal monotonic ok')"
+      # No drizzle journal/migration check — the project is push-only and has
+      # no `drizzle/` migrations folder. Schema is diffed straight from
+      # `lib/db/schema` by `drizzle-kit push` (see the e2e job).
 
   unit-test:
     name: unit (vitest)
@@ -93,12 +87,13 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Apply the schema to the fresh Postgres service before e2e.
-      # e2e/global-setup.ts only TRUNCATE+reseeds (no schema step), so the
-      # tables must already exist. `drizzle-kit push` syncs lib/db/schema → DB
-      # directly (journal-free, matching the project's move off db:migrate);
-      # --force skips the interactive data-loss prompt (a no-op on a fresh DB
-      # that only receives CREATEs). DATABASE_URL is read from the job env above.
+      # Create the schema on the fresh Postgres service as a baseline.
+      # `drizzle-kit push` diffs lib/db/schema → DB directly (push-only project,
+      # no migrations folder); --force skips the data-loss prompt (a no-op on a
+      # fresh DB that only receives CREATEs). global-setup then runs
+      # `pnpm e2e:reset`, which drops + recreates the schema from the same
+      # lib/db/schema and seeds — so e2e:reset is authoritative, this is just a
+      # baseline. DATABASE_URL is read from the job env above.
       - name: apply schema to test DB
         run: pnpm exec drizzle-kit push --force
       # Playwright browsers (chromium only — matches projects[] config).

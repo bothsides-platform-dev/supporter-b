@@ -89,7 +89,9 @@ pm2 save
 ```bash
 cd bidit && bash scripts/deploy/lightsail-deploy.sh
 ```
-git pull → install → DB 기동 대기 → migrate → build → `pm2 reload` (무중단 reload). Caddy 는 건드리지 않음.
+git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 reload). Caddy 는 건드리지 않음.
+
+> 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
 ## 운영
 

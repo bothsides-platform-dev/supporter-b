@@ -6,8 +6,9 @@
  *      Next server, started by `webServer` in playwright.config.ts, talks
  *      to the test DB and not to 5432.
  *   2. Schema recreation + reseed via `scripts/test-db-reset.ts`.
- *      `e2e:reset` drops the public schema, re-applies drizzle/0000_*.sql,
- *      then seeds — so the test DB always matches the current Drizzle schema.
+ *      `e2e:reset` drops the public schema, recreates it from `lib/db/schema`
+ *      (push-style DDL, no migrations folder), then seeds — so the test DB
+ *      always matches the current Drizzle schema.
  *
  * NOTE: `globalSetup` runs once per `playwright test` invocation. Each
  * spec is responsible for handling its own state if it needs strict
