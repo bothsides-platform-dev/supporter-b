@@ -9,6 +9,15 @@ import { Chip } from '@/components/primitives/Chip';
 
 const ICON_SPAN_STYLE = { display: 'inline-flex' } as const;
 
+async function handleLogout() {
+  try {
+    await fetch('/logout', { method: 'POST' });
+  } catch {
+    // 세션 클리어 실패해도 /login 이동
+  }
+  window.location.assign('/login');
+}
+
 export function ApprovalWaitingScreen() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fireRef = useRef<ReturnType<typeof confetti.create> | null>(null);
@@ -101,6 +110,13 @@ export function ApprovalWaitingScreen() {
         >
           홈으로 가기
         </Link>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="inline-flex h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 text-body-medium font-medium text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50"
+        >
+          로그아웃
+        </button>
       </div>
     </>
   );
