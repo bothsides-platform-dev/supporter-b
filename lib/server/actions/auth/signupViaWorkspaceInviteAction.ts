@@ -24,7 +24,6 @@ import { passwordSchema } from '@/lib/auth/password-validation';
 import {
   users,
   phoneOtps,
-  verificationTokens,
   workspaceInvitations,
 } from '@/lib/db/schema';
 import {
@@ -36,6 +35,7 @@ import {
 import { normalizePhone } from './phoneOtpUtils';
 import { hashToken } from '@/lib/server/token';
 import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceInvite';
+import { purgeUnverifiedSignup } from './_purgeUnverifiedSignup';
 
 const Input = z
   .object({
@@ -72,35 +72,22 @@ export async function signupViaWorkspaceInviteAction(
 
   const db = actionDb();
 
-  // ── 1 + 2. Phone OTP + 이메일 인증 게이트 (병렬) ─────────────────────────
-  // 두 조회는 서로 독립적이므로 병렬 실행.
-  const [[otpRow], [emailToken]] = await Promise.all([
-    db
-      .select()
-      .from(phoneOtps)
-      .where(
-        and(
-          eq(phoneOtps.id, parsed.data.phoneVerificationId),
-          eq(phoneOtps.phone, normalizedPhone),
-          isNotNull(phoneOtps.verifiedAt),
-        ),
-      )
-      .limit(1),
-    db
-      .select({ id: verificationTokens.id })
-      .from(verificationTokens)
-      .where(
-        and(
-          eq(verificationTokens.email, email),
-          eq(verificationTokens.purpose, 'signup_email'),
-          isNotNull(verificationTokens.consumedAt),
-        ),
-      )
-      .limit(1),
-  ]);
+  // ── 1. Phone OTP 게이트 ───────────────────────────────────────────────
+  // 이메일 인증은 초대 경로에선 강제하지 않는다(결정 #3: 초대자가 이메일을 지정).
+  // 유저는 emailVerified=false 로 생성되며 active 워크스페이스에 합류한다.
+  const [otpRow] = await db
+    .select()
+    .from(phoneOtps)
+    .where(
+      and(
+        eq(phoneOtps.id, parsed.data.phoneVerificationId),
+        eq(phoneOtps.phone, normalizedPhone),
+        isNotNull(phoneOtps.verifiedAt),
+      ),
+    )
+    .limit(1);
 
   if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
-  if (!emailToken) return { ok: false, error: 'EMAIL_NOT_VERIFIED' };
 
   // ── 3. 초대 토큰 사전 검증 (빠른 에러 반환, 쓰기 없음) ─────────────────────
   // INVITE_INVALID + INVITE_EMAIL_MISMATCH는 tx 밖에서 확인해 불필요한 트랜잭션 시작 방지.
@@ -131,7 +118,10 @@ export async function signupViaWorkspaceInviteAction(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result = await db.transaction(async (tx: any): Promise<SignupViaWorkspaceInviteResult> => {
-    // 4a. 유저 생성
+    // 4a-0. 재가입: 중단된 미인증 계정 정리(결정 #2). verified 계정엔 no-op → 아래 UNIQUE → EMAIL_TAKEN.
+    await purgeUnverifiedSignup(tx, email);
+
+    // 4a. 유저 생성 (email-unverified)
     try {
       await tx.insert(users).values({
         id: userId,
@@ -141,6 +131,7 @@ export async function signupViaWorkspaceInviteAction(
         phone: normalizedPhone,
         avatarColor: 'ink',
         status: 'active',
+        emailVerified: false,
       });
     } catch (err) {
       if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };

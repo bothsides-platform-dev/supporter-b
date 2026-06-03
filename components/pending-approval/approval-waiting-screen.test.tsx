@@ -21,7 +21,7 @@ vi.mock('canvas-confetti', () => ({
 
 vi.mock('motion/react', () => ({
   motion: {
-    span: ({ children, animate, style, className }: Record<string, unknown>) =>
+    span: ({ children, style, className }: Record<string, unknown>) =>
       <span style={style as React.CSSProperties} className={className as string}>{children as React.ReactNode}</span>,
   },
   useAnimation: vi.fn(() => ({ start: animationStartMock })),

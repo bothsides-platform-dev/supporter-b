@@ -44,7 +44,7 @@ export default function BuyerWorkspacePage() {
 
   return (
     <div className="space-y-6">
-      <SignupStepper current={2} total={4} />
+      <SignupStepper current={2} total={3} />
 
       <div>
         <h2 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">

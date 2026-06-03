@@ -25,30 +25,27 @@ const DEFAULT_PHONE = '01099999999';
 // Fixed UUID used by throwingInsertDb so VALID_SIGNUP can be a static constant.
 const FAKE_OTP_ID = randomUUID();
 
-// Fake action-db for error-tightening tests. Stubs the two pre-checks
-// (phone OTP select + email token select) so both pass, then throws from
-// the user INSERT inside the transaction.
-let _throwingSelectCallCount = 0;
+// Fake action-db for error-tightening tests. Stubs the phone OTP pre-check so
+// it passes, then throws from the user INSERT inside the transaction. The tx
+// also stubs select (purgeUnverifiedSignup's "existing user?" lookup → none)
+// so re-registration is a no-op and the throwing insert is reached.
 function throwingInsertDb(error: unknown) {
-  _throwingSelectCallCount = 0;
   return {
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: () => {
-            _throwingSelectCallCount++;
-            if (_throwingSelectCallCount === 1) {
-              // 1st call: phone OTP check
-              return [{ id: FAKE_OTP_ID, phone: DEFAULT_PHONE, verifiedAt: new Date() }];
-            }
-            // 2nd call: email token check
-            return [{ id: FAKE_OTP_ID }];
-          },
+          // Outer pre-check: phone OTP lookup → verified row.
+          limit: () => [{ id: FAKE_OTP_ID, phone: DEFAULT_PHONE, verifiedAt: new Date() }],
         }),
       }),
     }),
     transaction: async (cb: (tx: unknown) => unknown) =>
-      cb({ insert: () => ({ values: () => { throw error; } }) }),
+      cb({
+        // purge's existing-user lookup → none found → no-op.
+        select: () => ({ from: () => ({ where: () => ({ limit: () => [] }) }) }),
+        delete: () => ({ where: () => undefined }),
+        insert: () => ({ values: () => { throw error; } }),
+      }),
   };
 }
 
@@ -338,7 +335,7 @@ describe('signupCompleteAction — buyer branch', () => {
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
 
-  it('returns EMAIL_TAKEN if a user with the email already exists', async () => {
+  it('returns EMAIL_TAKEN if a VERIFIED user with the email already exists', async () => {
     const ok = await signupCompleteAction({
       email: 'kim@example.com',
       name: '김구매',
@@ -350,7 +347,8 @@ describe('signupCompleteAction — buyer branch', () => {
       bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
     });
     expect(ok.ok).toBe(true);
-    // Second signup with same email — phone OTP is already verified so reuse is fine.
+    // A *verified* account blocks re-registration (unverified would be purged).
+    await db.update(users).set({ emailVerified: true }).where(eq(users.email, 'kim@example.com'));
     const dup = await signupCompleteAction({
       email: 'kim@example.com',
       name: '다른사람',
@@ -653,10 +651,26 @@ describe('checkEmailAvailableAction', () => {
     expect(r.ok).toBe(true);
   });
 
-  it('returns EMAIL_TAKEN when a user with that email already exists', async () => {
-    // 완전 가입 시드: email 인증 → signupComplete로 users row 생성
+  it('returns ok:true (resumable) when the existing user is UNVERIFIED', async () => {
     const vid = await seedVerifiedOtp(DEFAULT_PHONE);
-    await seedVerifiedEmail('taken@example.com');
+    // 가입했지만 이메일 미인증 상태 (이어서 가입 허용 — 결정 #2)
+    await signupCompleteAction({
+      email: 'pending@example.com',
+      name: '테스터',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: vid,
+      wsKind: 'buyer',
+      wsName: '(주)테스트',
+      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
+    });
+
+    const r = await checkEmailAvailableAction({ email: 'pending@example.com' });
+    expect(r.ok).toBe(true);
+  });
+
+  it('returns EMAIL_TAKEN when a VERIFIED user with that email already exists', async () => {
+    const vid = await seedVerifiedOtp(DEFAULT_PHONE);
     await signupCompleteAction({
       email: 'taken@example.com',
       name: '테스터',
@@ -671,6 +685,7 @@ describe('checkEmailAvailableAction', () => {
         status: 'active',
       },
     });
+    await db.update(users).set({ emailVerified: true }).where(eq(users.email, 'taken@example.com'));
 
     const r = await checkEmailAvailableAction({ email: 'taken@example.com' });
     expect(r.ok).toBe(false);
@@ -679,7 +694,6 @@ describe('checkEmailAvailableAction', () => {
 
   it('normalises email before checking (case-insensitive)', async () => {
     const vid = await seedVerifiedOtp(DEFAULT_PHONE);
-    await seedVerifiedEmail('case@example.com');
     await signupCompleteAction({
       email: 'case@example.com',
       name: '테스터',
@@ -694,6 +708,7 @@ describe('checkEmailAvailableAction', () => {
         status: 'active',
       },
     });
+    await db.update(users).set({ emailVerified: true }).where(eq(users.email, 'case@example.com'));
 
     // 대문자로 전달해도 EMAIL_TAKEN이어야 함
     const r = await checkEmailAvailableAction({ email: 'CASE@example.com' });

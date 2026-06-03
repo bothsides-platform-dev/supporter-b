@@ -84,6 +84,7 @@ export function ApprovalWaitingScreen() {
               지금 입점 심사를 진행하고 있어요.
             </p>
           </div>
+
           <Chip color="tertiary" label="✓ 심사는 영업일 기준 2일 이내로 완료해요" />
           <div className="flex flex-col items-center gap-1">
             <p className="text-body-small text-on-surface-variant">
