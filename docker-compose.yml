@@ -35,6 +35,22 @@ services:
       timeout: 3s
       retries: 10
 
+  centrifugo:
+    image: centrifugo/centrifugo:v6
+    container_name: supporter-b-centrifugo
+    profiles: ["realtime"]
+    command: centrifugo -c /centrifugo/config.json
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./deploy/centrifugo/config.json:/centrifugo/config.json:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET:-dev-secret}
+      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY:-dev-api-key}
+      CENTRIFUGO_CLIENT_ALLOWED_ORIGINS: ${CENTRIFUGO_ALLOWED_ORIGINS:-http://localhost:3000}
+
 volumes:
   supporter_b_pgdata:
     driver: local
