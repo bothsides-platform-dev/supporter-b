@@ -171,6 +171,109 @@ CRON_SECRET=붙여넣을-시크릿
 
 > **주의 — cron 은 셸 프로필도 `.env.production` 도 읽지 않는다.** 시크릿은 위처럼 **crontab 상단 한 줄**(또는 `/etc/cron.d/` 파일 상단의 `CRON_SECRET=...`)로 정의한다. ⚠️ `* * * * * CRON_SECRET=… curl … -H "x-cron-secret: $CRON_SECRET"` 처럼 **명령 줄 앞에 인라인 대입**하는 형태는 동작하지 않는다 — POSIX 셸은 대입을 적용하기 *전에* `$CRON_SECRET` 를 (아직 비어 있는) 현재 환경으로 펼치므로 빈 헤더가 간다. 빈 값이면 라우트가 fail-closed 로 401 → **메일이 조용히 안 나간다**(우회는 안 되지만 flush 도 안 됨). 정 인라인 대입이 싫고 변수도 안 쓰고 싶으면 헤더에 시크릿 리터럴을 직접 박아도 된다(시크릿은 어차피 같은 호스트 `.env.production` 에 있다). 값은 `.env.production` 의 `CRON_SECRET` 와 **동일**해야 하고, 헤더 이름은 `x-cron-secret` 로 라우트와 정확히 일치시킬 것.
 
+## 채팅 활성화 — 기존 운영 서버 마이그레이션 체크리스트
+
+`feat+realtime-chat` 이 `main` 에 처음 머지·배포될 때 한 번만 필요한 추가 작업. 일반 `lightsail-deploy.sh` 단독으로는 부족하다 — Centrifugo 시크릿, DB 스키마 4개 신규 테이블, Caddyfile `/connection/*` 라우트, crontab 이 모두 새로 생겼기 때문.
+
+### 선행: 로컬에서 dev → main PR 머지
+
+```bash
+# /ship 스킬 또는 gh pr create
+```
+
+### 1. 서버 — `.env.production` 에 신규 변수 추가
+
+> **⚠️ 반드시 deploy 스크립트 실행 전에 완료** — `NEXT_PUBLIC_CENTRIFUGO_WS_URL` 은 빌드 타임 인라인이라 값이 없으면 WS 연결이 안 됨. `CENTRIFUGO_TOKEN_HMAC_SECRET` / `CENTRIFUGO_API_KEY` 누락 시 `docker compose up` 이 `:?` 오류로 실패.
+
+```bash
+# 서버에서 강한 시크릿 생성
+CENTRIFUGO_TOKEN_HMAC_SECRET=$(openssl rand -base64 48)
+CENTRIFUGO_API_KEY=$(openssl rand -base64 48)
+CRON_SECRET=$(openssl rand -base64 32)
+
+# .env.production 에 추가 (값 채워 넣기)
+CENTRIFUGO_TOKEN_HMAC_SECRET=<위에서 생성>
+CENTRIFUGO_API_KEY=<위에서 생성>
+CENTRIFUGO_HTTP_API_URL=http://127.0.0.1:8000/api
+NEXT_PUBLIC_CENTRIFUGO_WS_URL=wss://supporter-b.com/connection/websocket
+CRON_SECRET=<위에서 생성>
+```
+
+### 2. 서버 — DB 스키마 push (deploy 전, pm2 reload 전)
+
+git pull 로 새 스키마 코드를 받기 전에도 아래처럼 배포 직전 수동으로 실행하거나, git pull 후 deploy 스크립트 내 빌드 단계 전에 별도 실행한다.
+
+```bash
+set -a; . ./.env.production; set +a
+pnpm db:push
+```
+
+아래 변경이 모두 **additive** (데이터 손실 없음) — 전부 Yes:
+
+| 변경 | 타입 |
+|---|---|
+| `chat_conversations` 테이블 신규 | 추가 |
+| `chat_messages` 테이블 신규 | 추가 |
+| `chat_conversation_reads` 테이블 신규 | 추가 |
+| `chat_message_templates` 테이블 신규 | 추가 |
+| `attachments.chat_message_id` nullable 컬럼 + 인덱스 추가 | 추가 |
+| `attachments` CHECK 제약 교체 (`chat_message_id` 포함으로 완화) | DROP+ADD; 기존 데이터는 `NULL` → 제약 통과 |
+| `outbox_event` 열거형에 `'chat.message'` 추가 | 추가 |
+
+### 3. 서버 — deploy 스크립트 실행
+
+```bash
+bash scripts/deploy/lightsail-deploy.sh
+```
+
+스크립트 내부에서 자동 처리:
+- `git pull`
+- `docker compose -f docker-compose.prod.yml up -d` → **pg + Centrifugo 컨테이너 동시 기동** (Centrifugo 는 이 배포에서 최초 기동)
+- `NEXT_PUBLIC_CENTRIFUGO_WS_URL` 인라인 포함 `next build`
+- `pm2 reload`
+
+### 4. 서버 — Caddyfile 업데이트 + 리로드
+
+운영 서버의 `/etc/caddy/Caddyfile` 은 채팅 추가 이전 버전이라 `/connection/*` → 8000 라우트가 없다. `git pull` 로 받은 레포 버전으로 교체:
+
+```bash
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+추가된 블록:
+```
+handle /connection/* {
+    reverse_proxy 127.0.0.1:8000   # WebSocket → Centrifugo
+}
+```
+
+### 5. 서버 — crontab 등록 (chat 다이제스트 이메일)
+
+```bash
+crontab -e
+```
+
+```cron
+CRON_SECRET=<.env.production 의 CRON_SECRET 와 동일한 값>
+* * * * * curl -fsS -XPOST localhost:3000/api/cron/flush-outbox -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
+```
+
+> `CRON_SECRET=` 는 **명령줄 앞 인라인이 아닌 상단 한 줄**로 정의. 인라인 방식은 빈 값으로 펼쳐져 401이 됨 — §이메일 큐 주기 flush 참조.
+
+### 6. 검증
+
+```bash
+# Centrifugo 정상 기동 확인
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs centrifugo
+
+# 브라우저 DevTools → Network → WS 탭 → /connection/websocket 101 Switching Protocols 확인
+# 채팅 메시지 전송 후 새로고침 없이 상대방 화면에 즉시 수신되는지 확인
+```
+
+문제 발생 시 §트러블슈팅의 "채팅 메시지가 실시간으로 안 옴" 항목 참조.
+
 ## Node 설치 (Amazon Linux 2023)
 
 AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치한다.
