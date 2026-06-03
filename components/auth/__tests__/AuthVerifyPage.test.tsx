@@ -1,7 +1,7 @@
 /**
  * /auth/verify (링크 랜딩) — 새 흐름.
- * 토큰을 소비(서버에서 user.emailVerified 전환)하고, 가입 draft 를 쓰거나
- * 제거된 /signup/{kind}/verify 로 이동하지 않는다. 대신 "원래 창에서 계속" 안내.
+ * 토큰을 소비(서버에서 user.emailVerified 전환)하고 /pending-approval 로 이동한다.
+ * 로그인 상태면 ApprovalWaitingScreen, 미로그인(다른 기기)이면 미들웨어가 /login 으로 안내.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -25,16 +25,13 @@ describe('AuthVerifyPage — 링크 토큰 소비', () => {
     mockVerify.mockReset();
   });
 
-  it('성공: verifyEmailAction 호출 + "원래 창에서 계속" 안내, /signup/*/verify 이동 없음', async () => {
+  it('성공: verifyEmailAction 호출 후 /pending-approval 로 이동', async () => {
     mockVerify.mockResolvedValue({ ok: true, email: 'x@x.com' });
 
     render(<AuthVerifyPage />);
 
     await waitFor(() => expect(mockVerify).toHaveBeenCalledWith('rawtok'));
-    await waitFor(() =>
-      expect(screen.getByText(/원래 창|이 창은 닫아도/)).toBeInTheDocument(),
-    );
-    expect(mockPush).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/pending-approval'));
   });
 
   it('만료/무효 토큰: 만료 안내를 표시한다', async () => {
