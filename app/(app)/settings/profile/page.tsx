@@ -8,6 +8,7 @@ import { WorkspaceBizNoForm } from '@/components/settings/WorkspaceBizNoForm';
 import { WorkspaceNameForm } from '@/components/settings/WorkspaceNameForm';
 import { WorkspaceLogoForm } from '@/components/settings/WorkspaceLogoForm';
 import { BizRequiredToast } from '@/components/settings/BizRequiredToast';
+import { DeleteAccountSection } from '@/components/settings/DeleteAccountSection';
 import { auth } from '@/auth';
 import {
   getUserRepo,
@@ -170,6 +171,15 @@ export default async function ProfilePage({ searchParams }: Props) {
             </div>
           )}
         </div>
+      </section>
+
+      {/* 계정 탈퇴 */}
+      <section>
+        <div className="flex items-center gap-3 mb-3">
+          <Label size="md" muted={false}>위험 영역</Label>
+          <div className="flex-1 h-px bg-[var(--md-sys-color-error)]/20" />
+        </div>
+        <DeleteAccountSection />
       </section>
     </PageEnter>
   );
