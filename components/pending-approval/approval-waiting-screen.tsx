@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { PartyPopper } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { motion, useAnimation } from 'motion/react';
 import { Chip } from '@/components/primitives/Chip';
+import { checkMyWorkspaceApprovalAction } from '@/lib/server/actions/auth/checkMyWorkspaceApprovalAction';
 
 const ICON_SPAN_STYLE = { display: 'inline-flex' } as const;
 
@@ -19,6 +21,7 @@ async function handleLogout() {
 }
 
 export function ApprovalWaitingScreen() {
+  const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fireRef = useRef<ReturnType<typeof confetti.create> | null>(null);
   const iconControls = useAnimation();
@@ -49,6 +52,21 @@ export function ApprovalWaitingScreen() {
       });
     }
   }, [iconControls]);
+
+  useEffect(() => {
+    let active = true;
+    const id = setInterval(async () => {
+      const r = await checkMyWorkspaceApprovalAction();
+      if (active && r.approved) {
+        clearInterval(id);
+        router.push('/home');
+      }
+    }, 10_000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [router]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -105,7 +123,7 @@ export function ApprovalWaitingScreen() {
           </p>
         </div>
         <Link
-          href="/"
+          href="/home"
           className="inline-flex h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 text-body-medium font-medium text-[var(--md-sys-color-primary)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50"
         >
           홈으로 가기
