@@ -120,8 +120,11 @@ surface-container-highest #E4E5E9               #202123
 1: 0 1px 2px rgba(0,0,0,.04)              0 1px 2px rgba(0,0,0,.40)   ← elevated 카드
 2: 0 2px 8px rgba(0,0,0,.06)              0 2px 8px rgba(0,0,0,.50)   ← 드롭다운
 3: 0 4px 16px rgba(0,0,0,.08)             0 4px 16px rgba(0,0,0,.55)  ← toast
-5: 0 8px 32px rgba(0,0,0,.12)             0 8px 32px rgba(0,0,0,.60)  ← command palette, 다이얼로그
+5: 0 2px 8px rgba(0,0,0,.08),             0 2px 8px rgba(0,0,0,.4),   ← command palette (`--command-palette-shadow`)
+   0 24px 64px -8px rgba(0,0,0,.18)          0 24px 64px -8px rgba(0,0,0,.6)
 ```
+
+`--command-palette-shadow` CSS 변수로 추출됨 (`app/globals.css`). 라이트/다크 값이 각각 설정된다.
 
 ---
 
