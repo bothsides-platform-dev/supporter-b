@@ -10,6 +10,12 @@ export function formatPct(value: number, digits = 2): string {
   return (value * 100).toFixed(digits) + '%';
 }
 
+export function formatSize(bytes: number): string {
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
 export function formatDate(iso: string): string {
   // Deadlines are stored as T23:59:59Z; the ISO date portion is the
   // user's intended calendar date. Append T00:00:00Z and format in UTC
