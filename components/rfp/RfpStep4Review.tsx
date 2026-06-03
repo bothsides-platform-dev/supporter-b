@@ -32,6 +32,17 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-3">
+      <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        {label}
+      </span>
+      <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+    </div>
+  );
+}
+
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_INPUT: '입력 값을 확인해주세요.',
   NETWORK_ERROR: '네트워크 오류가 발생했습니다. 다시 시도해주세요.',
@@ -88,12 +99,7 @@ export function RfpStep4Review({
 
       {/* 제안 내용 요약 */}
       <div>
-        <div className="flex items-center gap-3 mb-3">
-          <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            제안 내용 요약
-          </span>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-        </div>
+        <SectionHeader label="제안 내용 요약" />
         <div className="border border-[var(--md-sys-color-outline-variant)]">
           {workspaceName && <ReviewRow label="상호명" value={workspaceName} />}
           {bizProfile?.bizNo && (
@@ -128,12 +134,7 @@ export function RfpStep4Review({
       {/* 상세 요청사항 (메모) — 발송 시 trim되어 빠지므로 공백뿐이면 숨김 */}
       {draft.memo.trim() && (
         <div>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              상세 요청사항
-            </span>
-            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-          </div>
+          <SectionHeader label="상세 요청사항" />
           <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap break-words border border-[var(--md-sys-color-outline-variant)] p-4">
             {draft.memo}
           </p>
@@ -143,12 +144,7 @@ export function RfpStep4Review({
       {/* 첨부파일 */}
       {draft.rfpFiles.length > 0 && (
         <div>
-          <div className="flex items-center gap-3 mb-3">
-            <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              첨부파일 ({draft.rfpFiles.length}개)
-            </span>
-            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-          </div>
+          <SectionHeader label={`첨부파일 (${draft.rfpFiles.length}개)`} />
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
             {draft.rfpFiles.map((file, i) => (
               <div
@@ -172,12 +168,7 @@ export function RfpStep4Review({
 
       {/* 초대 PG 목록 */}
       <div>
-        <div className="flex items-center gap-3 mb-3">
-          <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            초대할 PG사 ({pgCount}개)
-          </span>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-        </div>
+        <SectionHeader label={`초대할 PG사 (${pgCount}개)`} />
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           {draft.allowedPgWorkspaceIds.map((ws, i) => (
             <div key={ws.id} className="py-2 flex items-center gap-3">
