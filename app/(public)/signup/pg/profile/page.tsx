@@ -7,6 +7,7 @@ import { PhoneVerificationField } from '@/components/auth/PhoneVerificationField
 import { SignupStepper } from '@/components/auth/SignupStepper';
 import { useSignupDraftStore } from '@/lib/stores/signup-draft';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
+import { finalizeSignup } from '@/lib/auth/finalizeSignup';
 
 export default function PgProfilePage() {
   const router = useRouter();
@@ -18,6 +19,8 @@ export default function PgProfilePage() {
   const [nameError, setNameError] = useState<string | null>(null);
   const [phoneRequired, setPhoneRequired] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const draft = readSignupDraft();
   const isInvited = !!draft.wsInviteToken;
@@ -38,7 +41,7 @@ export default function PgProfilePage() {
     setPhoneRequired(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAttemptedSubmit(true);
     if (!name.trim()) {
@@ -50,6 +53,10 @@ export default function PgProfilePage() {
       setPhoneRequired(true);
       return;
     }
+    if (submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+
     setProfile(name.trim(), verifiedPhone);
     writeSignupDraft({
       ...readSignupDraft(),
@@ -57,12 +64,25 @@ export default function PgProfilePage() {
       phone: verifiedPhone,
       phoneVerificationId: verificationId,
     });
-    router.push('/signup/pg/verify');
+
+    // 가입 완료(미인증 유저 생성) + 자동 로그인. 일반 가입은 가드가 /pending-approval 로,
+    // 초대 가입은 active 워크스페이스라 /home 으로 이동한다.
+    const r = await finalizeSignup();
+    if (!r.ok) {
+      setSubmitError(
+        r.error === 'EMAIL_TAKEN'
+          ? '이미 가입된 이메일이에요. 로그인해 주세요.'
+          : '가입을 완료하지 못했어요. 잠시 후 다시 시도해요.',
+      );
+      setSubmitting(false);
+      return;
+    }
+    router.push(r.redirectTo);
   };
 
   return (
     <div className="space-y-6">
-      <SignupStepper current={isInvited ? 2 : 3} total={isInvited ? 3 : 4} />
+      <SignupStepper current={isInvited ? 2 : 3} total={isInvited ? 2 : 3} />
 
       <div>
         <h2 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
@@ -98,8 +118,14 @@ export default function PgProfilePage() {
           </p>
         )}
 
-        <Button type="submit" fullWidth size="lg">
-          다음
+        {submitError && (
+          <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
+            {submitError}
+          </p>
+        )}
+
+        <Button type="submit" fullWidth size="lg" disabled={submitting}>
+          {submitting ? 'LOADING…' : '가입 완료'}
         </Button>
       </form>
     </div>
