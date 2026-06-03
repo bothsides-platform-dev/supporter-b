@@ -8,7 +8,6 @@ import type { RfpMockFile } from '@/lib/stores/rfp-draft';
 import { DRAFT_OWNER_ID } from '@/lib/server/storage/constants';
 import { formatSize } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { formatSize } from '@/lib/utils/format-size';
 
 type Props = {
   value: RfpMockFile[];

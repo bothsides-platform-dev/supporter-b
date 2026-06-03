@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
-import { formatSize } from '@/lib/utils/format-size';
+import { formatSize } from '@/lib/format';
 import {
   Sheet,
   SheetContent,
