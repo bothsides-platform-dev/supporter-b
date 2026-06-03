@@ -70,6 +70,26 @@ describe('EmailVerifySection', () => {
     expect(screen.getByText(/인증 완료/)).toBeInTheDocument();
   });
 
+  it('재발송 버튼: {resend:true}로 호출하고 발송 후 쿨다운으로 버튼을 비활성화한다', async () => {
+    const user = userEvent.setup();
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+    // 마운트 자동 발송 (인자 없음) 이후, 명시적 재발송만 따로 검증
+    await waitFor(() => expect(mockSend).toHaveBeenCalled());
+    mockSend.mockClear();
+
+    await user.click(screen.getByRole('button', { name: /다시 보내기/ }));
+
+    await waitFor(() => {
+      expect(mockSend).toHaveBeenCalledWith({ resend: true });
+      expect(screen.getByText('메일을 다시 보냈어요')).toBeInTheDocument();
+    });
+    // 쿨다운 중에는 재발송 버튼이 비활성
+    expect(
+      screen.getByRole('button', { name: /다시 보낼 수 있어요/ }),
+    ).toBeDisabled();
+  });
+
   it('인증 성공 시 onVerified 콜백을 호출한다 (페이지가 기존 pending-approval 로 전환하도록)', async () => {
     mockVerifyCode.mockResolvedValue({ ok: true, email: 'me@x.com' });
     const onVerified = vi.fn();
