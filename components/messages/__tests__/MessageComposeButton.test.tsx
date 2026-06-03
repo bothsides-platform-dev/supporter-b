@@ -194,12 +194,4 @@ describe('MessageComposeButton (rich compose drawer)', () => {
     );
   });
 
-  it('알림 발송 토글(이메일/인앱)을 표시한다', async () => {
-    const user = userEvent.setup();
-    render(<MessageComposeButton counterparty={counterparty} rfpContext={rfpContext} />);
-    await openComposeDrawer(user);
-
-    expect(screen.getByLabelText('이메일 알림')).toBeInTheDocument();
-    expect(screen.getByLabelText('인앱 알림')).toBeInTheDocument();
-  });
 });

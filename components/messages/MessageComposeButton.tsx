@@ -18,9 +18,9 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/primitives/Checkbox';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { ComposeIcon, PaperclipIcon, ChevronDownIcon, XIcon } from '@/components/icons';
+import { MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { listTemplatesAction } from '@/lib/server/actions/chat/listTemplatesAction';
 import { saveTemplateAction } from '@/lib/server/actions/chat/saveTemplateAction';
@@ -40,10 +40,6 @@ type Props = {
 
 const LABEL = '메시지 보내기';
 const PLACEHOLDER = '상대에게 보낼 메시지를 입력하세요';
-const MAX_FILES = 5;
-const MAX_BYTES = 20 * 1024 * 1024;
-const ACCEPT_EXT = '.pdf,.png,.jpg,.jpeg';
-const ACCEPTED_MIMES = new Set(['application/pdf', 'image/png', 'image/jpeg']);
 
 type AttachmentRow = {
   // tempId until upload resolves, then swapped for the server attachment id.
@@ -73,8 +69,6 @@ export function MessageComposeButton({ counterparty, rfpContext, variant = 'avat
   const [draft, setDraft] = useState('');
   const [templates, setTemplates] = useState<ChatMessageTemplate[]>([]);
   const [rows, setRows] = useState<AttachmentRow[]>([]);
-  const [emailNotify, setEmailNotify] = useState(true);
-  const [inappNotify, setInappNotify] = useState(true);
   const [sending, setSending] = useState(false);
 
   // RfpContext.code carries the RFP *uuid* at all embed sites (e.g.
@@ -85,8 +79,6 @@ export function MessageComposeButton({ counterparty, rfpContext, variant = 'avat
   function resetDraftState() {
     setDraft('');
     setRows([]);
-    setEmailNotify(true);
-    setInappNotify(true);
   }
 
   async function handleOpenChange(open: boolean) {
@@ -347,36 +339,6 @@ export function MessageComposeButton({ counterparty, rfpContext, variant = 'avat
               )}
             </div>
 
-            {/* 알림 발송 토글 */}
-            <div className="flex flex-col gap-2 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] px-3 py-2.5">
-              <span className="text-[12px] font-medium text-[var(--md-sys-color-on-surface-variant)]">
-                알림 발송
-              </span>
-              <label
-                htmlFor="chat-notify-email"
-                className="flex cursor-pointer items-center gap-2 text-[13px] text-[var(--md-sys-color-on-surface)]"
-              >
-                <Checkbox
-                  id="chat-notify-email"
-                  aria-label="이메일 알림"
-                  checked={emailNotify}
-                  onCheckedChange={setEmailNotify}
-                />
-                이메일
-              </label>
-              <label
-                htmlFor="chat-notify-inapp"
-                className="flex cursor-pointer items-center gap-2 text-[13px] text-[var(--md-sys-color-on-surface)]"
-              >
-                <Checkbox
-                  id="chat-notify-inapp"
-                  aria-label="인앱 알림"
-                  checked={inappNotify}
-                  onCheckedChange={setInappNotify}
-                />
-                인앱
-              </label>
-            </div>
           </div>
 
           <SheetFooter className="flex-row justify-end gap-2 border-t border-[var(--md-sys-color-outline-variant)]">

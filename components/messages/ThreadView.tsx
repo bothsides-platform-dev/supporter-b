@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { http } from '@/lib/http';
 import { HTTPError } from 'ky';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/primitives/Chip';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { PaperclipIcon, ArrowUpIcon, CheckIcon, XIcon } from '@/components/icons';
-import { DRAFT_OWNER_ID } from '@/lib/server/storage/constants';
+import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
@@ -37,11 +37,6 @@ type LiveMessagePayload = {
 // keystroke, then suppress for this long. NOT a trailing debounce (which would
 // only fire after the user *stops* typing — backwards for a live indicator).
 const TYPING_THROTTLE_MS = 2000;
-
-const MAX_FILES = 5;
-const MAX_BYTES = 20 * 1024 * 1024;
-const ACCEPT_EXT = '.pdf,.png,.jpg,.jpeg';
-const ACCEPTED_MIMES = new Set(['application/pdf', 'image/png', 'image/jpeg']);
 
 type Attachment = { id: string; name: string };
 
@@ -96,11 +91,11 @@ export function ThreadView({
   const [localMessages, setLocalMessages] = useState<ThreadMessage[]>(messages);
   // Track the messages prop identity to resync local state when it changes
   // (MessageInbox renders [] first, then the loaded thread for the SAME
-  // conversationId — no remount). Adjusting state during render is React's
-  // documented pattern; it re-renders immediately without a cascade.
-  const [seenMessages, setSeenMessages] = useState<ThreadMessage[]>(messages);
-  if (seenMessages !== messages) {
-    setSeenMessages(messages);
+  // conversationId — no remount). useRef avoids the extra re-render that
+  // the previous useState-based pattern caused.
+  const prevMessagesRef = useRef(messages);
+  if (prevMessagesRef.current !== messages) {
+    prevMessagesRef.current = messages;
     setLocalMessages(messages);
   }
   // Live read watermark (ms epoch): the counterparty's "read" event carries no
@@ -157,13 +152,14 @@ export function ThreadView({
   // readByCounterparty 를 다르게 매기므로(앞선 건 true, 이후 건 false), "마지막
   // self" 기준이면 영수증이 통째로 사라진다. 라이브 read 이벤트는 readAt 워터마크로
   // 그 시점 이하의 메시지를 모두 읽음 처리한다.
-  const receiptIndex = localMessages.reduce(
-    (acc, m, i) =>
-      m.sender === 'self' &&
-      (m.readByCounterparty || (readAt > 0 && Date.parse(m.createdAt) <= readAt))
-        ? i
-        : acc,
-    -1,
+  const receiptIndex = useMemo(
+    () =>
+      localMessages.findLastIndex(
+        (m) =>
+          m.sender === 'self' &&
+          (m.readByCounterparty || (readAt > 0 && Date.parse(m.createdAt) <= readAt)),
+      ),
+    [localMessages, readAt],
   );
 
   async function uploadOne(file: File): Promise<void> {
