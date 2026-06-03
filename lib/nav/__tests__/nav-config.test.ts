@@ -84,7 +84,8 @@ describe('getNavConfig — pg inbox section', () => {
       '제출완료',
       '마감',
     ]);
-    expect(inbox?.links).toBeUndefined();
+    expect(inbox?.links?.map((l) => l.href)).toEqual(['/opportunities']);
+    expect(inbox?.links?.[0]?.label).toBe('제안 기회');
     expect(top.some((i) => i.id === 'rfp')).toBe(false);
   });
 });
@@ -122,6 +123,10 @@ describe('getBreadcrumbSegments', () => {
       { label: '신규' },
     ]);
     expect(getBreadcrumbSegments('/inbox')).toEqual([{ label: '받은 RFP' }]);
+  });
+
+  it('maps /opportunities to a single 제안 기회 segment', () => {
+    expect(getBreadcrumbSegments('/opportunities')).toEqual([{ label: '제안 기회' }]);
   });
 
   it('links the 설정 parent to /settings/profile with the sub-page as the current page', () => {
@@ -163,6 +168,7 @@ describe('getChordMap', () => {
       n: '/notifications',
       m: '/messages',
       i: '/inbox',
+      o: '/opportunities',
       s: '/settings/profile',
       '1': '/inbox?status=new',
       '2': '/inbox?status=submitted',

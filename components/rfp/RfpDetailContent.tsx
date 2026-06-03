@@ -8,6 +8,8 @@ import { Button } from '@/components/primitives/Button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BidComparisonView } from '@/components/rfp/BidComparisonView';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
+import { RfpBoardVisibilityToggle } from '@/components/rfp/RfpBoardVisibilityToggle';
+import { RfpPendingRequests } from '@/components/rfp/RfpPendingRequests';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
@@ -64,6 +66,7 @@ export function RfpDetailContent({
     companyName,
     inviteList,
     pgWsNameMap,
+    pendingRequests,
     canEdit,
     shareUrl,
     authorId,
@@ -171,6 +174,12 @@ export function RfpDetailContent({
             shareUrl={shareUrl}
             canEdit={canEdit}
           />
+          <RfpBoardVisibilityToggle
+            rfpCode={rfp.code}
+            boardVisible={rfp.boardVisible ?? true}
+            canEdit={canEdit}
+          />
+          <RfpPendingRequests requests={pendingRequests} canEdit={canEdit} />
           {[
             ['사업 운영 홈페이지', rfp.websiteUrl],
             ['주요 판매 상품', rfp.mainProducts],

@@ -3,6 +3,7 @@ import {
   getRfpRepo,
   getBidRepo,
   getInvitationRepo,
+  getPgRequestRepo,
 } from '@/lib/server/repositories/factory';
 import {
   buildBuyerDashboard,
@@ -20,8 +21,15 @@ export async function loadBuyerDashboard(workspaceId: string): Promise<Dashboard
 }
 
 export async function loadPgDashboard(workspaceId: string): Promise<Dashboard> {
-  const invRepo = await getInvitationRepo();
-  const pairs = await invRepo.findByPgWorkspace(workspaceId);
+  const [invRepo, reqRepo] = await Promise.all([
+    getInvitationRepo(),
+    getPgRequestRepo(),
+  ]);
+  const now = new Date();
+  const [pairs, openRfps] = await Promise.all([
+    invRepo.findByPgWorkspace(workspaceId),
+    reqRepo.findOpenRfpsForPg(workspaceId, now),
+  ]);
   const rows: PgDashRow[] = pairs.map(({ invitation, rfp }) => ({
     invitationId: invitation.id,
     invitationStatus: invitation.status,
@@ -29,5 +37,5 @@ export async function loadPgDashboard(workspaceId: string): Promise<Dashboard> {
     rfpTitle: rfp.title,
     rfpDeadline: rfp.deadline,
   }));
-  return buildPgDashboard(rows, new Date());
+  return buildPgDashboard(rows, now, openRfps);
 }
