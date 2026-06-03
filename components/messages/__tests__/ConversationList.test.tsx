@@ -88,7 +88,12 @@ describe('ConversationList', () => {
   });
 
   it('shows the last message time in Seoul time (absolute, tz-stable)', () => {
-    // 2026-06-02T01:00:00Z === 오전 10:00 in Asia/Seoul.
+    // toLocaleTimeString('ko-KR') output depends on ICU data in the runner (small-icu
+    // builds return "AM 10:00" instead of "오전 10:00"). Stub to be deterministic while
+    // still asserting the correct locale + timezone are forwarded.
+    const spy = vi
+      .spyOn(Date.prototype, 'toLocaleTimeString')
+      .mockReturnValue('오전 10:00');
     render(
       <ConversationList
         conversations={[makeItem({ lastMessageAt: '2026-06-02T01:00:00.000Z' })]}
@@ -97,6 +102,11 @@ describe('ConversationList', () => {
       />,
     );
     expect(screen.getByText('오전 10:00')).toBeInTheDocument();
+    expect(spy).toHaveBeenCalledWith(
+      'ko-KR',
+      expect.objectContaining({ timeZone: 'Asia/Seoul' }),
+    );
+    spy.mockRestore();
   });
 
   it('renders no time when lastMessageAt is null', () => {
