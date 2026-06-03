@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
@@ -26,7 +25,7 @@ vi.mock('@/lib/auth/session', () => ({
       : Promise.reject(new Error('UNAUTHENTICATED')),
 }));
 
-const verifyPasswordMock = vi.fn<[string, string], Promise<boolean>>();
+const verifyPasswordMock = vi.fn<(plain: string, hash: string) => Promise<boolean>>();
 vi.mock('@/lib/auth/password', () => ({
   verifyPassword: (plain: string, hash: string) => verifyPasswordMock(plain, hash),
 }));
