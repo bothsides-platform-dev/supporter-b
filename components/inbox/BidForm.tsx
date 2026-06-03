@@ -8,13 +8,11 @@ import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
-import { StatutoryCardFeeNotice } from './StatutoryCardFeeNotice';
 import { useBidDraft, type BidDraft } from './useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
 import {
   PAYMENT_METHOD_CATEGORIES,
   PAYMENT_METHOD_LABELS,
-  STATUTORY_CARD_FEE,
   type CustomPaymentMethod,
   type PaymentMethod,
 } from '@/lib/types/bid';
@@ -150,7 +148,6 @@ export function BidForm({
   const proposalUploading = proposal && 'status' in proposal && proposal.status === 'uploading';
 
   const allowCardInput = grade === undefined || grade === 'general';
-  const cardFeeStatutory = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
 
   // 구매사가 요청한 수단 (빈 배열 = 제한 없음 → 9종 전체). capped 등급의 card는
   // 법정 고정이라 입력칸을 만들지 않고, paymentFees에도 싣지 않는다(비교표가 등급에서 산출).
@@ -261,9 +258,6 @@ export function BidForm({
             </button>
           </div>
         </div>
-      )}
-      {grade && grade !== 'general' && cardFeeStatutory !== null && (
-        <StatutoryCardFeeNotice grade={grade} />
       )}
       {grade === undefined && (
         <div className="border border-[var(--md-sys-color-outline-variant)] px-4 py-3 space-y-1">
