@@ -13,6 +13,8 @@ import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessage
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
+import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
+import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 
 type Props = {
   conversationId: string;
@@ -87,6 +89,7 @@ export function ThreadView({
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [sending, setSending] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
   // Local copy so live receives + optimistic sends append without a refetch.
   const [localMessages, setLocalMessages] = useState<ThreadMessage[]>(messages);
   // Track the messages prop identity to resync local state when it changes
@@ -127,6 +130,7 @@ export function ThreadView({
             rfpId: data.rfpId ?? null,
             createdAt: data.createdAt as string,
             readByCounterparty: false,
+            attachments: [],
           },
         ];
       });
@@ -160,6 +164,11 @@ export function ThreadView({
           (m.readByCounterparty || (readAt > 0 && Date.parse(m.createdAt) <= readAt)),
       ),
     [localMessages, readAt],
+  );
+
+  const totalAttachmentCount = useMemo(
+    () => localMessages.reduce((sum, m) => sum + m.attachments.length, 0),
+    [localMessages],
   );
 
   async function uploadOne(file: File): Promise<void> {
@@ -223,6 +232,7 @@ export function ThreadView({
                 rfpId: null,
                 createdAt: new Date().toISOString(),
                 readByCounterparty: false,
+                attachments: [],
               },
             ],
       );
@@ -249,7 +259,8 @@ export function ThreadView({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-w-0">
+    <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* 헤더 — 상대 워크스페이스 + 타입 + 프레즌스 + 타이핑 */}
       <header className="flex items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
         <div className="relative">
@@ -272,6 +283,21 @@ export function ThreadView({
             <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">입력 중…</span>
           )}
         </div>
+        {totalAttachmentCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowGallery((v) => !v)}
+            className={cn(
+              'flex shrink-0 items-center gap-1 rounded-[var(--md-sys-shape-small)] px-2 py-1 text-[12px] transition-colors',
+              showGallery
+                ? 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]'
+                : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
+            )}
+          >
+            <PaperclipIcon size={13} />
+            <span className="md-numeric">파일 {totalAttachmentCount}</span>
+          </button>
+        )}
       </header>
 
       {/* 말풍선 목록 */}
@@ -341,6 +367,11 @@ export function ThreadView({
                     )}
                   >
                     {renderBody(m.body)}
+                    {m.attachments.length > 0 && (
+                      <div className="mt-2">
+                        <AttachmentPreviewList files={m.attachments} />
+                      </div>
+                    )}
                   </div>
                   {isSelf && (
                     <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -437,6 +468,19 @@ export function ThreadView({
           보내기
         </Button>
       </div>
+    </div>
+
+    {/* 우측 첨부파일 갤러리 패널 */}
+    {showGallery && (
+      <div className="flex w-64 shrink-0 flex-col border-l border-[var(--md-sys-color-outline-variant)]">
+        <div className="border-b border-[var(--md-sys-color-outline-variant)] px-3 py-2 text-[12px] font-medium text-[var(--md-sys-color-on-surface)]">
+          첨부파일
+        </div>
+        <div className="flex-1 overflow-y-auto p-3">
+          <AttachmentGalleryPanel conversationId={conversationId} />
+        </div>
+      </div>
+    )}
     </div>
   );
 }

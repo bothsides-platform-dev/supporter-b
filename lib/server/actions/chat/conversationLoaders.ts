@@ -1,11 +1,13 @@
 'use server';
 
 import {
+  getAttachmentRepo,
   getChatConversationRepo,
   getChatMessageRepo,
   getChatReadRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
+import type { Attachment } from '@/lib/types/common';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
@@ -31,6 +33,7 @@ export type ThreadMessage = {
    * read does not count.
    */
   readByCounterparty: boolean;
+  attachments: Attachment[];
 };
 
 export type LoadThreadResult = ChatActionResult<{
@@ -133,6 +136,17 @@ export async function loadConversationThread(
 
   const msgRepo = await getChatMessageRepo();
   const rows = await msgRepo.listByConversation(conversationId);
+
+  // Load attachments for all messages in one query (N+1 없음).
+  const attRepo = await getAttachmentRepo();
+  const allAttachments = await attRepo.findByChatMessageIds(rows.map((r) => r.id));
+  const attachmentsByMsgId = new Map<string, Attachment[]>();
+  for (const { chatMessageId, ...att } of allAttachments) {
+    const list = attachmentsByMsgId.get(chatMessageId) ?? [];
+    list.push(att);
+    attachmentsByMsgId.set(chatMessageId, list);
+  }
+
   const messages: ThreadMessage[] = rows.map((m) => {
     const isSelf = m.authorWsId === ws.workspaceId;
     return {
@@ -145,6 +159,7 @@ export async function loadConversationThread(
         isSelf &&
         counterpartyReadAt !== null &&
         counterpartyReadAt >= new Date(m.createdAt),
+      attachments: attachmentsByMsgId.get(m.id) ?? [],
     };
   });
 

@@ -11,6 +11,7 @@
 //     - FORBIDDEN for a non-member; otherwise messages asc with a `self` flag
 //       derived from author_ws_id === my workspace.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 
 import {
   seedBuyerWorkspace,
@@ -20,6 +21,7 @@ import {
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import { attachments } from '@/lib/db/schema';
 
 type SessionUser = {
   id: string;
@@ -234,6 +236,53 @@ describe('loadConversationThread', () => {
     if (!thread.ok) return;
     expect(thread.messages[0].sender).toBe('other');
     expect(thread.messages[0].readByCounterparty).toBe(false);
+  });
+
+  it('messages without attachments have attachments: []', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'no attachments here',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    const thread = await loadConversationThread(sent.conversationId);
+    expect(thread.ok).toBe(true);
+    if (!thread.ok) return;
+    expect(thread.messages[0].attachments).toEqual([]);
+  });
+
+  it('messages with attachments include attachment data', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    // Insert a draft attachment (uploaded by the session user, no chatMessageId).
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId,
+      name: 'spec.pdf',
+      size: 2048,
+      mimeType: 'application/pdf',
+      uploadedBy: buyerUser.id,
+    });
+
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'with attachment',
+      attachmentIds: [attId],
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    const thread = await loadConversationThread(sent.conversationId);
+    expect(thread.ok).toBe(true);
+    if (!thread.ok) return;
+    const msg = thread.messages[0];
+    expect(msg.attachments).toHaveLength(1);
+    expect(msg.attachments[0].name).toBe('spec.pdf');
+    expect(msg.attachments[0].url).toBe(`/api/files/${attId}`);
   });
 
   it('a co-member of the viewer workspace reading does NOT flip readByCounterparty (only the counterparty workspace counts)', async () => {
