@@ -27,6 +27,10 @@ vi.mock('motion/react', () => ({
   useAnimation: vi.fn(() => ({ start: animationStartMock })),
 }));
 
+vi.mock('next/link', () => ({
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+}));
+
 beforeEach(() => {
   fireMock.mockClear();
   animationStartMock.mockClear();
@@ -88,5 +92,11 @@ describe('ApprovalWaitingScreen', () => {
       screen.getByRole('button', { name: '축하 효과 다시 보기' }),
     );
     expect(animationStartMock).toHaveBeenCalledTimes(callsAfterMount + 1);
+  });
+
+  it('홈으로 가기 링크가 루트로 연결된다', () => {
+    render(<ApprovalWaitingScreen />);
+    const link = screen.getByRole('link', { name: '홈으로 가기' });
+    expect(link).toHaveAttribute('href', '/');
   });
 });
