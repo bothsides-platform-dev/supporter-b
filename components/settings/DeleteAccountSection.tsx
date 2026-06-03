@@ -20,6 +20,7 @@ import type { WorkspaceStub } from '@/lib/server/actions/auth/getDeleteAccountSt
 type DialogState =
   | { phase: 'idle' }
   | { phase: 'loading' }
+  | { phase: 'error'; message: string }
   | { phase: 'blocked'; blockingWorkspaces: WorkspaceStub[] }
   | { phase: 'ready'; soloWorkspaces: WorkspaceStub[] };
 
@@ -38,7 +39,7 @@ export function DeleteAccountSection() {
 
     const status = await getDeleteAccountStatus();
     if (!status.ok) {
-      setOpen(false);
+      setDialogState({ phase: 'error', message: '탈퇴 정보를 불러오지 못했어요. 다시 시도해 주세요.' });
       return;
     }
     if (status.blockingWorkspaces.length > 0) {
@@ -72,6 +73,9 @@ export function DeleteAccountSection() {
           phase: 'blocked',
           blockingWorkspaces: result.blockingWorkspaces,
         });
+      } else {
+        // UNAUTHENTICATED or unknown error
+        setDialogState({ phase: 'error', message: '오류가 발생했어요. 다시 시도해 주세요.' });
       }
       return;
     }
@@ -109,6 +113,22 @@ export function DeleteAccountSection() {
               <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
                 LOADING…
               </p>
+            </>
+          )}
+
+          {dialogState.phase === 'error' && (
+            <>
+              <DialogHeader>
+                <DialogTitle>오류</DialogTitle>
+              </DialogHeader>
+              <p className="text-[13px] text-[var(--md-sys-color-error)]">
+                {dialogState.message}
+              </p>
+              <DialogFooter>
+                <Button variant="outlined" size="sm" onClick={handleClose}>
+                  닫기
+                </Button>
+              </DialogFooter>
             </>
           )}
 
@@ -177,7 +197,6 @@ export function DeleteAccountSection() {
                       handleSubmit();
                     }
                   }}
-                  aria-label="비밀번호"
                   className="w-full border-b border-[var(--md-sys-color-outline-variant)] bg-transparent py-1.5 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none focus:border-[var(--md-sys-color-primary)]"
                   disabled={submitting}
                   autoComplete="current-password"
