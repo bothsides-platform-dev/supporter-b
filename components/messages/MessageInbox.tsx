@@ -1,34 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { EnvelopeIcon } from '@/components/icons';
-import { loadConversationThread } from '@/lib/server/actions/chat/conversationLoaders';
 import { ConversationList } from './ConversationList';
 import { NewConversationSheet } from './NewConversationSheet';
-import { ThreadView } from './ThreadView';
-import type { ConversationListItem, ThreadMessage } from './types';
+import { ThreadPane } from './ThreadPane';
+import { ThreadSkeleton } from './ThreadSkeleton';
+import type { ConversationListItem } from './types';
 
 type Props = { conversations: ConversationListItem[] };
 
-type LoadedThread = {
-  counterparty: { workspaceId: string; name: string; type: 'buyer' | 'pg' };
-  messages: ThreadMessage[];
-};
-
 export function MessageInbox({ conversations }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [thread, setThread] = useState<LoadedThread | null>(null);
   const selected = conversations.find((c) => c.conversationId === selectedId) ?? null;
-
-  async function handleSelect(id: string) {
-    setSelectedId(id);
-    setThread(null);
-    const result = await loadConversationThread(id);
-    if (result.ok) {
-      setThread({ counterparty: result.counterparty, messages: result.messages });
-    }
-  }
 
   // 메신저형 2-컬럼: 좌측 고정폭 대화 목록 + 우측 스레드. (RFP peek 오버레이형
   // SplitView 대신 — 오버레이는 목록을 240px로 잘라 시각·미리보기·버튼이 클립됨.)
@@ -45,21 +30,20 @@ export function MessageInbox({ conversations }: Props) {
           <ConversationList
             conversations={conversations}
             selectedId={selectedId}
-            onSelect={handleSelect}
+            onSelect={setSelectedId}
           />
         </div>
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         {selected ? (
-          // Key by conversationId so switching conversations remounts the
-          // thread — resets local message/read state and re-fires mark-read &
-          // the live subscription for the newly opened conversation.
-          <ThreadView
-            key={selected.conversationId}
-            conversationId={selected.conversationId}
-            counterparty={thread?.counterparty ?? selected.counterparty}
-            messages={thread?.messages ?? []}
-          />
+          // key={selectedId} resets the Suspense boundary when conversation changes,
+          // showing the skeleton again for the newly selected conversation.
+          <Suspense key={selectedId} fallback={<ThreadSkeleton />}>
+            <ThreadPane
+              conversationId={selected.conversationId}
+              counterpartyFallback={selected.counterparty}
+            />
+          </Suspense>
         ) : (
           <div className="flex h-full items-center justify-center">
             <EmptyState

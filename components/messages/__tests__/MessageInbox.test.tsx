@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 class ResizeObserverStub {
@@ -37,13 +37,17 @@ vi.mock('@/lib/server/actions/chat/markConversationReadAction', () => ({
   markConversationReadAction: vi.fn().mockResolvedValue({ ok: true }),
 }));
 vi.mock('@/lib/hooks/useChatChannel', () => ({
-  useChatChannel: () => ({ online: false, typingUserIds: [], sendTyping: vi.fn() }),
+  useChatChannel: () => ({ online: false, typingUserIds: [], sendTyping: vi.fn(), connected: null }),
 }));
 
 afterEach(() => cleanup());
-beforeEach(() => loadConversationThread.mockReset());
+beforeEach(() => {
+  loadConversationThread.mockReset();
+  clearAllThreadCache();
+});
 
 import { MessageInbox } from '../MessageInbox';
+import { clearAllThreadCache } from '../thread-cache';
 import type { ConversationListItem } from '../types';
 
 const conversations: ConversationListItem[] = [
@@ -80,10 +84,14 @@ describe('MessageInbox', () => {
     // Empty panel before selection.
     expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /OO페이/ }));
+    // Wrap the click + Suspense resolution in a single awaited act so React
+    // can flush the async Suspense retry (use() pings back through act's queue).
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /OO페이/ }));
+    });
 
     expect(loadConversationThread).toHaveBeenCalledWith('conv-1');
-    expect(await screen.findByText('스레드 본문 메시지입니다.')).toBeInTheDocument();
+    expect(screen.getByText('스레드 본문 메시지입니다.')).toBeInTheDocument();
   });
 
   it('does not call the loader on first render (only on select)', async () => {
@@ -96,5 +104,25 @@ describe('MessageInbox', () => {
   it('인박스 상단에 새 대화 시작 진입점을 노출한다', () => {
     render(<MessageInbox conversations={conversations} />);
     expect(screen.getByRole('button', { name: '새 대화' })).toBeInTheDocument();
+  });
+
+  it('대화 선택 중 로딩 스켈레톤을 표시한다', async () => {
+    const user = userEvent.setup();
+    // Return a promise that never resolves during this test
+    let resolveThread!: (v: unknown) => void;
+    loadConversationThread.mockReturnValue(
+      new Promise((resolve) => { resolveThread = resolve; })
+    );
+
+    render(<MessageInbox conversations={conversations} />);
+    await user.click(screen.getByRole('button', { name: /OO페이/ }));
+
+    // While loading, skeleton is visible (animate-pulse element)
+    await waitFor(() => {
+      expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
+    });
+
+    // Cleanup: resolve so no pending promises leak
+    resolveThread({ ok: false, error: 'CANCELLED' });
   });
 });
