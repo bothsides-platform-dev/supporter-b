@@ -55,40 +55,43 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
 
   const conversations = await convRepo.listForWorkspace(ws.workspaceId, ws.workspaceType);
 
-  const items: ConversationListItem[] = [];
-  for (const conv of conversations) {
-    const counterpartyWsId =
-      ws.workspaceType === 'buyer' ? conv.pgWsId : conv.buyerWsId;
-    const counterpartyType: WorkspaceType =
-      ws.workspaceType === 'buyer' ? 'pg' : 'buyer';
-    const counterpartyWs = await wsRepo.findById(counterpartyWsId);
+  const rows = await Promise.all(
+    conversations.map(async (conv) => {
+      const counterpartyWsId =
+        ws.workspaceType === 'buyer' ? conv.pgWsId : conv.buyerWsId;
+      const counterpartyType: WorkspaceType =
+        ws.workspaceType === 'buyer' ? 'pg' : 'buyer';
 
-    const msgs = await msgRepo.listByConversation(conv.id);
-    const last = msgs[msgs.length - 1];
+      const [counterpartyWs, msgs, myRead] = await Promise.all([
+        wsRepo.findById(counterpartyWsId),
+        msgRepo.listByConversation(conv.id),
+        readRepo.getFor(conv.id, ws.userId),
+      ]);
 
-    const myRead = await readRepo.getFor(conv.id, ws.userId);
-    const lastReadAt = myRead?.lastReadAt ?? null;
-    // Unread if there's a message after my last read AND it isn't my own.
-    const unread =
-      !!last &&
-      last.authorWsId !== ws.workspaceId &&
-      (lastReadAt === null || new Date(last.createdAt) > new Date(lastReadAt));
+      const last = msgs[msgs.length - 1];
+      const lastReadAt = myRead?.lastReadAt ?? null;
+      // Unread if there's a message after my last read AND it isn't my own.
+      const unread =
+        !!last &&
+        last.authorWsId !== ws.workspaceId &&
+        (lastReadAt === null || new Date(last.createdAt) > new Date(lastReadAt));
 
-    items.push({
-      conversationId: conv.id,
-      counterparty: {
-        workspaceId: counterpartyWsId,
-        name: counterpartyWs?.name ?? '상대',
-        type: counterpartyType,
-        hasLogo: counterpartyWs?.hasLogo ?? false,
-      },
-      rfpId: last?.rfpId ?? null,
-      preview: last?.body ?? '',
-      lastMessageAt: conv.lastMessageAt ? new Date(conv.lastMessageAt).toISOString() : null,
-      unread,
-    });
-  }
-  return items;
+      return {
+        conversationId: conv.id,
+        counterparty: {
+          workspaceId: counterpartyWsId,
+          name: counterpartyWs?.name ?? '상대',
+          type: counterpartyType,
+          hasLogo: counterpartyWs?.hasLogo ?? false,
+        },
+        rfpId: last?.rfpId ?? null,
+        preview: last?.body ?? '',
+        lastMessageAt: conv.lastMessageAt ? new Date(conv.lastMessageAt).toISOString() : null,
+        unread,
+      } satisfies ConversationListItem;
+    }),
+  );
+  return rows;
 }
 
 /**
@@ -118,16 +121,15 @@ export async function loadConversationThread(
   // not "anyone but me".
   const readRepo = await getChatReadRepo();
   const counterpartyMemberIds = await wsRepo.memberUserIds(counterpartyWsId);
-  let counterpartyReadAt: Date | null = null;
-  for (const userId of counterpartyMemberIds) {
-    const read = await readRepo.getFor(conversationId, userId);
-    if (read?.lastReadAt) {
-      const at = new Date(read.lastReadAt);
-      if (counterpartyReadAt === null || at > counterpartyReadAt) {
-        counterpartyReadAt = at;
-      }
-    }
-  }
+  // Parallelize per-member read lookups (M sequential → 1 parallel round).
+  const counterpartyReads = await Promise.all(
+    counterpartyMemberIds.map((userId) => readRepo.getFor(conversationId, userId)),
+  );
+  const counterpartyReadAt = counterpartyReads.reduce<Date | null>((best, read) => {
+    if (!read?.lastReadAt) return best;
+    const at = new Date(read.lastReadAt);
+    return best === null || at > best ? at : best;
+  }, null);
 
   const msgRepo = await getChatMessageRepo();
   const rows = await msgRepo.listByConversation(conversationId);
