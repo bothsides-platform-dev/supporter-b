@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
+import { formatSize } from '@/lib/utils/format-size';
 import {
   Sheet,
   SheetContent,
@@ -49,12 +50,6 @@ type AttachmentRow = {
   status: 'uploading' | 'ready' | 'error';
   error?: string;
 };
-
-function formatSize(bytes: number): string {
-  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
-  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
-  return `${bytes} B`;
-}
 
 /**
  * 메시지 보내기 진입점 — 프로필(아바타) 클릭 시 '채팅보내기' 메뉴를 열고,
