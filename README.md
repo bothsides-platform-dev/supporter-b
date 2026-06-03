@@ -107,6 +107,22 @@ docker compose ps
 
 `supporter-b-pg` 가 `running (healthy)` 으로 보이면 성공입니다.
 
+### 채팅 실시간 기능 (선택)
+
+Centrifugo 가 없어도 앱은 뜨고 채팅 메시지는 DB에 저장됩니다. 다만 새 메시지가 **새로고침 없이 즉시 수신**되는 라이브 fanout 을 테스트하려면 Centrifugo 컨테이너를 별도로 띄웁니다:
+
+```bash
+docker run --rm -p 127.0.0.1:8000:8000 \
+  -v "$PWD/deploy/centrifugo/config.json:/centrifugo/config.json:ro" \
+  -e CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY=dev-secret \
+  -e CENTRIFUGO_HTTP_API_KEY=dev-api-key \
+  -e CENTRIFUGO_CLIENT_ALLOWED_ORIGINS=http://localhost:3000 \
+  --add-host host.docker.internal:host-gateway \
+  centrifugo/centrifugo:v6 centrifugo -c /centrifugo/config.json
+```
+
+`.env.local` 의 `CENTRIFUGO_*` 값이 `.env.example` 기본값(`dev-secret` / `dev-api-key`)이면 그대로 연결됩니다.
+
 ## 5. DB 초기 데이터 채우기
 
 > **스키마 적용은 별도 절차입니다.** 이 프로젝트는 마이그레이션 폴더 없이
