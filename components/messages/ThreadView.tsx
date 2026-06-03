@@ -91,11 +91,11 @@ export function ThreadView({
   const [localMessages, setLocalMessages] = useState<ThreadMessage[]>(messages);
   // Track the messages prop identity to resync local state when it changes
   // (MessageInbox renders [] first, then the loaded thread for the SAME
-  // conversationId — no remount). useRef avoids the extra re-render that
-  // the previous useState-based pattern caused.
-  const prevMessagesRef = useRef(messages);
-  if (prevMessagesRef.current !== messages) {
-    prevMessagesRef.current = messages;
+  // conversationId — no remount). setState during render causes React to
+  // restart the render immediately with no extra committed paint.
+  const [prevMessages, setPrevMessages] = useState<ThreadMessage[]>(messages);
+  if (prevMessages !== messages) {
+    setPrevMessages(messages);
     setLocalMessages(messages);
   }
   // Live read watermark (ms epoch): the counterparty's "read" event carries no
