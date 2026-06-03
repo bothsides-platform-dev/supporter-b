@@ -146,6 +146,19 @@ describe('RfpStep4Review', () => {
     expect(screen.queryByText('상세 요청사항')).not.toBeInTheDocument();
   });
 
+  it('공백뿐인 메모는 상세 요청사항 섹션을 표시하지 않는다 (발송 시 trim되어 빠지므로)', () => {
+    useRfpDraftStore.setState({ memo: '   \n  ' });
+    render(
+      <RfpStep4Review
+        onBack={vi.fn()}
+        onSubmit={vi.fn()}
+        submitting={false}
+        serverError=""
+      />,
+    );
+    expect(screen.queryByText('상세 요청사항')).not.toBeInTheDocument();
+  });
+
   it('첨부파일이 있으면 파일명과 크기가 표시된다', () => {
     useRfpDraftStore.setState({
       rfpFiles: [

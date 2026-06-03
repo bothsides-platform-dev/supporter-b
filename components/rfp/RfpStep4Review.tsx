@@ -125,8 +125,8 @@ export function RfpStep4Review({
         </div>
       </div>
 
-      {/* 상세 요청사항 (메모) */}
-      {draft.memo && (
+      {/* 상세 요청사항 (메모) — 발송 시 trim되어 빠지므로 공백뿐이면 숨김 */}
+      {draft.memo.trim() && (
         <div>
           <div className="flex items-center gap-3 mb-3">
             <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
