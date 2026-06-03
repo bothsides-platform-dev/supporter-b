@@ -1,7 +1,11 @@
 import { redirect } from 'next/navigation';
+import { eq } from 'drizzle-orm';
 import { auth } from '@/auth';
+import { db } from '@/lib/db/client';
+import { workspaces } from '@/lib/db/schema';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { RfpCreateWizard } from '@/components/rfp/RfpCreateWizard';
+import type { PgWorkspace } from '@/components/rfp/RfpStep3PgSelect';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +17,26 @@ export default async function RfpNewPage() {
     redirect('/home?notice=pg-rfp-blocked');
   }
 
+  const pgRows = await db
+    .select({ id: workspaces.id, name: workspaces.name })
+    .from(workspaces)
+    .where(eq(workspaces.type, 'pg'))
+    .limit(500);
+
+  const nameCount = new Map<string, number>();
+  for (const row of pgRows) {
+    nameCount.set(row.name, (nameCount.get(row.name) ?? 0) + 1);
+  }
+
+  const pgList: PgWorkspace[] = pgRows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    displayName:
+      (nameCount.get(row.name) ?? 1) > 1
+        ? `${row.name} #${row.id.slice(0, 8)}`
+        : row.name,
+  }));
+
   // 비인증 또는 buyer 워크스페이스 미완료 → 게스트 모드
   if (!session?.user?.id || !session.user.workspaceId) {
     return (
@@ -23,7 +47,7 @@ export default async function RfpNewPage() {
           </h1>
         </div>
         <div className="lg:flex-1 lg:min-h-0">
-          <RfpCreateWizard guest />
+          <RfpCreateWizard guest pgList={pgList} />
         </div>
       </div>
     );
@@ -42,6 +66,7 @@ export default async function RfpNewPage() {
         <RfpCreateWizard
           bizProfile={ws?.bizProfile ?? undefined}
           workspaceName={ws?.name ?? ''}
+          pgList={pgList}
         />
       </div>
     </div>

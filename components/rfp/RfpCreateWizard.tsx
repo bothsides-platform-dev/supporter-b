@@ -15,6 +15,7 @@ import { createRfpAction } from '@/lib/server/actions/rfp';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { toast } from '@/lib/toast';
 import type { BizProfile } from '@/lib/types/biz-profile';
+import type { PgWorkspace } from './RfpStep3PgSelect';
 import { STEP_LABELS } from './wizard-steps';
 import { getWizardValidity, getFirstIncompleteStep } from './wizard-validation';
 
@@ -27,9 +28,10 @@ type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
   workspaceName?: string;
   guest?: boolean;
+  pgList: PgWorkspace[];
 };
 
-export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
+export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Props) {
   const router = useRouter();
   const draft = useRfpDraftStore();
 
@@ -148,7 +150,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
             />
           )}
           {currentStep === 2 && <RfpStep2Content onBack={back} onNext={advance} />}
-          {currentStep === 3 && <RfpStep3PgSelect onBack={back} onNext={advance} />}
+          {currentStep === 3 && <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} />}
           {currentStep === 4 && (
             <RfpStep4Review
               bizProfile={bizProfile}
