@@ -5,17 +5,10 @@ import userEvent from '@testing-library/user-event';
 import { RfpStep3PgSelect } from '../RfpStep3PgSelect';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 
-vi.mock('@/hooks/useLazyPgWorkspaces', () => ({
-  useLazyPgWorkspaces: () => ({
-    pgList: [
-      { id: 'pg-1', displayName: '나이스페이먼츠' },
-      { id: 'pg-2', displayName: 'KG이니시스' },
-    ],
-    loading: false,
-    error: null,
-    load: vi.fn(),
-  }),
-}));
+const PG_LIST = [
+  { id: 'pg-1', name: '나이스페이먼츠', displayName: '나이스페이먼츠' },
+  { id: 'pg-2', name: 'KG이니시스', displayName: 'KG이니시스' },
+];
 
 function resetStore() {
   useRfpDraftStore.setState({ allowedPgWorkspaceIds: [] });
@@ -24,42 +17,77 @@ function resetStore() {
 describe('RfpStep3PgSelect', () => {
   beforeEach(resetStore);
 
-  it('PG가 없어도 다음 버튼은 비활성화되지 않는다 (순서 무관 입력)', () => {
-    render(<RfpStep3PgSelect onBack={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByRole('button', { name: '다음' })).not.toBeDisabled();
+  it('pgList 항목이 버튼으로 렌더링된다', () => {
+    render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+    expect(screen.getByRole('button', { name: '나이스페이먼츠' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'KG이니시스' })).toBeInTheDocument();
   });
 
-  it('PG가 없어도 다음 버튼 클릭 시 onNext가 호출된다', async () => {
+  it('칩 클릭 시 store에 추가된다', async () => {
     const user = userEvent.setup();
-    const onNext = vi.fn();
-    render(<RfpStep3PgSelect onBack={vi.fn()} onNext={onNext} />);
-    await user.click(screen.getByRole('button', { name: '다음' }));
-    expect(onNext).toHaveBeenCalledOnce();
+    render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
+    expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toEqual([
+      { id: 'pg-1', displayName: '나이스페이먼츠' },
+    ]);
   });
 
-  it('선택된 PG 이름이 목록에 표시된다', () => {
-    useRfpDraftStore.setState({
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스페이먼츠' }],
-    });
-    render(<RfpStep3PgSelect onBack={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByText('나이스페이먼츠')).toBeInTheDocument();
-  });
-
-  it('제거 버튼 클릭 시 store에서 해당 PG가 제거된다', async () => {
+  it('선택된 칩 클릭 시 store에서 제거된다', async () => {
     const user = userEvent.setup();
     useRfpDraftStore.setState({
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스페이먼츠' }],
     });
-    render(<RfpStep3PgSelect onBack={vi.fn()} onNext={vi.fn()} />);
-    await user.click(screen.getByRole('button', { name: '제거' }));
+    render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
     expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toHaveLength(0);
   });
 
-  it('이전 버튼 클릭 시 onBack이 호출된다', async () => {
+  it('전체 선택 버튼 클릭 시 pgList 전체가 store에 추가된다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '전체 선택' }));
+    expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toEqual([
+      { id: 'pg-1', displayName: '나이스페이먼츠' },
+      { id: 'pg-2', displayName: 'KG이니시스' },
+    ]);
+  });
+
+  it('전체 선택 후 버튼 라벨이 "전체 해제"로 바뀐다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '전체 선택' }));
+    expect(screen.getByRole('button', { name: '전체 해제' })).toBeInTheDocument();
+  });
+
+  it('전체 해제 버튼 클릭 시 store가 빈 배열이 된다', async () => {
+    const user = userEvent.setup();
+    useRfpDraftStore.setState({
+      allowedPgWorkspaceIds: [
+        { id: 'pg-1', displayName: '나이스페이먼츠' },
+        { id: 'pg-2', displayName: 'KG이니시스' },
+      ],
+    });
+    render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '전체 해제' }));
+    expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toHaveLength(0);
+  });
+
+  it('이전/다음 버튼 클릭 시 onBack/onNext가 호출된다', async () => {
     const user = userEvent.setup();
     const onBack = vi.fn();
-    render(<RfpStep3PgSelect onBack={onBack} onNext={vi.fn()} />);
+    const onNext = vi.fn();
+    render(<RfpStep3PgSelect pgList={PG_LIST} onBack={onBack} onNext={onNext} />);
     await user.click(screen.getByRole('button', { name: '이전' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
     expect(onBack).toHaveBeenCalledOnce();
+    expect(onNext).toHaveBeenCalledOnce();
+  });
+
+  it('pgList가 비어있으면 칩이 렌더링되지 않고 전체 선택 버튼은 클릭해도 store가 변하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep3PgSelect pgList={[]} onBack={vi.fn()} onNext={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: '나이스페이먼츠' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '전체 선택' }));
+    expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toHaveLength(0);
   });
 });
