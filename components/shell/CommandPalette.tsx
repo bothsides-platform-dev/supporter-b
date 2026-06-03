@@ -82,14 +82,13 @@ export function CommandPalette() {
     <>
       {commandPaletteOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-[rgba(10,10,15,0.4)] backdrop-blur-[4px] pt-[12vh]"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 dark:bg-white/5 backdrop-blur-[4px] pt-[12vh]"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeCommandPalette();
           }}
         >
           <div
-            className="w-[620px] bg-[var(--md-sys-color-surface)] border border-[var(--md-sys-color-outline-variant)] rounded-md overflow-hidden shadow-lg"
-            style={{ boxShadow: '0 2px 8px rgba(10,10,15,0.08), 0 24px 64px -8px rgba(10,10,15,0.18)' }}
+            className="w-[620px] bg-[var(--md-sys-color-surface)] border border-[var(--md-sys-color-outline-variant)] rounded-md overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.08),_0_24px_64px_-8px_rgba(0,0,0,0.18)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.4),_0_24px_64px_-8px_rgba(0,0,0,0.6)]"
           >
             <Command>
               <div className="flex items-center border-b border-[var(--md-sys-color-outline-variant)] px-4">
