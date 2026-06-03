@@ -158,7 +158,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
 
     // Toast 확인
     await expect(
-      page.getByText(/초대 메일을 보냈습니다/),
+      page.getByText(/초대 메일을 보냈어요/),
     ).toBeVisible({ timeout: 10_000 });
 
     // ── 6. DB: status가 'pending'(DB enum, UI상 '발송됨')으로 전이 ─
