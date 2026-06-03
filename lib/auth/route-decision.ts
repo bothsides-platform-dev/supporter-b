@@ -29,6 +29,7 @@ const ALWAYS_PASSTHROUGH_PREFIXES = [
   '/admin',
   '/pending-approval',
   '/suspended',
+  '/auth/verify', // 이메일 매직링크는 인증 상태와 무관하게 항상 접근 가능해야 함
 ];
 
 const CLAIMABLE_PUBLIC_PREFIXES = ['/invite/rfp'];

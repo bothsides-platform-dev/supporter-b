@@ -1,22 +1,22 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ResendCountdown } from '@/components/auth/ResendCountdown';
 import { EnvelopeSvg } from '@/components/auth/EnvelopeSvg';
 import { verifyEmailAction } from '@/lib/server/actions/auth';
 import { readSignupDraft } from '@/lib/auth/signup-storage';
 
-type TokenState = 'loading' | 'success' | 'expired' | 'invalid' | 'used';
+type TokenState = 'loading' | 'expired' | 'invalid' | 'used';
 
 // `/auth/verify` is bivalent:
-//   - `?token=…` → consume the verification row. 새 흐름: 유저는 이미 생성·로그인된
-//     상태이므로 verifyEmailAction 이 서버에서 user.emailVerified 를 전환한다. 이 페이지는
-//     draft 를 쓰거나 리다이렉트하지 않고 "원래 창에서 계속" 안내만 한다(교차 기기·미로그인
-//     컨텍스트 대응). 원래 창(/pending-approval)은 폴링으로 ✓ 갱신된다.
+//   - `?token=…` → consume the verification row and redirect to /pending-approval.
+//     로그인 상태면 ApprovalWaitingScreen 을 바로 볼 수 있고, 미로그인(다른 기기)이면
+//     미들웨어가 /login 으로 안내한다. 실패 시 만료/오류 화면을 렌더.
 //   - `?email=…` (no token) → "we sent the link" announcement.
 function VerifyContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const emailQuery = searchParams.get('email');
@@ -34,14 +34,20 @@ function VerifyContent() {
     (async () => {
       const r = await verifyEmailAction(token);
       if (cancelled) return;
-      // 성공/실패만 구분 — 성공 시 서버가 이미 user.emailVerified 를 전환했다.
-      setState(r.ok ? 'success' : 'expired');
+      if (r.ok) {
+        // 인증 완료 — 같은 탭·다른 탭 모두 /pending-approval 로 이동.
+        // 로그인 상태면 이메일 인증 완료 후 ApprovalWaitingScreen 을 바로 볼 수 있고,
+        // 미로그인 상태(다른 기기)면 미들웨어가 /login 으로 안내한다.
+        router.push('/pending-approval');
+      } else {
+        setState('expired');
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, router]);
 
   // Announcement view — `?email=…` with no token.
   if (token == null) {
@@ -83,21 +89,6 @@ function VerifyContent() {
   // Token verification view.
   if (state === 'loading') {
     return <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)] text-center">LOADING…</p>;
-  }
-  if (state === 'success') {
-    return (
-      <div className="space-y-3 text-center">
-        <p className="text-[15px] font-[700] text-[var(--md-sys-color-tertiary)]">이메일 인증 완료</p>
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          가입을 시작한 원래 창에서 자동으로 계속 진행돼요.
-          <br />
-          이 창은 닫아도 돼요.
-        </p>
-        <Link href="/login" className="inline-block font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--md-sys-color-on-surface)] hover:text-[var(--md-sys-color-on-surface-variant)]">
-          로그인 →
-        </Link>
-      </div>
-    );
   }
   if (state === 'expired') {
     return (
