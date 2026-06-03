@@ -69,4 +69,16 @@ describe('EmailVerifySection', () => {
     expect(mockSend).not.toHaveBeenCalled();
     expect(screen.getByText(/인증 완료/)).toBeInTheDocument();
   });
+
+  it('인증 성공 시 onVerified 콜백을 호출한다 (페이지가 기존 pending-approval 로 전환하도록)', async () => {
+    mockVerifyCode.mockResolvedValue({ ok: true, email: 'me@x.com' });
+    const onVerified = vi.fn();
+    const user = userEvent.setup();
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} onVerified={onVerified} />);
+
+    await user.type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
+    await user.click(screen.getByRole('button', { name: /코드로 인증하기/i }));
+
+    await waitFor(() => expect(onVerified).toHaveBeenCalledTimes(1));
+  });
 });

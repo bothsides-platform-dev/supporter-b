@@ -5,17 +5,10 @@ import { PartyPopper } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { motion, useAnimation } from 'motion/react';
 import { Chip } from '@/components/primitives/Chip';
-import { EmailVerifySection } from './email-verify-section';
 
 const ICON_SPAN_STYLE = { display: 'inline-flex' } as const;
 
-export function ApprovalWaitingScreen({
-  email,
-  emailVerified,
-}: {
-  email: string;
-  emailVerified: boolean;
-}) {
+export function ApprovalWaitingScreen() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fireRef = useRef<ReturnType<typeof confetti.create> | null>(null);
   const iconControls = useAnimation();
@@ -91,8 +84,6 @@ export function ApprovalWaitingScreen({
               지금 입점 심사를 진행하고 있어요.
             </p>
           </div>
-
-          <EmailVerifySection email={email} initialVerified={emailVerified} />
 
           <Chip color="tertiary" label="✓ 심사는 영업일 기준 2일 이내로 완료해요" />
           <div className="flex flex-col items-center gap-1">

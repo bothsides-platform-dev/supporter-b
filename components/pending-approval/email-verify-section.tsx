@@ -20,15 +20,27 @@ import { verifyEmailCodeAction } from '@/lib/server/actions/auth/verifyEmailCode
 export function EmailVerifySection({
   email,
   initialVerified,
+  onVerified,
 }: {
   email: string;
   initialVerified: boolean;
+  /** 인증이 완료되는 순간 1회 호출 — 페이지가 기존 pending-approval 화면으로 전환하는 데 사용. */
+  onVerified?: () => void;
 }) {
   const [verified, setVerified] = useState(initialVerified);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const sentOnce = useRef(false);
+  const notifiedRef = useRef(false);
+
+  // 인증 완료 순간 onVerified 1회 호출 (코드 입력·폴링 어느 경로든).
+  useEffect(() => {
+    if (verified && !notifiedRef.current) {
+      notifiedRef.current = true;
+      onVerified?.();
+    }
+  }, [verified, onVerified]);
 
   // 마운트 시 인증 메일 발송 (미인증 1회).
   useEffect(() => {
@@ -84,7 +96,6 @@ export function EmailVerifySection({
   return (
     <div className="w-full max-w-sm space-y-3 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] p-4 text-left">
       <div className="space-y-1">
-        <p className="text-body-medium text-on-surface">이메일을 인증해 주세요</p>
         <p className="text-body-small text-on-surface-variant">
           <span className="font-mono">{email}</span> 으로 보낸 메일의 [인증하기] 버튼을 누르거나,
           아래에 6자리 코드를 입력해요.
