@@ -26,11 +26,13 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    ".next-e2e/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Claude worktrees are separate checkouts — not part of this workspace's lint surface.
+    // Worktrees are separate checkouts — not part of this workspace's lint surface.
     ".claude/**",
+    ".worktrees/**",
   ]),
 ]);
 
