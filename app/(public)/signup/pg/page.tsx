@@ -92,7 +92,7 @@ export default function PgSignupEmailPage() {
     router.push(isInvited ? '/signup/pg/profile' : '/signup/pg/workspace');
   };
 
-  const stepperTotal = isInvited ? 3 : 4;
+  const stepperTotal = isInvited ? 2 : 3;
 
   return (
     <div className="space-y-6">

@@ -48,6 +48,7 @@ const ADMIN: User = {
   avatarColor: 'ink',
   role: 'admin',
   status: 'active',
+  emailVerified: true,
   joinedAt: '2026-01-01T00:00:00.000Z',
 };
 const MEMBER: User = {
@@ -57,6 +58,7 @@ const MEMBER: User = {
   avatarColor: 'ink',
   role: 'member',
   status: 'active',
+  emailVerified: true,
   joinedAt: '2026-01-01T00:00:00.000Z',
 };
 

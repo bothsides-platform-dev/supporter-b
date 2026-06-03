@@ -1,0 +1,130 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/primitives/Button';
+import { Chip } from '@/components/primitives/Chip';
+import {
+  sendMyEmailVerificationAction,
+  checkMyEmailVerifiedAction,
+} from '@/lib/server/actions/auth';
+import { verifyEmailCodeAction } from '@/lib/server/actions/auth/verifyEmailCodeAction';
+
+/**
+ * 가입 후 이메일 인증 섹션 — /pending-approval 에서 렌더.
+ *
+ * 유저는 이미 생성·로그인된 상태이므로 인증은 서버 플래그(users.emailVerified) 전환이다.
+ *   - 마운트 시 인증 메일 발송(미인증인 경우 1회)
+ *   - 6자리 코드 입력으로 인증(같은 탭) — verifyEmailCodeAction
+ *   - 다른 탭/기기에서 링크를 누르면 폴링으로 감지해 ✓ 로 전환
+ */
+export function EmailVerifySection({
+  email,
+  initialVerified,
+}: {
+  email: string;
+  initialVerified: boolean;
+}) {
+  const [verified, setVerified] = useState(initialVerified);
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const sentOnce = useRef(false);
+
+  // 마운트 시 인증 메일 발송 (미인증 1회).
+  useEffect(() => {
+    if (verified || sentOnce.current) return;
+    sentOnce.current = true;
+    void sendMyEmailVerificationAction();
+  }, [verified]);
+
+  // 다른 탭/기기 링크 클릭 감지용 폴링.
+  useEffect(() => {
+    if (verified) return;
+    let active = true;
+    const id = setInterval(async () => {
+      const r = await checkMyEmailVerifiedAction();
+      if (active && r.verified) {
+        setVerified(true);
+        clearInterval(id);
+      }
+    }, 4000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [verified]);
+
+  if (verified) {
+    return <Chip color="tertiary" label="✓ 이메일 인증 완료" />;
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return;
+    if (!/^\d{6}$/.test(code)) {
+      setError('6자리 숫자를 입력해요.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    const r = await verifyEmailCodeAction({ email, code });
+    if (!r.ok) {
+      setError('코드가 올바르지 않거나 만료되었습니다.');
+      setSubmitting(false);
+      return;
+    }
+    setVerified(true);
+  };
+
+  const handleResend = async () => {
+    setError('');
+    await sendMyEmailVerificationAction();
+  };
+
+  return (
+    <div className="w-full max-w-sm space-y-3 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] p-4 text-left">
+      <div className="space-y-1">
+        <p className="text-body-medium text-on-surface">이메일을 인증해 주세요</p>
+        <p className="text-body-small text-on-surface-variant">
+          <span className="font-mono">{email}</span> 으로 보낸 메일의 [인증하기] 버튼을 누르거나,
+          아래에 6자리 코드를 입력해요.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-2">
+        <label
+          htmlFor="approvalEmailCode"
+          className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+        >
+          인증 코드 (6자리)
+        </label>
+        <input
+          id="approvalEmailCode"
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+          placeholder="000000"
+          className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[18px] font-mono tracking-[0.3em] text-center text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+        />
+        {error && (
+          <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
+            {error}
+          </p>
+        )}
+        <Button type="submit" fullWidth size="md" disabled={submitting || code.length !== 6}>
+          {submitting ? 'LOADING…' : '코드로 인증하기'}
+        </Button>
+      </form>
+
+      <button
+        type="button"
+        onClick={handleResend}
+        className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+      >
+        인증 메일 다시 보내기
+      </button>
+    </div>
+  );
+}

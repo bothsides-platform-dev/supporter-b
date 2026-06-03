@@ -105,6 +105,8 @@ export interface UserRepo {
     email: string,
     tx?: Tx,
   ): Promise<(User & { passwordHash: string }) | undefined>;
+  /** 이메일 인증 플래그 전환 — signup_email 토큰 소비 시 호출. 매칭 없으면 no-op. */
+  markEmailVerified(email: string, tx?: Tx): Promise<void>;
 }
 
 // ── BizProfile ────────────────────────────────────────────────────────

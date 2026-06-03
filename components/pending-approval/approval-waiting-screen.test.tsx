@@ -21,10 +21,20 @@ vi.mock('canvas-confetti', () => ({
 
 vi.mock('motion/react', () => ({
   motion: {
-    span: ({ children, animate, style, className }: Record<string, unknown>) =>
+    span: ({ children, style, className }: Record<string, unknown>) =>
       <span style={style as React.CSSProperties} className={className as string}>{children as React.ReactNode}</span>,
   },
   useAnimation: vi.fn(() => ({ start: animationStartMock })),
+}));
+
+// EmailVerifySection 이 임포트하는 인증 액션을 모킹 — 실제 @/auth(next-auth) 로드 방지.
+// emailVerified 로 렌더하므로 호출되진 않지만 모듈 로드만 차단하면 된다.
+vi.mock('@/lib/server/actions/auth', () => ({
+  sendMyEmailVerificationAction: vi.fn(),
+  checkMyEmailVerifiedAction: vi.fn().mockResolvedValue({ verified: false }),
+}));
+vi.mock('@/lib/server/actions/auth/verifyEmailCodeAction', () => ({
+  verifyEmailCodeAction: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -41,12 +51,12 @@ afterEach(cleanup);
 
 describe('ApprovalWaitingScreen', () => {
   it('환영 제목을 렌더한다', () => {
-    render(<ApprovalWaitingScreen />);
+    render(<ApprovalWaitingScreen email="me@x.com" emailVerified />);
     expect(screen.getByText('거의 다 왔어요!')).toBeInTheDocument();
   });
 
   it('심사 소요 칩과 채널톡 문의 안내를 렌더한다', () => {
-    render(<ApprovalWaitingScreen />);
+    render(<ApprovalWaitingScreen email="me@x.com" emailVerified />);
     expect(
       screen.getByText(/심사는 영업일 기준 2일 이내/),
     ).toBeInTheDocument();
@@ -54,20 +64,20 @@ describe('ApprovalWaitingScreen', () => {
   });
 
   it('접근 가능한 파티 꼬깔 버튼을 렌더한다', () => {
-    render(<ApprovalWaitingScreen />);
+    render(<ApprovalWaitingScreen email="me@x.com" emailVerified />);
     expect(
       screen.getByRole('button', { name: '축하 효과 다시 보기' }),
     ).toBeInTheDocument();
   });
 
   it('마운트 시 컨페티를 발사한다', () => {
-    render(<ApprovalWaitingScreen />);
+    render(<ApprovalWaitingScreen email="me@x.com" emailVerified />);
     // fire()는 내부적으로 3개 버스트(좌·우·중앙)를 한 번에 발사한다
     expect(fireMock).toHaveBeenCalledTimes(3);
   });
 
   it('꼬깔 버튼을 클릭하면 컨페티를 다시 발사한다', () => {
-    render(<ApprovalWaitingScreen />);
+    render(<ApprovalWaitingScreen email="me@x.com" emailVerified />);
     const callsAfterMount = fireMock.mock.calls.length; // 3
     fireEvent.click(
       screen.getByRole('button', { name: '축하 효과 다시 보기' }),
@@ -77,12 +87,12 @@ describe('ApprovalWaitingScreen', () => {
   });
 
   it('마운트 시 아이콘 셰이크 애니메이션을 시작한다', () => {
-    render(<ApprovalWaitingScreen />);
+    render(<ApprovalWaitingScreen email="me@x.com" emailVerified />);
     expect(animationStartMock).toHaveBeenCalledTimes(1);
   });
 
   it('꼬깔 버튼 클릭 시 아이콘 셰이크 애니메이션을 다시 시작한다', () => {
-    render(<ApprovalWaitingScreen />);
+    render(<ApprovalWaitingScreen email="me@x.com" emailVerified />);
     const callsAfterMount = animationStartMock.mock.calls.length;
     fireEvent.click(
       screen.getByRole('button', { name: '축하 효과 다시 보기' }),
