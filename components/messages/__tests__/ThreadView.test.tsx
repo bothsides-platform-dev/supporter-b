@@ -159,6 +159,29 @@ describe('ThreadView', () => {
     expect(await screen.findByText('읽음')).toBeInTheDocument();
   });
 
+  it('onRead 페이로드의 readAt(ISO) 이 있으면 Date.now() 대신 서버 시간을 워터마크로 사용한다', async () => {
+    render(base());
+    expect(screen.queryByText('읽음')).not.toBeInTheDocument();
+
+    act(() => {
+      // 2026-05-26T04:00:00Z = m2 createdAt(2026-05-27T05:00:00Z) 보다 이전
+      channelOptions.onRead?.({ type: 'read', userId: 'pg-1', readAt: '2026-05-26T04:00:00.000Z' });
+    });
+
+    // readAt < m2.createdAt이므로 읽음 미표시
+    expect(screen.queryByText('읽음')).not.toBeInTheDocument();
+  });
+
+  it('onRead readAt 이 m2 이후 시각이면 "읽음" 표시', async () => {
+    render(base());
+
+    act(() => {
+      channelOptions.onRead?.({ type: 'read', userId: 'pg-1', readAt: '2026-05-28T05:00:00.000Z' });
+    });
+
+    expect(await screen.findByText('읽음')).toBeInTheDocument();
+  });
+
   it('useChatChannel.online 이 true 면 프레즌스 점을 렌더한다', () => {
     channelResult = { online: true, typingUserIds: [], sendTyping };
     render(base());

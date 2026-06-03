@@ -136,9 +136,12 @@ export function ThreadView({
         ];
       });
     },
-    onRead: () => {
-      // Counterparty read up to "now" — advance the live watermark.
-      setReadAt(Date.now());
+    onRead: (data) => {
+      // Use the server-issued timestamp from the payload to avoid client clock
+      // skew. Fall back to Date.now() only if the server omits readAt
+      // (e.g. older server during a rolling deploy).
+      const ts = typeof data.readAt === 'string' ? Date.parse(data.readAt) : Date.now();
+      setReadAt(ts);
     },
   });
 

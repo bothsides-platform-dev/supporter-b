@@ -25,7 +25,7 @@ import type { PublicationContext, Subscription } from 'centrifuge';
 import { chatChannel } from '@/lib/server/realtime/centrifugo';
 import { getCentrifuge } from '@/lib/realtime/centrifuge-client';
 
-type ChatPayload = { type?: string; userId?: string; [k: string]: unknown };
+type ChatPayload = { type?: string; userId?: string; readAt?: string; [k: string]: unknown };
 
 type UseChatChannelOptions = {
   onMessage?: (data: ChatPayload) => void;
