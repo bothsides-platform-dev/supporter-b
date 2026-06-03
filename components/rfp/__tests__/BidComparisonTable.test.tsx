@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 
 class ResizeObserverStub {
   observe() {}
@@ -14,7 +13,26 @@ if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = 
 if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => {};
 if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 
-afterEach(() => cleanup());
+// MessageComposeButton imports 'use server' chat actions whose transitive
+// next-auth → next/server chain fails to resolve in the jsdom env (collection
+// error). Stub it to a recognizable profile button and capture the wired
+// counterparty so we can still assert the embed without the real action chain.
+const counterpartyCapture = vi.fn();
+vi.mock('@/components/messages/MessageComposeButton', () => ({
+  MessageComposeButton: (props: { counterparty: { name: string } }) => {
+    counterpartyCapture(props.counterparty);
+    return (
+      <button type="button" aria-label={`${props.counterparty.name} 프로필`}>
+        {props.counterparty.name}
+      </button>
+    );
+  },
+}));
+
+afterEach(() => {
+  cleanup();
+  counterpartyCapture.mockClear();
+});
 
 import { BidComparisonTable } from '../BidComparisonTable';
 import type { Bid, CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
@@ -66,16 +84,11 @@ describe('BidComparisonTable — PG 프로필 채팅 진입', () => {
     expect(screen.getByText('에이페이먼츠')).toBeInTheDocument();
   });
 
-  it('PG 프로필 클릭 → 채팅보내기 메뉴 → 컴포즈 Sheet → 채팅보내기 → 구현중 모달', async () => {
-    const user = userEvent.setup();
+  it('각 행의 MessageComposeButton에 해당 PG의 counterparty(name·type·workspaceId)를 전달한다', () => {
     renderTable();
-
-    await user.click(screen.getByRole('button', { name: '에이페이먼츠 프로필' }));
-    await user.click(await screen.findByRole('menuitem', { name: '채팅보내기' }));
-    expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '채팅보내기' }));
-    expect(screen.getByRole('button', { name: '확인' })).toBeInTheDocument();
+    expect(counterpartyCapture).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '에이페이먼츠', type: 'pg', workspaceId: 'ws-toss' }),
+    );
   });
 });
 

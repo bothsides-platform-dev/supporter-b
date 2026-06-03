@@ -44,6 +44,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | Logging | Pino + Axiom (`next-axiom`) | `pino@10.3.1`, `next-axiom@1.10.0` |
 | Observability | Sentry | `@sentry/nextjs@10.51.0` |
 | Support | Channel.io | `@channel.io/channel-web-sdk-loader@2.0.2` |
+| Realtime | Centrifugo (자체호스팅 WS, Caddy `wss://`) + `centrifuge-js` — 채팅 라이브(즉시 수신·타이핑·프레즌스·읽음). 메시지는 자사 Postgres에만 영속, 비공개 ACL은 subscribe-proxy로 앱에 보존 | `centrifuge@5.6.0` |
 | Cmdk | `cmdk` | `cmdk@1.1.1` |
 | Testing | Vitest + PGlite (단위), Playwright (e2e) | `vitest@4.1.5`, `@electric-sql/pglite@0.3.13` |
 | Package mgr | pnpm | — |

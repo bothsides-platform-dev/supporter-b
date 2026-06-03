@@ -6,7 +6,11 @@ import type { PgliteDB } from '@/lib/db/client-pglite';
 
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
-import type { Workspace, WorkspaceMembershipSummary } from '@/lib/types/workspace';
+import type {
+  Workspace,
+  WorkspaceMembershipSummary,
+  WorkspaceType,
+} from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { Bid } from '@/lib/types/bid';
@@ -92,6 +96,8 @@ export interface WorkspaceRepo {
   ): Promise<WorkspaceMembershipSummary[]>;
   /** 유저가 해당 워크스페이스의 멤버인지 여부 (boolean). 권한 게이트 단일 소스. */
   isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
+  /** 해당 워크스페이스 멤버 user id 배열 — 알림 fanout + Centrifugo subscribe ACL용. 순서 미보장. */
+  memberUserIds(workspaceId: string, tx?: Tx): Promise<string[]>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────
@@ -278,7 +284,11 @@ export interface AttachmentRepo {
 
 // ── Outbox ────────────────────────────────────────────────────────────
 export interface OutboxRepo {
-  /** 메일 전송 큐 enqueue — dedupeKey UNIQUE 위배 시 null. */
+  /**
+   * 메일 전송 큐 enqueue — dedupeKey UNIQUE 위배 시 null. `scheduledAt` 생략 시
+   * 컬럼 기본값 now()(즉시 발송 대상). 지연 발송(예: chat digest 윈도우 종료
+   * 시각)에는 미래 시각을 명시.
+   */
   enqueue(
     params: {
       event: OutboxEvent;
@@ -287,11 +297,22 @@ export interface OutboxRepo {
       html: string;
       dedupeKey?: string;
       maxAttempts?: number;
+      scheduledAt?: Date;
     },
     tx?: Tx,
   ): Promise<OutboxEntry | null>;
-  /** 송신 대기 batch 조회. */
+  /**
+   * 송신 대기 batch 조회. `chat.message` 행은 전용 chat-digest 처리기 소관이므로
+   * 제외 — generic 메일러가 coalesce 전 raw 메시지 메일을 보내면 안 됨.
+   */
   pending(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
+  /**
+   * Due chat-digest 행: `status='pending' AND event='chat.message' AND
+   * scheduled_at <= now()`, scheduled_at 오름차순. 전용 chat-digest 처리기
+   * (cron + post-commit)가 본문 재계산·읽음 단락 후 markResult 한다. lease/
+   * SKIP-LOCKED 없는 단순 read — 중복발송 가드는 처리기 책임.
+   */
+  dueChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
   /** 전송 결과 반영(성공/실패 + 시도횟수 +1). */
   markResult(
     id: string,
@@ -312,4 +333,123 @@ export interface OutboxRepo {
     limit?: number,
     tx?: Tx,
   ): Promise<{ ok: number; failed: number }>;
+}
+
+// ── Chat: Conversation ────────────────────────────────────────────────
+/** Buyer↔PG conversation row (one per workspace pair). */
+export type ChatConversation = {
+  id: string;
+  buyerWsId: string;
+  pgWsId: string;
+  lastMessageAt: Date | null;
+  createdAt: Date;
+};
+
+export interface ChatConversationRepo {
+  /**
+   * Idempotent on the (buyer_ws_id, pg_ws_id) unique — returns the existing
+   * conversation or creates one. The buyer↔PG type invariant is the caller's
+   * responsibility (FK alone cannot express it).
+   */
+  findOrCreatePair(
+    buyerWsId: string,
+    pgWsId: string,
+    tx?: Tx,
+  ): Promise<ChatConversation>;
+  /** id 단건 조회. 없으면 undefined. */
+  findById(id: string, tx?: Tx): Promise<ChatConversation | undefined>;
+  /**
+   * 한 워크스페이스의 대화 목록 — viewer 의 side(buyer/pg)에 매칭되는 행만,
+   * last_message_at desc (nulls last). 비공개 ACL: pg viewer 는 pg_ws_id=내WS
+   * 만, buyer viewer 는 buyer_ws_id=내WS 만 본다.
+   */
+  listForWorkspace(
+    wsId: string,
+    viewerType: WorkspaceType,
+    tx?: Tx,
+  ): Promise<ChatConversation[]>;
+  /** 인박스 정렬키 갱신 — 메시지 전송 시. */
+  touchLastMessageAt(id: string, at: Date, tx?: Tx): Promise<void>;
+}
+
+// ── Chat: Message ─────────────────────────────────────────────────────
+/** Canonical (Postgres-only) chat message row. */
+export type ChatMessageRecord = {
+  id: string;
+  conversationId: string;
+  authorUserId: string;
+  authorWsId: string;
+  body: string;
+  rfpId: string | null;
+  createdAt: Date;
+};
+
+export interface ChatMessageRepo {
+  /** 메시지 insert. 첨부 링크는 액션 레이어 책임. */
+  save(msg: ChatMessageRecord, tx?: Tx): Promise<void>;
+  /** 한 대화의 모든 메시지 — created_at asc. */
+  listByConversation(
+    conversationId: string,
+    tx?: Tx,
+  ): Promise<ChatMessageRecord[]>;
+}
+
+// ── Chat: Message Template ────────────────────────────────────────────
+/** Workspace-shared chat message template — hydrated DB shape. */
+export type ChatMessageTemplate = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  body: string;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export interface ChatTemplateRepo {
+  /** 템플릿 생성 — id 미지정 시 발급. 워크스페이스 공유. */
+  create(
+    template: {
+      id?: string;
+      workspaceId: string;
+      title: string;
+      body: string;
+      createdBy: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /** id 단건 조회. 없으면 undefined. */
+  findById(id: string, tx?: Tx): Promise<ChatMessageTemplate | undefined>;
+  /** 한 워크스페이스의 모든 템플릿 — cross-workspace isolation 근거. */
+  listByWorkspace(workspaceId: string, tx?: Tx): Promise<ChatMessageTemplate[]>;
+  /** 단건 삭제. */
+  remove(id: string, tx?: Tx): Promise<void>;
+}
+
+// ── Chat: Conversation Read State ─────────────────────────────────────
+/** 유저별 대화 읽음 상태 row. 미읽음 배지 + 라이브 읽음 영수증 근거. */
+export type ChatConversationRead = {
+  conversationId: string;
+  userId: string;
+  lastReadAt: Date;
+};
+
+export interface ChatReadRepo {
+  /** (conversation, user) PK upsert — last_read_at 갱신(idempotent, monotonic). */
+  upsert(conversationId: string, userId: string, at: Date, tx?: Tx): Promise<void>;
+  /** (conversation, user) 읽음 row 조회. 없으면 undefined. */
+  getFor(
+    conversationId: string,
+    userId: string,
+    tx?: Tx,
+  ): Promise<ChatConversationRead | undefined>;
+  /**
+   * 상대(=viewer 가 아닌 유저) 중 가장 최근 last_read_at — 라이브 읽음 영수증
+   * 근거. 상대 읽음 기록이 없으면 undefined.
+   */
+  lastReadByCounterparty(
+    conversationId: string,
+    viewerUserId: string,
+    tx?: Tx,
+  ): Promise<Date | undefined>;
 }

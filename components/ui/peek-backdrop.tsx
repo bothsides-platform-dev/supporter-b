@@ -9,7 +9,7 @@ export function PeekBackdrop() {
     <div
       onClick={close}
       aria-hidden
-      className="absolute inset-0 z-10 bg-black/10 animate-in fade-in duration-150"
+      className="absolute inset-0 z-10 bg-black/10 dark:bg-white/10 animate-in fade-in duration-150"
     />
   );
 }

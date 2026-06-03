@@ -57,6 +57,7 @@ Authenticated AppShell
 │  ├─ /inbox/:rfpId
 │  └─ /inbox/:rfpId/submitted
 ├─ /notifications
+├─ /messages
 ├─ /workspace/new
 └─ /settings
    ├─ /settings/profile
@@ -95,6 +96,14 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | P4 | `/inbox/:rfpId/submitted` | 제출 완료, 결과 대기, 수정/철회 정책 안내 | `SubmittedState` |
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처) | `WorkspaceProfileForm` |
 | P6 | `/settings/members` | 같은 워크스페이스 멤버 관리 (도메인 자동 합류 없음 — 초대만) | `MemberTable` |
+
+### 0.3a 공용 화면 (buyer · pg 공통)
+
+| # | Route | Purpose | Primary Components |
+|---|---|---|---|
+| S1 | `/messages` | 워크스페이스 페어(구매사↔PG) **라이브 채팅**. 2-컬럼: 좌측 대화 목록(미읽음 점) + 우측 스레드(말풍선·날짜 구분·읽음 영수증·프레즌스·타이핑). RFP는 메시지 태그로 표시. 리치 작성 드로어(저장 템플릿/첨부/이메일·인앱 알림 토글). `MessageComposeButton`으로 RFP 상세·입찰표에서 진입(ComingSoon 제거). 구매사↔PG만(PG 상호 비공개 유지), 이메일 조회로 콜드 컨택 가능 | `MessageInbox`, `ConversationList`, `ThreadView`, `MessageComposeButton`, `NewConversationSheet`, `useChatChannel` |
+
+> 실시간 전송은 Centrifugo(자체호스팅 WS) — 미설정 환경에선 정적 로드로 graceful degrade. 이메일 알림은 presence 억제 + 윈도우 digest로 폭주 방지. `/notifications`·`/workspace/new` 도 buyer·pg 공통.
 
 > 칸반 뷰 컬럼: 구매사 `진행중 / 계약완료 / 마감`(3, 표 탭과 동일 — 발송 전 draft RFP는 보드에 노출 안 함), PG `신규 / 제출완료 / 낙찰 / 실패`(4 — 표 탭 `마감`을 보드에서 `낙찰`/`실패`로 분리; 미제출 응답은 `신규`). 작성중 단계 제거로 보드 드래그-발송/취소·드래그-작성 전이도 사라졌다(발송은 RFP 상세의 `초대 발송`, 제출은 inbox 폼).
 

@@ -1,18 +1,17 @@
 // 메시지함 — /messages
 //
-// RFP별 비공개 스레드 모델의 메시지함(렌더 전용). 백엔드 미구현이라 대화/메시지는 목 데이터이며,
-// 모든 전송 액션('보내기'/'채팅보내기')은 '구현중' 모달로 귀결한다.
-import { requireSession } from '@/lib/auth/session';
+// RFP별 비공개 스레드 모델의 메시지함. 인박스 목록은 서버 액션 로더로 실데이터를
+// 전달하고, 스레드 메시지는 대화 선택 시 클라이언트에서 loadConversationThread 로
+// 로드한다(MessageInbox 내부).
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { MessageInbox } from '@/components/messages/MessageInbox';
-import { getMockConversations } from '@/components/messages/mock-data';
+import { listConversationsForViewer } from '@/lib/server/actions/chat/conversationLoaders';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MessagesPage() {
-  const session = await requireSession();
-  const conversations = getMockConversations(session.user.workspaceType ?? 'buyer');
+  const conversations = await listConversationsForViewer();
   const unread = conversations.filter((c) => c.unread).length;
 
   return (

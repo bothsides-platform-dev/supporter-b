@@ -2,7 +2,7 @@
 // pending, markResult, and `flush(sender, limit)` which drains pending rows
 // through a `Sender` under FOR UPDATE SKIP LOCKED so concurrent cron + post-
 // commit callers don't double-deliver.
-import { eq, isNotNull, sql, lte, and, inArray } from 'drizzle-orm';
+import { eq, ne, isNotNull, sql, lte, and, inArray } from 'drizzle-orm';
 import { outboxEntries } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { OutboxEntry, OutboxEvent, Sender } from '../../outbox/types';
@@ -44,6 +44,7 @@ export class DrizzleOutboxRepository implements OutboxRepo {
       html: string;
       dedupeKey?: string;
       maxAttempts?: number;
+      scheduledAt?: Date;
     },
     tx?: Tx,
   ): Promise<OutboxEntry | null> {
@@ -61,6 +62,9 @@ export class DrizzleOutboxRepository implements OutboxRepo {
         html: params.html,
         dedupeKey: params.dedupeKey ?? null,
         maxAttempts: params.maxAttempts ?? 5,
+        // Omit → column default now() (immediate). Explicit future time for
+        // delayed digests (chat window-end scheduling).
+        ...(params.scheduledAt ? { scheduledAt: params.scheduledAt } : {}),
       })
       .onConflictDoNothing({
         target: outboxEntries.dedupeKey,
@@ -79,8 +83,39 @@ export class DrizzleOutboxRepository implements OutboxRepo {
         and(
           eq(outboxEntries.status, 'pending'),
           lte(outboxEntries.scheduledAt, sql`now()`),
+          // chat.message rows are coalesced digests handled by the dedicated
+          // chat-digest processor (see dueChatDigests) — the generic mailer
+          // must never drain them, or it would send a raw per-message mail
+          // before the window/read-state digest logic runs.
+          ne(outboxEntries.event, 'chat.message'),
         ),
       )
+      .limit(limit);
+    return rows.map(rowToEntry);
+  }
+
+  /**
+   * Due chat-digest rows: `status='pending' AND event='chat.message' AND
+   * scheduled_at <= now()`, ordered by scheduled_at for determinism. The
+   * dedicated chat-digest processor (cron + post-commit) owns these — it
+   * recomputes the digest body at flush time, short-circuits on read state,
+   * then `markResult`s them. Unlike `flush`, this is a plain read with no
+   * lease/SKIP-LOCKED bump; double-delivery protection lives in that
+   * processor, not here.
+   */
+  async dueChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]> {
+    const db = this.h(tx);
+    const rows = await db
+      .select()
+      .from(outboxEntries)
+      .where(
+        and(
+          eq(outboxEntries.status, 'pending'),
+          eq(outboxEntries.event, 'chat.message'),
+          lte(outboxEntries.scheduledAt, sql`now()`),
+        ),
+      )
+      .orderBy(outboxEntries.scheduledAt)
       .limit(limit);
     return rows.map(rowToEntry);
   }
@@ -171,6 +206,10 @@ export class DrizzleOutboxRepository implements OutboxRepo {
           and(
             eq(outboxEntries.status, 'pending'),
             lte(outboxEntries.scheduledAt, sql`now()`),
+            // Skip chat.message rows — those are coalesced digests owned by
+            // the dedicated chat-digest processor (dueChatDigests). The
+            // generic mailer would otherwise send a raw per-message mail.
+            ne(outboxEntries.event, 'chat.message'),
           ),
         )
         .orderBy(outboxEntries.scheduledAt)

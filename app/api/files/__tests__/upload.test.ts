@@ -399,6 +399,60 @@ describe('POST /api/files/upload', () => {
     expect(row?.uploadedBy).toBe(buyer.id);
   });
 
+  it('happy path — chat: buyer ws member uploads an ownerless chat draft', async () => {
+    const { buyer } = await seedBuyerSession();
+    const f = new FormData();
+    f.append('file', makeFile('chat.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'chat');
+    f.append('ownerId', '__draft__');
+    const r = await callUpload(f);
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { id: string };
+
+    const [row] = await db
+      .select()
+      .from(attachments)
+      .where(eq(attachments.id, body.id))
+      .limit(1);
+    // Ownerless draft — linked to the chat_messages row by sendChatMessageAction.
+    expect(row?.rfpId).toBeNull();
+    expect(row?.bidId).toBeNull();
+    expect(row?.bidNoteId).toBeNull();
+    expect(row?.chatMessageId).toBeNull();
+    expect(row?.uploadedBy).toBe(buyer.id);
+    expect(row?.mimeType).toBe('application/pdf');
+  });
+
+  it('happy path — chat: PG ws member also uploads an ownerless chat draft', async () => {
+    const { pg } = await seedPgSession('P-2605-0303');
+    const f = new FormData();
+    f.append('file', makeFile('chat.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'chat');
+    f.append('ownerId', '__draft__');
+    const r = await callUpload(f);
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { id: string };
+
+    const [row] = await db
+      .select()
+      .from(attachments)
+      .where(eq(attachments.id, body.id))
+      .limit(1);
+    expect(row?.uploadedBy).toBe(pg.id);
+    expect(row?.rfpId).toBeNull();
+  });
+
+  it('403 when a session without a workspace uploads a chat draft', async () => {
+    const user = await seedUser(db, { email: 'noworkspace@x.com' });
+    sessionRef.value = { user: { id: user.id, email: user.email } };
+    const f = new FormData();
+    f.append('file', makeFile('chat.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'chat');
+    f.append('ownerId', '__draft__');
+    const r = await callUpload(f);
+    expect(r.status).toBe(403);
+  });
+
   it('cleanup ordering — storage.save throws → orphan metadata row deleted', async () => {
     const { buyer } = await seedBuyerSession();
 
