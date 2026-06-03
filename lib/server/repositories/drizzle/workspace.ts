@@ -204,4 +204,16 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .limit(1);
     return Boolean(row);
   }
+
+  async memberUserIds(workspaceId: string, tx?: Tx): Promise<string[]> {
+    const db = this.h(tx);
+    const rows = (await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, workspaceId))) as Pick<
+      MemberRow,
+      'userId'
+    >[];
+    return rows.map((r) => r.userId);
+  }
 }

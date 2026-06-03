@@ -18,6 +18,7 @@ function rowToAttachment(row: AttachRow): AttachmentRecord {
     rfpId: row.rfpId ?? undefined,
     bidId: row.bidId ?? undefined,
     bidNoteId: row.bidNoteId ?? undefined,
+    chatMessageId: row.chatMessageId ?? undefined,
     uploadedBy: row.uploadedBy,
   };
 }

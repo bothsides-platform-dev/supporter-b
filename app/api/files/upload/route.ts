@@ -57,7 +57,7 @@ const ALLOWED_MIMES = new Set<AcceptedMime>([
 
 const MetaInput = z
   .object({
-    ownerKind: z.enum(['rfp', 'bid_proposal', 'bid_note']),
+    ownerKind: z.enum(['rfp', 'bid_proposal', 'bid_note', 'chat']),
     ownerId: z.string().min(1).max(64),
   })
   .strict();
@@ -142,6 +142,15 @@ export async function POST(req: Request): Promise<Response> {
         .limit(1);
       if (!rfp) return fail(404, 'RFP_NOT_FOUND');
       if (rfp.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
+    }
+  } else if (meta.data.ownerKind === 'chat') {
+    // Chat attachment — buyer↔PG IM. Any authenticated workspace member may
+    // upload an ownerless draft; sendChatMessageAction links it to the
+    // chat_messages row and re-checks the uploader is a session-ws member.
+    // ownerId is the literal '__draft__' placeholder (no parent yet).
+    if (!wsId) return fail(403, 'FORBIDDEN');
+    if (!(await (await getWorkspaceRepo()).isMember(userId, wsId))) {
+      return fail(403, 'FORBIDDEN');
     }
   } else if (meta.data.ownerKind === 'bid_note') {
     // Buyer-only memo attachment. ownerId here is the *bid id* (the parent

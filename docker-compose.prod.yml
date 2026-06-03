@@ -24,6 +24,39 @@ services:
       timeout: 3s
       retries: 10
 
+  # Realtime fanout for chat. Like pg, bound to 127.0.0.1 only — never exposed
+  # to the public internet directly. The browser reaches it through Caddy's
+  # wss:// reverse proxy (deploy/Caddyfile, /connection/* -> 127.0.0.1:8000).
+  # The Next.js app (PM2:3000, native on the host) publishes via the HTTP API at
+  # 127.0.0.1:8000/api. Centrifugo persists nothing — Postgres is canonical.
+  #
+  # Secrets live in .env.production, NOT in config.json (Centrifugo does not
+  # interpolate ${VAR} in config.json). docker-compose interpolates the
+  # environment: block below from .env.production and bridges the app-named vars
+  # to Centrifugo's v6 nested-key env names (same value, two consumers):
+  #   app CENTRIFUGO_TOKEN_HMAC_SECRET -> CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY
+  #   app CENTRIFUGO_API_KEY           -> CENTRIFUGO_HTTP_API_KEY
+  centrifugo:
+    image: centrifugo/centrifugo:v6
+    container_name: bidit-centrifugo-prod
+    restart: always
+    command: centrifugo -c /centrifugo/config.json
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./deploy/centrifugo/config.json:/centrifugo/config.json:ro
+    # The app runs natively on the host, not in Docker. The subscribe proxy
+    # (Centrifugo -> app) therefore reaches it via host.docker.internal, mapped
+    # to the host gateway (works on Linux/Lightsail). config.json references this.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET:?set CENTRIFUGO_TOKEN_HMAC_SECRET in .env.production}
+      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY:?set CENTRIFUGO_API_KEY in .env.production}
+      CENTRIFUGO_CLIENT_ALLOWED_ORIGINS: https://${APP_DOMAIN:?set APP_DOMAIN in .env.production}
+    # Centrifugo ships a default ulimit-friendly image; no extra tuning needed
+    # for a single 2GB VM with Memory engine.
+
 volumes:
   bidit_pgdata_prod:
     driver: local
