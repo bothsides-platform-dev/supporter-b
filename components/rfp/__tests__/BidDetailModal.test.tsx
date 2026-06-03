@@ -47,6 +47,7 @@ const bid: Bid = {
   settleLimit: 0,
   guaranteeInsurance: 0,
   paymentFees: {},
+  customFees: {},
   proposalPdfs: [
     {
       id: 'pdf',

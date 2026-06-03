@@ -19,6 +19,9 @@ const mockVerifyCode = vi.fn();
 vi.mock('@/lib/server/actions/auth/verifyEmailCodeAction', () => ({
   verifyEmailCodeAction: (...a: unknown[]) => mockVerifyCode(...a),
 }));
+vi.mock('next/link', () => ({
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+}));
 
 import { EmailVerifyScreen } from '../email-verify-screen';
 
@@ -45,5 +48,11 @@ describe('EmailVerifyScreen', () => {
     await user.click(screen.getByRole('button', { name: /코드로 인증하기/i }));
 
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+  });
+
+  it('홈으로 가기 링크가 루트로 연결된다', () => {
+    render(<EmailVerifyScreen email="me@x.com" />);
+    const link = screen.getByRole('link', { name: '홈으로 가기' });
+    expect(link).toHaveAttribute('href', '/');
   });
 });
