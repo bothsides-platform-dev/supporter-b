@@ -109,10 +109,10 @@ docker compose ps
 
 ## 5. DB 초기 데이터 채우기
 
-> **스키마 적용은 별도 절차입니다.** `drizzle/` 아래의 단일 그린필드 스키마 SQL
-> (`drizzle/0000_*.sql` — `pnpm db:generate` 로 재생성되며 파일명은 바뀔 수 있음) 을
-> 대상 DB에 적용해 테이블을 먼저 만들어야 합니다(증분 `db:migrate` 미사용 — 그린필드
-> 단일 스키마). 스키마가 준비된 뒤:
+> **스키마 적용은 별도 절차입니다.** 이 프로젝트는 마이그레이션 폴더 없이
+> **`pnpm db:push`** 로 운영합니다 — `lib/db/schema` 를 대상 DB와 직접 diff 해서
+> 테이블을 만듭니다. 먼저 스키마를 적용하세요 (`pnpm db:push`; 출력 계획을 검토해
+> additive 면 적용, DROP·데이터 영향 구문이 보이면 중단). 스키마가 준비된 뒤:
 
 ```bash
 pnpm db:seed
@@ -167,8 +167,7 @@ DB 도구·기타:
 | 명령 | 설명 |
 |---|---|
 | `pnpm db:studio` | 브라우저 GUI 로 DB 보기 (https://local.drizzle.studio) |
-| `pnpm db:generate` | 스키마 변경 후 새 마이그레이션 SQL 생성 |
-| `pnpm db:push` | 마이그레이션 없이 즉시 스키마 푸시 (dev 전용) |
+| `pnpm db:push` | `lib/db/schema` 를 대상 DB에 직접 적용 (마이그레이션 폴더 없음; 계획 검토 후 적용) |
 | `docker compose down -v` | DB 볼륨까지 삭제하고 처음부터 다시 |
 
 프로덕션 빌드:
