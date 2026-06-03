@@ -53,7 +53,7 @@ export async function getDeleteAccountStatus(): Promise<GetDeleteAccountStatusRe
       soloWorkspaces.push(stub);
     } else if (membership.role === 'admin') {
       const otherAdmins = allMembers.filter(
-        (m) => m.userId !== userId && m.role === 'admin',
+        (m: { userId: string; role: string }) => m.userId !== userId && m.role === 'admin',
       );
       if (otherAdmins.length === 0) {
         blockingWorkspaces.push(stub);
