@@ -31,7 +31,7 @@ vi.mock('@/lib/server/actions/chat/markConversationReadAction', () => ({
 type ChatPayload = { type?: string; userId?: string; [k: string]: unknown };
 let channelOptions: { onMessage?: (d: ChatPayload) => void; onRead?: (d: ChatPayload) => void } = {};
 const sendTyping = vi.fn();
-let channelResult: UseChatChannelResult = { online: false, typingUserIds: [], sendTyping };
+let channelResult: UseChatChannelResult = { online: false, typingUserIds: [], sendTyping, connected: null };
 vi.mock('@/lib/hooks/useChatChannel', () => ({
   useChatChannel: (_conversationId: string, opts: typeof channelOptions): UseChatChannelResult => {
     channelOptions = opts;
@@ -47,7 +47,7 @@ beforeEach(() => {
   markConversationReadAction.mockResolvedValue({ ok: true });
   sendTyping.mockReset();
   channelOptions = {};
-  channelResult = { online: false, typingUserIds: [], sendTyping };
+  channelResult = { online: false, typingUserIds: [], sendTyping, connected: null };
 });
 
 import { ThreadView } from '../ThreadView';
@@ -183,7 +183,7 @@ describe('ThreadView', () => {
   });
 
   it('useChatChannel.online 이 true 면 프레즌스 점을 렌더한다', () => {
-    channelResult = { online: true, typingUserIds: [], sendTyping };
+    channelResult = { online: true, typingUserIds: [], sendTyping, connected: null };
     render(base());
     expect(screen.getByLabelText('온라인')).toBeInTheDocument();
   });
@@ -194,7 +194,7 @@ describe('ThreadView', () => {
   });
 
   it('typingUserIds 가 있으면 "입력 중…" 인디케이터를 렌더한다', () => {
-    channelResult = { online: false, typingUserIds: ['pg-user-1'], sendTyping };
+    channelResult = { online: false, typingUserIds: ['pg-user-1'], sendTyping, connected: null };
     render(base());
     expect(screen.getByText('입력 중…')).toBeInTheDocument();
   });
@@ -357,5 +357,23 @@ describe('ThreadView', () => {
     render(base());
     const clip = screen.getByRole('button', { name: '파일 첨부' });
     expect(clip).not.toBeDisabled();
+  });
+
+  it('connected 가 false 면 "재연결 중" 배너를 렌더한다', () => {
+    channelResult = { online: false, typingUserIds: [], sendTyping, connected: false };
+    render(base());
+    expect(screen.getByRole('status')).toHaveTextContent('재연결 중');
+  });
+
+  it('connected 가 null 이면 배너를 렌더하지 않는다', () => {
+    channelResult = { online: false, typingUserIds: [], sendTyping, connected: null };
+    render(base());
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('connected 가 true 면 배너를 렌더하지 않는다', () => {
+    channelResult = { online: false, typingUserIds: [], sendTyping, connected: true };
+    render(base());
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

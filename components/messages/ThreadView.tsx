@@ -113,7 +113,7 @@ export function ThreadView({
   // Live channel — graceful no-op when realtime is unconfigured (dev/tests):
   // online stays false, typingUserIds empty, onMessage/onRead never fire, and
   // the thread runs entirely off the static loader + optimistic local append.
-  const { online, typingUserIds, sendTyping } = useChatChannel(conversationId, {
+  const { online, typingUserIds, sendTyping, connected } = useChatChannel(conversationId, {
     onMessage: (data: LiveMessagePayload) => {
       if (!data.id || typeof data.body !== 'string' || !data.createdAt) return;
       const id = data.id;
@@ -364,6 +364,16 @@ export function ThreadView({
           );
         })}
       </div>
+
+      {/* 연결 끊김 배너 */}
+      {connected === false && (
+        <div
+          role="status"
+          className="px-4 py-1.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container-low)] border-b border-[var(--md-sys-color-outline-variant)]"
+        >
+          채팅 서버와 연결이 끊겼습니다. 재연결 중…
+        </div>
+      )}
 
       {/* 첨부 칩 리스트 */}
       {attachments.length > 0 && (
