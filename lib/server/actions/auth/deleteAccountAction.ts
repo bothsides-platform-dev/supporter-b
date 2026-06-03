@@ -74,7 +74,8 @@ export async function deleteAccountAction(input: {
   }
 
   // 4. 트랜잭션: 단독 WS 삭제 → 나머지 멤버십 제거 → 소프트 딜리트
-  await db.transaction(async (tx) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await db.transaction(async (tx: any) => {
     if (soloWorkspaceIds.length > 0) {
       await tx
         .delete(workspaces)
