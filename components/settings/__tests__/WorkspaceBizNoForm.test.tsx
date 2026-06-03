@@ -186,4 +186,19 @@ describe('WorkspaceBizNoForm', () => {
     expect(screen.queryByRole('alert')).toBeNull();
     expect(refresh).not.toHaveBeenCalled();
   });
+
+  it('NTS 조회 실패 시 "찾지 못했어요"가 아닌 오류 메시지를 표시한다', async () => {
+    const user = userEvent.setup();
+    lookupBizNoAction.mockResolvedValue({ ok: false, error: 'NTS_NETWORK' });
+
+    render(<WorkspaceBizNoForm currentBizNo={null} />);
+    await user.type(screen.getByLabelText('사업자 등록번호'), '1234567890');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    expect(
+      await screen.findByText(/잠시 후 다시 시도해주세요/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('조회 중…')).not.toBeInTheDocument();
+    expect(screen.queryByText(/찾지 못했어요/)).not.toBeInTheDocument();
+  });
 });
