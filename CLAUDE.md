@@ -18,7 +18,9 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 ## Domain Context (memorize)
 
 - **Two-sided platform**: `buyer` workspace (구매사) sends RFPs; `pg` workspace (결제대행사 영업담당) responds with bids
-- **Private 1:N RFP, NOT a marketplace**: matching is by buyer-supplied PG email allowlist. PGs don't see each other (완전 비공개 — `Bid.competitorCount` etc. do not exist by design)
+- **Bidding is sealed 1:N; discovery is open (opt-out)**: participation (who can bid) is buyer-controlled via the workspace-ID allowlist (`rfp_allowed_pg`), and **bids stay sealed — PGs never see each other or a competitor count (`Bid.competitorCount` does not exist by design).** Two axes, kept separate:
+  - **Discovery = open by default, buyer opt-out.** Every `sent` RFP with `deadline > now` and `board_visible=true` (the default) appears on the PG-facing open board (`/opportunities` + PG home 탐색 section). The board listing exposes **only `구매사명`(workspace name)·`제목`·`홈페이지`** — never fees/current-terms/volume/bizNo/memo/attachments (whitelist enforced at the query layer in `lib/server/repositories/drizzle/rfp-pg-request.ts`). A buyer can hide a specific RFP via `setRfpBoardVisibilityAction`.
+  - **Participation = buyer-gated.** A non-invited PG sends a one-time cold-pitch request (`rfp_pg_requests`, UNIQUE per (rfp, pg), rejection permanent). Buyer **accept** adds them to the allowlist + a real invitation (full info then visible in their inbox); **reject** is final.
 - **Per-RFP unique URL + token** in invitation email; token authoritative only for first entry, then workspace membership takes over
 
 ## Current Stack

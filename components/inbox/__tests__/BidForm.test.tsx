@@ -129,10 +129,10 @@ describe('BidForm 결제수단 동적 렌더', () => {
     expect(screen.queryByText('가상계좌 수수료')).toBeNull();
   });
 
-  it('카드 법정상한 등급(capped)이면 카드가 요청돼도 입력칸 대신 법정 안내를 보여준다', () => {
+  it('카드 법정상한 등급(capped)이면 카드가 요청돼도 카드 입력칸을 렌더하지 않는다', () => {
     renderForm({ requiredPaymentMethods: ['card', 'bank_transfer'], grade: 'sme2' });
     expect(screen.queryByText('카드 수수료')).toBeNull();
-    expect(screen.getByText(/법정/)).toBeInTheDocument();
+    expect(screen.getByText('계좌이체 수수료')).toBeInTheDocument();
   });
 
   it('일반(general) 등급이면 카드 입력칸을 렌더한다', () => {

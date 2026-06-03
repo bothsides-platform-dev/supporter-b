@@ -40,4 +40,6 @@ export type RFP = {
   // surfaced server-side for the buyer's detail page → never serialised to PG
   // clients. Optional on type so PG-side renders that omit it stay sound.
   shareToken?: string;
+  // 오픈 RFP 게시판 노출 여부(opt-out). 기본 true. 구매사가 끄면 게시판에서 제외.
+  boardVisible?: boolean;
 };

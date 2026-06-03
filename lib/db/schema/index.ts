@@ -7,6 +7,7 @@ export * from './workspace-invitations';
 export * from './rfps';
 export * from './rfp-allowed-pg';
 export * from './rfp-invitations';
+export * from './rfp-pg-requests';
 export * from './bids';
 export * from './bid-notes';
 export * from './columns';

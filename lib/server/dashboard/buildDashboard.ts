@@ -4,6 +4,7 @@
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { InvitationStatus } from '@/lib/types/invitation';
+import type { OpportunityListing } from '@/lib/types/pg-request';
 import { matchesDeadlineBucket } from '@/lib/server/board/filterRfps';
 
 export type DashboardKpi = { id: string; label: string; value: number; href: string };
@@ -15,7 +16,13 @@ export type OnboardingAction = {
   title: string;
   description: string;
 };
-export type Dashboard = { kpis: DashboardKpi[]; groups: ActionGroup[]; onboardingActions: OnboardingAction[] | null };
+export type Dashboard = {
+  kpis: DashboardKpi[];
+  groups: ActionGroup[];
+  onboardingActions: OnboardingAction[] | null;
+  // PG 게시판 탐색 목록 (오픈 RFP). buyer dashboard 에는 없음.
+  openRfps?: OpportunityListing[];
+};
 
 const DAY = 86_400_000;
 /** "무응답 경과" 기준일 — 시작값, 튜닝 가능. */
@@ -96,7 +103,11 @@ export type PgDashRow = {
   rfpDeadline: string;
 };
 
-export function buildPgDashboard(rows: PgDashRow[], now: Date): Dashboard {
+export function buildPgDashboard(
+  rows: PgDashRow[],
+  now: Date,
+  openRfps: OpportunityListing[] = [],
+): Dashboard {
   const isUrgent = (r: PgDashRow) => matchesDeadlineBucket(r.rfpDeadline, 'd7', now);
   const unsubmitted = (r: PgDashRow) => r.invitationStatus === 'sent' || r.invitationStatus === 'opened';
   const toItem = (r: PgDashRow): ActionItem => ({
@@ -120,5 +131,5 @@ export function buildPgDashboard(rows: PgDashRow[], now: Date): Dashboard {
     { id: 'due', label: '응답 마감 임박', items: dueItems },
   ].filter((g) => g.items.length > 0);
 
-  return { kpis, groups, onboardingActions: null };
+  return { kpis, groups, onboardingActions: null, openRfps };
 }

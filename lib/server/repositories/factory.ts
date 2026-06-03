@@ -16,6 +16,7 @@ import type {
   InvitationRepo,
   NotificationRepo,
   OutboxRepo,
+  PgRequestRepo,
   RfpRepo,
   UserRepo,
   VerificationTokenRepo,
@@ -25,6 +26,7 @@ import type {
 type RepoBundle = {
   rfp: RfpRepo;
   invitation: InvitationRepo;
+  pgRequest: PgRequestRepo;
   workspace: WorkspaceRepo;
   user: UserRepo;
   bizProfile: BizProfileRepo;
@@ -55,6 +57,7 @@ async function buildBundle(): Promise<RepoBundle> {
   const { db } = await import('@/lib/db/client');
   const { DrizzleRfpRepository } = await import('./drizzle/rfp');
   const { DrizzleInvitationRepository } = await import('./drizzle/invitation');
+  const { DrizzleRfpRequestRepository } = await import('./drizzle/rfp-pg-request');
   const { DrizzleWorkspaceRepository } = await import('./drizzle/workspace');
   const { DrizzleUserRepository } = await import('./drizzle/user');
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
@@ -78,6 +81,7 @@ async function buildBundle(): Promise<RepoBundle> {
   return {
     rfp: new DrizzleRfpRepository(db),
     invitation: new DrizzleInvitationRepository(db),
+    pgRequest: new DrizzleRfpRequestRepository(db),
     workspace: new DrizzleWorkspaceRepository(db),
     user: new DrizzleUserRepository(db),
     bizProfile: new DrizzleBizProfileRepository(db),
@@ -102,6 +106,7 @@ function isRepoBundleStale(bundle: RepoBundle): boolean {
   return (
     typeof bundle.workspace.listForUser !== 'function' ||
     typeof bundle.workspace.isMember !== 'function' ||
+    typeof bundle.pgRequest?.findOpenRfpsForPg !== 'function' ||
     typeof bundle.column?.listByBoard !== 'function' ||
     typeof bundle.chatTemplate?.create !== 'function' ||
     typeof bundle.chatConversation?.findOrCreatePair !== 'function' ||
@@ -125,6 +130,9 @@ export async function getRfpRepo(): Promise<RfpRepo> {
 }
 export async function getInvitationRepo(): Promise<InvitationRepo> {
   return (await getBundle()).invitation;
+}
+export async function getPgRequestRepo(): Promise<PgRequestRepo> {
+  return (await getBundle()).pgRequest;
 }
 export async function getWorkspaceRepo(): Promise<WorkspaceRepo> {
   return (await getBundle()).workspace;
@@ -190,6 +198,7 @@ export async function __useDrizzleWithDbForTest(
 ): Promise<void> {
   const { DrizzleRfpRepository } = await import('./drizzle/rfp');
   const { DrizzleInvitationRepository } = await import('./drizzle/invitation');
+  const { DrizzleRfpRequestRepository } = await import('./drizzle/rfp-pg-request');
   const { DrizzleWorkspaceRepository } = await import('./drizzle/workspace');
   const { DrizzleUserRepository } = await import('./drizzle/user');
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
@@ -212,6 +221,7 @@ export async function __useDrizzleWithDbForTest(
   globalThis.__bidit_repos__ = {
     rfp: new DrizzleRfpRepository(db),
     invitation: new DrizzleInvitationRepository(db),
+    pgRequest: new DrizzleRfpRequestRepository(db),
     workspace: new DrizzleWorkspaceRepository(db),
     user: new DrizzleUserRepository(db),
     bizProfile: new DrizzleBizProfileRepository(db),

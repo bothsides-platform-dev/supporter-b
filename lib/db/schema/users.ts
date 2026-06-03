@@ -24,6 +24,7 @@ export const users = pgTable('users', {
   // Drizzle-level .references() is unnecessary.
   lastActiveWorkspaceId: uuid('last_active_workspace_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
   // Auto-maintained by the `set_updated_at` trigger (see 0000 migration).
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
 });

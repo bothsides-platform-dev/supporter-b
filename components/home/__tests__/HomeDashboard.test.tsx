@@ -4,6 +4,10 @@ import { render, screen, cleanup } from '@testing-library/react';
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+// Mock the server-action barrel so the jsdom suite doesn't load next-auth
+// (pulled transitively via the OpportunityRequestDialog in the discovery section).
+vi.mock('@/lib/server/actions/rfp', () => ({ createPgRequestAction: vi.fn() }));
 
 import { HomeDashboard } from '../HomeDashboard';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
@@ -58,5 +62,23 @@ describe('HomeDashboard', () => {
     expect(screen.getByRole('link', { name: /워크스페이스 프로필 설정/ }))
       .toHaveAttribute('href', '/settings/profile');
     expect(screen.queryByText('지금 처리할 일이 없습니다')).not.toBeInTheDocument();
+  });
+
+  it('renders the open-RFP discovery section for a PG with openRfps', () => {
+    const dash: Dashboard = {
+      ...empty,
+      openRfps: [
+        { rfpCode: 'P-OPEN1', buyerName: '구매사A', title: '카드 PG 견적', websiteUrl: 'https://a.example.com' },
+      ],
+    };
+    render(<HomeDashboard dashboard={dash} workspaceType="pg" />);
+    expect(screen.getByText('카드 PG 견적')).toBeInTheDocument();
+    expect(screen.getByText('구매사A')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '참여 요청' })).toBeInTheDocument();
+  });
+
+  it('does not render the discovery section for a buyer', () => {
+    render(<HomeDashboard dashboard={withGroups} workspaceType="buyer" />);
+    expect(screen.queryByRole('button', { name: '참여 요청' })).not.toBeInTheDocument();
   });
 });

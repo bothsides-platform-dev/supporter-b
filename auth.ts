@@ -39,6 +39,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           .where(eq(users.email, email))
           .limit(1);
         if (!user) return null;
+        if (user.deletedAt) return null; // 탈퇴 계정 로그인 차단
 
         const ok = await verifyPassword(password, user.passwordHash);
         if (!ok) return null;

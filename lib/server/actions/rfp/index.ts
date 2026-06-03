@@ -16,6 +16,30 @@ export type {
   SendDraftInvitationsResult,
 } from './sendDraftInvitationsAction';
 
+export { createPgRequestAction } from './createPgRequestAction';
+export type {
+  CreatePgRequestInput,
+  CreatePgRequestResult,
+} from './createPgRequestAction';
+
+export { acceptPgRequestAction } from './acceptPgRequestAction';
+export type {
+  AcceptPgRequestInput,
+  AcceptPgRequestResult,
+} from './acceptPgRequestAction';
+
+export { rejectPgRequestAction } from './rejectPgRequestAction';
+export type {
+  RejectPgRequestInput,
+  RejectPgRequestResult,
+} from './rejectPgRequestAction';
+
+export { setRfpBoardVisibilityAction } from './setRfpBoardVisibilityAction';
+export type {
+  SetRfpBoardVisibilityInput,
+  SetRfpBoardVisibilityResult,
+} from './setRfpBoardVisibilityAction';
+
 export { awardRfpAction } from './awardRfpAction';
 export type { AwardRfpInput, AwardRfpResult } from './awardRfpAction';
 

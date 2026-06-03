@@ -9,6 +9,7 @@ import {
   getBidNoteRepo,
   getBidRepo,
   getInvitationRepo,
+  getPgRequestRepo,
   getRfpRepo,
   getWorkspaceRepo,
 } from './repositories/factory';
@@ -29,6 +30,8 @@ export type BuyerRfpDetailData = {
   companyName: string;
   inviteList: { wsId: string; wsName: string; status: InvitationStatus }[];
   pgWsNameMap: Record<string, string>;
+  /** 오픈 게시판에서 들어온 미결(pending) 참여 요청 — 구매사 검토용. */
+  pendingRequests: { id: string; pgWsId: string; pgWsName: string; message: string; createdAt: string }[];
   canEdit: boolean;
   shareUrl: string;
   authorId: string;
@@ -112,6 +115,23 @@ export async function loadBuyerRfpDetail(args: {
     status: invByWsId.get(wsId) ?? ('draft' as InvitationStatus),
   }));
 
+  // 오픈 게시판 콜드 피치 — pending 만 검토 목록에 노출. PG 상호명 hydrate.
+  const allRequests = await (await getPgRequestRepo()).findByRfp(rfp.id);
+  const pendingReqRows = allRequests.filter((r) => r.status === 'pending');
+  const reqWsIds = Array.from(new Set(pendingReqRows.map((r) => r.pgWsId)));
+  const reqWorkspaces = await Promise.all(reqWsIds.map((id) => wsRepo.findById(id)));
+  const reqNameMap: Record<string, string> = {};
+  reqWorkspaces.forEach((w, i) => {
+    if (w) reqNameMap[reqWsIds[i]] = w.name;
+  });
+  const pendingRequests = pendingReqRows.map((r) => ({
+    id: r.id,
+    pgWsId: r.pgWsId,
+    pgWsName: reqNameMap[r.pgWsId] ?? r.pgWsId,
+    message: r.message,
+    createdAt: r.createdAt,
+  }));
+
   const canEdit = rfp.status === 'sent' && new Date(rfp.deadline).getTime() > Date.now();
   const shareUrl = rfp.shareToken ? `${baseUrl()}/share/rfp/${rfp.shareToken}` : '';
 
@@ -123,6 +143,7 @@ export async function loadBuyerRfpDetail(args: {
     companyName,
     inviteList,
     pgWsNameMap,
+    pendingRequests,
     canEdit,
     shareUrl,
     authorId: args.userId,
