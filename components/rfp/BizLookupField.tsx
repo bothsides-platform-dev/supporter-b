@@ -16,7 +16,7 @@ export type BizLookupResult = {
 
 type LookupResponse =
   | { valid: true; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed' }
-  | { valid: false; taxType?: undefined; status?: undefined };
+  | { valid: false; error?: string };
 
 type Status = 'idle' | 'loading' | 'found' | 'notfound';
 
@@ -62,20 +62,25 @@ export function BizLookupField({ onLookup, onResult, onReset }: Props) {
     if (!isComplete) return;
     setStatus('loading');
     setError('');
-    const response = await onLookup(formatted);
-    if (response.valid) {
-      const profile: BizLookupResult = {
-        bizNo: formatted,
-        taxType: response.taxType,
-        status: response.status,
-      };
-      setResult(profile);
-      setStatus('found');
-      onResult(profile);
-    } else {
-      setResult(null);
-      setStatus('notfound');
-      setError('사업자번호를 찾지 못했어요.');
+    try {
+      const response = await onLookup(formatted);
+      if (response.valid) {
+        const profile: BizLookupResult = {
+          bizNo: formatted,
+          taxType: response.taxType,
+          status: response.status,
+        };
+        setResult(profile);
+        setStatus('found');
+        onResult(profile);
+      } else {
+        setResult(null);
+        setStatus('notfound');
+        setError(response.error ?? '사업자번호를 찾지 못했어요.');
+      }
+    } catch {
+      setStatus('idle');
+      setError('조회 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
     }
   };
 
