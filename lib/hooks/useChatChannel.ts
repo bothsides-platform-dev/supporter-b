@@ -36,6 +36,7 @@ export type UseChatChannelResult = {
   online: boolean;
   typingUserIds: string[];
   sendTyping: () => void;
+  connected: boolean | null;
 };
 
 const TYPING_TIMEOUT_MS = 3000;
@@ -46,6 +47,7 @@ export function useChatChannel(
 ): UseChatChannelResult {
   const [online, setOnline] = useState(false);
   const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
+  const [connected, setConnected] = useState<boolean | null>(null);
   const subRef = useRef<Subscription | null>(null);
 
   // Keep callbacks current without re-subscribing on every render.
@@ -102,6 +104,11 @@ export function useChatChannel(
     sub.on('leave', refreshPresence);
     sub.on('subscribed', refreshPresence);
 
+    const onConnected = () => setConnected(true);
+    const onDisconnected = () => setConnected(false);
+    client.on('connected', onConnected);
+    client.on('disconnected', onDisconnected);
+
     sub.subscribe();
     client.connect();
 
@@ -114,6 +121,8 @@ export function useChatChannel(
       // handlers (which would fire onMessage/typing twice). Safe under the
       // single-consumer model (no ref-counted sharing).
       client.removeSubscription(sub);
+      client.off('connected', onConnected);
+      client.off('disconnected', onDisconnected);
       subRef.current = null;
       for (const t of timers.values()) clearTimeout(t);
       timers.clear();
@@ -126,5 +135,5 @@ export function useChatChannel(
     subRef.current?.publish({ type: 'typing' }).catch(() => {});
   }, []);
 
-  return { online, typingUserIds, sendTyping };
+  return { online, typingUserIds, sendTyping, connected };
 }

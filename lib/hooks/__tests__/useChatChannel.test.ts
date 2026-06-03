@@ -25,12 +25,20 @@ function makeSub() {
 
 type MockSub = ReturnType<typeof makeSub>;
 let mockSub: MockSub;
+const mockClientHandlers: Record<string, Handler[]> = {};
 const mockClient = {
   connect: vi.fn(),
   disconnect: vi.fn(),
   newSubscription: vi.fn((): MockSub => mockSub),
   getSubscription: vi.fn((): MockSub | null => null),
   removeSubscription: vi.fn(),
+  off: vi.fn(),
+  on: vi.fn((event: string, cb: Handler) => {
+    (mockClientHandlers[event] ??= []).push(cb);
+  }),
+  __fire(event: string, ctx: unknown) {
+    for (const h of mockClientHandlers[event] ?? []) h(ctx);
+  },
 };
 // Defined inside the factory (hoisted) so `new Centrifuge()` resolves to a real
 // constructable mock. Exported so tests can assert on construction.
@@ -52,6 +60,7 @@ const CHANNEL = `chat:conversation:${CONV_ID}`;
 
 beforeEach(async () => {
   vi.resetModules();
+  Object.keys(mockClientHandlers).forEach((k) => delete mockClientHandlers[k]);
   mockSub = makeSub();
   mockClient.newSubscription.mockImplementation(() => mockSub);
   mockClient.getSubscription.mockReturnValue(null);
@@ -79,6 +88,7 @@ describe('useChatChannel — graceful no-op (URL 미설정)', () => {
     expect(mockSub.subscribe).not.toHaveBeenCalled();
     expect(result.current.online).toBe(false);
     expect(result.current.typingUserIds).toEqual([]);
+    expect(result.current.connected).toBeNull();
   });
 });
 
@@ -211,5 +221,57 @@ describe('useChatChannel — 라이브 연결 (URL 설정)', () => {
     });
 
     expect(onMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('(f) 초기 connected 는 null (미확정)', async () => {
+    const { renderHook } = await import('@testing-library/react');
+    const { useChatChannel } = await import('@/lib/hooks/useChatChannel');
+
+    const { result } = renderHook(() => useChatChannel(CONV_ID, {}));
+
+    expect(result.current.connected).toBeNull();
+  });
+
+  it('(g) client connected 이벤트 → connected:true', async () => {
+    const { renderHook, act } = await import('@testing-library/react');
+    const { useChatChannel } = await import('@/lib/hooks/useChatChannel');
+
+    const { result } = renderHook(() => useChatChannel(CONV_ID, {}));
+    expect(result.current.connected).toBeNull();
+
+    act(() => {
+      mockClient.__fire('connected', {});
+    });
+
+    expect(result.current.connected).toBe(true);
+  });
+
+  it('(h) client disconnected 이벤트 → connected:false', async () => {
+    const { renderHook, act } = await import('@testing-library/react');
+    const { useChatChannel } = await import('@/lib/hooks/useChatChannel');
+
+    const { result } = renderHook(() => useChatChannel(CONV_ID, {}));
+
+    act(() => {
+      mockClient.__fire('connected', {});
+    });
+    expect(result.current.connected).toBe(true);
+
+    act(() => {
+      mockClient.__fire('disconnected', {});
+    });
+    expect(result.current.connected).toBe(false);
+  });
+
+  it('언마운트 시 connected/disconnected 핸들러를 client.off 로 해제한다', async () => {
+    const { renderHook } = await import('@testing-library/react');
+    const { useChatChannel } = await import('@/lib/hooks/useChatChannel');
+
+    const { unmount } = renderHook(() => useChatChannel(CONV_ID, {}));
+    unmount();
+
+    const offCalls = mockClient.off.mock.calls.map(([event]: [string]) => event);
+    expect(offCalls).toContain('connected');
+    expect(offCalls).toContain('disconnected');
   });
 });
