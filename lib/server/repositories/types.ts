@@ -6,6 +6,7 @@ import type { PgliteDB } from '@/lib/db/client-pglite';
 
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
+import type { PgRequest, PgRequestStatus, OpportunityListing } from '@/lib/types/pg-request';
 import type {
   Workspace,
   WorkspaceMembershipSummary,
@@ -79,6 +80,33 @@ export interface InvitationRepo {
   markOpened(invitationId: string, openedAt: Date, tx?: Tx): Promise<void>;
   /** 통일 칸반: pg pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
   setBoardColumn(invitationId: string, columnId: string | null, tx?: Tx): Promise<void>;
+}
+
+// ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────
+export interface PgRequestRepo {
+  /** 요청 1건 생성 — (rfpId, pgWsId) UNIQUE 위배 시 throw(중복 요청 차단). */
+  create(req: PgRequest, tx?: Tx): Promise<void>;
+  /** id 단건 조회. */
+  findById(id: string, tx?: Tx): Promise<PgRequest | undefined>;
+  /** 한 RFP의 모든 요청 — 구매사 검토 목록(상태 필터는 호출부). createdAt asc. */
+  findByRfp(rfpId: string, tx?: Tx): Promise<PgRequest[]>;
+  /** (rfp, pg) 쌍의 현재 요청 상태 — 없으면 undefined. 게시판/액션 제외 판정용. */
+  findPairStatus(rfpId: string, pgWsId: string, tx?: Tx): Promise<PgRequestStatus | undefined>;
+  /** pending → accepted|rejected 원자 전이(`WHERE status='pending'`). 이미 결정됐으면 no-op. */
+  markDecided(
+    id: string,
+    status: 'accepted' | 'rejected',
+    decidedByUserId: string,
+    at: Date,
+    tx?: Tx,
+  ): Promise<void>;
+  /**
+   * PG 게시판 — 발견 가능한 오픈 RFP 목록. 공개 경계가 이 쿼리에 있다:
+   * SELECT는 화이트리스트 컬럼만(수수료/현재조건 미포함). WHERE status='sent'
+   * AND deadline>now AND board_visible=true, 그리고 이미 allowlist 됐거나
+   * 어떤 상태로든 요청 행이 있는 RFP는 제외.
+   */
+  findOpenRfpsForPg(pgWsId: string, now: Date, tx?: Tx): Promise<OpportunityListing[]>;
 }
 
 // ── Workspace ─────────────────────────────────────────────────────────

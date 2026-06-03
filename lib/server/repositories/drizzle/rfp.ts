@@ -51,6 +51,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     requiredPaymentMethods: (row.requiredPaymentMethods ?? []) as PaymentMethod[],
     customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
     shareToken: row.shareToken,
+    boardVisible: row.boardVisible,
   };
 }
 
@@ -132,6 +133,10 @@ export class DrizzleRfpRepository implements RfpRepo {
       sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
     };
     if (rfp.shareToken) values.shareToken = rfp.shareToken;
+    // boardVisible 미지정 시 DB default(true). 지정 시에만 반영하고, 업서트
+    // conflict set 에는 넣지 않아 — 노출 토글은 전용 액션의 직접 UPDATE 소관이라
+    // 일반 RFP 저장/수정이 구매사의 opt-out 선택을 덮어쓰지 않게 한다.
+    if (rfp.boardVisible !== undefined) values.boardVisible = rfp.boardVisible;
 
     await db
       .insert(rfps)

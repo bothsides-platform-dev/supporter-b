@@ -8,6 +8,7 @@ import {
 import type { PgDashRow } from '../buildDashboard';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
+import type { OpportunityListing } from '@/lib/types/pg-request';
 
 const NOW = new Date(2026, 4, 25, 9, 0, 0); // 2026-05-25 09:00 local
 const DAY = 86_400_000;
@@ -136,5 +137,29 @@ describe('buildPgDashboard — onboarding', () => {
   it('always returns onboardingActions: null', () => {
     const dash = buildPgDashboard([], NOW);
     expect(dash.onboardingActions).toBeNull();
+  });
+});
+
+describe('buildPgDashboard — open RFP discovery', () => {
+  const listings: OpportunityListing[] = [
+    { rfpCode: 'P-OPEN1', buyerName: '구매사A', title: '오픈 견적', websiteUrl: 'https://a.example.com' },
+    { rfpCode: 'P-OPEN2', buyerName: '구매사B', title: '오픈 견적2', websiteUrl: null },
+  ];
+
+  it('passes through the open-RFP listings for PG discovery', () => {
+    const dash = buildPgDashboard([], NOW, listings);
+    expect(dash.openRfps).toEqual(listings);
+  });
+
+  it('defaults to an empty list when none are provided', () => {
+    const dash = buildPgDashboard([], NOW);
+    expect(dash.openRfps).toEqual([]);
+  });
+});
+
+describe('buildBuyerDashboard — no open RFP discovery', () => {
+  it('never surfaces open-RFP listings to buyers', () => {
+    const dash = buildBuyerDashboard([], new Map(), NOW);
+    expect(dash.openRfps).toBeUndefined();
   });
 });

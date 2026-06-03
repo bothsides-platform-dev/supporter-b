@@ -11,6 +11,14 @@ vi.mock('../BidComparisonView', () => ({
 vi.mock('../RfpInviteManager', () => ({
   RfpInviteManager: () => <div data-testid="invite-manager" />,
 }));
+vi.mock('../RfpBoardVisibilityToggle', () => ({
+  RfpBoardVisibilityToggle: () => <div data-testid="board-visibility-toggle" />,
+}));
+vi.mock('../RfpPendingRequests', () => ({
+  RfpPendingRequests: ({ requests }: { requests: { id: string }[] }) => (
+    <div data-testid="pending-requests">{requests.length}</div>
+  ),
+}));
 vi.mock('@/components/attachments/AttachmentPreviewList', () => ({
   AttachmentPreviewList: () => <div data-testid="attachments" />,
 }));
@@ -60,6 +68,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     companyName: '구매사',
     inviteList: [],
     pgWsNameMap: {},
+    pendingRequests: [],
     canEdit: true,
     shareUrl: '',
     authorId: 'u1',
@@ -113,5 +122,19 @@ describe('RfpDetailContent', () => {
   it('currentSolution 이 없으면 "현재 운영 솔루션" 행을 렌더하지 않는다', () => {
     render(<RfpDetailContent data={buildData()} />);
     expect(screen.queryByText('현재 운영 솔루션')).not.toBeInTheDocument();
+  });
+
+  it('게시판 노출 토글과 참여 요청 검토 목록을 함께 렌더한다', () => {
+    render(
+      <RfpDetailContent
+        data={buildData({
+          pendingRequests: [
+            { id: 'r1', pgWsId: 'ws-toss', pgWsName: '토스', message: '제안합니다', createdAt: new Date().toISOString() },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByTestId('board-visibility-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('pending-requests')).toHaveTextContent('1');
   });
 });

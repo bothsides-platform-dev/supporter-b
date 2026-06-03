@@ -101,6 +101,15 @@ const INBOX_SECTION: NavSection = {
   icon: InboxIcon,
   shortcut: { kind: 'chord', lead: 'g', key: 'i' },
   statuses: statusItems('/inbox'),
+  links: [
+    {
+      id: 'opportunities',
+      label: '제안 기회',
+      href: '/opportunities',
+      // G then O (Opportunities) — h/n/m/i/s/p/t/1-3 are taken for pg.
+      shortcut: { kind: 'chord', lead: 'g', key: 'o' },
+    },
+  ],
 };
 
 const SETTINGS_SECTION: NavSection = {
@@ -174,6 +183,7 @@ export function getBreadcrumbSegments(
   if (pathname === '/home') return [{ label: '홈' }];
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
+  if (pathname === '/opportunities') return [{ label: '제안 기회' }];
   if (pathname === '/rfp') {
     const label = status ? STATUS_LABELS['/rfp'][status as keyof typeof STATUS_LABELS['/rfp']] : undefined;
     return label ? [{ label: 'RFP', href: '/rfp' }, { label }] : [{ label: 'RFP' }];
