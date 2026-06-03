@@ -90,3 +90,40 @@ describe('PhoneVerificationField — 하이픈 입력 마스킹', () => {
     expect(mockVerify).toHaveBeenCalledWith({ phone: '010-1234-5678', code: '123456' });
   });
 });
+
+describe('PhoneVerificationField — 외부 API 실패 처리', () => {
+  it('발송 액션 throw 시 무한 로딩에 빠지지 않는다', async () => {
+    const user = userEvent.setup();
+    mockSend.mockRejectedValue(new Error('network'));
+
+    render(<PhoneVerificationField onVerified={vi.fn()} />);
+    await user.type(screen.getByLabelText('휴대전화'), '01012345678');
+    await user.click(screen.getByRole('button', { name: '인증하기' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText('LOADING…')).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText(/오류가 발생했습니다/)).toBeInTheDocument();
+  });
+
+  it('확인 액션 throw 시 무한 로딩에 빠지지 않는다', async () => {
+    const user = userEvent.setup();
+    mockSend.mockResolvedValue({ ok: true });
+    mockVerify.mockRejectedValue(new Error('network'));
+
+    render(<PhoneVerificationField onVerified={vi.fn()} />);
+    await user.type(screen.getByLabelText('휴대전화'), '01012345678');
+    await user.click(screen.getByRole('button', { name: '인증하기' }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('인증번호')).toBeInTheDocument(),
+    );
+    await user.type(screen.getByLabelText('인증번호'), '123456');
+    await user.click(screen.getByRole('button', { name: '확인' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText('LOADING…')).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText(/오류가 발생했습니다/)).toBeInTheDocument();
+  });
+});

@@ -69,42 +69,52 @@ export function PhoneVerificationField({ onVerified }: Props) {
   async function handleSend() {
     setPhoneError(null);
     setSending(true);
-    const r = await sendPhoneOtpAction({ phone });
-    setSending(false);
-    if (!r.ok) {
-      setPhoneError(
-        r.error === 'RATE_LIMITED'
-          ? '잠시 후 다시 시도해주세요. (10분 내 3회 제한)'
-          : r.error === 'SMS_FAILED'
-            ? '인증번호 발송에 실패했습니다. 잠시 후 다시 시도해주세요.'
-            : '올바른 휴대전화 번호를 입력해주세요.',
-      );
-      return;
+    try {
+      const r = await sendPhoneOtpAction({ phone });
+      if (!r.ok) {
+        setPhoneError(
+          r.error === 'RATE_LIMITED'
+            ? '잠시 후 다시 시도해주세요. (10분 내 3회 제한)'
+            : r.error === 'SMS_FAILED'
+              ? '인증번호 발송에 실패했습니다. 잠시 후 다시 시도해주세요.'
+              : '올바른 휴대전화 번호를 입력해주세요.',
+        );
+        return;
+      }
+      setStep('otp');
+      setOtpCode('');
+      setOtpError(null);
+      startCountdown();
+    } catch {
+      setPhoneError('인증번호 발송 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setSending(false);
     }
-    setStep('otp');
-    setOtpCode('');
-    setOtpError(null);
-    startCountdown();
   }
 
   async function handleVerify() {
     setOtpError(null);
     setVerifying(true);
-    const r = await verifyPhoneOtpAction({ phone, code: otpCode });
-    setVerifying(false);
-    if (!r.ok) {
-      setOtpError(
-        r.error === 'MAX_ATTEMPTS'
-          ? '인증 시도 횟수를 초과했습니다. 번호를 다시 인증해주세요.'
-          : '인증번호가 올바르지 않습니다.',
-      );
-      if (r.error === 'MAX_ATTEMPTS') setStep('input');
-      return;
+    try {
+      const r = await verifyPhoneOtpAction({ phone, code: otpCode });
+      if (!r.ok) {
+        setOtpError(
+          r.error === 'MAX_ATTEMPTS'
+            ? '인증 시도 횟수를 초과했습니다. 번호를 다시 인증해주세요.'
+            : '인증번호가 올바르지 않습니다.',
+        );
+        if (r.error === 'MAX_ATTEMPTS') setStep('input');
+        return;
+      }
+      if (timerRef.current) clearInterval(timerRef.current);
+      setStep('verified');
+      // Submit the hyphenated format as-is; the server normalizes for storage.
+      onVerified(phone, r.verificationId);
+    } catch {
+      setOtpError('인증 확인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setVerifying(false);
     }
-    if (timerRef.current) clearInterval(timerRef.current);
-    setStep('verified');
-    // Submit the hyphenated format as-is; the server normalizes for storage.
-    onVerified(phone, r.verificationId);
   }
 
   async function handleResend() {

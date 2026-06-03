@@ -90,4 +90,44 @@ describe('BizLookupField', () => {
       await screen.findByText(/사업자번호를 찾지 못했어요/),
     ).toBeInTheDocument();
   });
+
+  it('shows API error message when onLookup returns { valid: false, error: ... }', async () => {
+    const user = userEvent.setup();
+    const onLookup = vi.fn(async () => ({
+      valid: false as const,
+      error: '조회 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.',
+    }));
+
+    render(
+      <BizLookupField onLookup={onLookup} onResult={() => {}} onReset={() => {}} />,
+    );
+    await user.type(screen.getByLabelText('사업자 등록번호'), '1234567890');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    expect(
+      await screen.findByText(/잠시 후 다시 시도해주세요/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '조회' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows error and resets to idle when onLookup throws (no infinite loading)', async () => {
+    const user = userEvent.setup();
+    const onLookup = vi.fn().mockRejectedValue(new Error('network'));
+
+    render(
+      <BizLookupField onLookup={onLookup} onResult={() => {}} onReset={() => {}} />,
+    );
+    await user.type(screen.getByLabelText('사업자 등록번호'), '1234567890');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText('조회 중…')).not.toBeInTheDocument(),
+    );
+    expect(
+      await screen.findByText(/오류가 발생했어요/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '조회' })).toBeInTheDocument();
+  });
 });
