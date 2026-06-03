@@ -134,7 +134,7 @@ export function RfpStep4Review({
             </span>
             <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
           </div>
-          <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap border border-[var(--md-sys-color-outline-variant)] p-4">
+          <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap break-words border border-[var(--md-sys-color-outline-variant)] p-4">
             {draft.memo}
           </p>
         </div>

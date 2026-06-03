@@ -55,6 +55,8 @@ describe('formatSize', () => {
   it('1KB 이상 1MB 미만은 KB로 표시 (정수)', () => {
     expect(formatSize(1_000)).toBe('1 KB');
     expect(formatSize(5_000)).toBe('5 KB');
+    // 1MB 바로 아래 경계는 MB로 승격되지 않고 KB로 남는다
+    expect(formatSize(999_999)).toBe('1000 KB');
   });
 
   it('1MB 이상은 MB로 표시 (소수 1자리)', () => {
