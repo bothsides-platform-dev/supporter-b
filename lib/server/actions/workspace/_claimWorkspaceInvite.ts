@@ -26,8 +26,8 @@ export type ClaimInviteResult =
   | { ok: true; workspaceId: string }
   | { ok: false; error: 'INVITE_EXPIRED' };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function claimInviteInTx(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any,
   invitation: InvitationClaimInput,
   userId: string,

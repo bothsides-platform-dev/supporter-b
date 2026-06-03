@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { getVerificationTokenRepo } from '@/lib/server/repositories/factory';
+import { getUserRepo, getVerificationTokenRepo } from '@/lib/server/repositories/factory';
 import { hashToken } from '@/lib/server/token';
 import { normalizeEmail, type AuthActionResult } from './_shared';
 
@@ -40,6 +40,9 @@ export async function verifyEmailCodeAction(input: {
   });
 
   if (!consumed) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
+
+  // 코드 소비 = 이메일 인증. 이미 생성된 유저의 플래그 전환(없으면 no-op).
+  await (await getUserRepo()).markEmailVerified(consumed.email);
 
   const meta = consumed.meta && typeof consumed.meta === 'object'
     ? (consumed.meta as Record<string, unknown>)

@@ -40,6 +40,7 @@ function rowToUser(u: UserRow, m: MemberRow): User {
     avatarColor: normalizeAvatarColor(u.avatarColor),
     role: m.role,
     status: u.status === 'paused' ? 'paused' : 'active',
+    emailVerified: u.emailVerified,
     joinedAt: new Date(m.joinedAt).toISOString(),
     lastSeenAt: m.lastSeenAt ? new Date(m.lastSeenAt).toISOString() : undefined,
   };

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -9,6 +9,12 @@ export const users = pgTable('users', {
   phone: text('phone'),
   avatarColor: text('avatar_color').notNull().default('#000'),
   status: text('status').notNull().default('active'),
+  // Email-verification flag. New signups are created false and flipped true when
+  // the user consumes a signup_email token (link or 6-digit code). Read by the
+  // /pending-approval verify UI and the (separate-repo) admin console, which
+  // only approves verified users. NOT in the JWT/session — read from DB.
+  emailVerified: boolean('email_verified').notNull().default(false),
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   // Remembered active workspace — restored on login so a multi-workspace user
   // lands where they left off. Nullable; set on first ws creation (signup /
   // createWorkspace) and on every switchWorkspaceAction. The FK (ON DELETE SET

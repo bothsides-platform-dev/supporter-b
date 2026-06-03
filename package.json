@@ -16,8 +16,6 @@
     "e2e:precheck": "tsx scripts/e2e-precheck.ts",
     "e2e:reset": "tsx scripts/test-db-reset.ts",
     "og:generate": "node scripts/generate-og.mjs",
-    "db:generate": "node scripts/db-generate.mjs",
-    "db:migrate": "tsx scripts/db-migrate-safe.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts"

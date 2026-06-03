@@ -312,8 +312,9 @@ describe('signupViaWorkspaceInviteAction — 중복 이메일 (EMAIL_TAKEN)', ()
   it('EMAIL_TAKEN — 같은 이메일로 이미 계정이 존재하면 거부', async () => {
     const ws = await seedPgWorkspace(db, 'PG Co');
     const admin = await seedUser(db, { email: 'admin@pg.co' });
-    // 같은 이메일로 기존 계정을 미리 생성
+    // 같은 이메일로 이미 인증된 기존 계정 — 미인증이면 purge 되므로 verified 로 둔다.
     await seedUser(db, { email: TEST_EMAIL });
+    await db.update(users).set({ emailVerified: true }).where(eq(users.email, TEST_EMAIL));
     const phoneId = await seedVerifiedOtp();
     // signupEmailAction을 우회: verification token을 직접 consumed 상태로 삽입
     const { hashToken, generateToken } = await import('@/lib/server/token');
@@ -362,12 +363,11 @@ describe('signupViaWorkspaceInviteAction — 인증 게이트', () => {
     if (!r.ok) expect(r.error).toBe('PHONE_NOT_VERIFIED');
   });
 
-  it('EMAIL_NOT_VERIFIED — 이메일 인증 없이 호출 시 거부', async () => {
+  it('이메일 인증 없이도 가입 성공 — emailVerified=false 로 생성 (초대 경로는 인증 강제 안 함)', async () => {
     const ws = await seedPgWorkspace(db, 'PG Co');
     const admin = await seedUser(db, { email: 'admin@pg.co' });
     const phoneId = await seedVerifiedOtp();
-    // signupEmailAction만 호출하고 verifyEmailAction 생략 → consumedAt NULL
-    await signupEmailAction({ email: TEST_EMAIL, workspaceType: 'pg' });
+    // 이메일 인증 단계 없음 (결정 #3: invitee 는 인증 강제 안 함)
     const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
 
     const r = await signupViaWorkspaceInviteAction({
@@ -379,27 +379,12 @@ describe('signupViaWorkspaceInviteAction — 인증 게이트', () => {
       wsInviteToken: rawToken,
     });
 
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('EMAIL_NOT_VERIFIED');
-  });
-
-  it('EMAIL_NOT_VERIFIED — 이메일 토큰 자체가 없으면 거부', async () => {
-    const ws = await seedPgWorkspace(db, 'PG Co');
-    const admin = await seedUser(db, { email: 'admin@pg.co' });
-    const phoneId = await seedVerifiedOtp();
-    // signupEmailAction 미호출 — 토큰 없음
-    const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
-
-    const r = await signupViaWorkspaceInviteAction({
-      email: TEST_EMAIL,
-      name: TEST_NAME,
-      password: TEST_PASSWORD,
-      phone: DEFAULT_PHONE,
-      phoneVerificationId: phoneId,
-      wsInviteToken: rawToken,
-    });
-
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('EMAIL_NOT_VERIFIED');
+    expect(r.ok).toBe(true);
+    const [u] = await db
+      .select({ emailVerified: users.emailVerified })
+      .from(users)
+      .where(eq(users.email, TEST_EMAIL))
+      .limit(1);
+    expect(u.emailVerified).toBe(false);
   });
 });

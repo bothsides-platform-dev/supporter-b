@@ -184,7 +184,7 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     // 같은 페이지에 "✓ 제출 완료" 에어브로우 paragraph가 또 있어 strict-mode
     // 위반을 피하려면 heading role로 좁혀야 한다.
     await expect(
-      page.getByRole('heading', { name: /제안이 제출/ }),
+      page.getByRole('heading', { name: /제안을 제출했어요/ }),
     ).toBeVisible();
   });
 });

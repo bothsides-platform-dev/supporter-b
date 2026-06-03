@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { phoneOtps } from '@/lib/db/schema';
+import { phoneOtps, users } from '@/lib/db/schema';
 import { signupEmailAction } from '../signupEmailAction';
 import { verifyEmailAction } from '../verifyEmailAction';
 import { signupCompleteAction } from '../signupCompleteAction';
@@ -39,74 +39,96 @@ async function seedVerifiedOtp(phone = DEFAULT_PHONE) {
   return row.id;
 }
 
-describe('signupCompleteAction — EMAIL_NOT_VERIFIED gate', () => {
+const BUYER_BIZ = { bizNo: VALID_BIZ_NO, taxType: 'general' as const, status: 'active' as const };
+
+describe('signupCompleteAction — creates unverified user (no email gate)', () => {
   beforeEach(async () => {
     db = await setupActionEnv();
   });
   afterEach(teardownActionEnv);
 
-  it('returns EMAIL_NOT_VERIFIED when no consumed signup_email token exists', async () => {
+  it('creates the user with emailVerified=false WITHOUT any prior email verification', async () => {
     const phoneId = await seedVerifiedOtp();
-    // signupEmailAction 발급만 하고 verifyEmailAction 호출 안 함 → consumed 없음
-    await signupEmailAction({ email: 'unverified@example.com', workspaceType: 'buyer' });
 
     const r = await signupCompleteAction({
-      email: 'unverified@example.com',
-      name: '미인증',
+      email: 'fresh@example.com',
+      name: '신규',
       password: 'Password123!',
       phone: DEFAULT_PHONE,
       phoneVerificationId: phoneId,
       wsKind: 'buyer',
-      wsName: '(주)미인증',
-      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
-    });
-
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('EMAIL_NOT_VERIFIED');
-  });
-
-  it('returns EMAIL_NOT_VERIFIED when email token was never issued', async () => {
-    const phoneId = await seedVerifiedOtp();
-
-    const r = await signupCompleteAction({
-      email: 'noemail@example.com',
-      name: '없음',
-      password: 'Password123!',
-      phone: DEFAULT_PHONE,
-      phoneVerificationId: phoneId,
-      wsKind: 'buyer',
-      wsName: '(주)없음',
-      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
-    });
-
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('EMAIL_NOT_VERIFIED');
-  });
-
-  it('succeeds when a consumed signup_email token exists (link click path)', async () => {
-    const phoneId = await seedVerifiedOtp();
-
-    await signupEmailAction({ email: 'verified@example.com', workspaceType: 'buyer' });
-    const [row] = await db
-      .select({ html: outboxEntries.html })
-      .from(outboxEntries)
-      .where(eq(outboxEntries.toAddr, 'verified@example.com'))
-      .limit(1);
-    const rawToken = tokenFromHtml(row.html);
-    await verifyEmailAction(rawToken);
-
-    const r = await signupCompleteAction({
-      email: 'verified@example.com',
-      name: '인증됨',
-      password: 'Password123!',
-      phone: DEFAULT_PHONE,
-      phoneVerificationId: phoneId,
-      wsKind: 'buyer',
-      wsName: '(주)인증',
-      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
+      wsName: '(주)신규',
+      bizProfile: BUYER_BIZ,
     });
 
     expect(r.ok).toBe(true);
+    const [row] = await db
+      .select({ emailVerified: users.emailVerified })
+      .from(users)
+      .where(eq(users.email, 'fresh@example.com'))
+      .limit(1);
+    expect(row.emailVerified).toBe(false);
+  });
+
+  it('re-registration: an unverified existing email is overwritten and succeeds', async () => {
+    const first = await signupCompleteAction({
+      email: 'redo@example.com',
+      name: '첫번째',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: await seedVerifiedOtp(),
+      wsKind: 'buyer',
+      wsName: '(주)첫',
+      bizProfile: BUYER_BIZ,
+    });
+    expect(first.ok).toBe(true);
+
+    const second = await signupCompleteAction({
+      email: 'redo@example.com',
+      name: '두번째',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: await seedVerifiedOtp(),
+      wsKind: 'buyer',
+      wsName: '(주)둘',
+      bizProfile: BUYER_BIZ,
+    });
+    expect(second.ok).toBe(true);
+
+    const rows = await db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.email, 'redo@example.com'));
+    expect(rows.length).toBe(1);
+    expect(rows[0].name).toBe('두번째');
+  });
+
+  it('re-registration: a VERIFIED existing email returns EMAIL_TAKEN', async () => {
+    const first = await signupCompleteAction({
+      email: 'taken@example.com',
+      name: '주인',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: await seedVerifiedOtp(),
+      wsKind: 'buyer',
+      wsName: '(주)주인',
+      bizProfile: BUYER_BIZ,
+    });
+    expect(first.ok).toBe(true);
+    await db.update(users).set({ emailVerified: true }).where(eq(users.email, 'taken@example.com'));
+
+    const second = await signupCompleteAction({
+      email: 'taken@example.com',
+      name: '침입',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: await seedVerifiedOtp(),
+      wsKind: 'buyer',
+      wsName: '(주)침입',
+      bizProfile: BUYER_BIZ,
+    });
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.error).toBe('EMAIL_TAKEN');
   });
 });
 

@@ -21,10 +21,14 @@ vi.mock('canvas-confetti', () => ({
 
 vi.mock('motion/react', () => ({
   motion: {
-    span: ({ children, animate, style, className }: Record<string, unknown>) =>
+    span: ({ children, style, className }: Record<string, unknown>) =>
       <span style={style as React.CSSProperties} className={className as string}>{children as React.ReactNode}</span>,
   },
   useAnimation: vi.fn(() => ({ start: animationStartMock })),
+}));
+
+vi.mock('next/link', () => ({
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
 beforeEach(() => {
@@ -88,5 +92,11 @@ describe('ApprovalWaitingScreen', () => {
       screen.getByRole('button', { name: '축하 효과 다시 보기' }),
     );
     expect(animationStartMock).toHaveBeenCalledTimes(callsAfterMount + 1);
+  });
+
+  it('홈으로 가기 링크가 루트로 연결된다', () => {
+    render(<ApprovalWaitingScreen />);
+    const link = screen.getByRole('link', { name: '홈으로 가기' });
+    expect(link).toHaveAttribute('href', '/');
   });
 });

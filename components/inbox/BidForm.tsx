@@ -90,9 +90,10 @@ export function BidForm({
   // 임시 저장
   const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
   const [showRestoreBanner, setShowRestoreBanner] = useState(draft !== null);
+  const draftDismissed = useRef(false);
 
   useEffect(() => {
-    saveDraft(fields);
+    if (!draftDismissed.current) saveDraft(fields);
   }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleRestore() {
@@ -102,6 +103,7 @@ export function BidForm({
   }
 
   function handleDismiss() {
+    draftDismissed.current = true;
     clearDraft();
     setShowRestoreBanner(false);
   }

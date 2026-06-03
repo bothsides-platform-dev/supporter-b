@@ -13,6 +13,12 @@ export type {
 export { verifyEmailAction } from './verifyEmailAction';
 export type { VerifyEmailResult } from './verifyEmailAction';
 
+export { verifyEmailCodeAction } from './verifyEmailCodeAction';
+export type { VerifyEmailCodeResult } from './verifyEmailCodeAction';
+
+export { sendMyEmailVerificationAction } from './sendMyEmailVerificationAction';
+export { checkMyEmailVerifiedAction } from './checkMyEmailVerifiedAction';
+
 export { signupCompleteAction } from './signupCompleteAction';
 export type {
   SignupCompleteInput,
