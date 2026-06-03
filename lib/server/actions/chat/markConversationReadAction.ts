@@ -12,13 +12,8 @@ import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 const Input = z.object({ conversationId: z.string().uuid() }).strict();
 
 export type MarkConversationReadInput = z.infer<typeof Input>;
-export type MarkConversationReadResult = ChatActionResult;
+export type MarkConversationReadResult = ChatActionResult<{ readAt: string }>;
 
-/**
- * Advance the caller's last_read_at for a conversation (idempotent, monotonic).
- * Backs the unread badge and the live read receipt — publishes a best-effort
- * "read" event so the counterparty sees the receipt update.
- */
 export async function markConversationReadAction(
   input: MarkConversationReadInput,
 ): Promise<MarkConversationReadResult> {
@@ -32,7 +27,6 @@ export async function markConversationReadAction(
     parsed.data.conversationId,
   );
   if (!conv) return { ok: false, error: 'CONVERSATION_NOT_FOUND' };
-  // Membership ACL: the session workspace must own one side of the pair.
   const myWsId = ws.workspaceType === 'buyer' ? conv.buyerWsId : conv.pgWsId;
   if (myWsId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
 
@@ -40,7 +34,12 @@ export async function markConversationReadAction(
   await (await getChatReadRepo()).upsert(conv.id, ws.userId, now);
 
   // Best-effort live read receipt to the counterparty.
-  await publishChatEvent(conv.id, { type: 'read', userId: ws.userId });
+  // readAt travels in the payload so the receiver uses server time, not client clock.
+  await publishChatEvent(conv.id, {
+    type: 'read',
+    userId: ws.userId,
+    readAt: now.toISOString(),
+  });
 
-  return { ok: true };
+  return { ok: true, readAt: now.toISOString() };
 }

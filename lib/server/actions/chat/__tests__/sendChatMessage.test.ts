@@ -377,13 +377,39 @@ describe('sendChatMessageAction', () => {
 describe('markConversationReadAction', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
+    publishChatEvent.mockClear();
+    isUserPresentInConversation.mockClear();
   });
   afterEach(() => {
     teardownRfpActionEnv();
     sessionRef.value = null;
   });
 
-  it('upserts last_read_at for a member of the conversation', async () => {
+  it('upserts last_read_at for a member and returns server readAt timestamp', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    const conv = await (await getChatConversationRepo()).findOrCreatePair(
+      buyerWs.id,
+      pgWs.id,
+    );
+    asBuyer(buyerUser, buyerWs.id);
+    const before = Date.now();
+
+    const r = await markConversationReadAction({ conversationId: conv.id });
+
+    const after = Date.now();
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error('unreachable');
+    // 반환된 readAt은 ISO 8601 문자열
+    expect(typeof r.readAt).toBe('string');
+    const ts = Date.parse(r.readAt);
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(after);
+    // DB row도 upsert됨
+    const row = await (await getChatReadRepo()).getFor(conv.id, buyerUser.id);
+    expect(row).toBeDefined();
+  });
+
+  it('publishes read event with readAt payload', async () => {
     const { buyerUser, buyerWs, pgWs } = await seedPair();
     const conv = await (await getChatConversationRepo()).findOrCreatePair(
       buyerWs.id,
@@ -391,10 +417,13 @@ describe('markConversationReadAction', () => {
     );
     asBuyer(buyerUser, buyerWs.id);
 
-    const r = await markConversationReadAction({ conversationId: conv.id });
-    expect(r.ok).toBe(true);
-    const row = await (await getChatReadRepo()).getFor(conv.id, buyerUser.id);
-    expect(row).toBeDefined();
+    await markConversationReadAction({ conversationId: conv.id });
+
+    expect(publishChatEvent).toHaveBeenCalledTimes(1);
+    const [, payload] = publishChatEvent.mock.calls[0];
+    expect(payload.type).toBe('read');
+    expect(payload.userId).toBe(buyerUser.id);
+    expect(typeof payload.readAt).toBe('string');
   });
 
   it('FORBIDDEN when the session workspace is not in the conversation', async () => {

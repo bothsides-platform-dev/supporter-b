@@ -14,7 +14,7 @@
 
 export type ChatRealtimeEvent =
   | { type: 'message'; id: string; [k: string]: unknown }
-  | { type: 'read'; [k: string]: unknown }
+  | { type: 'read'; userId: string; readAt: string; [k: string]: unknown }
   | { type: string; [k: string]: unknown };
 
 /** Channel name for a conversation. Single source so the subscribe proxy and
@@ -48,9 +48,10 @@ export async function publishChatEvent(
         params: { channel: chatChannel(conversationId), data },
       }),
     });
-  } catch {
+  } catch (err) {
     // Best-effort: persistence already succeeded in Postgres; a missed fanout
     // is recovered by the client's REST history load on next connect.
+    console.warn('[centrifugo] publish failed', err);
   }
 }
 
