@@ -72,7 +72,7 @@ export default async function ProfilePage({ searchParams }: Props) {
             : []),
         ] as [string, ReactNode][])
       : []),
-    ['생성일', <LocalDate iso={ws.createdAt} />],
+    ['생성일', <LocalDate key="createdAt" iso={ws.createdAt} />],
   ];
 
   const kvRowClass =
