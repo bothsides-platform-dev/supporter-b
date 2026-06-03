@@ -31,6 +31,8 @@ export function EmailVerifySection({
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [cooldown, setCooldown] = useState(0); // 재발송 쿨다운(초) — 0이면 발송 가능
+  const [resent, setResent] = useState(false); // 재발송 직후 피드백 노출 여부
   const sentOnce = useRef(false);
   const notifiedRef = useRef(false);
 
@@ -48,6 +50,13 @@ export function EmailVerifySection({
     sentOnce.current = true;
     void sendMyEmailVerificationAction();
   }, [verified]);
+
+  // 재발송 쿨다운 카운트다운 — 1초마다 1씩 감소, 언마운트 시 정리.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
 
   // 다른 탭/기기 링크 클릭 감지용 폴링.
   useEffect(() => {
@@ -89,8 +98,12 @@ export function EmailVerifySection({
   };
 
   const handleResend = async () => {
+    if (cooldown > 0) return;
     setError('');
-    await sendMyEmailVerificationAction();
+    setResent(false);
+    await sendMyEmailVerificationAction({ resend: true });
+    setResent(true);
+    setCooldown(30);
   };
 
   return (
@@ -129,13 +142,19 @@ export function EmailVerifySection({
         </Button>
       </form>
 
-      <button
-        type="button"
-        onClick={handleResend}
-        className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-      >
-        인증 메일 다시 보내기
-      </button>
+      <div className="space-y-1">
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={cooldown > 0}
+          className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-[var(--md-sys-color-on-surface-variant)]"
+        >
+          {cooldown > 0 ? `${cooldown}초 후 다시 보낼 수 있어요` : '인증 메일 다시 보내기'}
+        </button>
+        {resent && (
+          <p className="text-body-small text-on-surface-variant">메일을 다시 보냈어요</p>
+        )}
+      </div>
     </div>
   );
 }

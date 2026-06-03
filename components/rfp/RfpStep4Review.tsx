@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { formatSize } from '@/lib/format';
 import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 
@@ -123,6 +124,51 @@ export function RfpStep4Review({
           <ReviewRow label="견적 결제수단" value={paymentMethodSummary} />
         </div>
       </div>
+
+      {/* 상세 요청사항 (메모) — 발송 시 trim되어 빠지므로 공백뿐이면 숨김 */}
+      {draft.memo.trim() && (
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              상세 요청사항
+            </span>
+            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          </div>
+          <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap break-words border border-[var(--md-sys-color-outline-variant)] p-4">
+            {draft.memo}
+          </p>
+        </div>
+      )}
+
+      {/* 첨부파일 */}
+      {draft.rfpFiles.length > 0 && (
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              첨부파일 ({draft.rfpFiles.length}개)
+            </span>
+            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          </div>
+          <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
+            {draft.rfpFiles.map((file, i) => (
+              <div
+                key={file.id}
+                className="py-2 flex items-center gap-3 min-w-0"
+              >
+                <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)] shrink-0">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span className="text-[13px] text-[var(--md-sys-color-on-surface)] truncate">
+                  {file.name}
+                </span>
+                <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-outline)] shrink-0 ml-auto">
+                  {formatSize(file.size)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 초대 PG 목록 */}
       <div>

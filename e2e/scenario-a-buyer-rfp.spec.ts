@@ -102,7 +102,7 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     // BidComparisonTable renders an EmptyState with this exact copy when
     // bids.length === 0 (see components/rfp/BidComparisonTable.tsx).
     await expect(
-      page.getByText('아직 받은 제안이 없습니다.'),
+      page.getByText('제안을 기다리는 중이에요.'),
     ).toBeVisible({ timeout: 10_000 });
 
     // ── 6. DB assertions ─────────────────────────────────────────

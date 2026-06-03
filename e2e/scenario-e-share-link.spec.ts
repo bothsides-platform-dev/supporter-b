@@ -79,7 +79,7 @@ test.describe.serial('Scenario E — share link claim by allowed domain user', (
 
     await page.goto(`/share/rfp/${shareToken}`);
     await expect(
-      page.getByText(/구매사 계정으로는 공유 링크를 사용할 수 없습니다/),
+      page.getByText(/구매사 계정으로는 공유 링크를 사용할 수 없어요/),
     ).toBeVisible({ timeout: 10_000 });
   });
 });

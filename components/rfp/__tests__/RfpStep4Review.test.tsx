@@ -16,6 +16,8 @@ function resetStore() {
     websiteUrl: 'https://example.com',
     annualPgVolume: '10억',
     currentSolution: 'cafe24',
+    memo: '',
+    rfpFiles: [],
   });
 }
 
@@ -113,5 +115,81 @@ describe('RfpStep4Review', () => {
       />,
     );
     expect(screen.getByRole('button', { name: '발송 중…' })).toBeDisabled();
+  });
+
+  it('메모(상세 요청사항)를 입력했으면 본문이 표시된다', () => {
+    useRfpDraftStore.setState({ memo: '정산주기 D+1 이내 희망합니다.' });
+    render(
+      <RfpStep4Review
+        onBack={vi.fn()}
+        onSubmit={vi.fn()}
+        submitting={false}
+        serverError=""
+      />,
+    );
+    expect(screen.getByText('상세 요청사항')).toBeInTheDocument();
+    expect(
+      screen.getByText('정산주기 D+1 이내 희망합니다.'),
+    ).toBeInTheDocument();
+  });
+
+  it('메모가 비어 있으면 상세 요청사항 섹션을 표시하지 않는다', () => {
+    useRfpDraftStore.setState({ memo: '' });
+    render(
+      <RfpStep4Review
+        onBack={vi.fn()}
+        onSubmit={vi.fn()}
+        submitting={false}
+        serverError=""
+      />,
+    );
+    expect(screen.queryByText('상세 요청사항')).not.toBeInTheDocument();
+  });
+
+  it('공백뿐인 메모는 상세 요청사항 섹션을 표시하지 않는다 (발송 시 trim되어 빠지므로)', () => {
+    useRfpDraftStore.setState({ memo: '   \n  ' });
+    render(
+      <RfpStep4Review
+        onBack={vi.fn()}
+        onSubmit={vi.fn()}
+        submitting={false}
+        serverError=""
+      />,
+    );
+    expect(screen.queryByText('상세 요청사항')).not.toBeInTheDocument();
+  });
+
+  it('첨부파일이 있으면 파일명과 크기가 표시된다', () => {
+    useRfpDraftStore.setState({
+      rfpFiles: [
+        { id: 'f1', name: '견적요청서.pdf', size: 2_500_000 },
+        { id: 'f2', name: '상품목록.xlsx', size: 5_000 },
+      ],
+    });
+    render(
+      <RfpStep4Review
+        onBack={vi.fn()}
+        onSubmit={vi.fn()}
+        submitting={false}
+        serverError=""
+      />,
+    );
+    expect(screen.getByText('견적요청서.pdf')).toBeInTheDocument();
+    expect(screen.getByText('2.5 MB')).toBeInTheDocument();
+    expect(screen.getByText('상품목록.xlsx')).toBeInTheDocument();
+    expect(screen.getByText('5 KB')).toBeInTheDocument();
+  });
+
+  it('첨부파일이 없으면 첨부파일 섹션을 표시하지 않는다', () => {
+    useRfpDraftStore.setState({ rfpFiles: [] });
+    render(
+      <RfpStep4Review
+        onBack={vi.fn()}
+        onSubmit={vi.fn()}
+        submitting={false}
+        serverError=""
+      />,
+    );
+    expect(screen.queryByText(/첨부파일/)).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { LocalTime, LocalDate } from '../LocalTime';
+import { formatDateTime } from '@/lib/format';
 
 describe('LocalTime', () => {
   it('명시적 timezone으로 렌더링된다 (Asia/Seoul)', async () => {
@@ -26,10 +27,11 @@ describe('LocalTime', () => {
   });
 
   it('timeZone prop 없으면 브라우저 timezone으로 렌더링된다', async () => {
-    // 테스트 환경(시스템 TZ = Asia/Seoul) 기준
+    const systemTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const expected = formatDateTime('2026-06-01T05:30:00Z', systemTz);
     render(<LocalTime iso="2026-06-01T05:30:00Z" />);
     await waitFor(() => {
-      expect(screen.getByText('2026-06-01 14:30')).toBeInTheDocument();
+      expect(screen.getByText(expected)).toBeInTheDocument();
     });
   });
 });
