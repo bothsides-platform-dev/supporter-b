@@ -9,7 +9,7 @@ import { LocalTime } from '@/components/primitives/LocalTime';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
-  const { rfp, myBid, buyerName } = data;
+  const { rfp, myBid, buyerName, quoteTemplates } = data;
 
   if (myBid) {
     return (
@@ -57,6 +57,7 @@ export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
           grade={rfp.bizProfile?.grade}
           requiredPaymentMethods={rfp.requiredPaymentMethods}
           customPaymentMethods={rfp.customPaymentMethods}
+          templates={quoteTemplates}
         />
       </div>
     </div>

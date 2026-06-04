@@ -7,12 +7,14 @@
 import {
   getAttachmentRepo,
   getBidNoteRepo,
+  getBidQuoteTemplateRepo,
   getBidRepo,
   getInvitationRepo,
   getPgRequestRepo,
   getRfpRepo,
   getWorkspaceRepo,
 } from './repositories/factory';
+import type { QuoteTemplateOption } from '@/components/inbox/BidForm';
 import { baseUrl } from './actions/auth/_shared';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
@@ -44,6 +46,8 @@ export type PgRfpDetailData = {
   myBid: Bid | undefined;
   /** 구매사 워크스페이스 상호명 (workspaces.name). */
   buyerName: string;
+  /** 본 PG 워크스페이스 공유 견적 템플릿 — BidForm 불러오기용(요율표). */
+  quoteTemplates: QuoteTemplateOption[];
 };
 
 export type BuyerAwardData = {
@@ -188,7 +192,20 @@ export async function loadPgRfpDetail(args: {
   const buyerWs = await wsRepo.findById(rfp.buyerWsId);
   const buyerName = buyerWs?.name ?? '—';
 
-  return { rfp, myBid, buyerName };
+  // 본 PG 워크스페이스 공유 견적 템플릿(요율표) — 폼 채우기용 직렬화 부분집합.
+  const templates = await (await getBidQuoteTemplateRepo()).listByWorkspace(
+    args.workspaceId,
+  );
+  const quoteTemplates: QuoteTemplateOption[] = templates.map((t) => ({
+    id: t.id,
+    name: t.name,
+    settleCycle: t.settleCycle,
+    settleLimit: t.settleLimit,
+    guaranteeInsurance: t.guaranteeInsurance,
+    paymentFees: t.paymentFees,
+  }));
+
+  return { rfp, myBid, buyerName, quoteTemplates };
 }
 
 /**
