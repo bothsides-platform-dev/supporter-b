@@ -85,6 +85,23 @@ describe('inviteWorkspaceMemberAction', () => {
     expect(r).toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
   });
 
+  it('returns FORBIDDEN_NOT_ADMIN when JWT claims admin but DB role is member', async () => {
+    const ws = await seedPgWorkspace(db, 'WS');
+    const caller = await seedUser(db, { email: 'demoted@example.com' });
+    await seedMembership(db, ws.id, caller.id, 'member'); // DB says member
+    // stale JWT still claims admin
+    sessionRef.value = { user: { id: caller.id, workspaceId: ws.id, role: 'admin' } };
+
+    const r = await inviteWorkspaceMemberAction({ email: 'target@example.com' });
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
+
+    const invites = await db
+      .select()
+      .from(workspaceInvitations)
+      .where(eq(workspaceInvitations.workspaceId, ws.id));
+    expect(invites).toHaveLength(0);
+  });
+
   it('returns INVALID_INPUT for a malformed email', async () => {
     const ws = await seedPgWorkspace(db, 'WS');
     await makeAdminSession(ws.id);

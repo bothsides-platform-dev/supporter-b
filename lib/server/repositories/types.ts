@@ -115,8 +115,6 @@ export interface WorkspaceRepo {
   save(ws: Workspace, tx?: Tx): Promise<void>;
   /** id 조회 — 멤버/bizProfile hydration 포함. */
   findById(id: string, tx?: Tx): Promise<Workspace | undefined>;
-  /** raw share token → 워크스페이스. 공용 초대 링크 클레임 시 사용. 없으면 undefined. */
-  findByShareToken(token: string, tx?: Tx): Promise<Workspace | undefined>;
   /** 유저가 속한 모든 워크스페이스 — 스위처용 경량 projection (hydration 없음). */
   listForUser(
     userId: string,

@@ -69,6 +69,11 @@ export default function PgProfilePage() {
     // 초대 가입은 active 워크스페이스라 /home 으로 이동한다.
     const r = await finalizeSignup();
     if (!r.ok) {
+      // 초대 경로에서 이미 가입된 이메일이면 로그인 후 초대 링크로 복귀(#8).
+      if (r.redirectTo) {
+        router.replace(r.redirectTo);
+        return;
+      }
       setSubmitError(
         r.error === 'EMAIL_TAKEN'
           ? '이미 가입된 이메일이에요. 로그인해 주세요.'

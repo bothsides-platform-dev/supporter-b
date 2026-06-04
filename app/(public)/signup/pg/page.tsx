@@ -113,7 +113,7 @@ export default function PgSignupEmailPage() {
 
       <div>
         <h2 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-          PG사 계정을 만듭니다
+          {isInvited ? '계정을 만들어 합류해요' : 'PG사 계정을 만듭니다'}
         </h2>
         <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           이메일과 비밀번호를 입력해요.
