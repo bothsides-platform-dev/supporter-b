@@ -58,7 +58,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 
 ```
 app/
-├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{,rfp,workspace}/[token], /share/{rfp,workspace}/[token], /auth/*, /pending-approval, /suspended
+├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{,rfp,workspace}/[token], /share/rfp/[token], /auth/*, /pending-approval, /suspended
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)
 │  ├─ home/
 │  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id], /rfp/[id]/award

@@ -9,7 +9,6 @@ export type Workspace = {
   name: string;
   bizProfile?: BizProfile;
   members: User[];
-  shareToken: string;
   hasLogo: boolean;
   createdAt: string;
 };

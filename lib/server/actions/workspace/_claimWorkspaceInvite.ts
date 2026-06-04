@@ -12,8 +12,8 @@
  * @returns ok:true → 클레임 성공, workspaceId 반환
  * @returns INVITE_EXPIRED → 동시 요청이 먼저 클레임했거나 만료됨
  */
-import { and, eq, gt } from 'drizzle-orm';
-import { workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
+import { and, eq, gt, sql } from 'drizzle-orm';
+import { users, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
 
 export type InvitationClaimInput = {
   id: string;
@@ -60,6 +60,14 @@ export async function claimInviteInTx(
       role: invitation.role,
     })
     .onConflictDoNothing();
+
+  // 이메일 인증 — 초대 링크가 invitedEmail 메일함으로 배달됐고(소유 증명),
+  // 클레임 시점엔 user.email == invitedEmail 이 보장된다(각 action의 사전 검사).
+  // 이미 인증된 유저면 no-op(WHERE 가드).
+  await tx
+    .update(users)
+    .set({ emailVerified: true, emailVerifiedAt: sql`now()` })
+    .where(and(eq(users.id, userId), eq(users.emailVerified, false)));
 
   return { ok: true, workspaceId: invitation.workspaceId };
 }

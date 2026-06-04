@@ -363,11 +363,12 @@ describe('signupViaWorkspaceInviteAction — 인증 게이트', () => {
     if (!r.ok) expect(r.error).toBe('PHONE_NOT_VERIFIED');
   });
 
-  it('이메일 인증 없이도 가입 성공 — emailVerified=false 로 생성 (초대 경로는 인증 강제 안 함)', async () => {
+  it('별도 인증 메일 단계 없이 가입 성공 — 초대 수락이 곧 이메일 소유 증명이라 emailVerified=true 로 생성', async () => {
     const ws = await seedPgWorkspace(db, 'PG Co');
     const admin = await seedUser(db, { email: 'admin@pg.co' });
     const phoneId = await seedVerifiedOtp();
-    // 이메일 인증 단계 없음 (결정 #3: invitee 는 인증 강제 안 함)
+    // 별도 이메일 인증(코드/링크) 단계 없음 — 초대 링크가 invitedEmail 메일함으로
+    // 배달됐고 가입 이메일이 그와 일치하므로 수락 자체가 소유 증명(#6).
     const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
 
     const r = await signupViaWorkspaceInviteAction({
@@ -385,6 +386,6 @@ describe('signupViaWorkspaceInviteAction — 인증 게이트', () => {
       .from(users)
       .where(eq(users.email, TEST_EMAIL))
       .limit(1);
-    expect(u.emailVerified).toBe(false);
+    expect(u.emailVerified).toBe(true);
   });
 });

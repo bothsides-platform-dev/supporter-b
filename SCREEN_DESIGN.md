@@ -46,7 +46,6 @@ Public
 ├─ /invite/rfp/:token
 ├─ /invite/workspace/:token
 ├─ /share/rfp/:token
-├─ /share/workspace/:token
 ├─ /pending-approval
 └─ /suspended
 

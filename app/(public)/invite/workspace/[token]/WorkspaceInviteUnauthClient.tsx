@@ -12,12 +12,14 @@ type Props = {
 
 // Unauthenticated workspace-invite landing.
 //
-// 새 가입 경로: draft에 { wsInviteToken, email, inviteWorkspaceName } 기록 후
-// /signup/pg(step 1)로 보낸다. signupEmailAction(인증 메일 발송)은 verify 진입 시
-// 호출 — 여기서 미리 호출할 이유가 없음.
+// 초대 가입 화면은 사실상 타입 무관이다(이메일·비밀번호·이름·전화만 받고
+// 워크스페이스를 만들지 않음 — finalizeSignup 은 wsInviteToken 분기에서
+// workspaceType 을 안 본다). 그래서 모든 초대자를 하나의 invite-aware 가입 흐름
+// (/signup/pg, isInvited 시 중립 문구)으로 보낸다. step 1 이 wsInviteToken 을
+// 감지해 email prefill + lock + workspace 단계 skip 한다.
 //
-// EMAIL_TAKEN(기존 유저) 처리: step 1의 checkEmailAvailableAction이 담당.
-// 기존 유저는 /login?next=<invite-url>로 유도해 로그인 후 authed path로 합류.
+// EMAIL_TAKEN/기존 계정 처리: 비인증 landing(page.tsx)이 계정 존재 시 로그인으로
+// 미리 분기(#9)하고, 끝단은 finalizeSignup 의 /login?next= 복구(#8)가 받친다.
 export function WorkspaceInviteUnauthClient({ token, inviteEmail, workspaceName }: Props) {
   const router = useRouter();
 
@@ -31,7 +33,6 @@ export function WorkspaceInviteUnauthClient({ token, inviteEmail, workspaceName 
       inviteWorkspaceName: workspaceName,
     });
 
-    // step 1로 보낸다. step 1이 wsInviteToken 존재를 감지해 email prefill + skip 라우팅.
     router.replace('/signup/pg');
   }, [token, inviteEmail, workspaceName, router]);
 

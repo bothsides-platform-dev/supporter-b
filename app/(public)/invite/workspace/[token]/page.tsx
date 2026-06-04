@@ -9,11 +9,13 @@
 //   - ok → /home redirect
 //   - error → 인라인 오류 메시지
 import { eq } from 'drizzle-orm';
+import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { db as prodDb } from '@/lib/db/client';
 import { workspaceInvitations, workspaces } from '@/lib/db/schema';
 import { hashToken } from '@/lib/server/token';
+import { accountExistsForEmail } from '@/lib/server/invite/workspaceInviteLanding';
 import { WorkspaceInviteAuthedClient } from './WorkspaceInviteAuthedClient';
 import { WorkspaceInviteEmailMismatch } from './WorkspaceInviteEmailMismatch';
 import { WorkspaceInviteUnauthClient } from './WorkspaceInviteUnauthClient';
@@ -96,9 +98,17 @@ export default async function WorkspaceInvitePage({ params }: Props) {
     );
   }
 
-  // Valid invite — hand off to client component so the token can be stored
-  // in sessionStorage before routing to signup (server redirect loses the token).
-  // workspaceName is passed so step 1 can show "○○ 워크스페이스에 초대받았습니다".
+  // 이미 계정이 있는 이메일(미인증 포함)이면 가입 폼 대신 로그인으로 보낸다(#9).
+  // 로그인 후 같은 초대 링크로 복귀 → authed path 에서 수락. 미인증 기존계정이
+  // 가입 동선 끝에서 EMAIL_TAKEN 막다른 길에 빠지는 것을 landing 에서 차단.
+  if (await accountExistsForEmail(prodDb, row.invitedEmail)) {
+    redirect(`/login?next=${encodeURIComponent(`/invite/workspace/${token}`)}`);
+  }
+
+  // Valid invite, no existing account — hand off to client component so the token
+  // can be stored in sessionStorage before routing to the (type-neutral) invite
+  // signup flow (server redirect loses the token). workspaceName 은 step 1 의
+  // "○○ 워크스페이스에 초대받았습니다" 안내용.
   return (
     <WorkspaceInviteUnauthClient
       token={token}
