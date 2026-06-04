@@ -322,6 +322,19 @@ describe('sendChatMessageAction', () => {
     );
   });
 
+  it('multiple messages in the same window create only one in-app notification per recipient', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    await sendChatMessageAction({ counterpartyWorkspaceId: pgWs.id, body: 'm1' });
+    await sendChatMessageAction({ counterpartyWorkspaceId: pgWs.id, body: 'm2' });
+    await sendChatMessageAction({ counterpartyWorkspaceId: pgWs.id, body: 'm3' });
+
+    const notifs = await db.select().from(notifications).where(eq(notifications.workspaceId, pgWs.id));
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0].userId).toBe(pgUser.id);
+  });
+
   it('coalesces multiple sends in the same window into one outbox row per recipient', async () => {
     const { buyerUser, buyerWs, pgWs } = await seedPair();
     asBuyer(buyerUser, buyerWs.id);

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import { notifications } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type {
@@ -110,5 +110,28 @@ export class DrizzleNotificationRepository implements NotificationRepo {
           isNull(notifications.readAt),
         ),
       );
+  }
+
+  async hasPendingChatNotification(
+    userId: string,
+    workspaceId: string,
+    windowStart: Date,
+    tx?: Tx,
+  ): Promise<boolean> {
+    const db = this.h(tx);
+    const rows = await db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.workspaceId, workspaceId),
+          eq(notifications.type, 'chat.message'),
+          eq(notifications.status, 'queued'),
+          gte(notifications.createdAt, windowStart),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
   }
 }
