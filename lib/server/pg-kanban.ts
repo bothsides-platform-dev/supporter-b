@@ -20,9 +20,9 @@ export const PG_KANBAN_ORDER: readonly PgKanbanStage[] = [
 
 export const PG_KANBAN_LABEL: Record<PgKanbanStage, string> = {
   received: '신규',
-  submitted: '제출완료',
-  won: '낙찰',
-  lost: '실패',
+  submitted: '견적 보냄',
+  won: '선정됨',
+  lost: '미선정',
 };
 
 export type PgKanbanCard = {

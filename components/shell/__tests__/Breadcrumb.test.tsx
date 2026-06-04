@@ -41,7 +41,7 @@ describe('Breadcrumb — URL-derived segments', () => {
     mockPathname.mockReturnValue('/rfp');
     mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
     render(<Breadcrumb />);
-    expect(screen.getByText('RFP')).toBeInTheDocument();
+    expect(screen.getByText('견적 요청')).toBeInTheDocument();
     expect(screen.getByText('진행중')).toBeInTheDocument();
   });
 
@@ -54,7 +54,7 @@ describe('Breadcrumb — URL-derived segments', () => {
   it('renders no path labels for an unknown route', () => {
     mockPathname.mockReturnValue('/rfp/new');
     render(<Breadcrumb />);
-    expect(screen.queryByText('RFP')).not.toBeInTheDocument();
+    expect(screen.queryByText('견적 요청')).not.toBeInTheDocument();
   });
 });
 
@@ -63,7 +63,7 @@ describe('Breadcrumb — clickable trail', () => {
     mockPathname.mockReturnValue('/rfp');
     mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
     render(<Breadcrumb />);
-    expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('href', '/rfp');
+    expect(screen.getByRole('link', { name: '견적 요청' })).toHaveAttribute('href', '/rfp');
   });
 
   it('renders the current segment as the page (aria-current, not a navigable link)', () => {

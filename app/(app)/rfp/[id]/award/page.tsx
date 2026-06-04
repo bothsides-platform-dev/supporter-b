@@ -24,7 +24,7 @@ export default async function AwardPage({ params, searchParams }: Props) {
     return (
       <div className="px-8 py-8">
         <p className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-          수주할 제안을 찾을 수 없습니다.
+          선정할 견적을 찾을 수 없어요.
         </p>
         <Link
           href={`/rfp/${id}`}

@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
 const STATUS_OPTIONS = [
   { value: 'active', label: '진행중' },
   { value: 'closed', label: '마감' },
-  { value: 'awarded', label: '계약완료' },
+  { value: 'awarded', label: '선정 완료' },
 ];
 const GRADE_OPTIONS = Object.entries(GRADE_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -43,7 +43,7 @@ export default async function RfpListPage({ searchParams }: Props) {
   const newRfpAction = (
     <Link href="/rfp/new">
       <Button size="sm" icon={<PlusIcon />}>
-        새 RFP
+        견적 요청하기
       </Button>
     </Link>
   );
@@ -53,7 +53,7 @@ export default async function RfpListPage({ searchParams }: Props) {
       <Suspense
         fallback={
           <>
-            <PageHeader title="RFP" action={newRfpAction} />
+            <PageHeader title="견적 요청" action={newRfpAction} />
             <RfpListTableSkeleton />
           </>
         }
@@ -97,8 +97,8 @@ async function RfpListPageLoader({
     rfps.length === 0 ? (
       <EmptyState
         icon={<FileTextIcon size={32} />}
-        title="제안 요청이 없어요."
-        description="필터를 바꾸거나 새 제안 요청을 작성해요."
+        title="아직 보낸 견적 요청이 없어요."
+        description="필터를 바꾸거나 첫 견적 요청을 보내보세요."
       />
     ) : view === 'board' ? (
       <RfpBoardView wsId={wsId} visibleIds={new Set(rfps.map((r) => r.id))} />
@@ -114,7 +114,7 @@ async function RfpListPageLoader({
 
   return (
     <>
-      <PageHeader title="RFP" count={rfps.length} action={newRfpAction} />
+      <PageHeader title="견적 요청" count={rfps.length} action={newRfpAction} />
       <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
         <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
         <BoardViewToggle view={view} cookieName="rfpBoardView" tableCount={rfps.length} />

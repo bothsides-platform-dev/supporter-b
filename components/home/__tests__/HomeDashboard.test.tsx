@@ -51,7 +51,7 @@ describe('HomeDashboard', () => {
   it('shows a workspace-specific empty state when there are no action groups', () => {
     render(<HomeDashboard dashboard={empty} workspaceType="pg" />);
     expect(screen.getByText('지금 처리할 일이 없습니다')).toBeInTheDocument();
-    expect(screen.getByText('구매사가 초대한 RFP가 여기에 표시됩니다.')).toBeInTheDocument();
+    expect(screen.getByText('구매사가 초대한 견적 요청이 여기에 표시돼요.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /진행중/ })).toBeInTheDocument();
   });
 

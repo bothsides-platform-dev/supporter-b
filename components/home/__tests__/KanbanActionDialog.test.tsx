@@ -44,7 +44,7 @@ describe('KanbanActionDialog', () => {
         onCommitted={vi.fn()}
       />,
     );
-    expect(screen.getByText('RFP를 취소(종료)할까요?')).toBeInTheDocument();
+    expect(screen.getByText('견적 요청을 취소(종료)할까요?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '취소 처리' })).toBeInTheDocument();
   });
 
@@ -56,7 +56,7 @@ describe('KanbanActionDialog', () => {
         onCommitted={vi.fn()}
       />,
     );
-    expect(screen.getByText('제출한 제안을 철회할까요?')).toBeInTheDocument();
+    expect(screen.getByText('보낸 견적을 철회할까요?')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '철회' })).toBeInTheDocument();
   });
 

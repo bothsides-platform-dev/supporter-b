@@ -133,7 +133,7 @@ export function RfpAttachmentDropzone({ value, onChange }: Props) {
 
   return (
     <div className="space-y-3">
-      <Label size="md" muted={false}>RFP 첨부 파일 (선택)</Label>
+      <Label size="md" muted={false}>견적 요청 첨부 파일 (선택)</Label>
 
       {rows.length < MAX_FILES && (
         <div

@@ -7,11 +7,11 @@ import { createPgRequestAction } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
 
 const ERROR_MESSAGE: Record<string, string> = {
-  ALREADY_REQUESTED: '이미 요청한 RFP예요.',
-  ALREADY_PARTICIPATING: '이미 참여 중인 RFP예요.',
-  RFP_NOT_OPEN: '지금은 요청할 수 없는 RFP예요.',
-  RFP_DEADLINE_PASSED: '마감된 RFP예요.',
-  NOT_FOUND: '더 이상 열려 있지 않은 RFP예요.',
+  ALREADY_REQUESTED: '이미 요청한 견적 요청이에요.',
+  ALREADY_PARTICIPATING: '이미 참여 중인 견적 요청이에요.',
+  RFP_NOT_OPEN: '지금은 요청할 수 없는 견적 요청이에요.',
+  RFP_DEADLINE_PASSED: '마감된 견적 요청이에요.',
+  NOT_FOUND: '더 이상 열려 있지 않은 견적 요청이에요.',
   FORBIDDEN_PG: '권한이 없어요.',
   INVALID_INPUT: '메시지를 확인해 주세요.',
 };
@@ -61,7 +61,7 @@ export function OpportunityRequestDialog({ rfpCode }: { rfpCode: string }) {
         onChange={(e) => setMessage(e.target.value)}
         rows={3}
         maxLength={1000}
-        placeholder="구매사에게 보낼 제안 메시지를 적어 주세요."
+        placeholder="구매사에게 보낼 메시지를 적어 주세요."
         aria-label="참여 요청 메시지"
         className="w-full resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-2.5 py-2 text-[14px] text-[var(--md-sys-color-on-surface)] outline-none focus:border-[var(--md-sys-color-primary)]"
       />

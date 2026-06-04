@@ -42,7 +42,7 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
     await rfpLink.click();
 
     await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
-    await expect(page.getByText('제안 비교')).toBeVisible();
+    await expect(page.getByText('견적 비교')).toBeVisible();
     // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
      // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
      // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
@@ -60,7 +60,7 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
     // RfpDetailContent('제안 비교')를 렌더한다.
     await page.getByText(RFP_CODE).click();
     await expect(page).toHaveURL(new RegExp(`/rfp\\?peek=${RFP_CODE}$`), { timeout: 60_000 });
-    await expect(page.getByText('제안 비교')).toBeVisible();
+    await expect(page.getByText('견적 비교')).toBeVisible();
     // 회귀 가드: peek 은 SplitView 사이드 패널 — 가로채기 라우트 dialog 가 아니다.
     // (Channel.io 'Channel Talk pop-up' 다이얼로그는 dev env 에서 함께 잡힐 수 있어 제외.)
     await expect(
@@ -70,14 +70,14 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
     // 패널 헤더 '전체화면' 버튼 → /rfp/<code> 전체 페이지(하드 라우트).
     await page.getByRole('button', { name: '전체화면', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
-    await expect(page.getByText('제안 비교')).toBeVisible();
+    await expect(page.getByText('견적 비교')).toBeVisible();
   });
 
   test('직접 진입(하드 네비)은 전체 페이지로 렌더', async ({ page }) => {
     await loginAs(page, 'buyer');
     await page.goto(`/rfp/${RFP_CODE}`);
 
-    await expect(page.getByText('제안 비교')).toBeVisible();
+    await expect(page.getByText('견적 비교')).toBeVisible();
     // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
      // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
      // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
@@ -89,20 +89,20 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
 
 test.describe('RFP 작성 진입은 상세 라우트로 오인되지 않는다 (구매사)', () => {
   // 회귀 가드: /rfp/new(작성, 최상위 정적 세그먼트)는 /rfp/[id](상세, 동적)보다
-  // 우선하므로, "RFP를 찾을 수 없습니다." 가 아니라 작성 폼이 떠야 한다.
-  test('목록에서 "새 RFP" soft-nav → 작성 폼(에러 아님)', async ({ page }) => {
+  // 우선하므로, "견적 요청을 찾을 수 없어요." 가 아니라 작성 폼이 떠야 한다.
+  test('목록에서 "견적 요청하기" soft-nav → 작성 폼(에러 아님)', async ({ page }) => {
     test.slow();
     await loginAs(page, 'buyer');
     await page.goto('/rfp');
 
-    // /rfp 페이지 헤더의 작성 진입 링크. 사이드바에도 같은 라벨의 링크가 있어
-    // strict-mode 충돌을 피하려 first() 로 좁힌다(둘 중 어느 쪽을 눌러도 의도는 동일).
-    await page.getByRole('link', { name: '새 RFP' }).first().click();
+    // /rfp 페이지 헤더의 작성 진입 링크('견적 요청하기'). 사이드바 링크는
+    // '새 견적 요청'으로 라벨이 달라 헤더 링크만 정확히 겨냥한다.
+    await page.getByRole('link', { name: '견적 요청하기' }).first().click();
 
     await expect(
-      page.getByRole('heading', { name: '신규 제안 요청' }),
+      page.getByRole('heading', { name: '새 견적 요청' }),
     ).toBeVisible({ timeout: 60_000 });
-    await expect(page.getByText('RFP를 찾을 수 없습니다.')).toHaveCount(0);
+    await expect(page.getByText('견적 요청을 찾을 수 없어요.')).toHaveCount(0);
   });
 });
 

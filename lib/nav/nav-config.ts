@@ -55,11 +55,11 @@ const STATUS_LABELS = {
   '/rfp': {
     active: '진행중',
     closed: '마감',
-    awarded: '계약완료',
+    awarded: '선정 완료',
   },
   '/inbox': {
     new: '신규',
-    submitted: '제출완료',
+    submitted: '견적 보냄',
     closed: '마감',
   },
 } as const;
@@ -76,7 +76,7 @@ function statusItems(base: '/rfp' | '/inbox'): NavStatusItem[] {
 
 const RFP_SECTION: NavSection = {
   id: 'rfp',
-  label: 'RFP',
+  label: '견적 요청',
   href: '/rfp',
   base: '/rfp',
   icon: FileTextIcon,
@@ -85,7 +85,7 @@ const RFP_SECTION: NavSection = {
   links: [
     {
       id: 'rfp-new',
-      label: '새 RFP',
+      label: '새 견적 요청',
       href: '/rfp/new',
       // G then C (Create). Replaces ⌘N, which the browser claims for "new window".
       shortcut: { kind: 'chord', lead: 'g', key: 'c' },
@@ -95,7 +95,7 @@ const RFP_SECTION: NavSection = {
 
 const INBOX_SECTION: NavSection = {
   id: 'inbox',
-  label: '받은 RFP',
+  label: '받은 견적 요청',
   href: '/inbox',
   base: '/inbox',
   icon: InboxIcon,
@@ -104,7 +104,7 @@ const INBOX_SECTION: NavSection = {
   links: [
     {
       id: 'opportunities',
-      label: '제안 기회',
+      label: '견적 기회',
       href: '/opportunities',
       // G then O (Opportunities) — h/n/m/i/s/p/t/1-3 are taken for pg.
       shortcut: { kind: 'chord', lead: 'g', key: 'o' },
@@ -183,14 +183,14 @@ export function getBreadcrumbSegments(
   if (pathname === '/home') return [{ label: '홈' }];
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
-  if (pathname === '/opportunities') return [{ label: '제안 기회' }];
+  if (pathname === '/opportunities') return [{ label: '견적 기회' }];
   if (pathname === '/rfp') {
     const label = status ? STATUS_LABELS['/rfp'][status as keyof typeof STATUS_LABELS['/rfp']] : undefined;
-    return label ? [{ label: 'RFP', href: '/rfp' }, { label }] : [{ label: 'RFP' }];
+    return label ? [{ label: '견적 요청', href: '/rfp' }, { label }] : [{ label: '견적 요청' }];
   }
   if (pathname === '/inbox') {
     const label = status ? STATUS_LABELS['/inbox'][status as keyof typeof STATUS_LABELS['/inbox']] : undefined;
-    return label ? [{ label: '받은 RFP', href: '/inbox' }, { label }] : [{ label: '받은 RFP' }];
+    return label ? [{ label: '받은 견적 요청', href: '/inbox' }, { label }] : [{ label: '받은 견적 요청' }];
   }
   if (pathname === '/settings/profile') {
     return [{ label: '설정', href: '/settings/profile' }, { label: '프로필' }];

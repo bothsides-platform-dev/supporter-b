@@ -191,23 +191,23 @@ describe('Sidebar — child routes', () => {
   it('activates RFP when pathname is a child of /rfp', () => {
     mockPathname.mockReturnValue('/rfp/rfp-1');
     renderSidebar(buyerProps);
-    expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: '견적 요청' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('activates 받은 RFP when pathname is a child of /inbox', () => {
     mockPathname.mockReturnValue('/inbox/rfp-1');
     renderSidebar(pgProps);
-    expect(screen.getByRole('link', { name: '받은 RFP' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: '받은 견적 요청' })).toHaveAttribute('aria-current', 'page');
   });
 });
 
 describe('Sidebar — buyer workspace', () => {
   it('renders RFP section with status sub-items and 새 RFP link', () => {
     renderSidebar(buyerProps);
-    expect(screen.getByRole('link', { name: 'RFP' })).toHaveAttribute('href', '/rfp');
+    expect(screen.getByRole('link', { name: '견적 요청' })).toHaveAttribute('href', '/rfp');
     expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('href', '/rfp?status=active');
-    expect(screen.getByRole('link', { name: '계약완료' })).toHaveAttribute('href', '/rfp?status=awarded');
-    expect(screen.getByRole('link', { name: '새 RFP' })).toHaveAttribute('href', '/rfp/new');
+    expect(screen.getByRole('link', { name: '선정 완료' })).toHaveAttribute('href', '/rfp?status=awarded');
+    expect(screen.getByRole('link', { name: '새 견적 요청' })).toHaveAttribute('href', '/rfp/new');
   });
 
   it('activates the matching status sub-item on /rfp?status=active', () => {
@@ -215,21 +215,21 @@ describe('Sidebar — buyer workspace', () => {
     mockSearchParams.mockReturnValue(new URLSearchParams('status=active'));
     renderSidebar(buyerProps);
     expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'RFP' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: '견적 요청' })).not.toHaveAttribute('aria-current');
   });
 
   it('does NOT render the inbox section for buyer', () => {
     renderSidebar(buyerProps);
-    expect(screen.queryByText('받은 RFP')).not.toBeInTheDocument();
+    expect(screen.queryByText('받은 견적 요청')).not.toBeInTheDocument();
   });
 });
 
 describe('Sidebar — pg workspace', () => {
   it('renders 받은 RFP section with status sub-items and no 새 RFP link', () => {
     renderSidebar(pgProps);
-    expect(screen.getByRole('link', { name: /받은 RFP/ })).toHaveAttribute('href', '/inbox');
-    expect(screen.getByRole('link', { name: '제출완료' })).toHaveAttribute('href', '/inbox?status=submitted');
-    expect(screen.queryByRole('link', { name: '새 RFP' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /받은 견적 요청/ })).toHaveAttribute('href', '/inbox');
+    expect(screen.getByRole('link', { name: '견적 보냄' })).toHaveAttribute('href', '/inbox?status=submitted');
+    expect(screen.queryByRole('link', { name: '새 견적 요청' })).not.toBeInTheDocument();
   });
 });
 

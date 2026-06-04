@@ -38,7 +38,7 @@ describe('RfpPeekPanel', () => {
     mockLoadBuyerRfpDetail.mockResolvedValue(null);
     const el = await RfpPeekPanel({ rfpCode: 'P-2604-0001', wsId: 'ws-1', userId: 'u1', userName: 'User' });
     render(el);
-    expect(screen.getByText(/찾을 수 없습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/찾을 수 없어요/)).toBeInTheDocument();
   });
 
   it('데이터 있으면 PeekPanelHeader + RfpDetailContent 렌더', async () => {

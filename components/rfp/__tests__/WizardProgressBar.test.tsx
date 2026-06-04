@@ -6,7 +6,7 @@ import { WizardProgressBar } from '../WizardProgressBar';
 describe('WizardProgressBar', () => {
   it('현재 단계 레이블과 Step X/4 텍스트를 표시한다', () => {
     render(<WizardProgressBar currentStep={2} completed={[true, false, false, false]} />);
-    expect(screen.getByText('Step 2 / 4 — 제안 내용')).toBeInTheDocument();
+    expect(screen.getByText('Step 2 / 4 — 견적 내용')).toBeInTheDocument();
   });
 
   it('총 4개의 dot을 렌더한다', () => {

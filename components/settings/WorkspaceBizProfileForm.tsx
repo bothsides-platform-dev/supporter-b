@@ -80,8 +80,8 @@ export function WorkspaceBizProfileForm({ currentGrade }: Props) {
         </Button>
       </div>
       <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-        새 등급은 새로운 사업자 프로필 row로 저장되며 워크스페이스에 반영됩니다.
-        과거 RFP는 발송 시점 스냅샷을 그대로 유지합니다.
+        새 등급은 새로운 사업자 프로필 row로 저장되며 워크스페이스에 반영돼요.
+        과거 견적 요청은 보낸 시점 정보를 그대로 유지해요.
       </p>
     </form>
   );

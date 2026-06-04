@@ -121,7 +121,7 @@ export async function createPgRequestAction(
           workspaceId: rfpRow.buyerWsId,
           type: 'pg.request.received',
           title: `[${code}] 새 참여 요청`,
-          body: `${pgWsName}가 이 RFP에 참여를 요청했어요.`,
+          body: `${pgWsName}가 이 견적 요청에 참여를 요청했어요.`,
           channel: 'inapp',
           status: 'pending',
           linkUrl: `/rfp/${code}`,

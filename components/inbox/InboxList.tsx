@@ -11,7 +11,7 @@ import type { MerchantGrade } from '@/lib/types/biz-profile';
 const invStatusLabel: Record<string, string> = {
   sent: '신규',
   opened: '신규',
-  accepted: '제출완료',
+  accepted: '견적 보냄',
   declined: '거절',
   expired: '만료',
 };

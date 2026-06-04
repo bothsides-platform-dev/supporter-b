@@ -34,7 +34,7 @@ export function BidCard({
         <span className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)] truncate">
           {pgName}
         </span>
-        {isAwarded && <Chip label="낙찰" color="tertiary" />}
+        {isAwarded && <Chip label="선정됨" color="tertiary" />}
       </div>
 
       <div className="space-y-1.5">
@@ -52,7 +52,7 @@ export function BidCard({
           </span>
         ) : (
           <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--md-sys-color-outline)]">
-            제안서 없음
+            견적서 없음
           </span>
         )}
         <span className="font-mono text-[10px] uppercase tracking-[0.1em] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">

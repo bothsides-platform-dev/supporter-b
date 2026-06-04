@@ -10,7 +10,7 @@ const ERROR_LABELS: Record<string, string> = {
   SHARE_BUYER_NOT_ALLOWED:
     '구매사 계정으로는 공유 링크를 사용할 수 없어요. PG 계정으로 로그인해요.',
   EMAIL_DOMAIN_MISMATCH:
-    '이 RFP에 초대된 도메인이 아니에요. 구매사 담당자에게 문의해요.',
+    '이 견적 요청에 초대된 도메인이 아니에요. 구매사 담당자에게 문의해요.',
   UNAUTHENTICATED: '로그인이 필요해요.',
 };
 
@@ -53,7 +53,7 @@ export function ShareClaimClient({ token }: { token: string }) {
         LOADING…
       </p>
       <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-        RFP 진입을 확인하는 중입니다.
+        견적 요청 진입을 확인하는 중이에요.
       </p>
     </div>
   );

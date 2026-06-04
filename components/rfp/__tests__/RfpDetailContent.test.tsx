@@ -84,18 +84,18 @@ describe('RfpDetailContent', () => {
     render(<RfpDetailContent data={buildData()} />);
     expect(screen.getByText('P-2605-0042')).toBeInTheDocument();
     expect(screen.getByText('결제대행 RFP')).toBeInTheDocument();
-    expect(screen.getByText('발송됨')).toBeInTheDocument();
+    expect(screen.getByText('요청 보냄')).toBeInTheDocument();
   });
 
-  it("status='sent' 이고 제출 입찰이 있으면 '수주 처리' 링크 노출", () => {
+  it("status='sent' 이고 제출 입찰이 있으면 '최종 선택' 링크 노출", () => {
     render(<RfpDetailContent data={buildData({ bids: [aBid] })} />);
-    const link = screen.getByRole('link', { name: /수주 처리/ });
+    const link = screen.getByRole('link', { name: /최종 선택/ });
     expect(link).toHaveAttribute('href', '/rfp/P-2605-0042/award');
   });
 
-  it('제출 입찰이 없으면 수주 처리 링크 미노출', () => {
+  it('제출 입찰이 없으면 최종 선택 링크 미노출', () => {
     render(<RfpDetailContent data={buildData({ bids: [] })} />);
-    expect(screen.queryByText(/수주 처리/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/최종 선택/)).not.toBeInTheDocument();
   });
 
   it('"현재 정산한도" 라벨이 "현재 월 정산한도"로 변경됐다', () => {

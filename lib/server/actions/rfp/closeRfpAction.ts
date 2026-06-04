@@ -86,7 +86,7 @@ export async function closeRfpAction(
             workspaceId: pgWsId,
             type: 'rfp.closed',
             title: `[${rfpId}] 마감됨`,
-            body: '구매사가 제안 요청을 마감했습니다.',
+            body: '구매사가 견적 요청을 마감했어요.',
             channel: 'inapp',
             status: 'pending',
             linkUrl: `/inbox/${rfpId}`,
