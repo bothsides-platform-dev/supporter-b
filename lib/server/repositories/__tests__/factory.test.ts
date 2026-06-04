@@ -33,7 +33,6 @@ describe('repository factory', () => {
     const staleWorkspace = {
       save: async () => {},
       findById: async () => undefined,
-      findByShareToken: async () => undefined,
     } satisfies Omit<WorkspaceRepo, 'listForUser' | 'isMember' | 'memberUserIds'>;
     globalThis.__bidit_repos__ = {
       ...(globalThis.__bidit_repos__ ?? {}),

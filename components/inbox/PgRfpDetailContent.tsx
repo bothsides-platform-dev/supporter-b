@@ -9,7 +9,7 @@ import { LocalTime } from '@/components/primitives/LocalTime';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
-  const { rfp, myBid, buyerName } = data;
+  const { rfp, myBid, buyerName, quoteTemplates } = data;
 
   if (myBid) {
     return (
@@ -17,17 +17,17 @@ export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
         <RfpBriefPanel rfp={rfp} buyerName={buyerName} />
         <div className="mt-10 border-t border-[var(--md-sys-color-outline-variant)] pt-8 space-y-4">
           <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-tertiary)]">
-            ✓ 제안 제출 완료
+            ✓ 견적을 보냈어요
           </p>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-            제출 시각:{' '}
+            보낸 시각:{' '}
             {myBid.submittedAt ? <LocalTime iso={myBid.submittedAt} /> : '—'}
           </p>
           <Link
             href={`/inbox/${rfp.code}/submitted`}
             className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
           >
-            제출 내역 보기 →
+            보낸 견적 보기 →
           </Link>
         </div>
       </>
@@ -45,10 +45,10 @@ export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
       <div>
         <div className="mb-8">
           <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            정형 제안 입력
+            정형 견적 입력
           </span>
           <h2 className="text-[22px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] mt-1">
-            제안 작성
+            견적 작성
           </h2>
         </div>
         <BidForm
@@ -57,6 +57,7 @@ export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
           grade={rfp.bizProfile?.grade}
           requiredPaymentMethods={rfp.requiredPaymentMethods}
           customPaymentMethods={rfp.customPaymentMethods}
+          templates={quoteTemplates}
         />
       </div>
     </div>

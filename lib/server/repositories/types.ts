@@ -14,7 +14,7 @@ import type {
 } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { BizProfile } from '@/lib/types/biz-profile';
-import type { Bid } from '@/lib/types/bid';
+import type { Bid, PaymentMethod } from '@/lib/types/bid';
 import type { BoardColumn, ColumnKind } from '@/lib/types/column';
 import type { Attachment } from '@/lib/types/common';
 import type { Contract } from '@/lib/types/contract';
@@ -115,8 +115,6 @@ export interface WorkspaceRepo {
   save(ws: Workspace, tx?: Tx): Promise<void>;
   /** id 조회 — 멤버/bizProfile hydration 포함. */
   findById(id: string, tx?: Tx): Promise<Workspace | undefined>;
-  /** raw share token → 워크스페이스. 공용 초대 링크 클레임 시 사용. 없으면 undefined. */
-  findByShareToken(token: string, tx?: Tx): Promise<Workspace | undefined>;
   /** 유저가 속한 모든 워크스페이스 — 스위처용 경량 projection (hydration 없음). */
   listForUser(
     userId: string,
@@ -461,6 +459,56 @@ export interface ChatTemplateRepo {
   findById(id: string, tx?: Tx): Promise<ChatMessageTemplate | undefined>;
   /** 한 워크스페이스의 모든 템플릿 — cross-workspace isolation 근거. */
   listByWorkspace(workspaceId: string, tx?: Tx): Promise<ChatMessageTemplate[]>;
+  /** 단건 삭제. */
+  remove(id: string, tx?: Tx): Promise<void>;
+}
+
+// ── Bid: Quote Template (견적 요율표) ──────────────────────────────────
+/** PG-workspace-shared bid quote template — hydrated DB shape. */
+export type BidQuoteTemplate = {
+  id: string;
+  pgWsId: string;
+  name: string;
+  settleCycle: string;
+  settleLimit: number;
+  guaranteeInsurance: number;
+  paymentFees: Partial<Record<PaymentMethod, number>>;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export interface BidQuoteTemplateRepo {
+  /** 템플릿 생성 — id 미지정 시 발급. PG 워크스페이스 공유. */
+  create(
+    template: {
+      id?: string;
+      pgWsId: string;
+      name: string;
+      settleCycle: string;
+      settleLimit: number;
+      guaranteeInsurance: number;
+      paymentFees: Partial<Record<PaymentMethod, number>>;
+      createdBy: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 단건 수정 — 소유권 검증은 액션 레이어 책임. updated_at 갱신. */
+  update(
+    id: string,
+    fields: {
+      name: string;
+      settleCycle: string;
+      settleLimit: number;
+      guaranteeInsurance: number;
+      paymentFees: Partial<Record<PaymentMethod, number>>;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /** id 단건 조회. 없으면 undefined. */
+  findById(id: string, tx?: Tx): Promise<BidQuoteTemplate | undefined>;
+  /** 한 PG 워크스페이스의 모든 템플릿 — cross-workspace isolation 근거. */
+  listByWorkspace(pgWsId: string, tx?: Tx): Promise<BidQuoteTemplate[]>;
   /** 단건 삭제. */
   remove(id: string, tx?: Tx): Promise<void>;
 }

@@ -12,8 +12,8 @@ export function BidSubmitted({
 }: BidSubmittedProps): React.JSX.Element {
   return (
     <Layout
-      preheader={`${pgName}이(가) ${rfpId} RFP에 제안을 제출했습니다.`}
-      serial={`RFP / ${rfpId}`}
+      preheader={`${pgName}이(가) ${rfpId} 견적 요청에 견적을 보냈어요.`}
+      serial={`견적 요청 / ${rfpId}`}
     >
       <h1
         style={{
@@ -23,10 +23,10 @@ export function BidSubmitted({
           letterSpacing: '-0.01em',
         }}
       >
-        새 제안 도착
+        새 견적이 도착했어요
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
-        <strong>{pgName}</strong>이(가) 제안을 제출했습니다.
+        <strong>{pgName}</strong>이(가) 견적을 보냈어요.
       </p>
 
       <table
@@ -38,7 +38,7 @@ export function BidSubmitted({
         <tbody>
           <tr>
             <td style={{ color: '#777', paddingRight: '16px', paddingBottom: '6px' }}>
-              RFP
+              견적 요청 번호
             </td>
             <td style={{ paddingBottom: '6px' }}>
               <Mono>{rfpId}</Mono>
@@ -51,7 +51,7 @@ export function BidSubmitted({
             <td style={{ paddingBottom: '6px' }}>{rfpTitle}</td>
           </tr>
           <tr>
-            <td style={{ color: '#777', paddingRight: '16px' }}>제출 시각</td>
+            <td style={{ color: '#777', paddingRight: '16px' }}>보낸 시각</td>
             <td>
               <Mono>{submittedAt}</Mono>
             </td>
@@ -60,7 +60,7 @@ export function BidSubmitted({
       </table>
 
       <p style={{ fontSize: '13px', color: '#555' }}>
-        대시보드에서 비교표를 열어 보실 수 있습니다.
+        대시보드에서 비교표를 열어 볼 수 있어요.
       </p>
     </Layout>
   );

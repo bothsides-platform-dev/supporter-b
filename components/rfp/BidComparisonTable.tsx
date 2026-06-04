@@ -92,11 +92,11 @@ export function BidComparisonTable({
     return (
       <EmptyState
         icon={<EnvelopeIcon size={32} />}
-        title="제안을 기다리는 중이에요."
+        title="견적을 기다리고 있어요."
         description={
           rfpStatus === 'sent'
-            ? '초대된 PG가 제안을 제출하면 비교표가 표시돼요.'
-            : 'RFP를 발송하면 제안을 받을 수 있어요.'
+            ? '초대한 PG가 견적을 보내면 비교표가 표시돼요.'
+            : '견적 요청을 보내면 견적을 받을 수 있어요.'
         }
         className="py-12"
       />
@@ -230,11 +230,11 @@ export function BidComparisonTable({
                 <td className="px-3 py-4 text-right">
                   {canAward && (
                     <Link href={`/rfp/${rfpId}/award?bidId=${bid.id}`}>
-                      <Button variant="outlined" size="sm">선택</Button>
+                      <Button variant="outlined" size="sm">선정하기</Button>
                     </Link>
                   )}
                   {!canAward && awardedBidId === bid.id && (
-                    <Chip label="수주" color="tertiary" />
+                    <Chip label="선정됨" color="tertiary" />
                   )}
                   {!canAward && awardedBidId && awardedBidId !== bid.id && (
                     <Chip label="미선정" color="surface" />

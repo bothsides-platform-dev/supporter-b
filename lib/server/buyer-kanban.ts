@@ -19,7 +19,7 @@ export const BUYER_KANBAN_ORDER: readonly BuyerKanbanStage[] = [
 
 export const BUYER_KANBAN_LABEL: Record<BuyerKanbanStage, string> = {
   active: '진행중',
-  awarded: '계약완료',
+  awarded: '선정 완료',
   closed: '마감',
 };
 

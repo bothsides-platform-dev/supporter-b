@@ -36,9 +36,9 @@ import type { BoardCard, BoardColumn } from '@/lib/types/column';
 
 const statusLabel: Record<string, string> = {
   draft: '임시저장',
-  sent: '발송됨',
+  sent: '요청 보냄',
   closed: '마감',
-  awarded: '계약완료',
+  awarded: '선정 완료',
   cancelled: '취소',
 };
 const statusColor: Record<string, ChipColor> = {
@@ -90,7 +90,7 @@ export function RfpDetailContent({
             <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
             {rfp.status === 'sent' && bids.length > 0 && (
               <Link href={`/rfp/${rfp.code}/award`}>
-                <Button size="sm">수주 처리 →</Button>
+                <Button size="sm">최종 선택 →</Button>
               </Link>
             )}
           </div>
@@ -100,7 +100,7 @@ export function RfpDetailContent({
           <span className="text-[var(--md-sys-color-outline)]">·</span>
           <Label size="md" muted={false}>PG {rfp.allowedPgWorkspaceIds.length}개사</Label>
           <span className="text-[var(--md-sys-color-outline)]">·</span>
-          <Label size="md" muted={false}>받은 제안 {bids.length}건</Label>
+          <Label size="md" muted={false}>받은 견적 {bids.length}건</Label>
         </div>
       </div>
 
@@ -108,7 +108,7 @@ export function RfpDetailContent({
       <section>
         <div className="flex items-center gap-3 mb-4">
           <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            제안 비교
+            견적 비교
           </span>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
@@ -221,7 +221,7 @@ export function RfpDetailContent({
           {rfp.memo && (
             <div>
               <div className="flex items-center gap-3 mb-3">
-                <Label size="md" muted={false}>제안서 요청 세부 내용</Label>
+                <Label size="md" muted={false}>견적 요청 세부 내용</Label>
                 <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
               </div>
               <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed whitespace-pre-wrap">

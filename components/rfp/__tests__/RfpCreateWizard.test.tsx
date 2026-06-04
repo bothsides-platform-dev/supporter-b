@@ -123,8 +123,8 @@ describe('RfpCreateWizard', () => {
   it('사이드바에서 미도달 단계로 자유롭게 점프할 수 있다 (Step 1 → Step 4)', async () => {
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);
-    // Step 1에서 바로 '발송 확인'(Step 4) 클릭 → 리뷰 단계로 점프
-    await user.click(screen.getByText('발송 확인'));
+    // Step 1에서 바로 '보내기 확인'(Step 4) 클릭 → 리뷰 단계로 점프
+    await user.click(screen.getByText('보내기 확인'));
     expect(screen.getByRole('button', { name: '발송' })).toBeInTheDocument();
   });
 

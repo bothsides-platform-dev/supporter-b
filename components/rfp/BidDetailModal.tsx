@@ -57,9 +57,9 @@ export function BidDetailModal({
         className="sm:max-w-[960px] w-[95vw] max-h-[88vh] grid grid-cols-1 md:grid-cols-[1fr_360px] gap-0 p-0 overflow-hidden rounded-lg"
         showCloseButton={false}
       >
-        <DialogTitle className="sr-only">{pgName} 제안 상세</DialogTitle>
+        <DialogTitle className="sr-only">{pgName} 견적 상세</DialogTitle>
         <DialogDescription className="sr-only">
-          제안서 PDF, 6컬럼 수치, 협상 메모 히스토리를 확인하고 새 메모/첨부를 기록할 수 있습니다.
+          견적서 PDF, 6컬럼 수치, 협상 메모 히스토리를 확인하고 새 메모·첨부를 기록할 수 있어요.
         </DialogDescription>
 
         {/* Left: PDF preview */}

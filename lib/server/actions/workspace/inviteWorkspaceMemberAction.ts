@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 
 import { requireSession } from '@/lib/auth/session';
+import { getMembership } from '@/lib/auth/active-workspace';
 import { workspaceInvitations, workspaces } from '@/lib/db/schema';
 import { getOutboxRepo } from '@/lib/server/repositories/factory';
 import { generateToken, hashToken } from '@/lib/server/token';
@@ -44,7 +45,15 @@ export async function inviteWorkspaceMemberAction(input: {
   if (!session.user.workspaceId) {
     return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
   }
-  if (session.user.role !== 'admin') {
+
+  const workspaceId = session.user.workspaceId;
+  const invitedByUserId = session.user.id;
+  const db = actionDb();
+
+  // Verify against the current DB role, not the (possibly stale) JWT — a
+  // just-demoted admin with a stale token must not retain invite powers.
+  const membership = await getMembership(db, invitedByUserId, workspaceId);
+  if (!membership || membership.role !== 'admin') {
     return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
   }
 
@@ -53,10 +62,6 @@ export async function inviteWorkspaceMemberAction(input: {
 
   const normalizedEmail = normalizeEmail(parsed.data.email);
   const role = parsed.data.role;
-  const workspaceId = session.user.workspaceId;
-  const invitedByUserId = session.user.id;
-
-  const db = actionDb();
 
   // Look up workspace name for the email body
   const [wsRow] = await db

@@ -36,7 +36,7 @@ export type AwardRfpInput = z.infer<typeof Input>;
 export type AwardRfpResult = RfpActionResult;
 
 /**
- * RFP 수주 확정.
+ * RFP 최종 선택(선정) 확정.
  *
  * 트랜잭션:
  *   1) ownership 검증 — `rfp.buyer_ws_id === session.workspaceId`
@@ -45,7 +45,7 @@ export type AwardRfpResult = RfpActionResult;
  *   3) `contracts` insert (RFP 1:1 unique — 중복 awardRfp 시 throw 안 하고
  *      onConflictDoNothing)
  *   4) **알림 비대칭 (advisor pin 6)**:
- *        - winner = 낙찰 PG ws 멤버 each:
+ *        - winner = 선정 PG ws 멤버 each:
  *            notifications.insert(channel='in_app', type='rfp.awarded')
  *          + outbox_entries.enqueue(rfp.awarded, dedupe rfp:{id}:awarded:{email})
  *        - loser  = 다른 입찰 PG ws 멤버 each (status='submitted', id != awardedBid):
@@ -154,8 +154,8 @@ export async function awardRfpAction(
           userId: m.userId,
           workspaceId: winner.pgWsId,
           type: 'rfp.awarded',
-          title: `[${rfpCode}] 낙찰`,
-          body: '제출하신 제안이 낙찰되었습니다.',
+          title: `[${rfpCode}] 선정됐어요`,
+          body: '보내신 견적이 최종 선정됐어요.',
           channel: 'inapp',
           status: 'pending',
           linkUrl: `/inbox/${rfpCode}`,
@@ -184,7 +184,7 @@ export async function awardRfpAction(
           {
             event: 'rfp.awarded',
             to: row.email,
-            subject: `[Supporter B · ${rfpCode}] 낙찰 결과`,
+            subject: `[Supporter B · ${rfpCode}] 선정 결과`,
             html: awardedHtml,
             dedupeKey: `rfp:${rfpId}:awarded:${row.email}`,
           },
@@ -204,8 +204,8 @@ export async function awardRfpAction(
             userId: m.userId,
             workspaceId: loser.pgWsId,
             type: 'rfp.rejected',
-            title: `[${rfpCode}] 미낙찰`,
-            body: '다른 PG가 선정되었습니다.',
+            title: `[${rfpCode}] 이번엔 선정되지 않았어요`,
+            body: '다른 PG가 선정됐어요.',
             channel: 'inapp',
             status: 'pending',
             linkUrl: `/inbox/${rfpCode}`,

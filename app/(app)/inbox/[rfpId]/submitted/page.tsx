@@ -45,13 +45,13 @@ export default async function InboxSubmittedPage({ params }: Props) {
     return (
       <div className="px-8 py-8">
         <p className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-          아직 제출한 제안이 없어요.
+          아직 보낸 견적이 없어요.
         </p>
         <Link
           href={`/inbox/${rfpCode}`}
           className="mt-4 block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
-          ← 제안 작성으로
+          ← 견적 작성으로
         </Link>
       </div>
     );
@@ -64,17 +64,17 @@ export default async function InboxSubmittedPage({ params }: Props) {
       {/* Status */}
       <div>
         <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-tertiary)] mb-3">
-          ✓ 제출 완료
+          ✓ 견적을 보냈어요
         </p>
         <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-          제안을 제출했어요
+          견적을 보냈어요
         </h1>
         <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           구매사가 마감일까지 비교·검토 후 결과를 알려드려요.
         </p>
         {bid.submittedAt && (
           <p className="mt-1 font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
-            제출 <LocalTime iso={bid.submittedAt} />
+            보낸 시각 <LocalTime iso={bid.submittedAt} />
           </p>
         )}
       </div>
@@ -82,12 +82,12 @@ export default async function InboxSubmittedPage({ params }: Props) {
       {/* RFP summary */}
       <div>
         <div className="flex items-center gap-3 mb-3">
-          <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">제안 요청</span>
+          <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">견적 요청</span>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           {[
-            ['RFP', rfp.code],
+            ['견적 요청 번호', rfp.code],
             ['제목', rfp.title],
             ['등급', grade ? GRADE_LABELS[grade] : '—'],
             ['마감', formatDate(rfp.deadline)],
@@ -103,7 +103,7 @@ export default async function InboxSubmittedPage({ params }: Props) {
       {/* Bid summary */}
       <div>
         <div className="flex items-center gap-3 mb-3">
-          <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">제출 제안</span>
+          <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">보낸 견적</span>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">

@@ -22,11 +22,11 @@ type CommandItem = {
 };
 
 const COMMANDS: CommandItem[] = [
-  { group: 'RFP', id: 'rfp-list', label: 'RFP 목록', href: '/rfp' },
+  { group: '견적 요청', id: 'rfp-list', label: '견적 요청 목록', href: '/rfp' },
   {
-    group: 'RFP',
+    group: '견적 요청',
     id: 'rfp-new',
-    label: '신규 제안 요청',
+    label: '새 견적 요청',
     shortcut: { kind: 'chord', lead: 'g', key: 'c' },
     href: '/rfp/new',
   },
@@ -134,7 +134,7 @@ export function CommandPalette() {
                   <Command.Group
                     heading={
                       <span className="px-4 py-1 block font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                        제안서
+                        견적서
                       </span>
                     }
                   >
