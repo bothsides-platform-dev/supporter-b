@@ -5,6 +5,7 @@
 import type {
   AttachmentRepo,
   BidNoteRepo,
+  BidQuoteTemplateRepo,
   BidRepo,
   BizProfileRepo,
   ChatConversationRepo,
@@ -32,6 +33,7 @@ type RepoBundle = {
   bizProfile: BizProfileRepo;
   bid: BidRepo;
   bidNote: BidNoteRepo;
+  bidQuoteTemplate: BidQuoteTemplateRepo;
   column: ColumnRepo;
   notification: NotificationRepo;
   contract: ContractRepo;
@@ -63,6 +65,9 @@ async function buildBundle(): Promise<RepoBundle> {
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
   const { DrizzleBidRepository } = await import('./drizzle/bid');
   const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
+  const { DrizzleBidQuoteTemplateRepository } = await import(
+    './drizzle/bid-quote-template'
+  );
   const { DrizzleColumnRepository } = await import('./drizzle/column');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
@@ -87,6 +92,7 @@ async function buildBundle(): Promise<RepoBundle> {
     bizProfile: new DrizzleBizProfileRepository(db),
     bid: new DrizzleBidRepository(db),
     bidNote: new DrizzleBidNoteRepository(db),
+    bidQuoteTemplate: new DrizzleBidQuoteTemplateRepository(db),
     column: new DrizzleColumnRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),
@@ -109,6 +115,7 @@ function isRepoBundleStale(bundle: RepoBundle): boolean {
     typeof bundle.pgRequest?.findOpenRfpsForPg !== 'function' ||
     typeof bundle.column?.listByBoard !== 'function' ||
     typeof bundle.chatTemplate?.create !== 'function' ||
+    typeof bundle.bidQuoteTemplate?.create !== 'function' ||
     typeof bundle.chatConversation?.findOrCreatePair !== 'function' ||
     typeof bundle.chatMessage?.save !== 'function' ||
     typeof bundle.chatRead?.upsert !== 'function'
@@ -145,6 +152,9 @@ export async function getBidRepo(): Promise<BidRepo> {
 }
 export async function getBidNoteRepo(): Promise<BidNoteRepo> {
   return (await getBundle()).bidNote;
+}
+export async function getBidQuoteTemplateRepo(): Promise<BidQuoteTemplateRepo> {
+  return (await getBundle()).bidQuoteTemplate;
 }
 export async function getColumnRepo(): Promise<ColumnRepo> {
   return (await getBundle()).column;
@@ -204,6 +214,9 @@ export async function __useDrizzleWithDbForTest(
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
   const { DrizzleBidRepository } = await import('./drizzle/bid');
   const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
+  const { DrizzleBidQuoteTemplateRepository } = await import(
+    './drizzle/bid-quote-template'
+  );
   const { DrizzleColumnRepository } = await import('./drizzle/column');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
@@ -227,6 +240,7 @@ export async function __useDrizzleWithDbForTest(
     bizProfile: new DrizzleBizProfileRepository(db),
     bid: new DrizzleBidRepository(db),
     bidNote: new DrizzleBidNoteRepository(db),
+    bidQuoteTemplate: new DrizzleBidQuoteTemplateRepository(db),
     column: new DrizzleColumnRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),

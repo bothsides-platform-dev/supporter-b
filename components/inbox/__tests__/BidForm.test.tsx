@@ -30,7 +30,15 @@ vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: (input: unknown) => submitBidMock(input),
 }));
 
-import { BidForm } from '../BidForm';
+const saveTemplateMock = vi.fn(async (_input: unknown) => ({
+  ok: true as const,
+  templateId: 't-new',
+}));
+vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
+  saveQuoteTemplateAction: (input: unknown) => saveTemplateMock(input),
+}));
+
+import { BidForm, type QuoteTemplateOption } from '../BidForm';
 
 beforeEach(() => {
   localStorage.clear();
@@ -40,12 +48,14 @@ afterEach(() => {
   cleanup();
   push.mockClear();
   submitBidMock.mockClear();
+  saveTemplateMock.mockClear();
 });
 
 type FormOverrides = {
   grade?: MerchantGrade | undefined;
   requiredPaymentMethods?: PaymentMethod[];
   customPaymentMethods?: CustomPaymentMethod[];
+  templates?: QuoteTemplateOption[];
 };
 
 function renderForm(overrides: FormOverrides = {}) {
@@ -56,9 +66,20 @@ function renderForm(overrides: FormOverrides = {}) {
       grade={'grade' in overrides ? overrides.grade : 'general'}
       requiredPaymentMethods={overrides.requiredPaymentMethods ?? ['bank_transfer']}
       customPaymentMethods={overrides.customPaymentMethods ?? []}
+      templates={overrides.templates ?? []}
     />,
   );
 }
+
+const tmpl = (over: Partial<QuoteTemplateOption> = {}): QuoteTemplateOption => ({
+  id: 't1',
+  name: '표준 요율',
+  settleCycle: 'M+1',
+  settleLimit: 0,
+  guaranteeInsurance: 0,
+  paymentFees: {},
+  ...over,
+});
 
 // PercentInput 은 라벨-input aria 연결이 없어 라벨 텍스트의 컨테이너에서 input 을 찾는다.
 function feeInput(labelText: string): HTMLInputElement {
@@ -270,6 +291,91 @@ describe('BidForm UX 개선 — 심리학 법칙', () => {
       });
 
       expect(screen.getByText(/저장됨/)).toBeInTheDocument();
+    });
+  });
+});
+
+describe('BidForm 견적 템플릿', () => {
+  it('templates가 있으면 "템플릿 불러오기" 셀렉트와 옵션을 렌더한다', () => {
+    renderForm({ templates: [tmpl({ id: 't1', name: '표준 요율' })] });
+    expect(screen.getByText('견적 템플릿 불러오기')).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: '표준 요율' }),
+    ).toBeInTheDocument();
+  });
+
+  it('templates가 없으면 "템플릿 불러오기" 셀렉트를 렌더하지 않는다', () => {
+    renderForm({ templates: [] });
+    expect(screen.queryByText('견적 템플릿 불러오기')).toBeNull();
+  });
+
+  it('템플릿 선택 시 정산주기와 요청된 결제수단 요율을 채운다', async () => {
+    const user = userEvent.setup();
+    renderForm({
+      requiredPaymentMethods: ['bank_transfer'],
+      grade: 'general',
+      templates: [
+        tmpl({
+          id: 't1',
+          name: '표준 요율',
+          settleCycle: 'M+2',
+          paymentFees: { card: 0.0125, bank_transfer: 0.005 },
+        }),
+      ],
+    });
+
+    await user.selectOptions(
+      screen.getByRole('option', { name: '표준 요율' }).closest('select')!,
+      't1',
+    );
+
+    // 요청된 bank_transfer 만 채워짐 (소수 0.005 → 퍼센트 "0.5")
+    expect(feeInput('계좌이체 수수료').value).toBe('0.5');
+    // 정산주기 M+2 파싱 (cycleNum input)
+    expect(
+      (screen.getByPlaceholderText('1') as HTMLInputElement).value,
+    ).toBe('2');
+  });
+
+  it('capped 등급에서는 템플릿의 카드 요율을 적용하지 않는다 (읽기전용 보존)', async () => {
+    const user = userEvent.setup();
+    renderForm({
+      requiredPaymentMethods: ['card', 'bank_transfer'],
+      grade: 'sme2',
+      templates: [
+        tmpl({
+          id: 't1',
+          paymentFees: { card: 0.01, bank_transfer: 0.006 },
+        }),
+      ],
+    });
+
+    await user.selectOptions(
+      screen.getByRole('option', { name: '표준 요율' }).closest('select')!,
+      't1',
+    );
+
+    // 카드 입력칸 자체가 없고(capped), 계좌이체만 채워진다.
+    expect(screen.queryByText('카드 수수료')).toBeNull();
+    expect(feeInput('계좌이체 수수료').value).toBe('0.6');
+  });
+
+  it('"템플릿으로 저장" 후 이름 입력·저장 시 현재 입력값으로 saveQuoteTemplateAction 호출', async () => {
+    const user = userEvent.setup();
+    renderForm({ requiredPaymentMethods: ['bank_transfer'], grade: 'general' });
+
+    await user.type(feeInput('계좌이체 수수료'), '0.50');
+    await user.click(screen.getByRole('button', { name: '템플릿으로 저장' }));
+    await user.type(screen.getByPlaceholderText('템플릿 이름'), '내 표준');
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(saveTemplateMock).toHaveBeenCalledOnce());
+    expect(saveTemplateMock.mock.calls[0][0]).toEqual({
+      name: '내 표준',
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: { bank_transfer: 0.005 },
     });
   });
 });

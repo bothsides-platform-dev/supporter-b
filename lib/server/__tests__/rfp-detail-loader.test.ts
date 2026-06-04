@@ -10,6 +10,7 @@ import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getBidQuoteTemplateRepo,
   getInvitationRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -260,6 +261,44 @@ describe('loadPgRfpDetail', () => {
     const res = await loadPgRfpDetail({ code: 'P-2605-0013', workspaceId: ctx.tossId });
     expect(res).not.toBeNull();
     expect(res!.buyerName).toBe('구매사');
+  });
+
+  it('해당 PG 워크스페이스의 견적 템플릿만 quoteTemplates로 반환(타 워크스페이스 격리)', async () => {
+    const rfpId = await ctx.seedRfp('P-2605-0014');
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const repo = await getBidQuoteTemplateRepo();
+    await repo.create({
+      pgWsId: ctx.tossId,
+      name: '표준 요율',
+      settleCycle: 'M+1',
+      settleLimit: 5_000_000,
+      guaranteeInsurance: 0,
+      paymentFees: { card: 0.0125 },
+      createdBy: ctx.buyerId,
+    });
+    await repo.create({
+      pgWsId: ctx.inicisId,
+      name: '남의 요율',
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: {},
+      createdBy: ctx.buyerId,
+    });
+
+    const res = await loadPgRfpDetail({ code: 'P-2605-0014', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.quoteTemplates).toEqual([
+      {
+        id: expect.any(String),
+        name: '표준 요율',
+        settleCycle: 'M+1',
+        settleLimit: 5_000_000,
+        guaranteeInsurance: 0,
+        paymentFees: { card: 0.0125 },
+      },
+    ]);
   });
 });
 
