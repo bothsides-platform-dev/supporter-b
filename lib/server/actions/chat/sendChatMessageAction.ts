@@ -9,6 +9,7 @@ import {
   getAttachmentRepo,
   getChatConversationRepo,
   getChatMessageRepo,
+  getNotificationRepo,
   getOutboxRepo,
   getUserRepo,
   getWorkspaceRepo,
@@ -27,8 +28,10 @@ import type { Notification } from '@/lib/types/notification';
 import {
   actionDb,
   baseUrl,
+  chatDigestBucket,
   chatDigestDedupeKey,
   chatDigestWindowEnd,
+  CHAT_DIGEST_WINDOW_MS,
   type ChatActionResult,
   requireActiveWorkspace,
 } from './_shared';
@@ -195,6 +198,7 @@ export async function sendChatMessageAction(
         email: string;
       }[];
 
+      const notifRepo = await getNotificationRepo();
       const outbox = await getOutboxRepo();
       const preview = body.length > 0 ? body.slice(0, 120) : '첨부 파일을 보냈어요.';
       const conversationUrl = `${baseUrl()}/messages`;
@@ -203,26 +207,38 @@ export async function sendChatMessageAction(
       // scheduledAt for every coalesced digest in this window — shared so a
       // flurry lands on one fire time (the window END).
       const digestScheduledAt = chatDigestWindowEnd(now);
+      // windowStart for in-app notification dedup (same 3-min grid as email).
+      const inappWindowStart = new Date(chatDigestBucket(now) * CHAT_DIGEST_WINDOW_MS);
 
       for (const m of recipients) {
         // sender's own membership never lands in counterparty fanout, but guard
         // anyway in case of shared membership edge cases.
         if (m.userId === ws.userId) continue;
-        const notif: Notification = {
-          id: randomUUID(),
-          userId: m.userId,
-          workspaceId: counterpartyWsId,
-          type: 'chat.message',
-          title: `${senderName}님의 새 메시지`,
-          body: preview,
-          channel: 'inapp',
-          status: 'pending',
-          linkUrl: '/messages',
-          createdAt: now.toISOString(),
-        };
-        // In-app bell ALWAYS fires (online or not).
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
+
+        // In-app bell: one notification per recipient per window — skip if one
+        // already exists so a message flurry doesn't stack up the bell count.
+        const alreadyNotified = await notifRepo.hasPendingChatNotification(
+          m.userId,
+          counterpartyWsId,
+          inappWindowStart,
+          tx,
+        );
+        if (!alreadyNotified) {
+          const notif: Notification = {
+            id: randomUUID(),
+            userId: m.userId,
+            workspaceId: counterpartyWsId,
+            type: 'chat.message',
+            title: `${senderName}님의 새 메시지`,
+            body: preview,
+            channel: 'inapp',
+            status: 'pending',
+            linkUrl: '/messages',
+            createdAt: now.toISOString(),
+          };
+          await dispatchNotification(tx, notif);
+          pendingEmits.push(notif);
+        }
 
         // Layer 1 — presence suppression: an online recipient sees the live
         // fanout, so skip the email enqueue entirely. Best-effort & defaults to

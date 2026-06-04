@@ -229,6 +229,13 @@ export interface NotificationRepo {
   markRead(id: string, tx?: Tx): Promise<void>;
   /** 사용자+워크스페이스 전부 읽음 처리. */
   markAllRead(userId: string, workspaceId: string, tx?: Tx): Promise<void>;
+  /** 동일 window 내 queued 상태 chat.message 알림 존재 여부 — 인앱 알림 중복 방지용. */
+  hasPendingChatNotification(
+    userId: string,
+    workspaceId: string,
+    windowStart: Date,
+    tx?: Tx,
+  ): Promise<boolean>;
 }
 
 // ── Contract ──────────────────────────────────────────────────────────
