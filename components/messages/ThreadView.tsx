@@ -13,6 +13,7 @@ import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessage
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
+import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 
 type Props = {
   conversationId: string;
@@ -38,12 +39,42 @@ type LiveMessagePayload = {
 // only fire after the user *stops* typing — backwards for a live indicator).
 const TYPING_THROTTLE_MS = 2000;
 
-type Attachment = { id: string; name: string };
+type Attachment = { id: string; name: string; size?: number; mimeType?: string; url?: string };
 
 // Capturing group so split keeps the URLs; matched per-part with a
 // non-global test (a /g regex carries lastIndex across .test() calls).
 const URL_SPLIT = /(https?:\/\/[^\s]+)/g;
 const isUrl = (s: string): boolean => /^https?:\/\//.test(s);
+
+/** 메시지 버블 내 컴팩트 첨부파일 그리드 — 헤더 없음, 2열 소형 타일. */
+function ChatAttachmentGrid({ attachments }: { attachments: { id: string; name: string; mimeType: string; url: string }[] }) {
+  return (
+    <div className="mt-2 grid grid-cols-2 gap-1.5">
+      {attachments.map((att) => {
+        const isImage = att.mimeType?.startsWith('image/');
+        return (
+          <a
+            key={att.id}
+            href={att.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-center gap-1.5 overflow-hidden rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-2 py-1.5 transition-colors hover:border-[var(--md-sys-color-outline)]"
+          >
+            {isImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={att.url} alt={att.name} className="h-8 w-8 shrink-0 rounded-sm object-cover" />
+            ) : (
+              <PaperclipIcon size={14} className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]" />
+            )}
+            <span className="min-w-0 truncate text-[11px] text-[var(--md-sys-color-on-surface)]">
+              {att.name}
+            </span>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
 
 /** 평문 본문 — 줄바꿈은 whitespace-pre-wrap, URL 은 자동 링크. */
 function renderBody(body: string): React.ReactNode {
@@ -87,6 +118,7 @@ export function ThreadView({
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [sending, setSending] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
   // Local copy so live receives + optimistic sends append without a refetch.
   const [localMessages, setLocalMessages] = useState<ThreadMessage[]>(messages);
   // Track the messages prop identity to resync local state when it changes
@@ -127,6 +159,7 @@ export function ThreadView({
             rfpId: data.rfpId ?? null,
             createdAt: data.createdAt as string,
             readByCounterparty: false,
+            attachments: [],
           },
         ];
       });
@@ -162,6 +195,11 @@ export function ThreadView({
     [localMessages, readAt],
   );
 
+  const totalAttachmentCount = useMemo(
+    () => localMessages.reduce((sum, m) => sum + m.attachments.length, 0),
+    [localMessages],
+  );
+
   async function uploadOne(file: File): Promise<void> {
     const form = new FormData();
     form.append('file', file);
@@ -170,9 +208,20 @@ export function ThreadView({
     try {
       const body = await http
         .post('/api/files/upload', { body: form })
-        .json<{ id: string; name: string }>();
+        .json<{ id: string; name: string; size: number; mimeType: string }>();
       setAttachments((prev) =>
-        prev.length >= MAX_FILES ? prev : [...prev, { id: body.id, name: body.name }],
+        prev.length >= MAX_FILES
+          ? prev
+          : [
+              ...prev,
+              {
+                id: body.id,
+                name: body.name,
+                size: body.size,
+                mimeType: body.mimeType,
+                url: `/api/files/${body.id}`,
+              },
+            ],
       );
     } catch (err) {
       // 첨부 실패는 조용히 무시(다음 단계에서 토스트). HTTPError 도 동일.
@@ -223,6 +272,12 @@ export function ThreadView({
                 rfpId: null,
                 createdAt: new Date().toISOString(),
                 readByCounterparty: false,
+                // 전송 시점의 attachments 상태로 즉시 표시 (reload 불필요).
+                attachments: attachments.flatMap((a) =>
+                  a.size !== undefined && a.mimeType && a.url
+                    ? [{ id: a.id, name: a.name, size: a.size, mimeType: a.mimeType, url: a.url }]
+                    : [],
+                ),
               },
             ],
       );
@@ -249,7 +304,8 @@ export function ThreadView({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-w-0">
+    <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* 헤더 — 상대 워크스페이스 + 타입 + 프레즌스 + 타이핑 */}
       <header className="flex items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
         <div className="relative">
@@ -272,6 +328,21 @@ export function ThreadView({
             <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">입력 중…</span>
           )}
         </div>
+        {totalAttachmentCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowGallery((v) => !v)}
+            className={cn(
+              'flex shrink-0 items-center gap-1 rounded-[var(--md-sys-shape-small)] px-2 py-1 text-[12px] transition-colors',
+              showGallery
+                ? 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]'
+                : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
+            )}
+          >
+            <PaperclipIcon size={13} />
+            <span className="md-numeric">파일 {totalAttachmentCount}</span>
+          </button>
+        )}
       </header>
 
       {/* 말풍선 목록 */}
@@ -341,6 +412,9 @@ export function ThreadView({
                     )}
                   >
                     {renderBody(m.body)}
+                    {m.attachments.length > 0 && (
+                      <ChatAttachmentGrid attachments={m.attachments} />
+                    )}
                   </div>
                   {isSelf && (
                     <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -437,6 +511,14 @@ export function ThreadView({
           보내기
         </Button>
       </div>
+    </div>
+
+    {/* 우측 첨부파일 갤러리 패널 */}
+    {showGallery && (
+      <div className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-[var(--md-sys-color-outline-variant)] p-3">
+        <AttachmentGalleryPanel conversationId={conversationId} />
+      </div>
+    )}
     </div>
   );
 }
