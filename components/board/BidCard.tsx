@@ -6,7 +6,7 @@ import { formatKRW, formatPct } from '@/lib/format';
 import { PAYMENT_METHOD_LABELS, type Bid, type PaymentMethod } from '@/lib/types/bid';
 
 // Presentational bid card for the rfp_bids board's renderCard slot. Drag is the
-// board's DraggableCard wrapper; awarded state shows a "낙찰" chip (decoupled
+// board's DraggableCard wrapper; awarded state shows a "선정됨" chip (decoupled
 // from columns — see spec §A). Click opens the detail modal.
 export function BidCard({
   bid,

@@ -1,5 +1,5 @@
 // PG 홈 칸반 — 초대받은 RFP 1건 = 카드 1장. 4개 컬럼.
-// 분류는 (invitation, optional bid, parent rfp) 트리플로부터 결정. 결과 단계(낙찰/실패)
+// 분류는 (invitation, optional bid, parent rfp) 트리플로부터 결정. 결과 단계(선정/미선정)
 // 가 bid 단계보다 우선 — RFP 가 awarded/closed 면 즉시 결과 컬럼으로 들어감.
 // 제출 전(bid 없음 / bid=draft)은 모두 신규(received) — 작성중 단계 제거.
 //

@@ -36,7 +36,7 @@ export type AwardRfpInput = z.infer<typeof Input>;
 export type AwardRfpResult = RfpActionResult;
 
 /**
- * RFP 수주 확정.
+ * RFP 최종 선택(선정) 확정.
  *
  * 트랜잭션:
  *   1) ownership 검증 — `rfp.buyer_ws_id === session.workspaceId`
@@ -45,7 +45,7 @@ export type AwardRfpResult = RfpActionResult;
  *   3) `contracts` insert (RFP 1:1 unique — 중복 awardRfp 시 throw 안 하고
  *      onConflictDoNothing)
  *   4) **알림 비대칭 (advisor pin 6)**:
- *        - winner = 낙찰 PG ws 멤버 each:
+ *        - winner = 선정 PG ws 멤버 each:
  *            notifications.insert(channel='in_app', type='rfp.awarded')
  *          + outbox_entries.enqueue(rfp.awarded, dedupe rfp:{id}:awarded:{email})
  *        - loser  = 다른 입찰 PG ws 멤버 each (status='submitted', id != awardedBid):

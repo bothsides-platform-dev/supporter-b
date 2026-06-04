@@ -5,7 +5,7 @@
  *   1. Buyer logs in, opens seed RFP `P-2604-0001` 상세.
  *   2. RfpInviteManager UI에서 "PG사 검색…" → cmdk 목록에서 신규 워크스페이스
  *      선택 → `[ 대기중 ]`(draft) 상태로 누적.
- *   3. "초대 발송" 클릭 → `[ 발송됨 ]`(pending)으로 전환 + outbox enqueue.
+ *   3. "초대 보내기" 클릭 → `[ 초대 보냄 ]`(pending)으로 전환 + outbox enqueue.
  *
  * Coverage:
  *   - addPgWorkspacesToRfpAction (workspaceIds 배열 → draft invitation insert).

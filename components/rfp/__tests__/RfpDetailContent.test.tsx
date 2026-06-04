@@ -1,5 +1,5 @@
 // RfpDetailContent — 구매사 상세 본문(전체 페이지·모달 공유). loader 산출물을 받아
-// 헤더 + 제안비교 + 첨부 + meta 를 그린다. 자체 로직은 '수주 처리' 링크 조건뿐.
+// 헤더 + 견적 비교 + 첨부 + meta 를 그린다. 자체 로직은 '최종 선택' 링크 조건뿐.
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 

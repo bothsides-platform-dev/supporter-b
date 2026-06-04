@@ -60,7 +60,7 @@ export type SubmitBidInput = z.input<typeof Input>;
 export type SubmitBidResult = BidActionResult<{ bidId: string }>;
 
 /**
- * PG 제안 제출 (v2 — payment_fees JSONB 모델).
+ * PG 견적 제출 (v2 — payment_fees JSONB 모델).
  *
  * 트랜잭션 단계:
  *   1) requirePgSession

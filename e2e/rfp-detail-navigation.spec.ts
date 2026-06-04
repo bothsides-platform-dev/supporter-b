@@ -57,7 +57,7 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
     await page.goto('/rfp');
 
     // 행 클릭(soft-nav) → ?peek=<code> 사이드 패널(미리보기). 패널은
-    // RfpDetailContent('제안 비교')를 렌더한다.
+    // RfpDetailContent('견적 비교')를 렌더한다.
     await page.getByText(RFP_CODE).click();
     await expect(page).toHaveURL(new RegExp(`/rfp\\?peek=${RFP_CODE}$`), { timeout: 60_000 });
     await expect(page.getByText('견적 비교')).toBeVisible();
