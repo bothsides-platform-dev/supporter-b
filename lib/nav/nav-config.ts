@@ -161,12 +161,27 @@ const MESSAGES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'm' },
 };
 
+// 견적 템플릿(요율표)은 PG 전용 — 구매사 설정에는 노출하지 않는다.
+const QUOTE_TEMPLATES_LINK: NavLeaf = {
+  id: 'settings-quote-templates',
+  label: '견적 템플릿',
+  href: '/settings/quote-templates',
+  shortcut: { kind: 'chord', lead: 'g', key: 'q' },
+};
+
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : INBOX_SECTION;
+  const settingsSection: NavSection =
+    workspaceType === 'pg'
+      ? {
+          ...SETTINGS_SECTION,
+          links: [...(SETTINGS_SECTION.links ?? []), QUOTE_TEMPLATES_LINK],
+        }
+      : SETTINGS_SECTION;
 
   return {
     top: [HOME, NOTIFICATIONS, MESSAGES],
-    sections: [workspaceSection, SETTINGS_SECTION],
+    sections: [workspaceSection, settingsSection],
   };
 }
 
@@ -197,6 +212,9 @@ export function getBreadcrumbSegments(
   }
   if (pathname === '/settings/members') {
     return [{ label: '설정', href: '/settings/profile' }, { label: '멤버' }];
+  }
+  if (pathname === '/settings/quote-templates') {
+    return [{ label: '설정', href: '/settings/profile' }, { label: '견적 템플릿' }];
   }
   return [];
 }

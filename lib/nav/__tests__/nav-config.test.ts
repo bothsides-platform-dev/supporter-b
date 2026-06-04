@@ -101,6 +101,23 @@ describe('getNavConfig — settings section (both)', () => {
       '/settings/members',
     ]);
   });
+
+  it('adds a PG-only 견적 템플릿 link (g q); buyer settings has no such link', () => {
+    const pg = getNavConfig('pg').sections.find((s) => s.id === 'settings');
+    expect(pg?.links?.map((l) => l.href)).toEqual([
+      '/settings/profile',
+      '/settings/members',
+      '/settings/quote-templates',
+    ]);
+    const qt = pg?.links?.find((l) => l.href === '/settings/quote-templates');
+    expect(qt?.label).toBe('견적 템플릿');
+    expect(qt?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'q' });
+
+    const buyer = getNavConfig('buyer').sections.find((s) => s.id === 'settings');
+    expect(
+      buyer?.links?.some((l) => l.href === '/settings/quote-templates'),
+    ).toBe(false);
+  });
 });
 
 describe('getBreadcrumbSegments', () => {
@@ -137,6 +154,10 @@ describe('getBreadcrumbSegments', () => {
     expect(getBreadcrumbSegments('/settings/members')).toEqual([
       { label: '설정', href: '/settings/profile' },
       { label: '멤버' },
+    ]);
+    expect(getBreadcrumbSegments('/settings/quote-templates')).toEqual([
+      { label: '설정', href: '/settings/profile' },
+      { label: '견적 템플릿' },
     ]);
   });
 
@@ -175,6 +196,7 @@ describe('getChordMap', () => {
       '3': '/inbox?status=closed',
       p: '/settings/profile',
       t: '/settings/members',
+      q: '/settings/quote-templates',
     });
   });
 
