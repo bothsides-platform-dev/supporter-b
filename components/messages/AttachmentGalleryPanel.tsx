@@ -8,18 +8,20 @@ import type { Attachment } from '@/lib/types/common';
 type Props = { conversationId: string };
 
 export function AttachmentGalleryPanel({ conversationId }: Props) {
-  const [files, setFiles] = useState<Attachment[] | null>(null);
+  const [loaded, setLoaded] = useState<{ id: string; files: Attachment[] } | null>(null);
 
   useEffect(() => {
-    setFiles(null);
     let cancelled = false;
     listConversationAttachments(conversationId).then((result) => {
-      if (!cancelled) setFiles(result);
+      if (!cancelled) setLoaded({ id: conversationId, files: result });
     });
     return () => {
       cancelled = true;
     };
   }, [conversationId]);
+
+  // conversationId가 바뀌면 직전 결과는 무효 — 새 조회가 끝날 때까지 로딩으로 본다.
+  const files = loaded?.id === conversationId ? loaded.files : null;
 
   if (files === null) {
     return (
