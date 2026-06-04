@@ -6,10 +6,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { attachments } from '@/lib/db/schema';
+import { attachments, chatConversations, chatMessages } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { DrizzleAttachmentRepository } from '../attachment';
-import { seedBuyerWorkspace, seedRfp, seedUser } from './_seed';
+import { seedBuyerWorkspace, seedPgWorkspace, seedRfp, seedUser } from './_seed';
 
 async function setup() {
   const db = await createPgliteDb();
@@ -137,5 +137,191 @@ describe('DrizzleAttachmentRepository.findByRfp', () => {
     });
 
     expect(await ctx.repo.findByRfp(rfp.id)).toEqual([]);
+  });
+});
+
+// ── Chat attachment helpers ────────────────────────────────────────────────
+
+async function seedConversation(db: PgliteDB, buyerWsId: string, pgWsId: string) {
+  const id = randomUUID();
+  await db.insert(chatConversations).values({ id, buyerWsId, pgWsId });
+  return id;
+}
+
+async function seedChatMessage(
+  db: PgliteDB,
+  opts: { conversationId: string; authorUserId: string; authorWsId: string },
+) {
+  const id = randomUUID();
+  await db.insert(chatMessages).values({
+    id,
+    conversationId: opts.conversationId,
+    authorUserId: opts.authorUserId,
+    authorWsId: opts.authorWsId,
+    body: 'test message',
+  });
+  return id;
+}
+
+async function insertChatAttachment(
+  db: PgliteDB,
+  opts: { uploaderId: string; chatMessageId: string; name: string; uploadedAt?: Date },
+) {
+  const id = randomUUID();
+  await db.insert(attachments).values({
+    id,
+    name: opts.name,
+    size: 1024,
+    mimeType: 'application/pdf',
+    uploadedBy: opts.uploaderId,
+    chatMessageId: opts.chatMessageId,
+    uploadedAt: opts.uploadedAt,
+  });
+  return id;
+}
+
+describe('DrizzleAttachmentRepository.findByChatMessageIds', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('returns attachments for the given message ids, oldest first', async () => {
+    const buyerWs = await seedBuyerWorkspace(ctx.db);
+    const pgWs = await seedPgWorkspace(ctx.db, 'PG사');
+    const convId = await seedConversation(ctx.db, buyerWs.id, pgWs.id);
+    const msgId = await seedChatMessage(ctx.db, {
+      conversationId: convId,
+      authorUserId: ctx.uploader.id,
+      authorWsId: buyerWs.id,
+    });
+
+    const first = await insertChatAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      chatMessageId: msgId,
+      name: 'first.pdf',
+      uploadedAt: new Date('2026-06-01T00:00:00Z'),
+    });
+    const second = await insertChatAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      chatMessageId: msgId,
+      name: 'second.pdf',
+      uploadedAt: new Date('2026-06-02T00:00:00Z'),
+    });
+    // Noise: draft attachment (no chatMessageId) — must be excluded.
+    await insertAttachment(ctx.db, ctx.uploader.id);
+
+    const files = await ctx.repo.findByChatMessageIds([msgId]);
+
+    expect(files.map((f) => f.id)).toEqual([first, second]);
+    expect(files.map((f) => f.name)).toEqual(['first.pdf', 'second.pdf']);
+    expect(files[0].url).toBe(`/api/files/${first}`);
+  });
+
+  it('groups attachments by messageId when multiple message ids given', async () => {
+    const buyerWs = await seedBuyerWorkspace(ctx.db);
+    const pgWs = await seedPgWorkspace(ctx.db, 'PG사');
+    const convId = await seedConversation(ctx.db, buyerWs.id, pgWs.id);
+    const msg1 = await seedChatMessage(ctx.db, {
+      conversationId: convId,
+      authorUserId: ctx.uploader.id,
+      authorWsId: buyerWs.id,
+    });
+    const msg2 = await seedChatMessage(ctx.db, {
+      conversationId: convId,
+      authorUserId: ctx.uploader.id,
+      authorWsId: buyerWs.id,
+    });
+
+    const a1 = await insertChatAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      chatMessageId: msg1,
+      name: 'msg1.pdf',
+    });
+    const a2 = await insertChatAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      chatMessageId: msg2,
+      name: 'msg2.pdf',
+    });
+
+    const files = await ctx.repo.findByChatMessageIds([msg1, msg2]);
+
+    expect(files.map((f) => f.id)).toEqual(expect.arrayContaining([a1, a2]));
+    expect(files).toHaveLength(2);
+  });
+
+  it('returns [] when no ids given', async () => {
+    expect(await ctx.repo.findByChatMessageIds([])).toEqual([]);
+  });
+
+  it('returns [] when no attachments exist for the given ids', async () => {
+    expect(await ctx.repo.findByChatMessageIds([randomUUID()])).toEqual([]);
+  });
+});
+
+describe('DrizzleAttachmentRepository.findByConversationId', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('returns all attachments across messages in the conversation, oldest first', async () => {
+    const buyerWs = await seedBuyerWorkspace(ctx.db);
+    const pgWs = await seedPgWorkspace(ctx.db, 'PG사');
+    const convId = await seedConversation(ctx.db, buyerWs.id, pgWs.id);
+    const msg1 = await seedChatMessage(ctx.db, {
+      conversationId: convId,
+      authorUserId: ctx.uploader.id,
+      authorWsId: buyerWs.id,
+    });
+    const msg2 = await seedChatMessage(ctx.db, {
+      conversationId: convId,
+      authorUserId: ctx.uploader.id,
+      authorWsId: buyerWs.id,
+    });
+
+    // Another conversation (different PG) — its attachments must not appear.
+    const otherPgWs = await seedPgWorkspace(ctx.db, 'Other PG');
+    const otherConvId = await seedConversation(ctx.db, buyerWs.id, otherPgWs.id);
+
+    const first = await insertChatAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      chatMessageId: msg1,
+      name: 'from-msg1.pdf',
+      uploadedAt: new Date('2026-06-01T00:00:00Z'),
+    });
+    const second = await insertChatAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      chatMessageId: msg2,
+      name: 'from-msg2.pdf',
+      uploadedAt: new Date('2026-06-02T00:00:00Z'),
+    });
+
+    // Noise: other conversation's message attachment.
+    const otherMsg = await seedChatMessage(ctx.db, {
+      conversationId: otherConvId,
+      authorUserId: ctx.uploader.id,
+      authorWsId: buyerWs.id,
+    });
+    await insertChatAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      chatMessageId: otherMsg,
+      name: 'other-conv.pdf',
+    });
+
+    const files = await ctx.repo.findByConversationId(convId);
+
+    expect(files.map((f) => f.id)).toEqual([first, second]);
+    expect(files.map((f) => f.name)).toEqual(['from-msg1.pdf', 'from-msg2.pdf']);
+  });
+
+  it('returns [] for a conversation with no attachments', async () => {
+    const buyerWs = await seedBuyerWorkspace(ctx.db);
+    const pgWs = await seedPgWorkspace(ctx.db, 'PG사');
+    const convId = await seedConversation(ctx.db, buyerWs.id, pgWs.id);
+
+    expect(await ctx.repo.findByConversationId(convId)).toEqual([]);
   });
 });

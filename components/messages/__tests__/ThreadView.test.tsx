@@ -18,6 +18,11 @@ vi.mock('@/lib/server/actions/chat/sendChatMessageAction', () => ({
   sendChatMessageAction: (...args: unknown[]) => sendChatMessageAction(...args),
 }));
 
+// listConversationAttachments is a 'use server' action used by AttachmentGalleryPanel.
+vi.mock('@/lib/server/actions/chat/listConversationAttachments', () => ({
+  listConversationAttachments: vi.fn().mockResolvedValue([]),
+}));
+
 // markConversationReadAction is likewise a server action (jsdom-unsafe) — mock
 // it for EVERY test, and capture calls for the mark-read-on-open assertion.
 const markConversationReadAction = vi.fn();
@@ -65,6 +70,7 @@ const messages: ThreadMessage[] = [
     rfpId: null,
     createdAt: '2026-05-26T05:00:00.000Z',
     readByCounterparty: false,
+    attachments: [],
   },
   {
     id: 'm2',
@@ -73,6 +79,7 @@ const messages: ThreadMessage[] = [
     rfpId: null,
     createdAt: '2026-05-27T05:00:00.000Z',
     readByCounterparty: false,
+    attachments: [],
   },
 ];
 
@@ -130,6 +137,7 @@ describe('ThreadView', () => {
         rfpId: null,
         createdAt: '2026-05-27T05:00:00.000Z',
         readByCounterparty: true,
+        attachments: [],
       },
       {
         id: 'b',
@@ -138,6 +146,7 @@ describe('ThreadView', () => {
         rfpId: null,
         createdAt: '2026-05-27T06:00:00.000Z',
         readByCounterparty: false,
+        attachments: [],
       },
     ];
     render(base({ messages: partial }));
@@ -256,6 +265,7 @@ describe('ThreadView', () => {
         rfpId: 'rfp-uuid-123',
         createdAt: '2026-05-26T05:00:00.000Z',
         readByCounterparty: false,
+        attachments: [],
       },
     ];
     render(
@@ -279,6 +289,7 @@ describe('ThreadView', () => {
             rfpId: null,
             createdAt: '2026-05-26T05:00:00.000Z',
             readByCounterparty: false,
+            attachments: [],
           },
         ],
       }),

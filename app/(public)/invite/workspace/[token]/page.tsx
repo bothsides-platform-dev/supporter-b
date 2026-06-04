@@ -15,6 +15,7 @@ import { db as prodDb } from '@/lib/db/client';
 import { workspaceInvitations, workspaces } from '@/lib/db/schema';
 import { hashToken } from '@/lib/server/token';
 import { WorkspaceInviteAuthedClient } from './WorkspaceInviteAuthedClient';
+import { WorkspaceInviteEmailMismatch } from './WorkspaceInviteEmailMismatch';
 import { WorkspaceInviteUnauthClient } from './WorkspaceInviteUnauthClient';
 
 type Props = { params: Promise<{ token: string }> };
@@ -51,6 +52,31 @@ export default async function WorkspaceInvitePage({ params }: Props) {
   // An RSC can't set the JWT cookie, so the switch must happen client-side or
   // the new membership stays inert until re-login.
   if (isAuthed) {
+    // Show the same expired/invalid error to authed users — don't mislead them
+    // into thinking a logout+retry will fix an invalid token.
+    if (!row || row.status !== 'pending' || row.expiresAt < new Date()) {
+      return (
+        <div className="py-12 max-w-[420px] mx-auto text-center space-y-3">
+          <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-error)]">
+            초대 링크 오류
+          </p>
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+            {!row ? ERROR_LABELS['INVITE_INVALID'] : ERROR_LABELS['INVITE_EXPIRED']}
+          </p>
+        </div>
+      );
+    }
+
+    const inviteEmail = row.invitedEmail;
+    const currentEmail = session?.user?.email;
+    const mismatch =
+      currentEmail &&
+      inviteEmail.trim().toLowerCase() !== currentEmail.trim().toLowerCase();
+
+    if (mismatch) {
+      return <WorkspaceInviteEmailMismatch inviteEmail={inviteEmail} token={token} />;
+    }
+
     return <WorkspaceInviteAuthedClient token={token} />;
   }
 

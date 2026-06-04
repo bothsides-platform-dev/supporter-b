@@ -308,6 +308,10 @@ export interface AttachmentRepo {
   findById(id: string, tx?: Tx): Promise<AttachmentRecord | undefined>;
   /** RFP 소유 첨부 목록 — 공개 Attachment 필드만, uploadedAt 오름차순. */
   findByRfp(rfpId: string, tx?: Tx): Promise<Attachment[]>;
+  /** 메시지 ID 배열로 첨부 목록 일괄 조회 — chatMessageId IN (ids), uploadedAt asc. */
+  findByChatMessageIds(ids: string[], tx?: Tx): Promise<(Attachment & { chatMessageId: string })[]>;
+  /** 대화 전체 첨부 목록 — chat_messages JOIN, uploadedAt asc. */
+  findByConversationId(conversationId: string, tx?: Tx): Promise<Attachment[]>;
 }
 
 // ── Outbox ────────────────────────────────────────────────────────────
