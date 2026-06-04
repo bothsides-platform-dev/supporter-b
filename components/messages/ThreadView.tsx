@@ -323,12 +323,14 @@ export function ThreadView({
                 )}
 
                 {rfp && (
-                  <Chip
-                    color="surface"
-                    icon={<span className="md-numeric">{rfp.code}</span>}
-                    label={rfp.title}
-                    className="max-w-[78%]"
-                  />
+                  <div className="w-full">
+                    <Chip
+                      color="surface"
+                      icon={<span className="md-numeric">{rfp.code}</span>}
+                      label={rfp.title}
+                      className="max-w-[78%]"
+                    />
+                  </div>
                 )}
 
                 <div className={cn('flex items-end gap-1.5 w-full', isSelf && 'flex-row-reverse')}>
