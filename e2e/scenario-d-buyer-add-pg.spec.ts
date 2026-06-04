@@ -5,7 +5,7 @@
  *   1. Buyer logs in, opens seed RFP `P-2604-0001` 상세.
  *   2. RfpInviteManager UI에서 "PG사 검색…" → cmdk 목록에서 신규 워크스페이스
  *      선택 → `[ 대기중 ]`(draft) 상태로 누적.
- *   3. "초대 발송" 클릭 → `[ 발송됨 ]`(pending)으로 전환 + outbox enqueue.
+ *   3. "초대 보내기" 클릭 → `[ 초대 보냄 ]`(pending)으로 전환 + outbox enqueue.
  *
  * Coverage:
  *   - addPgWorkspacesToRfpAction (workspaceIds 배열 → draft invitation insert).
@@ -151,8 +151,8 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
         ((allowRow as any).rows ?? []);
     expect(allowArr[0].c).toBe(1);
 
-    // ── 5. Click "초대 발송" → outbox + status flip ────────────────
-    const sendBtn = page.getByRole('button', { name: /개 PG에 초대 발송/ });
+    // ── 5. Click "초대 보내기" → outbox + status flip ────────────────
+    const sendBtn = page.getByRole('button', { name: /개 PG에 초대 보내기/ });
     await expect(sendBtn).toBeEnabled();
     await sendBtn.click();
 
@@ -161,7 +161,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
       page.getByText(/초대 메일을 보냈어요/),
     ).toBeVisible({ timeout: 10_000 });
 
-    // ── 6. DB: status가 'pending'(DB enum, UI상 '발송됨')으로 전이 ─
+    // ── 6. DB: status가 'pending'(DB enum, UI상 '초대 보냄')으로 전이 ─
     const sentRow = await db.execute<{ status: string }>(
       sql`SELECT status::text AS status FROM rfp_invitations
           WHERE rfp_id = ${rfpUuid} AND pg_ws_id = ${newPgWsId}`,

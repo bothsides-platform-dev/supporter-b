@@ -9,8 +9,8 @@ import { CheckIcon } from '@/components/icons';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
 
 const EMPTY_DESC: Record<'buyer' | 'pg', string> = {
-  buyer: '새 응답이 오거나 마감이 다가오면 여기에 표시됩니다.',
-  pg: '구매사가 초대한 RFP가 여기에 표시됩니다.',
+  buyer: '새 견적이 오거나 마감이 다가오면 여기에 표시돼요.',
+  pg: '구매사가 초대한 견적 요청이 여기에 표시돼요.',
 };
 
 /** 홈 미리보기에서 보여줄 오픈 RFP 최대 개수. 나머지는 /opportunities 전체 보기. */
@@ -43,7 +43,7 @@ export function HomeDashboard({
           dashboard.openRfps.length > 0 && (
             <section>
               <h2 className="mb-1.5 text-[13px] font-medium text-[var(--md-sys-color-on-surface-variant)]">
-                탐색 가능한 RFP
+                참여할 수 있는 견적 요청
               </h2>
               <OpportunityList
                 items={dashboard.openRfps}

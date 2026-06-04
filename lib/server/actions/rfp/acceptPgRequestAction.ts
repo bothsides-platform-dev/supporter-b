@@ -168,7 +168,7 @@ export async function acceptPgRequestAction(
             {
               event: 'rfp.invited',
               to: admin.email,
-              subject: `[Supporter B · ${rfpRow.code}] 제안 요청 도착`,
+              subject: `[Supporter B · ${rfpRow.code}] 견적 요청이 도착했어요`,
               html,
               dedupeKey: `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${admin.userId}`,
             },
@@ -189,7 +189,7 @@ export async function acceptPgRequestAction(
           workspaceId: req.pgWsId,
           type: 'pg.request.accepted',
           title: `[${rfpRow.code}] 참여 요청 수락됨`,
-          body: `${buyerName}가 참여 요청을 수락했어요. 이제 제안을 제출할 수 있어요.`,
+          body: `${buyerName}가 참여 요청을 수락했어요. 이제 견적을 보낼 수 있어요.`,
           channel: 'inapp',
           status: 'pending',
           linkUrl: `/inbox/${rfpRow.code}`,

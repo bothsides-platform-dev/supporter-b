@@ -24,7 +24,7 @@ export async function RfpPeekPanel({ rfpCode, wsId, userId, userName }: RfpPeekP
         <PeekPanelHeader rfpCode={rfpCode} fullscreenHref={`/rfp/${rfpCode}`} />
         <div className="px-8 py-8">
           <p className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-            RFP를 찾을 수 없습니다.
+            견적 요청을 찾을 수 없어요.
           </p>
         </div>
       </div>

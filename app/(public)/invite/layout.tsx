@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: '제안 초청',
+  title: '견적 요청 초대',
   robots: { index: false, follow: false },
 };
 

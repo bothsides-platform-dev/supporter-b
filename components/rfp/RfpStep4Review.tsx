@@ -97,9 +97,9 @@ export function RfpStep4Review({
         />
       </div>
 
-      {/* 제안 내용 요약 */}
+      {/* 견적 요청 요약 */}
       <div>
-        <SectionHeader label="제안 내용 요약" />
+        <SectionHeader label="견적 요청 요약" />
         <div className="border border-[var(--md-sys-color-outline-variant)]">
           {workspaceName && <ReviewRow label="상호명" value={workspaceName} />}
           {bizProfile?.bizNo && (
@@ -209,10 +209,10 @@ export function RfpStep4Review({
           onClick={onSubmit}
         >
           {submitting
-            ? '발송 중…'
+            ? '보내는 중…'
             : pgCount > 0
-              ? `${pgCount}개 PG사에 발송`
-              : '발송'}
+              ? `${pgCount}개 PG사에 보내기`
+              : '보내기'}
         </Button>
       </div>
     </div>

@@ -40,7 +40,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
             [ 사업자번호 미입력 ]
           </div>
           <p className="text-[12px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
-            사전 제안 또는 보완 예정 RFP — 일반 등급 가정으로 9개 카드사별 제안을 작성하세요.
+            사전 견적 또는 보완 예정 견적 요청 — 일반 등급 가정으로 9개 카드사별 견적을 작성해요.
           </p>
         </div>
       )}
@@ -133,11 +133,11 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
         </div>
       )}
 
-      {/* 제안서 요청 세부 내용 */}
+      {/* 견적 요청 세부 내용 */}
       {rfp.memo && (
         <div>
           <div className="flex items-center gap-3 mb-3">
-            <Label size="md" muted={false}>제안서 요청 세부 내용</Label>
+            <Label size="md" muted={false}>견적 요청 세부 내용</Label>
             <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
           </div>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed whitespace-pre-wrap">

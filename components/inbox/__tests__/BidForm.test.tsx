@@ -183,8 +183,8 @@ describe('BidForm 제출 — paymentFees / customFees 분리', () => {
     await user.type(feeInput('계좌이체 수수료'), '0.50');
     await user.type(feeInput('포인트결제 수수료'), '2.00');
 
-    await user.click(screen.getByRole('button', { name: /제안 제출/ }));
-    await user.click(screen.getByRole('button', { name: '제안 제출', hidden: false }));
+    await user.click(screen.getByRole('button', { name: /견적 보내기/ }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 
     await waitFor(() => expect(submitBidMock).toHaveBeenCalledOnce());
     const arg = submitBidMock.mock.calls[0][0] as {
@@ -197,7 +197,7 @@ describe('BidForm 제출 — paymentFees / customFees 분리', () => {
 
   it('요율을 하나도 입력하지 않으면 제출 버튼이 비활성화된다', () => {
     renderForm({ requiredPaymentMethods: ['bank_transfer'], grade: 'general' });
-    const submitBtn = screen.getByRole('button', { name: /제안 제출/ });
+    const submitBtn = screen.getByRole('button', { name: /견적 보내기/ });
     expect(submitBtn).toBeDisabled();
   });
 });
@@ -240,8 +240,8 @@ describe('BidForm 임시 저장 복원 배너', () => {
     localStorage.setItem('bid-draft:rfp-1', JSON.stringify(draftV2({ bank_transfer: '0.50' })));
     renderForm();
     await user.click(screen.getByRole('button', { name: '불러오기' }));
-    await user.click(screen.getByRole('button', { name: /제안 제출/ }));
-    await user.click(screen.getByRole('button', { name: '제안 제출', hidden: false }));
+    await user.click(screen.getByRole('button', { name: /견적 보내기/ }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 
     await waitFor(() => expect(push).toHaveBeenCalled());
     expect(localStorage.getItem('bid-draft:rfp-1')).toBeNull();
@@ -252,7 +252,7 @@ describe('BidForm UX 개선 — 심리학 법칙', () => {
   describe('비가역성 경고 (Peak-End / 멘탈 모델 #4/#5)', () => {
     it('폼 마운트 시 "제출 후 수정 불가" 경고 텍스트가 렌더된다', () => {
       renderForm();
-      expect(screen.getByText(/제출 후 수정 불가/)).toBeInTheDocument();
+      expect(screen.getByText(/보낸 후 수정 불가/)).toBeInTheDocument();
     });
   });
 
@@ -401,7 +401,7 @@ describe('BidForm 제출 후 네비게이션', () => {
     const user = userEvent.setup();
     renderForm();
     await user.type(feeInput('계좌이체 수수료'), '0.50');
-    await user.click(screen.getByRole('button', { name: /제안 제출/ }));
+    await user.click(screen.getByRole('button', { name: /견적 보내기/ }));
 
     expect(submitBidMock).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -411,7 +411,7 @@ describe('BidForm 제출 후 네비게이션', () => {
     const user = userEvent.setup();
     renderForm();
     await user.type(feeInput('계좌이체 수수료'), '0.50');
-    await user.click(screen.getByRole('button', { name: /제안 제출/ }));
+    await user.click(screen.getByRole('button', { name: /견적 보내기/ }));
     await user.click(screen.getByRole('button', { name: '취소' }));
 
     expect(submitBidMock).not.toHaveBeenCalled();
@@ -422,8 +422,8 @@ describe('BidForm 제출 후 네비게이션', () => {
     const user = userEvent.setup();
     renderForm();
     await user.type(feeInput('계좌이체 수수료'), '0.50');
-    await user.click(screen.getByRole('button', { name: /제안 제출/ }));
-    await user.click(screen.getByRole('button', { name: '제안 제출', hidden: false }));
+    await user.click(screen.getByRole('button', { name: /견적 보내기/ }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 
     await waitFor(() =>
       expect(push).toHaveBeenCalledWith('/inbox/P-2605-0042/submitted'),

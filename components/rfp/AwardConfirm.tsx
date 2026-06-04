@@ -81,24 +81,24 @@ export function AwardConfirm(props: Props) {
       <div className="px-8 py-8 space-y-10">
         <div>
           <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-tertiary)] mb-3">
-            ✓ 수주 확정
+            ✓ 최종 선택 완료
           </p>
           <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-            {pgName(selected.pgWsId)} 와의 계약이 확정되었습니다
+            {pgName(selected.pgWsId)} 와의 계약이 확정됐어요
           </h1>
           <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-            선정된 PG와 미선정 PG 모두에게 결과 알림이 발송됩니다.
+            선정한 PG와 미선정 PG 모두에게 결과 알림을 보냈어요.
           </p>
         </div>
 
         <section>
           <div className="flex items-center gap-3 mb-3">
-            <Label size="md" muted={false}>발송 알림</Label>
+            <Label size="md" muted={false}>보낸 알림</Label>
             <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
           </div>
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
             <div className="py-3 flex items-center gap-4">
-              <Chip label="선정" color="tertiary" />
+              <Chip label="선정됨" color="tertiary" />
               <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
                 {pgName(selected.pgWsId)}
               </span>
@@ -119,7 +119,7 @@ export function AwardConfirm(props: Props) {
             ))}
             {others.length === 0 && (
               <div className="py-3 font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-                — 다른 응답 제안 없음 —
+                — 다른 견적 없음 —
               </div>
             )}
           </div>
@@ -127,7 +127,7 @@ export function AwardConfirm(props: Props) {
 
         <div className="space-y-3">
           <Button onClick={() => router.push('/rfp')} fullWidth>
-            RFP 목록으로 →
+            견적 요청 목록으로 →
           </Button>
         </div>
       </div>
@@ -139,21 +139,21 @@ export function AwardConfirm(props: Props) {
       {/* Header */}
       <div>
         <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
-          {rfpCode} · 수주 처리
+          {rfpCode} · 최종 선택
         </span>
         <h1 className="mt-1 text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-          {pgName(selected.pgWsId)} 제안을 선택하시겠습니까?
+          {pgName(selected.pgWsId)}의 견적을 선택할까요?
         </h1>
         <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          확정 시 선정 PG와 미선정 PG 모두에게 결과가 통지되며, RFP가 마감
-          처리됩니다.
+          확정하면 선정 PG와 미선정 PG 모두에게 결과를 알리고, 견적 요청이
+          마감돼요.
         </p>
       </div>
 
       {/* Selected bid */}
       <section>
         <div className="flex items-center gap-3 mb-3">
-          <Label size="md" muted={false}>선택 제안</Label>
+          <Label size="md" muted={false}>선택한 견적</Label>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
@@ -210,7 +210,7 @@ export function AwardConfirm(props: Props) {
             ['등급', grade ? GRADE_LABELS[grade] : '—'],
             ['마감', formatDate(rfpDeadline)],
             ['초대 PG', `${rfpAllowedCount}개사`],
-            ['응답 제안', `${others.length + 1}건`],
+            ['받은 견적', `${others.length + 1}건`],
           ].map(([label, value]) => (
             <div key={label} className="py-2.5 flex items-baseline justify-between">
               <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
@@ -239,10 +239,10 @@ export function AwardConfirm(props: Props) {
           </p>
           <ul className="space-y-1.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
             <li>
-              · RFP 상태가 <span className="font-mono">awarded</span>로 전환됩니다
+              · 견적 요청 상태가 <span className="font-mono">awarded</span>로 바뀌어요
             </li>
-            <li>· 미선정 PG {others.length}곳에 결과가 통지됩니다</li>
-            <li>· 이후 제안 수정·철회는 불가합니다</li>
+            <li>· 미선정 PG {others.length}곳에 결과를 알려요</li>
+            <li>· 이후 견적 수정·철회는 할 수 없어요</li>
           </ul>
         </div>
         <div className="flex gap-3">
@@ -256,7 +256,7 @@ export function AwardConfirm(props: Props) {
             disabled={submitting}
             className="flex-1"
           >
-            {submitting ? '처리 중…' : '수주 확정'}
+            {submitting ? '처리 중…' : '선정할게요'}
           </Button>
         </div>
       </section>

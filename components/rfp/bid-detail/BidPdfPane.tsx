@@ -12,16 +12,16 @@ export function BidPdfPane({ pdf }: { pdf?: Attachment }) {
 }
 
 function PdfPreview({ pdf }: { pdf?: Attachment }) {
-  const hasPdf = pdf?.url && pdf.name !== '제안서 미첨부';
+  const hasPdf = pdf?.url && pdf.name !== '견적서 미첨부';
   if (!hasPdf) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
         <FileTextIcon size={28} />
         <p className="mt-3 font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-          제안서 미첨부
+          견적서 미첨부
         </p>
         <p className="mt-1 text-[12px] text-[var(--md-sys-color-outline)]">
-          PG가 제안 제출 시 PDF를 함께 업로드합니다.
+          PG가 견적을 보낼 때 PDF를 함께 업로드해요.
         </p>
       </div>
     );

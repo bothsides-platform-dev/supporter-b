@@ -59,8 +59,8 @@ afterEach(() => {
 describe('PgRfpDetailContent', () => {
   it('myBid 있으면 제출 완료 블록 + 제출내역 링크, 폼 없음', () => {
     render(<PgRfpDetailContent data={{ rfp, myBid, buyerName: '(주)테스트', quoteTemplates: [] }} />);
-    expect(screen.getByText(/제안 제출 완료/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /제출 내역 보기/ })).toHaveAttribute(
+    expect(screen.getByText(/견적을 보냈어요/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /보낸 견적 보기/ })).toHaveAttribute(
       'href',
       '/inbox/P-2605-0042/submitted',
     );
@@ -71,7 +71,7 @@ describe('PgRfpDetailContent', () => {
     render(<PgRfpDetailContent data={{ rfp, myBid: undefined, buyerName: '(주)테스트', quoteTemplates: [] }} />);
     expect(screen.getByTestId('brief')).toBeInTheDocument();
     expect(screen.getByTestId('bid-form')).toBeInTheDocument();
-    expect(screen.queryByText(/제안 제출 완료/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/견적을 보냈어요/)).not.toBeInTheDocument();
   });
 
   it('BidForm 에 rfpId·rfpCode 를 전달', () => {

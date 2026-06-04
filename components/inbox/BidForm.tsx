@@ -38,12 +38,12 @@ const CYCLE_UNITS = [
 
 const ERROR_LABELS: Record<string, string> = {
   FORBIDDEN_PG: 'PG 사용자 권한이 필요합니다.',
-  FORBIDDEN: '이 RFP에 입찰할 권한이 없습니다.',
+  FORBIDDEN: '이 견적 요청에 견적을 보낼 권한이 없어요.',
   INVALID_INPUT: '입력 값을 확인해주세요.',
-  RFP_NOT_FOUND: 'RFP를 찾을 수 없습니다.',
-  RFP_NOT_OPEN: '마감되었거나 이미 종료된 RFP입니다.',
-  INVITATION_NOT_FOUND: '초대 내역을 찾을 수 없습니다.',
-  BID_ALREADY_SUBMITTED: '이미 제안을 제출하셨습니다.',
+  RFP_NOT_FOUND: '견적 요청을 찾을 수 없어요.',
+  RFP_NOT_OPEN: '마감됐거나 이미 종료된 견적 요청이에요.',
+  INVITATION_NOT_FOUND: '초대 내역을 찾을 수 없어요.',
+  BID_ALREADY_SUBMITTED: '이미 견적을 보냈어요.',
   CARD_FEE_EXCEEDS_STATUTORY_CAP: '카드 수수료가 법정 상한을 초과합니다.',
   PAYMENT_METHOD_NOT_REQUESTED: '구매사가 요청하지 않은 결제수단입니다.',
 };
@@ -298,9 +298,9 @@ export function BidForm({
       <ConfirmDialog
         open={submitConfirmOpen}
         onOpenChange={(o) => !o && setSubmitConfirmOpen(false)}
-        title="제안을 제출할까요?"
-        description="제출 후에는 수정할 수 없습니다."
-        confirmLabel="제안 제출"
+        title="견적을 보낼까요?"
+        description="보낸 후에는 수정할 수 없어요."
+        confirmLabel="견적 보내기"
         variant="default"
         onConfirm={doSubmit}
         loading={pending}
@@ -405,10 +405,10 @@ export function BidForm({
       {grade === undefined && (
         <div className="border border-[var(--md-sys-color-outline-variant)] px-4 py-3 space-y-1">
           <p className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            [ 등급 미입력 ] 일반 가정 제안
+            [ 등급 미입력 ] 일반 가정 견적
           </p>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-            구매사가 가맹점 등급을 입력하지 않은 사전 제안 RFP입니다. 카드 수수료를 직접 입력하세요.
+            구매사가 가맹점 등급을 입력하지 않은 사전 견적 요청이에요. 카드 수수료를 직접 입력해요.
           </p>
         </div>
       )}
@@ -493,17 +493,17 @@ export function BidForm({
         </div>
       </section>
 
-      {/* 03 제안서 */}
+      {/* 03 견적서 */}
       <section>
         <div className="flex items-center gap-3 mb-5">
           <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            03 — 제안서
+            03 — 견적서
           </span>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label size="md" muted={false}>제안서 PDF (선택)</Label>
+            <Label size="md" muted={false}>견적서 PDF (선택)</Label>
             <input
               ref={proposalInputRef}
               type="file"
@@ -600,11 +600,11 @@ export function BidForm({
       )}
 
       <p className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--md-sys-color-outline)]">
-        제출 후 수정 불가 — 한 번만 제출됩니다
+        보낸 후 수정 불가 — 한 번만 보낼 수 있어요
       </p>
 
       <Button type="submit" fullWidth size="lg" disabled={!canSubmit}>
-        {pending ? '제출 중…' : '제안 제출'}
+        {pending ? '보내는 중…' : '견적 보내기'}
       </Button>
     </form>
     </>

@@ -124,17 +124,17 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
       .fill('e2e B: D+1, bank 0.5%');
 
     // ── 5. Submit ────────────────────────────────────────────────
-    // BidForm 의 제출 버튼은 ConfirmDialog 를 띄우고, 다이얼로그의 '제안 제출'
+    // BidForm 의 제출 버튼은 ConfirmDialog 를 띄우고, 다이얼로그의 '견적 보내기'
     // 확인 버튼이 실제 server action 을 트리거한다. role=dialog 로 좁혀
     // 같은 라벨의 form 버튼과 충돌하지 않게 한다.
     // 액션 성공 → /inbox/<rfpId>/submitted로 redirect되어야 한다.
     // (server action에서 revalidatePath + client에서 router.push,
     //  router.push + router.refresh 동시 호출은 Next 16 useTransition
     //  hang 패턴이라 금지 — vercel/next.js#86055 참조.)
-    await page.getByRole('button', { name: /^제안 제출$/ }).first().click();
+    await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
     await page
       .getByRole('dialog')
-      .getByRole('button', { name: /제안 제출/ })
+      .getByRole('button', { name: /견적 보내기/ })
       .click();
     await page.waitForURL(new RegExp(`/inbox/${RFP_ID}/submitted$`), {
       timeout: 15_000,
@@ -181,10 +181,10 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     expect(outboxArr[0].c).toBeGreaterThanOrEqual(1);
 
     // /submitted 페이지의 헤딩으로 redirect 후 RSC 렌더링 완료를 검증.
-    // 같은 페이지에 "✓ 제출 완료" 에어브로우 paragraph가 또 있어 strict-mode
+    // 같은 페이지에 "✓ 견적을 보냈어요" 에어브로우 paragraph가 또 있어 strict-mode
     // 위반을 피하려면 heading role로 좁혀야 한다.
     await expect(
-      page.getByRole('heading', { name: /제안을 제출했어요/ }),
+      page.getByRole('heading', { name: /견적을 보냈어요/ }),
     ).toBeVisible();
   });
 });

@@ -44,7 +44,7 @@ describe('getNavConfig — buyer RFP section', () => {
     expect(sections.map((s) => s.id)).toEqual(['rfp', 'settings']);
 
     const rfp = sections.find((s) => s.id === 'rfp');
-    expect(rfp?.label).toBe('RFP');
+    expect(rfp?.label).toBe('견적 요청');
     expect(rfp?.href).toBe('/rfp');
     expect(rfp?.base).toBe('/rfp');
     expect(rfp?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'r' });
@@ -56,10 +56,10 @@ describe('getNavConfig — buyer RFP section', () => {
     expect(rfp?.statuses?.map((s) => s.label)).toEqual([
       '진행중',
       '마감',
-      '계약완료',
+      '선정 완료',
     ]);
     expect(rfp?.links?.map((l) => l.href)).toEqual(['/rfp/new']);
-    expect(rfp?.links?.[0]?.label).toBe('새 RFP');
+    expect(rfp?.links?.[0]?.label).toBe('새 견적 요청');
   });
 });
 
@@ -70,7 +70,7 @@ describe('getNavConfig — pg inbox section', () => {
     expect(sections.map((s) => s.id)).toEqual(['inbox', 'settings']);
 
     const inbox = sections.find((s) => s.id === 'inbox');
-    expect(inbox?.label).toBe('받은 RFP');
+    expect(inbox?.label).toBe('받은 견적 요청');
     expect(inbox?.href).toBe('/inbox');
     expect(inbox?.base).toBe('/inbox');
     expect(inbox?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'i' });
@@ -81,11 +81,11 @@ describe('getNavConfig — pg inbox section', () => {
     ]);
     expect(inbox?.statuses?.map((s) => s.label)).toEqual([
       '신규',
-      '제출완료',
+      '견적 보냄',
       '마감',
     ]);
     expect(inbox?.links?.map((l) => l.href)).toEqual(['/opportunities']);
-    expect(inbox?.links?.[0]?.label).toBe('제안 기회');
+    expect(inbox?.links?.[0]?.label).toBe('견적 기회');
     expect(top.some((i) => i.id === 'rfp')).toBe(false);
   });
 });
@@ -128,22 +128,22 @@ describe('getBreadcrumbSegments', () => {
 
   it('makes the parent RFP segment a link to /rfp and the status the current page', () => {
     expect(getBreadcrumbSegments('/rfp', 'active')).toEqual([
-      { label: 'RFP', href: '/rfp' },
+      { label: '견적 요청', href: '/rfp' },
       { label: '진행중' },
     ]);
-    expect(getBreadcrumbSegments('/rfp')).toEqual([{ label: 'RFP' }]);
+    expect(getBreadcrumbSegments('/rfp')).toEqual([{ label: '견적 요청' }]);
   });
 
   it('makes the parent 받은 RFP segment a link to /inbox and the status the current page', () => {
     expect(getBreadcrumbSegments('/inbox', 'new')).toEqual([
-      { label: '받은 RFP', href: '/inbox' },
+      { label: '받은 견적 요청', href: '/inbox' },
       { label: '신규' },
     ]);
-    expect(getBreadcrumbSegments('/inbox')).toEqual([{ label: '받은 RFP' }]);
+    expect(getBreadcrumbSegments('/inbox')).toEqual([{ label: '받은 견적 요청' }]);
   });
 
-  it('maps /opportunities to a single 제안 기회 segment', () => {
-    expect(getBreadcrumbSegments('/opportunities')).toEqual([{ label: '제안 기회' }]);
+  it('maps /opportunities to a single 견적 기회 segment', () => {
+    expect(getBreadcrumbSegments('/opportunities')).toEqual([{ label: '견적 기회' }]);
   });
 
   it('links the 설정 parent to /settings/profile with the sub-page as the current page', () => {

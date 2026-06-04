@@ -14,7 +14,7 @@ export function WizardStepSidebar({ currentStep, completed, onStepClick }: Wizar
   return (
     <nav className="w-[160px] border-r border-[var(--md-sys-color-outline-variant)] px-3 py-5 flex-shrink-0 hidden lg:flex flex-col">
       <span className="font-mono text-[9px] tracking-[0.14em] uppercase text-[var(--md-sys-color-outline)] mb-4">
-        신규 제안 요청
+        새 견적 요청
       </span>
       {WIZARD_STEPS.map(({ num, label }) => {
         const isActive = num === currentStep;

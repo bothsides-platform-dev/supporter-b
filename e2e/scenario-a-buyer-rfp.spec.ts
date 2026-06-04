@@ -46,7 +46,7 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     // 버튼으로 진행한다.
     await page.goto('/rfp/new');
     await expect(
-      page.getByRole('heading', { name: '신규 제안 요청' }),
+      page.getByRole('heading', { name: '새 견적 요청' }),
     ).toBeVisible();
     // Step 1 renders the workspace bizProfile (123-45-67890) — verify the
     // page didn't redirect to a "missing workspace bizProfile" branch, then
@@ -59,7 +59,7 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     // createRfpAction 은 send 시 requiredPaymentMethods+custom ≥1 을 강제하므로
     // (zod superRefine → 미선택 시 INVALID_INPUT, 발송 차단) 결제수단도 선택.
     await page
-      .getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 제안건')
+      .getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 견적 요청')
       .fill('e2e-A-2026 결제 인프라 제안');
     await page
       .getByPlaceholder(/카드결제·간편결제 통합 솔루션 검토 중입니다/)
@@ -86,9 +86,9 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
       .toISOString()
       .slice(0, 10);
     await page.locator('input[type="date"]').fill(tomorrow);
-    // Send button text reflects count: "3개 PG사에 발송". Anchor the full name so
-    // it doesn't also match the sidebar step button "발송 확인" (strict-mode).
-    await page.getByRole('button', { name: /^\d+개 PG사에 발송$/ }).click();
+    // Send button text reflects count: "3개 PG사에 보내기". Anchor the full name so
+    // it doesn't also match the sidebar step button "보내기 확인" (strict-mode).
+    await page.getByRole('button', { name: /^\d+개 PG사에 보내기$/ }).click();
 
     // ── 5. Land on /rfp/<rfpId> ──────────────────────────────────
     await page.waitForURL(/\/rfp\/P-\d{4}-\d{4}$/, { timeout: 15_000 });
@@ -102,7 +102,7 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     // BidComparisonTable renders an EmptyState with this exact copy when
     // bids.length === 0 (see components/rfp/BidComparisonTable.tsx).
     await expect(
-      page.getByText('제안을 기다리는 중이에요.'),
+      page.getByText('견적을 기다리고 있어요.'),
     ).toBeVisible({ timeout: 10_000 });
 
     // ── 6. DB assertions ─────────────────────────────────────────

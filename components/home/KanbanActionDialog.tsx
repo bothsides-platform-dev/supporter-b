@@ -18,13 +18,13 @@ const COPY: Record<
   { title: string; bodyKey: 'rfp' | 'bid'; cta: string; danger?: boolean }
 > = {
   'cancel-rfp': {
-    title: 'RFP를 취소(종료)할까요?',
+    title: '견적 요청을 취소(종료)할까요?',
     bodyKey: 'rfp',
     cta: '취소 처리',
     danger: true,
   },
   'withdraw-bid': {
-    title: '제출한 제안을 철회할까요?',
+    title: '보낸 견적을 철회할까요?',
     bodyKey: 'bid',
     cta: '철회',
     danger: true,
