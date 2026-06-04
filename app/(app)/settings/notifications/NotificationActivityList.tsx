@@ -62,7 +62,7 @@ function NotificationRow({
   };
 
   const markReadInPlace = () => {
-    void markRead(notif.id);
+    void markRead(notif.id).then(() => router.refresh());
   };
 
   const body = (
