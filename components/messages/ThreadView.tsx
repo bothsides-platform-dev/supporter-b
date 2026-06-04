@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { http } from '@/lib/http';
 import { HTTPError } from 'ky';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Chip } from '@/components/primitives/Chip';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { PaperclipIcon, ArrowUpIcon, CheckIcon, XIcon } from '@/components/icons';
@@ -39,7 +40,16 @@ type LiveMessagePayload = {
 // only fire after the user *stops* typing — backwards for a live indicator).
 const TYPING_THROTTLE_MS = 2000;
 
-type Attachment = { id: string; name: string; size?: number; mimeType?: string; url?: string };
+// Composer attachment row. `id` is a temp id while `status === 'uploading'`
+// (no server id/url/mime yet), swapped for the real attachment id once ready.
+type Attachment = {
+  id: string;
+  name: string;
+  size?: number;
+  mimeType?: string;
+  url?: string;
+  status: 'uploading' | 'ready';
+};
 
 // Capturing group so split keeps the URLs; matched per-part with a
 // non-global test (a /g regex carries lastIndex across .test() calls).
@@ -200,7 +210,7 @@ export function ThreadView({
     [localMessages],
   );
 
-  async function uploadOne(file: File): Promise<void> {
+  async function uploadOne(file: File, tempId: string): Promise<void> {
     const form = new FormData();
     form.append('file', file);
     form.append('ownerKind', 'chat');
@@ -209,22 +219,25 @@ export function ThreadView({
       const body = await http
         .post('/api/files/upload', { body: form })
         .json<{ id: string; name: string; size: number; mimeType: string }>();
+      // 임시 행을 서버 첨부로 교체(스켈레톤 → 일반 칩).
       setAttachments((prev) =>
-        prev.length >= MAX_FILES
-          ? prev
-          : [
-              ...prev,
-              {
+        prev.map((a) =>
+          a.id === tempId
+            ? {
                 id: body.id,
                 name: body.name,
                 size: body.size,
                 mimeType: body.mimeType,
                 url: `/api/files/${body.id}`,
-              },
-            ],
+                status: 'ready',
+              }
+            : a,
+        ),
       );
     } catch (err) {
       // 첨부 실패는 조용히 무시(다음 단계에서 토스트). HTTPError 도 동일.
+      // 실패한 임시 행(스켈레톤)을 제거한다.
+      setAttachments((prev) => prev.filter((a) => a.id !== tempId));
       void (err instanceof HTTPError);
     }
   }
@@ -232,12 +245,17 @@ export function ThreadView({
   function addFiles(list: FileList | null): void {
     if (!list) return;
     const remaining = MAX_FILES - attachments.length;
+    const additions: Attachment[] = [];
     for (let i = 0; i < Math.min(list.length, remaining); i++) {
       const f = list[i];
       if (!ACCEPTED_MIMES.has(f.type)) continue;
       if (f.size > MAX_BYTES) continue;
-      void uploadOne(f);
+      // 선택 즉시 'uploading' 행(스켈레톤)을 추가해 올리는 중임을 보여준다.
+      const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
+      additions.push({ id: tempId, name: f.name, size: f.size, status: 'uploading' });
+      void uploadOne(f, tempId);
     }
+    if (additions.length > 0) setAttachments((prev) => [...prev, ...additions]);
   }
 
   function autoGrow(el: HTMLTextAreaElement): void {
@@ -248,12 +266,15 @@ export function ThreadView({
   async function handleSend(): Promise<void> {
     const body = draft.trim();
     if (sending) return;
-    if (body.length === 0 && attachments.length === 0) return;
+    // 업로드가 끝난(ready) 첨부만 전송한다 — 임시(uploading) 행의 tempId 가
+    // 서버로 새지 않도록.
+    const readyAttachments = attachments.filter((a) => a.status === 'ready');
+    if (body.length === 0 && readyAttachments.length === 0) return;
     setSending(true);
     const result = await sendChatMessageAction({
       conversationId,
       body,
-      attachmentIds: attachments.map((a) => a.id),
+      attachmentIds: readyAttachments.map((a) => a.id),
     });
     setSending(false);
     if (result.ok) {
@@ -450,22 +471,35 @@ export function ThreadView({
       {/* 첨부 칩 리스트 */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-1.5 border-t border-[var(--md-sys-color-outline-variant)] px-3 pt-2">
-          {attachments.map((a) => (
-            <span
-              key={a.id}
-              className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface)]"
-            >
-              <span className="max-w-[160px] truncate">{a.name}</span>
-              <button
-                type="button"
-                aria-label={`${a.name} 첨부 제거`}
-                onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
-                className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
+          {attachments.map((a) =>
+            a.status === 'uploading' ? (
+              // 업로드 중 — 파일명 + 펄스 스켈레톤(제거 불가, 올리는 중임을 표시).
+              <span
+                key={a.id}
+                aria-busy="true"
+                aria-label={`${a.name} 업로드 중`}
+                className="inline-flex animate-pulse items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface-variant)]"
               >
-                <XIcon size={12} />
-              </button>
-            </span>
-          ))}
+                <span className="max-w-[160px] truncate">{a.name}</span>
+                <Skeleton className="size-3 rounded-full" />
+              </span>
+            ) : (
+              <span
+                key={a.id}
+                className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface)]"
+              >
+                <span className="max-w-[160px] truncate">{a.name}</span>
+                <button
+                  type="button"
+                  aria-label={`${a.name} 첨부 제거`}
+                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
+                >
+                  <XIcon size={12} />
+                </button>
+              </span>
+            ),
+          )}
         </div>
       )}
 
@@ -506,7 +540,11 @@ export function ThreadView({
         <Button
           size="sm"
           onClick={handleSend}
-          disabled={sending || (draft.trim().length === 0 && attachments.length === 0)}
+          disabled={
+            sending ||
+            attachments.some((a) => a.status === 'uploading') ||
+            (draft.trim().length === 0 && !attachments.some((a) => a.status === 'ready'))
+          }
           aria-label="보내기"
         >
           <ArrowUpIcon size={16} />
