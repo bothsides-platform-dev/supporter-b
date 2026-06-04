@@ -331,7 +331,7 @@ export function ThreadView({
                   />
                 )}
 
-                <div className={cn('flex items-end gap-1.5', isSelf && 'flex-row-reverse')}>
+                <div className={cn('flex items-end gap-1.5 w-full', isSelf && 'flex-row-reverse')}>
                   <div
                     className={cn(
                       'max-w-[78%] whitespace-pre-wrap break-words rounded-[var(--md-sys-shape-medium)] px-3 py-2 text-[13px] leading-relaxed',
