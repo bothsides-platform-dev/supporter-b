@@ -59,7 +59,7 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     // createRfpAction 은 send 시 requiredPaymentMethods+custom ≥1 을 강제하므로
     // (zod superRefine → 미선택 시 INVALID_INPUT, 발송 차단) 결제수단도 선택.
     await page
-      .getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 제안건')
+      .getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 견적 요청')
       .fill('e2e-A-2026 결제 인프라 제안');
     await page
       .getByPlaceholder(/카드결제·간편결제 통합 솔루션 검토 중입니다/)
