@@ -23,6 +23,12 @@ function rowToAttachment(row: AttachRow): AttachmentRecord {
   };
 }
 
+// 공개 Attachment 필드만 — uploadedBy 등 record 전용 필드는 클라이언트로 안 보냄.
+function toPublicAttachment(row: AttachRow): Attachment {
+  const { id, name, size, mimeType, url } = rowToAttachment(row);
+  return { id, name, size, mimeType, url };
+}
+
 export class DrizzleAttachmentRepository implements AttachmentRepo {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(private readonly _db: DB | any) {}
@@ -63,11 +69,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       .from(attachments)
       .where(eq(attachments.rfpId, rfpId))
       .orderBy(asc(attachments.uploadedAt));
-    // 공개 Attachment 필드만 노출 — uploadedBy 등 record 전용 필드는 클라이언트로 안 보냄.
-    return rows.map((row) => {
-      const { id, name, size, mimeType, url } = rowToAttachment(row);
-      return { id, name, size, mimeType, url };
-    });
+    return rows.map(toPublicAttachment);
   }
 
   async findByChatMessageIds(ids: string[], tx?: Tx): Promise<(Attachment & { chatMessageId: string })[]> {
@@ -78,23 +80,17 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       .from(attachments)
       .where(inArray(attachments.chatMessageId, ids))
       .orderBy(asc(attachments.uploadedAt));
-    return rows.map((row) => {
-      const { id, name, size, mimeType, url } = rowToAttachment(row);
-      return { id, name, size, mimeType, url, chatMessageId: row.chatMessageId! };
-    });
+    return rows.map((row) => ({ ...toPublicAttachment(row), chatMessageId: row.chatMessageId! }));
   }
 
   async findByConversationId(conversationId: string, tx?: Tx): Promise<Attachment[]> {
     const db = this.h(tx);
-    const rows: (AttachRow & { _: unknown })[] = await db
+    const rows: AttachRow[] = await db
       .select({ ...attachments })
       .from(attachments)
       .innerJoin(chatMessages, eq(attachments.chatMessageId, chatMessages.id))
       .where(eq(chatMessages.conversationId, conversationId))
       .orderBy(asc(attachments.uploadedAt));
-    return rows.map((row) => {
-      const { id, name, size, mimeType, url } = rowToAttachment(row as AttachRow);
-      return { id, name, size, mimeType, url };
-    });
+    return rows.map(toPublicAttachment);
   }
 }

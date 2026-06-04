@@ -273,15 +273,11 @@ export function ThreadView({
                 createdAt: new Date().toISOString(),
                 readByCounterparty: false,
                 // 전송 시점의 attachments 상태로 즉시 표시 (reload 불필요).
-                attachments: attachments
-                  .filter((a) => a.size !== undefined && a.mimeType && a.url)
-                  .map((a) => ({
-                    id: a.id,
-                    name: a.name,
-                    size: a.size!,
-                    mimeType: a.mimeType!,
-                    url: a.url!,
-                  })),
+                attachments: attachments.flatMap((a) =>
+                  a.size !== undefined && a.mimeType && a.url
+                    ? [{ id: a.id, name: a.name, size: a.size, mimeType: a.mimeType, url: a.url }]
+                    : [],
+                ),
               },
             ],
       );
