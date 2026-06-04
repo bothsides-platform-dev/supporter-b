@@ -69,14 +69,13 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await page.getByRole('button', { name: '카드', exact: true }).click();
     await page.getByRole('button', { name: '다음' }).click();
 
-    // ── 3b. Step 3 PG 선택 — Popover + cmdk Command ────────────
-    // click "PG사 검색…" trigger → list loads via /api/workspaces/search
-    // → click each workspace (role=option) → Popover closes → re-open.
+    // ── 3b. Step 3 PG 선택 — 칩 토글 리스트 (RfpStep3PgSelect) ──
+    // 칩 <button>{displayName}</button> 를 직접 클릭해 선택 토글.
+    // (cb48492: 검색 팝오버 → 칩 토글 + 전체선택 UI 로 교체됨.)
     // Seed workspaces: '서포터 B 페이', 'KG이니시스', '카카오페이'.
     const pgNames = ['서포터 B 페이', 'KG이니시스', '카카오페이'];
     for (const name of pgNames) {
-      await page.getByRole('button', { name: 'PG사 검색…' }).click();
-      await page.getByRole('option', { name }).click();
+      await page.getByRole('button', { name }).click();
     }
     await page.getByRole('button', { name: '다음' }).click();
 
