@@ -28,6 +28,7 @@ type RfpDraftStore = {
   currentFeeRate: string;
   currentSettlementLimit: string;
   currentGuaranteeInsurance: string;
+  currentSettlementCycle: string;
   currentSolution: string;
   currentSolutionDetail: string;
   memo: string;
@@ -50,6 +51,7 @@ const defaultState = {
   currentFeeRate: '',
   currentSettlementLimit: '',
   currentGuaranteeInsurance: '',
+  currentSettlementCycle: '',
   currentSolution: '',
   currentSolutionDetail: '',
   memo: '',
@@ -73,7 +75,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       storage: createJSONStorage(() => localStorage),
       // 결제수단 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
       // 백필하므로 진행 중인 draft가 폐기되지 않는다.
-      version: 1,
+      version: 2,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<RfpDraftStore>;
         if (version < 1) {
@@ -81,6 +83,12 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
             ...state,
             requiredPaymentMethods: state.requiredPaymentMethods ?? [],
             customPaymentMethods: state.customPaymentMethods ?? [],
+          };
+        }
+        if (version < 2) {
+          return {
+            ...state,
+            currentSettlementCycle: state.currentSettlementCycle ?? '',
           };
         }
         return state;
@@ -94,6 +102,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         currentFeeRate: state.currentFeeRate,
         currentSettlementLimit: state.currentSettlementLimit,
         currentGuaranteeInsurance: state.currentGuaranteeInsurance,
+        currentSettlementCycle: state.currentSettlementCycle,
         currentSolution: state.currentSolution,
         currentSolutionDetail: state.currentSolutionDetail,
         memo: state.memo,

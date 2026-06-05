@@ -594,6 +594,35 @@ describe('createRfpAction', () => {
     expect(r.error).toBe('INVALID_INPUT');
   });
 
+  it('persists currentSettlementCycle when supplied', async () => {
+    const r = await createRfpAction({
+      title: '정산주기 필드 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      currentSettlementCycle: 'D+1',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.currentSettlementCycle).toBe('D+1');
+  });
+
+  it('stores NULL for currentSettlementCycle when omitted', async () => {
+    const r = await createRfpAction({
+      title: '정산주기 생략 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.currentSettlementCycle).toBeNull();
+  });
+
   // _suppress unused import warnings
   void and;
 });

@@ -62,4 +62,15 @@ describe('RfpBriefPanel', () => {
     expect(screen.getByText('대표자')).toBeInTheDocument();
     expect(screen.getByText('—')).toBeInTheDocument();
   });
+
+  it('currentSettlementCycle 있을 때 "현재 정산주기" 행이 표시된다', () => {
+    render(<RfpBriefPanel rfp={{ ...rfp, currentSettlementCycle: 'D+1' }} buyerName="(주)진짜상사" />);
+    expect(screen.getByText('현재 정산주기')).toBeInTheDocument();
+    expect(screen.getByText('D+1')).toBeInTheDocument();
+  });
+
+  it('currentSettlementCycle 없을 때 "현재 정산주기" 행이 없다', () => {
+    render(<RfpBriefPanel rfp={rfp} buyerName="(주)진짜상사" />);
+    expect(screen.queryByText('현재 정산주기')).not.toBeInTheDocument();
+  });
 });
