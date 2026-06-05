@@ -652,6 +652,35 @@ describe('createRfpAction', () => {
     expect(row.deliveryServicePeriod).toBeNull();
   });
 
+  it('persists boardVisible=false when opted out', async () => {
+    const r = await createRfpAction({
+      title: '게시판 노출 끔 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      boardVisible: false,
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.boardVisible).toBe(false);
+  });
+
+  it('defaults boardVisible=true when omitted', async () => {
+    const r = await createRfpAction({
+      title: '게시판 노출 기본값 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.boardVisible).toBe(true);
+  });
+
   // _suppress unused import warnings
   void and;
 });

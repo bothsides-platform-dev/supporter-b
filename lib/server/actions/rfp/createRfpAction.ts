@@ -81,6 +81,8 @@ const Input = z
     currentGuaranteeInsurance: z.string().max(100).optional(),
     currentSettlementCycle: z.string().max(50).optional(),
     deliveryServicePeriod: z.string().max(100).optional(),   // ← 추가
+    // 오픈 게시판 노출 여부(opt-out). 생략 시 노출(true)이 기본.
+    boardVisible: z.boolean().optional().default(true),
     currentSolution: z.enum(['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other']).optional(),
     currentSolutionDetail: z.string().max(100).optional(),
   })
@@ -222,6 +224,7 @@ export async function createRfpAction(
         currentGuaranteeInsurance: parsed.data.currentGuaranteeInsurance?.trim() ?? null,
         currentSettlementCycle: parsed.data.currentSettlementCycle?.trim() ?? null,
         deliveryServicePeriod: parsed.data.deliveryServicePeriod?.trim() ?? null,   // ← 추가
+        boardVisible: parsed.data.boardVisible,
         currentSolution: parsed.data.currentSolution ?? null,
         currentSolutionDetail: parsed.data.currentSolutionDetail?.trim() ?? null,
         deadline: new Date(parsed.data.deadline),
