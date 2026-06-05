@@ -46,6 +46,17 @@ describe('OpportunityList', () => {
     expect(screen.getByText('전자책 구독')).toBeTruthy();
   });
 
+  it('구매사명·제목을 1차로 보여주고 마감은 D-n 칩으로 강조한다', () => {
+    render(
+      <OpportunityList
+        items={[makeItem({ deadline: new Date(Date.now() + 2 * 86_400_000).toISOString() })]}
+      />,
+    );
+    expect(screen.getByText('구매사ABC')).toBeTruthy();
+    expect(screen.getByText(/PG 견적 요청 건/)).toBeTruthy();
+    expect(screen.getByTestId('deadline-chip')).toHaveTextContent('D-2');
+  });
+
   it('omits the payment-method and product lines when those fields are empty', () => {
     render(
       <OpportunityList
