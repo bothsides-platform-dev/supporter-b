@@ -22,7 +22,6 @@ import {
 import { renderBidSubmitted } from '@/lib/server/outbox/templates/bidSubmitted';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import type { Bid } from '@/lib/types/bid';
-import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import type { Notification } from '@/lib/types/notification';
 import { actionDb, type BidActionResult } from './_shared';
 
@@ -66,11 +65,10 @@ export type SubmitBidResult = BidActionResult<{ bidId: string }>;
  *   1) requirePgSession
  *   2) zod 검증
  *   3) canAccess 가드: 초대된 PG 워크스페이스 멤버라면 누구나 통과
- *   4) RFP + 스냅샷 BizProfile 조회 → grade 추출
- *   5) 카드 법정 상한 검증: payment_fees.card > STATUTORY_CARD_FEE[grade] → reject
- *   6) invitation 조회 → invitationId 픽업
- *   7) BidRepo.save — UNIQUE(rfpId, pgWsId) 위반은 'BID_ALREADY_SUBMITTED'
- *   8) buyer ws 멤버 → notifications.in_app + outbox.bid.submitted
+ *   4) 결제수단 범위 검증: 요청된 수단/커스텀 id만 허용 (카드는 등급 무관 협상 입력)
+ *   5) invitation 조회 → invitationId 픽업
+ *   6) BidRepo.save — UNIQUE(rfpId, pgWsId) 위반은 'BID_ALREADY_SUBMITTED'
+ *   7) buyer ws 멤버 → notifications.in_app + outbox.bid.submitted
  */
 export async function submitBidAction(
   input: SubmitBidInput,
@@ -113,16 +111,6 @@ export async function submitBidAction(
   for (const id of Object.keys(data.customFees)) {
     if (!customIds.has(id)) {
       return { ok: false, error: 'PAYMENT_METHOD_NOT_REQUESTED' };
-    }
-  }
-
-  // 카드 법정 상한 검증
-  const cardFee = data.paymentFees.card;
-  if (cardFee !== undefined) {
-    const grade = rfp.bizProfile?.grade ?? null;
-    const cap = STATUTORY_CARD_FEE[grade ?? 'general'];
-    if (!isNaN(cap) && cardFee > cap) {
-      return { ok: false, error: 'CARD_FEE_EXCEEDS_STATUTORY_CAP' };
     }
   }
 

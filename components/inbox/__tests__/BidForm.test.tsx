@@ -5,7 +5,6 @@ import userEvent from '@testing-library/user-event';
 import { http } from '@/lib/http';
 import { HTTPError } from 'ky';
 import type { NormalizedOptions, ResponsePromise } from 'ky';
-import type { MerchantGrade } from '@/lib/types/biz-profile';
 import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 
 class ResizeObserverStub {
@@ -52,7 +51,6 @@ afterEach(() => {
 });
 
 type FormOverrides = {
-  grade?: MerchantGrade | undefined;
   requiredPaymentMethods?: PaymentMethod[];
   customPaymentMethods?: CustomPaymentMethod[];
   templates?: QuoteTemplateOption[];
@@ -63,7 +61,6 @@ function renderForm(overrides: FormOverrides = {}) {
     <BidForm
       rfpId="rfp-1"
       rfpCode="P-2605-0042"
-      grade={'grade' in overrides ? overrides.grade : 'general'}
       requiredPaymentMethods={overrides.requiredPaymentMethods ?? ['bank_transfer']}
       customPaymentMethods={overrides.customPaymentMethods ?? []}
       templates={overrides.templates ?? []}
@@ -139,25 +136,19 @@ describe('BidForm 제안서 업로드', () => {
 
 describe('BidForm 결제수단 동적 렌더', () => {
   it('요청된 결제수단마다 수수료 입력칸을 렌더한다', () => {
-    renderForm({ requiredPaymentMethods: ['card', 'bank_transfer'], grade: 'general' });
+    renderForm({ requiredPaymentMethods: ['card', 'bank_transfer'] });
     expect(screen.getByText('카드 수수료')).toBeInTheDocument();
     expect(screen.getByText('계좌이체 수수료')).toBeInTheDocument();
   });
 
   it('요청되지 않은 결제수단은 입력칸이 없다', () => {
-    renderForm({ requiredPaymentMethods: ['bank_transfer'], grade: 'general' });
+    renderForm({ requiredPaymentMethods: ['bank_transfer'] });
     expect(screen.queryByText('카드 수수료')).toBeNull();
     expect(screen.queryByText('가상계좌 수수료')).toBeNull();
   });
 
-  it('카드 법정상한 등급(capped)이면 카드가 요청돼도 카드 입력칸을 렌더하지 않는다', () => {
-    renderForm({ requiredPaymentMethods: ['card', 'bank_transfer'], grade: 'sme2' });
-    expect(screen.queryByText('카드 수수료')).toBeNull();
-    expect(screen.getByText('계좌이체 수수료')).toBeInTheDocument();
-  });
-
-  it('일반(general) 등급이면 카드 입력칸을 렌더한다', () => {
-    renderForm({ requiredPaymentMethods: ['card'], grade: 'general' });
+  it('카드만 요청하면 등급과 무관하게 카드 수수료 입력칸을 렌더한다 (카드는 법정 고정이 아닌 협상 대상)', () => {
+    renderForm({ requiredPaymentMethods: ['card'] });
     expect(screen.getByText('카드 수수료')).toBeInTheDocument();
   });
 
@@ -165,7 +156,6 @@ describe('BidForm 결제수단 동적 렌더', () => {
     renderForm({
       requiredPaymentMethods: ['bank_transfer'],
       customPaymentMethods: [{ id: 'c1', label: '포인트결제' }],
-      grade: 'general',
     });
     expect(screen.getByText('포인트결제 수수료')).toBeInTheDocument();
   });
@@ -177,7 +167,6 @@ describe('BidForm 제출 — paymentFees / customFees 분리', () => {
     renderForm({
       requiredPaymentMethods: ['bank_transfer'],
       customPaymentMethods: [{ id: 'c1', label: '포인트결제' }],
-      grade: 'general',
     });
 
     await user.type(feeInput('계좌이체 수수료'), '0.50');
@@ -196,7 +185,7 @@ describe('BidForm 제출 — paymentFees / customFees 분리', () => {
   });
 
   it('요율을 하나도 입력하지 않으면 제출 버튼이 비활성화된다', () => {
-    renderForm({ requiredPaymentMethods: ['bank_transfer'], grade: 'general' });
+    renderForm({ requiredPaymentMethods: ['bank_transfer'] });
     const submitBtn = screen.getByRole('button', { name: /견적 보내기/ });
     expect(submitBtn).toBeDisabled();
   });
@@ -313,7 +302,6 @@ describe('BidForm 견적 템플릿', () => {
     const user = userEvent.setup();
     renderForm({
       requiredPaymentMethods: ['bank_transfer'],
-      grade: 'general',
       templates: [
         tmpl({
           id: 't1',
@@ -337,11 +325,10 @@ describe('BidForm 견적 템플릿', () => {
     ).toBe('2');
   });
 
-  it('capped 등급에서는 템플릿의 카드 요율을 적용하지 않는다 (읽기전용 보존)', async () => {
+  it('요청된 카드에 템플릿의 카드 요율을 적용한다 (등급 무관)', async () => {
     const user = userEvent.setup();
     renderForm({
       requiredPaymentMethods: ['card', 'bank_transfer'],
-      grade: 'sme2',
       templates: [
         tmpl({
           id: 't1',
@@ -355,14 +342,14 @@ describe('BidForm 견적 템플릿', () => {
       't1',
     );
 
-    // 카드 입력칸 자체가 없고(capped), 계좌이체만 채워진다.
-    expect(screen.queryByText('카드 수수료')).toBeNull();
+    // 카드도 일반 협상 수단 — 템플릿 카드 요율(0.01 → "1")이 입력칸에 채워진다.
+    expect(feeInput('카드 수수료').value).toBe('1');
     expect(feeInput('계좌이체 수수료').value).toBe('0.6');
   });
 
   it('"템플릿으로 저장" 후 이름 입력·저장 시 현재 입력값으로 saveQuoteTemplateAction 호출', async () => {
     const user = userEvent.setup();
-    renderForm({ requiredPaymentMethods: ['bank_transfer'], grade: 'general' });
+    renderForm({ requiredPaymentMethods: ['bank_transfer'] });
 
     await user.type(feeInput('계좌이체 수수료'), '0.50');
     await user.click(screen.getByRole('button', { name: '템플릿으로 저장' }));

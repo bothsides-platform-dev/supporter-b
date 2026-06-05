@@ -4,7 +4,6 @@ import { InfoTip } from '@/components/ui/info-tip';
 import { MessageComposeButton } from '@/components/messages/MessageComposeButton';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
-import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import { formatDate, formatDeadline } from '@/lib/format';
 import type { RFP } from '@/lib/types/rfp';
 
@@ -14,7 +13,6 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
   const bizProfile = rfp.bizProfile;
   const bizNoMissing = !bizProfile?.bizNo;
   const grade = bizProfile?.grade;
-  const cardFee = grade ? STATUTORY_CARD_FEE[grade] : NaN;
   const daysLeft = formatDeadline(rfp.deadline);
   const isUrgent = daysLeft.startsWith('D-') && parseInt(daysLeft.slice(2)) <= 3;
 
@@ -81,24 +79,12 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
         <div className="flex items-center justify-between py-2.5 border-t border-[var(--md-sys-color-outline-variant)] border-b border-[var(--md-sys-color-outline-variant)]">
           <div className="flex items-center gap-3">
             {grade ? (
-              <>
-                <Chip label={GRADE_LABELS[grade]} color="surface" />
-                {!isNaN(cardFee) && (
-                  <span className="font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
-                    카드 법정 {(cardFee * 100).toFixed(2)}%
-                  </span>
-                )}
-                {isNaN(cardFee) && (
-                  <span className="font-mono text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                    일반등급 — 카드사별 수수료 입력 필요
-                  </span>
-                )}
-              </>
+              <Chip label={GRADE_LABELS[grade]} color="surface" />
             ) : (
               <>
                 <Chip label="미정" color="surface" />
                 <span className="font-mono text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                  등급 미입력 — 일반 가정으로 카드사별 수수료 입력 필요
+                  등급 미입력
                 </span>
               </>
             )}

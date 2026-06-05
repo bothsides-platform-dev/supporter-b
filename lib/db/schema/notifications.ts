@@ -15,9 +15,12 @@ export const notifications = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    workspaceId: uuid('workspace_id')
-      .notNull()
-      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    // Nullable = user-level notification (워크스페이스에 묶이지 않음). 예: 워크스페이스
+    // 초대 알림은 받는 사람이 아직 그 워크스페이스 멤버가 아니라 특정 ws에 귀속될
+    // 수 없다 → null 로 두면 읽기 계층(findRecentForUser)이 어느 ws를 보든 노출한다.
+    workspaceId: uuid('workspace_id').references(() => workspaces.id, {
+      onDelete: 'cascade',
+    }),
     type: text('type').notNull(),
     title: text('title').notNull(),
     body: text('body').notNull().default(''),

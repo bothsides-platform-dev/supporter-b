@@ -104,7 +104,7 @@ const INBOX_SECTION: NavSection = {
   links: [
     {
       id: 'opportunities',
-      label: '견적 기회',
+      label: '참여 가능한 견적',
       href: '/opportunities',
       // G then O (Opportunities) — h/n/m/i/s/p/t/1-3 are taken for pg.
       shortcut: { kind: 'chord', lead: 'g', key: 'o' },
@@ -253,7 +253,7 @@ export function getBreadcrumbSegments(
   if (pathname === '/home') return [{ label: '홈' }];
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
-  if (pathname === '/opportunities') return [{ label: '견적 기회' }];
+  if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp') {
     const label = status ? STATUS_LABELS['/rfp'][status as keyof typeof STATUS_LABELS['/rfp']] : undefined;
     return label ? [{ label: '견적 요청', href: '/rfp' }, { label }] : [{ label: '견적 요청' }];

@@ -1,20 +1,14 @@
 import { formatKRW, formatPct } from '@/lib/format';
-import { STATUTORY_CARD_FEE, type Bid } from '@/lib/types/bid';
-import { GRADE_LABELS, type MerchantGrade } from '@/lib/types/biz-profile';
+import { type Bid } from '@/lib/types/bid';
 import { SectionLabel } from './parts';
 
-/** Read-only 6-figure bid KPI grid (settlement, fees). Shows the statutory card
- *  fee row for graded merchants, else the PG's quoted card fee. */
+/** Read-only 6-figure bid KPI grid (settlement, fees). Card is a negotiable
+ *  payment method like the others — shows the PG's quoted card fee. */
 export function BidKpiGrid({
   bid,
-  grade,
 }: {
   bid: Bid;
-  grade: MerchantGrade | undefined;
 }) {
-  const cardFee = grade ? STATUTORY_CARD_FEE[grade] : NaN;
-  const showStatutoryCard = grade && grade !== 'general' && !Number.isNaN(cardFee);
-
   return (
     <section className="px-5 py-4 border-b border-[var(--md-sys-color-outline-variant)]">
       <SectionLabel>정형 수치</SectionLabel>
@@ -22,14 +16,7 @@ export function BidKpiGrid({
         <Kpi label="정산주기" value={bid.settleCycle} />
         <Kpi label="정산한도" value={formatKRW(bid.settleLimit)} />
         <Kpi label="월 보증보험" value={formatKRW(bid.guaranteeInsurance)} />
-        {showStatutoryCard && (
-          <Kpi
-            label={`카드 (${GRADE_LABELS[grade!]})`}
-            value={`${(cardFee * 100).toFixed(2)}% 고정`}
-            muted
-          />
-        )}
-        {bid.paymentFees.card !== undefined && !showStatutoryCard && (
+        {bid.paymentFees.card !== undefined && (
           <Kpi label="카드" value={formatPct(bid.paymentFees.card)} />
         )}
         {bid.paymentFees.overseas_card !== undefined && (

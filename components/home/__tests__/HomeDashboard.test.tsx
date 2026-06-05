@@ -68,7 +68,16 @@ describe('HomeDashboard', () => {
     const dash: Dashboard = {
       ...empty,
       openRfps: [
-        { rfpCode: 'P-OPEN1', buyerName: '구매사A', title: '카드 PG 견적', websiteUrl: 'https://a.example.com' },
+        {
+          rfpCode: 'P-OPEN1',
+          buyerName: '구매사A',
+          title: '카드 PG 견적',
+          websiteUrl: 'https://a.example.com',
+          deadline: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+          requiredPaymentMethods: ['card'],
+          customPaymentMethodLabels: [],
+          mainProducts: null,
+        },
       ],
     };
     render(<HomeDashboard dashboard={dash} workspaceType="pg" />);

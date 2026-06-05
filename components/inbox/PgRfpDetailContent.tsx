@@ -54,7 +54,6 @@ export function PgRfpDetailContent({ data }: { data: PgRfpDetailData }) {
         <BidForm
           rfpId={rfp.id}
           rfpCode={rfp.code}
-          grade={rfp.bizProfile?.grade}
           requiredPaymentMethods={rfp.requiredPaymentMethods}
           customPaymentMethods={rfp.customPaymentMethods}
           templates={quoteTemplates}

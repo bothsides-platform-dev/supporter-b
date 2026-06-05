@@ -18,7 +18,6 @@ import {
   type CustomPaymentMethod,
   type PaymentMethod,
 } from '@/lib/types/bid';
-import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap(
   (c) => c.methods,
@@ -45,7 +44,6 @@ const ERROR_LABELS: Record<string, string> = {
   RFP_NOT_OPEN: '마감됐거나 이미 종료된 견적 요청이에요.',
   INVITATION_NOT_FOUND: '초대 내역을 찾을 수 없어요.',
   BID_ALREADY_SUBMITTED: '이미 견적을 보냈어요.',
-  CARD_FEE_EXCEEDS_STATUTORY_CAP: '카드 수수료가 법정 상한을 초과합니다.',
   PAYMENT_METHOD_NOT_REQUESTED: '구매사가 요청하지 않은 결제수단입니다.',
 };
 
@@ -63,7 +61,6 @@ export type QuoteTemplateOption = {
 type Props = {
   rfpId: string;
   rfpCode: string;
-  grade: MerchantGrade | undefined;
   requiredPaymentMethods: PaymentMethod[];
   customPaymentMethods: CustomPaymentMethod[];
   templates?: QuoteTemplateOption[];
@@ -72,7 +69,6 @@ type Props = {
 export function BidForm({
   rfpId,
   rfpCode,
-  grade,
   requiredPaymentMethods,
   customPaymentMethods,
   templates = [],
@@ -165,28 +161,19 @@ export function BidForm({
   const proposalReady = proposal && 'id' in proposal;
   const proposalUploading = proposal && 'status' in proposal && proposal.status === 'uploading';
 
-  const allowCardInput = grade === undefined || grade === 'general';
-
-  // 구매사가 요청한 수단 (빈 배열 = 제한 없음 → 9종 전체). capped 등급의 card는
-  // 법정 고정이라 입력칸을 만들지 않고, paymentFees에도 싣지 않는다(비교표가 등급에서 산출).
-  const enumMethods = requiredPaymentMethods.length > 0 ? requiredPaymentMethods : ALL_PAYMENT_METHODS;
-  const feeInputMethods = enumMethods.filter((m) => !(m === 'card' && !allowCardInput));
-  const hasStatutoryCard = enumMethods.includes('card') && !allowCardInput;
+  // 구매사가 요청한 수단 (빈 배열 = 제한 없음 → 9종 전체). 카드도 다른 수단과
+  // 동일한 협상 대상이라 항상 입력칸을 렌더한다.
+  const feeInputMethods = requiredPaymentMethods.length > 0 ? requiredPaymentMethods : ALL_PAYMENT_METHODS;
 
   const settleCycle = `${cycleUnit}+${cycleNum || '1'}`;
 
   const feeFilled = (key: string) => (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
   const anyFeeFilled =
-    hasStatutoryCard ||
     feeInputMethods.some((m) => feeFilled(m)) ||
     customPaymentMethods.some((c) => feeFilled(c.id));
 
-  const totalFeeCount =
-    (hasStatutoryCard ? 1 : 0) +
-    feeInputMethods.length +
-    customPaymentMethods.length;
+  const totalFeeCount = feeInputMethods.length + customPaymentMethods.length;
   const filledFeeCount =
-    (hasStatutoryCard ? 1 : 0) +
     feeInputMethods.filter((m) => feeFilled(m)).length +
     customPaymentMethods.filter((c) => feeFilled(c.id)).length;
 
@@ -208,7 +195,6 @@ export function BidForm({
   const pct = (s: string) => parseFloat(s) / 100;
 
   // 폼의 enum 결제수단 요율(퍼센트 문자열)을 소수 요율 맵으로 — 제출/템플릿 저장 공용.
-  // capped 등급의 card 는 feeInputMethods 에서 제외되므로 자연히 빠진다.
   const buildPaymentFees = (): Partial<Record<PaymentMethod, number>> => {
     const out: Partial<Record<PaymentMethod, number>> = {};
     for (const m of feeInputMethods) {
@@ -402,17 +388,6 @@ export function BidForm({
           </p>
         )}
       </div>
-
-      {grade === undefined && (
-        <div className="border border-[var(--md-sys-color-outline-variant)] px-4 py-3 space-y-1">
-          <p className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            [ 등급 미입력 ] 일반 가정 견적
-          </p>
-          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-            구매사가 가맹점 등급을 입력하지 않은 사전 견적 요청이에요. 카드 수수료를 직접 입력해요.
-          </p>
-        </div>
-      )}
 
       {/* 01 정산 조건 */}
       <section>

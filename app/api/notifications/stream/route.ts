@@ -16,6 +16,7 @@
  */
 import { auth } from '@/auth';
 import { subscribe } from '@/lib/server/notifications/bus';
+import { shouldDeliverToWorkspace } from '@/lib/server/notifications/shouldDeliver';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,9 +48,10 @@ export async function GET(req: Request): Promise<Response> {
         }
       };
 
-      // 신규 알림 구독 — 현재 워크스페이스 알림만 전달.
+      // 신규 알림 구독 — 현재 워크스페이스 알림 + user-level(workspaceId=null)
+      // 알림(워크스페이스 무관)을 전달. 다른 워크스페이스 전용 알림은 누설 금지.
       const unsubscribe = subscribe(userId, (n) => {
-        if (n.workspaceId !== currentWorkspaceId) return;
+        if (!shouldDeliverToWorkspace(n, currentWorkspaceId)) return;
         safeEnqueue(`data: ${JSON.stringify(n)}\n\n`);
       });
 
