@@ -15,7 +15,6 @@ export function RefreshButton() {
       size="sm"
       disabled={isPending}
       onClick={() => startTransition(() => router.refresh())}
-      className={isPending ? '[&_svg]:animate-spin' : ''}
     >
       <RefreshIcon />
       새로고침
