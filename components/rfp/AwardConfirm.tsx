@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
+import { InfoTip } from '@/components/ui/info-tip';
 import { Button } from '@/components/primitives/Button';
 import { awardRfpAction } from '@/lib/server/actions/rfp';
 import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
@@ -22,6 +23,13 @@ const SETTLE_LABEL: Record<string, string> = {
   'D+2': 'D+2 (2영업일)',
   weekly: '주 1회',
   monthly: '월 1회',
+};
+
+// 선택한 견적 행 라벨 → 용어집 키 (라벨 표기와 키가 다른 것 매핑)
+const ROW_INFO_TERM: Record<string, string> = {
+  '정산 주기': '정산주기',
+  정산한도: '정산한도',
+  '월 보증보험': '보증보험',
 };
 
 type Props = {
@@ -176,8 +184,9 @@ export function AwardConfirm(props: Props) {
               : []),
           ].map(([label, value]) => (
             <div key={label} className="py-2.5 flex items-baseline justify-between">
-              <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              <span className="inline-flex items-center gap-1 font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                 {label}
+                {ROW_INFO_TERM[label] && <InfoTip term={ROW_INFO_TERM[label]} />}
               </span>
               <span className="font-mono text-[13px] tabular-nums text-[var(--md-sys-color-on-surface)]">
                 {value}

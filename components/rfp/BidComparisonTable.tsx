@@ -14,6 +14,7 @@ import type { Bid, CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import { GRADE_LABELS, type MerchantGrade } from '@/lib/types/biz-profile';
 import { compareSettleCycle } from '@/lib/utils/settle-cycle';
 import { EnvelopeIcon } from '@/components/icons';
+import { InfoTip } from '@/components/ui/info-tip';
 import { MessageComposeButton } from '@/components/messages/MessageComposeButton';
 import Link from 'next/link';
 
@@ -42,20 +43,25 @@ function min(bids: Bid[], key: (b: Bid) => number): number {
 }
 
 function SortTh({
-  label, sortId, active, dir, onSort,
+  label, sortId, active, dir, onSort, infoTerm,
 }: {
   label: string;
   sortId: SortKey;
   active: boolean;
   dir: SortDir;
   onSort: (k: SortKey) => void;
+  /** 헤더 옆 ⓘ 설명 아이콘 용어집 키. 아이콘 클릭은 정렬을 일으키지 않음 */
+  infoTerm?: string;
 }) {
   return (
     <th
       className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal cursor-pointer hover:text-[var(--md-sys-color-on-surface)] transition-colors select-none"
       onClick={() => onSort(sortId)}
     >
-      {label}
+      <span className="inline-flex items-center gap-1 align-middle">
+        {label}
+        {infoTerm && <InfoTip term={infoTerm} side="bottom" />}
+      </span>
       {active && <span className="ml-1 text-[var(--md-sys-color-on-surface)]">{dir === 'asc' ? '↑' : '↓'}</span>}
     </th>
   );
@@ -161,9 +167,9 @@ export function BidComparisonTable({
         <thead>
           <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
             <SortTh label="PG사" sortId="name" active={sortKey === 'name'} dir={sortDir} onSort={handleSort} />
-            <SortTh label="정산주기" sortId="settle" active={sortKey === 'settle'} dir={sortDir} onSort={handleSort} />
-            <SortTh label="정산한도" sortId="settleLimit" active={sortKey === 'settleLimit'} dir={sortDir} onSort={handleSort} />
-            <SortTh label="보증보험" sortId="guaranteeInsurance" active={sortKey === 'guaranteeInsurance'} dir={sortDir} onSort={handleSort} />
+            <SortTh label="정산주기" sortId="settle" active={sortKey === 'settle'} dir={sortDir} onSort={handleSort} infoTerm="정산주기" />
+            <SortTh label="정산한도" sortId="settleLimit" active={sortKey === 'settleLimit'} dir={sortDir} onSort={handleSort} infoTerm="정산한도" />
+            <SortTh label="보증보험" sortId="guaranteeInsurance" active={sortKey === 'guaranteeInsurance'} dir={sortDir} onSort={handleSort} infoTerm="보증보험" />
             {payCols.map((col) =>
               col.kind === 'card-statutory' ? (
                 <th
