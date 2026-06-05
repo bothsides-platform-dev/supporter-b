@@ -4,6 +4,7 @@
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { underlineInputClass } from '@/components/forms/inputs';
+import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
@@ -69,7 +70,10 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         />
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>현재 카드 수수료</Label>
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>현재 카드 수수료</Label>
+          <InfoTip term="수수료율" />
+        </div>
         <input
           type="text"
           value={draft.currentFeeRate}
@@ -79,7 +83,10 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         />
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>현재 월 정산한도</Label>
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>현재 월 정산한도</Label>
+          <InfoTip term="정산한도" />
+        </div>
         <input
           type="text"
           value={draft.currentSettlementLimit}
@@ -89,7 +96,10 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         />
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>현재 보증보험</Label>
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>현재 보증보험</Label>
+          <InfoTip term="보증보험" />
+        </div>
         <input
           type="text"
           value={draft.currentGuaranteeInsurance}

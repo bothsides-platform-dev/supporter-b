@@ -8,6 +8,7 @@ import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
+import { InfoTip } from '@/components/ui/info-tip';
 import { useBidDraft, type BidDraft } from './useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
@@ -431,7 +432,10 @@ export function BidForm({
         </div>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
           <div className="col-span-2 space-y-1">
-            <Label size="md" muted={false}>정산 주기 *</Label>
+            <div className="flex items-center gap-1">
+              <Label size="md" muted={false}>정산 주기 *</Label>
+              <InfoTip term="정산주기" />
+            </div>
             <div className="flex items-end gap-2">
               <div className="w-28">
                 <Select
@@ -454,8 +458,8 @@ export function BidForm({
               예: D+1, W+2, M+1
             </p>
           </div>
-          <CurrencyInput label="정산한도 (원/월)" value={settleLimit} onChange={(v) => setField('settleLimit', v)} placeholder="0" />
-          <CurrencyInput label="월 보증보험 (원/연)" value={guaranteeInsurance} onChange={(v) => setField('guaranteeInsurance', v)} placeholder="0" />
+          <CurrencyInput label="정산한도 (원/월)" infoTerm="정산한도" value={settleLimit} onChange={(v) => setField('settleLimit', v)} placeholder="0" />
+          <CurrencyInput label="월 보증보험 (원/연)" infoTerm="보증보험" value={guaranteeInsurance} onChange={(v) => setField('guaranteeInsurance', v)} placeholder="0" />
         </div>
       </section>
 
@@ -465,6 +469,7 @@ export function BidForm({
           <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
             02 — 수수료
           </span>
+          <InfoTip term="수수료율" />
           <span
             data-testid="section02-count"
             className="font-mono text-[10px] text-[var(--md-sys-color-outline)]"

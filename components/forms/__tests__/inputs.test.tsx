@@ -2,6 +2,14 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+// InfoTip (rendered when infoTerm is passed) mounts a base-ui Popover.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+
 import { PercentInput, CurrencyInput } from '../inputs';
 
 afterEach(cleanup);
@@ -46,5 +54,22 @@ describe('CurrencyInput', () => {
     render(<CurrencyInput label="정산한도" value="" onChange={onChange} />);
     await user.type(screen.getByRole('spinbutton'), '7');
     expect(onChange).toHaveBeenCalledWith('7');
+  });
+});
+
+describe('infoTerm', () => {
+  it('PercentInput renders an info icon button when infoTerm is given', () => {
+    render(<PercentInput label="수수료" value="" onChange={() => {}} infoTerm="수수료율" />);
+    expect(screen.getByRole('button', { name: /설명/ })).toBeInTheDocument();
+  });
+
+  it('CurrencyInput renders an info icon button when infoTerm is given', () => {
+    render(<CurrencyInput label="정산한도" value="" onChange={() => {}} infoTerm="정산한도" />);
+    expect(screen.getByRole('button', { name: /설명/ })).toBeInTheDocument();
+  });
+
+  it('renders no info icon when infoTerm is omitted', () => {
+    render(<CurrencyInput label="정산한도" value="" onChange={() => {}} />);
+    expect(screen.queryByRole('button', { name: /설명/ })).toBeNull();
   });
 });

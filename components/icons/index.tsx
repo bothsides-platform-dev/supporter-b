@@ -193,3 +193,13 @@ export function ComposeIcon({ size = 16, ...p }: IconProps) {
     </svg>
   );
 }
+
+export function InfoIcon({ size = 16, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
+      <circle cx="10" cy="10" r="8" />
+      <path d="M10 9v4.5" />
+      <path d="M10 6.5h.01" />
+    </svg>
+  );
+}

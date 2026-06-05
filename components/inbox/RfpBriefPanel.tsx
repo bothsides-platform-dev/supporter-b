@@ -1,5 +1,6 @@
 import { Chip } from '@/components/primitives/Chip';
 import { Label } from '@/components/primitives/Label';
+import { InfoTip } from '@/components/ui/info-tip';
 import { MessageComposeButton } from '@/components/messages/MessageComposeButton';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
@@ -74,6 +75,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
       <div>
         <div className="flex items-center gap-3 mb-3">
           <Label size="md" muted={false}>가맹점 등급</Label>
+          <InfoTip term="가맹점등급" />
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="flex items-center justify-between py-2.5 border-t border-[var(--md-sys-color-outline-variant)] border-b border-[var(--md-sys-color-outline-variant)]">
