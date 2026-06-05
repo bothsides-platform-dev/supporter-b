@@ -162,7 +162,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.memo}
           onChange={(e) => draft.setField('memo', e.target.value)}
           rows={4}
-          placeholder="카드결제·간편결제 통합 솔루션 검토 중입니다. 정산주기 D+7 이내 희망."
+          placeholder={"결제 수수료 최소화 요청\n결제 전환율 최적화 레퍼런스 요청\n정산주기 D+4 이내 요청"}
           className={cn(underlineInputClass, 'resize-none')}
         />
       </div>
