@@ -8,7 +8,6 @@ import { Chip } from '@/components/primitives/Chip';
 import { InfoTip } from '@/components/ui/info-tip';
 import { Button } from '@/components/primitives/Button';
 import { awardRfpAction } from '@/lib/server/actions/rfp';
-import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import {
   formatKRW,
   formatPct,
@@ -67,7 +66,6 @@ export function AwardConfirm(props: Props) {
   const [error, setError] = useState('');
 
   const grade = bizProfile.grade;
-  const cardFee = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
 
   const pgName = (wsId: string) => pgWsNameById[wsId] ?? wsId;
 
@@ -173,9 +171,6 @@ export function AwardConfirm(props: Props) {
             ],
             ['정산한도', formatKRW(selected.settleLimit)],
             ['월 보증보험', formatKRW(selected.guaranteeInsurance)],
-            ...(cardFee !== null
-              ? ([['카드 (법정)', formatPct(cardFee)]] as [string, string][])
-              : []),
             ...(selected.paymentFees.card !== undefined
               ? ([['카드', formatPct(selected.paymentFees.card)]] as [string, string][])
               : []),

@@ -132,9 +132,8 @@ export function SavingsCalculator() {
       <p className="mt-[var(--s-7)] font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
         * 최대 절감 가능액 추정치입니다. 일반 등급(연 30억 초과)은{' '}
         {(GENERAL_ASSUMED_RATE * 100).toFixed(2)}% 가정(최저 가능 수준).
-        영세·중소 등급의 카드 수수료는 법정 고정으로, 실 절감은 카드 외
-        항목(정산주기·보증금·셋업비 등)에서 발생합니다. 실제 절감액은 입찰
-        결과에 따라 다릅니다.
+        카드 수수료를 포함한 모든 항목(정산주기·보증금·셋업비 등)이 협상 대상이며,
+        실제 절감액은 입찰 결과에 따라 다릅니다.
       </p>
     </section>
   );

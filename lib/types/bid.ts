@@ -1,5 +1,4 @@
 import type { Attachment } from './common';
-import type { MerchantGrade } from './biz-profile';
 
 export type PaymentMethod =
   | 'card'
@@ -38,14 +37,6 @@ export const PAYMENT_METHOD_CATEGORIES: {
 export type CustomPaymentMethod = {
   id: string;
   label: string;
-};
-
-export const STATUTORY_CARD_FEE: Record<MerchantGrade, number> = {
-  small: 0.005,
-  sme1: 0.011,
-  sme2: 0.0125,
-  sme3: 0.015,
-  general: Number.NaN,
 };
 
 export type Bid = {

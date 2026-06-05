@@ -11,7 +11,6 @@ import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { RfpBoardVisibilityToggle } from '@/components/rfp/RfpBoardVisibilityToggle';
 import { RfpPendingRequests } from '@/components/rfp/RfpPendingRequests';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
-import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { formatDate } from '@/lib/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
@@ -73,7 +72,6 @@ export function RfpDetailContent({
     authorName,
   } = data;
   const bizProfile = rfp.bizProfile;
-  const cardFee = bizProfile?.grade ? STATUTORY_CARD_FEE[bizProfile.grade] : NaN;
 
   return (
     <>
@@ -118,7 +116,6 @@ export function RfpDetailContent({
           boardColumns={boardColumns}
           boardCards={boardCards}
           notesByBid={notesByBid}
-          grade={bizProfile?.grade}
           rfpStatus={rfp.status}
           awardedBidId={rfp.awardedBidId}
           requiredPaymentMethods={rfp.requiredPaymentMethods}
@@ -145,15 +142,7 @@ export function RfpDetailContent({
               ['상호명', companyName],
               ['사업자번호', bizProfile?.bizNo ?? '미입력'],
               ...(bizProfile?.grade
-                ? [
-                    ['등급', GRADE_LABELS[bizProfile.grade]],
-                    [
-                      '카드',
-                      Number.isNaN(cardFee)
-                        ? '카드사별 협의'
-                        : `${(cardFee * 100).toFixed(2)}%`,
-                    ],
-                  ]
+                ? [['등급', GRADE_LABELS[bizProfile.grade]]]
                 : [['등급', '미정']]),
             ].map(([label, value]) => (
               <div key={label} className="py-2 flex items-baseline justify-between">

@@ -3,8 +3,7 @@
 // Coverage:
 //   - 새 정산조건 필드(settleLimit, guaranteeInsurance) 저장
 //   - payment_fees JSONB 저장
-//   - 카드 법정 상한 초과 → CARD_FEE_EXCEEDS_STATUTORY_CAP
-//   - sme 등급 카드 법정 상한 이하 요율은 허용
+//   - 카드 수수료는 등급 무관 협상 입력 — 상한 검증 없이 그대로 저장
 //   - 허용되지 않는 결제수단 키 → INVALID_INPUT
 //   - requiredPaymentMethods가 비어있으면 payment_fees 자유 허용
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -165,7 +164,7 @@ describe('submitBidAction v2 — payment_fees model', () => {
     expect(row.paymentFees).toEqual({ bank_transfer: 0.002 });
   });
 
-  it('카드 법정 상한 초과 → CARD_FEE_EXCEEDS_STATUTORY_CAP', async () => {
+  it('capped 등급(sme2)이어도 카드 수수료는 상한 없이 협상 입력으로 허용된다', async () => {
     const s = await seedSetup('sme2', ['card']);
     sessionRef.value = {
       user: {
@@ -177,38 +176,17 @@ describe('submitBidAction v2 — payment_fees model', () => {
       },
     };
 
-    // sme2 법정 상한은 1.25% = 0.0125. 2%는 초과.
+    // 카드는 법정 고정이 아닌 협상 대상 — sme2에서 2%도 그대로 저장된다.
     const r = await submitBidAction({
       ...baseInput,
       rfpId: s.rfpId,
       paymentFees: { card: 0.02 },
     });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('CARD_FEE_EXCEEDS_STATUTORY_CAP');
-  });
-
-  it('카드 법정 상한 이하 요율 → 허용', async () => {
-    const s = await seedSetup('sme2', ['card']);
-    sessionRef.value = {
-      user: {
-        id: s.pgUserId,
-        email: s.pgUserEmail,
-        workspaceId: s.pgWsId,
-        workspaceType: 'pg',
-        role: 'admin',
-      },
-    };
-
-    const r = await submitBidAction({
-      ...baseInput,
-      rfpId: s.rfpId,
-      paymentFees: { card: 0.0125 },
-    });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
     const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
-    expect((row.paymentFees as Record<string, number>).card).toBe(0.0125);
+    expect((row.paymentFees as Record<string, number>).card).toBe(0.02);
   });
 
   it('일반 등급 카드 수수료 상한 없음 → 높은 요율도 허용', async () => {

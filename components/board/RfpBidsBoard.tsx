@@ -7,7 +7,6 @@ import { BidDetailModal } from '@/components/rfp/BidDetailModal';
 import type { BoardCard, BoardColumn } from '@/lib/types/column';
 import type { Bid } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
-import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 // Client wrapper for the RFP bid board (rfp_bids kind). Owns the detail-modal
 // open state and supplies the bid-card renderCard.
@@ -15,7 +14,6 @@ export function RfpBidsBoard({
   columns,
   cards,
   notesByBid,
-  grade,
   awardedBidId,
   pgWsNameMap,
   authorId,
@@ -24,7 +22,6 @@ export function RfpBidsBoard({
   columns: BoardColumn[];
   cards: BoardCard[];
   notesByBid: Record<string, BidNote[]>;
-  grade: MerchantGrade | undefined;
   awardedBidId?: string;
   pgWsNameMap: Record<string, string>;
   authorId: string;
@@ -62,7 +59,6 @@ export function RfpBidsBoard({
         bid={openBid}
         notes={openNotes}
         pgName={openBid ? pgName(openBid.pgWsId) : ''}
-        grade={grade}
         authorId={authorId}
         authorName={authorName}
       />
