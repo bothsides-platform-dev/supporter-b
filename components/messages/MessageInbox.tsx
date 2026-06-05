@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import { cn } from '@/lib/utils';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { EnvelopeIcon } from '@/components/icons';
 import { ConversationList } from './ConversationList';
@@ -15,11 +16,18 @@ export function MessageInbox({ conversations }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = conversations.find((c) => c.conversationId === selectedId) ?? null;
 
-  // 메신저형 2-컬럼: 좌측 고정폭 대화 목록 + 우측 스레드. (RFP peek 오버레이형
-  // SplitView 대신 — 오버레이는 목록을 240px로 잘라 시각·미리보기·버튼이 클립됨.)
+  // 메신저형 레이아웃: 데스크톱은 2-컬럼(목록 + 스레드), 모바일은 단일 컬럼으로
+  // 목록 ↔ 스레드를 전환한다(선택 시 스레드 전체폭, 뒤로가기로 목록 복귀). 좁은
+  // 화면에서 고정 w-80 목록이 스레드를 으스러뜨리던 문제를 해소.
   return (
     <div className="flex h-full min-h-0">
-      <div className="flex w-80 shrink-0 flex-col border-r border-[var(--md-sys-color-outline-variant)]">
+      <div
+        data-pane="list"
+        className={cn(
+          'w-full shrink-0 flex-col border-r border-[var(--md-sys-color-outline-variant)] md:w-80 md:flex',
+          selected ? 'hidden' : 'flex',
+        )}
+      >
         <div className="flex items-center justify-between gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-3 py-2.5">
           <span className="text-[12px] font-medium text-[var(--md-sys-color-on-surface-variant)]">
             대화
@@ -34,7 +42,10 @@ export function MessageInbox({ conversations }: Props) {
           />
         </div>
       </div>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div
+        data-pane="thread"
+        className={cn('min-w-0 flex-1 flex-col md:flex', selected ? 'flex' : 'hidden md:flex')}
+      >
         {selected ? (
           // key={selectedId} resets the Suspense boundary when conversation changes,
           // showing the skeleton again for the newly selected conversation.
@@ -42,6 +53,7 @@ export function MessageInbox({ conversations }: Props) {
             <ThreadPane
               conversationId={selected.conversationId}
               counterpartyFallback={selected.counterparty}
+              onBack={() => setSelectedId(null)}
             />
           </Suspense>
         ) : (
