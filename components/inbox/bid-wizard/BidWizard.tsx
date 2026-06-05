@@ -12,7 +12,7 @@ import { submitBidAction } from '@/lib/server/actions/bid';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
 import { PAYMENT_METHOD_CATEGORIES, type PaymentMethod } from '@/lib/types/bid';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
-import type { QuoteTemplateOption } from '../BidForm';
+import type { QuoteTemplateOption } from '@/lib/types/bid';
 
 import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
 import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';

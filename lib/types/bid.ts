@@ -61,3 +61,14 @@ export type Bid = {
   submittedAt?: string;
   boardColumnId?: string | null;
 };
+
+// PG 워크스페이스 공유 견적 템플릿 — 폼 채우기용 직렬화 가능한 부분집합(요율표).
+// 커스텀 결제수단·메모·PDF는 RFP 종속적이라 템플릿에 담지 않는다.
+export type QuoteTemplateOption = {
+  id: string;
+  name: string;
+  settleCycle: string;
+  settleLimit: number;
+  guaranteeInsurance: number;
+  paymentFees: Partial<Record<PaymentMethod, number>>;
+};
