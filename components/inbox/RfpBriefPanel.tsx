@@ -107,7 +107,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
       </div>
 
       {/* 사업 운영 정보 — 6 optional fields */}
-      {[rfp.websiteUrl, rfp.mainProducts, rfp.annualPgVolume, rfp.currentFeeRate, rfp.currentSettlementLimit, rfp.currentGuaranteeInsurance].some(Boolean) && (
+      {[rfp.websiteUrl, rfp.mainProducts, rfp.annualPgVolume, rfp.currentFeeRate, rfp.currentSettlementLimit, rfp.currentGuaranteeInsurance, rfp.currentSettlementCycle].some(Boolean) && (
         <div>
           <div className="flex items-center gap-3 mb-3">
             <Label size="md" muted={false}>사업 운영 정보</Label>
@@ -122,6 +122,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
                 ['현재 카드 수수료', rfp.currentFeeRate],
                 ['현재 정산한도', rfp.currentSettlementLimit],
                 ['현재 보증보험', rfp.currentGuaranteeInsurance],
+                ['현재 정산주기', rfp.currentSettlementCycle],
               ] as [string, string | undefined][]
             )
               .filter(([, v]) => v)
