@@ -37,6 +37,8 @@ function resetStore() {
     websiteUrl: 'https://example.com',
     annualPgVolume: '10억',
     currentSolution: 'cafe24',
+    currentSettlementCycle: '',
+    deliveryServicePeriod: '',
     memo: '',
     rfpFiles: [],
   });
