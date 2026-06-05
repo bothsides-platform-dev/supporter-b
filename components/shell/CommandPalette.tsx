@@ -7,39 +7,30 @@ import { Command } from 'cmdk';
 import { XIcon } from '@/components/icons';
 import { IconButton } from '@/components/primitives/IconButton';
 import { ShortcutHint } from '@/components/shell/ShortcutHint';
-import type { NavShortcut } from '@/lib/nav/nav-config';
+import { getNavCommands } from '@/lib/nav/nav-config';
+import type { WorkspaceType } from '@/lib/types/workspace';
 import {
-  searchBidsAction,
-  type BidSearchItem,
-} from '@/lib/server/actions/search/searchBidsAction';
+  searchEntitiesAction,
+  type SearchResults,
+} from '@/lib/server/actions/search/searchEntitiesAction';
 
-type CommandItem = {
-  group: string;
-  id: string;
-  label: string;
-  shortcut?: NavShortcut; // rendered as keycaps via ShortcutHint
-  href?: string;
-};
+const EMPTY_RESULTS: SearchResults = { rfps: [], bids: [], opportunities: [] };
 
-const COMMANDS: CommandItem[] = [
-  { group: '견적 요청', id: 'rfp-list', label: '견적 요청 목록', href: '/rfp' },
-  {
-    group: '견적 요청',
-    id: 'rfp-new',
-    label: '새 견적 요청',
-    shortcut: { kind: 'chord', lead: 'g', key: 'c' },
-    href: '/rfp/new',
-  },
-  { group: '수신함', id: 'inbox', label: '수신함', href: '/inbox' },
-  { group: '설정', id: 'settings-profile', label: '프로필 설정', href: '/settings/profile' },
-  { group: '설정', id: 'settings-members', label: '멤버 관리', href: '/settings/members' },
-];
+const HEADING_CLASS =
+  'px-4 py-1 block font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]';
+const ITEM_CLASS =
+  'flex items-center justify-between px-4 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface)] cursor-pointer aria-selected:bg-[var(--md-sys-color-surface-container-high)]';
+const ENTITY_ITEM_CLASS =
+  'flex flex-col items-start gap-0.5 px-4 py-2.5 cursor-pointer aria-selected:bg-[var(--md-sys-color-surface-container-high)]';
 
-export function CommandPalette() {
+export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType }) {
   const { commandPaletteOpen, closeCommandPalette } = useUIStore();
   const router = useRouter();
-  const [bidItems, setBidItems] = useState<BidSearchItem[]>([]);
-  const [bidsLoading, setBidsLoading] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
+  const [loading, setLoading] = useState(false);
+
+  const navCommands = getNavCommands(workspaceType);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -52,132 +43,187 @@ export function CommandPalette() {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  // Reset transient state whenever the palette closes. State updates are deferred
+  // (setTimeout 0) so they don't run synchronously inside the effect body.
   useEffect(() => {
-    if (!commandPaletteOpen) {
-      const clear = setTimeout(() => setBidItems([]), 0);
-      return () => clearTimeout(clear);
-    }
-    let cancelled = false;
-    const start = setTimeout(() => {
-      if (cancelled) return;
-      setBidsLoading(true);
-      searchBidsAction()
-        .then((items) => {
-          if (!cancelled) setBidItems(items);
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (!cancelled) setBidsLoading(false);
-        });
+    if (commandPaletteOpen) return;
+    const t = setTimeout(() => {
+      setQuery('');
+      setResults(EMPTY_RESULTS);
+      setLoading(false);
     }, 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(start);
-    };
+    return () => clearTimeout(t);
   }, [commandPaletteOpen]);
 
-  const groups = [...new Set(COMMANDS.map((c) => c.group))];
+  // Debounced server-side search-as-you-type. Empty query short-circuits without
+  // a round trip; stale responses are dropped via the `cancelled` flag. All state
+  // updates happen inside the timer so none run synchronously in the effect body.
+  useEffect(() => {
+    const q = query.trim();
+    let cancelled = false;
+    const t = setTimeout(
+      () => {
+        if (cancelled) return;
+        if (!q) {
+          setResults(EMPTY_RESULTS);
+          setLoading(false);
+          return;
+        }
+        setLoading(true);
+        searchEntitiesAction(q)
+          .then((r) => {
+            if (!cancelled) setResults(r);
+          })
+          .catch(() => {})
+          .finally(() => {
+            if (!cancelled) setLoading(false);
+          });
+      },
+      q ? 200 : 0,
+    );
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query]);
+
+  // Nav commands are static, so we filter them client-side (cmdk's own filter is
+  // off — entity results are already filtered by the server).
+  const q = query.trim().toLowerCase();
+  const navMatches = q
+    ? navCommands.filter((c) => c.label.toLowerCase().includes(q))
+    : navCommands;
+
+  // Normalize the three entity result types into one shape so a single loop
+  // renders them — primary text, an optional inline aside, an optional sub line.
+  const entityGroups: {
+    heading: string;
+    items: { key: string; value: string; href: string; primary: string; aside?: string; sub?: string }[];
+  }[] = [
+    {
+      heading: '견적 요청',
+      items: results.rfps.map((r) => ({
+        key: r.code,
+        value: `rfp-${r.code}`,
+        href: r.href,
+        primary: r.title,
+        sub: r.memo,
+      })),
+    },
+    {
+      heading: '견적서',
+      items: results.bids.map((b) => ({
+        key: b.bidId,
+        value: `bid-${b.bidId}`,
+        href: b.href,
+        primary: b.rfpTitle,
+        aside: b.pgWsName,
+        sub: b.memo,
+      })),
+    },
+    {
+      heading: '견적 기회',
+      items: results.opportunities.map((o) => ({
+        key: o.rfpCode,
+        value: `opp-${o.rfpCode}`,
+        href: o.href,
+        primary: o.title,
+        aside: o.buyerName,
+      })),
+    },
+  ];
+
+  if (!commandPaletteOpen) return null;
 
   return (
-    <>
-      {commandPaletteOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 dark:bg-white/10 backdrop-blur-[4px] pt-[12vh]"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeCommandPalette();
-          }}
-        >
-          <div
-            className="w-[620px] bg-[var(--md-sys-color-surface)] border border-[var(--md-sys-color-outline-variant)] rounded-md overflow-hidden shadow-[var(--command-palette-shadow)]"
-          >
-            <Command>
-              <div className="flex items-center border-b border-[var(--md-sys-color-outline-variant)] px-4">
-                <Command.Input
-                  className="flex-1 h-12 bg-transparent font-sans text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] outline-none"
-                  placeholder="명령어 검색..."
-                  autoFocus
-                />
-                <IconButton label="닫기" size="sm" onClick={closeCommandPalette}>
-                  <XIcon size={14} />
-                </IconButton>
-              </div>
-              <Command.List className="max-h-80 overflow-y-auto py-2">
-                <Command.Empty className="py-8 text-center font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                  결과 없음
-                </Command.Empty>
-                {groups.map((group) => (
-                  <Command.Group
-                    key={group}
-                    heading={
-                      <span className="px-4 py-1 block font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                        {group}
-                      </span>
-                    }
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 dark:bg-white/10 backdrop-blur-[4px] pt-[12vh]"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeCommandPalette();
+      }}
+    >
+      <div className="w-[620px] bg-[var(--md-sys-color-surface)] border border-[var(--md-sys-color-outline-variant)] rounded-md overflow-hidden shadow-[var(--command-palette-shadow)]">
+        <Command shouldFilter={false}>
+          <div className="flex items-center border-b border-[var(--md-sys-color-outline-variant)] px-4">
+            <Command.Input
+              value={query}
+              onValueChange={setQuery}
+              className="flex-1 h-12 bg-transparent font-sans text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] outline-none"
+              placeholder="검색..."
+              autoFocus
+            />
+            <IconButton label="닫기" size="sm" onClick={closeCommandPalette}>
+              <XIcon size={14} />
+            </IconButton>
+          </div>
+          <Command.List className="max-h-80 overflow-y-auto py-2">
+            <Command.Empty className="py-8 text-center font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              결과 없음
+            </Command.Empty>
+
+            {navMatches.length > 0 && (
+              <Command.Group heading={<span className={HEADING_CLASS}>이동</span>}>
+                {navMatches.map((cmd) => (
+                  <Command.Item
+                    key={cmd.id}
+                    value={cmd.id}
+                    onSelect={() => {
+                      router.push(cmd.href);
+                      closeCommandPalette();
+                    }}
+                    className={ITEM_CLASS}
                   >
-                    {COMMANDS.filter((c) => c.group === group).map((cmd) => (
+                    <span>{cmd.label}</span>
+                    {cmd.shortcut && <ShortcutHint shortcut={cmd.shortcut} />}
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            )}
+
+            {loading && (
+              <span className="px-4 py-3 block font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                LOADING…
+              </span>
+            )}
+
+            {entityGroups.map(
+              (group) =>
+                group.items.length > 0 && (
+                  <Command.Group
+                    key={group.heading}
+                    heading={<span className={HEADING_CLASS}>{group.heading}</span>}
+                  >
+                    {group.items.map((item) => (
                       <Command.Item
-                        key={cmd.id}
-                        value={cmd.label}
+                        key={item.key}
+                        value={item.value}
                         onSelect={() => {
-                          if (cmd.href) router.push(cmd.href);
+                          router.push(item.href);
                           closeCommandPalette();
                         }}
-                        className="flex items-center justify-between px-4 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface)] cursor-pointer aria-selected:bg-[var(--md-sys-color-surface-container-high)]"
+                        className={ENTITY_ITEM_CLASS}
                       >
-                        <span>{cmd.label}</span>
-                        {cmd.shortcut && <ShortcutHint shortcut={cmd.shortcut} />}
+                        <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
+                          {item.primary}
+                          {item.aside && (
+                            <span className="ml-2 text-[var(--md-sys-color-on-surface-variant)]">
+                              {item.aside}
+                            </span>
+                          )}
+                        </span>
+                        {item.sub && (
+                          <span className="text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] truncate max-w-[540px]">
+                            {item.sub}
+                          </span>
+                        )}
                       </Command.Item>
                     ))}
                   </Command.Group>
-                ))}
-                {(bidsLoading || bidItems.length > 0) && (
-                  <Command.Group
-                    heading={
-                      <span className="px-4 py-1 block font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                        견적서
-                      </span>
-                    }
-                  >
-                    {bidsLoading ? (
-                      <Command.Loading>
-                        <span className="px-4 py-3 block font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                          LOADING…
-                        </span>
-                      </Command.Loading>
-                    ) : (
-                      bidItems.map((item) => (
-                        <Command.Item
-                          key={item.bidId}
-                          value={[item.rfpTitle, item.pgWsName, item.memo].filter(Boolean).join(' ')}
-                          onSelect={() => {
-                            router.push(item.href);
-                            closeCommandPalette();
-                          }}
-                          className="flex flex-col items-start gap-0.5 px-4 py-2.5 cursor-pointer aria-selected:bg-[var(--md-sys-color-surface-container-high)]"
-                        >
-                          <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
-                            {item.rfpTitle}
-                            {item.pgWsName && (
-                              <span className="ml-2 text-[var(--md-sys-color-on-surface-variant)]">
-                                {item.pgWsName}
-                              </span>
-                            )}
-                          </span>
-                          {item.memo && (
-                            <span className="text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] truncate max-w-[540px]">
-                              {item.memo}
-                            </span>
-                          )}
-                        </Command.Item>
-                      ))
-                    )}
-                  </Command.Group>
-                )}
-              </Command.List>
-            </Command>
-          </div>
-        </div>
-      )}
-    </>
+                ),
+            )}
+          </Command.List>
+        </Command>
+      </div>
+    </div>
   );
 }

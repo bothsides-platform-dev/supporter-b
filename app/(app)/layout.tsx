@@ -81,7 +81,7 @@ export default async function AppLayout({
       >
         {children}
       </AppSidebarLayout>
-      <CommandPalette />
+      <CommandPalette workspaceType={active.type} />
       <GlobalShortcuts />
       <SentryUserContext user={sentryUser} />
     </ToasterProvider>
