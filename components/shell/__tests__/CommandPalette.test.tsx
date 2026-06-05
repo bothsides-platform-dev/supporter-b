@@ -43,15 +43,15 @@ describe('CommandPalette — workspace-scoped nav commands', () => {
     expect(screen.getAllByText('G').length).toBeGreaterThan(0);
     expect(screen.getByText('C')).toBeInTheDocument();
     // pg-only destinations must not leak into a buyer palette
-    expect(screen.queryByText('견적 기회')).not.toBeInTheDocument();
+    expect(screen.queryByText('참여 가능한 견적')).not.toBeInTheDocument();
     expect(screen.queryByText('견적 템플릿')).not.toBeInTheDocument();
   });
 
-  it('pg: shows 견적 기회 + 견적 템플릿 and no buyer-only new-RFP', () => {
+  it('pg: shows 참여 가능한 견적 + 견적 템플릿 and no buyer-only new-RFP', () => {
     useUIStore.setState({ commandPaletteOpen: true });
     render(<CommandPalette workspaceType="pg" />);
 
-    expect(screen.getByText('견적 기회')).toBeInTheDocument();
+    expect(screen.getByText('참여 가능한 견적')).toBeInTheDocument();
     expect(screen.getByText('견적 템플릿')).toBeInTheDocument();
     expect(screen.queryByText('새 견적 요청')).not.toBeInTheDocument();
   });
@@ -84,7 +84,7 @@ describe('CommandPalette — server entity search rendering', () => {
     expect(searchEntitiesMock).toHaveBeenCalledWith('수수료');
   });
 
-  it('pg: typing a query renders 견적 기회 results', async () => {
+  it('pg: typing a query renders 참여 가능한 견적 results', async () => {
     searchEntitiesMock.mockResolvedValue({
       rfps: [],
       bids: [],

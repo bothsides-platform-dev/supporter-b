@@ -99,15 +99,20 @@ export class DrizzleRfpRequestRepository implements PgRequestRepo {
     tx?: Tx,
   ): Promise<OpportunityListing[]> {
     const db = this.h(tx);
-    // 공개 경계: SELECT 절에 화이트리스트 컬럼만. 수수료·현재조건·메모·bizProfile 등은
-    // 절대 포함하지 않는다. WHERE 로 노출 대상(sent·미마감·board_visible)을 좁히고,
-    // 이미 allowlist 됐거나 어떤 상태로든 요청이 있는 RFP는 제외.
+    // 공개 경계: SELECT 절에 화이트리스트 컬럼만. 신원·마감·요청 결제수단·취급 상품(비경쟁
+    // 정보)만 노출하고, 수수료·연거래량·현재조건·메모·bizProfile 등 경쟁정보는 절대 포함하지
+    // 않는다(봉인입찰 모델). WHERE 로 노출 대상(sent·미마감·board_visible)을 좁히고, 이미
+    // allowlist 됐거나 어떤 상태로든 요청이 있는 RFP는 제외.
     const rows = (await db
       .select({
         rfpCode: rfps.code,
         buyerName: workspaces.name,
         title: rfps.title,
         websiteUrl: rfps.websiteUrl,
+        deadline: rfps.deadline,
+        requiredPaymentMethods: rfps.requiredPaymentMethods,
+        customPaymentMethods: rfps.customPaymentMethods,
+        mainProducts: rfps.mainProducts,
       })
       .from(rfps)
       .innerJoin(workspaces, eq(rfps.buyerWsId, workspaces.id))
@@ -135,12 +140,20 @@ export class DrizzleRfpRequestRepository implements PgRequestRepo {
       buyerName: string;
       title: string;
       websiteUrl: string | null;
+      deadline: Date;
+      requiredPaymentMethods: string[] | null;
+      customPaymentMethods: { id: string; label: string }[] | null;
+      mainProducts: string | null;
     }[];
     return rows.map((r) => ({
       rfpCode: r.rfpCode,
       buyerName: r.buyerName,
       title: r.title,
       websiteUrl: r.websiteUrl ?? null,
+      deadline: new Date(r.deadline).toISOString(),
+      requiredPaymentMethods: r.requiredPaymentMethods ?? [],
+      customPaymentMethodLabels: (r.customPaymentMethods ?? []).map((c) => c.label),
+      mainProducts: r.mainProducts ?? null,
     }));
   }
 }
