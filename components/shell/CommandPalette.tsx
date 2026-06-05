@@ -94,6 +94,45 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
     ? navCommands.filter((c) => c.label.toLowerCase().includes(q))
     : navCommands;
 
+  // Normalize the three entity result types into one shape so a single loop
+  // renders them — primary text, an optional inline aside, an optional sub line.
+  const entityGroups: {
+    heading: string;
+    items: { key: string; value: string; href: string; primary: string; aside?: string; sub?: string }[];
+  }[] = [
+    {
+      heading: '견적 요청',
+      items: results.rfps.map((r) => ({
+        key: r.code,
+        value: `rfp-${r.code}`,
+        href: r.href,
+        primary: r.title,
+        sub: r.memo,
+      })),
+    },
+    {
+      heading: '견적서',
+      items: results.bids.map((b) => ({
+        key: b.bidId,
+        value: `bid-${b.bidId}`,
+        href: b.href,
+        primary: b.rfpTitle,
+        aside: b.pgWsName,
+        sub: b.memo,
+      })),
+    },
+    {
+      heading: '견적 기회',
+      items: results.opportunities.map((o) => ({
+        key: o.rfpCode,
+        value: `opp-${o.rfpCode}`,
+        href: o.href,
+        primary: o.title,
+        aside: o.buyerName,
+      })),
+    },
+  ];
+
   if (!commandPaletteOpen) return null;
 
   return (
@@ -147,82 +186,40 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
               </span>
             )}
 
-            {results.rfps.length > 0 && (
-              <Command.Group heading={<span className={HEADING_CLASS}>견적 요청</span>}>
-                {results.rfps.map((item) => (
-                  <Command.Item
-                    key={item.code}
-                    value={`rfp-${item.code}`}
-                    onSelect={() => {
-                      router.push(item.href);
-                      closeCommandPalette();
-                    }}
-                    className={ENTITY_ITEM_CLASS}
+            {entityGroups.map(
+              (group) =>
+                group.items.length > 0 && (
+                  <Command.Group
+                    key={group.heading}
+                    heading={<span className={HEADING_CLASS}>{group.heading}</span>}
                   >
-                    <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
-                      {item.title}
-                    </span>
-                    {item.memo && (
-                      <span className="text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] truncate max-w-[540px]">
-                        {item.memo}
-                      </span>
-                    )}
-                  </Command.Item>
-                ))}
-              </Command.Group>
-            )}
-
-            {results.bids.length > 0 && (
-              <Command.Group heading={<span className={HEADING_CLASS}>견적서</span>}>
-                {results.bids.map((item) => (
-                  <Command.Item
-                    key={item.bidId}
-                    value={`bid-${item.bidId}`}
-                    onSelect={() => {
-                      router.push(item.href);
-                      closeCommandPalette();
-                    }}
-                    className={ENTITY_ITEM_CLASS}
-                  >
-                    <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
-                      {item.rfpTitle}
-                      {item.pgWsName && (
-                        <span className="ml-2 text-[var(--md-sys-color-on-surface-variant)]">
-                          {item.pgWsName}
+                    {group.items.map((item) => (
+                      <Command.Item
+                        key={item.key}
+                        value={item.value}
+                        onSelect={() => {
+                          router.push(item.href);
+                          closeCommandPalette();
+                        }}
+                        className={ENTITY_ITEM_CLASS}
+                      >
+                        <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
+                          {item.primary}
+                          {item.aside && (
+                            <span className="ml-2 text-[var(--md-sys-color-on-surface-variant)]">
+                              {item.aside}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                    {item.memo && (
-                      <span className="text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] truncate max-w-[540px]">
-                        {item.memo}
-                      </span>
-                    )}
-                  </Command.Item>
-                ))}
-              </Command.Group>
-            )}
-
-            {results.opportunities.length > 0 && (
-              <Command.Group heading={<span className={HEADING_CLASS}>견적 기회</span>}>
-                {results.opportunities.map((item) => (
-                  <Command.Item
-                    key={item.rfpCode}
-                    value={`opp-${item.rfpCode}`}
-                    onSelect={() => {
-                      router.push(item.href);
-                      closeCommandPalette();
-                    }}
-                    className={ENTITY_ITEM_CLASS}
-                  >
-                    <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
-                      {item.title}
-                      <span className="ml-2 text-[var(--md-sys-color-on-surface-variant)]">
-                        {item.buyerName}
-                      </span>
-                    </span>
-                  </Command.Item>
-                ))}
-              </Command.Group>
+                        {item.sub && (
+                          <span className="text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] truncate max-w-[540px]">
+                            {item.sub}
+                          </span>
+                        )}
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                ),
             )}
           </Command.List>
         </Command>
