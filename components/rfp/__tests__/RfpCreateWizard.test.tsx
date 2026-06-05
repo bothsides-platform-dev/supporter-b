@@ -95,6 +95,8 @@ function resetStore() {
     currentFeeRate: '',
     currentSettlementLimit: '',
     currentGuaranteeInsurance: '',
+    currentSettlementCycle: '',
+    deliveryServicePeriod: '',
     currentSolution: '',
     currentSolutionDetail: '',
     memo: '',
@@ -201,6 +203,33 @@ describe('RfpCreateWizard', () => {
     expect(createRfpAction).not.toHaveBeenCalled();
     // 첫 미충족 step(Step 2 제안 내용)으로 이동 → Step 2 입력 필드가 보인다
     expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
+  });
+
+  it('currentSettlementCycle과 deliveryServicePeriod를 createRfpAction에 전달한다', async () => {
+    vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0099' });
+    useRfpDraftStore.setState({
+      title: '테스트',
+      deadline: '2026-06-30T23:59:59Z',
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      currentSettlementCycle: 'D+2',
+      deliveryServicePeriod: '3~5일',
+    });
+    const user = userEvent.setup();
+    render(<RfpCreateWizard pgList={[]} />);
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
+
+    await waitFor(() => {
+      expect(createRfpAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          currentSettlementCycle: 'D+2',
+          deliveryServicePeriod: '3~5일',
+        }),
+      );
+    });
   });
 
   it('발송 실패 시 serverError를 표시한다', async () => {

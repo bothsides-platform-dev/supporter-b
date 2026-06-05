@@ -115,6 +115,14 @@ export function RfpStep4Review({
             label="보증보험"
             value={draft.currentGuaranteeInsurance}
           />
+          <ReviewRow
+            label="정산주기"
+            value={draft.currentSettlementCycle}
+          />
+          <ReviewRow
+            label="배송 및 서비스 기간"
+            value={draft.deliveryServicePeriod}
+          />
           {draft.currentSolution && (
             <ReviewRow
               label="현재 솔루션"

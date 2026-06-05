@@ -129,4 +129,30 @@ describe('RfpStep4Review', () => {
     renderComponent();
     expect(screen.queryByText(/첨부파일/)).not.toBeInTheDocument();
   });
+
+  it('currentSettlementCycle이 있으면 정산주기 행을 표시한다', () => {
+    useRfpDraftStore.setState({ currentSettlementCycle: 'D+2' });
+    renderComponent();
+    expect(screen.getByText('정산주기')).toBeInTheDocument();
+    expect(screen.getByText('D+2')).toBeInTheDocument();
+  });
+
+  it('currentSettlementCycle이 없으면 정산주기 행을 표시하지 않는다', () => {
+    useRfpDraftStore.setState({ currentSettlementCycle: '' });
+    renderComponent();
+    expect(screen.queryByText('정산주기')).not.toBeInTheDocument();
+  });
+
+  it('deliveryServicePeriod가 있으면 배송 및 서비스 기간 행을 표시한다', () => {
+    useRfpDraftStore.setState({ deliveryServicePeriod: '3~5일' });
+    renderComponent();
+    expect(screen.getByText('배송 및 서비스 기간')).toBeInTheDocument();
+    expect(screen.getByText('3~5일')).toBeInTheDocument();
+  });
+
+  it('deliveryServicePeriod가 없으면 배송 및 서비스 기간 행을 표시하지 않는다', () => {
+    useRfpDraftStore.setState({ deliveryServicePeriod: '' });
+    renderComponent();
+    expect(screen.queryByText('배송 및 서비스 기간')).not.toBeInTheDocument();
+  });
 });
