@@ -72,6 +72,14 @@ export function ChevronRightIcon({ size = 16, ...p }: IconProps) {
   );
 }
 
+export function RefreshIcon({ size = 16, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
+      <path d="M13.5 2.5A6.5 6.5 0 1 1 7 1M13.5 2.5V6M13.5 2.5H10" />
+    </svg>
+  );
+}
+
 export function ChevronDownIcon({ size = 16, ...p }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
