@@ -95,6 +95,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
         rfpAttachmentIds: draft.rfpFiles.map((f) => f.id),
         requiredPaymentMethods: draft.requiredPaymentMethods,
         customPaymentMethods: draft.customPaymentMethods,
+        boardVisible: draft.boardVisible,
         send: true,
       });
     } catch {

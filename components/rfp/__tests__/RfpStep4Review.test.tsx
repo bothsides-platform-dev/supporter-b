@@ -39,6 +39,7 @@ function resetStore() {
     currentSolution: 'cafe24',
     currentSettlementCycle: '',
     deliveryServicePeriod: '',
+    boardVisible: true,
     memo: '',
     rfpFiles: [],
   });
@@ -156,5 +157,27 @@ describe('RfpStep4Review', () => {
     useRfpDraftStore.setState({ deliveryServicePeriod: '' });
     renderComponent();
     expect(screen.queryByText('배송 및 서비스 기간')).not.toBeInTheDocument();
+  });
+
+  it('오픈 게시판 노출 체크박스가 기본 노출(체크) 상태로 표시된다', () => {
+    renderComponent();
+    expect(
+      screen.getByRole('checkbox', { name: /오픈 게시판/ }),
+    ).toBeChecked();
+  });
+
+  it('체크 해제 시 store의 boardVisible이 false가 된다', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+    await user.click(screen.getByRole('checkbox', { name: /오픈 게시판/ }));
+    expect(useRfpDraftStore.getState().boardVisible).toBe(false);
+  });
+
+  it('boardVisible이 false면 체크박스가 해제 상태로 표시된다', () => {
+    useRfpDraftStore.setState({ boardVisible: false });
+    renderComponent();
+    expect(
+      screen.getByRole('checkbox', { name: /오픈 게시판/ }),
+    ).not.toBeChecked();
   });
 });

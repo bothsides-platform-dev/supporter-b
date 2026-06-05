@@ -38,6 +38,7 @@ type RfpDraftStore = {
   requiredPaymentMethods: PaymentMethod[];
   customPaymentMethods: DraftCustomPaymentMethod[];
   deadline: string;
+  boardVisible: boolean;
   setBizProfile: (biz: BizProfile | null) => void;
   setField: <K extends keyof RfpDraftStore>(key: K, value: RfpDraftStore[K]) => void;
   reset: () => void;
@@ -62,6 +63,7 @@ const defaultState = {
   requiredPaymentMethods: [] as PaymentMethod[],
   customPaymentMethods: [] as DraftCustomPaymentMethod[],
   deadline: '',
+  boardVisible: true,
 };
 
 export const useRfpDraftStore = create<RfpDraftStore>()(
@@ -77,7 +79,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       storage: createJSONStorage(() => localStorage),
       // 결제수단 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
       // 백필하므로 진행 중인 draft가 폐기되지 않는다.
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<RfpDraftStore>;
         if (version < 1) {
@@ -97,6 +99,12 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
           return {
             ...state,
             deliveryServicePeriod: state.deliveryServicePeriod ?? '',
+          };
+        }
+        if (version < 4) {
+          return {
+            ...state,
+            boardVisible: state.boardVisible ?? true,
           };
         }
         return state;
@@ -120,6 +128,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         requiredPaymentMethods: state.requiredPaymentMethods,
         customPaymentMethods: state.customPaymentMethods,
         deadline: state.deadline,
+        boardVisible: state.boardVisible,
       }),
     },
   ),
