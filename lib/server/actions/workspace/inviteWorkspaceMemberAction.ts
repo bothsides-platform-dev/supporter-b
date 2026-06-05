@@ -10,6 +10,9 @@ import { getOutboxRepo } from '@/lib/server/repositories/factory';
 import { generateToken, hashToken } from '@/lib/server/token';
 import { renderWorkspaceInvited } from '@/lib/server/outbox/templates/workspaceInvited';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
+import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
+import type { Notification } from '@/lib/types/notification';
+import { dispatchWorkspaceInviteInApp } from './_workspaceInviteNotify';
 import { actionDb, baseUrl, bucket15Min, isUniqueViolation, normalizeEmail } from '@/lib/server/actions/auth/_shared';
 
 const Input = z
@@ -75,6 +78,8 @@ export async function inviteWorkspaceMemberAction(input: {
   const tokenHash = hashToken(rawToken);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
+  let pendingEmit: Notification | null = null;
+
   const result = await db.transaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (tx: any): Promise<InviteWorkspaceMemberResult> => {
@@ -110,11 +115,18 @@ export async function inviteWorkspaceMemberAction(input: {
         tx,
       );
 
+      pendingEmit = await dispatchWorkspaceInviteInApp(tx, {
+        invitedEmail: normalizedEmail,
+        workspaceName: wsRow.name,
+        linkUrl: `/invite/workspace/${rawToken}`,
+      });
+
       return { ok: true };
     },
   );
 
   if (result.ok) {
+    if (pendingEmit) emitAfterCommit([pendingEmit]);
     flushAfterCommit();
   }
   return result;

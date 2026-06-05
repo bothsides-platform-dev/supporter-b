@@ -21,7 +21,7 @@ import {
   seedUser,
   seedMembership,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { workspaceInvitations, outboxEntries } from '@/lib/db/schema';
+import { workspaceInvitations, outboxEntries, notifications } from '@/lib/db/schema';
 import { generateToken, hashToken } from '@/lib/server/token';
 
 vi.mock('@/lib/server/outbox/templates/workspaceInvited', () => ({
@@ -175,5 +175,24 @@ describe('resendWorkspaceInviteAction', () => {
 
     const outbox = await db.select().from(outboxEntries);
     expect(outbox).toHaveLength(2);
+  });
+
+  it('creates a user-level in-app notification when resending to an existing user', async () => {
+    const ws = await seedPgWorkspace(db, 'WS');
+    const admin = await makeAdminSession(ws.id);
+    const invitee = await seedUser(db, { email: 'existing@example.com' });
+    await seedPendingInvite(ws.id, admin.id, 'existing@example.com');
+
+    const r = await resendWorkspaceInviteAction({ email: 'existing@example.com' });
+    expect(r).toEqual({ ok: true });
+
+    const notifs = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, invitee.id));
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0].workspaceId).toBeNull();
+    expect(notifs[0].type).toBe('workspace.invited');
+    expect(notifs[0].channel).toBe('in_app');
   });
 });
