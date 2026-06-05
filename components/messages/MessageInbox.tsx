@@ -44,7 +44,7 @@ export function MessageInbox({ conversations }: Props) {
       </div>
       <div
         data-pane="thread"
-        className={cn('min-w-0 flex-1 flex-col md:flex', selected ? 'flex' : 'hidden md:flex')}
+        className={cn('min-w-0 flex-1 flex-col md:flex', selected ? 'flex' : 'hidden')}
       >
         {selected ? (
           // key={selectedId} resets the Suspense boundary when conversation changes,

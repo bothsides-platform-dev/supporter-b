@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { http } from '@/lib/http';
-import { HTTPError } from 'ky';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Chip } from '@/components/primitives/Chip';
@@ -46,6 +45,9 @@ const TYPING_THROTTLE_MS = 2000;
 
 // 같은 상대의 연속 메시지를 한 묶음으로 보는 최대 간격(이내면 헤더 생략).
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
+
+// 하단에서 이만큼(px) 이내면 "하단 근처"로 보고 새 메시지를 자동 추적한다.
+const NEAR_BOTTOM_PX = 120;
 
 // 낙관적 전송 중에만 쓰는 표시 전용 확장 — 서버 로더 타입(ThreadMessage)에는
 // pending 개념이 없으므로 클라이언트 뷰 모델로만 둔다.
@@ -174,8 +176,6 @@ export function ThreadView({
   const prevLenRef = useRef(0);
   const [showNewMessagePill, setShowNewMessagePill] = useState(false);
 
-  // 하단에서 이만큼(px) 이내면 "하단 근처"로 보고 새 메시지를 자동 추적.
-  const NEAR_BOTTOM_PX = 120;
   const isNearBottom = useCallback((): boolean => {
     const el = listRef.current;
     if (!el) return true; // 메트릭 없으면(초기/jsdom) 하단으로 간주
@@ -317,10 +317,9 @@ export function ThreadView({
             : a,
         ),
       );
-    } catch (err) {
+    } catch {
       // 업로드 실패: 임시 행(스켈레톤)을 제거하고 에러 토스트로 알린다.
       setAttachments((prev) => prev.filter((a) => a.id !== tempId));
-      void (err instanceof HTTPError);
       toast('파일을 올리지 못했어요. 다시 시도해 주세요.', { type: 'error' });
     }
   }
