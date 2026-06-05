@@ -15,7 +15,7 @@ export default async function OpportunitiesPage() {
       <Suspense
         fallback={
           <>
-            <PageHeader title="견적 기회" />
+            <PageHeader title="참여 가능한 견적" />
             <div className="px-6 py-4 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
               LOADING…
             </div>
@@ -34,7 +34,7 @@ async function OpportunitiesLoader({ wsId }: { wsId: string }) {
 
   return (
     <>
-      <PageHeader title="견적 기회" count={items.length} />
+      <PageHeader title="참여 가능한 견적" count={items.length} />
       <div className="flex-1 overflow-auto px-6 py-4">
         {items.length === 0 ? (
           <EmptyState

@@ -43,7 +43,7 @@ export function HomeDashboard({
           dashboard.openRfps.length > 0 && (
             <section>
               <h2 className="mb-1.5 text-[13px] font-medium text-[var(--md-sys-color-on-surface-variant)]">
-                참여할 수 있는 견적 요청
+                참여 가능한 견적
               </h2>
               <OpportunityList
                 items={dashboard.openRfps}

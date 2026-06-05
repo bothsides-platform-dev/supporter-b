@@ -85,7 +85,7 @@ describe('getNavConfig — pg inbox section', () => {
       '마감',
     ]);
     expect(inbox?.links?.map((l) => l.href)).toEqual(['/opportunities']);
-    expect(inbox?.links?.[0]?.label).toBe('견적 기회');
+    expect(inbox?.links?.[0]?.label).toBe('참여 가능한 견적');
     expect(top.some((i) => i.id === 'rfp')).toBe(false);
   });
 });
@@ -142,8 +142,8 @@ describe('getBreadcrumbSegments', () => {
     expect(getBreadcrumbSegments('/inbox')).toEqual([{ label: '받은 견적 요청' }]);
   });
 
-  it('maps /opportunities to a single 견적 기회 segment', () => {
-    expect(getBreadcrumbSegments('/opportunities')).toEqual([{ label: '견적 기회' }]);
+  it('maps /opportunities to a single 참여 가능한 견적 segment', () => {
+    expect(getBreadcrumbSegments('/opportunities')).toEqual([{ label: '참여 가능한 견적' }]);
   });
 
   it('links the 설정 parent to /settings/profile with the sub-page as the current page', () => {

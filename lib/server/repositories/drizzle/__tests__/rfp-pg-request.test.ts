@@ -16,6 +16,9 @@ type RfpOpts = {
   websiteUrl?: string | null;
   boardVisible?: boolean;
   title?: string;
+  mainProducts?: string | null;
+  requiredPaymentMethods?: string[];
+  customPaymentMethods?: { id: string; label: string }[];
 };
 
 async function insertRfp(db: PgliteDB, o: RfpOpts): Promise<string> {
@@ -27,6 +30,9 @@ async function insertRfp(db: PgliteDB, o: RfpOpts): Promise<string> {
     title: o.title ?? 'RFP 제목',
     memo: '',
     websiteUrl: o.websiteUrl === undefined ? 'https://buyer.example.com' : o.websiteUrl,
+    mainProducts: o.mainProducts === undefined ? null : o.mainProducts,
+    requiredPaymentMethods: o.requiredPaymentMethods ?? [],
+    customPaymentMethods: o.customPaymentMethods ?? [],
     // 핵심 거래정보 — 게시판에 절대 노출되면 안 되는 필드들. 채워서 누출 회귀를 잡는다.
     annualPgVolume: '연 100억',
     currentFeeRate: '2.5%',
@@ -163,21 +169,48 @@ describe('DrizzleRfpRequestRepository', () => {
       expect(codes).not.toContain('P-2605-3002');
     });
 
-    it('listing exposes EXACTLY {rfpCode, buyerName, title, websiteUrl} — no fee/contact leakage', async () => {
+    it('listing exposes the whitelist (incl. deadline·payment·products) and NEVER leaks sealed fee/terms', async () => {
       await insertRfp(ctx.db, {
         buyerWsId: ctx.ws.id,
         createdBy: ctx.buyer.id,
         code: 'P-2605-4000',
         title: '카드 결제 PG 견적',
         websiteUrl: 'https://shop.example.com',
+        mainProducts: '전자책 구독',
+        requiredPaymentMethods: ['card', 'kakao_pay'],
+        customPaymentMethods: [{ id: 'c1', label: '포인트결제' }],
       });
       const [listing] = await repo.findOpenRfpsForPg(ctx.pgWs.id, new Date());
       expect(listing).toBeDefined();
-      expect(Object.keys(listing).sort()).toEqual(['buyerName', 'rfpCode', 'title', 'websiteUrl']);
+      // 정확한 화이트리스트 — 키 하나라도 늘면(봉인 필드가 새면) 여기서 깨진다.
+      expect(Object.keys(listing).sort()).toEqual([
+        'buyerName',
+        'customPaymentMethodLabels',
+        'deadline',
+        'mainProducts',
+        'requiredPaymentMethods',
+        'rfpCode',
+        'title',
+        'websiteUrl',
+      ]);
       expect(listing.rfpCode).toBe('P-2605-4000');
       expect(listing.buyerName).toBe('구매사ABC');
       expect(listing.title).toBe('카드 결제 PG 견적');
       expect(listing.websiteUrl).toBe('https://shop.example.com');
+      expect(listing.mainProducts).toBe('전자책 구독');
+      expect(listing.requiredPaymentMethods).toEqual(['card', 'kakao_pay']);
+      expect(listing.customPaymentMethodLabels).toEqual(['포인트결제']);
+      // deadline 은 직렬화된 ISO 문자열.
+      expect(typeof listing.deadline).toBe('string');
+      expect(Number.isNaN(Date.parse(listing.deadline))).toBe(false);
+      // 봉인 경계 — 경쟁정보는 절대 포함 안 됨(명시 가드).
+      const sealed = listing as Record<string, unknown>;
+      expect(sealed.currentFeeRate).toBeUndefined();
+      expect(sealed.annualPgVolume).toBeUndefined();
+      expect(sealed.currentSettlementLimit).toBeUndefined();
+      expect(sealed.currentGuaranteeInsurance).toBeUndefined();
+      expect(sealed.memo).toBeUndefined();
+      expect(sealed.bizProfileId).toBeUndefined();
     });
   });
 });

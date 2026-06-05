@@ -80,6 +80,7 @@ const Input = z
     currentSettlementLimit: z.string().max(100).optional(),
     currentGuaranteeInsurance: z.string().max(100).optional(),
     currentSettlementCycle: z.string().max(50).optional(),
+    deliveryServicePeriod: z.string().max(100).optional(),   // ← 추가
     currentSolution: z.enum(['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other']).optional(),
     currentSolutionDetail: z.string().max(100).optional(),
   })
@@ -220,6 +221,7 @@ export async function createRfpAction(
         currentSettlementLimit: parsed.data.currentSettlementLimit?.trim() ?? null,
         currentGuaranteeInsurance: parsed.data.currentGuaranteeInsurance?.trim() ?? null,
         currentSettlementCycle: parsed.data.currentSettlementCycle?.trim() ?? null,
+        deliveryServicePeriod: parsed.data.deliveryServicePeriod?.trim() ?? null,   // ← 추가
         currentSolution: parsed.data.currentSolution ?? null,
         currentSolutionDetail: parsed.data.currentSolutionDetail?.trim() ?? null,
         deadline: new Date(parsed.data.deadline),

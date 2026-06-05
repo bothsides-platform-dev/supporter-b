@@ -121,6 +121,19 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           className={underlineInputClass}
         />
       </div>
+      <div className="space-y-1">
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>배송 및 서비스 기간</Label>
+          <InfoTip term="NDX" />
+        </div>
+        <input
+          type="text"
+          value={draft.deliveryServicePeriod}
+          onChange={(e) => draft.setField('deliveryServicePeriod', e.target.value)}
+          placeholder="D+3"
+          className={underlineInputClass}
+        />
+      </div>
       <div className="space-y-2">
         <Label size="md" muted={false}>현재 운영 솔루션 유무</Label>
         <div className="flex flex-wrap gap-2">
@@ -162,7 +175,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.memo}
           onChange={(e) => draft.setField('memo', e.target.value)}
           rows={4}
-          placeholder="카드결제·간편결제 통합 솔루션 검토 중입니다. 정산주기 D+1 이내 희망."
+          placeholder={"결제 수수료 최소화 요청\n결제 전환율 최적화 레퍼런스 요청\n정산주기 D+4 이내 요청"}
           className={cn(underlineInputClass, 'resize-none')}
         />
       </div>

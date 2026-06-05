@@ -122,7 +122,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
       })),
     },
     {
-      heading: '견적 기회',
+      heading: '참여 가능한 견적',
       items: results.opportunities.map((o) => ({
         key: o.rfpCode,
         value: `opp-${o.rfpCode}`,
