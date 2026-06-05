@@ -36,7 +36,6 @@ afterEach(() => {
 
 import { BidComparisonTable } from '../BidComparisonTable';
 import type { Bid, CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
-import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 const bid: Bid = {
   id: 'bid-toss',
@@ -58,7 +57,6 @@ const pgWsNameMap = { 'ws-toss': '에이페이먼츠' };
 
 type TableOverrides = {
   bids?: Bid[];
-  grade?: MerchantGrade | undefined;
   requiredPaymentMethods?: PaymentMethod[];
   customPaymentMethods?: CustomPaymentMethod[];
 };
@@ -68,7 +66,6 @@ function renderTable(overrides: TableOverrides = {}) {
     <BidComparisonTable
       rfpId="P-2604-0001"
       bids={overrides.bids ?? [bid]}
-      grade={'grade' in overrides ? overrides.grade : 'sme1'}
       rfpStatus="sent"
       requiredPaymentMethods={overrides.requiredPaymentMethods ?? ['bank_transfer']}
       customPaymentMethods={overrides.customPaymentMethods ?? []}
@@ -94,7 +91,7 @@ describe('BidComparisonTable — PG 프로필 채팅 진입', () => {
 
 describe('BidComparisonTable — 결제수단 동적 컬럼', () => {
   it('요청된 결제수단마다 헤더 컬럼을 렌더한다', () => {
-    renderTable({ requiredPaymentMethods: ['card', 'bank_transfer'], grade: 'general' });
+    renderTable({ requiredPaymentMethods: ['card', 'bank_transfer'] });
     expect(screen.getByRole('columnheader', { name: '카드' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: '계좌이체' })).toBeInTheDocument();
   });
@@ -104,22 +101,21 @@ describe('BidComparisonTable — 결제수단 동적 컬럼', () => {
     expect(screen.getByRole('columnheader', { name: '포인트결제' })).toBeInTheDocument();
   });
 
-  it('capped 등급이면 카드 컬럼은 bid값이 아닌 법정값(1.10%)을 표시한다', () => {
-    const b: Bid = { ...bid, paymentFees: { card: 0.99 } };
-    renderTable({ bids: [b], requiredPaymentMethods: ['card'], grade: 'sme1' });
-    expect(screen.getByText('1.10%')).toBeInTheDocument();
-    expect(screen.queryByText('99.00%')).toBeNull();
+  it('등급과 무관하게 카드 컬럼은 bid의 paymentFees.card(협상값)를 표시한다', () => {
+    const b: Bid = { ...bid, paymentFees: { card: 0.03 } };
+    renderTable({ bids: [b], requiredPaymentMethods: ['card'] });
+    expect(screen.getByText('3.00%')).toBeInTheDocument();
   });
 
-  it('일반 등급이면 카드 컬럼은 bid의 paymentFees.card를 표시한다', () => {
-    const b: Bid = { ...bid, paymentFees: { card: 0.03 } };
-    renderTable({ bids: [b], requiredPaymentMethods: ['card'], grade: 'general' });
-    expect(screen.getByText('3.00%')).toBeInTheDocument();
+  it('카드료가 없는 과거 견적(capped 등급 시절 제출)은 카드 컬럼을 — 로 표시한다', () => {
+    const b: Bid = { ...bid, paymentFees: {} };
+    renderTable({ bids: [b], requiredPaymentMethods: ['card'] });
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
   it('요율 미입력 결제수단은 — 로 표시한다', () => {
     const b: Bid = { ...bid, paymentFees: {} };
-    renderTable({ bids: [b], requiredPaymentMethods: ['bank_transfer'], grade: 'general' });
+    renderTable({ bids: [b], requiredPaymentMethods: ['bank_transfer'] });
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
@@ -128,7 +124,6 @@ describe('BidComparisonTable — 결제수단 동적 컬럼', () => {
     renderTable({
       bids: [b],
       customPaymentMethods: [{ id: 'c1', label: '포인트결제' }],
-      grade: 'general',
     });
     expect(screen.getByText('2.00%')).toBeInTheDocument();
   });

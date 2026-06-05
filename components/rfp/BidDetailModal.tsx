@@ -10,7 +10,6 @@ import { IconButton } from '@/components/primitives/IconButton';
 import { XIcon } from '@/components/icons';
 import { MessageComposeButton } from '@/components/messages/MessageComposeButton';
 import type { Bid } from '@/lib/types/bid';
-import type { MerchantGrade } from '@/lib/types/biz-profile';
 import type { BidNote } from '@/lib/types/bid-note';
 import { BidPdfPane } from './bid-detail/BidPdfPane';
 import { BidKpiGrid } from './bid-detail/BidKpiGrid';
@@ -22,7 +21,6 @@ type Props = {
   bid: Bid | null;
   notes: BidNote[];
   pgName: string;
-  grade: MerchantGrade | undefined;
   // Accepted for caller compatibility; the note author is derived server-side.
   authorId: string;
   authorName: string;
@@ -39,7 +37,6 @@ export function BidDetailModal({
   bid,
   notes,
   pgName,
-  grade,
   authorId: _authorId,
   authorName: _authorName,
 }: Props) {
@@ -88,7 +85,7 @@ export function BidDetailModal({
           </header>
 
           <div className="overflow-y-auto flex-1">
-            <BidKpiGrid bid={bid} grade={grade} />
+            <BidKpiGrid bid={bid} />
             <BidNotesPanel bidId={bid.id} notes={notes} />
           </div>
         </div>

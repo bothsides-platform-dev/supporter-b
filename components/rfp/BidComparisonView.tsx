@@ -6,7 +6,6 @@ import { RfpBidsBoard } from '@/components/board/RfpBidsBoard';
 import { BidViewToggle, type BidView } from './BidViewToggle';
 import type { Bid, CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
-import type { MerchantGrade } from '@/lib/types/biz-profile';
 import type { BoardCard, BoardColumn } from '@/lib/types/column';
 
 type Props = {
@@ -15,7 +14,6 @@ type Props = {
   boardColumns: BoardColumn[];
   boardCards: BoardCard[];
   notesByBid: Record<string, BidNote[]>;
-  grade: MerchantGrade | undefined;
   rfpStatus: string;
   awardedBidId?: string;
   requiredPaymentMethods: PaymentMethod[];
@@ -37,7 +35,6 @@ export function BidComparisonView(props: Props) {
         <BidComparisonTable
           rfpId={props.rfpId}
           bids={props.bids}
-          grade={props.grade}
           rfpStatus={props.rfpStatus}
           awardedBidId={props.awardedBidId}
           requiredPaymentMethods={props.requiredPaymentMethods}
@@ -49,7 +46,6 @@ export function BidComparisonView(props: Props) {
           columns={props.boardColumns}
           cards={props.boardCards}
           notesByBid={props.notesByBid}
-          grade={props.grade}
           awardedBidId={props.awardedBidId}
           pgWsNameMap={props.pgWsNameMap}
           authorId={props.authorId}

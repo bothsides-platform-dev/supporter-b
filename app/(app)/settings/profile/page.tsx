@@ -14,7 +14,6 @@ import {
   getUserRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
-import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import { LocalDate } from '@/components/primitives/LocalTime';
 import type { ReactNode } from 'react';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
@@ -46,7 +45,6 @@ export default async function ProfilePage({ searchParams }: Props) {
 
   const biz = ws.bizProfile;
   const grade = biz?.grade;
-  const cardFee = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
   const memberMeta = ws.members.find((m) => m.id === me.id);
 
   const wsKvPairs: [string, ReactNode][] = [
@@ -61,15 +59,7 @@ export default async function ProfilePage({ searchParams }: Props) {
                 : '면세',
           ],
           ...(grade
-            ? ([
-                ['가맹점 등급', GRADE_LABELS[grade]],
-                [
-                  '카드 (법정)',
-                  cardFee !== null
-                    ? `${(cardFee * 100).toFixed(2)}%`
-                    : '카드사별 협의',
-                ],
-              ] as [string, ReactNode][])
+            ? ([['가맹점 등급', GRADE_LABELS[grade]]] as [string, ReactNode][])
             : []),
         ] as [string, ReactNode][])
       : []),

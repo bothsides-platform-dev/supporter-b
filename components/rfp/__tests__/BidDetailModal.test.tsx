@@ -84,10 +84,9 @@ describe('BidDetailModal', () => {
       <BidDetailModal
         open
         onOpenChange={() => {}}
-        bid={bid}
+        bid={{ ...bid, paymentFees: { card: 0.018 } }}
         notes={[]}
         pgName="서포터 B 페이"
-        grade="sme1"
         authorId="u-1"
         authorName="김구매"
       />,
@@ -95,8 +94,8 @@ describe('BidDetailModal', () => {
     expect(screen.getByText('정산주기')).toBeInTheDocument();
     expect(screen.getByText('정산한도')).toBeInTheDocument();
     expect(screen.getByText('월 보증보험')).toBeInTheDocument();
-    // Statutory card fee row for sme1 (1.10% fixed).
-    expect(screen.getByText(/1\.10% 고정/)).toBeInTheDocument();
+    // 카드는 등급 무관 협상 입력 — PG가 제출한 카드 요율(1.80%)을 그대로 표시.
+    expect(screen.getByText('1.80%')).toBeInTheDocument();
   });
 
   it('submitting a memo calls addBidNoteAction with body + empty attachments + triggers refresh', async () => {
@@ -108,7 +107,6 @@ describe('BidDetailModal', () => {
         bid={bid}
         notes={[]}
         pgName="서포터 B 페이"
-        grade="sme1"
         authorId="u-1"
         authorName="김구매"
       />,
@@ -157,7 +155,6 @@ describe('BidDetailModal', () => {
         bid={bid}
         notes={notes}
         pgName="서포터 B 페이"
-        grade="sme1"
         authorId="u-1"
         authorName="김구매"
       />,
@@ -190,7 +187,6 @@ describe('BidDetailModal', () => {
         bid={bid}
         notes={notes}
         pgName="서포터 B 페이"
-        grade="sme1"
         authorId="u-1"
         authorName="김구매"
       />,
@@ -220,7 +216,6 @@ describe('BidDetailModal', () => {
         bid={bid}
         notes={notes}
         pgName="서포터 B 페이"
-        grade="sme1"
         authorId="u-1"
         authorName="김구매"
       />,
@@ -252,7 +247,6 @@ describe('BidDetailModal', () => {
         bid={bid}
         notes={notes}
         pgName="서포터 B 페이"
-        grade="sme1"
         authorId="u-1"
         authorName="김구매"
       />,
@@ -288,7 +282,6 @@ describe('BidDetailModal 첨부파일 업로드', () => {
         bid={bid}
         notes={[]}
         pgName="서포터 B 페이"
-        grade="sme1"
         authorId="u-1"
         authorName="김구매"
       />,
