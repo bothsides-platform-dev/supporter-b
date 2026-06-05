@@ -39,6 +39,8 @@
 - `components/inbox/PgRfpDetailContent.tsx` — 미제출 분기를 2-col → `BidWizard` 풀폭으로 교체 + Skeleton 갱신.
 - `components/opportunities/OpportunityList.tsx` — 행 위계 정돈(1·2차 라인) + 마감 D-n 칩.
 - `components/inbox/InboxList.tsx` — 상태 칩 강조 + 행당 1차 행동 + 마감 D-n 칩.
+- `components/inbox/PgRfpDetailContent.tsx` — `variant: 'peek' | 'full'` 분기(peek=브리프+CTA, full=위저드). **두 렌더 컨텍스트**(전체 페이지 + InboxPeekPanel 오버레이) 때문에 필수.
+- `app/(app)/inbox/[rfpId]/page.tsx` — 호출부에 `variant="full"` 전달(peek 호출부 InboxPeekPanel은 기본 'peek' 유지).
 - `app/(app)/inbox/[rfpId]/submitted/page.tsx` — 메시지 지배 + 요약 접힘(`SubmittedSummary` 사용).
 - `components/inbox/SubmittedSummary.tsx` — (신규) 접히는 견적 요약 클라이언트 컴포넌트.
 
@@ -245,6 +247,8 @@ type WizardStepSidebarProps = {
   steps?: readonly { num: number; label: string }[];
   /** 사이드바 상단 제목 — 기본값은 구매사 플로우. */
   title?: string;
+  /** 사이드바 하단 슬롯 — 견적 위저드의 '자동저장' 표시 등(기본 없음). */
+  footer?: React.ReactNode;
 };
 
 export function WizardStepSidebar({
@@ -253,10 +257,19 @@ export function WizardStepSidebar({
   onStepClick,
   steps = WIZARD_STEPS,
   title = '새 견적 요청',
+  footer,
 }: WizardStepSidebarProps) {
 ```
 
-그리고 본문에서 제목 span 텍스트를 `{title}` 로, `WIZARD_STEPS.map(...)` 를 `steps.map(...)` 로 교체. (나머지 마크업/클래스는 그대로.)
+그리고:
+- 본문에서 제목 span 텍스트를 `{title}` 로, `WIZARD_STEPS.map(...)` 를 `steps.map(...)` 로 교체.
+- `steps.map(...)` 블록을 닫는 `</...>` 직전(`</nav>` 안 마지막)에 footer 슬롯 추가:
+
+```tsx
+      {footer && <div className="mt-auto pt-4">{footer}</div>}
+```
+
+(나머지 마크업/클래스는 그대로. `React.ReactNode` 사용을 위해 파일에 별도 import 불필요 — 전역 `React` 네임스페이스 타입은 TS에서 사용 가능하나, 안전을 위해 상단에 `import type { ReactNode } from 'react';` 추가하고 타입을 `ReactNode` 로 써도 됨.)
 
 - [ ] **Step 4: GREEN 확인 + 구매사 위저드 회귀 확인**
 
@@ -1630,7 +1643,20 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
         <BidContextStrip buyerName={buyerName} rfp={rfp} currentStep={currentStep} feeInputMethods={feeInputMethods} />
 
         <div className="flex min-h-0">
-          <WizardStepSidebar currentStep={currentStep} completed={completed} onStepClick={goToStep} steps={BID_WIZARD_STEPS} title="견적 작성" />
+          <WizardStepSidebar
+            currentStep={currentStep}
+            completed={completed}
+            onStepClick={goToStep}
+            steps={BID_WIZARD_STEPS}
+            title="견적 작성"
+            footer={
+              savedAt ? (
+                <span className="font-mono text-[10px] text-[var(--md-sys-color-outline)]">
+                  💾 자동저장됨 · {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                </span>
+              ) : null
+            }
+          />
 
           <div className="flex-1 min-w-0 flex flex-col">
             <WizardProgressBar currentStep={currentStep} completed={completed} onStepClick={goToStep} steps={BID_WIZARD_STEPS} />
@@ -1709,11 +1735,7 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
                 />
               )}
 
-              {savedAt && (
-                <p className="mt-6 font-mono text-[10px] text-[var(--md-sys-color-outline)]">
-                  저장됨 · {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                </p>
-              )}
+              {/* 자동저장 표시는 사이드바 footer 로 이동(설계 승인 목업과 일치) */}
             </div>
           </div>
         </div>
@@ -1737,13 +1759,20 @@ git commit -m "feat(bid-wizard): 위저드 컨테이너 + 단계 조립"
 
 ---
 
-### Task 11: `PgRfpDetailContent` 를 위저드로 교체
+### Task 11: `PgRfpDetailContent` — peek/full 분기 + full에 위저드
+
+**⚠️ 두 렌더 컨텍스트**: `PgRfpDetailContent` 는 (a) 전체 페이지 `app/(app)/inbox/[rfpId]/page.tsx:46` 와 (b) **인박스 peek 슬라이드오버** `components/inbox/InboxPeekPanel.tsx:32` 둘 다에서 렌더된다. 풀 위저드(160px 사이드바 + strip)는 좁은 peek 오버레이에 부적합하다. 따라서:
+- **peek**(기본): 읽기전용 `RfpBriefPanel` + "견적 작성 →" CTA(전체 페이지로 이동). Task 14의 행 행동(견적 작성 → `/inbox/[code]`)과 일관.
+- **full**(전체 페이지): `BidWizard`.
+
+`variant` prop으로 분기하고 **기본값을 `'peek'`** 으로 둬 기존 peek 호출부(InboxPeekPanel)는 수정 없이 안전.
 
 **Files:**
 - Modify: `components/inbox/PgRfpDetailContent.tsx`
+- Modify: `app/(app)/inbox/[rfpId]/page.tsx` (호출부에 `variant="full"`)
 - Test: `components/inbox/__tests__/PgRfpDetailContent.test.tsx` (없으면 생성)
 
-- [ ] **Step 1: 실패 테스트 작성** — 미제출 시 위저드(정산 주기 라벨)가 풀폭으로 렌더되는지.
+- [ ] **Step 1: 실패 테스트 작성** — full=위저드, peek=브리프+CTA, 제출완료=링크.
 
 ```tsx
 // components/inbox/__tests__/PgRfpDetailContent.test.tsx
@@ -1753,7 +1782,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock('../RfpBriefPanel', () => ({ RfpBriefPanel: () => <div /> }));
+vi.mock('../RfpBriefPanel', () => ({ RfpBriefPanel: () => <div data-testid="brief" /> }));
 
 import { PgRfpDetailContent } from '../PgRfpDetailContent';
 
@@ -1767,16 +1796,27 @@ const baseRfp = {
   bizProfile: undefined,
 } as never;
 
+const data = (over: Record<string, unknown> = {}) =>
+  ({ rfp: baseRfp, myBid: null, buyerName: '토스', quoteTemplates: [], ...over } as never);
+
 afterEach(cleanup);
 
 describe('PgRfpDetailContent', () => {
-  it('미제출 시 견적 작성 위저드(정산 주기)를 렌더', () => {
-    render(<PgRfpDetailContent data={{ rfp: baseRfp, myBid: null, buyerName: '토스', quoteTemplates: [] } as never} />);
-    expect(screen.getByText('정산 주기 *')).toBeInTheDocument();
+  it('variant="full" 미제출 시 견적 작성 위저드(검토·발송 단계 라벨)를 렌더', () => {
+    render(<PgRfpDetailContent data={data()} variant="full" />);
+    // '검토·발송'은 위저드 사이드바에만 존재 — BidForm/브리프엔 없는 신호
+    expect(screen.getByText('검토·발송')).toBeInTheDocument();
+  });
+
+  it('variant="peek"(기본) 미제출 시 위저드가 아니라 브리프 + "견적 작성" CTA를 렌더', () => {
+    render(<PgRfpDetailContent data={data()} />);
+    expect(screen.queryByText('검토·발송')).not.toBeInTheDocument();
+    expect(screen.getByTestId('brief')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /견적 작성/ })).toHaveAttribute('href', '/inbox/P-2606-0001');
   });
 
   it('제출 완료 시 "보낸 견적 보기" 링크를 렌더', () => {
-    render(<PgRfpDetailContent data={{ rfp: baseRfp, myBid: { submittedAt: baseRfp.deadline }, buyerName: '토스', quoteTemplates: [] } as never} />);
+    render(<PgRfpDetailContent data={data({ myBid: { submittedAt: baseRfp.deadline } })} />);
     expect(screen.getByText(/보낸 견적 보기/)).toBeInTheDocument();
   });
 });
@@ -1785,27 +1825,40 @@ describe('PgRfpDetailContent', () => {
 - [ ] **Step 2: RED 확인**
 
 Run: `pnpm test components/inbox/__tests__/PgRfpDetailContent.test.tsx`
-Expected: FAIL — 첫 테스트가 '정산 주기 *'를 못 찾음(현재는 BidForm의 3섹션 폼이 한 번에 렌더되어 '정산 주기 *'는 있지만 풀폭 위저드가 아님). 실제로는 import만 바꾸기 전이라 통과할 수도 있으니, **이 task는 교체 자체가 GREEN의 기준**이다. 첫 테스트가 이미 통과하면, 두 번째(제출) 테스트 + 풀폭(2-col grid 부재) 단언을 추가해 RED를 만든다:
+Expected: FAIL — `variant` prop 미지원 + '검토·발송'(위저드 사이드바 라벨, 현재 BidForm은 렌더 안 함) 없음. (이 신호는 교체 전 반드시 실패 → 진짜 RED.)
 
-```tsx
-  it('미제출 위저드는 2-col grid 래퍼를 쓰지 않는다', () => {
-    const { container } = render(<PgRfpDetailContent data={{ rfp: baseRfp, myBid: null, buyerName: '토스', quoteTemplates: [] } as never} />);
-    expect(container.querySelector('.grid-cols-\\[340px_1fr\\]')).toBeNull();
-  });
-```
-현재 코드(`grid grid-cols-[340px_1fr]`)에서 이 단언은 FAIL → RED 확보.
-
-- [ ] **Step 3: 구현 — 미제출 분기 교체**
+- [ ] **Step 3: 구현 — variant 분기**
 
 `components/inbox/PgRfpDetailContent.tsx`:
 - import 교체: `import { BidForm } from './BidForm';` → `import { BidWizard } from './bid-wizard/BidWizard';`
+- 시그니처: `export function PgRfpDetailContent({ data, variant = 'peek' }: { data: PgRfpDetailData; variant?: 'peek' | 'full' }) {`
+- `myBid` 분기는 그대로 유지(브리프 + "보낸 견적 보기" — peek/full 공통).
 - 미제출 `return (...)`(현재 37–63줄, `grid grid-cols-[340px_1fr]` 블록)을 다음으로 교체:
 
 ```tsx
-  return <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} />;
+  if (variant === 'full') {
+    return <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} />;
+  }
+
+  // peek(기본): 읽기전용 브리프 + 전체 페이지로 가는 '견적 작성' CTA
+  return (
+    <div>
+      <RfpBriefPanel rfp={rfp} buyerName={buyerName} />
+      <div className="mt-8 border-t border-[var(--md-sys-color-outline-variant)] pt-6">
+        <Link
+          href={`/inbox/${rfp.code}`}
+          className="inline-flex items-center rounded-[6px] bg-[var(--md-sys-color-primary)] px-4 py-2 text-[13px] font-medium text-[var(--md-sys-color-on-primary)] hover:opacity-90 transition-opacity"
+        >
+          견적 작성 →
+        </Link>
+      </div>
+    </div>
+  );
 ```
 
-- `PgRfpDetailContent.Skeleton`(66–94줄)을 단일 컬럼 위저드 스켈레톤으로 교체:
+- 전체 페이지 호출부 `app/(app)/inbox/[rfpId]/page.tsx:46` 를 `return <PgRfpDetailContent data={data} variant="full" />;` 로 변경. (InboxPeekPanel·loading 은 기본 'peek' 유지 — 수정 불필요.)
+
+- `PgRfpDetailContent.Skeleton`(66–94줄)을 단일 컬럼 위저드 스켈레톤으로 교체(peek/full 공통 — 단순 스켈레톤):
 
 ```tsx
 PgRfpDetailContent.Skeleton = function PgRfpDetailContentSkeleton() {
@@ -1827,18 +1880,20 @@ PgRfpDetailContent.Skeleton = function PgRfpDetailContentSkeleton() {
 };
 ```
 
-(`myBid` 분기와 `RfpBriefPanel`/`LocalTime` import는 그대로 유지.)
+(`myBid` 분기와 `RfpBriefPanel`/`LocalTime` import는 그대로 유지. peek CTA용 `Link` 는 이미 import됨 — 없으면 `import Link from 'next/link';` 추가.)
 
-- [ ] **Step 4: GREEN 확인**
+- [ ] **Step 4: GREEN 확인 + peek 회귀**
 
 Run: `pnpm test components/inbox/__tests__/PgRfpDetailContent.test.tsx`
-Expected: PASS.
+Expected: PASS (3).
+Run: `pnpm tsc --noEmit 2>&1 | grep -iE "InboxPeekPanel|inbox/\[rfpId\]/page"`
+Expected: 출력 없음(peek 호출부는 기본 variant로 그대로 컴파일).
 
 - [ ] **Step 5: 커밋**
 
 ```bash
-git add components/inbox/PgRfpDetailContent.tsx components/inbox/__tests__/PgRfpDetailContent.test.tsx
-git commit -m "feat(inbox): 견적 상세를 BidWizard 풀폭으로 교체"
+git add components/inbox/PgRfpDetailContent.tsx components/inbox/__tests__/PgRfpDetailContent.test.tsx "app/(app)/inbox/[rfpId]/page.tsx"
+git commit -m "feat(inbox): 견적 상세 full=위저드 / peek=브리프+CTA 분기"
 ```
 
 ---
@@ -1871,22 +1926,107 @@ export type QuoteTemplateOption = {
 Run: `grep -rn "from '@/components/inbox/BidForm'\|from './BidForm'\|from '../BidForm'" --include=*.ts --include=*.tsx .`
 모든 import 를 `bid-wizard/types`(타입) 또는 `bid-wizard/BidWizard`(컴포넌트)로 교체.
 
-- [ ] **Step 2: BidForm 삭제**
+- [ ] **Step 2: `BidForm.test.tsx` 케이스 매핑 (삭제 전 필수)**
+
+각 `it()` 를 신규 테스트로 매핑한다. "동등하다" 가정 금지 — 표를 채우고 **미커버 행은 이관**한다:
+
+| BidForm.test 케이스 | 대체 위치 | 상태 |
+|---|---|---|
+| 제안서 업로드 http.post 호출 | `BidStepProposal.test`(onUpload) + 아래 이관(413 매핑) | 이관 |
+| 413 → 파일 크기 오류 메시지 | **미커버 → 이관**(매핑 로직이 `BidWizard.uploadProposal` 로 이동) | 이관 |
+| 결제수단 동적 렌더(요청/커스텀/카드) | `BidStepFees.test` | 보강 |
+| paymentFees/customFees 분리 제출 | `BidWizard.test`(커스텀 포함 케이스 **이관**) | 이관 |
+| 요율 미입력 시 제출 비활성 | `BidStepReview.test`(canSubmit=false) | 커버됨 |
+| 드래프트 배너 없음/표시/불러오기/무시/제출 후 제거 | **미커버 → 이관**(BidWizard step1) | 이관 |
+| 비가역 경고 텍스트 | `BidStepReview.test`(한 번만) | 커버됨 |
+| 템플릿 셀렉트 렌더/적용/저장 | `BidStepReview.test`(저장) + **적용 이관**(BidWizard step1) | 이관 |
+| 수수료 환산 힌트(1만원 결제 시) | `PercentInput` 자체 기능 — 기존 inputs 테스트 유지 | 변동 없음 |
+| confirm 다이얼로그 열림/취소/확인 | `BidWizard.test`(확인) + **취소 이관** | 이관 |
+
+- [ ] **Step 3: 미커버 케이스를 `BidWizard.test.tsx` 에 이관(RED→GREEN)**
+
+`feeInput` 헬퍼(BidForm.test 82–85줄 패턴)와 함께 다음을 `BidWizard.test.tsx` 에 추가. 먼저 RED(아직 위저드 동작이 일부 누락이면) 확인 후, BidWizard가 이미 로직을 옮겼으므로 대부분 바로 GREEN이어야 한다. **GREEN이 즉시 뜨면 그 테스트는 가짜가 아님을 확인**하기 위해 해당 동작을 일시 주석 처리해 RED를 본 뒤 되돌린다.
+
+```tsx
+// BidWizard.test.tsx 에 추가 — 라벨↔input aria 연결이 없으므로 컨테이너로 input 탐색
+function feeInput(labelText: string): HTMLInputElement {
+  const label = screen.getByText(labelText);
+  return label.closest('.space-y-1')!.querySelector('input[type="number"]') as HTMLInputElement;
+}
+const draftV2 = (fees: Record<string, string>, memo = '') => ({
+  __v: 2, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees, memo,
+});
+
+describe('BidWizard 드래프트 복원(1단계)', () => {
+  it('드래프트 없으면 복원 배너 없음', () => {
+    render(<BidWizard rfp={rfp} buyerName="토스" />);
+    expect(screen.queryByText(/이전에 작성 중이던 내용/)).toBeNull();
+  });
+  it('드래프트 있으면 배너 표시 + 불러오기 시 값 반영', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV2({ card: '0.40' }, '복원됨')));
+    render(<BidWizard rfp={rfp} buyerName="토스" />);
+    await user.click(screen.getByRole('button', { name: '불러오기' }));
+    expect(screen.queryByText(/이전에 작성 중이던 내용/)).toBeNull();
+    // step2 로 이동해 카드 수수료 0.40 확인
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    expect(feeInput('카드 수수료').value).toBe('0.40');
+  });
+  it('무시 클릭 시 배너 사라지고 localStorage 제거', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV2({ card: '0.50' })));
+    render(<BidWizard rfp={rfp} buyerName="토스" />);
+    await user.click(screen.getByRole('button', { name: '무시' }));
+    expect(localStorage.getItem('bid-draft:rfp-uuid')).toBeNull();
+  });
+});
+
+describe('BidWizard 413 업로드 오류(3단계)', () => {
+  it('413 응답 시 파일 크기 오류 메시지', async () => {
+    // 주: 파일 상단 http mock 을 BidForm.test 처럼 추가 — vi.mock('@/lib/http', () => ({ http: { post: vi.fn() } }))
+    // 그리고 HTTPError(413) 를 던지도록 설정. step3 로 이동 후 업로드.
+    // (구현 셀렉터는 BidForm.test 116–134줄 패턴을 그대로 차용)
+  });
+});
+
+describe('BidWizard 템플릿 적용(1단계)', () => {
+  it('템플릿 선택 시 정산주기 + 요청 결제수단 요율 채움', async () => {
+    const user = userEvent.setup();
+    render(
+      <BidWizard
+        rfp={rfp}
+        buyerName="토스"
+        templates={[{ id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0, paymentFees: { card: 0.005 } }]}
+      />,
+    );
+    await user.selectOptions(screen.getByRole('option', { name: '표준' }).closest('select')!, 't1');
+    expect((screen.getByPlaceholderText('1') as HTMLInputElement).value).toBe('2');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    expect(feeInput('카드 수수료').value).toBe('0.5');
+  });
+});
+```
+
+> 413 케이스는 `http` mock 의존 — `BidWizard.test.tsx` 상단에 `vi.mock('@/lib/http', () => ({ http: { post: vi.fn() } }))` + `vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')))` 를 추가하고 BidForm.test 116–134줄을 그대로 이식. paymentFees/customFees 분리(커스텀 c1) 제출 케이스도 BidForm.test 165–185줄을 `customPaymentMethods: [{id:'c1',label:'포인트결제'}]` 로 BidWizard에 이식.
+
+각 이관 테스트 RED→GREEN 확인:
+Run: `pnpm test components/inbox/bid-wizard/__tests__/BidWizard.test.tsx`
+Expected: PASS.
+
+- [ ] **Step 4: BidForm 삭제**
 
 ```bash
 git rm components/inbox/BidForm.tsx components/inbox/__tests__/BidForm.test.tsx
 ```
 
-> BidForm.test.tsx 의 고유 커버리지(제안서 업로드 http.post 호출, draft 무시 동작)는 이미 `BidStepProposal.test`(업로드 트리거) + `BidWizard.test`(제출 페이로드)로 대체됨. 누락된 핵심 단언이 있으면 해당 위저드 테스트에 보강.
-
-- [ ] **Step 3: 전체 그린 + 타입 확인**
+- [ ] **Step 5: 전체 그린 + 타입 확인**
 
 Run: `pnpm test components/inbox`
 Expected: PASS.
 Run: `pnpm tsc --noEmit 2>&1 | grep -i bidform`
 Expected: 출력 없음(잔존 참조 없음).
 
-- [ ] **Step 4: 커밋**
+- [ ] **Step 6: 커밋**
 
 ```bash
 git add -A
@@ -2354,6 +2494,10 @@ Expected: PASS.
   - §3 목록 정돈 → Task 13·14. §4 완료 정돈 → Task 15·16.
   - §5 디자인 정합(D-n 칩·✓ 배지의 shape-full 예외) → Task 13 `DeadlineChip`(rounded-full) + Task 16(✓). §6 영향 컴포넌트 표 → 전부 task 존재.
   - §7 열린 항목(견적서 단계 선택 정책) → Task 1 검증에서 step3=항상 complete + submit 게이트는 step1·2(canSubmit)로 해소.
-- **Placeholder 스캔**: 모든 코드 step에 완전 코드 포함. "주"는 셀렉터 검증 안내이지 미완 코드 아님.
+- **렌더 컨텍스트(advisor #1, 해결)**: `PgRfpDetailContent` 는 전체 페이지 + InboxPeekPanel 오버레이 둘 다에서 렌더 → Task 11에서 `variant` 분기(peek=브리프+'견적 작성 →' CTA, full=위저드). peek 기본값으로 기존 호출부 무수정.
+- **BidForm.test 이관(advisor #2, 해결)**: Task 12에 케이스 매핑 표 + 미커버(413 매핑·드래프트 복원/무시·템플릿 적용·confirm 취소·customFees 분리)를 BidWizard.test로 이관하는 step 추가. "동등 가정"으로 삭제하지 않음.
+- **진짜 RED(advisor #3, 해결)**: Task 11 RED 신호를 CSS 클래스 부재 대신 위저드 전용 라벨 `검토·발송`(BidForm 미렌더) 존재로 변경.
+- **승인 목업 정합(advisor #4, 해결)**: `savedAt` 자동저장 표시를 컨텐츠 영역 → 사이드바 footer(`WizardStepSidebar` 의 `footer` prop)로 이동.
+- **Placeholder 스캔**: 모든 코드 step에 완전 코드 포함. "주"는 셀렉터 검증 안내이지 미완 코드 아님. (Task 12 Step 3의 413 케이스만 셀렉터를 BidForm.test 줄번호로 참조 — 이식 시 그대로 복사.)
 - **타입 일관성**: `SetBidField`(types.ts)·`BidDraft`(useBidDraft)·`ProposalState`(BidStepProposal export)·`QuoteTemplateOption`(Task 12에서 types.ts로 이전) — Task 5–12 전반에서 동일 시그니처 사용. `getBidWizardValidity` 입력 `{cycleNum, anyFeeFilled}` 가 Task 1 정의와 Task 10 호출에서 일치.
 - **위험/확인 필요(실행 중 검증)**: ① `PercentInput` 의 label-input 연결 방식(getByLabelText vs getByRole) — Task 6·10 주석에 대체안. ② `formatDeadline` 실제 출력 포맷(`D-2` 가정) — Task 13에서 확인. ③ `RfpBriefPanel` prop 이름 — Task 9에서 확인. ④ `Button` 의 `icon`/`trailingIcon` prop 존재(레퍼런스 기준 존재) — 없으면 children 으로 화살표 인라인.
