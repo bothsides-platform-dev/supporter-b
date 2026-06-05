@@ -15,7 +15,7 @@ export default async function OpportunitiesPage() {
       <Suspense
         fallback={
           <>
-            <PageHeader title="제안 기회" />
+            <PageHeader title="견적 기회" />
             <div className="px-6 py-4 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
               LOADING…
             </div>
@@ -34,13 +34,13 @@ async function OpportunitiesLoader({ wsId }: { wsId: string }) {
 
   return (
     <>
-      <PageHeader title="제안 기회" count={items.length} />
+      <PageHeader title="견적 기회" count={items.length} />
       <div className="flex-1 overflow-auto px-6 py-4">
         {items.length === 0 ? (
           <EmptyState
             icon={<InboxIcon size={32} />}
-            title="지금 열린 RFP가 없어요."
-            description="구매사가 공개한 RFP가 여기에 표시돼요. 관심 있는 RFP에 참여를 요청해 보세요."
+            title="지금 열린 견적 요청이 없어요."
+            description="구매사가 공개한 견적 요청이 여기에 표시돼요. 관심 있는 견적 요청에 참여를 요청해 보세요."
           />
         ) : (
           <OpportunityList items={items} />

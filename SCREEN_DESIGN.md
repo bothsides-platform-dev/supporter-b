@@ -6,6 +6,8 @@
 
 본 문서 **§0 PG v0 화면 IA** 가 v0 제품 정의이자 구현 대상의 최상위 기준이다 (레거시 `PG_RFP_SPEC.md` 는 제거됨 — 제품 규칙은 아래 "확정 결정" 블록 + 코드·테스트가 캐노니컬).
 
+> **용어 주의**: 이 문서는 내부 개념어로 **`RFP`/`Bid`** 를 쓰지만, **사용자에게 보이는 실제 화면 라벨은 '견적' 언어**(견적 요청·견적·선정 등)다. 화면 문구는 `UX_WRITING.md` §8 도메인 용어집을 따른다 (예: 이 문서의 "받은 RFP" 화면 = 실제 라벨 "받은 견적 요청", "계약완료" 탭 = "선정 완료"). 랜딩/마케팅만 '경쟁 입찰' 프레이밍 유지.
+
 **왜 만드는가**
 - 구매사가 이미 아는 PG 영업담당에게만 RFP를 보내고, PG가 서로의 존재를 모르는 private 1:N 입찰을 만든다.
 - 사업자번호 enrichment, 카드 우대수수료 등급, 6개 정형 수치를 한 화면에서 비교해 결제 인프라 선택 시간을 줄인다.
@@ -44,7 +46,6 @@ Public
 ├─ /invite/rfp/:token
 ├─ /invite/workspace/:token
 ├─ /share/rfp/:token
-├─ /share/workspace/:token
 ├─ /pending-approval
 └─ /suspended
 
@@ -64,6 +65,7 @@ Authenticated AppShell
 └─ /settings
    ├─ /settings/profile
    ├─ /settings/members
+   ├─ /settings/quote-templates     (pg only — 견적 요율표)
    └─ /settings/notifications
 
 Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.tsx)
@@ -94,11 +96,12 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 |---|---|---|---|
 | P1 | `/home` | 신규 RFP, 임박 마감, 제출 완료, 수주율 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget` |
 | P2 | `/inbox` | 받은 RFP 함. 신규/제출완료/마감 탭 (작성중 단계 제거 — 미제출 응답은 신규로 표시) | `InboxList`, `DataTable`, `Tag` |
-| P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성. 사업자번호 미입력 시 안내 배너. 등급 미입력 시 일반 폴백(9개 카드사 입력) | `RfpBriefPanel`, `BidForm`, `StatutoryCardFeeNotice` |
+| P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성. 사업자번호 미입력 시 안내 배너. 등급 미입력 시 일반 폴백(9개 카드사 입력). 저장된 견적 템플릿(요율표) 불러오기 + 현재 입력 저장 | `RfpBriefPanel`, `BidForm`, `StatutoryCardFeeNotice` |
 | P4 | `/inbox/:rfpId/submitted` | 제출 완료, 결과 대기, 수정/철회 정책 안내 | `SubmittedState` |
 | P7 | `/opportunities` | 오픈 RFP 게시판 — 초대받지 않은 PG가 발견·콜드 피치. 공개는 구매사명·제목·홈페이지만(수수료 등 비노출). PG 홈 탐색 섹션의 "전체 보기" 대상 | `OpportunityList`, `OpportunityRequestDialog` |
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처) | `WorkspaceProfileForm` |
 | P6 | `/settings/members` | 같은 워크스페이스 멤버 관리 (도메인 자동 합류 없음 — 초대만) | `MemberTable` |
+| P8 | `/settings/quote-templates` | PG 워크스페이스 공유 견적 템플릿(요율표) 관리 — 정산조건+결제수단별 수수료율 프리셋 CRUD. 견적 작성(P3)에서 불러와 한 번에 채움 (최대 20개) | `QuoteTemplatesPanel` |
 
 ### 0.3a 공용 화면 (buyer · pg 공통)
 

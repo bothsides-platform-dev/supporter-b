@@ -48,7 +48,7 @@ function deadlineBadge(deadline: string, now: Date): string {
 }
 
 const BUYER_ONBOARDING_ACTIONS: OnboardingAction[] = [
-  { id: 'create-rfp',     href: '/rfp/new',          title: '첫 RFP를 작성해 보세요',  description: 'PG사를 초대하고 수수료 견적을 비교할 수 있어요' },
+  { id: 'create-rfp',     href: '/rfp/new',          title: '첫 견적 요청을 보내보세요',  description: 'PG사를 초대하고 수수료 견적을 비교할 수 있어요' },
   { id: 'setup-profile',  href: '/settings/profile', title: '워크스페이스 프로필 설정', description: '' },
   { id: 'invite-members', href: '/settings/members', title: '팀원 초대하기',            description: '' },
 ];
@@ -65,8 +65,8 @@ export function buildBuyerDashboard(
   const kpis: DashboardKpi[] = [
     { id: 'active', label: '진행중', value: sent.length, href: '/rfp?status=active' },
     { id: 'due', label: '마감 임박', value: sent.filter(isUrgent).length, href: '/rfp?status=active&deadline=d7' },
-    { id: 'review', label: '응답 검토대기', value: sent.filter((r) => countOf(r) >= 1).length, href: '/rfp?status=active' },
-    { id: 'awarded', label: '계약완료', value: rfps.filter((r) => r.status === 'awarded').length, href: '/rfp?status=awarded' },
+    { id: 'review', label: '견적 검토대기', value: sent.filter((r) => countOf(r) >= 1).length, href: '/rfp?status=active' },
+    { id: 'awarded', label: '선정 완료', value: rfps.filter((r) => r.status === 'awarded').length, href: '/rfp?status=awarded' },
   ];
 
   const dueItems: ActionItem[] = [...sent]
@@ -76,16 +76,16 @@ export function buildBuyerDashboard(
 
   const reviewItems: ActionItem[] = sent
     .filter((r) => countOf(r) >= 1)
-    .map((r) => ({ id: r.id, href: `/rfp/${r.code}`, title: r.title, badge: `응답 ${countOf(r)}건` }));
+    .map((r) => ({ id: r.id, href: `/rfp/${r.code}`, title: r.title, badge: `견적 ${countOf(r)}건` }));
 
   const unansweredItems: ActionItem[] = sent
     .filter((r) => countOf(r) === 0 && r.sentAt != null && daysSince(r.sentAt, now) >= UNANSWERED_DAYS)
-    .map((r) => ({ id: r.id, href: `/rfp/${r.code}`, title: r.title, badge: `응답 0건 · 발송 ${daysSince(r.sentAt!, now)}일` }));
+    .map((r) => ({ id: r.id, href: `/rfp/${r.code}`, title: r.title, badge: `견적 0건 · 보낸 지 ${daysSince(r.sentAt!, now)}일` }));
 
   const groups: ActionGroup[] = [
     { id: 'due', label: '마감 임박', items: dueItems },
-    { id: 'review', label: '응답 도착·검토대기', items: reviewItems },
-    { id: 'unanswered', label: '무응답 경과', items: unansweredItems },
+    { id: 'review', label: '견적 도착·검토 대기', items: reviewItems },
+    { id: 'unanswered', label: '견적 미도착', items: unansweredItems },
   ].filter((g) => g.items.length > 0);
 
   return {
@@ -117,7 +117,7 @@ export function buildPgDashboard(
   const kpis: DashboardKpi[] = [
     { id: 'new', label: '신규', value: rows.filter((r) => r.invitationStatus === 'sent').length, href: '/inbox?status=new' },
     { id: 'due', label: '마감 임박', value: rows.filter((r) => unsubmitted(r) && isUrgent(r)).length, href: '/inbox?deadline=d7' },
-    { id: 'submitted', label: '제출완료', value: rows.filter((r) => r.invitationStatus === 'accepted').length, href: '/inbox?status=submitted' },
+    { id: 'submitted', label: '견적 보냄', value: rows.filter((r) => r.invitationStatus === 'accepted').length, href: '/inbox?status=submitted' },
   ];
 
   const newItems = rows.filter((r) => r.invitationStatus === 'sent').map(toItem);
@@ -127,8 +127,8 @@ export function buildPgDashboard(
     .map(toItem);
 
   const groups: ActionGroup[] = [
-    { id: 'new', label: '신규 받은 RFP', items: newItems },
-    { id: 'due', label: '응답 마감 임박', items: dueItems },
+    { id: 'new', label: '신규 받은 견적 요청', items: newItems },
+    { id: 'due', label: '마감 임박', items: dueItems },
   ].filter((g) => g.items.length > 0);
 
   return { kpis, groups, onboardingActions: null, openRfps };

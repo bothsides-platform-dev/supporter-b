@@ -63,9 +63,9 @@ describe('buildBuyerDashboard', () => {
     expect(byId.due.items[0].href).toBe('/rfp/P-A');
     expect(byId.due.items[0].badge).toBe('D-3');
     expect(byId.review.items.map((i) => i.id)).toEqual(['B']);
-    expect(byId.review.items[0].badge).toBe('응답 2건');
+    expect(byId.review.items[0].badge).toBe('견적 2건');
     expect(byId.unanswered.items.map((i) => i.id)).toEqual(['A']);
-    expect(byId.unanswered.items[0].badge).toBe(`응답 0건 · 발송 5일`);
+    expect(byId.unanswered.items[0].badge).toBe(`견적 0건 · 보낸 지 5일`);
     expect(dash.groups.every((g) => g.items.length > 0)).toBe(true);
   });
 

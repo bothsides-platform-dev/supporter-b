@@ -23,7 +23,7 @@ export function OnboardingActionList({ actions }: { actions: OnboardingAction[] 
           )}
         </div>
         <span className="shrink-0 rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-[13px] font-medium text-[var(--md-sys-color-on-primary)]">
-          RFP 작성해요
+          견적 요청하기
         </span>
       </Link>
       {secondary.length > 0 && (

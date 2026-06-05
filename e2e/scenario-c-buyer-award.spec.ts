@@ -92,7 +92,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     ).toBeVisible();
 
     // ── 3. Navigate directly to award flow w/ bidId search param ─
-    // (BidComparisonTable wires this URL behind its '수주' CTA but
+    // (BidComparisonTable wires this URL behind its '선정하기' CTA but
     //  we navigate directly to keep the spec robust against table UI
     //  changes — the integration boundary is the action call.)
     await page.goto(`/rfp/${RFP_ID}/award?bidId=${winnerBidId}`);
@@ -100,16 +100,16 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     // 같은 페이지에 RFP 번호/탭/리스트 등 서포터 B 페이 키워드가 흩어져 있어
     // 헤딩 role 로 좁혀 strict 모드 위반을 피한다.
     await expect(
-      page.getByRole('heading', { name: /서포터 B 페이.*선택하시겠습니까/ }),
+      page.getByRole('heading', { name: /서포터 B 페이.*선택할까요/ }),
     ).toBeVisible();
 
     // ── 4. Confirm award ─────────────────────────────────────────
-    await page.getByRole('button', { name: /수주 확정/ }).click();
+    await page.getByRole('button', { name: /선정할게요/ }).click();
 
     // After confirm: AwardConfirm renders the success state in place —
-    // wait for the "계약이 확정되었습니다" heading. Avoid the bare "✓ 수주 확정"
+    // wait for the "계약이 확정됐어요" heading. Avoid the bare "✓ 최종 선택 완료"
     // chip text because the same string also appears in the page eyebrow
-    // ("P-2604-0001 · 수주 처리") and triggers a strict-mode collision.
+    // ("P-2604-0001 · 최종 선택") and triggers a strict-mode collision.
     await expect(
       page.getByRole('heading', { name: /계약이 확정/ }),
     ).toBeVisible({ timeout: 15_000 });

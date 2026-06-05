@@ -13,8 +13,8 @@ export function RfpInvited({
 }: RfpInvitedProps): React.JSX.Element {
   return (
     <Layout
-      preheader={`${buyerName}이(가) ${rfpId} 제안을 요청했습니다.`}
-      serial={`RFP / ${rfpId}`}
+      preheader={`${buyerName}이(가) ${rfpId} 견적을 요청했어요.`}
+      serial={`견적 요청 / ${rfpId}`}
     >
       <h1
         style={{
@@ -24,10 +24,10 @@ export function RfpInvited({
           letterSpacing: '-0.01em',
         }}
       >
-        제안 요청 도착
+        견적 요청이 도착했어요
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
-        <strong>{buyerName}</strong>이(가) 새 RFP를 보냈습니다.
+        <strong>{buyerName}</strong>이(가) 견적 요청을 보냈어요.
       </p>
 
       <table

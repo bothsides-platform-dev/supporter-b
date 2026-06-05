@@ -34,7 +34,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           type="text"
           value={draft.title}
           onChange={(e) => draft.setField('title', e.target.value)}
-          placeholder="2026 서포트쇼핑몰 결제 인프라 제안건"
+          placeholder="2026 서포트쇼핑몰 결제 인프라 견적 요청"
           className={underlineInputClass}
         />
       </div>
@@ -134,7 +134,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         )}
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>제안서 요청 세부 내용</Label>
+        <Label size="md" muted={false}>견적 요청 세부 내용</Label>
         <textarea
           value={draft.memo}
           onChange={(e) => draft.setField('memo', e.target.value)}

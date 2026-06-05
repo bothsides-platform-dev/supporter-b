@@ -40,6 +40,13 @@ vi.mock('@/lib/hooks/useChatChannel', () => ({
   useChatChannel: () => ({ online: false, typingUserIds: [], sendTyping: vi.fn(), connected: null }),
 }));
 
+// ThreadView mounts AttachmentGalleryPanel, which imports listConversationAttachments
+// (a 'use server' action that transitively pulls in next-auth) — mock it so the
+// suite collects without resolving next-auth's `next/server` import under vitest.
+vi.mock('@/lib/server/actions/chat/listConversationAttachments', () => ({
+  listConversationAttachments: vi.fn().mockResolvedValue([]),
+}));
+
 afterEach(() => cleanup());
 beforeEach(() => {
   loadConversationThread.mockReset();
@@ -75,6 +82,8 @@ describe('MessageInbox', () => {
           body: '스레드 본문 메시지입니다.',
           rfpId: null,
           createdAt: '2026-06-02T01:00:00.000Z',
+          readByCounterparty: false,
+          attachments: [],
         },
       ],
     });

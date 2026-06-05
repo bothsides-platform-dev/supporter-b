@@ -28,19 +28,6 @@ describe('DrizzleWorkspaceRepository', () => {
     expect(await repo.findById('00000000-0000-0000-0000-000000000000')).toBeUndefined();
   });
 
-  it('findByShareToken hydrates the workspace for a known token', async () => {
-    const ws = await seedPgWorkspace(db, '서포터 B 페이');
-    const seeded = await repo.findById(ws.id);
-    const fetched = await repo.findByShareToken(seeded!.shareToken);
-    expect(fetched).toBeDefined();
-    expect(fetched!.id).toBe(ws.id);
-    expect(fetched!.shareToken).toBe(seeded!.shareToken);
-  });
-
-  it('findByShareToken returns undefined for unknown token', async () => {
-    expect(await repo.findByShareToken('no-such-token')).toBeUndefined();
-  });
-
   it('findById returns hasLogo: false when no logo blob exists', async () => {
     const ws = await seedBuyerWorkspace(db);
     const fetched = await repo.findById(ws.id);

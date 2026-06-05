@@ -66,7 +66,7 @@ describe('ResendSender', () => {
     const entry = makeEntry({
       event: 'rfp.invited',
       to: 'pg@toss.im',
-      subject: '[P-2605-0042] 제안 요청 도착',
+      subject: '[P-2605-0042] 견적 요청이 도착했어요',
       html: '<a href="https://example.com/very-long-html">x</a>',
       dedupeKey: 'rfp:P-2605-0042:invite:pg@toss.im',
     });
@@ -79,7 +79,7 @@ describe('ResendSender', () => {
     expect(line).toContain('[email DEV]');
     expect(line).toContain('event=rfp.invited');
     expect(line).toContain('to=pg@toss.im');
-    expect(line).toContain('subject=[P-2605-0042] 제안 요청 도착');
+    expect(line).toContain('subject=[P-2605-0042] 견적 요청이 도착했어요');
     expect(line).toContain('dedupeKey=rfp:P-2605-0042:invite:pg@toss.im');
     // html intentionally excluded from the dev line.
     expect(line).not.toContain('<a href');

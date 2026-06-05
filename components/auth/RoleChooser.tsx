@@ -15,13 +15,13 @@ const OPTIONS: Option[] = [
   {
     role: 'buyer',
     title: '구매사',
-    description: '결제대행사에 제안을 요청하는 사업자입니다.',
+    description: '결제대행사에 견적을 요청하는 사업자예요.',
     badge: 'BUYER',
   },
   {
     role: 'pg',
     title: 'PG사 영업담당',
-    description: '구매사 RFP를 받아 제안을 제출하는 영업담당입니다.',
+    description: '구매사의 견적 요청을 받아 견적을 보내는 영업담당이에요.',
     badge: 'PG',
   },
 ];

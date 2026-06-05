@@ -109,7 +109,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
     }
 
     const pgCount = draft.allowedPgWorkspaceIds.length;
-    toast(`${pgCount}개 PG사에 제안서를 보냈어요`, { type: 'success' });
+    toast(`${pgCount}개 PG사에 견적 요청을 보냈어요`, { type: 'success' });
     draft.reset();
     router.push(`/rfp/${result.rfpId}`);
   };

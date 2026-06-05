@@ -7,7 +7,7 @@ import { clearSignupDraft, readSignupDraft } from '@/lib/auth/signup-storage';
 
 export type FinalizeResult =
   | { ok: true; redirectTo: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; redirectTo?: string };
 
 /**
  * 가입 마무리 — 담당자 정보(step 3) 제출 시 호출.
@@ -60,7 +60,19 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
     });
   }
 
-  if (!r.ok) return { ok: false, error: r.error };
+  if (!r.ok) {
+    // 초대 경로에서 이미 가입된 이메일(미인증 기존계정 포함) → 막다른 길 대신
+    // 로그인 후 같은 초대 링크로 복귀해 수락한다(#8). 로그인이 미인증 유저를
+    // 허용하므로 성립.
+    if (r.error === 'EMAIL_TAKEN' && d.wsInviteToken) {
+      return {
+        ok: false,
+        error: 'EMAIL_TAKEN',
+        redirectTo: `/login?next=${encodeURIComponent(`/invite/workspace/${d.wsInviteToken}`)}`,
+      };
+    }
+    return { ok: false, error: r.error };
+  }
 
   const signInResult = await signIn('credentials', {
     email: r.email,

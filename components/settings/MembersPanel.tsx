@@ -359,7 +359,7 @@ export function MembersPanel({
                 disabled={!inviteEmail.trim() || isPending}
                 className="md:ml-4"
               >
-                {isPending ? '발송 중…' : '초대 발송'}
+                {isPending ? '보내는 중…' : '초대 보내기'}
               </Button>
             </div>
             {error && (

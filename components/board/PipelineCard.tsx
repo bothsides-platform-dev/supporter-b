@@ -63,7 +63,7 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
             초대 PG<span className="font-mono tabular-nums ml-1">{card.invitedPgCount}</span>
           </span>
           <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
-            응답 {card.submittedBidCount}/{card.invitedPgCount}
+            견적 {card.submittedBidCount}/{card.invitedPgCount}
           </span>
         </div>
       )}

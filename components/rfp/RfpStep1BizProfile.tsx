@@ -25,10 +25,10 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
       {guest ? (
         <InfoBox>
           <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)]">
-            가입 후 사업자 정보가 자동으로 연동됩니다.
+            가입 후 사업자 정보가 자동으로 연동돼요.
           </p>
           <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-            제안 내용을 먼저 작성한 뒤 발송 시 가입 페이지로 이동합니다.
+            견적 요청 내용을 먼저 작성한 뒤, 보낼 때 가입 페이지로 이동해요.
           </p>
         </InfoBox>
       ) : bizProfile ? (

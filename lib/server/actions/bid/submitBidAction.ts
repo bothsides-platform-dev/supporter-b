@@ -60,7 +60,7 @@ export type SubmitBidInput = z.input<typeof Input>;
 export type SubmitBidResult = BidActionResult<{ bidId: string }>;
 
 /**
- * PG 제안 제출 (v2 — payment_fees JSONB 모델).
+ * PG 견적 제출 (v2 — payment_fees JSONB 모델).
  *
  * 트랜잭션 단계:
  *   1) requirePgSession
@@ -225,8 +225,8 @@ export async function submitBidAction(
           userId: m.userId,
           workspaceId: rfp.buyerWsId,
           type: 'bid.submitted',
-          title: `[${rfp.code}] ${pgWsLabel} 제안 도착`,
-          body: `${pgWsLabel}가 제안을 제출했습니다.`,
+          title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+          body: `${pgWsLabel}가 견적을 보냈어요.`,
           channel: 'inapp',
           status: 'pending',
           linkUrl: `/rfp/${rfp.code}`,
@@ -238,7 +238,7 @@ export async function submitBidAction(
           {
             event: 'bid.submitted',
             to: m.email,
-            subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 제안 도착`,
+            subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
             html: submittedHtml,
             dedupeKey: `bid:${data.rfpId}:${pgWsId}:${m.userId}`,
           },

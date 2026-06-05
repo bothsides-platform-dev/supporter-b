@@ -10,9 +10,9 @@ import type { RFP } from '@/lib/types/rfp';
 
 const statusLabel: Record<string, string> = {
   draft: '임시저장',
-  sent: '발송됨',
+  sent: '요청 보냄',
   closed: '마감',
-  awarded: '계약완료',
+  awarded: '선정 완료',
   cancelled: '취소',
 };
 

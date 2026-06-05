@@ -32,7 +32,7 @@ type Props = {
 
 const statusLabel: Record<InvitationStatus, string> = {
   draft: '대기중',
-  sent: '발송됨',
+  sent: '초대 보냄',
   opened: '열람',
   accepted: '수락',
   declined: '거절',
@@ -110,7 +110,7 @@ export function RfpInviteManager({
         </div>
         {invitations.length === 0 ? (
           <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-            초대된 PG가 없습니다.
+            초대한 PG가 없어요.
           </p>
         ) : (
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
@@ -198,12 +198,12 @@ export function RfpInviteManager({
               </p>
             )}
             <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-              추가된 PG는 [ 대기중 ] 상태로 누적되며, 아래 &ldquo;초대 발송&rdquo;을
-              눌러야 메일이 나갑니다.
+              추가된 PG는 [ 대기중 ] 상태로 쌓여요. 아래 &ldquo;초대 보내기&rdquo;를
+              누르면 메일이 나가요.
             </p>
           </div>
 
-          {/* 초대 발송 */}
+          {/* 초대 보내기 */}
           <div className="space-y-2">
             <Button
               type="button"
@@ -214,10 +214,10 @@ export function RfpInviteManager({
               onClick={handleSendDrafts}
             >
               {pending && draftCount > 0
-                ? '발송 중…'
+                ? '보내는 중…'
                 : draftCount > 0
-                  ? `${draftCount}개 PG에 초대 발송`
-                  : '발송할 대기 PG 없음'}
+                  ? `${draftCount}개 PG에 초대 보내기`
+                  : '보낼 대기 PG 없음'}
             </Button>
           </div>
 

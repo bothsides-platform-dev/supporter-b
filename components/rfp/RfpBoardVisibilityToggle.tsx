@@ -44,7 +44,7 @@ export function RfpBoardVisibilityToggle({
         <Label size="md" muted={false}>오픈 게시판 노출</Label>
         <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
           {visible
-            ? '다른 PG사가 이 RFP를 발견하고 참여를 요청할 수 있어요.'
+            ? '다른 PG사가 이 견적 요청을 발견하고 참여를 요청할 수 있어요.'
             : '게시판에서 숨겨져 초대한 PG사만 볼 수 있어요.'}
         </span>
       </div>

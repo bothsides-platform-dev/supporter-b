@@ -18,6 +18,11 @@ vi.mock('@/lib/server/actions/chat/sendChatMessageAction', () => ({
   sendChatMessageAction: (...args: unknown[]) => sendChatMessageAction(...args),
 }));
 
+// listConversationAttachments is a 'use server' action used by AttachmentGalleryPanel.
+vi.mock('@/lib/server/actions/chat/listConversationAttachments', () => ({
+  listConversationAttachments: vi.fn().mockResolvedValue([]),
+}));
+
 // markConversationReadAction is likewise a server action (jsdom-unsafe) — mock
 // it for EVERY test, and capture calls for the mark-read-on-open assertion.
 const markConversationReadAction = vi.fn();
@@ -39,6 +44,13 @@ vi.mock('@/lib/hooks/useChatChannel', () => ({
   },
 }));
 
+// http (ky) is used for the `/api/files/upload` POST. Mock it so the test can
+// hold the upload promise open and assert the in-progress (uploading) UI.
+const httpPost = vi.fn();
+vi.mock('@/lib/http', () => ({
+  http: { post: (...args: unknown[]) => httpPost(...args) },
+}));
+
 afterEach(() => cleanup());
 beforeEach(() => {
   sendChatMessageAction.mockReset();
@@ -46,6 +58,7 @@ beforeEach(() => {
   markConversationReadAction.mockReset();
   markConversationReadAction.mockResolvedValue({ ok: true });
   sendTyping.mockReset();
+  httpPost.mockReset();
   channelOptions = {};
   channelResult = { online: false, typingUserIds: [], sendTyping, connected: null };
 });
@@ -65,6 +78,7 @@ const messages: ThreadMessage[] = [
     rfpId: null,
     createdAt: '2026-05-26T05:00:00.000Z',
     readByCounterparty: false,
+    attachments: [],
   },
   {
     id: 'm2',
@@ -73,6 +87,7 @@ const messages: ThreadMessage[] = [
     rfpId: null,
     createdAt: '2026-05-27T05:00:00.000Z',
     readByCounterparty: false,
+    attachments: [],
   },
 ];
 
@@ -130,6 +145,7 @@ describe('ThreadView', () => {
         rfpId: null,
         createdAt: '2026-05-27T05:00:00.000Z',
         readByCounterparty: true,
+        attachments: [],
       },
       {
         id: 'b',
@@ -138,6 +154,7 @@ describe('ThreadView', () => {
         rfpId: null,
         createdAt: '2026-05-27T06:00:00.000Z',
         readByCounterparty: false,
+        attachments: [],
       },
     ];
     render(base({ messages: partial }));
@@ -256,6 +273,7 @@ describe('ThreadView', () => {
         rfpId: 'rfp-uuid-123',
         createdAt: '2026-05-26T05:00:00.000Z',
         readByCounterparty: false,
+        attachments: [],
       },
     ];
     render(
@@ -279,6 +297,7 @@ describe('ThreadView', () => {
             rfpId: null,
             createdAt: '2026-05-26T05:00:00.000Z',
             readByCounterparty: false,
+            attachments: [],
           },
         ],
       }),
@@ -375,5 +394,35 @@ describe('ThreadView', () => {
     channelResult = { online: false, typingUserIds: [], sendTyping, connected: true };
     render(base());
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('첨부 업로드 중에는 "업로드 중" 스켈레톤 칩을 보여주고 전송을 잠그며, 완료되면 일반 칩으로 바뀐다', async () => {
+    const user = userEvent.setup();
+    // 업로드 응답을 테스트가 직접 resolve 하도록 promise 를 붙잡는다.
+    let resolveUpload: ((v: unknown) => void) | null = null;
+    httpPost.mockReturnValue({
+      json: () => new Promise((res) => { resolveUpload = res; }),
+    });
+
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '제안서.pdf', { type: 'application/pdf' });
+    await user.upload(input, file);
+
+    // 업로드 중: 스켈레톤(업로드 중) 칩이 즉시 뜨고, 제거 버튼은 아직 없으며,
+    // 전송 버튼은 잠긴다(완료 전 전송으로 첨부가 누락되지 않도록).
+    expect(screen.getByLabelText('제안서.pdf 업로드 중')).toBeInTheDocument();
+    expect(screen.queryByLabelText('제안서.pdf 첨부 제거')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
+
+    // 업로드 완료 → 일반 칩(제거 버튼 포함)으로 전환, 스켈레톤 사라짐.
+    await act(async () => {
+      resolveUpload?.({ id: 'att-1', name: '제안서.pdf', size: 1234, mimeType: 'application/pdf' });
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('제안서.pdf 첨부 제거')).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText('제안서.pdf 업로드 중')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '보내기' })).not.toBeDisabled();
   });
 });

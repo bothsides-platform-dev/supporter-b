@@ -47,14 +47,14 @@ describe('RfpStep4Review', () => {
 
   it('마감일이 없어도 발송 버튼은 비활성화되지 않는다 (미충족 안내는 클릭 시 토스트로)', () => {
     renderComponent();
-    expect(screen.getByRole('button', { name: /발송/ })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /보내기/ })).not.toBeDisabled();
   });
 
   it('마감일이 없어도 발송 버튼 클릭 시 onSubmit이 호출된다', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     renderComponent({ onSubmit });
-    await user.click(screen.getByRole('button', { name: /발송/ }));
+    await user.click(screen.getByRole('button', { name: /보내기/ }));
     expect(onSubmit).toHaveBeenCalledOnce();
   });
 
@@ -66,7 +66,7 @@ describe('RfpStep4Review', () => {
   it('선택된 PG 수가 발송 버튼 텍스트에 표시된다', () => {
     useRfpDraftStore.setState({ deadline: '2026-06-30T23:59:59Z' });
     renderComponent();
-    expect(screen.getByRole('button', { name: '2개 PG사에 발송' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2개 PG사에 보내기' })).toBeInTheDocument();
   });
 
   it('serverError가 있으면 에러 메시지를 표시한다', () => {
@@ -79,14 +79,14 @@ describe('RfpStep4Review', () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     renderComponent({ onSubmit });
-    await user.click(screen.getByRole('button', { name: '2개 PG사에 발송' }));
+    await user.click(screen.getByRole('button', { name: '2개 PG사에 보내기' }));
     expect(onSubmit).toHaveBeenCalledOnce();
   });
 
   it('submitting=true면 버튼이 비활성화되고 "발송 중…"을 표시한다', () => {
     useRfpDraftStore.setState({ deadline: '2026-06-30T23:59:59Z' });
     renderComponent({ submitting: true });
-    expect(screen.getByRole('button', { name: '발송 중…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '보내는 중…' })).toBeDisabled();
   });
 
   it('메모(상세 요청사항)를 입력했으면 본문이 표시된다', () => {

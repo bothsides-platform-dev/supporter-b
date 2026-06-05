@@ -96,7 +96,7 @@ describe('MembersPanel', () => {
     );
     // 역할 select — Label이 span으로 렌더되므로 role=combobox 로 찾는다
     await user.selectOptions(screen.getByRole('combobox'), 'admin');
-    await user.click(screen.getByRole('button', { name: '초대 발송' }));
+    await user.click(screen.getByRole('button', { name: '초대 보내기' }));
 
     await waitFor(() =>
       expect(inviteWorkspaceMemberAction).toHaveBeenCalledWith({

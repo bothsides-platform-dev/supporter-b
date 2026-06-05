@@ -1,5 +1,5 @@
 // RfpDetailContent — 구매사 상세 본문(전체 페이지·모달 공유). loader 산출물을 받아
-// 헤더 + 제안비교 + 첨부 + meta 를 그린다. 자체 로직은 '수주 처리' 링크 조건뿐.
+// 헤더 + 견적 비교 + 첨부 + meta 를 그린다. 자체 로직은 '최종 선택' 링크 조건뿐.
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 
@@ -84,18 +84,18 @@ describe('RfpDetailContent', () => {
     render(<RfpDetailContent data={buildData()} />);
     expect(screen.getByText('P-2605-0042')).toBeInTheDocument();
     expect(screen.getByText('결제대행 RFP')).toBeInTheDocument();
-    expect(screen.getByText('발송됨')).toBeInTheDocument();
+    expect(screen.getByText('요청 보냄')).toBeInTheDocument();
   });
 
-  it("status='sent' 이고 제출 입찰이 있으면 '수주 처리' 링크 노출", () => {
+  it("status='sent' 이고 제출 입찰이 있으면 '최종 선택' 링크 노출", () => {
     render(<RfpDetailContent data={buildData({ bids: [aBid] })} />);
-    const link = screen.getByRole('link', { name: /수주 처리/ });
+    const link = screen.getByRole('link', { name: /최종 선택/ });
     expect(link).toHaveAttribute('href', '/rfp/P-2605-0042/award');
   });
 
-  it('제출 입찰이 없으면 수주 처리 링크 미노출', () => {
+  it('제출 입찰이 없으면 최종 선택 링크 미노출', () => {
     render(<RfpDetailContent data={buildData({ bids: [] })} />);
-    expect(screen.queryByText(/수주 처리/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/최종 선택/)).not.toBeInTheDocument();
   });
 
   it('"현재 정산한도" 라벨이 "현재 월 정산한도"로 변경됐다', () => {
