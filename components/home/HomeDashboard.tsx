@@ -1,6 +1,8 @@
 import { KpiStrip } from './KpiStrip';
 import { ActionQueue } from './ActionQueue';
 import { OnboardingActionList } from './OnboardingActionList';
+import { RecentMessagesPanel } from './RecentMessagesPanel';
+import { RefreshButton } from './RefreshButton';
 import { ChatPanelPlaceholder } from './ChatPanelPlaceholder';
 import { HomeHeaderActionsRegistrar } from './HomeHeaderActionsRegistrar';
 import { OpportunityList } from '@/components/opportunities/OpportunityList';
@@ -8,6 +10,7 @@ import { EmptyState } from '@/components/primitives/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckIcon } from '@/components/icons';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
+import type { ConversationListItem } from '@/components/messages/types';
 
 const EMPTY_DESC: Record<'buyer' | 'pg', string> = {
   buyer: '새 견적이 오거나 마감이 다가오면 여기에 표시돼요.',
@@ -20,9 +23,13 @@ const HOME_OPEN_RFP_PREVIEW = 5;
 export function HomeDashboard({
   dashboard,
   workspaceType,
+  conversations,
+  unreadCount,
 }: {
   dashboard: Dashboard;
   workspaceType: 'buyer' | 'pg';
+  conversations: ConversationListItem[];
+  unreadCount: number;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -57,7 +64,7 @@ export function HomeDashboard({
             )}
         </div>
         <div className="lg:w-[360px] lg:shrink-0">
-          <ChatPanelPlaceholder />
+          <RecentMessagesPanel conversations={conversations} unreadCount={unreadCount} />
         </div>
       </div>
     </div>
