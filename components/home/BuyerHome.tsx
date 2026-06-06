@@ -1,12 +1,23 @@
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { loadBuyerDashboard } from '@/lib/server/dashboard/loadDashboard';
+import { listConversationsForViewer } from '@/lib/server/actions/chat/conversationLoaders';
+import { buildHomeMessagesSnapshot } from '@/lib/server/dashboard/homeMessages';
 import { HomeDashboard } from '@/components/home/HomeDashboard';
 
 export async function BuyerHome({ workspaceId }: { workspaceId: string }) {
-  const dashboard = await loadBuyerDashboard(workspaceId);
+  const [dashboard, allConversations] = await Promise.all([
+    loadBuyerDashboard(workspaceId),
+    listConversationsForViewer(),
+  ]);
+  const { conversations, unreadCount } = buildHomeMessagesSnapshot(allConversations);
   return (
     <PageEnter className="px-8 py-10">
-      <HomeDashboard dashboard={dashboard} workspaceType="buyer" />
+      <HomeDashboard
+        dashboard={dashboard}
+        workspaceType="buyer"
+        conversations={conversations}
+        unreadCount={unreadCount}
+      />
     </PageEnter>
   );
 }
