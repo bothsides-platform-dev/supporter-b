@@ -8,14 +8,17 @@
 //   undefined / '' / unknown → undefined (show all)
 //   (draft RFPs are hidden from the kanban; surfaced only in the unfiltered table)
 //
-// Inbox mapping (invitation-level):
-//   new       → invitation_status 'sent'       (kind: invStatus)
-//   submitted → invitation_status 'accepted'   (kind: invStatus)
-//   closed    → rfp_status 'closed'            (kind: rfpStatus — no inv enum for this)
-//   undefined / '' → undefined (show all)
+// Inbox mapping (bid-aware PG kanban stage — classifyPgInvitation, NOT invitation status):
+//   new       → ['received']     (bid 없음/draft — 열람 여부 무관)
+//   submitted → ['submitted']    (bid 제출됨)
+//   closed    → ['won','lost']   (결과 — 선정/미선정 통합)
+//   undefined / '' → undefined (show all); unknown → empty
+//   ⚠️ 과거엔 invitation status('sent'/'accepted')로 필터해 열람 즉시 'opened'로
+//      바뀐 건이 어떤 탭에도 안 잡히는 버그가 있었다. stage 기반으로 바로잡음.
 
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { InboxRow } from '@/components/inbox/InboxList';
+import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 
 // ── RFP ───────────────────────────────────────────────────────────────────
 
@@ -44,33 +47,25 @@ export function filterRfpsByParam(rfps: RFP[], param: string | undefined): RFP[]
 
 // ── Inbox ─────────────────────────────────────────────────────────────────
 
-export type InboxFilterMapped =
-  | { kind: 'invStatus'; value: string }
-  | { kind: 'rfpStatus'; value: string };
-
-const INBOX_PARAM_MAP: Record<string, InboxFilterMapped> = {
-  new: { kind: 'invStatus', value: 'sent' },
-  submitted: { kind: 'invStatus', value: 'accepted' },
-  // 'closed' has no invitation enum value; it means the parent RFP is closed.
-  closed: { kind: 'rfpStatus', value: 'closed' },
+// Sidebar token → the PG kanban stages it surfaces. 'closed' folds won+lost.
+const INBOX_PARAM_TO_STAGES: Record<string, readonly PgKanbanStage[]> = {
+  new: ['received'],
+  submitted: ['submitted'],
+  closed: ['won', 'lost'],
 };
 
-/** Map a sidebar URL token to the domain filter descriptor, or undefined. */
-export function mapInboxParam(param: string | undefined): InboxFilterMapped | undefined {
+/** Map a sidebar URL token to the PG kanban stages it covers, or undefined. */
+export function mapInboxParam(param: string | undefined): readonly PgKanbanStage[] | undefined {
   if (!param) return undefined;
-  return INBOX_PARAM_MAP[param];
+  return INBOX_PARAM_TO_STAGES[param];
 }
 
 /** Filter inbox rows by sidebar URL token. Returns all if param is absent. */
 export function filterInboxRowsByParam(rows: InboxRow[], param: string | undefined): InboxRow[] {
-  const mapped = mapInboxParam(param);
-  if (mapped === undefined) {
+  const stages = mapInboxParam(param);
+  if (stages === undefined) {
     if (!param) return rows;
     return [];
   }
-  if (mapped.kind === 'invStatus') {
-    return rows.filter((r) => r.invitationStatus === mapped.value);
-  }
-  // kind === 'rfpStatus'
-  return rows.filter((r) => r.rfpStatus === mapped.value);
+  return rows.filter((r) => stages.includes(r.stage));
 }

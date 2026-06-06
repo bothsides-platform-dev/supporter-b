@@ -2,6 +2,7 @@
 
 import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
+import { formatKrwReadable } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /**
@@ -73,6 +74,10 @@ export function CurrencyInput({
   placeholder = '0',
   infoTerm,
 }: NumericFieldProps) {
+  const numVal = parseFloat(value);
+  const hint =
+    !isNaN(numVal) && numVal > 0 ? `= ${formatKrwReadable(numVal)}` : null;
+
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-1">
@@ -91,6 +96,11 @@ export function CurrencyInput({
         />
         <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">원</span>
       </div>
+      {hint && (
+        <p className="font-mono text-[11px] text-[var(--md-sys-color-tertiary)] mt-1">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
