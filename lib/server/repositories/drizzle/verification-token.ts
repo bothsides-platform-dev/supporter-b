@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import { verificationTokens } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { VerificationToken } from '@/lib/types/auth';
@@ -164,5 +164,42 @@ export class DrizzleVerificationTokenRepository implements VerificationTokenRepo
       )
       .returning();
     return updated.length > 0 ? rowToToken(updated[0]) : undefined;
+  }
+
+  async findActiveEmailCodeToken(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<{ id: string; attempts: number; emailCodeHash: string | null } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select()
+      .from(verificationTokens)
+      .where(
+        and(
+          eq(verificationTokens.email, params.email),
+          eq(verificationTokens.purpose, params.purpose),
+          isNull(verificationTokens.consumedAt),
+          gt(verificationTokens.expiresAt, params.now),
+        ),
+      )
+      .orderBy(desc(verificationTokens.issuedAt))
+      .limit(1);
+    if (!row) return undefined;
+    const meta = (row.meta ?? {}) as Record<string, unknown>;
+    const emailCodeHash =
+      typeof meta.emailCode === 'string' ? meta.emailCode : null;
+    return { id: row.id, attempts: row.attempts, emailCodeHash };
+  }
+
+  async bumpEmailCodeAttempts(id: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(verificationTokens)
+      .set({ attempts: sql`${verificationTokens.attempts} + 1` })
+      .where(eq(verificationTokens.id, id));
   }
 }

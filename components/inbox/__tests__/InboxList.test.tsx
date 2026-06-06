@@ -66,6 +66,19 @@ describe('InboxList', () => {
     const { container } = render(<InboxList rows={[row]} />);
     expect(container.textContent).not.toContain('J / K 이동');
   });
+
+  it('신규(sent) 행은 "견적 작성" 행동 링크를 보여준다', () => {
+    render(<InboxList rows={[row]} />);
+    expect(screen.getByRole('link', { name: '견적 작성' })).toHaveAttribute('href', '/inbox/P-2604-0001');
+  });
+
+  it('견적 보낸(accepted) 행은 "보낸 견적" 행동 링크를 보여준다', () => {
+    render(<InboxList rows={[{ ...row, invitationId: 'inv-004', invitationStatus: 'accepted' }]} />);
+    expect(screen.getByRole('link', { name: '보낸 견적' })).toHaveAttribute(
+      'href',
+      '/inbox/P-2604-0001/submitted',
+    );
+  });
 });
 
 describe('InboxListSkeleton — RSC fallback 회귀 방지', () => {

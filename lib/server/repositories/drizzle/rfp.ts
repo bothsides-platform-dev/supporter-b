@@ -39,6 +39,10 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     currentFeeRate: row.currentFeeRate ?? undefined,
     currentSettlementLimit: row.currentSettlementLimit ?? undefined,
     currentGuaranteeInsurance: row.currentGuaranteeInsurance ?? undefined,
+    currentSettlementCycle: row.currentSettlementCycle ?? undefined,
+    deliveryServicePeriod: row.deliveryServicePeriod ?? undefined,
+    currentSolution: row.currentSolution ?? undefined,
+    currentSolutionDetail: row.currentSolutionDetail ?? undefined,
     rfpFiles: [], // attachments hydrated separately when needed
     allowedPgWorkspaceIds: allowed,
     deadline: new Date(row.deadline).toISOString(),

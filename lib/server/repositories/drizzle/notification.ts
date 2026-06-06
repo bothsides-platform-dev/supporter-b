@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, or, sql } from 'drizzle-orm';
 import { notifications } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type {
@@ -76,9 +76,14 @@ export class DrizzleNotificationRepository implements NotificationRepo {
     tx?: Tx,
   ): Promise<Notification[]> {
     const db = this.h(tx);
+    // 현재 워크스페이스 알림 ∪ user-level(workspace_id IS NULL) 알림.
+    // null 알림은 어느 ws를 보든 표시되고, non-null 알림은 그 ws에만 격리된다.
     const base = and(
       eq(notifications.userId, userId),
-      eq(notifications.workspaceId, workspaceId),
+      or(
+        eq(notifications.workspaceId, workspaceId),
+        isNull(notifications.workspaceId),
+      ),
     );
     const where = channel ? and(base, eq(notifications.channel, uiChannel(channel))) : base;
     const rows = await db
@@ -106,7 +111,12 @@ export class DrizzleNotificationRepository implements NotificationRepo {
       .where(
         and(
           eq(notifications.userId, userId),
-          eq(notifications.workspaceId, workspaceId),
+          // 현재 ws 알림 + user-level(null) 알림을 함께 읽음 처리 — null 알림은
+          // 어느 ws 피드에서 보든 같은 행이므로 그 피드에서 지울 수 있어야 한다.
+          or(
+            eq(notifications.workspaceId, workspaceId),
+            isNull(notifications.workspaceId),
+          ),
           isNull(notifications.readAt),
         ),
       );

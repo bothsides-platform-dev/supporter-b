@@ -85,6 +85,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
         currentFeeRate: draft.currentFeeRate.trim() || undefined,
         currentSettlementLimit: draft.currentSettlementLimit.trim() || undefined,
         currentGuaranteeInsurance: draft.currentGuaranteeInsurance.trim() || undefined,
+        currentSettlementCycle: draft.currentSettlementCycle.trim() || undefined,
+        deliveryServicePeriod: draft.deliveryServicePeriod.trim() || undefined,
         currentSolution,
         currentSolutionDetail: draft.currentSolutionDetail.trim() || undefined,
         memo: draft.memo.trim() || undefined,
@@ -93,6 +95,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
         rfpAttachmentIds: draft.rfpFiles.map((f) => f.id),
         requiredPaymentMethods: draft.requiredPaymentMethods,
         customPaymentMethods: draft.customPaymentMethods,
+        boardVisible: draft.boardVisible,
         send: true,
       });
     } catch {

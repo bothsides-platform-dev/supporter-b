@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -69,6 +70,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
             <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">등급</th>
             <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">마감</th>
             <th className="px-3 py-3 text-right font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">상태</th>
+            <th className="px-3 py-3 text-right font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">행동</th>
           </tr>
         </thead>
         <tbody>
@@ -104,6 +106,25 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                     color={invStatusColor[row.invitationStatus] ?? 'surface'}
                   />
                 </td>
+                <td className="px-3 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                  {row.invitationStatus === 'accepted' ? (
+                    <Link
+                      href={`/inbox/${row.rfpId}/submitted`}
+                      className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+                    >
+                      보낸 견적
+                    </Link>
+                  ) : row.invitationStatus === 'declined' || row.invitationStatus === 'expired' ? (
+                    <span className="font-mono text-[11px] text-[var(--md-sys-color-outline)]">—</span>
+                  ) : (
+                    <Link
+                      href={`/inbox/${row.rfpId}`}
+                      className="inline-flex items-center rounded-[6px] bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-[12px] font-medium text-[var(--md-sys-color-on-primary)] hover:opacity-90 transition-opacity"
+                    >
+                      견적 작성
+                    </Link>
+                  )}
+                </td>
               </tr>
             );
           })}
@@ -127,6 +148,7 @@ export function InboxListSkeleton() {
             <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
             <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
             <th className="px-3 py-3 text-right"><Skeleton className="h-2 w-8 ml-auto" /></th>
+            <th className="px-3 py-3 text-right"><Skeleton className="h-2 w-10 ml-auto" /></th>
           </tr>
         </thead>
         <tbody>
@@ -138,6 +160,9 @@ export function InboxListSkeleton() {
               <td className="px-3 py-4"><Skeleton className="h-3 w-16" /></td>
               <td className="px-3 py-4 text-right">
                 <Skeleton className="h-5 w-14 rounded-full ml-auto" />
+              </td>
+              <td className="px-3 py-4 text-right">
+                <Skeleton className="h-7 w-16 rounded-[6px] ml-auto" />
               </td>
             </tr>
           ))}

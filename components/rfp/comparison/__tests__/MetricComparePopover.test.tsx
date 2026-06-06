@@ -1,0 +1,126 @@
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MetricComparePopover, type CompareRow } from '../MetricComparePopover';
+import type { Bid } from '@/lib/types/bid';
+
+beforeAll(() => {
+  if (!('ResizeObserver' in globalThis)) {
+    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+  }
+});
+
+function makeBid(id: string, pgWsId: string): Bid {
+  return {
+    id,
+    rfpId: 'r1',
+    pgWsId,
+    invitationId: 'i1',
+    settleCycle: 'D+1',
+    settleLimit: 0,
+    guaranteeInsurance: 0,
+    paymentFees: {},
+    customFees: {},
+    proposalPdfs: [],
+    status: 'submitted',
+    submittedBy: 'u1',
+  };
+}
+
+const rows: CompareRow[] = [
+  { bid: makeBid('b-toss', 'pg-toss'), isBest: true, valueText: '2.20%' },
+  { bid: makeBid('b-kg', 'pg-kg'), isBest: false, valueText: '2.50%' },
+  { bid: makeBid('b-nice', 'pg-nice'), isBest: false, valueText: '2.80%' },
+];
+
+const pgWsNameMap = { 'pg-toss': '토스페이먼츠', 'pg-kg': 'KG이니시스', 'pg-nice': '나이스페이' };
+
+afterEach(cleanup);
+
+describe('MetricComparePopover', () => {
+  it('lists every PG with its value in the given order when opened', async () => {
+    const user = userEvent.setup();
+    render(
+      <MetricComparePopover
+        label="카드 수수료"
+        rows={rows}
+        activeBidId="b-kg"
+        pgWsNameMap={pgWsNameMap}
+        onSelect={vi.fn()}
+      >
+        <span>2.50%</span>
+      </MetricComparePopover>,
+    );
+    await user.click(screen.getByTestId('compare-trigger'));
+
+    const dialog = within(await screen.findByTestId('compare-popup'));
+    expect(dialog.getByText('토스페이먼츠')).toBeInTheDocument();
+    expect(dialog.getByText('2.20%')).toBeInTheDocument();
+    expect(dialog.getByText('KG이니시스')).toBeInTheDocument();
+    expect(dialog.getByText('나이스페이')).toBeInTheDocument();
+  });
+
+  it('marks the active bid as "이 견적" and the best row as "최선"', async () => {
+    const user = userEvent.setup();
+    render(
+      <MetricComparePopover
+        label="카드 수수료"
+        rows={rows}
+        activeBidId="b-kg"
+        pgWsNameMap={pgWsNameMap}
+        onSelect={vi.fn()}
+      >
+        <span>2.50%</span>
+      </MetricComparePopover>,
+    );
+    await user.click(screen.getByTestId('compare-trigger'));
+
+    const tossRow = within(await screen.findByTestId('compare-row-pg-toss'));
+    expect(tossRow.getByText('최선')).toBeInTheDocument();
+    const kgRow = within(screen.getByTestId('compare-row-pg-kg'));
+    expect(kgRow.getByText('이 견적')).toBeInTheDocument();
+  });
+
+  it('shows the current-condition baseline when provided', async () => {
+    const user = userEvent.setup();
+    render(
+      <MetricComparePopover
+        label="카드 수수료"
+        rows={rows}
+        activeBidId="b-kg"
+        pgWsNameMap={pgWsNameMap}
+        baselineText="2.8%"
+        onSelect={vi.fn()}
+      >
+        <span>2.50%</span>
+      </MetricComparePopover>,
+    );
+    await user.click(screen.getByTestId('compare-trigger'));
+    const dialog = within(await screen.findByTestId('compare-popup'));
+    expect(dialog.getByText(/현재/)).toBeInTheDocument();
+    expect(dialog.getByText('2.8%')).toBeInTheDocument();
+  });
+
+  it('calls onSelect with the PG workspace id when another PG row is clicked', async () => {
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <MetricComparePopover
+        label="카드 수수료"
+        rows={rows}
+        activeBidId="b-kg"
+        pgWsNameMap={pgWsNameMap}
+        onSelect={onSelect}
+      >
+        <span>2.50%</span>
+      </MetricComparePopover>,
+    );
+    await user.click(screen.getByTestId('compare-trigger'));
+    await user.click(await screen.findByTestId('compare-row-pg-toss'));
+    expect(onSelect).toHaveBeenCalledWith('pg-toss');
+  });
+});

@@ -104,7 +104,7 @@ const INBOX_SECTION: NavSection = {
   links: [
     {
       id: 'opportunities',
-      label: '견적 기회',
+      label: '참여 가능한 견적',
       href: '/opportunities',
       // G then O (Opportunities) — h/n/m/i/s/p/t/1-3 are taken for pg.
       shortcut: { kind: 'chord', lead: 'g', key: 'o' },
@@ -185,6 +185,61 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   };
 }
 
+// A single navigable destination for the command palette (Cmd+K). Flattened
+// from the nav tree so the palette never re-declares routes — nav-config stays
+// the single source of truth.
+export type NavCommand = {
+  id: string;
+  label: string;
+  href: string;
+  shortcut?: NavShortcut;
+};
+
+// Flatten the workspace-scoped nav tree (top items + workspace section + its
+// statuses/links + settings links) into a flat command list. A section's base
+// is emitted only when it isn't already one of that section's links — so
+// /settings (an alias for the profile link) doesn't double-emit, while /rfp
+// (a distinct list page) does. Deduped by href as a safety net.
+export function getNavCommands(workspaceType: WorkspaceType): NavCommand[] {
+  const { top, sections } = getNavConfig(workspaceType);
+  const out: NavCommand[] = [];
+  const seen = new Set<string>();
+  const push = (cmd: NavCommand) => {
+    if (seen.has(cmd.href)) return;
+    seen.add(cmd.href);
+    out.push(cmd);
+  };
+
+  for (const item of top) {
+    push({ id: item.id, label: item.label, href: item.href, shortcut: item.shortcut });
+  }
+
+  for (const section of sections) {
+    const linkHrefs = new Set((section.links ?? []).map((l) => l.href));
+    if (!linkHrefs.has(section.href)) {
+      push({
+        id: section.id,
+        label: section.label,
+        href: section.href,
+        shortcut: section.shortcut,
+      });
+    }
+    for (const s of section.statuses ?? []) {
+      push({
+        id: `${section.id}-${s.status}`,
+        label: `${section.label} · ${s.label}`,
+        href: `${section.base}?status=${s.status}`,
+        shortcut: s.shortcut,
+      });
+    }
+    for (const link of section.links ?? []) {
+      push({ id: link.id, label: link.label, href: link.href, shortcut: link.shortcut });
+    }
+  }
+
+  return out;
+}
+
 // One breadcrumb segment. The current page (last segment) has no `href`; every
 // ancestor segment carries the `href` to navigate to when clicked.
 export type BreadcrumbSegment = { label: string; href?: string };
@@ -198,7 +253,7 @@ export function getBreadcrumbSegments(
   if (pathname === '/home') return [{ label: '홈' }];
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
-  if (pathname === '/opportunities') return [{ label: '견적 기회' }];
+  if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp') {
     const label = status ? STATUS_LABELS['/rfp'][status as keyof typeof STATUS_LABELS['/rfp']] : undefined;
     return label ? [{ label: '견적 요청', href: '/rfp' }, { label }] : [{ label: '견적 요청' }];

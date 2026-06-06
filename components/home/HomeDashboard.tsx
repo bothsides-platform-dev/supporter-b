@@ -2,6 +2,7 @@ import { KpiStrip } from './KpiStrip';
 import { ActionQueue } from './ActionQueue';
 import { OnboardingActionList } from './OnboardingActionList';
 import { ChatPanelPlaceholder } from './ChatPanelPlaceholder';
+import { RefreshButton } from './RefreshButton';
 import { OpportunityList } from '@/components/opportunities/OpportunityList';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,37 +25,42 @@ export function HomeDashboard({
   workspaceType: 'buyer' | 'pg';
 }) {
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
-      <div className="flex min-w-0 flex-1 flex-col gap-6">
-        <KpiStrip kpis={dashboard.kpis} />
-        {dashboard.groups.length > 0 ? (
-          <ActionQueue groups={dashboard.groups} />
-        ) : dashboard.onboardingActions ? (
-          <OnboardingActionList actions={dashboard.onboardingActions} />
-        ) : (
-          <EmptyState
-            icon={<CheckIcon />}
-            title="지금 처리할 일이 없습니다"
-            description={EMPTY_DESC[workspaceType]}
-          />
-        )}
-        {workspaceType === 'pg' &&
-          dashboard.openRfps != null &&
-          dashboard.openRfps.length > 0 && (
-            <section>
-              <h2 className="mb-1.5 text-[13px] font-medium text-[var(--md-sys-color-on-surface-variant)]">
-                참여할 수 있는 견적 요청
-              </h2>
-              <OpportunityList
-                items={dashboard.openRfps}
-                limit={HOME_OPEN_RFP_PREVIEW}
-                showAllHref="/opportunities"
-              />
-            </section>
-          )}
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <RefreshButton />
       </div>
-      <div className="lg:w-[360px] lg:shrink-0">
-        <ChatPanelPlaceholder />
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
+          <KpiStrip kpis={dashboard.kpis} />
+          {dashboard.groups.length > 0 ? (
+            <ActionQueue groups={dashboard.groups} />
+          ) : dashboard.onboardingActions ? (
+            <OnboardingActionList actions={dashboard.onboardingActions} />
+          ) : (
+            <EmptyState
+              icon={<CheckIcon />}
+              title="지금 처리할 일이 없습니다"
+              description={EMPTY_DESC[workspaceType]}
+            />
+          )}
+          {workspaceType === 'pg' &&
+            dashboard.openRfps != null &&
+            dashboard.openRfps.length > 0 && (
+              <section>
+                <h2 className="mb-1.5 text-[13px] font-medium text-[var(--md-sys-color-on-surface-variant)]">
+                  참여 가능한 견적
+                </h2>
+                <OpportunityList
+                  items={dashboard.openRfps}
+                  limit={HOME_OPEN_RFP_PREVIEW}
+                  showAllHref="/opportunities"
+                />
+              </section>
+            )}
+        </div>
+        <div className="lg:w-[360px] lg:shrink-0">
+          <ChatPanelPlaceholder />
+        </div>
       </div>
     </div>
   );

@@ -34,17 +34,25 @@ function LoginContent() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Lock anchor returned by the server (authoritative). The client localStorage
+  // tracker below is only a UX hint — the real lock lives server-side, so when
+  // loginAction reports LOCKED we trust its lockedUntil even if the client
+  // counter is nowhere near the threshold (cleared storage, another device, or
+  // an IP-level lock triggered by other accounts).
+  const [serverLockUntil, setServerLockUntil] = useState<number | null>(null);
   // React 19 strict purity rules forbid Date.now() in the render body, so the
   // clock is pulled from state and bumped on each tick / after every failure.
   // The lazy initializer keeps SSR/CSR boundary clean.
   const [now, setNow] = useState<number>(() => Date.now());
 
   const attempts = getState(email, undefined, now);
-  const locked =
-    attempts.lockedUntilTs !== null && now < attempts.lockedUntilTs;
-  const remainingMs = locked
-    ? (attempts.lockedUntilTs as number) - now
-    : 0;
+  // Effective lock = the later of the client hint and the server's anchor.
+  const lockUntilTs = Math.max(
+    attempts.lockedUntilTs ?? 0,
+    serverLockUntil ?? 0,
+  ) || null;
+  const locked = lockUntilTs !== null && now < lockUntilTs;
+  const remainingMs = locked ? (lockUntilTs as number) - now : 0;
 
   useEffect(() => {
     if (!locked) return;
@@ -60,6 +68,13 @@ function LoginContent() {
     const r = await loginAction({ email, password });
     setSubmitting(false);
     if (!r.ok) {
+      // Server says we're locked — adopt its anchor and stop here (don't also
+      // bump the client counter; the server is the source of truth).
+      if (r.error === 'LOCKED' && r.lockedUntil) {
+        setServerLockUntil(new Date(r.lockedUntil).getTime());
+        setNow(Date.now());
+        return;
+      }
       const after = recordFailure(email);
       setNow(Date.now());
       if (after.lockedUntilTs !== null) {

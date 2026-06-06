@@ -4,6 +4,7 @@ import { AxiomWebVitals } from "next-axiom";
 import { siteConfig } from "@/lib/site-config";
 import { getChannelMember } from "@/lib/channel-io/server";
 import { ChannelTalk } from "@/components/shell/ChannelTalk";
+import { Analytics } from "@/components/shell/Analytics";
 import "./globals.css";
 
 const pretendard = localFont({
@@ -65,6 +66,7 @@ export default async function RootLayout({
 }>) {
   const member = await getChannelMember();
   const pluginKey = process.env.NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY;
+  const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
   return (
     <html
       lang="ko"
@@ -83,6 +85,7 @@ export default async function RootLayout({
         <AxiomWebVitals />
         {children}
         <ChannelTalk pluginKey={pluginKey} member={member} />
+        <Analytics gaId={gaId} />
       </body>
     </html>
   );
