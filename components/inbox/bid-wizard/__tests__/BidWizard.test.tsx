@@ -23,6 +23,11 @@ vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
   saveQuoteTemplateAction: vi.fn(async () => ({ ok: true as const, templateId: 't1' })),
 }));
 vi.mock('../../RfpBriefPanel', () => ({ RfpBriefPanel: () => <div /> }));
+vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
+  CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
+    <span>{counterparty.name}</span>
+  ),
+}));
 
 import { BidWizard } from '../BidWizard';
 import type { QuoteTemplateOption } from '@/lib/types/bid';

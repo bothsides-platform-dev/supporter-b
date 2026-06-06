@@ -9,6 +9,11 @@ class ResizeObserverStub {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
+vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
+  CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
+    <span>{counterparty.name}</span>
+  ),
+}));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock('@/lib/http', () => ({ http: { post: vi.fn() } }));
 const awardRfpAction = vi.fn();

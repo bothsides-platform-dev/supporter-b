@@ -4,8 +4,8 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 
 const counterpartyCapture = vi.fn();
-vi.mock('@/components/messages/MessageComposeButton', () => ({
-  MessageComposeButton: (props: { counterparty: { name: string } }) => {
+vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
+  CounterpartyProfileCard: (props: { counterparty: { name: string } }) => {
     counterpartyCapture(props.counterparty);
     return <div data-testid="msg-btn" />;
   },
@@ -49,7 +49,7 @@ describe('RfpBriefPanel', () => {
     expect(screen.queryByText('(주)샘플테크')).not.toBeInTheDocument();
   });
 
-  it('MessageComposeButton에 counterparty.name으로 buyerName을 전달한다', () => {
+  it('CounterpartyProfileCard에 counterparty.name으로 buyerName을 전달한다', () => {
     render(<RfpBriefPanel rfp={rfp} buyerName="(주)진짜상사" />);
     expect(counterpartyCapture).toHaveBeenCalledWith(
       expect.objectContaining({ name: '(주)진짜상사' }),

@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
+import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import {
   acceptPgRequestAction,
   rejectPgRequestAction,
@@ -64,9 +65,10 @@ export function RfpPendingRequests({
         {requests.map((r) => (
           <li key={r.id} className="flex items-start justify-between gap-3 py-2.5">
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
-                {r.pgWsName}
-              </span>
+              <CounterpartyProfileCard
+                variant="profile"
+                counterparty={{ name: r.pgWsName, type: 'pg', workspaceId: r.pgWsId }}
+              />
               <p className="whitespace-pre-wrap text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
                 {r.message}
               </p>

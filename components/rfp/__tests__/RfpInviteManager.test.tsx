@@ -1,6 +1,11 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 
+vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
+  CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
+    <span>{counterparty.name}</span>
+  ),
+}));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/hooks/useLazyPgWorkspaces', () => ({
   useLazyPgWorkspaces: () => ({ pgList: [], loading: false, error: null, load: vi.fn() }),
