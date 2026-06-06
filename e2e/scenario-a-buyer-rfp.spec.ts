@@ -97,11 +97,10 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     // URL/seed identifier is the human code; FK columns + dedupe keys use the uuid.
     const rfpUuid = await rfpUuidFromCode(rfpId);
 
-    // Comparison table shows zero bids since no PG has submitted.
-    // BidComparisonTable renders an EmptyState with this exact copy when
-    // bids.length === 0 (see components/rfp/BidComparisonTable.tsx).
+    // 비교 영역(FocusComparison)은 제출된 견적이 0건이면 EmptyState 를 그린다
+    // (see components/rfp/comparison/FocusComparison.tsx).
     await expect(
-      page.getByText('견적을 기다리고 있어요.'),
+      page.getByText('견적을 기다리고 있어요'),
     ).toBeVisible({ timeout: 10_000 });
 
     // ── 6. DB assertions ─────────────────────────────────────────

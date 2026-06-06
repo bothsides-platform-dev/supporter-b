@@ -1,12 +1,12 @@
 // 구매사 RFP 상세 본문 — 전체 페이지(app/(app)/rfp/[id])가 사용.
-// loader(BuyerRfpDetailData) 산출물만 받는 표현 컴포넌트 — 재fetch 금지.
-// 바깥 패딩/PageEnter 래핑은 호출부(page) 책임.
-import Link from 'next/link';
+// IA: 헤더 → 아코디언('내가 요청한 조건') → FocusComparison(견적 비교·선정) →
+// 아코디언('PG 초대 · 게시판 노출 관리'). loader(BuyerRfpDetailData) 산출물만 받는
+// 표현 컴포넌트 — 재fetch 금지. 바깥 패딩/PageEnter 래핑은 호출부(page) 책임.
 import { Label } from '@/components/primitives/Label';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
-import { Button } from '@/components/primitives/Button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BidComparisonView } from '@/components/rfp/BidComparisonView';
+import { Accordion, AccordionItem } from '@/components/ui/accordion';
+import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { RfpBoardVisibilityToggle } from '@/components/rfp/RfpBoardVisibilityToggle';
 import { RfpPendingRequests } from '@/components/rfp/RfpPendingRequests';
@@ -31,7 +31,6 @@ function formatSolution(solution?: string | null, detail?: string | null): strin
     ? `${label} (${detail})`
     : label;
 }
-import type { BoardCard, BoardColumn } from '@/lib/types/column';
 
 const statusLabel: Record<string, string> = {
   draft: '임시저장',
@@ -48,15 +47,7 @@ const statusColor: Record<string, ChipColor> = {
   cancelled: 'error',
 };
 
-export function RfpDetailContent({
-  data,
-  boardColumns = [],
-  boardCards = [],
-}: {
-  data: BuyerRfpDetailData;
-  boardColumns?: BoardColumn[];
-  boardCards?: BoardCard[];
-}) {
+export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
   const {
     rfp,
     bids,
@@ -68,10 +59,24 @@ export function RfpDetailContent({
     pendingRequests,
     canEdit,
     shareUrl,
-    authorId,
-    authorName,
   } = data;
   const bizProfile = rfp.bizProfile;
+
+  // 아코디언 기본 펼침 — 받은 견적 0건 또는 콜드피치 대기 > 0 이면 'PG 관리' 자동 펼침.
+  const pendingCount = pendingRequests.length;
+  const autoOpenPgManage = bids.length === 0 || pendingCount > 0;
+  const defaultOpen = autoOpenPgManage ? ['pg-manage'] : [];
+
+  const operationRows: [string, string | undefined][] = [
+    ['사업 운영 홈페이지', rfp.websiteUrl],
+    ['주요 판매 상품', rfp.mainProducts],
+    ['전년도 연간 PG 거래액', rfp.annualPgVolume],
+    ['현재 카드 수수료', rfp.currentFeeRate],
+    ['현재 정산주기', rfp.currentSettlementCycle],
+    ['현재 월 정산한도', rfp.currentSettlementLimit],
+    ['현재 보증보험', rfp.currentGuaranteeInsurance],
+    ['현재 운영 솔루션', formatSolution(rfp.currentSolution, rfp.currentSolutionDetail)],
+  ];
 
   return (
     <>
@@ -84,14 +89,7 @@ export function RfpDetailContent({
           <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
             {rfp.title}
           </h1>
-          <div className="flex items-center gap-3 shrink-0">
-            <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
-            {rfp.status === 'sent' && bids.length > 0 && (
-              <Link href={`/rfp/${rfp.code}/award`}>
-                <Button size="sm">최종 선택 →</Button>
-              </Link>
-            )}
-          </div>
+          <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
         </div>
         <div className="flex items-center gap-4 mt-2">
           <Label size="md" muted={false}>마감 {formatDate(rfp.deadline)}</Label>
@@ -102,113 +100,59 @@ export function RfpDetailContent({
         </div>
       </div>
 
-      {/* Comparison table */}
-      <section>
-        <div className="flex items-center gap-3 mb-4">
-          <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            견적 비교
-          </span>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-        </div>
-        <BidComparisonView
-          rfpId={rfp.code}
-          bids={bids}
-          boardColumns={boardColumns}
-          boardCards={boardCards}
-          notesByBid={notesByBid}
-          rfpStatus={rfp.status}
-          awardedBidId={rfp.awardedBidId}
-          requiredPaymentMethods={rfp.requiredPaymentMethods}
-          customPaymentMethods={rfp.customPaymentMethods}
-          pgWsNameMap={pgWsNameMap}
-          authorId={authorId}
-          authorName={authorName}
-        />
-      </section>
-
-      {/* RFP attachments — buyer-uploaded requirement docs */}
-      <AttachmentPreviewList files={rfpFiles} />
-
-      {/* Meta sidebar */}
-      <div className="grid grid-cols-2 gap-10 border-t border-[var(--md-sys-color-outline-variant)] pt-8">
-        {/* Biz info */}
-        <section>
-          <div className="flex items-center gap-3 mb-3">
-            <Label size="md" muted={false}>사업자 정보</Label>
-            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-          </div>
-          <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
-            {[
-              ['상호명', companyName],
-              ['사업자번호', bizProfile?.bizNo ?? '미입력'],
-              ...(bizProfile?.grade
-                ? [['등급', GRADE_LABELS[bizProfile.grade]]]
-                : [['등급', '미정']]),
-            ].map(([label, value]) => (
-              <div key={label} className="py-2 flex items-baseline justify-between">
-                <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                  {label}
-                </span>
-                <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">{value}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* PG list + memo */}
-        <section className="space-y-6">
-          <RfpInviteManager
-            rfpId={rfp.code}
-            invitations={inviteList}
-            shareUrl={shareUrl}
-            canEdit={canEdit}
-          />
-          <RfpBoardVisibilityToggle
-            rfpCode={rfp.code}
-            boardVisible={rfp.boardVisible ?? true}
-            canEdit={canEdit}
-          />
-          <RfpPendingRequests requests={pendingRequests} canEdit={canEdit} />
-          {[
-            ['사업 운영 홈페이지', rfp.websiteUrl],
-            ['주요 판매 상품', rfp.mainProducts],
-            ['전년도 연간 PG 거래액', rfp.annualPgVolume],
-            ['현재 카드 수수료', rfp.currentFeeRate],
-            ['현재 월 정산한도', rfp.currentSettlementLimit],
-            ['현재 보증보험', rfp.currentGuaranteeInsurance],
-            ['현재 운영 솔루션', formatSolution(rfp.currentSolution, rfp.currentSolutionDetail)],
-          ].some(([, v]) => v) && (
-            <div>
+      {/* '내가 요청한 조건' — 기본 접힘 */}
+      <Accordion className="mt-2">
+        <AccordionItem value="request-conditions" title="내가 요청한 조건">
+          <div className="grid grid-cols-2 gap-10">
+            <section>
               <div className="flex items-center gap-3 mb-3">
-                <Label size="md" muted={false}>사업 운영 정보</Label>
+                <Label size="md" muted={false}>사업자 정보</Label>
                 <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
               </div>
               <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
                 {(
                   [
-                    ['사업 운영 홈페이지', rfp.websiteUrl],
-                    ['주요 판매 상품', rfp.mainProducts],
-                    ['전년도 연간 PG 거래액', rfp.annualPgVolume],
-                    ['현재 카드 수수료', rfp.currentFeeRate],
-                    ['현재 월 정산한도', rfp.currentSettlementLimit],
-                    ['현재 보증보험', rfp.currentGuaranteeInsurance],
-                    ['현재 운영 솔루션', formatSolution(rfp.currentSolution, rfp.currentSolutionDetail)],
-                  ] as [string, string | undefined][]
-                )
-                  .filter(([, v]) => v)
-                  .map(([label, value]) => (
-                    <div key={label} className="py-2 flex items-baseline justify-between">
-                      <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                        {label}
-                      </span>
-                      <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">{value}</span>
-                    </div>
-                  ))}
+                    ['상호명', companyName],
+                    ['사업자번호', bizProfile?.bizNo ?? '미입력'],
+                    ['등급', bizProfile?.grade ? GRADE_LABELS[bizProfile.grade] : '미정'],
+                  ] as [string, string][]
+                ).map(([label, value]) => (
+                  <div key={label} className="py-2 flex items-baseline justify-between">
+                    <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                      {label}
+                    </span>
+                    <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">{value}</span>
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
+            </section>
+
+            <section>
+              {operationRows.some(([, v]) => v) && (
+                <>
+                  <div className="flex items-center gap-3 mb-3">
+                    <Label size="md" muted={false}>사업 운영 정보</Label>
+                    <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+                  </div>
+                  <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
+                    {operationRows
+                      .filter(([, v]) => v)
+                      .map(([label, value]) => (
+                        <div key={label} className="py-2 flex items-baseline justify-between">
+                          <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                            {label}
+                          </span>
+                          <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">{value}</span>
+                        </div>
+                      ))}
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
+
           {rfp.memo && (
-            <div>
+            <div className="mt-6">
               <div className="flex items-center gap-3 mb-3">
                 <Label size="md" muted={false}>견적 요청 세부 내용</Label>
                 <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
@@ -218,8 +162,57 @@ export function RfpDetailContent({
               </p>
             </div>
           )}
-        </section>
-      </div>
+
+          <div className="mt-6">
+            <AttachmentPreviewList files={rfpFiles} />
+          </div>
+        </AccordionItem>
+      </Accordion>
+
+      {/* 견적 비교 — 포커스 + hover */}
+      <FocusComparison
+        bids={bids}
+        pgWsNameMap={pgWsNameMap}
+        current={{
+          feeRate: rfp.currentFeeRate,
+          settlementCycle: rfp.currentSettlementCycle,
+          settlementLimit: rfp.currentSettlementLimit,
+          guaranteeInsurance: rfp.currentGuaranteeInsurance,
+        }}
+        notesByBid={notesByBid}
+        rfpStatus={rfp.status}
+        awardedBidId={rfp.awardedBidId}
+        requiredPaymentMethods={rfp.requiredPaymentMethods}
+        customPaymentMethods={rfp.customPaymentMethods}
+        rfpId={rfp.id}
+        rfpCode={rfp.code}
+      />
+
+      {/* 'PG 초대 · 게시판 노출 관리' — 조건부 자동 펼침 */}
+      <Accordion defaultValue={defaultOpen}>
+        <AccordionItem
+          value="pg-manage"
+          title="PG 초대 · 게시판 노출 관리"
+          badge={
+            pendingCount > 0 ? <Chip label={`대기 ${pendingCount}건`} color="warning" /> : undefined
+          }
+        >
+          <div className="space-y-6">
+            <RfpInviteManager
+              rfpId={rfp.code}
+              invitations={inviteList}
+              shareUrl={shareUrl}
+              canEdit={canEdit}
+            />
+            <RfpBoardVisibilityToggle
+              rfpCode={rfp.code}
+              boardVisible={rfp.boardVisible ?? true}
+              canEdit={canEdit}
+            />
+            <RfpPendingRequests requests={pendingRequests} canEdit={canEdit} />
+          </div>
+        </AccordionItem>
+      </Accordion>
     </>
   );
 }
@@ -240,35 +233,18 @@ RfpDetailContent.Skeleton = function RfpDetailContentSkeleton() {
         </div>
       </div>
 
+      <Skeleton className="h-12 w-full" />
+
       <section>
         <div className="flex items-center gap-3 mb-4">
           <Skeleton className="h-2 w-16" />
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
+        <Skeleton className="h-9 w-64 mb-4" />
         <Skeleton className="h-48 w-full" />
       </section>
 
-      <Skeleton className="h-16 w-full" />
-
-      <div className="grid grid-cols-2 gap-10 border-t border-[var(--md-sys-color-outline-variant)] pt-8">
-        <section>
-          <div className="flex items-center gap-3 mb-3">
-            <Skeleton className="h-3 w-20" />
-            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-          </div>
-          <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="py-2 flex items-baseline justify-between">
-                <Skeleton className="h-2 w-16" />
-                <Skeleton className="h-3 w-20" />
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="space-y-6">
-          <Skeleton className="h-32 w-full" />
-        </section>
-      </div>
+      <Skeleton className="h-12 w-full" />
     </>
   );
 };

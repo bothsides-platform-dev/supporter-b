@@ -50,15 +50,6 @@ export type PgRfpDetailData = {
   quoteTemplates: QuoteTemplateOption[];
 };
 
-export type BuyerAwardData = {
-  rfp: RFP;
-  /** 수주 대상 입찰. */
-  selected: Bid;
-  /** 나머지 제출 입찰(비교용). */
-  others: Bid[];
-  pgWsNameById: Record<string, string>;
-  buyerWorkspaceName: string;
-};
 
 /**
  * 구매사 상세 데이터. 소유하지 않거나 없는 RFP면 null(→ page 가 not-found UI).
@@ -206,42 +197,4 @@ export async function loadPgRfpDetail(args: {
   }));
 
   return { rfp, myBid, buyerName, quoteTemplates };
-}
-
-/**
- * 수주 확정 화면 데이터. 소유하지 않거나 선택 입찰(bidId)을 못 찾으면 null.
- * 전체 페이지(app/(app)/rfp/[id]/award)가 사용.
- */
-export async function loadBuyerAwardData(args: {
-  code: string;
-  workspaceId: string;
-  bidId: string | undefined;
-}): Promise<BuyerAwardData | null> {
-  const rfp = await (await getRfpRepo()).findByCode(args.code);
-  if (!rfp || rfp.buyerWsId !== args.workspaceId) return null;
-
-  const allBids = (await (await getBidRepo()).findByRfp(rfp.id)).filter(
-    (b) => b.status === 'submitted',
-  );
-  const selected = args.bidId ? allBids.find((b) => b.id === args.bidId) : undefined;
-  if (!selected) return null;
-
-  const others = allBids.filter((b) => b.id !== selected.id);
-
-  const wsRepo = await getWorkspaceRepo();
-  const pgWsIds = Array.from(new Set(allBids.map((b) => b.pgWsId)));
-  const pgWsNameById: Record<string, string> = {};
-  for (const wsId of pgWsIds) {
-    const ws = await wsRepo.findById(wsId);
-    if (ws) pgWsNameById[wsId] = ws.name;
-  }
-  const buyerWs = await wsRepo.findById(rfp.buyerWsId);
-
-  return {
-    rfp,
-    selected,
-    others,
-    pgWsNameById,
-    buyerWorkspaceName: buyerWs?.name ?? '—',
-  };
 }
