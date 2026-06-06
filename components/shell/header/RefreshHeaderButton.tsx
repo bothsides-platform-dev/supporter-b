@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer } from 'react';
 import { Button } from '@/components/ui/button';
 import { RefreshIcon } from '@/components/icons';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,8 @@ type Props = {
   isRefreshing: boolean;
 };
 
+const LABEL_REFRESH_INTERVAL_MS = 60_000;
+
 function formatRelative(date: Date): string {
   const diffMs = Date.now() - date.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
@@ -20,19 +22,15 @@ function formatRelative(date: Date): string {
 }
 
 export function RefreshHeaderButton({ onRefresh, lastRefreshedAt, isRefreshing }: Props) {
-  const [label, setLabel] = useState<string>(() =>
-    lastRefreshedAt ? formatRelative(lastRefreshedAt) : '새로고침',
-  );
+  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
 
   useEffect(() => {
-    if (!lastRefreshedAt) {
-      setLabel('새로고침');
-      return;
-    }
-    setLabel(formatRelative(lastRefreshedAt));
-    const id = setInterval(() => setLabel(formatRelative(lastRefreshedAt)), 60_000);
+    if (!lastRefreshedAt) return;
+    const id = setInterval(forceUpdate, LABEL_REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
   }, [lastRefreshedAt]);
+
+  const label = lastRefreshedAt ? formatRelative(lastRefreshedAt) : '새로고침';
 
   return (
     <Button
@@ -40,6 +38,7 @@ export function RefreshHeaderButton({ onRefresh, lastRefreshedAt, isRefreshing }
       size="sm"
       disabled={isRefreshing}
       onClick={onRefresh}
+      aria-label={label === '새로고침' ? '새로고침' : `새로고침: ${label}`}
     >
       <RefreshIcon className={cn(isRefreshing && 'animate-spin')} />
       {label}

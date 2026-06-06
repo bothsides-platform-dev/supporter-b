@@ -22,6 +22,9 @@ export function HomeHeaderActionsRegistrar() {
     setRefreshAction({ onRefresh, lastRefreshedAt, isRefreshing: isPending });
   }, [onRefresh, lastRefreshedAt, isPending, setRefreshAction]);
 
+  // Separate effect so clearRefreshAction only fires on unmount, not on every dep change.
+  // Merging into the sync effect above would null the slot briefly between renders,
+  // causing the header button to flicker each time isPending or lastRefreshedAt updates.
   useEffect(() => {
     return () => clearRefreshAction();
   }, [clearRefreshAction]);

@@ -92,6 +92,14 @@ describe('Header', () => {
     expect(screen.getByRole('button', { name: /새로고침/ })).toBeInTheDocument();
   });
 
+  it('refreshSlot.isRefreshing=true 이면 새로고침 버튼이 disabled', () => {
+    useHeaderActionsStore.setState({
+      refreshSlot: { onRefresh: vi.fn(), lastRefreshedAt: null, isRefreshing: true },
+    });
+    render(<Header user={user} workspaceType="buyer" />);
+    expect(screen.getByRole('button', { name: /새로고침/ })).toBeDisabled();
+  });
+
   it('logs out via the user menu', async () => {
     const u = userEvent.setup();
     render(<Header user={user} workspaceType="buyer" />);

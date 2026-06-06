@@ -5,6 +5,7 @@ import { RefreshHeaderButton } from '../header/RefreshHeaderButton';
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.setSystemTime(new Date('2025-01-01T00:00:00Z'));
 });
 
 afterEach(() => {
@@ -54,6 +55,12 @@ describe('RefreshHeaderButton', () => {
     renderButton({ onRefresh, lastRefreshedAt: null });
     fireEvent.click(screen.getByRole('button'));
     expect(onRefresh).toHaveBeenCalledOnce();
+  });
+
+  it('정확히 60분 전 새로고침 → "1시간 전" (경계값)', () => {
+    const t = new Date(Date.now() - 60 * 60_000);
+    renderButton({ lastRefreshedAt: t });
+    expect(screen.getByRole('button', { name: /1시간 전/ })).toBeInTheDocument();
   });
 
   it('60초 경과 후 레이블이 자동으로 업데이트된다', () => {

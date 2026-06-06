@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 
-type RefreshSlot = {
+export type RefreshSlot = {
   onRefresh: () => void;
   lastRefreshedAt: Date | null;
   isRefreshing: boolean;
