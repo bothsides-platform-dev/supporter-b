@@ -240,6 +240,52 @@ describe('ThreadView', () => {
     expect(appended.closest('[data-message-row]')).toHaveAttribute('data-sender', 'other');
   });
 
+  it('onMessage 에 attachments 가 포함된 경우 첨부 링크를 렌더한다', async () => {
+    render(base());
+
+    act(() => {
+      channelOptions.onMessage?.({
+        type: 'message',
+        id: 'live-att-1',
+        body: '파일 확인해 주세요.',
+        authorWsId: 'pg-1', // counterparty
+        rfpId: null,
+        createdAt: '2026-05-27T06:00:00.000Z',
+        attachments: [
+          {
+            id: 'att-uuid-1',
+            name: '제안서.pdf',
+            size: 12345,
+            mimeType: 'application/pdf',
+            url: '/api/files/att-uuid-1',
+          },
+        ],
+      });
+    });
+
+    await screen.findByText('파일 확인해 주세요.');
+    const link = screen.getByRole('link', { name: /제안서.pdf/ });
+    expect(link).toHaveAttribute('href', '/api/files/att-uuid-1');
+  });
+
+  it('onMessage 에 attachments 가 없으면 첨부 링크를 렌더하지 않는다', async () => {
+    render(base());
+
+    act(() => {
+      channelOptions.onMessage?.({
+        type: 'message',
+        id: 'live-no-att',
+        body: '첨부 없는 메시지.',
+        authorWsId: 'pg-1',
+        rfpId: null,
+        createdAt: '2026-05-27T06:00:00.000Z',
+      });
+    });
+
+    await screen.findByText('첨부 없는 메시지.');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
   it('onMessage 로 같은 id 메시지가 다시 와도 중복 append 하지 않는다', async () => {
     render(base());
     const evt = {
