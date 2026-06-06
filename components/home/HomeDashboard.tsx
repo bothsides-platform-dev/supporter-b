@@ -2,7 +2,6 @@ import { KpiStrip } from './KpiStrip';
 import { ActionQueue } from './ActionQueue';
 import { OnboardingActionList } from './OnboardingActionList';
 import { RecentMessagesPanel } from './RecentMessagesPanel';
-import { ChatPanelPlaceholder } from './ChatPanelPlaceholder';
 import { HomeHeaderActionsRegistrar } from './HomeHeaderActionsRegistrar';
 import { OpportunityList } from '@/components/opportunities/OpportunityList';
 import { EmptyState } from '@/components/primitives/EmptyState';
