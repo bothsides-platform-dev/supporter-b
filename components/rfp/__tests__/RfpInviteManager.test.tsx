@@ -25,6 +25,6 @@ describe('RfpInviteManager', () => {
       />,
     );
     expect(screen.queryByText('공유 링크')).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/복사/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '복사' })).not.toBeInTheDocument();
   });
 });
