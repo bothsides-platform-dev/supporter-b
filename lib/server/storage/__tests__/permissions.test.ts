@@ -435,3 +435,176 @@ describe('canAccessAttachment — bid_note', () => {
     expect(ok).toBe(true);
   });
 });
+
+describe('canAccessAttachment — chatMessageId branch', () => {
+  it('ALLOW for buyer side of conversation', async () => {
+    const s = await seedScenario();
+    const { chatConversations, chatMessages } = await import('@/lib/db/schema');
+    const convId = randomUUID();
+    await db.insert(chatConversations).values({ id: convId, buyerWsId: s.buyerWsId, pgWsId: s.pgWsId });
+    const msgId = randomUUID();
+    await db.insert(chatMessages).values({
+      id: msgId,
+      conversationId: convId,
+      authorUserId: s.buyerUserId,
+      authorWsId: s.buyerWsId,
+      body: 'test',
+    });
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId,
+      chatMessageId: msgId,
+      name: 'chat.pdf',
+      size: 100,
+      mimeType: 'application/pdf',
+      uploadedBy: s.buyerUserId,
+    });
+    const att: AttachmentRow = { id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', url: '', uploadedBy: s.pgUserId };
+    const ok = await canAccessAttachment(
+      db, att,
+      { user: { id: s.buyerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
+      await repos(),
+    );
+    expect(ok).toBe(true);
+  });
+
+  it('ALLOW for pg side of conversation', async () => {
+    const s = await seedScenario();
+    const { chatConversations, chatMessages } = await import('@/lib/db/schema');
+    const convId = randomUUID();
+    await db.insert(chatConversations).values({ id: convId, buyerWsId: s.buyerWsId, pgWsId: s.pgWsId });
+    const msgId = randomUUID();
+    await db.insert(chatMessages).values({
+      id: msgId,
+      conversationId: convId,
+      authorUserId: s.buyerUserId,
+      authorWsId: s.buyerWsId,
+      body: 'test',
+    });
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId,
+      chatMessageId: msgId,
+      name: 'chat.pdf',
+      size: 100,
+      mimeType: 'application/pdf',
+      uploadedBy: s.buyerUserId,
+    });
+    const att: AttachmentRow = { id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', url: '', uploadedBy: s.buyerUserId };
+    const ok = await canAccessAttachment(
+      db, att,
+      { user: { id: s.pgUserId, workspaceId: s.pgWsId, workspaceType: 'pg' } },
+      await repos(),
+    );
+    expect(ok).toBe(true);
+  });
+
+  it('DENY for a workspace that is not part of the conversation', async () => {
+    const s = await seedScenario();
+    const { chatConversations, chatMessages } = await import('@/lib/db/schema');
+    const convId = randomUUID();
+    await db.insert(chatConversations).values({ id: convId, buyerWsId: s.buyerWsId, pgWsId: s.pgWsId });
+    const msgId = randomUUID();
+    await db.insert(chatMessages).values({
+      id: msgId, conversationId: convId, authorUserId: s.buyerUserId, authorWsId: s.buyerWsId, body: 'test',
+    });
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', uploadedBy: s.buyerUserId,
+    });
+    const att: AttachmentRow = { id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', url: '', uploadedBy: s.buyerUserId };
+    // otherPgUserId is in a different workspace — not part of this conversation.
+    const ok = await canAccessAttachment(
+      db, att,
+      { user: { id: s.otherPgUserId, workspaceId: s.otherPgWsId, workspaceType: 'pg' } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+
+  it('DENY when wsId is missing from session (unauthenticated-ish)', async () => {
+    const s = await seedScenario();
+    const { chatConversations, chatMessages } = await import('@/lib/db/schema');
+    const convId = randomUUID();
+    await db.insert(chatConversations).values({ id: convId, buyerWsId: s.buyerWsId, pgWsId: s.pgWsId });
+    const msgId = randomUUID();
+    await db.insert(chatMessages).values({
+      id: msgId, conversationId: convId, authorUserId: s.buyerUserId, authorWsId: s.buyerWsId, body: 'test',
+    });
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', uploadedBy: s.buyerUserId,
+    });
+    // att.uploadedBy !== randomUserId so uploader fast-path doesn't fire
+    const att: AttachmentRow = { id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', url: '', uploadedBy: s.buyerUserId };
+    // session has no workspaceId — exercises `if (!wsId) return false`
+    const ok = await canAccessAttachment(
+      db, att,
+      { user: { id: s.randomUserId } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+
+  it('DENY when chatMessageId is not in DB (orphan FK — tested via mock db)', async () => {
+    // PGlite enforces FK so we can't insert an orphan row.  Instead we pass a
+    // stub `db` whose query chain returns [] for the first SELECT, simulating
+    // a deleted/missing chatMessages row.
+    const s = await seedScenario();
+    const phantomMsgId = randomUUID();
+    const att: AttachmentRow = {
+      id: randomUUID(),
+      chatMessageId: phantomMsgId,
+      name: 'ghost.pdf',
+      size: 100,
+      mimeType: 'application/pdf',
+      url: '',
+      uploadedBy: s.pgUserId, // different from querying user → uploader skip does not fire
+    };
+    // Minimal fluent-query stub that returns [] for every call.
+    const emptyChain = { from: () => emptyChain, where: () => emptyChain, limit: () => Promise.resolve([]) };
+    const mockDb = { select: () => emptyChain };
+    const ok = await canAccessAttachment(
+      mockDb as unknown as typeof db,
+      att,
+      { user: { id: s.buyerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+
+  it('DENY when conversation row is not in DB (orphan message — tested via mock db)', async () => {
+    const s = await seedScenario();
+    const phantomConvId = randomUUID();
+    const att: AttachmentRow = {
+      id: randomUUID(),
+      chatMessageId: randomUUID(),
+      name: 'ghost2.pdf',
+      size: 100,
+      mimeType: 'application/pdf',
+      url: '',
+      uploadedBy: s.pgUserId,
+    };
+    // First call (chatMessages lookup) returns a row; second call (chatConversations) returns [].
+    let callCount = 0;
+    const makeChain = (result: unknown[]) => {
+      const c = { from: () => c, where: () => c, limit: () => Promise.resolve(result) };
+      return c;
+    };
+    const mockDb = {
+      select: () => {
+        callCount += 1;
+        return callCount === 1
+          ? makeChain([{ conversationId: phantomConvId }])
+          : makeChain([]);
+      },
+    };
+    const ok = await canAccessAttachment(
+      mockDb as unknown as typeof db,
+      att,
+      { user: { id: s.buyerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+});

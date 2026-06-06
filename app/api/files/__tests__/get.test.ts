@@ -403,4 +403,5 @@ describe('GET /api/files/[id]', () => {
     };
     expect((await callGet(chatAttId)).status).toBe(403);
   });
+
 });

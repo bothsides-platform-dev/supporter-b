@@ -498,6 +498,43 @@ describe('ThreadView', () => {
     expect(await screen.findByLabelText('보고서.docx 업로드 실패')).toBeInTheDocument();
   });
 
+  it('서버가 415 를 반환하면 에러 칩 메시지가 "지원되지 않는 파일 형식이에요"다', async () => {
+    const user = userEvent.setup();
+    // Construct a minimal HTTPError with a response stub carrying status 415.
+    const { HTTPError } = await import('ky');
+    const fakeResponse = { status: 415, statusText: 'Unsupported Media Type' } as Response;
+    const fakeRequest = new Request('https://example.com/api/files/upload', { method: 'POST' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const kyErr = new HTTPError(fakeResponse, fakeRequest, {} as any);
+    httpPost.mockReturnValue({ json: () => Promise.reject(kyErr) });
+
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '악성.pdf', { type: 'application/pdf' });
+    await user.upload(input, file);
+
+    const chip = await screen.findByLabelText('악성.pdf 업로드 실패');
+    expect(chip).toHaveAttribute('title', '지원되지 않는 파일 형식이에요');
+  });
+
+  it('MAX_BYTES 초과 파일은 칩에 추가되지 않는다(silent skip)', async () => {
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    // Create a file whose size property reports >20 MB.
+    const oversized = new File([new Uint8Array(1)], '큰파일.pdf', { type: 'application/pdf' });
+    Object.defineProperty(oversized, 'size', { value: 21 * 1024 * 1024 });
+    Object.defineProperty(input, 'files', { value: [oversized], configurable: true });
+    fireEvent.change(input);
+
+    // Nothing should appear — no uploading chip, no error chip.
+    await waitFor(() => {
+      expect(screen.queryByLabelText('큰파일.pdf 업로드 중')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('큰파일.pdf 업로드 실패')).not.toBeInTheDocument();
+    });
+    // httpPost must not have been called either.
+    expect(httpPost).not.toHaveBeenCalled();
+  });
+
   it('첨부 업로드 중에는 "업로드 중" 스켈레톤 칩을 보여주고 전송을 잠그며, 완료되면 일반 칩으로 바뀐다', async () => {
     const user = userEvent.setup();
     // 업로드 응답을 테스트가 직접 resolve 하도록 promise 를 붙잡는다.
