@@ -5,6 +5,9 @@ import { getUserRepo, getVerificationTokenRepo } from '@/lib/server/repositories
 import { hashToken } from '@/lib/server/token';
 import { normalizeEmail, type AuthActionResult } from './_shared';
 
+// 코드 오입력 허용 횟수 (전화 OTP verifyPhoneOtpAction 과 동일).
+const MAX_CODE_ATTEMPTS = 5;
+
 const Input = z.object({
   email: z.string().email(),
   code: z.string().regex(/^\d{6}$/, 'INVALID_INPUT'),
@@ -30,13 +33,30 @@ export async function verifyEmailCodeAction(input: {
 
   const email = normalizeEmail(parsed.data.email);
   const codeHash = hashToken(parsed.data.code);
+  const now = new Date();
 
   const repo = await getVerificationTokenRepo();
+
+  // F2 — cap brute-force of the 6-digit code (phone OTP has the same guard).
+  const active = await repo.findActiveEmailCodeToken({
+    email,
+    purpose: 'signup_email',
+    now,
+  });
+  if (!active) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
+  if (active.attempts >= MAX_CODE_ATTEMPTS) {
+    return { ok: false, error: 'MAX_ATTEMPTS' };
+  }
+  if (active.emailCodeHash !== codeHash) {
+    await repo.bumpEmailCodeAttempts(active.id);
+    return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
+  }
+
   const consumed = await repo.consumeByEmailCode({
     email,
     purpose: 'signup_email',
     codeHash,
-    now: new Date(),
+    now,
   });
 
   if (!consumed) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
