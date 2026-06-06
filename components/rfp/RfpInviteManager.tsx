@@ -8,6 +8,7 @@ import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
 import type { ChipColor } from '@/components/primitives/Chip';
+import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import {
   addPgWorkspacesToRfpAction,
   sendDraftInvitationsAction,
@@ -112,9 +113,10 @@ export function RfpInviteManager({
                   <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)]">
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  <span className="text-[13px] text-[var(--md-sys-color-on-surface)] truncate">
-                    {inv.wsName}
-                  </span>
+                  <CounterpartyProfileCard
+                    variant="profile"
+                    counterparty={{ name: inv.wsName, type: 'pg', workspaceId: inv.wsId }}
+                  />
                 </div>
                 <Chip label={statusLabel[inv.status]} color={statusColor[inv.status]} />
               </div>

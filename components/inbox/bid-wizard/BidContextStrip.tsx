@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { RfpBriefPanel } from '../RfpBriefPanel';
+import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
@@ -24,9 +25,13 @@ export function BidContextStrip({ buyerName, rfp, currentStep, feeInputMethods }
   return (
     <div className="border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]">
       <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-        <span className="truncate text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-          <span className="text-[var(--md-sys-color-on-surface)] font-medium">{buyerName}</span>
-          <span className="mx-2 text-[var(--md-sys-color-outline-variant)]">·</span>
+        <span className="flex min-w-0 items-center gap-2 truncate text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+          <CounterpartyProfileCard
+            variant="profile"
+            counterparty={{ name: buyerName, type: 'buyer', workspaceId: rfp.buyerWsId }}
+            rfpContext={{ code: rfp.id, title: rfp.title }}
+          />
+          <span className="mx-1 text-[var(--md-sys-color-outline-variant)]">·</span>
           {hint}
         </span>
         <button

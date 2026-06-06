@@ -6,6 +6,11 @@ import type { PaymentMethod } from '@/lib/types/bid';
 vi.mock('../../RfpBriefPanel', () => ({
   RfpBriefPanel: () => <div data-testid="brief">brief</div>,
 }));
+vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
+  CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
+    <span>{counterparty.name}</span>
+  ),
+}));
 
 import { BidContextStrip } from '../BidContextStrip';
 

@@ -1,7 +1,7 @@
 import { Chip } from '@/components/primitives/Chip';
 import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
-import { MessageComposeButton } from '@/components/messages/MessageComposeButton';
+import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { formatDate, formatDeadline } from '@/lib/format';
@@ -49,7 +49,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
         <div className="flex items-center gap-3 mb-3">
           <Label size="md" muted={false}>구매사 정보</Label>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-          <MessageComposeButton
+          <CounterpartyProfileCard
             variant="avatar"
             counterparty={{ name: buyerName, type: 'buyer', workspaceId: rfp.buyerWsId }}
             rfpContext={{ code: rfp.id, title: rfp.title }}
