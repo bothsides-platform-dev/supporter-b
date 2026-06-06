@@ -38,7 +38,7 @@ const withOnboarding: Dashboard = {
 
 describe('HomeDashboard', () => {
   it('renders KPI strip, action queue, and the chat panel', () => {
-    render(<HomeDashboard dashboard={withGroups} workspaceType="buyer" />);
+    render(<HomeDashboard dashboard={withGroups} workspaceType="buyer" conversations={[]} unreadCount={0} />);
     // NOTE: don't getByText('마감 임박') — a KPI and an action group can share
     // that label; anchor on the unique action item instead.
     expect(screen.getByRole('link', { name: /진행중/ })).toBeInTheDocument();
@@ -49,14 +49,14 @@ describe('HomeDashboard', () => {
   });
 
   it('shows a workspace-specific empty state when there are no action groups', () => {
-    render(<HomeDashboard dashboard={empty} workspaceType="pg" />);
+    render(<HomeDashboard dashboard={empty} workspaceType="pg" conversations={[]} unreadCount={0} />);
     expect(screen.getByText('지금 처리할 일이 없습니다')).toBeInTheDocument();
     expect(screen.getByText('구매사가 초대한 견적 요청이 여기에 표시돼요.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /진행중/ })).toBeInTheDocument();
   });
 
   it('shows OnboardingActionList when groups is empty and onboardingActions is set', () => {
-    render(<HomeDashboard dashboard={withOnboarding} workspaceType="buyer" />);
+    render(<HomeDashboard dashboard={withOnboarding} workspaceType="buyer" conversations={[]} unreadCount={0} />);
     expect(screen.getByRole('link', { name: /첫 RFP를 작성해 보세요/ }))
       .toHaveAttribute('href', '/rfp/new');
     expect(screen.getByRole('link', { name: /워크스페이스 프로필 설정/ }))
@@ -80,14 +80,14 @@ describe('HomeDashboard', () => {
         },
       ],
     };
-    render(<HomeDashboard dashboard={dash} workspaceType="pg" />);
+    render(<HomeDashboard dashboard={dash} workspaceType="pg" conversations={[]} unreadCount={0} />);
     expect(screen.getByText('카드 PG 견적')).toBeInTheDocument();
     expect(screen.getByText('구매사A')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '참여 요청' })).toBeInTheDocument();
   });
 
   it('does not render the discovery section for a buyer', () => {
-    render(<HomeDashboard dashboard={withGroups} workspaceType="buyer" />);
+    render(<HomeDashboard dashboard={withGroups} workspaceType="buyer" conversations={[]} unreadCount={0} />);
     expect(screen.queryByRole('button', { name: '참여 요청' })).not.toBeInTheDocument();
   });
 });
