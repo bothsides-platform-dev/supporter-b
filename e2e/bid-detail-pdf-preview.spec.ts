@@ -21,7 +21,7 @@ import {
 
 const RFP_ID = 'P-2604-0001';
 
-test.describe.serial('BidDetailModal — PDF preview iframe', () => {
+test.describe.serial('FocusComparison — 제안서 PDF 미리보기 iframe', () => {
   let attachmentId: string;
 
   test.beforeAll(async () => {
@@ -33,14 +33,16 @@ test.describe.serial('BidDetailModal — PDF preview iframe', () => {
 
     await loginAs(page, 'buyer');
     await page.goto(`/rfp/${RFP_ID}`);
-    await page.getByRole('tab', { name: '[ 보드 ]' }).click();
+    // 포커스 비교 — 서포터 B 페이 탭으로 전환한 뒤 'PG 메모 · 제안서 PDF'
+    // 아코디언을 펼치면 BidPdfPane(iframe) 가 마운트된다.
+    await page.getByRole('tab', { name: /서포터 B 페이/ }).click();
 
-    // First modal open — capture the iframe's /api/files/{id} request and
-    // assert the Stage 1 contract (200 + application/pdf + ETag).
+    // 아코디언 펼침 시 iframe 의 /api/files/{id} 요청을 잡아 Stage 1 계약
+    // (200 + application/pdf + ETag) 을 검증한다.
     const firstReq = page.waitForResponse((r) =>
       r.url().includes(`/api/files/${attachmentId}`),
     );
-    await page.getByRole('button', { name: /서포터 B 페이/ }).first().click();
+    await page.getByRole('button', { name: /제안서 PDF/ }).click();
     const first = await firstReq;
     expect(first.status()).toBe(200);
     expect(first.headers()['content-type']).toBe('application/pdf');

@@ -7,9 +7,11 @@ import { ThreadView } from './ThreadView';
 export function ThreadPane({
   conversationId,
   counterpartyFallback,
+  onBack,
 }: {
   conversationId: string;
   counterpartyFallback: { workspaceId: string; name: string; type: 'buyer' | 'pg'; hasLogo: boolean };
+  onBack?: () => void;
 }) {
   const result = use(getThreadPromise(conversationId));
   const counterparty = result.ok ? result.counterparty : counterpartyFallback;
@@ -20,6 +22,7 @@ export function ThreadPane({
       conversationId={conversationId}
       counterparty={counterparty}
       messages={messages}
+      onBack={onBack}
     />
   );
 }

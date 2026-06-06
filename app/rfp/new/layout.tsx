@@ -48,7 +48,7 @@ export default async function RfpNewLayout({ children }: { children: React.React
       >
         {children}
       </AppSidebarLayout>
-      <CommandPalette />
+      <CommandPalette workspaceType={active.type} />
       <GlobalShortcuts />
     </ToasterProvider>
   );

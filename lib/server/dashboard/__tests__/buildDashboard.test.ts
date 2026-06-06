@@ -141,9 +141,15 @@ describe('buildPgDashboard — onboarding', () => {
 });
 
 describe('buildPgDashboard — open RFP discovery', () => {
+  const base = {
+    deadline: fromNow(5),
+    requiredPaymentMethods: [] as string[],
+    customPaymentMethodLabels: [] as string[],
+    mainProducts: null,
+  };
   const listings: OpportunityListing[] = [
-    { rfpCode: 'P-OPEN1', buyerName: '구매사A', title: '오픈 견적', websiteUrl: 'https://a.example.com' },
-    { rfpCode: 'P-OPEN2', buyerName: '구매사B', title: '오픈 견적2', websiteUrl: null },
+    { rfpCode: 'P-OPEN1', buyerName: '구매사A', title: '오픈 견적', websiteUrl: 'https://a.example.com', ...base },
+    { rfpCode: 'P-OPEN2', buyerName: '구매사B', title: '오픈 견적2', websiteUrl: null, ...base },
   ];
 
   it('passes through the open-RFP listings for PG discovery', () => {

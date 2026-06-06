@@ -40,6 +40,8 @@ export const rfps = pgTable(
     currentFeeRate: text('current_fee_rate'),
     currentSettlementLimit: text('current_settlement_limit'),
     currentGuaranteeInsurance: text('current_guarantee_insurance'),
+    currentSettlementCycle: text('current_settlement_cycle'),
+    deliveryServicePeriod: text('delivery_service_period'),
     currentSolution: text('current_solution'),
     currentSolutionDetail: text('current_solution_detail'),
     deadline: timestamp('deadline', { withTimezone: true }).notNull(),

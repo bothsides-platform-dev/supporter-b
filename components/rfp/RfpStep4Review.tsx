@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
+import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { formatSize } from '@/lib/format';
@@ -97,6 +98,25 @@ export function RfpStep4Review({
         />
       </div>
 
+      {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true) */}
+      <div className="flex items-start gap-3">
+        <Checkbox
+          id="rfp-board-visible"
+          checked={draft.boardVisible}
+          onCheckedChange={(checked) => draft.setField('boardVisible', checked)}
+          aria-label="오픈 게시판에 노출하기"
+          className="mt-0.5"
+        />
+        <label htmlFor="rfp-board-visible" className="cursor-pointer">
+          <span className="block text-[14px] text-[var(--md-sys-color-on-surface)]">
+            오픈 게시판에 노출하기
+          </span>
+          <span className="block text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+            다른 PG사가 이 견적 요청을 발견하고 참여를 요청할 수 있어요.
+          </span>
+        </label>
+      </div>
+
       {/* 견적 요청 요약 */}
       <div>
         <SectionHeader label="견적 요청 요약" />
@@ -114,6 +134,14 @@ export function RfpStep4Review({
           <ReviewRow
             label="보증보험"
             value={draft.currentGuaranteeInsurance}
+          />
+          <ReviewRow
+            label="정산주기"
+            value={draft.currentSettlementCycle}
+          />
+          <ReviewRow
+            label="배송 및 서비스 기간"
+            value={draft.deliveryServicePeriod}
           />
           {draft.currentSolution && (
             <ReviewRow

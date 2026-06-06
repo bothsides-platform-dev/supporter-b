@@ -1,5 +1,4 @@
 import type { Attachment } from './common';
-import type { MerchantGrade } from './biz-profile';
 
 export type PaymentMethod =
   | 'card'
@@ -40,14 +39,6 @@ export type CustomPaymentMethod = {
   label: string;
 };
 
-export const STATUTORY_CARD_FEE: Record<MerchantGrade, number> = {
-  small: 0.005,
-  sme1: 0.011,
-  sme2: 0.0125,
-  sme3: 0.015,
-  general: Number.NaN,
-};
-
 export type Bid = {
   id: string;
   rfpId: string;
@@ -69,4 +60,15 @@ export type Bid = {
   submittedBy: string;
   submittedAt?: string;
   boardColumnId?: string | null;
+};
+
+// PG 워크스페이스 공유 견적 템플릿 — 폼 채우기용 직렬화 가능한 부분집합(요율표).
+// 커스텀 결제수단·메모·PDF는 RFP 종속적이라 템플릿에 담지 않는다.
+export type QuoteTemplateOption = {
+  id: string;
+  name: string;
+  settleCycle: string;
+  settleLimit: number;
+  guaranteeInsurance: number;
+  paymentFees: Partial<Record<PaymentMethod, number>>;
 };

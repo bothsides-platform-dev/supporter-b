@@ -2,9 +2,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { STEP_LABELS, WIZARD_STEPS } from './wizard-steps';
-
-const TOTAL = WIZARD_STEPS.length;
+import { WIZARD_STEPS } from './wizard-steps';
 
 type WizardProgressBarProps = {
   currentStep: number; // 1-4
@@ -12,9 +10,13 @@ type WizardProgressBarProps = {
   completed: boolean[];
   /** 자유 이동 — dot 클릭 시 해당 단계로 이동. */
   onStepClick?: (step: number) => void;
+  /** 단계 정의. 기본값은 구매사 RFP 4단계. */
+  steps?: readonly { num: number; label: string }[];
 };
 
-export function WizardProgressBar({ currentStep, completed, onStepClick }: WizardProgressBarProps) {
+export function WizardProgressBar({ currentStep, completed, onStepClick, steps = WIZARD_STEPS }: WizardProgressBarProps) {
+  const TOTAL = steps.length;
+  const labels = steps.map((s) => s.label);
   return (
     <div className="lg:hidden border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3 flex flex-col items-center gap-2">
       <div className="flex items-center gap-1.5">
@@ -27,7 +29,7 @@ export function WizardProgressBar({ currentStep, completed, onStepClick }: Wizar
             <button
               key={step}
               type="button"
-              aria-label={`${step}단계: ${STEP_LABELS[step - 1]}`}
+              aria-label={`${step}단계: ${labels[step - 1]}`}
               onClick={() => onStepClick?.(step)}
               className="flex items-center justify-center p-1.5 -m-1 cursor-pointer"
             >
@@ -46,7 +48,7 @@ export function WizardProgressBar({ currentStep, completed, onStepClick }: Wizar
         })}
       </div>
       <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-        Step {currentStep} / {TOTAL} — {STEP_LABELS[currentStep - 1]}
+        Step {currentStep} / {TOTAL} — {labels[currentStep - 1]}
       </span>
     </div>
   );

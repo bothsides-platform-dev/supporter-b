@@ -61,7 +61,7 @@ app/
 ├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{,rfp,workspace}/[token], /share/rfp/[token], /auth/*, /pending-approval, /suspended
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)
 │  ├─ home/
-│  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id], /rfp/[id]/award
+│  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id] (비교·선정 인라인 — 별도 award 라우트 없음)
 │  ├─ inbox/                  # pg workspace pages (P2~P4): /inbox, /inbox/[rfpId], /inbox/[rfpId]/submitted
 │  ├─ notifications/          # 인앱 알림 목록 페이지
 │  ├─ workspace/new/          # 워크스페이스 생성

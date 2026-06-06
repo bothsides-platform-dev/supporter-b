@@ -20,6 +20,7 @@ export * from './attachment-blobs';
 export * from './workspace-logo-blobs';
 export * from './rfp-counters';
 export * from './phone-otps';
+export * from './login-attempts';
 export * from './admin';
 export * from './chat-conversations';
 export * from './chat-messages';

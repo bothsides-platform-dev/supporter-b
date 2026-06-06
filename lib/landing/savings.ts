@@ -1,13 +1,14 @@
-import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
 
 export const GENERAL_ASSUMED_RATE = 0.015;
 
+// 절감 시뮬레이터용 등급별 달성 가능 카드 요율(추정 기준선). 마케팅 계산 전용으로
+// 제품의 협상 입력값과는 무관하다.
 export const SUPPORTER_B_RATE: Record<MerchantGrade, number> = {
-  small: STATUTORY_CARD_FEE.small,
-  sme1: STATUTORY_CARD_FEE.sme1,
-  sme2: STATUTORY_CARD_FEE.sme2,
-  sme3: STATUTORY_CARD_FEE.sme3,
+  small: 0.005,
+  sme1: 0.011,
+  sme2: 0.0125,
+  sme3: 0.015,
   general: GENERAL_ASSUMED_RATE,
 };
 
