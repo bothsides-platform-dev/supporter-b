@@ -43,5 +43,5 @@ async function PgRfpDetailLoader({
 }) {
   const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: wsId });
   if (!data) notFound();
-  return <PgRfpDetailContent data={data} />;
+  return <PgRfpDetailContent data={data} variant="full" />;
 }

@@ -14,7 +14,7 @@ import {
   PAYMENT_METHOD_LABELS,
   type PaymentMethod,
 } from '@/lib/types/bid';
-import type { QuoteTemplateOption } from '@/components/inbox/BidForm';
+import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { cn } from '@/lib/utils';
 
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap(

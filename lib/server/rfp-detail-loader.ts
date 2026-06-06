@@ -14,7 +14,7 @@ import {
   getRfpRepo,
   getWorkspaceRepo,
 } from './repositories/factory';
-import type { QuoteTemplateOption } from '@/components/inbox/BidForm';
+import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { baseUrl } from './actions/auth/_shared';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
