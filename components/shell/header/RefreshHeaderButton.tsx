@@ -40,7 +40,6 @@ export function RefreshHeaderButton({ onRefresh, lastRefreshedAt, isRefreshing }
       size="sm"
       disabled={isRefreshing}
       onClick={onRefresh}
-      aria-label={label}
     >
       <RefreshIcon className={cn(isRefreshing && 'animate-spin')} />
       {label}
