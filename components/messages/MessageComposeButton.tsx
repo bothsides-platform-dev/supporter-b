@@ -21,7 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { ComposeIcon, PaperclipIcon, ChevronDownIcon, XIcon } from '@/components/icons';
-import { MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES } from '@/lib/server/storage/constants';
+import { MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES, ACCEPTED_EXTENSIONS } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { listTemplatesAction } from '@/lib/server/actions/chat/listTemplatesAction';
 import { saveTemplateAction } from '@/lib/server/actions/chat/saveTemplateAction';
@@ -141,7 +141,8 @@ export function MessageComposeButton({ counterparty, rfpContext, variant = 'avat
     for (let i = 0; i < Math.min(fileList.length, remaining); i++) {
       const f = fileList[i];
       if (rows.some((r) => r.name === f.name)) continue;
-      if (!ACCEPTED_MIMES.has(f.type)) continue;
+      const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
+      if (!ACCEPTED_MIMES.has(f.type) && !ACCEPTED_EXTENSIONS.has(ext)) continue;
       if (f.size > MAX_BYTES) continue;
       const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
       additions.push({ id: tempId, name: f.name, size: f.size, status: 'uploading' });

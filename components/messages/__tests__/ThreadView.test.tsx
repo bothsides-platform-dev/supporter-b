@@ -405,6 +405,22 @@ describe('ThreadView', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
+  it('f.type이 빈 문자열인 PDF 파일도 확장자 기반으로 업로드 스켈레톤 칩이 뜬다', async () => {
+    const user = userEvent.setup();
+    httpPost.mockReturnValue({
+      json: () => Promise.resolve({ id: 'att-empty-mime', name: '보고서.pdf', size: 2048, mimeType: 'application/pdf' }),
+    });
+
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    // type: '' simulates a browser/OS that doesn't report a MIME for PDF files
+    const file = new File([new Uint8Array([1, 2, 3])], '보고서.pdf', { type: '' });
+    await user.upload(input, file);
+
+    // Chip must appear — currently silently dropped because ACCEPTED_MIMES.has('') === false
+    expect(await screen.findByLabelText('보고서.pdf 첨부 제거')).toBeInTheDocument();
+  });
+
   it('첨부 업로드 중에는 "업로드 중" 스켈레톤 칩을 보여주고 전송을 잠그며, 완료되면 일반 칩으로 바뀐다', async () => {
     const user = userEvent.setup();
     // 업로드 응답을 테스트가 직접 resolve 하도록 promise 를 붙잡는다.

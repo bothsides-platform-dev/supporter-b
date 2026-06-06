@@ -142,6 +142,24 @@ describe('MessageComposeButton (rich compose drawer)', () => {
     );
   });
 
+  it('f.type이 빈 문자열인 PDF 파일도 확장자 기반으로 첨부 칩에 노출된다', async () => {
+    httpPost.mockReturnValue({
+      json: () => Promise.resolve({ id: 'att-empty-mime', name: '보고서.pdf', size: 2048 }),
+    });
+    const user = userEvent.setup();
+    render(<MessageComposeButton counterparty={counterparty} rfpContext={rfpContext} />);
+    await openComposeDrawer(user);
+
+    // type: '' simulates a browser/OS that doesn't report a MIME for PDF files
+    const file = new File([new Uint8Array([1, 2, 3])], '보고서.pdf', { type: '' });
+    const input = screen.getByLabelText('파일 첨부', { selector: 'input[type="file"]' });
+    await user.upload(input, file);
+
+    // Chip must appear — currently silently dropped because ACCEPTED_MIMES.has('') === false
+    expect(await screen.findByText('보고서.pdf')).toBeInTheDocument();
+    await waitFor(() => expect(httpPost).toHaveBeenCalled());
+  });
+
   it('첨부 추가 → 칩 노출 → 전송 시 attachmentIds 포함, 제거하면 빠진다', async () => {
     httpPost.mockReturnValue({
       json: () => Promise.resolve({ id: 'att-1', name: '제안서.pdf', size: 1234 }),

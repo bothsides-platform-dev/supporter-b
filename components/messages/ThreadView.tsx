@@ -9,7 +9,7 @@ import { Chip } from '@/components/primitives/Chip';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, XIcon, EnvelopeIcon } from '@/components/icons';
-import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES } from '@/lib/server/storage/constants';
+import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES, ACCEPTED_EXTENSIONS } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
@@ -330,7 +330,8 @@ export function ThreadView({
     const additions: Attachment[] = [];
     for (let i = 0; i < Math.min(list.length, remaining); i++) {
       const f = list[i];
-      if (!ACCEPTED_MIMES.has(f.type)) continue;
+      const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
+      if (!ACCEPTED_MIMES.has(f.type) && !ACCEPTED_EXTENSIONS.has(ext)) continue;
       if (f.size > MAX_BYTES) continue;
       // 선택 즉시 'uploading' 행(스켈레톤)을 추가해 올리는 중임을 보여준다.
       const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
