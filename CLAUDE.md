@@ -37,7 +37,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | Styling | Tailwind v4 + CSS Variables (`@theme` block) | `tailwindcss@4.2.4` |
 | Headless UI | `@base-ui/react` (shadcn base-nova style) + Radix 일부 (`@radix-ui/react-popover`, `@radix-ui/react-slider`) | `@base-ui/react@1.4.1` |
 | Component tooling | shadcn (base-nova) — 컴포넌트 scaffolding 전용 | `shadcn@4.6.0` |
-| State | Zustand (UI toggles, signup draft) | `zustand@5.0.13` |
+| State | Zustand (UI toggles, signup draft, page→shell header-actions slot) | `zustand@5.0.13` |
 | Forms | zod v4 검증 + Server Actions (react-hook-form 미사용 — 폼은 useState + zod) | `zod@4.4.3` |
 | Icons | lucide-react | `lucide-react@1.14.0` |
 | Fonts | `next/font/local` — Pretendard Variable + JetBrains Mono Variable, self-hosted in `public/fonts/` | — |
@@ -58,10 +58,10 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 
 ```
 app/
-├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{,rfp,workspace}/[token], /share/rfp/[token], /auth/*, /pending-approval, /suspended
+├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{,rfp,workspace}/[token], /auth/*, /pending-approval, /suspended
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)
 │  ├─ home/
-│  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id], /rfp/[id]/award
+│  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id] (비교·선정 인라인 — 별도 award 라우트 없음)
 │  ├─ inbox/                  # pg workspace pages (P2~P4): /inbox, /inbox/[rfpId], /inbox/[rfpId]/submitted
 │  ├─ notifications/          # 인앱 알림 목록 페이지
 │  ├─ workspace/new/          # 워크스페이스 생성

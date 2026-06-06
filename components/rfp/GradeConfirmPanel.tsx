@@ -83,7 +83,7 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
       </div>
       <div className="flex items-center justify-between gap-3">
         <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-          영세·중소 카드료는 법정 고정 — 일반은 카드사별 협상.
+          등급은 PG에게 전달되는 참고 정보예요 — 카드 수수료는 모두 협상 대상.
         </p>
         <Button
           type="button"

@@ -42,8 +42,6 @@ export interface RfpRepo {
   findByCode(code: string, tx?: Tx): Promise<RFP | undefined>;
   /** 한 구매사 워크스페이스의 모든 RFP. */
   findByBuyerWs(wsId: string, tx?: Tx): Promise<RFP[]>;
-  /** raw share token → RFP. 공유 링크 클레임 시 사용. 없으면 undefined. */
-  findByShareToken(token: string, tx?: Tx): Promise<RFP | undefined>;
   /** 상태 전이 + 패치. DB 레이어에서 `WHERE status=$prev` 동시성 가드. */
   transition(id: string, to: RfpStatus, patch?: Partial<RFP>, tx?: Tx): Promise<RFP>;
   /** 통일 칸반: pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
@@ -303,6 +301,20 @@ export interface VerificationTokenRepo {
     },
     tx?: Tx,
   ): Promise<(Omit<VerificationToken, 'token'> & { tokenHash: string }) | undefined>;
+  /**
+   * 활성(미사용·미만료) 토큰의 6자리 코드 시도 상태 조회 — 가장 최근 발급분 1건.
+   * emailCodeHash 는 meta.emailCode. 코드 무차별 대입 제한(F2)용. 없으면 undefined.
+   */
+  findActiveEmailCodeToken(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<{ id: string; attempts: number; emailCodeHash: string | null } | undefined>;
+  /** 코드 오입력 시 attempts +1 (race-tolerant, 전화 OTP와 동일 패턴). */
+  bumpEmailCodeAttempts(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── Attachment ────────────────────────────────────────────────────────

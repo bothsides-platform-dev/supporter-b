@@ -28,7 +28,7 @@ const SAMPLE_PDF = Buffer.from(
   'utf8',
 );
 
-test.describe.serial('BidDetailModal — note roundtrip (Stage 3)', () => {
+test.describe.serial('FocusComparison 내 메모 — note roundtrip (Stage 3)', () => {
   test.beforeAll(async () => {
     await resetRfpForKanban(RFP_ID);
   });
@@ -40,10 +40,9 @@ test.describe.serial('BidDetailModal — note roundtrip (Stage 3)', () => {
 
     await loginAs(page, 'buyer');
     await page.goto(`/rfp/${RFP_ID}`);
-    await page.getByRole('tab', { name: '[ 보드 ]' }).click();
-
-    // Open the toss bid modal.
-    await page.getByRole('button', { name: /서포터 B 페이/ }).first().click();
+    // 서포터 B 페이 탭으로 포커스 → '내 메모' 아코디언 펼침 → BidNotesPanel.
+    await page.getByRole('tab', { name: /서포터 B 페이/ }).click();
+    await page.getByRole('button', { name: '내 메모' }).click();
 
     // Fill body + attach a tiny PDF. NoteForm uploads eagerly on file
     // pick — wait for the /api/files/upload success before clicking 기록.
@@ -73,8 +72,8 @@ test.describe.serial('BidDetailModal — note roundtrip (Stage 3)', () => {
     // Full reload + reopen — proves the data really came back from the DB
     // via RSC, not from any optimistic client state.
     await page.reload();
-    await page.getByRole('tab', { name: '[ 보드 ]' }).click();
-    await page.getByRole('button', { name: /서포터 B 페이/ }).first().click();
+    await page.getByRole('tab', { name: /서포터 B 페이/ }).click();
+    await page.getByRole('button', { name: '내 메모' }).click();
 
     await expect(
       page.getByText('e2e: 본사 컨펌 후 회신 예정'),
@@ -98,8 +97,8 @@ test.describe.serial('BidDetailModal — note roundtrip (Stage 3)', () => {
 
     // Reload to ensure the row is really gone from the server view.
     await page.reload();
-    await page.getByRole('tab', { name: '[ 보드 ]' }).click();
-    await page.getByRole('button', { name: /서포터 B 페이/ }).first().click();
+    await page.getByRole('tab', { name: /서포터 B 페이/ }).click();
+    await page.getByRole('button', { name: '내 메모' }).click();
     await expect(
       page.getByText(/아직 기록된 메모가 없습니다/),
     ).toBeVisible();

@@ -594,6 +594,93 @@ describe('createRfpAction', () => {
     expect(r.error).toBe('INVALID_INPUT');
   });
 
+  it('persists currentSettlementCycle when supplied', async () => {
+    const r = await createRfpAction({
+      title: '정산주기 필드 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      currentSettlementCycle: 'D+1',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.currentSettlementCycle).toBe('D+1');
+  });
+
+  it('stores NULL for currentSettlementCycle when omitted', async () => {
+    const r = await createRfpAction({
+      title: '정산주기 생략 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.currentSettlementCycle).toBeNull();
+  });
+
+  it('persists deliveryServicePeriod when supplied', async () => {
+    const r = await createRfpAction({
+      title: '배송기간 필드 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      deliveryServicePeriod: 'D+3',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.deliveryServicePeriod).toBe('D+3');
+  });
+
+  it('stores NULL for deliveryServicePeriod when omitted', async () => {
+    const r = await createRfpAction({
+      title: '배송기간 생략 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.deliveryServicePeriod).toBeNull();
+  });
+
+  it('persists boardVisible=false when opted out', async () => {
+    const r = await createRfpAction({
+      title: '게시판 노출 끔 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      boardVisible: false,
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.boardVisible).toBe(false);
+  });
+
+  it('defaults boardVisible=true when omitted', async () => {
+    const r = await createRfpAction({
+      title: '게시판 노출 기본값 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.boardVisible).toBe(true);
+  });
+
   // _suppress unused import warnings
   void and;
 });

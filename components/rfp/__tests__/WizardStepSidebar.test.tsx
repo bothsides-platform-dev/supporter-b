@@ -1,8 +1,10 @@
 // components/rfp/__tests__/WizardStepSidebar.test.tsx
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WizardStepSidebar } from '../WizardStepSidebar';
+
+afterEach(cleanup);
 
 describe('WizardStepSidebar', () => {
   it('4개 단계 레이블을 모두 렌더한다', () => {
@@ -86,5 +88,43 @@ describe('WizardStepSidebar', () => {
     expect(onStepClick).toHaveBeenCalledWith(3);
     await user.click(screen.getByText('보내기 확인'));
     expect(onStepClick).toHaveBeenCalledWith(4);
+  });
+
+  it('기본값: 구매사 단계 라벨 + 제목을 렌더', () => {
+    render(<WizardStepSidebar currentStep={1} completed={[false, false, false, false]} onStepClick={vi.fn()} />);
+    expect(screen.getByText('새 견적 요청')).toBeInTheDocument();
+    expect(screen.getByText('사업자 확인')).toBeInTheDocument();
+  });
+
+  it('steps·title prop으로 견적 작성 단계를 렌더', () => {
+    render(
+      <WizardStepSidebar
+        currentStep={2}
+        completed={[true, false, false, false]}
+        onStepClick={vi.fn()}
+        steps={[
+          { num: 1, label: '정산 조건' },
+          { num: 2, label: '수수료' },
+        ]}
+        title="견적 작성"
+      />,
+    );
+    expect(screen.getByText('견적 작성')).toBeInTheDocument();
+    expect(screen.getByText('수수료')).toBeInTheDocument();
+    expect(screen.queryByText('사업자 확인')).not.toBeInTheDocument();
+  });
+
+  it('footer prop을 하단에 렌더한다', () => {
+    render(
+      <WizardStepSidebar
+        currentStep={1}
+        completed={[false, false]}
+        onStepClick={vi.fn()}
+        steps={[{ num: 1, label: '정산 조건' }, { num: 2, label: '수수료' }]}
+        title="견적 작성"
+        footer={<span>자동저장됨</span>}
+      />,
+    );
+    expect(screen.getByText('자동저장됨')).toBeInTheDocument();
   });
 });

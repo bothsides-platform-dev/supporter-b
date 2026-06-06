@@ -19,6 +19,8 @@ function resetStore() {
     currentFeeRate: '',
     currentSettlementLimit: '',
     currentGuaranteeInsurance: '',
+    currentSettlementCycle: '',
+    deliveryServicePeriod: '',
     currentSolution: '',
     currentSolutionDetail: '',
     memo: '',
@@ -62,5 +64,29 @@ describe('RfpStep2Content', () => {
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: '기타' }));
     expect(screen.getByPlaceholderText('솔루션 이름')).toBeInTheDocument();
+  });
+
+  it('현재 정산주기 입력 필드가 렌더된다', () => {
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    expect(screen.getByPlaceholderText('D+1')).toBeInTheDocument();
+  });
+
+  it('현재 정산주기 입력 시 store에 반영된다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    await user.type(screen.getByPlaceholderText('D+1'), 'W+2');
+    expect(useRfpDraftStore.getState().currentSettlementCycle).toBe('W+2');
+  });
+
+  it('배송 및 서비스 기간 입력 필드가 렌더된다', () => {
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    expect(screen.getByPlaceholderText('D+3')).toBeInTheDocument();
+  });
+
+  it('배송 및 서비스 기간 입력 시 store에 반영된다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    await user.type(screen.getByPlaceholderText('D+3'), 'D+5');
+    expect(useRfpDraftStore.getState().deliveryServicePeriod).toBe('D+5');
   });
 });

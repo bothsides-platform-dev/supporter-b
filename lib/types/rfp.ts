@@ -19,6 +19,8 @@ export type RFP = {
   currentFeeRate?: string;
   currentSettlementLimit?: string;
   currentGuaranteeInsurance?: string;
+  currentSettlementCycle?: string;
+  deliveryServicePeriod?: string;
   currentSolution?: string;
   currentSolutionDetail?: string;
   rfpFiles: Attachment[];
@@ -36,10 +38,6 @@ export type RFP = {
   requiredPaymentMethods: PaymentMethod[];
   // 구매사 직접입력 커스텀 결제수단 (id + 라벨). PG는 id로 customFees 제출.
   customPaymentMethods: CustomPaymentMethod[];
-  // RFP-scoped permanent share token (raw). Populated by the repo layer; only
-  // surfaced server-side for the buyer's detail page → never serialised to PG
-  // clients. Optional on type so PG-side renders that omit it stay sound.
-  shareToken?: string;
   // 오픈 RFP 게시판 노출 여부(opt-out). 기본 true. 구매사가 끄면 게시판에서 제외.
   boardVisible?: boolean;
 };

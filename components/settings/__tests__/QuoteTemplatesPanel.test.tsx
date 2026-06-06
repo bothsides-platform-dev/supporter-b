@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { QuoteTemplateOption } from '@/components/inbox/BidForm';
+import type { QuoteTemplateOption } from '@/lib/types/bid';
 
 const saveMock = vi.fn(async (_i: unknown) => ({ ok: true as const, templateId: 't-new' }));
 const deleteMock = vi.fn(async (_i: unknown) => ({ ok: true as const }));

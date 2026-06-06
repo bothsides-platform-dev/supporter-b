@@ -45,7 +45,6 @@ Public
 ├─ /invite                       (토큰 없는 진입 안내)
 ├─ /invite/rfp/:token
 ├─ /invite/workspace/:token
-├─ /share/rfp/:token
 ├─ /pending-approval
 └─ /suspended
 
@@ -53,8 +52,7 @@ Authenticated AppShell
 ├─ /home
 ├─ /rfp
 │  ├─ /rfp/new
-│  ├─ /rfp/:id
-│  └─ /rfp/:id/award
+│  └─ /rfp/:id                     (비교·선정 인라인 — 별도 award 라우트 없음)
 ├─ /inbox
 │  ├─ /inbox/:rfpId
 │  └─ /inbox/:rfpId/submitted
@@ -85,8 +83,8 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget` |
 | B2 | `/rfp` | RFP 목록. 진행중/마감/계약완료 탭 (작성중 단계는 제거 — draft RFP는 `?status=draft` URL/표로만 접근) | `RfpList`, `DataTable`, `Tag` |
 | B3 | `/rfp/new` | 사업자 조회 (선택), 등급 확인 (선택), RFP 첨부, PG 워크스페이스 검색·선택, 발송 | `BizLookupField`, `GradeConfirmPanel`, `RfpCreateForm` (인라인 Popover+cmdk PG 검색), `RfpAttachmentDropzone` |
-| B4 | `/rfp/:id` | RFP 상세 + 받은 Bid 비교 + PDF 프리뷰. 표↔보드 토글로 칸반(진행전/협상중/결정) 전환, 카드 모달에 메모/첨부 히스토리 누적 | `InvitationStatusPanel`, `BidComparisonView`, `BidComparisonTable`, `BidViewToggle`, `BidBoard`, `BidBoardCard`, `BidDetailModal`, `ProposalPdfPreview` |
-| B5 | `/rfp/:id/award` | Bid 선택, 계약 레코드 생성, 선택/미선택 PG 통보 | `AwardFlow`, `DecisionTimeline` |
+| B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / 내 메모 / PG 초대·게시판 관리). 표·보드·칸반 제거 | `RfpDetailContent`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `BidNotesPanel`, `BidPdfPane` |
+| B5 | (B4에 통합) | 선정은 B4 포커스 뷰의 CTA → **인라인 `AwardConfirmDialog`**(결과·마감 경고 + 확정). 계약 레코드 생성·선택/미선택 PG 통보는 `awardRfpAction` 불변. 별도 `/rfp/:id/award` 라우트 제거 | `AwardConfirmDialog`, `awardRfpAction` |
 | B6 | `/settings/profile` | 구매사 사업자 프로필과 등급 갱신 상태 | `WorkspaceProfileForm` |
 | B7 | `/settings/members` | buyer 워크스페이스 멤버 관리 | `MemberTable` |
 
@@ -137,16 +135,15 @@ email unique URL
 ```
 
 ```
-Award
-/rfp/:id
-  ├─ [ 표 ] BidComparisonTable 정렬
-  ├─ [ 보드 ] BidBoard (kanban: 진행전/협상중/결정)
-  │     ├─ 카드 DnD 또는 ⋯ 메뉴로 stage 이동
-  │     └─ 카드 클릭 → BidDetailModal (PDF + 6수치 + 메모/첨부 히스토리)
-  ├─ ProposalPdfPreview 확인
-  ├─ /rfp/:id/award
-  ├─ Contract 생성
-  └─ selected/rejected notifications outbox
+Award (B4에 인라인 통합 — 별도 라우트 없음)
+/rfp/:id  FocusComparison
+  ├─ 탭으로 PG 전환 (hover peek)
+  ├─ ImprovementSummary hero (현재 조건 → 제안값 + 개선폭)
+  ├─ 값 hover → MetricComparePopover (지표로 전 PG 줄세움 · 클릭 전환)
+  ├─ 아코디언: 전체 결제수단 요율 / PG 메모·제안서 PDF / 내 메모
+  └─ CTA [이 견적 선정하기] → AwardConfirmDialog (인라인 확정)
+        ├─ awardRfpAction → Contract 생성
+        └─ selected/rejected notifications outbox
 ```
 
 ### 0.5 v0 Screen Non-Goals

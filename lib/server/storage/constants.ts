@@ -23,3 +23,5 @@ export const MAX_BYTES = 20 * 1024 * 1024;
 export const ACCEPT_EXT = '.pdf,.png,.jpg,.jpeg';
 /** Set of accepted MIME types — mirrors ACCEPT_EXT. */
 export const ACCEPTED_MIMES = new Set(['application/pdf', 'image/png', 'image/jpeg']);
+/** Set of accepted extensions — fallback when the browser doesn't report a MIME (e.g. f.type === ''). */
+export const ACCEPTED_EXTENSIONS = new Set(['.pdf', '.png', '.jpg', '.jpeg']);

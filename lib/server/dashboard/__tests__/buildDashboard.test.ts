@@ -75,30 +75,34 @@ describe('buildBuyerDashboard', () => {
 });
 
 describe('buildPgDashboard', () => {
+  // stage 기반(classifyPgInvitation) — KPI/그룹이 /inbox?status= 탭과 일치해야 함.
   const row = (over: Partial<PgDashRow>): PgDashRow => ({
-    invitationId: 'i', invitationStatus: 'sent', rfpCode: 'P-0', rfpTitle: 't', rfpDeadline: fromNow(20),
+    invitationId: 'i', stage: 'received', rfpCode: 'P-0', rfpTitle: 't', rfpDeadline: fromNow(20),
     ...over,
   });
   const rows: PgDashRow[] = [
-    row({ invitationId: 'n', invitationStatus: 'sent', rfpCode: 'P-N', rfpTitle: 'N', rfpDeadline: fromNow(3) }),
-    row({ invitationId: 'o', invitationStatus: 'opened', rfpCode: 'P-O', rfpTitle: 'O', rfpDeadline: fromNow(20) }),
-    row({ invitationId: 'a', invitationStatus: 'accepted', rfpCode: 'P-A', rfpTitle: 'A', rfpDeadline: fromNow(20) }),
-    row({ invitationId: 'o2', invitationStatus: 'opened', rfpCode: 'P-O2', rfpTitle: 'O2', rfpDeadline: fromNow(2) }),
+    row({ invitationId: 'n', stage: 'received', rfpCode: 'P-N', rfpTitle: 'N', rfpDeadline: fromNow(3) }),
+    row({ invitationId: 'o', stage: 'received', rfpCode: 'P-O', rfpTitle: 'O', rfpDeadline: fromNow(20) }),
+    row({ invitationId: 'a', stage: 'submitted', rfpCode: 'P-A', rfpTitle: 'A', rfpDeadline: fromNow(20) }),
+    row({ invitationId: 'o2', stage: 'received', rfpCode: 'P-O2', rfpTitle: 'O2', rfpDeadline: fromNow(2) }),
   ];
   const dash = buildPgDashboard(rows, NOW);
 
-  it('computes PG KPI values and deep links', () => {
+  it('computes PG KPI values and deep links (stage 기반)', () => {
     const byId = Object.fromEntries(dash.kpis.map((k) => [k.id, k]));
-    expect(byId.new.value).toBe(1);
+    // new = received 전부(열람 여부 무관) — /inbox?status=new 탭과 동일
+    expect(byId.new.value).toBe(3);
     expect(byId.new.href).toBe('/inbox?status=new');
+    // due = received & 마감 임박(d7): n(3d), o2(2d)
     expect(byId.due.value).toBe(2);
     expect(byId.drafting).toBeUndefined();
+    // submitted = bid 제출(stage submitted)
     expect(byId.submitted.value).toBe(1);
   });
 
   it('builds PG action groups (href uses rfp code), omitting empty', () => {
     const byId = Object.fromEntries(dash.groups.map((g) => [g.id, g]));
-    expect(byId.new.items.map((i) => i.id)).toEqual(['n']);
+    expect(byId.new.items.map((i) => i.id)).toEqual(['n', 'o', 'o2']);
     expect(byId.new.items[0].href).toBe('/inbox/P-N');
     expect(byId.due.items.map((i) => i.id)).toEqual(['o2', 'n']);
     expect(byId.drafting).toBeUndefined();
@@ -141,9 +145,15 @@ describe('buildPgDashboard — onboarding', () => {
 });
 
 describe('buildPgDashboard — open RFP discovery', () => {
+  const base = {
+    deadline: fromNow(5),
+    requiredPaymentMethods: [] as string[],
+    customPaymentMethodLabels: [] as string[],
+    mainProducts: null,
+  };
   const listings: OpportunityListing[] = [
-    { rfpCode: 'P-OPEN1', buyerName: '구매사A', title: '오픈 견적', websiteUrl: 'https://a.example.com' },
-    { rfpCode: 'P-OPEN2', buyerName: '구매사B', title: '오픈 견적2', websiteUrl: null },
+    { rfpCode: 'P-OPEN1', buyerName: '구매사A', title: '오픈 견적', websiteUrl: 'https://a.example.com', ...base },
+    { rfpCode: 'P-OPEN2', buyerName: '구매사B', title: '오픈 견적2', websiteUrl: null, ...base },
   ];
 
   it('passes through the open-RFP listings for PG discovery', () => {

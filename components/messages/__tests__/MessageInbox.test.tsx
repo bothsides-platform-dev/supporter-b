@@ -115,6 +115,58 @@ describe('MessageInbox', () => {
     expect(screen.getByRole('button', { name: '새 대화' })).toBeInTheDocument();
   });
 
+  it('미선택 상태: 목록은 표시하고 스레드 pane 은 모바일에서 숨긴다(데스크톱만 표시)', () => {
+    const { container } = render(<MessageInbox conversations={conversations} />);
+    const list = container.querySelector('[data-pane="list"]') as HTMLElement;
+    const thread = container.querySelector('[data-pane="thread"]') as HTMLElement;
+    // 목록: 모바일 전체폭, 데스크톱 고정폭. 미선택 시 항상 보인다.
+    expect(list.className).toContain('w-full');
+    expect(list.className).toContain('md:w-80');
+    expect(list.className).not.toContain('hidden');
+    // 스레드: 미선택 시 모바일에서 숨고 데스크톱(md)에서만 보인다.
+    expect(thread.className).toContain('hidden');
+    expect(thread.className).toContain('md:flex');
+  });
+
+  it('대화 선택 시: 목록 pane 은 모바일에서 숨고 스레드 pane 이 표시된다', async () => {
+    const user = userEvent.setup();
+    loadConversationThread.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      messages: [],
+    });
+    const { container } = render(<MessageInbox conversations={conversations} />);
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /OO페이/ }));
+    });
+    const list = container.querySelector('[data-pane="list"]') as HTMLElement;
+    const thread = container.querySelector('[data-pane="thread"]') as HTMLElement;
+    expect(list.className).toContain('hidden');
+    expect(list.className).toContain('md:flex');
+    expect(thread.className).not.toContain('hidden');
+  });
+
+  it('모바일 뒤로가기 버튼을 누르면 대화 목록으로 돌아간다', async () => {
+    const user = userEvent.setup();
+    loadConversationThread.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      messages: [],
+    });
+    render(<MessageInbox conversations={conversations} />);
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /OO페이/ }));
+    });
+    expect(screen.queryByText('대화를 선택하세요')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '대화 목록' }));
+    });
+    expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
+  });
+
   it('대화 선택 중 로딩 스켈레톤을 표시한다', async () => {
     const user = userEvent.setup();
     // Return a promise that never resolves during this test
@@ -133,5 +185,37 @@ describe('MessageInbox', () => {
 
     // Cleanup: resolve so no pending promises leak
     resolveThread({ ok: false, error: 'CANCELLED' });
+  });
+
+  it('initialSelectedId로 마운트 시 해당 대화의 스레드를 즉시 보여준다', async () => {
+    loadConversationThread.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      messages: [
+        {
+          id: 'm1',
+          sender: 'other',
+          body: '미리 열린 스레드 메시지입니다.',
+          rfpId: null,
+          createdAt: '2026-06-06T01:00:00.000Z',
+          readByCounterparty: false,
+          attachments: [],
+        },
+      ],
+    });
+
+    await act(async () => {
+      render(<MessageInbox conversations={conversations} initialSelectedId="conv-1" />);
+    });
+
+    expect(loadConversationThread).toHaveBeenCalledWith('conv-1');
+    expect(screen.getByText('미리 열린 스레드 메시지입니다.')).toBeInTheDocument();
+  });
+
+  it('목록에 없는 initialSelectedId는 무시하고 미선택 상태로 마운트된다', () => {
+    render(<MessageInbox conversations={conversations} initialSelectedId="conv-does-not-exist" />);
+    expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
+    expect(loadConversationThread).not.toHaveBeenCalled();
   });
 });

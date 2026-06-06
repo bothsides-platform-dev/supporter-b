@@ -26,7 +26,6 @@ type InvitationView = {
 type Props = {
   rfpId: string;
   invitations: InvitationView[];
-  shareUrl: string;
   canEdit: boolean;
 };
 
@@ -51,7 +50,6 @@ const statusColor: Record<InvitationStatus, ChipColor> = {
 export function RfpInviteManager({
   rfpId,
   invitations,
-  shareUrl,
   canEdit,
 }: Props) {
   const router = useRouter();
@@ -89,15 +87,6 @@ export function RfpInviteManager({
       toast(`${r.sentCount}개 PG에 초대 메일을 보냈어요.`);
       router.refresh();
     });
-  };
-
-  const handleCopyShare = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast('공유 링크를 복사했어요.');
-    } catch {
-      toast('링크를 복사하지 못했어요.', { type: 'error' });
-    }
   };
 
   return (
@@ -221,33 +210,6 @@ export function RfpInviteManager({
             </Button>
           </div>
 
-          {/* 공유 링크 */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-3 mb-1">
-              <Label size="md" muted={false}>공유 링크</Label>
-              <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-            </div>
-            <div className="flex items-center gap-3 border border-[var(--md-sys-color-outline-variant)] rounded-md px-3 py-2">
-              <input
-                readOnly
-                value={shareUrl}
-                onFocus={(e) => e.currentTarget.select()}
-                className="flex-1 bg-transparent text-[12px] font-mono tabular-nums text-[var(--md-sys-color-on-surface-variant)] focus:outline-none truncate"
-              />
-              <Button
-                type="button"
-                variant="outlined"
-                size="sm"
-                onClick={handleCopyShare}
-              >
-                복사
-              </Button>
-            </div>
-            <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-              초대받은 PG 워크스페이스 멤버라면 이 링크로 입장 가능합니다.
-              마감일에 자동 만료됩니다.
-            </p>
-          </div>
         </>
       )}
     </div>
