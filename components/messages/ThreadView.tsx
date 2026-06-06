@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,7 +10,7 @@ import { Chip } from '@/components/primitives/Chip';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, XIcon, EnvelopeIcon } from '@/components/icons';
-import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES } from '@/lib/server/storage/constants';
+import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES, ACCEPTED_EXTENSIONS } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
@@ -61,7 +62,8 @@ type Attachment = {
   size?: number;
   mimeType?: string;
   url?: string;
-  status: 'uploading' | 'ready';
+  status: 'uploading' | 'ready' | 'error';
+  error?: string;
 };
 
 // Capturing group so split keeps the URLs; matched per-part with a
@@ -317,10 +319,14 @@ export function ThreadView({
             : a,
         ),
       );
-    } catch {
-      // 업로드 실패: 임시 행(스켈레톤)을 제거하고 에러 토스트로 알린다.
-      setAttachments((prev) => prev.filter((a) => a.id !== tempId));
-      toast('파일을 올리지 못했어요. 다시 시도해 주세요.', { type: 'error' });
+    } catch (err) {
+      let msg = '업로드 실패';
+      if (err instanceof HTTPError) {
+        msg = err.response.status === 415 ? '지원되지 않는 파일 형식이에요' : `업로드 실패 (${err.response.status})`;
+      }
+      setAttachments((prev) =>
+        prev.map((a) => (a.id === tempId ? { ...a, status: 'error', error: msg } : a)),
+      );
     }
   }
 
@@ -330,7 +336,12 @@ export function ThreadView({
     const additions: Attachment[] = [];
     for (let i = 0; i < Math.min(list.length, remaining); i++) {
       const f = list[i];
-      if (!ACCEPTED_MIMES.has(f.type)) continue;
+      const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
+      if (!ACCEPTED_MIMES.has(f.type) && !ACCEPTED_EXTENSIONS.has(ext)) {
+        const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
+        additions.push({ id: tempId, name: f.name, status: 'error', error: '지원되지 않는 파일 형식이에요 (PDF/PNG/JPEG)' });
+        continue;
+      }
       if (f.size > MAX_BYTES) continue;
       // 선택 즉시 'uploading' 행(스켈레톤)을 추가해 올리는 중임을 보여준다.
       const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
@@ -635,6 +646,24 @@ export function ThreadView({
               >
                 <span className="max-w-[160px] truncate">{a.name}</span>
                 <Skeleton className="size-3 rounded-full" />
+              </span>
+            ) : a.status === 'error' ? (
+              // 업로드 실패 — 에러 메시지 + 제거 버튼.
+              <span
+                key={a.id}
+                aria-label={`${a.name} 업로드 실패`}
+                title={a.error}
+                className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-error)] px-2 py-1 text-[12px] text-[var(--md-sys-color-error)]"
+              >
+                <span className="max-w-[160px] truncate">{a.name}</span>
+                <button
+                  type="button"
+                  aria-label={`${a.name} 첨부 제거`}
+                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  className="hover:opacity-70"
+                >
+                  <XIcon size={12} />
+                </button>
               </span>
             ) : (
               <span
