@@ -28,7 +28,7 @@
  * read another PG's proposal even if invited to the same RFP.
  */
 import { eq } from 'drizzle-orm';
-import { bidNotes, bids, rfps } from '@/lib/db/schema';
+import { bidNotes, bids, chatConversations, chatMessages, rfps } from '@/lib/db/schema';
 import type { AttachmentRecord } from '@/lib/server/repositories/attachment-record';
 import type { InvitationRepo, WorkspaceRepo, Tx } from '@/lib/server/repositories/types';
 
@@ -133,6 +133,27 @@ export async function canAccessAttachment(
     if (!rfpRow) return false;
     if (wsId && rfpRow.buyerWsId === wsId && (await isMember(wsId))) return true;
     return false;
+  }
+
+  if (att.chatMessageId) {
+    // chat attachment — both workspace sides of the conversation can read it.
+    const [msgRow] = await h
+      .select({ conversationId: chatMessages.conversationId })
+      .from(chatMessages)
+      .where(eq(chatMessages.id, att.chatMessageId))
+      .limit(1);
+    if (!msgRow) return false;
+
+    const [conv] = await h
+      .select({ buyerWsId: chatConversations.buyerWsId, pgWsId: chatConversations.pgWsId })
+      .from(chatConversations)
+      .where(eq(chatConversations.id, msgRow.conversationId))
+      .limit(1);
+    if (!conv) return false;
+
+    if (!wsId) return false;
+    if (conv.buyerWsId !== wsId && conv.pgWsId !== wsId) return false;
+    return isMember(wsId);
   }
 
   // Draft with no owner linked — only the uploader (handled above) may read.
