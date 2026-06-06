@@ -70,6 +70,29 @@ describe('verifyEmailCodeAction', () => {
     expect(second.ok).toBe(false);
   });
 
+  it('locks the code after 5 wrong attempts — even the correct code is then refused', async () => {
+    await signupEmailAction({ email: 'brute@example.com', workspaceType: 'buyer' });
+
+    const [row] = await db
+      .select({ html: outboxEntries.html })
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'brute@example.com'))
+      .limit(1);
+    const code = codeFromHtml(row.html);
+    const wrong = code === '000000' ? '111111' : '000000';
+
+    for (let i = 0; i < 5; i++) {
+      const r = await verifyEmailCodeAction({ email: 'brute@example.com', code: wrong });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('TOKEN_INVALID_OR_EXPIRED');
+    }
+
+    // 6th call with the CORRECT code must be refused — the code is now locked.
+    const r = await verifyEmailCodeAction({ email: 'brute@example.com', code });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('MAX_ATTEMPTS');
+  });
+
   it('returns inviteToken from meta when present', async () => {
     await signupEmailAction({ email: 'code5@example.com', inviteToken: 'INV-CODE-42' });
 

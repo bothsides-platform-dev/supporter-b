@@ -303,6 +303,20 @@ export interface VerificationTokenRepo {
     },
     tx?: Tx,
   ): Promise<(Omit<VerificationToken, 'token'> & { tokenHash: string }) | undefined>;
+  /**
+   * 활성(미사용·미만료) 토큰의 6자리 코드 시도 상태 조회 — 가장 최근 발급분 1건.
+   * emailCodeHash 는 meta.emailCode. 코드 무차별 대입 제한(F2)용. 없으면 undefined.
+   */
+  findActiveEmailCodeToken(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<{ id: string; attempts: number; emailCodeHash: string | null } | undefined>;
+  /** 코드 오입력 시 attempts +1 (race-tolerant, 전화 OTP와 동일 패턴). */
+  bumpEmailCodeAttempts(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── Attachment ────────────────────────────────────────────────────────
