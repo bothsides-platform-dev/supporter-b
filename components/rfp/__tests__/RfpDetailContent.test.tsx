@@ -78,7 +78,6 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     pgWsNameMap: {},
     pendingRequests: [],
     canEdit: true,
-    shareUrl: '',
     authorId: 'u1',
     authorName: '담당자',
     ...over,

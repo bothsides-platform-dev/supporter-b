@@ -45,7 +45,6 @@ Public
 ├─ /invite                       (토큰 없는 진입 안내)
 ├─ /invite/rfp/:token
 ├─ /invite/workspace/:token
-├─ /share/rfp/:token
 ├─ /pending-approval
 └─ /suspended
 
