@@ -3,6 +3,8 @@ import { ActionQueue } from './ActionQueue';
 import { OnboardingActionList } from './OnboardingActionList';
 import { RecentMessagesPanel } from './RecentMessagesPanel';
 import { RefreshButton } from './RefreshButton';
+import { ChatPanelPlaceholder } from './ChatPanelPlaceholder';
+import { HomeHeaderActionsRegistrar } from './HomeHeaderActionsRegistrar';
 import { OpportunityList } from '@/components/opportunities/OpportunityList';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,9 +33,7 @@ export function HomeDashboard({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
-        <RefreshButton />
-      </div>
+      <HomeHeaderActionsRegistrar />
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           <KpiStrip kpis={dashboard.kpis} />

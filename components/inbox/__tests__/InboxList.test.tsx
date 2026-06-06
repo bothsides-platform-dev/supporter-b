@@ -14,8 +14,7 @@ import type { InboxRow } from '../InboxList';
 
 const row: InboxRow = {
   invitationId: 'inv-001',
-  invitationStatus: 'sent',
-  rfpStatus: 'sent',
+  stage: 'received',
   rfpId: 'P-2604-0001',
   rfpTitle: 'PG 결제대행 RFP',
   rfpDeadline: new Date(Date.now() + 86_400_000).toISOString(),
@@ -40,24 +39,26 @@ describe('InboxList', () => {
     expect(screen.getByText('P-2604-0001')).toBeInTheDocument();
   });
 
-  it('InboxRow에 rfpStatus 필드가 포함됨', () => {
-    const rowWithClosedRfp: InboxRow = {
-      ...row,
-      invitationId: 'inv-002',
-      rfpStatus: 'closed',
-    };
-    render(<InboxList rows={[rowWithClosedRfp]} />);
-    expect(screen.getByText('P-2604-0001')).toBeInTheDocument();
-  });
-
-  it('초대 상태 Chip을 렌더', () => {
+  it('received 단계 Chip을 신규로 렌더', () => {
     render(<InboxList rows={[row]} />);
     expect(screen.getByText('신규')).toBeInTheDocument();
   });
 
-  it('opened 초대는 작성중 대신 신규로 표시', () => {
-    const openedRow: InboxRow = { ...row, invitationId: 'inv-003', invitationStatus: 'opened' };
-    render(<InboxList rows={[openedRow]} />);
+  it('won 단계는 선정됨, lost 단계는 미선정 Chip을 렌더', () => {
+    render(
+      <InboxList
+        rows={[
+          { ...row, invitationId: 'inv-won', stage: 'won', bidId: 'bid-1' },
+          { ...row, invitationId: 'inv-lost', stage: 'lost', bidId: 'bid-2' },
+        ]}
+      />,
+    );
+    expect(screen.getByText('선정됨')).toBeInTheDocument();
+    expect(screen.getByText('미선정')).toBeInTheDocument();
+  });
+
+  it('received 단계는 작성중이 아닌 신규로 표시', () => {
+    render(<InboxList rows={[row]} />);
     expect(screen.queryByText('작성중')).not.toBeInTheDocument();
     expect(screen.getByText('신규')).toBeInTheDocument();
   });
@@ -67,17 +68,23 @@ describe('InboxList', () => {
     expect(container.textContent).not.toContain('J / K 이동');
   });
 
-  it('신규(sent) 행은 "견적 작성" 행동 링크를 보여준다', () => {
+  it('received 행은 "견적 작성" 행동 링크를 보여준다', () => {
     render(<InboxList rows={[row]} />);
     expect(screen.getByRole('link', { name: '견적 작성' })).toHaveAttribute('href', '/inbox/P-2604-0001');
   });
 
-  it('견적 보낸(accepted) 행은 "보낸 견적" 행동 링크를 보여준다', () => {
-    render(<InboxList rows={[{ ...row, invitationId: 'inv-004', invitationStatus: 'accepted' }]} />);
+  it('submitted 행은 "보낸 견적" 행동 링크를 보여준다', () => {
+    render(<InboxList rows={[{ ...row, invitationId: 'inv-004', stage: 'submitted', bidId: 'bid-3' }]} />);
     expect(screen.getByRole('link', { name: '보낸 견적' })).toHaveAttribute(
       'href',
       '/inbox/P-2604-0001/submitted',
     );
+  });
+
+  it('bid 없이 마감된(lost, 미제출) 행은 행동 링크 대신 — 를 보여준다', () => {
+    render(<InboxList rows={[{ ...row, invitationId: 'inv-005', stage: 'lost' }]} />);
+    expect(screen.queryByRole('link', { name: '견적 작성' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '보낸 견적' })).not.toBeInTheDocument();
   });
 });
 
