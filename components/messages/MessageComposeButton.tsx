@@ -142,7 +142,11 @@ export function MessageComposeButton({ counterparty, rfpContext, variant = 'avat
       const f = fileList[i];
       if (rows.some((r) => r.name === f.name)) continue;
       const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
-      if (!ACCEPTED_MIMES.has(f.type) && !ACCEPTED_EXTENSIONS.has(ext)) continue;
+      if (!ACCEPTED_MIMES.has(f.type) && !ACCEPTED_EXTENSIONS.has(ext)) {
+        const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
+        additions.push({ id: tempId, name: f.name, size: f.size, status: 'error', error: '지원되지 않는 파일 형식이에요 (PDF/PNG/JPEG)' });
+        continue;
+      }
       if (f.size > MAX_BYTES) continue;
       const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
       additions.push({ id: tempId, name: f.name, size: f.size, status: 'uploading' });

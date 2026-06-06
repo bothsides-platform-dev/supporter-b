@@ -421,6 +421,37 @@ describe('ThreadView', () => {
     expect(await screen.findByLabelText('보고서.pdf 첨부 제거')).toBeInTheDocument();
   });
 
+  it('서버 업로드 실패 시 행이 제거되지 않고 에러 칩으로 전환되며, X 버튼으로 제거할 수 있다', async () => {
+    const user = userEvent.setup();
+    httpPost.mockReturnValue({
+      json: () => Promise.reject(new Error('network error')),
+    });
+
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '제안서.pdf', { type: 'application/pdf' });
+    await user.upload(input, file);
+
+    // Error chip must appear with the file name — currently the row is removed
+    expect(await screen.findByLabelText('제안서.pdf 업로드 실패')).toBeInTheDocument();
+    // Remove button should be available on the error chip
+    const removeBtn = screen.getByLabelText('제안서.pdf 첨부 제거');
+    await user.click(removeBtn);
+    await waitFor(() => expect(screen.queryByLabelText('제안서.pdf 업로드 실패')).not.toBeInTheDocument());
+  });
+
+  it('지원하지 않는 파일 형식 선택 시 에러 칩이 노출된다', async () => {
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '보고서.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    // Simulate OS "모든 파일" selection bypassing accept filter
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    // Error chip must appear — currently silently dropped
+    expect(await screen.findByLabelText('보고서.docx 업로드 실패')).toBeInTheDocument();
+  });
+
   it('첨부 업로드 중에는 "업로드 중" 스켈레톤 칩을 보여주고 전송을 잠그며, 완료되면 일반 칩으로 바뀐다', async () => {
     const user = userEvent.setup();
     // 업로드 응답을 테스트가 직접 resolve 하도록 promise 를 붙잡는다.
@@ -477,7 +508,7 @@ describe('ThreadView 실패 피드백', () => {
     expect(toast).not.toHaveBeenCalled();
   });
 
-  it('첨부 업로드 실패 시 에러 토스트를 띄운다', async () => {
+  it('첨부 업로드 실패 시 에러 칩으로 전환되고 토스트는 띄우지 않는다', async () => {
     const user = userEvent.setup();
     httpPost.mockReturnValue({ json: () => Promise.reject(new Error('upload failed')) });
     const { container } = render(base());
@@ -486,8 +517,9 @@ describe('ThreadView 실패 피드백', () => {
     await user.upload(input, file);
 
     await waitFor(() => {
-      expect(toast).toHaveBeenCalledWith(expect.any(String), { type: 'error' });
+      expect(screen.getByLabelText('실패.pdf 업로드 실패')).toBeInTheDocument();
     });
+    expect(toast).not.toHaveBeenCalled();
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor, within } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 class ResizeObserverStub {
@@ -158,6 +158,25 @@ describe('MessageComposeButton (rich compose drawer)', () => {
     // Chip must appear — currently silently dropped because ACCEPTED_MIMES.has('') === false
     expect(await screen.findByText('보고서.pdf')).toBeInTheDocument();
     await waitFor(() => expect(httpPost).toHaveBeenCalled());
+  });
+
+  it('지원하지 않는 파일 형식 선택 시 ERROR 칩이 노출된다', async () => {
+    const user = userEvent.setup();
+    render(<MessageComposeButton counterparty={counterparty} rfpContext={rfpContext} />);
+    await openComposeDrawer(user);
+
+    const file = new File([new Uint8Array([1, 2, 3])], '보고서.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const input = screen.getByLabelText('파일 첨부', { selector: 'input[type="file"]' });
+    // Simulate OS "모든 파일" selection bypassing accept filter
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    // ERROR chip must appear — currently the file is silently dropped
+    expect(await screen.findByText('보고서.docx')).toBeInTheDocument();
+    expect(screen.getByText('ERROR')).toBeInTheDocument();
+    expect(httpPost).not.toHaveBeenCalled();
   });
 
   it('첨부 추가 → 칩 노출 → 전송 시 attachmentIds 포함, 제거하면 빠진다', async () => {
