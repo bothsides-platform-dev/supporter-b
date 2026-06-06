@@ -1,5 +1,34 @@
 import { describe, it, expect } from 'vitest';
-import { formatDate, formatDateTime, formatSize } from '../format';
+import { formatDate, formatDateTime, formatSize, formatKrwReadable } from '../format';
+
+describe('formatKrwReadable', () => {
+  it('1000의 배수 그룹은 천 단위로 축약한다', () => {
+    expect(formatKrwReadable(5000)).toBe('5천원');
+    expect(formatKrwReadable(50000)).toBe('5만 원');
+    expect(formatKrwReadable(50000000)).toBe('5천만 원');
+  });
+
+  it('천 배수가 아닌 그룹은 콤마로 표기한다', () => {
+    expect(formatKrwReadable(5000000)).toBe('500만 원');
+    expect(formatKrwReadable(12340000)).toBe('1,234만 원');
+  });
+
+  it('억·만 그룹을 함께 표기한다', () => {
+    expect(formatKrwReadable(120000000)).toBe('1억 2천만 원');
+    expect(formatKrwReadable(100000000)).toBe('1억 원');
+  });
+
+  it('나머지(원)가 있으면 마지막 토큰에 원을 붙인다', () => {
+    expect(formatKrwReadable(12345)).toBe('1만 2,345원');
+  });
+
+  it('유효하지 않은 값은 빈 문자열을 반환한다', () => {
+    expect(formatKrwReadable(0)).toBe('');
+    expect(formatKrwReadable(-5000)).toBe('');
+    expect(formatKrwReadable(NaN)).toBe('');
+    expect(formatKrwReadable(Infinity)).toBe('');
+  });
+});
 
 describe('formatDate', () => {
   it('UTC+9 타임존에서 T23:59:59Z 마감일이 같은 날짜로 표시된다', () => {
