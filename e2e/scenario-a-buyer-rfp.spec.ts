@@ -61,8 +61,10 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await page
       .getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 견적 요청')
       .fill('e2e-A-2026 결제 인프라 제안');
+    // 견적 요청 세부 내용(memo)은 optional. placeholder 가 자주 바뀌므로 step 2
+    // 의 유일한 <textarea> 를 직접 노린다.
     await page
-      .getByPlaceholder(/카드결제·간편결제 통합 솔루션 검토 중입니다/)
+      .locator('textarea')
       .fill('e2e scenario A — automated send');
     // 견적 받을 결제수단 * — RfpPaymentMethodSelect 의 토글 버튼. '카드' 는
     // '해외카드' 와 부분일치하므로 exact 로 좁힌다.
