@@ -1,8 +1,8 @@
 /**
  * `canAccessAttachment` — single source of truth for file route ACLs.
  *
- * Ownership is exclusive-arc (C3): an attachment carries at most one of
- * rfpId / bidId / bidNoteId. Rules per owner column:
+ * Ownership is exclusive-arc (C4): an attachment carries at most one of
+ * rfpId / bidId / bidNoteId / chatMessageId. Rules per owner column:
  *
  *   `rfpId` set (RFP PDFs attached to a buyer-side RFP)
  *     - Buyer ws members of the RFP owner: ALLOW
@@ -20,6 +20,12 @@
  *     - Buyer ws members of the RFP behind the bid: ALLOW
  *     - Uploader themselves: ALLOW
  *     - **All PG users: DENY** — notes are internal to the buyer.
+ *
+ *   `chatMessageId` set (attachment sent in a chat conversation)
+ *     - Buyer ws members of the conversation: ALLOW
+ *     - PG ws members of the conversation: ALLOW
+ *     - Uploader themselves: ALLOW (via top-level fast-path)
+ *     - Otherwise: DENY
  *
  *   None set (draft, uploaded before its owner row exists)
  *     - Only the uploader: ALLOW

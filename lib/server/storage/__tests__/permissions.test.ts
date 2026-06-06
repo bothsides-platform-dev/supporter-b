@@ -459,6 +459,9 @@ describe('canAccessAttachment — chatMessageId branch', () => {
       mimeType: 'application/pdf',
       uploadedBy: s.buyerUserId,
     });
+    // uploadedBy is intentionally set to pgUserId (not the actual uploader s.buyerUserId)
+    // so the top-level fast-path (att.uploadedBy === userId) does NOT short-circuit —
+    // this forces the chatMessageId branch to run and be exercised.
     const att: AttachmentRow = { id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', url: '', uploadedBy: s.pgUserId };
     const ok = await canAccessAttachment(
       db, att,

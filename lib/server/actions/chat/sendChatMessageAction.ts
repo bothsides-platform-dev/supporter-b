@@ -274,9 +274,8 @@ export async function sendChatMessageAction(
     // Load the saved attachments (chatMessageId is committed at this point)
     // so the live fanout payload includes file metadata and the receiver can
     // render tiles without a refetch.
-    const attRepo = await getAttachmentRepo();
     const savedAtts = data.attachmentIds.length > 0
-      ? await attRepo.findByChatMessageIds([result.messageId])
+      ? await (await getAttachmentRepo()).findByChatMessageIds([result.messageId])
       : [];
     // Best-effort live fanout — never blocks the send. Content-bearing so a
     // subscriber can append straight to its thread (sender derived from

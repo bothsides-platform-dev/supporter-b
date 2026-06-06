@@ -437,6 +437,42 @@ describe('sendChatMessageAction', () => {
       expect.objectContaining({ attachments: [] }),
     );
   });
+
+  it('INVALID_ATTACHMENT when attachment already has chatMessageId set', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    // First seed a real conversation + message (FK required).
+    const { chatConversations, chatMessages: chatMessagesTable } = await import('@/lib/db/schema');
+    const convId = randomUUID();
+    await db.insert(chatConversations).values({ id: convId, buyerWsId: buyerWs.id, pgWsId: pgWs.id });
+    const existingMsgId = randomUUID();
+    await db.insert(chatMessagesTable).values({
+      id: existingMsgId,
+      conversationId: convId,
+      authorUserId: buyerUser.id,
+      authorWsId: buyerWs.id,
+      body: '기존 메시지',
+    });
+
+    // Seed an attachment already linked to that message.
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId,
+      name: 'already-linked.pdf',
+      size: 1024,
+      mimeType: 'application/pdf',
+      uploadedBy: buyerUser.id,
+      chatMessageId: existingMsgId,
+    });
+
+    const r = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '이미 연결된 첨부파일.',
+      attachmentIds: [attId],
+    });
+    expect(r).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+  });
 });
 
 describe('markConversationReadAction', () => {
