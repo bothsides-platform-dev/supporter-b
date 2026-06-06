@@ -68,7 +68,6 @@ export function RfpDetailContent({
     pgWsNameMap,
     pendingRequests,
     canEdit,
-    shareUrl,
     authorId,
     authorName,
   } = data;
@@ -171,7 +170,6 @@ export function RfpDetailContent({
           <RfpInviteManager
             rfpId={rfp.code}
             invitations={inviteList}
-            shareUrl={shareUrl}
             canEdit={canEdit}
           />
           <RfpBoardVisibilityToggle

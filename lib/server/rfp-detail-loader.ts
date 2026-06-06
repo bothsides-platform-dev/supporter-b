@@ -15,7 +15,6 @@ import {
   getWorkspaceRepo,
 } from './repositories/factory';
 import type { QuoteTemplateOption } from '@/components/inbox/BidForm';
-import { baseUrl } from './actions/auth/_shared';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
@@ -35,7 +34,6 @@ export type BuyerRfpDetailData = {
   /** 오픈 게시판에서 들어온 미결(pending) 참여 요청 — 구매사 검토용. */
   pendingRequests: { id: string; pgWsId: string; pgWsName: string; message: string; createdAt: string }[];
   canEdit: boolean;
-  shareUrl: string;
   authorId: string;
   authorName: string;
 };
@@ -137,7 +135,6 @@ export async function loadBuyerRfpDetail(args: {
   }));
 
   const canEdit = rfp.status === 'sent' && new Date(rfp.deadline).getTime() > Date.now();
-  const shareUrl = rfp.shareToken ? `${baseUrl()}/share/rfp/${rfp.shareToken}` : '';
 
   return {
     rfp,
@@ -149,7 +146,6 @@ export async function loadBuyerRfpDetail(args: {
     pgWsNameMap,
     pendingRequests,
     canEdit,
-    shareUrl,
     authorId: args.userId,
     authorName: args.userName,
   };

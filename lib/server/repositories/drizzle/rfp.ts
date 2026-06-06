@@ -50,7 +50,6 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     boardColumnId: row.boardColumnId,
     requiredPaymentMethods: (row.requiredPaymentMethods ?? []) as PaymentMethod[],
     customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
-    shareToken: row.shareToken,
     boardVisible: row.boardVisible,
   };
 }
@@ -111,7 +110,6 @@ export class DrizzleRfpRepository implements RfpRepo {
       bizProfileId = biz.id;
     }
 
-    // shareToken 미지정 시 DB default(gen_random_uuid()::text)로 폴백.
     type Insertable = typeof rfps.$inferInsert;
     const values: Insertable = {
       id: rfp.id,
@@ -132,7 +130,6 @@ export class DrizzleRfpRepository implements RfpRepo {
       createdBy: rfp.createdBy,
       sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
     };
-    if (rfp.shareToken) values.shareToken = rfp.shareToken;
     // boardVisible 미지정 시 DB default(true). 지정 시에만 반영하고, 업서트
     // conflict set 에는 넣지 않아 — 노출 토글은 전용 액션의 직접 UPDATE 소관이라
     // 일반 RFP 저장/수정이 구매사의 opt-out 선택을 덮어쓰지 않게 한다.
@@ -202,19 +199,6 @@ export class DrizzleRfpRepository implements RfpRepo {
       typed.map((r) => r.rfp.id),
     );
     return typed.map((r) => rowToRfp(r.rfp, r.biz, allowed.get(r.rfp.id) ?? []));
-  }
-
-  async findByShareToken(token: string, tx?: Tx): Promise<RFP | undefined> {
-    const db = this.h(tx);
-    const [row] = await db
-      .select({ rfp: rfps, biz: bizProfiles })
-      .from(rfps)
-      .leftJoin(bizProfiles, eq(rfps.bizProfileId, bizProfiles.id))
-      .where(eq(rfps.shareToken, token))
-      .limit(1);
-    if (!row) return undefined;
-    const allowed = await this.allowedByRfp(db, [row.rfp.id]);
-    return rowToRfp(row.rfp, row.biz, allowed.get(row.rfp.id) ?? []);
   }
 
   async transition(
