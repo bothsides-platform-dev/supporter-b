@@ -3,7 +3,9 @@
 import { Suspense } from 'react';
 import { Breadcrumb } from '@/components/shell/Breadcrumb';
 import { SearchBar } from '@/components/shell/header/SearchBar';
+import { RefreshHeaderButton } from '@/components/shell/header/RefreshHeaderButton';
 import { UserMenu } from '@/components/shell/UserMenu';
+import { useHeaderActionsStore } from '@/lib/stores/header-actions';
 import { cn } from '@/lib/utils';
 import type { WorkspaceType } from '@/lib/types/workspace';
 
@@ -15,9 +17,11 @@ type HeaderProps = {
 
 /**
  * Header — sits above the main content (Linear "정통": not over the sidebar).
- * Left: URL-derived breadcrumb. Right: search bar (⌘K) + user menu.
+ * Left: URL-derived breadcrumb. Right: page-specific actions (e.g. refresh) + search bar (⌘K) + user menu.
  */
 export function Header({ user, workspaceType, className }: HeaderProps) {
+  const refreshSlot = useHeaderActionsStore((s) => s.refreshSlot);
+
   return (
     <header
       className={cn(
@@ -30,6 +34,13 @@ export function Header({ user, workspaceType, className }: HeaderProps) {
           <Breadcrumb />
         </Suspense>
       </div>
+      {refreshSlot && (
+        <RefreshHeaderButton
+          onRefresh={refreshSlot.onRefresh}
+          lastRefreshedAt={refreshSlot.lastRefreshedAt}
+          isRefreshing={refreshSlot.isRefreshing}
+        />
+      )}
       <SearchBar />
       <UserMenu user={user} workspaceType={workspaceType} />
     </header>
