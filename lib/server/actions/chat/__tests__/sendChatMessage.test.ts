@@ -385,6 +385,94 @@ describe('sendChatMessageAction', () => {
     const r = await sendChatMessageAction({ counterpartyWorkspaceId: pgWs.id, body: '' });
     expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
   });
+
+  it('attachmentIds 를 포함한 전송 시 publishChatEvent 페이로드에 attachments 배열이 포함된다', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId,
+      name: '제안서.pdf',
+      size: 2048,
+      mimeType: 'application/pdf',
+      uploadedBy: buyerUser.id,
+      // rfpId, bidId, bidNoteId, chatMessageId all null (draft)
+    });
+
+    const r = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '파일 확인해 주세요.',
+      attachmentIds: [attId],
+    });
+    expect(r.ok).toBe(true);
+
+    expect(publishChatEvent).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        attachments: expect.arrayContaining([
+          expect.objectContaining({
+            id: attId,
+            name: '제안서.pdf',
+            mimeType: 'application/pdf',
+            url: `/api/files/${attId}`,
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it('첨부파일 없이 전송 시 publishChatEvent 페이로드의 attachments 는 빈 배열이다', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    const r = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '첨부 없는 메시지',
+    });
+    expect(r.ok).toBe(true);
+
+    expect(publishChatEvent).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ attachments: [] }),
+    );
+  });
+
+  it('INVALID_ATTACHMENT when attachment already has chatMessageId set', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    // First seed a real conversation + message (FK required).
+    const { chatConversations, chatMessages: chatMessagesTable } = await import('@/lib/db/schema');
+    const convId = randomUUID();
+    await db.insert(chatConversations).values({ id: convId, buyerWsId: buyerWs.id, pgWsId: pgWs.id });
+    const existingMsgId = randomUUID();
+    await db.insert(chatMessagesTable).values({
+      id: existingMsgId,
+      conversationId: convId,
+      authorUserId: buyerUser.id,
+      authorWsId: buyerWs.id,
+      body: '기존 메시지',
+    });
+
+    // Seed an attachment already linked to that message.
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId,
+      name: 'already-linked.pdf',
+      size: 1024,
+      mimeType: 'application/pdf',
+      uploadedBy: buyerUser.id,
+      chatMessageId: existingMsgId,
+    });
+
+    const r = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '이미 연결된 첨부파일.',
+      attachmentIds: [attId],
+    });
+    expect(r).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+  });
 });
 
 describe('markConversationReadAction', () => {

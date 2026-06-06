@@ -36,6 +36,7 @@ type LiveMessagePayload = {
   authorWsId?: string;
   rfpId?: string | null;
   createdAt?: string;
+  attachments?: { id: string; name: string; size: number; mimeType: string; url: string }[];
   [k: string]: unknown;
 };
 
@@ -243,7 +244,7 @@ export function ThreadView({
             rfpId: data.rfpId ?? null,
             createdAt: data.createdAt as string,
             readByCounterparty: false,
-            attachments: [],
+            attachments: data.attachments ?? [],
           },
         ];
       });
