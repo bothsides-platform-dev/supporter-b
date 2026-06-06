@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { loginAttempts } from '@/lib/db/schema';
 
 // Server-authoritative login throttle. Keyed independently by email (single
@@ -118,12 +118,17 @@ export async function recordLoginFailure(
 }
 
 /**
- * Clear the email bucket after a successful login. The IP bucket is left
- * intact on purpose — one valid login must not reset a spraying streak.
+ * Clear the failure buckets after a successful login. Both the email key and
+ * (when present) the IP key are reset, so a legitimate sign-in fully releases
+ * the throttle for that user/network. Trade-off: an attacker who happens to
+ * own one valid account on a shared IP can reset that IP's spraying streak —
+ * accepted in exchange for not penalising shared-NAT users after they log in.
  */
 export async function clearLoginAttempts(
   db: Db,
-  { email }: { email: string; ip?: string | null },
+  { email, ip }: { email: string; ip?: string | null },
 ): Promise<void> {
-  await db.delete(loginAttempts).where(eq(loginAttempts.key, emailKey(email)));
+  const keys = [emailKey(email)];
+  if (ip) keys.push(ipKey(ip));
+  await db.delete(loginAttempts).where(inArray(loginAttempts.key, keys));
 }

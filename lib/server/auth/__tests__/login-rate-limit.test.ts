@@ -63,6 +63,23 @@ describe('login-rate-limit', () => {
     expect(r.locked).toBe(false);
   });
 
+  it('clearLoginAttempts also resets the IP bucket when an ip is given', async () => {
+    for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
+      await recordLoginFailure(db, {
+        email: `v${i}@example.com`,
+        ip: '203.0.113.7',
+        now: T0,
+      });
+    }
+    await clearLoginAttempts(db, { email: 'v0@example.com', ip: '203.0.113.7' });
+    const r = await checkLoginLock(db, {
+      email: 'fresh@example.com',
+      ip: '203.0.113.7',
+      now: T0,
+    });
+    expect(r.locked).toBe(false);
+  });
+
   it('locks by IP independently of email (password spraying)', async () => {
     // Many distinct emails, one IP — the email buckets never reach the
     // threshold but the shared IP bucket does.
