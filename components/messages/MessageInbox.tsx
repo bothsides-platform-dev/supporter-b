@@ -10,10 +10,14 @@ import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import type { ConversationListItem } from './types';
 
-type Props = { conversations: ConversationListItem[] };
+type Props = {
+  conversations: ConversationListItem[];
+  /** Pre-select a conversation on mount (e.g. from ?c= deep-link). Ignored if id not in list. */
+  initialSelectedId?: string | null;
+};
 
-export function MessageInbox({ conversations }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+export function MessageInbox({ conversations, initialSelectedId = null }: Props) {
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const selected = conversations.find((c) => c.conversationId === selectedId) ?? null;
 
   // 메신저형 레이아웃: 데스크톱은 2-컬럼(목록 + 스레드), 모바일은 단일 컬럼으로

@@ -186,4 +186,36 @@ describe('MessageInbox', () => {
     // Cleanup: resolve so no pending promises leak
     resolveThread({ ok: false, error: 'CANCELLED' });
   });
+
+  it('initialSelectedId로 마운트 시 해당 대화의 스레드를 즉시 보여준다', async () => {
+    loadConversationThread.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      messages: [
+        {
+          id: 'm1',
+          sender: 'other',
+          body: '미리 열린 스레드 메시지입니다.',
+          rfpId: null,
+          createdAt: '2026-06-06T01:00:00.000Z',
+          readByCounterparty: false,
+          attachments: [],
+        },
+      ],
+    });
+
+    await act(async () => {
+      render(<MessageInbox conversations={conversations} initialSelectedId="conv-1" />);
+    });
+
+    expect(loadConversationThread).toHaveBeenCalledWith('conv-1');
+    expect(screen.getByText('미리 열린 스레드 메시지입니다.')).toBeInTheDocument();
+  });
+
+  it('목록에 없는 initialSelectedId는 무시하고 미선택 상태로 마운트된다', () => {
+    render(<MessageInbox conversations={conversations} initialSelectedId="conv-does-not-exist" />);
+    expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
+    expect(loadConversationThread).not.toHaveBeenCalled();
+  });
 });
