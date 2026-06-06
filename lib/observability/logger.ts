@@ -32,10 +32,20 @@ function makeNodeLogger(): AppLogger {
   // Development pretty output: pipe stdout through pino-pretty in your terminal.
   //   pnpm dev 2>&1 | pnpm exec pino-pretty
   const { AXIOM_TOKEN, AXIOM_DATASET } = process.env;
-  const axiomPinoPath = createRequire(process.cwd() + '/package.json').resolve('@axiomhq/pino');
-  const transport = (AXIOM_TOKEN && AXIOM_DATASET)
-    ? pinoLib.transport({ target: axiomPinoPath, options: { token: AXIOM_TOKEN, dataset: AXIOM_DATASET } })
-    : undefined;
+  let transport: ReturnType<typeof pinoLib.transport> | undefined;
+  if (AXIOM_TOKEN && AXIOM_DATASET) {
+    try {
+      // Anchor to this module's location rather than process.cwd() — cwd is not
+      // guaranteed to be the app root at runtime (seen /var/task in prod, Sentry #7499226682).
+      // Pre-resolve to an absolute path because pino transport runs in a worker thread
+      // and cannot resolve a bare specifier under bundlers.
+      const axiomPinoPath = createRequire(import.meta.url).resolve('@axiomhq/pino');
+      transport = pinoLib.transport({ target: axiomPinoPath, options: { token: AXIOM_TOKEN, dataset: AXIOM_DATASET } });
+    } catch (err) {
+      // Degrade to stdout pino — never crash the instrumentation hook over log transport setup.
+      console.warn('[logger] @axiomhq/pino transport unavailable; logging to stdout', err instanceof Error ? err.message : err);
+    }
+  }
   const p = transport ? pinoLib({ level }, transport) : pinoLib({ level });
   return {
     info:  (msg, attrs) => { try { p.info( attrs ?? {}, msg); } catch {} },
