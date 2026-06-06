@@ -1,8 +1,10 @@
 import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { requirePgPage } from '@/lib/auth/page-guards';
-import { getInvitationRepo } from '@/lib/server/repositories/factory';
+import { getInvitationRepo, getBidRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
+import { classifyPgInvitation } from '@/lib/server/pg-kanban';
+import type { Bid } from '@/lib/types/bid';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { InboxList, InboxListSkeleton, type InboxRow } from '@/components/inbox/InboxList';
 import { InboxPeekPanel, InboxPeekPanelSkeleton } from '@/components/inbox/InboxPeekPanel';
@@ -68,19 +70,30 @@ async function InboxListPageLoader({
   peek?: string;
 }) {
   const now = new Date();
-  const invRepo = await getInvitationRepo();
-  const pairs = await invRepo.findByPgWorkspace(wsId);
+  const [invRepo, bidRepo] = await Promise.all([getInvitationRepo(), getBidRepo()]);
+  const [pairs, bidList] = await Promise.all([
+    invRepo.findByPgWorkspace(wsId),
+    bidRepo.findByPgWs(wsId),
+  ]);
+  // bid 기반 stage 분류를 위해 RFP별 bid 매핑 (loadBoard PG 파이프라인과 동일 패턴).
+  const bidByRfp = new Map<string, Bid>();
+  for (const b of bidList) bidByRfp.set(b.rfpId, b);
 
-  const allRows: InboxRow[] = pairs.map(({ invitation, rfp }) => ({
-    invitationId: invitation.id,
-    invitationStatus: invitation.status,
-    rfpStatus: rfp.status,
-    rfpId: rfp.code,
-    rfpTitle: rfp.title,
-    rfpDeadline: rfp.deadline,
-    grade: rfp.bizProfile?.grade ? GRADE_LABELS[rfp.bizProfile.grade] : '—',
-    gradeRaw: rfp.bizProfile?.grade,
-  }));
+  const allRows: InboxRow[] = pairs.map(({ invitation, rfp }) => {
+    const bid = bidByRfp.get(rfp.id);
+    const stage = classifyPgInvitation({ invitation, bid, rfp });
+    return {
+      invitationId: invitation.id,
+      stage,
+      // received(미제출) 단계는 "보낸 견적" 링크를 노출하지 않도록 bidId 생략.
+      bidId: stage === 'received' ? undefined : bid?.id,
+      rfpId: rfp.code,
+      rfpTitle: rfp.title,
+      rfpDeadline: rfp.deadline,
+      grade: rfp.bizProfile?.grade ? GRADE_LABELS[rfp.bizProfile.grade] : '—',
+      gradeRaw: rfp.bizProfile?.grade,
+    };
+  });
   const rows = filterInboxRows(allRows, params, now);
 
   const panel = peek ? (

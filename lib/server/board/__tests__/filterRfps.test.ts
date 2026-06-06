@@ -106,21 +106,21 @@ describe('filterRfps (status + deadline + grade, AND)', () => {
 
 describe('filterInboxRows (status + deadline + grade, AND)', () => {
   const row = (over: Partial<InboxRow>): InboxRow => ({
-    invitationId: 'i', invitationStatus: 'sent', rfpStatus: 'sent',
+    invitationId: 'i', stage: 'received',
     rfpId: 'P-1', rfpTitle: 't', rfpDeadline: iso(2026, 5, 27), grade: '중소1', gradeRaw: 'sme1',
     ...over,
   });
   const rows: InboxRow[] = [
-    row({ invitationId: 'a', invitationStatus: 'sent', rfpDeadline: iso(2026, 5, 27), gradeRaw: 'sme1' }),
-    row({ invitationId: 'b', invitationStatus: 'opened', rfpDeadline: iso(2026, 6, 10), gradeRaw: 'general' }),
-    row({ invitationId: 'c', invitationStatus: 'accepted', rfpDeadline: iso(2026, 6, 10), gradeRaw: 'sme1' }),
+    row({ invitationId: 'a', stage: 'received', rfpDeadline: iso(2026, 5, 27), gradeRaw: 'sme1' }),
+    row({ invitationId: 'b', stage: 'submitted', rfpDeadline: iso(2026, 6, 10), gradeRaw: 'general' }),
+    row({ invitationId: 'c', stage: 'received', rfpDeadline: iso(2026, 6, 10), gradeRaw: 'sme1' }),
   ];
 
   it('no params → all', () => {
     expect(filterInboxRows(rows, {}, NOW).map((r) => r.invitationId)).toEqual(['a', 'b', 'c']);
   });
-  it('status=new (→ invitation sent)', () => {
-    expect(filterInboxRows(rows, { status: 'new' }, NOW).map((r) => r.invitationId)).toEqual(['a']);
+  it('status=new (→ stage received)', () => {
+    expect(filterInboxRows(rows, { status: 'new' }, NOW).map((r) => r.invitationId)).toEqual(['a', 'c']);
   });
   it('deadline=d7', () => {
     expect(filterInboxRows(rows, { deadline: 'd7' }, NOW).map((r) => r.invitationId)).toEqual(['a']);
