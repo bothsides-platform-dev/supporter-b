@@ -271,6 +271,13 @@ export async function sendChatMessageAction(
   if (result.ok) {
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
+    // Load the saved attachments (chatMessageId is committed at this point)
+    // so the live fanout payload includes file metadata and the receiver can
+    // render tiles without a refetch.
+    const attRepo = await getAttachmentRepo();
+    const savedAtts = data.attachmentIds.length > 0
+      ? await attRepo.findByChatMessageIds([result.messageId])
+      : [];
     // Best-effort live fanout — never blocks the send. Content-bearing so a
     // subscriber can append straight to its thread (sender derived from
     // authorWsId) without a refetch round-trip.
@@ -281,6 +288,7 @@ export async function sendChatMessageAction(
       authorWsId: ws.workspaceId,
       rfpId: data.rfpId ?? null,
       createdAt: now.toISOString(),
+      attachments: savedAtts.map(({ chatMessageId: _cid, ...att }) => att),
     });
   }
   return result;
