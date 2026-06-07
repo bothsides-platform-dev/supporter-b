@@ -1,12 +1,11 @@
 'use server';
 
 import { requireSession } from '@/lib/auth/session';
-import { getNotificationRepo } from '@/lib/server/repositories/factory';
 import { type NotificationActionResult } from './_shared';
+import { getNotificationService } from '@/lib/server/services/notification';
 
 export type MarkAllReadResult = NotificationActionResult;
 
-/** 현재 워크스페이스의 미읽음 알림 일괄 읽음 처리. */
 export async function markAllReadAction(): Promise<MarkAllReadResult> {
   let session;
   try {
@@ -17,7 +16,6 @@ export async function markAllReadAction(): Promise<MarkAllReadResult> {
   if (!session.user.workspaceId) {
     return { ok: false, error: 'FORBIDDEN' };
   }
-  const repo = await getNotificationRepo();
-  await repo.markAllRead(session.user.id, session.user.workspaceId);
-  return { ok: true };
+  const svc = await getNotificationService();
+  return svc.markAllRead({ userId: session.user.id, workspaceId: session.user.workspaceId });
 }
