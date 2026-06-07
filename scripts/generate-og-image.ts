@@ -105,7 +105,7 @@ function ogHtml(pretendard: string, jetbrains: string) {
 
   <div class="hero">
     <div class="wordmark">Supporter B</div>
-    <div class="subline">결제대행사 비공개 1:N RFP 플랫폼</div>
+    <div class="subline">다수의 PG사의 견적을 비교하여 최적의 견적을 받아보세요</div>
   </div>
 
   <div class="corner bot-right mono"><span class="b">[</span>&nbsp;SUPPORTER-B.STORE&nbsp;<span class="b">]</span></div>

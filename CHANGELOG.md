@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.7.2] - 2026-06-07
+
+### Changed
+
+- **소셜 카드 문구 업데이트**: OG 이미지와 사이트 제목·설명이 'Supporter B — PG사 비교 견적 플랫폼 / 다수의 PG사의 견적을 비교하여 최적의 견적을 받아보세요'로 갱신됩니다. 카카오·슬랙·SNS 공유 시 새 문구로 노출됩니다.
+
 ## [0.1.7.1] - 2026-06-07
 
 ### Changed
