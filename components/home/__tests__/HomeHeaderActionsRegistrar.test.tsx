@@ -30,12 +30,17 @@ describe('HomeHeaderActionsRegistrar', () => {
   });
 
   it('onRefresh 호출 후 lastRefreshedAt이 갱신된다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-01T00:00:00Z'));
     render(<HomeHeaderActionsRegistrar />);
     const before = useHeaderActionsStore.getState().refreshSlot?.lastRefreshedAt as Date;
+    vi.advanceTimersByTime(1000);
     act(() => {
       useHeaderActionsStore.getState().refreshSlot?.onRefresh();
     });
-    expect(useHeaderActionsStore.getState().refreshSlot?.lastRefreshedAt).toBeInstanceOf(Date);
-    expect(useHeaderActionsStore.getState().refreshSlot?.lastRefreshedAt).not.toBe(before);
+    const after = useHeaderActionsStore.getState().refreshSlot?.lastRefreshedAt as Date;
+    expect(after).toBeInstanceOf(Date);
+    expect(after.getTime()).toBeGreaterThan(before.getTime());
+    vi.useRealTimers();
   });
 });
