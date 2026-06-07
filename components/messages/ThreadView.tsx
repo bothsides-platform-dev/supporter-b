@@ -437,10 +437,10 @@ export function ThreadView({
   }
 
   return (
-    <div className="flex h-full min-w-0">
-    <div className="flex h-full min-w-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-1">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {/* 헤더 — 상대 워크스페이스 + 타입 + 프레즌스 + 타이핑 */}
-      <header className="flex items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
+      <header className="flex shrink-0 items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
         {onBack && (
           <button
             type="button"
@@ -628,7 +628,7 @@ export function ThreadView({
       {connected === false && (
         <div
           role="status"
-          className="px-4 py-1.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container-low)] border-b border-[var(--md-sys-color-outline-variant)]"
+          className="shrink-0 px-4 py-1.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container-low)] border-b border-[var(--md-sys-color-outline-variant)]"
         >
           채팅 서버와 연결이 끊겼습니다. 재연결 중…
         </div>
@@ -636,7 +636,7 @@ export function ThreadView({
 
       {/* 첨부 칩 리스트 */}
       {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-t border-[var(--md-sys-color-outline-variant)] px-3 pt-2">
+        <div className="flex shrink-0 flex-wrap gap-1.5 border-t border-[var(--md-sys-color-outline-variant)] px-3 pt-2 pb-1">
           {attachments.map((a) =>
             a.status === 'uploading' ? (
               // 업로드 중 — 파일명 + 펄스 스켈레톤(제거 불가, 올리는 중임을 표시).
@@ -688,7 +688,7 @@ export function ThreadView({
       )}
 
       {/* 하단 인라인 컴포저 */}
-      <div className="flex items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] p-3">
+      <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] p-3">
         <IconButton
           label="파일 첨부"
           size="sm"
@@ -720,11 +720,11 @@ export function ThreadView({
           onKeyDown={handleKeyDown}
           placeholder="메시지를 입력하세요…"
           rows={1}
-          className="max-h-40 min-h-7 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-1.5 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
+          className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-1.5 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
         />
         <Button
           size="sm"
-          className="shrink-0 self-end"
+          className="shrink-0"
           onClick={handleSend}
           disabled={
             sending ||
