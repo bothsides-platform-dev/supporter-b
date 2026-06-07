@@ -4,7 +4,7 @@ import { create } from 'zustand';
 
 export type RefreshSlot = {
   onRefresh: () => void;
-  lastRefreshedAt: Date | null;
+  lastRefreshedAt: Date;
   isRefreshing: boolean;
 };
 
