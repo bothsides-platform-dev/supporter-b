@@ -396,11 +396,21 @@ export function ThreadView({
     setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    const result = await sendChatMessageAction({
-      conversationId,
-      body,
-      attachmentIds: readyAttachments.map((a) => a.id),
-    });
+    let result: Awaited<ReturnType<typeof sendChatMessageAction>>;
+    try {
+      result = await sendChatMessageAction({
+        conversationId,
+        body,
+        attachmentIds: readyAttachments.map((a) => a.id),
+      });
+    } catch {
+      setSending(false);
+      setLocalMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setDraft(restoreDraft);
+      setAttachments(restoreAttachments);
+      toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
+      return;
+    }
     setSending(false);
     if (result.ok) {
       // pending 말풍선을 확정으로 교체(실서버 id + pending 해제). 라이브 echo 가
