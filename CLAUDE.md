@@ -10,6 +10,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 - `DESIGN.md` — Linear design language: tokens, typography, color, component visual rules.
 - `SCREEN_DESIGN.md` — screen IA, route map, per-screen UX spec.
 - `UX_WRITING.md` — 토스 보이스톤 기반 UX 라이팅 원칙 (해요체·능동형·긍정형·캐주얼 경어·버튼 문구). UI 문구 작성 시 필수 참조.
+- `TODOS.md` — 미완료 기술 부채·Phase별 작업 목록. 새 작업 아이템은 여기에 추가.
 
 **라이브 배포**: AWS Lightsail 단일 VM 자체호스팅 (Caddy + PM2 `next start` + Docker Postgres). 현행 런북은 `docs/DEPLOY_LIGHTSAIL.md`, 관련 자산은 `ecosystem.config.cjs`(PM2) · `docker-compose.prod.yml`(운영 Postgres) · `deploy/Caddyfile` · `scripts/deploy/lightsail-*.sh` · `.env.production.example`.
 
@@ -76,6 +77,27 @@ app/
 Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation.
 
 **Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
+
+## Server Architecture (lib/server/)
+
+세 계층으로 구성된다. 계층 간 의존 방향은 Actions → Services → Repositories.
+
+```
+lib/server/
+├─ actions/          # 얇은 진입점: 세션 검증 + 입력 파싱 후 서비스에 위임
+├─ services/         # 비즈니스 로직 캡슐화 (Phase 1: rfp.ts · bid.ts)
+│  ├─ rfp.ts         # RfpService: award / cancel / close
+│  └─ bid.ts         # BidService: withdraw
+└─ repositories/     # DB 접근 추상화 (Drizzle 구현 + 메모리 테스트 구현)
+```
+
+**서비스 레이어 규칙:**
+- 서비스는 트랜잭션·알림 팬아웃·이메일 아웃박스를 소유한다. 액션은 이를 직접 다루지 않는다.
+- `Actor = { userId, workspaceId }` — 세션에서 추출해 액션이 서비스에 전달한다.
+- `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 예외 throw 없이 결과를 반환한다.
+- 서비스 싱글턴은 Next.js `globalThis` 캐싱 패턴 사용 (`getRfpService()` / `getBidService()`).
+
+아직 서비스로 미분리된 액션은 `TODOS.md` Phase 2 항목 참조.
 
 ## Linear Design Language — Hard Rules
 
