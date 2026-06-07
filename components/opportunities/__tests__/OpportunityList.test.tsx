@@ -23,6 +23,7 @@ function makeItem(overrides?: Partial<OpportunityListing>): OpportunityListing {
     requiredPaymentMethods: ['card', 'kakao_pay'],
     customPaymentMethodLabels: ['포인트결제'],
     mainProducts: '전자책 구독',
+    contractType: null,
     ...overrides,
   };
 }
@@ -71,5 +72,21 @@ describe('OpportunityList', () => {
     expect(screen.queryByText(/카드/)).toBeNull();
     expect(screen.queryByText(/카카오페이/)).toBeNull();
     expect(screen.queryByText('전자책 구독')).toBeNull();
+  });
+
+  it("contractType 'new' 이면 '신규 계약' Chip을 표시한다", () => {
+    render(<OpportunityList items={[makeItem({ contractType: 'new' })]} />);
+    expect(screen.getByText('신규 계약')).toBeTruthy();
+  });
+
+  it("contractType 'renewal' 이면 '갱신 계약' Chip을 표시한다", () => {
+    render(<OpportunityList items={[makeItem({ contractType: 'renewal' })]} />);
+    expect(screen.getByText('갱신 계약')).toBeTruthy();
+  });
+
+  it('contractType 없으면 계약 유형 Chip을 표시하지 않는다', () => {
+    render(<OpportunityList items={[makeItem({ contractType: null })]} />);
+    expect(screen.queryByText('신규 계약')).toBeNull();
+    expect(screen.queryByText('갱신 계약')).toBeNull();
   });
 });

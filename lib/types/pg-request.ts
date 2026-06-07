@@ -37,4 +37,6 @@ export type OpportunityListing = {
   customPaymentMethodLabels: string[];
   /** 주요 상품·서비스. 없으면 null. */
   mainProducts: string | null;
+  /** 계약 유형(선택사항). null/undefined이면 미표시. */
+  contractType?: 'new' | 'renewal' | null;
 };

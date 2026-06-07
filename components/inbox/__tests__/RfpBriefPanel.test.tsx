@@ -86,4 +86,20 @@ describe('RfpBriefPanel', () => {
     render(<RfpBriefPanel rfp={rfp} buyerName="(주)진짜상사" />);
     expect(screen.queryByText('배송 및 서비스 기간')).not.toBeInTheDocument();
   });
+
+  it("contractType 'renewal' 이면 '갱신 계약' Chip이 표시된다", () => {
+    render(<RfpBriefPanel rfp={{ ...rfp, contractType: 'renewal' }} buyerName="(주)진짜상사" />);
+    expect(screen.getByText('갱신 계약')).toBeInTheDocument();
+  });
+
+  it("contractType 'new' 이면 '신규 계약' Chip이 표시된다", () => {
+    render(<RfpBriefPanel rfp={{ ...rfp, contractType: 'new' }} buyerName="(주)진짜상사" />);
+    expect(screen.getByText('신규 계약')).toBeInTheDocument();
+  });
+
+  it('contractType 없으면 계약 유형 Chip이 없다', () => {
+    render(<RfpBriefPanel rfp={rfp} buyerName="(주)진짜상사" />);
+    expect(screen.queryByText('신규 계약')).not.toBeInTheDocument();
+    expect(screen.queryByText('갱신 계약')).not.toBeInTheDocument();
+  });
 });

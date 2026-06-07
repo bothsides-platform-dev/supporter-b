@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [0.1.7.2] - 2026-06-07
 
+### Added
+
+- **견적 계약 유형(신규/갱신) 선택**: 구매사가 새 견적 요청 작성 위저드(Step 2)에서 '신규 계약' 또는 '갱신 계약'을 선택할 수 있습니다(선택 사항). 선택한 유형은 PG사 오픈 게시판(`/opportunities`), 받은 견적함 목록(`/inbox`), 견적 상세 패널에 Chip으로 표시돼 PG사가 계약 성격을 한눈에 파악할 수 있습니다.
 ### Changed
 
 - **소셜 카드 문구 업데이트**: OG 이미지와 사이트 제목·설명이 'Supporter B — PG사 비교 견적 플랫폼 / 다수의 PG사의 견적을 비교하여 최적의 견적을 받아보세요'로 갱신됩니다. 카카오·슬랙·SNS 공유 시 새 문구로 노출됩니다.

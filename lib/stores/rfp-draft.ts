@@ -39,6 +39,7 @@ type RfpDraftStore = {
   customPaymentMethods: DraftCustomPaymentMethod[];
   deadline: string;
   boardVisible: boolean;
+  contractType: 'new' | 'renewal' | null;
   setBizProfile: (biz: BizProfile | null) => void;
   setField: <K extends keyof RfpDraftStore>(key: K, value: RfpDraftStore[K]) => void;
   reset: () => void;
@@ -64,6 +65,7 @@ const defaultState = {
   customPaymentMethods: [] as DraftCustomPaymentMethod[],
   deadline: '',
   boardVisible: true,
+  contractType: null as 'new' | 'renewal' | null,
 };
 
 export const useRfpDraftStore = create<RfpDraftStore>()(
@@ -77,9 +79,9 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
     {
       name: 'supporter-b-rfp-draft',
       storage: createJSONStorage(() => localStorage),
-      // 결제수단 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
+      // 계약 유형 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
       // 백필하므로 진행 중인 draft가 폐기되지 않는다.
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<RfpDraftStore>;
         if (version < 1) {
@@ -107,6 +109,12 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
             boardVisible: state.boardVisible ?? true,
           };
         }
+        if (version < 5) {
+          return {
+            ...state,
+            contractType: state.contractType ?? null,
+          };
+        }
         return state;
       },
       // Only persist form data fields, not UI/method state
@@ -129,6 +137,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         customPaymentMethods: state.customPaymentMethods,
         deadline: state.deadline,
         boardVisible: state.boardVisible,
+        contractType: state.contractType,
       }),
     },
   ),

@@ -128,4 +128,28 @@ describe('RfpStep2Content', () => {
       );
     });
   });
+
+  describe('견적 유형 토글', () => {
+    it('"신규 계약" 버튼 클릭 시 store contractType 이 new 로 업데이트된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '신규 계약' }));
+      expect(useRfpDraftStore.getState().contractType).toBe('new');
+    });
+
+    it('"갱신 계약" 버튼 클릭 시 store contractType 이 renewal 로 업데이트된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '갱신 계약' }));
+      expect(useRfpDraftStore.getState().contractType).toBe('renewal');
+    });
+
+    it('선택된 버튼을 다시 클릭하면 contractType 이 null 로 복귀한다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '신규 계약' }));
+      await user.click(screen.getByRole('button', { name: '신규 계약' }));
+      expect(useRfpDraftStore.getState().contractType).toBeNull();
+    });
+  });
 });

@@ -55,6 +55,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     requiredPaymentMethods: (row.requiredPaymentMethods ?? []) as PaymentMethod[],
     customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
     boardVisible: row.boardVisible,
+    contractType: row.contractType ?? null,
   };
 }
 
@@ -133,6 +134,7 @@ export class DrizzleRfpRepository implements RfpRepo {
       awardedBidId: rfp.awardedBidId ?? null,
       createdBy: rfp.createdBy,
       sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
+      contractType: rfp.contractType ?? null,
     };
     // boardVisible 미지정 시 DB default(true). 지정 시에만 반영하고, 업서트
     // conflict set 에는 넣지 않아 — 노출 토글은 전용 액션의 직접 UPDATE 소관이라
@@ -157,6 +159,7 @@ export class DrizzleRfpRepository implements RfpRepo {
           status: rfp.status,
           awardedBidId: rfp.awardedBidId ?? null,
           sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
+          contractType: rfp.contractType ?? null,
         },
       });
 

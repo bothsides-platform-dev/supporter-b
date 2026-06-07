@@ -92,6 +92,8 @@ const Input = z
     boardVisible: z.boolean().optional().default(true),
     currentSolution: z.enum(['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other']).optional(),
     currentSolutionDetail: z.string().max(100).optional(),
+    // 계약 유형(선택사항): 'new'(신규) | 'renewal'(갱신). 생략 시 null.
+    contractType: z.enum(['new', 'renewal']).nullable().optional(),
   })
   .strict()
   .superRefine((d, ctx) => {
@@ -229,6 +231,7 @@ export async function createRfpAction(
         currentSettlementCycle: parsed.data.currentSettlementCycle?.trim() ?? null,
         deliveryServicePeriod: parsed.data.deliveryServicePeriod?.trim() ?? null,   // ← 추가
         boardVisible: parsed.data.boardVisible,
+        contractType: parsed.data.contractType ?? null,
         currentSolution: parsed.data.currentSolution ?? null,
         currentSolutionDetail: parsed.data.currentSolutionDetail?.trim() ?? null,
         deadline: new Date(parsed.data.deadline),

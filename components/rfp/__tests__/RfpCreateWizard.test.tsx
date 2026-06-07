@@ -256,6 +256,29 @@ describe('RfpCreateWizard', () => {
     });
   });
 
+  it('contractType(신규/갱신)을 createRfpAction에 전달한다', async () => {
+    vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0101' });
+    useRfpDraftStore.setState({
+      title: '테스트',
+      deadline: '2026-06-30T23:59:59Z',
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      contractType: 'renewal',
+    });
+    const user = userEvent.setup();
+    render(<RfpCreateWizard pgList={[]} />);
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
+
+    await waitFor(() => {
+      expect(createRfpAction).toHaveBeenCalledWith(
+        expect.objectContaining({ contractType: 'renewal' }),
+      );
+    });
+  });
+
   it('발송 실패 시 serverError를 표시한다', async () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: false, error: 'INVALID_INPUT' });
     useRfpDraftStore.setState({
