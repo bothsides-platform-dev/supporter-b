@@ -58,7 +58,6 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
     pgWsNameMap,
     pendingRequests,
     canEdit,
-    shareUrl,
   } = data;
   const bizProfile = rfp.bizProfile;
 
@@ -201,7 +200,6 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
             <RfpInviteManager
               rfpId={rfp.code}
               invitations={inviteList}
-              shareUrl={shareUrl}
               canEdit={canEdit}
             />
             <RfpBoardVisibilityToggle

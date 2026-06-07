@@ -127,4 +127,21 @@ describe('WizardStepSidebar', () => {
     );
     expect(screen.getByText('자동저장됨')).toBeInTheDocument();
   });
+
+  it('className prop을 nav 요소에 병합해 적용한다', () => {
+    render(
+      <WizardStepSidebar
+        currentStep={1}
+        completed={[false, false, false, false]}
+        onStepClick={vi.fn()}
+        className="sticky top-0 self-start border-r-0"
+      />,
+    );
+    const nav = screen.getByRole('navigation');
+    expect(nav).toHaveClass('sticky', 'top-0', 'self-start');
+    // twMerge로 기존 border-r가 border-r-0에 의해 제거된다 (정확히 'border-r' 토큰만 검사)
+    const tokens = nav.className.split(/\s+/);
+    expect(tokens).not.toContain('border-r');
+    expect(tokens).toContain('border-r-0');
+  });
 });

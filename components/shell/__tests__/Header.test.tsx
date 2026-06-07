@@ -31,6 +31,7 @@ vi.mock('@/lib/http', () => ({
 
 import { Header } from '../Header';
 import { http } from '@/lib/http';
+import { useHeaderActionsStore } from '@/lib/stores/header-actions';
 import type { ResponsePromise } from 'ky';
 
 const user = { name: '홍길동', email: 'gildong@test.com' };
@@ -38,6 +39,7 @@ const user = { name: '홍길동', email: 'gildong@test.com' };
 beforeEach(() => {
   push.mockReset();
   assign.mockReset();
+  useHeaderActionsStore.setState({ refreshSlot: null });
   mockPathname.mockReturnValue('/home');
   mockSearchParams.mockReturnValue(new URLSearchParams(''));
   Object.defineProperty(window, 'location', {
@@ -75,6 +77,27 @@ describe('Header', () => {
   it('renders the user menu trigger', () => {
     render(<Header user={user} workspaceType="buyer" />);
     expect(screen.getByRole('button', { name: '사용자 메뉴' })).toBeInTheDocument();
+  });
+
+  it('refreshSlot이 없으면 새로고침 버튼을 렌더하지 않는다', () => {
+    render(<Header user={user} workspaceType="buyer" />);
+    expect(screen.queryByRole('button', { name: /새로고침|방금 전|분 전/ })).not.toBeInTheDocument();
+  });
+
+  it('refreshSlot이 있으면 새로고침 버튼을 렌더한다', () => {
+    useHeaderActionsStore.setState({
+      refreshSlot: { onRefresh: vi.fn(), lastRefreshedAt: new Date(), isRefreshing: false },
+    });
+    render(<Header user={user} workspaceType="buyer" />);
+    expect(screen.getByRole('button', { name: /새로고침/ })).toBeInTheDocument();
+  });
+
+  it('refreshSlot.isRefreshing=true 이면 새로고침 버튼이 disabled', () => {
+    useHeaderActionsStore.setState({
+      refreshSlot: { onRefresh: vi.fn(), lastRefreshedAt: new Date(), isRefreshing: true },
+    });
+    render(<Header user={user} workspaceType="buyer" />);
+    expect(screen.getByRole('button', { name: /새로고침/ })).toBeDisabled();
   });
 
   it('logs out via the user menu', async () => {

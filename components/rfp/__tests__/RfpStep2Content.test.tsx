@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpStep2Content } from '../RfpStep2Content';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 
 // RfpAttachmentDropzone은 fetch 없이 테스트하기 위해 mock
 vi.mock('../RfpAttachmentDropzone', () => ({
@@ -88,5 +89,43 @@ describe('RfpStep2Content', () => {
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
     await user.type(screen.getByPlaceholderText('D+3'), 'D+5');
     expect(useRfpDraftStore.getState().deliveryServicePeriod).toBe('D+5');
+  });
+
+  describe('홈페이지 도메인 유효성', () => {
+    const homepagePlaceholder = 'https://supporter-b.com/';
+
+    it('빈 값이면 에러를 표시하지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByPlaceholderText(homepagePlaceholder)).toHaveAttribute(
+        'aria-invalid',
+        'false',
+      );
+    });
+
+    it('도메인 형식이 아닌 값을 입력하면 실시간 에러를 표시한다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.type(screen.getByPlaceholderText(homepagePlaceholder), 'abc');
+      expect(screen.getByRole('alert')).toHaveTextContent(WEBSITE_URL_ERROR);
+      expect(screen.getByPlaceholderText(homepagePlaceholder)).toHaveAttribute(
+        'aria-invalid',
+        'true',
+      );
+    });
+
+    it('유효한 도메인을 입력하면 에러를 표시하지 않는다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.type(
+        screen.getByPlaceholderText(homepagePlaceholder),
+        'https://x.com',
+      );
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByPlaceholderText(homepagePlaceholder)).toHaveAttribute(
+        'aria-invalid',
+        'false',
+      );
+    });
   });
 });

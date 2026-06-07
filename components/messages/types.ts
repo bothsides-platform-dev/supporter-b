@@ -4,7 +4,7 @@
 // conversationLoaders 의 반환형을 그대로 재노출해 드리프트를 막아요. 풍부한 렌더에
 // 필요한 추가 필드(읽음영수증·첨부 등)는 로더가 그 필드를 돌려줄 때 함께 늘려요.
 //
-// Counterparty/RfpContext 는 컴포즈 진입점(MessageComposeButton·RecipientCard)이
+// Counterparty/RfpContext 는 컴포즈 진입점(CounterpartyProfileCard·MessageComposeSheet·RecipientCard)이
 // 쓰는 표시 전용 타입 — 로더 반환형과 별개로 유지해요.
 
 export type {

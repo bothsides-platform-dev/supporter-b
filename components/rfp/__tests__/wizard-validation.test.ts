@@ -4,12 +4,14 @@ import { getWizardValidity, getFirstIncompleteStep } from '../wizard-validation'
 
 type Draft = {
   title: string;
+  websiteUrl: string;
   allowedPgWorkspaceIds: { id: string; displayName: string }[];
   deadline: string;
 };
 
 const emptyDraft: Draft = {
   title: '',
+  websiteUrl: '',
   allowedPgWorkspaceIds: [],
   deadline: '',
 };
@@ -29,6 +31,16 @@ describe('getWizardValidity', () => {
 
   it('공백뿐인 제목은 Step 2를 complete으로 보지 않는다', () => {
     expect(complete({ ...emptyDraft, title: '   ' })[2]).toBe(false);
+  });
+
+  it('제목이 있어도 홈페이지 주소 형식이 틀리면 Step 2는 incomplete이다', () => {
+    expect(complete({ ...emptyDraft, title: '제안건', websiteUrl: 'abc' })[2]).toBe(false);
+  });
+
+  it('제목이 있고 홈페이지가 유효한 도메인이면 Step 2는 complete이다', () => {
+    expect(
+      complete({ ...emptyDraft, title: '제안건', websiteUrl: 'https://x.com' })[2],
+    ).toBe(true);
   });
 
   it('PG를 1개 이상 추가하면 Step 3가 complete이 된다', () => {
@@ -64,6 +76,7 @@ describe('getFirstIncompleteStep', () => {
   it('제목·PG만 채우면 첫 미충족 step은 Step 4(마감일)이다 — 순서와 무관', () => {
     const draft: Draft = {
       title: '제안건',
+      websiteUrl: '',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       deadline: '',
     };
@@ -80,9 +93,16 @@ describe('getFirstIncompleteStep', () => {
     expect(getFirstIncompleteStep(draft)?.num).toBe(2);
   });
 
+  it('제목은 있으나 홈페이지 형식이 틀리면 Step 2를 반환하고 hint에 홈페이지를 안내한다', () => {
+    const result = getFirstIncompleteStep({ ...emptyDraft, title: '제안건', websiteUrl: 'abc' });
+    expect(result?.num).toBe(2);
+    expect(result?.hint).toContain('홈페이지');
+  });
+
   it('모든 필수값을 채우면 null을 반환한다', () => {
     const draft: Draft = {
       title: '제안건',
+      websiteUrl: '',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       deadline: '2026-06-30T23:59:59Z',
     };

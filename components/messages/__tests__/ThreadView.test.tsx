@@ -249,6 +249,52 @@ describe('ThreadView', () => {
     expect(appended.closest('[data-message-row]')).toHaveAttribute('data-sender', 'other');
   });
 
+  it('onMessage 에 attachments 가 포함된 경우 첨부 링크를 렌더한다', async () => {
+    render(base());
+
+    act(() => {
+      channelOptions.onMessage?.({
+        type: 'message',
+        id: 'live-att-1',
+        body: '파일 확인해 주세요.',
+        authorWsId: 'pg-1', // counterparty
+        rfpId: null,
+        createdAt: '2026-05-27T06:00:00.000Z',
+        attachments: [
+          {
+            id: 'att-uuid-1',
+            name: '제안서.pdf',
+            size: 12345,
+            mimeType: 'application/pdf',
+            url: '/api/files/att-uuid-1',
+          },
+        ],
+      });
+    });
+
+    await screen.findByText('파일 확인해 주세요.');
+    const link = screen.getByRole('link', { name: /제안서.pdf/ });
+    expect(link).toHaveAttribute('href', '/api/files/att-uuid-1');
+  });
+
+  it('onMessage 에 attachments 가 없으면 첨부 링크를 렌더하지 않는다', async () => {
+    render(base());
+
+    act(() => {
+      channelOptions.onMessage?.({
+        type: 'message',
+        id: 'live-no-att',
+        body: '첨부 없는 메시지.',
+        authorWsId: 'pg-1',
+        rfpId: null,
+        createdAt: '2026-05-27T06:00:00.000Z',
+      });
+    });
+
+    await screen.findByText('첨부 없는 메시지.');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
   it('onMessage 로 같은 id 메시지가 다시 와도 중복 append 하지 않는다', async () => {
     render(base());
     const evt = {
@@ -405,6 +451,90 @@ describe('ThreadView', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
+  it('f.type이 빈 문자열인 PDF 파일도 확장자 기반으로 업로드 스켈레톤 칩이 뜬다', async () => {
+    const user = userEvent.setup();
+    httpPost.mockReturnValue({
+      json: () => Promise.resolve({ id: 'att-empty-mime', name: '보고서.pdf', size: 2048, mimeType: 'application/pdf' }),
+    });
+
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    // type: '' simulates a browser/OS that doesn't report a MIME for PDF files
+    const file = new File([new Uint8Array([1, 2, 3])], '보고서.pdf', { type: '' });
+    await user.upload(input, file);
+
+    // Chip must appear — currently silently dropped because ACCEPTED_MIMES.has('') === false
+    expect(await screen.findByLabelText('보고서.pdf 첨부 제거')).toBeInTheDocument();
+  });
+
+  it('서버 업로드 실패 시 행이 제거되지 않고 에러 칩으로 전환되며, X 버튼으로 제거할 수 있다', async () => {
+    const user = userEvent.setup();
+    httpPost.mockReturnValue({
+      json: () => Promise.reject(new Error('network error')),
+    });
+
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '제안서.pdf', { type: 'application/pdf' });
+    await user.upload(input, file);
+
+    // Error chip must appear with the file name — currently the row is removed
+    expect(await screen.findByLabelText('제안서.pdf 업로드 실패')).toBeInTheDocument();
+    // Remove button should be available on the error chip
+    const removeBtn = screen.getByLabelText('제안서.pdf 첨부 제거');
+    await user.click(removeBtn);
+    await waitFor(() => expect(screen.queryByLabelText('제안서.pdf 업로드 실패')).not.toBeInTheDocument());
+  });
+
+  it('지원하지 않는 파일 형식 선택 시 에러 칩이 노출된다', async () => {
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '보고서.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    // Simulate OS "모든 파일" selection bypassing accept filter
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    // Error chip must appear — currently silently dropped
+    expect(await screen.findByLabelText('보고서.docx 업로드 실패')).toBeInTheDocument();
+  });
+
+  it('서버가 415 를 반환하면 에러 칩 메시지가 "지원되지 않는 파일 형식이에요"다', async () => {
+    const user = userEvent.setup();
+    // Construct a minimal HTTPError with a response stub carrying status 415.
+    const { HTTPError } = await import('ky');
+    const fakeResponse = { status: 415, statusText: 'Unsupported Media Type' } as Response;
+    const fakeRequest = new Request('https://example.com/api/files/upload', { method: 'POST' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const kyErr = new HTTPError(fakeResponse, fakeRequest, {} as any);
+    httpPost.mockReturnValue({ json: () => Promise.reject(kyErr) });
+
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '악성.pdf', { type: 'application/pdf' });
+    await user.upload(input, file);
+
+    const chip = await screen.findByLabelText('악성.pdf 업로드 실패');
+    expect(chip).toHaveAttribute('title', '지원되지 않는 파일 형식이에요');
+  });
+
+  it('MAX_BYTES 초과 파일은 칩에 추가되지 않는다(silent skip)', async () => {
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    // Create a file whose size property reports >20 MB.
+    const oversized = new File([new Uint8Array(1)], '큰파일.pdf', { type: 'application/pdf' });
+    Object.defineProperty(oversized, 'size', { value: 21 * 1024 * 1024 });
+    Object.defineProperty(input, 'files', { value: [oversized], configurable: true });
+    fireEvent.change(input);
+
+    // Nothing should appear — no uploading chip, no error chip.
+    await waitFor(() => {
+      expect(screen.queryByLabelText('큰파일.pdf 업로드 중')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('큰파일.pdf 업로드 실패')).not.toBeInTheDocument();
+    });
+    // httpPost must not have been called either.
+    expect(httpPost).not.toHaveBeenCalled();
+  });
+
   it('첨부 업로드 중에는 "업로드 중" 스켈레톤 칩을 보여주고 전송을 잠그며, 완료되면 일반 칩으로 바뀐다', async () => {
     const user = userEvent.setup();
     // 업로드 응답을 테스트가 직접 resolve 하도록 promise 를 붙잡는다.
@@ -461,7 +591,7 @@ describe('ThreadView 실패 피드백', () => {
     expect(toast).not.toHaveBeenCalled();
   });
 
-  it('첨부 업로드 실패 시 에러 토스트를 띄운다', async () => {
+  it('첨부 업로드 실패 시 에러 칩으로 전환되고 토스트는 띄우지 않는다', async () => {
     const user = userEvent.setup();
     httpPost.mockReturnValue({ json: () => Promise.reject(new Error('upload failed')) });
     const { container } = render(base());
@@ -470,8 +600,9 @@ describe('ThreadView 실패 피드백', () => {
     await user.upload(input, file);
 
     await waitFor(() => {
-      expect(toast).toHaveBeenCalledWith(expect.any(String), { type: 'error' });
+      expect(screen.getByLabelText('실패.pdf 업로드 실패')).toBeInTheDocument();
     });
+    expect(toast).not.toHaveBeenCalled();
   });
 });
 

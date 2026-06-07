@@ -346,4 +346,62 @@ describe('GET /api/files/[id]', () => {
     const r = await callGet(s.attachmentId);
     expect(r.status).toBe(410);
   });
+
+  it('200 for chat attachment — buyer side, pg side; 403 for stranger', async () => {
+    const { chatConversations, chatMessages } = await import('@/lib/db/schema');
+    const s = await seedScenario();
+
+    const convId = randomUUID();
+    await db.insert(chatConversations).values({
+      id: convId,
+      buyerWsId: s.buyerWsId,
+      pgWsId: s.pgWsId,
+    });
+    const msgId = randomUUID();
+    await db.insert(chatMessages).values({
+      id: msgId,
+      conversationId: convId,
+      authorUserId: s.buyerUserId,
+      authorWsId: s.buyerWsId,
+      body: '첨부 테스트 메시지',
+    });
+    const chatAttId = randomUUID();
+    await db.insert(attachments).values({
+      id: chatAttId,
+      chatMessageId: msgId,
+      name: 'chat.pdf',
+      size: PDF_HEAD.length,
+      mimeType: 'application/pdf',
+      uploadedBy: s.buyerUserId,
+    });
+    await storage.save(chatAttId, PDF_HEAD, 'application/pdf');
+
+    sessionRef.value = {
+      user: {
+        id: s.buyerUserId,
+        email: 'buyer@buy.com',
+        workspaceId: s.buyerWsId,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    expect((await callGet(chatAttId)).status).toBe(200);
+
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: 'sales@toss.im',
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+    expect((await callGet(chatAttId)).status).toBe(200);
+
+    sessionRef.value = {
+      user: { id: s.strangerId, email: 'rando@x.com' },
+    };
+    expect((await callGet(chatAttId)).status).toBe(403);
+  });
+
 });

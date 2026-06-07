@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
+  CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
+    <span>{counterparty.name}</span>
+  ),
+}));
 const toast = vi.fn();
 vi.mock('@/lib/toast', () => ({ toast: (...a: unknown[]) => toast(...a) }));
 const refresh = vi.fn();

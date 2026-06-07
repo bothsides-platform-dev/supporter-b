@@ -28,6 +28,7 @@ import {
   emitAfterCommit,
 } from '@/lib/server/notifications/dispatch';
 import { logBusinessEvent } from '@/lib/observability/log';
+import { isValidWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import type { Notification } from '@/lib/types/notification';
 import {
   actionDb,
@@ -73,7 +74,13 @@ const Input = z
       .default('inherit'),
     bizNoOverride: z.string().min(1).max(50).optional(),
     gradeOverride: z.enum(MERCHANT_GRADES).optional(),
-    websiteUrl: z.string().max(500).optional(),
+    websiteUrl: z
+      .string()
+      .max(500)
+      .optional()
+      .refine((v) => v === undefined || isValidWebsiteUrl(v), {
+        message: WEBSITE_URL_ERROR,
+      }),
     mainProducts: z.string().max(200).optional(),
     annualPgVolume: z.string().max(100).optional(),
     currentFeeRate: z.string().max(50).optional(),
@@ -206,9 +213,6 @@ export async function createRfpAction(
       // mode==='none' 또는 mode==='inherit' && workspace bizProfile 미등록
       // → snapshotId 가 null 인 채로 rfps insert. 사전 제안 RFP.
 
-      // 4. rfps insert (share_token: RFP-scoped 영구 공유 URL 토큰. 평문 저장 —
-      //    buyer가 상세 페이지 재방문 시 동일 URL을 다시 보여주기 위해. deadline
-      //    경과 시 claim 단계에서 만료 분기로 차단되므로 별도 회수 정책 없음.)
       await tx.insert(rfps).values({
         id: rfpId,
         code,
@@ -228,7 +232,6 @@ export async function createRfpAction(
         currentSolution: parsed.data.currentSolution ?? null,
         currentSolutionDetail: parsed.data.currentSolutionDetail?.trim() ?? null,
         deadline: new Date(parsed.data.deadline),
-        shareToken: generateToken(),
         status: send ? 'sent' : 'draft',
         requiredPaymentMethods: parsed.data.requiredPaymentMethods,
         customPaymentMethods: parsed.data.customPaymentMethods.map((m) => ({

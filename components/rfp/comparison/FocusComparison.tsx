@@ -14,6 +14,7 @@ import { ImprovementSummary, type CurrentConditions } from './ImprovementSummary
 import { MetricComparePopover, type CompareRow } from './MetricComparePopover';
 import { AwardConfirmDialog } from './AwardConfirmDialog';
 import { BidNotesPanel } from '@/components/rfp/bid-detail/BidNotesPanel';
+import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { BidPdfPane } from '@/components/rfp/bid-detail/BidPdfPane';
 import { rankByMetric } from '@/lib/utils/bid-compare';
 import { formatKRW, formatPct } from '@/lib/format';
@@ -155,14 +156,19 @@ export function FocusComparison(props: Props) {
 
       {/* Active bid body */}
       <div className="mt-5 space-y-2">
-        {isAwarded && (
-          <div className="mb-2">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <CounterpartyProfileCard
+            variant="profile"
+            counterparty={{ name: pgName(active.pgWsId), type: 'pg', workspaceId: active.pgWsId }}
+            rfpContext={{ code: props.rfpId, title: props.rfpCode }}
+          />
+          {isAwarded && (
             <Chip
               label={active.id === awardedBidId ? '선정됨' : '미선정'}
               color={active.id === awardedBidId ? 'tertiary' : 'surface'}
             />
-          </div>
-        )}
+          )}
+        </div>
 
         <ImprovementSummary bid={active} current={current} />
 

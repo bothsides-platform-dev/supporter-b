@@ -42,8 +42,6 @@ export interface RfpRepo {
   findByCode(code: string, tx?: Tx): Promise<RFP | undefined>;
   /** 한 구매사 워크스페이스의 모든 RFP. */
   findByBuyerWs(wsId: string, tx?: Tx): Promise<RFP[]>;
-  /** raw share token → RFP. 공유 링크 클레임 시 사용. 없으면 undefined. */
-  findByShareToken(token: string, tx?: Tx): Promise<RFP | undefined>;
   /** 상태 전이 + 패치. DB 레이어에서 `WHERE status=$prev` 동시성 가드. */
   transition(id: string, to: RfpStatus, patch?: Partial<RFP>, tx?: Tx): Promise<RFP>;
   /** 통일 칸반: pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */

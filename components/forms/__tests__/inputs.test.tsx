@@ -55,6 +55,18 @@ describe('CurrencyInput', () => {
     await user.type(screen.getByRole('spinbutton'), '7');
     expect(onChange).toHaveBeenCalledWith('7');
   });
+
+  it('shows a Korean-readable amount hint when value > 0', () => {
+    render(<CurrencyInput label="정산한도" value="50000000" onChange={() => {}} />);
+    expect(screen.getByText('= 5천만 원')).toBeInTheDocument();
+  });
+
+  it('shows no hint for empty or zero value', () => {
+    const { rerender } = render(<CurrencyInput label="정산한도" value="" onChange={() => {}} />);
+    expect(screen.queryByText(/^=/)).toBeNull();
+    rerender(<CurrencyInput label="정산한도" value="0" onChange={() => {}} />);
+    expect(screen.queryByText(/^=/)).toBeNull();
+  });
 });
 
 describe('infoTerm', () => {

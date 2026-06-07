@@ -12,6 +12,7 @@ import {
   type Dashboard,
   type PgDashRow,
 } from './buildDashboard';
+import { classifyPgInvitation } from '@/lib/server/pg-kanban';
 
 export async function loadBuyerDashboard(workspaceId: string): Promise<Dashboard> {
   const [rfpRepo, bidRepo] = await Promise.all([getRfpRepo(), getBidRepo()]);
@@ -21,18 +22,22 @@ export async function loadBuyerDashboard(workspaceId: string): Promise<Dashboard
 }
 
 export async function loadPgDashboard(workspaceId: string): Promise<Dashboard> {
-  const [invRepo, reqRepo] = await Promise.all([
+  const [invRepo, reqRepo, bidRepo] = await Promise.all([
     getInvitationRepo(),
     getPgRequestRepo(),
+    getBidRepo(),
   ]);
   const now = new Date();
-  const [pairs, openRfps] = await Promise.all([
+  const [pairs, openRfps, bidList] = await Promise.all([
     invRepo.findByPgWorkspace(workspaceId),
     reqRepo.findOpenRfpsForPg(workspaceId, now),
+    bidRepo.findByPgWs(workspaceId),
   ]);
+  // bid 기반 stage 분류 (inbox 목록 / loadBoard PG 파이프라인과 동일 패턴).
+  const bidByRfp = new Map(bidList.map((b) => [b.rfpId, b]));
   const rows: PgDashRow[] = pairs.map(({ invitation, rfp }) => ({
     invitationId: invitation.id,
-    invitationStatus: invitation.status,
+    stage: classifyPgInvitation({ invitation, bid: bidByRfp.get(rfp.id), rfp }),
     rfpCode: rfp.code,
     rfpTitle: rfp.title,
     rfpDeadline: rfp.deadline,
