@@ -8,7 +8,7 @@ import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
-import { isValidWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { cn } from '@/lib/utils';
 
 const CONTRACT_TYPE_OPTIONS = [
@@ -33,7 +33,7 @@ type Props = {
 export function RfpStep2Content({ onBack, onNext }: Props) {
   const draft = useRfpDraftStore();
 
-  const websiteInvalid = !isValidWebsiteUrl(draft.websiteUrl);
+  const websiteInvalid = !isValidWebsiteUrlLight(draft.websiteUrl);
 
   return (
     <div className="space-y-5">
@@ -76,7 +76,11 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           type="text"
           value={draft.websiteUrl}
           onChange={(e) => draft.setField('websiteUrl', e.target.value)}
-          placeholder="https://supporter-b.com/"
+          onBlur={(e) => {
+            const normalized = normalizeWebsiteUrl(e.target.value);
+            if (normalized !== e.target.value) draft.setField('websiteUrl', normalized);
+          }}
+          placeholder="example.com"
           aria-invalid={websiteInvalid}
           className={underlineInputClass}
         />
