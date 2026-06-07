@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useHeaderActionsStore } from '@/lib/stores/header-actions';
 
 /** Minimum spinner visibility so refresh feedback completes at least one visible turn. */
-export const MIN_REFRESH_SPIN_MS = 800;
+export const MIN_REFRESH_SPIN_MS = 400;
 
 export function HomeHeaderActionsRegistrar() {
   const router = useRouter();
