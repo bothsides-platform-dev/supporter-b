@@ -530,6 +530,30 @@ describe('createRfpAction', () => {
     expect(row.currentGuaranteeInsurance).toBe('3000만원');
   });
 
+  it('도메인 형식이 아닌 websiteUrl 은 INVALID_INPUT 으로 거부한다', async () => {
+    const r = await createRfpAction({
+      title: '잘못된 홈페이지',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      websiteUrl: 'not-a-domain',
+      send: false,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('빈 문자열 websiteUrl 은 허용한다 (refine empty-string accept path)', async () => {
+    const r = await createRfpAction({
+      title: '빈 홈페이지 허용',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      websiteUrl: '',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+  });
+
   it('omitting the 6 new optional fields stores NULL in DB', async () => {
     const r = await createRfpAction({
       title: '옵셔널 생략 테스트',

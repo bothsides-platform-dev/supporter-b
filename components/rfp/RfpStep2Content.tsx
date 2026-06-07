@@ -8,6 +8,7 @@ import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { isValidWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { cn } from '@/lib/utils';
 
 const SOLUTION_OPTIONS = [
@@ -26,6 +27,8 @@ type Props = {
 
 export function RfpStep2Content({ onBack, onNext }: Props) {
   const draft = useRfpDraftStore();
+
+  const websiteInvalid = !isValidWebsiteUrl(draft.websiteUrl);
 
   return (
     <div className="space-y-5">
@@ -46,8 +49,14 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.websiteUrl}
           onChange={(e) => draft.setField('websiteUrl', e.target.value)}
           placeholder="https://supporter-b.com/"
+          aria-invalid={websiteInvalid}
           className={underlineInputClass}
         />
+        {websiteInvalid && (
+          <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
+            {WEBSITE_URL_ERROR}
+          </p>
+        )}
       </div>
       <div className="space-y-1">
         <Label size="md" muted={false}>주요 판매 상품</Label>
