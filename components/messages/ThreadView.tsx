@@ -701,7 +701,7 @@ export function ThreadView({
           type="file"
           multiple
           accept={ACCEPT_EXT}
-          className="sr-only"
+          className="hidden"
           onChange={(e) => {
             addFiles(e.target.files);
             e.target.value = '';

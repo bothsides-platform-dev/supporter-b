@@ -163,7 +163,7 @@ export function RfpAttachmentDropzone({ value, onChange }: Props) {
         type="file"
         multiple
         accept={ACCEPT_EXT}
-        className="sr-only"
+        className="hidden"
         onChange={(e) => addFiles(e.target.files)}
       />
 
