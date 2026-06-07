@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,7 @@ function formatRelative(date: Date): string {
 
 export function RefreshHeaderButton({ onRefresh, lastRefreshedAt, isRefreshing }: Props) {
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
+  const [isSpinning, setIsSpinning] = useState(false);
 
   useEffect(() => {
     const id = setInterval(forceUpdate, LABEL_REFRESH_INTERVAL_MS);
@@ -31,15 +32,24 @@ export function RefreshHeaderButton({ onRefresh, lastRefreshedAt, isRefreshing }
 
   const label = formatRelative(lastRefreshedAt);
 
+  const handleClick = () => {
+    setIsSpinning(true);
+    onRefresh();
+    setTimeout(() => setIsSpinning(false), 350);
+  };
+
   return (
     <Button
       variant="ghost"
       size="sm"
-      disabled={isRefreshing}
-      onClick={onRefresh}
+      disabled={isRefreshing || isSpinning}
+      onClick={handleClick}
       aria-label={`새로고침: ${label}`}
     >
-      <RefreshCw size={14} className={cn(isRefreshing && 'animate-spin')} />
+      <RefreshCw
+        size={14}
+        className={cn(isSpinning ? 'animate-spin-once' : isRefreshing && 'animate-spin')}
+      />
       {label}
     </Button>
   );
