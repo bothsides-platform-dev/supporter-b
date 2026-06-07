@@ -38,6 +38,19 @@ describe('RfpAttachmentDropzone 파일 업로드', () => {
     )
   })
 
+  // 회귀: 숨김 파일 input이 `sr-only`(=position:absolute)를 쓰면, 긴 폼 안에서
+  // absolute 박스가 스크롤 컨테이너를 빠져나가 document 높이를 늘려 위저드 하단에
+  // 빈 스크롤 영역을 만든다. 보이지 않고 ref.click()로만 트리거되므로 `hidden`
+  // (display:none)이어야 한다.
+  it('숨김 파일 input은 sr-only가 아니라 hidden 이어야 한다', () => {
+    render(<RfpAttachmentDropzone value={[]} onChange={vi.fn()} />)
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.classList.contains('hidden')).toBe(true)
+    expect(input.classList.contains('sr-only')).toBe(false)
+  })
+
   it('415 응답 시 형식 오류 메시지 표시', async () => {
     const user = userEvent.setup()
     const error415 = new HTTPError(

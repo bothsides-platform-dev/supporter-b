@@ -87,7 +87,7 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
           ref={inputRef}
           type="file"
           accept="image/png,image/jpeg"
-          className="sr-only"
+          className="hidden"
           onChange={handleFileChange}
         />
 

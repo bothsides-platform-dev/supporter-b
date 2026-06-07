@@ -259,7 +259,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
                 multiple
                 accept={ACCEPT_EXT}
                 aria-label="파일 첨부"
-                className="sr-only"
+                className="hidden"
                 onChange={(e) => {
                   addFiles(e.target.files);
                   e.target.value = '';

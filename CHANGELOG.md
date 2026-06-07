@@ -2,11 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.1.5] - 2026-06-07
+## [0.1.6] - 2026-06-07
 
 ### Added
 
 - **견적 요청 홈페이지 URL 형식 검증**: 새 견적 요청(`/rfp/new`) 작성 위저드 Step 2의 '사업 운영 홈페이지'(`websiteUrl`) 입력에 도메인 형식 유효성 검증을 추가. 선택 필드라 빈 값은 그대로 허용하되, 값을 입력하면 `http(s)://` 스킴 + 점(.)+TLD 도메인 형태여야 한다. 형식이 어긋나면 입력 즉시 인라인 안내(`role="alert"`)를 보여주고 발송을 막는다(위저드 Step 2 미완료 처리 + 서버 `createRfpAction` zod 검증). `https://trusted.com@evil.com`처럼 표시 host와 실제 목적지가 다른 userinfo 형태도 거부 — 홈페이지가 오픈 게시판에 링크로 노출되므로 피싱을 차단한다.
+
+## [0.1.5] - 2026-06-07
+
+### Fixed
+
+- **견적 요청 위저드 첨부 파일 빈 스크롤**: 새 견적 요청(`/rfp/new`) 작성 위저드에서 폼·버튼 아래로 거대한 빈 흰 화면이 생기고 그 영역까지 스크롤되던 버그 수정. 원인은 숨김 파일 input이 쓰던 Tailwind `sr-only` 클래스(`position:absolute`)가 긴 폼 안에서 스크롤 컨테이너의 클립을 벗어나 문서 높이를 늘린 것 — `display:none`이 아니라 absolute 박스라 레이아웃에 1px이 남아 문서가 늘어났다. 프로그래밍(`ref.click()`·`<label>`)으로만 열리고 별도 가시 트리거가 있는 숨김 파일 input 5곳을 `hidden`(`display:none`)으로 교체. 첨부 드롭존(`RfpAttachmentDropzone`)·입찰 위저드 견적서 업로드·워크스페이스 로고·메시지/채팅 첨부에 동일 패턴 일괄 적용.
 
 ## [0.1.4] - 2026-06-07
 
