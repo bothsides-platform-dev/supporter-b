@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.4] - 2026-06-07
+
+### Fixed
+
+- **견적 요청 위저드 첨부 파일 빈 스크롤**: 새 견적 요청(`/rfp/new`) 작성 위저드에서 폼·버튼 아래로 거대한 빈 흰 화면이 생기고 그 영역까지 스크롤되던 버그 수정. 원인은 숨김 파일 input이 쓰던 Tailwind `sr-only` 클래스(`position:absolute`)가 긴 폼 안에서 스크롤 컨테이너의 클립을 벗어나 문서 높이를 늘린 것 — `display:none`이 아니라 absolute 박스라 레이아웃에 1px이 남아 문서가 늘어났다. 프로그래밍(`ref.click()`·`<label>`)으로만 열리고 별도 가시 트리거가 있는 숨김 파일 input 5곳을 `hidden`(`display:none`)으로 교체. 첨부 드롭존(`RfpAttachmentDropzone`)·입찰 위저드 견적서 업로드·워크스페이스 로고·메시지/채팅 첨부에 동일 패턴 일괄 적용.
+
 ## [0.1.3] - 2026-06-07
 
 ### Fixed
