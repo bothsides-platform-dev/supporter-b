@@ -202,4 +202,17 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     >[];
     return rows.map((r) => r.userId);
   }
+
+  async memberEmails(workspaceId: string, tx?: Tx): Promise<string[]> {
+    const db = this.h(tx);
+    const rows = (await db
+      .select({ email: usersTable.email })
+      .from(workspaceMembers)
+      .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
+      .where(eq(workspaceMembers.workspaceId, workspaceId))) as Pick<
+      UserRow,
+      'email'
+    >[];
+    return rows.map((r) => r.email);
+  }
 }
