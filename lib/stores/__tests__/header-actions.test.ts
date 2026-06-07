@@ -14,7 +14,7 @@ describe('useHeaderActionsStore', () => {
     const onRefresh = () => {};
     useHeaderActionsStore.getState().setRefreshAction({
       onRefresh,
-      lastRefreshedAt: null,
+      lastRefreshedAt: new Date(),
       isRefreshing: false,
     });
     const slot = useHeaderActionsStore.getState().refreshSlot;

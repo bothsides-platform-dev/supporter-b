@@ -15,16 +15,16 @@ afterEach(() => {
 function renderButton(overrides: Partial<React.ComponentProps<typeof RefreshHeaderButton>> = {}) {
   const defaults = {
     onRefresh: vi.fn(),
-    lastRefreshedAt: null,
+    lastRefreshedAt: new Date(),
     isRefreshing: false,
   };
   return render(<RefreshHeaderButton {...defaults} {...overrides} />);
 }
 
 describe('RefreshHeaderButton', () => {
-  it('lastRefreshedAt=null 이면 "새로고침" 레이블을 보인다', () => {
-    renderButton({ lastRefreshedAt: null });
-    expect(screen.getByRole('button', { name: /새로고침/ })).toBeInTheDocument();
+  it('lastRefreshedAt이 현재 시간이면 "방금 전"을 보인다', () => {
+    renderButton({ lastRefreshedAt: new Date() });
+    expect(screen.getByRole('button', { name: /방금 전/ })).toBeInTheDocument();
   });
 
   it('30초 전 새로고침 → "방금 전"', () => {
@@ -52,7 +52,7 @@ describe('RefreshHeaderButton', () => {
 
   it('클릭 시 onRefresh가 호출된다', () => {
     const onRefresh = vi.fn();
-    renderButton({ onRefresh, lastRefreshedAt: null });
+    renderButton({ onRefresh });
     fireEvent.click(screen.getByRole('button'));
     expect(onRefresh).toHaveBeenCalledOnce();
   });
