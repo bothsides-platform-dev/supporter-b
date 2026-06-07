@@ -86,7 +86,7 @@ describe('Header', () => {
 
   it('refreshSlot이 있으면 새로고침 버튼을 렌더한다', () => {
     useHeaderActionsStore.setState({
-      refreshSlot: { onRefresh: vi.fn(), lastRefreshedAt: null, isRefreshing: false },
+      refreshSlot: { onRefresh: vi.fn(), lastRefreshedAt: new Date(), isRefreshing: false },
     });
     render(<Header user={user} workspaceType="buyer" />);
     expect(screen.getByRole('button', { name: /새로고침/ })).toBeInTheDocument();
@@ -94,7 +94,7 @@ describe('Header', () => {
 
   it('refreshSlot.isRefreshing=true 이면 새로고침 버튼이 disabled', () => {
     useHeaderActionsStore.setState({
-      refreshSlot: { onRefresh: vi.fn(), lastRefreshedAt: null, isRefreshing: true },
+      refreshSlot: { onRefresh: vi.fn(), lastRefreshedAt: new Date(), isRefreshing: true },
     });
     render(<Header user={user} workspaceType="buyer" />);
     expect(screen.getByRole('button', { name: /새로고침/ })).toBeDisabled();

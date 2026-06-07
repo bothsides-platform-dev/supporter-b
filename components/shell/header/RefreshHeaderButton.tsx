@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useReducer } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { RefreshIcon } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 type Props = {
   onRefresh: () => void;
-  lastRefreshedAt: Date | null;
+  lastRefreshedAt: Date;
   isRefreshing: boolean;
 };
 
@@ -25,12 +25,11 @@ export function RefreshHeaderButton({ onRefresh, lastRefreshedAt, isRefreshing }
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
 
   useEffect(() => {
-    if (!lastRefreshedAt) return;
     const id = setInterval(forceUpdate, LABEL_REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
   }, [lastRefreshedAt]);
 
-  const label = lastRefreshedAt ? formatRelative(lastRefreshedAt) : '새로고침';
+  const label = formatRelative(lastRefreshedAt);
 
   return (
     <Button
@@ -38,9 +37,9 @@ export function RefreshHeaderButton({ onRefresh, lastRefreshedAt, isRefreshing }
       size="sm"
       disabled={isRefreshing}
       onClick={onRefresh}
-      aria-label={label === '새로고침' ? '새로고침' : `새로고침: ${label}`}
+      aria-label={`새로고침: ${label}`}
     >
-      <RefreshIcon className={cn(isRefreshing && 'animate-spin')} />
+      <RefreshCw size={14} className={cn(isRefreshing && 'animate-spin')} />
       {label}
     </Button>
   );
