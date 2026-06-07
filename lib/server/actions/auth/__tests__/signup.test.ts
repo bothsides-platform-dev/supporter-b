@@ -18,8 +18,9 @@ import { signupCompleteAction } from '../signupCompleteAction';
 import { checkEmailAvailableAction } from '../checkEmailAvailableAction';
 import { verifyEmailAction } from '../verifyEmailAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
-import { __setActionDbForTest } from '../_shared';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import { AuthService, __setAuthServiceForTest } from '@/lib/server/services/auth';
+import { getUserRepo, getVerificationTokenRepo, getOutboxRepo } from '@/lib/server/repositories/factory';
 
 const DEFAULT_PHONE = '01099999999';
 // Fixed UUID used by throwingInsertDb so VALID_SIGNUP can be a static constant.
@@ -615,27 +616,33 @@ describe('signupCompleteAction — insert error tightening', () => {
   afterEach(teardownActionEnv);
 
   it('maps a postgres-shaped unique violation (err.code) to EMAIL_TAKEN', async () => {
-    __setActionDbForTest(
+    const [userRepo, vtRepo, outboxRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo()]);
+    __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('dup'), { code: '23505' })),
-    );
+      userRepo, vtRepo, outboxRepo,
+    ));
     const r = await signupCompleteAction(VALID_SIGNUP);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
   });
 
   it('maps a pglite-shaped unique violation (err.cause.code) to EMAIL_TAKEN', async () => {
-    __setActionDbForTest(
+    const [userRepo, vtRepo, outboxRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo()]);
+    __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('dup'), { cause: { code: '23505' } })),
-    );
+      userRepo, vtRepo, outboxRepo,
+    ));
     const r = await signupCompleteAction(VALID_SIGNUP);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
   });
 
   it('rethrows a non-unique DB error instead of masking it as EMAIL_TAKEN', async () => {
-    __setActionDbForTest(
+    const [userRepo, vtRepo, outboxRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo()]);
+    __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('not null'), { code: '23502' })),
-    );
+      userRepo, vtRepo, outboxRepo,
+    ));
     await expect(signupCompleteAction(VALID_SIGNUP)).rejects.toThrow('not null');
   });
 });
