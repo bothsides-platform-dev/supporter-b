@@ -10,6 +10,7 @@ import { Chip } from '@/components/primitives/Chip';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
+import { Paperclip } from 'lucide-react';
 import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, XIcon, EnvelopeIcon } from '@/components/icons';
 import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES, ACCEPTED_EXTENSIONS } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
@@ -696,7 +697,7 @@ export function ThreadView({
           className="shrink-0"
           onClick={() => fileInputRef.current?.click()}
         >
-          <PaperclipIcon />
+          <Paperclip size={16} />
         </IconButton>
         <input
           ref={fileInputRef}
@@ -723,7 +724,6 @@ export function ThreadView({
           className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-1.5 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
         />
         <Button
-          size="sm"
           className="shrink-0"
           onClick={handleSend}
           disabled={
