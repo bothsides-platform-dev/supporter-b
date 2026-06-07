@@ -124,8 +124,12 @@ export class RfpService {
 
       const rfpCode = rfp.code;
 
+      // Batch-fetch member IDs for winner + all losers in a single IN-query.
+      const allPgWsIds = [winner.pgWsId, ...losers.map((l) => l.pgWsId)];
+      const memberIdsMap = await this.workspaceRepo.memberUserIdsBatch(allPgWsIds, tx);
+
       // winner: in-app + email per member
-      const winnerUserIds = await this.workspaceRepo.memberUserIds(winner.pgWsId, tx);
+      const winnerUserIds = memberIdsMap.get(winner.pgWsId) ?? [];
       for (const userId of winnerUserIds) {
         const notif: Notification = {
           id: randomUUID(),
@@ -165,7 +169,7 @@ export class RfpService {
 
       // losers: in-app only
       for (const loser of losers) {
-        const loserUserIds = await this.workspaceRepo.memberUserIds(loser.pgWsId, tx);
+        const loserUserIds = memberIdsMap.get(loser.pgWsId) ?? [];
         for (const userId of loserUserIds) {
           const notif: Notification = {
             id: randomUUID(),
@@ -222,8 +226,9 @@ export class RfpService {
         ),
       ];
 
+      const cancelMemberMap = await this.workspaceRepo.memberUserIdsBatch(submittedPgWsIds, tx);
       for (const pgWsId of submittedPgWsIds) {
-        const memberIds = await this.workspaceRepo.memberUserIds(pgWsId, tx);
+        const memberIds = cancelMemberMap.get(pgWsId) ?? [];
         for (const userId of memberIds) {
           const notif: Notification = {
             id: randomUUID(),
@@ -278,8 +283,9 @@ export class RfpService {
         ),
       ];
 
+      const closeMemberMap = await this.workspaceRepo.memberUserIdsBatch(submittedPgWsIds, tx);
       for (const pgWsId of submittedPgWsIds) {
-        const memberIds = await this.workspaceRepo.memberUserIds(pgWsId, tx);
+        const memberIds = closeMemberMap.get(pgWsId) ?? [];
         for (const userId of memberIds) {
           const notif: Notification = {
             id: randomUUID(),

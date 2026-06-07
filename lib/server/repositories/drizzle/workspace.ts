@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import {
   workspaces,
   workspaceMembers,
@@ -201,6 +201,25 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       'userId'
     >[];
     return rows.map((r) => r.userId);
+  }
+
+  async memberUserIdsBatch(wsIds: string[], tx?: Tx): Promise<Map<string, string[]>> {
+    if (wsIds.length === 0) return new Map();
+    const db = this.h(tx);
+    const rows = (await db
+      .select({ workspaceId: workspaceMembers.workspaceId, userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(inArray(workspaceMembers.workspaceId, wsIds))) as Pick<
+      MemberRow,
+      'workspaceId' | 'userId'
+    >[];
+    const map = new Map<string, string[]>();
+    for (const r of rows) {
+      const list = map.get(r.workspaceId) ?? [];
+      list.push(r.userId);
+      map.set(r.workspaceId, list);
+    }
+    return map;
   }
 
   async memberEmails(workspaceId: string, tx?: Tx): Promise<string[]> {
