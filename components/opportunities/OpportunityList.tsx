@@ -4,6 +4,9 @@ import type { OpportunityListing } from '@/lib/types/pg-request';
 import { formatDate, formatDeadline } from '@/lib/format';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
 import { cn } from '@/lib/utils';
+import { Chip } from '@/components/primitives/Chip';
+
+const CONTRACT_TYPE_LABELS = { new: '신규 계약', renewal: '갱신 계약' } as const;
 
 // 마감 임박(D-2 이하)을 빨강으로 강조하는 칩 — PG 화면 공통 신호.
 function DeadlineChip({ deadline }: { deadline: string }) {
@@ -83,6 +86,12 @@ export function OpportunityList({
                 </span>
               </div>
               <div className="flex shrink-0 items-center gap-3">
+                {it.contractType && (
+                  <Chip
+                    label={CONTRACT_TYPE_LABELS[it.contractType]}
+                    color={it.contractType === 'new' ? 'primary' : 'surface'}
+                  />
+                )}
                 <DeadlineChip deadline={it.deadline} />
                 <OpportunityRequestDialog rfpCode={it.rfpCode} />
               </div>

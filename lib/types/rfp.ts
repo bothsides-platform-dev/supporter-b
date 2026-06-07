@@ -40,4 +40,6 @@ export type RFP = {
   customPaymentMethods: CustomPaymentMethod[];
   // 오픈 RFP 게시판 노출 여부(opt-out). 기본 true. 구매사가 끄면 게시판에서 제외.
   boardVisible?: boolean;
+  // 계약 유형(선택사항). null이면 미표시.
+  contractType?: 'new' | 'renewal' | null;
 };

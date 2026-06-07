@@ -46,6 +46,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null): RFP {
     createdBy: row.createdBy,
     createdAt: new Date(row.createdAt).toISOString(),
     sentAt: toIso(row.sentAt),
+    contractType: row.contractType ?? null,
   };
 }
 

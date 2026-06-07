@@ -56,6 +56,20 @@ describe('DrizzleRfpRepository', () => {
     db = ctx.db;
   });
 
+  it('round-trips contractType via save/findById', async () => {
+    const rfp: RFP = { ...makeRfp('P-2605-CTYPE1', ctx.ws.id, ctx.user.id), contractType: 'renewal' };
+    await repo.save(rfp);
+    const fetched = await repo.findById(rfp.id);
+    expect(fetched!.contractType).toBe('renewal');
+  });
+
+  it('round-trips contractType=new via save/findByCode', async () => {
+    const rfp: RFP = { ...makeRfp('P-2605-CTYPE2', ctx.ws.id, ctx.user.id), contractType: 'new' };
+    await repo.save(rfp);
+    const fetched = await repo.findByCode('P-2605-CTYPE2');
+    expect(fetched!.contractType).toBe('new');
+  });
+
   it('saves and retrieves by uuid id', async () => {
     const rfp = makeRfp('P-2605-0001', ctx.ws.id, ctx.user.id);
     await repo.save(rfp);

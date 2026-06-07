@@ -185,6 +185,7 @@ describe('DrizzleRfpRequestRepository', () => {
       // 정확한 화이트리스트 — 키 하나라도 늘면(봉인 필드가 새면) 여기서 깨진다.
       expect(Object.keys(listing).sort()).toEqual([
         'buyerName',
+        'contractType',
         'customPaymentMethodLabels',
         'deadline',
         'mainProducts',

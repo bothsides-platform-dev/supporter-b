@@ -1,4 +1,7 @@
-import { Chip } from '@/components/primitives/Chip';
+import { Chip, type ChipColor } from '@/components/primitives/Chip';
+
+const CONTRACT_TYPE_LABELS = { new: '신규 계약', renewal: '갱신 계약' } as const;
+const CONTRACT_TYPE_COLOR: Record<'new' | 'renewal', ChipColor> = { new: 'primary', renewal: 'surface' };
 import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
@@ -30,6 +33,12 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
           >
             마감 {daysLeft} ({formatDate(rfp.deadline)})
           </span>
+          {rfp.contractType && (
+            <Chip
+              label={CONTRACT_TYPE_LABELS[rfp.contractType]}
+              color={CONTRACT_TYPE_COLOR[rfp.contractType]}
+            />
+          )}
         </div>
       </div>
 

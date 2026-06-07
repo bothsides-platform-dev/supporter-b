@@ -96,6 +96,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
         requiredPaymentMethods: draft.requiredPaymentMethods,
         customPaymentMethods: draft.customPaymentMethods,
         boardVisible: draft.boardVisible,
+        contractType: draft.contractType ?? undefined,
         send: true,
       });
     } catch {
