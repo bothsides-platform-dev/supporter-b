@@ -28,6 +28,7 @@ import {
   emitAfterCommit,
 } from '@/lib/server/notifications/dispatch';
 import { logBusinessEvent } from '@/lib/observability/log';
+import { isValidWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import type { Notification } from '@/lib/types/notification';
 import {
   actionDb,
@@ -73,7 +74,13 @@ const Input = z
       .default('inherit'),
     bizNoOverride: z.string().min(1).max(50).optional(),
     gradeOverride: z.enum(MERCHANT_GRADES).optional(),
-    websiteUrl: z.string().max(500).optional(),
+    websiteUrl: z
+      .string()
+      .max(500)
+      .optional()
+      .refine((v) => v === undefined || isValidWebsiteUrl(v), {
+        message: WEBSITE_URL_ERROR,
+      }),
     mainProducts: z.string().max(200).optional(),
     annualPgVolume: z.string().max(100).optional(),
     currentFeeRate: z.string().max(50).optional(),

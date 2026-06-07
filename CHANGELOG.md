@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.6] - 2026-06-07
+
+### Added
+
+- **견적 요청 홈페이지 URL 형식 검증**: 새 견적 요청(`/rfp/new`) 작성 위저드 Step 2의 '사업 운영 홈페이지'(`websiteUrl`) 입력에 도메인 형식 유효성 검증을 추가. 선택 필드라 빈 값은 그대로 허용하되, 값을 입력하면 `http(s)://` 스킴 + 점(.)+TLD 도메인 형태여야 한다. 형식이 어긋나면 입력 즉시 인라인 안내(`role="alert"`)를 보여주고 발송을 막는다(위저드 Step 2 미완료 처리 + 서버 `createRfpAction` zod 검증). `https://trusted.com@evil.com`처럼 표시 host와 실제 목적지가 다른 userinfo 형태도 거부 — 홈페이지가 오픈 게시판에 링크로 노출되므로 피싱을 차단한다.
+
 ## [0.1.5] - 2026-06-07
 
 ### Fixed
