@@ -9,6 +9,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 - `README.md` — local setup / run instructions.
 - `DESIGN.md` — Linear design language: tokens, typography, color, component visual rules.
 - `SCREEN_DESIGN.md` — screen IA, route map, per-screen UX spec.
+- `UX_WRITING.md` — 토스 보이스톤 기반 UX 라이팅 원칙 (해요체·능동형·긍정형·캐주얼 경어·버튼 문구). UI 문구 작성 시 필수 참조.
 
 **라이브 배포**: AWS Lightsail 단일 VM 자체호스팅 (Caddy + PM2 `next start` + Docker Postgres). 현행 런북은 `docs/DEPLOY_LIGHTSAIL.md`, 관련 자산은 `ecosystem.config.cjs`(PM2) · `docker-compose.prod.yml`(운영 Postgres) · `deploy/Caddyfile` · `scripts/deploy/lightsail-*.sh` · `.env.production.example`.
 
@@ -17,8 +18,11 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 ## Domain Context (memorize)
 
 - **Two-sided platform**: `buyer` workspace (구매사) sends RFPs; `pg` workspace (결제대행사 영업담당) responds with bids
-- **Private 1:N RFP, NOT a marketplace**: matching is by buyer-supplied PG email allowlist. PGs don't see each other (완전 비공개 — `Bid.competitorCount` etc. do not exist by design)
+- **Bidding is sealed 1:N; discovery is open (opt-out)**: participation (who can bid) is buyer-controlled via the workspace-ID allowlist (`rfp_allowed_pg`), and **bids stay sealed — PGs never see each other or a competitor count (`Bid.competitorCount` does not exist by design).** Two axes, kept separate:
+  - **Discovery = open by default, buyer opt-out.** Every `sent` RFP with `deadline > now` and `board_visible=true` (the default) appears on the PG-facing open board (`/opportunities` + PG home 탐색 section). The board listing exposes **only `구매사명`(workspace name)·`제목`·`홈페이지`** — never fees/current-terms/volume/bizNo/memo/attachments (whitelist enforced at the query layer in `lib/server/repositories/drizzle/rfp-pg-request.ts`). A buyer can hide a specific RFP via `setRfpBoardVisibilityAction`.
+  - **Participation = buyer-gated.** A non-invited PG sends a one-time cold-pitch request (`rfp_pg_requests`, UNIQUE per (rfp, pg), rejection permanent). Buyer **accept** adds them to the allowlist + a real invitation (full info then visible in their inbox); **reject** is final.
 - **Per-RFP unique URL + token** in invitation email; token authoritative only for first entry, then workspace membership takes over
+- **용어 주의 — 코드는 `RFP`/`bid`, 사용자 화면은 '견적' 언어**: 코드 식별자·라우트(`/rfp`)·DB(`rfps`/`bids`)는 영어 그대로지만, **사용자에게 보이는 모든 한국어 문구는 '견적 요청'(RFP)·'견적'(bid)·'선정'(award)** 으로 통일한다. UI 문구 작성·수정 시 `UX_WRITING.md` §8 도메인 용어집을 따른다. 랜딩/마케팅 면만 '경쟁 입찰' 프레이밍 유지.
 
 ## Current Stack
 
@@ -33,7 +37,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | Styling | Tailwind v4 + CSS Variables (`@theme` block) | `tailwindcss@4.2.4` |
 | Headless UI | `@base-ui/react` (shadcn base-nova style) + Radix 일부 (`@radix-ui/react-popover`, `@radix-ui/react-slider`) | `@base-ui/react@1.4.1` |
 | Component tooling | shadcn (base-nova) — 컴포넌트 scaffolding 전용 | `shadcn@4.6.0` |
-| State | Zustand (UI toggles, signup draft) | `zustand@5.0.13` |
+| State | Zustand (UI toggles, signup draft, page→shell header-actions slot) | `zustand@5.0.13` |
 | Forms | zod v4 검증 + Server Actions (react-hook-form 미사용 — 폼은 useState + zod) | `zod@4.4.3` |
 | Icons | lucide-react | `lucide-react@1.14.0` |
 | Fonts | `next/font/local` — Pretendard Variable + JetBrains Mono Variable, self-hosted in `public/fonts/` | — |
@@ -43,6 +47,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | Logging | Pino + Axiom (`next-axiom`) | `pino@10.3.1`, `next-axiom@1.10.0` |
 | Observability | Sentry | `@sentry/nextjs@10.51.0` |
 | Support | Channel.io | `@channel.io/channel-web-sdk-loader@2.0.2` |
+| Realtime | Centrifugo (자체호스팅 WS, Caddy `wss://`) + `centrifuge-js` — 채팅 라이브(즉시 수신·타이핑·프레즌스·읽음). 메시지는 자사 Postgres에만 영속, 비공개 ACL은 subscribe-proxy로 앱에 보존 | `centrifuge@5.6.0` |
 | Cmdk | `cmdk` | `cmdk@1.1.1` |
 | Testing | Vitest + PGlite (단위), Playwright (e2e) | `vitest@4.1.5`, `@electric-sql/pglite@0.3.13` |
 | Package mgr | pnpm | — |
@@ -53,21 +58,22 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 
 ```
 app/
-├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{,rfp,workspace}/[token], /share/{rfp,workspace}/[token], /auth/*, /pending-approval, /suspended
+├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{,rfp,workspace}/[token], /auth/*, /pending-approval, /suspended
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)
 │  ├─ home/
-│  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id], /rfp/[id]/award
+│  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id] (비교·선정 인라인 — 별도 award 라우트 없음)
 │  ├─ inbox/                  # pg workspace pages (P2~P4): /inbox, /inbox/[rfpId], /inbox/[rfpId]/submitted
 │  ├─ notifications/          # 인앱 알림 목록 페이지
 │  ├─ workspace/new/          # 워크스페이스 생성
 │  └─ settings/{profile,members,notifications}/
 ├─ rfp/new/                   # full-screen RFP 작성 플로우 (자체 layout, AppShell 밖)
-├─ admin/                     # 운영자 콘솔 (별도 트리): admin/login + admin/(protected)/{index 대시보드, buyers/[id], sellers/[id], rfps/[id], review/[id], audit-log}; role-guard in admin/(protected)/layout.tsx
 ├─ logout/route.ts            # POST handler
 └─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리
 ```
 
-Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation. The `admin/` console is a separate top-level tree, gated by a role guard in `admin/(protected)/layout.tsx` (not the buyer/pg AppShell).
+Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation.
+
+**Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
 
 ## Linear Design Language — Hard Rules
 

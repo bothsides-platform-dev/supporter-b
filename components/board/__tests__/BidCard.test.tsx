@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
+  CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
+    <span>{counterparty.name}</span>
+  ),
+}));
 
 import { BidCard } from '../BidCard';
 import type { Bid } from '@/lib/types/bid';
@@ -38,5 +45,28 @@ describe('BidCard 결제수단 요약', () => {
   it('제출하지 않은 결제수단 라벨은 표시하지 않는다', () => {
     renderCard({ ...baseBid, paymentFees: { card: 0.02 } });
     expect(screen.queryByText('계좌이체')).toBeNull();
+  });
+});
+
+describe('BidCard 카드 활성화(클릭·키보드)', () => {
+  it('카드를 클릭하면 onClick을 호출한다', async () => {
+    const onClick = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BidCard bid={baseBid} pgName="에이페이" isAwarded={false} noteCount={0} onClick={onClick} />,
+    );
+    await user.click(screen.getByRole('button'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('Enter 키로 onClick을 호출한다(키보드 접근성)', async () => {
+    const onClick = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BidCard bid={baseBid} pgName="에이페이" isAwarded={false} noteCount={0} onClick={onClick} />,
+    );
+    screen.getByRole('button').focus();
+    await user.keyboard('{Enter}');
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });

@@ -8,6 +8,7 @@ import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
 import type { ChipColor } from '@/components/primitives/Chip';
+import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import {
   addPgWorkspacesToRfpAction,
   sendDraftInvitationsAction,
@@ -26,13 +27,12 @@ type InvitationView = {
 type Props = {
   rfpId: string;
   invitations: InvitationView[];
-  shareUrl: string;
   canEdit: boolean;
 };
 
 const statusLabel: Record<InvitationStatus, string> = {
   draft: '대기중',
-  sent: '발송됨',
+  sent: '초대 보냄',
   opened: '열람',
   accepted: '수락',
   declined: '거절',
@@ -51,7 +51,6 @@ const statusColor: Record<InvitationStatus, ChipColor> = {
 export function RfpInviteManager({
   rfpId,
   invitations,
-  shareUrl,
   canEdit,
 }: Props) {
   const router = useRouter();
@@ -71,7 +70,7 @@ export function RfpInviteManager({
     startTransition(async () => {
       const r = await addPgWorkspacesToRfpAction({ rfpId, workspaceIds: [ws.id] });
       if (!r.ok) {
-        toast(`추가 실패 — ${r.error}`, { type: 'error' });
+        toast(`추가하지 못했어요 — ${r.error}`, { type: 'error' });
         return;
       }
       router.refresh();
@@ -83,21 +82,12 @@ export function RfpInviteManager({
     startTransition(async () => {
       const r = await sendDraftInvitationsAction({ rfpId });
       if (!r.ok) {
-        toast(`초대 발송 실패 — ${r.error}`, { type: 'error' });
+        toast(`초대 메일을 보내지 못했어요 — ${r.error}`, { type: 'error' });
         return;
       }
-      toast(`${r.sentCount}개 PG에 초대 메일을 보냈습니다.`);
+      toast(`${r.sentCount}개 PG에 초대 메일을 보냈어요.`);
       router.refresh();
     });
-  };
-
-  const handleCopyShare = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast('공유 링크를 복사했습니다.');
-    } catch {
-      toast('링크 복사에 실패했습니다.', { type: 'error' });
-    }
   };
 
   return (
@@ -110,7 +100,7 @@ export function RfpInviteManager({
         </div>
         {invitations.length === 0 ? (
           <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-            초대된 PG가 없습니다.
+            초대한 PG가 없어요.
           </p>
         ) : (
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
@@ -123,9 +113,10 @@ export function RfpInviteManager({
                   <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)]">
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  <span className="text-[13px] text-[var(--md-sys-color-on-surface)] truncate">
-                    {inv.wsName}
-                  </span>
+                  <CounterpartyProfileCard
+                    variant="profile"
+                    counterparty={{ name: inv.wsName, type: 'pg', workspaceId: inv.wsId }}
+                  />
                 </div>
                 <Chip label={statusLabel[inv.status]} color={statusColor[inv.status]} />
               </div>
@@ -198,12 +189,12 @@ export function RfpInviteManager({
               </p>
             )}
             <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-              추가된 PG는 [ 대기중 ] 상태로 누적되며, 아래 &ldquo;초대 발송&rdquo;을
-              눌러야 메일이 나갑니다.
+              추가된 PG는 [ 대기중 ] 상태로 쌓여요. 아래 &ldquo;초대 보내기&rdquo;를
+              누르면 메일이 나가요.
             </p>
           </div>
 
-          {/* 초대 발송 */}
+          {/* 초대 보내기 */}
           <div className="space-y-2">
             <Button
               type="button"
@@ -214,40 +205,13 @@ export function RfpInviteManager({
               onClick={handleSendDrafts}
             >
               {pending && draftCount > 0
-                ? '발송 중…'
+                ? '보내는 중…'
                 : draftCount > 0
-                  ? `${draftCount}개 PG에 초대 발송`
-                  : '발송할 대기 PG 없음'}
+                  ? `${draftCount}개 PG에 초대 보내기`
+                  : '보낼 대기 PG 없음'}
             </Button>
           </div>
 
-          {/* 공유 링크 */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-3 mb-1">
-              <Label size="md" muted={false}>공유 링크</Label>
-              <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-            </div>
-            <div className="flex items-center gap-3 border border-[var(--md-sys-color-outline-variant)] rounded-md px-3 py-2">
-              <input
-                readOnly
-                value={shareUrl}
-                onFocus={(e) => e.currentTarget.select()}
-                className="flex-1 bg-transparent text-[12px] font-mono tabular-nums text-[var(--md-sys-color-on-surface-variant)] focus:outline-none truncate"
-              />
-              <Button
-                type="button"
-                variant="outlined"
-                size="sm"
-                onClick={handleCopyShare}
-              >
-                복사
-              </Button>
-            </div>
-            <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-              초대받은 PG 워크스페이스 멤버라면 이 링크로 입장 가능합니다.
-              마감일에 자동 만료됩니다.
-            </p>
-          </div>
         </>
       )}
     </div>

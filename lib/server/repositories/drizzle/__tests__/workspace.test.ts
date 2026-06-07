@@ -28,19 +28,6 @@ describe('DrizzleWorkspaceRepository', () => {
     expect(await repo.findById('00000000-0000-0000-0000-000000000000')).toBeUndefined();
   });
 
-  it('findByShareToken hydrates the workspace for a known token', async () => {
-    const ws = await seedPgWorkspace(db, '서포터 B 페이');
-    const seeded = await repo.findById(ws.id);
-    const fetched = await repo.findByShareToken(seeded!.shareToken);
-    expect(fetched).toBeDefined();
-    expect(fetched!.id).toBe(ws.id);
-    expect(fetched!.shareToken).toBe(seeded!.shareToken);
-  });
-
-  it('findByShareToken returns undefined for unknown token', async () => {
-    expect(await repo.findByShareToken('no-such-token')).toBeUndefined();
-  });
-
   it('findById returns hasLogo: false when no logo blob exists', async () => {
     const ws = await seedBuyerWorkspace(db);
     const fetched = await repo.findById(ws.id);
@@ -112,6 +99,37 @@ describe('DrizzleWorkspaceRepository', () => {
       const u = await seedUser(db, { email: 'a-only@buy.com' });
       await seedMembership(db, wsA.id, u.id);
       expect(await repo.isMember(u.id, wsB.id)).toBe(false);
+    });
+  });
+
+  describe('memberUserIds', () => {
+    it('returns every member user id for the workspace', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const u1 = await seedUser(db, { email: 'm1@buy.com' });
+      const u2 = await seedUser(db, { email: 'm2@buy.com' });
+      await seedMembership(db, ws.id, u1.id, 'admin');
+      await seedMembership(db, ws.id, u2.id, 'member');
+
+      const ids = await repo.memberUserIds(ws.id);
+      expect(ids).toHaveLength(2);
+      expect(ids).toEqual(expect.arrayContaining([u1.id, u2.id]));
+    });
+
+    it('returns an empty array for a workspace with no members', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      expect(await repo.memberUserIds(ws.id)).toEqual([]);
+    });
+
+    it('does not include members of a different workspace', async () => {
+      const wsA = await seedBuyerWorkspace(db);
+      const wsB = await seedPgWorkspace(db, 'other.im');
+      const uA = await seedUser(db, { email: 'a@buy.com' });
+      const uB = await seedUser(db, { email: 'b@pg.com' });
+      await seedMembership(db, wsA.id, uA.id);
+      await seedMembership(db, wsB.id, uB.id);
+
+      const ids = await repo.memberUserIds(wsA.id);
+      expect(ids).toEqual([uA.id]);
     });
   });
 });

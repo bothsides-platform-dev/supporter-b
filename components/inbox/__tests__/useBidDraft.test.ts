@@ -87,4 +87,44 @@ describe('useBidDraft', () => {
     expect(result.current.draft).toBeNull();
     expect(localStorage.getItem(KEY)).toBeNull();
   });
+
+  describe('savedAt — 자동저장 피드백 신호', () => {
+    it('초기에는 savedAt이 null이다', () => {
+      const { result } = renderHook(() => useBidDraft(RFP_ID));
+      expect(result.current.savedAt).toBeNull();
+    });
+
+    it('saveDraft 호출 후 디바운스(500ms) 뒤에 savedAt이 Date로 설정된다', () => {
+      const { result } = renderHook(() => useBidDraft(RFP_ID));
+
+      act(() => {
+        result.current.saveDraft(SAMPLE_DRAFT);
+      });
+      // 디바운스 전: 아직 null
+      expect(result.current.savedAt).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      // 디바운스 후: Date 인스턴스
+      expect(result.current.savedAt).toBeInstanceOf(Date);
+    });
+
+    it('연속 저장 시 savedAt이 새 Date 인스턴스로 갱신된다', () => {
+      const { result } = renderHook(() => useBidDraft(RFP_ID));
+
+      act(() => {
+        result.current.saveDraft(SAMPLE_DRAFT);
+        vi.advanceTimersByTime(500);
+      });
+      const first = result.current.savedAt;
+      expect(first).toBeInstanceOf(Date);
+
+      act(() => {
+        result.current.saveDraft({ ...SAMPLE_DRAFT, memo: 'updated' });
+        vi.advanceTimersByTime(500);
+      });
+      expect(result.current.savedAt).not.toBe(first);
+    });
+  });
 });

@@ -12,8 +12,8 @@ export function RfpAwarded({
 }: RfpAwardedProps): React.JSX.Element {
   return (
     <Layout
-      preheader={`${rfpId} RFP가 낙찰되었습니다.`}
-      serial={`RFP / ${rfpId}`}
+      preheader={`${rfpId} 견적이 최종 선정됐어요.`}
+      serial={`견적 요청 / ${rfpId}`}
     >
       <h1
         style={{
@@ -23,10 +23,10 @@ export function RfpAwarded({
           letterSpacing: '-0.01em',
         }}
       >
-        낙찰 알림
+        선정 알림
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
-        제출하신 제안이 최종 선정되었습니다.
+        보내신 견적이 최종 선정됐어요.
       </p>
 
       <table
@@ -38,7 +38,7 @@ export function RfpAwarded({
         <tbody>
           <tr>
             <td style={{ color: '#777', paddingRight: '16px', paddingBottom: '6px' }}>
-              RFP
+              견적 요청 번호
             </td>
             <td style={{ paddingBottom: '6px' }}>
               <Mono>{rfpId}</Mono>
@@ -52,7 +52,7 @@ export function RfpAwarded({
           </tr>
           <tr>
             <td style={{ color: '#777', paddingRight: '16px', paddingBottom: '6px' }}>
-              입찰 ID
+              견적 번호
             </td>
             <td style={{ paddingBottom: '6px' }}>
               <Mono>{bidId}</Mono>
@@ -68,7 +68,7 @@ export function RfpAwarded({
       </table>
 
       <p style={{ fontSize: '13px', color: '#555' }}>
-        구매사 담당자가 곧 후속 절차로 연락드릴 예정입니다.
+        구매사 담당자가 곧 후속 절차로 연락드릴 거예요.
       </p>
     </Layout>
   );

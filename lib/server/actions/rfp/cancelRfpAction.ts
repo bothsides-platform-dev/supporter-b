@@ -87,7 +87,7 @@ export async function cancelRfpAction(
             workspaceId: pgWsId,
             type: 'rfp.cancelled',
             title: `[${rfpId}] 취소됨`,
-            body: '구매사가 제안 요청을 취소했습니다.',
+            body: '구매사가 견적 요청을 취소했어요.',
             channel: 'inapp',
             status: 'pending',
             linkUrl: `/inbox/${rfpId}`,

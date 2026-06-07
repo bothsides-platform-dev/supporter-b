@@ -26,7 +26,7 @@ vi.mock('../RfpStep2Content', () => ({
 }));
 
 vi.mock('../RfpStep3PgSelect', () => ({
-  RfpStep3PgSelect: ({ onBack, onNext }: { onBack: () => void; onNext: () => void }) => (
+  RfpStep3PgSelect: ({ onBack, onNext }: { pgList: unknown[]; onBack: () => void; onNext: () => void }) => (
     <div>
       <button type="button" onClick={onBack}>이전</button>
       <button type="button" onClick={onNext}>다음</button>
@@ -95,9 +95,12 @@ function resetStore() {
     currentFeeRate: '',
     currentSettlementLimit: '',
     currentGuaranteeInsurance: '',
+    currentSettlementCycle: '',
+    deliveryServicePeriod: '',
     currentSolution: '',
     currentSolutionDetail: '',
     memo: '',
+    boardVisible: true,
   });
 }
 
@@ -108,29 +111,29 @@ describe('RfpCreateWizard', () => {
   });
 
   it('초기 렌더 시 Step 1이 표시된다', () => {
-    render(<RfpCreateWizard />);
+    render(<RfpCreateWizard pgList={[]} />);
     expect(screen.getAllByText('사업자 확인').length).toBeGreaterThan(0);
     expect(screen.queryByPlaceholderText(/서포트쇼핑몰/)).not.toBeInTheDocument();
   });
 
   it('Step 1에서 다음 클릭 시 Step 2로 이동한다', async () => {
     const user = userEvent.setup();
-    render(<RfpCreateWizard />);
+    render(<RfpCreateWizard pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
   });
 
   it('사이드바에서 미도달 단계로 자유롭게 점프할 수 있다 (Step 1 → Step 4)', async () => {
     const user = userEvent.setup();
-    render(<RfpCreateWizard />);
-    // Step 1에서 바로 '발송 확인'(Step 4) 클릭 → 리뷰 단계로 점프
-    await user.click(screen.getByText('발송 확인'));
+    render(<RfpCreateWizard pgList={[]} />);
+    // Step 1에서 바로 '보내기 확인'(Step 4) 클릭 → 리뷰 단계로 점프
+    await user.click(screen.getByText('보내기 확인'));
     expect(screen.getByRole('button', { name: '발송' })).toBeInTheDocument();
   });
 
   it('Step 2에서 이전 클릭 시 Step 1로 돌아간다', async () => {
     const user = userEvent.setup();
-    render(<RfpCreateWizard />);
+    render(<RfpCreateWizard pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '이전' }));
     expect(screen.queryByPlaceholderText(/서포트쇼핑몰/)).not.toBeInTheDocument();
@@ -144,7 +147,7 @@ describe('RfpCreateWizard', () => {
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard />);
+    render(<RfpCreateWizard pgList={[]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -168,7 +171,7 @@ describe('RfpCreateWizard', () => {
     });
     const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
     const user = userEvent.setup();
-    render(<RfpCreateWizard guest />);
+    render(<RfpCreateWizard pgList={[]} guest />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -185,7 +188,7 @@ describe('RfpCreateWizard', () => {
   it('필수값 미충족 상태에서 발송 클릭 시 토스트로 안내하고 해당 step으로 이동하며 createRfpAction을 호출하지 않는다', async () => {
     const user = userEvent.setup();
     // store는 빈 상태(resetStore) — 제목/PG/마감일 모두 비어있음
-    render(<RfpCreateWizard />);
+    render(<RfpCreateWizard pgList={[]} />);
 
     // 순서 무관 자유 이동: Step1 → 4까지 다음으로 이동
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -203,6 +206,56 @@ describe('RfpCreateWizard', () => {
     expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
   });
 
+  it('currentSettlementCycle과 deliveryServicePeriod를 createRfpAction에 전달한다', async () => {
+    vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0099' });
+    useRfpDraftStore.setState({
+      title: '테스트',
+      deadline: '2026-06-30T23:59:59Z',
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      currentSettlementCycle: 'D+2',
+      deliveryServicePeriod: '3~5일',
+    });
+    const user = userEvent.setup();
+    render(<RfpCreateWizard pgList={[]} />);
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
+
+    await waitFor(() => {
+      expect(createRfpAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          currentSettlementCycle: 'D+2',
+          deliveryServicePeriod: '3~5일',
+        }),
+      );
+    });
+  });
+
+  it('boardVisible(오픈 게시판 노출 여부)를 createRfpAction에 전달한다', async () => {
+    vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0100' });
+    useRfpDraftStore.setState({
+      title: '테스트',
+      deadline: '2026-06-30T23:59:59Z',
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      boardVisible: false,
+    });
+    const user = userEvent.setup();
+    render(<RfpCreateWizard pgList={[]} />);
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
+
+    await waitFor(() => {
+      expect(createRfpAction).toHaveBeenCalledWith(
+        expect.objectContaining({ boardVisible: false }),
+      );
+    });
+  });
+
   it('발송 실패 시 serverError를 표시한다', async () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: false, error: 'INVALID_INPUT' });
     useRfpDraftStore.setState({
@@ -211,7 +264,7 @@ describe('RfpCreateWizard', () => {
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard />);
+    render(<RfpCreateWizard pgList={[]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));

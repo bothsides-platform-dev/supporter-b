@@ -4,9 +4,11 @@
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { underlineInputClass } from '@/components/forms/inputs';
+import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { isValidWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { cn } from '@/lib/utils';
 
 const SOLUTION_OPTIONS = [
@@ -26,6 +28,8 @@ type Props = {
 export function RfpStep2Content({ onBack, onNext }: Props) {
   const draft = useRfpDraftStore();
 
+  const websiteInvalid = !isValidWebsiteUrl(draft.websiteUrl);
+
   return (
     <div className="space-y-5">
       <div className="space-y-1">
@@ -34,7 +38,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           type="text"
           value={draft.title}
           onChange={(e) => draft.setField('title', e.target.value)}
-          placeholder="2026 서포트쇼핑몰 결제 인프라 제안건"
+          placeholder="2026 서포트쇼핑몰 결제 인프라 견적 요청"
           className={underlineInputClass}
         />
       </div>
@@ -45,8 +49,14 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.websiteUrl}
           onChange={(e) => draft.setField('websiteUrl', e.target.value)}
           placeholder="https://supporter-b.com/"
+          aria-invalid={websiteInvalid}
           className={underlineInputClass}
         />
+        {websiteInvalid && (
+          <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
+            {WEBSITE_URL_ERROR}
+          </p>
+        )}
       </div>
       <div className="space-y-1">
         <Label size="md" muted={false}>주요 판매 상품</Label>
@@ -69,7 +79,10 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         />
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>현재 카드 수수료</Label>
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>현재 카드 수수료</Label>
+          <InfoTip term="수수료율" />
+        </div>
         <input
           type="text"
           value={draft.currentFeeRate}
@@ -79,7 +92,10 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         />
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>현재 월 정산한도</Label>
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>현재 월 정산한도</Label>
+          <InfoTip term="정산한도" />
+        </div>
         <input
           type="text"
           value={draft.currentSettlementLimit}
@@ -89,12 +105,41 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         />
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>현재 보증보험</Label>
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>현재 보증보험</Label>
+          <InfoTip term="보증보험" />
+        </div>
         <input
           type="text"
           value={draft.currentGuaranteeInsurance}
           onChange={(e) => draft.setField('currentGuaranteeInsurance', e.target.value)}
           placeholder="3000만원"
+          className={underlineInputClass}
+        />
+      </div>
+      <div className="space-y-1">
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>현재 정산주기</Label>
+          <InfoTip term="정산주기" />
+        </div>
+        <input
+          type="text"
+          value={draft.currentSettlementCycle}
+          onChange={(e) => draft.setField('currentSettlementCycle', e.target.value)}
+          placeholder="D+1"
+          className={underlineInputClass}
+        />
+      </div>
+      <div className="space-y-1">
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>배송 및 서비스 기간</Label>
+          <InfoTip term="NDX" />
+        </div>
+        <input
+          type="text"
+          value={draft.deliveryServicePeriod}
+          onChange={(e) => draft.setField('deliveryServicePeriod', e.target.value)}
+          placeholder="D+3"
           className={underlineInputClass}
         />
       </div>
@@ -134,12 +179,12 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         )}
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>제안서 요청 세부 내용</Label>
+        <Label size="md" muted={false}>견적 요청 세부 내용</Label>
         <textarea
           value={draft.memo}
           onChange={(e) => draft.setField('memo', e.target.value)}
           rows={4}
-          placeholder="카드결제·간편결제 통합 솔루션 검토 중입니다. 정산주기 D+1 이내 희망."
+          placeholder={"결제 수수료 최소화 요청\n결제 전환율 최적화 레퍼런스 요청\n정산주기 D+4 이내 요청"}
           className={cn(underlineInputClass, 'resize-none')}
         />
       </div>

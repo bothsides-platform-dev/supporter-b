@@ -22,7 +22,7 @@ import {
   seedUser,
   seedMembership,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { workspaceInvitations, outboxEntries } from '@/lib/db/schema';
+import { workspaceInvitations, outboxEntries, notifications } from '@/lib/db/schema';
 import { generateToken, hashToken } from '@/lib/server/token';
 
 vi.mock('@/lib/server/outbox/templates/workspaceInvited', () => ({
@@ -83,6 +83,23 @@ describe('inviteWorkspaceMemberAction', () => {
 
     const r = await inviteWorkspaceMemberAction({ email: 'target@example.com' });
     expect(r).toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
+  });
+
+  it('returns FORBIDDEN_NOT_ADMIN when JWT claims admin but DB role is member', async () => {
+    const ws = await seedPgWorkspace(db, 'WS');
+    const caller = await seedUser(db, { email: 'demoted@example.com' });
+    await seedMembership(db, ws.id, caller.id, 'member'); // DB says member
+    // stale JWT still claims admin
+    sessionRef.value = { user: { id: caller.id, workspaceId: ws.id, role: 'admin' } };
+
+    const r = await inviteWorkspaceMemberAction({ email: 'target@example.com' });
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
+
+    const invites = await db
+      .select()
+      .from(workspaceInvitations)
+      .where(eq(workspaceInvitations.workspaceId, ws.id));
+    expect(invites).toHaveLength(0);
   });
 
   it('returns INVALID_INPUT for a malformed email', async () => {
@@ -198,5 +215,38 @@ describe('inviteWorkspaceMemberAction', () => {
 
     const r = await inviteWorkspaceMemberAction({ email: 'lapsed@example.com' });
     expect(r).toEqual({ ok: true });
+  });
+
+  it('creates a user-level in-app notification when inviting an existing user', async () => {
+    const ws = await seedPgWorkspace(db, 'WS');
+    await makeAdminSession(ws.id);
+    const invitee = await seedUser(db, { email: 'existing@example.com' });
+
+    const r = await inviteWorkspaceMemberAction({ email: 'existing@example.com' });
+    expect(r).toEqual({ ok: true });
+
+    const notifs = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, invitee.id));
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0].workspaceId).toBeNull(); // user-level
+    expect(notifs[0].type).toBe('workspace.invited');
+    expect(notifs[0].channel).toBe('in_app');
+  });
+
+  it('does not create an in-app notification when inviting an unregistered email', async () => {
+    const ws = await seedPgWorkspace(db, 'WS');
+    await makeAdminSession(ws.id);
+
+    const r = await inviteWorkspaceMemberAction({ email: 'ghost@example.com' });
+    expect(r).toEqual({ ok: true });
+
+    const notifs = await db.select().from(notifications);
+    expect(notifs).toHaveLength(0);
+
+    // email invite still enqueued
+    const outbox = await db.select().from(outboxEntries);
+    expect(outbox).toHaveLength(1);
   });
 });

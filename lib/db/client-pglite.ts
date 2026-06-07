@@ -1,23 +1,17 @@
 // In-process pglite for tests. createPgliteDb() returns a singleton DB handle
 // (one PGlite WASM instance per module — i.e. per test file under vitest's
-// default isolate:true fork pool). On first call: init + migrate. On every
-// subsequent call: TRUNCATE all public user tables (RESTART IDENTITY CASCADE)
-// so each test starts with an empty schema without paying WASM re-init cost.
+// default isolate:true fork pool). On first call: init + create schema. On
+// every subsequent call: TRUNCATE all public user tables (RESTART IDENTITY
+// CASCADE) so each test starts with an empty schema without paying WASM
+// re-init cost.
 //
 // Safety: vitest uses forks + isolate:true → module state resets per file, so
 // the singleton never leaks across test files. No .concurrent tests exist in
 // this project, so intra-file data races are also impossible.
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import * as schema from './schema';
-
-// Resolve drizzle/ migrations relative to this file so tests work from any cwd.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const MIGRATIONS_FOLDER = path.resolve(__dirname, '../../drizzle');
+import { generateSchemaDDL } from './schema-ddl';
 
 // Module-level singleton — reset to null by vitest's module isolation per file.
 let cached: { pg: PGlite; db: ReturnType<typeof drizzle<typeof schema>> } | null = null;
@@ -27,14 +21,16 @@ let publicTables: string[] | null = null;
 
 export async function createPgliteDb() {
   if (!cached) {
-    // First call: cold start — init WASM, wrap with drizzle, run migrations.
+    // First call: cold start — init WASM, wrap with drizzle, then create the
+    // schema from the live schema definitions (push-style, no migrations
+    // folder). Statements come back in dependency order (enums → tables → FKs).
     const pg = new PGlite();
     const db = drizzle(pg, { schema, casing: 'snake_case' });
-    await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+    for (const statement of await generateSchemaDDL()) {
+      await pg.exec(statement);
+    }
     cached = { pg, db };
-    // Discover all user tables in the public schema. __drizzle_migrations lives
-    // in the 'drizzle' schema so the schemaname='public' filter excludes it
-    // automatically — no name exclusion needed.
+    // Discover all user tables in the public schema.
     const result = await pg.query<{ tablename: string }>(
       "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename",
     );

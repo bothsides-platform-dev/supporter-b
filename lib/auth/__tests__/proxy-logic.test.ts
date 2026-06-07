@@ -67,6 +67,15 @@ describe('decideRoute — Step 3 four cases', () => {
   });
 });
 
+describe('/auth/verify 패스스루 — 매직링크 버그 픽스', () => {
+  it('auth + /auth/verify?token=... 는 /home 으로 리다이렉트되지 않고 pass-through', () => {
+    // 근본원인: 인증된 사용자가 이메일 매직링크 클릭 시 미들웨어가 /home으로 튕겨
+    // verifyEmailAction이 실행되지 않는 버그. /auth/verify 는 항상 통과해야 한다.
+    expect(decideRoute('/auth/verify', '?token=abc123', true)).toEqual({ kind: 'next' });
+    expect(decideRoute('/auth/verify', '?token=abc123', false)).toEqual({ kind: 'next' });
+  });
+});
+
 describe('admin + gate 라우트 패스스루', () => {
   it('/admin/* 는 인증 여부와 무관하게 pass-through', () => {
     expect(decideRoute('/admin', '', false)).toEqual({ kind: 'next' });

@@ -40,6 +40,7 @@ function rowToUser(u: UserRow, m: MemberRow): User {
     avatarColor: normalizeAvatarColor(u.avatarColor),
     role: m.role,
     status: u.status === 'paused' ? 'paused' : 'active',
+    emailVerified: u.emailVerified,
     joinedAt: new Date(m.joinedAt).toISOString(),
     lastSeenAt: m.lastSeenAt ? new Date(m.lastSeenAt).toISOString() : undefined,
   };
@@ -100,7 +101,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       name: ws.name,
       bizProfile,
       members,
-      shareToken: ws.shareToken,
       hasLogo: !!logoRow,
       createdAt: new Date(ws.createdAt).toISOString(),
     };
@@ -148,19 +148,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return row ? this.hydrate(db, row) : undefined;
   }
 
-  async findByShareToken(
-    token: string,
-    tx?: Tx,
-  ): Promise<Workspace | undefined> {
-    const db = this.h(tx);
-    const [row] = await db
-      .select()
-      .from(workspaces)
-      .where(eq(workspaces.shareToken, token))
-      .limit(1);
-    return row ? this.hydrate(db, row) : undefined;
-  }
-
   async listForUser(
     userId: string,
     tx?: Tx,
@@ -202,5 +189,17 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       )
       .limit(1);
     return Boolean(row);
+  }
+
+  async memberUserIds(workspaceId: string, tx?: Tx): Promise<string[]> {
+    const db = this.h(tx);
+    const rows = (await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, workspaceId))) as Pick<
+      MemberRow,
+      'userId'
+    >[];
+    return rows.map((r) => r.userId);
   }
 }

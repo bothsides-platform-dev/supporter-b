@@ -40,7 +40,7 @@ describe('WorkspaceNameForm', () => {
     await user.type(input, '새 이름');
     await user.click(screen.getByRole('button', { name: '저장' }));
 
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('워크스페이스 이름을 변경했습니다.'));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('이름을 변경했어요.'));
     expect(toast).not.toHaveBeenCalledWith(expect.anything(), { type: 'error' });
   });
 
@@ -57,7 +57,7 @@ describe('WorkspaceNameForm', () => {
     await user.click(screen.getByRole('button', { name: '저장' }));
 
     await waitFor(() =>
-      expect(toast).toHaveBeenCalledWith('권한이 없습니다.', { type: 'error' }),
+      expect(toast).toHaveBeenCalledWith('권한이 없어요.', { type: 'error' }),
     );
     // No inline error paragraph
     expect(screen.queryByRole('alert')).toBeNull();

@@ -4,11 +4,15 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 
 import { requireSession } from '@/lib/auth/session';
+import { getMembership } from '@/lib/auth/active-workspace';
 import { workspaceInvitations, workspaces } from '@/lib/db/schema';
 import { getOutboxRepo } from '@/lib/server/repositories/factory';
 import { generateToken, hashToken } from '@/lib/server/token';
 import { renderWorkspaceInvited } from '@/lib/server/outbox/templates/workspaceInvited';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
+import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
+import type { Notification } from '@/lib/types/notification';
+import { dispatchWorkspaceInviteInApp } from './_workspaceInviteNotify';
 import { actionDb, baseUrl, bucket15Min, isUniqueViolation, normalizeEmail } from '@/lib/server/actions/auth/_shared';
 
 const Input = z
@@ -44,7 +48,15 @@ export async function inviteWorkspaceMemberAction(input: {
   if (!session.user.workspaceId) {
     return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
   }
-  if (session.user.role !== 'admin') {
+
+  const workspaceId = session.user.workspaceId;
+  const invitedByUserId = session.user.id;
+  const db = actionDb();
+
+  // Verify against the current DB role, not the (possibly stale) JWT — a
+  // just-demoted admin with a stale token must not retain invite powers.
+  const membership = await getMembership(db, invitedByUserId, workspaceId);
+  if (!membership || membership.role !== 'admin') {
     return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
   }
 
@@ -53,10 +65,6 @@ export async function inviteWorkspaceMemberAction(input: {
 
   const normalizedEmail = normalizeEmail(parsed.data.email);
   const role = parsed.data.role;
-  const workspaceId = session.user.workspaceId;
-  const invitedByUserId = session.user.id;
-
-  const db = actionDb();
 
   // Look up workspace name for the email body
   const [wsRow] = await db
@@ -69,6 +77,8 @@ export async function inviteWorkspaceMemberAction(input: {
   const rawToken = generateToken();
   const tokenHash = hashToken(rawToken);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  let pendingEmit: Notification | null = null;
 
   const result = await db.transaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,11 +115,18 @@ export async function inviteWorkspaceMemberAction(input: {
         tx,
       );
 
+      pendingEmit = await dispatchWorkspaceInviteInApp(tx, {
+        invitedEmail: normalizedEmail,
+        workspaceName: wsRow.name,
+        linkUrl: `/invite/workspace/${rawToken}`,
+      });
+
       return { ok: true };
     },
   );
 
   if (result.ok) {
+    if (pendingEmit) emitAfterCommit([pendingEmit]);
     flushAfterCommit();
   }
   return result;

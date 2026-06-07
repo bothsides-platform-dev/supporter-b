@@ -3,8 +3,10 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
+import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { formatSize } from '@/lib/format';
 import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 
@@ -27,6 +29,17 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
       <span className="text-[13px] text-[var(--md-sys-color-on-surface)] font-mono tabular-nums">
         {value}
       </span>
+    </div>
+  );
+}
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-3">
+      <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        {label}
+      </span>
+      <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
     </div>
   );
 }
@@ -85,14 +98,28 @@ export function RfpStep4Review({
         />
       </div>
 
-      {/* 제안 내용 요약 */}
-      <div>
-        <div className="flex items-center gap-3 mb-3">
-          <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            제안 내용 요약
+      {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true) */}
+      <div className="flex items-start gap-3">
+        <Checkbox
+          id="rfp-board-visible"
+          checked={draft.boardVisible}
+          onCheckedChange={(checked) => draft.setField('boardVisible', checked)}
+          aria-label="오픈 게시판에 노출하기"
+          className="mt-0.5"
+        />
+        <label htmlFor="rfp-board-visible" className="cursor-pointer">
+          <span className="block text-[14px] text-[var(--md-sys-color-on-surface)]">
+            오픈 게시판에 노출하기
           </span>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-        </div>
+          <span className="block text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+            다른 PG사가 이 견적 요청을 발견하고 참여를 요청할 수 있어요.
+          </span>
+        </label>
+      </div>
+
+      {/* 견적 요청 요약 */}
+      <div>
+        <SectionHeader label="견적 요청 요약" />
         <div className="border border-[var(--md-sys-color-outline-variant)]">
           {workspaceName && <ReviewRow label="상호명" value={workspaceName} />}
           {bizProfile?.bizNo && (
@@ -107,6 +134,14 @@ export function RfpStep4Review({
           <ReviewRow
             label="보증보험"
             value={draft.currentGuaranteeInsurance}
+          />
+          <ReviewRow
+            label="정산주기"
+            value={draft.currentSettlementCycle}
+          />
+          <ReviewRow
+            label="배송 및 서비스 기간"
+            value={draft.deliveryServicePeriod}
           />
           {draft.currentSolution && (
             <ReviewRow
@@ -124,14 +159,44 @@ export function RfpStep4Review({
         </div>
       </div>
 
+      {/* 상세 요청사항 (메모) — 발송 시 trim되어 빠지므로 공백뿐이면 숨김 */}
+      {draft.memo.trim() && (
+        <div>
+          <SectionHeader label="상세 요청사항" />
+          <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap break-words border border-[var(--md-sys-color-outline-variant)] p-4">
+            {draft.memo}
+          </p>
+        </div>
+      )}
+
+      {/* 첨부파일 */}
+      {draft.rfpFiles.length > 0 && (
+        <div>
+          <SectionHeader label={`첨부파일 (${draft.rfpFiles.length}개)`} />
+          <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
+            {draft.rfpFiles.map((file, i) => (
+              <div
+                key={file.id}
+                className="py-2 flex items-center gap-3 min-w-0"
+              >
+                <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)] shrink-0">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span className="text-[13px] text-[var(--md-sys-color-on-surface)] truncate">
+                  {file.name}
+                </span>
+                <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-outline)] shrink-0 ml-auto">
+                  {formatSize(file.size)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 초대 PG 목록 */}
       <div>
-        <div className="flex items-center gap-3 mb-3">
-          <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-            초대할 PG사 ({pgCount}개)
-          </span>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-        </div>
+        <SectionHeader label={`초대할 PG사 (${pgCount}개)`} />
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           {draft.allowedPgWorkspaceIds.map((ws, i) => (
             <div key={ws.id} className="py-2 flex items-center gap-3">
@@ -172,10 +237,10 @@ export function RfpStep4Review({
           onClick={onSubmit}
         >
           {submitting
-            ? '발송 중…'
+            ? '보내는 중…'
             : pgCount > 0
-              ? `${pgCount}개 PG사에 발송`
-              : '발송'}
+              ? `${pgCount}개 PG사에 보내기`
+              : '보내기'}
         </Button>
       </div>
     </div>

@@ -15,6 +15,7 @@ import { createRfpAction } from '@/lib/server/actions/rfp';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { toast } from '@/lib/toast';
 import type { BizProfile } from '@/lib/types/biz-profile';
+import type { PgWorkspace } from './RfpStep3PgSelect';
 import { STEP_LABELS } from './wizard-steps';
 import { getWizardValidity, getFirstIncompleteStep } from './wizard-validation';
 
@@ -27,9 +28,10 @@ type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
   workspaceName?: string;
   guest?: boolean;
+  pgList: PgWorkspace[];
 };
 
-export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
+export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Props) {
   const router = useRouter();
   const draft = useRfpDraftStore();
 
@@ -83,6 +85,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
         currentFeeRate: draft.currentFeeRate.trim() || undefined,
         currentSettlementLimit: draft.currentSettlementLimit.trim() || undefined,
         currentGuaranteeInsurance: draft.currentGuaranteeInsurance.trim() || undefined,
+        currentSettlementCycle: draft.currentSettlementCycle.trim() || undefined,
+        deliveryServicePeriod: draft.deliveryServicePeriod.trim() || undefined,
         currentSolution,
         currentSolutionDetail: draft.currentSolutionDetail.trim() || undefined,
         memo: draft.memo.trim() || undefined,
@@ -91,6 +95,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
         rfpAttachmentIds: draft.rfpFiles.map((f) => f.id),
         requiredPaymentMethods: draft.requiredPaymentMethods,
         customPaymentMethods: draft.customPaymentMethods,
+        boardVisible: draft.boardVisible,
         send: true,
       });
     } catch {
@@ -107,22 +112,25 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
     }
 
     const pgCount = draft.allowedPgWorkspaceIds.length;
-    toast(`${pgCount}개 PG사에 제안서가 발송되었습니다`, { type: 'success' });
+    toast(`${pgCount}개 PG사에 견적 요청을 보냈어요`, { type: 'success' });
     draft.reset();
     router.push(`/rfp/${result.rfpId}`);
   };
 
   return (
-    <div className="flex h-full min-h-0">
+    // 스크롤 컨테이너를 루트로 통일 → 좌측 단계 네비/우측 콘텐츠 어디서 스크롤해도 동일 동작.
+    // 사이드바는 sticky로 고정, 구분선은 우측 컬럼 border-l로 전체 높이 유지.
+    <div className="flex h-full min-h-0 lg:overflow-y-auto">
       {/* Desktop: left step sidebar (hidden on mobile via WizardStepSidebar internal class) */}
       <WizardStepSidebar
         currentStep={currentStep}
         completed={completed}
         onStepClick={goToStep}
+        className="sticky top-0 self-start border-r-0"
       />
 
       {/* Content area */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 lg:border-l border-[var(--md-sys-color-outline-variant)]">
         {/* Mobile: top progress bar (hidden on desktop via WizardProgressBar internal class) */}
         <WizardProgressBar
           currentStep={currentStep}
@@ -130,7 +138,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
           onStepClick={goToStep}
         />
 
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="flex-1 px-6 py-6">
           {/* Step header */}
           <div className="flex items-center gap-3 mb-6">
             <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
@@ -148,7 +156,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest }: Props) {
             />
           )}
           {currentStep === 2 && <RfpStep2Content onBack={back} onNext={advance} />}
-          {currentStep === 3 && <RfpStep3PgSelect onBack={back} onNext={advance} />}
+          {currentStep === 3 && <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} />}
           {currentStep === 4 && (
             <RfpStep4Review
               bizProfile={bizProfile}

@@ -20,11 +20,11 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
     if (!file) return;
 
     if (!ALLOWED_TYPES.has(file.type)) {
-      toast('PNG 또는 JPEG 파일만 업로드할 수 있습니다.', { type: 'error' });
+      toast('PNG 또는 JPEG 파일을 업로드해요.', { type: 'error' });
       return;
     }
     if (file.size > MAX_BYTES) {
-      toast('파일 크기는 5MB 이하여야 합니다.', { type: 'error' });
+      toast('5MB 이하 파일을 올려요.', { type: 'error' });
       return;
     }
 
@@ -39,10 +39,10 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        toast(json.error ?? '업로드에 실패했습니다.', { type: 'error' });
+        toast(json.error ?? '업로드에 실패했어요.', { type: 'error' });
         return;
       }
-      toast('프로필 사진을 변경했습니다.');
+      toast('프로필 사진을 변경했어요.');
       router.refresh();
     } finally {
       setLoading(null);
@@ -58,10 +58,10 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        toast(json.error ?? '삭제에 실패했습니다.', { type: 'error' });
+        toast(json.error ?? '삭제에 실패했어요.', { type: 'error' });
         return;
       }
-      toast('프로필 사진을 삭제했습니다.');
+      toast('프로필 사진을 삭제했어요.');
       router.refresh();
     } finally {
       setLoading(null);
@@ -87,7 +87,7 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
           ref={inputRef}
           type="file"
           accept="image/png,image/jpeg"
-          className="sr-only"
+          className="hidden"
           onChange={handleFileChange}
         />
 

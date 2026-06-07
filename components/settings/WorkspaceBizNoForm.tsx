@@ -16,12 +16,15 @@ import { toast } from '@/lib/toast';
 
 const ntsLookup = async (bizNo: string) => {
   const r = await lookupBizNoAction(bizNo);
-  if (!r.ok || !r.valid) return { valid: false as const };
-  return {
-    valid: true as const,
-    taxType: r.taxType!,
-    status: r.status!,
-  };
+  if (!r.ok) {
+    const msg =
+      r.error === 'NTS_RATE_LIMIT'
+        ? '요청이 너무 많아요. 잠시 후 다시 시도해주세요.'
+        : '사업자번호 조회 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.';
+    return { valid: false as const, error: msg };
+  }
+  if (!r.valid) return { valid: false as const };
+  return { valid: true as const, taxType: r.taxType!, status: r.status! };
 };
 
 type Props = {
@@ -63,10 +66,10 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
     });
     setSubmitting(false);
     if (!r.ok) {
-      toast(`저장 실패 — ${r.error}`, { type: 'error' });
+      toast(`저장하지 못했어요 — ${r.error}`, { type: 'error' });
       return;
     }
-    toast('사업자번호를 저장했습니다.');
+    toast('사업자번호를 저장했어요.');
     setEditing(false);
     setNext(null);
     if (isInitialRegistration && returnUrl) {

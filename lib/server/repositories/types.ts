@@ -6,10 +6,15 @@ import type { PgliteDB } from '@/lib/db/client-pglite';
 
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
-import type { Workspace, WorkspaceMembershipSummary } from '@/lib/types/workspace';
+import type { PgRequest, PgRequestStatus, OpportunityListing } from '@/lib/types/pg-request';
+import type {
+  Workspace,
+  WorkspaceMembershipSummary,
+  WorkspaceType,
+} from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { BizProfile } from '@/lib/types/biz-profile';
-import type { Bid } from '@/lib/types/bid';
+import type { Bid, PaymentMethod } from '@/lib/types/bid';
 import type { BoardColumn, ColumnKind } from '@/lib/types/column';
 import type { Attachment } from '@/lib/types/common';
 import type { Contract } from '@/lib/types/contract';
@@ -37,8 +42,6 @@ export interface RfpRepo {
   findByCode(code: string, tx?: Tx): Promise<RFP | undefined>;
   /** 한 구매사 워크스페이스의 모든 RFP. */
   findByBuyerWs(wsId: string, tx?: Tx): Promise<RFP[]>;
-  /** raw share token → RFP. 공유 링크 클레임 시 사용. 없으면 undefined. */
-  findByShareToken(token: string, tx?: Tx): Promise<RFP | undefined>;
   /** 상태 전이 + 패치. DB 레이어에서 `WHERE status=$prev` 동시성 가드. */
   transition(id: string, to: RfpStatus, patch?: Partial<RFP>, tx?: Tx): Promise<RFP>;
   /** 통일 칸반: pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
@@ -77,14 +80,39 @@ export interface InvitationRepo {
   setBoardColumn(invitationId: string, columnId: string | null, tx?: Tx): Promise<void>;
 }
 
+// ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────
+export interface PgRequestRepo {
+  /** 요청 1건 생성 — (rfpId, pgWsId) UNIQUE 위배 시 throw(중복 요청 차단). */
+  create(req: PgRequest, tx?: Tx): Promise<void>;
+  /** id 단건 조회. */
+  findById(id: string, tx?: Tx): Promise<PgRequest | undefined>;
+  /** 한 RFP의 모든 요청 — 구매사 검토 목록(상태 필터는 호출부). createdAt asc. */
+  findByRfp(rfpId: string, tx?: Tx): Promise<PgRequest[]>;
+  /** (rfp, pg) 쌍의 현재 요청 상태 — 없으면 undefined. 게시판/액션 제외 판정용. */
+  findPairStatus(rfpId: string, pgWsId: string, tx?: Tx): Promise<PgRequestStatus | undefined>;
+  /** pending → accepted|rejected 원자 전이(`WHERE status='pending'`). 이미 결정됐으면 no-op. */
+  markDecided(
+    id: string,
+    status: 'accepted' | 'rejected',
+    decidedByUserId: string,
+    at: Date,
+    tx?: Tx,
+  ): Promise<void>;
+  /**
+   * PG 게시판 — 발견 가능한 오픈 RFP 목록. 공개 경계가 이 쿼리에 있다:
+   * SELECT는 화이트리스트 컬럼만(수수료/현재조건 미포함). WHERE status='sent'
+   * AND deadline>now AND board_visible=true, 그리고 이미 allowlist 됐거나
+   * 어떤 상태로든 요청 행이 있는 RFP는 제외.
+   */
+  findOpenRfpsForPg(pgWsId: string, now: Date, tx?: Tx): Promise<OpportunityListing[]>;
+}
+
 // ── Workspace ─────────────────────────────────────────────────────────
 export interface WorkspaceRepo {
   /** 워크스페이스 + 멤버 동기화. */
   save(ws: Workspace, tx?: Tx): Promise<void>;
   /** id 조회 — 멤버/bizProfile hydration 포함. */
   findById(id: string, tx?: Tx): Promise<Workspace | undefined>;
-  /** raw share token → 워크스페이스. 공용 초대 링크 클레임 시 사용. 없으면 undefined. */
-  findByShareToken(token: string, tx?: Tx): Promise<Workspace | undefined>;
   /** 유저가 속한 모든 워크스페이스 — 스위처용 경량 projection (hydration 없음). */
   listForUser(
     userId: string,
@@ -92,6 +120,8 @@ export interface WorkspaceRepo {
   ): Promise<WorkspaceMembershipSummary[]>;
   /** 유저가 해당 워크스페이스의 멤버인지 여부 (boolean). 권한 게이트 단일 소스. */
   isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
+  /** 해당 워크스페이스 멤버 user id 배열 — 알림 fanout + Centrifugo subscribe ACL용. 순서 미보장. */
+  memberUserIds(workspaceId: string, tx?: Tx): Promise<string[]>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────
@@ -105,6 +135,8 @@ export interface UserRepo {
     email: string,
     tx?: Tx,
   ): Promise<(User & { passwordHash: string }) | undefined>;
+  /** 이메일 인증 플래그 전환 — signup_email 토큰 소비 시 호출. 매칭 없으면 no-op. */
+  markEmailVerified(email: string, tx?: Tx): Promise<void>;
 }
 
 // ── BizProfile ────────────────────────────────────────────────────────
@@ -193,6 +225,13 @@ export interface NotificationRepo {
   markRead(id: string, tx?: Tx): Promise<void>;
   /** 사용자+워크스페이스 전부 읽음 처리. */
   markAllRead(userId: string, workspaceId: string, tx?: Tx): Promise<void>;
+  /** 동일 window 내 queued 상태 chat.message 알림 존재 여부 — 인앱 알림 중복 방지용. */
+  hasPendingChatNotification(
+    userId: string,
+    workspaceId: string,
+    windowStart: Date,
+    tx?: Tx,
+  ): Promise<boolean>;
 }
 
 // ── Contract ──────────────────────────────────────────────────────────
@@ -262,6 +301,20 @@ export interface VerificationTokenRepo {
     },
     tx?: Tx,
   ): Promise<(Omit<VerificationToken, 'token'> & { tokenHash: string }) | undefined>;
+  /**
+   * 활성(미사용·미만료) 토큰의 6자리 코드 시도 상태 조회 — 가장 최근 발급분 1건.
+   * emailCodeHash 는 meta.emailCode. 코드 무차별 대입 제한(F2)용. 없으면 undefined.
+   */
+  findActiveEmailCodeToken(
+    params: {
+      email: string;
+      purpose: 'signup_email' | 'password_reset' | 'email_change';
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<{ id: string; attempts: number; emailCodeHash: string | null } | undefined>;
+  /** 코드 오입력 시 attempts +1 (race-tolerant, 전화 OTP와 동일 패턴). */
+  bumpEmailCodeAttempts(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── Attachment ────────────────────────────────────────────────────────
@@ -272,11 +325,19 @@ export interface AttachmentRepo {
   findById(id: string, tx?: Tx): Promise<AttachmentRecord | undefined>;
   /** RFP 소유 첨부 목록 — 공개 Attachment 필드만, uploadedAt 오름차순. */
   findByRfp(rfpId: string, tx?: Tx): Promise<Attachment[]>;
+  /** 메시지 ID 배열로 첨부 목록 일괄 조회 — chatMessageId IN (ids), uploadedAt asc. */
+  findByChatMessageIds(ids: string[], tx?: Tx): Promise<(Attachment & { chatMessageId: string })[]>;
+  /** 대화 전체 첨부 목록 — chat_messages JOIN, uploadedAt asc. */
+  findByConversationId(conversationId: string, tx?: Tx): Promise<Attachment[]>;
 }
 
 // ── Outbox ────────────────────────────────────────────────────────────
 export interface OutboxRepo {
-  /** 메일 전송 큐 enqueue — dedupeKey UNIQUE 위배 시 null. */
+  /**
+   * 메일 전송 큐 enqueue — dedupeKey UNIQUE 위배 시 null. `scheduledAt` 생략 시
+   * 컬럼 기본값 now()(즉시 발송 대상). 지연 발송(예: chat digest 윈도우 종료
+   * 시각)에는 미래 시각을 명시.
+   */
   enqueue(
     params: {
       event: OutboxEvent;
@@ -285,11 +346,22 @@ export interface OutboxRepo {
       html: string;
       dedupeKey?: string;
       maxAttempts?: number;
+      scheduledAt?: Date;
     },
     tx?: Tx,
   ): Promise<OutboxEntry | null>;
-  /** 송신 대기 batch 조회. */
+  /**
+   * 송신 대기 batch 조회. `chat.message` 행은 전용 chat-digest 처리기 소관이므로
+   * 제외 — generic 메일러가 coalesce 전 raw 메시지 메일을 보내면 안 됨.
+   */
   pending(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
+  /**
+   * Due chat-digest 행: `status='pending' AND event='chat.message' AND
+   * scheduled_at <= now()`, scheduled_at 오름차순. 전용 chat-digest 처리기
+   * (cron + post-commit)가 본문 재계산·읽음 단락 후 markResult 한다. lease/
+   * SKIP-LOCKED 없는 단순 read — 중복발송 가드는 처리기 책임.
+   */
+  dueChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
   /** 전송 결과 반영(성공/실패 + 시도횟수 +1). */
   markResult(
     id: string,
@@ -310,4 +382,173 @@ export interface OutboxRepo {
     limit?: number,
     tx?: Tx,
   ): Promise<{ ok: number; failed: number }>;
+}
+
+// ── Chat: Conversation ────────────────────────────────────────────────
+/** Buyer↔PG conversation row (one per workspace pair). */
+export type ChatConversation = {
+  id: string;
+  buyerWsId: string;
+  pgWsId: string;
+  lastMessageAt: Date | null;
+  createdAt: Date;
+};
+
+export interface ChatConversationRepo {
+  /**
+   * Idempotent on the (buyer_ws_id, pg_ws_id) unique — returns the existing
+   * conversation or creates one. The buyer↔PG type invariant is the caller's
+   * responsibility (FK alone cannot express it).
+   */
+  findOrCreatePair(
+    buyerWsId: string,
+    pgWsId: string,
+    tx?: Tx,
+  ): Promise<ChatConversation>;
+  /** id 단건 조회. 없으면 undefined. */
+  findById(id: string, tx?: Tx): Promise<ChatConversation | undefined>;
+  /**
+   * 한 워크스페이스의 대화 목록 — viewer 의 side(buyer/pg)에 매칭되는 행만,
+   * last_message_at desc (nulls last). 비공개 ACL: pg viewer 는 pg_ws_id=내WS
+   * 만, buyer viewer 는 buyer_ws_id=내WS 만 본다.
+   */
+  listForWorkspace(
+    wsId: string,
+    viewerType: WorkspaceType,
+    tx?: Tx,
+  ): Promise<ChatConversation[]>;
+  /** 인박스 정렬키 갱신 — 메시지 전송 시. */
+  touchLastMessageAt(id: string, at: Date, tx?: Tx): Promise<void>;
+}
+
+// ── Chat: Message ─────────────────────────────────────────────────────
+/** Canonical (Postgres-only) chat message row. */
+export type ChatMessageRecord = {
+  id: string;
+  conversationId: string;
+  authorUserId: string;
+  authorWsId: string;
+  body: string;
+  rfpId: string | null;
+  createdAt: Date;
+};
+
+export interface ChatMessageRepo {
+  /** 메시지 insert. 첨부 링크는 액션 레이어 책임. */
+  save(msg: ChatMessageRecord, tx?: Tx): Promise<void>;
+  /** 한 대화의 모든 메시지 — created_at asc. */
+  listByConversation(
+    conversationId: string,
+    tx?: Tx,
+  ): Promise<ChatMessageRecord[]>;
+}
+
+// ── Chat: Message Template ────────────────────────────────────────────
+/** Workspace-shared chat message template — hydrated DB shape. */
+export type ChatMessageTemplate = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  body: string;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export interface ChatTemplateRepo {
+  /** 템플릿 생성 — id 미지정 시 발급. 워크스페이스 공유. */
+  create(
+    template: {
+      id?: string;
+      workspaceId: string;
+      title: string;
+      body: string;
+      createdBy: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /** id 단건 조회. 없으면 undefined. */
+  findById(id: string, tx?: Tx): Promise<ChatMessageTemplate | undefined>;
+  /** 한 워크스페이스의 모든 템플릿 — cross-workspace isolation 근거. */
+  listByWorkspace(workspaceId: string, tx?: Tx): Promise<ChatMessageTemplate[]>;
+  /** 단건 삭제. */
+  remove(id: string, tx?: Tx): Promise<void>;
+}
+
+// ── Bid: Quote Template (견적 요율표) ──────────────────────────────────
+/** PG-workspace-shared bid quote template — hydrated DB shape. */
+export type BidQuoteTemplate = {
+  id: string;
+  pgWsId: string;
+  name: string;
+  settleCycle: string;
+  settleLimit: number;
+  guaranteeInsurance: number;
+  paymentFees: Partial<Record<PaymentMethod, number>>;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export interface BidQuoteTemplateRepo {
+  /** 템플릿 생성 — id 미지정 시 발급. PG 워크스페이스 공유. */
+  create(
+    template: {
+      id?: string;
+      pgWsId: string;
+      name: string;
+      settleCycle: string;
+      settleLimit: number;
+      guaranteeInsurance: number;
+      paymentFees: Partial<Record<PaymentMethod, number>>;
+      createdBy: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 단건 수정 — 소유권 검증은 액션 레이어 책임. updated_at 갱신. */
+  update(
+    id: string,
+    fields: {
+      name: string;
+      settleCycle: string;
+      settleLimit: number;
+      guaranteeInsurance: number;
+      paymentFees: Partial<Record<PaymentMethod, number>>;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /** id 단건 조회. 없으면 undefined. */
+  findById(id: string, tx?: Tx): Promise<BidQuoteTemplate | undefined>;
+  /** 한 PG 워크스페이스의 모든 템플릿 — cross-workspace isolation 근거. */
+  listByWorkspace(pgWsId: string, tx?: Tx): Promise<BidQuoteTemplate[]>;
+  /** 단건 삭제. */
+  remove(id: string, tx?: Tx): Promise<void>;
+}
+
+// ── Chat: Conversation Read State ─────────────────────────────────────
+/** 유저별 대화 읽음 상태 row. 미읽음 배지 + 라이브 읽음 영수증 근거. */
+export type ChatConversationRead = {
+  conversationId: string;
+  userId: string;
+  lastReadAt: Date;
+};
+
+export interface ChatReadRepo {
+  /** (conversation, user) PK upsert — last_read_at 갱신(idempotent, monotonic). */
+  upsert(conversationId: string, userId: string, at: Date, tx?: Tx): Promise<void>;
+  /** (conversation, user) 읽음 row 조회. 없으면 undefined. */
+  getFor(
+    conversationId: string,
+    userId: string,
+    tx?: Tx,
+  ): Promise<ChatConversationRead | undefined>;
+  /**
+   * 상대(=viewer 가 아닌 유저) 중 가장 최근 last_read_at — 라이브 읽음 영수증
+   * 근거. 상대 읽음 기록이 없으면 undefined.
+   */
+  lastReadByCounterparty(
+    conversationId: string,
+    viewerUserId: string,
+    tx?: Tx,
+  ): Promise<Date | undefined>;
 }

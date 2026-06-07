@@ -21,7 +21,13 @@ export default function PgSignupEmailPage() {
   const router = useRouter();
   const { setEmail, setAgreedAt, setWorkspaceType } = useSignupDraftStore();
 
-  const [emailInput, setEmailInput] = useState('');
+  // 초대 경로 여부를 draft에서 읽는다 (sessionStorage, 서버사이드에서 읽을 수 없음)
+  const draft = readSignupDraft();
+  const isInvited = !!draft.wsInviteToken;
+  const inviteEmail = draft.email ?? '';
+  const inviteWorkspaceName = draft.inviteWorkspaceName ?? '';
+
+  const [emailInput, setEmailInput] = useState(isInvited ? inviteEmail : '');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [agreements, setAgreements] = useState<AgreementState>({
@@ -37,7 +43,7 @@ export default function PgSignupEmailPage() {
     passwordConfirm.length > 0
       ? validatePasswordConfirm(password, passwordConfirm)
       : attemptedSubmit
-        ? '비밀번호 확인을 입력해주세요.'
+        ? '비밀번호 확인을 입력해요.'
         : null;
 
   const canSubmit =
@@ -58,6 +64,12 @@ export default function PgSignupEmailPage() {
 
     const check = await checkEmailAvailableAction({ email });
     if (!check.ok && check.error === 'EMAIL_TAKEN') {
+      if (isInvited) {
+        // 초대받은 이메일이 이미 가입됨 → 로그인 후 authed path로 합류.
+        // setSubmitting(false) 생략: 곧 navigate하므로 버튼 재활성화 불필요.
+        router.replace(`/login?next=${encodeURIComponent(`/invite/workspace/${draft.wsInviteToken}`)}&email=${encodeURIComponent(email)}`);
+        return;
+      }
       setEmailTaken(true);
       setSubmitting(false);
       return;
@@ -68,7 +80,6 @@ export default function PgSignupEmailPage() {
     setAgreedAt(agreedAt);
     setWorkspaceType('pg');
 
-    const draft = readSignupDraft();
     writeSignupDraft({
       ...draft,
       email,
@@ -77,19 +88,35 @@ export default function PgSignupEmailPage() {
       workspaceType: 'pg',
     });
 
-    router.push('/signup/pg/workspace');
+    // 초대 경로: workspace 단계 건너뜀 (wsName/bizNo 불필요)
+    router.push(isInvited ? '/signup/pg/profile' : '/signup/pg/workspace');
   };
+
+  const stepperTotal = isInvited ? 2 : 3;
 
   return (
     <div className="space-y-6">
-      <SignupStepper current={1} total={4} />
+      <SignupStepper current={1} total={stepperTotal} />
+
+      {/* 초대 맥락 안내 */}
+      {isInvited && inviteWorkspaceName && (
+        <div className="rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-variant)] px-4 py-3">
+          <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-primary)] mb-1">
+            워크스페이스 초대
+          </p>
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+            <span className="font-[600] text-[var(--md-sys-color-on-surface)]">{inviteWorkspaceName}</span>에 초대받았습니다.
+            <br />계정을 만들고 팀에 합류하세요.
+          </p>
+        </div>
+      )}
 
       <div>
         <h2 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-          PG사 계정을 만듭니다
+          {isInvited ? '계정을 만들어 합류해요' : 'PG사 계정을 만듭니다'}
         </h2>
         <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          로그인에 사용할 이메일과 비밀번호를 입력해주세요.
+          이메일과 비밀번호를 입력해요.
         </p>
       </div>
 
@@ -106,12 +133,18 @@ export default function PgSignupEmailPage() {
             type="email"
             name="email"
             value={emailInput}
-            onChange={(e) => { setEmailInput(e.target.value); setEmailTaken(false); }}
+            onChange={(e) => { if (!isInvited) { setEmailInput(e.target.value); setEmailTaken(false); } }}
+            readOnly={isInvited}
             autoComplete="email"
             placeholder="your@pgcompany.com"
-            className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+            className={[
+              'block w-full bg-transparent border-0 border-b py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none transition-colors',
+              isInvited
+                ? 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] cursor-default select-all'
+                : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',
+            ].join(' ')}
           />
-          {emailTaken && (
+          {emailTaken && !isInvited && (
             <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)] mt-1">
               이미 가입된 이메일입니다.{' '}
               <Link
@@ -130,7 +163,7 @@ export default function PgSignupEmailPage() {
           value={password}
           onChange={setPassword}
           showStrength
-          error={attemptedSubmit && !password ? '비밀번호를 입력해주세요.' : undefined}
+          error={attemptedSubmit && !password ? '비밀번호를 입력해요.' : undefined}
         />
         <PasswordField
           label="비밀번호 확인"
@@ -148,20 +181,22 @@ export default function PgSignupEmailPage() {
         </Button>
       </form>
 
-      <div className="text-center space-y-2">
-        <Link
-          href="/signup"
-          className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-        >
-          ← 역할 선택으로
-        </Link>
-        <Link
-          href="/login"
-          className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-        >
-          이미 계정이 있으세요? 로그인 →
-        </Link>
-      </div>
+      {!isInvited && (
+        <div className="text-center space-y-2">
+          <Link
+            href="/signup"
+            className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+          >
+            ← 이전으로
+          </Link>
+          <Link
+            href="/login"
+            className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+          >
+            이미 계정이 있어요? 로그인 →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

@@ -20,7 +20,7 @@ import {
   seedPgWorkspace,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
+import { users, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
 import { generateToken, hashToken } from '@/lib/server/token';
 
 const sessionRef: {
@@ -195,6 +195,34 @@ describe('acceptWorkspaceInviteAction', () => {
         ),
       );
     expect(m.role).toBe('admin');
+  });
+
+  it('marks the accepting user email-verified (link delivery proves ownership)', async () => {
+    const ws = await seedPgWorkspace(db, 'WS');
+    const admin = await seedUser(db, { email: 'admin@example.com' });
+    const u = await seedUser(db, { email: 'invited@example.com' });
+    sessionRef.value = { user: { id: u.id, email: u.email } };
+
+    const [before] = await db
+      .select({ v: users.emailVerified })
+      .from(users)
+      .where(eq(users.id, u.id));
+    expect(before.v).toBe(false); // precondition: unverified
+
+    const { rawToken } = await seedInvitation({
+      workspaceId: ws.id,
+      invitedByUserId: admin.id,
+      invitedEmail: 'invited@example.com',
+    });
+    const r = await acceptWorkspaceInviteAction(rawToken);
+    expect(r).toEqual({ ok: true, workspaceId: ws.id });
+
+    const [after] = await db
+      .select({ v: users.emailVerified, at: users.emailVerifiedAt })
+      .from(users)
+      .where(eq(users.id, u.id));
+    expect(after.v).toBe(true);
+    expect(after.at).not.toBeNull();
   });
 
   it('accepts when invited email and user email differ only by case', async () => {

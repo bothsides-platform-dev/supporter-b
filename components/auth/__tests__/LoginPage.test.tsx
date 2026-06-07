@@ -14,6 +14,9 @@ vi.mock('@/lib/server/actions/auth', () => ({
 }));
 
 import LoginPage from '@/app/(public)/login/page';
+import { loginAction } from '@/lib/server/actions/auth';
+
+const loginActionMock = loginAction as unknown as ReturnType<typeof vi.fn>;
 
 describe('LoginPage — 이메일 프리필', () => {
   beforeEach(() => {
@@ -49,7 +52,7 @@ describe('LoginPage — 실패 카운트 / 락 mock', () => {
     await waitFor(() => {
       const lockBox = screen.queryByTestId('login-lock');
       if (lockBox) return;
-      const err = screen.queryByText(/일치하지 않습니다|잠겼습니다/);
+      const err = screen.queryByText(/확인해요|잠겼어요/);
       expect(err).not.toBeNull();
     });
   }
@@ -85,6 +88,38 @@ describe('LoginPage — 실패 카운트 / 락 mock', () => {
       (screen.getByRole('button', {
         name: '로그인',
       }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+});
+
+describe('LoginPage — 서버 LOCKED 응답', () => {
+  beforeEach(() => {
+    mockSearchParams.delete('email');
+    mockSearchParams.delete('next');
+    if (typeof window !== 'undefined') window.localStorage.clear();
+  });
+
+  it('서버가 LOCKED를 돌려주면 클라 카운터와 무관하게 첫 시도에도 락 박스가 뜨고 버튼이 비활성화된다', async () => {
+    const lockedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    loginActionMock.mockResolvedValueOnce({ ok: false, error: 'LOCKED', lockedUntil });
+
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText('이메일'), {
+      target: { value: 'kim@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('비밀번호'), {
+      target: { value: 'whatever' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+
+    // Single failed attempt — the client localStorage counter is at 1, nowhere
+    // near the threshold. The lock must come from the server response.
+    await waitFor(() => {
+      expect(screen.getByTestId('login-lock')).toBeDefined();
+    });
+    expect(
+      (screen.getByRole('button', { name: '로그인' }) as HTMLButtonElement)
+        .disabled,
     ).toBe(true);
   });
 });

@@ -80,6 +80,14 @@ export function ChevronDownIcon({ size = 16, ...p }: IconProps) {
   );
 }
 
+export function RefreshIcon({ size = 16, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
+      <path d="M13.5 2.5A6.5 6.5 0 1 1 7 1M13.5 2.5V6M13.5 2.5H10" />
+    </svg>
+  );
+}
+
 export function PlusIcon({ size = 20, ...p }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
@@ -190,6 +198,16 @@ export function ComposeIcon({ size = 16, ...p }: IconProps) {
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
       <path d="M11 2l3 3-8 8H3v-3l8-8z" />
       <path d="M9.5 3.5l3 3" />
+    </svg>
+  );
+}
+
+export function InfoIcon({ size = 16, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
+      <circle cx="10" cy="10" r="8" />
+      <path d="M10 9v4.5" />
+      <path d="M10 6.5h.01" />
     </svg>
   );
 }

@@ -5,11 +5,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { bids, bidNotes, rfpInvitations, rfps } from '@/lib/db/schema';
+import { bids, bidNotes, rfpInvitations, rfpPgRequests, rfps } from '@/lib/db/schema';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getBidQuoteTemplateRepo,
   getInvitationRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -20,7 +21,6 @@ import {
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
 import {
-  loadBuyerAwardData,
   loadBuyerRfpDetail,
   loadPgRfpDetail,
 } from '../rfp-detail-loader';
@@ -99,6 +99,23 @@ async function setup() {
     await db.insert(bidNotes).values({ id, bidId, authorId: buyer.id, body });
     return id;
   }
+  async function seedPgRequest(
+    rfpId: string,
+    pgWsId: string,
+    message: string,
+    status: 'pending' | 'accepted' | 'rejected' = 'pending',
+  ) {
+    const id = randomUUID();
+    await db.insert(rfpPgRequests).values({
+      id,
+      rfpId,
+      pgWsId,
+      message,
+      status,
+      createdByUserId: pgUser.id,
+    });
+    return id;
+  }
 
   return {
     buyerWsId: buyerWs.id,
@@ -111,6 +128,7 @@ async function setup() {
     seedInvitation,
     seedBid,
     seedNote,
+    seedPgRequest,
   };
 }
 
@@ -170,8 +188,29 @@ describe('loadBuyerRfpDetail', () => {
     expect(notes).toHaveLength(1);
     expect(notes[0].body).toBe('괜찮은 제안');
     expect(typeof notes[0].createdAt).toBe('string');
-    // 작성자 정보가 BidComparisonView 로 전달되도록 채워짐.
+    // 작성자 정보가 FocusComparison 의 메모 패널로 전달되도록 채워짐.
     expect(res!.authorId).toBe(ctx.buyerId);
+  });
+
+  it('pendingRequests에 pending 콜드 피치만 PG명+메시지와 함께 반환', async () => {
+    const rfpId = await ctx.seedRfp('P-2605-0003');
+    await ctx.seedPgRequest(rfpId, ctx.tossId, '제안 드리고 싶어요', 'pending');
+    await ctx.seedPgRequest(rfpId, ctx.inicisId, '이미 거절됨', 'rejected');
+
+    const res = await loadBuyerRfpDetail({
+      code: 'P-2605-0003',
+      workspaceId: ctx.buyerWsId,
+      userId: ctx.buyerId,
+      userName: ctx.buyerName,
+    });
+
+    expect(res).not.toBeNull();
+    expect(res!.pendingRequests).toHaveLength(1);
+    const req = res!.pendingRequests[0];
+    expect(req.pgWsId).toBe(ctx.tossId);
+    expect(req.pgWsName).toBe('toss.im');
+    expect(req.message).toBe('제안 드리고 싶어요');
+    expect(typeof req.id).toBe('string');
   });
 });
 
@@ -213,48 +252,51 @@ describe('loadPgRfpDetail', () => {
     expect(res).not.toBeNull();
     expect(res!.myBid?.id).toBe(bidId);
   });
-});
 
-describe('loadBuyerAwardData', () => {
-  it('다른 워크스페이스 소유 → null', async () => {
-    const rfpId = await ctx.seedRfp('P-2605-0020');
-    const inv = await ctx.seedInvitation(rfpId, ctx.tossId);
-    const bidId = await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted');
-    const res = await loadBuyerAwardData({
-      code: 'P-2605-0020',
-      workspaceId: ctx.otherWsId,
-      bidId,
-    });
-    expect(res).toBeNull();
-  });
+  it('buyerName에 구매사 워크스페이스 name을 반환', async () => {
+    const rfpId = await ctx.seedRfp('P-2605-0013');
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
 
-  it('선택 bid 없음(잘못된 bidId) → null', async () => {
-    await ctx.seedRfp('P-2605-0021');
-    const res = await loadBuyerAwardData({
-      code: 'P-2605-0021',
-      workspaceId: ctx.buyerWsId,
-      bidId: '00000000-0000-0000-0000-000000000000',
-    });
-    expect(res).toBeNull();
-  });
-
-  it('선택 bid + 나머지 + PG명/구매사명 반환', async () => {
-    const rfpId = await ctx.seedRfp('P-2605-0022');
-    const invToss = await ctx.seedInvitation(rfpId, ctx.tossId);
-    const invInicis = await ctx.seedInvitation(rfpId, ctx.inicisId);
-    const tossBid = await ctx.seedBid(rfpId, ctx.tossId, invToss, 'submitted');
-    const inicisBid = await ctx.seedBid(rfpId, ctx.inicisId, invInicis, 'submitted');
-
-    const res = await loadBuyerAwardData({
-      code: 'P-2605-0022',
-      workspaceId: ctx.buyerWsId,
-      bidId: tossBid,
-    });
-
+    const res = await loadPgRfpDetail({ code: 'P-2605-0013', workspaceId: ctx.tossId });
     expect(res).not.toBeNull();
-    expect(res!.selected.id).toBe(tossBid);
-    expect(res!.others.map((b) => b.id)).toEqual([inicisBid]);
-    expect(res!.pgWsNameById[ctx.tossId]).toBe('toss.im');
-    expect(res!.buyerWorkspaceName).toBe('구매사');
+    expect(res!.buyerName).toBe('구매사');
+  });
+
+  it('해당 PG 워크스페이스의 견적 템플릿만 quoteTemplates로 반환(타 워크스페이스 격리)', async () => {
+    const rfpId = await ctx.seedRfp('P-2605-0014');
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const repo = await getBidQuoteTemplateRepo();
+    await repo.create({
+      pgWsId: ctx.tossId,
+      name: '표준 요율',
+      settleCycle: 'M+1',
+      settleLimit: 5_000_000,
+      guaranteeInsurance: 0,
+      paymentFees: { card: 0.0125 },
+      createdBy: ctx.buyerId,
+    });
+    await repo.create({
+      pgWsId: ctx.inicisId,
+      name: '남의 요율',
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: {},
+      createdBy: ctx.buyerId,
+    });
+
+    const res = await loadPgRfpDetail({ code: 'P-2605-0014', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.quoteTemplates).toEqual([
+      {
+        id: expect.any(String),
+        name: '표준 요율',
+        settleCycle: 'M+1',
+        settleLimit: 5_000_000,
+        guaranteeInsurance: 0,
+        paymentFees: { card: 0.0125 },
+      },
+    ]);
   });
 });

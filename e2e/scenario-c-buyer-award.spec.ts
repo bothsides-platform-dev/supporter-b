@@ -83,35 +83,31 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     await page.getByRole('button', { name: '로그인' }).click();
     await expect(page).toHaveURL(/\/home$/);
 
-    // ── 2. Comparison table — assert it lists submitted bids ─────
+    // ── 2. 포커스 비교 — PG 탭으로 서포터 B 페이를 포커스 ─────────
     await page.goto(`/rfp/${RFP_ID}`);
-    // 서포터 B 페이는 BidComparisonTable 행과 RfpInviteManager 목록 양쪽에
-    // 렌더되므로 strict 모드 위반을 피하기 위해 비교 테이블 셀을 직접 노린다.
-    await expect(
-      page.getByRole('cell', { name: /서포터 B 페이/ }),
-    ).toBeVisible();
+    // 서포터 B 페이는 비교 탭과 RfpInviteManager 목록 양쪽에 렌더되므로
+    // strict 모드 위반을 피하려고 탭(role=tab)을 직접 노려 클릭 = 포커스 전환.
+    const winnerTab = page.getByRole('tab', { name: /서포터 B 페이/ });
+    await expect(winnerTab).toBeVisible();
+    await winnerTab.click();
 
-    // ── 3. Navigate directly to award flow w/ bidId search param ─
-    // (BidComparisonTable wires this URL behind its '수주' CTA but
-    //  we navigate directly to keep the spec robust against table UI
-    //  changes — the integration boundary is the action call.)
-    await page.goto(`/rfp/${RFP_ID}/award?bidId=${winnerBidId}`);
-    // Award 페이지는 헤딩 "서포터 B 페이 제안을 선택하시겠습니까?"로 시작 —
-    // 같은 페이지에 RFP 번호/탭/리스트 등 서포터 B 페이 키워드가 흩어져 있어
-    // 헤딩 role 로 좁혀 strict 모드 위반을 피한다.
+    // ── 3. 인라인 선정 CTA → AwardConfirmDialog ──────────────────
+    // 별도 /rfp/:id/award 라우트는 제거됐다 — 포커스 뷰 CTA 가 다이얼로그를 연다.
+    await page.getByRole('button', { name: /이 견적 선정하기/ }).click();
     await expect(
-      page.getByRole('heading', { name: /서포터 B 페이.*선택하시겠습니까/ }),
+      page.getByRole('heading', { name: /서포터 B 페이.*선정할까요/ }),
     ).toBeVisible();
 
     // ── 4. Confirm award ─────────────────────────────────────────
-    await page.getByRole('button', { name: /수주 확정/ }).click();
+    await page.getByRole('button', { name: /선정할게요/ }).click();
 
-    // After confirm: AwardConfirm renders the success state in place —
-    // wait for the "계약이 확정되었습니다" heading. Avoid the bare "✓ 수주 확정"
-    // chip text because the same string also appears in the page eyebrow
-    // ("P-2604-0001 · 수주 처리") and triggers a strict-mode collision.
+    // 확정 후: awardRfpAction 완료 시 다이얼로그가 닫힌다(성공 신호). 그 다음
+    // router.refresh 로 awarded 상태가 반영돼 포커스 본문에 '선정됨' 칩이 뜬다.
+    // (사이드바 nav 에 '선정 완료' 링크가 상시 존재하므로, 그 문구 대신 본문
+    //  전용 '선정됨' 을 노려 false positive 를 피한다.)
+    await expect(page.getByRole('dialog')).toBeHidden({ timeout: 15_000 });
     await expect(
-      page.getByRole('heading', { name: /계약이 확정/ }),
+      page.getByRole('main').getByText('선정됨'),
     ).toBeVisible({ timeout: 15_000 });
 
     // ── 5. DB assertions ─────────────────────────────────────────

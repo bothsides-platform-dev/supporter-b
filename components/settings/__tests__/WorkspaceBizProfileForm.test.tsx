@@ -38,7 +38,7 @@ describe('WorkspaceBizProfileForm', () => {
     await user.click(screen.getByRole('radio', { name: /일반/ }));
     await user.click(screen.getByRole('button', { name: '등급 갱신' }));
 
-    await waitFor(() => expect(toast).toHaveBeenCalledWith('가맹점 등급을 변경했습니다.'));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('가맹점 등급을 변경했어요.'));
     expect(toast).not.toHaveBeenCalledWith(expect.anything(), { type: 'error' });
   });
 

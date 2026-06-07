@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { OutboxEntry } from '@/lib/server/outbox/types';
+import { logger } from '@/lib/observability/logger';
 
 const sendMock = vi.fn();
 
@@ -18,6 +19,10 @@ vi.mock('resend', () => {
   }
   return { Resend: FakeResend };
 });
+
+vi.mock('@/lib/observability/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 function makeEntry(overrides?: Partial<OutboxEntry>): OutboxEntry {
   return {
@@ -40,6 +45,7 @@ const ORIGINAL_FROM = process.env.RESEND_FROM;
 
 beforeEach(() => {
   sendMock.mockReset();
+  vi.mocked(logger.info).mockReset();
   delete process.env.RESEND_API_KEY;
   delete process.env.RESEND_FROM;
 });
@@ -60,7 +66,7 @@ describe('ResendSender', () => {
     const entry = makeEntry({
       event: 'rfp.invited',
       to: 'pg@toss.im',
-      subject: '[P-2605-0042] 제안 요청 도착',
+      subject: '[P-2605-0042] 견적 요청이 도착했어요',
       html: '<a href="https://example.com/very-long-html">x</a>',
       dedupeKey: 'rfp:P-2605-0042:invite:pg@toss.im',
     });
@@ -73,7 +79,7 @@ describe('ResendSender', () => {
     expect(line).toContain('[email DEV]');
     expect(line).toContain('event=rfp.invited');
     expect(line).toContain('to=pg@toss.im');
-    expect(line).toContain('subject=[P-2605-0042] 제안 요청 도착');
+    expect(line).toContain('subject=[P-2605-0042] 견적 요청이 도착했어요');
     expect(line).toContain('dedupeKey=rfp:P-2605-0042:invite:pg@toss.im');
     // html intentionally excluded from the dev line.
     expect(line).not.toContain('<a href');
@@ -97,6 +103,25 @@ describe('ResendSender', () => {
       subject: 'Supporter B 인증',
       html: expect.stringContaining('<a'),
     });
+  });
+
+  it('emits an email.sent operational log on success', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    sendMock.mockResolvedValue({ data: { id: 'msg_123' }, error: null });
+
+    const { ResendSender, __resetResendClientForTest } = await import('../resend');
+    __resetResendClientForTest();
+    await ResendSender(makeEntry({ event: 'rfp.invited', to: 'pg@toss.im' }));
+
+    expect(logger.info).toHaveBeenCalledWith(
+      'email.sent',
+      expect.objectContaining({
+        event: 'rfp.invited',
+        to: 'pg@toss.im',
+        messageId: 'msg_123',
+        durationMs: expect.any(Number),
+      }),
+    );
   });
 
   it('uses the default from when RESEND_FROM is unset', async () => {

@@ -67,3 +67,24 @@ export interface WorkspaceApprovedProps {
   orgLabel: string;
   loginUrl: string;
 }
+
+export interface WorkspaceRejectedProps {
+  workspaceName: string;
+  orgLabel: string;
+  reason: string;
+  reapplyUrl: string;
+}
+
+export interface ChatMessageProps {
+  /** 보낸 워크스페이스 이름 (예: "OO페이"). */
+  senderName: string;
+  /** 가장 최근 메시지 미리보기 (1줄). */
+  preview: string;
+  /** 대화 열람 링크. */
+  conversationUrl: string;
+  /**
+   * 발송 시점 미읽음 메시지 수. flush 때 digest 재계산으로 채워진다. 2 이상이면
+   * "새 메시지 N건" 요약 문구를 노출. 생략·1이면 단건 문구(기존 동작 유지).
+   */
+  count?: number;
+}

@@ -3,7 +3,6 @@ import { PageEnter } from '@/components/primitives/PageEnter';
 import { RfpDetailContent } from '@/components/rfp/RfpDetailContent';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
-import { loadBoard } from '@/lib/server/board/loadBoard';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,23 +54,15 @@ async function RfpDetailLoader({
     return (
       <div className="px-8 py-8">
         <p className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-          RFP를 찾을 수 없습니다.
+          견적 요청을 찾을 수 없어요.
         </p>
       </div>
     );
   }
 
-  // rfp_bids board (columns + placement-resolved cards) for the kanban view.
-  const board = await loadBoard({
-    workspaceId: data.rfp.buyerWsId,
-    workspaceType: 'buyer',
-    kind: 'rfp_bids',
-    scope: { rfpId: data.rfp.id },
-  });
-
   return (
     <PageEnter className="px-8 py-8 space-y-10">
-      <RfpDetailContent data={data} boardColumns={board.columns} boardCards={board.cards} />
+      <RfpDetailContent data={data} />
     </PageEnter>
   );
 }

@@ -95,7 +95,7 @@ function AttachmentPreviewDialog({
           {attachment?.name ?? '첨부파일'} 미리보기
         </DialogTitle>
         <DialogDescription className="sr-only">
-          구매사가 RFP에 첨부한 파일을 미리봅니다.
+          구매사가 견적 요청에 첨부한 파일을 미리 봐요.
         </DialogDescription>
         {attachment && (
           <>

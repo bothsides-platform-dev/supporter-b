@@ -8,6 +8,7 @@ import {
 import type { PgDashRow } from '../buildDashboard';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
+import type { OpportunityListing } from '@/lib/types/pg-request';
 
 const NOW = new Date(2026, 4, 25, 9, 0, 0); // 2026-05-25 09:00 local
 const DAY = 86_400_000;
@@ -62,9 +63,9 @@ describe('buildBuyerDashboard', () => {
     expect(byId.due.items[0].href).toBe('/rfp/P-A');
     expect(byId.due.items[0].badge).toBe('D-3');
     expect(byId.review.items.map((i) => i.id)).toEqual(['B']);
-    expect(byId.review.items[0].badge).toBe('응답 2건');
+    expect(byId.review.items[0].badge).toBe('견적 2건');
     expect(byId.unanswered.items.map((i) => i.id)).toEqual(['A']);
-    expect(byId.unanswered.items[0].badge).toBe(`응답 0건 · 발송 5일`);
+    expect(byId.unanswered.items[0].badge).toBe(`견적 0건 · 보낸 지 5일`);
     expect(dash.groups.every((g) => g.items.length > 0)).toBe(true);
   });
 
@@ -74,32 +75,101 @@ describe('buildBuyerDashboard', () => {
 });
 
 describe('buildPgDashboard', () => {
+  // stage 기반(classifyPgInvitation) — KPI/그룹이 /inbox?status= 탭과 일치해야 함.
   const row = (over: Partial<PgDashRow>): PgDashRow => ({
-    invitationId: 'i', invitationStatus: 'sent', rfpCode: 'P-0', rfpTitle: 't', rfpDeadline: fromNow(20),
+    invitationId: 'i', stage: 'received', rfpCode: 'P-0', rfpTitle: 't', rfpDeadline: fromNow(20),
     ...over,
   });
   const rows: PgDashRow[] = [
-    row({ invitationId: 'n', invitationStatus: 'sent', rfpCode: 'P-N', rfpTitle: 'N', rfpDeadline: fromNow(3) }),
-    row({ invitationId: 'o', invitationStatus: 'opened', rfpCode: 'P-O', rfpTitle: 'O', rfpDeadline: fromNow(20) }),
-    row({ invitationId: 'a', invitationStatus: 'accepted', rfpCode: 'P-A', rfpTitle: 'A', rfpDeadline: fromNow(20) }),
-    row({ invitationId: 'o2', invitationStatus: 'opened', rfpCode: 'P-O2', rfpTitle: 'O2', rfpDeadline: fromNow(2) }),
+    row({ invitationId: 'n', stage: 'received', rfpCode: 'P-N', rfpTitle: 'N', rfpDeadline: fromNow(3) }),
+    row({ invitationId: 'o', stage: 'received', rfpCode: 'P-O', rfpTitle: 'O', rfpDeadline: fromNow(20) }),
+    row({ invitationId: 'a', stage: 'submitted', rfpCode: 'P-A', rfpTitle: 'A', rfpDeadline: fromNow(20) }),
+    row({ invitationId: 'o2', stage: 'received', rfpCode: 'P-O2', rfpTitle: 'O2', rfpDeadline: fromNow(2) }),
   ];
   const dash = buildPgDashboard(rows, NOW);
 
-  it('computes PG KPI values and deep links', () => {
+  it('computes PG KPI values and deep links (stage 기반)', () => {
     const byId = Object.fromEntries(dash.kpis.map((k) => [k.id, k]));
-    expect(byId.new.value).toBe(1);
+    // new = received 전부(열람 여부 무관) — /inbox?status=new 탭과 동일
+    expect(byId.new.value).toBe(3);
     expect(byId.new.href).toBe('/inbox?status=new');
+    // due = received & 마감 임박(d7): n(3d), o2(2d)
     expect(byId.due.value).toBe(2);
     expect(byId.drafting).toBeUndefined();
+    // submitted = bid 제출(stage submitted)
     expect(byId.submitted.value).toBe(1);
   });
 
   it('builds PG action groups (href uses rfp code), omitting empty', () => {
     const byId = Object.fromEntries(dash.groups.map((g) => [g.id, g]));
-    expect(byId.new.items.map((i) => i.id)).toEqual(['n']);
+    expect(byId.new.items.map((i) => i.id)).toEqual(['n', 'o', 'o2']);
     expect(byId.new.items[0].href).toBe('/inbox/P-N');
     expect(byId.due.items.map((i) => i.id)).toEqual(['o2', 'n']);
     expect(byId.drafting).toBeUndefined();
+  });
+});
+
+describe('buildBuyerDashboard — onboarding', () => {
+  it('returns onboardingActions when there are no sent RFPs', () => {
+    const dash = buildBuyerDashboard([], new Map(), NOW);
+    expect(dash.onboardingActions).not.toBeNull();
+    expect(dash.onboardingActions).toHaveLength(3);
+    expect(dash.onboardingActions![0].id).toBe('create-rfp');
+    expect(dash.onboardingActions![0].href).toBe('/rfp/new');
+  });
+
+  it('returns null when sent RFPs exist', () => {
+    const sentRfps = [rfp({ id: 'X', status: 'sent', deadline: fromNow(10), sentAt: fromNow(-1) })];
+    const dash = buildBuyerDashboard(sentRfps, new Map([['X', 0]]), NOW);
+    expect(dash.onboardingActions).toBeNull();
+  });
+
+  it('returns onboardingActions when only draft RFPs exist (no sent)', () => {
+    const draftOnly = [rfp({ id: 'D', status: 'draft', deadline: fromNow(10) })];
+    const dash = buildBuyerDashboard(draftOnly, new Map(), NOW);
+    expect(dash.onboardingActions).not.toBeNull();
+  });
+
+  it('returns null when buyer has awarded RFPs but no sent (returning buyer)', () => {
+    const awardedOnly = [rfp({ id: 'A', status: 'awarded', deadline: fromNow(-1) })];
+    const dash = buildBuyerDashboard(awardedOnly, new Map(), NOW);
+    expect(dash.onboardingActions).toBeNull();
+  });
+});
+
+describe('buildPgDashboard — onboarding', () => {
+  it('always returns onboardingActions: null', () => {
+    const dash = buildPgDashboard([], NOW);
+    expect(dash.onboardingActions).toBeNull();
+  });
+});
+
+describe('buildPgDashboard — open RFP discovery', () => {
+  const base = {
+    deadline: fromNow(5),
+    requiredPaymentMethods: [] as string[],
+    customPaymentMethodLabels: [] as string[],
+    mainProducts: null,
+  };
+  const listings: OpportunityListing[] = [
+    { rfpCode: 'P-OPEN1', buyerName: '구매사A', title: '오픈 견적', websiteUrl: 'https://a.example.com', ...base },
+    { rfpCode: 'P-OPEN2', buyerName: '구매사B', title: '오픈 견적2', websiteUrl: null, ...base },
+  ];
+
+  it('passes through the open-RFP listings for PG discovery', () => {
+    const dash = buildPgDashboard([], NOW, listings);
+    expect(dash.openRfps).toEqual(listings);
+  });
+
+  it('defaults to an empty list when none are provided', () => {
+    const dash = buildPgDashboard([], NOW);
+    expect(dash.openRfps).toEqual([]);
+  });
+});
+
+describe('buildBuyerDashboard — no open RFP discovery', () => {
+  it('never surfaces open-RFP listings to buyers', () => {
+    const dash = buildBuyerDashboard([], new Map(), NOW);
+    expect(dash.openRfps).toBeUndefined();
   });
 });

@@ -1,6 +1,6 @@
 'use server';
 
-import { getVerificationTokenRepo } from '@/lib/server/repositories/factory';
+import { getUserRepo, getVerificationTokenRepo } from '@/lib/server/repositories/factory';
 import { hashToken } from '@/lib/server/token';
 import type { AuthActionResult } from './_shared';
 
@@ -35,6 +35,10 @@ export async function verifyEmailAction(
   if (consumed.purpose !== 'signup_email') {
     return { ok: false, error: 'WRONG_PURPOSE' };
   }
+
+  // 새 흐름: 토큰 소비 = 이메일 인증. 이미 생성된 유저의 플래그를 전환한다(유저가
+  // 아직 없으면 no-op). 교차 기기/탭과 무관하게 서버 상태가 진실의 원천.
+  await (await getUserRepo()).markEmailVerified(consumed.email);
 
   const meta = consumed.meta && typeof consumed.meta === 'object'
     ? (consumed.meta as Record<string, unknown>)

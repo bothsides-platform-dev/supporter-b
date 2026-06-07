@@ -530,6 +530,30 @@ describe('createRfpAction', () => {
     expect(row.currentGuaranteeInsurance).toBe('3000만원');
   });
 
+  it('도메인 형식이 아닌 websiteUrl 은 INVALID_INPUT 으로 거부한다', async () => {
+    const r = await createRfpAction({
+      title: '잘못된 홈페이지',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      websiteUrl: 'not-a-domain',
+      send: false,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('빈 문자열 websiteUrl 은 허용한다 (refine empty-string accept path)', async () => {
+    const r = await createRfpAction({
+      title: '빈 홈페이지 허용',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      websiteUrl: '',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+  });
+
   it('omitting the 6 new optional fields stores NULL in DB', async () => {
     const r = await createRfpAction({
       title: '옵셔널 생략 테스트',
@@ -592,6 +616,93 @@ describe('createRfpAction', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('persists currentSettlementCycle when supplied', async () => {
+    const r = await createRfpAction({
+      title: '정산주기 필드 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      currentSettlementCycle: 'D+1',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.currentSettlementCycle).toBe('D+1');
+  });
+
+  it('stores NULL for currentSettlementCycle when omitted', async () => {
+    const r = await createRfpAction({
+      title: '정산주기 생략 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.currentSettlementCycle).toBeNull();
+  });
+
+  it('persists deliveryServicePeriod when supplied', async () => {
+    const r = await createRfpAction({
+      title: '배송기간 필드 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      deliveryServicePeriod: 'D+3',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.deliveryServicePeriod).toBe('D+3');
+  });
+
+  it('stores NULL for deliveryServicePeriod when omitted', async () => {
+    const r = await createRfpAction({
+      title: '배송기간 생략 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.deliveryServicePeriod).toBeNull();
+  });
+
+  it('persists boardVisible=false when opted out', async () => {
+    const r = await createRfpAction({
+      title: '게시판 노출 끔 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      boardVisible: false,
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.boardVisible).toBe(false);
+  });
+
+  it('defaults boardVisible=true when omitted', async () => {
+    const r = await createRfpAction({
+      title: '게시판 노출 기본값 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.boardVisible).toBe(true);
   });
 
   // _suppress unused import warnings

@@ -57,15 +57,20 @@
   --radius-lg: var(--md-sys-shape-medium);
   --radius-xl: var(--md-sys-shape-large);
   --radius:    var(--md-sys-shape-small);
+
+  /* Refresh icon — slower than Tailwind default (1s) for readable feedback */
+  --animate-spin: spin 1.5s linear infinite;
 }
 
 :root {
   color-scheme: light;
   --sidebar-accent-computed: var(--md-sys-color-surface-container-high);
+  --command-palette-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 24px 64px -8px rgba(0,0,0,0.18);
 }
 .dark {
   color-scheme: dark;
   --sidebar-accent-computed: var(--md-sys-color-surface-container-high);
+  --command-palette-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 24px 64px -8px rgba(0,0,0,0.6);
 }
 
 @layer base {

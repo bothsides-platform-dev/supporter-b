@@ -1,6 +1,8 @@
 'use client';
 
 import { Label } from '@/components/primitives/Label';
+import { InfoTip } from '@/components/ui/info-tip';
+import { formatKrwReadable } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /**
@@ -19,6 +21,8 @@ type NumericFieldProps = {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  /** 라벨 옆에 ⓘ 설명 아이콘을 붙일 용어집 키 (예: '정산한도') */
+  infoTerm?: string;
 };
 
 /** Labeled numeric input with a `%` suffix and a "per ₩10,000" hint. */
@@ -27,6 +31,7 @@ export function PercentInput({
   value,
   onChange,
   placeholder = '0.00',
+  infoTerm,
 }: NumericFieldProps) {
   const numVal = parseFloat(value);
   const hint =
@@ -36,7 +41,10 @@ export function PercentInput({
 
   return (
     <div className="space-y-1">
-      <Label size="md" muted={false}>{label}</Label>
+      <div className="flex items-center gap-1">
+        <Label size="md" muted={false}>{label}</Label>
+        {infoTerm && <InfoTip term={infoTerm} />}
+      </div>
       <div className="flex items-end gap-1">
         <input
           type="number"
@@ -64,10 +72,18 @@ export function CurrencyInput({
   value,
   onChange,
   placeholder = '0',
+  infoTerm,
 }: NumericFieldProps) {
+  const numVal = parseFloat(value);
+  const hint =
+    !isNaN(numVal) && numVal > 0 ? `= ${formatKrwReadable(numVal)}` : null;
+
   return (
     <div className="space-y-1">
-      <Label size="md" muted={false}>{label}</Label>
+      <div className="flex items-center gap-1">
+        <Label size="md" muted={false}>{label}</Label>
+        {infoTerm && <InfoTip term={infoTerm} />}
+      </div>
       <div className="flex items-end gap-1">
         <input
           type="number"
@@ -80,6 +96,11 @@ export function CurrencyInput({
         />
         <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">원</span>
       </div>
+      {hint && (
+        <p className="font-mono text-[11px] text-[var(--md-sys-color-tertiary)] mt-1">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

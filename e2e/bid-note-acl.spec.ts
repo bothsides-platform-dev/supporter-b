@@ -43,10 +43,11 @@ test.describe.serial('bid_note attachment ACL', () => {
     const { toss: tossBidId } = await findSeededBidIds(RFP_ID);
 
     // ─── Buyer creates a note with attachment via UI ───────────────────
+    // 포커스 비교 — 서포터 B 페이 탭으로 전환 → '내 메모' 아코디언 → BidNotesPanel.
     await loginAs(page, 'buyer');
     await page.goto(`/rfp/${RFP_ID}`);
-    await page.getByRole('tab', { name: '[ 보드 ]' }).click();
-    await page.getByRole('button', { name: /서포터 B 페이/ }).first().click();
+    await page.getByRole('tab', { name: /서포터 B 페이/ }).click();
+    await page.getByRole('button', { name: '내 메모' }).click();
 
     const uploadResp = page.waitForResponse(
       (r) =>

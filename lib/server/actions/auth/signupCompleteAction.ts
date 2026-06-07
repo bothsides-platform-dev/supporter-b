@@ -5,9 +5,10 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/password';
 import { passwordSchema } from '@/lib/auth/password-validation';
-import { users, phoneOtps, pgProfiles, verificationTokens } from '@/lib/db/schema';
+import { users, phoneOtps, pgProfiles } from '@/lib/db/schema';
 import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
+import { purgeUnverifiedSignup } from './_purgeUnverifiedSignup';
 import {
   notifyAdminNewSignupAfterCommit,
   type AdminSignupNotice,
@@ -131,23 +132,9 @@ export async function signupCompleteAction(
 
   if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
-  // 이메일 인증 확인 — consumedAt IS NOT NULL ⟺ 사용자가 인증 완료.
-  // 새 흐름에서 이메일 인증은 맨 마지막 단계이므로 암묵적 라우팅 게이트가 없어짐.
-  // 기존 signupEmailAction → verifyEmailAction/verifyEmailCodeAction 경로가
-  // consumedAt 을 스탬프 찍어 두므로 여기서 직접 검증한다.
-  const [emailToken] = await db
-    .select({ id: verificationTokens.id })
-    .from(verificationTokens)
-    .where(
-      and(
-        eq(verificationTokens.email, email),
-        eq(verificationTokens.purpose, 'signup_email'),
-        isNotNull(verificationTokens.consumedAt),
-      ),
-    )
-    .limit(1);
-
-  if (!emailToken) return { ok: false, error: 'EMAIL_NOT_VERIFIED' };
+  // 이메일 인증은 더 이상 가입 게이트가 아니다 — 미인증 유저를 먼저 만들고,
+  // 인증은 가입 후 /pending-approval 에서 서버 플래그(users.emailVerified) 전환으로
+  // 처리한다(탭/기기 독립). 따라서 여기서 토큰 consumedAt 을 검사하지 않는다.
 
   const passwordHash = await hashPassword(parsed.data.password);
   const userId = randomUUID();
@@ -159,8 +146,13 @@ export async function signupCompleteAction(
   const result = await db.transaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (tx: any): Promise<SignupCompleteResult> => {
-      // 1. Insert user. Email UNIQUE — collision means an account already
-      //    exists for the address; surface that explicitly.
+      // 0. Re-registration (결정 #2): clear an abandoned *unverified* attempt for
+      //    this email so the fresh signup proceeds. No-op for a verified user →
+      //    the UNIQUE insert below then surfaces EMAIL_TAKEN.
+      await purgeUnverifiedSignup(tx, email);
+
+      // 1. Insert user (email-unverified). Email UNIQUE — collision means a
+      //    *verified* account already exists; surface that explicitly.
       try {
         await tx.insert(users).values({
           id: userId,
@@ -170,6 +162,7 @@ export async function signupCompleteAction(
           phone: normalizedPhone,
           avatarColor: 'ink',
           status: 'active',
+          emailVerified: false,
         });
       } catch (err) {
         // Email UNIQUE collision → expected. Anything else is unexpected and

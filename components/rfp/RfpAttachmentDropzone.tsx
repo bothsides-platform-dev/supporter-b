@@ -6,18 +6,13 @@ import { http } from '@/lib/http';
 import { Label } from '@/components/primitives/Label';
 import type { RfpMockFile } from '@/lib/stores/rfp-draft';
 import { DRAFT_OWNER_ID } from '@/lib/server/storage/constants';
+import { formatSize } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 type Props = {
   value: RfpMockFile[];
   onChange: (files: RfpMockFile[]) => void;
 };
-
-function formatSize(bytes: number): string {
-  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
-  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
-  return `${bytes} B`;
-}
 
 const MAX_FILES = 5;
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -138,7 +133,7 @@ export function RfpAttachmentDropzone({ value, onChange }: Props) {
 
   return (
     <div className="space-y-3">
-      <Label size="md" muted={false}>RFP 첨부 파일 (선택)</Label>
+      <Label size="md" muted={false}>견적 요청 첨부 파일 (선택)</Label>
 
       {rows.length < MAX_FILES && (
         <div
@@ -168,7 +163,7 @@ export function RfpAttachmentDropzone({ value, onChange }: Props) {
         type="file"
         multiple
         accept={ACCEPT_EXT}
-        className="sr-only"
+        className="hidden"
         onChange={(e) => addFiles(e.target.files)}
       />
 

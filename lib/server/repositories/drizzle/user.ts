@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { users } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { User } from '@/lib/types/user';
@@ -31,6 +31,7 @@ function rowToUser(row: UserRow): User & { passwordHash: string } {
     avatarColor: normAvatar(row.avatarColor),
     role: 'member',
     status: row.status === 'paused' ? 'paused' : 'active',
+    emailVerified: row.emailVerified,
     joinedAt: new Date(row.createdAt).toISOString(),
     passwordHash: row.passwordHash,
   };
@@ -91,5 +92,13 @@ export class DrizzleUserRepository implements UserRepo {
       .where(eq(users.email, email))
       .limit(1);
     return row ? rowToUser(row) : undefined;
+  }
+
+  async markEmailVerified(email: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(users)
+      .set({ emailVerified: true, emailVerifiedAt: sql`now()` })
+      .where(eq(users.email, email));
   }
 }

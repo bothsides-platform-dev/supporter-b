@@ -11,8 +11,8 @@ export function RfpSent({
 }: RfpSentProps): React.JSX.Element {
   return (
     <Layout
-      preheader={`${rfpId} 제안이 ${inviteCount}개 PG사에 발송되었습니다.`}
-      serial={`RFP / ${rfpId}`}
+      preheader={`${rfpId} 견적 요청을 ${inviteCount}개 PG사에 보냈어요.`}
+      serial={`견적 요청 / ${rfpId}`}
     >
       <h1
         style={{
@@ -22,10 +22,10 @@ export function RfpSent({
           letterSpacing: '-0.01em',
         }}
       >
-        제안 발송 완료
+        견적 요청을 보냈어요
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
-        다음 RFP가 정상적으로 발송되었습니다.
+        다음 견적 요청을 정상적으로 보냈어요.
       </p>
 
       <table
@@ -50,7 +50,7 @@ export function RfpSent({
             <td style={{ paddingBottom: '6px' }}>{rfpTitle}</td>
           </tr>
           <tr>
-            <td style={{ color: '#777', paddingRight: '16px' }}>발송 건수</td>
+            <td style={{ color: '#777', paddingRight: '16px' }}>보낸 건수</td>
             <td>
               <Mono>{inviteCount}</Mono> 건
             </td>
@@ -59,7 +59,7 @@ export function RfpSent({
       </table>
 
       <p style={{ fontSize: '13px', color: '#555' }}>
-        PG사들의 응답이 도착하면 별도 알림으로 안내됩니다.
+        PG사들의 견적이 도착하면 별도 알림으로 안내해 드려요.
       </p>
     </Layout>
   );

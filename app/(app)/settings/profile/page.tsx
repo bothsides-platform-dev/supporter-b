@@ -8,13 +8,14 @@ import { WorkspaceBizNoForm } from '@/components/settings/WorkspaceBizNoForm';
 import { WorkspaceNameForm } from '@/components/settings/WorkspaceNameForm';
 import { WorkspaceLogoForm } from '@/components/settings/WorkspaceLogoForm';
 import { BizRequiredToast } from '@/components/settings/BizRequiredToast';
+import { DeleteAccountSection } from '@/components/settings/DeleteAccountSection';
 import { auth } from '@/auth';
 import {
   getUserRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
-import { STATUTORY_CARD_FEE } from '@/lib/types/bid';
-import { formatDate } from '@/lib/format';
+import { LocalDate } from '@/components/primitives/LocalTime';
+import type { ReactNode } from 'react';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 
 export const dynamic = 'force-dynamic';
@@ -44,10 +45,9 @@ export default async function ProfilePage({ searchParams }: Props) {
 
   const biz = ws.bizProfile;
   const grade = biz?.grade;
-  const cardFee = grade && grade !== 'general' ? STATUTORY_CARD_FEE[grade] : null;
   const memberMeta = ws.members.find((m) => m.id === me.id);
 
-  const wsKvPairs: [string, string][] = [
+  const wsKvPairs: [string, ReactNode][] = [
     ...(biz
       ? ([
           [
@@ -59,19 +59,11 @@ export default async function ProfilePage({ searchParams }: Props) {
                 : '면세',
           ],
           ...(grade
-            ? ([
-                ['가맹점 등급', GRADE_LABELS[grade]],
-                [
-                  '카드 (법정)',
-                  cardFee !== null
-                    ? `${(cardFee * 100).toFixed(2)}%`
-                    : '카드사별 협의',
-                ],
-              ] as [string, string][])
+            ? ([['가맹점 등급', GRADE_LABELS[grade]]] as [string, ReactNode][])
             : []),
-        ] as [string, string][])
+        ] as [string, ReactNode][])
       : []),
-    ['생성일', formatDate(ws.createdAt)],
+    ['생성일', <LocalDate key="createdAt" iso={ws.createdAt} />],
   ];
 
   const kvRowClass =
@@ -112,7 +104,7 @@ export default async function ProfilePage({ searchParams }: Props) {
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
           <div className={kvRowClass}>
             <span className={kvLabelClass}>가입일</span>
-            <span className={kvValueClass}>{formatDate(memberMeta?.joinedAt ?? me.joinedAt)}</span>
+            <span className={kvValueClass}><LocalDate iso={memberMeta?.joinedAt ?? me.joinedAt} /></span>
           </div>
         </div>
       </section>
@@ -157,7 +149,7 @@ export default async function ProfilePage({ searchParams }: Props) {
                     role="alert"
                     className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
                   >
-                    제안 생성을 위해 사업자번호 등록이 필요합니다.
+                    사업자번호를 등록하면 견적 요청을 보낼 수 있어요.
                   </p>
                 </>
               )}
@@ -169,6 +161,15 @@ export default async function ProfilePage({ searchParams }: Props) {
             </div>
           )}
         </div>
+      </section>
+
+      {/* 계정 탈퇴 */}
+      <section>
+        <div className="flex items-center gap-3 mb-3">
+          <Label size="md" muted={false}>위험 영역</Label>
+          <div className="flex-1 h-px bg-[var(--md-sys-color-error)]/20" />
+        </div>
+        <DeleteAccountSection />
       </section>
     </PageEnter>
   );

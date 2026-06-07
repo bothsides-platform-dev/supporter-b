@@ -12,7 +12,7 @@
  *   4. any    + `/logout`              → pass-through
  */
 
-export const PUBLIC_PREFIXES = [
+const PUBLIC_PREFIXES = [
   '/login',
   '/signup',
   '/password',
@@ -25,17 +25,18 @@ export const PUBLIC_PREFIXES = [
 // These are NOT subject to the "authenticated user on public page → /home" redirect.
 // /admin is gated by its own JWT check in proxy.ts (not NextAuth).
 // /pending-approval and /suspended are gate states reachable by logged-in users.
-export const ALWAYS_PASSTHROUGH_PREFIXES = [
+const ALWAYS_PASSTHROUGH_PREFIXES = [
   '/admin',
   '/pending-approval',
   '/suspended',
+  '/auth/verify', // 이메일 매직링크는 인증 상태와 무관하게 항상 접근 가능해야 함
 ];
 
-export const CLAIMABLE_PUBLIC_PREFIXES = ['/invite/rfp'];
+const CLAIMABLE_PUBLIC_PREFIXES = ['/invite/rfp'];
 
 // Paths that guests (unauthenticated) may access even though they live outside
 // the (public) route group. Authenticated users pass through too.
-export const GUEST_ACCESSIBLE_PATHS = ['/rfp/new'];
+const GUEST_ACCESSIBLE_PATHS = ['/rfp/new'];
 
 export type RouteDecision =
   | { kind: 'next' }

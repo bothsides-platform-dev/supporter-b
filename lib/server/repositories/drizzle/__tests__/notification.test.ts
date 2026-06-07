@@ -167,3 +167,60 @@ describe('DrizzleNotificationRepository — workspace isolation', () => {
     expect(ws2Rows[0].status).toBe('sent');
   });
 });
+
+describe('DrizzleNotificationRepository — user-level (workspaceId null) notifications', () => {
+  function buildUserLevel(
+    overrides: Partial<Notification> & {
+      userId: string;
+      channel: NotificationChannel;
+    },
+  ): Notification {
+    return {
+      id: randomUUID(),
+      type: 'workspace.invited',
+      title: 't',
+      body: 'b',
+      status: 'sent',
+      createdAt: new Date().toISOString(),
+      workspaceId: null,
+      ...overrides,
+    };
+  }
+
+  it('findRecentForUser: workspaceId가 null인 알림은 어느 워크스페이스로 조회해도 반환된다', async () => {
+    const { db, repo, user, ws } = await setup();
+    const ws2 = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws2.id, user.id);
+
+    await repo.save(buildUserLevel({ userId: user.id, channel: 'inapp' }));
+
+    const rowsWs1 = await repo.findRecentForUser(user.id, ws.id, 10, 'inapp');
+    expect(rowsWs1).toHaveLength(1);
+    expect(rowsWs1[0].workspaceId).toBeNull();
+
+    const rowsWs2 = await repo.findRecentForUser(user.id, ws2.id, 10, 'inapp');
+    expect(rowsWs2).toHaveLength(1);
+    expect(rowsWs2[0].workspaceId).toBeNull();
+  });
+
+  it('findRecentForUser: 다른 유저의 user-level 알림은 반환하지 않는다', async () => {
+    const { db, repo, user, ws } = await setup();
+    const other = await seedUser(db);
+
+    await repo.save(buildUserLevel({ userId: other.id, channel: 'inapp' }));
+
+    const rows = await repo.findRecentForUser(user.id, ws.id, 10, 'inapp');
+    expect(rows).toHaveLength(0);
+  });
+
+  it('markAllRead: user-level(null) 알림도 읽음 처리된다', async () => {
+    const { repo, user, ws } = await setup();
+    await repo.save(buildUserLevel({ userId: user.id, channel: 'inapp', status: 'sent' }));
+
+    await repo.markAllRead(user.id, ws.id);
+
+    const rows = await repo.findRecentForUser(user.id, ws.id, 10, 'inapp');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('read');
+  });
+});

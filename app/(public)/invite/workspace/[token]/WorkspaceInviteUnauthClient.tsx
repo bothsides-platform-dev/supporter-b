@@ -2,40 +2,39 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { signupEmailAction } from '@/lib/server/actions/auth';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 
 type Props = {
   token: string;
   inviteEmail: string;
+  workspaceName: string;
 };
 
-// Unauthenticated workspace-invite landing. Mirrors InviteUnauthClient for RFP
-// invites: writes the workspace token to sessionStorage draft so biz/page.tsx
-// can redirect back to the invite URL after signup completes.
-export function WorkspaceInviteUnauthClient({ token, inviteEmail }: Props) {
+// Unauthenticated workspace-invite landing.
+//
+// 초대 가입 화면은 사실상 타입 무관이다(이메일·비밀번호·이름·전화만 받고
+// 워크스페이스를 만들지 않음 — finalizeSignup 은 wsInviteToken 분기에서
+// workspaceType 을 안 본다). 그래서 모든 초대자를 하나의 invite-aware 가입 흐름
+// (/signup/pg, isInvited 시 중립 문구)으로 보낸다. step 1 이 wsInviteToken 을
+// 감지해 email prefill + lock + workspace 단계 skip 한다.
+//
+// EMAIL_TAKEN/기존 계정 처리: 비인증 landing(page.tsx)이 계정 존재 시 로그인으로
+// 미리 분기(#9)하고, 끝단은 finalizeSignup 의 /login?next= 복구(#8)가 받친다.
+export function WorkspaceInviteUnauthClient({ token, inviteEmail, workspaceName }: Props) {
   const router = useRouter();
 
   useEffect(() => {
-    void (async () => {
-      const draft = readSignupDraft();
-      writeSignupDraft({ ...draft, workspaceType: 'pg', wsInviteToken: token });
+    const draft = readSignupDraft();
+    writeSignupDraft({
+      ...draft,
+      workspaceType: 'pg',
+      wsInviteToken: token,
+      email: inviteEmail,
+      inviteWorkspaceName: workspaceName,
+    });
 
-      const r = await signupEmailAction({ email: inviteEmail, workspaceType: 'pg' });
-
-      const updated = readSignupDraft();
-      if (r.ok) {
-        writeSignupDraft({ ...updated, email: r.email });
-        router.replace('/signup/pg/verify');
-      } else if (r.error === 'EMAIL_TAKEN') {
-        // Existing user — send them to login with a next= redirect back to the invite
-        router.replace(`/login?next=${encodeURIComponent(`/invite/workspace/${token}`)}`);
-      } else {
-        // Other error (rate limit, etc.) — fall back to manual email entry
-        router.replace('/signup/pg');
-      }
-    })();
-  }, [token, inviteEmail, router]);
+    router.replace('/signup/pg');
+  }, [token, inviteEmail, workspaceName, router]);
 
   return (
     <div className="py-8 text-center">

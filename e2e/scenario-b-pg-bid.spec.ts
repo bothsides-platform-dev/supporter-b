@@ -100,41 +100,45 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
       timeout: 15_000,
     });
 
-    // ── 4. Fill the BidForm ──────────────────────────────────────
-    // 정산 주기는 단일 <select value='D+1'> 에서 unit Select(D|W|M) +
-    // 숫자 input 의 조합으로 분리됨. 두 필드를 합쳐 settleCycle = 'D+1'.
-    // BidForm 최상단 첫 <select> 가 unit, 첫 <input type=number> 가 cycleNum.
+    // ── 4. Fill the bid wizard ───────────────────────────────────
+    // 견적 작성은 4단계 위저드(components/inbox/bid-wizard/): 정산조건 →
+    // 수수료 → 견적서 → 검토·발송. 단계 사이는 footer 의 다음 버튼으로 이동한다.
+    // 사이드바에도 같은 라벨의 단계 버튼이 있어(예: '2 수수료') 다음 버튼은
+    // exact 매칭으로 좁힌다(접근명이 정확히 '수수료'/'견적서'/'검토·발송').
+
+    // step1 정산 조건: unit Select(D|W|M) + cycleNum 숫자 input → settleCycle 'D+1'.
     await page.locator('select').first().selectOption('D');
     await page.locator('input[type="number"]').first().fill('1');
+    await page.getByRole('button', { name: '수수료', exact: true }).click();
 
-    // 결제수단별 수수료 — BidForm(components/inbox/BidForm.tsx) 의 02 수수료
-    // 섹션은 구매사가 요청한 결제수단마다 PercentInput(<input type=number
-    // placeholder='0.00'>) 을 직접 렌더한다(체크박스 없음). 보이는 모든 수수료
-    // input 을 채워 유효한 입찰(anyFeeFilled)을 만든다.
-    // (옛 단일 'easyPay'(1.80)/'overseas'(3.00)/bankPct('0.50') 필드는 제거됨.)
+    // step2 수수료: 구매사가 요청한 결제수단마다 PercentInput(placeholder='0.00').
+    // 보이는 모든 수수료 input 을 채워 유효한 입찰(anyFeeFilled)을 만든다.
     const feePctInputs = page.getByPlaceholder('0.00');
     const feeInputs = await feePctInputs.all();
     expect(feeInputs.length).toBeGreaterThan(0);
     for (const feeInput of feeInputs) {
       await feeInput.fill('0.50');
     }
+    await page.getByRole('button', { name: '견적서', exact: true }).click();
 
+    // step3 견적서: 메모(선택) 입력 후 검토 단계로.
     await page
       .getByPlaceholder(/추가 안내 사항이 있으면/)
       .fill('e2e B: D+1, bank 0.5%');
+    await page.getByRole('button', { name: '검토·발송', exact: true }).click();
 
-    // ── 5. Submit ────────────────────────────────────────────────
-    // BidForm 의 제출 버튼은 ConfirmDialog 를 띄우고, 다이얼로그의 '제안 제출'
-    // 확인 버튼이 실제 server action 을 트리거한다. role=dialog 로 좁혀
-    // 같은 라벨의 form 버튼과 충돌하지 않게 한다.
+    // ── 5. Submit (step4 검토·발송) ───────────────────────────────
+    // 발송 버튼은 ConfirmDialog 를 띄우고, 다이얼로그의 '견적 보내기' 확인
+    // 버튼이 실제 server action 을 트리거한다. role=dialog 로 좁혀 같은 라벨의
+    // step 버튼과 충돌하지 않게 한다.
     // 액션 성공 → /inbox/<rfpId>/submitted로 redirect되어야 한다.
     // (server action에서 revalidatePath + client에서 router.push,
     //  router.push + router.refresh 동시 호출은 Next 16 useTransition
     //  hang 패턴이라 금지 — vercel/next.js#86055 참조.)
-    await page.getByRole('button', { name: /^제안 제출$/ }).first().click();
+    await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
     await page
       .getByRole('dialog')
-      .getByRole('button', { name: /제안 제출/ })
+      .getByRole('button', { name: /견적 보내기/ })
       .click();
     await page.waitForURL(new RegExp(`/inbox/${RFP_ID}/submitted$`), {
       timeout: 15_000,
@@ -181,10 +185,10 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     expect(outboxArr[0].c).toBeGreaterThanOrEqual(1);
 
     // /submitted 페이지의 헤딩으로 redirect 후 RSC 렌더링 완료를 검증.
-    // 같은 페이지에 "✓ 제출 완료" 에어브로우 paragraph가 또 있어 strict-mode
+    // 같은 페이지에 "✓ 견적을 보냈어요" 에어브로우 paragraph가 또 있어 strict-mode
     // 위반을 피하려면 heading role로 좁혀야 한다.
     await expect(
-      page.getByRole('heading', { name: /제안이 제출/ }),
+      page.getByRole('heading', { name: /견적을 보냈어요/ }),
     ).toBeVisible();
   });
 });

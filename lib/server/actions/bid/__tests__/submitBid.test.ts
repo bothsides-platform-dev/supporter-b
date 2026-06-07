@@ -2,7 +2,7 @@
 //
 // Coverage:
 //   - canAccess 가드: 초대된 PG 워크스페이스 멤버 누구나 통과
-//   - STATUTORY_CARD_FEE 강제 (advisor pin 1): sme 등급에서 cardFees=null 강제
+//   - 카드 수수료는 등급 무관 협상 입력 — 상한 검증 없이 그대로 저장
 //   - UNIQUE(rfpId, pgWsId) 위반 → BID_ALREADY_SUBMITTED (advisor pin 4)
 //   - bid.submitted 알림 — buyer ws 전 멤버 인앱 + 메일 (advisor pin 6)
 //   - dedupeKey 형식: bid:{rfpId}:{pgWsId}:{userId}
@@ -182,7 +182,7 @@ describe('submitBidAction', () => {
     expect(row.submittedBy).toBe(peer.id);
   });
 
-  it('🚨 STATUTORY_CARD_FEE enforced for sme2 — card fee above cap is rejected', async () => {
+  it('sme2 등급이어도 카드 수수료는 상한 없이 협상 입력으로 저장된다', async () => {
     const s = await seedSetup('sme2');
     sessionRef.value = {
       user: {
@@ -194,17 +194,17 @@ describe('submitBidAction', () => {
       },
     };
 
-    // sme2 cap is 1.25% (0.0125). Submitting 2% must be rejected.
+    // 카드는 법정 고정이 아닌 협상 대상 — sme2에서 2%도 거부 없이 저장된다.
     const r = await submitBidAction({
       rfpId: s.rfpId,
       ...baseInput,
       paymentFees: { card: 0.02 },
     });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('CARD_FEE_EXCEEDS_STATUTORY_CAP');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
 
-    const rows = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
-    expect(rows).toHaveLength(0);
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect((row.paymentFees as { card?: number })?.card).toBe(0.02);
   });
 
   it('null grade (no bizProfile) allows any card fee rate', async () => {

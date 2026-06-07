@@ -1,34 +1,29 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDeadline } from '@/lib/format';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
+import { PG_KANBAN_LABEL, type PgKanbanStage } from '@/lib/server/pg-kanban';
 
-const invStatusLabel: Record<string, string> = {
-  sent: '신규',
-  opened: '신규',
-  accepted: '제출완료',
-  declined: '거절',
-  expired: '만료',
-};
-
-const invStatusColor: Record<string, ChipColor> = {
-  sent: 'warning',
-  opened: 'warning',
-  accepted: 'tertiary',
-  declined: 'error',
-  expired: 'surface',
+// 칩 라벨은 PG 칸반 stage 와 동일 어휘(received→신규 …) — PG_KANBAN_LABEL 재사용.
+const stageColor: Record<PgKanbanStage, ChipColor> = {
+  received: 'warning', // 신규 — 보류/신규
+  submitted: 'tertiary', // 견적 보냄 — 주요 진행
+  won: 'tertiary', // 선정됨 — 성공/완료
+  lost: 'surface', // 미선정 — 중립
 };
 
 export type InboxRow = {
   invitationId: string;
-  invitationStatus: string;
-  /** Domain status of the parent RFP — used by the closed-filter mapping. */
-  rfpStatus: string;
+  /** Bid-aware PG kanban stage (classifyPgInvitation) — 필터·칩·행동의 단일 기준. */
+  stage: PgKanbanStage;
+  /** 제출된 bid id (있으면 "보낸 견적" 링크 노출). received 단계는 비어 있음. */
+  bidId?: string;
   rfpId: string;
   rfpTitle: string;
   rfpDeadline: string;
@@ -69,6 +64,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
             <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">등급</th>
             <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">마감</th>
             <th className="px-3 py-3 text-right font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">상태</th>
+            <th className="px-3 py-3 text-right font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">행동</th>
           </tr>
         </thead>
         <tbody>
@@ -100,9 +96,28 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                 </td>
                 <td className="px-3 py-4 text-right">
                   <Chip
-                    label={invStatusLabel[row.invitationStatus] ?? row.invitationStatus}
-                    color={invStatusColor[row.invitationStatus] ?? 'surface'}
+                    label={PG_KANBAN_LABEL[row.stage]}
+                    color={stageColor[row.stage]}
                   />
+                </td>
+                <td className="px-3 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                  {row.stage === 'received' ? (
+                    <Link
+                      href={`/inbox/${row.rfpId}`}
+                      className="inline-flex items-center rounded-[6px] bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-[12px] font-medium text-[var(--md-sys-color-on-primary)] hover:opacity-90 transition-opacity"
+                    >
+                      견적 작성
+                    </Link>
+                  ) : row.bidId ? (
+                    <Link
+                      href={`/inbox/${row.rfpId}/submitted`}
+                      className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+                    >
+                      보낸 견적
+                    </Link>
+                  ) : (
+                    <span className="font-mono text-[11px] text-[var(--md-sys-color-outline)]">—</span>
+                  )}
                 </td>
               </tr>
             );
@@ -127,6 +142,7 @@ export function InboxListSkeleton() {
             <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
             <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
             <th className="px-3 py-3 text-right"><Skeleton className="h-2 w-8 ml-auto" /></th>
+            <th className="px-3 py-3 text-right"><Skeleton className="h-2 w-10 ml-auto" /></th>
           </tr>
         </thead>
         <tbody>
@@ -138,6 +154,9 @@ export function InboxListSkeleton() {
               <td className="px-3 py-4"><Skeleton className="h-3 w-16" /></td>
               <td className="px-3 py-4 text-right">
                 <Skeleton className="h-5 w-14 rounded-full ml-auto" />
+              </td>
+              <td className="px-3 py-4 text-right">
+                <Skeleton className="h-7 w-16 rounded-[6px] ml-auto" />
               </td>
             </tr>
           ))}

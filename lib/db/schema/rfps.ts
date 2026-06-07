@@ -2,6 +2,7 @@ import {
   pgTable,
   uuid,
   text,
+  boolean,
   timestamp,
   jsonb,
   check,
@@ -39,6 +40,8 @@ export const rfps = pgTable(
     currentFeeRate: text('current_fee_rate'),
     currentSettlementLimit: text('current_settlement_limit'),
     currentGuaranteeInsurance: text('current_guarantee_insurance'),
+    currentSettlementCycle: text('current_settlement_cycle'),
+    deliveryServicePeriod: text('delivery_service_period'),
     currentSolution: text('current_solution'),
     currentSolutionDetail: text('current_solution_detail'),
     deadline: timestamp('deadline', { withTimezone: true }).notNull(),
@@ -67,6 +70,9 @@ export const rfps = pgTable(
     requiredPaymentMethods: text('required_payment_methods').array().notNull().default([]),
     // 구매사 직접입력 커스텀 결제수단: [{ id, label }] (id는 서버가 발급). PG는 이 id로 customFees 제출.
     customPaymentMethods: jsonb('custom_payment_methods').notNull().default(sql`'[]'::jsonb`),
+    // 오픈 RFP 게시판 노출 여부 (opt-out). 기본 true = 노출. 구매사가 끄면 PG
+    // 게시판/홈 탐색에서 사라진다. default true ⇒ 기존 행 백필 시 모두 노출.
+    boardVisible: boolean('board_visible').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
     sentAt: timestamp('sent_at', { withTimezone: true }),

@@ -1,8 +1,8 @@
 /**
  * `canAccessAttachment` — single source of truth for file route ACLs.
  *
- * Ownership is exclusive-arc (C3): an attachment carries at most one of
- * rfpId / bidId / bidNoteId. Rules per owner column:
+ * Ownership is exclusive-arc (C4): an attachment carries at most one of
+ * rfpId / bidId / bidNoteId / chatMessageId. Rules per owner column:
  *
  *   `rfpId` set (RFP PDFs attached to a buyer-side RFP)
  *     - Buyer ws members of the RFP owner: ALLOW
@@ -21,6 +21,12 @@
  *     - Uploader themselves: ALLOW
  *     - **All PG users: DENY** — notes are internal to the buyer.
  *
+ *   `chatMessageId` set (attachment sent in a chat conversation)
+ *     - Buyer ws members of the conversation: ALLOW
+ *     - PG ws members of the conversation: ALLOW
+ *     - Uploader themselves: ALLOW (via top-level fast-path)
+ *     - Otherwise: DENY
+ *
  *   None set (draft, uploaded before its owner row exists)
  *     - Only the uploader: ALLOW
  *
@@ -28,7 +34,7 @@
  * read another PG's proposal even if invited to the same RFP.
  */
 import { eq } from 'drizzle-orm';
-import { bidNotes, bids, rfps } from '@/lib/db/schema';
+import { bidNotes, bids, chatConversations, chatMessages, rfps } from '@/lib/db/schema';
 import type { AttachmentRecord } from '@/lib/server/repositories/attachment-record';
 import type { InvitationRepo, WorkspaceRepo, Tx } from '@/lib/server/repositories/types';
 
@@ -133,6 +139,27 @@ export async function canAccessAttachment(
     if (!rfpRow) return false;
     if (wsId && rfpRow.buyerWsId === wsId && (await isMember(wsId))) return true;
     return false;
+  }
+
+  if (att.chatMessageId) {
+    // chat attachment — both workspace sides of the conversation can read it.
+    const [msgRow] = await h
+      .select({ conversationId: chatMessages.conversationId })
+      .from(chatMessages)
+      .where(eq(chatMessages.id, att.chatMessageId))
+      .limit(1);
+    if (!msgRow) return false;
+
+    const [conv] = await h
+      .select({ buyerWsId: chatConversations.buyerWsId, pgWsId: chatConversations.pgWsId })
+      .from(chatConversations)
+      .where(eq(chatConversations.id, msgRow.conversationId))
+      .limit(1);
+    if (!conv) return false;
+
+    if (!wsId) return false;
+    if (conv.buyerWsId !== wsId && conv.pgWsId !== wsId) return false;
+    return isMember(wsId);
   }
 
   // Draft with no owner linked — only the uploader (handled above) may read.

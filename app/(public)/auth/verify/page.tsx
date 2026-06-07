@@ -6,20 +6,15 @@ import Link from 'next/link';
 import { ResendCountdown } from '@/components/auth/ResendCountdown';
 import { EnvelopeSvg } from '@/components/auth/EnvelopeSvg';
 import { verifyEmailAction } from '@/lib/server/actions/auth';
-import {
-  readSignupDraft,
-  writeSignupDraft,
-} from '@/lib/auth/signup-storage';
+import { readSignupDraft } from '@/lib/auth/signup-storage';
 
-type TokenState = 'loading' | 'success' | 'expired' | 'invalid' | 'used';
+type TokenState = 'loading' | 'expired';
 
 // `/auth/verify` is bivalent:
-//   - `?token=…` → consume the verification row (P4). Success redirects to
-//     /signup/profile carrying email + emailVerified + (optional) inviteToken
-//     in sessionStorage.
-//   - `?email=…` (no token) → "we sent the link" announcement (P3). This
-//     replaces the old /signup/verify shell; that route still exists as a
-//     redirect for back-compat and is marked for deletion in Step 13.
+//   - `?token=…` → consume the verification row and redirect to /pending-approval.
+//     로그인 상태면 ApprovalWaitingScreen 을 바로 볼 수 있고, 미로그인(다른 기기)이면
+//     미들웨어가 /login 으로 안내한다. 실패 시 만료/오류 화면을 렌더.
+//   - `?email=…` (no token) → "we sent the link" announcement.
 function VerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,29 +34,14 @@ function VerifyContent() {
     (async () => {
       const r = await verifyEmailAction(token);
       if (cancelled) return;
-      if (!r.ok) {
-        // Best-effort classification — the action returns a single error
-        // for invalid/expired/used, so visually fold into 'expired'.
+      if (r.ok) {
+        // 인증 완료 — 같은 탭·다른 탭 모두 /pending-approval 로 이동.
+        // 로그인 상태면 이메일 인증 완료 후 ApprovalWaitingScreen 을 바로 볼 수 있고,
+        // 미로그인 상태(다른 기기)면 미들웨어가 /login 으로 안내한다.
+        router.push('/pending-approval');
+      } else {
         setState('expired');
-        return;
       }
-      const draft = readSignupDraft();
-      const kind = r.workspaceType ?? draft.workspaceType ?? 'buyer';
-      writeSignupDraft({
-        ...draft,
-        email: r.email,
-        emailVerified: true,
-        workspaceType: kind,
-        // inviteToken is the only payload that flows from the verify-row's
-        // meta back into the client-side draft; sessionStorage keeps it
-        // alive until /signup/workspace consumes it.
-        inviteToken: r.inviteToken ?? draft.inviteToken,
-      });
-      setState('success');
-      // 새 흐름: 이메일 인증을 마지막(step 4)으로 이동.
-      // emailVerified=true 를 draft 에 기록하고 verify 페이지로 돌아가면
-      // 해당 페이지가 draft.emailVerified 를 감지해 자동으로 완료 처리.
-      setTimeout(() => router.push(`/signup/${kind}/verify`), 600);
     })();
 
     return () => {
@@ -110,9 +90,6 @@ function VerifyContent() {
   if (state === 'loading') {
     return <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)] text-center">LOADING…</p>;
   }
-  if (state === 'success') {
-    return <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-[var(--md-sys-color-tertiary)] text-center">인증 완료. 이동 중…</p>;
-  }
   if (state === 'expired') {
     return (
       <div className="space-y-4 text-center">
@@ -121,20 +98,7 @@ function VerifyContent() {
       </div>
     );
   }
-  if (state === 'used') {
-    return (
-      <div className="space-y-4 text-center">
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">이미 사용된 링크입니다.</p>
-        <Link href="/login" className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--md-sys-color-on-surface)]">로그인 →</Link>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-4 text-center">
-      <p className="text-[13px] text-[var(--md-sys-color-error)]">잘못된 링크입니다.</p>
-      <Link href="/login" className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--md-sys-color-on-surface)]">로그인 →</Link>
-    </div>
-  );
+  return null;
 }
 
 export default function AuthVerifyPage() {

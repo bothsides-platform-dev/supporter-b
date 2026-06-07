@@ -1,10 +1,10 @@
 'use client';
 
-import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
-import { markNotificationReadAction } from '@/lib/server/actions/notifications/markNotificationReadAction';
+import { useNotifications } from '@/lib/hooks/useNotifications';
+import { LocalTime } from '@/components/primitives/LocalTime';
 import type { Notification, NotificationStatus } from '@/lib/types/notification';
 
 const statusColor: Record<NotificationStatus, ChipColor> = {
@@ -21,17 +21,13 @@ const statusLabel: Record<NotificationStatus, string> = {
   read: '읽음',
 };
 
-function fmtDateTime(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
 
 export function NotificationActivityList({ items }: { items: Notification[] }) {
   if (items.length === 0) {
     return (
       <div className="py-16 text-center">
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          아직 받은 알림이 없습니다.
+          알림이 오면 여기에 표시돼요.
         </p>
       </div>
     );
@@ -54,22 +50,20 @@ function NotificationRow({
   indexFromEnd: number;
 }) {
   const router = useRouter();
-  const [pending, start] = useTransition();
+  const { markRead } = useNotifications();
   const hasLink = Boolean(notif.linkUrl);
   const isUnread = notif.status !== 'read';
 
   const navigate = () => {
     if (notif.status !== 'read') {
-      void markNotificationReadAction({ notificationId: notif.id });
+      void markRead(notif.id);
     }
     if (notif.linkUrl) router.push(notif.linkUrl);
   };
 
-  const markReadInPlace = () =>
-    start(async () => {
-      await markNotificationReadAction({ notificationId: notif.id });
-      router.refresh();
-    });
+  const markReadInPlace = () => {
+    void markRead(notif.id).then(() => router.refresh());
+  };
 
   const body = (
     <>
@@ -90,7 +84,7 @@ function NotificationRow({
         </p>
         <div className="mt-2 flex items-center gap-3">
           <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)]">
-            {fmtDateTime(notif.createdAt)}
+            <LocalTime iso={notif.createdAt} />
           </span>
         </div>
       </div>
@@ -99,14 +93,13 @@ function NotificationRow({
         {!hasLink && isUnread && (
           <button
             type="button"
-            disabled={pending}
             onClick={(e) => {
               e.stopPropagation();
               markReadInPlace();
             }}
-            className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors disabled:opacity-50"
+            className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
           >
-            {pending ? '처리 중…' : '읽음 처리'}
+            읽음 처리
           </button>
         )}
       </div>

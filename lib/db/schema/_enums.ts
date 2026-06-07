@@ -35,6 +35,13 @@ export const invitationStatusEnum = pgEnum('invitation_status', [
 ]);
 export const bidStatusEnum = pgEnum('bid_status', ['draft', 'submitted', 'withdrawn']);
 
+// 비초대 PG가 오픈 게시판에서 보낸 참여 요청(콜드 피치)의 상태.
+export const pgRequestStatusEnum = pgEnum('pg_request_status', [
+  'pending',
+  'accepted',
+  'rejected',
+]);
+
 export const notificationStatusEnum = pgEnum('notification_status', [
   'queued',
   'sent',
@@ -61,6 +68,8 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'rfp.awarded',
   'workspace.invited',
   'workspace.approved',
+  'workspace.rejected',
+  'chat.message',
 ]);
 
 export const workspaceInvitationStatusEnum = pgEnum('workspace_invitation_status', [

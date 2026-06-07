@@ -5,7 +5,6 @@ import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { PgRfpDetailContent } from '@/components/inbox/PgRfpDetailContent';
-import { BackButton } from '@/components/primitives/BackButton';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 
 type Props = { params: Promise<{ rfpId: string }> };
@@ -24,9 +23,6 @@ export default async function InboxDetailPage({ params }: Props) {
   return (
     <div className="px-8 py-8">
       <MarkInboxViewed rfpId={rfpCode} />
-      <div className="mb-6">
-        <BackButton />
-      </div>
       <Suspense fallback={<PgRfpDetailContent.Skeleton />}>
         <PgRfpDetailLoader rfpCode={rfpCode} wsId={session.user.workspaceId} />
       </Suspense>
@@ -43,5 +39,5 @@ async function PgRfpDetailLoader({
 }) {
   const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: wsId });
   if (!data) notFound();
-  return <PgRfpDetailContent data={data} />;
+  return <PgRfpDetailContent data={data} variant="full" />;
 }

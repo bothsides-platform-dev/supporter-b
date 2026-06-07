@@ -34,17 +34,25 @@ function LoginContent() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Lock anchor returned by the server (authoritative). The client localStorage
+  // tracker below is only a UX hint — the real lock lives server-side, so when
+  // loginAction reports LOCKED we trust its lockedUntil even if the client
+  // counter is nowhere near the threshold (cleared storage, another device, or
+  // an IP-level lock triggered by other accounts).
+  const [serverLockUntil, setServerLockUntil] = useState<number | null>(null);
   // React 19 strict purity rules forbid Date.now() in the render body, so the
   // clock is pulled from state and bumped on each tick / after every failure.
   // The lazy initializer keeps SSR/CSR boundary clean.
   const [now, setNow] = useState<number>(() => Date.now());
 
   const attempts = getState(email, undefined, now);
-  const locked =
-    attempts.lockedUntilTs !== null && now < attempts.lockedUntilTs;
-  const remainingMs = locked
-    ? (attempts.lockedUntilTs as number) - now
-    : 0;
+  // Effective lock = the later of the client hint and the server's anchor.
+  const lockUntilTs = Math.max(
+    attempts.lockedUntilTs ?? 0,
+    serverLockUntil ?? 0,
+  ) || null;
+  const locked = lockUntilTs !== null && now < lockUntilTs;
+  const remainingMs = locked ? (lockUntilTs as number) - now : 0;
 
   useEffect(() => {
     if (!locked) return;
@@ -60,6 +68,13 @@ function LoginContent() {
     const r = await loginAction({ email, password });
     setSubmitting(false);
     if (!r.ok) {
+      // Server says we're locked — adopt its anchor and stop here (don't also
+      // bump the client counter; the server is the source of truth).
+      if (r.error === 'LOCKED' && r.lockedUntil) {
+        setServerLockUntil(new Date(r.lockedUntil).getTime());
+        setNow(Date.now());
+        return;
+      }
       const after = recordFailure(email);
       setNow(Date.now());
       if (after.lockedUntilTs !== null) {
@@ -67,7 +82,7 @@ function LoginContent() {
           `로그인 시도가 ${LOCK_THRESHOLD}회 초과되어 15분간 잠겼습니다.`,
         );
       } else {
-        setError('이메일 또는 비밀번호가 일치하지 않습니다.');
+        setError('이메일 또는 비밀번호를 확인해요.');
       }
       return;
     }
@@ -137,7 +152,7 @@ function LoginContent() {
             className="border border-[var(--md-sys-color-error)] rounded-[8px] p-3 space-y-1"
           >
             <p className="text-[12px] text-[var(--md-sys-color-error)]">
-              로그인이 잠겼습니다. 잠시 후 다시 시도해주세요.
+              로그인이 잠겼어요. 잠시 후 다시 시도해요.
             </p>
             <p className="font-mono tabular-nums text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
               남은 시간 {formatRemaining(remainingMs)}
@@ -166,7 +181,7 @@ function LoginContent() {
           href="/password/forgot"
           className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
-          비밀번호를 잊으셨나요?
+          비밀번호를 잊었어요?
         </Link>
         <Link
           href="/signup"

@@ -1,8 +1,10 @@
 // components/rfp/__tests__/WizardStepSidebar.test.tsx
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WizardStepSidebar } from '../WizardStepSidebar';
+
+afterEach(cleanup);
 
 describe('WizardStepSidebar', () => {
   it('4개 단계 레이블을 모두 렌더한다', () => {
@@ -14,9 +16,9 @@ describe('WizardStepSidebar', () => {
       />,
     );
     expect(screen.getByText('사업자 확인')).toBeInTheDocument();
-    expect(screen.getByText('제안 내용')).toBeInTheDocument();
+    expect(screen.getByText('견적 내용')).toBeInTheDocument();
     expect(screen.getByText('PG 선택')).toBeInTheDocument();
-    expect(screen.getByText('발송 확인')).toBeInTheDocument();
+    expect(screen.getByText('보내기 확인')).toBeInTheDocument();
   });
 
   it('완료된 step(현재 step 아님)은 ✓를 표시한다 — 위치가 아니라 입력 기준', () => {
@@ -53,7 +55,7 @@ describe('WizardStepSidebar', () => {
         onStepClick={onStepClick}
       />,
     );
-    await user.click(screen.getByText('발송 확인'));
+    await user.click(screen.getByText('보내기 확인'));
     expect(onStepClick).toHaveBeenCalledWith(4);
   });
 
@@ -84,7 +86,62 @@ describe('WizardStepSidebar', () => {
     // PG 선택(3), 발송 확인(4) 모두 미완료여도 클릭 가능
     await user.click(screen.getByText('PG 선택'));
     expect(onStepClick).toHaveBeenCalledWith(3);
-    await user.click(screen.getByText('발송 확인'));
+    await user.click(screen.getByText('보내기 확인'));
     expect(onStepClick).toHaveBeenCalledWith(4);
+  });
+
+  it('기본값: 구매사 단계 라벨 + 제목을 렌더', () => {
+    render(<WizardStepSidebar currentStep={1} completed={[false, false, false, false]} onStepClick={vi.fn()} />);
+    expect(screen.getByText('새 견적 요청')).toBeInTheDocument();
+    expect(screen.getByText('사업자 확인')).toBeInTheDocument();
+  });
+
+  it('steps·title prop으로 견적 작성 단계를 렌더', () => {
+    render(
+      <WizardStepSidebar
+        currentStep={2}
+        completed={[true, false, false, false]}
+        onStepClick={vi.fn()}
+        steps={[
+          { num: 1, label: '정산 조건' },
+          { num: 2, label: '수수료' },
+        ]}
+        title="견적 작성"
+      />,
+    );
+    expect(screen.getByText('견적 작성')).toBeInTheDocument();
+    expect(screen.getByText('수수료')).toBeInTheDocument();
+    expect(screen.queryByText('사업자 확인')).not.toBeInTheDocument();
+  });
+
+  it('footer prop을 하단에 렌더한다', () => {
+    render(
+      <WizardStepSidebar
+        currentStep={1}
+        completed={[false, false]}
+        onStepClick={vi.fn()}
+        steps={[{ num: 1, label: '정산 조건' }, { num: 2, label: '수수료' }]}
+        title="견적 작성"
+        footer={<span>자동저장됨</span>}
+      />,
+    );
+    expect(screen.getByText('자동저장됨')).toBeInTheDocument();
+  });
+
+  it('className prop을 nav 요소에 병합해 적용한다', () => {
+    render(
+      <WizardStepSidebar
+        currentStep={1}
+        completed={[false, false, false, false]}
+        onStepClick={vi.fn()}
+        className="sticky top-0 self-start border-r-0"
+      />,
+    );
+    const nav = screen.getByRole('navigation');
+    expect(nav).toHaveClass('sticky', 'top-0', 'self-start');
+    // twMerge로 기존 border-r가 border-r-0에 의해 제거된다 (정확히 'border-r' 토큰만 검사)
+    const tokens = nav.className.split(/\s+/);
+    expect(tokens).not.toContain('border-r');
+    expect(tokens).toContain('border-r-0');
   });
 });

@@ -7,12 +7,14 @@
 import {
   getAttachmentRepo,
   getBidNoteRepo,
+  getBidQuoteTemplateRepo,
   getBidRepo,
   getInvitationRepo,
+  getPgRequestRepo,
   getRfpRepo,
   getWorkspaceRepo,
 } from './repositories/factory';
-import { baseUrl } from './actions/auth/_shared';
+import type { QuoteTemplateOption } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
@@ -29,8 +31,9 @@ export type BuyerRfpDetailData = {
   companyName: string;
   inviteList: { wsId: string; wsName: string; status: InvitationStatus }[];
   pgWsNameMap: Record<string, string>;
+  /** 오픈 게시판에서 들어온 미결(pending) 참여 요청 — 구매사 검토용. */
+  pendingRequests: { id: string; pgWsId: string; pgWsName: string; message: string; createdAt: string }[];
   canEdit: boolean;
-  shareUrl: string;
   authorId: string;
   authorName: string;
 };
@@ -39,17 +42,12 @@ export type PgRfpDetailData = {
   rfp: RFP;
   /** 본인 워크스페이스가 이미 제출한 입찰(있으면). */
   myBid: Bid | undefined;
+  /** 구매사 워크스페이스 상호명 (workspaces.name). */
+  buyerName: string;
+  /** 본 PG 워크스페이스 공유 견적 템플릿 — BidForm 불러오기용(요율표). */
+  quoteTemplates: QuoteTemplateOption[];
 };
 
-export type BuyerAwardData = {
-  rfp: RFP;
-  /** 수주 대상 입찰. */
-  selected: Bid;
-  /** 나머지 제출 입찰(비교용). */
-  others: Bid[];
-  pgWsNameById: Record<string, string>;
-  buyerWorkspaceName: string;
-};
 
 /**
  * 구매사 상세 데이터. 소유하지 않거나 없는 RFP면 null(→ page 가 not-found UI).
@@ -110,8 +108,24 @@ export async function loadBuyerRfpDetail(args: {
     status: invByWsId.get(wsId) ?? ('draft' as InvitationStatus),
   }));
 
+  // 오픈 게시판 콜드 피치 — pending 만 검토 목록에 노출. PG 상호명 hydrate.
+  const allRequests = await (await getPgRequestRepo()).findByRfp(rfp.id);
+  const pendingReqRows = allRequests.filter((r) => r.status === 'pending');
+  const reqWsIds = Array.from(new Set(pendingReqRows.map((r) => r.pgWsId)));
+  const reqWorkspaces = await Promise.all(reqWsIds.map((id) => wsRepo.findById(id)));
+  const reqNameMap: Record<string, string> = {};
+  reqWorkspaces.forEach((w, i) => {
+    if (w) reqNameMap[reqWsIds[i]] = w.name;
+  });
+  const pendingRequests = pendingReqRows.map((r) => ({
+    id: r.id,
+    pgWsId: r.pgWsId,
+    pgWsName: reqNameMap[r.pgWsId] ?? r.pgWsId,
+    message: r.message,
+    createdAt: r.createdAt,
+  }));
+
   const canEdit = rfp.status === 'sent' && new Date(rfp.deadline).getTime() > Date.now();
-  const shareUrl = rfp.shareToken ? `${baseUrl()}/share/rfp/${rfp.shareToken}` : '';
 
   return {
     rfp,
@@ -121,8 +135,8 @@ export async function loadBuyerRfpDetail(args: {
     companyName,
     inviteList,
     pgWsNameMap,
+    pendingRequests,
     canEdit,
-    shareUrl,
     authorId: args.userId,
     authorName: args.userName,
   };
@@ -160,43 +174,23 @@ export async function loadPgRfpDetail(args: {
     (b) => b.pgWsId === args.workspaceId && b.status === 'submitted',
   );
 
-  return { rfp, myBid };
-}
-
-/**
- * 수주 확정 화면 데이터. 소유하지 않거나 선택 입찰(bidId)을 못 찾으면 null.
- * 전체 페이지(app/(app)/rfp/[id]/award)가 사용.
- */
-export async function loadBuyerAwardData(args: {
-  code: string;
-  workspaceId: string;
-  bidId: string | undefined;
-}): Promise<BuyerAwardData | null> {
-  const rfp = await (await getRfpRepo()).findByCode(args.code);
-  if (!rfp || rfp.buyerWsId !== args.workspaceId) return null;
-
-  const allBids = (await (await getBidRepo()).findByRfp(rfp.id)).filter(
-    (b) => b.status === 'submitted',
-  );
-  const selected = args.bidId ? allBids.find((b) => b.id === args.bidId) : undefined;
-  if (!selected) return null;
-
-  const others = allBids.filter((b) => b.id !== selected.id);
-
+  // 구매사 상호명 — RfpBriefPanel 에 표시.
   const wsRepo = await getWorkspaceRepo();
-  const pgWsIds = Array.from(new Set(allBids.map((b) => b.pgWsId)));
-  const pgWsNameById: Record<string, string> = {};
-  for (const wsId of pgWsIds) {
-    const ws = await wsRepo.findById(wsId);
-    if (ws) pgWsNameById[wsId] = ws.name;
-  }
   const buyerWs = await wsRepo.findById(rfp.buyerWsId);
+  const buyerName = buyerWs?.name ?? '—';
 
-  return {
-    rfp,
-    selected,
-    others,
-    pgWsNameById,
-    buyerWorkspaceName: buyerWs?.name ?? '—',
-  };
+  // 본 PG 워크스페이스 공유 견적 템플릿(요율표) — 폼 채우기용 직렬화 부분집합.
+  const templates = await (await getBidQuoteTemplateRepo()).listByWorkspace(
+    args.workspaceId,
+  );
+  const quoteTemplates: QuoteTemplateOption[] = templates.map((t) => ({
+    id: t.id,
+    name: t.name,
+    settleCycle: t.settleCycle,
+    settleLimit: t.settleLimit,
+    guaranteeInsurance: t.guaranteeInsurance,
+    paymentFees: t.paymentFees,
+  }));
+
+  return { rfp, myBid, buyerName, quoteTemplates };
 }

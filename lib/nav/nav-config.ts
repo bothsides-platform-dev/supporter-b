@@ -55,11 +55,11 @@ const STATUS_LABELS = {
   '/rfp': {
     active: '진행중',
     closed: '마감',
-    awarded: '계약완료',
+    awarded: '선정 완료',
   },
   '/inbox': {
     new: '신규',
-    submitted: '제출완료',
+    submitted: '견적 보냄',
     closed: '마감',
   },
 } as const;
@@ -76,7 +76,7 @@ function statusItems(base: '/rfp' | '/inbox'): NavStatusItem[] {
 
 const RFP_SECTION: NavSection = {
   id: 'rfp',
-  label: 'RFP',
+  label: '견적 요청',
   href: '/rfp',
   base: '/rfp',
   icon: FileTextIcon,
@@ -85,7 +85,7 @@ const RFP_SECTION: NavSection = {
   links: [
     {
       id: 'rfp-new',
-      label: '새 RFP',
+      label: '새 견적 요청',
       href: '/rfp/new',
       // G then C (Create). Replaces ⌘N, which the browser claims for "new window".
       shortcut: { kind: 'chord', lead: 'g', key: 'c' },
@@ -95,12 +95,21 @@ const RFP_SECTION: NavSection = {
 
 const INBOX_SECTION: NavSection = {
   id: 'inbox',
-  label: '받은 RFP',
+  label: '받은 견적 요청',
   href: '/inbox',
   base: '/inbox',
   icon: InboxIcon,
   shortcut: { kind: 'chord', lead: 'g', key: 'i' },
   statuses: statusItems('/inbox'),
+  links: [
+    {
+      id: 'opportunities',
+      label: '참여 가능한 견적',
+      href: '/opportunities',
+      // G then O (Opportunities) — h/n/m/i/s/p/t/1-3 are taken for pg.
+      shortcut: { kind: 'chord', lead: 'g', key: 'o' },
+    },
+  ],
 };
 
 const SETTINGS_SECTION: NavSection = {
@@ -152,13 +161,83 @@ const MESSAGES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'm' },
 };
 
+// 견적 템플릿(요율표)은 PG 전용 — 구매사 설정에는 노출하지 않는다.
+const QUOTE_TEMPLATES_LINK: NavLeaf = {
+  id: 'settings-quote-templates',
+  label: '견적 템플릿',
+  href: '/settings/quote-templates',
+  shortcut: { kind: 'chord', lead: 'g', key: 'q' },
+};
+
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : INBOX_SECTION;
+  const settingsSection: NavSection =
+    workspaceType === 'pg'
+      ? {
+          ...SETTINGS_SECTION,
+          links: [...(SETTINGS_SECTION.links ?? []), QUOTE_TEMPLATES_LINK],
+        }
+      : SETTINGS_SECTION;
 
   return {
     top: [HOME, NOTIFICATIONS, MESSAGES],
-    sections: [workspaceSection, SETTINGS_SECTION],
+    sections: [workspaceSection, settingsSection],
   };
+}
+
+// A single navigable destination for the command palette (Cmd+K). Flattened
+// from the nav tree so the palette never re-declares routes — nav-config stays
+// the single source of truth.
+export type NavCommand = {
+  id: string;
+  label: string;
+  href: string;
+  shortcut?: NavShortcut;
+};
+
+// Flatten the workspace-scoped nav tree (top items + workspace section + its
+// statuses/links + settings links) into a flat command list. A section's base
+// is emitted only when it isn't already one of that section's links — so
+// /settings (an alias for the profile link) doesn't double-emit, while /rfp
+// (a distinct list page) does. Deduped by href as a safety net.
+export function getNavCommands(workspaceType: WorkspaceType): NavCommand[] {
+  const { top, sections } = getNavConfig(workspaceType);
+  const out: NavCommand[] = [];
+  const seen = new Set<string>();
+  const push = (cmd: NavCommand) => {
+    if (seen.has(cmd.href)) return;
+    seen.add(cmd.href);
+    out.push(cmd);
+  };
+
+  for (const item of top) {
+    push({ id: item.id, label: item.label, href: item.href, shortcut: item.shortcut });
+  }
+
+  for (const section of sections) {
+    const linkHrefs = new Set((section.links ?? []).map((l) => l.href));
+    if (!linkHrefs.has(section.href)) {
+      push({
+        id: section.id,
+        label: section.label,
+        href: section.href,
+        shortcut: section.shortcut,
+      });
+    }
+    for (const s of section.statuses ?? []) {
+      push({
+        id: `${section.id}-${s.status}`,
+        label: `${section.label} · ${s.label}`,
+        href: `${section.base}?status=${s.status}`,
+        shortcut: s.shortcut,
+      });
+    }
+    for (const link of section.links ?? []) {
+      push({ id: link.id, label: link.label, href: link.href, shortcut: link.shortcut });
+    }
+  }
+
+  return out;
 }
 
 // One breadcrumb segment. The current page (last segment) has no `href`; every
@@ -174,19 +253,23 @@ export function getBreadcrumbSegments(
   if (pathname === '/home') return [{ label: '홈' }];
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
+  if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp') {
     const label = status ? STATUS_LABELS['/rfp'][status as keyof typeof STATUS_LABELS['/rfp']] : undefined;
-    return label ? [{ label: 'RFP', href: '/rfp' }, { label }] : [{ label: 'RFP' }];
+    return label ? [{ label: '견적 요청', href: '/rfp' }, { label }] : [{ label: '견적 요청' }];
   }
   if (pathname === '/inbox') {
     const label = status ? STATUS_LABELS['/inbox'][status as keyof typeof STATUS_LABELS['/inbox']] : undefined;
-    return label ? [{ label: '받은 RFP', href: '/inbox' }, { label }] : [{ label: '받은 RFP' }];
+    return label ? [{ label: '받은 견적 요청', href: '/inbox' }, { label }] : [{ label: '받은 견적 요청' }];
   }
   if (pathname === '/settings/profile') {
     return [{ label: '설정', href: '/settings/profile' }, { label: '프로필' }];
   }
   if (pathname === '/settings/members') {
     return [{ label: '설정', href: '/settings/profile' }, { label: '멤버' }];
+  }
+  if (pathname === '/settings/quote-templates') {
+    return [{ label: '설정', href: '/settings/profile' }, { label: '견적 템플릿' }];
   }
   return [];
 }

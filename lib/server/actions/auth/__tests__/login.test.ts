@@ -79,4 +79,48 @@ describe('loginAction', () => {
     expect(r.ok).toBe(false);
     expect(signInMock).not.toHaveBeenCalled();
   });
+
+  it('locks the account after 10 failed attempts and stops calling signIn', async () => {
+    signInMock.mockRejectedValue(authError('CredentialsSignin'));
+    for (let i = 0; i < 10; i++) {
+      await loginAction({ email: 'brute@example.com', password: 'wrong' });
+    }
+    expect(signInMock).toHaveBeenCalledTimes(10);
+
+    const locked = await loginAction({ email: 'brute@example.com', password: 'wrong' });
+    expect(locked.ok).toBe(false);
+    if (!locked.ok) expect(locked.error).toBe('LOCKED');
+    // The lock short-circuits before bcrypt/signIn.
+    expect(signInMock).toHaveBeenCalledTimes(10);
+  });
+
+  it('does not count unexpected (non-credential) errors toward the lock', async () => {
+    signInMock.mockRejectedValue(new Error('db connection refused'));
+    for (let i = 0; i < 12; i++) {
+      const r = await loginAction({ email: 'flaky@example.com', password: 'Password123!' });
+      // Never reports LOCKED — DB outages must not lock real users out.
+      if (!r.ok) expect(r.error).toBe('INVALID_CREDENTIALS');
+    }
+    expect(signInMock).toHaveBeenCalledTimes(12);
+  });
+
+  it('a successful login clears the failure streak', async () => {
+    signInMock.mockRejectedValue(authError('CredentialsSignin'));
+    for (let i = 0; i < 9; i++) {
+      await loginAction({ email: 'reset@example.com', password: 'wrong' });
+    }
+    // Success resets the counter.
+    signInMock.mockResolvedValue(undefined);
+    const ok = await loginAction({ email: 'reset@example.com', password: 'Password123!' });
+    expect(ok.ok).toBe(true);
+
+    // Now 9 more failures must NOT lock (streak was reset to 0).
+    signInMock.mockRejectedValue(authError('CredentialsSignin'));
+    let last;
+    for (let i = 0; i < 9; i++) {
+      last = await loginAction({ email: 'reset@example.com', password: 'wrong' });
+    }
+    expect(last!.ok).toBe(false);
+    if (!last!.ok) expect(last!.error).toBe('INVALID_CREDENTIALS');
+  });
 });
