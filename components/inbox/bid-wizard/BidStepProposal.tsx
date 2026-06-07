@@ -43,7 +43,7 @@ export function BidStepProposal({
             ref={inputRef}
             type="file"
             accept=".pdf"
-            className="sr-only"
+            className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) onUpload(f);
