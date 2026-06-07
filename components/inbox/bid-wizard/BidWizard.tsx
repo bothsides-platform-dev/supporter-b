@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
@@ -66,9 +66,8 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
   // 초안 자동저장 (BidForm 동일)
   const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
   const [showRestoreBanner, setShowRestoreBanner] = useState(draft !== null);
-  const draftDismissed = useRef(false);
   useEffect(() => {
-    if (!draftDismissed.current) saveDraft(fields);
+    saveDraft(fields);
   }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRestore = () => {
@@ -77,7 +76,6 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
     setShowRestoreBanner(false);
   };
   const handleDismiss = () => {
-    draftDismissed.current = true;
     clearDraft();
     setShowRestoreBanner(false);
   };
@@ -128,6 +126,7 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
   };
   const fmtPct = (rate: number) => String(Math.round(rate * 1e6) / 1e4);
   const applyTemplate = (t: QuoteTemplateOption) => {
+    setShowRestoreBanner(false);
     const m = /^([DWM])\+(\d+)$/.exec(t.settleCycle);
     const unit = (m?.[1] ?? 'D') as 'D' | 'W' | 'M';
     const num = m?.[2] ?? '1';
