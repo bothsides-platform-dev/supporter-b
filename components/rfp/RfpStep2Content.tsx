@@ -48,7 +48,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
                 draft.setField('contractType', draft.contractType === value ? null : value)
               }
               className={cn(
-                'px-3 py-1.5 text-[13px] rounded-[6px] border transition-colors',
+                'px-3 py-1.5 text-[13px] rounded-[var(--md-sys-shape-small)] border transition-colors',
                 draft.contractType === value
                   ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
                   : 'border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
