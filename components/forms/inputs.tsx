@@ -88,8 +88,8 @@ export function CurrencyInput({
       <div className="flex items-end gap-1">
         <NumericFormat
           thousandSeparator=","
+          decimalScale={0}
           allowNegative={false}
-          step={1000}
           value={value}
           onValueChange={(values) => onChange(values.value)}
           placeholder={placeholder}
