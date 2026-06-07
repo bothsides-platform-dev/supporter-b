@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.9.0] - 2026-06-08
+
+### Changed
+
+- **서비스 레이어 전면 도입(Phase 2)**: 채팅(`ChatService`), 워크스페이스(`WorkspaceService`), 인증(`AuthService`), 알림(`NotificationService`) 4개 서비스 클래스를 추가하여 Actions → Services → Repositories 3계층 구조가 전체 코드베이스에 적용됩니다. 서버 액션은 세션 검증·입력 파싱만 담당하고, 트랜잭션·이메일 아웃박스·알림 팬아웃은 서비스가 캡슐화합니다.
+- **ChatService**: 메시지 전송(`sendMessage`) 및 대화 읽음 처리(`markConversationRead`) — 아웃박스 enqueue, 인앱 알림 다이제스트 소유. Centrifugo 발행은 post-commit best-effort로 액션에 잔류.
+- **WorkspaceService**: 워크스페이스 생성(`createWorkspace`), 멤버 초대/수락/재발송/취소(`inviteMember`·`acceptInvite`·`resendInvite`·`cancelInvite`), 역할 변경(`changeMemberRole`), 멤버 제거(`removeMember`) — 초대 이메일 아웃박스·인앱 알림 팬아웃 소유.
+- **AuthService**: 회원가입(`completeSignup`·`signupViaInvite`), 계정 삭제(`deleteAccount`), 비밀번호 재설정(`requestPasswordReset`·`resetPassword`), 이메일 변경(`requestEmailChange`·`confirmEmailChange`) — 인증 토큰 발급·consume·아웃박스 소유.
+- **NotificationService**: 알림 읽음 처리(`markRead`·`markAllRead`), 이메일 재발송 enqueue(`retryEmail`) — outbox 상태 reset 소유.
+
 ## [0.1.8.0] - 2026-06-08
 
 ### Changed
