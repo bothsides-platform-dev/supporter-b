@@ -63,7 +63,7 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
     setFields((f) => ({ ...f, fees: { ...f.fees, [key]: value } }));
   const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, fees, memo } = fields;
 
-  // 초안 자동저장 (BidForm 동일)
+  // 초안 자동저장
   const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
   const [showRestoreBanner, setShowRestoreBanner] = useState(draft !== null);
   useEffect(() => {
@@ -80,7 +80,7 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
     setShowRestoreBanner(false);
   };
 
-  // 견적서 업로드 (BidForm 동일)
+  // 견적서 업로드
   const [proposal, setProposal] = useState<ProposalState>(null);
   const uploadProposal = async (file: File): Promise<void> => {
     if (file.type !== 'application/pdf') {
@@ -107,7 +107,7 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
   const proposalReady = proposal && 'id' in proposal;
   const proposalUploading = proposal && 'status' in proposal && proposal.status === 'uploading';
 
-  // 파생값 (BidForm 동일)
+  // 파생값
   const feeInputMethods = requiredPaymentMethods.length > 0 ? requiredPaymentMethods : ALL_PAYMENT_METHODS;
   const settleCycle = `${cycleUnit}+${cycleNum || '1'}`;
   const feeFilled = (key: string) => (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
@@ -126,6 +126,7 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
   };
   const fmtPct = (rate: number) => String(Math.round(rate * 1e6) / 1e4);
   const applyTemplate = (t: QuoteTemplateOption) => {
+    clearDraft();
     setShowRestoreBanner(false);
     const m = /^([DWM])\+(\d+)$/.exec(t.settleCycle);
     const unit = (m?.[1] ?? 'D') as 'D' | 'W' | 'M';

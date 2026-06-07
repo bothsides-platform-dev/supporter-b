@@ -89,6 +89,7 @@ export function CurrencyInput({
         <NumericFormat
           thousandSeparator=","
           allowNegative={false}
+          step={1000}
           value={value}
           onValueChange={(values) => onChange(values.value)}
           placeholder={placeholder}
