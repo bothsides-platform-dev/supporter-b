@@ -63,9 +63,11 @@ app/
 │  ├─ home/
 │  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id] (비교·선정 인라인 — 별도 award 라우트 없음)
 │  ├─ inbox/                  # pg workspace pages (P2~P4): /inbox, /inbox/[rfpId], /inbox/[rfpId]/submitted
+│  ├─ opportunities/          # pg — 오픈 RFP 게시판 (비초대 PG 발견·콜드 피치)
+│  ├─ messages/               # buyer+pg 공통 — 라이브 채팅 (Centrifugo WS)
 │  ├─ notifications/          # 인앱 알림 목록 페이지
 │  ├─ workspace/new/          # 워크스페이스 생성
-│  └─ settings/{profile,members,notifications}/
+│  └─ settings/{profile,members,notifications,quote-templates}/
 ├─ rfp/new/                   # full-screen RFP 작성 플로우 (자체 layout, AppShell 밖)
 ├─ logout/route.ts            # POST handler
 └─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리

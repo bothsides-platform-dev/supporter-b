@@ -705,6 +705,35 @@ describe('createRfpAction', () => {
     expect(row.boardVisible).toBe(true);
   });
 
+  it("contractType: 'renewal' 을 전달하면 DB에 저장한다", async () => {
+    const r = await createRfpAction({
+      title: '갱신 계약 유형 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      contractType: 'renewal',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.contractType).toBe('renewal');
+  });
+
+  it('contractType 를 생략하면 DB에 NULL 로 저장한다', async () => {
+    const r = await createRfpAction({
+      title: '계약 유형 생략 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.contractType).toBeNull();
+  });
+
   // _suppress unused import warnings
   void and;
 });

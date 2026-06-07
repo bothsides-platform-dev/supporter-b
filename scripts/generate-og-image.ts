@@ -77,26 +77,38 @@ function ogHtml(pretendard: string, jetbrains: string) {
 
   .hero {
     position: absolute;
-    left: 96px;
+    left: 50%;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 64px;
+  }
+  .logo svg {
+    display: block;
+  }
+  .hero-text {
+    display: flex;
+    flex-direction: column;
   }
   .wordmark {
     font-family: 'Pretendard', sans-serif;
     font-weight: 800;
-    font-size: 168px;
+    font-size: 96px;
     line-height: 1;
     letter-spacing: -0.04em;
     color: #0a0a0f;
     margin: 0;
+    white-space: nowrap;
   }
   .subline {
     font-family: 'Pretendard', sans-serif;
     font-weight: 500;
-    font-size: 36px;
+    font-size: 32px;
     letter-spacing: -0.02em;
     color: #5a5560;
-    margin: 24px 0 0 4px;
+    margin: 20px 0 0 4px;
   }
 </style>
 </head>
@@ -104,8 +116,17 @@ function ogHtml(pretendard: string, jetbrains: string) {
   <div class="frame"></div>
 
   <div class="hero">
-    <div class="wordmark">Supporter B</div>
-    <div class="subline">결제대행사 비공개 1:N RFP 플랫폼</div>
+    <div class="logo">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="144" height="144">
+        <rect x="5.5" y="5" width="4.5" height="22" rx="2.25" fill="#0a0a0f"/>
+        <circle cx="21" cy="16" r="9" fill="#0a0a0f"/>
+        <rect x="10" y="0" width="3" height="32" fill="#faf7f0"/>
+      </svg>
+    </div>
+    <div class="hero-text">
+      <div class="wordmark">Supporter B</div>
+      <div class="subline">PG사 비교 견적 플랫폼</div>
+    </div>
   </div>
 
   <div class="corner bot-right mono"><span class="b">[</span>&nbsp;SUPPORTER-B.STORE&nbsp;<span class="b">]</span></div>

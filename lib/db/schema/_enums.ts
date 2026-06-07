@@ -110,3 +110,5 @@ export const verificationStatusEnum = pgEnum('verification_status', [
   'approved',
   'rejected',
 ]);
+
+export const contractTypeEnum = pgEnum('contract_type', ['new', 'renewal']);
