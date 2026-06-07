@@ -28,7 +28,7 @@ import {
   emitAfterCommit,
 } from '@/lib/server/notifications/dispatch';
 import { logBusinessEvent } from '@/lib/observability/log';
-import { isValidWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { isValidWebsiteUrl, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import type { Notification } from '@/lib/types/notification';
 import {
   actionDb,
@@ -222,7 +222,7 @@ export async function createRfpAction(
         bizProfileId: snapshotId,
         title: parsed.data.title.trim(),
         memo: parsed.data.memo?.trim() ?? '',
-        websiteUrl: parsed.data.websiteUrl?.trim() ?? null,
+        websiteUrl: parsed.data.websiteUrl ? normalizeWebsiteUrl(parsed.data.websiteUrl.trim()) || null : null,
         mainProducts: parsed.data.mainProducts?.trim() ?? null,
         annualPgVolume: parsed.data.annualPgVolume?.trim() ?? null,
         currentFeeRate: parsed.data.currentFeeRate?.trim() ?? null,

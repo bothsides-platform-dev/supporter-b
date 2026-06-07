@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.7.3] - 2026-06-08
+
+### Changed
+
+- **RFP 홈페이지 주소 입력 개선**: 구매사가 사업 운영 홈페이지를 입력할 때 `https://` 스킴 없이 `example.com` 형태로 입력해도 유효한 도메인으로 인정됩니다. 입력 필드에서 포커스가 벗어나면 자동으로 `https://`가 앞에 붙어 저장됩니다. 유효하지 않은 TLD(`example.invalidtld`)나 localhost, 단순 문자열은 여전히 거부됩니다.
+
 ## [0.1.7.2] - 2026-06-07
 
 ### Added
