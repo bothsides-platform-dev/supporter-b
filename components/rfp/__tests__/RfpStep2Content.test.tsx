@@ -92,7 +92,7 @@ describe('RfpStep2Content', () => {
   });
 
   describe('홈페이지 도메인 유효성', () => {
-    const homepagePlaceholder = 'https://supporter-b.com/';
+    const homepagePlaceholder = 'example.com';
 
     it('빈 값이면 에러를 표시하지 않는다', () => {
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
