@@ -18,6 +18,8 @@ const stageColor: Record<PgKanbanStage, ChipColor> = {
   lost: 'surface', // 미선정 — 중립
 };
 
+const CONTRACT_TYPE_LABELS = { new: '신규 계약', renewal: '갱신 계약' } as const;
+
 export type InboxRow = {
   invitationId: string;
   /** Bid-aware PG kanban stage (classifyPgInvitation) — 필터·칩·행동의 단일 기준. */
@@ -30,6 +32,8 @@ export type InboxRow = {
   grade: string;
   /** Raw merchant-grade enum for the grade filter (label lives in `grade`). */
   gradeRaw?: MerchantGrade;
+  /** 계약 유형. null이면 미표시. */
+  contractType?: 'new' | 'renewal' | null;
 };
 
 export function InboxList({ rows }: { rows: InboxRow[] }) {
@@ -87,7 +91,17 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                 <td className="relative px-8 py-4 font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-2 group-hover:before:bg-[var(--md-sys-color-on-surface)] group-data-[active=true]:before:absolute group-data-[active=true]:before:left-0 group-data-[active=true]:before:top-0 group-data-[active=true]:before:bottom-0 group-data-[active=true]:before:w-2 group-data-[active=true]:before:bg-[var(--md-sys-color-on-surface)] group-data-[peeked=true]:before:absolute group-data-[peeked=true]:before:left-0 group-data-[peeked=true]:before:top-0 group-data-[peeked=true]:before:bottom-0 group-data-[peeked=true]:before:w-0.5 group-data-[peeked=true]:before:bg-[var(--md-sys-color-primary)]">
                   {row.rfpId}
                 </td>
-                <td className="px-3 py-4 text-[13px] text-[var(--md-sys-color-on-surface)] font-medium">{row.rfpTitle}</td>
+                <td className="px-3 py-4 text-[13px] text-[var(--md-sys-color-on-surface)] font-medium">
+                  <span className="flex items-center gap-1.5">
+                    {row.contractType && (
+                      <Chip
+                        label={CONTRACT_TYPE_LABELS[row.contractType]}
+                        color={row.contractType === 'new' ? 'primary' : 'surface'}
+                      />
+                    )}
+                    {row.rfpTitle}
+                  </span>
+                </td>
                 <td className="px-3 py-4 font-mono text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
                   {row.grade}
                 </td>

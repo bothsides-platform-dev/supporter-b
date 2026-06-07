@@ -113,6 +113,7 @@ export class DrizzleRfpRequestRepository implements PgRequestRepo {
         requiredPaymentMethods: rfps.requiredPaymentMethods,
         customPaymentMethods: rfps.customPaymentMethods,
         mainProducts: rfps.mainProducts,
+        contractType: rfps.contractType,
       })
       .from(rfps)
       .innerJoin(workspaces, eq(rfps.buyerWsId, workspaces.id))
@@ -144,6 +145,7 @@ export class DrizzleRfpRequestRepository implements PgRequestRepo {
       requiredPaymentMethods: string[] | null;
       customPaymentMethods: { id: string; label: string }[] | null;
       mainProducts: string | null;
+      contractType: 'new' | 'renewal' | null;
     }[];
     return rows.map((r) => ({
       rfpCode: r.rfpCode,
@@ -154,6 +156,7 @@ export class DrizzleRfpRequestRepository implements PgRequestRepo {
       requiredPaymentMethods: r.requiredPaymentMethods ?? [],
       customPaymentMethodLabels: (r.customPaymentMethods ?? []).map((c) => c.label),
       mainProducts: r.mainProducts ?? null,
+      contractType: r.contractType ?? null,
     }));
   }
 }

@@ -11,6 +11,11 @@ import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isValidWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { cn } from '@/lib/utils';
 
+const CONTRACT_TYPE_OPTIONS = [
+  { value: 'new', label: '신규 계약' },
+  { value: 'renewal', label: '갱신 계약' },
+] as const;
+
 const SOLUTION_OPTIONS = [
   { value: 'cafe24', label: '카페24' },
   { value: 'imweb', label: '아임웹' },
@@ -32,6 +37,28 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
 
   return (
     <div className="space-y-5">
+      <div className="space-y-1">
+        <Label size="md" muted>견적 유형 <span className="text-[var(--md-sys-color-on-surface-variant)]">(선택)</span></Label>
+        <div className="flex gap-2">
+          {CONTRACT_TYPE_OPTIONS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() =>
+                draft.setField('contractType', draft.contractType === value ? null : value)
+              }
+              className={cn(
+                'px-3 py-1.5 text-[13px] rounded-[6px] border transition-colors',
+                draft.contractType === value
+                  ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
+                  : 'border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="space-y-1">
         <Label size="md" muted={false}>제목 *</Label>
         <input

@@ -86,6 +86,22 @@ describe('InboxList', () => {
     expect(screen.queryByRole('link', { name: '견적 작성' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '보낸 견적' })).not.toBeInTheDocument();
   });
+
+  it("contractType 'new' 이면 '신규 계약' Chip을 표시한다", () => {
+    render(<InboxList rows={[{ ...row, contractType: 'new' }]} />);
+    expect(screen.getByText('신규 계약')).toBeInTheDocument();
+  });
+
+  it("contractType 'renewal' 이면 '갱신 계약' Chip을 표시한다", () => {
+    render(<InboxList rows={[{ ...row, contractType: 'renewal' }]} />);
+    expect(screen.getByText('갱신 계약')).toBeInTheDocument();
+  });
+
+  it('contractType 없으면 계약 유형 Chip을 표시하지 않는다', () => {
+    render(<InboxList rows={[{ ...row, contractType: null }]} />);
+    expect(screen.queryByText('신규 계약')).not.toBeInTheDocument();
+    expect(screen.queryByText('갱신 계약')).not.toBeInTheDocument();
+  });
 });
 
 describe('InboxListSkeleton — RSC fallback 회귀 방지', () => {

@@ -92,6 +92,7 @@ async function InboxListPageLoader({
       rfpDeadline: rfp.deadline,
       grade: rfp.bizProfile?.grade ? GRADE_LABELS[rfp.bizProfile.grade] : '—',
       gradeRaw: rfp.bizProfile?.grade,
+      contractType: rfp.contractType ?? null,
     };
   });
   const rows = filterInboxRows(allRows, params, now);
