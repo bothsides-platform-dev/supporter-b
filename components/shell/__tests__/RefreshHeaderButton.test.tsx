@@ -63,6 +63,29 @@ describe('RefreshHeaderButton', () => {
     expect(screen.getByRole('button', { name: /1시간 전/ })).toBeInTheDocument();
   });
 
+  it('클릭 시 아이콘에 animate-spin-once 클래스가 추가된다', () => {
+    const { container } = renderButton();
+    const icon = container.querySelector('svg');
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(icon).toHaveClass('animate-spin-once');
+  });
+
+  it('350ms 후 animate-spin-once 클래스가 제거된다', () => {
+    const { container } = renderButton();
+    const icon = container.querySelector('svg')!;
+
+    fireEvent.click(screen.getByRole('button'));
+    expect(icon).toHaveClass('animate-spin-once');
+
+    act(() => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(icon).not.toHaveClass('animate-spin-once');
+  });
+
   it('60초 경과 후 레이블이 자동으로 업데이트된다', () => {
     const t = new Date(Date.now() - 30_000);
     renderButton({ lastRefreshedAt: t });
