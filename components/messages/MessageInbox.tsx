@@ -14,9 +14,10 @@ type Props = {
   conversations: ConversationListItem[];
   /** Pre-select a conversation on mount (e.g. from ?c= deep-link). Ignored if id not in list. */
   initialSelectedId?: string | null;
+  className?: string;
 };
 
-export function MessageInbox({ conversations, initialSelectedId = null }: Props) {
+export function MessageInbox({ conversations, initialSelectedId = null, className }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const selected = conversations.find((c) => c.conversationId === selectedId) ?? null;
 
@@ -24,7 +25,7 @@ export function MessageInbox({ conversations, initialSelectedId = null }: Props)
   // 목록 ↔ 스레드를 전환한다(선택 시 스레드 전체폭, 뒤로가기로 목록 복귀). 좁은
   // 화면에서 고정 w-80 목록이 스레드를 으스러뜨리던 문제를 해소.
   return (
-    <div className="flex h-full min-h-0">
+    <div className={cn('flex min-h-0 flex-1', className)}>
       <div
         data-pane="list"
         className={cn(
@@ -48,7 +49,7 @@ export function MessageInbox({ conversations, initialSelectedId = null }: Props)
       </div>
       <div
         data-pane="thread"
-        className={cn('min-w-0 flex-1 flex-col md:flex', selected ? 'flex' : 'hidden')}
+        className={cn('flex min-h-0 min-w-0 flex-1 flex-col md:flex', selected ? 'flex' : 'hidden')}
       >
         {selected ? (
           // key={selectedId} resets the Suspense boundary when conversation changes,
