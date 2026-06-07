@@ -7,8 +7,10 @@ import { http } from '@/lib/http';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Chip } from '@/components/primitives/Chip';
+import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
+import { Paperclip } from 'lucide-react';
 import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, XIcon, EnvelopeIcon } from '@/components/icons';
 import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES, ACCEPTED_EXTENSIONS } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
@@ -394,11 +396,21 @@ export function ThreadView({
     setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    const result = await sendChatMessageAction({
-      conversationId,
-      body,
-      attachmentIds: readyAttachments.map((a) => a.id),
-    });
+    let result: Awaited<ReturnType<typeof sendChatMessageAction>>;
+    try {
+      result = await sendChatMessageAction({
+        conversationId,
+        body,
+        attachmentIds: readyAttachments.map((a) => a.id),
+      });
+    } catch {
+      setSending(false);
+      setLocalMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setDraft(restoreDraft);
+      setAttachments(restoreAttachments);
+      toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
+      return;
+    }
     setSending(false);
     if (result.ok) {
       // pending 말풍선을 확정으로 교체(실서버 id + pending 해제). 라이브 echo 가
@@ -436,10 +448,10 @@ export function ThreadView({
   }
 
   return (
-    <div className="flex h-full min-w-0">
-    <div className="flex h-full min-w-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-1">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {/* 헤더 — 상대 워크스페이스 + 타입 + 프레즌스 + 타이핑 */}
-      <header className="flex items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
+      <header className="flex shrink-0 items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
         {onBack && (
           <button
             type="button"
@@ -627,7 +639,7 @@ export function ThreadView({
       {connected === false && (
         <div
           role="status"
-          className="px-4 py-1.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container-low)] border-b border-[var(--md-sys-color-outline-variant)]"
+          className="shrink-0 px-4 py-1.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)] bg-[var(--md-sys-color-surface-container-low)] border-b border-[var(--md-sys-color-outline-variant)]"
         >
           채팅 서버와 연결이 끊겼습니다. 재연결 중…
         </div>
@@ -635,7 +647,7 @@ export function ThreadView({
 
       {/* 첨부 칩 리스트 */}
       {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-t border-[var(--md-sys-color-outline-variant)] px-3 pt-2">
+        <div className="flex shrink-0 flex-wrap gap-1.5 border-t border-[var(--md-sys-color-outline-variant)] px-3 pt-2 pb-1">
           {attachments.map((a) =>
             a.status === 'uploading' ? (
               // 업로드 중 — 파일명 + 펄스 스켈레톤(제거 불가, 올리는 중임을 표시).
@@ -687,15 +699,16 @@ export function ThreadView({
       )}
 
       {/* 하단 인라인 컴포저 */}
-      <div className="flex items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] p-3">
-        <button
-          type="button"
-          aria-label="파일 첨부"
+      <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] p-3">
+        <IconButton
+          label="파일 첨부"
+          size="sm"
+          variant="standard"
+          className="shrink-0"
           onClick={() => fileInputRef.current?.click()}
-          className="flex size-8 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)]"
         >
-          <PaperclipIcon size={16} />
-        </button>
+          <Paperclip size={16} />
+        </IconButton>
         <input
           ref={fileInputRef}
           type="file"
@@ -718,10 +731,10 @@ export function ThreadView({
           onKeyDown={handleKeyDown}
           placeholder="메시지를 입력하세요…"
           rows={1}
-          className="max-h-40 flex-1 resize-none rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-2 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
+          className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-1.5 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
         />
         <Button
-          size="sm"
+          className="shrink-0"
           onClick={handleSend}
           disabled={
             sending ||
