@@ -118,16 +118,19 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
   };
 
   return (
-    <div className="flex h-full min-h-0">
+    // 스크롤 컨테이너를 루트로 통일 → 좌측 단계 네비/우측 콘텐츠 어디서 스크롤해도 동일 동작.
+    // 사이드바는 sticky로 고정, 구분선은 우측 컬럼 border-l로 전체 높이 유지.
+    <div className="flex h-full min-h-0 lg:overflow-y-auto">
       {/* Desktop: left step sidebar (hidden on mobile via WizardStepSidebar internal class) */}
       <WizardStepSidebar
         currentStep={currentStep}
         completed={completed}
         onStepClick={goToStep}
+        className="sticky top-0 self-start border-r-0"
       />
 
       {/* Content area */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 lg:border-l border-[var(--md-sys-color-outline-variant)]">
         {/* Mobile: top progress bar (hidden on desktop via WizardProgressBar internal class) */}
         <WizardProgressBar
           currentStep={currentStep}
@@ -135,7 +138,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
           onStepClick={goToStep}
         />
 
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="flex-1 px-6 py-6">
           {/* Step header */}
           <div className="flex items-center gap-3 mb-6">
             <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">

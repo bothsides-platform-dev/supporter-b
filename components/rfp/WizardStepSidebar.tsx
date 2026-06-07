@@ -15,6 +15,8 @@ type WizardStepSidebarProps = {
   title?: string;
   /** 사이드바 하단 슬롯 — 견적 위저드의 '자동저장' 표시 등(기본 없음). */
   footer?: ReactNode;
+  /** 컨테이너에 병합할 추가 클래스 (sticky/self-start 등 레이아웃 제어용). */
+  className?: string;
 };
 
 export function WizardStepSidebar({
@@ -24,9 +26,15 @@ export function WizardStepSidebar({
   steps = WIZARD_STEPS,
   title = '새 견적 요청',
   footer,
+  className,
 }: WizardStepSidebarProps) {
   return (
-    <nav className="w-[160px] border-r border-[var(--md-sys-color-outline-variant)] px-3 py-5 flex-shrink-0 hidden lg:flex flex-col">
+    <nav
+      className={cn(
+        'w-[160px] border-r border-[var(--md-sys-color-outline-variant)] px-3 py-5 flex-shrink-0 hidden lg:flex flex-col',
+        className,
+      )}
+    >
       <span className="font-mono text-[9px] tracking-[0.14em] uppercase text-[var(--md-sys-color-outline)] mb-4">
         {title}
       </span>
