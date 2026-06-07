@@ -44,6 +44,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
             <button
               key={value}
               type="button"
+              aria-pressed={draft.contractType === value}
               onClick={() =>
                 draft.setField('contractType', draft.contractType === value ? null : value)
               }

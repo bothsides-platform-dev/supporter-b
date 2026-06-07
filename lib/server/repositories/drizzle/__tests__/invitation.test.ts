@@ -217,6 +217,29 @@ describe('DrizzleInvitationRepository', () => {
     expect(tossPairsAfter[0].invitation.acceptedByUserId).toBe(userA.id);
   });
 
+  it('findByPgWorkspace: rfp.contractType이 DB 값으로 반환된다', async () => {
+    // RFP를 contractType='renewal'로 직접 INSERT
+    const rfpId2 = randomUUID();
+    await ctx.db.insert(rfps).values({
+      id: rfpId2,
+      code: 'P-2605-CTYPE',
+      buyerWsId: ctx.ws.id,
+      bizProfileId: ctx.biz.id,
+      title: 'Renewal RFP',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: ctx.buyer.id,
+      contractType: 'renewal',
+    });
+    await repo.save(makeInvitation(rfpId2, ctx.pgWs.id), generateToken());
+
+    const pairs = await repo.findByPgWorkspace(ctx.pgWs.id);
+    const pair = pairs.find((p) => p.rfp.code === 'P-2605-CTYPE');
+    expect(pair).toBeDefined();
+    expect(pair!.rfp.contractType).toBe('renewal');
+  });
+
   it('findByRfpIds: 여러 RFP의 invitation을 rfpId별 Map으로 그룹화', async () => {
     // 두 번째 RFP(같은 ws) 생성.
     const rfp2 = randomUUID();
