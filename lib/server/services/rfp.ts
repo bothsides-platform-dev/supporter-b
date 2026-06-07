@@ -197,6 +197,7 @@ export class RfpService {
       return { ok: true as const };
     });
 
+    // No flushAfterCommit here — cancel enqueues no outbox entries.
     if (result.ok) emitAfterCommit(pendingEmits);
     return result;
   }
@@ -252,6 +253,7 @@ export class RfpService {
       return { ok: true as const };
     });
 
+    // No flushAfterCommit here — close enqueues no outbox entries.
     if (result.ok) emitAfterCommit(pendingEmits);
     return result;
   }

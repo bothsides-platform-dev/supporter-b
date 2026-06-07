@@ -153,4 +153,22 @@ describe('BidService.withdraw', () => {
     });
     expect(r.ok).toBe(true);
   });
+
+  it('returns FORBIDDEN when invitation is expired (canAccess false)', async () => {
+    const s = await seedWithdrawEnv();
+    // Expire the invitation so canAccess returns false.
+    await db
+      .update(rfpInvitations)
+      .set({ status: 'expired' })
+      .where(eq(rfpInvitations.id, s.invitationId));
+
+    // pgWsId matches bid.pgWsId (passes first guard), but canAccess fails.
+    const r = await service.withdraw(s.bidId, {
+      userId: s.pgUserId,
+      workspaceId: s.pgWsId,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('FORBIDDEN');
+  });
 });

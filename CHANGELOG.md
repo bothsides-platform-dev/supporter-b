@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.8.0] - 2026-06-08
+
+### Changed
+
+- **서비스 레이어 도입(Phase 1)**: 선정(`awardRfpAction`), 취소(`cancelRfpAction`), 마감(`closeRfpAction`), 제안 철회(`withdrawBidAction`) 등 핵심 비즈니스 로직이 `RfpService`·`BidService` 클래스로 분리됩니다. 서버 액션은 세션 검증·입력 파싱 후 서비스에 위임하는 얇은 레이어로 변경되며, 트랜잭션 관리·알림 발송·이메일 큐는 서비스가 캡슐화합니다.
+- **선정 로직 개선**: 존재하지 않는 bid ID를 선정 시도하면 FK 위반 에러 대신 명확한 `WINNING_BID_NOT_FOUND` 오류를 반환합니다.
+- **`awardRfpAction` 입력 검증 강화**: `rfpId` 필드가 UUID 형식으로 검증됩니다. 잘못된 형식 전달 시 즉시 `INVALID_INPUT` 오류를 반환합니다.
+
+### Fixed
+
+- **취소·마감 액션 세션 없음 처리**: `cancelRfpAction`·`closeRfpAction` 호출 시 세션이 없으면 `FORBIDDEN_BUYER`를 반환합니다.
+
 ## [0.1.7.3] - 2026-06-08
 
 ### Changed

@@ -168,4 +168,11 @@ describe('cancelRfpAction', () => {
     const r = await cancelRfpAction({ rfpId: s.rfpCode });
     expect(r.ok).toBe(false);
   });
+
+  it('rejects without buyer session', async () => {
+    sessionRef.value = null;
+    const r = await cancelRfpAction({ rfpId: 'P-2605-0010' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_BUYER');
+  });
 });

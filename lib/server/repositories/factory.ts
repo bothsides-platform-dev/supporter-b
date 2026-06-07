@@ -149,6 +149,7 @@ export async function getWorkspaceRepo(): Promise<WorkspaceRepo> {
 export async function getUserRepo(): Promise<UserRepo> {
   return (await getBundle()).user;
 }
+// Used by RfpService.createRfp (Phase 2) for biz-profile inheritance logic.
 export async function getBizProfileRepo(): Promise<BizProfileRepo> {
   return (await getBundle()).bizProfile;
 }

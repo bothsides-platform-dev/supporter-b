@@ -8,7 +8,7 @@ import type { RfpActionResult } from './_shared';
 
 const Input = z
   .object({
-    rfpId: z.string().min(1),
+    rfpId: z.string().uuid(),
     awardedBidId: z.string().uuid(),
   })
   .strict();

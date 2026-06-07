@@ -381,4 +381,100 @@ describe('RfpService.close', () => {
     if (r.ok) return;
     expect(r.error).toBe('FORBIDDEN_BUYER');
   });
+
+  it('returns RFP_NOT_FOUND when rfp does not exist', async () => {
+    const r = await service.close(randomUUID(), {
+      userId: randomUUID(),
+      workspaceId: randomUUID(),
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('RFP_NOT_FOUND');
+  });
+
+  it('returns INVALID_TRANSITION error when rfp is already closed', async () => {
+    const s = await seedCancelEnv();
+    // pre-close
+    await db
+      .update(rfps)
+      .set({ status: 'closed' })
+      .where(eq(rfps.id, s.rfpId));
+
+    const r = await service.close(s.rfpId, {
+      userId: s.buyerUserId,
+      workspaceId: s.buyerWsId,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toMatch(/INVALID_TRANSITION/);
+  });
+
+  it('succeeds with no in-app notifications when rfp has no submitted bids', async () => {
+    // RFP without any bids — close should still transition OK, emit no notifications.
+    const buyer = await seedUser(db, { email: 'buyer@nobids.com' });
+    const buyerWs = await seedBuyerWorkspace(db);
+    await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+
+    const rfpId = randomUUID();
+    await db.insert(rfps).values({
+      id: rfpId,
+      code: 'P-2606-0099',
+      buyerWsId: buyerWs.id,
+      title: 'no bids test',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: buyer.id,
+      sentAt: new Date(),
+    });
+
+    const r = await service.close(rfpId, {
+      userId: buyer.id,
+      workspaceId: buyerWs.id,
+    });
+    expect(r.ok).toBe(true);
+
+    const notifs = await db.select().from(notifications);
+    expect(notifs).toHaveLength(0);
+  });
+});
+
+// ─── RfpService.award — INVALID_TRANSITION ──────────────────────────────────
+
+describe('RfpService.award — INVALID_TRANSITION', () => {
+  it('returns INVALID_TRANSITION error when rfp is already awarded', async () => {
+    const s = await seedAwardEnv();
+    await db
+      .update(rfps)
+      .set({ status: 'awarded' })
+      .where(eq(rfps.id, s.rfpId));
+
+    const r = await service.award(s.rfpId, s.winnerBidId, {
+      userId: s.buyerUserId,
+      workspaceId: s.buyerWsId,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toMatch(/INVALID_TRANSITION/);
+  });
+});
+
+// ─── RfpService.cancel — INVALID_TRANSITION ──────────────────────────────────
+
+describe('RfpService.cancel — INVALID_TRANSITION', () => {
+  it('returns INVALID_TRANSITION error when rfp is already cancelled', async () => {
+    const s = await seedCancelEnv();
+    // pre-cancel
+    await db
+      .update(rfps)
+      .set({ status: 'cancelled' })
+      .where(eq(rfps.id, s.rfpId));
+
+    const r = await service.cancel(s.rfpId, {
+      userId: s.buyerUserId,
+      workspaceId: s.buyerWsId,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toMatch(/INVALID_TRANSITION/);
+  });
 });

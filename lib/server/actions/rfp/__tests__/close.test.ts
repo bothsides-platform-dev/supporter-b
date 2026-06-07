@@ -155,4 +155,42 @@ describe('closeRfpAction', () => {
     const r = await closeRfpAction({ rfpId: rfpCode });
     expect(r.ok).toBe(false);
   });
+
+  it('rejects without buyer session', async () => {
+    sessionRef.value = null;
+    const r = await closeRfpAction({ rfpId: 'P-2605-0099' });
+    expect(r.ok).toBe(false);
+  });
+
+  it('rejects bad transition (rfp already closed)', async () => {
+    const buyer = await seedUser(db, { email: 'b2@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+    const rfpId = randomUUID();
+    const rfpCode = 'P-2605-0022';
+    await db.insert(rfps).values({
+      id: rfpId,
+      code: rfpCode,
+      buyerWsId: buyerWs.id,
+      bizProfileId: biz.id,
+      title: 'x2',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'closed',
+      createdBy: buyer.id,
+      sentAt: new Date(),
+    });
+    sessionRef.value = {
+      user: {
+        id: buyer.id,
+        email: 'b2@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    const r = await closeRfpAction({ rfpId: rfpCode });
+    expect(r.ok).toBe(false);
+  });
 });
