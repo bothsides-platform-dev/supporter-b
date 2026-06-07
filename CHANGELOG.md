@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.4] - 2026-06-07
+
+### Changed
+
+- **홈 새로고침 버튼 타임스탬프**: 페이지 진입 즉시 "방금 전" 등 마지막 갱신 시각이 표시됩니다. 기존에는 버튼을 한 번 클릭해야만 시각이 나타났습니다.
+- **새로고침 아이콘**: lucide-react 표준 `RefreshCw` 아이콘으로 교체. 클릭 시 아이콘이 회전하는 애니메이션은 그대로 유지됩니다.
+
 ## [0.1.3] - 2026-06-07
 
 ### Fixed
