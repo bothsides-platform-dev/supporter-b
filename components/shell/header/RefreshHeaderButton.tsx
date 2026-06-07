@@ -35,7 +35,7 @@ export function RefreshHeaderButton({ onRefresh, lastRefreshedAt, isRefreshing }
   const handleClick = () => {
     setIsSpinning(true);
     onRefresh();
-    setTimeout(() => setIsSpinning(false), 350);
+    setTimeout(() => setIsSpinning(false), 600);
   };
 
   return (

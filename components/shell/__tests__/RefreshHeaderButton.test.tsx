@@ -72,7 +72,7 @@ describe('RefreshHeaderButton', () => {
     expect(icon).toHaveClass('animate-spin-once');
   });
 
-  it('350ms 후 animate-spin-once 클래스가 제거된다', () => {
+  it('600ms 후 animate-spin-once 클래스가 제거된다', () => {
     const { container } = renderButton();
     const icon = container.querySelector('svg')!;
 
@@ -80,7 +80,7 @@ describe('RefreshHeaderButton', () => {
     expect(icon).toHaveClass('animate-spin-once');
 
     act(() => {
-      vi.advanceTimersByTime(350);
+      vi.advanceTimersByTime(600);
     });
 
     expect(icon).not.toHaveClass('animate-spin-once');

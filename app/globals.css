@@ -60,8 +60,8 @@
 
   /* Refresh icon — slower than Tailwind default (1s) for readable feedback */
   --animate-spin: spin 1.5s linear infinite;
-  /* Refresh icon click — single fast rotation */
-  --animate-spin-once: spin-once 0.35s ease-in-out;
+  /* Refresh icon click — single visible rotation */
+  --animate-spin-once: spin-once 0.6s ease-in-out;
 }
 
 :root {
