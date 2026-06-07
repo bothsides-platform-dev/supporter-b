@@ -53,6 +53,7 @@
     "postgres": "^3.4.7",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-number-format": "^5.4.5",
     "resend": "^6.4.0",
     "shadcn": "^4.6.0",
     "tailwind-merge": "^3.5.0",

@@ -1,5 +1,6 @@
 'use client';
 
+import { NumericFormat } from 'react-number-format';
 import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
 import { formatKrwReadable } from '@/lib/format';
@@ -85,12 +86,11 @@ export function CurrencyInput({
         {infoTerm && <InfoTip term={infoTerm} />}
       </div>
       <div className="flex items-end gap-1">
-        <input
-          type="number"
-          min="0"
-          step="1000"
+        <NumericFormat
+          thousandSeparator=","
+          allowNegative={false}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onValueChange={(values) => onChange(values.value)}
           placeholder={placeholder}
           className={cn(numericInputClass, 'flex-1')}
         />
