@@ -8,7 +8,7 @@ import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
-import { isValidWebsiteUrl, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { cn } from '@/lib/utils';
 
 const CONTRACT_TYPE_OPTIONS = [
@@ -33,7 +33,7 @@ type Props = {
 export function RfpStep2Content({ onBack, onNext }: Props) {
   const draft = useRfpDraftStore();
 
-  const websiteInvalid = !isValidWebsiteUrl(draft.websiteUrl);
+  const websiteInvalid = !isValidWebsiteUrlLight(draft.websiteUrl);
 
   return (
     <div className="space-y-5">

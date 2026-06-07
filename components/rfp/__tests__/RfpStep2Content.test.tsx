@@ -134,6 +134,7 @@ describe('RfpStep2Content', () => {
       await user.type(screen.getByPlaceholderText(homepagePlaceholder), 'example.com');
       await user.tab();
       expect(useRfpDraftStore.getState().websiteUrl).toBe('https://example.com');
+      expect(screen.getByDisplayValue('https://example.com')).toBeInTheDocument();
     });
 
     it('이미 https://가 있는 값은 포커스 이탈 후 그대로 유지된다', async () => {
