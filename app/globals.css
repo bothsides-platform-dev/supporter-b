@@ -57,6 +57,9 @@
   --radius-lg: var(--md-sys-shape-medium);
   --radius-xl: var(--md-sys-shape-large);
   --radius:    var(--md-sys-shape-small);
+
+  /* Refresh icon — slower than Tailwind default (1s) for readable feedback */
+  --animate-spin: spin 1.5s linear infinite;
 }
 
 :root {
