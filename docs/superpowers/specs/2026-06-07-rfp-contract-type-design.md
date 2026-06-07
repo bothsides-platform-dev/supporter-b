@@ -76,7 +76,7 @@ contractType: 'new' | 'renewal' | null  // 기본값 null
 
 ### 서버 액션 / Zod 스키마
 
-- `createRfpAction` / `upsertRfpDraftAction` 에서 `contractType` 포함
+- `lib/server/actions/rfp/createRfpAction.ts` — Zod 스키마 + INSERT에 `contractType` 포함 (`boardVisible`과 동일 패턴)
 - Zod: `z.enum(['new', 'renewal']).nullable().optional()`
 
 ---
@@ -177,7 +177,7 @@ export const CONTRACT_TYPE_LABELS: Record<'new' | 'renewal', string> = {
 | `lib/types/rfp.ts` | contractType 필드 추가 |
 | `lib/stores/rfp-draft.ts` | contractType 필드 + 버전 bump |
 | `components/rfp/RfpStep2Content.tsx` | 세그먼트 토글 UI 추가 |
-| createRfpAction / upsertDraftAction | contractType 포함 |
+| `lib/server/actions/rfp/createRfpAction.ts` | Zod 스키마 + INSERT에 contractType 포함 |
 | `lib/server/repositories/drizzle/rfp-pg-request.ts` | SELECT에 contractType 추가 |
 | `lib/types/pg-request.ts` | OpportunityListing 타입 업데이트 |
 | `components/opportunities/OpportunityList.tsx` | Chip 렌더링 추가 |
