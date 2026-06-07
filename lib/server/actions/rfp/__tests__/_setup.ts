@@ -9,10 +9,14 @@ import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getAttachmentRepo,
+  getBidNoteRepo,
   getBidRepo,
+  getBizProfileRepo,
   getContractRepo,
   getInvitationRepo,
   getOutboxRepo,
+  getPgRequestRepo,
   getRfpRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
@@ -34,12 +38,15 @@ export async function setupRfpActionEnv(): Promise<PgliteDB> {
   __resetNtsRateLimitForTest();
 
   // Inject services backed by the same PGlite db so action tests pass through.
-  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo] = await Promise.all([
-    getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
-    getInvitationRepo(),
-  ]);
-  __setRfpServiceForTest(new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo));
-  __setBidServiceForTest(new BidService(db, bidRepo, invRepo));
+  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, attRepo, bidNoteRepo, pgReqRepo, bizRepo] =
+    await Promise.all([
+      getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
+      getInvitationRepo(), getAttachmentRepo(), getBidNoteRepo(), getPgRequestRepo(), getBizProfileRepo(),
+    ]);
+  __setRfpServiceForTest(new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo));
+  __setBidServiceForTest(
+    new BidService(db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo),
+  );
 
   return db;
 }

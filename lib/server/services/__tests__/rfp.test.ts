@@ -7,8 +7,11 @@ import {
   __resetForTest,
   __useDrizzleWithDbForTest,
   getBidRepo,
+  getBizProfileRepo,
   getContractRepo,
+  getInvitationRepo,
   getOutboxRepo,
+  getPgRequestRepo,
   getRfpRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
@@ -34,14 +37,12 @@ let db: PgliteDB;
 let service: RfpService;
 
 async function buildService(): Promise<RfpService> {
-  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo] = await Promise.all([
-    getRfpRepo(),
-    getContractRepo(),
-    getOutboxRepo(),
-    getWorkspaceRepo(),
-    getBidRepo(),
-  ]);
-  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo);
+  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo] =
+    await Promise.all([
+      getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
+      getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(),
+    ]);
+  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo);
 }
 
 beforeEach(async () => {

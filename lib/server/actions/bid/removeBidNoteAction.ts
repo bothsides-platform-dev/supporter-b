@@ -1,39 +1,17 @@
 'use server';
 
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
 
 import { requireBuyerSession } from '@/lib/auth/session';
-import { attachments, bidNotes } from '@/lib/db/schema';
-import {
-  getBidRepo,
-  getRfpRepo,
-} from '@/lib/server/repositories/factory';
-import { getStorage } from '@/lib/server/storage';
-import { actionDb, type BidActionResult } from './_shared';
+import { getBidService } from '@/lib/server/services/bid';
+import type { BidActionResult } from './_shared';
 
 const Input = z.object({ noteId: z.string().uuid() }).strict();
 
 export type RemoveBidNoteInput = z.infer<typeof Input>;
 export type RemoveBidNoteResult = BidActionResult;
 
-/**
- * 구매사 측 메모 삭제. lib/stores/bid-board.ts 의 `removeNote` 를 대체.
- *
- * 가드:
- *   1) requireBuyerSession.
- *   2) note → bid → rfp.buyerWsId === session.workspaceId.
- *
- * 처리:
- *   1) 노트 첨부(attachments.bid_note_id=noteId) id 들을 모은다.
- *   2) storage.delete(attachmentId) 로 바이트 best-effort 삭제(메모리 백엔드용 —
- *      Postgres 백엔드는 아래 cascade 로도 정리됨).
- *   3) bid_notes row 삭제 → attachments(bid_note_id FK cascade) →
- *      attachment_blobs(attachment_id FK cascade) 까지 연쇄 삭제(C3·C4).
- */
-export async function removeBidNoteAction(
-  input: RemoveBidNoteInput,
-): Promise<RemoveBidNoteResult> {
+export async function removeBidNoteAction(input: RemoveBidNoteInput): Promise<RemoveBidNoteResult> {
   let session;
   try {
     session = await requireBuyerSession();
@@ -44,41 +22,9 @@ export async function removeBidNoteAction(
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
-  const db = actionDb();
-  const [note] = await db
-    .select({ id: bidNotes.id, bidId: bidNotes.bidId })
-    .from(bidNotes)
-    .where(eq(bidNotes.id, parsed.data.noteId))
-    .limit(1);
-  if (!note) return { ok: false, error: 'NOTE_NOT_FOUND' };
-
-  const bidRepo = await getBidRepo();
-  const bid = await bidRepo.findById(note.bidId);
-  if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
-
-  const rfpRepo = await getRfpRepo();
-  const rfp = await rfpRepo.findById(bid.rfpId);
-  if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
-  if (rfp.buyerWsId !== session.user.workspaceId) {
-    return { ok: false, error: 'FORBIDDEN' };
-  }
-
-  // Gather attachment ids (storage key = id) before deleting so we can drop
-  // the bytes from the storage backend.
-  const attRows = await db
-    .select({ id: attachments.id })
-    .from(attachments)
-    .where(eq(attachments.bidNoteId, parsed.data.noteId));
-
-  const storage = getStorage();
-  for (const att of attRows) {
-    await storage.delete(att.id).catch(() => {
-      // orphan storage object — v1 sweeper picks it up. Don't block the action.
-    });
-  }
-
-  // Deleting the note cascades to attachments (bid_note_id FK) and their blobs.
-  await db.delete(bidNotes).where(eq(bidNotes.id, parsed.data.noteId));
-
-  return { ok: true };
+  const service = await getBidService();
+  return service.removeNote(
+    parsed.data.noteId,
+    { userId: session.user.id, workspaceId: session.user.workspaceId },
+  );
 }

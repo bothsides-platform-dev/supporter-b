@@ -174,3 +174,58 @@ describe('DrizzleBidNoteRepository', () => {
     expect(await ctx.repo.findByBid(ctx.bidId)).toHaveLength(0);
   });
 });
+
+describe('BidNoteRepo.findById', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => { ctx = await setup(); });
+
+  it('returns note stub when note exists', async () => {
+    const noteId = randomUUID();
+    await ctx.repo.save({
+      id: noteId,
+      bidId: ctx.bidId,
+      authorId: ctx.buyer.id,
+      body: 'stub test',
+      createdAt: new Date(),
+    });
+    const result = await ctx.repo.findById(noteId);
+    expect(result).toEqual({ id: noteId, bidId: ctx.bidId });
+  });
+
+  it('returns undefined when note does not exist', async () => {
+    const result = await ctx.repo.findById(randomUUID());
+    expect(result).toBeUndefined();
+  });
+});
+
+describe('BidNoteRepo.findAttachmentIds', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => { ctx = await setup(); });
+
+  it('returns empty array when note has no attachments', async () => {
+    const noteId = randomUUID();
+    await ctx.repo.save({
+      id: noteId,
+      bidId: ctx.bidId,
+      authorId: ctx.buyer.id,
+      body: 'no att',
+      createdAt: new Date(),
+    });
+    const ids = await ctx.repo.findAttachmentIds(noteId);
+    expect(ids).toEqual([]);
+  });
+
+  it('returns attachment id list when attachments exist', async () => {
+    const noteId = randomUUID();
+    await ctx.repo.save({
+      id: noteId,
+      bidId: ctx.bidId,
+      authorId: ctx.buyer.id,
+      body: 'with att',
+      createdAt: new Date(),
+    });
+    const attId = await insertAttachment(ctx.db, noteId, ctx.buyer.id);
+    const ids = await ctx.repo.findAttachmentIds(noteId);
+    expect(ids).toEqual([attId]);
+  });
+});
