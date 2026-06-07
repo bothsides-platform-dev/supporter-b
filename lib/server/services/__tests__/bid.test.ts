@@ -163,6 +163,23 @@ describe('BidService.withdraw', () => {
     expect(r.ok).toBe(true);
   });
 
+  it('returns ALREADY_AWARDED when rfp status is awarded', async () => {
+    const s = await seedWithdrawEnv();
+    // Mark the RFP as awarded.
+    await db
+      .update((await import('@/lib/db/schema')).rfps)
+      .set({ status: 'awarded', awardedBidId: s.bidId })
+      .where(eq((await import('@/lib/db/schema')).rfps.id, s.rfpId));
+
+    const r = await service.withdraw(s.bidId, {
+      userId: s.pgUserId,
+      workspaceId: s.pgWsId,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('ALREADY_AWARDED');
+  });
+
   it('returns FORBIDDEN when invitation is expired (canAccess false)', async () => {
     const s = await seedWithdrawEnv();
     // Expire the invitation so canAccess returns false.

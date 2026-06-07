@@ -55,6 +55,11 @@ export class BidService {
       return { ok: false, error: 'FORBIDDEN' };
     }
 
+    const rfp = await this.rfpRepo.findById(bid.rfpId);
+    if (rfp?.status === 'awarded') {
+      return { ok: false, error: 'ALREADY_AWARDED' };
+    }
+
     const canAccess = await this.invitationRepo.canAccess(bid.rfpId, actor.workspaceId);
     if (!canAccess) return { ok: false, error: 'FORBIDDEN' };
 
