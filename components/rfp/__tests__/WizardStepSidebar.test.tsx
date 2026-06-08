@@ -144,4 +144,46 @@ describe('WizardStepSidebar', () => {
     expect(tokens).not.toContain('border-r');
     expect(tokens).toContain('border-r-0');
   });
+
+  // ── 유효성 표시 ✓/✗ ─────────────────────────────────────────────────────
+
+  it('비활성 미완료 step은 ✗를 표시한다', () => {
+    // Step 1: active → 번호. Steps 2, 3, 4: 비활성+미완료 → ✗ 표시
+    render(
+      <WizardStepSidebar
+        currentStep={1}
+        completed={[true, false, false, false]}
+        onStepClick={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByText('✗')).toHaveLength(3);
+  });
+
+  it('완료 비활성 step은 ✓, 미완료 비활성 step은 ✗로 구분 표시한다', () => {
+    // Step 1: active → 번호 / Step 2: 비활성+완료 → ✓ / Steps 3, 4: 비활성+미완료 → ✗
+    render(
+      <WizardStepSidebar
+        currentStep={1}
+        completed={[true, true, false, false]}
+        onStepClick={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByText('✓')).toHaveLength(1);
+    expect(screen.getAllByText('✗')).toHaveLength(2);
+  });
+
+  // ── 도달 불가 step 스타일 ─────────────────────────────────────────────────
+
+  it('도달 불가 step(이전 step 미완료)에는 cursor-not-allowed opacity-50 스타일이 적용된다', () => {
+    // completed[1]=false → canNavigateTo(3) = [true, false].every = false → PG 선택 차단
+    render(
+      <WizardStepSidebar
+        currentStep={1}
+        completed={[true, false, false, false]}
+        onStepClick={vi.fn()}
+      />,
+    );
+    const pgButton = screen.getByText('PG 선택').closest('button');
+    expect(pgButton).toHaveClass('cursor-not-allowed', 'opacity-50');
+  });
 });

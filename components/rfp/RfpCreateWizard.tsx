@@ -40,13 +40,35 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
   const [serverError, setServerError] = useState('');
 
   // 각 step의 완료 여부를 실제 입력값으로 독립 판정 — 순서와 무관.
-  const completed = getWizardValidity(draft).map((s) => s.complete);
+  const validity = getWizardValidity(draft);
+  const completed = validity.map((s) => s.complete);
 
-  // 자유 이동 — 어느 step이든(앞/뒤 무관) 바로 이동. 순서 강제 없음.
-  const advance = () => setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1));
+  // step N에 이동하려면 steps 1..N-1이 모두 complete이어야 한다.
+  const canNavigateTo = (step: number) =>
+    validity.slice(0, step - 1).every((s) => s.complete);
+
+  // advance: 현재 step이 미완료면 hint toast 후 차단.
+  const advance = () => {
+    const cur = validity.find((s) => s.num === currentStep);
+    if (!cur?.complete) {
+      toast(cur?.hint ?? '현재 단계를 완료해주세요.', { type: 'error' });
+      return;
+    }
+    setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1));
+  };
+
   const back = () => setCurrentStep((s) => Math.max(1, s - 1));
-  const goToStep = (step: number) =>
-    setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, step)));
+
+  // goToStep: 이전 step이 모두 complete일 때만 이동. 첫 번째 blocker hint toast.
+  const goToStep = (step: number) => {
+    const clamped = Math.min(TOTAL_STEPS, Math.max(1, step));
+    if (!canNavigateTo(clamped)) {
+      const blocker = validity.find((s) => s.num < clamped && !s.complete);
+      if (blocker) toast(blocker.hint, { type: 'error' });
+      return;
+    }
+    setCurrentStep(clamped);
+  };
 
   const handleSubmit = async () => {
     if (submitting) return;

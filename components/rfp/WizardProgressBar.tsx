@@ -23,24 +23,31 @@ export function WizardProgressBar({ currentStep, completed, onStepClick, steps =
         {Array.from({ length: TOTAL }, (_, i) => {
           const step = i + 1;
           const isActive = step === currentStep;
+          const isComplete = completed[i];
           // 현재 step은 done 표시하지 않음(active 하이라이트 유지). 그 외 완료 step만 done.
-          const isDone = !isActive && completed[i];
+          const isDone = !isActive && isComplete;
+          const isError = !isActive && !isComplete;
+          const reachable = completed.slice(0, i).every(Boolean);
           return (
             <button
               key={step}
               type="button"
               aria-label={`${step}단계: ${labels[step - 1]}`}
               onClick={() => onStepClick?.(step)}
-              className="flex items-center justify-center p-1.5 -m-1 cursor-pointer"
+              className={cn(
+                'flex items-center justify-center p-1.5 -m-1',
+                reachable || isActive ? 'cursor-pointer' : 'cursor-not-allowed',
+              )}
             >
               <span
                 data-testid="progress-dot"
                 data-done={isDone ? 'true' : 'false'}
+                data-error={isError ? 'true' : 'false'}
                 className={cn(
                   'h-1.5 rounded-full transition-all',
                   isDone && 'w-1.5 bg-[var(--md-sys-color-tertiary)]',
                   isActive && 'w-4 bg-[var(--md-sys-color-primary)]',
-                  !isDone && !isActive && 'w-1.5 bg-[var(--md-sys-color-outline-variant)]',
+                  isError && 'w-1.5 bg-[var(--md-sys-color-error)]',
                 )}
               />
             </button>
