@@ -132,4 +132,68 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(ids).toEqual([uA.id]);
     });
   });
+
+  describe('memberUserIdsBatch', () => {
+    it('returns empty Map for empty input', async () => {
+      const result = await repo.memberUserIdsBatch([]);
+      expect(result).toEqual(new Map());
+    });
+
+    it('returns Map keyed by workspaceId with member IDs', async () => {
+      const ws1 = await seedPgWorkspace(db, 'batch-ws1.com');
+      const ws2 = await seedPgWorkspace(db, 'batch-ws2.com');
+      const u1 = await seedUser(db, { email: 'u1@batch-ws1.com' });
+      const u2 = await seedUser(db, { email: 'u2@batch-ws2.com' });
+      const u3 = await seedUser(db, { email: 'u3@batch-ws1.com' });
+      await seedMembership(db, ws1.id, u1.id);
+      await seedMembership(db, ws1.id, u3.id);
+      await seedMembership(db, ws2.id, u2.id);
+
+      const result = await repo.memberUserIdsBatch([ws1.id, ws2.id]);
+      expect(result.get(ws1.id)?.sort()).toEqual([u1.id, u3.id].sort());
+      expect(result.get(ws2.id)).toEqual([u2.id]);
+    });
+
+    it('workspaceId not in input is absent from Map', async () => {
+      const ws1 = await seedPgWorkspace(db, 'batch-absent-a.com');
+      const ws2 = await seedPgWorkspace(db, 'batch-absent-b.com');
+      const u1 = await seedUser(db, { email: 'absent-u1@batch-a.com' });
+      await seedMembership(db, ws1.id, u1.id);
+
+      const result = await repo.memberUserIdsBatch([ws1.id]);
+      expect(result.has(ws1.id)).toBe(true);
+      expect(result.has(ws2.id)).toBe(false);
+    });
+  });
+
+  describe('memberEmails', () => {
+    it('returns email addresses for every member of the workspace', async () => {
+      const ws = await seedPgWorkspace(db, 'pg.email.test');
+      const u1 = await seedUser(db, { email: 'sales@pg.email.test' });
+      const u2 = await seedUser(db, { email: 'cs@pg.email.test' });
+      await seedMembership(db, ws.id, u1.id, 'admin');
+      await seedMembership(db, ws.id, u2.id, 'member');
+
+      const emails = await repo.memberEmails(ws.id);
+      expect(emails).toHaveLength(2);
+      expect(emails).toEqual(expect.arrayContaining(['sales@pg.email.test', 'cs@pg.email.test']));
+    });
+
+    it('returns an empty array for a workspace with no members', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      expect(await repo.memberEmails(ws.id)).toEqual([]);
+    });
+
+    it('does not include emails of members from a different workspace', async () => {
+      const wsA = await seedPgWorkspace(db, 'pg-a.com');
+      const wsB = await seedPgWorkspace(db, 'pg-b.com');
+      const uA = await seedUser(db, { email: 'a@pg-a.com' });
+      const uB = await seedUser(db, { email: 'b@pg-b.com' });
+      await seedMembership(db, wsA.id, uA.id);
+      await seedMembership(db, wsB.id, uB.id);
+
+      const emails = await repo.memberEmails(wsA.id);
+      expect(emails).toEqual(['a@pg-a.com']);
+    });
+  });
 });

@@ -5,6 +5,8 @@ import { outboxEntries, users } from '@/lib/db/schema';
 import { hashPassword } from '@/lib/auth/password';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import { AuthService, __setAuthServiceForTest } from '@/lib/server/services/auth';
+import { getUserRepo, getVerificationTokenRepo, getOutboxRepo } from '@/lib/server/repositories/factory';
 
 // requireSession() is mocked per-test so the request action can be exercised
 // without a real Auth.js JWT cookie. The mock is attached before importing
@@ -23,7 +25,6 @@ vi.mock('@/lib/auth/session', () => ({
 
 import { emailChangeRequestAction } from '../emailChangeRequestAction';
 import { emailChangeConfirmAction } from '../emailChangeConfirmAction';
-import { __setActionDbForTest } from '../_shared';
 
 let db: PgliteDB;
 
@@ -147,7 +148,8 @@ describe('emailChangeConfirmAction', () => {
 
   it('maps a pglite-shaped unique violation (err.cause.code) to EMAIL_TAKEN', async () => {
     const token = await issueToken();
-    __setActionDbForTest(throwingUpdateDb({ cause: { code: '23505' } }));
+    const [userRepo, vtRepo, outboxRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo()]);
+    __setAuthServiceForTest(new AuthService(throwingUpdateDb({ cause: { code: '23505' } }), userRepo, vtRepo, outboxRepo));
     const r = await emailChangeConfirmAction({ rawToken: token });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
@@ -155,9 +157,11 @@ describe('emailChangeConfirmAction', () => {
 
   it('rethrows a non-unique DB error instead of masking it as EMAIL_TAKEN', async () => {
     const token = await issueToken();
-    __setActionDbForTest(
+    const [userRepo, vtRepo, outboxRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo()]);
+    __setAuthServiceForTest(new AuthService(
       throwingUpdateDb(Object.assign(new Error('not null'), { code: '23502' })),
-    );
+      userRepo, vtRepo, outboxRepo,
+    ));
     await expect(emailChangeConfirmAction({ rawToken: token })).rejects.toThrow(
       'not null',
     );

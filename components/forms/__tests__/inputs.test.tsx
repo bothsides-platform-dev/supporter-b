@@ -52,8 +52,13 @@ describe('CurrencyInput', () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     render(<CurrencyInput label="정산한도" value="" onChange={onChange} />);
-    await user.type(screen.getByRole('spinbutton'), '7');
+    await user.type(screen.getByRole('textbox'), '7');
     expect(onChange).toHaveBeenCalledWith('7');
+  });
+
+  it('displays comma-formatted value for large numbers', () => {
+    render(<CurrencyInput label="정산한도" value="1000000" onChange={() => {}} />);
+    expect(screen.getByRole('textbox')).toHaveValue('1,000,000');
   });
 
   it('shows a Korean-readable amount hint when value > 0', () => {

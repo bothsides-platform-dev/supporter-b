@@ -81,6 +81,27 @@ export class DrizzleBidNoteRepository implements BidNoteRepo {
     }));
   }
 
+  async findById(
+    noteId: string,
+    tx?: Tx,
+  ): Promise<Pick<BidNoteRecord, 'id' | 'bidId'> | undefined> {
+    const db = this.h(tx);
+    const rows = await db
+      .select({ id: bidNotes.id, bidId: bidNotes.bidId })
+      .from(bidNotes)
+      .where(eq(bidNotes.id, noteId));
+    return rows[0];
+  }
+
+  async findAttachmentIds(noteId: string, tx?: Tx): Promise<string[]> {
+    const db = this.h(tx);
+    const rows = await db
+      .select({ id: attachments.id })
+      .from(attachments)
+      .where(eq(attachments.bidNoteId, noteId));
+    return rows.map((r: { id: string }) => r.id);
+  }
+
   async remove(noteId: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.delete(bidNotes).where(eq(bidNotes.id, noteId));

@@ -39,6 +39,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | Component tooling | shadcn (base-nova) — 컴포넌트 scaffolding 전용 | `shadcn@4.6.0` |
 | State | Zustand (UI toggles, signup draft, page→shell header-actions slot) | `zustand@5.0.13` |
 | Forms | zod v4 검증 + Server Actions (react-hook-form 미사용 — 폼은 useState + zod) | `zod@4.4.3` |
+| Numeric input | `react-number-format` — 원화 금액 입력 천단위 구분·소수점 차단 (`CurrencyInput`) | `react-number-format@5.4.5` |
 | Icons | lucide-react | `lucide-react@1.14.0` |
 | Fonts | `next/font/local` — Pretendard Variable + JetBrains Mono Variable, self-hosted in `public/fonts/` | — |
 | Motion | `motion` (구 Framer Motion). 임포트는 `motion/react`. | `motion@12.38.0` |
@@ -76,6 +77,27 @@ app/
 Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation.
 
 **Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
+
+## Server Architecture (lib/server/)
+
+세 계층으로 구성된다. 계층 간 의존 방향은 Actions → Services → Repositories.
+
+```
+lib/server/
+├─ actions/          # 얇은 진입점: 세션 검증 + 입력 파싱 후 서비스에 위임
+├─ services/         # 비즈니스 로직 캡슐화 (Phase 1: rfp.ts · bid.ts)
+│  ├─ rfp.ts         # RfpService: award / cancel / close
+│  └─ bid.ts         # BidService: withdraw
+└─ repositories/     # DB 접근 추상화 (Drizzle 구현 + 메모리 테스트 구현)
+```
+
+**서비스 레이어 규칙:**
+- 서비스는 트랜잭션·알림 팬아웃·이메일 아웃박스를 소유한다. 액션은 이를 직접 다루지 않는다.
+- `Actor = { userId, workspaceId }` — 세션에서 추출해 액션이 서비스에 전달한다.
+- `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 예외 throw 없이 결과를 반환한다.
+- 서비스 싱글턴은 Next.js `globalThis` 캐싱 패턴 사용 (`getRfpService()` / `getBidService()`).
+
+아직 서비스로 미분리된 액션은 `TODOS.md` Phase 2 항목 참조.
 
 ## Linear Design Language — Hard Rules
 

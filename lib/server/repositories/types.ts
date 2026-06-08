@@ -62,6 +62,12 @@ export interface InvitationRepo {
   findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, RfpInvitation[]>>;
   /** 한 RFP의 draft 상태 초대만 조회 — sendDraftInvitationsAction 일괄 발송용. */
   findDraftsByRfp(rfpId: string, tx?: Tx): Promise<RfpInvitation[]>;
+  /** (rfpId, pgWsId) 쌍으로 단건 조회 — status 불문. acceptPgRequest 분기용. */
+  findByRfpAndPg(rfpId: string, pgWsId: string, tx?: Tx): Promise<RfpInvitation | undefined>;
+  /** draft row 삽입 (tokenHash = 'draft-{invId}' placeholder). */
+  saveDraft(invId: string, rfpId: string, pgWsId: string, expiresAt: Date, tx?: Tx): Promise<void>;
+  /** draft → pending: rawToken hash 갱신 + status='pending' + sentAt/expiresAt 갱신. */
+  promoteDraft(invId: string, rawToken: string, now: Date, expiresAt: Date, tx?: Tx): Promise<void>;
   /** PG 워크스페이스에 발송된 활성 초대 + RFP pair — 인박스/칸반 공통 fetcher. */
   findByPgWorkspace(
     pgWsId: string,
@@ -122,6 +128,10 @@ export interface WorkspaceRepo {
   isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
   /** 해당 워크스페이스 멤버 user id 배열 — 알림 fanout + Centrifugo subscribe ACL용. 순서 미보장. */
   memberUserIds(workspaceId: string, tx?: Tx): Promise<string[]>;
+  /** 여러 워크스페이스 멤버 user id를 workspaceId 키 Map으로 배치 조회 — N+1 제거용. */
+  memberUserIdsBatch(wsIds: string[], tx?: Tx): Promise<Map<string, string[]>>;
+  /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
+  memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────
@@ -205,7 +215,11 @@ export interface BidNoteRepo {
   /** 한 bid의 노트 — 생성 순서(오래된 → 최신). authorName, attachments
    *  hydrated. */
   findByBid(bidId: string, tx?: Tx): Promise<Required<BidNoteRecord>[]>;
-  /** 단건 삭제 — 첨부는 별도 정리 책임(액션 레이어). */
+  /** noteId로 stub 조회 — id + bidId만 반환. removeNote 소유권 체인용. */
+  findById(noteId: string, tx?: Tx): Promise<Pick<BidNoteRecord, 'id' | 'bidId'> | undefined>;
+  /** noteId에 연결된 attachment id 목록 — storage best-effort 정리용. */
+  findAttachmentIds(noteId: string, tx?: Tx): Promise<string[]>;
+  /** 단건 삭제 — DB cascade가 attachments 처리. */
   remove(noteId: string, tx?: Tx): Promise<void>;
 }
 
