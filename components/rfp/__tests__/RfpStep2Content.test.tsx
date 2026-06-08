@@ -146,6 +146,39 @@ describe('RfpStep2Content', () => {
     });
   });
 
+  describe('제목 인라인 에러 (attempted)', () => {
+    it('다음 클릭 전에는 제목이 비어있어도 에러 메시지가 표시되지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText('제목을 입력해주세요')).not.toBeInTheDocument();
+    });
+
+    it('다음 클릭 후 제목 미입력 시 에러 메시지가 표시된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      expect(screen.getByText('제목을 입력해주세요')).toBeInTheDocument();
+    });
+
+    it('다음 클릭 후 제목을 입력하면 에러 메시지가 사라진다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      await user.type(screen.getByPlaceholderText(/서포트쇼핑몰/), '테스트 견적건');
+      expect(screen.queryByText('제목을 입력해주세요')).not.toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이면 다음 클릭 없이도 제목 미입력 에러가 표시된다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.getByText('제목을 입력해주세요')).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 제목이 채워지면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ title: '테스트 견적건' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText('제목을 입력해주세요')).not.toBeInTheDocument();
+    });
+  });
+
   describe('견적 유형 토글', () => {
     it('"신규 계약" 버튼 클릭 시 store contractType 이 new 로 업데이트된다', async () => {
       const user = userEvent.setup();

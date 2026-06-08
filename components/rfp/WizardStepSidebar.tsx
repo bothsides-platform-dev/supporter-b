@@ -8,6 +8,8 @@ type WizardStepSidebarProps = {
   currentStep: number;
   // index 0..3 → step 1..4 의 입력 완료 여부 (순서 무관, 실제 입력 기준)
   completed: boolean[];
+  // index 0..3 → 해당 step에서 advance/goToStep 실패가 있었는지 (없으면 ✗ 미표시)
+  failedAt?: boolean[];
   onStepClick: (step: number) => void;
   /** 단계 정의 — 기본값은 구매사 RFP 작성 단계. */
   steps?: readonly { num: number; label: string }[];
@@ -22,6 +24,7 @@ type WizardStepSidebarProps = {
 export function WizardStepSidebar({
   currentStep,
   completed,
+  failedAt,
   onStepClick,
   steps = WIZARD_STEPS,
   title = '새 견적 요청',
@@ -40,9 +43,12 @@ export function WizardStepSidebar({
       </span>
       {steps.map(({ num, label }) => {
         const isActive = num === currentStep;
-        // 자유 이동 — 모든 단계 클릭 가능. 현재 step은 완료 상태여도 번호를 유지
-        // (✓ 대신 하이라이트). 그 외 완료된 step만 ✓ — 위치가 아니라 실제 입력 기준.
-        const isDone = !isActive && completed[num - 1];
+        const isComplete = completed[num - 1];
+        // 비활성 + 완료 → ✓ / 비활성 + 실패이력 있는 미완료 → ✗ / 활성 → 번호
+        const isDone = !isActive && isComplete;
+        const isError = !isActive && !isComplete && !!(failedAt?.[num - 1]);
+        // step N 도달 조건: steps 1..N-1 이 모두 complete
+        const reachable = completed.slice(0, num - 1).every(Boolean);
 
         return (
           <button
@@ -50,27 +56,29 @@ export function WizardStepSidebar({
             type="button"
             onClick={() => onStepClick(num)}
             className={cn(
-              'flex items-center gap-2 px-2 py-1.5 rounded-[var(--md-sys-shape-extra-small)] text-left mb-0.5 transition-colors cursor-pointer',
+              'flex items-center gap-2 px-2 py-1.5 rounded-[var(--md-sys-shape-extra-small)] text-left mb-0.5 transition-colors',
               isActive && 'bg-[var(--md-sys-color-surface-container-high)]',
-              !isActive && 'hover:bg-[var(--md-sys-color-surface-container)]',
+              !isActive && reachable && 'hover:bg-[var(--md-sys-color-surface-container)] cursor-pointer',
+              !isActive && !reachable && 'cursor-not-allowed opacity-50',
             )}
           >
             <span
               className={cn(
                 'w-[18px] h-[18px] rounded-full flex items-center justify-center font-mono text-[9px] font-bold flex-shrink-0',
                 isDone && 'bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)]',
+                isError && 'bg-[var(--md-sys-color-error)] text-[var(--md-sys-color-on-error)]',
                 isActive && 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]',
-                !isDone && !isActive && 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-outline)]',
+                !isDone && !isError && !isActive && 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-outline)]',
               )}
             >
-              {isDone ? '✓' : num}
+              {isDone ? '✓' : isError ? '✗' : num}
             </span>
             <span
               className={cn(
                 'font-mono text-[11px]',
                 isActive && 'text-[var(--md-sys-color-on-surface)] font-semibold',
-                isDone && 'text-[var(--md-sys-color-on-surface-variant)]',
-                !isDone && !isActive && 'text-[var(--md-sys-color-outline)]',
+                (isDone || isError) && 'text-[var(--md-sys-color-on-surface-variant)]',
+                !isDone && !isError && !isActive && 'text-[var(--md-sys-color-outline)]',
               )}
             >
               {label}

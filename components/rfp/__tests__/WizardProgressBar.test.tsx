@@ -30,6 +30,21 @@ describe('WizardProgressBar', () => {
     expect(screen.getByText(/사업자 확인/)).toBeInTheDocument();
   });
 
+  it('failedAt 있는 미완료 비활성 dot에 data-error="true" 속성이 적용된다', () => {
+    // step 1: active, step 2: 비활성+미완료+실패이력 → data-error="true"
+    render(<WizardProgressBar currentStep={1} completed={[true, false, false, false]} failedAt={[false, true, false, false]} />);
+    const dots = screen.getAllByTestId('progress-dot');
+    expect(dots[1]).toHaveAttribute('data-error', 'true');
+    expect(dots[0]).not.toHaveAttribute('data-error', 'true'); // active step
+  });
+
+  it('failedAt 없으면 미완료 비활성 dot도 data-error="false"이다', () => {
+    // 초기 렌더 — 아직 어떤 step도 시도하지 않음
+    render(<WizardProgressBar currentStep={1} completed={[true, false, false, false]} />);
+    const dots = screen.getAllByTestId('progress-dot');
+    expect(dots[1]).toHaveAttribute('data-error', 'false');
+  });
+
   it('steps prop: 단계 수·라벨이 바뀐다', () => {
     // currentStep=4 → span에 "Step 4 / 4 — 검토·발송"이 보임.
     // 기본 4단계 라벨은 "보내기 확인"이므로 "검토·발송"이 보이면 steps prop이 적용된 것.

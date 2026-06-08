@@ -1,6 +1,7 @@
 // components/rfp/RfpStep2Content.tsx
 'use client';
 
+import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { underlineInputClass } from '@/components/forms/inputs';
@@ -28,12 +29,16 @@ const SOLUTION_OPTIONS = [
 type Props = {
   onBack: () => void;
   onNext: () => void;
+  /** 위저드에서 이미 advance 실패를 경험한 step — 다음 클릭 없이도 에러를 표시 */
+  showFieldErrors?: boolean;
 };
 
-export function RfpStep2Content({ onBack, onNext }: Props) {
+export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
   const draft = useRfpDraftStore();
+  const [attempted, setAttempted] = useState(false);
 
   const websiteInvalid = !isValidWebsiteUrlLight(draft.websiteUrl);
+  const titleError = (attempted || !!showFieldErrors) && draft.title.trim() === '';
 
   return (
     <div className="space-y-5">
@@ -67,8 +72,12 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.title}
           onChange={(e) => draft.setField('title', e.target.value)}
           placeholder="2026 서포트쇼핑몰 결제 인프라 견적 요청"
-          className={underlineInputClass}
+          aria-invalid={titleError}
+          className={cn(underlineInputClass, titleError && 'border-[var(--md-sys-color-error)]')}
         />
+        {titleError && (
+          <p className="text-[12px] text-[var(--md-sys-color-error)]">제목을 입력해주세요</p>
+        )}
       </div>
       <div className="space-y-1">
         <Label size="md" muted={false}>사업 운영 홈페이지</Label>
@@ -230,7 +239,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
-        <Button type="button" size="md" onClick={onNext}>
+        <Button type="button" size="md" onClick={() => { setAttempted(true); onNext(); }}>
           다음
         </Button>
       </div>
