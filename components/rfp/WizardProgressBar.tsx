@@ -50,6 +50,7 @@ export function WizardProgressBar({ currentStep, completed, failedAt, onStepClic
                   isDone && 'w-1.5 bg-[var(--md-sys-color-tertiary)]',
                   isActive && 'w-4 bg-[var(--md-sys-color-primary)]',
                   isError && 'w-1.5 bg-[var(--md-sys-color-error)]',
+                  !isDone && !isActive && !isError && 'w-1.5 bg-[var(--md-sys-color-outline-variant)]',
                 )}
               />
             </button>

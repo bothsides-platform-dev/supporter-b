@@ -68,6 +68,7 @@ export function WizardStepSidebar({
                 isDone && 'bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)]',
                 isError && 'bg-[var(--md-sys-color-error)] text-[var(--md-sys-color-on-error)]',
                 isActive && 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]',
+                !isDone && !isError && !isActive && 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-outline)]',
               )}
             >
               {isDone ? '✓' : isError ? '✗' : num}
@@ -76,8 +77,8 @@ export function WizardStepSidebar({
               className={cn(
                 'font-mono text-[11px]',
                 isActive && 'text-[var(--md-sys-color-on-surface)] font-semibold',
-                isDone && 'text-[var(--md-sys-color-on-surface-variant)]',
-                isError && 'text-[var(--md-sys-color-on-surface-variant)]',
+                (isDone || isError) && 'text-[var(--md-sys-color-on-surface-variant)]',
+                !isDone && !isError && !isActive && 'text-[var(--md-sys-color-outline)]',
               )}
             >
               {label}
