@@ -19,8 +19,9 @@ vi.mock('motion/react', () => {
 });
 
 vi.mock('@/components/landing/SavingsCalculator', () => ({ SavingsCalculator: () => null }));
-vi.mock('@/components/landing/LiveBidSimulation', () => ({ LiveBidSimulation: () => null }));
-vi.mock('@/components/landing/LandingToast', () => ({ LandingToast: () => null }));
+vi.mock('@/components/landing/OfferComparisonTable', () => ({ OfferComparisonTable: () => null }));
+vi.mock('@/components/landing/ProcessSection', () => ({ ProcessSection: () => null }));
+vi.mock('@/components/landing/FaqAccordion', () => ({ FaqAccordion: () => null }));
 
 vi.mock('@/lib/stores/theme', () => ({
   useThemeStore: (selector: (s: { resolvedTheme: string; setTheme: (t: string) => void }) => unknown) =>

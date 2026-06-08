@@ -9,7 +9,6 @@ import { formatKRW } from '@/lib/format';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import {
   SUPPORTER_B_RATE,
-  GENERAL_ASSUMED_RATE,
   annualMaxSavings,
   gradeFromVolume,
 } from '@/lib/landing/savings';
@@ -50,9 +49,6 @@ export function SavingsCalculator() {
   const savings = annualMaxSavings(volume, currentRate);
   const currentCost = Math.round(currentRate * volume);
   const supporterBCost = Math.round(supporterBRate * volume);
-
-  const baselineRate = grade === 'general' ? GENERAL_ASSUMED_RATE : supporterBRate;
-  const baselineNote = `최저가능 ${(baselineRate * 100).toFixed(2)}%`;
 
   return (
     <section className="border-t border-b border-[var(--md-sys-color-outline)] py-[var(--s-9)]">
@@ -102,21 +98,20 @@ export function SavingsCalculator() {
           </div>
         </div>
 
-        {/* Result */}
-        <div className="flex flex-col gap-[var(--s-3)] md:items-end md:text-right md:min-w-[360px]">
-          <KpiCell
-            label="EST. ANNUAL SAVINGS"
-            value={formatKRW(savings)}
-          />
-          <div className="flex items-center gap-3 md:justify-end">
-            <span className="font-mono text-[var(--text-2xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              가맹점 등급
-            </span>
-            <Chip label={GRADE_LABELS[grade]} color="surface" />
+        {/* Result — emphasized savings */}
+        <div className="md:min-w-[360px]">
+          <div className="flex flex-col gap-[var(--s-4)] rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-tertiary-container)]/20 p-[var(--s-6)] md:items-end md:text-right">
+            <KpiCell
+              label="EST. ANNUAL SAVINGS"
+              value={formatKRW(savings)}
+            />
+            <div className="flex items-center gap-3 md:justify-end">
+              <span className="font-mono text-[var(--text-2xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                가맹점 등급
+              </span>
+              <Chip label={GRADE_LABELS[grade]} color="surface" />
+            </div>
           </div>
-          <span className="font-mono text-[var(--text-2xs)] tracking-[0.08em] text-[var(--md-sys-color-on-surface-variant)]">
-            {baselineNote}
-          </span>
         </div>
       </div>
 
@@ -130,10 +125,8 @@ export function SavingsCalculator() {
       </div>
 
       <p className="mt-[var(--s-7)] font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
-        * 최대 절감 가능액 추정치입니다. 일반 등급(연 30억 초과)은{' '}
-        {(GENERAL_ASSUMED_RATE * 100).toFixed(2)}% 가정(최저 가능 수준).
-        카드 수수료를 포함한 모든 항목(정산주기·보증금·셋업비 등)이 협상 대상이며,
-        실제 절감액은 입찰 결과에 따라 다릅니다.
+        * 예상 절감액은 추정치입니다. 카드 수수료를 포함한 모든 항목(정산주기·보증보험·가입비 등)이
+        협상 대상이며, 실제 절감액은 PG사 견적·조건에 따라 달라질 수 있습니다.
       </p>
     </section>
   );

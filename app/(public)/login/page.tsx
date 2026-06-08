@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { PasswordField } from '@/components/auth/PasswordField';
+import { LoginSignupCallout } from '@/components/auth/LoginSignupCallout';
 import { loginAction } from '@/lib/server/actions/auth';
 import {
   LOCK_THRESHOLD,
@@ -97,10 +98,14 @@ function LoginContent() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-          로그인
-        </h2>
+      <LoginSignupCallout />
+
+      <div className="flex items-center gap-3" aria-hidden>
+        <span className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
+        <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          또는 로그인
+        </span>
+        <span className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
       </div>
 
       <form className="space-y-6" onSubmit={handleSubmit}>
@@ -176,18 +181,12 @@ function LoginContent() {
         </Button>
       </form>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-center">
         <Link
           href="/password/forgot"
           className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
           비밀번호를 잊었어요?
-        </Link>
-        <Link
-          href="/signup"
-          className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-        >
-          회원가입 →
         </Link>
       </div>
     </div>
