@@ -11,17 +11,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
-import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import {
-  __resetForTest,
-  __useDrizzleWithDbForTest,
-} from '@/lib/server/repositories/factory';
-import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
+import { type PgliteDB } from '@/lib/db/client-pglite';
 import {
   seedPgWorkspace,
   seedUser,
   seedMembership,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
+import { setupWorkspaceActionEnv, teardownWorkspaceActionEnv } from './_setup';
 import { workspaceInvitations, outboxEntries, notifications } from '@/lib/db/schema';
 import { generateToken, hashToken } from '@/lib/server/token';
 
@@ -46,16 +42,12 @@ import { inviteWorkspaceMemberAction } from '../inviteWorkspaceMemberAction';
 let db: PgliteDB;
 
 beforeEach(async () => {
-  __resetForTest();
-  db = await createPgliteDb();
-  await __useDrizzleWithDbForTest(db);
-  __setActionDbForTest(db);
+  db = await setupWorkspaceActionEnv();
   sessionRef.value = null;
 });
 
 afterEach(() => {
-  __setActionDbForTest(undefined);
-  __resetForTest();
+  teardownWorkspaceActionEnv();
 });
 
 async function makeAdminSession(

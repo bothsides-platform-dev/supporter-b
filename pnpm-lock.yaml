@@ -113,6 +113,9 @@ dependencies:
   tailwind-merge:
     specifier: ^3.5.0
     version: 3.6.0
+  tldts:
+    specifier: ^7.4.2
+    version: 7.4.2
   tw-animate-css:
     specifier: ^1.4.0
     version: 1.4.0

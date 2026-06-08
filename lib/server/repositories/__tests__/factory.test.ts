@@ -27,17 +27,14 @@ describe('repository factory', () => {
     expect(backend).toBe('drizzle');
   });
 
-  it('rebuilds a stale global repo cache missing WorkspaceRepo.listForUser', async () => {
+  it('rebuilds a stale global repo cache missing __version', async () => {
     vi.stubEnv('DATABASE_URL', 'postgres://test:test@127.0.0.1:1/x');
-    // Mimics Next dev HMR keeping an old DrizzleWorkspaceRepository instance.
-    const staleWorkspace = {
-      save: async () => {},
-      findById: async () => undefined,
-    } satisfies Omit<WorkspaceRepo, 'listForUser' | 'isMember' | 'memberUserIds'>;
+    // Mimics Next dev HMR keeping an old bundle that predates __version.
     globalThis.__bidit_repos__ = {
       ...(globalThis.__bidit_repos__ ?? {}),
-      workspace: staleWorkspace as unknown as WorkspaceRepo,
+      workspace: { save: async () => {}, findById: async () => undefined } as unknown as WorkspaceRepo,
       __backend: 'drizzle',
+      __version: 0, // stale — below current BUNDLE_VERSION
     } as typeof globalThis.__bidit_repos__;
 
     const repo = await getWorkspaceRepo();

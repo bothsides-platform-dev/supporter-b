@@ -304,4 +304,56 @@ export class DrizzleInvitationRepository implements InvitationRepo {
       .set({ boardColumnId: columnId })
       .where(eq(rfpInvitations.id, invitationId));
   }
+
+  async findByRfpAndPg(
+    rfpId: string,
+    pgWsId: string,
+    tx?: Tx,
+  ): Promise<RfpInvitation | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select()
+      .from(rfpInvitations)
+      .where(and(eq(rfpInvitations.rfpId, rfpId), eq(rfpInvitations.pgWsId, pgWsId)))
+      .limit(1);
+    return row ? rowToInvitation(row) : undefined;
+  }
+
+  async saveDraft(
+    invId: string,
+    rfpId: string,
+    pgWsId: string,
+    expiresAt: Date,
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db.insert(rfpInvitations).values({
+      id: invId,
+      rfpId,
+      pgWsId,
+      tokenHash: `draft-${invId}`,
+      sentAt: new Date(),
+      expiresAt,
+      status: 'draft',
+    });
+  }
+
+  async promoteDraft(
+    invId: string,
+    rawToken: string,
+    now: Date,
+    expiresAt: Date,
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(rfpInvitations)
+      .set({
+        tokenHash: hashToken(rawToken),
+        status: 'pending',
+        sentAt: now,
+        expiresAt,
+      })
+      .where(eq(rfpInvitations.id, invId));
+  }
 }

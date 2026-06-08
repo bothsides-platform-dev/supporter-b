@@ -92,7 +92,7 @@ describe('RfpStep2Content', () => {
   });
 
   describe('홈페이지 도메인 유효성', () => {
-    const homepagePlaceholder = 'https://supporter-b.com/';
+    const homepagePlaceholder = 'example.com';
 
     it('빈 값이면 에러를 표시하지 않는다', () => {
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
@@ -126,6 +126,23 @@ describe('RfpStep2Content', () => {
         'aria-invalid',
         'false',
       );
+    });
+
+    it('스킴 없는 도메인 입력 후 포커스를 떠나면 https://가 자동으로 붙는다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.type(screen.getByPlaceholderText(homepagePlaceholder), 'example.com');
+      await user.tab();
+      expect(useRfpDraftStore.getState().websiteUrl).toBe('https://example.com');
+      expect(screen.getByDisplayValue('https://example.com')).toBeInTheDocument();
+    });
+
+    it('이미 https://가 있는 값은 포커스 이탈 후 그대로 유지된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.type(screen.getByPlaceholderText(homepagePlaceholder), 'https://example.com');
+      await user.tab();
+      expect(useRfpDraftStore.getState().websiteUrl).toBe('https://example.com');
     });
   });
 

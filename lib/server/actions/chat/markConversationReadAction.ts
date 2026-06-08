@@ -2,11 +2,8 @@
 
 import { z } from 'zod';
 
-import {
-  getChatConversationRepo,
-  getChatReadRepo,
-} from '@/lib/server/repositories/factory';
 import { publishChatEvent } from '@/lib/server/realtime/centrifugo';
+import { getChatService } from '@/lib/server/services/chat';
 import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
 const Input = z.object({ conversationId: z.string().uuid() }).strict();
@@ -23,23 +20,19 @@ export async function markConversationReadAction(
   const ws = await requireActiveWorkspace();
   if (!ws.ok) return ws;
 
-  const conv = await (await getChatConversationRepo()).findById(
-    parsed.data.conversationId,
-  );
-  if (!conv) return { ok: false, error: 'CONVERSATION_NOT_FOUND' };
-  const myWsId = ws.workspaceType === 'buyer' ? conv.buyerWsId : conv.pgWsId;
-  if (myWsId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
+  const actor = { userId: ws.userId, workspaceId: ws.workspaceId, workspaceType: ws.workspaceType };
 
-  const now = new Date();
-  await (await getChatReadRepo()).upsert(conv.id, ws.userId, now);
+  const service = await getChatService();
+  const result = await service.markConversationRead(parsed.data.conversationId, actor);
 
-  // Best-effort live read receipt to the counterparty.
-  // readAt travels in the payload so the receiver uses server time, not client clock.
-  await publishChatEvent(conv.id, {
-    type: 'read',
-    userId: ws.userId,
-    readAt: now.toISOString(),
-  });
+  if (result.ok) {
+    // Best-effort live read receipt to the counterparty.
+    await publishChatEvent(parsed.data.conversationId, {
+      type: 'read',
+      userId: ws.userId,
+      readAt: result.readAt,
+    });
+  }
 
-  return { ok: true, readAt: now.toISOString() };
+  return result;
 }
