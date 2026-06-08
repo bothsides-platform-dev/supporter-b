@@ -14,8 +14,14 @@ export function appOrigins(): AppOrigins {
 /** Which workspace type a request host serves, or null if unknown / routing disabled. */
 export function hostServes(host: string | null, origins: AppOrigins): WorkspaceType | null {
   if (!host) return null;
-  const buyerHost = new URL(origins.buyer).hostname.toLowerCase();
-  const partnerHost = new URL(origins.pg).hostname.toLowerCase();
+  let buyerHost: string;
+  let partnerHost: string;
+  try {
+    buyerHost = new URL(origins.buyer).hostname.toLowerCase();
+    partnerHost = new URL(origins.pg).hostname.toLowerCase();
+  } catch {
+    return null; // malformed origin → routing disabled, never throw (runs in the layout guard)
+  }
   if (buyerHost === partnerHost) return null; // single-host (local/dev) → routing off
   const h = host.split(':')[0].toLowerCase();
   if (h === partnerHost) return 'pg';
@@ -31,6 +37,8 @@ export function resolveHostRedirect(
 ): string | null {
   const serving = hostServes(host, origins);
   if (serving === null || serving === activeType) return null;
+  // Cross-host mismatch lands on the other host's /home by design — the original
+  // path is not preserved (mismatches are rare and home is a safe re-entry).
   return `${origins[activeType]}/home`;
 }
 

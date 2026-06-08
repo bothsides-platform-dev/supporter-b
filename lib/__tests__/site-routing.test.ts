@@ -27,6 +27,11 @@ describe('hostServes', () => {
   it('disables routing when both origins share a host (local/dev)', () => {
     expect(hostServes('localhost', LOCAL)).toBeNull();
   });
+  it('returns null (fails safe) when an origin is malformed instead of throwing', () => {
+    const BAD = { buyer: 'supporter-b.com', pg: 'partner.supporter-b.com' } as AppOrigins; // no scheme
+    expect(() => hostServes('partner.supporter-b.com', BAD)).not.toThrow();
+    expect(hostServes('partner.supporter-b.com', BAD)).toBeNull();
+  });
 });
 
 describe('resolveHostRedirect', () => {
