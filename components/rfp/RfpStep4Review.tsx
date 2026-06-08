@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
+import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
@@ -99,7 +100,12 @@ export function RfpStep4Review({
             )
           }
           aria-invalid={deadlineError}
-          className={`block bg-transparent border-0 border-b py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] focus:outline-none transition-colors ${deadlineError ? 'border-[var(--md-sys-color-error)] focus:border-[var(--md-sys-color-error)]' : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]'}`}
+          className={cn(
+            'block bg-transparent border-0 border-b py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] focus:outline-none transition-colors',
+            deadlineError
+              ? 'border-[var(--md-sys-color-error)] focus:border-[var(--md-sys-color-error)]'
+              : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',
+          )}
         />
         {deadlineError && (
           <p className="text-[12px] text-[var(--md-sys-color-error)]">마감일을 선택해주세요</p>

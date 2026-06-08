@@ -147,8 +147,21 @@ describe('WizardStepSidebar', () => {
 
   // ── 유효성 표시 ✓/✗ ─────────────────────────────────────────────────────
 
-  it('비활성 미완료 step은 ✗를 표시한다', () => {
-    // Step 1: active → 번호. Steps 2, 3, 4: 비활성+미완료 → ✗ 표시
+  it('failedAt 있는 비활성 미완료 step은 ✗를 표시한다', () => {
+    // failedAt=[false, true, true, true] → steps 2, 3, 4 실패 이력 → ✗ 표시
+    render(
+      <WizardStepSidebar
+        currentStep={1}
+        completed={[true, false, false, false]}
+        failedAt={[false, true, true, true]}
+        onStepClick={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByText('✗')).toHaveLength(3);
+  });
+
+  it('failedAt 없으면 비활성 미완료 step도 ✗ 없이 번호를 표시한다', () => {
+    // 초기 렌더(failedAt 미전달) → steps 2, 3, 4 아직 시도 없음 → ✗ 없음
     render(
       <WizardStepSidebar
         currentStep={1}
@@ -156,15 +169,16 @@ describe('WizardStepSidebar', () => {
         onStepClick={vi.fn()}
       />,
     );
-    expect(screen.getAllByText('✗')).toHaveLength(3);
+    expect(screen.queryAllByText('✗')).toHaveLength(0);
   });
 
-  it('완료 비활성 step은 ✓, 미완료 비활성 step은 ✗로 구분 표시한다', () => {
-    // Step 1: active → 번호 / Step 2: 비활성+완료 → ✓ / Steps 3, 4: 비활성+미완료 → ✗
+  it('완료 비활성 step은 ✓, failedAt 있는 미완료 비활성 step은 ✗로 구분 표시한다', () => {
+    // Step 1: active → 번호 / Step 2: 비활성+완료 → ✓ / Steps 3, 4: 비활성+미완료+실패이력 → ✗
     render(
       <WizardStepSidebar
         currentStep={1}
         completed={[true, true, false, false]}
+        failedAt={[false, false, true, true]}
         onStepClick={vi.fn()}
       />,
     );

@@ -8,13 +8,15 @@ type WizardProgressBarProps = {
   currentStep: number; // 1-4
   // index 0..3 → step 1..4 의 입력 완료 여부 (순서 무관, 실제 입력 기준)
   completed: boolean[];
+  // index 0..3 → 해당 step에서 advance/goToStep 실패가 있었는지 (없으면 error dot 미표시)
+  failedAt?: boolean[];
   /** 자유 이동 — dot 클릭 시 해당 단계로 이동. */
   onStepClick?: (step: number) => void;
   /** 단계 정의. 기본값은 구매사 RFP 4단계. */
   steps?: readonly { num: number; label: string }[];
 };
 
-export function WizardProgressBar({ currentStep, completed, onStepClick, steps = WIZARD_STEPS }: WizardProgressBarProps) {
+export function WizardProgressBar({ currentStep, completed, failedAt, onStepClick, steps = WIZARD_STEPS }: WizardProgressBarProps) {
   const TOTAL = steps.length;
   const labels = steps.map((s) => s.label);
   return (
@@ -24,9 +26,9 @@ export function WizardProgressBar({ currentStep, completed, onStepClick, steps =
           const step = i + 1;
           const isActive = step === currentStep;
           const isComplete = completed[i];
-          // 현재 step은 done 표시하지 않음(active 하이라이트 유지). 그 외 완료 step만 done.
+          // 현재 step은 done 표시하지 않음(active 하이라이트 유지). 실패이력 있는 미완료만 error dot.
           const isDone = !isActive && isComplete;
-          const isError = !isActive && !isComplete;
+          const isError = !isActive && !isComplete && !!(failedAt?.[i]);
           const reachable = completed.slice(0, i).every(Boolean);
           return (
             <button

@@ -30,12 +30,19 @@ describe('WizardProgressBar', () => {
     expect(screen.getByText(/사업자 확인/)).toBeInTheDocument();
   });
 
-  it('미완료 비활성 dot에 data-error="true" 속성이 적용된다', () => {
-    // step 1: active, step 2: 비활성+미완료 → data-error="true"
-    render(<WizardProgressBar currentStep={1} completed={[true, false, false, false]} />);
+  it('failedAt 있는 미완료 비활성 dot에 data-error="true" 속성이 적용된다', () => {
+    // step 1: active, step 2: 비활성+미완료+실패이력 → data-error="true"
+    render(<WizardProgressBar currentStep={1} completed={[true, false, false, false]} failedAt={[false, true, false, false]} />);
     const dots = screen.getAllByTestId('progress-dot');
     expect(dots[1]).toHaveAttribute('data-error', 'true');
     expect(dots[0]).not.toHaveAttribute('data-error', 'true'); // active step
+  });
+
+  it('failedAt 없으면 미완료 비활성 dot도 data-error="false"이다', () => {
+    // 초기 렌더 — 아직 어떤 step도 시도하지 않음
+    render(<WizardProgressBar currentStep={1} completed={[true, false, false, false]} />);
+    const dots = screen.getAllByTestId('progress-dot');
+    expect(dots[1]).toHaveAttribute('data-error', 'false');
   });
 
   it('steps prop: 단계 수·라벨이 바뀐다', () => {

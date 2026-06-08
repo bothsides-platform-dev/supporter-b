@@ -44,17 +44,19 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
   // 각 step의 완료 여부를 실제 입력값으로 독립 판정 — 순서와 무관.
   const validity = getWizardValidity(draft);
   const completed = validity.map((s) => s.complete);
+  // 사이드바·프로그레스바에 ✗ 표시 범위를 전달 — 실패 이력이 있는 step만 오류 표시.
+  const failedAt = validity.map((s) => failedSteps.has(s.num));
 
   // step N에 이동하려면 steps 1..N-1이 모두 complete이어야 한다.
   const canNavigateTo = (step: number) =>
     validity.slice(0, step - 1).every((s) => s.complete);
 
   const markFailed = (stepNum: number) =>
-    setFailedSteps((prev) => new Set([...prev, stepNum]));
+    setFailedSteps((prev) => { const next = new Set(prev); next.add(stepNum); return next; });
 
   // advance: 현재 step이 미완료면 hint toast 후 차단. 실패 시 해당 step을 failedSteps에 기록.
   const advance = () => {
-    const cur = validity.find((s) => s.num === currentStep);
+    const cur = validity[currentStep - 1];
     if (!cur?.complete) {
       toast(cur?.hint ?? '현재 단계를 완료해주세요.', { type: 'error' });
       markFailed(currentStep);
@@ -93,6 +95,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
     const incomplete = getFirstIncompleteStep(draft);
     if (incomplete) {
       toast(incomplete.hint, { type: 'error' });
+      markFailed(incomplete.num);
       setCurrentStep(incomplete.num);
       return;
     }
@@ -157,6 +160,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
       <WizardStepSidebar
         currentStep={currentStep}
         completed={completed}
+        failedAt={failedAt}
         onStepClick={goToStep}
         className="sticky top-0 self-start border-r-0"
       />
@@ -167,6 +171,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
         <WizardProgressBar
           currentStep={currentStep}
           completed={completed}
+          failedAt={failedAt}
           onStepClick={goToStep}
         />
 

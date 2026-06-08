@@ -8,6 +8,8 @@ type WizardStepSidebarProps = {
   currentStep: number;
   // index 0..3 → step 1..4 의 입력 완료 여부 (순서 무관, 실제 입력 기준)
   completed: boolean[];
+  // index 0..3 → 해당 step에서 advance/goToStep 실패가 있었는지 (없으면 ✗ 미표시)
+  failedAt?: boolean[];
   onStepClick: (step: number) => void;
   /** 단계 정의 — 기본값은 구매사 RFP 작성 단계. */
   steps?: readonly { num: number; label: string }[];
@@ -22,6 +24,7 @@ type WizardStepSidebarProps = {
 export function WizardStepSidebar({
   currentStep,
   completed,
+  failedAt,
   onStepClick,
   steps = WIZARD_STEPS,
   title = '새 견적 요청',
@@ -41,9 +44,9 @@ export function WizardStepSidebar({
       {steps.map(({ num, label }) => {
         const isActive = num === currentStep;
         const isComplete = completed[num - 1];
-        // 비활성 + 완료 → ✓ / 비활성 + 미완료 → ✗ / 활성 → 번호(편집 중 중립)
+        // 비활성 + 완료 → ✓ / 비활성 + 실패이력 있는 미완료 → ✗ / 활성 → 번호
         const isDone = !isActive && isComplete;
-        const isError = !isActive && !isComplete;
+        const isError = !isActive && !isComplete && !!(failedAt?.[num - 1]);
         // step N 도달 조건: steps 1..N-1 이 모두 complete
         const reachable = completed.slice(0, num - 1).every(Boolean);
 
