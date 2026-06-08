@@ -70,8 +70,10 @@ export function RfpStep4Review({
   const [minDate] = useState(() =>
     new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
   );
+  const [attempted, setAttempted] = useState(false);
 
   const pgCount = draft.allowedPgWorkspaceIds.length;
+  const deadlineError = attempted && !draft.deadline;
   const paymentMethodSummary = [
     ...draft.requiredPaymentMethods.map((m) => PAYMENT_METHOD_LABELS[m]),
     ...draft.customPaymentMethods.map((c) => c.label),
@@ -94,8 +96,12 @@ export function RfpStep4Review({
               e.target.value ? `${e.target.value}T23:59:59Z` : '',
             )
           }
-          className="block bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+          aria-invalid={deadlineError}
+          className={`block bg-transparent border-0 border-b py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] focus:outline-none transition-colors ${deadlineError ? 'border-[var(--md-sys-color-error)] focus:border-[var(--md-sys-color-error)]' : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]'}`}
         />
+        {deadlineError && (
+          <p className="text-[12px] text-[var(--md-sys-color-error)]">마감일을 선택해주세요</p>
+        )}
       </div>
 
       {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true) */}
@@ -234,7 +240,7 @@ export function RfpStep4Review({
           type="button"
           size="lg"
           disabled={submitting}
-          onClick={onSubmit}
+          onClick={() => { setAttempted(true); void onSubmit(); }}
         >
           {submitting
             ? '보내는 중…'

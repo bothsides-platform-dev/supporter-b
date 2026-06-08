@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 
@@ -14,8 +15,10 @@ type Props = {
 
 export function RfpStep3PgSelect({ pgList, onBack, onNext }: Props) {
   const draft = useRfpDraftStore();
+  const [attempted, setAttempted] = useState(false);
 
   const selectedIds = new Set(draft.allowedPgWorkspaceIds.map((w) => w.id));
+  const pgError = attempted && draft.allowedPgWorkspaceIds.length === 0;
   const allSelected = pgList.length > 0 && selectedIds.size === pgList.length;
 
   const handleToggle = (ws: PgWorkspace) => {
@@ -83,12 +86,15 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext }: Props) {
           {draft.allowedPgWorkspaceIds.length}개 선택됨
         </p>
       )}
+      {pgError && (
+        <p className="text-[12px] text-[var(--md-sys-color-error)]">PG를 1개 이상 선택해주세요</p>
+      )}
 
       <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
-        <Button type="button" size="md" onClick={onNext}>
+        <Button type="button" size="md" onClick={() => { setAttempted(true); onNext(); }}>
           다음
         </Button>
       </div>

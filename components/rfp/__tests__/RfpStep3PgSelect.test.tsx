@@ -83,6 +83,28 @@ describe('RfpStep3PgSelect', () => {
     expect(onNext).toHaveBeenCalledOnce();
   });
 
+  describe('PG 미선택 인라인 에러 (attempted)', () => {
+    it('다음 클릭 전에는 PG 미선택이어도 에러 메시지가 표시되지 않는다', () => {
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText('PG를 1개 이상 선택해주세요')).not.toBeInTheDocument();
+    });
+
+    it('다음 클릭 후 PG 미선택 시 에러 메시지가 표시된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      expect(screen.getByText('PG를 1개 이상 선택해주세요')).toBeInTheDocument();
+    });
+
+    it('다음 클릭 후 PG 선택하면 에러 메시지가 사라진다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
+      expect(screen.queryByText('PG를 1개 이상 선택해주세요')).not.toBeInTheDocument();
+    });
+  });
+
   it('pgList가 비어있으면 칩이 렌더링되지 않고 전체 선택 버튼은 클릭해도 store가 변하지 않는다', async () => {
     const user = userEvent.setup();
     render(<RfpStep3PgSelect pgList={[]} onBack={vi.fn()} onNext={vi.fn()} />);
