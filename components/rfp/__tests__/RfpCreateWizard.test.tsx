@@ -123,12 +123,17 @@ describe('RfpCreateWizard', () => {
     expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
   });
 
-  it('사이드바에서 미도달 단계로 자유롭게 점프할 수 있다 (Step 1 → Step 4)', async () => {
+  it('이전 step 모두 완료 시 사이드바에서 이후 step으로 이동할 수 있다', async () => {
+    // Steps 1, 2, 3 완료 조건 충족 → 사이드바에서 Step 4로 바로 이동 가능
+    useRfpDraftStore.setState({
+      title: '테스트',
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      deadline: '2026-06-30T23:59:59Z',
+    });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);
-    // Step 1에서 바로 '보내기 확인'(Step 4) 클릭 → 리뷰 단계로 점프
     await user.click(screen.getByText('보내기 확인'));
-    expect(screen.getByRole('button', { name: '발송' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1개 PG사에 발송' })).toBeInTheDocument();
   });
 
   it('Step 2에서 이전 클릭 시 Step 1로 돌아간다', async () => {
@@ -185,25 +190,27 @@ describe('RfpCreateWizard', () => {
     localStorageSpy.mockRestore();
   });
 
-  it('필수값 미충족 상태에서 발송 클릭 시 토스트로 안내하고 해당 step으로 이동하며 createRfpAction을 호출하지 않는다', async () => {
+  it('마감일 미설정 상태에서 발송 클릭 시 토스트로 안내하고 createRfpAction을 호출하지 않는다', async () => {
+    // Steps 1, 2, 3 완료 / Step 4(마감일) 미완료 — 순서 강제로 step 4까지 도달 가능
+    useRfpDraftStore.setState({
+      title: '테스트',
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      // deadline 미설정 → Step 4 미완료
+    });
     const user = userEvent.setup();
-    // store는 빈 상태(resetStore) — 제목/PG/마감일 모두 비어있음
     render(<RfpCreateWizard pgList={[]} />);
 
-    // 순서 무관 자유 이동: Step1 → 4까지 다음으로 이동
+    // Steps 1→2→3→4 (steps 1-3 유효 → advance() 통과)
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
-    // Step 4 발송 버튼 클릭 (미충족이라도 클릭 가능)
-    await user.click(screen.getByRole('button', { name: '발송' }));
+    await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
 
     expect(toast).toHaveBeenCalledWith(
-      expect.stringContaining('제목'),
+      expect.stringContaining('마감일'),
       { type: 'error' },
     );
     expect(createRfpAction).not.toHaveBeenCalled();
-    // 첫 미충족 step(Step 2 제안 내용)으로 이동 → Step 2 입력 필드가 보인다
-    expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
   });
 
   it('currentSettlementCycle과 deliveryServicePeriod를 createRfpAction에 전달한다', async () => {
@@ -297,5 +304,40 @@ describe('RfpCreateWizard', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('INVALID_INPUT');
     });
+  });
+
+  // ── step 순서 강제 — advance() 게이트 ──────────────────────────────────
+
+  it('Step 2 미완료(제목 없음) 시 다음 클릭은 step을 유지하고 hint toast를 표시한다', async () => {
+    const user = userEvent.setup();
+    render(<RfpCreateWizard pgList={[]} />);
+    await user.click(screen.getByRole('button', { name: '다음' })); // Step 1 → 2 (항상 유효)
+    await user.click(screen.getByRole('button', { name: '다음' })); // 차단: title 없음
+    // 여전히 Step 2
+    expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
+    expect(toast).toHaveBeenCalledWith('제목을 입력해주세요', { type: 'error' });
+  });
+
+  it('Step 3 미완료(PG 없음) 시 다음 클릭은 step을 유지하고 hint toast를 표시한다', async () => {
+    useRfpDraftStore.setState({ title: '테스트 제안건' });
+    const user = userEvent.setup();
+    render(<RfpCreateWizard pgList={[]} />);
+    await user.click(screen.getByRole('button', { name: '다음' })); // → Step 2
+    await user.click(screen.getByRole('button', { name: '다음' })); // → Step 3 (title 있음)
+    await user.click(screen.getByRole('button', { name: '다음' })); // 차단: PG 없음
+    // 여전히 Step 3 (Step 4 '발송' 버튼 없음)
+    expect(screen.queryByRole('button', { name: '발송' })).not.toBeInTheDocument();
+    expect(toast).toHaveBeenCalledWith('PG를 1개 이상 선택해주세요', { type: 'error' });
+  });
+
+  // ── step 순서 강제 — goToStep() 게이트 (사이드바 클릭) ─────────────────
+
+  it('이전 step 미완료 시 사이드바 클릭으로 이후 step 이동 불가 — toast 호출', async () => {
+    const user = userEvent.setup();
+    // store 비어있음 → Step 2 미완료(title 없음)
+    render(<RfpCreateWizard pgList={[]} />);
+    await user.click(screen.getByText('보내기 확인')); // goToStep(4) — Step 2 미완료라 차단
+    expect(screen.queryByRole('button', { name: '발송' })).not.toBeInTheDocument();
+    expect(toast).toHaveBeenCalledWith('제목을 입력해주세요', { type: 'error' });
   });
 });

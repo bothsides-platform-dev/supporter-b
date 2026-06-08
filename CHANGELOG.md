@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.9.1] - 2026-06-08
+
+### Added
+
+- **금액 입력 시 천단위 콤마 자동 표시**: 정산한도·보증보험 등 원화 금액 입력 필드에서 숫자를 입력하면 `1,000,000` 형태로 자동 포맷됩니다. 소수점 입력은 차단되고(`decimalScale=0`), 실제 저장·제출 값은 콤마 없는 순수 숫자입니다.
+
+### Fixed
+
+- **견적 작성 위저드 — 무시 후 폼 수정 시 자동저장이 재개됩니다**: 이전 버전에서 '무시' 클릭 후 내용을 수정해도 초안이 저장되지 않는 버그를 수정했습니다.
+- **견적 작성 위저드 — 템플릿 적용 시 초안 복원 배너가 닫힙니다**: 이전 버전에서 템플릿을 선택해도 '이전 작성 내용이 있습니다' 배너가 남아 있던 버그를 수정했습니다. 이제 템플릿 적용 시 기존 초안도 함께 삭제됩니다.
+
+## [0.1.9.0] - 2026-06-08
+
+### Changed
+
+- **서비스 레이어 전면 도입(Phase 2)**: 채팅(`ChatService`), 워크스페이스(`WorkspaceService`), 인증(`AuthService`), 알림(`NotificationService`) 4개 서비스 클래스를 추가하여 Actions → Services → Repositories 3계층 구조가 전체 코드베이스에 적용됩니다. 서버 액션은 세션 검증·입력 파싱만 담당하고, 트랜잭션·이메일 아웃박스·알림 팬아웃은 서비스가 캡슐화합니다.
+- **ChatService**: 메시지 전송(`sendMessage`) 및 대화 읽음 처리(`markConversationRead`) — 아웃박스 enqueue, 인앱 알림 다이제스트 소유. Centrifugo 발행은 post-commit best-effort로 액션에 잔류.
+- **WorkspaceService**: 워크스페이스 생성(`createWorkspace`), 멤버 초대/수락/재발송/취소(`inviteMember`·`acceptInvite`·`resendInvite`·`cancelInvite`), 역할 변경(`changeMemberRole`), 멤버 제거(`removeMember`) — 초대 이메일 아웃박스·인앱 알림 팬아웃 소유.
+- **AuthService**: 회원가입(`completeSignup`·`signupViaInvite`), 계정 삭제(`deleteAccount`), 비밀번호 재설정(`requestPasswordReset`·`resetPassword`), 이메일 변경(`requestEmailChange`·`confirmEmailChange`) — 인증 토큰 발급·consume·아웃박스 소유.
+- **NotificationService**: 알림 읽음 처리(`markRead`·`markAllRead`), 이메일 재발송 enqueue(`retryEmail`) — outbox 상태 reset 소유.
+
+## [0.1.8.0] - 2026-06-08
+
+### Changed
+
+- **서비스 레이어 도입(Phase 1)**: 선정(`awardRfpAction`), 취소(`cancelRfpAction`), 마감(`closeRfpAction`), 제안 철회(`withdrawBidAction`) 등 핵심 비즈니스 로직이 `RfpService`·`BidService` 클래스로 분리됩니다. 서버 액션은 세션 검증·입력 파싱 후 서비스에 위임하는 얇은 레이어로 변경되며, 트랜잭션 관리·알림 발송·이메일 큐는 서비스가 캡슐화합니다.
+- **선정 로직 개선**: 존재하지 않는 bid ID를 선정 시도하면 FK 위반 에러 대신 명확한 `WINNING_BID_NOT_FOUND` 오류를 반환합니다.
+- **`awardRfpAction` 입력 검증 강화**: `rfpId` 필드가 UUID 형식으로 검증됩니다. 잘못된 형식 전달 시 즉시 `INVALID_INPUT` 오류를 반환합니다.
+
+### Fixed
+
+- **취소·마감 액션 세션 없음 처리**: `cancelRfpAction`·`closeRfpAction` 호출 시 세션이 없으면 `FORBIDDEN_BUYER`를 반환합니다.
+
+## [0.1.7.3] - 2026-06-08
+
+### Changed
+
+- **RFP 홈페이지 주소 입력 개선**: 구매사가 사업 운영 홈페이지를 입력할 때 `https://` 스킴 없이 `example.com` 형태로 입력해도 유효한 도메인으로 인정됩니다. 입력 필드에서 포커스가 벗어나면 자동으로 `https://`가 앞에 붙어 저장됩니다. 유효하지 않은 TLD(`example.invalidtld`)나 localhost, 단순 문자열은 여전히 거부됩니다.
+
 ## [0.1.7.2] - 2026-06-07
 
 ### Added

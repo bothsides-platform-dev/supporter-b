@@ -4,7 +4,7 @@
 // 독립적으로 complete 여부를 판정한다(순서 무관). Sidebar·ProgressBar·발송
 // 버튼이 모두 이 함수를 통해 동일한 기준으로 step 상태를 본다.
 import { WIZARD_STEPS } from './wizard-steps';
-import { isValidWebsiteUrl } from '@/lib/validation/website-url';
+import { isValidWebsiteUrlLight } from '@/lib/validation/website-url';
 
 export type WizardValidationDraft = {
   title: string;
@@ -19,7 +19,7 @@ function isStepComplete(num: number, draft: WizardValidationDraft): boolean {
   switch (num) {
     case 2:
       // 제목 필수 + 홈페이지(선택)는 비었거나 유효한 도메인이어야 함.
-      return draft.title.trim() !== '' && isValidWebsiteUrl(draft.websiteUrl);
+      return draft.title.trim() !== '' && isValidWebsiteUrlLight(draft.websiteUrl);
     case 3:
       return draft.allowedPgWorkspaceIds.length > 0;
     case 4:

@@ -38,15 +38,48 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
   const [currentStep, setCurrentStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
+  // advance/goToStep 실패를 경험한 step set — back 후 복귀해도 에러 표시 유지
+  const [failedSteps, setFailedSteps] = useState<Set<number>>(new Set());
 
   // 각 step의 완료 여부를 실제 입력값으로 독립 판정 — 순서와 무관.
-  const completed = getWizardValidity(draft).map((s) => s.complete);
+  const validity = getWizardValidity(draft);
+  const completed = validity.map((s) => s.complete);
+  // 사이드바·프로그레스바에 ✗ 표시 범위를 전달 — 실패 이력이 있는 step만 오류 표시.
+  const failedAt = validity.map((s) => failedSteps.has(s.num));
 
-  // 자유 이동 — 어느 step이든(앞/뒤 무관) 바로 이동. 순서 강제 없음.
-  const advance = () => setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1));
+  // step N에 이동하려면 steps 1..N-1이 모두 complete이어야 한다.
+  const canNavigateTo = (step: number) =>
+    validity.slice(0, step - 1).every((s) => s.complete);
+
+  const markFailed = (stepNum: number) =>
+    setFailedSteps((prev) => { const next = new Set(prev); next.add(stepNum); return next; });
+
+  // advance: 현재 step이 미완료면 hint toast 후 차단. 실패 시 해당 step을 failedSteps에 기록.
+  const advance = () => {
+    const cur = validity[currentStep - 1];
+    if (!cur?.complete) {
+      toast(cur?.hint ?? '현재 단계를 완료해주세요.', { type: 'error' });
+      markFailed(currentStep);
+      return;
+    }
+    setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1));
+  };
+
   const back = () => setCurrentStep((s) => Math.max(1, s - 1));
-  const goToStep = (step: number) =>
-    setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, step)));
+
+  // goToStep: 이전 step이 모두 complete일 때만 이동. blocker step을 failedSteps에 기록.
+  const goToStep = (step: number) => {
+    const clamped = Math.min(TOTAL_STEPS, Math.max(1, step));
+    if (!canNavigateTo(clamped)) {
+      const blocker = validity.find((s) => s.num < clamped && !s.complete);
+      if (blocker) {
+        toast(blocker.hint, { type: 'error' });
+        markFailed(blocker.num);
+      }
+      return;
+    }
+    setCurrentStep(clamped);
+  };
 
   const handleSubmit = async () => {
     if (submitting) return;
@@ -62,6 +95,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
     const incomplete = getFirstIncompleteStep(draft);
     if (incomplete) {
       toast(incomplete.hint, { type: 'error' });
+      markFailed(incomplete.num);
       setCurrentStep(incomplete.num);
       return;
     }
@@ -126,6 +160,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
       <WizardStepSidebar
         currentStep={currentStep}
         completed={completed}
+        failedAt={failedAt}
         onStepClick={goToStep}
         className="sticky top-0 self-start border-r-0"
       />
@@ -136,6 +171,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
         <WizardProgressBar
           currentStep={currentStep}
           completed={completed}
+          failedAt={failedAt}
           onStepClick={goToStep}
         />
 
@@ -156,8 +192,12 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
               onNext={advance}
             />
           )}
-          {currentStep === 2 && <RfpStep2Content onBack={back} onNext={advance} />}
-          {currentStep === 3 && <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} />}
+          {currentStep === 2 && (
+            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} />
+          )}
+          {currentStep === 3 && (
+            <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} showFieldErrors={failedSteps.has(3)} />
+          )}
           {currentStep === 4 && (
             <RfpStep4Review
               bizProfile={bizProfile}
@@ -166,6 +206,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
               onSubmit={handleSubmit}
               submitting={submitting}
               serverError={serverError}
+              showFieldErrors={failedSteps.has(4)}
             />
           )}
         </div>

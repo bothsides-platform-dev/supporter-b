@@ -92,7 +92,7 @@ describe('RfpStep2Content', () => {
   });
 
   describe('홈페이지 도메인 유효성', () => {
-    const homepagePlaceholder = 'https://supporter-b.com/';
+    const homepagePlaceholder = 'example.com';
 
     it('빈 값이면 에러를 표시하지 않는다', () => {
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
@@ -126,6 +126,56 @@ describe('RfpStep2Content', () => {
         'aria-invalid',
         'false',
       );
+    });
+
+    it('스킴 없는 도메인 입력 후 포커스를 떠나면 https://가 자동으로 붙는다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.type(screen.getByPlaceholderText(homepagePlaceholder), 'example.com');
+      await user.tab();
+      expect(useRfpDraftStore.getState().websiteUrl).toBe('https://example.com');
+      expect(screen.getByDisplayValue('https://example.com')).toBeInTheDocument();
+    });
+
+    it('이미 https://가 있는 값은 포커스 이탈 후 그대로 유지된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.type(screen.getByPlaceholderText(homepagePlaceholder), 'https://example.com');
+      await user.tab();
+      expect(useRfpDraftStore.getState().websiteUrl).toBe('https://example.com');
+    });
+  });
+
+  describe('제목 인라인 에러 (attempted)', () => {
+    it('다음 클릭 전에는 제목이 비어있어도 에러 메시지가 표시되지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText('제목을 입력해주세요')).not.toBeInTheDocument();
+    });
+
+    it('다음 클릭 후 제목 미입력 시 에러 메시지가 표시된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      expect(screen.getByText('제목을 입력해주세요')).toBeInTheDocument();
+    });
+
+    it('다음 클릭 후 제목을 입력하면 에러 메시지가 사라진다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      await user.type(screen.getByPlaceholderText(/서포트쇼핑몰/), '테스트 견적건');
+      expect(screen.queryByText('제목을 입력해주세요')).not.toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이면 다음 클릭 없이도 제목 미입력 에러가 표시된다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.getByText('제목을 입력해주세요')).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 제목이 채워지면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ title: '테스트 견적건' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText('제목을 입력해주세요')).not.toBeInTheDocument();
     });
   });
 

@@ -58,6 +58,7 @@ const draftV2 = (fees: Record<string, string>, memo = '') => ({
 });
 
 beforeEach(() => {
+  vi.useRealTimers();
   localStorage.clear();
   pushMock.mockClear();
   submitBidMock.mockClear();
@@ -125,6 +126,22 @@ describe('BidWizard 드래프트 복원(1단계)', () => {
     expect(screen.queryByText(/이전에 작성 중이던 내용/)).toBeNull();
     expect(localStorage.getItem('bid-draft:rfp-uuid')).toBeNull();
   });
+
+  it('무시 후 폼 수정 시 새 draft가 저장된다', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV2({ card: '0.40' })));
+    render(<BidWizard rfp={rfp} buyerName="토스" />);
+
+    await user.click(screen.getByRole('button', { name: '무시' }));
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.type(feeInput('카드 수수료'), '2.5');
+
+    // saveDraft has a 500ms debounce; waitFor polls until the draft is persisted
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem('bid-draft:rfp-uuid') ?? 'null');
+      expect(saved?.fees?.card).toBe('2.5');
+    }, { timeout: 1000 });
+  });
 });
 
 describe('BidWizard 413 업로드 오류(3단계)', () => {
@@ -162,6 +179,23 @@ describe('BidWizard 템플릿 적용(1단계)', () => {
     expect((screen.getByPlaceholderText('1') as HTMLInputElement).value).toBe('2');
     await user.click(screen.getByRole('button', { name: '수수료' }));
     expect(feeInput('카드 수수료').value).toBe('0.5');
+  });
+
+  it('템플릿 선택 시 드래프트 복원 배너가 닫힌다', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV2({ card: '0.40' })));
+    const tmpl: QuoteTemplateOption = {
+      id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
+      paymentFees: { card: 0.005 },
+    };
+    render(<BidWizard rfp={rfp} buyerName="토스" templates={[tmpl]} />);
+
+    expect(screen.getByText(/이전에 작성 중이던 내용/)).toBeInTheDocument();
+    await user.selectOptions(
+      screen.getByRole('option', { name: '표준' }).closest('select')!,
+      't1',
+    );
+    expect(screen.queryByText(/이전에 작성 중이던 내용/)).not.toBeInTheDocument();
   });
 });
 

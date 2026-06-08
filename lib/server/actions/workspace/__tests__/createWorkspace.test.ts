@@ -4,8 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 
-import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
+import { type PgliteDB } from '@/lib/db/client-pglite';
+import { setupWorkspaceActionEnv, teardownWorkspaceActionEnv } from './_setup';
 import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
   users,
@@ -37,12 +37,11 @@ import { createWorkspaceAction } from '../createWorkspaceAction';
 
 let db: PgliteDB;
 beforeEach(async () => {
-  db = await createPgliteDb();
-  __setActionDbForTest(db);
+  db = await setupWorkspaceActionEnv();
   sessionRef.value = null;
 });
 afterEach(() => {
-  __setActionDbForTest(undefined);
+  teardownWorkspaceActionEnv();
 });
 
 describe('createWorkspaceInTx', () => {
