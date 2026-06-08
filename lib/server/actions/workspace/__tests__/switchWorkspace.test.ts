@@ -34,6 +34,10 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: any[]) => revalidatePath(...args),
 }));
 
+vi.mock('next/headers', () => ({
+  headers: () => Promise.resolve({ get: (_name: string) => null }),
+}));
+
 import { switchWorkspaceAction } from '../switchWorkspaceAction';
 
 let db: PgliteDB;
