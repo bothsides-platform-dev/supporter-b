@@ -39,6 +39,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | Component tooling | shadcn (base-nova) — 컴포넌트 scaffolding 전용 | `shadcn@4.6.0` |
 | State | Zustand (UI toggles, signup draft, page→shell header-actions slot) | `zustand@5.0.13` |
 | Forms | zod v4 검증 + Server Actions (react-hook-form 미사용 — 폼은 useState + zod) | `zod@4.4.3` |
+| Numeric input | `react-number-format` — 원화 금액 입력 천단위 구분·소수점 차단 (`CurrencyInput`) | `react-number-format@5.4.5` |
 | Icons | lucide-react | `lucide-react@1.14.0` |
 | Fonts | `next/font/local` — Pretendard Variable + JetBrains Mono Variable, self-hosted in `public/fonts/` | — |
 | Motion | `motion` (구 Framer Motion). 임포트는 `motion/react`. | `motion@12.38.0` |

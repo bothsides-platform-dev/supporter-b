@@ -101,6 +101,9 @@ dependencies:
   react-dom:
     specifier: 19.2.4
     version: 19.2.4(react@19.2.4)
+  react-number-format:
+    specifier: ^5.4.5
+    version: 5.4.5(react-dom@19.2.4)(react@19.2.4)
   resend:
     specifier: ^6.4.0
     version: 6.12.4(@react-email/render@2.0.8)
@@ -8622,6 +8625,16 @@ packages:
   /react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
     dev: true
+
+  /react-number-format@5.4.5(react-dom@19.2.4)(react@19.2.4):
+    resolution: {integrity: sha512-y8O2yHHj3w0aE9XO8d2BCcUOOdQTRSVq+WIuMlLVucAm5XNjJAy+BoOJiuQMldVYVOKTMyvVNfnbl2Oqp+YxGw==}
+    peerDependencies:
+      react: ^0.14 || ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^0.14 || ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    dependencies:
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+    dev: false
 
   /react-remove-scroll-bar@2.3.8(@types/react@19.2.15)(react@19.2.4):
     resolution: {integrity: sha512-9r+yi9+mgU33AKcj6IbT9oRCO78WriSj6t/cF8DWBZJ9aOGPOTEDvdUDz1FwKim7QXWwmHqtdHnRJfhAxEG46Q==}
