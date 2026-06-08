@@ -38,6 +38,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
   const [currentStep, setCurrentStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
+  // advance/goToStep 실패를 경험한 step set — back 후 복귀해도 에러 표시 유지
+  const [failedSteps, setFailedSteps] = useState<Set<number>>(new Set());
 
   // 각 step의 완료 여부를 실제 입력값으로 독립 판정 — 순서와 무관.
   const validity = getWizardValidity(draft);
@@ -47,11 +49,15 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
   const canNavigateTo = (step: number) =>
     validity.slice(0, step - 1).every((s) => s.complete);
 
-  // advance: 현재 step이 미완료면 hint toast 후 차단.
+  const markFailed = (stepNum: number) =>
+    setFailedSteps((prev) => new Set([...prev, stepNum]));
+
+  // advance: 현재 step이 미완료면 hint toast 후 차단. 실패 시 해당 step을 failedSteps에 기록.
   const advance = () => {
     const cur = validity.find((s) => s.num === currentStep);
     if (!cur?.complete) {
       toast(cur?.hint ?? '현재 단계를 완료해주세요.', { type: 'error' });
+      markFailed(currentStep);
       return;
     }
     setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1));
@@ -59,12 +65,15 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
 
   const back = () => setCurrentStep((s) => Math.max(1, s - 1));
 
-  // goToStep: 이전 step이 모두 complete일 때만 이동. 첫 번째 blocker hint toast.
+  // goToStep: 이전 step이 모두 complete일 때만 이동. blocker step을 failedSteps에 기록.
   const goToStep = (step: number) => {
     const clamped = Math.min(TOTAL_STEPS, Math.max(1, step));
     if (!canNavigateTo(clamped)) {
       const blocker = validity.find((s) => s.num < clamped && !s.complete);
-      if (blocker) toast(blocker.hint, { type: 'error' });
+      if (blocker) {
+        toast(blocker.hint, { type: 'error' });
+        markFailed(blocker.num);
+      }
       return;
     }
     setCurrentStep(clamped);
@@ -178,8 +187,12 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
               onNext={advance}
             />
           )}
-          {currentStep === 2 && <RfpStep2Content onBack={back} onNext={advance} />}
-          {currentStep === 3 && <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} />}
+          {currentStep === 2 && (
+            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} />
+          )}
+          {currentStep === 3 && (
+            <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} showFieldErrors={failedSteps.has(3)} />
+          )}
           {currentStep === 4 && (
             <RfpStep4Review
               bizProfile={bizProfile}
@@ -188,6 +201,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
               onSubmit={handleSubmit}
               submitting={submitting}
               serverError={serverError}
+              showFieldErrors={failedSteps.has(4)}
             />
           )}
         </div>

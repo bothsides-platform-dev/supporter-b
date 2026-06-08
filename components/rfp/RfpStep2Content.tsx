@@ -29,14 +29,16 @@ const SOLUTION_OPTIONS = [
 type Props = {
   onBack: () => void;
   onNext: () => void;
+  /** 위저드에서 이미 advance 실패를 경험한 step — 다음 클릭 없이도 에러를 표시 */
+  showFieldErrors?: boolean;
 };
 
-export function RfpStep2Content({ onBack, onNext }: Props) {
+export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
   const draft = useRfpDraftStore();
   const [attempted, setAttempted] = useState(false);
 
   const websiteInvalid = !isValidWebsiteUrlLight(draft.websiteUrl);
-  const titleError = attempted && draft.title.trim() === '';
+  const titleError = (attempted || !!showFieldErrors) && draft.title.trim() === '';
 
   return (
     <div className="space-y-5">

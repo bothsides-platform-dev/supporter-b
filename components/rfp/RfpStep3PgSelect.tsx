@@ -11,14 +11,15 @@ type Props = {
   pgList: PgWorkspace[];
   onBack: () => void;
   onNext: () => void;
+  showFieldErrors?: boolean;
 };
 
-export function RfpStep3PgSelect({ pgList, onBack, onNext }: Props) {
+export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Props) {
   const draft = useRfpDraftStore();
   const [attempted, setAttempted] = useState(false);
 
   const selectedIds = new Set(draft.allowedPgWorkspaceIds.map((w) => w.id));
-  const pgError = attempted && draft.allowedPgWorkspaceIds.length === 0;
+  const pgError = (attempted || !!showFieldErrors) && draft.allowedPgWorkspaceIds.length === 0;
   const allSelected = pgList.length > 0 && selectedIds.size === pgList.length;
 
   const handleToggle = (ws: PgWorkspace) => {

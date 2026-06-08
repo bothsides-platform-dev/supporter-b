@@ -17,6 +17,7 @@ type Props = {
   onSubmit: () => Promise<void>;
   submitting: boolean;
   serverError: string;
+  showFieldErrors?: boolean;
 };
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
@@ -65,6 +66,7 @@ export function RfpStep4Review({
   onSubmit,
   submitting,
   serverError,
+  showFieldErrors,
 }: Props) {
   const draft = useRfpDraftStore();
   const [minDate] = useState(() =>
@@ -73,7 +75,7 @@ export function RfpStep4Review({
   const [attempted, setAttempted] = useState(false);
 
   const pgCount = draft.allowedPgWorkspaceIds.length;
-  const deadlineError = attempted && !draft.deadline;
+  const deadlineError = (attempted || !!showFieldErrors) && !draft.deadline;
   const paymentMethodSummary = [
     ...draft.requiredPaymentMethods.map((m) => PAYMENT_METHOD_LABELS[m]),
     ...draft.customPaymentMethods.map((c) => c.label),

@@ -10,11 +10,13 @@ function renderComponent({
   onSubmit = vi.fn().mockResolvedValue(undefined),
   submitting = false,
   serverError = '',
+  showFieldErrors = false,
 }: {
   onBack?: () => void;
   onSubmit?: () => Promise<void>;
   submitting?: boolean;
   serverError?: string;
+  showFieldErrors?: boolean;
 } = {}) {
   return render(
     <RfpStep4Review
@@ -22,6 +24,7 @@ function renderComponent({
       onSubmit={onSubmit}
       submitting={submitting}
       serverError={serverError}
+      showFieldErrors={showFieldErrors}
     />,
   );
 }
@@ -192,6 +195,11 @@ describe('RfpStep4Review', () => {
       const user = userEvent.setup();
       renderComponent();
       await user.click(screen.getByRole('button', { name: /보내기/ }));
+      expect(screen.getByText('마감일을 선택해주세요')).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이면 발송 클릭 없이도 마감일 미설정 에러가 표시된다', () => {
+      renderComponent({ showFieldErrors: true });
       expect(screen.getByText('마감일을 선택해주세요')).toBeInTheDocument();
     });
   });

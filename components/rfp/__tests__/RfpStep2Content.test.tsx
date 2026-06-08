@@ -166,6 +166,17 @@ describe('RfpStep2Content', () => {
       await user.type(screen.getByPlaceholderText(/서포트쇼핑몰/), '테스트 견적건');
       expect(screen.queryByText('제목을 입력해주세요')).not.toBeInTheDocument();
     });
+
+    it('showFieldErrors=true 이면 다음 클릭 없이도 제목 미입력 에러가 표시된다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.getByText('제목을 입력해주세요')).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 제목이 채워지면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ title: '테스트 견적건' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText('제목을 입력해주세요')).not.toBeInTheDocument();
+    });
   });
 
   describe('견적 유형 토글', () => {

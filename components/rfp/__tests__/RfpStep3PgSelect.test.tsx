@@ -103,6 +103,11 @@ describe('RfpStep3PgSelect', () => {
       await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
       expect(screen.queryByText('PG를 1개 이상 선택해주세요')).not.toBeInTheDocument();
     });
+
+    it('showFieldErrors=true 이면 다음 클릭 없이도 PG 미선택 에러가 표시된다', () => {
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.getByText('PG를 1개 이상 선택해주세요')).toBeInTheDocument();
+    });
   });
 
   it('pgList가 비어있으면 칩이 렌더링되지 않고 전체 선택 버튼은 클릭해도 store가 변하지 않는다', async () => {
