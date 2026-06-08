@@ -1,40 +1,11 @@
 'use server';
 
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
 
-import { attachments, users, workspaces, workspaceMembers } from '@/lib/db/schema';
-import {
-  getAttachmentRepo,
-  getChatConversationRepo,
-  getChatMessageRepo,
-  getNotificationRepo,
-  getOutboxRepo,
-  getUserRepo,
-  getWorkspaceRepo,
-} from '@/lib/server/repositories/factory';
-import {
-  dispatchNotification,
-  emitAfterCommit,
-} from '@/lib/server/notifications/dispatch';
-import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
-import { renderChatMessage } from '@/lib/server/outbox/templates/chatMessage';
-import {
-  isUserPresentInConversation,
-  publishChatEvent,
-} from '@/lib/server/realtime/centrifugo';
-import type { Notification } from '@/lib/types/notification';
-import {
-  actionDb,
-  baseUrl,
-  chatDigestBucket,
-  chatDigestDedupeKey,
-  chatDigestWindowEnd,
-  CHAT_DIGEST_WINDOW_MS,
-  type ChatActionResult,
-  requireActiveWorkspace,
-} from './_shared';
+import { getAttachmentRepo } from '@/lib/server/repositories/factory';
+import { publishChatEvent } from '@/lib/server/realtime/centrifugo';
+import { getChatService } from '@/lib/server/services/chat';
+import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
 const Input = z
   .object({
@@ -70,223 +41,34 @@ export async function sendChatMessageAction(
   const ws = await requireActiveWorkspace();
   if (!ws.ok) return ws;
 
-  const body = data.body.trim();
-  if (body.length === 0 && data.attachmentIds.length === 0) {
-    return { ok: false, error: 'INVALID_INPUT' };
-  }
+  const actor = { userId: ws.userId, workspaceId: ws.workspaceId, workspaceType: ws.workspaceType };
 
-  const convRepo = await getChatConversationRepo();
-  const wsRepo = await getWorkspaceRepo();
-
-  // ── Resolve the conversation ────────────────────────────────────────
-  let buyerWsId: string;
-  let pgWsId: string;
-  let conversationId: string | undefined;
-
-  if (data.conversationId) {
-    const conv = await convRepo.findById(data.conversationId);
-    if (!conv) return { ok: false, error: 'CONVERSATION_NOT_FOUND' };
-    // Membership ACL: the session workspace must be the conversation's own side.
-    const myWsId = ws.workspaceType === 'buyer' ? conv.buyerWsId : conv.pgWsId;
-    if (myWsId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
-    buyerWsId = conv.buyerWsId;
-    pgWsId = conv.pgWsId;
-    conversationId = conv.id;
-  } else {
-    // Resolve the counterparty workspace from id or email (cold contact).
-    let counterpartyWsId = data.counterpartyWorkspaceId;
-    if (!counterpartyWsId && data.counterpartyEmail) {
-      const user = await (await getUserRepo()).findByEmail(data.counterpartyEmail);
-      if (!user) return { ok: false, error: 'COUNTERPARTY_NOT_FOUND' };
-      const memberships = await wsRepo.listForUser(user.id);
-      // Pick the counterparty's workspace of the OPPOSITE type to the sender.
-      const wantType = ws.workspaceType === 'buyer' ? 'pg' : 'buyer';
-      const target = memberships.find((m) => m.type === wantType);
-      if (!target) return { ok: false, error: 'COUNTERPARTY_NOT_FOUND' };
-      counterpartyWsId = target.id;
-    }
-    if (!counterpartyWsId) return { ok: false, error: 'INVALID_INPUT' };
-
-    const counterparty = await wsRepo.findById(counterpartyWsId);
-    if (!counterparty) return { ok: false, error: 'COUNTERPARTY_NOT_FOUND' };
-    // buyer↔PG only — reject same-type counterparty.
-    if (counterparty.type === ws.workspaceType) {
-      return { ok: false, error: 'INVALID_COUNTERPARTY' };
-    }
-    if (ws.workspaceType === 'buyer') {
-      buyerWsId = ws.workspaceId;
-      pgWsId = counterpartyWsId;
-    } else {
-      buyerWsId = counterpartyWsId;
-      pgWsId = ws.workspaceId;
-    }
-  }
-
-  const counterpartyWsId = ws.workspaceType === 'buyer' ? pgWsId : buyerWsId;
-
-  // Validate attachments are unlinked drafts uploaded by a session-ws member.
-  if (data.attachmentIds.length > 0) {
-    const attRepo = await getAttachmentRepo();
-    for (const id of data.attachmentIds) {
-      const att = await attRepo.findById(id);
-      if (!att || att.rfpId || att.bidId || att.bidNoteId || att.chatMessageId) {
-        return { ok: false, error: 'INVALID_ATTACHMENT' };
-      }
-      const uploaderIsMember = await wsRepo.isMember(att.uploadedBy, ws.workspaceId);
-      if (!uploaderIsMember) return { ok: false, error: 'INVALID_ATTACHMENT' };
-    }
-  }
-
-  const msgRepo = await getChatMessageRepo();
-  const db = actionDb();
-  const now = new Date();
-  const messageId = randomUUID();
-  const pendingEmits: Notification[] = [];
-
-  const result: SendChatMessageResult = await db.transaction(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (tx: any): Promise<SendChatMessageResult> => {
-      // findOrCreatePair is idempotent on the pair unique.
-      const conv = conversationId
-        ? { id: conversationId }
-        : await convRepo.findOrCreatePair(buyerWsId, pgWsId, tx);
-
-      await msgRepo.save(
-        {
-          id: messageId,
-          conversationId: conv.id,
-          authorUserId: ws.userId,
-          authorWsId: ws.workspaceId,
-          body,
-          rfpId: data.rfpId ?? null,
-          createdAt: now,
-        },
-        tx,
-      );
-
-      if (data.attachmentIds.length > 0) {
-        await tx
-          .update(attachments)
-          .set({ chatMessageId: messageId })
-          .where(
-            and(
-              inArray(attachments.id, data.attachmentIds),
-              isNull(attachments.rfpId),
-              isNull(attachments.bidId),
-              isNull(attachments.bidNoteId),
-              isNull(attachments.chatMessageId),
-            ),
-          );
-      }
-
-      await convRepo.touchLastMessageAt(conv.id, now, tx);
-
-      // Sender label + counterparty members for the fanout.
-      const [senderRow] = (await tx
-        .select({ name: workspaces.name })
-        .from(workspaces)
-        .where(eq(workspaces.id, ws.workspaceId))
-        .limit(1)) as { name: string }[];
-      const senderName = senderRow?.name ?? '상대';
-
-      const recipients = (await tx
-        .select({ userId: workspaceMembers.userId, email: users.email })
-        .from(workspaceMembers)
-        .innerJoin(users, eq(workspaceMembers.userId, users.id))
-        .where(eq(workspaceMembers.workspaceId, counterpartyWsId))) as {
-        userId: string;
-        email: string;
-      }[];
-
-      const notifRepo = await getNotificationRepo();
-      const outbox = await getOutboxRepo();
-      const preview = body.length > 0 ? body.slice(0, 120) : '첨부 파일을 보냈어요.';
-      const conversationUrl = `${baseUrl()}/messages`;
-      const html = await renderChatMessage({ senderName, preview, conversationUrl });
-
-      // scheduledAt for every coalesced digest in this window — shared so a
-      // flurry lands on one fire time (the window END).
-      const digestScheduledAt = chatDigestWindowEnd(now);
-      // windowStart for in-app notification dedup (same 3-min grid as email).
-      const inappWindowStart = new Date(chatDigestBucket(now) * CHAT_DIGEST_WINDOW_MS);
-
-      for (const m of recipients) {
-        // sender's own membership never lands in counterparty fanout, but guard
-        // anyway in case of shared membership edge cases.
-        if (m.userId === ws.userId) continue;
-
-        // In-app bell: one notification per recipient per window — skip if one
-        // already exists so a message flurry doesn't stack up the bell count.
-        const alreadyNotified = await notifRepo.hasPendingChatNotification(
-          m.userId,
-          counterpartyWsId,
-          inappWindowStart,
-          tx,
-        );
-        if (!alreadyNotified) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId: m.userId,
-            workspaceId: counterpartyWsId,
-            type: 'chat.message',
-            title: `${senderName}님의 새 메시지`,
-            body: preview,
-            channel: 'inapp',
-            status: 'pending',
-            linkUrl: '/messages',
-            createdAt: now.toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-        }
-
-        // Layer 1 — presence suppression: an online recipient sees the live
-        // fanout, so skip the email enqueue entirely. Best-effort & defaults to
-        // offline when Centrifugo is unconfigured, so we never silently drop a
-        // mail a recipient actually needs.
-        if (await isUserPresentInConversation(conv.id, m.userId)) continue;
-
-        // Layer 2 — windowed coalesce: a flurry in one window collapses to a
-        // single outbox row (dedupeKey holds the time bucket; ON CONFLICT DO
-        // NOTHING). scheduledAt = window END so the mail fires once the window
-        // closes; the body (preview/count) is recomputed at flush time, so the
-        // html enqueued here is only a placeholder for the single-message case.
-        await outbox.enqueue(
-          {
-            event: 'chat.message',
-            to: m.email,
-            subject: `[Supporter B] ${senderName}님의 새 메시지`,
-            html,
-            dedupeKey: chatDigestDedupeKey(conv.id, m.userId, now),
-            scheduledAt: digestScheduledAt,
-          },
-          tx,
-        );
-      }
-
-      return { ok: true, conversationId: conv.id, messageId };
+  const service = await getChatService();
+  const result = await service.sendMessage(
+    {
+      conversationId: data.conversationId,
+      counterpartyWorkspaceId: data.counterpartyWorkspaceId,
+      counterpartyEmail: data.counterpartyEmail,
+      body: data.body,
+      rfpId: data.rfpId,
+      attachmentIds: data.attachmentIds,
     },
+    actor,
   );
 
   if (result.ok) {
-    emitAfterCommit(pendingEmits);
-    flushAfterCommit();
-    // Load the saved attachments (chatMessageId is committed at this point)
-    // so the live fanout payload includes file metadata and the receiver can
-    // render tiles without a refetch.
+    // Best-effort live fanout — never blocks the send. Load saved attachments so
+    // the receiver can render tiles without a refetch.
     const savedAtts = data.attachmentIds.length > 0
       ? await (await getAttachmentRepo()).findByChatMessageIds([result.messageId])
       : [];
-    // Best-effort live fanout — never blocks the send. Content-bearing so a
-    // subscriber can append straight to its thread (sender derived from
-    // authorWsId) without a refetch round-trip.
     await publishChatEvent(result.conversationId, {
       type: 'message',
       id: result.messageId,
-      body,
+      body: data.body.trim(),
       authorWsId: ws.workspaceId,
       rfpId: data.rfpId ?? null,
-      createdAt: now.toISOString(),
+      createdAt: new Date().toISOString(),
       attachments: savedAtts.map(({ chatMessageId: _cid, ...att }) => att),
     });
   }

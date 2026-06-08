@@ -10,12 +10,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 
-import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import {
-  __resetForTest,
-  __useDrizzleWithDbForTest,
-} from '@/lib/server/repositories/factory';
-import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
+import { type PgliteDB } from '@/lib/db/client-pglite';
+import { setupWorkspaceActionEnv, teardownWorkspaceActionEnv } from './_setup';
 import {
   seedPgWorkspace,
   seedUser,
@@ -38,16 +34,12 @@ import { acceptWorkspaceInviteAction } from '../acceptWorkspaceInviteAction';
 let db: PgliteDB;
 
 beforeEach(async () => {
-  __resetForTest();
-  db = await createPgliteDb();
-  await __useDrizzleWithDbForTest(db);
-  __setActionDbForTest(db);
+  db = await setupWorkspaceActionEnv();
   sessionRef.value = null;
 });
 
 afterEach(() => {
-  __setActionDbForTest(undefined);
-  __resetForTest();
+  teardownWorkspaceActionEnv();
 });
 
 async function seedInvitation(
