@@ -52,9 +52,16 @@ describe('Breadcrumb — URL-derived segments', () => {
   });
 
   it('renders no path labels for an unknown route', () => {
-    mockPathname.mockReturnValue('/rfp/new');
+    mockPathname.mockReturnValue('/rfp/unknown-path');
     render(<Breadcrumb />);
     expect(screen.queryByText('견적 요청')).not.toBeInTheDocument();
+  });
+
+  it('derives "견적 요청 / 새 견적 요청" from /rfp/new', () => {
+    mockPathname.mockReturnValue('/rfp/new');
+    render(<Breadcrumb />);
+    expect(screen.getByText('견적 요청')).toBeInTheDocument();
+    expect(screen.getByText('새 견적 요청')).toBeInTheDocument();
   });
 });
 

@@ -254,6 +254,9 @@ export function getBreadcrumbSegments(
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
+  if (pathname === '/rfp/new') {
+    return [{ label: '견적 요청', href: '/rfp' }, { label: '새 견적 요청' }];
+  }
   if (pathname === '/rfp') {
     const label = status ? STATUS_LABELS['/rfp'][status as keyof typeof STATUS_LABELS['/rfp']] : undefined;
     return label ? [{ label: '견적 요청', href: '/rfp' }, { label }] : [{ label: '견적 요청' }];
