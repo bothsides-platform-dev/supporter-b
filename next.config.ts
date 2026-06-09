@@ -6,6 +6,9 @@ import { withAxiom } from "next-axiom";
 const nextConfig: NextConfig = {
   // Prevent pino (and its worker-thread transport) from being bundled for Edge.
   serverExternalPackages: ["pino", "pino-pretty", "@axiomhq/pino"],
+  // Allow lvh.me (wildcard DNS → 127.0.0.1) as a trusted dev origin so local
+  // cross-subdomain dev (buyer=lvh.me:3000, pg=partner.lvh.me:3000) works with
+  // Next.js's CSRF-style origin check on cross-origin Server Action requests.
   allowedDevOrigins: ["lvh.me", "*.lvh.me"],
   // Next 16 acquires a `<distDir>/dev/lock` per `next dev` and refuses a second
   // dev server in the same dir *even on a different port*. The e2e webServer

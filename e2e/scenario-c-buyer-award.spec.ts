@@ -101,13 +101,12 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     // ── 4. Confirm award ─────────────────────────────────────────
     await page.getByRole('button', { name: /선정할게요/ }).click();
 
-    // 확정 후: awardRfpAction 완료 시 다이얼로그가 닫힌다(성공 신호). 그 다음
-    // router.refresh 로 awarded 상태가 반영돼 포커스 본문에 '선정됨' 칩이 뜬다.
-    // (사이드바 nav 에 '선정 완료' 링크가 상시 존재하므로, 그 문구 대신 본문
-    //  전용 '선정됨' 을 노려 false positive 를 피한다.)
+    // 확정 후: awardRfpAction 완료 시 다이얼로그가 닫힌다(성공 신호). 그 직후
+    // AwardResult 전체화면 축하 오버레이가 뜬다(PR#148, 2026-06-09). 오버레이는
+    // 별도 dialog role 없이 fixed inset-0 div 이므로 '선정했어요' 헤딩으로 검증.
     await expect(page.getByRole('dialog')).toBeHidden({ timeout: 15_000 });
     await expect(
-      page.getByRole('main').getByText('선정됨'),
+      page.getByRole('heading', { name: /선정했어요/ }),
     ).toBeVisible({ timeout: 15_000 });
 
     // ── 5. DB assertions ─────────────────────────────────────────
