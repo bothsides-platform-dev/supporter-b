@@ -4,6 +4,7 @@ import {
   signupViaWorkspaceInviteAction,
 } from '@/lib/server/actions/auth';
 import { clearSignupDraft, readSignupDraft } from '@/lib/auth/signup-storage';
+import { safeInternalNext } from '@/lib/auth/safe-next';
 
 export type FinalizeResult =
   | { ok: true; redirectTo: string }
@@ -82,5 +83,8 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   clearSignupDraft();
 
   if (signInResult?.error) return { ok: false, error: 'SIGNIN_FAILED' };
-  return { ok: true, redirectTo: r.redirectTo };
+  // draft의 next가 안전한 내부 경로면 서버 기본 redirectTo를 오버라이드한다.
+  // (초대 경로는 위에서 조기 반환되므로 여기선 일반 가입만 해당)
+  const override = safeInternalNext(d.next);
+  return { ok: true, redirectTo: override ?? r.redirectTo };
 }
