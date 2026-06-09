@@ -46,4 +46,13 @@ describe('BidStepFees 구간 매트릭스', () => {
     setup();
     expect(screen.queryByText('해외카드')).toBeNull();
   });
+
+  it('해외카드는 구간 매트릭스가 아니라 단일 입력으로 받는다', () => {
+    setup({ feeInputMethods: ['card', 'overseas_card'] });
+    // 국내카드는 구간 셀이 있지만, 해외카드는 구간 셀이 없어야 한다.
+    expect(screen.getByTestId('fee-cell-card-sole')).toBeInTheDocument();
+    expect(screen.queryByTestId('fee-cell-overseas_card-sole')).toBeNull();
+    // 해외카드는 단일요율 PercentInput(라벨 "해외카드 수수료")으로 렌더.
+    expect(screen.getByText('해외카드 수수료')).toBeInTheDocument();
+  });
 });

@@ -15,12 +15,15 @@ describe('merchant tiers', () => {
 });
 
 describe('isTieredMethod', () => {
-  it('카드·간편결제 카테고리만 true', () => {
+  it('국내카드·간편결제만 true', () => {
     expect(isTieredMethod('card')).toBe(true);
-    expect(isTieredMethod('overseas_card')).toBe(true);
     expect(isTieredMethod('naver_pay')).toBe(true);
     expect(isTieredMethod('kakao_pay')).toBe(true);
     expect(isTieredMethod('toss_pay')).toBe(true);
+  });
+  it('해외카드는 우대수수료 구간 대상이 아니라 false', () => {
+    // 영세·중소 우대수수료는 국내 카드결제만 적용 — 해외카드는 단일요율.
+    expect(isTieredMethod('overseas_card')).toBe(false);
   });
   it('계좌·기타는 false', () => {
     expect(isTieredMethod('virtual_account')).toBe(false);

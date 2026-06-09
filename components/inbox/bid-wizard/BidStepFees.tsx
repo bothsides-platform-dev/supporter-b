@@ -38,7 +38,10 @@ export function BidStepFees({
   const tieredGroups = PAYMENT_METHOD_CATEGORIES.filter((c) =>
     TIERED_LABELS.includes(c.label),
   )
-    .map((c) => ({ label: c.label, methods: c.methods.filter((m) => requested.has(m)) }))
+    .map((c) => ({
+      label: c.label,
+      methods: c.methods.filter((m) => requested.has(m) && isTieredMethod(m)),
+    }))
     .filter((g) => g.methods.length > 0);
 
   // 단일요율 수단(계좌·기타 등 비-구간 요청수단)

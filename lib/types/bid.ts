@@ -50,10 +50,16 @@ export type TierRates = Partial<Record<MerchantTier, number>>;
 // 구간이 적용되는 카테고리 라벨 (PAYMENT_METHOD_CATEGORIES.label 기준)
 export const TIERED_CATEGORY_LABELS = ['카드', '간편결제'] as const;
 
+// 위 카테고리에 속하지만 영세·중소 우대수수료 구간이 적용되지 않는 예외 수단.
+// 우대수수료는 국내 카드결제에만 적용되므로 해외카드는 단일요율로 받는다.
+const NON_TIERED_METHODS: ReadonlySet<PaymentMethod> = new Set<PaymentMethod>(['overseas_card']);
+
 const TIERED_METHODS: ReadonlySet<PaymentMethod> = new Set(
   PAYMENT_METHOD_CATEGORIES.filter((c) =>
     (TIERED_CATEGORY_LABELS as readonly string[]).includes(c.label),
-  ).flatMap((c) => c.methods),
+  )
+    .flatMap((c) => c.methods)
+    .filter((m) => !NON_TIERED_METHODS.has(m)),
 );
 
 /** 카테고리 상수로만 판별 — 저장된 값의 모양에 의존하지 않는다. */
