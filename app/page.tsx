@@ -2,7 +2,7 @@ import { headers } from 'next/headers';
 import { LandingHero } from '@/components/landing/LandingHero';
 import { LandingHeaderNav } from '@/components/landing/LandingHeaderNav';
 import { PgLanding } from '@/components/landing/PgLanding';
-import { FAQ_ITEMS } from '@/components/landing/FaqList';
+import { FAQ_ITEMS } from '@/components/landing/faq-data';
 import { siteConfig } from '@/lib/site-config';
 import { appOrigins, hostServes } from '@/lib/site-routing';
 

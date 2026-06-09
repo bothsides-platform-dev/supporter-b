@@ -18,12 +18,13 @@ vi.mock('@/components/landing/LandingHeaderNav', () => ({
 vi.mock('@/components/landing/PgLanding', () => ({
   PgLanding: () => <div>PG 랜딩화면</div>,
 }));
-vi.mock('@/components/landing/FaqList', () => ({
+vi.mock('@/components/landing/faq-data', () => ({
   FAQ_ITEMS: [
     { q: 'Test Q 1?', a: 'Test A 1' },
     { q: 'Test Q 2?', a: 'Test A 2' },
   ],
 }));
+vi.mock('@/components/landing/FaqList', () => ({ FaqList: () => null }));
 vi.mock('@/lib/site-config', () => ({
   siteConfig: { name: 'Test', url: 'https://test.com', description: 'Test' },
 }));
