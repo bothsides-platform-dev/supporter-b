@@ -47,7 +47,7 @@ beforeEach(() => {
     value: { assign },
   });
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true } as Response)));
-  vi.mocked(http.post).mockReturnValue({ json: vi.fn().mockResolvedValue({}) } as unknown as ResponsePromise);
+  vi.mocked(http.post).mockReturnValue(Promise.resolve({}) as unknown as ResponsePromise);
 });
 
 afterEach(() => {
