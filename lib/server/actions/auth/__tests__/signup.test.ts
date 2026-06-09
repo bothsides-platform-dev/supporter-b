@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }) }));
 import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 

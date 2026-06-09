@@ -8,6 +8,8 @@
 //
 // 인증 모킹: requireSession/requireBuyerSession/requirePgSession 모두 sessionRef.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }) }));
 import { eq, and } from 'drizzle-orm';
 
 import {

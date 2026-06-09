@@ -312,6 +312,8 @@ sudo systemctl reload caddy
 
 `git pull` 로 받은 `deploy/Caddyfile` 은 메인 블록 주소가 `{$APP_DOMAIN}, partner.{$APP_DOMAIN}` 로 바뀌어 있다. `admin.{$APP_DOMAIN}` 블록은 그대로다.
 
+> ⚠️ 호스트 라우팅은 Caddy 가 업스트림으로 원본 `Host` 헤더를 그대로 전달하는 데 의존한다(Caddy v2 `reverse_proxy` 기본 동작). `header_up Host {upstream_hostport}` 같은 설정을 추가하면 앱이 `127.0.0.1:3000` 을 호스트로 보게 되어 라우팅이 조용히 멈춘다(에러 없이 리다이렉트 안 됨). 기본 동작을 유지할 것.
+
 ### 4. 배포 (빌드 포함)
 
 ```bash
