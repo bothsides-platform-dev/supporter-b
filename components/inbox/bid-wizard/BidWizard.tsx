@@ -50,7 +50,7 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
 
   const [fields, setFields] = useState<BidDraft>({
-    __v: 2,
+    __v: 3,
     cycleUnit: 'D',
     cycleNum: '1',
     settleLimit: '0',

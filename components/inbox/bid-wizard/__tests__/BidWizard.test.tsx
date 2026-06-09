@@ -53,8 +53,8 @@ function feeInput(labelText: string): HTMLInputElement {
   return label.closest('.space-y-1')!.querySelector('input[type="number"]') as HTMLInputElement;
 }
 
-const draftV2 = (fees: Record<string, string>, memo = '') => ({
-  __v: 2, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees, memo,
+const draftV3 = (fees: Record<string, string>, memo = '') => ({
+  __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees, memo,
 });
 
 beforeEach(() => {
@@ -110,7 +110,7 @@ describe('BidWizard 드래프트 복원(1단계)', () => {
 
   it('드래프트 있으면 배너 표시 + 불러오기 시 값 반영', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV2({ card: '0.40' }, '복원됨')));
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ card: '0.40' }, '복원됨')));
     render(<BidWizard rfp={rfp} buyerName="토스" />);
     await user.click(screen.getByRole('button', { name: '불러오기' }));
     expect(screen.queryByText(/이전에 작성 중이던 내용/)).toBeNull();
@@ -120,7 +120,7 @@ describe('BidWizard 드래프트 복원(1단계)', () => {
 
   it('무시 클릭 시 배너 사라지고 localStorage 제거', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV2({ card: '0.50' })));
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ card: '0.50' })));
     render(<BidWizard rfp={rfp} buyerName="토스" />);
     await user.click(screen.getByRole('button', { name: '무시' }));
     expect(screen.queryByText(/이전에 작성 중이던 내용/)).toBeNull();
@@ -129,7 +129,7 @@ describe('BidWizard 드래프트 복원(1단계)', () => {
 
   it('무시 후 폼 수정 시 새 draft가 저장된다', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV2({ card: '0.40' })));
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ card: '0.40' })));
     render(<BidWizard rfp={rfp} buyerName="토스" />);
 
     await user.click(screen.getByRole('button', { name: '무시' }));
@@ -183,7 +183,7 @@ describe('BidWizard 템플릿 적용(1단계)', () => {
 
   it('템플릿 선택 시 드래프트 복원 배너가 닫힌다', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV2({ card: '0.40' })));
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ card: '0.40' })));
     const tmpl: QuoteTemplateOption = {
       id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
       paymentFees: { card: 0.005 },
