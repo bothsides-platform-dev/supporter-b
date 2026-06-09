@@ -87,9 +87,13 @@ Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown
 ```
 lib/server/
 ├─ actions/          # 얇은 진입점: 세션 검증 + 입력 파싱 후 서비스에 위임
-├─ services/         # 비즈니스 로직 캡슐화 (Phase 1: rfp.ts · bid.ts)
+├─ services/         # 비즈니스 로직 캡슐화 (전체 코드베이스 적용 완료)
 │  ├─ rfp.ts         # RfpService: award / cancel / close
-│  └─ bid.ts         # BidService: withdraw
+│  ├─ bid.ts         # BidService: submit / withdraw
+│  ├─ chat.ts        # ChatService: sendMessage / markConversationRead
+│  ├─ workspace.ts   # WorkspaceService: create / invite / member management
+│  ├─ auth.ts        # AuthService: signup / password reset / email change
+│  └─ notification.ts# NotificationService: markRead / markAllRead / retryEmail
 └─ repositories/     # DB 접근 추상화 (Drizzle 구현 + 메모리 테스트 구현)
 ```
 
@@ -97,9 +101,7 @@ lib/server/
 - 서비스는 트랜잭션·알림 팬아웃·이메일 아웃박스를 소유한다. 액션은 이를 직접 다루지 않는다.
 - `Actor = { userId, workspaceId }` — 세션에서 추출해 액션이 서비스에 전달한다.
 - `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 예외 throw 없이 결과를 반환한다.
-- 서비스 싱글턴은 Next.js `globalThis` 캐싱 패턴 사용 (`getRfpService()` / `getBidService()`).
-
-아직 서비스로 미분리된 액션은 `TODOS.md` Phase 2 항목 참조.
+- 서비스 싱글턴은 Next.js `globalThis` 캐싱 패턴 사용 (`getRfpService()` / `getBidService()` 등).
 
 ## Linear Design Language — Hard Rules
 

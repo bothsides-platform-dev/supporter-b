@@ -117,3 +117,21 @@
 .blink-cursor {
   animation: blink-cursor 0.7s step-end infinite;
 }
+
+/* Landing in-page anchor nav — smooth scroll scoped to the landing (class
+   toggled on <html> while mounted) so app keyboard/list/chat scrolls stay
+   instant. Fixed-header offset is handled per-section via scroll-mt. */
+.landing-scroll {
+  scroll-behavior: smooth;
+}
+
+/* Process stepper auto-advance progress bar (duration matches AUTO_ADVANCE_MS). */
+@keyframes process-progress {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .process-progress {
+    animation: process-progress 5000ms linear forwards;
+  }
+}

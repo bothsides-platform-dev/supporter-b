@@ -105,9 +105,6 @@ describe('Header', () => {
     render(<Header user={user} workspaceType="buyer" />);
     await u.click(screen.getByRole('button', { name: '사용자 메뉴' }));
     await u.click(await screen.findByText('로그아웃'));
-    await waitFor(() =>
-      expect(fetch).toHaveBeenCalledWith('/logout', expect.objectContaining({ method: 'POST', keepalive: true })),
-    );
-    await waitFor(() => expect(assign).toHaveBeenCalledWith('/login'));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/logout'));
   });
 });
