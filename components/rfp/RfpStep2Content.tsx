@@ -43,7 +43,10 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <Label size="md" muted>견적 유형 <span className="text-[var(--md-sys-color-on-surface-variant)]">(선택)</span></Label>
+        <div className="flex items-center gap-1">
+          <Label size="md" muted>견적 유형 <span className="text-[var(--md-sys-color-on-surface-variant)]">(선택)</span></Label>
+          <InfoTip term="견적유형" />
+        </div>
         <div className="flex gap-2">
           {CONTRACT_TYPE_OPTIONS.map(({ value, label }) => (
             <button
