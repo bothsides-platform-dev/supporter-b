@@ -2,7 +2,7 @@
 // 카드 수수료·정산주기·월 정산한도·보증보험. 현재 조건(자유 텍스트)이 파싱되면 개선폭
 // 배지, 아니면 병기만. 현재 조건이 전혀 없으면 '핵심 수치' 요약으로 강등 + 입력 안내.
 import { formatKRW, formatPct } from '@/lib/format';
-import { parseCurrentValue, improvement, cycleQuality } from '@/lib/utils/bid-compare';
+import { parseCurrentValue, improvement, metricVerdict, cycleQuality } from '@/lib/utils/bid-compare';
 import type { Bid } from '@/lib/types/bid';
 
 export type CurrentConditions = {
@@ -29,11 +29,28 @@ export function ImprovementSummary({
     current.feeRate || current.settlementCycle || current.settlementLimit || current.guaranteeInsurance,
   );
 
+  // 비교 가능한 지표 중 하나라도 나빠지면 "좋아져요" 단정 대신 중립 헤더로 바꾼다.
+  const verdicts = [
+    bid.paymentFees.card !== undefined
+      ? metricVerdict(parseCurrentValue(current.feeRate, 'percent'), bid.paymentFees.card, 'lower')
+      : null,
+    cycleQuality(current.settlementCycle, bid.settleCycle),
+    metricVerdict(parseCurrentValue(current.settlementLimit, 'krw'), bid.settleLimit, 'higher'),
+    metricVerdict(parseCurrentValue(current.guaranteeInsurance, 'krw'), bid.guaranteeInsurance, 'lower'),
+  ];
+  const anyWorse = verdicts.some((v) => v === 'worse' || v === 'slower');
+
+  const heading = !hasAnyCurrent
+    ? '핵심 수치'
+    : anyWorse
+      ? '지금 조건과 비교하면 이렇게 달라져요'
+      : '지금 조건보다 이만큼 좋아져요';
+
   return (
     <section>
       <div className="flex items-center gap-3 mb-3">
         <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-          {hasAnyCurrent ? '지금 조건보다 이만큼 좋아져요' : '핵심 수치'}
+          {heading}
         </span>
         <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
       </div>
@@ -80,9 +97,10 @@ export function ImprovementSummary({
 }
 
 function feeBadge(currentText: string | null | undefined, proposed: number) {
-  const imp = improvement(parseCurrentValue(currentText, 'percent'), proposed, 'lower');
-  if (!imp) return null;
-  return { text: `${(imp.deltaAbs * 100).toFixed(2)}%p`, down: true, better: imp.better };
+  const current = parseCurrentValue(currentText, 'percent');
+  const imp = improvement(current, proposed, 'lower');
+  if (!imp || current === null) return null;
+  return { text: `${(imp.deltaAbs * 100).toFixed(2)}%p`, down: proposed < current, better: imp.better };
 }
 
 function krwBadge(

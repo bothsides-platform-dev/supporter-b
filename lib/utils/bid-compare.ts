@@ -87,6 +87,21 @@ export function improvement(
 }
 
 /**
+ * 현재값 대비 제안값의 정성 판정 — better/worse/same. 현재값이 null이면 비교 불가(null).
+ * 헤더 요약("좋아져요" vs 중립)에 쓰며, '같음'을 '나쁨'과 구분한다.
+ */
+export function metricVerdict(
+  current: number | null,
+  proposed: number,
+  direction: MetricDirection,
+): 'better' | 'worse' | 'same' | null {
+  if (current === null) return null;
+  if (proposed === current) return 'same';
+  const better = direction === 'lower' ? proposed < current : proposed > current;
+  return better ? 'better' : 'worse';
+}
+
+/**
  * 정산주기 정성 비교 — 현재 대비 제안이 더 빠름/같음/더 느림.
  * 현재가 없거나 유효 주기 문자열이 아니면 null(개선폭 표기 안 함).
  */
