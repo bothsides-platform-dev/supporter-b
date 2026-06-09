@@ -1,7 +1,6 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { http } from '@/lib/http';
 import { Avatar } from '@/components/primitives/Avatar';
 import {
   DropdownMenu,
@@ -30,7 +29,8 @@ export function UserMenu({ user, workspaceType, className }: UserMenuProps) {
   const router = useRouter();
 
   function handleLogout() {
-    http.post('/logout').catch(() => {});
+    // keepalive: true ensures the POST survives page navigation (browser won't abort it)
+    fetch('/logout', { method: 'POST', credentials: 'same-origin', keepalive: true });
     window.location.assign('/login');
   }
 
