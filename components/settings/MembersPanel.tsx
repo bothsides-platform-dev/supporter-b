@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { josa } from 'es-hangul';
 import { Avatar } from '@/components/primitives/Avatar';
 import { Label } from '@/components/primitives/Label';
 import { Button } from '@/components/primitives/Button';
@@ -138,7 +139,7 @@ export function MembersPanel({
         return;
       }
       setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, role } : x)));
-      toast(`${m.name}님의 권한을 ${roleLabel[role]}(으)로 변경했어요.`);
+      toast(`${m.name}님의 권한을 ${josa(roleLabel[role], '으로/로')} 변경했어요.`);
     });
   };
 
@@ -250,7 +251,7 @@ export function MembersPanel({
                         disabled={isSelf || isMutating}
                         onClick={() => handleRoleChange(m, oppositeRole)}
                       >
-                        {oppositeRoleLabel}(으)로 변경
+                        {josa(oppositeRoleLabel, '으로/로')} 변경
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem

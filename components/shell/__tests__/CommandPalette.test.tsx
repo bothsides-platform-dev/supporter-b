@@ -104,3 +104,34 @@ describe('CommandPalette — server entity search rendering', () => {
     expect(screen.getByText('구매사A')).toBeInTheDocument();
   });
 });
+
+describe('CommandPalette — 초성 검색 (nav commands)', () => {
+  it('ㅇㄹ 초성 입력 시 알림 항목이 노출되고 홈은 숨겨짐', () => {
+    useUIStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette workspaceType="buyer" />);
+
+    fireEvent.change(screen.getByPlaceholderText('검색...'), {
+      target: { value: 'ㅇㄹ' },
+    });
+
+    // 알림(ㅇ=알, ㄹ=림) 은 ㅇㄹ에 매칭
+    expect(screen.getByText('알림')).toBeInTheDocument();
+    // 홈(ㅎ)은 ㅇㄹ에 매칭 안 됨
+    expect(screen.queryByText('홈')).not.toBeInTheDocument();
+    // 새 견적 요청(ㅅ ㄱㅈ ㅇㅊ)은 ㅇㄹ 연속이 없으므로 숨겨짐
+    expect(screen.queryByText('새 견적 요청')).not.toBeInTheDocument();
+  });
+
+  it('ㅎ 초성 입력 시 홈 항목이 노출되고 알림은 숨겨짐', () => {
+    useUIStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette workspaceType="buyer" />);
+
+    fireEvent.change(screen.getByPlaceholderText('검색...'), {
+      target: { value: 'ㅎ' },
+    });
+
+    expect(screen.getByText('홈')).toBeInTheDocument();
+    // 알림(ㅇㄹ)은 ㅎ 포함 안 함
+    expect(screen.queryByText('알림')).not.toBeInTheDocument();
+  });
+});
