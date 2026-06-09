@@ -13,7 +13,7 @@ vi.mock('@/components/landing/LandingHero', () => ({
   LandingHero: () => <div>BUYER_LANDING</div>,
 }));
 vi.mock('@/components/landing/LandingHeaderNav', () => ({
-  LandingHeaderNav: async () => null,
+  LandingHeaderNav: () => null,
 }));
 vi.mock('@/lib/site-config', () => ({
   siteConfig: { name: 'Test', url: 'https://test.com', description: 'Test' },
