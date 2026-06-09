@@ -44,6 +44,31 @@ describe('ImprovementSummary', () => {
     expect(limit.getByText('700,000,000원')).toBeInTheDocument();
   });
 
+  it('shows an upward (↑) error badge when the proposed card fee is HIGHER than current (worse)', () => {
+    // current 2.8% → proposed 3.2% : 수수료가 0.40%p 올라 더 나쁨
+    render(<ImprovementSummary bid={makeBid({ paymentFees: { card: 0.032 } })} current={fullCurrent} />);
+
+    const card = within(screen.getByTestId('metric-row-card'));
+    const badge = card.getByText(/0\.40%p/);
+    // 수수료가 올랐으니 화살표는 ↑ (↓ 아님)
+    expect(badge.textContent).toContain('↑');
+    expect(badge.textContent).not.toContain('↓');
+    // 나빠졌으니 error 색상
+    expect(badge.className).toContain('--md-sys-color-error');
+  });
+
+  it('keeps the "좋아져요" header when every comparable metric improves', () => {
+    render(<ImprovementSummary bid={makeBid()} current={fullCurrent} />);
+    expect(screen.getByText('지금 조건보다 이만큼 좋아져요')).toBeInTheDocument();
+  });
+
+  it('uses a neutral comparison header (not "좋아져요") when any metric gets worse', () => {
+    // 카드 수수료가 현재(2.8%)보다 높은 3.2% → 한 지표라도 나빠지면 "좋아져요" 단정 금지
+    render(<ImprovementSummary bid={makeBid({ paymentFees: { card: 0.032 } })} current={fullCurrent} />);
+    expect(screen.queryByText('지금 조건보다 이만큼 좋아져요')).not.toBeInTheDocument();
+    expect(screen.getByText('지금 조건과 비교하면 이렇게 달라져요')).toBeInTheDocument();
+  });
+
   it('renders a qualitative cycle improvement ("더 빠름") rather than a numeric badge', () => {
     render(<ImprovementSummary bid={makeBid({ settleCycle: 'D+1' })} current={fullCurrent} />);
     const cycle = within(screen.getByTestId('metric-row-cycle'));
