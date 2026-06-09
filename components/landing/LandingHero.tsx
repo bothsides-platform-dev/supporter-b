@@ -116,6 +116,14 @@ function SectionHeading({ children }: { children: ReactNode }) {
 export function LandingHero({ nav }: { nav?: ReactNode }) {
   const displayText = useTypewriter(TYPING_VALUES);
 
+  // 랜딩에서만 인페이지 앵커 스크롤을 부드럽게 한다. 앱(목록 키보드 이동·채팅
+  // 스크롤)은 즉시 스크롤을 유지해야 하므로 전역 대신 <html> 클래스로 스코프.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add('landing-scroll');
+    return () => root.classList.remove('landing-scroll');
+  }, []);
+
   return (
     <div className="min-h-screen bg-[var(--md-sys-color-surface)] flex flex-col">
 
@@ -207,10 +215,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           </div>
         </section>
 
-        {/* ── Process ── */}
+        {/* ── Process (제목 없이 프로세스만 노출) ── */}
         <section id="process" className={sectionCls}>
           <div className={containerCls}>
-            <SectionHeading>SupporterB 이용 프로세스</SectionHeading>
             <ProcessSection />
           </div>
         </section>

@@ -18,6 +18,15 @@ describe('LandingNav', () => {
     }
   });
 
+  it('orders the anchor links to match the landing section flow', () => {
+    render(<LandingNav authed={false} />);
+    const order = screen
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('href'))
+      .filter((h): h is string => !!h && h.startsWith('#'));
+    expect(order).toEqual(['#service', '#pricing', '#calculator', '#faq', '#contact']);
+  });
+
   it('shows a Sign in link to /login when unauthenticated', () => {
     render(<LandingNav authed={false} />);
     expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');

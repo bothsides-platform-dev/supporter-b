@@ -17,6 +17,11 @@ vi.mock('@/components/landing/CostComparisonChart', () => ({
   CostComparisonChart: () => null,
 }));
 
+// The first-visit slider hint is gated on in-view; keep it off in tests.
+vi.mock('motion/react', () => ({
+  useInView: () => false,
+}));
+
 import { SavingsCalculator } from '../SavingsCalculator';
 
 describe('SavingsCalculator', () => {
@@ -37,5 +42,10 @@ describe('SavingsCalculator', () => {
     const note = screen.getByText(/추정/);
     expect(note.textContent).toMatch(/실제/);
     expect(note.textContent).not.toMatch(/최저\s*가능/);
+  });
+
+  it('does not show the first-visit slider hint when the calculator is not in view', () => {
+    render(<SavingsCalculator />);
+    expect(screen.queryByText(/드래그/)).toBeNull();
   });
 });

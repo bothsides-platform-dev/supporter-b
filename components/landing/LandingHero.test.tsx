@@ -71,4 +71,9 @@ describe('LandingHero', () => {
       expect(container.querySelector(`#${id}`)).not.toBeNull()
     }
   })
+
+  it('drops the standalone process section heading', () => {
+    render(<LandingHero />)
+    expect(screen.queryByText('SupporterB 이용 프로세스')).toBeNull()
+  })
 })

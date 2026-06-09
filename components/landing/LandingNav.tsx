@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, type MouseEvent } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { XIcon } from '@/components/icons';
 
+// 랜딩 섹션 흐름과 동일한 순서: 서비스 → 이용요금 → 계산기 → FAQ → 도입문의(마지막).
 const NAV_LINKS: { label: string; href: string }[] = [
   { label: '서비스 설명', href: '#service' },
-  { label: '도입문의', href: '#contact' },
   { label: '이용요금', href: '#pricing' },
   { label: '비용 절감 계산기', href: '#calculator' },
   { label: '자주 묻는 질문', href: '#faq' },
+  { label: '도입문의', href: '#contact' },
 ];
 
 const linkCls =
@@ -18,15 +19,9 @@ const linkCls =
 export function LandingNav({ authed }: { authed: boolean }) {
   const [open, setOpen] = useState(false);
 
-  function handleAnchor(e: MouseEvent<HTMLAnchorElement>, href: string) {
-    const el = typeof document !== 'undefined' ? document.getElementById(href.slice(1)) : null;
-    if (el) {
-      e.preventDefault();
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    setOpen(false);
-  }
-
+  // 인페이지 이동은 네이티브 해시 앵커(<a href="#id">)에 맡긴다 — 가장 확실하게
+  // 동작한다. 부드러운 스크롤·헤더 오프셋은 랜딩에 스코프된 CSS(.landing-scroll +
+  // 섹션의 scroll-mt)가 처리한다.
   const authLink = authed ? (
     <Link href="/home" className={linkCls}>
       앱으로 이동 →
@@ -42,7 +37,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
       {/* Desktop anchor links */}
       <div className="hidden md:flex items-center gap-[var(--s-5)]">
         {NAV_LINKS.map((l) => (
-          <a key={l.href} href={l.href} className={linkCls} onClick={(e) => handleAnchor(e, l.href)}>
+          <a key={l.href} href={l.href} className={linkCls}>
             {l.label}
           </a>
         ))}
@@ -83,7 +78,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
               key={l.href}
               href={l.href}
               className={`${linkCls} py-2.5`}
-              onClick={(e) => handleAnchor(e, l.href)}
+              onClick={() => setOpen(false)}
             >
               {l.label}
             </a>

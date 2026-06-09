@@ -1,5 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+vi.mock('motion/react', () => {
+  const makeEl = (tag: string) => {
+    const El = ({ children, ...props }: Record<string, unknown>) =>
+      React.createElement(tag, props, children as React.ReactNode);
+    El.displayName = `motion.${tag}`;
+    return El;
+  };
+  return {
+    motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }),
+    useInView: () => true,
+  };
+});
+
 import { ProcessSection } from '../ProcessSection';
 
 const STEP_TITLES = [
@@ -24,10 +39,17 @@ describe('ProcessSection', () => {
     expect(screen.getByText(/기본적인 사업자 정보를 입력/)).toBeInTheDocument();
   });
 
-  it('switches the detail when another step is selected', () => {
+  it('renders the first step example view as a filled business-info form', () => {
+    render(<ProcessSection />);
+    expect(screen.getByText('(주)서포터비')).toBeInTheDocument();
+    expect(screen.getByText('일반과세자')).toBeInTheDocument();
+  });
+
+  it('switches the detail and example view when another step is selected', () => {
     render(<ProcessSection />);
     fireEvent.click(screen.getByRole('button', { name: /PG 선택/ }));
     expect(screen.getByText(/견적을 받고 싶은 PG사를 선택/)).toBeInTheDocument();
+    expect(screen.getByText('2개 선택됨')).toBeInTheDocument();
   });
 
   it('marks the active step with aria-current', () => {
