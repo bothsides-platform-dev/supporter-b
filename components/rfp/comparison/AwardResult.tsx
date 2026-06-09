@@ -12,7 +12,7 @@ import { motion } from 'motion/react';
 import { Button } from '@/components/primitives/Button';
 import { ImprovementSummary, type CurrentConditions } from './ImprovementSummary';
 import { getOrCreateConversationAction } from '@/lib/server/actions/chat/getOrCreateConversationAction';
-import { josa } from '@/lib/utils/josa';
+import { josa } from 'es-hangul';
 import type { Bid, MerchantTier } from '@/lib/types/bid';
 
 export function AwardResult({

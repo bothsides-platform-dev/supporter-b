@@ -75,6 +75,14 @@ describe('AwardResult', () => {
     expect(screen.getByText(/견적 요청이 마무리됐어요/)).toBeInTheDocument();
   });
 
+  it('받침 있는 PG명에는 올바른 조사(을/과)를 붙인다', () => {
+    render(<AwardResult {...baseProps} pgName="한국정보통신" current={{}} />);
+    expect(screen.getByText(/한국정보통신을 선정했어요/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /한국정보통신과 메시지 시작/ }),
+    ).toBeInTheDocument();
+  });
+
   it('현재 조건이 있으면 개선 델타(↓)를 렌더한다', () => {
     render(
       <AwardResult
