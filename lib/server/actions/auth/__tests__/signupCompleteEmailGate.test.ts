@@ -5,7 +5,9 @@
  * signupCompleteAction 이 서버에서 직접 "email 에 consumedAt 이 있는
  * signup_email 토큰이 존재하는가" 를 확인해야 한다.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }) }));
 
 import { phoneOtps, users } from '@/lib/db/schema';
 import { signupEmailAction } from '../signupEmailAction';

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { AppSidebarLayout } from '@/components/shell/AppSidebarLayout';
 import { ToasterProvider } from '@/components/shell/Toaster';
 import { CommandPalette } from '@/components/shell/CommandPalette';
@@ -10,6 +11,7 @@ import { auth } from '@/auth';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { resolveShellAccess } from '@/lib/auth/shell-access';
 import { setSentryUser } from '@/lib/observability/sentry-user';
+import { appOrigins, resolveHostRedirect } from '@/lib/site-routing';
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -41,6 +43,14 @@ export default async function AppLayout({
     redirect(decision.to);
   }
   const active = decision.active;
+  // Host routing: a PG-active session on supporter-b.com (or a buyer-active
+  // session on partner.supporter-b.com) is bounced to its correct host. No-op on
+  // unknown hosts and in local/dev (single host) — see lib/site-routing.
+  const host = (await headers()).get('host');
+  const hostRedirect = resolveHostRedirect(active.type, host, appOrigins());
+  if (hostRedirect) {
+    redirect(hostRedirect);
+  }
   // A 'render' decision guarantees a complete authenticated session (see
   // resolveShellAccess) — TS can't link the two, so narrow once here.
   const user = session!.user!;

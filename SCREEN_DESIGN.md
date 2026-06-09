@@ -26,6 +26,8 @@
 
 ### 0.1 Route Map
 
+> **호스트 라우팅 (prod)**: 단일 앱이 두 호스트를 서비스한다 — `supporter-b.com` (buyer), `partner.supporter-b.com` (PG). 아래 라우트 트리는 동일하며, `(app)/layout.tsx`가 요청 호스트를 확인해 세션 타입 불일치 시 올바른 호스트로 리다이렉트한다. 로컬 개발은 단일 호스트(라우팅 비활성).
+
 ```
 Public
 ├─ /login

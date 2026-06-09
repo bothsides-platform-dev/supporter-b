@@ -5,20 +5,16 @@ import userEvent from '@testing-library/user-event';
 const createWorkspaceAction = vi.fn();
 const switchWorkspaceAction = vi.fn();
 const lookupBizNoAction = vi.fn();
-const push = vi.fn();
-const refresh = vi.fn();
+const assign = vi.fn();
 
 vi.mock('@/lib/server/actions/workspace/createWorkspaceAction', () => ({
   createWorkspaceAction: (input: unknown) => createWorkspaceAction(input),
 }));
 vi.mock('@/lib/server/actions/workspace/switchWorkspaceAction', () => ({
-  switchWorkspaceAction: (id: string) => switchWorkspaceAction(id),
+  switchWorkspaceAction: (id: string, path?: string) => switchWorkspaceAction(id, path),
 }));
 vi.mock('@/lib/server/actions/rfp', () => ({
   lookupBizNoAction: (bizNo: string) => lookupBizNoAction(bizNo),
-}));
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push, refresh }),
 }));
 
 import { CreateWorkspaceForm } from '../CreateWorkspaceForm';
@@ -27,8 +23,12 @@ beforeEach(() => {
   createWorkspaceAction.mockReset();
   switchWorkspaceAction.mockReset();
   lookupBizNoAction.mockReset();
-  push.mockReset();
-  refresh.mockReset();
+  assign.mockReset();
+  // jsdom's window.location.assign throws "not implemented"; replace with a stub.
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { assign },
+  });
 });
 
 describe('CreateWorkspaceForm — PG', () => {
@@ -42,7 +42,7 @@ describe('CreateWorkspaceForm — PG', () => {
     expect(submit).toBeEnabled();
   });
 
-  it('creates a pg workspace, switches into it, and navigates home', async () => {
+  it('creates a pg workspace, switches into it, and hard-navigates to redirectTo', async () => {
     const user = userEvent.setup();
     createWorkspaceAction.mockResolvedValue({ ok: true, workspaceId: 'ws-new' });
     switchWorkspaceAction.mockResolvedValue({ ok: true, redirectTo: '/home' });
@@ -55,8 +55,8 @@ describe('CreateWorkspaceForm — PG', () => {
     await waitFor(() =>
       expect(createWorkspaceAction).toHaveBeenCalledWith({ type: 'pg', name: 'My PG' }),
     );
-    await waitFor(() => expect(switchWorkspaceAction).toHaveBeenCalledWith('ws-new'));
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/home'));
+    await waitFor(() => expect(switchWorkspaceAction).toHaveBeenCalledWith('ws-new', undefined));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
   });
 
   it('shows the error and does not navigate on failure', async () => {
@@ -70,7 +70,7 @@ describe('CreateWorkspaceForm — PG', () => {
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(switchWorkspaceAction).not.toHaveBeenCalled();
-    expect(push).not.toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
   });
 });
 
@@ -110,6 +110,7 @@ describe('CreateWorkspaceForm — buyer', () => {
         },
       }),
     );
-    await waitFor(() => expect(switchWorkspaceAction).toHaveBeenCalledWith('ws-b2'));
+    await waitFor(() => expect(switchWorkspaceAction).toHaveBeenCalledWith('ws-b2', undefined));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
   });
 });

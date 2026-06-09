@@ -274,6 +274,63 @@ docker compose -f docker-compose.prod.yml logs centrifugo
 
 문제 발생 시 §트러블슈팅의 "채팅 메시지가 실시간으로 안 옴" 항목 참조.
 
+## partner.supporter-b.com 서브도메인 (PG 호스트 라우팅) 롤아웃
+
+`partner.supporter-b.com` 은 **별도 프로세스 없이** 동일한 `:3000` Next.js 앱이 서빙한다. PM2 앱을 새로 띄우지 않아도 된다 — Caddy 가 두 호스트를 한 블록에서 처리한다.
+
+### 1. DNS — deploy 전에 선행 필수
+
+도메인 DNS 에 A 레코드를 추가한다:
+
+```
+partner.supporter-b.com  A  <Lightsail 고정 IP>
+```
+
+> **⚠️ Caddy 리로드 전에 레코드가 전파돼 있어야 한다.** Caddy 는 호스트별로 Let's Encrypt ACME 챌린지를 시도하므로, `dig +short partner.supporter-b.com` 이 고정 IP 를 반환하는 것을 확인한 뒤 Caddy 를 리로드할 것.
+
+### 2. `.env.production` 에 신규 변수 추가
+
+> **⚠️ `NEXT_PUBLIC_*` 는 빌드 타임 인라인** — 값 변경 후 `pnpm build` 없이 `pm2 reload` 만 해서는 반영 안 됨. `AUTH_COOKIE_DOMAIN` 은 런타임 변수라 restart 만으로 충분.
+>
+> **⚠️ `AUTH_COOKIE_DOMAIN` 설정은 기존 사용자 전원을 1회 로그아웃** 시킨다. Caddy 리로드·DNS 컷오버와 같은 시점에 진행할 것.
+
+```bash
+# 런타임 변수 (restart 로 반영)
+AUTH_COOKIE_DOMAIN=.supporter-b.com
+
+# 빌드 타임 변수 (변경 후 반드시 pnpm build 재실행)
+NEXT_PUBLIC_BUYER_ORIGIN=https://supporter-b.com
+NEXT_PUBLIC_PARTNER_ORIGIN=https://partner.supporter-b.com
+```
+
+### 3. Caddyfile 교체 + 리로드
+
+```bash
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+`git pull` 로 받은 `deploy/Caddyfile` 은 메인 블록 주소가 `{$APP_DOMAIN}, partner.{$APP_DOMAIN}` 로 바뀌어 있다. `admin.{$APP_DOMAIN}` 블록은 그대로다.
+
+> ⚠️ 호스트 라우팅은 Caddy 가 업스트림으로 원본 `Host` 헤더를 그대로 전달하는 데 의존한다(Caddy v2 `reverse_proxy` 기본 동작). `header_up Host {upstream_hostport}` 같은 설정을 추가하면 앱이 `127.0.0.1:3000` 을 호스트로 보게 되어 라우팅이 조용히 멈춘다(에러 없이 리다이렉트 안 됨). 기본 동작을 유지할 것.
+
+### 4. 배포 (빌드 포함)
+
+```bash
+bash scripts/deploy/lightsail-deploy.sh
+```
+
+`NEXT_PUBLIC_BUYER_ORIGIN` / `NEXT_PUBLIC_PARTNER_ORIGIN` 이 `.env.production` 에 설정된 상태에서 빌드돼야 한다.
+
+### 5. 수동 확인 체크리스트
+
+배포 후 아래를 직접 확인한다:
+
+- [ ] PG 계정으로 `supporter-b.com/home` 접속 → `partner.supporter-b.com/home` 으로 307 리다이렉트되고 로그인 유지
+- [ ] 두 워크스페이스를 가진 유저가 워크스페이스 전환 시 서브도메인 간 이동 후 로그인 유지
+- [ ] `supporter-b.com` / `partner.supporter-b.com` 양쪽에서 채팅 실시간 수신 정상 동작
+- [ ] RFP 초대 이메일의 링크가 `partner.supporter-b.com` 도메인을 가리킴
+
 ## Node 설치 (Amazon Linux 2023)
 
 AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치한다.

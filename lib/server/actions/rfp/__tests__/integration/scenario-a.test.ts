@@ -4,6 +4,8 @@
 // 하는 흐름을 액션만으로 재현. P6 가입 → workspace bizProfile 캡처 →
 // createRfpAction(send=true) → invitations N + outbox 1+N 검증.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }) }));
 import { eq } from 'drizzle-orm';
 
 import {
