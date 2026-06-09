@@ -17,7 +17,9 @@ export async function GET(req: Request) {
   // (render-server.js) when started without -H, so req.url becomes
   // 'https://localhost:3000/logout' instead of the real domain.
   // Caddy passes the original Host header through, so use it when available.
-  const proto = req.headers.get('x-forwarded-proto');
+  // Multi-hop proxy chains can produce comma-separated values (e.g. "https, http").
+  // Take only the first to avoid constructing an invalid URL.
+  const proto = req.headers.get('x-forwarded-proto')?.split(',')[0].trim();
   const host = req.headers.get('host');
   const origin =
     proto && host ? `${proto}://${host}` : new URL(req.url).origin;
