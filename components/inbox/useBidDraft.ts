@@ -2,10 +2,9 @@
 
 import { useRef, useState, useCallback } from 'react';
 
-// __v 2: 결제수단 동적화로 bankPct/cardPct 고정 필드를 fees 맵으로 교체.
-// 구버전 blob(bankPct/cardPct)은 fees가 없어 폼이 깨지므로 readDraft에서 폐기.
+// __v 3: 카드·간편결제 구간화로 fees 키에 "<method>:<tier>" 복합 키 도입.
 export type BidDraft = {
-  __v: 2;
+  __v: 3;
   cycleUnit: 'D' | 'W' | 'M';
   cycleNum: string;
   settleLimit: string;
@@ -28,7 +27,7 @@ function readDraft(rfpId: string): BidDraft | null {
     if (
       typeof parsed !== 'object' ||
       parsed === null ||
-      (parsed as { __v?: unknown }).__v !== 2 ||
+      (parsed as { __v?: unknown }).__v !== 3 ||
       typeof (parsed as { fees?: unknown }).fees !== 'object' ||
       (parsed as { fees?: unknown }).fees === null
     ) {

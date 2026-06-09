@@ -6,7 +6,7 @@ const RFP_ID = 'rfp-abc';
 const KEY = `bid-draft:${RFP_ID}`;
 
 const SAMPLE_DRAFT = {
-  __v: 2 as const,
+  __v: 3 as const,
   cycleUnit: 'D' as const,
   cycleNum: '1',
   settleLimit: '10000000',
@@ -68,6 +68,26 @@ describe('useBidDraft', () => {
     const { result } = renderHook(() => useBidDraft(RFP_ID));
     expect(result.current.draft).toBeNull();
     expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('구버전 __v=2 draft는 폐기한다', () => {
+    localStorage.setItem(
+      'bid-draft:rfp-x',
+      JSON.stringify({ __v: 2, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees: { card: '1.2' }, memo: '' }),
+    );
+    const { result } = renderHook(() => useBidDraft('rfp-x'));
+    expect(result.current.draft).toBeNull();
+    expect(localStorage.getItem('bid-draft:rfp-x')).toBeNull();
+  });
+
+  it('__v=3 복합 키 draft를 복원한다', () => {
+    localStorage.setItem(
+      'bid-draft:rfp-y',
+      JSON.stringify({ __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees: { 'card:sole': '0.5', virtual_account: '0.3' }, memo: '' }),
+    );
+    const { result } = renderHook(() => useBidDraft('rfp-y'));
+    expect(result.current.draft?.fees['card:sole']).toBe('0.5');
+    expect(result.current.draft?.fees.virtual_account).toBe('0.3');
   });
 
   it('구버전(bankPct/cardPct) 드래프트는 무시하고 항목을 삭제한다', () => {

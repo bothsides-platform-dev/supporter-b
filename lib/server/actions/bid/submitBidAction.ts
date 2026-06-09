@@ -7,7 +7,17 @@ import { requirePgSession } from '@/lib/auth/session';
 import { getBidService } from '@/lib/server/services/bid';
 import type { BidActionResult } from './_shared';
 
-const feeField = z.number().min(0).max(1).optional();
+const tierRatesSchema = z
+  .object({
+    sole: z.number().min(0).max(1).optional(),
+    sme1: z.number().min(0).max(1).optional(),
+    sme2: z.number().min(0).max(1).optional(),
+    sme3: z.number().min(0).max(1).optional(),
+    general: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+
+const feeField = z.union([z.number().min(0).max(1), tierRatesSchema]).optional();
 
 const PaymentFeesSchema = z
   .object({
@@ -57,7 +67,7 @@ export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidR
       settleCycle: parsed.data.settleCycle,
       settleLimit: parsed.data.settleLimit,
       guaranteeInsurance: parsed.data.guaranteeInsurance,
-      paymentFees: parsed.data.paymentFees as Record<string, number>,
+      paymentFees: parsed.data.paymentFees,
       customFees: parsed.data.customFees,
       proposalAttachmentId: parsed.data.proposalAttachmentId,
       memo: parsed.data.memo,

@@ -26,7 +26,7 @@ export type SubmitBidServiceInput = {
   settleCycle: string;
   settleLimit: number;
   guaranteeInsurance: number;
-  paymentFees: Record<string, number>;
+  paymentFees: Record<string, number | import('@/lib/types/bid').TierRates>;
   customFees: Record<string, number>;
   proposalAttachmentId?: string;
   memo?: string;
