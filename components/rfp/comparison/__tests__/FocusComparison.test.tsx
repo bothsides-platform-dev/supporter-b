@@ -25,6 +25,13 @@ vi.mock('@/lib/server/actions/rfp', () => ({
 vi.mock('@/lib/server/actions/bid/addBidNoteAction', () => ({ addBidNoteAction: vi.fn() }));
 vi.mock('@/lib/server/actions/bid/removeBidNoteAction', () => ({ removeBidNoteAction: vi.fn() }));
 
+// 결과 오버레이는 표시 여부만 검증한다(내부는 Task 2가 커버).
+vi.mock('@/components/rfp/comparison/AwardResult', () => ({
+  AwardResult: ({ pgName }: { pgName: string }) => (
+    <div data-testid="award-result">{pgName} 선정 완료</div>
+  ),
+}));
+
 import { FocusComparison } from '../FocusComparison';
 import type { Bid } from '@/lib/types/bid';
 
@@ -136,5 +143,42 @@ describe('FocusComparison', () => {
     const matrix = screen.getByTestId('tiered-matrix-card');
     expect(matrix).toHaveTextContent('0.50%');
     expect(matrix).toHaveTextContent('1.80%');
+  });
+});
+
+describe('FocusComparison · award result overlay', () => {
+  beforeEach(() => {
+    awardRfpAction.mockResolvedValue({ ok: true });
+  });
+
+  it('이미 선정된 RFP를 처음 열면 결과 오버레이를 띄우지 않는다', () => {
+    render(
+      <FocusComparison {...baseProps} rfpStatus="awarded" awardedBidId="b-toss" />,
+    );
+    expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
+  });
+
+  it('선정을 확정하면 결과 오버레이를 띄운다', async () => {
+    const user = userEvent.setup();
+    render(<FocusComparison {...baseProps} rfpStatus="sent" awardedBidId={null} />);
+
+    await user.click(screen.getByRole('button', { name: /이 견적 선정하기/ }));
+    await user.click(screen.getByRole('button', { name: '선정할게요' }));
+
+    // 활성(기본 선정) 견적인 토스페이먼츠를 축하해야 한다 — 잘못된 bid 배선 회귀 방지.
+    expect(await screen.findByText('토스페이먼츠 선정 완료')).toBeInTheDocument();
+  });
+
+  it('선정이 실패하면 결과 오버레이를 띄우지 않는다', async () => {
+    const user = userEvent.setup();
+    awardRfpAction.mockResolvedValue({ ok: false, error: 'ALREADY_AWARDED' });
+    render(<FocusComparison {...baseProps} rfpStatus="sent" awardedBidId={null} />);
+
+    await user.click(screen.getByRole('button', { name: /이 견적 선정하기/ }));
+    await user.click(screen.getByRole('button', { name: '선정할게요' }));
+
+    // 실패 시 인라인 에러만, 축하 오버레이는 없어야 한다.
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
   });
 });
