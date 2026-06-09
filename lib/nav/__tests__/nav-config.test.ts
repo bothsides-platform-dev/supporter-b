@@ -171,6 +171,13 @@ describe('getBreadcrumbSegments', () => {
       { label: '새 견적 요청' },
     ]);
   });
+
+  it('/rfp/new ignores status param (not applicable to the create route)', () => {
+    expect(getBreadcrumbSegments('/rfp/new', 'active')).toEqual([
+      { label: '견적 요청', href: '/rfp' },
+      { label: '새 견적 요청' },
+    ]);
+  });
 });
 
 describe('getChordMap', () => {

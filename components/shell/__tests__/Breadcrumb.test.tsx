@@ -65,6 +65,22 @@ describe('Breadcrumb — URL-derived segments', () => {
   });
 });
 
+describe('Breadcrumb — /rfp/new trail', () => {
+  it('renders "견적 요청" as a link to /rfp', () => {
+    mockPathname.mockReturnValue('/rfp/new');
+    render(<Breadcrumb />);
+    expect(screen.getByRole('link', { name: '견적 요청' })).toHaveAttribute('href', '/rfp');
+  });
+
+  it('renders "새 견적 요청" as the current page (aria-current, no link)', () => {
+    mockPathname.mockReturnValue('/rfp/new');
+    render(<Breadcrumb />);
+    const current = screen.getByText('새 견적 요청');
+    expect(current).toHaveAttribute('aria-current', 'page');
+    expect(current).not.toHaveAttribute('href');
+  });
+});
+
 describe('Breadcrumb — clickable trail', () => {
   it('renders the parent RFP segment as a link to /rfp', () => {
     mockPathname.mockReturnValue('/rfp');
