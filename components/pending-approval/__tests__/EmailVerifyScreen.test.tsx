@@ -56,14 +56,11 @@ describe('EmailVerifyScreen', () => {
     expect(link).toHaveAttribute('href', '/');
   });
 
-  it('로그아웃 버튼 클릭 시 /logout POST 후 /login으로 이동한다', async () => {
-    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
+  it('로그아웃 버튼 클릭 시 GET /logout 으로 이동한다', async () => {
     const assignMock = vi.fn();
     Object.defineProperty(window, 'location', { value: { assign: assignMock }, writable: true });
     render(<EmailVerifyScreen email="me@x.com" />);
     await userEvent.setup().click(screen.getByRole('button', { name: '로그아웃' }));
-    expect(fetchSpy).toHaveBeenCalledWith('/logout', { method: 'POST' });
-    expect(assignMock).toHaveBeenCalledWith('/login');
-    fetchSpy.mockRestore();
+    expect(assignMock).toHaveBeenCalledWith('/logout');
   });
 });

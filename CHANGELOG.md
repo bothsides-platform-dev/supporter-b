@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - **어디서든 초성 검색이 됩니다**: Cmd+K 전체 검색에서도 초성(예: ㅇㄹ → 알림, ㅅㅅㄹ → 수수료 포함 견적)으로 이동 메뉴와 견적·견적서·오픈 기회를 바로 찾을 수 있어요.
 - **PG사 검색에 초성 입력이 됩니다**: 견적 요청에서 PG사를 초대할 때 이름 전체를 입력하지 않아도 초성(예: ㄴㅇㅅ → 나이스페이먼츠)으로 바로 찾을 수 있어요.
+- **입점 심사 알림 메일의 '심사하러 가기' 링크가 어드민 콘솔로 연결됩니다**: 신규 워크스페이스가 가입하면 운영자에게 전송되는 이메일의 링크가 이제 `admin.supporter-b.com`을 가리킵니다. `.env`에 `ADMIN_ORIGIN=https://admin.supporter-b.com`을 설정해 주세요.
 
 ### Changed
 
@@ -18,6 +19,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - **운영 환경에서 로그아웃 후 실제 도메인 로그인 화면으로 이동합니다**: `next start -p 3000`으로 실행 시 Next.js가 내부 hostname을 `localhost`로 채워 로그아웃 리다이렉트 URL이 `https://localhost:3000/login`이 되던 문제를 수정했습니다. 이제 Caddy가 전달하는 `Host` 헤더를 우선 사용해 실제 도메인(`supporter-b.com` 또는 `partner.supporter-b.com`)으로 올바르게 이동합니다.
+- **로그인 후 외부 URL로 이동하는 오픈 리다이렉트 취약점 수정**: `/login?next=` 파라미터가 검증 없이 그대로 사용되어 외부 사이트로 리다이렉트될 수 있던 문제를 수정했습니다. 이제 내부 경로만 허용합니다.
+- **심사 대기·이메일 인증 화면의 로그아웃 버튼이 일관된 방식으로 동작합니다**: 해당 화면들의 로그아웃도 `GET /logout` 단일 요청 방식으로 통일되었습니다.
 
 ## [0.2.2.2] - 2026-06-10
 

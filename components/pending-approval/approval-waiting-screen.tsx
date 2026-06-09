@@ -11,13 +11,8 @@ import { checkMyWorkspaceApprovalAction } from '@/lib/server/actions/auth/checkM
 
 const ICON_SPAN_STYLE = { display: 'inline-flex' } as const;
 
-async function handleLogout() {
-  try {
-    await fetch('/logout', { method: 'POST' });
-  } catch {
-    // 세션 클리어 실패해도 /login 이동
-  }
-  window.location.assign('/login');
+function handleLogout() {
+  window.location.assign('/logout');
 }
 
 export function ApprovalWaitingScreen() {
