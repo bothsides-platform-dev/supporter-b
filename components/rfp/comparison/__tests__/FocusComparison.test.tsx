@@ -165,6 +165,7 @@ describe('FocusComparison · award result overlay', () => {
     await user.click(screen.getByRole('button', { name: /이 견적 선정하기/ }));
     await user.click(screen.getByRole('button', { name: '선정할게요' }));
 
-    expect(await screen.findByTestId('award-result')).toBeInTheDocument();
+    // 활성(기본 선정) 견적인 토스페이먼츠를 축하해야 한다 — 잘못된 bid 배선 회귀 방지.
+    expect(await screen.findByText('토스페이먼츠 선정 완료')).toBeInTheDocument();
   });
 });
