@@ -134,6 +134,21 @@ describe('BidService.submit', () => {
     expect(r.error).toBe('PAYMENT_METHOD_NOT_REQUESTED');
   });
 
+  it('요청되지 않은 수단의 구간맵도 거부한다', async () => {
+    const s = await seedSubmitEnv();
+    await db
+      .update(rfps)
+      .set({ requiredPaymentMethods: ['card'] })
+      .where(eq(rfps.id, s.rfpId));
+    const r = await service.submit(
+      { ...BASE, rfpId: s.rfpId, paymentFees: { naver_pay: { general: 0.02 } } },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+    );
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('PAYMENT_METHOD_NOT_REQUESTED');
+  });
+
   it('returns BID_ALREADY_SUBMITTED when duplicate exists', async () => {
     const s = await seedSubmitEnv();
     const r1 = await service.submit(
