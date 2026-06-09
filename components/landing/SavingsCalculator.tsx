@@ -8,6 +8,7 @@ import { Chip } from '@/components/primitives/Chip';
 import { CostComparisonChart } from '@/components/landing/CostComparisonChart';
 import { formatKRW } from '@/lib/format';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 import {
   SUPPORTER_B_RATE,
   annualMaxSavings,
@@ -24,15 +25,7 @@ const RATE_MIN = 50;
 const RATE_MAX = 400;
 const RATE_STEP = 5;
 
-const HINT_KEY = 'sb:calc-hint-seen';
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window === 'undefined' ||
-    typeof window.matchMedia !== 'function' ||
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
+const IDLE_MS = 6000;
 
 function tToVolume(t: number): number {
   return VOL_BASE * Math.pow(10, (t / VOL_T_MAX) * VOL_DECADES);
@@ -54,29 +47,15 @@ export function SavingsCalculator() {
   const [rateBp, setRateBp] = useState(RATE_DEFAULT);
 
   const rootRef = useRef<HTMLElement>(null);
-  const inView = useInView(rootRef, { once: true, amount: 0.4 });
+  const inView = useInView(rootRef, { amount: 0.4 });
   const [hintActive, setHintActive] = useState(false);
-  const hintCancelled = useRef(false);
-  const hintDone = useRef(false);
+  const resetIdleRef = useRef<(() => void) | null>(null);
 
-  // 처음 접속한 사용자에게만, 계산기가 화면에 들어오면 가짜 커서가 슬라이더 위를
-  // 한 번 훑으며 값을 끌어 절감액이 실시간으로 바뀌는 걸 보여준다(사용법 힌트).
-  // localStorage 1회 기록 · 동작 줄이기 선호 시 생략 · 사용자가 만지면 즉시 중단.
+  // 계산기가 화면에 보이고 일정 시간(IDLE_MS) 입력이 없으면 가짜 커서가 슬라이더를
+  // 훑으며 사용법을 보여준다. 사용자가 만지면 즉시 멈추고 idle 타이머 리셋, 데모가
+  // 끝나면 다시 idle 카운트다운(반복). 화면에서 벗어나거나 동작 줄이기 선호 시 중단.
   useEffect(() => {
-    if (!inView || hintDone.current) return;
-    if (prefersReducedMotion()) return;
-    let seen = false;
-    try {
-      seen = window.localStorage.getItem(HINT_KEY) === '1';
-    } catch {
-      seen = false;
-    }
-    if (seen) {
-      hintDone.current = true;
-      return;
-    }
-
-    hintCancelled.current = false;
+    if (!inView || prefersReducedMotion()) return;
 
     const path: [number, number][] = [
       [0, DEFAULT_VOL_T],
@@ -98,14 +77,19 @@ export function SavingsCalculator() {
       return path[path.length - 1][1];
     };
 
+    let cancelled = false;
+    let idleTimer = 0;
     let raf = 0;
     let startTs = 0;
+
+    const scheduleIdle = () => {
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(playDemo, IDLE_MS);
+    };
+
     const tick = (ts: number) => {
-      if (hintCancelled.current) return;
-      if (!startTs) {
-        startTs = ts;
-        setHintActive(true);
-      }
+      if (cancelled) return;
+      if (!startTs) startTs = ts;
       const p = Math.min(1, (ts - startTs) / duration);
       setVolT(Math.round(valueAt(p)));
       if (p < 1) {
@@ -113,33 +97,34 @@ export function SavingsCalculator() {
       } else {
         setHintActive(false);
         setVolT(DEFAULT_VOL_T);
-        hintDone.current = true;
-        try {
-          window.localStorage.setItem(HINT_KEY, '1');
-        } catch {
-          /* ignore */
-        }
+        scheduleIdle();
       }
     };
-    raf = requestAnimationFrame(tick);
+
+    function playDemo() {
+      if (cancelled) return;
+      startTs = 0;
+      setHintActive(true);
+      raf = requestAnimationFrame(tick);
+    }
+
+    // 사용자 입력 시 호출: 진행 중 데모 중단 + idle 타이머 리셋.
+    resetIdleRef.current = () => {
+      cancelAnimationFrame(raf);
+      startTs = 0;
+      setHintActive(false);
+      scheduleIdle();
+    };
+
+    scheduleIdle();
 
     return () => {
-      hintCancelled.current = true;
+      cancelled = true;
+      window.clearTimeout(idleTimer);
       cancelAnimationFrame(raf);
+      resetIdleRef.current = null;
     };
   }, [inView]);
-
-  function dismissHint() {
-    if (!hintActive) return;
-    hintCancelled.current = true;
-    hintDone.current = true;
-    setHintActive(false);
-    try {
-      window.localStorage.setItem(HINT_KEY, '1');
-    } catch {
-      /* ignore */
-    }
-  }
 
   const volume = useMemo(() => tToVolume(volT), [volT]);
   const currentRate = rateBp / 10000;
@@ -170,7 +155,7 @@ export function SavingsCalculator() {
                 max={VOL_T_MAX}
                 step={1}
                 onValueChange={(v) => {
-                  dismissHint();
+                  resetIdleRef.current?.();
                   setVolT(v);
                 }}
                 ariaLabel="연간 거래액"
@@ -219,7 +204,7 @@ export function SavingsCalculator() {
               max={RATE_MAX}
               step={RATE_STEP}
               onValueChange={(v) => {
-                dismissHint();
+                resetIdleRef.current?.();
                 setRateBp(v);
               }}
               ariaLabel="현재 PG 수수료율"

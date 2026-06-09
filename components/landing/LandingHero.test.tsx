@@ -11,7 +11,7 @@ vi.mock('motion/react', () => {
     return El
   }
   const motion = new Proxy({}, { get: (_, tag: string) => makeEl(tag) })
-  return { motion, useScroll: () => ({ scrollYProgress: { on: vi.fn() } }), useMotionValueEvent: vi.fn() }
+  return { motion, useScroll: () => ({ scrollYProgress: { on: vi.fn() } }), useMotionValueEvent: vi.fn(), useInView: () => true }
 })
 
 // Heavy leaf sections are covered by their own suites — stub them so this
@@ -19,7 +19,7 @@ vi.mock('motion/react', () => {
 vi.mock('@/components/landing/SavingsCalculator', () => ({ SavingsCalculator: () => null }))
 vi.mock('@/components/landing/OfferComparisonTable', () => ({ OfferComparisonTable: () => null }))
 vi.mock('@/components/landing/ProcessSection', () => ({ ProcessSection: () => null }))
-vi.mock('@/components/landing/FaqAccordion', () => ({ FaqAccordion: () => null }))
+vi.mock('@/components/landing/FaqList', () => ({ FaqList: () => null }))
 
 vi.mock('@/lib/stores/theme', () => ({
   useThemeStore: (selector: (s: { resolvedTheme: string; setTheme: (t: string) => void }) => unknown) =>

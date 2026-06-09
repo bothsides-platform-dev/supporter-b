@@ -1,5 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import React from 'react';
 import { render, screen, within } from '@testing-library/react';
+
+vi.mock('motion/react', () => {
+  const makeEl = (tag: string) => {
+    const El = ({ children, ...props }: Record<string, unknown>) =>
+      React.createElement(tag, props, children as React.ReactNode);
+    El.displayName = `motion.${tag}`;
+    return El;
+  };
+  return {
+    motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }),
+    useInView: () => false,
+  };
+});
+
 import { OfferComparisonTable } from '../OfferComparisonTable';
 
 describe('OfferComparisonTable', () => {

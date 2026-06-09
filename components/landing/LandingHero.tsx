@@ -10,7 +10,7 @@ import { Footer } from '@/components/shell/Footer';
 import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
 import { OfferComparisonTable } from '@/components/landing/OfferComparisonTable';
 import { ProcessSection } from '@/components/landing/ProcessSection';
-import { FaqAccordion } from '@/components/landing/FaqAccordion';
+import { FaqList } from '@/components/landing/FaqList';
 import { ProblemCard } from '@/components/landing/ProblemCard';
 import { MetricCard } from '@/components/landing/MetricCard';
 
@@ -55,9 +55,9 @@ const SOLUTION_POINTS = [
 ];
 
 const METRICS = [
-  { value: '0.89%', suffix: '절감', caption: 'PoC 고객사 평균 수수료 절감 비율' },
-  { value: '4.5주', suffix: '감소', caption: 'PG사 견적 비교 시 소요 시간 감소' },
-  { value: '2300만원', caption: 'PoC 고객사 연간 평균 수수료 절감액' },
+  { to: 0.89, decimals: 2, unit: '%', qualifier: '절감', caption: 'PoC 고객사 평균 수수료 절감 비율' },
+  { to: 4.5, decimals: 1, unit: '주', qualifier: '감소', caption: 'PG사 견적 비교 시 소요 시간 감소' },
+  { to: 2300, decimals: 0, unit: '만원', qualifier: undefined, caption: 'PoC 고객사 연간 평균 수수료 절감액' },
 ];
 
 function useTypewriter(values: string[], typingMs = 60, deletingMs = 30, holdMs = 1800): string {
@@ -200,15 +200,22 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           <div className={containerCls}>
             <SectionHeading>SupporterB를 통해<br />PG 도입 문제를 해결해보세요</SectionHeading>
             <ul className="flex flex-col gap-[var(--s-5)]">
-              {SOLUTION_POINTS.map((point) => (
-                <li key={point} className="flex items-start gap-[var(--s-4)]">
+              {SOLUTION_POINTS.map((point, i) => (
+                <motion.li
+                  key={point}
+                  initial={{ opacity: 0, x: -8 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.36, delay: i * 0.08, ease: EASE_OUT }}
+                  className="flex items-start gap-[var(--s-4)]"
+                >
                   <span className="mt-0.5 shrink-0 grid place-items-center h-5 w-5 rounded-full bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)]">
                     <CheckIcon size={13} />
                   </span>
                   <span className="text-[var(--text-md)] leading-[1.6] tracking-[-0.006em] text-[var(--md-sys-color-on-surface)]">
                     {point}
                   </span>
-                </li>
+                </motion.li>
               ))}
             </ul>
             <OfferComparisonTable />
@@ -230,7 +237,14 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
             </SectionHeading>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-[var(--s-8)]">
               {METRICS.map((m) => (
-                <MetricCard key={m.value} value={m.value} suffix={m.suffix} caption={m.caption} />
+                <MetricCard
+                  key={m.caption}
+                  to={m.to}
+                  decimals={m.decimals}
+                  unit={m.unit}
+                  qualifier={m.qualifier}
+                  caption={m.caption}
+                />
               ))}
             </div>
           </div>
@@ -242,12 +256,20 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         <section id="pricing" className={sectionCls}>
           <div className={`${containerCls} gap-[var(--s-6)]`}>
             <SectionHeading>이용 요금</SectionHeading>
-            <p className="text-[clamp(18px,2.2vw,24px)] leading-[1.5] tracking-[-0.012em] text-[var(--md-sys-color-on-surface)]">
-              SupporterB는 현재(2026년) 무료로 이용 가능합니다.
-            </p>
-            <p className="text-[var(--text-md)] leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
-              추후 유료로 전환될 수 있으며, 전환 2달 전 사전 공유 예정입니다.
-            </p>
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4, ease: EASE_OUT }}
+              className="flex flex-col gap-[var(--s-4)]"
+            >
+              <p className="text-[clamp(18px,2.2vw,24px)] leading-[1.5] tracking-[-0.012em] text-[var(--md-sys-color-on-surface)]">
+                SupporterB는 현재(2026년) 무료로 이용 가능합니다.
+              </p>
+              <p className="text-[var(--text-md)] leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
+                추후 유료로 전환될 수 있으며, 전환 2달 전 사전 공유 예정입니다.
+              </p>
+            </motion.div>
           </div>
         </section>
 
@@ -263,7 +285,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         <section id="faq" className={sectionCls}>
           <div className="mx-auto w-full max-w-[760px] flex flex-col gap-[var(--s-9)]">
             <SectionHeading>자주 묻는 질문</SectionHeading>
-            <FaqAccordion />
+            <FaqList />
           </div>
         </section>
 

@@ -52,10 +52,9 @@ describe('SavingsCalculator', () => {
   });
 });
 
-describe('SavingsCalculator — first-visit slider hint', () => {
+describe('SavingsCalculator — idle slider hint', () => {
   beforeEach(() => {
     motionHoisted.inView = true;
-    window.localStorage.clear();
     vi.useFakeTimers({
       toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'setTimeout', 'clearTimeout', 'Date', 'performance'],
     });
@@ -76,23 +75,21 @@ describe('SavingsCalculator — first-visit slider hint', () => {
     vi.useRealTimers();
     // @ts-expect-error remove the test stub
     delete window.matchMedia;
-    window.localStorage.clear();
   });
 
-  it('shows the drag hint on first visit once the calculator is in view', () => {
+  it('does not show the hint before the idle delay elapses', () => {
     render(<SavingsCalculator />);
     act(() => {
-      vi.advanceTimersByTime(60); // a few rAF frames → first tick sets hint active
-    });
-    expect(screen.getByText('드래그해서 조정해 보세요')).toBeInTheDocument();
-  });
-
-  it('does not replay the hint once it has been seen', () => {
-    window.localStorage.setItem('sb:calc-hint-seen', '1');
-    render(<SavingsCalculator />);
-    act(() => {
-      vi.advanceTimersByTime(60);
+      vi.advanceTimersByTime(3000); // < IDLE_MS (6s)
     });
     expect(screen.queryByText('드래그해서 조정해 보세요')).toBeNull();
+  });
+
+  it('plays the hint after the calculator sits idle in view', () => {
+    render(<SavingsCalculator />);
+    act(() => {
+      vi.advanceTimersByTime(6500); // past IDLE_MS + a few rAF frames
+    });
+    expect(screen.getByText('드래그해서 조정해 보세요')).toBeInTheDocument();
   });
 });

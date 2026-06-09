@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { motion, useInView } from 'motion/react';
 import { CheckIcon } from '@/components/icons';
 import { Chip } from '@/components/primitives/Chip';
+import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 
 type Step = { n: number; title: string; desc: string };
 type Field = { label: string; value: string; mono?: boolean };
@@ -34,14 +35,6 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 function pad(n: number): string {
   return n.toString().padStart(2, '0');
-}
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window === 'undefined' ||
-    typeof window.matchMedia !== 'function' ||
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
 }
 
 // 예시 view를 실제 사용자가 입력하는 것처럼 연출하기 위한 훅들.

@@ -15,13 +15,14 @@ vi.mock('motion/react', () => {
     motion,
     useScroll: () => ({ scrollYProgress: { on: vi.fn() } }),
     useMotionValueEvent: vi.fn(),
+    useInView: () => true,
   };
 });
 
 vi.mock('@/components/landing/SavingsCalculator', () => ({ SavingsCalculator: () => null }));
 vi.mock('@/components/landing/OfferComparisonTable', () => ({ OfferComparisonTable: () => null }));
 vi.mock('@/components/landing/ProcessSection', () => ({ ProcessSection: () => null }));
-vi.mock('@/components/landing/FaqAccordion', () => ({ FaqAccordion: () => null }));
+vi.mock('@/components/landing/FaqList', () => ({ FaqList: () => null }));
 
 vi.mock('@/lib/stores/theme', () => ({
   useThemeStore: (selector: (s: { resolvedTheme: string; setTheme: (t: string) => void }) => unknown) =>
