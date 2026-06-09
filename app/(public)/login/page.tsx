@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/primitives/Checkbox';
 import { PasswordField } from '@/components/auth/PasswordField';
 import { LoginSignupCallout } from '@/components/auth/LoginSignupCallout';
 import { loginAction } from '@/lib/server/actions/auth';
+import { safeInternalNext } from '@/lib/auth/safe-next';
 import {
   LOCK_THRESHOLD,
   getState,
@@ -28,7 +29,7 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawNext = searchParams.get('next');
-  const next = rawNext ?? '/home';
+  const next = safeInternalNext(rawNext) ?? '/home';
   const [email, setEmail] = useState(
     () => searchParams.get('email') ?? '',
   );
