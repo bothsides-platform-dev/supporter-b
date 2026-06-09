@@ -13,5 +13,13 @@ export async function POST() {
 // → /home ↔ /login 무한 리다이렉트(ERR_TOO_MANY_REDIRECTS) 종료.
 export async function GET(req: Request) {
   await signOut({ redirect: false });
-  return NextResponse.redirect(new URL('/login', req.url), 303);
+  // req.url is unreliable behind a proxy: Next.js defaults hostname to 'localhost'
+  // (render-server.js) when started without -H, so req.url becomes
+  // 'https://localhost:3000/logout' instead of the real domain.
+  // Caddy passes the original Host header through, so use it when available.
+  const proto = req.headers.get('x-forwarded-proto');
+  const host = req.headers.get('host');
+  const origin =
+    proto && host ? `${proto}://${host}` : new URL(req.url).origin;
+  return NextResponse.redirect(`${origin}/login`, 303);
 }

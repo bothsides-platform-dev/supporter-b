@@ -27,6 +27,22 @@ describe('GET /logout', () => {
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
   });
+
+  it('Caddy 뒤 프로덕션 환경 — req.url이 localhost:3000이어도 Host 헤더 도메인으로 리다이렉트한다', async () => {
+    signOutMock.mockResolvedValue(undefined);
+
+    // Next.js는 next start -p 3000에서 hostname을 'localhost'로 채워
+    // req.url을 'https://localhost:3000/logout'으로 구성한다.
+    // Caddy는 실제 도메인을 Host 헤더로 전달하므로 이를 우선 사용해야 한다.
+    const req = new Request('https://localhost:3000/logout', {
+      headers: { host: 'supporter-b.com', 'x-forwarded-proto': 'https' },
+    });
+
+    const res = await GET(req);
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
+  });
 });
 
 describe('POST /logout', () => {
