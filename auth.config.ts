@@ -11,6 +11,7 @@
  */
 import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
+import { sessionCookie } from '@/lib/auth/cookie-config';
 
 export default {
   providers: [
@@ -20,6 +21,7 @@ export default {
     Credentials({ credentials: {}, authorize: async () => null }),
   ],
   session: { strategy: 'jwt' },
+  cookies: { sessionToken: sessionCookie() },
   pages: { signIn: '/login' },
   callbacks: {
     async jwt({ token, user, trigger, session }) {

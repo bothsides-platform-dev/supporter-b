@@ -19,7 +19,7 @@ import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderRfpAwarded } from '@/lib/server/outbox/templates/rfpAwarded';
 import { renderRfpInvited } from '@/lib/server/outbox/templates/rfpInvited';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
-import { baseUrl } from '@/lib/server/env';
+import { baseUrlFor } from '@/lib/server/env';
 import { nextRfpId } from '@/lib/server/rfp-id';
 import { addMinutes, generateToken } from '@/lib/server/token';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
@@ -536,7 +536,7 @@ export class RfpService {
             ),
           )) as { userId: string; email: string }[];
         for (const admin of adminRows) {
-          const inviteUrl = `${baseUrl()}/invite/rfp/${rawToken}`;
+          const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
           const html = await renderRfpInvited({
             rfpId: rfpRow.code,
             rfpTitle: rfpRow.title,
@@ -763,7 +763,7 @@ export class RfpService {
         const rawToken = generateToken();
         await this.invitationRepo.promoteDraft(draft.id, rawToken, now, expiresAt, tx);
 
-        const inviteUrl = `${baseUrl()}/invite/rfp/${rawToken}`;
+        const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
         const html = await renderRfpInvited({
           rfpId: rfpCode,
           rfpTitle: rfpRow.title,
@@ -951,7 +951,7 @@ export class RfpService {
             )) as { userId: string; email: string }[];
 
           for (const admin of adminRows) {
-            const inviteUrl = `${baseUrl()}/invite/rfp/${rawToken}`;
+            const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
             const html = await renderRfpInvited({
               rfpId: code,
               rfpTitle: input.title.trim(),
