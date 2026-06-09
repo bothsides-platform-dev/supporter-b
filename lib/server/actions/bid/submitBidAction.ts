@@ -57,7 +57,7 @@ export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidR
       settleCycle: parsed.data.settleCycle,
       settleLimit: parsed.data.settleLimit,
       guaranteeInsurance: parsed.data.guaranteeInsurance,
-      paymentFees: parsed.data.paymentFees as Record<string, number>,
+      paymentFees: parsed.data.paymentFees as Record<string, number | import('@/lib/types/bid').TierRates>,
       customFees: parsed.data.customFees,
       proposalAttachmentId: parsed.data.proposalAttachmentId,
       memo: parsed.data.memo,

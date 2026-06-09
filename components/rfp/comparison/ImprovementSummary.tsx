@@ -3,7 +3,7 @@
 // 배지, 아니면 병기만. 현재 조건이 전혀 없으면 '핵심 수치' 요약으로 강등 + 입력 안내.
 import { formatKRW, formatPct } from '@/lib/format';
 import { parseCurrentValue, improvement, cycleQuality } from '@/lib/utils/bid-compare';
-import type { Bid } from '@/lib/types/bid';
+import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
 
 export type CurrentConditions = {
   feeRate?: string | null;
@@ -21,9 +21,11 @@ const CYCLE_QUALITY_LABEL: Record<'faster' | 'same' | 'slower', string> = {
 export function ImprovementSummary({
   bid,
   current,
+  tier = 'general',
 }: {
   bid: Bid;
   current: CurrentConditions;
+  tier?: MerchantTier;
 }) {
   const hasAnyCurrent = Boolean(
     current.feeRate || current.settlementCycle || current.settlementLimit || current.guaranteeInsurance,
@@ -45,15 +47,18 @@ export function ImprovementSummary({
       )}
 
       <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
-        {bid.paymentFees.card !== undefined && (
-          <NumericRow
-            testId="metric-row-card"
-            label="카드 수수료"
-            currentText={current.feeRate}
-            proposedText={formatPct(bid.paymentFees.card)}
-            badge={feeBadge(current.feeRate, bid.paymentFees.card)}
-          />
-        )}
+        {(() => {
+          const cardRate = getMethodRate(bid.paymentFees.card, tier);
+          return cardRate !== undefined ? (
+            <NumericRow
+              testId="metric-row-card"
+              label="카드 수수료"
+              currentText={current.feeRate}
+              proposedText={formatPct(cardRate)}
+              badge={feeBadge(current.feeRate, cardRate)}
+            />
+          ) : null;
+        })()}
         <CycleRow
           testId="metric-row-cycle"
           currentText={current.settlementCycle}

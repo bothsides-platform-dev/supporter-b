@@ -19,6 +19,7 @@ import { BidPdfPane } from '@/components/rfp/bid-detail/BidPdfPane';
 import { rankByMetric } from '@/lib/utils/bid-compare';
 import { formatKRW, formatPct } from '@/lib/format';
 import {
+  getMethodRate,
   PAYMENT_METHOD_LABELS,
   type Bid,
   type CustomPaymentMethod,
@@ -49,7 +50,9 @@ export function FocusComparison(props: Props) {
   const sortedBids = useMemo(
     () =>
       [...bids].sort(
-        (a, b) => (a.paymentFees.card ?? Infinity) - (b.paymentFees.card ?? Infinity),
+        (a, b) =>
+          (getMethodRate(a.paymentFees.card, 'general') ?? Infinity) -
+          (getMethodRate(b.paymentFees.card, 'general') ?? Infinity),
       ),
     [bids],
   );
@@ -80,7 +83,7 @@ export function FocusComparison(props: Props) {
     feeRows.push({
       key: method,
       label: PAYMENT_METHOD_LABELS[method],
-      getValue: (b) => b.paymentFees[method] ?? null,
+      getValue: (b) => getMethodRate(b.paymentFees[method], 'general') ?? null,
       baseline: method === 'card' ? current.feeRate : undefined,
     });
   }
@@ -146,7 +149,13 @@ export function FocusComparison(props: Props) {
               {pgName(peek.pgWsId)}
             </p>
             <dl className="space-y-0.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-              <PeekRow label="카드" value={peek.paymentFees.card !== undefined ? formatPct(peek.paymentFees.card) : '—'} />
+              <PeekRow
+                label="카드"
+                value={(() => {
+                  const r = getMethodRate(peek.paymentFees.card, 'general');
+                  return r !== undefined ? formatPct(r) : '—';
+                })()}
+              />
               <PeekRow label="정산주기" value={peek.settleCycle} />
               <PeekRow label="정산한도" value={formatKRW(peek.settleLimit)} />
             </dl>

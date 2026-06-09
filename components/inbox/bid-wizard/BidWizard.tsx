@@ -11,6 +11,7 @@ import { useBidDraft, type BidDraft } from '../useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
 import {
+  getMethodRate,
   PAYMENT_METHOD_CATEGORIES,
   type PaymentMethod,
   type QuoteTemplateOption,
@@ -134,7 +135,7 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
     setFields((f) => {
       const nextFees = { ...f.fees };
       for (const method of feeInputMethods) {
-        const rate = t.paymentFees[method];
+        const rate = getMethodRate(t.paymentFees[method], 'general');
         if (rate !== undefined) nextFees[method] = fmtPct(rate);
       }
       return { ...f, cycleUnit: unit, cycleNum: num, settleLimit: String(t.settleLimit), guaranteeInsurance: String(t.guaranteeInsurance), fees: nextFees };

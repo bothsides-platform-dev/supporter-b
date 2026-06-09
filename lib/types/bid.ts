@@ -91,8 +91,8 @@ export type Bid = {
   settleLimit: number;
   // 월 보증보험 (원/연)
   guaranteeInsurance: number;
-  // 결제수단별 수수료 (key: PaymentMethod, value: 소수 요율)
-  paymentFees: Partial<Record<PaymentMethod, number>>;
+  // 결제수단별 수수료 (key: PaymentMethod, value: 소수 요율 또는 구간맵)
+  paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
   // 커스텀 결제수단별 수수료 (key: CustomPaymentMethod.id, value: 소수 요율)
   customFees: Record<string, number>;
   proposalPdfs: Attachment[];
@@ -111,5 +111,5 @@ export type QuoteTemplateOption = {
   settleCycle: string;
   settleLimit: number;
   guaranteeInsurance: number;
-  paymentFees: Partial<Record<PaymentMethod, number>>;
+  paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
 };
