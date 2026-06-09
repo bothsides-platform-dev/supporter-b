@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
 - **수수료·금액 한글 표기가 더 자연스러워집니다**: 숫자 금액을 한글로 보여줄 때 내부 로직을 제거하고 toss/es-hangul 라이브러리로 일원화했어요.
 - **이메일·화면 문구의 조사(이/가, 으로/로)가 정확하게 붙습니다**: 역할 변경 안내나 이메일 제목처럼 회사 이름 뒤에 붙는 조사가 이전에는 괄호 표기(`이(가)`)로 처리되었는데, 이제 받침 여부를 자동으로 판단해 `토스페이먼츠가`, `한국정보통신이`처럼 올바른 형태로 나옵니다.
 
+### Fixed
+
+- **운영 환경에서 로그아웃 후 실제 도메인 로그인 화면으로 이동합니다**: `next start -p 3000`으로 실행 시 Next.js가 내부 hostname을 `localhost`로 채워 로그아웃 리다이렉트 URL이 `https://localhost:3000/login`이 되던 문제를 수정했습니다. 이제 Caddy가 전달하는 `Host` 헤더를 우선 사용해 실제 도메인(`supporter-b.com` 또는 `partner.supporter-b.com`)으로 올바르게 이동합니다.
+
 ## [0.2.2.2] - 2026-06-10
 
 ### Added

@@ -27,6 +27,38 @@ describe('GET /logout', () => {
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
   });
+
+  it('Caddy 뒤 프로덕션 환경 — req.url이 localhost:3000이어도 Host 헤더 도메인으로 리다이렉트한다', async () => {
+    signOutMock.mockResolvedValue(undefined);
+
+    // Next.js는 next start -p 3000에서 hostname을 'localhost'로 채워
+    // req.url을 'https://localhost:3000/logout'으로 구성한다.
+    // Caddy는 실제 도메인을 Host 헤더로 전달하므로 이를 우선 사용해야 한다.
+    const req = new Request('https://localhost:3000/logout', {
+      headers: { host: 'supporter-b.com', 'x-forwarded-proto': 'https' },
+    });
+
+    const res = await GET(req);
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
+  });
+
+  it('X-Forwarded-Proto가 multi-value("https, http")여도 첫 번째 값으로 올바르게 리다이렉트한다', async () => {
+    signOutMock.mockResolvedValue(undefined);
+
+    // CDN → Caddy → Next.js 다단계 프록시에서 X-Forwarded-Proto가
+    // 쉼표 구분 복수값("https, http")으로 올 수 있다. split으로 첫 값을
+    // 취하지 않으면 new URL("https, http://host/login") 이 TypeError를 던진다.
+    const req = new Request('https://localhost:3000/logout', {
+      headers: { host: 'supporter-b.com', 'x-forwarded-proto': 'https, http' },
+    });
+
+    const res = await GET(req);
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
+  });
 });
 
 describe('POST /logout', () => {
