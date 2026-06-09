@@ -108,6 +108,7 @@ export function BidStepFees({
                         <input
                           data-testid={`fee-cell-${m}-${t}`}
                           inputMode="decimal"
+                          placeholder="0.00"
                           value={fees[key] ?? ''}
                           onChange={(e) => onFee(key, e.target.value)}
                           className={numericInputClass}
