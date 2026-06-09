@@ -12,10 +12,11 @@ export function RfpInvited({
   deadline,
   inviteUrl,
 }: RfpInvitedProps): React.JSX.Element {
-  const buyerParticle = josa(buyerName, '이/가').slice(buyerName.length);
+  const buyerWithParticle = josa(buyerName, '이/가');
+  const buyerParticle = buyerWithParticle.slice(buyerName.length);
   return (
     <Layout
-      preheader={`${josa(buyerName, '이/가')} ${rfpId} 견적을 요청했어요.`}
+      preheader={`${buyerWithParticle} ${rfpId} 견적을 요청했어요.`}
       serial={`견적 요청 / ${rfpId}`}
     >
       <h1

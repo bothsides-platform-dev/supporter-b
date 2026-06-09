@@ -5,18 +5,6 @@ import { useRouter } from 'next/navigation';
 import * as Popover from '@radix-ui/react-popover';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from 'cmdk';
 import { getChoseong } from 'es-hangul';
-
-/**
- * cmdk의 filter prop에 사용하는 한국어 초성 검색 필터.
- * 부분 문자열(대소문자 무관) 또는 초성 연속 중 하나가 일치하면 1, 모두 불일치면 0을 반환한다.
- * cmdk v1 spec: 0 = hidden, 양수 = visible.
- */
-export function chosungCommandFilter(value: string, search: string): number {
-  if (search === '') return 1;
-  if (value.toLowerCase().includes(search.toLowerCase())) return 1;
-  if (getChoseong(value).includes(search)) return 1;
-  return 0;
-}
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
@@ -30,6 +18,18 @@ import { useLazyPgWorkspaces } from '@/hooks/useLazyPgWorkspaces';
 import type { PgWorkspace } from '@/hooks/useLazyPgWorkspaces';
 import { toast } from '@/lib/toast';
 import type { InvitationStatus } from '@/lib/types/invitation';
+
+/**
+ * cmdk의 filter prop에 사용하는 한국어 초성 검색 필터.
+ * 부분 문자열(대소문자 무관) 또는 초성 연속 중 하나가 일치하면 1, 모두 불일치면 0을 반환한다.
+ * cmdk v1 spec: 0 = hidden, 양수 = visible.
+ */
+export function chosungCommandFilter(value: string, search: string): number {
+  if (search === '') return 1;
+  if (value.toLowerCase().includes(search.toLowerCase())) return 1;
+  if (getChoseong(value).includes(search)) return 1;
+  return 0;
+}
 
 type InvitationView = {
   wsId: string;

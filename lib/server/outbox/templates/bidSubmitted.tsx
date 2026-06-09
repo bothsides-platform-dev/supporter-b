@@ -11,10 +11,11 @@ export function BidSubmitted({
   pgName,
   submittedAt,
 }: BidSubmittedProps): React.JSX.Element {
-  const pgParticle = josa(pgName, '이/가').slice(pgName.length);
+  const pgWithParticle = josa(pgName, '이/가');
+  const pgParticle = pgWithParticle.slice(pgName.length);
   return (
     <Layout
-      preheader={`${josa(pgName, '이/가')} ${rfpId} 견적 요청에 견적을 보냈어요.`}
+      preheader={`${pgWithParticle} ${rfpId} 견적 요청에 견적을 보냈어요.`}
       serial={`견적 요청 / ${rfpId}`}
     >
       <h1

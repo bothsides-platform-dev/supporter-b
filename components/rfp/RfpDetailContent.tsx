@@ -12,7 +12,7 @@ import { RfpBoardVisibilityToggle } from '@/components/rfp/RfpBoardVisibilityTog
 import { RfpPendingRequests } from '@/components/rfp/RfpPendingRequests';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatKrwReadable } from '@/lib/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 const SOLUTION_LABELS: Record<string, string> = {
@@ -69,7 +69,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
   const operationRows: [string, string | undefined][] = [
     ['사업 운영 홈페이지', rfp.websiteUrl],
     ['주요 판매 상품', rfp.mainProducts],
-    ['전년도 연간 PG 거래액', rfp.annualPgVolume],
+    ['전년도 연간 PG 거래액', rfp.annualPgVolume ? (formatKrwReadable(Number(rfp.annualPgVolume)) || rfp.annualPgVolume) : undefined],
     ['현재 카드 수수료', rfp.currentFeeRate],
     ['현재 정산주기', rfp.currentSettlementCycle],
     ['현재 월 정산한도', rfp.currentSettlementLimit],
