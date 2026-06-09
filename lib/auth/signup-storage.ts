@@ -36,6 +36,8 @@ export type SignupClientDraft = {
   bizProfile?: SignupBizProfile;
   /** PG: 직접 입력한 사업자번호 (step 2 → step 4) */
   bizNo?: string;
+  /** 가입 완료 후 복귀할 내부 경로 (CTA → /login?next= → /signup?next= 경유로 주입됨) */
+  next?: string;
 };
 
 export function readSignupDraft(): SignupClientDraft {
