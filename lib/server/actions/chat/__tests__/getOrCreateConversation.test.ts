@@ -45,6 +45,11 @@ function asBuyer(u: { id: string; email: string }, wsId: string) {
     user: { id: u.id, email: u.email, workspaceId: wsId, workspaceType: 'buyer' },
   };
 }
+function asPg(u: { id: string; email: string }, wsId: string) {
+  sessionRef.value = {
+    user: { id: u.id, email: u.email, workspaceId: wsId, workspaceType: 'pg' },
+  };
+}
 
 describe('getOrCreateConversationAction', () => {
   beforeEach(async () => {
@@ -139,5 +144,33 @@ describe('getOrCreateConversationAction', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('PG가 초대 주체여도 buyer/pg 컬럼을 올바르게 배치한다', async () => {
+    const { pgUser, pgWs, buyerWs } = await seedPair();
+    asPg(pgUser, pgWs.id);
+
+    const r = await getOrCreateConversationAction(buyerWs.id);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const convs = await db
+      .select()
+      .from(chatConversations)
+      .where(eq(chatConversations.id, r.conversationId));
+    expect(convs).toHaveLength(1);
+    // actor가 PG여도 buyerWsId=구매사, pgWsId=PG로 배치돼야 한다(미러 아님).
+    expect(convs[0].buyerWsId).toBe(buyerWs.id);
+    expect(convs[0].pgWsId).toBe(pgWs.id);
+  });
+
+  it('워크스페이스가 없는 세션이면 NO_WORKSPACE를 반환한다', async () => {
+    sessionRef.value = {
+      user: { id: 'u-1', email: 'x@x.com', workspaceId: '', workspaceType: 'buyer' },
+    };
+    const r = await getOrCreateConversationAction('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('NO_WORKSPACE');
   });
 });
