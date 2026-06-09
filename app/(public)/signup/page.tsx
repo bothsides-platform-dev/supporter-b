@@ -1,18 +1,22 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { RoleChooser } from '@/components/auth/RoleChooser';
 import { useSignupDraftStore } from '@/lib/stores/signup-draft';
 import { writeSignupDraft } from '@/lib/auth/signup-storage';
+import { safeInternalNext } from '@/lib/auth/safe-next';
 
-export default function SignupPage() {
+function SignupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setWorkspaceType } = useSignupDraftStore();
 
   const handleSelect = (role: 'buyer' | 'pg') => {
+    const safeNext = safeInternalNext(searchParams.get('next')) ?? undefined;
     setWorkspaceType(role);
-    writeSignupDraft({ workspaceType: role });
+    writeSignupDraft({ workspaceType: role, next: safeNext });
     router.push(role === 'buyer' ? '/signup/buyer' : '/signup/pg');
   };
 
@@ -38,5 +42,19 @@ export default function SignupPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense
+      fallback={
+        <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">
+          LOADING…
+        </p>
+      }
+    >
+      <SignupContent />
+    </Suspense>
   );
 }

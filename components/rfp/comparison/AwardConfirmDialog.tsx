@@ -2,7 +2,7 @@
 
 // 인라인 선정 확정 다이얼로그 — 포커스 뷰 CTA 가 연다. 화면에 이미 있는 견적으로 충분해
 // 추가 fetch 없음. awardRfpAction 재사용(서버 로직 불변). 성공 시 onAwarded 로 부모에
-// 알리고(보통 router.refresh) 닫는다. 실패 시 에러를 인라인 노출.
+// 알리고(현재 호출부는 선정 결과 화면을 띄움) 닫는다. 실패 시 에러를 인라인 노출.
 import { useState } from 'react';
 import {
   Dialog,
