@@ -8,6 +8,11 @@ export function baseUrl(): string {
   );
 }
 
+/** Absolute origin for the admin console (admin.supporter-b.com). */
+export function adminBaseUrl(): string {
+  return process.env.ADMIN_ORIGIN ?? baseUrl();
+}
+
 /** Absolute origin for links shown to a given workspace type (partner subdomain for pg). */
 export function baseUrlFor(type: WorkspaceType): string {
   const origin =
