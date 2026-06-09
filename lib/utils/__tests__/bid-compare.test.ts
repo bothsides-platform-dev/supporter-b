@@ -7,7 +7,7 @@ import {
   metricVerdict,
   cycleQuality,
 } from '../bid-compare';
-import type { Bid } from '@/lib/types/bid';
+import { getMethodRate, type Bid } from '@/lib/types/bid';
 
 function makeBid(over: Partial<Bid>): Bid {
   return {
@@ -72,7 +72,7 @@ describe('rankByMetric', () => {
       makeBid({ id: 'b', paymentFees: { card: 0.022 } }),
       makeBid({ id: 'c', paymentFees: { card: 0.025 } }),
     ];
-    const ranked = rankByMetric(bids, (b) => b.paymentFees.card ?? null, 'lower');
+    const ranked = rankByMetric(bids, (b) => getMethodRate(b.paymentFees.card, 'general') ?? null, 'lower');
     expect(ranked.map((r) => r.bid.id)).toEqual(['b', 'c', 'a']);
     expect(ranked.map((r) => r.isBest)).toEqual([true, false, false]);
   });
@@ -93,7 +93,7 @@ describe('rankByMetric', () => {
       makeBid({ id: 'a', paymentFees: {} }),
       makeBid({ id: 'b', paymentFees: { card: 0.022 } }),
     ];
-    const ranked = rankByMetric(bids, (b) => b.paymentFees.card ?? null, 'lower');
+    const ranked = rankByMetric(bids, (b) => getMethodRate(b.paymentFees.card, 'general') ?? null, 'lower');
     expect(ranked.map((r) => r.bid.id)).toEqual(['b', 'a']);
     expect(ranked[1].value).toBeNull();
     expect(ranked[1].isBest).toBe(false);

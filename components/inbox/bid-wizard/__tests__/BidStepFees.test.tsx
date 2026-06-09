@@ -1,38 +1,58 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import * as React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { BidStepFees } from '../BidStepFees';
-import type { PaymentMethod } from '@/lib/types/bid';
 
-afterEach(cleanup);
+const noop = () => {};
 
-// 'bank' is not a valid PaymentMethod — use 'bank_transfer' (label: '계좌이체')
-const methods: PaymentMethod[] = ['card', 'bank_transfer'];
-
-function renderStep(over: Partial<React.ComponentProps<typeof BidStepFees>> = {}) {
+function setup(over: Partial<React.ComponentProps<typeof BidStepFees>> = {}) {
   const onFee = vi.fn();
   render(
     <BidStepFees
-      feeInputMethods={methods}
+      feeInputMethods={['card', 'naver_pay', 'virtual_account']}
       customPaymentMethods={[]}
       fees={{}}
       onFee={onFee}
-      onBack={vi.fn()}
-      onNext={vi.fn()}
+      onBack={noop}
+      onNext={noop}
       {...over}
     />,
   );
   return { onFee };
 }
 
-describe('BidStepFees', () => {
-  it('요청된 결제수단 수만큼 수수료 입력칸 렌더', () => {
-    renderStep();
-    expect(screen.getByText(/카드 수수료/)).toBeInTheDocument();
-    expect(screen.getByText(/계좌이체 수수료/)).toBeInTheDocument();
+describe('BidStepFees 구간 매트릭스', () => {
+  it('카드·간편결제는 5구간 컬럼 헤더를 보여준다', () => {
+    setup();
+    expect(screen.getAllByText('영세').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('일반').length).toBeGreaterThan(0);
+    expect(screen.getByText('카드')).toBeInTheDocument();
+    expect(screen.getByText('네이버페이')).toBeInTheDocument();
   });
 
-  it('채움 카운터가 입력된 칸 수를 보여준다', () => {
-    renderStep({ fees: { card: '1.5' } });
-    expect(screen.getByTestId('fees-count')).toHaveTextContent('1/2');
+  it('계좌·기타는 구간 없이 단일 입력', () => {
+    setup();
+    expect(screen.getByText(/가상계좌/)).toBeInTheDocument();
+  });
+
+  it('구간 셀 입력 시 "<method>:<tier>" 복합 키로 onFee 호출', () => {
+    const { onFee } = setup();
+    const cell = screen.getByTestId('fee-cell-card-sole');
+    fireEvent.change(cell, { target: { value: '0.5' } });
+    expect(onFee).toHaveBeenCalledWith('card:sole', '0.5');
+  });
+
+  it('요청 안 된 카드 카테고리 수단(해외카드)은 렌더하지 않는다', () => {
+    setup();
+    expect(screen.queryByText('해외카드')).toBeNull();
+  });
+
+  it('해외카드는 구간 매트릭스가 아니라 단일 입력으로 받는다', () => {
+    setup({ feeInputMethods: ['card', 'overseas_card'] });
+    // 국내카드는 구간 셀이 있지만, 해외카드는 구간 셀이 없어야 한다.
+    expect(screen.getByTestId('fee-cell-card-sole')).toBeInTheDocument();
+    expect(screen.queryByTestId('fee-cell-overseas_card-sole')).toBeNull();
+    // 해외카드는 단일요율 PercentInput(라벨 "해외카드 수수료")으로 렌더.
+    expect(screen.getByText('해외카드 수수료')).toBeInTheDocument();
   });
 });

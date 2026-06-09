@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { asc, eq } from 'drizzle-orm';
 import { bidQuoteTemplates } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
-import type { PaymentMethod } from '@/lib/types/bid';
+import type { PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { BidQuoteTemplate, BidQuoteTemplateRepo, Tx } from '../types';
 
 // Explicit column projection (BID_COLUMNS precedent) — guards against schema
@@ -32,7 +32,7 @@ function rowToTemplate(row: TemplateRow): BidQuoteTemplate {
     settleCycle: row.settleCycle,
     settleLimit: Number(row.settleLimit),
     guaranteeInsurance: Number(row.guaranteeInsurance),
-    paymentFees: (row.paymentFees ?? {}) as Partial<Record<PaymentMethod, number>>,
+    paymentFees: (row.paymentFees ?? {}) as Partial<Record<PaymentMethod, number | TierRates>>,
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -56,7 +56,7 @@ export class DrizzleBidQuoteTemplateRepository implements BidQuoteTemplateRepo {
       settleCycle: string;
       settleLimit: number;
       guaranteeInsurance: number;
-      paymentFees: Partial<Record<PaymentMethod, number>>;
+      paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
       createdBy: string;
     },
     tx?: Tx,
@@ -81,7 +81,7 @@ export class DrizzleBidQuoteTemplateRepository implements BidQuoteTemplateRepo {
       settleCycle: string;
       settleLimit: number;
       guaranteeInsurance: number;
-      paymentFees: Partial<Record<PaymentMethod, number>>;
+      paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
     },
     tx?: Tx,
   ): Promise<void> {
