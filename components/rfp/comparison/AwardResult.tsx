@@ -1,17 +1,17 @@
 'use client';
 
 // 견적 선정 직후 1회만 뜨는 전체 화면 축하 결과 — 히어로(선정 PG·완료) + 혜택 요약
-// (ImprovementSummary 재사용) + 컨페티(approval-waiting-screen 패턴 차용). 주 CTA는
+// (ImprovementSummary 재사용) + 컨페티(useCelebrationConfetti 공용 훅). 주 CTA는
 // getOrCreateConversationAction으로 선정 PG와의 빈 대화를 보장하고 메시지로 딥링크.
 // Linear 하드룰의 "축하 모먼트" 승인 예외(DESIGN.md §9) — 이 화면 한정.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import { motion } from 'motion/react';
 import { Button } from '@/components/primitives/Button';
 import { ImprovementSummary, type CurrentConditions } from './ImprovementSummary';
 import { getOrCreateConversationAction } from '@/lib/server/actions/chat/getOrCreateConversationAction';
+import { useCelebrationConfetti } from '@/lib/hooks/useCelebrationConfetti';
 import { josa } from 'es-hangul';
 import type { Bid, MerchantTier } from '@/lib/types/bid';
 
@@ -20,7 +20,7 @@ export function AwardResult({
   pgWsId,
   bid,
   current,
-  tier = 'general',
+  tier,
 }: {
   pgName: string;
   pgWsId: string;
@@ -29,37 +29,8 @@ export function AwardResult({
   tier?: MerchantTier;
 }) {
   const router = useRouter();
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const fireRef = useRef<ReturnType<typeof confetti.create> | null>(null);
+  const { canvasRef } = useCelebrationConfetti();
   const [starting, setStarting] = useState(false);
-
-  const fire = useCallback(() => {
-    const run = fireRef.current;
-    if (!run) return;
-    const primary =
-      getComputedStyle(document.documentElement)
-        .getPropertyValue('--md-sys-color-primary')
-        .trim() || '#0061A4';
-    const shared = { colors: [primary], scalar: 1, ticks: 250 };
-    run({ ...shared, particleCount: 80, angle: 60, spread: 60, startVelocity: 65, origin: { x: 0, y: 0.65 } });
-    run({ ...shared, particleCount: 80, angle: 120, spread: 60, startVelocity: 65, origin: { x: 1, y: 0.65 } });
-    run({ ...shared, particleCount: 120, spread: 180, startVelocity: 40, gravity: 0.6, origin: { x: 0.5, y: 0 } });
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    fireRef.current = confetti.create(canvas, {
-      resize: true,
-      useWorker: false,
-      disableForReducedMotion: true,
-    });
-    fire();
-    return () => {
-      fireRef.current?.reset();
-      fireRef.current = null;
-    };
-  }, [fire]);
 
   const startMessage = async () => {
     if (starting) return;

@@ -16,7 +16,6 @@ type SessionUser = {
   email: string;
   workspaceId: string;
   workspaceType: 'buyer' | 'pg';
-  role: 'admin' | 'member';
 };
 const sessionRef: { value: { user: SessionUser } | null } = { value: null };
 
@@ -43,7 +42,7 @@ async function seedPair() {
 
 function asBuyer(u: { id: string; email: string }, wsId: string) {
   sessionRef.value = {
-    user: { id: u.id, email: u.email, workspaceId: wsId, workspaceType: 'buyer', role: 'admin' },
+    user: { id: u.id, email: u.email, workspaceId: wsId, workspaceType: 'buyer' },
   };
 }
 

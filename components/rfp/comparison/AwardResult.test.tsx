@@ -28,7 +28,6 @@ vi.mock('motion/react', () => ({
         <div style={style as React.CSSProperties} className={className as string}>{children as React.ReactNode}</div>,
     },
   ),
-  useAnimation: vi.fn(() => ({ start: vi.fn() })),
 }));
 
 function makeBid(over: Partial<Bid> = {}): Bid {
