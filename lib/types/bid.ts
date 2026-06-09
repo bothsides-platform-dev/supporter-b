@@ -33,6 +33,47 @@ export const PAYMENT_METHOD_CATEGORIES: {
   { label: '기타', methods: ['mobile', 'gift_card'] },
 ];
 
+// ─── 영세·중소가맹점 우대수수료 구간 (여신금융협회 기준 고정 5종) ────────────────
+export const MERCHANT_TIERS = ['sole', 'sme1', 'sme2', 'sme3', 'general'] as const;
+export type MerchantTier = (typeof MERCHANT_TIERS)[number];
+export const MERCHANT_TIER_LABELS: Record<MerchantTier, string> = {
+  sole: '영세',
+  sme1: '중소1',
+  sme2: '중소2',
+  sme3: '중소3',
+  general: '일반',
+};
+
+// 소수 요율의 구간맵 (부분 허용 — 일부 구간만 채워도 됨)
+export type TierRates = Partial<Record<MerchantTier, number>>;
+
+// 구간이 적용되는 카테고리 라벨 (PAYMENT_METHOD_CATEGORIES.label 기준)
+export const TIERED_CATEGORY_LABELS = ['카드', '간편결제'] as const;
+
+const TIERED_METHODS: ReadonlySet<PaymentMethod> = new Set(
+  PAYMENT_METHOD_CATEGORIES.filter((c) =>
+    (TIERED_CATEGORY_LABELS as readonly string[]).includes(c.label),
+  ).flatMap((c) => c.methods),
+);
+
+/** 카테고리 상수로만 판별 — 저장된 값의 모양에 의존하지 않는다. */
+export function isTieredMethod(m: PaymentMethod): boolean {
+  return TIERED_METHODS.has(m);
+}
+
+/**
+ * 관대한 요율 접근자. value가 number면 구버전 단일요율로 해석(구간 무관),
+ * 구간맵이면 해당 구간 값(없으면 undefined). 모든 읽기 사이트가 이 함수를 거친다.
+ */
+export function getMethodRate(
+  value: number | TierRates | undefined,
+  tier: MerchantTier,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'number') return value;
+  return value[tier];
+}
+
 // 구매사 직접입력 커스텀 결제수단. id는 서버가 발급(클라는 label만 전송).
 export type CustomPaymentMethod = {
   id: string;
