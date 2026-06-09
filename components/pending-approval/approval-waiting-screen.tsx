@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PartyPopper } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import { motion, useAnimation } from 'motion/react';
 import { Chip } from '@/components/primitives/Chip';
+import { useCelebrationConfetti } from '@/lib/hooks/useCelebrationConfetti';
 import { checkMyWorkspaceApprovalAction } from '@/lib/server/actions/auth/checkMyWorkspaceApprovalAction';
 
 const ICON_SPAN_STYLE = { display: 'inline-flex' } as const;
@@ -22,28 +22,12 @@ async function handleLogout() {
 
 export function ApprovalWaitingScreen() {
   const router = useRouter();
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const fireRef = useRef<ReturnType<typeof confetti.create> | null>(null);
+  // 컨페티는 공용 축하 모먼트 훅(DESIGN.md §9), 아이콘 셰이크는 이 화면 고유 연출.
+  const { canvasRef, fire } = useCelebrationConfetti();
   const iconControls = useAnimation();
 
-  const fire = useCallback(() => {
-    const run = fireRef.current;
-    if (!run) return;
-    const primary =
-      getComputedStyle(document.documentElement)
-        .getPropertyValue('--md-sys-color-primary')
-        .trim() || '#0061A4';
-
-    const shared = { colors: [primary], scalar: 1, ticks: 250 };
-
-    // 좌측 끝에서 안쪽 위로
-    run({ ...shared, particleCount: 80, angle: 60, spread: 60, startVelocity: 65, origin: { x: 0, y: 0.65 } });
-    // 우측 끝에서 안쪽 위로
-    run({ ...shared, particleCount: 80, angle: 120, spread: 60, startVelocity: 65, origin: { x: 1, y: 0.65 } });
-    // 중앙 상단에서 180° 전방위 비
-    run({ ...shared, particleCount: 120, spread: 180, startVelocity: 40, gravity: 0.6, origin: { x: 0.5, y: 0 } });
-
-    // 아이콘 셰이크 (모션 감소 설정 존중)
+  // 아이콘 셰이크 (모션 감소 설정 존중).
+  const shake = useCallback(() => {
     if (!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
       iconControls.start({
         rotate: [-14, 12, -9, 7, -4, 2, 0],
@@ -52,6 +36,17 @@ export function ApprovalWaitingScreen() {
       });
     }
   }, [iconControls]);
+
+  // 컨페티(훅)와 셰이크를 함께 — 마운트 1회 + "다시 보기" 버튼.
+  const celebrate = useCallback(() => {
+    fire();
+    shake();
+  }, [fire, shake]);
+
+  // 마운트 시 셰이크 1회 (컨페티는 훅이 마운트에서 자체 발사).
+  useEffect(() => {
+    shake();
+  }, [shake]);
 
   useEffect(() => {
     let active = true;
@@ -68,21 +63,6 @@ export function ApprovalWaitingScreen() {
     };
   }, [router]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    fireRef.current = confetti.create(canvas, {
-      resize: true,
-      useWorker: false,
-      disableForReducedMotion: true,
-    });
-    fire();
-    return () => {
-      fireRef.current?.reset();
-      fireRef.current = null;
-    };
-  }, [fire]);
-
   return (
     <>
       {/* 콘페티 캔버스: 뷰포트 전체를 덮되 pointer-events-none 로 클릭은 통과시켜
@@ -97,7 +77,7 @@ export function ApprovalWaitingScreen() {
         <button
           type="button"
           aria-label="축하 효과 다시 보기"
-          onClick={fire}
+          onClick={celebrate}
           className="rounded-[var(--md-sys-shape-small)] p-2 text-[var(--md-sys-color-primary)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--md-sys-color-primary)]/50"
         >
           <motion.span animate={iconControls} style={ICON_SPAN_STYLE}>

@@ -5,7 +5,6 @@
 // 로 전 PG 줄세움. CTA 는 인라인 AwardConfirmDialog 로 선정 확정. 표/보드/별도 award 페이지
 // 를 대체한다. 표현 전용 — 데이터는 loadBuyerRfpDetail 산출물.
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
@@ -13,6 +12,7 @@ import { Accordion, AccordionItem } from '@/components/ui/accordion';
 import { ImprovementSummary, type CurrentConditions } from './ImprovementSummary';
 import { MetricComparePopover, type CompareRow } from './MetricComparePopover';
 import { AwardConfirmDialog } from './AwardConfirmDialog';
+import { AwardResult } from './AwardResult';
 import { BidNotesPanel } from '@/components/rfp/bid-detail/BidNotesPanel';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { BidPdfPane } from '@/components/rfp/bid-detail/BidPdfPane';
@@ -47,7 +47,6 @@ type Props = {
 
 export function FocusComparison(props: Props) {
   const { bids, pgWsNameMap, current, notesByBid, rfpStatus, awardedBidId } = props;
-  const router = useRouter();
 
   const [tier, setTier] = useState<MerchantTier>('general');
 
@@ -66,6 +65,8 @@ export function FocusComparison(props: Props) {
   const [activeBidId, setActiveBidId] = useState<string | undefined>(defaultBidId);
   const [peekBidId, setPeekBidId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // 선정 확정 직후 1회만 뜨는 결과 화면. 초기 awarded 로드로는 set되지 않는다(1회성).
+  const [resultBid, setResultBid] = useState<Bid | null>(null);
 
   if (sortedBids.length === 0) {
     return (
@@ -81,6 +82,18 @@ export function FocusComparison(props: Props) {
   const isAwarded = rfpStatus === 'awarded' || rfpStatus === 'closed';
   const canAward = rfpStatus === 'sent';
   const peek = peekBidId ? sortedBids.find((b) => b.id === peekBidId) : null;
+
+  if (resultBid) {
+    return (
+      <AwardResult
+        pgName={pgName(resultBid.pgWsId)}
+        pgWsId={resultBid.pgWsId}
+        bid={resultBid}
+        current={current}
+        tier={tier}
+      />
+    );
+  }
 
   // 활성 견적의 결제수단 요율 행 — 각 행 hover 시 전 PG 줄세움.
   const feeRows: { key: string; label: string; getValue: (b: Bid) => number | null; baseline?: string | null }[] = [];
@@ -304,7 +317,7 @@ export function FocusComparison(props: Props) {
         awardedBidId={active.id}
         pgName={pgName(active.pgWsId)}
         otherCount={sortedBids.length - 1}
-        onAwarded={() => router.refresh()}
+        onAwarded={() => setResultBid(active)}
       />
     </section>
   );

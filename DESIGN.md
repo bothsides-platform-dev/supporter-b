@@ -209,6 +209,19 @@ surface-container-highest #E4E5E9               #202123
 - **No** 큰 본문(16px+) — 앱 본문은 14px, 조밀하게.
 - **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + JetBrains Mono만.
 - **No** 브래킷 상태 태그 `[ 결재중 ]` — Chip 사용.
+- **No** 컨페티·펄스·강한 모멘텀 모션 — 단 하나의 예외(아래 "축하 모먼트")만 허용.
+
+> **예외 — 축하 모먼트 (Celebration Moment).** 위 컨페티·펄스·강한 모션 금지에는
+> 단 하나의 좁은 예외가 있다. 다음 4조건을 **모두** 만족하는 종결 성공 순간에 한해
+> 1회성 컨페티/강조 모션을 허용한다:
+> ① 사용자가 직접 일으킨 액션의 결과일 것,
+> ② 되돌릴 수 없는 종결(terminal) 성공 이벤트일 것,
+> ③ 1회성일 것(재방문·재렌더로 반복 발화 금지),
+> ④ `prefers-reduced-motion: reduce`를 존중하고(컨페티 `disableForReducedMotion`),
+>    네온·그라데이션 없이 브랜드 컬러만 사용할 것.
+> 현재 등록된 발동 지점: **(1) 입점 심사 대기 화면**(`approval-waiting-screen`),
+> **(2) 견적 선정 완료 결과 화면**(`AwardResult`). 새 발동 지점을 추가할 때는
+> 위 4조건 충족을 PR에서 명시할 것.
 
 ---
 

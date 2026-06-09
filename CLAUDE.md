@@ -87,9 +87,13 @@ Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown
 ```
 lib/server/
 ├─ actions/          # 얇은 진입점: 세션 검증 + 입력 파싱 후 서비스에 위임
-├─ services/         # 비즈니스 로직 캡슐화 (Phase 1: rfp.ts · bid.ts)
+├─ services/         # 비즈니스 로직 캡슐화 (전체 코드베이스 적용 완료)
 │  ├─ rfp.ts         # RfpService: award / cancel / close
-│  └─ bid.ts         # BidService: withdraw
+│  ├─ bid.ts         # BidService: submit / withdraw
+│  ├─ chat.ts        # ChatService: sendMessage / markConversationRead
+│  ├─ workspace.ts   # WorkspaceService: create / invite / member management
+│  ├─ auth.ts        # AuthService: signup / password reset / email change
+│  └─ notification.ts# NotificationService: markRead / markAllRead / retryEmail
 └─ repositories/     # DB 접근 추상화 (Drizzle 구현 + 메모리 테스트 구현)
 ```
 
@@ -97,9 +101,7 @@ lib/server/
 - 서비스는 트랜잭션·알림 팬아웃·이메일 아웃박스를 소유한다. 액션은 이를 직접 다루지 않는다.
 - `Actor = { userId, workspaceId }` — 세션에서 추출해 액션이 서비스에 전달한다.
 - `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 예외 throw 없이 결과를 반환한다.
-- 서비스 싱글턴은 Next.js `globalThis` 캐싱 패턴 사용 (`getRfpService()` / `getBidService()`).
-
-아직 서비스로 미분리된 액션은 `TODOS.md` Phase 2 항목 참조.
+- 서비스 싱글턴은 Next.js `globalThis` 캐싱 패턴 사용 (`getRfpService()` / `getBidService()` 등).
 
 ## Linear Design Language — Hard Rules
 
@@ -113,13 +115,13 @@ These are non-negotiable visual decisions enforced across all screens. The desig
 - **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28px buttons).
 - **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`.
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
-- **No** pulse/spinner loading. Use `LOADING…` text (body-medium type).
+- **No** pulse/spinner loading. Use `LOADING…` text (body-medium type). (예외: DESIGN.md §9 "축하 모먼트" — 종결 성공 1회성에 한해 컨페티 허용.)
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.
 - **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (mono + tabular-nums). Never on nav/labels/buttons.
 - **Status** uses Chip component — never bracketed plain text `[ 결재중 ]`.
 - **Typography** uses the typescale tokens — no `font-mono uppercase tracking` on labels/nav; sentence case with slight negative tracking.
 - **Chip color** mapping: 성공/완료→tertiary, 실패/오류→error, 보류/신규→warning, 중립→surface, 주요→primary.
-- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`).
+- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`). 단, DESIGN.md §9의 "축하 모먼트" 예외(종결 성공 1회성 컨페티)는 별도.
 
 If frontend code looks "generic SaaS", check DESIGN.md §9 (anti-patterns) before defending it.
 
