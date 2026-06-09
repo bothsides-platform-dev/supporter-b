@@ -1,11 +1,22 @@
 'use server';
 
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
+import { getChoseong } from 'es-hangul';
 import { bids, rfps, workspaces } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth/session';
 import { getPgRequestRepo } from '@/lib/server/repositories/factory';
 import { escapeIlike } from '@/lib/server/search/escapeIlike';
 import { actionDb } from '../auth/_shared';
+
+// Returns true when every char is a Korean consonant (ㄱ–ㅎ, U+3131–U+314E).
+// SQL ilike never matches chosung; we switch to in-memory getChoseong filtering.
+function isChosungOnly(q: string): boolean {
+  return q.length > 0 && [...q].every((ch) => ch >= 'ㄱ' && ch <= 'ㅎ');
+}
+
+function matchesChosung(q: string, ...fields: string[]): boolean {
+  return fields.some((f) => getChoseong(f).includes(q));
+}
 
 export type RfpSearchItem = {
   code: string;
@@ -64,7 +75,10 @@ export async function searchEntitiesAction(query: string): Promise<SearchResults
   if (!workspaceId || !workspaceType) return EMPTY;
 
   const db = actionDb();
+  const chosung = isChosungOnly(q);
   const pattern = `%${escapeIlike(q)}%`;
+  // For chosung queries we fetch more rows (no SQL filter) and reduce in JS.
+  const scanLimit = chosung ? LIMIT * 10 : LIMIT;
 
   if (workspaceType === 'buyer') {
     const rfpRows = await db
@@ -76,13 +90,19 @@ export async function searchEntitiesAction(query: string): Promise<SearchResults
       })
       .from(rfps)
       .where(
-        and(
-          eq(rfps.buyerWsId, workspaceId),
-          or(ilike(rfps.title, pattern), ilike(rfps.memo, pattern)),
-        ),
+        chosung
+          ? eq(rfps.buyerWsId, workspaceId)
+          : and(
+              eq(rfps.buyerWsId, workspaceId),
+              or(ilike(rfps.title, pattern), ilike(rfps.memo, pattern)),
+            ),
       )
       .orderBy(desc(rfps.createdAt))
-      .limit(LIMIT);
+      .limit(scanLimit);
+
+    const filteredRfps = chosung
+      ? rfpRows.filter((r: typeof rfpRows[number]) => matchesChosung(q, r.title, r.memo ?? '')).slice(0, LIMIT)
+      : rfpRows;
 
     const bidRows = await db
       .select({
@@ -96,22 +116,28 @@ export async function searchEntitiesAction(query: string): Promise<SearchResults
       .innerJoin(rfps, eq(bids.rfpId, rfps.id))
       .innerJoin(workspaces, eq(bids.pgWsId, workspaces.id))
       .where(
-        and(
-          eq(rfps.buyerWsId, workspaceId),
-          eq(bids.status, 'submitted'),
-          or(
-            ilike(rfps.title, pattern),
-            ilike(bids.memo, pattern),
-            ilike(workspaces.name, pattern),
-          ),
-        ),
+        chosung
+          ? and(eq(rfps.buyerWsId, workspaceId), eq(bids.status, 'submitted'))
+          : and(
+              eq(rfps.buyerWsId, workspaceId),
+              eq(bids.status, 'submitted'),
+              or(
+                ilike(rfps.title, pattern),
+                ilike(bids.memo, pattern),
+                ilike(workspaces.name, pattern),
+              ),
+            ),
       )
       .orderBy(desc(bids.submittedAt))
-      .limit(LIMIT);
+      .limit(scanLimit);
+
+    const filteredBids = chosung
+      ? bidRows.filter((r: typeof bidRows[number]) => matchesChosung(q, r.rfpTitle, r.memo ?? '', r.pgWsName)).slice(0, LIMIT)
+      : bidRows;
 
     return {
-      rfps: rfpRows.map((r: typeof rfpRows[number]) => ({ ...r, href: `/rfp/${r.code}` })),
-      bids: bidRows.map((r: typeof bidRows[number]) => ({ ...r, href: `/rfp/${r.rfpId}` })),
+      rfps: filteredRfps.map((r: typeof rfpRows[number]) => ({ ...r, href: `/rfp/${r.code}` })),
+      bids: filteredBids.map((r: typeof bidRows[number]) => ({ ...r, href: `/rfp/${r.rfpId}` })),
       opportunities: [],
     };
   }
@@ -127,14 +153,20 @@ export async function searchEntitiesAction(query: string): Promise<SearchResults
       .from(bids)
       .innerJoin(rfps, eq(bids.rfpId, rfps.id))
       .where(
-        and(
-          eq(bids.pgWsId, workspaceId),
-          eq(bids.status, 'submitted'),
-          or(ilike(rfps.title, pattern), ilike(bids.memo, pattern)),
-        ),
+        chosung
+          ? and(eq(bids.pgWsId, workspaceId), eq(bids.status, 'submitted'))
+          : and(
+              eq(bids.pgWsId, workspaceId),
+              eq(bids.status, 'submitted'),
+              or(ilike(rfps.title, pattern), ilike(bids.memo, pattern)),
+            ),
       )
       .orderBy(desc(bids.submittedAt))
-      .limit(LIMIT);
+      .limit(scanLimit);
+
+    const filteredBids = chosung
+      ? bidRows.filter((r: typeof bidRows[number]) => matchesChosung(q, r.rfpTitle, r.memo ?? '')).slice(0, LIMIT)
+      : bidRows;
 
     // Opportunities reuse the whitelist repo query (제목·구매사명·홈페이지만) and
     // filter in memory — never a bespoke SELECT that could leak sensitive columns.
@@ -144,7 +176,9 @@ export async function searchEntitiesAction(query: string): Promise<SearchResults
     const opportunities = open
       .filter(
         (o) =>
-          o.title.toLowerCase().includes(ql) || o.buyerName.toLowerCase().includes(ql),
+          o.title.toLowerCase().includes(ql) ||
+          o.buyerName.toLowerCase().includes(ql) ||
+          (chosung && matchesChosung(q, o.title, o.buyerName)),
       )
       .slice(0, LIMIT)
       .map((o) => ({
@@ -157,7 +191,7 @@ export async function searchEntitiesAction(query: string): Promise<SearchResults
 
     return {
       rfps: [],
-      bids: bidRows.map((r: typeof bidRows[number]) => ({
+      bids: filteredBids.map((r: typeof bidRows[number]) => ({
         ...r,
         pgWsName: '',
         href: `/inbox/${r.rfpId}`,
