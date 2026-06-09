@@ -40,6 +40,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | State | Zustand (UI toggles, signup draft, page→shell header-actions slot) | `zustand@5.0.13` |
 | Forms | zod v4 검증 + Server Actions (react-hook-form 미사용 — 폼은 useState + zod) | `zod@4.4.3` |
 | Numeric input | `react-number-format` — 원화 금액 입력 천단위 구분·소수점 차단 (`CurrencyInput`) | `react-number-format@5.4.5` |
+| Korean i18n | `es-hangul` (toss) — 조사 자동 선택(`josa()`), 초성 검색(`disassemble`), 숫자→한글 혼합 표기(`numberToHangulMixed`). 한글 텍스트 처리 단일 출처 | `es-hangul@2.3.8` |
 | Icons | lucide-react | `lucide-react@1.14.0` |
 | Fonts | `next/font/local` — Pretendard Variable + JetBrains Mono Variable, self-hosted in `public/fonts/` | — |
 | Motion | `motion` (구 Framer Motion). 임포트는 `motion/react`. | `motion@12.38.0` |
@@ -63,14 +64,14 @@ app/
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)
 │  ├─ home/
 │  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id] (비교·선정 인라인 — 별도 award 라우트 없음)
+│  │  └─ new/                 # /rfp/new — RFP 작성 플로우 (AppShell 공유)
 │  ├─ inbox/                  # pg workspace pages (P2~P4): /inbox, /inbox/[rfpId], /inbox/[rfpId]/submitted
 │  ├─ opportunities/          # pg — 오픈 RFP 게시판 (비초대 PG 발견·콜드 피치)
 │  ├─ messages/               # buyer+pg 공통 — 라이브 채팅 (Centrifugo WS)
 │  ├─ notifications/          # 인앱 알림 목록 페이지
 │  ├─ workspace/new/          # 워크스페이스 생성
 │  └─ settings/{profile,members,notifications,quote-templates}/
-├─ rfp/new/                   # full-screen RFP 작성 플로우 (자체 layout, AppShell 밖)
-├─ logout/route.ts            # POST handler
+├─ logout/route.ts            # GET (redirect to /login) + POST (204, for client-side signOut)
 └─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리
 ```
 
@@ -115,13 +116,13 @@ These are non-negotiable visual decisions enforced across all screens. The desig
 - **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28px buttons).
 - **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`.
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
-- **No** pulse/spinner loading. Use `LOADING…` text (body-medium type).
+- **No** pulse/spinner loading. Use `LOADING…` text (body-medium type). (예외: DESIGN.md §9 "축하 모먼트" — 종결 성공 1회성에 한해 컨페티 허용.)
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.
 - **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (mono + tabular-nums). Never on nav/labels/buttons.
 - **Status** uses Chip component — never bracketed plain text `[ 결재중 ]`.
 - **Typography** uses the typescale tokens — no `font-mono uppercase tracking` on labels/nav; sentence case with slight negative tracking.
 - **Chip color** mapping: 성공/완료→tertiary, 실패/오류→error, 보류/신규→warning, 중립→surface, 주요→primary.
-- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`).
+- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`). 단, DESIGN.md §9의 "축하 모먼트" 예외(종결 성공 1회성 컨페티)는 별도.
 
 If frontend code looks "generic SaaS", check DESIGN.md §9 (anti-patterns) before defending it.
 

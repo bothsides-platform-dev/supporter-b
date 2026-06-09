@@ -162,7 +162,21 @@ describe('getBreadcrumbSegments', () => {
   });
 
   it('returns an empty array for unknown paths', () => {
-    expect(getBreadcrumbSegments('/rfp/new')).toEqual([]);
+    expect(getBreadcrumbSegments('/rfp/unknown-path')).toEqual([]);
+  });
+
+  it('/rfp/new shows "견적 요청" parent link + "새 견적 요청" current page', () => {
+    expect(getBreadcrumbSegments('/rfp/new')).toEqual([
+      { label: '견적 요청', href: '/rfp' },
+      { label: '새 견적 요청' },
+    ]);
+  });
+
+  it('/rfp/new ignores status param (not applicable to the create route)', () => {
+    expect(getBreadcrumbSegments('/rfp/new', 'active')).toEqual([
+      { label: '견적 요청', href: '/rfp' },
+      { label: '새 견적 요청' },
+    ]);
   });
 });
 

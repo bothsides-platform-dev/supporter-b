@@ -15,6 +15,15 @@ vi.mock('@/components/landing/LandingHero', () => ({
 vi.mock('@/components/landing/LandingHeaderNav', () => ({
   LandingHeaderNav: () => null,
 }));
+vi.mock('@/components/landing/PgLanding', () => ({
+  PgLanding: () => <div>PG 랜딩화면</div>,
+}));
+vi.mock('@/components/landing/faq-data', () => ({
+  FAQ_ITEMS: [
+    { q: 'Test Q 1?', a: 'Test A 1' },
+    { q: 'Test Q 2?', a: 'Test A 2' },
+  ],
+}));
 vi.mock('@/lib/site-config', () => ({
   siteConfig: { name: 'Test', url: 'https://test.com', description: 'Test' },
 }));
@@ -61,5 +70,31 @@ describe('RootPage — 호스트 인지형 랜딩', () => {
     render(await RootPage());
 
     expect(screen.getByText('BUYER_LANDING')).toBeInTheDocument();
+  });
+
+  it('buyer 호스트에서 FAQPage JSON-LD script를 렌더한다', async () => {
+    setHost('supporter-b.com');
+    const { container } = render(await RootPage());
+    const scripts = container.querySelectorAll('script[type="application/ld+json"]');
+    const schemas = Array.from(scripts).map((s) => JSON.parse(s.textContent!));
+    expect(schemas.some((s) => s['@type'] === 'FAQPage')).toBe(true);
+  });
+
+  it('buyer 호스트에서 SoftwareApplication JSON-LD script를 렌더한다', async () => {
+    setHost('supporter-b.com');
+    const { container } = render(await RootPage());
+    const scripts = container.querySelectorAll('script[type="application/ld+json"]');
+    const schemas = Array.from(scripts).map((s) => JSON.parse(s.textContent!));
+    expect(schemas.some((s) => s['@type'] === 'SoftwareApplication')).toBe(true);
+  });
+
+  it('FAQPage JSON-LD에 mainEntity 배열이 있다', async () => {
+    setHost('supporter-b.com');
+    const { container } = render(await RootPage());
+    const scripts = container.querySelectorAll('script[type="application/ld+json"]');
+    const schemas = Array.from(scripts).map((s) => JSON.parse(s.textContent!));
+    const faq = schemas.find((s) => s['@type'] === 'FAQPage');
+    expect(Array.isArray(faq?.mainEntity)).toBe(true);
+    expect(faq.mainEntity.length).toBeGreaterThan(0);
   });
 });

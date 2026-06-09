@@ -8,7 +8,7 @@ import {
   notifyAdminNewSignupAfterCommit,
 } from '@/lib/server/notifications/admin-signup';
 import {
-  baseUrl,
+  adminBaseUrl,
   normalizeEmail,
   type AuthActionResult,
 } from './_shared';
@@ -104,7 +104,7 @@ export async function signupCompleteAction(
   notifyAdminNewSignupAfterCommit({
     workspaceName: parsed.data.wsName,
     orgType: parsed.data.wsKind,
-    reviewUrl: `${baseUrl()}/admin/review/${result.applicationId}`,
+    reviewUrl: `${adminBaseUrl()}/admin/review/${result.applicationId}`,
   });
 
   const host = (await headers()).get('host');

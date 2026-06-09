@@ -12,13 +12,8 @@ import { EmailVerifySection } from './email-verify-section';
  * public 레이아웃(app/(public)/layout.tsx) 안의 일반 흐름 콘텐츠로 렌더링한다.
  * (풀스크린 오버레이를 쓰면 레이아웃의 푸터와 채널톡 FAB을 가린다.)
  */
-async function handleLogout() {
-  try {
-    await fetch('/logout', { method: 'POST' });
-  } catch {
-    // 세션 클리어 실패해도 /login 이동
-  }
-  window.location.assign('/login');
+function handleLogout() {
+  window.location.assign('/logout');
 }
 
 export function EmailVerifyScreen({ email }: { email: string }) {

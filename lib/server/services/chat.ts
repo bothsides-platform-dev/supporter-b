@@ -245,6 +245,26 @@ export class ChatService {
     return result;
   }
 
+  /**
+   * 상대 워크스페이스와의 대화를 보장한다(없으면 생성). 메시지는 보내지 않는다 —
+   * 결과 화면의 "메시지 시작" CTA가 빈 대화로 딥링크하기 위한 경로. buyer↔PG
+   * 타입 불변식은 sendMessage와 동일하게 여기서 검증한다.
+   */
+  async getOrCreateConversation(
+    counterpartyWorkspaceId: string,
+    actor: ChatActor,
+  ): Promise<ServiceResult<{ conversationId: string }>> {
+    const counterparty = await this.wsRepo.findById(counterpartyWorkspaceId);
+    if (!counterparty) return { ok: false, error: 'COUNTERPARTY_NOT_FOUND' };
+    if (counterparty.type === actor.workspaceType) {
+      return { ok: false, error: 'INVALID_COUNTERPARTY' };
+    }
+    const buyerWsId = actor.workspaceType === 'buyer' ? actor.workspaceId : counterpartyWorkspaceId;
+    const pgWsId = actor.workspaceType === 'buyer' ? counterpartyWorkspaceId : actor.workspaceId;
+    const conv = await this.convRepo.findOrCreatePair(buyerWsId, pgWsId);
+    return { ok: true, conversationId: conv.id };
+  }
+
   async markConversationRead(
     conversationId: string,
     actor: ChatActor,

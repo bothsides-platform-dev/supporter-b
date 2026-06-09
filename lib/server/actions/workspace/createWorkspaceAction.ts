@@ -3,7 +3,7 @@
 import { z } from 'zod';
 
 import { requireSession } from '@/lib/auth/session';
-import { baseUrl } from '@/lib/server/env';
+import { adminBaseUrl } from '@/lib/server/env';
 import { notifyAdminNewSignupAfterCommit } from '@/lib/server/notifications/admin-signup';
 import { getWorkspaceService } from '@/lib/server/services/workspace';
 import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
@@ -57,7 +57,7 @@ export async function createWorkspaceAction(
     notifyAdminNewSignupAfterCommit({
       workspaceName: parsed.data.name,
       orgType: parsed.data.type,
-      reviewUrl: `${baseUrl()}/admin/review/${result.applicationId}`,
+      reviewUrl: `${adminBaseUrl()}/admin/review/${result.applicationId}`,
     });
     return { ok: true, workspaceId: result.workspaceId };
   }

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { render } from '@react-email/render';
+import { josa } from 'es-hangul';
 
 import { Layout, Mono } from './_layout';
 import type { BidSubmittedProps } from './types';
@@ -10,9 +11,11 @@ export function BidSubmitted({
   pgName,
   submittedAt,
 }: BidSubmittedProps): React.JSX.Element {
+  const pgWithParticle = josa(pgName, '이/가');
+  const pgParticle = pgWithParticle.slice(pgName.length);
   return (
     <Layout
-      preheader={`${pgName}이(가) ${rfpId} 견적 요청에 견적을 보냈어요.`}
+      preheader={`${pgWithParticle} ${rfpId} 견적 요청에 견적을 보냈어요.`}
       serial={`견적 요청 / ${rfpId}`}
     >
       <h1
@@ -26,7 +29,7 @@ export function BidSubmitted({
         새 견적이 도착했어요
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
-        <strong>{pgName}</strong>이(가) 견적을 보냈어요.
+        <strong>{pgName}</strong>{pgParticle} 견적을 보냈어요.
       </p>
 
       <table

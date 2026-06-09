@@ -37,7 +37,7 @@ export function __setActionDbForTest(db: any | undefined): void {
 
 // Default base URL for verify links. Used when building the URL passed to
 // the outbox HTML body; Step 10 swaps this for a templated email.
-export { baseUrl } from '@/lib/server/env';
+export { baseUrl, adminBaseUrl } from '@/lib/server/env';
 
 // (Step 10) The previous `devLogVerifyLink` console fallback is gone. The
 // equivalent dev affordance now lives in `lib/integrations/resend.ts` —
