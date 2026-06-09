@@ -29,9 +29,11 @@ export function UserMenu({ user, workspaceType, className }: UserMenuProps) {
   const router = useRouter();
 
   function handleLogout() {
-    // keepalive: true ensures the POST survives page navigation (browser won't abort it)
-    fetch('/logout', { method: 'POST', credentials: 'same-origin', keepalive: true });
-    window.location.assign('/login');
+    // GET /logout clears the session cookie and redirects to /login in a single
+    // round-trip, avoiding the race where a fire-and-forget POST's Set-Cookie
+    // response arrives after the browser has already navigated to /login with the
+    // old cookie still present (causing proxy to bounce back to /home).
+    window.location.assign('/logout');
   }
 
   return (
