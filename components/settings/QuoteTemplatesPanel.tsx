@@ -10,6 +10,7 @@ import { CurrencyInput, PercentInput, numericInputClass, underlineInputClass } f
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
 import { deleteQuoteTemplateAction } from '@/lib/server/actions/quote-template/deleteQuoteTemplateAction';
 import {
+  getMethodRate,
   PAYMENT_METHOD_CATEGORIES,
   PAYMENT_METHOD_LABELS,
   type PaymentMethod,
@@ -61,7 +62,7 @@ function editorFromTemplate(t: QuoteTemplateOption): EditorState {
   const m = /^([DWM])\+(\d+)$/.exec(t.settleCycle);
   const fees: Record<string, string> = {};
   for (const method of ALL_PAYMENT_METHODS) {
-    const rate = t.paymentFees[method];
+    const rate = getMethodRate(t.paymentFees[method], 'general');
     if (rate !== undefined) fees[method] = fmtPct(rate);
   }
   return {
