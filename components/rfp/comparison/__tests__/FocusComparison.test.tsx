@@ -127,4 +127,14 @@ describe('FocusComparison', () => {
     fireEvent.click(screen.getByRole('button', { name: '영세' }));
     expect(screen.getAllByText('1.20%').length).toBeGreaterThan(0);
   });
+
+  it('상세 매트릭스에 활성 견적의 전 구간 카드 요율이 보인다', () => {
+    const bids = [makeBid({ id: 'a', pgWsId: 'pgA', paymentFees: { card: { sole: 0.005, sme1: 0.01, sme2: 0.0125, sme3: 0.0145, general: 0.018 } } })];
+    render(<FocusComparison {...baseProps} bids={bids} requiredPaymentMethods={['card']} />);
+    // accordion panel은 keepMounted=false(기본)이므로 닫힌 상태에서 DOM에 없음 — 트리거 클릭으로 펼친다
+    fireEvent.click(screen.getByText(/전체 결제수단 요율/));
+    const matrix = screen.getByTestId('tiered-matrix-card');
+    expect(matrix).toHaveTextContent('0.50%');
+    expect(matrix).toHaveTextContent('1.80%');
+  });
 });

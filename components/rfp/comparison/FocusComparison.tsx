@@ -207,6 +207,36 @@ export function FocusComparison(props: Props) {
 
         <Accordion>
           <AccordionItem value="rates" title={`전체 결제수단 요율 (${feeRows.length})`}>
+            {(Object.keys(active.paymentFees) as PaymentMethod[])
+              .filter((m) => typeof active.paymentFees[m] === 'object')
+              .map((m) => (
+                <table key={m} data-testid={`tiered-matrix-${m}`} className="w-full mb-3 border-collapse">
+                  <caption className="text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] mb-1">
+                    {PAYMENT_METHOD_LABELS[m]} · 구간별
+                  </caption>
+                  <thead>
+                    <tr>
+                      {MERCHANT_TIERS.map((t) => (
+                        <th key={t} className="text-center font-mono text-[10px] text-[var(--md-sys-color-outline)] pb-0.5">
+                          {MERCHANT_TIER_LABELS[t]}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      {MERCHANT_TIERS.map((t) => {
+                        const r = getMethodRate(active.paymentFees[m], t);
+                        return (
+                          <td key={t} className="text-center md-numeric text-[12px] text-[var(--md-sys-color-on-surface)] py-0.5">
+                            {r !== undefined ? formatPct(r) : '—'}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              ))}
             <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
               {feeRows.map((row) => {
                 const ranked = rankByMetric(sortedBids, row.getValue, 'lower');
