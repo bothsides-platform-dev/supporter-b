@@ -119,4 +119,25 @@ describe('getOrCreateConversationAction', () => {
     if (r.ok) return;
     expect(r.error).toBe('UNAUTHENTICATED');
   });
+
+  it('존재하지 않는 워크스페이스면 COUNTERPARTY_NOT_FOUND를 반환한다', async () => {
+    const { buyerUser, buyerWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    // 유효한 v4 UUID지만 시드되지 않은 워크스페이스
+    const r = await getOrCreateConversationAction('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('COUNTERPARTY_NOT_FOUND');
+  });
+
+  it('UUID 형식이 아니면 INVALID_INPUT을 반환한다', async () => {
+    const { buyerUser, buyerWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    const r = await getOrCreateConversationAction('not-a-uuid');
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('INVALID_INPUT');
+  });
 });
