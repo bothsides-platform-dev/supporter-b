@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **어디서든 초성 검색이 됩니다**: Cmd+K 전체 검색에서도 초성(예: ㅇㄹ → 알림, ㅅㅅㄹ → 수수료 포함 견적)으로 이동 메뉴와 견적·견적서·오픈 기회를 바로 찾을 수 있어요.
 - **PG사 검색에 초성 입력이 됩니다**: 견적 요청에서 PG사를 초대할 때 이름 전체를 입력하지 않아도 초성(예: ㄴㅇㅅ → 나이스페이먼츠)으로 바로 찾을 수 있어요.
 
 ### Changed
