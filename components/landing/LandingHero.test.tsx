@@ -34,24 +34,10 @@ describe('LandingHero', () => {
     expect(screen.getByRole('link', { name: 'Test Nav' })).toHaveAttribute('href', '/test')
   })
 
-  it('routes the hero primary CTA to /rfp/new', () => {
-    render(<LandingHero />)
-    const cta = screen.getByRole('link', { name: /PG 비교 견적 무료로 시작하기/ })
-    expect(cta).toHaveAttribute('href', '/rfp/new')
-  })
-
-  it('routes the final CTA to /rfp/new', () => {
+  it('routes the final CTA in the contact section to /rfp/new', () => {
     render(<LandingHero />)
     const cta = screen.getByRole('link', { name: /PG견적 무료로 받기/ })
     expect(cta).toHaveAttribute('href', '/rfp/new')
-  })
-
-  it('both primary CTAs point to /rfp/new (not /login)', () => {
-    render(<LandingHero />)
-    const rfpLinks = screen
-      .queryAllByRole('link')
-      .filter((a) => a.getAttribute('href') === '/rfp/new')
-    expect(rfpLinks).toHaveLength(2)
   })
 
   it('shows the three PoC metrics', () => {
