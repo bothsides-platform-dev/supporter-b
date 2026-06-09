@@ -11,7 +11,13 @@ import {
   getRfpRepo,
 } from '@/lib/server/repositories/factory';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
-import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
+import {
+  MERCHANT_TIERS,
+  MERCHANT_TIER_LABELS,
+  PAYMENT_METHOD_LABELS,
+  type PaymentMethod,
+  type TierRates,
+} from '@/lib/types/bid';
 import { formatDate, formatPct, formatKRW } from '@/lib/format';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import { SubmittedSummary } from '@/components/inbox/SubmittedSummary';
@@ -68,10 +74,15 @@ export default async function InboxSubmittedPage({ params }: Props) {
     ['정산 주기', bid.settleCycle],
     ['정산한도', formatKRW(bid.settleLimit)],
     ['월 보증보험', formatKRW(bid.guaranteeInsurance)],
-    ...Object.entries(bid.paymentFees).map(
-      ([m, fee]) =>
-        [PAYMENT_METHOD_LABELS[m as PaymentMethod], formatPct(fee as number)] as [string, string],
-    ),
+    ...Object.entries(bid.paymentFees).flatMap(([m, fee]) => {
+      const label = PAYMENT_METHOD_LABELS[m as PaymentMethod];
+      if (typeof fee === 'object' && fee !== null) {
+        return MERCHANT_TIERS
+          .filter((t) => (fee as TierRates)[t] !== undefined)
+          .map((t) => [`${label} (${MERCHANT_TIER_LABELS[t]})`, formatPct((fee as TierRates)[t]!)] as [string, string]);
+      }
+      return [[label, formatPct(fee as number)] as [string, string]];
+    }),
     ...Object.entries(bid.customFees).map(([id, fee]) => {
       const label = rfp.customPaymentMethods.find((c) => c.id === id)?.label ?? id;
       return [label, formatPct(fee)] as [string, string];
