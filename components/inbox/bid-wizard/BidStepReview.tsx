@@ -5,6 +5,9 @@ import { Button } from '@/components/primitives/Button';
 import { underlineInputClass } from '@/components/forms/inputs';
 import { cn } from '@/lib/utils';
 import {
+  MERCHANT_TIERS,
+  MERCHANT_TIER_LABELS,
+  isTieredMethod,
   PAYMENT_METHOD_LABELS,
   type CustomPaymentMethod,
   type PaymentMethod,
@@ -40,9 +43,9 @@ type Props = {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="py-2.5 flex items-baseline justify-between">
-      <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">{label}</span>
-      <span className="font-mono text-[13px] tabular-nums text-[var(--md-sys-color-on-surface)]">{value}</span>
+    <div className="py-2.5 flex items-baseline justify-between gap-4">
+      <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] shrink-0">{label}</span>
+      <span className="font-mono text-[13px] tabular-nums text-[var(--md-sys-color-on-surface)] text-right whitespace-normal break-keep">{value}</span>
     </div>
   );
 }
@@ -66,14 +69,20 @@ export function BidStepReview({
   const [tplError, setTplError] = useState<string | null>(null);
   const [tplSaving, setTplSaving] = useState(false);
 
-  const feeRows = [
-    ...feeInputMethods
-      .filter((m) => (fees[m] ?? '') !== '')
-      .map((m) => [PAYMENT_METHOD_LABELS[m], `${fees[m]}%`] as [string, string]),
-    ...customPaymentMethods
-      .filter((c) => (fees[c.id] ?? '') !== '')
-      .map((c) => [c.label, `${fees[c.id]}%`] as [string, string]),
-  ];
+  const feeRows: [string, string][] = [];
+  for (const m of feeInputMethods) {
+    if (isTieredMethod(m)) {
+      const parts = MERCHANT_TIERS
+        .filter((t) => (fees[`${m}:${t}`] ?? '') !== '')
+        .map((t) => `${MERCHANT_TIER_LABELS[t]} ${fees[`${m}:${t}`]}%`);
+      if (parts.length > 0) feeRows.push([PAYMENT_METHOD_LABELS[m], parts.join(' · ')]);
+    } else if ((fees[m] ?? '') !== '') {
+      feeRows.push([PAYMENT_METHOD_LABELS[m], `${fees[m]}%`]);
+    }
+  }
+  for (const c of customPaymentMethods) {
+    if ((fees[c.id] ?? '') !== '') feeRows.push([c.label, `${fees[c.id]}%`]);
+  }
 
   const handleSaveTemplate = async () => {
     const name = tplName.trim();
