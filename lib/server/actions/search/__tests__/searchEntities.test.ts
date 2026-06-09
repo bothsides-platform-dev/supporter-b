@@ -258,3 +258,43 @@ describe('searchEntitiesAction — pg opportunities search', () => {
     expect(opportunities).toEqual([]);
   });
 });
+
+describe('searchEntitiesAction — 초성 검색', () => {
+  it('buyer: 초성 쿼리(ㅅㅅㄹ)로 RFP 제목 매칭', async () => {
+    const { buyer, buyerWs } = await seedBuyer();
+    await seedRfp({ code: 'P-2605-0071', buyerWsId: buyerWs.id, title: '수수료 인하 문의', createdBy: buyer.id });
+    await seedRfp({ code: 'P-2605-0072', buyerWsId: buyerWs.id, title: '정산 한도', createdBy: buyer.id });
+    sessionRef.value = { user: { id: buyer.id, workspaceId: buyerWs.id, workspaceType: 'buyer', role: 'admin' } };
+
+    const { rfps: found } = await searchEntitiesAction('ㅅㅅㄹ');
+    expect(found.map((r: { code: string }) => r.code)).toEqual(['P-2605-0071']);
+  });
+
+  it('pg: 초성 쿼리(ㅋㄷ)로 opportunities 제목 매칭', async () => {
+    const { buyer, buyerWs } = await seedBuyer();
+    await seedRfp({ code: 'P-2605-0073', buyerWsId: buyerWs.id, title: '카드 수수료 문의', createdBy: buyer.id });
+    await seedRfp({ code: 'P-2605-0074', buyerWsId: buyerWs.id, title: '정산 한도 검토', createdBy: buyer.id });
+
+    const pgWs = await seedPgWorkspace(db, 'nice2.co', { name: '나이스페이먼츠' });
+    const pgUser = await seedUser(db, { email: 'pg@nice2.co' });
+    await seedMembership(db, pgWs.id, pgUser.id, 'admin');
+
+    sessionRef.value = { user: { id: pgUser.id, workspaceId: pgWs.id, workspaceType: 'pg', role: 'admin' } };
+
+    const { opportunities } = await searchEntitiesAction('ㅋㄷ');
+    expect(opportunities).toHaveLength(1);
+    expect(opportunities[0].title).toBe('카드 수수료 문의');
+  });
+
+  it('buyer: 초성 쿼리가 워크스페이스 경계를 넘지 않음', async () => {
+    const { buyer, buyerWs } = await seedBuyer();
+    const other = await seedUser(db, { email: 'other2@co.com' });
+    const otherWs = await seedBuyerWorkspace(db, { name: '다른구매사2' });
+    await seedMembership(db, otherWs.id, other.id, 'admin');
+    await seedRfp({ code: 'P-2605-0075', buyerWsId: otherWs.id, title: '수수료 타사', createdBy: other.id });
+    sessionRef.value = { user: { id: buyer.id, workspaceId: buyerWs.id, workspaceType: 'buyer', role: 'admin' } };
+
+    const { rfps: found } = await searchEntitiesAction('ㅅㅅㄹ');
+    expect(found).toHaveLength(0);
+  });
+});

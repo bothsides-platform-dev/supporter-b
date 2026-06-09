@@ -173,6 +173,58 @@ describe('outbox email templates / render', () => {
     expect(html).not.toMatch(/\d+\s*건/);
   });
 
+  it('bidSubmitted preheader에 받침 없는 PG명은 "가"가 붙는다', async () => {
+    // 토스페이먼츠 → 모음 종성(ㅊ) → "가"
+    const html = await renderBidSubmitted({
+      rfpId: 'P-2605-0099',
+      rfpTitle: '결제대행 서비스 제안',
+      pgName: '토스페이먼츠',
+      submittedAt: '2026-06-10 10:00',
+    });
+    // 조사 '가' 형태 포함
+    expect(html).toContain('토스페이먼츠가');
+    // 괄호 표기 미사용
+    expect(html).not.toContain('이(가)');
+  });
+
+  it('bidSubmitted preheader에 받침 있는 PG명은 "이"가 붙는다', async () => {
+    // 한국정보통신 → 자음 종성(ㄴ) → "이"
+    const html = await renderBidSubmitted({
+      rfpId: 'P-2605-0100',
+      rfpTitle: '결제대행 서비스 제안',
+      pgName: '한국정보통신',
+      submittedAt: '2026-06-10 10:00',
+    });
+    expect(html).toContain('한국정보통신이');
+    expect(html).not.toContain('이(가)');
+  });
+
+  it('rfpInvited preheader에 받침 없는 구매사명은 "가"가 붙는다', async () => {
+    // 서포터 페이 → 모음 종성(이) → "가"
+    const html = await renderRfpInvited({
+      rfpId: 'P-2605-0101',
+      rfpTitle: '결제대행 서비스 제안',
+      buyerName: '서포터 페이',
+      deadline: '2026-07-01 18:00',
+      inviteUrl: 'https://bidit.test/invite/rfp/tok',
+    });
+    expect(html).toContain('서포터 페이가');
+    expect(html).not.toContain('이(가)');
+  });
+
+  it('rfpInvited preheader에 받침 있는 구매사명은 "이"가 붙는다', async () => {
+    // 바이딧 솔루션 → 션(batchim ㄴ) → "이"
+    const html = await renderRfpInvited({
+      rfpId: 'P-2605-0102',
+      rfpTitle: '결제대행 서비스 제안',
+      buyerName: '바이딧 솔루션',
+      deadline: '2026-07-01 18:00',
+      inviteUrl: 'https://bidit.test/invite/rfp/tok2',
+    });
+    expect(html).toContain('바이딧 솔루션이');
+    expect(html).not.toContain('이(가)');
+  });
+
   it('adminSignupReview includes workspace name, org label and review URL', async () => {
     const html = await renderAdminSignupReview({
       workspaceName: '토스페이먼츠',

@@ -40,6 +40,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | State | Zustand (UI toggles, signup draft, page→shell header-actions slot) | `zustand@5.0.13` |
 | Forms | zod v4 검증 + Server Actions (react-hook-form 미사용 — 폼은 useState + zod) | `zod@4.4.3` |
 | Numeric input | `react-number-format` — 원화 금액 입력 천단위 구분·소수점 차단 (`CurrencyInput`) | `react-number-format@5.4.5` |
+| Korean i18n | `es-hangul` (toss) — 조사 자동 선택(`josa()`), 초성 검색(`disassemble`), 숫자→한글 혼합 표기(`numberToHangulMixed`). 한글 텍스트 처리 단일 출처 | `es-hangul@2.3.8` |
 | Icons | lucide-react | `lucide-react@1.14.0` |
 | Fonts | `next/font/local` — Pretendard Variable + JetBrains Mono Variable, self-hosted in `public/fonts/` | — |
 | Motion | `motion` (구 Framer Motion). 임포트는 `motion/react`. | `motion@12.38.0` |
@@ -70,7 +71,7 @@ app/
 │  ├─ notifications/          # 인앱 알림 목록 페이지
 │  ├─ workspace/new/          # 워크스페이스 생성
 │  └─ settings/{profile,members,notifications,quote-templates}/
-├─ logout/route.ts            # POST handler
+├─ logout/route.ts            # GET (redirect to /login) + POST (204, for client-side signOut)
 └─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리
 ```
 

@@ -160,4 +160,30 @@ describe('MembersPanel', () => {
     expect(screen.queryByRole('button', { name: /강퇴/ })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('멤버 역할 변경')).not.toBeInTheDocument();
   });
+
+  it('admin: 역할 변경 드롭다운 메뉴 항목에 괄호 없는 조사가 표시된다', async () => {
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    await user.click(screen.getByRole('button', { name: '멤버 관리' }));
+    const menuItem = await screen.findByRole('menuitem', { name: '관리자로 변경' });
+    expect(menuItem).toBeInTheDocument();
+    // 괄호 표기 미사용 검증
+    expect(screen.queryByText(/관리자\(으로\)/)).not.toBeInTheDocument();
+  });
+
+  it('admin: 역할 변경 성공 시 toast에 괄호 없는 조사가 사용된다', async () => {
+    changeWorkspaceMemberRoleAction.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    await user.click(screen.getByRole('button', { name: '멤버 관리' }));
+    await user.click(await screen.findByRole('menuitem', { name: /관리자.*변경/ }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        expect.stringContaining('관리자로 변경했어요'),
+      ),
+    );
+  });
 });
