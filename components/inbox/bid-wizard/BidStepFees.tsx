@@ -7,6 +7,7 @@ import {
   PAYMENT_METHOD_LABELS,
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
+  TIERED_CATEGORY_LABELS,
   isTieredMethod,
   type CustomPaymentMethod,
   type PaymentMethod,
@@ -21,7 +22,7 @@ type Props = {
   onNext: () => void;
 };
 
-const TIERED_LABELS: readonly string[] = ['카드', '간편결제'];
+const TIERED_LABELS: readonly string[] = TIERED_CATEGORY_LABELS;
 
 export function BidStepFees({
   feeInputMethods,
