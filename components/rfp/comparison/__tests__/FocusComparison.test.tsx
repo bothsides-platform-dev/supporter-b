@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 class ResizeObserverStub {
@@ -108,5 +108,23 @@ describe('FocusComparison', () => {
   it('shows an empty state when no bids have arrived', () => {
     render(<FocusComparison {...baseProps} bids={[]} />);
     expect(screen.getByText(/견적을 기다리고 있어요/)).toBeInTheDocument();
+  });
+
+  it('구간 셀렉터를 바꾸면 카드 요율 표시가 그 구간 값으로 바뀐다', () => {
+    const bids = [
+      makeBid({ id: 'a', pgWsId: 'pgA', paymentFees: { card: { sole: 0.005, general: 0.018 } } }),
+    ];
+    render(<FocusComparison {...baseProps} bids={bids} requiredPaymentMethods={['card']} />);
+    // 기본 일반 → 1.80%
+    expect(screen.getAllByText('1.80%').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: '영세' }));
+    expect(screen.getAllByText('0.50%').length).toBeGreaterThan(0);
+  });
+
+  it('구버전 number bid는 구간 무관 동일 값', () => {
+    const bids = [makeBid({ id: 'a', pgWsId: 'pgA', paymentFees: { card: 0.012 } })];
+    render(<FocusComparison {...baseProps} bids={bids} requiredPaymentMethods={['card']} />);
+    fireEvent.click(screen.getByRole('button', { name: '영세' }));
+    expect(screen.getAllByText('1.20%').length).toBeGreaterThan(0);
   });
 });

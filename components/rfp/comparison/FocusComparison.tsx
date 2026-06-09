@@ -20,9 +20,12 @@ import { rankByMetric } from '@/lib/utils/bid-compare';
 import { formatKRW, formatPct } from '@/lib/format';
 import {
   getMethodRate,
+  MERCHANT_TIERS,
+  MERCHANT_TIER_LABELS,
   PAYMENT_METHOD_LABELS,
   type Bid,
   type CustomPaymentMethod,
+  type MerchantTier,
   type PaymentMethod,
 } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
@@ -46,15 +49,17 @@ export function FocusComparison(props: Props) {
   const { bids, pgWsNameMap, current, notesByBid, rfpStatus, awardedBidId } = props;
   const router = useRouter();
 
+  const [tier, setTier] = useState<MerchantTier>('general');
+
   // 정렬: 카드 수수료 낮은 순(기본). 동률·미입력은 뒤로.
   const sortedBids = useMemo(
     () =>
       [...bids].sort(
         (a, b) =>
-          (getMethodRate(a.paymentFees.card, 'general') ?? Infinity) -
-          (getMethodRate(b.paymentFees.card, 'general') ?? Infinity),
+          (getMethodRate(a.paymentFees.card, tier) ?? Infinity) -
+          (getMethodRate(b.paymentFees.card, tier) ?? Infinity),
       ),
-    [bids],
+    [bids, tier],
   );
 
   const defaultBidId = awardedBidId ?? sortedBids[0]?.id;
@@ -83,7 +88,7 @@ export function FocusComparison(props: Props) {
     feeRows.push({
       key: method,
       label: PAYMENT_METHOD_LABELS[method],
-      getValue: (b) => getMethodRate(b.paymentFees[method], 'general') ?? null,
+      getValue: (b) => getMethodRate(b.paymentFees[method], tier) ?? null,
       baseline: method === 'card' ? current.feeRate : undefined,
     });
   }
@@ -106,6 +111,25 @@ export function FocusComparison(props: Props) {
         <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
           정렬: 카드 수수료 낮은 순
         </span>
+      </div>
+
+      <div role="group" aria-label="구간 선택" className="flex gap-1 mb-3">
+        {MERCHANT_TIERS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={tier === t}
+            onClick={() => setTier(t)}
+            className={cn(
+              'h-7 px-2.5 rounded-[6px] text-[12px] transition-colors',
+              tier === t
+                ? 'bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]'
+                : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
+            )}
+          >
+            {MERCHANT_TIER_LABELS[t]}
+          </button>
+        ))}
       </div>
 
       {/* Tabs */}
@@ -152,7 +176,7 @@ export function FocusComparison(props: Props) {
               <PeekRow
                 label="카드"
                 value={(() => {
-                  const r = getMethodRate(peek.paymentFees.card, 'general');
+                  const r = getMethodRate(peek.paymentFees.card, tier);
                   return r !== undefined ? formatPct(r) : '—';
                 })()}
               />
@@ -179,7 +203,7 @@ export function FocusComparison(props: Props) {
           )}
         </div>
 
-        <ImprovementSummary bid={active} current={current} />
+        <ImprovementSummary bid={active} current={current} tier={tier} />
 
         <Accordion>
           <AccordionItem value="rates" title={`전체 결제수단 요율 (${feeRows.length})`}>
