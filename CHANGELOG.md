@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3.0] - 2026-06-10
+
+### Changed
+
+- **견적 작성 화면에 헤더가 표시됩니다**: 새 견적 요청 화면(/rfp/new)에서도 다른 페이지처럼 상단 헤더(‹ › 이동·'견적 요청 / 새 견적 요청' 브레드크럼·⌘K 검색·유저메뉴)가 보입니다. 이전에는 헤더 없이 본문만 표시됐어요.
+
 ## [0.2.2.3] - 2026-06-10
 
 ### Added
