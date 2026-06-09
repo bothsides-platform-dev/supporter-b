@@ -3,8 +3,6 @@
 import { motion } from 'motion/react';
 import { FAQ_ITEMS } from './faq-data';
 
-export { FAQ_ITEMS };
-
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 // 접지 않고 항상 펼친 상태로 큼직하게 노출한다.

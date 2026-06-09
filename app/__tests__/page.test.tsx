@@ -24,7 +24,6 @@ vi.mock('@/components/landing/faq-data', () => ({
     { q: 'Test Q 2?', a: 'Test A 2' },
   ],
 }));
-vi.mock('@/components/landing/FaqList', () => ({ FaqList: () => null }));
 vi.mock('@/lib/site-config', () => ({
   siteConfig: { name: 'Test', url: 'https://test.com', description: 'Test' },
 }));

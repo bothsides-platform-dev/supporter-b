@@ -12,7 +12,8 @@ vi.mock('motion/react', () => {
   return { motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }) };
 });
 
-import { FaqList, FAQ_ITEMS } from '../FaqList';
+import { FaqList } from '../FaqList';
+import { FAQ_ITEMS } from '../faq-data';
 
 describe('FaqList', () => {
   it('shows all three questions and their answers expanded (no folding)', () => {
