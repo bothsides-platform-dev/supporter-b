@@ -11,10 +11,12 @@ import { useBidDraft, type BidDraft } from '../useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
 import {
-  getMethodRate,
+  MERCHANT_TIERS,
   PAYMENT_METHOD_CATEGORIES,
+  isTieredMethod,
   type PaymentMethod,
   type QuoteTemplateOption,
+  type TierRates,
 } from '@/lib/types/bid';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
@@ -112,16 +114,30 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
   const feeInputMethods = requiredPaymentMethods.length > 0 ? requiredPaymentMethods : ALL_PAYMENT_METHODS;
   const settleCycle = `${cycleUnit}+${cycleNum || '1'}`;
   const feeFilled = (key: string) => (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
-  const anyFeeFilled =
-    feeInputMethods.some((m) => feeFilled(m)) || customPaymentMethods.some((c) => feeFilled(c.id));
+  const anyTieredFilled = feeInputMethods.some(
+    (m) => isTieredMethod(m) && MERCHANT_TIERS.some((t) => feeFilled(`${m}:${t}`)),
+  );
+  const anySingleFilled =
+    feeInputMethods.some((m) => !isTieredMethod(m) && feeFilled(m)) ||
+    customPaymentMethods.some((c) => feeFilled(c.id));
+  const anyFeeFilled = anyTieredFilled || anySingleFilled;
   const canSubmit = !pending && !proposalUploading && cycleNum !== '' && parseInt(cycleNum) > 0 && anyFeeFilled;
 
   const pct = (s: string) => parseFloat(s) / 100;
-  const buildPaymentFees = (): Partial<Record<PaymentMethod, number>> => {
-    const out: Partial<Record<PaymentMethod, number>> = {};
+  const buildPaymentFees = (): Partial<Record<PaymentMethod, number | TierRates>> => {
+    const out: Partial<Record<PaymentMethod, number | TierRates>> = {};
     for (const m of feeInputMethods) {
-      const v = fees[m] ?? '';
-      if (v !== '') out[m] = pct(v);
+      if (isTieredMethod(m)) {
+        const map: TierRates = {};
+        for (const tier of MERCHANT_TIERS) {
+          const v = fees[`${m}:${tier}`] ?? '';
+          if (v !== '') map[tier] = pct(v);
+        }
+        if (Object.keys(map).length > 0) out[m] = map;
+      } else {
+        const v = fees[m] ?? '';
+        if (v !== '') out[m] = pct(v);
+      }
     }
     return out;
   };
@@ -135,8 +151,19 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
     setFields((f) => {
       const nextFees = { ...f.fees };
       for (const method of feeInputMethods) {
-        const rate = getMethodRate(t.paymentFees[method], 'general');
-        if (rate !== undefined) nextFees[method] = fmtPct(rate);
+        const val = t.paymentFees[method];
+        if (val === undefined) continue;
+        if (typeof val === 'object') {
+          for (const tier of MERCHANT_TIERS) {
+            const r = val[tier];
+            if (r !== undefined) nextFees[`${method}:${tier}`] = fmtPct(r);
+          }
+        } else if (isTieredMethod(method)) {
+          // 구버전 단일요율 템플릿 → 전 구간 동일값으로 전개
+          for (const tier of MERCHANT_TIERS) nextFees[`${method}:${tier}`] = fmtPct(val);
+        } else {
+          nextFees[method] = fmtPct(val);
+        }
       }
       return { ...f, cycleUnit: unit, cycleNum: num, settleLimit: String(t.settleLimit), guaranteeInsurance: String(t.guaranteeInsurance), fees: nextFees };
     });

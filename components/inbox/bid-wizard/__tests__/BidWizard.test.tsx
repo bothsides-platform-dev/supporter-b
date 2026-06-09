@@ -81,8 +81,8 @@ describe('BidWizard', () => {
     await user.type(screen.getByPlaceholderText('1'), '1');
     await user.click(screen.getByRole('button', { name: '수수료' }));
 
-    // step2: 카드 수수료
-    await user.type(feeInput('카드 수수료'), '1.5');
+    // step2: 카드는 구간 수단 → general 셀 입력
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
     await user.click(screen.getByRole('button', { name: '견적서' }));
 
     // step3 → step4
@@ -96,7 +96,7 @@ describe('BidWizard', () => {
     expect(submitBidMock.mock.calls[0][0]).toMatchObject({
       rfpId: 'rfp-uuid',
       settleCycle: 'D+1',
-      paymentFees: { card: 0.015 },
+      paymentFees: { card: { general: 0.015 } },
     });
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/inbox/P-2606-0001/submitted'));
   });
@@ -110,12 +110,13 @@ describe('BidWizard 드래프트 복원(1단계)', () => {
 
   it('드래프트 있으면 배너 표시 + 불러오기 시 값 반영', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ card: '0.40' }, '복원됨')));
+    // 카드는 구간 수단이므로 draft도 composite 키로 저장
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ 'card:general': '0.40' }, '복원됨')));
     render(<BidWizard rfp={rfp} buyerName="토스" />);
     await user.click(screen.getByRole('button', { name: '불러오기' }));
     expect(screen.queryByText(/이전에 작성 중이던 내용/)).toBeNull();
     await user.click(screen.getByRole('button', { name: '수수료' }));
-    expect(feeInput('카드 수수료').value).toBe('0.40');
+    expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('0.40');
   });
 
   it('무시 클릭 시 배너 사라지고 localStorage 제거', async () => {
@@ -129,17 +130,17 @@ describe('BidWizard 드래프트 복원(1단계)', () => {
 
   it('무시 후 폼 수정 시 새 draft가 저장된다', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ card: '0.40' })));
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ 'card:general': '0.40' })));
     render(<BidWizard rfp={rfp} buyerName="토스" />);
 
     await user.click(screen.getByRole('button', { name: '무시' }));
     await user.click(screen.getByRole('button', { name: '수수료' }));
-    await user.type(feeInput('카드 수수료'), '2.5');
+    await user.type(screen.getByTestId('fee-cell-card-general'), '2.5');
 
     // saveDraft has a 500ms debounce; waitFor polls until the draft is persisted
     await waitFor(() => {
       const saved = JSON.parse(localStorage.getItem('bid-draft:rfp-uuid') ?? 'null');
-      expect(saved?.fees?.card).toBe('2.5');
+      expect(saved?.fees?.['card:general']).toBe('2.5');
     }, { timeout: 1000 });
   });
 });
@@ -177,8 +178,10 @@ describe('BidWizard 템플릿 적용(1단계)', () => {
     render(<BidWizard rfp={rfp} buyerName="토스" templates={[tmpl]} />);
     await user.selectOptions(screen.getByRole('option', { name: '표준' }).closest('select')!, 't1');
     expect((screen.getByPlaceholderText('1') as HTMLInputElement).value).toBe('2');
+    // 카드는 구간 수단 — 구버전 단일요율(0.005) → 전 구간 동일값으로 전개
     await user.click(screen.getByRole('button', { name: '수수료' }));
-    expect(feeInput('카드 수수료').value).toBe('0.5');
+    expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('0.5');
+    expect((screen.getByTestId('fee-cell-card-sole') as HTMLInputElement).value).toBe('0.5');
   });
 
   it('템플릿 선택 시 드래프트 복원 배너가 닫힌다', async () => {
@@ -204,7 +207,8 @@ describe('BidWizard 제출 — paymentFees / customFees 분리', () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfpWithCustom} buyerName="토스" />);
     await user.click(screen.getByRole('button', { name: '수수료' }));
-    await user.type(feeInput('카드 수수료'), '1.0');
+    // 카드는 구간 수단 → general 셀 입력
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.0');
     await user.type(feeInput('포인트결제 수수료'), '2.0');
     await user.click(screen.getByRole('button', { name: '견적서' }));
     await user.click(screen.getByRole('button', { name: '검토·발송' }));
@@ -213,10 +217,10 @@ describe('BidWizard 제출 — paymentFees / customFees 분리', () => {
 
     await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
     const arg = submitBidMock.mock.calls[0][0] as {
-      paymentFees: Record<string, number>;
+      paymentFees: Record<string, unknown>;
       customFees: Record<string, number>;
     };
-    expect(arg.paymentFees).toEqual({ card: 0.01 });
+    expect(arg.paymentFees).toEqual({ card: { general: 0.01 } });
     expect(arg.customFees).toEqual({ c1: 0.02 });
   });
 });
@@ -226,12 +230,52 @@ describe('BidWizard confirm 취소', () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="토스" />);
     await user.click(screen.getByRole('button', { name: '수수료' }));
-    await user.type(feeInput('카드 수수료'), '1.5');
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
     await user.click(screen.getByRole('button', { name: '견적서' }));
     await user.click(screen.getByRole('button', { name: '검토·발송' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
     await user.click(screen.getByRole('button', { name: '취소' }));
     expect(submitBidMock).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('BidWizard 구간 수수료 조립', () => {
+  it('구간 셀을 채워 발송하면 paymentFees가 구간맵으로 조립된다', async () => {
+    const user = userEvent.setup();
+    const rfpTiered = {
+      id: 'rfp-uuid',
+      code: 'P-2606-0001',
+      requiredPaymentMethods: ['card', 'virtual_account'] as PaymentMethod[],
+      customPaymentMethods: [],
+    } as never;
+    render(<BidWizard rfp={rfpTiered} buyerName="토스" />);
+
+    // step1: 정산주기
+    await user.clear(screen.getByPlaceholderText('1'));
+    await user.type(screen.getByPlaceholderText('1'), '1');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+
+    // step2: 카드 구간 셀(영세·일반) + 가상계좌 단일
+    await user.type(screen.getByTestId('fee-cell-card-sole'), '0.5');
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.8');
+    await user.type(feeInput('가상계좌 수수료'), '0.3');
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+
+    // step3 → step4
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
+    // step4: 발송 → 확인 다이얼로그 → 확인
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    const arg = submitBidMock.mock.calls[0][0] as {
+      paymentFees: Record<string, unknown>;
+    };
+    expect(arg.paymentFees).toMatchObject({
+      card: { sole: 0.005, general: expect.closeTo(0.018, 5) },
+      virtual_account: 0.003,
+    });
   });
 });
