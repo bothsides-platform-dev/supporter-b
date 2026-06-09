@@ -35,7 +35,7 @@ describe('UserMenu 로그아웃', () => {
       configurable: true,
       value: { assign: assignMock },
     })
-    vi.mocked(http.post).mockReturnValue({ json: vi.fn().mockResolvedValue({}) } as unknown as ResponsePromise)
+    vi.mocked(http.post).mockReturnValue(Promise.resolve({}) as unknown as ResponsePromise)
 
     const user = userEvent.setup()
     render(
@@ -49,6 +49,30 @@ describe('UserMenu 로그아웃', () => {
     await user.click(await screen.findByText('로그아웃'))
 
     expect(http.post).toHaveBeenCalledWith('/logout')
+    expect(assignMock).toHaveBeenCalledWith('/login')
+  })
+
+  it('POST가 resolve되지 않아도 클릭 즉시 /login 으로 이동한다 (fire-and-forget)', async () => {
+    const assignMock = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { assign: assignMock },
+    })
+    // POST가 절대 resolve/reject되지 않는 상황 — await하면 assign이 영원히 호출 안 됨
+    vi.mocked(http.post).mockReturnValue(new Promise(() => {}) as unknown as ResponsePromise)
+
+    const user = userEvent.setup()
+    render(
+      <UserMenu
+        user={{ name: '홍길동', email: 'test@test.com' }}
+        workspaceType="buyer"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /사용자 메뉴/ }))
+    await user.click(await screen.findByText('로그아웃'))
+
+    // POST 완료를 기다리지 않고 즉시 /login 으로 이동해야 한다
     expect(assignMock).toHaveBeenCalledWith('/login')
   })
 
