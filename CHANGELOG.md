@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1.1] - 2026-06-09
+
+### Added
+
+- **견적 유형 필드에 ⓘ 설명 아이콘 추가**: 견적 요청 작성 2단계에서 '견적 유형' 항목 옆 ⓘ를 클릭하거나 마우스를 올리면 신규 계약·갱신 계약의 차이를 한 줄로 안내합니다.
+
 ## [0.2.1.0] - 2026-06-09
 
 ### Added
