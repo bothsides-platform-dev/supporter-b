@@ -67,4 +67,17 @@ describe('workspaceSwitchTarget', () => {
   it('stays relative in local/dev (single host)', () => {
     expect(workspaceSwitchTarget('pg', 'localhost', LOCAL)).toBe('/home');
   });
+  it('appends a given path on a cross-host switch', () => {
+    expect(workspaceSwitchTarget('pg', 'supporter-b.com', PROD, '/inbox/abc')).toBe(
+      'https://partner.supporter-b.com/inbox/abc',
+    );
+  });
+  it('returns the given relative path on a same-host switch', () => {
+    expect(workspaceSwitchTarget('buyer', 'supporter-b.com', PROD, '/rfp')).toBe('/rfp');
+  });
+  it('defaults the path to /home when omitted', () => {
+    expect(workspaceSwitchTarget('pg', 'supporter-b.com', PROD)).toBe(
+      'https://partner.supporter-b.com/home',
+    );
+  });
 });

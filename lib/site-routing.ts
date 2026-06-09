@@ -42,13 +42,14 @@ export function resolveHostRedirect(
   return `${origins[activeType]}/home`;
 }
 
-/** Where a workspace switch lands: relative if same host, absolute if cross-host. */
+/** Where a workspace switch lands: relative if same host, absolute if cross-host. Path defaults to /home. */
 export function workspaceSwitchTarget(
   targetType: WorkspaceType,
   host: string | null,
   origins: AppOrigins,
+  path: string = '/home',
 ): string {
   const serving = hostServes(host, origins);
-  if (serving === null || serving === targetType) return '/home';
-  return `${origins[targetType]}/home`;
+  if (serving === null || serving === targetType) return path;
+  return `${origins[targetType]}${path}`;
 }

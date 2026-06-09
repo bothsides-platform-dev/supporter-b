@@ -36,6 +36,7 @@ export type SwitchWorkspaceResult =
  */
 export async function switchWorkspaceAction(
   targetWorkspaceId: string,
+  landingPath: string = '/home',
 ): Promise<SwitchWorkspaceResult> {
   const session = await requireSession().catch(() => null);
   if (!session?.user?.id) return { ok: false, error: 'UNAUTHENTICATED' };
@@ -65,7 +66,7 @@ export async function switchWorkspaceAction(
   // The switcher hard-navigates to redirectTo, so an absolute URL crosses origins
   // while keeping the (already domain-scoped) session cookie. See WorkspaceSwitcher.
   const host = (await headers()).get('host');
-  const redirectTo = workspaceSwitchTarget(membership.workspaceType, host, appOrigins());
+  const redirectTo = workspaceSwitchTarget(membership.workspaceType, host, appOrigins(), landingPath);
   revalidatePath('/home');
   return { ok: true, redirectTo };
 }
