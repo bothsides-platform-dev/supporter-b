@@ -14,8 +14,10 @@ vi.mock('motion/react', () => {
   return { motion, useScroll: () => ({ scrollYProgress: { on: vi.fn() } }), useMotionValueEvent: vi.fn(), useInView: () => true }
 })
 
-// Heavy leaf sections are covered by their own suites — stub them so this
-// suite focuses on the landing shell: CTAs, section anchors, metrics, pricing.
+vi.mock('./LandingHeroSection', () => ({ LandingHeroSection: () => null }))
+vi.mock('./FadeInView', () => ({
+  FadeInView: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
 vi.mock('@/components/landing/SavingsCalculator', () => ({ SavingsCalculator: () => null }))
 vi.mock('@/components/landing/OfferComparisonTable', () => ({ OfferComparisonTable: () => null }))
 vi.mock('@/components/landing/ProcessSection', () => ({ ProcessSection: () => null }))

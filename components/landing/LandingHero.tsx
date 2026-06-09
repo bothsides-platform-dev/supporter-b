@@ -1,28 +1,16 @@
-'use client';
-
-import { useEffect, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { motion } from 'motion/react';
-import { Logo } from '@/components/primitives/Logo';
-import { Button } from '@/components/primitives/Button';
 import { CheckIcon } from '@/components/icons';
 import { Footer } from '@/components/shell/Footer';
+import { Logo } from '@/components/primitives/Logo';
 import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
 import { OfferComparisonTable } from '@/components/landing/OfferComparisonTable';
 import { ProcessSection } from '@/components/landing/ProcessSection';
 import { FaqList } from '@/components/landing/FaqList';
 import { ProblemCard } from '@/components/landing/ProblemCard';
 import { MetricCard } from '@/components/landing/MetricCard';
-
-const EASE_OUT = [0.16, 1, 0.3, 1] as const;
-
-const TYPING_VALUES = [
-  '협상의 주도권을',
-  '연간 수천만 원의 절감을',
-  '정보 비대칭 없는 계약을',
-  'PG사 간 공정한 경쟁을',
-  '5분짜리 경쟁 입찰을',
-];
+import { LandingHeroSection } from '@/components/landing/LandingHeroSection';
+import { FadeInView } from '@/components/landing/FadeInView';
 
 const PROBLEM_ITEMS = [
   {
@@ -60,70 +48,13 @@ const METRICS = [
   { to: 2300, decimals: 0, unit: '만원', qualifier: undefined, caption: 'PoC 고객사 연간 평균 수수료 절감액' },
 ];
 
-function useTypewriter(values: string[], typingMs = 60, deletingMs = 30, holdMs = 1800): string {
-  const [displayText, setDisplayText] = useState('');
-  const [index, setIndex] = useState(0);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    const current = values[index];
-
-    if (!isDeleting && displayText === current) {
-      const hold = setTimeout(() => setIsDeleting(true), holdMs);
-      return () => clearTimeout(hold);
-    }
-
-    if (isDeleting && displayText === '') {
-      const advance = setTimeout(() => {
-        setIsDeleting(false);
-        setIndex((i) => (i + 1) % values.length);
-      }, 0);
-      return () => clearTimeout(advance);
-    }
-
-    const speed = isDeleting ? deletingMs : typingMs;
-    const next = isDeleting
-      ? displayText.slice(0, -1)
-      : current.slice(0, displayText.length + 1);
-
-    const timer = setTimeout(() => setDisplayText(next), speed);
-    return () => clearTimeout(timer);
-  }, [displayText, index, isDeleting, values, typingMs, deletingMs, holdMs]);
-
-  return displayText;
-}
-
 const sectionCls =
   'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--shell-topbar)]';
 const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9)]';
 const h2Cls =
   'text-[clamp(22px,3.2vw,42px)] leading-[1.1] tracking-[-0.022em] font-medium text-[var(--md-sys-color-on-surface)]';
 
-function SectionHeading({ children }: { children: ReactNode }) {
-  return (
-    <motion.h2
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.36, ease: EASE_OUT }}
-      className={h2Cls}
-    >
-      {children}
-    </motion.h2>
-  );
-}
-
 export function LandingHero({ nav }: { nav?: ReactNode }) {
-  const displayText = useTypewriter(TYPING_VALUES);
-
-  // 랜딩에서만 인페이지 앵커 스크롤을 부드럽게 한다. 앱(목록 키보드 이동·채팅
-  // 스크롤)은 즉시 스크롤을 유지해야 하므로 전역 대신 <html> 클래스로 스코프.
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.add('landing-scroll');
-    return () => root.classList.remove('landing-scroll');
-  }, []);
-
   return (
     <div className="min-h-screen bg-[var(--md-sys-color-surface)] flex flex-col">
 
@@ -178,18 +109,16 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── Problem ── */}
         <section className={sectionCls}>
           <div className={containerCls}>
-            <SectionHeading>기존 PG 계약을 하면서<br />이런 불편함을 겪지 않으셨나요?</SectionHeading>
+            <FadeInView>
+              <h2 className={h2Cls}>
+                기존 PG 계약을 하면서<br />이런 불편함을 겪지 않으셨나요?
+              </h2>
+            </FadeInView>
             <div className="flex flex-col gap-[var(--s-4)]">
               {PROBLEM_ITEMS.map((item, i) => (
-                <motion.div
-                  key={item.num}
-                  initial={{ opacity: 0, y: 16 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.36, delay: i * 0.08, ease: EASE_OUT }}
-                >
+                <FadeInView key={item.num} delay={i * 0.08}>
                   <ProblemCard num={item.num} title={item.title} desc={item.desc} />
-                </motion.div>
+                </FadeInView>
               ))}
             </div>
           </div>
@@ -198,31 +127,30 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── Solution ── */}
         <section id="service" className={sectionCls}>
           <div className={containerCls}>
-            <SectionHeading>SupporterB를 통해<br />PG 도입 문제를 해결해보세요</SectionHeading>
+            <FadeInView>
+              <h2 className={h2Cls}>
+                SupporterB를 통해<br />PG 도입 문제를 해결해보세요
+              </h2>
+            </FadeInView>
             <ul className="flex flex-col gap-[var(--s-5)]">
               {SOLUTION_POINTS.map((point, i) => (
-                <motion.li
-                  key={point}
-                  initial={{ opacity: 0, x: -8 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.36, delay: i * 0.08, ease: EASE_OUT }}
-                  className="flex items-start gap-[var(--s-4)]"
-                >
-                  <span className="mt-0.5 shrink-0 grid place-items-center h-5 w-5 rounded-full bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)]">
-                    <CheckIcon size={13} />
-                  </span>
-                  <span className="text-[var(--text-md)] leading-[1.6] tracking-[-0.006em] text-[var(--md-sys-color-on-surface)]">
-                    {point}
-                  </span>
-                </motion.li>
+                <FadeInView key={point} delay={i * 0.08}>
+                  <li className="flex items-start gap-[var(--s-4)]">
+                    <span className="mt-0.5 shrink-0 grid place-items-center h-5 w-5 rounded-full bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)]">
+                      <CheckIcon size={13} />
+                    </span>
+                    <span className="text-[var(--text-md)] leading-[1.6] tracking-[-0.006em] text-[var(--md-sys-color-on-surface)]">
+                      {point}
+                    </span>
+                  </li>
+                </FadeInView>
               ))}
             </ul>
             <OfferComparisonTable />
           </div>
         </section>
 
-        {/* ── Process (제목 없이 프로세스만 노출) ── */}
+        {/* ── Process ── */}
         <section id="process" className={sectionCls}>
           <div className={containerCls}>
             <ProcessSection />
@@ -232,9 +160,11 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── Metrics ── */}
         <section className={sectionCls}>
           <div className={containerCls}>
-            <SectionHeading>
-              SupporterB를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
-            </SectionHeading>
+            <FadeInView>
+              <h2 className={h2Cls}>
+                SupporterB를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
+              </h2>
+            </FadeInView>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-[var(--s-8)]">
               {METRICS.map((m) => (
                 <MetricCard
@@ -250,33 +180,31 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           </div>
         </section>
 
-        {/* TODO(landing): 레퍼런스 + 파트너사 섹션은 의도적으로 미노출. 자료 확보 후 Metrics와 Pricing 사이에 추가 예정. */}
-
         {/* ── Pricing ── */}
         <section id="pricing" className={sectionCls}>
           <div className={`${containerCls} gap-[var(--s-6)]`}>
-            <SectionHeading>이용 요금</SectionHeading>
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4, ease: EASE_OUT }}
-              className="flex flex-col gap-[var(--s-4)]"
-            >
-              <p className="text-[clamp(18px,2.2vw,24px)] leading-[1.5] tracking-[-0.012em] text-[var(--md-sys-color-on-surface)]">
-                SupporterB는 현재(2026년) 무료로 이용 가능합니다.
-              </p>
-              <p className="text-[var(--text-md)] leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
-                추후 유료로 전환될 수 있으며, 전환 2달 전 사전 공유 예정입니다.
-              </p>
-            </motion.div>
+            <FadeInView>
+              <h2 className={h2Cls}>이용 요금</h2>
+            </FadeInView>
+            <FadeInView>
+              <div className="flex flex-col gap-[var(--s-4)]">
+                <p className="text-[clamp(18px,2.2vw,24px)] leading-[1.5] tracking-[-0.012em] text-[var(--md-sys-color-on-surface)]">
+                  SupporterB는 현재(2026년) 무료로 이용 가능합니다.
+                </p>
+                <p className="text-[var(--text-md)] leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
+                  추후 유료로 전환될 수 있으며, 전환 2달 전 사전 공유 예정입니다.
+                </p>
+              </div>
+            </FadeInView>
           </div>
         </section>
 
         {/* ── Calculator ── */}
         <section id="calculator" className={sectionCls}>
           <div className={containerCls}>
-            <SectionHeading>직접 계산해 보세요.</SectionHeading>
+            <FadeInView>
+              <h2 className={h2Cls}>직접 계산해 보세요.</h2>
+            </FadeInView>
             <SavingsCalculator />
           </div>
         </section>
@@ -284,7 +212,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── FAQ ── */}
         <section id="faq" className={sectionCls}>
           <div className="mx-auto w-full max-w-[760px] flex flex-col gap-[var(--s-9)]">
-            <SectionHeading>자주 묻는 질문</SectionHeading>
+            <FadeInView>
+              <h2 className={h2Cls}>자주 묻는 질문</h2>
+            </FadeInView>
             <FaqList />
           </div>
         </section>

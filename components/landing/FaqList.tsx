@@ -2,7 +2,7 @@
 
 import { motion } from 'motion/react';
 
-const FAQ_ITEMS = [
+export const FAQ_ITEMS = [
   {
     q: 'SupporterB 도입 수수료가 있나요?',
     a: 'SupporterB는 현재(2026년) 무료로 이용 가능합니다. 추후 유료로 전환될 수 있으며, 전환 2달 전 사전 공유 예정입니다.',
