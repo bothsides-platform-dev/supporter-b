@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0.1] - 2026-06-09
+
+### Added
+
+- **PG 랜딩 헤더 내비게이션**: PG 전용 랜딩(`partner.supporter-b.com`)에도 구매사 랜딩과 동일한 고정 헤더(로고 + 로그인 진입)를 넣어, PG 사용자가 랜딩에서 바로 로그인할 수 있습니다.
+
 ## [0.2.0.0] - 2026-06-09
 
 ### Added
