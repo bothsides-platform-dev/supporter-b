@@ -84,14 +84,14 @@ UX 문구는 `UX_WRITING.md`(해요체·능동형·긍정형) 및 도메인 용�
 선정 직후 **1회**, `prefers-reduced-motion`이면 전부 정적 폴백.
 
 - **체크마크**: stroke draw-in (`motion`의 `pathLength` 0→1, ~250ms).
-- **컨페티**: 짧은 1회 버스트. `canvas-confetti`(약 6kb, 신규 의존성).
+- **컨페티**: 짧은 1회 버스트. `canvas-confetti`는 **이미 의존성으로 설치돼 있음**
+  (`components/pending-approval/approval-waiting-screen.tsx`에 동일 패턴 존재 —
+  `confetti.create(canvas, { disableForReducedMotion: true })`). 그 패턴을 그대로 차용.
   파티클 컬러는 **브랜드 팔레트로 제한**(네온·그라데이션 금지 유지).
 - **히어로 텍스트**: fade + scale-in (0.96→1).
 - **혜택 행**: 아래로 stagger fade-in.
-- **`prefers-reduced-motion: reduce`**: 컨페티·draw 생략, 체크마크·텍스트 즉시 표시.
-
-> 신규 의존성 `canvas-confetti`는 worktree에서 추가 시
-> `pnpm add` virtual-store 주의(임시 `.npmrc` 패턴) — 메모리 참조.
+- **`prefers-reduced-motion: reduce`**: `disableForReducedMotion`로 컨페티 생략,
+  체크마크·텍스트 즉시 표시.
 
 ## 6. 메시지 연결 — 신규 액션
 
@@ -166,11 +166,16 @@ if (r.ok) router.push(`/messages?c=${r.conversationId}`);
 - `components/rfp/comparison/AwardResult.tsx` (+ 테스트)
 - `lib/server/actions/chat/getOrCreateConversationAction.ts` (+ 테스트)
 
+신규 (서비스):
+- `lib/server/services/chat.ts` — `ChatService.getOrCreateConversation` 메서드 (+ 액션 경유 테스트)
+
 수정:
-- `components/rfp/comparison/FocusComparison.tsx` — award 콜백에서 오버레이 표시
-- `components/rfp/comparison/AwardConfirmDialog.tsx` — 성공 시 refresh 대신 콜백
+- `components/rfp/comparison/FocusComparison.tsx` — award `onAwarded` 콜백에서
+  오버레이 상태 표시 (기존 `router.refresh()` 대체). `AwardConfirmDialog`는
+  `onAwarded` 콜백을 이미 받으므로 **변경 불필요**.
 - `DESIGN.md` §9, `CLAUDE.md` 하드룰 — 축하 모먼트 예외
-- `package.json` / lock — `canvas-confetti`
+
+의존성 변경 없음: `canvas-confetti`는 이미 설치됨.
 
 ## 11. 열린 항목
 
