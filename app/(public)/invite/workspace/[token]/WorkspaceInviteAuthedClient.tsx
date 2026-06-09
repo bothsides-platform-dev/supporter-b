@@ -25,10 +25,11 @@ export function WorkspaceInviteAuthedClient({ token }: { token: string }) {
       const r = await acceptWorkspaceInviteAction(token);
       if (cancelled) return;
       if (r.ok) {
-        await switchWorkspaceAction(r.workspaceId);
+        const sr = await switchWorkspaceAction(r.workspaceId);
         if (cancelled) return;
-        // Hard navigation: revalidatePath + router.refresh() causes Next.js 16 hang (#86055)
-        window.location.replace('/home');
+        // Hard navigation (host-correct redirectTo) — revalidatePath + router.refresh()
+        // causes Next.js 16 hang (#86055), and an absolute URL crosses subdomains.
+        window.location.assign(sr.ok ? sr.redirectTo : '/home');
       } else {
         setError(r.error);
       }

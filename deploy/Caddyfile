@@ -5,7 +5,7 @@
 #
 #   sudo APP_DOMAIN=your-domain.com caddy run --config /etc/caddy/Caddyfile
 # or via the systemd service after writing APP_DOMAIN into /etc/caddy/caddy.env.
-{$APP_DOMAIN} {
+{$APP_DOMAIN}, partner.{$APP_DOMAIN} {
 	encode zstd gzip
 
 	# Attachments are stored as Postgres bytea and posted through the app.

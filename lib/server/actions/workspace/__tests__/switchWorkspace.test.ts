@@ -34,6 +34,11 @@ vi.mock('next/cache', () => ({
   revalidatePath: (...args: any[]) => revalidatePath(...args),
 }));
 
+const { mockHostRef } = vi.hoisted(() => ({ mockHostRef: { value: null as string | null } }));
+vi.mock('next/headers', () => ({
+  headers: () => Promise.resolve({ get: (_name: string) => mockHostRef.value }),
+}));
+
 import { switchWorkspaceAction } from '../switchWorkspaceAction';
 
 let db: PgliteDB;
@@ -46,6 +51,7 @@ beforeEach(async () => {
 });
 afterEach(() => {
   __setActionDbForTest(undefined);
+  mockHostRef.value = null;
 });
 
 describe('switchWorkspaceAction', () => {
@@ -120,5 +126,31 @@ describe('switchWorkspaceAction', () => {
     await switchWorkspaceAction(other.id);
 
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('cross-host: switching to a pg workspace from the buyer host returns an absolute partner URL', async () => {
+    const savedBuyer = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+    const savedPartner = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+    mockHostRef.value = 'supporter-b.com';
+
+    try {
+      const u = await seedUser(db);
+      const wsBuyer = await seedBuyerWorkspace(db);
+      const wsPg = await seedPgWorkspace(db, 'CrossHostPG');
+      await seedMembership(db, wsBuyer.id, u.id, 'admin');
+      await seedMembership(db, wsPg.id, u.id, 'member');
+      sessionRef.value = { user: { id: u.id } };
+
+      const r = await switchWorkspaceAction(wsPg.id);
+
+      expect(r).toEqual({ ok: true, redirectTo: 'https://partner.supporter-b.com/home' });
+    } finally {
+      if (savedBuyer === undefined) delete process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+      else process.env.NEXT_PUBLIC_BUYER_ORIGIN = savedBuyer;
+      if (savedPartner === undefined) delete process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+      else process.env.NEXT_PUBLIC_PARTNER_ORIGIN = savedPartner;
+    }
   });
 });

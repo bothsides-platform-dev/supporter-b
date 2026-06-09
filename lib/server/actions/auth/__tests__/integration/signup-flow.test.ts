@@ -4,7 +4,9 @@
 // No UI involved. The point is to prove the sessionStorage hand-off the
 // client performs (email, inviteToken) carries the right data so each hop
 // has what it needs.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }) }));
 import { eq } from 'drizzle-orm';
 
 import {

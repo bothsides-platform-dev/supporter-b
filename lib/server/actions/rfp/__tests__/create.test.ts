@@ -751,4 +751,34 @@ describe('createRfpAction', () => {
 
   // _suppress unused import warnings
   void and;
+
+  it('invite outbox HTML uses the partner host when NEXT_PUBLIC_PARTNER_ORIGIN is set', async () => {
+    const savedPartner = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+    try {
+      const pg = await seedPgWorkspace(db, 'PartnerHostPG');
+      const pgAdmin = await seedUser(db, { email: 'admin@partnerhost.test' });
+      await seedMembership(db, pg.id, pgAdmin.id, 'admin');
+
+      const r = await createRfpAction({
+        title: '파트너 호스트 초대 테스트',
+        deadline: new Date(Date.now() + 86_400_000).toISOString(),
+        allowedPgWorkspaceIds: [pg.id],
+        requiredPaymentMethods: ['card'],
+        send: true,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+
+      const inviteRows = await db
+        .select({ html: outboxEntries.html })
+        .from(outboxEntries)
+        .where(eq(outboxEntries.event, 'rfp.invited'));
+      expect(inviteRows).toHaveLength(1);
+      expect(inviteRows[0].html).toContain('https://partner.supporter-b.com/invite/rfp/');
+    } finally {
+      if (savedPartner === undefined) delete process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+      else process.env.NEXT_PUBLIC_PARTNER_ORIGIN = savedPartner;
+    }
+  });
 });

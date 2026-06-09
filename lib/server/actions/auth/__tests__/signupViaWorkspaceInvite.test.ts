@@ -9,7 +9,9 @@
  *   - 만료·사용된 토큰은 INVITE_EXPIRED
  *   - 초대 role(member/admin)이 workspace_members에 그대로 반영
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }) }));
 import { and, count, eq } from 'drizzle-orm';
 
 import {

@@ -1,5 +1,6 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { z } from 'zod';
 import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
 import { passwordSchema } from '@/lib/auth/password-validation';
@@ -13,6 +14,7 @@ import {
 } from './_shared';
 import { normalizePhone } from './phoneOtpUtils';
 import { getAuthService } from '@/lib/server/services/auth';
+import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
 
 const PgProfileInput = z
   .object({
@@ -105,9 +107,17 @@ export async function signupCompleteAction(
     reviewUrl: `${baseUrl()}/admin/review/${result.applicationId}`,
   });
 
+  const host = (await headers()).get('host');
+  const redirectTo = workspaceSwitchTarget(
+    parsed.data.wsKind === 'buyer' ? 'buyer' : 'pg',
+    host,
+    appOrigins(),
+    parsed.data.wsKind === 'buyer' ? '/rfp' : '/inbox',
+  );
+
   return {
     ok: true,
-    redirectTo: parsed.data.wsKind === 'buyer' ? '/rfp' : '/inbox',
+    redirectTo,
     email: result.email,
     password: parsed.data.password,
   };

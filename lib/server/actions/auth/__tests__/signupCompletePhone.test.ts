@@ -9,6 +9,8 @@ import { verifyEmailAction } from '../verifyEmailAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }) }));
+
 vi.mock('@/lib/server/sms/solapi', () => ({
   sendSms: vi.fn().mockResolvedValue(undefined),
 }));

@@ -2,15 +2,17 @@
 
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 
 import { requireSession } from '@/lib/auth/session';
 import { unstable_update } from '@/auth';
 import { users } from '@/lib/db/schema';
 import { getMembership } from '@/lib/auth/active-workspace';
 import { actionDb } from '../auth/_shared';
+import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
 
 export type SwitchWorkspaceResult =
-  | { ok: true; redirectTo: '/home' }
+  | { ok: true; redirectTo: string }
   | { ok: false; error: 'UNAUTHENTICATED' | 'INVALID_INPUT' | 'NOT_MEMBER' };
 
 /**
@@ -34,6 +36,7 @@ export type SwitchWorkspaceResult =
  */
 export async function switchWorkspaceAction(
   targetWorkspaceId: string,
+  landingPath: string = '/home',
 ): Promise<SwitchWorkspaceResult> {
   const session = await requireSession().catch(() => null);
   if (!session?.user?.id) return { ok: false, error: 'UNAUTHENTICATED' };
@@ -59,6 +62,11 @@ export async function switchWorkspaceAction(
     },
   });
 
+  // Cross-type switch lands on the other host (absolute); same-type stays relative.
+  // The switcher hard-navigates to redirectTo, so an absolute URL crosses origins
+  // while keeping the (already domain-scoped) session cookie. See WorkspaceSwitcher.
+  const host = (await headers()).get('host');
+  const redirectTo = workspaceSwitchTarget(membership.workspaceType, host, appOrigins(), landingPath);
   revalidatePath('/home');
-  return { ok: true, redirectTo: '/home' };
+  return { ok: true, redirectTo };
 }
