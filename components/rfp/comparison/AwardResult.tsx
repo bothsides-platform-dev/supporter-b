@@ -12,6 +12,7 @@ import { motion } from 'motion/react';
 import { Button } from '@/components/primitives/Button';
 import { ImprovementSummary, type CurrentConditions } from './ImprovementSummary';
 import { getOrCreateConversationAction } from '@/lib/server/actions/chat/getOrCreateConversationAction';
+import { josa } from '@/lib/utils/josa';
 import type { Bid, MerchantTier } from '@/lib/types/bid';
 
 export function AwardResult({
@@ -63,12 +64,16 @@ export function AwardResult({
   const startMessage = async () => {
     if (starting) return;
     setStarting(true);
-    const r = await getOrCreateConversationAction(pgWsId);
-    if (r.ok) {
-      router.push(`/messages?c=${r.conversationId}`);
-      return;
+    try {
+      const r = await getOrCreateConversationAction(pgWsId);
+      if (r.ok) {
+        router.push(`/messages?c=${r.conversationId}`);
+        return;
+      }
+    } catch {
+      // 액션이 throw해도 사용자를 LOADING…에 가두지 않는다.
     }
-    // 실패 시에도 사용자를 가두지 않는다 — 메시지 목록으로.
+    // 실패(결과 ok=false 또는 throw) 시 메시지 목록으로 — 가두지 않는다.
     setStarting(false);
     router.push('/messages');
   };
@@ -90,7 +95,7 @@ export function AwardResult({
           <Check className="size-8" strokeWidth={2} />
         </span>
         <div className="flex flex-col items-center gap-1.5">
-          <h1 className="text-title-large">{pgName}를 선정했어요</h1>
+          <h1 className="text-title-large">{josa(pgName, '을/를')} 선정했어요</h1>
           <p className="text-body-medium text-on-surface-variant">견적 요청이 마무리됐어요</p>
         </div>
 
@@ -100,7 +105,7 @@ export function AwardResult({
 
         <div className="flex w-full flex-col gap-2">
           <Button onClick={startMessage} disabled={starting}>
-            {starting ? 'LOADING…' : `${pgName}와 메시지 시작 →`}
+            {starting ? 'LOADING…' : `${josa(pgName, '와/과')} 메시지 시작 →`}
           </Button>
           <Button variant="text" onClick={() => router.push('/rfp')}>
             견적 목록으로

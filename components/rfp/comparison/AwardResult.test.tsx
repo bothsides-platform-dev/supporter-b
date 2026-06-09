@@ -113,4 +113,11 @@ describe('AwardResult', () => {
     );
     expect(routerPushMock).toHaveBeenCalledWith('/rfp');
   });
+
+  it('주 CTA에서 대화 보장이 실패하면 /messages로 폴백한다', async () => {
+    getOrCreateMock.mockResolvedValue({ ok: false, error: 'BOOM' });
+    render(<AwardResult {...baseProps} current={{}} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: /메시지/ }));
+    expect(routerPushMock).toHaveBeenCalledWith('/messages');
+  });
 });
