@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }) }));
+const { signupMockHostRef } = vi.hoisted(() => ({ signupMockHostRef: { value: null as string | null } }));
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => signupMockHostRef.value }) }));
 import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
@@ -729,5 +730,48 @@ describe('checkEmailAvailableAction', () => {
     const r = await checkEmailAvailableAction({ email: 'not-an-email' });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+});
+
+describe('signupCompleteAction — cross-host redirect for pg signup', () => {
+  let verificationId: string;
+  const savedBuyer = { val: undefined as string | undefined };
+  const savedPartner = { val: undefined as string | undefined };
+
+  beforeEach(async () => {
+    db = await setupActionEnv();
+    verificationId = await seedVerifiedOtp();
+    await seedVerifiedEmail('sales.crosshost@toss.im');
+    savedBuyer.val = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+    savedPartner.val = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+    signupMockHostRef.value = 'supporter-b.com';
+  });
+  afterEach(() => {
+    teardownActionEnv();
+    signupMockHostRef.value = null;
+    if (savedBuyer.val === undefined) delete process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+    else process.env.NEXT_PUBLIC_BUYER_ORIGIN = savedBuyer.val;
+    if (savedPartner.val === undefined) delete process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+    else process.env.NEXT_PUBLIC_PARTNER_ORIGIN = savedPartner.val;
+  });
+
+  it('pg signup on the buyer host returns an absolute partner URL for /inbox', async () => {
+    const r = await signupCompleteAction({
+      email: 'sales.crosshost@toss.im',
+      name: '크로스호스트 PG',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '크로스호스트 페이',
+      pgProfile: {
+        bizNo: VALID_BIZ_NO,
+      },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.redirectTo).toBe('https://partner.supporter-b.com/inbox');
   });
 });
