@@ -66,8 +66,45 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
 
       <main className="flex-1 pt-[var(--shell-topbar)]">
 
-        {/* ── Hero (client: 타이핑·애니메이션) ── */}
-        <LandingHeroSection />
+        {/* ── Hero ── */}
+        <section className="relative overflow-hidden px-8 py-[var(--s-11)] min-h-[calc(100svh-60px)] flex items-center border-b border-[var(--md-sys-color-outline-variant)]">
+          <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
+            <div className="flex flex-col gap-0">
+              <motion.h1
+                initial={{ opacity: 0, y: 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.44, delay: 0.08, ease: EASE_OUT }}
+                className="text-[clamp(30px,5.5vw,72px)] leading-[1.06] tracking-[-0.028em] font-medium text-[var(--md-sys-color-on-surface)]"
+              >
+                Supporter B를 통해
+              </motion.h1>
+              <motion.div
+                initial={{ opacity: 0, y: 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.44, delay: 0.18, ease: EASE_OUT }}
+                className="text-[clamp(30px,5.5vw,72px)] leading-[1.06] tracking-[-0.028em] font-medium flex items-baseline flex-wrap"
+              >
+                <span className="text-[var(--md-sys-color-primary)]">{displayText}</span>
+                <span className="blink-cursor text-[var(--md-sys-color-primary)]">|</span>
+                <span className="text-[var(--md-sys-color-on-surface)]">&nbsp;만듭니다.</span>
+              </motion.div>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.36, delay: 0.46, ease: EASE_OUT }}
+              className="flex flex-col items-start gap-[var(--s-4)]"
+            >
+              <Link href="/rfp/new">
+                <Button size="lg">PG 비교 견적 무료로 시작하기 →</Button>
+              </Link>
+              <span className="font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-outline)]">
+                신용카드 불필요 — 입찰 시작까지 5분
+              </span>
+            </motion.div>
+          </div>
+        </section>
 
         {/* ── Problem ── */}
         <section className={sectionCls}>
@@ -185,25 +222,34 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── Final CTA / 도입문의 ── */}
         <section id="contact" className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-on-surface)] scroll-mt-[var(--shell-topbar)]">
           <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
-            <FadeInView>
-              <div className="flex flex-col gap-[var(--s-3)]">
-                <span className="font-mono text-[var(--text-xs)] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                  — 도입문의
-                </span>
-                <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-surface)]">
-                  지금 바로 불필요한 비용은 줄이고,<br />사업의 본질에 집중하세요.
-                </h2>
-              </div>
-            </FadeInView>
-            <FadeInView delay={0.2}>
-              <div className="flex flex-col items-start gap-[var(--s-5)]">
-                <Link href="/rfp/new">
-                  <button className="inline-flex items-center gap-2 h-12 px-6 rounded-md bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] font-mono text-[13px] tracking-[0.06em] uppercase transition-opacity duration-[140ms] hover:opacity-85 active:scale-[0.98]">
-                    PG견적 무료로 받기 →
-                  </button>
-                </Link>
-              </div>
-            </FadeInView>
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.36, ease: EASE_OUT }}
+              className="flex flex-col gap-[var(--s-3)]"
+            >
+              <span className="font-mono text-[var(--text-xs)] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                — 도입문의
+              </span>
+              <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-surface)]">
+                지금 바로 불필요한 비용은 줄이고,<br />사업의 본질에 집중하세요.
+              </h2>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.36, delay: 0.2, ease: EASE_OUT }}
+              className="flex flex-col items-start gap-[var(--s-5)]"
+            >
+              <Link href="/rfp/new">
+                <button className="inline-flex items-center gap-2 h-12 px-6 rounded-md bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] font-mono text-[13px] tracking-[0.06em] uppercase transition-opacity duration-[140ms] hover:opacity-85 active:scale-[0.98]">
+                  PG견적 무료로 받기 →
+                </button>
+              </Link>
+            </motion.div>
           </div>
         </section>
 

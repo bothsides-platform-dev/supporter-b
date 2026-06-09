@@ -9,6 +9,7 @@ import { IconButton } from '@/components/primitives/IconButton';
 import { ShortcutHint } from '@/components/shell/ShortcutHint';
 import { getNavCommands } from '@/lib/nav/nav-config';
 import type { WorkspaceType } from '@/lib/types/workspace';
+import { getChoseong } from 'es-hangul';
 import {
   searchEntitiesAction,
   type SearchResults,
@@ -88,10 +89,14 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
   }, [query]);
 
   // Nav commands are static, so we filter them client-side (cmdk's own filter is
-  // off — entity results are already filtered by the server).
+  // off — entity results are already filtered by the server). Chosung (초성)
+  // matching lets users type ㅅㅈ to find 설정 etc.
   const q = query.trim().toLowerCase();
   const navMatches = q
-    ? navCommands.filter((c) => c.label.toLowerCase().includes(q))
+    ? navCommands.filter((c) => {
+        const label = c.label.toLowerCase();
+        return label.includes(q) || getChoseong(label).includes(q);
+      })
     : navCommands;
 
   // Normalize the three entity result types into one shape so a single loop

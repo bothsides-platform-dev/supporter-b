@@ -4,18 +4,21 @@ import { auth } from '@/auth';
 import { db } from '@/lib/db/client';
 import { workspaces } from '@/lib/db/schema';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { RfpCreateWizard } from '@/components/rfp/RfpCreateWizard';
 import type { PgWorkspace } from '@/components/rfp/RfpStep3PgSelect';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RfpNewPage() {
-  const session = await auth();
-
-  // PG 워크스페이스 사용자는 RFP를 작성할 수 없음 — 홈으로 이동
-  if (session?.user?.workspaceType === 'pg') {
+  // PG 워크스페이스 사용자는 RFP를 작성할 수 없음 — 홈으로 이동 (안내 포함)
+  const preCheck = await auth();
+  if (preCheck?.user?.workspaceType === 'pg') {
     redirect('/home?notice=pg-rfp-blocked');
   }
+
+  // 비로그인 / 미완료 세션 → /login?next=/rfp/new 또는 /logout (루프 세이프 가드)
+  const session = await requireBuyerPage('/rfp/new');
 
   const pgRows = await db
     .select({ id: workspaces.id, name: workspaces.name })
@@ -36,22 +39,6 @@ export default async function RfpNewPage() {
         ? `${row.name} #${row.id.slice(0, 8)}`
         : row.name,
   }));
-
-  // 비인증 또는 buyer 워크스페이스 미완료 → 게스트 모드
-  if (!session?.user?.id || !session.user.workspaceId) {
-    return (
-      <div className="px-8 py-8 lg:h-full lg:flex lg:flex-col lg:overflow-hidden">
-        <div className="mb-10 lg:flex-none">
-          <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-            새 견적 요청
-          </h1>
-        </div>
-        <div className="lg:flex-1 lg:min-h-0">
-          <RfpCreateWizard guest pgList={pgList} />
-        </div>
-      </div>
-    );
-  }
 
   const ws = await (await getWorkspaceRepo()).findById(session.user.workspaceId);
   // ws.bizProfile 미등록이어도 RFP 작성 허용 (사전 제안 모드)

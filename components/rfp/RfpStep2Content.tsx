@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
-import { underlineInputClass } from '@/components/forms/inputs';
+import { underlineInputClass, CurrencyInput } from '@/components/forms/inputs';
 import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
@@ -112,16 +112,12 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
           className={underlineInputClass}
         />
       </div>
-      <div className="space-y-1">
-        <Label size="md" muted={false}>전년도 연간 PG 총 거래액</Label>
-        <input
-          type="text"
-          value={draft.annualPgVolume}
-          onChange={(e) => draft.setField('annualPgVolume', e.target.value)}
-          placeholder="10억"
-          className={underlineInputClass}
-        />
-      </div>
+      <CurrencyInput
+        label="전년도 연간 PG 총 거래액"
+        value={draft.annualPgVolume}
+        onChange={(v) => draft.setField('annualPgVolume', v)}
+        placeholder="10억"
+      />
       <div className="space-y-1">
         <div className="flex items-center gap-1">
           <Label size="md" muted={false}>현재 카드 수수료</Label>

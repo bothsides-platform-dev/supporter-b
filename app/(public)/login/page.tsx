@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/primitives/Checkbox';
 import { PasswordField } from '@/components/auth/PasswordField';
 import { LoginSignupCallout } from '@/components/auth/LoginSignupCallout';
 import { loginAction } from '@/lib/server/actions/auth';
+import { safeInternalNext } from '@/lib/auth/safe-next';
 import {
   LOCK_THRESHOLD,
   getState,
@@ -27,7 +28,8 @@ function formatRemaining(ms: number): string {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get('next') ?? '/home';
+  const rawNext = searchParams.get('next');
+  const next = safeInternalNext(rawNext) ?? '/home';
   const [email, setEmail] = useState(
     () => searchParams.get('email') ?? '',
   );
@@ -98,7 +100,7 @@ function LoginContent() {
 
   return (
     <div className="space-y-8">
-      <LoginSignupCallout />
+      <LoginSignupCallout next={rawNext} />
 
       <div className="flex items-center gap-3" aria-hidden>
         <span className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />

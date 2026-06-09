@@ -1,8 +1,19 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { baseUrl, baseUrlFor } from '../env';
+import { baseUrl, baseUrlFor, adminBaseUrl } from '../env';
 
 const env = { ...process.env };
 afterEach(() => { process.env = { ...env }; });
+
+describe('adminBaseUrl', () => {
+  it('returns ADMIN_ORIGIN when set', () => {
+    process.env.ADMIN_ORIGIN = 'https://admin.supporter-b.com';
+    expect(adminBaseUrl()).toBe('https://admin.supporter-b.com');
+  });
+  it('falls back to baseUrl() when ADMIN_ORIGIN is unset', () => {
+    delete process.env.ADMIN_ORIGIN;
+    expect(adminBaseUrl()).toBe(baseUrl());
+  });
+});
 
 describe('baseUrlFor', () => {
   it('uses the partner origin for pg-facing links', () => {

@@ -179,6 +179,27 @@ describe('RfpStep2Content', () => {
     });
   });
 
+  describe('전년도 연간 PG 총 거래액 — CurrencyInput', () => {
+    it('숫자를 입력하면 천단위 콤마로 표시된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      // placeholder "10억"으로 전년도 거래액 필드 특정
+      const input = screen.getByPlaceholderText('10억');
+      await user.type(input, '10000000');
+      // CurrencyInput(NumericFormat)이면 10,000,000 으로 표시됨
+      expect(screen.getByDisplayValue('10,000,000')).toBeInTheDocument();
+    });
+
+    it('입력값이 store에 raw digit 문자열로 저장된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      const input = screen.getByPlaceholderText('10억');
+      await user.type(input, '50000000');
+      // CurrencyInput onValueChange → values.value (raw digit)
+      expect(useRfpDraftStore.getState().annualPgVolume).toBe('50000000');
+    });
+  });
+
   describe('견적 유형 토글', () => {
     it('"신규 계약" 버튼 클릭 시 store contractType 이 new 로 업데이트된다', async () => {
       const user = userEvent.setup();
