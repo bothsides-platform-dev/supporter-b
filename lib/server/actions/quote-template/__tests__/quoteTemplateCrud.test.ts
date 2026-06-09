@@ -97,6 +97,21 @@ describe('saveQuoteTemplateAction (create)', () => {
     }
   });
 
+  it('구간맵 paymentFees 템플릿을 저장하고 그대로 불러온다', async () => {
+    await setupPg();
+    const res = await saveQuoteTemplateAction({
+      name: '표준요율',
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: { card: { sole: 0.005, general: 0.018 } },
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const loaded = await (await getBidQuoteTemplateRepo()).findById(res.templateId);
+    expect(loaded?.paymentFees.card).toEqual({ sole: 0.005, general: 0.018 });
+  });
+
   it('rejects an empty name', async () => {
     await setupPg();
     const r = await saveQuoteTemplateAction({ ...VALID, name: '' });
