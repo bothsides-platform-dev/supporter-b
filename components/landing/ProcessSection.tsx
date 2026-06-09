@@ -69,13 +69,19 @@ function useTypedFields(fields: Field[], play: boolean) {
     let ci = 0;
     let timer = 0;
     const step = () => {
+      if (fi >= fields.length) return;
+      const value = fields[fi].value;
       ci += 1;
+      // setTyped 업데이터는 지연 실행(다음 렌더)된다. 그 안에서 클로저 fi/ci 를 직접
+      // 읽으면 아래에서 증가시킨 값을 읽어 범위를 벗어난다 → 호출 시점 값을 캡처해 사용.
+      const fieldIdx = fi;
+      const charCount = ci;
       setTyped((prev) => {
         const next = [...prev];
-        next[fi] = fields[fi].value.slice(0, ci);
+        next[fieldIdx] = value.slice(0, charCount);
         return next;
       });
-      if (ci >= fields[fi].value.length) {
+      if (ci >= value.length) {
         fi += 1;
         ci = 0;
         if (fi >= fields.length) {

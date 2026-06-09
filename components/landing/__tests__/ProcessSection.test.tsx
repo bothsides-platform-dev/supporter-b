@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import React from 'react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import React, { act } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('motion/react', () => {
@@ -56,5 +56,38 @@ describe('ProcessSection', () => {
     render(<ProcessSection />);
     const first = screen.getByRole('button', { name: /사업자 정보 확인/ });
     expect(first).toHaveAttribute('aria-current', 'step');
+  });
+});
+
+describe('ProcessSection — animated example-view typing', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // Non-reduced-motion so the typing loop actually runs (the other suites rely
+    // on jsdom's missing matchMedia → reduced-motion → instant fill).
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: false,
+      media: '',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }) as unknown as typeof window.matchMedia;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    // @ts-expect-error remove the test stub
+    delete window.matchMedia;
+  });
+
+  it('types the business-info form to completion without crashing', () => {
+    render(<ProcessSection />);
+    // Advance less than the 5s auto-advance so we stay on step 1; the form
+    // finishes typing (~3.5s) — the final field must not throw.
+    act(() => {
+      vi.advanceTimersByTime(4500);
+    });
+    expect(screen.getByText('계속사업자')).toBeInTheDocument();
   });
 });
