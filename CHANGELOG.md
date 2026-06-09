@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2.3] - 2026-06-10
+
+### Fixed
+
+- **운영 환경에서 로그아웃 후 실제 도메인 로그인 화면으로 이동합니다**: `next start -p 3000`으로 실행 시 Next.js가 내부 hostname을 `localhost`로 채워 로그아웃 리다이렉트 URL이 `https://localhost:3000/login`이 되던 문제를 수정했습니다. 이제 Caddy가 전달하는 `Host` 헤더를 우선 사용해 실제 도메인(`supporter-b.com` 또는 `partner.supporter-b.com`)으로 올바르게 이동합니다.
+
 ## [0.2.2.2] - 2026-06-10
 
 ### Added
