@@ -6,6 +6,7 @@ import { withAxiom } from "next-axiom";
 const nextConfig: NextConfig = {
   // Prevent pino (and its worker-thread transport) from being bundled for Edge.
   serverExternalPackages: ["pino", "pino-pretty", "@axiomhq/pino"],
+  allowedDevOrigins: ["lvh.me", "*.lvh.me"],
   // Next 16 acquires a `<distDir>/dev/lock` per `next dev` and refuses a second
   // dev server in the same dir *even on a different port*. The e2e webServer
   // (playwright.config.ts) starts `next dev --port 3001`; without an isolated
