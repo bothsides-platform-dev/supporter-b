@@ -1,7 +1,7 @@
 import { eq, inArray } from 'drizzle-orm';
 import { bids, attachments } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
-import type { Bid, PaymentMethod } from '@/lib/types/bid';
+import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { BidRepo, Tx } from '../types';
 
@@ -63,7 +63,7 @@ function rowToBid(row: BidRow, proposalPdfs: Attachment[]): Bid {
     settleCycle: row.settleCycle,
     settleLimit: Number(row.settleLimit),
     guaranteeInsurance: Number(row.guaranteeInsurance),
-    paymentFees: (row.paymentFees ?? {}) as Partial<Record<PaymentMethod, number>>,
+    paymentFees: (row.paymentFees ?? {}) as Partial<Record<PaymentMethod, number | TierRates>>,
     customFees: (row.customFees ?? {}) as Record<string, number>,
     proposalPdfs,
     memo: row.memo,

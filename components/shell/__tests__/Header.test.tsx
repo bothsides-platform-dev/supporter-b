@@ -47,7 +47,7 @@ beforeEach(() => {
     value: { assign },
   });
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true } as Response)));
-  vi.mocked(http.post).mockReturnValue({ json: vi.fn().mockResolvedValue({}) } as unknown as ResponsePromise);
+  vi.mocked(http.post).mockReturnValue(Promise.resolve({}) as unknown as ResponsePromise);
 });
 
 afterEach(() => {
@@ -106,7 +106,7 @@ describe('Header', () => {
     await u.click(screen.getByRole('button', { name: '사용자 메뉴' }));
     await u.click(await screen.findByText('로그아웃'));
     await waitFor(() =>
-      expect(http.post).toHaveBeenCalledWith('/logout'),
+      expect(fetch).toHaveBeenCalledWith('/logout', expect.objectContaining({ method: 'POST', keepalive: true })),
     );
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/login'));
   });

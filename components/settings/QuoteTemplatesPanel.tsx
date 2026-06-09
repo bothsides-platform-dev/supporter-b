@@ -12,7 +12,9 @@ import { deleteQuoteTemplateAction } from '@/lib/server/actions/quote-template/d
 import {
   PAYMENT_METHOD_CATEGORIES,
   PAYMENT_METHOD_LABELS,
+  isTieredMethod,
   type PaymentMethod,
+  type TierRates,
 } from '@/lib/types/bid';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { cn } from '@/lib/utils';
@@ -42,6 +44,8 @@ type EditorState = {
   settleLimit: string;
   guaranteeInsurance: string;
   fees: Record<string, string>;
+  /** 구간 요율 수단은 편집기에서 단일 입력 불가 — TierRates를 원형 그대로 보존해 저장 시 재첨부 */
+  tieredFees: Partial<Record<PaymentMethod, TierRates>>;
 };
 
 const fmtPct = (rate: number) => String(Math.round(rate * 1e6) / 1e4);
@@ -54,15 +58,22 @@ function blankEditor(): EditorState {
     settleLimit: '0',
     guaranteeInsurance: '0',
     fees: {},
+    tieredFees: {},
   };
 }
 
 function editorFromTemplate(t: QuoteTemplateOption): EditorState {
   const m = /^([DWM])\+(\d+)$/.exec(t.settleCycle);
   const fees: Record<string, string> = {};
+  const tieredFees: Partial<Record<PaymentMethod, TierRates>> = {};
   for (const method of ALL_PAYMENT_METHODS) {
-    const rate = t.paymentFees[method];
-    if (rate !== undefined) fees[method] = fmtPct(rate);
+    const stored = t.paymentFees[method];
+    if (stored === undefined) continue;
+    if (typeof stored === 'object') {
+      tieredFees[method] = stored;
+    } else {
+      fees[method] = fmtPct(stored);
+    }
   }
   return {
     id: t.id,
@@ -72,6 +83,7 @@ function editorFromTemplate(t: QuoteTemplateOption): EditorState {
     settleLimit: String(t.settleLimit),
     guaranteeInsurance: String(t.guaranteeInsurance),
     fees,
+    tieredFees,
   };
 }
 
@@ -100,7 +112,7 @@ export function QuoteTemplatesPanel({
     setError(null);
 
     const settleCycle = `${editor.cycleUnit}+${editor.cycleNum || '1'}`;
-    const paymentFees: Partial<Record<PaymentMethod, number>> = {};
+    const paymentFees: Partial<Record<PaymentMethod, number | TierRates>> = { ...editor.tieredFees };
     for (const method of ALL_PAYMENT_METHODS) {
       const v = editor.fees[method] ?? '';
       if (v !== '') paymentFees[method] = parseFloat(v) / 100;
@@ -279,14 +291,25 @@ export function QuoteTemplatesPanel({
               결제수단별 수수료
             </span>
             <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-              {ALL_PAYMENT_METHODS.map((m) => (
-                <PercentInput
-                  key={m}
-                  label={`${PAYMENT_METHOD_LABELS[m]} 수수료`}
-                  value={editor.fees[m] ?? ''}
-                  onChange={(v) => setFee(m, v)}
-                />
-              ))}
+              {ALL_PAYMENT_METHODS.map((m) =>
+                isTieredMethod(m) && editor.tieredFees[m] ? (
+                  <div key={m} className="space-y-0.5">
+                    <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                      {PAYMENT_METHOD_LABELS[m]} 수수료
+                    </span>
+                    <p className="font-mono text-[12px] text-[var(--md-sys-color-outline)]">
+                      구간별 (견적 작성 시 수정)
+                    </p>
+                  </div>
+                ) : (
+                  <PercentInput
+                    key={m}
+                    label={`${PAYMENT_METHOD_LABELS[m]} 수수료`}
+                    value={editor.fees[m] ?? ''}
+                    onChange={(v) => setFee(m, v)}
+                  />
+                ),
+              )}
             </div>
           </div>
 

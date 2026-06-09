@@ -327,6 +327,59 @@ describe('submitBidAction', () => {
     );
   });
 
+  it('카드 구간맵을 그대로 저장한다', async () => {
+    const s = await seedSetup();
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+
+    // Set card as a required payment method so the service gate passes.
+    await db.update(rfps).set({ requiredPaymentMethods: ['card'] }).where(eq(rfps.id, s.rfpId));
+
+    const r = await submitBidAction({
+      rfpId: s.rfpId,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: { card: { sole: 0.005, general: 0.018 } },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect((row.paymentFees as { card?: unknown }).card).toEqual({ sole: 0.005, general: 0.018 });
+  });
+
+  it('잘못된 구간 키는 거부한다', async () => {
+    const s = await seedSetup();
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+
+    await db.update(rfps).set({ requiredPaymentMethods: ['card'] }).where(eq(rfps.id, s.rfpId));
+
+    const r = await submitBidAction({
+      rfpId: s.rfpId,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: { card: { bogus: 0.1 } as never },
+    });
+    expect(r.ok).toBe(false);
+  });
+
   it('rejects when RFP is not in sent state', async () => {
     const s = await seedSetup();
     await db.update(rfps).set({ status: 'closed' }).where(eq(rfps.id, s.rfpId));

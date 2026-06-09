@@ -14,7 +14,7 @@ import type {
 } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { BizProfile } from '@/lib/types/biz-profile';
-import type { Bid, PaymentMethod } from '@/lib/types/bid';
+import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { BoardColumn, ColumnKind } from '@/lib/types/column';
 import type { Attachment } from '@/lib/types/common';
 import type { Contract } from '@/lib/types/contract';
@@ -498,7 +498,7 @@ export type BidQuoteTemplate = {
   settleCycle: string;
   settleLimit: number;
   guaranteeInsurance: number;
-  paymentFees: Partial<Record<PaymentMethod, number>>;
+  paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -514,7 +514,7 @@ export interface BidQuoteTemplateRepo {
       settleCycle: string;
       settleLimit: number;
       guaranteeInsurance: number;
-      paymentFees: Partial<Record<PaymentMethod, number>>;
+      paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
       createdBy: string;
     },
     tx?: Tx,
@@ -527,7 +527,7 @@ export interface BidQuoteTemplateRepo {
       settleCycle: string;
       settleLimit: number;
       guaranteeInsurance: number;
-      paymentFees: Partial<Record<PaymentMethod, number>>;
+      paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
     },
     tx?: Tx,
   ): Promise<void>;
