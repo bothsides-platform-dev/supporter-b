@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 // Radix Slider observes element size; jsdom has no ResizeObserver.
 vi.stubGlobal(
@@ -91,5 +91,26 @@ describe('SavingsCalculator — idle slider hint', () => {
       vi.advanceTimersByTime(6500); // past IDLE_MS + a few rAF frames
     });
     expect(screen.getByText('드래그해서 조정해 보세요')).toBeInTheDocument();
+  });
+
+  it('stops the idle hint for good once the user nudges a slider', () => {
+    render(<SavingsCalculator />);
+    act(() => {
+      vi.advanceTimersByTime(6500); // first idle hint plays
+    });
+    expect(screen.getByText('드래그해서 조정해 보세요')).toBeInTheDocument();
+
+    const thumb = screen.getAllByRole('slider')[0]; // 연간 거래액 슬라이더
+    act(() => {
+      fireEvent.keyDown(thumb, { key: 'ArrowRight' }); // user grabs it
+    });
+
+    // hint clears immediately…
+    expect(screen.queryByText('드래그해서 조정해 보세요')).toBeNull();
+    // …and never comes back, no matter how long it idles again
+    act(() => {
+      vi.advanceTimersByTime(6500);
+    });
+    expect(screen.queryByText('드래그해서 조정해 보세요')).toBeNull();
   });
 });

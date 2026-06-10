@@ -50,12 +50,15 @@ export function SavingsCalculator() {
   const inView = useInView(rootRef, { amount: 0.4 });
   const [hintActive, setHintActive] = useState(false);
   const resetIdleRef = useRef<(() => void) | null>(null);
+  // 사용자가 슬라이더를 한 번이라도 만지면 true. 이후로는 힌트 데모를 영구 중단한다
+  // (입력을 덮어쓰지 않도록). inView 토글로 effect가 재실행돼도 유지돼야 하므로 ref.
+  const interactedRef = useRef(false);
 
   // 계산기가 화면에 보이고 일정 시간(IDLE_MS) 입력이 없으면 가짜 커서가 슬라이더를
-  // 훑으며 사용법을 보여준다. 사용자가 만지면 즉시 멈추고 idle 타이머 리셋, 데모가
-  // 끝나면 다시 idle 카운트다운(반복). 화면에서 벗어나거나 동작 줄이기 선호 시 중단.
+  // 훑으며 사용법을 보여준다. 사용자가 만지면 즉시 멈추고 다시 재생하지 않는다. 데모가
+  // 끝나면 (아직 미조작이면) 다시 idle 카운트다운. 화면 밖이거나 동작 줄이기 선호 시 중단.
   useEffect(() => {
-    if (!inView || prefersReducedMotion()) return;
+    if (!inView || prefersReducedMotion() || interactedRef.current) return;
 
     const path: [number, number][] = [
       [0, DEFAULT_VOL_T],
@@ -83,12 +86,13 @@ export function SavingsCalculator() {
     let startTs = 0;
 
     const scheduleIdle = () => {
+      if (interactedRef.current) return;
       window.clearTimeout(idleTimer);
       idleTimer = window.setTimeout(playDemo, IDLE_MS);
     };
 
     const tick = (ts: number) => {
-      if (cancelled) return;
+      if (cancelled || interactedRef.current) return;
       if (!startTs) startTs = ts;
       const p = Math.min(1, (ts - startTs) / duration);
       setVolT(Math.round(valueAt(p)));
@@ -102,18 +106,19 @@ export function SavingsCalculator() {
     };
 
     function playDemo() {
-      if (cancelled) return;
+      if (cancelled || interactedRef.current) return;
       startTs = 0;
       setHintActive(true);
       raf = requestAnimationFrame(tick);
     }
 
-    // 사용자 입력 시 호출: 진행 중 데모 중단 + idle 타이머 리셋.
+    // 사용자가 슬라이더를 만지면 호출: 진행 중 데모를 중단하고 이후 재생을 영구 차단.
     resetIdleRef.current = () => {
+      interactedRef.current = true;
       cancelAnimationFrame(raf);
+      window.clearTimeout(idleTimer);
       startTs = 0;
       setHintActive(false);
-      scheduleIdle();
     };
 
     scheduleIdle();
