@@ -540,12 +540,11 @@ export function ThreadView({
           return (
             <div key={m.id} className="flex flex-col gap-3">
               {showDivider && (
-                <div role="separator" className="flex items-center gap-2 py-1">
-                  <span className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
+                // 중앙 라벨만 — 플랭킹 라인 없는 절제된 구분선(레퍼런스 정합).
+                <div role="separator" className="flex justify-center py-1.5">
                   <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
                     {dayLabel}
                   </span>
-                  <span className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
                 </div>
               )}
 
@@ -563,9 +562,6 @@ export function ThreadView({
                     />
                     <span className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]">
                       {counterparty.name}
-                    </span>
-                    <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                      {formatTime(m.createdAt)}
                     </span>
                   </div>
                 )}
@@ -587,7 +583,7 @@ export function ThreadView({
                       'max-w-[78%] whitespace-pre-wrap break-words rounded-[var(--md-sys-shape-medium)] px-3 py-2 text-[13px] leading-relaxed',
                       'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]',
                       isSelf &&
-                        'bg-[var(--md-sys-color-surface-container-high)]',
+                        'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]',
                       m.pending && 'opacity-60',
                     )}
                   >
@@ -596,17 +592,18 @@ export function ThreadView({
                       <ChatAttachmentGrid attachments={m.attachments} />
                     )}
                   </div>
-                  {isSelf &&
-                    (m.pending ? (
-                      <span
-                        aria-label="전송 중"
-                        className="size-1.5 shrink-0 animate-pulse rounded-full bg-[var(--md-sys-color-on-surface-variant)]"
-                      />
-                    ) : (
-                      <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                        {formatTime(m.createdAt)}
-                      </span>
-                    ))}
+                  {/* 타임스탬프는 버블 옆 단일 출처 — 발신자 헤더에는 두지 않는다.
+                      pending 은 본인 메시지에서만 발생(전송 중 점). */}
+                  {m.pending ? (
+                    <span
+                      aria-label="전송 중"
+                      className="size-1.5 shrink-0 animate-pulse rounded-full bg-[var(--md-sys-color-on-surface-variant)]"
+                    />
+                  ) : (
+                    <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                      {formatTime(m.createdAt)}
+                    </span>
+                  )}
                 </div>
 
                 {showReceipt && (
@@ -709,7 +706,7 @@ export function ThreadView({
       )}
 
       {/* 하단 인라인 컴포저 */}
-      <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] p-3">
+      <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <IconButton
           label="파일 첨부"
           size="sm"
