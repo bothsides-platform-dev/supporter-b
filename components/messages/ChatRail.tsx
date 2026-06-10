@@ -15,7 +15,7 @@
  * h-12 라는 가정에 결합 — 헤더 높이가 바뀌면 calc 도 함께 바꿔야 한다.
  * lg 미만은 레일 대신 ChatRailToggle 의 모바일 폴백(/messages?c=)을 쓴다.
  */
-import { Suspense, use, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 
 import { Tabs } from '@/components/primitives/Tabs';
@@ -35,6 +35,7 @@ import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import { TeamThreadView } from './TeamThreadView';
 import { getTeamThreadPromise, invalidateTeamThread } from './team-thread-cache';
+import type { LoadTeamThreadResult } from '@/lib/server/actions/chat/teamThreadLoader';
 
 type Props = {
   /** RFP uuid (라우트 param 은 사람용 code — 혼동 주의). */
@@ -182,9 +183,7 @@ export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props)
             </>
           )
         ) : (
-          <Suspense fallback={<ThreadSkeleton />}>
-            <TeamThreadPane rfpId={rfpId} />
-          </Suspense>
+          <TeamThreadPane rfpId={rfpId} />
         )}
       </div>
     </aside>
@@ -278,15 +277,30 @@ function NewConversationPane({
 }
 
 /**
- * 팀 채팅 탭 — Suspense 로더 래퍼 (thread-cache 의 use() 패턴).
- * unmount(탭 전환·레일 닫기) 시 캐시를 무효화해 재진입이 항상 신선한 스레드를
- * refetch 하게 한다 — 모듈 캐시가 첫 로드 스냅샷을 영구 재생하면 그 사이의
- * 본인 전송·팀원 메시지가 리로드 전까지 화면에서 사라진다.
+ * 팀 채팅 탭 — useEffect 로더 패턴.
+ * use(serverAction) 대신 useEffect + state 를 써서 Next.js App Router 가
+ * 서버 액션 응답 시 render phase 에서 router state 를 업데이트하는 부작용
+ * (React "Cannot update Router while rendering TeamThreadPane" 경고)을 제거한다.
+ * unmount 시 캐시 무효화 → 재진입마다 항상 신선한 스레드.
  */
 function TeamThreadPane({ rfpId }: { rfpId: string }) {
-  const [, setRetryCount] = useState(0);
-  useEffect(() => () => invalidateTeamThread(rfpId), [rfpId]);
-  const result = use(getTeamThreadPromise(rfpId));
+  const [result, setResult] = useState<LoadTeamThreadResult | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setResult(null);
+    getTeamThreadPromise(rfpId).then((r) => {
+      if (!cancelled) setResult(r);
+    });
+    return () => {
+      cancelled = true;
+      invalidateTeamThread(rfpId);
+    };
+  }, [rfpId, retryCount]);
+
+  if (!result) return <ThreadSkeleton />;
+
   if (!result.ok) {
     return (
       <EmptyState
@@ -297,7 +311,6 @@ function TeamThreadPane({ rfpId }: { rfpId: string }) {
           <Button
             size="sm"
             onClick={() => {
-              // 실패 결과가 캐시에 남아 있으므로 비우고 재서스펜드시킨다.
               invalidateTeamThread(rfpId);
               setRetryCount((n) => n + 1);
             }}
@@ -308,6 +321,7 @@ function TeamThreadPane({ rfpId }: { rfpId: string }) {
       />
     );
   }
+
   return (
     <TeamThreadView
       rfpId={result.rfpId}

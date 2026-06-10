@@ -58,9 +58,12 @@ let teamThreadResult: Record<string, unknown> = {
   viewerUserId: 'u-me',
   messages: [],
 };
+// 지역 spy — vi.mock 팩토리에서 프록시해 mock.calls 를 테스트에서 직접 접근.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const getTeamThreadPromise = vi.fn((_rfpId: string) => Promise.resolve(teamThreadResult));
 const invalidateTeamThread = vi.fn();
 vi.mock('../team-thread-cache', () => ({
-  getTeamThreadPromise: vi.fn(() => Promise.resolve(teamThreadResult)),
+  getTeamThreadPromise: (rfpId: string) => getTeamThreadPromise(rfpId),
   invalidateTeamThread: (...args: unknown[]) => invalidateTeamThread(...args),
 }));
 
@@ -95,6 +98,8 @@ beforeEach(() => {
   threadPaneProps.mockReset();
   teamThreadViewProps.mockReset();
   toast.mockReset();
+  getTeamThreadPromise.mockReset();
+  getTeamThreadPromise.mockImplementation(() => Promise.resolve(teamThreadResult));
   invalidateTeamThread.mockReset();
   teamThreadResult = {
     ok: true,
@@ -356,8 +361,6 @@ describe('ChatRail — 팀 채팅 탭', () => {
     openWithCounterparty();
     render(<ChatRail {...baseProps} />);
 
-    // 클릭 + Suspense(use()) 해소를 하나의 awaited act 로 묶는다
-    // (MessageInbox.test 선례 — async retry 가 act 큐를 타고 flush 된다).
     await act(async () => {
       await user.click(screen.getByRole('tab', { name: '팀 채팅' }));
     });
@@ -371,6 +374,34 @@ describe('ChatRail — 팀 채팅 탭', () => {
         messages: [],
       }),
     );
+  });
+
+  it('팀 채팅 활성 중 rfpId 무관한 재렌더 시 getTeamThreadPromise를 재호출하지 않는다 (effect-only 보장)', async () => {
+    // use(Promise) 패턴은 렌더마다 getTeamThreadPromise를 호출하지만
+    // useEffect 패턴은 의존성(rfpId, retryCount)이 변할 때만 호출한다.
+    const user = userEvent.setup();
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} />);
+
+    await act(async () => {
+      await user.click(screen.getByRole('tab', { name: '팀 채팅' }));
+    });
+    await screen.findByTestId('team-thread-view');
+
+    const callsAfterLoad = getTeamThreadPromise.mock.calls.length;
+    expect(callsAfterLoad).toBeGreaterThan(0);
+
+    // counterparty 변경 → ChatRail 재렌더 → TeamThreadPane 재렌더.
+    // rfpId는 그대로이므로 getTeamThreadPromise가 재호출되어선 안 된다.
+    act(() => {
+      useChatRailStore
+        .getState()
+        .setCounterparty({ workspaceId: 'pg-ws-1', name: 'OO페이 Updated', type: 'pg' });
+    });
+
+    await waitFor(() => {
+      expect(getTeamThreadPromise.mock.calls.length).toBe(callsAfterLoad);
+    });
   });
 });
 
