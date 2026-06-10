@@ -137,11 +137,11 @@ export class ChatService {
     const messageId = randomUUID();
     const pendingEmits: Notification[] = [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult<{
       conversationId: string;
       messageId: string;
       createdAt: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     }> = await this._db.transaction(async (tx: any) => {
       const conv = conversationId
         ? { id: conversationId }
