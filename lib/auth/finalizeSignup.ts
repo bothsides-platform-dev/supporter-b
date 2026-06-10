@@ -3,6 +3,7 @@ import {
   signupCompleteAction,
   signupViaWorkspaceInviteAction,
 } from '@/lib/server/actions/auth';
+import { joinCanonicalPgWorkspaceAction } from '@/lib/server/actions/auth/joinCanonicalPgWorkspaceAction';
 import { clearSignupDraft, readSignupDraft } from '@/lib/auth/signup-storage';
 import { safeInternalNext } from '@/lib/auth/safe-next';
 
@@ -25,7 +26,17 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   }
 
   let r;
-  if (d.wsInviteToken) {
+  if (d.selectedPgWorkspaceId) {
+    // 주요 PG사 선택 경로 — canonical 워크스페이스에 member로 즉시 합류.
+    r = await joinCanonicalPgWorkspaceAction({
+      email: d.email,
+      name: d.name,
+      password: d.password,
+      phone: d.phone,
+      phoneVerificationId: d.phoneVerificationId,
+      selectedPgWorkspaceId: d.selectedPgWorkspaceId,
+    });
+  } else if (d.wsInviteToken) {
     // 초대 경로 — 기존(승인된) 워크스페이스에 member 합류.
     r = await signupViaWorkspaceInviteAction({
       email: d.email,

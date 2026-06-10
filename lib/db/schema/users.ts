@@ -23,6 +23,9 @@ export const users = pgTable('users', {
   // biz_profiles→users type cycle (TS7022). Migrations are hand-written, so the
   // Drizzle-level .references() is unnecessary.
   lastActiveWorkspaceId: uuid('last_active_workspace_id'),
+  // System-managed master accounts (pre-seeded PG company admins).
+  // Hidden from all member-list UIs; never shown to end users.
+  isSystemAccount: boolean('is_system_account').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   // Auto-maintained by the `set_updated_at` trigger (see 0000 migration).

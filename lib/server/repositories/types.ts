@@ -132,6 +132,8 @@ export interface WorkspaceRepo {
   memberUserIdsBatch(wsIds: string[], tx?: Tx): Promise<Map<string, string[]>>;
   /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
+  /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
+  listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string }[]>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────

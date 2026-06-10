@@ -24,10 +24,12 @@ export default function PgProfilePage() {
 
   const draft = readSignupDraft();
   const isInvited = !!draft.wsInviteToken;
+  const isCanonicalPg = !!draft.selectedPgWorkspaceId;
   // 초대 경로: wsName/bizNo 불필요 (step 2 건너뜀)
+  // canonical PG 선택 경로: selectedPgWorkspaceId만 필요 (wsName/bizNo 없음)
   // 일반 경로: wsName + bizNo 필수
   const ready = !!draft.email && !!draft.password &&
-    (isInvited || (!!draft.wsName && !!draft.bizNo));
+    (isInvited || isCanonicalPg || (!!draft.wsName && !!draft.bizNo));
 
   useEffect(() => {
     if (!ready) router.replace('/signup/pg');
