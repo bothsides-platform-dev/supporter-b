@@ -1,0 +1,119 @@
+// loadTeamThread — RSC/rail loader for the (rfp, session-workspace) internal
+// thread. Returns workspaceId (the client needs it to assemble the Centrifugo
+// channel name) and messages with isSelf derived from the session user.
+
+import { randomUUID } from 'node:crypto';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  seedBuyerWorkspace,
+  seedMembership,
+  seedRfp,
+  seedUser,
+} from '@/lib/server/repositories/drizzle/__tests__/_seed';
+import { rfpTeamMessages } from '@/lib/db/schema';
+import { __resetTeamChatServiceForTest } from '@/lib/server/services/team-chat';
+import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
+import type { PgliteDB } from '@/lib/db/client-pglite';
+
+type SessionUser = {
+  id: string;
+  email: string;
+  workspaceId: string;
+  workspaceType: 'buyer' | 'pg';
+};
+const sessionRef: { value: { user: SessionUser } | null } = { value: null };
+
+vi.mock('@/lib/auth/session', () => ({
+  requireSession: () =>
+    sessionRef.value
+      ? Promise.resolve(sessionRef.value)
+      : Promise.reject(new Error('UNAUTHENTICATED')),
+}));
+
+import { loadTeamThread } from '../teamThreadLoader';
+
+let db: PgliteDB;
+
+describe('loadTeamThread', () => {
+  beforeEach(async () => {
+    db = await setupRfpActionEnv();
+    __resetTeamChatServiceForTest();
+  });
+  afterEach(() => {
+    teardownRfpActionEnv();
+    __resetTeamChatServiceForTest();
+    sessionRef.value = null;
+  });
+
+  it('returns own-scope messages with isSelf and the session workspaceId', async () => {
+    const me = await seedUser(db, { email: 'me@b.com', name: '김구매' });
+    const teammate = await seedUser(db, { email: 'mate@b.com', name: '이동료' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, teammate.id);
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+
+    await db.insert(rfpTeamMessages).values([
+      {
+        id: randomUUID(),
+        rfpId: rfp.id,
+        workspaceId: ws.id,
+        authorUserId: me.id,
+        body: '메모 1',
+        createdAt: new Date('2026-06-10T10:00:00Z'),
+      },
+      {
+        id: randomUUID(),
+        rfpId: rfp.id,
+        workspaceId: ws.id,
+        authorUserId: teammate.id,
+        body: '메모 2',
+        createdAt: new Date('2026-06-10T10:01:00Z'),
+      },
+    ]);
+
+    sessionRef.value = {
+      user: { id: me.id, email: 'me@b.com', workspaceId: ws.id, workspaceType: 'buyer' },
+    };
+
+    const r = await loadTeamThread(rfp.id);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.workspaceId).toBe(ws.id);
+    expect(r.rfpId).toBe(rfp.id);
+    expect(r.messages.map((m) => m.body)).toEqual(['메모 1', '메모 2']);
+    expect(r.messages[0].isSelf).toBe(true);
+    expect(r.messages[1].isSelf).toBe(false);
+    expect(r.messages[1].authorName).toBe('이동료');
+    expect(new Date(r.messages[0].createdAt).getTime()).not.toBeNaN();
+  });
+
+  it('returns UNAUTHENTICATED without a session', async () => {
+    sessionRef.value = null;
+    const r = await loadTeamThread(randomUUID());
+    expect(r).toEqual({ ok: false, error: 'UNAUTHENTICATED' });
+  });
+
+  it('propagates FORBIDDEN for an uninvited workspace', async () => {
+    const owner = await seedUser(db, { email: 'own@b.com' });
+    const ownerWs = await seedBuyerWorkspace(db);
+    await seedMembership(db, ownerWs.id, owner.id);
+    const rfp = await seedRfp(db, { buyerWsId: ownerWs.id, createdBy: owner.id });
+
+    const stranger = await seedUser(db, { email: 'str@b.com' });
+    const strangerWs = await seedBuyerWorkspace(db);
+    await seedMembership(db, strangerWs.id, stranger.id);
+    sessionRef.value = {
+      user: {
+        id: stranger.id,
+        email: 'str@b.com',
+        workspaceId: strangerWs.id,
+        workspaceType: 'buyer',
+      },
+    };
+
+    const r = await loadTeamThread(rfp.id);
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+  });
+});

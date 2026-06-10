@@ -26,14 +26,16 @@ import {
   seedBuyerWorkspace,
   seedMembership,
   seedPgWorkspace,
+  seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
   setupRfpActionEnv,
   teardownRfpActionEnv,
 } from '@/lib/server/actions/rfp/__tests__/_setup';
+import { rfpInvitations } from '@/lib/db/schema';
 import { getChatConversationRepo } from '@/lib/server/repositories/factory';
-import { chatChannel } from '@/lib/server/realtime/centrifugo';
+import { chatChannel, teamChatChannel } from '@/lib/server/realtime/centrifugo';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 import { POST } from '../route';
@@ -239,5 +241,117 @@ describe('POST /api/centrifugo/subscribe (subscribe proxy ACL)', () => {
     const json = await res.json();
     expect(json.result).toBeUndefined();
     expect(json.error).toBeDefined();
+  });
+
+  // ── team:rfp:<rfpId>:<wsId> — RFP 팀 채팅 채널 ACL ─────────────────────────
+  // Allow iff `user` is a member of <wsId> AND <wsId> has access to <rfpId>
+  // (buyer owns it, or PG holds an invitation — invRepo.canAccess). The wsId
+  // segment keeps buyer/PG team threads on disjoint channels; cross-workspace
+  // subscriptions must deny even when the user legitimately accesses the SAME
+  // RFP from the other side (sealed-bid invariant).
+
+  async function seedTeamScene() {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedPairWithMembers();
+    const rfp = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyerUser.id });
+    await db.insert(rfpInvitations).values({
+      id: randomUUID(),
+      rfpId: rfp.id,
+      pgWsId: pgWs.id,
+      tokenHash: `hash-${randomUUID()}`,
+      sentAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000),
+      status: 'pending',
+    });
+    return { buyerUser, buyerWs, pgUser, pgWs, rfp };
+  }
+
+  it('(t1) buyer member of the owning ws → allow on its team channel', async () => {
+    const { buyerUser, buyerWs, rfp } = await seedTeamScene();
+
+    const res = await call({
+      user: buyerUser.id,
+      channel: teamChatChannel(rfp.id, buyerWs.id),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ result: {} });
+  });
+
+  it('(t2) invited PG member → allow on the PG team channel', async () => {
+    const { pgUser, pgWs, rfp } = await seedTeamScene();
+
+    const res = await call({
+      user: pgUser.id,
+      channel: teamChatChannel(rfp.id, pgWs.id),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ result: {} });
+  });
+
+  it('(t3) cross-workspace subscribe (PG user → buyer team channel, and vice versa) → deny', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs, rfp } = await seedTeamScene();
+
+    // PG user has RFP access but is NOT a member of the buyer ws.
+    const a = await call({
+      user: pgUser.id,
+      channel: teamChatChannel(rfp.id, buyerWs.id),
+    });
+    expect(a.status).toBe(200);
+    expect((await a.json()).result).toBeUndefined();
+
+    // Buyer user owns the RFP but is NOT a member of the PG ws.
+    const b = await call({
+      user: buyerUser.id,
+      channel: teamChatChannel(rfp.id, pgWs.id),
+    });
+    expect(b.status).toBe(200);
+    expect((await b.json()).result).toBeUndefined();
+  });
+
+  it('(t4) member of a ws WITHOUT rfp access (uninvited PG) → deny', async () => {
+    const { rfp } = await seedTeamScene();
+    const strangerWs = await seedPgWorkspace(db, 'STR', { name: '낯선페이' });
+    const stranger = await seedUser(db, { email: 'stranger@pg.com' });
+    await seedMembership(db, strangerWs.id, stranger.id, 'admin');
+
+    const res = await call({
+      user: stranger.id,
+      channel: teamChatChannel(rfp.id, strangerWs.id),
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.result).toBeUndefined();
+    expect(json.error).toBeDefined();
+  });
+
+  it('(t5) unknown rfp id → deny', async () => {
+    const { buyerUser, buyerWs } = await seedTeamScene();
+
+    const res = await call({
+      user: buyerUser.id,
+      channel: teamChatChannel(randomUUID(), buyerWs.id),
+    });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.result).toBeUndefined();
+    expect(json.error).toBeDefined();
+  });
+
+  it('(t6) malformed team channels (segment count / non-uuid) → deny, no throw', async () => {
+    const { buyerUser, buyerWs, rfp } = await seedTeamScene();
+
+    const vectors = [
+      `team:rfp:${rfp.id}`, // missing ws segment
+      `team:rfp:${rfp.id}:${buyerWs.id}:${randomUUID()}`, // extra segment
+      `team:rfp:garbage:${buyerWs.id}`, // non-uuid rfp
+      `team:rfp:${rfp.id}:garbage`, // non-uuid ws
+      'team:rfp::', // empty segments
+    ];
+    for (const channel of vectors) {
+      const res = await call({ user: buyerUser.id, channel });
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.result, `channel ${channel} must not allow`).toBeUndefined();
+      expect(json.error).toBeDefined();
+    }
   });
 });

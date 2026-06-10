@@ -459,6 +459,36 @@ export interface ChatMessageRepo {
   ): Promise<ChatMessageRecord[]>;
 }
 
+// ── RFP Team Chat: Message ────────────────────────────────────────────
+/**
+ * RFP-scoped internal team message. Scope = (rfpId, workspaceId) — buyer team
+ * and each PG team have fully separate threads (sealed-bid invariant).
+ */
+export type RfpTeamMessageRecord = {
+  id: string;
+  rfpId: string;
+  workspaceId: string;
+  authorUserId: string;
+  body: string;
+  createdAt: Date;
+};
+
+/** Read shape — authorName hydrated from users for display. */
+export type RfpTeamMessageWithAuthor = RfpTeamMessageRecord & {
+  authorName: string;
+};
+
+export interface RfpTeamMessageRepo {
+  /** 메시지 insert (append-only). */
+  save(msg: RfpTeamMessageRecord, tx?: Tx): Promise<void>;
+  /** 한 (rfp, workspace) 스코프의 모든 메시지 — created_at asc. */
+  listByScope(
+    rfpId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<RfpTeamMessageWithAuthor[]>;
+}
+
 // ── Chat: Message Template ────────────────────────────────────────────
 /** Workspace-shared chat message template — hydrated DB shape. */
 export type ChatMessageTemplate = {
