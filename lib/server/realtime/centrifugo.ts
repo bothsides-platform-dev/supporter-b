@@ -55,6 +55,9 @@ async function publishToChannel(
         method: 'publish',
         params: { channel, data },
       }),
+      // 전송 액션이 publish 를 await 한다 — Centrifugo 가 거부가 아니라 '행'으로
+      // 멈추면 catch 가 못 잡으므로, 타임아웃으로 사용자 응답이 붙들리지 않게 한다.
+      signal: AbortSignal.timeout(3000),
     });
   } catch (err) {
     // Best-effort: persistence already succeeded in Postgres; a missed fanout

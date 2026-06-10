@@ -4,8 +4,10 @@
 // 멤버 이름+아바타 헤더를 단다.
 
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor, act } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, act, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+import { formatTime } from '../format';
 
 if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 
@@ -158,6 +160,39 @@ describe('TeamThreadView — 전송', () => {
     expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
   });
 
+  it('한글 IME 조합 중 Enter 는 전송하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(base());
+    const ta = screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…');
+
+    await user.type(ta, '한글입력');
+    fireEvent.keyDown(ta, { key: 'Enter', isComposing: true, keyCode: 229 });
+    expect(sendTeamMessageAction).not.toHaveBeenCalled();
+  });
+
+  it('확정 승격 시 서버 createdAt 을 채택한다 (클라이언트 시계 드리프트 방지)', async () => {
+    sendTeamMessageAction.mockResolvedValue({
+      ok: true,
+      messageId: 'tm-new',
+      createdAt: '2026-06-10T01:23:00.000Z',
+    });
+    const user = userEvent.setup();
+    render(base());
+
+    await user.type(
+      screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…'),
+      '시각 확인 메모',
+    );
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    await waitFor(() => {
+      const row = screen.getByText('시각 확인 메모').closest('[data-message-row]')!;
+      expect(
+        within(row as HTMLElement).getByText(formatTime('2026-06-10T01:23:00.000Z')),
+      ).toBeInTheDocument();
+    });
+  });
+
   it('전송 실패 시 말풍선을 걷어내고 입력을 복원하며 토스트를 띄운다', async () => {
     sendTeamMessageAction.mockResolvedValue({ ok: false, error: 'FORBIDDEN' });
     const user = userEvent.setup();
@@ -267,6 +302,56 @@ describe('TeamThreadView — 라이브 수신', () => {
     await act(async () => {
       resolveSend({ ok: true, messageId: 'tm-mine', createdAt: '2026-06-10T07:01:00.000Z' });
     });
+  });
+});
+
+describe('TeamThreadView — 스크롤', () => {
+  function setScrolledUp(list: HTMLElement) {
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 1000 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 300 });
+    list.scrollTop = 0; // diff = 700 > 임계값 → 하단 아님
+  }
+
+  it('위로 올려둔 상태에서 팀원 라이브 메시지가 와도 하단으로 끌려가지 않는다', async () => {
+    const { container } = render(base());
+    const list = container.querySelector('[data-message-list]') as HTMLElement;
+    setScrolledUp(list);
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, 'scrollIntoView')
+      .mockImplementation(() => {});
+
+    act(() =>
+      channelOptions.onMessage?.({
+        type: 'message',
+        id: 'tm-yank',
+        body: '읽는 중 끼어든 메모',
+        authorUserId: 'u-mate',
+        authorName: '이동료',
+        createdAt: '2026-06-10T06:00:00.000Z',
+      }),
+    );
+    await screen.findByText('읽는 중 끼어든 메모');
+    expect(scrollSpy).not.toHaveBeenCalled();
+    scrollSpy.mockRestore();
+  });
+
+  it('본인 전송은 위로 올려둔 상태여도 하단으로 따라간다', async () => {
+    const user = userEvent.setup();
+    const { container } = render(base());
+    const list = container.querySelector('[data-message-list]') as HTMLElement;
+    setScrolledUp(list);
+    const scrollSpy = vi
+      .spyOn(HTMLElement.prototype, 'scrollIntoView')
+      .mockImplementation(() => {});
+
+    await user.type(
+      screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…'),
+      '내가 보낸 메모',
+    );
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await screen.findByText('내가 보낸 메모');
+    expect(scrollSpy).toHaveBeenCalled();
+    scrollSpy.mockRestore();
   });
 });
 

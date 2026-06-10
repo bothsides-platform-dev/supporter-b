@@ -73,6 +73,7 @@ beforeEach(() => {
 });
 
 import { ThreadView } from '../ThreadView';
+import { formatTime } from '../format';
 import type { ThreadMessage } from '../types';
 
 const counterparty = { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const };
@@ -901,6 +902,39 @@ describe('ThreadView — defaultRfpId (레일 컨텍스트 RFP 태그)', () => {
         attachmentIds: [],
         rfpId: undefined,
       });
+    });
+  });
+});
+
+describe('ThreadView — 컴포저 가드·승격 시각', () => {
+  it('한글 IME 조합 중 Enter 는 전송하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(base());
+    const ta = screen.getByPlaceholderText('메시지를 입력하세요…');
+
+    await user.type(ta, '한글입력');
+    fireEvent.keyDown(ta, { key: 'Enter', isComposing: true, keyCode: 229 });
+    expect(sendChatMessageAction).not.toHaveBeenCalled();
+  });
+
+  it('확정 승격 시 서버 createdAt 을 채택한다', async () => {
+    sendChatMessageAction.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      messageId: 'm-new',
+      createdAt: '2026-06-10T01:23:00.000Z',
+    });
+    const user = userEvent.setup();
+    render(base());
+
+    await user.type(screen.getByPlaceholderText('메시지를 입력하세요…'), '시각 확인');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    await waitFor(() => {
+      const row = screen.getByText('시각 확인').closest('[data-message-row]')!;
+      expect(
+        within(row as HTMLElement).getByText(formatTime('2026-06-10T01:23:00.000Z')),
+      ).toBeInTheDocument();
     });
   });
 });

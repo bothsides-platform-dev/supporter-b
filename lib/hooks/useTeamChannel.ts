@@ -13,7 +13,7 @@
  * live path activates only when NEXT_PUBLIC_CENTRIFUGO_WS_URL is set.
  */
 import { useEffect, useRef, useState } from 'react';
-import type { PublicationContext, Subscription } from 'centrifuge';
+import type { PublicationContext } from 'centrifuge';
 
 import { teamChatChannel } from '@/lib/server/realtime/centrifugo';
 import { getCentrifuge } from '@/lib/realtime/centrifuge-client';
@@ -42,7 +42,6 @@ export function useTeamChannel(
   { onMessage }: UseTeamChannelOptions,
 ): UseTeamChannelResult {
   const [connected, setConnected] = useState<boolean | null>(null);
-  const subRef = useRef<Subscription | null>(null);
 
   // Keep the callback current without re-subscribing on every render.
   const onMessageRef = useRef(onMessage);
@@ -57,7 +56,6 @@ export function useTeamChannel(
 
     const channel = teamChatChannel(rfpId, workspaceId);
     const sub = client.getSubscription(channel) ?? client.newSubscription(channel);
-    subRef.current = sub;
 
     sub.on('publication', (ctx: PublicationContext) => {
       const data = (ctx.data ?? {}) as TeamLivePayload;
@@ -82,7 +80,6 @@ export function useTeamChannel(
       client.removeSubscription(sub);
       client.off('connected', onConnected);
       client.off('disconnected', onDisconnected);
-      subRef.current = null;
     };
   }, [rfpId, workspaceId]);
 

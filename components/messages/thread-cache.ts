@@ -8,7 +8,14 @@ const cache = new Map<string, Promise<LoadThreadResult>>();
 
 export function getThreadPromise(id: string): Promise<LoadThreadResult> {
   if (!cache.has(id)) {
-    cache.set(id, loadConversationThread(id));
+    // reject 를 {ok:false} 로 정규화 — rejected promise 가 캐시되면 use() 가
+    // throw 해 세그먼트 전체가 에러 페이지로 교체되고 reset 루프에 갇힌다.
+    cache.set(
+      id,
+      loadConversationThread(id).catch(
+        (): LoadThreadResult => ({ ok: false, error: 'NETWORK' }),
+      ),
+    );
   }
   return cache.get(id)!;
 }

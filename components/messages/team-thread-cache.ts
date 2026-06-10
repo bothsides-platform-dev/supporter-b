@@ -10,7 +10,15 @@ const cache = new Map<string, Promise<LoadTeamThreadResult>>();
 
 export function getTeamThreadPromise(rfpId: string): Promise<LoadTeamThreadResult> {
   if (!cache.has(rfpId)) {
-    cache.set(rfpId, loadTeamThread(rfpId));
+    // reject 를 {ok:false} 로 정규화 — rejected promise 가 캐시되면 use() 가
+    // throw 해 에러 바운더리 없는 상세 페이지 전체가 죽고, reset 해도 같은
+    // rejected promise 를 다시 받아 루프에 갇힌다.
+    cache.set(
+      rfpId,
+      loadTeamThread(rfpId).catch(
+        (): LoadTeamThreadResult => ({ ok: false, error: 'NETWORK' }),
+      ),
+    );
   }
   return cache.get(rfpId)!;
 }

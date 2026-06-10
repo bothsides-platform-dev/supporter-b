@@ -40,6 +40,9 @@ export async function sendTeamMessageAction(
   });
   if (!result.ok) return result;
 
+  // best-effort — 영속은 이미 완료. publishToChannel 이 자체적으로 throw 하지
+  // 않지만, 그 계약이 회귀해도 전송 결과가 실패로 둔갑하지 않게 여기서도 삼킨다
+  // (실패 응답을 받은 클라이언트가 재시도하면 메시지가 중복 저장된다).
   await publishTeamChatEvent(parsed.data.rfpId, ws.workspaceId, {
     type: 'message',
     id: result.messageId,
@@ -47,7 +50,7 @@ export async function sendTeamMessageAction(
     authorUserId: ws.userId,
     authorName: result.authorName,
     createdAt: result.createdAt,
-  });
+  }).catch(() => {});
 
   return { ok: true, messageId: result.messageId, createdAt: result.createdAt };
 }

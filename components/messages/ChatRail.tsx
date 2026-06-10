@@ -22,8 +22,10 @@ import { Tabs } from '@/components/primitives/Tabs';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Button } from '@/components/ui/button';
-import { XIcon, EnvelopeIcon, ChevronRightIcon } from '@/components/icons';
-import { getOrCreateConversationAction } from '@/lib/server/actions/chat/getOrCreateConversationAction';
+import { XIcon, EnvelopeIcon, ChevronRightIcon, ArrowUpIcon } from '@/components/icons';
+import { lookupConversationAction } from '@/lib/server/actions/chat/lookupConversationAction';
+import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
+import { toast } from '@/lib/toast';
 import {
   useChatRailStore,
   type ChatRailCounterparty,
@@ -32,7 +34,7 @@ import {
 import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import { TeamThreadView } from './TeamThreadView';
-import { getTeamThreadPromise } from './team-thread-cache';
+import { getTeamThreadPromise, invalidateTeamThread } from './team-thread-cache';
 
 type Props = {
   /** RFP uuid (라우트 param 은 사람용 code — 혼동 주의). */
@@ -67,19 +69,20 @@ export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props)
   // 페이지 단위 상태 — 레일 unmount(상세 이탈) 시 다른 페이지로 새지 않게 reset.
   useEffect(() => () => useChatRailStore.getState().reset(), []);
 
-  // wsId → conversationId 해소 캐시. 레일이 열려 있고 상대방 탭일 때만 lazy 해소
-  // (열람만으로 빈 페어 대화가 생기는 부수효과를 탭 활성 시점으로 한정).
-  // 실패는 wsId 단위로 기록해 무한 스켈레톤 대신 에러 빈 상태 + 다시 시도를
-  // 노출한다 — 상대가 바뀌면 새 wsId 는 실패 기록이 없으므로 자연히 재해소.
-  const [convByWs, setConvByWs] = useState<Record<string, string>>({});
+  // wsId → conversationId 해소 캐시. **읽기 전용 lookup** — null 은 "대화 없음"
+  // 으로 캐시되고 새 대화 컴포저를 띄운다. 생성은 첫 메시지 전송에만 일어난다:
+  // 열람·포커스 추종만으로 빈 페어 대화가 생기면 상대 인박스에 "보고 있다"는
+  // 관심 신호가 새기 때문(sealed-bid). 실패는 wsId 단위로 기록해 무한 스켈레톤
+  // 대신 에러 빈 상태 + 다시 시도를 노출한다.
+  const [convByWs, setConvByWs] = useState<Record<string, string | null>>({});
   const [failedWs, setFailedWs] = useState<Record<string, boolean>>({});
   const activeWsId = counterparty?.workspaceId;
   const resolveFailed = activeWsId ? !!failedWs[activeWsId] : false;
   useEffect(() => {
     if (!open || tab !== 'counterparty' || !activeWsId) return;
-    if (convByWs[activeWsId] || failedWs[activeWsId]) return;
+    if (convByWs[activeWsId] !== undefined || failedWs[activeWsId]) return;
     let cancelled = false;
-    void getOrCreateConversationAction(activeWsId)
+    void lookupConversationAction(activeWsId)
       .then((r) => {
         if (cancelled) return;
         if (!r.ok) {
@@ -144,8 +147,16 @@ export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props)
                 </Button>
               }
             />
-          ) : !conversationId ? (
+          ) : conversationId === undefined ? (
             <ThreadSkeleton />
+          ) : conversationId === null ? (
+            <NewConversationPane
+              counterparty={counterparty}
+              rfpId={rfpId}
+              onCreated={(wsId, newId) =>
+                setConvByWs((prev) => ({ ...prev, [wsId]: newId }))
+              }
+            />
           ) : (
             <>
               <div className="min-h-0 flex-1">
@@ -180,15 +191,120 @@ export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props)
   );
 }
 
-/** 팀 채팅 탭 — Suspense 로더 래퍼 (thread-cache 의 use() 패턴). */
+/**
+ * 새 대화 컴포저 — 아직 페어 대화가 없는 상대용. 첫 메시지를 보내는 순간에만
+ * 대화가 생성된다(sendChatMessageAction 의 counterpartyWorkspaceId 경로).
+ * 열람만으로는 어떤 행도 만들지 않는다 — sealed-bid 관심 신호 차단의 핵심.
+ */
+function NewConversationPane({
+  counterparty,
+  rfpId,
+  onCreated,
+}: {
+  counterparty: ChatRailCounterparty;
+  rfpId: string;
+  onCreated: (wsId: string, conversationId: string) => void;
+}) {
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+
+  async function handleSend(): Promise<void> {
+    const body = draft.trim();
+    if (body.length === 0 || sending) return;
+    setSending(true);
+    let result: Awaited<ReturnType<typeof sendChatMessageAction>>;
+    try {
+      result = await sendChatMessageAction({
+        counterpartyWorkspaceId: counterparty.workspaceId,
+        body,
+        rfpId,
+        attachmentIds: [],
+      });
+    } catch {
+      result = { ok: false, error: 'NETWORK' };
+    }
+    setSending(false);
+    if (result.ok) {
+      onCreated(counterparty.workspaceId, result.conversationId);
+    } else {
+      toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
+    }
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex flex-1 items-center justify-center">
+        <EmptyState
+          icon={<EnvelopeIcon />}
+          title="메시지를 보내면 대화가 시작돼요"
+          description={`${counterparty.name}에 보낼 첫 메시지를 입력해 주세요.`}
+          className="py-12"
+        />
+      </div>
+      <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
+        <div className="flex items-end gap-2">
+          <textarea
+            rows={1}
+            value={draft}
+            maxLength={4000}
+            placeholder="메시지를 입력하세요…"
+            onChange={(e) => {
+              setDraft(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                void handleSend();
+              }
+            }}
+            className="min-h-8 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-1.5 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
+          />
+          <Button
+            size="sm"
+            onClick={() => void handleSend()}
+            disabled={sending || draft.trim().length === 0}
+            aria-label="보내기"
+          >
+            <ArrowUpIcon size={16} />
+            보내기
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 팀 채팅 탭 — Suspense 로더 래퍼 (thread-cache 의 use() 패턴).
+ * unmount(탭 전환·레일 닫기) 시 캐시를 무효화해 재진입이 항상 신선한 스레드를
+ * refetch 하게 한다 — 모듈 캐시가 첫 로드 스냅샷을 영구 재생하면 그 사이의
+ * 본인 전송·팀원 메시지가 리로드 전까지 화면에서 사라진다.
+ */
 function TeamThreadPane({ rfpId }: { rfpId: string }) {
+  const [, setRetryCount] = useState(0);
+  useEffect(() => () => invalidateTeamThread(rfpId), [rfpId]);
   const result = use(getTeamThreadPromise(rfpId));
   if (!result.ok) {
     return (
       <EmptyState
         title="팀 채팅을 불러오지 못했어요"
-        description="잠시 후 다시 시도해 주세요."
+        description="네트워크 상태를 확인하고 다시 시도해 주세요."
         className="py-12"
+        action={
+          <Button
+            size="sm"
+            onClick={() => {
+              // 실패 결과가 캐시에 남아 있으므로 비우고 재서스펜드시킨다.
+              invalidateTeamThread(rfpId);
+              setRetryCount((n) => n + 1);
+            }}
+          >
+            다시 시도
+          </Button>
+        }
       />
     );
   }

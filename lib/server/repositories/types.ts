@@ -421,6 +421,16 @@ export interface ChatConversationRepo {
     pgWsId: string,
     tx?: Tx,
   ): Promise<ChatConversation>;
+  /**
+   * 페어 읽기 전용 조회 — 없으면 undefined, **행을 생성하지 않는다**.
+   * 채팅 레일의 표시용 해소 경로: 열람·포커스 추종만으로 빈 대화가 생기면
+   * 상대 인박스에 관심 신호가 새므로(sealed-bid), 생성은 첫 전송에만 맡긴다.
+   */
+  findPair(
+    buyerWsId: string,
+    pgWsId: string,
+    tx?: Tx,
+  ): Promise<ChatConversation | undefined>;
   /** id 단건 조회. 없으면 undefined. */
   findById(id: string, tx?: Tx): Promise<ChatConversation | undefined>;
   /**

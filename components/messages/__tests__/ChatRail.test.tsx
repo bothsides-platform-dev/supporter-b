@@ -16,6 +16,18 @@ vi.mock('@/lib/server/actions/chat/getOrCreateConversationAction', () => ({
     getOrCreateConversationAction(...args),
 }));
 
+// 레일의 표시 해소는 읽기 전용 — 생성은 첫 전송(sendChatMessageAction)만 한다.
+const lookupConversationAction = vi.fn();
+vi.mock('@/lib/server/actions/chat/lookupConversationAction', () => ({
+  lookupConversationAction: (...args: unknown[]) =>
+    lookupConversationAction(...args),
+}));
+
+const sendChatMessageAction = vi.fn();
+vi.mock('@/lib/server/actions/chat/sendChatMessageAction', () => ({
+  sendChatMessageAction: (...args: unknown[]) => sendChatMessageAction(...args),
+}));
+
 const routerPush = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush }),
@@ -46,8 +58,10 @@ let teamThreadResult: Record<string, unknown> = {
   viewerUserId: 'u-me',
   messages: [],
 };
+const invalidateTeamThread = vi.fn();
 vi.mock('../team-thread-cache', () => ({
   getTeamThreadPromise: vi.fn(() => Promise.resolve(teamThreadResult)),
+  invalidateTeamThread: (...args: unknown[]) => invalidateTeamThread(...args),
 }));
 
 const toast = vi.fn();
@@ -67,9 +81,21 @@ beforeEach(() => {
     ok: true,
     conversationId: 'conv-9',
   });
+  lookupConversationAction.mockReset();
+  lookupConversationAction.mockResolvedValue({
+    ok: true,
+    conversationId: 'conv-9',
+  });
+  sendChatMessageAction.mockReset();
+  sendChatMessageAction.mockResolvedValue({
+    ok: true,
+    conversationId: 'conv-new',
+    messageId: 'm-new',
+  });
   threadPaneProps.mockReset();
   teamThreadViewProps.mockReset();
   toast.mockReset();
+  invalidateTeamThread.mockReset();
   teamThreadResult = {
     ok: true,
     rfpId: 'rfp-1',
@@ -130,13 +156,15 @@ describe('ChatRail — 프레임', () => {
 });
 
 describe('ChatRail — 상대방 채팅 탭', () => {
-  it('상대를 1회 해소하고 ThreadPane(variant=rail, defaultRfpId, rfpById)을 렌더한다', async () => {
+  it('상대를 읽기 전용으로 1회 해소하고 ThreadPane(variant=rail, defaultRfpId, rfpById)을 렌더한다', async () => {
     openWithCounterparty();
     render(<ChatRail {...baseProps} />);
 
     await screen.findByTestId('thread-pane');
-    expect(getOrCreateConversationAction).toHaveBeenCalledTimes(1);
-    expect(getOrCreateConversationAction).toHaveBeenCalledWith('pg-ws-1');
+    expect(lookupConversationAction).toHaveBeenCalledTimes(1);
+    expect(lookupConversationAction).toHaveBeenCalledWith('pg-ws-1');
+    // 표시 해소는 절대 대화를 생성하지 않는다 (sealed-bid 신호 누출 방지).
+    expect(getOrCreateConversationAction).not.toHaveBeenCalled();
     expect(threadPaneProps).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-9',
@@ -145,6 +173,61 @@ describe('ChatRail — 상대방 채팅 탭', () => {
         rfpById: { 'rfp-1': { code: 'P-2606-0001', title: '결제 견적 요청' } },
       }),
     );
+  });
+
+  it('대화가 없으면(null) 생성하지 않고 새 대화 컴포저를 보여준다', async () => {
+    lookupConversationAction.mockResolvedValue({ ok: true, conversationId: null });
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} />);
+
+    expect(
+      await screen.findByPlaceholderText('메시지를 입력하세요…'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('메시지를 보내면 대화가 시작돼요')).toBeInTheDocument();
+    expect(screen.queryByTestId('thread-pane')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /메시지함에서 열기/ })).not.toBeInTheDocument();
+    expect(getOrCreateConversationAction).not.toHaveBeenCalled();
+  });
+
+  it('새 대화 컴포저에서 첫 전송 시에만 대화가 생성되고 스레드로 전환된다', async () => {
+    const user = userEvent.setup();
+    lookupConversationAction.mockResolvedValue({ ok: true, conversationId: null });
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} />);
+
+    const textarea = await screen.findByPlaceholderText('메시지를 입력하세요…');
+    await user.type(textarea, '첫 문의 드립니다');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    await waitFor(() => {
+      expect(sendChatMessageAction).toHaveBeenCalledWith({
+        counterpartyWorkspaceId: 'pg-ws-1',
+        body: '첫 문의 드립니다',
+        rfpId: 'rfp-1',
+        attachmentIds: [],
+      });
+    });
+    // 전송 성공 → 생성된 대화의 스레드로 전환.
+    await screen.findByTestId('thread-pane');
+    expect(threadPaneProps).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'conv-new' }),
+    );
+  });
+
+  it('첫 전송이 실패하면 토스트를 띄우고 입력을 복원한다', async () => {
+    const user = userEvent.setup();
+    lookupConversationAction.mockResolvedValue({ ok: true, conversationId: null });
+    sendChatMessageAction.mockResolvedValue({ ok: false, error: 'FORBIDDEN' });
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} />);
+
+    const textarea = await screen.findByPlaceholderText('메시지를 입력하세요…');
+    await user.type(textarea, '실패할 문의');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    expect(textarea).toHaveValue('실패할 문의');
+    expect(screen.queryByTestId('thread-pane')).not.toBeInTheDocument();
   });
 
   it('해소된 대화로 가는 "메시지함에서 열기" 링크를 노출한다', async () => {
@@ -160,7 +243,7 @@ describe('ChatRail — 상대방 채팅 탭', () => {
     render(<ChatRail {...baseProps} />);
     await screen.findByTestId('thread-pane');
 
-    getOrCreateConversationAction.mockResolvedValue({
+    lookupConversationAction.mockResolvedValue({
       ok: true,
       conversationId: 'conv-10',
     });
@@ -171,7 +254,7 @@ describe('ChatRail — 상대방 채팅 탭', () => {
     });
 
     await waitFor(() => {
-      expect(getOrCreateConversationAction).toHaveBeenCalledWith('pg-ws-2');
+      expect(lookupConversationAction).toHaveBeenCalledWith('pg-ws-2');
     });
   });
 
@@ -191,12 +274,12 @@ describe('ChatRail — 상대방 채팅 탭', () => {
     );
 
     await screen.findByTestId('thread-pane');
-    expect(getOrCreateConversationAction).toHaveBeenCalledWith('buyer-ws-1');
+    expect(lookupConversationAction).toHaveBeenCalledWith('buyer-ws-1');
   });
 
   it('대화 해소 실패 시 무한 스켈레톤 대신 에러 빈 상태 + 다시 시도를 보여준다', async () => {
     const user = userEvent.setup();
-    getOrCreateConversationAction.mockResolvedValue({ ok: false, error: 'FORBIDDEN' });
+    lookupConversationAction.mockResolvedValue({ ok: false, error: 'FORBIDDEN' });
     openWithCounterparty();
     render(<ChatRail {...baseProps} />);
 
@@ -205,13 +288,13 @@ describe('ChatRail — 상대방 채팅 탭', () => {
     ).toBeInTheDocument();
 
     // 다시 시도 → 이번엔 성공 → 스레드 렌더.
-    getOrCreateConversationAction.mockResolvedValue({ ok: true, conversationId: 'conv-9' });
+    lookupConversationAction.mockResolvedValue({ ok: true, conversationId: 'conv-9' });
     await user.click(screen.getByRole('button', { name: '다시 시도' }));
     await screen.findByTestId('thread-pane');
   });
 
   it('해소 액션이 throw 해도 에러 빈 상태로 수렴한다 (네트워크 오류)', async () => {
-    getOrCreateConversationAction.mockRejectedValue(new Error('network'));
+    lookupConversationAction.mockRejectedValue(new Error('network'));
     openWithCounterparty();
     render(<ChatRail {...baseProps} />);
 
@@ -222,7 +305,7 @@ describe('ChatRail — 상대방 채팅 탭', () => {
 });
 
 describe('ChatRail — 팀 채팅 탭', () => {
-  it('로더가 실패(ok:false)하면 에러 빈 상태를 보여준다', async () => {
+  it('로더가 실패(ok:false)하면 에러 빈 상태 + 다시 시도를 보여주고, 재시도로 복구한다', async () => {
     const user = userEvent.setup();
     teamThreadResult = { ok: false, error: 'FORBIDDEN' };
     openWithCounterparty();
@@ -236,6 +319,36 @@ describe('ChatRail — 팀 채팅 탭', () => {
       await screen.findByText('팀 채팅을 불러오지 못했어요'),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('team-thread-view')).not.toBeInTheDocument();
+
+    // 다시 시도 → 캐시 무효화 + 재로드(이번엔 성공).
+    teamThreadResult = {
+      ok: true,
+      rfpId: 'rfp-1',
+      workspaceId: 'ws-self',
+      viewerUserId: 'u-me',
+      messages: [],
+    };
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '다시 시도' }));
+    });
+    expect(invalidateTeamThread).toHaveBeenCalledWith('rfp-1');
+    await screen.findByTestId('team-thread-view');
+  });
+
+  it('팀 채팅 탭이 unmount 되면 캐시를 무효화한다 — 재진입 시 항상 신선한 스레드', async () => {
+    const user = userEvent.setup();
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} />);
+
+    await act(async () => {
+      await user.click(screen.getByRole('tab', { name: '팀 채팅' }));
+    });
+    await screen.findByTestId('team-thread-view');
+    expect(invalidateTeamThread).not.toHaveBeenCalled();
+
+    // 상대방 채팅 탭으로 전환 → TeamThreadPane unmount → 무효화.
+    await user.click(screen.getByRole('tab', { name: '상대방 채팅' }));
+    expect(invalidateTeamThread).toHaveBeenCalledWith('rfp-1');
   });
 
   it('팀 채팅 탭 클릭 시 TeamThreadView 를 로더 결과로 렌더한다', async () => {

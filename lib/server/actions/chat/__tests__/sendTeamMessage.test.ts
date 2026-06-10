@@ -118,6 +118,27 @@ describe('sendTeamMessageAction', () => {
     expect(r).toEqual({ ok: false, error: 'UNAUTHENTICATED' });
   });
 
+  it('body 4000자는 허용, 4001자는 INVALID_INPUT (zod 경계)', async () => {
+    const { buyerUser, buyerWs, rfp } = await seedScene();
+    asBuyer(buyerUser, buyerWs.id);
+
+    const over = await sendTeamMessageAction({ rfpId: rfp.id, body: 'x'.repeat(4001) });
+    expect(over).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    expect(publishTeamChatEvent).not.toHaveBeenCalled();
+
+    const max = await sendTeamMessageAction({ rfpId: rfp.id, body: 'x'.repeat(4000) });
+    expect(max.ok).toBe(true);
+  });
+
+  it('라이브 팬아웃이 reject 해도 전송은 ok 다 (best-effort — 영속은 이미 완료)', async () => {
+    const { buyerUser, buyerWs, rfp } = await seedScene();
+    asBuyer(buyerUser, buyerWs.id);
+    vi.mocked(publishTeamChatEvent).mockRejectedValueOnce(new Error('centrifugo down'));
+
+    const r = await sendTeamMessageAction({ rfpId: rfp.id, body: '메모' });
+    expect(r.ok).toBe(true);
+  });
+
   it('propagates service errors (FORBIDDEN for a non-owning buyer)', async () => {
     const { rfp } = await seedScene();
     const otherUser = await seedUser(db, { email: 'other@b.com' });

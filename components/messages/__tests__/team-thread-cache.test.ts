@@ -63,4 +63,13 @@ describe('getTeamThreadPromise', () => {
 
     expect(loadTeamThread).toHaveBeenCalledTimes(4);
   });
+
+  it('로더가 reject 하면 {ok:false} 로 정규화한다 — use() 가 throw 해 페이지 전체가 죽는 것을 방지', async () => {
+    loadTeamThread.mockRejectedValue(new Error('network'));
+
+    await expect(getTeamThreadPromise('rfp-1')).resolves.toEqual({
+      ok: false,
+      error: 'NETWORK',
+    });
+  });
 });

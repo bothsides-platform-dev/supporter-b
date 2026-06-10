@@ -170,4 +170,18 @@ describe('useTeamChannel — 라이브 연결 (URL 설정)', () => {
     expect(mockSub.unsubscribe).toHaveBeenCalled();
     expect(mockClient.removeSubscription).toHaveBeenCalledWith(mockSub);
   });
+
+  it('(f) 같은 채널의 기존 구독이 있으면 재사용한다 (newSubscription 미호출)', async () => {
+    const existing = makeSub();
+    mockClient.getSubscription.mockReturnValue(existing);
+    const { renderHook } = await import('@testing-library/react');
+    const { useTeamChannel } = await import('@/lib/hooks/useTeamChannel');
+
+    const { unmount } = renderHook(() => useTeamChannel(RFP_ID, WS_ID, {}));
+
+    expect(mockClient.newSubscription).not.toHaveBeenCalled();
+    expect(existing.on).toHaveBeenCalledWith('publication', expect.any(Function));
+    unmount();
+    expect(mockClient.removeSubscription).toHaveBeenCalledWith(existing);
+  });
 });

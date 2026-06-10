@@ -52,8 +52,12 @@ export class TeamChatService {
   ): Promise<
     ServiceResult<{ messageId: string; createdAt: string; authorName: string }>
   > {
+    // 길이 상한은 액션 zod 와 동일하게 서비스도 소유(defense-in-depth) — 미래의
+    // 다른 호출자(잡 등)가 무제한 본문을 영속·팬아웃하지 못하게 한다.
     const body = input.body.trim();
-    if (body.length === 0) return { ok: false, error: 'INVALID_INPUT' };
+    if (body.length === 0 || body.length > 4000) {
+      return { ok: false, error: 'INVALID_INPUT' };
+    }
 
     const auth = await this.authorize(input.rfpId, actor);
     if (!auth.ok) return auth;

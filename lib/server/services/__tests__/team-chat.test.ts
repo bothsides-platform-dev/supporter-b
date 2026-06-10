@@ -143,6 +143,15 @@ describe('TeamChatService.sendMessage', () => {
     const result = await service.sendMessage({ rfpId: rfp.id, body: '   ' }, buyerActor);
     expect(result).toEqual({ ok: false, error: 'INVALID_INPUT' });
   });
+
+  it('rejects a body over 4000 chars at the service layer (defense-in-depth)', async () => {
+    const { rfp, buyerActor } = await seedScene();
+    const result = await service.sendMessage(
+      { rfpId: rfp.id, body: 'x'.repeat(4001) },
+      buyerActor,
+    );
+    expect(result).toEqual({ ok: false, error: 'INVALID_INPUT' });
+  });
 });
 
 describe('TeamChatService.listMessages', () => {

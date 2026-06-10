@@ -97,6 +97,19 @@ describe('loadTeamThread', () => {
     expect(r).toEqual({ ok: false, error: 'UNAUTHENTICATED' });
   });
 
+  it('returns INVALID_INPUT for a non-uuid rfpId', async () => {
+    const me = await seedUser(db, { email: 'v@b.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id);
+    sessionRef.value = {
+      user: { id: me.id, email: 'v@b.com', workspaceId: ws.id, workspaceType: 'buyer' },
+    };
+    expect(await loadTeamThread('not-a-uuid')).toEqual({
+      ok: false,
+      error: 'INVALID_INPUT',
+    });
+  });
+
   it('propagates FORBIDDEN for an uninvited workspace', async () => {
     const owner = await seedUser(db, { email: 'own@b.com' });
     const ownerWs = await seedBuyerWorkspace(db);

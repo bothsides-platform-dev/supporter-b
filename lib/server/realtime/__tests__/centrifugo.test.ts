@@ -51,6 +51,9 @@ describe('publishChatEvent', () => {
     expect(body.params.channel).toBe('chat:conversation:conv-1');
     expect(body.params.data).toEqual({ type: 'message', id: 'm1' });
     expect(init.headers['X-API-Key']).toBe('secret');
+    // 행이 멈춘(거부 아님) Centrifugo 가 전송 응답을 무기한 붙들지 않도록
+    // 타임아웃 시그널이 있어야 한다 — 전송 액션이 publish 를 await 한다.
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('swallows transport errors (best-effort, never throws)', async () => {

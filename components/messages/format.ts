@@ -17,3 +17,14 @@ export function formatTime(iso: string): string {
     minute: '2-digit',
   });
 }
+
+/** 같은 발신자의 연속 메시지를 한 묶음으로 보는 최대 간격(이내면 헤더 생략). */
+export const GROUP_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * 그룹핑 시간 판정 — 직전 메시지와의 간격이 윈도 이내인지(경계 포함).
+ * 발신자 비교는 뷰마다 키가 달라(워크스페이스 vs 유저) 호출부 책임.
+ */
+export function withinGroupWindow(prevIso: string, currIso: string): boolean {
+  return Date.parse(currIso) - Date.parse(prevIso) <= GROUP_WINDOW_MS;
+}

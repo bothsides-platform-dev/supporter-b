@@ -19,7 +19,7 @@ import { useChatChannel } from '@/lib/hooks/useChatChannel';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
-import { formatDayLabel, formatTime } from './format';
+import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 
 type Props = {
   conversationId: string;
@@ -55,8 +55,6 @@ type LiveMessagePayload = {
 // only fire after the user *stops* typing — backwards for a live indicator).
 const TYPING_THROTTLE_MS = 2000;
 
-// 같은 상대의 연속 메시지를 한 묶음으로 보는 최대 간격(이내면 헤더 생략).
-const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 // 하단에서 이만큼(px) 이내면 "하단 근처"로 보고 새 메시지를 자동 추적한다.
 const NEAR_BOTTOM_PX = 120;
@@ -132,7 +130,6 @@ function renderBody(body: string): React.ReactNode {
   );
 }
 
-/** "5월 26일 월요일" 형태 (KST 캘린더 일자 기준 그룹 키와 동일 포맷). */
 export function ThreadView({
   conversationId,
   counterparty,
@@ -231,7 +228,13 @@ export function ThreadView({
           const pendingIdx = prev.findIndex((m) => m.pending);
           if (pendingIdx >= 0) {
             const next = prev.slice();
-            next[pendingIdx] = { ...next[pendingIdx], id, pending: false };
+            next[pendingIdx] = {
+              ...next[pendingIdx],
+              id,
+              pending: false,
+              // 서버 권위 타임스탬프 채택 — 리로드 후 로더 렌더와 일치.
+              createdAt: data.createdAt ?? next[pendingIdx].createdAt,
+            };
             return next;
           }
         }
@@ -415,10 +418,15 @@ export function ThreadView({
       // pending 말풍선을 확정으로 교체(실서버 id + pending 해제). 라이브 echo 가
       // 먼저 같은 실제 id 를 추가했다면 임시 행은 버린다(중복 방지).
       const newId = result.messageId;
+      const serverCreatedAt = result.createdAt;
       setLocalMessages((prev) => {
         const hasReal = prev.some((m) => m.id === newId);
         return prev.flatMap((m) =>
-          m.id === tempId ? (hasReal ? [] : [{ ...m, id: newId, pending: false }]) : [m],
+          m.id === tempId
+            ? hasReal
+              ? []
+              : [{ ...m, id: newId, pending: false, createdAt: serverCreatedAt ?? m.createdAt }]
+            : [m],
         );
       });
     } else {
@@ -441,6 +449,9 @@ export function ThreadView({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
     if (e.key === 'Enter' && !e.shiftKey) {
+      // 한글 IME 조합 확정 Enter(keyCode 229)는 전송이 아니다 — 조합 중
+      // 전송되면 글자가 잘리거나 이중 전송된다.
+      if (e.nativeEvent.isComposing) return;
       e.preventDefault();
       void handleSend();
     }
@@ -525,13 +536,14 @@ export function ThreadView({
           const prev = i > 0 ? localMessages[i - 1] : null;
           const prevDayLabel = prev ? formatDayLabel(prev.createdAt) : null;
           const showDivider = dayLabel !== prevDayLabel;
-          // 같은 상대가 짧은 간격(GROUP_WINDOW_MS)으로 연속해 보낸 메시지는 하나의
-          // 묶음으로 보고 이름·아바타 헤더를 두 번째부터 생략한다(날짜 경계서 리셋).
+          // 같은 상대가 짧은 간격으로 연속해 보낸 메시지는 하나의 묶음으로 보고
+          // 이름·아바타 헤더를 두 번째부터 생략한다(날짜 경계서 리셋). 시간 판정은
+          // TeamThreadView 와 공유(withinGroupWindow — 드리프트 방지 단일 출처).
           const groupedWithPrev =
             !!prev &&
             prev.sender === m.sender &&
             !showDivider &&
-            Date.parse(m.createdAt) - Date.parse(prev.createdAt) <= GROUP_WINDOW_MS;
+            withinGroupWindow(prev.createdAt, m.createdAt);
           const showSenderHeader = !isSelf && !groupedWithPrev;
           const rfp = m.rfpId ? rfpById?.[m.rfpId] : undefined;
           // Receipt only on the last *read* self message (receiptIndex).
