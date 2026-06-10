@@ -159,7 +159,9 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
   ├─ 탭 [상대방 채팅]: 기존 buyer↔PG 페어 대화 임베드 (ThreadPane variant='rail')
   │     ├─ 상대 출처 = chat-rail zustand 스토어 — 구매사: FocusComparison 이 포커스 PG publish(탭 추종),
   │     │   PG: fixedCounterparty(구매사) 를 마운트 시 시드
-  │     ├─ wsId→conversationId 는 getOrCreateConversationAction 으로 lazy 해소 (탭 활성 시 1회, 메시지 미발송)
+  │     ├─ wsId→conversationId 는 **읽기 전용** lookupConversationAction 으로 해소 — 열람·포커스만으로는
+  │     │   어떤 행도 생성하지 않는다(빈 대화가 상대 인박스에 뜨면 관심 신호 누출 — sealed-bid).
+  │     │   대화가 없으면 새 대화 컴포저를 띄우고 **첫 메시지 전송 시점에만** 생성
   │     └─ 컴포저 전송에 해당 RFP 태그 기본 적용 (ThreadView defaultRfpId)
   └─ 탭 [팀 채팅]: RFP 단위 워크스페이스 내부 스레드 — v1 확정 결정:
         ├─ 스코프 = (rfpId, workspaceId), rfp_team_messages append-only
