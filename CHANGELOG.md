@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3.1] - 2026-06-10
+
+### Added
+
+- **주요 PG사를 카드로 선택해서 즉시 합류할 수 있어요**: PG사 가입 시 워크스페이스 단계에서 토스페이먼츠·KG이니시스·나이스페이먼츠·NHN KCP·헥토파이낸셜·다날·KICC(이지페이) 카드를 선택하면 해당 워크스페이스에 바로 합류됩니다. 관리자 심사 없이 즉시 `/inbox`로 이동해요. 기존 직접 입력 방식도 그대로 사용할 수 있어요.
+- **마스터 계정은 어느 화면에도 표시되지 않아요**: 사전 시딩된 PG사 마스터 계정(`is_system_account=true`)은 멤버 목록·알림 팬아웃·이메일 발송 대상에서 자동으로 제외됩니다.
+- **PG사 사전 시딩 스크립트**: `scripts/seed-pg-companies.ts`를 `pnpm tsx scripts/seed-pg-companies.ts`로 실행하면 7개 주요 PG사 워크스페이스와 마스터 계정이 idempotent하게 생성됩니다. 환경변수 `SEED_PG_<KEY>_EMAIL`/`SEED_PG_<KEY>_PASSWORD` 설정 필요.
+
+### Changed
+
+- **DB 스키마 변경**: `workspaces.canonical_pg_key` (text UNIQUE nullable) 및 `users.is_system_account` (boolean default false) 컬럼 추가. 운영 DB에 `drizzle-kit push` 필요.
+
 ## [0.2.3.0] - 2026-06-10
 
 ### Changed
