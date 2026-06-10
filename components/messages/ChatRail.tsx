@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { Tabs } from '@/components/primitives/Tabs';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
+import { Button } from '@/components/ui/button';
 import { XIcon, EnvelopeIcon, ChevronRightIcon } from '@/components/icons';
 import { getOrCreateConversationAction } from '@/lib/server/actions/chat/getOrCreateConversationAction';
 import {
@@ -68,20 +69,35 @@ export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props)
 
   // wsId → conversationId 해소 캐시. 레일이 열려 있고 상대방 탭일 때만 lazy 해소
   // (열람만으로 빈 페어 대화가 생기는 부수효과를 탭 활성 시점으로 한정).
+  // 실패하면 무한 스켈레톤 대신 에러 빈 상태 + 다시 시도를 노출한다.
   const [convByWs, setConvByWs] = useState<Record<string, string>>({});
+  const [resolveFailed, setResolveFailed] = useState(false);
   const activeWsId = counterparty?.workspaceId;
   useEffect(() => {
-    if (!open || tab !== 'counterparty' || !activeWsId) return;
+    if (!open || tab !== 'counterparty' || !activeWsId || resolveFailed) return;
     if (convByWs[activeWsId]) return;
     let cancelled = false;
-    void getOrCreateConversationAction(activeWsId).then((r) => {
-      if (cancelled || !r.ok) return;
-      setConvByWs((prev) => ({ ...prev, [activeWsId]: r.conversationId }));
-    });
+    void getOrCreateConversationAction(activeWsId)
+      .then((r) => {
+        if (cancelled) return;
+        if (!r.ok) {
+          setResolveFailed(true);
+          return;
+        }
+        setConvByWs((prev) => ({ ...prev, [activeWsId]: r.conversationId }));
+      })
+      .catch(() => {
+        if (!cancelled) setResolveFailed(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [open, tab, activeWsId, convByWs]);
+  }, [open, tab, activeWsId, convByWs, resolveFailed]);
+
+  // 상대가 바뀌면 이전 실패 상태를 걷어 새 상대로 재시도하게 둔다.
+  useEffect(() => {
+    setResolveFailed(false);
+  }, [activeWsId]);
 
   if (!open) return null;
 
@@ -112,6 +128,18 @@ export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props)
               title="대화할 상대를 선택해 주세요"
               description="견적을 선택하면 해당 PG와 바로 대화할 수 있어요."
               className="py-12"
+            />
+          ) : resolveFailed ? (
+            <EmptyState
+              icon={<EnvelopeIcon />}
+              title="대화를 불러오지 못했어요"
+              description="네트워크 상태를 확인하고 다시 시도해 주세요."
+              className="py-12"
+              action={
+                <Button size="sm" onClick={() => setResolveFailed(false)}>
+                  다시 시도
+                </Button>
+              }
             />
           ) : !conversationId ? (
             <ThreadSkeleton />

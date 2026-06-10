@@ -38,15 +38,21 @@ vi.mock('../TeamThreadView', () => ({
   },
 }));
 
-const loadTeamThreadResult = {
-  ok: true as const,
+// 테스트별로 결과를 갈아끼울 수 있게 mutable ref — 기본은 성공 빈 스레드.
+let teamThreadResult: Record<string, unknown> = {
+  ok: true,
   rfpId: 'rfp-1',
   workspaceId: 'ws-self',
   viewerUserId: 'u-me',
   messages: [],
 };
 vi.mock('../team-thread-cache', () => ({
-  getTeamThreadPromise: vi.fn(() => Promise.resolve(loadTeamThreadResult)),
+  getTeamThreadPromise: vi.fn(() => Promise.resolve(teamThreadResult)),
+}));
+
+const toast = vi.fn();
+vi.mock('@/lib/toast', () => ({
+  toast: (...args: unknown[]) => toast(...args),
 }));
 
 import { ChatRail } from '../ChatRail';
@@ -63,6 +69,14 @@ beforeEach(() => {
   });
   threadPaneProps.mockReset();
   teamThreadViewProps.mockReset();
+  toast.mockReset();
+  teamThreadResult = {
+    ok: true,
+    rfpId: 'rfp-1',
+    workspaceId: 'ws-self',
+    viewerUserId: 'u-me',
+    messages: [],
+  };
 });
 
 const baseProps = {
@@ -179,9 +193,51 @@ describe('ChatRail — 상대방 채팅 탭', () => {
     await screen.findByTestId('thread-pane');
     expect(getOrCreateConversationAction).toHaveBeenCalledWith('buyer-ws-1');
   });
+
+  it('대화 해소 실패 시 무한 스켈레톤 대신 에러 빈 상태 + 다시 시도를 보여준다', async () => {
+    const user = userEvent.setup();
+    getOrCreateConversationAction.mockResolvedValue({ ok: false, error: 'FORBIDDEN' });
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} />);
+
+    expect(
+      await screen.findByText('대화를 불러오지 못했어요'),
+    ).toBeInTheDocument();
+
+    // 다시 시도 → 이번엔 성공 → 스레드 렌더.
+    getOrCreateConversationAction.mockResolvedValue({ ok: true, conversationId: 'conv-9' });
+    await user.click(screen.getByRole('button', { name: '다시 시도' }));
+    await screen.findByTestId('thread-pane');
+  });
+
+  it('해소 액션이 throw 해도 에러 빈 상태로 수렴한다 (네트워크 오류)', async () => {
+    getOrCreateConversationAction.mockRejectedValue(new Error('network'));
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} />);
+
+    expect(
+      await screen.findByText('대화를 불러오지 못했어요'),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('ChatRail — 팀 채팅 탭', () => {
+  it('로더가 실패(ok:false)하면 에러 빈 상태를 보여준다', async () => {
+    const user = userEvent.setup();
+    teamThreadResult = { ok: false, error: 'FORBIDDEN' };
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} />);
+
+    await act(async () => {
+      await user.click(screen.getByRole('tab', { name: '팀 채팅' }));
+    });
+
+    expect(
+      await screen.findByText('팀 채팅을 불러오지 못했어요'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('team-thread-view')).not.toBeInTheDocument();
+  });
+
   it('팀 채팅 탭 클릭 시 TeamThreadView 를 로더 결과로 렌더한다', async () => {
     const user = userEvent.setup();
     openWithCounterparty();
@@ -245,5 +301,23 @@ describe('ChatRailToggle', () => {
   it('모바일 폴백 버튼은 상대가 없으면 비활성화된다', () => {
     render(<ChatRailToggle />);
     expect(screen.getByRole('button', { name: '메시지함에서 보기' })).toBeDisabled();
+  });
+
+  it('모바일 폴백 해소 실패 시 토스트를 띄우고 버튼이 다시 활성화된다', async () => {
+    const user = userEvent.setup();
+    getOrCreateConversationAction.mockResolvedValue({ ok: false, error: 'FORBIDDEN' });
+    act(() => {
+      useChatRailStore
+        .getState()
+        .setCounterparty({ workspaceId: 'pg-ws-1', name: 'OO페이', type: 'pg' });
+    });
+    render(<ChatRailToggle />);
+
+    const btn = screen.getByRole('button', { name: '메시지함에서 보기' });
+    await user.click(btn);
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(btn).toBeEnabled(); // 재시도 가능해야 한다
   });
 });

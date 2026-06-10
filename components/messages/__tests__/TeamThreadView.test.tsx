@@ -195,4 +195,112 @@ describe('TeamThreadView — 라이브 수신', () => {
     act(() => channelOptions.onMessage?.(evt));
     expect(screen.getAllByText('라이브 팀 메모')).toHaveLength(1);
   });
+
+  it('본인 echo 가 액션 응답보다 먼저 오면 pending 말풍선을 승격한다 (중복 없음)', async () => {
+    // 액션 응답을 보류해 echo-first 레이스를 강제한다.
+    let resolveSend!: (v: unknown) => void;
+    sendTeamMessageAction.mockImplementation(
+      () => new Promise((res) => (resolveSend = res)),
+    );
+    const user = userEvent.setup();
+    render(base());
+
+    await user.type(
+      screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…'),
+      '레이스 메모',
+    );
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await screen.findByText('레이스 메모'); // pending 상태
+
+    // echo 선착 — pending 이 실제 id 로 승격돼야 한다 (append 아님).
+    act(() =>
+      channelOptions.onMessage?.({
+        type: 'message',
+        id: 'tm-echo',
+        body: '레이스 메모',
+        authorUserId: 'u-me',
+        authorName: '김구매',
+        createdAt: '2026-06-10T07:00:00.000Z',
+      }),
+    );
+    expect(screen.getAllByText('레이스 메모')).toHaveLength(1);
+
+    // 액션이 늦게 같은 id 로 응답 — temp 행은 이미 승격됐으므로 중복이 생기면 안 된다.
+    await act(async () => {
+      resolveSend({ ok: true, messageId: 'tm-echo', createdAt: '2026-06-10T07:00:00.000Z' });
+    });
+    expect(screen.getAllByText('레이스 메모')).toHaveLength(1);
+    const row = screen.getByText('레이스 메모').closest('[data-message-row]')!;
+    expect(row.querySelector('[aria-label="전송 중"]')).not.toBeInTheDocument();
+  });
+
+  it('타인 echo 는 pending 을 건드리지 않고 append 된다', async () => {
+    let resolveSend!: (v: unknown) => void;
+    sendTeamMessageAction.mockImplementation(
+      () => new Promise((res) => (resolveSend = res)),
+    );
+    const user = userEvent.setup();
+    render(base());
+
+    await user.type(
+      screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…'),
+      '내 메모',
+    );
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await screen.findByText('내 메모');
+
+    act(() =>
+      channelOptions.onMessage?.({
+        type: 'message',
+        id: 'tm-other',
+        body: '동료 메모',
+        authorUserId: 'u-mate',
+        authorName: '이동료',
+        createdAt: '2026-06-10T07:00:00.000Z',
+      }),
+    );
+    // 동료 메시지가 append 됐고 내 pending 은 그대로 살아 있다.
+    expect(screen.getByText('동료 메모')).toBeInTheDocument();
+    const myRow = screen.getByText('내 메모').closest('[data-message-row]')!;
+    expect(myRow.querySelector('[aria-label="전송 중"]')).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSend({ ok: true, messageId: 'tm-mine', createdAt: '2026-06-10T07:01:00.000Z' });
+    });
+  });
+});
+
+describe('TeamThreadView — 그룹핑', () => {
+  it('같은 작성자의 5분 이내 연속 메시지는 작성자 헤더를 생략한다', () => {
+    const grouped: TeamThreadMessage[] = [
+      {
+        id: 'g1',
+        authorUserId: 'u-mate',
+        authorName: '이동료',
+        body: '첫 메시지',
+        createdAt: '2026-06-10T05:00:00.000Z',
+        isSelf: false,
+      },
+      {
+        id: 'g2',
+        authorUserId: 'u-mate',
+        authorName: '이동료',
+        body: '바로 이어진 메시지',
+        createdAt: '2026-06-10T05:02:00.000Z', // 2분 뒤 — 그룹핑
+        isSelf: false,
+      },
+      {
+        id: 'g3',
+        authorUserId: 'u-mate',
+        authorName: '이동료',
+        body: '한참 뒤 메시지',
+        createdAt: '2026-06-10T05:30:00.000Z', // 28분 뒤 — 새 그룹
+        isSelf: false,
+      },
+    ];
+    render(base({ messages: grouped }));
+
+    // 헤더(이름)는 그룹 시작에만 — 1·3번째 메시지에서 두 번.
+    expect(screen.getAllByText('이동료')).toHaveLength(2);
+  });
 });
