@@ -16,6 +16,10 @@ export const workspaces = pgTable(
     statusReason: text('status_reason'),
     hasLogo: boolean('has_logo').notNull().default(false),
     reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    // Marks pre-seeded canonical PG company workspaces (e.g. 'tosspayments', 'kginicis').
+    // NULL on all user-created workspaces. Used to populate the PG signup company-selector
+    // and to validate joinCanonicalPgWorkspaceAction inputs.
+    canonicalPgKey: text('canonical_pg_key').unique(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
