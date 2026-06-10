@@ -5,6 +5,7 @@
 // their workspace. They are PG-only (buyers have no use for a 견적 요율표) and
 // the security invariant is cross-workspace isolation: a member of PG workspace
 // A must never see, edit, or delete a template owned by PG workspace B.
+import { strict as assert } from 'node:assert';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -42,6 +43,7 @@ vi.mock('@/lib/auth/session', () => ({
 import { saveQuoteTemplateAction } from '../saveQuoteTemplateAction';
 import { listQuoteTemplatesAction } from '../listQuoteTemplatesAction';
 import { deleteQuoteTemplateAction } from '../deleteQuoteTemplateAction';
+import { duplicateQuoteTemplateAction } from '../duplicateQuoteTemplateAction';
 import { getBidQuoteTemplateRepo } from '@/lib/server/repositories/factory';
 
 let db: PgliteDB;
@@ -338,5 +340,73 @@ describe('deleteQuoteTemplateAction', () => {
     sessionRef.value = null;
     const r = await deleteQuoteTemplateAction({ templateId: crypto.randomUUID() });
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('duplicateQuoteTemplateAction', () => {
+  beforeEach(async () => {
+    db = await setupRfpActionEnv();
+  });
+  afterEach(() => {
+    teardownRfpActionEnv();
+    sessionRef.value = null;
+  });
+
+  it('원본 템플릿을 "이름 복제"로 복사하고 원본은 유지된다', async () => {
+    const { user, ws } = await setupPg();
+    sessionRef.value = { user: { id: user.id, email: user.email, workspaceId: ws.id, workspaceType: 'pg', role: 'admin' } };
+
+    const created = await saveQuoteTemplateAction(VALID);
+    assert(created.ok);
+
+    const duped = await duplicateQuoteTemplateAction({ templateId: created.templateId });
+    expect(duped.ok).toBe(true);
+    assert(duped.ok);
+    expect(duped.templateId).not.toBe(created.templateId);
+
+    const repo = await getBidQuoteTemplateRepo();
+    const all = await repo.listByWorkspace(ws.id);
+    expect(all).toHaveLength(2);
+    expect(all.map((t) => t.name).sort()).toEqual(['표준 요율', '표준 요율 복제'].sort());
+    const dup = all.find((t) => t.name === '표준 요율 복제')!;
+    expect(dup.settleCycle).toBe(VALID.settleCycle);
+    expect(dup.settleLimit).toBe(VALID.settleLimit);
+  });
+
+  it('20개 한도 초과 시 LIMIT_REACHED 반환', async () => {
+    const { user, ws } = await setupPg();
+    sessionRef.value = { user: { id: user.id, email: user.email, workspaceId: ws.id, workspaceType: 'pg', role: 'admin' } };
+
+    let lastId = '';
+    for (let i = 0; i < 20; i++) {
+      const r = await saveQuoteTemplateAction({ ...VALID, name: `t${i}` });
+      assert(r.ok);
+      lastId = r.templateId;
+    }
+    const r = await duplicateQuoteTemplateAction({ templateId: lastId });
+    expect(r.ok).toBe(false);
+    assert(!r.ok);
+    expect(r.error).toBe('LIMIT_REACHED');
+  });
+
+  it('다른 워크스페이스 템플릿 복제 시 FORBIDDEN', async () => {
+    // Seed PG-A user + workspace manually to use a unique email.
+    const u1 = await seedUser(db, { email: 'pg-a@example.com' });
+    const ws1 = await seedPgWorkspace(db, 'pg-a.com');
+    await seedMembership(db, ws1.id, u1.id, 'admin');
+    sessionRef.value = { user: { id: u1.id, email: u1.email, workspaceId: ws1.id, workspaceType: 'pg', role: 'admin' } };
+    const r = await saveQuoteTemplateAction(VALID);
+    assert(r.ok);
+    const otherTemplateId = r.templateId;
+
+    // Seed PG-B user + workspace with a different email.
+    const u2 = await seedUser(db, { email: 'pg-b@example.com' });
+    const ws2 = await seedPgWorkspace(db, 'pg-b.com');
+    await seedMembership(db, ws2.id, u2.id, 'admin');
+    sessionRef.value = { user: { id: u2.id, email: u2.email, workspaceId: ws2.id, workspaceType: 'pg', role: 'admin' } };
+    const duped = await duplicateQuoteTemplateAction({ templateId: otherTemplateId });
+    expect(duped.ok).toBe(false);
+    assert(!duped.ok);
+    expect(duped.error).toBe('FORBIDDEN');
   });
 });
