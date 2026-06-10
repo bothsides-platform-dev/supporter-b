@@ -9,7 +9,7 @@ import {
   requireOwnedQuoteTemplate,
 } from './_shared';
 
-const Input = z.object({ templateId: z.string().uuid() }).strict();
+const Input = z.object({ templateId: z.uuid() }).strict();
 
 export type DuplicateQuoteTemplateInput = z.infer<typeof Input>;
 export type DuplicateQuoteTemplateResult = QuoteActionResult<{ templateId: string }>;
