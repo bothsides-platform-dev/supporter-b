@@ -6,6 +6,7 @@ import {
   FileTextIcon,
   InboxIcon,
   SettingsIcon,
+  LayoutTemplateIcon,
 } from '@/components/icons';
 import type { WorkspaceType } from '@/lib/types/workspace';
 
@@ -161,27 +162,25 @@ const MESSAGES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'm' },
 };
 
-// 견적 템플릿(요율표)은 PG 전용 — 구매사 설정에는 노출하지 않는다.
-const QUOTE_TEMPLATES_LINK: NavLeaf = {
-  id: 'settings-quote-templates',
+// 견적 템플릿은 PG 전용 — top 배열에 추가해 홈·알림·메시지와 같은 레이어로 노출.
+const QUOTE_TEMPLATES: NavLeaf = {
+  id: 'quote-templates',
   label: '견적 템플릿',
-  href: '/settings/quote-templates',
+  href: '/quote-templates',
+  icon: LayoutTemplateIcon,
   shortcut: { kind: 'chord', lead: 'g', key: 'q' },
 };
 
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : INBOX_SECTION;
-  const settingsSection: NavSection =
+  const top: NavLeaf[] =
     workspaceType === 'pg'
-      ? {
-          ...SETTINGS_SECTION,
-          links: [...(SETTINGS_SECTION.links ?? []), QUOTE_TEMPLATES_LINK],
-        }
-      : SETTINGS_SECTION;
+      ? [HOME, NOTIFICATIONS, MESSAGES, QUOTE_TEMPLATES]
+      : [HOME, NOTIFICATIONS, MESSAGES];
 
   return {
-    top: [HOME, NOTIFICATIONS, MESSAGES],
-    sections: [workspaceSection, settingsSection],
+    top,
+    sections: [workspaceSection, SETTINGS_SECTION],
   };
 }
 
@@ -253,6 +252,7 @@ export function getBreadcrumbSegments(
   if (pathname === '/home') return [{ label: '홈' }];
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
+  if (pathname === '/quote-templates') return [{ label: '견적 템플릿' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp/new') {
     return [{ label: '견적 요청', href: '/rfp' }, { label: '새 견적 요청' }];
@@ -270,9 +270,6 @@ export function getBreadcrumbSegments(
   }
   if (pathname === '/settings/members') {
     return [{ label: '설정', href: '/settings/profile' }, { label: '멤버' }];
-  }
-  if (pathname === '/settings/quote-templates') {
-    return [{ label: '설정', href: '/settings/profile' }, { label: '견적 템플릿' }];
   }
   return [];
 }
