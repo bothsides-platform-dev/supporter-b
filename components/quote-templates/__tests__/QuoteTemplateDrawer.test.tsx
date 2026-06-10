@@ -53,9 +53,10 @@ describe('QuoteTemplateDrawer', () => {
 
   it('TierRates 수단(카드)은 5개 구간 라벨을 보여준다', () => {
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={tieredTmpl} />);
-    expect(screen.getByText('영세')).toBeInTheDocument();
-    expect(screen.getByText('중소1')).toBeInTheDocument();
-    expect(screen.getByText('일반')).toBeInTheDocument();
+    // 모든 tiered 수단이 같은 tier 라벨을 렌더하므로 getAllByText 사용
+    expect(screen.getAllByText('영세').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('중소1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('일반').length).toBeGreaterThan(0);
   });
 
   it('TierRates 수단에 기존값이 채워진다', () => {

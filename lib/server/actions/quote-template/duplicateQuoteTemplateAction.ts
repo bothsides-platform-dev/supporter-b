@@ -7,6 +7,7 @@ import { getBidQuoteTemplateRepo } from '@/lib/server/repositories/factory';
 import {
   type QuoteActionResult,
   requireOwnedQuoteTemplate,
+  requirePgWorkspace,
 } from './_shared';
 
 const Input = z.object({ templateId: z.uuid() }).strict();
@@ -31,6 +32,9 @@ export async function duplicateQuoteTemplateAction(
   const owned = await requireOwnedQuoteTemplate(parsed.data.templateId);
   if (!owned.ok) return owned;
 
+  const ws = await requirePgWorkspace();
+  if (!ws.ok) return ws;
+
   const repo = await getBidQuoteTemplateRepo();
   const existing = await repo.listByWorkspace(owned.workspaceId);
   if (existing.length >= MAX_TEMPLATES) return { ok: false, error: 'LIMIT_REACHED' };
@@ -45,7 +49,7 @@ export async function duplicateQuoteTemplateAction(
     settleLimit: template.settleLimit,
     guaranteeInsurance: template.guaranteeInsurance,
     paymentFees: { ...template.paymentFees },
-    createdBy: template.createdBy,
+    createdBy: ws.userId,
   });
 
   return { ok: true, templateId: newId };

@@ -44,8 +44,6 @@ type EditorState = {
   guaranteeInsurance: string;
   /** flat fees map: "method" → pct string for single-rate, "method:tier" → pct string for tiered */
   fees: Record<string, string>;
-  /** tiered methods: original TierRates preserved for re-assembly on save */
-  tieredFees: Partial<Record<PaymentMethod, TierRates>>;
 };
 
 const fmtPct = (rate: number) => String(Math.round(rate * 1e6) / 1e4);
@@ -58,26 +56,20 @@ function blankEditor(): EditorState {
     settleLimit: '0',
     guaranteeInsurance: '0',
     fees: {},
-    tieredFees: {},
   };
 }
 
 function editorFromTemplate(t: QuoteTemplateOption): EditorState {
   const m = /^([DWM])\+(\d+)$/.exec(t.settleCycle);
   const fees: Record<string, string> = {};
-  const tieredFees: Partial<Record<PaymentMethod, TierRates>> = {};
 
   for (const method of ALL_PAYMENT_METHODS) {
     const stored = t.paymentFees[method];
     if (stored === undefined) continue;
     if (typeof stored === 'object') {
-      // TierRates: store individual tier values as "method:tier" keys
-      tieredFees[method] = stored;
       for (const tier of MERCHANT_TIERS) {
         const tierVal = stored[tier];
-        if (tierVal !== undefined) {
-          fees[`${method}:${tier}`] = fmtPct(tierVal);
-        }
+        if (tierVal !== undefined) fees[`${method}:${tier}`] = fmtPct(tierVal);
       }
     } else {
       fees[method] = fmtPct(stored);
@@ -92,19 +84,16 @@ function editorFromTemplate(t: QuoteTemplateOption): EditorState {
     settleLimit: String(t.settleLimit),
     guaranteeInsurance: String(t.guaranteeInsurance),
     fees,
-    tieredFees,
   };
 }
 
 function buildPaymentFees(
   fees: Record<string, string>,
-  tieredFees: Partial<Record<PaymentMethod, TierRates>>,
 ): Partial<Record<PaymentMethod, number | TierRates>> {
   const result: Partial<Record<PaymentMethod, number | TierRates>> = {};
 
   for (const method of ALL_PAYMENT_METHODS) {
-    if (tieredFees[method]) {
-      // Re-assemble TierRates from "method:tier" keys
+    if (isTieredMethod(method)) {
       const tiers: TierRates = {};
       let hasAny = false;
       for (const tier of MERCHANT_TIERS) {
@@ -162,7 +151,7 @@ export function QuoteTemplateDrawer({
     setError(null);
 
     const settleCycle = `${editor.cycleUnit}+${editor.cycleNum || '1'}`;
-    const paymentFees = buildPaymentFees(editor.fees, editor.tieredFees);
+    const paymentFees = buildPaymentFees(editor.fees);
     const base = {
       name,
       settleCycle,
@@ -262,8 +251,7 @@ export function QuoteTemplateDrawer({
           </span>
           <div className="space-y-5">
             {ALL_PAYMENT_METHODS.map((method) => {
-              const isT = isTieredMethod(method) && editor.tieredFees[method];
-              if (isT) {
+              if (isTieredMethod(method)) {
                 // 5-tier grid
                 return (
                   <div key={method} className="space-y-2">
