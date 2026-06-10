@@ -54,9 +54,9 @@ const SOLUTION_POINTS = [
 ];
 
 const METRICS = [
-  { to: 0.89, decimals: 2, unit: '%', qualifier: '절감', caption: 'PoC 고객사 평균 수수료 절감 비율' },
-  { to: 4.5, decimals: 1, unit: '주', qualifier: '감소', caption: 'PG사 견적 비교 시 소요 시간 감소' },
-  { to: 2300, decimals: 0, unit: '만원', qualifier: undefined, caption: 'PoC 고객사 연간 평균 수수료 절감액' },
+  { to: 0.89, decimals: 2, unit: '%', qualifier: '절감', trend: 'down' as const, caption: 'PoC 고객사 평균 수수료 절감 비율' },
+  { to: 4.5, decimals: 1, unit: '주', qualifier: '감소', trend: 'down' as const, caption: 'PG사 견적 비교 시 소요 시간 감소' },
+  { to: 2300, decimals: 0, unit: '만원', qualifier: undefined, trend: 'up' as const, caption: 'PoC 고객사 연간 평균 수수료 절감액' },
 ];
 
 function useTypewriter(values: string[], typingMs = 60, deletingMs = 30, holdMs = 1800): string {
@@ -223,6 +223,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                   decimals={m.decimals}
                   unit={m.unit}
                   qualifier={m.qualifier}
+                  trend={m.trend}
                   caption={m.caption}
                 />
               ))}
