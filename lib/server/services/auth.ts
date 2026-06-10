@@ -187,6 +187,84 @@ export class AuthService {
     return result;
   }
 
+  async joinCanonicalPgWorkspace(input: {
+    email: string;
+    name: string;
+    plainPassword: string;
+    phone: string;
+    phoneVerificationId: string;
+    selectedPgWorkspaceId: string;
+  }): Promise<ServiceResult<{ email: string }>> {
+    const email = normalizeEmail(input.email);
+
+    const [otpRow] = await this._db
+      .select()
+      .from(phoneOtps)
+      .where(
+        and(
+          eq(phoneOtps.id, input.phoneVerificationId),
+          eq(phoneOtps.phone, input.phone),
+          isNotNull(phoneOtps.verifiedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
+
+    const [workspace] = await this._db
+      .select({ id: workspaces.id, canonicalPgKey: workspaces.canonicalPgKey })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, input.selectedPgWorkspaceId),
+          eq(workspaces.type, 'pg'),
+          eq(workspaces.status, 'active'),
+          isNotNull(workspaces.canonicalPgKey),
+        ),
+      )
+      .limit(1);
+
+    if (!workspace) return { ok: false, error: 'INVALID_CANONICAL_WORKSPACE' };
+
+    const passwordHash = await hashPassword(input.plainPassword);
+    const userId = randomUUID();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ email: string }>> => {
+      await purgeUnverifiedSignup(tx, email);
+
+      try {
+        await tx.insert(users).values({
+          id: userId,
+          email,
+          passwordHash,
+          name: input.name,
+          phone: input.phone,
+          avatarColor: 'ink',
+          status: 'active',
+          emailVerified: false,
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
+        throw err;
+      }
+
+      await tx
+        .insert(workspaceMembers)
+        .values({ workspaceId: input.selectedPgWorkspaceId, userId, role: 'member' })
+        .onConflictDoNothing();
+
+      await tx
+        .update(users)
+        .set({ lastActiveWorkspaceId: input.selectedPgWorkspaceId })
+        .where(eq(users.id, userId));
+
+      return { ok: true, email };
+    });
+
+    return result;
+  }
+
   async deleteAccount(input: {
     userId: string;
     plainPassword: string;
