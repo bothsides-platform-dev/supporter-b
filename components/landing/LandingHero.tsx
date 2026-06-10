@@ -5,10 +5,9 @@ import Link from 'next/link';
 import { motion } from 'motion/react';
 import { Logo } from '@/components/primitives/Logo';
 import { Button } from '@/components/primitives/Button';
-import { CheckIcon } from '@/components/icons';
 import { Footer } from '@/components/shell/Footer';
 import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
-import { OfferComparisonTable } from '@/components/landing/OfferComparisonTable';
+import { SolutionShowcase } from '@/components/landing/SolutionShowcase';
 import { ProcessSection } from '@/components/landing/ProcessSection';
 import { FaqList } from '@/components/landing/FaqList';
 import { ProblemCard } from '@/components/landing/ProblemCard';
@@ -199,26 +198,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         <section id="service" className={sectionCls}>
           <div className={containerCls}>
             <SectionHeading>SupporterB를 통해<br />PG 도입 문제를 해결해보세요</SectionHeading>
-            <ul className="flex flex-col gap-[var(--s-5)]">
-              {SOLUTION_POINTS.map((point, i) => (
-                <motion.li
-                  key={point}
-                  initial={{ opacity: 0, x: -8 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.36, delay: i * 0.08, ease: EASE_OUT }}
-                  className="flex items-start gap-[var(--s-4)]"
-                >
-                  <span className="mt-0.5 shrink-0 grid place-items-center h-5 w-5 rounded-full bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)]">
-                    <CheckIcon size={13} />
-                  </span>
-                  <span className="text-[var(--text-md)] leading-[1.6] tracking-[-0.006em] text-[var(--md-sys-color-on-surface)]">
-                    {point}
-                  </span>
-                </motion.li>
-              ))}
-            </ul>
-            <OfferComparisonTable />
+            <SolutionShowcase points={SOLUTION_POINTS} />
           </div>
         </section>
 

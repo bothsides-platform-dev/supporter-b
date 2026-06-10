@@ -17,7 +17,7 @@ vi.mock('motion/react', () => {
 // Heavy leaf sections are covered by their own suites — stub them so this
 // suite focuses on the landing shell: CTAs, section anchors, metrics, pricing.
 vi.mock('@/components/landing/SavingsCalculator', () => ({ SavingsCalculator: () => null }))
-vi.mock('@/components/landing/OfferComparisonTable', () => ({ OfferComparisonTable: () => null }))
+vi.mock('@/components/landing/SolutionShowcase', () => ({ SolutionShowcase: () => null }))
 vi.mock('@/components/landing/ProcessSection', () => ({ ProcessSection: () => null }))
 vi.mock('@/components/landing/FaqList', () => ({ FaqList: () => null }))
 
