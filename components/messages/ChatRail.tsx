@@ -69,35 +69,32 @@ export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props)
 
   // wsId → conversationId 해소 캐시. 레일이 열려 있고 상대방 탭일 때만 lazy 해소
   // (열람만으로 빈 페어 대화가 생기는 부수효과를 탭 활성 시점으로 한정).
-  // 실패하면 무한 스켈레톤 대신 에러 빈 상태 + 다시 시도를 노출한다.
+  // 실패는 wsId 단위로 기록해 무한 스켈레톤 대신 에러 빈 상태 + 다시 시도를
+  // 노출한다 — 상대가 바뀌면 새 wsId 는 실패 기록이 없으므로 자연히 재해소.
   const [convByWs, setConvByWs] = useState<Record<string, string>>({});
-  const [resolveFailed, setResolveFailed] = useState(false);
+  const [failedWs, setFailedWs] = useState<Record<string, boolean>>({});
   const activeWsId = counterparty?.workspaceId;
+  const resolveFailed = activeWsId ? !!failedWs[activeWsId] : false;
   useEffect(() => {
-    if (!open || tab !== 'counterparty' || !activeWsId || resolveFailed) return;
-    if (convByWs[activeWsId]) return;
+    if (!open || tab !== 'counterparty' || !activeWsId) return;
+    if (convByWs[activeWsId] || failedWs[activeWsId]) return;
     let cancelled = false;
     void getOrCreateConversationAction(activeWsId)
       .then((r) => {
         if (cancelled) return;
         if (!r.ok) {
-          setResolveFailed(true);
+          setFailedWs((prev) => ({ ...prev, [activeWsId]: true }));
           return;
         }
         setConvByWs((prev) => ({ ...prev, [activeWsId]: r.conversationId }));
       })
       .catch(() => {
-        if (!cancelled) setResolveFailed(true);
+        if (!cancelled) setFailedWs((prev) => ({ ...prev, [activeWsId]: true }));
       });
     return () => {
       cancelled = true;
     };
-  }, [open, tab, activeWsId, convByWs, resolveFailed]);
-
-  // 상대가 바뀌면 이전 실패 상태를 걷어 새 상대로 재시도하게 둔다.
-  useEffect(() => {
-    setResolveFailed(false);
-  }, [activeWsId]);
+  }, [open, tab, activeWsId, convByWs, failedWs]);
 
   if (!open) return null;
 
@@ -136,7 +133,13 @@ export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props)
               description="네트워크 상태를 확인하고 다시 시도해 주세요."
               className="py-12"
               action={
-                <Button size="sm" onClick={() => setResolveFailed(false)}>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    activeWsId &&
+                    setFailedWs((prev) => ({ ...prev, [activeWsId]: false }))
+                  }
+                >
                   다시 시도
                 </Button>
               }
