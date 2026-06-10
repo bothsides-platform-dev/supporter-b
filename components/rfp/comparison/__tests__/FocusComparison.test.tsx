@@ -33,6 +33,7 @@ vi.mock('@/components/rfp/comparison/AwardResult', () => ({
 }));
 
 import { FocusComparison } from '../FocusComparison';
+import { useChatRailStore } from '@/lib/stores/chat-rail';
 import type { Bid } from '@/lib/types/bid';
 
 function makeBid(over: Partial<Bid>): Bid {
@@ -180,5 +181,40 @@ describe('FocusComparison · award result overlay', () => {
     // 실패 시 인라인 에러만, 축하 오버레이는 없어야 한다.
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
+  });
+});
+
+// 채팅 레일 연동 — 포커스된 PG 를 chat-rail 스토어에 publish 해, 우측 레일의
+// '상대방 채팅' 탭이 탭 전환을 추종하게 한다 (RSC 경계로 콜백 전달 불가).
+describe('FocusComparison — 채팅 레일 상대 publish', () => {
+  beforeEach(() => {
+    useChatRailStore.getState().reset();
+  });
+
+  it('마운트 시 기본 포커스 PG(최저 카드 수수료)를 publish 한다', () => {
+    render(<FocusComparison {...baseProps} />);
+    expect(useChatRailStore.getState().counterparty).toEqual({
+      workspaceId: 'pg-toss',
+      name: '토스페이먼츠',
+      type: 'pg',
+    });
+  });
+
+  it('탭 전환 시 해당 PG 로 갱신한다', async () => {
+    const user = userEvent.setup();
+    render(<FocusComparison {...baseProps} />);
+
+    await user.click(screen.getByRole('tab', { name: /KG이니시스/ }));
+
+    expect(useChatRailStore.getState().counterparty).toEqual({
+      workspaceId: 'pg-kg',
+      name: 'KG이니시스',
+      type: 'pg',
+    });
+  });
+
+  it('견적이 없으면 publish 하지 않는다', () => {
+    render(<FocusComparison {...baseProps} bids={[]} />);
+    expect(useChatRailStore.getState().counterparty).toBeNull();
   });
 });

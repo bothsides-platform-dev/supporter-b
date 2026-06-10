@@ -82,6 +82,8 @@ describe('loadTeamThread', () => {
     if (!r.ok) return;
     expect(r.workspaceId).toBe(ws.id);
     expect(r.rfpId).toBe(rfp.id);
+    // 라이브 echo 의 self 판별용 — 클라이언트는 세션 userId 를 모른다.
+    expect(r.viewerUserId).toBe(me.id);
     expect(r.messages.map((m) => m.body)).toEqual(['메모 1', '메모 2']);
     expect(r.messages[0].isSelf).toBe(true);
     expect(r.messages[1].isSelf).toBe(false);

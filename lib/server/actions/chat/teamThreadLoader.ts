@@ -19,6 +19,8 @@ export type TeamThreadMessage = {
 export type LoadTeamThreadResult = ChatActionResult<{
   rfpId: string;
   workspaceId: string;
+  /** 세션 유저 id — 라이브 echo 의 self 판별용(클라이언트는 세션을 모른다). */
+  viewerUserId: string;
   messages: TeamThreadMessage[];
 }>;
 
@@ -48,6 +50,7 @@ export async function loadTeamThread(
     ok: true,
     rfpId: parsed.data,
     workspaceId: ws.workspaceId,
+    viewerUserId: ws.userId,
     messages: result.messages.map((m) => ({
       id: m.id,
       authorUserId: m.authorUserId,

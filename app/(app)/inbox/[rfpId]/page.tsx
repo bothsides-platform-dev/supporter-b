@@ -4,6 +4,8 @@ import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
+import { ChatRail } from '@/components/messages/ChatRail';
+import { ChatRailToggle } from '@/components/messages/ChatRailToggle';
 import { PgRfpDetailContent } from '@/components/inbox/PgRfpDetailContent';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 
@@ -21,12 +23,18 @@ export default async function InboxDetailPage({ params }: Props) {
   }
 
   return (
-    <div className="px-8 py-8">
+    <>
       <MarkInboxViewed rfpId={rfpCode} />
-      <Suspense fallback={<PgRfpDetailContent.Skeleton />}>
+      <Suspense
+        fallback={
+          <div className="px-8 py-8">
+            <PgRfpDetailContent.Skeleton />
+          </div>
+        }
+      >
         <PgRfpDetailLoader rfpCode={rfpCode} wsId={session.user.workspaceId} />
       </Suspense>
-    </div>
+    </>
   );
 }
 
@@ -39,5 +47,26 @@ async function PgRfpDetailLoader({
 }) {
   const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: wsId });
   if (!data) notFound();
-  return <PgRfpDetailContent data={data} variant="full" />;
+  // 우측 채팅 레일(상대방 채팅: 구매사 고정 / 팀 채팅)과 본문이 나란히 — 레일에
+  // rfp uuid·구매사 정보가 필요해 로더 안에서 함께 렌더한다(lg 미만 비노출).
+  return (
+    <div className="flex items-start">
+      <div className="min-w-0 flex-1 px-8 py-8">
+        <div className="mb-4 flex justify-end">
+          <ChatRailToggle />
+        </div>
+        <PgRfpDetailContent data={data} variant="full" />
+      </div>
+      <ChatRail
+        rfpId={data.rfp.id}
+        rfpCode={data.rfp.code}
+        rfpTitle={data.rfp.title}
+        fixedCounterparty={{
+          workspaceId: data.rfp.buyerWsId,
+          name: data.buyerName,
+          type: 'buyer',
+        }}
+      />
+    </div>
+  );
 }

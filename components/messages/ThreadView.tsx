@@ -19,6 +19,7 @@ import { useChatChannel } from '@/lib/hooks/useChatChannel';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
+import { formatDayLabel, formatTime } from './format';
 
 type Props = {
   conversationId: string;
@@ -28,6 +29,13 @@ type Props = {
   rfpById?: Record<string, { code: string; title: string }>;
   /** 모바일 단일 컬럼에서 대화 목록으로 돌아가는 콜백(데스크톱에선 미노출). */
   onBack?: () => void;
+  /**
+   * 'rail' = 상세 화면 우측 채팅 레일 임베드(w-96) — w-64 사이드 갤러리가 말풍선
+   * 영역을 짓누르므로 갤러리를 목록 위 오버레이로 전환한다. 기본은 'page'.
+   */
+  variant?: 'page' | 'rail';
+  /** 레일 컨텍스트의 RFP — 컴포저 전송에 이 RFP 태그를 기본 적용한다. */
+  defaultRfpId?: string;
 };
 
 /** Live `message` event payload published by sendChatMessageAction. */
@@ -125,24 +133,14 @@ function renderBody(body: string): React.ReactNode {
 }
 
 /** "5월 26일 월요일" 형태 (KST 캘린더 일자 기준 그룹 키와 동일 포맷). */
-function formatDayLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('ko-KR', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-  });
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' });
-}
-
 export function ThreadView({
   conversationId,
   counterparty,
   messages,
   rfpById,
   onBack,
+  variant = 'page',
+  defaultRfpId,
 }: Props) {
   // 대화별 초안 보존 — 대화 전환(remount) 시에도 작성 중이던 내용을 잃지 않는다.
   const draftKey = `chat-draft:${conversationId}`;
@@ -384,7 +382,7 @@ export function ThreadView({
         id: tempId,
         sender: 'self',
         body,
-        rfpId: null,
+        rfpId: defaultRfpId ?? null,
         createdAt: new Date().toISOString(),
         readByCounterparty: false,
         attachments: optimisticAttachments,
@@ -402,6 +400,7 @@ export function ThreadView({
         conversationId,
         body,
         attachmentIds: readyAttachments.map((a) => a.id),
+        rfpId: defaultRfpId,
       });
     } catch {
       setSending(false);
@@ -633,6 +632,17 @@ export function ThreadView({
           새 메시지
         </button>
       )}
+
+      {/* 레일 변형 갤러리 — w-64 사이드 패널이 좁은 레일을 짓누르므로 목록 위
+          오버레이로 전환(기능 동일, 폭 손실 없음). */}
+      {variant === 'rail' && showGallery && (
+        <div
+          data-gallery-overlay
+          className="absolute inset-0 z-10 overflow-y-auto bg-[var(--md-sys-color-surface)] p-3"
+        >
+          <AttachmentGalleryPanel conversationId={conversationId} />
+        </div>
+      )}
       </div>
 
       {/* 연결 끊김 배너 */}
@@ -749,9 +759,12 @@ export function ThreadView({
       </div>
     </div>
 
-    {/* 우측 첨부파일 갤러리 패널 */}
-    {showGallery && (
-      <div className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-[var(--md-sys-color-outline-variant)] p-3">
+    {/* 우측 첨부파일 갤러리 패널 (page 변형 전용 — rail 은 목록 오버레이) */}
+    {variant === 'page' && showGallery && (
+      <div
+        data-gallery-pane
+        className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-[var(--md-sys-color-outline-variant)] p-3"
+      >
         <AttachmentGalleryPanel conversationId={conversationId} />
       </div>
     )}
