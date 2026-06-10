@@ -79,8 +79,9 @@ export function QuoteTemplateList({
     <div className="space-y-6">
       <QuoteTemplateDrawer
         open={drawerOpen}
-        onOpenChange={setDrawerOpen}
+        onClose={() => setDrawerOpen(false)}
         template={editTarget}
+        onSaved={() => { setDrawerOpen(false); router.refresh(); }}
       />
 
       <ConfirmDialog
@@ -94,19 +95,27 @@ export function QuoteTemplateList({
         loading={pending}
       />
 
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] md-numeric">
-          {initialTemplates.length} / {MAX_TEMPLATES}개
-        </span>
-        <Button
-          type="button"
-          size="sm"
-          variant="outlined"
-          onClick={openNew}
-        >
-          새 템플릿
-        </Button>
-      </div>
+      <header className="space-y-1">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-0.5">
+            <h1 className="text-[20px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
+              견적 템플릿
+            </h1>
+            <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+              자주 쓰는 정산조건과 수수료율을 저장해 두고, 견적 작성 시 한 번에 불러와요
+              {workspaceName ? ` · ${workspaceName}` : ''}.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outlined"
+            onClick={openNew}
+          >
+            새 템플릿
+          </Button>
+        </div>
+      </header>
 
       {initialTemplates.length === 0 ? (
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -174,6 +183,10 @@ export function QuoteTemplateList({
           })}
         </ul>
       )}
+
+      <p className="font-mono text-[11px] text-[var(--md-sys-color-outline)] md-numeric">
+        {initialTemplates.length} / {MAX_TEMPLATES}개
+      </p>
     </div>
   );
 }

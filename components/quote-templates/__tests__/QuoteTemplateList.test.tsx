@@ -3,8 +3,8 @@ import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 
-const deleteMock = vi.fn(async () => ({ ok: true as const }));
-const duplicateMock = vi.fn(async () => ({ ok: true as const, templateId: 'dup-id' }));
+const deleteMock = vi.fn(async (_i: unknown) => ({ ok: true as const }));
+const duplicateMock = vi.fn(async (_i: unknown) => ({ ok: true as const, templateId: 'dup-id' }));
 vi.mock('@/lib/server/actions/quote-template/deleteQuoteTemplateAction', () => ({
   deleteQuoteTemplateAction: (i: unknown) => deleteMock(i),
 }));
