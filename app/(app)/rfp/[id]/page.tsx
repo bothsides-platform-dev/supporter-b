@@ -70,7 +70,9 @@ async function RfpDetailLoader({
           <RfpDetailContent data={data} />
         </PageEnter>
       </div>
-      <ChatRail rfpId={data.rfp.id} rfpCode={data.rfp.code} rfpTitle={data.rfp.title} />
+      {!data.rfp.isSample && (
+        <ChatRail rfpId={data.rfp.id} rfpCode={data.rfp.code} rfpTitle={data.rfp.title} />
+      )}
     </div>
   );
 }

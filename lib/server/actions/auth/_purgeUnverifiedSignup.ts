@@ -5,6 +5,7 @@ import {
   workspaceMembers,
   bizProfiles,
   verificationTokens,
+  rfps,
 } from '@/lib/db/schema';
 
 /**
@@ -54,6 +55,9 @@ export async function purgeUnverifiedSignup(tx: any, email: string): Promise<voi
       .map((w: { bizProfileId: string | null }) => w.bizProfileId)
       .filter((x: string | null): x is string => !!x);
 
+    // 이 워크스페이스의 RFP(온보딩 샘플 포함)를 먼저 삭제 — rfps.buyer_ws_id FK는 cascade가
+    // 아니라 워크스페이스 삭제 전에 비워야 한다. rfps 삭제는 bids·invitations·allowlist로 cascade.
+    await tx.delete(rfps).where(inArray(rfps.buyerWsId, wsIds));
     await tx.delete(workspaces).where(inArray(workspaces.id, wsIds));
     if (bizIds.length > 0) {
       await tx.delete(bizProfiles).where(inArray(bizProfiles.id, bizIds));

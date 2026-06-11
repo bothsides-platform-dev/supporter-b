@@ -32,6 +32,7 @@ export type BuyerKanbanCard = {
   invitedPgCount: number;
   submittedBidCount: number;
   awardedBidId?: string;
+  isSample: boolean;
 };
 
 // pure — 단위 테스트 가능. status 만으로 3단계 분류 (진행중/마감/계약완료).
@@ -63,6 +64,7 @@ export function toBuyerCard(args: {
     invitedPgCount: invitedActive,
     submittedBidCount: bids.filter((b) => b.status === 'submitted').length,
     awardedBidId: rfp.awardedBidId,
+    isSample: rfp.isSample ?? false,
   };
 }
 

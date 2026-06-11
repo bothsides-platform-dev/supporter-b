@@ -14,6 +14,8 @@ import {
   bizProfiles,
   columns,
   verificationApplications,
+  rfps,
+  bids,
 } from '@/lib/db/schema';
 
 const sessionRef: { value: { user: { id: string } } | null } = { value: null };
@@ -143,6 +145,24 @@ describe('createWorkspaceInTx', () => {
     const cols = await db.select().from(columns).where(eq(columns.workspaceId, workspaceId));
     expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(4);
     expect(cols.filter((c) => c.kind === 'rfp_bids')).toHaveLength(0);
+  });
+
+  it('buyer: seeds a sample RFP (isSample) with 3 bids', async () => {
+    const u = await seedUser(db);
+    const { workspaceId } = await createWorkspaceInTx(db, { userId: u.id, type: 'buyer', name: 'BuyerCo' });
+
+    const sample = await db.select().from(rfps).where(eq(rfps.buyerWsId, workspaceId));
+    expect(sample).toHaveLength(1);
+    expect(sample[0].isSample).toBe(true);
+    const bidRows = await db.select().from(bids).where(eq(bids.rfpId, sample[0].id));
+    expect(bidRows).toHaveLength(3);
+  });
+
+  it('pg: does NOT seed a sample RFP', async () => {
+    const u = await seedUser(db);
+    const { workspaceId } = await createWorkspaceInTx(db, { userId: u.id, type: 'pg', name: 'NewPG' });
+    const sample = await db.select().from(rfps).where(eq(rfps.buyerWsId, workspaceId));
+    expect(sample).toHaveLength(0);
   });
 });
 

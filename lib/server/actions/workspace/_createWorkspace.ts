@@ -10,6 +10,7 @@ import {
   verificationApplications,
 } from '@/lib/db/schema';
 import { defaultColumns } from '@/lib/server/columns/seed';
+import { seedSampleRfpInTx } from '@/lib/server/onboarding/sample-rfp';
 
 export type CreateWorkspaceBizProfile = {
   bizNo: string;
@@ -87,6 +88,11 @@ export async function createWorkspaceInTx(
   // Seed the unified kanban columns (single source: defaultColumns). buyer gets
   // both pipeline + rfp_bids boards; pg gets only pipeline.
   await tx.insert(columns).values(defaultColumns(wsId, input.type));
+
+  // 구매사 온보딩: 샘플 견적 요청 1건 + 데모 PG 견적을 같은 tx 에 시드. (pg 는 시드 안 함)
+  if (input.type === 'buyer') {
+    await seedSampleRfpInTx(tx, { buyerWsId: wsId, buyerUserId: input.userId });
+  }
 
   return { workspaceId: wsId, applicationId };
 }

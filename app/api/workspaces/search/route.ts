@@ -6,11 +6,10 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { eq, ilike, and } from 'drizzle-orm';
 
 import { auth } from '@/auth';
 import { db } from '@/lib/db/client';
-import { workspaces } from '@/lib/db/schema';
+import { searchWorkspaces } from '@/lib/server/workspaces/search';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,10 +18,6 @@ const QuerySchema = z.object({
   q: z.string().max(100).optional(),
   type: z.enum(['buyer', 'pg']).default('pg'),
 });
-
-function escapeIlike(s: string): string {
-  return s.replace(/[\\%_]/g, '\\$&');
-}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -46,15 +41,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const rows = await db
-    .select({ id: workspaces.id, name: workspaces.name })
-    .from(workspaces)
-    .where(
-      q
-        ? and(eq(workspaces.type, type), ilike(workspaces.name, `%${escapeIlike(q)}%`))
-        : eq(workspaces.type, type),
-    )
-    .limit(q ? 20 : 500);
+  const rows = await searchWorkspaces(db, { type, q });
 
   const nameCount = new Map<string, number>();
   for (const row of rows) {

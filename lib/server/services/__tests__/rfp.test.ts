@@ -299,6 +299,20 @@ describe('RfpService.award', () => {
     if (r.ok) return;
     expect(r.error).toContain('WINNING_BID_NOT_FOUND');
   });
+
+  it('refuses to award a sample RFP (SAMPLE_READONLY)', async () => {
+    const s = await seedAwardEnv();
+    await db.update(rfps).set({ isSample: true }).where(eq(rfps.id, s.rfpId));
+    const r = await service.award(s.rfpId, s.winnerBidId, {
+      userId: s.buyerUserId,
+      workspaceId: s.buyerWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'SAMPLE_READONLY' });
+    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.id, s.rfpId));
+    expect(rfpRow!.status).not.toBe('awarded');
+    const c = await db.select().from(contracts).where(eq(contracts.rfpId, s.rfpId));
+    expect(c).toHaveLength(0);
+  });
 });
 
 // ─── RfpService.cancel ───────────────────────────────────────────────────────

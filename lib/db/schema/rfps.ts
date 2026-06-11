@@ -73,6 +73,8 @@ export const rfps = pgTable(
     // 오픈 RFP 게시판 노출 여부 (opt-out). 기본 true = 노출. 구매사가 끄면 PG
     // 게시판/홈 탐색에서 사라진다. default true ⇒ 기존 행 백필 시 모두 노출.
     boardVisible: boolean('board_visible').notNull().default(true),
+    // 온보딩 샘플 RFP 표식. true면 '샘플' 칩·읽기전용 샌드박스·전용 하드삭제 게이트가 켜진다.
+    isSample: boolean('is_sample').notNull().default(false),
     // 계약 유형: 신규 계약('new') 또는 갱신 계약('renewal'). 선택사항 — null이면 미표시.
     contractType: contractTypeEnum('contract_type'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),

@@ -55,6 +55,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     requiredPaymentMethods: (row.requiredPaymentMethods ?? []) as PaymentMethod[],
     customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
     boardVisible: row.boardVisible,
+    isSample: row.isSample,
     contractType: row.contractType ?? null,
   };
 }

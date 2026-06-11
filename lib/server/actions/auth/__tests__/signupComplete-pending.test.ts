@@ -14,12 +14,12 @@ describe('createWorkspaceInTx — pending status + verification_application', ()
   it('buyer 워크스페이스 생성 시 status=pending', async () => {
     const user = await seedUser(db);
     const { createWorkspaceInTx } = await import('@/lib/server/actions/workspace/_createWorkspace');
-    await createWorkspaceInTx(db, {
+    const { workspaceId } = await createWorkspaceInTx(db, {
       userId: user.id,
       type: 'buyer',
       name: '구매사',
     });
-    const [ws] = await db.select().from(workspaces);
+    const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId));
     expect(ws.status).toBe('pending');
   });
 
