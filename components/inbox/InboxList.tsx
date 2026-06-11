@@ -34,6 +34,8 @@ export type InboxRow = {
   gradeRaw?: MerchantGrade;
   /** 계약 유형. null이면 미표시. */
   contractType?: 'new' | 'renewal' | null;
+  /** 이 PG에 대해 pending 재요청이 있으면 true — 재요청 Chip 표시 트리거. */
+  hasPendingRequote?: boolean;
 };
 
 export function InboxList({ rows }: { rows: InboxRow[] }) {
@@ -99,6 +101,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                         color={row.contractType === 'new' ? 'primary' : 'surface'}
                       />
                     )}
+                    {row.hasPendingRequote && <Chip label="재요청" color="warning" />}
                     {row.rfpTitle}
                   </span>
                 </td>

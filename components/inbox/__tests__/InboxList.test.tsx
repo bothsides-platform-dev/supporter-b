@@ -102,6 +102,16 @@ describe('InboxList', () => {
     expect(screen.queryByText('신규 계약')).not.toBeInTheDocument();
     expect(screen.queryByText('갱신 계약')).not.toBeInTheDocument();
   });
+
+  it('hasPendingRequote가 true이면 재요청 Chip을 표시한다', () => {
+    render(<InboxList rows={[{ ...row, hasPendingRequote: true }]} />);
+    expect(screen.getByText('재요청')).toBeInTheDocument();
+  });
+
+  it('hasPendingRequote가 false/undefined이면 재요청 Chip을 표시하지 않는다', () => {
+    render(<InboxList rows={[row]} />);
+    expect(screen.queryByText('재요청')).not.toBeInTheDocument();
+  });
 });
 
 describe('InboxListSkeleton — RSC fallback 회귀 방지', () => {
