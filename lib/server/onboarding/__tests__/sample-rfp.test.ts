@@ -27,6 +27,8 @@ describe('ensureDemoPgs', () => {
     expect(demoWs).toHaveLength(3);
     const sys = await db.select().from(users).where(eq(users.isSystemAccount, true));
     expect(sys).toHaveLength(3);
+    // 데모 계정은 절대 인증되지 않아야 한다 — 사용 불가 passwordHash
+    expect(sys.every((u) => u.passwordHash === '!')).toBe(true);
     // each demo ws has an admin membership
     for (const d of first) {
       const [m] = await db

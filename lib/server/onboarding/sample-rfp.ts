@@ -28,6 +28,9 @@ export async function ensureDemoPgs(tx: any): Promise<DemoPg[]> {
         .from(workspaceMembers)
         .where(eq(workspaceMembers.workspaceId, existing.id))
         .limit(1);
+      if (!member) {
+        throw new Error(`demo PG workspace ${existing.id} has no member — data integrity error`);
+      }
       out.push({ wsId: existing.id, userId: member.userId, name });
       continue;
     }
@@ -46,7 +49,7 @@ export async function ensureDemoPgs(tx: any): Promise<DemoPg[]> {
       id: wsId,
       type: 'pg',
       name,
-      status: 'active',
+      status: 'active', // 승인 플로우 우회 — 데모 PG라 실제 계정이 아님
       isDemo: true,
     });
     await tx.insert(workspaceMembers).values({ workspaceId: wsId, userId, role: 'admin' });
