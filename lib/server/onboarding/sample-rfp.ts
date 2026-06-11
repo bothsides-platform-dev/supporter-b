@@ -7,7 +7,7 @@ import { nextRfpId } from '@/lib/server/rfp-id';
 
 export const DEMO_PG_NAMES = ['샘플페이 A', '샘플페이 B', '샘플페이 C'] as const;
 
-export const SAMPLE_DEADLINE_MS = 3650 * 24 * 60 * 60 * 1000;
+const SAMPLE_DEADLINE_MS = 3650 * 24 * 60 * 60 * 1000;
 
 type SampleBidSpec = {
   settleCycle: string;
@@ -116,6 +116,10 @@ export async function seedSampleRfpInTx(
   tx: any,
   input: { buyerWsId: string; buyerUserId: string },
 ): Promise<{ seeded: boolean; rfpId?: string }> {
+  if (SAMPLE_BIDS.length !== DEMO_PG_NAMES.length) {
+    throw new Error('SAMPLE_BIDS must have one entry per demo PG');
+  }
+
   const [ws] = await tx
     .select({ sampleSeededAt: workspaces.sampleSeededAt })
     .from(workspaces)
