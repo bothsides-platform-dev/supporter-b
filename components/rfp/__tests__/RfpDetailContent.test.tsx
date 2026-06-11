@@ -30,6 +30,11 @@ vi.mock('../RfpPendingRequests', () => ({
 vi.mock('@/components/attachments/AttachmentPreviewList', () => ({
   AttachmentPreviewList: () => <div data-testid="attachments" />,
 }));
+// ChatRailToggle 은 server action(getOrCreateConversationAction → next-auth 체인)을
+// 정적 임포트해 jsdom 수집을 깨뜨린다 — 자체 테스트(ChatRail.test)가 커버.
+vi.mock('@/components/messages/ChatRailToggle', () => ({
+  ChatRailToggle: () => <div data-testid="chat-rail-toggle" />,
+}));
 
 import { RfpDetailContent } from '../RfpDetailContent';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';

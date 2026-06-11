@@ -421,6 +421,16 @@ export interface ChatConversationRepo {
     pgWsId: string,
     tx?: Tx,
   ): Promise<ChatConversation>;
+  /**
+   * 페어 읽기 전용 조회 — 없으면 undefined, **행을 생성하지 않는다**.
+   * 채팅 레일의 표시용 해소 경로: 열람·포커스 추종만으로 빈 대화가 생기면
+   * 상대 인박스에 관심 신호가 새므로(sealed-bid), 생성은 첫 전송에만 맡긴다.
+   */
+  findPair(
+    buyerWsId: string,
+    pgWsId: string,
+    tx?: Tx,
+  ): Promise<ChatConversation | undefined>;
   /** id 단건 조회. 없으면 undefined. */
   findById(id: string, tx?: Tx): Promise<ChatConversation | undefined>;
   /**
@@ -457,6 +467,36 @@ export interface ChatMessageRepo {
     conversationId: string,
     tx?: Tx,
   ): Promise<ChatMessageRecord[]>;
+}
+
+// ── RFP Team Chat: Message ────────────────────────────────────────────
+/**
+ * RFP-scoped internal team message. Scope = (rfpId, workspaceId) — buyer team
+ * and each PG team have fully separate threads (sealed-bid invariant).
+ */
+export type RfpTeamMessageRecord = {
+  id: string;
+  rfpId: string;
+  workspaceId: string;
+  authorUserId: string;
+  body: string;
+  createdAt: Date;
+};
+
+/** Read shape — authorName hydrated from users for display. */
+export type RfpTeamMessageWithAuthor = RfpTeamMessageRecord & {
+  authorName: string;
+};
+
+export interface RfpTeamMessageRepo {
+  /** 메시지 insert (append-only). */
+  save(msg: RfpTeamMessageRecord, tx?: Tx): Promise<void>;
+  /** 한 (rfp, workspace) 스코프의 모든 메시지 — created_at asc. */
+  listByScope(
+    rfpId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<RfpTeamMessageWithAuthor[]>;
 }
 
 // ── Chat: Message Template ────────────────────────────────────────────

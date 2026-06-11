@@ -6,6 +6,7 @@ import { Label } from '@/components/primitives/Label';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Accordion, AccordionItem } from '@/components/ui/accordion';
+import { ChatRailToggle } from '@/components/messages/ChatRailToggle';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { RfpBoardVisibilityToggle } from '@/components/rfp/RfpBoardVisibilityToggle';
@@ -88,7 +89,10 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
           <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
             {rfp.title}
           </h1>
-          <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
+          <div className="flex shrink-0 items-center gap-2">
+            <ChatRailToggle />
+            <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
+          </div>
         </div>
         <div className="flex items-center gap-4 mt-2">
           <Label size="md" muted={false}>마감 {formatDate(rfp.deadline)}</Label>
