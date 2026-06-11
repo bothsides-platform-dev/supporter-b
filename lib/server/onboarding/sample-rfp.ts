@@ -2,9 +2,58 @@
 // createWorkspaceInTx(신규 구매사)·backfill 스크립트(기존)·OnboardingService(삭제)가 호출.
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
-import { users, workspaceMembers, workspaces } from '@/lib/db/schema';
+import { users, workspaceMembers, workspaces, rfps, rfpAllowedPg, rfpInvitations, bids } from '@/lib/db/schema';
+import { nextRfpId } from '@/lib/server/rfp-id';
 
 export const DEMO_PG_NAMES = ['샘플페이 A', '샘플페이 B', '샘플페이 C'] as const;
+
+export const SAMPLE_DEADLINE_MS = 3650 * 24 * 60 * 60 * 1000;
+
+type SampleBidSpec = {
+  settleCycle: string;
+  settleLimit: string;
+  guaranteeInsurance: string;
+  // PaymentMethod → 단일요율(number) 또는 우대수수료 구간맵(TierRates)
+  paymentFees: Record<string, number | Record<string, number>>;
+  memo: string;
+};
+
+// 세 비더를 의도적으로 차별화 — 비교가 의미를 갖도록.
+const SAMPLE_BIDS: SampleBidSpec[] = [
+  {
+    settleCycle: 'D+2',
+    settleLimit: '50000000',
+    guaranteeInsurance: '5000000',
+    paymentFees: {
+      card: { sole: 0.005, sme1: 0.008, sme2: 0.011, sme3: 0.013, general: 0.018 },
+      virtual_account: 0.003,
+      naver_pay: 0.025,
+    },
+    memo: '카드 수수료가 가장 낮아요. 정산은 D+2예요.',
+  },
+  {
+    settleCycle: 'D+1',
+    settleLimit: '100000000',
+    guaranteeInsurance: '3000000',
+    paymentFees: {
+      card: { sole: 0.006, sme1: 0.009, sme2: 0.012, sme3: 0.015, general: 0.02 },
+      virtual_account: 0.0025,
+      naver_pay: 0.023,
+    },
+    memo: '정산이 D+1로 빠르고 한도가 높아요.',
+  },
+  {
+    settleCycle: 'D+1',
+    settleLimit: '80000000',
+    guaranteeInsurance: '0',
+    paymentFees: {
+      card: { sole: 0.007, sme1: 0.01, sme2: 0.013, sme3: 0.016, general: 0.022 },
+      virtual_account: 0.002,
+      naver_pay: 0.019,
+    },
+    memo: '간편결제 수수료가 낮고 보증보험이 없어요.',
+  },
+];
 
 export type DemoPg = { wsId: string; userId: string; name: string };
 
@@ -56,4 +105,83 @@ export async function ensureDemoPgs(tx: any): Promise<DemoPg[]> {
     out.push({ wsId, userId, name });
   }
   return out;
+}
+
+/**
+ * 구매사 워크스페이스에 샘플 견적 요청 1건 + 데모 PG 3사의 견적을 시드한다.
+ * sampleSeededAt 가 이미 설정돼 있으면 no-op(멱등). 반드시 tx 안에서 호출.
+ */
+export async function seedSampleRfpInTx(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  input: { buyerWsId: string; buyerUserId: string },
+): Promise<{ seeded: boolean; rfpId?: string }> {
+  const [ws] = await tx
+    .select({ sampleSeededAt: workspaces.sampleSeededAt })
+    .from(workspaces)
+    .where(eq(workspaces.id, input.buyerWsId))
+    .limit(1);
+  if (!ws || ws.sampleSeededAt) return { seeded: false };
+
+  const demos = await ensureDemoPgs(tx);
+  const now = new Date();
+  const deadline = new Date(now.getTime() + SAMPLE_DEADLINE_MS);
+  const rfpId = randomUUID();
+  const code = await nextRfpId(tx);
+
+  await tx.insert(rfps).values({
+    id: rfpId,
+    code,
+    buyerWsId: input.buyerWsId,
+    title: '온라인 쇼핑몰 PG 견적 요청 (샘플)',
+    memo: '결제대행사 비교를 위한 샘플 견적 요청이에요. 받은 견적을 비교하고 선정하는 과정을 둘러볼 수 있어요. 다 살펴봤다면 삭제해도 돼요.',
+    mainProducts: '패션 의류 · 잡화',
+    annualPgVolume: '1200000000',
+    currentFeeRate: '2.8%',
+    currentSettlementCycle: 'D+5',
+    currentSettlementLimit: '30000000',
+    currentGuaranteeInsurance: '없음',
+    requiredPaymentMethods: ['card', 'virtual_account', 'naver_pay'],
+    deadline,
+    status: 'sent',
+    boardVisible: false,
+    isSample: true,
+    createdBy: input.buyerUserId,
+    sentAt: now,
+  });
+
+  for (let i = 0; i < demos.length; i++) {
+    const demo = demos[i];
+    const spec = SAMPLE_BIDS[i];
+    const invitationId = randomUUID();
+    await tx.insert(rfpAllowedPg).values({ rfpId, pgWsId: demo.wsId });
+    await tx.insert(rfpInvitations).values({
+      id: invitationId,
+      rfpId,
+      pgWsId: demo.wsId,
+      acceptedByUserId: demo.userId,
+      tokenHash: randomUUID(), // 샘플은 토큰 진입이 없어 임의 unique 값으로 충분
+      sentAt: now,
+      expiresAt: deadline,
+      status: 'accepted',
+    });
+    await tx.insert(bids).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: demo.wsId,
+      invitationId,
+      settleCycle: spec.settleCycle,
+      settleLimit: spec.settleLimit,
+      guaranteeInsurance: spec.guaranteeInsurance,
+      paymentFees: spec.paymentFees,
+      customFees: {},
+      memo: spec.memo,
+      status: 'submitted',
+      submittedBy: demo.userId,
+      submittedAt: now,
+    });
+  }
+
+  await tx.update(workspaces).set({ sampleSeededAt: now }).where(eq(workspaces.id, input.buyerWsId));
+  return { seeded: true, rfpId };
 }
