@@ -28,6 +28,7 @@ function makeBid(id: string, pgWsId: string): Bid {
     proposalPdfs: [],
     status: 'submitted',
     submittedBy: 'u1',
+    round: 1,
   };
 }
 
