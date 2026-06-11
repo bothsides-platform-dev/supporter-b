@@ -54,3 +54,6 @@ export type {
   UpdateWorkspaceBizProfileInput,
   UpdateWorkspaceBizProfileResult,
 } from './updateWorkspaceBizProfileAction';
+
+export { requestRequoteAction } from './requestRequoteAction';
+export type { RequestRequoteInput, RequestRequoteResult } from './requestRequoteAction';
