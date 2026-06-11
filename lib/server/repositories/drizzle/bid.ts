@@ -22,6 +22,7 @@ const BID_COLUMNS = {
   paymentFees: bids.paymentFees,
   customFees: bids.customFees,
   memo: bids.memo,
+  round: bids.round,
   status: bids.status,
   boardColumnId: bids.boardColumnId,
   submittedBy: bids.submittedBy,
@@ -60,6 +61,7 @@ function rowToBid(row: BidRow, proposalPdfs: Attachment[]): Bid {
     rfpId: row.rfpId,
     pgWsId: row.pgWsId,
     invitationId: row.invitationId,
+    round: row.round,
     settleCycle: row.settleCycle,
     settleLimit: Number(row.settleLimit),
     guaranteeInsurance: Number(row.guaranteeInsurance),
@@ -111,6 +113,7 @@ export class DrizzleBidRepository implements BidRepo {
         rfpId: bid.rfpId,
         pgWsId: bid.pgWsId,
         invitationId: bid.invitationId,
+        round: bid.round,
         settleCycle: bid.settleCycle,
         settleLimit: String(bid.settleLimit),
         guaranteeInsurance: String(bid.guaranteeInsurance),
@@ -124,6 +127,7 @@ export class DrizzleBidRepository implements BidRepo {
       .onConflictDoUpdate({
         target: bids.id,
         set: {
+          round: bid.round,
           settleCycle: bid.settleCycle,
           settleLimit: String(bid.settleLimit),
           guaranteeInsurance: String(bid.guaranteeInsurance),
