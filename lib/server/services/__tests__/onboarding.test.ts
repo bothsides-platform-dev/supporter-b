@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
@@ -16,6 +16,10 @@ beforeEach(async () => {
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
   svc = new OnboardingService(db);
+});
+
+afterEach(() => {
+  __resetForTest();
 });
 
 async function seedSample(): Promise<{ wsId: string; userId: string; code: string }> {

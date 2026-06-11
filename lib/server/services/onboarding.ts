@@ -10,6 +10,7 @@ export class OnboardingService {
     return this._db.transaction((tx: any) => seedSampleRfpInTx(tx, input));
   }
 
+  // 소유권은 actor.workspaceId 로만 게이트한다(userId 는 Actor 계약상 받지만 여기선 미사용).
   async deleteSampleRfp(code: string, actor: Actor): Promise<ServiceResult> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return this._db.transaction((tx: any) => deleteSampleRfpInTx(tx, { code, workspaceId: actor.workspaceId }));
