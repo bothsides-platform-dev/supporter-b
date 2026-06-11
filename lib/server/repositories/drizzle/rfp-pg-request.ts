@@ -122,6 +122,7 @@ export class DrizzleRfpRequestRepository implements PgRequestRepo {
           eq(rfps.status, 'sent'),
           gt(rfps.deadline, now),
           eq(rfps.boardVisible, true),
+          eq(rfps.isSample, false),
           notExists(
             db
               .select({ one: sql`1` })
