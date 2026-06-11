@@ -37,9 +37,40 @@ type Props = {
   rfp: PgRfpDetailData['rfp'];
   buyerName: string;
   templates?: QuoteTemplateOption[];
+  /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
+  initialBid?: PgRfpDetailData['myBid'];
 };
 
-export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
+/**
+ * Bid 도메인 객체 → BidDraft 폼 상태로 변환 (재요청 prefill용).
+ *
+ * NOTE: TierRates(객체형) 요율은 단순화로 생략 — 단일 number 요율만 prefill.
+ * 구간별 요율 편집은 사용자가 직접 수행.
+ */
+export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
+  const m = /^([A-Z]+)\+?(\d+)?$/.exec(b.settleCycle);
+  const fees: Record<string, string> = {};
+  for (const [k, v] of Object.entries(b.paymentFees ?? {})) {
+    if (typeof v === 'number') {
+      fees[k] = String(Math.round(v * 1e6) / 1e4);
+    }
+    // TierRates(object) — 단순화로 생략; 사용자가 직접 입력
+  }
+  for (const [k, v] of Object.entries(b.customFees ?? {})) {
+    fees[k] = String(Math.round(v * 1e6) / 1e4);
+  }
+  return {
+    __v: 3,
+    cycleUnit: (m?.[1] ?? 'D') as BidDraft['cycleUnit'],
+    cycleNum: m?.[2] ?? '1',
+    settleLimit: String(b.settleLimit ?? 0),
+    guaranteeInsurance: String(b.guaranteeInsurance ?? 0),
+    fees,
+    memo: b.memo ?? '',
+  };
+}
+
+export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const rfpCode = rfp.code;
@@ -51,15 +82,11 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
 
-  const [fields, setFields] = useState<BidDraft>({
-    __v: 3,
-    cycleUnit: 'D',
-    cycleNum: '1',
-    settleLimit: '0',
-    guaranteeInsurance: '0',
-    fees: {},
-    memo: '',
-  });
+  const [fields, setFields] = useState<BidDraft>(() =>
+    initialBid
+      ? bidToDraft(initialBid)
+      : { __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees: {}, memo: '' },
+  );
   const setField = <K extends keyof BidDraft>(key: K, value: BidDraft[K]) =>
     setFields((f) => ({ ...f, [key]: value }));
   const setFee = (key: string, value: string) =>
