@@ -20,7 +20,7 @@ describe('rowToRfp isSample mapping', () => {
   it('maps rfps.is_sample → RFP.isSample', async () => {
     const u = await seedUser(db);
     const ws = await seedBuyerWorkspace(db);
-    const code = `P-2606-${Math.floor(1000 + Math.random() * 8999)}`;
+    const code = 'P-2606-SMPL1';
     await db.insert(rfps).values({
       id: randomUUID(),
       code,
@@ -33,5 +33,22 @@ describe('rowToRfp isSample mapping', () => {
     const repo = await getRfpRepo();
     const found = await repo.findByCode(code);
     expect(found?.isSample).toBe(true);
+  });
+
+  it('defaults isSample to false when not set', async () => {
+    const u = await seedUser(db);
+    const ws = await seedBuyerWorkspace(db);
+    const code = 'P-2606-SMPL2';
+    await db.insert(rfps).values({
+      id: randomUUID(),
+      code,
+      buyerWsId: ws.id,
+      title: 'normal',
+      deadline: new Date(Date.now() + 1000),
+      createdBy: u.id,
+    });
+    const repo = await getRfpRepo();
+    const found = await repo.findByCode(code);
+    expect(found?.isSample).toBe(false);
   });
 });
