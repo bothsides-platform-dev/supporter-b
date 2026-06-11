@@ -13,6 +13,7 @@ import {
   getOutboxRepo,
   getPgRequestRepo,
   getRfpRepo,
+  getRfpRequoteRequestRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -36,12 +37,12 @@ let db: PgliteDB;
 let service: RfpService;
 
 async function buildService(): Promise<RfpService> {
-  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo] =
+  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo] =
     await Promise.all([
       getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
-      getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(),
+      getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(),
     ]);
-  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo);
+  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo);
 }
 
 beforeEach(async () => {
