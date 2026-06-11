@@ -150,4 +150,25 @@ describe('RfpService.requote', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('FORBIDDEN_BUYER');
   });
+
+  it('writes nothing when one of multiple targets is invalid (all-or-nothing)', async () => {
+    const s = await seedBidderEnv();
+    const nonBidder = await seedPgWorkspace(db, 'no-bid.io'); // has NO submitted bid
+    const [rfpBefore] = await db.select().from(rfps).where(eq(rfps.id, s.rfpId));
+
+    const r = await service.requote(
+      s.rfpId,
+      { targetPgWsIds: [s.pgWs.id, nonBidder.id], message: '낮춰주세요', newDeadline: future() },
+      { userId: s.buyer.id, workspaceId: s.buyerWs.id },
+    );
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('TARGET_NOT_BIDDER');
+
+    // all-or-nothing: the valid target (s.pgWs) must NOT have a requote row, and the deadline must be unchanged
+    const reqs = await db.select().from(rfpRequoteRequests).where(eq(rfpRequoteRequests.rfpId, s.rfpId));
+    expect(reqs).toHaveLength(0);
+    const [rfpAfter] = await db.select().from(rfps).where(eq(rfps.id, s.rfpId));
+    expect(rfpAfter!.deadline.getTime()).toBe(rfpBefore!.deadline.getTime());
+  });
 });
