@@ -59,6 +59,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
     pgWsNameMap,
     pendingRequests,
     canEdit,
+    requoteByPg,
   } = data;
   const bizProfile = rfp.bizProfile;
 
@@ -189,6 +190,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
         customPaymentMethods={rfp.customPaymentMethods}
         rfpId={rfp.id}
         rfpCode={rfp.code}
+        requoteByPg={requoteByPg}
       />
 
       {/* 'PG 초대 · 게시판 노출 관리' — 조건부 자동 펼침 */}
