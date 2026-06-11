@@ -22,6 +22,7 @@ import type { Notification, NotificationChannel } from '@/lib/types/notification
 import type { AttachmentRecord } from './attachment-record';
 import type { VerificationToken } from '@/lib/types/auth';
 import type { OutboxEntry, OutboxEvent, Sender } from '../outbox/types';
+import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
 // `any` generics are localised here so individual method signatures stay clean.
@@ -84,6 +85,18 @@ export interface InvitationRepo {
   markOpened(invitationId: string, openedAt: Date, tx?: Tx): Promise<void>;
   /** 통일 칸반: pg pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
   setBoardColumn(invitationId: string, columnId: string | null, tx?: Tx): Promise<void>;
+}
+
+// ── RfpRequoteRequest (마감 전 협상 라운드) ───────────────────────────
+export interface RfpRequoteRequestRepo {
+  /** 요청 1건 생성 — (rfp,pg,round) UNIQUE 위배 시 throw. */
+  create(req: RfpRequoteRequest, tx?: Tx): Promise<void>;
+  /** 한 RFP의 모든 재요청 — createdAt asc. */
+  findByRfp(rfpId: string, tx?: Tx): Promise<RfpRequoteRequest[]>;
+  /** (rfp, pg) 의 pending 요청 — 없으면 undefined. submit 라운드 게이트용. */
+  findPendingByPair(rfpId: string, pgWsId: string, tx?: Tx): Promise<RfpRequoteRequest | undefined>;
+  /** pending → responded 원자 전이(`WHERE status='pending'`). */
+  markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
 }
 
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────

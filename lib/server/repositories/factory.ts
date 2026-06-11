@@ -19,6 +19,7 @@ import type {
   OutboxRepo,
   PgRequestRepo,
   RfpRepo,
+  RfpRequoteRequestRepo,
   RfpTeamMessageRepo,
   UserRepo,
   VerificationTokenRepo,
@@ -46,6 +47,7 @@ type RepoBundle = {
   chatMessage: ChatMessageRepo;
   chatRead: ChatReadRepo;
   rfpTeamMessage: RfpTeamMessageRepo;
+  rfpRequoteRequest: RfpRequoteRequestRepo;
   // Backend marker for tests.
   __backend: 'memory' | 'drizzle';
   // Version for HMR stale detection — bump when adding repos/methods.
@@ -58,7 +60,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 4;
+const BUNDLE_VERSION = 5;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,6 +93,7 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
   const { DrizzleRfpTeamMessageRepository } = await import(
     './drizzle/rfp-team-message'
   );
+  const { DrizzleRfpRequoteRequestRepository } = await import('./drizzle/rfp-requote-request');
 
   return {
     rfp: new DrizzleRfpRepository(db),
@@ -113,6 +116,7 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
     chatMessage: new DrizzleChatMessageRepository(db),
     chatRead: new DrizzleChatReadRepository(db),
     rfpTeamMessage: new DrizzleRfpTeamMessageRepository(db),
+    rfpRequoteRequest: new DrizzleRfpRequoteRequestRepository(db),
     __backend: backend,
     __version: BUNDLE_VERSION,
   };
@@ -200,6 +204,9 @@ export async function getChatReadRepo(): Promise<ChatReadRepo> {
 }
 export async function getRfpTeamMessageRepo(): Promise<RfpTeamMessageRepo> {
   return (await getBundle()).rfpTeamMessage;
+}
+export async function getRfpRequoteRequestRepo(): Promise<RfpRequoteRequestRepo> {
+  return (await getBundle()).rfpRequoteRequest;
 }
 
 // For tests only — read which backend the cache settled on.
