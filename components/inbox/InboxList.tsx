@@ -34,6 +34,8 @@ export type InboxRow = {
   gradeRaw?: MerchantGrade;
   /** 계약 유형. null이면 미표시. */
   contractType?: 'new' | 'renewal' | null;
+  /** 온보딩 샘플 견적 요청이면 true — '샘플' 칩 노출. */
+  isSample?: boolean;
 };
 
 export function InboxList({ rows }: { rows: InboxRow[] }) {
@@ -93,6 +95,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                 </td>
                 <td className="px-3 py-4 text-[13px] text-[var(--md-sys-color-on-surface)] font-medium">
                   <span className="flex items-center gap-1.5">
+                    {row.isSample && <Chip label="샘플" color="surface" />}
                     {row.contractType && (
                       <Chip
                         label={CONTRACT_TYPE_LABELS[row.contractType]}

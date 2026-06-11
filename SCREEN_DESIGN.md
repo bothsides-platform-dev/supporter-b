@@ -95,8 +95,8 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
 | P1 | `/home` | 신규 RFP, 임박 마감, 제출 완료, 수주율 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget` |
-| P2 | `/inbox` | 받은 RFP 함. 신규/제출완료/마감 탭 (작성중 단계 제거 — 미제출 응답은 신규로 표시) | `InboxList`, `DataTable`, `Tag` |
-| P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성. 사업자번호 미입력 시 안내 배너. 등급 미입력 시 일반 폴백(9개 카드사 입력). 저장된 견적 템플릿(요율표) 불러오기 + 현재 입력 저장. **우측 채팅 레일**(B4 와 동일, 상대 = 구매사 고정) — 견적 작성 중 질의응답·내부 메모 | `RfpBriefPanel`, `BidForm`, `StatutoryCardFeeNotice`, `ChatRail`, `ChatRailToggle` |
+| P2 | `/inbox` | 받은 RFP 함. 신규/제출완료/마감 탭 (작성중 단계 제거 — 미제출 응답은 신규로 표시). **온보딩 샘플**: 신규·기존 PG는 데모 구매사가 보낸 `isSample=true` 샘플 견적 요청 1건을 인박스에서 본다(`샘플` Chip). | `InboxList`, `DataTable`, `Tag` |
+| P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성. 사업자번호 미입력 시 안내 배너. 등급 미입력 시 일반 폴백(9개 카드사 입력). 저장된 견적 템플릿(요율표) 불러오기 + 현재 입력 저장. **우측 채팅 레일**(B4 와 동일, 상대 = 구매사 고정) — 견적 작성 중 질의응답·내부 메모. **온보딩 샘플**: `isSample=true` RFP 는 인터랙티브 샌드박스 — PG 가 실제 4단계 위저드로 견적을 제출하면 잠시 뒤 선정을 시뮬레이트하고 전체화면 축하(`SamplePgAwardCelebration`)를 띄운다(`simulateSampleAwardAction`). 채팅 레일 비활성, 상단 `SamplePgRfpBanner`로 삭제 안내(`deleteSamplePgRfpAction`, 삭제 영속). | `RfpBriefPanel`, `BidWizard`, `StatutoryCardFeeNotice`, `ChatRail`, `ChatRailToggle`, `SamplePgRfpBanner`, `SamplePgAwardCelebration` |
 | P4 | `/inbox/:rfpId/submitted` | 제출 완료, 결과 대기, 수정/철회 정책 안내 | `SubmittedState` |
 | P7 | `/opportunities` | 오픈 RFP 게시판 — 초대받지 않은 PG가 발견·콜드 피치. 공개는 구매사명·제목·홈페이지만(수수료 등 비노출). PG 홈 탐색 섹션의 "전체 보기" 대상 | `OpportunityList`, `OpportunityRequestDialog` |
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처) | `WorkspaceProfileForm` |

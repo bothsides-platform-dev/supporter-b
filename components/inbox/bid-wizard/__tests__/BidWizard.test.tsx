@@ -19,6 +19,10 @@ const submitBidMock = vi.fn(async (_i: unknown) => ({ ok: true as const, bidId: 
 vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: (i: unknown) => submitBidMock(i),
 }));
+// BidWizard 가 임포트하는 서버 액션 — 목킹하지 않으면 next-auth 가 jsdom 에서 로드 실패.
+vi.mock('@/lib/server/actions/onboarding/simulateSampleAwardAction', () => ({
+  simulateSampleAwardAction: vi.fn(async () => ({ ok: true as const })),
+}));
 vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
   saveQuoteTemplateAction: vi.fn(async () => ({ ok: true as const, templateId: 't1' })),
 }));

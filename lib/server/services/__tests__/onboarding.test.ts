@@ -3,9 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { __resetForTest, __useDrizzleWithDbForTest } from '@/lib/server/repositories/factory';
-import { rfps, bids, workspaces } from '@/lib/db/schema';
-import { seedBuyerWorkspace, seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
+import { rfps, bids, workspaces, rfpInvitations } from '@/lib/db/schema';
+import {
+  seedBuyerWorkspace,
+  seedPgWorkspace,
+  seedUser,
+} from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { seedSampleRfpInTx } from '@/lib/server/onboarding/sample-rfp';
+import { seedSamplePgRfpInTx } from '@/lib/server/onboarding/sample-pg-rfp';
 import { OnboardingService } from '../onboarding';
 
 let db: PgliteDB;
@@ -57,6 +62,62 @@ describe('OnboardingService.deleteSampleRfp', () => {
   it('refuses another workspace\'s sample (FORBIDDEN)', async () => {
     const s = await seedSample();
     const res = await svc.deleteSampleRfp(s.code, { userId: s.userId, workspaceId: randomUUID() });
+    expect(res).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(await db.select().from(rfps).where(eq(rfps.code, s.code))).toHaveLength(1);
+  });
+});
+
+async function seedPgSample(): Promise<{ pgWsId: string; userId: string; code: string }> {
+  const u = await seedUser(db);
+  const pg = await seedPgWorkspace(db, 'PG샘플');
+  const r = await db.transaction((tx) => seedSamplePgRfpInTx(tx, { pgWsId: pg.id, pgUserId: u.id }));
+  const [rfp] = await db.select().from(rfps).where(eq(rfps.id, r.rfpId!));
+  return { pgWsId: pg.id, userId: u.id, code: rfp.code };
+}
+
+async function submitBidFor(code: string, pgWsId: string, userId: string): Promise<void> {
+  const [rfp] = await db.select().from(rfps).where(eq(rfps.code, code));
+  const [inv] = await db.select().from(rfpInvitations).where(eq(rfpInvitations.rfpId, rfp.id));
+  await db.insert(bids).values({
+    id: randomUUID(),
+    rfpId: rfp.id,
+    pgWsId,
+    invitationId: inv.id,
+    settleCycle: 'D+1',
+    status: 'submitted',
+    submittedBy: userId,
+  });
+}
+
+describe('OnboardingService.simulateSampleAward', () => {
+  it('awards the PG sample to the caller PG submitted bid', async () => {
+    const s = await seedPgSample();
+    await submitBidFor(s.code, s.pgWsId, s.userId);
+    const res = await svc.simulateSampleAward(s.code, { userId: s.userId, workspaceId: s.pgWsId });
+    expect(res.ok).toBe(true);
+    const [rfp] = await db.select().from(rfps).where(eq(rfps.code, s.code));
+    expect(rfp.status).toBe('awarded');
+  });
+
+  it('refuses a caller PG that is not the invited sample PG', async () => {
+    const s = await seedPgSample();
+    await submitBidFor(s.code, s.pgWsId, s.userId);
+    const res = await svc.simulateSampleAward(s.code, { userId: s.userId, workspaceId: randomUUID() });
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe('OnboardingService.deleteSamplePgRfp', () => {
+  it('hard-deletes the PG sample for the invited PG', async () => {
+    const s = await seedPgSample();
+    const res = await svc.deleteSamplePgRfp(s.code, { userId: s.userId, workspaceId: s.pgWsId });
+    expect(res.ok).toBe(true);
+    expect(await db.select().from(rfps).where(eq(rfps.code, s.code))).toHaveLength(0);
+  });
+
+  it('refuses another workspace (FORBIDDEN)', async () => {
+    const s = await seedPgSample();
+    const res = await svc.deleteSamplePgRfp(s.code, { userId: s.userId, workspaceId: randomUUID() });
     expect(res).toEqual({ ok: false, error: 'FORBIDDEN' });
     expect(await db.select().from(rfps).where(eq(rfps.code, s.code))).toHaveLength(1);
   });

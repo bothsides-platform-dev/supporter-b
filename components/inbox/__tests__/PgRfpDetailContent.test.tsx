@@ -15,6 +15,11 @@ vi.mock('../bid-wizard/BidWizard', () => ({
     return <div data-testid="bid-wizard" />;
   },
 }));
+vi.mock('../SamplePgRfpBanner', () => ({
+  SamplePgRfpBanner: ({ rfpCode }: { rfpCode: string }) => (
+    <div data-testid="sample-banner">{rfpCode}</div>
+  ),
+}));
 
 import { PgRfpDetailContent } from '../PgRfpDetailContent';
 import type { RFP } from '@/lib/types/rfp';
@@ -86,5 +91,35 @@ describe('PgRfpDetailContent', () => {
     expect(screen.getByTestId('brief')).toBeInTheDocument();
     expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /견적 작성/ })).toHaveAttribute('href', '/inbox/P-2605-0042');
+  });
+
+  it('isSample 면 샘플 배너를 위저드와 함께 보여준다 (full)', () => {
+    render(
+      <PgRfpDetailContent
+        data={{ rfp: { ...rfp, isSample: true }, myBid: undefined, buyerName: '샘플 쇼핑몰', quoteTemplates: [] }}
+        variant="full"
+      />,
+    );
+    expect(screen.getByTestId('sample-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('bid-wizard')).toBeInTheDocument();
+  });
+
+  it('isSample 면 제출 완료 화면에도 샘플 배너를 보여준다', () => {
+    render(
+      <PgRfpDetailContent
+        data={{ rfp: { ...rfp, isSample: true }, myBid, buyerName: '샘플 쇼핑몰', quoteTemplates: [] }}
+      />,
+    );
+    expect(screen.getByTestId('sample-banner')).toBeInTheDocument();
+  });
+
+  it('isSample 아니면 샘플 배너 없음', () => {
+    render(
+      <PgRfpDetailContent
+        data={{ rfp, myBid: undefined, buyerName: '(주)테스트', quoteTemplates: [] }}
+        variant="full"
+      />,
+    );
+    expect(screen.queryByTestId('sample-banner')).not.toBeInTheDocument();
   });
 });

@@ -201,7 +201,14 @@ export async function backfillSampleRfps(
   const buyers = await database
     .select({ id: workspaces.id })
     .from(workspaces)
-    .where(and(eq(workspaces.type, 'buyer'), isNull(workspaces.sampleSeededAt)));
+    .where(
+      and(
+        eq(workspaces.type, 'buyer'),
+        // 데모 워크스페이스(예: PG 샘플이 쓰는 공유 데모 구매사)는 온보딩 대상이 아니다.
+        eq(workspaces.isDemo, false),
+        isNull(workspaces.sampleSeededAt),
+      ),
+    );
 
   let seeded = 0;
   for (const b of buyers as { id: string }[]) {

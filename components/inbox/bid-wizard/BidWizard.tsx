@@ -9,7 +9,10 @@ import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
 import { useBidDraft, type BidDraft } from '../useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
+import { simulateSampleAwardAction } from '@/lib/server/actions/onboarding/simulateSampleAwardAction';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
+import { SamplePgAwardCelebration } from '../SamplePgAwardCelebration';
+import { SAMPLE_AWARD_DELAY_MS } from './sample-award';
 import {
   MERCHANT_TIERS,
   PAYMENT_METHOD_CATEGORIES,
@@ -50,6 +53,8 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
   const [currentStep, setCurrentStep] = useState(1);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  // 온보딩 샘플 전용 흐름: 제출 → '검토중' 안내 → 잠시 뒤 선정 시뮬레이트 → 축하.
+  const [samplePhase, setSamplePhase] = useState<'idle' | 'reviewing' | 'awarded'>('idle');
 
   const [fields, setFields] = useState<BidDraft>({
     __v: 3,
@@ -218,7 +223,12 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
       });
       if (r.ok) {
         clearDraft();
-        router.push(`/inbox/${rfpCode}/submitted`);
+        if (rfp.isSample) {
+          // 샘플은 제출 후 리다이렉트하지 않고 '검토중 → 선정' 시뮬레이션으로 이어간다.
+          setSamplePhase('reviewing');
+        } else {
+          router.push(`/inbox/${rfpCode}/submitted`);
+        }
       } else {
         setSubmitError(r.error);
         setCurrentStep(4);
@@ -226,8 +236,29 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
     });
   };
 
+  // 샘플 '검토중' 진입 후 잠시 뒤 선정을 시뮬레이트하고 축하 화면으로 전환한다.
+  useEffect(() => {
+    if (samplePhase !== 'reviewing') return;
+    const t = setTimeout(async () => {
+      await simulateSampleAwardAction({ code: rfpCode });
+      setSamplePhase('awarded');
+      router.refresh(); // 인박스가 '선정됨'을 반영하도록
+    }, SAMPLE_AWARD_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [samplePhase, rfpCode, router]);
+
+  if (samplePhase === 'awarded') {
+    return <SamplePgAwardCelebration buyerName={buyerName} />;
+  }
+
   return (
     <>
+      {samplePhase === 'reviewing' && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-2 bg-[var(--md-sys-color-surface)] px-6 text-center">
+          <p className="text-title-medium">구매사가 검토하고 있어요</p>
+          <p className="text-body-medium text-on-surface-variant">잠시만 기다려 주세요…</p>
+        </div>
+      )}
       <ConfirmDialog
         open={submitConfirmOpen}
         onOpenChange={(o) => !o && setSubmitConfirmOpen(false)}
