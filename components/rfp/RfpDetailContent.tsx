@@ -7,6 +7,7 @@ import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Accordion, AccordionItem } from '@/components/ui/accordion';
 import { ChatRailToggle } from '@/components/messages/ChatRailToggle';
+import { SampleRfpBanner } from '@/components/rfp/SampleRfpBanner';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { RfpBoardVisibilityToggle } from '@/components/rfp/RfpBoardVisibilityToggle';
@@ -80,6 +81,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
 
   return (
     <>
+      {rfp.isSample && <SampleRfpBanner rfpCode={rfp.code} />}
       {/* Header */}
       <div>
         <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
@@ -90,7 +92,8 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
             {rfp.title}
           </h1>
           <div className="flex shrink-0 items-center gap-2">
-            <ChatRailToggle />
+            {!rfp.isSample && <ChatRailToggle />}
+            {rfp.isSample && <Chip label="샘플" color="surface" />}
             <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
           </div>
         </div>
@@ -189,6 +192,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
         customPaymentMethods={rfp.customPaymentMethods}
         rfpId={rfp.id}
         rfpCode={rfp.code}
+        isSample={rfp.isSample ?? false}
       />
 
       {/* 'PG 초대 · 게시판 노출 관리' — 조건부 자동 펼침 */}

@@ -35,6 +35,11 @@ vi.mock('@/components/attachments/AttachmentPreviewList', () => ({
 vi.mock('@/components/messages/ChatRailToggle', () => ({
   ChatRailToggle: () => <div data-testid="chat-rail-toggle" />,
 }));
+// SampleRfpBanner 는 deleteSampleRfpAction(→ next-auth 체인)을 정적 임포트해 jsdom 수집을
+// 깨뜨린다 — 자체 테스트(SampleRfpBanner.test)가 커버.
+vi.mock('../SampleRfpBanner', () => ({
+  SampleRfpBanner: () => <div data-testid="sample-banner" />,
+}));
 
 import { RfpDetailContent } from '../RfpDetailContent';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';

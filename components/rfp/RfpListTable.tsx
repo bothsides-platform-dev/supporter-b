@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
 import { formatDate } from '@/lib/format';
 import type { RFP } from '@/lib/types/rfp';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { deleteSampleRfpAction } from '@/lib/server/actions/onboarding/deleteSampleRfpAction';
+import { toast } from '@/lib/toast';
 
 const statusLabel: Record<string, string> = {
   draft: '임시저장',
@@ -32,6 +35,8 @@ export function RfpListTable({ rfps }: Props) {
   const searchParams = useSearchParams();
   const peekCode = searchParams.get('peek');
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
+  const [deleteCode, setDeleteCode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   function handlePeek(code: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -49,7 +54,8 @@ export function RfpListTable({ rfps }: Props) {
   }, [active]);
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <>
+      <div className="flex-1 overflow-y-auto">
       <table className="w-full border-collapse">
         <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
           <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
@@ -95,13 +101,52 @@ export function RfpListTable({ rfps }: Props) {
                 {rfp.allowedPgWorkspaceIds.length}
               </td>
               <td className="px-3 py-4 text-right">
-                <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
+                <div className="inline-flex items-center gap-2">
+                  {rfp.isSample && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteCode(rfp.code);
+                      }}
+                      className="font-mono text-[10px] text-[var(--md-sys-color-error)] hover:underline"
+                      aria-label="샘플 삭제"
+                    >
+                      삭제
+                    </button>
+                  )}
+                  {rfp.isSample && <Chip label="샘플" color="surface" />}
+                  <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+      <ConfirmDialog
+        open={deleteCode !== null}
+        onOpenChange={(o) => !busy && !o && setDeleteCode(null)}
+        title="샘플 견적 요청을 삭제할까요?"
+        description="삭제하면 다시 표시되지 않아요."
+        confirmLabel="삭제"
+        variant="danger"
+        loading={busy}
+        onConfirm={async () => {
+          if (!deleteCode) return;
+          setBusy(true);
+          const r = await deleteSampleRfpAction({ code: deleteCode });
+          setBusy(false);
+          if (!r.ok) {
+            toast(`삭제하지 못했어요 — ${r.error}`, { type: 'error' });
+            return;
+          }
+          setDeleteCode(null);
+          toast('샘플 견적 요청을 삭제했어요.');
+          router.refresh();
+        }}
+      />
+    </>
   );
 }
 

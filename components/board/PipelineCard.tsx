@@ -54,6 +54,7 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
   return (
     <div className="space-y-2">
       <CardHead code={card.rfpId} deadline={card.deadline} hideDday={false} />
+      {card.isSample && <Chip label="샘플" color="surface" />}
       <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)] line-clamp-2">
         {card.title}
       </p>
