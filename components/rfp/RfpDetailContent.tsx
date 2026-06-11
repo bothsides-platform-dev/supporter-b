@@ -60,6 +60,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
     pgWsNameMap,
     pendingRequests,
     canEdit,
+    requoteByPg,
   } = data;
   const bizProfile = rfp.bizProfile;
 
@@ -192,6 +193,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
         customPaymentMethods={rfp.customPaymentMethods}
         rfpId={rfp.id}
         rfpCode={rfp.code}
+        requoteByPg={requoteByPg}
         isSample={rfp.isSample ?? false}
       />
 

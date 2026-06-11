@@ -9,6 +9,7 @@ import {
   getBidRepo,
   getInvitationRepo,
   getRfpRepo,
+  getRfpRequoteRequestRepo,
 } from '@/lib/server/repositories/factory';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import {
@@ -42,11 +43,17 @@ export default async function InboxSubmittedPage({ params }: Props) {
   const ok = await invRepo.canAccess(rfp.id, session.user.workspaceId);
   if (!ok) notFound();
 
+  // pending 재요청이 있으면 제출 완료 화면 대신 인박스 상세로 보내 배너+폼 렌더
+  const requoteRepo = await getRfpRequoteRequestRepo();
+  const pendingRequote = await requoteRepo.findPendingByPair(rfp.id, session.user.workspaceId);
+  if (pendingRequote) redirect(`/inbox/${rfpCode}`);
+
   const bidRepo = await getBidRepo();
   const allBids = await bidRepo.findByRfp(rfp.id);
-  const bid = allBids.find(
-    (b) => b.pgWsId === session.user!.workspaceId && b.status === 'submitted',
-  );
+  // 라운드가 여러 개면 최신(최대 round) 제출 견적을 보여준다 — 로더의 current-bid 규칙과 동일.
+  const bid = allBids
+    .filter((b) => b.pgWsId === session.user!.workspaceId && b.status === 'submitted')
+    .sort((a, b) => b.round - a.round)[0];
 
   if (!bid) {
     return (

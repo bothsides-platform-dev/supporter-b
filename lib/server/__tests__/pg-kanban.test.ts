@@ -51,6 +51,7 @@ function makeBid(id: string, status: Bid['status'] = 'submitted'): Bid {
     status,
     submittedBy: 'user-pg',
     submittedAt: status === 'submitted' ? '2026-05-05T00:00:00Z' : undefined,
+    round: 1,
   };
 }
 

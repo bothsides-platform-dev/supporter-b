@@ -66,6 +66,7 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'rfp.sent',
   'bid.submitted',
   'rfp.awarded',
+  'rfp.requote_requested',
   'workspace.invited',
   'workspace.approved',
   'workspace.rejected',
@@ -112,3 +113,8 @@ export const verificationStatusEnum = pgEnum('verification_status', [
 ]);
 
 export const contractTypeEnum = pgEnum('contract_type', ['new', 'renewal']);
+
+export const rfpRequoteRequestStatusEnum = pgEnum('rfp_requote_request_status', [
+  'pending',
+  'responded',
+]);

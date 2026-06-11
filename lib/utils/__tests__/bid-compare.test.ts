@@ -23,6 +23,7 @@ function makeBid(over: Partial<Bid>): Bid {
     proposalPdfs: [],
     status: 'submitted',
     submittedBy: 'u1',
+    round: 1,
     ...over,
   };
 }

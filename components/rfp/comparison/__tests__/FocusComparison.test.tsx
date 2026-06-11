@@ -32,6 +32,13 @@ vi.mock('@/components/rfp/comparison/AwardResult', () => ({
   ),
 }));
 
+// RequoteDialog 내부는 RequoteDialog.test.tsx가 커버하므로 stub 처리.
+vi.mock('@/components/rfp/comparison/RequoteDialog', () => ({
+  RequoteDialog: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="requote-dialog">requote dialog</div> : null,
+}));
+vi.mock('@/lib/server/actions/rfp/requestRequoteAction', () => ({ requestRequoteAction: vi.fn() }));
+
 import { FocusComparison } from '../FocusComparison';
 import { useChatRailStore } from '@/lib/stores/chat-rail';
 import type { Bid } from '@/lib/types/bid';
@@ -50,6 +57,7 @@ function makeBid(over: Partial<Bid>): Bid {
     proposalPdfs: [],
     status: 'submitted',
     submittedBy: 'u1',
+    round: 1,
     ...over,
   };
 }
@@ -181,6 +189,68 @@ describe('FocusComparison · award result overlay', () => {
     // 실패 시 인라인 에러만, 축하 오버레이는 없어야 한다.
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
+  });
+});
+
+describe('FocusComparison — requote CTA + status chips', () => {
+  it('shows requote status chip and a 견적 재요청 button while sent', () => {
+    const bid = makeBid({ id: 'b-oo', pgWsId: 'pg-1', round: 2, paymentFees: { card: 0.019 } });
+    render(
+      <FocusComparison
+        bids={[bid]}
+        pgWsNameMap={{ 'pg-1': 'OO페이' }}
+        current={{ feeRate: null, settlementCycle: null, settlementLimit: null, guaranteeInsurance: null }}
+        notesByBid={{}}
+        rfpStatus="sent"
+        awardedBidId={null}
+        requiredPaymentMethods={[]}
+        customPaymentMethods={[]}
+        rfpId="11111111-1111-1111-1111-111111111111"
+        rfpCode="P-2606-0021"
+        requoteByPg={{ 'pg-1': { status: 'pending', round: 2, deadline: new Date().toISOString() } }}
+      />,
+    );
+    expect(screen.getByText(/재요청함/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /견적 재요청/ })).toBeInTheDocument();
+  });
+
+  it('shows 재제출됨 chip when status is responded', () => {
+    const bid = makeBid({ id: 'b-oo', pgWsId: 'pg-1', round: 2, paymentFees: { card: 0.019 } });
+    render(
+      <FocusComparison
+        bids={[bid]}
+        pgWsNameMap={{ 'pg-1': 'OO페이' }}
+        current={{ feeRate: null, settlementCycle: null, settlementLimit: null, guaranteeInsurance: null }}
+        notesByBid={{}}
+        rfpStatus="sent"
+        awardedBidId={null}
+        requiredPaymentMethods={[]}
+        customPaymentMethods={[]}
+        rfpId="11111111-1111-1111-1111-111111111111"
+        rfpCode="P-2606-0021"
+        requoteByPg={{ 'pg-1': { status: 'responded', round: 2, deadline: new Date().toISOString() } }}
+      />,
+    );
+    expect(screen.getByText('재제출됨')).toBeInTheDocument();
+  });
+
+  it('shows N차 chip when bid.round > 1', () => {
+    const bid = makeBid({ id: 'b-oo', pgWsId: 'pg-1', round: 3, paymentFees: { card: 0.019 } });
+    render(
+      <FocusComparison
+        bids={[bid]}
+        pgWsNameMap={{ 'pg-1': 'OO페이' }}
+        current={{ feeRate: null }}
+        notesByBid={{}}
+        rfpStatus="sent"
+        awardedBidId={null}
+        requiredPaymentMethods={[]}
+        customPaymentMethods={[]}
+        rfpId="11111111-1111-1111-1111-111111111111"
+        rfpCode="P-2606-0021"
+      />,
+    );
+    expect(screen.getByText('3차')).toBeInTheDocument();
   });
 });
 

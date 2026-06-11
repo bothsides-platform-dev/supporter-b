@@ -88,3 +88,13 @@ export interface ChatMessageProps {
    */
   count?: number;
 }
+
+export interface RfpRequoteRequestedProps {
+  rfpId: string;
+  rfpTitle: string;
+  buyerName: string;
+  /** 구매사 개선 요청 메시지(필수). */
+  message: string;
+  deadline: string;
+  inboxUrl: string;
+}

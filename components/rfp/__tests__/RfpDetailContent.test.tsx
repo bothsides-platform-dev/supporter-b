@@ -75,6 +75,7 @@ const aBid: Bid = {
   proposalPdfs: [],
   status: 'submitted',
   submittedBy: 'pg-user',
+  round: 1,
 };
 
 function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
@@ -90,6 +91,8 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     canEdit: true,
     authorId: 'u1',
     authorName: '담당자',
+    requoteByPg: {},
+    priorBidByPg: {},
     ...over,
   };
 }

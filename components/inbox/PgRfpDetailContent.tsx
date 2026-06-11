@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RfpBriefPanel } from './RfpBriefPanel';
 import { BidWizard } from './bid-wizard/BidWizard';
+import { RequoteBanner } from './RequoteBanner';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
@@ -15,7 +16,17 @@ export function PgRfpDetailContent({
   data: PgRfpDetailData;
   variant?: 'peek' | 'full';
 }) {
-  const { rfp, myBid, buyerName, quoteTemplates } = data;
+  const { rfp, myBid, buyerName, quoteTemplates, pendingRequote } = data;
+
+  // 재요청 진행 중 → 배너 + prefill 폼(다시 제출 가능)
+  if (pendingRequote) {
+    return (
+      <>
+        <RequoteBanner message={pendingRequote.message} deadline={pendingRequote.deadline} />
+        <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} initialBid={myBid} />
+      </>
+    );
+  }
 
   if (myBid) {
     return (
