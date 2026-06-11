@@ -14,9 +14,11 @@ const push = vi.fn();
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh }) }));
 
-const deleteAction = vi.fn(async () => ({ ok: true as const }));
+import type { DeleteSampleRfpInput } from '@/lib/server/actions/onboarding/deleteSampleRfpAction';
+
+const deleteAction = vi.fn(async (_input: DeleteSampleRfpInput) => ({ ok: true as const }));
 vi.mock('@/lib/server/actions/onboarding/deleteSampleRfpAction', () => ({
-  deleteSampleRfpAction: (...a: unknown[]) => deleteAction(...a),
+  deleteSampleRfpAction: (input: DeleteSampleRfpInput) => deleteAction(input),
 }));
 vi.mock('@/lib/toast', () => ({ toast: vi.fn() }));
 
