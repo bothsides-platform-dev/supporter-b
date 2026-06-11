@@ -65,8 +65,8 @@ Authenticated AppShell
 └─ /settings
    ├─ /settings/profile
    ├─ /settings/members
-   ├─ /settings/quote-templates     (pg only — 견적 요율표)
    └─ /settings/notifications
+├─ /quote-templates               (pg only — 견적 템플릿)
 
 Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.tsx)
 ├─ /admin/login
@@ -101,7 +101,7 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | P7 | `/opportunities` | 오픈 RFP 게시판 — 초대받지 않은 PG가 발견·콜드 피치. 공개는 구매사명·제목·홈페이지만(수수료 등 비노출). PG 홈 탐색 섹션의 "전체 보기" 대상 | `OpportunityList`, `OpportunityRequestDialog` |
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처) | `WorkspaceProfileForm` |
 | P6 | `/settings/members` | 같은 워크스페이스 멤버 관리 (도메인 자동 합류 없음 — 초대만) | `MemberTable` |
-| P8 | `/settings/quote-templates` | PG 워크스페이스 공유 견적 템플릿(요율표) 관리 — 정산조건+결제수단별 수수료율 프리셋 CRUD. 견적 작성(P3)에서 불러와 한 번에 채움 (최대 20개) | `QuoteTemplatesPanel` |
+| P8 | `/quote-templates` | PG 워크스페이스 공유 견적 템플릿(요율표) 관리 — 정산조건+결제수단별 수수료율 프리셋 CRUD. 견적 작성(P3)에서 불러와 한 번에 채움 (최대 20개). 구간 수수료(카드·네이버페이·카카오페이·토스페이) 직접 편집 지원. nav top 레벨 (G→Q). | `QuoteTemplateList`, `QuoteTemplateDrawer` |
 
 ### 0.3a 공용 화면 (buyer · pg 공통)
 
