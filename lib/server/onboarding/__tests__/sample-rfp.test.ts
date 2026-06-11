@@ -3,8 +3,8 @@ import { and, eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { __resetForTest, __useDrizzleWithDbForTest } from '@/lib/server/repositories/factory';
 import { workspaces, workspaceMembers, users, rfps, bids, rfpInvitations, rfpAllowedPg } from '@/lib/db/schema';
-import { seedBuyerWorkspace, seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { ensureDemoPgs, DEMO_PG_NAMES, seedSampleRfpInTx } from '../sample-rfp';
+import { seedBuyerWorkspace, seedUser, seedMembership } from '@/lib/server/repositories/drizzle/__tests__/_seed';
+import { ensureDemoPgs, DEMO_PG_NAMES, seedSampleRfpInTx, backfillSampleRfps } from '../sample-rfp';
 
 let db: PgliteDB;
 
@@ -81,5 +81,29 @@ describe('seedSampleRfpInTx', () => {
     expect(second.seeded).toBe(false);
     const all = await db.select().from(rfps).where(eq(rfps.buyerWsId, ws.id));
     expect(all).toHaveLength(1);
+  });
+});
+
+describe('backfillSampleRfps', () => {
+  it('seeds samples for buyer workspaces without one, idempotently, skipping pg', async () => {
+    // buyer with admin
+    const bu = await seedUser(db);
+    const buyer = await seedBuyerWorkspace(db);
+    await seedMembership(db, buyer.id, bu.id, 'admin');
+    // pg workspace (should be skipped)
+    const { seedPgWorkspace } = await import('@/lib/server/repositories/drizzle/__tests__/_seed');
+    const pu = await seedUser(db);
+    const pg = await seedPgWorkspace(db, 'PG백필');
+    await seedMembership(db, pg.id, pu.id, 'admin');
+
+    const first = await backfillSampleRfps(db);
+    expect(first.seeded).toBe(1);
+
+    const rfpRows = await db.select().from(rfps).where(eq(rfps.buyerWsId, buyer.id));
+    expect(rfpRows).toHaveLength(1);
+    expect(await db.select().from(rfps).where(eq(rfps.buyerWsId, pg.id))).toHaveLength(0);
+
+    const second = await backfillSampleRfps(db);
+    expect(second.seeded).toBe(0); // 멱등
   });
 });

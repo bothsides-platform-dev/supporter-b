@@ -18,7 +18,8 @@
     "og:generate": "node scripts/generate-og.mjs",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "backfill:sample": "tsx scripts/backfill-sample-rfp.ts"
   },
   "dependencies": {
     "@axiomhq/pino": "^1.6.1",

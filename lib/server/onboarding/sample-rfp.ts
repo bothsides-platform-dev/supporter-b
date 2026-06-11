@@ -1,7 +1,7 @@
 // 온보딩 샘플 견적 요청 — 순수 tx 시딩/삭제 로직 (DB 클라이언트 import 없음).
 // createWorkspaceInTx(신규 구매사)·backfill 스크립트(기존)·OnboardingService(삭제)가 호출.
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { users, workspaceMembers, workspaces, rfps, rfpAllowedPg, rfpInvitations, bids } from '@/lib/db/schema';
 import { nextRfpId } from '@/lib/server/rfp-id';
 
@@ -188,6 +188,36 @@ export async function seedSampleRfpInTx(
 
   await tx.update(workspaces).set({ sampleSeededAt: now }).where(eq(workspaces.id, input.buyerWsId));
   return { seeded: true, rfpId };
+}
+
+/**
+ * sampleSeededAt 가 없는 모든 buyer 워크스페이스에 샘플을 시드한다(멱등). 각 워크스페이스의
+ * admin 멤버를 createdBy 로 사용한다. 1회성 백필 스크립트가 호출.
+ */
+export async function backfillSampleRfps(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  database: any,
+): Promise<{ seeded: number }> {
+  const buyers = await database
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(and(eq(workspaces.type, 'buyer'), isNull(workspaces.sampleSeededAt)));
+
+  let seeded = 0;
+  for (const b of buyers as { id: string }[]) {
+    const [admin] = await database
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, b.id), eq(workspaceMembers.role, 'admin')))
+      .limit(1);
+    if (!admin) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = await database.transaction((tx: any) =>
+      seedSampleRfpInTx(tx, { buyerWsId: b.id, buyerUserId: admin.userId }),
+    );
+    if (r.seeded) seeded++;
+  }
+  return { seeded };
 }
 
 /**
