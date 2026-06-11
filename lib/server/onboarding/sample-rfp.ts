@@ -189,3 +189,25 @@ export async function seedSampleRfpInTx(
   await tx.update(workspaces).set({ sampleSeededAt: now }).where(eq(workspaces.id, input.buyerWsId));
   return { seeded: true, rfpId };
 }
+
+/**
+ * 샘플 견적 요청 하드삭제. 소유권(workspaceId) + isSample 둘 다 만족할 때만 삭제한다.
+ * 실제 RFP 는 이 경로로 절대 삭제되지 않는다. 자식(bids·invitations·allowlist·attachments·
+ * team_messages)은 FK ON DELETE CASCADE 로 함께 제거된다. sampleSeededAt 은 유지 → 재시드 안 함.
+ */
+export async function deleteSampleRfpInTx(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  input: { code: string; workspaceId: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const [rfp] = await tx
+    .select({ id: rfps.id, buyerWsId: rfps.buyerWsId, isSample: rfps.isSample })
+    .from(rfps)
+    .where(eq(rfps.code, input.code))
+    .limit(1);
+  if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+  if (rfp.buyerWsId !== input.workspaceId) return { ok: false, error: 'FORBIDDEN' };
+  if (!rfp.isSample) return { ok: false, error: 'NOT_SAMPLE' };
+  await tx.delete(rfps).where(eq(rfps.id, rfp.id));
+  return { ok: true };
+}
