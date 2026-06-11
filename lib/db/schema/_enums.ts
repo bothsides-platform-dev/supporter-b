@@ -112,3 +112,8 @@ export const verificationStatusEnum = pgEnum('verification_status', [
 ]);
 
 export const contractTypeEnum = pgEnum('contract_type', ['new', 'renewal']);
+
+export const rfpRequoteRequestStatusEnum = pgEnum('rfp_requote_request_status', [
+  'pending',
+  'responded',
+]);
