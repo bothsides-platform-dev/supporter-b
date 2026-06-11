@@ -44,6 +44,8 @@ type Props = {
   /** uuid — awardRfpAction 용 */
   rfpId: string;
   rfpCode: string;
+  /** 온보딩 샘플 — 읽기전용 샌드박스(선정 비활성) */
+  isSample?: boolean;
 };
 
 export function FocusComparison(props: Props) {
@@ -96,7 +98,7 @@ export function FocusComparison(props: Props) {
 
   const pgName = (wsId: string) => pgWsNameMap[wsId] ?? wsId;
   const isAwarded = rfpStatus === 'awarded' || rfpStatus === 'closed';
-  const canAward = rfpStatus === 'sent';
+  const canAward = rfpStatus === 'sent' && !props.isSample;
   const peek = peekBidId ? sortedBids.find((b) => b.id === peekBidId) : null;
 
   if (resultBid) {
@@ -322,6 +324,13 @@ export function FocusComparison(props: Props) {
         {canAward && (
           <div className="pt-4 flex justify-end">
             <Button onClick={() => setDialogOpen(true)}>이 견적 선정하기 →</Button>
+          </div>
+        )}
+        {props.isSample && (
+          <div className="pt-4 flex justify-end">
+            <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+              샘플에서는 선정할 수 없어요. 실제 견적 요청을 보내보세요.
+            </p>
           </div>
         )}
       </div>

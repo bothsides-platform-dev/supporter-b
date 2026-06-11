@@ -189,6 +189,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
         customPaymentMethods={rfp.customPaymentMethods}
         rfpId={rfp.id}
         rfpCode={rfp.code}
+        isSample={rfp.isSample ?? false}
       />
 
       {/* 'PG 초대 · 게시판 노출 관리' — 조건부 자동 펼침 */}
