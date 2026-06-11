@@ -174,7 +174,7 @@ export interface BizProfileRepo {
 
 // ── Bid ───────────────────────────────────────────────────────────────
 export interface BidRepo {
-  /** 입찰 저장 — `(rfpId, pgWsId)` UNIQUE 위배 시 throw. */
+  /** 입찰 저장 — `(rfpId, pgWsId, round)` UNIQUE 위배 시 throw. */
   save(bid: Bid, tx?: Tx): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<Bid | undefined>;

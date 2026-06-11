@@ -50,9 +50,10 @@ export default async function InboxSubmittedPage({ params }: Props) {
 
   const bidRepo = await getBidRepo();
   const allBids = await bidRepo.findByRfp(rfp.id);
-  const bid = allBids.find(
-    (b) => b.pgWsId === session.user!.workspaceId && b.status === 'submitted',
-  );
+  // 라운드가 여러 개면 최신(최대 round) 제출 견적을 보여준다 — 로더의 current-bid 규칙과 동일.
+  const bid = allBids
+    .filter((b) => b.pgWsId === session.user!.workspaceId && b.status === 'submitted')
+    .sort((a, b) => b.round - a.round)[0];
 
   if (!bid) {
     return (
