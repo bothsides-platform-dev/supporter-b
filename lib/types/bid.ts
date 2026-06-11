@@ -91,6 +91,8 @@ export type Bid = {
   rfpId: string;
   pgWsId: string;
   invitationId: string;
+  /** PG별 제출 순번. 1차=1, 재요청 응답=2…. */
+  round: number;
   // 정산주기: "D+1", "W+2", "M+1" 형식의 자유 텍스트
   settleCycle: string;
   // 정산한도 (원/월)

@@ -14,6 +14,7 @@ import {
   seedBizProfile,
   seedBuyerWorkspace,
   seedPgWorkspace,
+  seedRfp,
   seedUser,
 } from './_seed';
 
@@ -292,5 +293,53 @@ describe('DrizzleBidRepository.findByRfpIds — 배치 조회 (N+1 제거)', () 
   it('빈 입력 → 빈 Map (쿼리 없이)', async () => {
     const map = await ctx.repo.findByRfpIds([]);
     expect(map.size).toBe(0);
+  });
+});
+
+// ─── Task 1: round 컬럼 영속 검증 ────────────────────────────────────────────
+
+async function seedInvited(db: PgliteDB, buyerWsId: string, createdBy: string, pgWsId: string) {
+  const { id: rfpId, code } = await seedRfp(db, { buyerWsId, createdBy });
+  const invId = randomUUID();
+  await db.insert(rfpInvitations).values({
+    id: invId,
+    rfpId,
+    pgWsId,
+    tokenHash: randomUUID(),
+    sentAt: new Date(),
+    expiresAt: new Date(Date.now() + 86_400_000),
+    status: 'accepted',
+  });
+  return { rfpId, code, invId };
+}
+
+describe('DrizzleBidRepository round', () => {
+  it('persists round and exposes it via findByRfp; allows two rounds for one PG', async () => {
+    const db = await createPgliteDb();
+    const repo = new DrizzleBidRepository(db);
+    const buyer = await seedUser(db);
+    const buyerWs = await seedBuyerWorkspace(db);
+    const pgWs = await seedPgWorkspace(db, 'pg.io');
+    const { rfpId, invId } = await seedInvited(db, buyerWs.id, buyer.id, pgWs.id);
+
+    const base = {
+      rfpId,
+      pgWsId: pgWs.id,
+      invitationId: invId,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: {},
+      customFees: {},
+      proposalPdfs: [],
+      status: 'submitted' as const,
+      submittedBy: buyer.id,
+      submittedAt: new Date().toISOString(),
+    };
+    await repo.save({ id: randomUUID(), round: 1, ...base });
+    await repo.save({ id: randomUUID(), round: 2, ...base });
+
+    const rows = await repo.findByRfp(rfpId);
+    expect(rows.map((b) => b.round).sort()).toEqual([1, 2]);
   });
 });

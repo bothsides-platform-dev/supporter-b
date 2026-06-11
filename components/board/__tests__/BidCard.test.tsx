@@ -27,6 +27,7 @@ const baseBid: Bid = {
   status: 'submitted',
   submittedBy: 'u1',
   submittedAt: '2026-05-01T00:00:00Z',
+  round: 1,
 };
 
 function renderCard(bid: Bid) {

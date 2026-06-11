@@ -12,6 +12,7 @@ import {
   getInvitationRepo,
   getOutboxRepo,
   getRfpRepo,
+  getRfpRequoteRequestRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -26,6 +27,7 @@ import {
   notifications,
   outboxEntries,
   rfpInvitations,
+  rfpRequoteRequests,
   rfps,
 } from '@/lib/db/schema';
 import { BidService } from '../bid';
@@ -35,11 +37,12 @@ let db: PgliteDB;
 let service: BidService;
 
 async function buildService(): Promise<BidService> {
-  const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo] = await Promise.all([
+  const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo] = await Promise.all([
     getBidRepo(), getInvitationRepo(), getRfpRepo(),
     getOutboxRepo(), getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
+    getRfpRequoteRequestRepo(),
   ]);
-  return new BidService(db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo);
+  return new BidService(db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo);
 }
 
 beforeEach(async () => {
@@ -230,5 +233,66 @@ describe('BidService.submit', () => {
     expect(
       await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'bid.submitted')),
     ).toHaveLength(0);
+  });
+});
+
+// ─── Round-aware submit ────────────────────────────────────────────────────────
+
+async function submitFirst(s: Awaited<ReturnType<typeof seedSubmitEnv>>) {
+  return service.submit({ ...BASE, rfpId: s.rfpId }, { userId: s.pgUser.id, workspaceId: s.pgWs.id });
+}
+
+describe('BidService.submit round-aware', () => {
+  it('blocks resubmission when no pending requote exists', async () => {
+    const s = await seedSubmitEnv();
+    expect((await submitFirst(s)).ok).toBe(true);
+    const again = await submitFirst(s);
+    expect(again.ok).toBe(false);
+    if (!again.ok) expect(again.error).toBe('BID_ALREADY_SUBMITTED');
+  });
+
+  it('allows round-2 submit when a pending requote exists; marks it responded', async () => {
+    const s = await seedSubmitEnv();
+    expect((await submitFirst(s)).ok).toBe(true);
+
+    await db.insert(rfpRequoteRequests).values({
+      id: randomUUID(),
+      rfpId: s.rfpId,
+      pgWsId: s.pgWs.id,
+      round: 2,
+      message: '낮춰주세요',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'pending',
+      createdByUserId: s.buyerUser.id,
+      createdAt: new Date(),
+    });
+
+    const r2 = await service.submit({ ...BASE, rfpId: s.rfpId }, { userId: s.pgUser.id, workspaceId: s.pgWs.id });
+    expect(r2.ok).toBe(true);
+
+    const myBids = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
+    expect(myBids.map((b) => b.round).sort()).toEqual([1, 2]);
+
+    const reqs = await db.select().from(rfpRequoteRequests).where(eq(rfpRequoteRequests.rfpId, s.rfpId));
+    expect(reqs[0]!.status).toBe('responded');
+  });
+
+  it('rejects round-2 submit after the requote deadline passed', async () => {
+    const s = await seedSubmitEnv();
+    expect((await submitFirst(s)).ok).toBe(true);
+    await db.insert(rfpRequoteRequests).values({
+      id: randomUUID(),
+      rfpId: s.rfpId,
+      pgWsId: s.pgWs.id,
+      round: 2,
+      message: '낮춰주세요',
+      deadline: new Date(Date.now() - 1000),
+      status: 'pending',
+      createdByUserId: s.buyerUser.id,
+      createdAt: new Date(),
+    });
+    const r2 = await service.submit({ ...BASE, rfpId: s.rfpId }, { userId: s.pgUser.id, workspaceId: s.pgWs.id });
+    expect(r2.ok).toBe(false);
+    if (!r2.ok) expect(r2.error).toBe('REQUOTE_DEADLINE_PASSED');
   });
 });

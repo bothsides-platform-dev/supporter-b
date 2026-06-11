@@ -45,6 +45,7 @@ function makeBid(over: Partial<Bid> = {}): Bid {
     status: 'submitted',
     submittedBy: 'u-1',
     boardColumnId: null,
+    round: 1,
     ...over,
   };
 }

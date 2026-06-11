@@ -5,6 +5,7 @@
 // 로 전 PG 줄세움. CTA 는 인라인 AwardConfirmDialog 로 선정 확정. 표/보드/별도 award 페이지
 // 를 대체한다. 표현 전용 — 데이터는 loadBuyerRfpDetail 산출물.
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
@@ -13,6 +14,7 @@ import { ImprovementSummary, type CurrentConditions } from './ImprovementSummary
 import { MetricComparePopover, type CompareRow } from './MetricComparePopover';
 import { AwardConfirmDialog } from './AwardConfirmDialog';
 import { AwardResult } from './AwardResult';
+import { RequoteDialog } from './RequoteDialog';
 import { BidNotesPanel } from '@/components/rfp/bid-detail/BidNotesPanel';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { useChatRailStore } from '@/lib/stores/chat-rail';
@@ -44,12 +46,15 @@ type Props = {
   /** uuid — awardRfpAction 용 */
   rfpId: string;
   rfpCode: string;
+  /** 재요청 현황 — pgWsId → 최신 요청 상태. 없으면 재요청 없음. */
+  requoteByPg?: Record<string, { status: 'pending' | 'responded'; round: number; deadline: string }>;
   /** 온보딩 샘플 — 읽기전용 샌드박스(선정 비활성) */
   isSample?: boolean;
 };
 
 export function FocusComparison(props: Props) {
-  const { bids, pgWsNameMap, current, notesByBid, rfpStatus, awardedBidId } = props;
+  const { bids, pgWsNameMap, current, notesByBid, rfpStatus, awardedBidId, requoteByPg } = props;
+  const router = useRouter();
 
   const [tier, setTier] = useState<MerchantTier>('general');
 
@@ -68,6 +73,7 @@ export function FocusComparison(props: Props) {
   const [activeBidId, setActiveBidId] = useState<string | undefined>(defaultBidId);
   const [peekBidId, setPeekBidId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [requoteOpen, setRequoteOpen] = useState(false);
   // 선정 확정 직후 1회만 뜨는 결과 화면. 초기 awarded 로드로는 set되지 않는다(1회성).
   const [resultBid, setResultBid] = useState<Bid | null>(null);
 
@@ -192,6 +198,17 @@ export function FocusComparison(props: Props) {
                     color={isWinner ? 'tertiary' : 'surface'}
                   />
                 )}
+                {!isAwarded && requoteByPg?.[bid.pgWsId] && (
+                  <Chip
+                    label={
+                      requoteByPg[bid.pgWsId]!.status === 'pending'
+                        ? '재요청함 · 응답대기'
+                        : '재제출됨'
+                    }
+                    color={requoteByPg[bid.pgWsId]!.status === 'pending' ? 'warning' : 'tertiary'}
+                  />
+                )}
+                {bid.round > 1 && <Chip label={`${bid.round}차`} color="surface" />}
               </button>
             );
           })}
@@ -322,7 +339,8 @@ export function FocusComparison(props: Props) {
         </Accordion>
 
         {canAward && (
-          <div className="pt-4 flex justify-end">
+          <div className="pt-4 flex items-center justify-end gap-2">
+            <Button variant="outlined" onClick={() => setRequoteOpen(true)}>견적 재요청</Button>
             <Button onClick={() => setDialogOpen(true)}>이 견적 선정하기 →</Button>
           </div>
         )}
@@ -343,6 +361,14 @@ export function FocusComparison(props: Props) {
         pgName={pgName(active.pgWsId)}
         otherCount={sortedBids.length - 1}
         onAwarded={() => setResultBid(active)}
+      />
+
+      <RequoteDialog
+        open={requoteOpen}
+        onOpenChange={setRequoteOpen}
+        rfpId={props.rfpId}
+        candidates={sortedBids.map((b) => ({ pgWsId: b.pgWsId, name: pgName(b.pgWsId) }))}
+        onRequested={() => router.refresh()}
       />
     </section>
   );

@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { requirePgPage } from '@/lib/auth/page-guards';
-import { getInvitationRepo, getBidRepo } from '@/lib/server/repositories/factory';
+import { getInvitationRepo, getBidRepo, getRfpRequoteRequestRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
 import { classifyPgInvitation } from '@/lib/server/pg-kanban';
 import type { Bid } from '@/lib/types/bid';
@@ -70,7 +70,11 @@ async function InboxListPageLoader({
   peek?: string;
 }) {
   const now = new Date();
-  const [invRepo, bidRepo] = await Promise.all([getInvitationRepo(), getBidRepo()]);
+  const [invRepo, bidRepo, requoteRepo] = await Promise.all([
+    getInvitationRepo(),
+    getBidRepo(),
+    getRfpRequoteRequestRepo(),
+  ]);
   const [pairs, bidList] = await Promise.all([
     invRepo.findByPgWorkspace(wsId),
     bidRepo.findByPgWs(wsId),
@@ -78,6 +82,16 @@ async function InboxListPageLoader({
   // bid 기반 stage 분류를 위해 RFP별 bid 매핑 (loadBoard PG 파이프라인과 동일 패턴).
   const bidByRfp = new Map<string, Bid>();
   for (const b of bidList) bidByRfp.set(b.rfpId, b);
+
+  // pending 재요청 여부 — rfpId(UUID) 기준 per-row 조회. N+1이지만 PG의 inbox 행 수가
+  // 수십 단위이므로 현재는 허용. 향후 bulk 메서드(findPendingByPgWs)로 최적화 가능.
+  const pendingRequoteByRfpId = new Map<string, boolean>();
+  await Promise.all(
+    pairs.map(async ({ rfp }) => {
+      const req = await requoteRepo.findPendingByPair(rfp.id, wsId);
+      if (req) pendingRequoteByRfpId.set(rfp.id, true);
+    }),
+  );
 
   const allRows: InboxRow[] = pairs.map(({ invitation, rfp }) => {
     const bid = bidByRfp.get(rfp.id);
@@ -94,6 +108,7 @@ async function InboxListPageLoader({
       gradeRaw: rfp.bizProfile?.grade,
       contractType: rfp.contractType ?? null,
       isSample: rfp.isSample ?? false,
+      hasPendingRequote: pendingRequoteByRfpId.get(rfp.id) ?? false,
     };
   });
   const rows = filterInboxRows(allRows, params, now);

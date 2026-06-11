@@ -9,6 +9,7 @@ import type {
   InvitationRepo,
   OutboxRepo,
   RfpRepo,
+  RfpRequoteRequestRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
 import {
@@ -45,6 +46,7 @@ export class BidService {
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly attachmentRepo: AttachmentRepo,
     private readonly bidNoteRepo: BidNoteRepo,
+    private readonly requoteRepo: RfpRequoteRequestRepo,
   ) {}
 
   async withdraw(bidId: string, actor: Actor): Promise<ServiceResult> {
@@ -110,8 +112,20 @@ export class BidService {
     }
 
     const existingBids = await this.bidRepo.findByRfp(input.rfpId);
-    if (existingBids.some((b) => b.pgWsId === actor.workspaceId)) {
-      return { ok: false, error: 'BID_ALREADY_SUBMITTED' };
+    const myBids = existingBids.filter((b) => b.pgWsId === actor.workspaceId);
+    const maxRound = myBids.reduce((m, b) => Math.max(m, b.round), 0);
+
+    let round = 1;
+    let respondedRequoteId: string | null = null;
+    if (maxRound >= 1) {
+      // 이미 견적이 있다 — pending 재요청이 있어야만 새 라운드 제출 허용.
+      const pending = await this.requoteRepo.findPendingByPair(input.rfpId, actor.workspaceId);
+      if (!pending) return { ok: false, error: 'BID_ALREADY_SUBMITTED' };
+      if (new Date(pending.deadline).getTime() < Date.now()) {
+        return { ok: false, error: 'REQUOTE_DEADLINE_PASSED' };
+      }
+      round = maxRound + 1;
+      respondedRequoteId = pending.id;
     }
 
     const bidId = randomUUID();
@@ -136,9 +150,14 @@ export class BidService {
           status: 'submitted',
           submittedBy: actor.userId,
           submittedAt: now.toISOString(),
+          round,
         },
         tx,
       );
+
+      if (respondedRequoteId) {
+        await this.requoteRepo.markResponded(respondedRequoteId, now, tx);
+      }
 
       if (input.proposalAttachmentId) {
         await tx
@@ -322,20 +341,21 @@ export async function getBidService(): Promise<BidService> {
   if (!globalThis.__bidit_bid_service__) {
     const [
       { db },
-      { getBidRepo, getInvitationRepo, getRfpRepo, getOutboxRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo },
+      { getBidRepo, getInvitationRepo, getRfpRepo, getOutboxRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo },
     ] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo] =
+    const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo] =
       await Promise.all([
         getBidRepo(), getInvitationRepo(), getRfpRepo(),
         getOutboxRepo(), getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
+        getRfpRequoteRequestRepo(),
       ]);
 
     globalThis.__bidit_bid_service__ = new BidService(
-      db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo,
+      db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo,
     );
   }
   return globalThis.__bidit_bid_service__!;

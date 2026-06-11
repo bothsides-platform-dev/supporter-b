@@ -36,6 +36,8 @@ export type InboxRow = {
   contractType?: 'new' | 'renewal' | null;
   /** 온보딩 샘플 견적 요청이면 true — '샘플' 칩 노출. */
   isSample?: boolean;
+  /** 이 PG에 대해 pending 재요청이 있으면 true — 재요청 Chip 표시 트리거. */
+  hasPendingRequote?: boolean;
 };
 
 export function InboxList({ rows }: { rows: InboxRow[] }) {
@@ -102,6 +104,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                         color={row.contractType === 'new' ? 'primary' : 'surface'}
                       />
                     )}
+                    {row.hasPendingRequote && <Chip label="재요청" color="warning" />}
                     {row.rfpTitle}
                   </span>
                 </td>
