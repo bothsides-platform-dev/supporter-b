@@ -21,9 +21,12 @@ vi.mock('@/components/rfp/comparison/AwardResult', () => ({
 }));
 
 beforeAll(() => {
-  // jsdom 폴리필 (base-ui/cmdk 등)
-  // @ts-expect-error test stub
-  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   Element.prototype.scrollIntoView ??= () => {};
 });
 
