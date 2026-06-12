@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 
 import { requireBuyerSession } from '@/lib/auth/session';
 import { rfps } from '@/lib/db/schema';
+import { getAuditLogRepo } from '@/lib/server/repositories/factory';
 import { actionDb, type RfpActionResult } from './_shared';
 
 const Input = z
@@ -44,6 +45,22 @@ export async function setRfpBoardVisibilityAction(
   if (!row) return { ok: false, error: 'NOT_FOUND' };
   if (row.buyerWsId !== wsId) return { ok: false, error: 'NOT_OWNED' };
 
-  await db.update(rfps).set({ boardVisible: parsed.data.visible }).where(eq(rfps.id, row.id));
+  const auditRepo = await getAuditLogRepo();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await db.transaction(async (tx: any) => {
+    await tx.update(rfps).set({ boardVisible: parsed.data.visible }).where(eq(rfps.id, row.id));
+    // 감사 로그 (C5) — 토글과 같은 트랜잭션에서 커밋.
+    await auditRepo.insert(
+      {
+        actorUserId: session.user.id,
+        actorWorkspaceId: wsId,
+        action: 'rfp.board_visibility',
+        entityType: 'rfp',
+        entityId: parsed.data.rfpId,
+        metadata: { visible: parsed.data.visible },
+      },
+      tx,
+    );
+  });
   return { ok: true };
 }

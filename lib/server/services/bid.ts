@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { attachments, bids, users, workspaceMembers, workspaces } from '@/lib/db/schema';
 import type {
   AttachmentRepo,
+  AuditLogRepo,
   BidNoteRepo,
   BidRepo,
   InvitationRepo,
@@ -47,6 +48,7 @@ export class BidService {
     private readonly attachmentRepo: AttachmentRepo,
     private readonly bidNoteRepo: BidNoteRepo,
     private readonly requoteRepo: RfpRequoteRequestRepo,
+    private readonly auditRepo: AuditLogRepo,
   ) {}
 
   async withdraw(bidId: string, actor: Actor): Promise<ServiceResult> {
@@ -67,7 +69,22 @@ export class BidService {
 
     if (bid.status === 'withdrawn') return { ok: true };
 
-    await this._db.update(bids).set({ status: 'withdrawn' }).where(eq(bids.id, bid.id));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this._db.transaction(async (tx: any) => {
+      await tx.update(bids).set({ status: 'withdrawn' }).where(eq(bids.id, bid.id));
+      // 감사 로그 (C5) — 철회와 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'bid.withdraw',
+          entityType: 'rfp',
+          entityId: rfp?.code ?? bid.rfpId,
+          metadata: { bidId: bid.id },
+        },
+        tx,
+      );
+    });
 
     return { ok: true };
   }
@@ -158,6 +175,19 @@ export class BidService {
       if (respondedRequoteId) {
         await this.requoteRepo.markResponded(respondedRequoteId, now, tx);
       }
+
+      // 감사 로그 (C5) — 제출과 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'bid.submit',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { bidId, round },
+        },
+        tx,
+      );
 
       if (input.proposalAttachmentId) {
         await tx
@@ -341,21 +371,21 @@ export async function getBidService(): Promise<BidService> {
   if (!globalThis.__bidit_bid_service__) {
     const [
       { db },
-      { getBidRepo, getInvitationRepo, getRfpRepo, getOutboxRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo },
+      { getBidRepo, getInvitationRepo, getRfpRepo, getOutboxRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo },
     ] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo] =
+    const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] =
       await Promise.all([
         getBidRepo(), getInvitationRepo(), getRfpRepo(),
         getOutboxRepo(), getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-        getRfpRequoteRequestRepo(),
+        getRfpRequoteRequestRepo(), getAuditLogRepo(),
       ]);
 
     globalThis.__bidit_bid_service__ = new BidService(
-      db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo,
+      db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo,
     );
   }
   return globalThis.__bidit_bid_service__!;

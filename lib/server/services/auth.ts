@@ -12,7 +12,8 @@ import { renderAuthEmailChange } from '@/lib/server/outbox/templates/authEmailCh
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceInvite';
 import { purgeUnverifiedSignup } from '@/lib/server/actions/auth/_purgeUnverifiedSignup';
-import type { UserRepo, VerificationTokenRepo, OutboxRepo } from '@/lib/server/repositories/types';
+import type {
+  AuditLogRepo, UserRepo, VerificationTokenRepo, OutboxRepo } from '@/lib/server/repositories/types';
 import type { ServiceResult } from './types';
 
 export type AuthActor = { userId: string };
@@ -34,6 +35,7 @@ export class AuthService {
     private readonly userRepo: UserRepo,
     private readonly verificationTokenRepo: VerificationTokenRepo,
     private readonly outboxRepo: OutboxRepo,
+    private readonly auditRepo: AuditLogRepo,
   ) {}
 
   async completeSignup(input: {
@@ -328,6 +330,11 @@ export class AuthService {
           sessionVersion: sql`${users.sessionVersion} + 1`,
         })
         .where(eq(users.id, input.userId));
+      // 감사 로그 (C5) — 워크스페이스 무관 인증 이벤트 (FK 없음 → 행 보존).
+      await this.auditRepo.insert(
+        { actorUserId: input.userId, actorWorkspaceId: null, action: 'auth.account_delete' },
+        tx,
+      );
     });
 
     return { ok: true };
@@ -385,12 +392,23 @@ export class AuthService {
     if (consumed.purpose !== 'password_reset') return { ok: false, error: 'WRONG_PURPOSE' };
 
     const passwordHash = await hashPassword(input.plainPassword);
-    await this._db
-      .update(users)
-      // sessionVersion bump revokes sessions issued before the reset — the
-      // whole point of resetting a (possibly compromised) password.
-      .set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1` })
-      .where(eq(users.email, consumed.email));
+    const resetUser = await this.userRepo.findByEmail(consumed.email);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this._db.transaction(async (tx: any) => {
+      await tx
+        .update(users)
+        // sessionVersion bump revokes sessions issued before the reset — the
+        // whole point of resetting a (possibly compromised) password.
+        .set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1` })
+        .where(eq(users.email, consumed.email));
+      if (resetUser) {
+        // 감사 로그 (C5) — 워크스페이스 무관 인증 이벤트.
+        await this.auditRepo.insert(
+          { actorUserId: resetUser.id, actorWorkspaceId: null, action: 'auth.password_reset' },
+          tx,
+        );
+      }
+    });
 
     return { ok: true, email: consumed.email };
   }
@@ -436,11 +454,19 @@ export class AuthService {
     if (!userId || !newEmail) return { ok: false, error: 'TOKEN_META_CORRUPT' };
 
     try {
-      await this._db
-        .update(users)
-        // Email is the login identifier — revoke sessions minted under the old one.
-        .set({ email: newEmail, sessionVersion: sql`${users.sessionVersion} + 1` })
-        .where(eq(users.id, userId));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await this._db.transaction(async (tx: any) => {
+        await tx
+          .update(users)
+          // Email is the login identifier — revoke sessions minted under the old one.
+          .set({ email: newEmail, sessionVersion: sql`${users.sessionVersion} + 1` })
+          .where(eq(users.id, userId));
+        // 감사 로그 (C5) — 워크스페이스 무관 인증 이벤트.
+        await this.auditRepo.insert(
+          { actorUserId: userId, actorWorkspaceId: null, action: 'auth.email_change', metadata: { newEmail } },
+          tx,
+        );
+      });
     } catch (err) {
       if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
       throw err;
@@ -464,13 +490,14 @@ export async function getAuthService(): Promise<AuthService> {
     return globalThis.__bidit_auth_service_override__;
   }
   if (!globalThis.__bidit_auth_service__) {
-    const { getUserRepo, getVerificationTokenRepo, getOutboxRepo } = await import('@/lib/server/repositories/factory');
+    const { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo } = await import('@/lib/server/repositories/factory');
     const { actionDb } = await import('@/lib/server/actions/auth/_shared');
     const db = actionDb();
     const userRepo = await getUserRepo();
+    const auditRepo = await getAuditLogRepo();
     const verificationTokenRepo = await getVerificationTokenRepo();
     const outboxRepo = await getOutboxRepo();
-    globalThis.__bidit_auth_service__ = new AuthService(db, userRepo, verificationTokenRepo, outboxRepo);
+    globalThis.__bidit_auth_service__ = new AuthService(db, userRepo, verificationTokenRepo, outboxRepo, auditRepo);
   }
   return globalThis.__bidit_auth_service__!;
 }

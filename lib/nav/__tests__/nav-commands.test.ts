@@ -19,6 +19,7 @@ describe('getNavCommands — buyer', () => {
         '/rfp/new',
         '/settings/profile',
         '/settings/members',
+        '/settings/audit-log',
       ]),
     );
   });
@@ -57,6 +58,7 @@ describe('getNavCommands — pg', () => {
         '/opportunities',
         '/settings/profile',
         '/settings/members',
+        '/settings/audit-log',
         '/quote-templates',
       ]),
     );

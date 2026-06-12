@@ -9,12 +9,14 @@ import {
   getUserRepo,
   getVerificationTokenRepo,
   getOutboxRepo,
+  getAuditLogRepo,
 } from '@/lib/server/repositories/factory';
 import {
   phoneOtps,
   users,
   workspaceMembers,
   outboxEntries,
+  auditLogs,
 } from '@/lib/db/schema';
 import { seedUser, seedPgWorkspace, seedMembership } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { hashToken, generateToken, addMinutes } from '@/lib/server/token';
@@ -42,7 +44,8 @@ async function buildService(): Promise<AuthService> {
   const userRepo = await getUserRepo();
   const verificationTokenRepo = await getVerificationTokenRepo();
   const outboxRepo = await getOutboxRepo();
-  return new AuthService(db, userRepo, verificationTokenRepo, outboxRepo);
+  const auditRepo = await getAuditLogRepo();
+  return new AuthService(db, userRepo, verificationTokenRepo, outboxRepo, auditRepo);
 }
 
 beforeEach(async () => {
@@ -393,5 +396,54 @@ describe('getAuthService / __setAuthServiceForTest / __resetAuthServiceForTest',
     // Next call would create a real service — just check it's no longer the fake
     // We can't call getAuthService() here without a real DB, so just verify no throw
     expect(() => __resetAuthServiceForTest()).not.toThrow();
+  });
+});
+
+// ─── 감사 로그 (C5) ───────────────────────────────────────────────────────────
+
+describe('AuthService — 감사 로그 기록', () => {
+  async function rowsFor(action: string) {
+    return db.select().from(auditLogs).where(eq(auditLogs.action, action));
+  }
+
+  it('resetPassword 성공 시 auth.password_reset 감사 행을 남긴다 (워크스페이스 무관)', async () => {
+    const svc = await buildService();
+    const user = await seedUser(db, { email: 'reset@audit.com' });
+    const rawToken = await seedVerificationToken({ email: 'reset@audit.com', purpose: 'password_reset' });
+
+    await svc.resetPassword({ rawToken, plainPassword: 'NewPass123!' });
+
+    const rows = await rowsFor('auth.password_reset');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actorUserId: user.id, actorWorkspaceId: null });
+  });
+
+  it('confirmEmailChange 성공 시 auth.email_change 감사 행을 남긴다', async () => {
+    const svc = await buildService();
+    const user = await seedUser(db, { email: 'old@audit.com' });
+    const rawToken = await seedVerificationToken({
+      email: 'new@audit.com',
+      purpose: 'email_change',
+      meta: { userId: user.id, newEmail: 'new@audit.com' },
+    });
+
+    await svc.confirmEmailChange({ rawToken });
+
+    const rows = await rowsFor('auth.email_change');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actorUserId: user.id, actorWorkspaceId: null });
+    expect(rows[0]!.metadata).toMatchObject({ newEmail: 'new@audit.com' });
+  });
+
+  it('deleteAccount 성공 시 auth.account_delete 감사 행을 남긴다', async () => {
+    const svc = await buildService();
+    const pwd = 'Password123!';
+    const userId = await seedUserWithPassword('gone@audit.com', pwd);
+
+    await svc.deleteAccount({ userId, plainPassword: pwd });
+
+    const rows = await rowsFor('auth.account_delete');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actorUserId: userId, actorWorkspaceId: null });
   });
 });

@@ -7,23 +7,24 @@ import {
   getBidRepo, getBizProfileRepo, getContractRepo, getInvitationRepo,
   getOutboxRepo, getPgRequestRepo, getRfpRepo, getWorkspaceRepo,
   getRfpRequoteRequestRepo,
+  getAuditLogRepo,
 } from '@/lib/server/repositories/factory';
 import {
   seedBizProfile, seedBuyerWorkspace, seedMembership, seedPgWorkspace, seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { bids, notifications, outboxEntries, rfpInvitations, rfpRequoteRequests, rfps } from '@/lib/db/schema';
+import { auditLogs, bids, notifications, outboxEntries, rfpInvitations, rfpRequoteRequests, rfps } from '@/lib/db/schema';
 import { RfpService } from '../rfp';
 
 let db: PgliteDB;
 let service: RfpService;
 
 async function buildService(): Promise<RfpService> {
-  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo] =
+  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo] =
     await Promise.all([
       getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
-      getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(),
+      getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(), getAuditLogRepo(),
     ]);
-  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo);
+  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo);
 }
 
 beforeEach(async () => {
@@ -170,5 +171,28 @@ describe('RfpService.requote', () => {
     expect(reqs).toHaveLength(0);
     const [rfpAfter] = await db.select().from(rfps).where(eq(rfps.id, s.rfpId));
     expect(rfpAfter!.deadline.getTime()).toBe(rfpBefore!.deadline.getTime());
+  });
+});
+
+// ─── 감사 로그 (C5) ───────────────────────────────────────────────────────────
+
+describe('RfpService.requote — 감사 로그 기록', () => {
+  it('requote 성공 시 rfp.requote 감사 행을 남긴다', async () => {
+    const s = await seedBidderEnv();
+    const r = await service.requote(
+      s.rfpId,
+      { targetPgWsIds: [s.pgWs.id], message: '조건 개선 부탁해요', newDeadline: future() },
+      { userId: s.buyer.id, workspaceId: s.buyerWs.id },
+    );
+    expect(r.ok).toBe(true);
+
+    const rows = await db.select().from(auditLogs).where(eq(auditLogs.action, 'rfp.requote'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorUserId: s.buyer.id,
+      actorWorkspaceId: s.buyerWs.id,
+      entityType: 'rfp',
+    });
+    expect(rows[0]!.metadata).toMatchObject({ targetPgWsIds: [s.pgWs.id] });
   });
 });

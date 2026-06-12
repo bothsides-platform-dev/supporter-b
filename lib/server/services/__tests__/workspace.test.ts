@@ -6,13 +6,14 @@ import {
   __resetForTest,
   __useDrizzleWithDbForTest,
   getOutboxRepo,
+  getAuditLogRepo,
 } from '@/lib/server/repositories/factory';
 import {
   seedBuyerWorkspace,
   seedMembership,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
+import { auditLogs, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
 import { WorkspaceService } from '../workspace';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -21,7 +22,8 @@ let service: WorkspaceService;
 
 async function buildService(): Promise<WorkspaceService> {
   const outboxRepo = await getOutboxRepo();
-  return new WorkspaceService(db, outboxRepo);
+  const auditRepo = await getAuditLogRepo();
+  return new WorkspaceService(db, outboxRepo, auditRepo);
 }
 
 beforeEach(async () => {
@@ -352,5 +354,116 @@ describe('WorkspaceService.acceptInvite', () => {
     });
 
     expect(result).toEqual({ ok: false, error: 'INVITE_EMAIL_MISMATCH' });
+  });
+});
+
+// ─── 감사 로그 (C5) ───────────────────────────────────────────────────────────
+
+describe('WorkspaceService — 감사 로그 기록', () => {
+  async function rowsFor(action: string) {
+    return db.select().from(auditLogs).where(eq(auditLogs.action, action));
+  }
+
+  it('createWorkspace 성공 시 workspace.create 감사 행을 남긴다', async () => {
+    const user = await seedUser(db, { email: 'creator@audit.com' });
+    const r = await service.createWorkspace(
+      { type: 'buyer', name: '감사 구매사', userId: user.id },
+      { userId: user.id, workspaceId: '' },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const rows = await rowsFor('workspace.create');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorUserId: user.id,
+      actorWorkspaceId: r.workspaceId,
+      entityType: 'workspace',
+      entityId: r.workspaceId,
+    });
+  });
+
+  it('inviteMember 성공 시 workspace.member_invite 감사 행을 남긴다', async () => {
+    const admin = await seedUser(db, { email: 'admin@audit.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+
+    const r = await service.inviteMember(
+      { email: 'newbie@audit.com', role: 'member' },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+    expect(r.ok).toBe(true);
+
+    const rows = await rowsFor('workspace.member_invite');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actorUserId: admin.id, actorWorkspaceId: ws.id });
+    expect(rows[0]!.metadata).toMatchObject({ email: 'newbie@audit.com', role: 'member' });
+  });
+
+  it('acceptInvite 성공 시 workspace.invite_accept 감사 행을 남긴다', async () => {
+    const admin = await seedUser(db, { email: 'admin@audit.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    const invited = await seedUser(db, { email: 'joiner@audit.com' });
+    const { generateToken, hashToken } = await import('@/lib/server/token');
+    const rawToken = generateToken();
+    await db.insert(workspaceInvitations).values({
+      workspaceId: ws.id,
+      invitedEmail: 'joiner@audit.com',
+      invitedByUserId: admin.id,
+      role: 'member',
+      tokenHash: hashToken(rawToken),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      status: 'pending',
+    });
+
+    const r = await service.acceptInvite(rawToken, {
+      userId: invited.id,
+      userEmail: 'joiner@audit.com',
+      workspaceId: '',
+    });
+    expect(r.ok).toBe(true);
+
+    const rows = await rowsFor('workspace.invite_accept');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actorUserId: invited.id, actorWorkspaceId: ws.id });
+  });
+
+  it('changeMemberRole 성공 시 workspace.member_role_change 감사 행을 남긴다', async () => {
+    const admin = await seedUser(db, { email: 'admin@audit.com' });
+    const member = await seedUser(db, { email: 'member@audit.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, member.id, 'member');
+
+    const r = await service.changeMemberRole(
+      { targetUserId: member.id, role: 'admin' },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+    expect(r.ok).toBe(true);
+
+    const rows = await rowsFor('workspace.member_role_change');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actorUserId: admin.id, actorWorkspaceId: ws.id });
+    expect(rows[0]!.metadata).toMatchObject({ targetUserId: member.id, role: 'admin' });
+  });
+
+  it('removeMember 성공 시 workspace.member_remove 감사 행을 남긴다', async () => {
+    const admin = await seedUser(db, { email: 'admin@audit.com' });
+    const member = await seedUser(db, { email: 'member@audit.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, member.id, 'member');
+
+    const r = await service.removeMember(
+      { targetUserId: member.id },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+    expect(r.ok).toBe(true);
+
+    const rows = await rowsFor('workspace.member_remove');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actorUserId: admin.id, actorWorkspaceId: ws.id });
+    expect(rows[0]!.metadata).toMatchObject({ targetUserId: member.id });
   });
 });
