@@ -100,6 +100,15 @@ describe('listAuditLogsAction', () => {
     expect(r.nextCursor).toBeNull();
   });
 
+  it('createdAt 이 ISO datetime 이 아닌 커서는 INVALID_INPUT 으로 거부한다 (Invalid Date 쿼리 방지)', async () => {
+    const { admin, ws } = await seedEnv();
+    sessionRef.value = { user: { id: admin.id, workspaceId: ws.id, role: 'admin' } };
+    const r = await listAuditLogsAction({
+      before: { createdAt: 'not-a-date', id: '00000000-0000-4000-8000-000000000000' },
+    });
+    expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+  });
+
   it('limit 를 채우면 nextCursor 를 반환하고, 커서로 이어서 받을 수 있다', async () => {
     const { admin, ws } = await seedEnv();
     const repo = await getAuditLogRepo();

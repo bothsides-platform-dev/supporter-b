@@ -12,7 +12,9 @@ const Input = z
   .object({
     limit: z.number().int().min(1).max(100).optional(),
     before: z
-      .object({ createdAt: z.string(), id: z.uuid() })
+      // createdAt 은 repo 가 돌려준 ISO 문자열 그대로 — 임의 문자열이
+      // new Date() 에서 Invalid Date 로 변해 쿼리 에러가 되는 것을 차단.
+      .object({ createdAt: z.iso.datetime(), id: z.uuid() })
       .optional(),
   })
   .strict();
