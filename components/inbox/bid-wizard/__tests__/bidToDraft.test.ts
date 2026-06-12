@@ -1,3 +1,5 @@
+import { describe, it, expect, vi } from 'vitest';
+
 // Mock server-action imports that BidWizard.tsx pulls in transitively
 // (next-auth / next/server are incompatible with the jsdom environment).
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));

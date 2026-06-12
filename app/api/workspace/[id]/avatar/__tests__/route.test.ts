@@ -9,7 +9,7 @@
 //         413 too large, 415 mime not allowed, 415 sniff mismatch,
 //         200 upserts blob + sets has_logo
 //   DELETE: 401 unauthenticated, 403 wrong workspace, 200 deletes blob + clears has_logo
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { workspaces, workspaceLogoBlobs } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
