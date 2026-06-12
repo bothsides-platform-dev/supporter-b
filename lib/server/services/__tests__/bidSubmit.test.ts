@@ -211,6 +211,29 @@ describe('BidService.submit', () => {
       .where(eq(outboxEntries.event, 'bid.submitted'));
     expect(entries.length).toBeGreaterThan(0);
   });
+
+  it('샘플 RFP 제출은 구매사 알림/아웃박스를 발행하지 않는다 (bid 는 저장)', async () => {
+    const s = await seedSubmitEnv();
+    // 온보딩 샘플로 표식 — 소유자는 데모 구매사(.invalid 메일)라 알림/이메일이 정크가 된다.
+    await db.update(rfps).set({ isSample: true }).where(eq(rfps.id, s.rfpId));
+
+    const r = await service.submit(
+      { ...BASE, rfpId: s.rfpId },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    // bid 는 정상 저장된다
+    expect(await db.select().from(bids).where(eq(bids.id, r.bidId))).toHaveLength(1);
+    // 데모 구매사 인앱 알림/아웃박스 이메일은 발행되지 않는다
+    expect(
+      await db.select().from(notifications).where(eq(notifications.userId, s.buyerUser.id)),
+    ).toHaveLength(0);
+    expect(
+      await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'bid.submitted')),
+    ).toHaveLength(0);
+  });
 });
 
 // ─── Round-aware submit ────────────────────────────────────────────────────────

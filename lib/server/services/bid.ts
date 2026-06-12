@@ -173,54 +173,58 @@ export class BidService {
           );
       }
 
-      const buyerMembers = (await tx
-        .select({ userId: workspaceMembers.userId, email: users.email })
-        .from(workspaceMembers)
-        .innerJoin(users, eq(workspaceMembers.userId, users.id))
-        .where(eq(workspaceMembers.workspaceId, rfp.buyerWsId))) as {
-        userId: string;
-        email: string;
-      }[];
+      // 온보딩 샘플 RFP 는 데모 구매사(.invalid 메일)가 소유 — 알림/이메일을 발행하지 않는다.
+      // (bid 저장은 위에서 끝났으므로 PG 의 인터랙티브 체험에는 영향이 없다.)
+      if (!rfp.isSample) {
+        const buyerMembers = (await tx
+          .select({ userId: workspaceMembers.userId, email: users.email })
+          .from(workspaceMembers)
+          .innerJoin(users, eq(workspaceMembers.userId, users.id))
+          .where(eq(workspaceMembers.workspaceId, rfp.buyerWsId))) as {
+          userId: string;
+          email: string;
+        }[];
 
-      const [pgWsRow] = (await tx
-        .select({ name: workspaces.name })
-        .from(workspaces)
-        .where(eq(workspaces.id, actor.workspaceId))
-        .limit(1)) as { name: string }[];
-      const pgWsLabel = pgWsRow?.name ?? 'PG';
+        const [pgWsRow] = (await tx
+          .select({ name: workspaces.name })
+          .from(workspaces)
+          .where(eq(workspaces.id, actor.workspaceId))
+          .limit(1)) as { name: string }[];
+        const pgWsLabel = pgWsRow?.name ?? 'PG';
 
-      const submittedHtml = await renderBidSubmitted({
-        rfpId: rfp.code,
-        rfpTitle: rfp.title,
-        pgName: pgWsLabel,
-        submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
-      });
+        const submittedHtml = await renderBidSubmitted({
+          rfpId: rfp.code,
+          rfpTitle: rfp.title,
+          pgName: pgWsLabel,
+          submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
+        });
 
-      for (const m of buyerMembers) {
-        const notif: Notification = {
-          id: randomUUID(),
-          userId: m.userId,
-          workspaceId: rfp.buyerWsId,
-          type: 'bid.submitted',
-          title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-          body: `${pgWsLabel}가 견적을 보냈어요.`,
-          channel: 'inapp',
-          status: 'pending',
-          linkUrl: `/rfp/${rfp.code}`,
-          createdAt: now.toISOString(),
-        };
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
-        await this.outboxRepo.enqueue(
-          {
-            event: 'bid.submitted',
-            to: m.email,
-            subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-            html: submittedHtml,
-            dedupeKey: `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
-          },
-          tx,
-        );
+        for (const m of buyerMembers) {
+          const notif: Notification = {
+            id: randomUUID(),
+            userId: m.userId,
+            workspaceId: rfp.buyerWsId,
+            type: 'bid.submitted',
+            title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+            body: `${pgWsLabel}가 견적을 보냈어요.`,
+            channel: 'inapp',
+            status: 'pending',
+            linkUrl: `/rfp/${rfp.code}`,
+            createdAt: now.toISOString(),
+          };
+          await dispatchNotification(tx, notif);
+          pendingEmits.push(notif);
+          await this.outboxRepo.enqueue(
+            {
+              event: 'bid.submitted',
+              to: m.email,
+              subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+              html: submittedHtml,
+              dedupeKey: `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
+            },
+            tx,
+          );
+        }
       }
 
       return { ok: true as const, bidId, rfpCode: rfp.code };

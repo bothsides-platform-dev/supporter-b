@@ -47,26 +47,32 @@ async function PgRfpDetailLoader({
 }) {
   const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: wsId });
   if (!data) notFound();
+  // 온보딩 샘플은 데모 구매사가 보낸 가공 견적 — 채팅 레일을 노출하지 않는다(샌드박스).
+  const showChat = !data.rfp.isSample;
   // 우측 채팅 레일(상대방 채팅: 구매사 고정 / 팀 채팅)과 본문이 나란히 — 레일에
   // rfp uuid·구매사 정보가 필요해 로더 안에서 함께 렌더한다(lg 미만 비노출).
   return (
     <div className="flex items-start">
       <div className="min-w-0 flex-1 px-8 py-8">
-        <div className="mb-4 flex justify-end">
-          <ChatRailToggle />
-        </div>
+        {showChat && (
+          <div className="mb-4 flex justify-end">
+            <ChatRailToggle />
+          </div>
+        )}
         <PgRfpDetailContent data={data} variant="full" />
       </div>
-      <ChatRail
-        rfpId={data.rfp.id}
-        rfpCode={data.rfp.code}
-        rfpTitle={data.rfp.title}
-        fixedCounterparty={{
-          workspaceId: data.rfp.buyerWsId,
-          name: data.buyerName,
-          type: 'buyer',
-        }}
-      />
+      {showChat && (
+        <ChatRail
+          rfpId={data.rfp.id}
+          rfpCode={data.rfp.code}
+          rfpTitle={data.rfp.title}
+          fixedCounterparty={{
+            workspaceId: data.rfp.buyerWsId,
+            name: data.buyerName,
+            type: 'buyer',
+          }}
+        />
+      )}
     </div>
   );
 }

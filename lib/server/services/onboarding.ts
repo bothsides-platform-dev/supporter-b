@@ -1,5 +1,10 @@
 import type { Actor, ServiceResult } from './types';
 import { seedSampleRfpInTx, deleteSampleRfpInTx } from '@/lib/server/onboarding/sample-rfp';
+import {
+  seedSamplePgRfpInTx,
+  simulateSampleAwardInTx,
+  deleteSamplePgRfpInTx,
+} from '@/lib/server/onboarding/sample-pg-rfp';
 
 export class OnboardingService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -14,6 +19,24 @@ export class OnboardingService {
   async deleteSampleRfp(code: string, actor: Actor): Promise<ServiceResult> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return this._db.transaction((tx: any) => deleteSampleRfpInTx(tx, { code, workspaceId: actor.workspaceId }));
+  }
+
+  // ── PG 온보딩 샘플 ──────────────────────────────────────────────────────────
+  async seedSamplePgRfp(input: { pgWsId: string; pgUserId: string }): Promise<{ seeded: boolean; rfpId?: string }> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this._db.transaction((tx: any) => seedSamplePgRfpInTx(tx, input));
+  }
+
+  // PG 가 견적을 제출한 뒤 호출 — 샘플 선정을 시뮬레이트한다. 게이트는 tx 함수가 강제.
+  async simulateSampleAward(code: string, actor: Actor): Promise<ServiceResult> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this._db.transaction((tx: any) => simulateSampleAwardInTx(tx, { code, pgWsId: actor.workspaceId }));
+  }
+
+  // 소유권은 초대 PG(actor.workspaceId) 로 게이트 — buyerWsId 가 아닌 allowlist 기준(tx 함수가 강제).
+  async deleteSamplePgRfp(code: string, actor: Actor): Promise<ServiceResult> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this._db.transaction((tx: any) => deleteSamplePgRfpInTx(tx, { code, pgWsId: actor.workspaceId }));
   }
 }
 

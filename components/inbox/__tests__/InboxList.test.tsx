@@ -44,6 +44,16 @@ describe('InboxList', () => {
     expect(screen.getByText('신규')).toBeInTheDocument();
   });
 
+  it('isSample 행에는 샘플 칩을 표시한다', () => {
+    render(<InboxList rows={[{ ...row, isSample: true }]} />);
+    expect(screen.getByText('샘플')).toBeInTheDocument();
+  });
+
+  it('isSample 아닌 행에는 샘플 칩이 없다', () => {
+    render(<InboxList rows={[row]} />);
+    expect(screen.queryByText('샘플')).not.toBeInTheDocument();
+  });
+
   it('won 단계는 선정됨, lost 단계는 미선정 Chip을 렌더', () => {
     render(
       <InboxList
