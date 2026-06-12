@@ -36,4 +36,22 @@ w-96 레일이 열린 lg(1024px) 뷰포트에서 '내가 요청한 조건' `grid
 **Priority:** P2
 FocusComparison → MessageComposeSheet 의 `rfpContext={{ code: props.rfpId(uuid), title: rfpCode }}` — RecipientCard 가 uuid 를 mono 로 표시. `code` 가 전송 rfpId(uuid) 겸 표시값으로 이중 사용되는 구조라 RfpContext 타입을 {id, code, title} 로 분리해야 함 (merge-base 기존 버그, 이 브랜치 비도입).
 
+## Kanban Board
+
+### 보드 카드 이동의 키보드 대체 수단
+**Priority:** P1
+센서 교체(Mouse+Touch)로 보드 드래그가 포인터 전용이 됨 — 기존 KeyboardSensor 는 래퍼 가짜 버튼(role/tabIndex 스프레드, 무라벨·중첩 버튼) 위에서만 동작하던 깨진 affordance 였고, 카드 버튼에 합치면 dnd-kit 이 Enter 클릭을 preventDefault 로 죽여 기각. 올바른 복원은 카드 버튼 **밖** 전용 드래그 핸들(스트레치드 버튼 패턴으로 PipelineCard 루트 재구성) + KeyboardSensor 재도입, 또는 카드 컨텍스트 메뉴 '이동' 액션. 모든 드래그 액션은 상세 화면 버튼 경로로 수행 가능(기능 잠금 아님). (발견: /ship adversarial·design 리뷰 2026-06-13, branch worktree-fix-kanban-board-ux)
+
+### PG 인박스 데이터 조립 중복 + 보드 뷰 2중 페치
+**Priority:** P2
+`app/(app)/inbox/page.tsx` 의 pairs/bids/pendingRequotes 조립이 `loadBoard.ts` pg 분기와 한 줄 단위 중복이고, 보드 뷰에서는 둘 다 실행돼 동일 쿼리 3쌍이 요청당 2회 나감(행 수 작아 현재 무해). `loadPgInboxData(wsId)` 공유 로더로 추출해 양쪽이 소비하도록. (발견: /ship maintainability·performance 리뷰 2026-06-13)
+
+### 종결 컬럼 정렬을 전이 시각 기준으로
+**Priority:** P3
+결과 컬럼 정렬 키가 buyer=createdAt, pg=submittedAt 이라 방금 취소/철회한 오래된 카드가 limit 10 절단 밖으로 밀려 '증발'처럼 보일 수 있음. 카드에 전이 시각(awarded/cancelled/withdrawn at)을 실어 내림차순 정렬하거나 최근 전이 카드 상단 고정. (발견: /ship red-team 리뷰 2026-06-13)
+
+### rfp_bids 보드 죽은 표면 정리
+**Priority:** P3
+BidCard·loadBoard rfp_bids 분기·cardType 'bid' 경로가 어디에도 마운트되지 않음(비교 화면 재설계 PR#97 이후). 부활 계획 없으면 제거, 보존이면 'no current mount point' 주석 명시. (발견: /ship red-team 리뷰 2026-06-13)
+
 ## Completed
