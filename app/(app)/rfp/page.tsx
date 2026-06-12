@@ -14,7 +14,7 @@ import { SplitView } from '@/components/ui/split-view';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
-import { filterRfps, resolveBoardView, type BoardView, type BoardFilterParams } from '@/lib/server/board/filterRfps';
+import { filterRfps, paramsForView, resolveBoardView, type BoardView, type BoardFilterParams } from '@/lib/server/board/filterRfps';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 
 export const dynamic = 'force-dynamic';
@@ -91,7 +91,7 @@ async function RfpListPageLoader({
 }) {
   const now = new Date();
   const allRfps = await (await getRfpRepo()).findByBuyerWs(wsId);
-  const rfps = filterRfps(allRfps, params, now);
+  const rfps = filterRfps(allRfps, paramsForView(params, view), now);
 
   const listContent =
     rfps.length === 0 ? (

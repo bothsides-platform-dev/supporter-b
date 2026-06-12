@@ -3,6 +3,7 @@ import {
   matchesDeadlineBucket,
   matchesGrade,
   resolveBoardView,
+  paramsForView,
   filterRfps,
   filterInboxRows,
 } from '../filterRfps';
@@ -48,6 +49,20 @@ describe('matchesGrade', () => {
     expect(matchesGrade('sme1', 'sme1')).toBe(true);
     expect(matchesGrade('general', 'sme1')).toBe(false);
     expect(matchesGrade(undefined, 'sme1')).toBe(false);
+  });
+});
+
+describe('paramsForView', () => {
+  it('board 뷰에서는 status 를 무력화한다 — 칩이 숨겨져 보이지 않는 필터 방지 (직접 URL 진입 포함)', () => {
+    expect(paramsForView({ status: 'closed', deadline: 'd7' }, 'board')).toEqual({
+      status: undefined,
+      deadline: 'd7',
+    });
+  });
+
+  it('table 뷰에서는 params 그대로', () => {
+    const p = { status: 'closed', grade: 'small' };
+    expect(paramsForView(p, 'table')).toEqual(p);
   });
 });
 

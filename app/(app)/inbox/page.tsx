@@ -17,6 +17,7 @@ import { InboxIcon } from '@/components/icons';
 import { SplitView } from '@/components/ui/split-view';
 import {
   filterInboxRows,
+  paramsForView,
   resolveBoardView,
   type BoardView,
   type BoardFilterParams,
@@ -105,7 +106,7 @@ async function InboxListPageLoader({
       hasPendingRequote: pendingRequoteRfpIds.has(rfp.id),
     };
   });
-  const rows = filterInboxRows(allRows, params, now);
+  const rows = filterInboxRows(allRows, paramsForView(params, view), now);
 
   const panel = peek ? (
     <Suspense fallback={<InboxPeekPanelSkeleton rfpCode={peek} />}>

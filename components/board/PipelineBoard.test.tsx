@@ -2,11 +2,12 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
 
 const mockReplace = vi.fn();
+const mockSearchParams = vi.fn(() => new URLSearchParams('view=board'));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mockReplace }),
   usePathname: () => '/rfp',
-  useSearchParams: () => new URLSearchParams('view=board'),
+  useSearchParams: () => mockSearchParams(),
 }));
 
 // Mock the child components that require complex context (dnd-kit, etc.)
@@ -58,6 +59,7 @@ const cards: BoardCard[] = [
 afterEach(() => {
   cleanup();
   mockReplace.mockClear();
+  mockSearchParams.mockReturnValue(new URLSearchParams('view=board'));
 });
 
 describe('PipelineBoard', () => {
@@ -94,5 +96,15 @@ describe('PipelineBoard', () => {
       moreHref: '/inbox?view=table&status=closed',
     });
     expect(lastColumnOverflow?.({ lifecycleKey: 'received' })).toBeNull();
+  });
+
+  it('overflow 딥링크는 현재 deadline/grade 필터를 보존한다 (peek 등은 제외)', () => {
+    mockSearchParams.mockReturnValue(
+      new URLSearchParams('view=board&deadline=d7&grade=small&peek=P-2604-0001'),
+    );
+    render(<PipelineBoard cardType="rfp" columns={[]} cards={[]} />);
+    expect(lastColumnOverflow?.({ lifecycleKey: 'closed' })?.moreHref).toBe(
+      '/rfp?deadline=d7&grade=small&view=table&status=closed',
+    );
   });
 });

@@ -134,6 +134,90 @@ describe('useBoardDnd', () => {
     expect(result.current.grouped.get('c-hold')).toHaveLength(0);
   });
 
+  it('드롭 직후 서버 응답 전에도 카드가 새 컬럼으로 보인다 (optimistic override)', async () => {
+    let resolveMove!: (v: { ok: true }) => void;
+    moveCard.mockImplementationOnce(
+      () => new Promise<{ ok: true }>((res) => (resolveMove = res)),
+    );
+    const { result } = setup();
+    await act(async () => {
+      result.current.handleDragEnd(drop('r1', 'c-hold'));
+    });
+    // 서버 액션 pending 동안 optimistic 배치가 보여야 한다 (없으면 카드가 스냅백처럼 보임).
+    expect(result.current.grouped.get('c-hold')?.map((c) => c.cardId)).toContain('r1');
+    expect(result.current.grouped.get('c-active')).toHaveLength(0);
+    await act(async () => {
+      resolveMove({ ok: true });
+    });
+  });
+
+  it('카드 위에 드롭하면 그 카드의 컬럼으로 배치된다', async () => {
+    const other: BoardCard = {
+      cardType: 'rfp',
+      cardId: 'r2',
+      columnId: 'c-hold',
+      payload: { rfpId: 'P-2605-0002', title: '보류 RFP', stage: 'active' },
+    };
+    const { result } = setup([rfpCard, other]);
+    await act(async () => {
+      result.current.handleDragEnd({
+        active: { id: 'card:r1' },
+        over: { id: 'card:r2' },
+      } as never);
+    });
+    expect(moveCard).toHaveBeenCalledWith({
+      cardType: 'rfp',
+      cardId: 'r1',
+      toColumnId: 'c-hold',
+    });
+  });
+
+  it('moveCardAction 실패 시 에러 토스트 + refresh 는 그대로 호출', async () => {
+    moveCard.mockResolvedValueOnce({ ok: false, error: 'NOT_A_DROP_TARGET' } as never);
+    const { result } = setup();
+    await act(async () => {
+      result.current.handleDragEnd(drop('r1', 'c-hold'));
+    });
+    expect(toast).toHaveBeenCalledWith('이동하지 못했어요 — NOT_A_DROP_TARGET', {
+      type: 'error',
+    });
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('default-landing 컬럼 드롭은 releaseCardAction 으로 배치를 해제한다 (bid 보드)', async () => {
+    const landingCol = col({
+      id: 'c-inbox',
+      title: '진행전',
+      lifecycleKey: 'inbox',
+      position: 'a0',
+    });
+    const bidCard: BoardCard = {
+      cardType: 'bid',
+      cardId: 'b1',
+      columnId: 'c-hold',
+      payload: { id: 'b1' },
+    };
+    const { result } = renderHook(() =>
+      useBoardDnd({ cardType: 'bid', columns: [landingCol, customCol], cards: [bidCard] }),
+    );
+    await act(async () => {
+      result.current.handleDragEnd(drop('b1', 'c-inbox'));
+    });
+    expect(release).toHaveBeenCalledWith({ cardType: 'bid', cardId: 'b1' });
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('over 가 없으면 (보드 밖 드롭) 아무 일도 일어나지 않는다', async () => {
+    const { result } = setup();
+    await act(async () => {
+      result.current.handleDragEnd({ active: { id: 'card:r1' }, over: null } as never);
+    });
+    expect(moveCard).not.toHaveBeenCalled();
+    expect(release).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it('drag start exposes activeCard and pre-evaluated valid drop targets', async () => {
     const { result } = setup();
     await act(async () => {

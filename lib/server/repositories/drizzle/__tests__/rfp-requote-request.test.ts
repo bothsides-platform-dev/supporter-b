@@ -53,8 +53,9 @@ describe('DrizzleRfpRequoteRequestRepository', () => {
     const buyerWs = await seedBuyerWorkspace(db);
     const pgWs = await seedPgWorkspace(db, 'pg.io');
     const otherPg = await seedPgWorkspace(db, 'other.io');
-    const rfpA = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyer.id });
-    const rfpB = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyer.id });
+    // 명시 코드 — seedRfp 기본 랜덤 코드는 ~1/9000 확률로 unique 충돌 (CI 플레이크 방지).
+    const rfpA = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyer.id, code: 'P-2605-0101' });
+    const rfpB = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyer.id, code: 'P-2605-0102' });
 
     const pendingReq = makeReq(rfpA.id, pgWs.id, buyer.id);
     await repo.create(pendingReq);

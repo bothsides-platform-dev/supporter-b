@@ -56,8 +56,13 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
   return (
     <div className="space-y-2">
       <CardHead code={card.rfpId} deadline={card.deadline} hideDday={isResult} />
-      {card.isCancelled && <Chip label="취소됨" color="error" />}
-      {card.isSample && <Chip label="샘플" color="surface" />}
+      {(card.isCancelled || card.isSample) && (
+        // 두 칩이 동시 렌더될 수 있어(취소된 샘플) 한 행으로 묶어 간격을 보장한다.
+        <div className="flex flex-wrap gap-1">
+          {card.isCancelled && <Chip label="취소됨" color="error" />}
+          {card.isSample && <Chip label="샘플" color="surface" />}
+        </div>
+      )}
       <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)] line-clamp-2">
         {card.title}
       </p>

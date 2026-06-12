@@ -129,7 +129,8 @@ describe('KanbanBoard', () => {
     );
     expect(screen.getByText('RFP 9')).toBeInTheDocument();
     expect(screen.queryByText('RFP 10')).not.toBeInTheDocument();
-    const link = screen.getByRole('link', { name: '전체 12건 보기' });
+    // 라벨은 건수를 약속하지 않는다 — 보드 N(필터 적용)과 표 도착지 건수가 다를 수 있음.
+    const link = screen.getByRole('link', { name: '표에서 전체 보기' });
     expect(link).toHaveAttribute('href', '/rfp?view=table&status=active');
   });
 
@@ -145,6 +146,23 @@ describe('KanbanBoard', () => {
       />,
     );
     expect(screen.getByText('결제대행 RFP')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /전체 .*건 보기/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '표에서 전체 보기' })).not.toBeInTheDocument();
+  });
+
+  it('드래그 래퍼에 명시적 tabIndex 가 없고 내부 버튼이 유일한 포커서블 요소다', () => {
+    const { container } = render(
+      <KanbanBoard
+        kind="pipeline"
+        cardType="rfp"
+        columns={[sysCol]}
+        cards={[cards[0]]}
+        renderCard={(c) => (
+          <button type="button">{(c.payload as { title: string }).title}</button>
+        )}
+      />,
+    );
+    expect(container.querySelector('[tabindex]')).toBeNull();
+    // 카드 텍스트를 가진 버튼은 renderCard 의 진짜 버튼 1개뿐 (래퍼는 비인터랙티브).
+    expect(screen.getAllByRole('button', { name: '결제대행 RFP' })).toHaveLength(1);
   });
 });

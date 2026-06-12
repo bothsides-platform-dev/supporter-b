@@ -139,6 +139,13 @@ describe('PipelineCard — 구매사 카드 정보 보강', () => {
     expect(screen.queryByText(/^D-\d+$/)).not.toBeInTheDocument();
   });
 
+  it('closed 단계 카드도 D-day 칩을 숨긴다 (isResult 의 || 절 회귀 가드)', () => {
+    render(
+      <PipelineCard card={makeBuyerCard({ stage: 'closed' })} onSelect={vi.fn()} />,
+    );
+    expect(screen.queryByText(/^D-\d+$/)).not.toBeInTheDocument();
+  });
+
   it('진행중(active) 카드는 D-day 칩을 표시한다', () => {
     render(
       <PipelineCard card={makeBuyerCard({ stage: 'active' })} onSelect={vi.fn()} />,

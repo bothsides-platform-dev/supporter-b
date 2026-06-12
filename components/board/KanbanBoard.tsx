@@ -142,11 +142,13 @@ export function KanbanBoard({
                   </DraggableCard>
                 ))}
                 {truncated && (
+                  // 라벨에 건수를 넣지 않는다 — 보드의 N(필터 적용·컬럼 폴드)과 표 도착지
+                  // 건수가 다를 수 있어 약속이 어긋남. 총 건수는 컬럼 헤더가 이미 보여줌.
                   <Link
                     href={overflow.moreHref}
                     className="block text-center py-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
                   >
-                    전체 {columnCards.length}건 보기
+                    표에서 전체 보기
                   </Link>
                 )}
               </ColumnView>
@@ -193,7 +195,9 @@ function DraggableCard({ card, children }: { card: BoardCard; children: ReactNod
     <div
       ref={setNodeRef}
       style={{ touchAction: 'manipulation' }}
-      className={cn(isDragging && 'opacity-30')}
+      // select-none/touch-callout: 길게 누르기(250ms) 활성화 중 iOS 텍스트 선택
+      // 돋보기·콜아웃이 드래그와 겹쳐 뜨는 것을 막는다.
+      className={cn('select-none [-webkit-touch-callout:none]', isDragging && 'opacity-30')}
       {...listeners}
     >
       {children}

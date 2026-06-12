@@ -25,16 +25,16 @@ describe('mapRfpParam', () => {
     expect(mapRfpParam('draft')).toBeUndefined();
   });
 
-  it('maps active → sent (sidebar token ≠ domain enum)', () => {
-    expect(mapRfpParam('active')).toBe('sent');
+  it('maps active → [sent] (sidebar token ≠ domain enum)', () => {
+    expect(mapRfpParam('active')).toEqual(['sent']);
   });
 
-  it('maps closed → closed', () => {
-    expect(mapRfpParam('closed')).toBe('closed');
+  it('closed 토큰은 cancelled 를 폴드한다 (칸반 마감 컬럼과 동일 모집단)', () => {
+    expect(mapRfpParam('closed')).toEqual(['closed', 'cancelled']);
   });
 
-  it('maps awarded → awarded', () => {
-    expect(mapRfpParam('awarded')).toBe('awarded');
+  it('maps awarded → [awarded]', () => {
+    expect(mapRfpParam('awarded')).toEqual(['awarded']);
   });
 
   it('returns undefined for unknown / missing param', () => {
@@ -87,10 +87,10 @@ describe('filterRfpsByParam', () => {
     expect(result[0].status).toBe('sent');
   });
 
-  it('filters to closed when param=closed', () => {
+  it('param=closed 는 closed + cancelled 둘 다 반환 (보드 마감 컬럼 딥링크 모집단 일치)', () => {
     const result = filterRfpsByParam(allRfps, 'closed');
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe('closed');
+    expect(result).toHaveLength(2);
+    expect(result.map((r) => r.status).sort()).toEqual(['cancelled', 'closed']);
   });
 
   it('filters to awarded when param=awarded', () => {
