@@ -77,6 +77,11 @@ export function AuditLogPanel({ workspaceType, initialLogs, initialNextCursor }:
                 <span className="shrink-0 font-medium text-[var(--md-sys-color-on-surface)]">
                   {row.actorName ?? '탈퇴한 멤버'}
                 </span>
+                {row.viaMaster && (
+                  <span className="shrink-0 rounded-[var(--md-sys-shape-extra-small)] bg-[var(--md-sys-color-surface-container-high)] px-1.5 py-0.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                    운영자
+                  </span>
+                )}
                 <span className="min-w-0 truncate text-[var(--md-sys-color-on-surface-variant)]">
                   {ACTION_LABELS[row.action] ?? row.action}
                 </span>

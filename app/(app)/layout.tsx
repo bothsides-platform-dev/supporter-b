@@ -32,9 +32,13 @@ export default async function AppLayout({
   // hit). Only fetched when the JWT carries a complete workspace claim; an
   // incomplete/unauth session never touches the DB (resolveShellAccess decides
   // the redirect from the empty list).
+  // Master/operator sees ALL active workspaces (switcher); regular users see
+  // only their memberships. isMaster is env-derived (MASTER_ACCOUNT_EMAILS).
   const workspaces =
     session?.user?.id && session.user.workspaceId && session.user.workspaceType
-      ? await (await getWorkspaceRepo()).listForUser(session.user.id)
+      ? session.user.isMaster
+        ? await (await getWorkspaceRepo()).listAllWorkspacesForMaster()
+        : await (await getWorkspaceRepo()).listForUser(session.user.id)
       : [];
 
   // Server-side revocation (C3): compare the JWT `sv` claim against
@@ -90,6 +94,7 @@ export default async function AppLayout({
           workspaceType: active.type,
           workspaces,
           current: { id: active.id, name: active.name, type: active.type, hasLogo: active.hasLogo },
+          isMaster: user.isMaster ?? false,
         }}
         header={{
           user: {

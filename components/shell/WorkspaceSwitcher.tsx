@@ -1,7 +1,7 @@
 // components/shell/WorkspaceSwitcher.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronsUpDownIcon, CheckIcon } from 'lucide-react';
 import {
   DropdownMenu,
@@ -22,11 +22,14 @@ const TYPE_LABEL: Record<WorkspaceType, string> = { buyer: '구매사', pg: 'PG'
 type Props = {
   current: { id: string; name: string; type: WorkspaceType; hasLogo: boolean };
   workspaces: WorkspaceMembershipSummary[];
+  /** Master/operator: shows a name search over ALL active workspaces. */
+  isMaster?: boolean;
 };
 
-export function WorkspaceSwitcher({ current, workspaces }: Props) {
+export function WorkspaceSwitcher({ current, workspaces, isMaster }: Props) {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{ id: string; name: string; type: WorkspaceType; hasLogo: boolean } | null>(null);
+  const [search, setSearch] = useState('');
 
   async function handleSelect(id: string) {
     if (id === current.id || busy) return;
@@ -44,6 +47,12 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
   }
 
   const display = pending ?? current;
+
+  const filtered = useMemo(() => {
+    if (!isMaster || !search.trim()) return workspaces;
+    const q = search.toLowerCase();
+    return workspaces.filter((w) => w.name.toLowerCase().includes(q));
+  }, [workspaces, isMaster, search]);
 
   const itemCls =
     'flex items-center gap-2 px-2 py-1.5 rounded-[var(--md-sys-shape-extra-small)] cursor-pointer text-[length:var(--md-typescale-label-large-size)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)]';
@@ -78,9 +87,22 @@ export function WorkspaceSwitcher({ current, workspaces }: Props) {
         className="w-[var(--shell-sidebar)] min-w-[var(--shell-sidebar)] rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] p-1 shadow-[var(--md-sys-elevation-2)]"
       >
         <div className="px-2 py-1.5 text-[length:var(--md-typescale-label-small-size)] text-[var(--md-sys-color-on-surface-variant)]">
-          내 워크스페이스
+          {isMaster ? '모든 워크스페이스' : '내 워크스페이스'}
         </div>
-        {workspaces.map((ws) => {
+        {isMaster && (
+          <div className="px-2 pb-1">
+            <input
+              type="text"
+              placeholder="워크스페이스 검색"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              // 드롭다운이 타이핑을 키보드 내비게이션으로 가로채지 않도록 차단.
+              onKeyDown={(e) => e.stopPropagation()}
+              className="w-full rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2 py-1 text-[length:var(--md-typescale-label-medium-size)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)]"
+            />
+          </div>
+        )}
+        {filtered.map((ws) => {
           const active = ws.id === current.id;
           return (
             <DropdownMenuItem

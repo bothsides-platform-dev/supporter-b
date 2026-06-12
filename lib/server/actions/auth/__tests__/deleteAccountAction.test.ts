@@ -16,7 +16,7 @@ import {
 import { users, workspaceMembers, workspaces } from '@/lib/db/schema';
 
 const sessionRef: {
-  value: { user: { id: string; workspaceId: string | null } } | null;
+  value: { user: { id: string; workspaceId: string | null; isMaster?: boolean } } | null;
 } = { value: null };
 vi.mock('@/lib/auth/session', () => ({
   requireSession: () =>
@@ -76,6 +76,17 @@ describe('deleteAccountAction', () => {
   it('returns UNAUTHENTICATED when no session', async () => {
     const r = await deleteAccountAction({ password: 'pw' });
     expect(r).toEqual({ ok: false, error: 'UNAUTHENTICATED' });
+  });
+
+  it('마스터 계정은 삭제할 수 없다 → MASTER_ACCOUNT (비밀번호가 맞아도)', async () => {
+    const user = await seedUser(db, { email: 'master@example.com' });
+    sessionRef.value = { user: { id: user.id, workspaceId: null, isMaster: true } };
+    verifyPasswordMock.mockResolvedValue(true);
+
+    const r = await deleteAccountAction({ password: 'correct' });
+
+    expect(r).toEqual({ ok: false, error: 'MASTER_ACCOUNT' });
+    expect(await isDeleted(user.id)).toBe(false);
   });
 
   it('returns INVALID_PASSWORD when password is wrong', async () => {

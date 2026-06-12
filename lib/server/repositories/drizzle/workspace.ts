@@ -182,6 +182,24 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .orderBy(asc(workspaceMembers.joinedAt))) as WorkspaceMembershipSummary[];
   }
 
+  async listAllWorkspacesForMaster(tx?: Tx): Promise<WorkspaceMembershipSummary[]> {
+    const db = this.h(tx);
+    return (await db
+      .select({
+        id: workspaces.id,
+        name: workspaces.name,
+        type: workspaces.type,
+        status: workspaces.status,
+        role: sql<'admin'>`'admin'`,
+        unreadCount: sql<number>`0`,
+        hasLogo: workspaces.hasLogo,
+      })
+      .from(workspaces)
+      .where(eq(workspaces.status, 'active'))
+      .orderBy(asc(workspaces.name))
+      .limit(500)) as WorkspaceMembershipSummary[];
+  }
+
   async isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean> {
     const db = this.h(tx);
     const [row] = await db

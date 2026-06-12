@@ -41,6 +41,23 @@ describe('passwordForgotAction', () => {
     expect(out).toHaveLength(0);
   });
 
+  it('마스터/운영자 이메일은 재설정 토큰을 발급하지 않는다 (env로만 관리, ok:true 위장)', async () => {
+    const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+    try {
+      await seedUser('help@supporter-b.com');
+      const r = await passwordForgotAction({ email: 'help@supporter-b.com' });
+      expect(r).toEqual({ ok: true });
+      const out = await db.select().from(outboxEntries);
+      expect(out).toHaveLength(0);
+      const tokens = await db.select().from(verificationTokens);
+      expect(tokens).toHaveLength(0);
+    } finally {
+      if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = ORIGINAL;
+    }
+  });
+
   it('issues a token + outbox row when the email matches a real user', async () => {
     await seedUser('kim@example.com');
     const r = await passwordForgotAction({ email: 'Kim@example.com' });
