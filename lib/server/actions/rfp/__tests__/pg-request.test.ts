@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { eq, and } from 'drizzle-orm';
 
 import {
+  auditLogs,
   notifications,
   outboxEntries,
   rfpAllowedPg,
@@ -402,6 +403,30 @@ describe('pg-request actions', () => {
       codes = (await reqRepo.findOpenRfpsForPg(otherPg.id, new Date())).map((r) => r.rfpCode);
       expect(codes).toContain(code);
       void rfpId;
+    });
+
+    it('토글 성공 시 rfp.board_visibility 감사 행을 남긴다', async () => {
+      const w = await world();
+      const code = 'P-2605-3001';
+      await insertRfp({ buyerWsId: w.buyerWs.id, createdBy: w.buyer.id, code });
+
+      asBuyer(w.buyer, w.buyerWs.id);
+      const res = await setRfpBoardVisibilityAction({ rfpId: code, visible: false });
+      expect(res.ok).toBe(true);
+
+      const { eq } = await import('drizzle-orm');
+      const rows = await db
+        .select()
+        .from(auditLogs)
+        .where(eq(auditLogs.action, 'rfp.board_visibility'));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        actorUserId: w.buyer.id,
+        actorWorkspaceId: w.buyerWs.id,
+        entityType: 'rfp',
+        entityId: code,
+      });
+      expect(rows[0]!.metadata).toMatchObject({ visible: false });
     });
 
     it('rejects a non-owner buyer (NOT_OWNED)', async () => {

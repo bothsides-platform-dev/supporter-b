@@ -134,6 +134,12 @@ const SETTINGS_SECTION: NavSection = {
       // G then T (Team) — moved off M so 메시지 can claim the mnemonic G M.
       shortcut: { kind: 'chord', lead: 'g', key: 't' },
     },
+    {
+      // 감사 로그 (C5) — 페이지 자체가 admin 게이트 (nav 는 role 비인지).
+      id: 'settings-audit-log',
+      label: '활동 기록',
+      href: '/settings/audit-log',
+    },
   ],
 };
 
@@ -270,6 +276,9 @@ export function getBreadcrumbSegments(
   }
   if (pathname === '/settings/members') {
     return [{ label: '설정', href: '/settings/profile' }, { label: '멤버' }];
+  }
+  if (pathname === '/settings/audit-log') {
+    return [{ label: '설정', href: '/settings/profile' }, { label: '활동 기록' }];
   }
   return [];
 }

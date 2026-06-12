@@ -44,4 +44,33 @@ describe('auth.config jwt callback', () => {
       role: 'admin',
     });
   });
+
+  // Server-side revocation: the login-time sessionVersion rides in the token
+  // as `sv` and is compared against users.session_version on every request.
+  it('login stamps the sv claim from user.sessionVersion', async () => {
+    const result = await jwt({
+      token: {},
+      user: { id: 'u9', sessionVersion: 3 },
+    });
+    expect(result.sv).toBe(3);
+  });
+});
+
+describe('auth.config session callback', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const session = authConfig.callbacks!.session as (params: any) => Promise<any>;
+
+  it('token.sv를 session.user.sessionVersion으로 노출한다 (requireSession 비교용)', async () => {
+    const result = await session({
+      session: { user: { id: 'u1', email: 'a@b.c' } },
+      token: { id: 'u1', sv: 4 },
+    });
+    expect(result.user.sessionVersion).toBe(4);
+  });
+});
+
+describe('auth.config session lifetime', () => {
+  it('세션 maxAge는 7일이다 (기본 30일 금지 — 엔터프라이즈 요구)', () => {
+    expect(authConfig.session?.maxAge).toBe(60 * 60 * 24 * 7);
+  });
 });

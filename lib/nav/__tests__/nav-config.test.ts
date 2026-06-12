@@ -100,6 +100,7 @@ describe('getNavConfig — settings section (both)', () => {
     expect(settings?.links?.map((l) => l.href)).toEqual([
       '/settings/profile',
       '/settings/members',
+      '/settings/audit-log',
     ]);
   });
 
@@ -116,6 +117,7 @@ describe('getNavConfig — settings section (both)', () => {
       expect(settings?.links?.map((l) => l.href)).toEqual([
         '/settings/profile',
         '/settings/members',
+        '/settings/audit-log',
       ]);
     }
 
@@ -260,6 +262,7 @@ describe('submenu shortcuts', () => {
     expect(settings?.links?.map((l) => l.shortcut)).toEqual([
       { kind: 'chord', lead: 'g', key: 'p' },
       { kind: 'chord', lead: 'g', key: 't' },
+      undefined, // 활동 기록 — chord 미배정 (G 키 공간 포화)
     ]);
   });
 

@@ -10,6 +10,7 @@ import { ChannelTalkHideButton } from '@/components/shell/ChannelTalkHideButton'
 import { auth } from '@/auth';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { resolveShellAccess } from '@/lib/auth/shell-access';
+import { getDbSessionVersion } from '@/lib/auth/session-version-db';
 import { setSentryUser } from '@/lib/observability/sentry-user';
 import { appOrigins, resolveHostRedirect } from '@/lib/site-routing';
 
@@ -36,9 +37,19 @@ export default async function AppLayout({
       ? await (await getWorkspaceRepo()).listForUser(session.user.id)
       : [];
 
+  // Server-side revocation (C3): compare the JWT `sv` claim against
+  // users.session_version. PK lookup, memoized per request (React cache) —
+  // requireSession() in server actions shares the same cached read.
+  const sessionVersions = session?.user?.id
+    ? {
+        token: session.user.sessionVersion,
+        db: await getDbSessionVersion(session.user.id),
+      }
+    : undefined;
+
   // The redirect-loop contract (incomplete-but-authenticated → /logout, never
   // /login) lives in lib/auth/shell-access.ts and is enforced by its unit test.
-  const decision = resolveShellAccess(session, workspaces);
+  const decision = resolveShellAccess(session, workspaces, sessionVersions);
   if (decision.kind === 'redirect') {
     redirect(decision.to);
   }

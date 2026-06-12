@@ -81,4 +81,22 @@ describe('authorizeCredentials', () => {
     expect(r).toBeNull();
     expect(verifyPasswordMock).not.toHaveBeenCalled();
   });
+
+  // The `sv` JWT claim is stamped from this value at login — without it the
+  // server-side revocation check (lib/auth/session-version.ts) has nothing to
+  // compare against.
+  it('returns the current sessionVersion so the jwt callback can stamp `sv`', async () => {
+    await seedUser('versioned@example.com');
+    const { eq } = await import('drizzle-orm');
+    await db
+      .update(users)
+      .set({ sessionVersion: 5 })
+      .where(eq(users.email, 'versioned@example.com'));
+    verifyPasswordMock.mockResolvedValue(true);
+    const r = await authorizeCredentials(db, {
+      email: 'versioned@example.com',
+      password: 'correct',
+    });
+    expect(r!.sessionVersion).toBe(5);
+  });
 });

@@ -34,6 +34,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { auth } from '@/auth';
+import { isSessionRevoked } from '@/lib/auth/session';
 import { attachments, bids, rfps } from '@/lib/db/schema';
 import { db as prodDb } from '@/lib/db/client';
 import {
@@ -87,6 +88,9 @@ function fail(status: number, error: string): Response {
 export async function POST(req: Request): Promise<Response> {
   const session = await auth();
   if (!session?.user?.id) return fail(401, 'UNAUTHENTICATED');
+
+  // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
+  if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
 
   let form: FormData;
   try {

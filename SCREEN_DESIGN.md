@@ -65,7 +65,8 @@ Authenticated AppShell
 └─ /settings
    ├─ /settings/profile
    ├─ /settings/members
-   └─ /settings/notifications
+   ├─ /settings/notifications
+   └─ /settings/audit-log         (admin 전용 — 워크스페이스 활동 기록)
 ├─ /quote-templates               (pg only — 견적 템플릿)
 
 Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.tsx)
@@ -107,6 +108,7 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
+| S2 | `/settings/audit-log` | **활동 기록** (admin 전용) — 워크스페이스 감사 로그 최신순 목록. 행위자 이름 · '견적' 언어 행위 라벨 · RFP 코드 링크(buyer는 `/rfp/`, pg는 `/inbox/`) · 시각. 커서 기반 '더 보기'(50건). member 에겐 안내 문구만. 기록은 서비스 레이어가 각 작업 트랜잭션 안에서 `audit_logs` 에 남긴다(rfp.create/send_invitations/award/cancel/close/requote/board_visibility, bid.submit/withdraw, workspace.create/member_invite/invite_accept/member_role_change/member_remove; auth.* 는 워크스페이스 무관이라 목록 비노출) | `AuditLogPanel`, `listAuditLogsAction` |
 | S1 | `/messages` | 워크스페이스 페어(구매사↔PG) **라이브 채팅**. 2-컬럼: 좌측 대화 목록(미읽음 점) + 우측 스레드(말풍선·날짜 구분·읽음 영수증·프레즌스·타이핑). RFP는 메시지 태그로 표시. 리치 작성 드로어(저장 템플릿/첨부/이메일·인앱 알림 토글). `MessageComposeButton`으로 RFP 상세·입찰표에서 진입(ComingSoon 제거). 구매사↔PG만(PG 상호 비공개 유지), 이메일 조회로 콜드 컨택 가능. **스레드 시각 규칙**: 중앙 날짜 구분선(라인 없음)·타임스탬프는 버블 옆 단일 출처·셀프 버블 `primary-container`. `ThreadView`/`ThreadPane`은 `variant='rail'`로 상세 화면 채팅 레일에 재사용(갤러리는 오버레이) | `MessageInbox`, `ConversationList`, `ThreadView`, `MessageComposeButton`, `NewConversationSheet`, `useChatChannel` |
 
 > 실시간 전송은 Centrifugo(자체호스팅 WS) — 미설정 환경에선 정적 로드로 graceful degrade. 이메일 알림은 presence 억제 + 윈도우 digest로 폭주 방지. `/notifications`·`/workspace/new` 도 buyer·pg 공통.

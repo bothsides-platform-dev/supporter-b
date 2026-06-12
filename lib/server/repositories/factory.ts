@@ -4,6 +4,7 @@
 // Cache lives on globalThis so Next dev HMR doesn't multiply instances.
 import type {
   AttachmentRepo,
+  AuditLogRepo,
   BidNoteRepo,
   BidQuoteTemplateRepo,
   BidRepo,
@@ -48,6 +49,7 @@ type RepoBundle = {
   chatRead: ChatReadRepo;
   rfpTeamMessage: RfpTeamMessageRepo;
   rfpRequoteRequest: RfpRequoteRequestRepo;
+  auditLog: AuditLogRepo;
   // Backend marker for tests.
   __backend: 'memory' | 'drizzle';
   // Version for HMR stale detection — bump when adding repos/methods.
@@ -60,7 +62,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 5;
+const BUNDLE_VERSION = 6;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,6 +96,7 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
     './drizzle/rfp-team-message'
   );
   const { DrizzleRfpRequoteRequestRepository } = await import('./drizzle/rfp-requote-request');
+  const { DrizzleAuditLogRepository } = await import('./drizzle/audit-log');
 
   return {
     rfp: new DrizzleRfpRepository(db),
@@ -117,6 +120,7 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
     chatRead: new DrizzleChatReadRepository(db),
     rfpTeamMessage: new DrizzleRfpTeamMessageRepository(db),
     rfpRequoteRequest: new DrizzleRfpRequoteRequestRepository(db),
+    auditLog: new DrizzleAuditLogRepository(db),
     __backend: backend,
     __version: BUNDLE_VERSION,
   };
@@ -207,6 +211,9 @@ export async function getRfpTeamMessageRepo(): Promise<RfpTeamMessageRepo> {
 }
 export async function getRfpRequoteRequestRepo(): Promise<RfpRequoteRequestRepo> {
   return (await getBundle()).rfpRequoteRequest;
+}
+export async function getAuditLogRepo(): Promise<AuditLogRepo> {
+  return (await getBundle()).auditLog;
 }
 
 // For tests only — read which backend the cache settled on.

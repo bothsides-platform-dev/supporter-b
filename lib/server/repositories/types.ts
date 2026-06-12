@@ -621,3 +621,44 @@ export interface ChatReadRepo {
     tx?: Tx,
   ): Promise<Date | undefined>;
 }
+
+// ── Audit Log (C5) ────────────────────────────────────────────────────
+/** 신규 감사 행 — createdAt/id 는 DB 가 채운다. */
+export type NewAuditLog = {
+  actorUserId: string;
+  /** 워크스페이스 무관 이벤트(auth.*)는 null. */
+  actorWorkspaceId?: string | null;
+  /** '<도메인>.<행위>' — rfp.award, bid.submit, workspace.member_invite … */
+  action: string;
+  entityType?: string | null;
+  /** uuid 또는 RFP code(P-2605-0042) — text 로 수용. */
+  entityId?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+/** (createdAt, id) 복합 커서 — 동일 타임스탬프에서도 누락 없는 페이지네이션. */
+export type AuditLogCursor = { createdAt: string; id: string };
+
+/** 조회 행 — actorName 은 users join 으로 hydrate (탈퇴 사용자는 null 허용). */
+export type AuditLogRecord = {
+  id: string;
+  actorUserId: string;
+  actorWorkspaceId: string | null;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  metadata: Record<string, unknown> | null;
+  /** ISO string. */
+  createdAt: string;
+  actorName: string | null;
+};
+
+export interface AuditLogRepo {
+  /** 감사 행 기록 — 호출자는 해당 작업의 트랜잭션(tx)을 넘긴다. */
+  insert(entry: NewAuditLog, tx?: Tx): Promise<void>;
+  /** 워크스페이스 스코프 최신순 목록 — 설정 > 활동 기록 화면용. */
+  listForWorkspace(
+    workspaceId: string,
+    opts: { limit: number; before?: AuditLogCursor },
+  ): Promise<AuditLogRecord[]>;
+}

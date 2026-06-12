@@ -13,6 +13,7 @@ import {
   getOutboxRepo,
   getRfpRepo,
   getRfpRequoteRequestRepo,
+  getAuditLogRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -22,7 +23,7 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { attachments, bids, rfpInvitations } from '@/lib/db/schema';
+import { attachments, auditLogs, bids, rfpInvitations } from '@/lib/db/schema';
 import { BidService } from '../bid';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -30,13 +31,13 @@ let db: PgliteDB;
 let service: BidService;
 
 async function buildService(): Promise<BidService> {
-  const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo] =
+  const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] =
     await Promise.all([
       getBidRepo(), getInvitationRepo(), getRfpRepo(),
       getOutboxRepo(), getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-      getRfpRequoteRequestRepo(),
+      getRfpRequoteRequestRepo(), getAuditLogRepo(),
     ]);
-  return new BidService(db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo);
+  return new BidService(db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo);
 }
 
 beforeEach(async () => {
@@ -367,5 +368,43 @@ describe('BidService.removeNote', () => {
     // Note should be gone
     const stub = await (await getBidNoteRepo()).findById(addR.noteId);
     expect(stub).toBeUndefined();
+  });
+});
+
+// ─── 감사 로그 (C5) ───────────────────────────────────────────────────────────
+
+describe('BidService.withdraw — 감사 로그 기록', () => {
+  it('withdraw 성공 시 bid.withdraw 감사 행을 남긴다', async () => {
+    const s = await seedWithdrawEnv();
+    const r = await service.withdraw(s.bidId, {
+      userId: s.pgUserId,
+      workspaceId: s.pgWsId,
+    });
+    expect(r.ok).toBe(true);
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'bid.withdraw'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorUserId: s.pgUserId,
+      actorWorkspaceId: s.pgWsId,
+      entityType: 'rfp',
+      entityId: 'P-2606-0010',
+    });
+    expect(rows[0]!.metadata).toMatchObject({ bidId: s.bidId });
+  });
+
+  it('이미 철회된 견적의 재철회(idempotent no-op)는 감사 행을 남기지 않는다', async () => {
+    const s = await seedWithdrawEnv();
+    await service.withdraw(s.bidId, { userId: s.pgUserId, workspaceId: s.pgWsId });
+    await service.withdraw(s.bidId, { userId: s.pgUserId, workspaceId: s.pgWsId });
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'bid.withdraw'));
+    expect(rows).toHaveLength(1);
   });
 });

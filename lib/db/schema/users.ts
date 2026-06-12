@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -15,6 +15,10 @@ export const users = pgTable('users', {
   // only approves verified users. NOT in the JWT/session — read from DB.
   emailVerified: boolean('email_verified').notNull().default(false),
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+  // Server-side JWT revocation counter. Stamped into the token as the `sv`
+  // claim at login; bumped on password reset / email change / account deletion
+  // so previously issued tokens go stale (see lib/auth/session-version.ts).
+  sessionVersion: integer('session_version').notNull().default(1),
   // Remembered active workspace — restored on login so a multi-workspace user
   // lands where they left off. Nullable; set on first ws creation (signup /
   // createWorkspace) and on every switchWorkspaceAction. The FK (ON DELETE SET

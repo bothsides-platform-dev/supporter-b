@@ -14,11 +14,15 @@ const mockRedirect = vi.hoisted(() =>
 );
 const mockAuth = vi.hoisted(() => vi.fn());
 const mockListForUser = vi.hoisted(() => vi.fn());
+const mockGetDbSessionVersion = vi.hoisted(() => vi.fn());
 
 vi.mock('next/navigation', () => ({ redirect: mockRedirect }));
 vi.mock('@/auth', () => ({ auth: mockAuth }));
 vi.mock('@/lib/server/repositories/factory', () => ({
   getWorkspaceRepo: () => Promise.resolve({ listForUser: mockListForUser }),
+}));
+vi.mock('@/lib/auth/session-version-db', () => ({
+  getDbSessionVersion: mockGetDbSessionVersion,
 }));
 vi.mock('@/lib/observability/sentry-user', () => ({ setSentryUser: () => {} }));
 vi.mock('@/components/shell/AppSidebarLayout', () => ({
@@ -55,6 +59,9 @@ describe('AppLayout 인증 가드 — 무한 리다이렉트 루프 방지', () 
     mockRedirect.mockClear();
     mockAuth.mockReset();
     mockListForUser.mockReset();
+    // 기본: 세션 버전 일치 (레거시 토큰 sv=undefined ↔ DB 기본값 1)
+    mockGetDbSessionVersion.mockReset();
+    mockGetDbSessionVersion.mockResolvedValue(1);
   });
 
   it('JWT에 워크스페이스가 없는(인증된) 세션은 /logout 으로 보낸다', async () => {
@@ -79,5 +86,18 @@ describe('AppLayout 인증 가드 — 무한 리다이렉트 루프 방지', () 
 
     await expect(AppLayout({ children: null })).rejects.toThrow('NEXT_REDIRECT');
     expect(mockRedirect).toHaveBeenCalledWith('/login');
+  });
+
+  it('토큰 sv가 DB session_version보다 낮으면(비번 변경 후 옛 토큰) /logout 으로 보낸다', async () => {
+    mockAuth.mockResolvedValue({
+      user: { ...FULL_SESSION.user, sessionVersion: 1 },
+    });
+    mockListForUser.mockResolvedValue([
+      { id: 'ws-1', name: 'W', type: 'buyer', status: 'active', role: 'admin', unreadCount: 0, hasLogo: false },
+    ]);
+    mockGetDbSessionVersion.mockResolvedValue(2);
+
+    await expect(AppLayout({ children: null })).rejects.toThrow('NEXT_REDIRECT');
+    expect(mockRedirect).toHaveBeenCalledWith('/logout');
   });
 });

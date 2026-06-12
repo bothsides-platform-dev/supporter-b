@@ -70,7 +70,7 @@ app/
 │  ├─ messages/               # buyer+pg 공통 — 라이브 채팅 (Centrifugo WS)
 │  ├─ notifications/          # 인앱 알림 목록 페이지
 │  ├─ workspace/new/          # 워크스페이스 생성
-│  └─ settings/{profile,members,notifications,quote-templates}/
+│  └─ settings/{profile,members,notifications,quote-templates,audit-log}/
 ├─ logout/route.ts            # GET (redirect to /login) + POST (204, for client-side signOut)
 └─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리
 ```

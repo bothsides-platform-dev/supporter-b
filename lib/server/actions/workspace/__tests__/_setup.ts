@@ -6,6 +6,7 @@ import {
   __resetForTest,
   __useDrizzleWithDbForTest,
   getOutboxRepo,
+  getAuditLogRepo,
 } from '@/lib/server/repositories/factory';
 import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
 import {
@@ -21,7 +22,8 @@ export async function setupWorkspaceActionEnv(): Promise<PgliteDB> {
   __setActionDbForTest(db);
 
   const outboxRepo = await getOutboxRepo();
-  __setWorkspaceServiceForTest(new WorkspaceService(db, outboxRepo));
+  const auditRepo = await getAuditLogRepo();
+  __setWorkspaceServiceForTest(new WorkspaceService(db, outboxRepo, auditRepo));
 
   return db;
 }

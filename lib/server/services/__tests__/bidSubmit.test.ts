@@ -13,6 +13,7 @@ import {
   getOutboxRepo,
   getRfpRepo,
   getRfpRequoteRequestRepo,
+  getAuditLogRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -23,6 +24,7 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
+  auditLogs,
   bids,
   notifications,
   outboxEntries,
@@ -37,12 +39,12 @@ let db: PgliteDB;
 let service: BidService;
 
 async function buildService(): Promise<BidService> {
-  const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo] = await Promise.all([
+  const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] = await Promise.all([
     getBidRepo(), getInvitationRepo(), getRfpRepo(),
     getOutboxRepo(), getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-    getRfpRequoteRequestRepo(),
+    getRfpRequoteRequestRepo(), getAuditLogRepo(),
   ]);
-  return new BidService(db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo);
+  return new BidService(db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo);
 }
 
 beforeEach(async () => {
@@ -294,5 +296,30 @@ describe('BidService.submit round-aware', () => {
     const r2 = await service.submit({ ...BASE, rfpId: s.rfpId }, { userId: s.pgUser.id, workspaceId: s.pgWs.id });
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.error).toBe('REQUOTE_DEADLINE_PASSED');
+  });
+});
+
+// ─── 감사 로그 (C5) ───────────────────────────────────────────────────────────
+
+describe('BidService.submit — 감사 로그 기록', () => {
+  it('submit 성공 시 bid.submit 감사 행을 남긴다 (제출 트랜잭션과 함께 커밋)', async () => {
+    const s = await seedSubmitEnv();
+    const r = await service.submit(
+      { ...BASE, rfpId: s.rfpId },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+    );
+    expect(r.ok).toBe(true);
+
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'bid.submit'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorUserId: s.pgUser.id,
+      actorWorkspaceId: s.pgWs.id,
+      entityType: 'rfp',
+      entityId: s.rfpCode,
+    });
   });
 });

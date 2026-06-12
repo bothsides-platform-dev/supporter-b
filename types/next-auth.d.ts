@@ -14,6 +14,8 @@ declare module 'next-auth' {
       workspaceId?: string;
       workspaceType?: WorkspaceType;
       role?: MemberRole;
+      /** Mirror of the JWT `sv` claim — server-side revocation comparand. */
+      sessionVersion?: number;
     };
   }
 
@@ -21,6 +23,7 @@ declare module 'next-auth' {
     workspaceId?: string;
     workspaceType?: WorkspaceType;
     role?: MemberRole;
+    sessionVersion?: number;
   }
 }
 
@@ -30,5 +33,7 @@ declare module 'next-auth/jwt' {
     workspaceId?: string;
     workspaceType?: WorkspaceType;
     role?: MemberRole;
+    /** users.session_version at login — see lib/auth/session-version.ts. */
+    sv?: number;
   }
 }
