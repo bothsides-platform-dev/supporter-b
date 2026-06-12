@@ -6,7 +6,7 @@ import {
 } from '../nav-config';
 
 describe('getNavConfig — top item order', () => {
-  it('lists 홈, 알림 then 메시지 (workspace nav is a section)', () => {
+  it('pg top includes quote-templates after messages; buyer top does not', () => {
     expect(getNavConfig('buyer').top.map((i) => i.id)).toEqual([
       'home',
       'notifications',
@@ -16,6 +16,7 @@ describe('getNavConfig — top item order', () => {
       'home',
       'notifications',
       'messages',
+      'quote-templates',
     ]);
   });
 });
@@ -99,24 +100,29 @@ describe('getNavConfig — settings section (both)', () => {
     expect(settings?.links?.map((l) => l.href)).toEqual([
       '/settings/profile',
       '/settings/members',
+      '/settings/audit-log',
     ]);
   });
 
-  it('adds a PG-only 견적 템플릿 link (g q); buyer settings has no such link', () => {
-    const pg = getNavConfig('pg').sections.find((s) => s.id === 'settings');
-    expect(pg?.links?.map((l) => l.href)).toEqual([
-      '/settings/profile',
-      '/settings/members',
-      '/settings/quote-templates',
-    ]);
-    const qt = pg?.links?.find((l) => l.href === '/settings/quote-templates');
+  it('PG top has 견적 템플릿 NavLeaf (g q, /quote-templates); settings has no such link', () => {
+    const pgTop = getNavConfig('pg').top;
+    const qt = pgTop.find((i) => i.id === 'quote-templates');
     expect(qt?.label).toBe('견적 템플릿');
+    expect(qt?.href).toBe('/quote-templates');
     expect(qt?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'q' });
 
-    const buyer = getNavConfig('buyer').sections.find((s) => s.id === 'settings');
-    expect(
-      buyer?.links?.some((l) => l.href === '/settings/quote-templates'),
-    ).toBe(false);
+    // settings links must not contain quote-templates for either workspace type
+    for (const ws of ['buyer', 'pg'] as const) {
+      const settings = getNavConfig(ws).sections.find((s) => s.id === 'settings');
+      expect(settings?.links?.map((l) => l.href)).toEqual([
+        '/settings/profile',
+        '/settings/members',
+        '/settings/audit-log',
+      ]);
+    }
+
+    const buyerTop = getNavConfig('buyer').top;
+    expect(buyerTop.some((i) => i.id === 'quote-templates')).toBe(false);
   });
 });
 
@@ -155,10 +161,12 @@ describe('getBreadcrumbSegments', () => {
       { label: '설정', href: '/settings/profile' },
       { label: '멤버' },
     ]);
-    expect(getBreadcrumbSegments('/settings/quote-templates')).toEqual([
-      { label: '설정', href: '/settings/profile' },
-      { label: '견적 템플릿' },
-    ]);
+    // /settings/quote-templates는 삭제된 라우트 → unknown path
+    expect(getBreadcrumbSegments('/settings/quote-templates')).toEqual([]);
+  });
+
+  it('/quote-templates maps to a single 견적 템플릿 segment', () => {
+    expect(getBreadcrumbSegments('/quote-templates')).toEqual([{ label: '견적 템플릿' }]);
   });
 
   it('returns an empty array for unknown paths', () => {
@@ -197,11 +205,12 @@ describe('getChordMap', () => {
     });
   });
 
-  it('routes the pg "g" chords (i for inbox, no r/c) incl. messages m, inbox statuses 1-3', () => {
+  it('routes the pg "g" chords (q → /quote-templates, not /settings/quote-templates)', () => {
     expect(getChordMap('pg')).toEqual({
       h: '/home',
       n: '/notifications',
       m: '/messages',
+      q: '/quote-templates',
       i: '/inbox',
       o: '/opportunities',
       s: '/settings/profile',
@@ -210,7 +219,6 @@ describe('getChordMap', () => {
       '3': '/inbox?status=closed',
       p: '/settings/profile',
       t: '/settings/members',
-      q: '/settings/quote-templates',
     });
   });
 
@@ -254,6 +262,7 @@ describe('submenu shortcuts', () => {
     expect(settings?.links?.map((l) => l.shortcut)).toEqual([
       { kind: 'chord', lead: 'g', key: 'p' },
       { kind: 'chord', lead: 'g', key: 't' },
+      undefined, // 활동 기록 — chord 미배정 (G 키 공간 포화)
     ]);
   });
 

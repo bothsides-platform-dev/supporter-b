@@ -14,6 +14,7 @@ import {
   getUserRepo,
   getVerificationTokenRepo,
   getOutboxRepo,
+  getAuditLogRepo,
 } from '@/lib/server/repositories/factory';
 import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
 import {
@@ -30,7 +31,8 @@ export async function setupActionEnv(): Promise<PgliteDB> {
   const userRepo = await getUserRepo();
   const verificationTokenRepo = await getVerificationTokenRepo();
   const outboxRepo = await getOutboxRepo();
-  __setAuthServiceForTest(new AuthService(db, userRepo, verificationTokenRepo, outboxRepo));
+  const auditRepo = await getAuditLogRepo();
+  __setAuthServiceForTest(new AuthService(db, userRepo, verificationTokenRepo, outboxRepo, auditRepo));
   return db;
 }
 

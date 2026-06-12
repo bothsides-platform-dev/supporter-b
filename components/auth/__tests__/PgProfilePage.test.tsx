@@ -80,6 +80,19 @@ describe('PgProfilePage', () => {
     expect(screen.queryByText('4')).not.toBeInTheDocument();
   });
 
+  it('canonical PG 선택 경로: selectedPgWorkspaceId만 있으면 wsName/bizNo 없어도 진입 허용', () => {
+    mockDraftData = {
+      email: 'sales@toss.im',
+      password: 'Password123!',
+      selectedPgWorkspaceId: 'ws-tosspayments-uuid',
+    };
+
+    render(<PgProfilePage />);
+
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('이름')).toBeInTheDocument();
+  });
+
   it('일반 경로: wsName/bizNo 없으면 /signup/pg로 redirect', () => {
     mockDraftData = {
       email: 'sales@toss.im',

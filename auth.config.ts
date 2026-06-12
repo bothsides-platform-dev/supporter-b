@@ -20,7 +20,9 @@ export default {
     // triggering edge-incompatible imports.
     Credentials({ credentials: {}, authorize: async () => null }),
   ],
-  session: { strategy: 'jwt' },
+  // 7-day cap (rolling — activity refreshes expiry). The next-auth default
+  // would be 30d. Server-side revocation rides the `sv` claim stamped below.
+  session: { strategy: 'jwt', maxAge: 60 * 60 * 24 * 7 },
   cookies: { sessionToken: sessionCookie() },
   pages: { signIn: '/login' },
   callbacks: {
@@ -30,6 +32,9 @@ export default {
         token.workspaceId = user.workspaceId;
         token.workspaceType = user.workspaceType;
         token.role = user.role;
+        // Revocation comparand — `authorize` reads users.session_version at
+        // login; requireSession()/the shell guard compare it every request.
+        token.sv = user.sessionVersion;
       }
       // Active-workspace switch: `switchWorkspaceAction` validates membership in
       // DB then calls `unstable_update({ user: {...} })`, which re-runs this
@@ -59,6 +64,7 @@ export default {
         session.user.workspaceId = token.workspaceId;
         session.user.workspaceType = token.workspaceType;
         session.user.role = token.role;
+        session.user.sessionVersion = token.sv;
       }
       return session;
     },

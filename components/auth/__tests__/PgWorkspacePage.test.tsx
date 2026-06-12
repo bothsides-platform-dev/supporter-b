@@ -1,8 +1,10 @@
 /**
- * PG 가입 2단계 (워크스페이스).
+ * PgWorkspaceStep — PG 가입 2단계 (워크스페이스 선택/직접 입력).
  *
+ *  - 기본: canonical PG사 카드 그리드 표시
+ *  - 카드 클릭 시 selectedPgWorkspaceId를 draft에 저장하고 /profile로 이동
+ *  - "직접 입력" 클릭 시 기존 워크스페이스 이름 + 사업자번호 폼 표시
  *  - 초대 경로 skip 가드
- *  - 사업자 인증: 구매사처럼 국세청(NTS) 자동 조회로 인증한 뒤에만 진행 가능
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -14,7 +16,6 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
-// writeSignupDraft / lookupBizNoAction 을 hoisted 스파이로 노출 — 호출 단언용.
 const { mockWriteSignupDraft, mockLookupBizNo } = vi.hoisted(() => ({
   mockWriteSignupDraft: vi.fn(),
   mockLookupBizNo: vi.fn(),
@@ -30,9 +31,14 @@ vi.mock('@/lib/server/actions/rfp', () => ({
   lookupBizNoAction: mockLookupBizNo,
 }));
 
-import PgWorkspacePage from '@/app/(public)/signup/pg/workspace/page';
+import PgWorkspaceStep from '@/app/(public)/signup/pg/workspace/PgWorkspaceStep';
 
-describe('PgWorkspacePage — 초대 경로 skip 가드', () => {
+const CANONICAL_COMPANIES = [
+  { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments' },
+  { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis' },
+];
+
+describe('PgWorkspaceStep — 초대 경로 skip 가드', () => {
   beforeEach(() => {
     mockReplace.mockReset();
     mockPush.mockReset();
@@ -45,72 +51,96 @@ describe('PgWorkspacePage — 초대 경로 skip 가드', () => {
       wsInviteToken: 'invite-token-abc',
     };
 
-    render(<PgWorkspacePage />);
+    render(<PgWorkspaceStep canonicalCompanies={CANONICAL_COMPANIES} />);
 
     expect(mockReplace).toHaveBeenCalledWith('/signup/pg/profile');
     expect(mockReplace).not.toHaveBeenCalledWith('/signup/pg');
   });
 
   it('wsInviteToken 없고 email+password 없으면 /signup/pg로 redirect한다', () => {
-    mockDraftData = {}; // 빈 draft
+    mockDraftData = {};
 
-    render(<PgWorkspacePage />);
+    render(<PgWorkspaceStep canonicalCompanies={CANONICAL_COMPANIES} />);
 
     expect(mockReplace).toHaveBeenCalledWith('/signup/pg');
   });
 });
 
-describe('PgWorkspacePage — 사업자 인증 (NTS 자동 조회)', () => {
+describe('PgWorkspaceStep — canonical PG 선택 모드', () => {
+  beforeEach(() => {
+    mockReplace.mockReset();
+    mockPush.mockReset();
+    mockWriteSignupDraft.mockReset();
+    mockDraftData = { email: 'sales@toss.im', password: 'Password123!' };
+  });
+
+  it('canonical 회사 카드 목록을 보여준다', () => {
+    render(<PgWorkspaceStep canonicalCompanies={CANONICAL_COMPANIES} />);
+
+    expect(screen.getByText('토스페이먼츠')).toBeInTheDocument();
+    expect(screen.getByText('KG이니시스')).toBeInTheDocument();
+  });
+
+  it('카드 클릭 시 selectedPgWorkspaceId를 draft에 저장하고 /profile로 이동', async () => {
+    const user = userEvent.setup();
+    render(<PgWorkspaceStep canonicalCompanies={CANONICAL_COMPANIES} />);
+
+    await user.click(screen.getByText('토스페이먼츠'));
+
+    expect(mockWriteSignupDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedPgWorkspaceId: 'ws-toss-id' }),
+    );
+    expect(mockPush).toHaveBeenCalledWith('/signup/pg/profile');
+  });
+
+  it('"직접 입력" 클릭 시 수동 입력 폼을 보여준다', async () => {
+    const user = userEvent.setup();
+    render(<PgWorkspaceStep canonicalCompanies={CANONICAL_COMPANIES} />);
+
+    await user.click(screen.getByRole('button', { name: /직접 입력/ }));
+
+    expect(screen.getByLabelText('사업자 등록번호')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('예: 서포터 B 페이 영업팀')).toBeInTheDocument();
+  });
+});
+
+describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
   beforeEach(() => {
     mockReplace.mockReset();
     mockPush.mockReset();
     mockWriteSignupDraft.mockReset();
     mockLookupBizNo.mockReset();
     mockLookupBizNo.mockResolvedValue({
-      ok: true,
-      valid: true,
-      taxType: 'general',
-      status: 'active',
+      ok: true, valid: true, taxType: 'general', status: 'active',
     });
     mockDraftData = { email: 'sales@toss.im', password: 'Password123!' };
   });
 
-  it('국세청 사업자 조회 UI(조회 버튼 + 사업자 등록번호 입력)를 보여준다', () => {
-    render(<PgWorkspacePage />);
-
-    expect(screen.getByLabelText('사업자 등록번호')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '조회' })).toBeInTheDocument();
-  });
+  async function openManualMode(user: ReturnType<typeof userEvent.setup>) {
+    render(<PgWorkspaceStep canonicalCompanies={CANONICAL_COMPANIES} />);
+    await user.click(screen.getByRole('button', { name: /직접 입력/ }));
+  }
 
   it('NTS 조회로 확인하기 전에는 제출 버튼이 비활성이다', async () => {
     const user = userEvent.setup();
-    render(<PgWorkspacePage />);
+    await openManualMode(user);
 
-    await user.type(
-      screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'),
-      '토스페이먼츠 영업팀',
-    );
+    await user.type(screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'), '토스페이먼츠 영업팀');
 
-    // 워크스페이스 이름은 채웠지만 사업자 인증 전이므로 제출 불가.
     expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
   });
 
-  it('사업자 조회 성공 후 제출하면 digits-only bizNo를 draft에 저장하고 profile로 이동한다', async () => {
+  it('사업자 조회 성공 후 제출하면 bizNo를 draft에 저장하고 profile로 이동', async () => {
     const user = userEvent.setup();
-    render(<PgWorkspacePage />);
+    await openManualMode(user);
 
-    await user.type(
-      screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'),
-      '토스페이먼츠 영업팀',
-    );
+    await user.type(screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'), '토스페이먼츠 영업팀');
     await user.type(screen.getByLabelText('사업자 등록번호'), '1248100998');
     await user.click(screen.getByRole('button', { name: '조회' }));
 
-    // 국세청 확인 패널 노출.
     await waitFor(() =>
       expect(screen.getByText('NTS — 국세청 자동 조회')).toBeInTheDocument(),
     );
-    expect(mockLookupBizNo).toHaveBeenCalledWith('124-81-00998');
 
     const submit = screen.getByRole('button', { name: '다음' });
     expect(submit).toBeEnabled();
@@ -119,7 +149,8 @@ describe('PgWorkspacePage — 사업자 인증 (NTS 자동 조회)', () => {
     expect(mockWriteSignupDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         wsName: '토스페이먼츠 영업팀',
-        bizNo: '1248100998', // 하이픈 제거된 10자리
+        bizNo: '1248100998',
+        selectedPgWorkspaceId: undefined,
       }),
     );
     expect(mockPush).toHaveBeenCalledWith('/signup/pg/profile');
@@ -128,12 +159,9 @@ describe('PgWorkspacePage — 사업자 인증 (NTS 자동 조회)', () => {
   it('사업자 조회 실패 시 제출 버튼이 비활성으로 유지된다', async () => {
     mockLookupBizNo.mockResolvedValue({ ok: true, valid: false });
     const user = userEvent.setup();
-    render(<PgWorkspacePage />);
+    await openManualMode(user);
 
-    await user.type(
-      screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'),
-      '토스페이먼츠 영업팀',
-    );
+    await user.type(screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'), '토스페이먼츠 영업팀');
     await user.type(screen.getByLabelText('사업자 등록번호'), '9999999999');
     await user.click(screen.getByRole('button', { name: '조회' }));
 

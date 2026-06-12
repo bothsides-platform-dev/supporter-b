@@ -9,7 +9,7 @@
 //         413 too large, 415 mime not allowed, 415 sniff mismatch,
 //         200 upserts blob + sets has_logo
 //   DELETE: 401 unauthenticated, 403 wrong workspace, 200 deletes blob + clears has_logo
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { workspaces, workspaceLogoBlobs } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
@@ -24,12 +24,20 @@ const sessionRef: { value: unknown | null } = { value: null };
 vi.mock('@/auth', () => ({
   auth: () => Promise.resolve(sessionRef.value),
 }));
+// 폐기 세션(sv stale) 차단용 — requireSession 미사용 라우트도 동일 기준 적용.
+const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/auth/session-version-db', () => ({
+  getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
+}));
+
 
 let db: PgliteDB;
 
 beforeEach(async () => {
   db = await createPgliteDb();
   sessionRef.value = null;
+  getDbSessionVersionMock.mockReset();
+  getDbSessionVersionMock.mockResolvedValue(1);
 
   // Install DB override before importing route
   const mod = await import('../route');
@@ -302,4 +310,16 @@ it('DELETE removes logo blob and clears has_logo', async () => {
     .from(workspaces)
     .where(eq(workspaces.id, wsId));
   expect(ws.hasLogo).toBe(false);
+});
+
+describe('avatar — 폐기 세션', () => {
+  it('POST: sv 가 stale 한(폐기된) 세션은 401', async () => {
+    const { id: wsId } = await seedBuyerWorkspace(db);
+    sessionRef.value = { user: { id: '00000000-0000-4000-8000-0000000000aa', email: 'x@x.com', sessionVersion: 1, workspaceId: wsId } };
+    getDbSessionVersionMock.mockResolvedValue(2);
+    const form = new FormData();
+    form.append('file', makeFile('image/png', makePng()));
+    const res = await callPost(wsId, form);
+    expect(res.status).toBe(401);
+  });
 });

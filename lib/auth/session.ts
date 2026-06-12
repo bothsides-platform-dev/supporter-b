@@ -10,6 +10,8 @@
  */
 import type { Session } from 'next-auth';
 import { auth } from '@/auth';
+import { isSessionVersionStale } from '@/lib/auth/session-version';
+import { getDbSessionVersion } from '@/lib/auth/session-version-db';
 
 export type AuthedSession = Session & {
   user: NonNullable<Session['user']> & { id: string };
@@ -31,9 +33,26 @@ export type PgSession = AuthedSession & {
   };
 };
 
+/**
+ * Server-side revocation: a JWT whose sv claim trails users.session_version
+ * (bumped on password reset / email change / deletion) is dead. The DB read
+ * is a PK lookup memoized per request (React cache) — see session-version-db.
+ *
+ * API routes that call `auth()` directly (instead of requireXxx) MUST run this
+ * after their unauthenticated check, or revoked tokens keep working there
+ * until JWT expiry. Unauthenticated sessions return false — the route's own
+ * 401 guard handles those.
+ */
+export async function isSessionRevoked(session: Session | null): Promise<boolean> {
+  if (!session?.user?.id) return false;
+  const dbVersion = await getDbSessionVersion(session.user.id);
+  return isSessionVersionStale(session.user.sessionVersion, dbVersion);
+}
+
 export async function requireSession(): Promise<AuthedSession> {
   const session = await auth();
   if (!session?.user?.id) throw new Error('UNAUTHENTICATED');
+  if (await isSessionRevoked(session)) throw new Error('UNAUTHENTICATED');
   return session as AuthedSession;
 }
 

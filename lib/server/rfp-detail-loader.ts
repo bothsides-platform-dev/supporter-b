@@ -13,6 +13,7 @@ import {
   getPgRequestRepo,
   getRfpRepo,
   getWorkspaceRepo,
+  getRfpRequoteRequestRepo,
 } from './repositories/factory';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
@@ -20,10 +21,11 @@ import type { Bid } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
+import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
 
 export type BuyerRfpDetailData = {
   rfp: RFP;
-  /** submitted 상태 입찰만. */
+  /** submitted 상태 입찰 중 PG별 최신 라운드만. */
   bids: Bid[];
   /** bidId → 노트(Date→ISO 직렬화). */
   notesByBid: Record<string, BidNote[]>;
@@ -33,6 +35,10 @@ export type BuyerRfpDetailData = {
   pgWsNameMap: Record<string, string>;
   /** 오픈 게시판에서 들어온 미결(pending) 참여 요청 — 구매사 검토용. */
   pendingRequests: { id: string; pgWsId: string; pgWsName: string; message: string; createdAt: string }[];
+  /** pgWsId → 최신 재요청 요약(없으면 키 없음). */
+  requoteByPg: Record<string, { status: RfpRequoteRequestStatus; round: number; deadline: string }>;
+  /** pgWsId → 직전 라운드 견적(델타 표시용; 없으면 키 없음). */
+  priorBidByPg: Record<string, Bid>;
   canEdit: boolean;
   authorId: string;
   authorName: string;
@@ -40,14 +46,26 @@ export type BuyerRfpDetailData = {
 
 export type PgRfpDetailData = {
   rfp: RFP;
-  /** 본인 워크스페이스가 이미 제출한 입찰(있으면). */
+  /** 본인 워크스페이스가 이미 제출한 입찰 중 최신 라운드(있으면). */
   myBid: Bid | undefined;
   /** 구매사 워크스페이스 상호명 (workspaces.name). */
   buyerName: string;
   /** 본 PG 워크스페이스 공유 견적 템플릿 — BidForm 불러오기용(요율표). */
   quoteTemplates: QuoteTemplateOption[];
+  /** 진행 중인 재요청(있으면 PG가 다시 제출 가능). */
+  pendingRequote: { message: string; deadline: string; round: number } | null;
 };
 
+
+/** PG별 최신 라운드(submitted)만 남긴다. */
+function pickCurrentBids(submitted: Bid[]): Bid[] {
+  const byPg = new Map<string, Bid>();
+  for (const b of submitted) {
+    const cur = byPg.get(b.pgWsId);
+    if (!cur || b.round > cur.round) byPg.set(b.pgWsId, b);
+  }
+  return [...byPg.values()];
+}
 
 /**
  * 구매사 상세 데이터. 소유하지 않거나 없는 RFP면 null(→ page 가 not-found UI).
@@ -62,7 +80,27 @@ export async function loadBuyerRfpDetail(args: {
   if (!rfp || rfp.buyerWsId !== args.workspaceId) return null;
 
   const allBids = await (await getBidRepo()).findByRfp(rfp.id);
-  const bids = allBids.filter((b) => b.status === 'submitted');
+  const submitted = allBids.filter((b) => b.status === 'submitted');
+  const bids = pickCurrentBids(submitted);
+
+  // 직전 라운드(현재 라운드 바로 아래 최댓값) — 델타 표시용.
+  const priorBidByPg: Record<string, Bid> = {};
+  for (const cur of bids) {
+    const prior = submitted
+      .filter((b) => b.pgWsId === cur.pgWsId && b.round < cur.round)
+      .sort((a, b) => b.round - a.round)[0];
+    if (prior) priorBidByPg[cur.pgWsId] = prior;
+  }
+
+  // 재요청 요약 — pgWsId별 라운드 최댓값 1건.
+  const requoteRows = await (await getRfpRequoteRequestRepo()).findByRfp(rfp.id);
+  const requoteByPg: Record<string, { status: RfpRequoteRequestStatus; round: number; deadline: string }> = {};
+  for (const r of requoteRows) {
+    const cur = requoteByPg[r.pgWsId];
+    if (!cur || r.round > cur.round) {
+      requoteByPg[r.pgWsId] = { status: r.status, round: r.round, deadline: r.deadline };
+    }
+  }
 
   const rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);
 
@@ -136,6 +174,8 @@ export async function loadBuyerRfpDetail(args: {
     inviteList,
     pgWsNameMap,
     pendingRequests,
+    requoteByPg,
+    priorBidByPg,
     canEdit,
     authorId: args.userId,
     authorName: args.userName,
@@ -170,9 +210,17 @@ export async function loadPgRfpDetail(args: {
   rfp.rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);
 
   const allBids = await (await getBidRepo()).findByRfp(rfp.id);
-  const myBid = allBids.find(
+  const submittedMine = allBids.filter(
     (b) => b.pgWsId === args.workspaceId && b.status === 'submitted',
   );
+  // 최신 라운드 submitted bid (여러 라운드 가능).
+  const myBid = submittedMine.sort((a, b) => b.round - a.round)[0] ?? undefined;
+
+  // pending 재요청 조회 — PG가 다시 제출 가능한 상태인지 판단.
+  const pendingReq = await (await getRfpRequoteRequestRepo()).findPendingByPair(rfp.id, args.workspaceId);
+  const pendingRequote = pendingReq
+    ? { message: pendingReq.message, deadline: pendingReq.deadline, round: pendingReq.round }
+    : null;
 
   // 구매사 상호명 — RfpBriefPanel 에 표시.
   const wsRepo = await getWorkspaceRepo();
@@ -192,5 +240,5 @@ export async function loadPgRfpDetail(args: {
     paymentFees: t.paymentFees,
   }));
 
-  return { rfp, myBid, buyerName, quoteTemplates };
+  return { rfp, myBid, pendingRequote, buyerName, quoteTemplates };
 }

@@ -24,6 +24,10 @@
         "presence": true,
         "join_leave": true,
         "subscribe_proxy_enabled": true
+      },
+      {
+        "name": "team",
+        "subscribe_proxy_enabled": true
       }
     ]
   }

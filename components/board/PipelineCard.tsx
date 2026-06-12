@@ -51,9 +51,18 @@ function CardHead({ code, deadline, hideDday }: { code: string; deadline: string
 }
 
 function BuyerBody({ card }: { card: BuyerKanbanCard }) {
+  // 결과 컬럼(선정 완료/마감) 카드의 D-day 는 노이즈 — PgBody 와 동일 규칙으로 숨김.
+  const isResult = card.stage === 'awarded' || card.stage === 'closed';
   return (
     <div className="space-y-2">
-      <CardHead code={card.rfpId} deadline={card.deadline} hideDday={false} />
+      <CardHead code={card.rfpId} deadline={card.deadline} hideDday={isResult} />
+      {(card.isCancelled || card.isSample) && (
+        // 두 칩이 동시 렌더될 수 있어(취소된 샘플) 한 행으로 묶어 간격을 보장한다.
+        <div className="flex flex-wrap gap-1">
+          {card.isCancelled && <Chip label="취소됨" color="error" />}
+          {card.isSample && <Chip label="샘플" color="surface" />}
+        </div>
+      )}
       <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)] line-clamp-2">
         {card.title}
       </p>
@@ -78,7 +87,14 @@ function PgBody({ card }: { card: PgKanbanCard }) {
   return (
     <div className="space-y-2">
       <CardHead code={card.rfpId} deadline={card.deadline} hideDday={isResult} />
+      {/* 재요청은 재제출로만 resolve — 종결(won/lost) 후엔 응답 불가라 칩을 숨긴다. */}
+      {card.hasPendingRequote && !isResult && <Chip label="재요청" color="warning" />}
       {showRecentBadge && <Chip label="최근 조회" color="surface" />}
+      {card.buyerName && (
+        <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+          {card.buyerName}
+        </p>
+      )}
       <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)] line-clamp-2">
         {card.title}
       </p>

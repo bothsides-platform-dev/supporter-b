@@ -2,7 +2,7 @@ import { and, count, eq, sql } from 'drizzle-orm';
 
 import { workspaceInvitations, workspaceMembers, workspaces } from '@/lib/db/schema';
 import { getMembership } from '@/lib/auth/active-workspace';
-import type { OutboxRepo } from '@/lib/server/repositories/types';
+import type { AuditLogRepo, OutboxRepo } from '@/lib/server/repositories/types';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
@@ -32,6 +32,7 @@ export class WorkspaceService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly _db: any,
     private readonly outboxRepo: OutboxRepo,
+    private readonly auditRepo: AuditLogRepo,
   ) {}
 
   async createWorkspace(
@@ -40,13 +41,27 @@ export class WorkspaceService {
   ): Promise<ServiceResult<{ workspaceId: string; applicationId: string }>> {
     const { workspaceId, applicationId } = await this._db.transaction(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      async (tx: any) =>
-        createWorkspaceInTx(tx, {
+      async (tx: any) => {
+        const ids = await createWorkspaceInTx(tx, {
           userId: input.userId,
           type: input.type,
           name: input.name,
           bizProfile: input.bizProfile as Parameters<typeof createWorkspaceInTx>[1]['bizProfile'],
-        }),
+        });
+        // 감사 로그 (C5) — 생성과 같은 트랜잭션에서 커밋.
+        await this.auditRepo.insert(
+          {
+            actorUserId: input.userId,
+            actorWorkspaceId: ids.workspaceId,
+            action: 'workspace.create',
+            entityType: 'workspace',
+            entityId: ids.workspaceId,
+            metadata: { name: input.name, type: input.type },
+          },
+          tx,
+        );
+        return ids;
+      },
     );
     return { ok: true, workspaceId, applicationId };
   }
@@ -113,6 +128,19 @@ export class WorkspaceService {
         workspaceName: wsRow.name,
         linkUrl: `/invite/workspace/${rawToken}`,
       });
+
+      // 감사 로그 (C5) — 초대와 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'workspace.member_invite',
+          entityType: 'workspace',
+          entityId: actor.workspaceId,
+          metadata: { email: normalizedEmail, role: input.role },
+        },
+        tx,
+      );
 
       return { ok: true };
     });
@@ -243,7 +271,23 @@ export class WorkspaceService {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return this._db.transaction((tx: any) => claimInviteInTx(tx, invitation, actor.userId));
+    return this._db.transaction(async (tx: any) => {
+      const r = await claimInviteInTx(tx, invitation, actor.userId);
+      if (r.ok) {
+        // 감사 로그 (C5) — 수락과 같은 트랜잭션에서 커밋.
+        await this.auditRepo.insert(
+          {
+            actorUserId: actor.userId,
+            actorWorkspaceId: invitation.workspaceId,
+            action: 'workspace.invite_accept',
+            entityType: 'workspace',
+            entityId: invitation.workspaceId,
+          },
+          tx,
+        );
+      }
+      return r;
+    });
   }
 
   async changeMemberRole(
@@ -280,15 +324,30 @@ export class WorkspaceService {
       if (adminCount <= 1) return { ok: false, error: 'LAST_ADMIN' };
     }
 
-    await this._db
-      .update(workspaceMembers)
-      .set({ role: input.role })
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, actor.workspaceId),
-          eq(workspaceMembers.userId, input.targetUserId),
-        ),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this._db.transaction(async (tx: any) => {
+      await tx
+        .update(workspaceMembers)
+        .set({ role: input.role })
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, actor.workspaceId),
+            eq(workspaceMembers.userId, input.targetUserId),
+          ),
+        );
+      // 감사 로그 (C5) — 역할 변경과 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'workspace.member_role_change',
+          entityType: 'workspace',
+          entityId: actor.workspaceId,
+          metadata: { targetUserId: input.targetUserId, role: input.role },
+        },
+        tx,
       );
+    });
 
     return { ok: true };
   }
@@ -318,14 +377,29 @@ export class WorkspaceService {
       .limit(1);
     if (!target) return { ok: false, error: 'MEMBER_NOT_FOUND' };
 
-    await this._db
-      .delete(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, actor.workspaceId),
-          eq(workspaceMembers.userId, input.targetUserId),
-        ),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this._db.transaction(async (tx: any) => {
+      await tx
+        .delete(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, actor.workspaceId),
+            eq(workspaceMembers.userId, input.targetUserId),
+          ),
+        );
+      // 감사 로그 (C5) — 제거와 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'workspace.member_remove',
+          entityType: 'workspace',
+          entityId: actor.workspaceId,
+          metadata: { targetUserId: input.targetUserId },
+        },
+        tx,
       );
+    });
 
     return { ok: true };
   }
@@ -340,14 +414,15 @@ declare global {
 
 export async function getWorkspaceService(): Promise<WorkspaceService> {
   if (!globalThis.__bidit_workspace_service__) {
-    const [{ db }, { getOutboxRepo }] = await Promise.all([
+    const [{ db }, { getOutboxRepo, getAuditLogRepo }] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
     const outboxRepo = await getOutboxRepo();
+    const auditRepo = await getAuditLogRepo();
 
-    globalThis.__bidit_workspace_service__ = new WorkspaceService(db, outboxRepo);
+    globalThis.__bidit_workspace_service__ = new WorkspaceService(db, outboxRepo, auditRepo);
   }
   return globalThis.__bidit_workspace_service__!;
 }

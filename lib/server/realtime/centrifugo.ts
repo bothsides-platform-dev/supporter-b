@@ -23,12 +23,20 @@ export function chatChannel(conversationId: string): string {
   return `chat:conversation:${conversationId}`;
 }
 
-/**
- * Publish an event to a conversation's channel. Best-effort: resolves to
- * undefined whether or not delivery happened. Never throws.
- */
-export async function publishChatEvent(
-  conversationId: string,
+/** RFP-scoped internal team thread channel namespace. The wsId suffix keeps
+ *  the buyer team and each PG team on disjoint channels (sealed-bid invariant
+ *  — the subscribe proxy enforces membership + RFP access per side). */
+export const TEAM_CHANNEL_PREFIX = 'team:rfp:';
+
+/** Channel name for an (rfp, workspace) team thread. Single source so the
+ *  subscribe proxy and publish stay in lockstep. */
+export function teamChatChannel(rfpId: string, workspaceId: string): string {
+  return `${TEAM_CHANNEL_PREFIX}${rfpId}:${workspaceId}`;
+}
+
+/** Shared best-effort publish body — both channel families fan out the same way. */
+async function publishToChannel(
+  channel: string,
   data: ChatRealtimeEvent,
 ): Promise<void> {
   const apiUrl = process.env.CENTRIFUGO_HTTP_API_URL;
@@ -45,14 +53,40 @@ export async function publishChatEvent(
       },
       body: JSON.stringify({
         method: 'publish',
-        params: { channel: chatChannel(conversationId), data },
+        params: { channel, data },
       }),
+      // 전송 액션이 publish 를 await 한다 — Centrifugo 가 거부가 아니라 '행'으로
+      // 멈추면 catch 가 못 잡으므로, 타임아웃으로 사용자 응답이 붙들리지 않게 한다.
+      signal: AbortSignal.timeout(3000),
     });
   } catch (err) {
     // Best-effort: persistence already succeeded in Postgres; a missed fanout
     // is recovered by the client's REST history load on next connect.
     console.warn('[centrifugo] publish failed', err);
   }
+}
+
+/**
+ * Publish an event to a conversation's channel. Best-effort: resolves to
+ * undefined whether or not delivery happened. Never throws.
+ */
+export async function publishChatEvent(
+  conversationId: string,
+  data: ChatRealtimeEvent,
+): Promise<void> {
+  await publishToChannel(chatChannel(conversationId), data);
+}
+
+/**
+ * Publish an event to an (rfp, workspace) team thread channel. Best-effort,
+ * mirroring publishChatEvent.
+ */
+export async function publishTeamChatEvent(
+  rfpId: string,
+  workspaceId: string,
+  data: ChatRealtimeEvent,
+): Promise<void> {
+  await publishToChannel(teamChatChannel(rfpId, workspaceId), data);
 }
 
 // Centrifugo `presence` response: `result.presence` is a map keyed by client id,

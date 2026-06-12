@@ -4,11 +4,13 @@ import { randomUUID } from 'node:crypto';
 import { attachments, bids, users, workspaceMembers, workspaces } from '@/lib/db/schema';
 import type {
   AttachmentRepo,
+  AuditLogRepo,
   BidNoteRepo,
   BidRepo,
   InvitationRepo,
   OutboxRepo,
   RfpRepo,
+  RfpRequoteRequestRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
 import {
@@ -45,6 +47,8 @@ export class BidService {
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly attachmentRepo: AttachmentRepo,
     private readonly bidNoteRepo: BidNoteRepo,
+    private readonly requoteRepo: RfpRequoteRequestRepo,
+    private readonly auditRepo: AuditLogRepo,
   ) {}
 
   async withdraw(bidId: string, actor: Actor): Promise<ServiceResult> {
@@ -65,7 +69,22 @@ export class BidService {
 
     if (bid.status === 'withdrawn') return { ok: true };
 
-    await this._db.update(bids).set({ status: 'withdrawn' }).where(eq(bids.id, bid.id));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this._db.transaction(async (tx: any) => {
+      await tx.update(bids).set({ status: 'withdrawn' }).where(eq(bids.id, bid.id));
+      // 감사 로그 (C5) — 철회와 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'bid.withdraw',
+          entityType: 'rfp',
+          entityId: rfp?.code ?? bid.rfpId,
+          metadata: { bidId: bid.id },
+        },
+        tx,
+      );
+    });
 
     return { ok: true };
   }
@@ -110,8 +129,20 @@ export class BidService {
     }
 
     const existingBids = await this.bidRepo.findByRfp(input.rfpId);
-    if (existingBids.some((b) => b.pgWsId === actor.workspaceId)) {
-      return { ok: false, error: 'BID_ALREADY_SUBMITTED' };
+    const myBids = existingBids.filter((b) => b.pgWsId === actor.workspaceId);
+    const maxRound = myBids.reduce((m, b) => Math.max(m, b.round), 0);
+
+    let round = 1;
+    let respondedRequoteId: string | null = null;
+    if (maxRound >= 1) {
+      // 이미 견적이 있다 — pending 재요청이 있어야만 새 라운드 제출 허용.
+      const pending = await this.requoteRepo.findPendingByPair(input.rfpId, actor.workspaceId);
+      if (!pending) return { ok: false, error: 'BID_ALREADY_SUBMITTED' };
+      if (new Date(pending.deadline).getTime() < Date.now()) {
+        return { ok: false, error: 'REQUOTE_DEADLINE_PASSED' };
+      }
+      round = maxRound + 1;
+      respondedRequoteId = pending.id;
     }
 
     const bidId = randomUUID();
@@ -136,6 +167,24 @@ export class BidService {
           status: 'submitted',
           submittedBy: actor.userId,
           submittedAt: now.toISOString(),
+          round,
+        },
+        tx,
+      );
+
+      if (respondedRequoteId) {
+        await this.requoteRepo.markResponded(respondedRequoteId, now, tx);
+      }
+
+      // 감사 로그 (C5) — 제출과 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'bid.submit',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { bidId, round },
         },
         tx,
       );
@@ -154,54 +203,58 @@ export class BidService {
           );
       }
 
-      const buyerMembers = (await tx
-        .select({ userId: workspaceMembers.userId, email: users.email })
-        .from(workspaceMembers)
-        .innerJoin(users, eq(workspaceMembers.userId, users.id))
-        .where(eq(workspaceMembers.workspaceId, rfp.buyerWsId))) as {
-        userId: string;
-        email: string;
-      }[];
+      // 온보딩 샘플 RFP 는 데모 구매사(.invalid 메일)가 소유 — 알림/이메일을 발행하지 않는다.
+      // (bid 저장은 위에서 끝났으므로 PG 의 인터랙티브 체험에는 영향이 없다.)
+      if (!rfp.isSample) {
+        const buyerMembers = (await tx
+          .select({ userId: workspaceMembers.userId, email: users.email })
+          .from(workspaceMembers)
+          .innerJoin(users, eq(workspaceMembers.userId, users.id))
+          .where(eq(workspaceMembers.workspaceId, rfp.buyerWsId))) as {
+          userId: string;
+          email: string;
+        }[];
 
-      const [pgWsRow] = (await tx
-        .select({ name: workspaces.name })
-        .from(workspaces)
-        .where(eq(workspaces.id, actor.workspaceId))
-        .limit(1)) as { name: string }[];
-      const pgWsLabel = pgWsRow?.name ?? 'PG';
+        const [pgWsRow] = (await tx
+          .select({ name: workspaces.name })
+          .from(workspaces)
+          .where(eq(workspaces.id, actor.workspaceId))
+          .limit(1)) as { name: string }[];
+        const pgWsLabel = pgWsRow?.name ?? 'PG';
 
-      const submittedHtml = await renderBidSubmitted({
-        rfpId: rfp.code,
-        rfpTitle: rfp.title,
-        pgName: pgWsLabel,
-        submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
-      });
+        const submittedHtml = await renderBidSubmitted({
+          rfpId: rfp.code,
+          rfpTitle: rfp.title,
+          pgName: pgWsLabel,
+          submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
+        });
 
-      for (const m of buyerMembers) {
-        const notif: Notification = {
-          id: randomUUID(),
-          userId: m.userId,
-          workspaceId: rfp.buyerWsId,
-          type: 'bid.submitted',
-          title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-          body: `${pgWsLabel}가 견적을 보냈어요.`,
-          channel: 'inapp',
-          status: 'pending',
-          linkUrl: `/rfp/${rfp.code}`,
-          createdAt: now.toISOString(),
-        };
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
-        await this.outboxRepo.enqueue(
-          {
-            event: 'bid.submitted',
-            to: m.email,
-            subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-            html: submittedHtml,
-            dedupeKey: `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
-          },
-          tx,
-        );
+        for (const m of buyerMembers) {
+          const notif: Notification = {
+            id: randomUUID(),
+            userId: m.userId,
+            workspaceId: rfp.buyerWsId,
+            type: 'bid.submitted',
+            title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+            body: `${pgWsLabel}가 견적을 보냈어요.`,
+            channel: 'inapp',
+            status: 'pending',
+            linkUrl: `/rfp/${rfp.code}`,
+            createdAt: now.toISOString(),
+          };
+          await dispatchNotification(tx, notif);
+          pendingEmits.push(notif);
+          await this.outboxRepo.enqueue(
+            {
+              event: 'bid.submitted',
+              to: m.email,
+              subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+              html: submittedHtml,
+              dedupeKey: `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
+            },
+            tx,
+          );
+        }
       }
 
       return { ok: true as const, bidId, rfpCode: rfp.code };
@@ -318,20 +371,21 @@ export async function getBidService(): Promise<BidService> {
   if (!globalThis.__bidit_bid_service__) {
     const [
       { db },
-      { getBidRepo, getInvitationRepo, getRfpRepo, getOutboxRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo },
+      { getBidRepo, getInvitationRepo, getRfpRepo, getOutboxRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo },
     ] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo] =
+    const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] =
       await Promise.all([
         getBidRepo(), getInvitationRepo(), getRfpRepo(),
         getOutboxRepo(), getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
+        getRfpRequoteRequestRepo(), getAuditLogRepo(),
       ]);
 
     globalThis.__bidit_bid_service__ = new BidService(
-      db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo,
+      db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo,
     );
   }
   return globalThis.__bidit_bid_service__!;

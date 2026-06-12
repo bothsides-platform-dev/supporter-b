@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { PageEnter } from '@/components/primitives/PageEnter';
+import { ChatRail } from '@/components/messages/ChatRail';
 import { RfpDetailContent } from '@/components/rfp/RfpDetailContent';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
@@ -60,9 +61,18 @@ async function RfpDetailLoader({
     );
   }
 
+  // 우측 채팅 레일(상대방 채팅: FocusComparison 의 포커스 PG 추종 / 팀 채팅)과
+  // 본문이 나란히 — 레일은 sticky 라 본문 스크롤에 영향 없음(lg 미만 비노출).
   return (
-    <PageEnter className="px-8 py-8 space-y-10">
-      <RfpDetailContent data={data} />
-    </PageEnter>
+    <div className="flex items-start">
+      <div className="min-w-0 flex-1">
+        <PageEnter className="px-8 py-8 space-y-10">
+          <RfpDetailContent data={data} />
+        </PageEnter>
+      </div>
+      {!data.rfp.isSample && (
+        <ChatRail rfpId={data.rfp.id} rfpCode={data.rfp.code} rfpTitle={data.rfp.title} />
+      )}
+    </div>
   );
 }

@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { bids, bidNotes, rfpInvitations, rfpPgRequests, rfps } from '@/lib/db/schema';
+import { bids, bidNotes, rfpInvitations, rfpPgRequests, rfpRequoteRequests, rfps } from '@/lib/db/schema';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
@@ -78,6 +78,7 @@ async function setup() {
     pgWsId: string,
     invitationId: string,
     status: 'submitted' | 'draft' = 'submitted',
+    round = 1,
   ) {
     const id = randomUUID();
     await db.insert(bids).values({
@@ -85,6 +86,7 @@ async function setup() {
       rfpId,
       pgWsId,
       invitationId,
+      round,
       settleCycle: 'D+1',
       settleLimit: '0',
       guaranteeInsurance: '0',
@@ -118,6 +120,7 @@ async function setup() {
   }
 
   return {
+    db,
     buyerWsId: buyerWs.id,
     otherWsId: otherWs.id,
     tossId: toss.id,
@@ -192,6 +195,47 @@ describe('loadBuyerRfpDetail', () => {
     expect(res!.authorId).toBe(ctx.buyerId);
   });
 
+  it('multi-round: PG별 최신 라운드 bid만 반환하고 requoteByPg·priorBidByPg를 노출', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0030');
+    const inv = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    // round 1 + round 2 제출.
+    await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted', 1);
+    const bid2Id = await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted', 2);
+    // requote 레코드 (round 2, responded).
+    await ctx.db.insert(rfpRequoteRequests).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: ctx.tossId,
+      round: 2,
+      message: '낮춰주세요',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'responded',
+      createdByUserId: ctx.buyerId,
+      createdAt: new Date(),
+      respondedAt: new Date(),
+    });
+
+    const res = await loadBuyerRfpDetail({
+      code: 'P-2606-0030',
+      workspaceId: ctx.buyerWsId,
+      userId: ctx.buyerId,
+      userName: ctx.buyerName,
+    });
+
+    expect(res).not.toBeNull();
+    // bids 는 최신 라운드 1건만.
+    const forToss = res!.bids.filter((b) => b.pgWsId === ctx.tossId);
+    expect(forToss).toHaveLength(1);
+    expect(forToss[0]!.id).toBe(bid2Id);
+    expect(forToss[0]!.round).toBe(2);
+    // requoteByPg.
+    expect(res!.requoteByPg[ctx.tossId]?.status).toBe('responded');
+    expect(res!.requoteByPg[ctx.tossId]?.round).toBe(2);
+    // priorBidByPg — round 1이 직전.
+    expect(res!.priorBidByPg[ctx.tossId]).toBeDefined();
+    expect(res!.priorBidByPg[ctx.tossId]!.round).toBe(1);
+  });
+
   it('pendingRequests에 pending 콜드 피치만 PG명+메시지와 함께 반환', async () => {
     const rfpId = await ctx.seedRfp('P-2605-0003');
     await ctx.seedPgRequest(rfpId, ctx.tossId, '제안 드리고 싶어요', 'pending');
@@ -260,6 +304,29 @@ describe('loadPgRfpDetail', () => {
     const res = await loadPgRfpDetail({ code: 'P-2605-0013', workspaceId: ctx.tossId });
     expect(res).not.toBeNull();
     expect(res!.buyerName).toBe('구매사');
+  });
+
+  it('pending 재요청이 있으면 pendingRequote 반환; 없으면 null', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0050');
+    const inv = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted', 1);
+    await ctx.db.insert(rfpRequoteRequests).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: ctx.tossId,
+      round: 2,
+      message: '수수료 낮춰주세요',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'pending',
+      createdByUserId: ctx.buyerId,
+      createdAt: new Date(),
+    });
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0050', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.pendingRequote).not.toBeNull();
+    expect(res!.pendingRequote!.round).toBe(2);
+    expect(res!.pendingRequote!.message).toBe('수수료 낮춰주세요');
   });
 
   it('해당 PG 워크스페이스의 견적 템플릿만 quoteTemplates로 반환(타 워크스페이스 격리)', async () => {

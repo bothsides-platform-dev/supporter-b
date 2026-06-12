@@ -71,7 +71,9 @@ export class ChatService {
   async sendMessage(
     input: SendMessageInput,
     actor: ChatActor,
-  ): Promise<ServiceResult<{ conversationId: string; messageId: string }>> {
+  ): Promise<
+    ServiceResult<{ conversationId: string; messageId: string; createdAt: string }>
+  > {
     const body = (input.body ?? '').trim();
     if (body.length === 0 && input.attachmentIds.length === 0) {
       return { ok: false, error: 'INVALID_INPUT' };
@@ -135,8 +137,12 @@ export class ChatService {
     const messageId = randomUUID();
     const pendingEmits: Notification[] = [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: ServiceResult<{ conversationId: string; messageId: string }> = await this._db.transaction(async (tx: any) => {
+    const result: ServiceResult<{
+      conversationId: string;
+      messageId: string;
+      createdAt: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    }> = await this._db.transaction(async (tx: any) => {
       const conv = conversationId
         ? { id: conversationId }
         : await this.convRepo.findOrCreatePair(buyerWsId, pgWsId, tx);
@@ -235,7 +241,14 @@ export class ChatService {
         );
       }
 
-      return { ok: true as const, conversationId: conv.id, messageId };
+      return {
+        ok: true as const,
+        conversationId: conv.id,
+        messageId,
+        // 서버 권위 타임스탬프 — 클라이언트가 낙관적 말풍선을 확정으로 승격할 때
+        // 자기 시계 대신 이 값을 채택한다(리로드 후 로더 렌더와 일치).
+        createdAt: now.toISOString(),
+      };
     });
 
     if (result.ok) {
@@ -263,6 +276,26 @@ export class ChatService {
     const pgWsId = actor.workspaceType === 'buyer' ? counterpartyWorkspaceId : actor.workspaceId;
     const conv = await this.convRepo.findOrCreatePair(buyerWsId, pgWsId);
     return { ok: true, conversationId: conv.id };
+  }
+
+  /**
+   * 읽기 전용 페어 해소 — 없으면 conversationId null, **행을 생성하지 않는다**.
+   * 채팅 레일 표시용: 열람·포커스 추종만으로 빈 대화를 만들면 상대 인박스에
+   * "보고 있다"는 관심 신호가 새므로(sealed-bid), 생성은 첫 전송에만 맡긴다.
+   */
+  async findConversation(
+    counterpartyWorkspaceId: string,
+    actor: ChatActor,
+  ): Promise<ServiceResult<{ conversationId: string | null }>> {
+    const counterparty = await this.wsRepo.findById(counterpartyWorkspaceId);
+    if (!counterparty) return { ok: false, error: 'COUNTERPARTY_NOT_FOUND' };
+    if (counterparty.type === actor.workspaceType) {
+      return { ok: false, error: 'INVALID_COUNTERPARTY' };
+    }
+    const buyerWsId = actor.workspaceType === 'buyer' ? actor.workspaceId : counterpartyWorkspaceId;
+    const pgWsId = actor.workspaceType === 'buyer' ? counterpartyWorkspaceId : actor.workspaceId;
+    const conv = await this.convRepo.findPair(buyerWsId, pgWsId);
+    return { ok: true, conversationId: conv?.id ?? null };
   }
 
   async markConversationRead(

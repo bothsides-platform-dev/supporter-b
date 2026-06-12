@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import type {
+  AuditLogRepo,
   BidRepo,
   BizProfileRepo,
   ContractRepo,
@@ -9,6 +10,7 @@ import type {
   OutboxRepo,
   PgRequestRepo,
   RfpRepo,
+  RfpRequoteRequestRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
 import {
@@ -18,6 +20,7 @@ import {
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderRfpAwarded } from '@/lib/server/outbox/templates/rfpAwarded';
 import { renderRfpInvited } from '@/lib/server/outbox/templates/rfpInvited';
+import { renderRfpRequoteRequested } from '@/lib/server/outbox/templates/rfpRequoteRequested';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { baseUrlFor } from '@/lib/server/env';
 import { nextRfpId } from '@/lib/server/rfp-id';
@@ -78,6 +81,8 @@ export class RfpService {
     private readonly invitationRepo: InvitationRepo,
     private readonly pgRequestRepo: PgRequestRepo,
     private readonly bizProfileRepo: BizProfileRepo,
+    private readonly requoteRepo: RfpRequoteRequestRepo,
+    private readonly auditRepo: AuditLogRepo,
   ) {}
 
   async award(
@@ -94,6 +99,8 @@ export class RfpService {
       if (rfp.buyerWsId !== actor.workspaceId) {
         return { ok: false as const, error: 'FORBIDDEN_BUYER' };
       }
+      // 온보딩 샘플은 읽기전용 샌드박스 — 서버에서도 선정을 막는다(UI 게이트 보강).
+      if (rfp.isSample) return { ok: false as const, error: 'SAMPLE_READONLY' };
 
       // Validate winner exists before transitioning to avoid FK violation.
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
@@ -118,6 +125,19 @@ export class RfpService {
           bidId: awardedBidId,
           awardedAt: new Date().toISOString(),
           awardedBy: actor.userId,
+        },
+        tx,
+      );
+
+      // 감사 로그 (C5) — 선정과 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'rfp.award',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { bidId: awardedBidId, pgWsId: winner.pgWsId, title: rfp.title },
         },
         tx,
       );
@@ -218,6 +238,19 @@ export class RfpService {
         };
       }
 
+      // 감사 로그 (C5) — 취소와 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'rfp.cancel',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { title: rfp.title },
+        },
+        tx,
+      );
+
       const rfpCode = rfp.code;
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
       const submittedPgWsIds = [
@@ -274,6 +307,19 @@ export class RfpService {
           error: `INVALID_TRANSITION: ${(e as Error).message}`,
         };
       }
+
+      // 감사 로그 (C5) — 마감과 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'rfp.close',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { title: rfp.title },
+        },
+        tx,
+      );
 
       const rfpCode = rfp.code;
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
@@ -789,7 +835,156 @@ export class RfpService {
         sentCount += 1;
       }
 
+      // 감사 로그 (C5) — 발송과 같은 트랜잭션에서 커밋 (no-op 0건은 위에서 조기 반환).
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'rfp.send_invitations',
+          entityType: 'rfp',
+          entityId: rfpCode,
+          metadata: { sentCount },
+        },
+        tx,
+      );
+
       return { ok: true as const, sentCount };
+    });
+
+    if (result.ok) {
+      emitAfterCommit(pendingEmits);
+      flushAfterCommit();
+    }
+    return result;
+  }
+
+  async requote(
+    rfpId: string,
+    input: { targetPgWsIds: string[]; message: string; newDeadline: Date },
+    actor: Actor,
+  ): Promise<ServiceResult> {
+    if (input.targetPgWsIds.length === 0) {
+      return { ok: false, error: 'NO_TARGETS' };
+    }
+    if (input.message.trim().length === 0) {
+      return { ok: false, error: 'MESSAGE_REQUIRED' };
+    }
+    if (input.newDeadline.getTime() <= Date.now()) {
+      return { ok: false, error: 'DEADLINE_IN_PAST' };
+    }
+
+    const pendingEmits: Notification[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: ServiceResult = await this._db.transaction(async (tx: any) => {
+      const rfp = await this.rfpRepo.findById(rfpId, tx);
+      if (!rfp) return { ok: false as const, error: 'RFP_NOT_FOUND' };
+      if (rfp.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'FORBIDDEN_BUYER' };
+      if (rfp.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
+
+      const allBids = await this.bidRepo.findByRfp(rfpId, tx);
+      const now = new Date();
+
+      // 1) 전 대상 검증 — 하나라도 실패하면 all-or-nothing 롤백.
+      const plans: { pgWsId: string; round: number }[] = [];
+      for (const pgWsId of input.targetPgWsIds) {
+        const theirSubmitted = allBids.filter((b) => b.pgWsId === pgWsId && b.status === 'submitted');
+        if (theirSubmitted.length === 0) {
+          return { ok: false as const, error: 'TARGET_NOT_BIDDER' };
+        }
+        const existingPending = await this.requoteRepo.findPendingByPair(rfpId, pgWsId, tx);
+        if (existingPending) return { ok: false as const, error: 'REQUOTE_ALREADY_PENDING' };
+        const maxRound = theirSubmitted.reduce((m, b) => Math.max(m, b.round), 0);
+        plans.push({ pgWsId, round: maxRound + 1 });
+      }
+
+      // 2) 레코드 생성 + 마감 갱신.
+      for (const p of plans) {
+        await this.requoteRepo.create(
+          {
+            id: randomUUID(),
+            rfpId,
+            pgWsId: p.pgWsId,
+            round: p.round,
+            message: input.message,
+            deadline: input.newDeadline.toISOString(),
+            status: 'pending',
+            createdByUserId: actor.userId,
+            createdAt: now.toISOString(),
+          },
+          tx,
+        );
+      }
+      // deadline 직접 갱신 (RfpRepo.transition은 status 전용이고 update 메서드가 없으므로 직접 tx 사용)
+      await tx.update(rfps).set({ deadline: input.newDeadline }).where(eq(rfps.id, rfpId));
+
+      // 감사 로그 (C5) — 재요청과 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'rfp.requote',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { targetPgWsIds: input.targetPgWsIds, newDeadline: input.newDeadline.toISOString() },
+        },
+        tx,
+      );
+
+      // 3) 알림 + 이메일 팬아웃 (대상 PG admin 멤버).
+      const deadlineLabel = input.newDeadline.toISOString().replace('T', ' ').slice(0, 16);
+      const inboxUrl = `${baseUrlFor('pg')}/inbox/${rfp.code}`;
+      const buyerName = (await this.workspaceRepo.findById(rfp.buyerWsId, tx))?.name ?? '구매사';
+      const html = await renderRfpRequoteRequested({
+        rfpId: rfp.code,
+        rfpTitle: rfp.title,
+        buyerName,
+        message: input.message,
+        deadline: deadlineLabel,
+        inboxUrl,
+      });
+
+      for (const p of plans) {
+        // admin 멤버 조회 — acceptPgRequest / createRfp 패턴 그대로 차용 (userId + email 필요)
+        const adminRows = (await tx
+          .select({ userId: workspaceMembers.userId, email: users.email })
+          .from(workspaceMembers)
+          .innerJoin(users, eq(workspaceMembers.userId, users.id))
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, p.pgWsId),
+              eq(workspaceMembers.role, 'admin'),
+            ),
+          )) as { userId: string; email: string }[];
+
+        for (const m of adminRows) {
+          const notif: Notification = {
+            id: randomUUID(),
+            userId: m.userId,
+            workspaceId: p.pgWsId,
+            type: 'rfp.requote_requested',
+            title: `[${rfp.code}] 견적 재요청이 도착했어요`,
+            body: `${buyerName}가 조건 개선을 요청했어요.`,
+            channel: 'inapp',
+            status: 'pending',
+            linkUrl: `/inbox/${rfp.code}`,
+            createdAt: now.toISOString(),
+          };
+          await dispatchNotification(tx, notif);
+          pendingEmits.push(notif);
+          await this.outboxRepo.enqueue(
+            {
+              event: 'rfp.requote_requested',
+              to: m.email,
+              subject: `[Supporter B · ${rfp.code}] 견적 재요청이 도착했어요`,
+              html,
+              dedupeKey: `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:user:${m.userId}`,
+            },
+            tx,
+          );
+        }
+      }
+
+      return { ok: true as const };
     });
 
     if (result.ok) {
@@ -891,6 +1086,19 @@ export class RfpService {
         createdBy: actor.userId,
         sentAt: send ? now : null,
       });
+
+      // 감사 로그 (C5) — 생성과 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'rfp.create',
+          entityType: 'rfp',
+          entityId: code,
+          metadata: { title: input.title.trim(), send },
+        },
+        tx,
+      );
 
       if (input.allowedPgWorkspaceIds.length > 0) {
         await tx.insert(rfpAllowedPg).values(
@@ -1025,13 +1233,15 @@ export async function getRfpService(): Promise<RfpService> {
         getInvitationRepo,
         getPgRequestRepo,
         getBizProfileRepo,
+        getRfpRequoteRequestRepo,
+        getAuditLogRepo,
       },
     ] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo] =
+    const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo] =
       await Promise.all([
         getRfpRepo(),
         getContractRepo(),
@@ -1041,6 +1251,8 @@ export async function getRfpService(): Promise<RfpService> {
         getInvitationRepo(),
         getPgRequestRepo(),
         getBizProfileRepo(),
+        getRfpRequoteRequestRepo(),
+        getAuditLogRepo(),
       ]);
 
     globalThis.__bidit_rfp_service__ = new RfpService(
@@ -1053,6 +1265,8 @@ export async function getRfpService(): Promise<RfpService> {
       invRepo,
       pgReqRepo,
       bizRepo,
+      requoteRepo,
+      auditRepo,
     );
   }
   return globalThis.__bidit_rfp_service__!;

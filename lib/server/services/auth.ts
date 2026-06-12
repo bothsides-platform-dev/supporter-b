@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { phoneOtps, users, workspaceInvitations, workspaceMembers, workspaces } from '@/lib/db/schema';
@@ -12,7 +12,8 @@ import { renderAuthEmailChange } from '@/lib/server/outbox/templates/authEmailCh
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceInvite';
 import { purgeUnverifiedSignup } from '@/lib/server/actions/auth/_purgeUnverifiedSignup';
-import type { UserRepo, VerificationTokenRepo, OutboxRepo } from '@/lib/server/repositories/types';
+import type {
+  AuditLogRepo, UserRepo, VerificationTokenRepo, OutboxRepo } from '@/lib/server/repositories/types';
 import type { ServiceResult } from './types';
 
 export type AuthActor = { userId: string };
@@ -34,6 +35,7 @@ export class AuthService {
     private readonly userRepo: UserRepo,
     private readonly verificationTokenRepo: VerificationTokenRepo,
     private readonly outboxRepo: OutboxRepo,
+    private readonly auditRepo: AuditLogRepo,
   ) {}
 
   async completeSignup(input: {
@@ -187,6 +189,84 @@ export class AuthService {
     return result;
   }
 
+  async joinCanonicalPgWorkspace(input: {
+    email: string;
+    name: string;
+    plainPassword: string;
+    phone: string;
+    phoneVerificationId: string;
+    selectedPgWorkspaceId: string;
+  }): Promise<ServiceResult<{ email: string }>> {
+    const email = normalizeEmail(input.email);
+
+    const [otpRow] = await this._db
+      .select()
+      .from(phoneOtps)
+      .where(
+        and(
+          eq(phoneOtps.id, input.phoneVerificationId),
+          eq(phoneOtps.phone, input.phone),
+          isNotNull(phoneOtps.verifiedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
+
+    const [workspace] = await this._db
+      .select({ id: workspaces.id, canonicalPgKey: workspaces.canonicalPgKey })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, input.selectedPgWorkspaceId),
+          eq(workspaces.type, 'pg'),
+          eq(workspaces.status, 'active'),
+          isNotNull(workspaces.canonicalPgKey),
+        ),
+      )
+      .limit(1);
+
+    if (!workspace) return { ok: false, error: 'INVALID_CANONICAL_WORKSPACE' };
+
+    const passwordHash = await hashPassword(input.plainPassword);
+    const userId = randomUUID();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ email: string }>> => {
+      await purgeUnverifiedSignup(tx, email);
+
+      try {
+        await tx.insert(users).values({
+          id: userId,
+          email,
+          passwordHash,
+          name: input.name,
+          phone: input.phone,
+          avatarColor: 'ink',
+          status: 'active',
+          emailVerified: false,
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
+        throw err;
+      }
+
+      await tx
+        .insert(workspaceMembers)
+        .values({ workspaceId: input.selectedPgWorkspaceId, userId, role: 'member' })
+        .onConflictDoNothing();
+
+      await tx
+        .update(users)
+        .set({ lastActiveWorkspaceId: input.selectedPgWorkspaceId })
+        .where(eq(users.id, userId));
+
+      return { ok: true, email };
+    });
+
+    return result;
+  }
+
   async deleteAccount(input: {
     userId: string;
     plainPassword: string;
@@ -243,8 +323,18 @@ export class AuthService {
       await tx.delete(workspaceMembers).where(eq(workspaceMembers.userId, input.userId));
       await tx
         .update(users)
-        .set({ deletedAt: new Date(), lastActiveWorkspaceId: null })
+        .set({
+          deletedAt: new Date(),
+          lastActiveWorkspaceId: null,
+          // Revoke every outstanding JWT for the deleted account.
+          sessionVersion: sql`${users.sessionVersion} + 1`,
+        })
         .where(eq(users.id, input.userId));
+      // 감사 로그 (C5) — 워크스페이스 무관 인증 이벤트 (FK 없음 → 행 보존).
+      await this.auditRepo.insert(
+        { actorUserId: input.userId, actorWorkspaceId: null, action: 'auth.account_delete' },
+        tx,
+      );
     });
 
     return { ok: true };
@@ -302,7 +392,23 @@ export class AuthService {
     if (consumed.purpose !== 'password_reset') return { ok: false, error: 'WRONG_PURPOSE' };
 
     const passwordHash = await hashPassword(input.plainPassword);
-    await this._db.update(users).set({ passwordHash }).where(eq(users.email, consumed.email));
+    const resetUser = await this.userRepo.findByEmail(consumed.email);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this._db.transaction(async (tx: any) => {
+      await tx
+        .update(users)
+        // sessionVersion bump revokes sessions issued before the reset — the
+        // whole point of resetting a (possibly compromised) password.
+        .set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1` })
+        .where(eq(users.email, consumed.email));
+      if (resetUser) {
+        // 감사 로그 (C5) — 워크스페이스 무관 인증 이벤트.
+        await this.auditRepo.insert(
+          { actorUserId: resetUser.id, actorWorkspaceId: null, action: 'auth.password_reset' },
+          tx,
+        );
+      }
+    });
 
     return { ok: true, email: consumed.email };
   }
@@ -348,7 +454,19 @@ export class AuthService {
     if (!userId || !newEmail) return { ok: false, error: 'TOKEN_META_CORRUPT' };
 
     try {
-      await this._db.update(users).set({ email: newEmail }).where(eq(users.id, userId));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await this._db.transaction(async (tx: any) => {
+        await tx
+          .update(users)
+          // Email is the login identifier — revoke sessions minted under the old one.
+          .set({ email: newEmail, sessionVersion: sql`${users.sessionVersion} + 1` })
+          .where(eq(users.id, userId));
+        // 감사 로그 (C5) — 워크스페이스 무관 인증 이벤트.
+        await this.auditRepo.insert(
+          { actorUserId: userId, actorWorkspaceId: null, action: 'auth.email_change', metadata: { newEmail } },
+          tx,
+        );
+      });
     } catch (err) {
       if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
       throw err;
@@ -372,13 +490,14 @@ export async function getAuthService(): Promise<AuthService> {
     return globalThis.__bidit_auth_service_override__;
   }
   if (!globalThis.__bidit_auth_service__) {
-    const { getUserRepo, getVerificationTokenRepo, getOutboxRepo } = await import('@/lib/server/repositories/factory');
+    const { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo } = await import('@/lib/server/repositories/factory');
     const { actionDb } = await import('@/lib/server/actions/auth/_shared');
     const db = actionDb();
     const userRepo = await getUserRepo();
+    const auditRepo = await getAuditLogRepo();
     const verificationTokenRepo = await getVerificationTokenRepo();
     const outboxRepo = await getOutboxRepo();
-    globalThis.__bidit_auth_service__ = new AuthService(db, userRepo, verificationTokenRepo, outboxRepo);
+    globalThis.__bidit_auth_service__ = new AuthService(db, userRepo, verificationTokenRepo, outboxRepo, auditRepo);
   }
   return globalThis.__bidit_auth_service__!;
 }

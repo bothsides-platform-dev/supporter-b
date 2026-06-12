@@ -16,7 +16,7 @@ export function SidebarFooterControls({ className }: SidebarFooterControlsProps)
       type="button"
       aria-label="문의하기"
       onClick={() => window.ChannelIO?.('showMessenger')}
-      className="flex h-8 w-full items-center gap-1.5 rounded-[var(--md-sys-shape-small)] px-2 text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]"
+      className="flex h-8 w-full items-center justify-between rounded-[var(--md-sys-shape-small)] px-2 text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]"
     >
       <MessageCircle size={18} aria-hidden="true" />
       <span className="text-sm group-data-[collapsible=icon]:hidden">문의하기</span>

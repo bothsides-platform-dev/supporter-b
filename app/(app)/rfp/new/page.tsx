@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation';
-import { eq } from 'drizzle-orm';
 import { auth } from '@/auth';
 import { db } from '@/lib/db/client';
-import { workspaces } from '@/lib/db/schema';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
+import { searchWorkspaces } from '@/lib/server/workspaces/search';
 import { RfpCreateWizard } from '@/components/rfp/RfpCreateWizard';
 import type { PgWorkspace } from '@/components/rfp/RfpStep3PgSelect';
 
@@ -20,11 +19,7 @@ export default async function RfpNewPage() {
   // 비로그인 / 미완료 세션 → /login?next=/rfp/new 또는 /logout (루프 세이프 가드)
   const session = await requireBuyerPage('/rfp/new');
 
-  const pgRows = await db
-    .select({ id: workspaces.id, name: workspaces.name })
-    .from(workspaces)
-    .where(eq(workspaces.type, 'pg'))
-    .limit(500);
+  const pgRows = await searchWorkspaces(db, { type: 'pg' });
 
   const nameCount = new Map<string, number>();
   for (const row of pgRows) {

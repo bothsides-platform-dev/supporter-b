@@ -19,6 +19,7 @@ describe('getNavCommands — buyer', () => {
         '/rfp/new',
         '/settings/profile',
         '/settings/members',
+        '/settings/audit-log',
       ]),
     );
   });
@@ -26,7 +27,7 @@ describe('getNavCommands — buyer', () => {
   it('does NOT leak pg-only destinations', () => {
     expect(hrefs()).not.toContain('/inbox');
     expect(hrefs()).not.toContain('/opportunities');
-    expect(hrefs()).not.toContain('/settings/quote-templates');
+    expect(hrefs()).not.toContain('/quote-templates');
   });
 
   it('carries the chord shortcut for 새 견적 요청', () => {
@@ -57,7 +58,8 @@ describe('getNavCommands — pg', () => {
         '/opportunities',
         '/settings/profile',
         '/settings/members',
-        '/settings/quote-templates',
+        '/settings/audit-log',
+        '/quote-templates',
       ]),
     );
   });

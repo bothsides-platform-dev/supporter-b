@@ -13,6 +13,8 @@ import {
   getOutboxRepo,
   getPgRequestRepo,
   getRfpRepo,
+  getRfpRequoteRequestRepo,
+  getAuditLogRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -23,6 +25,7 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
+  auditLogs,
   rfpAllowedPg,
   rfpInvitations,
   rfpPgRequests,
@@ -36,12 +39,12 @@ let db: PgliteDB;
 let service: RfpService;
 
 async function buildService(): Promise<RfpService> {
-  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo] =
+  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo] =
     await Promise.all([
       getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
-      getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(),
+      getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(), getAuditLogRepo(),
     ]);
-  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo);
+  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo);
 }
 
 beforeEach(async () => {
@@ -547,5 +550,61 @@ describe('RfpService.createRfp', () => {
     const invRows = await db.select().from(rfpInvitations).where(eq(rfpInvitations.pgWsId, pgWsId));
     expect(invRows).toHaveLength(1);
     expect(invRows[0]!.status).toBe('pending');
+  });
+});
+
+// ─── 감사 로그 (C5) ───────────────────────────────────────────────────────────
+
+describe('RfpService createRfp/sendDraftInvitations — 감사 로그 기록', () => {
+  it('createRfp 성공 시 rfp.create 감사 행을 남긴다', async () => {
+    const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
+    const result = await service.createRfp({
+      title: '감사 RFP', deadline: new Date(Date.now() + 7 * 86400_000),
+      allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
+      requiredPaymentMethods: [], customPaymentMethods: [],
+      send: false, boardVisible: true, bizProfileMode: 'none',
+    }, { userId: buyerUserId, workspaceId: buyerWsId });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const rows = await db.select().from(auditLogs).where(eq(auditLogs.action, 'rfp.create'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorUserId: buyerUserId,
+      actorWorkspaceId: buyerWsId,
+      entityType: 'rfp',
+      entityId: result.rfpId,
+    });
+    expect(rows[0]!.metadata).toMatchObject({ title: '감사 RFP', send: false });
+  });
+
+  it('sendDraftInvitations 성공(발송>0) 시 rfp.send_invitations 감사 행을 남긴다', async () => {
+    const env = await seedSendDraftEnv();
+    await db.insert(rfpAllowedPg).values({ rfpId: env.rfpId, pgWsId: env.pgWsId });
+    const invId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: invId, rfpId: env.rfpId, pgWsId: env.pgWsId,
+      tokenHash: `draft-${invId}`, sentAt: new Date(), expiresAt: new Date(Date.now() + 7 * 86400_000), status: 'draft',
+    });
+
+    const result = await service.sendDraftInvitations(env.rfpCode, { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+    expect(result).toMatchObject({ ok: true, sentCount: 1 });
+
+    const rows = await db.select().from(auditLogs).where(eq(auditLogs.action, 'rfp.send_invitations'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorUserId: env.buyerUserId,
+      actorWorkspaceId: env.buyerWsId,
+      entityType: 'rfp',
+      entityId: env.rfpCode,
+    });
+    expect(rows[0]!.metadata).toMatchObject({ sentCount: 1 });
+  });
+
+  it('보낼 draft 가 없으면(sentCount=0 no-op) 감사 행을 남기지 않는다', async () => {
+    const env = await seedSendDraftEnv();
+    await service.sendDraftInvitations(env.rfpCode, { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+    const rows = await db.select().from(auditLogs).where(eq(auditLogs.action, 'rfp.send_invitations'));
+    expect(rows).toHaveLength(0);
   });
 });

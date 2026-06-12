@@ -10,7 +10,12 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isUserPresentInConversation, publishChatEvent } from '../centrifugo';
+import {
+  isUserPresentInConversation,
+  publishChatEvent,
+  publishTeamChatEvent,
+  teamChatChannel,
+} from '../centrifugo';
 
 describe('publishChatEvent', () => {
   afterEach(() => {
@@ -46,6 +51,9 @@ describe('publishChatEvent', () => {
     expect(body.params.channel).toBe('chat:conversation:conv-1');
     expect(body.params.data).toEqual({ type: 'message', id: 'm1' });
     expect(init.headers['X-API-Key']).toBe('secret');
+    // 행이 멈춘(거부 아님) Centrifugo 가 전송 응답을 무기한 붙들지 않도록
+    // 타임아웃 시그널이 있어야 한다 — 전송 액션이 publish 를 await 한다.
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('swallows transport errors (best-effort, never throws)', async () => {
@@ -58,6 +66,60 @@ describe('publishChatEvent', () => {
 
     await expect(
       publishChatEvent('conv-1', { type: 'message', id: 'm1' }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe('teamChatChannel + publishTeamChatEvent', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('teamChatChannel builds the (rfp, workspace)-scoped channel name', () => {
+    expect(teamChatChannel('rfp-1', 'ws-1')).toBe('team:rfp:rfp-1:ws-1');
+  });
+
+  it('no-ops (resolves, no fetch) when env is unconfigured', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', '');
+    vi.stubEnv('CENTRIFUGO_API_KEY', '');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(
+      publishTeamChatEvent('rfp-1', 'ws-1', { type: 'message', id: 'm1' }),
+    ).resolves.toBeUndefined();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('POSTs a publish command to the team channel when configured', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', 'http://localhost:8000/api');
+    vi.stubEnv('CENTRIFUGO_API_KEY', 'secret');
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await publishTeamChatEvent('rfp-1', 'ws-1', { type: 'message', id: 'm1' });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe('http://localhost:8000/api');
+    const body = JSON.parse(init.body);
+    expect(body.method).toBe('publish');
+    expect(body.params.channel).toBe('team:rfp:rfp-1:ws-1');
+    expect(body.params.data).toEqual({ type: 'message', id: 'm1' });
+    expect(init.headers['X-API-Key']).toBe('secret');
+  });
+
+  it('swallows transport errors (best-effort, never throws)', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', 'http://localhost:8000/api');
+    vi.stubEnv('CENTRIFUGO_API_KEY', 'secret');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new Error('connection refused')),
+    );
+
+    await expect(
+      publishTeamChatEvent('rfp-1', 'ws-1', { type: 'message', id: 'm1' }),
     ).resolves.toBeUndefined();
   });
 });

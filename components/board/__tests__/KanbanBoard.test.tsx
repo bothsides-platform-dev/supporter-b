@@ -98,4 +98,71 @@ describe('KanbanBoard', () => {
     await user.click(screen.getByRole('button', { name: '진행중 컬럼 메뉴' }));
     expect(screen.queryByRole('button', { name: '컬럼 삭제' })).not.toBeInTheDocument();
   });
+
+  it('드래그 래퍼는 인터랙티브 요소가 아니다 — 카드 내부 버튼이 유일한 탭스톱', () => {
+    renderBoard();
+    // 이전 구현은 래퍼 div 에 dnd-kit attributes(role="button", tabIndex)를 그대로
+    // 스프레드해 카드 텍스트가 접근성 이름인 가짜 버튼이 생겼다 (중첩 버튼 + 이중 탭스톱).
+    expect(screen.queryByRole('button', { name: /결제대행 RFP/ })).not.toBeInTheDocument();
+  });
+
+  it('columnOverflow 컬럼은 limit 초과분을 숨기고 전체 보기 링크를 단다', () => {
+    const many: BoardCard[] = Array.from({ length: 12 }, (_, i) => ({
+      cardType: 'rfp',
+      cardId: `m${i}`,
+      columnId: 'c-active',
+      payload: { rfpId: `P-${i}`, title: `RFP ${i}`, stage: 'active' },
+    }));
+    render(
+      <KanbanBoard
+        kind="pipeline"
+        cardType="rfp"
+        columns={[sysCol]}
+        cards={many}
+        renderCard={(c) => <div>{(c.payload as { title: string }).title}</div>}
+        columnOverflow={(col) =>
+          col.lifecycleKey === 'active'
+            ? { limit: 10, moreHref: '/rfp?view=table&status=active' }
+            : null
+        }
+      />,
+    );
+    expect(screen.getByText('RFP 9')).toBeInTheDocument();
+    expect(screen.queryByText('RFP 10')).not.toBeInTheDocument();
+    // 라벨은 건수를 약속하지 않는다 — 보드 N(필터 적용)과 표 도착지 건수가 다를 수 있음.
+    const link = screen.getByRole('link', { name: '표에서 전체 보기' });
+    expect(link).toHaveAttribute('href', '/rfp?view=table&status=active');
+  });
+
+  it('limit 이하면 링크 없이 전부 렌더한다', () => {
+    render(
+      <KanbanBoard
+        kind="pipeline"
+        cardType="rfp"
+        columns={[sysCol, customCol]}
+        cards={cards}
+        renderCard={(c) => <div>{(c.payload as { title: string }).title}</div>}
+        columnOverflow={() => ({ limit: 10, moreHref: '/rfp?view=table' })}
+      />,
+    );
+    expect(screen.getByText('결제대행 RFP')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '표에서 전체 보기' })).not.toBeInTheDocument();
+  });
+
+  it('드래그 래퍼에 명시적 tabIndex 가 없고 내부 버튼이 유일한 포커서블 요소다', () => {
+    const { container } = render(
+      <KanbanBoard
+        kind="pipeline"
+        cardType="rfp"
+        columns={[sysCol]}
+        cards={[cards[0]]}
+        renderCard={(c) => (
+          <button type="button">{(c.payload as { title: string }).title}</button>
+        )}
+      />,
+    );
+    expect(container.querySelector('[tabindex]')).toBeNull();
+    // 카드 텍스트를 가진 버튼은 renderCard 의 진짜 버튼 1개뿐 (래퍼는 비인터랙티브).
+    expect(screen.getAllByRole('button', { name: '결제대행 RFP' })).toHaveLength(1);
+  });
 });

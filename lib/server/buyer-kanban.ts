@@ -1,10 +1,10 @@
-// Buyer 홈 칸반 — RFP 1건 = 카드 1장. 4개 컬럼.
+// Buyer 파이프라인 칸반 — RFP 1건 = 카드 1장. 3개 컬럼 (진행중/선정 완료/마감).
 // 분류는 `RFP.status` 로 도출되는 derived 값.
-// 사용자가 임의로 컬럼을 옮기는 건 plan 의 드래그 매트릭스가 허락하는 전이만 가능 (각각이
-// 도메인 액션을 트리거 — sendDraftInvitationsAction / awardRfpAction / cancelRfpAction).
+// 사용자가 임의로 컬럼을 옮기는 건 드래그 매트릭스가 허락하는 전이만 가능 (각각이
+// 도메인 액션 또는 상세 이동을 트리거 — awardRfpAction / cancelRfpAction).
 //
 // 이 파일은 client component 에서도 import 가능 — repo / DB import 없이 순수 도메인.
-// 데이터 로더는 ./buyer-kanban-loader.ts 참조.
+// 데이터 로더는 ./board/loadBoard.ts 참조.
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { RfpInvitation } from '@/lib/types/invitation';
@@ -32,6 +32,9 @@ export type BuyerKanbanCard = {
   invitedPgCount: number;
   submittedBidCount: number;
   awardedBidId?: string;
+  isSample: boolean;
+  /** status='cancelled' — 마감 컬럼 안에서 취소 칩으로 구분. */
+  isCancelled: boolean;
 };
 
 // pure — 단위 테스트 가능. status 만으로 3단계 분류 (진행중/마감/계약완료).
@@ -63,6 +66,8 @@ export function toBuyerCard(args: {
     invitedPgCount: invitedActive,
     submittedBidCount: bids.filter((b) => b.status === 'submitted').length,
     awardedBidId: rfp.awardedBidId,
+    isSample: rfp.isSample ?? false,
+    isCancelled: rfp.status === 'cancelled',
   };
 }
 

@@ -22,6 +22,7 @@ import type { Notification, NotificationChannel } from '@/lib/types/notification
 import type { AttachmentRecord } from './attachment-record';
 import type { VerificationToken } from '@/lib/types/auth';
 import type { OutboxEntry, OutboxEvent, Sender } from '../outbox/types';
+import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
 // `any` generics are localised here so individual method signatures stay clean.
@@ -49,6 +50,13 @@ export interface RfpRepo {
 }
 
 // ── Invitation ────────────────────────────────────────────────────────
+/** findByPgWorkspace 반환 행 — buyerName 은 RFP 발신 구매사 워크스페이스명 (카드/목록 표기용). */
+export type PgInvitationPair = {
+  invitation: RfpInvitation;
+  rfp: RFP;
+  buyerName: string;
+};
+
 export interface InvitationRepo {
   /** 초대 발송 — raw 토큰을 hash로 변환해 저장. raw 비저장. */
   save(inv: RfpInvitation, rawToken: string, tx?: Tx): Promise<void>;
@@ -69,10 +77,7 @@ export interface InvitationRepo {
   /** draft → pending: rawToken hash 갱신 + status='pending' + sentAt/expiresAt 갱신. */
   promoteDraft(invId: string, rawToken: string, now: Date, expiresAt: Date, tx?: Tx): Promise<void>;
   /** PG 워크스페이스에 발송된 활성 초대 + RFP pair — 인박스/칸반 공통 fetcher. */
-  findByPgWorkspace(
-    pgWsId: string,
-    tx?: Tx,
-  ): Promise<{ invitation: RfpInvitation; rfp: RFP }[]>;
+  findByPgWorkspace(pgWsId: string, tx?: Tx): Promise<PgInvitationPair[]>;
   /** 토큰 atomic claim — 만료/사용/무효 분기. 동일 raw 토큰 동시 진입 가드. */
   claimToken(rawToken: string, userId: string, tx?: Tx): Promise<TokenClaimResult>;
   /** 워크스페이스 멤버십 단위 접근권 — 초대된 PG ws의 모든 멤버 통과. */
@@ -84,6 +89,20 @@ export interface InvitationRepo {
   markOpened(invitationId: string, openedAt: Date, tx?: Tx): Promise<void>;
   /** 통일 칸반: pg pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
   setBoardColumn(invitationId: string, columnId: string | null, tx?: Tx): Promise<void>;
+}
+
+// ── RfpRequoteRequest (마감 전 협상 라운드) ───────────────────────────
+export interface RfpRequoteRequestRepo {
+  /** 요청 1건 생성 — (rfp,pg,round) UNIQUE 위배 시 throw. */
+  create(req: RfpRequoteRequest, tx?: Tx): Promise<void>;
+  /** 한 RFP의 모든 재요청 — createdAt asc. */
+  findByRfp(rfpId: string, tx?: Tx): Promise<RfpRequoteRequest[]>;
+  /** (rfp, pg) 의 pending 요청 — 없으면 undefined. submit 라운드 게이트용. */
+  findPendingByPair(rfpId: string, pgWsId: string, tx?: Tx): Promise<RfpRequoteRequest | undefined>;
+  /** PG 워크스페이스의 모든 pending 요청 — 인박스/칸반 '재요청' 배지 bulk 조회. */
+  findPendingByPgWs(pgWsId: string, tx?: Tx): Promise<RfpRequoteRequest[]>;
+  /** pending → responded 원자 전이(`WHERE status='pending'`). */
+  markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
 }
 
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────
@@ -132,6 +151,8 @@ export interface WorkspaceRepo {
   memberUserIdsBatch(wsIds: string[], tx?: Tx): Promise<Map<string, string[]>>;
   /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
+  /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
+  listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string }[]>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────
@@ -159,7 +180,7 @@ export interface BizProfileRepo {
 
 // ── Bid ───────────────────────────────────────────────────────────────
 export interface BidRepo {
-  /** 입찰 저장 — `(rfpId, pgWsId)` UNIQUE 위배 시 throw. */
+  /** 입찰 저장 — `(rfpId, pgWsId, round)` UNIQUE 위배 시 throw. */
   save(bid: Bid, tx?: Tx): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<Bid | undefined>;
@@ -419,6 +440,16 @@ export interface ChatConversationRepo {
     pgWsId: string,
     tx?: Tx,
   ): Promise<ChatConversation>;
+  /**
+   * 페어 읽기 전용 조회 — 없으면 undefined, **행을 생성하지 않는다**.
+   * 채팅 레일의 표시용 해소 경로: 열람·포커스 추종만으로 빈 대화가 생기면
+   * 상대 인박스에 관심 신호가 새므로(sealed-bid), 생성은 첫 전송에만 맡긴다.
+   */
+  findPair(
+    buyerWsId: string,
+    pgWsId: string,
+    tx?: Tx,
+  ): Promise<ChatConversation | undefined>;
   /** id 단건 조회. 없으면 undefined. */
   findById(id: string, tx?: Tx): Promise<ChatConversation | undefined>;
   /**
@@ -455,6 +486,36 @@ export interface ChatMessageRepo {
     conversationId: string,
     tx?: Tx,
   ): Promise<ChatMessageRecord[]>;
+}
+
+// ── RFP Team Chat: Message ────────────────────────────────────────────
+/**
+ * RFP-scoped internal team message. Scope = (rfpId, workspaceId) — buyer team
+ * and each PG team have fully separate threads (sealed-bid invariant).
+ */
+export type RfpTeamMessageRecord = {
+  id: string;
+  rfpId: string;
+  workspaceId: string;
+  authorUserId: string;
+  body: string;
+  createdAt: Date;
+};
+
+/** Read shape — authorName hydrated from users for display. */
+export type RfpTeamMessageWithAuthor = RfpTeamMessageRecord & {
+  authorName: string;
+};
+
+export interface RfpTeamMessageRepo {
+  /** 메시지 insert (append-only). */
+  save(msg: RfpTeamMessageRecord, tx?: Tx): Promise<void>;
+  /** 한 (rfp, workspace) 스코프의 모든 메시지 — created_at asc. */
+  listByScope(
+    rfpId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<RfpTeamMessageWithAuthor[]>;
 }
 
 // ── Chat: Message Template ────────────────────────────────────────────
@@ -565,4 +626,45 @@ export interface ChatReadRepo {
     viewerUserId: string,
     tx?: Tx,
   ): Promise<Date | undefined>;
+}
+
+// ── Audit Log (C5) ────────────────────────────────────────────────────
+/** 신규 감사 행 — createdAt/id 는 DB 가 채운다. */
+export type NewAuditLog = {
+  actorUserId: string;
+  /** 워크스페이스 무관 이벤트(auth.*)는 null. */
+  actorWorkspaceId?: string | null;
+  /** '<도메인>.<행위>' — rfp.award, bid.submit, workspace.member_invite … */
+  action: string;
+  entityType?: string | null;
+  /** uuid 또는 RFP code(P-2605-0042) — text 로 수용. */
+  entityId?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+/** (createdAt, id) 복합 커서 — 동일 타임스탬프에서도 누락 없는 페이지네이션. */
+export type AuditLogCursor = { createdAt: string; id: string };
+
+/** 조회 행 — actorName 은 users join 으로 hydrate (탈퇴 사용자는 null 허용). */
+export type AuditLogRecord = {
+  id: string;
+  actorUserId: string;
+  actorWorkspaceId: string | null;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  metadata: Record<string, unknown> | null;
+  /** ISO string. */
+  createdAt: string;
+  actorName: string | null;
+};
+
+export interface AuditLogRepo {
+  /** 감사 행 기록 — 호출자는 해당 작업의 트랜잭션(tx)을 넘긴다. */
+  insert(entry: NewAuditLog, tx?: Tx): Promise<void>;
+  /** 워크스페이스 스코프 최신순 목록 — 설정 > 활동 기록 화면용. */
+  listForWorkspace(
+    workspaceId: string,
+    opts: { limit: number; before?: AuditLogCursor },
+  ): Promise<AuditLogRecord[]>;
 }

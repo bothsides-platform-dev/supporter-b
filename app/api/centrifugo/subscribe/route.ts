@@ -11,16 +11,26 @@
  * Protocol (Centrifugo v6 proxy docs):
  *   - Request body: { client, transport, protocol, encoding, user, channel }.
  *     We only read `user` and `channel`.
- *   - Channel convention (single source: chatChannel()):
+ *   - Channel conventions (single sources: chatChannel() / teamChatChannel()):
  *       chat:conversation:<conversationId>
+ *       team:rfp:<rfpId>:<workspaceId>
  *   - Allow response body: { result: {} }
  *   - Deny  response body: { error: { code, message } }
  *   - HTTP status is ALWAYS 200. A non-200 is interpreted by Centrifugo as a
  *     proxy *transport* error, not a clean deny — so every response here is 200
  *     and allow/deny is carried in the JSON body.
  *
- * ACL: allow iff `user` is a member of the conversation's buyer OR pg
- * workspace. Every reject — non-member, missing/unknown conversation, non-chat
+ * ACL:
+ *   chat — allow iff `user` is a member of the conversation's buyer OR pg
+ *   workspace.
+ *   team — allow iff `user` is a member of <workspaceId> AND that workspace
+ *   has access to <rfpId> (buyer owns it, or PG holds an invitation —
+ *   invRepo.canAccess, the same gate as the PG inbox detail loader). The wsId
+ *   segment keeps buyer/PG team threads on disjoint channels: a user with
+ *   legitimate access to the SAME RFP from the other side must still deny
+ *   (sealed-bid invariant).
+ *
+ * Every reject — non-member, missing/unknown conversation or rfp, non-chat
  * channel, malformed channel, missing field, bad JSON — returns the SAME
  * generic deny. We never distinguish "not found" from "forbidden": doing so
  * would leak whether a conversation exists, breaking the privacy invariant.
@@ -30,9 +40,14 @@ import { z } from 'zod';
 
 import {
   getChatConversationRepo,
+  getInvitationRepo,
+  getRfpRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
-import { chatChannel } from '@/lib/server/realtime/centrifugo';
+import {
+  chatChannel,
+  TEAM_CHANNEL_PREFIX,
+} from '@/lib/server/realtime/centrifugo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -71,6 +86,10 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const { user, channel } = parsed.data;
 
+  if (channel.startsWith(TEAM_CHANNEL_PREFIX)) {
+    return authorizeTeamChannel(user, channel);
+  }
+
   // Reverse-parse the channel via the single-source convention.
   if (!channel.startsWith(CHANNEL_PREFIX)) return deny();
   const conversationId = channel.slice(CHANNEL_PREFIX.length);
@@ -90,6 +109,34 @@ export async function POST(request: Request): Promise<NextResponse> {
       (await wsRepo.isMember(user, conv.pgWsId));
 
     return isMember ? allow() : deny();
+  } catch {
+    // Any unexpected error → deny (fail closed). Never leak details.
+    return deny();
+  }
+}
+
+// team:rfp:<rfpId>:<workspaceId> — RFP 팀 채팅 채널 ACL (header doc 참조).
+async function authorizeTeamChannel(
+  user: string,
+  channel: string,
+): Promise<NextResponse> {
+  const parts = channel.slice(TEAM_CHANNEL_PREFIX.length).split(':');
+  if (parts.length !== 2) return deny();
+  const [rfpId, workspaceId] = parts;
+  // uuid-gate BEFORE Postgres (22P02 guard), anchored ^…$ — no smuggling.
+  if (!z.string().uuid().safeParse(rfpId).success) return deny();
+  if (!z.string().uuid().safeParse(workspaceId).success) return deny();
+
+  try {
+    const wsRepo = await getWorkspaceRepo();
+    if (!(await wsRepo.isMember(user, workspaceId))) return deny();
+
+    const rfp = await (await getRfpRepo()).findById(rfpId);
+    if (!rfp) return deny();
+    if (rfp.buyerWsId === workspaceId) return allow();
+
+    const invited = await (await getInvitationRepo()).canAccess(rfpId, workspaceId);
+    return invited ? allow() : deny();
   } catch {
     // Any unexpected error → deny (fail closed). Never leak details.
     return deny();

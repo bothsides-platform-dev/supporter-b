@@ -30,6 +30,16 @@ vi.mock('../RfpPendingRequests', () => ({
 vi.mock('@/components/attachments/AttachmentPreviewList', () => ({
   AttachmentPreviewList: () => <div data-testid="attachments" />,
 }));
+// ChatRailToggle 은 server action(getOrCreateConversationAction → next-auth 체인)을
+// 정적 임포트해 jsdom 수집을 깨뜨린다 — 자체 테스트(ChatRail.test)가 커버.
+vi.mock('@/components/messages/ChatRailToggle', () => ({
+  ChatRailToggle: () => <div data-testid="chat-rail-toggle" />,
+}));
+// SampleRfpBanner 는 deleteSampleRfpAction(→ next-auth 체인)을 정적 임포트해 jsdom 수집을
+// 깨뜨린다 — 자체 테스트(SampleRfpBanner.test)가 커버.
+vi.mock('../SampleRfpBanner', () => ({
+  SampleRfpBanner: () => <div data-testid="sample-banner" />,
+}));
 
 import { RfpDetailContent } from '../RfpDetailContent';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
@@ -65,6 +75,7 @@ const aBid: Bid = {
   proposalPdfs: [],
   status: 'submitted',
   submittedBy: 'pg-user',
+  round: 1,
 };
 
 function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
@@ -80,6 +91,8 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     canEdit: true,
     authorId: 'u1',
     authorName: '담당자',
+    requoteByPg: {},
+    priorBidByPg: {},
     ...over,
   };
 }

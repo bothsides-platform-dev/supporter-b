@@ -13,6 +13,8 @@ import {
   getOutboxRepo,
   getPgRequestRepo,
   getRfpRepo,
+  getRfpRequoteRequestRepo,
+  getAuditLogRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -23,6 +25,7 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
+  auditLogs,
   bids,
   contracts,
   notifications,
@@ -37,12 +40,12 @@ let db: PgliteDB;
 let service: RfpService;
 
 async function buildService(): Promise<RfpService> {
-  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo] =
+  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo] =
     await Promise.all([
       getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
-      getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(),
+      getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(), getAuditLogRepo(),
     ]);
-  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo);
+  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo);
 }
 
 beforeEach(async () => {
@@ -298,6 +301,20 @@ describe('RfpService.award', () => {
     if (r.ok) return;
     expect(r.error).toContain('WINNING_BID_NOT_FOUND');
   });
+
+  it('refuses to award a sample RFP (SAMPLE_READONLY)', async () => {
+    const s = await seedAwardEnv();
+    await db.update(rfps).set({ isSample: true }).where(eq(rfps.id, s.rfpId));
+    const r = await service.award(s.rfpId, s.winnerBidId, {
+      userId: s.buyerUserId,
+      workspaceId: s.buyerWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'SAMPLE_READONLY' });
+    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.id, s.rfpId));
+    expect(rfpRow!.status).not.toBe('awarded');
+    const c = await db.select().from(contracts).where(eq(contracts.rfpId, s.rfpId));
+    expect(c).toHaveLength(0);
+  });
 });
 
 // ─── RfpService.cancel ───────────────────────────────────────────────────────
@@ -477,5 +494,76 @@ describe('RfpService.cancel — INVALID_TRANSITION', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error).toMatch(/INVALID_TRANSITION/);
+  });
+});
+
+// ─── 감사 로그 (C5) ───────────────────────────────────────────────────────────
+// 각 상태 전이는 해당 트랜잭션 안에서 audit_logs 에 "누가 무엇을" 을 남긴다.
+
+describe('RfpService — 감사 로그 기록', () => {
+  async function rowsFor(action: string) {
+    return db.select().from(auditLogs).where(eq(auditLogs.action, action));
+  }
+
+  it('award 성공 시 rfp.award 감사 행을 남긴다', async () => {
+    const s = await seedAwardEnv();
+    const r = await service.award(s.rfpId, s.winnerBidId, {
+      userId: s.buyerUserId,
+      workspaceId: s.buyerWsId,
+    });
+    expect(r.ok).toBe(true);
+
+    const rows = await rowsFor('rfp.award');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorUserId: s.buyerUserId,
+      actorWorkspaceId: s.buyerWsId,
+      entityType: 'rfp',
+      entityId: s.rfpCode,
+    });
+    expect(rows[0]!.metadata).toMatchObject({ bidId: s.winnerBidId });
+  });
+
+  it('실패한 award(FORBIDDEN_BUYER)는 감사 행을 남기지 않는다', async () => {
+    const s = await seedAwardEnv();
+    await service.award(s.rfpId, s.winnerBidId, {
+      userId: s.buyerUserId,
+      workspaceId: randomUUID(),
+    });
+    expect(await rowsFor('rfp.award')).toHaveLength(0);
+  });
+
+  it('cancel 성공 시 rfp.cancel 감사 행을 남긴다', async () => {
+    const s = await seedCancelEnv();
+    const r = await service.cancel(s.rfpId, {
+      userId: s.buyerUserId,
+      workspaceId: s.buyerWsId,
+    });
+    expect(r.ok).toBe(true);
+
+    const rows = await rowsFor('rfp.cancel');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorUserId: s.buyerUserId,
+      actorWorkspaceId: s.buyerWsId,
+      entityType: 'rfp',
+    });
+  });
+
+  it('close 성공 시 rfp.close 감사 행을 남긴다', async () => {
+    const s = await seedCancelEnv();
+    const r = await service.close(s.rfpId, {
+      userId: s.buyerUserId,
+      workspaceId: s.buyerWsId,
+    });
+    expect(r.ok).toBe(true);
+
+    const rows = await rowsFor('rfp.close');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      actorUserId: s.buyerUserId,
+      actorWorkspaceId: s.buyerWsId,
+      entityType: 'rfp',
+    });
   });
 });

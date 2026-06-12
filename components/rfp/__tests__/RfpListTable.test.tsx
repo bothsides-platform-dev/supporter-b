@@ -9,6 +9,9 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/rfp',
   useSearchParams: () => new URLSearchParams(''),
 }));
+vi.mock('@/lib/server/actions/onboarding/deleteSampleRfpAction', () => ({
+  deleteSampleRfpAction: vi.fn(async () => ({ ok: true })),
+}));
 
 import { RfpListTable, RfpListTableSkeleton } from '../RfpListTable';
 import type { RFP } from '@/lib/types/rfp';

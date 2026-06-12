@@ -14,9 +14,12 @@ const DEADLINE_OPTIONS: Option[] = [
 export function BoardFilterBar({
   statusOptions,
   gradeOptions,
+  hideStatus = false,
 }: {
   statusOptions: Option[];
   gradeOptions: Option[];
+  /** 보드 뷰에서는 컬럼이 곧 status — 중복인 status 칩 그룹을 숨긴다. */
+  hideStatus?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -34,13 +37,15 @@ export function BoardFilterBar({
 
   return (
     <div className="flex items-center gap-3 flex-wrap" role="group" aria-label="필터">
-      <ChipGroup
-        param="status"
-        label="상태"
-        options={statusOptions}
-        current={current('status')}
-        onSelect={setParam}
-      />
+      {!hideStatus && (
+        <ChipGroup
+          param="status"
+          label="상태"
+          options={statusOptions}
+          current={current('status')}
+          onSelect={setParam}
+        />
+      )}
       <ChipGroup
         param="deadline"
         label="마감일"

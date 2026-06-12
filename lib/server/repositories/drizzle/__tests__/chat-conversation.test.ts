@@ -97,6 +97,23 @@ describe('DrizzleChatConversationRepository.touchLastMessageAt + listForWorkspac
   });
 });
 
+describe('DrizzleChatConversationRepository.findPair (읽기 전용)', () => {
+  it('기존 페어 대화를 돌려준다', async () => {
+    const { convRepo, buyer, pg } = await setup();
+    const created = await convRepo.findOrCreatePair(buyer.id, pg.id);
+    const found = await convRepo.findPair(buyer.id, pg.id);
+    expect(found?.id).toBe(created.id);
+  });
+
+  it('페어가 없으면 undefined — 행을 생성하지 않는다 (sealed-bid 신호 누출 방지)', async () => {
+    const { convRepo, buyer, pg } = await setup();
+    expect(await convRepo.findPair(buyer.id, pg.id)).toBeUndefined();
+    // 조회가 부수효과로 대화를 만들지 않았는지 — 같은 페어 재조회도 여전히 없음.
+    expect(await convRepo.findPair(buyer.id, pg.id)).toBeUndefined();
+    expect(await convRepo.listForWorkspace(pg.id, 'pg')).toEqual([]);
+  });
+});
+
 describe('DrizzleChatMessageRepository', () => {
   it('saves messages and lists them by created_at ascending', async () => {
     const { convRepo, msgRepo, buyer, pg, author } = await setup();

@@ -65,8 +65,9 @@ Authenticated AppShell
 └─ /settings
    ├─ /settings/profile
    ├─ /settings/members
-   ├─ /settings/quote-templates     (pg only — 견적 요율표)
-   └─ /settings/notifications
+   ├─ /settings/notifications
+   └─ /settings/audit-log         (admin 전용 — 워크스페이스 활동 기록)
+├─ /quote-templates               (pg only — 견적 템플릿)
 
 Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.tsx)
 ├─ /admin/login
@@ -83,9 +84,9 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
 | B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget` |
-| B2 | `/rfp` | RFP 목록. 진행중/마감/계약완료 탭 (작성중 단계는 제거 — draft RFP는 `?status=draft` URL/표로만 접근) | `RfpList`, `DataTable`, `Tag` |
+| B2 | `/rfp` | RFP 목록. 진행중/마감/선정 완료 탭 (작성중 단계는 제거 — draft RFP는 `?status=draft` URL/표로만 접근). **온보딩 샘플**: 신규·기존 구매사는 `isSample=true` 샘플 견적 요청 1건을 목록 최상단에서 볼 수 있다(`샘플` Chip 표시). 목록 행에서 직접 삭제 가능(삭제 영속 — 재시드 안 함). | `RfpList`, `DataTable`, `Tag`, `SampleRfpBanner` |
 | B3 | `/rfp/new` | 사업자 조회 (선택), 등급 확인 (선택), RFP 첨부, PG 워크스페이스 검색·선택, 발송 | `BizLookupField`, `GradeConfirmPanel`, `RfpCreateForm` (인라인 Popover+cmdk PG 검색), `RfpAttachmentDropzone` |
-| B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / 내 메모 / PG 초대·게시판 관리). 표·보드·칸반 제거 | `RfpDetailContent`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `AwardResult`, `BidNotesPanel`, `BidPdfPane` |
+| B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / 내 메모 / PG 초대·게시판 관리). 표·보드·칸반 제거. **우측 채팅 레일**(헤더 '메시지' 토글, lg+): 탭 [상대방 채팅(FocusComparison 포커스 PG 추종, 전송에 RFP 태그 기본값) \| 팀 채팅(워크스페이스 내부 스레드)]. lg 미만은 `/messages?c=` 폴백. **온보딩 샘플**: `isSample=true` RFP 상세는 받은 견적 3건(데모 PG 워크스페이스)을 보기·비교 전용 샌드박스로 제공한다 — 선정·채팅 비활성, 상단 `SampleRfpBanner`로 삭제 안내(`deleteSampleRfpAction`, 삭제 영속). | `RfpDetailContent`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `AwardResult`, `BidNotesPanel`, `BidPdfPane`, `ChatRail`, `ChatRailToggle`, `SampleRfpBanner` |
 | B5 | (B4에 통합) | 선정은 B4 포커스 뷰의 CTA → **인라인 `AwardConfirmDialog`**(결과·마감 경고 + 확정) → 확정 후 **`AwardResult` 전체 화면 오버레이**(1회성 축하 결과 — 히어로+혜택 요약+메시지 딥링크). 계약 레코드 생성·선택/미선택 PG 통보는 `awardRfpAction` 불변. 별도 `/rfp/:id/award` 라우트 없음 | `AwardConfirmDialog`, `AwardResult`, `awardRfpAction`, `useCelebrationConfetti` |
 | B6 | `/settings/profile` | 구매사 사업자 프로필과 등급 갱신 상태 | `WorkspaceProfileForm` |
 | B7 | `/settings/members` | buyer 워크스페이스 멤버 관리 | `MemberTable` |
@@ -95,23 +96,26 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
 | P1 | `/home` | 신규 RFP, 임박 마감, 제출 완료, 수주율 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget` |
-| P2 | `/inbox` | 받은 RFP 함. 신규/제출완료/마감 탭 (작성중 단계 제거 — 미제출 응답은 신규로 표시) | `InboxList`, `DataTable`, `Tag` |
-| P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성. 사업자번호 미입력 시 안내 배너. 등급 미입력 시 일반 폴백(9개 카드사 입력). 저장된 견적 템플릿(요율표) 불러오기 + 현재 입력 저장 | `RfpBriefPanel`, `BidForm`, `StatutoryCardFeeNotice` |
+| P2 | `/inbox` | 받은 RFP 함. 신규/견적 보냄/마감 탭 (작성중 단계 제거 — 미제출 응답은 신규로 표시). **온보딩 샘플**: 신규·기존 PG는 데모 구매사가 보낸 `isSample=true` 샘플 견적 요청 1건을 인박스에서 본다(`샘플` Chip). | `InboxList`, `DataTable`, `Tag` |
+| P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성. 사업자번호 미입력 시 안내 배너. 등급 미입력 시 일반 폴백(9개 카드사 입력). 저장된 견적 템플릿(요율표) 불러오기 + 현재 입력 저장. **우측 채팅 레일**(B4 와 동일, 상대 = 구매사 고정) — 견적 작성 중 질의응답·내부 메모. **온보딩 샘플**: `isSample=true` RFP 는 인터랙티브 샌드박스 — PG 가 실제 4단계 위저드로 견적을 제출하면 잠시 뒤 선정을 시뮬레이트하고 전체화면 축하(`SamplePgAwardCelebration`)를 띄운다(`simulateSampleAwardAction`). 채팅 레일 비활성, 상단 `SamplePgRfpBanner`로 삭제 안내(`deleteSamplePgRfpAction`, 삭제 영속). | `RfpBriefPanel`, `BidWizard`, `StatutoryCardFeeNotice`, `ChatRail`, `ChatRailToggle`, `SamplePgRfpBanner`, `SamplePgAwardCelebration` |
 | P4 | `/inbox/:rfpId/submitted` | 제출 완료, 결과 대기, 수정/철회 정책 안내 | `SubmittedState` |
 | P7 | `/opportunities` | 오픈 RFP 게시판 — 초대받지 않은 PG가 발견·콜드 피치. 공개는 구매사명·제목·홈페이지만(수수료 등 비노출). PG 홈 탐색 섹션의 "전체 보기" 대상 | `OpportunityList`, `OpportunityRequestDialog` |
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처) | `WorkspaceProfileForm` |
 | P6 | `/settings/members` | 같은 워크스페이스 멤버 관리 (도메인 자동 합류 없음 — 초대만) | `MemberTable` |
-| P8 | `/settings/quote-templates` | PG 워크스페이스 공유 견적 템플릿(요율표) 관리 — 정산조건+결제수단별 수수료율 프리셋 CRUD. 견적 작성(P3)에서 불러와 한 번에 채움 (최대 20개) | `QuoteTemplatesPanel` |
+| P8 | `/quote-templates` | PG 워크스페이스 공유 견적 템플릿(요율표) 관리 — 정산조건+결제수단별 수수료율 프리셋 CRUD. 견적 작성(P3)에서 불러와 한 번에 채움 (최대 20개). 구간 수수료(카드·네이버페이·카카오페이·토스페이) 직접 편집 지원. nav top 레벨 (G→Q). | `QuoteTemplateList`, `QuoteTemplateDrawer` |
 
 ### 0.3a 공용 화면 (buyer · pg 공통)
 
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
-| S1 | `/messages` | 워크스페이스 페어(구매사↔PG) **라이브 채팅**. 2-컬럼: 좌측 대화 목록(미읽음 점) + 우측 스레드(말풍선·날짜 구분·읽음 영수증·프레즌스·타이핑). RFP는 메시지 태그로 표시. 리치 작성 드로어(저장 템플릿/첨부/이메일·인앱 알림 토글). `MessageComposeButton`으로 RFP 상세·입찰표에서 진입(ComingSoon 제거). 구매사↔PG만(PG 상호 비공개 유지), 이메일 조회로 콜드 컨택 가능 | `MessageInbox`, `ConversationList`, `ThreadView`, `MessageComposeButton`, `NewConversationSheet`, `useChatChannel` |
+| S2 | `/settings/audit-log` | **활동 기록** (admin 전용) — 워크스페이스 감사 로그 최신순 목록. 행위자 이름 · '견적' 언어 행위 라벨 · RFP 코드 링크(buyer는 `/rfp/`, pg는 `/inbox/`) · 시각. 커서 기반 '더 보기'(50건). member 에겐 안내 문구만. 기록은 서비스 레이어가 각 작업 트랜잭션 안에서 `audit_logs` 에 남긴다(rfp.create/send_invitations/award/cancel/close/requote/board_visibility, bid.submit/withdraw, workspace.create/member_invite/invite_accept/member_role_change/member_remove; auth.* 는 워크스페이스 무관이라 목록 비노출) | `AuditLogPanel`, `listAuditLogsAction` |
+| S1 | `/messages` | 워크스페이스 페어(구매사↔PG) **라이브 채팅**. 2-컬럼: 좌측 대화 목록(미읽음 점) + 우측 스레드(말풍선·날짜 구분·읽음 영수증·프레즌스·타이핑). RFP는 메시지 태그로 표시. 리치 작성 드로어(저장 템플릿/첨부/이메일·인앱 알림 토글). `MessageComposeButton`으로 RFP 상세·입찰표에서 진입(ComingSoon 제거). 구매사↔PG만(PG 상호 비공개 유지), 이메일 조회로 콜드 컨택 가능. **스레드 시각 규칙**: 중앙 날짜 구분선(라인 없음)·타임스탬프는 버블 옆 단일 출처·셀프 버블 `primary-container`. `ThreadView`/`ThreadPane`은 `variant='rail'`로 상세 화면 채팅 레일에 재사용(갤러리는 오버레이) | `MessageInbox`, `ConversationList`, `ThreadView`, `MessageComposeButton`, `NewConversationSheet`, `useChatChannel` |
 
 > 실시간 전송은 Centrifugo(자체호스팅 WS) — 미설정 환경에선 정적 로드로 graceful degrade. 이메일 알림은 presence 억제 + 윈도우 digest로 폭주 방지. `/notifications`·`/workspace/new` 도 buyer·pg 공통.
 
-> 칸반 뷰 컬럼: 구매사 `진행중 / 계약완료 / 마감`(3, 표 탭과 동일 — 발송 전 draft RFP는 보드에 노출 안 함), PG `신규 / 제출완료 / 낙찰 / 실패`(4 — 표 탭 `마감`을 보드에서 `낙찰`/`실패`로 분리; 미제출 응답은 `신규`). 작성중 단계 제거로 보드 드래그-발송/취소·드래그-작성 전이도 사라졌다(발송은 RFP 상세의 `초대 발송`, 제출은 inbox 폼).
+> 칸반 뷰 컬럼: 구매사 `진행중 / 선정 완료 / 마감`(3, 표 탭과 동일 — 발송 전 draft RFP는 보드에 노출 안 함), PG `신규 / 견적 보냄 / 선정됨 / 미선정`(4 — 표 탭 `마감`을 보드에서 `선정됨`/`미선정`으로 분리; 미제출 응답은 `신규`). 작성중 단계 제거로 보드 드래그-발송/취소·드래그-작성 전이도 사라졌다(발송은 RFP 상세의 `초대 발송`, 제출은 inbox 폼).
+>
+> 칸반 보드 UX(2026-06-12): 종결 컬럼(구매사 `선정 완료`/`마감`, PG `선정됨`/`미선정`)은 최근 10장만 노출 + `표에서 전체 보기`로 표 뷰 status 필터 딥링크(라벨에 건수 비표기 — 보드 컬럼 N과 표 도착지 건수가 다를 수 있음). 표/딥링크의 `closed` 토큰은 `cancelled` 를 폴드해 보드 마감 컬럼과 모집단을 맞춘다(`status-filter.ts`). 보드 뷰에서는 status 필터 칩을 숨긴다(컬럼과 중복 — 보드 전환 시 잔류 `?status=`도 제거). 드래그 센서는 Mouse+Touch(모바일 long-press, 카드 위 세로 스크롤 보존) — 키보드 대체 수단은 TODOS P1, 동일 작업은 상세 화면 버튼으로 가능. 드래그 중 무효 드롭 컬럼은 dim 처리, 드래그 카드는 DragOverlay 로 표시. 드래그-선정(`진행중`→`선정 완료`)은 RFP 상세로 즉시 이동.
 
 ### 0.4 Core Flow Diagrams
 
@@ -151,6 +155,24 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
               ├─ useCelebrationConfetti (canvas-confetti, DESIGN.md §9 예외)
               ├─ CTA [PG와 메시지 시작 →] → getOrCreateConversationAction → /messages?c=…
               └─ 보조 CTA [견적 목록으로] → /rfp
+```
+
+```
+채팅 레일 + 팀 채팅 (확정 결정, 2026-06-10)
+/rfp/:id · /inbox/:rfpId 우측 고정 레일 (sticky, w-96, lg+ 전용 — lg 미만은 /messages?c= 폴백)
+  ├─ 탭 [상대방 채팅]: 기존 buyer↔PG 페어 대화 임베드 (ThreadPane variant='rail')
+  │     ├─ 상대 출처 = chat-rail zustand 스토어 — 구매사: FocusComparison 이 포커스 PG publish(탭 추종),
+  │     │   PG: fixedCounterparty(구매사) 를 마운트 시 시드
+  │     ├─ wsId→conversationId 는 **읽기 전용** lookupConversationAction 으로 해소 — 열람·포커스만으로는
+  │     │   어떤 행도 생성하지 않는다(빈 대화가 상대 인박스에 뜨면 관심 신호 누출 — sealed-bid).
+  │     │   대화가 없으면 새 대화 컴포저를 띄우고 **첫 메시지 전송 시점에만** 생성
+  │     └─ 컴포저 전송에 해당 RFP 태그 기본 적용 (ThreadView defaultRfpId)
+  └─ 탭 [팀 채팅]: RFP 단위 워크스페이스 내부 스레드 — v1 확정 결정:
+        ├─ 스코프 = (rfpId, workspaceId), rfp_team_messages append-only
+        ├─ 멘션/알림/읽음/첨부 없음 (의도적 경량 — 후속 과제)
+        ├─ 구매사 팀 ↔ PG 팀 스레드 상호 완전 비공개 (sealed-bid 불변식)
+        ├─ ACL = 워크스페이스 멤버 ∧ RFP 접근권 (buyer 소유 or invitation canAccess)
+        └─ 라이브 채널 team:rfp:<rfpId>:<wsId> (subscribe-proxy generic deny 유지)
 ```
 
 ### 0.5 v0 Screen Non-Goals

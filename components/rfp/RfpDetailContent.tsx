@@ -6,6 +6,8 @@ import { Label } from '@/components/primitives/Label';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Accordion, AccordionItem } from '@/components/ui/accordion';
+import { ChatRailToggle } from '@/components/messages/ChatRailToggle';
+import { SampleRfpBanner } from '@/components/rfp/SampleRfpBanner';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { RfpBoardVisibilityToggle } from '@/components/rfp/RfpBoardVisibilityToggle';
@@ -58,6 +60,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
     pgWsNameMap,
     pendingRequests,
     canEdit,
+    requoteByPg,
   } = data;
   const bizProfile = rfp.bizProfile;
 
@@ -79,6 +82,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
 
   return (
     <>
+      {rfp.isSample && <SampleRfpBanner rfpCode={rfp.code} />}
       {/* Header */}
       <div>
         <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
@@ -88,7 +92,11 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
           <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
             {rfp.title}
           </h1>
-          <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
+          <div className="flex shrink-0 items-center gap-2">
+            {!rfp.isSample && <ChatRailToggle />}
+            {rfp.isSample && <Chip label="샘플" color="surface" />}
+            <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
+          </div>
         </div>
         <div className="flex items-center gap-4 mt-2">
           <Label size="md" muted={false}>마감 {formatDate(rfp.deadline)}</Label>
@@ -185,6 +193,8 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
         customPaymentMethods={rfp.customPaymentMethods}
         rfpId={rfp.id}
         rfpCode={rfp.code}
+        requoteByPg={requoteByPg}
+        isSample={rfp.isSample ?? false}
       />
 
       {/* 'PG 초대 · 게시판 노출 관리' — 조건부 자동 펼침 */}

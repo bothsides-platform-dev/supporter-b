@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
   workspaces,
   workspaceMembers,
@@ -63,7 +63,13 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .select({ m: workspaceMembers, u: usersTable })
       .from(workspaceMembers)
       .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
-      .where(eq(workspaceMembers.workspaceId, ws.id))) as { m: MemberRow; u: UserRow }[];
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, ws.id),
+          // System-managed master accounts are hidden from all UI member lists.
+          eq(usersTable.isSystemAccount, false),
+        ),
+      )) as { m: MemberRow; u: UserRow }[];
 
     const members: User[] = memberRows.map((r) => rowToUser(r.u, r.m));
 
@@ -196,10 +202,13 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     const rows = (await db
       .select({ userId: workspaceMembers.userId })
       .from(workspaceMembers)
-      .where(eq(workspaceMembers.workspaceId, workspaceId))) as Pick<
-      MemberRow,
-      'userId'
-    >[];
+      .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(usersTable.isSystemAccount, false),
+        ),
+      )) as Pick<MemberRow, 'userId'>[];
     return rows.map((r) => r.userId);
   }
 
@@ -209,10 +218,13 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     const rows = (await db
       .select({ workspaceId: workspaceMembers.workspaceId, userId: workspaceMembers.userId })
       .from(workspaceMembers)
-      .where(inArray(workspaceMembers.workspaceId, wsIds))) as Pick<
-      MemberRow,
-      'workspaceId' | 'userId'
-    >[];
+      .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
+      .where(
+        and(
+          inArray(workspaceMembers.workspaceId, wsIds),
+          eq(usersTable.isSystemAccount, false),
+        ),
+      )) as Pick<MemberRow, 'workspaceId' | 'userId'>[];
     const map = new Map<string, string[]>();
     for (const r of rows) {
       const list = map.get(r.workspaceId) ?? [];
@@ -228,10 +240,27 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .select({ email: usersTable.email })
       .from(workspaceMembers)
       .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
-      .where(eq(workspaceMembers.workspaceId, workspaceId))) as Pick<
-      UserRow,
-      'email'
-    >[];
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(usersTable.isSystemAccount, false),
+        ),
+      )) as Pick<UserRow, 'email'>[];
     return rows.map((r) => r.email);
+  }
+
+  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string }[]> {
+    const rows = (await this._db
+      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.type, 'pg'),
+          eq(workspaces.status, 'active'),
+          isNotNull(workspaces.canonicalPgKey),
+        ),
+      )
+      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null }[];
+    return rows.map((r) => ({ ...r, canonicalPgKey: r.canonicalPgKey! }));
   }
 }

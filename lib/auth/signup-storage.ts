@@ -36,6 +36,8 @@ export type SignupClientDraft = {
   bizProfile?: SignupBizProfile;
   /** PG: 직접 입력한 사업자번호 (step 2 → step 4) */
   bizNo?: string;
+  /** PG 가입 시 선택한 canonical PG 워크스페이스 id — 선택 경로에서 설정, /profile 제출 시 소비 */
+  selectedPgWorkspaceId?: string;
   /** 가입 완료 후 복귀할 내부 경로 (CTA → /login?next= → /signup?next= 경유로 주입됨) */
   next?: string;
 };

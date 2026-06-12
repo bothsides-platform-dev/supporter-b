@@ -15,6 +15,11 @@ vi.mock('../bid-wizard/BidWizard', () => ({
     return <div data-testid="bid-wizard" />;
   },
 }));
+vi.mock('../SamplePgRfpBanner', () => ({
+  SamplePgRfpBanner: ({ rfpCode }: { rfpCode: string }) => (
+    <div data-testid="sample-banner">{rfpCode}</div>
+  ),
+}));
 
 import { PgRfpDetailContent } from '../PgRfpDetailContent';
 import type { RFP } from '@/lib/types/rfp';
@@ -50,6 +55,7 @@ const myBid: Bid = {
   status: 'submitted',
   submittedBy: 'pg-user',
   submittedAt: new Date().toISOString(),
+  round: 1,
 };
 
 afterEach(() => {
@@ -59,7 +65,7 @@ afterEach(() => {
 
 describe('PgRfpDetailContent', () => {
   it('myBid 있으면 제출 완료 블록 + 보낸 견적 보기 링크, 위저드 없음', () => {
-    render(<PgRfpDetailContent data={{ rfp, myBid, buyerName: '(주)테스트', quoteTemplates: [] }} />);
+    render(<PgRfpDetailContent data={{ rfp, myBid, buyerName: '(주)테스트', quoteTemplates: [], pendingRequote: null }} />);
     expect(screen.getByText(/견적을 보냈어요/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /보낸 견적 보기/ })).toHaveAttribute(
       'href',
@@ -71,7 +77,7 @@ describe('PgRfpDetailContent', () => {
   it('variant="full" 미제출 시 BidWizard 렌더 + rfp·buyerName 전달', () => {
     render(
       <PgRfpDetailContent
-        data={{ rfp, myBid: undefined, buyerName: '(주)테스트', quoteTemplates: [] }}
+        data={{ rfp, myBid: undefined, buyerName: '(주)테스트', quoteTemplates: [], pendingRequote: null }}
         variant="full"
       />,
     );
@@ -82,9 +88,39 @@ describe('PgRfpDetailContent', () => {
   });
 
   it('variant="peek"(기본) 미제출 시 브리프 + 견적 작성 CTA, 위저드 없음', () => {
-    render(<PgRfpDetailContent data={{ rfp, myBid: undefined, buyerName: '(주)테스트', quoteTemplates: [] }} />);
+    render(<PgRfpDetailContent data={{ rfp, myBid: undefined, buyerName: '(주)테스트', quoteTemplates: [], pendingRequote: null }} />);
     expect(screen.getByTestId('brief')).toBeInTheDocument();
     expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /견적 작성/ })).toHaveAttribute('href', '/inbox/P-2605-0042');
+  });
+
+  it('isSample 면 샘플 배너를 위저드와 함께 보여준다 (full)', () => {
+    render(
+      <PgRfpDetailContent
+        data={{ rfp: { ...rfp, isSample: true }, myBid: undefined, buyerName: '샘플 쇼핑몰', quoteTemplates: [], pendingRequote: null }}
+        variant="full"
+      />,
+    );
+    expect(screen.getByTestId('sample-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('bid-wizard')).toBeInTheDocument();
+  });
+
+  it('isSample 면 제출 완료 화면에도 샘플 배너를 보여준다', () => {
+    render(
+      <PgRfpDetailContent
+        data={{ rfp: { ...rfp, isSample: true }, myBid, buyerName: '샘플 쇼핑몰', quoteTemplates: [], pendingRequote: null }}
+      />,
+    );
+    expect(screen.getByTestId('sample-banner')).toBeInTheDocument();
+  });
+
+  it('isSample 아니면 샘플 배너 없음', () => {
+    render(
+      <PgRfpDetailContent
+        data={{ rfp, myBid: undefined, buyerName: '(주)테스트', quoteTemplates: [], pendingRequote: null }}
+        variant="full"
+      />,
+    );
+    expect(screen.queryByTestId('sample-banner')).not.toBeInTheDocument();
   });
 });

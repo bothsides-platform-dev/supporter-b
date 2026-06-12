@@ -3,32 +3,23 @@
 // Set to true to re-enable the custom-column UI (add/delete column controls).
 const CUSTOM_COLUMNS_ENABLED = false;
 
-import { useMemo, useOptimistic, useState, useTransition, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   DndContext,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
+  DragOverlay,
   useDraggable,
   useDroppable,
   closestCorners,
-  type DragEndEvent,
 } from '@dnd-kit/core';
-import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { generateKeyBetween } from 'fractional-indexing';
 import { KanbanActionDialog } from '@/components/home/KanbanActionDialog';
-import type { DragAction } from '@/components/home/dragMatrix';
-import { resolveBoardDrop } from './resolveBoardDrop';
-import { moveCardAction } from '@/lib/server/actions/board/moveCardAction';
-import { releaseCardAction } from '@/lib/server/actions/board/releaseCardAction';
+import { useBoardDnd } from './useBoardDnd';
 import { addColumnAction } from '@/lib/server/actions/board/addColumnAction';
 import { deleteColumnAction } from '@/lib/server/actions/board/deleteColumnAction';
 import { renameColumnAction } from '@/lib/server/actions/board/renameColumnAction';
 import { recolorColumnAction } from '@/lib/server/actions/board/recolorColumnAction';
-import { DEFAULT_LANDING_KEY } from '@/lib/server/columns/lifecycle-keys';
 import { toast } from '@/lib/toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -48,6 +39,13 @@ type Props = {
   columns: BoardColumn[];
   cards: BoardCard[];
   renderCard: (card: BoardCard) => ReactNode;
+  /**
+   * 종결 컬럼처럼 무한 누적되는 컬럼의 노출 제한 — limit 초과분은 숨기고
+   * "표에서 전체 보기" 링크(표 뷰 딥링크)로 위임한다. null 이면 제한 없음.
+   */
+  columnOverflow?: (
+    column: BoardColumn,
+  ) => { limit: number; moreHref: string } | null;
 };
 
 const dotClass: Record<ChipColorRole, string> = {
@@ -66,97 +64,29 @@ const COLOR_CHOICES: (ChipColorRole | null)[] = [
   'error',
 ];
 
-export function KanbanBoard({ kind, cardType, columns, cards, renderCard }: Props) {
+export function KanbanBoard({
+  kind,
+  cardType,
+  columns,
+  cards,
+  renderCard,
+  columnOverflow,
+}: Props) {
   const router = useRouter();
-  const [, startTransition] = useTransition();
-  const [pendingAction, setPendingAction] = useState<DragAction | null>(null);
   // One column menu open at a time.
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
-  // Optimistic column override per card (the server truth lands via refresh()).
-  const [overrides, applyOverride] = useOptimistic<
-    Record<string, string>,
-    { cardId: string; columnId: string }
-  >({}, (state, patch) => ({ ...state, [patch.cardId]: patch.columnId }));
-
-  const columnOf = (c: BoardCard): string => overrides[c.cardId] ?? c.columnId;
-
-  const grouped = useMemo(() => {
-    const m = new Map<string, BoardCard[]>();
-    for (const col of columns) m.set(col.id, []);
-    for (const card of cards) {
-      const list = m.get(columnOf(card));
-      if (list) list.push(card);
-    }
-    return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cards, columns, overrides]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const commitPlace = (card: BoardCard, toColumn: BoardColumn) => {
-    startTransition(async () => {
-      applyOverride({ cardId: card.cardId, columnId: toColumn.id });
-      const r = await moveCardAction({
-        cardType,
-        cardId: card.cardId,
-        toColumnId: toColumn.id,
-      });
-      if (!r.ok) toast(`이동하지 못했어요 — ${r.error}`, { type: 'error' });
-      router.refresh();
-    });
-  };
-
-  const commitRelease = (card: BoardCard) => {
-    const wantKey =
-      cardType === 'bid' ? DEFAULT_LANDING_KEY : (card.payload as { stage?: string }).stage;
-    const target = columns.find((c) => c.lifecycleKey === wantKey);
-    startTransition(async () => {
-      if (target) applyOverride({ cardId: card.cardId, columnId: target.id });
-      const r = await releaseCardAction({ cardType, cardId: card.cardId });
-      if (!r.ok) toast(`이동하지 못했어요 — ${r.error}`, { type: 'error' });
-      router.refresh();
-    });
-  };
-
-  const handleDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e;
-    if (!over) return;
-    const overId = String(over.id);
-    let toColumnId: string | undefined;
-    if (overId.startsWith('column:')) {
-      toColumnId = overId.slice('column:'.length);
-    } else if (overId.startsWith('card:')) {
-      const overCard = cards.find((c) => `card:${c.cardId}` === overId);
-      toColumnId = overCard ? columnOf(overCard) : undefined;
-    }
-    if (!toColumnId) return;
-
-    const cardId = overId === '' ? '' : String(active.id).slice('card:'.length);
-    const card = cards.find((c) => c.cardId === cardId);
-    const toColumn = columns.find((c) => c.id === toColumnId);
-    if (!card || !toColumn) return;
-    if (columnOf(card) === toColumn.id) return; // no-op
-
-    const drop = resolveBoardDrop({ cardType, toColumn, payload: card.payload as object });
-    switch (drop.kind) {
-      case 'reject':
-        toast('이 컬럼으로는 이동할 수 없습니다.', { type: 'info' });
-        return;
-      case 'lifecycle':
-        setPendingAction(drop.action);
-        return;
-      case 'place':
-        commitPlace(card, toColumn);
-        return;
-      case 'release':
-        commitRelease(card);
-        return;
-    }
-  };
+  const {
+    sensors,
+    grouped,
+    pendingAction,
+    clearPendingAction,
+    activeCard,
+    validDropTargets,
+    handleDragStart,
+    handleDragCancel,
+    handleDragEnd,
+  } = useBoardDnd({ cardType, columns, cards });
 
   const lastColumnPos = columns.length ? columns[columns.length - 1].position : null;
 
@@ -166,32 +96,64 @@ export function KanbanBoard({ kind, cardType, columns, cards, renderCard }: Prop
         id={`board-${kind}`}
         sensors={sensors}
         collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragCancel={handleDragCancel}
         onDragEnd={handleDragEnd}
       >
         <div
           role="region"
           aria-label="칸반 보드"
-          className="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory"
+          // mandatory snap 은 드래그 자동 가로 스크롤과 충돌 — 평시 proximity,
+          // 드래그 중에는 snap 자체를 끈다.
+          className={cn(
+            'flex gap-3 overflow-x-auto pb-4',
+            !activeCard && 'snap-x snap-proximity',
+          )}
         >
-          {columns.map((column) => (
-            <ColumnView
-              key={column.id}
-              column={column}
-              count={(grouped.get(column.id) ?? []).length}
-              menuOpen={openMenu === column.id}
-              onToggleMenu={() =>
-                setOpenMenu((prev) => (prev === column.id ? null : column.id))
-              }
-              onCloseMenu={() => setOpenMenu(null)}
-              onRefresh={() => router.refresh()}
-            >
-              {(grouped.get(column.id) ?? []).map((card) => (
-                <DraggableCard key={card.cardId} card={card}>
-                  {renderCard(card)}
-                </DraggableCard>
-              ))}
-            </ColumnView>
-          ))}
+          {columns.map((column) => {
+            const columnCards = grouped.get(column.id) ?? [];
+            const overflow = columnOverflow?.(column) ?? null;
+            const truncated = overflow !== null && columnCards.length > overflow.limit;
+            const visibleCards = truncated
+              ? columnCards.slice(0, overflow.limit)
+              : columnCards;
+            return (
+              <ColumnView
+                key={column.id}
+                column={column}
+                count={columnCards.length}
+                dropState={
+                  !activeCard
+                    ? 'idle'
+                    : validDropTargets?.has(column.id)
+                      ? 'valid'
+                      : 'invalid'
+                }
+                menuOpen={openMenu === column.id}
+                onToggleMenu={() =>
+                  setOpenMenu((prev) => (prev === column.id ? null : column.id))
+                }
+                onCloseMenu={() => setOpenMenu(null)}
+                onRefresh={() => router.refresh()}
+              >
+                {visibleCards.map((card) => (
+                  <DraggableCard key={card.cardId} card={card}>
+                    {renderCard(card)}
+                  </DraggableCard>
+                ))}
+                {truncated && (
+                  // 라벨에 건수를 넣지 않는다 — 보드의 N(필터 적용·컬럼 폴드)과 표 도착지
+                  // 건수가 다를 수 있어 약속이 어긋남. 총 건수는 컬럼 헤더가 이미 보여줌.
+                  <Link
+                    href={overflow.moreHref}
+                    className="block text-center py-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+                  >
+                    표에서 전체 보기
+                  </Link>
+                )}
+              </ColumnView>
+            );
+          })}
           {CUSTOM_COLUMNS_ENABLED && (
             <AddColumnControl
               kind={kind}
@@ -200,13 +162,19 @@ export function KanbanBoard({ kind, cardType, columns, cards, renderCard }: Prop
             />
           )}
         </div>
+        <DragOverlay>
+          {activeCard ? (
+            // 컬럼 w-72(288px) − p-3 양쪽(24px) = 카드 실폭 264px.
+            <div className="w-[264px]">{renderCard(activeCard)}</div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       <KanbanActionDialog
         action={pendingAction}
-        onClose={() => setPendingAction(null)}
+        onClose={clearPendingAction}
         onCommitted={() => {
-          setPendingAction(null);
+          clearPendingAction();
           router.refresh();
         }}
       />
@@ -214,20 +182,22 @@ export function KanbanBoard({ kind, cardType, columns, cards, renderCard }: Prop
   );
 }
 
+// 래퍼는 드래그 시작 리스너만 보유 — dnd-kit attributes(role/tabIndex)를 스프레드하면
+// 카드 내부의 진짜 버튼과 중첩 버튼 시맨틱 + 이중 탭스톱이 생긴다. 시각 이동은
+// DragOverlay 가 담당하므로 원본은 자리 placeholder 로만 남는다. touchAction 은
+// 'manipulation' — TouchSensor 의 길게 누르기 활성화와 함께 세로 스크롤을 살린다.
 function DraggableCard({ card, children }: { card: BoardCard; children: ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { listeners, setNodeRef, isDragging } = useDraggable({
     id: `card:${card.cardId}`,
     data: { card },
   });
   return (
     <div
       ref={setNodeRef}
-      style={{
-        transform: CSS.Translate.toString(transform),
-        opacity: isDragging ? 0.5 : 1,
-        touchAction: 'none',
-      }}
-      {...attributes}
+      style={{ touchAction: 'manipulation' }}
+      // select-none/touch-callout: 길게 누르기(250ms) 활성화 중 iOS 텍스트 선택
+      // 돋보기·콜아웃이 드래그와 겹쳐 뜨는 것을 막는다.
+      className={cn('select-none [-webkit-touch-callout:none]', isDragging && 'opacity-30')}
       {...listeners}
     >
       {children}
@@ -238,6 +208,7 @@ function DraggableCard({ card, children }: { card: BoardCard; children: ReactNod
 function ColumnView({
   column,
   count,
+  dropState,
   children,
   menuOpen,
   onToggleMenu,
@@ -246,6 +217,8 @@ function ColumnView({
 }: {
   column: BoardColumn;
   count: number;
+  /** 드래그 중 드롭 가능 여부 — invalid 컬럼은 dim, isOver 강조는 valid 만. */
+  dropState: 'idle' | 'valid' | 'invalid';
   children: ReactNode;
   menuOpen: boolean;
   onToggleMenu: () => void;
@@ -259,8 +232,10 @@ function ColumnView({
       ref={setNodeRef}
       data-column-title={column.title}
       className={cn(
-        'flex flex-col w-72 shrink-0 snap-start bg-[var(--md-sys-color-surface-container)] rounded-[var(--md-sys-shape-medium)] p-3 min-h-[400px] transition-colors',
+        'flex flex-col w-72 shrink-0 snap-start bg-[var(--md-sys-color-surface-container)] rounded-[var(--md-sys-shape-medium)] p-3 min-h-[400px] transition-[background-color,opacity]',
+        dropState === 'invalid' && 'opacity-40',
         isOver &&
+          dropState === 'valid' &&
           'bg-[var(--md-sys-color-surface-container-high)] outline outline-1 outline-dashed outline-[var(--md-sys-color-outline)]',
       )}
     >

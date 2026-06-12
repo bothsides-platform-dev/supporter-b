@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
+import { isSessionRevoked } from '@/lib/auth/session';
 import { issueCentrifugoConnectionToken } from '@/lib/server/realtime/token';
 
 export const runtime = 'nodejs';
@@ -24,6 +25,9 @@ export async function POST() {
   if (!session?.user?.id) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
+
+  // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
+  if (await isSessionRevoked(session)) return new NextResponse('Unauthorized', { status: 401 });
   const token = await issueCentrifugoConnectionToken(session.user.id);
   return NextResponse.json({ token });
 }

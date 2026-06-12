@@ -22,6 +22,8 @@ export type SendChatMessageInput = z.input<typeof Input>;
 export type SendChatMessageResult = ChatActionResult<{
   conversationId: string;
   messageId: string;
+  /** 서버 권위 타임스탬프(영속 행과 동일) — 낙관적 말풍선 승격 시 채택. */
+  createdAt: string;
 }>;
 
 /**
@@ -68,7 +70,8 @@ export async function sendChatMessageAction(
       body: data.body.trim(),
       authorWsId: ws.workspaceId,
       rfpId: data.rfpId ?? null,
-      createdAt: new Date().toISOString(),
+      // 영속 행과 동일한 서버 타임스탬프 — 라이브 수신자와 리로드 렌더가 일치.
+      createdAt: result.createdAt,
       attachments: savedAtts.map(({ chatMessageId: _cid, ...att }) => att),
     });
   }
