@@ -71,6 +71,19 @@ export class DrizzleRfpRequoteRequestRepository implements RfpRequoteRequestRepo
     return row ? rowToReq(row) : undefined;
   }
 
+  async findPendingByPgWs(pgWsId: string, tx?: Tx): Promise<RfpRequoteRequest[]> {
+    const rows = (await this.h(tx)
+      .select()
+      .from(rfpRequoteRequests)
+      .where(
+        and(
+          eq(rfpRequoteRequests.pgWsId, pgWsId),
+          eq(rfpRequoteRequests.status, 'pending'),
+        ),
+      )) as Row[];
+    return rows.map(rowToReq);
+  }
+
   async markResponded(id: string, at: Date, tx?: Tx): Promise<void> {
     await this.h(tx)
       .update(rfpRequoteRequests)

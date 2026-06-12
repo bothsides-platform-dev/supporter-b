@@ -50,6 +50,13 @@ export interface RfpRepo {
 }
 
 // ── Invitation ────────────────────────────────────────────────────────
+/** findByPgWorkspace 반환 행 — buyerName 은 RFP 발신 구매사 워크스페이스명 (카드/목록 표기용). */
+export type PgInvitationPair = {
+  invitation: RfpInvitation;
+  rfp: RFP;
+  buyerName: string;
+};
+
 export interface InvitationRepo {
   /** 초대 발송 — raw 토큰을 hash로 변환해 저장. raw 비저장. */
   save(inv: RfpInvitation, rawToken: string, tx?: Tx): Promise<void>;
@@ -70,10 +77,7 @@ export interface InvitationRepo {
   /** draft → pending: rawToken hash 갱신 + status='pending' + sentAt/expiresAt 갱신. */
   promoteDraft(invId: string, rawToken: string, now: Date, expiresAt: Date, tx?: Tx): Promise<void>;
   /** PG 워크스페이스에 발송된 활성 초대 + RFP pair — 인박스/칸반 공통 fetcher. */
-  findByPgWorkspace(
-    pgWsId: string,
-    tx?: Tx,
-  ): Promise<{ invitation: RfpInvitation; rfp: RFP }[]>;
+  findByPgWorkspace(pgWsId: string, tx?: Tx): Promise<PgInvitationPair[]>;
   /** 토큰 atomic claim — 만료/사용/무효 분기. 동일 raw 토큰 동시 진입 가드. */
   claimToken(rawToken: string, userId: string, tx?: Tx): Promise<TokenClaimResult>;
   /** 워크스페이스 멤버십 단위 접근권 — 초대된 PG ws의 모든 멤버 통과. */
@@ -95,6 +99,8 @@ export interface RfpRequoteRequestRepo {
   findByRfp(rfpId: string, tx?: Tx): Promise<RfpRequoteRequest[]>;
   /** (rfp, pg) 의 pending 요청 — 없으면 undefined. submit 라운드 게이트용. */
   findPendingByPair(rfpId: string, pgWsId: string, tx?: Tx): Promise<RfpRequoteRequest | undefined>;
+  /** PG 워크스페이스의 모든 pending 요청 — 인박스/칸반 '재요청' 배지 bulk 조회. */
+  findPendingByPgWs(pgWsId: string, tx?: Tx): Promise<RfpRequoteRequest[]>;
   /** pending → responded 원자 전이(`WHERE status='pending'`). */
   markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
 }

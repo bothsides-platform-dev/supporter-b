@@ -1,10 +1,10 @@
 // status-filter.ts — Sidebar URL param token → domain status mapping + filter.
 //
 // Sidebar tokens are user-facing labels; domain enums are the actual DB values.
-// RFP mapping:
-//   active   → rfp_status 'sent'   (sidebar calls in-flight RFPs "active")
-//   closed   → rfp_status 'closed'
-//   awarded  → rfp_status 'awarded'
+// RFP mapping (token → statuses it folds — 칸반 컬럼 모집단과 1:1):
+//   active   → ['sent']                 (sidebar calls in-flight RFPs "active")
+//   closed   → ['closed', 'cancelled']  (칸반 마감 컬럼이 둘을 폴드 — 표/딥링크도 동일 모집단)
+//   awarded  → ['awarded']
 //   undefined / '' / unknown → undefined (show all)
 //   (draft RFPs are hidden from the kanban; surfaced only in the unfiltered table)
 //
@@ -22,27 +22,27 @@ import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 
 // ── RFP ───────────────────────────────────────────────────────────────────
 
-const RFP_PARAM_MAP: Record<string, RfpStatus> = {
-  active: 'sent',
-  closed: 'closed',
-  awarded: 'awarded',
+const RFP_PARAM_MAP: Record<string, readonly RfpStatus[]> = {
+  active: ['sent'],
+  closed: ['closed', 'cancelled'],
+  awarded: ['awarded'],
 };
 
-/** Map a sidebar URL token to the domain RfpStatus, or undefined if no match. */
-export function mapRfpParam(param: string | undefined): RfpStatus | undefined {
+/** Map a sidebar URL token to the domain statuses it folds, or undefined if no match. */
+export function mapRfpParam(param: string | undefined): readonly RfpStatus[] | undefined {
   if (!param) return undefined;
   return RFP_PARAM_MAP[param];
 }
 
 /** Filter RFPs by sidebar URL token. Returns all if param is absent/unknown. */
 export function filterRfpsByParam(rfps: RFP[], param: string | undefined): RFP[] {
-  const domainStatus = mapRfpParam(param);
-  if (domainStatus === undefined) {
+  const statuses = mapRfpParam(param);
+  if (statuses === undefined) {
     // bare /rfp → all; unknown param → empty (no match)
     if (!param) return rfps;
     return [];
   }
-  return rfps.filter((r) => r.status === domainStatus);
+  return rfps.filter((r) => statuses.includes(r.status));
 }
 
 // ── Inbox ─────────────────────────────────────────────────────────────────

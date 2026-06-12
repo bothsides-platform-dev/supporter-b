@@ -8,6 +8,7 @@ import {
   getRfpRepo,
   getBidRepo,
   getInvitationRepo,
+  getRfpRequoteRequestRepo,
 } from '@/lib/server/repositories/factory';
 import {
   classifyBuyerRfp,
@@ -132,14 +133,20 @@ export async function loadBoard(args: {
   }
 
   // pipeline + pg
-  const [invRepo, bidRepo] = await Promise.all([getInvitationRepo(), getBidRepo()]);
-  const [pairs, bidList] = await Promise.all([
+  const [invRepo, bidRepo, requoteRepo] = await Promise.all([
+    getInvitationRepo(),
+    getBidRepo(),
+    getRfpRequoteRequestRepo(),
+  ]);
+  const [pairs, bidList, pendingRequotes] = await Promise.all([
     invRepo.findByPgWorkspace(workspaceId),
     bidRepo.findByPgWs(workspaceId),
+    requoteRepo.findPendingByPgWs(workspaceId),
   ]);
   const bidByRfp = new Map<string, Bid>();
   for (const b of bidList) bidByRfp.set(b.rfpId, b);
-  const cards: BoardCard[] = pairs.map(({ invitation, rfp }) => {
+  const pendingRequoteRfpIds = new Set(pendingRequotes.map((r) => r.rfpId));
+  const cards: BoardCard[] = pairs.map(({ invitation, rfp, buyerName }) => {
     const bid = bidByRfp.get(rfp.id);
     const stage = classifyPgInvitation({ invitation, bid, rfp });
     return {
@@ -150,7 +157,14 @@ export async function loadBoard(args: {
         lifecycleKey: stage,
         columns,
       }),
-      payload: toPgCard({ invitation, bid, rfp, stage }),
+      payload: toPgCard({
+        invitation,
+        bid,
+        rfp,
+        stage,
+        buyerName,
+        hasPendingRequote: pendingRequoteRfpIds.has(rfp.id),
+      }),
     };
   });
   return { columns, cards: sortCards(cards, columns, 'invitation') };

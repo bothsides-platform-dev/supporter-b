@@ -38,6 +38,15 @@ export function matchesGrade(grade: string | undefined, gradeParam: string | und
   return grade === gradeParam;
 }
 
+/**
+ * 보드 뷰는 status 칩을 숨기므로(컬럼이 곧 status) status 파라미터를 무력화한다.
+ * 토글 클릭 경로만이 아니라 직접 URL/쿠키 진입에서도 보이지 않는 필터가 남지 않도록
+ * 서버 단일 지점에서 강제한다.
+ */
+export function paramsForView(params: BoardFilterParams, view: BoardView): BoardFilterParams {
+  return view === 'board' ? { ...params, status: undefined } : params;
+}
+
 /** URL param > cookie > 'table'. */
 export function resolveBoardView(
   paramView: string | undefined,

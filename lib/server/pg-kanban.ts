@@ -4,7 +4,7 @@
 // 제출 전(bid 없음 / bid=draft)은 모두 신규(received) — 작성중 단계 제거.
 //
 // 이 파일은 client component 에서도 import 가능 — repo / DB import 없이 순수 도메인.
-// 데이터 로더는 ./pg-kanban-loader.ts 참조.
+// 데이터 로더는 ./board/loadBoard.ts 참조.
 import type { Bid } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
@@ -34,6 +34,10 @@ export type PgKanbanCard = {
   bizGradeLabel?: string;
   bidId?: string;
   submittedAt?: string;
+  /** RFP 발신 구매사 워크스페이스명 — 카드에서 발신처 식별용. */
+  buyerName?: string;
+  /** pending 재요청 존재 — 카드 '재요청' warning 칩 트리거 (표 InboxRow 와 동일 신호). */
+  hasPendingRequote: boolean;
 };
 
 // pure — 단위 테스트 가능. 검토중(reviewing) 제거 — 열람 여부와 무관하게 신규(received).
@@ -70,8 +74,10 @@ export function toPgCard(args: {
   bid?: Bid;
   rfp: RFP;
   stage: PgKanbanStage;
+  buyerName?: string;
+  hasPendingRequote?: boolean;
 }): PgKanbanCard {
-  const { invitation, bid, rfp, stage } = args;
+  const { invitation, bid, rfp, stage, buyerName, hasPendingRequote } = args;
   const grade = rfp.bizProfile?.grade;
   return {
     invitationId: invitation.id,
@@ -83,6 +89,8 @@ export function toPgCard(args: {
     bizGradeLabel: grade ? GRADE_LABEL[grade] : undefined,
     bidId: bid?.id,
     submittedAt: bid?.submittedAt,
+    buyerName,
+    hasPendingRequote: hasPendingRequote ?? false,
   };
 }
 

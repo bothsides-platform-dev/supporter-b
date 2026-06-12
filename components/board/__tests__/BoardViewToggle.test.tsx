@@ -29,14 +29,27 @@ describe('BoardViewToggle', () => {
     expect(screen.getByRole('tab', { name: '칸반' })).toHaveAttribute('aria-selected', 'false');
   });
 
-  it('on switch: pushes ?view=board preserving other params and writes the cookie', async () => {
+  it('보드 전환: status 는 컬럼과 중복이므로 지우고, 쿠키를 쓴다', async () => {
+    // 보드 뷰는 status 칩을 숨기므로 잔류 status 파라미터가 보이지 않는 필터로
+    // 남는다 — 전환 시 함께 제거한다.
     const user = userEvent.setup();
+    mockSearchParams.mockReturnValue(new URLSearchParams('status=active&deadline=d7'));
     render(<BoardViewToggle view="table" cookieName="rfpBoardView" />);
     await user.click(screen.getByRole('tab', { name: '칸반' }));
     expect(push).toHaveBeenCalledTimes(1);
     const url = push.mock.calls[0][0] as string;
     expect(url).toContain('view=board');
-    expect(url).toContain('status=active');
+    expect(url).not.toContain('status=');
+    expect(url).toContain('deadline=d7');
     expect(document.cookie).toContain('rfpBoardView=board');
+  });
+
+  it('표 전환: status 를 보존한다', async () => {
+    const user = userEvent.setup();
+    render(<BoardViewToggle view="board" cookieName="rfpBoardView" />);
+    await user.click(screen.getByRole('tab', { name: /표/ }));
+    const url = push.mock.calls[0][0] as string;
+    expect(url).toContain('view=table');
+    expect(url).toContain('status=active');
   });
 });

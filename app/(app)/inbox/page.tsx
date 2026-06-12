@@ -17,6 +17,7 @@ import { InboxIcon } from '@/components/icons';
 import { SplitView } from '@/components/ui/split-view';
 import {
   filterInboxRows,
+  paramsForView,
   resolveBoardView,
   type BoardView,
   type BoardFilterParams,
@@ -75,23 +76,17 @@ async function InboxListPageLoader({
     getBidRepo(),
     getRfpRequoteRequestRepo(),
   ]);
-  const [pairs, bidList] = await Promise.all([
+  const [pairs, bidList, pendingRequotes] = await Promise.all([
     invRepo.findByPgWorkspace(wsId),
     bidRepo.findByPgWs(wsId),
+    requoteRepo.findPendingByPgWs(wsId),
   ]);
   // bid 기반 stage 분류를 위해 RFP별 bid 매핑 (loadBoard PG 파이프라인과 동일 패턴).
   const bidByRfp = new Map<string, Bid>();
   for (const b of bidList) bidByRfp.set(b.rfpId, b);
 
-  // pending 재요청 여부 — rfpId(UUID) 기준 per-row 조회. N+1이지만 PG의 inbox 행 수가
-  // 수십 단위이므로 현재는 허용. 향후 bulk 메서드(findPendingByPgWs)로 최적화 가능.
-  const pendingRequoteByRfpId = new Map<string, boolean>();
-  await Promise.all(
-    pairs.map(async ({ rfp }) => {
-      const req = await requoteRepo.findPendingByPair(rfp.id, wsId);
-      if (req) pendingRequoteByRfpId.set(rfp.id, true);
-    }),
-  );
+  // pending 재요청 — 워크스페이스 단위 bulk 1쿼리 (loadBoard PG 파이프라인과 동일 소스).
+  const pendingRequoteRfpIds = new Set(pendingRequotes.map((r) => r.rfpId));
 
   const allRows: InboxRow[] = pairs.map(({ invitation, rfp }) => {
     const bid = bidByRfp.get(rfp.id);
@@ -108,10 +103,10 @@ async function InboxListPageLoader({
       gradeRaw: rfp.bizProfile?.grade,
       contractType: rfp.contractType ?? null,
       isSample: rfp.isSample ?? false,
-      hasPendingRequote: pendingRequoteByRfpId.get(rfp.id) ?? false,
+      hasPendingRequote: pendingRequoteRfpIds.has(rfp.id),
     };
   });
-  const rows = filterInboxRows(allRows, params, now);
+  const rows = filterInboxRows(allRows, paramsForView(params, view), now);
 
   const panel = peek ? (
     <Suspense fallback={<InboxPeekPanelSkeleton rfpCode={peek} />}>
@@ -136,7 +131,11 @@ async function InboxListPageLoader({
     <>
       <PageHeader title="받은 견적 요청" count={rows.length} />
       <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
-        <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
+        <BoardFilterBar
+          statusOptions={STATUS_OPTIONS}
+          gradeOptions={GRADE_OPTIONS}
+          hideStatus={view === 'board'}
+        />
         <BoardViewToggle view={view} cookieName="inboxBoardView" tableCount={rows.length} />
       </div>
       <SplitView list={listContent} panel={panel} />

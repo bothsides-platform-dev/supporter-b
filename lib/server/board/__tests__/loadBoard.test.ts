@@ -10,7 +10,7 @@ import {
 import { loadBoard } from '@/lib/server/board/loadBoard';
 import { defaultColumns } from '@/lib/server/columns/seed';
 import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
-import { bids, rfps, rfpInvitations, columns } from '@/lib/db/schema';
+import { bids, rfps, rfpInvitations, rfpRequoteRequests, columns } from '@/lib/db/schema';
 import {
   seedBizProfile,
   seedBuyerWorkspace,
@@ -91,6 +91,90 @@ describe('loadBoard — pipeline (buyer)', () => {
     const board = await loadBoard({ workspaceId: ws.id, workspaceType: 'buyer', kind: 'pipeline' });
     const card = board.cards.find((c) => c.cardId === rfpId);
     expect(card?.columnId).toBe(customId);
+  });
+});
+
+describe('loadBoard — pipeline (pg)', () => {
+  it('pg 카드 payload 에 구매사명과 pending 재요청 신호를 담는다', async () => {
+    const buyer = await seedUser(db, { email: 'b2@lb.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { name: '오롤리데이', bizProfileId: biz.id });
+    const pgWs = await seedPgWorkspace(db, 'PG사');
+    await db.insert(columns).values(defaultColumns(pgWs.id, 'pg'));
+
+    const rfpId = randomUUID();
+    await db.insert(rfps).values({
+      id: rfpId,
+      code: 'P-2605-0010',
+      buyerWsId: buyerWs.id,
+      title: '재요청 걸린 RFP',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: buyer.id,
+      sentAt: new Date(),
+    });
+    const invId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: invId,
+      rfpId,
+      pgWsId: pgWs.id,
+      tokenHash: hashToken(generateToken()),
+      sentAt: new Date(),
+      expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
+      status: 'accepted',
+    });
+    await db.insert(rfpRequoteRequests).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: pgWs.id,
+      round: 2,
+      message: '카드 수수료 개선 부탁드려요',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'pending',
+      createdByUserId: buyer.id,
+      createdAt: new Date(),
+    });
+
+    const board = await loadBoard({ workspaceId: pgWs.id, workspaceType: 'pg', kind: 'pipeline' });
+    const card = board.cards.find((c) => c.cardId === invId);
+    const payload = card?.payload as { buyerName?: string; hasPendingRequote?: boolean };
+    expect(payload.buyerName).toBe('오롤리데이');
+    expect(payload.hasPendingRequote).toBe(true);
+  });
+
+  it('재요청 없는 pg 카드는 hasPendingRequote=false', async () => {
+    const buyer = await seedUser(db, { email: 'b3@lb.com' });
+    const buyerWs = await seedBuyerWorkspace(db, { name: '구매사' });
+    const pgWs = await seedPgWorkspace(db, 'PG사2');
+    await db.insert(columns).values(defaultColumns(pgWs.id, 'pg'));
+
+    const rfpId = randomUUID();
+    await db.insert(rfps).values({
+      id: rfpId,
+      code: 'P-2605-0011',
+      buyerWsId: buyerWs.id,
+      title: '평범한 RFP',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: buyer.id,
+      sentAt: new Date(),
+    });
+    const invId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: invId,
+      rfpId,
+      pgWsId: pgWs.id,
+      tokenHash: hashToken(generateToken()),
+      sentAt: new Date(),
+      expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
+      status: 'accepted',
+    });
+
+    const board = await loadBoard({ workspaceId: pgWs.id, workspaceType: 'pg', kind: 'pipeline' });
+    const payload = board.cards.find((c) => c.cardId === invId)?.payload as {
+      hasPendingRequote?: boolean;
+    };
+    expect(payload.hasPendingRequote).toBe(false);
   });
 });
 
