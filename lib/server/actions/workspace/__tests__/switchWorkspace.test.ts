@@ -1,6 +1,7 @@
 // switchWorkspaceAction — validate membership, re-derive type+role from the
 // TARGET membership, persist lastActiveWorkspaceId, push the new active
 // workspace into the JWT via unstable_update, land on /home.
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
@@ -12,9 +13,9 @@ import {
   seedPgWorkspace,
   seedMembership,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { users } from '@/lib/db/schema';
+import { users, workspaces } from '@/lib/db/schema';
 
-const sessionRef: { value: { user: { id: string } } | null } = { value: null };
+const sessionRef: { value: { user: { id: string; email?: string } } | null } = { value: null };
 vi.mock('@/lib/auth/session', () => ({
   requireSession: () =>
     sessionRef.value
@@ -126,6 +127,65 @@ describe('switchWorkspaceAction', () => {
     await switchWorkspaceAction(other.id);
 
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  describe('master account (env allowlist)', () => {
+    const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
+    beforeEach(() => {
+      process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+    });
+    afterEach(() => {
+      if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = ORIGINAL;
+    });
+
+    it('마스터는 멤버십 없는 active 워크스페이스로도 전환할 수 있다 (role admin)', async () => {
+      const master = await seedUser(db, { email: 'help@supporter-b.com' });
+      const ws = await seedBuyerWorkspace(db); // 멤버십 행 없음
+      sessionRef.value = { user: { id: master.id, email: 'help@supporter-b.com' } };
+
+      const r = await switchWorkspaceAction(ws.id);
+
+      expect(r).toEqual({ ok: true, redirectTo: '/home' });
+      expect(unstableUpdate).toHaveBeenCalledWith({
+        user: { workspaceId: ws.id, workspaceType: 'buyer', role: 'admin' },
+      });
+      const [row] = await db.select().from(users).where(eq(users.id, master.id));
+      expect(row.lastActiveWorkspaceId).toBe(ws.id);
+      expect(revalidatePath).toHaveBeenCalledWith('/home');
+    });
+
+    it('allowlist가 아닌 이메일은 멤버십 없으면 NOT_MEMBER (마스터 우회 불가)', async () => {
+      const u = await seedUser(db, { email: 'buyer@example.com' });
+      const ws = await seedBuyerWorkspace(db);
+      sessionRef.value = { user: { id: u.id, email: 'buyer@example.com' } };
+
+      const r = await switchWorkspaceAction(ws.id);
+
+      expect(r).toEqual({ ok: false, error: 'NOT_MEMBER' });
+      expect(unstableUpdate).not.toHaveBeenCalled();
+    });
+
+    it('마스터는 pending 워크스페이스로 전환할 수 없다 → INVALID_INPUT', async () => {
+      const master = await seedUser(db, { email: 'help@supporter-b.com' });
+      const pendingId = randomUUID();
+      await db.insert(workspaces).values({ id: pendingId, type: 'buyer', name: '심사중', status: 'pending' });
+      sessionRef.value = { user: { id: master.id, email: 'help@supporter-b.com' } };
+
+      const r = await switchWorkspaceAction(pendingId);
+
+      expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+      expect(unstableUpdate).not.toHaveBeenCalled();
+    });
+
+    it('마스터는 존재하지 않는 워크스페이스로 전환할 수 없다 → INVALID_INPUT', async () => {
+      const master = await seedUser(db, { email: 'help@supporter-b.com' });
+      sessionRef.value = { user: { id: master.id, email: 'help@supporter-b.com' } };
+
+      const r = await switchWorkspaceAction(randomUUID());
+
+      expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    });
   });
 
   it('cross-host: switching to a pg workspace from the buyer host returns an absolute partner URL', async () => {

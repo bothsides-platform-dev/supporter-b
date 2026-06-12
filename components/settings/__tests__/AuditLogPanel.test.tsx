@@ -21,6 +21,7 @@ function log(over: Partial<AuditLogRecord> = {}): AuditLogRecord {
     metadata: null,
     createdAt: '2026-06-12T03:00:00.000Z',
     actorName: '김선정',
+    viaMaster: false,
     ...over,
   };
 }
@@ -68,6 +69,21 @@ describe('AuditLogPanel', () => {
       />,
     );
     expect(screen.getByText('future.event')).toBeInTheDocument();
+  });
+
+  it('viaMaster 행위는 운영자 배지를 보여주고, 일반 행위는 보여주지 않는다', () => {
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={[
+          log({ id: 'm', actorName: '운영팀', viaMaster: true }),
+          log({ id: 'n', actorName: '김선정', viaMaster: false }),
+        ]}
+        initialNextCursor={null}
+      />,
+    );
+    // 운영자 배지는 master 행에만 1개.
+    expect(screen.getAllByText('운영자')).toHaveLength(1);
   });
 
   it('로그가 없으면 빈 상태 문구를 보여준다', () => {

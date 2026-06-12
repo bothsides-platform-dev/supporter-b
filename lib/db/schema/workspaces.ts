@@ -27,5 +27,9 @@ export const workspaces = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
-  (t) => [index('workspaces_biz_profile_idx').on(t.bizProfileId)],
+  (t) => [
+    index('workspaces_biz_profile_idx').on(t.bizProfileId),
+    // 마스터 스위처의 listAllWorkspacesForMaster (WHERE status='active') 가속.
+    index('workspaces_status_idx').on(t.status),
+  ],
 );

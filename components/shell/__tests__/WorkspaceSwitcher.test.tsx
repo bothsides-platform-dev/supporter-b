@@ -176,3 +176,38 @@ describe('WorkspaceSwitcher', () => {
     expect(screen.queryByText('초대 링크로 합류')).not.toBeInTheDocument();
   });
 });
+
+describe('WorkspaceSwitcher — master mode (isMaster)', () => {
+  const many = [
+    { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, unreadCount: 0, hasLogo: false },
+    { id: 'ws2', name: 'PG사B', type: 'pg' as const, status: 'active' as const, role: 'admin' as const, unreadCount: 0, hasLogo: false },
+    { id: 'ws3', name: '구매사C', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, unreadCount: 0, hasLogo: false },
+  ];
+  const masterCurrent = { id: 'ws1', name: '구매사A', type: 'buyer' as const, hasLogo: false };
+
+  it('isMaster=false면 드롭다운을 열어도 검색 인풋이 없다', async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceSwitcher current={masterCurrent} workspaces={many} isMaster={false} />);
+    await user.click(screen.getByRole('button'));
+    await screen.findByText('내 워크스페이스');
+    expect(screen.queryByPlaceholderText('워크스페이스 검색')).not.toBeInTheDocument();
+  });
+
+  it('isMaster=true면 "모든 워크스페이스" 헤더 + 검색 인풋을 렌더한다', async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceSwitcher current={masterCurrent} workspaces={many} isMaster={true} />);
+    await user.click(screen.getByRole('button'));
+    expect(await screen.findByText('모든 워크스페이스')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('워크스페이스 검색')).toBeInTheDocument();
+  });
+
+  it('검색어로 이름을 필터링한다 (대소문자 무관)', async () => {
+    const user = userEvent.setup();
+    render(<WorkspaceSwitcher current={masterCurrent} workspaces={many} isMaster={true} />);
+    await user.click(screen.getByRole('button'));
+    const input = await screen.findByPlaceholderText('워크스페이스 검색');
+    await user.type(input, 'pg');
+    expect(screen.getByText('PG사B')).toBeInTheDocument();
+    expect(screen.queryByText('구매사C')).not.toBeInTheDocument();
+  });
+});

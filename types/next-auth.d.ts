@@ -16,6 +16,8 @@ declare module 'next-auth' {
       role?: MemberRole;
       /** Mirror of the JWT `sv` claim — server-side revocation comparand. */
       sessionVersion?: number;
+      /** Master/operator account — derived from the MASTER_ACCOUNT_EMAILS allowlist. */
+      isMaster?: boolean;
     };
   }
 
@@ -35,5 +37,7 @@ declare module 'next-auth/jwt' {
     role?: MemberRole;
     /** users.session_version at login — see lib/auth/session-version.ts. */
     sv?: number;
+    /** Master/operator account — re-derived from MASTER_ACCOUNT_EMAILS every token pass. */
+    isMaster?: boolean;
   }
 }

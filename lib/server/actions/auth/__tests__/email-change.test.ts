@@ -11,7 +11,7 @@ import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo }
 // requireSession() is mocked per-test so the request action can be exercised
 // without a real Auth.js JWT cookie. The mock is attached before importing
 // the action modules so the SUT picks up the stub at module load time.
-const sessionRef: { value: { user: { id: string } } | null } = {
+const sessionRef: { value: { user: { id: string; isMaster?: boolean } } | null } = {
   value: null,
 };
 vi.mock('@/lib/auth/session', () => ({
@@ -68,6 +68,17 @@ describe('emailChangeRequestAction', () => {
     sessionRef.value = null;
     const r = await emailChangeRequestAction({ newEmail: 'new@example.com' });
     expect(r.ok).toBe(false);
+  });
+
+  it('마스터 계정은 이메일 변경을 요청할 수 없다 → FORBIDDEN', async () => {
+    const userId = await seedUser('master@example.com');
+    sessionRef.value = { user: { id: userId, isMaster: true } };
+
+    const r = await emailChangeRequestAction({ newEmail: 'new@example.com' });
+
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    const out = await db.select().from(outboxEntries);
+    expect(out).toHaveLength(0);
   });
 
   it('issues a token + outbox row to the new address', async () => {
