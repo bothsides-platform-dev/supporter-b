@@ -222,6 +222,20 @@ describe('AuthService.deleteAccount', () => {
       .where(eq(workspaceMembers.userId, userId));
     expect(memberships).toHaveLength(0);
   });
+
+  it('bumps sessionVersion so outstanding JWTs are revoked', async () => {
+    const svc = await buildService();
+    const pwd = 'Password123!';
+    const userId = await seedUserWithPassword('user@example.com', pwd);
+
+    await svc.deleteAccount({ userId, plainPassword: pwd });
+
+    const [u] = await db
+      .select({ sv: users.sessionVersion })
+      .from(users)
+      .where(eq(users.id, userId));
+    expect(u.sv).toBe(2);
+  });
 });
 
 describe('AuthService.requestPasswordReset', () => {
@@ -275,6 +289,20 @@ describe('AuthService.resetPassword', () => {
       .where(eq(users.id, user.id));
     expect(await verifyPassword('NewPass123!', u.hash)).toBe(true);
   });
+
+  it('bumps sessionVersion so sessions issued before the reset are revoked', async () => {
+    const svc = await buildService();
+    const user = await seedUser(db, { email: 'reset@example.com' });
+    const rawToken = await seedVerificationToken({ email: 'reset@example.com', purpose: 'password_reset' });
+
+    await svc.resetPassword({ rawToken, plainPassword: 'NewPass123!' });
+
+    const [u] = await db
+      .select({ sv: users.sessionVersion })
+      .from(users)
+      .where(eq(users.id, user.id));
+    expect(u.sv).toBe(2);
+  });
 });
 
 describe('AuthService.requestEmailChange', () => {
@@ -315,6 +343,24 @@ describe('AuthService.confirmEmailChange', () => {
 
     const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, user.id));
     expect(u.email).toBe('new@example.com');
+  });
+
+  it('bumps sessionVersion so sessions issued before the email change are revoked', async () => {
+    const svc = await buildService();
+    const user = await seedUser(db, { email: 'old@example.com' });
+    const rawToken = await seedVerificationToken({
+      email: 'new@example.com',
+      purpose: 'email_change',
+      meta: { userId: user.id, newEmail: 'new@example.com' },
+    });
+
+    await svc.confirmEmailChange({ rawToken });
+
+    const [u] = await db
+      .select({ sv: users.sessionVersion })
+      .from(users)
+      .where(eq(users.id, user.id));
+    expect(u.sv).toBe(2);
   });
 
   it('returns EMAIL_TAKEN if the new email is already in use', async () => {

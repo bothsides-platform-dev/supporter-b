@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { phoneOtps, users, workspaceInvitations, workspaceMembers, workspaces } from '@/lib/db/schema';
@@ -321,7 +321,12 @@ export class AuthService {
       await tx.delete(workspaceMembers).where(eq(workspaceMembers.userId, input.userId));
       await tx
         .update(users)
-        .set({ deletedAt: new Date(), lastActiveWorkspaceId: null })
+        .set({
+          deletedAt: new Date(),
+          lastActiveWorkspaceId: null,
+          // Revoke every outstanding JWT for the deleted account.
+          sessionVersion: sql`${users.sessionVersion} + 1`,
+        })
         .where(eq(users.id, input.userId));
     });
 
@@ -380,7 +385,12 @@ export class AuthService {
     if (consumed.purpose !== 'password_reset') return { ok: false, error: 'WRONG_PURPOSE' };
 
     const passwordHash = await hashPassword(input.plainPassword);
-    await this._db.update(users).set({ passwordHash }).where(eq(users.email, consumed.email));
+    await this._db
+      .update(users)
+      // sessionVersion bump revokes sessions issued before the reset — the
+      // whole point of resetting a (possibly compromised) password.
+      .set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1` })
+      .where(eq(users.email, consumed.email));
 
     return { ok: true, email: consumed.email };
   }
@@ -426,7 +436,11 @@ export class AuthService {
     if (!userId || !newEmail) return { ok: false, error: 'TOKEN_META_CORRUPT' };
 
     try {
-      await this._db.update(users).set({ email: newEmail }).where(eq(users.id, userId));
+      await this._db
+        .update(users)
+        // Email is the login identifier — revoke sessions minted under the old one.
+        .set({ email: newEmail, sessionVersion: sql`${users.sessionVersion} + 1` })
+        .where(eq(users.id, userId));
     } catch (err) {
       if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
       throw err;

@@ -10,6 +10,8 @@
  */
 import type { Session } from 'next-auth';
 import { auth } from '@/auth';
+import { isSessionVersionStale } from '@/lib/auth/session-version';
+import { getDbSessionVersion } from '@/lib/auth/session-version-db';
 
 export type AuthedSession = Session & {
   user: NonNullable<Session['user']> & { id: string };
@@ -34,6 +36,13 @@ export type PgSession = AuthedSession & {
 export async function requireSession(): Promise<AuthedSession> {
   const session = await auth();
   if (!session?.user?.id) throw new Error('UNAUTHENTICATED');
+  // Server-side revocation: a JWT whose sv claim trails users.session_version
+  // (bumped on password reset / email change / deletion) is dead. The DB read
+  // is a PK lookup memoized per request (React cache) — see session-version-db.
+  const dbVersion = await getDbSessionVersion(session.user.id);
+  if (isSessionVersionStale(session.user.sessionVersion, dbVersion)) {
+    throw new Error('UNAUTHENTICATED');
+  }
   return session as AuthedSession;
 }
 

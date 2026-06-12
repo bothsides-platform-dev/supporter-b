@@ -14,6 +14,8 @@ export interface AuthorizedUser {
   id: string;
   email: string;
   name: string;
+  /** Stamped into the JWT as `sv` — server-side revocation comparand. */
+  sessionVersion: number;
   workspaceId?: string;
   workspaceType?: 'buyer' | 'pg';
   role?: 'admin' | 'member';
@@ -70,6 +72,7 @@ export async function authorizeCredentials(
     id: user.id,
     email: user.email,
     name: user.name,
+    sessionVersion: user.sessionVersion ?? 1,
     workspaceId: member?.workspaceId,
     workspaceType: member?.workspaceType,
     role: member?.role,

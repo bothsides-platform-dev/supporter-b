@@ -95,4 +95,44 @@ describe('resolveShellAccess — (app) shell auth guard contract', () => {
       resolveShellAccess({ user: completeUser }, [ws({ status: 'suspended' })]),
     ).toEqual({ kind: 'redirect', to: '/suspended' });
   });
+
+  // Server-side revocation (C3): a JWT whose sv claim trails users.session_version
+  // (bumped on password reset / email change / deletion) is dead. Same loop-safety
+  // contract as the other authenticated-but-invalid branches: /logout, never /login.
+  describe('sessionVersion revocation', () => {
+    it('토큰 sv가 DB보다 낮으면(비번 변경 후 옛 토큰) → /logout', () => {
+      expect(
+        resolveShellAccess({ user: completeUser }, [ws()], {
+          token: 1,
+          db: 2,
+        }),
+      ).toEqual({ kind: 'redirect', to: INCOMPLETE_SESSION_REDIRECT });
+    });
+
+    it('토큰 sv와 DB가 일치하면 정상 렌더', () => {
+      const a = ws();
+      expect(
+        resolveShellAccess({ user: completeUser }, [a], { token: 2, db: 2 }),
+      ).toEqual({ kind: 'render', active: a });
+    });
+
+    it('sv claim 없는 레거시 토큰 + DB 기본값 1 → 정상 렌더 (배포 시 강제 로그아웃 없음)', () => {
+      const a = ws();
+      expect(
+        resolveShellAccess({ user: completeUser }, [a], {
+          token: undefined,
+          db: 1,
+        }),
+      ).toEqual({ kind: 'render', active: a });
+    });
+
+    it('DB에 사용자 행이 없으면(null) → /logout', () => {
+      expect(
+        resolveShellAccess({ user: completeUser }, [ws()], {
+          token: 1,
+          db: null,
+        }),
+      ).toEqual({ kind: 'redirect', to: INCOMPLETE_SESSION_REDIRECT });
+    });
+  });
 });
