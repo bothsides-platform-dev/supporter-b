@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.9.0] - 2026-06-13
+
+### Added
+
+- **마스터/운영자 계정 (Google OAuth 전용)**: 운영 담당자가 모든 active 워크스페이스에 접속. 숨겨진 `/login/ops` 주소에서 Google 계정으로만 로그인하며, `MASTER_ACCOUNT_EMAILS` 환경변수 allowlist(쉼표로 여러 운영자)에 등록된 Google 계정만 허용(default-deny). 최초 로그인 시 계정이 자동 생성되어 시드 스크립트가 필요 없음. 로그인 후 사이드바 스위처에서 이름 검색으로 워크스페이스 전환.
+- **운영자 행위 감사 표시**: 마스터가 워크스페이스에서 수행한 변경은 해당 워크스페이스 활동 기록에 '운영자' 배지로 표시됨.
+
+### Changed
+
+- **보안**: 마스터 계정은 비밀번호 로그인이 차단되고(allowlist 이메일은 비밀번호 경로 거부), 워크스페이스 생성·이메일 변경·계정 삭제·비밀번호 재설정이 모두 차단됨. `isMaster` 판정은 매 요청마다 서버 전용 env에서 재유도되어 토큰 조작으로 승격할 수 없음.
+
 ## [0.2.8.0] - 2026-06-13
 
 ### Fixed

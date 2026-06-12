@@ -31,6 +31,7 @@ export type SidebarProps = {
   workspaceType: 'buyer' | 'pg';
   workspaces: WorkspaceMembershipSummary[];
   current: { id: string; name: string; type: WorkspaceType; hasLogo: boolean };
+  isMaster?: boolean;
 };
 
 function SidebarNav({
@@ -81,6 +82,7 @@ function SidebarBody({
   workspaceType,
   workspaces,
   current,
+  isMaster,
   onNavigate,
 }: SidebarProps & { onNavigate?: () => void }) {
   return (
@@ -92,7 +94,7 @@ function SidebarBody({
         </div>
         <div className="border-b border-[var(--md-sys-color-outline-variant)] group-data-[collapsible=icon]:hidden mb-1" />
         <div className="min-w-0">
-          <WorkspaceSwitcher current={current} workspaces={workspaces} />
+          <WorkspaceSwitcher current={current} workspaces={workspaces} isMaster={isMaster} />
         </div>
       </SidebarHeader>
 

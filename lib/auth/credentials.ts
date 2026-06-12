@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { users } from '@/lib/db/schema';
 import { verifyPassword } from '@/lib/auth/password';
 import { resolveInitialMembership } from '@/lib/auth/active-workspace';
+import { isMasterEmail } from '@/lib/auth/master-allowlist';
 
 // A real cost-12 bcrypt hash of a throwaway string. When the email is unknown
 // we still run verifyPassword against this so an absent account costs roughly
@@ -58,6 +59,9 @@ export async function authorizeCredentials(
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return null;
   if (user.deletedAt) return null; // 탈퇴 계정 로그인 차단
+  // 마스터/운영자 계정은 비밀번호 로그인 불가 — Google OAuth(/login/ops)로만 진입.
+  // (compare 이후에 체크해 상수시간 보존. 마스터 이메일로 가입해 비번 로그인하는 우회도 차단.)
+  if (isMasterEmail(user.email)) return null;
 
   // Land in the remembered active workspace if still a member, else the
   // earliest-joined one. A user with no membership gets undefined fields and

@@ -27,7 +27,7 @@ const Input = z
 export type CreateWorkspaceActionInput = z.input<typeof Input>;
 export type CreateWorkspaceResult =
   | { ok: true; workspaceId: string }
-  | { ok: false; error: 'UNAUTHENTICATED' | 'INVALID_INPUT' };
+  | { ok: false; error: 'UNAUTHENTICATED' | 'INVALID_INPUT' | 'FORBIDDEN' };
 
 /**
  * Create a new workspace for the logged-in user (in-app, from the switcher).
@@ -39,6 +39,8 @@ export async function createWorkspaceAction(
 ): Promise<CreateWorkspaceResult> {
   const session = await requireSession().catch(() => null);
   if (!session?.user?.id) return { ok: false, error: 'UNAUTHENTICATED' };
+  // 마스터/운영자 계정은 워크스페이스를 생성하지 않는다 — workspace_members 오염 방지.
+  if (session.user.isMaster) return { ok: false, error: 'FORBIDDEN' };
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };

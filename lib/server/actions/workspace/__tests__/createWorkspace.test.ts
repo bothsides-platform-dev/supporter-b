@@ -19,7 +19,7 @@ import {
   rfpInvitations,
 } from '@/lib/db/schema';
 
-const sessionRef: { value: { user: { id: string } } | null } = { value: null };
+const sessionRef: { value: { user: { id: string; isMaster?: boolean } } | null } = { value: null };
 vi.mock('@/lib/auth/session', () => ({
   requireSession: () =>
     sessionRef.value
@@ -249,5 +249,19 @@ describe('createWorkspaceAction', () => {
     sessionRef.value = { user: { id: u.id } };
     const r = await createWorkspaceAction({ type: 'pg', name: '' });
     expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+  });
+
+  it('마스터 계정은 워크스페이스를 생성할 수 없다 → FORBIDDEN (멤버십 오염 방지)', async () => {
+    const u = await seedUser(db);
+    sessionRef.value = { user: { id: u.id, isMaster: true } };
+
+    const r = await createWorkspaceAction({ type: 'pg', name: 'MasterWS' });
+
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    const members = await db
+      .select()
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.userId, u.id));
+    expect(members).toHaveLength(0);
   });
 });

@@ -31,6 +31,7 @@
 ```
 Public
 ├─ /login
+├─ /login/ops                    (숨김 — 운영자 Google 로그인. NEXT_PUBLIC_MASTER_OAUTH_ENABLED off 시 404)
 ├─ /signup                       (Rs1 — 가입 유형 선택)
 ├─ /signup/buyer                 (Bs1 — 구매사 이메일)
 ├─ /signup/buyer/verify          (Bs2)
@@ -207,6 +208,7 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 |---|---|---|---|
 | — | `/` (비인증) | redirect | → `/login?next=...` |
 | — | `/login` | 로그인 | 이메일 + 비밀번호 |
+| — | `/login/ops` | 운영자 로그인(숨김) | Google OAuth 전용. MASTER_ACCOUNT_EMAILS allowlist default-deny. 킬스위치 off 시 404 |
 | — | `/auth/verify?token=...` | 인증 처리(스플래시) | 토큰 검증 → workspaceType 분기 후 각 profile로 |
 | — | `/password/forgot` | 비밀번호 찾기 | 이메일 → 재설정 링크 |
 | — | `/password/reset?token=...` | 비밀번호 재설정 | 새 비밀번호 → 자동 로그인 |

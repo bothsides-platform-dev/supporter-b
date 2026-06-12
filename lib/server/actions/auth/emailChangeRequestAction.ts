@@ -15,6 +15,8 @@ export async function emailChangeRequestAction(
 ): Promise<EmailChangeRequestResult> {
   const session = await requireSession().catch(() => null);
   if (!session) return { ok: false, error: 'UNAUTHENTICATED' };
+  // 마스터/운영자 계정의 이메일은 MASTER_ACCOUNT_EMAILS env로만 관리 — 셀프 변경 금지.
+  if (session.user.isMaster) return { ok: false, error: 'FORBIDDEN' };
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };

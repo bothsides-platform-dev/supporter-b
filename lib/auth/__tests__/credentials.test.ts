@@ -76,6 +76,25 @@ describe('authorizeCredentials', () => {
     expect(r).toBeNull();
   });
 
+  it('마스터/운영자 이메일은 비밀번호가 맞아도 로그인 불가 (Google 강제) — 단, compare는 수행', async () => {
+    const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+    try {
+      await seedUser('help@supporter-b.com');
+      verifyPasswordMock.mockResolvedValue(true); // 올바른 비밀번호여도
+      const r = await authorizeCredentials(db, {
+        email: 'help@supporter-b.com',
+        password: 'correct',
+      });
+      expect(r).toBeNull();
+      // 타이밍 보존: 거부 전에 compare가 한 번은 돌아야 한다 (열거 방지 계약)
+      expect(verifyPasswordMock).toHaveBeenCalledTimes(1);
+    } finally {
+      if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = ORIGINAL;
+    }
+  });
+
   it('returns null without a compare when fields are missing', async () => {
     const r = await authorizeCredentials(db, { email: '', password: '' });
     expect(r).toBeNull();

@@ -52,6 +52,27 @@ describe('DrizzleAuditLogRepository', () => {
     expect(rows[0].createdAt).toBeTruthy();
   });
 
+  it('actor 이메일이 MASTER_ACCOUNT_EMAILS면 viaMaster=true, 아니면 false (운영자 행위 식별)', async () => {
+    const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'ops@supporter-b.com';
+    try {
+      const master = await seedUser(db, { email: 'ops@supporter-b.com', name: '운영팀' });
+      await repo.insert({ actorUserId: master.id, actorWorkspaceId: wsId, action: 'rfp.award' });
+      await repo.insert({ actorUserId: actorId, actorWorkspaceId: wsId, action: 'rfp.cancel' });
+
+      const rows = await repo.listForWorkspace(wsId, { limit: 10 });
+      const masterRow = rows.find((r) => r.actorUserId === master.id)!;
+      const normalRow = rows.find((r) => r.actorUserId === actorId)!;
+      expect(masterRow.viaMaster).toBe(true);
+      expect(normalRow.viaMaster).toBe(false);
+      // 행위자 이메일은 클라이언트로 새지 않는다 (boolean만 노출).
+      expect((masterRow as Record<string, unknown>).actorEmail).toBeUndefined();
+    } finally {
+      if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = ORIGINAL;
+    }
+  });
+
   it('다른 워크스페이스의 로그는 보이지 않는다', async () => {
     const otherWs = await seedBuyerWorkspace(db);
     await repo.insert({

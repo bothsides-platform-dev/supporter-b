@@ -143,6 +143,11 @@ export interface WorkspaceRepo {
     userId: string,
     tx?: Tx,
   ): Promise<WorkspaceMembershipSummary[]>;
+  /**
+   * 마스터/운영자 스위처용 — 모든 active 워크스페이스를 synthetic admin 멤버십
+   * (role:'admin', unreadCount:0)으로 반환. 최대 500개. 멤버십 무관.
+   */
+  listAllWorkspacesForMaster(tx?: Tx): Promise<WorkspaceMembershipSummary[]>;
   /** 유저가 해당 워크스페이스의 멤버인지 여부 (boolean). 권한 게이트 단일 소스. */
   isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
   /** 해당 워크스페이스 멤버 user id 배열 — 알림 fanout + Centrifugo subscribe ACL용. 순서 미보장. */
@@ -657,6 +662,13 @@ export type AuditLogRecord = {
   /** ISO string. */
   createdAt: string;
   actorName: string | null;
+  /**
+   * True when the actor is currently a master/operator (email on the
+   * MASTER_ACCOUNT_EMAILS allowlist). Derived at read time so master actions in
+   * any workspace are identifiable; reflects the current allowlist, not the
+   * write-time state. The actor's email itself is never exposed to the client.
+   */
+  viaMaster: boolean;
 };
 
 export interface AuditLogRepo {
