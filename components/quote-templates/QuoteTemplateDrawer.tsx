@@ -133,8 +133,10 @@ export function QuoteTemplateDrawer({
   // Reset form when drawer opens or template changes
   useEffect(() => {
     if (open) {
+      /* eslint-disable react-hooks/set-state-in-effect -- 드로어 열림/템플릿 변경 시 폼을 1회 리셋하는 의도된 동기화 */
       setEditor(template ? editorFromTemplate(template) : blankEditor());
       setError(null);
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [open, template]);
 

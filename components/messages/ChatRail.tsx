@@ -289,6 +289,7 @@ function TeamThreadPane({ rfpId }: { rfpId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- rfpId/재시도 변경 시 이전 스레드를 즉시 비워 스켈레톤을 보여주는 의도된 리셋
     setResult(null);
     getTeamThreadPromise(rfpId).then((r) => {
       if (!cancelled) setResult(r);
