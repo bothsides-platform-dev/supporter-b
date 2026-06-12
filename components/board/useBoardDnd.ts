@@ -123,15 +123,10 @@ export function useBoardDnd({
     setActiveCard(null);
     const { active, over } = e;
     if (!over) return;
+    // over 는 항상 droppable(컬럼) — 카드는 draggable 로만 등록되므로 card:* 가 올 수 없다.
     const overId = String(over.id);
-    let toColumnId: string | undefined;
-    if (overId.startsWith('column:')) {
-      toColumnId = overId.slice('column:'.length);
-    } else if (overId.startsWith('card:')) {
-      const overCard = cards.find((c) => `card:${c.cardId}` === overId);
-      toColumnId = overCard ? columnOf(overCard) : undefined;
-    }
-    if (!toColumnId) return;
+    if (!overId.startsWith('column:')) return;
+    const toColumnId = overId.slice('column:'.length);
 
     const cardId = String(active.id).slice('card:'.length);
     const card = cards.find((c) => c.cardId === cardId);

@@ -107,6 +107,16 @@ describe('PipelineCard — PG 카드 정보 보강', () => {
     );
     expect(screen.queryByText('재요청')).not.toBeInTheDocument();
   });
+
+  it('종결 단계(won/lost) 카드는 pending 재요청이 남아 있어도 칩을 숨긴다', () => {
+    render(
+      <PipelineCard
+        card={makePgCard({ stage: 'won', hasPendingRequote: true })}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('재요청')).not.toBeInTheDocument();
+  });
 });
 
 describe('PipelineCard — 구매사 카드 정보 보강', () => {

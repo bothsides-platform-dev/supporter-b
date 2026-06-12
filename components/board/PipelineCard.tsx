@@ -87,7 +87,8 @@ function PgBody({ card }: { card: PgKanbanCard }) {
   return (
     <div className="space-y-2">
       <CardHead code={card.rfpId} deadline={card.deadline} hideDday={isResult} />
-      {card.hasPendingRequote && <Chip label="재요청" color="warning" />}
+      {/* 재요청은 재제출로만 resolve — 종결(won/lost) 후엔 응답 불가라 칩을 숨긴다. */}
+      {card.hasPendingRequote && !isResult && <Chip label="재요청" color="warning" />}
       {showRecentBadge && <Chip label="최근 조회" color="surface" />}
       {card.buyerName && (
         <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">

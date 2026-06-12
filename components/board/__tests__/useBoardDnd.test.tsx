@@ -151,27 +151,6 @@ describe('useBoardDnd', () => {
     });
   });
 
-  it('카드 위에 드롭하면 그 카드의 컬럼으로 배치된다', async () => {
-    const other: BoardCard = {
-      cardType: 'rfp',
-      cardId: 'r2',
-      columnId: 'c-hold',
-      payload: { rfpId: 'P-2605-0002', title: '보류 RFP', stage: 'active' },
-    };
-    const { result } = setup([rfpCard, other]);
-    await act(async () => {
-      result.current.handleDragEnd({
-        active: { id: 'card:r1' },
-        over: { id: 'card:r2' },
-      } as never);
-    });
-    expect(moveCard).toHaveBeenCalledWith({
-      cardType: 'rfp',
-      cardId: 'r1',
-      toColumnId: 'c-hold',
-    });
-  });
-
   it('moveCardAction 실패 시 에러 토스트 + refresh 는 그대로 호출', async () => {
     moveCard.mockResolvedValueOnce({ ok: false, error: 'NOT_A_DROP_TARGET' } as never);
     const { result } = setup();

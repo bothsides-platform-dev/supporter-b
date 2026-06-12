@@ -104,7 +104,10 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                         color={row.contractType === 'new' ? 'primary' : 'surface'}
                       />
                     )}
-                    {row.hasPendingRequote && <Chip label="재요청" color="warning" />}
+                    {/* 재요청은 재제출로만 resolve — 종결(won/lost) 후엔 응답 불가라 숨김. */}
+                    {row.hasPendingRequote && row.stage !== 'won' && row.stage !== 'lost' && (
+                      <Chip label="재요청" color="warning" />
+                    )}
                     {row.rfpTitle}
                   </span>
                 </td>
