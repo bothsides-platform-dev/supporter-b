@@ -13,9 +13,17 @@ const sessionRef: { value: unknown | null } = { value: null };
 vi.mock('@/auth', () => ({
   auth: () => Promise.resolve(sessionRef.value),
 }));
+// 폐기 세션(sv stale) 차단용 — requireSession 미사용 라우트도 동일 기준 적용.
+const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/auth/session-version-db', () => ({
+  getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
+}));
+
 
 beforeEach(() => {
   sessionRef.value = null;
+  getDbSessionVersionMock.mockReset();
+  getDbSessionVersionMock.mockResolvedValue(1);
   vi.stubEnv('CENTRIFUGO_TOKEN_HMAC_SECRET', SECRET);
 });
 
@@ -45,5 +53,14 @@ describe('POST /api/centrifugo/connection-token', () => {
 
     const { payload } = await jwtVerify(body.token, encode(SECRET));
     expect(payload.sub).toBe('user-99');
+  });
+});
+
+describe('connection-token — 폐기 세션', () => {
+  it('sv 가 stale 한(폐기된) 세션은 401', async () => {
+    sessionRef.value = { user: { id: 'user-99', email: 'u@x.com', sessionVersion: 1 } };
+    getDbSessionVersionMock.mockResolvedValue(2);
+    const r = await callPost();
+    expect(r.status).toBe(401);
   });
 });

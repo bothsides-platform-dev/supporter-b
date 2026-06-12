@@ -16,7 +16,7 @@ vi.mock('@/lib/auth/session-version-db', () => ({
   getDbSessionVersion: (userId: string) => getDbSessionVersionMock(userId),
 }));
 
-import { requireSession } from '../session';
+import { requireSession, isSessionRevoked } from '../session';
 
 beforeEach(() => {
   authMock.mockReset();
@@ -58,5 +58,32 @@ describe('requireSession — sessionVersion revocation', () => {
     });
     getDbSessionVersionMock.mockResolvedValue(null);
     await expect(requireSession()).rejects.toThrow('UNAUTHENTICATED');
+  });
+});
+
+describe('isSessionRevoked — API 라우트용 폐기 판정', () => {
+  it('세션 없음 → false (미인증은 라우트가 이미 401 처리)', async () => {
+    await expect(isSessionRevoked(null)).resolves.toBe(false);
+  });
+
+  it('토큰 sv가 DB보다 낮으면 true', async () => {
+    getDbSessionVersionMock.mockResolvedValue(2);
+    await expect(
+      isSessionRevoked({ user: { id: 'u-1', email: 'a@b.c', sessionVersion: 1 } } as never),
+    ).resolves.toBe(true);
+  });
+
+  it('토큰 sv와 DB가 일치하면 false', async () => {
+    getDbSessionVersionMock.mockResolvedValue(2);
+    await expect(
+      isSessionRevoked({ user: { id: 'u-1', email: 'a@b.c', sessionVersion: 2 } } as never),
+    ).resolves.toBe(false);
+  });
+
+  it('레거시 토큰(sv 부재) + DB 기본값 1 → false', async () => {
+    getDbSessionVersionMock.mockResolvedValue(1);
+    await expect(
+      isSessionRevoked({ user: { id: 'u-1', email: 'a@b.c' } } as never),
+    ).resolves.toBe(false);
   });
 });

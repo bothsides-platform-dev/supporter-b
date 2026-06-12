@@ -10,6 +10,7 @@
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
+import { isSessionRevoked } from '@/lib/auth/session';
 import { getNotificationRepo } from '@/lib/server/repositories/factory';
 
 export const runtime = 'nodejs';
@@ -20,6 +21,9 @@ export async function GET() {
   if (!session?.user?.id) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
+
+  // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
+  if (await isSessionRevoked(session)) return new NextResponse('Unauthorized', { status: 401 });
   if (!session.user.workspaceId) {
     return new NextResponse('Forbidden', { status: 403 });
   }
