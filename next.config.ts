@@ -1,9 +1,13 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 import { withAxiom } from "next-axiom";
+import { SECURITY_HEADERS } from "./lib/security-headers";
 
 // Dev: pipe stdout through pino-pretty: `pnpm dev 2>&1 | pnpm exec pino-pretty`
 const nextConfig: NextConfig = {
+  async headers() {
+    return [{ source: "/(.*)", headers: SECURITY_HEADERS }];
+  },
   // Prevent pino (and its worker-thread transport) from being bundled for Edge.
   serverExternalPackages: ["pino", "pino-pretty", "@axiomhq/pino"],
   // Allow lvh.me (wildcard DNS → 127.0.0.1) as a trusted dev origin so local
