@@ -82,4 +82,11 @@ describe('BoardFilterBar', () => {
     expect(url).toContain('status=active');
     expect(url).toContain('grade=sme1');
   });
+
+  it('hideStatus: 보드 뷰에서는 status 칩 그룹을 숨기고 마감일·등급은 유지한다', () => {
+    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} hideStatus />);
+    expect(screen.queryByRole('group', { name: '상태' })).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '마감일' })).toBeInTheDocument();
+    expect(screen.getByLabelText('가맹점 등급')).toBeInTheDocument();
+  });
 });

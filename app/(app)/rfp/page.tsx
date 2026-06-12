@@ -116,7 +116,11 @@ async function RfpListPageLoader({
     <>
       <PageHeader title="견적 요청" count={rfps.length} action={newRfpAction} />
       <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
-        <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
+        <BoardFilterBar
+          statusOptions={STATUS_OPTIONS}
+          gradeOptions={GRADE_OPTIONS}
+          hideStatus={view === 'board'}
+        />
         <BoardViewToggle view={view} cookieName="rfpBoardView" tableCount={rfps.length} />
       </div>
       <SplitView list={listContent} panel={panel} />

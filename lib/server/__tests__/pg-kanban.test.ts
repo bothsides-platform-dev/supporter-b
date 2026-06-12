@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyPgInvitation } from '../pg-kanban';
+import { classifyPgInvitation, toPgCard } from '../pg-kanban';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { RfpInvitation } from '@/lib/types/invitation';
@@ -154,5 +154,30 @@ describe('classifyPgInvitation', () => {
       rfp: makeRfp({ status: 'awarded', awardedBidId: 'b-other' }),
     });
     expect(stage).toBe('lost');
+  });
+});
+
+describe('toPgCard', () => {
+  it('buyerName 과 hasPendingRequote 를 카드 페이로드에 전달', () => {
+    const card = toPgCard({
+      invitation: makeInv('opened'),
+      bid: makeBid('b1', 'submitted'),
+      rfp: makeRfp(),
+      stage: 'submitted',
+      buyerName: '오롤리데이',
+      hasPendingRequote: true,
+    });
+    expect(card.buyerName).toBe('오롤리데이');
+    expect(card.hasPendingRequote).toBe(true);
+  });
+
+  it('hasPendingRequote 미전달 시 false 기본값', () => {
+    const card = toPgCard({
+      invitation: makeInv('accepted'),
+      rfp: makeRfp(),
+      stage: 'received',
+    });
+    expect(card.hasPendingRequote).toBe(false);
+    expect(card.buyerName).toBeUndefined();
   });
 });

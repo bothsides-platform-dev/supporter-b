@@ -114,6 +114,8 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 > 실시간 전송은 Centrifugo(자체호스팅 WS) — 미설정 환경에선 정적 로드로 graceful degrade. 이메일 알림은 presence 억제 + 윈도우 digest로 폭주 방지. `/notifications`·`/workspace/new` 도 buyer·pg 공통.
 
 > 칸반 뷰 컬럼: 구매사 `진행중 / 계약완료 / 마감`(3, 표 탭과 동일 — 발송 전 draft RFP는 보드에 노출 안 함), PG `신규 / 제출완료 / 낙찰 / 실패`(4 — 표 탭 `마감`을 보드에서 `낙찰`/`실패`로 분리; 미제출 응답은 `신규`). 작성중 단계 제거로 보드 드래그-발송/취소·드래그-작성 전이도 사라졌다(발송은 RFP 상세의 `초대 발송`, 제출은 inbox 폼).
+>
+> 칸반 보드 UX(2026-06-12): 종결 컬럼(구매사 `계약완료`/`마감`, PG `낙찰`/`실패`)은 최근 10장만 노출 + `전체 N건 보기`로 표 뷰 status 필터 딥링크. 보드 뷰에서는 status 필터 칩을 숨긴다(컬럼과 중복 — 보드 전환 시 잔류 `?status=`도 제거). 드래그 중 무효 드롭 컬럼은 dim 처리, 드래그 카드는 DragOverlay 로 표시. 드래그-선정(`진행중`→`계약완료`)은 RFP 상세로 즉시 이동.
 
 ### 0.4 Core Flow Diagrams
 

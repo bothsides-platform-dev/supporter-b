@@ -20,6 +20,9 @@ export function BoardViewToggle({ view, cookieName, tableCount }: Props) {
     document.cookie = `${cookieName}=${id}; path=/; max-age=31536000; samesite=lax`;
     const params = new URLSearchParams(searchParams.toString());
     params.set('view', id);
+    // 보드 뷰는 status 칩을 숨긴다(컬럼과 중복) — 잔류 status 가 보이지 않는
+    // 필터로 남지 않도록 전환 시 함께 지운다.
+    if (id === 'board') params.delete('status');
     router.push(`${pathname}?${params.toString()}`);
   };
 

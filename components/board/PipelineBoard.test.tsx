@@ -10,20 +10,30 @@ vi.mock('next/navigation', () => ({
 }));
 
 // Mock the child components that require complex context (dnd-kit, etc.)
+let lastColumnOverflow:
+  | ((col: { lifecycleKey: string | null }) => { limit: number; moreHref: string } | null)
+  | undefined;
 vi.mock('@/components/board/KanbanBoard', () => ({
   KanbanBoard: ({
     renderCard,
     cards,
+    columnOverflow,
   }: {
     renderCard: (c: unknown) => React.ReactNode;
     cards: unknown[];
-  }) => (
-    <div data-testid="kanban">
-      {cards.map((c, i) => (
-        <div key={i}>{renderCard(c)}</div>
-      ))}
-    </div>
-  ),
+    columnOverflow?: (col: {
+      lifecycleKey: string | null;
+    }) => { limit: number; moreHref: string } | null;
+  }) => {
+    lastColumnOverflow = columnOverflow;
+    return (
+      <div data-testid="kanban">
+        {cards.map((c, i) => (
+          <div key={i}>{renderCard(c)}</div>
+        ))}
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/components/board/PipelineCard', () => ({
@@ -58,5 +68,31 @@ describe('PipelineBoard', () => {
     const btn = await findByText('카드');
     btn.click();
     expect(mockReplace).toHaveBeenCalledWith('/rfp?view=board&peek=P-2604-0001');
+  });
+
+  it('buyer: 종결 컬럼(closed/awarded)에 표 뷰 딥링크 overflow 를 주입한다', () => {
+    render(<PipelineBoard cardType="rfp" columns={[]} cards={[]} />);
+    expect(lastColumnOverflow?.({ lifecycleKey: 'closed' })).toEqual({
+      limit: 10,
+      moreHref: '/rfp?view=table&status=closed',
+    });
+    expect(lastColumnOverflow?.({ lifecycleKey: 'awarded' })).toEqual({
+      limit: 10,
+      moreHref: '/rfp?view=table&status=awarded',
+    });
+    expect(lastColumnOverflow?.({ lifecycleKey: 'active' })).toBeNull();
+  });
+
+  it('pg: won/lost 컬럼은 inbox 표 마감 필터로 딥링크한다', () => {
+    render(<PipelineBoard cardType="invitation" columns={[]} cards={[]} />);
+    expect(lastColumnOverflow?.({ lifecycleKey: 'won' })).toEqual({
+      limit: 10,
+      moreHref: '/inbox?view=table&status=closed',
+    });
+    expect(lastColumnOverflow?.({ lifecycleKey: 'lost' })).toEqual({
+      limit: 10,
+      moreHref: '/inbox?view=table&status=closed',
+    });
+    expect(lastColumnOverflow?.({ lifecycleKey: 'received' })).toBeNull();
   });
 });

@@ -118,6 +118,14 @@ describe('DrizzleInvitationRepository', () => {
     expect(await repo.canAccess(ctx.rfpId, ctx.pgWs.id)).toBe(true);
   });
 
+  it('findByPgWorkspace includes the buyer workspace name', async () => {
+    const raw = generateToken();
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), raw);
+    const pairs = await repo.findByPgWorkspace(ctx.pgWs.id);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]!.buyerName).toBe('구매사');
+  });
+
   it('markOpened transitions pending → opened (non-claimer first visit) and is idempotent', async () => {
     const raw = generateToken();
     const inv = makeInvitation(ctx.rfpId, ctx.pgWs.id);
