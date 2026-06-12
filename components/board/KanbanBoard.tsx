@@ -41,7 +41,7 @@ type Props = {
   renderCard: (card: BoardCard) => ReactNode;
   /**
    * 종결 컬럼처럼 무한 누적되는 컬럼의 노출 제한 — limit 초과분은 숨기고
-   * "전체 N건 보기" 링크(표 뷰 딥링크)로 위임한다. null 이면 제한 없음.
+   * "표에서 전체 보기" 링크(표 뷰 딥링크)로 위임한다. null 이면 제한 없음.
    */
   columnOverflow?: (
     column: BoardColumn,
