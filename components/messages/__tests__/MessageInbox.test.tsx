@@ -10,7 +10,7 @@ class ResizeObserverStub {
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 
-// SplitView mounts PeekBackdrop, which reads the app router/pathname/search.
+// ThreadView/ThreadPane 가 app router/pathname/search 를 읽으므로 스텁한다.
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => '/messages',

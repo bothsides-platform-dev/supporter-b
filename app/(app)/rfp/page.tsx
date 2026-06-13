@@ -9,8 +9,6 @@ import { PipelineBoard } from '@/components/board/PipelineBoard';
 import { BoardViewToggle } from '@/components/board/BoardViewToggle';
 import { BoardFilterBar } from '@/components/board/BoardFilterBar';
 import { PageHeader } from '@/components/shell/PageHeader';
-import { RfpPeekPanel, RfpPeekPanelSkeleton } from '@/components/rfp/RfpPeekPanel';
-import { SplitView } from '@/components/ui/split-view';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
@@ -27,7 +25,7 @@ const STATUS_OPTIONS = [
 const GRADE_OPTIONS = Object.entries(GRADE_LABELS).map(([value, label]) => ({ value, label }));
 
 type Props = {
-  searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string; peek?: string }>;
+  searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string }>;
 };
 
 export default async function RfpListPage({ searchParams }: Props) {
@@ -37,8 +35,6 @@ export default async function RfpListPage({ searchParams }: Props) {
   const cookieStore = await cookies();
   const view = resolveBoardView(sp.view, cookieStore.get('rfpBoardView')?.value);
   const wsId = session.user.workspaceId;
-  const userId = session.user.id;
-  const userName = session.user.name ?? session.user.email ?? '구매사 담당자';
 
   const newRfpAction = (
     <Link href="/rfp-create">
@@ -58,15 +54,7 @@ export default async function RfpListPage({ searchParams }: Props) {
           </>
         }
       >
-        <RfpListPageLoader
-          wsId={wsId}
-          userId={userId}
-          userName={userName}
-          params={sp}
-          view={view}
-          newRfpAction={newRfpAction}
-          peek={sp.peek}
-        />
+        <RfpListPageLoader wsId={wsId} params={sp} view={view} newRfpAction={newRfpAction} />
       </Suspense>
     </div>
   );
@@ -74,25 +62,20 @@ export default async function RfpListPage({ searchParams }: Props) {
 
 async function RfpListPageLoader({
   wsId,
-  userId,
-  userName,
   params,
   view,
   newRfpAction,
-  peek,
 }: {
   wsId: string;
-  userId: string;
-  userName: string;
   params: BoardFilterParams;
   view: BoardView;
   newRfpAction: React.ReactNode;
-  peek?: string;
 }) {
   const now = new Date();
   const allRfps = await (await getRfpRepo()).findByBuyerWs(wsId);
   const rfps = filterRfps(allRfps, paramsForView(params, view), now);
 
+  // 행 클릭은 딜룸 모달(인터셉트 라우트)을 띄운다 — 과거 ?peek 사이드 패널은 제거됨.
   const listContent =
     rfps.length === 0 ? (
       <EmptyState
@@ -106,12 +89,6 @@ async function RfpListPageLoader({
       <RfpListTable rfps={rfps} />
     );
 
-  const panel = peek ? (
-    <Suspense fallback={<RfpPeekPanelSkeleton rfpCode={peek} />}>
-      <RfpPeekPanel rfpCode={peek} wsId={wsId} userId={userId} userName={userName} />
-    </Suspense>
-  ) : undefined;
-
   return (
     <>
       <PageHeader title="견적 요청" count={rfps.length} action={newRfpAction} />
@@ -123,7 +100,7 @@ async function RfpListPageLoader({
         />
         <BoardViewToggle view={view} cookieName="rfpBoardView" tableCount={rfps.length} />
       </div>
-      <SplitView list={listContent} panel={panel} />
+      {listContent}
     </>
   );
 }

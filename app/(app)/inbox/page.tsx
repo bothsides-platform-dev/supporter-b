@@ -7,14 +7,12 @@ import { classifyPgInvitation } from '@/lib/server/pg-kanban';
 import type { Bid } from '@/lib/types/bid';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { InboxList, InboxListSkeleton, type InboxRow } from '@/components/inbox/InboxList';
-import { InboxPeekPanel, InboxPeekPanelSkeleton } from '@/components/inbox/InboxPeekPanel';
 import { PipelineBoard } from '@/components/board/PipelineBoard';
 import { BoardViewToggle } from '@/components/board/BoardViewToggle';
 import { BoardFilterBar } from '@/components/board/BoardFilterBar';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { InboxIcon } from '@/components/icons';
-import { SplitView } from '@/components/ui/split-view';
 import {
   filterInboxRows,
   paramsForView,
@@ -33,7 +31,7 @@ const STATUS_OPTIONS = [
 const GRADE_OPTIONS = Object.entries(GRADE_LABELS).map(([value, label]) => ({ value, label }));
 
 type Props = {
-  searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string; peek?: string }>;
+  searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string }>;
 };
 
 export default async function InboxPage({ searchParams }: Props) {
@@ -53,7 +51,7 @@ export default async function InboxPage({ searchParams }: Props) {
           </>
         }
       >
-        <InboxListPageLoader wsId={session.user.workspaceId} params={sp} view={view} peek={sp.peek} />
+        <InboxListPageLoader wsId={session.user.workspaceId} params={sp} view={view} />
       </Suspense>
     </div>
   );
@@ -63,12 +61,10 @@ async function InboxListPageLoader({
   wsId,
   params,
   view,
-  peek,
 }: {
   wsId: string;
   params: BoardFilterParams;
   view: BoardView;
-  peek?: string;
 }) {
   const now = new Date();
   const [invRepo, bidRepo, requoteRepo] = await Promise.all([
@@ -108,12 +104,7 @@ async function InboxListPageLoader({
   });
   const rows = filterInboxRows(allRows, paramsForView(params, view), now);
 
-  const panel = peek ? (
-    <Suspense fallback={<InboxPeekPanelSkeleton rfpCode={peek} />}>
-      <InboxPeekPanel rfpCode={peek} wsId={wsId} />
-    </Suspense>
-  ) : undefined;
-
+  // 행 클릭은 딜룸 모달(인터셉트 라우트)을 띄운다 — 과거 ?peek 사이드 패널은 제거됨.
   const listContent =
     rows.length === 0 ? (
       <EmptyState
@@ -138,7 +129,7 @@ async function InboxListPageLoader({
         />
         <BoardViewToggle view={view} cookieName="inboxBoardView" tableCount={rows.length} />
       </div>
-      <SplitView list={listContent} panel={panel} />
+      {listContent}
     </>
   );
 }
