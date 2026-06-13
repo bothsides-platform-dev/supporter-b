@@ -25,6 +25,8 @@ type DealRoomShellProps = {
   statusChip?: ReactNode;
   /** modal 모드 닫기(보통 router.back). */
   onClose?: () => void;
+  /** 우측 채팅 칼럼(상대방/팀). lg 이상에서만 노출 — 미만은 후속 Phase 의 하단 시트. */
+  chat?: ReactNode;
   children: ReactNode;
 };
 
@@ -35,6 +37,7 @@ export function DealRoomShell({
   fullscreenHref,
   statusChip,
   onClose,
+  chat,
   children,
 }: DealRoomShellProps) {
   return (
@@ -73,7 +76,17 @@ export function DealRoomShell({
           )}
         </div>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      <div className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
+        {chat && (
+          <aside
+            aria-label="채팅"
+            className="hidden w-[360px] shrink-0 flex-col border-l border-[var(--md-sys-color-outline-variant)] lg:flex"
+          >
+            {chat}
+          </aside>
+        )}
+      </div>
     </div>
   );
 }

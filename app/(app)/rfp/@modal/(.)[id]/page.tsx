@@ -4,6 +4,7 @@
 // 새로고침/딥링크는 인터셉터를 건너뛰어 정식 페이지가 풀스크린으로 렌더된다.
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { DealRoomModal } from '@/components/deal-room/DealRoomModal';
+import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
 import { RfpDetailContent } from '@/components/rfp/RfpDetailContent';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
@@ -41,6 +42,14 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
       title={data.rfp.title}
       fullscreenHref={`/rfp/${data.rfp.code}`}
       statusChip={s ? <Chip label={s.label} color={s.color} /> : undefined}
+      chat={
+        <DealRoomChat
+          rfpId={data.rfp.id}
+          rfpCode={data.rfp.code}
+          rfpTitle={data.rfp.title}
+          isSample={data.rfp.isSample}
+        />
+      }
     >
       <div className="px-6 py-6">
         <RfpDetailContent data={data} />

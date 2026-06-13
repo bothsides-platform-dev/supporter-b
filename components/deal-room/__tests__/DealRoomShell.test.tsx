@@ -72,6 +72,22 @@ describe('DealRoomShell', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('chat 슬롯을 제공하면 본문과 함께 렌더한다', () => {
+    render(
+      <DealRoomShell
+        mode="modal"
+        code="P-1"
+        title="t"
+        fullscreenHref="/rfp/P-1"
+        chat={<div>채팅 패널 내용</div>}
+      >
+        <p>가운데 본문</p>
+      </DealRoomShell>,
+    );
+    expect(screen.getByText('채팅 패널 내용')).toBeInTheDocument();
+    expect(screen.getByText('가운데 본문')).toBeInTheDocument();
+  });
+
   it('상태 칩 노드를 상단바에 렌더한다', () => {
     render(
       <DealRoomShell

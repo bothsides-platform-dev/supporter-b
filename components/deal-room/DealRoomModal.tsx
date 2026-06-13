@@ -20,6 +20,8 @@ type DealRoomModalProps = {
   title: string;
   fullscreenHref: string;
   statusChip?: ReactNode;
+  /** 우측 채팅 칼럼(상대방/팀). */
+  chat?: ReactNode;
   children: ReactNode;
 };
 
@@ -28,6 +30,7 @@ export function DealRoomModal({
   title,
   fullscreenHref,
   statusChip,
+  chat,
   children,
 }: DealRoomModalProps) {
   const router = useRouter();
@@ -50,6 +53,7 @@ export function DealRoomModal({
             fullscreenHref={fullscreenHref}
             statusChip={statusChip}
             onClose={close}
+            chat={chat}
           >
             {children}
           </DealRoomShell>

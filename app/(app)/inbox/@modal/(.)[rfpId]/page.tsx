@@ -6,6 +6,7 @@ import { redirect, notFound } from 'next/navigation';
 import { auth } from '@/auth';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { DealRoomModal } from '@/components/deal-room/DealRoomModal';
+import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
 import { PgRfpDetailContent } from '@/components/inbox/PgRfpDetailContent';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
@@ -39,6 +40,22 @@ export default async function InboxDealRoomModalPage({ params }: Props) {
         title={data.rfp.title}
         fullscreenHref={`/inbox/${data.rfp.code}`}
         statusChip={<Chip label={chip.label} color={chip.color} />}
+        chat={
+          // 온보딩 샘플은 데모 구매사라 채팅 비노출(정식 페이지와 동일). 그 외엔
+          // 상대(구매사) 고정 시드.
+          data.rfp.isSample ? undefined : (
+            <DealRoomChat
+              rfpId={data.rfp.id}
+              rfpCode={data.rfp.code}
+              rfpTitle={data.rfp.title}
+              fixedCounterparty={{
+                workspaceId: data.rfp.buyerWsId,
+                name: data.buyerName,
+                type: 'buyer',
+              }}
+            />
+          )
+        }
       >
         <div className="px-6 py-6">
           <PgRfpDetailContent data={data} variant="full" />
