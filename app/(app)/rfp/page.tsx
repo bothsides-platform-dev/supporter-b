@@ -41,7 +41,7 @@ export default async function RfpListPage({ searchParams }: Props) {
   const userName = session.user.name ?? session.user.email ?? '구매사 담당자';
 
   const newRfpAction = (
-    <Link href="/rfp/new">
+    <Link href="/rfp-create">
       <Button size="sm" icon={<PlusIcon />}>
         견적 요청하기
       </Button>

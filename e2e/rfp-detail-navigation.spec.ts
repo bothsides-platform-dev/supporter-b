@@ -1,18 +1,16 @@
 /**
- * RFP/인박스 상세 네비게이션 — 진입점별 동작.
+ * RFP/인박스 상세 네비게이션 — 진입점별 동작 (견적 딜룸 모달 개편 후).
  *
- * 상세는 가로채기 라우트 모달(@modal)로 렌더되지 않는다. 진입점에 따라:
- *   1. 홈 대시보드 ActionQueue 링크 클릭 → /rfp/<code> 전체 페이지.
- *   2. /rfp 목록 행 클릭 → ?peek=<code> 사이드 패널(미리보기, SplitView).
- *      패널의 '전체화면' 버튼 → /rfp/<code> 전체 페이지.
- *   3. /rfp/<code> 직접 진입(하드 네비) → 전체 페이지.
- * PG 인박스(/inbox/<code>, ?peek=<code>)도 동일.
+ * 상세는 진입 방식에 따라 두 모습으로 렌더된다:
+ *   1. 목록(/rfp · /inbox) 행 클릭(soft-nav) → 인터셉트 라우트(@modal/(.)[id])가
+ *      목록 위에 **딜룸 모달**을 띄운다. URL 은 /rfp/<code> 로 바뀌고, 모달 상단바에
+ *      '전체화면' 링크가 있다.
+ *   2. 대시보드 링크 클릭(/home → /rfp/<code>, 세그먼트 밖) · 직접 진입(하드 네비) ·
+ *      '전체화면' 링크(풀 리로드) → 정식 **전체 페이지**(인터셉트 없음, 모달 없음).
  *
- * 회귀 가드(전 케이스 공통): 상세가 가로채기 라우트 dialog 로 렌더되지 않음
- * (`getByRole('dialog').toHaveCount(0)`; peek 은 dialog 아닌 사이드 패널).
- *
- * 주의: /home 은 이전 KanbanBoard 에서 KPI strip + ActionQueue 의 대시보드로
- * 재설계됨. 칸반은 /rfp(구매사) / /inbox(PG) 에서만 렌더된다.
+ * 모달 식별자(브리틀 회피): 상단바 '전체화면' 링크(role=link, name='전체화면')는
+ * 모달에만 존재한다 — 전체 페이지에는 없다. /rfp-create(작성, 정적 세그먼트)는
+ * /rfp/[id](동적)보다 우선하므로 모달로 가로채지지 않아야 한다.
  */
 import { test, expect } from 'playwright/test';
 import { eq, and } from 'drizzle-orm';
@@ -28,94 +26,77 @@ process.env.DATABASE_URL =
 const RFP_CODE = 'P-2604-0001';
 
 test.describe('RFP 상세 네비게이션 (구매사)', () => {
-  test('홈 대시보드 RFP 링크 클릭 → 전체 페이지', async ({ page }) => {
-    // dev 서버는 라우트를 첫 진입 시 컴파일한다(login+home 트리). 이 스펙의
-    // 첫 테스트라 cold-compile 비용을 전부 떠안으므로 예산을 넉넉히(prod는 사전컴파일).
+  test('대시보드 RFP 링크 클릭 → 전체 페이지(모달 아님)', async ({ page }) => {
+    // dev 서버는 라우트를 첫 진입 시 컴파일한다(login+home 트리). 이 스펙의 첫
+    // 테스트라 cold-compile 비용을 전부 떠안으므로 예산을 넉넉히(prod는 사전컴파일).
     test.setTimeout(180_000);
     await loginAs(page, 'buyer'); // /home 착지(대시보드)
-    // ActionQueue 가 RFP 링크를 그릴 때까지 대기(cold-compile 흡수) — 이후 클릭이
-    // 컴파일 예산을 잠식하지 않도록. dashboard 의 a[href="/rfp/<code>"] 가 ready 신호.
     const rfpLink = page.locator(`a[href="/rfp/${RFP_CODE}"]`).first();
     await expect(rfpLink).toBeVisible({ timeout: 120_000 });
 
-    // 대시보드 링크 클릭 → 전체 페이지(모달 아님).
     await rfpLink.click();
 
     await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
     await expect(page.getByText('견적 비교')).toBeVisible();
-    // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
-     // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
-     // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
-    await expect(
-      page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
-    ).toHaveCount(0);
+    // 세그먼트 밖(/home) 진입은 인터셉트되지 않으므로 모달 '전체화면' 링크가 없다.
+    await expect(page.getByRole('link', { name: '전체화면' })).toHaveCount(0);
   });
 
-  test('목록 행 클릭은 peek 사이드 패널을 열고, 전체화면 버튼은 전체 페이지로 렌더', async ({ page }) => {
+  test('목록 행 클릭 → 딜룸 모달(인터셉트), 전체화면 링크 → 전체 페이지', async ({ page }) => {
     test.slow();
     await loginAs(page, 'buyer');
     await page.goto('/rfp');
 
-    // 행 클릭(soft-nav) → ?peek=<code> 사이드 패널(미리보기). 패널은
-    // RfpDetailContent('견적 비교')를 렌더한다.
+    // 행 클릭(soft-nav) → /rfp/<code> 로 URL 변경 + 목록 위 딜룸 모달. ?peek 아님.
     await page.getByText(RFP_CODE).click();
-    await expect(page).toHaveURL(new RegExp(`/rfp\\?peek=${RFP_CODE}$`), { timeout: 60_000 });
-    await expect(page.getByText('견적 비교')).toBeVisible();
-    // 회귀 가드: peek 은 SplitView 사이드 패널 — 가로채기 라우트 dialog 가 아니다.
-    // (Channel.io 'Channel Talk pop-up' 다이얼로그는 dev env 에서 함께 잡힐 수 있어 제외.)
-    await expect(
-      page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
-    ).toHaveCount(0);
-
-    // 패널 헤더 '전체화면' 버튼 → /rfp/<code> 전체 페이지(하드 라우트).
-    await page.getByRole('button', { name: '전체화면', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
+    await expect(page).not.toHaveURL(/\?peek=/);
+    // 모달 식별자: 상단바 '전체화면' 링크 + 본문 '견적 비교'.
+    const fullscreen = page.getByRole('link', { name: '전체화면' });
+    await expect(fullscreen).toBeVisible();
+    await expect(page.getByText('견적 비교')).toBeVisible();
+
+    // '전체화면'(풀 리로드) → 정식 전체 페이지. 모달 마커(전체화면 링크)가 사라진다.
+    await fullscreen.click();
+    await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
+    await expect(page.getByRole('link', { name: '전체화면' })).toHaveCount(0);
     await expect(page.getByText('견적 비교')).toBeVisible();
   });
 
-  test('직접 진입(하드 네비)은 전체 페이지로 렌더', async ({ page }) => {
+  test('직접 진입(하드 네비)은 전체 페이지로 렌더(모달 아님)', async ({ page }) => {
     await loginAs(page, 'buyer');
     await page.goto(`/rfp/${RFP_CODE}`);
 
     await expect(page.getByText('견적 비교')).toBeVisible();
-    // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
-     // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
-     // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
-    await expect(
-      page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
-    ).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '전체화면' })).toHaveCount(0);
   });
 });
 
 test.describe('RFP 작성 진입은 상세 라우트로 오인되지 않는다 (구매사)', () => {
-  // 회귀 가드: /rfp/new(작성, 최상위 정적 세그먼트)는 /rfp/[id](상세, 동적)보다
-  // 우선하므로, "견적 요청을 찾을 수 없어요." 가 아니라 작성 폼이 떠야 한다.
-  test('목록에서 "견적 요청하기" soft-nav → 작성 폼(에러 아님)', async ({ page }) => {
+  // 회귀 가드: /rfp-create(작성, 최상위 정적 세그먼트)는 /rfp/[id](상세, 동적)보다
+  // 우선하므로 인터셉트 모달이 아니라 작성 폼이 떠야 한다.
+  test('목록에서 "견적 요청하기" soft-nav → 작성 폼(모달/에러 아님)', async ({ page }) => {
     test.slow();
     await loginAs(page, 'buyer');
     await page.goto('/rfp');
 
-    // /rfp 페이지 헤더의 작성 진입 링크('견적 요청하기'). 사이드바 링크는
-    // '새 견적 요청'으로 라벨이 달라 헤더 링크만 정확히 겨냥한다.
     await page.getByRole('link', { name: '견적 요청하기' }).first().click();
 
     await expect(
       page.getByRole('heading', { name: '새 견적 요청' }),
     ).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText('견적 요청을 찾을 수 없어요.')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '전체화면' })).toHaveCount(0);
   });
 });
 
 test.describe('RFP 상세 네비게이션 (PG)', () => {
-  test('홈 대시보드 RFP 링크 클릭 → 전체 페이지, ← 뒤로 → /home 복귀', async ({ page }) => {
-    // dev cold 컴파일 흡수(BidForm 등 무거운 트리 포함) — prod는 사전컴파일.
+  test('대시보드 RFP 링크 클릭 → 전체 페이지, ← 뒤로 → /home 복귀', async ({ page }) => {
     test.slow();
 
-    // PG 대시보드 ActionQueue 는 classifyPgInvitation 이 'received' 를 반환하는
-    // 항목만 렌더한다. classifyPgInvitation 은 bid.status 를 기준으로 분류하며
-    // invitation.status 는 무시한다. 시드된 toss bid 는 'submitted' 상태라
-    // 'submitted' stage 로 분류되어 ActionQueue 에 렌더되지 않는다.
-    // bid.status 를 'draft' 로 리셋해 'received' stage 로 분류되도록 한다.
+    // PG 대시보드 ActionQueue 는 classifyPgInvitation 이 'received' 인 항목만
+    // 렌더한다(bid.status 기준). 시드 toss bid 는 'submitted' 라 'draft' 로 리셋해
+    // 'received' stage 로 분류되게 한다.
     const rfpUuid = await rfpUuidFromCode(RFP_CODE);
     const [toss] = await db
       .select({ id: workspaces.id })
@@ -125,51 +106,39 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
     await db
       .update(bids)
       .set({ status: 'draft' })
-      .where(
-        and(
-          eq(bids.rfpId, rfpUuid),
-          eq(bids.pgWsId, toss.id),
-        ),
-      );
+      .where(and(eq(bids.rfpId, rfpUuid), eq(bids.pgWsId, toss.id)));
 
     await loginAs(page, 'pg-toss'); // /home 착지(PG 대시보드)
 
-    // PG 대시보드의 ActionQueue 링크는 a[href="/inbox/<code>"] 로 그려진다.
     const inboxLink = page.locator(`a[href="/inbox/${RFP_CODE}"]`).first();
     await expect(inboxLink).toBeVisible({ timeout: 60_000 });
 
     await inboxLink.click();
 
     await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
-    // '상세 라우트가 모달로 가로채기 렌더 안 됨' 의 회귀 가드. 단, Channel.io
-     // 챗 위젯의 'Channel Talk pop-up' 다이얼로그가 dev 환경의 env(.env.local 의
-     // NEXT_PUBLIC_CHANNEL_IO_PLUGIN_KEY)에서 함께 잡힐 수 있어 이를 명시적으로 제외.
-    await expect(
-      page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
-    ).toHaveCount(0);
+    // 세그먼트 밖 진입 → 인터셉트 없음 → 모달 '전체화면' 링크 없음.
+    await expect(page.getByRole('link', { name: '전체화면' })).toHaveCount(0);
 
-    // 인박스 상세 페이지 본문에도 '← 뒤로' 텍스트 버튼이 있어 헤더의
-    // aria-label='뒤로' 와 부분 일치한다. 헤더 백버튼만 정확히 타겟팅.
+    // 인박스 상세 페이지 본문에도 '← 뒤로' 텍스트가 있어 헤더 백버튼만 정확히 타겟팅.
     await page.getByRole('button', { name: '뒤로', exact: true }).click();
     await expect(page).toHaveURL(/\/home$/);
   });
 
-  test('인박스 목록 행 클릭은 peek 사이드 패널을 열고, 전체화면 버튼은 전체 페이지로 렌더', async ({ page }) => {
+  test('인박스 목록 행 클릭 → 딜룸 모달(인터셉트), 전체화면 링크 → 전체 페이지', async ({ page }) => {
     test.slow();
     await loginAs(page, 'pg-toss');
     await page.goto('/inbox');
 
-    // 행 클릭(soft-nav) → ?peek=<code> 사이드 패널(미리보기).
+    // 행 클릭(soft-nav) → /inbox/<code> + 목록 위 딜룸 모달. ?peek 아님.
     await page.getByText(RFP_CODE).click();
-    await expect(page).toHaveURL(new RegExp(`/inbox\\?peek=${RFP_CODE}$`), { timeout: 60_000 });
-    // 회귀 가드: peek 은 SplitView 사이드 패널 — 가로채기 라우트 dialog 가 아니다.
-    // (Channel.io 'Channel Talk pop-up' 다이얼로그는 dev env 에서 함께 잡힐 수 있어 제외.)
-    await expect(
-      page.getByRole('dialog').filter({ hasNotText: /Channel Talk/i }),
-    ).toHaveCount(0);
-
-    // 패널 헤더 '전체화면' 버튼 → /inbox/<code> 전체 페이지(하드 라우트).
-    await page.getByRole('button', { name: '전체화면', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
+    await expect(page).not.toHaveURL(/\?peek=/);
+    const fullscreen = page.getByRole('link', { name: '전체화면' });
+    await expect(fullscreen).toBeVisible();
+
+    // '전체화면'(풀 리로드) → 정식 전체 페이지.
+    await fullscreen.click();
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
+    await expect(page.getByRole('link', { name: '전체화면' })).toHaveCount(0);
   });
 });

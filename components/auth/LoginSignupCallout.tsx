@@ -6,11 +6,11 @@ import { safeInternalNext } from '@/lib/auth/safe-next';
 // 폼 위에 두어 redirect 된 신규 방문자가 먼저 보게 한다.
 //
 // next: 로그인/가입 이후 복귀할 내부 경로. 안전한 경우에만 가입 링크에 포함되며,
-// /rfp/new인 경우 견적 시작 맥락 안내 문구로 교체한다.
+// /rfp-create인 경우 견적 시작 맥락 안내 문구로 교체한다.
 export function LoginSignupCallout({ next }: { next?: string | null } = {}) {
   const safeNext = safeInternalNext(next);
   const signupHref = safeNext ? `/signup?next=${encodeURIComponent(safeNext)}` : '/signup';
-  const isRfpContext = safeNext === '/rfp/new';
+  const isRfpContext = safeNext === '/rfp-create';
 
   return (
     <div className="flex flex-col gap-[var(--s-4)] rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-primary-container)]/20 p-[var(--s-6)]">

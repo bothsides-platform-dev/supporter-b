@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
@@ -31,22 +31,22 @@ type Props = { rfps: RFP[] };
 
 export function RfpListTable({ rfps }: Props) {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const peekCode = searchParams.get('peek');
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
   const [deleteCode, setDeleteCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  function handlePeek(code: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('peek', code);
-    router.replace(`${pathname}?${params.toString()}`);
+  // 행 클릭/Enter → 상세 라우트로 push. 인터셉트 라우트(@modal/(.)[id])가
+  // 목록 위에 딜룸 모달을 띄우고 URL 은 /rfp/<code> 로 바뀐다(새로고침 시 정식
+  // 페이지). 과거 ?peek 패널을 대체한다.
+  function openDealRoom(code: string) {
+    router.push(`/rfp/${code}`);
   }
 
   const { active } = useListNavigation(rfps.length, {
-    onEnter: (i) => handlePeek(rfps[i].code),
-    onEdit: (i) => handlePeek(rfps[i].code),
+    onEnter: (i) => openDealRoom(rfps[i].code),
+    onEdit: (i) => openDealRoom(rfps[i].code),
   });
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export function RfpListTable({ rfps }: Props) {
               ref={(el) => {
                 rowRefs.current[i] = el;
               }}
-              onClick={() => handlePeek(rfp.code)}
+              onClick={() => openDealRoom(rfp.code)}
               data-active={active === i}
               data-peeked={rfp.code === peekCode}
               className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] data-[peeked=true]:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer transition-colors"

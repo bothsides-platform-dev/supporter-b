@@ -15,14 +15,14 @@ describe('LoginSignupCallout', () => {
     expect(cta).toHaveAttribute('href', '/signup');
   });
 
-  it('next="/rfp/new" → 가입 링크에 next 인코딩 포함', () => {
-    render(<LoginSignupCallout next="/rfp/new" />);
+  it('next="/rfp-create" → 가입 링크에 next 인코딩 포함', () => {
+    render(<LoginSignupCallout next="/rfp-create" />);
     const link = screen.getByRole('link', { name: /신규 회원가입/ });
-    expect(link).toHaveAttribute('href', `/signup?next=${encodeURIComponent('/rfp/new')}`);
+    expect(link).toHaveAttribute('href', `/signup?next=${encodeURIComponent('/rfp-create')}`);
   });
 
-  it('next="/rfp/new" → 맥락 안내 문구 노출', () => {
-    render(<LoginSignupCallout next="/rfp/new" />);
+  it('next="/rfp-create" → 맥락 안내 문구 노출', () => {
+    render(<LoginSignupCallout next="/rfp-create" />);
     expect(screen.getByText(/견적을 시작하려면 가입하거나 로그인해요/)).toBeInTheDocument();
   });
 

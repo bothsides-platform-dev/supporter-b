@@ -2,9 +2,9 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const replace = vi.fn();
+const push = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace }),
+  useRouter: () => ({ push }),
   usePathname: () => '/inbox',
   useSearchParams: () => new URLSearchParams(''),
 }));
@@ -23,15 +23,15 @@ const row: InboxRow = {
 
 afterEach(() => {
   cleanup();
-  replace.mockClear();
+  push.mockClear();
 });
 
 describe('InboxList', () => {
-  it('행 클릭 시 ?peek=<rfpId>로 replace', async () => {
+  it('행 클릭 시 상세 라우트(/inbox/<rfpId>)로 push — 딜룸 모달 오픈', async () => {
     const user = userEvent.setup();
     render(<InboxList rows={[row]} />);
     await user.click(screen.getByText('PG 결제대행 RFP'));
-    expect(replace).toHaveBeenCalledWith('/inbox?peek=P-2604-0001');
+    expect(push).toHaveBeenCalledWith('/inbox/P-2604-0001');
   });
 
   it('번호 컬럼에 rfpId(code)를 표시', () => {

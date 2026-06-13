@@ -16,7 +16,7 @@ describe('getNavCommands — buyer', () => {
         '/rfp?status=active',
         '/rfp?status=closed',
         '/rfp?status=awarded',
-        '/rfp/new',
+        '/rfp-create',
         '/settings/profile',
         '/settings/members',
         '/settings/audit-log',
@@ -31,7 +31,7 @@ describe('getNavCommands — buyer', () => {
   });
 
   it('carries the chord shortcut for 새 견적 요청', () => {
-    const newRfp = getNavCommands('buyer').find((c) => c.href === '/rfp/new');
+    const newRfp = getNavCommands('buyer').find((c) => c.href === '/rfp-create');
     expect(newRfp?.label).toBe('새 견적 요청');
     expect(newRfp?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'c' });
   });
@@ -66,6 +66,6 @@ describe('getNavCommands — pg', () => {
 
   it('does NOT leak buyer-only destinations', () => {
     expect(hrefs()).not.toContain('/rfp');
-    expect(hrefs()).not.toContain('/rfp/new');
+    expect(hrefs()).not.toContain('/rfp-create');
   });
 });

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDeadline } from '@/lib/format';
@@ -42,20 +42,19 @@ export type InboxRow = {
 
 export function InboxList({ rows }: { rows: InboxRow[] }) {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const peekCode = searchParams.get('peek');
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
-  function handlePeek(rfpId: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('peek', rfpId);
-    router.replace(`${pathname}?${params.toString()}`);
+  // 행 클릭/Enter → 상세 라우트로 push. 인터셉트 라우트가 목록 위에 딜룸 모달을
+  // 띄우고 URL 은 /inbox/<code> 로 바뀐다(새로고침 시 정식 페이지). ?peek 대체.
+  function openDealRoom(rfpId: string) {
+    router.push(`/inbox/${rfpId}`);
   }
 
   const { active } = useListNavigation(rows.length, {
-    onEnter: (i) => handlePeek(rows[i].rfpId),
-    onEdit: (i) => handlePeek(rows[i].rfpId),
+    onEnter: (i) => openDealRoom(rows[i].rfpId),
+    onEdit: (i) => openDealRoom(rows[i].rfpId),
   });
 
   useEffect(() => {
@@ -87,7 +86,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                 ref={(el) => {
                   rowRefs.current[i] = el;
                 }}
-                onClick={() => handlePeek(row.rfpId)}
+                onClick={() => openDealRoom(row.rfpId)}
                 data-active={active === i}
                 data-peeked={row.rfpId === peekCode}
                 className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] data-[peeked=true]:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer transition-colors"
