@@ -35,9 +35,8 @@ export function PercentInput({
   placeholder = '0.00',
   infoTerm,
 }: NumericFieldProps) {
-  const numVal = parseFloat(value);
-  const hint =
-    !isNaN(numVal) && numVal > 0 ? `= ${formatRatePerManwon(numVal)}` : null;
+  const rate = formatRatePerManwon(parseFloat(value));
+  const hint = rate ? `= ${rate}` : null;
 
   return (
     <div className="space-y-1">
@@ -85,8 +84,7 @@ export function FeeRateCell({
 }: FeeRateCellProps) {
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const numVal = parseFloat(value);
-  const hint = !isNaN(numVal) && numVal > 0 ? formatRatePerManwon(numVal) : null;
+  const hint = formatRatePerManwon(parseFloat(value)) || null;
   const showHint = (focused || hovered) && !!hint;
 
   return (

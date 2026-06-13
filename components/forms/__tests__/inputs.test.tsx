@@ -44,9 +44,10 @@ describe('PercentInput', () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     render(<PercentInput label="수수료" value="" onChange={onChange} />);
-    await user.type(screen.getByRole('textbox'), 'abc');
-    const calledValues = onChange.mock.calls.map((c) => c[0]);
-    expect(calledValues.every((v) => /^[0-9.]*$/.test(v))).toBe(true);
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    await user.type(input, 'abc');
+    expect(input.value).toBe('');
+    expect(onChange).not.toHaveBeenCalledWith(expect.stringMatching(/[a-z]/i));
   });
 });
 
@@ -136,9 +137,10 @@ describe('FeeRateCell', () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     render(<FeeRateCell value="" onChange={onChange} testId="c" />);
-    await user.type(screen.getByTestId('c'), 'abc');
-    const calledValues = onChange.mock.calls.map((c) => c[0]);
-    expect(calledValues.every((v) => /^[0-9.]*$/.test(v))).toBe(true);
+    const input = screen.getByTestId('c') as HTMLInputElement;
+    await user.type(input, 'abc');
+    expect(input.value).toBe('');
+    expect(onChange).not.toHaveBeenCalledWith(expect.stringMatching(/[a-z]/i));
   });
 });
 

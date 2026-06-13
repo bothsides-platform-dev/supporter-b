@@ -48,6 +48,15 @@ describe('BidStepSettlement', () => {
     expect(cycleVals.some((v: string) => v.includes('.'))).toBe(false);
   });
 
+  it('정산주기 일수는 99를 초과하면 입력되지 않는다', () => {
+    const { onField } = renderStep({ cycleNum: '' });
+    fireEvent.change(screen.getByPlaceholderText('1'), { target: { value: '150' } });
+    const cycleVals = onField.mock.calls
+      .filter((c) => c[0] === 'cycleNum')
+      .map((c) => c[1]);
+    expect(cycleVals.every((v: string) => Number(v) <= 99)).toBe(true);
+  });
+
   it('다음 버튼 클릭 시 onNext 호출', async () => {
     const user = userEvent.setup();
     const { onNext } = renderStep();
