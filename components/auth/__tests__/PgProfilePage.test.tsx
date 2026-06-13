@@ -167,3 +167,68 @@ describe('PgProfilePage', () => {
     expect(mockReplace).not.toHaveBeenCalledWith('/signup/pg');
   });
 });
+
+describe('PgProfilePage — cross-host redirect', () => {
+  // 일반 PG 가입의 redirectTo 는 workspaceSwitchTarget 산출물이라, 가입한 호스트와
+  // PG home 호스트(partner)가 다르면 다른 origin 절대 URL이 된다. router.push 로
+  // 따라가면 (app) 셸의 cross-origin redirect 를 RSC fetch 가 따라가다 CORS 로 막힌다.
+  let assign: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockReplace.mockReset();
+    mockPush.mockReset();
+    mockSignupComplete.mockReset();
+    mockSignupInvite.mockReset();
+    mockSignIn.mockReset().mockResolvedValue({ ok: true });
+    mockDraftData = {
+      email: 'sales@toss.im',
+      password: 'Password123!',
+      workspaceType: 'pg',
+      wsName: '토스페이먼츠',
+      bizNo: '1234567890',
+    };
+    assign = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { host: 'supporter-b.com', assign },
+    });
+  });
+
+  it('redirectTo 가 다른 호스트 절대 URL이면 router.push 대신 전체 페이지 이동한다', async () => {
+    mockSignupComplete.mockResolvedValue({
+      ok: true,
+      redirectTo: 'https://partner.supporter-b.com/home',
+      email: 'sales@toss.im',
+      password: 'Password123!',
+    });
+    const user = userEvent.setup();
+    render(<PgProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '신규 영업');
+    await user.click(screen.getByRole('button', { name: '인증 완료' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith('https://partner.supporter-b.com/home'),
+    );
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('redirectTo 가 같은 호스트 상대경로면 기존대로 router.push 한다', async () => {
+    mockSignupComplete.mockResolvedValue({
+      ok: true,
+      redirectTo: '/pending-approval',
+      email: 'sales@toss.im',
+      password: 'Password123!',
+    });
+    const user = userEvent.setup();
+    render(<PgProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '신규 영업');
+    await user.click(screen.getByRole('button', { name: '인증 완료' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/pending-approval'));
+    expect(assign).not.toHaveBeenCalled();
+  });
+});

@@ -115,3 +115,62 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
     expect(screen.queryByLabelText('이름')).not.toBeInTheDocument();
   });
 });
+
+describe('BuyerProfilePage — cross-host redirect', () => {
+  // signupCompleteAction 의 redirectTo 는 workspaceSwitchTarget 산출물이라, 가입한
+  // 호스트와 워크스페이스 home 호스트가 다르면 다른 origin 절대 URL이 된다. 이를
+  // router.push 로 따라가면 (app) 셸의 cross-origin redirect 를 RSC fetch 가 따라가다
+  // 브라우저 CORS 로 막힌다. 절대 URL 은 전체 페이지 이동으로 처리해야 한다.
+  let assign: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockDraft = { ...BASE_DRAFT };
+    mockPush.mockReset();
+    mockReplace.mockReset();
+    mockSignIn.mockReset().mockResolvedValue({ ok: true });
+    assign = vi.fn();
+    // jsdom 의 window.location.assign 은 "not implemented" 를 던지므로 스텁으로 교체.
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { host: 'partner.supporter-b.com', assign },
+    });
+  });
+
+  it('redirectTo 가 다른 호스트 절대 URL이면 router.push 대신 전체 페이지 이동한다', async () => {
+    mockSignupComplete.mockReset().mockResolvedValue({
+      ok: true,
+      redirectTo: 'https://supporter-b.com/rfp',
+      email: 'kim@example.com',
+      password: 'Password123!',
+    });
+    const user = userEvent.setup();
+    render(<BuyerProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '김구매');
+    await user.click(screen.getByRole('button', { name: 'verify-phone' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith('https://supporter-b.com/rfp'),
+    );
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('redirectTo 가 같은 호스트 상대경로면 기존대로 router.push 한다', async () => {
+    mockSignupComplete.mockReset().mockResolvedValue({
+      ok: true,
+      redirectTo: '/rfp',
+      email: 'kim@example.com',
+      password: 'Password123!',
+    });
+    const user = userEvent.setup();
+    render(<BuyerProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '김구매');
+    await user.click(screen.getByRole('button', { name: 'verify-phone' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/rfp'));
+    expect(assign).not.toHaveBeenCalled();
+  });
+});
