@@ -185,6 +185,12 @@ export async function loadPgRfpDetail(args: {
   );
   if (mine) await invRepo.markOpened(mine.id, new Date());
 
+  // 봉인입찰 데이터 경계: 구매사가 현재 카드 수수료를 비공개(opt-out)로 두면
+  // 값 자체를 PG 페이로드에서 제거한다. RfpBriefPanel 렌더 게이트는 시각적
+  // 방어선일 뿐 — 서버에서 지워야 PG가 RSC payload/네트워크에서 읽지 못한다.
+  // (rfp 는 findByCode 가 매 호출 새로 만든 request-scoped 객체라 변이 안전.)
+  if (rfp.currentFeeVisibleToPg === false) rfp.currentFeeRate = undefined;
+
   // 구매사 첨부 hydrate — RfpBriefPanel 미리보기용.
   rfp.rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);
 

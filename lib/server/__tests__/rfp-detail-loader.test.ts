@@ -39,7 +39,10 @@ async function setup() {
   const inicis = await seedPgWorkspace(db, 'inicis.com');
   const pgUser = await seedUser(db, { email: 'pg@toss.im' });
 
-  async function seedRfp(code: string) {
+  async function seedRfp(
+    code: string,
+    opts: { currentFeeRate?: string; currentFeeVisibleToPg?: boolean } = {},
+  ) {
     const id = randomUUID();
     await db.insert(rfps).values({
       id,
@@ -52,6 +55,10 @@ async function setup() {
       status: 'sent',
       createdBy: buyer.id,
       sentAt: new Date(),
+      currentFeeRate: opts.currentFeeRate,
+      ...(opts.currentFeeVisibleToPg === undefined
+        ? {}
+        : { currentFeeVisibleToPg: opts.currentFeeVisibleToPg }),
     });
     return id;
   }
@@ -320,6 +327,31 @@ describe('loadPgRfpDetail', () => {
     expect(res!.pendingRequote).not.toBeNull();
     expect(res!.pendingRequote!.round).toBe(2);
     expect(res!.pendingRequote!.message).toBe('수수료 낮춰주세요');
+  });
+
+  it('currentFeeVisibleToPg=false면 currentFeeRate를 서버에서 제거하고 PG에게 반환한다(payload 누출 차단)', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0060', {
+      currentFeeRate: '3.4%',
+      currentFeeVisibleToPg: false,
+    });
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0060', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    // 봉인입찰: 비공개 수수료는 PG 페이로드에 절대 담기지 않는다.
+    expect(res!.rfp.currentFeeRate).toBeUndefined();
+  });
+
+  it('currentFeeVisibleToPg=true면 currentFeeRate를 그대로 PG에게 반환한다', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0061', {
+      currentFeeRate: '3.4%',
+      currentFeeVisibleToPg: true,
+    });
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0061', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.rfp.currentFeeRate).toBe('3.4%');
   });
 
   it('해당 PG 워크스페이스의 견적 템플릿만 quoteTemplates로 반환(타 워크스페이스 격리)', async () => {
