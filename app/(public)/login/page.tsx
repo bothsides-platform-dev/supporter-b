@@ -9,6 +9,7 @@ import { PasswordField } from '@/components/auth/PasswordField';
 import { LoginSignupCallout } from '@/components/auth/LoginSignupCallout';
 import { loginAction } from '@/lib/server/actions/auth';
 import { safeInternalNext } from '@/lib/auth/safe-next';
+import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
 import {
   LOCK_THRESHOLD,
   getState,
@@ -90,8 +91,26 @@ function LoginContent() {
       return;
     }
     resetAttempts(email);
-    // Auth.js v5 sets the cookie inside the server action's signIn() call;
-    // a router.push is enough to land on the protected route.
+    // Auth.js v5 sets the cookie inside the server action's signIn() call.
+    // If the user's home host differs from the host they logged in on (e.g. a
+    // buyer-active session on partner.supporter-b.com), the (app) shell would
+    // bounce them via a server redirect() to the OTHER origin. A client-side
+    // router.push RSC-fetches /home and follows that cross-origin redirect,
+    // which the browser blocks as CORS — so do a full-page navigation to the
+    // correct host instead. Same host → soft router.push (no full reload).
+    const wsType = r.workspaceType;
+    if (wsType === 'buyer' || wsType === 'pg') {
+      const target = workspaceSwitchTarget(
+        wsType,
+        window.location.host,
+        appOrigins(),
+        next,
+      );
+      if (/^https?:\/\//.test(target)) {
+        window.location.assign(target);
+        return;
+      }
+    }
     router.push(next);
     router.refresh();
   }

@@ -22,14 +22,21 @@ export default function PgProfilePage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const draft = readSignupDraft();
-  const isInvited = !!draft.wsInviteToken;
-  const isCanonicalPg = !!draft.selectedPgWorkspaceId;
-  // 초대 경로: wsName/bizNo 불필요 (step 2 건너뜀)
-  // canonical PG 선택 경로: selectedPgWorkspaceId만 필요 (wsName/bizNo 없음)
-  // 일반 경로: wsName + bizNo 필수
-  const ready = !!draft.email && !!draft.password &&
-    (isInvited || isCanonicalPg || (!!draft.wsName && !!draft.bizNo));
+  // 가드는 "1·2단계를 건너뛰고 직접 진입"만 막는다. 가입 완료가 성공하면
+  // finalizeSignup 이 clearSignupDraft 로 draft 를 비우는데, 이후 router.push 전이로
+  // 페이지가 한 번 더 렌더되면 draft 가 비어 ready 가 false → /signup/pg 로 튕긴다.
+  // 그래서 도착 시점에 한 번만 판정해 고정한다(이후 draft 변화에 반응하지 않음).
+  //   초대 경로: wsName/bizNo 불필요 (step 2 건너뜀)
+  //   canonical PG 선택 경로: selectedPgWorkspaceId만 필요 (wsName/bizNo 없음)
+  //   일반 경로: wsName + bizNo 필수
+  const [{ ready, isInvited }] = useState(() => {
+    const d = readSignupDraft();
+    const invited = !!d.wsInviteToken;
+    const canonicalPg = !!d.selectedPgWorkspaceId;
+    const isReady = !!d.email && !!d.password &&
+      (invited || canonicalPg || (!!d.wsName && !!d.bizNo));
+    return { ready: isReady, isInvited: invited };
+  });
 
   useEffect(() => {
     if (!ready) router.replace('/signup/pg');
@@ -82,6 +89,14 @@ export default function PgProfilePage() {
           : '가입을 완료하지 못했어요. 잠시 후 다시 시도해요.',
       );
       setSubmitting(false);
+      return;
+    }
+    // redirectTo 는 workspaceSwitchTarget 산출물 — 가입한 호스트와 워크스페이스 home
+    // 호스트가 다르면 다른 origin 절대 URL이다. router.push 는 그 URL을 RSC fetch 로
+    // 따라가 (app) 셸의 cross-origin redirect 에서 브라우저 CORS 로 막히므로, 절대
+    // URL은 전체 페이지 이동으로 처리한다(같은 호스트 상대경로는 기존대로 soft push).
+    if (/^https?:\/\//.test(r.redirectTo)) {
+      window.location.assign(r.redirectTo);
       return;
     }
     router.push(r.redirectTo);
