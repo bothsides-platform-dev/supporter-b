@@ -483,6 +483,11 @@ export type ChatMessageRecord = {
   createdAt: Date;
 };
 
+export type ChatMessageWithAuthor = ChatMessageRecord & {
+  authorName: string;
+  authorEmail: string;
+};
+
 export interface ChatMessageRepo {
   /** 메시지 insert. 첨부 링크는 액션 레이어 책임. */
   save(msg: ChatMessageRecord, tx?: Tx): Promise<void>;
@@ -491,6 +496,14 @@ export interface ChatMessageRepo {
     conversationId: string,
     tx?: Tx,
   ): Promise<ChatMessageRecord[]>;
+  /**
+   * 한 대화의 모든 메시지 + 작성자 이름·이메일(users 조인) — created_at asc.
+   * 스레드 로더 전용. 인박스 목록 로더는 가벼운 listByConversation 을 쓴다.
+   */
+  listByConversationWithAuthor(
+    conversationId: string,
+    tx?: Tx,
+  ): Promise<ChatMessageWithAuthor[]>;
 }
 
 // ── RFP Team Chat: Message ────────────────────────────────────────────
