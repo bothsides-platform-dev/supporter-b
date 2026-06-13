@@ -2,6 +2,7 @@ import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 
 import authConfig from './auth.config';
+import { PROXY_MATCHER } from './lib/auth/proxy-matcher';
 import { decideRoute } from './lib/auth/route-decision';
 
 // Edge-runtime-only: instantiated from `auth.config.ts` (no DB, no bcrypt).
@@ -20,13 +21,12 @@ export default auth(async (req) => {
   return NextResponse.next();
 });
 
-// Exclude `/api` (especially `/api/auth/*` for NextAuth handlers), Next
-// internals/static assets, and Next.js metadata file conventions
-// (robots.txt, sitemap.xml, manifest.webmanifest, opengraph-image,
-// twitter-image, icon.svg, apple-icon) which must serve to unauth users
-// for SEO and social-card crawlers.
+// Excludes external telemetry proxies (Sentry `/monitoring`, next-axiom
+// `/_axiom/*` beacons), `/api` (especially `/api/auth/*` for NextAuth
+// handlers), Next internals/static assets, and Next.js metadata file
+// conventions (robots.txt, sitemap.xml, manifest.webmanifest, opengraph-image,
+// twitter-image, icon.svg, apple-icon) which must serve to unauth users for
+// SEO and social-card crawlers. See `lib/auth/proxy-matcher.ts`.
 export const config = {
-  matcher: [
-    '/((?!monitoring|api|_next|favicon.ico|icon.svg|apple-icon|opengraph-image|twitter-image|manifest.webmanifest|robots.txt|sitemap.xml|fonts|file|globe|next|vercel|window).*)',
-  ],
+  matcher: [PROXY_MATCHER],
 };
