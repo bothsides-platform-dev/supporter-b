@@ -5,6 +5,7 @@ import {
   getChatConversationRepo,
   getChatMessageRepo,
   getChatReadRepo,
+  getUserRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import type { Attachment } from '@/lib/types/common';
@@ -22,6 +23,12 @@ export type ConversationListItem = {
 
 export type ThreadMessage = {
   id: string;
+  /** 작성자 user id — 작성자별 그룹핑·낙관적 self 판별의 단일 키. */
+  authorUserId: string;
+  /** 작성자 표시 이름(users.name 조인) — 말풍선 그룹 헤더. */
+  authorName: string;
+  /** 작성자 이메일(users.email 조인) — 이름 호버로 노출. */
+  authorEmail: string;
   sender: 'self' | 'other';
   body: string;
   rfpId: string | null;
@@ -39,6 +46,9 @@ export type ThreadMessage = {
 export type LoadThreadResult = ChatActionResult<{
   conversationId: string;
   counterparty: { workspaceId: string; name: string; type: WorkspaceType };
+  /** 세션 사용자(클라이언트는 세션을 모른다) — 낙관적 self 말풍선이 즉시 자기
+   *  이름을 그릴 때 쓴다. */
+  viewer: { userId: string; name: string };
   messages: ThreadMessage[];
 }>;
 
@@ -135,7 +145,7 @@ export async function loadConversationThread(
   }, null);
 
   const msgRepo = await getChatMessageRepo();
-  const rows = await msgRepo.listByConversation(conversationId);
+  const rows = await msgRepo.listByConversationWithAuthor(conversationId);
 
   // Load attachments for all messages in one query (N+1 없음).
   const attRepo = await getAttachmentRepo();
@@ -151,6 +161,9 @@ export async function loadConversationThread(
     const isSelf = m.authorWsId === ws.workspaceId;
     return {
       id: m.id,
+      authorUserId: m.authorUserId,
+      authorName: m.authorName,
+      authorEmail: m.authorEmail,
       sender: isSelf ? 'self' : 'other',
       body: m.body,
       rfpId: m.rfpId,
@@ -163,6 +176,9 @@ export async function loadConversationThread(
     };
   });
 
+  const userRepo = await getUserRepo();
+  const viewerUser = await userRepo.findById(ws.userId);
+
   return {
     ok: true,
     conversationId,
@@ -171,6 +187,7 @@ export async function loadConversationThread(
       name: counterpartyWs?.name ?? '상대',
       type: counterpartyType,
     },
+    viewer: { userId: ws.userId, name: viewerUser?.name ?? '' },
     messages,
   };
 }

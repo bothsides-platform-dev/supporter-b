@@ -75,9 +75,13 @@ describe('MessageInbox', () => {
       ok: true,
       conversationId: 'conv-1',
       counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      viewer: { userId: 'u-self', name: '나' },
       messages: [
         {
           id: 'm1',
+          authorUserId: 'u-pg',
+          authorName: 'OO페이담당',
+          authorEmail: 'sales@pg.com',
           sender: 'other',
           body: '스레드 본문 메시지입니다.',
           rfpId: null,
@@ -134,6 +138,7 @@ describe('MessageInbox', () => {
       ok: true,
       conversationId: 'conv-1',
       counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      viewer: { userId: 'u-self', name: '나' },
       messages: [],
     });
     const { container } = render(<MessageInbox conversations={conversations} />);
@@ -153,6 +158,7 @@ describe('MessageInbox', () => {
       ok: true,
       conversationId: 'conv-1',
       counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      viewer: { userId: 'u-self', name: '나' },
       messages: [],
     });
     render(<MessageInbox conversations={conversations} />);
@@ -192,9 +198,13 @@ describe('MessageInbox', () => {
       ok: true,
       conversationId: 'conv-1',
       counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      viewer: { userId: 'u-self', name: '나' },
       messages: [
         {
           id: 'm1',
+          authorUserId: 'u-pg',
+          authorName: 'OO페이담당',
+          authorEmail: 'sales@pg.com',
           sender: 'other',
           body: '미리 열린 스레드 메시지입니다.',
           rfpId: null,

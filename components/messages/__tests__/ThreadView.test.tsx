@@ -77,12 +77,16 @@ import { formatTime } from '../format';
 import type { ThreadMessage } from '../types';
 
 const counterparty = { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const };
+const viewer = { userId: 'u-self', name: '나' };
 
 // Timestamps in the T03:00Z–T14:00Z window so UTC and KST agree on the
 // calendar day (avoids a TZ-dependent date-divider flake).
 const messages: ThreadMessage[] = [
   {
     id: 'm1',
+    authorUserId: 'u-pg',
+    authorName: 'OO페이담당',
+    authorEmail: 'sales@pg.com',
     sender: 'other',
     body: '안녕하세요, 제안 드립니다.',
     rfpId: null,
@@ -92,6 +96,9 @@ const messages: ThreadMessage[] = [
   },
   {
     id: 'm2',
+    authorUserId: 'u-self',
+    authorName: '나',
+    authorEmail: 'me@buyer.com',
     sender: 'self',
     body: '확인했습니다. 감사합니다.',
     rfpId: null,
@@ -106,6 +113,7 @@ function base(overrides: Partial<React.ComponentProps<typeof ThreadView>> = {}) 
     <ThreadView
       conversationId="conv-1"
       counterparty={counterparty}
+      viewer={viewer}
       messages={messages}
       {...overrides}
     />
@@ -150,6 +158,9 @@ describe('ThreadView', () => {
     const partial: ThreadMessage[] = [
       {
         id: 'a',
+        authorUserId: 'u-self',
+        authorName: '나',
+        authorEmail: 'me@buyer.com',
         sender: 'self',
         body: '먼저 보낸 메시지 A',
         rfpId: null,
@@ -159,6 +170,9 @@ describe('ThreadView', () => {
       },
       {
         id: 'b',
+        authorUserId: 'u-self',
+        authorName: '나',
+        authorEmail: 'me@buyer.com',
         sender: 'self',
         body: '나중에 보낸 메시지 B',
         rfpId: null,
@@ -324,6 +338,9 @@ describe('ThreadView', () => {
     const withRfp: ThreadMessage[] = [
       {
         id: 'm3',
+        authorUserId: 'u-pg',
+        authorName: 'OO페이담당',
+        authorEmail: 'sales@pg.com',
         sender: 'other',
         body: '입찰표 보냅니다.',
         rfpId: 'rfp-uuid-123',
@@ -348,6 +365,9 @@ describe('ThreadView', () => {
         messages: [
           {
             id: 'm4',
+            authorUserId: 'u-pg',
+            authorName: 'OO페이담당',
+            authorEmail: 'sales@pg.com',
             sender: 'other',
             body: '여기 https://example.com/rfp 와 https://example.com/bid 보세요',
             rfpId: null,
@@ -637,10 +657,12 @@ describe('ThreadView 초안 보존', () => {
 
 describe('ThreadView 연속 메시지 그룹핑', () => {
   const other = (id: string, body: string, createdAt: string): ThreadMessage => ({
-    id, sender: 'other', body, rfpId: null, createdAt, readByCounterparty: false, attachments: [],
+    id, authorUserId: 'u-pg', authorName: 'OO페이담당', authorEmail: 'sales@pg.com',
+    sender: 'other', body, rfpId: null, createdAt, readByCounterparty: false, attachments: [],
   });
   const self = (id: string, body: string, createdAt: string): ThreadMessage => ({
-    id, sender: 'self', body, rfpId: null, createdAt, readByCounterparty: false, attachments: [],
+    id, authorUserId: 'u-self', authorName: '나', authorEmail: 'me@buyer.com',
+    sender: 'self', body, rfpId: null, createdAt, readByCounterparty: false, attachments: [],
   });
 
   it('같은 상대가 5분 내 연속으로 보낸 메시지는 두 번째부터 이름·아바타 헤더를 생략한다', () => {
@@ -650,8 +672,8 @@ describe('ThreadView 연속 메시지 그룹핑', () => {
     ] }));
     const first = screen.getByText('첫 번째').closest('[data-message-row]') as HTMLElement;
     const second = screen.getByText('두 번째').closest('[data-message-row]') as HTMLElement;
-    expect(within(first).getByText('OO페이')).toBeInTheDocument();
-    expect(within(second).queryByText('OO페이')).not.toBeInTheDocument();
+    expect(within(first).getByText('OO페이담당')).toBeInTheDocument();
+    expect(within(second).queryByText('OO페이담당')).not.toBeInTheDocument();
   });
 
   it('sender 가 바뀌면 헤더를 다시 표시한다', () => {
@@ -661,7 +683,7 @@ describe('ThreadView 연속 메시지 그룹핑', () => {
       other('s3', '상대 재개', '2026-05-26T05:02:00.000Z'),
     ] }));
     const third = screen.getByText('상대 재개').closest('[data-message-row]') as HTMLElement;
-    expect(within(third).getByText('OO페이')).toBeInTheDocument();
+    expect(within(third).getByText('OO페이담당')).toBeInTheDocument();
   });
 
   it('같은 상대라도 5분을 넘기면 헤더를 다시 표시한다', () => {
@@ -670,7 +692,7 @@ describe('ThreadView 연속 메시지 그룹핑', () => {
       other('t2', '한참 뒤 메시지', '2026-05-26T05:10:00.000Z'),
     ] }));
     const second = screen.getByText('한참 뒤 메시지').closest('[data-message-row]') as HTMLElement;
-    expect(within(second).getByText('OO페이')).toBeInTheDocument();
+    expect(within(second).getByText('OO페이담당')).toBeInTheDocument();
   });
 
   it('날짜가 바뀌면(구분선) 같은 상대라도 헤더를 다시 표시한다', () => {
@@ -679,7 +701,7 @@ describe('ThreadView 연속 메시지 그룹핑', () => {
       other('d2', '오늘 메시지', '2026-05-27T05:00:00.000Z'),
     ] }));
     const second = screen.getByText('오늘 메시지').closest('[data-message-row]') as HTMLElement;
-    expect(within(second).getByText('OO페이')).toBeInTheDocument();
+    expect(within(second).getByText('OO페이담당')).toBeInTheDocument();
   });
 });
 
@@ -943,6 +965,9 @@ describe('ThreadView — variant="rail" 갤러리 오버레이', () => {
   const messagesWithAttachment: ThreadMessage[] = [
     {
       id: 'm-att',
+      authorUserId: 'u-pg',
+      authorName: 'OO페이담당',
+      authorEmail: 'sales@pg.com',
       sender: 'other',
       body: '첨부 보냈어요.',
       rfpId: null,
@@ -980,5 +1005,88 @@ describe('ThreadView — variant="rail" 갤러리 오버레이', () => {
 
     expect(container.querySelector('[data-gallery-pane]')).toBeInTheDocument();
     expect(container.querySelector('[data-gallery-overlay]')).not.toBeInTheDocument();
+  });
+});
+
+describe('ThreadView 작성자(담당자) 표시', () => {
+  const mk = (
+    id: string,
+    sender: 'self' | 'other',
+    authorUserId: string,
+    authorName: string,
+    body: string,
+    createdAt: string,
+    authorEmail = `${authorUserId}@x.com`,
+  ): ThreadMessage => ({
+    id, authorUserId, authorName, authorEmail, sender, body, rfpId: null,
+    createdAt, readByCounterparty: false, attachments: [],
+  });
+
+  it('받은 메시지와 보낸 메시지 모두 작성자 이름 헤더를 표시한다', () => {
+    render(base({ messages: [
+      mk('a1', 'other', 'u-pg', '박영업', '안녕하세요', '2026-05-26T05:00:00.000Z'),
+      mk('a2', 'self', 'u-self', '김구매', '확인했습니다', '2026-05-26T05:00:30.000Z'),
+    ] }));
+    const received = screen.getByText('안녕하세요').closest('[data-message-row]') as HTMLElement;
+    const sent = screen.getByText('확인했습니다').closest('[data-message-row]') as HTMLElement;
+    expect(within(received).getByText('박영업')).toBeInTheDocument();
+    expect(within(sent).getByText('김구매')).toBeInTheDocument();
+  });
+
+  it('같은 측이라도 작성자가 다르면 각자 헤더를 표시한다(우리 팀원 구분)', () => {
+    render(base({ messages: [
+      mk('t1', 'self', 'u-self', '김구매', '제가 보냅니다', '2026-05-26T05:00:00.000Z'),
+      mk('t2', 'self', 'u-mate', '이동료', '제가 이어서요', '2026-05-26T05:01:00.000Z'),
+    ] }));
+    const second = screen.getByText('제가 이어서요').closest('[data-message-row]') as HTMLElement;
+    expect(within(second).getByText('이동료')).toBeInTheDocument();
+  });
+
+  it('같은 작성자가 5분 내 연속이면 두 번째부터 헤더를 생략한다', () => {
+    render(base({ messages: [
+      mk('s1', 'other', 'u-pg', '박영업', '첫 줄', '2026-05-26T05:00:00.000Z'),
+      mk('s2', 'other', 'u-pg', '박영업', '둘째 줄', '2026-05-26T05:02:00.000Z'),
+    ] }));
+    const first = screen.getByText('첫 줄').closest('[data-message-row]') as HTMLElement;
+    const second = screen.getByText('둘째 줄').closest('[data-message-row]') as HTMLElement;
+    expect(within(first).getByText('박영업')).toBeInTheDocument();
+    expect(within(second).queryByText('박영업')).not.toBeInTheDocument();
+  });
+
+  it('작성자 이름에 이메일 title(호버)을 단다', () => {
+    render(base({ messages: [
+      mk('e1', 'other', 'u-pg', '박영업', '메일 확인', '2026-05-26T05:00:00.000Z', 'park@pg.com'),
+    ] }));
+    expect(screen.getByText('박영업')).toHaveAttribute('title', 'park@pg.com');
+  });
+
+  it('낙관적으로 보낸 메시지는 viewer 이름으로 헤더를 표시한다', async () => {
+    const user = userEvent.setup();
+    render(base({ messages: [] }));
+    await user.type(screen.getByPlaceholderText('메시지를 입력하세요…'), '내 첫 메시지');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    const row = (await screen.findByText('내 첫 메시지')).closest('[data-message-row]') as HTMLElement;
+    // Avatar renders '나' as initials AND the span shows '나' — both are correct;
+    // use getAllByText since two elements (Avatar div + name span) match.
+    expect(within(row).getAllByText('나').length).toBeGreaterThan(0);
+  });
+
+  it('라이브 수신 메시지는 페이로드의 authorName 으로 헤더를 표시한다', async () => {
+    render(base({ messages: [] }));
+    act(() => {
+      channelOptions.onMessage?.({
+        type: 'message',
+        id: 'live-author',
+        body: '실시간 담당자',
+        authorWsId: 'pg-1',
+        authorUserId: 'u-pg',
+        authorName: '최라이브',
+        authorEmail: 'choi@pg.com',
+        rfpId: null,
+        createdAt: '2026-05-27T06:00:00.000Z',
+      });
+    });
+    const row = (await screen.findByText('실시간 담당자')).closest('[data-message-row]') as HTMLElement;
+    expect(within(row).getByText('최라이브')).toBeInTheDocument();
   });
 });
