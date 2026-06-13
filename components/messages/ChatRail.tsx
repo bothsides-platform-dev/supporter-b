@@ -44,6 +44,11 @@ type Props = {
   rfpTitle: string;
   /** PG 인박스 상세처럼 상대가 고정인 화면 — 마운트 시 스토어에 시드된다. */
   fixedCounterparty?: ChatRailCounterparty;
+  /**
+   * 샘플 RFP — 상대(데모 PG)는 응답하지 않으므로 상대방 채팅 탭은 보이되 전송을
+   * 막는다(팀 채팅은 정상 동작). 팀 채팅을 샘플에서도 노출하기 위한 플래그.
+   */
+  isSample?: boolean;
 };
 
 const RAIL_TABS = [
@@ -51,7 +56,7 @@ const RAIL_TABS = [
   { id: 'team', label: '팀 채팅' },
 ];
 
-export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props) {
+export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty, isSample = false }: Props) {
   const open = useChatRailStore((s) => s.open);
   const tab = useChatRailStore((s) => s.tab);
   const counterparty = useChatRailStore((s) => s.counterparty);
@@ -154,6 +159,7 @@ export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props)
             <NewConversationPane
               counterparty={counterparty}
               rfpId={rfpId}
+              sendDisabled={isSample}
               onCreated={(wsId, newId) =>
                 setConvByWs((prev) => ({ ...prev, [wsId]: newId }))
               }
@@ -168,6 +174,7 @@ export function ChatRail({ rfpId, rfpCode, rfpTitle, fixedCounterparty }: Props)
                     variant="rail"
                     defaultRfpId={rfpId}
                     rfpById={{ [rfpId]: { code: rfpCode, title: rfpTitle } }}
+                    sendDisabled={isSample}
                   />
                 </Suspense>
               </div>
@@ -199,17 +206,20 @@ function NewConversationPane({
   counterparty,
   rfpId,
   onCreated,
+  sendDisabled = false,
 }: {
   counterparty: ChatRailCounterparty;
   rfpId: string;
   onCreated: (wsId: string, conversationId: string) => void;
+  /** 샘플 RFP — 전송 차단(데모 PG 에게 실제 전송 방지). */
+  sendDisabled?: boolean;
 }) {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
 
   async function handleSend(): Promise<void> {
     const body = draft.trim();
-    if (body.length === 0 || sending) return;
+    if (body.length === 0 || sending || sendDisabled) return;
     setSending(true);
     let result: Awaited<ReturnType<typeof sendChatMessageAction>>;
     try {
@@ -240,12 +250,18 @@ function NewConversationPane({
           className="py-12"
         />
       </div>
+      {sendDisabled && (
+        <p className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-4 py-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+          샘플에서는 메시지를 보낼 수 없어요. 실제 견적 요청을 보내보세요.
+        </p>
+      )}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <div className="flex items-end gap-2">
           <textarea
             rows={1}
             value={draft}
             maxLength={4000}
+            disabled={sendDisabled}
             placeholder="메시지를 입력하세요…"
             onChange={(e) => {
               setDraft(e.target.value);
@@ -259,12 +275,12 @@ function NewConversationPane({
                 void handleSend();
               }
             }}
-            className="min-h-8 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-1.5 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
+            className="min-h-8 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-1.5 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
           />
           <Button
             size="sm"
             onClick={() => void handleSend()}
-            disabled={sending || draft.trim().length === 0}
+            disabled={sendDisabled || sending || draft.trim().length === 0}
             aria-label="보내기"
           >
             <ArrowUpIcon size={16} />

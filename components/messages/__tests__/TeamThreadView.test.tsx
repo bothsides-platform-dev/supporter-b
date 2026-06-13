@@ -16,6 +16,12 @@ vi.mock('@/lib/server/actions/chat/sendTeamMessageAction', () => ({
   sendTeamMessageAction: (...args: unknown[]) => sendTeamMessageAction(...args),
 }));
 
+// http (ky) — `/api/files/upload` POST. Mock so the test controls the upload.
+const httpPost = vi.fn();
+vi.mock('@/lib/http', () => ({
+  http: { post: (...args: unknown[]) => httpPost(...args) },
+}));
+
 type TeamPayload = { type?: string; [k: string]: unknown };
 let channelOptions: { onMessage?: (d: TeamPayload) => void } = {};
 let channelResult: { connected: boolean | null } = { connected: null };
@@ -44,6 +50,7 @@ beforeEach(() => {
     createdAt: '2026-06-10T10:05:00.000Z',
   });
   toast.mockReset();
+  httpPost.mockReset();
   channelOptions = {};
   channelResult = { connected: null };
 });
@@ -60,6 +67,7 @@ const messages: TeamThreadMessage[] = [
     body: '이 견적 수수료 괜찮은데요?',
     createdAt: '2026-06-09T05:00:00.000Z',
     isSelf: false,
+    attachments: [],
   },
   {
     id: 'tm2',
@@ -68,6 +76,7 @@ const messages: TeamThreadMessage[] = [
     body: '내일 회의에서 정리하시죠.',
     createdAt: '2026-06-10T05:00:00.000Z',
     isSelf: true,
+    attachments: [],
   },
 ];
 
@@ -127,6 +136,7 @@ describe('TeamThreadView — 전송', () => {
       expect(sendTeamMessageAction).toHaveBeenCalledWith({
         rfpId: 'rfp-1',
         body: '새 팀 메모',
+        attachmentIds: [],
       });
     });
     // 확정 승격 — pending 표시가 사라진다.
@@ -151,6 +161,7 @@ describe('TeamThreadView — 전송', () => {
       expect(sendTeamMessageAction).toHaveBeenCalledWith({
         rfpId: 'rfp-1',
         body: '줄1\n줄2',
+        attachmentIds: [],
       });
     });
   });
@@ -209,6 +220,114 @@ describe('TeamThreadView — 전송', () => {
     });
     expect(textarea).toHaveValue('실패할 메모');
     expect(toast).toHaveBeenCalled();
+  });
+});
+
+describe('TeamThreadView — 첨부', () => {
+  it('파일 업로드 후 보내기 시 attachmentIds 를 함께 전송하고 버블에 첨부를 렌더한다', async () => {
+    httpPost.mockReturnValue({
+      json: () =>
+        Promise.resolve({ id: 'att-1', name: '제안서.pdf', size: 1234, mimeType: 'application/pdf' }),
+    });
+    sendTeamMessageAction.mockResolvedValue({
+      ok: true,
+      messageId: 'tm-att',
+      createdAt: '2026-06-10T10:06:00.000Z',
+      attachments: [
+        { id: 'att-1', name: '제안서.pdf', size: 1234, mimeType: 'application/pdf', url: '/api/files/att-1' },
+      ],
+    });
+    const user = userEvent.setup();
+    const { container } = render(base());
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '제안서.pdf', { type: 'application/pdf' });
+    await user.upload(input, file);
+    await screen.findByLabelText('제안서.pdf 첨부 제거');
+
+    // 업로드는 team_message 소유로, ownerId 는 rfpId 로 보낸다.
+    const uploadBody = httpPost.mock.calls[0][1].body as FormData;
+    expect(uploadBody.get('ownerKind')).toBe('team_message');
+    expect(uploadBody.get('ownerId')).toBe('rfp-1');
+
+    await user.type(
+      screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…'),
+      '첨부 메모',
+    );
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    await waitFor(() => {
+      expect(sendTeamMessageAction).toHaveBeenCalledWith({
+        rfpId: 'rfp-1',
+        body: '첨부 메모',
+        attachmentIds: ['att-1'],
+      });
+    });
+    const link = await screen.findByRole('link', { name: /제안서.pdf/ });
+    expect(link).toHaveAttribute('href', '/api/files/att-1');
+  });
+
+  it('본문이 비어도 첨부만 있으면 전송할 수 있다', async () => {
+    httpPost.mockReturnValue({
+      json: () =>
+        Promise.resolve({ id: 'att-2', name: '이미지.png', size: 500, mimeType: 'image/png' }),
+    });
+    const user = userEvent.setup();
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '이미지.png', { type: 'image/png' });
+    await user.upload(input, file);
+    await screen.findByLabelText('이미지.png 첨부 제거');
+
+    const sendBtn = screen.getByRole('button', { name: '보내기' });
+    expect(sendBtn).toBeEnabled();
+    await user.click(sendBtn);
+    await waitFor(() => {
+      expect(sendTeamMessageAction).toHaveBeenCalledWith({
+        rfpId: 'rfp-1',
+        body: '',
+        attachmentIds: ['att-2'],
+      });
+    });
+  });
+
+  it('첨부가 있는 메시지는 버블에 첨부 링크를 렌더한다', () => {
+    const withAtt: TeamThreadMessage[] = [
+      {
+        id: 'a1',
+        authorUserId: 'u-mate',
+        authorName: '이동료',
+        body: '파일 봐주세요',
+        createdAt: '2026-06-10T05:00:00.000Z',
+        isSelf: false,
+        attachments: [
+          { id: 'att-x', name: '명세.pdf', size: 100, mimeType: 'application/pdf', url: '/api/files/att-x' },
+        ],
+      },
+    ];
+    render(base({ messages: withAtt }));
+    const link = screen.getByRole('link', { name: /명세.pdf/ });
+    expect(link).toHaveAttribute('href', '/api/files/att-x');
+  });
+
+  it('라이브 onMessage 의 attachments 를 버블에 렌더한다', async () => {
+    render(base());
+    act(() =>
+      channelOptions.onMessage?.({
+        type: 'message',
+        id: 'tm-live-att',
+        body: '라이브 첨부',
+        authorUserId: 'u-mate',
+        authorName: '이동료',
+        createdAt: '2026-06-10T06:00:00.000Z',
+        attachments: [
+          { id: 'att-live', name: '회의록.pdf', size: 200, mimeType: 'application/pdf', url: '/api/files/att-live' },
+        ],
+      }),
+    );
+    await screen.findByText('라이브 첨부');
+    const link = screen.getByRole('link', { name: /회의록.pdf/ });
+    expect(link).toHaveAttribute('href', '/api/files/att-live');
   });
 });
 
@@ -365,6 +484,7 @@ describe('TeamThreadView — 그룹핑', () => {
         body: '첫 메시지',
         createdAt: '2026-06-10T05:00:00.000Z',
         isSelf: false,
+        attachments: [],
       },
       {
         id: 'g2',
@@ -373,6 +493,7 @@ describe('TeamThreadView — 그룹핑', () => {
         body: '바로 이어진 메시지',
         createdAt: '2026-06-10T05:02:00.000Z', // 2분 뒤 — 그룹핑
         isSelf: false,
+        attachments: [],
       },
       {
         id: 'g3',
@@ -381,6 +502,7 @@ describe('TeamThreadView — 그룹핑', () => {
         body: '한참 뒤 메시지',
         createdAt: '2026-06-10T05:30:00.000Z', // 28분 뒤 — 새 그룹
         isSelf: false,
+        attachments: [],
       },
     ];
     render(base({ messages: grouped }));

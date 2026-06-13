@@ -15,7 +15,6 @@ import { MetricComparePopover, type CompareRow } from './MetricComparePopover';
 import { AwardConfirmDialog } from './AwardConfirmDialog';
 import { AwardResult } from './AwardResult';
 import { RequoteDialog } from './RequoteDialog';
-import { BidNotesPanel } from '@/components/rfp/bid-detail/BidNotesPanel';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { useChatRailStore } from '@/lib/stores/chat-rail';
 import { BidPdfPane } from '@/components/rfp/bid-detail/BidPdfPane';
@@ -31,14 +30,12 @@ import {
   type MerchantTier,
   type PaymentMethod,
 } from '@/lib/types/bid';
-import type { BidNote } from '@/lib/types/bid-note';
 import { cn } from '@/lib/utils';
 
 type Props = {
   bids: Bid[];
   pgWsNameMap: Record<string, string>;
   current: CurrentConditions;
-  notesByBid: Record<string, BidNote[]>;
   rfpStatus: string;
   awardedBidId?: string | null;
   requiredPaymentMethods: readonly PaymentMethod[];
@@ -53,7 +50,7 @@ type Props = {
 };
 
 export function FocusComparison(props: Props) {
-  const { bids, pgWsNameMap, current, notesByBid, rfpStatus, awardedBidId, requoteByPg } = props;
+  const { bids, pgWsNameMap, current, rfpStatus, awardedBidId, requoteByPg } = props;
   const router = useRouter();
 
   const [tier, setTier] = useState<MerchantTier>('general');
@@ -333,9 +330,6 @@ export function FocusComparison(props: Props) {
             <BidPdfPane pdf={active.proposalPdfs[0]} />
           </AccordionItem>
 
-          <AccordionItem value="my-notes" title="내 메모">
-            <BidNotesPanel bidId={active.id} notes={notesByBid[active.id] ?? []} />
-          </AccordionItem>
         </Accordion>
 
         {canAward && (

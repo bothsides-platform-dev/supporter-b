@@ -6,7 +6,6 @@
 // pglite + seed 로 auth mock 없이 단위 테스트 가능하다.
 import {
   getAttachmentRepo,
-  getBidNoteRepo,
   getBidQuoteTemplateRepo,
   getBidRepo,
   getInvitationRepo,
@@ -18,7 +17,6 @@ import {
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
-import type { BidNote } from '@/lib/types/bid-note';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
@@ -27,8 +25,6 @@ export type BuyerRfpDetailData = {
   rfp: RFP;
   /** submitted 상태 입찰 중 PG별 최신 라운드만. */
   bids: Bid[];
-  /** bidId → 노트(Date→ISO 직렬화). */
-  notesByBid: Record<string, BidNote[]>;
   rfpFiles: Attachment[];
   companyName: string;
   inviteList: { wsId: string; wsName: string; status: InvitationStatus }[];
@@ -104,22 +100,6 @@ export async function loadBuyerRfpDetail(args: {
 
   const rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);
 
-  // 노트는 DB 소스. Date → ISO 로 직렬화해 클라이언트 트리에 안전하게 전달.
-  const noteRepo = await getBidNoteRepo();
-  const notesByBid: Record<string, BidNote[]> = {};
-  for (const bid of bids) {
-    const records = await noteRepo.findByBid(bid.id);
-    notesByBid[bid.id] = records.map((n) => ({
-      id: n.id,
-      bidId: n.bidId,
-      authorId: n.authorId,
-      authorName: n.authorName,
-      body: n.body,
-      attachments: n.attachments,
-      createdAt: n.createdAt.toISOString(),
-    }));
-  }
-
   const wsRepo = await getWorkspaceRepo();
   const ws = await wsRepo.findById(rfp.buyerWsId);
   const companyName = ws?.name ?? '—';
@@ -168,7 +148,6 @@ export async function loadBuyerRfpDetail(args: {
   return {
     rfp,
     bids,
-    notesByBid,
     rfpFiles,
     companyName,
     inviteList,

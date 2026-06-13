@@ -611,3 +611,139 @@ describe('canAccessAttachment — chatMessageId branch', () => {
     expect(ok).toBe(false);
   });
 });
+
+// Team-message attachments are scoped to one (rfp, workspace) thread. Sealed-bid:
+// each workspace reads only its OWN team-thread attachments — a PG never sees the
+// buyer team's files and vice versa, even on the same RFP.
+describe('canAccessAttachment — rfpTeamMessageId branch (sealed-bid)', () => {
+  async function seedTeamAtt(
+    s: Scenario,
+    opts: { workspaceId: string; authorUserId: string; uploadedBy: string },
+  ): Promise<AttachmentRow> {
+    const { rfpTeamMessages } = await import('@/lib/db/schema');
+    const msgId = randomUUID();
+    await db.insert(rfpTeamMessages).values({
+      id: msgId,
+      rfpId: s.rfpId,
+      workspaceId: opts.workspaceId,
+      authorUserId: opts.authorUserId,
+      body: 'team note',
+    });
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId,
+      rfpTeamMessageId: msgId,
+      name: 'team.pdf',
+      size: 80,
+      mimeType: 'application/pdf',
+      uploadedBy: opts.uploadedBy,
+    });
+    return {
+      id: attId,
+      rfpTeamMessageId: msgId,
+      name: 'team.pdf',
+      size: 80,
+      mimeType: 'application/pdf',
+      url: '',
+      uploadedBy: opts.uploadedBy,
+    };
+  }
+
+  it('ALLOW for buyer ws member on buyer-scope team message', async () => {
+    const s = await seedScenario();
+    // authored+uploaded by buyer; buyerPeer (member, not uploader) reads it →
+    // exercises the real branch, not the uploader fast-path.
+    const att = await seedTeamAtt(s, {
+      workspaceId: s.buyerWsId,
+      authorUserId: s.buyerUserId,
+      uploadedBy: s.buyerUserId,
+    });
+    const ok = await canAccessAttachment(
+      db,
+      att,
+      { user: { id: s.buyerPeerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
+      await repos(),
+    );
+    expect(ok).toBe(true);
+  });
+
+  it('ALLOW for pg ws member on pg-scope team message', async () => {
+    const s = await seedScenario();
+    const att = await seedTeamAtt(s, {
+      workspaceId: s.pgWsId,
+      authorUserId: s.pgUserId,
+      uploadedBy: s.pgUserId,
+    });
+    const ok = await canAccessAttachment(
+      db,
+      att,
+      { user: { id: s.pgPeerUserId, workspaceId: s.pgWsId, workspaceType: 'pg' } },
+      await repos(),
+    );
+    expect(ok).toBe(true);
+  });
+
+  it('DENY for buyer reading pg-scope team message (sealed-bid)', async () => {
+    const s = await seedScenario();
+    const att = await seedTeamAtt(s, {
+      workspaceId: s.pgWsId,
+      authorUserId: s.pgUserId,
+      uploadedBy: s.pgUserId,
+    });
+    const ok = await canAccessAttachment(
+      db,
+      att,
+      { user: { id: s.buyerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+
+  it('DENY for pg reading buyer-scope team message (sealed-bid)', async () => {
+    const s = await seedScenario();
+    const att = await seedTeamAtt(s, {
+      workspaceId: s.buyerWsId,
+      authorUserId: s.buyerUserId,
+      uploadedBy: s.buyerUserId,
+    });
+    const ok = await canAccessAttachment(
+      db,
+      att,
+      { user: { id: s.pgUserId, workspaceId: s.pgWsId, workspaceType: 'pg' } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+
+  it('DENY for other pg ws on pg-scope team message (cross-PG isolation)', async () => {
+    const s = await seedScenario();
+    const att = await seedTeamAtt(s, {
+      workspaceId: s.pgWsId,
+      authorUserId: s.pgUserId,
+      uploadedBy: s.pgUserId,
+    });
+    const ok = await canAccessAttachment(
+      db,
+      att,
+      { user: { id: s.otherPgUserId, workspaceId: s.otherPgWsId, workspaceType: 'pg' } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+
+  it('DENY when wsId is missing from session', async () => {
+    const s = await seedScenario();
+    const att = await seedTeamAtt(s, {
+      workspaceId: s.buyerWsId,
+      authorUserId: s.buyerUserId,
+      uploadedBy: s.buyerUserId,
+    });
+    const ok = await canAccessAttachment(
+      db,
+      att,
+      { user: { id: s.randomUserId } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+});

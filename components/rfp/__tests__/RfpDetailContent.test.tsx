@@ -82,7 +82,6 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
   return {
     rfp: baseRfp,
     bids: [aBid],
-    notesByBid: {},
     rfpFiles: [],
     companyName: '구매사',
     inviteList: [],

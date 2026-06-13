@@ -309,6 +309,43 @@ describe('ChatRail — 상대방 채팅 탭', () => {
   });
 });
 
+describe('ChatRail — 샘플 RFP (상대방 전송 차단)', () => {
+  it('isSample 면 ThreadPane 에 sendDisabled=true 를 넘긴다', async () => {
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} isSample />);
+
+    await screen.findByTestId('thread-pane');
+    expect(threadPaneProps).toHaveBeenCalledWith(
+      expect.objectContaining({ sendDisabled: true }),
+    );
+  });
+
+  it('isSample + 대화 없음(null) 이면 새 대화 컴포저를 막고 안내 문구를 보여준다', async () => {
+    lookupConversationAction.mockResolvedValue({ ok: true, conversationId: null });
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} isSample />);
+
+    const textarea = await screen.findByPlaceholderText('메시지를 입력하세요…');
+    expect(textarea).toBeDisabled();
+    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
+    expect(screen.getByText(/샘플에서는 메시지를 보낼 수 없어요/)).toBeInTheDocument();
+  });
+
+  it('isSample 이어도 팀 채팅은 정상 동작한다(sendDisabled 미적용)', async () => {
+    const user = userEvent.setup();
+    openWithCounterparty();
+    render(<ChatRail {...baseProps} isSample />);
+
+    await act(async () => {
+      await user.click(screen.getByRole('tab', { name: '팀 채팅' }));
+    });
+    await screen.findByTestId('team-thread-view');
+    expect(teamThreadViewProps).toHaveBeenCalledWith(
+      expect.not.objectContaining({ sendDisabled: true }),
+    );
+  });
+});
+
 describe('ChatRail — 팀 채팅 탭', () => {
   it('로더가 실패(ok:false)하면 에러 빈 상태 + 다시 시도를 보여주고, 재시도로 복구한다', async () => {
     const user = userEvent.setup();

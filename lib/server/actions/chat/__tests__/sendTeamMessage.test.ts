@@ -7,14 +7,13 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
-import { rfpTeamMessages } from '@/lib/db/schema';
+import { attachments, rfpTeamMessages } from '@/lib/db/schema';
 import {
   seedBuyerWorkspace,
   seedMembership,
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { __resetTeamChatServiceForTest } from '@/lib/server/services/team-chat';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -61,14 +60,24 @@ function asBuyer(u: { id: string; email: string }, wsId: string) {
   };
 }
 
+async function seedDraftAttachment(uploaderId: string, name = 'team.pdf') {
+  const id = randomUUID();
+  await db.insert(attachments).values({
+    id,
+    name,
+    size: 1024,
+    mimeType: 'application/pdf',
+    uploadedBy: uploaderId,
+  });
+  return id;
+}
+
 describe('sendTeamMessageAction', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
-    __resetTeamChatServiceForTest();
   });
   afterEach(() => {
     teardownRfpActionEnv();
-    __resetTeamChatServiceForTest();
     sessionRef.value = null;
     vi.clearAllMocks();
   });
@@ -137,6 +146,47 @@ describe('sendTeamMessageAction', () => {
 
     const r = await sendTeamMessageAction({ rfpId: rfp.id, body: '메모' });
     expect(r.ok).toBe(true);
+  });
+
+  it('links attachments and includes them in the result + fanout payload', async () => {
+    const { buyerUser, buyerWs, rfp } = await seedScene();
+    asBuyer(buyerUser, buyerWs.id);
+    const a1 = await seedDraftAttachment(buyerUser.id, 'memo.pdf');
+
+    const r = await sendTeamMessageAction({
+      rfpId: rfp.id,
+      body: '첨부 메모',
+      attachmentIds: [a1],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.attachments.map((a) => a.id)).toEqual([a1]);
+
+    const [attRow] = await db
+      .select()
+      .from(attachments)
+      .where(eq(attachments.id, a1))
+      .limit(1);
+    expect(attRow.rfpTeamMessageId).toBe(r.messageId);
+
+    const [, , payload] = vi.mocked(publishTeamChatEvent).mock.calls[0];
+    expect(
+      (payload as { attachments?: { id: string }[] }).attachments?.map((a) => a.id),
+    ).toEqual([a1]);
+  });
+
+  it('allows an attachment-only message (empty body)', async () => {
+    const { buyerUser, buyerWs, rfp } = await seedScene();
+    asBuyer(buyerUser, buyerWs.id);
+    const a1 = await seedDraftAttachment(buyerUser.id);
+
+    const r = await sendTeamMessageAction({
+      rfpId: rfp.id,
+      body: '',
+      attachmentIds: [a1],
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.attachments).toHaveLength(1);
   });
 
   it('propagates service errors (FORBIDDEN for a non-owning buyer)', async () => {
