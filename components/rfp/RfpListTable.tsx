@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
+import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
 import { formatDate } from '@/lib/format';
 import type { RFP } from '@/lib/types/rfp';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -34,6 +35,12 @@ export function RfpListTable({ rfps }: Props) {
   const searchParams = useSearchParams();
   const peekCode = searchParams.get('peek');
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
+
+  // 딜룸 ‹ › 이전/다음용 목록 순서 시드(현재 정렬 기준).
+  const setNavOrder = useDealRoomNav((s) => s.setOrder);
+  useEffect(() => {
+    setNavOrder('/rfp', rfps.map((r) => r.code));
+  }, [rfps, setNavOrder]);
   const [deleteCode, setDeleteCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

@@ -40,7 +40,6 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
     <DealRoomModal
       code={data.rfp.code}
       title={data.rfp.title}
-      fullscreenHref={`/rfp/${data.rfp.code}`}
       statusChip={s ? <Chip label={s.label} color={s.color} /> : undefined}
       chat={
         <DealRoomChat

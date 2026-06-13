@@ -38,7 +38,6 @@ export default async function InboxDealRoomModalPage({ params }: Props) {
       <DealRoomModal
         code={data.rfp.code}
         title={data.rfp.title}
-        fullscreenHref={`/inbox/${data.rfp.code}`}
         statusChip={<Chip label={chip.label} color={chip.color} />}
         chat={
           // 온보딩 샘플은 데모 구매사라 채팅 비노출(정식 페이지와 동일). 그 외엔

@@ -1,17 +1,17 @@
 'use client';
 
 /**
- * DealRoomShell — 견적 딜룸의 레이아웃 골격(상단바 + 본문).
+ * DealRoomShell — 견적 딜룸의 레이아웃 골격(상단바 + 3-pane 본문).
  *
  * mode='modal' 은 인터셉트 라우트가 띄우는 모달 안에서, mode='page' 는 정식
- * 상세 페이지(새로고침·딥링크·전체화면 진입)에서 렌더된다. 둘 다 같은 본문
- * 컴포넌트를 감싸므로 모달↔페이지 시각이 일치한다.
+ * 상세 페이지(새로고침·딥링크)에서 렌더된다. 둘 다 같은 본문을 감싸 시각이 일치한다.
  *
- * Phase 1 골격: 상단바(코드·제목·상태칩·전체화면·닫기) + 스크롤 본문.
- * 좌측 액션 레일 / 가운데 탭 / 우측 채팅은 후속 Phase 에서 본문으로 합류한다.
+ * 상단바: ‹ ›(목록 순서 이전/다음) · 코드·제목 · 상태칩 · 전체화면 토글 · 닫기.
+ * 본문: children(좌측 레일 + 가운데 탭) + 우측 채팅(lg 이상). 전체화면은 모달을
+ * CSS 로 inset-0 확장(리마운트·리페치 없음) — DealRoomModal 이 상태를 소유한다.
  */
 import type { ReactNode } from 'react';
-import { Maximize2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2, X } from 'lucide-react';
 
 import { IconButton } from '@/components/primitives/IconButton';
 
@@ -20,12 +20,18 @@ type DealRoomShellProps = {
   /** 사람용 코드 P-YYMM-NNNN */
   code: string;
   title: string;
-  /** 전체화면(⤢) 링크 — 정식 상세 페이지 경로. page 모드에선 숨김. */
-  fullscreenHref: string;
   statusChip?: ReactNode;
   /** modal 모드 닫기(보통 router.back). */
   onClose?: () => void;
-  /** 우측 채팅 칼럼(상대방/팀). lg 이상에서만 노출 — 미만은 후속 Phase 의 하단 시트. */
+  /** 전체화면 토글(CSS inset-0). 제공 시 ⤢ 버튼 노출(modal 모드). */
+  fullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  /** 목록 순서 이전/다음 견적으로 이동. 끝단/컨텍스트 없음이면 비활성. */
+  onPrev?: () => void;
+  onNext?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
+  /** 우측 채팅 칼럼(상대방/팀). lg 이상에서만 노출. */
   chat?: ReactNode;
   children: ReactNode;
 };
@@ -34,18 +40,35 @@ export function DealRoomShell({
   mode,
   code,
   title,
-  fullscreenHref,
   statusChip,
   onClose,
+  fullscreen = false,
+  onToggleFullscreen,
+  onPrev,
+  onNext,
+  hasPrev = false,
+  hasNext = false,
   chat,
   children,
 }: DealRoomShellProps) {
+  const showNav = mode === 'modal' && (onPrev != null || onNext != null);
+
   return (
     <div
       data-mode={mode}
       className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-surface)]"
     >
       <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-2.5">
+        {showNav && (
+          <div className="flex items-center">
+            <IconButton label="이전 견적" size="sm" onClick={onPrev} disabled={!hasPrev}>
+              <ChevronLeft />
+            </IconButton>
+            <IconButton label="다음 견적" size="sm" onClick={onNext} disabled={!hasNext}>
+              <ChevronRight />
+            </IconButton>
+          </div>
+        )}
         <div className="flex min-w-0 items-center gap-2">
           <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
             {code}
@@ -57,17 +80,14 @@ export function DealRoomShell({
         </div>
         {statusChip}
         <div className="ml-auto flex items-center gap-0.5">
-          {mode === 'modal' && (
-            // 전체화면 = canonical 경로로의 하드 내비(전체 새로고침). 모달의 URL 은
-            // 이미 /rfp/<code> 이므로 soft-nav 로는 모달↔페이지가 안 바뀐다 —
-            // 풀 리로드만 인터셉터를 건너뛰어 정식 페이지를 띄운다(next/link 아님).
-            <a
-              href={fullscreenHref}
-              aria-label="전체화면"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] [&_svg]:size-4"
+          {mode === 'modal' && onToggleFullscreen && (
+            <IconButton
+              label={fullscreen ? '창 모드로' : '전체화면'}
+              size="sm"
+              onClick={onToggleFullscreen}
             >
-              <Maximize2 />
-            </a>
+              {fullscreen ? <Minimize2 /> : <Maximize2 />}
+            </IconButton>
           )}
           {mode === 'modal' && onClose && (
             <IconButton label="닫기" size="sm" onClick={onClose}>
