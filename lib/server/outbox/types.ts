@@ -11,7 +11,8 @@ export type OutboxEvent =
   | 'workspace.invited'
   | 'workspace.approved'
   | 'workspace.rejected'
-  | 'chat.message';
+  | 'chat.message'
+  | 'rfp.requote_requested';
 
 export type OutboxEntry = {
   id: string;

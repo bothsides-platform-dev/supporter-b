@@ -2,6 +2,7 @@ import {
   pgTable,
   uuid,
   text,
+  integer,
   timestamp,
   numeric,
   jsonb,
@@ -40,6 +41,8 @@ export const bids = pgTable(
     // 커스텀 결제수단별 수수료 JSONB: { <customId>: 0.02, ... } (rfps.customPaymentMethods.id 기준)
     customFees: jsonb('custom_fees').notNull().default(sql`'{}'::jsonb`),
     memo: text('memo').notNull().default(''),
+    /** PG별 제출 순번. 1차=1, 재요청 응답=2…. */
+    round: integer('round').notNull().default(1),
     status: bidStatusEnum('status').notNull().default('submitted'),
     boardColumnId: uuid('board_column_id').references(() => columns.id, {
       onDelete: 'set null',
@@ -51,7 +54,7 @@ export const bids = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
-    unique('bids_rfp_pg_unique').on(t.rfpId, t.pgWsId),
+    unique('bids_rfp_pg_round_unique').on(t.rfpId, t.pgWsId, t.round),
     index('bids_pg_ws_idx').on(t.pgWsId),
     index('bids_board_column_idx').on(t.boardColumnId),
   ],

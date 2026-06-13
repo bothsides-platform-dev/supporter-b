@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RfpBriefPanel } from './RfpBriefPanel';
 import { BidWizard } from './bid-wizard/BidWizard';
+import { SamplePgRfpBanner } from './SamplePgRfpBanner';
+import { RequoteBanner } from './RequoteBanner';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
@@ -15,11 +17,28 @@ export function PgRfpDetailContent({
   data: PgRfpDetailData;
   variant?: 'peek' | 'full';
 }) {
-  const { rfp, myBid, buyerName, quoteTemplates } = data;
+  const { rfp, myBid, buyerName, quoteTemplates, pendingRequote } = data;
+  // 온보딩 샘플 안내 + 삭제 — 모든 분기 상단에 노출.
+  const sampleBanner = rfp.isSample ? (
+    <div className="mb-6">
+      <SamplePgRfpBanner rfpCode={rfp.code} />
+    </div>
+  ) : null;
+
+  // 재요청 진행 중 → 배너 + prefill 폼(다시 제출 가능). (샘플은 재요청 대상이 아님.)
+  if (pendingRequote) {
+    return (
+      <>
+        <RequoteBanner message={pendingRequote.message} deadline={pendingRequote.deadline} />
+        <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} initialBid={myBid} />
+      </>
+    );
+  }
 
   if (myBid) {
     return (
       <>
+        {sampleBanner}
         <RfpBriefPanel rfp={rfp} buyerName={buyerName} />
         <div className="mt-10 border-t border-[var(--md-sys-color-outline-variant)] pt-8 space-y-4">
           <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-tertiary)]">
@@ -41,12 +60,18 @@ export function PgRfpDetailContent({
   }
 
   if (variant === 'full') {
-    return <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} />;
+    return (
+      <>
+        {sampleBanner}
+        <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} />
+      </>
+    );
   }
 
   // peek(기본): 읽기전용 브리프 + 전체 페이지로 가는 '견적 작성' CTA
   return (
     <div>
+      {sampleBanner}
       <RfpBriefPanel rfp={rfp} buyerName={buyerName} />
       <div className="mt-8 border-t border-[var(--md-sys-color-outline-variant)] pt-6">
         <Link

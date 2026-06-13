@@ -10,8 +10,18 @@ import {
   requirePgWorkspace,
 } from './_shared';
 
-// Mirrors submitBidAction's fee envelope: per-method decimal rates 0..1.
-const feeField = z.number().min(0).max(1).optional();
+// Mirrors submitBidAction's fee envelope: per-method decimal rates 0..1, or tier-rate maps.
+const tierRatesSchema = z
+  .object({
+    sole: z.number().min(0).max(1).optional(),
+    sme1: z.number().min(0).max(1).optional(),
+    sme2: z.number().min(0).max(1).optional(),
+    sme3: z.number().min(0).max(1).optional(),
+    general: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+
+const feeField = z.union([z.number().min(0).max(1), tierRatesSchema]).optional();
 
 const PaymentFeesSchema = z
   .object({

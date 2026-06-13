@@ -1,14 +1,15 @@
 // components/rfp/RfpStep2Content.tsx
 'use client';
 
+import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
-import { underlineInputClass } from '@/components/forms/inputs';
+import { underlineInputClass, CurrencyInput } from '@/components/forms/inputs';
 import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
-import { isValidWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { cn } from '@/lib/utils';
 
 const CONTRACT_TYPE_OPTIONS = [
@@ -28,17 +29,24 @@ const SOLUTION_OPTIONS = [
 type Props = {
   onBack: () => void;
   onNext: () => void;
+  /** 위저드에서 이미 advance 실패를 경험한 step — 다음 클릭 없이도 에러를 표시 */
+  showFieldErrors?: boolean;
 };
 
-export function RfpStep2Content({ onBack, onNext }: Props) {
+export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
   const draft = useRfpDraftStore();
+  const [attempted, setAttempted] = useState(false);
 
-  const websiteInvalid = !isValidWebsiteUrl(draft.websiteUrl);
+  const websiteInvalid = !isValidWebsiteUrlLight(draft.websiteUrl);
+  const titleError = (attempted || !!showFieldErrors) && draft.title.trim() === '';
 
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <Label size="md" muted>견적 유형 <span className="text-[var(--md-sys-color-on-surface-variant)]">(선택)</span></Label>
+        <div className="flex items-center gap-1">
+          <Label size="md" muted>견적 유형 <span className="text-[var(--md-sys-color-on-surface-variant)]">(선택)</span></Label>
+          <InfoTip term="견적유형" />
+        </div>
         <div className="flex gap-2">
           {CONTRACT_TYPE_OPTIONS.map(({ value, label }) => (
             <button
@@ -67,8 +75,12 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           value={draft.title}
           onChange={(e) => draft.setField('title', e.target.value)}
           placeholder="2026 서포트쇼핑몰 결제 인프라 견적 요청"
-          className={underlineInputClass}
+          aria-invalid={titleError}
+          className={cn(underlineInputClass, titleError && 'border-[var(--md-sys-color-error)]')}
         />
+        {titleError && (
+          <p className="text-[12px] text-[var(--md-sys-color-error)]">제목을 입력해주세요</p>
+        )}
       </div>
       <div className="space-y-1">
         <Label size="md" muted={false}>사업 운영 홈페이지</Label>
@@ -76,7 +88,11 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           type="text"
           value={draft.websiteUrl}
           onChange={(e) => draft.setField('websiteUrl', e.target.value)}
-          placeholder="https://supporter-b.com/"
+          onBlur={(e) => {
+            const normalized = normalizeWebsiteUrl(e.target.value);
+            if (normalized !== e.target.value) draft.setField('websiteUrl', normalized);
+          }}
+          placeholder="example.com"
           aria-invalid={websiteInvalid}
           className={underlineInputClass}
         />
@@ -96,16 +112,12 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
           className={underlineInputClass}
         />
       </div>
-      <div className="space-y-1">
-        <Label size="md" muted={false}>전년도 연간 PG 총 거래액</Label>
-        <input
-          type="text"
-          value={draft.annualPgVolume}
-          onChange={(e) => draft.setField('annualPgVolume', e.target.value)}
-          placeholder="10억"
-          className={underlineInputClass}
-        />
-      </div>
+      <CurrencyInput
+        label="전년도 연간 PG 총 거래액"
+        value={draft.annualPgVolume}
+        onChange={(v) => draft.setField('annualPgVolume', v)}
+        placeholder="10억"
+      />
       <div className="space-y-1">
         <div className="flex items-center gap-1">
           <Label size="md" muted={false}>현재 카드 수수료</Label>
@@ -226,7 +238,7 @@ export function RfpStep2Content({ onBack, onNext }: Props) {
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
-        <Button type="button" size="md" onClick={onNext}>
+        <Button type="button" size="md" onClick={() => { setAttempted(true); onNext(); }}>
           다음
         </Button>
       </div>

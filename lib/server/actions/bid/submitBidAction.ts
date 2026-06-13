@@ -1,31 +1,23 @@
 'use server';
 
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 
 import { requirePgSession } from '@/lib/auth/session';
-import { attachments, workspaceMembers, users, workspaces } from '@/lib/db/schema';
-import {
-  getAttachmentRepo,
-  getBidRepo,
-  getInvitationRepo,
-  getOutboxRepo,
-  getRfpRepo,
-  getWorkspaceRepo,
-} from '@/lib/server/repositories/factory';
-import {
-  dispatchNotification,
-  emitAfterCommit,
-} from '@/lib/server/notifications/dispatch';
-import { renderBidSubmitted } from '@/lib/server/outbox/templates/bidSubmitted';
-import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
-import type { Bid } from '@/lib/types/bid';
-import type { Notification } from '@/lib/types/notification';
-import { actionDb, type BidActionResult } from './_shared';
+import { getBidService } from '@/lib/server/services/bid';
+import type { BidActionResult } from './_shared';
 
-const feeField = z.number().min(0).max(1).optional();
+const tierRatesSchema = z
+  .object({
+    sole: z.number().min(0).max(1).optional(),
+    sme1: z.number().min(0).max(1).optional(),
+    sme2: z.number().min(0).max(1).optional(),
+    sme3: z.number().min(0).max(1).optional(),
+    general: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+
+const feeField = z.union([z.number().min(0).max(1), tierRatesSchema]).optional();
 
 const PaymentFeesSchema = z
   .object({
@@ -48,7 +40,6 @@ const Input = z
     settleLimit: z.number().nonnegative(),
     guaranteeInsurance: z.number().nonnegative(),
     paymentFees: PaymentFeesSchema,
-    // 커스텀 결제수단 요율: { <customId>: 0..1 }. 키 유효성은 RFP 대조로 검증.
     customFees: z.record(z.string(), z.number().min(0).max(1)).optional().default({}),
     proposalAttachmentId: z.string().uuid().optional(),
     memo: z.string().max(2000).optional(),
@@ -58,21 +49,7 @@ const Input = z
 export type SubmitBidInput = z.input<typeof Input>;
 export type SubmitBidResult = BidActionResult<{ bidId: string }>;
 
-/**
- * PG 견적 제출 (v2 — payment_fees JSONB 모델).
- *
- * 트랜잭션 단계:
- *   1) requirePgSession
- *   2) zod 검증
- *   3) canAccess 가드: 초대된 PG 워크스페이스 멤버라면 누구나 통과
- *   4) 결제수단 범위 검증: 요청된 수단/커스텀 id만 허용 (카드는 등급 무관 협상 입력)
- *   5) invitation 조회 → invitationId 픽업
- *   6) BidRepo.save — UNIQUE(rfpId, pgWsId) 위반은 'BID_ALREADY_SUBMITTED'
- *   7) buyer ws 멤버 → notifications.in_app + outbox.bid.submitted
- */
-export async function submitBidAction(
-  input: SubmitBidInput,
-): Promise<SubmitBidResult> {
+export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidResult> {
   let session;
   try {
     session = await requirePgSession();
@@ -83,165 +60,23 @@ export async function submitBidAction(
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
-  const data = parsed.data;
-  const userId = session.user.id;
-  const pgWsId = session.user.workspaceId;
-
-  const invRepo = await getInvitationRepo();
-  const ok = await invRepo.canAccess(data.rfpId, pgWsId);
-  if (!ok) return { ok: false, error: 'FORBIDDEN' };
-
-  const rfpRepo = await getRfpRepo();
-  const rfp = await rfpRepo.findById(data.rfpId);
-  if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
-  if (rfp.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
-
-  // 결제수단 범위 검증: PG는 구매사가 요청한 수단만 제안할 수 있다.
-  // requiredPaymentMethods 가 비어 있으면 (= 제한 없음) 9종 enum 키는 자유 허용.
-  const required = rfp.requiredPaymentMethods;
-  if (required.length > 0) {
-    for (const method of Object.keys(data.paymentFees)) {
-      if (!required.includes(method as (typeof required)[number])) {
-        return { ok: false, error: 'PAYMENT_METHOD_NOT_REQUESTED' };
-      }
-    }
-  }
-  // 커스텀 수단은 항상 RFP에 선언된 id 집합으로 제한.
-  const customIds = new Set(rfp.customPaymentMethods.map((m) => m.id));
-  for (const id of Object.keys(data.customFees)) {
-    if (!customIds.has(id)) {
-      return { ok: false, error: 'PAYMENT_METHOD_NOT_REQUESTED' };
-    }
-  }
-
-  const allInvs = await invRepo.findByRfp(data.rfpId);
-  const myInv = allInvs.find((i) => i.pgWsId === pgWsId);
-  if (!myInv) return { ok: false, error: 'INVITATION_NOT_FOUND' };
-
-  if (data.proposalAttachmentId) {
-    const att = await (await getAttachmentRepo()).findById(
-      data.proposalAttachmentId,
-    );
-    if (!att || att.rfpId || att.bidId || att.bidNoteId) {
-      return { ok: false, error: 'INVALID_ATTACHMENT' };
-    }
-    const uploaderIsMember = await (await getWorkspaceRepo()).isMember(
-      att.uploadedBy,
-      pgWsId,
-    );
-    if (!uploaderIsMember) {
-      return { ok: false, error: 'INVALID_ATTACHMENT' };
-    }
-  }
-
-  const db = actionDb();
-  const bidId = randomUUID();
-  const now = new Date();
-
-  const bidRepo = await getBidRepo();
-  const existingBids = await bidRepo.findByRfp(data.rfpId);
-  if (existingBids.some((b) => b.pgWsId === pgWsId)) {
-    return { ok: false, error: 'BID_ALREADY_SUBMITTED' };
-  }
-
-  const pendingEmits: Notification[] = [];
-
-  const result: SubmitBidResult = await db.transaction(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (tx: any): Promise<SubmitBidResult> => {
-      const bid: Bid = {
-        id: bidId,
-        rfpId: data.rfpId,
-        pgWsId,
-        invitationId: myInv.id,
-        settleCycle: data.settleCycle,
-        settleLimit: data.settleLimit,
-        guaranteeInsurance: data.guaranteeInsurance,
-        paymentFees: data.paymentFees,
-        customFees: data.customFees,
-        proposalPdfs: [],
-        memo: data.memo,
-        status: 'submitted',
-        submittedBy: userId,
-        submittedAt: now.toISOString(),
-      };
-
-      await bidRepo.save(bid, tx);
-
-      if (data.proposalAttachmentId) {
-        await tx
-          .update(attachments)
-          .set({ bidId })
-          .where(
-            and(
-              inArray(attachments.id, [data.proposalAttachmentId]),
-              isNull(attachments.rfpId),
-              isNull(attachments.bidId),
-              isNull(attachments.bidNoteId),
-            ),
-          );
-      }
-
-      const buyerMembers = (await tx
-        .select({ userId: workspaceMembers.userId, email: users.email })
-        .from(workspaceMembers)
-        .innerJoin(users, eq(workspaceMembers.userId, users.id))
-        .where(eq(workspaceMembers.workspaceId, rfp.buyerWsId))) as {
-        userId: string;
-        email: string;
-      }[];
-
-      const [pgWsRow] = (await tx
-        .select({ name: workspaces.name })
-        .from(workspaces)
-        .where(eq(workspaces.id, pgWsId))
-        .limit(1)) as { name: string }[];
-      const pgWsLabel = pgWsRow?.name ?? 'PG';
-
-      const outbox = await getOutboxRepo();
-
-      const submittedHtml = await renderBidSubmitted({
-        rfpId: rfp.code,
-        rfpTitle: rfp.title,
-        pgName: pgWsLabel,
-        submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
-      });
-
-      for (const m of buyerMembers) {
-        const notif: Notification = {
-          id: randomUUID(),
-          userId: m.userId,
-          workspaceId: rfp.buyerWsId,
-          type: 'bid.submitted',
-          title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-          body: `${pgWsLabel}가 견적을 보냈어요.`,
-          channel: 'inapp',
-          status: 'pending',
-          linkUrl: `/rfp/${rfp.code}`,
-          createdAt: now.toISOString(),
-        };
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
-        await outbox.enqueue(
-          {
-            event: 'bid.submitted',
-            to: m.email,
-            subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-            html: submittedHtml,
-            dedupeKey: `bid:${data.rfpId}:${pgWsId}:${m.userId}`,
-          },
-          tx,
-        );
-      }
-
-      return { ok: true, bidId };
+  const service = await getBidService();
+  const result = await service.submit(
+    {
+      rfpId: parsed.data.rfpId,
+      settleCycle: parsed.data.settleCycle,
+      settleLimit: parsed.data.settleLimit,
+      guaranteeInsurance: parsed.data.guaranteeInsurance,
+      paymentFees: parsed.data.paymentFees,
+      customFees: parsed.data.customFees,
+      proposalAttachmentId: parsed.data.proposalAttachmentId,
+      memo: parsed.data.memo,
     },
+    { userId: session.user.id, workspaceId: session.user.workspaceId },
   );
 
   if (result.ok) {
-    emitAfterCommit(pendingEmits);
-    flushAfterCommit();
-    revalidatePath(`/inbox/${rfp.code}`);
+    revalidatePath(`/inbox/${result.rfpCode}`);
   }
-  return result;
+  return result.ok ? { ok: true, bidId: result.bidId } : result;
 }

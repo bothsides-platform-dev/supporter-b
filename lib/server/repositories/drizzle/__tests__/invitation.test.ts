@@ -118,6 +118,14 @@ describe('DrizzleInvitationRepository', () => {
     expect(await repo.canAccess(ctx.rfpId, ctx.pgWs.id)).toBe(true);
   });
 
+  it('findByPgWorkspace includes the buyer workspace name', async () => {
+    const raw = generateToken();
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), raw);
+    const pairs = await repo.findByPgWorkspace(ctx.pgWs.id);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]!.buyerName).toBe('구매사');
+  });
+
   it('markOpened transitions pending → opened (non-claimer first visit) and is idempotent', async () => {
     const raw = generateToken();
     const inv = makeInvitation(ctx.rfpId, ctx.pgWs.id);
@@ -271,5 +279,73 @@ describe('DrizzleInvitationRepository', () => {
   it('findByRfpIds: 빈 입력 → 빈 Map', async () => {
     const map = await repo.findByRfpIds([]);
     expect(map.size).toBe(0);
+  });
+});
+
+describe('InvitationRepo.findByRfpAndPg', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  let repo: DrizzleInvitationRepository;
+  beforeEach(async () => { ctx = await setup(); repo = ctx.repo; });
+
+  it('returns undefined when no invitation exists for the pair', async () => {
+    const result = await repo.findByRfpAndPg(ctx.rfpId, ctx.pgWs.id);
+    expect(result).toBeUndefined();
+  });
+
+  it('returns the invitation regardless of status', async () => {
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), generateToken());
+    const result = await repo.findByRfpAndPg(ctx.rfpId, ctx.pgWs.id);
+    expect(result).toBeDefined();
+    expect(result!.pgWsId).toBe(ctx.pgWs.id);
+    expect(result!.rfpId).toBe(ctx.rfpId);
+  });
+
+  it('returns draft invitation by (rfpId, pgWsId)', async () => {
+    const invId = randomUUID();
+    await repo.saveDraft(invId, ctx.rfpId, ctx.pgWs.id, new Date(Date.now() + 86_400_000));
+    const result = await repo.findByRfpAndPg(ctx.rfpId, ctx.pgWs.id);
+    expect(result).toBeDefined();
+    expect(result!.status).toBe('draft');
+  });
+});
+
+describe('InvitationRepo.saveDraft', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  let repo: DrizzleInvitationRepository;
+  beforeEach(async () => { ctx = await setup(); repo = ctx.repo; });
+
+  it('inserts row with status=draft and tokenHash=draft-{id}', async () => {
+    const invId = randomUUID();
+    await repo.saveDraft(invId, ctx.rfpId, ctx.pgWs.id, new Date(Date.now() + 86_400_000));
+    const [row] = await ctx.db
+      .select()
+      .from(rfpInvitations)
+      .where(eq(rfpInvitations.id, invId));
+    expect(row).toBeDefined();
+    expect(row!.status).toBe('draft');
+    expect(row!.tokenHash).toBe(`draft-${invId}`);
+    expect(row!.pgWsId).toBe(ctx.pgWs.id);
+  });
+});
+
+describe('InvitationRepo.promoteDraft', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  let repo: DrizzleInvitationRepository;
+  beforeEach(async () => { ctx = await setup(); repo = ctx.repo; });
+
+  it('updates tokenHash and transitions draft → pending', async () => {
+    const invId = randomUUID();
+    const expiresAt = new Date(Date.now() + 86_400_000);
+    await repo.saveDraft(invId, ctx.rfpId, ctx.pgWs.id, expiresAt);
+    const rawToken = generateToken();
+    const now = new Date();
+    await repo.promoteDraft(invId, rawToken, now, expiresAt);
+    const [row] = await ctx.db
+      .select()
+      .from(rfpInvitations)
+      .where(eq(rfpInvitations.id, invId));
+    expect(row!.status).toBe('pending');
+    expect(row!.tokenHash).toBe(hashToken(rawToken));
+    expect(row!.tokenHash).not.toMatch(/^draft-/);
   });
 });

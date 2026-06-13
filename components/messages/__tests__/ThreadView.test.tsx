@@ -73,6 +73,7 @@ beforeEach(() => {
 });
 
 import { ThreadView } from '../ThreadView';
+import { formatTime } from '../format';
 import type { ThreadMessage } from '../types';
 
 const counterparty = { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const };
@@ -852,5 +853,132 @@ describe('ThreadView 자동 스크롤', () => {
     list.scrollTop = 700; // diff = 1000 - 700 - 300 = 0 → 하단 근처
     fireEvent.scroll(list);
     expect(screen.queryByRole('button', { name: /새 메시지/ })).not.toBeInTheDocument();
+  });
+});
+
+// ── 채팅 레일 확장: defaultRfpId + variant='rail' ────────────────────────────
+// 상세 화면 임베드(ChatRail)에서 ThreadView 가 (1) 컴포저 전송에 해당 RFP 태그를
+// 기본 적용하고 (2) w-64 사이드 갤러리 대신 오버레이 갤러리를 쓰도록 하는 분기.
+
+describe('ThreadView — defaultRfpId (레일 컨텍스트 RFP 태그)', () => {
+  it('defaultRfpId 가 있으면 전송 시 rfpId 를 포함하고 낙관적 말풍선에 RFP 칩을 단다', async () => {
+    const user = userEvent.setup();
+    render(
+      base({
+        defaultRfpId: 'rfp-uuid-1',
+        rfpById: { 'rfp-uuid-1': { code: 'P-2606-0001', title: '결제 견적 요청' } },
+      }),
+    );
+
+    await user.type(screen.getByPlaceholderText('메시지를 입력하세요…'), '레일에서 보낸 메시지');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    await waitFor(() => {
+      expect(sendChatMessageAction).toHaveBeenCalledWith({
+        conversationId: 'conv-1',
+        body: '레일에서 보낸 메시지',
+        attachmentIds: [],
+        rfpId: 'rfp-uuid-1',
+      });
+    });
+
+    // 낙관적/확정 말풍선에 RFP 컨텍스트 칩(코드, uuid 원문 노출 금지)이 붙는다.
+    const row = screen.getByText('레일에서 보낸 메시지').closest('[data-message-row]')!;
+    expect(within(row as HTMLElement).getByText('P-2606-0001')).toBeInTheDocument();
+    expect(screen.queryByText('rfp-uuid-1')).not.toBeInTheDocument();
+  });
+
+  it('defaultRfpId 가 없으면 기존처럼 rfpId 없이 전송한다', async () => {
+    const user = userEvent.setup();
+    render(base());
+
+    await user.type(screen.getByPlaceholderText('메시지를 입력하세요…'), '일반 전송');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    await waitFor(() => {
+      expect(sendChatMessageAction).toHaveBeenCalledWith({
+        conversationId: 'conv-1',
+        body: '일반 전송',
+        attachmentIds: [],
+        rfpId: undefined,
+      });
+    });
+  });
+});
+
+describe('ThreadView — 컴포저 가드·승격 시각', () => {
+  it('한글 IME 조합 중 Enter 는 전송하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(base());
+    const ta = screen.getByPlaceholderText('메시지를 입력하세요…');
+
+    await user.type(ta, '한글입력');
+    fireEvent.keyDown(ta, { key: 'Enter', isComposing: true, keyCode: 229 });
+    expect(sendChatMessageAction).not.toHaveBeenCalled();
+  });
+
+  it('확정 승격 시 서버 createdAt 을 채택한다', async () => {
+    sendChatMessageAction.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      messageId: 'm-new',
+      createdAt: '2026-06-10T01:23:00.000Z',
+    });
+    const user = userEvent.setup();
+    render(base());
+
+    await user.type(screen.getByPlaceholderText('메시지를 입력하세요…'), '시각 확인');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    await waitFor(() => {
+      const row = screen.getByText('시각 확인').closest('[data-message-row]')!;
+      expect(
+        within(row as HTMLElement).getByText(formatTime('2026-06-10T01:23:00.000Z')),
+      ).toBeInTheDocument();
+    });
+  });
+});
+
+describe('ThreadView — variant="rail" 갤러리 오버레이', () => {
+  const messagesWithAttachment: ThreadMessage[] = [
+    {
+      id: 'm-att',
+      sender: 'other',
+      body: '첨부 보냈어요.',
+      rfpId: null,
+      createdAt: '2026-05-26T05:00:00.000Z',
+      readByCounterparty: false,
+      attachments: [
+        {
+          id: 'att-1',
+          name: '제안서.pdf',
+          size: 1000,
+          mimeType: 'application/pdf',
+          url: '/api/files/att-1',
+        },
+      ],
+    },
+  ];
+
+  it('rail 변형에서 갤러리 토글은 사이드 패널 대신 오버레이로 띄운다', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      base({ variant: 'rail', messages: messagesWithAttachment }),
+    );
+
+    await user.click(screen.getByRole('button', { name: /파일 1/ }));
+
+    expect(container.querySelector('[data-gallery-overlay]')).toBeInTheDocument();
+    expect(container.querySelector('[data-gallery-pane]')).not.toBeInTheDocument();
+  });
+
+  it('기본(page) 변형에서는 기존 사이드 패널을 유지한다', async () => {
+    const user = userEvent.setup();
+    const { container } = render(base({ messages: messagesWithAttachment }));
+
+    await user.click(screen.getByRole('button', { name: /파일 1/ }));
+
+    expect(container.querySelector('[data-gallery-pane]')).toBeInTheDocument();
+    expect(container.querySelector('[data-gallery-overlay]')).not.toBeInTheDocument();
   });
 });

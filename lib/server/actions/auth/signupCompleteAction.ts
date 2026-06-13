@@ -1,31 +1,24 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
-import { and, eq, isNotNull } from 'drizzle-orm';
-import { hashPassword } from '@/lib/auth/password';
-import { passwordSchema } from '@/lib/auth/password-validation';
-import { users, phoneOtps, pgProfiles } from '@/lib/db/schema';
 import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
-import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
-import { purgeUnverifiedSignup } from './_purgeUnverifiedSignup';
+import { passwordSchema } from '@/lib/auth/password-validation';
 import {
   notifyAdminNewSignupAfterCommit,
-  type AdminSignupNotice,
 } from '@/lib/server/notifications/admin-signup';
 import {
-  actionDb,
-  baseUrl,
-  isUniqueViolation,
+  adminBaseUrl,
   normalizeEmail,
   type AuthActionResult,
 } from './_shared';
 import { normalizePhone } from './phoneOtpUtils';
+import { getAuthService } from '@/lib/server/services/auth';
+import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
 
 const PgProfileInput = z
   .object({
     bizNo: z.string().min(10).max(12).refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
-    // serviceScope(결제수단·거래량) 가입 시 수집 제거 — 컬럼은 유지(null 기록).
     slaDays: z.number().int().min(1).max(30).optional(),
   })
   .strict();
@@ -40,7 +33,6 @@ const BizProfileInput = z
     taxType: z.enum(['general', 'simple', 'exempt']),
     status: z.enum(['active', 'suspended', 'closed']),
     grade: z.enum(['small', 'sme1', 'sme2', 'sme3', 'general']).optional(),
-    // 가입 시 등급 자기신고 제거 — gradeSource는 항상 'unset'으로 저장됨.
     gradeSource: z.enum(['user_confirmed', 'user_overridden', 'unset']).default(
       'unset',
     ),
@@ -69,7 +61,6 @@ const Input = z
     { message: 'MISSING_PG_PROFILE', path: ['pgProfile'] },
   );
 
-// z.input: default 필드(gradeSource 등)가 optional — 호출자가 생략해도 됨.
 export type SignupCompleteInput = z.input<typeof Input>;
 export type SignupCompleteResult = AuthActionResult<{
   redirectTo: string;
@@ -77,147 +68,57 @@ export type SignupCompleteResult = AuthActionResult<{
   password: string;
 }>;
 
-/**
- * P6 — finalise signup.
- *
- * Branches:
- *   - wsKind='buyer' → insert biz_profiles + workspaces(type='buyer') +
- *     member(role='admin'). Returns redirectTo=/rfp.
- *   - wsKind='pg' → create new PG workspace with wsName +
- *     member(role='admin'). Returns redirectTo=/inbox.
- *
- * Auth.js v5 + Next 16 makes server-side signIn flaky (cookies can't be set
- * from a server action without a route response). Per advisor block C the
- * action returns `{ password }` so the client immediately calls
- * signIn('credentials', { email, password, redirect: false }) and pushes.
- *
- * Note: invite token claiming is handled separately via claimInviteTokenAction
- * after the user is authenticated.
- */
 export async function signupCompleteAction(
   input: SignupCompleteInput,
 ): Promise<SignupCompleteResult> {
   const parsed = Input.safeParse(input);
   if (!parsed.success) {
-    // passwordSchema's refine() carries message 'WEAK_PASSWORD' so policy
-    // violations surface a dedicated error code the form can map to inline
-    // rule guidance — distinct from generic INVALID_INPUT (bad email etc).
     const weak = parsed.error.issues.some(
       (i) => i.path[0] === 'password' && i.message === 'WEAK_PASSWORD',
     );
     return { ok: false, error: weak ? 'WEAK_PASSWORD' : 'INVALID_INPUT' };
   }
 
-  const email = normalizeEmail(parsed.data.email);
+  if (!parsed.data.wsKind) return { ok: false, error: 'MISSING_WS_KIND' };
+  if (!parsed.data.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
 
-  // Frontend submits the hyphenated format (e.g. 010-1234-5678); normalize to
-  // the digits-only form used as the canonical key in phone_otps / users.phone.
+  const email = normalizeEmail(parsed.data.email);
   const normalizedPhone = normalizePhone(parsed.data.phone);
   if (!normalizedPhone) return { ok: false, error: 'INVALID_INPUT' };
 
-  const db = actionDb();
+  const svc = await getAuthService();
+  const result = await svc.completeSignup({
+    email,
+    name: parsed.data.name,
+    plainPassword: parsed.data.password,
+    phone: normalizedPhone,
+    phoneVerificationId: parsed.data.phoneVerificationId,
+    wsKind: parsed.data.wsKind,
+    wsName: parsed.data.wsName,
+    bizProfile: parsed.data.bizProfile,
+    pgProfile: parsed.data.pgProfile,
+  });
 
-  // Verify phone OTP before starting the user-creation transaction.
-  const [otpRow] = await db
-    .select()
-    .from(phoneOtps)
-    .where(
-      and(
-        eq(phoneOtps.id, parsed.data.phoneVerificationId),
-        eq(phoneOtps.phone, normalizedPhone),
-        isNotNull(phoneOtps.verifiedAt),
-      ),
-    )
-    .limit(1);
+  if (!result.ok) return result;
 
-  if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
+  notifyAdminNewSignupAfterCommit({
+    workspaceName: parsed.data.wsName,
+    orgType: parsed.data.wsKind,
+    reviewUrl: `${adminBaseUrl()}/admin/review/${result.applicationId}`,
+  });
 
-  // 이메일 인증은 더 이상 가입 게이트가 아니다 — 미인증 유저를 먼저 만들고,
-  // 인증은 가입 후 /pending-approval 에서 서버 플래그(users.emailVerified) 전환으로
-  // 처리한다(탭/기기 독립). 따라서 여기서 토큰 consumedAt 을 검사하지 않는다.
-
-  const passwordHash = await hashPassword(parsed.data.password);
-  const userId = randomUUID();
-
-  // Captured inside the tx, fired post-commit so the admin email never runs
-  // inside the DB transaction (and a render/send failure can't roll back signup).
-  let adminNotice: AdminSignupNotice | null = null;
-
-  const result = await db.transaction(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (tx: any): Promise<SignupCompleteResult> => {
-      // 0. Re-registration (결정 #2): clear an abandoned *unverified* attempt for
-      //    this email so the fresh signup proceeds. No-op for a verified user →
-      //    the UNIQUE insert below then surfaces EMAIL_TAKEN.
-      await purgeUnverifiedSignup(tx, email);
-
-      // 1. Insert user (email-unverified). Email UNIQUE — collision means a
-      //    *verified* account already exists; surface that explicitly.
-      try {
-        await tx.insert(users).values({
-          id: userId,
-          email,
-          passwordHash,
-          name: parsed.data.name,
-          phone: normalizedPhone,
-          avatarColor: 'ink',
-          status: 'active',
-          emailVerified: false,
-        });
-      } catch (err) {
-        // Email UNIQUE collision → expected. Anything else is unexpected and
-        // must propagate (onRequestError → Sentry) rather than masquerade as
-        // EMAIL_TAKEN.
-        if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-        throw err;
-      }
-
-      // 2. Workspace branch — buyer or pg. Shared creation (workspace + admin
-      //    membership + lastActiveWorkspaceId) lives in createWorkspaceInTx;
-      //    bizProfile is consumed for buyer only. redirectTo differs per kind.
-      if (parsed.data.wsKind === 'buyer' || parsed.data.wsKind === 'pg') {
-        if (!parsed.data.wsName) {
-          return { ok: false, error: 'MISSING_WS_NAME' };
-        }
-        const { workspaceId, applicationId } = await createWorkspaceInTx(tx, {
-          userId,
-          type: parsed.data.wsKind,
-          name: parsed.data.wsName,
-          bizProfile: parsed.data.bizProfile,
-        });
-
-        adminNotice = {
-          workspaceName: parsed.data.wsName,
-          orgType: parsed.data.wsKind,
-          reviewUrl: `${baseUrl()}/admin/review/${applicationId}`,
-        };
-
-        if (parsed.data.wsKind === 'pg' && parsed.data.pgProfile) {
-          await tx.insert(pgProfiles).values({
-            workspaceId,
-            bizNo: parsed.data.pgProfile.bizNo,
-            serviceScope: null, // 가입 시 수집 제거 — 컬럼은 nullable 유지
-            slaDays: parsed.data.pgProfile.slaDays ?? null,
-          });
-        }
-
-        return {
-          ok: true,
-          redirectTo: parsed.data.wsKind === 'buyer' ? '/rfp' : '/inbox',
-          email,
-          password: parsed.data.password,
-        };
-      }
-
-      return { ok: false, error: 'MISSING_WS_KIND' };
-    },
+  const host = (await headers()).get('host');
+  const redirectTo = workspaceSwitchTarget(
+    parsed.data.wsKind === 'buyer' ? 'buyer' : 'pg',
+    host,
+    appOrigins(),
+    parsed.data.wsKind === 'buyer' ? '/rfp' : '/inbox',
   );
 
-  // New pending workspace → notify admins by email (post-commit, fire-and-forget).
-  // The /admin review queue is the durable record.
-  if (result.ok && adminNotice) {
-    notifyAdminNewSignupAfterCommit(adminNotice);
-  }
-
-  return result;
+  return {
+    ok: true,
+    redirectTo,
+    email: result.email,
+    password: parsed.data.password,
+  };
 }

@@ -5,11 +5,13 @@ import { outboxEntries, users } from '@/lib/db/schema';
 import { hashPassword } from '@/lib/auth/password';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import { AuthService, __setAuthServiceForTest } from '@/lib/server/services/auth';
+import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo } from '@/lib/server/repositories/factory';
 
 // requireSession() is mocked per-test so the request action can be exercised
 // without a real Auth.js JWT cookie. The mock is attached before importing
 // the action modules so the SUT picks up the stub at module load time.
-const sessionRef: { value: { user: { id: string } } | null } = {
+const sessionRef: { value: { user: { id: string; isMaster?: boolean } } | null } = {
   value: null,
 };
 vi.mock('@/lib/auth/session', () => ({
@@ -23,7 +25,6 @@ vi.mock('@/lib/auth/session', () => ({
 
 import { emailChangeRequestAction } from '../emailChangeRequestAction';
 import { emailChangeConfirmAction } from '../emailChangeConfirmAction';
-import { __setActionDbForTest } from '../_shared';
 
 let db: PgliteDB;
 
@@ -32,7 +33,10 @@ let db: PgliteDB;
 // repo runs on the real pglite handle (separate override), so token consume
 // still succeeds.
 function throwingUpdateDb(error: unknown) {
-  return { update: () => ({ set: () => ({ where: () => { throw error; } }) }) };
+  const handle = { update: () => ({ set: () => ({ where: () => { throw error; } }) }) };
+  // confirmEmailChange wraps the update in a tx (audit log) — pass the same
+  // throwing handle through so the error still propagates.
+  return { ...handle, transaction: async (fn: (tx: unknown) => unknown) => fn(handle) };
 }
 
 async function seedUser(email: string): Promise<string> {
@@ -64,6 +68,17 @@ describe('emailChangeRequestAction', () => {
     sessionRef.value = null;
     const r = await emailChangeRequestAction({ newEmail: 'new@example.com' });
     expect(r.ok).toBe(false);
+  });
+
+  it('마스터 계정은 이메일 변경을 요청할 수 없다 → FORBIDDEN', async () => {
+    const userId = await seedUser('master@example.com');
+    sessionRef.value = { user: { id: userId, isMaster: true } };
+
+    const r = await emailChangeRequestAction({ newEmail: 'new@example.com' });
+
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    const out = await db.select().from(outboxEntries);
+    expect(out).toHaveLength(0);
   });
 
   it('issues a token + outbox row to the new address', async () => {
@@ -147,7 +162,8 @@ describe('emailChangeConfirmAction', () => {
 
   it('maps a pglite-shaped unique violation (err.cause.code) to EMAIL_TAKEN', async () => {
     const token = await issueToken();
-    __setActionDbForTest(throwingUpdateDb({ cause: { code: '23505' } }));
+    const [userRepo, vtRepo, outboxRepo, auditRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo()]);
+    __setAuthServiceForTest(new AuthService(throwingUpdateDb({ cause: { code: '23505' } }), userRepo, vtRepo, outboxRepo, auditRepo));
     const r = await emailChangeConfirmAction({ rawToken: token });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
@@ -155,9 +171,11 @@ describe('emailChangeConfirmAction', () => {
 
   it('rethrows a non-unique DB error instead of masking it as EMAIL_TAKEN', async () => {
     const token = await issueToken();
-    __setActionDbForTest(
+    const [userRepo, vtRepo, outboxRepo, auditRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo()]);
+    __setAuthServiceForTest(new AuthService(
       throwingUpdateDb(Object.assign(new Error('not null'), { code: '23502' })),
-    );
+      userRepo, vtRepo, outboxRepo, auditRepo,
+    ));
     await expect(emailChangeConfirmAction({ rawToken: token })).rejects.toThrow(
       'not null',
     );

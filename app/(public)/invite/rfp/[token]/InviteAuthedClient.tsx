@@ -27,8 +27,14 @@ export function InviteAuthedClient({ token }: { token: string }) {
         // Member of the invited PG ws but active elsewhere — switch active into
         // it so the inbox (scoped to the active ws) shows this RFP.
         if (r.switchTo) {
-          await switchWorkspaceAction(r.switchTo);
+          const sr = await switchWorkspaceAction(r.switchTo, `/inbox/${r.rfpId}`);
           if (cancelled) return;
+          if (sr.ok) {
+            // Hard nav to the host-correct URL (absolute when the switch crosses
+            // subdomains) so the RFP deep-link isn't dropped by the host guard.
+            window.location.assign(sr.redirectTo);
+            return;
+          }
         }
         router.replace(`/inbox/${r.rfpId}`);
       } else {

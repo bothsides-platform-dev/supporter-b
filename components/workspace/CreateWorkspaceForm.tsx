@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
 import { BuyerWorkspaceForm } from '@/components/auth/BuyerWorkspaceForm';
 import {
@@ -20,7 +19,6 @@ const ERROR_LABELS: Record<string, string> = {
 // PG just needs a name. On success the new ws is created (caller becomes admin),
 // switched into via the JWT, and we land on /home.
 export function CreateWorkspaceForm() {
-  const router = useRouter();
   const [type, setType] = useState<'buyer' | 'pg'>('buyer');
   const [name, setName] = useState(''); // pg only
   const [submitting, setSubmitting] = useState(false);
@@ -35,9 +33,10 @@ export function CreateWorkspaceForm() {
       setError(ERROR_LABELS[r.error] ?? r.error);
       return;
     }
-    await switchWorkspaceAction(r.workspaceId);
-    router.refresh();
-    router.push('/home');
+    const sr = await switchWorkspaceAction(r.workspaceId);
+    // Hard nav to the host-correct landing (a newly created PG ws may live on the
+    // partner subdomain). Soft router.push would leave stale shell chrome.
+    window.location.assign(sr.ok ? sr.redirectTo : '/home');
   }
 
   const pgName = name.trim();

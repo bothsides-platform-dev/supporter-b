@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { auth } from '@/auth';
+import { isSessionRevoked } from '@/lib/auth/session';
 import { workspaces, workspaceLogoBlobs } from '@/lib/db/schema';
 import { db as prodDb } from '@/lib/db/client';
 import { sniffMime } from '@/lib/server/storage/sniff';
@@ -57,6 +58,9 @@ export async function POST(req: Request, ctx: RouteContext): Promise<Response> {
   const session = await auth();
   if (!session?.user?.id) return fail(401, 'UNAUTHENTICATED');
 
+  // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
+  if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
+
   const { id } = await ctx.params;
   const wsId = (session.user as { workspaceId?: string }).workspaceId;
   if (wsId !== id) return fail(403, 'FORBIDDEN');
@@ -103,6 +107,9 @@ export async function DELETE(
 ): Promise<Response> {
   const session = await auth();
   if (!session?.user?.id) return fail(401, 'UNAUTHENTICATED');
+
+  // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
+  if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
 
   const { id } = await ctx.params;
   const wsId = (session.user as { workspaceId?: string }).workspaceId;

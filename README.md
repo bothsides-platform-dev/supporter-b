@@ -70,6 +70,9 @@ Copy-Item .env.example .env.local
 | `NTS_SERVICE_KEY` | (선택) 비워둬도 됨. 사업자번호 자동 조회를 쓰려면 [data.go.kr](https://www.data.go.kr) 에서 "국세청 사업자등록 상태조회" API 신청 |
 | `NEXT_PUBLIC_BASE_URL` | 그대로 두기 (`http://localhost:3000`) |
 | `CRON_SECRET` | 아무 문자열이나 입력. 예: `changeme` |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | (선택) 마스터/운영자 Google 로그인용. 로컬은 보통 비워둠 — 비어 있으면 Google 프로바이더 비활성 |
+| `MASTER_ACCOUNT_EMAILS` | (선택) 운영자 Google 이메일 allowlist, 쉼표로 여러 개. 운영자는 숨겨진 `/login/ops` 에서 Google로만 로그인 |
+| `NEXT_PUBLIC_MASTER_OAUTH_ENABLED` | (선택) `true` 면 `/login/ops` 라우트 활성화. 비우면 404 |
 
 > 외부 키(`RESEND_API_KEY`, `NTS_SERVICE_KEY`) 가 비어 있어도 앱은 정상적으로 떠서 화면 클릭은 가능합니다. 다만 실제 이메일 발송과 사업자번호 자동 조회는 동작하지 않습니다.
 

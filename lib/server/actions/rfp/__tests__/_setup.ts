@@ -9,6 +9,18 @@ import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getAttachmentRepo,
+  getBidNoteRepo,
+  getBidRepo,
+  getBizProfileRepo,
+  getContractRepo,
+  getInvitationRepo,
+  getOutboxRepo,
+  getPgRequestRepo,
+  getRfpRepo,
+  getRfpRequoteRequestRepo,
+  getAuditLogRepo,
+  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
 import {
@@ -16,6 +28,17 @@ import {
   __resetNtsRateLimitForTest,
 } from '@/lib/integrations/nts';
 import { MockNtsClient } from '@/lib/integrations/nts.mock';
+import { RfpService, __setRfpServiceForTest, __resetRfpServiceForTest } from '@/lib/server/services/rfp';
+import { BidService, __setBidServiceForTest, __resetBidServiceForTest } from '@/lib/server/services/bid';
+import { ChatService, __setChatServiceForTest, __resetChatServiceForTest } from '@/lib/server/services/chat';
+import { WorkspaceService, __setWorkspaceServiceForTest, __resetWorkspaceServiceForTest } from '@/lib/server/services/workspace';
+import {
+  getChatConversationRepo,
+  getChatMessageRepo,
+  getChatReadRepo,
+  getNotificationRepo,
+  getUserRepo,
+} from '@/lib/server/repositories/factory';
 
 export async function setupRfpActionEnv(): Promise<PgliteDB> {
   __resetForTest();
@@ -24,11 +47,35 @@ export async function setupRfpActionEnv(): Promise<PgliteDB> {
   __setActionDbForTest(db);
   __setNtsClientForTest(new MockNtsClient());
   __resetNtsRateLimitForTest();
+
+  // Inject services backed by the same PGlite db so action tests pass through.
+  const [
+    rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, attRepo, bidNoteRepo, pgReqRepo, bizRepo,
+    convRepo, msgRepo, userRepo, notifRepo, readRepo, requoteRepo, auditRepo,
+  ] = await Promise.all([
+    getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
+    getInvitationRepo(), getAttachmentRepo(), getBidNoteRepo(), getPgRequestRepo(), getBizProfileRepo(),
+    getChatConversationRepo(), getChatMessageRepo(), getUserRepo(), getNotificationRepo(), getChatReadRepo(),
+    getRfpRequoteRequestRepo(), getAuditLogRepo(),
+  ]);
+  __setRfpServiceForTest(new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo));
+  __setBidServiceForTest(
+    new BidService(db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo),
+  );
+  __setChatServiceForTest(
+    new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo),
+  );
+  __setWorkspaceServiceForTest(new WorkspaceService(db, outboxRepo, auditRepo));
+
   return db;
 }
 
 export function teardownRfpActionEnv(): void {
   __setActionDbForTest(undefined);
   __setNtsClientForTest(undefined);
+  __resetRfpServiceForTest();
+  __resetBidServiceForTest();
+  __resetChatServiceForTest();
+  __resetWorkspaceServiceForTest();
   __resetForTest();
 }

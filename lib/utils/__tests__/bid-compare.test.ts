@@ -4,9 +4,10 @@ import {
   rankByMetric,
   rankByCycle,
   improvement,
+  metricVerdict,
   cycleQuality,
 } from '../bid-compare';
-import type { Bid } from '@/lib/types/bid';
+import { getMethodRate, type Bid } from '@/lib/types/bid';
 
 function makeBid(over: Partial<Bid>): Bid {
   return {
@@ -22,6 +23,7 @@ function makeBid(over: Partial<Bid>): Bid {
     proposalPdfs: [],
     status: 'submitted',
     submittedBy: 'u1',
+    round: 1,
     ...over,
   };
 }
@@ -71,7 +73,7 @@ describe('rankByMetric', () => {
       makeBid({ id: 'b', paymentFees: { card: 0.022 } }),
       makeBid({ id: 'c', paymentFees: { card: 0.025 } }),
     ];
-    const ranked = rankByMetric(bids, (b) => b.paymentFees.card ?? null, 'lower');
+    const ranked = rankByMetric(bids, (b) => getMethodRate(b.paymentFees.card, 'general') ?? null, 'lower');
     expect(ranked.map((r) => r.bid.id)).toEqual(['b', 'c', 'a']);
     expect(ranked.map((r) => r.isBest)).toEqual([true, false, false]);
   });
@@ -92,7 +94,7 @@ describe('rankByMetric', () => {
       makeBid({ id: 'a', paymentFees: {} }),
       makeBid({ id: 'b', paymentFees: { card: 0.022 } }),
     ];
-    const ranked = rankByMetric(bids, (b) => b.paymentFees.card ?? null, 'lower');
+    const ranked = rankByMetric(bids, (b) => getMethodRate(b.paymentFees.card, 'general') ?? null, 'lower');
     expect(ranked.map((r) => r.bid.id)).toEqual(['b', 'a']);
     expect(ranked[1].value).toBeNull();
     expect(ranked[1].isBest).toBe(false);
@@ -134,6 +136,28 @@ describe('improvement', () => {
 
   it('returns null when the current value is not parseable', () => {
     expect(improvement(null, 0.022, 'lower')).toBeNull();
+  });
+});
+
+describe('metricVerdict', () => {
+  it('returns "better" when a lower-is-better proposal is below current', () => {
+    expect(metricVerdict(0.028, 0.022, 'lower')).toBe('better');
+  });
+
+  it('returns "worse" when a lower-is-better proposal is above current', () => {
+    expect(metricVerdict(0.022, 0.028, 'lower')).toBe('worse');
+  });
+
+  it('returns "same" when proposal equals current', () => {
+    expect(metricVerdict(0.028, 0.028, 'lower')).toBe('same');
+  });
+
+  it('returns "worse" when a higher-is-better proposal is below current', () => {
+    expect(metricVerdict(700_000_000, 500_000_000, 'higher')).toBe('worse');
+  });
+
+  it('returns null when the current value is not parseable', () => {
+    expect(metricVerdict(null, 0.022, 'lower')).toBeNull();
   });
 });
 

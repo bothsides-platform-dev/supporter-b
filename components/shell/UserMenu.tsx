@@ -1,7 +1,6 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { http } from '@/lib/http';
 import { Avatar } from '@/components/primitives/Avatar';
 import {
   DropdownMenu,
@@ -29,13 +28,12 @@ type UserMenuProps = {
 export function UserMenu({ user, workspaceType, className }: UserMenuProps) {
   const router = useRouter();
 
-  async function handleLogout() {
-    try {
-      await http.post('/logout');
-    } catch {
-      // 세션 클리어 실패해도 반드시 /login 으로 이동
-    }
-    window.location.assign('/login');
+  function handleLogout() {
+    // GET /logout clears the session cookie and redirects to /login in a single
+    // round-trip, avoiding the race where a fire-and-forget POST's Set-Cookie
+    // response arrives after the browser has already navigated to /login with the
+    // old cookie still present (causing proxy to bounce back to /home).
+    window.location.assign('/logout');
   }
 
   return (

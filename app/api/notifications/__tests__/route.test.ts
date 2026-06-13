@@ -21,6 +21,12 @@ const sessionRef: { value: unknown | null } = { value: null };
 vi.mock('@/auth', () => ({
   auth: () => Promise.resolve(sessionRef.value),
 }));
+// 폐기 세션(sv stale) 차단용 — requireSession 미사용 라우트도 동일 기준 적용.
+const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/auth/session-version-db', () => ({
+  getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
+}));
+
 
 let db: PgliteDB;
 
@@ -29,6 +35,8 @@ beforeEach(async () => {
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
   sessionRef.value = null;
+  getDbSessionVersionMock.mockReset();
+  getDbSessionVersionMock.mockResolvedValue(1);
 });
 
 afterEach(() => {
@@ -84,5 +92,14 @@ describe('GET /api/notifications', () => {
     const body = await r.json();
     expect(body.notifications).toHaveLength(2);
     expect(body.notifications.every((n: { workspaceId: string }) => n.workspaceId === wsA.id)).toBe(true);
+  });
+});
+
+describe('GET /api/notifications — 폐기 세션', () => {
+  it('sv 가 stale 한(폐기된) 세션은 401', async () => {
+    sessionRef.value = { user: { id: '00000000-0000-4000-8000-0000000000aa', email: 'x@x.com', sessionVersion: 1, workspaceId: '00000000-0000-4000-8000-0000000000cc' } };
+    getDbSessionVersionMock.mockResolvedValue(2);
+    const r = await callGet();
+    expect(r.status).toBe(401);
   });
 });

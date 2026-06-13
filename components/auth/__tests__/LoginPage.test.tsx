@@ -1,9 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const mockSearchParams = new URLSearchParams();
+// Stable spies so cross-host tests can assert push vs. window.location.assign.
+// (Lazily referenced by the factory at module import, after these init.)
+const routerPush = vi.fn();
+const routerRefresh = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: routerPush, refresh: routerRefresh }),
   useSearchParams: () => mockSearchParams,
 }));
 
@@ -89,6 +93,77 @@ describe('LoginPage — 실패 카운트 / 락 mock', () => {
         name: '로그인',
       }) as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+});
+
+describe('LoginPage — cross-host 로그인 리다이렉트', () => {
+  // Two hosts in prod: supporter-b.com (buyer) / partner.supporter-b.com (pg).
+  // The (app) shell bounces a session whose home host ≠ the host it logged in on
+  // via a server `redirect()` to an absolute cross-origin URL. Reached through a
+  // client-side router.push (RSC fetch), the browser blocks that cross-origin
+  // redirect as CORS. The login page must therefore do a FULL-PAGE navigation
+  // when the home host differs, and a soft router.push only when it matches.
+  let assign: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockSearchParams.delete('email');
+    mockSearchParams.delete('next');
+    if (typeof window !== 'undefined') window.localStorage.clear();
+    routerPush.mockReset();
+    routerRefresh.mockReset();
+    assign = vi.fn();
+    // jsdom's window.location.assign throws "not implemented"; replace location
+    // with a stub exposing host + assign so a hard navigation can be asserted.
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { host: 'partner.supporter-b.com', assign },
+    });
+    vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'https://supporter-b.com');
+    vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.supporter-b.com');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  async function submitLogin() {
+    fireEvent.change(screen.getByLabelText('이메일'), {
+      target: { value: 'user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('비밀번호'), {
+      target: { value: 'password123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+  }
+
+  it('buyer 워크스페이스 유저가 PG 호스트(partner)에서 로그인하면 buyer 호스트로 전체 페이지 이동한다 (cross-origin redirect CORS 회피)', async () => {
+    loginActionMock.mockResolvedValueOnce({
+      ok: true,
+      email: 'user@example.com',
+      workspaceType: 'buyer',
+    });
+
+    render(<LoginPage />);
+    await submitLogin();
+
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledWith('https://supporter-b.com/home'),
+    );
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('pg 워크스페이스 유저가 같은 PG 호스트에서 로그인하면 router.push로 부드럽게 이동한다 (불필요한 전체 새로고침 없음)', async () => {
+    loginActionMock.mockResolvedValueOnce({
+      ok: true,
+      email: 'user@example.com',
+      workspaceType: 'pg',
+    });
+
+    render(<LoginPage />);
+    await submitLogin();
+
+    await waitFor(() => expect(routerPush).toHaveBeenCalledWith('/home'));
+    expect(assign).not.toHaveBeenCalled();
   });
 });
 

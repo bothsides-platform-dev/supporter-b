@@ -70,6 +70,11 @@ export const GLOSSARY = {
     description:
       "초대받지 않은 PG가 공개된 견적 요청에 먼저 참여하겠다고 보내는 신청이에요. 구매사가 직접 지정하는 '초대'와는 달라요.",
   },
+  견적유형: {
+    label: '견적 유형',
+    description:
+      'PG와 처음 계약을 맺으면 신규 계약, 기존 PG와 계약 기간이 끝나 다시 맺으면 갱신 계약이에요. 선택 사항이며, PG가 제안 조건을 맞출 때 참고해요.',
+  },
 } satisfies Record<string, GlossaryEntry>;
 
 export function getGlossaryEntry(term: string): GlossaryEntry | undefined {

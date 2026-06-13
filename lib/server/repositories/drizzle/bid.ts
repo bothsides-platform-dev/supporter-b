@@ -1,7 +1,7 @@
 import { eq, inArray } from 'drizzle-orm';
 import { bids, attachments } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
-import type { Bid, PaymentMethod } from '@/lib/types/bid';
+import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { BidRepo, Tx } from '../types';
 
@@ -22,6 +22,7 @@ const BID_COLUMNS = {
   paymentFees: bids.paymentFees,
   customFees: bids.customFees,
   memo: bids.memo,
+  round: bids.round,
   status: bids.status,
   boardColumnId: bids.boardColumnId,
   submittedBy: bids.submittedBy,
@@ -60,10 +61,11 @@ function rowToBid(row: BidRow, proposalPdfs: Attachment[]): Bid {
     rfpId: row.rfpId,
     pgWsId: row.pgWsId,
     invitationId: row.invitationId,
+    round: row.round,
     settleCycle: row.settleCycle,
     settleLimit: Number(row.settleLimit),
     guaranteeInsurance: Number(row.guaranteeInsurance),
-    paymentFees: (row.paymentFees ?? {}) as Partial<Record<PaymentMethod, number>>,
+    paymentFees: (row.paymentFees ?? {}) as Partial<Record<PaymentMethod, number | TierRates>>,
     customFees: (row.customFees ?? {}) as Record<string, number>,
     proposalPdfs,
     memo: row.memo,
@@ -111,6 +113,7 @@ export class DrizzleBidRepository implements BidRepo {
         rfpId: bid.rfpId,
         pgWsId: bid.pgWsId,
         invitationId: bid.invitationId,
+        round: bid.round,
         settleCycle: bid.settleCycle,
         settleLimit: String(bid.settleLimit),
         guaranteeInsurance: String(bid.guaranteeInsurance),
@@ -124,6 +127,7 @@ export class DrizzleBidRepository implements BidRepo {
       .onConflictDoUpdate({
         target: bids.id,
         set: {
+          round: bid.round,
           settleCycle: bid.settleCycle,
           settleLimit: String(bid.settleLimit),
           guaranteeInsurance: String(bid.guaranteeInsurance),

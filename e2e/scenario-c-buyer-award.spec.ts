@@ -42,22 +42,22 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     // ── Pre: 토스 bid 복구. scenario-b 는 setup 단계에서 토스 bid 를 지우는데,
     // UI 단계가 실패하면 재제출이 일어나지 않아 DB 가 '토스 bid 없음' 으로 남는다.
     // globalSetup 의 seed 결과(토스 + 이니시스 각 1건 submitted) 를 재현하기
-    // 위해 누락이면 직접 INSERT — uniq(rfp_id,pg_ws_id) + ON CONFLICT 로 중복 차단.
+    // 위해 누락이면 직접 INSERT — uniq(rfp_id,pg_ws_id,round) + ON CONFLICT 로 중복 차단.
     // submittedBy 는 토스 워크스페이스 멤버 아무 user_id (FK 만 충족하면 됨).
     await db.execute(sql`
       INSERT INTO bids (
-        id, rfp_id, pg_ws_id, invitation_id, settle_cycle, settle_limit,
+        id, rfp_id, pg_ws_id, invitation_id, round, settle_cycle, settle_limit,
         guarantee_insurance, payment_fees, memo, status, submitted_by, submitted_at
       )
       SELECT
-        gen_random_uuid(), ${rfpUuid}, w.id, i.id, 'D+1', '0', '0', '{}'::jsonb,
+        gen_random_uuid(), ${rfpUuid}, w.id, i.id, 1, 'D+1', '0', '0', '{}'::jsonb,
         'e2e C: restored toss bid', 'submitted', m.user_id, NOW()
       FROM workspaces w
       JOIN rfp_invitations i ON i.rfp_id = ${rfpUuid} AND i.pg_ws_id = w.id
       JOIN workspace_members m ON m.workspace_id = w.id
       WHERE w.name = '서포터 B 페이'
       LIMIT 1
-      ON CONFLICT (rfp_id, pg_ws_id) DO NOTHING
+      ON CONFLICT (rfp_id, pg_ws_id, round) DO NOTHING
     `);
 
     // Pick the toss bid (winner) — seeded as 'submitted'. The workspaces
@@ -101,13 +101,12 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     // ── 4. Confirm award ─────────────────────────────────────────
     await page.getByRole('button', { name: /선정할게요/ }).click();
 
-    // 확정 후: awardRfpAction 완료 시 다이얼로그가 닫힌다(성공 신호). 그 다음
-    // router.refresh 로 awarded 상태가 반영돼 포커스 본문에 '선정됨' 칩이 뜬다.
-    // (사이드바 nav 에 '선정 완료' 링크가 상시 존재하므로, 그 문구 대신 본문
-    //  전용 '선정됨' 을 노려 false positive 를 피한다.)
+    // 확정 후: awardRfpAction 완료 시 다이얼로그가 닫힌다(성공 신호). 그 직후
+    // AwardResult 전체화면 축하 오버레이가 뜬다(PR#148, 2026-06-09). 오버레이는
+    // 별도 dialog role 없이 fixed inset-0 div 이므로 '선정했어요' 헤딩으로 검증.
     await expect(page.getByRole('dialog')).toBeHidden({ timeout: 15_000 });
     await expect(
-      page.getByRole('main').getByText('선정됨'),
+      page.getByRole('heading', { name: /선정했어요/ }),
     ).toBeVisible({ timeout: 15_000 });
 
     // ── 5. DB assertions ─────────────────────────────────────────

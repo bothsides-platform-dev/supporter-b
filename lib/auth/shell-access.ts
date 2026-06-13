@@ -15,9 +15,16 @@
  * incomplete-session branches below.
  */
 import type { WorkspaceMembershipSummary } from '@/lib/types/workspace';
+import { isSessionVersionStale } from '@/lib/auth/session-version';
 
 /** Where an authenticated-but-incomplete session goes. NEVER `/login`. */
 export const INCOMPLETE_SESSION_REDIRECT = '/logout';
+
+/** JWT `sv` claim vs. current users.session_version — see session-version.ts. */
+export type SessionVersionPair = {
+  token: number | undefined;
+  db: number | null | undefined;
+};
 
 type ShellSession = {
   user?: {
@@ -34,10 +41,20 @@ export type ShellAccessDecision =
 export function resolveShellAccess(
   session: ShellSession,
   workspaces: WorkspaceMembershipSummary[],
+  sessionVersions?: SessionVersionPair,
 ): ShellAccessDecision {
   // Genuinely unauthenticated → /login (proxy lets unauth users stay on /login).
   if (!session?.user?.id) {
     return { kind: 'redirect', to: '/login' };
+  }
+
+  // Revoked session (sv claim trails users.session_version — bumped on password
+  // reset / email change / deletion) → /logout, NOT /login (loop contract above).
+  if (
+    sessionVersions &&
+    isSessionVersionStale(sessionVersions.token, sessionVersions.db)
+  ) {
+    return { kind: 'redirect', to: INCOMPLETE_SESSION_REDIRECT };
   }
 
   // Authenticated JWT but no workspace claim → /logout, NOT /login (see contract).

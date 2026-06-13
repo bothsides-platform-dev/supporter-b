@@ -13,6 +13,7 @@ vi.mock('motion/react', () => {
 });
 
 import { FaqList } from '../FaqList';
+import { FAQ_ITEMS } from '../faq-data';
 
 describe('FaqList', () => {
   it('shows all three questions and their answers expanded (no folding)', () => {
@@ -28,5 +29,13 @@ describe('FaqList', () => {
   it('has no toggle buttons (not an accordion)', () => {
     render(<FaqList />);
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('exports FAQ_ITEMS as a non-empty array with q and a strings', () => {
+    expect(FAQ_ITEMS.length).toBeGreaterThan(0);
+    FAQ_ITEMS.forEach((item: { q: string; a: string }) => {
+      expect(typeof item.q).toBe('string');
+      expect(typeof item.a).toBe('string');
+    });
   });
 });

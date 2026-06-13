@@ -16,6 +16,12 @@ const sessionRef: { value: unknown | null } = { value: null };
 vi.mock('@/auth', () => ({
   auth: () => Promise.resolve(sessionRef.value),
 }));
+// 폐기 세션(sv stale) 차단용 — requireSession 미사용 라우트도 동일 기준 적용.
+const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/auth/session-version-db', () => ({
+  getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
+}));
+
 
 // Capture the subscribe callback so tests can trigger emissions.
 type NotifHandler = (n: Notification) => void;
@@ -40,6 +46,8 @@ beforeEach(async () => {
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
   sessionRef.value = null;
+  getDbSessionVersionMock.mockReset();
+  getDbSessionVersionMock.mockResolvedValue(1);
   capturedHandlers = new Map();
   capturedUnsubscribeCalls = 0;
 });
@@ -167,5 +175,16 @@ describe('GET /api/notifications/stream', () => {
     // Give the abort event microtask a tick to fire.
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(capturedUnsubscribeCalls).toBeGreaterThan(0);
+  });
+});
+
+describe('GET /api/notifications/stream — 폐기 세션', () => {
+  it('sv 가 stale 한(폐기된) 세션은 401', async () => {
+    sessionRef.value = { user: { id: '00000000-0000-4000-8000-0000000000aa', email: 'x@x.com', sessionVersion: 1, workspaceId: '00000000-0000-4000-8000-0000000000cc' } };
+    getDbSessionVersionMock.mockResolvedValue(2);
+    const { GET } = await import('../stream/route');
+    const { req } = makeAbortableRequest();
+    const r = await GET(req);
+    expect(r.status).toBe(401);
   });
 });

@@ -10,16 +10,9 @@ import { matchesDeadlineBucket } from '@/lib/server/board/filterRfps';
 export type DashboardKpi = { id: string; label: string; value: number; href: string };
 export type ActionItem = { id: string; href: string; title: string; badge: string };
 export type ActionGroup = { id: string; label: string; items: ActionItem[] };
-export type OnboardingAction = {
-  id: string;
-  href: string;
-  title: string;
-  description: string;
-};
 export type Dashboard = {
   kpis: DashboardKpi[];
   groups: ActionGroup[];
-  onboardingActions: OnboardingAction[] | null;
   // PG 게시판 탐색 목록 (오픈 RFP). buyer dashboard 에는 없음.
   openRfps?: OpportunityListing[];
 };
@@ -46,12 +39,6 @@ function deadlineBadge(deadline: string, now: Date): string {
   const diff = Math.ceil((new Date(deadline).getTime() - now.getTime()) / DAY);
   return diff < 0 ? '마감' : `D-${diff}`;
 }
-
-const BUYER_ONBOARDING_ACTIONS: OnboardingAction[] = [
-  { id: 'create-rfp',     href: '/rfp/new',          title: '첫 견적 요청을 보내보세요',  description: 'PG사를 초대하고 수수료 견적을 비교할 수 있어요' },
-  { id: 'setup-profile',  href: '/settings/profile', title: '워크스페이스 프로필 설정', description: '' },
-  { id: 'invite-members', href: '/settings/members', title: '팀원 초대하기',            description: '' },
-];
 
 export function buildBuyerDashboard(
   rfps: RFP[],
@@ -88,11 +75,7 @@ export function buildBuyerDashboard(
     { id: 'unanswered', label: '견적 미도착', items: unansweredItems },
   ].filter((g) => g.items.length > 0);
 
-  return {
-    kpis,
-    groups,
-    onboardingActions: rfps.some(r => r.status !== 'draft') ? null : BUYER_ONBOARDING_ACTIONS,
-  };
+  return { kpis, groups };
 }
 
 export type PgDashRow = {
@@ -133,5 +116,5 @@ export function buildPgDashboard(
     { id: 'due', label: '마감 임박', items: dueItems },
   ].filter((g) => g.items.length > 0);
 
-  return { kpis, groups, onboardingActions: null, openRfps };
+  return { kpis, groups, openRfps };
 }

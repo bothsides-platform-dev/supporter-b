@@ -55,4 +55,21 @@ describe('BidStepReview', () => {
     await user.click(screen.getByRole('button', { name: '저장' }));
     expect(onSaveTemplate).toHaveBeenCalledWith('기본요율');
   });
+
+  it('구간 수단은 구간별 요율을 요약 표시한다', () => {
+    render(
+      <BidStepReview
+        settleCycle="D+1" settleLimit="0" guaranteeInsurance="0"
+        feeInputMethods={['card'] as PaymentMethod[]}
+        customPaymentMethods={[]}
+        fees={{ 'card:sole': '0.5', 'card:general': '1.8' }}
+        canSubmit pending={false} submitError={null}
+        onBack={() => {}} onSubmit={() => {}} onSaveTemplate={async () => ({ ok: true })}
+      />,
+    );
+    expect(screen.getByText('카드')).toBeInTheDocument();
+    expect(screen.getByText(/영세/)).toBeInTheDocument();
+    expect(screen.getByText(/0\.5%/)).toBeInTheDocument();
+    expect(screen.getByText(/1\.8%/)).toBeInTheDocument();
+  });
 });

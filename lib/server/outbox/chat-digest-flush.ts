@@ -27,7 +27,8 @@ import {
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { isUserPresentInConversation } from '@/lib/server/realtime/centrifugo';
-import { baseUrl, parseChatDigestDedupeKey } from '@/lib/server/actions/chat/_shared';
+import { parseChatDigestDedupeKey } from '@/lib/server/actions/chat/_shared';
+import { baseUrlFor } from '@/lib/server/env';
 import { renderChatMessage } from './templates/chatMessage';
 import type { Sender } from './types';
 
@@ -119,7 +120,7 @@ export async function flushChatDigests(
     const html = await renderChatMessage({
       senderName,
       preview,
-      conversationUrl: `${baseUrl()}/messages`,
+      conversationUrl: `${baseUrlFor(recipientOnBuyerSide ? 'buyer' : 'pg')}/messages`,
       count: unread.length,
     });
     const subject =

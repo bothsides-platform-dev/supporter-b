@@ -89,6 +89,7 @@ pm2 save
 - `NEXT_PUBLIC_BASE_URL=https://<YOUR_DOMAIN>` — **빌드 타임에 인라인**되므로 deploy(빌드) 전에 설정
 - **Centrifugo(채팅)** — `CENTRIFUGO_TOKEN_HMAC_SECRET`, `CENTRIFUGO_API_KEY` 는 `openssl rand -base64 48` 로 강하게 생성. **이름 브리지 주의**: 이 값들은 `docker-compose.prod.yml` 가 컨테이너에 v6 환경변수명(`CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` / `CENTRIFUGO_HTTP_API_KEY`)으로 다시 주입한다 — **한 번만 설정하면 앱과 컨테이너가 같은 값을 공유**. `CENTRIFUGO_HTTP_API_URL=http://127.0.0.1:8000/api`, `NEXT_PUBLIC_CENTRIFUGO_WS_URL=wss://<YOUR_DOMAIN>/connection/websocket`(빌드 타임 인라인 — deploy 전에 설정). 컨테이너의 `allowed_origins` 는 `APP_DOMAIN` 에서 자동 도출.
 - `AXIOM_TOKEN` / `AXIOM_DATASET` — 둘 다 설정하면 운영 로그(pino)가 Axiom으로 전송된다. 미설정 시 `pm2 logs bidit` 으로만 확인.
+- **마스터/운영자 계정 (Google OAuth 전용)** — `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`(Google OAuth 클라이언트, 승인된 리디렉션 URI = `https://supporter-b.com/api/auth/callback/google` 1개), `MASTER_ACCOUNT_EMAILS`(쉼표로 구분된 운영자 Google 이메일 allowlist — 복수 가능), `NEXT_PUBLIC_MASTER_OAUTH_ENABLED=true`(숨겨진 `/login/ops` 라우트 활성화 — **빌드 타임 인라인**, deploy 전 설정). 라우트는 이 플래그가 true이고 `AUTH_GOOGLE_ID` 도 설정됐을 때만 렌더(아니면 404). 운영자는 `/login/ops` 주소를 직접 입력해 Google로만 로그인하며, allowlist에 없는 Google 계정은 거부된다. **보안 경계는 라우트 404가 아니라 allowlist default-deny** — `AUTH_GOOGLE_ID` 가 설정된 한 OAuth 콜백 엔드포인트는 플래그와 무관하게 존재하지만 allowlist 이메일만 로그인 완료 가능. 기능을 완전히 끄려면 `AUTH_GOOGLE_ID` 를 비운다. **시드 스크립트 불필요** — 최초 로그인 시 users 행이 자동 생성된다. `AUTH_GOOGLE_ID` 가 비어 있으면 Google 프로바이더 자체가 비활성. 스키마는 `is_master` 컬럼 없이 env allowlist 로만 판정하므로 추가 DDL 은 `workspaces_status_idx`(additive) 뿐.
 - `RESEND_*`, `SENTRY_*`, `SOLAPI_*` 등 — 사용하는 것만
 
 ## 갱신 배포 (이후 매번)
@@ -273,6 +274,63 @@ docker compose -f docker-compose.prod.yml logs centrifugo
 ```
 
 문제 발생 시 §트러블슈팅의 "채팅 메시지가 실시간으로 안 옴" 항목 참조.
+
+## partner.supporter-b.com 서브도메인 (PG 호스트 라우팅) 롤아웃
+
+`partner.supporter-b.com` 은 **별도 프로세스 없이** 동일한 `:3000` Next.js 앱이 서빙한다. PM2 앱을 새로 띄우지 않아도 된다 — Caddy 가 두 호스트를 한 블록에서 처리한다.
+
+### 1. DNS — deploy 전에 선행 필수
+
+도메인 DNS 에 A 레코드를 추가한다:
+
+```
+partner.supporter-b.com  A  <Lightsail 고정 IP>
+```
+
+> **⚠️ Caddy 리로드 전에 레코드가 전파돼 있어야 한다.** Caddy 는 호스트별로 Let's Encrypt ACME 챌린지를 시도하므로, `dig +short partner.supporter-b.com` 이 고정 IP 를 반환하는 것을 확인한 뒤 Caddy 를 리로드할 것.
+
+### 2. `.env.production` 에 신규 변수 추가
+
+> **⚠️ `NEXT_PUBLIC_*` 는 빌드 타임 인라인** — 값 변경 후 `pnpm build` 없이 `pm2 reload` 만 해서는 반영 안 됨. `AUTH_COOKIE_DOMAIN` 은 런타임 변수라 restart 만으로 충분.
+>
+> **⚠️ `AUTH_COOKIE_DOMAIN` 설정은 기존 사용자 전원을 1회 로그아웃** 시킨다. Caddy 리로드·DNS 컷오버와 같은 시점에 진행할 것.
+
+```bash
+# 런타임 변수 (restart 로 반영)
+AUTH_COOKIE_DOMAIN=.supporter-b.com
+
+# 빌드 타임 변수 (변경 후 반드시 pnpm build 재실행)
+NEXT_PUBLIC_BUYER_ORIGIN=https://supporter-b.com
+NEXT_PUBLIC_PARTNER_ORIGIN=https://partner.supporter-b.com
+```
+
+### 3. Caddyfile 교체 + 리로드
+
+```bash
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+`git pull` 로 받은 `deploy/Caddyfile` 은 메인 블록 주소가 `{$APP_DOMAIN}, partner.{$APP_DOMAIN}` 로 바뀌어 있다. `admin.{$APP_DOMAIN}` 블록은 그대로다.
+
+> ⚠️ 호스트 라우팅은 Caddy 가 업스트림으로 원본 `Host` 헤더를 그대로 전달하는 데 의존한다(Caddy v2 `reverse_proxy` 기본 동작). `header_up Host {upstream_hostport}` 같은 설정을 추가하면 앱이 `127.0.0.1:3000` 을 호스트로 보게 되어 라우팅이 조용히 멈춘다(에러 없이 리다이렉트 안 됨). 기본 동작을 유지할 것.
+
+### 4. 배포 (빌드 포함)
+
+```bash
+bash scripts/deploy/lightsail-deploy.sh
+```
+
+`NEXT_PUBLIC_BUYER_ORIGIN` / `NEXT_PUBLIC_PARTNER_ORIGIN` 이 `.env.production` 에 설정된 상태에서 빌드돼야 한다.
+
+### 5. 수동 확인 체크리스트
+
+배포 후 아래를 직접 확인한다:
+
+- [ ] PG 계정으로 `supporter-b.com/home` 접속 → `partner.supporter-b.com/home` 으로 307 리다이렉트되고 로그인 유지
+- [ ] 두 워크스페이스를 가진 유저가 워크스페이스 전환 시 서브도메인 간 이동 후 로그인 유지
+- [ ] `supporter-b.com` / `partner.supporter-b.com` 양쪽에서 채팅 실시간 수신 정상 동작
+- [ ] RFP 초대 이메일의 링크가 `partner.supporter-b.com` 도메인을 가리킴
 
 ## Node 설치 (Amazon Linux 2023)
 

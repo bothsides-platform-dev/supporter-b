@@ -65,6 +65,9 @@ dependencies:
   drizzle-orm:
     specifier: ^0.45.0
     version: 0.45.2(@electric-sql/pglite@0.3.16)(@opentelemetry/api@1.9.1)(postgres@3.4.9)
+  es-hangul:
+    specifier: ^2.3.8
+    version: 2.3.8
   fractional-indexing:
     specifier: ^3.2.0
     version: 3.2.0
@@ -101,15 +104,21 @@ dependencies:
   react-dom:
     specifier: 19.2.4
     version: 19.2.4(react@19.2.4)
+  react-number-format:
+    specifier: ^5.4.5
+    version: 5.4.5(react-dom@19.2.4)(react@19.2.4)
   resend:
     specifier: ^6.4.0
     version: 6.12.4(@react-email/render@2.0.8)
   shadcn:
     specifier: ^4.6.0
-    version: 4.8.3(@types/node@20.19.41)(typescript@6.0.3)
+    version: 4.8.3(@types/node@22.13.0)(typescript@6.0.3)
   tailwind-merge:
     specifier: ^3.5.0
     version: 3.6.0
+  tldts:
+    specifier: ^7.4.2
+    version: 7.4.2
   tw-animate-css:
     specifier: ^1.4.0
     version: 1.4.0
@@ -143,8 +152,8 @@ devDependencies:
     specifier: ^1.9.0
     version: 1.9.0
   '@types/node':
-    specifier: ^20
-    version: 20.19.41
+    specifier: ^22.13.0
+    version: 22.13.0
   '@types/react':
     specifier: ^19
     version: 19.2.15
@@ -195,7 +204,7 @@ devDependencies:
     version: 6.0.3
   vitest:
     specifier: ^4.1.5
-    version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@20.19.41)(jsdom@29.1.1)(vite@8.0.14)
+    version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.13.0)(jsdom@29.1.1)(vite@8.0.14)
 
 packages:
 
@@ -1835,7 +1844,7 @@ packages:
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     dev: false
 
-  /@inquirer/confirm@6.1.1(@types/node@20.19.41):
+  /@inquirer/confirm@6.1.1(@types/node@22.13.0):
     resolution: {integrity: sha512-eb8DBZcz/2qHWQda4rk2JiQk5h9QV/cVHi1yjt0f69WFZMRFn0sJTye3EAP8icut8UDMjQPsaH5KbcOogefrFQ==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
@@ -1844,12 +1853,12 @@ packages:
       '@types/node':
         optional: true
     dependencies:
-      '@inquirer/core': 11.2.1(@types/node@20.19.41)
-      '@inquirer/type': 4.0.7(@types/node@20.19.41)
-      '@types/node': 20.19.41
+      '@inquirer/core': 11.2.1(@types/node@22.13.0)
+      '@inquirer/type': 4.0.7(@types/node@22.13.0)
+      '@types/node': 22.13.0
     dev: false
 
-  /@inquirer/core@11.2.1(@types/node@20.19.41):
+  /@inquirer/core@11.2.1(@types/node@22.13.0):
     resolution: {integrity: sha512-Qd6GJT1yVyrZZCfN8W2qKF5ApmqryXRhRKCuip8h01x2w/esJQ2XIYc6f9abMIHgKQdBfFTSOdbHRLAhuM09UA==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
@@ -1860,8 +1869,8 @@ packages:
     dependencies:
       '@inquirer/ansi': 2.0.7
       '@inquirer/figures': 2.0.7
-      '@inquirer/type': 4.0.7(@types/node@20.19.41)
-      '@types/node': 20.19.41
+      '@inquirer/type': 4.0.7(@types/node@22.13.0)
+      '@types/node': 22.13.0
       cli-width: 4.1.0
       fast-wrap-ansi: 0.2.2
       mute-stream: 3.0.0
@@ -1873,7 +1882,7 @@ packages:
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     dev: false
 
-  /@inquirer/type@4.0.7(@types/node@20.19.41):
+  /@inquirer/type@4.0.7(@types/node@22.13.0):
     resolution: {integrity: sha512-t28inv14nMQ1PhKpsJPY+kEs/c00qzeCOS2gTNRyTjG5d6qsVA2fItxW4hkvGZ5lvanGLdtCzVIx5dwdRpN1+g==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^20.17.0'}
     peerDependencies:
@@ -1882,7 +1891,7 @@ packages:
       '@types/node':
         optional: true
     dependencies:
-      '@types/node': 20.19.41
+      '@types/node': 22.13.0
     dev: false
 
   /@jridgewell/gen-mapping@0.3.13:
@@ -4087,10 +4096,10 @@ packages:
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
     dev: false
 
-  /@types/node@20.19.41:
-    resolution: {integrity: sha512-ECymXOukMnOoVkC2bb1Vc/w/836DXncOg5m8Xj1RH7xSHZJWNYY6Zh7EH477vcnD5egKNNfy2RpNOmuChhFPgQ==}
+  /@types/node@22.13.0:
+    resolution: {integrity: sha512-ClIbNe36lawluuvq3+YYhnIN2CELi+6q8NpnM7PYp4hBn/TatfboPgVSm2rwKRfnV2M+Ty9GWDFI64KEe+kysA==}
     dependencies:
-      undici-types: 6.21.0
+      undici-types: 6.20.0
 
   /@types/react-dom@19.2.3(@types/react@19.2.15):
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -4107,7 +4116,7 @@ packages:
   /@types/set-cookie-parser@2.4.10:
     resolution: {integrity: sha512-GGmQVGpQWUe5qglJozEjZV/5dyxbOOZ0LHe/lqyWssB88Y4svNfst0uqBVscdDeIKl5Jy5+aPSvy7mI9tYRguw==}
     dependencies:
-      '@types/node': 20.19.41
+      '@types/node': 22.13.0
     dev: false
 
   /@types/statuses@2.0.6:
@@ -4472,7 +4481,7 @@ packages:
         optional: true
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.0.14(@types/node@20.19.41)(tsx@4.22.3)
+      vite: 8.0.14(@types/node@22.13.0)(tsx@4.22.3)
     dev: true
 
   /@vitest/expect@4.1.7:
@@ -4500,7 +4509,7 @@ packages:
       '@vitest/spy': 4.1.7
       estree-walker: 3.0.3
       magic-string: 0.30.21
-      vite: 8.0.14(@types/node@20.19.41)(tsx@4.22.3)
+      vite: 8.0.14(@types/node@22.13.0)(tsx@4.22.3)
     dev: true
 
   /@vitest/pretty-format@4.1.7:
@@ -5760,6 +5769,10 @@ packages:
   /es-errors@1.3.0:
     resolution: {integrity: sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw==}
     engines: {node: '>= 0.4'}
+
+  /es-hangul@2.3.8:
+    resolution: {integrity: sha512-VrJuqYBC7W04aKYjCnswomuJNXQRc0q33SG1IltVrRofi2YEE6FwVDPlsEJIdKbHwsOpbBL/mk9sUaBxVpbd+w==}
+    dev: false
 
   /es-iterator-helpers@1.3.2:
     resolution: {integrity: sha512-HVLACW1TppGYjJ8H6/jqH/pqOtKRw6wMlrB23xfExmFWxFquAIWCmwoLsOyN96K4a5KbmOf5At9ZUO3GZbetAw==}
@@ -7284,7 +7297,7 @@ packages:
     resolution: {integrity: sha512-7vuh85V5cdDofPyxn58nrPjBktZo0u9x1g8WtjQol+jZDaE+fhN+cIvTj11GndBnMnyfrUOG1sZQxCdjKh+DKg==}
     engines: {node: '>= 10.13.0'}
     dependencies:
-      '@types/node': 20.19.41
+      '@types/node': 22.13.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
     dev: false
@@ -7770,7 +7783,7 @@ packages:
   /ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
-  /msw@2.14.6(@types/node@20.19.41)(typescript@6.0.3):
+  /msw@2.14.6(@types/node@22.13.0)(typescript@6.0.3):
     resolution: {integrity: sha512-ALe+N10S72cyx94cMcy3Zs4HhXCj35sgeAL4c+WTvKi0zWnbd8/h0lcFqv0mb2P+aSgAdD7p9HzvA0DiUPxsyg==}
     engines: {node: '>=18'}
     hasBin: true
@@ -7781,7 +7794,7 @@ packages:
       typescript:
         optional: true
     dependencies:
-      '@inquirer/confirm': 6.1.1(@types/node@20.19.41)
+      '@inquirer/confirm': 6.1.1(@types/node@22.13.0)
       '@mswjs/interceptors': 0.41.9
       '@open-draft/deferred-promise': 3.0.0
       '@types/statuses': 2.0.6
@@ -8547,7 +8560,7 @@ packages:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.1
-      '@types/node': 20.19.41
+      '@types/node': 22.13.0
       long: 5.3.2
     dev: false
 
@@ -8619,6 +8632,16 @@ packages:
   /react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
     dev: true
+
+  /react-number-format@5.4.5(react-dom@19.2.4)(react@19.2.4):
+    resolution: {integrity: sha512-y8O2yHHj3w0aE9XO8d2BCcUOOdQTRSVq+WIuMlLVucAm5XNjJAy+BoOJiuQMldVYVOKTMyvVNfnbl2Oqp+YxGw==}
+    peerDependencies:
+      react: ^0.14 || ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^0.14 || ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    dependencies:
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+    dev: false
 
   /react-remove-scroll-bar@2.3.8(@types/react@19.2.15)(react@19.2.4):
     resolution: {integrity: sha512-9r+yi9+mgU33AKcj6IbT9oRCO78WriSj6t/cF8DWBZJ9aOGPOTEDvdUDz1FwKim7QXWwmHqtdHnRJfhAxEG46Q==}
@@ -9047,7 +9070,7 @@ packages:
     resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
     dev: false
 
-  /shadcn@4.8.3(@types/node@20.19.41)(typescript@6.0.3):
+  /shadcn@4.8.3(@types/node@22.13.0)(typescript@6.0.3):
     resolution: {integrity: sha512-cnP485rIqtDb8waOp+IKUIfifVf64/PCd5VX/nnLeIP+qZ3yS4r6FOQtOdQkoQEvomQUsJS2OHr5CTzKWw0wKQ==}
     hasBin: true
     dependencies:
@@ -9070,7 +9093,7 @@ packages:
       fuzzysort: 3.1.0
       https-proxy-agent: 7.0.6
       kleur: 4.1.5
-      msw: 2.14.6(@types/node@20.19.41)(typescript@6.0.3)
+      msw: 2.14.6(@types/node@22.13.0)(typescript@6.0.3)
       node-fetch: 3.3.2
       open: 11.0.0
       ora: 8.2.0
@@ -9767,8 +9790,8 @@ packages:
       which-boxed-primitive: 1.1.1
     dev: true
 
-  /undici-types@6.21.0:
-    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+  /undici-types@6.20.0:
+    resolution: {integrity: sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==}
 
   /undici@7.26.0:
     resolution: {integrity: sha512-3O9Tf67pGhgOv9jM35AbhkXAKi13f3oy3aE4CSgr+TckGeY+/iu97ZXN+J7DpHPzLbVApFd1IFhcnBjREYXYcg==}
@@ -9902,7 +9925,7 @@ packages:
     engines: {node: '>= 0.8'}
     dev: false
 
-  /vite@8.0.14(@types/node@20.19.41)(tsx@4.22.3):
+  /vite@8.0.14(@types/node@22.13.0)(tsx@4.22.3):
     resolution: {integrity: sha512-s4BJJ+5y1pYL6Otw51FHhVJQhPnuRinKig64g/1+EUNaJsd3gCKdD31IPFvswUgW9/60QT9oFHbZHbQK5imcxw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
@@ -9945,7 +9968,7 @@ packages:
       yaml:
         optional: true
     dependencies:
-      '@types/node': 20.19.41
+      '@types/node': 22.13.0
       lightningcss: 1.32.0
       picomatch: 4.0.4
       postcss: 8.5.15
@@ -9956,7 +9979,7 @@ packages:
       fsevents: 2.3.3
     dev: true
 
-  /vitest@4.1.7(@opentelemetry/api@1.9.1)(@types/node@20.19.41)(jsdom@29.1.1)(vite@8.0.14):
+  /vitest@4.1.7(@opentelemetry/api@1.9.1)(@types/node@22.13.0)(jsdom@29.1.1)(vite@8.0.14):
     resolution: {integrity: sha512-flYyaFd2CgoCoU+0UKt3pxksgC+S02iTDN0n3LtqaMeXsI9SBcdNujc2k0DeFLzUn/0k538yNjOSdwgCqcrwJA==}
     engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
     hasBin: true
@@ -9998,7 +10021,7 @@ packages:
         optional: true
     dependencies:
       '@opentelemetry/api': 1.9.1
-      '@types/node': 20.19.41
+      '@types/node': 22.13.0
       '@vitest/expect': 4.1.7
       '@vitest/mocker': 4.1.7(vite@8.0.14)
       '@vitest/pretty-format': 4.1.7
@@ -10018,7 +10041,7 @@ packages:
       tinyexec: 1.2.3
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vite: 8.0.14(@types/node@20.19.41)(tsx@4.22.3)
+      vite: 8.0.14(@types/node@22.13.0)(tsx@4.22.3)
       why-is-node-running: 2.3.0
     transitivePeerDependencies:
       - msw

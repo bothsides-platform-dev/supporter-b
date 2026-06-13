@@ -37,13 +37,7 @@ export function __setActionDbForTest(db: any | undefined): void {
 
 // Default base URL for verify links. Used when building the URL passed to
 // the outbox HTML body; Step 10 swaps this for a templated email.
-export function baseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_BASE_URL ??
-    process.env.AUTH_URL ??
-    'http://localhost:3000'
-  );
-}
+export { baseUrl, adminBaseUrl } from '@/lib/server/env';
 
 // (Step 10) The previous `devLogVerifyLink` console fallback is gone. The
 // equivalent dev affordance now lives in `lib/integrations/resend.ts` —
@@ -70,12 +64,6 @@ export function emailDomain(email: string): string | null {
   return email.slice(at + 1);
 }
 
-// Postgres unique-violation (23505) detector that works in BOTH runtimes:
-// postgres-js (prod) exposes `.code` directly; pglite (tests) nests it under
-// `.cause.code`. Use this so a duplicate-key catch maps to a friendly error
-// while genuinely unexpected DB errors are re-thrown (→ onRequestError/Sentry).
-export function isUniqueViolation(err: unknown): boolean {
-  const direct = (err as { code?: unknown } | null)?.code;
-  const nested = (err as { cause?: { code?: unknown } } | null)?.cause?.code;
-  return direct === '23505' || nested === '23505';
-}
+// Postgres unique-violation (23505) detector — implementation lives in
+// repositories/utils to avoid action→service layer inversion.
+export { isUniqueViolation } from '@/lib/server/repositories/utils';

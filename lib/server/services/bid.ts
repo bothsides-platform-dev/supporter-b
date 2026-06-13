@@ -1,0 +1,400 @@
+import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+
+import { attachments, bids, users, workspaceMembers, workspaces } from '@/lib/db/schema';
+import type {
+  AttachmentRepo,
+  AuditLogRepo,
+  BidNoteRepo,
+  BidRepo,
+  InvitationRepo,
+  OutboxRepo,
+  RfpRepo,
+  RfpRequoteRequestRepo,
+  WorkspaceRepo,
+} from '@/lib/server/repositories/types';
+import {
+  dispatchNotification,
+  emitAfterCommit,
+} from '@/lib/server/notifications/dispatch';
+import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
+import { renderBidSubmitted } from '@/lib/server/outbox/templates/bidSubmitted';
+import { getStorage } from '@/lib/server/storage';
+import type { Notification } from '@/lib/types/notification';
+import type { Actor, ServiceResult } from './types';
+
+export type SubmitBidServiceInput = {
+  rfpId: string;
+  settleCycle: string;
+  settleLimit: number;
+  guaranteeInsurance: number;
+  paymentFees: Record<string, number | import('@/lib/types/bid').TierRates>;
+  customFees: Record<string, number>;
+  proposalAttachmentId?: string;
+  memo?: string;
+};
+
+export type { Actor, ServiceResult };
+
+export class BidService {
+  constructor(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private readonly _db: any,
+    private readonly bidRepo: BidRepo,
+    private readonly invitationRepo: InvitationRepo,
+    private readonly rfpRepo: RfpRepo,
+    private readonly outboxRepo: OutboxRepo,
+    private readonly workspaceRepo: WorkspaceRepo,
+    private readonly attachmentRepo: AttachmentRepo,
+    private readonly bidNoteRepo: BidNoteRepo,
+    private readonly requoteRepo: RfpRequoteRequestRepo,
+    private readonly auditRepo: AuditLogRepo,
+  ) {}
+
+  async withdraw(bidId: string, actor: Actor): Promise<ServiceResult> {
+    const bid = await this.bidRepo.findById(bidId);
+    if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
+
+    if (bid.pgWsId !== actor.workspaceId) {
+      return { ok: false, error: 'FORBIDDEN' };
+    }
+
+    const rfp = await this.rfpRepo.findById(bid.rfpId);
+    if (rfp?.status === 'awarded') {
+      return { ok: false, error: 'ALREADY_AWARDED' };
+    }
+
+    const canAccess = await this.invitationRepo.canAccess(bid.rfpId, actor.workspaceId);
+    if (!canAccess) return { ok: false, error: 'FORBIDDEN' };
+
+    if (bid.status === 'withdrawn') return { ok: true };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this._db.transaction(async (tx: any) => {
+      await tx.update(bids).set({ status: 'withdrawn' }).where(eq(bids.id, bid.id));
+      // 감사 로그 (C5) — 철회와 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'bid.withdraw',
+          entityType: 'rfp',
+          entityId: rfp?.code ?? bid.rfpId,
+          metadata: { bidId: bid.id },
+        },
+        tx,
+      );
+    });
+
+    return { ok: true };
+  }
+
+  async submit(
+    input: SubmitBidServiceInput,
+    actor: Actor,
+  ): Promise<ServiceResult<{ bidId: string; rfpCode: string }>> {
+    const canAccess = await this.invitationRepo.canAccess(input.rfpId, actor.workspaceId);
+    if (!canAccess) return { ok: false, error: 'FORBIDDEN' };
+
+    const rfp = await this.rfpRepo.findById(input.rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    if (rfp.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
+
+    const required = rfp.requiredPaymentMethods;
+    if (required.length > 0) {
+      for (const method of Object.keys(input.paymentFees)) {
+        if (!required.includes(method as (typeof required)[number])) {
+          return { ok: false, error: 'PAYMENT_METHOD_NOT_REQUESTED' };
+        }
+      }
+    }
+    const customIds = new Set(rfp.customPaymentMethods.map((m) => m.id));
+    for (const id of Object.keys(input.customFees)) {
+      if (!customIds.has(id)) {
+        return { ok: false, error: 'PAYMENT_METHOD_NOT_REQUESTED' };
+      }
+    }
+
+    const allInvs = await this.invitationRepo.findByRfp(input.rfpId);
+    const myInv = allInvs.find((i) => i.pgWsId === actor.workspaceId);
+    if (!myInv) return { ok: false, error: 'INVITATION_NOT_FOUND' };
+
+    if (input.proposalAttachmentId) {
+      const att = await this.attachmentRepo.findById(input.proposalAttachmentId);
+      if (!att || att.rfpId || att.bidId || att.bidNoteId) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      const isMember = await this.workspaceRepo.isMember(att.uploadedBy, actor.workspaceId);
+      if (!isMember) return { ok: false, error: 'INVALID_ATTACHMENT' };
+    }
+
+    const existingBids = await this.bidRepo.findByRfp(input.rfpId);
+    const myBids = existingBids.filter((b) => b.pgWsId === actor.workspaceId);
+    const maxRound = myBids.reduce((m, b) => Math.max(m, b.round), 0);
+
+    let round = 1;
+    let respondedRequoteId: string | null = null;
+    if (maxRound >= 1) {
+      // 이미 견적이 있다 — pending 재요청이 있어야만 새 라운드 제출 허용.
+      const pending = await this.requoteRepo.findPendingByPair(input.rfpId, actor.workspaceId);
+      if (!pending) return { ok: false, error: 'BID_ALREADY_SUBMITTED' };
+      if (new Date(pending.deadline).getTime() < Date.now()) {
+        return { ok: false, error: 'REQUOTE_DEADLINE_PASSED' };
+      }
+      round = maxRound + 1;
+      respondedRequoteId = pending.id;
+    }
+
+    const bidId = randomUUID();
+    const now = new Date();
+    const pendingEmits: Notification[] = [];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await this._db.transaction(async (tx: any) => {
+      await this.bidRepo.save(
+        {
+          id: bidId,
+          rfpId: input.rfpId,
+          pgWsId: actor.workspaceId,
+          invitationId: myInv.id,
+          settleCycle: input.settleCycle,
+          settleLimit: input.settleLimit,
+          guaranteeInsurance: input.guaranteeInsurance,
+          paymentFees: input.paymentFees,
+          customFees: input.customFees,
+          proposalPdfs: [],
+          memo: input.memo,
+          status: 'submitted',
+          submittedBy: actor.userId,
+          submittedAt: now.toISOString(),
+          round,
+        },
+        tx,
+      );
+
+      if (respondedRequoteId) {
+        await this.requoteRepo.markResponded(respondedRequoteId, now, tx);
+      }
+
+      // 감사 로그 (C5) — 제출과 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'bid.submit',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { bidId, round },
+        },
+        tx,
+      );
+
+      if (input.proposalAttachmentId) {
+        await tx
+          .update(attachments)
+          .set({ bidId })
+          .where(
+            and(
+              eq(attachments.id, input.proposalAttachmentId),
+              isNull(attachments.rfpId),
+              isNull(attachments.bidId),
+              isNull(attachments.bidNoteId),
+            ),
+          );
+      }
+
+      // 온보딩 샘플 RFP 는 데모 구매사(.invalid 메일)가 소유 — 알림/이메일을 발행하지 않는다.
+      // (bid 저장은 위에서 끝났으므로 PG 의 인터랙티브 체험에는 영향이 없다.)
+      if (!rfp.isSample) {
+        const buyerMembers = (await tx
+          .select({ userId: workspaceMembers.userId, email: users.email })
+          .from(workspaceMembers)
+          .innerJoin(users, eq(workspaceMembers.userId, users.id))
+          .where(eq(workspaceMembers.workspaceId, rfp.buyerWsId))) as {
+          userId: string;
+          email: string;
+        }[];
+
+        const [pgWsRow] = (await tx
+          .select({ name: workspaces.name })
+          .from(workspaces)
+          .where(eq(workspaces.id, actor.workspaceId))
+          .limit(1)) as { name: string }[];
+        const pgWsLabel = pgWsRow?.name ?? 'PG';
+
+        const submittedHtml = await renderBidSubmitted({
+          rfpId: rfp.code,
+          rfpTitle: rfp.title,
+          pgName: pgWsLabel,
+          submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
+        });
+
+        for (const m of buyerMembers) {
+          const notif: Notification = {
+            id: randomUUID(),
+            userId: m.userId,
+            workspaceId: rfp.buyerWsId,
+            type: 'bid.submitted',
+            title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+            body: `${pgWsLabel}가 견적을 보냈어요.`,
+            channel: 'inapp',
+            status: 'pending',
+            linkUrl: `/rfp/${rfp.code}`,
+            createdAt: now.toISOString(),
+          };
+          await dispatchNotification(tx, notif);
+          pendingEmits.push(notif);
+          await this.outboxRepo.enqueue(
+            {
+              event: 'bid.submitted',
+              to: m.email,
+              subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+              html: submittedHtml,
+              dedupeKey: `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
+            },
+            tx,
+          );
+        }
+      }
+
+      return { ok: true as const, bidId, rfpCode: rfp.code };
+    });
+
+    if (result.ok) {
+      emitAfterCommit(pendingEmits);
+      flushAfterCommit();
+    }
+    return result;
+  }
+
+  async addNote(
+    input: { bidId: string; body: string; attachmentIds: string[] },
+    actor: Actor,
+  ): Promise<ServiceResult<{ noteId: string }>> {
+    const body = input.body.trim();
+    if (body.length === 0 && input.attachmentIds.length === 0) {
+      return { ok: false, error: 'NOTE_EMPTY' };
+    }
+
+    const bid = await this.bidRepo.findById(input.bidId);
+    if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
+
+    const rfp = await this.rfpRepo.findById(bid.rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    if (rfp.buyerWsId !== actor.workspaceId) {
+      return { ok: false, error: 'FORBIDDEN' };
+    }
+
+    const noteId = randomUUID();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const txResult = await this._db.transaction(async (tx: any) => {
+      if (input.attachmentIds.length > 0) {
+        const rows = await tx
+          .select({
+            id: attachments.id,
+            rfpId: attachments.rfpId,
+            bidId: attachments.bidId,
+            bidNoteId: attachments.bidNoteId,
+            uploadedBy: attachments.uploadedBy,
+          })
+          .from(attachments)
+          .where(inArray(attachments.id, input.attachmentIds));
+        if (rows.length !== input.attachmentIds.length) return 'INVALID_ATTACHMENT' as const;
+        for (const r of rows) {
+          if (r.uploadedBy !== actor.userId || r.rfpId || r.bidId || r.bidNoteId) {
+            return 'INVALID_ATTACHMENT' as const;
+          }
+        }
+      }
+
+      await this.bidNoteRepo.save(
+        { id: noteId, bidId: input.bidId, authorId: actor.userId, body, createdAt: new Date() },
+        tx,
+      );
+
+      if (input.attachmentIds.length > 0) {
+        await tx
+          .update(attachments)
+          .set({ bidNoteId: noteId })
+          .where(
+            and(
+              inArray(attachments.id, input.attachmentIds),
+              eq(attachments.uploadedBy, actor.userId),
+              isNull(attachments.rfpId),
+              isNull(attachments.bidId),
+              isNull(attachments.bidNoteId),
+            ),
+          );
+      }
+      return 'ok' as const;
+    });
+
+    if (txResult === 'INVALID_ATTACHMENT') {
+      return { ok: false, error: 'INVALID_ATTACHMENT' };
+    }
+    return { ok: true, noteId };
+  }
+
+  async removeNote(noteId: string, actor: Actor): Promise<ServiceResult> {
+    const note = await this.bidNoteRepo.findById(noteId);
+    if (!note) return { ok: false, error: 'NOTE_NOT_FOUND' };
+
+    const bid = await this.bidRepo.findById(note.bidId);
+    if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
+
+    const rfp = await this.rfpRepo.findById(bid.rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    if (rfp.buyerWsId !== actor.workspaceId) {
+      return { ok: false, error: 'FORBIDDEN' };
+    }
+
+    const attIds = await this.bidNoteRepo.findAttachmentIds(noteId);
+    const storage = getStorage();
+    for (const id of attIds) {
+      await storage.delete(id).catch(() => {});
+    }
+
+    await this.bidNoteRepo.remove(noteId);
+    return { ok: true };
+  }
+}
+
+// ─── Factory ─────────────────────────────────────────────────────────────────
+
+declare global {
+  // eslint-disable-next-line no-var -- global augmentation requires var
+  var __bidit_bid_service__: BidService | undefined;
+}
+
+export async function getBidService(): Promise<BidService> {
+  if (!globalThis.__bidit_bid_service__) {
+    const [
+      { db },
+      { getBidRepo, getInvitationRepo, getRfpRepo, getOutboxRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo },
+    ] = await Promise.all([
+      import('@/lib/db/client'),
+      import('@/lib/server/repositories/factory'),
+    ]);
+
+    const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] =
+      await Promise.all([
+        getBidRepo(), getInvitationRepo(), getRfpRepo(),
+        getOutboxRepo(), getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
+        getRfpRequoteRequestRepo(), getAuditLogRepo(),
+      ]);
+
+    globalThis.__bidit_bid_service__ = new BidService(
+      db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo,
+    );
+  }
+  return globalThis.__bidit_bid_service__!;
+}
+
+export function __resetBidServiceForTest(): void {
+  globalThis.__bidit_bid_service__ = undefined;
+}
+
+export function __setBidServiceForTest(service: BidService): void {
+  globalThis.__bidit_bid_service__ = service;
+}

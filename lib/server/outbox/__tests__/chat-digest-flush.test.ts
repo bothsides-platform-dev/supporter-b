@@ -311,4 +311,59 @@ describe('flushChatDigests', () => {
     expect(sent.html).toContain('구매사');
     expect(sent.html).not.toContain('teammate msg');
   });
+
+  it('PG recipient digest email uses the partner host conversationUrl', async () => {
+    const savedBuyer = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+    const savedPartner = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+    try {
+      const { buyerUser, buyerWs, pgUser, conv } = await seedScene();
+      const base = new Date(Date.now() - 60_000);
+      await seedMessages(conv.id, buyerUser.id, buyerWs.id, ['안녕하세요'], base);
+      await seedDueDigest(conv.id, pgUser.id, pgUser.email);
+
+      const sender = vi.fn<Sender>().mockResolvedValue({ ok: true });
+      await flushChatDigests(sender, 10);
+
+      expect(sender).toHaveBeenCalledTimes(1);
+      const sent = sender.mock.calls[0][0];
+      // PG recipient → conversationUrl must use the partner host
+      expect(sent.html).toContain('https://partner.supporter-b.com/messages');
+      expect(sent.html).not.toContain('https://supporter-b.com/messages');
+    } finally {
+      if (savedBuyer === undefined) delete process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+      else process.env.NEXT_PUBLIC_BUYER_ORIGIN = savedBuyer;
+      if (savedPartner === undefined) delete process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+      else process.env.NEXT_PUBLIC_PARTNER_ORIGIN = savedPartner;
+    }
+  });
+
+  it('buyer recipient digest email uses the buyer host conversationUrl', async () => {
+    const savedBuyer = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+    const savedPartner = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+    try {
+      const { buyerUser, pgUser, pgWs, conv } = await seedScene();
+      const base = new Date(Date.now() - 60_000);
+      // PG sends to buyer → buyer is the recipient
+      await seedMessages(conv.id, pgUser.id, pgWs.id, ['견적서 보내드립니다'], base);
+      await seedDueDigest(conv.id, buyerUser.id, buyerUser.email);
+
+      const sender = vi.fn<Sender>().mockResolvedValue({ ok: true });
+      await flushChatDigests(sender, 10);
+
+      expect(sender).toHaveBeenCalledTimes(1);
+      const sent = sender.mock.calls[0][0];
+      // buyer recipient → conversationUrl must use the buyer host
+      expect(sent.html).toContain('https://supporter-b.com/messages');
+      expect(sent.html).not.toContain('https://partner.supporter-b.com/messages');
+    } finally {
+      if (savedBuyer === undefined) delete process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+      else process.env.NEXT_PUBLIC_BUYER_ORIGIN = savedBuyer;
+      if (savedPartner === undefined) delete process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+      else process.env.NEXT_PUBLIC_PARTNER_ORIGIN = savedPartner;
+    }
+  });
 });

@@ -10,11 +10,13 @@ function renderComponent({
   onSubmit = vi.fn().mockResolvedValue(undefined),
   submitting = false,
   serverError = '',
+  showFieldErrors = false,
 }: {
   onBack?: () => void;
   onSubmit?: () => Promise<void>;
   submitting?: boolean;
   serverError?: string;
+  showFieldErrors?: boolean;
 } = {}) {
   return render(
     <RfpStep4Review
@@ -22,6 +24,7 @@ function renderComponent({
       onSubmit={onSubmit}
       submitting={submitting}
       serverError={serverError}
+      showFieldErrors={showFieldErrors}
     />,
   );
 }
@@ -179,5 +182,25 @@ describe('RfpStep4Review', () => {
     expect(
       screen.getByRole('checkbox', { name: /오픈 게시판/ }),
     ).not.toBeChecked();
+  });
+
+  describe('마감일 인라인 에러 (attempted)', () => {
+    it('발송 버튼 클릭 전에는 마감일 미설정이어도 에러 메시지가 표시되지 않는다', () => {
+      // deadline: '' (resetStore 기본값)
+      renderComponent();
+      expect(screen.queryByText('마감일을 선택해주세요')).not.toBeInTheDocument();
+    });
+
+    it('발송 버튼 클릭 후 마감일 미설정 시 에러 메시지가 표시된다', async () => {
+      const user = userEvent.setup();
+      renderComponent();
+      await user.click(screen.getByRole('button', { name: /보내기/ }));
+      expect(screen.getByText('마감일을 선택해주세요')).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이면 발송 클릭 없이도 마감일 미설정 에러가 표시된다', () => {
+      renderComponent({ showFieldErrors: true });
+      expect(screen.getByText('마감일을 선택해주세요')).toBeInTheDocument();
+    });
   });
 });

@@ -4,8 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 
-import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
+import { type PgliteDB } from '@/lib/db/client-pglite';
+import { setupWorkspaceActionEnv, teardownWorkspaceActionEnv } from './_setup';
 import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
   users,
@@ -14,9 +14,12 @@ import {
   bizProfiles,
   columns,
   verificationApplications,
+  rfps,
+  bids,
+  rfpInvitations,
 } from '@/lib/db/schema';
 
-const sessionRef: { value: { user: { id: string } } | null } = { value: null };
+const sessionRef: { value: { user: { id: string; isMaster?: boolean } } | null } = { value: null };
 vi.mock('@/lib/auth/session', () => ({
   requireSession: () =>
     sessionRef.value
@@ -37,12 +40,11 @@ import { createWorkspaceAction } from '../createWorkspaceAction';
 
 let db: PgliteDB;
 beforeEach(async () => {
-  db = await createPgliteDb();
-  __setActionDbForTest(db);
+  db = await setupWorkspaceActionEnv();
   sessionRef.value = null;
 });
 afterEach(() => {
-  __setActionDbForTest(undefined);
+  teardownWorkspaceActionEnv();
 });
 
 describe('createWorkspaceInTx', () => {
@@ -145,6 +147,42 @@ describe('createWorkspaceInTx', () => {
     expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(4);
     expect(cols.filter((c) => c.kind === 'rfp_bids')).toHaveLength(0);
   });
+
+  it('buyer: seeds a sample RFP (isSample) with 3 bids', async () => {
+    const u = await seedUser(db);
+    const { workspaceId } = await createWorkspaceInTx(db, { userId: u.id, type: 'buyer', name: 'BuyerCo' });
+
+    const sample = await db.select().from(rfps).where(eq(rfps.buyerWsId, workspaceId));
+    expect(sample).toHaveLength(1);
+    expect(sample[0].isSample).toBe(true);
+    const bidRows = await db.select().from(bids).where(eq(bids.rfpId, sample[0].id));
+    expect(bidRows).toHaveLength(3);
+  });
+
+  it('pg: seeds a sample RFP invitation in the inbox (demo-buyer-owned, accepted, no bid)', async () => {
+    const u = await seedUser(db);
+    const { workspaceId } = await createWorkspaceInTx(db, { userId: u.id, type: 'pg', name: 'NewPG' });
+
+    // the PG owns no RFP itself — the sample is owned by the shared demo buyer
+    expect(await db.select().from(rfps).where(eq(rfps.buyerWsId, workspaceId))).toHaveLength(0);
+
+    // it has exactly one accepted invitation to an isSample RFP
+    const invs = await db.select().from(rfpInvitations).where(eq(rfpInvitations.pgWsId, workspaceId));
+    expect(invs).toHaveLength(1);
+    expect(invs[0].status).toBe('accepted');
+
+    const [rfp] = await db.select().from(rfps).where(eq(rfps.id, invs[0].rfpId));
+    expect(rfp.isSample).toBe(true);
+    const [owner] = await db.select().from(workspaces).where(eq(workspaces.id, rfp.buyerWsId));
+    expect(owner.isDemo).toBe(true);
+
+    // no bid yet — the PG submits it themselves
+    expect(await db.select().from(bids).where(eq(bids.rfpId, rfp.id))).toHaveLength(0);
+
+    // sampleSeededAt marker set on the PG workspace
+    const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId));
+    expect(ws.sampleSeededAt).not.toBeNull();
+  });
 });
 
 describe('createWorkspaceAction', () => {
@@ -183,6 +221,23 @@ describe('createWorkspaceAction', () => {
     expect(arg.reviewUrl).toContain('/admin/review/');
   });
 
+  it('ADMIN_ORIGIN 설정 시 reviewUrl 이 해당 origin 으로 시작한다', async () => {
+    const saved = process.env.ADMIN_ORIGIN;
+    process.env.ADMIN_ORIGIN = 'https://admin.supporter-b.com';
+    notifyMock.mockClear();
+    try {
+      const u = await seedUser(db);
+      sessionRef.value = { user: { id: u.id } };
+      const r = await createWorkspaceAction({ type: 'pg', name: 'AdminPG' });
+      expect(r.ok).toBe(true);
+      const arg = notifyMock.mock.calls[0][0] as { reviewUrl: string };
+      expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.supporter-b\.com\/admin\/review\//);
+    } finally {
+      if (saved === undefined) delete process.env.ADMIN_ORIGIN;
+      else process.env.ADMIN_ORIGIN = saved;
+    }
+  });
+
   it('unauthenticated → UNAUTHENTICATED', async () => {
     sessionRef.value = null;
     const r = await createWorkspaceAction({ type: 'pg', name: 'X' });
@@ -194,5 +249,19 @@ describe('createWorkspaceAction', () => {
     sessionRef.value = { user: { id: u.id } };
     const r = await createWorkspaceAction({ type: 'pg', name: '' });
     expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+  });
+
+  it('마스터 계정은 워크스페이스를 생성할 수 없다 → FORBIDDEN (멤버십 오염 방지)', async () => {
+    const u = await seedUser(db);
+    sessionRef.value = { user: { id: u.id, isMaster: true } };
+
+    const r = await createWorkspaceAction({ type: 'pg', name: 'MasterWS' });
+
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    const members = await db
+      .select()
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.userId, u.id));
+    expect(members).toHaveLength(0);
   });
 });

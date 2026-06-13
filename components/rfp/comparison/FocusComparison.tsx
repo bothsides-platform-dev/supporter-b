@@ -4,7 +4,7 @@
 // 견적을 깊게: 개선 요약(hero) + 부차정보 아코디언 3종. 값 단위 hover 는 MetricComparePopover
 // 로 전 PG 줄세움. CTA 는 인라인 AwardConfirmDialog 로 선정 확정. 표/보드/별도 award 페이지
 // 를 대체한다. 표현 전용 — 데이터는 loadBuyerRfpDetail 산출물.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
@@ -13,15 +13,22 @@ import { Accordion, AccordionItem } from '@/components/ui/accordion';
 import { ImprovementSummary, type CurrentConditions } from './ImprovementSummary';
 import { MetricComparePopover, type CompareRow } from './MetricComparePopover';
 import { AwardConfirmDialog } from './AwardConfirmDialog';
+import { AwardResult } from './AwardResult';
+import { RequoteDialog } from './RequoteDialog';
 import { BidNotesPanel } from '@/components/rfp/bid-detail/BidNotesPanel';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
+import { useChatRailStore } from '@/lib/stores/chat-rail';
 import { BidPdfPane } from '@/components/rfp/bid-detail/BidPdfPane';
 import { rankByMetric } from '@/lib/utils/bid-compare';
 import { formatKRW, formatPct } from '@/lib/format';
 import {
+  getMethodRate,
+  MERCHANT_TIERS,
+  MERCHANT_TIER_LABELS,
   PAYMENT_METHOD_LABELS,
   type Bid,
   type CustomPaymentMethod,
+  type MerchantTier,
   type PaymentMethod,
 } from '@/lib/types/bid';
 import type { BidNote } from '@/lib/types/bid-note';
@@ -39,27 +46,54 @@ type Props = {
   /** uuid — awardRfpAction 용 */
   rfpId: string;
   rfpCode: string;
+  /** 재요청 현황 — pgWsId → 최신 요청 상태. 없으면 재요청 없음. */
+  requoteByPg?: Record<string, { status: 'pending' | 'responded'; round: number; deadline: string }>;
+  /** 온보딩 샘플 — 읽기전용 샌드박스(선정 비활성) */
+  isSample?: boolean;
 };
 
 export function FocusComparison(props: Props) {
-  const { bids, pgWsNameMap, current, notesByBid, rfpStatus, awardedBidId } = props;
+  const { bids, pgWsNameMap, current, notesByBid, rfpStatus, awardedBidId, requoteByPg } = props;
   const router = useRouter();
+
+  const [tier, setTier] = useState<MerchantTier>('general');
 
   // 정렬: 카드 수수료 낮은 순(기본). 동률·미입력은 뒤로.
   const sortedBids = useMemo(
     () =>
       [...bids].sort(
-        (a, b) => (a.paymentFees.card ?? Infinity) - (b.paymentFees.card ?? Infinity),
+        (a, b) =>
+          (getMethodRate(a.paymentFees.card, tier) ?? Infinity) -
+          (getMethodRate(b.paymentFees.card, tier) ?? Infinity),
       ),
-    [bids],
+    [bids, tier],
   );
 
   const defaultBidId = awardedBidId ?? sortedBids[0]?.id;
   const [activeBidId, setActiveBidId] = useState<string | undefined>(defaultBidId);
   const [peekBidId, setPeekBidId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [requoteOpen, setRequoteOpen] = useState(false);
+  // 선정 확정 직후 1회만 뜨는 결과 화면. 초기 awarded 로드로는 set되지 않는다(1회성).
+  const [resultBid, setResultBid] = useState<Bid | null>(null);
 
-  if (sortedBids.length === 0) {
+  // hooks 는 무조건 호출돼야 하므로 active 계산을 early return 위로 둔다
+  // (빈 목록이면 undefined). 포커스 PG 를 chat-rail 스토어에 publish 해 우측
+  // 채팅 레일의 '상대방 채팅' 탭이 탭 전환을 추종하게 한다.
+  const active: Bid | undefined =
+    sortedBids.find((b) => b.id === activeBidId) ?? sortedBids[0];
+  const setCounterparty = useChatRailStore((s) => s.setCounterparty);
+  const activePgWsId = active?.pgWsId;
+  useEffect(() => {
+    if (!activePgWsId) return;
+    setCounterparty({
+      workspaceId: activePgWsId,
+      name: pgWsNameMap[activePgWsId] ?? activePgWsId,
+      type: 'pg',
+    });
+  }, [activePgWsId, pgWsNameMap, setCounterparty]);
+
+  if (sortedBids.length === 0 || !active) {
     return (
       <EmptyState
         title="견적을 기다리고 있어요"
@@ -68,11 +102,22 @@ export function FocusComparison(props: Props) {
     );
   }
 
-  const active = sortedBids.find((b) => b.id === activeBidId) ?? sortedBids[0];
   const pgName = (wsId: string) => pgWsNameMap[wsId] ?? wsId;
   const isAwarded = rfpStatus === 'awarded' || rfpStatus === 'closed';
-  const canAward = rfpStatus === 'sent';
+  const canAward = rfpStatus === 'sent' && !props.isSample;
   const peek = peekBidId ? sortedBids.find((b) => b.id === peekBidId) : null;
+
+  if (resultBid) {
+    return (
+      <AwardResult
+        pgName={pgName(resultBid.pgWsId)}
+        pgWsId={resultBid.pgWsId}
+        bid={resultBid}
+        current={current}
+        tier={tier}
+      />
+    );
+  }
 
   // 활성 견적의 결제수단 요율 행 — 각 행 hover 시 전 PG 줄세움.
   const feeRows: { key: string; label: string; getValue: (b: Bid) => number | null; baseline?: string | null }[] = [];
@@ -80,7 +125,7 @@ export function FocusComparison(props: Props) {
     feeRows.push({
       key: method,
       label: PAYMENT_METHOD_LABELS[method],
-      getValue: (b) => b.paymentFees[method] ?? null,
+      getValue: (b) => getMethodRate(b.paymentFees[method], tier) ?? null,
       baseline: method === 'card' ? current.feeRate : undefined,
     });
   }
@@ -103,6 +148,25 @@ export function FocusComparison(props: Props) {
         <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
           정렬: 카드 수수료 낮은 순
         </span>
+      </div>
+
+      <div role="group" aria-label="구간 선택" className="flex gap-1 mb-3">
+        {MERCHANT_TIERS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={tier === t}
+            onClick={() => setTier(t)}
+            className={cn(
+              'h-7 px-2.5 rounded-[6px] text-[12px] transition-colors',
+              tier === t
+                ? 'bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]'
+                : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
+            )}
+          >
+            {MERCHANT_TIER_LABELS[t]}
+          </button>
+        ))}
       </div>
 
       {/* Tabs */}
@@ -134,6 +198,17 @@ export function FocusComparison(props: Props) {
                     color={isWinner ? 'tertiary' : 'surface'}
                   />
                 )}
+                {!isAwarded && requoteByPg?.[bid.pgWsId] && (
+                  <Chip
+                    label={
+                      requoteByPg[bid.pgWsId]!.status === 'pending'
+                        ? '재요청함 · 응답대기'
+                        : '재제출됨'
+                    }
+                    color={requoteByPg[bid.pgWsId]!.status === 'pending' ? 'warning' : 'tertiary'}
+                  />
+                )}
+                {bid.round > 1 && <Chip label={`${bid.round}차`} color="surface" />}
               </button>
             );
           })}
@@ -146,7 +221,13 @@ export function FocusComparison(props: Props) {
               {pgName(peek.pgWsId)}
             </p>
             <dl className="space-y-0.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-              <PeekRow label="카드" value={peek.paymentFees.card !== undefined ? formatPct(peek.paymentFees.card) : '—'} />
+              <PeekRow
+                label="카드"
+                value={(() => {
+                  const r = getMethodRate(peek.paymentFees.card, tier);
+                  return r !== undefined ? formatPct(r) : '—';
+                })()}
+              />
               <PeekRow label="정산주기" value={peek.settleCycle} />
               <PeekRow label="정산한도" value={formatKRW(peek.settleLimit)} />
             </dl>
@@ -170,10 +251,40 @@ export function FocusComparison(props: Props) {
           )}
         </div>
 
-        <ImprovementSummary bid={active} current={current} />
+        <ImprovementSummary bid={active} current={current} tier={tier} />
 
         <Accordion>
           <AccordionItem value="rates" title={`전체 결제수단 요율 (${feeRows.length})`}>
+            {(Object.keys(active.paymentFees) as PaymentMethod[])
+              .filter((m) => typeof active.paymentFees[m] === 'object')
+              .map((m) => (
+                <table key={m} data-testid={`tiered-matrix-${m}`} className="w-full mb-3 border-collapse">
+                  <caption className="text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] mb-1">
+                    {PAYMENT_METHOD_LABELS[m]} · 구간별
+                  </caption>
+                  <thead>
+                    <tr>
+                      {MERCHANT_TIERS.map((t) => (
+                        <th key={t} className="text-center font-mono text-[10px] text-[var(--md-sys-color-outline)] pb-0.5">
+                          {MERCHANT_TIER_LABELS[t]}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      {MERCHANT_TIERS.map((t) => {
+                        const r = getMethodRate(active.paymentFees[m], t);
+                        return (
+                          <td key={t} className="text-center md-numeric text-[12px] text-[var(--md-sys-color-on-surface)] py-0.5">
+                            {r !== undefined ? formatPct(r) : '—'}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              ))}
             <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
               {feeRows.map((row) => {
                 const ranked = rankByMetric(sortedBids, row.getValue, 'lower');
@@ -228,8 +339,16 @@ export function FocusComparison(props: Props) {
         </Accordion>
 
         {canAward && (
-          <div className="pt-4 flex justify-end">
+          <div className="pt-4 flex items-center justify-end gap-2">
+            <Button variant="outlined" onClick={() => setRequoteOpen(true)}>견적 재요청</Button>
             <Button onClick={() => setDialogOpen(true)}>이 견적 선정하기 →</Button>
+          </div>
+        )}
+        {props.isSample && (
+          <div className="pt-4 flex justify-end">
+            <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+              샘플에서는 선정할 수 없어요. 실제 견적 요청을 보내보세요.
+            </p>
           </div>
         )}
       </div>
@@ -241,7 +360,15 @@ export function FocusComparison(props: Props) {
         awardedBidId={active.id}
         pgName={pgName(active.pgWsId)}
         otherCount={sortedBids.length - 1}
-        onAwarded={() => router.refresh()}
+        onAwarded={() => setResultBid(active)}
+      />
+
+      <RequoteDialog
+        open={requoteOpen}
+        onOpenChange={setRequoteOpen}
+        rfpId={props.rfpId}
+        candidates={sortedBids.map((b) => ({ pgWsId: b.pgWsId, name: pgName(b.pgWsId) }))}
+        onRequested={() => router.refresh()}
       />
     </section>
   );

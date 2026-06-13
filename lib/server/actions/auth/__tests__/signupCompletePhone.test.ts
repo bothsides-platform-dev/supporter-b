@@ -9,6 +9,8 @@ import { verifyEmailAction } from '../verifyEmailAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }) }));
+
 vi.mock('@/lib/server/sms/solapi', () => ({
   sendSms: vi.fn().mockResolvedValue(undefined),
 }));
@@ -175,5 +177,22 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     expect(arg.workspaceName).toBe(BASE.wsName);
     expect(arg.orgType).toBe('buyer');
     expect(arg.reviewUrl).toContain('/admin/review/');
+  });
+
+  it('ADMIN_ORIGIN 설정 시 reviewUrl 이 해당 origin 으로 시작한다', async () => {
+    const saved = process.env.ADMIN_ORIGIN;
+    process.env.ADMIN_ORIGIN = 'https://admin.supporter-b.com';
+    notifyMock.mockClear();
+    try {
+      const verificationId = await seedVerifiedOtp(BASE.phone);
+      await seedVerifiedEmail(BASE.email);
+      const r = await signupCompleteAction({ ...BASE, phoneVerificationId: verificationId });
+      expect(r.ok).toBe(true);
+      const arg = notifyMock.mock.calls[0][0] as { reviewUrl: string };
+      expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.supporter-b\.com\/admin\/review\//);
+    } finally {
+      if (saved === undefined) delete process.env.ADMIN_ORIGIN;
+      else process.env.ADMIN_ORIGIN = saved;
+    }
   });
 });

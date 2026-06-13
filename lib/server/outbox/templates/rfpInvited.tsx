@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { render } from '@react-email/render';
+import { josa } from 'es-hangul';
 
 import { Button, Layout, Mono } from './_layout';
 import type { RfpInvitedProps } from './types';
@@ -11,9 +12,11 @@ export function RfpInvited({
   deadline,
   inviteUrl,
 }: RfpInvitedProps): React.JSX.Element {
+  const buyerWithParticle = josa(buyerName, '이/가');
+  const buyerParticle = buyerWithParticle.slice(buyerName.length);
   return (
     <Layout
-      preheader={`${buyerName}이(가) ${rfpId} 견적을 요청했어요.`}
+      preheader={`${buyerWithParticle} ${rfpId} 견적을 요청했어요.`}
       serial={`견적 요청 / ${rfpId}`}
     >
       <h1
@@ -27,7 +30,7 @@ export function RfpInvited({
         견적 요청이 도착했어요
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
-        <strong>{buyerName}</strong>이(가) 견적 요청을 보냈어요.
+        <strong>{buyerName}</strong>{buyerParticle} 견적 요청을 보냈어요.
       </p>
 
       <table

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyBuyerRfp } from '../buyer-kanban';
+import { classifyBuyerRfp, toBuyerCard } from '../buyer-kanban';
 import type { RFP } from '@/lib/types/rfp';
 
 function makeRfp(overrides: Partial<RFP> = {}): RFP {
@@ -36,5 +36,27 @@ describe('classifyBuyerRfp', () => {
 
   it('closed: status=cancelled', () => {
     expect(classifyBuyerRfp({ rfp: makeRfp({ status: 'cancelled' }) })).toBe('closed');
+  });
+});
+
+describe('toBuyerCard', () => {
+  it('cancelled RFP → isCancelled=true (마감 컬럼 안 취소 구분 칩용)', () => {
+    const card = toBuyerCard({
+      rfp: makeRfp({ status: 'cancelled' }),
+      bids: [],
+      invitations: [],
+      stage: 'closed',
+    });
+    expect(card.isCancelled).toBe(true);
+  });
+
+  it('closed(비취소) RFP → isCancelled=false', () => {
+    const card = toBuyerCard({
+      rfp: makeRfp({ status: 'closed' }),
+      bids: [],
+      invitations: [],
+      stage: 'closed',
+    });
+    expect(card.isCancelled).toBe(false);
   });
 });

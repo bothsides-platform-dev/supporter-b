@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { signupMockHostRef } = vi.hoisted(() => ({ signupMockHostRef: { value: null as string | null } }));
+vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => signupMockHostRef.value }) }));
 import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
@@ -18,8 +21,9 @@ import { signupCompleteAction } from '../signupCompleteAction';
 import { checkEmailAvailableAction } from '../checkEmailAvailableAction';
 import { verifyEmailAction } from '../verifyEmailAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
-import { __setActionDbForTest } from '../_shared';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import { AuthService, __setAuthServiceForTest } from '@/lib/server/services/auth';
+import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo } from '@/lib/server/repositories/factory';
 
 const DEFAULT_PHONE = '01099999999';
 // Fixed UUID used by throwingInsertDb so VALID_SIGNUP can be a static constant.
@@ -615,27 +619,33 @@ describe('signupCompleteAction — insert error tightening', () => {
   afterEach(teardownActionEnv);
 
   it('maps a postgres-shaped unique violation (err.code) to EMAIL_TAKEN', async () => {
-    __setActionDbForTest(
+    const [userRepo, vtRepo, outboxRepo, auditRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo()]);
+    __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('dup'), { code: '23505' })),
-    );
+      userRepo, vtRepo, outboxRepo, auditRepo,
+    ));
     const r = await signupCompleteAction(VALID_SIGNUP);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
   });
 
   it('maps a pglite-shaped unique violation (err.cause.code) to EMAIL_TAKEN', async () => {
-    __setActionDbForTest(
+    const [userRepo, vtRepo, outboxRepo, auditRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo()]);
+    __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('dup'), { cause: { code: '23505' } })),
-    );
+      userRepo, vtRepo, outboxRepo, auditRepo,
+    ));
     const r = await signupCompleteAction(VALID_SIGNUP);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
   });
 
   it('rethrows a non-unique DB error instead of masking it as EMAIL_TAKEN', async () => {
-    __setActionDbForTest(
+    const [userRepo, vtRepo, outboxRepo, auditRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo()]);
+    __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('not null'), { code: '23502' })),
-    );
+      userRepo, vtRepo, outboxRepo, auditRepo,
+    ));
     await expect(signupCompleteAction(VALID_SIGNUP)).rejects.toThrow('not null');
   });
 });
@@ -720,5 +730,48 @@ describe('checkEmailAvailableAction', () => {
     const r = await checkEmailAvailableAction({ email: 'not-an-email' });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+});
+
+describe('signupCompleteAction — cross-host redirect for pg signup', () => {
+  let verificationId: string;
+  const savedBuyer = { val: undefined as string | undefined };
+  const savedPartner = { val: undefined as string | undefined };
+
+  beforeEach(async () => {
+    db = await setupActionEnv();
+    verificationId = await seedVerifiedOtp();
+    await seedVerifiedEmail('sales.crosshost@toss.im');
+    savedBuyer.val = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+    savedPartner.val = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+    signupMockHostRef.value = 'supporter-b.com';
+  });
+  afterEach(() => {
+    teardownActionEnv();
+    signupMockHostRef.value = null;
+    if (savedBuyer.val === undefined) delete process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+    else process.env.NEXT_PUBLIC_BUYER_ORIGIN = savedBuyer.val;
+    if (savedPartner.val === undefined) delete process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+    else process.env.NEXT_PUBLIC_PARTNER_ORIGIN = savedPartner.val;
+  });
+
+  it('pg signup on the buyer host returns an absolute partner URL for /inbox', async () => {
+    const r = await signupCompleteAction({
+      email: 'sales.crosshost@toss.im',
+      name: '크로스호스트 PG',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '크로스호스트 페이',
+      pgProfile: {
+        bizNo: VALID_BIZ_NO,
+      },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.redirectTo).toBe('https://partner.supporter-b.com/inbox');
   });
 });

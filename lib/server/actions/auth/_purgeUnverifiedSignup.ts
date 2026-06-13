@@ -5,6 +5,8 @@ import {
   workspaceMembers,
   bizProfiles,
   verificationTokens,
+  rfps,
+  rfpInvitations,
 } from '@/lib/db/schema';
 
 /**
@@ -54,6 +56,22 @@ export async function purgeUnverifiedSignup(tx: any, email: string): Promise<voi
       .map((w: { bizProfileId: string | null }) => w.bizProfileId)
       .filter((x: string | null): x is string => !!x);
 
+    // PG 온보딩 샘플: 데모 구매사가 소유하지만 이 PG 전용으로 시드된 견적 — 워크스페이스 삭제 전
+    // 함께 지운다. rfp_invitations.pg_ws_id 는 cascade 가 아니라 남으면 워크스페이스 삭제를 막는다.
+    // rfp 삭제가 invitations·allowlist·bids 를 rfp_id cascade 로 함께 제거한다. isSample 만 대상.
+    const invitedSamples = await tx
+      .select({ rfpId: rfps.id })
+      .from(rfpInvitations)
+      .innerJoin(rfps, eq(rfpInvitations.rfpId, rfps.id))
+      .where(and(inArray(rfpInvitations.pgWsId, wsIds), eq(rfps.isSample, true)));
+    const sampleRfpIds = invitedSamples.map((r: { rfpId: string }) => r.rfpId);
+    if (sampleRfpIds.length > 0) {
+      await tx.delete(rfps).where(inArray(rfps.id, sampleRfpIds));
+    }
+
+    // 이 워크스페이스가 소유한 RFP(온보딩 샘플 포함)를 삭제 — rfps.buyer_ws_id FK는 cascade가
+    // 아니라 워크스페이스 삭제 전에 비워야 한다. rfps 삭제는 bids·invitations·allowlist로 cascade.
+    await tx.delete(rfps).where(inArray(rfps.buyerWsId, wsIds));
     await tx.delete(workspaces).where(inArray(workspaces.id, wsIds));
     if (bizIds.length > 0) {
       await tx.delete(bizProfiles).where(inArray(bizProfiles.id, bizIds));

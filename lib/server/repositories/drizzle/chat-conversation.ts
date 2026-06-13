@@ -51,6 +51,25 @@ export class DrizzleChatConversationRepository implements ChatConversationRepo {
     return row as ChatConversation;
   }
 
+  async findPair(
+    buyerWsId: string,
+    pgWsId: string,
+    tx?: Tx,
+  ): Promise<ChatConversation | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select(CONVERSATION_COLUMNS)
+      .from(chatConversations)
+      .where(
+        and(
+          eq(chatConversations.buyerWsId, buyerWsId),
+          eq(chatConversations.pgWsId, pgWsId),
+        ),
+      )
+      .limit(1);
+    return row as ChatConversation | undefined;
+  }
+
   async findById(id: string, tx?: Tx): Promise<ChatConversation | undefined> {
     const db = this.h(tx);
     const [row] = await db

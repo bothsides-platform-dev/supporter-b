@@ -211,3 +211,9 @@ export function InfoIcon({ size = 16, ...p }: IconProps) {
     </svg>
   );
 }
+
+import { LayoutTemplate } from 'lucide-react';
+
+export function LayoutTemplateIcon({ size = 20, ...p }: IconProps) {
+  return <LayoutTemplate width={size} height={size} {...p} />;
+}

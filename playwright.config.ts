@@ -50,8 +50,20 @@ export default defineConfig({
         process.env.DATABASE_URL_TEST ??
         'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test',
       // Auth.js requires AUTH_SECRET ≥ 32 bytes. Deterministic for e2e.
-      AUTH_SECRET: 'e2e-test-secret-' + 'a'.repeat(32),
+      // Use AUTH_SECRET_E2E if set; otherwise fall back to process env (which
+      // Next.js fills from .env). Using a dedicated test secret avoids using
+      // the production secret in tests while staying consistent between
+      // loginAction (node) and proxy.ts (edge) within the same server.
+      AUTH_SECRET: process.env.AUTH_SECRET_E2E ?? process.env.AUTH_SECRET ?? ('e2e-test-secret-' + 'a'.repeat(32)),
+      AUTH_URL: 'http://localhost:3001',
+      // AUTH_COOKIE_DOMAIN must be unset so the session cookie is host-only
+      // (no domain attribute). In local dev the .env may set this to a wildcard
+      // like `.lvh.me` for cross-subdomain testing, which causes the cookie to
+      // be excluded from localhost requests and breaks e2e auth.
+      AUTH_COOKIE_DOMAIN: '',
       NEXT_PUBLIC_BASE_URL: 'http://localhost:3001',
+      NEXT_PUBLIC_BUYER_ORIGIN: 'http://localhost:3001',
+      NEXT_PUBLIC_PARTNER_ORIGIN: 'http://localhost:3001',
       // Empty → Resend/NTS fall back to dev console / mock paths.
       // RESEND_API_KEY '': console fallback in lib/integrations/resend.ts.
       // NTS_SERVICE_KEY '': RealNtsClient throws NTS_NO_KEY — scenario A

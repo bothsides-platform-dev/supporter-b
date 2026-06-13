@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { requirePgPage } from '@/lib/auth/page-guards';
-import { getInvitationRepo, getBidRepo } from '@/lib/server/repositories/factory';
+import { getInvitationRepo, getBidRepo, getRfpRequoteRequestRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
 import { classifyPgInvitation } from '@/lib/server/pg-kanban';
 import type { Bid } from '@/lib/types/bid';
@@ -17,6 +17,7 @@ import { InboxIcon } from '@/components/icons';
 import { SplitView } from '@/components/ui/split-view';
 import {
   filterInboxRows,
+  paramsForView,
   resolveBoardView,
   type BoardView,
   type BoardFilterParams,
@@ -70,14 +71,22 @@ async function InboxListPageLoader({
   peek?: string;
 }) {
   const now = new Date();
-  const [invRepo, bidRepo] = await Promise.all([getInvitationRepo(), getBidRepo()]);
-  const [pairs, bidList] = await Promise.all([
+  const [invRepo, bidRepo, requoteRepo] = await Promise.all([
+    getInvitationRepo(),
+    getBidRepo(),
+    getRfpRequoteRequestRepo(),
+  ]);
+  const [pairs, bidList, pendingRequotes] = await Promise.all([
     invRepo.findByPgWorkspace(wsId),
     bidRepo.findByPgWs(wsId),
+    requoteRepo.findPendingByPgWs(wsId),
   ]);
   // bid 기반 stage 분류를 위해 RFP별 bid 매핑 (loadBoard PG 파이프라인과 동일 패턴).
   const bidByRfp = new Map<string, Bid>();
   for (const b of bidList) bidByRfp.set(b.rfpId, b);
+
+  // pending 재요청 — 워크스페이스 단위 bulk 1쿼리 (loadBoard PG 파이프라인과 동일 소스).
+  const pendingRequoteRfpIds = new Set(pendingRequotes.map((r) => r.rfpId));
 
   const allRows: InboxRow[] = pairs.map(({ invitation, rfp }) => {
     const bid = bidByRfp.get(rfp.id);
@@ -93,9 +102,11 @@ async function InboxListPageLoader({
       grade: rfp.bizProfile?.grade ? GRADE_LABELS[rfp.bizProfile.grade] : '—',
       gradeRaw: rfp.bizProfile?.grade,
       contractType: rfp.contractType ?? null,
+      isSample: rfp.isSample ?? false,
+      hasPendingRequote: pendingRequoteRfpIds.has(rfp.id),
     };
   });
-  const rows = filterInboxRows(allRows, params, now);
+  const rows = filterInboxRows(allRows, paramsForView(params, view), now);
 
   const panel = peek ? (
     <Suspense fallback={<InboxPeekPanelSkeleton rfpCode={peek} />}>
@@ -120,7 +131,11 @@ async function InboxListPageLoader({
     <>
       <PageHeader title="받은 견적 요청" count={rows.length} />
       <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
-        <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
+        <BoardFilterBar
+          statusOptions={STATUS_OPTIONS}
+          gradeOptions={GRADE_OPTIONS}
+          hideStatus={view === 'board'}
+        />
         <BoardViewToggle view={view} cookieName="inboxBoardView" tableCount={rows.length} />
       </div>
       <SplitView list={listContent} panel={panel} />

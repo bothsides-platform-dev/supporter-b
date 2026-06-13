@@ -21,6 +21,12 @@ vi.mock('@/lib/server/actions/auth', () => ({
   signupCompleteAction: (...a: any[]) => completeActionMock(...a),
 }));
 
+const joinCanonicalMock = vi.fn();
+vi.mock('@/lib/server/actions/auth/joinCanonicalPgWorkspaceAction', () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  joinCanonicalPgWorkspaceAction: (...a: any[]) => joinCanonicalMock(...a),
+}));
+
 const signInMock = vi.fn();
 vi.mock('next-auth/react', () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,11 +44,79 @@ const INVITE_DRAFT = {
   wsInviteToken: 'TOK123',
 };
 
+const BUYER_DRAFT_BASE = {
+  email: 'buyer@example.com',
+  password: 'pw-123456',
+  name: 'Buyer',
+  phone: '01012345678',
+  phoneVerificationId: 'vid-2',
+  workspaceType: 'buyer',
+  wsName: '구매사',
+  bizProfile: { bizNo: '1234567890', taxType: 'general', status: 'active' },
+};
+
 beforeEach(() => {
   inviteActionMock.mockReset();
   completeActionMock.mockReset();
+  joinCanonicalMock.mockReset();
   signInMock.mockReset();
   draftRef.value = {};
+});
+
+const CANONICAL_PG_DRAFT = {
+  email: 'sales@toss.im',
+  password: 'pw-123456',
+  name: '영업담당자',
+  phone: '01012345678',
+  phoneVerificationId: 'vid-pg',
+  selectedPgWorkspaceId: 'ws-toss-uuid',
+};
+
+describe('finalizeSignup — canonical PG workspace 합류 경로', () => {
+  it('selectedPgWorkspaceId 있으면 joinCanonicalPgWorkspaceAction을 호출하고 /inbox로 리디렉션', async () => {
+    draftRef.value = { ...CANONICAL_PG_DRAFT };
+    joinCanonicalMock.mockResolvedValue({
+      ok: true,
+      redirectTo: '/inbox',
+      email: 'sales@toss.im',
+      password: 'pw-123456',
+    });
+    signInMock.mockResolvedValue({});
+
+    const r = await finalizeSignup();
+
+    expect(joinCanonicalMock).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedPgWorkspaceId: 'ws-toss-uuid' }),
+    );
+    expect(inviteActionMock).not.toHaveBeenCalled();
+    expect(r).toEqual({ ok: true, redirectTo: '/inbox' });
+  });
+
+  it('joinCanonicalPgWorkspaceAction 에러 시 ok:false 전파', async () => {
+    draftRef.value = { ...CANONICAL_PG_DRAFT };
+    joinCanonicalMock.mockResolvedValue({ ok: false, error: 'INVALID_CANONICAL_WORKSPACE' });
+
+    const r = await finalizeSignup();
+
+    expect(r).toEqual({ ok: false, error: 'INVALID_CANONICAL_WORKSPACE' });
+    expect(signInMock).not.toHaveBeenCalled();
+  });
+
+  it('selectedPgWorkspaceId가 wsInviteToken보다 우선한다', async () => {
+    draftRef.value = { ...CANONICAL_PG_DRAFT, wsInviteToken: 'INVITE-TOKEN' };
+    joinCanonicalMock.mockResolvedValue({
+      ok: true,
+      redirectTo: '/inbox',
+      email: 'sales@toss.im',
+      password: 'pw-123456',
+    });
+    signInMock.mockResolvedValue({});
+
+    await finalizeSignup();
+
+    expect(joinCanonicalMock).toHaveBeenCalled();
+    expect(inviteActionMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('finalizeSignup — invite EMAIL_TAKEN recovery (#8)', () => {
@@ -61,7 +135,7 @@ describe('finalizeSignup — invite EMAIL_TAKEN recovery (#8)', () => {
     expect(signInMock).not.toHaveBeenCalled();
   });
 
-  it('does not add a redirect for a non-invite EMAIL_TAKEN (normal signup)', async () => {
+  it('does not add a redirect for non-invite EMAIL_TAKEN (normal signup)', async () => {
     draftRef.value = {
       email: 'x@example.com',
       password: 'pw-123456',
@@ -77,5 +151,37 @@ describe('finalizeSignup — invite EMAIL_TAKEN recovery (#8)', () => {
     const r = await finalizeSignup();
 
     expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
+  });
+});
+
+describe('finalizeSignup — next 복귀 URL 오버라이드', () => {
+  it('buyer draft에 next=/rfp/new가 있으면 redirectTo가 /rfp/new로 오버라이드됨', async () => {
+    draftRef.value = { ...BUYER_DRAFT_BASE, next: '/rfp/new' };
+    completeActionMock.mockResolvedValue({ ok: true, redirectTo: '/rfp', email: 'buyer@example.com', password: 'pw-123456' });
+    signInMock.mockResolvedValue({});
+
+    const r = await finalizeSignup();
+
+    expect(r).toEqual({ ok: true, redirectTo: '/rfp/new' });
+  });
+
+  it('불안전한 next(//evil.com)는 무시하고 서버 기본값 사용', async () => {
+    draftRef.value = { ...BUYER_DRAFT_BASE, next: '//evil.com' };
+    completeActionMock.mockResolvedValue({ ok: true, redirectTo: '/rfp', email: 'buyer@example.com', password: 'pw-123456' });
+    signInMock.mockResolvedValue({});
+
+    const r = await finalizeSignup();
+
+    expect(r).toEqual({ ok: true, redirectTo: '/rfp' });
+  });
+
+  it('next 없으면 서버 기본값(/rfp) 그대로 사용', async () => {
+    draftRef.value = { ...BUYER_DRAFT_BASE };
+    completeActionMock.mockResolvedValue({ ok: true, redirectTo: '/rfp', email: 'buyer@example.com', password: 'pw-123456' });
+    signInMock.mockResolvedValue({});
+
+    const r = await finalizeSignup();
+
+    expect(r).toEqual({ ok: true, redirectTo: '/rfp' });
   });
 });

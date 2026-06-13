@@ -4,6 +4,7 @@
 // Cache lives on globalThis so Next dev HMR doesn't multiply instances.
 import type {
   AttachmentRepo,
+  AuditLogRepo,
   BidNoteRepo,
   BidQuoteTemplateRepo,
   BidRepo,
@@ -19,6 +20,8 @@ import type {
   OutboxRepo,
   PgRequestRepo,
   RfpRepo,
+  RfpRequoteRequestRepo,
+  RfpTeamMessageRepo,
   UserRepo,
   VerificationTokenRepo,
   WorkspaceRepo,
@@ -44,8 +47,13 @@ type RepoBundle = {
   chatConversation: ChatConversationRepo;
   chatMessage: ChatMessageRepo;
   chatRead: ChatReadRepo;
+  rfpTeamMessage: RfpTeamMessageRepo;
+  rfpRequoteRequest: RfpRequoteRequestRepo;
+  auditLog: AuditLogRepo;
   // Backend marker for tests.
   __backend: 'memory' | 'drizzle';
+  // Version for HMR stale detection — bump when adding repos/methods.
+  __version: number;
 };
 
 declare global {
@@ -53,10 +61,12 @@ declare global {
   var __bidit_repos__: RepoBundle | undefined;
 }
 
-async function buildBundle(): Promise<RepoBundle> {
-  // Lazy import the postgres-js client so missing DATABASE_URL doesn't crash
-  // tests that inject a pglite db via __useDrizzleWithDbForTest.
-  const { db } = await import('@/lib/db/client');
+// Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
+const BUNDLE_VERSION = 6;
+
+// Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise<RepoBundle> {
   const { DrizzleRfpRepository } = await import('./drizzle/rfp');
   const { DrizzleInvitationRepository } = await import('./drizzle/invitation');
   const { DrizzleRfpRequestRepository } = await import('./drizzle/rfp-pg-request');
@@ -82,6 +92,11 @@ async function buildBundle(): Promise<RepoBundle> {
   );
   const { DrizzleChatMessageRepository } = await import('./drizzle/chat-message');
   const { DrizzleChatReadRepository } = await import('./drizzle/chat-read');
+  const { DrizzleRfpTeamMessageRepository } = await import(
+    './drizzle/rfp-team-message'
+  );
+  const { DrizzleRfpRequoteRequestRepository } = await import('./drizzle/rfp-requote-request');
+  const { DrizzleAuditLogRepository } = await import('./drizzle/audit-log');
 
   return {
     rfp: new DrizzleRfpRepository(db),
@@ -103,23 +118,24 @@ async function buildBundle(): Promise<RepoBundle> {
     chatConversation: new DrizzleChatConversationRepository(db),
     chatMessage: new DrizzleChatMessageRepository(db),
     chatRead: new DrizzleChatReadRepository(db),
-    __backend: 'drizzle',
+    rfpTeamMessage: new DrizzleRfpTeamMessageRepository(db),
+    rfpRequoteRequest: new DrizzleRfpRequoteRequestRepository(db),
+    auditLog: new DrizzleAuditLogRepository(db),
+    __backend: backend,
+    __version: BUNDLE_VERSION,
   };
+}
+
+async function buildBundle(): Promise<RepoBundle> {
+  // Lazy import the postgres-js client so missing DATABASE_URL doesn't crash
+  // tests that inject a pglite db via __useDrizzleWithDbForTest.
+  const { db } = await import('@/lib/db/client');
+  return createRepoBundle(db, 'drizzle');
 }
 
 /** Dev HMR can keep old repo instances after new methods land — rebuild when stale. */
 function isRepoBundleStale(bundle: RepoBundle): boolean {
-  return (
-    typeof bundle.workspace.listForUser !== 'function' ||
-    typeof bundle.workspace.isMember !== 'function' ||
-    typeof bundle.pgRequest?.findOpenRfpsForPg !== 'function' ||
-    typeof bundle.column?.listByBoard !== 'function' ||
-    typeof bundle.chatTemplate?.create !== 'function' ||
-    typeof bundle.bidQuoteTemplate?.create !== 'function' ||
-    typeof bundle.chatConversation?.findOrCreatePair !== 'function' ||
-    typeof bundle.chatMessage?.save !== 'function' ||
-    typeof bundle.chatRead?.upsert !== 'function'
-  );
+  return bundle.__version !== BUNDLE_VERSION;
 }
 
 async function getBundle(): Promise<RepoBundle> {
@@ -146,6 +162,10 @@ export async function getWorkspaceRepo(): Promise<WorkspaceRepo> {
 }
 export async function getUserRepo(): Promise<UserRepo> {
   return (await getBundle()).user;
+}
+// Used by RfpService.createRfp (Phase 2) for biz-profile inheritance logic.
+export async function getBizProfileRepo(): Promise<BizProfileRepo> {
+  return (await getBundle()).bizProfile;
 }
 export async function getBidRepo(): Promise<BidRepo> {
   return (await getBundle()).bid;
@@ -186,6 +206,15 @@ export async function getChatMessageRepo(): Promise<ChatMessageRepo> {
 export async function getChatReadRepo(): Promise<ChatReadRepo> {
   return (await getBundle()).chatRead;
 }
+export async function getRfpTeamMessageRepo(): Promise<RfpTeamMessageRepo> {
+  return (await getBundle()).rfpTeamMessage;
+}
+export async function getRfpRequoteRequestRepo(): Promise<RfpRequoteRequestRepo> {
+  return (await getBundle()).rfpRequoteRequest;
+}
+export async function getAuditLogRepo(): Promise<AuditLogRepo> {
+  return (await getBundle()).auditLog;
+}
 
 // For tests only — read which backend the cache settled on.
 export async function __getBackend(): Promise<'memory' | 'drizzle'> {
@@ -206,51 +235,5 @@ export async function __useDrizzleWithDbForTest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,
 ): Promise<void> {
-  const { DrizzleRfpRepository } = await import('./drizzle/rfp');
-  const { DrizzleInvitationRepository } = await import('./drizzle/invitation');
-  const { DrizzleRfpRequestRepository } = await import('./drizzle/rfp-pg-request');
-  const { DrizzleWorkspaceRepository } = await import('./drizzle/workspace');
-  const { DrizzleUserRepository } = await import('./drizzle/user');
-  const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
-  const { DrizzleBidRepository } = await import('./drizzle/bid');
-  const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
-  const { DrizzleBidQuoteTemplateRepository } = await import(
-    './drizzle/bid-quote-template'
-  );
-  const { DrizzleColumnRepository } = await import('./drizzle/column');
-  const { DrizzleNotificationRepository } = await import('./drizzle/notification');
-  const { DrizzleContractRepository } = await import('./drizzle/contract');
-  const { DrizzleVerificationTokenRepository } = await import(
-    './drizzle/verification-token'
-  );
-  const { DrizzleAttachmentRepository } = await import('./drizzle/attachment');
-  const { DrizzleOutboxRepository } = await import('./drizzle/outbox');
-  const { DrizzleChatTemplateRepository } = await import('./drizzle/chat-template');
-  const { DrizzleChatConversationRepository } = await import(
-    './drizzle/chat-conversation'
-  );
-  const { DrizzleChatMessageRepository } = await import('./drizzle/chat-message');
-  const { DrizzleChatReadRepository } = await import('./drizzle/chat-read');
-  globalThis.__bidit_repos__ = {
-    rfp: new DrizzleRfpRepository(db),
-    invitation: new DrizzleInvitationRepository(db),
-    pgRequest: new DrizzleRfpRequestRepository(db),
-    workspace: new DrizzleWorkspaceRepository(db),
-    user: new DrizzleUserRepository(db),
-    bizProfile: new DrizzleBizProfileRepository(db),
-    bid: new DrizzleBidRepository(db),
-    bidNote: new DrizzleBidNoteRepository(db),
-    bidQuoteTemplate: new DrizzleBidQuoteTemplateRepository(db),
-    column: new DrizzleColumnRepository(db),
-    notification: new DrizzleNotificationRepository(db),
-    contract: new DrizzleContractRepository(db),
-    verificationToken: new DrizzleVerificationTokenRepository(db),
-    attachment: new DrizzleAttachmentRepository(db),
-    outbox: new DrizzleOutboxRepository(db),
-    chatTemplate: new DrizzleChatTemplateRepository(db),
-    chatConversation: new DrizzleChatConversationRepository(db),
-    chatMessage: new DrizzleChatMessageRepository(db),
-    chatRead: new DrizzleChatReadRepository(db),
-    __backend: 'drizzle',
-  };
+  globalThis.__bidit_repos__ = await createRepoBundle(db, 'drizzle');
 }

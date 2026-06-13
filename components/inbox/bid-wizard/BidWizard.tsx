@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
@@ -9,11 +9,17 @@ import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
 import { useBidDraft, type BidDraft } from '../useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
+import { simulateSampleAwardAction } from '@/lib/server/actions/onboarding/simulateSampleAwardAction';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
+import { SamplePgAwardCelebration } from '../SamplePgAwardCelebration';
+import { SAMPLE_AWARD_DELAY_MS } from './sample-award';
 import {
+  MERCHANT_TIERS,
   PAYMENT_METHOD_CATEGORIES,
+  isTieredMethod,
   type PaymentMethod,
   type QuoteTemplateOption,
+  type TierRates,
 } from '@/lib/types/bid';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
@@ -34,9 +40,40 @@ type Props = {
   rfp: PgRfpDetailData['rfp'];
   buyerName: string;
   templates?: QuoteTemplateOption[];
+  /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
+  initialBid?: PgRfpDetailData['myBid'];
 };
 
-export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
+/**
+ * Bid 도메인 객체 → BidDraft 폼 상태로 변환 (재요청 prefill용).
+ *
+ * NOTE: TierRates(객체형) 요율은 단순화로 생략 — 단일 number 요율만 prefill.
+ * 구간별 요율 편집은 사용자가 직접 수행.
+ */
+export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
+  const m = /^([A-Z]+)\+?(\d+)?$/.exec(b.settleCycle);
+  const fees: Record<string, string> = {};
+  for (const [k, v] of Object.entries(b.paymentFees ?? {})) {
+    if (typeof v === 'number') {
+      fees[k] = String(Math.round(v * 1e6) / 1e4);
+    }
+    // TierRates(object) — 단순화로 생략; 사용자가 직접 입력
+  }
+  for (const [k, v] of Object.entries(b.customFees ?? {})) {
+    fees[k] = String(Math.round(v * 1e6) / 1e4);
+  }
+  return {
+    __v: 3,
+    cycleUnit: (m?.[1] ?? 'D') as BidDraft['cycleUnit'],
+    cycleNum: m?.[2] ?? '1',
+    settleLimit: String(b.settleLimit ?? 0),
+    guaranteeInsurance: String(b.guaranteeInsurance ?? 0),
+    fees,
+    memo: b.memo ?? '',
+  };
+}
+
+export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const rfpCode = rfp.code;
@@ -47,28 +84,25 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
   const [currentStep, setCurrentStep] = useState(1);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  // 온보딩 샘플 전용 흐름: 제출 → '검토중' 안내 → 잠시 뒤 선정 시뮬레이트 → 축하.
+  const [samplePhase, setSamplePhase] = useState<'idle' | 'reviewing' | 'awarded'>('idle');
 
-  const [fields, setFields] = useState<BidDraft>({
-    __v: 2,
-    cycleUnit: 'D',
-    cycleNum: '1',
-    settleLimit: '0',
-    guaranteeInsurance: '0',
-    fees: {},
-    memo: '',
-  });
+  const [fields, setFields] = useState<BidDraft>(() =>
+    initialBid
+      ? bidToDraft(initialBid)
+      : { __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees: {}, memo: '' },
+  );
   const setField = <K extends keyof BidDraft>(key: K, value: BidDraft[K]) =>
     setFields((f) => ({ ...f, [key]: value }));
   const setFee = (key: string, value: string) =>
     setFields((f) => ({ ...f, fees: { ...f.fees, [key]: value } }));
   const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, fees, memo } = fields;
 
-  // 초안 자동저장 (BidForm 동일)
+  // 초안 자동저장
   const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
   const [showRestoreBanner, setShowRestoreBanner] = useState(draft !== null);
-  const draftDismissed = useRef(false);
   useEffect(() => {
-    if (!draftDismissed.current) saveDraft(fields);
+    saveDraft(fields);
   }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRestore = () => {
@@ -77,12 +111,11 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
     setShowRestoreBanner(false);
   };
   const handleDismiss = () => {
-    draftDismissed.current = true;
     clearDraft();
     setShowRestoreBanner(false);
   };
 
-  // 견적서 업로드 (BidForm 동일)
+  // 견적서 업로드
   const [proposal, setProposal] = useState<ProposalState>(null);
   const uploadProposal = async (file: File): Promise<void> => {
     if (file.type !== 'application/pdf') {
@@ -109,33 +142,60 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
   const proposalReady = proposal && 'id' in proposal;
   const proposalUploading = proposal && 'status' in proposal && proposal.status === 'uploading';
 
-  // 파생값 (BidForm 동일)
+  // 파생값
   const feeInputMethods = requiredPaymentMethods.length > 0 ? requiredPaymentMethods : ALL_PAYMENT_METHODS;
   const settleCycle = `${cycleUnit}+${cycleNum || '1'}`;
   const feeFilled = (key: string) => (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
-  const anyFeeFilled =
-    feeInputMethods.some((m) => feeFilled(m)) || customPaymentMethods.some((c) => feeFilled(c.id));
+  const anyTieredFilled = feeInputMethods.some(
+    (m) => isTieredMethod(m) && MERCHANT_TIERS.some((t) => feeFilled(`${m}:${t}`)),
+  );
+  const anySingleFilled =
+    feeInputMethods.some((m) => !isTieredMethod(m) && feeFilled(m)) ||
+    customPaymentMethods.some((c) => feeFilled(c.id));
+  const anyFeeFilled = anyTieredFilled || anySingleFilled;
   const canSubmit = !pending && !proposalUploading && cycleNum !== '' && parseInt(cycleNum) > 0 && anyFeeFilled;
 
   const pct = (s: string) => parseFloat(s) / 100;
-  const buildPaymentFees = (): Partial<Record<PaymentMethod, number>> => {
-    const out: Partial<Record<PaymentMethod, number>> = {};
+  const buildPaymentFees = (): Partial<Record<PaymentMethod, number | TierRates>> => {
+    const out: Partial<Record<PaymentMethod, number | TierRates>> = {};
     for (const m of feeInputMethods) {
-      const v = fees[m] ?? '';
-      if (v !== '') out[m] = pct(v);
+      if (isTieredMethod(m)) {
+        const map: TierRates = {};
+        for (const tier of MERCHANT_TIERS) {
+          const v = fees[`${m}:${tier}`] ?? '';
+          if (v !== '') map[tier] = pct(v);
+        }
+        if (Object.keys(map).length > 0) out[m] = map;
+      } else {
+        const v = fees[m] ?? '';
+        if (v !== '') out[m] = pct(v);
+      }
     }
     return out;
   };
   const fmtPct = (rate: number) => String(Math.round(rate * 1e6) / 1e4);
   const applyTemplate = (t: QuoteTemplateOption) => {
+    clearDraft();
+    setShowRestoreBanner(false);
     const m = /^([DWM])\+(\d+)$/.exec(t.settleCycle);
     const unit = (m?.[1] ?? 'D') as 'D' | 'W' | 'M';
     const num = m?.[2] ?? '1';
     setFields((f) => {
       const nextFees = { ...f.fees };
       for (const method of feeInputMethods) {
-        const rate = t.paymentFees[method];
-        if (rate !== undefined) nextFees[method] = fmtPct(rate);
+        const val = t.paymentFees[method];
+        if (val === undefined) continue;
+        if (typeof val === 'object') {
+          for (const tier of MERCHANT_TIERS) {
+            const r = val[tier];
+            if (r !== undefined) nextFees[`${method}:${tier}`] = fmtPct(r);
+          }
+        } else if (isTieredMethod(method)) {
+          // 구버전 단일요율 템플릿 → 전 구간 동일값으로 전개
+          for (const tier of MERCHANT_TIERS) nextFees[`${method}:${tier}`] = fmtPct(val);
+        } else {
+          nextFees[method] = fmtPct(val);
+        }
       }
       return { ...f, cycleUnit: unit, cycleNum: num, settleLimit: String(t.settleLimit), guaranteeInsurance: String(t.guaranteeInsurance), fees: nextFees };
     });
@@ -190,7 +250,12 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
       });
       if (r.ok) {
         clearDraft();
-        router.push(`/inbox/${rfpCode}/submitted`);
+        if (rfp.isSample) {
+          // 샘플은 제출 후 리다이렉트하지 않고 '검토중 → 선정' 시뮬레이션으로 이어간다.
+          setSamplePhase('reviewing');
+        } else {
+          router.push(`/inbox/${rfpCode}/submitted`);
+        }
       } else {
         setSubmitError(r.error);
         setCurrentStep(4);
@@ -198,8 +263,29 @@ export function BidWizard({ rfp, buyerName, templates = [] }: Props) {
     });
   };
 
+  // 샘플 '검토중' 진입 후 잠시 뒤 선정을 시뮬레이트하고 축하 화면으로 전환한다.
+  useEffect(() => {
+    if (samplePhase !== 'reviewing') return;
+    const t = setTimeout(async () => {
+      await simulateSampleAwardAction({ code: rfpCode });
+      setSamplePhase('awarded');
+      router.refresh(); // 인박스가 '선정됨'을 반영하도록
+    }, SAMPLE_AWARD_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [samplePhase, rfpCode, router]);
+
+  if (samplePhase === 'awarded') {
+    return <SamplePgAwardCelebration buyerName={buyerName} />;
+  }
+
   return (
     <>
+      {samplePhase === 'reviewing' && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-2 bg-[var(--md-sys-color-surface)] px-6 text-center">
+          <p className="text-title-medium">구매사가 검토하고 있어요</p>
+          <p className="text-body-medium text-on-surface-variant">잠시만 기다려 주세요…</p>
+        </div>
+      )}
       <ConfirmDialog
         open={submitConfirmOpen}
         onOpenChange={(o) => !o && setSubmitConfirmOpen(false)}

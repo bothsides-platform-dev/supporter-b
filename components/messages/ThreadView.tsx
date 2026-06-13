@@ -19,6 +19,7 @@ import { useChatChannel } from '@/lib/hooks/useChatChannel';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
+import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 
 type Props = {
   conversationId: string;
@@ -28,6 +29,13 @@ type Props = {
   rfpById?: Record<string, { code: string; title: string }>;
   /** 모바일 단일 컬럼에서 대화 목록으로 돌아가는 콜백(데스크톱에선 미노출). */
   onBack?: () => void;
+  /**
+   * 'rail' = 상세 화면 우측 채팅 레일 임베드(w-96) — w-64 사이드 갤러리가 말풍선
+   * 영역을 짓누르므로 갤러리를 목록 위 오버레이로 전환한다. 기본은 'page'.
+   */
+  variant?: 'page' | 'rail';
+  /** 레일 컨텍스트의 RFP — 컴포저 전송에 이 RFP 태그를 기본 적용한다. */
+  defaultRfpId?: string;
 };
 
 /** Live `message` event payload published by sendChatMessageAction. */
@@ -47,8 +55,6 @@ type LiveMessagePayload = {
 // only fire after the user *stops* typing — backwards for a live indicator).
 const TYPING_THROTTLE_MS = 2000;
 
-// 같은 상대의 연속 메시지를 한 묶음으로 보는 최대 간격(이내면 헤더 생략).
-const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 // 하단에서 이만큼(px) 이내면 "하단 근처"로 보고 새 메시지를 자동 추적한다.
 const NEAR_BOTTOM_PX = 120;
@@ -124,25 +130,14 @@ function renderBody(body: string): React.ReactNode {
   );
 }
 
-/** "5월 26일 월요일" 형태 (KST 캘린더 일자 기준 그룹 키와 동일 포맷). */
-function formatDayLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('ko-KR', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-  });
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' });
-}
-
 export function ThreadView({
   conversationId,
   counterparty,
   messages,
   rfpById,
   onBack,
+  variant = 'page',
+  defaultRfpId,
 }: Props) {
   // 대화별 초안 보존 — 대화 전환(remount) 시에도 작성 중이던 내용을 잃지 않는다.
   const draftKey = `chat-draft:${conversationId}`;
@@ -233,7 +228,13 @@ export function ThreadView({
           const pendingIdx = prev.findIndex((m) => m.pending);
           if (pendingIdx >= 0) {
             const next = prev.slice();
-            next[pendingIdx] = { ...next[pendingIdx], id, pending: false };
+            next[pendingIdx] = {
+              ...next[pendingIdx],
+              id,
+              pending: false,
+              // 서버 권위 타임스탬프 채택 — 리로드 후 로더 렌더와 일치.
+              createdAt: data.createdAt ?? next[pendingIdx].createdAt,
+            };
             return next;
           }
         }
@@ -384,7 +385,7 @@ export function ThreadView({
         id: tempId,
         sender: 'self',
         body,
-        rfpId: null,
+        rfpId: defaultRfpId ?? null,
         createdAt: new Date().toISOString(),
         readByCounterparty: false,
         attachments: optimisticAttachments,
@@ -402,6 +403,7 @@ export function ThreadView({
         conversationId,
         body,
         attachmentIds: readyAttachments.map((a) => a.id),
+        rfpId: defaultRfpId,
       });
     } catch {
       setSending(false);
@@ -416,10 +418,15 @@ export function ThreadView({
       // pending 말풍선을 확정으로 교체(실서버 id + pending 해제). 라이브 echo 가
       // 먼저 같은 실제 id 를 추가했다면 임시 행은 버린다(중복 방지).
       const newId = result.messageId;
+      const serverCreatedAt = result.createdAt;
       setLocalMessages((prev) => {
         const hasReal = prev.some((m) => m.id === newId);
         return prev.flatMap((m) =>
-          m.id === tempId ? (hasReal ? [] : [{ ...m, id: newId, pending: false }]) : [m],
+          m.id === tempId
+            ? hasReal
+              ? []
+              : [{ ...m, id: newId, pending: false, createdAt: serverCreatedAt ?? m.createdAt }]
+            : [m],
         );
       });
     } else {
@@ -442,6 +449,9 @@ export function ThreadView({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
     if (e.key === 'Enter' && !e.shiftKey) {
+      // 한글 IME 조합 확정 Enter(keyCode 229)는 전송이 아니다 — 조합 중
+      // 전송되면 글자가 잘리거나 이중 전송된다.
+      if (e.nativeEvent.isComposing) return;
       e.preventDefault();
       void handleSend();
     }
@@ -526,13 +536,14 @@ export function ThreadView({
           const prev = i > 0 ? localMessages[i - 1] : null;
           const prevDayLabel = prev ? formatDayLabel(prev.createdAt) : null;
           const showDivider = dayLabel !== prevDayLabel;
-          // 같은 상대가 짧은 간격(GROUP_WINDOW_MS)으로 연속해 보낸 메시지는 하나의
-          // 묶음으로 보고 이름·아바타 헤더를 두 번째부터 생략한다(날짜 경계서 리셋).
+          // 같은 상대가 짧은 간격으로 연속해 보낸 메시지는 하나의 묶음으로 보고
+          // 이름·아바타 헤더를 두 번째부터 생략한다(날짜 경계서 리셋). 시간 판정은
+          // TeamThreadView 와 공유(withinGroupWindow — 드리프트 방지 단일 출처).
           const groupedWithPrev =
             !!prev &&
             prev.sender === m.sender &&
             !showDivider &&
-            Date.parse(m.createdAt) - Date.parse(prev.createdAt) <= GROUP_WINDOW_MS;
+            withinGroupWindow(prev.createdAt, m.createdAt);
           const showSenderHeader = !isSelf && !groupedWithPrev;
           const rfp = m.rfpId ? rfpById?.[m.rfpId] : undefined;
           // Receipt only on the last *read* self message (receiptIndex).
@@ -541,12 +552,11 @@ export function ThreadView({
           return (
             <div key={m.id} className="flex flex-col gap-3">
               {showDivider && (
-                <div role="separator" className="flex items-center gap-2 py-1">
-                  <span className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
+                // 중앙 라벨만 — 플랭킹 라인 없는 절제된 구분선(레퍼런스 정합).
+                <div role="separator" className="flex justify-center py-1.5">
                   <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
                     {dayLabel}
                   </span>
-                  <span className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
                 </div>
               )}
 
@@ -564,9 +574,6 @@ export function ThreadView({
                     />
                     <span className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]">
                       {counterparty.name}
-                    </span>
-                    <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                      {formatTime(m.createdAt)}
                     </span>
                   </div>
                 )}
@@ -588,7 +595,7 @@ export function ThreadView({
                       'max-w-[78%] whitespace-pre-wrap break-words rounded-[var(--md-sys-shape-medium)] px-3 py-2 text-[13px] leading-relaxed',
                       'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]',
                       isSelf &&
-                        'bg-[var(--md-sys-color-surface-container-high)]',
+                        'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]',
                       m.pending && 'opacity-60',
                     )}
                   >
@@ -597,17 +604,18 @@ export function ThreadView({
                       <ChatAttachmentGrid attachments={m.attachments} />
                     )}
                   </div>
-                  {isSelf &&
-                    (m.pending ? (
-                      <span
-                        aria-label="전송 중"
-                        className="size-1.5 shrink-0 animate-pulse rounded-full bg-[var(--md-sys-color-on-surface-variant)]"
-                      />
-                    ) : (
-                      <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                        {formatTime(m.createdAt)}
-                      </span>
-                    ))}
+                  {/* 타임스탬프는 버블 옆 단일 출처 — 발신자 헤더에는 두지 않는다.
+                      pending 은 본인 메시지에서만 발생(전송 중 점). */}
+                  {m.pending ? (
+                    <span
+                      aria-label="전송 중"
+                      className="size-1.5 shrink-0 animate-pulse rounded-full bg-[var(--md-sys-color-on-surface-variant)]"
+                    />
+                  ) : (
+                    <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                      {formatTime(m.createdAt)}
+                    </span>
+                  )}
                 </div>
 
                 {showReceipt && (
@@ -632,6 +640,17 @@ export function ThreadView({
           <ArrowDownIcon size={13} />
           새 메시지
         </button>
+      )}
+
+      {/* 레일 변형 갤러리 — w-64 사이드 패널이 좁은 레일을 짓누르므로 목록 위
+          오버레이로 전환(기능 동일, 폭 손실 없음). */}
+      {variant === 'rail' && showGallery && (
+        <div
+          data-gallery-overlay
+          className="absolute inset-0 z-10 overflow-y-auto bg-[var(--md-sys-color-surface)] p-3"
+        >
+          <AttachmentGalleryPanel conversationId={conversationId} />
+        </div>
       )}
       </div>
 
@@ -699,7 +718,7 @@ export function ThreadView({
       )}
 
       {/* 하단 인라인 컴포저 */}
-      <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] p-3">
+      <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <IconButton
           label="파일 첨부"
           size="sm"
@@ -749,9 +768,12 @@ export function ThreadView({
       </div>
     </div>
 
-    {/* 우측 첨부파일 갤러리 패널 */}
-    {showGallery && (
-      <div className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-[var(--md-sys-color-outline-variant)] p-3">
+    {/* 우측 첨부파일 갤러리 패널 (page 변형 전용 — rail 은 목록 오버레이) */}
+    {variant === 'page' && showGallery && (
+      <div
+        data-gallery-pane
+        className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-[var(--md-sys-color-outline-variant)] p-3"
+      >
         <AttachmentGalleryPanel conversationId={conversationId} />
       </div>
     )}

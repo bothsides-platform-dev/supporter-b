@@ -1,12 +1,12 @@
 import { and, eq, exists, gt, inArray, isNull, sql } from 'drizzle-orm';
-import { rfpInvitations, rfps, bizProfiles } from '@/lib/db/schema';
+import { rfpInvitations, rfps, bizProfiles, workspaces } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { RfpInvitation, InvitationStatus } from '@/lib/types/invitation';
 import type { RFP } from '@/lib/types/rfp';
 import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { hashToken } from '../../token';
-import type { InvitationRepo, TokenClaimResult, Tx } from '../types';
+import type { InvitationRepo, PgInvitationPair, TokenClaimResult, Tx } from '../types';
 
 type InvRow = typeof rfpInvitations.$inferSelect;
 type RfpRow = typeof rfps.$inferSelect;
@@ -195,25 +195,24 @@ export class DrizzleInvitationRepository implements InvitationRepo {
     return row ? rowToInvitation(row) : undefined;
   }
 
-  async findByPgWorkspace(
-    pgWsId: string,
-    tx?: Tx,
-  ): Promise<{ invitation: RfpInvitation; rfp: RFP }[]> {
+  async findByPgWorkspace(pgWsId: string, tx?: Tx): Promise<PgInvitationPair[]> {
     const db = this.h(tx);
     const rows = (await db
-      .select({ inv: rfpInvitations, rfp: rfps, biz: bizProfiles })
+      .select({ inv: rfpInvitations, rfp: rfps, biz: bizProfiles, buyerName: workspaces.name })
       .from(rfpInvitations)
       .innerJoin(rfps, eq(rfpInvitations.rfpId, rfps.id))
+      .innerJoin(workspaces, eq(rfps.buyerWsId, workspaces.id))
       .leftJoin(bizProfiles, eq(rfps.bizProfileId, bizProfiles.id))
       .where(
         and(
           eq(rfpInvitations.pgWsId, pgWsId),
           inArray(rfpInvitations.status, ['pending', 'opened', 'accepted']),
         ),
-      )) as { inv: InvRow; rfp: RfpRow; biz: BizRow | null }[];
+      )) as { inv: InvRow; rfp: RfpRow; biz: BizRow | null; buyerName: string }[];
     return rows.map((r) => ({
       invitation: rowToInvitation(r.inv),
       rfp: rowToRfp(r.rfp, r.biz),
+      buyerName: r.buyerName,
     }));
   }
 
@@ -303,5 +302,57 @@ export class DrizzleInvitationRepository implements InvitationRepo {
       .update(rfpInvitations)
       .set({ boardColumnId: columnId })
       .where(eq(rfpInvitations.id, invitationId));
+  }
+
+  async findByRfpAndPg(
+    rfpId: string,
+    pgWsId: string,
+    tx?: Tx,
+  ): Promise<RfpInvitation | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select()
+      .from(rfpInvitations)
+      .where(and(eq(rfpInvitations.rfpId, rfpId), eq(rfpInvitations.pgWsId, pgWsId)))
+      .limit(1);
+    return row ? rowToInvitation(row) : undefined;
+  }
+
+  async saveDraft(
+    invId: string,
+    rfpId: string,
+    pgWsId: string,
+    expiresAt: Date,
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db.insert(rfpInvitations).values({
+      id: invId,
+      rfpId,
+      pgWsId,
+      tokenHash: `draft-${invId}`,
+      sentAt: new Date(),
+      expiresAt,
+      status: 'draft',
+    });
+  }
+
+  async promoteDraft(
+    invId: string,
+    rawToken: string,
+    now: Date,
+    expiresAt: Date,
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(rfpInvitations)
+      .set({
+        tokenHash: hashToken(rawToken),
+        status: 'pending',
+        sentAt: now,
+        expiresAt,
+      })
+      .where(eq(rfpInvitations.id, invId));
   }
 }
