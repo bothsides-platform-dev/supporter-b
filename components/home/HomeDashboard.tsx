@@ -1,12 +1,13 @@
+import Link from 'next/link';
 import { KpiStrip } from './KpiStrip';
 import { ActionQueue } from './ActionQueue';
-import { OnboardingActionList } from './OnboardingActionList';
 import { RecentMessagesPanel } from './RecentMessagesPanel';
 import { HomeHeaderActionsRegistrar } from './HomeHeaderActionsRegistrar';
 import { OpportunityList } from '@/components/opportunities/OpportunityList';
+import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CheckIcon } from '@/components/icons';
+import { CheckIcon, PlusIcon } from '@/components/icons';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
 import type { ConversationListItem } from '@/components/messages/types';
 
@@ -34,11 +35,18 @@ export function HomeDashboard({
       <HomeHeaderActionsRegistrar />
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
+          {/* 샘플 견적이 액션 큐에 잡혀도 구매사가 새 견적을 만들 수 있도록 /rfp 헤더의
+              "견적 요청하기" CTA를 재사용해 상시 노출. */}
+          {workspaceType === 'buyer' && (
+            <div className="flex justify-end">
+              <Link href="/rfp/new">
+                <Button size="sm" icon={<PlusIcon />}>견적 요청하기</Button>
+              </Link>
+            </div>
+          )}
           <KpiStrip kpis={dashboard.kpis} />
           {dashboard.groups.length > 0 ? (
             <ActionQueue groups={dashboard.groups} />
-          ) : dashboard.onboardingActions ? (
-            <OnboardingActionList actions={dashboard.onboardingActions} />
           ) : (
             <EmptyState
               icon={<CheckIcon />}
