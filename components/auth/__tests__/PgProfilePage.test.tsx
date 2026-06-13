@@ -29,7 +29,8 @@ let mockDraftData: Record<string, unknown> = {};
 vi.mock('@/lib/auth/signup-storage', () => ({
   readSignupDraft: () => mockDraftData,
   writeSignupDraft: (d: Record<string, unknown>) => { mockDraftData = d; },
-  clearSignupDraft: vi.fn(),
+  // 실제 동작과 동일하게 draft 를 비운다. finalizeSignup 성공 경로가 호출한다.
+  clearSignupDraft: () => { mockDraftData = {}; },
 }));
 
 vi.mock('@/lib/stores/signup-draft', () => ({
@@ -135,5 +136,34 @@ describe('PgProfilePage', () => {
     });
     expect(mockSignupComplete).not.toHaveBeenCalled();
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/home'));
+  });
+
+  // 회귀: 가입 완료 성공 후 clearSignupDraft 로 draft 가 비면, 재렌더 시 ready 가 false 가
+  // 되어 가드가 /signup/pg 로 튕긴다(buyer 와 동일 P0 버그). 튕기지 않아야 한다.
+  it('가입 완료 후 draft 가 비워져도 /signup/pg 로 튕기지 않는다', async () => {
+    mockDraftData = {
+      email: 'newmember@toss.im',
+      password: 'Password123!',
+      wsInviteToken: 'invite-token-abc',
+    };
+    mockSignupInvite.mockResolvedValue({
+      ok: true,
+      redirectTo: '/home',
+      email: 'newmember@toss.im',
+      password: 'Password123!',
+    });
+
+    const user = userEvent.setup();
+    const { rerender } = render(<PgProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '신규 영업');
+    await user.click(screen.getByRole('button', { name: '인증 완료' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/home'));
+
+    rerender(<PgProfilePage />);
+
+    expect(mockReplace).not.toHaveBeenCalledWith('/signup/pg');
   });
 });
