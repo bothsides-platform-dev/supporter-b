@@ -78,7 +78,8 @@ function BuyerSignupEmailForm() {
       password,
       agreedAt,
       workspaceType: 'buyer',
-      ...(nextParam ? { next: nextParam } : {}),
+      // step-1이 next의 단일 출처: 현재 진입 URL 기준으로 덮어쓴다(이전 세션 잔여값 제거).
+      next: nextParam ?? undefined,
     });
 
     router.push('/signup/buyer/workspace');

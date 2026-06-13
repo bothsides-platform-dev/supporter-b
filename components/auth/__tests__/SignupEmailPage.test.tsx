@@ -272,4 +272,14 @@ describe('SignupEmailPage — next 파라미터 흡수', () => {
     const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
     expect(drafted.next).toBe('/rfp/abc?tab=bids');
   });
+
+  it('URL에 next가 없으면 이전 세션의 잔여 next를 덮어써 비운다', async () => {
+    mockDraftData = { next: '/stale/from-previous-session' };
+    mockSearchParams = new URLSearchParams(); // 현재 진입 URL에는 next 없음
+    render(<BuyerSignupEmailPage />);
+    await fillAndSubmit();
+    await waitFor(() => expect(mockWriteDraft).toHaveBeenCalled());
+    const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
+    expect(drafted.next).toBeUndefined();
+  });
 });
