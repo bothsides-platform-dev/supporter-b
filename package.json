@@ -1,6 +1,6 @@
 {
   "name": "supporter-b",
-  "version": "0.2.10.10",
+  "version": "0.2.11.0",
   "private": true,
   "engines": {
     "node": ">=22"
