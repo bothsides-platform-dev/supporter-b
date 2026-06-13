@@ -24,6 +24,8 @@ import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 type Props = {
   conversationId: string;
   counterparty: { workspaceId: string; name: string; type: 'buyer' | 'pg' };
+  /** 세션 사용자 — 낙관적 self 말풍선이 즉시 자기 이름을 보여줄 때 쓴다. */
+  viewer: { userId: string; name: string };
   messages: ThreadMessage[];
   /** rfpId(uuid) → 표시용 코드/제목. 주어진 항목만 RFP 칩을 렌더(uuid 원문 노출 금지). */
   rfpById?: Record<string, { code: string; title: string }>;
@@ -44,6 +46,9 @@ type LiveMessagePayload = {
   id?: string;
   body?: string;
   authorWsId?: string;
+  authorUserId?: string;
+  authorName?: string;
+  authorEmail?: string;
   rfpId?: string | null;
   createdAt?: string;
   attachments?: { id: string; name: string; size: number; mimeType: string; url: string }[];
@@ -133,6 +138,7 @@ function renderBody(body: string): React.ReactNode {
 export function ThreadView({
   conversationId,
   counterparty,
+  viewer,
   messages,
   rfpById,
   onBack,
@@ -242,6 +248,9 @@ export function ThreadView({
           ...prev,
           {
             id,
+            authorUserId: data.authorUserId ?? '',
+            authorName: data.authorName ?? '',
+            authorEmail: data.authorEmail ?? '',
             sender,
             body: data.body as string,
             rfpId: data.rfpId ?? null,
@@ -383,6 +392,9 @@ export function ThreadView({
       ...prev,
       {
         id: tempId,
+        authorUserId: viewer.userId,
+        authorName: viewer.name,
+        authorEmail: '',
         sender: 'self',
         body,
         rfpId: defaultRfpId ?? null,

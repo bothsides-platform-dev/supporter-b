@@ -77,12 +77,16 @@ import { formatTime } from '../format';
 import type { ThreadMessage } from '../types';
 
 const counterparty = { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const };
+const viewer = { userId: 'u-self', name: '나' };
 
 // Timestamps in the T03:00Z–T14:00Z window so UTC and KST agree on the
 // calendar day (avoids a TZ-dependent date-divider flake).
 const messages: ThreadMessage[] = [
   {
     id: 'm1',
+    authorUserId: 'u-pg',
+    authorName: 'OO페이담당',
+    authorEmail: 'sales@pg.com',
     sender: 'other',
     body: '안녕하세요, 제안 드립니다.',
     rfpId: null,
@@ -92,6 +96,9 @@ const messages: ThreadMessage[] = [
   },
   {
     id: 'm2',
+    authorUserId: 'u-self',
+    authorName: '나',
+    authorEmail: 'me@buyer.com',
     sender: 'self',
     body: '확인했습니다. 감사합니다.',
     rfpId: null,
@@ -106,6 +113,7 @@ function base(overrides: Partial<React.ComponentProps<typeof ThreadView>> = {}) 
     <ThreadView
       conversationId="conv-1"
       counterparty={counterparty}
+      viewer={viewer}
       messages={messages}
       {...overrides}
     />
@@ -150,6 +158,9 @@ describe('ThreadView', () => {
     const partial: ThreadMessage[] = [
       {
         id: 'a',
+        authorUserId: 'u-self',
+        authorName: '나',
+        authorEmail: 'me@buyer.com',
         sender: 'self',
         body: '먼저 보낸 메시지 A',
         rfpId: null,
@@ -159,6 +170,9 @@ describe('ThreadView', () => {
       },
       {
         id: 'b',
+        authorUserId: 'u-self',
+        authorName: '나',
+        authorEmail: 'me@buyer.com',
         sender: 'self',
         body: '나중에 보낸 메시지 B',
         rfpId: null,
@@ -324,6 +338,9 @@ describe('ThreadView', () => {
     const withRfp: ThreadMessage[] = [
       {
         id: 'm3',
+        authorUserId: 'u-pg',
+        authorName: 'OO페이담당',
+        authorEmail: 'sales@pg.com',
         sender: 'other',
         body: '입찰표 보냅니다.',
         rfpId: 'rfp-uuid-123',
@@ -348,6 +365,9 @@ describe('ThreadView', () => {
         messages: [
           {
             id: 'm4',
+            authorUserId: 'u-pg',
+            authorName: 'OO페이담당',
+            authorEmail: 'sales@pg.com',
             sender: 'other',
             body: '여기 https://example.com/rfp 와 https://example.com/bid 보세요',
             rfpId: null,
@@ -637,10 +657,12 @@ describe('ThreadView 초안 보존', () => {
 
 describe('ThreadView 연속 메시지 그룹핑', () => {
   const other = (id: string, body: string, createdAt: string): ThreadMessage => ({
-    id, sender: 'other', body, rfpId: null, createdAt, readByCounterparty: false, attachments: [],
+    id, authorUserId: 'u-pg', authorName: 'OO페이담당', authorEmail: 'sales@pg.com',
+    sender: 'other', body, rfpId: null, createdAt, readByCounterparty: false, attachments: [],
   });
   const self = (id: string, body: string, createdAt: string): ThreadMessage => ({
-    id, sender: 'self', body, rfpId: null, createdAt, readByCounterparty: false, attachments: [],
+    id, authorUserId: 'u-self', authorName: '나', authorEmail: 'me@buyer.com',
+    sender: 'self', body, rfpId: null, createdAt, readByCounterparty: false, attachments: [],
   });
 
   it('같은 상대가 5분 내 연속으로 보낸 메시지는 두 번째부터 이름·아바타 헤더를 생략한다', () => {
@@ -943,6 +965,9 @@ describe('ThreadView — variant="rail" 갤러리 오버레이', () => {
   const messagesWithAttachment: ThreadMessage[] = [
     {
       id: 'm-att',
+      authorUserId: 'u-pg',
+      authorName: 'OO페이담당',
+      authorEmail: 'sales@pg.com',
       sender: 'other',
       body: '첨부 보냈어요.',
       rfpId: null,
