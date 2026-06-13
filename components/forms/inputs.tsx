@@ -1,9 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { NumericFormat } from 'react-number-format';
 import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
-import { formatKrwReadable } from '@/lib/format';
+import { formatKrwReadable, formatRatePerManwon } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /**
@@ -36,9 +37,7 @@ export function PercentInput({
 }: NumericFieldProps) {
   const numVal = parseFloat(value);
   const hint =
-    !isNaN(numVal) && numVal > 0
-      ? `= 1만원 결제 시 ${Math.round(numVal * 100).toLocaleString()}원`
-      : null;
+    !isNaN(numVal) && numVal > 0 ? `= ${formatRatePerManwon(numVal)}` : null;
 
   return (
     <div className="space-y-1">
@@ -47,12 +46,11 @@ export function PercentInput({
         {infoTerm && <InfoTip term={infoTerm} />}
       </div>
       <div className="flex items-end gap-1">
-        <input
-          type="number"
-          min="0"
-          step="0.01"
+        <NumericFormat
+          decimalScale={2}
+          allowNegative={false}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onValueChange={(values) => onChange(values.value)}
           placeholder={placeholder}
           className={cn(numericInputClass, 'flex-1')}
         />
@@ -62,6 +60,62 @@ export function PercentInput({
         <p className="font-mono text-[11px] text-[var(--md-sys-color-tertiary)] mt-1">
           {hint}
         </p>
+      )}
+    </div>
+  );
+}
+
+type FeeRateCellProps = {
+  value: string;
+  onChange: (v: string) => void;
+  /** 그리드 셀 식별용 data-testid (예: `fee-cell-card-sole`) */
+  testId?: string;
+  ariaLabel?: string;
+};
+
+/**
+ * 구간별 우대수수료 그리드 셀. 숫자(소수 2자리)만 입력되며, 칸이 좁아
+ * 라벨·접미를 두지 않는 대신 포커스/호버 시 "1만원 결제 시 N원" 환산 툴팁을 띄운다.
+ */
+export function FeeRateCell({
+  value,
+  onChange,
+  testId,
+  ariaLabel,
+}: FeeRateCellProps) {
+  const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const numVal = parseFloat(value);
+  const hint = !isNaN(numVal) && numVal > 0 ? formatRatePerManwon(numVal) : null;
+  const showHint = (focused || hovered) && !!hint;
+
+  return (
+    // 포커스/호버 감지는 래퍼에 둔다 — React onFocus/onBlur 는 focusin/focusout
+    // 버블링을 쓰므로 NumericFormat 내부 onFocus 가로채기와 무관하게 동작한다.
+    <div
+      className="relative"
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <NumericFormat
+        data-testid={testId}
+        aria-label={ariaLabel}
+        decimalScale={2}
+        allowNegative={false}
+        value={value}
+        onValueChange={(values) => onChange(values.value)}
+        placeholder="0.00"
+        className={numericInputClass}
+      />
+      {showHint && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface)] shadow-md"
+        >
+          {hint}
+        </div>
       )}
     </div>
   );

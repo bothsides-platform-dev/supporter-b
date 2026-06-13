@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // InfoTip mounts a base-ui Popover which requires ResizeObserver
@@ -37,6 +37,15 @@ describe('BidStepSettlement', () => {
     const { onField } = renderStep({ cycleNum: '' });
     await user.type(screen.getByPlaceholderText('1'), '2');
     expect(onField).toHaveBeenCalledWith('cycleNum', '2');
+  });
+
+  it('정산주기 일수는 소수점을 받지 않는다 (정수 전용)', () => {
+    const { onField } = renderStep({ cycleNum: '' });
+    fireEvent.change(screen.getByPlaceholderText('1'), { target: { value: '1.5' } });
+    const cycleVals = onField.mock.calls
+      .filter((c) => c[0] === 'cycleNum')
+      .map((c) => c[1]);
+    expect(cycleVals.some((v: string) => v.includes('.'))).toBe(false);
   });
 
   it('다음 버튼 클릭 시 onNext 호출', async () => {

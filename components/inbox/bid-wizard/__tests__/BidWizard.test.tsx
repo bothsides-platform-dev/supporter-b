@@ -52,9 +52,10 @@ const rfpWithCustom = {
 } as never;
 
 // PercentInput 은 label↔input aria 연결이 없어 라벨 텍스트 컨테이너에서 input 을 찾는다.
+// (NumericFormat 으로 전환되어 type="number" 가 아니므로 컨테이너의 단일 input 을 집는다.)
 function feeInput(labelText: string): HTMLInputElement {
   const label = screen.getByText(labelText);
-  return label.closest('.space-y-1')!.querySelector('input[type="number"]') as HTMLInputElement;
+  return label.closest('.space-y-1')!.querySelector('input') as HTMLInputElement;
 }
 
 const draftV3 = (fees: Record<string, string>, memo = '') => ({
