@@ -105,4 +105,13 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
 
     expect(mockReplace).not.toHaveBeenCalledWith('/signup/buyer');
   });
+
+  // deny-path: 1·2단계 미완료(draft 불충분)로 프로필 단계에 직접 진입하면 첫 가입 화면으로
+  // 돌려보낸다. freeze(useState 초기화) 이후에도 이 가드가 동작함을 보장한다(PgProfilePage 대칭).
+  it('미완성 draft 로 직접 진입 시 /signup/buyer 로 redirect', () => {
+    mockDraft = { email: 'kim@example.com', password: 'Password123!' }; // wsName/bizProfile 없음
+    render(<BuyerProfilePage />);
+    expect(mockReplace).toHaveBeenCalledWith('/signup/buyer');
+    expect(screen.queryByLabelText('이름')).not.toBeInTheDocument();
+  });
 });
