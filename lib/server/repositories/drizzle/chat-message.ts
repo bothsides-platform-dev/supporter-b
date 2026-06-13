@@ -1,7 +1,12 @@
 import { asc, eq } from 'drizzle-orm';
-import { chatMessages } from '@/lib/db/schema';
+import { chatMessages, users } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
-import type { ChatMessageRecord, ChatMessageRepo, Tx } from '../types';
+import type {
+  ChatMessageRecord,
+  ChatMessageRepo,
+  ChatMessageWithAuthor,
+  Tx,
+} from '../types';
 
 // Explicit column projection (BID_COLUMNS precedent) — guards against schema
 // drift where select().from() would compile the full column list.
@@ -47,5 +52,22 @@ export class DrizzleChatMessageRepository implements ChatMessageRepo {
       .from(chatMessages)
       .where(eq(chatMessages.conversationId, conversationId))
       .orderBy(asc(chatMessages.createdAt))) as ChatMessageRecord[];
+  }
+
+  async listByConversationWithAuthor(
+    conversationId: string,
+    tx?: Tx,
+  ): Promise<ChatMessageWithAuthor[]> {
+    const db = this.h(tx);
+    return (await db
+      .select({
+        ...MESSAGE_COLUMNS,
+        authorName: users.name,
+        authorEmail: users.email,
+      })
+      .from(chatMessages)
+      .innerJoin(users, eq(users.id, chatMessages.authorUserId))
+      .where(eq(chatMessages.conversationId, conversationId))
+      .orderBy(asc(chatMessages.createdAt))) as ChatMessageWithAuthor[];
   }
 }

@@ -24,11 +24,13 @@ export function ThreadPane({
   const result = use(getThreadPromise(conversationId));
   const counterparty = result.ok ? result.counterparty : counterpartyFallback;
   const messages = result.ok ? result.messages : [];
+  const viewer = result.ok ? result.viewer : { userId: '', name: '' };
   return (
     <ThreadView
       key={conversationId}
       conversationId={conversationId}
       counterparty={counterparty}
+      viewer={viewer}
       messages={messages}
       onBack={onBack}
       variant={variant}

@@ -193,6 +193,28 @@ describe('sendChatMessageAction', () => {
     expect(Number.isNaN(Date.parse(payload.createdAt as string))).toBe(false);
   });
 
+  it('publishes the author identity (userId/name/email) so receivers can label the message', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    const r = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '담당자 표시 확인',
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [, payload] = publishChatEvent.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(payload).toMatchObject({
+      authorUserId: buyerUser.id,
+      authorName: '구매사담당',
+      authorEmail: 'buyer@b.com',
+    });
+  });
+
   it('buyer sends to a PG by counterparty workspace id → creates the pair, persists the message', async () => {
     const { buyerUser, buyerWs, pgWs } = await seedPair();
     asBuyer(buyerUser, buyerWs.id);

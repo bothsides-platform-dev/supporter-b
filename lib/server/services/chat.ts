@@ -72,7 +72,13 @@ export class ChatService {
     input: SendMessageInput,
     actor: ChatActor,
   ): Promise<
-    ServiceResult<{ conversationId: string; messageId: string; createdAt: string }>
+    ServiceResult<{
+      conversationId: string;
+      messageId: string;
+      createdAt: string;
+      authorName: string;
+      authorEmail: string;
+    }>
   > {
     const body = (input.body ?? '').trim();
     if (body.length === 0 && input.attachmentIds.length === 0) {
@@ -135,12 +141,16 @@ export class ChatService {
 
     const now = new Date();
     const messageId = randomUUID();
+    // 표시 전용 — 보낸 사람 이름/이메일(라이브 수신자가 메시지에 라벨을 붙인다).
+    const me = await this.userRepo.findById(actor.userId);
     const pendingEmits: Notification[] = [];
 
     const result: ServiceResult<{
       conversationId: string;
       messageId: string;
       createdAt: string;
+      authorName: string;
+      authorEmail: string;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     }> = await this._db.transaction(async (tx: any) => {
       const conv = conversationId
@@ -248,6 +258,8 @@ export class ChatService {
         // 서버 권위 타임스탬프 — 클라이언트가 낙관적 말풍선을 확정으로 승격할 때
         // 자기 시계 대신 이 값을 채택한다(리로드 후 로더 렌더와 일치).
         createdAt: now.toISOString(),
+        authorName: me?.name ?? '',
+        authorEmail: me?.email ?? '',
       };
     });
 
