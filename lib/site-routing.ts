@@ -53,3 +53,11 @@ export function workspaceSwitchTarget(
   if (serving === null || serving === targetType) return path;
   return `${origins[targetType]}${path}`;
 }
+
+/** Which signup entry path a request host should land on. Unknown host → buyer (mirrors the root landing in app/page.tsx). */
+export function signupTargetForHost(
+  host: string | null,
+  origins: AppOrigins,
+): '/signup/buyer' | '/signup/pg' {
+  return hostServes(host, origins) === 'pg' ? '/signup/pg' : '/signup/buyer';
+}
