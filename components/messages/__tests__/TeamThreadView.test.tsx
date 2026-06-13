@@ -331,6 +331,73 @@ describe('TeamThreadView — 첨부', () => {
   });
 });
 
+describe('TeamThreadView — 첨부 검증·에러', () => {
+  it('지원하지 않는 파일 형식 선택 시 에러 칩이 노출된다', async () => {
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '보고서.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+    expect(await screen.findByLabelText('보고서.docx 업로드 실패')).toBeInTheDocument();
+    expect(httpPost).not.toHaveBeenCalled();
+  });
+
+  it('MAX_BYTES 초과 파일은 칩에 추가되지 않는다(silent skip)', async () => {
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const oversized = new File([new Uint8Array(1)], '큰파일.pdf', { type: 'application/pdf' });
+    Object.defineProperty(oversized, 'size', { value: 21 * 1024 * 1024 });
+    Object.defineProperty(input, 'files', { value: [oversized], configurable: true });
+    fireEvent.change(input);
+    await waitFor(() => {
+      expect(screen.queryByLabelText('큰파일.pdf 업로드 중')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('큰파일.pdf 업로드 실패')).not.toBeInTheDocument();
+    });
+    expect(httpPost).not.toHaveBeenCalled();
+  });
+
+  it('업로드 중에는 스켈레톤 칩 + 전송 잠금, 완료되면 일반 칩으로 바뀐다', async () => {
+    const user = userEvent.setup();
+    let resolveUpload: ((v: unknown) => void) | null = null;
+    httpPost.mockReturnValue({ json: () => new Promise((res) => { resolveUpload = res; }) });
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '제안서.pdf', { type: 'application/pdf' });
+    await user.upload(input, file);
+
+    expect(screen.getByLabelText('제안서.pdf 업로드 중')).toBeInTheDocument();
+    expect(screen.queryByLabelText('제안서.pdf 첨부 제거')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
+
+    await act(async () => {
+      resolveUpload?.({ id: 'att-1', name: '제안서.pdf', size: 1234, mimeType: 'application/pdf' });
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('제안서.pdf 첨부 제거')).toBeInTheDocument();
+    });
+    expect(screen.queryByLabelText('제안서.pdf 업로드 중')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '보내기' })).not.toBeDisabled();
+  });
+
+  it('업로드 실패 시 에러 칩으로 전환되고 토스트는 띄우지 않으며, 제거할 수 있다', async () => {
+    const user = userEvent.setup();
+    httpPost.mockReturnValue({ json: () => Promise.reject(new Error('upload failed')) });
+    const { container } = render(base());
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], '실패.pdf', { type: 'application/pdf' });
+    await user.upload(input, file);
+
+    await screen.findByLabelText('실패.pdf 업로드 실패');
+    expect(toast).not.toHaveBeenCalled();
+    await user.click(screen.getByLabelText('실패.pdf 첨부 제거'));
+    await waitFor(() =>
+      expect(screen.queryByLabelText('실패.pdf 업로드 실패')).not.toBeInTheDocument(),
+    );
+  });
+});
+
 describe('TeamThreadView — 라이브 수신', () => {
   it('onMessage 수신 시 메시지를 append 하고 같은 id 는 중복 append 하지 않는다', async () => {
     render(base());

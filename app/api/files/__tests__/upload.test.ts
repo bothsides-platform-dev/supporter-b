@@ -524,6 +524,16 @@ describe('POST /api/files/upload', () => {
     expect(r.status).toBe(403);
   });
 
+  it('404 when buyer uploads team_message for an unknown RFP', async () => {
+    await seedBuyerSession();
+    const f = new FormData();
+    f.append('file', makeFile('team.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'team_message');
+    f.append('ownerId', randomUUID()); // RFP that does not exist
+    const r = await callUpload(f);
+    expect(r.status).toBe(404);
+  });
+
   it('403 when buyer uploads team_message for an RFP outside their workspace', async () => {
     await seedBuyerSession();
     const fBuyer = await seedUser(db, { email: 'fb@buy.com' });
