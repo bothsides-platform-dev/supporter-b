@@ -20,7 +20,7 @@ vi.mock('motion/react', () => {
 });
 
 vi.mock('@/components/landing/SavingsCalculator', () => ({ SavingsCalculator: () => null }));
-vi.mock('@/components/landing/OfferComparisonTable', () => ({ OfferComparisonTable: () => null }));
+vi.mock('@/components/landing/SolutionShowcase', () => ({ SolutionShowcase: () => null }));
 vi.mock('@/components/landing/ProcessSection', () => ({ ProcessSection: () => null }));
 vi.mock('@/components/landing/FaqList', () => ({ FaqList: () => null }));
 
