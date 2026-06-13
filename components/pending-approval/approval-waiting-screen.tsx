@@ -98,7 +98,7 @@ export function ApprovalWaitingScreen() {
           </p>
         </div>
         <Link
-          href="/home"
+          href="/"
           className="inline-flex h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 text-body-medium font-medium text-[var(--md-sys-color-primary)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50"
         >
           홈으로 가기

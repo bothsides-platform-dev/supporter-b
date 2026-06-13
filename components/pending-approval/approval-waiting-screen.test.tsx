@@ -105,10 +105,10 @@ describe('ApprovalWaitingScreen', () => {
     expect(animationStartMock).toHaveBeenCalledTimes(callsAfterMount + 1);
   });
 
-  it('홈으로 가기 링크가 /home으로 연결된다', () => {
+  it('홈으로 가기 링크가 공개 랜딩(/)으로 연결된다', () => {
     render(<ApprovalWaitingScreen />);
     const link = screen.getByRole('link', { name: '홈으로 가기' });
-    expect(link).toHaveAttribute('href', '/home');
+    expect(link).toHaveAttribute('href', '/');
   });
 
   describe('승인 폴링', () => {
