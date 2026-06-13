@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/primitives/Button';
-import { PercentInput, numericInputClass } from '@/components/forms/inputs';
+import { PercentInput, FeeRateCell } from '@/components/forms/inputs';
 import {
   PAYMENT_METHOD_CATEGORIES,
   PAYMENT_METHOD_LABELS,
@@ -109,14 +109,11 @@ export function BidStepFees({
                     const key = `${m}:${t}`;
                     return (
                       <td key={t} className="px-0.5 py-1">
-                        <input
-                          data-testid={`fee-cell-${m}-${t}`}
-                          inputMode="decimal"
-                          placeholder="0.00"
+                        <FeeRateCell
+                          testId={`fee-cell-${m}-${t}`}
+                          ariaLabel={`${PAYMENT_METHOD_LABELS[m]} ${MERCHANT_TIER_LABELS[t]} 수수료`}
                           value={fees[key] ?? ''}
-                          onChange={(e) => onFee(key, e.target.value)}
-                          className={numericInputClass}
-                          aria-label={`${PAYMENT_METHOD_LABELS[m]} ${MERCHANT_TIER_LABELS[t]} 수수료`}
+                          onChange={(v) => onFee(key, v)}
                         />
                       </td>
                     );

@@ -21,6 +21,16 @@ export function formatPct(value: number, digits = 2): string {
   return (value * 100).toFixed(digits) + '%';
 }
 
+/**
+ * 수수료율(%)을 1만원 결제 기준 원화 환산으로 표기한다.
+ * 예: 1.25→`1만원 결제 시 125원`, 0.8→`1만원 결제 시 80원`.
+ * 유효하지 않은 값(<=0·NaN·Infinity)은 힌트 생략을 위해 빈 문자열을 반환한다.
+ */
+export function formatRatePerManwon(ratePct: number): string {
+  if (!Number.isFinite(ratePct) || ratePct <= 0) return '';
+  return `1만원 결제 시 ${Math.round(ratePct * 100).toLocaleString()}원`;
+}
+
 export function formatSize(bytes: number): string {
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
   if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;

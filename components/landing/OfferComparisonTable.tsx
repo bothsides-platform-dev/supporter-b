@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { motion, useInView } from 'motion/react';
+import { motion } from 'motion/react';
+import { type ReactNode } from 'react';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
-import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 
 // 정적 예시 비교표 — 기존 'LiveBidSimulation'(스크롤 구동·토스트)을 대체한다.
 // 실제 견적이 아닌 표현용 예시값. 다수 PG사의 조건을 한 화면에서 비교하는 현실적인
-// B2B 뷰를 보여주되, AI 챗/결과 느낌을 배제한다. 화면에 보이는 동안 행 스포트라이트가
-// 2.5초 간격으로 단계적으로 이동하며 표를 훑어준다.
+// B2B 뷰를 보여주되, AI 챗/결과 느낌을 배제한다. 표는 부모(SolutionShowcase)가 내려주는
+// activeStep 에 따라, 그 단계의 해결 포인트가 말하는 컬럼을 또렷하게 하이라이트한다.
 
 type Status = { label: string; color: ChipColor };
 
@@ -64,23 +63,48 @@ const OFFERS: Offer[] = [
   },
 ];
 
-const STEP_MS = 2500;
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
+// 컬럼 인덱스: 0 PG사 · 1 수수료 · 2 정산주기 · 3 보증보험 · 4 가입비 · 5 승인 상태 · 6 협의 가능 여부
+// 해결 포인트(SolutionShowcase) 단계 → 강조할 컬럼(들). 마지막 단계는 컬럼 대신 추천 PG '행'을 강조.
+const STEP_COLUMNS: readonly (readonly number[])[] = [
+  [1], // 투명한 수수료 견적
+  [2, 3, 4, 5], // 정산·보증·가입·승인 조건 비교
+  [6], // 추가 협의
+  [], // 최적 조건 = 추천 PG 행
+];
+const STEP_ROW: readonly (number | null)[] = [null, null, null, 0];
+
 const headCls =
-  'px-[var(--s-4)] py-[var(--s-3)] text-left font-mono text-[var(--text-2xs)] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap';
+  'px-[var(--s-4)] py-[var(--s-3)] text-left font-mono text-[var(--text-2xs)] tracking-[0.12em] uppercase whitespace-nowrap transition-colors duration-300';
 const cellCls =
-  'px-[var(--s-4)] py-[var(--s-4)] align-middle border-t border-[var(--md-sys-color-outline-variant)] whitespace-nowrap';
+  'px-[var(--s-4)] py-[var(--s-4)] align-middle border-t border-[var(--md-sys-color-outline-variant)] whitespace-nowrap transition-colors duration-300';
 const numCls = 'md-numeric text-[var(--text-base)] text-[var(--md-sys-color-on-surface)]';
 
-// 활성(스포트라이트) 행의 셀 내용을 살짝 키워(scale) 강조한다 — transform 이라
-// 행 높이(레이아웃)에는 영향을 주지 않는다.
-function GrowCell({ active, children }: { active: boolean; children: ReactNode }) {
+// 활성 컬럼(또는 활성 행)에 속한 셀을 배경 틴트 + 살짝 키워 또렷하게 강조한다.
+function Cell({
+  col,
+  activeCols,
+  rowActive,
+  children,
+}: {
+  col: number;
+  activeCols: readonly number[];
+  rowActive: boolean;
+  children: ReactNode;
+}) {
+  const colActive = activeCols.includes(col);
+  const highlight = colActive || rowActive;
   return (
-    <td className={cellCls}>
+    <td
+      className={[
+        cellCls,
+        colActive ? 'bg-[var(--md-sys-color-primary-container)]/25' : '',
+      ].join(' ')}
+    >
       <span
         className="inline-flex items-center gap-2 origin-left transition-transform duration-300"
-        style={{ transform: active ? 'scale(1.06)' : 'scale(1)' }}
+        style={{ transform: highlight ? 'scale(1.05)' : 'scale(1)' }}
       >
         {children}
       </span>
@@ -88,24 +112,12 @@ function GrowCell({ active, children }: { active: boolean; children: ReactNode }
   );
 }
 
-export function OfferComparisonTable() {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { amount: 0.3 });
-  const [activeRow, setActiveRow] = useState(0);
-
-  // 화면에 보이는 동안 행 스포트라이트를 단계적으로 이동(반복). 화면을 벗어나거나
-  // 동작 줄이기 선호 시 멈춤(첫 행 = 추천 PG 에 고정).
-  useEffect(() => {
-    if (!inView || prefersReducedMotion()) return;
-    const id = window.setInterval(() => {
-      setActiveRow((r) => (r + 1) % OFFERS.length);
-    }, STEP_MS);
-    return () => window.clearInterval(id);
-  }, [inView]);
+export function OfferComparisonTable({ activeStep = null }: { activeStep?: number | null }) {
+  const activeCols = activeStep != null ? (STEP_COLUMNS[activeStep] ?? []) : [];
+  const activeRow = activeStep != null ? (STEP_ROW[activeStep] ?? null) : null;
 
   return (
     <motion.div
-      ref={ref}
       initial={{ opacity: 0, y: 12 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.3 }}
@@ -116,29 +128,42 @@ export function OfferComparisonTable() {
         <table className="w-full min-w-[680px] border-collapse text-left">
           <thead className="bg-[var(--md-sys-color-surface-container-low)]">
             <tr>
-              {COLUMNS.map((col) => (
-                <th key={col} scope="col" className={headCls}>
-                  {col}
-                </th>
-              ))}
+              {COLUMNS.map((col, ci) => {
+                const colActive = activeCols.includes(ci);
+                return (
+                  <th
+                    key={col}
+                    scope="col"
+                    data-active={colActive ? 'true' : undefined}
+                    className={[
+                      headCls,
+                      colActive
+                        ? 'text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/30'
+                        : 'text-[var(--md-sys-color-on-surface-variant)]',
+                    ].join(' ')}
+                  >
+                    {col}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {OFFERS.map((o, i) => {
-              const isActive = i === activeRow;
+              const rowActive = activeRow === i;
               return (
                 <tr
                   key={o.pg}
                   className={[
                     'transition-colors duration-300',
-                    isActive
-                      ? 'bg-[var(--md-sys-color-surface-container-high)]'
+                    rowActive
+                      ? 'bg-[var(--md-sys-color-tertiary-container)]/50'
                       : o.recommended
-                        ? 'bg-[var(--md-sys-color-tertiary-container)]/30'
+                        ? 'bg-[var(--md-sys-color-tertiary-container)]/25'
                         : '',
                   ].join(' ')}
                 >
-                  <GrowCell active={isActive}>
+                  <Cell col={0} activeCols={activeCols} rowActive={rowActive}>
                     {o.recommended && (
                       <span
                         aria-hidden
@@ -148,7 +173,7 @@ export function OfferComparisonTable() {
                     <span
                       className={[
                         'text-[var(--text-base)] font-medium transition-colors duration-300',
-                        isActive
+                        rowActive
                           ? 'text-[var(--md-sys-color-primary)]'
                           : 'text-[var(--md-sys-color-on-surface)]',
                       ].join(' ')}
@@ -156,29 +181,29 @@ export function OfferComparisonTable() {
                       {o.pg}
                     </span>
                     {o.recommended && <Chip label="추천" color="tertiary" />}
-                  </GrowCell>
-                  <GrowCell active={isActive}>
+                  </Cell>
+                  <Cell col={1} activeCols={activeCols} rowActive={rowActive}>
                     <span className={numCls}>{o.fee}</span>
-                  </GrowCell>
-                  <GrowCell active={isActive}>
+                  </Cell>
+                  <Cell col={2} activeCols={activeCols} rowActive={rowActive}>
                     <span className={numCls}>{o.settlement}</span>
-                  </GrowCell>
-                  <GrowCell active={isActive}>
+                  </Cell>
+                  <Cell col={3} activeCols={activeCols} rowActive={rowActive}>
                     <span className="text-[var(--text-sm)] text-[var(--md-sys-color-on-surface-variant)]">
                       {o.guarantee}
                     </span>
-                  </GrowCell>
-                  <GrowCell active={isActive}>
+                  </Cell>
+                  <Cell col={4} activeCols={activeCols} rowActive={rowActive}>
                     <span className="text-[var(--text-sm)] text-[var(--md-sys-color-on-surface-variant)]">
                       {o.joinFee}
                     </span>
-                  </GrowCell>
-                  <GrowCell active={isActive}>
+                  </Cell>
+                  <Cell col={5} activeCols={activeCols} rowActive={rowActive}>
                     <Chip label={o.approval.label} color={o.approval.color} />
-                  </GrowCell>
-                  <GrowCell active={isActive}>
+                  </Cell>
+                  <Cell col={6} activeCols={activeCols} rowActive={rowActive}>
                     <Chip label={o.negotiable.label} color={o.negotiable.color} />
-                  </GrowCell>
+                  </Cell>
                 </tr>
               );
             })}
