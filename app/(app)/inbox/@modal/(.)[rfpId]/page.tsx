@@ -7,7 +7,7 @@ import { auth } from '@/auth';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { DealRoomModal } from '@/components/deal-room/DealRoomModal';
 import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
-import { PgRfpDetailContent } from '@/components/inbox/PgRfpDetailContent';
+import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 
@@ -57,9 +57,7 @@ export default async function InboxDealRoomModalPage({ params }: Props) {
           )
         }
       >
-        <div className="px-6 py-6">
-          <PgRfpDetailContent data={data} variant="full" />
-        </div>
+        <PgDealRoomBody data={data} />
       </DealRoomModal>
     </>
   );

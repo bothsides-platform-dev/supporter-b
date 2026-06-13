@@ -77,7 +77,7 @@ export function DealRoomShell({
         </div>
       </header>
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
+        <div className="min-w-0 flex-1">{children}</div>
         {chat && (
           <aside
             aria-label="채팅"

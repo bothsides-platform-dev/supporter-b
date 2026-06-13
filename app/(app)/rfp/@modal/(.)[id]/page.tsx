@@ -5,7 +5,7 @@
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { DealRoomModal } from '@/components/deal-room/DealRoomModal';
 import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
-import { RfpDetailContent } from '@/components/rfp/RfpDetailContent';
+import { BuyerDealRoomBody } from '@/components/deal-room/buyer/BuyerDealRoomBody';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
 
@@ -51,9 +51,7 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
         />
       }
     >
-      <div className="px-6 py-6">
-        <RfpDetailContent data={data} />
-      </div>
+      <BuyerDealRoomBody data={data} />
     </DealRoomModal>
   );
 }
