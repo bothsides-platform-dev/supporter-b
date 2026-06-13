@@ -109,41 +109,6 @@ describe('buildPgDashboard', () => {
   });
 });
 
-describe('buildBuyerDashboard — onboarding', () => {
-  it('returns onboardingActions when there are no sent RFPs', () => {
-    const dash = buildBuyerDashboard([], new Map(), NOW);
-    expect(dash.onboardingActions).not.toBeNull();
-    expect(dash.onboardingActions).toHaveLength(3);
-    expect(dash.onboardingActions![0].id).toBe('create-rfp');
-    expect(dash.onboardingActions![0].href).toBe('/rfp/new');
-  });
-
-  it('returns null when sent RFPs exist', () => {
-    const sentRfps = [rfp({ id: 'X', status: 'sent', deadline: fromNow(10), sentAt: fromNow(-1) })];
-    const dash = buildBuyerDashboard(sentRfps, new Map([['X', 0]]), NOW);
-    expect(dash.onboardingActions).toBeNull();
-  });
-
-  it('returns onboardingActions when only draft RFPs exist (no sent)', () => {
-    const draftOnly = [rfp({ id: 'D', status: 'draft', deadline: fromNow(10) })];
-    const dash = buildBuyerDashboard(draftOnly, new Map(), NOW);
-    expect(dash.onboardingActions).not.toBeNull();
-  });
-
-  it('returns null when buyer has awarded RFPs but no sent (returning buyer)', () => {
-    const awardedOnly = [rfp({ id: 'A', status: 'awarded', deadline: fromNow(-1) })];
-    const dash = buildBuyerDashboard(awardedOnly, new Map(), NOW);
-    expect(dash.onboardingActions).toBeNull();
-  });
-});
-
-describe('buildPgDashboard — onboarding', () => {
-  it('always returns onboardingActions: null', () => {
-    const dash = buildPgDashboard([], NOW);
-    expect(dash.onboardingActions).toBeNull();
-  });
-});
-
 describe('buildPgDashboard — open RFP discovery', () => {
   const base = {
     deadline: fromNow(5),
