@@ -32,7 +32,7 @@
 Public
 ├─ /login
 ├─ /login/ops                    (숨김 — 운영자 Google 로그인. NEXT_PUBLIC_MASTER_OAUTH_ENABLED off 시 404)
-├─ /signup                       (Rs1 — 가입 유형 선택)
+├─ /signup                       (Rs1 — 호스트 기반 redirect: partner → /signup/pg, 그 외 → /signup/buyer)
 ├─ /signup/buyer                 (Bs1 — 구매사 이메일)
 ├─ /signup/buyer/verify          (Bs2)
 ├─ /signup/buyer/profile         (Bs3)
@@ -187,17 +187,17 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 
 ## 1. 인증 / 가입 (Public 영역)
 
-구매사(셀러)와 PG사 영업담당은 **처음부터 별도 경로**로 가입한다. 역할 선택 후 각자에게 맞는 컨텍스트와 필드로 진행하며, 단일 P6 워크스페이스 선택 화면은 제거됐다.
+구매사(셀러)와 PG사 영업담당은 **처음부터 별도 경로**로 가입한다. `/signup` 진입 시 역할 선택 화면 없이 **요청 호스트**가 자동으로 분기한다(`supporter-b.com` → /signup/buyer, `partner.supporter-b.com` → /signup/pg). 각자에게 맞는 컨텍스트와 필드로 진행하며, 단일 P6 워크스페이스 선택 화면은 제거됐다.
 
-> **화면 ID 규칙**: B1~B7 = 구매사 앱 화면, P1~P6 = PG 앱 화면. 가입 전용 ID는 `s` 접미사 사용 — Rs1(역할선택), Bs1~Bs4(구매사 가입), Gs1~Gs4(PG 가입).
+> **화면 ID 규칙**: B1~B7 = 구매사 앱 화면, P1~P6 = PG 앱 화면. 가입 전용 ID는 `s` 접미사 사용 — Rs1(호스트 redirect, 화면 없음), Bs1~Bs4(구매사 가입), Gs1~Gs4(PG 가입).
 
 ### 1.1 진입 경로
 
-- **D · 구매사 신규 가입**: `/signup` → 구매사 카드 선택 → Bs1~Bs4 → `/rfp` (관리자)
+- **D · 구매사 신규 가입**: `/signup` → (호스트가 buyer이면 자동) Bs1~Bs4 → `/rfp` (관리자)
 - **E · PG RFP 초대 진입**: `/invite/rfp/:token` → 기존 PG 유저 로그인 → `/inbox/:rfpId` (기존 워크스페이스 전제)
 - **E2 · PG 워크스페이스 초대 진입(신규 유저)**: `/invite/workspace/:token` → Gs1(email 고정) → Gs3(profile) → Gs4(verify, 3단계) → `/home` (기존 ws에 member 합류, 새 워크스페이스 미생성)
 - **E3 · PG 워크스페이스 초대 진입(기존 유저)**: `/invite/workspace/:token` → (authed) → acceptWorkspaceInviteAction → `/home`
-- **F · PG 직접 가입**: `/signup` → PG 카드 선택 → Gs1~Gs2~Gs3~Gs4(4단계) → `/inbox` (새 워크스페이스 생성, 관리자 심사)
+- **F · PG 직접 가입**: `/signup` → (partner 호스트이면 자동) Gs1~Gs2~Gs3~Gs4(4단계) → `/inbox` (새 워크스페이스 생성, 관리자 심사)
 - **G · 비밀번호 분실**: 로그인 화면에서 재설정 요청 → 메일 → 새 비밀번호
 
 ### 1.2 화면 목록
@@ -216,11 +216,11 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 | — | `/auth/email-change?token=...` | 이메일 변경 확인 | 기존 사용자 이메일 변경 |
 | — | `/logout` | 로그아웃 | POST: 세션 클리어 → `/login` |
 
-#### 역할 선택
+#### 가입 진입점 (역할 선택 없음)
 
 | # | 라우트 | 제목 | 핵심 |
 |---|---|---|---|
-| Rs1 | `/signup` | 가입 유형 선택 | 두 카드: 구매사 / PG사. 역할 확정 후 각 플로우로 분기 |
+| Rs1 | `/signup` | 호스트 기반 redirect | 화면 없음. 요청 호스트로 자동 분기 — partner → /signup/pg, 그 외 → /signup/buyer. `?next=` 전달 |
 
 #### 구매사(셀러) 가입 — Bs 시리즈
 
@@ -257,18 +257,17 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - "로그인 유지" 체크박스 (30일 세션)
 - 1차 [로그인] full-width
 - 보조 링크: `비밀번호를 잊으셨나요?` → `/password/forgot`
-- 푸터: `처음 오셨나요? 회원가입 →` → Rs1
+- 푸터: `처음 오셨나요? 회원가입 →` → Rs1 (호스트가 자동 분기)
 - 5회 실패 → 캡차, 10회 → 15분 락
 - `next` 쿼리 보존
 
-#### Rs1 가입 유형 선택 `/signup`
-- 워드마크 + serial
-- 헤드라인: `누구로 시작하시나요?`
-- 좌/우 두 카드 (카드 클릭 → 각 플로우 첫 페이지로, `SignupDraft.workspaceType` 설정):
-  - **좌: 구매사** — "결제대행사에 제안을 요청합니다" → Bs1
-  - **우: PG사 영업담당** — "초대받은 RFP에 제안을 제출합니다" → Gs1
-- 푸터: `이미 계정이 있으세요? 로그인 →`
-- 기 세팅된 `SignupDraft`(초대 토큰 진입 시) 존재하면 Rs1 건너뜀
+#### Rs1 가입 진입점 `/signup` (화면 없음 — 서버사이드 redirect)
+- 사용자에게 보이는 화면 없음. 서버 컴포넌트가 요청 `Host` 헤더를 읽어 즉시 redirect.
+- `partner.supporter-b.com` → `/signup/pg` (Gs1)
+- 그 외 (`supporter-b.com`, 단일호스트 로컬, 미상) → `/signup/buyer` (Bs1)
+- `?next=` 쿼리스트링은 목적지로 그대로 전달, step-1 페이지(Bs1/Gs1)가 흡수함
+- 구현: `lib/site-routing.ts` → `signupTargetForHost(host, appOrigins())`
+- 기 세팅된 `SignupDraft`(초대 토큰 진입 시) 존재하면 Rs1 건너뜀 (기존과 동일)
 
 #### Bs1 구매사 — 이메일 `/signup/buyer`
 - `01 / 04 — EMAIL`
@@ -362,19 +361,18 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 ### 1.4 시나리오 (Verification)
 
 **시나리오 D — 구매사 신규 가입(셀프서비스)**
-1. `/login` → `회원가입` → Rs1 역할 선택 → "구매사" 카드
-2. Bs1 이메일 + 약관 동의 → [인증 메일 받기]
+1. `/login` → `회원가입` → `/signup` → (buyer 호스트이면 자동) Bs1 이메일 + 약관 동의 → [인증 메일 받기]
 3. Bs2 대기 → 이메일 토큰 URL → `/auth/verify` 스플래시 → Bs3 자동 이동
 4. 프로필 입력 → Bs4 워크스페이스 이름·산업 → [만들기] → `/rfp` (관리자)
 
 **시나리오 E2 — PG 워크스페이스 초대 진입(신규 유저)**
 1. `/invite/workspace/:token` 진입 — `SignupDraft` 선 채움 (workspaceType='pg', email, wsInviteToken, inviteWorkspaceName)
-2. Rs1 건너뜀 → Gs1 이메일(email prefill + readOnly, 3단계 스텝)
+2. Rs1 건너뜀(draft 존재) → Gs1 이메일(email prefill + readOnly, 3단계 스텝)
 3. Gs3 프로필(이름 + 비밀번호) → Gs4 인증 메일 대기
 4. 이메일 인증 → `signupViaWorkspaceInviteAction` → `/home` (기존 ws에 member 합류)
 
 **시나리오 F — PG 직접 가입**
-1. `/signup` → Rs1 → "PG사 영업담당" 카드 → Gs1 이메일(4단계 스텝)
+1. `/signup` → (partner 호스트이면 자동) Gs1 이메일(4단계 스텝)
 2. Gs2 워크스페이스 정보 → Gs3 프로필 → Gs4 인증 메일 대기 → `signupCompleteAction` → `/inbox`
 
 **시나리오 G — 비밀번호 분실**
@@ -387,7 +385,7 @@ PG 영업담당의 1차 진입 경로. 토큰 검증 후 인증 상태에 따라
 
 - **Case A** — 이미 인증됨 + 이메일 일치: token claim → `/inbox/:rfpId`
 - **Case B** — 이미 인증됨 + 이메일 불일치: "다른 계정으로 로그인이 필요합니다" + [로그아웃 후 재시작]
-- **Case C** — 미인증: `SignupDraft` 선 채움 (`workspaceType='pg'`, `email`, `rfpInviteToken`) → Gs2로 redirect (Rs1·Gs1 건너뜀, 이메일 자동 채움)
+- **Case C** — 미인증: `SignupDraft` 선 채움 (`workspaceType='pg'`, `email`, `rfpInviteToken`) → Gs2로 redirect (Rs1 호스트 redirect + Gs1 건너뜀, 이메일 자동 채움)
 
 ### 1.6 본 절 범위 외
 - SSO (Google/네이버/카카오) — 후속
