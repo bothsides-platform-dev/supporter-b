@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.10.2] - 2026-06-13
+
+### Fixed
+
+- **운영 빌드가 다시 정상적으로 빌드돼요**: 직전 `/_axiom/*` 인증 우회 수정(0.2.10.1)에서 인증 미들웨어 경로 매처를 별도 모듈 상수(`PROXY_MATCHER`)로 분리하면서, Next.js가 `config.matcher`를 정적 문자열 리터럴로만 허용하는 제약에 걸려 `next build`가 `matcher[0] need to be static strings`로 실패하던 문제를 고쳤어요(매처 동작 자체는 그대로). 매처를 리터럴로 인라인하고, 정규 정의(`lib/auth/proxy-matcher.ts`)와 인라인 리터럴이 절대 어긋나지 않도록 드리프트 가드 테스트를 추가했어요. (유닛 테스트는 통과했지만 빌드가 깨져 있던 상태라, 다음 운영 배포가 빌드 단계에서 실패했을 문제예요.)
+
 ## [0.2.10.1] - 2026-06-13
 
 ### Fixed
