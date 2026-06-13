@@ -32,11 +32,13 @@ import { RfpService, __setRfpServiceForTest, __resetRfpServiceForTest } from '@/
 import { BidService, __setBidServiceForTest, __resetBidServiceForTest } from '@/lib/server/services/bid';
 import { ChatService, __setChatServiceForTest, __resetChatServiceForTest } from '@/lib/server/services/chat';
 import { WorkspaceService, __setWorkspaceServiceForTest, __resetWorkspaceServiceForTest } from '@/lib/server/services/workspace';
+import { TeamChatService, __setTeamChatServiceForTest, __resetTeamChatServiceForTest } from '@/lib/server/services/team-chat';
 import {
   getChatConversationRepo,
   getChatMessageRepo,
   getChatReadRepo,
   getNotificationRepo,
+  getRfpTeamMessageRepo,
   getUserRepo,
 } from '@/lib/server/repositories/factory';
 
@@ -51,12 +53,12 @@ export async function setupRfpActionEnv(): Promise<PgliteDB> {
   // Inject services backed by the same PGlite db so action tests pass through.
   const [
     rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, attRepo, bidNoteRepo, pgReqRepo, bizRepo,
-    convRepo, msgRepo, userRepo, notifRepo, readRepo, requoteRepo, auditRepo,
+    convRepo, msgRepo, userRepo, notifRepo, readRepo, requoteRepo, auditRepo, teamMsgRepo,
   ] = await Promise.all([
     getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
     getInvitationRepo(), getAttachmentRepo(), getBidNoteRepo(), getPgRequestRepo(), getBizProfileRepo(),
     getChatConversationRepo(), getChatMessageRepo(), getUserRepo(), getNotificationRepo(), getChatReadRepo(),
-    getRfpRequoteRequestRepo(), getAuditLogRepo(),
+    getRfpRequoteRequestRepo(), getAuditLogRepo(), getRfpTeamMessageRepo(),
   ]);
   __setRfpServiceForTest(new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo));
   __setBidServiceForTest(
@@ -66,6 +68,7 @@ export async function setupRfpActionEnv(): Promise<PgliteDB> {
     new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo),
   );
   __setWorkspaceServiceForTest(new WorkspaceService(db, outboxRepo, auditRepo));
+  __setTeamChatServiceForTest(new TeamChatService(db, rfpRepo, invRepo, userRepo, teamMsgRepo));
 
   return db;
 }
@@ -77,5 +80,6 @@ export function teardownRfpActionEnv(): void {
   __resetBidServiceForTest();
   __resetChatServiceForTest();
   __resetWorkspaceServiceForTest();
+  __resetTeamChatServiceForTest();
   __resetForTest();
 }

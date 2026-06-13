@@ -1090,3 +1090,19 @@ describe('ThreadView 작성자(담당자) 표시', () => {
     expect(within(row).getByText('최라이브')).toBeInTheDocument();
   });
 });
+
+describe('ThreadView — sendDisabled (샘플 RFP)', () => {
+  it('sendDisabled 면 안내 문구를 보여주고 전송 버튼·입력을 막는다', () => {
+    render(base({ sendDisabled: true }));
+    expect(screen.getByText(/샘플에서는 메시지를 보낼 수 없어요/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
+    expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toBeDisabled();
+  });
+
+  it('sendDisabled 면 Enter 로도 전송되지 않는다', async () => {
+    render(base({ sendDisabled: true }));
+    const ta = screen.getByPlaceholderText('메시지를 입력하세요…') as HTMLTextAreaElement;
+    fireEvent.keyDown(ta, { key: 'Enter' });
+    expect(sendChatMessageAction).not.toHaveBeenCalled();
+  });
+});

@@ -1,12 +1,26 @@
-import { and, asc, eq } from 'drizzle-orm';
-import { rfpTeamMessages, users } from '@/lib/db/schema';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import { attachments, rfpTeamMessages, users } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
+import type { Attachment } from '@/lib/types/common';
 import type {
   RfpTeamMessageRecord,
   RfpTeamMessageRepo,
   RfpTeamMessageWithAuthor,
   Tx,
 } from '../types';
+
+type AttRow = typeof attachments.$inferSelect;
+
+function attRowToAttachment(row: AttRow): Attachment {
+  return {
+    id: row.id,
+    name: row.name,
+    size: row.size,
+    mimeType: row.mimeType,
+    // Same contract as every other read site — the authenticated route.
+    url: `/api/files/${row.id}`,
+  };
+}
 
 // Explicit column projection (BID_COLUMNS precedent) — guards against schema
 // drift where select().from() would compile the full column list.
@@ -47,7 +61,7 @@ export class DrizzleRfpTeamMessageRepository implements RfpTeamMessageRepo {
     tx?: Tx,
   ): Promise<RfpTeamMessageWithAuthor[]> {
     const db = this.h(tx);
-    return (await db
+    const rows = (await db
       .select(TEAM_MESSAGE_COLUMNS)
       .from(rfpTeamMessages)
       .innerJoin(users, eq(users.id, rfpTeamMessages.authorUserId))
@@ -57,6 +71,29 @@ export class DrizzleRfpTeamMessageRepository implements RfpTeamMessageRepo {
           eq(rfpTeamMessages.workspaceId, workspaceId),
         ),
       )
-      .orderBy(asc(rfpTeamMessages.createdAt))) as RfpTeamMessageWithAuthor[];
+      .orderBy(asc(rfpTeamMessages.createdAt))) as Omit<
+      RfpTeamMessageWithAuthor,
+      'attachments'
+    >[];
+
+    if (rows.length === 0) return [];
+
+    // Single batch fetch of attachments for all returned messages (exclusive-arc
+    // C3): attachments.rfp_team_message_id ∈ {message ids} — bid-note pattern.
+    const ids = rows.map((r) => r.id);
+    const attRows: AttRow[] = await db
+      .select()
+      .from(attachments)
+      .where(inArray(attachments.rfpTeamMessageId, ids));
+
+    const byMessage = new Map<string, Attachment[]>();
+    for (const row of attRows) {
+      if (!row.rfpTeamMessageId) continue;
+      const list = byMessage.get(row.rfpTeamMessageId) ?? [];
+      list.push(attRowToAttachment(row));
+      byMessage.set(row.rfpTeamMessageId, list);
+    }
+
+    return rows.map((r) => ({ ...r, attachments: byMessage.get(r.id) ?? [] }));
   }
 }

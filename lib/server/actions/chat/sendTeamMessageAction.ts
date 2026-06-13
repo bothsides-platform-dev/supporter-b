@@ -4,18 +4,22 @@ import { z } from 'zod';
 
 import { publishTeamChatEvent } from '@/lib/server/realtime/centrifugo';
 import { getTeamChatService } from '@/lib/server/services/team-chat';
+import type { Attachment } from '@/lib/types/common';
 import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
+// body 는 비어도 첨부가 있으면 허용 — 서비스가 "본문·첨부 모두 빔" 만 거부한다.
 const Input = z
   .object({
     rfpId: z.string().uuid(),
-    body: z.string().min(1).max(4000),
+    body: z.string().max(4000).default(''),
+    attachmentIds: z.array(z.string().uuid()).max(20).default([]),
   })
   .strict();
 
 export type SendTeamMessageResult = ChatActionResult<{
   messageId: string;
   createdAt: string;
+  attachments: Attachment[];
 }>;
 
 /**
@@ -50,7 +54,13 @@ export async function sendTeamMessageAction(
     authorUserId: ws.userId,
     authorName: result.authorName,
     createdAt: result.createdAt,
+    attachments: result.attachments,
   }).catch(() => {});
 
-  return { ok: true, messageId: result.messageId, createdAt: result.createdAt };
+  return {
+    ok: true,
+    messageId: result.messageId,
+    createdAt: result.createdAt,
+    attachments: result.attachments,
+  };
 }

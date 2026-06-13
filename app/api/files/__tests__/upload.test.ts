@@ -461,6 +461,106 @@ describe('POST /api/files/upload', () => {
     expect(r.status).toBe(403);
   });
 
+  it('happy path — team_message: buyer ws member uploads ownerless draft for own RFP', async () => {
+    const { buyer, buyerWs } = await seedBuyerSession();
+    const biz2 = await seedBizProfile(db, { bizNo: '7777777777' });
+    const rfpId = randomUUID();
+    await db.insert(rfps).values({
+      id: rfpId,
+      code: 'P-2605-0700',
+      buyerWsId: buyerWs.id,
+      bizProfileId: biz2.id,
+      title: 'team',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: buyer.id,
+      sentAt: new Date(),
+    });
+    const f = new FormData();
+    f.append('file', makeFile('team.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'team_message');
+    f.append('ownerId', rfpId);
+    const r = await callUpload(f);
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { id: string };
+
+    const [row] = await db
+      .select()
+      .from(attachments)
+      .where(eq(attachments.id, body.id))
+      .limit(1);
+    // Ownerless draft — linked to rfp_team_messages by sendTeamMessageAction.
+    expect(row?.rfpTeamMessageId).toBeNull();
+    expect(row?.uploadedBy).toBe(buyer.id);
+  });
+
+  it('happy path — team_message: invited PG uploads ownerless draft', async () => {
+    const { pg, rfpId } = await seedPgSession('P-2605-0701');
+    const f = new FormData();
+    f.append('file', makeFile('team.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'team_message');
+    f.append('ownerId', rfpId);
+    const r = await callUpload(f);
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { id: string };
+
+    const [row] = await db
+      .select()
+      .from(attachments)
+      .where(eq(attachments.id, body.id))
+      .limit(1);
+    expect(row?.uploadedBy).toBe(pg.id);
+    expect(row?.rfpTeamMessageId).toBeNull();
+  });
+
+  it('403 when PG uploads team_message for an RFP they were not invited to', async () => {
+    await seedPgSession('P-2605-0702');
+    const f = new FormData();
+    f.append('file', makeFile('team.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'team_message');
+    f.append('ownerId', randomUUID()); // unknown rfp → not invited
+    const r = await callUpload(f);
+    expect(r.status).toBe(403);
+  });
+
+  it('404 when buyer uploads team_message for an unknown RFP', async () => {
+    await seedBuyerSession();
+    const f = new FormData();
+    f.append('file', makeFile('team.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'team_message');
+    f.append('ownerId', randomUUID()); // RFP that does not exist
+    const r = await callUpload(f);
+    expect(r.status).toBe(404);
+  });
+
+  it('403 when buyer uploads team_message for an RFP outside their workspace', async () => {
+    await seedBuyerSession();
+    const fBuyer = await seedUser(db, { email: 'fb@buy.com' });
+    const fBiz = await seedBizProfile(db, { bizNo: '1212121212' });
+    const fWs = await seedBuyerWorkspace(db, { bizProfileId: fBiz.id });
+    await seedMembership(db, fWs.id, fBuyer.id, 'admin');
+    const fRfpId = randomUUID();
+    await db.insert(rfps).values({
+      id: fRfpId,
+      code: 'P-2605-0703',
+      buyerWsId: fWs.id,
+      bizProfileId: fBiz.id,
+      title: 'foreign',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: fBuyer.id,
+      sentAt: new Date(),
+    });
+    const f = new FormData();
+    f.append('file', makeFile('team.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'team_message');
+    f.append('ownerId', fRfpId);
+    const r = await callUpload(f);
+    expect(r.status).toBe(403);
+  });
+
   it('cleanup ordering — storage.save throws → orphan metadata row deleted', async () => {
     const { buyer } = await seedBuyerSession();
 

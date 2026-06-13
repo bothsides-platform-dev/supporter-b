@@ -20,11 +20,6 @@ const awardRfpAction = vi.fn();
 vi.mock('@/lib/server/actions/rfp', () => ({
   awardRfpAction: (...a: unknown[]) => awardRfpAction(...a),
 }));
-// BidNotesPanel statically imports these server actions (→ next-auth). Mock to
-// keep the jsdom collection from loading the auth chain.
-vi.mock('@/lib/server/actions/bid/addBidNoteAction', () => ({ addBidNoteAction: vi.fn() }));
-vi.mock('@/lib/server/actions/bid/removeBidNoteAction', () => ({ removeBidNoteAction: vi.fn() }));
-
 // 결과 오버레이는 표시 여부만 검증한다(내부는 Task 2가 커버).
 vi.mock('@/components/rfp/comparison/AwardResult', () => ({
   AwardResult: ({ pgName }: { pgName: string }) => (
@@ -69,7 +64,6 @@ const baseProps = {
   bids: [kg, toss], // intentionally not pre-sorted
   pgWsNameMap: { 'pg-toss': '토스페이먼츠', 'pg-kg': 'KG이니시스' },
   current: { feeRate: '2.8%' },
-  notesByBid: {} as Record<string, never[]>,
   rfpStatus: 'sent',
   awardedBidId: null,
   requiredPaymentMethods: ['card', 'bank_transfer'] as const,
@@ -97,11 +91,11 @@ describe('FocusComparison', () => {
     expect(screen.getByText('2.80%')).toBeInTheDocument();
   });
 
-  it('renders the three detail accordions', () => {
+  it('renders the two detail accordions (no per-bid 내 메모 — moved to 팀 채팅)', () => {
     render(<FocusComparison {...baseProps} />);
     expect(screen.getByText(/전체 결제수단 요율/)).toBeInTheDocument();
     expect(screen.getByText(/PG 메모/)).toBeInTheDocument();
-    expect(screen.getByText('내 메모')).toBeInTheDocument();
+    expect(screen.queryByText('내 메모')).not.toBeInTheDocument();
   });
 
   it('opens the award confirm dialog from the CTA when the RFP is open', async () => {
@@ -200,7 +194,6 @@ describe('FocusComparison — requote CTA + status chips', () => {
         bids={[bid]}
         pgWsNameMap={{ 'pg-1': 'OO페이' }}
         current={{ feeRate: null, settlementCycle: null, settlementLimit: null, guaranteeInsurance: null }}
-        notesByBid={{}}
         rfpStatus="sent"
         awardedBidId={null}
         requiredPaymentMethods={[]}
@@ -221,7 +214,6 @@ describe('FocusComparison — requote CTA + status chips', () => {
         bids={[bid]}
         pgWsNameMap={{ 'pg-1': 'OO페이' }}
         current={{ feeRate: null, settlementCycle: null, settlementLimit: null, guaranteeInsurance: null }}
-        notesByBid={{}}
         rfpStatus="sent"
         awardedBidId={null}
         requiredPaymentMethods={[]}
@@ -241,7 +233,6 @@ describe('FocusComparison — requote CTA + status chips', () => {
         bids={[bid]}
         pgWsNameMap={{ 'pg-1': 'OO페이' }}
         current={{ feeRate: null }}
-        notesByBid={{}}
         rfpStatus="sent"
         awardedBidId={null}
         requiredPaymentMethods={[]}

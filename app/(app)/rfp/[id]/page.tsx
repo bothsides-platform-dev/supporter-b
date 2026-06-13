@@ -70,9 +70,13 @@ async function RfpDetailLoader({
           <RfpDetailContent data={data} />
         </PageEnter>
       </div>
-      {!data.rfp.isSample && (
-        <ChatRail rfpId={data.rfp.id} rfpCode={data.rfp.code} rfpTitle={data.rfp.title} />
-      )}
+      {/* 샘플에서도 노출 — 팀 채팅은 정상 동작, 상대방 채팅은 전송 차단(isSample). */}
+      <ChatRail
+        rfpId={data.rfp.id}
+        rfpCode={data.rfp.code}
+        rfpTitle={data.rfp.title}
+        isSample={data.rfp.isSample}
+      />
     </div>
   );
 }

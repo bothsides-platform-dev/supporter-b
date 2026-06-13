@@ -12,8 +12,6 @@ vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock('@/lib/http', () => ({ http: { post: vi.fn() } }));
 vi.mock('@/lib/server/actions/rfp', () => ({ awardRfpAction: vi.fn() }));
-vi.mock('@/lib/server/actions/bid/addBidNoteAction', () => ({ addBidNoteAction: vi.fn() }));
-vi.mock('@/lib/server/actions/bid/removeBidNoteAction', () => ({ removeBidNoteAction: vi.fn() }));
 vi.mock('@/components/rfp/comparison/AwardResult', () => ({
   AwardResult: ({ pgName }: { pgName: string }) => (
     <div data-testid="award-result">{pgName} 선정 완료</div>
@@ -43,7 +41,6 @@ const baseProps = {
   bids: [bid('b1', 'pgA'), bid('b2', 'pgB')],
   pgWsNameMap: { pgA: '샘플페이 A', pgB: '샘플페이 B' },
   current: {},
-  notesByBid: {},
   awardedBidId: null,
   requiredPaymentMethods: ['card'] as const,
   customPaymentMethods: [],

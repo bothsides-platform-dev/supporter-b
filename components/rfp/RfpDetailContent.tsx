@@ -53,7 +53,6 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
   const {
     rfp,
     bids,
-    notesByBid,
     rfpFiles,
     companyName,
     inviteList,
@@ -93,7 +92,7 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
             {rfp.title}
           </h1>
           <div className="flex shrink-0 items-center gap-2">
-            {!rfp.isSample && <ChatRailToggle />}
+            <ChatRailToggle />
             {rfp.isSample && <Chip label="샘플" color="surface" />}
             <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
           </div>
@@ -186,7 +185,6 @@ export function RfpDetailContent({ data }: { data: BuyerRfpDetailData }) {
           settlementLimit: rfp.currentSettlementLimit,
           guaranteeInsurance: rfp.currentGuaranteeInsurance,
         }}
-        notesByBid={notesByBid}
         rfpStatus={rfp.status}
         awardedBidId={rfp.awardedBidId}
         requiredPaymentMethods={rfp.requiredPaymentMethods}

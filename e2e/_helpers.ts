@@ -13,7 +13,7 @@ import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
 import { db } from '@/lib/db/client';
-import { attachments, bids, bidNotes, columns, rfps } from '@/lib/db/schema';
+import { attachments, bids, columns, rfps } from '@/lib/db/schema';
 import { getStorage } from '@/lib/server/storage';
 
 // Seed/URL identifiers are the human RFP code (P-YYMM-NNNN); FKs use the uuid.
@@ -72,16 +72,6 @@ export async function getBidColumnTitleFromDb(bidId: string): Promise<string> {
     .limit(1);
   if (!row) throw new Error(`[e2e helpers] bid not found: ${bidId}`);
   return row.boardColumnId ? (row.title ?? '진행전') : '진행전';
-}
-
-/** Number of bid_notes rows for a given bid. Used by the note roundtrip
- *  spec to gate UI-vs-DB invariants. */
-export async function getNoteCountFromDb(bidId: string): Promise<number> {
-  const rows = await db
-    .select({ id: bidNotes.id })
-    .from(bidNotes)
-    .where(eq(bidNotes.bidId, bidId));
-  return rows.length;
 }
 
 /** Reset the seeded P-2604-0001 RFP back to a runnable state for a new spec

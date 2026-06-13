@@ -520,9 +520,11 @@ export type RfpTeamMessageRecord = {
   createdAt: Date;
 };
 
-/** Read shape — authorName hydrated from users for display. */
+/** Read shape — authorName hydrated from users, attachments from the
+ *  exclusive-arc attachments table (empty array when none). */
 export type RfpTeamMessageWithAuthor = RfpTeamMessageRecord & {
   authorName: string;
+  attachments: Attachment[];
 };
 
 export interface RfpTeamMessageRepo {
