@@ -10,6 +10,7 @@ import { Chip } from '@/components/primitives/Chip';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
+import { Avatar } from '@/components/primitives/Avatar';
 import { Paperclip } from 'lucide-react';
 import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, XIcon, EnvelopeIcon } from '@/components/icons';
 import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES, ACCEPTED_EXTENSIONS } from '@/lib/server/storage/constants';
@@ -551,12 +552,14 @@ export function ThreadView({
           // 같은 상대가 짧은 간격으로 연속해 보낸 메시지는 하나의 묶음으로 보고
           // 이름·아바타 헤더를 두 번째부터 생략한다(날짜 경계서 리셋). 시간 판정은
           // TeamThreadView 와 공유(withinGroupWindow — 드리프트 방지 단일 출처).
+          // 작성자(authorUserId) 기준 그룹핑 — 같은 회사라도 담당자가 다르면
+          // 묶음·헤더를 분리한다. 양쪽(self·other) 모두 작성자 헤더를 단다.
           const groupedWithPrev =
             !!prev &&
-            prev.sender === m.sender &&
+            prev.authorUserId === m.authorUserId &&
             !showDivider &&
             withinGroupWindow(prev.createdAt, m.createdAt);
-          const showSenderHeader = !isSelf && !groupedWithPrev;
+          const showAuthorHeader = !groupedWithPrev;
           const rfp = m.rfpId ? rfpById?.[m.rfpId] : undefined;
           // Receipt only on the last *read* self message (receiptIndex).
           const showReceipt = i === receiptIndex;
@@ -577,15 +580,14 @@ export function ThreadView({
                 data-sender={m.sender}
                 className={cn('flex flex-col gap-1', isSelf ? 'items-end' : 'items-start')}
               >
-                {showSenderHeader && (
+                {showAuthorHeader && (
                   <div className="flex items-center gap-1.5">
-                    <WorkspaceAvatar
-                      name={counterparty.name}
-                      size="sm"
-                      workspaceId={counterparty.workspaceId}
-                    />
-                    <span className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]">
-                      {counterparty.name}
+                    <Avatar name={m.authorName} size="sm" color={isSelf ? 'primary' : 'surface'} />
+                    <span
+                      title={m.authorEmail || undefined}
+                      className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]"
+                    >
+                      {m.authorName}
                     </span>
                   </div>
                 )}
