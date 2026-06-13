@@ -54,4 +54,14 @@ FocusComparison → MessageComposeSheet 의 `rfpContext={{ code: props.rfpId(uui
 **Priority:** P3
 BidCard·loadBoard rfp_bids 분기·cardType 'bid' 경로가 어디에도 마운트되지 않음(비교 화면 재설계 PR#97 이후). 부활 계획 없으면 제거, 보존이면 'no current mount point' 주석 명시. (발견: /ship red-team 리뷰 2026-06-13)
 
+## Signup / Auth
+
+### OTP 입력 칸 Enter 키 → 폼 조기 제출
+**Priority:** P3
+담당자 정보 단계에서 인증번호 입력 후 Enter 를 누르면 폼이 제출되어(확인 버튼은 type=button) 인증 전 "휴대전화 인증을 완료해주세요" 가 뜸. OTP 입력의 Enter 를 handleVerify 로 라우팅하거나 그 입력에서 폼 제출을 막기. (발견: /ship 근본원인 분석 2026-06-13, branch worktree-fix-signup-profile-ready-guard-bounce)
+
+### 비공개 모드 sessionStorage 차단 시 가입 막다른 길
+**Priority:** P3
+sessionStorage 가 차단되면(사파리 비공개 등) readSignupDraft 가 {} 반환 → 프로필 단계 ready=false 로 첫 가입 화면 redirect, 폼 진입 불가(기존 동작, 이 브랜치 비도입). 비공개 모드 안내 또는 대체 캐리어 검토. (발견: /ship adversarial 리뷰 2026-06-13)
+
 ## Completed
