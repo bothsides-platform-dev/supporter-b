@@ -49,4 +49,22 @@ describe('OfferComparisonTable', () => {
     render(<OfferComparisonTable />);
     expect(screen.queryByText(/AI|챗봇|대화/i)).toBeNull();
   });
+
+  it('highlights the 수수료 column when the fee-quote step is active', () => {
+    render(<OfferComparisonTable activeStep={0} />);
+    const headers = screen.getAllByRole('columnheader');
+    const fee = headers.find((h) => h.textContent === '수수료');
+    const pg = headers.find((h) => h.textContent === 'PG사');
+    expect(fee).toHaveAttribute('data-active', 'true');
+    expect(pg).not.toHaveAttribute('data-active');
+  });
+
+  it('highlights the 협의 가능 여부 column on the negotiation step', () => {
+    render(<OfferComparisonTable activeStep={2} />);
+    const headers = screen.getAllByRole('columnheader');
+    const negotiate = headers.find((h) => h.textContent === '협의 가능 여부');
+    const fee = headers.find((h) => h.textContent === '수수료');
+    expect(negotiate).toHaveAttribute('data-active', 'true');
+    expect(fee).not.toHaveAttribute('data-active');
+  });
 });

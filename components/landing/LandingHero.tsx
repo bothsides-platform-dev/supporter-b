@@ -1,16 +1,16 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { CheckIcon } from '@/components/icons';
 import { Footer } from '@/components/shell/Footer';
 import { Logo } from '@/components/primitives/Logo';
 import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
-import { OfferComparisonTable } from '@/components/landing/OfferComparisonTable';
+import { SolutionShowcase } from '@/components/landing/SolutionShowcase';
 import { ProcessSection } from '@/components/landing/ProcessSection';
 import { FaqList } from '@/components/landing/FaqList';
 import { ProblemCard } from '@/components/landing/ProblemCard';
 import { MetricCard } from '@/components/landing/MetricCard';
 import { LandingHeroSection } from '@/components/landing/LandingHeroSection';
 import { FadeInView } from '@/components/landing/FadeInView';
+import { SectionHeading } from '@/components/landing/SectionHeading';
 
 const PROBLEM_ITEMS = [
   {
@@ -43,16 +43,14 @@ const SOLUTION_POINTS = [
 ];
 
 const METRICS = [
-  { to: 0.89, decimals: 2, unit: '%', qualifier: '절감', caption: 'PoC 고객사 평균 수수료 절감 비율' },
-  { to: 4.5, decimals: 1, unit: '주', qualifier: '감소', caption: 'PG사 견적 비교 시 소요 시간 감소' },
-  { to: 2300, decimals: 0, unit: '만원', qualifier: undefined, caption: 'PoC 고객사 연간 평균 수수료 절감액' },
+  { to: 0.89, decimals: 2, unit: '%', qualifier: '절감', trend: 'down' as const, caption: 'PoC 고객사 평균 수수료 절감 비율' },
+  { to: 4.5, decimals: 1, unit: '주', qualifier: '감소', trend: 'down' as const, caption: 'PG사 견적 비교 시 소요 시간 감소' },
+  { to: 2300, decimals: 0, unit: '만원', qualifier: undefined, trend: 'up' as const, caption: 'PoC 고객사 연간 평균 수수료 절감액' },
 ];
 
 const sectionCls =
   'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--shell-topbar)]';
 const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9)]';
-const h2Cls =
-  'text-[clamp(22px,3.2vw,42px)] leading-[1.1] tracking-[-0.022em] font-medium text-[var(--md-sys-color-on-surface)]';
 
 export function LandingHero({ nav }: { nav?: ReactNode }) {
   return (
@@ -66,17 +64,15 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
 
       <main className="flex-1 pt-[var(--shell-topbar)]">
 
-        {/* ── Hero (client: 타이핑·애니메이션) ── */}
+        {/* ── Hero (client: 타이핑·애니메이션·landing-scroll 이펙트) ── */}
         <LandingHeroSection />
 
         {/* ── Problem ── */}
         <section className={sectionCls}>
           <div className={containerCls}>
-            <FadeInView>
-              <h2 className={h2Cls}>
-                기존 PG 계약을 하면서<br />이런 불편함을 겪지 않으셨나요?
-              </h2>
-            </FadeInView>
+            <SectionHeading>
+              기존 PG 계약을 하면서<br />이런 불편함을 겪지 않으셨나요?
+            </SectionHeading>
             <div className="flex flex-col gap-[var(--s-4)]">
               {PROBLEM_ITEMS.map((item, i) => (
                 <FadeInView key={item.num} delay={i * 0.08}>
@@ -90,26 +86,10 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── Solution ── */}
         <section id="service" className={sectionCls}>
           <div className={containerCls}>
-            <FadeInView>
-              <h2 className={h2Cls}>
-                SupporterB를 통해<br />PG 도입 문제를 해결해보세요
-              </h2>
-            </FadeInView>
-            <ul className="flex flex-col gap-[var(--s-5)]">
-              {SOLUTION_POINTS.map((point, i) => (
-                <FadeInView key={point} delay={i * 0.08}>
-                  <li className="flex items-start gap-[var(--s-4)]">
-                    <span className="mt-0.5 shrink-0 grid place-items-center h-5 w-5 rounded-full bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)]">
-                      <CheckIcon size={13} />
-                    </span>
-                    <span className="text-[var(--text-md)] leading-[1.6] tracking-[-0.006em] text-[var(--md-sys-color-on-surface)]">
-                      {point}
-                    </span>
-                  </li>
-                </FadeInView>
-              ))}
-            </ul>
-            <OfferComparisonTable />
+            <SectionHeading>
+              SupporterB를 통해<br />PG 도입 문제를 해결해보세요
+            </SectionHeading>
+            <SolutionShowcase points={SOLUTION_POINTS} />
           </div>
         </section>
 
@@ -123,11 +103,9 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── Metrics ── */}
         <section className={sectionCls}>
           <div className={containerCls}>
-            <FadeInView>
-              <h2 className={h2Cls}>
-                SupporterB를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
-              </h2>
-            </FadeInView>
+            <SectionHeading>
+              SupporterB를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
+            </SectionHeading>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-[var(--s-8)]">
               {METRICS.map((m) => (
                 <MetricCard
@@ -136,6 +114,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                   decimals={m.decimals}
                   unit={m.unit}
                   qualifier={m.qualifier}
+                  trend={m.trend}
                   caption={m.caption}
                 />
               ))}
@@ -143,12 +122,12 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           </div>
         </section>
 
+        {/* TODO(landing): 레퍼런스 + 파트너사 섹션은 의도적으로 미노출. 자료 확보 후 Metrics와 Pricing 사이에 추가 예정. */}
+
         {/* ── Pricing ── */}
         <section id="pricing" className={sectionCls}>
           <div className={`${containerCls} gap-[var(--s-6)]`}>
-            <FadeInView>
-              <h2 className={h2Cls}>이용 요금</h2>
-            </FadeInView>
+            <SectionHeading>이용 요금</SectionHeading>
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-4)]">
                 <p className="text-[clamp(18px,2.2vw,24px)] leading-[1.5] tracking-[-0.012em] text-[var(--md-sys-color-on-surface)]">
@@ -165,9 +144,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── Calculator ── */}
         <section id="calculator" className={sectionCls}>
           <div className={containerCls}>
-            <FadeInView>
-              <h2 className={h2Cls}>직접 계산해 보세요.</h2>
-            </FadeInView>
+            <SectionHeading>직접 계산해 보세요.</SectionHeading>
             <SavingsCalculator />
           </div>
         </section>
@@ -175,9 +152,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── FAQ ── */}
         <section id="faq" className={sectionCls}>
           <div className="mx-auto w-full max-w-[760px] flex flex-col gap-[var(--s-9)]">
-            <FadeInView>
-              <h2 className={h2Cls}>자주 묻는 질문</h2>
-            </FadeInView>
+            <SectionHeading>자주 묻는 질문</SectionHeading>
             <FaqList />
           </div>
         </section>
