@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { formatDate, formatDateTime, formatSize, formatKrwReadable } from '../format';
+import {
+  formatDate,
+  formatDateTime,
+  formatSize,
+  formatKrwReadable,
+  formatRatePerManwon,
+} from '../format';
 
 describe('formatKrwReadable', () => {
   it('만·억 단위로 끊고 나머지는 콤마로 표기한다', () => {
@@ -27,6 +33,25 @@ describe('formatKrwReadable', () => {
     expect(formatKrwReadable(-5000)).toBe('');
     expect(formatKrwReadable(NaN)).toBe('');
     expect(formatKrwReadable(Infinity)).toBe('');
+  });
+});
+
+describe('formatRatePerManwon', () => {
+  it('수수료율(%)을 1만원 결제 기준 원화 환산으로 표기한다', () => {
+    expect(formatRatePerManwon(1.25)).toBe('1만원 결제 시 125원');
+    expect(formatRatePerManwon(0.8)).toBe('1만원 결제 시 80원');
+    expect(formatRatePerManwon(3)).toBe('1만원 결제 시 300원');
+  });
+
+  it('1,000원 이상은 콤마로 표기한다', () => {
+    expect(formatRatePerManwon(15)).toBe('1만원 결제 시 1,500원');
+  });
+
+  it('유효하지 않은 값(0·음수·NaN·Infinity)은 빈 문자열을 반환한다', () => {
+    expect(formatRatePerManwon(0)).toBe('');
+    expect(formatRatePerManwon(-1)).toBe('');
+    expect(formatRatePerManwon(NaN)).toBe('');
+    expect(formatRatePerManwon(Infinity)).toBe('');
   });
 });
 

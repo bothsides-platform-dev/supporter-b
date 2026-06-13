@@ -42,6 +42,12 @@ describe('BidStepFees 구간 매트릭스', () => {
     expect(onFee).toHaveBeenCalledWith('card:sole', '0.5');
   });
 
+  it('값이 입력된 구간 셀에 포커스하면 1만원 결제 환산 툴팁을 보여준다', () => {
+    setup({ fees: { 'card:sole': '1.25' } });
+    fireEvent.focusIn(screen.getByTestId('fee-cell-card-sole'));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('1만원 결제 시 125원');
+  });
+
   it('요청 안 된 카드 카테고리 수단(해외카드)은 렌더하지 않는다', () => {
     setup();
     expect(screen.queryByText('해외카드')).toBeNull();
