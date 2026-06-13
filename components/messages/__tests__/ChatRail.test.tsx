@@ -339,9 +339,16 @@ describe('ChatRail — 샘플 RFP (상대방 전송 차단)', () => {
     await act(async () => {
       await user.click(screen.getByRole('tab', { name: '팀 채팅' }));
     });
+    // 팀 탭은 isSample 여부와 무관하게 정상 렌더 — 로더 결과를 그대로 받아
+    // 전송 가능한 TeamThreadView 가 마운트된다(전송 차단은 상대방 탭에만 적용).
     await screen.findByTestId('team-thread-view');
     expect(teamThreadViewProps).toHaveBeenCalledWith(
-      expect.not.objectContaining({ sendDisabled: true }),
+      expect.objectContaining({
+        rfpId: 'rfp-1',
+        workspaceId: 'ws-self',
+        viewerUserId: 'u-me',
+        messages: [],
+      }),
     );
   });
 });
