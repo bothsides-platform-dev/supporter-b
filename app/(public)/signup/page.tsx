@@ -18,6 +18,7 @@ export default async function SignupPage({
   const target = signupTargetForHost(host, appOrigins());
 
   const sp = await searchParams;
+  // 첫 값만 사용한다. 배열(예: ?next=a&next=b)이나 누락은 null로 떨어뜨린다.
   const next = safeInternalNext(typeof sp.next === 'string' ? sp.next : null);
 
   redirect(next ? `${target}?next=${encodeURIComponent(next)}` : target);

@@ -254,4 +254,22 @@ describe('SignupEmailPage — next 파라미터 흡수', () => {
     const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
     expect(drafted.next).toBeUndefined();
   });
+
+  it('pg: 안전하지 않은 next(프로토콜-상대 URL)는 흡수하지 않는다', async () => {
+    mockSearchParams = new URLSearchParams('next=//evil.com');
+    render(<PgSignupEmailPage />);
+    await fillAndSubmit({ email: 'sales@toss.im' });
+    await waitFor(() => expect(mockWriteDraft).toHaveBeenCalled());
+    const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
+    expect(drafted.next).toBeUndefined();
+  });
+
+  it('next에 쿼리스트링이 있어도 그대로 흡수한다', async () => {
+    mockSearchParams = new URLSearchParams('next=/rfp/abc?tab=bids');
+    render(<BuyerSignupEmailPage />);
+    await fillAndSubmit();
+    await waitFor(() => expect(mockWriteDraft).toHaveBeenCalled());
+    const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
+    expect(drafted.next).toBe('/rfp/abc?tab=bids');
+  });
 });
