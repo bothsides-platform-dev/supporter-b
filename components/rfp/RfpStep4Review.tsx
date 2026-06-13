@@ -143,7 +143,14 @@ export function RfpStep4Review({
           <ReviewRow label="홈페이지" value={draft.websiteUrl} />
           <ReviewRow label="주요 상품" value={draft.mainProducts} />
           <ReviewRow label="연간 거래액" value={draft.annualPgVolume ? (formatKrwReadable(Number(draft.annualPgVolume)) || draft.annualPgVolume) : ''} />
-          <ReviewRow label="카드 수수료" value={draft.currentFeeRate} />
+          <ReviewRow
+            label={
+              draft.currentFeeRate && !draft.currentFeeVisibleToPg
+                ? '카드 수수료 (PG 비공개)'
+                : '카드 수수료'
+            }
+            value={draft.currentFeeRate}
+          />
           <ReviewRow label="월 정산한도" value={draft.currentSettlementLimit} />
           <ReviewRow
             label="보증보험"

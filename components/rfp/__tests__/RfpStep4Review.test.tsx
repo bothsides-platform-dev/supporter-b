@@ -43,6 +43,8 @@ function resetStore() {
     currentSettlementCycle: '',
     deliveryServicePeriod: '',
     boardVisible: true,
+    currentFeeRate: '',
+    currentFeeVisibleToPg: true,
     memo: '',
     rfpFiles: [],
   });
@@ -182,6 +184,18 @@ describe('RfpStep4Review', () => {
     expect(
       screen.getByRole('checkbox', { name: /오픈 게시판/ }),
     ).not.toBeChecked();
+  });
+
+  it('현재 카드 수수료를 PG 비공개로 설정하면 요약에 비공개 표시가 나온다', () => {
+    useRfpDraftStore.setState({ currentFeeRate: '3.4%', currentFeeVisibleToPg: false });
+    renderComponent();
+    expect(screen.getByText(/PG 비공개/)).toBeInTheDocument();
+  });
+
+  it('현재 카드 수수료가 PG 공개면 비공개 표시가 없다', () => {
+    useRfpDraftStore.setState({ currentFeeRate: '3.4%', currentFeeVisibleToPg: true });
+    renderComponent();
+    expect(screen.queryByText(/PG 비공개/)).not.toBeInTheDocument();
   });
 
   describe('마감일 인라인 에러 (attempted)', () => {

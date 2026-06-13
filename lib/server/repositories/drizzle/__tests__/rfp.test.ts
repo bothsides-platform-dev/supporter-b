@@ -70,6 +70,23 @@ describe('DrizzleRfpRepository', () => {
     expect(fetched!.contractType).toBe('new');
   });
 
+  it('round-trips currentFeeVisibleToPg=false via save/findById', async () => {
+    const rfp: RFP = {
+      ...makeRfp('P-2605-FEEVIS1', ctx.ws.id, ctx.user.id),
+      currentFeeVisibleToPg: false,
+    };
+    await repo.save(rfp);
+    const fetched = await repo.findById(rfp.id);
+    expect(fetched!.currentFeeVisibleToPg).toBe(false);
+  });
+
+  it('currentFeeVisibleToPg defaults to true when omitted', async () => {
+    const rfp = makeRfp('P-2605-FEEVIS2', ctx.ws.id, ctx.user.id);
+    await repo.save(rfp);
+    const fetched = await repo.findByCode('P-2605-FEEVIS2');
+    expect(fetched!.currentFeeVisibleToPg).toBe(true);
+  });
+
   it('saves and retrieves by uuid id', async () => {
     const rfp = makeRfp('P-2605-0001', ctx.ws.id, ctx.user.id);
     await repo.save(rfp);

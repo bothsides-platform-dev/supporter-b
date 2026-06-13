@@ -53,6 +53,7 @@ export type CreateRfpServiceInput = {
   customPaymentMethods: { id?: string; label: string }[];
   send: boolean;
   boardVisible: boolean;
+  currentFeeVisibleToPg: boolean;
   contractType?: 'new' | 'renewal' | null;
   bizProfileMode: 'inherit' | 'override' | 'none';
   bizNoOverride?: string;
@@ -1073,6 +1074,7 @@ export class RfpService {
         currentSettlementCycle: input.currentSettlementCycle?.trim() ?? null,
         deliveryServicePeriod: input.deliveryServicePeriod?.trim() ?? null,
         boardVisible: input.boardVisible,
+        currentFeeVisibleToPg: input.currentFeeVisibleToPg,
         contractType: input.contractType ?? null,
         currentSolution: input.currentSolution ?? null,
         currentSolutionDetail: input.currentSolutionDetail?.trim() ?? null,

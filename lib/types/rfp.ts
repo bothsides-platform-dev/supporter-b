@@ -40,6 +40,10 @@ export type RFP = {
   customPaymentMethods: CustomPaymentMethod[];
   // 오픈 RFP 게시판 노출 여부(opt-out). 기본 true. 구매사가 끄면 게시판에서 제외.
   boardVisible?: boolean;
+  // 초대 PG에게 현재 카드 수수료(currentFeeRate)를 노출할지(opt-out). 기본 true.
+  // false면 PG 견적 화면(RfpBriefPanel)에서만 숨김 — 구매사 비교 baseline은 유지.
+  // undefined는 노출(true)로 취급한다.
+  currentFeeVisibleToPg?: boolean;
   // 온보딩 샘플 RFP 여부. 목록·상세에서 '샘플' 칩 + 읽기전용 샌드박스를 구동.
   isSample?: boolean;
   // 계약 유형(선택사항). null이면 미표시.
