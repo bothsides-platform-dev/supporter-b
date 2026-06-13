@@ -1,6 +1,6 @@
 {
   "name": "supporter-b",
-  "version": "0.2.10.0",
+  "version": "0.2.10.1",
   "private": true,
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true",
