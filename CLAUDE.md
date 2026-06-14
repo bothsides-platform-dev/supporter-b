@@ -73,10 +73,12 @@ app/
 │  ├─ workspace/new/          # 워크스페이스 생성
 │  └─ settings/{profile,members,notifications,quote-templates,audit-log}/
 ├─ logout/route.ts            # GET (redirect to /login) + POST (204, for client-side signOut)
-└─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리
+└─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리 (resolveShellAccess)
 ```
 
 Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation.
+
+**Shell-guard gates (`resolveShellAccess` in `lib/auth/shell-access.ts`)**: the `(app)/layout.tsx` guard runs ordered redirects — unauth → `/login`, incomplete-but-authed (no membership) → `/logout`, **email-unverified → `/pending-approval`**, workspace `pending` → `/pending-approval`, workspace `suspended` → `/suspended`. The email-verification gate is **first-class and independent of workspace status** — an unverified member is redirected even when their active workspace is already `active` (closes the canonical-PG-join hole where joining an approved workspace skipped verification). `emailVerified` is read **live from the DB** (`getDbEmailVerified`, not the JWT) so a just-completed verification takes effect without re-login; after verifying, `EmailVerifyScreen` hard-navigates (`window.location.assign('/home')`) so the guard re-branches by workspace status. (Data-boundary enforcement on server actions / API routes is deliberately deferred — see TODOS.md.)
 
 **Host routing (prod only)**: the single Next.js app serves two hostnames — `supporter-b.com` (buyer) and `partner.supporter-b.com` (PG). Route tree is unchanged; `(app)/layout.tsx` reads the request host and redirects a mismatched session to its correct host (`lib/site-routing.ts`). `/signup` also reads the host and redirects to `/signup/buyer` or `/signup/pg` without a role-chooser screen (`signupTargetForHost` in `lib/site-routing.ts`). Session cookie is scoped to `.supporter-b.com` for cross-subdomain SSO (`AUTH_COOKIE_DOMAIN`). Workspace switch navigates across hosts. PG-facing emails link to `partner.supporter-b.com`. Local dev uses a single host (routing disabled). Env vars: `NEXT_PUBLIC_BUYER_ORIGIN`, `NEXT_PUBLIC_PARTNER_ORIGIN`.
 
