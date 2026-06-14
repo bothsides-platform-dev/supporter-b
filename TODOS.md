@@ -36,6 +36,14 @@ buyer-소유/PG-canAccess 규칙이 `TeamChatService.authorize` 와 subscribe �
 **Priority:** P3
 `if (isUniqueViolation(err)) return {ok:false, error:'EMAIL_TAKEN'}; throw err;` 가 3개 가입 메서드 `.catch` + `confirmEmailChange` 까지 4곳 중복. 제네릭 헬퍼 `mapUniqueViolationToEmailTaken<T>` 로 추출. 가입 user-insert 8필드 리터럴도 3곳 중복(스키마 컬럼 추가 시 drift 위험) — `insertNewSignupUser(tx, …)` 헬퍼 검토. (발견: /ship 유지보수 리뷰 2026-06-14)
 
+### 이메일 미인증 사용자의 서버 액션·API 데이터 경계 차단
+**Priority:** P1
+이메일 인증 게이트(0.2.19.0)는 (app) **페이지 렌더 경로만** 막는다. 서버 액션(`requireSession`/`requireBuyerSession`/`requirePgSession`)과 raw `auth()` API 라우트(`/api/files/*`·`/api/notifications/*`·`/api/centrifugo/connection-token`·`/api/workspace/*/avatar`·`/api/workspaces/search`)는 `emailVerified` 를 검사하지 않아, 미인증이지만 인증된 세션(가입 직후 자동 로그인)으로 직접 호출 시 견적 제출·RFP 생성·award·파일 업로드·realtime 토큰 발급이 가능. `requireSession` 에 emailVerified 검사 추가(액션 + 이를 쓰는 API 일괄 커버) + raw-auth API 약 7곳에 `isSessionRevoked` 옆에 미러. **footgun: verify 액션 3개(`sendMyEmailVerificationAction`·`checkMyEmailVerifiedAction`·`verifyEmailCodeAction`)는 반드시 면제** — 아니면 미인증 유저가 영영 인증 불가. 별도 TDD PR. (발견: /ship 어드버서리얼 2026-06-14, branch worktree-fix+pg-email-verification-gate. 기존 동작, 이 PR 비도입; 사용자가 후속으로 명시 연기.)
+
+### ApprovalWaitingScreen 의 router.push('/home') cross-host 잠재 위험
+**Priority:** P3
+`approval-waiting-screen.tsx` 승인 폴링 성공 시 `router.push('/home')`(소프트 내비)를 쓴다. EmailVerifyScreen 은 0.2.19.0 에서 `window.location.assign` 으로 전환했으나 이 형제 화면은 그대로다. 미인증/승인대기 유저가 다른 호스트의 `/pending-approval` 에 있을 때 (app) 가드의 cross-host redirect 를 RSC fetch 로 따라가다 CORS 에 막힐 수 있음(좁은 윈도우, 기존 동작). `window.location.assign('/home')` 로 통일. (발견: /ship 어드버서리얼 2026-06-14)
+
 ## Design
 
 ### PG 인박스 상세 토글 위치 정돈
