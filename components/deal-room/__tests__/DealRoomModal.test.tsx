@@ -84,4 +84,34 @@ describe('DealRoomModal', () => {
     expect(screen.getByRole('button', { name: '이전 견적' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '다음 견적' })).toBeDisabled();
   });
+
+  it('첫 항목에서는 이전이, 마지막 항목에서는 다음이 비활성된다 (경계)', () => {
+    useDealRoomNav.getState().setOrder('/rfp', ['P-1', 'P-2', 'P-3']);
+    const { rerender } = render(
+      <DealRoomModal code="P-1" title="t">
+        x
+      </DealRoomModal>,
+    );
+    expect(screen.getByRole('button', { name: '이전 견적' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '다음 견적' })).not.toBeDisabled();
+
+    rerender(
+      <DealRoomModal code="P-3" title="t">
+        x
+      </DealRoomModal>,
+    );
+    expect(screen.getByRole('button', { name: '다음 견적' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '이전 견적' })).not.toBeDisabled();
+  });
+
+  it('현재 코드가 목록에 없으면 ‹ › 가 모두 비활성된다', () => {
+    useDealRoomNav.getState().setOrder('/rfp', ['P-1', 'P-2', 'P-3']);
+    render(
+      <DealRoomModal code="P-9" title="t">
+        x
+      </DealRoomModal>,
+    );
+    expect(screen.getByRole('button', { name: '이전 견적' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '다음 견적' })).toBeDisabled();
+  });
 });

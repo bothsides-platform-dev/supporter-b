@@ -58,7 +58,12 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
   const [busy, setBusy] = useState(false);
 
   const focusedWsId = useChatRailStore((s) => s.counterparty?.workspaceId);
-  const focusedBid = bids.find((b) => b.pgWsId === focusedWsId) ?? bids[0];
+  // 선정 대상은 가운데 FocusComparison 이 publish 한 포커스 PG 만 따른다. 아직
+  // publish 전(첫 프레임)엔 undefined → 선정 비활성 — 정렬순 기본값(bids[0])을
+  // 추측해 하이라이트와 다른 견적을 겨냥하는 일을 막는다.
+  const focusedBid = focusedWsId
+    ? bids.find((b) => b.pgWsId === focusedWsId)
+    : undefined;
   const pgName = (wsId?: string) => (wsId ? (pgWsNameMap[wsId] ?? wsId) : '');
   const canAward = rfp.status === 'sent' && !rfp.isSample;
   const isOpenStatus = rfp.status === 'sent';

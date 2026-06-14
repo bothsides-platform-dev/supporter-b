@@ -32,7 +32,19 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
     userId,
     userName: name ?? email ?? '구매사 담당자',
   });
-  if (!data) return null;
+  // 삭제됐거나 접근 불가한 코드(이전/다음 stale·다른 탭 삭제 등) — 빈 오버레이 대신
+  // 닫을 수 있는 모달에 안내를 띄운다.
+  if (!data) {
+    return (
+      <DealRoomModal code={id} title="견적 요청을 찾을 수 없어요">
+        <div className="flex h-full items-center justify-center p-8 text-center">
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+            이미 삭제됐거나 접근할 수 없는 견적 요청이에요.
+          </p>
+        </div>
+      </DealRoomModal>
+    );
+  }
 
   const s = STATUS[data.rfp.status];
 
