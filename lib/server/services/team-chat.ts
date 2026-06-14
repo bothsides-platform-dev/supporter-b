@@ -6,6 +6,7 @@ import type { Attachment } from '@/lib/types/common';
 import type {
   InvitationRepo,
   NotificationRepo,
+  OutboxRepo,
   RfpRepo,
   RfpTeamMessageReadRepo,
   RfpTeamMessageRepo,
@@ -17,6 +18,8 @@ import {
   dispatchNotification,
   emitAfterCommit,
 } from '@/lib/server/notifications/dispatch';
+import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
+import { teamDigestDedupeKey, teamDigestWindowEnd } from '@/lib/server/outbox/team-digest';
 import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';
@@ -63,6 +66,7 @@ export class TeamChatService {
     private readonly readRepo: RfpTeamMessageReadRepo,
     private readonly wsRepo: WorkspaceRepo,
     private readonly notifRepo: NotificationRepo,
+    private readonly outboxRepo: OutboxRepo,
   ) {}
 
   private async authorize(
@@ -194,6 +198,24 @@ export class TeamChatService {
         };
         await dispatchNotification(tx, notif);
         pendingEmits.push(notif);
+
+        // 이메일 digest — 윈도 내 같은 (rfp, workspace, recipient) 발송을 하나로
+        // coalesce(outbox dedupeKey UNIQUE). 본문은 placeholder; 실제 발송 시점에
+        // flushTeamChatDigests 가 안읽음 상태로 재계산·읽음 단락한다.
+        const member = await this.userRepo.findById(memberId, tx);
+        if (member?.email) {
+          await this.outboxRepo.enqueue(
+            {
+              event: 'team_chat.message',
+              to: member.email,
+              subject: '[Supporter B] 새 팀 메시지',
+              html: '<p>새 팀 메시지가 있어요.</p>', // placeholder — processor recomputes at send
+              dedupeKey: teamDigestDedupeKey(input.rfpId, actor.workspaceId, memberId, now),
+              scheduledAt: teamDigestWindowEnd(now),
+            },
+            tx,
+          );
+        }
       }
 
       if (attachmentIds.length > 0) {
@@ -221,6 +243,7 @@ export class TeamChatService {
 
     // commit 이후에만 SSE emit — rollback과 정합(dispatch.ts 계약).
     emitAfterCommit(pendingEmits);
+    flushAfterCommit();
     return {
       ok: true,
       messageId: id,
@@ -286,6 +309,7 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       {
         getInvitationRepo,
         getNotificationRepo,
+        getOutboxRepo,
         getRfpRepo,
         getRfpTeamMessageRepo,
         getRfpTeamMessageReadRepo,
@@ -296,7 +320,7 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
-    const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo] = await Promise.all([
+    const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo] = await Promise.all([
       getRfpRepo(),
       getInvitationRepo(),
       getUserRepo(),
@@ -304,6 +328,7 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       getRfpTeamMessageReadRepo(),
       getWorkspaceRepo(),
       getNotificationRepo(),
+      getOutboxRepo(),
     ]);
     globalThis.__bidit_team_chat_service__ = new TeamChatService(
       db,
@@ -314,6 +339,7 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       readRepo,
       wsRepo,
       notifRepo,
+      outboxRepo,
     );
   }
   return globalThis.__bidit_team_chat_service__!;

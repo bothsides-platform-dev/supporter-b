@@ -16,6 +16,7 @@ import {
   __useDrizzleWithDbForTest,
   getInvitationRepo,
   getNotificationRepo,
+  getOutboxRepo,
   getRfpRepo,
   getRfpTeamMessageRepo,
   getRfpTeamMessageReadRepo,
@@ -29,7 +30,7 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { attachments, notifications, rfpInvitations } from '@/lib/db/schema';
+import { attachments, notifications, outboxEntries, rfpInvitations } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { TeamChatService, type TeamChatActor } from '../team-chat';
 import type { PgliteDB } from '@/lib/db/client-pglite';
@@ -38,7 +39,7 @@ let db: PgliteDB;
 let service: TeamChatService;
 
 async function buildService(): Promise<TeamChatService> {
-  const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo] = await Promise.all([
+  const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo] = await Promise.all([
     getRfpRepo(),
     getInvitationRepo(),
     getUserRepo(),
@@ -46,8 +47,9 @@ async function buildService(): Promise<TeamChatService> {
     getRfpTeamMessageReadRepo(),
     getWorkspaceRepo(),
     getNotificationRepo(),
+    getOutboxRepo(),
   ]);
-  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo);
+  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo);
 }
 
 // Draft attachment — all owner FKs null (valid: num_nonnulls <= 1).
@@ -362,5 +364,26 @@ describe('TeamChatService.sendMessage — notification fan-out', () => {
       .from(notifications)
       .where(and(eq(notifications.userId, me.id), eq(notifications.type, 'team_chat.message')));
     expect(meNotifs).toHaveLength(0); // author excluded
+  });
+
+  it('enqueues a coalesced team_chat.message email digest row to teammates on send', async () => {
+    const me = await seedUser(db, { email: 'me@b.com', name: '나' }); // author
+    const mate = await seedUser(db, { email: 'mate@b.com', name: '동료' }); // recipient
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, mate.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+    const svc = await buildService();
+    const actorMe: TeamChatActor = { userId: me.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    await svc.sendMessage({ rfpId: rfp.id, body: '메모1' }, actorMe);
+
+    const rows = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'team_chat.message'));
+    // One coalesced row per non-author teammate (author excluded).
+    expect(rows.length).toBe(1);
+    expect(rows[0].toAddr).toBe('mate@b.com');
   });
 });
