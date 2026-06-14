@@ -720,6 +720,38 @@ describe('createRfpAction', () => {
     expect(row.boardVisible).toBe(true);
   });
 
+  it('persists currentFeeVisibleToPg=false when opted out', async () => {
+    const r = await createRfpAction({
+      title: '현재 수수료 비공개 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      currentFeeRate: '3.4%',
+      currentFeeVisibleToPg: false,
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.currentFeeVisibleToPg).toBe(false);
+    // 값 자체는 항상 저장된다 (구매사 비교 baseline 보존).
+    expect(row.currentFeeRate).toBe('3.4%');
+  });
+
+  it('defaults currentFeeVisibleToPg=true when omitted', async () => {
+    const r = await createRfpAction({
+      title: '현재 수수료 공개 기본값 테스트',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.currentFeeVisibleToPg).toBe(true);
+  });
+
   it("contractType: 'renewal' 을 전달하면 DB에 저장한다", async () => {
     const r = await createRfpAction({
       title: '갱신 계약 유형 테스트',

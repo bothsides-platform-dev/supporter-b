@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
+import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { underlineInputClass, CurrencyInput } from '@/components/forms/inputs';
 import { InfoTip } from '@/components/ui/info-tip';
@@ -130,6 +131,26 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
           placeholder="3.4%"
           className={underlineInputClass}
         />
+        {/* 현재 카드 수수료 PG 노출(opt-out) — 기본 공개(true). 끄면 PG 견적 화면에서 숨김. */}
+        <div className="flex items-start gap-3 pt-1">
+          <Checkbox
+            id="rfp-current-fee-visible"
+            checked={draft.currentFeeVisibleToPg}
+            onCheckedChange={(checked) => draft.setField('currentFeeVisibleToPg', checked)}
+            aria-label="현재 카드 수수료를 PG사에 공개하기"
+            className="mt-0.5"
+          />
+          <label htmlFor="rfp-current-fee-visible" className="cursor-pointer">
+            <span className="block text-[14px] text-[var(--md-sys-color-on-surface)]">
+              현재 카드 수수료를 PG사에 공개하기
+            </span>
+            <span className="block text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+              {draft.currentFeeVisibleToPg
+                ? 'PG사가 현재 수수료를 참고해 제안해요.'
+                : 'PG사에게는 현재 수수료를 보여주지 않아요.'}
+            </span>
+          </label>
+        </div>
       </div>
       <div className="space-y-1">
         <div className="flex items-center gap-1">

@@ -130,6 +130,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
         requiredPaymentMethods: draft.requiredPaymentMethods,
         customPaymentMethods: draft.customPaymentMethods,
         boardVisible: draft.boardVisible,
+        currentFeeVisibleToPg: draft.currentFeeVisibleToPg,
         contractType: draft.contractType ?? undefined,
         send: true,
       });
