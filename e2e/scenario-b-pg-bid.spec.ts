@@ -106,9 +106,11 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     // 사이드바에도 같은 라벨의 단계 버튼이 있어(예: '2 수수료') 다음 버튼은
     // exact 매칭으로 좁힌다(접근명이 정확히 '수수료'/'견적서'/'검토·발송').
 
-    // step1 정산 조건: unit Select(D|W|M) + cycleNum 숫자 input → settleCycle 'D+1'.
+    // step1 정산 조건: unit Select(D|W|M) + cycleNum 입력 → settleCycle 'D+1'.
     await page.locator('select').first().selectOption('D');
-    await page.locator('input[type="number"]').first().fill('1');
+    // cycleNum 은 NumericFormat(type=text, placeholder="1") — 구 input[type=number]
+    // 셀렉터(cf98414 NumericFormat 전환 이후 stale)를 placeholder 매칭으로 교체.
+    await page.getByPlaceholder('1', { exact: true }).fill('1');
     await page.getByRole('button', { name: '수수료', exact: true }).click();
 
     // step2 수수료: 구매사가 요청한 결제수단마다 PercentInput(placeholder='0.00').
