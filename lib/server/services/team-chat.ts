@@ -327,7 +327,11 @@ export class TeamChatService {
   }
 
   async listThreads(actor: TeamChatActor): Promise<ServiceResult<{ threads: TeamThreadEntry[] }>> {
-    const summaries = await this.msgRepo.listThreadsForWorkspace(actor.workspaceId);
+    const [summaries, roster] = await Promise.all([
+      this.msgRepo.listThreadsForWorkspace(actor.workspaceId),
+      this.wsRepo.teamRoster(actor.workspaceId),
+    ]);
+    const nameById = new Map(roster.map((r) => [r.userId, r.name]));
     const entries = await Promise.all(
       summaries.map(async (s) => {
         const [rfp, read] = await Promise.all([
@@ -342,7 +346,7 @@ export class TeamChatService {
           rfpId: s.rfpId,
           rfpCode: rfp?.code ?? '',
           rfpTitle: rfp?.title ?? '',
-          preview: s.lastBody.length > 0 ? s.lastBody : '첨부 파일',
+          preview: s.lastBody.length > 0 ? mentionsToPlainText(s.lastBody, nameById) : '첨부 파일',
           lastMessageAt: s.lastMessageAt.toISOString(),
           unread,
         } satisfies TeamThreadEntry;

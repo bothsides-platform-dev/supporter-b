@@ -474,3 +474,23 @@ describe('TeamChatService.sendMessage — 멘션', () => {
     expect(await notifsFor(author.id)).toHaveLength(0);
   });
 });
+
+describe('TeamChatService.listThreads — 미리보기 평문화', () => {
+  it('마지막 메시지의 멘션 토큰을 @이름 평문으로 보여준다', async () => {
+    const author = await seedUser(db, { name: '김구매' });
+    const mate = await seedUser(db, { name: '이동료' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, author.id, 'admin');
+    await seedMembership(db, ws.id, mate.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: author.id });
+    const actor: TeamChatActor = { userId: author.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    await service.sendMessage({ rfpId: rfp.id, body: `<@${mate.id}> 확인` }, actor);
+    const r = await service.listThreads(actor);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const t = r.threads.find((x) => x.rfpId === rfp.id)!;
+      expect(t.preview).toBe('@이동료 확인');
+    }
+  });
+});
