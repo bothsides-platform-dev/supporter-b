@@ -2,9 +2,23 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+
+// 브레이크포인트를 테스트에서 제어 — 기본 lg 이상(aside).
+const mq = vi.hoisted(() => ({ lgUp: true }));
+vi.mock('@/hooks/use-lg-up', () => ({ useIsLgUp: () => mq.lgUp }));
+
 import { DealRoomShell } from '../DealRoomShell';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mq.lgUp = true;
+});
 
 describe('DealRoomShell', () => {
   it('상단바에 코드·제목과 본문을 표시한다', () => {
@@ -103,7 +117,8 @@ describe('DealRoomShell', () => {
     expect(screen.queryByRole('button', { name: '전체화면' })).not.toBeInTheDocument();
   });
 
-  it('chat 슬롯을 제공하면 본문과 함께 렌더한다', () => {
+  it('lg 이상이면 chat 슬롯을 aside 로 본문과 함께 렌더하고 FAB 는 없다', () => {
+    mq.lgUp = true;
     render(
       <DealRoomShell mode="modal" code="P-1" title="t" chat={<div>채팅 패널 내용</div>}>
         <p>가운데 본문</p>
@@ -111,6 +126,18 @@ describe('DealRoomShell', () => {
     );
     expect(screen.getByText('채팅 패널 내용')).toBeInTheDocument();
     expect(screen.getByText('가운데 본문')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '채팅 열기' })).not.toBeInTheDocument();
+  });
+
+  it('lg 미만이면 채팅 aside 대신 FAB 를 렌더한다 (채팅 단일 인스턴스 — 시트 닫힘이라 콘텐츠 미마운트)', () => {
+    mq.lgUp = false;
+    render(
+      <DealRoomShell mode="modal" code="P-1" title="t" chat={<div>채팅 패널 내용</div>}>
+        <p>가운데 본문</p>
+      </DealRoomShell>,
+    );
+    expect(screen.getByRole('button', { name: '채팅 열기' })).toBeInTheDocument();
+    expect(screen.queryByText('채팅 패널 내용')).not.toBeInTheDocument();
   });
 
   it('상태 칩 노드를 상단바에 렌더한다', () => {
