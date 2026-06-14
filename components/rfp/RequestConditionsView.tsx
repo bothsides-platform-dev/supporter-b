@@ -3,7 +3,7 @@
 import { Label } from '@/components/primitives/Label';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
-import { formatKrwReadable } from '@/lib/format';
+import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 const SOLUTION_LABELS: Record<string, string> = {
@@ -64,10 +64,10 @@ export function RequestConditionsView({ data }: { data: BuyerRfpDetailData }) {
         ? formatKrwReadable(Number(rfp.annualPgVolume)) || rfp.annualPgVolume
         : undefined,
     ],
-    ['현재 카드 수수료', rfp.currentFeeRate],
+    ['현재 카드 수수료', formatFeeRateDisplay(rfp.currentFeeRate)],
     ['현재 정산주기', rfp.currentSettlementCycle],
-    ['현재 월 정산한도', rfp.currentSettlementLimit],
-    ['현재 보증보험', rfp.currentGuaranteeInsurance],
+    ['현재 월 정산한도', formatKrwField(rfp.currentSettlementLimit)],
+    ['현재 보증보험', formatKrwField(rfp.currentGuaranteeInsurance)],
     ['현재 운영 솔루션', formatSolution(rfp.currentSolution, rfp.currentSolutionDetail)],
   ];
 
