@@ -8,11 +8,14 @@
  * 는 router.back() 으로 매핑돼 URL 까지 함께 pop 한다(목록 복귀).
  *
  * 전체화면(⤢): CSS 로 Popup 을 inset-0 확장(리마운트·리페치 없음) → 채팅·위저드
- * 상태가 보존된다. 새로고침/딥링크는 인터셉터를 건너뛰어 정식 페이지가 렌더된다.
+ * 상태가 보존된다. 전체화면 여부는 useDealRoomNav 에 두어 이전/다음 이동이 모달을
+ * 리마운트해도 의도적으로 보존되며(로컬 useState 는 리마운트 시 리셋), 닫을 때만
+ * close() 가 해제한다(이전/다음은 close 를 거치지 않음 → 보존). 새로고침/딥링크는
+ * 인터셉터를 건너뛰어 정식 페이지가 렌더된다.
  * 이전/다음(‹ ›): useDealRoomNav 의 목록 순서에서 prev/next 코드를 계산해 같은
  * 세그먼트로 router.replace(인터셉트 → 모달 교체, Back 은 항상 목록 복귀).
  */
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 
@@ -36,10 +39,12 @@ export function DealRoomModal({
   children,
 }: DealRoomModalProps) {
   const router = useRouter();
-  const close = () => router.back();
-  const [fullscreen, setFullscreen] = useState(false);
+  const { basePath, codes, fullscreen, setFullscreen } = useDealRoomNav();
+  const close = () => {
+    setFullscreen(false); // 닫을 때만 전체화면 해제 — 다음 오픈은 윈도우드.
+    router.back();
+  };
 
-  const { basePath, codes } = useDealRoomNav();
   const i = codes.indexOf(code);
   const prevCode = i > 0 ? codes[i - 1] : undefined;
   const nextCode = i >= 0 && i < codes.length - 1 ? codes[i + 1] : undefined;
@@ -72,7 +77,7 @@ export function DealRoomModal({
             onClose={close}
             chat={chat}
             fullscreen={fullscreen}
-            onToggleFullscreen={() => setFullscreen((f) => !f)}
+            onToggleFullscreen={() => setFullscreen(!fullscreen)}
             onPrev={() => go(prevCode)}
             onNext={() => go(nextCode)}
             hasPrev={prevCode != null}

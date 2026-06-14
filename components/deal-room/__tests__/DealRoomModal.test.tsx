@@ -17,7 +17,7 @@ beforeEach(() => {
     unobserve() {}
     disconnect() {}
   } as unknown as typeof ResizeObserver;
-  useDealRoomNav.getState().setOrder('', []);
+  useDealRoomNav.setState({ basePath: '', codes: [], fullscreen: false });
 });
 
 afterEach(() => {
@@ -113,5 +113,37 @@ describe('DealRoomModal', () => {
     );
     expect(screen.getByRole('button', { name: '이전 견적' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '다음 견적' })).toBeDisabled();
+  });
+
+  it('전체화면 토글 후 리마운트(이전/다음)에도 전체화면이 보존된다', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <DealRoomModal key="P-1" code="P-1" title="t">
+        x
+      </DealRoomModal>,
+    );
+    await user.click(screen.getByRole('button', { name: '전체화면' }));
+    expect(screen.getByTestId('deal-room-modal')).toHaveAttribute('data-fullscreen', 'true');
+    // key 변경 → 리마운트(로컬 useState 라면 리셋될 상황). 스토어 보유라 보존된다.
+    rerender(
+      <DealRoomModal key="P-2" code="P-2" title="t">
+        x
+      </DealRoomModal>,
+    );
+    expect(screen.getByTestId('deal-room-modal')).toHaveAttribute('data-fullscreen', 'true');
+  });
+
+  it('닫기 시 전체화면을 해제한다 (다음 오픈은 윈도우드) — 이전/다음은 close 를 거치지 않아 보존', async () => {
+    const user = userEvent.setup();
+    render(
+      <DealRoomModal code="P-1" title="t">
+        x
+      </DealRoomModal>,
+    );
+    await user.click(screen.getByRole('button', { name: '전체화면' }));
+    expect(useDealRoomNav.getState().fullscreen).toBe(true);
+    await user.click(screen.getByRole('button', { name: '닫기' }));
+    expect(useDealRoomNav.getState().fullscreen).toBe(false);
+    expect(back).toHaveBeenCalled();
   });
 });
