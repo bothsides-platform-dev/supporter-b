@@ -134,6 +134,23 @@ describe('RfpBriefPanel', () => {
     expect(screen.getByText('3.4%')).toBeInTheDocument();
   });
 
+  it('숫자만 저장된 신규 값을 표기형식(%·한국어 금액)으로 보여준다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{
+          ...rfp,
+          currentFeeRate: '3.4',
+          currentSettlementLimit: '100000000',
+          currentGuaranteeInsurance: '30000000',
+        }}
+        buyerName="(주)진짜상사"
+      />,
+    );
+    expect(screen.getByText('3.4%')).toBeInTheDocument();
+    expect(screen.getByText('1억원')).toBeInTheDocument();
+    expect(screen.getByText('3,000만원')).toBeInTheDocument();
+  });
+
   it("contractType 'renewal' 이면 '갱신 계약' Chip이 표시된다", () => {
     render(<RfpBriefPanel rfp={{ ...rfp, contractType: 'renewal' }} buyerName="(주)진짜상사" />);
     expect(screen.getByText('갱신 계약')).toBeInTheDocument();

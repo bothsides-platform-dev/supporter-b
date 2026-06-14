@@ -157,3 +157,38 @@ export function CurrencyInput({
     </div>
   );
 }
+
+/**
+ * Labeled integer input with a fixed `D+` prefix. Stores the canonical
+ * `D+N` string (e.g. `"D+1"`) so downstream cycle comparison(`/^[DWM]\+\d+$/`)
+ * keeps working; an empty input stores `""`.
+ */
+export function DayOffsetInput({
+  label,
+  value,
+  onChange,
+  placeholder = '0',
+  infoTerm,
+}: NumericFieldProps) {
+  const numeric = value.match(/\d+/)?.[0] ?? '';
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1">
+        <Label size="md" muted={false}>{label}</Label>
+        {infoTerm && <InfoTip term={infoTerm} />}
+      </div>
+      <div className="flex items-end gap-1">
+        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">D+</span>
+        <NumericFormat
+          decimalScale={0}
+          allowNegative={false}
+          value={numeric}
+          onValueChange={(values) => onChange(values.value ? `D+${values.value}` : '')}
+          placeholder={placeholder}
+          className={cn(numericInputClass, 'flex-1')}
+        />
+      </div>
+    </div>
+  );
+}
