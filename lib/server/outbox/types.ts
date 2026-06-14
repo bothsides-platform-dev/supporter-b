@@ -12,6 +12,7 @@ export type OutboxEvent =
   | 'workspace.approved'
   | 'workspace.rejected'
   | 'chat.message'
+  | 'team_chat.message'
   | 'rfp.requote_requested';
 
 export type OutboxEntry = {

@@ -16,6 +16,11 @@ vi.mock('@/lib/server/actions/chat/sendTeamMessageAction', () => ({
   sendTeamMessageAction: (...args: unknown[]) => sendTeamMessageAction(...args),
 }));
 
+vi.mock('@/lib/server/actions/chat/markTeamThreadReadAction', () => ({
+  markTeamThreadReadAction: vi.fn().mockResolvedValue({ ok: true, readAt: '2026-06-14T00:00:00Z' }),
+}));
+import { markTeamThreadReadAction } from '@/lib/server/actions/chat/markTeamThreadReadAction';
+
 // http (ky) — `/api/files/upload` POST. Mock so the test controls the upload.
 const httpPost = vi.fn();
 vi.mock('@/lib/http', () => ({
@@ -117,6 +122,11 @@ describe('TeamThreadView — 렌더', () => {
   it('메시지가 없으면 내부 전용임을 알리는 빈 상태를 보여준다', () => {
     render(base({ messages: [] }));
     expect(screen.getByText('아직 팀 메시지가 없어요')).toBeInTheDocument();
+  });
+
+  it('마운트 시 팀 스레드를 읽음 처리한다', () => {
+    render(<TeamThreadView rfpId="r1" workspaceId="w1" viewerUserId="u1" messages={[]} />);
+    expect(markTeamThreadReadAction).toHaveBeenCalledWith({ rfpId: 'r1' });
   });
 });
 

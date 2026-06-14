@@ -52,7 +52,7 @@ const RAIL_TABS = [
   { id: 'team', label: '팀 채팅' },
 ];
 
-export function ChatPanel({ rfpId, rfpCode, rfpTitle, isSample = false, onClose }: Props) {
+export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
   const tab = useChatRailStore((s) => s.tab);
   const counterparty = useChatRailStore((s) => s.counterparty);
   const setTab = useChatRailStore((s) => s.setTab);
@@ -149,7 +149,6 @@ export function ChatPanel({ rfpId, rfpCode, rfpTitle, isSample = false, onClose 
                     counterpartyFallback={{ ...counterparty, hasLogo: false }}
                     variant="rail"
                     defaultRfpId={rfpId}
-                    rfpById={{ [rfpId]: { code: rfpCode, title: rfpTitle } }}
                     sendDisabled={isSample}
                   />
                 </Suspense>
@@ -166,7 +165,20 @@ export function ChatPanel({ rfpId, rfpCode, rfpTitle, isSample = false, onClose 
             </>
           )
         ) : (
-          <TeamThreadPane rfpId={rfpId} />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1">
+              <TeamThreadPane rfpId={rfpId} />
+            </div>
+            <div className="flex shrink-0 justify-end border-t border-[var(--md-sys-color-outline-variant)] px-3 py-1.5">
+              <Link
+                href={`/messages?t=${rfpId}`}
+                className="inline-flex items-center gap-0.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:text-[var(--md-sys-color-on-surface)]"
+              >
+                메시지함에서 열기
+                <ChevronRightIcon size={13} />
+              </Link>
+            </div>
+          </div>
         )}
       </div>
     </div>

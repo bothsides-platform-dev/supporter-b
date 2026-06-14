@@ -107,4 +107,14 @@ describe('ChatPanel', () => {
       expect.objectContaining({ sendDisabled: true }),
     );
   });
+
+  it('팀 탭은 메시지함 딥링크(/messages?t=<rfpId>)를 렌더한다', async () => {
+    const user = userEvent.setup();
+    render(<ChatPanel {...baseProps} />);
+    await user.click(screen.getByRole('tab', { name: '팀 채팅' }));
+    await screen.findByTestId('team-thread-view');
+    expect(
+      screen.getByRole('link', { name: /메시지함에서 열기/ }),
+    ).toHaveAttribute('href', '/messages?t=rfp-1');
+  });
 });

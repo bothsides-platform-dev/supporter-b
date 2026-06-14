@@ -8,9 +8,11 @@
  * now) on a later tick when no action is running. The cron is what actually
  * sends those window-end digests.
  *
- * It drives BOTH:
- *   - flushAllOutbox  — generic pending rows (everything except chat.message).
- *   - flushChatDigests — coalesced chat.message digests, body recomputed at send.
+ * It drives:
+ *   - flushAllOutbox       — generic pending rows (everything except the
+ *                            coalesced chat digests).
+ *   - flushChatDigests     — coalesced chat.message digests, recomputed at send.
+ *   - flushTeamChatDigests — coalesced team_chat.message digests, recomputed at send.
  *
  * Auth (fail-closed): authorized iff CRON_SECRET is a non-empty string AND the
  * provided value (header `x-cron-secret` or query `?secret=`) equals it. An
@@ -23,6 +25,7 @@ import { NextResponse } from 'next/server';
 
 import { flushAllOutbox } from '@/lib/server/outbox/flush-all';
 import { flushChatDigests } from '@/lib/server/outbox/chat-digest-flush';
+import { flushTeamChatDigests } from '@/lib/server/outbox/team-chat-digest-flush';
 import { getResendSender } from '@/lib/integrations/resend';
 
 export const runtime = 'nodejs';
@@ -42,6 +45,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const sender = getResendSender();
   const generic = await flushAllOutbox(sender);
   const digests = await flushChatDigests(sender);
+  const teamDigests = await flushTeamChatDigests(sender);
 
-  return NextResponse.json({ generic, digests });
+  return NextResponse.json({ generic, digests, teamDigests });
 }

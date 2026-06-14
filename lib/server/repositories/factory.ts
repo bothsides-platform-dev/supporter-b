@@ -22,6 +22,7 @@ import type {
   RfpRepo,
   RfpRequoteRequestRepo,
   RfpTeamMessageRepo,
+  RfpTeamMessageReadRepo,
   UserRepo,
   VerificationTokenRepo,
   WorkspaceRepo,
@@ -48,6 +49,7 @@ type RepoBundle = {
   chatMessage: ChatMessageRepo;
   chatRead: ChatReadRepo;
   rfpTeamMessage: RfpTeamMessageRepo;
+  rfpTeamMessageRead: RfpTeamMessageReadRepo;
   rfpRequoteRequest: RfpRequoteRequestRepo;
   auditLog: AuditLogRepo;
   // Backend marker for tests.
@@ -62,7 +64,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 6;
+const BUNDLE_VERSION = 7;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +97,7 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
   const { DrizzleRfpTeamMessageRepository } = await import(
     './drizzle/rfp-team-message'
   );
+  const { DrizzleRfpTeamMessageReadRepository } = await import('./drizzle/rfp-team-message-read');
   const { DrizzleRfpRequoteRequestRepository } = await import('./drizzle/rfp-requote-request');
   const { DrizzleAuditLogRepository } = await import('./drizzle/audit-log');
 
@@ -119,6 +122,7 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
     chatMessage: new DrizzleChatMessageRepository(db),
     chatRead: new DrizzleChatReadRepository(db),
     rfpTeamMessage: new DrizzleRfpTeamMessageRepository(db),
+    rfpTeamMessageRead: new DrizzleRfpTeamMessageReadRepository(db),
     rfpRequoteRequest: new DrizzleRfpRequoteRequestRepository(db),
     auditLog: new DrizzleAuditLogRepository(db),
     __backend: backend,
@@ -208,6 +212,9 @@ export async function getChatReadRepo(): Promise<ChatReadRepo> {
 }
 export async function getRfpTeamMessageRepo(): Promise<RfpTeamMessageRepo> {
   return (await getBundle()).rfpTeamMessage;
+}
+export async function getRfpTeamMessageReadRepo(): Promise<RfpTeamMessageReadRepo> {
+  return (await getBundle()).rfpTeamMessageRead;
 }
 export async function getRfpRequoteRequestRepo(): Promise<RfpRequoteRequestRepo> {
   return (await getBundle()).rfpRequoteRequest;

@@ -1,10 +1,11 @@
 import Link from 'next/link';
+import { Users } from 'lucide-react';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { EnvelopeIcon } from '@/components/icons';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
-import type { ConversationListItem } from '@/components/messages/types';
+import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 
-/** Max conversations previewed in the home widget; the rest are in /messages. */
+/** Max items previewed in the home widget; the rest are in /messages. */
 const HOME_RECENT_MESSAGES = 4;
 
 // Formats as "오전 10:00" in Asia/Seoul regardless of runner TZ — matches
@@ -19,18 +20,19 @@ function formatLastMessageTime(iso: string): string {
 }
 
 /**
- * Home screen right-sidebar widget. Shows the most recent conversations as a
- * server snapshot (no realtime subscription). Each row deep-links to
- * /messages?c=<id> so the /messages page can pre-select the conversation.
+ * Home screen right-sidebar widget. Shows the most recent inbox items
+ * (counterparty conversations + team threads) as a server snapshot (no realtime
+ * subscription). Each row deep-links to /messages?c=<id> or /messages?t=<rfpId>
+ * so the /messages page can pre-select the conversation or team thread.
  */
 export function RecentMessagesPanel({
-  conversations,
+  items,
   unreadCount,
 }: {
-  conversations: ConversationListItem[];
+  items: InboxListItem[];
   unreadCount: number;
 }) {
-  const recent = conversations.slice(0, HOME_RECENT_MESSAGES);
+  const recent = items.slice(0, HOME_RECENT_MESSAGES);
 
   return (
     <aside
@@ -58,37 +60,56 @@ export function RecentMessagesPanel({
           />
         ) : (
           <ul className="flex flex-col">
-            {recent.map((c) => (
-              <li key={c.conversationId}>
+            {recent.map((item) => (
+              <li key={item.key}>
                 <Link
-                  href={`/messages?c=${c.conversationId}`}
+                  href={
+                    item.kind === 'team'
+                      ? `/messages?t=${item.rfpId}`
+                      : `/messages?c=${item.conversationId}`
+                  }
                   className="flex w-full items-start gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-3 py-3 transition-colors hover:bg-[var(--md-sys-color-surface-container)]"
                 >
-                  <WorkspaceAvatar
-                    name={c.counterparty.name}
-                    size="md"
-                    workspaceId={c.counterparty.workspaceId}
-                    hasLogo={c.counterparty.hasLogo}
-                  />
+                  {item.kind === 'team' ? (
+                    <span
+                      aria-hidden
+                      className="flex size-9 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-full)] bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]"
+                    >
+                      <Users size={18} strokeWidth={1.5} />
+                    </span>
+                  ) : (
+                    <WorkspaceAvatar
+                      name={item.counterparty.name}
+                      size="md"
+                      workspaceId={item.counterparty.workspaceId}
+                      hasLogo={item.counterparty.hasLogo}
+                    />
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
-                        {c.counterparty.name}
-                      </span>
-                      {c.lastMessageAt && (
+                      {item.kind === 'team' ? (
+                        <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
+                          팀 · <span className="md-numeric">{item.rfpCode}</span> {item.rfpTitle}
+                        </span>
+                      ) : (
+                        <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
+                          {item.counterparty.name}
+                        </span>
+                      )}
+                      {item.lastMessageAt && (
                         <time
-                          dateTime={c.lastMessageAt}
+                          dateTime={item.lastMessageAt}
                           className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]"
                         >
-                          {formatLastMessageTime(c.lastMessageAt)}
+                          {formatLastMessageTime(item.lastMessageAt)}
                         </time>
                       )}
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5">
                       <p className="min-w-0 flex-1 truncate text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                        {c.preview}
+                        {item.preview}
                       </p>
-                      {c.unread && (
+                      {item.unread && (
                         <span
                           aria-label="읽지 않음"
                           className="size-2 shrink-0 rounded-full bg-[var(--md-sys-color-primary)]"
