@@ -14,7 +14,7 @@ import { eq, sql } from 'drizzle-orm';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import { outboxEntries } from '@/lib/db/schema';
 import { DrizzleOutboxRepository } from '../outbox';
-import type { Sender } from '@/lib/server/outbox/types';
+import type { BatchSender } from '@/lib/server/outbox/types';
 
 async function setup() {
   const db = await createPgliteDb();
@@ -41,7 +41,9 @@ async function readAll(
 
 void sql; // imported for future raw-SQL tests; keep usage minimal here.
 
-const okSender: Sender = async () => ({ ok: true });
+// BatchSender stubs — flush now drains claimed rows through Resend's batch API
+// (one call per <=100-row chunk) instead of one call per row.
+const okBatch: BatchSender = async (entries) => entries.map(() => ({ ok: true }));
 
 describe('DrizzleOutboxRepository / Step 10', () => {
   it('enqueue dedupes by dedupeKey (partial unique index)', async () => {
@@ -116,18 +118,81 @@ describe('DrizzleOutboxRepository / Step 10', () => {
       subject: 'S',
       html: '',
     });
-    const { ok, failed } = await repo.flush(okSender);
+    const { ok, failed } = await repo.flush(okBatch);
     expect(ok).toBe(1);
     expect(failed).toBe(0);
     const pending = await repo.pending(10);
     expect(pending).toHaveLength(0);
   });
 
+  it('flush sends ALL claimed entries in a single batch call (rate-limit fix)', async () => {
+    const { repo } = await setup();
+    const sender = vi
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) => entries.map(() => ({ ok: true })));
+    for (let i = 0; i < 3; i++) {
+      await repo.enqueue({ event: 'rfp.invited', to: `pg${i}@e.com`, subject: 'S', html: '' });
+    }
+
+    const { ok } = await repo.flush(sender);
+
+    expect(ok).toBe(3);
+    // 3 rows → ONE batch.send call carrying all 3 (not 3 separate calls).
+    expect(sender).toHaveBeenCalledTimes(1);
+    expect(sender.mock.calls[0][0]).toHaveLength(3);
+  });
+
+  it('flush reschedules a RETRYABLE failure into the future with backoff (not the 5-min lease)', async () => {
+    const { db, repo } = await setup();
+    const sender = vi
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) =>
+        entries.map(() => ({ ok: false as const, error: '429', retryable: true })),
+      );
+    await repo.enqueue({ event: 'auth.reset', to: 'u@e.com', subject: 'S', html: '', maxAttempts: 5 });
+
+    const before = Date.now();
+    const r = await repo.flush(sender);
+    expect(r.failed).toBe(1);
+
+    const [row] = await db
+      .select({ status: outboxEntries.status, attempts: outboxEntries.attempts, scheduledAt: outboxEntries.scheduledAt })
+      .from(outboxEntries);
+    expect(row.status).toBe('pending');
+    expect(row.attempts).toBe(1);
+    const next = new Date(row.scheduledAt).getTime();
+    // Rescheduled into the future…
+    expect(next).toBeGreaterThan(before);
+    // …by the backoff window (tens of seconds), NOT the 5-minute crash-safety
+    // lease — proving markResult applied computeBackoff, not just the lease bump.
+    expect(next).toBeLessThan(before + 120_000);
+  });
+
+  it('flush fails a PERMANENT (non-retryable) error immediately, ignoring maxAttempts', async () => {
+    const { db, repo } = await setup();
+    const sender = vi
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) =>
+        entries.map(() => ({ ok: false as const, error: 'bad address', retryable: false })),
+      );
+    await repo.enqueue({ event: 'rfp.invited', to: 'bad', subject: 'S', html: '', maxAttempts: 5 });
+
+    const r = await repo.flush(sender);
+
+    expect(r.failed).toBe(1);
+    const [row] = await db
+      .select({ status: outboxEntries.status, attempts: outboxEntries.attempts })
+      .from(outboxEntries);
+    // One attempt, already 'failed' — did not waste the remaining 4 attempts.
+    expect(row.status).toBe('failed');
+    expect(row.attempts).toBe(1);
+  });
+
   it('flush retries failed entries up to maxAttempts then marks failed', async () => {
     const { db, repo } = await setup();
     const failSender = vi
-      .fn<Sender>()
-      .mockResolvedValue({ ok: false, error: 'SMTP down' });
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) => entries.map(() => ({ ok: false as const, error: 'SMTP down' })));
     await repo.enqueue({
       event: 'auth.reset',
       to: 'u@e.com',
@@ -166,7 +231,9 @@ describe('DrizzleOutboxRepository / Step 10', () => {
 
   it('flush does not re-send already-sent entries', async () => {
     const { repo } = await setup();
-    const sender = vi.fn<Sender>().mockResolvedValue({ ok: true });
+    const sender = vi
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) => entries.map(() => ({ ok: true })));
     await repo.enqueue({
       event: 'auth.verify',
       to: 'u@e.com',
@@ -175,6 +242,7 @@ describe('DrizzleOutboxRepository / Step 10', () => {
     });
     await repo.flush(sender);
     await repo.flush(sender);
+    // First flush claims+sends the row (1 batch call); second finds nothing.
     expect(sender).toHaveBeenCalledTimes(1);
   });
 
@@ -185,7 +253,9 @@ describe('DrizzleOutboxRepository / Step 10', () => {
     // ready-set and skips the rows — even though SKIP LOCKED alone only
     // protects rows during the tx itself.
     const { repo } = await setup();
-    const sender = vi.fn<Sender>().mockResolvedValue({ ok: true });
+    const sender = vi
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) => entries.map(() => ({ ok: true })));
     for (let i = 0; i < 5; i++) {
       await repo.enqueue({
         event: 'auth.verify',
@@ -200,7 +270,10 @@ describe('DrizzleOutboxRepository / Step 10', () => {
       repo.flush(sender),
     ]);
     expect(a.ok + b.ok).toBe(5);
-    expect(sender).toHaveBeenCalledTimes(5);
+    // Each entry is sent exactly once across the two flushes — regardless of how
+    // the batch calls split, the total entries delivered must be 5 (no dupes).
+    const totalDelivered = sender.mock.calls.reduce((n, c) => n + c[0].length, 0);
+    expect(totalDelivered).toBe(5);
     const pending = await repo.pending(10);
     expect(pending).toHaveLength(0);
   });
@@ -228,7 +301,9 @@ describe('DrizzleOutboxRepository / chat-digest separation', () => {
 
   it('generic flush does NOT touch chat.message rows', async () => {
     const { db, repo } = await setup();
-    const sender = vi.fn<Sender>().mockResolvedValue({ ok: true });
+    const sender = vi
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) => entries.map(() => ({ ok: true })));
     // Due chat.message row (scheduled now) — generic flush must skip it.
     await seedChat(db, 'pg@toss.im', 'chat-digest:c1:u1:100', new Date());
 
@@ -246,7 +321,9 @@ describe('DrizzleOutboxRepository / chat-digest separation', () => {
 
   it('generic flush still drains non-chat rows unchanged', async () => {
     const { db, repo } = await setup();
-    const sender = vi.fn<Sender>().mockResolvedValue({ ok: true });
+    const sender = vi
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) => entries.map(() => ({ ok: true })));
     await repo.enqueue({
       event: 'auth.verify',
       to: 'a@e.com',
@@ -261,7 +338,9 @@ describe('DrizzleOutboxRepository / chat-digest separation', () => {
     expect(ok).toBe(1);
     expect(failed).toBe(0);
     expect(sender).toHaveBeenCalledTimes(1);
-    expect(sender.mock.calls[0][0].event).toBe('auth.verify');
+    // The batch carries exactly the one non-chat row.
+    expect(sender.mock.calls[0][0]).toHaveLength(1);
+    expect(sender.mock.calls[0][0][0].event).toBe('auth.verify');
     // chat row is still pending.
     const chatStill = await db
       .select()

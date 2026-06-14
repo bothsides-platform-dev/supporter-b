@@ -21,7 +21,7 @@ import type { Contract } from '@/lib/types/contract';
 import type { Notification, NotificationChannel } from '@/lib/types/notification';
 import type { AttachmentRecord } from './attachment-record';
 import type { VerificationToken } from '@/lib/types/auth';
-import type { OutboxEntry, OutboxEvent, Sender } from '../outbox/types';
+import type { BatchSender, OutboxEntry, OutboxEvent } from '../outbox/types';
 import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
@@ -406,23 +406,32 @@ export interface OutboxRepo {
   dueChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
   /** Due team-chat-digest rows — owned by the team-digest flush processor. */
   dueTeamChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
-  /** 전송 결과 반영(성공/실패 + 시도횟수 +1). */
+  /**
+   * 전송 결과 반영(성공/실패 + 시도횟수 +1). 실패 시 `retryable:false` 면 즉시
+   * 'failed'(영구 오류 — 잔여 시도 낭비 방지), 그 외엔 maxAttempts 도달 시에만
+   * 'failed'. `nextScheduledAt` 가 주어지면 다음 시도 시각을 그 값(now()+백오프)
+   * 으로 재설정한다. retryable/nextScheduledAt 생략은 레거시 호환(일시 오류 취급).
+   */
   markResult(
     id: string,
-    result: { ok: true } | { ok: false; error: string },
+    result:
+      | { ok: true }
+      | { ok: false; error: string; retryable?: boolean; nextScheduledAt?: Date },
     tx?: Tx,
   ): Promise<void>;
   /**
-   * Drain pending entries through `sender`.
+   * Drain pending entries through `batchSender` (Resend's batch API).
    *
    * Postgres impl uses `SELECT ... FOR UPDATE SKIP LOCKED LIMIT $limit` so
    * concurrent flush callers (cron + post-commit fire-and-forget) don't
-   * double-deliver. Returns counts: `ok` = sender returned ok, `failed` =
-   * sender returned !ok (regardless of whether maxAttempts was hit on this
-   * pass — `markResult` decides the persistent state).
+   * double-deliver, then sends the whole claim in <=100-row chunks (paced) — an
+   * N-recipient fan-out becomes ceil(N/100) API calls, keeping bursts under
+   * Resend's rate limit. Returns counts: `ok` = batch reported ok, `failed` =
+   * batch reported !ok (regardless of whether maxAttempts was hit on this pass —
+   * `markResult` decides the persistent state).
    */
   flush(
-    sender: Sender,
+    batchSender: BatchSender,
     limit?: number,
     tx?: Tx,
   ): Promise<{ ok: number; failed: number }>;

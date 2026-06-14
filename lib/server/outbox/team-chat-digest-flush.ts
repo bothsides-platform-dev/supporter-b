@@ -28,6 +28,7 @@ import {
 } from '@/lib/server/repositories/factory';
 import { parseTeamDigestDedupeKey } from './team-digest';
 import { baseUrlFor } from '@/lib/server/env';
+import { computeBackoff } from './backoff';
 import { renderChatMessage } from './templates/chatMessage';
 import type { Sender } from './types';
 
@@ -106,7 +107,20 @@ export async function flushTeamChatDigests(
       await outbox.markResult(entry.id, { ok: true });
       sent++;
     } else {
-      await outbox.markResult(entry.id, { ok: false, error: result.error ?? 'unknown' });
+      // Reschedule a transient failure with backoff, or fail a permanent one
+      // fast — same policy as the generic flush.
+      const nextScheduledAt =
+        result.retryable === false
+          ? undefined
+          : new Date(
+              Date.now() + computeBackoff(entry.attempts + 1, { retryAfterMs: result.retryAfterMs }),
+            );
+      await outbox.markResult(entry.id, {
+        ok: false,
+        error: result.error ?? 'unknown',
+        retryable: result.retryable,
+        nextScheduledAt,
+      });
       failed++;
     }
   }
