@@ -11,6 +11,7 @@ import type {
   RfpTeamMessageReadRepo,
   RfpTeamMessageRepo,
   RfpTeamMessageWithAuthor,
+  TeamMember,
   UserRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
@@ -264,6 +265,16 @@ export class TeamChatService {
     if (!auth.ok) return auth;
     const messages = await this.msgRepo.listByScope(rfpId, actor.workspaceId);
     return { ok: true, messages };
+  }
+
+  async listTeamMembers(
+    rfpId: string,
+    actor: TeamChatActor,
+  ): Promise<ServiceResult<{ members: TeamMember[] }>> {
+    const auth = await this.authorize(rfpId, actor);
+    if (!auth.ok) return auth;
+    const members = await this.wsRepo.teamRoster(actor.workspaceId);
+    return { ok: true, members };
   }
 
   async markRead(rfpId: string, actor: TeamChatActor): Promise<ServiceResult<{ readAt: string }>> {

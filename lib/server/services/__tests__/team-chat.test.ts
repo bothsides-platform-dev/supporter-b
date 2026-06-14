@@ -387,3 +387,27 @@ describe('TeamChatService.sendMessage — notification fan-out', () => {
     expect(rows[0].toAddr).toBe('mate@b.com');
   });
 });
+
+describe('TeamChatService.listTeamMembers', () => {
+  it('owning buyer 액터에게 팀 로스터를 반환한다', async () => {
+    const { rfp, buyerActor, buyerUser } = await seedScene();
+    const result = await service.listTeamMembers(rfp.id, buyerActor);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.members.map((m) => m.userId)).toContain(buyerUser.id);
+      expect(result.members.find((m) => m.userId === buyerUser.id)?.name).toBe('김구매');
+    }
+  });
+
+  it('권한 없는 buyer 는 FORBIDDEN', async () => {
+    const { rfp } = await seedScene();
+    const otherWs = await seedBuyerWorkspace(db);
+    const otherUser = await seedUser(db);
+    await seedMembership(db, otherWs.id, otherUser.id, 'admin');
+    const result = await service.listTeamMembers(rfp.id, {
+      userId: otherUser.id, workspaceId: otherWs.id, workspaceType: 'buyer',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe('FORBIDDEN');
+  });
+});
