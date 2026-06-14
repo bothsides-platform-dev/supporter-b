@@ -52,7 +52,10 @@ export type TeamThreadEntry = {
 
 // RFP-scoped internal team thread. Read-state (rfp_team_message_reads), per-RFP
 // unread, and notifications (in-app + a coalesced email digest, mirroring the
-// ChatService digest pattern) are supported; mentions are not yet. Surfaced in
+// ChatService digest pattern) are supported. @-mentions: bodies store structured
+// tokens (<@uuid> / <@all>, see lib/team-mentions.ts); sendMessage re-derives
+// mentions from the body, validates membership, and routes a team_chat.mention
+// notification to mentioned members (others get team_chat.message). Surfaced in
 // the unified inbox (/messages) via listThreads + the ?t=<rfpId> deep-link.
 // Supports PDF/image attachments (absorbed the per-bid memo). Separate from
 // ChatService (which owns buyer↔PG pair resolution + counterparty fanout). ACL
