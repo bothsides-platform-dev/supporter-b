@@ -59,6 +59,23 @@ describe('GET /logout', () => {
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
   });
+
+  it('레거시 host-only stale 쿠키를 확실히 만료시키는 Set-Cookie 헤더를 부착한다', async () => {
+    // 근본 원인: signOut() 은 현행 도메인-스코프 쿠키만 만료시켜, 도메인 설정 이전
+    // 발급된 host-only 레거시 쿠키는 살아남아 무한 리다이렉트가 된다. /logout 응답이
+    // host-only 변종까지 명시적으로 만료시켜야 stale 쿠키가 제거되고 루프가 끊긴다.
+    signOutMock.mockResolvedValue(undefined);
+
+    const res = await GET(new Request('https://supporter-b.com/logout'));
+
+    const setCookies = res.headers.getSetCookie();
+    const expired = setCookies.filter(
+      (c) => c.includes('session-token=') && c.includes('Max-Age=0'),
+    );
+    expect(expired.length).toBeGreaterThanOrEqual(1);
+    // host-only 변종(Domain 속성 없음)이 반드시 포함되어야 레거시 쿠키가 제거된다
+    expect(expired.some((c) => !c.includes('Domain='))).toBe(true);
+  });
 });
 
 describe('POST /logout', () => {
@@ -71,5 +88,16 @@ describe('POST /logout', () => {
 
     expect(signOutMock).toHaveBeenCalledWith({ redirect: false });
     expect(res.status).toBe(204);
+  });
+
+  it('204 응답에도 stale 세션 쿠키 만료 헤더를 부착한다', async () => {
+    signOutMock.mockResolvedValue(undefined);
+
+    const res = await POST();
+
+    const expired = res.headers
+      .getSetCookie()
+      .filter((c) => c.includes('session-token=') && c.includes('Max-Age=0'));
+    expect(expired.length).toBeGreaterThanOrEqual(1);
   });
 });
