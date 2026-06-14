@@ -343,3 +343,162 @@ describe('DrizzleBidRepository round', () => {
     expect(rows.map((b) => b.round).sort()).toEqual([1, 2]);
   });
 });
+
+// ─── Phase 2C gap methods ─────────────────────────────────────────────────
+
+describe('DrizzleBidRepository.updateStatus', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('transitions a submitted bid to withdrawn', async () => {
+    const { bidId } = await insertBid(ctx.db, ctx, 0);
+    expect((await ctx.repo.findById(bidId))!.status).toBe('submitted');
+    await ctx.repo.updateStatus(bidId, 'withdrawn');
+    expect((await ctx.repo.findById(bidId))!.status).toBe('withdrawn');
+  });
+});
+
+describe('DrizzleBidRepository.searchForBuyer', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('returns bids⋈rfps⋈workspaces projection for submitted bids matching ilike', async () => {
+    const bidId = randomUUID();
+    await ctx.db.insert(bids).values({
+      id: bidId,
+      rfpId: ctx.rfpId, // code P-2605-0042, title 'bid repo test'
+      pgWsId: ctx.pgWs.id, // name 'toss.im'
+      invitationId: ctx.invitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      memo: 'buyer needle',
+      status: 'submitted',
+      submittedBy: ctx.pgUser.id,
+    });
+
+    const rows = (await ctx.repo.searchForBuyer(ctx.buyerWs.id, '%needle%')) as {
+      bidId: string;
+      rfpId: string;
+      rfpTitle: string;
+      pgWsName: string;
+      memo: string;
+    }[];
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({
+      bidId,
+      rfpId: 'P-2605-0042', // rfps.code, not uuid
+      rfpTitle: 'bid repo test',
+      pgWsName: 'toss.im',
+      memo: 'buyer needle',
+    });
+  });
+
+  it('excludes non-submitted bids and other workspaces', async () => {
+    // withdrawn — excluded
+    await ctx.db.insert(bids).values({
+      id: randomUUID(),
+      rfpId: ctx.rfpId,
+      pgWsId: ctx.pgWs.id,
+      invitationId: ctx.invitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      memo: 'needle wd',
+      status: 'withdrawn',
+      submittedBy: ctx.pgUser.id,
+    });
+    const rows = (await ctx.repo.searchForBuyer(ctx.buyerWs.id, '%needle%')) as unknown[];
+    expect(rows).toHaveLength(0);
+    // unrelated buyer ws — no rows
+    const otherRows = (await ctx.repo.searchForBuyer(randomUUID(), '%bid repo%')) as unknown[];
+    expect(otherRows).toHaveLength(0);
+  });
+});
+
+describe('DrizzleBidRepository.searchForPg', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('returns bids⋈rfps projection (no pgWsName) for the PG ws, submitted only', async () => {
+    const bidId = randomUUID();
+    await ctx.db.insert(bids).values({
+      id: bidId,
+      rfpId: ctx.rfpId,
+      pgWsId: ctx.pgWs.id,
+      invitationId: ctx.invitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      memo: 'pg needle',
+      status: 'submitted',
+      submittedBy: ctx.pgUser.id,
+    });
+
+    const rows = (await ctx.repo.searchForPg(ctx.pgWs.id, '%needle%')) as {
+      bidId: string;
+      rfpId: string;
+      rfpTitle: string;
+      memo: string;
+    }[];
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({
+      bidId,
+      rfpId: 'P-2605-0042',
+      rfpTitle: 'bid repo test',
+      memo: 'pg needle',
+    });
+    // projection has no pgWsName key
+    expect('pgWsName' in rows[0]).toBe(false);
+  });
+
+  it('matches on rfp title and excludes other PG ws', async () => {
+    await ctx.db.insert(bids).values({
+      id: randomUUID(),
+      rfpId: ctx.rfpId,
+      pgWsId: ctx.pgWs.id,
+      invitationId: ctx.invitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      memo: '',
+      status: 'submitted',
+      submittedBy: ctx.pgUser.id,
+    });
+    const byTitle = (await ctx.repo.searchForPg(ctx.pgWs.id, '%bid repo%')) as unknown[];
+    expect(byTitle).toHaveLength(1);
+    const otherPg = (await ctx.repo.searchForPg(randomUUID(), '%bid repo%')) as unknown[];
+    expect(otherPg).toHaveLength(0);
+  });
+});
+
+describe('DrizzleBidRepository.findRfpOwner', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('returns rfpId + owning buyer ws for a known bid', async () => {
+    const { bidId } = await insertBid(ctx.db, ctx, 0);
+    expect(await ctx.repo.findRfpOwner(bidId)).toEqual({
+      rfpId: ctx.rfpId,
+      buyerWsId: ctx.buyerWs.id,
+    });
+  });
+
+  it('returns undefined for an unknown bid', async () => {
+    expect(await ctx.repo.findRfpOwner(randomUUID())).toBeUndefined();
+  });
+});

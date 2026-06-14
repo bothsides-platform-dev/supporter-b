@@ -1,5 +1,5 @@
-import { eq, inArray } from 'drizzle-orm';
-import { bids, attachments } from '@/lib/db/schema';
+import { and, desc, eq, ilike, inArray, or } from 'drizzle-orm';
+import { bids, attachments, rfps, workspaces } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
@@ -192,5 +192,81 @@ export class DrizzleBidRepository implements BidRepo {
   async setBoardColumn(bidId: string, columnId: string | null, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.update(bids).set({ boardColumnId: columnId }).where(eq(bids.id, bidId));
+  }
+
+  async updateStatus(id: string, status: Bid['status'], tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.update(bids).set({ status }).where(eq(bids.id, id));
+  }
+
+  async searchForBuyer(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // bids⋈rfps⋈workspaces — mirrors searchEntitiesAction.ts (buyer bid branch).
+    // rfpId is the RFP *code* (human id for URLs); pgWsName is the PG ws name.
+    // Submitted bids only; pattern is escape+wrapped by the caller.
+    return db
+      .select({
+        bidId: bids.id,
+        rfpId: rfps.code,
+        rfpTitle: rfps.title,
+        pgWsName: workspaces.name,
+        memo: bids.memo,
+      })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .innerJoin(workspaces, eq(bids.pgWsId, workspaces.id))
+      .where(
+        and(
+          eq(rfps.buyerWsId, wsId),
+          eq(bids.status, 'submitted'),
+          or(
+            ilike(rfps.title, pattern),
+            ilike(bids.memo, pattern),
+            ilike(workspaces.name, pattern),
+          ),
+        ),
+      )
+      .orderBy(desc(bids.submittedAt))
+      .limit(20);
+  }
+
+  async searchForPg(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // bids⋈rfps — mirrors searchEntitiesAction.ts (pg bid branch). No ws name
+    // (PG sees its own bids). Submitted only; pattern is escape+wrapped.
+    return db
+      .select({
+        bidId: bids.id,
+        rfpId: rfps.code,
+        rfpTitle: rfps.title,
+        memo: bids.memo,
+      })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .where(
+        and(
+          eq(bids.pgWsId, wsId),
+          eq(bids.status, 'submitted'),
+          or(ilike(rfps.title, pattern), ilike(bids.memo, pattern)),
+        ),
+      )
+      .orderBy(desc(bids.submittedAt))
+      .limit(20);
+  }
+
+  async findRfpOwner(
+    bidId: string,
+    tx?: Tx,
+  ): Promise<{ rfpId: string; buyerWsId: string } | undefined> {
+    const db = this.h(tx);
+    // bids⋈rfps — upload/ACL gate: which RFP a bid belongs to + its owning buyer
+    // ws. rfpId here is the surrogate uuid (FK), matching upload route usage.
+    const [row] = await db
+      .select({ rfpId: bids.rfpId, buyerWsId: rfps.buyerWsId })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .where(eq(bids.id, bidId))
+      .limit(1);
+    return row ?? undefined;
   }
 }

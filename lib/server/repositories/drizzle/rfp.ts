@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { rfps, bizProfiles, rfpAllowedPg } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
@@ -263,5 +263,80 @@ export class DrizzleRfpRepository implements RfpRepo {
   async setBoardColumn(rfpId: string, columnId: string | null, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.update(rfps).set({ boardColumnId: columnId }).where(eq(rfps.id, rfpId));
+  }
+
+  async setBoardVisible(rfpId: string, visible: boolean, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.update(rfps).set({ boardVisible: visible }).where(eq(rfps.id, rfpId));
+  }
+
+  async updateDeadline(id: string, deadline: Date, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.update(rfps).set({ deadline }).where(eq(rfps.id, id));
+  }
+
+  async findIdAndOwnerByCode(
+    code: string,
+    tx?: Tx,
+  ): Promise<{ id: string; buyerWsId: string } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ id: rfps.id, buyerWsId: rfps.buyerWsId })
+      .from(rfps)
+      .where(eq(rfps.code, code))
+      .limit(1);
+    return row ?? undefined;
+  }
+
+  async findOwnerById(id: string, tx?: Tx): Promise<{ buyerWsId: string } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ buyerWsId: rfps.buyerWsId })
+      .from(rfps)
+      .where(eq(rfps.id, id))
+      .limit(1);
+    return row ?? undefined;
+  }
+
+  async reserveNextCode(yearMonth: string, tx?: Tx): Promise<string> {
+    const db = this.h(tx);
+    // Atomic INSERT … ON CONFLICT DO UPDATE … RETURNING — folds the raw SQL in
+    // lib/server/rfp-id.ts so the counter increment can share a tx with the RFP
+    // insert. Output format mirrors nextRfpId byte-for-byte: `P-YYMM-NNNN`.
+    const result = await db.execute(sql`
+      INSERT INTO rfp_counters(year_month, last_seq) VALUES (${yearMonth}, 1)
+      ON CONFLICT (year_month) DO UPDATE SET last_seq = rfp_counters.last_seq + 1
+      RETURNING last_seq
+    `);
+    // postgres-js returns an array of rows; pglite returns `{ rows: [...] }`.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = result as any;
+    const rows: Array<{ last_seq: number }> = Array.isArray(r)
+      ? (r as Array<{ last_seq: number }>)
+      : (r?.rows ?? []);
+    const seq = rows[0].last_seq;
+    return `P-${yearMonth}-${String(seq).padStart(4, '0')}`;
+  }
+
+  async searchForBuyer(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // Whitelisted projection — mirrors searchEntitiesAction.ts (buyer RFP branch).
+    // pattern is escape+wrapped by the caller (`%escaped%`).
+    return db
+      .select({
+        code: rfps.code,
+        title: rfps.title,
+        memo: rfps.memo,
+        status: rfps.status,
+      })
+      .from(rfps)
+      .where(
+        and(
+          eq(rfps.buyerWsId, wsId),
+          or(ilike(rfps.title, pattern), ilike(rfps.memo, pattern)),
+        ),
+      )
+      .orderBy(desc(rfps.createdAt))
+      .limit(20);
   }
 }

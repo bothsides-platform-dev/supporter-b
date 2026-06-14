@@ -47,6 +47,21 @@ export interface RfpRepo {
   transition(id: string, to: RfpStatus, patch?: Partial<RFP>, tx?: Tx): Promise<RFP>;
   /** 통일 칸반: pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
   setBoardColumn(rfpId: string, columnId: string | null, tx?: Tx): Promise<void>;
+  /** 오픈 게시판 노출 토글 (opt-out). */
+  setBoardVisible(rfpId: string, visible: boolean, tx?: Tx): Promise<void>;
+  /** 마감 직접 갱신 — transition 은 status 전용. */
+  updateDeadline(id: string, deadline: Date, tx?: Tx): Promise<void>;
+  /** code → id + 소유 워크스페이스 (경량, 소유권 게이트). findByCode 는 전체 hydrate 라 무겁다. */
+  findIdAndOwnerByCode(
+    code: string,
+    tx?: Tx,
+  ): Promise<{ id: string; buyerWsId: string } | undefined>;
+  /** id → 소유 워크스페이스만 (ACL/업로드 게이트). */
+  findOwnerById(id: string, tx?: Tx): Promise<{ buyerWsId: string } | undefined>;
+  /** YYMM 카운터를 원자적으로 증가시켜 다음 RFP code(`P-YYMM-NNNN`) 발급. */
+  reserveNextCode(yearMonth: string, tx?: Tx): Promise<string>;
+  /** 구매사 검색 — 화이트리스트 projection(code·title·memo·status). pattern 은 호출자가 escape+wrap. */
+  searchForBuyer(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]>;
 }
 
 // ── Invitation ────────────────────────────────────────────────────────
@@ -315,6 +330,17 @@ export interface BidRepo {
   findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]>;
   /** 통일 칸반: rfp_bids 보드 커스텀 컬럼 배치. null = 기본착지(진행전) 복귀. */
   setBoardColumn(bidId: string, columnId: string | null, tx?: Tx): Promise<void>;
+  /** 입찰 상태 전이 (withdraw 등). */
+  updateStatus(id: string, status: Bid['status'], tx?: Tx): Promise<void>;
+  /** 구매사 검색 — bids⋈rfps⋈workspaces projection. pattern 은 호출자가 escape+wrap. */
+  searchForBuyer(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]>;
+  /** PG 검색 — bids⋈rfps projection. pattern 은 호출자가 escape+wrap. */
+  searchForPg(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]>;
+  /** bidId → 소속 RFP id + 소유 구매사 (ACL/업로드 게이트). */
+  findRfpOwner(
+    bidId: string,
+    tx?: Tx,
+  ): Promise<{ rfpId: string; buyerWsId: string } | undefined>;
 }
 
 // ── Kanban Column ─────────────────────────────────────────────────────

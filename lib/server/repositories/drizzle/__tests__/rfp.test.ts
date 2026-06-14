@@ -221,4 +221,100 @@ describe('DrizzleRfpRepository', () => {
     const reason = (rejected[0] as PromiseRejectedResult).reason as Error;
     expect(reason.message).toMatch(/Invalid RFP transition|lost a race/);
   });
+
+  // ─── Phase 2C gap methods ─────────────────────────────────────────────
+
+  describe('setBoardVisible', () => {
+    it('toggles board_visible off then on', async () => {
+      const rfp = makeRfp('P-2605-BV01', ctx.ws.id, ctx.user.id);
+      await repo.save(rfp);
+      // default true
+      expect((await repo.findById(rfp.id))!.boardVisible).toBe(true);
+      await repo.setBoardVisible(rfp.id, false);
+      expect((await repo.findById(rfp.id))!.boardVisible).toBe(false);
+      await repo.setBoardVisible(rfp.id, true);
+      expect((await repo.findById(rfp.id))!.boardVisible).toBe(true);
+    });
+  });
+
+  describe('updateDeadline', () => {
+    it('replaces the deadline without touching status', async () => {
+      const rfp = makeRfp('P-2605-DL01', ctx.ws.id, ctx.user.id, 'sent');
+      await repo.save(rfp);
+      const next = new Date('2030-01-02T03:04:05.000Z');
+      await repo.updateDeadline(rfp.id, next);
+      const fetched = await repo.findById(rfp.id);
+      expect(fetched!.deadline).toBe(next.toISOString());
+      expect(fetched!.status).toBe('sent');
+    });
+  });
+
+  describe('findIdAndOwnerByCode', () => {
+    it('returns id + buyerWsId for a known code', async () => {
+      const rfp = makeRfp('P-2605-OWN1', ctx.ws.id, ctx.user.id);
+      await repo.save(rfp);
+      const res = await repo.findIdAndOwnerByCode('P-2605-OWN1');
+      expect(res).toEqual({ id: rfp.id, buyerWsId: ctx.ws.id });
+    });
+
+    it('returns undefined for an unknown code', async () => {
+      expect(await repo.findIdAndOwnerByCode('P-2605-NONE')).toBeUndefined();
+    });
+  });
+
+  describe('findOwnerById', () => {
+    it('returns buyerWsId for a known id', async () => {
+      const rfp = makeRfp('P-2605-OWN2', ctx.ws.id, ctx.user.id);
+      await repo.save(rfp);
+      expect(await repo.findOwnerById(rfp.id)).toEqual({ buyerWsId: ctx.ws.id });
+    });
+
+    it('returns undefined for an unknown id', async () => {
+      expect(await repo.findOwnerById(randomUUID())).toBeUndefined();
+    });
+  });
+
+  describe('reserveNextCode', () => {
+    it('issues P-YYMM-0001 on first call and increments per month', async () => {
+      expect(await repo.reserveNextCode('2605')).toBe('P-2605-0001');
+      expect(await repo.reserveNextCode('2605')).toBe('P-2605-0002');
+      // independent counter per year-month
+      expect(await repo.reserveNextCode('2606')).toBe('P-2606-0001');
+    });
+  });
+
+  describe('searchForBuyer', () => {
+    it('returns whitelisted projection for ilike matches, scoped to ws', async () => {
+      await repo.save({ ...makeRfp('P-2605-SR01', ctx.ws.id, ctx.user.id), title: 'Alpha 견적' });
+      await repo.save({ ...makeRfp('P-2605-SR02', ctx.ws.id, ctx.user.id), title: 'Beta 견적' });
+      // other ws — must be excluded
+      const otherBiz = await seedBizProfile(db, { bizNo: '8888888888' });
+      const otherWs = await seedBuyerWorkspace(db, { bizProfileId: otherBiz.id });
+      await repo.save({
+        ...makeRfp('P-2605-SR03', otherWs.id, ctx.user.id),
+        title: 'Alpha other',
+        bizProfile: { bizNo: '8888888888', taxType: 'general', status: 'active', gradeSource: 'user_confirmed' },
+      });
+
+      const rows = (await repo.searchForBuyer(ctx.ws.id, '%Alpha%')) as {
+        code: string;
+        title: string;
+        memo: string;
+        status: string;
+      }[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toEqual({
+        code: 'P-2605-SR01',
+        title: 'Alpha 견적',
+        memo: '',
+        status: 'draft',
+      });
+    });
+
+    it('matches on memo as well as title', async () => {
+      await repo.save({ ...makeRfp('P-2605-SR04', ctx.ws.id, ctx.user.id), title: 'T', memo: 'needle' });
+      const rows = (await repo.searchForBuyer(ctx.ws.id, '%needle%')) as { code: string }[];
+      expect(rows.map((r) => r.code)).toEqual(['P-2605-SR04']);
+    });
+  });
 });
