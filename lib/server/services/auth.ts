@@ -70,23 +70,23 @@ export class AuthService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> => {
-      await purgeUnverifiedSignup(tx, email);
-
-      try {
-        await tx.insert(users).values({
-          id: userId,
-          email,
-          passwordHash,
-          name: input.name,
-          phone: input.phone,
-          avatarColor: 'ink',
-          status: 'active',
-          emailVerified: false,
-        });
-      } catch (err) {
-        if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-        throw err;
+      // 선검사: 이미 가입된 이메일이면 INSERT 전에 EMAIL_TAKEN 반환. postgres-js 는
+      // tx 안에서 발생한 unique violation 을 콜백 종료 후 재던지므로(try/catch 로 못 막음)
+      // 충돌을 일으키기 전에 차단한다. 상세는 purgeUnverifiedSignup 주석 참조.
+      if ((await purgeUnverifiedSignup(tx, email)) === 'blocked') {
+        return { ok: false, error: 'EMAIL_TAKEN' };
       }
+
+      await tx.insert(users).values({
+        id: userId,
+        email,
+        passwordHash,
+        name: input.name,
+        phone: input.phone,
+        avatarColor: 'ink',
+        status: 'active',
+        emailVerified: false,
+      });
 
       if (!input.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
 
@@ -108,6 +108,12 @@ export class AuthService {
       }
 
       return { ok: true, workspaceId, applicationId, email };
+    }).catch((err: unknown) => {
+      // 드문 동시-가입 경쟁: 선검사 통과 후 INSERT 직전 같은 이메일이 들어와 충돌하면
+      // postgres-js 가 tx 종료 후 위반을 재던진다 → tx 경계 밖에서 잡아 EMAIL_TAKEN 으로 매핑
+      // (confirmEmailChange 와 동일 패턴). 흔한 케이스는 위 선검사가 처리한다.
+      if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
+      throw err;
     });
 
     return result;
@@ -157,23 +163,23 @@ export class AuthService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ workspaceId: string; email: string }>> => {
-      await purgeUnverifiedSignup(tx, email);
-
-      try {
-        await tx.insert(users).values({
-          id: userId,
-          email,
-          passwordHash,
-          name: input.name,
-          phone: input.phone,
-          avatarColor: 'ink',
-          status: 'active',
-          emailVerified: false,
-        });
-      } catch (err) {
-        if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-        throw err;
+      // 선검사: 이미 가입된 이메일이면 INSERT 전에 EMAIL_TAKEN 반환. postgres-js 는
+      // tx 안에서 발생한 unique violation 을 콜백 종료 후 재던지므로(try/catch 로 못 막음)
+      // 충돌을 일으키기 전에 차단한다. 상세는 purgeUnverifiedSignup 주석 참조.
+      if ((await purgeUnverifiedSignup(tx, email)) === 'blocked') {
+        return { ok: false, error: 'EMAIL_TAKEN' };
       }
+
+      await tx.insert(users).values({
+        id: userId,
+        email,
+        passwordHash,
+        name: input.name,
+        phone: input.phone,
+        avatarColor: 'ink',
+        status: 'active',
+        emailVerified: false,
+      });
 
       const claim = await claimInviteInTx(tx, invitation, userId);
       if (!claim.ok) return claim;
@@ -184,6 +190,12 @@ export class AuthService {
         .where(eq(users.id, userId));
 
       return { ok: true, workspaceId: claim.workspaceId, email };
+    }).catch((err: unknown) => {
+      // 드문 동시-가입 경쟁: 선검사 통과 후 INSERT 직전 같은 이메일이 들어와 충돌하면
+      // postgres-js 가 tx 종료 후 위반을 재던진다 → tx 경계 밖에서 잡아 EMAIL_TAKEN 으로 매핑
+      // (confirmEmailChange 와 동일 패턴). 흔한 케이스는 위 선검사가 처리한다.
+      if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
+      throw err;
     });
 
     return result;
@@ -233,23 +245,23 @@ export class AuthService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ email: string }>> => {
-      await purgeUnverifiedSignup(tx, email);
-
-      try {
-        await tx.insert(users).values({
-          id: userId,
-          email,
-          passwordHash,
-          name: input.name,
-          phone: input.phone,
-          avatarColor: 'ink',
-          status: 'active',
-          emailVerified: false,
-        });
-      } catch (err) {
-        if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-        throw err;
+      // 선검사: 이미 가입된 이메일이면 INSERT 전에 EMAIL_TAKEN 반환. postgres-js 는
+      // tx 안에서 발생한 unique violation 을 콜백 종료 후 재던지므로(try/catch 로 못 막음)
+      // 충돌을 일으키기 전에 차단한다. 상세는 purgeUnverifiedSignup 주석 참조.
+      if ((await purgeUnverifiedSignup(tx, email)) === 'blocked') {
+        return { ok: false, error: 'EMAIL_TAKEN' };
       }
+
+      await tx.insert(users).values({
+        id: userId,
+        email,
+        passwordHash,
+        name: input.name,
+        phone: input.phone,
+        avatarColor: 'ink',
+        status: 'active',
+        emailVerified: false,
+      });
 
       await tx
         .insert(workspaceMembers)
@@ -262,6 +274,12 @@ export class AuthService {
         .where(eq(users.id, userId));
 
       return { ok: true, email };
+    }).catch((err: unknown) => {
+      // 드문 동시-가입 경쟁: 선검사 통과 후 INSERT 직전 같은 이메일이 들어와 충돌하면
+      // postgres-js 가 tx 종료 후 위반을 재던진다 → tx 경계 밖에서 잡아 EMAIL_TAKEN 으로 매핑
+      // (confirmEmailChange 와 동일 패턴). 흔한 케이스는 위 선검사가 처리한다.
+      if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
+      throw err;
     });
 
     return result;
