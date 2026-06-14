@@ -527,6 +527,13 @@ export type RfpTeamMessageWithAuthor = RfpTeamMessageRecord & {
   attachments: Attachment[];
 };
 
+export type TeamThreadSummary = {
+  rfpId: string;
+  lastMessageAt: Date;
+  lastBody: string;
+  lastAuthorUserId: string;
+};
+
 export interface RfpTeamMessageRepo {
   /** 메시지 insert (append-only). */
   save(msg: RfpTeamMessageRecord, tx?: Tx): Promise<void>;
@@ -536,6 +543,8 @@ export interface RfpTeamMessageRepo {
     workspaceId: string,
     tx?: Tx,
   ): Promise<RfpTeamMessageWithAuthor[]>;
+  /** 워크스페이스가 메시지를 남긴 모든 RFP 의 스레드 요약(rfp별 마지막 메시지). */
+  listThreadsForWorkspace(workspaceId: string, tx?: Tx): Promise<TeamThreadSummary[]>;
 }
 
 // ── Chat: Message Template ────────────────────────────────────────────
