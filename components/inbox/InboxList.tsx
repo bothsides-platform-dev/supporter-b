@@ -136,7 +136,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                     </Link>
                   ) : row.bidId ? (
                     <Link
-                      href={`/inbox/${row.rfpId}/submitted`}
+                      href={`/inbox/${row.rfpId}`}
                       className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
                     >
                       보낸 견적

@@ -27,6 +27,7 @@ vi.mock('@/components/inbox/SamplePgRfpBanner', () => ({
 import { PgDealRoomBody } from '../PgDealRoomBody';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { RFP } from '@/lib/types/rfp';
+import type { Bid } from '@/lib/types/bid';
 
 const baseRfp: RFP = {
   id: 'rfp-1',
@@ -66,5 +67,32 @@ describe('PgDealRoomBody — 샘플 배너', () => {
   it('isSample 이 아니면 SamplePgRfpBanner 를 렌더하지 않는다', () => {
     render(<PgDealRoomBody data={buildData({ rfp: { ...baseRfp, isSample: false } })} />);
     expect(screen.queryByTestId('sample-banner')).not.toBeInTheDocument();
+  });
+});
+
+const submittedBid: Bid = {
+  id: 'b1',
+  rfpId: 'rfp-1',
+  pgWsId: 'ws-pg',
+  invitationId: 'inv1',
+  settleCycle: 'D+1',
+  settleLimit: 0,
+  guaranteeInsurance: 0,
+  paymentFees: { card: 1.5 },
+  customFees: {},
+  proposalPdfs: [],
+  status: 'submitted',
+  submittedBy: 'pg-u',
+  submittedAt: new Date().toISOString(),
+  round: 1,
+};
+
+describe('PgDealRoomBody — 제출 완료 상태', () => {
+  it('myBid 있으면 제출 완료 안내 + 접이식 SubmittedSummary 를 같은 창에서 보여준다', () => {
+    render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
+    expect(screen.getByText(/견적을 보냈어요/)).toBeInTheDocument();
+    // SubmittedSummary 의 '보낸 내용 보기' 토글이 인라인으로 — /submitted 페이지로 안 나감.
+    expect(screen.getByRole('button', { name: /보낸 내용 보기/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /보낸 견적 보기/ })).not.toBeInTheDocument();
   });
 });
