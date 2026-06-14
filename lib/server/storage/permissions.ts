@@ -27,6 +27,12 @@
  *     - Uploader themselves: ALLOW (via top-level fast-path)
  *     - Otherwise: DENY
  *
+ *   `rfpTeamMessageId` set (attachment on an internal team-thread message)
+ *     - Members of the message's OWN workspace: ALLOW
+ *     - Uploader themselves: ALLOW (via top-level fast-path)
+ *     - **Other workspaces (buyer↔PG, PG↔PG): DENY** — sealed-bid: each side's
+ *       team thread is disjoint.
+ *
  *   None set (draft, uploaded before its owner row exists)
  *     - Only the uploader: ALLOW
  *
@@ -34,7 +40,7 @@
  * read another PG's proposal even if invited to the same RFP.
  */
 import { eq } from 'drizzle-orm';
-import { bidNotes, bids, chatConversations, chatMessages, rfps } from '@/lib/db/schema';
+import { bidNotes, bids, chatConversations, chatMessages, rfpTeamMessages, rfps } from '@/lib/db/schema';
 import type { AttachmentRecord } from '@/lib/server/repositories/attachment-record';
 import type { InvitationRepo, WorkspaceRepo, Tx } from '@/lib/server/repositories/types';
 
@@ -139,6 +145,21 @@ export async function canAccessAttachment(
     if (!rfpRow) return false;
     if (wsId && rfpRow.buyerWsId === wsId && (await isMember(wsId))) return true;
     return false;
+  }
+
+  if (att.rfpTeamMessageId) {
+    // team-message attachment — scoped to one (rfp, workspace) internal thread.
+    // Sealed-bid: only members of THAT workspace may read it; the opposite side
+    // (buyer vs each PG) sees a disjoint thread. Same gate as listByScope, which
+    // filters team messages by (rfpId, workspaceId).
+    const [msg] = await h
+      .select({ workspaceId: rfpTeamMessages.workspaceId })
+      .from(rfpTeamMessages)
+      .where(eq(rfpTeamMessages.id, att.rfpTeamMessageId))
+      .limit(1);
+    if (!msg) return false;
+    if (!wsId || msg.workspaceId !== wsId) return false;
+    return isMember(wsId);
   }
 
   if (att.chatMessageId) {

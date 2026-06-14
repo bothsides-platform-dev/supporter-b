@@ -21,6 +21,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 - **Bidding is sealed 1:N; discovery is open (opt-out)**: participation (who can bid) is buyer-controlled via the workspace-ID allowlist (`rfp_allowed_pg`), and **bids stay sealed — PGs never see each other or a competitor count (`Bid.competitorCount` does not exist by design).** Two axes, kept separate:
   - **Discovery = open by default, buyer opt-out.** Every `sent` RFP with `deadline > now` and `board_visible=true` (the default) appears on the PG-facing open board (`/opportunities` + PG home 탐색 section). The board listing exposes **only `구매사명`(workspace name)·`제목`·`홈페이지`** — never fees/current-terms/volume/bizNo/memo/attachments (whitelist enforced at the query layer in `lib/server/repositories/drizzle/rfp-pg-request.ts`). A buyer can hide a specific RFP via `setRfpBoardVisibilityAction`.
   - **Participation = buyer-gated.** A non-invited PG sends a one-time cold-pitch request (`rfp_pg_requests`, UNIQUE per (rfp, pg), rejection permanent). Buyer **accept** adds them to the allowlist + a real invitation (full info then visible in their inbox); **reject** is final.
+  - **Per-field opt-out for invited PGs — `현재 카드 수수료`.** Even an invited PG who sees the full brief can be denied one field: the buyer's **current card fee** (`current_fee_visible_to_pg`, default true = shown). When off, the value is stripped server-side in `loadPgRfpDetail` (the PG never reads it from the RSC payload/network — `RfpBriefPanel`'s render gate is only the visual fallback). The buyer's own comparison baseline always keeps the fee. Toggle lives in the RFP create wizard (step 2, under 현재 카드 수수료).
 - **Per-RFP unique URL + token** in invitation email; token authoritative only for first entry, then workspace membership takes over
 - **용어 주의 — 코드는 `RFP`/`bid`, 사용자 화면은 '견적' 언어**: 코드 식별자·라우트(`/rfp`)·DB(`rfps`/`bids`)는 영어 그대로지만, **사용자에게 보이는 모든 한국어 문구는 '견적 요청'(RFP)·'견적'(bid)·'선정'(award)** 으로 통일한다. UI 문구 작성·수정 시 `UX_WRITING.md` §8 도메인 용어집을 따른다. 랜딩/마케팅 면만 '경쟁 입찰' 프레이밍 유지.
 
@@ -39,7 +40,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | Component tooling | shadcn (base-nova) — 컴포넌트 scaffolding 전용 | `shadcn@4.6.0` |
 | State | Zustand (UI toggles, signup draft, page→shell header-actions slot) | `zustand@5.0.13` |
 | Forms | zod v4 검증 + Server Actions (react-hook-form 미사용 — 폼은 useState + zod) | `zod@4.4.3` |
-| Numeric input | `react-number-format` — 원화 금액 입력 천단위 구분·소수점 차단 (`CurrencyInput`) | `react-number-format@5.4.5` |
+| Numeric input | `react-number-format` — 원화 금액 입력 천단위 구분·소수점 차단 (`CurrencyInput`) + `D+N` 정수 전용 정산주기 입력 (`DayOffsetInput`) | `react-number-format@5.4.5` |
 | Korean i18n | `es-hangul` (toss) — 조사 자동 선택(`josa()`), 초성 검색(`disassemble`), 숫자→한글 혼합 표기(`numberToHangulMixed`). 한글 텍스트 처리 단일 출처 | `es-hangul@2.3.8` |
 | Icons | lucide-react | `lucide-react@1.14.0` |
 | Fonts | `next/font/local` — Pretendard Variable + JetBrains Mono Variable, self-hosted in `public/fonts/` | — |
@@ -77,7 +78,7 @@ app/
 
 Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation.
 
-**Host routing (prod only)**: the single Next.js app serves two hostnames — `supporter-b.com` (buyer) and `partner.supporter-b.com` (PG). Route tree is unchanged; `(app)/layout.tsx` reads the request host and redirects a mismatched session to its correct host (`lib/site-routing.ts`). Session cookie is scoped to `.supporter-b.com` for cross-subdomain SSO (`AUTH_COOKIE_DOMAIN`). Workspace switch navigates across hosts. PG-facing emails link to `partner.supporter-b.com`. Local dev uses a single host (routing disabled). Env vars: `NEXT_PUBLIC_BUYER_ORIGIN`, `NEXT_PUBLIC_PARTNER_ORIGIN`.
+**Host routing (prod only)**: the single Next.js app serves two hostnames — `supporter-b.com` (buyer) and `partner.supporter-b.com` (PG). Route tree is unchanged; `(app)/layout.tsx` reads the request host and redirects a mismatched session to its correct host (`lib/site-routing.ts`). `/signup` also reads the host and redirects to `/signup/buyer` or `/signup/pg` without a role-chooser screen (`signupTargetForHost` in `lib/site-routing.ts`). Session cookie is scoped to `.supporter-b.com` for cross-subdomain SSO (`AUTH_COOKIE_DOMAIN`). Workspace switch navigates across hosts. PG-facing emails link to `partner.supporter-b.com`. Local dev uses a single host (routing disabled). Env vars: `NEXT_PUBLIC_BUYER_ORIGIN`, `NEXT_PUBLIC_PARTNER_ORIGIN`.
 
 **Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
 

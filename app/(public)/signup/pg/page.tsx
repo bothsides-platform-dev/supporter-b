@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/primitives/Button';
 import { AgreementCheckboxes } from '@/components/auth/AgreementCheckboxes';
@@ -14,11 +14,13 @@ import {
   validatePasswordConfirm,
 } from '@/lib/auth/password-validation';
 import { checkEmailAvailableAction } from '@/lib/server/actions/auth';
+import { safeInternalNext } from '@/lib/auth/safe-next';
 
 type AgreementState = { terms: boolean; privacy: boolean; marketing: boolean };
 
-export default function PgSignupEmailPage() {
+function PgSignupEmailForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setEmail, setAgreedAt, setWorkspaceType } = useSignupDraftStore();
 
   // 초대 경로 여부를 draft에서 읽는다 (sessionStorage, 서버사이드에서 읽을 수 없음)
@@ -80,12 +82,15 @@ export default function PgSignupEmailPage() {
     setAgreedAt(agreedAt);
     setWorkspaceType('pg');
 
+    const nextParam = safeInternalNext(searchParams.get('next'));
     writeSignupDraft({
       ...draft,
       email,
       password,
       agreedAt,
       workspaceType: 'pg',
+      // step-1이 next의 단일 출처: 현재 진입 URL 기준으로 덮어쓴다(이전 세션 잔여값 제거).
+      next: nextParam ?? undefined,
     });
 
     // 초대 경로: workspace 단계 건너뜀 (wsName/bizNo 불필요)
@@ -184,12 +189,6 @@ export default function PgSignupEmailPage() {
       {!isInvited && (
         <div className="text-center space-y-2">
           <Link
-            href="/signup"
-            className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-          >
-            ← 이전으로
-          </Link>
-          <Link
             href="/login"
             className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
           >
@@ -198,5 +197,19 @@ export default function PgSignupEmailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PgSignupEmailPage() {
+  return (
+    <Suspense
+      fallback={
+        <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">
+          LOADING…
+        </p>
+      }
+    >
+      <PgSignupEmailForm />
+    </Suspense>
   );
 }

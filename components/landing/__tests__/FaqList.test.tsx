@@ -31,6 +31,14 @@ describe('FaqList', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('items prop 으로 전달한 FAQ 를 렌더하고 기본 항목은 숨긴다 (PG 랜딩 공용)', () => {
+    const custom = [{ q: 'PG 전용 질문?', a: 'PG 전용 답변' }];
+    render(<FaqList items={custom} />);
+    expect(screen.getByText('PG 전용 질문?')).toBeInTheDocument();
+    expect(screen.getByText('PG 전용 답변')).toBeInTheDocument();
+    expect(screen.queryByText(/도입 수수료가 있나요/)).toBeNull();
+  });
+
   it('exports FAQ_ITEMS as a non-empty array with q and a strings', () => {
     expect(FAQ_ITEMS.length).toBeGreaterThan(0);
     FAQ_ITEMS.forEach((item: { q: string; a: string }) => {

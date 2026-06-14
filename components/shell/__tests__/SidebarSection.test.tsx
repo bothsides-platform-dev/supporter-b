@@ -45,7 +45,7 @@ const rfpSection: NavSection = {
   label: 'RFP',
   href: '/rfp',
   base: '/rfp',
-  links: [{ id: 'rfp-new', label: '새 RFP', href: '/rfp/new' }],
+  links: [{ id: 'rfp-new', label: '새 RFP', href: '/rfp-create' }],
   statuses: [
     { status: 'active', label: '진행중' },
     { status: 'closed', label: '마감' },
@@ -89,7 +89,7 @@ describe('SidebarSection — status section (RFP)', () => {
     renderSection(rfpSection);
     expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('href', '/rfp?status=active');
     expect(screen.getByRole('link', { name: '마감' })).toHaveAttribute('href', '/rfp?status=closed');
-    expect(screen.getByRole('link', { name: '새 RFP' })).toHaveAttribute('href', '/rfp/new');
+    expect(screen.getByRole('link', { name: '새 RFP' })).toHaveAttribute('href', '/rfp-create');
   });
 
   it('marks the matching status sub-item as active', () => {

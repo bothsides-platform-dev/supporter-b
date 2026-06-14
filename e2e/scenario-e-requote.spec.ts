@@ -131,7 +131,9 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
 
     // 2d. Fill the BidWizard — step 1: 정산 조건
     await page.locator('select').first().selectOption('D');
-    await page.locator('input[type="number"]').first().fill('1');
+    // cycleNum 은 NumericFormat(type=text, placeholder="1") — 구 input[type=number]
+    // 셀렉터(cf98414 NumericFormat 전환 이후 stale)를 placeholder 매칭으로 교체.
+    await page.getByPlaceholder('1', { exact: true }).fill('1');
     await page.getByRole('button', { name: '수수료', exact: true }).click();
 
     // 2e. Step 2: 수수료 — fill all visible PercentInput placeholders
@@ -155,14 +157,10 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
       .getByRole('dialog')
       .getByRole('button', { name: /견적 보내기/ })
       .click();
-    await page.waitForURL(new RegExp(`/inbox/${RFP_CODE}/submitted$`), {
-      timeout: 15_000,
-    });
 
-    // 2h. Confirm submitted page loaded
-    await expect(
-      page.getByRole('heading', { name: /견적을 보냈어요/ }),
-    ).toBeVisible({ timeout: 15_000 });
+    // 2h. 인플레이스 제출 완료 — 별도 /submitted 로 이탈하지 않고 같은 창에서 갱신.
+    await expect(page.getByText(/견적을 보냈어요/)).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`));
 
     // ── DB assertions ─────────────────────────────────────────────────────
 

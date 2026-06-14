@@ -87,6 +87,70 @@ describe('RfpBriefPanel', () => {
     expect(screen.queryByText('배송 및 서비스 기간')).not.toBeInTheDocument();
   });
 
+  it('currentFeeVisibleToPg가 false면 "현재 카드 수수료" 행이 표시되지 않는다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{ ...rfp, currentFeeRate: '3.4%', currentFeeVisibleToPg: false }}
+        buyerName="(주)진짜상사"
+      />,
+    );
+    expect(screen.queryByText('현재 카드 수수료')).not.toBeInTheDocument();
+    expect(screen.queryByText('3.4%')).not.toBeInTheDocument();
+  });
+
+  it('currentFeeVisibleToPg가 false여도 다른 현재 조건 행은 표시된다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{
+          ...rfp,
+          currentFeeRate: '3.4%',
+          currentSettlementCycle: 'D+1',
+          currentFeeVisibleToPg: false,
+        }}
+        buyerName="(주)진짜상사"
+      />,
+    );
+    expect(screen.queryByText('현재 카드 수수료')).not.toBeInTheDocument();
+    expect(screen.getByText('현재 정산주기')).toBeInTheDocument();
+    expect(screen.getByText('D+1')).toBeInTheDocument();
+  });
+
+  it('currentFeeVisibleToPg가 true면 "현재 카드 수수료" 행이 표시된다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{ ...rfp, currentFeeRate: '3.4%', currentFeeVisibleToPg: true }}
+        buyerName="(주)진짜상사"
+      />,
+    );
+    expect(screen.getByText('현재 카드 수수료')).toBeInTheDocument();
+    expect(screen.getByText('3.4%')).toBeInTheDocument();
+  });
+
+  it('currentFeeVisibleToPg가 undefined(미지정)면 노출로 취급한다(하위호환)', () => {
+    render(
+      <RfpBriefPanel rfp={{ ...rfp, currentFeeRate: '3.4%' }} buyerName="(주)진짜상사" />,
+    );
+    expect(screen.getByText('현재 카드 수수료')).toBeInTheDocument();
+    expect(screen.getByText('3.4%')).toBeInTheDocument();
+  });
+
+  it('숫자만 저장된 신규 값을 표기형식(%·한국어 금액)으로 보여준다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{
+          ...rfp,
+          currentFeeRate: '3.4',
+          currentSettlementLimit: '100000000',
+          currentGuaranteeInsurance: '30000000',
+        }}
+        buyerName="(주)진짜상사"
+      />,
+    );
+    expect(screen.getByText('3.4%')).toBeInTheDocument();
+    expect(screen.getByText('1억원')).toBeInTheDocument();
+    expect(screen.getByText('3,000만원')).toBeInTheDocument();
+  });
+
   it("contractType 'renewal' 이면 '갱신 계약' Chip이 표시된다", () => {
     render(<RfpBriefPanel rfp={{ ...rfp, contractType: 'renewal' }} buyerName="(주)진짜상사" />);
     expect(screen.getByText('갱신 계약')).toBeInTheDocument();

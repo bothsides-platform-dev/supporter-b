@@ -11,7 +11,7 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { rfpTeamMessages } from '@/lib/db/schema';
+import { attachments, rfpTeamMessages } from '@/lib/db/schema';
 import { __resetTeamChatServiceForTest } from '@/lib/server/services/team-chat';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
@@ -89,6 +89,40 @@ describe('loadTeamThread', () => {
     expect(r.messages[1].isSelf).toBe(false);
     expect(r.messages[1].authorName).toBe('이동료');
     expect(new Date(r.messages[0].createdAt).getTime()).not.toBeNaN();
+  });
+
+  it('hydrates attachments on messages', async () => {
+    const me = await seedUser(db, { email: 'att@b.com', name: '김구매' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+    const msgId = randomUUID();
+    await db.insert(rfpTeamMessages).values({
+      id: msgId,
+      rfpId: rfp.id,
+      workspaceId: ws.id,
+      authorUserId: me.id,
+      body: '첨부 메모',
+      createdAt: new Date('2026-06-10T10:00:00Z'),
+    });
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId,
+      rfpTeamMessageId: msgId,
+      name: 'memo.pdf',
+      size: 100,
+      mimeType: 'application/pdf',
+      uploadedBy: me.id,
+    });
+    sessionRef.value = {
+      user: { id: me.id, email: 'att@b.com', workspaceId: ws.id, workspaceType: 'buyer' },
+    };
+
+    const r = await loadTeamThread(rfp.id);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.messages[0].attachments.map((a) => a.id)).toEqual([attId]);
+    expect(r.messages[0].attachments[0].url).toBe(`/api/files/${attId}`);
   });
 
   it('returns UNAUTHENTICATED without a session', async () => {

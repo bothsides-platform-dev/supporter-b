@@ -15,7 +15,6 @@ import { MetricComparePopover, type CompareRow } from './MetricComparePopover';
 import { AwardConfirmDialog } from './AwardConfirmDialog';
 import { AwardResult } from './AwardResult';
 import { RequoteDialog } from './RequoteDialog';
-import { BidNotesPanel } from '@/components/rfp/bid-detail/BidNotesPanel';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { useChatRailStore } from '@/lib/stores/chat-rail';
 import { BidPdfPane } from '@/components/rfp/bid-detail/BidPdfPane';
@@ -31,14 +30,12 @@ import {
   type MerchantTier,
   type PaymentMethod,
 } from '@/lib/types/bid';
-import type { BidNote } from '@/lib/types/bid-note';
 import { cn } from '@/lib/utils';
 
 type Props = {
   bids: Bid[];
   pgWsNameMap: Record<string, string>;
   current: CurrentConditions;
-  notesByBid: Record<string, BidNote[]>;
   rfpStatus: string;
   awardedBidId?: string | null;
   requiredPaymentMethods: readonly PaymentMethod[];
@@ -50,10 +47,12 @@ type Props = {
   requoteByPg?: Record<string, { status: 'pending' | 'responded'; round: number; deadline: string }>;
   /** 온보딩 샘플 — 읽기전용 샌드박스(선정 비활성) */
   isSample?: boolean;
+  /** 딜룸 모달의 '견적 비교' 탭에 임베드될 때 — 탭이 제목을 제공하므로 외곽 헤더를 숨긴다. */
+  hideHeader?: boolean;
 };
 
 export function FocusComparison(props: Props) {
-  const { bids, pgWsNameMap, current, notesByBid, rfpStatus, awardedBidId, requoteByPg } = props;
+  const { bids, pgWsNameMap, current, rfpStatus, awardedBidId, requoteByPg } = props;
   const router = useRouter();
 
   const [tier, setTier] = useState<MerchantTier>('general');
@@ -140,15 +139,17 @@ export function FocusComparison(props: Props) {
 
   return (
     <section>
-      <div className="flex items-center gap-3 mb-4">
-        <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-          견적 비교
-        </span>
-        <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-        <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-          정렬: 카드 수수료 낮은 순
-        </span>
-      </div>
+      {!props.hideHeader && (
+        <div className="flex items-center gap-3 mb-4">
+          <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+            견적 비교
+          </span>
+          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+            정렬: 카드 수수료 낮은 순
+          </span>
+        </div>
+      )}
 
       <div role="group" aria-label="구간 선택" className="flex gap-1 mb-3">
         {MERCHANT_TIERS.map((t) => (
@@ -333,9 +334,6 @@ export function FocusComparison(props: Props) {
             <BidPdfPane pdf={active.proposalPdfs[0]} />
           </AccordionItem>
 
-          <AccordionItem value="my-notes" title="내 메모">
-            <BidNotesPanel bidId={active.id} notes={notesByBid[active.id] ?? []} />
-          </AccordionItem>
         </Accordion>
 
         {canAward && (

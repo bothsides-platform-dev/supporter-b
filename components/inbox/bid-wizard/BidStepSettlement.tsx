@@ -1,5 +1,6 @@
 'use client';
 
+import { NumericFormat } from 'react-number-format';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
 import { InfoTip } from '@/components/ui/info-tip';
@@ -47,12 +48,14 @@ export function BidStepSettlement({
                 onChange={(v) => onField('cycleUnit', v as 'D' | 'W' | 'M')}
               />
             </div>
-            <input
-              type="number"
-              min="1"
-              max="99"
+            <NumericFormat
+              decimalScale={0}
+              allowNegative={false}
+              isAllowed={(values) =>
+                values.floatValue === undefined || values.floatValue <= 99
+              }
               value={cycleNum}
-              onChange={(e) => onField('cycleNum', e.target.value)}
+              onValueChange={(values) => onField('cycleNum', values.value)}
               placeholder="1"
               className={cn(numericInputClass, 'flex-1')}
             />

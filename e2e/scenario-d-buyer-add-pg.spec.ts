@@ -111,9 +111,8 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
 
     // ── 2. Open seeded RFP detail ────────────────────────────────
     await page.goto(`/rfp/${RFP_ID}`);
-    // 'PG 초대 · 게시판 노출 관리' Accordion 은 제출된 bid 가 있을 때 기본 닫힘.
-    // 명시적으로 펼쳐 RfpInviteManager 가 보이도록 한다.
-    await page.getByRole('button', { name: 'PG 초대 · 게시판 노출 관리' }).click({ timeout: 15_000 });
+    // 딜룸 'PG 관리' 탭으로 전환해 RfpInviteManager 를 띄운다(구 아코디언 대체).
+    await page.getByRole('tab', { name: 'PG 관리' }).click({ timeout: 15_000 });
     await expect(page.getByText('초대 PG')).toBeVisible();
 
     // ── 3. Add a new PG workspace via Popover + cmdk ─────────────

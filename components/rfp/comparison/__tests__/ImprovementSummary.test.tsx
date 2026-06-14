@@ -99,6 +99,22 @@ describe('ImprovementSummary', () => {
     expect(card.queryByText(/%p/)).not.toBeInTheDocument();
   });
 
+  it('숫자만 저장된 신규 현재값을 표기형식으로 보여주면서 개선폭은 그대로 계산한다', () => {
+    render(
+      <ImprovementSummary
+        bid={makeBid()}
+        current={{ feeRate: '2.8', settlementLimit: '500000000', guaranteeInsurance: '1200000' }}
+      />,
+    );
+    const card = within(screen.getByTestId('metric-row-card'));
+    expect(card.getByText('2.8%')).toBeInTheDocument(); // 표기: 숫자 → %
+    expect(card.getByText(/0\.60%p/)).toBeInTheDocument(); // 개선폭은 그대로
+
+    const limit = within(screen.getByTestId('metric-row-limit'));
+    expect(limit.getByText('5억원')).toBeInTheDocument(); // 표기: 한국어 금액
+    expect(limit.getByText('700,000,000원')).toBeInTheDocument(); // 제안값
+  });
+
   it('degrades to a "핵심 수치" summary with guidance when no current conditions are given', () => {
     render(<ImprovementSummary bid={makeBid()} current={{}} />);
     expect(screen.getByText(/현재 조건을 입력하면/)).toBeInTheDocument();

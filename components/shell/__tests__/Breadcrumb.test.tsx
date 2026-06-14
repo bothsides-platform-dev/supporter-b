@@ -57,23 +57,23 @@ describe('Breadcrumb — URL-derived segments', () => {
     expect(screen.queryByText('견적 요청')).not.toBeInTheDocument();
   });
 
-  it('derives "견적 요청 / 새 견적 요청" from /rfp/new', () => {
-    mockPathname.mockReturnValue('/rfp/new');
+  it('derives "견적 요청 / 새 견적 요청" from /rfp-create', () => {
+    mockPathname.mockReturnValue('/rfp-create');
     render(<Breadcrumb />);
     expect(screen.getByText('견적 요청')).toBeInTheDocument();
     expect(screen.getByText('새 견적 요청')).toBeInTheDocument();
   });
 });
 
-describe('Breadcrumb — /rfp/new trail', () => {
+describe('Breadcrumb — /rfp-create trail', () => {
   it('renders "견적 요청" as a link to /rfp', () => {
-    mockPathname.mockReturnValue('/rfp/new');
+    mockPathname.mockReturnValue('/rfp-create');
     render(<Breadcrumb />);
     expect(screen.getByRole('link', { name: '견적 요청' })).toHaveAttribute('href', '/rfp');
   });
 
   it('renders "새 견적 요청" as the current page (aria-current, no link)', () => {
-    mockPathname.mockReturnValue('/rfp/new');
+    mockPathname.mockReturnValue('/rfp-create');
     render(<Breadcrumb />);
     const current = screen.getByText('새 견적 요청');
     expect(current).toHaveAttribute('aria-current', 'page');

@@ -26,6 +26,7 @@ function resetStore() {
     currentSolutionDetail: '',
     memo: '',
     rfpFiles: [],
+    currentFeeVisibleToPg: true,
   });
 }
 
@@ -67,28 +68,65 @@ describe('RfpStep2Content', () => {
     expect(screen.getByPlaceholderText('솔루션 이름')).toBeInTheDocument();
   });
 
-  it('현재 정산주기 입력 필드가 렌더된다', () => {
-    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByPlaceholderText('D+1')).toBeInTheDocument();
-  });
-
-  it('현재 정산주기 입력 시 store에 반영된다', async () => {
+  it('현재 정산주기 입력 시 숫자만 입력되어 D+N 형식으로 저장된다', async () => {
     const user = userEvent.setup();
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-    await user.type(screen.getByPlaceholderText('D+1'), 'W+2');
-    expect(useRfpDraftStore.getState().currentSettlementCycle).toBe('W+2');
+    // 정산주기 DayOffsetInput — 'D+' 접두 고정, 숫자 placeholder '1'
+    await user.type(screen.getByPlaceholderText('1'), 'W2');
+    expect(useRfpDraftStore.getState().currentSettlementCycle).toBe('D+2');
   });
 
-  it('배송 및 서비스 기간 입력 필드가 렌더된다', () => {
-    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-    expect(screen.getByPlaceholderText('D+3')).toBeInTheDocument();
-  });
-
-  it('배송 및 서비스 기간 입력 시 store에 반영된다', async () => {
+  it('배송 및 서비스 기간 입력 시 숫자만 입력되어 D+N 형식으로 저장된다', async () => {
     const user = userEvent.setup();
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-    await user.type(screen.getByPlaceholderText('D+3'), 'D+5');
+    await user.type(screen.getByPlaceholderText('3'), 'D5');
     expect(useRfpDraftStore.getState().deliveryServicePeriod).toBe('D+5');
+  });
+
+  describe('현재 카드 수수료 — 숫자+% 제한', () => {
+    it('숫자만 raw 문자열로 저장되고 글자는 차단된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      const input = screen.getByPlaceholderText('3.4') as HTMLInputElement;
+      await user.type(input, '3.4%abc');
+      expect(input.value).toBe('3.4');
+      expect(useRfpDraftStore.getState().currentFeeRate).toBe('3.4');
+    });
+
+    it('100 을 초과하는 값은 입력되지 않는다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      const input = screen.getByPlaceholderText('3.4') as HTMLInputElement;
+      await user.type(input, '150');
+      expect(useRfpDraftStore.getState().currentFeeRate).not.toBe('150');
+    });
+
+    it('정확히 100 은 허용된다 (상한 포함 경계)', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      const input = screen.getByPlaceholderText('3.4') as HTMLInputElement;
+      await user.type(input, '100');
+      expect(useRfpDraftStore.getState().currentFeeRate).toBe('100');
+    });
+  });
+
+  describe('현재 월 정산한도/보증보험 — 원화 CurrencyInput', () => {
+    it('정산한도는 천단위 콤마로 표시되고 raw digit로 저장된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.type(screen.getByPlaceholderText('월 1억'), '100000000');
+      expect(screen.getByDisplayValue('100,000,000')).toBeInTheDocument();
+      expect(useRfpDraftStore.getState().currentSettlementLimit).toBe('100000000');
+    });
+
+    it('보증보험에 글자를 입력하면 차단된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      const input = screen.getByPlaceholderText('3000만원') as HTMLInputElement;
+      await user.type(input, '30000000원');
+      expect(input.value).toBe('30,000,000');
+      expect(useRfpDraftStore.getState().currentGuaranteeInsurance).toBe('30000000');
+    });
   });
 
   describe('홈페이지 도메인 유효성', () => {
@@ -197,6 +235,31 @@ describe('RfpStep2Content', () => {
       await user.type(input, '50000000');
       // CurrencyInput onValueChange → values.value (raw digit)
       expect(useRfpDraftStore.getState().annualPgVolume).toBe('50000000');
+    });
+  });
+
+  describe('현재 카드 수수료 PG 공개 토글', () => {
+    const cbName = '현재 카드 수수료를 PG사에 공개하기';
+
+    it('기본값은 공개(checked)다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getByRole('checkbox', { name: cbName })).toBeChecked();
+    });
+
+    it('체크 해제 시 store currentFeeVisibleToPg가 false가 된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('checkbox', { name: cbName }));
+      expect(useRfpDraftStore.getState().currentFeeVisibleToPg).toBe(false);
+    });
+
+    it('다시 체크 시 store currentFeeVisibleToPg가 true로 복귀한다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      const cb = screen.getByRole('checkbox', { name: cbName });
+      await user.click(cb);
+      await user.click(cb);
+      expect(useRfpDraftStore.getState().currentFeeVisibleToPg).toBe(true);
     });
   });
 
