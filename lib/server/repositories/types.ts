@@ -648,6 +648,22 @@ export interface ChatReadRepo {
   ): Promise<Date | undefined>;
 }
 
+// ── RFP Team Message Read State ───────────────────────────────────────
+/** (rfp, workspace, user) 팀 스레드 읽음 row — 통합 인박스 팀 안읽음 배지 근거. */
+export type RfpTeamMessageRead = {
+  rfpId: string;
+  workspaceId: string;
+  userId: string;
+  lastReadAt: Date;
+};
+
+export interface RfpTeamMessageReadRepo {
+  /** (rfp, workspace, user) PK upsert — last_read_at 갱신(idempotent, monotonic). */
+  upsert(rfpId: string, workspaceId: string, userId: string, at: Date, tx?: Tx): Promise<void>;
+  /** (rfp, workspace, user) 읽음 row 조회. 없으면 undefined. */
+  getFor(rfpId: string, workspaceId: string, userId: string, tx?: Tx): Promise<RfpTeamMessageRead | undefined>;
+}
+
 // ── Audit Log (C5) ────────────────────────────────────────────────────
 /** 신규 감사 행 — createdAt/id 는 DB 가 채운다. */
 export type NewAuditLog = {
