@@ -278,6 +278,8 @@ export interface NotificationRepo {
   ): Promise<boolean>;
   /** 동일 window 내 pending team_chat 인앱 알림 존재 여부(rfp 단위 dedupe). */
   hasPendingTeamNotification(userId: string, rfpId: string, windowStart: Date, tx?: Tx): Promise<boolean>;
+  /** 동일 window 내 team_chat.mention 인앱 알림 존재 여부(멘션 전용 dedupe). */
+  hasPendingTeamMentionNotification(userId: string, rfpId: string, windowStart: Date, tx?: Tx): Promise<boolean>;
 }
 
 // ── Contract ──────────────────────────────────────────────────────────
