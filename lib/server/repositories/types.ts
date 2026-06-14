@@ -173,6 +173,37 @@ export interface UserRepo {
   ): Promise<(User & { passwordHash: string }) | undefined>;
   /** 이메일 인증 플래그 전환 — signup_email 토큰 소비 시 호출. 매칭 없으면 no-op. */
   markEmailVerified(email: string, tx?: Tx): Promise<void>;
+  /** JWT 무효화용 sessionVersion 단건 조회. 유저 없으면 undefined. */
+  getSessionVersion(userId: string, tx?: Tx): Promise<number | undefined>;
+  /** 이메일 인증 플래그 단건 조회(DB 라이브 read). 유저 없으면 undefined. */
+  getEmailVerified(userId: string, tx?: Tx): Promise<boolean | undefined>;
+  /** 이메일로 인증 플래그 조회 — 계정 없으면 undefined(미등록 식별용). */
+  findEmailVerifiedByEmail(email: string, tx?: Tx): Promise<boolean | undefined>;
+  /** 해당 이메일 계정 존재 여부(인증 여부 무관). */
+  existsByEmail(email: string, tx?: Tx): Promise<boolean>;
+  /** 이메일 대소문자 무시(lower) 매칭으로 userId 조회. 없으면 undefined. */
+  findIdByEmailCI(email: string, tx?: Tx): Promise<string | undefined>;
+  /** id 기준 이메일 인증 전환 — 미인증 행만(WHERE 가드). 매칭 없으면 no-op. */
+  markEmailVerifiedById(userId: string, tx?: Tx): Promise<void>;
+  /** 마지막 활성 워크스페이스 기억값 갱신. */
+  setLastActiveWorkspace(userId: string, workspaceId: string, tx?: Tx): Promise<void>;
+  /** 로그인용 raw auth projection — 도메인 매핑이 버리는 deletedAt·lastActiveWorkspaceId 포함. */
+  findAuthRowByEmail(
+    email: string,
+    tx?: Tx,
+  ): Promise<
+    | {
+        id: string;
+        email: string;
+        passwordHash: string | null;
+        emailVerified: boolean;
+        deletedAt: Date | null;
+        lastActiveWorkspaceId: string | null;
+      }
+    | undefined
+  >;
+  /** 마스터/운영자 계정 insert-if-absent — 인증 완료·시스템 계정으로 생성, userId 반환. */
+  provisionMaster(params: { email: string; name: string }, tx?: Tx): Promise<string>;
 }
 
 // ── BizProfile ────────────────────────────────────────────────────────
