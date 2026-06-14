@@ -21,6 +21,7 @@ import {
 } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { teamDigestDedupeKey, teamDigestWindowEnd } from '@/lib/server/outbox/team-digest';
+import { extractMentions, mentionsToPlainText } from '@/lib/team-mentions';
 import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';
@@ -178,47 +179,87 @@ export class TeamChatService {
       );
 
       // 팀 알림 팬아웃 — 같은 워크스페이스의 다른 멤버(작성자 제외)에게 인앱 알림.
-      // 3분 윈도 내 같은 RFP 알림은 dedupe(ChatService digest 패턴 미러).
+      // 멘션된 멤버는 team_chat.mention(멘션 전용 dedupe), 그 외는 기존
+      // team_chat.message(일반 dedupe). 이메일 digest 는 윈도당 멤버 1회 enqueue.
       const now = createdAt;
       const windowStart = new Date(chatDigestBucket(now) * CHAT_DIGEST_WINDOW_MS);
-      const memberIds = await this.wsRepo.memberUserIds(actor.workspaceId, tx);
-      const preview = body.length > 0 ? body.slice(0, 120) : '첨부 파일';
-      for (const memberId of memberIds) {
-        if (memberId === actor.userId) continue;
-        if (await this.notifRepo.hasPendingTeamNotification(memberId, input.rfpId, windowStart, tx)) {
-          continue;
-        }
-        const notif: Notification = {
-          id: randomUUID(),
-          userId: memberId,
-          workspaceId: actor.workspaceId,
-          type: 'team_chat.message',
-          title: `${authorName}님의 팀 메시지`,
-          body: preview,
-          channel: 'inapp',
-          status: 'pending',
-          linkUrl: `/messages?t=${input.rfpId}`,
-          createdAt: now.toISOString(),
-        };
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
+      const roster = await this.wsRepo.teamRoster(actor.workspaceId, tx);
+      const nameById = new Map(roster.map((r) => [r.userId, r.name]));
+      const memberIdSet = new Set(roster.map((r) => r.userId));
+      const { userIds: mentionedRaw, all } = extractMentions(body);
+      // 서버에서 멤버십 재검증 — 비멤버 토큰은 드롭(크로스팀 누출/알림 방지).
+      const mentioned = new Set<string>(
+        all ? [...memberIdSet] : mentionedRaw.filter((uid) => memberIdSet.has(uid)),
+      );
+      // 미리보기는 토큰이 아닌 평문(@이름/@전체).
+      const preview =
+        body.length > 0 ? mentionsToPlainText(body, nameById).slice(0, 120) : '첨부 파일';
 
-        // 이메일 digest — 윈도 내 같은 (rfp, workspace, recipient) 발송을 하나로
-        // coalesce(outbox dedupeKey UNIQUE). 본문은 placeholder; 실제 발송 시점에
-        // flushTeamChatDigests 가 안읽음 상태로 재계산·읽음 단락한다.
-        const member = await this.userRepo.findById(memberId, tx);
-        if (member?.email) {
-          await this.outboxRepo.enqueue(
-            {
-              event: 'team_chat.message',
-              to: member.email,
-              subject: '[Supporter B] 새 팀 메시지',
-              html: '<p>새 팀 메시지가 있어요.</p>', // placeholder — processor recomputes at send
-              dedupeKey: teamDigestDedupeKey(input.rfpId, actor.workspaceId, memberId, now),
-              scheduledAt: teamDigestWindowEnd(now),
-            },
-            tx,
-          );
+      for (const memberId of memberIdSet) {
+        if (memberId === actor.userId) continue;
+
+        // 디스패치 전에 윈도 내 기존 팀 알림을 스냅샷(이메일 1회 enqueue 게이트용).
+        const hadGeneric = await this.notifRepo.hasPendingTeamNotification(
+          memberId, input.rfpId, windowStart, tx,
+        );
+        const hadMention = await this.notifRepo.hasPendingTeamMentionNotification(
+          memberId, input.rfpId, windowStart, tx,
+        );
+
+        if (mentioned.has(memberId)) {
+          if (!hadMention) {
+            const notif: Notification = {
+              id: randomUUID(),
+              userId: memberId,
+              workspaceId: actor.workspaceId,
+              type: 'team_chat.mention',
+              title: `${authorName}님이 회원님을 언급했어요`,
+              body: preview,
+              channel: 'inapp',
+              status: 'pending',
+              linkUrl: `/messages?t=${input.rfpId}`,
+              createdAt: now.toISOString(),
+            };
+            await dispatchNotification(tx, notif);
+            pendingEmits.push(notif);
+          }
+        } else {
+          if (!hadGeneric) {
+            const notif: Notification = {
+              id: randomUUID(),
+              userId: memberId,
+              workspaceId: actor.workspaceId,
+              type: 'team_chat.message',
+              title: `${authorName}님의 팀 메시지`,
+              body: preview,
+              channel: 'inapp',
+              status: 'pending',
+              linkUrl: `/messages?t=${input.rfpId}`,
+              createdAt: now.toISOString(),
+            };
+            await dispatchNotification(tx, notif);
+            pendingEmits.push(notif);
+          }
+        }
+
+        // 이메일 digest — (rfp, workspace, recipient) 윈도당 1회. 첫 팀 알림 발생
+        // 시점에만 enqueue(outbox dedupeKey UNIQUE 로 coalesce). 본문은 placeholder;
+        // flushTeamChatDigests 가 발송 시 재계산·읽음 단락.
+        if (!hadGeneric && !hadMention) {
+          const member = await this.userRepo.findById(memberId, tx);
+          if (member?.email) {
+            await this.outboxRepo.enqueue(
+              {
+                event: 'team_chat.message',
+                to: member.email,
+                subject: '[Supporter B] 새 팀 메시지',
+                html: '<p>새 팀 메시지가 있어요.</p>', // placeholder — processor recomputes at send
+                dedupeKey: teamDigestDedupeKey(input.rfpId, actor.workspaceId, memberId, now),
+                scheduledAt: teamDigestWindowEnd(now),
+              },
+              tx,
+            );
+          }
         }
       }
 

@@ -411,3 +411,66 @@ describe('TeamChatService.listTeamMembers', () => {
     if (!result.ok) expect(result.error).toBe('FORBIDDEN');
   });
 });
+
+describe('TeamChatService.sendMessage — 멘션', () => {
+  async function buyerSceneWithTwoMembers() {
+    const author = await seedUser(db, { name: '김구매' });
+    const mate = await seedUser(db, { name: '이동료' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, author.id, 'admin');
+    await seedMembership(db, ws.id, mate.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: author.id });
+    const actor: TeamChatActor = { userId: author.id, workspaceId: ws.id, workspaceType: 'buyer' };
+    return { author, mate, ws, rfp, actor };
+  }
+
+  async function notifsFor(userId: string) {
+    return db.select().from(notifications).where(eq(notifications.userId, userId));
+  }
+
+  it('멘션된 멤버는 team_chat.mention, 작성자는 알림 없음', async () => {
+    const { mate, rfp, actor, author } = await buyerSceneWithTwoMembers();
+    const r = await service.sendMessage({ rfpId: rfp.id, body: `<@${mate.id}> 확인해줘` }, actor);
+    expect(r.ok).toBe(true);
+
+    const mateNotifs = await notifsFor(mate.id);
+    expect(mateNotifs).toHaveLength(1);
+    expect(mateNotifs[0].type).toBe('team_chat.mention');
+    // 미리보기는 토큰이 아니라 평문 @이름.
+    expect(mateNotifs[0].body).toContain('@이동료');
+
+    const authorNotifs = await notifsFor(author.id);
+    expect(authorNotifs).toHaveLength(0);
+  });
+
+  it('멘션 안 된 멤버는 기존 team_chat.message 알림', async () => {
+    const { mate, rfp, actor } = await buyerSceneWithTwoMembers();
+    await service.sendMessage({ rfpId: rfp.id, body: '그냥 메모' }, actor);
+    const mateNotifs = await notifsFor(mate.id);
+    expect(mateNotifs).toHaveLength(1);
+    expect(mateNotifs[0].type).toBe('team_chat.message');
+  });
+
+  it('비멤버 uuid 토큰은 무시 — 알림/누출 없음', async () => {
+    const { mate, rfp, actor } = await buyerSceneWithTwoMembers();
+    const stranger = '99999999-9999-4999-8999-999999999999';
+    await service.sendMessage({ rfpId: rfp.id, body: `<@${stranger}> 안녕` }, actor);
+    // 멤버 mate 는 멘션되지 않았으므로 일반 알림.
+    const mateNotifs = await notifsFor(mate.id);
+    expect(mateNotifs).toHaveLength(1);
+    expect(mateNotifs[0].type).toBe('team_chat.message');
+    // stranger 에게는 어떤 알림도 생성되지 않는다.
+    const strangerNotifs = await notifsFor(stranger);
+    expect(strangerNotifs).toHaveLength(0);
+  });
+
+  it('@all 은 작성자 제외 전원에게 team_chat.mention', async () => {
+    const { mate, rfp, actor, author } = await buyerSceneWithTwoMembers();
+    const r = await service.sendMessage({ rfpId: rfp.id, body: '<@all> 공지' }, actor);
+    expect(r.ok).toBe(true);
+    const mateNotifs = await notifsFor(mate.id);
+    expect(mateNotifs).toHaveLength(1);
+    expect(mateNotifs[0].type).toBe('team_chat.mention');
+    expect(await notifsFor(author.id)).toHaveLength(0);
+  });
+});
