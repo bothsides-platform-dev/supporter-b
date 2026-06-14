@@ -10,9 +10,49 @@ class ResizeObserverStub {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
-import { PercentInput, CurrencyInput, FeeRateCell } from '../inputs';
+import { PercentInput, CurrencyInput, FeeRateCell, DayOffsetInput } from '../inputs';
 
 afterEach(cleanup);
+
+describe('DayOffsetInput', () => {
+  it('renders the label and a fixed "D+" prefix', () => {
+    render(<DayOffsetInput label="현재 정산주기" value="" onChange={() => {}} />);
+    expect(screen.getByText('현재 정산주기')).toBeInTheDocument();
+    expect(screen.getByText('D+')).toBeInTheDocument();
+  });
+
+  it('shows only the numeric part of a stored "D+N" value', () => {
+    render(<DayOffsetInput label="정산주기" value="D+3" onChange={() => {}} />);
+    expect(screen.getByRole('textbox')).toHaveValue('3');
+  });
+
+  it('calls onChange with the canonical "D+N" string when a number is typed', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<DayOffsetInput label="정산주기" value="" onChange={onChange} />);
+    await user.type(screen.getByRole('textbox'), '2');
+    expect(onChange).toHaveBeenLastCalledWith('D+2');
+  });
+
+  it('calls onChange with empty string when the input is cleared', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<DayOffsetInput label="정산주기" value="D+5" onChange={onChange} />);
+    await user.clear(screen.getByRole('textbox'));
+    expect(onChange).toHaveBeenLastCalledWith('');
+  });
+
+  it('blocks non-numeric and decimal input (정수만)', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<DayOffsetInput label="정산주기" value="" onChange={onChange} />);
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    await user.type(input, 'a.5');
+    // 'a' 와 '.' 은 차단되어 정수 5 만 남는다 → 저장값은 'D+5'
+    expect(input.value).toBe('5');
+    expect(onChange).toHaveBeenLastCalledWith('D+5');
+  });
+});
 
 describe('PercentInput', () => {
   it('renders the label and a % suffix', () => {

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
-import { formatSize, formatKrwReadable } from '@/lib/format';
+import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 
@@ -149,12 +149,12 @@ export function RfpStep4Review({
                 ? '카드 수수료 (PG 비공개)'
                 : '카드 수수료'
             }
-            value={draft.currentFeeRate}
+            value={formatFeeRateDisplay(draft.currentFeeRate)}
           />
-          <ReviewRow label="월 정산한도" value={draft.currentSettlementLimit} />
+          <ReviewRow label="월 정산한도" value={formatKrwField(draft.currentSettlementLimit)} />
           <ReviewRow
             label="보증보험"
-            value={draft.currentGuaranteeInsurance}
+            value={formatKrwField(draft.currentGuaranteeInsurance)}
           />
           <ReviewRow
             label="정산주기"

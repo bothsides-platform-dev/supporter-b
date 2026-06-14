@@ -157,3 +157,39 @@ export function CurrencyInput({
     </div>
   );
 }
+
+/**
+ * Labeled integer input with a fixed `D+` prefix. Always emits a `D+N` string
+ * (e.g. `"D+1"`); `W+`/`M+` can no longer be entered (only `D+`). Downstream
+ * cycle comparison (`CYCLE_RE = /^[DWM]\+\d+$/` in lib/utils/bid-compare.ts)
+ * still accepts `W+`/`M+` for legacy rows. An empty input stores `""`.
+ */
+export function DayOffsetInput({
+  label,
+  value,
+  onChange,
+  placeholder = '0',
+  infoTerm,
+}: NumericFieldProps) {
+  const numeric = value.match(/\d+/)?.[0] ?? '';
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1">
+        <Label size="md" muted={false}>{label}</Label>
+        {infoTerm && <InfoTip term={infoTerm} />}
+      </div>
+      <div className="flex items-end gap-1">
+        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">D+</span>
+        <NumericFormat
+          decimalScale={0}
+          allowNegative={false}
+          value={numeric}
+          onValueChange={(values) => onChange(values.value ? `D+${values.value}` : '')}
+          placeholder={placeholder}
+          className={cn(numericInputClass, 'flex-1')}
+        />
+      </div>
+    </div>
+  );
+}

@@ -22,6 +22,26 @@ export function formatPct(value: number, digits = 2): string {
 }
 
 /**
+ * 구매사 '현재 카드 수수료' 표기. 신규 데이터는 숫자만 저장("3.4") → "3.4%".
+ * 이미 % 가 붙었거나 자유 텍스트인 과거 값("3.4%"·"협의 가능")은 그대로 둔다.
+ */
+export function formatFeeRateDisplay(value: string | null | undefined): string {
+  if (!value) return '';
+  const trimmed = value.trim();
+  return /^\d+(\.\d+)?$/.test(trimmed) ? `${trimmed}%` : value;
+}
+
+/**
+ * 원 단위 숫자 문자열을 읽기 쉬운 한국어 금액으로. 신규 데이터는 숫자만("100000000")
+ * → "1억원". 파싱 불가한 과거 자유 텍스트("월 1억")는 원문을 유지한다.
+ * (annualPgVolume 표기 관용구를 단일 함수로 추출)
+ */
+export function formatKrwField(value: string | null | undefined): string {
+  if (!value) return '';
+  return formatKrwReadable(Number(value)) || value;
+}
+
+/**
  * 수수료율(%)을 1만원 결제 기준 원화 환산으로 표기한다.
  * 예: 1.25→`1만원 결제 시 125원`, 0.8→`1만원 결제 시 80원`.
  * 유효하지 않은 값(<=0·NaN·Infinity)은 힌트 생략을 위해 빈 문자열을 반환한다.

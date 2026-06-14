@@ -7,7 +7,7 @@ import { InfoTip } from '@/components/ui/info-tip';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
-import { formatDate, formatDeadline, formatKrwReadable } from '@/lib/format';
+import { formatDate, formatDeadline, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import type { RFP } from '@/lib/types/rfp';
 
 type Props = { rfp: RFP; buyerName: string };
@@ -116,9 +116,9 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
                 ['사업 운영 홈페이지', rfp.websiteUrl],
                 ['주요 판매 상품', rfp.mainProducts],
                 ['전년도 연간 PG 거래액', rfp.annualPgVolume ? (formatKrwReadable(Number(rfp.annualPgVolume)) || rfp.annualPgVolume) : undefined],
-                ['현재 카드 수수료', pgCardFee],
-                ['현재 정산한도', rfp.currentSettlementLimit],
-                ['현재 보증보험', rfp.currentGuaranteeInsurance],
+                ['현재 카드 수수료', formatFeeRateDisplay(pgCardFee)],
+                ['현재 정산한도', formatKrwField(rfp.currentSettlementLimit)],
+                ['현재 보증보험', formatKrwField(rfp.currentGuaranteeInsurance)],
                 ['현재 정산주기', rfp.currentSettlementCycle],
                 ['배송 및 서비스 기간', rfp.deliveryServicePeriod],
               ] as [string, string | undefined][]
