@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { users } from '@/lib/db/schema';
-import { fetchSessionVersion } from '../session-version-db';
+import { fetchSessionVersion, fetchEmailVerified } from '../session-version-db';
 
 let db: PgliteDB;
 
@@ -40,5 +40,24 @@ describe('fetchSessionVersion', () => {
     expect(
       await fetchSessionVersion(db, '00000000-0000-4000-8000-000000000000'),
     ).toBeNull();
+  });
+});
+
+describe('fetchEmailVerified', () => {
+  it('신규 사용자는 컬럼 기본값 false 를 반환한다', async () => {
+    const id = await seedUser('unverified@example.com');
+    expect(await fetchEmailVerified(db, id)).toBe(false);
+  });
+
+  it('인증 완료 사용자는 true 를 반환한다', async () => {
+    const id = await seedUser('verified@example.com');
+    await db.update(users).set({ emailVerified: true }).where(eq(users.id, id));
+    expect(await fetchEmailVerified(db, id)).toBe(true);
+  });
+
+  it('사용자 행이 없으면 false 를 반환한다 (미인증 취급)', async () => {
+    expect(
+      await fetchEmailVerified(db, '00000000-0000-4000-8000-000000000000'),
+    ).toBe(false);
   });
 });

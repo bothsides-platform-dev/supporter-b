@@ -1,13 +1,18 @@
 /**
  * EmailVerifyScreen — /pending-approval 이 미인증 유저에게 보여주는 인증 전용 화면.
- * 인증되면 router.refresh() 로 기존 pending-approval(심사 대기) 화면으로 전환.
+ * 인증되면 /home 으로 push 해 (app) 가드가 워크스페이스 상태로 재분기하게 한다
+ * (active=정규 PG → 앱 진입, pending=buyer → 심사 대기 화면). router.refresh()는
+ * active 워크스페이스 사용자를 잘못된 "심사 대기" 화면에 잠시 머물게 하므로 쓰지 않는다.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+const mockPush = vi.fn();
 const mockRefresh = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mockRefresh }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
+}));
 
 const mockSend = vi.fn();
 const mockCheck = vi.fn();
@@ -27,6 +32,7 @@ import { EmailVerifyScreen } from '../email-verify-screen';
 
 describe('EmailVerifyScreen', () => {
   beforeEach(() => {
+    mockPush.mockReset();
     mockRefresh.mockReset();
     mockSend.mockReset().mockResolvedValue({ ok: true });
     mockCheck.mockReset().mockResolvedValue({ verified: false });
@@ -39,7 +45,7 @@ describe('EmailVerifyScreen', () => {
     expect(screen.getByLabelText('인증 코드 (6자리)')).toBeInTheDocument();
   });
 
-  it('코드 인증 성공 시 router.refresh()로 기존 pending-approval 화면으로 전환', async () => {
+  it('코드 인증 성공 시 /home 으로 push 한다 ((app) 가드가 상태로 재분기)', async () => {
     mockVerifyCode.mockResolvedValue({ ok: true, email: 'me@x.com' });
     const user = userEvent.setup();
     render(<EmailVerifyScreen email="me@x.com" />);
@@ -47,7 +53,7 @@ describe('EmailVerifyScreen', () => {
     await user.type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
     await user.click(screen.getByRole('button', { name: /코드로 인증하기/i }));
 
-    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/home'));
   });
 
   it('홈으로 가기 링크가 루트로 연결된다', () => {

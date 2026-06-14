@@ -6,8 +6,10 @@ import { EmailVerifySection } from './email-verify-section';
 
 /**
  * 가입 후 이메일 인증 전용 화면 — /pending-approval 이 *미인증* 유저에게 보여준다.
- * 인증이 끝나면 router.refresh() 로 서버 컴포넌트를 다시 그려 기존
- * pending-approval(축하·심사 대기) 화면으로 전환한다.
+ * 인증이 끝나면 /home 으로 push 해 (app) 가드가 워크스페이스 상태로 재분기하게 한다:
+ *   - active(정규 PG 가입) → 앱으로 바로 진입
+ *   - pending(buyer/일반 PG) → 가드가 다시 /pending-approval 로 보내 심사 대기 화면 노출
+ * (router.refresh() 면 active 워크스페이스 사용자가 잘못된 "심사 대기" 화면에 잠시 머문다.)
  *
  * public 레이아웃(app/(public)/layout.tsx) 안의 일반 흐름 콘텐츠로 렌더링한다.
  * (풀스크린 오버레이를 쓰면 레이아웃의 푸터와 채널톡 FAB을 가린다.)
@@ -29,7 +31,7 @@ export function EmailVerifyScreen({ email }: { email: string }) {
       <EmailVerifySection
         email={email}
         initialVerified={false}
-        onVerified={() => router.refresh()}
+        onVerified={() => router.push('/home')}
       />
       <Link
         href="/"

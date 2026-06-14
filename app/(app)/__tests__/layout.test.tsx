@@ -15,6 +15,7 @@ const mockRedirect = vi.hoisted(() =>
 const mockAuth = vi.hoisted(() => vi.fn());
 const mockListForUser = vi.hoisted(() => vi.fn());
 const mockGetDbSessionVersion = vi.hoisted(() => vi.fn());
+const mockGetDbEmailVerified = vi.hoisted(() => vi.fn());
 
 vi.mock('next/navigation', () => ({ redirect: mockRedirect }));
 vi.mock('@/auth', () => ({ auth: mockAuth }));
@@ -23,6 +24,7 @@ vi.mock('@/lib/server/repositories/factory', () => ({
 }));
 vi.mock('@/lib/auth/session-version-db', () => ({
   getDbSessionVersion: mockGetDbSessionVersion,
+  getDbEmailVerified: mockGetDbEmailVerified,
 }));
 vi.mock('@/lib/observability/sentry-user', () => ({ setSentryUser: () => {} }));
 vi.mock('@/components/shell/AppSidebarLayout', () => ({
@@ -62,6 +64,9 @@ describe('AppLayout 인증 가드 — 무한 리다이렉트 루프 방지', () 
     // 기본: 세션 버전 일치 (레거시 토큰 sv=undefined ↔ DB 기본값 1)
     mockGetDbSessionVersion.mockReset();
     mockGetDbSessionVersion.mockResolvedValue(1);
+    // 기본: 이메일 인증 완료 (이메일 게이트가 다른 테스트를 방해하지 않도록)
+    mockGetDbEmailVerified.mockReset();
+    mockGetDbEmailVerified.mockResolvedValue(true);
   });
 
   it('JWT에 워크스페이스가 없는(인증된) 세션은 /logout 으로 보낸다', async () => {
@@ -99,5 +104,19 @@ describe('AppLayout 인증 가드 — 무한 리다이렉트 루프 방지', () 
 
     await expect(AppLayout({ children: null })).rejects.toThrow('NEXT_REDIRECT');
     expect(mockRedirect).toHaveBeenCalledWith('/logout');
+  });
+
+  // 정규(canonical) PG 가입 회귀: active 워크스페이스에 합류한 미인증 사용자는
+  // 워크스페이스 status 게이트(pending)를 우회하지만, 이메일 인증 게이트가
+  // /pending-approval 로 보내야 한다. emailVerified 가 가드까지 전달되는지 검증.
+  it('이메일 미인증 + active 워크스페이스(정규 PG)는 /pending-approval 로 보낸다', async () => {
+    mockAuth.mockResolvedValue(FULL_SESSION);
+    mockListForUser.mockResolvedValue([
+      { id: 'ws-1', name: 'W', type: 'pg', status: 'active', role: 'admin', unreadCount: 0, hasLogo: false },
+    ]);
+    mockGetDbEmailVerified.mockResolvedValue(false);
+
+    await expect(AppLayout({ children: null })).rejects.toThrow('NEXT_REDIRECT');
+    expect(mockRedirect).toHaveBeenCalledWith('/pending-approval');
   });
 });
