@@ -60,10 +60,11 @@ export function PipelineBoard({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  // 카드 클릭 → 상세 라우트로 push → 인터셉트 딜룸 모달(표 뷰 행 클릭과 동일).
+  // pathname 은 보드 뷰가 사는 '/rfp' | '/inbox' — 같은 세그먼트라 인터셉트된다.
+  // (과거 ?peek 사이드 패널은 제거됨.)
   function handleCardSelect(code: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('peek', code);
-    router.replace(`${pathname}?${params.toString()}`);
+    router.push(`${pathname}/${code}`);
   }
 
   return (

@@ -57,7 +57,9 @@ export async function loginAs(page: Page, role: Role): Promise<void> {
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
   await page.getByRole('button', { name: '로그인' }).click();
-  await page.waitForURL(/\/home$/, { timeout: 15_000 });
+  // dev 서버 cold-compile(login→home 트리)는 15s 를 넘길 수 있어 여유를 둔다.
+  // prod 빌드(CI)는 사전컴파일이라 즉시 통과 — 더 길게 잡아도 무해하다.
+  await page.waitForURL(/\/home$/, { timeout: 45_000 });
 }
 
 /** Title of the column a bid currently sits in (unified kanban). A bid with no

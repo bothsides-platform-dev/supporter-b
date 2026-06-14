@@ -207,7 +207,7 @@ describe('Sidebar — buyer workspace', () => {
     expect(screen.getByRole('link', { name: '견적 요청' })).toHaveAttribute('href', '/rfp');
     expect(screen.getByRole('link', { name: '진행중' })).toHaveAttribute('href', '/rfp?status=active');
     expect(screen.getByRole('link', { name: '선정 완료' })).toHaveAttribute('href', '/rfp?status=awarded');
-    expect(screen.getByRole('link', { name: '새 견적 요청' })).toHaveAttribute('href', '/rfp/new');
+    expect(screen.getByRole('link', { name: '새 견적 요청' })).toHaveAttribute('href', '/rfp-create');
   });
 
   it('activates the matching status sub-item on /rfp?status=active', () => {

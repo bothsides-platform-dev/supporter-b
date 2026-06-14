@@ -8,6 +8,16 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/(.*)", headers: SECURITY_HEADERS }];
   },
+  async redirects() {
+    return [
+      // 견적 요청 작성을 /rfp/new → /rfp-create 로 이동. 딜룸 모달은 인터셉트
+      // 라우트 /rfp/[id] 로 구현되는데, 정적 형제 /rfp/new 가 동적 [id] 인터셉터에
+      // 비결정적으로 가로채여(프리페치 의존) 작성 폼 대신 목록이 얼어붙는 문제가
+      // 있었다. 작성 경로를 /rfp 네임스페이스 밖으로 빼 충돌을 원천 제거하고,
+      // 남은 외부 링크·북마크는 이 리다이렉트로 새 경로에 보낸다.
+      { source: "/rfp/new", destination: "/rfp-create", permanent: false },
+    ];
+  },
   // Prevent pino (and its worker-thread transport) from being bundled for Edge.
   serverExternalPackages: ["pino", "pino-pretty", "@axiomhq/pino"],
   // Allow lvh.me (wildcard DNS → 127.0.0.1) as a trusted dev origin so local

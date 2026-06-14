@@ -2,7 +2,7 @@
 //
 // 두 가드를 검증한다:
 // 1. PG 워크스페이스 → /home?notice=pg-rfp-blocked (페이지 자체 PG 차단)
-// 2. 비로그인/미완료 세션 → requireBuyerPage가 /login?next=/rfp/new 등으로 이동
+// 2. 비로그인/미완료 세션 → requireBuyerPage가 /login?next=/rfp-create 등으로 이동
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockRedirect = vi.hoisted(() =>
@@ -63,10 +63,10 @@ describe('RfpNewPage — 인증 가드', () => {
   it('requireBuyerPage 리다이렉트(비로그인 등)를 그대로 전파한다', async () => {
     mockAuth.mockResolvedValue(null);
     mockRequireBuyerPage.mockImplementation(() => {
-      throw new Error('NEXT_REDIRECT:/login?next=/rfp/new');
+      throw new Error('NEXT_REDIRECT:/login?next=/rfp-create');
     });
 
-    await expect(RfpNewPage()).rejects.toThrow('NEXT_REDIRECT:/login?next=/rfp/new');
+    await expect(RfpNewPage()).rejects.toThrow('NEXT_REDIRECT:/login?next=/rfp-create');
   });
 
   it('buyer 세션에서 페이지가 정상적으로 엘리먼트를 반환한다', async () => {

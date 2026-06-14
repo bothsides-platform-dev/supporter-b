@@ -172,7 +172,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
             </FadeInView>
             <FadeInView delay={0.2}>
               <div className="flex flex-col items-start gap-[var(--s-5)]">
-                <Link href="/rfp/new">
+                <Link href="/rfp-create">
                   <button className="inline-flex items-center gap-2 h-12 px-6 rounded-md bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] font-mono text-[13px] tracking-[0.06em] uppercase transition-opacity duration-[140ms] hover:opacity-85 active:scale-[0.98]">
                     PG견적 무료로 받기 →
                   </button>

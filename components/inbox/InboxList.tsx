@@ -2,11 +2,12 @@
 
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDeadline } from '@/lib/format';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
+import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
 import { PG_KANBAN_LABEL, type PgKanbanStage } from '@/lib/server/pg-kanban';
 
@@ -42,20 +43,23 @@ export type InboxRow = {
 
 export function InboxList({ rows }: { rows: InboxRow[] }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const peekCode = searchParams.get('peek');
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
-  function handlePeek(rfpId: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('peek', rfpId);
-    router.replace(`${pathname}?${params.toString()}`);
+  // 딜룸 ‹ › 이전/다음용 목록 순서 시드(현재 정렬 기준).
+  const setNavOrder = useDealRoomNav((s) => s.setOrder);
+  useEffect(() => {
+    setNavOrder('/inbox', rows.map((r) => r.rfpId));
+  }, [rows, setNavOrder]);
+
+  // 행 클릭/Enter → 상세 라우트로 push. 인터셉트 라우트가 목록 위에 딜룸 모달을
+  // 띄우고 URL 은 /inbox/<code> 로 바뀐다(새로고침 시 정식 페이지). ?peek 대체.
+  function openDealRoom(rfpId: string) {
+    router.push(`/inbox/${rfpId}`);
   }
 
   const { active } = useListNavigation(rows.length, {
-    onEnter: (i) => handlePeek(rows[i].rfpId),
-    onEdit: (i) => handlePeek(rows[i].rfpId),
+    onEnter: (i) => openDealRoom(rows[i].rfpId),
+    onEdit: (i) => openDealRoom(rows[i].rfpId),
   });
 
   useEffect(() => {
@@ -87,9 +91,8 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                 ref={(el) => {
                   rowRefs.current[i] = el;
                 }}
-                onClick={() => handlePeek(row.rfpId)}
+                onClick={() => openDealRoom(row.rfpId)}
                 data-active={active === i}
-                data-peeked={row.rfpId === peekCode}
                 className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] data-[peeked=true]:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer transition-colors"
               >
                 <td className="relative px-8 py-4 font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-2 group-hover:before:bg-[var(--md-sys-color-on-surface)] group-data-[active=true]:before:absolute group-data-[active=true]:before:left-0 group-data-[active=true]:before:top-0 group-data-[active=true]:before:bottom-0 group-data-[active=true]:before:w-2 group-data-[active=true]:before:bg-[var(--md-sys-color-on-surface)] group-data-[peeked=true]:before:absolute group-data-[peeked=true]:before:left-0 group-data-[peeked=true]:before:top-0 group-data-[peeked=true]:before:bottom-0 group-data-[peeked=true]:before:w-0.5 group-data-[peeked=true]:before:bg-[var(--md-sys-color-primary)]">

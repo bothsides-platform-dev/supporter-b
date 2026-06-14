@@ -29,9 +29,9 @@ describe('LandingHeroSection', () => {
     expect(screen.getByText('협상의 주도권을')).toBeInTheDocument();
   });
 
-  it('routes the hero CTA to /rfp/new', () => {
+  it('routes the hero CTA to /rfp-create', () => {
     render(<LandingHeroSection />);
     const cta = screen.getByRole('link', { name: /PG 비교 견적 무료로 시작하기/ });
-    expect(cta).toHaveAttribute('href', '/rfp/new');
+    expect(cta).toHaveAttribute('href', '/rfp-create');
   });
 });

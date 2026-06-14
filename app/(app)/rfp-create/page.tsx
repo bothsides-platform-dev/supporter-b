@@ -16,8 +16,8 @@ export default async function RfpNewPage() {
     redirect('/home?notice=pg-rfp-blocked');
   }
 
-  // 비로그인 / 미완료 세션 → /login?next=/rfp/new 또는 /logout (루프 세이프 가드)
-  const session = await requireBuyerPage('/rfp/new');
+  // 비로그인 / 미완료 세션 → /login?next=/rfp-create 또는 /logout (루프 세이프 가드)
+  const session = await requireBuyerPage('/rfp-create');
 
   const pgRows = await searchWorkspaces(db, { type: 'pg' });
 

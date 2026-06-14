@@ -59,7 +59,7 @@ describe('getNavConfig — buyer RFP section', () => {
       '마감',
       '선정 완료',
     ]);
-    expect(rfp?.links?.map((l) => l.href)).toEqual(['/rfp/new']);
+    expect(rfp?.links?.map((l) => l.href)).toEqual(['/rfp-create']);
     expect(rfp?.links?.[0]?.label).toBe('새 견적 요청');
   });
 });
@@ -173,15 +173,15 @@ describe('getBreadcrumbSegments', () => {
     expect(getBreadcrumbSegments('/rfp/unknown-path')).toEqual([]);
   });
 
-  it('/rfp/new shows "견적 요청" parent link + "새 견적 요청" current page', () => {
-    expect(getBreadcrumbSegments('/rfp/new')).toEqual([
+  it('/rfp-create shows "견적 요청" parent link + "새 견적 요청" current page', () => {
+    expect(getBreadcrumbSegments('/rfp-create')).toEqual([
       { label: '견적 요청', href: '/rfp' },
       { label: '새 견적 요청' },
     ]);
   });
 
-  it('/rfp/new ignores status param (not applicable to the create route)', () => {
-    expect(getBreadcrumbSegments('/rfp/new', 'active')).toEqual([
+  it('/rfp-create ignores status param (not applicable to the create route)', () => {
+    expect(getBreadcrumbSegments('/rfp-create', 'active')).toEqual([
       { label: '견적 요청', href: '/rfp' },
       { label: '새 견적 요청' },
     ]);
@@ -199,7 +199,7 @@ describe('getChordMap', () => {
       '1': '/rfp?status=active',
       '2': '/rfp?status=closed',
       '3': '/rfp?status=awarded',
-      c: '/rfp/new',
+      c: '/rfp-create',
       p: '/settings/profile',
       t: '/settings/members',
     });

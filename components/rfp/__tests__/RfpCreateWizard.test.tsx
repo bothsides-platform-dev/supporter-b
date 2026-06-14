@@ -183,7 +183,7 @@ describe('RfpCreateWizard', () => {
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
 
-    expect(localStorageSpy).toHaveBeenCalledWith('supporter-b-rfp-next', '/rfp/new');
+    expect(localStorageSpy).toHaveBeenCalledWith('supporter-b-rfp-next', '/rfp-create');
     expect(mockPush).toHaveBeenCalledWith('/signup/buyer');
     expect(createRfpAction).not.toHaveBeenCalled();
 
