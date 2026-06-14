@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.19.1] - 2026-06-14
+
+### Changed
+
+- **여러 작업을 동시에 배포할 때 버전 충돌이 자동으로 풀려요** (개발 도구): 서로 다른 세션에서 `/ship`을 동시에 돌리면 같은 다음 버전을 집어 `VERSION`·`package.json`·`CHANGELOG`가 매번 충돌했어요. 이제 git 머지 드라이버를 등록해서 `VERSION`과 `package.json`은 더 높은 버전으로, `CHANGELOG`는 양쪽 항목을 모두 남기도록 자동 정리해요. `pnpm install` 시 자동 등록돼요.
+
 ## [0.2.19.0] - 2026-06-14
 
 ### Fixed
