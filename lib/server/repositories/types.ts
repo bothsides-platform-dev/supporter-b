@@ -158,6 +158,93 @@ export interface WorkspaceRepo {
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
   listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string }[]>;
+  /** 이름 검색 (isDemo 제외) — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500). */
+  search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string }[]>;
+  /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
+  getName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /** 알림·이메일 팬아웃 대상 (멤버 userId+email). 시스템 계정 제외. 순서 미보장. */
+  memberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
+  /** active 상태 워크스페이스 (id+type) — 마스터/스위치. 없거나 비활성이면 undefined. */
+  findActiveById(workspaceId: string, tx?: Tx): Promise<{ id: string; type: WorkspaceType } | undefined>;
+  /** 가장 먼저 만들어진 active 워크스페이스 — 마스터 기본 진입. 없으면 undefined. */
+  findEarliestActiveWorkspace(tx?: Tx): Promise<{ id: string } | undefined>;
+  /** (userId, workspaceId) 멤버십 — role+type. 없으면 undefined. */
+  getMembership(
+    userId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ role: string; type: WorkspaceType } | undefined>;
+  /** 유저의 최초 가입 멤버십 (earliest joinedAt). 없으면 undefined. */
+  findInitialMembership(
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ workspaceId: string; role: string; type: WorkspaceType } | undefined>;
+  /**
+   * 유저의 모든 멤버십 + 각 워크스페이스의 전체 멤버 — 탈퇴 상태 화면(마지막 admin / solo 판정).
+   * createdAt 순서 미보장; 호출부가 멤버 수·역할로 분기한다.
+   */
+  listMembershipsWithMembers(
+    userId: string,
+    tx?: Tx,
+  ): Promise<
+    {
+      workspaceId: string;
+      name: string;
+      role: string;
+      members: { userId: string; role: string }[];
+    }[]
+  >;
+  /** bizProfile 포인터 갱신. */
+  setBizProfilePointer(workspaceId: string, bizProfileId: string, tx?: Tx): Promise<void>;
+  /** 현재 bizProfileId (경량). 없거나 미설정이면 undefined. */
+  getBizProfileId(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /** 상호명 변경. */
+  rename(workspaceId: string, name: string, tx?: Tx): Promise<void>;
+  /** hasLogo 플래그 갱신. */
+  setHasLogo(workspaceId: string, hasLogo: boolean, tx?: Tx): Promise<void>;
+  /**
+   * 경량 workspace 생성 (save()는 멤버 동기화까지 하는 무거운 버전 — 이건 단순 insert).
+   * 멤버십/컬럼/온보딩 시드는 호출부 책임.
+   */
+  createBare(
+    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 멤버 추가 (onConflictDoNothing — 중복 race 안전). */
+  addMember(params: { workspaceId: string; userId: string; role: string }, tx?: Tx): Promise<void>;
+  /** 워크스페이스의 pending(미만료) 초대 목록 — 설정 > 멤버 화면. */
+  listPendingInvitations(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ email: string; createdAt: Date; role: string }[]>;
+  /** tokenHash 로 워크스페이스 초대 + 워크스페이스명 조인. 없으면 undefined. */
+  findInvitationByTokenHash(
+    tokenHash: string,
+    tx?: Tx,
+  ): Promise<
+    | {
+        invitedEmail: string;
+        status: string;
+        expiresAt: Date;
+        workspaceName: string;
+        workspaceId: string;
+      }
+    | undefined
+  >;
+  /**
+   * 초대 원자적 클레임 (조건부 UPDATE: status='pending' AND expires_at>now).
+   * 이미 사용/만료면 실패. 멤버 추가·이메일 인증은 호출부(addMember 등) 책임.
+   */
+  claimInvitation(
+    invitationId: string,
+    userId: string,
+    tx?: Tx,
+  ): Promise<
+    | { ok: true; workspaceId: string; role: string }
+    | { ok: false; reason: 'expired' }
+  >;
+  /** 워크스페이스 관리자(admin) 이메일 — RFP 초대 랜딩 프리필. 없으면 undefined. */
+  findAdminEmail(workspaceId: string, tx?: Tx): Promise<string | undefined>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────
