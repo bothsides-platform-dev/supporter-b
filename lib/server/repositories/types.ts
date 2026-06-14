@@ -404,6 +404,8 @@ export interface OutboxRepo {
    * SKIP-LOCKED 없는 단순 read — 중복발송 가드는 처리기 책임.
    */
   dueChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
+  /** Due team-chat-digest rows — owned by the team-digest flush processor. */
+  dueTeamChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
   /** 전송 결과 반영(성공/실패 + 시도횟수 +1). */
   markResult(
     id: string,

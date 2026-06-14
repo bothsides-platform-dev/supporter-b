@@ -2,7 +2,7 @@
 // pending, markResult, and `flush(sender, limit)` which drains pending rows
 // through a `Sender` under FOR UPDATE SKIP LOCKED so concurrent cron + post-
 // commit callers don't double-deliver.
-import { eq, ne, isNotNull, sql, lte, and, inArray } from 'drizzle-orm';
+import { eq, isNotNull, sql, lte, and, inArray, notInArray } from 'drizzle-orm';
 import { outboxEntries } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { OutboxEntry, OutboxEvent, Sender } from '../../outbox/types';
@@ -83,11 +83,12 @@ export class DrizzleOutboxRepository implements OutboxRepo {
         and(
           eq(outboxEntries.status, 'pending'),
           lte(outboxEntries.scheduledAt, sql`now()`),
-          // chat.message rows are coalesced digests handled by the dedicated
-          // chat-digest processor (see dueChatDigests) — the generic mailer
-          // must never drain them, or it would send a raw per-message mail
-          // before the window/read-state digest logic runs.
-          ne(outboxEntries.event, 'chat.message'),
+          // chat.message and team_chat.message rows are coalesced digests
+          // handled by their dedicated flush processors (dueChatDigests /
+          // dueTeamChatDigests) — the generic mailer must never drain them,
+          // or it would send a raw per-message mail before the
+          // window/read-state digest logic runs.
+          notInArray(outboxEntries.event, ['chat.message', 'team_chat.message']),
         ),
       )
       .limit(limit);
@@ -112,6 +113,28 @@ export class DrizzleOutboxRepository implements OutboxRepo {
         and(
           eq(outboxEntries.status, 'pending'),
           eq(outboxEntries.event, 'chat.message'),
+          lte(outboxEntries.scheduledAt, sql`now()`),
+        ),
+      )
+      .orderBy(outboxEntries.scheduledAt)
+      .limit(limit);
+    return rows.map(rowToEntry);
+  }
+
+  /**
+   * Due team-chat-digest rows: `status='pending' AND event='team_chat.message'
+   * AND scheduled_at <= now()`, ordered by scheduled_at for determinism.
+   * Mirrors `dueChatDigests` but scoped to the team-chat digest processor.
+   */
+  async dueTeamChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]> {
+    const db = this.h(tx);
+    const rows = await db
+      .select()
+      .from(outboxEntries)
+      .where(
+        and(
+          eq(outboxEntries.status, 'pending'),
+          eq(outboxEntries.event, 'team_chat.message'),
           lte(outboxEntries.scheduledAt, sql`now()`),
         ),
       )
@@ -206,10 +229,11 @@ export class DrizzleOutboxRepository implements OutboxRepo {
           and(
             eq(outboxEntries.status, 'pending'),
             lte(outboxEntries.scheduledAt, sql`now()`),
-            // Skip chat.message rows — those are coalesced digests owned by
-            // the dedicated chat-digest processor (dueChatDigests). The
-            // generic mailer would otherwise send a raw per-message mail.
-            ne(outboxEntries.event, 'chat.message'),
+            // Skip chat.message and team_chat.message rows — those are
+            // coalesced digests owned by their dedicated flush processors
+            // (dueChatDigests / dueTeamChatDigests). The generic mailer
+            // would otherwise send a raw per-message mail.
+            notInArray(outboxEntries.event, ['chat.message', 'team_chat.message']),
           ),
         )
         .orderBy(outboxEntries.scheduledAt)
