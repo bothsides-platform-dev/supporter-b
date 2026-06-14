@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { attachments, rfpTeamMessages, users } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { Attachment } from '@/lib/types/common';
@@ -6,6 +6,7 @@ import type {
   RfpTeamMessageRecord,
   RfpTeamMessageRepo,
   RfpTeamMessageWithAuthor,
+  TeamThreadSummary,
   Tx,
 } from '../types';
 
@@ -95,5 +96,21 @@ export class DrizzleRfpTeamMessageRepository implements RfpTeamMessageRepo {
     }
 
     return rows.map((r) => ({ ...r, attachments: byMessage.get(r.id) ?? [] }));
+  }
+
+  async listThreadsForWorkspace(workspaceId: string, tx?: Tx): Promise<TeamThreadSummary[]> {
+    const db = this.h(tx);
+    // rfp별 마지막 메시지: DISTINCT ON (rfp_id) + ORDER BY rfp_id, created_at DESC.
+    const rows = (await db
+      .selectDistinctOn([rfpTeamMessages.rfpId], {
+        rfpId: rfpTeamMessages.rfpId,
+        lastMessageAt: rfpTeamMessages.createdAt,
+        lastBody: rfpTeamMessages.body,
+        lastAuthorUserId: rfpTeamMessages.authorUserId,
+      })
+      .from(rfpTeamMessages)
+      .where(eq(rfpTeamMessages.workspaceId, workspaceId))
+      .orderBy(rfpTeamMessages.rfpId, desc(rfpTeamMessages.createdAt))) as TeamThreadSummary[];
+    return rows;
   }
 }

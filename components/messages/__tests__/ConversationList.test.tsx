@@ -5,10 +5,12 @@ import userEvent from '@testing-library/user-event';
 afterEach(() => cleanup());
 
 import { ConversationList } from '../ConversationList';
-import type { ConversationListItem } from '../types';
+import type { InboxListItem } from '../types';
 
-function makeItem(over: Partial<ConversationListItem> = {}): ConversationListItem {
+function makeCounterparty(over: Partial<Extract<InboxListItem, { kind: 'counterparty' }>> = {}): InboxListItem {
   return {
+    kind: 'counterparty',
+    key: 'c:conv-1',
     conversationId: 'conv-1',
     counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', hasLogo: false },
     rfpId: null,
@@ -19,12 +21,26 @@ function makeItem(over: Partial<ConversationListItem> = {}): ConversationListIte
   };
 }
 
+function makeTeam(over: Partial<Extract<InboxListItem, { kind: 'team' }>> = {}): InboxListItem {
+  return {
+    kind: 'team',
+    key: 't:rfp-1',
+    rfpId: 'rfp-1',
+    rfpCode: 'P-2605-0042',
+    rfpTitle: '결제대행 견적',
+    preview: '내부 메모입니다.',
+    lastMessageAt: '2026-06-02T01:00:00.000Z',
+    unread: false,
+    ...over,
+  };
+}
+
 describe('ConversationList', () => {
   it('renders counterparty name and recent message preview', () => {
     render(
       <ConversationList
-        conversations={[makeItem()]}
-        selectedId={null}
+        items={[makeCounterparty()]}
+        selectedKey={null}
         onSelect={vi.fn()}
       />,
     );
@@ -32,11 +48,25 @@ describe('ConversationList', () => {
     expect(screen.getByText('제안 보냅니다.')).toBeInTheDocument();
   });
 
+  it('renders a team thread row with 팀 label, rfp code and title', () => {
+    render(
+      <ConversationList
+        items={[makeTeam()]}
+        selectedKey={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    // 코드는 .md-numeric, 제목은 평문. 둘 다 노출.
+    expect(screen.getByText('P-2605-0042')).toBeInTheDocument();
+    expect(screen.getByText(/결제대행 견적/)).toBeInTheDocument();
+    expect(screen.getByText('내부 메모입니다.')).toBeInTheDocument();
+  });
+
   it('shows the unread dot when unread is true', () => {
     render(
       <ConversationList
-        conversations={[makeItem({ unread: true })]}
-        selectedId={null}
+        items={[makeCounterparty({ unread: true })]}
+        selectedKey={null}
         onSelect={vi.fn()}
       />,
     );
@@ -46,33 +76,47 @@ describe('ConversationList', () => {
   it('hides the unread dot when unread is false', () => {
     render(
       <ConversationList
-        conversations={[makeItem({ unread: false })]}
-        selectedId={null}
+        items={[makeCounterparty({ unread: false })]}
+        selectedKey={null}
         onSelect={vi.fn()}
       />,
     );
     expect(screen.queryByLabelText('읽지 않음')).not.toBeInTheDocument();
   });
 
-  it('calls onSelect with the conversation id when a row is clicked', async () => {
+  it('calls onSelect with the item key when a counterparty row is clicked', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     render(
       <ConversationList
-        conversations={[makeItem({ conversationId: 'conv-42' })]}
-        selectedId={null}
+        items={[makeCounterparty({ key: 'c:conv-42', conversationId: 'conv-42' })]}
+        selectedKey={null}
         onSelect={onSelect}
       />,
     );
     await user.click(screen.getByRole('button', { name: /OO페이/ }));
-    expect(onSelect).toHaveBeenCalledWith('conv-42');
+    expect(onSelect).toHaveBeenCalledWith('c:conv-42');
+  });
+
+  it('calls onSelect with the team key when a team row is clicked', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(
+      <ConversationList
+        items={[makeTeam({ key: 't:rfp-9', rfpId: 'rfp-9' })]}
+        selectedKey={null}
+        onSelect={onSelect}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /결제대행 견적/ }));
+    expect(onSelect).toHaveBeenCalledWith('t:rfp-9');
   });
 
   it('marks the selected row with aria-current', () => {
     render(
       <ConversationList
-        conversations={[makeItem({ conversationId: 'conv-7' })]}
-        selectedId="conv-7"
+        items={[makeCounterparty({ key: 'c:conv-7', conversationId: 'conv-7' })]}
+        selectedKey="c:conv-7"
         onSelect={vi.fn()}
       />,
     );
@@ -82,8 +126,8 @@ describe('ConversationList', () => {
     );
   });
 
-  it('renders nothing for an empty conversation list', () => {
-    render(<ConversationList conversations={[]} selectedId={null} onSelect={vi.fn()} />);
+  it('renders nothing for an empty list', () => {
+    render(<ConversationList items={[]} selectedKey={null} onSelect={vi.fn()} />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -96,8 +140,8 @@ describe('ConversationList', () => {
       .mockReturnValue('오전 10:00');
     render(
       <ConversationList
-        conversations={[makeItem({ lastMessageAt: '2026-06-02T01:00:00.000Z' })]}
-        selectedId={null}
+        items={[makeCounterparty({ lastMessageAt: '2026-06-02T01:00:00.000Z' })]}
+        selectedKey={null}
         onSelect={vi.fn()}
       />,
     );
@@ -112,8 +156,8 @@ describe('ConversationList', () => {
   it('renders no time when lastMessageAt is null', () => {
     render(
       <ConversationList
-        conversations={[makeItem({ lastMessageAt: null })]}
-        selectedId={null}
+        items={[makeCounterparty({ lastMessageAt: null })]}
+        selectedKey={null}
         onSelect={vi.fn()}
       />,
     );

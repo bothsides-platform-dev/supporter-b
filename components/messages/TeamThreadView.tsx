@@ -28,6 +28,7 @@ import {
   ACCEPTED_EXTENSIONS,
 } from '@/lib/server/storage/constants';
 import { sendTeamMessageAction } from '@/lib/server/actions/chat/sendTeamMessageAction';
+import { markTeamThreadReadAction } from '@/lib/server/actions/chat/markTeamThreadReadAction';
 import { useTeamChannel, type TeamLivePayload } from '@/lib/hooks/useTeamChannel';
 import { toast } from '@/lib/toast';
 import type { Attachment } from '@/lib/types/common';
@@ -87,6 +88,12 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
       bottomRef.current?.scrollIntoView({ block: 'end' });
     }
   }, [localMessages]);
+
+  // 마운트(및 rfp 전환) 시 팀 스레드를 읽음 처리한다 — ThreadView 의
+  // markConversationReadAction 패턴 미러링.
+  useEffect(() => {
+    void markTeamThreadReadAction({ rfpId });
+  }, [rfpId]);
 
   useTeamChannel(rfpId, workspaceId, {
     onMessage: (data: TeamLivePayload) => {
