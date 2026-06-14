@@ -48,13 +48,16 @@ export type TeamThreadEntry = {
   unread: boolean;
 };
 
-// RFP-scoped internal team thread (v1: no mentions/notifications/read-state —
-// 확정 결정). Supports PDF/image attachments (absorbed the per-bid memo). NOT
-// part of ChatService: that service owns buyer↔PG pair resolution and
-// notification fanout, none of which apply here. ACL mirrors the page loaders:
-// buyer must own the RFP, PG must hold an invitation (invRepo.canAccess — same
-// gate as loadPgRfpDetail). sendMessage re-parents draft attachments in one
-// transaction (BidService.addNote pattern); list/insert stay append-only.
+// RFP-scoped internal team thread. Read-state (rfp_team_message_reads), per-RFP
+// unread, and notifications (in-app + a coalesced email digest, mirroring the
+// ChatService digest pattern) are supported; mentions are not yet. Surfaced in
+// the unified inbox (/messages) via listThreads + the ?t=<rfpId> deep-link.
+// Supports PDF/image attachments (absorbed the per-bid memo). Separate from
+// ChatService (which owns buyer↔PG pair resolution + counterparty fanout). ACL
+// mirrors the page loaders: buyer must own the RFP, PG must hold an invitation
+// (invRepo.canAccess — same gate as loadPgRfpDetail). sendMessage re-parents
+// draft attachments in one transaction (BidService.addNote pattern); list/insert
+// stay append-only.
 export class TeamChatService {
   constructor(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
