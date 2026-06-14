@@ -274,4 +274,32 @@ describe('MessageInbox', () => {
     expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
     expect(loadConversationThread).not.toHaveBeenCalled();
   });
+
+  it('팀 스레드 선택 시 모바일 뒤로가기 버튼이 표시되고 클릭하면 목록으로 돌아간다', async () => {
+    const user = userEvent.setup();
+    const teamItems: InboxListItem[] = [
+      {
+        kind: 'team',
+        key: 't:r1',
+        rfpId: 'r1',
+        rfpCode: 'P-1',
+        rfpTitle: '제목',
+        preview: '메모',
+        lastMessageAt: '2026-06-14T01:00:00Z',
+        unread: false,
+      },
+    ];
+    render(<MessageInbox items={teamItems as any} initialSelectedKey="t:r1" />);
+
+    // TeamThreadPane resolves async via getTeamThreadPromise mock — wait for back button
+    const back = await screen.findByRole('button', { name: '대화 목록' });
+    expect(back).toBeInTheDocument();
+
+    await act(async () => {
+      await user.click(back);
+    });
+
+    // After back, selection cleared → empty state shown
+    expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
+  });
 });

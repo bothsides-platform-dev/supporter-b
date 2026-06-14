@@ -7,16 +7,20 @@
  * (use(serverAction) 의 render-phase Router 업데이트 경고 회피). unmount/rfpId
  * 변경 시 캐시 무효화 → 재진입마다 신선한 스레드. 자체적으로 로딩 스켈레톤을
  * 관리하므로 호출부에 Suspense 가 필요 없다.
+ *
+ * onBack — 모바일 뒤로가기 콜백. 인박스에서 전달하며, ChatPanel 처럼 onBack 이
+ * 불필요한 맥락에서는 생략한다.
  */
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/primitives/EmptyState';
+import { ChevronLeftIcon } from '@/components/icons';
 import { TeamThreadView } from './TeamThreadView';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import { getTeamThreadPromise, invalidateTeamThread } from './team-thread-cache';
 import type { LoadTeamThreadResult } from '@/lib/server/actions/chat/teamThreadLoader';
 
-export function TeamThreadPane({ rfpId }: { rfpId: string }) {
+export function TeamThreadPane({ rfpId, onBack }: { rfpId: string; onBack?: () => void }) {
   const [result, setResult] = useState<LoadTeamThreadResult | null>(null);
   const [retry, setRetry] = useState(0);
 
@@ -57,11 +61,27 @@ export function TeamThreadPane({ rfpId }: { rfpId: string }) {
   }
 
   return (
-    <TeamThreadView
-      rfpId={result.rfpId}
-      workspaceId={result.workspaceId}
-      viewerUserId={result.viewerUserId}
-      messages={result.messages}
-    />
+    <div className="flex h-full min-h-0 flex-col">
+      {onBack && (
+        <div className="flex shrink-0 items-center border-b border-[var(--md-sys-color-outline-variant)] px-3 py-2 md:hidden">
+          <button
+            type="button"
+            aria-label="대화 목록"
+            onClick={onBack}
+            className="-ml-1 flex size-8 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)]"
+          >
+            <ChevronLeftIcon size={18} />
+          </button>
+        </div>
+      )}
+      <div className="min-h-0 flex-1">
+        <TeamThreadView
+          rfpId={result.rfpId}
+          workspaceId={result.workspaceId}
+          viewerUserId={result.viewerUserId}
+          messages={result.messages}
+        />
+      </div>
+    </div>
   );
 }

@@ -71,7 +71,7 @@ export function MessageInbox({ items, initialSelectedKey = null, className }: Pr
       >
         {selected?.kind === 'team' ? (
           // TeamThreadPane 은 useEffect 로더 패턴으로 로딩을 자체 관리 — Suspense 불필요.
-          <TeamThreadPane rfpId={selected.rfpId} />
+          <TeamThreadPane rfpId={selected.rfpId} onBack={() => setSelectedKey(null)} />
         ) : selected?.kind === 'counterparty' ? (
           // key={selected.key} resets the Suspense boundary when conversation changes,
           // showing the skeleton again for the newly selected conversation.
