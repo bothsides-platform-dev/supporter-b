@@ -83,6 +83,10 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
         email: adminEmail,
         passwordHash: await hashPassword('password123'),
         name: 'NICE 관리자',
+        // 이 유저는 현재 로그인하지 않지만(scenario-d는 buyer로만 로그인),
+        // 향후 이 계정으로 로그인하는 스펙이 생겨도 이메일 인증 게이트에 막히지
+        // 않도록 방어적으로 인증 완료 상태로 시드한다.
+        emailVerified: true,
       });
     }
     await db.execute(

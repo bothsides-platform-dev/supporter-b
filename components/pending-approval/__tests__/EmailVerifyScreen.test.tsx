@@ -5,13 +5,12 @@
  * active 워크스페이스 사용자를 잘못된 "심사 대기" 화면에 잠시 머물게 하므로 쓰지 않는다.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockPush = vi.fn();
-const mockRefresh = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 const mockSend = vi.fn();
@@ -33,7 +32,6 @@ import { EmailVerifyScreen } from '../email-verify-screen';
 describe('EmailVerifyScreen', () => {
   beforeEach(() => {
     mockPush.mockReset();
-    mockRefresh.mockReset();
     mockSend.mockReset().mockResolvedValue({ ok: true });
     mockCheck.mockReset().mockResolvedValue({ verified: false });
     mockVerifyCode.mockReset();
@@ -54,6 +52,25 @@ describe('EmailVerifyScreen', () => {
     await user.click(screen.getByRole('button', { name: /코드로 인증하기/i }));
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/home'));
+  });
+
+  it('다른 탭/기기에서 링크 인증 시(폴링 감지) 도 /home 으로 push 한다', async () => {
+    // 4초 폴링 인터벌을 결정적으로 진행하기 위해 fake timer 사용.
+    vi.useFakeTimers();
+    try {
+      mockCheck.mockResolvedValue({ verified: true });
+      render(<EmailVerifyScreen email="me@x.com" />);
+
+      // act 로 감싸 폴링 콜백의 비동기 상태 갱신(setVerified)과 그에 따른
+      // onVerified useEffect 재실행을 모두 flush 한다.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4100);
+      });
+
+      expect(mockPush).toHaveBeenCalledWith('/home');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('홈으로 가기 링크가 루트로 연결된다', () => {
