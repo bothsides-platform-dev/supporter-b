@@ -157,14 +157,10 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
       .getByRole('dialog')
       .getByRole('button', { name: /견적 보내기/ })
       .click();
-    await page.waitForURL(new RegExp(`/inbox/${RFP_CODE}/submitted$`), {
-      timeout: 15_000,
-    });
 
-    // 2h. Confirm submitted page loaded
-    await expect(
-      page.getByRole('heading', { name: /견적을 보냈어요/ }),
-    ).toBeVisible({ timeout: 15_000 });
+    // 2h. 인플레이스 제출 완료 — 별도 /submitted 로 이탈하지 않고 같은 창에서 갱신.
+    await expect(page.getByText(/견적을 보냈어요/)).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`));
 
     // ── DB assertions ─────────────────────────────────────────────────────
 

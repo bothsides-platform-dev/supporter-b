@@ -8,13 +8,14 @@
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Pencil, FileText, Paperclip, Undo2 } from 'lucide-react';
 
 import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
 import { RfpBriefPanel } from '@/components/inbox/RfpBriefPanel';
 import { SamplePgRfpBanner } from '@/components/inbox/SamplePgRfpBanner';
+import { SubmittedSummary } from '@/components/inbox/SubmittedSummary';
+import { buildSubmittedSummaryRows } from '@/components/inbox/buildSubmittedSummaryRows';
 import { BidWizard } from '@/components/inbox/bid-wizard/BidWizard';
 import { RequoteBanner } from '@/components/inbox/RequoteBanner';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
@@ -44,12 +45,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
       <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
         보낸 시각: {myBid.submittedAt ? <LocalTime iso={myBid.submittedAt} /> : '—'}
       </p>
-      <Link
-        href={`/inbox/${rfp.code}/submitted`}
-        className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:text-[var(--md-sys-color-on-surface)]"
-      >
-        보낸 견적 보기 →
-      </Link>
+      <SubmittedSummary rows={buildSubmittedSummaryRows(rfp, myBid)} />
     </div>
   ) : (
     <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} />

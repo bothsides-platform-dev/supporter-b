@@ -83,11 +83,12 @@ describe('InboxList', () => {
     expect(screen.getByRole('link', { name: '견적 작성' })).toHaveAttribute('href', '/inbox/P-2604-0001');
   });
 
-  it('submitted 행은 "보낸 견적" 행동 링크를 보여준다', () => {
+  it('submitted 행은 "보낸 견적" 행동 링크를 딜룸으로 보여준다', () => {
     render(<InboxList rows={[{ ...row, invitationId: 'inv-004', stage: 'submitted', bidId: 'bid-3' }]} />);
+    // 별도 /submitted 라우트 제거 — 딜룸(/inbox/<code>)이 제출 완료 상태를 렌더.
     expect(screen.getByRole('link', { name: '보낸 견적' })).toHaveAttribute(
       'href',
-      '/inbox/P-2604-0001/submitted',
+      '/inbox/P-2604-0001',
     );
   });
 

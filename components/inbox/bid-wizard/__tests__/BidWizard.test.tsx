@@ -13,7 +13,8 @@ vi.mock('@/lib/http', () => ({ http: { post: vi.fn() } }));
 vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')));
 
 const pushMock = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
+const refreshMock = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
 
 const submitBidMock = vi.fn(async (_i: unknown) => ({ ok: true as const, bidId: 'b1' }));
 vi.mock('@/lib/server/actions/bid', () => ({
@@ -66,6 +67,7 @@ beforeEach(() => {
   vi.useRealTimers();
   localStorage.clear();
   pushMock.mockClear();
+  refreshMock.mockClear();
   submitBidMock.mockClear();
 });
 afterEach(cleanup);
@@ -77,7 +79,7 @@ describe('BidWizard', () => {
     expect(screen.queryByText(/카드 수수료/)).not.toBeInTheDocument();
   });
 
-  it('단계 이동 후 입력 → 발송 → submitBidAction 호출 + /submitted 이동', async () => {
+  it('단계 이동 후 입력 → 발송 → submitBidAction 호출 + 인플레이스 갱신(refresh)', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="토스" />);
 
@@ -103,7 +105,10 @@ describe('BidWizard', () => {
       settleCycle: 'D+1',
       paymentFees: { card: { general: 0.015 } },
     });
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/inbox/P-2606-0001/submitted'));
+    // 별도 /submitted 페이지로 push 하지 않고 같은 창에서 refresh — PgDealRoomBody 가
+    // 제출 완료 상태를 인플레이스 렌더.
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(pushMock).not.toHaveBeenCalledWith('/inbox/P-2606-0001/submitted');
   });
 });
 
