@@ -79,6 +79,7 @@ export function TeamThreadPane({ rfpId, onBack }: { rfpId: string; onBack?: () =
           rfpId={result.rfpId}
           workspaceId={result.workspaceId}
           viewerUserId={result.viewerUserId}
+          teamMembers={result.teamMembers}
           messages={result.messages}
         />
       </div>

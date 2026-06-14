@@ -27,6 +27,7 @@ import {
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { parseTeamDigestDedupeKey } from './team-digest';
+import { mentionsToPlainText } from '@/lib/team-mentions';
 import { baseUrlFor } from '@/lib/server/env';
 import { renderChatMessage } from './templates/chatMessage';
 import type { Sender } from './types';
@@ -84,8 +85,11 @@ export async function flushTeamChatDigests(
 
     // Recompute the digest body from the unread messages.
     const latest = unread[unread.length - 1];
+    const roster = await wsRepo.teamRoster(workspaceId);
+    const nameById = new Map(roster.map((r) => [r.userId, r.name]));
+    const latestPlain = mentionsToPlainText(latest.body, nameById);
     const preview =
-      latest.body.length > 0 ? latest.body.slice(0, PREVIEW_LEN) : EMPTY_PREVIEW;
+      latestPlain.length > 0 ? latestPlain.slice(0, PREVIEW_LEN) : EMPTY_PREVIEW;
     const senderName = latest.authorName.length > 0 ? latest.authorName : '팀원';
     const ws = await wsRepo.findById(workspaceId);
     const origin = baseUrlFor(ws?.type === 'pg' ? 'pg' : 'buyer');
