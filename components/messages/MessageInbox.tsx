@@ -2,24 +2,37 @@
 
 import { Suspense, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { Tabs } from '@/components/primitives/Tabs';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { EnvelopeIcon } from '@/components/icons';
 import { ConversationList } from './ConversationList';
 import { NewConversationSheet } from './NewConversationSheet';
 import { ThreadPane } from './ThreadPane';
+import { TeamThreadPane } from './TeamThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
-import type { ConversationListItem } from './types';
+import type { InboxListItem } from './types';
+
+type Filter = 'all' | 'counterparty' | 'team';
 
 type Props = {
-  conversations: ConversationListItem[];
-  /** Pre-select a conversation on mount (e.g. from ?c= deep-link). Ignored if id not in list. */
-  initialSelectedId?: string | null;
+  items: InboxListItem[];
+  /** Pre-select an item on mount (e.g. from ?c=/?t= deep-link). Ignored if key not in list. */
+  initialSelectedKey?: string | null;
   className?: string;
 };
 
-export function MessageInbox({ conversations, initialSelectedId = null, className }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
-  const selected = conversations.find((c) => c.conversationId === selectedId) ?? null;
+const FILTER_TABS = [
+  { id: 'all', label: '전체' },
+  { id: 'counterparty', label: '상대방' },
+  { id: 'team', label: '팀' },
+];
+
+export function MessageInbox({ items, initialSelectedKey = null, className }: Props) {
+  const [selectedKey, setSelectedKey] = useState<string | null>(initialSelectedKey);
+  const [filter, setFilter] = useState<Filter>('all');
+
+  const visible = items.filter((i) => filter === 'all' || i.kind === filter);
+  const selected = items.find((i) => i.key === selectedKey) ?? null;
 
   // 메신저형 레이아웃: 데스크톱은 2-컬럼(목록 + 스레드), 모바일은 단일 컬럼으로
   // 목록 ↔ 스레드를 전환한다(선택 시 스레드 전체폭, 뒤로가기로 목록 복귀). 좁은
@@ -39,11 +52,16 @@ export function MessageInbox({ conversations, initialSelectedId = null, classNam
           </span>
           <NewConversationSheet />
         </div>
+        <Tabs
+          tabs={FILTER_TABS}
+          active={filter}
+          onChange={(id) => setFilter(id as Filter)}
+        />
         <div className="min-h-0 flex-1 overflow-y-auto">
           <ConversationList
-            conversations={conversations}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
+            items={visible}
+            selectedKey={selectedKey}
+            onSelect={setSelectedKey}
           />
         </div>
       </div>
@@ -51,14 +69,17 @@ export function MessageInbox({ conversations, initialSelectedId = null, classNam
         data-pane="thread"
         className={cn('flex min-h-0 min-w-0 flex-1 flex-col md:flex', selected ? 'flex' : 'hidden')}
       >
-        {selected ? (
-          // key={selectedId} resets the Suspense boundary when conversation changes,
+        {selected?.kind === 'team' ? (
+          // TeamThreadPane 은 useEffect 로더 패턴으로 로딩을 자체 관리 — Suspense 불필요.
+          <TeamThreadPane rfpId={selected.rfpId} />
+        ) : selected?.kind === 'counterparty' ? (
+          // key={selected.key} resets the Suspense boundary when conversation changes,
           // showing the skeleton again for the newly selected conversation.
-          <Suspense key={selectedId} fallback={<ThreadSkeleton />}>
+          <Suspense key={selected.key} fallback={<ThreadSkeleton />}>
             <ThreadPane
               conversationId={selected.conversationId}
               counterpartyFallback={selected.counterparty}
-              onBack={() => setSelectedId(null)}
+              onBack={() => setSelectedKey(null)}
             />
           </Suspense>
         ) : (
