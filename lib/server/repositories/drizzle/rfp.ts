@@ -55,6 +55,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     requiredPaymentMethods: (row.requiredPaymentMethods ?? []) as PaymentMethod[],
     customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
     boardVisible: row.boardVisible,
+    currentFeeVisibleToPg: row.currentFeeVisibleToPg,
     isSample: row.isSample,
     contractType: row.contractType ?? null,
   };
@@ -141,6 +142,10 @@ export class DrizzleRfpRepository implements RfpRepo {
     // conflict set 에는 넣지 않아 — 노출 토글은 전용 액션의 직접 UPDATE 소관이라
     // 일반 RFP 저장/수정이 구매사의 opt-out 선택을 덮어쓰지 않게 한다.
     if (rfp.boardVisible !== undefined) values.boardVisible = rfp.boardVisible;
+    // currentFeeVisibleToPg 도 동일: 작성 시점 선택을 보존하기 위해 지정 시에만
+    // 반영하고 conflict set 에는 넣지 않는다 (일반 저장/수정이 덮어쓰지 않게).
+    if (rfp.currentFeeVisibleToPg !== undefined)
+      values.currentFeeVisibleToPg = rfp.currentFeeVisibleToPg;
 
     await db
       .insert(rfps)

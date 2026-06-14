@@ -18,6 +18,8 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
   const grade = bizProfile?.grade;
   const daysLeft = formatDeadline(rfp.deadline);
   const isUrgent = daysLeft.startsWith('D-') && parseInt(daysLeft.slice(2)) <= 3;
+  // 현재 카드 수수료 PG 노출(opt-out). false면 PG 화면에서만 숨김 — undefined는 노출로 취급.
+  const pgCardFee = rfp.currentFeeVisibleToPg === false ? undefined : rfp.currentFeeRate;
 
   return (
     <div className="space-y-6">
@@ -102,7 +104,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
       </div>
 
       {/* 사업 운영 정보 — 6 optional fields */}
-      {[rfp.websiteUrl, rfp.mainProducts, rfp.annualPgVolume, rfp.currentFeeRate, rfp.currentSettlementLimit, rfp.currentGuaranteeInsurance, rfp.currentSettlementCycle, rfp.deliveryServicePeriod].some(Boolean) && (
+      {[rfp.websiteUrl, rfp.mainProducts, rfp.annualPgVolume, pgCardFee, rfp.currentSettlementLimit, rfp.currentGuaranteeInsurance, rfp.currentSettlementCycle, rfp.deliveryServicePeriod].some(Boolean) && (
         <div>
           <div className="flex items-center gap-3 mb-3">
             <Label size="md" muted={false}>사업 운영 정보</Label>
@@ -114,7 +116,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
                 ['사업 운영 홈페이지', rfp.websiteUrl],
                 ['주요 판매 상품', rfp.mainProducts],
                 ['전년도 연간 PG 거래액', rfp.annualPgVolume ? (formatKrwReadable(Number(rfp.annualPgVolume)) || rfp.annualPgVolume) : undefined],
-                ['현재 카드 수수료', rfp.currentFeeRate],
+                ['현재 카드 수수료', pgCardFee],
                 ['현재 정산한도', rfp.currentSettlementLimit],
                 ['현재 보증보험', rfp.currentGuaranteeInsurance],
                 ['현재 정산주기', rfp.currentSettlementCycle],

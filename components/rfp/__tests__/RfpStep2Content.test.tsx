@@ -26,6 +26,7 @@ function resetStore() {
     currentSolutionDetail: '',
     memo: '',
     rfpFiles: [],
+    currentFeeVisibleToPg: true,
   });
 }
 
@@ -197,6 +198,31 @@ describe('RfpStep2Content', () => {
       await user.type(input, '50000000');
       // CurrencyInput onValueChange → values.value (raw digit)
       expect(useRfpDraftStore.getState().annualPgVolume).toBe('50000000');
+    });
+  });
+
+  describe('현재 카드 수수료 PG 공개 토글', () => {
+    const cbName = '현재 카드 수수료를 PG사에 공개하기';
+
+    it('기본값은 공개(checked)다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getByRole('checkbox', { name: cbName })).toBeChecked();
+    });
+
+    it('체크 해제 시 store currentFeeVisibleToPg가 false가 된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('checkbox', { name: cbName }));
+      expect(useRfpDraftStore.getState().currentFeeVisibleToPg).toBe(false);
+    });
+
+    it('다시 체크 시 store currentFeeVisibleToPg가 true로 복귀한다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      const cb = screen.getByRole('checkbox', { name: cbName });
+      await user.click(cb);
+      await user.click(cb);
+      expect(useRfpDraftStore.getState().currentFeeVisibleToPg).toBe(true);
     });
   });
 
