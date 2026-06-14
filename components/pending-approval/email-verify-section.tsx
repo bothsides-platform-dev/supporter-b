@@ -24,7 +24,8 @@ export function EmailVerifySection({
 }: {
   email: string;
   initialVerified: boolean;
-  /** 인증이 완료되는 순간 1회 호출 — 페이지가 기존 pending-approval 화면으로 전환하는 데 사용. */
+  /** 인증이 완료되는 순간 1회 호출 — 호출부가 화면을 전환하는 데 사용(현재 caller 는
+   *  /home 으로 push 해 (app) 가드가 워크스페이스 상태에 맞게 재분기하도록 한다). */
   onVerified?: () => void;
 }) {
   const [verified, setVerified] = useState(initialVerified);

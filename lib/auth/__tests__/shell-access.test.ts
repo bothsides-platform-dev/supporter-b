@@ -171,6 +171,14 @@ describe('resolveShellAccess — (app) shell auth guard contract', () => {
       ).toEqual({ kind: 'redirect', to: '/suspended' });
     });
 
+    // 게이트 우선순위: 이메일 인증 게이트가 suspended 상태 게이트보다 앞선다 →
+    // 미인증이면 suspended 워크스페이스라도 /pending-approval(인증 먼저)로 보낸다.
+    it('미인증 + suspended 워크스페이스 → /pending-approval (이메일 게이트가 suspended 보다 우선)', () => {
+      expect(
+        resolveShellAccess({ user: completeUser }, [ws({ status: 'suspended' })], undefined, false),
+      ).toEqual({ kind: 'redirect', to: '/pending-approval' });
+    });
+
     // 게이트 순서: 멤버십/세션 무효 검사가 이메일 인증 검사보다 먼저다.
     it('미인증이라도 멤버십 없으면 → /logout (멤버십 검사 우선)', () => {
       expect(

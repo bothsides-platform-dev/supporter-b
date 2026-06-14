@@ -84,6 +84,9 @@ describe('AppLayout 인증 가드 — 무한 리다이렉트 루프 방지', () 
 
     await expect(AppLayout({ children: null })).rejects.toThrow('NEXT_REDIRECT');
     expect(mockRedirect).toHaveBeenCalledWith('/logout');
+    // 멤버십이 없으면 게이트는 emailVerified 를 참조하기 전에 /logout 으로 끝나므로,
+    // 레이아웃은 DB read(getDbEmailVerified)를 아예 건너뛴다(낭비 read 방지 최적화).
+    expect(mockGetDbEmailVerified).not.toHaveBeenCalled();
   });
 
   it('user.id 자체가 없으면 /login 으로 보낸다 (미인증, 루프 아님)', async () => {
