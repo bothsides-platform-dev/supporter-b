@@ -39,7 +39,7 @@ export function HomeDashboard({
               "견적 요청하기" CTA를 재사용해 상시 노출. */}
           {workspaceType === 'buyer' && (
             <div className="flex justify-end">
-              <Link href="/rfp/new">
+              <Link href="/rfp-create">
                 <Button size="sm" icon={<PlusIcon />}>견적 요청하기</Button>
               </Link>
             </div>

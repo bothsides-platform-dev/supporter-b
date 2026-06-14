@@ -19,6 +19,10 @@ function draftKey(rfpId: string) {
 }
 
 function readDraft(rfpId: string): BidDraft | null {
+  // SSR 가드: useState 초기화로 render 중에 호출되므로 서버엔 localStorage 가 없다.
+  // 딜룸 모달이 BidWizard 를 SSR 하는 경로에서 ReferenceError 가 나던 것을 막는다
+  // (catch 안의 removeItem 도 서버에선 재-throw 됐었다).
+  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(draftKey(rfpId));
     if (!raw) return null;

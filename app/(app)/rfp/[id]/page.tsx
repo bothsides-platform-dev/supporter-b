@@ -1,13 +1,24 @@
 import { Suspense } from 'react';
-import { PageEnter } from '@/components/primitives/PageEnter';
-import { ChatRail } from '@/components/messages/ChatRail';
-import { RfpDetailContent } from '@/components/rfp/RfpDetailContent';
+import { Chip, type ChipColor } from '@/components/primitives/Chip';
+import { DealRoomFull } from '@/components/deal-room/DealRoomFull';
+import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
+import { BuyerDealRoomBody } from '@/components/deal-room/buyer/BuyerDealRoomBody';
+import { DealRoomPageSkeleton } from '@/components/skeletons';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
 
 export const dynamic = 'force-dynamic';
 
 type Props = { params: Promise<{ id: string }> };
+
+// @modal 인터셉트 페이지(app/(app)/rfp/@modal/(.)[id]/page.tsx)와 동일한 상태칩 맵.
+const STATUS: Record<string, { label: string; color: ChipColor }> = {
+  draft: { label: '임시저장', color: 'surface' },
+  sent: { label: '요청 보냄', color: 'warning' },
+  closed: { label: '마감', color: 'surface' },
+  awarded: { label: '선정 완료', color: 'tertiary' },
+  cancelled: { label: '취소', color: 'error' },
+};
 
 export default async function RfpDetailPage({ params }: Props) {
   const { id } = await params;
@@ -16,13 +27,7 @@ export default async function RfpDetailPage({ params }: Props) {
   const { workspaceId, id: userId, name, email } = session.user;
 
   return (
-    <Suspense
-      fallback={
-        <PageEnter className="px-8 py-8 space-y-10">
-          <RfpDetailContent.Skeleton />
-        </PageEnter>
-      }
-    >
+    <Suspense fallback={<DealRoomPageSkeleton />}>
       <RfpDetailLoader
         id={id}
         wsId={workspaceId}
@@ -53,26 +58,33 @@ async function RfpDetailLoader({
 
   if (!data) {
     return (
-      <div className="px-8 py-8">
-        <p className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+      <div className="flex h-full items-center justify-center p-8 text-center">
+        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           견적 요청을 찾을 수 없어요.
         </p>
       </div>
     );
   }
 
-  // 우측 채팅 레일(상대방 채팅: FocusComparison 의 포커스 PG 추종 / 팀 채팅)과
-  // 본문이 나란히 — 레일은 sticky 라 본문 스크롤에 영향 없음(lg 미만 비노출).
+  // 새로고침·딥링크는 인터셉터를 건너뛰어 이 정식 페이지가 풀스크린으로 렌더되며,
+  // 모달과 같은 딜룸 셸(DealRoomFull)을 호스팅해 시각·기능이 일치한다.
+  const s = STATUS[data.rfp.status];
+
   return (
-    <div className="flex items-start">
-      <div className="min-w-0 flex-1">
-        <PageEnter className="px-8 py-8 space-y-10">
-          <RfpDetailContent data={data} />
-        </PageEnter>
-      </div>
-      {!data.rfp.isSample && (
-        <ChatRail rfpId={data.rfp.id} rfpCode={data.rfp.code} rfpTitle={data.rfp.title} />
-      )}
-    </div>
+    <DealRoomFull
+      code={data.rfp.code}
+      title={data.rfp.title}
+      statusChip={s ? <Chip label={s.label} color={s.color} /> : undefined}
+      chat={
+        <DealRoomChat
+          rfpId={data.rfp.id}
+          rfpCode={data.rfp.code}
+          rfpTitle={data.rfp.title}
+          isSample={data.rfp.isSample}
+        />
+      }
+    >
+      <BuyerDealRoomBody data={data} />
+    </DealRoomFull>
   );
 }

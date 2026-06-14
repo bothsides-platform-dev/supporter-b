@@ -97,7 +97,7 @@ export function LandingHeroSection() {
           transition={{ duration: 0.36, delay: 0.46, ease: EASE_OUT }}
           className="flex flex-col items-start gap-[var(--s-4)]"
         >
-          <Link href="/rfp/new">
+          <Link href="/rfp-create">
             <Button size="lg">PG 비교 견적 무료로 시작하기 →</Button>
           </Link>
           <span className="font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-outline)]">

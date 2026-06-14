@@ -71,15 +71,15 @@ describe('HomeDashboard', () => {
   });
 
   // 샘플 견적(액션 큐에 잡힘)이 있어도 구매사 홈에 "새 견적 만들기" 동선이 남아야 한다.
-  // 기존 /rfp 헤더의 "견적 요청하기"(→ /rfp/new) CTA를 그대로 재사용.
-  it('shows the 견적 요청하기 CTA (→ /rfp/new) for a buyer with an action queue (e.g. a sample RFP)', () => {
+  // 기존 /rfp 헤더의 "견적 요청하기"(→ /rfp-create) CTA를 그대로 재사용.
+  it('shows the 견적 요청하기 CTA (→ /rfp-create) for a buyer with an action queue (e.g. a sample RFP)', () => {
     render(<HomeDashboard dashboard={withGroups} workspaceType="buyer" conversations={[]} unreadCount={0} />);
-    expect(screen.getByRole('link', { name: /견적 요청하기/ })).toHaveAttribute('href', '/rfp/new');
+    expect(screen.getByRole('link', { name: /견적 요청하기/ })).toHaveAttribute('href', '/rfp-create');
   });
 
   it('shows the 견적 요청하기 CTA for a buyer in the "no work" empty state too', () => {
     render(<HomeDashboard dashboard={empty} workspaceType="buyer" conversations={[]} unreadCount={0} />);
-    expect(screen.getByRole('link', { name: /견적 요청하기/ })).toHaveAttribute('href', '/rfp/new');
+    expect(screen.getByRole('link', { name: /견적 요청하기/ })).toHaveAttribute('href', '/rfp-create');
   });
 
   it('does not show the buyer create CTA for a PG', () => {

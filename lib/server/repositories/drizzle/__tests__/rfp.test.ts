@@ -70,6 +70,36 @@ describe('DrizzleRfpRepository', () => {
     expect(fetched!.contractType).toBe('new');
   });
 
+  it('round-trips currentFeeVisibleToPg=false via save/findById', async () => {
+    const rfp: RFP = {
+      ...makeRfp('P-2605-FEEVIS1', ctx.ws.id, ctx.user.id),
+      currentFeeVisibleToPg: false,
+    };
+    await repo.save(rfp);
+    const fetched = await repo.findById(rfp.id);
+    expect(fetched!.currentFeeVisibleToPg).toBe(false);
+  });
+
+  it('re-save does not clobber a persisted currentFeeVisibleToPg=false (conflict-set 제외 불변식)', async () => {
+    const rfp: RFP = {
+      ...makeRfp('P-2605-FEEVIS3', ctx.ws.id, ctx.user.id),
+      currentFeeVisibleToPg: false,
+    };
+    await repo.save(rfp);
+    // 일반 저장/수정(노출=true)이 구매사의 비공개 선택을 덮어쓰면 안 된다.
+    await repo.save({ ...rfp, currentFeeVisibleToPg: true, title: 'edited' });
+    const fetched = await repo.findById(rfp.id);
+    expect(fetched!.currentFeeVisibleToPg).toBe(false);
+    expect(fetched!.title).toBe('edited');
+  });
+
+  it('currentFeeVisibleToPg defaults to true when omitted', async () => {
+    const rfp = makeRfp('P-2605-FEEVIS2', ctx.ws.id, ctx.user.id);
+    await repo.save(rfp);
+    const fetched = await repo.findByCode('P-2605-FEEVIS2');
+    expect(fetched!.currentFeeVisibleToPg).toBe(true);
+  });
+
   it('saves and retrieves by uuid id', async () => {
     const rfp = makeRfp('P-2605-0001', ctx.ws.id, ctx.user.id);
     await repo.save(rfp);

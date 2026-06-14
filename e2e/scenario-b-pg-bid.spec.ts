@@ -5,7 +5,7 @@
  *   - bids row inserted (status='submitted', pgWsId=tossWs)
  *   - notifications row for buyer (bid.submitted)
  *   - outbox_entries row event_type='bid.submitted'
- *   - UI: lands on /inbox/<rfpId>/submitted
+ *   - UI: in-place submitted state on /inbox/<rfpId> (별도 /submitted 라우트 없음)
  *
  * Token strategy
  * --------------
@@ -38,7 +38,7 @@ const TOSS_PASSWORD = 'password123';
 const RFP_ID = 'P-2604-0001';
 
 test.describe.serial('Scenario B — PG submits a bid', () => {
-  test('toss claims invitation, submits bid, lands on submitted page', async ({
+  test('toss claims invitation, submits bid, shows in-place submitted state', async ({
     page,
   }) => {
     // RFP_ID is the human code; FK columns + dedupe keys use the uuid.
@@ -106,9 +106,11 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     // 사이드바에도 같은 라벨의 단계 버튼이 있어(예: '2 수수료') 다음 버튼은
     // exact 매칭으로 좁힌다(접근명이 정확히 '수수료'/'견적서'/'검토·발송').
 
-    // step1 정산 조건: unit Select(D|W|M) + cycleNum 숫자 input → settleCycle 'D+1'.
+    // step1 정산 조건: unit Select(D|W|M) + cycleNum 입력 → settleCycle 'D+1'.
     await page.locator('select').first().selectOption('D');
-    await page.locator('input[type="number"]').first().fill('1');
+    // cycleNum 은 NumericFormat(type=text, placeholder="1") — 구 input[type=number]
+    // 셀렉터(cf98414 NumericFormat 전환 이후 stale)를 placeholder 매칭으로 교체.
+    await page.getByPlaceholder('1', { exact: true }).fill('1');
     await page.getByRole('button', { name: '수수료', exact: true }).click();
 
     // step2 수수료: 구매사가 요청한 결제수단마다 PercentInput(placeholder='0.00').
@@ -131,18 +133,17 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     // 발송 버튼은 ConfirmDialog 를 띄우고, 다이얼로그의 '견적 보내기' 확인
     // 버튼이 실제 server action 을 트리거한다. role=dialog 로 좁혀 같은 라벨의
     // step 버튼과 충돌하지 않게 한다.
-    // 액션 성공 → /inbox/<rfpId>/submitted로 redirect되어야 한다.
-    // (server action에서 revalidatePath + client에서 router.push,
-    //  router.push + router.refresh 동시 호출은 Next 16 useTransition
-    //  hang 패턴이라 금지 — vercel/next.js#86055 참조.)
+    // 액션 성공 → 별도 /submitted 로 이탈하지 않고 같은 창(/inbox/<rfpId>)에서
+    // router.refresh() → 견적작성 탭이 제출 완료 상태를 인플레이스 렌더.
+    // (push+refresh 동시 호출은 Next 16 useTransition hang — vercel/next.js#86055.)
     await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
     await page
       .getByRole('dialog')
       .getByRole('button', { name: /견적 보내기/ })
       .click();
-    await page.waitForURL(new RegExp(`/inbox/${RFP_ID}/submitted$`), {
-      timeout: 15_000,
-    });
+    // 인플레이스 제출 완료 — URL 불변, 같은 화면에 "✓ 견적을 보냈어요".
+    await expect(page.getByText(/견적을 보냈어요/)).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_ID}$`));
 
     // ── 6. DB-of-record: bid row inserted with status='submitted' ──
     const bidRows = await db.execute<{ c: number }>(
@@ -183,12 +184,5 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
       : // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ((outboxRows as any).rows ?? []);
     expect(outboxArr[0].c).toBeGreaterThanOrEqual(1);
-
-    // /submitted 페이지의 헤딩으로 redirect 후 RSC 렌더링 완료를 검증.
-    // 같은 페이지에 "✓ 견적을 보냈어요" 에어브로우 paragraph가 또 있어 strict-mode
-    // 위반을 피하려면 heading role로 좁혀야 한다.
-    await expect(
-      page.getByRole('heading', { name: /견적을 보냈어요/ }),
-    ).toBeVisible();
   });
 });

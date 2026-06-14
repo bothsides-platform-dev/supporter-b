@@ -13,7 +13,7 @@ import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
 import { db } from '@/lib/db/client';
-import { attachments, bids, bidNotes, columns, rfps } from '@/lib/db/schema';
+import { attachments, bids, columns, rfps } from '@/lib/db/schema';
 import { getStorage } from '@/lib/server/storage';
 
 // Seed/URL identifiers are the human RFP code (P-YYMM-NNNN); FKs use the uuid.
@@ -57,7 +57,9 @@ export async function loginAs(page: Page, role: Role): Promise<void> {
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
   await page.getByRole('button', { name: '로그인' }).click();
-  await page.waitForURL(/\/home$/, { timeout: 15_000 });
+  // dev 서버 cold-compile(login→home 트리)는 15s 를 넘길 수 있어 여유를 둔다.
+  // prod 빌드(CI)는 사전컴파일이라 즉시 통과 — 더 길게 잡아도 무해하다.
+  await page.waitForURL(/\/home$/, { timeout: 45_000 });
 }
 
 /** Title of the column a bid currently sits in (unified kanban). A bid with no
@@ -72,16 +74,6 @@ export async function getBidColumnTitleFromDb(bidId: string): Promise<string> {
     .limit(1);
   if (!row) throw new Error(`[e2e helpers] bid not found: ${bidId}`);
   return row.boardColumnId ? (row.title ?? '진행전') : '진행전';
-}
-
-/** Number of bid_notes rows for a given bid. Used by the note roundtrip
- *  spec to gate UI-vs-DB invariants. */
-export async function getNoteCountFromDb(bidId: string): Promise<number> {
-  const rows = await db
-    .select({ id: bidNotes.id })
-    .from(bidNotes)
-    .where(eq(bidNotes.bidId, bidId));
-  return rows.length;
 }
 
 /** Reset the seeded P-2604-0001 RFP back to a runnable state for a new spec

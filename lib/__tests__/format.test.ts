@@ -1,5 +1,59 @@
 import { describe, it, expect } from 'vitest';
-import { formatDate, formatDateTime, formatSize, formatKrwReadable } from '../format';
+import {
+  formatDate,
+  formatDateTime,
+  formatSize,
+  formatKrwReadable,
+  formatRatePerManwon,
+  formatFeeRateDisplay,
+  formatKrwField,
+} from '../format';
+
+describe('formatFeeRateDisplay', () => {
+  it('숫자만 저장된 신규 값에는 % 를 붙인다', () => {
+    expect(formatFeeRateDisplay('3.4')).toBe('3.4%');
+    expect(formatFeeRateDisplay('2')).toBe('2%');
+  });
+
+  it('이미 %·자유 텍스트인 과거 값은 그대로 둔다', () => {
+    expect(formatFeeRateDisplay('3.4%')).toBe('3.4%');
+    expect(formatFeeRateDisplay('협의 가능')).toBe('협의 가능');
+  });
+
+  it('앞뒤 공백이 있는 숫자도 trim 후 % 를 붙인다', () => {
+    expect(formatFeeRateDisplay(' 3.4 ')).toBe('3.4%');
+  });
+
+  it('빈 값/널은 빈 문자열을 반환한다', () => {
+    expect(formatFeeRateDisplay('')).toBe('');
+    expect(formatFeeRateDisplay(null)).toBe('');
+    expect(formatFeeRateDisplay(undefined)).toBe('');
+  });
+});
+
+describe('formatKrwField', () => {
+  it('원 단위 숫자 문자열을 읽기 쉬운 한국어 금액으로 표기한다', () => {
+    expect(formatKrwField('100000000')).toBe('1억원');
+    expect(formatKrwField('30000000')).toBe('3,000만원');
+  });
+
+  it('파싱 불가한 과거 자유 텍스트는 원문을 유지한다', () => {
+    expect(formatKrwField('월 1억')).toBe('월 1억');
+    expect(formatKrwField('3000만원')).toBe('3000만원');
+  });
+
+  it('0·음수는 formatKrwReadable 가 빈 문자열을 주므로 원문을 유지한다(경계)', () => {
+    // formatKrwReadable 는 n<=0 에 ''를 반환 → `|| value` 폴백으로 원문 노출
+    expect(formatKrwField('0')).toBe('0');
+    expect(formatKrwField('-100')).toBe('-100');
+  });
+
+  it('빈 값/널은 빈 문자열을 반환한다', () => {
+    expect(formatKrwField('')).toBe('');
+    expect(formatKrwField(null)).toBe('');
+    expect(formatKrwField(undefined)).toBe('');
+  });
+});
 
 describe('formatKrwReadable', () => {
   it('만·억 단위로 끊고 나머지는 콤마로 표기한다', () => {
@@ -27,6 +81,25 @@ describe('formatKrwReadable', () => {
     expect(formatKrwReadable(-5000)).toBe('');
     expect(formatKrwReadable(NaN)).toBe('');
     expect(formatKrwReadable(Infinity)).toBe('');
+  });
+});
+
+describe('formatRatePerManwon', () => {
+  it('수수료율(%)을 1만원 결제 기준 원화 환산으로 표기한다', () => {
+    expect(formatRatePerManwon(1.25)).toBe('1만원 결제 시 125원');
+    expect(formatRatePerManwon(0.8)).toBe('1만원 결제 시 80원');
+    expect(formatRatePerManwon(3)).toBe('1만원 결제 시 300원');
+  });
+
+  it('1,000원 이상은 콤마로 표기한다', () => {
+    expect(formatRatePerManwon(15)).toBe('1만원 결제 시 1,500원');
+  });
+
+  it('유효하지 않은 값(0·음수·NaN·Infinity)은 빈 문자열을 반환한다', () => {
+    expect(formatRatePerManwon(0)).toBe('');
+    expect(formatRatePerManwon(-1)).toBe('');
+    expect(formatRatePerManwon(NaN)).toBe('');
+    expect(formatRatePerManwon(Infinity)).toBe('');
   });
 });
 

@@ -11,6 +11,7 @@ export function ThreadPane({
   variant,
   defaultRfpId,
   rfpById,
+  sendDisabled,
 }: {
   conversationId: string;
   counterpartyFallback: { workspaceId: string; name: string; type: 'buyer' | 'pg'; hasLogo: boolean };
@@ -20,20 +21,25 @@ export function ThreadPane({
   /** 레일 컨텍스트 RFP — 컴포저 전송에 기본 태그로 적용. */
   defaultRfpId?: string;
   rfpById?: Record<string, { code: string; title: string }>;
+  /** 샘플 RFP — 컴포저 전송 차단(데모 PG 에게 실제 전송 방지). */
+  sendDisabled?: boolean;
 }) {
   const result = use(getThreadPromise(conversationId));
   const counterparty = result.ok ? result.counterparty : counterpartyFallback;
   const messages = result.ok ? result.messages : [];
+  const viewer = result.ok ? result.viewer : { userId: '', name: '' };
   return (
     <ThreadView
       key={conversationId}
       conversationId={conversationId}
       counterparty={counterparty}
+      viewer={viewer}
       messages={messages}
       onBack={onBack}
       variant={variant}
       defaultRfpId={defaultRfpId}
       rfpById={rfpById}
+      sendDisabled={sendDisabled}
     />
   );
 }

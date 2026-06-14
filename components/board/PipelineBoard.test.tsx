@@ -1,11 +1,11 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
 
-const mockReplace = vi.fn();
+const mockPush = vi.fn();
 const mockSearchParams = vi.fn(() => new URLSearchParams('view=board'));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mockReplace }),
+  useRouter: () => ({ push: mockPush }),
   usePathname: () => '/rfp',
   useSearchParams: () => mockSearchParams(),
 }));
@@ -58,18 +58,19 @@ const cards: BoardCard[] = [
 
 afterEach(() => {
   cleanup();
-  mockReplace.mockClear();
+  mockPush.mockClear();
   mockSearchParams.mockReturnValue(new URLSearchParams('view=board'));
 });
 
 describe('PipelineBoard', () => {
-  it('rfp 카드 클릭 시 view=board 유지하며 peek 파라미터 추가', async () => {
+  it('rfp 카드 클릭 시 상세 라우트로 push 해 딜룸 모달을 연다', async () => {
     const { findByText } = render(
       <PipelineBoard cardType="rfp" columns={[]} cards={cards} />,
     );
     const btn = await findByText('카드');
     btn.click();
-    expect(mockReplace).toHaveBeenCalledWith('/rfp?view=board&peek=P-2604-0001');
+    // 보드 카드도 표 뷰 행과 동일하게 인터셉트 딜룸 모달로 — 과거 ?peek 사이드패널 제거.
+    expect(mockPush).toHaveBeenCalledWith('/rfp/P-2604-0001');
   });
 
   it('buyer: 종결 컬럼(closed/awarded)에 표 뷰 딥링크 overflow 를 주입한다', () => {

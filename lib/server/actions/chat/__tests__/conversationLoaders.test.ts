@@ -285,6 +285,29 @@ describe('loadConversationThread', () => {
     expect(msg.attachments[0].url).toBe(`/api/files/${attId}`);
   });
 
+  it('attaches author identity to both sides and returns the viewer', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'buyer says hi',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+    asPg(pgUser, pgWs.id);
+    await sendChatMessageAction({ conversationId: sent.conversationId, body: 'pg replies' });
+
+    asBuyer(buyerUser, buyerWs.id);
+    const thread = await loadConversationThread(sent.conversationId);
+    expect(thread.ok).toBe(true);
+    if (!thread.ok) return;
+
+    expect(thread.messages.map((m) => m.authorUserId)).toEqual([buyerUser.id, pgUser.id]);
+    expect(thread.messages.map((m) => m.authorName)).toEqual(['구매사담당', 'PG영업']);
+    expect(thread.messages.map((m) => m.authorEmail)).toEqual(['buyer@b.com', 'sales@pg.com']);
+    expect(thread.viewer).toEqual({ userId: buyerUser.id, name: '구매사담당' });
+  });
+
   it('a co-member of the viewer workspace reading does NOT flip readByCounterparty (only the counterparty workspace counts)', async () => {
     const { buyerUser, buyerWs, pgWs } = await seedPair();
     // Second buyer member joins the viewer's OWN workspace.

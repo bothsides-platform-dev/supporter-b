@@ -3,6 +3,7 @@
 import { z } from 'zod';
 
 import { getTeamChatService } from '@/lib/server/services/team-chat';
+import type { Attachment } from '@/lib/types/common';
 import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
 const Input = z.string().uuid();
@@ -14,6 +15,7 @@ export type TeamThreadMessage = {
   body: string;
   createdAt: string;
   isSelf: boolean;
+  attachments: Attachment[];
 };
 
 export type LoadTeamThreadResult = ChatActionResult<{
@@ -58,6 +60,7 @@ export async function loadTeamThread(
       body: m.body,
       createdAt: m.createdAt.toISOString(),
       isSelf: m.authorUserId === ws.userId,
+      attachments: m.attachments,
     })),
   };
 }

@@ -16,7 +16,7 @@ export function GuestHeader() {
           로그인
         </Link>
         <Link
-          href="/signup/buyer"
+          href="/signup"
           className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface)] bg-[var(--md-sys-color-surface-container-high)] hover:bg-[var(--md-sys-color-surface-container-highest)] transition-colors px-3 py-1.5 rounded-sm"
         >
           가입하기

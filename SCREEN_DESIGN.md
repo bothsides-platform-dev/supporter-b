@@ -18,6 +18,7 @@
 - RFP 작성 워크플로우: **(선택)** 사업자번호 조회 → **(선택)** 등급 확인 → 자유 메모·첨부 → PG 워크스페이스 검색·선택 → 발송 (사업자번호·등급 모두 옵셔널)
 - PG 응답 워크플로우: 초대 URL → 가입/로그인 → 워크스페이스 이름 입력(신규) 또는 기존 합류 → 정형 Bid 제출
 - **오픈 발견 + 봉인 입찰**: 발견(discovery)은 기본 공개(구매사 opt-out, `board_visible`) — 발송된 모든 RFP가 PG 게시판/홈에 **구매사명·제목·홈페이지만** 노출(수수료·현재 거래조건·거래액·bizNo·메모·첨부 비노출). 비초대 PG는 쌍당 1회 콜드 피치(`rfp_pg_requests`) → 구매사 수락 시 allowlist+invitation, 거절은 영구. **입찰 자체는 여전히 봉인** — PG는 서로/경쟁사 수를 보지 못한다(`Bid.competitorCount` 부재 유지).
+- **초대 PG 대상 필드 단위 opt-out — `현재 카드 수수료`**: 초대받아 전체 브리프를 보는 PG라도 구매사는 **현재 카드 수수료** 한 필드를 가릴 수 있다(`current_fee_visible_to_pg`, 기본 true=공개). 끄면 값 자체를 `loadPgRfpDetail`에서 서버 제거 — PG는 RSC payload/네트워크에서 읽지 못한다(`RfpBriefPanel` 렌더 게이트는 시각적 폴백). 구매사 본인 비교 baseline은 항상 유지. 토글은 RFP 작성 위저드 2단계(현재 카드 수수료 아래).
 - v0 결재선 없음. 승인 UI를 만들지 않는다.
 
 ---
@@ -32,7 +33,7 @@
 Public
 ├─ /login
 ├─ /login/ops                    (숨김 — 운영자 Google 로그인. NEXT_PUBLIC_MASTER_OAUTH_ENABLED off 시 404)
-├─ /signup                       (Rs1 — 가입 유형 선택)
+├─ /signup                       (Rs1 — 호스트 기반 redirect: partner → /signup/pg, 그 외 → /signup/buyer)
 ├─ /signup/buyer                 (Bs1 — 구매사 이메일)
 ├─ /signup/buyer/verify          (Bs2)
 ├─ /signup/buyer/profile         (Bs3)
@@ -87,7 +88,7 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget` |
 | B2 | `/rfp` | RFP 목록. 진행중/마감/선정 완료 탭 (작성중 단계는 제거 — draft RFP는 `?status=draft` URL/표로만 접근). **온보딩 샘플**: 신규·기존 구매사는 `isSample=true` 샘플 견적 요청 1건을 목록 최상단에서 볼 수 있다(`샘플` Chip 표시). 목록 행에서 직접 삭제 가능(삭제 영속 — 재시드 안 함). | `RfpList`, `DataTable`, `Tag`, `SampleRfpBanner` |
 | B3 | `/rfp/new` | 사업자 조회 (선택), 등급 확인 (선택), RFP 첨부, PG 워크스페이스 검색·선택, 발송 | `BizLookupField`, `GradeConfirmPanel`, `RfpCreateForm` (인라인 Popover+cmdk PG 검색), `RfpAttachmentDropzone` |
-| B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / 내 메모 / PG 초대·게시판 관리). 표·보드·칸반 제거. **우측 채팅 레일**(헤더 '메시지' 토글, lg+): 탭 [상대방 채팅(FocusComparison 포커스 PG 추종, 전송에 RFP 태그 기본값) \| 팀 채팅(워크스페이스 내부 스레드)]. lg 미만은 `/messages?c=` 폴백. **온보딩 샘플**: `isSample=true` RFP 상세는 받은 견적 3건(데모 PG 워크스페이스)을 보기·비교 전용 샌드박스로 제공한다 — 선정·채팅 비활성, 상단 `SampleRfpBanner`로 삭제 안내(`deleteSampleRfpAction`, 삭제 영속). | `RfpDetailContent`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `AwardResult`, `BidNotesPanel`, `BidPdfPane`, `ChatRail`, `ChatRailToggle`, `SampleRfpBanner` |
+| B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / PG 초대·게시판 관리). 견적별 '내 메모'는 제거 — 팀 메모는 채팅 레일 '팀 채팅'으로 일원화(첨부 지원). 표·보드·칸반 제거. **우측 채팅 레일**(헤더 '메시지' 토글, lg+): 탭 [상대방 채팅(FocusComparison 포커스 PG 추종, 전송에 RFP 태그 기본값) \| 팀 채팅(워크스페이스 내부 스레드, PDF·이미지 첨부)]. lg 미만은 `/messages?c=` 폴백. **온보딩 샘플**: `isSample=true` RFP 상세는 받은 견적 3건(데모 PG 워크스페이스)을 보기·비교 전용 샌드박스로 제공한다 — 선정 비활성. **채팅 레일은 샘플에서도 노출**(팀 채팅 정상 동작, 상대방 채팅 탭은 데모 PG라 전송 차단·안내). 상단 `SampleRfpBanner`로 삭제 안내(`deleteSampleRfpAction`, 삭제 영속). | `RfpDetailContent`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `AwardResult`, `BidPdfPane`, `ChatRail`, `ChatRailToggle`, `TeamThreadView`, `MessageAttachmentGrid`, `SampleRfpBanner` |
 | B5 | (B4에 통합) | 선정은 B4 포커스 뷰의 CTA → **인라인 `AwardConfirmDialog`**(결과·마감 경고 + 확정) → 확정 후 **`AwardResult` 전체 화면 오버레이**(1회성 축하 결과 — 히어로+혜택 요약+메시지 딥링크). 계약 레코드 생성·선택/미선택 PG 통보는 `awardRfpAction` 불변. 별도 `/rfp/:id/award` 라우트 없음 | `AwardConfirmDialog`, `AwardResult`, `awardRfpAction`, `useCelebrationConfetti` |
 | B6 | `/settings/profile` | 구매사 사업자 프로필과 등급 갱신 상태 | `WorkspaceProfileForm` |
 | B7 | `/settings/members` | buyer 워크스페이스 멤버 관리 | `MemberTable` |
@@ -147,7 +148,7 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
   ├─ 탭으로 PG 전환 (hover peek)
   ├─ ImprovementSummary hero (현재 조건 → 제안값 + 개선폭)
   ├─ 값 hover → MetricComparePopover (지표로 전 PG 줄세움 · 클릭 전환)
-  ├─ 아코디언: 전체 결제수단 요율 / PG 메모·제안서 PDF / 내 메모
+  ├─ 아코디언: 전체 결제수단 요율 / PG 메모·제안서 PDF (견적별 '내 메모'는 제거 — 팀 채팅으로 일원화)
   └─ CTA [이 견적 선정하기] → AwardConfirmDialog (인라인 확정)
         ├─ awardRfpAction → Contract 생성
         ├─ selected/rejected notifications outbox
@@ -170,7 +171,9 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
   │     └─ 컴포저 전송에 해당 RFP 태그 기본 적용 (ThreadView defaultRfpId)
   └─ 탭 [팀 채팅]: RFP 단위 워크스페이스 내부 스레드 — v1 확정 결정:
         ├─ 스코프 = (rfpId, workspaceId), rfp_team_messages append-only
-        ├─ 멘션/알림/읽음/첨부 없음 (의도적 경량 — 후속 과제)
+        ├─ 멘션/알림/읽음 없음 (의도적 경량). **첨부(PDF·이미지) 지원** — 견적별 '내 메모'를 흡수(2026-06-14):
+        │     업로드 ownerKind='team_message'(ownerId=rfpId) → 전송 시 메시지로 재부모, attachments.rfp_team_message_id 5번째 arc
+        │     읽기 ACL = 같은 워크스페이스 멤버만(sealed-bid: 상대 측 첨부 비공개)
         ├─ 구매사 팀 ↔ PG 팀 스레드 상호 완전 비공개 (sealed-bid 불변식)
         ├─ ACL = 워크스페이스 멤버 ∧ RFP 접근권 (buyer 소유 or invitation canAccess)
         └─ 라이브 채널 team:rfp:<rfpId>:<wsId> (subscribe-proxy generic deny 유지)
@@ -187,17 +190,17 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 
 ## 1. 인증 / 가입 (Public 영역)
 
-구매사(셀러)와 PG사 영업담당은 **처음부터 별도 경로**로 가입한다. 역할 선택 후 각자에게 맞는 컨텍스트와 필드로 진행하며, 단일 P6 워크스페이스 선택 화면은 제거됐다.
+구매사(셀러)와 PG사 영업담당은 **처음부터 별도 경로**로 가입한다. `/signup` 진입 시 역할 선택 화면 없이 **요청 호스트**가 자동으로 분기한다(`supporter-b.com` → /signup/buyer, `partner.supporter-b.com` → /signup/pg). 각자에게 맞는 컨텍스트와 필드로 진행하며, 단일 P6 워크스페이스 선택 화면은 제거됐다.
 
-> **화면 ID 규칙**: B1~B7 = 구매사 앱 화면, P1~P6 = PG 앱 화면. 가입 전용 ID는 `s` 접미사 사용 — Rs1(역할선택), Bs1~Bs4(구매사 가입), Gs1~Gs4(PG 가입).
+> **화면 ID 규칙**: B1~B7 = 구매사 앱 화면, P1~P6 = PG 앱 화면. 가입 전용 ID는 `s` 접미사 사용 — Rs1(호스트 redirect, 화면 없음), Bs1~Bs4(구매사 가입), Gs1~Gs4(PG 가입).
 
 ### 1.1 진입 경로
 
-- **D · 구매사 신규 가입**: `/signup` → 구매사 카드 선택 → Bs1~Bs4 → `/rfp` (관리자)
+- **D · 구매사 신규 가입**: `/signup` → (호스트가 buyer이면 자동) Bs1~Bs4 → `/rfp` (관리자)
 - **E · PG RFP 초대 진입**: `/invite/rfp/:token` → 기존 PG 유저 로그인 → `/inbox/:rfpId` (기존 워크스페이스 전제)
 - **E2 · PG 워크스페이스 초대 진입(신규 유저)**: `/invite/workspace/:token` → Gs1(email 고정) → Gs3(profile) → Gs4(verify, 3단계) → `/home` (기존 ws에 member 합류, 새 워크스페이스 미생성)
 - **E3 · PG 워크스페이스 초대 진입(기존 유저)**: `/invite/workspace/:token` → (authed) → acceptWorkspaceInviteAction → `/home`
-- **F · PG 직접 가입**: `/signup` → PG 카드 선택 → Gs1~Gs2~Gs3~Gs4(4단계) → `/inbox` (새 워크스페이스 생성, 관리자 심사)
+- **F · PG 직접 가입**: `/signup` → (partner 호스트이면 자동) Gs1~Gs2~Gs3~Gs4(4단계) → `/inbox` (새 워크스페이스 생성, 관리자 심사)
 - **G · 비밀번호 분실**: 로그인 화면에서 재설정 요청 → 메일 → 새 비밀번호
 
 ### 1.2 화면 목록
@@ -216,11 +219,11 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 | — | `/auth/email-change?token=...` | 이메일 변경 확인 | 기존 사용자 이메일 변경 |
 | — | `/logout` | 로그아웃 | POST: 세션 클리어 → `/login` |
 
-#### 역할 선택
+#### 가입 진입점 (역할 선택 없음)
 
 | # | 라우트 | 제목 | 핵심 |
 |---|---|---|---|
-| Rs1 | `/signup` | 가입 유형 선택 | 두 카드: 구매사 / PG사. 역할 확정 후 각 플로우로 분기 |
+| Rs1 | `/signup` | 호스트 기반 redirect | 화면 없음. 요청 호스트로 자동 분기 — partner → /signup/pg, 그 외 → /signup/buyer. `?next=` 전달 |
 
 #### 구매사(셀러) 가입 — Bs 시리즈
 
@@ -257,18 +260,17 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - "로그인 유지" 체크박스 (30일 세션)
 - 1차 [로그인] full-width
 - 보조 링크: `비밀번호를 잊으셨나요?` → `/password/forgot`
-- 푸터: `처음 오셨나요? 회원가입 →` → Rs1
+- 푸터: `처음 오셨나요? 회원가입 →` → Rs1 (호스트가 자동 분기)
 - 5회 실패 → 캡차, 10회 → 15분 락
 - `next` 쿼리 보존
 
-#### Rs1 가입 유형 선택 `/signup`
-- 워드마크 + serial
-- 헤드라인: `누구로 시작하시나요?`
-- 좌/우 두 카드 (카드 클릭 → 각 플로우 첫 페이지로, `SignupDraft.workspaceType` 설정):
-  - **좌: 구매사** — "결제대행사에 제안을 요청합니다" → Bs1
-  - **우: PG사 영업담당** — "초대받은 RFP에 제안을 제출합니다" → Gs1
-- 푸터: `이미 계정이 있으세요? 로그인 →`
-- 기 세팅된 `SignupDraft`(초대 토큰 진입 시) 존재하면 Rs1 건너뜀
+#### Rs1 가입 진입점 `/signup` (화면 없음 — 서버사이드 redirect)
+- 사용자에게 보이는 화면 없음. 서버 컴포넌트가 요청 `Host` 헤더를 읽어 즉시 redirect.
+- `partner.supporter-b.com` → `/signup/pg` (Gs1)
+- 그 외 (`supporter-b.com`, 단일호스트 로컬, 미상) → `/signup/buyer` (Bs1)
+- `?next=` 쿼리스트링은 목적지로 그대로 전달, step-1 페이지(Bs1/Gs1)가 흡수함
+- 구현: `lib/site-routing.ts` → `signupTargetForHost(host, appOrigins())`
+- 기 세팅된 `SignupDraft`(초대 토큰 진입 시) 존재하면 Rs1 건너뜀 (기존과 동일)
 
 #### Bs1 구매사 — 이메일 `/signup/buyer`
 - `01 / 04 — EMAIL`
@@ -362,19 +364,18 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 ### 1.4 시나리오 (Verification)
 
 **시나리오 D — 구매사 신규 가입(셀프서비스)**
-1. `/login` → `회원가입` → Rs1 역할 선택 → "구매사" 카드
-2. Bs1 이메일 + 약관 동의 → [인증 메일 받기]
+1. `/login` → `회원가입` → `/signup` → (buyer 호스트이면 자동) Bs1 이메일 + 약관 동의 → [인증 메일 받기]
 3. Bs2 대기 → 이메일 토큰 URL → `/auth/verify` 스플래시 → Bs3 자동 이동
 4. 프로필 입력 → Bs4 워크스페이스 이름·산업 → [만들기] → `/rfp` (관리자)
 
 **시나리오 E2 — PG 워크스페이스 초대 진입(신규 유저)**
 1. `/invite/workspace/:token` 진입 — `SignupDraft` 선 채움 (workspaceType='pg', email, wsInviteToken, inviteWorkspaceName)
-2. Rs1 건너뜀 → Gs1 이메일(email prefill + readOnly, 3단계 스텝)
+2. Rs1 건너뜀(draft 존재) → Gs1 이메일(email prefill + readOnly, 3단계 스텝)
 3. Gs3 프로필(이름 + 비밀번호) → Gs4 인증 메일 대기
 4. 이메일 인증 → `signupViaWorkspaceInviteAction` → `/home` (기존 ws에 member 합류)
 
 **시나리오 F — PG 직접 가입**
-1. `/signup` → Rs1 → "PG사 영업담당" 카드 → Gs1 이메일(4단계 스텝)
+1. `/signup` → (partner 호스트이면 자동) Gs1 이메일(4단계 스텝)
 2. Gs2 워크스페이스 정보 → Gs3 프로필 → Gs4 인증 메일 대기 → `signupCompleteAction` → `/inbox`
 
 **시나리오 G — 비밀번호 분실**
@@ -387,7 +388,7 @@ PG 영업담당의 1차 진입 경로. 토큰 검증 후 인증 상태에 따라
 
 - **Case A** — 이미 인증됨 + 이메일 일치: token claim → `/inbox/:rfpId`
 - **Case B** — 이미 인증됨 + 이메일 불일치: "다른 계정으로 로그인이 필요합니다" + [로그아웃 후 재시작]
-- **Case C** — 미인증: `SignupDraft` 선 채움 (`workspaceType='pg'`, `email`, `rfpInviteToken`) → Gs2로 redirect (Rs1·Gs1 건너뜀, 이메일 자동 채움)
+- **Case C** — 미인증: `SignupDraft` 선 채움 (`workspaceType='pg'`, `email`, `rfpInviteToken`) → Gs2로 redirect (Rs1 호스트 redirect + Gs1 건너뜀, 이메일 자동 채움)
 
 ### 1.6 본 절 범위 외
 - SSO (Google/네이버/카카오) — 후속

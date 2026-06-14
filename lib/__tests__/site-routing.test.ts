@@ -3,6 +3,7 @@ import {
   hostServes,
   resolveHostRedirect,
   workspaceSwitchTarget,
+  signupTargetForHost,
   type AppOrigins,
 } from '../site-routing';
 
@@ -79,5 +80,21 @@ describe('workspaceSwitchTarget', () => {
     expect(workspaceSwitchTarget('pg', 'supporter-b.com', PROD)).toBe(
       'https://partner.supporter-b.com/home',
     );
+  });
+});
+
+describe('signupTargetForHost', () => {
+  it('routes the partner host to the pg signup flow', () => {
+    expect(signupTargetForHost('partner.supporter-b.com', PROD)).toBe('/signup/pg');
+  });
+  it('routes the buyer host to the buyer signup flow', () => {
+    expect(signupTargetForHost('supporter-b.com', PROD)).toBe('/signup/buyer');
+  });
+  it('falls back to the buyer flow for an unknown host or null (mirrors the landing)', () => {
+    expect(signupTargetForHost('52.78.126.178', PROD)).toBe('/signup/buyer');
+    expect(signupTargetForHost(null, PROD)).toBe('/signup/buyer');
+  });
+  it('falls back to the buyer flow in single-host local/dev', () => {
+    expect(signupTargetForHost('localhost', LOCAL)).toBe('/signup/buyer');
   });
 });

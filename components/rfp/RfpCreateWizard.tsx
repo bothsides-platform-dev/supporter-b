@@ -85,7 +85,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
     if (submitting) return;
 
     if (guest) {
-      localStorage.setItem('supporter-b-rfp-next', '/rfp/new');
+      localStorage.setItem('supporter-b-rfp-next', '/rfp-create');
       router.push('/signup/buyer');
       return;
     }
@@ -130,6 +130,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
         requiredPaymentMethods: draft.requiredPaymentMethods,
         customPaymentMethods: draft.customPaymentMethods,
         boardVisible: draft.boardVisible,
+        currentFeeVisibleToPg: draft.currentFeeVisibleToPg,
         contractType: draft.contractType ?? undefined,
         send: true,
       });

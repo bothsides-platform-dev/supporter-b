@@ -481,7 +481,7 @@ describe('RfpService.createRfp', () => {
       title: 'test', deadline: new Date(Date.now() + 7 * 86400_000),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
       requiredPaymentMethods: [], customPaymentMethods: [],
-      send: false, boardVisible: true, bizProfileMode: 'override',
+      send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'override',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result).toEqual({ ok: false, error: 'INVALID_BIZ_PROFILE' });
   });
@@ -492,7 +492,7 @@ describe('RfpService.createRfp', () => {
       title: 'Draft RFP', deadline: new Date(Date.now() + 7 * 86400_000),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
       requiredPaymentMethods: [], customPaymentMethods: [],
-      send: false, boardVisible: true, bizProfileMode: 'none',
+      send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -508,7 +508,7 @@ describe('RfpService.createRfp', () => {
       title: 'None BizProfile', deadline: new Date(Date.now() + 7 * 86400_000),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
       requiredPaymentMethods: [], customPaymentMethods: [],
-      send: false, boardVisible: true, bizProfileMode: 'none',
+      send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -522,7 +522,7 @@ describe('RfpService.createRfp', () => {
       title: 'Override BizProfile', deadline: new Date(Date.now() + 7 * 86400_000),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
       requiredPaymentMethods: [], customPaymentMethods: [],
-      send: false, boardVisible: true,
+      send: false, boardVisible: true, currentFeeVisibleToPg: true,
       bizProfileMode: 'override', bizNoOverride: '9876543210',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
@@ -539,7 +539,7 @@ describe('RfpService.createRfp', () => {
       title: 'Sent RFP', deadline: new Date(Date.now() + 7 * 86400_000),
       allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
-      send: true, boardVisible: true, bizProfileMode: 'none',
+      send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -562,7 +562,7 @@ describe('RfpService createRfp/sendDraftInvitations — 감사 로그 기록', (
       title: '감사 RFP', deadline: new Date(Date.now() + 7 * 86400_000),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
       requiredPaymentMethods: [], customPaymentMethods: [],
-      send: false, boardVisible: true, bizProfileMode: 'none',
+      send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
     if (!result.ok) return;

@@ -39,7 +39,10 @@ async function setup() {
   const inicis = await seedPgWorkspace(db, 'inicis.com');
   const pgUser = await seedUser(db, { email: 'pg@toss.im' });
 
-  async function seedRfp(code: string) {
+  async function seedRfp(
+    code: string,
+    opts: { currentFeeRate?: string; currentFeeVisibleToPg?: boolean } = {},
+  ) {
     const id = randomUUID();
     await db.insert(rfps).values({
       id,
@@ -52,6 +55,10 @@ async function setup() {
       status: 'sent',
       createdBy: buyer.id,
       sentAt: new Date(),
+      currentFeeRate: opts.currentFeeRate,
+      ...(opts.currentFeeVisibleToPg === undefined
+        ? {}
+        : { currentFeeVisibleToPg: opts.currentFeeVisibleToPg }),
     });
     return id;
   }
@@ -166,13 +173,12 @@ describe('loadBuyerRfpDetail', () => {
     expect(res).toBeNull();
   });
 
-  it('소유 RFP → submitted bid만 반환하고 note를 ISO 문자열로 직렬화', async () => {
+  it('소유 RFP → submitted bid만 반환', async () => {
     const rfpId = await ctx.seedRfp('P-2605-0002');
     const invToss = await ctx.seedInvitation(rfpId, ctx.tossId);
     const invInicis = await ctx.seedInvitation(rfpId, ctx.inicisId);
     const submitted = await ctx.seedBid(rfpId, ctx.tossId, invToss, 'submitted');
     await ctx.seedBid(rfpId, ctx.inicisId, invInicis, 'draft');
-    await ctx.seedNote(submitted, '괜찮은 제안');
 
     const res = await loadBuyerRfpDetail({
       code: 'P-2605-0002',
@@ -186,12 +192,6 @@ describe('loadBuyerRfpDetail', () => {
     // draft 제외, submitted 1건만.
     expect(res!.bids).toHaveLength(1);
     expect(res!.bids[0].id).toBe(submitted);
-    // note 가 ISO 문자열로 직렬화돼 클라이언트 트리에 안전.
-    const notes = res!.notesByBid[submitted];
-    expect(notes).toHaveLength(1);
-    expect(notes[0].body).toBe('괜찮은 제안');
-    expect(typeof notes[0].createdAt).toBe('string');
-    // 작성자 정보가 FocusComparison 의 메모 패널로 전달되도록 채워짐.
     expect(res!.authorId).toBe(ctx.buyerId);
   });
 
@@ -327,6 +327,31 @@ describe('loadPgRfpDetail', () => {
     expect(res!.pendingRequote).not.toBeNull();
     expect(res!.pendingRequote!.round).toBe(2);
     expect(res!.pendingRequote!.message).toBe('수수료 낮춰주세요');
+  });
+
+  it('currentFeeVisibleToPg=false면 currentFeeRate를 서버에서 제거하고 PG에게 반환한다(payload 누출 차단)', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0060', {
+      currentFeeRate: '3.4%',
+      currentFeeVisibleToPg: false,
+    });
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0060', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    // 봉인입찰: 비공개 수수료는 PG 페이로드에 절대 담기지 않는다.
+    expect(res!.rfp.currentFeeRate).toBeUndefined();
+  });
+
+  it('currentFeeVisibleToPg=true면 currentFeeRate를 그대로 PG에게 반환한다', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0061', {
+      currentFeeRate: '3.4%',
+      currentFeeVisibleToPg: true,
+    });
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0061', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.rfp.currentFeeRate).toBe('3.4%');
   });
 
   it('해당 PG 워크스페이스의 견적 템플릿만 quoteTemplates로 반환(타 워크스페이스 격리)', async () => {

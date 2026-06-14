@@ -11,8 +11,10 @@ import userEvent from '@testing-library/user-event';
 
 const mockPush = vi.fn();
 const mockReplace = vi.fn();
+let mockSearchParams = new URLSearchParams();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useSearchParams: () => mockSearchParams,
 }));
 
 const mockWriteDraft = vi.fn();
@@ -67,6 +69,7 @@ describe('BuyerSignupEmailPage — 새 step 1 흐름', () => {
     mockCheckEmailAvailable.mockReset();
     // 기본: 사용 가능한 이메일
     mockCheckEmailAvailable.mockResolvedValue({ ok: true });
+    mockSearchParams = new URLSearchParams();
     render(<BuyerSignupEmailPage />);
   });
 
@@ -122,6 +125,7 @@ describe('PgSignupEmailPage — 새 step 1 흐름', () => {
     mockWriteDraft.mockReset();
     mockCheckEmailAvailable.mockReset();
     mockCheckEmailAvailable.mockResolvedValue({ ok: true });
+    mockSearchParams = new URLSearchParams();
     render(<PgSignupEmailPage />);
   });
 
@@ -162,6 +166,7 @@ describe('PgSignupEmailPage — 초대 모드 (wsInviteToken in draft)', () => {
     mockWriteDraft.mockReset();
     mockCheckEmailAvailable.mockReset();
     mockCheckEmailAvailable.mockResolvedValue({ ok: true });
+    mockSearchParams = new URLSearchParams();
   });
 
   it('초대 이메일이 prefill되어 readOnly 표시된다', () => {
@@ -211,5 +216,70 @@ describe('PgSignupEmailPage — 초대 모드 (wsInviteToken in draft)', () => {
       expect(callArg).toContain('ws-invite-token-xyz');
     });
     expect(mockPush).not.toHaveBeenCalled();
+  });
+});
+
+describe('SignupEmailPage — next 파라미터 흡수', () => {
+  beforeEach(() => {
+    mockDraftData = {};
+    mockPush.mockReset();
+    mockReplace.mockReset();
+    mockWriteDraft.mockReset();
+    mockCheckEmailAvailable.mockReset();
+    mockCheckEmailAvailable.mockResolvedValue({ ok: true });
+    mockSearchParams = new URLSearchParams('next=/rfp/abc');
+  });
+
+  it('buyer: URL의 next를 draft에 저장한다', async () => {
+    render(<BuyerSignupEmailPage />);
+    await fillAndSubmit();
+    await waitFor(() => expect(mockWriteDraft).toHaveBeenCalled());
+    const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
+    expect(drafted.next).toBe('/rfp/abc');
+  });
+
+  it('pg: URL의 next를 draft에 저장한다', async () => {
+    render(<PgSignupEmailPage />);
+    await fillAndSubmit({ email: 'sales@toss.im' });
+    await waitFor(() => expect(mockWriteDraft).toHaveBeenCalled());
+    const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
+    expect(drafted.next).toBe('/rfp/abc');
+  });
+
+  it('안전하지 않은 next(프로토콜-상대 URL)는 흡수하지 않는다', async () => {
+    mockSearchParams = new URLSearchParams('next=//evil.com');
+    render(<BuyerSignupEmailPage />);
+    await fillAndSubmit();
+    await waitFor(() => expect(mockWriteDraft).toHaveBeenCalled());
+    const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
+    expect(drafted.next).toBeUndefined();
+  });
+
+  it('pg: 안전하지 않은 next(프로토콜-상대 URL)는 흡수하지 않는다', async () => {
+    mockSearchParams = new URLSearchParams('next=//evil.com');
+    render(<PgSignupEmailPage />);
+    await fillAndSubmit({ email: 'sales@toss.im' });
+    await waitFor(() => expect(mockWriteDraft).toHaveBeenCalled());
+    const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
+    expect(drafted.next).toBeUndefined();
+  });
+
+  it('next에 쿼리스트링이 있어도 그대로 흡수한다', async () => {
+    mockSearchParams = new URLSearchParams('next=/rfp/abc?tab=bids');
+    render(<BuyerSignupEmailPage />);
+    await fillAndSubmit();
+    await waitFor(() => expect(mockWriteDraft).toHaveBeenCalled());
+    const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
+    expect(drafted.next).toBe('/rfp/abc?tab=bids');
+  });
+
+  it('URL에 next가 없으면 이전 세션의 잔여 next를 덮어써 비운다', async () => {
+    mockDraftData = { next: '/stale/from-previous-session' };
+    mockSearchParams = new URLSearchParams(); // 현재 진입 URL에는 next 없음
+    render(<BuyerSignupEmailPage />);
+    await fillAndSubmit();
+    await waitFor(() => expect(mockWriteDraft).toHaveBeenCalled());
+    const drafted = mockWriteDraft.mock.calls[0][0] as Record<string, unknown>;
+    expect(drafted.next).toBeUndefined();
   });
 });

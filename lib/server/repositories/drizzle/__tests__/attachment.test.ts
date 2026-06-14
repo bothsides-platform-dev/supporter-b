@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, chatConversations, chatMessages } from '@/lib/db/schema';
+import { attachments, chatConversations, chatMessages, rfpTeamMessages } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { DrizzleAttachmentRepository } from '../attachment';
 import { seedBuyerWorkspace, seedPgWorkspace, seedRfp, seedUser } from './_seed';
@@ -54,6 +54,41 @@ describe('DrizzleAttachmentRepository.findById', () => {
 
   it('returns undefined for unknown id', async () => {
     expect(await ctx.repo.findById(randomUUID())).toBeUndefined();
+  });
+
+  it('exposes rfpTeamMessageId for a team-message attachment (5th arc)', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, {
+      buyerWsId: ws.id,
+      createdBy: ctx.uploader.id,
+    });
+    const msgId = randomUUID();
+    await ctx.db.insert(rfpTeamMessages).values({
+      id: msgId,
+      rfpId: rfp.id,
+      workspaceId: ws.id,
+      authorUserId: ctx.uploader.id,
+      body: 'team note',
+    });
+    const attId = randomUUID();
+    await ctx.db.insert(attachments).values({
+      id: attId,
+      name: 'team.pdf',
+      size: 1024,
+      mimeType: 'application/pdf',
+      uploadedBy: ctx.uploader.id,
+      rfpTeamMessageId: msgId,
+    });
+
+    const row = await ctx.repo.findById(attId);
+
+    expect(row).toBeDefined();
+    expect(row!.rfpTeamMessageId).toBe(msgId);
+    // exclusive-arc: only the team-message owner set.
+    expect(row!.rfpId).toBeUndefined();
+    expect(row!.bidId).toBeUndefined();
+    expect(row!.bidNoteId).toBeUndefined();
+    expect(row!.chatMessageId).toBeUndefined();
   });
 });
 

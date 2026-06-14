@@ -10,6 +10,7 @@ import { Chip } from '@/components/primitives/Chip';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
+import { Avatar } from '@/components/primitives/Avatar';
 import { Paperclip } from 'lucide-react';
 import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, XIcon, EnvelopeIcon } from '@/components/icons';
 import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES, ACCEPTED_EXTENSIONS } from '@/lib/server/storage/constants';
@@ -19,11 +20,14 @@ import { useChatChannel } from '@/lib/hooks/useChatChannel';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
+import { MessageAttachmentGrid } from './MessageAttachmentGrid';
 import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 
 type Props = {
   conversationId: string;
   counterparty: { workspaceId: string; name: string; type: 'buyer' | 'pg' };
+  /** 세션 사용자 — 낙관적 self 말풍선이 즉시 자기 이름을 보여줄 때 쓴다. */
+  viewer: { userId: string; name: string };
   messages: ThreadMessage[];
   /** rfpId(uuid) → 표시용 코드/제목. 주어진 항목만 RFP 칩을 렌더(uuid 원문 노출 금지). */
   rfpById?: Record<string, { code: string; title: string }>;
@@ -36,6 +40,11 @@ type Props = {
   variant?: 'page' | 'rail';
   /** 레일 컨텍스트의 RFP — 컴포저 전송에 이 RFP 태그를 기본 적용한다. */
   defaultRfpId?: string;
+  /**
+   * 전송 차단(읽기 전용 컴포저) — 샘플 RFP 의 상대방 채팅 탭에서 데모 PG 에게
+   * 실제로 메시지가 가지 않도록 입력·전송을 막고 안내 문구를 표시한다.
+   */
+  sendDisabled?: boolean;
 };
 
 /** Live `message` event payload published by sendChatMessageAction. */
@@ -44,6 +53,9 @@ type LiveMessagePayload = {
   id?: string;
   body?: string;
   authorWsId?: string;
+  authorUserId?: string;
+  authorName?: string;
+  authorEmail?: string;
   rfpId?: string | null;
   createdAt?: string;
   attachments?: { id: string; name: string; size: number; mimeType: string; url: string }[];
@@ -80,36 +92,6 @@ type Attachment = {
 const URL_SPLIT = /(https?:\/\/[^\s]+)/g;
 const isUrl = (s: string): boolean => /^https?:\/\//.test(s);
 
-/** 메시지 버블 내 컴팩트 첨부파일 그리드 — 헤더 없음, 2열 소형 타일. */
-function ChatAttachmentGrid({ attachments }: { attachments: { id: string; name: string; mimeType: string; url: string }[] }) {
-  return (
-    <div className="mt-2 grid grid-cols-2 gap-1.5">
-      {attachments.map((att) => {
-        const isImage = att.mimeType?.startsWith('image/');
-        return (
-          <a
-            key={att.id}
-            href={att.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex items-center gap-1.5 overflow-hidden rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-2 py-1.5 transition-colors hover:border-[var(--md-sys-color-outline)]"
-          >
-            {isImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={att.url} alt={att.name} className="h-8 w-8 shrink-0 rounded-sm object-cover" />
-            ) : (
-              <PaperclipIcon size={14} className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]" />
-            )}
-            <span className="min-w-0 truncate text-[11px] text-[var(--md-sys-color-on-surface)]">
-              {att.name}
-            </span>
-          </a>
-        );
-      })}
-    </div>
-  );
-}
-
 /** 평문 본문 — 줄바꿈은 whitespace-pre-wrap, URL 은 자동 링크. */
 function renderBody(body: string): React.ReactNode {
   const parts = body.split(URL_SPLIT);
@@ -133,11 +115,13 @@ function renderBody(body: string): React.ReactNode {
 export function ThreadView({
   conversationId,
   counterparty,
+  viewer,
   messages,
   rfpById,
   onBack,
   variant = 'page',
   defaultRfpId,
+  sendDisabled = false,
 }: Props) {
   // 대화별 초안 보존 — 대화 전환(remount) 시에도 작성 중이던 내용을 잃지 않는다.
   const draftKey = `chat-draft:${conversationId}`;
@@ -242,6 +226,9 @@ export function ThreadView({
           ...prev,
           {
             id,
+            authorUserId: data.authorUserId ?? '',
+            authorName: data.authorName ?? '',
+            authorEmail: data.authorEmail ?? '',
             sender,
             body: data.body as string,
             rfpId: data.rfpId ?? null,
@@ -362,7 +349,7 @@ export function ThreadView({
 
   async function handleSend(): Promise<void> {
     const body = draft.trim();
-    if (sending) return;
+    if (sending || sendDisabled) return;
     // 업로드가 끝난(ready) 첨부만 전송한다 — 임시(uploading) 행의 tempId 가
     // 서버로 새지 않도록.
     const readyAttachments = attachments.filter((a) => a.status === 'ready');
@@ -383,6 +370,9 @@ export function ThreadView({
       ...prev,
       {
         id: tempId,
+        authorUserId: viewer.userId,
+        authorName: viewer.name,
+        authorEmail: '',
         sender: 'self',
         body,
         rfpId: defaultRfpId ?? null,
@@ -539,12 +529,14 @@ export function ThreadView({
           // 같은 상대가 짧은 간격으로 연속해 보낸 메시지는 하나의 묶음으로 보고
           // 이름·아바타 헤더를 두 번째부터 생략한다(날짜 경계서 리셋). 시간 판정은
           // TeamThreadView 와 공유(withinGroupWindow — 드리프트 방지 단일 출처).
+          // 작성자(authorUserId) 기준 그룹핑 — 같은 회사라도 담당자가 다르면
+          // 묶음·헤더를 분리한다. 양쪽(self·other) 모두 작성자 헤더를 단다.
           const groupedWithPrev =
             !!prev &&
-            prev.sender === m.sender &&
+            prev.authorUserId === m.authorUserId &&
             !showDivider &&
             withinGroupWindow(prev.createdAt, m.createdAt);
-          const showSenderHeader = !isSelf && !groupedWithPrev;
+          const showAuthorHeader = !groupedWithPrev;
           const rfp = m.rfpId ? rfpById?.[m.rfpId] : undefined;
           // Receipt only on the last *read* self message (receiptIndex).
           const showReceipt = i === receiptIndex;
@@ -565,15 +557,14 @@ export function ThreadView({
                 data-sender={m.sender}
                 className={cn('flex flex-col gap-1', isSelf ? 'items-end' : 'items-start')}
               >
-                {showSenderHeader && (
+                {showAuthorHeader && (
                   <div className="flex items-center gap-1.5">
-                    <WorkspaceAvatar
-                      name={counterparty.name}
-                      size="sm"
-                      workspaceId={counterparty.workspaceId}
-                    />
-                    <span className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]">
-                      {counterparty.name}
+                    <Avatar name={m.authorName} size="sm" color={isSelf ? 'primary' : 'surface'} />
+                    <span
+                      title={m.authorEmail || undefined}
+                      className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]"
+                    >
+                      {m.authorName}
                     </span>
                   </div>
                 )}
@@ -601,7 +592,7 @@ export function ThreadView({
                   >
                     {renderBody(m.body)}
                     {m.attachments.length > 0 && (
-                      <ChatAttachmentGrid attachments={m.attachments} />
+                      <MessageAttachmentGrid attachments={m.attachments} />
                     )}
                   </div>
                   {/* 타임스탬프는 버블 옆 단일 출처 — 발신자 헤더에는 두지 않는다.
@@ -717,6 +708,13 @@ export function ThreadView({
         </div>
       )}
 
+      {/* 샘플 안내 — 데모 PG 에게는 실제로 보내지지 않음 */}
+      {sendDisabled && (
+        <p className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-4 py-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+          샘플에서는 메시지를 보낼 수 없어요. 실제 견적 요청을 보내보세요.
+        </p>
+      )}
+
       {/* 하단 인라인 컴포저 */}
       <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <IconButton
@@ -724,6 +722,7 @@ export function ThreadView({
           size="sm"
           variant="standard"
           className="shrink-0"
+          disabled={sendDisabled}
           onClick={() => fileInputRef.current?.click()}
         >
           <Paperclip size={16} />
@@ -742,6 +741,7 @@ export function ThreadView({
         <textarea
           ref={textareaRef}
           value={draft}
+          disabled={sendDisabled}
           onChange={(e) => {
             setDraft(e.target.value);
             autoGrow(e.target);
@@ -750,12 +750,13 @@ export function ThreadView({
           onKeyDown={handleKeyDown}
           placeholder="메시지를 입력하세요…"
           rows={1}
-          className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-1.5 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
+          className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-1.5 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
         />
         <Button
           className="shrink-0"
           onClick={handleSend}
           disabled={
+            sendDisabled ||
             sending ||
             attachments.some((a) => a.status === 'uploading') ||
             (draft.trim().length === 0 && !attachments.some((a) => a.status === 'ready'))

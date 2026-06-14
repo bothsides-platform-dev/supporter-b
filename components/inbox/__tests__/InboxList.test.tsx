@@ -2,9 +2,9 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const replace = vi.fn();
+const push = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace }),
+  useRouter: () => ({ push }),
   usePathname: () => '/inbox',
   useSearchParams: () => new URLSearchParams(''),
 }));
@@ -23,15 +23,15 @@ const row: InboxRow = {
 
 afterEach(() => {
   cleanup();
-  replace.mockClear();
+  push.mockClear();
 });
 
 describe('InboxList', () => {
-  it('행 클릭 시 ?peek=<rfpId>로 replace', async () => {
+  it('행 클릭 시 상세 라우트(/inbox/<rfpId>)로 push — 딜룸 모달 오픈', async () => {
     const user = userEvent.setup();
     render(<InboxList rows={[row]} />);
     await user.click(screen.getByText('PG 결제대행 RFP'));
-    expect(replace).toHaveBeenCalledWith('/inbox?peek=P-2604-0001');
+    expect(push).toHaveBeenCalledWith('/inbox/P-2604-0001');
   });
 
   it('번호 컬럼에 rfpId(code)를 표시', () => {
@@ -83,11 +83,12 @@ describe('InboxList', () => {
     expect(screen.getByRole('link', { name: '견적 작성' })).toHaveAttribute('href', '/inbox/P-2604-0001');
   });
 
-  it('submitted 행은 "보낸 견적" 행동 링크를 보여준다', () => {
+  it('submitted 행은 "보낸 견적" 행동 링크를 딜룸으로 보여준다', () => {
     render(<InboxList rows={[{ ...row, invitationId: 'inv-004', stage: 'submitted', bidId: 'bid-3' }]} />);
+    // 별도 /submitted 라우트 제거 — 딜룸(/inbox/<code>)이 제출 완료 상태를 렌더.
     expect(screen.getByRole('link', { name: '보낸 견적' })).toHaveAttribute(
       'href',
-      '/inbox/P-2604-0001/submitted',
+      '/inbox/P-2604-0001',
     );
   });
 

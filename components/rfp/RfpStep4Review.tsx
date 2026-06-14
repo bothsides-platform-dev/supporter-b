@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
-import { formatSize, formatKrwReadable } from '@/lib/format';
+import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 
@@ -143,11 +143,18 @@ export function RfpStep4Review({
           <ReviewRow label="홈페이지" value={draft.websiteUrl} />
           <ReviewRow label="주요 상품" value={draft.mainProducts} />
           <ReviewRow label="연간 거래액" value={draft.annualPgVolume ? (formatKrwReadable(Number(draft.annualPgVolume)) || draft.annualPgVolume) : ''} />
-          <ReviewRow label="카드 수수료" value={draft.currentFeeRate} />
-          <ReviewRow label="월 정산한도" value={draft.currentSettlementLimit} />
+          <ReviewRow
+            label={
+              draft.currentFeeRate && !draft.currentFeeVisibleToPg
+                ? '카드 수수료 (PG 비공개)'
+                : '카드 수수료'
+            }
+            value={formatFeeRateDisplay(draft.currentFeeRate)}
+          />
+          <ReviewRow label="월 정산한도" value={formatKrwField(draft.currentSettlementLimit)} />
           <ReviewRow
             label="보증보험"
-            value={draft.currentGuaranteeInsurance}
+            value={formatKrwField(draft.currentGuaranteeInsurance)}
           />
           <ReviewRow
             label="정산주기"

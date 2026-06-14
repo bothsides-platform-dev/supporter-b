@@ -87,7 +87,7 @@ const RFP_SECTION: NavSection = {
     {
       id: 'rfp-new',
       label: '새 견적 요청',
-      href: '/rfp/new',
+      href: '/rfp-create',
       // G then C (Create). Replaces ⌘N, which the browser claims for "new window".
       shortcut: { kind: 'chord', lead: 'g', key: 'c' },
     },
@@ -260,7 +260,7 @@ export function getBreadcrumbSegments(
   if (pathname === '/messages') return [{ label: '메시지' }];
   if (pathname === '/quote-templates') return [{ label: '견적 템플릿' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
-  if (pathname === '/rfp/new') {
+  if (pathname === '/rfp-create') {
     return [{ label: '견적 요청', href: '/rfp' }, { label: '새 견적 요청' }];
   }
   if (pathname === '/rfp') {

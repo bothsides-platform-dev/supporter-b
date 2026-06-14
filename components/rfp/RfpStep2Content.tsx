@@ -2,15 +2,20 @@
 'use client';
 
 import { useState } from 'react';
+import { NumericFormat } from 'react-number-format';
 import { Button } from '@/components/primitives/Button';
+import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
-import { underlineInputClass, CurrencyInput } from '@/components/forms/inputs';
+import { underlineInputClass, numericInputClass, CurrencyInput, DayOffsetInput } from '@/components/forms/inputs';
 import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { cn } from '@/lib/utils';
+
+// 카드 수수료는 % 값이라 100을 넘을 수 없다 — 입력 단계에서 상한을 강제한다.
+const MAX_FEE_RATE_PCT = 100;
 
 const CONTRACT_TYPE_OPTIONS = [
   { value: 'new', label: '신규 계약' },
@@ -123,66 +128,67 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
           <Label size="md" muted={false}>현재 카드 수수료</Label>
           <InfoTip term="수수료율" />
         </div>
-        <input
-          type="text"
-          value={draft.currentFeeRate}
-          onChange={(e) => draft.setField('currentFeeRate', e.target.value)}
-          placeholder="3.4%"
-          className={underlineInputClass}
-        />
-      </div>
-      <div className="space-y-1">
-        <div className="flex items-center gap-1">
-          <Label size="md" muted={false}>현재 월 정산한도</Label>
-          <InfoTip term="정산한도" />
+        <div className="flex items-end gap-1">
+          <NumericFormat
+            decimalScale={2}
+            allowNegative={false}
+            isAllowed={({ floatValue }) => floatValue === undefined || floatValue <= MAX_FEE_RATE_PCT}
+            value={draft.currentFeeRate}
+            onValueChange={(values) => draft.setField('currentFeeRate', values.value)}
+            placeholder="3.4"
+            className={cn(numericInputClass, 'flex-1')}
+          />
+          <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
         </div>
-        <input
-          type="text"
-          value={draft.currentSettlementLimit}
-          onChange={(e) => draft.setField('currentSettlementLimit', e.target.value)}
-          placeholder="월 1억"
-          className={underlineInputClass}
-        />
-      </div>
-      <div className="space-y-1">
-        <div className="flex items-center gap-1">
-          <Label size="md" muted={false}>현재 보증보험</Label>
-          <InfoTip term="보증보험" />
+        {/* 현재 카드 수수료 PG 노출(opt-out) — 기본 공개(true). 끄면 PG 견적 화면에서 숨김. */}
+        <div className="flex items-start gap-3 pt-1">
+          <Checkbox
+            id="rfp-current-fee-visible"
+            checked={draft.currentFeeVisibleToPg}
+            onCheckedChange={(checked) => draft.setField('currentFeeVisibleToPg', checked)}
+            aria-label="현재 카드 수수료를 PG사에 공개하기"
+            className="mt-0.5"
+          />
+          <label htmlFor="rfp-current-fee-visible" className="cursor-pointer">
+            <span className="block text-[14px] text-[var(--md-sys-color-on-surface)]">
+              현재 카드 수수료를 PG사에 공개하기
+            </span>
+            <span className="block text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+              {draft.currentFeeVisibleToPg
+                ? 'PG사가 현재 수수료를 참고해 제안해요.'
+                : 'PG사에게는 현재 수수료를 보여주지 않아요.'}
+            </span>
+          </label>
         </div>
-        <input
-          type="text"
-          value={draft.currentGuaranteeInsurance}
-          onChange={(e) => draft.setField('currentGuaranteeInsurance', e.target.value)}
-          placeholder="3000만원"
-          className={underlineInputClass}
-        />
       </div>
-      <div className="space-y-1">
-        <div className="flex items-center gap-1">
-          <Label size="md" muted={false}>현재 정산주기</Label>
-          <InfoTip term="정산주기" />
-        </div>
-        <input
-          type="text"
-          value={draft.currentSettlementCycle}
-          onChange={(e) => draft.setField('currentSettlementCycle', e.target.value)}
-          placeholder="D+1"
-          className={underlineInputClass}
-        />
-      </div>
-      <div className="space-y-1">
-        <div className="flex items-center gap-1">
-          <Label size="md" muted={false}>배송 및 서비스 기간</Label>
-          <InfoTip term="NDX" />
-        </div>
-        <input
-          type="text"
-          value={draft.deliveryServicePeriod}
-          onChange={(e) => draft.setField('deliveryServicePeriod', e.target.value)}
-          placeholder="D+3"
-          className={underlineInputClass}
-        />
-      </div>
+      <CurrencyInput
+        label="현재 월 정산한도"
+        infoTerm="정산한도"
+        value={draft.currentSettlementLimit}
+        onChange={(v) => draft.setField('currentSettlementLimit', v)}
+        placeholder="월 1억"
+      />
+      <CurrencyInput
+        label="현재 보증보험"
+        infoTerm="보증보험"
+        value={draft.currentGuaranteeInsurance}
+        onChange={(v) => draft.setField('currentGuaranteeInsurance', v)}
+        placeholder="3000만원"
+      />
+      <DayOffsetInput
+        label="현재 정산주기"
+        infoTerm="정산주기"
+        value={draft.currentSettlementCycle}
+        onChange={(v) => draft.setField('currentSettlementCycle', v)}
+        placeholder="1"
+      />
+      <DayOffsetInput
+        label="배송 및 서비스 기간"
+        infoTerm="NDX"
+        value={draft.deliveryServicePeriod}
+        onChange={(v) => draft.setField('deliveryServicePeriod', v)}
+        placeholder="3"
+      />
       <div className="space-y-2">
         <Label size="md" muted={false}>현재 운영 솔루션 유무</Label>
         <div className="flex flex-wrap gap-2">

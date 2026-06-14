@@ -58,7 +58,7 @@ const ALLOWED_MIMES = new Set<AcceptedMime>([
 
 const MetaInput = z
   .object({
-    ownerKind: z.enum(['rfp', 'bid_proposal', 'bid_note', 'chat']),
+    ownerKind: z.enum(['rfp', 'bid_proposal', 'bid_note', 'chat', 'team_message']),
     ownerId: z.string().min(1).max(64),
   })
   .strict();
@@ -175,6 +175,31 @@ export async function POST(req: Request): Promise<Response> {
     // storage/permissions.ts so the upload and the read share one matrix.
     if (!(await (await getWorkspaceRepo()).isMember(userId, wsId))) {
       return fail(403, 'FORBIDDEN');
+    }
+  } else if (meta.data.ownerKind === 'team_message') {
+    // Team-thread attachment — buyer (owns the RFP) or invited PG. ownerId is
+    // the *RFP id* (the parent rfp_team_messages row may not exist yet —
+    // sendTeamMessageAction creates it and re-points owner_id after this row
+    // lands). Gate mirrors TeamChatService.authorize.
+    if (!wsId) return fail(403, 'FORBIDDEN');
+    if (wsType === 'buyer') {
+      const [rfp] = await routeDb()
+        .select({ buyerWsId: rfps.buyerWsId })
+        .from(rfps)
+        .where(eq(rfps.id, meta.data.ownerId))
+        .limit(1);
+      if (!rfp) return fail(404, 'RFP_NOT_FOUND');
+      if (rfp.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
+      // Membership — match the team-message read ACL in storage/permissions.ts.
+      if (!(await (await getWorkspaceRepo()).isMember(userId, wsId))) {
+        return fail(403, 'FORBIDDEN');
+      }
+    } else {
+      // PG — invitation gate (same as loadPgRfpDetail / bid_proposal).
+      const invRepo = await getInvitationRepo();
+      if (!(await invRepo.canAccess(meta.data.ownerId, wsId))) {
+        return fail(403, 'FORBIDDEN');
+      }
     }
   } else {
     // bid_proposal — PG-only, must be a member of an invited PG ws for ownerId.

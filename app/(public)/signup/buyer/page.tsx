@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/primitives/Button';
 import { AgreementCheckboxes } from '@/components/auth/AgreementCheckboxes';
@@ -14,11 +14,13 @@ import {
   validatePasswordConfirm,
 } from '@/lib/auth/password-validation';
 import { checkEmailAvailableAction } from '@/lib/server/actions/auth';
+import { safeInternalNext } from '@/lib/auth/safe-next';
 
 type AgreementState = { terms: boolean; privacy: boolean; marketing: boolean };
 
-export default function BuyerSignupEmailPage() {
+function BuyerSignupEmailForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setEmail, setAgreedAt, setWorkspaceType } = useSignupDraftStore();
 
   const [emailInput, setEmailInput] = useState('');
@@ -69,12 +71,15 @@ export default function BuyerSignupEmailPage() {
     setWorkspaceType('buyer');
 
     const draft = readSignupDraft();
+    const nextParam = safeInternalNext(searchParams.get('next'));
     writeSignupDraft({
       ...draft,
       email,
       password,
       agreedAt,
       workspaceType: 'buyer',
+      // step-1이 next의 단일 출처: 현재 진입 URL 기준으로 덮어쓴다(이전 세션 잔여값 제거).
+      next: nextParam ?? undefined,
     });
 
     router.push('/signup/buyer/workspace');
@@ -150,12 +155,6 @@ export default function BuyerSignupEmailPage() {
 
       <div className="text-center space-y-2">
         <Link
-          href="/signup"
-          className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-        >
-          ← 이전으로
-        </Link>
-        <Link
           href="/login"
           className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
@@ -163,5 +162,19 @@ export default function BuyerSignupEmailPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function BuyerSignupEmailPage() {
+  return (
+    <Suspense
+      fallback={
+        <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">
+          LOADING…
+        </p>
+      }
+    >
+      <BuyerSignupEmailForm />
+    </Suspense>
   );
 }

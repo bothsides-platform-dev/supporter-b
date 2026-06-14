@@ -1,6 +1,6 @@
 /**
  * 채팅 레일 + 팀 채팅 여정 — 유닛이 모킹으로 못 잡는 배선을 핀한다:
- * 페이지 조립(flex 래퍼) → ChatRailToggle → ChatRail → teamThreadLoader →
+ * 딜룸 셸(DealRoomFull) → 채팅 aside(상시 노출 lg+) → ChatPanel → teamThreadLoader →
  * sendTeamMessageAction → DB 영속 → 재로드 렌더.
  *
  * sealed-bid 불변식의 여정 레벨 검증 포함: 같은 RFP 라도 구매사 팀 메모는
@@ -35,8 +35,7 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
     await loginAs(page, 'buyer');
     await page.goto(`/rfp/${RFP_CODE}`);
 
-    // 헤더 토글로 레일 열기 (lg+ 전용 — 기본 뷰포트 1280px).
-    await page.getByRole('button', { name: '메시지' }).click();
+    // 딜룸 셸은 채팅 aside 를 lg+ 에서 상시 노출(토글 없음 — 기본 뷰포트 1280px).
     await expect(page.getByRole('tab', { name: '상대방 채팅' })).toBeVisible();
 
     // 팀 채팅 탭 → 메모 전송 → 즉시 렌더.
@@ -48,7 +47,6 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
 
     // 재로드 후에도 영속 — 로더 경로 검증.
     await page.reload();
-    await page.getByRole('button', { name: '메시지' }).click();
     await page.getByRole('tab', { name: '팀 채팅' }).click();
     await expect(page.getByText(BUYER_MEMO)).toBeVisible();
   });
@@ -59,7 +57,6 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
     await loginAs(page, 'pg-toss');
     await page.goto(`/inbox/${RFP_CODE}`);
 
-    await page.getByRole('button', { name: '메시지' }).click();
     await page.getByRole('tab', { name: '팀 채팅' }).click();
 
     // sealed-bid: 구매사 팀 메모는 어떤 형태로도 노출되지 않는다.
@@ -78,7 +75,6 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
   }) => {
     await loginAs(page, 'buyer');
     await page.goto(`/rfp/${RFP_CODE}`);
-    await page.getByRole('button', { name: '메시지' }).click();
     await page.getByRole('tab', { name: '팀 채팅' }).click();
 
     await expect(page.getByText(BUYER_MEMO)).toBeVisible();

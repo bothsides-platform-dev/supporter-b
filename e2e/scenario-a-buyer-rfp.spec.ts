@@ -41,10 +41,10 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await expect(page).toHaveURL(/\/home$/, { timeout: 15_000 });
 
     // ── 2. Open the new-RFP wizard (step 1 사업자 확인) ──────────
-    // /rfp/new 는 4-step 위저드(1 사업자 확인 · 2 제안 내용 · 3 PG 선택 ·
+    // /rfp-create 는 4-step 위저드(1 사업자 확인 · 2 제안 내용 · 3 PG 선택 ·
     // 4 발송 확인). 각 단계는 'use client' RfpCreateWizard 가 렌더하며 '다음'
     // 버튼으로 진행한다.
-    await page.goto('/rfp/new');
+    await page.goto('/rfp-create');
     await expect(
       page.getByRole('heading', { name: '새 견적 요청' }),
     ).toBeVisible();

@@ -254,7 +254,11 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
           // 샘플은 제출 후 리다이렉트하지 않고 '검토중 → 선정' 시뮬레이션으로 이어간다.
           setSamplePhase('reviewing');
         } else {
-          router.push(`/inbox/${rfpCode}/submitted`);
+          // 별도 /submitted 페이지로 이탈하지 않고 같은 창에서 갱신 — submitBidAction 이
+          // revalidatePath('/inbox/<code>') 했으므로 refresh 면 로더 재실행 → myBid 존재 →
+          // PgDealRoomBody 가 제출 완료 상태를 인플레이스 렌더. (push+refresh 동시 금지:
+          // Next 16 useTransition 행, vercel/next.js#86055.)
+          router.refresh();
         }
       } else {
         setSubmitError(r.error);

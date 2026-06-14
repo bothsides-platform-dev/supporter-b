@@ -5,20 +5,34 @@
  *
  * ThreadView 와 동일한 시각 언어(말풍선 12px radius·13px 본문·5분 그룹핑·중앙
  * 날짜 구분선·.md-numeric 타임스탬프)를 따르되 표면은 의도적으로 작다:
- * 메시지만 — 타이핑/프레즌스/읽음/첨부 없음 (v1 확정 결정). 내부 스레드이므로
- * 타인 메시지에 멤버 이름+아바타 헤더를 단다. ChatRail 의 '팀 채팅' 탭 전용.
+ * 메시지 + PDF·이미지 첨부 — 타이핑/프레즌스/읽음 없음 (per-bid 메모를 흡수).
+ * 내부 스레드이므로 타인 메시지에 멤버 이름+아바타 헤더를 단다. ChatRail 의
+ * '팀 채팅' 탭 전용.
  */
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { HTTPError } from 'ky';
+import { http } from '@/lib/http';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar } from '@/components/primitives/Avatar';
+import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
-import { Users } from 'lucide-react';
-import { ArrowUpIcon } from '@/components/icons';
+import { Users, Paperclip } from 'lucide-react';
+import { ArrowUpIcon, XIcon } from '@/components/icons';
+import {
+  MAX_FILES,
+  MAX_BYTES,
+  ACCEPT_EXT,
+  ACCEPTED_MIMES,
+  ACCEPTED_EXTENSIONS,
+} from '@/lib/server/storage/constants';
 import { sendTeamMessageAction } from '@/lib/server/actions/chat/sendTeamMessageAction';
 import { useTeamChannel, type TeamLivePayload } from '@/lib/hooks/useTeamChannel';
 import { toast } from '@/lib/toast';
+import type { Attachment } from '@/lib/types/common';
 import type { TeamThreadMessage } from '@/lib/server/actions/chat/teamThreadLoader';
+import { MessageAttachmentGrid } from './MessageAttachmentGrid';
 import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 
 type Props = {
@@ -35,11 +49,25 @@ const NEAR_BOTTOM_PX = 120;
 
 type LocalMessage = TeamThreadMessage & { pending?: boolean };
 
+// 컴포저 첨부 행. `id` 는 업로드 중에는 임시값(status==='uploading'), 완료되면
+// 서버 attachment id 로 교체된다(ThreadView 패턴).
+type StagedAttachment = {
+  id: string;
+  name: string;
+  size?: number;
+  mimeType?: string;
+  url?: string;
+  status: 'uploading' | 'ready' | 'error';
+  error?: string;
+};
+
 export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: Props) {
   const [draft, setDraft] = useState('');
+  const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
   const [sending, setSending] = useState(false);
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>(messages);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevLenRef = useRef(0);
@@ -68,7 +96,8 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
       setLocalMessages((prev) => {
         // Dedup by id — 재전달·승격 선행 케이스.
         if (prev.some((m) => m.id === id)) return prev;
-        // 본인 echo: pending 말풍선을 확정으로 승격(append 하면 중복).
+        // 본인 echo: pending 말풍선을 확정으로 승격(append 하면 중복). 낙관적
+        // 첨부는 그대로 보존한다.
         if (isSelf) {
           const pendingIdx = prev.findIndex((m) => m.pending);
           if (pendingIdx >= 0) {
@@ -92,19 +121,93 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
             body: data.body as string,
             createdAt: data.createdAt as string,
             isSelf,
+            attachments: data.attachments ?? [],
           },
         ];
       });
     },
   });
 
+  async function uploadOne(file: File, tempId: string): Promise<void> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('ownerKind', 'team_message');
+    // 팀 메시지 첨부의 ownerId 는 RFP id — 전송 시 새 메시지로 재부모된다.
+    form.append('ownerId', rfpId);
+    try {
+      const body = await http
+        .post('/api/files/upload', { body: form })
+        .json<{ id: string; name: string; size: number; mimeType: string }>();
+      setAttachments((prev) =>
+        prev.map((a) =>
+          a.id === tempId
+            ? {
+                id: body.id,
+                name: body.name,
+                size: body.size,
+                mimeType: body.mimeType,
+                url: `/api/files/${body.id}`,
+                status: 'ready',
+              }
+            : a,
+        ),
+      );
+    } catch (err) {
+      let msg = '업로드 실패';
+      if (err instanceof HTTPError) {
+        msg =
+          err.response.status === 415
+            ? '지원되지 않는 파일 형식이에요'
+            : `업로드 실패 (${err.response.status})`;
+      }
+      setAttachments((prev) =>
+        prev.map((a) => (a.id === tempId ? { ...a, status: 'error', error: msg } : a)),
+      );
+    }
+  }
+
+  function addFiles(list: FileList | null): void {
+    if (!list) return;
+    const remaining = MAX_FILES - attachments.length;
+    const additions: StagedAttachment[] = [];
+    for (let i = 0; i < Math.min(list.length, remaining); i++) {
+      const f = list[i];
+      const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
+      if (!ACCEPTED_MIMES.has(f.type) && !ACCEPTED_EXTENSIONS.has(ext)) {
+        const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
+        additions.push({
+          id: tempId,
+          name: f.name,
+          status: 'error',
+          error: '지원되지 않는 파일 형식이에요 (PDF/PNG/JPEG)',
+        });
+        continue;
+      }
+      if (f.size > MAX_BYTES) continue;
+      const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
+      additions.push({ id: tempId, name: f.name, size: f.size, status: 'uploading' });
+      void uploadOne(f, tempId);
+    }
+    if (additions.length > 0) setAttachments((prev) => [...prev, ...additions]);
+  }
+
   async function handleSend(): Promise<void> {
+    if (sending) return;
     const body = draft.trim();
-    if (body.length === 0 || sending) return;
+    const readyAttachments = attachments.filter((a) => a.status === 'ready');
+    if (body.length === 0 && readyAttachments.length === 0) return;
     setSending(true);
+
+    // 전송 시점의 첨부 스냅샷(reload 불필요) — 낙관적 말풍선 표시용.
+    const optimisticAttachments: Attachment[] = readyAttachments.flatMap((a) =>
+      a.size !== undefined && a.mimeType && a.url
+        ? [{ id: a.id, name: a.name, size: a.size, mimeType: a.mimeType, url: a.url }]
+        : [],
+    );
 
     const tempId = `pending-${Math.random().toString(36).slice(2, 10)}`;
     const restoreDraft = draft;
+    const restoreAttachments = attachments;
     setLocalMessages((prev) => [
       ...prev,
       {
@@ -114,15 +217,21 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
         body,
         createdAt: new Date().toISOString(),
         isSelf: true,
+        attachments: optimisticAttachments,
         pending: true,
       },
     ]);
     setDraft('');
+    setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     let result: Awaited<ReturnType<typeof sendTeamMessageAction>>;
     try {
-      result = await sendTeamMessageAction({ rfpId, body });
+      result = await sendTeamMessageAction({
+        rfpId,
+        body,
+        attachmentIds: readyAttachments.map((a) => a.id),
+      });
     } catch {
       result = { ok: false, error: 'NETWORK' };
     }
@@ -130,19 +239,29 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
     if (result.ok) {
       const newId = result.messageId;
       const serverCreatedAt = result.createdAt;
+      const serverAttachments = result.attachments ?? optimisticAttachments;
       setLocalMessages((prev) => {
         const hasReal = prev.some((m) => m.id === newId);
         return prev.flatMap((m) =>
           m.id === tempId
             ? hasReal
               ? []
-              : [{ ...m, id: newId, pending: false, createdAt: serverCreatedAt ?? m.createdAt }]
+              : [
+                  {
+                    ...m,
+                    id: newId,
+                    pending: false,
+                    createdAt: serverCreatedAt ?? m.createdAt,
+                    attachments: serverAttachments,
+                  },
+                ]
             : [m],
         );
       });
     } else {
       setLocalMessages((prev) => prev.filter((m) => m.id !== tempId));
       setDraft(restoreDraft);
+      setAttachments(restoreAttachments);
       toast('메모를 남기지 못했어요. 다시 시도해 주세요.', { type: 'error' });
     }
   }
@@ -155,6 +274,11 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
       void handleSend();
     }
   }
+
+  const canSend =
+    !sending &&
+    !attachments.some((a) => a.status === 'uploading') &&
+    (draft.trim().length > 0 || attachments.some((a) => a.status === 'ready'));
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
@@ -221,6 +345,9 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
                     )}
                   >
                     {m.body}
+                    {m.attachments.length > 0 && (
+                      <MessageAttachmentGrid attachments={m.attachments} />
+                    )}
                   </div>
                   {m.pending ? (
                     <span
@@ -240,9 +367,80 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
         <div ref={bottomRef} aria-hidden />
       </div>
 
-      {/* 컴포저 — textarea + 보내기 (첨부 없음, v1 확정 결정) */}
+      {/* 첨부 칩 리스트 */}
+      {attachments.length > 0 && (
+        <div className="flex shrink-0 flex-wrap gap-1.5 border-t border-[var(--md-sys-color-outline-variant)] px-3 pt-2 pb-1">
+          {attachments.map((a) =>
+            a.status === 'uploading' ? (
+              <span
+                key={a.id}
+                aria-busy="true"
+                aria-label={`${a.name} 업로드 중`}
+                className="inline-flex animate-pulse items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface-variant)]"
+              >
+                <span className="max-w-[160px] truncate">{a.name}</span>
+                <Skeleton className="size-3 rounded-full" />
+              </span>
+            ) : a.status === 'error' ? (
+              <span
+                key={a.id}
+                aria-label={`${a.name} 업로드 실패`}
+                title={a.error}
+                className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-error)] px-2 py-1 text-[12px] text-[var(--md-sys-color-error)]"
+              >
+                <span className="max-w-[160px] truncate">{a.name}</span>
+                <button
+                  type="button"
+                  aria-label={`${a.name} 첨부 제거`}
+                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  className="hover:opacity-70"
+                >
+                  <XIcon size={12} />
+                </button>
+              </span>
+            ) : (
+              <span
+                key={a.id}
+                className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface)]"
+              >
+                <span className="max-w-[160px] truncate">{a.name}</span>
+                <button
+                  type="button"
+                  aria-label={`${a.name} 첨부 제거`}
+                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
+                >
+                  <XIcon size={12} />
+                </button>
+              </span>
+            ),
+          )}
+        </div>
+      )}
+
+      {/* 컴포저 — 첨부 + textarea + 보내기 */}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <div className="flex items-end gap-2">
+          <IconButton
+            label="파일 첨부"
+            size="sm"
+            variant="standard"
+            className="shrink-0"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Paperclip size={16} />
+          </IconButton>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={ACCEPT_EXT}
+            className="hidden"
+            onChange={(e) => {
+              addFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
           <textarea
             ref={textareaRef}
             rows={1}
@@ -260,7 +458,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
           <Button
             size="sm"
             onClick={() => void handleSend()}
-            disabled={sending || draft.trim().length === 0}
+            disabled={!canSend}
             aria-label="보내기"
           >
             <ArrowUpIcon size={16} />

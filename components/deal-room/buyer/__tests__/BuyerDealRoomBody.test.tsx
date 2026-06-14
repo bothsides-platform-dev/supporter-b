@@ -1,0 +1,119 @@
+// BuyerDealRoomBody — 구매사 딜룸 본문(레일 + 탭). 자체 책임 중 하나는 샘플 견적일 때
+// 상단에 SampleRfpBanner(삭제 어포던스)를 노출하는 것 — 정식 페이지 통일 후 구
+// RfpDetailContent 가 갖던 동작을 잃지 않도록 공유 바디로 옮긴 부분이다.
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
+
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+Element.prototype.scrollIntoView = vi.fn();
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+
+// 무거운 자식 트리·server-action 정적 임포트(next-auth 체인)는 각자 테스트가 커버 — 목.
+vi.mock('@/components/rfp/comparison/FocusComparison', () => ({
+  FocusComparison: () => <div data-testid="focus-comparison" />,
+}));
+vi.mock('@/components/rfp/RequestConditionsView', () => ({
+  RequestConditionsView: () => <div data-testid="request-conditions" />,
+}));
+vi.mock('@/components/rfp/RfpInviteManager', () => ({
+  RfpInviteManager: () => <div data-testid="invite-manager" />,
+}));
+vi.mock('@/components/rfp/RfpBoardVisibilityToggle', () => ({
+  RfpBoardVisibilityToggle: () => <div data-testid="board-visibility-toggle" />,
+}));
+vi.mock('@/components/rfp/RfpPendingRequests', () => ({
+  RfpPendingRequests: () => <div data-testid="pending-requests" />,
+}));
+vi.mock('@/components/attachments/AttachmentPreviewList', () => ({
+  AttachmentPreviewList: () => <div data-testid="attachments" />,
+}));
+vi.mock('@/components/rfp/comparison/AwardConfirmDialog', () => ({
+  AwardConfirmDialog: () => null,
+}));
+vi.mock('@/components/rfp/comparison/RequoteDialog', () => ({
+  RequoteDialog: () => null,
+}));
+vi.mock('@/lib/server/actions/rfp', () => ({
+  closeRfpAction: vi.fn(),
+  cancelRfpAction: vi.fn(),
+}));
+// SampleRfpBanner 는 deleteSampleRfpAction(→ next-auth 체인)을 정적 임포트해 jsdom 수집을
+// 깨뜨린다 — 자체 테스트(SampleRfpBanner.test)가 커버. 여기선 마운트 여부만 본다.
+vi.mock('@/components/rfp/SampleRfpBanner', () => ({
+  SampleRfpBanner: () => <div data-testid="sample-banner" />,
+}));
+
+import { BuyerDealRoomBody } from '../BuyerDealRoomBody';
+import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
+import type { RFP } from '@/lib/types/rfp';
+import type { Bid } from '@/lib/types/bid';
+
+const baseRfp: RFP = {
+  id: 'rfp-1',
+  code: 'P-2605-0042',
+  buyerWsId: 'ws-buyer',
+  title: '결제대행 RFP',
+  memo: '',
+  rfpFiles: [],
+  allowedPgWorkspaceIds: [],
+  requiredPaymentMethods: [],
+  customPaymentMethods: [],
+  deadline: new Date(Date.now() + 86_400_000).toISOString(),
+  status: 'sent',
+  createdBy: 'u1',
+  createdAt: new Date().toISOString(),
+};
+
+const aBid: Bid = {
+  id: 'bid-1',
+  rfpId: 'rfp-1',
+  pgWsId: 'ws-toss',
+  invitationId: 'inv-1',
+  settleCycle: 'D+1',
+  settleLimit: 0,
+  guaranteeInsurance: 0,
+  paymentFees: {},
+  customFees: {},
+  proposalPdfs: [],
+  status: 'submitted',
+  submittedBy: 'pg-user',
+  round: 1,
+};
+
+function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
+  return {
+    rfp: baseRfp,
+    bids: [aBid],
+    rfpFiles: [],
+    companyName: '구매사',
+    inviteList: [],
+    pgWsNameMap: {},
+    pendingRequests: [],
+    canEdit: true,
+    authorId: 'u1',
+    authorName: '담당자',
+    requoteByPg: {},
+    priorBidByPg: {},
+    ...over,
+  };
+}
+
+afterEach(cleanup);
+
+describe('BuyerDealRoomBody — 샘플 배너', () => {
+  it('isSample 면 상단에 SampleRfpBanner 를 렌더한다', () => {
+    render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, isSample: true } })} />);
+    expect(screen.getByTestId('sample-banner')).toBeInTheDocument();
+  });
+
+  it('isSample 이 아니면 SampleRfpBanner 를 렌더하지 않는다', () => {
+    render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, isSample: false } })} />);
+    expect(screen.queryByTestId('sample-banner')).not.toBeInTheDocument();
+  });
+});

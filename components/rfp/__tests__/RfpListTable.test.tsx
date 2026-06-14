@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const replace = vi.fn();
+const push = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace }),
+  useRouter: () => ({ push }),
   usePathname: () => '/rfp',
   useSearchParams: () => new URLSearchParams(''),
 }));
@@ -46,15 +46,15 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  replace.mockClear();
+  push.mockClear();
 });
 
 describe('RfpListTable', () => {
-  it('행 클릭 시 ?peek=<code>로 replace (uuid 아님)', async () => {
+  it('행 클릭 시 상세 라우트(/rfp/<code>)로 push — 딜룸 모달 오픈 (uuid 아님)', async () => {
     const user = userEvent.setup();
     render(<RfpListTable rfps={[rfp]} />);
     await user.click(screen.getByText('결제대행 RFP'));
-    expect(replace).toHaveBeenCalledWith('/rfp?peek=P-2604-0001');
+    expect(push).toHaveBeenCalledWith('/rfp/P-2604-0001');
   });
 
   it('번호 컬럼에 code를 표시', () => {
@@ -65,15 +65,15 @@ describe('RfpListTable', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('Enter 키로 ?peek=<code> replace', () => {
+  it('Enter 키로 상세 라우트(/rfp/<code>)로 push', () => {
     render(<RfpListTable rfps={[rfp, rfpSecond]} />);
     fireEvent.keyDown(document, { key: 'j' });
     fireEvent.keyDown(document, { key: 'j' });
     fireEvent.keyDown(document, { key: 'Enter' });
-    expect(replace).toHaveBeenCalledWith('/rfp?peek=P-2604-0002');
+    expect(push).toHaveBeenCalledWith('/rfp/P-2604-0002');
   });
 
-  it('peekCode와 일치하는 행이 2개 렌더됨', () => {
+  it('행이 2개 렌더됨', () => {
     const { container } = render(<RfpListTable rfps={[rfp, rfpSecond]} />);
     const rows = container.querySelectorAll('tbody tr');
     expect(rows.length).toBe(2);
