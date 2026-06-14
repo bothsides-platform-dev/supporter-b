@@ -74,22 +74,6 @@ sessionStorage 가 차단되면(사파리 비공개 등) readSignupDraft 가 {} 
 **Priority:** P3
 `FeeRateCell` 환산 툴팁이 `left-1/2 -translate-x-1/2` 중앙 정렬이라 5열 그리드의 영세(맨 왼쪽)·일반(맨 오른쪽) 열에서 가장자리로 넘칠 수 있음. 또 `role="tooltip"` 이 입력과 `aria-describedby` 로 연결돼 있지 않아 스크린리더는 환산값을 못 읽음(단, 기존엔 힌트 자체가 없어 순수 개선분). 픽스: 열 위치별 정렬(start/center/end) prop + 안정 id 의 aria-describedby. (발견: /ship 디자인 리뷰 2026-06-14, /design-review 경로)
 
-## Deal Room
-
-### 정식 [id]/[rfpId] 페이지를 DealRoomFull 로 통일
-**Priority:** P1
-새로고침·딥링크·전체화면이 떨어지는 정식 풀페이지(`app/(app)/{rfp/[id],inbox/[rfpId]}/page.tsx`)는 아직 **구 레이아웃**(본문 + sticky `ChatRail` 2단, `ChatRailToggle`)으로 렌더돼 인터셉트 모달과 시각·기능이 갈린다. 모달과 동일한 `DealRoomShell`(레일+탭+ChatPanel)을 호스팅하는 `DealRoomFull` 로 통일해야 한 견적이 모달이든 단독 페이지든 같은 화면이 된다. **통일해야 `ChatRailToggle` 과 sticky 2단 레이아웃을 완전히 삭제**할 수 있다. (발견: deal-room 모달 PR 계획 단계 의도적 분리, 2026-06-14)
-
-### /inbox/[rfpId]/submitted 를 견적작성 탭으로 흡수
-**Priority:** P2
-PG 견적 제출 성공이 아직 별도 페이지(`app/(app)/inbox/[rfpId]/submitted/`)로 남아 있어 모달 안에서 제출하면 그 페이지로 빠져나간다. 모달 견적작성 탭이 제출 후 같은 창에서 'submitted 상태'(`SubmittedSummary`)를 보여주도록 흡수하고 별도 라우트를 제거. e2e scenario-b/e 가 `/submitted` URL 을 기다리므로 함께 갱신 필요. (발견: deal-room 모달 PR 계획 단계 의도적 분리, 2026-06-14)
-
-### lg 미만 채팅 하단 시트
-**Priority:** P2
-딜룸 우측 채팅은 `lg:flex` 게이트라 1024px 미만에서는 통째로 숨는다(모바일에서 견적 옆 채팅 불가). 좌측 레일도 좁은 폭에서 정돈 필요. 우측 채팅 → 하단 `Sheet`(side="bottom") + 채팅 FAB, 레일 → 서브헤더 아래 가로 아이콘바/더보기로 반응형 보강. (발견: deal-room 모달 PR 계획 단계 의도적 분리, 2026-06-14)
-
-### 이전/다음 이동 시 전체화면 상태 처리 명확화
-**Priority:** P3
-딜룸 전체화면에서 ‹ › 로 이전·다음 견적으로 넘어갈 때 `router.replace` 가 `DealRoomModal` 을 리마운트하는지(전체화면 해제) 유지하는지 리뷰어 의견이 갈렸다 — 실측으로 동작을 확정하고, 해제가 맞다면 전체화면 상태를 `useDealRoomNav`(또는 URL)로 끌어올려 이동 간 보존하거나 의도된 동작으로 문서화. 어느 쪽이든 데이터 손실은 없음(경미한 UX). (발견: /ship 리뷰 army 2026-06-14)
-
 ## Completed
+
+- **딜룸 후속 TODO 4건 해소 (2026-06-14, dev 머지)**: 정식 페이지 통일(`DealRoomFull`, PR #186) · `/submitted` 견적작성 탭 흡수(PR #188) · `<lg` 하단시트 채팅 + 반응형 레일(PR #189) · 전체화면 이전/다음 결정성(`useDealRoomNav` 슬라이스, PR #187). 딜룸 모달 본 PR #185 위 스택으로 진행.
