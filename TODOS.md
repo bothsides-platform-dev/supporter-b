@@ -22,6 +22,20 @@ buyer-소유/PG-canAccess 규칙이 `TeamChatService.authorize` 와 subscribe �
 **Priority:** P2
 `/messages` 의 conversation thread-cache 는 invalidate-on-unmount 가 없어(기존 동작) 소프트 재방문 시 스테일 스냅샷 재생 가능. 팀 채팅에 적용한 패턴(TeamThreadPane unmount invalidate) 을 ThreadPane 에도 이식.
 
+## Auth / Signup
+
+### 가입 INSERT 후 비즈니스 early-return 의 고아 user 행 (기존 버그)
+**Priority:** P2
+`completeSignup`(`!input.wsName`)·`signupViaInvite`(`!claim.ok`) 가 `tx.insert(users)` *뒤에* `{ok:false}` 를 반환하면 콜백이 정상 resolve→postgres-js 가 부분 tx 를 commit→워크스페이스 없는 미인증 user 행이 남음. `MISSING_WS_NAME` 은 `signupCompleteAction` 이 액션에서 선검증하므로 현재 도달 불가지만, 서비스 내 가드를 `transaction()` 앞으로 hoist 하면 깔끔. claim 실패 경로는 throw-to-rollback 패턴 필요. 자가치유(재시도 시 멤버십 없어 purge 대상)되지만 의도치 않은 commit. (발견: /ship 어드버서리얼 2026-06-14, branch worktree-fix+signup-email-taken-pg-tx-rethrow. merge-base 기존 동작, 이 브랜치 비도입.)
+
+### 가입 race-collision .catch arm 테스트 (invite·canonical)
+**Priority:** P2
+`signupViaInvite`·`joinCanonicalPgWorkspace` 의 새 outer `.catch`(unique→EMAIL_TAKEN, non-unique→rethrow)는 `completeSignup` 의 throwingInsertDb 테스트와 동일 코드지만 직접 테스트 없음. invite/canonical 진입점은 유효 invitation·workspace 픽스처가 tx 까지 살아남는 더 풍부한 stub 필요. 추가로 postgres-js 의 "콜백 resolve 후 재던짐" 시맨틱을 모사하는 충실한 stub(동기 throw 가 아니라 resolve-후-reject)으로 회귀를 박제. (발견: /ship 테스트·어드버서리얼 2026-06-14)
+
+### AuthService unique-violation→EMAIL_TAKEN 매핑 DRY
+**Priority:** P3
+`if (isUniqueViolation(err)) return {ok:false, error:'EMAIL_TAKEN'}; throw err;` 가 3개 가입 메서드 `.catch` + `confirmEmailChange` 까지 4곳 중복. 제네릭 헬퍼 `mapUniqueViolationToEmailTaken<T>` 로 추출. 가입 user-insert 8필드 리터럴도 3곳 중복(스키마 컬럼 추가 시 drift 위험) — `insertNewSignupUser(tx, …)` 헬퍼 검토. (발견: /ship 유지보수 리뷰 2026-06-14)
+
 ## Design
 
 ### PG 인박스 상세 토글 위치 정돈

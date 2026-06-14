@@ -132,3 +132,43 @@ describe('purgeUnverifiedSignup', () => {
     await purgeUnverifiedSignup(db, 'nobody@x.com');
   });
 });
+
+// postgres-js 트랜잭션은 콜백이 unique violation 을 try/catch 로 잡아도 콜백 종료 후
+// 다시 던진다(node_modules/postgres scope: `if (uncaughtError) throw uncaughtError`).
+// 따라서 INSERT 충돌을 잡아 EMAIL_TAKEN 으로 바꾸는 패턴은 prod 에서 크래시한다.
+// 대신 purge 가 "이미 존재해 INSERT 가 불가하다"(blocked)를 INSERT *전에* 알려,
+// 호출자가 트랜잭션을 오염시키기 전에 EMAIL_TAKEN 을 반환하게 한다.
+describe('purgeUnverifiedSignup → clear|blocked status (INSERT 선검사)', () => {
+  it("returns 'clear' for an unknown email (safe to insert)", async () => {
+    const { db } = await setup();
+    expect(await purgeUnverifiedSignup(db, 'nobody@x.com')).toBe('clear');
+  });
+
+  it("returns 'clear' after purging an abandoned unverified signup", async () => {
+    const { db, repo } = await setup();
+    const u = makeUser('abandon2@x.com');
+    await repo.save(u);
+    await createWorkspaceInTx(db, { userId: u.id, type: 'buyer', name: 'WS', bizProfile: BIZ });
+
+    expect(await purgeUnverifiedSignup(db, 'abandon2@x.com')).toBe('clear');
+  });
+
+  it("returns 'blocked' for a VERIFIED user (email taken)", async () => {
+    const { db, repo } = await setup();
+    const u = makeUser('verified2@x.com');
+    await repo.save(u);
+    await repo.markEmailVerified('verified2@x.com');
+
+    expect(await purgeUnverifiedSignup(db, 'verified2@x.com')).toBe('blocked');
+  });
+
+  it("returns 'blocked' for an unverified member of an ACTIVE workspace", async () => {
+    const { db, repo } = await setup();
+    const u = makeUser('invitee2@x.com');
+    await repo.save(u);
+    const { workspaceId } = await createWorkspaceInTx(db, { userId: u.id, type: 'pg', name: 'WS' });
+    await db.update(workspaces).set({ status: 'active' }).where(eq(workspaces.id, workspaceId));
+
+    expect(await purgeUnverifiedSignup(db, 'invitee2@x.com')).toBe('blocked');
+  });
+});
