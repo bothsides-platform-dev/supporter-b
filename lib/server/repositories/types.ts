@@ -133,6 +133,8 @@ export interface PgRequestRepo {
 }
 
 // ── Workspace ─────────────────────────────────────────────────────────
+export type TeamMember = { userId: string; name: string; joinedAt: string };
+
 export interface WorkspaceRepo {
   /** 워크스페이스 + 멤버 동기화. */
   save(ws: Workspace, tx?: Tx): Promise<void>;
@@ -152,6 +154,8 @@ export interface WorkspaceRepo {
   isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
   /** 해당 워크스페이스 멤버 user id 배열 — 알림 fanout + Centrifugo subscribe ACL용. 순서 미보장. */
   memberUserIds(workspaceId: string, tx?: Tx): Promise<string[]>;
+  /** 멘션 자동완성/렌더용 팀 로스터 — {userId, name, joinedAt}. 시스템 계정 제외. */
+  teamRoster(workspaceId: string, tx?: Tx): Promise<TeamMember[]>;
   /** 여러 워크스페이스 멤버 user id를 workspaceId 키 Map으로 배치 조회 — N+1 제거용. */
   memberUserIdsBatch(wsIds: string[], tx?: Tx): Promise<Map<string, string[]>>;
   /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
