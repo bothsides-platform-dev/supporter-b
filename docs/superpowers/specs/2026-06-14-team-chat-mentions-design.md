@@ -91,8 +91,11 @@ export function mentionsToPlainText(
 
 **드롭다운 UX**
 - `@` 입력 → 멤버 목록(본인 제외) + 상단 `@전체`. ↑/↓ 이동, Enter/Tab 선택, Esc 닫기. 클릭 선택.
+- **각 행 = 프사(아바타) + 이름 [+ 합류일자]**. 아바타는 기존 `components/primitives/Avatar.tsx`(이니셜 기반, 사진 업로드 없음) 재사용 — 메시지 헤더와 동일하게 `<Avatar name={member.name} size="sm" />`. **추가 로스터 필드 불필요**(name으로 충분). `@전체` 행은 아바타 대신 그룹 아이콘/플레이스홀더.
+- **동명이인 구분**: 로스터에서 이름이 **중복인 후보**에 한해, 이름 옆에 **합류일자**(`workspace_members.joined_at`)를 `.md-numeric`로 표기(예: `[아바타] 김민수  2026.03.14`). 이름이 유일하면 표기 안 함. 중복 판정은 전체 로스터 기준(현재 필터와 무관, 안정적). 저장 토큰은 항상 `userId`라 멘션 자체는 모호하지 않으며, 합류일자는 선택 시 사람이 올바른 대상을 고르기 위한 보조 표시.
 - Linear 디자인: 6px radius, `outline-variant` 보더, elevation(팝오버), 펄스/스피너 금지.
 - 후보 로스터 = 로더가 내려준 `teamMembers`(아래 §8). 한글 IME는 textarea 네이티브로 처리.
+- 범위: 합류일자 표기는 **드롭다운 한정**. 전송된 메시지 본문의 멘션 칩에는 표기하지 않음(렌더는 현재 이름만; 본문 혼잡 방지).
 
 **TDD**: detectMentionQuery 경계(시작/공백/공백포함 비매칭), filterMembers 초성, applyMentionSelection 치환·caret, 컴포넌트(드롭다운 출현/선택삽입/Esc).
 
@@ -112,11 +115,14 @@ export function mentionsToPlainText(
 
 ## 8. 로더 / 서비스 — 팀 로스터 노출
 
-- `LoadTeamThreadResult`에 `teamMembers: { userId: string; name: string }[]` 추가(자동완성 후보 + 렌더 해소용; 본인 포함—렌더 해소 위해, 드롭다운에서만 본인 제외).
-- `TeamChatService.listMessages`(또는 신규 `listTeamMembers`)가 로스터를 함께 반환 — 기존 `wsRepo.memberUserIds` + `userRepo` 사용(생성자 불변, additive 반환).
+- `LoadTeamThreadResult`에 `teamMembers: { userId: string; name: string; joinedAt: string }[]` 추가.
+  - `userId`/`name`: 자동완성 후보 + 렌더 해소 + 아바타(이니셜)용. 본인 포함(렌더 해소 위해), 드롭다운에서만 본인 제외.
+  - `joinedAt`(ISO): 동명이인 합류일자 표기용(`workspace_members.joined_at`).
+  - 아바타는 별도 필드 불필요(이니셜 기반, `name`으로 충분).
+- 로스터 조회는 `workspace_members` JOIN `users`(system 계정 제외)로 `{userId, name, joinedAt}` 반환하는 repo 메서드 추가(기존 `memberUserIds`는 joined_at 미반환이므로 신규/확장). `TeamChatService`가 이를 노출 — 생성자 불변(기존 `wsRepo` 사용), additive 반환.
 - 로더가 messages + teamMembers를 결과에 매핑.
 
-**TDD**: 로더가 teamMembers 포함, system 계정 제외, 이름 해소.
+**TDD**: 로더가 teamMembers(joinedAt 포함) 반환, system 계정 제외, 이름·합류일자 해소.
 
 ## 9. 팬아웃 — `TeamChatService.sendMessage`
 
@@ -159,6 +165,7 @@ export function mentionsToPlainText(
 - `lib/server/services/team-chat.ts` — 멘션 팬아웃 분기, 로스터 반환
 - `lib/server/actions/chat/teamThreadLoader.ts` — `teamMembers` 추가
 - 인박스 미리보기 / 이메일 다이제스트 / 알림 preview 평문화 지점
+- `lib/server/repositories/drizzle/workspace.ts` — 로스터 메서드(`{userId, name, joinedAt}`, system 계정 제외) 신규/확장
 - `lib/server/repositories/drizzle/notification.ts` — 멘션 dedupe 체크(또는 기존 체크 타입 파라미터화)
 - 알림 목록 UI 타입 분기(필요 시)
 
