@@ -98,7 +98,7 @@ lib/server/
 │  ├─ workspace.ts   # WorkspaceService: create / invite / member management
 │  ├─ auth.ts        # AuthService: signup / password reset / email change
 │  └─ notification.ts# NotificationService: markRead / markAllRead / retryEmail
-└─ repositories/     # DB 접근 추상화 (Drizzle 구현 + 메모리 테스트 구현)
+└─ repositories/     # DB 접근 추상화 (Drizzle 구현 — 단위 테스트는 PGlite 로 실 DB 검증)
 ```
 
 **서비스 레이어 규칙:**
