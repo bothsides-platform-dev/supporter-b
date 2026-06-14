@@ -289,7 +289,7 @@ describe('MessageInbox', () => {
         unread: false,
       },
     ];
-    render(<MessageInbox items={teamItems as any} initialSelectedKey="t:r1" />);
+    render(<MessageInbox items={teamItems} initialSelectedKey="t:r1" />);
 
     // TeamThreadPane resolves async via getTeamThreadPromise mock — wait for back button
     const back = await screen.findByRole('button', { name: '대화 목록' });
