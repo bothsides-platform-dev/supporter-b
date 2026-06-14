@@ -5,11 +5,14 @@ import { FAQ_ITEMS } from './faq-data';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
+export type FaqItem = { q: string; a: string };
+
 // 접지 않고 항상 펼친 상태로 큼직하게 노출한다.
-export function FaqList() {
+// items 미지정 시 buyer 기본 FAQ, 지정 시 해당 목록(예: PG 랜딩)을 렌더한다.
+export function FaqList({ items = FAQ_ITEMS }: { items?: readonly FaqItem[] }) {
   return (
     <div className="flex flex-col">
-      {FAQ_ITEMS.map((item, i) => (
+      {items.map((item, i) => (
         <motion.div
           key={item.q}
           initial={{ opacity: 0, y: 12 }}
