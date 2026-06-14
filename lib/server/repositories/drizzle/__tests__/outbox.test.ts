@@ -312,3 +312,16 @@ describe('DrizzleOutboxRepository / chat-digest separation', () => {
     expect(due[0].scheduledAt).toBeTruthy();
   });
 });
+
+describe('DrizzleOutboxRepository / team-chat-digest separation', () => {
+  it('dueTeamChatDigests returns team_chat.message rows; pending() excludes them', async () => {
+    const db = await createPgliteDb();
+    const repo = new DrizzleOutboxRepository(db);
+    const past = new Date(Date.now() - 60_000);
+    await repo.enqueue({ event: 'team_chat.message', to: 't@b.com', subject: 's', html: '<p>x</p>', dedupeKey: 'team-digest:r:w:u:1', scheduledAt: past });
+    const due = await repo.dueTeamChatDigests(50);
+    expect(due.map((d) => d.event)).toContain('team_chat.message');
+    const generic = await repo.pending(50);
+    expect(generic.find((g) => g.event === 'team_chat.message')).toBeUndefined();
+  });
+});

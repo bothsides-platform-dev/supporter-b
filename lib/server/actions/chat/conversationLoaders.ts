@@ -5,6 +5,7 @@ import {
   getChatConversationRepo,
   getChatMessageRepo,
   getChatReadRepo,
+  getRfpRepo,
   getUserRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
@@ -50,6 +51,8 @@ export type LoadThreadResult = ChatActionResult<{
    *  이름을 그릴 때 쓴다. */
   viewer: { userId: string; name: string };
   messages: ThreadMessage[];
+  /** 스레드에 등장한 rfpId → { code, title } 맵. 메시지 RFP 칩 렌더용. */
+  rfpById: Record<string, { code: string; title: string }>;
 }>;
 
 /**
@@ -179,6 +182,12 @@ export async function loadConversationThread(
   const userRepo = await getUserRepo();
   const viewerUser = await userRepo.findById(ws.userId);
 
+  const rfpRepo = await getRfpRepo();
+  const distinctRfpIds = [...new Set(messages.map((m) => m.rfpId).filter((x): x is string => !!x))];
+  const rfpRows = await Promise.all(distinctRfpIds.map((id) => rfpRepo.findById(id)));
+  const rfpById: Record<string, { code: string; title: string }> = {};
+  rfpRows.forEach((rfp) => { if (rfp) rfpById[rfp.id] = { code: rfp.code, title: rfp.title }; });
+
   return {
     ok: true,
     conversationId,
@@ -189,5 +198,6 @@ export async function loadConversationThread(
     },
     viewer: { userId: ws.userId, name: viewerUser?.name ?? '' },
     messages,
+    rfpById,
   };
 }

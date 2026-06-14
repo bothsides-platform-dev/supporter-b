@@ -13,6 +13,9 @@ export type {
   LoadThreadResult,
 } from '@/lib/server/actions/chat/conversationLoaders';
 
+// 통합 인박스 항목(상대방 대화 + 팀 스레드) — 인박스 로더가 단일 진실원천.
+export type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
+
 export type CounterpartyType = 'buyer' | 'pg';
 
 export const COUNTERPARTY_TYPE_LABEL: Record<CounterpartyType, string> = {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import type { ConversationListItem } from '@/components/messages/types';
+import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 
 // next/link renders as <a> in jsdom
 vi.mock('next/link', () => ({
@@ -28,8 +29,8 @@ afterEach(() => cleanup());
 
 import { RecentMessagesPanel } from '../RecentMessagesPanel';
 
-function makeConv(overrides?: Partial<ConversationListItem>): ConversationListItem {
-  return {
+function makeConv(overrides?: Partial<ConversationListItem>): InboxListItem {
+  const c: ConversationListItem = {
     conversationId: 'conv-abc',
     counterparty: { workspaceId: 'ws-pg', name: 'NICE페이', type: 'pg', hasLogo: false },
     rfpId: null,
@@ -38,23 +39,46 @@ function makeConv(overrides?: Partial<ConversationListItem>): ConversationListIt
     unread: false,
     ...overrides,
   };
+  return { kind: 'counterparty', key: `c:${c.conversationId}`, ...c };
 }
 
 describe('RecentMessagesPanel', () => {
   it('renders a conversation row with a deep-link to /messages?c=<id>', () => {
-    render(<RecentMessagesPanel conversations={[makeConv({ conversationId: 'conv-xyz' })]} unreadCount={0} />);
+    render(<RecentMessagesPanel items={[makeConv({ conversationId: 'conv-xyz' })]} unreadCount={0} />);
     const link = screen.getByRole('link', { name: /NICE페이/ });
     expect(link).toHaveAttribute('href', '/messages?c=conv-xyz');
   });
 
-  it('shows at most 4 conversation rows (HOME_RECENT_MESSAGES cap)', () => {
+  it('renders a team thread row deep-linking to /messages?t=<rfpId>', () => {
+    render(
+      <RecentMessagesPanel
+        items={[
+          {
+            kind: 'team',
+            key: 't:r1',
+            rfpId: 'r1',
+            rfpCode: 'P-1',
+            rfpTitle: '제목',
+            preview: '메모',
+            lastMessageAt: '2026-06-14T01:00:00Z',
+            unread: true,
+          },
+        ]}
+        unreadCount={1}
+      />,
+    );
+    const link = screen.getByRole('link', { name: /제목|메모|팀|P-1/ });
+    expect(link).toHaveAttribute('href', '/messages?t=r1');
+  });
+
+  it('shows at most 4 rows (HOME_RECENT_MESSAGES cap)', () => {
     const convs = Array.from({ length: 5 }, (_, i) =>
       makeConv({
         conversationId: `conv-${i}`,
         counterparty: { workspaceId: `ws-${i}`, name: `회사 ${i}`, type: 'pg', hasLogo: false },
       }),
     );
-    render(<RecentMessagesPanel conversations={convs} unreadCount={0} />);
+    render(<RecentMessagesPanel items={convs} unreadCount={0} />);
     const links = screen
       .getAllByRole('link')
       .filter((l) => l.getAttribute('href')?.startsWith('/messages?c='));
@@ -62,32 +86,32 @@ describe('RecentMessagesPanel', () => {
   });
 
   it('shows an unread badge when unreadCount > 0', () => {
-    render(<RecentMessagesPanel conversations={[makeConv()]} unreadCount={3} />);
+    render(<RecentMessagesPanel items={[makeConv()]} unreadCount={3} />);
     expect(screen.getByLabelText('읽지 않은 메시지 3개')).toBeInTheDocument();
   });
 
   it('does not show an unread badge when unreadCount is 0', () => {
-    render(<RecentMessagesPanel conversations={[makeConv()]} unreadCount={0} />);
+    render(<RecentMessagesPanel items={[makeConv()]} unreadCount={0} />);
     expect(screen.queryByLabelText(/읽지 않은 메시지/)).not.toBeInTheDocument();
   });
 
-  it('renders the empty state when conversations is empty', () => {
-    render(<RecentMessagesPanel conversations={[]} unreadCount={0} />);
+  it('renders the empty state when items is empty', () => {
+    render(<RecentMessagesPanel items={[]} unreadCount={0} />);
     expect(screen.getByText('아직 주고받은 메시지가 없어요')).toBeInTheDocument();
   });
 
   it('renders a "메시지 전체 보기" link to /messages', () => {
-    render(<RecentMessagesPanel conversations={[]} unreadCount={0} />);
+    render(<RecentMessagesPanel items={[]} unreadCount={0} />);
     expect(screen.getByRole('link', { name: '메시지 전체 보기' })).toHaveAttribute(
       'href',
       '/messages',
     );
   });
 
-  it('shows an unread dot on a conversation row when c.unread is true', () => {
+  it('shows an unread dot on a row when item.unread is true', () => {
     render(
       <RecentMessagesPanel
-        conversations={[makeConv({ unread: true })]}
+        items={[makeConv({ unread: true })]}
         unreadCount={1}
       />,
     );

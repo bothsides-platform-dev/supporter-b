@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/primitives/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckIcon, PlusIcon } from '@/components/icons';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
-import type { ConversationListItem } from '@/components/messages/types';
+import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 
 const EMPTY_DESC: Record<'buyer' | 'pg', string> = {
   buyer: '새 견적이 오거나 마감이 다가오면 여기에 표시돼요.',
@@ -22,12 +22,12 @@ const HOME_OPEN_RFP_PREVIEW = 5;
 export function HomeDashboard({
   dashboard,
   workspaceType,
-  conversations,
+  items,
   unreadCount,
 }: {
   dashboard: Dashboard;
   workspaceType: 'buyer' | 'pg';
-  conversations: ConversationListItem[];
+  items: InboxListItem[];
   unreadCount: number;
 }) {
   return (
@@ -69,7 +69,7 @@ export function HomeDashboard({
             )}
         </div>
         <div className="lg:w-[360px] lg:shrink-0">
-          <RecentMessagesPanel conversations={conversations} unreadCount={unreadCount} />
+          <RecentMessagesPanel items={items} unreadCount={unreadCount} />
         </div>
       </div>
     </div>

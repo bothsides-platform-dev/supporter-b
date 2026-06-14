@@ -4,8 +4,9 @@ import { users } from './users';
 import { workspaces } from './workspaces';
 import { rfps } from './rfps';
 
-// RFP-scoped internal team thread (v1: no mentions/notifications/read-state/
-// attachments). Scope key = (rfp_id, workspace_id): the buyer team and each PG
+// RFP-scoped internal team thread. Attachments, per-user read-state
+// (rfp_team_message_reads), and notifications (in-app + email digest) are
+// supported; mentions are not yet. Scope key = (rfp_id, workspace_id): the buyer team and each PG
 // team get fully separate threads on the same RFP — rows must never cross the
 // workspace boundary (sealed-bid invariant). Append-only; deleting the RFP or
 // the workspace cascades the thread away. index backs the ascending scope load.

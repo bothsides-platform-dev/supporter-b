@@ -93,4 +93,24 @@ describe('DrizzleRfpTeamMessageRepository', () => {
     const { repo, rfp } = await setup();
     expect(await repo.listByScope(rfp.id, randomUUID())).toEqual([]);
   });
+
+  it('listThreadsForWorkspace aggregates one summary per rfp with its last message', async () => {
+    const db = await createPgliteDb();
+    const u = await seedUser(db, { email: 'u@b.com', name: 'U' });
+    const ws = await seedBuyerWorkspace(db);
+    const rfpA = await seedRfp(db, { buyerWsId: ws.id, createdBy: u.id });
+    const rfpB = await seedRfp(db, { buyerWsId: ws.id, createdBy: u.id });
+    const repo = new DrizzleRfpTeamMessageRepository(db);
+    await repo.save({ id: randomUUID(), rfpId: rfpA.id, workspaceId: ws.id, authorUserId: u.id, body: 'A1', createdAt: new Date('2026-06-14T00:00:00Z') });
+    await repo.save({ id: randomUUID(), rfpId: rfpA.id, workspaceId: ws.id, authorUserId: u.id, body: 'A2-last', createdAt: new Date('2026-06-14T02:00:00Z') });
+    await repo.save({ id: randomUUID(), rfpId: rfpB.id, workspaceId: ws.id, authorUserId: u.id, body: 'B1-last', createdAt: new Date('2026-06-14T01:00:00Z') });
+
+    const summaries = await repo.listThreadsForWorkspace(ws.id);
+    expect(summaries).toHaveLength(2);
+    const a = summaries.find((s) => s.rfpId === rfpA.id)!;
+    expect(a.lastBody).toBe('A2-last');
+    expect(a.lastMessageAt.toISOString()).toBe('2026-06-14T02:00:00.000Z');
+    const otherWs = await seedBuyerWorkspace(db);
+    expect(await repo.listThreadsForWorkspace(otherWs.id)).toHaveLength(0);
+  });
 });

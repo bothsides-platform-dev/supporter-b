@@ -272,6 +272,8 @@ export interface NotificationRepo {
     windowStart: Date,
     tx?: Tx,
   ): Promise<boolean>;
+  /** 동일 window 내 pending team_chat 인앱 알림 존재 여부(rfp 단위 dedupe). */
+  hasPendingTeamNotification(userId: string, rfpId: string, windowStart: Date, tx?: Tx): Promise<boolean>;
 }
 
 // ── Contract ──────────────────────────────────────────────────────────
@@ -402,6 +404,8 @@ export interface OutboxRepo {
    * SKIP-LOCKED 없는 단순 read — 중복발송 가드는 처리기 책임.
    */
   dueChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
+  /** Due team-chat-digest rows — owned by the team-digest flush processor. */
+  dueTeamChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
   /** 전송 결과 반영(성공/실패 + 시도횟수 +1). */
   markResult(
     id: string,
@@ -527,6 +531,13 @@ export type RfpTeamMessageWithAuthor = RfpTeamMessageRecord & {
   attachments: Attachment[];
 };
 
+export type TeamThreadSummary = {
+  rfpId: string;
+  lastMessageAt: Date;
+  lastBody: string;
+  lastAuthorUserId: string;
+};
+
 export interface RfpTeamMessageRepo {
   /** 메시지 insert (append-only). */
   save(msg: RfpTeamMessageRecord, tx?: Tx): Promise<void>;
@@ -536,6 +547,8 @@ export interface RfpTeamMessageRepo {
     workspaceId: string,
     tx?: Tx,
   ): Promise<RfpTeamMessageWithAuthor[]>;
+  /** 워크스페이스가 메시지를 남긴 모든 RFP 의 스레드 요약(rfp별 마지막 메시지). */
+  listThreadsForWorkspace(workspaceId: string, tx?: Tx): Promise<TeamThreadSummary[]>;
 }
 
 // ── Chat: Message Template ────────────────────────────────────────────
@@ -646,6 +659,22 @@ export interface ChatReadRepo {
     viewerUserId: string,
     tx?: Tx,
   ): Promise<Date | undefined>;
+}
+
+// ── RFP Team Message Read State ───────────────────────────────────────
+/** (rfp, workspace, user) 팀 스레드 읽음 row — 통합 인박스 팀 안읽음 배지 근거. */
+export type RfpTeamMessageRead = {
+  rfpId: string;
+  workspaceId: string;
+  userId: string;
+  lastReadAt: Date;
+};
+
+export interface RfpTeamMessageReadRepo {
+  /** (rfp, workspace, user) PK upsert — last_read_at 갱신(idempotent, monotonic). */
+  upsert(rfpId: string, workspaceId: string, userId: string, at: Date, tx?: Tx): Promise<void>;
+  /** (rfp, workspace, user) 읽음 row 조회. 없으면 undefined. */
+  getFor(rfpId: string, workspaceId: string, userId: string, tx?: Tx): Promise<RfpTeamMessageRead | undefined>;
 }
 
 // ── Audit Log (C5) ────────────────────────────────────────────────────
