@@ -15,10 +15,12 @@ import {
   __resetForTest,
   __useDrizzleWithDbForTest,
   getInvitationRepo,
+  getNotificationRepo,
   getRfpRepo,
   getRfpTeamMessageRepo,
   getRfpTeamMessageReadRepo,
   getUserRepo,
+  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
   seedBuyerWorkspace,
@@ -27,8 +29,8 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { attachments, rfpInvitations } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { attachments, notifications, rfpInvitations } from '@/lib/db/schema';
+import { and, eq } from 'drizzle-orm';
 import { TeamChatService, type TeamChatActor } from '../team-chat';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -36,14 +38,16 @@ let db: PgliteDB;
 let service: TeamChatService;
 
 async function buildService(): Promise<TeamChatService> {
-  const [rfpRepo, invRepo, userRepo, msgRepo, readRepo] = await Promise.all([
+  const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo] = await Promise.all([
     getRfpRepo(),
     getInvitationRepo(),
     getUserRepo(),
     getRfpTeamMessageRepo(),
     getRfpTeamMessageReadRepo(),
+    getWorkspaceRepo(),
+    getNotificationRepo(),
   ]);
-  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo, readRepo);
+  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo);
 }
 
 // Draft attachment — all owner FKs null (valid: num_nonnulls <= 1).
@@ -330,5 +334,33 @@ describe('TeamChatService.markRead + listThreads', () => {
 
     r = await svc.listThreads(actorMe);
     expect(r.ok && r.threads.find((t) => t.rfpId === rfp.id)?.unread).toBe(false);
+  });
+});
+
+describe('TeamChatService.sendMessage — notification fan-out', () => {
+  it('fans out one inapp notification to teammates (not author) on send, deduped within window', async () => {
+    const me = await seedUser(db, { email: 'me@b.com', name: '나' }); // author
+    const mate = await seedUser(db, { email: 'mate@b.com', name: '동료' }); // recipient
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, mate.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+    const svc = await buildService();
+    const actorMe: TeamChatActor = { userId: me.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    await svc.sendMessage({ rfpId: rfp.id, body: '메모1' }, actorMe);
+    await svc.sendMessage({ rfpId: rfp.id, body: '메모2' }, actorMe);
+
+    const mateNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, mate.id), eq(notifications.type, 'team_chat.message')));
+    expect(mateNotifs).toHaveLength(1); // deduped within the window
+
+    const meNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, me.id), eq(notifications.type, 'team_chat.message')));
+    expect(meNotifs).toHaveLength(0); // author excluded
   });
 });
