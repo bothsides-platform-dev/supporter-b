@@ -2,16 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Every code change follows superpowers:test-driven-development (RED → GREEN → REFACTOR).
 
-**Goal:** Make `lib/server/repositories/` the single enforced DB-access boundary (migrate all ~44 leak sites behind repos, add an ESLint guard), and restore the "thin action" rule by extracting `BoardService`, `QuoteTemplateService`, and absorbing auth email/verify into `AuthService`.
+**Goal:** Route all ~44 direct-DB leak sites behind `lib/server/repositories/` so every DB touch has a repo home, and restore the "thin action" rule by extracting `BoardService`, `QuoteTemplateService`, and absorbing auth email/verify into `AuthService`.
 
-**Architecture:** Three server layers — Actions (thin: session + parse + delegate) → Services (own tx / notification fan-out / outbox, return `ServiceResult`, `globalThis` singletons) → Repositories (backend-agnostic interfaces in `types.ts`, Drizzle impls, built by a Factory bundle). This plan (1) fills repo gaps so every DB touch has a repo home, (2) migrates every direct `@/lib/db` query to a repo call, (3) extracts fat actions into services, (4) locks the boundary with `no-restricted-imports`.
+**Scope note:** The ESLint `no-restricted-imports` boundary guard, the dead `'memory'`-union removal, and the doc sync are **deferred to a separate PR** (was Phase 5 — removed). This PR does the migration + extraction work; a follow-up locks the boundary with lint once the leaks are gone.
+
+**Architecture:** Three server layers — Actions (thin: session + parse + delegate) → Services (own tx / notification fan-out / outbox, return `ServiceResult`, `globalThis` singletons) → Repositories (backend-agnostic interfaces in `types.ts`, Drizzle impls, built by a Factory bundle). This plan (1) fills repo gaps so every DB touch has a repo home, (2) migrates every direct `@/lib/db` query to a repo call, (3) extracts fat actions into services.
 
 **Tech Stack:** Next.js 16 App Router, Drizzle ORM + Postgres (postgres-js prod / PGlite tests), Vitest, TypeScript strict, pnpm.
 
-**Documented exceptions (NOT migrated — intentional, will be allowlisted in Phase 6):**
+**Documented exceptions (NOT migrated — intentional; the follow-up lint PR will allowlist these):**
 - `lib/server/storage/postgres.ts` + `lib/server/storage/memory.ts` — the **Storage byte-blob tier** (`attachment_blobs`). Already abstracted behind `getStorage()`; that IS its boundary. Keep.
-- Pure **injection-only** sites (import `db` only to pass into a helper / install a global override): `lib/server/storage/index.ts`, `lib/server/actions/auth/_shared.ts`, `app/api/workspaces/search/route.ts`, `app/api/files/[id]/route.ts`, `app/(app)/settings/audit-log/page.tsx`, `app/(app)/rfp-create/page.tsx`, and the service singleton getters' `import('@/lib/db/client')`. These never call `.select/.insert/.update/.delete/.transaction` directly. The Phase-6 ESLint rule targets the **schema-table import + query-builder call**, not the bare client import, so these need no change.
-- `lib/server/actions/auth/_purgeUnverifiedSignup.ts` — deliberate cross-aggregate cascade delete spanning 7 tables; wrapped in a caller tx. Stays raw (a single repo can't own a cross-aggregate cascade); allowlisted with a comment.
+- Pure **injection-only** sites (import `db` only to pass into a helper / install a global override): `lib/server/storage/index.ts`, `lib/server/actions/auth/_shared.ts`, `app/api/workspaces/search/route.ts`, `app/api/files/[id]/route.ts`, `app/(app)/settings/audit-log/page.tsx`, `app/(app)/rfp-create/page.tsx`, and the service singleton getters' `import('@/lib/db/client')`. These never call `.select/.insert/.update/.delete/.transaction` directly — not query leaks.
+- `lib/server/actions/auth/_purgeUnverifiedSignup.ts` — deliberate cross-aggregate cascade delete spanning 7 tables; wrapped in a caller tx. Stays raw (a single repo can't own a cross-aggregate cascade).
 
 ---
 
@@ -366,29 +368,7 @@ async verifyEmailToken(rawToken: string): Promise<ServiceResult<{ email: string;
 
 ---
 
-# PHASE 5 — Lock the boundary + cleanup
-
-### Task 5.1: ESLint `no-restricted-imports` boundary rule
-**Files:** Modify `eslint.config.mjs`; Test (drift guard): `lib/server/__tests__/repo-boundary.test.ts`.
-
-Add a flat-config override: for files matching `lib/**` and `app/**` but NOT `lib/server/repositories/**` and NOT `**/__tests__/**` / `**/*.test.*`, forbid importing `@/lib/db/schema` and `@/lib/db/client` (the query handle). Allowlist the documented exceptions (storage tier + injection-only + `_purgeUnverifiedSignup`).
-- [ ] **Step 1:** After Phase 3, run `grep -rE "@/lib/db/(schema|client)" lib app --include=*.ts --include=*.tsx | grep -vE "(repositories/|__tests__|\.test\.)"` → the remaining list MUST equal the documented exceptions. If anything else remains, it's an un-migrated leak — fix it before adding the rule.
-- [ ] **Step 2:** Write the ESLint override with the exception allowlist.
-- [ ] **Step 3:** `pnpm lint` → must be clean (proves all leaks migrated + exceptions allowlisted).
-- [ ] **Step 4:** Add a small test that reads `eslint.config.mjs` and asserts the allowlist matches the documented exception set (drift guard, like the `proxy-matcher` pattern in MEMORY).
-- [ ] **Step 5:** Commit `feat(lint): enforce repository boundary via no-restricted-imports`.
-
-### Task 5.2: Remove dead `'memory'` backend union
-**Files:** `lib/server/repositories/factory.ts`.
-- [ ] Remove `'memory'` from the `__backend` union (`:56`), the `backend: 'drizzle' | 'memory'` param (`:71`), and the `__getBackend` return type (`:227`) — both call sites already hardcode `'drizzle'` (the in-memory backend was removed in commit `a061fa6`). Run `factory.test.ts`. Commit `chore(repo): drop dead memory-backend type union`.
-
-### Task 5.3: Doc sync
-**Files:** `CLAUDE.md`, `docs/superpowers/plans/2026-06-15-repo-boundary-and-services.md` (mark done).
-- [ ] Update the **Server Architecture** section: state that `lib/server/repositories/` is now the **enforced** DB boundary (ESLint-guarded), list the documented exceptions, and correct the stale "Drizzle 구현 + 메모리 테스트 구현" line (in-memory repos were removed; tests use Drizzle-on-PGlite). Update the **Storage** row only if wording drifted. Commit `docs: document enforced repository boundary`.
-
-**Phase 5 gate:** tsc + lint + full `pnpm test` green. `pnpm build` (Next.js — boundary/ESLint changes can affect build per MEMORY proxy-matcher note).
-
----
+> **Deferred to a follow-up PR (was Phase 5):** the ESLint `no-restricted-imports` boundary guard + drift test, removing the dead `'memory'` backend union from `factory.ts`, and the CLAUDE.md doc sync. After Phase 3 completes here, the boundary will be *clean* (no leaks outside the documented exceptions) but not yet *lint-enforced* — that lock-in lands separately.
 
 ## Notes
 
@@ -400,4 +380,4 @@ Add a flat-config override: for files matching `lib/**` and `app/**` but NOT `li
 - Spec coverage: every leak file from the audit appears in Phase 3; every gap method in Phase 2; all 3 extractions in Phase 4. ✓
 - Type consistency: method names used in Phase 3 match signatures defined in Phase 1–2. ✓
 - New-repo wiring (factory + BUNDLE_VERSION bump) included in each Phase-1 task. ✓
-- Exceptions explicitly enumerated and allowlisted in Phase 5.1. ✓
+- Exceptions explicitly enumerated up front; lint allowlist deferred to the follow-up PR. ✓
