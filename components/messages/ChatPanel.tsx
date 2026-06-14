@@ -52,7 +52,7 @@ const RAIL_TABS = [
   { id: 'team', label: '팀 채팅' },
 ];
 
-export function ChatPanel({ rfpId, rfpCode, rfpTitle, isSample = false, onClose }: Props) {
+export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
   const tab = useChatRailStore((s) => s.tab);
   const counterparty = useChatRailStore((s) => s.counterparty);
   const setTab = useChatRailStore((s) => s.setTab);
@@ -149,7 +149,6 @@ export function ChatPanel({ rfpId, rfpCode, rfpTitle, isSample = false, onClose 
                     counterpartyFallback={{ ...counterparty, hasLogo: false }}
                     variant="rail"
                     defaultRfpId={rfpId}
-                    rfpById={{ [rfpId]: { code: rfpCode, title: rfpTitle } }}
                     sendDisabled={isSample}
                   />
                 </Suspense>
