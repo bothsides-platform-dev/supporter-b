@@ -14,6 +14,8 @@ import type { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, X } from 'lucide-react';
 
 import { IconButton } from '@/components/primitives/IconButton';
+import { useIsLgUp } from '@/hooks/use-lg-up';
+import { DealRoomChatFab } from './DealRoomChatFab';
 
 type DealRoomShellProps = {
   mode: 'modal' | 'page';
@@ -52,6 +54,9 @@ export function DealRoomShell({
   children,
 }: DealRoomShellProps) {
   const showNav = mode === 'modal' && (onPrev != null || onNext != null);
+  // 채팅을 lg 이상은 우측 aside, lg 미만은 FAB+하단 시트로 — 둘 중 하나만 렌더해
+  // DealRoomChat 인스턴스가 항상 단 하나(스토어 시드/리셋 충돌 방지)가 되게 한다.
+  const lgUp = useIsLgUp();
 
   return (
     <div
@@ -98,15 +103,16 @@ export function DealRoomShell({
       </header>
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">{children}</div>
-        {chat && (
+        {chat && lgUp && (
           <aside
             aria-label="채팅"
-            className="hidden w-[360px] shrink-0 flex-col border-l border-[var(--md-sys-color-outline-variant)] lg:flex"
+            className="flex w-[360px] shrink-0 flex-col border-l border-[var(--md-sys-color-outline-variant)]"
           >
             {chat}
           </aside>
         )}
       </div>
+      {chat && !lgUp && <DealRoomChatFab>{chat}</DealRoomChatFab>}
     </div>
   );
 }
