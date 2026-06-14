@@ -1,6 +1,6 @@
 // Repository factory — single entry point for actions/handlers.
-// Decision is lazy (first call) so vitest's NODE_ENV='test' is observed even
-// when this module is imported by code that runs before env stubbing.
+// Construction is lazy (first call) so the postgres-js client isn't imported
+// until a repo is actually used — tests inject a pglite db before that point.
 // Cache lives on globalThis so Next dev HMR doesn't multiply instances.
 import type {
   AttachmentRepo,
@@ -52,8 +52,6 @@ type RepoBundle = {
   rfpTeamMessageRead: RfpTeamMessageReadRepo;
   rfpRequoteRequest: RfpRequoteRequestRepo;
   auditLog: AuditLogRepo;
-  // Backend marker for tests.
-  __backend: 'memory' | 'drizzle';
   // Version for HMR stale detection — bump when adding repos/methods.
   __version: number;
 };
@@ -68,7 +66,7 @@ const BUNDLE_VERSION = 7;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise<RepoBundle> {
+async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleRfpRepository } = await import('./drizzle/rfp');
   const { DrizzleInvitationRepository } = await import('./drizzle/invitation');
   const { DrizzleRfpRequestRepository } = await import('./drizzle/rfp-pg-request');
@@ -125,7 +123,6 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
     rfpTeamMessageRead: new DrizzleRfpTeamMessageReadRepository(db),
     rfpRequoteRequest: new DrizzleRfpRequoteRequestRepository(db),
     auditLog: new DrizzleAuditLogRepository(db),
-    __backend: backend,
     __version: BUNDLE_VERSION,
   };
 }
@@ -134,7 +131,7 @@ async function buildBundle(): Promise<RepoBundle> {
   // Lazy import the postgres-js client so missing DATABASE_URL doesn't crash
   // tests that inject a pglite db via __useDrizzleWithDbForTest.
   const { db } = await import('@/lib/db/client');
-  return createRepoBundle(db, 'drizzle');
+  return createRepoBundle(db);
 }
 
 /** Dev HMR can keep old repo instances after new methods land — rebuild when stale. */
@@ -223,24 +220,18 @@ export async function getAuditLogRepo(): Promise<AuditLogRepo> {
   return (await getBundle()).auditLog;
 }
 
-// For tests only — read which backend the cache settled on.
-export async function __getBackend(): Promise<'memory' | 'drizzle'> {
-  return (await getBundle()).__backend;
-}
-
-// For tests only — clear the cache so a different env can re-decide.
+// For tests only — clear the cache so the bundle rebuilds on next use.
 export function __resetForTest(): void {
   globalThis.__bidit_repos__ = undefined;
 }
 
 // For tests only — install Drizzle repos backed by a pglite db handle so
 // action tests (Step 5+) can exercise the full repo surface (user, biz, outbox,
-// verification-token, etc.) under NODE_ENV='test'. Bypasses the in-memory
-// shortcut without touching factory selection logic. Pair with __resetForTest
+// verification-token, etc.) under NODE_ENV='test'. Pair with __resetForTest
 // in afterEach.
 export async function __useDrizzleWithDbForTest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,
 ): Promise<void> {
-  globalThis.__bidit_repos__ = await createRepoBundle(db, 'drizzle');
+  globalThis.__bidit_repos__ = await createRepoBundle(db);
 }

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.19.2] - 2026-06-15
+
+### Removed
+
+- **레포지토리 팩토리에서 쓰지 않는 메모리 백엔드 선택 코드를 정리했어요** (개발 도구): 예전에 인메모리 저장소 구현이 있던 시절의 잔재(`__backend` 마커·`REPO_BACKEND` 환경변수·테스트 전용 `__getBackend` 헬퍼)가 남아 있었어요. 지금은 Drizzle 구현만 쓰고 단위 테스트는 PGlite로 실제 DB를 검증하기 때문에 더 이상 의미가 없어, 관련 죽은 코드와 문서 설명을 모두 지웠어요. 서비스 동작 변화는 없어요.
+
 ## [0.2.19.1] - 2026-06-14
 
 ### Changed
