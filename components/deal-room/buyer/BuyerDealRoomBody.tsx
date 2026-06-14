@@ -26,6 +26,7 @@ import { DealRoomActionRail, type RailAction } from '@/components/deal-room/Deal
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { RequestConditionsView } from '@/components/rfp/RequestConditionsView';
+import { SampleRfpBanner } from '@/components/rfp/SampleRfpBanner';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { RfpBoardVisibilityToggle } from '@/components/rfp/RfpBoardVisibilityToggle';
 import { RfpPendingRequests } from '@/components/rfp/RfpPendingRequests';
@@ -150,10 +151,17 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
   ];
 
   return (
-    <div className="flex h-full min-h-0">
-      <DealRoomActionRail actions={actions} />
-      <div className="min-w-0 flex-1">
-        <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />
+    <div className="flex h-full min-h-0 flex-col">
+      {rfp.isSample && (
+        <div className="shrink-0 px-6 pt-4">
+          <SampleRfpBanner rfpCode={rfp.code} />
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1">
+        <DealRoomActionRail actions={actions} />
+        <div className="min-w-0 flex-1">
+          <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />
+        </div>
       </div>
 
       {focusedBid && (

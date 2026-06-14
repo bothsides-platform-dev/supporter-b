@@ -14,6 +14,7 @@ import { Pencil, FileText, Paperclip, Undo2 } from 'lucide-react';
 import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
 import { RfpBriefPanel } from '@/components/inbox/RfpBriefPanel';
+import { SamplePgRfpBanner } from '@/components/inbox/SamplePgRfpBanner';
 import { BidWizard } from '@/components/inbox/bid-wizard/BidWizard';
 import { RequoteBanner } from '@/components/inbox/RequoteBanner';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
@@ -75,10 +76,17 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   ];
 
   return (
-    <div className="flex h-full min-h-0">
-      <DealRoomActionRail actions={actions} />
-      <div className="min-w-0 flex-1">
-        <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />
+    <div className="flex h-full min-h-0 flex-col">
+      {rfp.isSample && (
+        <div className="shrink-0 px-6 pt-4">
+          <SamplePgRfpBanner rfpCode={rfp.code} />
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1">
+        <DealRoomActionRail actions={actions} />
+        <div className="min-w-0 flex-1">
+          <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />
+        </div>
       </div>
 
       {myBid && (
