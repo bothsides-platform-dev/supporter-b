@@ -100,6 +100,14 @@ describe('RfpStep2Content', () => {
       await user.type(input, '150');
       expect(useRfpDraftStore.getState().currentFeeRate).not.toBe('150');
     });
+
+    it('정확히 100 은 허용된다 (상한 포함 경계)', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      const input = screen.getByPlaceholderText('3.4') as HTMLInputElement;
+      await user.type(input, '100');
+      expect(useRfpDraftStore.getState().currentFeeRate).toBe('100');
+    });
   });
 
   describe('현재 월 정산한도/보증보험 — 원화 CurrencyInput', () => {

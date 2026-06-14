@@ -20,6 +20,10 @@ describe('formatFeeRateDisplay', () => {
     expect(formatFeeRateDisplay('협의 가능')).toBe('협의 가능');
   });
 
+  it('앞뒤 공백이 있는 숫자도 trim 후 % 를 붙인다', () => {
+    expect(formatFeeRateDisplay(' 3.4 ')).toBe('3.4%');
+  });
+
   it('빈 값/널은 빈 문자열을 반환한다', () => {
     expect(formatFeeRateDisplay('')).toBe('');
     expect(formatFeeRateDisplay(null)).toBe('');
@@ -36,6 +40,12 @@ describe('formatKrwField', () => {
   it('파싱 불가한 과거 자유 텍스트는 원문을 유지한다', () => {
     expect(formatKrwField('월 1억')).toBe('월 1억');
     expect(formatKrwField('3000만원')).toBe('3000만원');
+  });
+
+  it('0·음수는 formatKrwReadable 가 빈 문자열을 주므로 원문을 유지한다(경계)', () => {
+    // formatKrwReadable 는 n<=0 에 ''를 반환 → `|| value` 폴백으로 원문 노출
+    expect(formatKrwField('0')).toBe('0');
+    expect(formatKrwField('-100')).toBe('-100');
   });
 
   it('빈 값/널은 빈 문자열을 반환한다', () => {

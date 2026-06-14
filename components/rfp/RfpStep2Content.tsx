@@ -14,6 +14,9 @@ import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { cn } from '@/lib/utils';
 
+// 카드 수수료는 % 값이라 100을 넘을 수 없다 — 입력 단계에서 상한을 강제한다.
+const MAX_FEE_RATE_PCT = 100;
+
 const CONTRACT_TYPE_OPTIONS = [
   { value: 'new', label: '신규 계약' },
   { value: 'renewal', label: '갱신 계약' },
@@ -129,7 +132,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
           <NumericFormat
             decimalScale={2}
             allowNegative={false}
-            isAllowed={({ floatValue }) => floatValue === undefined || floatValue <= 100}
+            isAllowed={({ floatValue }) => floatValue === undefined || floatValue <= MAX_FEE_RATE_PCT}
             value={draft.currentFeeRate}
             onValueChange={(values) => draft.setField('currentFeeRate', values.value)}
             placeholder="3.4"

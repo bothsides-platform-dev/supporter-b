@@ -159,9 +159,10 @@ export function CurrencyInput({
 }
 
 /**
- * Labeled integer input with a fixed `D+` prefix. Stores the canonical
- * `D+N` string (e.g. `"D+1"`) so downstream cycle comparison(`/^[DWM]\+\d+$/`)
- * keeps working; an empty input stores `""`.
+ * Labeled integer input with a fixed `D+` prefix. Always emits a `D+N` string
+ * (e.g. `"D+1"`); `W+`/`M+` can no longer be entered (only `D+`). Downstream
+ * cycle comparison (`CYCLE_RE = /^[DWM]\+\d+$/` in lib/utils/bid-compare.ts)
+ * still accepts `W+`/`M+` for legacy rows. An empty input stores `""`.
  */
 export function DayOffsetInput({
   label,
