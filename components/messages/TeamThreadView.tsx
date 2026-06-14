@@ -9,7 +9,7 @@
  * 내부 스레드이므로 타인 메시지에 멤버 이름+아바타 헤더를 단다. ChatRail 의
  * '팀 채팅' 탭 전용.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
@@ -35,6 +35,18 @@ import type { Attachment } from '@/lib/types/common';
 import type { TeamThreadMessage } from '@/lib/server/actions/chat/teamThreadLoader';
 import { MessageAttachmentGrid } from './MessageAttachmentGrid';
 import { formatDayLabel, formatTime, withinGroupWindow } from './format';
+import { MentionText } from './MentionText';
+import { MentionDropdown } from './MentionDropdown';
+import {
+  detectMentionQuery,
+  buildMentionItems,
+  applyMentionSelection,
+  resolveMentionsToBody,
+  type MentionCandidate,
+  type MentionItem,
+  type MentionQuery,
+  type TrackedMention,
+} from './mention-input';
 
 type Props = {
   rfpId: string;
@@ -43,6 +55,7 @@ type Props = {
   /** 라이브 echo 의 self 판별용 — loadTeamThread 가 반환한 세션 유저 id. */
   viewerUserId: string;
   messages: TeamThreadMessage[];
+  teamMembers?: MentionCandidate[];
 };
 
 // 하단에서 이만큼(px) 이내면 "하단 근처"로 보고 새 메시지를 자동 추적한다.
@@ -62,7 +75,7 @@ type StagedAttachment = {
   error?: string;
 };
 
-export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: Props) {
+export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, teamMembers = [] }: Props) {
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
   const [sending, setSending] = useState(false);
@@ -72,6 +85,28 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevLenRef = useRef(0);
+
+  const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null);
+  const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const trackedRef = useRef<TrackedMention[]>([]);
+  const caretRef = useRef<number | null>(null);
+
+  // 렌더용 이름 맵 + 동명이인 집합(전체 로스터 기준).
+  const nameById = useMemo(
+    () => new Map(teamMembers.map((m) => [m.userId, m.name])),
+    [teamMembers],
+  );
+  const duplicateNames = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const m of teamMembers) seen.set(m.name, (seen.get(m.name) ?? 0) + 1);
+    return new Set([...seen.entries()].filter(([, n]) => n > 1).map(([name]) => name));
+  }, [teamMembers]);
+  // 본인 제외 후보(드롭다운).
+  const candidates = useMemo(
+    () => teamMembers.filter((m) => m.userId !== viewerUserId),
+    [teamMembers, viewerUserId],
+  );
 
   // 새 메시지 append 시 하단 추적 — 단, 위로 올려 과거 메모를 읽는 중에 팀원
   // 메시지가 오면 끌어내리지 않는다(초기 로드·본인 전송·하단 근처만 추적).
@@ -94,6 +129,14 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
   useEffect(() => {
     void markTeamThreadReadAction({ rfpId });
   }, [rfpId]);
+
+  useEffect(() => {
+    if (caretRef.current !== null && textareaRef.current) {
+      const pos = caretRef.current;
+      textareaRef.current.setSelectionRange(pos, pos);
+      caretRef.current = null;
+    }
+  }, [draft]);
 
   useTeamChannel(rfpId, workspaceId, {
     onMessage: (data: TeamLivePayload) => {
@@ -200,7 +243,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
 
   async function handleSend(): Promise<void> {
     if (sending) return;
-    const body = draft.trim();
+    const body = resolveMentionsToBody(draft, trackedRef.current).trim();
     const readyAttachments = attachments.filter((a) => a.status === 'ready');
     if (body.length === 0 && readyAttachments.length === 0) return;
     setSending(true);
@@ -229,6 +272,9 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
       },
     ]);
     setDraft('');
+    trackedRef.current = [];
+    setMentionQuery(null);
+    setMentionItems([]);
     setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
@@ -273,7 +319,45 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
     }
   }
 
+  function pickMention(item: MentionItem): void {
+    if (!mentionQuery) return;
+    const pick =
+      item.kind === 'all'
+        ? ({ kind: 'all' } as const)
+        : ({ kind: 'member', userId: item.userId, name: item.name } as const);
+    const out = applyMentionSelection(draft, mentionQuery, pick);
+    trackedRef.current = [...trackedRef.current, out.tracked];
+    caretRef.current = out.caret;
+    setDraft(out.text);
+    setMentionQuery(null);
+    setMentionItems([]);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    if (mentionQuery && mentionItems.length > 0) {
+      if (e.nativeEvent.isComposing) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionItems.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex((i) => (i - 1 + mentionItems.length) % mentionItems.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        pickMention(mentionItems[mentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionQuery(null);
+        setMentionItems([]);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       // 한글 IME 조합 확정 Enter(keyCode 229)는 전송이 아니다.
       if (e.nativeEvent.isComposing) return;
@@ -351,7 +435,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
                       m.pending && 'opacity-60',
                     )}
                   >
-                    {m.body}
+                    <MentionText body={m.body} nameById={nameById} viewerUserId={viewerUserId} />
                     {m.attachments.length > 0 && (
                       <MessageAttachmentGrid attachments={m.attachments} />
                     )}
@@ -427,7 +511,16 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
 
       {/* 컴포저 — 첨부 + textarea + 보내기 */}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
-        <div className="flex items-end gap-2">
+        <div className="relative flex items-end gap-2">
+          {mentionQuery && mentionItems.length > 0 && (
+            <MentionDropdown
+              items={mentionItems}
+              activeIndex={mentionIndex}
+              duplicateNames={duplicateNames}
+              onPick={pickMention}
+              onHover={setMentionIndex}
+            />
+          )}
           <IconButton
             label="파일 첨부"
             size="sm"
@@ -455,9 +548,20 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
             maxLength={4000}
             placeholder="우리 팀에게만 보이는 메모를 남겨보세요…"
             onChange={(e) => {
-              setDraft(e.target.value);
+              const value = e.target.value;
+              setDraft(value);
               e.target.style.height = 'auto';
               e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+              const q = detectMentionQuery(value, e.target.selectionStart ?? value.length);
+              if (q) {
+                const items = buildMentionItems(candidates, q.query);
+                setMentionQuery(items.length > 0 ? q : null);
+                setMentionItems(items);
+                setMentionIndex(0);
+              } else {
+                setMentionQuery(null);
+                setMentionItems([]);
+              }
             }}
             onKeyDown={handleKeyDown}
             className="min-h-8 max-h-40 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-1.5 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
