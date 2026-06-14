@@ -16,15 +16,20 @@ import type {
   ColumnRepo,
   ContractRepo,
   InvitationRepo,
+  LoginAttemptRepo,
   NotificationRepo,
   OutboxRepo,
   PgRequestRepo,
+  PhoneOtpRepo,
+  RfpAllowedPgRepo,
   RfpRepo,
   RfpRequoteRequestRepo,
   RfpTeamMessageRepo,
   RfpTeamMessageReadRepo,
   UserRepo,
+  VerificationApplicationRepo,
   VerificationTokenRepo,
+  WorkspaceLogoRepo,
   WorkspaceRepo,
 } from './types';
 
@@ -52,6 +57,11 @@ type RepoBundle = {
   rfpTeamMessageRead: RfpTeamMessageReadRepo;
   rfpRequoteRequest: RfpRequoteRequestRepo;
   auditLog: AuditLogRepo;
+  phoneOtp: PhoneOtpRepo;
+  workspaceLogo: WorkspaceLogoRepo;
+  rfpAllowedPg: RfpAllowedPgRepo;
+  verificationApplication: VerificationApplicationRepo;
+  loginAttempt: LoginAttemptRepo;
   // Backend marker for tests.
   __backend: 'memory' | 'drizzle';
   // Version for HMR stale detection — bump when adding repos/methods.
@@ -64,7 +74,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 7;
+const BUNDLE_VERSION = 8;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,6 +110,13 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
   const { DrizzleRfpTeamMessageReadRepository } = await import('./drizzle/rfp-team-message-read');
   const { DrizzleRfpRequoteRequestRepository } = await import('./drizzle/rfp-requote-request');
   const { DrizzleAuditLogRepository } = await import('./drizzle/audit-log');
+  const { DrizzlePhoneOtpRepository } = await import('./drizzle/phone-otp');
+  const { DrizzleWorkspaceLogoRepository } = await import('./drizzle/workspace-logo');
+  const { DrizzleRfpAllowedPgRepository } = await import('./drizzle/rfp-allowed-pg');
+  const { DrizzleVerificationApplicationRepository } = await import(
+    './drizzle/verification-application'
+  );
+  const { DrizzleLoginAttemptRepository } = await import('./drizzle/login-attempt');
 
   return {
     rfp: new DrizzleRfpRepository(db),
@@ -125,6 +142,11 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
     rfpTeamMessageRead: new DrizzleRfpTeamMessageReadRepository(db),
     rfpRequoteRequest: new DrizzleRfpRequoteRequestRepository(db),
     auditLog: new DrizzleAuditLogRepository(db),
+    phoneOtp: new DrizzlePhoneOtpRepository(db),
+    workspaceLogo: new DrizzleWorkspaceLogoRepository(db),
+    rfpAllowedPg: new DrizzleRfpAllowedPgRepository(db),
+    verificationApplication: new DrizzleVerificationApplicationRepository(db),
+    loginAttempt: new DrizzleLoginAttemptRepository(db),
     __backend: backend,
     __version: BUNDLE_VERSION,
   };
@@ -221,6 +243,21 @@ export async function getRfpRequoteRequestRepo(): Promise<RfpRequoteRequestRepo>
 }
 export async function getAuditLogRepo(): Promise<AuditLogRepo> {
   return (await getBundle()).auditLog;
+}
+export async function getPhoneOtpRepo(): Promise<PhoneOtpRepo> {
+  return (await getBundle()).phoneOtp;
+}
+export async function getWorkspaceLogoRepo(): Promise<WorkspaceLogoRepo> {
+  return (await getBundle()).workspaceLogo;
+}
+export async function getRfpAllowedPgRepo(): Promise<RfpAllowedPgRepo> {
+  return (await getBundle()).rfpAllowedPg;
+}
+export async function getVerificationApplicationRepo(): Promise<VerificationApplicationRepo> {
+  return (await getBundle()).verificationApplication;
+}
+export async function getLoginAttemptRepo(): Promise<LoginAttemptRepo> {
+  return (await getBundle()).loginAttempt;
 }
 
 // For tests only — read which backend the cache settled on.

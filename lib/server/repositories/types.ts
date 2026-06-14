@@ -724,3 +724,85 @@ export interface AuditLogRepo {
     opts: { limit: number; before?: AuditLogCursor },
   ): Promise<AuditLogRecord[]>;
 }
+
+// ── PhoneOtp ──────────────────────────────────────────────────────────
+export interface PhoneOtpRepo {
+  /** 지정 window 내 해당 번호로 발급된 OTP 수 — 발송 레이트리밋용. */
+  countRecent(phone: string, since: Date, tx?: Tx): Promise<number>;
+  /** OTP 발급 row 생성 — code 는 호출자가 해시. 생성된 id 반환. */
+  create(
+    params: { phone: string; codeHash: string; expiresAt: Date },
+    tx?: Tx,
+  ): Promise<string>;
+  /** 미인증·미만료 활성 OTP 1건 (created_at asc). 없으면 undefined. */
+  findActive(
+    phone: string,
+    now: Date,
+    tx?: Tx,
+  ): Promise<{ id: string; codeHash: string; attempts: number } | undefined>;
+  /** (id, phone) 의 인증완료(verified_at not null) 존재 여부. */
+  isVerified(id: string, phone: string, tx?: Tx): Promise<boolean>;
+  /** 코드 오입력 시 attempts +1. */
+  bumpAttempts(id: string, tx?: Tx): Promise<void>;
+  /** verified_at 스탬프. */
+  markVerified(id: string, at: Date, tx?: Tx): Promise<void>;
+  /** 단건 삭제 — SMS 발송 실패 롤백용. */
+  remove(id: string, tx?: Tx): Promise<void>;
+}
+
+// ── WorkspaceLogo ─────────────────────────────────────────────────────
+export interface WorkspaceLogoRepo {
+  /** 로고 바이트+mime — GET /avatar. 없으면 undefined. */
+  find(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ bytes: Buffer; mime: string } | undefined>;
+  /** 존재 여부만 — Workspace.findById 의 hasLogo 계산용. */
+  exists(workspaceId: string, tx?: Tx): Promise<boolean>;
+  /** upsert(by workspace_id). */
+  upsert(workspaceId: string, bytes: Buffer, mime: string, tx?: Tx): Promise<void>;
+  /** 단건 삭제. */
+  remove(workspaceId: string, tx?: Tx): Promise<void>;
+}
+
+// ── RfpAllowedPg ──────────────────────────────────────────────────────
+export interface RfpAllowedPgRepo {
+  /** RFP 에 PG 워크스페이스들을 allowlist 등록 (onConflictDoNothing). */
+  add(rfpId: string, pgWsIds: string[], tx?: Tx): Promise<void>;
+  /** 한 RFP 의 허용 PG 워크스페이스 id 목록. */
+  listPgWsIds(rfpId: string, tx?: Tx): Promise<string[]>;
+  /** (rfpId, pgWsId) 가 allowlist 에 있는지. */
+  has(rfpId: string, pgWsId: string, tx?: Tx): Promise<boolean>;
+}
+
+// ── VerificationApplication ───────────────────────────────────────────
+export interface VerificationApplicationRepo {
+  /**
+   * 워크스페이스 생성 시 인증 신청 row 생성. status 는 DB 기본값
+   * ('submitted') 을 사용하므로 호출자는 id·workspaceId·orgType 만 넘긴다.
+   */
+  create(
+    params: { id: string; workspaceId: string; orgType: 'buyer' | 'pg' },
+    tx?: Tx,
+  ): Promise<void>;
+}
+
+// ── LoginAttempt ──────────────────────────────────────────────────────
+/** 레이트리밋 카운터 행 — key 는 `email:<addr>` 또는 `ip:<addr>`. */
+export type LoginAttemptRecord = {
+  count: number;
+  lockedUntil: Date | null;
+};
+
+export interface LoginAttemptRepo {
+  /** key(email|ip) 의 현재 카운터 row. 없으면 undefined. */
+  findByKey(key: string, tx?: Tx): Promise<LoginAttemptRecord | undefined>;
+  /** upsert(by key) — 시도 누적. updatedAt 은 호출자가 now 로 넘긴다. */
+  upsert(
+    key: string,
+    rec: { count: number; lockedUntil: Date | null; updatedAt: Date },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 성공 로그인 시 keys 삭제. 빈 배열은 안전한 no-op. */
+  clear(keys: string[], tx?: Tx): Promise<void>;
+}
