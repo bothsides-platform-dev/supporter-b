@@ -86,4 +86,13 @@ describe('HomeDashboard', () => {
     render(<HomeDashboard dashboard={withGroups} workspaceType="pg" items={[]} unreadCount={0} />);
     expect(screen.queryByRole('link', { name: /견적 요청하기/ })).not.toBeInTheDocument();
   });
+
+  // CTA는 KPI strip(진행중·…·선정 완료) 바로 아래에 와야 한다 — 큰 풀-width 버튼.
+  it('places the 견적 요청하기 CTA after the KPI strip in DOM order', () => {
+    render(<HomeDashboard dashboard={empty} workspaceType="buyer" items={[]} unreadCount={0} />);
+    const kpi = screen.getByRole('link', { name: /진행중/ });
+    const cta = screen.getByRole('link', { name: /견적 요청하기/ });
+    // CTA must FOLLOW the KPI link in document order (it currently precedes it → RED).
+    expect(kpi.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

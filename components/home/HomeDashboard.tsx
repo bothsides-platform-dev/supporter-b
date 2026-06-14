@@ -35,16 +35,15 @@ export function HomeDashboard({
       <HomeHeaderActionsRegistrar />
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
-          {/* 샘플 견적이 액션 큐에 잡혀도 구매사가 새 견적을 만들 수 있도록 /rfp 헤더의
-              "견적 요청하기" CTA를 재사용해 상시 노출. */}
-          {workspaceType === 'buyer' && (
-            <div className="flex justify-end">
-              <Link href="/rfp-create">
-                <Button size="sm" icon={<PlusIcon />}>견적 요청하기</Button>
-              </Link>
-            </div>
-          )}
           <KpiStrip kpis={dashboard.kpis} />
+          {/* 샘플 견적이 액션 큐에 잡혀도 구매사가 새 견적을 만들 수 있도록 /rfp 헤더의
+              "견적 요청하기" CTA를 재사용해 상시 노출. KPI strip(선정 완료) 바로 아래에
+              풀-width 큰 버튼으로 강조한다. */}
+          {workspaceType === 'buyer' && (
+            <Link href="/rfp-create" className="block">
+              <Button size="lg" fullWidth icon={<PlusIcon />}>견적 요청하기</Button>
+            </Link>
+          )}
           {dashboard.groups.length > 0 ? (
             <ActionQueue groups={dashboard.groups} />
           ) : (
