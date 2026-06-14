@@ -17,6 +17,7 @@ import {
   getInvitationRepo,
   getRfpRepo,
   getRfpTeamMessageRepo,
+  getRfpTeamMessageReadRepo,
   getUserRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -35,13 +36,14 @@ let db: PgliteDB;
 let service: TeamChatService;
 
 async function buildService(): Promise<TeamChatService> {
-  const [rfpRepo, invRepo, userRepo, msgRepo] = await Promise.all([
+  const [rfpRepo, invRepo, userRepo, msgRepo, readRepo] = await Promise.all([
     getRfpRepo(),
     getInvitationRepo(),
     getUserRepo(),
     getRfpTeamMessageRepo(),
+    getRfpTeamMessageReadRepo(),
   ]);
-  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo);
+  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo, readRepo);
 }
 
 // Draft attachment — all owner FKs null (valid: num_nonnulls <= 1).
@@ -303,5 +305,30 @@ describe('TeamChatService.listMessages', () => {
       workspaceType: 'pg',
     });
     expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+  });
+});
+
+describe('TeamChatService.markRead + listThreads', () => {
+  it('markRead then listThreads clears unread for own read; teammate message raises unread', async () => {
+    const me = await seedUser(db, { email: 'me@b.com', name: '나' });
+    const mate = await seedUser(db, { email: 'mate@b.com', name: '동료' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, mate.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+    const svc = await buildService();
+    const actorMe: TeamChatActor = { userId: me.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    // mate posts a team message
+    await svc.sendMessage({ rfpId: rfp.id, body: '동료 메모' }, { userId: mate.id, workspaceId: ws.id, workspaceType: 'buyer' });
+
+    let r = await svc.listThreads(actorMe);
+    expect(r.ok && r.threads.find((t) => t.rfpId === rfp.id)?.unread).toBe(true);
+
+    const mark = await svc.markRead(rfp.id, actorMe);
+    expect(mark.ok).toBe(true);
+
+    r = await svc.listThreads(actorMe);
+    expect(r.ok && r.threads.find((t) => t.rfpId === rfp.id)?.unread).toBe(false);
   });
 });

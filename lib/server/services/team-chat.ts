@@ -6,6 +6,7 @@ import type { Attachment } from '@/lib/types/common';
 import type {
   InvitationRepo,
   RfpRepo,
+  RfpTeamMessageReadRepo,
   RfpTeamMessageRepo,
   RfpTeamMessageWithAuthor,
   UserRepo,
@@ -17,6 +18,15 @@ export type TeamChatActor = {
   userId: string;
   workspaceId: string;
   workspaceType: WorkspaceType;
+};
+
+export type TeamThreadEntry = {
+  rfpId: string;
+  rfpCode: string;
+  rfpTitle: string;
+  preview: string;
+  lastMessageAt: string;
+  unread: boolean;
 };
 
 // RFP-scoped internal team thread (v1: no mentions/notifications/read-state —
@@ -34,6 +44,7 @@ export class TeamChatService {
     private readonly invRepo: InvitationRepo,
     private readonly userRepo: UserRepo,
     private readonly msgRepo: RfpTeamMessageRepo,
+    private readonly readRepo: RfpTeamMessageReadRepo,
   ) {}
 
   private async authorize(
@@ -178,6 +189,39 @@ export class TeamChatService {
     const messages = await this.msgRepo.listByScope(rfpId, actor.workspaceId);
     return { ok: true, messages };
   }
+
+  async markRead(rfpId: string, actor: TeamChatActor): Promise<ServiceResult<{ readAt: string }>> {
+    const auth = await this.authorize(rfpId, actor);
+    if (!auth.ok) return auth;
+    const at = new Date();
+    await this.readRepo.upsert(rfpId, actor.workspaceId, actor.userId, at);
+    return { ok: true, readAt: at.toISOString() };
+  }
+
+  async listThreads(actor: TeamChatActor): Promise<ServiceResult<{ threads: TeamThreadEntry[] }>> {
+    const summaries = await this.msgRepo.listThreadsForWorkspace(actor.workspaceId);
+    const entries = await Promise.all(
+      summaries.map(async (s) => {
+        const [rfp, read] = await Promise.all([
+          this.rfpRepo.findById(s.rfpId),
+          this.readRepo.getFor(s.rfpId, actor.workspaceId, actor.userId),
+        ]);
+        const lastReadAt = read?.lastReadAt ?? null;
+        const unread =
+          s.lastAuthorUserId !== actor.userId &&
+          (lastReadAt === null || s.lastMessageAt > lastReadAt);
+        return {
+          rfpId: s.rfpId,
+          rfpCode: rfp?.code ?? '',
+          rfpTitle: rfp?.title ?? '',
+          preview: s.lastBody.length > 0 ? s.lastBody : '첨부 파일',
+          lastMessageAt: s.lastMessageAt.toISOString(),
+          unread,
+        } satisfies TeamThreadEntry;
+      }),
+    );
+    return { ok: true, threads: entries };
+  }
 }
 
 declare global {
@@ -189,16 +233,17 @@ export async function getTeamChatService(): Promise<TeamChatService> {
   if (!globalThis.__bidit_team_chat_service__) {
     const [
       { db },
-      { getInvitationRepo, getRfpRepo, getRfpTeamMessageRepo, getUserRepo },
+      { getInvitationRepo, getRfpRepo, getRfpTeamMessageRepo, getRfpTeamMessageReadRepo, getUserRepo },
     ] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
-    const [rfpRepo, invRepo, userRepo, msgRepo] = await Promise.all([
+    const [rfpRepo, invRepo, userRepo, msgRepo, readRepo] = await Promise.all([
       getRfpRepo(),
       getInvitationRepo(),
       getUserRepo(),
       getRfpTeamMessageRepo(),
+      getRfpTeamMessageReadRepo(),
     ]);
     globalThis.__bidit_team_chat_service__ = new TeamChatService(
       db,
@@ -206,6 +251,7 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       invRepo,
       userRepo,
       msgRepo,
+      readRepo,
     );
   }
   return globalThis.__bidit_team_chat_service__!;

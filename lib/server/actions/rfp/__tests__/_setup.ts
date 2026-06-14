@@ -39,6 +39,7 @@ import {
   getChatReadRepo,
   getNotificationRepo,
   getRfpTeamMessageRepo,
+  getRfpTeamMessageReadRepo,
   getUserRepo,
 } from '@/lib/server/repositories/factory';
 
@@ -53,12 +54,12 @@ export async function setupRfpActionEnv(): Promise<PgliteDB> {
   // Inject services backed by the same PGlite db so action tests pass through.
   const [
     rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, attRepo, bidNoteRepo, pgReqRepo, bizRepo,
-    convRepo, msgRepo, userRepo, notifRepo, readRepo, requoteRepo, auditRepo, teamMsgRepo,
+    convRepo, msgRepo, userRepo, notifRepo, readRepo, requoteRepo, auditRepo, teamMsgRepo, teamReadRepo,
   ] = await Promise.all([
     getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
     getInvitationRepo(), getAttachmentRepo(), getBidNoteRepo(), getPgRequestRepo(), getBizProfileRepo(),
     getChatConversationRepo(), getChatMessageRepo(), getUserRepo(), getNotificationRepo(), getChatReadRepo(),
-    getRfpRequoteRequestRepo(), getAuditLogRepo(), getRfpTeamMessageRepo(),
+    getRfpRequoteRequestRepo(), getAuditLogRepo(), getRfpTeamMessageRepo(), getRfpTeamMessageReadRepo(),
   ]);
   __setRfpServiceForTest(new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo));
   __setBidServiceForTest(
@@ -68,7 +69,7 @@ export async function setupRfpActionEnv(): Promise<PgliteDB> {
     new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo),
   );
   __setWorkspaceServiceForTest(new WorkspaceService(db, outboxRepo, auditRepo));
-  __setTeamChatServiceForTest(new TeamChatService(db, rfpRepo, invRepo, userRepo, teamMsgRepo));
+  __setTeamChatServiceForTest(new TeamChatService(db, rfpRepo, invRepo, userRepo, teamMsgRepo, teamReadRepo));
 
   return db;
 }
