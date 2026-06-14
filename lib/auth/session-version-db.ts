@@ -31,3 +31,28 @@ export const getDbSessionVersion = cache(async (userId: string): Promise<number 
   const { db } = await import('@/lib/db/client');
   return fetchSessionVersion(db, userId);
 });
+
+/**
+ * Email-verification flag for the (app) shell guard. Deliberately read from the
+ * DB (NOT the JWT) so a just-completed verification reflects immediately without
+ * re-login — same rationale as the live emailVerified reads elsewhere. Absent
+ * user row → false (treated as unverified); in practice an absent row is caught
+ * by the session-version (revocation) check first. DI for PGlite tests.
+ */
+export async function fetchEmailVerified(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ emailVerified: users.emailVerified })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.emailVerified ?? false;
+}
+
+export const getDbEmailVerified = cache(async (userId: string): Promise<boolean> => {
+  const { db } = await import('@/lib/db/client');
+  return fetchEmailVerified(db, userId);
+});
