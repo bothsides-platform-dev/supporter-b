@@ -140,6 +140,28 @@ describe('flushTeamChatDigests', () => {
     expect(after.status).toBe('sent');
   });
 
+  it('reschedules a failed (retryable) digest with backoff instead of dropping it', async () => {
+    const { me, mate, ws, rfp } = await seedScene();
+    const base = new Date(Date.now() - 60_000);
+    await seedMessages(rfp.id, ws.id, mate.id, ['m1'], base);
+    const row = await seedDueDigest(rfp.id, ws.id, me.id, me.email);
+
+    const before = Date.now();
+    const sender = vi
+      .fn<Sender>()
+      .mockResolvedValue({ ok: false, error: 'rate limited', retryable: true });
+    const result = await flushTeamChatDigests(sender, 10);
+
+    expect(result.failed).toBe(1);
+    const [after] = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.id, row.id));
+    expect(after.status).toBe('pending');
+    expect(after.attempts).toBe(1);
+    expect(new Date(after.scheduledAt).getTime()).toBeGreaterThan(before);
+  });
+
   it('marks a malformed-dedupeKey row sent without sending (queue self-heals)', async () => {
     await seedScene();
     await db.insert(outboxEntries).values({
