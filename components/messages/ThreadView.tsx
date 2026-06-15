@@ -18,12 +18,12 @@ import { useChatChannel } from '@/lib/hooks/useChatChannel';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
-import { MessageAttachmentGrid } from './MessageAttachmentGrid';
+import { MessageBubble } from './MessageBubble';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
 import { useStickToBottom } from './useStickToBottom';
 import { useStringDraft } from './useStringDraft';
-import { formatDayLabel, formatTime, withinGroupWindow } from './format';
+import { formatDayLabel, withinGroupWindow } from './format';
 
 type Props = {
   conversationId: string;
@@ -446,34 +446,14 @@ export function ThreadView({
                   </div>
                 )}
 
-                <div className={cn('flex items-end gap-1.5 w-full', isSelf && 'flex-row-reverse')}>
-                  <div
-                    className={cn(
-                      'max-w-[78%] whitespace-pre-wrap break-words rounded-[var(--md-sys-shape-medium)] px-3 py-2 text-[13px] leading-relaxed',
-                      'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]',
-                      isSelf &&
-                        'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]',
-                      m.pending && 'opacity-60',
-                    )}
-                  >
-                    {renderBody(m.body)}
-                    {m.attachments.length > 0 && (
-                      <MessageAttachmentGrid attachments={m.attachments} />
-                    )}
-                  </div>
-                  {/* 타임스탬프는 버블 옆 단일 출처 — 발신자 헤더에는 두지 않는다.
-                      pending 은 본인 메시지에서만 발생(전송 중 점). */}
-                  {m.pending ? (
-                    <span
-                      aria-label="전송 중"
-                      className="size-1.5 shrink-0 animate-pulse rounded-full bg-[var(--md-sys-color-on-surface-variant)]"
-                    />
-                  ) : (
-                    <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                      {formatTime(m.createdAt)}
-                    </span>
-                  )}
-                </div>
+                <MessageBubble
+                  isSelf={isSelf}
+                  pending={m.pending}
+                  createdAt={m.createdAt}
+                  body={m.body}
+                  attachments={m.attachments}
+                  renderBody={renderBody}
+                />
 
                 {showReceipt && (
                   <span className="flex items-center gap-0.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
