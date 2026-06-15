@@ -1,5 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
-import { loginAttempts } from '@/lib/db/schema';
+import { getLoginAttemptRepo } from '@/lib/server/repositories/factory';
 
 // Server-authoritative login throttle. Keyed independently by email (single
 // account brute-force) and by IP (password spraying across many accounts).
@@ -35,17 +34,11 @@ function keysFor(email: string, ip: string | null): string[] {
   return keys;
 }
 
-async function readKey(db: Db, key: string): Promise<KeyRecord | null> {
-  const [row] = await db
-    .select()
-    .from(loginAttempts)
-    .where(eq(loginAttempts.key, key))
-    .limit(1);
-  if (!row) return null;
-  return {
-    count: row.count,
-    lockedUntil: row.lockedUntil ? new Date(row.lockedUntil) : null,
-  };
+async function readKey(_db: Db, key: string): Promise<KeyRecord | null> {
+  const rec = await (await getLoginAttemptRepo()).findByKey(key);
+  // Repo returns `undefined` for a missing row; this module's policy math is
+  // written against `null` — adapt without changing the downstream logic.
+  return rec ?? null;
 }
 
 function isActiveLock(rec: KeyRecord | null, now: Date): boolean {
@@ -90,13 +83,11 @@ function nextRecord(existing: KeyRecord | null, now: Date): KeyRecord {
 async function bumpKey(db: Db, key: string, now: Date): Promise<KeyRecord> {
   const existing = await readKey(db, key);
   const next = nextRecord(existing, now);
-  await db
-    .insert(loginAttempts)
-    .values({ key, count: next.count, lockedUntil: next.lockedUntil, updatedAt: now })
-    .onConflictDoUpdate({
-      target: loginAttempts.key,
-      set: { count: next.count, lockedUntil: next.lockedUntil, updatedAt: now },
-    });
+  await (await getLoginAttemptRepo()).upsert(key, {
+    count: next.count,
+    lockedUntil: next.lockedUntil,
+    updatedAt: now,
+  });
   return next;
 }
 
@@ -125,10 +116,10 @@ export async function recordLoginFailure(
  * accepted in exchange for not penalising shared-NAT users after they log in.
  */
 export async function clearLoginAttempts(
-  db: Db,
+  _db: Db,
   { email, ip }: { email: string; ip?: string | null },
 ): Promise<void> {
   const keys = [emailKey(email)];
   if (ip) keys.push(ipKey(ip));
-  await db.delete(loginAttempts).where(inArray(loginAttempts.key, keys));
+  await (await getLoginAttemptRepo()).clear(keys);
 }

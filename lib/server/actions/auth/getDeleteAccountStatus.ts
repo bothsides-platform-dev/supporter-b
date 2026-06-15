@@ -1,10 +1,7 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
-
 import { requireSession } from '@/lib/auth/session';
-import { workspaceMembers, workspaces } from '@/lib/db/schema';
-import { actionDb } from '@/lib/server/actions/auth/_shared';
+import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 
 export type WorkspaceStub = { id: string; name: string };
 
@@ -26,26 +23,16 @@ export async function getDeleteAccountStatus(): Promise<GetDeleteAccountStatusRe
   }
 
   const userId = session.user.id;
-  const db = actionDb();
 
-  const myMemberships = await db
-    .select({
-      workspaceId: workspaceMembers.workspaceId,
-      role: workspaceMembers.role,
-      name: workspaces.name,
-    })
-    .from(workspaceMembers)
-    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-    .where(eq(workspaceMembers.userId, userId));
+  const myMemberships = await (
+    await getWorkspaceRepo()
+  ).listMembershipsWithMembers(userId);
 
   const blockingWorkspaces: WorkspaceStub[] = [];
   const soloWorkspaces: WorkspaceStub[] = [];
 
   for (const membership of myMemberships) {
-    const allMembers = await db
-      .select({ userId: workspaceMembers.userId, role: workspaceMembers.role })
-      .from(workspaceMembers)
-      .where(eq(workspaceMembers.workspaceId, membership.workspaceId));
+    const allMembers = membership.members;
 
     const stub: WorkspaceStub = { id: membership.workspaceId, name: membership.name };
 

@@ -17,19 +17,17 @@ vi.mock('@/lib/server/invite/workspaceInviteLanding', () => ({
   accountExistsForEmail: (...a: unknown[]) => mockAccountExists(...a),
 }));
 
-// Minimal drizzle query-builder stub — every chain method returns the builder,
-// and limit() resolves to [row]. Built inside vi.hoisted so the vi.mock factory
-// (hoisted to top) can reference it.
-const builder = vi.hoisted(() => {
-  const b: Record<string, unknown> = {};
-  b.select = () => b;
-  b.from = () => b;
-  b.innerJoin = () => b;
-  b.where = () => b;
-  b.limit = () => Promise.resolve(rowRef.value ? [rowRef.value] : []);
-  return b;
-});
-vi.mock('@/lib/db/client', () => ({ db: builder }));
+// The page resolves the invitation via getWorkspaceRepo().findInvitationByTokenHash;
+// stub it to return rowRef.value (or undefined when absent). prodDb is still
+// imported (for accountExistsForEmail, which is mocked) so keep a no-op db stub.
+vi.mock('@/lib/db/client', () => ({ db: {} }));
+const mockFindInvitationByTokenHash = vi.hoisted(() =>
+  vi.fn(() => Promise.resolve(rowRef.value ?? undefined)),
+);
+vi.mock('@/lib/server/repositories/factory', () => ({
+  getWorkspaceRepo: () =>
+    Promise.resolve({ findInvitationByTokenHash: mockFindInvitationByTokenHash }),
+}));
 
 // Identify which client component the page renders.
 vi.mock('../WorkspaceInviteAuthedClient', () => ({

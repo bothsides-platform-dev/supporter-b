@@ -404,3 +404,72 @@ describe('DrizzleOutboxRepository / team-chat-digest separation', () => {
     expect(generic.find((g) => g.event === 'team_chat.message')).toBeUndefined();
   });
 });
+
+describe('DrizzleOutboxRepository.findLatestFailed / requeue (retryEmail)', () => {
+  // Seed a failed row with an explicit scheduledAt for deterministic ordering.
+  async function seedFailed(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    db: any,
+    opts: { to: string; event: string; scheduledAt: Date; attempts?: number },
+  ) {
+    await db.insert(outboxEntries).values({
+      event: opts.event,
+      toAddr: opts.to,
+      subject: 'S',
+      html: '<a>x</a>',
+      status: 'failed',
+      attempts: opts.attempts ?? 5,
+      maxAttempts: 5,
+      lastError: 'SMTP down',
+      scheduledAt: opts.scheduledAt,
+    });
+  }
+
+  it('findLatestFailed returns the most recent failed row for (to, event)', async () => {
+    const { db, repo } = await setup();
+    const now = Date.now();
+    await seedFailed(db, { to: 'u@e.com', event: 'rfp.invited', scheduledAt: new Date(now - 2000) });
+    await seedFailed(db, { to: 'u@e.com', event: 'rfp.invited', scheduledAt: new Date(now - 1000) });
+
+    const latest = await db
+      .select({ id: outboxEntries.id, scheduledAt: outboxEntries.scheduledAt })
+      .from(outboxEntries)
+      .orderBy(sql`${outboxEntries.scheduledAt} desc`)
+      .limit(1);
+
+    const row = await repo.findLatestFailed({ to: 'u@e.com', event: 'rfp.invited' });
+    expect(row).toBeDefined();
+    expect(row!.id).toBe(latest[0].id);
+  });
+
+  it('findLatestFailed ignores non-failed rows and other (to, event)', async () => {
+    const { db, repo } = await setup();
+    const now = Date.now();
+    // pending row for same to+event — must be ignored.
+    await repo.enqueue({ event: 'rfp.invited', to: 'u@e.com', subject: 'S', html: '' });
+    // failed row but different recipient — ignored.
+    await seedFailed(db, { to: 'other@e.com', event: 'rfp.invited', scheduledAt: new Date(now - 1000) });
+    // failed row but different event — ignored.
+    await seedFailed(db, { to: 'u@e.com', event: 'auth.verify', scheduledAt: new Date(now - 1000) });
+
+    expect(await repo.findLatestFailed({ to: 'u@e.com', event: 'rfp.invited' })).toBeUndefined();
+  });
+
+  it('requeue flips a failed row back to pending', async () => {
+    const { db, repo } = await setup();
+    await seedFailed(db, { to: 'u@e.com', event: 'rfp.invited', scheduledAt: new Date() });
+    const found = await repo.findLatestFailed({ to: 'u@e.com', event: 'rfp.invited' });
+    expect(found).toBeDefined();
+
+    await repo.requeue(found!.id);
+
+    const [row] = await db
+      .select({ status: outboxEntries.status, attempts: outboxEntries.attempts, lastError: outboxEntries.lastError })
+      .from(outboxEntries)
+      .where(eq(outboxEntries.id, found!.id));
+    expect(row.status).toBe('pending');
+    // requeue only flips status — attempts/lastError are preserved.
+    expect(row.attempts).toBe(5);
+    expect(row.lastError).toBe('SMTP down');
+  });
+});

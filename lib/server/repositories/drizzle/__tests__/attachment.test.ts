@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
 import { attachments, chatConversations, chatMessages, rfpTeamMessages } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { DrizzleAttachmentRepository } from '../attachment';
 import { seedBuyerWorkspace, seedPgWorkspace, seedRfp, seedUser } from './_seed';
@@ -358,5 +359,159 @@ describe('DrizzleAttachmentRepository.findByConversationId', () => {
     const convId = await seedConversation(ctx.db, buyerWs.id, pgWs.id);
 
     expect(await ctx.repo.findByConversationId(convId)).toEqual([]);
+  });
+});
+
+// ── claim (exclusive-arc link) ──────────────────────────────────────────────
+
+// Read the raw owner FKs of an attachment row (record fields may drop nulls).
+async function readOwnerCols(db: PgliteDB, id: string) {
+  const [row] = await db
+    .select({
+      rfpId: attachments.rfpId,
+      bidId: attachments.bidId,
+      bidNoteId: attachments.bidNoteId,
+      chatMessageId: attachments.chatMessageId,
+      rfpTeamMessageId: attachments.rfpTeamMessageId,
+    })
+    .from(attachments)
+    .where(eq(attachments.id, id))
+    .limit(1);
+  return row;
+}
+
+describe('DrizzleAttachmentRepository.claim', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('links draft attachments to the given owner column (rfpId), leaving others null', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, { buyerWsId: ws.id, createdBy: ctx.uploader.id });
+    const a1 = await insertAttachment(ctx.db, ctx.uploader.id);
+    const a2 = await insertAttachment(ctx.db, ctx.uploader.id);
+
+    await ctx.repo.claim({ ids: [a1, a2], owner: { rfpId: rfp.id }, uploadedBy: ctx.uploader.id });
+
+    for (const id of [a1, a2]) {
+      const cols = await readOwnerCols(ctx.db, id);
+      expect(cols.rfpId).toBe(rfp.id);
+      expect(cols.bidId).toBeNull();
+      expect(cols.bidNoteId).toBeNull();
+      expect(cols.chatMessageId).toBeNull();
+      expect(cols.rfpTeamMessageId).toBeNull();
+    }
+  });
+
+  it('links a chat-message owner without an uploadedBy filter (chat.ts call site)', async () => {
+    const buyerWs = await seedBuyerWorkspace(ctx.db);
+    const pgWs = await seedPgWorkspace(ctx.db, 'PG사');
+    const convId = await seedConversation(ctx.db, buyerWs.id, pgWs.id);
+    const msgId = await seedChatMessage(ctx.db, {
+      conversationId: convId,
+      authorUserId: ctx.uploader.id,
+      authorWsId: buyerWs.id,
+    });
+    // Uploaded by a different user — claim() without uploadedBy must still link it.
+    const otherUploader = await seedUser(ctx.db, { email: 'other@x.com' });
+    const att = await insertAttachment(ctx.db, otherUploader.id);
+
+    await ctx.repo.claim({ ids: [att], owner: { chatMessageId: msgId } });
+
+    const cols = await readOwnerCols(ctx.db, att);
+    expect(cols.chatMessageId).toBe(msgId);
+    expect(cols.rfpId).toBeNull();
+  });
+
+  it('respects the uploadedBy filter — does not claim another user\'s draft', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, { buyerWsId: ws.id, createdBy: ctx.uploader.id });
+    const otherUploader = await seedUser(ctx.db, { email: 'other2@x.com' });
+    const mine = await insertAttachment(ctx.db, ctx.uploader.id);
+    const theirs = await insertAttachment(ctx.db, otherUploader.id);
+
+    await ctx.repo.claim({ ids: [mine, theirs], owner: { rfpId: rfp.id }, uploadedBy: ctx.uploader.id });
+
+    expect((await readOwnerCols(ctx.db, mine)).rfpId).toBe(rfp.id);
+    // Not mine → left untouched (all owner cols null).
+    expect((await readOwnerCols(ctx.db, theirs)).rfpId).toBeNull();
+  });
+
+  it('all-null guard: refuses to re-parent an already-claimed attachment', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp1 = await seedRfp(ctx.db, { buyerWsId: ws.id, createdBy: ctx.uploader.id });
+    const rfp2 = await seedRfp(ctx.db, { buyerWsId: ws.id, createdBy: ctx.uploader.id });
+    const att = await insertAttachment(ctx.db, ctx.uploader.id);
+    // First claim → linked to rfp1.
+    await ctx.repo.claim({ ids: [att], owner: { rfpId: rfp1.id }, uploadedBy: ctx.uploader.id });
+    // Second claim to rfp2 must be a no-op (owner col already set → guard fails).
+    await ctx.repo.claim({ ids: [att], owner: { rfpId: rfp2.id }, uploadedBy: ctx.uploader.id });
+
+    expect((await readOwnerCols(ctx.db, att)).rfpId).toBe(rfp1.id);
+  });
+
+  it('empty ids is a safe no-op', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, { buyerWsId: ws.id, createdBy: ctx.uploader.id });
+    const untouched = await insertAttachment(ctx.db, ctx.uploader.id);
+
+    await expect(
+      ctx.repo.claim({ ids: [], owner: { rfpId: rfp.id }, uploadedBy: ctx.uploader.id }),
+    ).resolves.toBeUndefined();
+
+    // No row touched.
+    expect((await readOwnerCols(ctx.db, untouched)).rfpId).toBeNull();
+  });
+});
+
+describe('DrizzleAttachmentRepository.findUnclaimedByIds', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('returns only unlinked rows with owner+uploader projection', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, { buyerWsId: ws.id, createdBy: ctx.uploader.id });
+    const draft = await insertAttachment(ctx.db, ctx.uploader.id);
+    const claimed = await insertRfpAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      rfpId: rfp.id,
+      name: 'claimed.pdf',
+      uploadedAt: new Date('2026-05-01T00:00:00Z'),
+    });
+
+    const rows = await ctx.repo.findUnclaimedByIds([draft, claimed]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(draft);
+    expect(rows[0].uploadedBy).toBe(ctx.uploader.id);
+    expect(rows[0].rfpId).toBeUndefined();
+    expect(rows[0].bidId).toBeUndefined();
+    expect(rows[0].bidNoteId).toBeUndefined();
+  });
+
+  it('returns [] for empty ids', async () => {
+    expect(await ctx.repo.findUnclaimedByIds([])).toEqual([]);
+  });
+});
+
+describe('DrizzleAttachmentRepository.remove', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('deletes a single attachment row', async () => {
+    const att = await insertAttachment(ctx.db, ctx.uploader.id);
+    expect(await ctx.repo.findById(att)).toBeDefined();
+
+    await ctx.repo.remove(att);
+
+    expect(await ctx.repo.findById(att)).toBeUndefined();
   });
 });

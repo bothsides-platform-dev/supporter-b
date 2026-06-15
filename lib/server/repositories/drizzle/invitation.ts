@@ -337,6 +337,32 @@ export class DrizzleInvitationRepository implements InvitationRepo {
     });
   }
 
+  async insertAccepted(
+    params: {
+      id: string;
+      rfpId: string;
+      pgWsId: string;
+      acceptedByUserId: string;
+      tokenHash: string;
+      sentAt: Date;
+      expiresAt: Date;
+    },
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    // 샘플은 토큰 진입이 없어 tokenHash 를 해싱하지 않고 호출자가 준 unique 값을 그대로 적재.
+    await db.insert(rfpInvitations).values({
+      id: params.id,
+      rfpId: params.rfpId,
+      pgWsId: params.pgWsId,
+      acceptedByUserId: params.acceptedByUserId,
+      tokenHash: params.tokenHash,
+      sentAt: params.sentAt,
+      expiresAt: params.expiresAt,
+      status: 'accepted',
+    });
+  }
+
   async promoteDraft(
     invId: string,
     rawToken: string,

@@ -44,7 +44,16 @@ import {
 } from '@/lib/server/storage/permissions';
 import { getStorage } from '@/lib/server/storage';
 import { db as prodDb } from '@/lib/db/client';
-import { getInvitationRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import {
+  getBidNoteRepo,
+  getBidRepo,
+  getChatConversationRepo,
+  getChatMessageRepo,
+  getInvitationRepo,
+  getRfpRepo,
+  getRfpTeamMessageRepo,
+  getWorkspaceRepo,
+} from '@/lib/server/repositories/factory';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -57,6 +66,13 @@ declare global {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function routeDb(): any {
   return globalThis.__bidit_files_db_override__ ?? prodDb;
+}
+
+// Test-only override — the canAccessAttachment helper still takes a raw db
+// handle (injection-only Phase 3.4 exception). Tests install a pglite handle.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function __setFilesDbForTest(db: any | undefined): void {
+  globalThis.__bidit_files_db_override__ = db;
 }
 
 function fail(status: number, msg: string): Response {
@@ -129,6 +145,12 @@ export async function GET(
   const repos: RepoBundleForAttachment = {
     invitation: await getInvitationRepo(),
     workspace: await getWorkspaceRepo(),
+    rfp: await getRfpRepo(),
+    bid: await getBidRepo(),
+    bidNote: await getBidNoteRepo(),
+    chatMessage: await getChatMessageRepo(),
+    chatConversation: await getChatConversationRepo(),
+    rfpTeamMessage: await getRfpTeamMessageRepo(),
   };
 
   const allowed = await canAccessAttachment(

@@ -1,7 +1,5 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, users, workspaceMembers, workspaces } from '@/lib/db/schema';
 import type {
   AttachmentRepo,
   ChatConversationRepo,
@@ -171,37 +169,17 @@ export class ChatService {
       );
 
       if (input.attachmentIds.length > 0) {
-        await tx
-          .update(attachments)
-          .set({ chatMessageId: messageId })
-          .where(
-            and(
-              inArray(attachments.id, input.attachmentIds),
-              isNull(attachments.rfpId),
-              isNull(attachments.bidId),
-              isNull(attachments.bidNoteId),
-              isNull(attachments.chatMessageId),
-            ),
-          );
+        await this.attRepo.claim(
+          { ids: input.attachmentIds, owner: { chatMessageId: messageId } },
+          tx,
+        );
       }
 
       await this.convRepo.touchLastMessageAt(conv.id, now, tx);
 
-      const [senderRow] = (await tx
-        .select({ name: workspaces.name })
-        .from(workspaces)
-        .where(eq(workspaces.id, actor.workspaceId))
-        .limit(1)) as { name: string }[];
-      const senderName = senderRow?.name ?? '상대';
+      const senderName = (await this.wsRepo.getName(actor.workspaceId, tx)) ?? '상대';
 
-      const recipients = (await tx
-        .select({ userId: workspaceMembers.userId, email: users.email })
-        .from(workspaceMembers)
-        .innerJoin(users, eq(workspaceMembers.userId, users.id))
-        .where(eq(workspaceMembers.workspaceId, counterpartyWsId))) as {
-        userId: string;
-        email: string;
-      }[];
+      const recipients = await this.wsRepo.memberRecipients(counterpartyWsId, tx);
 
       const preview = body.length > 0 ? body.slice(0, 120) : '첨부 파일을 보냈어요.';
       const conversationUrl = `${BASE_URL}/messages`;

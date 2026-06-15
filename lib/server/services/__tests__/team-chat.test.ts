@@ -14,6 +14,7 @@ import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getAttachmentRepo,
   getInvitationRepo,
   getNotificationRepo,
   getOutboxRepo,
@@ -39,7 +40,7 @@ let db: PgliteDB;
 let service: TeamChatService;
 
 async function buildService(): Promise<TeamChatService> {
-  const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo] = await Promise.all([
+  const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo, attRepo] = await Promise.all([
     getRfpRepo(),
     getInvitationRepo(),
     getUserRepo(),
@@ -48,8 +49,9 @@ async function buildService(): Promise<TeamChatService> {
     getWorkspaceRepo(),
     getNotificationRepo(),
     getOutboxRepo(),
+    getAttachmentRepo(),
   ]);
-  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo);
+  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo, attRepo);
 }
 
 // Draft attachment — all owner FKs null (valid: num_nonnulls <= 1).

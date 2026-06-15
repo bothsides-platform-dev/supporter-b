@@ -16,15 +16,21 @@ import type {
   ColumnRepo,
   ContractRepo,
   InvitationRepo,
+  LoginAttemptRepo,
   NotificationRepo,
   OutboxRepo,
+  PgProfileRepo,
   PgRequestRepo,
+  PhoneOtpRepo,
+  RfpAllowedPgRepo,
   RfpRepo,
   RfpRequoteRequestRepo,
   RfpTeamMessageRepo,
   RfpTeamMessageReadRepo,
   UserRepo,
+  VerificationApplicationRepo,
   VerificationTokenRepo,
+  WorkspaceLogoRepo,
   WorkspaceRepo,
 } from './types';
 
@@ -34,6 +40,7 @@ type RepoBundle = {
   pgRequest: PgRequestRepo;
   workspace: WorkspaceRepo;
   user: UserRepo;
+  pgProfile: PgProfileRepo;
   bizProfile: BizProfileRepo;
   bid: BidRepo;
   bidNote: BidNoteRepo;
@@ -52,6 +59,11 @@ type RepoBundle = {
   rfpTeamMessageRead: RfpTeamMessageReadRepo;
   rfpRequoteRequest: RfpRequoteRequestRepo;
   auditLog: AuditLogRepo;
+  phoneOtp: PhoneOtpRepo;
+  workspaceLogo: WorkspaceLogoRepo;
+  rfpAllowedPg: RfpAllowedPgRepo;
+  verificationApplication: VerificationApplicationRepo;
+  loginAttempt: LoginAttemptRepo;
   // Version for HMR stale detection — bump when adding repos/methods.
   __version: number;
 };
@@ -62,7 +74,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 7;
+const BUNDLE_VERSION = 13;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -72,6 +84,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleRfpRequestRepository } = await import('./drizzle/rfp-pg-request');
   const { DrizzleWorkspaceRepository } = await import('./drizzle/workspace');
   const { DrizzleUserRepository } = await import('./drizzle/user');
+  const { DrizzlePgProfileRepository } = await import('./drizzle/pg-profile');
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
   const { DrizzleBidRepository } = await import('./drizzle/bid');
   const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
@@ -98,6 +111,13 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleRfpTeamMessageReadRepository } = await import('./drizzle/rfp-team-message-read');
   const { DrizzleRfpRequoteRequestRepository } = await import('./drizzle/rfp-requote-request');
   const { DrizzleAuditLogRepository } = await import('./drizzle/audit-log');
+  const { DrizzlePhoneOtpRepository } = await import('./drizzle/phone-otp');
+  const { DrizzleWorkspaceLogoRepository } = await import('./drizzle/workspace-logo');
+  const { DrizzleRfpAllowedPgRepository } = await import('./drizzle/rfp-allowed-pg');
+  const { DrizzleVerificationApplicationRepository } = await import(
+    './drizzle/verification-application'
+  );
+  const { DrizzleLoginAttemptRepository } = await import('./drizzle/login-attempt');
 
   return {
     rfp: new DrizzleRfpRepository(db),
@@ -105,6 +125,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     pgRequest: new DrizzleRfpRequestRepository(db),
     workspace: new DrizzleWorkspaceRepository(db),
     user: new DrizzleUserRepository(db),
+    pgProfile: new DrizzlePgProfileRepository(db),
     bizProfile: new DrizzleBizProfileRepository(db),
     bid: new DrizzleBidRepository(db),
     bidNote: new DrizzleBidNoteRepository(db),
@@ -123,6 +144,11 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     rfpTeamMessageRead: new DrizzleRfpTeamMessageReadRepository(db),
     rfpRequoteRequest: new DrizzleRfpRequoteRequestRepository(db),
     auditLog: new DrizzleAuditLogRepository(db),
+    phoneOtp: new DrizzlePhoneOtpRepository(db),
+    workspaceLogo: new DrizzleWorkspaceLogoRepository(db),
+    rfpAllowedPg: new DrizzleRfpAllowedPgRepository(db),
+    verificationApplication: new DrizzleVerificationApplicationRepository(db),
+    loginAttempt: new DrizzleLoginAttemptRepository(db),
     __version: BUNDLE_VERSION,
   };
 }
@@ -163,6 +189,9 @@ export async function getWorkspaceRepo(): Promise<WorkspaceRepo> {
 }
 export async function getUserRepo(): Promise<UserRepo> {
   return (await getBundle()).user;
+}
+export async function getPgProfileRepo(): Promise<PgProfileRepo> {
+  return (await getBundle()).pgProfile;
 }
 // Used by RfpService.createRfp (Phase 2) for biz-profile inheritance logic.
 export async function getBizProfileRepo(): Promise<BizProfileRepo> {
@@ -218,6 +247,21 @@ export async function getRfpRequoteRequestRepo(): Promise<RfpRequoteRequestRepo>
 }
 export async function getAuditLogRepo(): Promise<AuditLogRepo> {
   return (await getBundle()).auditLog;
+}
+export async function getPhoneOtpRepo(): Promise<PhoneOtpRepo> {
+  return (await getBundle()).phoneOtp;
+}
+export async function getWorkspaceLogoRepo(): Promise<WorkspaceLogoRepo> {
+  return (await getBundle()).workspaceLogo;
+}
+export async function getRfpAllowedPgRepo(): Promise<RfpAllowedPgRepo> {
+  return (await getBundle()).rfpAllowedPg;
+}
+export async function getVerificationApplicationRepo(): Promise<VerificationApplicationRepo> {
+  return (await getBundle()).verificationApplication;
+}
+export async function getLoginAttemptRepo(): Promise<LoginAttemptRepo> {
+  return (await getBundle()).loginAttempt;
 }
 
 // For tests only — clear the cache so the bundle rebuilds on next use.

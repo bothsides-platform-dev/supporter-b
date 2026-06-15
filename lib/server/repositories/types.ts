@@ -34,9 +34,46 @@ export type TokenClaimResult =
   | { ok: false; reason: 'expired' | 'used' | 'invalid' };
 
 // ── RFP ───────────────────────────────────────────────────────────────
+/**
+ * RFP 신규 생성 insert 입력 — createRfp 가 발급한 bizProfile 스냅샷 id 를 직접 들고,
+ * 도메인 RFP 매핑이 거치는 bizNo 룩업/allowlist 동기화 없이 컬럼을 그대로 적재한다.
+ * (RfpRepo.save 는 bizProfile.bizNo 로 기존 프로필을 매칭해 일부 필드가 누락되므로 별도 경로.)
+ */
+export type NewRfpInsert = {
+  id: string;
+  code: string;
+  buyerWsId: string;
+  bizProfileId: string | null;
+  title: string;
+  memo: string;
+  websiteUrl: string | null;
+  mainProducts: string | null;
+  annualPgVolume: string | null;
+  currentFeeRate: string | null;
+  currentSettlementLimit: string | null;
+  currentGuaranteeInsurance: string | null;
+  currentSettlementCycle: string | null;
+  deliveryServicePeriod: string | null;
+  boardVisible: boolean;
+  currentFeeVisibleToPg: boolean;
+  contractType: 'new' | 'renewal' | null;
+  currentSolution: string | null;
+  currentSolutionDetail: string | null;
+  deadline: Date;
+  status: RfpStatus;
+  requiredPaymentMethods: string[];
+  customPaymentMethods: { id: string; label: string }[];
+  createdBy: string;
+  sentAt: Date | null;
+  /** 온보딩 샘플 시드 전용 — true 면 is_sample 컬럼을 켠다. 미지정 시 DB default(false). */
+  isSample?: boolean;
+};
+
 export interface RfpRepo {
   /** RFP insert/upsert(by id). 호출자가 id 미리 발급(`rfp-id.ts`). */
   save(rfp: RFP, tx?: Tx): Promise<void>;
+  /** createRfp 전용 신규 insert — 스냅샷 bizProfileId·전 컬럼을 그대로 적재 (save 의 bizNo 룩업 우회). */
+  insertNew(values: NewRfpInsert, tx?: Tx): Promise<void>;
   /** id(uuid) 단건 조회. 없으면 undefined. */
   findById(id: string, tx?: Tx): Promise<RFP | undefined>;
   /** code(P-YYMM-NNNN) 단건 조회 — URL/표시용 식별자. 없으면 undefined. */
@@ -47,6 +84,25 @@ export interface RfpRepo {
   transition(id: string, to: RfpStatus, patch?: Partial<RFP>, tx?: Tx): Promise<RFP>;
   /** 통일 칸반: pipeline 보드 커스텀 컬럼 배치. null = 자동분류 복귀. */
   setBoardColumn(rfpId: string, columnId: string | null, tx?: Tx): Promise<void>;
+  /** 오픈 게시판 노출 토글 (opt-out). */
+  setBoardVisible(rfpId: string, visible: boolean, tx?: Tx): Promise<void>;
+  /** 마감 직접 갱신 — transition 은 status 전용. */
+  updateDeadline(id: string, deadline: Date, tx?: Tx): Promise<void>;
+  /** code → id + 소유 워크스페이스 (경량, 소유권 게이트). findByCode 는 전체 hydrate 라 무겁다. */
+  findIdAndOwnerByCode(
+    code: string,
+    tx?: Tx,
+  ): Promise<{ id: string; buyerWsId: string } | undefined>;
+  /** id → 소유 워크스페이스만 (ACL/업로드 게이트). */
+  findOwnerById(id: string, tx?: Tx): Promise<{ buyerWsId: string } | undefined>;
+  /** YYMM 카운터를 원자적으로 증가시켜 다음 RFP code(`P-YYMM-NNNN`) 발급. */
+  reserveNextCode(yearMonth: string, tx?: Tx): Promise<string>;
+  /** 구매사 검색 — 화이트리스트 projection(code·title·memo·status). pattern 은 호출자가 escape+wrap. */
+  searchForBuyer(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]>;
+  /** 초성 검색용 — searchForBuyer 와 동일 projection, ilike 없이 ws-scope 만 fetch (호출자가 JS 필터). */
+  listForBuyer(wsId: string, limit: number, tx?: Tx): Promise<unknown[]>;
+  /** RFP 단건 하드삭제(by id). 자식(bids·invitations·allowlist 등)은 FK CASCADE. 온보딩 샘플 삭제 경로. */
+  deleteById(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── Invitation ────────────────────────────────────────────────────────
@@ -74,6 +130,22 @@ export interface InvitationRepo {
   findByRfpAndPg(rfpId: string, pgWsId: string, tx?: Tx): Promise<RfpInvitation | undefined>;
   /** draft row 삽입 (tokenHash = 'draft-{invId}' placeholder). */
   saveDraft(invId: string, rfpId: string, pgWsId: string, expiresAt: Date, tx?: Tx): Promise<void>;
+  /**
+   * 이미 수락된(accepted) 초대 row 를 주어진 tokenHash 그대로 삽입 — 온보딩 샘플 전용.
+   * 샘플은 토큰 진입이 없어 호출자가 임의 unique 값(uuid)을 그대로 적재한다(해시하지 않음).
+   */
+  insertAccepted(
+    params: {
+      id: string;
+      rfpId: string;
+      pgWsId: string;
+      acceptedByUserId: string;
+      tokenHash: string;
+      sentAt: Date;
+      expiresAt: Date;
+    },
+    tx?: Tx,
+  ): Promise<void>;
   /** draft → pending: rawToken hash 갱신 + status='pending' + sentAt/expiresAt 갱신. */
   promoteDraft(invId: string, rawToken: string, now: Date, expiresAt: Date, tx?: Tx): Promise<void>;
   /** PG 워크스페이스에 발송된 활성 초대 + RFP pair — 인박스/칸반 공통 fetcher. */
@@ -162,14 +234,257 @@ export interface WorkspaceRepo {
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
   listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string }[]>;
+  /** 이름 검색 (isDemo 제외) — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500). */
+  search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string }[]>;
+  /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
+  getName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /** 알림·이메일 팬아웃 대상 (멤버 userId+email). 시스템 계정 제외. 순서 미보장. */
+  memberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
+  /** admin 멤버 팬아웃 대상 (userId+email). 시스템 계정 제외. 초대 메일 발송 대상. 순서 미보장. */
+  adminRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
+  /**
+   * 여러 워크스페이스의 멤버를 (workspaceId, userId, role, email) 평면 목록으로 배치 조회.
+   * 시스템 계정 제외. 빈 입력은 빈 배열. 초대 일괄 발송(멤버 알림 + admin 메일)용.
+   */
+  memberRecipientsBatch(
+    wsIds: string[],
+    tx?: Tx,
+  ): Promise<{ workspaceId: string; userId: string; role: string; email: string }[]>;
+  /** active 상태 워크스페이스 (id+type) — 마스터/스위치. 없거나 비활성이면 undefined. */
+  findActiveById(workspaceId: string, tx?: Tx): Promise<{ id: string; type: WorkspaceType } | undefined>;
+  /**
+   * 사전 시딩된 canonical PG 워크스페이스 (type='pg' AND status='active' AND
+   * canonical_pg_key IS NOT NULL) 단건 — PG 가입 합류 입력 검증용. 위 조건 중 하나라도
+   * 어긋나거나 없으면 undefined.
+   */
+  findActiveCanonicalPgById(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ id: string; canonicalPgKey: string } | undefined>;
+  /** 가장 먼저 만들어진 active 워크스페이스 (id+type) — 마스터 기본 진입. 없으면 undefined. */
+  findEarliestActiveWorkspace(
+    tx?: Tx,
+  ): Promise<{ id: string; type: WorkspaceType } | undefined>;
+  /** (userId, workspaceId) 멤버십 — role+type. 없으면 undefined. */
+  getMembership(
+    userId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ role: string; type: WorkspaceType } | undefined>;
+  /** 유저의 최초 가입 멤버십 (earliest joinedAt). 없으면 undefined. */
+  findInitialMembership(
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ workspaceId: string; role: string; type: WorkspaceType } | undefined>;
+  /**
+   * 유저의 모든 멤버십 + 각 워크스페이스의 전체 멤버 — 탈퇴 상태 화면(마지막 admin / solo 판정).
+   * createdAt 순서 미보장; 호출부가 멤버 수·역할로 분기한다.
+   */
+  listMembershipsWithMembers(
+    userId: string,
+    tx?: Tx,
+  ): Promise<
+    {
+      workspaceId: string;
+      name: string;
+      role: string;
+      members: { userId: string; role: string }[];
+    }[]
+  >;
+  /** bizProfile 포인터 갱신. */
+  setBizProfilePointer(workspaceId: string, bizProfileId: string, tx?: Tx): Promise<void>;
+  /** 현재 bizProfileId (경량). 없거나 미설정이면 undefined. */
+  getBizProfileId(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /**
+   * 현재 bizProfileId + 상호명 단건 조회 — RFP 작성 시 스냅샷·발신자명 확보용.
+   * 워크스페이스 없으면 undefined (소유권/존재 게이트). bizProfile 미설정이면 null.
+   */
+  getBizProfileIdAndName(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ bizProfileId: string | null; name: string } | undefined>;
+  /** 주어진 id 중 type='pg' 인 워크스페이스 id 부분집합. 빈 입력은 빈 배열. PG allowlist 검증용. */
+  filterPgIds(ids: string[], tx?: Tx): Promise<string[]>;
+  /** 상호명 변경. */
+  rename(workspaceId: string, name: string, tx?: Tx): Promise<void>;
+  /** hasLogo 플래그 갱신. */
+  setHasLogo(workspaceId: string, hasLogo: boolean, tx?: Tx): Promise<void>;
+  /**
+   * 경량 workspace 생성 (save()는 멤버 동기화까지 하는 무거운 버전 — 이건 단순 insert).
+   * 멤버십/컬럼/온보딩 시드는 호출부 책임.
+   */
+  createBare(
+    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 멤버 추가 (onConflictDoNothing — 중복 race 안전). */
+  addMember(params: { workspaceId: string; userId: string; role: string }, tx?: Tx): Promise<void>;
+  /** 워크스페이스의 pending(미만료) 초대 목록 — 설정 > 멤버 화면. */
+  listPendingInvitations(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ email: string; createdAt: Date; role: string }[]>;
+  /** tokenHash 로 워크스페이스 초대 + 워크스페이스명 조인. 없으면 undefined. */
+  findInvitationByTokenHash(
+    tokenHash: string,
+    tx?: Tx,
+  ): Promise<
+    | {
+        invitedEmail: string;
+        status: string;
+        expiresAt: Date;
+        workspaceName: string;
+        workspaceId: string;
+      }
+    | undefined
+  >;
+  /**
+   * 초대 원자적 클레임 (조건부 UPDATE: status='pending' AND expires_at>now).
+   * 이미 사용/만료면 실패. 멤버 추가·이메일 인증은 호출부(addMember 등) 책임.
+   */
+  claimInvitation(
+    invitationId: string,
+    userId: string,
+    tx?: Tx,
+  ): Promise<
+    | { ok: true; workspaceId: string; role: string }
+    | { ok: false; reason: 'expired' }
+  >;
+  /** 워크스페이스 관리자(admin) 이메일 — RFP 초대 랜딩 프리필. 없으면 undefined. */
+  findAdminEmail(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /**
+   * 멤버 초대 row 생성 (pending). (workspace, lower(email)) pending UNIQUE 위배 시
+   * throw — 호출부가 isUniqueViolation 로 ALREADY_INVITED 분기. invitedEmail 은
+   * 호출부가 normalize 한 값을 그대로 적재.
+   */
+  createInvitation(
+    params: {
+      workspaceId: string;
+      invitedEmail: string;
+      invitedByUserId: string;
+      role: 'admin' | 'member';
+      tokenHash: string;
+      expiresAt: Date;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /**
+   * 재발송 — 매칭되는 pending 초대(workspace + lower(email))의 tokenHash·expiresAt
+   * 갱신. 갱신된 행이 있으면 true(=재발송 대상 존재), 없으면 false(INVITE_NOT_FOUND).
+   */
+  resetPendingInvitationToken(
+    params: { workspaceId: string; email: string; tokenHash: string; expiresAt: Date },
+    tx?: Tx,
+  ): Promise<boolean>;
+  /**
+   * 취소 — 매칭되는 pending 초대(workspace + lower(email))를 'expired' 로 전이.
+   * 전이된 행이 있으면 true, 없으면 false(INVITE_NOT_FOUND).
+   */
+  expirePendingInvitation(
+    params: { workspaceId: string; email: string },
+    tx?: Tx,
+  ): Promise<boolean>;
+  /**
+   * tokenHash 로 초대 claim 입력 조회 — acceptInvite 의 사전검사(status/expiresAt/
+   * invitedEmail) + claimInviteInTx 입력(id/workspaceId/role/expiresAt) 용. 없으면 undefined.
+   * (findInvitationByTokenHash 는 워크스페이스명 조인의 표시용 projection 이라 별도.)
+   */
+  findInvitationClaimByTokenHash(
+    tokenHash: string,
+    tx?: Tx,
+  ): Promise<
+    | {
+        id: string;
+        workspaceId: string;
+        role: 'admin' | 'member';
+        expiresAt: Date;
+        status: string;
+        invitedEmail: string;
+      }
+    | undefined
+  >;
+  /** 워크스페이스의 admin 역할 멤버 수 — 마지막 admin 강등 가드(LAST_ADMIN). */
+  countAdmins(workspaceId: string, tx?: Tx): Promise<number>;
+  /** 멤버 역할 변경. */
+  updateMemberRole(
+    params: { workspaceId: string; userId: string; role: 'admin' | 'member' },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 멤버 제거. */
+  removeMember(params: { workspaceId: string; userId: string }, tx?: Tx): Promise<void>;
+  /** 주어진 워크스페이스들을 삭제 (멤버/RFP 등은 FK cascade). 빈 배열은 안전한 no-op. 계정 탈퇴 solo 정리용. */
+  deleteWorkspaces(ids: string[], tx?: Tx): Promise<void>;
+  /** 한 유저의 모든 멤버십 row 삭제 — 계정 탈퇴용. */
+  removeAllMembershipsForUser(userId: string, tx?: Tx): Promise<void>;
+
+  // ── 온보딩 샘플 시드 지원 ──────────────────────────────────────────────
+  /**
+   * 데모 워크스페이스 생성 — 온보딩 샘플의 공유 데모 PG/구매사. status='active'(승인
+   * 우회)·isDemo=true 로 고정한다. bizProfileId 는 데모 구매사만 사용(데모 PG 는 null).
+   */
+  createDemo(
+    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 이름(+옵션 type) 기준 데모 워크스페이스(isDemo=true) 단건 조회 — 샘플 멱등성. 없으면 undefined. */
+  findDemoByName(
+    name: string,
+    type?: WorkspaceType,
+    tx?: Tx,
+  ): Promise<{ id: string } | undefined>;
+  /** 한 워크스페이스의 임의 멤버 user id 1명 — 데모 ws 무결성 확인용. 없으면 undefined. */
+  firstMemberUserId(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /**
+   * 샘플 시드 상태 — sampleSeededAt 값. ws 가 없으면 undefined(존재 게이트), 있으면
+   * { sampleSeededAt } (미시드는 null). 시드 멱등성 판정용.
+   */
+  getSampleSeededState(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ sampleSeededAt: Date | null } | undefined>;
+  /** sampleSeededAt 스탬프 — 샘플 시드 완료 표식(재시드 차단). */
+  markSampleSeeded(workspaceId: string, at: Date, tx?: Tx): Promise<void>;
+  /**
+   * 온보딩 샘플이 아직 없는(sampleSeededAt IS NULL) 비-데모 워크스페이스 목록 — 백필 스크립트용.
+   * 데모(isDemo) 워크스페이스는 제외한다(샘플이 데모로 새지 않도록).
+   */
+  listWsNeedingSample(type: WorkspaceType, tx?: Tx): Promise<{ id: string }[]>;
+  /** 한 워크스페이스의 admin 멤버 user id 1명 — 백필 시드 createdBy/수락자. 없으면 undefined. */
+  findAdminMemberUserId(workspaceId: string, tx?: Tx): Promise<string | undefined>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────
 export interface UserRepo {
   /** upsert(by id). bcrypt hash는 호출자 책임. */
   save(user: User & { passwordHash: string }, tx?: Tx): Promise<void>;
+  /**
+   * 신규 가입 user insert — 미인증·active 기본값으로 고정 (emailVerified=false,
+   * status='active', avatarColor='ink'). 이메일 UNIQUE 위배 시 throw (호출부가
+   * isUniqueViolation 로 EMAIL_TAKEN 분기). save(upsert)와 달리 충돌 시 갱신하지 않는다.
+   */
+  create(
+    params: { id: string; email: string; passwordHash: string; name: string; phone: string },
+    tx?: Tx,
+  ): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<User | undefined>;
+  /** id 로 passwordHash 단건 조회 — 계정 탈퇴 비밀번호 확인용. 없으면 undefined. */
+  findPasswordHashById(userId: string, tx?: Tx): Promise<string | undefined>;
+  /**
+   * email 매칭 행의 passwordHash 갱신 + sessionVersion +1 — 비밀번호 재설정.
+   * sessionVersion bump 로 재설정 전 발급된 세션을 무효화한다.
+   */
+  updatePassword(email: string, passwordHash: string, tx?: Tx): Promise<void>;
+  /**
+   * id 매칭 행의 email 교체 + sessionVersion +1 — 이메일 변경 확정.
+   * 새 email UNIQUE 위배 시 throw (호출부가 isUniqueViolation 로 EMAIL_TAKEN 분기).
+   */
+  updateEmail(userId: string, newEmail: string, tx?: Tx): Promise<void>;
+  /**
+   * 계정 소프트 삭제 — deletedAt 스탬프 + lastActiveWorkspaceId=null +
+   * sessionVersion +1 (탈퇴 계정의 모든 미만료 JWT 무효화).
+   */
+  softDelete(userId: string, tx?: Tx): Promise<void>;
   /** email 조회 — passwordHash 포함(로그인용). */
   findByEmail(
     email: string,
@@ -177,6 +492,63 @@ export interface UserRepo {
   ): Promise<(User & { passwordHash: string }) | undefined>;
   /** 이메일 인증 플래그 전환 — signup_email 토큰 소비 시 호출. 매칭 없으면 no-op. */
   markEmailVerified(email: string, tx?: Tx): Promise<void>;
+  /** JWT 무효화용 sessionVersion 단건 조회. 유저 없으면 undefined. */
+  getSessionVersion(userId: string, tx?: Tx): Promise<number | undefined>;
+  /** 이메일 인증 플래그 단건 조회(DB 라이브 read). 유저 없으면 undefined. */
+  getEmailVerified(userId: string, tx?: Tx): Promise<boolean | undefined>;
+  /** 이메일로 인증 플래그 조회 — 계정 없으면 undefined(미등록 식별용). */
+  findEmailVerifiedByEmail(email: string, tx?: Tx): Promise<boolean | undefined>;
+  /** 해당 이메일 계정 존재 여부(인증 여부 무관). */
+  existsByEmail(email: string, tx?: Tx): Promise<boolean>;
+  /** 이메일 대소문자 무시(lower) 매칭으로 userId 조회. 없으면 undefined. */
+  findIdByEmailCI(email: string, tx?: Tx): Promise<string | undefined>;
+  /** id 기준 이메일 인증 전환 — 미인증 행만(WHERE 가드). 매칭 없으면 no-op. */
+  markEmailVerifiedById(userId: string, tx?: Tx): Promise<void>;
+  /** 마지막 활성 워크스페이스 기억값 갱신. */
+  setLastActiveWorkspace(userId: string, workspaceId: string, tx?: Tx): Promise<void>;
+  /**
+   * 로그인용 raw auth projection — 도메인 매핑이 버리는 deletedAt·lastActiveWorkspaceId
+   * 와 JWT 스탬프에 필요한 name·sessionVersion 포함.
+   */
+  findAuthRowByEmail(
+    email: string,
+    tx?: Tx,
+  ): Promise<
+    | {
+        id: string;
+        email: string;
+        name: string;
+        passwordHash: string | null;
+        emailVerified: boolean;
+        deletedAt: Date | null;
+        lastActiveWorkspaceId: string | null;
+        sessionVersion: number;
+      }
+    | undefined
+  >;
+  /** 마스터/운영자 계정 insert-if-absent — 인증 완료·시스템 계정으로 생성, userId 반환. */
+  provisionMaster(params: { email: string; name: string }, tx?: Tx): Promise<string>;
+  /**
+   * 데모/시스템 계정 생성 — 온보딩 샘플의 데모 PG/구매사 유저. 로그인 불가 sentinel
+   * passwordHash('!')·isSystemAccount=true·emailVerified=true 로 고정한다. id/email 은
+   * 호출자가 발급한 값을 그대로 적재(정규화·해싱 없음).
+   */
+  createSystemAccount(
+    params: { id: string; email: string; name: string },
+    tx?: Tx,
+  ): Promise<void>;
+}
+
+// ── PgProfile ─────────────────────────────────────────────────────────
+export interface PgProfileRepo {
+  /**
+   * PG 워크스페이스 프로필 row 생성 — PG 가입 시. serviceScope 는 null 로 둔다
+   * (이후 검증 단계에서 채움). slaDays 미지정 시 null. (workspace_id, biz_no).
+   */
+  create(
+    params: { workspaceId: string; bizNo: string; slaDays?: number | null },
+    tx?: Tx,
+  ): Promise<void>;
 }
 
 // ── BizProfile ────────────────────────────────────────────────────────
@@ -201,6 +573,30 @@ export interface BidRepo {
   findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]>;
   /** 통일 칸반: rfp_bids 보드 커스텀 컬럼 배치. null = 기본착지(진행전) 복귀. */
   setBoardColumn(bidId: string, columnId: string | null, tx?: Tx): Promise<void>;
+  /** 입찰 상태 전이 (withdraw 등). */
+  updateStatus(id: string, status: Bid['status'], tx?: Tx): Promise<void>;
+  /** 구매사 검색 — bids⋈rfps⋈workspaces projection. pattern 은 호출자가 escape+wrap. */
+  searchForBuyer(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]>;
+  /** 초성 검색용 — searchForBuyer 와 동일 projection, ilike 없이 ws-scope+submitted 만 fetch (호출자가 JS 필터). */
+  listForBuyer(wsId: string, limit: number, tx?: Tx): Promise<unknown[]>;
+  /** PG 검색 — bids⋈rfps projection. pattern 은 호출자가 escape+wrap. */
+  searchForPg(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]>;
+  /** 초성 검색용 — searchForPg 와 동일 projection, ilike 없이 ws-scope+submitted 만 fetch (호출자가 JS 필터). */
+  listForPg(wsId: string, limit: number, tx?: Tx): Promise<unknown[]>;
+  /** bidId → 소속 RFP id + 소유 구매사 (ACL/업로드 게이트). */
+  findRfpOwner(
+    bidId: string,
+    tx?: Tx,
+  ): Promise<{ rfpId: string; buyerWsId: string } | undefined>;
+  /**
+   * bidId → 입찰 소유 PG ws + 소속 RFP id (bids 단독, rfps 조인 없음). 첨부 ACL 전용:
+   * PG fast-path(bid.pgWsId === viewer ws)를 RFP 존재 여부와 무관하게 판정해야 하므로
+   * innerJoin 하는 findRfpOwner 와 분리한다. 없으면 undefined.
+   */
+  findOwner(
+    bidId: string,
+    tx?: Tx,
+  ): Promise<{ pgWsId: string; rfpId: string } | undefined>;
 }
 
 // ── Kanban Column ─────────────────────────────────────────────────────
@@ -278,6 +674,12 @@ export interface NotificationRepo {
   ): Promise<boolean>;
   /** 동일 window 내 pending team_chat 인앱 알림 존재 여부(rfp 단위 dedupe). */
   hasPendingTeamNotification(userId: string, rfpId: string, windowStart: Date, tx?: Tx): Promise<boolean>;
+  /** 소유권 검증 + type 조회 (markRead/retryEmail). 없거나 타인 것이면 undefined. */
+  findOwnedById(
+    notificationId: string,
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ id: string; type: string } | undefined>;
   /** 동일 window 내 team_chat.mention 인앱 알림 존재 여부(멘션 전용 dedupe). */
   hasPendingTeamMentionNotification(userId: string, rfpId: string, windowStart: Date, tx?: Tx): Promise<boolean>;
 }
@@ -377,6 +779,32 @@ export interface AttachmentRepo {
   findByChatMessageIds(ids: string[], tx?: Tx): Promise<(Attachment & { chatMessageId: string })[]>;
   /** 대화 전체 첨부 목록 — chat_messages JOIN, uploadedAt asc. */
   findByConversationId(conversationId: string, tx?: Tx): Promise<Attachment[]>;
+  /**
+   * draft 첨부를 owner row 에 링크 (exclusive-arc). owner 는 정확히 한 키만 설정 —
+   * 그 컬럼을 set 한다. 모든 owner 컬럼이 IS NULL 인 행만 갱신(이미 링크된 행
+   * re-parent 방지). uploadedBy 지정 시 업로더 소유분만. 빈 ids 는 안전한 no-op.
+   */
+  claim(
+    params: {
+      ids: string[];
+      owner: {
+        rfpId?: string;
+        bidId?: string;
+        bidNoteId?: string;
+        chatMessageId?: string;
+        rfpTeamMessageId?: string;
+      };
+      uploadedBy?: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /** claim 전 소유권·미링크 검증용 — 모든 owner 컬럼 IS NULL 인 행만 projection 반환. */
+  findUnclaimedByIds(
+    ids: string[],
+    tx?: Tx,
+  ): Promise<Pick<AttachmentRecord, 'id' | 'rfpId' | 'bidId' | 'bidNoteId' | 'uploadedBy'>[]>;
+  /** 단건 삭제 (고아 정리). */
+  remove(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── Outbox ────────────────────────────────────────────────────────────
@@ -441,6 +869,13 @@ export interface OutboxRepo {
     limit?: number,
     tx?: Tx,
   ): Promise<{ ok: number; failed: number }>;
+  /** retryEmail — 특정 수신자+이벤트의 가장 최근 failed outbox 행. 없으면 undefined. */
+  findLatestFailed(
+    params: { to: string; event: OutboxEvent },
+    tx?: Tx,
+  ): Promise<{ id: string } | undefined>;
+  /** failed → pending 재시도 전환 (status 만 갱신 — attempts/lastError 보존). */
+  requeue(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── Chat: Conversation ────────────────────────────────────────────────
@@ -515,6 +950,11 @@ export interface ChatMessageRepo {
     conversationId: string,
     tx?: Tx,
   ): Promise<ChatMessageRecord[]>;
+  /** messageId → 소속 대화 id (첨부 ACL 게이트). 없으면 undefined. */
+  findConversationId(
+    messageId: string,
+    tx?: Tx,
+  ): Promise<{ conversationId: string } | undefined>;
   /**
    * 한 대화의 모든 메시지 + 작성자 이름·이메일(users 조인) — created_at asc.
    * 스레드 로더 전용. 인박스 목록 로더는 가벼운 listByConversation 을 쓴다.
@@ -564,6 +1004,14 @@ export interface RfpTeamMessageRepo {
   ): Promise<RfpTeamMessageWithAuthor[]>;
   /** 워크스페이스가 메시지를 남긴 모든 RFP 의 스레드 요약(rfp별 마지막 메시지). */
   listThreadsForWorkspace(workspaceId: string, tx?: Tx): Promise<TeamThreadSummary[]>;
+  /**
+   * messageId → 메시지를 소유한 워크스페이스 (첨부 ACL sealed-bid 게이트). 메시지의
+   * 스코프 ws 가 viewer ws 와 같을 때만 통과해야 하므로 그 한 컬럼만 반환. 없으면 undefined.
+   */
+  findOwner(
+    messageId: string,
+    tx?: Tx,
+  ): Promise<{ workspaceId: string } | undefined>;
 }
 
 // ── Chat: Message Template ────────────────────────────────────────────
@@ -738,4 +1186,86 @@ export interface AuditLogRepo {
     workspaceId: string,
     opts: { limit: number; before?: AuditLogCursor },
   ): Promise<AuditLogRecord[]>;
+}
+
+// ── PhoneOtp ──────────────────────────────────────────────────────────
+export interface PhoneOtpRepo {
+  /** 지정 window 내 해당 번호로 발급된 OTP 수 — 발송 레이트리밋용. */
+  countRecent(phone: string, since: Date, tx?: Tx): Promise<number>;
+  /** OTP 발급 row 생성 — code 는 호출자가 해시. 생성된 id 반환. */
+  create(
+    params: { phone: string; codeHash: string; expiresAt: Date },
+    tx?: Tx,
+  ): Promise<string>;
+  /** 미인증·미만료 활성 OTP 1건 (created_at asc). 없으면 undefined. */
+  findActive(
+    phone: string,
+    now: Date,
+    tx?: Tx,
+  ): Promise<{ id: string; codeHash: string; attempts: number } | undefined>;
+  /** (id, phone) 의 인증완료(verified_at not null) 존재 여부. */
+  isVerified(id: string, phone: string, tx?: Tx): Promise<boolean>;
+  /** 코드 오입력 시 attempts +1. */
+  bumpAttempts(id: string, tx?: Tx): Promise<void>;
+  /** verified_at 스탬프. */
+  markVerified(id: string, at: Date, tx?: Tx): Promise<void>;
+  /** 단건 삭제 — SMS 발송 실패 롤백용. */
+  remove(id: string, tx?: Tx): Promise<void>;
+}
+
+// ── WorkspaceLogo ─────────────────────────────────────────────────────
+export interface WorkspaceLogoRepo {
+  /** 로고 바이트+mime — GET /avatar. 없으면 undefined. */
+  find(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ bytes: Buffer; mime: string } | undefined>;
+  /** 존재 여부만 — Workspace.findById 의 hasLogo 계산용. */
+  exists(workspaceId: string, tx?: Tx): Promise<boolean>;
+  /** upsert(by workspace_id). */
+  upsert(workspaceId: string, bytes: Buffer, mime: string, tx?: Tx): Promise<void>;
+  /** 단건 삭제. */
+  remove(workspaceId: string, tx?: Tx): Promise<void>;
+}
+
+// ── RfpAllowedPg ──────────────────────────────────────────────────────
+export interface RfpAllowedPgRepo {
+  /** RFP 에 PG 워크스페이스들을 allowlist 등록 (onConflictDoNothing). */
+  add(rfpId: string, pgWsIds: string[], tx?: Tx): Promise<void>;
+  /** 한 RFP 의 허용 PG 워크스페이스 id 목록. */
+  listPgWsIds(rfpId: string, tx?: Tx): Promise<string[]>;
+  /** (rfpId, pgWsId) 가 allowlist 에 있는지. */
+  has(rfpId: string, pgWsId: string, tx?: Tx): Promise<boolean>;
+}
+
+// ── VerificationApplication ───────────────────────────────────────────
+export interface VerificationApplicationRepo {
+  /**
+   * 워크스페이스 생성 시 인증 신청 row 생성. status 는 DB 기본값
+   * ('submitted') 을 사용하므로 호출자는 id·workspaceId·orgType 만 넘긴다.
+   */
+  create(
+    params: { id: string; workspaceId: string; orgType: 'buyer' | 'pg' },
+    tx?: Tx,
+  ): Promise<void>;
+}
+
+// ── LoginAttempt ──────────────────────────────────────────────────────
+/** 레이트리밋 카운터 행 — key 는 `email:<addr>` 또는 `ip:<addr>`. */
+export type LoginAttemptRecord = {
+  count: number;
+  lockedUntil: Date | null;
+};
+
+export interface LoginAttemptRepo {
+  /** key(email|ip) 의 현재 카운터 row. 없으면 undefined. */
+  findByKey(key: string, tx?: Tx): Promise<LoginAttemptRecord | undefined>;
+  /** upsert(by key) — 시도 누적. updatedAt 은 호출자가 now 로 넘긴다. */
+  upsert(
+    key: string,
+    rec: { count: number; lockedUntil: Date | null; updatedAt: Date },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 성공 로그인 시 keys 삭제. 빈 배열은 안전한 no-op. */
+  clear(keys: string[], tx?: Tx): Promise<void>;
 }

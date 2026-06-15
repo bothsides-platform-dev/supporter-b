@@ -1,14 +1,13 @@
 'use server';
 
-import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 
 import { requireSession } from '@/lib/auth/session';
 import { unstable_update } from '@/auth';
-import { users, workspaces } from '@/lib/db/schema';
 import { getMembership } from '@/lib/auth/active-workspace';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
+import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { actionDb } from '../auth/_shared';
 import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
 import { logger } from '@/lib/observability/logger';
@@ -48,22 +47,17 @@ export async function switchWorkspaceAction(
   }
 
   const db = actionDb();
+  const workspaceRepo = await getWorkspaceRepo();
+  const userRepo = await getUserRepo();
 
   // Master/operator: re-confirm against the server-only MASTER_ACCOUNT_EMAILS
   // allowlist (the session email is signed, so this can't be forged), then bypass
   // membership and land in any ACTIVE workspace as a synthetic admin.
   if (isMasterEmail(session.user.email)) {
-    const [ws] = await db
-      .select({ type: workspaces.type })
-      .from(workspaces)
-      .where(and(eq(workspaces.id, targetWorkspaceId), eq(workspaces.status, 'active')))
-      .limit(1);
+    const ws = await workspaceRepo.findActiveById(targetWorkspaceId);
     if (!ws) return { ok: false, error: 'INVALID_INPUT' };
 
-    await db
-      .update(users)
-      .set({ lastActiveWorkspaceId: targetWorkspaceId })
-      .where(eq(users.id, session.user.id));
+    await userRepo.setLastActiveWorkspace(session.user.id, targetWorkspaceId);
 
     await unstable_update({
       user: { workspaceId: targetWorkspaceId, workspaceType: ws.type, role: 'admin' },
@@ -84,10 +78,7 @@ export async function switchWorkspaceAction(
   const membership = await getMembership(db, session.user.id, targetWorkspaceId);
   if (!membership) return { ok: false, error: 'NOT_MEMBER' };
 
-  await db
-    .update(users)
-    .set({ lastActiveWorkspaceId: membership.workspaceId })
-    .where(eq(users.id, session.user.id));
+  await userRepo.setLastActiveWorkspace(session.user.id, membership.workspaceId);
 
   await unstable_update({
     user: {

@@ -98,6 +98,19 @@ export class DrizzleRfpTeamMessageRepository implements RfpTeamMessageRepo {
     return rows.map((r) => ({ ...r, attachments: byMessage.get(r.id) ?? [] }));
   }
 
+  async findOwner(
+    messageId: string,
+    tx?: Tx,
+  ): Promise<{ workspaceId: string } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ workspaceId: rfpTeamMessages.workspaceId })
+      .from(rfpTeamMessages)
+      .where(eq(rfpTeamMessages.id, messageId))
+      .limit(1);
+    return row ?? undefined;
+  }
+
   async listThreadsForWorkspace(workspaceId: string, tx?: Tx): Promise<TeamThreadSummary[]> {
     const db = this.h(tx);
     // rfp별 마지막 메시지: DISTINCT ON (rfp_id) + ORDER BY rfp_id, created_at DESC.

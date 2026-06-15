@@ -1,8 +1,8 @@
 // Active-workspace resolution — shared by login (auth.ts `authorize`) and the
-// runtime switch (switchWorkspaceAction). Node-only (touches the DB); MUST NOT
-// be imported by auth.config.ts, which stays edge-safe.
-import { and, asc, eq } from 'drizzle-orm';
-import { workspaceMembers, workspaces } from '@/lib/db/schema';
+// runtime switch (switchWorkspaceAction). Node-only (the repo resolves the
+// postgres-js client); MUST NOT be imported by auth.config.ts, which stays
+// edge-safe.
+import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 
 export type ActiveMembership = {
   workspaceId: string;
@@ -10,35 +10,27 @@ export type ActiveMembership = {
   workspaceType: 'buyer' | 'pg';
 };
 
-// drizzle instance — postgres-js in prod, pglite in tests. Typed loosely to
-// match the shared `actionDb()` / repo db handles.
+// drizzle instance — postgres-js in prod, pglite in tests. DB access now goes
+// through the repository factory; the param is retained for call-site
+// compatibility (services/actions/pages) but is no longer touched directly.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 
-const membershipProjection = {
-  workspaceId: workspaceMembers.workspaceId,
-  role: workspaceMembers.role,
-  workspaceType: workspaces.type,
-} as const;
-
 /** Membership of a specific workspace, with role + workspace type, or null. */
 export async function getMembership(
-  db: Db,
+  _db: Db,
   userId: string,
   workspaceId: string,
 ): Promise<ActiveMembership | null> {
-  const [row] = await db
-    .select(membershipProjection)
-    .from(workspaceMembers)
-    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-    .where(
-      and(
-        eq(workspaceMembers.userId, userId),
-        eq(workspaceMembers.workspaceId, workspaceId),
-      ),
-    )
-    .limit(1);
-  return row ?? null;
+  const workspaceRepo = await getWorkspaceRepo();
+  const row = await workspaceRepo.getMembership(userId, workspaceId);
+  if (!row) return null;
+  // Repo names the key `type`; the app shape uses `workspaceType`.
+  return {
+    workspaceId,
+    role: row.role as ActiveMembership['role'],
+    workspaceType: row.type,
+  };
 }
 
 /**
@@ -55,12 +47,13 @@ export async function resolveInitialMembership(
     const preferred = await getMembership(db, userId, lastActiveWorkspaceId);
     if (preferred) return preferred;
   }
-  const [row] = await db
-    .select(membershipProjection)
-    .from(workspaceMembers)
-    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-    .where(eq(workspaceMembers.userId, userId))
-    .orderBy(asc(workspaceMembers.joinedAt))
-    .limit(1);
-  return row ?? null;
+  const workspaceRepo = await getWorkspaceRepo();
+  const row = await workspaceRepo.findInitialMembership(userId);
+  if (!row) return null;
+  // Repo names the key `type`; the app shape uses `workspaceType`.
+  return {
+    workspaceId: row.workspaceId,
+    role: row.role as ActiveMembership['role'],
+    workspaceType: row.type,
+  };
 }
