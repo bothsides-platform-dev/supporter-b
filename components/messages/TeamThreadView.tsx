@@ -9,7 +9,7 @@
  * 내부 스레드이므로 타인 메시지에 멤버 이름+아바타 헤더를 단다. ChatRail 의
  * '팀 채팅' 탭 전용.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,10 +24,10 @@ import { markTeamThreadReadAction } from '@/lib/server/actions/chat/markTeamThre
 import { useTeamChannel, type TeamLivePayload } from '@/lib/hooks/useTeamChannel';
 import { toast } from '@/lib/toast';
 import type { TeamThreadMessage } from '@/lib/server/actions/chat/teamThreadLoader';
-import { MessageAttachmentGrid } from './MessageAttachmentGrid';
+import { MessageBubble } from './MessageBubble';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { useStickToBottom } from './useStickToBottom';
-import { formatDayLabel, formatTime, withinGroupWindow } from './format';
+import { formatDayLabel, withinGroupWindow } from './format';
 import { MentionText } from './MentionText';
 import { MentionDropdown } from './MentionDropdown';
 import { type MentionCandidate } from './mention-input';
@@ -65,6 +65,13 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
   });
 
   const mention = useMentionPicker({ teamMembers, viewerUserId, textareaRef, draft, setDraft });
+  // 안정적 렌더러 — MessageBubble(memo)이 컴포저 입력마다 리렌더되지 않도록 ref 고정.
+  const renderTeamBody = useCallback(
+    (body: string) => (
+      <MentionText body={body} nameById={mention.nameById} viewerUserId={viewerUserId} />
+    ),
+    [mention.nameById, viewerUserId],
+  );
 
   // 마운트(및 rfp 전환) 시 팀 스레드를 읽음 처리한다 — ThreadView 의
   // markConversationReadAction 패턴 미러링.
@@ -254,32 +261,14 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
                   </div>
                 )}
 
-                <div className={cn('flex w-full items-end gap-1.5', m.isSelf && 'flex-row-reverse')}>
-                  <div
-                    className={cn(
-                      'max-w-[78%] whitespace-pre-wrap break-words rounded-[var(--md-sys-shape-medium)] px-3 py-2 text-[13px] leading-relaxed',
-                      m.isSelf
-                        ? 'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
-                        : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]',
-                      m.pending && 'opacity-60',
-                    )}
-                  >
-                    <MentionText body={m.body} nameById={mention.nameById} viewerUserId={viewerUserId} />
-                    {m.attachments.length > 0 && (
-                      <MessageAttachmentGrid attachments={m.attachments} />
-                    )}
-                  </div>
-                  {m.pending ? (
-                    <span
-                      aria-label="전송 중"
-                      className="size-1.5 shrink-0 animate-pulse rounded-full bg-[var(--md-sys-color-on-surface-variant)]"
-                    />
-                  ) : (
-                    <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                      {formatTime(m.createdAt)}
-                    </span>
-                  )}
-                </div>
+                <MessageBubble
+                  isSelf={m.isSelf}
+                  pending={m.pending}
+                  createdAt={m.createdAt}
+                  body={m.body}
+                  attachments={m.attachments}
+                  renderBody={renderTeamBody}
+                />
               </div>
             </div>
           );
