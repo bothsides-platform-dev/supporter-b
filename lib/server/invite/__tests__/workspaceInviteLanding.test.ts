@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
+import {
+  __resetForTest,
+  __useDrizzleWithDbForTest,
+} from '@/lib/server/repositories/factory';
 import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -15,12 +19,15 @@ import { accountExistsForEmail } from '../workspaceInviteLanding';
 let db: PgliteDB;
 
 beforeEach(async () => {
+  __resetForTest();
   db = await createPgliteDb();
+  await __useDrizzleWithDbForTest(db);
   __setActionDbForTest(db);
 });
 
 afterEach(() => {
   __setActionDbForTest(undefined);
+  __resetForTest();
 });
 
 describe('accountExistsForEmail', () => {
