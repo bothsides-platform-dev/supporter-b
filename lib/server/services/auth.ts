@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
-import { phoneOtps, users, workspaceInvitations, workspaceMembers, workspaces } from '@/lib/db/schema';
 import { baseUrl } from '@/lib/server/env';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { addMinutes, generateToken, hashToken } from '@/lib/server/token';
@@ -13,7 +11,14 @@ import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorks
 import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceInvite';
 import { purgeUnverifiedSignup } from '@/lib/server/actions/auth/_purgeUnverifiedSignup';
 import type {
-  AuditLogRepo, UserRepo, VerificationTokenRepo, OutboxRepo } from '@/lib/server/repositories/types';
+  AuditLogRepo,
+  OutboxRepo,
+  PgProfileRepo,
+  PhoneOtpRepo,
+  UserRepo,
+  VerificationTokenRepo,
+  WorkspaceRepo,
+} from '@/lib/server/repositories/types';
 import type { ServiceResult } from './types';
 
 export type AuthActor = { userId: string };
@@ -36,6 +41,9 @@ export class AuthService {
     private readonly verificationTokenRepo: VerificationTokenRepo,
     private readonly outboxRepo: OutboxRepo,
     private readonly auditRepo: AuditLogRepo,
+    private readonly phoneOtpRepo: PhoneOtpRepo,
+    private readonly workspaceRepo: WorkspaceRepo,
+    private readonly pgProfileRepo: PgProfileRepo,
   ) {}
 
   async completeSignup(input: {
@@ -51,19 +59,8 @@ export class AuthService {
   }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> {
     const email = normalizeEmail(input.email);
 
-    const [otpRow] = await this._db
-      .select()
-      .from(phoneOtps)
-      .where(
-        and(
-          eq(phoneOtps.id, input.phoneVerificationId),
-          eq(phoneOtps.phone, input.phone),
-          isNotNull(phoneOtps.verifiedAt),
-        ),
-      )
-      .limit(1);
-
-    if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
+    const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
+    if (!phoneVerified) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
     const passwordHash = await hashPassword(input.plainPassword);
     const userId = randomUUID();
@@ -77,16 +74,7 @@ export class AuthService {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
-      await tx.insert(users).values({
-        id: userId,
-        email,
-        passwordHash,
-        name: input.name,
-        phone: input.phone,
-        avatarColor: 'ink',
-        status: 'active',
-        emailVerified: false,
-      });
+      await this.userRepo.create({ id: userId, email, passwordHash, name: input.name, phone: input.phone }, tx);
 
       if (!input.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
 
@@ -98,13 +86,10 @@ export class AuthService {
       });
 
       if (input.wsKind === 'pg' && input.pgProfile) {
-        const { pgProfiles } = await import('@/lib/db/schema');
-        await tx.insert(pgProfiles).values({
-          workspaceId,
-          bizNo: input.pgProfile.bizNo,
-          serviceScope: null,
-          slaDays: input.pgProfile.slaDays ?? null,
-        });
+        await this.pgProfileRepo.create(
+          { workspaceId, bizNo: input.pgProfile.bizNo, slaDays: input.pgProfile.slaDays },
+          tx,
+        );
       }
 
       return { ok: true, workspaceId, applicationId, email };
@@ -129,26 +114,11 @@ export class AuthService {
   }): Promise<ServiceResult<{ workspaceId: string; email: string }>> {
     const email = normalizeEmail(input.email);
 
-    const [otpRow] = await this._db
-      .select()
-      .from(phoneOtps)
-      .where(
-        and(
-          eq(phoneOtps.id, input.phoneVerificationId),
-          eq(phoneOtps.phone, input.phone),
-          isNotNull(phoneOtps.verifiedAt),
-        ),
-      )
-      .limit(1);
-
-    if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
+    const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
+    if (!phoneVerified) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
     const inviteTokenHash = hashToken(input.wsInviteRawToken);
-    const [invitation] = await this._db
-      .select()
-      .from(workspaceInvitations)
-      .where(eq(workspaceInvitations.tokenHash, inviteTokenHash))
-      .limit(1);
+    const invitation = await this.workspaceRepo.findInvitationClaimByTokenHash(inviteTokenHash);
 
     if (!invitation) return { ok: false, error: 'INVITE_INVALID' };
     if (invitation.status !== 'pending' || invitation.expiresAt < new Date()) {
@@ -170,24 +140,12 @@ export class AuthService {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
-      await tx.insert(users).values({
-        id: userId,
-        email,
-        passwordHash,
-        name: input.name,
-        phone: input.phone,
-        avatarColor: 'ink',
-        status: 'active',
-        emailVerified: false,
-      });
+      await this.userRepo.create({ id: userId, email, passwordHash, name: input.name, phone: input.phone }, tx);
 
       const claim = await claimInviteInTx(tx, invitation, userId);
       if (!claim.ok) return claim;
 
-      await tx
-        .update(users)
-        .set({ lastActiveWorkspaceId: invitation.workspaceId })
-        .where(eq(users.id, userId));
+      await this.userRepo.setLastActiveWorkspace(userId, invitation.workspaceId, tx);
 
       return { ok: true, workspaceId: claim.workspaceId, email };
     }).catch((err: unknown) => {
@@ -211,33 +169,10 @@ export class AuthService {
   }): Promise<ServiceResult<{ email: string }>> {
     const email = normalizeEmail(input.email);
 
-    const [otpRow] = await this._db
-      .select()
-      .from(phoneOtps)
-      .where(
-        and(
-          eq(phoneOtps.id, input.phoneVerificationId),
-          eq(phoneOtps.phone, input.phone),
-          isNotNull(phoneOtps.verifiedAt),
-        ),
-      )
-      .limit(1);
+    const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
+    if (!phoneVerified) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
-    if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
-
-    const [workspace] = await this._db
-      .select({ id: workspaces.id, canonicalPgKey: workspaces.canonicalPgKey })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.id, input.selectedPgWorkspaceId),
-          eq(workspaces.type, 'pg'),
-          eq(workspaces.status, 'active'),
-          isNotNull(workspaces.canonicalPgKey),
-        ),
-      )
-      .limit(1);
-
+    const workspace = await this.workspaceRepo.findActiveCanonicalPgById(input.selectedPgWorkspaceId);
     if (!workspace) return { ok: false, error: 'INVALID_CANONICAL_WORKSPACE' };
 
     const passwordHash = await hashPassword(input.plainPassword);
@@ -252,26 +187,14 @@ export class AuthService {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
-      await tx.insert(users).values({
-        id: userId,
-        email,
-        passwordHash,
-        name: input.name,
-        phone: input.phone,
-        avatarColor: 'ink',
-        status: 'active',
-        emailVerified: false,
-      });
+      await this.userRepo.create({ id: userId, email, passwordHash, name: input.name, phone: input.phone }, tx);
 
-      await tx
-        .insert(workspaceMembers)
-        .values({ workspaceId: input.selectedPgWorkspaceId, userId, role: 'member' })
-        .onConflictDoNothing();
+      await this.workspaceRepo.addMember(
+        { workspaceId: input.selectedPgWorkspaceId, userId, role: 'member' },
+        tx,
+      );
 
-      await tx
-        .update(users)
-        .set({ lastActiveWorkspaceId: input.selectedPgWorkspaceId })
-        .where(eq(users.id, userId));
+      await this.userRepo.setLastActiveWorkspace(userId, input.selectedPgWorkspaceId, tx);
 
       return { ok: true, email };
     }).catch((err: unknown) => {
@@ -289,33 +212,18 @@ export class AuthService {
     userId: string;
     plainPassword: string;
   }): Promise<{ ok: true } | { ok: false; error: 'INVALID_PASSWORD' } | { ok: false; error: 'LAST_ADMIN'; blockingWorkspaces: WorkspaceStub[] }> {
-    const [user] = await this._db
-      .select({ passwordHash: users.passwordHash })
-      .from(users)
-      .where(eq(users.id, input.userId))
-      .limit(1);
+    const passwordHash = await this.userRepo.findPasswordHashById(input.userId);
 
-    const valid = user ? await verifyPassword(input.plainPassword, user.passwordHash) : false;
+    const valid = passwordHash ? await verifyPassword(input.plainPassword, passwordHash) : false;
     if (!valid) return { ok: false, error: 'INVALID_PASSWORD' };
 
-    const myMemberships = await this._db
-      .select({
-        workspaceId: workspaceMembers.workspaceId,
-        role: workspaceMembers.role,
-        name: workspaces.name,
-      })
-      .from(workspaceMembers)
-      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-      .where(eq(workspaceMembers.userId, input.userId));
+    const myMemberships = await this.workspaceRepo.listMembershipsWithMembers(input.userId);
 
     const blockingWorkspaces: WorkspaceStub[] = [];
     const soloWorkspaceIds: string[] = [];
 
     for (const membership of myMemberships) {
-      const allMembers = await this._db
-        .select({ userId: workspaceMembers.userId, role: workspaceMembers.role })
-        .from(workspaceMembers)
-        .where(eq(workspaceMembers.workspaceId, membership.workspaceId));
+      const allMembers = membership.members;
 
       if (allMembers.length === 1) {
         soloWorkspaceIds.push(membership.workspaceId);
@@ -336,18 +244,10 @@ export class AuthService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
       if (soloWorkspaceIds.length > 0) {
-        await tx.delete(workspaces).where(inArray(workspaces.id, soloWorkspaceIds));
+        await this.workspaceRepo.deleteWorkspaces(soloWorkspaceIds, tx);
       }
-      await tx.delete(workspaceMembers).where(eq(workspaceMembers.userId, input.userId));
-      await tx
-        .update(users)
-        .set({
-          deletedAt: new Date(),
-          lastActiveWorkspaceId: null,
-          // Revoke every outstanding JWT for the deleted account.
-          sessionVersion: sql`${users.sessionVersion} + 1`,
-        })
-        .where(eq(users.id, input.userId));
+      await this.workspaceRepo.removeAllMembershipsForUser(input.userId, tx);
+      await this.userRepo.softDelete(input.userId, tx);
       // 감사 로그 (C5) — 워크스페이스 무관 인증 이벤트 (FK 없음 → 행 보존).
       await this.auditRepo.insert(
         { actorUserId: input.userId, actorWorkspaceId: null, action: 'auth.account_delete' },
@@ -413,12 +313,7 @@ export class AuthService {
     const resetUser = await this.userRepo.findByEmail(consumed.email);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
-      await tx
-        .update(users)
-        // sessionVersion bump revokes sessions issued before the reset — the
-        // whole point of resetting a (possibly compromised) password.
-        .set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1` })
-        .where(eq(users.email, consumed.email));
+      await this.userRepo.updatePassword(consumed.email, passwordHash, tx);
       if (resetUser) {
         // 감사 로그 (C5) — 워크스페이스 무관 인증 이벤트.
         await this.auditRepo.insert(
@@ -474,11 +369,7 @@ export class AuthService {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await this._db.transaction(async (tx: any) => {
-        await tx
-          .update(users)
-          // Email is the login identifier — revoke sessions minted under the old one.
-          .set({ email: newEmail, sessionVersion: sql`${users.sessionVersion} + 1` })
-          .where(eq(users.id, userId));
+        await this.userRepo.updateEmail(userId, newEmail, tx);
         // 감사 로그 (C5) — 워크스페이스 무관 인증 이벤트.
         await this.auditRepo.insert(
           { actorUserId: userId, actorWorkspaceId: null, action: 'auth.email_change', metadata: { newEmail } },
@@ -508,14 +399,34 @@ export async function getAuthService(): Promise<AuthService> {
     return globalThis.__bidit_auth_service_override__;
   }
   if (!globalThis.__bidit_auth_service__) {
-    const { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo } = await import('@/lib/server/repositories/factory');
+    const {
+      getUserRepo,
+      getVerificationTokenRepo,
+      getOutboxRepo,
+      getAuditLogRepo,
+      getPhoneOtpRepo,
+      getWorkspaceRepo,
+      getPgProfileRepo,
+    } = await import('@/lib/server/repositories/factory');
     const { actionDb } = await import('@/lib/server/actions/auth/_shared');
     const db = actionDb();
     const userRepo = await getUserRepo();
     const auditRepo = await getAuditLogRepo();
     const verificationTokenRepo = await getVerificationTokenRepo();
     const outboxRepo = await getOutboxRepo();
-    globalThis.__bidit_auth_service__ = new AuthService(db, userRepo, verificationTokenRepo, outboxRepo, auditRepo);
+    const phoneOtpRepo = await getPhoneOtpRepo();
+    const workspaceRepo = await getWorkspaceRepo();
+    const pgProfileRepo = await getPgProfileRepo();
+    globalThis.__bidit_auth_service__ = new AuthService(
+      db,
+      userRepo,
+      verificationTokenRepo,
+      outboxRepo,
+      auditRepo,
+      phoneOtpRepo,
+      workspaceRepo,
+      pgProfileRepo,
+    );
   }
   return globalThis.__bidit_auth_service__!;
 }

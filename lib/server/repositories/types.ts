@@ -226,6 +226,15 @@ export interface WorkspaceRepo {
   ): Promise<{ workspaceId: string; userId: string; role: string; email: string }[]>;
   /** active 상태 워크스페이스 (id+type) — 마스터/스위치. 없거나 비활성이면 undefined. */
   findActiveById(workspaceId: string, tx?: Tx): Promise<{ id: string; type: WorkspaceType } | undefined>;
+  /**
+   * 사전 시딩된 canonical PG 워크스페이스 (type='pg' AND status='active' AND
+   * canonical_pg_key IS NOT NULL) 단건 — PG 가입 합류 입력 검증용. 위 조건 중 하나라도
+   * 어긋나거나 없으면 undefined.
+   */
+  findActiveCanonicalPgById(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ id: string; canonicalPgKey: string } | undefined>;
   /** 가장 먼저 만들어진 active 워크스페이스 — 마스터 기본 진입. 없으면 undefined. */
   findEarliestActiveWorkspace(tx?: Tx): Promise<{ id: string } | undefined>;
   /** (userId, workspaceId) 멤버십 — role+type. 없으면 undefined. */
@@ -375,14 +384,44 @@ export interface WorkspaceRepo {
   ): Promise<void>;
   /** 멤버 제거. */
   removeMember(params: { workspaceId: string; userId: string }, tx?: Tx): Promise<void>;
+  /** 주어진 워크스페이스들을 삭제 (멤버/RFP 등은 FK cascade). 빈 배열은 안전한 no-op. 계정 탈퇴 solo 정리용. */
+  deleteWorkspaces(ids: string[], tx?: Tx): Promise<void>;
+  /** 한 유저의 모든 멤버십 row 삭제 — 계정 탈퇴용. */
+  removeAllMembershipsForUser(userId: string, tx?: Tx): Promise<void>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────
 export interface UserRepo {
   /** upsert(by id). bcrypt hash는 호출자 책임. */
   save(user: User & { passwordHash: string }, tx?: Tx): Promise<void>;
+  /**
+   * 신규 가입 user insert — 미인증·active 기본값으로 고정 (emailVerified=false,
+   * status='active', avatarColor='ink'). 이메일 UNIQUE 위배 시 throw (호출부가
+   * isUniqueViolation 로 EMAIL_TAKEN 분기). save(upsert)와 달리 충돌 시 갱신하지 않는다.
+   */
+  create(
+    params: { id: string; email: string; passwordHash: string; name: string; phone: string },
+    tx?: Tx,
+  ): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<User | undefined>;
+  /** id 로 passwordHash 단건 조회 — 계정 탈퇴 비밀번호 확인용. 없으면 undefined. */
+  findPasswordHashById(userId: string, tx?: Tx): Promise<string | undefined>;
+  /**
+   * email 매칭 행의 passwordHash 갱신 + sessionVersion +1 — 비밀번호 재설정.
+   * sessionVersion bump 로 재설정 전 발급된 세션을 무효화한다.
+   */
+  updatePassword(email: string, passwordHash: string, tx?: Tx): Promise<void>;
+  /**
+   * id 매칭 행의 email 교체 + sessionVersion +1 — 이메일 변경 확정.
+   * 새 email UNIQUE 위배 시 throw (호출부가 isUniqueViolation 로 EMAIL_TAKEN 분기).
+   */
+  updateEmail(userId: string, newEmail: string, tx?: Tx): Promise<void>;
+  /**
+   * 계정 소프트 삭제 — deletedAt 스탬프 + lastActiveWorkspaceId=null +
+   * sessionVersion +1 (탈퇴 계정의 모든 미만료 JWT 무효화).
+   */
+  softDelete(userId: string, tx?: Tx): Promise<void>;
   /** email 조회 — passwordHash 포함(로그인용). */
   findByEmail(
     email: string,
@@ -421,6 +460,18 @@ export interface UserRepo {
   >;
   /** 마스터/운영자 계정 insert-if-absent — 인증 완료·시스템 계정으로 생성, userId 반환. */
   provisionMaster(params: { email: string; name: string }, tx?: Tx): Promise<string>;
+}
+
+// ── PgProfile ─────────────────────────────────────────────────────────
+export interface PgProfileRepo {
+  /**
+   * PG 워크스페이스 프로필 row 생성 — PG 가입 시. serviceScope 는 null 로 둔다
+   * (이후 검증 단계에서 채움). slaDays 미지정 시 null. (workspace_id, biz_no).
+   */
+  create(
+    params: { workspaceId: string; bizNo: string; slaDays?: number | null },
+    tx?: Tx,
+  ): Promise<void>;
 }
 
 // ── BizProfile ────────────────────────────────────────────────────────

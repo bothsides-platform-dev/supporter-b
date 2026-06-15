@@ -1023,4 +1023,88 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(await repo.getMembership(u.id, ws.id)).toBeUndefined();
     });
   });
+
+  describe('findActiveCanonicalPgById', () => {
+    it('returns id + canonicalPgKey for an active canonical PG workspace', async () => {
+      const id = randomUUID();
+      await db.insert(workspaces).values({
+        id,
+        type: 'pg',
+        name: 'Toss',
+        status: 'active',
+        canonicalPgKey: 'tosspayments',
+      });
+      expect(await repo.findActiveCanonicalPgById(id)).toEqual({ id, canonicalPgKey: 'tosspayments' });
+    });
+
+    it('returns undefined when the workspace has no canonicalPgKey', async () => {
+      const ws = await seedPgWorkspace(db, 'plain-pg'); // active, but canonicalPgKey null
+      expect(await repo.findActiveCanonicalPgById(ws.id)).toBeUndefined();
+    });
+
+    it('returns undefined when the workspace is a buyer', async () => {
+      const id = randomUUID();
+      await db.insert(workspaces).values({
+        id,
+        type: 'buyer',
+        name: 'BuyerCo',
+        status: 'active',
+        canonicalPgKey: 'should-not-match',
+      });
+      expect(await repo.findActiveCanonicalPgById(id)).toBeUndefined();
+    });
+
+    it('returns undefined when the workspace is not active', async () => {
+      const id = randomUUID();
+      await db.insert(workspaces).values({
+        id,
+        type: 'pg',
+        name: 'Pending PG',
+        status: 'pending',
+        canonicalPgKey: 'pendingpg',
+      });
+      expect(await repo.findActiveCanonicalPgById(id)).toBeUndefined();
+    });
+
+    it('returns undefined for an unknown id', async () => {
+      expect(await repo.findActiveCanonicalPgById(randomUUID())).toBeUndefined();
+    });
+  });
+
+  describe('deleteWorkspaces', () => {
+    it('deletes the given workspaces and leaves others intact', async () => {
+      const a = await seedBuyerWorkspace(db, { name: 'A' });
+      const b = await seedBuyerWorkspace(db, { name: 'B' });
+      await repo.deleteWorkspaces([a.id]);
+      const [rowA] = await db.select().from(workspaces).where(eq(workspaces.id, a.id));
+      const [rowB] = await db.select().from(workspaces).where(eq(workspaces.id, b.id));
+      expect(rowA).toBeUndefined();
+      expect(rowB).toBeDefined();
+    });
+
+    it('is a no-op for an empty id list', async () => {
+      const a = await seedBuyerWorkspace(db);
+      await repo.deleteWorkspaces([]);
+      const [rowA] = await db.select().from(workspaces).where(eq(workspaces.id, a.id));
+      expect(rowA).toBeDefined();
+    });
+  });
+
+  describe('removeAllMembershipsForUser', () => {
+    it('removes every membership for the user, leaving other members', async () => {
+      const ws1 = await seedBuyerWorkspace(db);
+      const ws2 = await seedPgWorkspace(db, 'pg2');
+      const me = await seedUser(db, { email: 'me@rmall.test' });
+      const other = await seedUser(db, { email: 'other@rmall.test' });
+      await seedMembership(db, ws1.id, me.id, 'admin');
+      await seedMembership(db, ws2.id, me.id, 'member');
+      await seedMembership(db, ws1.id, other.id, 'member');
+
+      await repo.removeAllMembershipsForUser(me.id);
+
+      expect(await repo.getMembership(me.id, ws1.id)).toBeUndefined();
+      expect(await repo.getMembership(me.id, ws2.id)).toBeUndefined();
+      expect(await repo.getMembership(other.id, ws1.id)).toEqual({ role: 'member', type: 'buyer' });
+    });
+  });
 });

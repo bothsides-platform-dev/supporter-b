@@ -19,6 +19,7 @@ import type {
   LoginAttemptRepo,
   NotificationRepo,
   OutboxRepo,
+  PgProfileRepo,
   PgRequestRepo,
   PhoneOtpRepo,
   RfpAllowedPgRepo,
@@ -39,6 +40,7 @@ type RepoBundle = {
   pgRequest: PgRequestRepo;
   workspace: WorkspaceRepo;
   user: UserRepo;
+  pgProfile: PgProfileRepo;
   bizProfile: BizProfileRepo;
   bid: BidRepo;
   bidNote: BidNoteRepo;
@@ -74,7 +76,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 8;
+const BUNDLE_VERSION = 9;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -84,6 +86,7 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
   const { DrizzleRfpRequestRepository } = await import('./drizzle/rfp-pg-request');
   const { DrizzleWorkspaceRepository } = await import('./drizzle/workspace');
   const { DrizzleUserRepository } = await import('./drizzle/user');
+  const { DrizzlePgProfileRepository } = await import('./drizzle/pg-profile');
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
   const { DrizzleBidRepository } = await import('./drizzle/bid');
   const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
@@ -124,6 +127,7 @@ async function createRepoBundle(db: any, backend: 'drizzle' | 'memory'): Promise
     pgRequest: new DrizzleRfpRequestRepository(db),
     workspace: new DrizzleWorkspaceRepository(db),
     user: new DrizzleUserRepository(db),
+    pgProfile: new DrizzlePgProfileRepository(db),
     bizProfile: new DrizzleBizProfileRepository(db),
     bid: new DrizzleBidRepository(db),
     bidNote: new DrizzleBidNoteRepository(db),
@@ -188,6 +192,9 @@ export async function getWorkspaceRepo(): Promise<WorkspaceRepo> {
 }
 export async function getUserRepo(): Promise<UserRepo> {
   return (await getBundle()).user;
+}
+export async function getPgProfileRepo(): Promise<PgProfileRepo> {
+  return (await getBundle()).pgProfile;
 }
 // Used by RfpService.createRfp (Phase 2) for biz-profile inheritance logic.
 export async function getBizProfileRepo(): Promise<BizProfileRepo> {

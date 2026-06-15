@@ -23,7 +23,7 @@ import { verifyEmailAction } from '../verifyEmailAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import { AuthService, __setAuthServiceForTest } from '@/lib/server/services/auth';
-import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo } from '@/lib/server/repositories/factory';
+import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo, getPhoneOtpRepo, getWorkspaceRepo, getPgProfileRepo } from '@/lib/server/repositories/factory';
 
 const DEFAULT_PHONE = '01099999999';
 // Fixed UUID used by throwingInsertDb so VALID_SIGNUP can be a static constant.
@@ -84,6 +84,19 @@ async function seedVerifiedOtp(phone: string = DEFAULT_PHONE): Promise<string> {
     })
     .returning();
   return row.id;
+}
+
+// Seed a verified OTP at a fixed id so VALID_SIGNUP's phoneVerificationId resolves
+// against the real DB (the OTP gate now reads through PhoneOtpRepo, not the
+// injected throwing _db — only the user INSERT goes through the throwing handle).
+async function seedVerifiedOtpWithId(id: string, phone: string = DEFAULT_PHONE): Promise<void> {
+  await db.insert(phoneOtps).values({
+    id,
+    phone,
+    codeHash: hashOtpCode('000000'),
+    expiresAt: new Date(Date.now() + 5 * 60_000),
+    verifiedAt: new Date(),
+  });
 }
 
 /** 이메일 발급 + 링크 클릭 소비 — signupCompleteAction의 EMAIL_NOT_VERIFIED 게이트 통과용 */
@@ -619,10 +632,11 @@ describe('signupCompleteAction — insert error tightening', () => {
   afterEach(teardownActionEnv);
 
   it('maps a postgres-shaped unique violation (err.code) to EMAIL_TAKEN', async () => {
-    const [userRepo, vtRepo, outboxRepo, auditRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo()]);
+    await seedVerifiedOtpWithId(FAKE_OTP_ID);
+    const [userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo(), getPhoneOtpRepo(), getWorkspaceRepo(), getPgProfileRepo()]);
     __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('dup'), { code: '23505' })),
-      userRepo, vtRepo, outboxRepo, auditRepo,
+      userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
     ));
     const r = await signupCompleteAction(VALID_SIGNUP);
     expect(r.ok).toBe(false);
@@ -630,10 +644,11 @@ describe('signupCompleteAction — insert error tightening', () => {
   });
 
   it('maps a pglite-shaped unique violation (err.cause.code) to EMAIL_TAKEN', async () => {
-    const [userRepo, vtRepo, outboxRepo, auditRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo()]);
+    await seedVerifiedOtpWithId(FAKE_OTP_ID);
+    const [userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo(), getPhoneOtpRepo(), getWorkspaceRepo(), getPgProfileRepo()]);
     __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('dup'), { cause: { code: '23505' } })),
-      userRepo, vtRepo, outboxRepo, auditRepo,
+      userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
     ));
     const r = await signupCompleteAction(VALID_SIGNUP);
     expect(r.ok).toBe(false);
@@ -641,10 +656,11 @@ describe('signupCompleteAction — insert error tightening', () => {
   });
 
   it('rethrows a non-unique DB error instead of masking it as EMAIL_TAKEN', async () => {
-    const [userRepo, vtRepo, outboxRepo, auditRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo()]);
+    await seedVerifiedOtpWithId(FAKE_OTP_ID);
+    const [userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo(), getPhoneOtpRepo(), getWorkspaceRepo(), getPgProfileRepo()]);
     __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('not null'), { code: '23502' })),
-      userRepo, vtRepo, outboxRepo, auditRepo,
+      userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
     ));
     await expect(signupCompleteAction(VALID_SIGNUP)).rejects.toThrow('not null');
   });

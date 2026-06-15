@@ -10,6 +10,9 @@ import {
   getVerificationTokenRepo,
   getOutboxRepo,
   getAuditLogRepo,
+  getPhoneOtpRepo,
+  getWorkspaceRepo,
+  getPgProfileRepo,
 } from '@/lib/server/repositories/factory';
 import {
   phoneOtps,
@@ -45,7 +48,19 @@ async function buildService(): Promise<AuthService> {
   const verificationTokenRepo = await getVerificationTokenRepo();
   const outboxRepo = await getOutboxRepo();
   const auditRepo = await getAuditLogRepo();
-  return new AuthService(db, userRepo, verificationTokenRepo, outboxRepo, auditRepo);
+  const phoneOtpRepo = await getPhoneOtpRepo();
+  const workspaceRepo = await getWorkspaceRepo();
+  const pgProfileRepo = await getPgProfileRepo();
+  return new AuthService(
+    db,
+    userRepo,
+    verificationTokenRepo,
+    outboxRepo,
+    auditRepo,
+    phoneOtpRepo,
+    workspaceRepo,
+    pgProfileRepo,
+  );
 }
 
 beforeEach(async () => {

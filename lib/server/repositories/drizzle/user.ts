@@ -72,6 +72,23 @@ export class DrizzleUserRepository implements UserRepo {
       });
   }
 
+  async create(
+    params: { id: string; email: string; passwordHash: string; name: string; phone: string },
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db.insert(users).values({
+      id: params.id,
+      email: params.email,
+      passwordHash: params.passwordHash,
+      name: params.name,
+      phone: params.phone,
+      avatarColor: 'ink',
+      status: 'active',
+      emailVerified: false,
+    });
+  }
+
   async findById(id: string, tx?: Tx): Promise<User | undefined> {
     const db = this.h(tx);
     const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1);
@@ -102,6 +119,48 @@ export class DrizzleUserRepository implements UserRepo {
       .update(users)
       .set({ emailVerified: true, emailVerifiedAt: sql`now()` })
       .where(eq(users.email, email));
+  }
+
+  async findPasswordHashById(userId: string, tx?: Tx): Promise<string | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return row?.passwordHash ?? undefined;
+  }
+
+  async updatePassword(email: string, passwordHash: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(users)
+      // sessionVersion bump revokes sessions issued before the reset — the
+      // whole point of resetting a (possibly compromised) password.
+      .set({ passwordHash, sessionVersion: sql`${users.sessionVersion} + 1` })
+      .where(eq(users.email, email));
+  }
+
+  async updateEmail(userId: string, newEmail: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(users)
+      // Email is the login identifier — revoke sessions minted under the old one.
+      .set({ email: newEmail, sessionVersion: sql`${users.sessionVersion} + 1` })
+      .where(eq(users.id, userId));
+  }
+
+  async softDelete(userId: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(users)
+      .set({
+        deletedAt: new Date(),
+        lastActiveWorkspaceId: null,
+        // Revoke every outstanding JWT for the deleted account.
+        sessionVersion: sql`${users.sessionVersion} + 1`,
+      })
+      .where(eq(users.id, userId));
   }
 
   async getSessionVersion(userId: string, tx?: Tx): Promise<number | undefined> {

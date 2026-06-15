@@ -388,6 +388,27 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return row ?? undefined;
   }
 
+  async findActiveCanonicalPgById(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ id: string; canonicalPgKey: string } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ id: workspaces.id, canonicalPgKey: workspaces.canonicalPgKey })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.type, 'pg'),
+          eq(workspaces.status, 'active'),
+          isNotNull(workspaces.canonicalPgKey),
+        ),
+      )
+      .limit(1);
+    if (!row) return undefined;
+    return { id: row.id, canonicalPgKey: row.canonicalPgKey as string };
+  }
+
   async findEarliestActiveWorkspace(tx?: Tx): Promise<{ id: string } | undefined> {
     const db = this.h(tx);
     const [row] = await db
@@ -798,5 +819,16 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           eq(workspaceMembers.userId, params.userId),
         ),
       );
+  }
+
+  async deleteWorkspaces(ids: string[], tx?: Tx): Promise<void> {
+    if (ids.length === 0) return;
+    const db = this.h(tx);
+    await db.delete(workspaces).where(inArray(workspaces.id, ids));
+  }
+
+  async removeAllMembershipsForUser(userId: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.delete(workspaceMembers).where(eq(workspaceMembers.userId, userId));
   }
 }

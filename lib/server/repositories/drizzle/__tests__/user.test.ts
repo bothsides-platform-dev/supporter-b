@@ -232,6 +232,111 @@ describe('findAuthRowByEmail', () => {
   });
 });
 
+describe('create', () => {
+  it('inserts a new signup user with the unverified defaults', async () => {
+    const { db, repo } = await setup();
+    const id = randomUUID();
+    await repo.create({
+      id,
+      email: 'new@x.com',
+      passwordHash: 'ph',
+      name: '김영업',
+      phone: '01099998888',
+    });
+
+    const [row] = await db.select().from(users).where(eq(users.id, id));
+    expect(row.email).toBe('new@x.com');
+    expect(row.passwordHash).toBe('ph');
+    expect(row.name).toBe('김영업');
+    expect(row.phone).toBe('01099998888');
+    expect(row.avatarColor).toBe('ink');
+    expect(row.status).toBe('active');
+    expect(row.emailVerified).toBe(false);
+  });
+
+  it('rejects a duplicate email (unique violation)', async () => {
+    const { repo } = await setup();
+    await repo.create({ id: randomUUID(), email: 'dup@x.com', passwordHash: 'p', name: 'A', phone: '0100' });
+    await expect(
+      repo.create({ id: randomUUID(), email: 'dup@x.com', passwordHash: 'p', name: 'B', phone: '0101' }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('findPasswordHashById', () => {
+  it('returns the passwordHash for an existing user', async () => {
+    const { repo } = await setup();
+    const id = randomUUID();
+    await repo.save(makeUser({ id, email: 'pwh@x.com' }));
+    expect(await repo.findPasswordHashById(id)).toBe('hash');
+  });
+
+  it('returns undefined for an unknown user', async () => {
+    const { repo } = await setup();
+    expect(await repo.findPasswordHashById(randomUUID())).toBeUndefined();
+  });
+});
+
+describe('updatePassword', () => {
+  it('sets passwordHash and bumps sessionVersion', async () => {
+    const { db, repo } = await setup();
+    const id = randomUUID();
+    await db.insert(users).values({ id, email: 'upw@x.com', passwordHash: 'old', name: 'U', sessionVersion: 3 });
+
+    await repo.updatePassword('upw@x.com', 'newhash');
+
+    const [row] = await db.select().from(users).where(eq(users.id, id));
+    expect(row.passwordHash).toBe('newhash');
+    expect(row.sessionVersion).toBe(4);
+  });
+});
+
+describe('updateEmail', () => {
+  it('changes the email and bumps sessionVersion', async () => {
+    const { db, repo } = await setup();
+    const id = randomUUID();
+    await db.insert(users).values({ id, email: 'old@x.com', passwordHash: 'p', name: 'U', sessionVersion: 2 });
+
+    await repo.updateEmail(id, 'fresh@x.com');
+
+    const [row] = await db.select().from(users).where(eq(users.id, id));
+    expect(row.email).toBe('fresh@x.com');
+    expect(row.sessionVersion).toBe(3);
+  });
+
+  it('throws a unique violation when the target email already exists', async () => {
+    const { db, repo } = await setup();
+    const id = randomUUID();
+    await db.insert(users).values({ id, email: 'me@x.com', passwordHash: 'p', name: 'U' });
+    await db.insert(users).values({ id: randomUUID(), email: 'taken@x.com', passwordHash: 'p', name: 'V' });
+
+    await expect(repo.updateEmail(id, 'taken@x.com')).rejects.toThrow();
+  });
+});
+
+describe('softDelete', () => {
+  it('stamps deletedAt, clears lastActiveWorkspaceId, bumps sessionVersion', async () => {
+    const { db, repo } = await setup();
+    const id = randomUUID();
+    const wsId = randomUUID();
+    await db.insert(users).values({
+      id,
+      email: 'del@x.com',
+      passwordHash: 'p',
+      name: 'U',
+      lastActiveWorkspaceId: wsId,
+      sessionVersion: 5,
+    });
+
+    await repo.softDelete(id);
+
+    const [row] = await db.select().from(users).where(eq(users.id, id));
+    expect(row.deletedAt).not.toBeNull();
+    expect(row.lastActiveWorkspaceId).toBeNull();
+    expect(row.sessionVersion).toBe(6);
+  });
+});
+
 describe('provisionMaster', () => {
   it('creates a verified, system-account row when absent and returns its id', async () => {
     const { db, repo } = await setup();
