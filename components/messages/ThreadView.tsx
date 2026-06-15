@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { HTTPError } from 'ky';
-import { http } from '@/lib/http';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Chip } from '@/components/primitives/Chip';
@@ -13,7 +11,7 @@ import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { Avatar } from '@/components/primitives/Avatar';
 import { Paperclip } from 'lucide-react';
 import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, XIcon, EnvelopeIcon } from '@/components/icons';
-import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES, ACCEPTED_EXTENSIONS } from '@/lib/server/storage/constants';
+import { DRAFT_OWNER_ID, ACCEPT_EXT } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
@@ -21,6 +19,7 @@ import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageAttachmentGrid } from './MessageAttachmentGrid';
+import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 
 type Props = {
@@ -75,18 +74,6 @@ const NEAR_BOTTOM_PX = 120;
 // pending 개념이 없으므로 클라이언트 뷰 모델로만 둔다.
 type LocalMessage = ThreadMessage & { pending?: boolean };
 
-// Composer attachment row. `id` is a temp id while `status === 'uploading'`
-// (no server id/url/mime yet), swapped for the real attachment id once ready.
-type Attachment = {
-  id: string;
-  name: string;
-  size?: number;
-  mimeType?: string;
-  url?: string;
-  status: 'uploading' | 'ready' | 'error';
-  error?: string;
-};
-
 // Capturing group so split keeps the URLs; matched per-part with a
 // non-global test (a /g regex carries lastIndex across .test() calls).
 const URL_SPLIT = /(https?:\/\/[^\s]+)/g;
@@ -133,7 +120,12 @@ export function ThreadView({
       return '';
     }
   });
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const {
+    rows: attachments,
+    setRows: setAttachments,
+    addFiles,
+    removeRow,
+  } = useComposerAttachments({ ownerKind: 'chat', ownerId: DRAFT_OWNER_ID });
   const [sending, setSending] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
   // Local copy so live receives + optimistic sends append without a refetch.
@@ -286,62 +278,6 @@ export function ThreadView({
     [localMessages],
   );
 
-  async function uploadOne(file: File, tempId: string): Promise<void> {
-    const form = new FormData();
-    form.append('file', file);
-    form.append('ownerKind', 'chat');
-    form.append('ownerId', DRAFT_OWNER_ID);
-    try {
-      const body = await http
-        .post('/api/files/upload', { body: form })
-        .json<{ id: string; name: string; size: number; mimeType: string }>();
-      // 임시 행을 서버 첨부로 교체(스켈레톤 → 일반 칩).
-      setAttachments((prev) =>
-        prev.map((a) =>
-          a.id === tempId
-            ? {
-                id: body.id,
-                name: body.name,
-                size: body.size,
-                mimeType: body.mimeType,
-                url: `/api/files/${body.id}`,
-                status: 'ready',
-              }
-            : a,
-        ),
-      );
-    } catch (err) {
-      let msg = '업로드 실패';
-      if (err instanceof HTTPError) {
-        msg = err.response.status === 415 ? '지원되지 않는 파일 형식이에요' : `업로드 실패 (${err.response.status})`;
-      }
-      setAttachments((prev) =>
-        prev.map((a) => (a.id === tempId ? { ...a, status: 'error', error: msg } : a)),
-      );
-    }
-  }
-
-  function addFiles(list: FileList | null): void {
-    if (!list) return;
-    const remaining = MAX_FILES - attachments.length;
-    const additions: Attachment[] = [];
-    for (let i = 0; i < Math.min(list.length, remaining); i++) {
-      const f = list[i];
-      const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
-      if (!ACCEPTED_MIMES.has(f.type) && !ACCEPTED_EXTENSIONS.has(ext)) {
-        const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
-        additions.push({ id: tempId, name: f.name, status: 'error', error: '지원되지 않는 파일 형식이에요 (PDF/PNG/JPEG)' });
-        continue;
-      }
-      if (f.size > MAX_BYTES) continue;
-      // 선택 즉시 'uploading' 행(스켈레톤)을 추가해 올리는 중임을 보여준다.
-      const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
-      additions.push({ id: tempId, name: f.name, size: f.size, status: 'uploading' });
-      void uploadOne(f, tempId);
-    }
-    if (additions.length > 0) setAttachments((prev) => [...prev, ...additions]);
-  }
-
   function autoGrow(el: HTMLTextAreaElement): void {
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
@@ -357,11 +293,7 @@ export function ThreadView({
     setSending(true);
 
     // 전송 시점의 첨부를 표시용으로 스냅샷(reload 불필요).
-    const optimisticAttachments = attachments.flatMap((a) =>
-      a.size !== undefined && a.mimeType && a.url
-        ? [{ id: a.id, name: a.name, size: a.size, mimeType: a.mimeType, url: a.url }]
-        : [],
-    );
+    const optimisticAttachments = toReadyMessageAttachments(attachments);
     // 낙관적 말풍선을 *전송 전*에 'pending' 으로 올려 "전송 중"을 즉시 보여준다.
     const tempId = `pending-${Math.random().toString(36).slice(2, 10)}`;
     const restoreDraft = draft;
@@ -682,7 +614,7 @@ export function ThreadView({
                 <button
                   type="button"
                   aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  onClick={() => removeRow(a.id)}
                   className="hover:opacity-70"
                 >
                   <XIcon size={12} />
@@ -697,7 +629,7 @@ export function ThreadView({
                 <button
                   type="button"
                   aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  onClick={() => removeRow(a.id)}
                   className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
                 >
                   <XIcon size={12} />
