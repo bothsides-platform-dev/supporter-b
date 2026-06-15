@@ -1,4 +1,4 @@
-import { Kbd } from '@/components/ui/Kbd';
+import { Kbd } from '@/components/primitives/Kbd';
 import { getModifierShortcutParts } from '@/lib/hooks/usePlatform';
 import { cn } from '@/lib/utils';
 
