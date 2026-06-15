@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.22.6] - 2026-06-15
+
+### Changed
+
+- **내부 구조 정리 — 채팅 입력창 중복 제거 (개발자 전용, 사용자 화면·동작 변화 없음)**: 컴포넌트 리팩토링 3b. 상대방 채팅(ThreadView)과 딜룸 새 대화 컴포저(ChatPanel)가 각자 인라인으로 복제하던 입력창 로직(내용에 따라 높이가 늘어나는 자동 높이 + 한글 IME 조합 중 Enter 가 메시지를 끊지 않도록 막는 안전 전송)을 공용 `ChatComposerTextarea` 컴포넌트로 모았어요. 멘션 입력이 결합된 팀 채팅(TeamThreadView)은 대상에서 제외했어요(별도 작업). 동작·스타일은 그대로(전송 후 높이 리셋 포함), 단위 테스트 5개로 IME/Shift+Enter 동작을 고정했어요. 전체 테스트 3277개 통과.
+
 ## [0.2.22.5] - 2026-06-15
 
 ### Changed
