@@ -22,6 +22,7 @@ import { MessageAttachmentGrid } from './MessageAttachmentGrid';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
 import { useStickToBottom } from './useStickToBottom';
+import { useStringDraft } from './useStringDraft';
 import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 
 type Props = {
@@ -112,14 +113,7 @@ export function ThreadView({
 }: Props) {
   // 대화별 초안 보존 — 대화 전환(remount) 시에도 작성 중이던 내용을 잃지 않는다.
   const draftKey = `chat-draft:${conversationId}`;
-  const [draft, setDraft] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
-    try {
-      return window.localStorage.getItem(draftKey) ?? '';
-    } catch {
-      return '';
-    }
-  });
+  const [draft, setDraft] = useStringDraft(draftKey);
   const {
     rows: attachments,
     setRows: setAttachments,
@@ -213,16 +207,6 @@ export function ThreadView({
     void markConversationReadAction({ conversationId });
   }, [conversationId]);
 
-  // 초안을 localStorage 에 동기 반영(디바운스 없이 — 메시지 길이는 짧아 비용이
-  // 작고, 디바운스 타이밍에 의존하는 테스트 플레이크도 피한다). 비면 제거한다.
-  useEffect(() => {
-    try {
-      if (draft) window.localStorage.setItem(draftKey, draft);
-      else window.localStorage.removeItem(draftKey);
-    } catch {
-      // localStorage 접근 불가(프라이빗 모드 등) — 보존 없이 동작.
-    }
-  }, [draft, draftKey]);
 
   // 읽음 영수증을 붙일 인덱스: 마지막 *읽힌* 보낸 메시지(절대 마지막 보낸
   // 메시지가 아님). 상대 last_read_at 이 두 발신 사이에 떨어지면 로더가 메시지별
