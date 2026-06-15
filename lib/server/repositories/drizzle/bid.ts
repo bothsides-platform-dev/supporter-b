@@ -230,6 +230,26 @@ export class DrizzleBidRepository implements BidRepo {
       .limit(20);
   }
 
+  async listForBuyer(wsId: string, limit: number, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // 초성 검색 companion — searchForBuyer 와 동일한 projection, ilike 없이
+    // ws-scope+submitted 만 fetch. 호출자가 getChoseong 로 JS 필터한다.
+    return db
+      .select({
+        bidId: bids.id,
+        rfpId: rfps.code,
+        rfpTitle: rfps.title,
+        pgWsName: workspaces.name,
+        memo: bids.memo,
+      })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .innerJoin(workspaces, eq(bids.pgWsId, workspaces.id))
+      .where(and(eq(rfps.buyerWsId, wsId), eq(bids.status, 'submitted')))
+      .orderBy(desc(bids.submittedAt))
+      .limit(limit);
+  }
+
   async searchForPg(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]> {
     const db = this.h(tx);
     // bids⋈rfps — mirrors searchEntitiesAction.ts (pg bid branch). No ws name
@@ -252,6 +272,24 @@ export class DrizzleBidRepository implements BidRepo {
       )
       .orderBy(desc(bids.submittedAt))
       .limit(20);
+  }
+
+  async listForPg(wsId: string, limit: number, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // 초성 검색 companion — searchForPg 와 동일한 projection (no pgWsName),
+    // ilike 없이 pg-scope+submitted 만 fetch. 호출자가 getChoseong 로 JS 필터.
+    return db
+      .select({
+        bidId: bids.id,
+        rfpId: rfps.code,
+        rfpTitle: rfps.title,
+        memo: bids.memo,
+      })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .where(and(eq(bids.pgWsId, wsId), eq(bids.status, 'submitted')))
+      .orderBy(desc(bids.submittedAt))
+      .limit(limit);
   }
 
   async findRfpOwner(

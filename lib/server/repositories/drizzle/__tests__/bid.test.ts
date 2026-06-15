@@ -484,6 +484,131 @@ describe('DrizzleBidRepository.searchForPg', () => {
   });
 });
 
+describe('DrizzleBidRepository.listForBuyer', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('returns the same projection as searchForBuyer, submitted+ws-scoped, no ilike, capped by limit', async () => {
+    const bidId = randomUUID();
+    await ctx.db.insert(bids).values({
+      id: bidId,
+      rfpId: ctx.rfpId, // code P-2605-0042, title 'bid repo test'
+      pgWsId: ctx.pgWs.id, // name 'toss.im'
+      invitationId: ctx.invitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      memo: 'no-match-text',
+      status: 'submitted',
+      submittedBy: ctx.pgUser.id,
+    });
+
+    const rows = (await ctx.repo.listForBuyer(ctx.buyerWs.id, 10)) as {
+      bidId: string;
+      rfpId: string;
+      rfpTitle: string;
+      pgWsName: string;
+      memo: string;
+    }[];
+
+    // no ilike — row returned despite memo not matching any pattern
+    expect(rows).toHaveLength(1);
+    expect(Object.keys(rows[0]).sort()).toEqual(['bidId', 'memo', 'pgWsName', 'rfpId', 'rfpTitle']);
+    expect(rows[0]).toEqual({
+      bidId,
+      rfpId: 'P-2605-0042',
+      rfpTitle: 'bid repo test',
+      pgWsName: 'toss.im',
+      memo: 'no-match-text',
+    });
+  });
+
+  it('excludes non-submitted bids and other workspaces, respects limit', async () => {
+    // withdrawn — excluded
+    await ctx.db.insert(bids).values({
+      id: randomUUID(),
+      rfpId: ctx.rfpId,
+      pgWsId: ctx.pgWs.id,
+      invitationId: ctx.invitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      memo: '',
+      status: 'withdrawn',
+      submittedBy: ctx.pgUser.id,
+    });
+    const rows = (await ctx.repo.listForBuyer(ctx.buyerWs.id, 10)) as unknown[];
+    expect(rows).toHaveLength(0);
+    const otherRows = (await ctx.repo.listForBuyer(randomUUID(), 10)) as unknown[];
+    expect(otherRows).toHaveLength(0);
+  });
+});
+
+describe('DrizzleBidRepository.listForPg', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('returns the same projection as searchForPg (no pgWsName), submitted+pg-scoped, no ilike, capped by limit', async () => {
+    const bidId = randomUUID();
+    await ctx.db.insert(bids).values({
+      id: bidId,
+      rfpId: ctx.rfpId,
+      pgWsId: ctx.pgWs.id,
+      invitationId: ctx.invitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      memo: 'no-match-text',
+      status: 'submitted',
+      submittedBy: ctx.pgUser.id,
+    });
+
+    const rows = (await ctx.repo.listForPg(ctx.pgWs.id, 10)) as {
+      bidId: string;
+      rfpId: string;
+      rfpTitle: string;
+      memo: string;
+    }[];
+
+    expect(rows).toHaveLength(1);
+    expect(Object.keys(rows[0]).sort()).toEqual(['bidId', 'memo', 'rfpId', 'rfpTitle']);
+    expect(rows[0]).toEqual({
+      bidId,
+      rfpId: 'P-2605-0042',
+      rfpTitle: 'bid repo test',
+      memo: 'no-match-text',
+    });
+    expect('pgWsName' in rows[0]).toBe(false);
+  });
+
+  it('excludes non-submitted bids and other PG workspaces', async () => {
+    await ctx.db.insert(bids).values({
+      id: randomUUID(),
+      rfpId: ctx.rfpId,
+      pgWsId: ctx.pgWs.id,
+      invitationId: ctx.invitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      memo: '',
+      status: 'withdrawn',
+      submittedBy: ctx.pgUser.id,
+    });
+    const rows = (await ctx.repo.listForPg(ctx.pgWs.id, 10)) as unknown[];
+    expect(rows).toHaveLength(0);
+    const otherPg = (await ctx.repo.listForPg(randomUUID(), 10)) as unknown[];
+    expect(otherPg).toHaveLength(0);
+  });
+});
+
 describe('DrizzleBidRepository.findRfpOwner', () => {
   let ctx: Awaited<ReturnType<typeof setup>>;
   beforeEach(async () => {

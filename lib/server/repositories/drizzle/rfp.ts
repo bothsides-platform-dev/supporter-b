@@ -370,4 +370,21 @@ export class DrizzleRfpRepository implements RfpRepo {
       .orderBy(desc(rfps.createdAt))
       .limit(20);
   }
+
+  async listForBuyer(wsId: string, limit: number, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // 초성 검색 companion — searchForBuyer 와 동일한 화이트리스트 projection,
+    // ilike 없이 ws-scope 만 fetch. 호출자가 getChoseong 로 JS 필터한다.
+    return db
+      .select({
+        code: rfps.code,
+        title: rfps.title,
+        memo: rfps.memo,
+        status: rfps.status,
+      })
+      .from(rfps)
+      .where(eq(rfps.buyerWsId, wsId))
+      .orderBy(desc(rfps.createdAt))
+      .limit(limit);
+  }
 }

@@ -97,6 +97,8 @@ export interface RfpRepo {
   reserveNextCode(yearMonth: string, tx?: Tx): Promise<string>;
   /** 구매사 검색 — 화이트리스트 projection(code·title·memo·status). pattern 은 호출자가 escape+wrap. */
   searchForBuyer(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]>;
+  /** 초성 검색용 — searchForBuyer 와 동일 projection, ilike 없이 ws-scope 만 fetch (호출자가 JS 필터). */
+  listForBuyer(wsId: string, limit: number, tx?: Tx): Promise<unknown[]>;
 }
 
 // ── Invitation ────────────────────────────────────────────────────────
@@ -500,8 +502,12 @@ export interface BidRepo {
   updateStatus(id: string, status: Bid['status'], tx?: Tx): Promise<void>;
   /** 구매사 검색 — bids⋈rfps⋈workspaces projection. pattern 은 호출자가 escape+wrap. */
   searchForBuyer(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]>;
+  /** 초성 검색용 — searchForBuyer 와 동일 projection, ilike 없이 ws-scope+submitted 만 fetch (호출자가 JS 필터). */
+  listForBuyer(wsId: string, limit: number, tx?: Tx): Promise<unknown[]>;
   /** PG 검색 — bids⋈rfps projection. pattern 은 호출자가 escape+wrap. */
   searchForPg(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]>;
+  /** 초성 검색용 — searchForPg 와 동일 projection, ilike 없이 ws-scope+submitted 만 fetch (호출자가 JS 필터). */
+  listForPg(wsId: string, limit: number, tx?: Tx): Promise<unknown[]>;
   /** bidId → 소속 RFP id + 소유 구매사 (ACL/업로드 게이트). */
   findRfpOwner(
     bidId: string,

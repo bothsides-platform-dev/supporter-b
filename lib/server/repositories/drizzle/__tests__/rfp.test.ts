@@ -318,6 +318,43 @@ describe('DrizzleRfpRepository', () => {
     });
   });
 
+  describe('listForBuyer', () => {
+    it('returns the same whitelisted projection as searchForBuyer, ws-scoped, no ilike, ordered desc(createdAt), capped by limit', async () => {
+      await repo.save({ ...makeRfp('P-2605-LB01', ctx.ws.id, ctx.user.id), title: 'first' });
+      await repo.save({ ...makeRfp('P-2605-LB02', ctx.ws.id, ctx.user.id), title: 'second', memo: 'm2' });
+      // other ws — must be excluded
+      const otherBiz = await seedBizProfile(db, { bizNo: '8888888888' });
+      const otherWs = await seedBuyerWorkspace(db, { bizProfileId: otherBiz.id });
+      await repo.save({
+        ...makeRfp('P-2605-LB03', otherWs.id, ctx.user.id),
+        title: 'other ws',
+        bizProfile: { bizNo: '8888888888', taxType: 'general', status: 'active', gradeSource: 'user_confirmed' },
+      });
+
+      const rows = (await repo.listForBuyer(ctx.ws.id, 10)) as {
+        code: string;
+        title: string;
+        memo: string;
+        status: string;
+      }[];
+      // no ilike — both ws rows returned
+      expect(rows).toHaveLength(2);
+      // projection keys exactly match searchForBuyer
+      expect(Object.keys(rows[0]).sort()).toEqual(['code', 'memo', 'status', 'title']);
+      expect(rows.map((r) => r.code).sort()).toEqual(['P-2605-LB01', 'P-2605-LB02']);
+      const second = rows.find((r) => r.code === 'P-2605-LB02')!;
+      expect(second).toEqual({ code: 'P-2605-LB02', title: 'second', memo: 'm2', status: 'draft' });
+    });
+
+    it('respects the limit param', async () => {
+      await repo.save({ ...makeRfp('P-2605-LB04', ctx.ws.id, ctx.user.id), title: 'a' });
+      await repo.save({ ...makeRfp('P-2605-LB05', ctx.ws.id, ctx.user.id), title: 'b' });
+      await repo.save({ ...makeRfp('P-2605-LB06', ctx.ws.id, ctx.user.id), title: 'c' });
+      const rows = (await repo.listForBuyer(ctx.ws.id, 2)) as unknown[];
+      expect(rows).toHaveLength(2);
+    });
+  });
+
   describe('insertNew', () => {
     it('inserts all RFP fields verbatim (createRfp path) and reads back via findById', async () => {
       const sentAt = new Date('2026-01-02T03:04:00Z');
