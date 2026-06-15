@@ -1,11 +1,9 @@
 'use server';
 
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
 
-import { users } from '@/lib/db/schema';
+import { getUserRepo } from '@/lib/server/repositories/factory';
 import {
-  actionDb,
   normalizeEmail,
   type AuthActionResult,
 } from './_shared';
@@ -35,12 +33,8 @@ export async function signupEmailAction(
 
   const email = normalizeEmail(parsed.data.email);
 
-  const [existing] = await actionDb()
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
-  if (existing) return { ok: false, error: 'EMAIL_TAKEN' };
+  const exists = await (await getUserRepo()).existsByEmail(email);
+  if (exists) return { ok: false, error: 'EMAIL_TAKEN' };
 
   await issueSignupEmail({
     email,

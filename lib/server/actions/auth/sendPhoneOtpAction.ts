@@ -1,10 +1,9 @@
 'use server';
 
 import { randomInt } from 'node:crypto';
-import { and, gte, count, eq } from 'drizzle-orm';
-import { phoneOtps } from '@/lib/db/schema';
+import { getPhoneOtpRepo } from '@/lib/server/repositories/factory';
 import { sendSms } from '@/lib/server/sms/solapi';
-import { actionDb, type AuthActionResult } from './_shared';
+import { type AuthActionResult } from './_shared';
 import { hashOtpCode, normalizePhone } from './phoneOtpUtils';
 
 const RATE_LIMIT_COUNT = 3;
@@ -21,34 +20,28 @@ export async function sendPhoneOtpAction(input: {
   const phone = normalizePhone(input.phone);
   if (!phone) return { ok: false, error: 'INVALID_PHONE' };
 
-  const db = actionDb();
+  const phoneOtpRepo = await getPhoneOtpRepo();
   const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS);
 
-  const [{ value: recentCount }] = await db
-    .select({ value: count() })
-    .from(phoneOtps)
-    .where(and(eq(phoneOtps.phone, phone), gte(phoneOtps.createdAt, windowStart)));
+  const recentCount = await phoneOtpRepo.countRecent(phone, windowStart);
 
-  if (Number(recentCount) >= RATE_LIMIT_COUNT) {
+  if (recentCount >= RATE_LIMIT_COUNT) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
 
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-  const [row] = await db
-    .insert(phoneOtps)
-    .values({
-      phone,
-      codeHash: hashOtpCode(code),
-      expiresAt,
-    })
-    .returning({ id: phoneOtps.id });
+  const id = await phoneOtpRepo.create({
+    phone,
+    codeHash: hashOtpCode(code),
+    expiresAt,
+  });
 
   try {
     await sendSms(phone, `Supporter B 인증번호: ${code} (5분 이내 입력)`);
   } catch {
-    await db.delete(phoneOtps).where(eq(phoneOtps.id, row.id));
+    await phoneOtpRepo.remove(id);
     return { ok: false, error: 'SMS_FAILED' };
   }
 
