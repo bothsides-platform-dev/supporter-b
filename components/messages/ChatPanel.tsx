@@ -25,10 +25,10 @@ import { XIcon, EnvelopeIcon, ChevronRightIcon, ArrowUpIcon } from '@/components
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { toast } from '@/lib/toast';
 import {
-  useChatRailStore,
-  type ChatRailCounterparty,
-  type ChatRailTab,
-} from '@/lib/stores/chat-rail';
+  useDealRoom,
+  type DealRoomCounterparty,
+  type DealRoomTab,
+} from '@/components/deal-room/DealRoomContext';
 import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import { TeamThreadPane } from './TeamThreadPane';
@@ -52,9 +52,7 @@ const RAIL_TABS = [
 ];
 
 export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
-  const tab = useChatRailStore((s) => s.tab);
-  const counterparty = useChatRailStore((s) => s.counterparty);
-  const setTab = useChatRailStore((s) => s.setTab);
+  const { tab, counterparty, setTab } = useDealRoom();
 
   // wsId → conversationId 읽기 전용 해소 — 열람만으로 대화를 만들지 않는다(sealed-bid).
   // conversationId: undefined=해소 중, null=대화 없음(새 대화 컴포저), string=해소됨.
@@ -71,7 +69,7 @@ export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
           className="flex-1 border-b-0"
           tabs={RAIL_TABS}
           active={tab}
-          onChange={(id) => setTab(id as ChatRailTab)}
+          onChange={(id) => setTab(id as DealRoomTab)}
         />
         {onClose && (
           <IconButton label="채팅 패널 닫기" size="sm" onClick={onClose}>
@@ -165,7 +163,7 @@ function NewConversationPane({
   onCreated,
   sendDisabled = false,
 }: {
-  counterparty: ChatRailCounterparty;
+  counterparty: DealRoomCounterparty;
   rfpId: string;
   onCreated: (wsId: string, conversationId: string) => void;
   sendDisabled?: boolean;
