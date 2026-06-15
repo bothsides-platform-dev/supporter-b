@@ -32,9 +32,7 @@ import {
 } from '@/lib/stores/chat-rail';
 import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
-import { TeamThreadView } from './TeamThreadView';
-import { getTeamThreadPromise, invalidateTeamThread } from './team-thread-cache';
-import type { LoadTeamThreadResult } from '@/lib/server/actions/chat/teamThreadLoader';
+import { TeamThreadPane } from './TeamThreadPane';
 
 type Props = {
   /** RFP uuid (라우트 param 은 사람용 code — 혼동 주의). */
@@ -275,60 +273,5 @@ function NewConversationPane({
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * 팀 채팅 탭 — useEffect 로더 패턴. use(serverAction) 의 render-phase Router
- * 업데이트 경고를 피한다. unmount 시 캐시 무효화 → 재진입마다 신선한 스레드.
- */
-function TeamThreadPane({ rfpId }: { rfpId: string }) {
-  const [result, setResult] = useState<LoadTeamThreadResult | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- rfpId/재시도 변경 시 이전 스레드를 즉시 비워 스켈레톤을 보여주는 의도된 리셋
-    setResult(null);
-    getTeamThreadPromise(rfpId).then((r) => {
-      if (!cancelled) setResult(r);
-    });
-    return () => {
-      cancelled = true;
-      invalidateTeamThread(rfpId);
-    };
-  }, [rfpId, retryCount]);
-
-  if (!result) return <ThreadSkeleton />;
-
-  if (!result.ok) {
-    return (
-      <EmptyState
-        title="팀 채팅을 불러오지 못했어요"
-        description="네트워크 상태를 확인하고 다시 시도해 주세요."
-        className="py-12"
-        action={
-          <Button
-            size="sm"
-            onClick={() => {
-              invalidateTeamThread(rfpId);
-              setRetryCount((n) => n + 1);
-            }}
-          >
-            다시 시도
-          </Button>
-        }
-      />
-    );
-  }
-
-  return (
-    <TeamThreadView
-      rfpId={result.rfpId}
-      workspaceId={result.workspaceId}
-      viewerUserId={result.viewerUserId}
-      teamMembers={result.teamMembers}
-      messages={result.messages}
-    />
   );
 }
