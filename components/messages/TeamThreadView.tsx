@@ -9,7 +9,7 @@
  * 내부 스레드이므로 타인 메시지에 멤버 이름+아바타 헤더를 단다. ChatRail 의
  * '팀 채팅' 탭 전용.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,16 +30,8 @@ import { useStickToBottom } from './useStickToBottom';
 import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 import { MentionText } from './MentionText';
 import { MentionDropdown } from './MentionDropdown';
-import {
-  detectMentionQuery,
-  buildMentionItems,
-  applyMentionSelection,
-  resolveMentionsToBody,
-  type MentionCandidate,
-  type MentionItem,
-  type MentionQuery,
-  type TrackedMention,
-} from './mention-input';
+import { type MentionCandidate } from './mention-input';
+import { useMentionPicker } from './useMentionPicker';
 
 type Props = {
   rfpId: string;
@@ -72,27 +64,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
     isOwnLast: lastIsOwn,
   });
 
-  const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null);
-  const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
-  const [mentionIndex, setMentionIndex] = useState(0);
-  const trackedRef = useRef<TrackedMention[]>([]);
-  const caretRef = useRef<number | null>(null);
-
-  // 렌더용 이름 맵 + 동명이인 집합(전체 로스터 기준).
-  const nameById = useMemo(
-    () => new Map(teamMembers.map((m) => [m.userId, m.name])),
-    [teamMembers],
-  );
-  const duplicateNames = useMemo(() => {
-    const seen = new Map<string, number>();
-    for (const m of teamMembers) seen.set(m.name, (seen.get(m.name) ?? 0) + 1);
-    return new Set([...seen.entries()].filter(([, n]) => n > 1).map(([name]) => name));
-  }, [teamMembers]);
-  // 본인 제외 후보(드롭다운).
-  const candidates = useMemo(
-    () => teamMembers.filter((m) => m.userId !== viewerUserId),
-    [teamMembers, viewerUserId],
-  );
+  const mention = useMentionPicker({ teamMembers, viewerUserId, textareaRef, draft, setDraft });
 
   // 마운트(및 rfp 전환) 시 팀 스레드를 읽음 처리한다 — ThreadView 의
   // markConversationReadAction 패턴 미러링.
@@ -100,13 +72,6 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
     void markTeamThreadReadAction({ rfpId });
   }, [rfpId]);
 
-  useEffect(() => {
-    if (caretRef.current !== null && textareaRef.current) {
-      const pos = caretRef.current;
-      textareaRef.current.setSelectionRange(pos, pos);
-      caretRef.current = null;
-    }
-  }, [draft]);
 
   useTeamChannel(rfpId, workspaceId, {
     onMessage: (data: TeamLivePayload) => {
@@ -150,7 +115,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
 
   async function handleSend(): Promise<void> {
     if (sending) return;
-    const body = resolveMentionsToBody(draft, trackedRef.current).trim();
+    const body = mention.resolveBody(draft).trim();
     const readyAttachments = attachments.filter((a) => a.status === 'ready');
     if (body.length === 0 && readyAttachments.length === 0) return;
     setSending(true);
@@ -175,9 +140,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
       },
     ]);
     setDraft('');
-    trackedRef.current = [];
-    setMentionQuery(null);
-    setMentionItems([]);
+    mention.reset();
     setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
@@ -222,45 +185,8 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
     }
   }
 
-  function pickMention(item: MentionItem): void {
-    if (!mentionQuery) return;
-    const pick =
-      item.kind === 'all'
-        ? ({ kind: 'all' } as const)
-        : ({ kind: 'member', userId: item.userId, name: item.name } as const);
-    const out = applyMentionSelection(draft, mentionQuery, pick);
-    trackedRef.current = [...trackedRef.current, out.tracked];
-    caretRef.current = out.caret;
-    setDraft(out.text);
-    setMentionQuery(null);
-    setMentionItems([]);
-  }
-
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
-    if (mentionQuery && mentionItems.length > 0) {
-      if (e.nativeEvent.isComposing) return;
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setMentionIndex((i) => (i + 1) % mentionItems.length);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setMentionIndex((i) => (i - 1 + mentionItems.length) % mentionItems.length);
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        pickMention(mentionItems[mentionIndex]);
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setMentionQuery(null);
-        setMentionItems([]);
-        return;
-      }
-    }
+    if (mention.onKeyDown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       // 한글 IME 조합 확정 Enter(keyCode 229)는 전송이 아니다.
       if (e.nativeEvent.isComposing) return;
@@ -338,7 +264,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
                       m.pending && 'opacity-60',
                     )}
                   >
-                    <MentionText body={m.body} nameById={nameById} viewerUserId={viewerUserId} />
+                    <MentionText body={m.body} nameById={mention.nameById} viewerUserId={viewerUserId} />
                     {m.attachments.length > 0 && (
                       <MessageAttachmentGrid attachments={m.attachments} />
                     )}
@@ -415,13 +341,13 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
       {/* 컴포저 — 첨부 + textarea + 보내기 */}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <div className="relative flex items-end gap-2">
-          {mentionQuery && mentionItems.length > 0 && (
+          {mention.dropdownVisible && (
             <MentionDropdown
-              items={mentionItems}
-              activeIndex={mentionIndex}
-              duplicateNames={duplicateNames}
-              onPick={pickMention}
-              onHover={setMentionIndex}
+              items={mention.items}
+              activeIndex={mention.activeIndex}
+              duplicateNames={mention.duplicateNames}
+              onPick={mention.pick}
+              onHover={mention.onHover}
             />
           )}
           <IconButton
@@ -455,16 +381,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
               setDraft(value);
               e.target.style.height = 'auto';
               e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
-              const q = detectMentionQuery(value, e.target.selectionStart ?? value.length);
-              if (q) {
-                const items = buildMentionItems(candidates, q.query);
-                setMentionQuery(items.length > 0 ? q : null);
-                setMentionItems(items);
-                setMentionIndex(0);
-              } else {
-                setMentionQuery(null);
-                setMentionItems([]);
-              }
+              mention.onTextChange(value, e.target.selectionStart ?? value.length);
             }}
             onKeyDown={handleKeyDown}
             className="min-h-8 max-h-40 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-1.5 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
