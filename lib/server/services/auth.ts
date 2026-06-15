@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { baseUrl } from '@/lib/server/env';
@@ -7,6 +7,7 @@ import { addMinutes, generateToken, hashToken } from '@/lib/server/token';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderAuthReset } from '@/lib/server/outbox/templates/authReset';
 import { renderAuthEmailChange } from '@/lib/server/outbox/templates/authEmailChange';
+import { renderAuthVerify } from '@/lib/server/outbox/templates/authVerify';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceInvite';
 import { purgeUnverifiedSignup } from '@/lib/server/actions/auth/_purgeUnverifiedSignup';
@@ -30,6 +31,14 @@ function normalizeEmail(raw: string): string {
 function bucket15Min(now: Date = new Date()): number {
   return Math.floor(now.getTime() / (15 * 60 * 1000));
 }
+
+/** 6자리 숫자 OTP 코드 생성 (000000~999999). */
+function generateEmailCode(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, '0');
+}
+
+// 코드 오입력 허용 횟수 (전화 OTP verifyPhoneOtpAction 과 동일).
+const MAX_CODE_ATTEMPTS = 5;
 
 export type WorkspaceStub = { id: string; name: string };
 
@@ -382,6 +391,194 @@ export class AuthService {
     }
 
     return { ok: true };
+  }
+
+  /**
+   * signup_email 토큰 발급 + 인증 메일 enqueue (link + 6자리 코드).
+   *
+   * 가입 게이트(EMAIL_TAKEN) 검사와 무관한 순수 발급 로직 — 두 호출자가 공유한다:
+   *   - signupEmailAction: 가입 전(유저 없음) 발급, EMAIL_TAKEN 가드는 호출자가 수행
+   *   - sendMyEmailVerificationAction: 가입 후(유저 존재) /pending-approval 자동 발송·재발송
+   *
+   * `email` 은 normalizeEmail 을 거친 값이어야 한다. TTL 15분.
+   *
+   * dedupe·토큰 회전 정책 (requestPasswordReset 과 동일한 enqueue-before-rotate):
+   *   1. 메일을 **먼저** enqueue 한다.
+   *   2. dedupe 충돌로 새 메일이 큐에 안 들어가면(`entry === null`) 이전 미소비
+   *      토큰을 그대로 두고 종료한다 — 그래야 직전 메일의 링크·코드가 계속 유효하다
+   *      (burn 후 메일도 못 보내면 작동 인증 수단이 0개가 되는 함정 회피).
+   *   3. 새 메일이 실제로 enqueue 됐을 때만 이전 토큰을 만료(expiresAt=now, consumedAt 은
+   *      NULL 유지 — "consumedAt IS NOT NULL ⟺ 인증 완료" 불변식 보존)하고 새 토큰 저장.
+   *
+   * mode:
+   *   - 'auto'  (default): /pending-approval 마운트 자동 발송. 15분 버킷 dedupeKey 로
+   *      리마운트/중복 마운트에 멱등.
+   *   - 'resend': 사용자가 누른 명시적 재발송. tokenHash 기반 유니크 dedupeKey 로 같은
+   *      버킷에서도 항상 새 메일을 보낸다 (resendWorkspaceInviteAction 과 동일 패턴).
+   *      도배 방지는 클라이언트 쿨다운이 담당한다.
+   */
+  async issueSignupEmail(params: {
+    email: string;
+    inviteToken?: string;
+    workspaceType?: 'buyer' | 'pg';
+    mode?: 'auto' | 'resend';
+  }): Promise<void> {
+    const { email, mode = 'auto' } = params;
+
+    const rawToken = generateToken();
+    const tokenHash = hashToken(rawToken);
+    const expiresAt = addMinutes(new Date(), 15);
+    const emailCode = generateEmailCode();
+    const emailCodeHash = hashToken(emailCode);
+
+    const verifyUrl = `${baseUrl()}/auth/verify?token=${rawToken}`;
+    const html = await renderAuthVerify({ verifyUrl, expiresMinutes: 15, emailCode });
+
+    // 명시적 재발송은 tokenHash 유니크 키 → 같은 15분 버킷에서도 dedup 되지 않고 항상
+    // 전송. 마운트 자동 발송은 버킷 키 → 리마운트/중복 마운트에 멱등.
+    const dedupeKey =
+      mode === 'resend'
+        ? `signup-verify-resend:${email}:${tokenHash}`
+        : `signup-verify:${email}:${bucket15Min()}`;
+
+    const metaFields = {
+      ...(params.inviteToken ? { inviteToken: params.inviteToken } : {}),
+      ...(params.workspaceType ? { workspaceType: params.workspaceType } : {}),
+      emailCode: emailCodeHash,
+    };
+
+    await this._db.transaction(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (tx: any) => {
+        const entry = await this.outboxRepo.enqueue(
+          {
+            event: 'auth.verify',
+            to: email,
+            subject: '[Supporter B] 이메일 인증을 완료해 주세요',
+            html,
+            dedupeKey,
+          },
+          tx,
+        );
+        // dedupe 충돌 — 새 메일이 안 나갔으므로 이전 토큰을 그대로 두고 종료.
+        if (!entry) return;
+
+        await this.verificationTokenRepo.expirePendingByEmail(
+          { email, purpose: 'signup_email', now: new Date() },
+          tx,
+        );
+        await this.verificationTokenRepo.save(
+          {
+            id: randomUUID(),
+            purpose: 'signup_email',
+            email,
+            tokenHash,
+            issuedAt: new Date().toISOString(),
+            expiresAt,
+            meta: metaFields,
+          },
+          tx,
+        );
+      },
+    );
+
+    flushAfterCommit();
+  }
+
+  /**
+   * 이메일로 발송된 6자리 OTP 코드로 signup_email 토큰을 인증.
+   * 링크 클릭이 어려운 환경(다른 기기, 웹메일)의 폴백 경로.
+   * 코드 → sha256 해시 → meta.emailCode 비교 → atomic consumeByEmailCode.
+   *
+   * `code` 는 raw 6자리 문자열을 받아 서비스 안에서 hashToken 한다 (resetPassword 가
+   * raw 토큰을 받는 것과 동일). zod `/^\d{6}$/` 형식 가드 + normalizeEmail 은 액션 책임.
+   */
+  async verifyEmailCode(input: {
+    email: string;
+    code: string;
+  }): Promise<ServiceResult<{ email: string; inviteToken?: string; workspaceType?: 'buyer' | 'pg' }>> {
+    const codeHash = hashToken(input.code);
+    const now = new Date();
+
+    // F2 — cap brute-force of the 6-digit code (phone OTP has the same guard).
+    const active = await this.verificationTokenRepo.findActiveEmailCodeToken({
+      email: input.email,
+      purpose: 'signup_email',
+      now,
+    });
+    if (!active) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
+    if (active.attempts >= MAX_CODE_ATTEMPTS) {
+      return { ok: false, error: 'MAX_ATTEMPTS' };
+    }
+    if (active.emailCodeHash !== codeHash) {
+      await this.verificationTokenRepo.bumpEmailCodeAttempts(active.id);
+      return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
+    }
+
+    const consumed = await this.verificationTokenRepo.consumeByEmailCode({
+      email: input.email,
+      purpose: 'signup_email',
+      codeHash,
+      now,
+    });
+
+    if (!consumed) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
+
+    // 코드 소비 = 이메일 인증. 이미 생성된 유저의 플래그 전환(없으면 no-op).
+    await this.userRepo.markEmailVerified(consumed.email);
+
+    const meta = consumed.meta && typeof consumed.meta === 'object'
+      ? (consumed.meta as Record<string, unknown>)
+      : {};
+
+    const inviteToken = meta.inviteToken;
+    const rawWorkspaceType = meta.workspaceType;
+
+    return {
+      ok: true,
+      email: consumed.email,
+      inviteToken: typeof inviteToken === 'string' ? inviteToken : undefined,
+      workspaceType:
+        rawWorkspaceType === 'buyer' || rawWorkspaceType === 'pg'
+          ? rawWorkspaceType
+          : undefined,
+    };
+  }
+
+  /**
+   * signup_email 토큰의 atomic 소비 (링크 클릭 경로).
+   *
+   * 토큰 소비 = 이메일 인증: 이미 생성된 유저의 emailVerified 플래그를 전환한다(유저가
+   * 아직 없으면 no-op). 교차 기기/탭과 무관하게 서버 상태가 진실의 원천.
+   *
+   * `rawToken` 은 raw 토큰을 받아 서비스 안에서 hashToken 한다 (resetPassword 와 동일).
+   * !rawToken / typeof 가드는 액션 책임.
+   */
+  async verifyEmailToken(
+    rawToken: string,
+  ): Promise<ServiceResult<{ email: string; inviteToken?: string; workspaceType?: 'buyer' | 'pg' }>> {
+    const consumed = await this.verificationTokenRepo.consume(hashToken(rawToken), new Date());
+    if (!consumed) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
+    if (consumed.purpose !== 'signup_email') return { ok: false, error: 'WRONG_PURPOSE' };
+
+    await this.userRepo.markEmailVerified(consumed.email);
+
+    const meta = consumed.meta && typeof consumed.meta === 'object'
+      ? (consumed.meta as Record<string, unknown>)
+      : {};
+
+    const inviteToken = meta.inviteToken;
+    const rawWorkspaceType = meta.workspaceType;
+
+    return {
+      ok: true,
+      email: consumed.email,
+      inviteToken: typeof inviteToken === 'string' ? inviteToken : undefined,
+      workspaceType:
+        rawWorkspaceType === 'buyer' || rawWorkspaceType === 'pg'
+          ? rawWorkspaceType
+          : undefined,
+    };
   }
 }
 

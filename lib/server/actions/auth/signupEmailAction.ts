@@ -3,11 +3,11 @@
 import { z } from 'zod';
 
 import { getUserRepo } from '@/lib/server/repositories/factory';
+import { getAuthService } from '@/lib/server/services/auth';
 import {
   normalizeEmail,
   type AuthActionResult,
 } from './_shared';
-import { issueSignupEmail } from './_issueSignupEmail';
 
 const Input = z.object({
   email: z.string().email(),
@@ -22,8 +22,8 @@ export type SignupEmailResult = AuthActionResult<{ email: string }>;
  * P2 — issue a signup_email verification token and enqueue the outbox mail.
  *
  * Pre-signup variant: rejects an email that already belongs to a user
- * (EMAIL_TAKEN). The token issuance itself lives in `issueSignupEmail`, shared
- * with `sendMyEmailVerificationAction` (post-signup resend, no EMAIL_TAKEN).
+ * (EMAIL_TAKEN). The token issuance itself lives in AuthService.issueSignupEmail,
+ * shared with `sendMyEmailVerificationAction` (post-signup resend, no EMAIL_TAKEN).
  */
 export async function signupEmailAction(
   input: SignupEmailInput,
@@ -36,7 +36,7 @@ export async function signupEmailAction(
   const exists = await (await getUserRepo()).existsByEmail(email);
   if (exists) return { ok: false, error: 'EMAIL_TAKEN' };
 
-  await issueSignupEmail({
+  await (await getAuthService()).issueSignupEmail({
     email,
     inviteToken: parsed.data.inviteToken,
     workspaceType: parsed.data.workspaceType,
