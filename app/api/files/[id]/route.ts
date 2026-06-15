@@ -68,6 +68,13 @@ function routeDb(): any {
   return globalThis.__bidit_files_db_override__ ?? prodDb;
 }
 
+// Test-only override — the canAccessAttachment helper still takes a raw db
+// handle (injection-only Phase 3.4 exception). Tests install a pglite handle.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function __setFilesDbForTest(db: any | undefined): void {
+  globalThis.__bidit_files_db_override__ = db;
+}
+
 function fail(status: number, msg: string): Response {
   return new Response(msg, { status });
 }

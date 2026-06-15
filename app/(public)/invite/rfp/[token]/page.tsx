@@ -9,14 +9,14 @@
 // 이메일 프리필 수정: 기존에는 inviteEmail={undefined} 고정으로 수동 입력으로
 // 튕겼음. 이제 토큰 해시로 초대 row를 조회 → pgWsId → 워크스페이스 admin 이메일
 // 를 가져와서 InviteUnauthClient 에 전달. 해당 이메일은 로그인 폼에 프리필됨.
-import { eq } from 'drizzle-orm';
 import { auth } from '@/auth';
-import { db as prodDb } from '@/lib/db/client';
-import { rfpInvitations, workspaceMembers, users } from '@/lib/db/schema';
+import {
+  getInvitationRepo,
+  getWorkspaceRepo,
+} from '@/lib/server/repositories/factory';
 import { hashToken } from '@/lib/server/token';
 import { InviteUnauthClient } from './InviteUnauthClient';
 import { InviteAuthedClient } from './InviteAuthedClient';
-import { and } from 'drizzle-orm';
 
 type Props = { params: Promise<{ token: string }> };
 
@@ -30,26 +30,11 @@ export default async function InviteRfpPage({ params }: Props) {
 
   // 토큰 해시로 초대 row 조회 → pgWsId → admin 이메일 프리필
   const tokenHash = hashToken(token);
-  const [invite] = await prodDb
-    .select({ pgWsId: rfpInvitations.pgWsId })
-    .from(rfpInvitations)
-    .where(eq(rfpInvitations.tokenHash, tokenHash))
-    .limit(1);
+  const invite = await (await getInvitationRepo()).findByTokenHash(tokenHash);
 
   let inviteEmail: string | undefined;
   if (invite?.pgWsId) {
-    const [adminUser] = await prodDb
-      .select({ email: users.email })
-      .from(workspaceMembers)
-      .innerJoin(users, eq(workspaceMembers.userId, users.id))
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, invite.pgWsId),
-          eq(workspaceMembers.role, 'admin'),
-        ),
-      )
-      .limit(1);
-    inviteEmail = adminUser?.email;
+    inviteEmail = await (await getWorkspaceRepo()).findAdminEmail(invite.pgWsId);
   }
 
   return (

@@ -8,12 +8,11 @@
 // 인증(기존 유저): acceptWorkspaceInviteAction 서버 사이드 호출.
 //   - ok → /home redirect
 //   - error → 인라인 오류 메시지
-import { eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { db as prodDb } from '@/lib/db/client';
-import { workspaceInvitations, workspaces } from '@/lib/db/schema';
+import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { hashToken } from '@/lib/server/token';
 import { accountExistsForEmail } from '@/lib/server/invite/workspaceInviteLanding';
 import { WorkspaceInviteAuthedClient } from './WorkspaceInviteAuthedClient';
@@ -32,19 +31,8 @@ export default async function WorkspaceInvitePage({ params }: Props) {
   const tokenHash = hashToken(token);
 
   // Resolve invitation + workspace name and session check in parallel (independent).
-  const [[row], session] = await Promise.all([
-    prodDb
-      .select({
-        invitedEmail: workspaceInvitations.invitedEmail,
-        status: workspaceInvitations.status,
-        expiresAt: workspaceInvitations.expiresAt,
-        workspaceName: workspaces.name,
-        workspaceId: workspaceInvitations.workspaceId,
-      })
-      .from(workspaceInvitations)
-      .innerJoin(workspaces, eq(workspaces.id, workspaceInvitations.workspaceId))
-      .where(eq(workspaceInvitations.tokenHash, tokenHash))
-      .limit(1),
+  const [row, session] = await Promise.all([
+    (await getWorkspaceRepo()).findInvitationByTokenHash(tokenHash),
     auth(),
   ]);
   const isAuthed = !!session?.user?.id;
