@@ -72,7 +72,7 @@ export class WorkspaceService {
       return { ok: false, error: 'INVALID_INPUT' };
     }
 
-    const membership = await getMembership(this._db, actor.userId, actor.workspaceId);
+    const membership = await getMembership(actor.userId, actor.workspaceId);
     if (!membership || membership.role !== 'admin') {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
@@ -152,7 +152,7 @@ export class WorkspaceService {
     input: { email: string },
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
-    const membership = await getMembership(this._db, actor.userId, actor.workspaceId);
+    const membership = await getMembership(actor.userId, actor.workspaceId);
     if (!membership || membership.role !== 'admin') {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
@@ -209,7 +209,7 @@ export class WorkspaceService {
     input: { email: string },
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
-    const membership = await getMembership(this._db, actor.userId, actor.workspaceId);
+    const membership = await getMembership(actor.userId, actor.workspaceId);
     if (!membership || membership.role !== 'admin') {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
@@ -268,7 +268,7 @@ export class WorkspaceService {
     input: { targetUserId: string; role: 'admin' | 'member' },
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
-    const membership = await getMembership(this._db, actor.userId, actor.workspaceId);
+    const membership = await getMembership(actor.userId, actor.workspaceId);
     if (!membership || membership.role !== 'admin') {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
@@ -311,7 +311,7 @@ export class WorkspaceService {
     input: { targetUserId: string },
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
-    const membership = await getMembership(this._db, actor.userId, actor.workspaceId);
+    const membership = await getMembership(actor.userId, actor.workspaceId);
     if (!membership || membership.role !== 'admin') {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }

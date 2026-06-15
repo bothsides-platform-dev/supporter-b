@@ -80,12 +80,9 @@ export type RepoBundleForAttachment = {
 };
 
 export async function canAccessAttachment(
-  // `db` is retained for signature compatibility with the file route + tests,
-  // but the owner chain is resolved exclusively through `repos` now (no raw
-  // schema access). Owner lookups forward `tx` so they share the caller's
-  // transaction when one is supplied.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _db: any,
+  // The owner chain is resolved exclusively through `repos` (no raw schema
+  // access). Owner lookups forward `tx` so they share the caller's transaction
+  // when one is supplied.
   att: AttachmentRow,
   session: AttachmentSession,
   repos: RepoBundleForAttachment,

@@ -18,7 +18,6 @@ type Db = any;
 
 /** Membership of a specific workspace, with role + workspace type, or null. */
 export async function getMembership(
-  _db: Db,
   userId: string,
   workspaceId: string,
 ): Promise<ActiveMembership | null> {
@@ -39,12 +38,12 @@ export async function getMembership(
  * user belongs to no workspace.
  */
 export async function resolveInitialMembership(
-  db: Db,
+  _db: Db,
   userId: string,
   lastActiveWorkspaceId: string | null,
 ): Promise<ActiveMembership | null> {
   if (lastActiveWorkspaceId) {
-    const preferred = await getMembership(db, userId, lastActiveWorkspaceId);
+    const preferred = await getMembership(userId, lastActiveWorkspaceId);
     if (preferred) return preferred;
   }
   const workspaceRepo = await getWorkspaceRepo();
