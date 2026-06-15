@@ -409,10 +409,12 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return { id: row.id, canonicalPgKey: row.canonicalPgKey as string };
   }
 
-  async findEarliestActiveWorkspace(tx?: Tx): Promise<{ id: string } | undefined> {
+  async findEarliestActiveWorkspace(
+    tx?: Tx,
+  ): Promise<{ id: string; type: WorkspaceType } | undefined> {
     const db = this.h(tx);
     const [row] = await db
-      .select({ id: workspaces.id })
+      .select({ id: workspaces.id, type: workspaces.type })
       .from(workspaces)
       .where(eq(workspaces.status, 'active'))
       .orderBy(asc(workspaces.createdAt))

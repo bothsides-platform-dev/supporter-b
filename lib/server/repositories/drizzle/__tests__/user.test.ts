@@ -203,10 +203,12 @@ describe('findAuthRowByEmail', () => {
     expect(row).toEqual({
       id,
       email: 'auth@x.com',
+      name: 'Kim',
       passwordHash: 'hash',
       emailVerified: true,
       deletedAt: null,
       lastActiveWorkspaceId: wsId,
+      sessionVersion: 1,
     });
   });
 

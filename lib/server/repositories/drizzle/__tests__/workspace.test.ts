@@ -358,7 +358,10 @@ describe('DrizzleWorkspaceRepository', () => {
         status: 'active',
         createdAt: new Date('2021-01-01T00:00:00Z'),
       });
-      expect(await repo.findEarliestActiveWorkspace()).toEqual({ id: first });
+      expect(await repo.findEarliestActiveWorkspace()).toEqual({
+        id: first,
+        type: 'buyer',
+      });
     });
 
     it('returns undefined when no active workspace exists', async () => {

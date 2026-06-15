@@ -243,10 +243,12 @@ export class DrizzleUserRepository implements UserRepo {
     | {
         id: string;
         email: string;
+        name: string;
         passwordHash: string | null;
         emailVerified: boolean;
         deletedAt: Date | null;
         lastActiveWorkspaceId: string | null;
+        sessionVersion: number;
       }
     | undefined
   > {
@@ -255,10 +257,12 @@ export class DrizzleUserRepository implements UserRepo {
       .select({
         id: users.id,
         email: users.email,
+        name: users.name,
         passwordHash: users.passwordHash,
         emailVerified: users.emailVerified,
         deletedAt: users.deletedAt,
         lastActiveWorkspaceId: users.lastActiveWorkspaceId,
+        sessionVersion: users.sessionVersion,
       })
       .from(users)
       .where(eq(users.email, email))

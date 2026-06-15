@@ -237,8 +237,10 @@ export interface WorkspaceRepo {
     workspaceId: string,
     tx?: Tx,
   ): Promise<{ id: string; canonicalPgKey: string } | undefined>;
-  /** 가장 먼저 만들어진 active 워크스페이스 — 마스터 기본 진입. 없으면 undefined. */
-  findEarliestActiveWorkspace(tx?: Tx): Promise<{ id: string } | undefined>;
+  /** 가장 먼저 만들어진 active 워크스페이스 (id+type) — 마스터 기본 진입. 없으면 undefined. */
+  findEarliestActiveWorkspace(
+    tx?: Tx,
+  ): Promise<{ id: string; type: WorkspaceType } | undefined>;
   /** (userId, workspaceId) 멤버십 — role+type. 없으면 undefined. */
   getMembership(
     userId: string,
@@ -445,7 +447,10 @@ export interface UserRepo {
   markEmailVerifiedById(userId: string, tx?: Tx): Promise<void>;
   /** 마지막 활성 워크스페이스 기억값 갱신. */
   setLastActiveWorkspace(userId: string, workspaceId: string, tx?: Tx): Promise<void>;
-  /** 로그인용 raw auth projection — 도메인 매핑이 버리는 deletedAt·lastActiveWorkspaceId 포함. */
+  /**
+   * 로그인용 raw auth projection — 도메인 매핑이 버리는 deletedAt·lastActiveWorkspaceId
+   * 와 JWT 스탬프에 필요한 name·sessionVersion 포함.
+   */
   findAuthRowByEmail(
     email: string,
     tx?: Tx,
@@ -453,10 +458,12 @@ export interface UserRepo {
     | {
         id: string;
         email: string;
+        name: string;
         passwordHash: string | null;
         emailVerified: boolean;
         deletedAt: Date | null;
         lastActiveWorkspaceId: string | null;
+        sessionVersion: number;
       }
     | undefined
   >;
