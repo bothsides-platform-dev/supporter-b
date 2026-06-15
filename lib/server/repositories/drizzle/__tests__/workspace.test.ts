@@ -833,4 +833,194 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(await repo.filterPgIds([])).toEqual([]);
     });
   });
+
+  describe('createInvitation', () => {
+    it('inserts a pending invitation row with the given fields', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const inviter = await seedUser(db, { email: 'inviter@create-inv.test' });
+      const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+
+      await repo.createInvitation({
+        workspaceId: ws.id,
+        invitedEmail: 'invitee@create-inv.test',
+        invitedByUserId: inviter.id,
+        role: 'member',
+        tokenHash: 'create-inv-hash-1',
+        expiresAt,
+      });
+
+      const [row] = await db
+        .select()
+        .from(workspaceInvitations)
+        .where(eq(workspaceInvitations.tokenHash, 'create-inv-hash-1'));
+      expect(row.workspaceId).toBe(ws.id);
+      expect(row.invitedEmail).toBe('invitee@create-inv.test');
+      expect(row.invitedByUserId).toBe(inviter.id);
+      expect(row.role).toBe('member');
+      expect(row.status).toBe('pending');
+    });
+
+    it('throws a unique violation when a pending invite already exists for the same (workspace, email)', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const inviter = await seedUser(db, { email: 'inviter2@create-inv.test' });
+      const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+      await repo.createInvitation({
+        workspaceId: ws.id,
+        invitedEmail: 'dup@create-inv.test',
+        invitedByUserId: inviter.id,
+        role: 'member',
+        tokenHash: 'create-inv-hash-2a',
+        expiresAt,
+      });
+
+      await expect(
+        repo.createInvitation({
+          workspaceId: ws.id,
+          invitedEmail: 'dup@create-inv.test',
+          invitedByUserId: inviter.id,
+          role: 'member',
+          tokenHash: 'create-inv-hash-2b',
+          expiresAt,
+        }),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('resetPendingInvitationToken', () => {
+    it('updates tokenHash + expiresAt on a matching pending invite and returns true', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const inviter = await seedUser(db, { email: 'admin@reset.test' });
+      const { id } = await seedInvitation(db, {
+        workspaceId: ws.id,
+        invitedByUserId: inviter.id,
+        invitedEmail: 'Pending@Reset.test',
+        tokenHash: 'reset-old-hash',
+        status: 'pending',
+      });
+      const newExpires = new Date(Date.now() + 14 * 24 * 3600 * 1000);
+
+      const ok = await repo.resetPendingInvitationToken({
+        workspaceId: ws.id,
+        email: 'pending@reset.test',
+        tokenHash: 'reset-new-hash',
+        expiresAt: newExpires,
+      });
+      expect(ok).toBe(true);
+
+      const [row] = await db
+        .select({ tokenHash: workspaceInvitations.tokenHash })
+        .from(workspaceInvitations)
+        .where(eq(workspaceInvitations.id, id));
+      expect(row.tokenHash).toBe('reset-new-hash');
+    });
+
+    it('returns false when there is no matching pending invite', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const ok = await repo.resetPendingInvitationToken({
+        workspaceId: ws.id,
+        email: 'nobody@reset.test',
+        tokenHash: 'x',
+        expiresAt: new Date(),
+      });
+      expect(ok).toBe(false);
+    });
+  });
+
+  describe('expirePendingInvitation', () => {
+    it('marks a matching pending invite as expired and returns true', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const inviter = await seedUser(db, { email: 'admin@expire.test' });
+      const { id } = await seedInvitation(db, {
+        workspaceId: ws.id,
+        invitedByUserId: inviter.id,
+        invitedEmail: 'Pending@Expire.test',
+        status: 'pending',
+      });
+
+      const ok = await repo.expirePendingInvitation({ workspaceId: ws.id, email: 'pending@expire.test' });
+      expect(ok).toBe(true);
+
+      const [row] = await db
+        .select({ status: workspaceInvitations.status })
+        .from(workspaceInvitations)
+        .where(eq(workspaceInvitations.id, id));
+      expect(row.status).toBe('expired');
+    });
+
+    it('returns false when there is no matching pending invite', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const ok = await repo.expirePendingInvitation({ workspaceId: ws.id, email: 'nobody@expire.test' });
+      expect(ok).toBe(false);
+    });
+  });
+
+  describe('findInvitationClaimByTokenHash', () => {
+    it('returns claim fields for an existing invitation', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const inviter = await seedUser(db, { email: 'admin@claim-find.test' });
+      const expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+      const { id } = await seedInvitation(db, {
+        workspaceId: ws.id,
+        invitedByUserId: inviter.id,
+        invitedEmail: 'invitee@claim-find.test',
+        tokenHash: 'claim-find-hash',
+        role: 'admin',
+        status: 'pending',
+        expiresAt,
+      });
+
+      const found = await repo.findInvitationClaimByTokenHash('claim-find-hash');
+      expect(found).toBeDefined();
+      expect(found!.id).toBe(id);
+      expect(found!.workspaceId).toBe(ws.id);
+      expect(found!.role).toBe('admin');
+      expect(found!.status).toBe('pending');
+      expect(found!.invitedEmail).toBe('invitee@claim-find.test');
+      expect(found!.expiresAt).toBeInstanceOf(Date);
+    });
+
+    it('returns undefined for an unknown token hash', async () => {
+      expect(await repo.findInvitationClaimByTokenHash('no-such-claim-hash')).toBeUndefined();
+    });
+  });
+
+  describe('countAdmins', () => {
+    it('counts admin members of a workspace', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const a1 = await seedUser(db, { email: 'a1@count-admin.test' });
+      const a2 = await seedUser(db, { email: 'a2@count-admin.test' });
+      const m1 = await seedUser(db, { email: 'm1@count-admin.test' });
+      await seedMembership(db, ws.id, a1.id, 'admin');
+      await seedMembership(db, ws.id, a2.id, 'admin');
+      await seedMembership(db, ws.id, m1.id, 'member');
+      expect(await repo.countAdmins(ws.id)).toBe(2);
+    });
+
+    it('returns 0 when there are no admins', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const m = await seedUser(db, { email: 'm@count-admin.test' });
+      await seedMembership(db, ws.id, m.id, 'member');
+      expect(await repo.countAdmins(ws.id)).toBe(0);
+    });
+  });
+
+  describe('updateMemberRole', () => {
+    it('changes a member role', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const u = await seedUser(db, { email: 'u@update-role.test' });
+      await seedMembership(db, ws.id, u.id, 'member');
+      await repo.updateMemberRole({ workspaceId: ws.id, userId: u.id, role: 'admin' });
+      expect(await repo.getMembership(u.id, ws.id)).toEqual({ role: 'admin', type: 'buyer' });
+    });
+  });
+
+  describe('removeMember', () => {
+    it('removes a member from the workspace', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const u = await seedUser(db, { email: 'u@remove-member.test' });
+      await seedMembership(db, ws.id, u.id, 'member');
+      await repo.removeMember({ workspaceId: ws.id, userId: u.id });
+      expect(await repo.getMembership(u.id, ws.id)).toBeUndefined();
+    });
+  });
 });

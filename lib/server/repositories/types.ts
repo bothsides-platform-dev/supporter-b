@@ -315,6 +315,66 @@ export interface WorkspaceRepo {
   >;
   /** 워크스페이스 관리자(admin) 이메일 — RFP 초대 랜딩 프리필. 없으면 undefined. */
   findAdminEmail(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /**
+   * 멤버 초대 row 생성 (pending). (workspace, lower(email)) pending UNIQUE 위배 시
+   * throw — 호출부가 isUniqueViolation 로 ALREADY_INVITED 분기. invitedEmail 은
+   * 호출부가 normalize 한 값을 그대로 적재.
+   */
+  createInvitation(
+    params: {
+      workspaceId: string;
+      invitedEmail: string;
+      invitedByUserId: string;
+      role: 'admin' | 'member';
+      tokenHash: string;
+      expiresAt: Date;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /**
+   * 재발송 — 매칭되는 pending 초대(workspace + lower(email))의 tokenHash·expiresAt
+   * 갱신. 갱신된 행이 있으면 true(=재발송 대상 존재), 없으면 false(INVITE_NOT_FOUND).
+   */
+  resetPendingInvitationToken(
+    params: { workspaceId: string; email: string; tokenHash: string; expiresAt: Date },
+    tx?: Tx,
+  ): Promise<boolean>;
+  /**
+   * 취소 — 매칭되는 pending 초대(workspace + lower(email))를 'expired' 로 전이.
+   * 전이된 행이 있으면 true, 없으면 false(INVITE_NOT_FOUND).
+   */
+  expirePendingInvitation(
+    params: { workspaceId: string; email: string },
+    tx?: Tx,
+  ): Promise<boolean>;
+  /**
+   * tokenHash 로 초대 claim 입력 조회 — acceptInvite 의 사전검사(status/expiresAt/
+   * invitedEmail) + claimInviteInTx 입력(id/workspaceId/role/expiresAt) 용. 없으면 undefined.
+   * (findInvitationByTokenHash 는 워크스페이스명 조인의 표시용 projection 이라 별도.)
+   */
+  findInvitationClaimByTokenHash(
+    tokenHash: string,
+    tx?: Tx,
+  ): Promise<
+    | {
+        id: string;
+        workspaceId: string;
+        role: 'admin' | 'member';
+        expiresAt: Date;
+        status: string;
+        invitedEmail: string;
+      }
+    | undefined
+  >;
+  /** 워크스페이스의 admin 역할 멤버 수 — 마지막 admin 강등 가드(LAST_ADMIN). */
+  countAdmins(workspaceId: string, tx?: Tx): Promise<number>;
+  /** 멤버 역할 변경. */
+  updateMemberRole(
+    params: { workspaceId: string; userId: string; role: 'admin' | 'member' },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 멤버 제거. */
+  removeMember(params: { workspaceId: string; userId: string }, tx?: Tx): Promise<void>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────

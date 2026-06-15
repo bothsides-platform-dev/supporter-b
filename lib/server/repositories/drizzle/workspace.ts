@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, ilike, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, ilike, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
   workspaces,
   workspaceMembers,
@@ -662,5 +662,141 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       )
       .limit(1);
     return row?.email;
+  }
+
+  async createInvitation(
+    params: {
+      workspaceId: string;
+      invitedEmail: string;
+      invitedByUserId: string;
+      role: 'admin' | 'member';
+      tokenHash: string;
+      expiresAt: Date;
+    },
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db.insert(workspaceInvitations).values({
+      workspaceId: params.workspaceId,
+      invitedEmail: params.invitedEmail,
+      invitedByUserId: params.invitedByUserId,
+      role: params.role,
+      tokenHash: params.tokenHash,
+      expiresAt: params.expiresAt,
+      status: 'pending',
+    });
+  }
+
+  async resetPendingInvitationToken(
+    params: { workspaceId: string; email: string; tokenHash: string; expiresAt: Date },
+    tx?: Tx,
+  ): Promise<boolean> {
+    const db = this.h(tx);
+    const updated = await db
+      .update(workspaceInvitations)
+      .set({ tokenHash: params.tokenHash, expiresAt: params.expiresAt, updatedAt: new Date() })
+      .where(
+        and(
+          eq(workspaceInvitations.workspaceId, params.workspaceId),
+          eq(workspaceInvitations.status, 'pending'),
+          sql`lower(${workspaceInvitations.invitedEmail}) = ${params.email}`,
+        ),
+      )
+      .returning({ id: workspaceInvitations.id });
+    return updated.length > 0;
+  }
+
+  async expirePendingInvitation(
+    params: { workspaceId: string; email: string },
+    tx?: Tx,
+  ): Promise<boolean> {
+    const db = this.h(tx);
+    const updated = await db
+      .update(workspaceInvitations)
+      .set({ status: 'expired', updatedAt: new Date() })
+      .where(
+        and(
+          eq(workspaceInvitations.workspaceId, params.workspaceId),
+          eq(workspaceInvitations.status, 'pending'),
+          sql`lower(${workspaceInvitations.invitedEmail}) = ${params.email}`,
+        ),
+      )
+      .returning({ id: workspaceInvitations.id });
+    return updated.length > 0;
+  }
+
+  async findInvitationClaimByTokenHash(
+    tokenHash: string,
+    tx?: Tx,
+  ): Promise<
+    | {
+        id: string;
+        workspaceId: string;
+        role: 'admin' | 'member';
+        expiresAt: Date;
+        status: string;
+        invitedEmail: string;
+      }
+    | undefined
+  > {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({
+        id: workspaceInvitations.id,
+        workspaceId: workspaceInvitations.workspaceId,
+        role: workspaceInvitations.role,
+        expiresAt: workspaceInvitations.expiresAt,
+        status: workspaceInvitations.status,
+        invitedEmail: workspaceInvitations.invitedEmail,
+      })
+      .from(workspaceInvitations)
+      .where(eq(workspaceInvitations.tokenHash, tokenHash))
+      .limit(1);
+    return row ?? undefined;
+  }
+
+  async countAdmins(workspaceId: string, tx?: Tx): Promise<number> {
+    const db = this.h(tx);
+    const [{ value }] = await db
+      .select({ value: count() })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.role, 'admin'),
+        ),
+      );
+    return value;
+  }
+
+  async updateMemberRole(
+    params: { workspaceId: string; userId: string; role: 'admin' | 'member' },
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(workspaceMembers)
+      .set({ role: params.role })
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, params.workspaceId),
+          eq(workspaceMembers.userId, params.userId),
+        ),
+      );
+  }
+
+  async removeMember(
+    params: { workspaceId: string; userId: string },
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .delete(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, params.workspaceId),
+          eq(workspaceMembers.userId, params.userId),
+        ),
+      );
   }
 }
