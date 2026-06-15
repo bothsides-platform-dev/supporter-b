@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.22.3] - 2026-06-15
+
+### Changed
+
+- **내부 구조 정리 — 프론트엔드 중복 컴포넌트 제거 (개발자 전용, 사용자 화면·동작 변화 없음)**: 멀티에이전트 분석으로 찾은 중복을 단일 출처로 모으는 리팩토링 1차분이에요. 채팅 스레드 캐시 두 개를 공통 팩토리(`createSuspensePromiseCache`)로, 샘플 삭제 배너 두 벌(구매사·PG)을 공용 컴포넌트로(삭제 액션은 권한이 달라 분리 유지), `ChatPanel` 안에 복제돼 있던 팀 채팅 페인을 별도 파일로 합쳤어요. 계약 유형 라벨·색(`CONTRACT_TYPE_LABELS`)은 3곳 중복을 `lib/types`로, 견적 상태 칩 맵(정식 페이지·인터셉트 모달·목록표 3중복)은 새 `lib/rfp-status`로 일원화했고, 키보드 단축키 키캡(`Kbd`/`ModifierShortcut`)을 vendored shadcn 슬롯에서 프로젝트 프리미티브로 옮겼어요. 동작은 이전과 완전히 똑같아요(전체 테스트 3249개 통과, 순 −193줄).
+
 ## [0.2.22.2] - 2026-06-15
 
 ### Changed
