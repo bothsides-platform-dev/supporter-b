@@ -33,6 +33,7 @@ import {
 import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import { TeamThreadPane } from './TeamThreadPane';
+import { ChatComposerTextarea } from './ChatComposerTextarea';
 
 type Props = {
   /** RFP uuid (라우트 param 은 사람용 code — 혼동 주의). */
@@ -241,24 +242,13 @@ function NewConversationPane({
       )}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <div className="flex items-end gap-2">
-          <textarea
-            rows={1}
+          <ChatComposerTextarea
             value={draft}
-            maxLength={4000}
+            onChange={setDraft}
+            onSubmit={() => void handleSend()}
             disabled={sendDisabled}
             placeholder="메시지를 입력하세요…"
-            onChange={(e) => {
-              setDraft(e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                if (e.nativeEvent.isComposing) return;
-                e.preventDefault();
-                void handleSend();
-              }
-            }}
+            maxLength={4000}
             className="min-h-8 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-1.5 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
           />
           <Button
