@@ -20,6 +20,7 @@ import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageAttachmentGrid } from './MessageAttachmentGrid';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
+import { ChatComposerTextarea } from './ChatComposerTextarea';
 import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 
 type Props = {
@@ -143,7 +144,6 @@ export function ThreadView({
   // timestamp, so treat its arrival time as "read up to now".
   const [readAt, setReadAt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastTypingSentAt = useRef(0);
   // 자동 스크롤: 리스트 컨테이너 + 하단 sentinel. prevLen 으로 "새 메시지 도착"을
   // 감지하고, "하단 근처"일 때만 자동으로 따라간다(위로 올려 과거 글 읽는 중엔 점프 금지).
@@ -278,11 +278,6 @@ export function ThreadView({
     [localMessages],
   );
 
-  function autoGrow(el: HTMLTextAreaElement): void {
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-  }
-
   async function handleSend(): Promise<void> {
     const body = draft.trim();
     if (sending || sendDisabled) return;
@@ -317,7 +312,6 @@ export function ThreadView({
     // 컴포저는 즉시 비운다(표준 메신저 동작). 실패하면 아래에서 되돌린다.
     setDraft('');
     setAttachments([]);
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     let result: Awaited<ReturnType<typeof sendChatMessageAction>>;
     try {
@@ -368,16 +362,6 @@ export function ThreadView({
     lastTypingSentAt.current = now;
     sendTyping();
   }, [sendTyping]);
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      // 한글 IME 조합 확정 Enter(keyCode 229)는 전송이 아니다 — 조합 중
-      // 전송되면 글자가 잘리거나 이중 전송된다.
-      if (e.nativeEvent.isComposing) return;
-      e.preventDefault();
-      void handleSend();
-    }
-  }
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1">
@@ -670,18 +654,15 @@ export function ThreadView({
             e.target.value = '';
           }}
         />
-        <textarea
-          ref={textareaRef}
+        <ChatComposerTextarea
           value={draft}
-          disabled={sendDisabled}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            autoGrow(e.target);
+          onChange={(v) => {
+            setDraft(v);
             handleTyping();
           }}
-          onKeyDown={handleKeyDown}
+          onSubmit={handleSend}
+          disabled={sendDisabled}
           placeholder="메시지를 입력하세요…"
-          rows={1}
           className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-1.5 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
         />
         <Button
