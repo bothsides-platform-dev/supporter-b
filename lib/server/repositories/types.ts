@@ -418,6 +418,12 @@ export interface NotificationRepo {
   ): Promise<boolean>;
   /** 동일 window 내 pending team_chat 인앱 알림 존재 여부(rfp 단위 dedupe). */
   hasPendingTeamNotification(userId: string, rfpId: string, windowStart: Date, tx?: Tx): Promise<boolean>;
+  /** 소유권 검증 + type 조회 (markRead/retryEmail). 없거나 타인 것이면 undefined. */
+  findOwnedById(
+    notificationId: string,
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ id: string; type: string } | undefined>;
 }
 
 // ── Contract ──────────────────────────────────────────────────────────
@@ -515,6 +521,32 @@ export interface AttachmentRepo {
   findByChatMessageIds(ids: string[], tx?: Tx): Promise<(Attachment & { chatMessageId: string })[]>;
   /** 대화 전체 첨부 목록 — chat_messages JOIN, uploadedAt asc. */
   findByConversationId(conversationId: string, tx?: Tx): Promise<Attachment[]>;
+  /**
+   * draft 첨부를 owner row 에 링크 (exclusive-arc). owner 는 정확히 한 키만 설정 —
+   * 그 컬럼을 set 한다. 모든 owner 컬럼이 IS NULL 인 행만 갱신(이미 링크된 행
+   * re-parent 방지). uploadedBy 지정 시 업로더 소유분만. 빈 ids 는 안전한 no-op.
+   */
+  claim(
+    params: {
+      ids: string[];
+      owner: {
+        rfpId?: string;
+        bidId?: string;
+        bidNoteId?: string;
+        chatMessageId?: string;
+        rfpTeamMessageId?: string;
+      };
+      uploadedBy?: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /** claim 전 소유권·미링크 검증용 — 모든 owner 컬럼 IS NULL 인 행만 projection 반환. */
+  findUnclaimedByIds(
+    ids: string[],
+    tx?: Tx,
+  ): Promise<Pick<AttachmentRecord, 'id' | 'rfpId' | 'bidId' | 'bidNoteId' | 'uploadedBy'>[]>;
+  /** 단건 삭제 (고아 정리). */
+  remove(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── Outbox ────────────────────────────────────────────────────────────
@@ -570,6 +602,13 @@ export interface OutboxRepo {
     limit?: number,
     tx?: Tx,
   ): Promise<{ ok: number; failed: number }>;
+  /** retryEmail — 특정 수신자+이벤트의 가장 최근 failed outbox 행. 없으면 undefined. */
+  findLatestFailed(
+    params: { to: string; event: OutboxEvent },
+    tx?: Tx,
+  ): Promise<{ id: string } | undefined>;
+  /** failed → pending 재시도 전환 (status 만 갱신 — attempts/lastError 보존). */
+  requeue(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── Chat: Conversation ────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 // pending, markResult, and `flush(sender, limit)` which drains pending rows
 // through a `Sender` under FOR UPDATE SKIP LOCKED so concurrent cron + post-
 // commit callers don't double-deliver.
-import { eq, isNotNull, sql, lte, and, inArray, notInArray } from 'drizzle-orm';
+import { desc, eq, isNotNull, sql, lte, and, inArray, notInArray } from 'drizzle-orm';
 import { outboxEntries } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { OutboxEntry, OutboxEvent, Sender } from '../../outbox/types';
@@ -270,5 +270,34 @@ export class DrizzleOutboxRepository implements OutboxRepo {
     }
 
     return { ok, failed };
+  }
+
+  async findLatestFailed(
+    params: { to: string; event: OutboxEvent },
+    tx?: Tx,
+  ): Promise<{ id: string } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ id: outboxEntries.id })
+      .from(outboxEntries)
+      .where(
+        and(
+          eq(outboxEntries.toAddr, params.to),
+          eq(outboxEntries.event, params.event),
+          eq(outboxEntries.status, 'failed'),
+        ),
+      )
+      .orderBy(desc(outboxEntries.scheduledAt))
+      .limit(1);
+    return row ? { id: row.id } : undefined;
+  }
+
+  async requeue(id: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    // status 만 failed → pending. attempts/lastError 는 보존 (서비스 retryEmail 패턴).
+    await db
+      .update(outboxEntries)
+      .set({ status: 'pending' })
+      .where(eq(outboxEntries.id, id));
   }
 }

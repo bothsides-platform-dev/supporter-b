@@ -168,4 +168,18 @@ export class DrizzleNotificationRepository implements NotificationRepo {
       .limit(1);
     return rows.length > 0;
   }
+
+  async findOwnedById(
+    notificationId: string,
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ id: string; type: string } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ id: notifications.id, type: notifications.type })
+      .from(notifications)
+      .where(and(eq(notifications.id, notificationId), eq(notifications.userId, userId)))
+      .limit(1);
+    return row ? { id: row.id, type: row.type } : undefined;
+  }
 }
