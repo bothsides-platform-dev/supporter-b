@@ -14,7 +14,7 @@ import type {
   WorkspaceType,
 } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
-import type { WorkspaceRepo, Tx } from '../types';
+import type { WorkspaceRepo, Tx, TeamMember } from '../types';
 
 /** ilike 메타문자 이스케이프 (사용자 입력 q 용). */
 function escapeIlike(s: string): string {
@@ -238,6 +238,34 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         ),
       )) as Pick<MemberRow, 'userId'>[];
     return rows.map((r) => r.userId);
+  }
+
+  async teamRoster(workspaceId: string, tx?: Tx): Promise<TeamMember[]> {
+    const db = this.h(tx);
+    const rows = (await db
+      .select({
+        userId: workspaceMembers.userId,
+        name: usersTable.name,
+        joinedAt: workspaceMembers.joinedAt,
+      })
+      .from(workspaceMembers)
+      .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(usersTable.isSystemAccount, false),
+        ),
+      )
+      .orderBy(asc(workspaceMembers.joinedAt))) as {
+      userId: string;
+      name: string;
+      joinedAt: Date;
+    }[];
+    return rows.map((r) => ({
+      userId: r.userId,
+      name: r.name,
+      joinedAt: new Date(r.joinedAt).toISOString(),
+    }));
   }
 
   async memberUserIdsBatch(wsIds: string[], tx?: Tx): Promise<Map<string, string[]>> {

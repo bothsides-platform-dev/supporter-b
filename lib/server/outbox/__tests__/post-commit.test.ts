@@ -24,6 +24,7 @@ vi.mock('@/lib/server/repositories/factory', () => ({
 
 vi.mock('@/lib/integrations/resend', () => ({
   getResendSender: () => async () => ({ ok: true }),
+  getResendBatchSender: () => async (entries: unknown[]) => entries.map(() => ({ ok: true })),
 }));
 
 vi.mock('@/lib/observability/logger', () => ({

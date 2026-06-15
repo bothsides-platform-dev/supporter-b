@@ -96,6 +96,16 @@ sessionStorage 가 차단되면(사파리 비공개 등) readSignupDraft 가 {} 
 **Priority:** P3
 `FeeRateCell` 환산 툴팁이 `left-1/2 -translate-x-1/2` 중앙 정렬이라 5열 그리드의 영세(맨 왼쪽)·일반(맨 오른쪽) 열에서 가장자리로 넘칠 수 있음. 또 `role="tooltip"` 이 입력과 `aria-describedby` 로 연결돼 있지 않아 스크린리더는 환산값을 못 읽음(단, 기존엔 힌트 자체가 없어 순수 개선분). 픽스: 열 위치별 정렬(start/center/end) prop + 안정 id 의 aria-describedby. (발견: /ship 디자인 리뷰 2026-06-14, /design-review 경로)
 
+## Email / Notifications
+
+### 채팅·팀 다이제스트 발송 배치화
+**Priority:** P3
+일반 outbox flush 는 `resend.batch.send`(콜당 100통, rate-limit 1요청)로 묶어 보내지만, `flushChatDigests`·`flushTeamChatDigests` 는 본문을 발송 시점에 재계산해야 해서 여전히 수신자당 단건 발송이다(백오프/분류는 적용됨). 다이제스트는 (스코프·수신자·3분 윈도) coalesce + tick당 50건 상한이라 버스트가 작지만, 멤버 많은 워크스페이스에서 한 윈도가 동시에 만료되면 단건 발송이 초당 2요청을 넘길 수 있다. 재계산/취소 필터 후 살아남은 다이제스트를 `sendEntriesInBatches` 로 묶어 발송하도록 확장 검토. crontab `flock -n` 로 cron 중첩 더블센드는 이미 차단. (발견: /ship 어드버서리얼 2026-06-15, 본 PR 의도적 연기)
+
+### 빈 RESEND_API_KEY dev-fallback 오설정 가드 (기존 동작)
+**Priority:** P3
+`RESEND_API_KEY` 가 빈 문자열이면 `ResendSender`/`ResendBatchSender` 가 dev 모드로 떨어져 `[email DEV]` 로그만 남기고 행을 `sent` 로 표시한다 — 운영에서 키를 빈 값으로 잘못 설정하면 메일이 조용히 안 나간다. 부팅/런타임 가드(예: `NODE_ENV==='production'` 이면 빈 키를 에러로)로 오설정을 표면화. 본 PR 비도입(기존 `ResendSender` 동작 미러). (발견: /ship 어드버서리얼 2026-06-15)
+
 ## Completed
 
 - **딜룸 후속 TODO 4건 해소 (2026-06-14, dev 머지)**: 정식 페이지 통일(`DealRoomFull`, PR #186) · `/submitted` 견적작성 탭 흡수(PR #188) · `<lg` 하단시트 채팅 + 반응형 레일(PR #189) · 전체화면 이전/다음 결정성(`useDealRoomNav` 슬라이스, PR #187). 딜룸 모달 본 PR #185 위 스택으로 진행.

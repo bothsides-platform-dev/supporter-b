@@ -26,7 +26,7 @@ import { NextResponse } from 'next/server';
 import { flushAllOutbox } from '@/lib/server/outbox/flush-all';
 import { flushChatDigests } from '@/lib/server/outbox/chat-digest-flush';
 import { flushTeamChatDigests } from '@/lib/server/outbox/team-chat-digest-flush';
-import { getResendSender } from '@/lib/integrations/resend';
+import { getResendBatchSender, getResendSender } from '@/lib/integrations/resend';
 
 export const runtime = 'nodejs';
 
@@ -42,8 +42,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
+  // Generic fan-outs (RFP invites, bid notifications, awards, …) go through the
+  // batch sender — that's the rate-limit fix. The coalesced chat/team digests
+  // are recomputed per-row at send time, so they use the single sender (they
+  // still gain backoff on failure via the enriched SendResult).
+  const generic = await flushAllOutbox(getResendBatchSender());
   const sender = getResendSender();
-  const generic = await flushAllOutbox(sender);
   const digests = await flushChatDigests(sender);
   const teamDigests = await flushTeamChatDigests(sender);
 

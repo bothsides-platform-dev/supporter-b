@@ -140,6 +140,28 @@ describe('flushTeamChatDigests', () => {
     expect(after.status).toBe('sent');
   });
 
+  it('reschedules a failed (retryable) digest with backoff instead of dropping it', async () => {
+    const { me, mate, ws, rfp } = await seedScene();
+    const base = new Date(Date.now() - 60_000);
+    await seedMessages(rfp.id, ws.id, mate.id, ['m1'], base);
+    const row = await seedDueDigest(rfp.id, ws.id, me.id, me.email);
+
+    const before = Date.now();
+    const sender = vi
+      .fn<Sender>()
+      .mockResolvedValue({ ok: false, error: 'rate limited', retryable: true });
+    const result = await flushTeamChatDigests(sender, 10);
+
+    expect(result.failed).toBe(1);
+    const [after] = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.id, row.id));
+    expect(after.status).toBe('pending');
+    expect(after.attempts).toBe(1);
+    expect(new Date(after.scheduledAt).getTime()).toBeGreaterThan(before);
+  });
+
   it('marks a malformed-dedupeKey row sent without sending (queue self-heals)', async () => {
     await seedScene();
     await db.insert(outboxEntries).values({
@@ -178,5 +200,23 @@ describe('flushTeamChatDigests', () => {
     const sent = sender.mock.calls[0][0];
     expect(sent.html).toMatch(/2\s*건/);
     expect(sent.html).not.toContain('my own note');
+  });
+
+  it('digest 이메일 본문/프리뷰에서 멘션 토큰을 @이름 평문으로 렌더한다', async () => {
+    const { me, mate, ws, rfp } = await seedScene();
+    const base = new Date(Date.now() - 60_000);
+    await seedMessages(rfp.id, ws.id, mate.id, [`<@${me.id}> 확인`], base);
+    await seedDueDigest(rfp.id, ws.id, me.id, me.email);
+
+    const captured: { subject: string; html: string }[] = [];
+    const sender = vi.fn<Sender>().mockImplementation(async (e) => {
+      captured.push({ subject: e.subject, html: e.html });
+      return { ok: true };
+    });
+    const result = await flushTeamChatDigests(sender, 10);
+
+    expect(result.sent).toBe(1);
+    expect(captured[0].html).not.toContain('<@');
+    expect(captured[0].html).toContain('@나');
   });
 });

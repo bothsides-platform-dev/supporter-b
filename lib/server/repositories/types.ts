@@ -21,7 +21,7 @@ import type { Contract } from '@/lib/types/contract';
 import type { Notification, NotificationChannel } from '@/lib/types/notification';
 import type { AttachmentRecord } from './attachment-record';
 import type { VerificationToken } from '@/lib/types/auth';
-import type { OutboxEntry, OutboxEvent, Sender } from '../outbox/types';
+import type { BatchSender, OutboxEntry, OutboxEvent } from '../outbox/types';
 import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
@@ -205,6 +205,8 @@ export interface PgRequestRepo {
 }
 
 // ── Workspace ─────────────────────────────────────────────────────────
+export type TeamMember = { userId: string; name: string; joinedAt: string };
+
 export interface WorkspaceRepo {
   /** 워크스페이스 + 멤버 동기화. */
   save(ws: Workspace, tx?: Tx): Promise<void>;
@@ -224,6 +226,8 @@ export interface WorkspaceRepo {
   isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
   /** 해당 워크스페이스 멤버 user id 배열 — 알림 fanout + Centrifugo subscribe ACL용. 순서 미보장. */
   memberUserIds(workspaceId: string, tx?: Tx): Promise<string[]>;
+  /** 멘션 자동완성/렌더용 팀 로스터 — {userId, name, joinedAt}. 시스템 계정 제외. */
+  teamRoster(workspaceId: string, tx?: Tx): Promise<TeamMember[]>;
   /** 여러 워크스페이스 멤버 user id를 workspaceId 키 Map으로 배치 조회 — N+1 제거용. */
   memberUserIdsBatch(wsIds: string[], tx?: Tx): Promise<Map<string, string[]>>;
   /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
@@ -676,6 +680,8 @@ export interface NotificationRepo {
     userId: string,
     tx?: Tx,
   ): Promise<{ id: string; type: string } | undefined>;
+  /** 동일 window 내 team_chat.mention 인앱 알림 존재 여부(멘션 전용 dedupe). */
+  hasPendingTeamMentionNotification(userId: string, rfpId: string, windowStart: Date, tx?: Tx): Promise<boolean>;
 }
 
 // ── Contract ──────────────────────────────────────────────────────────
@@ -834,23 +840,32 @@ export interface OutboxRepo {
   dueChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
   /** Due team-chat-digest rows — owned by the team-digest flush processor. */
   dueTeamChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
-  /** 전송 결과 반영(성공/실패 + 시도횟수 +1). */
+  /**
+   * 전송 결과 반영(성공/실패 + 시도횟수 +1). 실패 시 `retryable:false` 면 즉시
+   * 'failed'(영구 오류 — 잔여 시도 낭비 방지), 그 외엔 maxAttempts 도달 시에만
+   * 'failed'. `nextScheduledAt` 가 주어지면 다음 시도 시각을 그 값(now()+백오프)
+   * 으로 재설정한다. retryable/nextScheduledAt 생략은 레거시 호환(일시 오류 취급).
+   */
   markResult(
     id: string,
-    result: { ok: true } | { ok: false; error: string },
+    result:
+      | { ok: true }
+      | { ok: false; error: string; retryable?: boolean; nextScheduledAt?: Date },
     tx?: Tx,
   ): Promise<void>;
   /**
-   * Drain pending entries through `sender`.
+   * Drain pending entries through `batchSender` (Resend's batch API).
    *
    * Postgres impl uses `SELECT ... FOR UPDATE SKIP LOCKED LIMIT $limit` so
    * concurrent flush callers (cron + post-commit fire-and-forget) don't
-   * double-deliver. Returns counts: `ok` = sender returned ok, `failed` =
-   * sender returned !ok (regardless of whether maxAttempts was hit on this
-   * pass — `markResult` decides the persistent state).
+   * double-deliver, then sends the whole claim in <=100-row chunks (paced) — an
+   * N-recipient fan-out becomes ceil(N/100) API calls, keeping bursts under
+   * Resend's rate limit. Returns counts: `ok` = batch reported ok, `failed` =
+   * batch reported !ok (regardless of whether maxAttempts was hit on this pass —
+   * `markResult` decides the persistent state).
    */
   flush(
-    sender: Sender,
+    batchSender: BatchSender,
     limit?: number,
     tx?: Tx,
   ): Promise<{ ok: number; failed: number }>;
