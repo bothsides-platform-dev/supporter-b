@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.22.4] - 2026-06-15
+
+### Changed
+
+- **내부 구조 정리 — 견적 수수료 매핑 중복 제거 (개발자 전용, 사용자 화면·동작 변화 없음)**: 컴포넌트 리팩토링 2차분. 입찰 위저드(BidWizard)·견적서 템플릿 편집기(QuoteTemplateDrawer)·템플릿 목록(QuoteTemplateList)이 각자 복제하고 있던 수수료 변환 로직(요율 %↔소수 변환 `fmtPct`은 3곳, 수수료맵 인코딩·정산주기 파싱·템플릿 디코딩은 2곳)을 순수 함수 모듈 `lib/quote/template-fees.ts` 한 곳으로 모았어요. 봉인입찰 제출 경로의 금액 산식이라 동작을 한 줄도 바꾸지 않았고(두 호출처의 차이 — 구버전 단일요율 템플릿을 전 구간으로 전개할지 — 는 명시적 옵션으로 보존), 단위 테스트 16개로 round-trip·legacy 전개를 고정했어요. 전체 테스트 3265개 통과.
+
 ## [0.2.22.3] - 2026-06-15
 
 ### Changed
