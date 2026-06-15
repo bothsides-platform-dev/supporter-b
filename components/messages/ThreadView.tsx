@@ -21,6 +21,7 @@ import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageAttachmentGrid } from './MessageAttachmentGrid';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
+import { useStickToBottom } from './useStickToBottom';
 import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 
 type Props = {
@@ -68,8 +69,6 @@ type LiveMessagePayload = {
 const TYPING_THROTTLE_MS = 2000;
 
 
-// 하단에서 이만큼(px) 이내면 "하단 근처"로 보고 새 메시지를 자동 추적한다.
-const NEAR_BOTTOM_PX = 120;
 
 // 낙관적 전송 중에만 쓰는 표시 전용 확장 — 서버 로더 타입(ThreadMessage)에는
 // pending 개념이 없으므로 클라이언트 뷰 모델로만 둔다.
@@ -145,44 +144,11 @@ export function ThreadView({
   const [readAt, setReadAt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingSentAt = useRef(0);
-  // 자동 스크롤: 리스트 컨테이너 + 하단 sentinel. prevLen 으로 "새 메시지 도착"을
-  // 감지하고, "하단 근처"일 때만 자동으로 따라간다(위로 올려 과거 글 읽는 중엔 점프 금지).
-  const listRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const prevLenRef = useRef(0);
-  const [showNewMessagePill, setShowNewMessagePill] = useState(false);
-
-  const isNearBottom = useCallback((): boolean => {
-    const el = listRef.current;
-    if (!el) return true; // 메트릭 없으면(초기/jsdom) 하단으로 간주
-    return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
-  }, []);
-
-  const scrollToBottom = useCallback((): void => {
-    bottomRef.current?.scrollIntoView({ block: 'end' });
-    setShowNewMessagePill(false);
-  }, []);
-
-  // 새 메시지(append)에만 반응: 최초 로드/본인 전송/하단 근처면 따라가고,
-  // 위로 올려둔 상태에서 상대 메시지가 오면 "새 메시지" pill 만 띄운다.
-  useEffect(() => {
-    const grew = localMessages.length > prevLenRef.current;
-    const isInitial = prevLenRef.current === 0;
-    prevLenRef.current = localMessages.length;
-    if (!grew) return;
-    const last = localMessages[localMessages.length - 1];
-    const ownSend = last?.sender === 'self';
-    if (isInitial || ownSend || isNearBottom()) {
-      scrollToBottom();
-    } else {
-      setShowNewMessagePill(true);
-    }
-  }, [localMessages, isNearBottom, scrollToBottom]);
-
-  // 사용자가 직접 하단으로 스크롤하면 pill 을 거둔다.
-  const handleListScroll = useCallback((): void => {
-    if (isNearBottom()) setShowNewMessagePill(false);
-  }, [isNearBottom]);
+  // 새 메시지 append 시 하단 자동 추적. 위로 올려 과거 글 읽는 중엔 점프하지 않고
+  // "새 메시지" pill 만 띄운다(useStickToBottom).
+  const lastIsOwn = localMessages[localMessages.length - 1]?.sender === 'self';
+  const { listRef, bottomRef, showNewMessagePill, scrollToBottom, onListScroll } =
+    useStickToBottom({ count: localMessages.length, isOwnLast: lastIsOwn, withPill: true });
 
   // Live channel — graceful no-op when realtime is unconfigured (dev/tests):
   // online stays false, typingUserIds empty, onMessage/onRead never fire, and
@@ -420,7 +386,7 @@ export function ThreadView({
       <div
         ref={listRef}
         data-message-list
-        onScroll={handleListScroll}
+        onScroll={onListScroll}
         className="flex h-full flex-col gap-3 overflow-y-auto px-4 py-4"
       >
         {localMessages.length === 0 && (
