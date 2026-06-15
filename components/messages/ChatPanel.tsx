@@ -14,7 +14,7 @@
  *     생성은 첫 전송(sendChatMessageAction)에만 일어난다.
  *   - 팀 탭은 (rfp, 세션 워크스페이스) 내부 스레드. unmount 시 캐시 무효화.
  */
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
 
 import { Tabs } from '@/components/primitives/Tabs';
@@ -22,7 +22,6 @@ import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Button } from '@/components/ui/button';
 import { XIcon, EnvelopeIcon, ChevronRightIcon, ArrowUpIcon } from '@/components/icons';
-import { lookupConversationAction } from '@/lib/server/actions/chat/lookupConversationAction';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { toast } from '@/lib/toast';
 import {
@@ -34,6 +33,7 @@ import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import { TeamThreadPane } from './TeamThreadPane';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
+import { useConversationLookup } from './useConversationLookup';
 
 type Props = {
   /** RFP uuid (라우트 param 은 사람용 code — 혼동 주의). */
@@ -56,34 +56,13 @@ export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
   const counterparty = useChatRailStore((s) => s.counterparty);
   const setTab = useChatRailStore((s) => s.setTab);
 
-  // wsId → conversationId 읽기 전용 해소 캐시. null = "대화 없음"(새 대화 컴포저).
-  // 생성은 첫 전송에만. 실패는 wsId 단위로 기록해 무한 스켈레톤 대신 에러 빈 상태.
-  const [convByWs, setConvByWs] = useState<Record<string, string | null>>({});
-  const [failedWs, setFailedWs] = useState<Record<string, boolean>>({});
+  // wsId → conversationId 읽기 전용 해소 — 열람만으로 대화를 만들지 않는다(sealed-bid).
+  // conversationId: undefined=해소 중, null=대화 없음(새 대화 컴포저), string=해소됨.
   const activeWsId = counterparty?.workspaceId;
-  const resolveFailed = activeWsId ? !!failedWs[activeWsId] : false;
-  useEffect(() => {
-    if (tab !== 'counterparty' || !activeWsId) return;
-    if (convByWs[activeWsId] !== undefined || failedWs[activeWsId]) return;
-    let cancelled = false;
-    void lookupConversationAction(activeWsId)
-      .then((r) => {
-        if (cancelled) return;
-        if (!r.ok) {
-          setFailedWs((prev) => ({ ...prev, [activeWsId]: true }));
-          return;
-        }
-        setConvByWs((prev) => ({ ...prev, [activeWsId]: r.conversationId }));
-      })
-      .catch(() => {
-        if (!cancelled) setFailedWs((prev) => ({ ...prev, [activeWsId]: true }));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, activeWsId, convByWs, failedWs]);
-
-  const conversationId = activeWsId ? convByWs[activeWsId] : undefined;
+  const { conversationId, resolveFailed, retry, markCreated } = useConversationLookup(
+    activeWsId,
+    tab === 'counterparty',
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-surface)]">
@@ -117,13 +96,7 @@ export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
               description="네트워크 상태를 확인하고 다시 시도해 주세요."
               className="py-12"
               action={
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    activeWsId &&
-                    setFailedWs((prev) => ({ ...prev, [activeWsId]: false }))
-                  }
-                >
+                <Button size="sm" onClick={retry}>
                   다시 시도
                 </Button>
               }
@@ -135,9 +108,7 @@ export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
               counterparty={counterparty}
               rfpId={rfpId}
               sendDisabled={isSample}
-              onCreated={(wsId, newId) =>
-                setConvByWs((prev) => ({ ...prev, [wsId]: newId }))
-              }
+              onCreated={markCreated}
             />
           ) : (
             <>
