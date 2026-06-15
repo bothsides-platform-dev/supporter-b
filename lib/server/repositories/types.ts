@@ -34,9 +34,44 @@ export type TokenClaimResult =
   | { ok: false; reason: 'expired' | 'used' | 'invalid' };
 
 // ── RFP ───────────────────────────────────────────────────────────────
+/**
+ * RFP 신규 생성 insert 입력 — createRfp 가 발급한 bizProfile 스냅샷 id 를 직접 들고,
+ * 도메인 RFP 매핑이 거치는 bizNo 룩업/allowlist 동기화 없이 컬럼을 그대로 적재한다.
+ * (RfpRepo.save 는 bizProfile.bizNo 로 기존 프로필을 매칭해 일부 필드가 누락되므로 별도 경로.)
+ */
+export type NewRfpInsert = {
+  id: string;
+  code: string;
+  buyerWsId: string;
+  bizProfileId: string | null;
+  title: string;
+  memo: string;
+  websiteUrl: string | null;
+  mainProducts: string | null;
+  annualPgVolume: string | null;
+  currentFeeRate: string | null;
+  currentSettlementLimit: string | null;
+  currentGuaranteeInsurance: string | null;
+  currentSettlementCycle: string | null;
+  deliveryServicePeriod: string | null;
+  boardVisible: boolean;
+  currentFeeVisibleToPg: boolean;
+  contractType: 'new' | 'renewal' | null;
+  currentSolution: string | null;
+  currentSolutionDetail: string | null;
+  deadline: Date;
+  status: RfpStatus;
+  requiredPaymentMethods: string[];
+  customPaymentMethods: { id: string; label: string }[];
+  createdBy: string;
+  sentAt: Date | null;
+};
+
 export interface RfpRepo {
   /** RFP insert/upsert(by id). 호출자가 id 미리 발급(`rfp-id.ts`). */
   save(rfp: RFP, tx?: Tx): Promise<void>;
+  /** createRfp 전용 신규 insert — 스냅샷 bizProfileId·전 컬럼을 그대로 적재 (save 의 bizNo 룩업 우회). */
+  insertNew(values: NewRfpInsert, tx?: Tx): Promise<void>;
   /** id(uuid) 단건 조회. 없으면 undefined. */
   findById(id: string, tx?: Tx): Promise<RFP | undefined>;
   /** code(P-YYMM-NNNN) 단건 조회 — URL/표시용 식별자. 없으면 undefined. */
@@ -179,6 +214,16 @@ export interface WorkspaceRepo {
   getName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
   /** 알림·이메일 팬아웃 대상 (멤버 userId+email). 시스템 계정 제외. 순서 미보장. */
   memberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
+  /** admin 멤버 팬아웃 대상 (userId+email). 시스템 계정 제외. 초대 메일 발송 대상. 순서 미보장. */
+  adminRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
+  /**
+   * 여러 워크스페이스의 멤버를 (workspaceId, userId, role, email) 평면 목록으로 배치 조회.
+   * 시스템 계정 제외. 빈 입력은 빈 배열. 초대 일괄 발송(멤버 알림 + admin 메일)용.
+   */
+  memberRecipientsBatch(
+    wsIds: string[],
+    tx?: Tx,
+  ): Promise<{ workspaceId: string; userId: string; role: string; email: string }[]>;
   /** active 상태 워크스페이스 (id+type) — 마스터/스위치. 없거나 비활성이면 undefined. */
   findActiveById(workspaceId: string, tx?: Tx): Promise<{ id: string; type: WorkspaceType } | undefined>;
   /** 가장 먼저 만들어진 active 워크스페이스 — 마스터 기본 진입. 없으면 undefined. */
@@ -213,6 +258,16 @@ export interface WorkspaceRepo {
   setBizProfilePointer(workspaceId: string, bizProfileId: string, tx?: Tx): Promise<void>;
   /** 현재 bizProfileId (경량). 없거나 미설정이면 undefined. */
   getBizProfileId(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /**
+   * 현재 bizProfileId + 상호명 단건 조회 — RFP 작성 시 스냅샷·발신자명 확보용.
+   * 워크스페이스 없으면 undefined (소유권/존재 게이트). bizProfile 미설정이면 null.
+   */
+  getBizProfileIdAndName(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ bizProfileId: string | null; name: string } | undefined>;
+  /** 주어진 id 중 type='pg' 인 워크스페이스 id 부분집합. 빈 입력은 빈 배열. PG allowlist 검증용. */
+  filterPgIds(ids: string[], tx?: Tx): Promise<string[]>;
   /** 상호명 변경. */
   rename(workspaceId: string, name: string, tx?: Tx): Promise<void>;
   /** hasLogo 플래그 갱신. */

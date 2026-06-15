@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb } from '@/lib/db/client-pglite';
-import { workspaceInvitations, workspaceLogoBlobs, workspaceMembers, workspaces } from '@/lib/db/schema';
+import { users as usersForTest, workspaceInvitations, workspaceLogoBlobs, workspaceMembers, workspaces } from '@/lib/db/schema';
 import { DrizzleWorkspaceRepository } from '../workspace';
 import {
   seedBizProfile,
@@ -681,6 +681,156 @@ describe('DrizzleWorkspaceRepository', () => {
       const member = await seedUser(db, { email: 'only-member@no-admin.test' });
       await seedMembership(db, ws.id, member.id, 'member');
       expect(await repo.findAdminEmail(ws.id)).toBeUndefined();
+    });
+  });
+
+  describe('adminRecipients', () => {
+    it('returns userId + email for every admin member only', async () => {
+      const ws = await seedPgWorkspace(db, 'admin-recip.test');
+      const a1 = await seedUser(db, { email: 'a1@admin-recip.test' });
+      const a2 = await seedUser(db, { email: 'a2@admin-recip.test' });
+      const m1 = await seedUser(db, { email: 'm1@admin-recip.test' });
+      await seedMembership(db, ws.id, a1.id, 'admin');
+      await seedMembership(db, ws.id, a2.id, 'admin');
+      await seedMembership(db, ws.id, m1.id, 'member');
+
+      const recipients = await repo.adminRecipients(ws.id);
+      expect(recipients).toHaveLength(2);
+      expect(recipients).toEqual(
+        expect.arrayContaining([
+          { userId: a1.id, email: 'a1@admin-recip.test' },
+          { userId: a2.id, email: 'a2@admin-recip.test' },
+        ]),
+      );
+    });
+
+    it('returns an empty array when there is no admin member', async () => {
+      const ws = await seedPgWorkspace(db, 'no-admin-recip.test');
+      const m = await seedUser(db, { email: 'm@no-admin-recip.test' });
+      await seedMembership(db, ws.id, m.id, 'member');
+      expect(await repo.adminRecipients(ws.id)).toEqual([]);
+    });
+
+    it('excludes system accounts even when they are admins', async () => {
+      const ws = await seedPgWorkspace(db, 'sys-admin-recip.test');
+      const human = await seedUser(db, { email: 'human@sys-admin-recip.test' });
+      const sysId = randomUUID();
+      await db.insert(usersForTest).values({
+        id: sysId,
+        email: 'system@sys-admin-recip.test',
+        passwordHash: 'x',
+        name: 'System',
+        avatarColor: 'ink',
+        isSystemAccount: true,
+      });
+      await seedMembership(db, ws.id, human.id, 'admin');
+      await seedMembership(db, ws.id, sysId, 'admin');
+
+      const recipients = await repo.adminRecipients(ws.id);
+      expect(recipients).toEqual([{ userId: human.id, email: 'human@sys-admin-recip.test' }]);
+    });
+
+    it('does not include admins of a different workspace', async () => {
+      const wsA = await seedPgWorkspace(db, 'admin-recip-a.com');
+      const wsB = await seedPgWorkspace(db, 'admin-recip-b.com');
+      const a = await seedUser(db, { email: 'a@admin-recip-a.com' });
+      const b = await seedUser(db, { email: 'b@admin-recip-b.com' });
+      await seedMembership(db, wsA.id, a.id, 'admin');
+      await seedMembership(db, wsB.id, b.id, 'admin');
+      expect(await repo.adminRecipients(wsA.id)).toEqual([{ userId: a.id, email: 'a@admin-recip-a.com' }]);
+    });
+  });
+
+  describe('memberRecipientsBatch', () => {
+    it('returns workspaceId + userId + role + email for all members across workspaces', async () => {
+      const ws1 = await seedPgWorkspace(db, 'mrb-1.com');
+      const ws2 = await seedPgWorkspace(db, 'mrb-2.com');
+      const a1 = await seedUser(db, { email: 'a1@mrb-1.com' });
+      const m1 = await seedUser(db, { email: 'm1@mrb-1.com' });
+      const a2 = await seedUser(db, { email: 'a2@mrb-2.com' });
+      await seedMembership(db, ws1.id, a1.id, 'admin');
+      await seedMembership(db, ws1.id, m1.id, 'member');
+      await seedMembership(db, ws2.id, a2.id, 'admin');
+
+      const rows = await repo.memberRecipientsBatch([ws1.id, ws2.id]);
+      expect(rows).toHaveLength(3);
+      expect(rows).toEqual(
+        expect.arrayContaining([
+          { workspaceId: ws1.id, userId: a1.id, role: 'admin', email: 'a1@mrb-1.com' },
+          { workspaceId: ws1.id, userId: m1.id, role: 'member', email: 'm1@mrb-1.com' },
+          { workspaceId: ws2.id, userId: a2.id, role: 'admin', email: 'a2@mrb-2.com' },
+        ]),
+      );
+    });
+
+    it('returns an empty array for empty input', async () => {
+      expect(await repo.memberRecipientsBatch([])).toEqual([]);
+    });
+
+    it('excludes system accounts', async () => {
+      const ws = await seedPgWorkspace(db, 'mrb-sys.com');
+      const human = await seedUser(db, { email: 'human@mrb-sys.com' });
+      const sysId = randomUUID();
+      await db.insert(usersForTest).values({
+        id: sysId,
+        email: 'system@mrb-sys.com',
+        passwordHash: 'x',
+        name: 'System',
+        avatarColor: 'ink',
+        isSystemAccount: true,
+      });
+      await seedMembership(db, ws.id, human.id, 'admin');
+      await seedMembership(db, ws.id, sysId, 'admin');
+
+      const rows = await repo.memberRecipientsBatch([ws.id]);
+      expect(rows).toEqual([
+        { workspaceId: ws.id, userId: human.id, role: 'admin', email: 'human@mrb-sys.com' },
+      ]);
+    });
+  });
+
+  describe('getBizProfileIdAndName', () => {
+    it('returns bizProfileId + name when a biz profile is set', async () => {
+      const biz = await seedBizProfile(db);
+      const ws = await seedBuyerWorkspace(db, { name: '비즈회사', bizProfileId: biz.id });
+      expect(await repo.getBizProfileIdAndName(ws.id)).toEqual({
+        bizProfileId: biz.id,
+        name: '비즈회사',
+      });
+    });
+
+    it('returns bizProfileId null when no biz profile is set', async () => {
+      const ws = await seedBuyerWorkspace(db, { name: '노비즈' });
+      expect(await repo.getBizProfileIdAndName(ws.id)).toEqual({
+        bizProfileId: null,
+        name: '노비즈',
+      });
+    });
+
+    it('returns undefined for an unknown workspace', async () => {
+      expect(
+        await repo.getBizProfileIdAndName('00000000-0000-0000-0000-000000000000'),
+      ).toBeUndefined();
+    });
+  });
+
+  describe('filterPgIds', () => {
+    it('returns only the ids whose workspace type is pg', async () => {
+      const pgA = await seedPgWorkspace(db, 'fp-a.com');
+      const pgB = await seedPgWorkspace(db, 'fp-b.com');
+      const buyer = await seedBuyerWorkspace(db);
+      const result = await repo.filterPgIds([pgA.id, buyer.id, pgB.id]);
+      expect(result.sort()).toEqual([pgA.id, pgB.id].sort());
+    });
+
+    it('omits unknown ids', async () => {
+      const pg = await seedPgWorkspace(db, 'fp-only.com');
+      const result = await repo.filterPgIds([pg.id, '00000000-0000-0000-0000-000000000000']);
+      expect(result).toEqual([pg.id]);
+    });
+
+    it('returns empty array for empty input', async () => {
+      expect(await repo.filterPgIds([])).toEqual([]);
     });
   });
 });

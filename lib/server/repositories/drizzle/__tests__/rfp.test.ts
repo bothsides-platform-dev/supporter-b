@@ -317,4 +317,103 @@ describe('DrizzleRfpRepository', () => {
       expect(rows.map((r) => r.code)).toEqual(['P-2605-SR04']);
     });
   });
+
+  describe('insertNew', () => {
+    it('inserts all RFP fields verbatim (createRfp path) and reads back via findById', async () => {
+      const sentAt = new Date('2026-01-02T03:04:00Z');
+      const deadline = new Date(Date.now() + 86_400_000);
+      const id = randomUUID();
+      await repo.insertNew({
+        id,
+        code: 'P-2605-NEW1',
+        buyerWsId: ctx.ws.id,
+        bizProfileId: ctx.biz.id,
+        title: '신규 견적',
+        memo: '메모',
+        websiteUrl: 'https://shop.example.com',
+        mainProducts: '패션 잡화',
+        annualPgVolume: '10억',
+        currentFeeRate: '3.4%',
+        currentSettlementLimit: '월 1억',
+        currentGuaranteeInsurance: '3000만원',
+        currentSettlementCycle: 'D+1',
+        deliveryServicePeriod: 'D+3',
+        boardVisible: false,
+        currentFeeVisibleToPg: false,
+        contractType: 'renewal',
+        currentSolution: 'self',
+        currentSolutionDetail: 'ABC몰',
+        deadline,
+        status: 'sent',
+        requiredPaymentMethods: ['card', 'bank_transfer'],
+        customPaymentMethods: [{ id: 'cpm-1', label: '포인트결제' }],
+        createdBy: ctx.user.id,
+        sentAt,
+      });
+
+      const fetched = await repo.findById(id);
+      expect(fetched).toBeDefined();
+      expect(fetched!.code).toBe('P-2605-NEW1');
+      expect(fetched!.title).toBe('신규 견적');
+      expect(fetched!.memo).toBe('메모');
+      expect(fetched!.websiteUrl).toBe('https://shop.example.com');
+      expect(fetched!.mainProducts).toBe('패션 잡화');
+      expect(fetched!.annualPgVolume).toBe('10억');
+      expect(fetched!.currentFeeRate).toBe('3.4%');
+      expect(fetched!.currentSettlementLimit).toBe('월 1억');
+      expect(fetched!.currentGuaranteeInsurance).toBe('3000만원');
+      expect(fetched!.currentSettlementCycle).toBe('D+1');
+      expect(fetched!.deliveryServicePeriod).toBe('D+3');
+      expect(fetched!.boardVisible).toBe(false);
+      expect(fetched!.currentFeeVisibleToPg).toBe(false);
+      expect(fetched!.contractType).toBe('renewal');
+      expect(fetched!.currentSolution).toBe('self');
+      expect(fetched!.currentSolutionDetail).toBe('ABC몰');
+      expect(fetched!.status).toBe('sent');
+      expect(fetched!.requiredPaymentMethods).toEqual(['card', 'bank_transfer']);
+      expect(fetched!.customPaymentMethods).toEqual([{ id: 'cpm-1', label: '포인트결제' }]);
+      expect(fetched!.createdBy).toBe(ctx.user.id);
+      expect(fetched!.sentAt).toBe(sentAt.toISOString());
+    });
+
+    it('stores null bizProfileId / null optional fields when omitted', async () => {
+      const id = randomUUID();
+      await repo.insertNew({
+        id,
+        code: 'P-2605-NEW2',
+        buyerWsId: ctx.ws.id,
+        bizProfileId: null,
+        title: '미니 견적',
+        memo: '',
+        websiteUrl: null,
+        mainProducts: null,
+        annualPgVolume: null,
+        currentFeeRate: null,
+        currentSettlementLimit: null,
+        currentGuaranteeInsurance: null,
+        currentSettlementCycle: null,
+        deliveryServicePeriod: null,
+        boardVisible: true,
+        currentFeeVisibleToPg: true,
+        contractType: null,
+        currentSolution: null,
+        currentSolutionDetail: null,
+        deadline: new Date(Date.now() + 86_400_000),
+        status: 'draft',
+        requiredPaymentMethods: [],
+        customPaymentMethods: [],
+        createdBy: ctx.user.id,
+        sentAt: null,
+      });
+
+      const fetched = await repo.findById(id);
+      expect(fetched).toBeDefined();
+      expect(fetched!.bizProfile).toBeUndefined();
+      expect(fetched!.websiteUrl).toBeUndefined();
+      expect(fetched!.currentSettlementCycle).toBeUndefined();
+      expect(fetched!.contractType).toBeNull();
+      expect(fetched!.status).toBe('draft');
+      expect(fetched!.sentAt).toBeUndefined();
+    });
+  });
 });

@@ -334,6 +334,47 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       )) as { userId: string; email: string }[];
   }
 
+  async adminRecipients(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ userId: string; email: string }[]> {
+    const db = this.h(tx);
+    return (await db
+      .select({ userId: workspaceMembers.userId, email: usersTable.email })
+      .from(workspaceMembers)
+      .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.role, 'admin'),
+          eq(usersTable.isSystemAccount, false),
+        ),
+      )) as { userId: string; email: string }[];
+  }
+
+  async memberRecipientsBatch(
+    wsIds: string[],
+    tx?: Tx,
+  ): Promise<{ workspaceId: string; userId: string; role: string; email: string }[]> {
+    if (wsIds.length === 0) return [];
+    const db = this.h(tx);
+    return (await db
+      .select({
+        workspaceId: workspaceMembers.workspaceId,
+        userId: workspaceMembers.userId,
+        role: workspaceMembers.role,
+        email: usersTable.email,
+      })
+      .from(workspaceMembers)
+      .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
+      .where(
+        and(
+          inArray(workspaceMembers.workspaceId, wsIds),
+          eq(usersTable.isSystemAccount, false),
+        ),
+      )) as { workspaceId: string; userId: string; role: string; email: string }[];
+  }
+
   async findActiveById(
     workspaceId: string,
     tx?: Tx,
@@ -462,6 +503,30 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(eq(workspaces.id, workspaceId))
       .limit(1);
     return row?.bizProfileId ?? undefined;
+  }
+
+  async getBizProfileIdAndName(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ bizProfileId: string | null; name: string } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ bizProfileId: workspaces.bizProfileId, name: workspaces.name })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1);
+    if (!row) return undefined;
+    return { bizProfileId: row.bizProfileId ?? null, name: row.name };
+  }
+
+  async filterPgIds(ids: string[], tx?: Tx): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const db = this.h(tx);
+    const rows = (await db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(and(inArray(workspaces.id, ids), eq(workspaces.type, 'pg')))) as { id: string }[];
+    return rows.map((r) => r.id);
   }
 
   async rename(workspaceId: string, name: string, tx?: Tx): Promise<void> {

@@ -5,7 +5,7 @@ import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { assertTransition } from '../../rfp-state';
-import type { RfpRepo, Tx } from '../types';
+import type { NewRfpInsert, RfpRepo, Tx } from '../types';
 
 type RfpRow = typeof rfps.$inferSelect;
 type BizRow = typeof bizProfiles.$inferSelect;
@@ -171,6 +171,37 @@ export class DrizzleRfpRepository implements RfpRepo {
 
     // Allowlist is normalized into rfp_allowed_pg (C2).
     await this.syncAllowlist(db, rfp.id, rfp.allowedPgWorkspaceIds);
+  }
+
+  async insertNew(values: NewRfpInsert, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.insert(rfps).values({
+      id: values.id,
+      code: values.code,
+      buyerWsId: values.buyerWsId,
+      bizProfileId: values.bizProfileId,
+      title: values.title,
+      memo: values.memo,
+      websiteUrl: values.websiteUrl,
+      mainProducts: values.mainProducts,
+      annualPgVolume: values.annualPgVolume,
+      currentFeeRate: values.currentFeeRate,
+      currentSettlementLimit: values.currentSettlementLimit,
+      currentGuaranteeInsurance: values.currentGuaranteeInsurance,
+      currentSettlementCycle: values.currentSettlementCycle,
+      deliveryServicePeriod: values.deliveryServicePeriod,
+      boardVisible: values.boardVisible,
+      currentFeeVisibleToPg: values.currentFeeVisibleToPg,
+      contractType: values.contractType,
+      currentSolution: values.currentSolution,
+      currentSolutionDetail: values.currentSolutionDetail,
+      deadline: values.deadline,
+      status: values.status,
+      requiredPaymentMethods: values.requiredPaymentMethods,
+      customPaymentMethods: values.customPaymentMethods,
+      createdBy: values.createdBy,
+      sentAt: values.sentAt,
+    });
   }
 
   async findById(id: string, tx?: Tx): Promise<RFP | undefined> {
