@@ -43,7 +43,6 @@ import {
   type RepoBundleForAttachment,
 } from '@/lib/server/storage/permissions';
 import { getStorage } from '@/lib/server/storage';
-import { db as prodDb } from '@/lib/db/client';
 import {
   getBidNoteRepo,
   getBidRepo,
@@ -57,23 +56,6 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
-  var __bidit_files_db_override__: unknown | undefined;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function routeDb(): any {
-  return globalThis.__bidit_files_db_override__ ?? prodDb;
-}
-
-// Test-only override — the canAccessAttachment helper still takes a raw db
-// handle (injection-only Phase 3.4 exception). Tests install a pglite handle.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function __setFilesDbForTest(db: any | undefined): void {
-  globalThis.__bidit_files_db_override__ = db;
-}
 
 function fail(status: number, msg: string): Response {
   return new Response(msg, { status });
@@ -154,7 +136,6 @@ export async function GET(
   };
 
   const allowed = await canAccessAttachment(
-    routeDb(),
     att,
     {
       user: {

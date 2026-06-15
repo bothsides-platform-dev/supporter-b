@@ -248,7 +248,6 @@ describe('canAccessAttachment — rfp', () => {
   it('ALLOW for buyer ws member', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
-      db,
       s.rfpAttachment,
       {
         user: {
@@ -265,7 +264,6 @@ describe('canAccessAttachment — rfp', () => {
   it('ALLOW for accepted PG invitation', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
-      db,
       s.rfpAttachment,
       {
         user: { id: s.pgUserId, workspaceId: s.pgWsId, workspaceType: 'pg' },
@@ -278,7 +276,6 @@ describe('canAccessAttachment — rfp', () => {
   it('ALLOW for PG ws peer (member of invited ws, did not personally claim)', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
-      db,
       s.rfpAttachment,
       {
         user: { id: s.pgPeerUserId, workspaceId: s.pgWsId, workspaceType: 'pg' },
@@ -291,7 +288,6 @@ describe('canAccessAttachment — rfp', () => {
   it('DENY for random unrelated user', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
-      db,
       s.rfpAttachment,
       { user: { id: s.randomUserId } },
       await repos(),
@@ -303,7 +299,6 @@ describe('canAccessAttachment — rfp', () => {
     const s = await seedScenario();
     // Pretend the buyer lost their workspace claim — uploader path still grants.
     const ok = await canAccessAttachment(
-      db,
       s.rfpAttachment,
       { user: { id: s.uploaderId } },
       await repos(),
@@ -316,7 +311,6 @@ describe('canAccessAttachment — bid_proposal', () => {
   it('ALLOW for buyer ws member of underlying RFP', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
-      db,
       s.bidAttachment,
       {
         user: {
@@ -333,7 +327,6 @@ describe('canAccessAttachment — bid_proposal', () => {
   it('ALLOW for PG ws peer (same ws as submitter)', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
-      db,
       s.bidAttachment,
       {
         user: {
@@ -350,7 +343,6 @@ describe('canAccessAttachment — bid_proposal', () => {
   it('DENY for PG ws other (different workspace, even if invited)', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
-      db,
       s.bidAttachment,
       {
         user: {
@@ -367,7 +359,6 @@ describe('canAccessAttachment — bid_proposal', () => {
   it('DENY for random unrelated user', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
-      db,
       s.bidAttachment,
       { user: { id: s.randomUserId } },
       await repos(),
@@ -386,7 +377,6 @@ describe('canAccessAttachment — bid_proposal', () => {
     // workspaceId = pgWsId. uploadedBy is pgUserId (≠ randomUserId) so the
     // uploader fast-path does not fire — forces the bid branch.
     const ok = await canAccessAttachment(
-      db,
       s.bidAttachment,
       { user: { id: s.randomUserId, workspaceId: s.pgWsId, workspaceType: 'pg' } },
       await repos(),
@@ -410,7 +400,6 @@ describe('canAccessAttachment — bid_proposal', () => {
       uploadedBy: s.pgUserId, // ≠ querying user so uploader fast-path skips
     };
     const ok = await canAccessAttachment(
-      db,
       att,
       { user: { id: s.buyerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
       await repos(),
@@ -426,7 +415,6 @@ describe('canAccessAttachment — bid_note', () => {
     // bypasses the uploader early-allow and exercises the real bid_note
     // branch in canAccessAttachment.
     const ok = await canAccessAttachment(
-      db,
       s.bidNoteAttachment,
       {
         user: {
@@ -444,7 +432,6 @@ describe('canAccessAttachment — bid_note', () => {
     const s = await seedScenario();
     // The PG that submitted the bid this note attaches to — still DENY.
     const okSubmitter = await canAccessAttachment(
-      db,
       s.bidNoteAttachment,
       {
         user: {
@@ -458,7 +445,6 @@ describe('canAccessAttachment — bid_note', () => {
     expect(okSubmitter).toBe(false);
 
     const okPeer = await canAccessAttachment(
-      db,
       s.bidNoteAttachment,
       {
         user: {
@@ -475,7 +461,6 @@ describe('canAccessAttachment — bid_note', () => {
   it('DENY for random unrelated user', async () => {
     const s = await seedScenario();
     const ok = await canAccessAttachment(
-      db,
       s.bidNoteAttachment,
       { user: { id: s.randomUserId } },
       await repos(),
@@ -487,7 +472,6 @@ describe('canAccessAttachment — bid_note', () => {
     const s = await seedScenario();
     // Uploader (buyer) regardless of ws claim.
     const ok = await canAccessAttachment(
-      db,
       s.bidNoteAttachment,
       { user: { id: s.uploaderId } },
       await repos(),
@@ -524,7 +508,7 @@ describe('canAccessAttachment — chatMessageId branch', () => {
     // this forces the chatMessageId branch to run and be exercised.
     const att: AttachmentRow = { id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', url: '', uploadedBy: s.pgUserId };
     const ok = await canAccessAttachment(
-      db, att,
+      att,
       { user: { id: s.buyerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
       await repos(),
     );
@@ -555,7 +539,7 @@ describe('canAccessAttachment — chatMessageId branch', () => {
     });
     const att: AttachmentRow = { id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', url: '', uploadedBy: s.buyerUserId };
     const ok = await canAccessAttachment(
-      db, att,
+      att,
       { user: { id: s.pgUserId, workspaceId: s.pgWsId, workspaceType: 'pg' } },
       await repos(),
     );
@@ -578,7 +562,7 @@ describe('canAccessAttachment — chatMessageId branch', () => {
     const att: AttachmentRow = { id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', url: '', uploadedBy: s.buyerUserId };
     // otherPgUserId is in a different workspace — not part of this conversation.
     const ok = await canAccessAttachment(
-      db, att,
+      att,
       { user: { id: s.otherPgUserId, workspaceId: s.otherPgWsId, workspaceType: 'pg' } },
       await repos(),
     );
@@ -602,7 +586,7 @@ describe('canAccessAttachment — chatMessageId branch', () => {
     const att: AttachmentRow = { id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', url: '', uploadedBy: s.buyerUserId };
     // session has no workspaceId — exercises `if (!wsId) return false`
     const ok = await canAccessAttachment(
-      db, att,
+      att,
       { user: { id: s.randomUserId } },
       await repos(),
     );
@@ -624,7 +608,6 @@ describe('canAccessAttachment — chatMessageId branch', () => {
       uploadedBy: s.pgUserId, // different from querying user → uploader skip does not fire
     };
     const ok = await canAccessAttachment(
-      db,
       att,
       { user: { id: s.buyerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
       await repos(),
@@ -660,7 +643,6 @@ describe('canAccessAttachment — chatMessageId branch', () => {
       chatConversation: { ...base.chatConversation, findById: async () => undefined },
     };
     const ok = await canAccessAttachment(
-      db,
       att,
       { user: { id: s.buyerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
       stubbed,
@@ -716,7 +698,6 @@ describe('canAccessAttachment — rfpTeamMessageId branch (sealed-bid)', () => {
       uploadedBy: s.buyerUserId,
     });
     const ok = await canAccessAttachment(
-      db,
       att,
       { user: { id: s.buyerPeerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
       await repos(),
@@ -732,7 +713,6 @@ describe('canAccessAttachment — rfpTeamMessageId branch (sealed-bid)', () => {
       uploadedBy: s.pgUserId,
     });
     const ok = await canAccessAttachment(
-      db,
       att,
       { user: { id: s.pgPeerUserId, workspaceId: s.pgWsId, workspaceType: 'pg' } },
       await repos(),
@@ -748,7 +728,6 @@ describe('canAccessAttachment — rfpTeamMessageId branch (sealed-bid)', () => {
       uploadedBy: s.pgUserId,
     });
     const ok = await canAccessAttachment(
-      db,
       att,
       { user: { id: s.buyerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
       await repos(),
@@ -764,7 +743,6 @@ describe('canAccessAttachment — rfpTeamMessageId branch (sealed-bid)', () => {
       uploadedBy: s.buyerUserId,
     });
     const ok = await canAccessAttachment(
-      db,
       att,
       { user: { id: s.pgUserId, workspaceId: s.pgWsId, workspaceType: 'pg' } },
       await repos(),
@@ -780,7 +758,6 @@ describe('canAccessAttachment — rfpTeamMessageId branch (sealed-bid)', () => {
       uploadedBy: s.pgUserId,
     });
     const ok = await canAccessAttachment(
-      db,
       att,
       { user: { id: s.otherPgUserId, workspaceId: s.otherPgWsId, workspaceType: 'pg' } },
       await repos(),
@@ -796,7 +773,6 @@ describe('canAccessAttachment — rfpTeamMessageId branch (sealed-bid)', () => {
       uploadedBy: s.buyerUserId,
     });
     const ok = await canAccessAttachment(
-      db,
       att,
       { user: { id: s.randomUserId } },
       await repos(),

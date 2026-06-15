@@ -8,7 +8,6 @@ import { unstable_update } from '@/auth';
 import { getMembership } from '@/lib/auth/active-workspace';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
-import { actionDb } from '../auth/_shared';
 import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
 import { logger } from '@/lib/observability/logger';
 
@@ -46,7 +45,6 @@ export async function switchWorkspaceAction(
     return { ok: false, error: 'INVALID_INPUT' };
   }
 
-  const db = actionDb();
   const workspaceRepo = await getWorkspaceRepo();
   const userRepo = await getUserRepo();
 
@@ -75,7 +73,7 @@ export async function switchWorkspaceAction(
     return { ok: true, redirectTo: masterRedirect };
   }
 
-  const membership = await getMembership(db, session.user.id, targetWorkspaceId);
+  const membership = await getMembership(session.user.id, targetWorkspaceId);
   if (!membership) return { ok: false, error: 'NOT_MEMBER' };
 
   await userRepo.setLastActiveWorkspace(session.user.id, membership.workspaceId);

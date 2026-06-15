@@ -106,12 +106,8 @@ sessionStorage 가 차단되면(사파리 비공개 등) readSignupDraft 가 {} 
 **Priority:** P3
 `RESEND_API_KEY` 가 빈 문자열이면 `ResendSender`/`ResendBatchSender` 가 dev 모드로 떨어져 `[email DEV]` 로그만 남기고 행을 `sent` 로 표시한다 — 운영에서 키를 빈 값으로 잘못 설정하면 메일이 조용히 안 나간다. 부팅/런타임 가드(예: `NODE_ENV==='production'` 이면 빈 키를 에러로)로 오설정을 표면화. 본 PR 비도입(기존 `ResendSender` 동작 미러). (발견: /ship 어드버서리얼 2026-06-15)
 
-## Architecture
-
-### 리포지토리 경계 ESLint 강제 + 문서 동기화 (본 PR 의도적 연기)
-**Priority:** P2
-본 PR(v0.2.22.1)이 모든 DB 접근을 `lib/server/repositories` 로 일원화했지만 *lint 강제*는 아직 없어 신규 누출을 막지 못함. 후속: ① ESLint `no-restricted-imports` 로 `repositories/**` 밖의 `@/lib/db/{schema,client}` 쿼리 사용 금지 + 드리프트 가드 테스트. allowlist 예외 = storage 바이트 티어(`storage/postgres.ts`·`storage/index.ts`)·injection-only 사이트(`_shared.ts`·`api/workspaces/search/route.ts`·`api/files/[id]/route.ts`·`settings/audit-log/page.tsx`·`rfp-create/page.tsx`)·`_purgeUnverifiedSignup.ts` 크로스-애그리거트 캐스케이드. ② CLAUDE.md 의 stale 문구 갱신("Drizzle 구현 + 메모리 테스트 구현" → 메모리 레포는 제거됨, PGlite-on-Drizzle 사용; storage `memory.ts` 언급 점검). (데드 `'memory'` 유니온은 본 PR 머지 시 dev 가 이미 제거 — 추가 작업 불필요.) (분리 결정 2026-06-15)
-
 ## Completed
+
+- **리포지토리 경계 ESLint 강제 + 드리프트 가드 (v0.2.22.2, 2026-06-15)**: `@typescript-eslint/no-restricted-imports`(규칙 `repo-boundary/db-access`)로 `repositories/**` 밖의 `@/lib/db/{schema,client}` 값 import 금지(`import type`·서비스 동적 `import()`는 허용) + 독립 fs-walk 드리프트 가드(`lib/server/__tests__/repo-boundary.test.ts`). allowlist 는 SSOT `lib/server/db-boundary-allowlist.mjs`(4개: storage×2·`_purgeUnverifiedSignup`·`_shared`). injection-only 사이트의 죽은 `db` 파라미터(`searchWorkspaces`·`getMembership`·`accountExistsForEmail`·`canAccessAttachment`)를 제거해 allowlist 를 9→4 로 축소. CLAUDE.md 경계 규칙 명문화. (stale "메모리 테스트 구현" 문구·데드 `'memory'` 유니온은 #204 에서 이미 해소.)
 
 - **딜룸 후속 TODO 4건 해소 (2026-06-14, dev 머지)**: 정식 페이지 통일(`DealRoomFull`, PR #186) · `/submitted` 견적작성 탭 흡수(PR #188) · `<lg` 하단시트 채팅 + 반응형 레일(PR #189) · 전체화면 이전/다음 결정성(`useDealRoomNav` 슬라이스, PR #187). 딜룸 모달 본 PR #185 위 스택으로 진행.

@@ -10,11 +10,8 @@ import { normalizeEmail } from '@/lib/server/actions/auth/_shared';
  *
  * 데이터 접근은 UserRepo.existsByEmail 에 위임. 입력 이메일을 normalizeEmail 로
  * 정규화한 뒤 exact-match 하는 기존 동작을 그대로 유지한다(저장 이메일은 정규화됨).
- * `db` 파라미터는 호출부 시그니처 호환을 위해 유지하나 더 이상 쿼리에 쓰지 않는다.
  */
 export async function accountExistsForEmail(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _db: any,
   email: string,
 ): Promise<boolean> {
   return (await getUserRepo()).existsByEmail(normalizeEmail(email));

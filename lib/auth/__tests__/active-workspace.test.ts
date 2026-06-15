@@ -30,14 +30,14 @@ describe('getMembership', () => {
     const u = await seedUser(db);
     const ws = await seedPgWorkspace(db, 'PG-A');
     await seedMembership(db, ws.id, u.id, 'member');
-    const m = await getMembership(db, u.id, ws.id);
+    const m = await getMembership(u.id, ws.id);
     expect(m).toEqual({ workspaceId: ws.id, role: 'member', workspaceType: 'pg' });
   });
 
   it('returns null when the user is not a member of the workspace', async () => {
     const u = await seedUser(db);
     const ws = await seedPgWorkspace(db, 'PG-A');
-    const m = await getMembership(db, u.id, ws.id);
+    const m = await getMembership(u.id, ws.id);
     expect(m).toBeNull();
   });
 });

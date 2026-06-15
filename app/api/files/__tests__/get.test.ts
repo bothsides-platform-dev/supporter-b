@@ -52,10 +52,8 @@ beforeEach(async () => {
   __resetStorageForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
-  // The GET route still passes a raw db handle to canAccessAttachment
-  // (injection-only exception) — install the pglite handle via its own setter.
-  const route = await import('../[id]/route');
-  route.__setFilesDbForTest(db);
+  // canAccessAttachment resolves the owner chain through the repository
+  // factory (configured by __useDrizzleWithDbForTest) — no raw db handle.
   storage = new InMemoryStorage();
   __setStorageForTest(storage);
   sessionRef.value = null;
@@ -64,8 +62,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  const route = await import('../[id]/route');
-  route.__setFilesDbForTest(undefined);
   __setStorageForTest(undefined);
   __resetStorageForTest();
   __resetForTest();

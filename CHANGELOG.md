@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.22.2] - 2026-06-15
+
+### Changed
+
+- **리포지토리 경계를 ESLint 로 강제 — 신규 직접 DB 접근을 lint 가 차단해요 (개발자 전용, 사용자 화면·동작 변화 없음)**: 직전 변경(v0.2.22.1)으로 모든 DB 접근을 한 곳(`lib/server/repositories`)으로 모았는데, 이제 그 경계를 ESLint 규칙(`repo-boundary/db-access`)과 독립 드리프트 가드 테스트로 못박았어요. 누군가 실수로 레포 밖에서 DB 를 직접 import 하면 `pnpm lint` 가 빨갛게 떠요. 더 이상 안 쓰는 `db` 파라미터(헬퍼에 넘기기만 하던 것)들을 정리해 예외 목록을 9개에서 4개로 줄였고, 예외는 단일 출처(`db-boundary-allowlist.mjs`)에 명문화했어요. 동작은 이전과 완전히 똑같아요(전체 테스트 3234개 통과).
+
 ## [0.2.22.1] - 2026-06-15
 
 ### Changed

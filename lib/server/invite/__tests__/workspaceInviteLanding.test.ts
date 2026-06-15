@@ -32,22 +32,22 @@ afterEach(() => {
 
 describe('accountExistsForEmail', () => {
   it('returns false when no account has that email', async () => {
-    expect(await accountExistsForEmail(db, 'nobody@example.com')).toBe(false);
+    expect(await accountExistsForEmail('nobody@example.com')).toBe(false);
   });
 
   it('returns true when a verified account exists', async () => {
     const u = await seedUser(db, { email: 'has@example.com' });
     await db.update(users).set({ emailVerified: true }).where(eq(users.id, u.id));
-    expect(await accountExistsForEmail(db, 'has@example.com')).toBe(true);
+    expect(await accountExistsForEmail('has@example.com')).toBe(true);
   });
 
   it('returns true even when the existing account is UNVERIFIED (the #8 dead-end population)', async () => {
     await seedUser(db, { email: 'unverified@example.com' }); // emailVerified defaults false
-    expect(await accountExistsForEmail(db, 'unverified@example.com')).toBe(true);
+    expect(await accountExistsForEmail('unverified@example.com')).toBe(true);
   });
 
   it('matches case-insensitively', async () => {
     await seedUser(db, { email: 'mixed@example.com' });
-    expect(await accountExistsForEmail(db, 'Mixed@Example.com')).toBe(true);
+    expect(await accountExistsForEmail('Mixed@Example.com')).toBe(true);
   });
 });

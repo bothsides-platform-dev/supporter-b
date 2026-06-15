@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { requireSession } from '@/lib/auth/session';
 import { getMembership } from '@/lib/auth/active-workspace';
 import { getAuditLogRepo } from '@/lib/server/repositories/factory';
-import { actionDb } from '@/lib/server/actions/auth/_shared';
 import type { AuditLogCursor, AuditLogRecord } from '@/lib/server/repositories/types';
 
 const Input = z
@@ -46,7 +45,7 @@ export async function listAuditLogsAction(
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
-  const membership = await getMembership(actionDb(), session.user.id, wsId);
+  const membership = await getMembership(session.user.id, wsId);
   if (!membership || membership.role !== 'admin') {
     return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
   }
