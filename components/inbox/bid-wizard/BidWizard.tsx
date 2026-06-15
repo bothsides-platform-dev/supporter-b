@@ -19,8 +19,8 @@ import {
   isTieredMethod,
   type PaymentMethod,
   type QuoteTemplateOption,
-  type TierRates,
 } from '@/lib/types/bid';
+import { buildPaymentFees, parseSettleCycle, pctToDecimal, templateFeesToFlat } from '@/lib/quote/template-fees';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
@@ -155,50 +155,22 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
   const anyFeeFilled = anyTieredFilled || anySingleFilled;
   const canSubmit = !pending && !proposalUploading && cycleNum !== '' && parseInt(cycleNum) > 0 && anyFeeFilled;
 
-  const pct = (s: string) => parseFloat(s) / 100;
-  const buildPaymentFees = (): Partial<Record<PaymentMethod, number | TierRates>> => {
-    const out: Partial<Record<PaymentMethod, number | TierRates>> = {};
-    for (const m of feeInputMethods) {
-      if (isTieredMethod(m)) {
-        const map: TierRates = {};
-        for (const tier of MERCHANT_TIERS) {
-          const v = fees[`${m}:${tier}`] ?? '';
-          if (v !== '') map[tier] = pct(v);
-        }
-        if (Object.keys(map).length > 0) out[m] = map;
-      } else {
-        const v = fees[m] ?? '';
-        if (v !== '') out[m] = pct(v);
-      }
-    }
-    return out;
-  };
-  const fmtPct = (rate: number) => String(Math.round(rate * 1e6) / 1e4);
   const applyTemplate = (t: QuoteTemplateOption) => {
     clearDraft();
     setShowRestoreBanner(false);
-    const m = /^([DWM])\+(\d+)$/.exec(t.settleCycle);
-    const unit = (m?.[1] ?? 'D') as 'D' | 'W' | 'M';
-    const num = m?.[2] ?? '1';
-    setFields((f) => {
-      const nextFees = { ...f.fees };
-      for (const method of feeInputMethods) {
-        const val = t.paymentFees[method];
-        if (val === undefined) continue;
-        if (typeof val === 'object') {
-          for (const tier of MERCHANT_TIERS) {
-            const r = val[tier];
-            if (r !== undefined) nextFees[`${method}:${tier}`] = fmtPct(r);
-          }
-        } else if (isTieredMethod(method)) {
-          // 구버전 단일요율 템플릿 → 전 구간 동일값으로 전개
-          for (const tier of MERCHANT_TIERS) nextFees[`${method}:${tier}`] = fmtPct(val);
-        } else {
-          nextFees[method] = fmtPct(val);
-        }
-      }
-      return { ...f, cycleUnit: unit, cycleNum: num, settleLimit: String(t.settleLimit), guaranteeInsurance: String(t.guaranteeInsurance), fees: nextFees };
+    const { unit, num } = parseSettleCycle(t.settleCycle);
+    // 입찰 폼은 구버전 단일요율 템플릿을 전 구간으로 전개해 보여준다.
+    const decoded = templateFeesToFlat(t.paymentFees, feeInputMethods, {
+      spreadLegacyTieredSingleRate: true,
     });
+    setFields((f) => ({
+      ...f,
+      cycleUnit: unit,
+      cycleNum: num,
+      settleLimit: String(t.settleLimit),
+      guaranteeInsurance: String(t.guaranteeInsurance),
+      fees: { ...f.fees, ...decoded },
+    }));
   };
 
   // 단계 이동 — 자유 점프(구매사 위저드 미러)
@@ -213,7 +185,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
       settleCycle,
       settleLimit: parseInt(settleLimit) || 0,
       guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
-      paymentFees: buildPaymentFees(),
+      paymentFees: buildPaymentFees(fees, feeInputMethods),
     });
     return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
   };
@@ -231,11 +203,11 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
 
   const doSubmit = () => {
     setSubmitConfirmOpen(false);
-    const paymentFees = buildPaymentFees();
+    const paymentFees = buildPaymentFees(fees, feeInputMethods);
     const customFees: Record<string, number> = {};
     for (const c of customPaymentMethods) {
       const v = fees[c.id] ?? '';
-      if (v !== '') customFees[c.id] = pct(v);
+      if (v !== '') customFees[c.id] = pctToDecimal(v);
     }
     startTransition(async () => {
       const r = await submitBidAction({
