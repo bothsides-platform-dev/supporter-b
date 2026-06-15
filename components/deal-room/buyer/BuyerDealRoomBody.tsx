@@ -7,7 +7,7 @@
  * 레일: 선정·재요청(포커스 PG 대상 다이얼로그) · PG관리·요청조건·첨부(탭 전환) ·
  *       마감·취소(ConfirmDialog → close/cancel 액션).
  *
- * 선정/재요청 대상은 chat-rail 스토어의 포커스 PG(=FocusComparison 이 publish)를
+ * 선정/재요청 대상은 DealRoom 컨텍스트의 포커스 PG(=FocusComparison 이 set)를
  * 따른다 — 가운데 견적비교 탭에서 PG 를 바꾸면 레일 '선정'도 그 PG 를 겨냥한다.
  */
 import { useState } from 'react';
@@ -35,7 +35,7 @@ import { AwardConfirmDialog } from '@/components/rfp/comparison/AwardConfirmDial
 import { RequoteDialog } from '@/components/rfp/comparison/RequoteDialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { closeRfpAction, cancelRfpAction } from '@/lib/server/actions/rfp';
-import { useChatRailStore } from '@/lib/stores/chat-rail';
+import { useDealRoom } from '@/components/deal-room/DealRoomContext';
 import { toast } from '@/lib/toast';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
@@ -58,7 +58,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const focusedWsId = useChatRailStore((s) => s.counterparty?.workspaceId);
+  const focusedWsId = useDealRoom().counterparty?.workspaceId;
   // 선정 대상은 가운데 FocusComparison 이 publish 한 포커스 PG 만 따른다. 아직
   // publish 전(첫 프레임)엔 undefined → 선정 비활성 — 정렬순 기본값(bids[0])을
   // 추측해 하이라이트와 다른 견적을 겨냥하는 일을 막는다.

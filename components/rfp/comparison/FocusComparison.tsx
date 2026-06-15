@@ -16,7 +16,7 @@ import { AwardConfirmDialog } from './AwardConfirmDialog';
 import { AwardResult } from './AwardResult';
 import { RequoteDialog } from './RequoteDialog';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
-import { useChatRailStore } from '@/lib/stores/chat-rail';
+import { useDealRoom } from '@/components/deal-room/DealRoomContext';
 import { BidPdfPane } from '@/components/rfp/bid-detail/BidPdfPane';
 import { rankByMetric } from '@/lib/utils/bid-compare';
 import { formatKRW, formatPct } from '@/lib/format';
@@ -77,11 +77,11 @@ export function FocusComparison(props: Props) {
   const [resultBid, setResultBid] = useState<Bid | null>(null);
 
   // hooks 는 무조건 호출돼야 하므로 active 계산을 early return 위로 둔다
-  // (빈 목록이면 undefined). 포커스 PG 를 chat-rail 스토어에 publish 해 우측
+  // (빈 목록이면 undefined). 포커스 PG 를 DealRoom 컨텍스트에 set 해 우측
   // 채팅 레일의 '상대방 채팅' 탭이 탭 전환을 추종하게 한다.
   const active: Bid | undefined =
     sortedBids.find((b) => b.id === activeBidId) ?? sortedBids[0];
-  const setCounterparty = useChatRailStore((s) => s.setCounterparty);
+  const { setCounterparty } = useDealRoom();
   const activePgWsId = active?.pgWsId;
   useEffect(() => {
     if (!activePgWsId) return;

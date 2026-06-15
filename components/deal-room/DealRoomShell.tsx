@@ -16,6 +16,7 @@ import { ChevronLeft, ChevronRight, Maximize2, Minimize2, X } from 'lucide-react
 import { IconButton } from '@/components/primitives/IconButton';
 import { useIsLgUp } from '@/hooks/use-lg-up';
 import { DealRoomChatFab } from './DealRoomChatFab';
+import { DealRoomProvider } from './DealRoomContext';
 
 type DealRoomShellProps = {
   mode: 'modal' | 'page';
@@ -58,11 +59,14 @@ export function DealRoomShell({
   // DealRoomChat 인스턴스가 항상 단 하나(스토어 시드/리셋 충돌 방지)가 되게 한다.
   const lgUp = useIsLgUp();
 
+  // Provider 를 code 별로 마운트 — 딜룸을 옮기면(prev/next·다른 상세) 상대방·탭 상태가
+  // 깨끗이 초기화돼 이전 딜룸의 상대가 새지 않는다(전역 스토어 + 수동 reset 대체).
   return (
-    <div
-      data-mode={mode}
-      className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-surface)]"
-    >
+    <DealRoomProvider key={code}>
+      <div
+        data-mode={mode}
+        className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-surface)]"
+      >
       <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-2.5">
         {showNav && (
           <div className="flex items-center">
@@ -113,6 +117,7 @@ export function DealRoomShell({
         )}
       </div>
       {chat && !lgUp && <DealRoomChatFab>{chat}</DealRoomChatFab>}
-    </div>
+      </div>
+    </DealRoomProvider>
   );
 }

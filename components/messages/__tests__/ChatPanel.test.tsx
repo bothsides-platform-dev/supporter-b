@@ -1,13 +1,11 @@
 // ChatPanel — 레이아웃 비종속 채팅 패널(탭 + 상대방/팀 페인 + lazy 해소).
-// ChatRail(sticky aside, open-gate, fixedCounterparty 시드, reset)이 감싸 쓰고,
-// 딜룸 모달은 ChatPanel 을 우측 칼럼에 직접 마운트한다(open-gate 없음).
-// 여기서는 "open 게이트 없이 렌더", "onClose 옵션", "lazy 해소 read-only" 등
-// ChatRail 래퍼와 구분되는 ChatPanel 고유 계약을 잠근다. 전체 행동(팀 탭·재시도
-// 등)은 ChatRail.test 가 래퍼를 통해 계속 커버한다.
+// DealRoomProvider 안에서 상대방·탭 상태를 받는다(전역 스토어 대체). 여기서는
+// "탭 렌더", "onClose 옵션", "lazy 해소 read-only" 등 ChatPanel 고유 계약을 잠근다.
 
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, act } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useEffect } from 'react';
 
 const getOrCreateConversationAction = vi.fn();
 vi.mock('@/lib/server/actions/chat/getOrCreateConversationAction', () => ({
@@ -55,11 +53,14 @@ vi.mock('../team-thread-cache', () => ({
 vi.mock('@/lib/toast', () => ({ toast: vi.fn() }));
 
 import { ChatPanel } from '../ChatPanel';
-import { useChatRailStore } from '@/lib/stores/chat-rail';
+import {
+  DealRoomProvider,
+  useDealRoom,
+  type DealRoomCounterparty,
+} from '@/components/deal-room/DealRoomContext';
 
 afterEach(() => cleanup());
 beforeEach(() => {
-  useChatRailStore.getState().reset();
   getOrCreateConversationAction.mockReset();
   lookupConversationAction.mockReset();
   lookupConversationAction.mockResolvedValue({ ok: true, conversationId: 'conv-9' });
@@ -68,19 +69,30 @@ beforeEach(() => {
 });
 
 const baseProps = { rfpId: 'rfp-1', rfpCode: 'P-2606-0001', rfpTitle: '결제 견적 요청' };
+const PG: DealRoomCounterparty = { workspaceId: 'pg-ws-1', name: 'OO페이', type: 'pg' };
 
-function setCounterparty() {
-  act(() => {
-    useChatRailStore
-      .getState()
-      .setCounterparty({ workspaceId: 'pg-ws-1', name: 'OO페이', type: 'pg' });
-  });
+// 컨텍스트에 상대방을 시드(딜룸 가운데 FocusComparison 이 publish 하는 것과 동일 효과).
+function Seed({ counterparty }: { counterparty: DealRoomCounterparty }) {
+  const { setCounterparty } = useDealRoom();
+  useEffect(() => setCounterparty(counterparty), [counterparty, setCounterparty]);
+  return null;
+}
+
+function renderPanel(
+  props: Partial<typeof baseProps> & { isSample?: boolean; onClose?: () => void } = {},
+  counterparty?: DealRoomCounterparty,
+) {
+  return render(
+    <DealRoomProvider>
+      {counterparty ? <Seed counterparty={counterparty} /> : null}
+      <ChatPanel {...baseProps} {...props} />
+    </DealRoomProvider>,
+  );
 }
 
 describe('ChatPanel', () => {
-  it('store.open 없이도 탭을 렌더한다 (open-gate 없음)', () => {
-    // ChatRail 과 달리 open 을 켜지 않아도 마운트되면 바로 보인다.
-    render(<ChatPanel {...baseProps} />);
+  it('탭을 렌더한다 (open-gate 없음)', () => {
+    renderPanel();
     expect(screen.getByRole('tablist')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '상대방 채팅' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '팀 채팅' })).toBeInTheDocument();
@@ -89,21 +101,20 @@ describe('ChatPanel', () => {
   it('onClose 가 있으면 닫기 버튼을 렌더하고 클릭 시 호출한다', async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
-    render(<ChatPanel {...baseProps} onClose={onClose} />);
+    renderPanel({ onClose });
     await user.click(screen.getByRole('button', { name: '채팅 패널 닫기' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('onClose 가 없으면 닫기 버튼을 렌더하지 않는다 (모달 컨텍스트)', () => {
-    render(<ChatPanel {...baseProps} />);
+    renderPanel();
     expect(
       screen.queryByRole('button', { name: '채팅 패널 닫기' }),
     ).not.toBeInTheDocument();
   });
 
   it('상대를 read-only 로 해소하고 ThreadPane(variant=rail)을 렌더한다 — 생성 안 함', async () => {
-    setCounterparty();
-    render(<ChatPanel {...baseProps} />);
+    renderPanel({}, PG);
     await screen.findByTestId('thread-pane');
     expect(lookupConversationAction).toHaveBeenCalledWith('pg-ws-1');
     expect(getOrCreateConversationAction).not.toHaveBeenCalled();
@@ -113,8 +124,7 @@ describe('ChatPanel', () => {
   });
 
   it('isSample 면 ThreadPane 에 sendDisabled=true 를 넘긴다', async () => {
-    setCounterparty();
-    render(<ChatPanel {...baseProps} isSample />);
+    renderPanel({ isSample: true }, PG);
     await screen.findByTestId('thread-pane');
     expect(threadPaneProps).toHaveBeenCalledWith(
       expect.objectContaining({ sendDisabled: true }),
@@ -123,7 +133,7 @@ describe('ChatPanel', () => {
 
   it('팀 탭은 메시지함 딥링크(/messages?t=<rfpId>)를 렌더한다', async () => {
     const user = userEvent.setup();
-    render(<ChatPanel {...baseProps} />);
+    renderPanel();
     await user.click(screen.getByRole('tab', { name: '팀 채팅' }));
     await screen.findByTestId('team-thread-view');
     expect(
@@ -132,10 +142,8 @@ describe('ChatPanel', () => {
   });
 
   it('팀 탭의 TeamThreadView 에 teamMembers 로스터를 전달한다 (멘션 자동완성/렌더용)', async () => {
-    // 딜룸 ChatPanel 도 통합 인박스와 동일하게 멘션이 동작해야 한다 —
-    // teamMembers 가 빠지면 @ 드롭다운이 죽고 기존 멘션이 '@(알 수 없음)'으로 렌더된다.
     const user = userEvent.setup();
-    render(<ChatPanel {...baseProps} />);
+    renderPanel();
     await user.click(screen.getByRole('tab', { name: '팀 채팅' }));
     await screen.findByTestId('team-thread-view');
     expect(teamThreadViewProps).toHaveBeenCalledWith(
