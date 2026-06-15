@@ -270,6 +270,22 @@ export class DrizzleUserRepository implements UserRepo {
     return row ?? undefined;
   }
 
+  async createSystemAccount(
+    params: { id: string; email: string; name: string },
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db.insert(users).values({
+      id: params.id,
+      email: params.email,
+      // 사용 불가 sentinel — 데모/시스템 계정은 절대 인증되지 않는다.
+      passwordHash: '!',
+      name: params.name,
+      isSystemAccount: true,
+      emailVerified: true,
+    });
+  }
+
   async provisionMaster(
     params: { email: string; name: string },
     tx?: Tx,

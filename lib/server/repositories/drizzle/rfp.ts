@@ -201,7 +201,15 @@ export class DrizzleRfpRepository implements RfpRepo {
       customPaymentMethods: values.customPaymentMethods,
       createdBy: values.createdBy,
       sentAt: values.sentAt,
+      // 온보딩 샘플 전용 — 미지정 시 DB default(false).
+      ...(values.isSample !== undefined ? { isSample: values.isSample } : {}),
     });
+  }
+
+  async deleteById(id: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    // 자식(bids·invitations·allowlist·attachments·team_messages)은 FK ON DELETE CASCADE.
+    await db.delete(rfps).where(eq(rfps.id, id));
   }
 
   async findById(id: string, tx?: Tx): Promise<RFP | undefined> {
