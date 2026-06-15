@@ -32,12 +32,24 @@ vi.mock('../ThreadPane', () => ({
     return <div data-testid="thread-pane" />;
   },
 }));
+const teamThreadViewProps = vi.fn();
 vi.mock('../TeamThreadView', () => ({
-  TeamThreadView: () => <div data-testid="team-thread-view" />,
+  TeamThreadView: (props: Record<string, unknown>) => {
+    teamThreadViewProps(props);
+    return <div data-testid="team-thread-view" />;
+  },
 }));
+const TEAM_ROSTER = [{ userId: 'u-mate', name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z' }];
 vi.mock('../team-thread-cache', () => ({
   getTeamThreadPromise: () =>
-    Promise.resolve({ ok: true, rfpId: 'rfp-1', workspaceId: 'ws-self', viewerUserId: 'u-me', messages: [] }),
+    Promise.resolve({
+      ok: true,
+      rfpId: 'rfp-1',
+      workspaceId: 'ws-self',
+      viewerUserId: 'u-me',
+      teamMembers: TEAM_ROSTER,
+      messages: [],
+    }),
   invalidateTeamThread: vi.fn(),
 }));
 vi.mock('@/lib/toast', () => ({ toast: vi.fn() }));
@@ -52,6 +64,7 @@ beforeEach(() => {
   lookupConversationAction.mockReset();
   lookupConversationAction.mockResolvedValue({ ok: true, conversationId: 'conv-9' });
   threadPaneProps.mockReset();
+  teamThreadViewProps.mockReset();
 });
 
 const baseProps = { rfpId: 'rfp-1', rfpCode: 'P-2606-0001', rfpTitle: '결제 견적 요청' };
@@ -116,5 +129,17 @@ describe('ChatPanel', () => {
     expect(
       screen.getByRole('link', { name: /메시지함에서 열기/ }),
     ).toHaveAttribute('href', '/messages?t=rfp-1');
+  });
+
+  it('팀 탭의 TeamThreadView 에 teamMembers 로스터를 전달한다 (멘션 자동완성/렌더용)', async () => {
+    // 딜룸 ChatPanel 도 통합 인박스와 동일하게 멘션이 동작해야 한다 —
+    // teamMembers 가 빠지면 @ 드롭다운이 죽고 기존 멘션이 '@(알 수 없음)'으로 렌더된다.
+    const user = userEvent.setup();
+    render(<ChatPanel {...baseProps} />);
+    await user.click(screen.getByRole('tab', { name: '팀 채팅' }));
+    await screen.findByTestId('team-thread-view');
+    expect(teamThreadViewProps).toHaveBeenCalledWith(
+      expect.objectContaining({ teamMembers: TEAM_ROSTER }),
+    );
   });
 });

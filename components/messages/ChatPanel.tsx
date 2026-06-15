@@ -327,6 +327,7 @@ function TeamThreadPane({ rfpId }: { rfpId: string }) {
       rfpId={result.rfpId}
       workspaceId={result.workspaceId}
       viewerUserId={result.viewerUserId}
+      teamMembers={result.teamMembers}
       messages={result.messages}
     />
   );

@@ -168,4 +168,27 @@ export class DrizzleNotificationRepository implements NotificationRepo {
       .limit(1);
     return rows.length > 0;
   }
+
+  async hasPendingTeamMentionNotification(
+    userId: string,
+    rfpId: string,
+    windowStart: Date,
+    tx?: Tx,
+  ): Promise<boolean> {
+    const db = this.h(tx);
+    const rows = await db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          eq(notifications.type, 'team_chat.mention'),
+          eq(notifications.linkUrl, `/messages?t=${rfpId}`),
+          eq(notifications.status, 'queued'),
+          gte(notifications.createdAt, windowStart),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  }
 }
