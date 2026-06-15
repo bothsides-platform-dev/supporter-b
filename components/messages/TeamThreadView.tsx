@@ -26,6 +26,7 @@ import { toast } from '@/lib/toast';
 import type { TeamThreadMessage } from '@/lib/server/actions/chat/teamThreadLoader';
 import { MessageAttachmentGrid } from './MessageAttachmentGrid';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
+import { useStickToBottom } from './useStickToBottom';
 import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 import { MentionText } from './MentionText';
 import { MentionDropdown } from './MentionDropdown';
@@ -50,8 +51,6 @@ type Props = {
   teamMembers?: MentionCandidate[];
 };
 
-// 하단에서 이만큼(px) 이내면 "하단 근처"로 보고 새 메시지를 자동 추적한다.
-const NEAR_BOTTOM_PX = 120;
 
 type LocalMessage = TeamThreadMessage & { pending?: boolean };
 
@@ -67,9 +66,11 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>(messages);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const prevLenRef = useRef(0);
+  const lastIsOwn = localMessages[localMessages.length - 1]?.isSelf ?? false;
+  const { listRef, bottomRef } = useStickToBottom({
+    count: localMessages.length,
+    isOwnLast: lastIsOwn,
+  });
 
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null);
   const [mentionItems, setMentionItems] = useState<MentionItem[]>([]);
@@ -92,22 +93,6 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
     () => teamMembers.filter((m) => m.userId !== viewerUserId),
     [teamMembers, viewerUserId],
   );
-
-  // 새 메시지 append 시 하단 추적 — 단, 위로 올려 과거 메모를 읽는 중에 팀원
-  // 메시지가 오면 끌어내리지 않는다(초기 로드·본인 전송·하단 근처만 추적).
-  useEffect(() => {
-    const grew = localMessages.length > prevLenRef.current;
-    const isInitial = prevLenRef.current === 0;
-    prevLenRef.current = localMessages.length;
-    if (!grew) return;
-    const last = localMessages[localMessages.length - 1];
-    const el = listRef.current;
-    const nearBottom =
-      !el || el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
-    if (isInitial || last?.isSelf || nearBottom) {
-      bottomRef.current?.scrollIntoView({ block: 'end' });
-    }
-  }, [localMessages]);
 
   // 마운트(및 rfp 전환) 시 팀 스레드를 읽음 처리한다 — ThreadView 의
   // markConversationReadAction 패턴 미러링.
