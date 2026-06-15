@@ -4,12 +4,13 @@
 // 마운트해 "열람" 신호를 보존한다.
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { Chip, type ChipColor } from '@/components/primitives/Chip';
+import { Chip } from '@/components/primitives/Chip';
 import { DealRoomModal } from '@/components/deal-room/DealRoomModal';
 import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
 import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
+import { pgRequestChip } from '@/lib/rfp-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,11 +39,10 @@ export default async function InboxDealRoomModalPage({ params }: Props) {
     );
   }
 
-  const chip: { label: string; color: ChipColor } = data.pendingRequote
-    ? { label: '재요청', color: 'warning' }
-    : data.myBid
-      ? { label: '견적 보냄', color: 'tertiary' }
-      : { label: '신규', color: 'warning' };
+  const chip = pgRequestChip({
+    pendingRequote: !!data.pendingRequote,
+    hasBid: !!data.myBid,
+  });
 
   return (
     <>
