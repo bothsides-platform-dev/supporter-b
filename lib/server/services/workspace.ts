@@ -1,8 +1,8 @@
 import { and, count, eq, sql } from 'drizzle-orm';
 
-import { workspaceInvitations, workspaceMembers, workspaces } from '@/lib/db/schema';
+import { workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
 import { getMembership } from '@/lib/auth/active-workspace';
-import type { AuditLogRepo, OutboxRepo } from '@/lib/server/repositories/types';
+import type { AuditLogRepo, OutboxRepo, WorkspaceRepo } from '@/lib/server/repositories/types';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
@@ -33,6 +33,7 @@ export class WorkspaceService {
     private readonly _db: any,
     private readonly outboxRepo: OutboxRepo,
     private readonly auditRepo: AuditLogRepo,
+    private readonly workspaceRepo: WorkspaceRepo,
   ) {}
 
   async createWorkspace(
@@ -79,12 +80,8 @@ export class WorkspaceService {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
-    const [wsRow] = await this._db
-      .select({ name: workspaces.name })
-      .from(workspaces)
-      .where(eq(workspaces.id, actor.workspaceId))
-      .limit(1);
-    if (!wsRow) return { ok: false, error: 'WORKSPACE_NOT_FOUND' };
+    const wsName = await this.workspaceRepo.getName(actor.workspaceId);
+    if (wsName === undefined) return { ok: false, error: 'WORKSPACE_NOT_FOUND' };
 
     const normalizedEmail = normalizeEmail(input.email);
     const rawToken = generateToken();
@@ -111,7 +108,7 @@ export class WorkspaceService {
       }
 
       const inviteUrl = `${baseUrl()}/invite/workspace/${rawToken}`;
-      const html = await renderWorkspaceInvited({ workspaceName: wsRow.name, inviteUrl });
+      const html = await renderWorkspaceInvited({ workspaceName: wsName, inviteUrl });
       await this.outboxRepo.enqueue(
         {
           event: 'workspace.invited',
@@ -125,7 +122,7 @@ export class WorkspaceService {
 
       pendingEmit = await dispatchWorkspaceInviteInApp(tx, {
         invitedEmail: normalizedEmail,
-        workspaceName: wsRow.name,
+        workspaceName: wsName,
         linkUrl: `/invite/workspace/${rawToken}`,
       });
 
@@ -161,12 +158,8 @@ export class WorkspaceService {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
-    const [wsRow] = await this._db
-      .select({ name: workspaces.name })
-      .from(workspaces)
-      .where(eq(workspaces.id, actor.workspaceId))
-      .limit(1);
-    if (!wsRow) return { ok: false, error: 'WORKSPACE_NOT_FOUND' };
+    const wsName = await this.workspaceRepo.getName(actor.workspaceId);
+    if (wsName === undefined) return { ok: false, error: 'WORKSPACE_NOT_FOUND' };
 
     const normalizedEmail = normalizeEmail(input.email);
     const rawToken = generateToken();
@@ -192,7 +185,7 @@ export class WorkspaceService {
       if (updated.length === 0) return { ok: false, error: 'INVITE_NOT_FOUND' };
 
       const inviteUrl = `${baseUrl()}/invite/workspace/${rawToken}`;
-      const html = await renderWorkspaceInvited({ workspaceName: wsRow.name, inviteUrl });
+      const html = await renderWorkspaceInvited({ workspaceName: wsName, inviteUrl });
       await this.outboxRepo.enqueue(
         {
           event: 'workspace.invited',
@@ -206,7 +199,7 @@ export class WorkspaceService {
 
       pendingEmit = await dispatchWorkspaceInviteInApp(tx, {
         invitedEmail: normalizedEmail,
-        workspaceName: wsRow.name,
+        workspaceName: wsName,
         linkUrl: `/invite/workspace/${rawToken}`,
       });
 
@@ -414,15 +407,23 @@ declare global {
 
 export async function getWorkspaceService(): Promise<WorkspaceService> {
   if (!globalThis.__bidit_workspace_service__) {
-    const [{ db }, { getOutboxRepo, getAuditLogRepo }] = await Promise.all([
+    const [{ db }, { getOutboxRepo, getAuditLogRepo, getWorkspaceRepo }] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const outboxRepo = await getOutboxRepo();
-    const auditRepo = await getAuditLogRepo();
+    const [outboxRepo, auditRepo, workspaceRepo] = await Promise.all([
+      getOutboxRepo(),
+      getAuditLogRepo(),
+      getWorkspaceRepo(),
+    ]);
 
-    globalThis.__bidit_workspace_service__ = new WorkspaceService(db, outboxRepo, auditRepo);
+    globalThis.__bidit_workspace_service__ = new WorkspaceService(
+      db,
+      outboxRepo,
+      auditRepo,
+      workspaceRepo,
+    );
   }
   return globalThis.__bidit_workspace_service__!;
 }
