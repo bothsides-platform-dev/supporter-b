@@ -1,9 +1,8 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
-import { attachments } from '@/lib/db/schema';
 import type { Attachment } from '@/lib/types/common';
 import type {
+  AttachmentRepo,
   InvitationRepo,
   NotificationRepo,
   OutboxRepo,
@@ -70,6 +69,7 @@ export class TeamChatService {
     private readonly wsRepo: WorkspaceRepo,
     private readonly notifRepo: NotificationRepo,
     private readonly outboxRepo: OutboxRepo,
+    private readonly attRepo: AttachmentRepo,
   ) {}
 
   private async authorize(
@@ -128,40 +128,24 @@ export class TeamChatService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const txResult = await this._db.transaction(async (tx: any) => {
       if (attachmentIds.length > 0) {
-        const rows = await tx
-          .select({
-            id: attachments.id,
-            name: attachments.name,
-            size: attachments.size,
-            mimeType: attachments.mimeType,
-            rfpId: attachments.rfpId,
-            bidId: attachments.bidId,
-            bidNoteId: attachments.bidNoteId,
-            chatMessageId: attachments.chatMessageId,
-            rfpTeamMessageId: attachments.rfpTeamMessageId,
-            uploadedBy: attachments.uploadedBy,
-          })
-          .from(attachments)
-          .where(inArray(attachments.id, attachmentIds));
-        if (rows.length !== attachmentIds.length) return 'INVALID_ATTACHMENT' as const;
-        for (const r of rows) {
-          if (
-            r.uploadedBy !== actor.userId ||
-            r.rfpId ||
-            r.bidId ||
-            r.bidNoteId ||
-            r.chatMessageId ||
-            r.rfpTeamMessageId
-          ) {
-            return 'INVALID_ATTACHMENT' as const;
-          }
+        // 미링크·본인 소유 검증 — findUnclaimedByIds 는 모든 owner 컬럼 IS NULL 인
+        // 행만 distinct 로 반환하므로, 이미 링크됐거나 중복 id 면 length 가 어긋난다
+        // (원래 inArray select 와 동일한 dedupe·length 가드).
+        const unclaimed = await this.attRepo.findUnclaimedByIds(attachmentIds, tx);
+        if (unclaimed.length !== attachmentIds.length) return 'INVALID_ATTACHMENT' as const;
+        for (const r of unclaimed) {
+          if (r.uploadedBy !== actor.userId) return 'INVALID_ATTACHMENT' as const;
         }
-        // 표시 순서는 사용자가 추가한 attachmentIds 순서로 — inArray 는 순서 보장 안 함.
-        const byId = new Map<string, (typeof rows)[number]>(rows.map((r: (typeof rows)[number]) => [r.id, r]));
-        linked = attachmentIds.map((aid) => {
-          const r = byId.get(aid)!;
-          return { id: r.id, name: r.name, size: r.size, mimeType: r.mimeType, url: `/api/files/${r.id}` };
-        });
+        // 표시용 메타(name/size/mimeType)는 record 로 다시 조회 — 사용자가 추가한
+        // attachmentIds 순서를 유지한다.
+        const records = await Promise.all(attachmentIds.map((aid) => this.attRepo.findById(aid, tx)));
+        linked = records.map((r) => ({
+          id: r!.id,
+          name: r!.name,
+          size: r!.size,
+          mimeType: r!.mimeType,
+          url: `/api/files/${r!.id}`,
+        }));
       }
 
       await this.msgRepo.save(
@@ -222,20 +206,10 @@ export class TeamChatService {
       }
 
       if (attachmentIds.length > 0) {
-        await tx
-          .update(attachments)
-          .set({ rfpTeamMessageId: id })
-          .where(
-            and(
-              inArray(attachments.id, attachmentIds),
-              eq(attachments.uploadedBy, actor.userId),
-              isNull(attachments.rfpId),
-              isNull(attachments.bidId),
-              isNull(attachments.bidNoteId),
-              isNull(attachments.chatMessageId),
-              isNull(attachments.rfpTeamMessageId),
-            ),
-          );
+        await this.attRepo.claim(
+          { ids: attachmentIds, owner: { rfpTeamMessageId: id }, uploadedBy: actor.userId },
+          tx,
+        );
       }
       return 'ok' as const;
     });
@@ -310,6 +284,7 @@ export async function getTeamChatService(): Promise<TeamChatService> {
     const [
       { db },
       {
+        getAttachmentRepo,
         getInvitationRepo,
         getNotificationRepo,
         getOutboxRepo,
@@ -323,7 +298,7 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
-    const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo] = await Promise.all([
+    const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo, attRepo] = await Promise.all([
       getRfpRepo(),
       getInvitationRepo(),
       getUserRepo(),
@@ -332,6 +307,7 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       getWorkspaceRepo(),
       getNotificationRepo(),
       getOutboxRepo(),
+      getAttachmentRepo(),
     ]);
     globalThis.__bidit_team_chat_service__ = new TeamChatService(
       db,
@@ -343,6 +319,7 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       wsRepo,
       notifRepo,
       outboxRepo,
+      attRepo,
     );
   }
   return globalThis.__bidit_team_chat_service__!;
