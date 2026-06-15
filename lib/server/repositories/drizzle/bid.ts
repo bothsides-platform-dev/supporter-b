@@ -307,4 +307,19 @@ export class DrizzleBidRepository implements BidRepo {
       .limit(1);
     return row ?? undefined;
   }
+
+  async findOwner(
+    bidId: string,
+    tx?: Tx,
+  ): Promise<{ pgWsId: string; rfpId: string } | undefined> {
+    const db = this.h(tx);
+    // bids 단독 (rfps 조인 없음) — 첨부 ACL 의 PG fast-path 가 RFP 존재 여부와
+    // 무관하게 bid.pgWsId 를 봐야 하므로 findRfpOwner 와 분리한 경량 projection.
+    const [row] = await db
+      .select({ pgWsId: bids.pgWsId, rfpId: bids.rfpId })
+      .from(bids)
+      .where(eq(bids.id, bidId))
+      .limit(1);
+    return row ?? undefined;
+  }
 }

@@ -627,3 +627,26 @@ describe('DrizzleBidRepository.findRfpOwner', () => {
     expect(await ctx.repo.findRfpOwner(randomUUID())).toBeUndefined();
   });
 });
+
+describe('DrizzleBidRepository.findOwner', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  // Lightweight bid-only owner lookup for the attachment ACL. Unlike
+  // findRfpOwner (bids⋈rfps innerJoin), this reads bids alone so the ACL can
+  // resolve the PG fast-path (bid.pgWsId === viewer ws) WITHOUT requiring the
+  // RFP row to exist — preserving the exact branch ordering of the raw ACL.
+  it('returns pgWsId + rfpId for a known bid (no rfp join)', async () => {
+    const { bidId } = await insertBid(ctx.db, ctx, 0);
+    expect(await ctx.repo.findOwner(bidId)).toEqual({
+      pgWsId: ctx.pgWs.id,
+      rfpId: ctx.rfpId,
+    });
+  });
+
+  it('returns undefined for an unknown bid', async () => {
+    expect(await ctx.repo.findOwner(randomUUID())).toBeUndefined();
+  });
+});

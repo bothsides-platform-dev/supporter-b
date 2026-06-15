@@ -113,4 +113,26 @@ describe('DrizzleRfpTeamMessageRepository', () => {
     const otherWs = await seedBuyerWorkspace(db);
     expect(await repo.listThreadsForWorkspace(otherWs.id)).toHaveLength(0);
   });
+
+  // Lightweight owner lookup for the attachment ACL — returns the message's
+  // scoping workspace so the sealed-bid gate (viewer ws === message ws) can be
+  // enforced without exposing body/author. id → { workspaceId }.
+  it('findOwner returns the scoping workspaceId for a known message', async () => {
+    const { repo, buyer, author, rfp } = await setup();
+    const msgId = randomUUID();
+    await repo.save({
+      id: msgId,
+      rfpId: rfp.id,
+      workspaceId: buyer.id,
+      authorUserId: author.id,
+      body: 'scoped',
+      createdAt: new Date('2026-06-10T10:00:00Z'),
+    });
+    expect(await repo.findOwner(msgId)).toEqual({ workspaceId: buyer.id });
+  });
+
+  it('findOwner returns undefined for an unknown message', async () => {
+    const { repo } = await setup();
+    expect(await repo.findOwner(randomUUID())).toBeUndefined();
+  });
 });

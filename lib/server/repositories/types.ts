@@ -520,6 +520,15 @@ export interface BidRepo {
     bidId: string,
     tx?: Tx,
   ): Promise<{ rfpId: string; buyerWsId: string } | undefined>;
+  /**
+   * bidId → 입찰 소유 PG ws + 소속 RFP id (bids 단독, rfps 조인 없음). 첨부 ACL 전용:
+   * PG fast-path(bid.pgWsId === viewer ws)를 RFP 존재 여부와 무관하게 판정해야 하므로
+   * innerJoin 하는 findRfpOwner 와 분리한다. 없으면 undefined.
+   */
+  findOwner(
+    bidId: string,
+    tx?: Tx,
+  ): Promise<{ pgWsId: string; rfpId: string } | undefined>;
 }
 
 // ── Kanban Column ─────────────────────────────────────────────────────
@@ -862,6 +871,11 @@ export interface ChatMessageRepo {
     conversationId: string,
     tx?: Tx,
   ): Promise<ChatMessageRecord[]>;
+  /** messageId → 소속 대화 id (첨부 ACL 게이트). 없으면 undefined. */
+  findConversationId(
+    messageId: string,
+    tx?: Tx,
+  ): Promise<{ conversationId: string } | undefined>;
   /**
    * 한 대화의 모든 메시지 + 작성자 이름·이메일(users 조인) — created_at asc.
    * 스레드 로더 전용. 인박스 목록 로더는 가벼운 listByConversation 을 쓴다.
@@ -911,6 +925,14 @@ export interface RfpTeamMessageRepo {
   ): Promise<RfpTeamMessageWithAuthor[]>;
   /** 워크스페이스가 메시지를 남긴 모든 RFP 의 스레드 요약(rfp별 마지막 메시지). */
   listThreadsForWorkspace(workspaceId: string, tx?: Tx): Promise<TeamThreadSummary[]>;
+  /**
+   * messageId → 메시지를 소유한 워크스페이스 (첨부 ACL sealed-bid 게이트). 메시지의
+   * 스코프 ws 가 viewer ws 와 같을 때만 통과해야 하므로 그 한 컬럼만 반환. 없으면 undefined.
+   */
+  findOwner(
+    messageId: string,
+    tx?: Tx,
+  ): Promise<{ workspaceId: string } | undefined>;
 }
 
 // ── Chat: Message Template ────────────────────────────────────────────
