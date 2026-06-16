@@ -60,7 +60,7 @@ vi.mock('@/lib/server/actions/workspace/_claimWorkspaceInvite', async () => {
   };
 });
 
-import { AuthService, getAuthService, __resetAuthServiceForTest, __setAuthServiceForTest } from '../auth';
+import { AuthService, getAuthService, __resetAuthServiceForTest, __setAuthServiceForTest, mapUniqueViolationToEmailTaken } from '../auth';
 
 let db: PgliteDB;
 
@@ -819,5 +819,34 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
       phone: '01099991233', phoneVerificationId: otpId, selectedPgWorkspaceId: wsId,
     });
     expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
+  });
+});
+
+// ─── mapUniqueViolationToEmailTaken ───────────────────────────────────────────
+
+describe('mapUniqueViolationToEmailTaken', () => {
+  it('postgres-js 형태 (code + constraint: users_email_unique) 이면 EMAIL_TAKEN 을 반환한다', () => {
+    const err = Object.assign(new Error('unique'), { code: '23505', constraint: 'users_email_unique' });
+    expect(mapUniqueViolationToEmailTaken(err)).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
+  });
+
+  it('pglite 형태 (cause.code + cause.constraint: users_email_unique) 이면 EMAIL_TAKEN 을 반환한다', () => {
+    const err = Object.assign(new Error('unique'), { cause: { code: '23505', constraint: 'users_email_unique' } });
+    expect(mapUniqueViolationToEmailTaken(err)).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
+  });
+
+  it('unique violation 이 아닌 에러는 재던진다', () => {
+    const err = new Error('other error');
+    expect(() => mapUniqueViolationToEmailTaken(err)).toThrow('other error');
+  });
+
+  it('users_email_unique 이외 컬럼 23505 은 재던진다 (오진단 방지)', () => {
+    const err = Object.assign(new Error('unique'), { code: '23505', constraint: 'workspaces_canonical_pg_key_unique' });
+    expect(() => mapUniqueViolationToEmailTaken(err)).toThrow('unique');
+  });
+
+  it('pglite 형태 — users_email_unique 이외 컬럼 23505 은 재던진다', () => {
+    const err = Object.assign(new Error('unique'), { cause: { code: '23505', constraint: 'workspaces_canonical_pg_key_unique' } });
+    expect(() => mapUniqueViolationToEmailTaken(err)).toThrow('unique');
   });
 });
