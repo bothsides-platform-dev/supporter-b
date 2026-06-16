@@ -5,12 +5,13 @@ import { Suspense } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
-import { Chip, type ChipColor } from '@/components/primitives/Chip';
+import { Chip } from '@/components/primitives/Chip';
 import { DealRoomFull } from '@/components/deal-room/DealRoomFull';
 import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
 import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { DealRoomPageSkeleton } from '@/components/skeletons';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
+import { pgRequestChip } from '@/lib/rfp-status';
 
 type Props = { params: Promise<{ rfpId: string }> };
 
@@ -45,11 +46,10 @@ async function PgRfpDetailLoader({
   const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: wsId });
   if (!data) notFound();
 
-  const chip: { label: string; color: ChipColor } = data.pendingRequote
-    ? { label: '재요청', color: 'warning' }
-    : data.myBid
-      ? { label: '견적 보냄', color: 'tertiary' }
-      : { label: '신규', color: 'warning' };
+  const chip = pgRequestChip({
+    pendingRequote: !!data.pendingRequote,
+    hasBid: !!data.myBid,
+  });
 
   return (
     <DealRoomFull

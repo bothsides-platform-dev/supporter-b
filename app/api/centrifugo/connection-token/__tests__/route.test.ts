@@ -15,8 +15,10 @@ vi.mock('@/auth', () => ({
 }));
 // 폐기 세션(sv stale) 차단용 — requireSession 미사용 라우트도 동일 기준 적용.
 const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
+const getDbEmailVerifiedMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/auth/session-version-db', () => ({
   getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
+  getDbEmailVerified: (...a: unknown[]) => getDbEmailVerifiedMock(...a),
 }));
 
 
@@ -24,6 +26,8 @@ beforeEach(() => {
   sessionRef.value = null;
   getDbSessionVersionMock.mockReset();
   getDbSessionVersionMock.mockResolvedValue(1);
+  getDbEmailVerifiedMock.mockReset();
+  getDbEmailVerifiedMock.mockResolvedValue(true);
   vi.stubEnv('CENTRIFUGO_TOKEN_HMAC_SECRET', SECRET);
 });
 
@@ -62,5 +66,14 @@ describe('connection-token — 폐기 세션', () => {
     getDbSessionVersionMock.mockResolvedValue(2);
     const r = await callPost();
     expect(r.status).toBe(401);
+  });
+});
+
+describe('connection-token — 이메일 미인증', () => {
+  it('미인증 세션은 403', async () => {
+    sessionRef.value = { user: { id: 'user-99', email: 'u@x.com', sessionVersion: 1 } };
+    getDbEmailVerifiedMock.mockResolvedValue(false);
+    const r = await callPost();
+    expect(r.status).toBe(403);
   });
 });

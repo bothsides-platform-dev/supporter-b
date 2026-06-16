@@ -7,6 +7,7 @@ import {
   __useDrizzleWithDbForTest,
   getOutboxRepo,
   getAuditLogRepo,
+  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
   seedBuyerWorkspace,
@@ -23,7 +24,8 @@ let service: WorkspaceService;
 async function buildService(): Promise<WorkspaceService> {
   const outboxRepo = await getOutboxRepo();
   const auditRepo = await getAuditLogRepo();
-  return new WorkspaceService(db, outboxRepo, auditRepo);
+  const workspaceRepo = await getWorkspaceRepo();
+  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo);
 }
 
 beforeEach(async () => {

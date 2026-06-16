@@ -2,15 +2,13 @@
 // MUST NOT be imported by auth.config.ts (edge-safe). Used by auth.ts to
 // (a) default-deny non-master Google sign-ins and (b) map a verified Google
 // identity onto a provisioned `users` row + active workspace.
-import { randomBytes } from 'node:crypto';
-import { and, asc, eq } from 'drizzle-orm';
-
-import { users, workspaces } from '@/lib/db/schema';
-import { hashPassword } from '@/lib/auth/password';
+import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import type { AuthorizedUser } from '@/lib/auth/credentials';
 
-// drizzle instance — postgres-js in prod, pglite in tests.
+// drizzle instance — postgres-js in prod, pglite in tests. DB access now goes
+// through the repository factory; the param is retained for call-site
+// compatibility (auth.ts) but is no longer touched directly.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
 
@@ -31,23 +29,14 @@ export function allowSignIn(params: {
 
 /** First active workspace to land a master in: remembered if still active, else earliest-created. */
 async function resolveMasterWorkspace(
-  db: Db,
   lastActiveWorkspaceId: string | null,
 ): Promise<{ id: string; type: 'buyer' | 'pg' } | null> {
+  const workspaceRepo = await getWorkspaceRepo();
   if (lastActiveWorkspaceId) {
-    const [remembered] = await db
-      .select({ id: workspaces.id, type: workspaces.type })
-      .from(workspaces)
-      .where(and(eq(workspaces.id, lastActiveWorkspaceId), eq(workspaces.status, 'active')))
-      .limit(1);
+    const remembered = await workspaceRepo.findActiveById(lastActiveWorkspaceId);
     if (remembered) return remembered;
   }
-  const [earliest] = await db
-    .select({ id: workspaces.id, type: workspaces.type })
-    .from(workspaces)
-    .where(eq(workspaces.status, 'active'))
-    .orderBy(asc(workspaces.createdAt))
-    .limit(1);
+  const earliest = await workspaceRepo.findEarliestActiveWorkspace();
   return earliest ?? null;
 }
 
@@ -58,37 +47,30 @@ async function resolveMasterWorkspace(
  * (`authorizeCredentials` rejects allowlist emails), so the hash is never used.
  */
 export async function resolveMasterUser(
-  db: Db,
+  _db: Db,
   email: string,
   name?: string | null,
 ): Promise<AuthorizedUser> {
   const normalized = email.trim().toLowerCase();
+  const userRepo = await getUserRepo();
 
-  let [user] = await db.select().from(users).where(eq(users.email, normalized)).limit(1);
-  if (!user) {
-    const passwordHash = await hashPassword(randomBytes(32).toString('hex'));
-    [user] = await db
-      .insert(users)
-      .values({
-        email: normalized,
-        passwordHash,
-        name: name?.trim() || normalized,
-        emailVerified: true,
-        emailVerifiedAt: new Date(),
-        // System-managed operator account — hidden from member lists (see
-        // workspace.ts isSystemAccount filter). Masters never hold a membership
-        // row, but this keeps the flag consistent with its documented intent.
-        isSystemAccount: true,
-      })
-      .returning();
-  }
+  // Insert-if-absent (random unusable password hash, emailVerified, system
+  // account) — identical row semantics to the old inline INSERT, idempotent for
+  // re-login. provisionMaster normalizes the email itself.
+  const userId = await userRepo.provisionMaster({
+    email: normalized,
+    name: name?.trim() || normalized,
+  });
 
-  const ws = await resolveMasterWorkspace(db, user.lastActiveWorkspaceId);
+  // Read back the canonical row for the stamped JWT identity (name + sv).
+  const authRow = await userRepo.findAuthRowByEmail(normalized);
+
+  const ws = await resolveMasterWorkspace(authRow?.lastActiveWorkspaceId ?? null);
   return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    sessionVersion: user.sessionVersion ?? 1,
+    id: userId,
+    email: authRow?.email ?? normalized,
+    name: authRow?.name ?? (name?.trim() || normalized),
+    sessionVersion: authRow?.sessionVersion ?? 1,
     workspaceId: ws?.id,
     workspaceType: ws?.type,
     role: ws ? 'admin' : undefined,

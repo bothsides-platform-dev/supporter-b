@@ -32,6 +32,7 @@ function makeBuyerCard(overrides: Partial<BuyerKanbanCard> = {}): BoardCard {
     stage: 'active',
     deadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     invitedPgCount: 3,
     submittedBidCount: 1,
     isSample: false,

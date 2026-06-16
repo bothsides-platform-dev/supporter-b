@@ -61,4 +61,22 @@ describe('BidStepFees 구간 매트릭스', () => {
     // 해외카드는 단일요율 PercentInput(라벨 "해외카드 수수료")으로 렌더.
     expect(screen.getByText('해외카드 수수료')).toBeInTheDocument();
   });
+
+  it('첫 번째 열(영세, sole) 셀의 툴팁은 left-0 클래스를 갖는다', () => {
+    setup({ fees: { 'card:sole': '1.25' } });
+    fireEvent.focusIn(screen.getByTestId('fee-cell-card-sole'));
+    expect(screen.getByRole('tooltip').className).toContain('left-0');
+  });
+
+  it('마지막 열(일반, general) 셀의 툴팁은 right-0 클래스를 갖는다', () => {
+    setup({ fees: { 'card:general': '2.00' } });
+    fireEvent.focusIn(screen.getByTestId('fee-cell-card-general'));
+    expect(screen.getByRole('tooltip').className).toContain('right-0');
+  });
+
+  it('중간 열(중소2, sme2) 셀의 툴팁은 left-1/2 클래스를 갖는다', () => {
+    setup({ fees: { 'card:sme2': '1.00' } });
+    fireEvent.focusIn(screen.getByTestId('fee-cell-card-sme2'));
+    expect(screen.getByRole('tooltip').className).toContain('left-1/2');
+  });
 });

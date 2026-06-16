@@ -2,10 +2,13 @@
 
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
 
 import { requireBuyerSession } from '@/lib/auth/session';
-import { bizProfiles, workspaces } from '@/lib/db/schema';
+import {
+  getBizProfileRepo,
+  getWorkspaceRepo,
+} from '@/lib/server/repositories/factory';
+import type { BizProfile } from '@/lib/types/biz-profile';
 import { actionDb, type RfpActionResult } from './_shared';
 
 const BizProfilePatch = z
@@ -59,25 +62,18 @@ export async function updateWorkspaceBizProfileAction(
   const userId = session.user.id;
   const db = actionDb();
 
+  const workspaceRepo = await getWorkspaceRepo();
+  const bizProfileRepo = await getBizProfileRepo();
+
   return await db.transaction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (tx: any): Promise<UpdateWorkspaceBizProfileResult> => {
-      const [wsRow] = await tx
-        .select({ bizProfileId: workspaces.bizProfileId })
-        .from(workspaces)
-        .where(eq(workspaces.id, wsId))
-        .limit(1);
-      if (!wsRow) return { ok: false, error: 'WORKSPACE_NOT_FOUND' };
+      const currentBizProfileId = await workspaceRepo.getBizProfileId(wsId, tx);
 
       // 현재 row 베이스로 patch 머지 — bizProfile patch 미지정 시 현재 값 그대로.
-      let base: typeof bizProfiles.$inferSelect | undefined;
-      if (wsRow.bizProfileId) {
-        const [b] = await tx
-          .select()
-          .from(bizProfiles)
-          .where(eq(bizProfiles.id, wsRow.bizProfileId))
-          .limit(1);
-        base = b;
+      let base: (BizProfile & { id: string }) | undefined;
+      if (currentBizProfileId) {
+        base = await bizProfileRepo.findById(currentBizProfileId, tx);
       }
 
       const bizPatch = parsed.data.bizProfile;
@@ -88,22 +84,22 @@ export async function updateWorkspaceBizProfileAction(
 
       const newId = randomUUID();
       const now = new Date();
-      await tx.insert(bizProfiles).values({
-        id: newId,
-        bizNo: bizPatch?.bizNo ?? base!.bizNo,
-        taxType: bizPatch?.taxType ?? base!.taxType,
-        status: bizPatch?.status ?? base!.status,
-        grade: parsed.data.grade ?? base?.grade ?? null,
-        gradeSource: 'user_overridden',
-        gradeConfirmedBy: userId,
-        gradeConfirmedAt: now,
-      });
+      await bizProfileRepo.save(
+        {
+          id: newId,
+          bizNo: bizPatch?.bizNo ?? base!.bizNo,
+          taxType: bizPatch?.taxType ?? base!.taxType,
+          status: bizPatch?.status ?? base!.status,
+          grade: parsed.data.grade ?? base?.grade ?? undefined,
+          gradeSource: 'user_overridden',
+          gradeConfirmedBy: userId,
+          gradeConfirmedAt: now.toISOString(),
+        },
+        tx,
+      );
 
       // workspace 포인터 갱신 — 이 액션의 핵심 (createRfp와의 차별점).
-      await tx
-        .update(workspaces)
-        .set({ bizProfileId: newId })
-        .where(eq(workspaces.id, wsId));
+      await workspaceRepo.setBizProfilePointer(wsId, newId, tx);
 
       return { ok: true, bizProfileId: newId };
     },

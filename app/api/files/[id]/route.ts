@@ -36,28 +36,26 @@
  *     410 so the UI can render a "missing" state (rare; v1 cron sweeper).
  */
 import { auth } from '@/auth';
-import { isSessionRevoked } from '@/lib/auth/session';
+import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import { getAttachmentRepo } from '@/lib/server/repositories/factory';
 import {
   canAccessAttachment,
   type RepoBundleForAttachment,
 } from '@/lib/server/storage/permissions';
 import { getStorage } from '@/lib/server/storage';
-import { db as prodDb } from '@/lib/db/client';
-import { getInvitationRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import {
+  getBidNoteRepo,
+  getBidRepo,
+  getChatConversationRepo,
+  getChatMessageRepo,
+  getInvitationRepo,
+  getRfpRepo,
+  getRfpTeamMessageRepo,
+  getWorkspaceRepo,
+} from '@/lib/server/repositories/factory';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
-  var __bidit_files_db_override__: unknown | undefined;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function routeDb(): any {
-  return globalThis.__bidit_files_db_override__ ?? prodDb;
-}
 
 function fail(status: number, msg: string): Response {
   return new Response(msg, { status });
@@ -118,6 +116,8 @@ export async function GET(
 
   // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return fail(401, 'Unauthorized');
+  // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
+  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
 
   const { id } = await ctx.params;
   if (!id) return fail(400, 'Bad Request');
@@ -129,10 +129,15 @@ export async function GET(
   const repos: RepoBundleForAttachment = {
     invitation: await getInvitationRepo(),
     workspace: await getWorkspaceRepo(),
+    rfp: await getRfpRepo(),
+    bid: await getBidRepo(),
+    bidNote: await getBidNoteRepo(),
+    chatMessage: await getChatMessageRepo(),
+    chatConversation: await getChatConversationRepo(),
+    rfpTeamMessage: await getRfpTeamMessageRepo(),
   };
 
   const allowed = await canAccessAttachment(
-    routeDb(),
     att,
     {
       user: {

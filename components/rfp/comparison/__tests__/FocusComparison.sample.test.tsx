@@ -1,7 +1,12 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { FocusComparison } from '../FocusComparison';
+import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
 import type { Bid } from '@/lib/types/bid';
+
+// FocusComparison 은 DealRoomProvider 안에서 동작한다(포커스 PG publish).
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: DealRoomProvider });
 
 // Mocks required to prevent server-action / next-auth chain from loading
 vi.mock('@/components/messages/CounterpartyProfileCard', () => ({

@@ -64,17 +64,27 @@ const useStore = create<NotifStore>((set) => ({
 let subscribers = 0;
 let eventSource: EventSource | null = null;
 let historyLoaded = false;
+// 현재 싱글톤이 들고 있는 워크스페이스. 워크스페이스를 전환하면 이전 ws의
+// 알림/구독이 그대로 남아 stale 해지므로(Phase 7b 버그), 키가 바뀔 때 리셋한다.
+let activeWorkspaceId: string | undefined;
 
 async function loadHistory(): Promise<void> {
   if (historyLoaded) return;
   historyLoaded = true;
+  // 이 fetch 가 속한 워크스페이스를 고정한다. 전환 중이면 이전 ws 요청이 아직
+  // in-flight 인 채로 새 ws fetch 가 시작되고, 둘이 역순으로 도착할 수 있다.
+  // 응답이 돌아왔을 때 activeWorkspaceId 가 바뀌었으면 stale 응답이므로 버린다
+  // (안 그러면 늦게 온 이전 ws 알림이 새 ws 를 덮어써 다시 stale 해진다 — TOCTOU).
+  const fetchWorkspaceId = activeWorkspaceId;
   try {
     useStore.getState().setStatus('loading')
     const data = await http
       .get('/api/notifications')
       .json<{ notifications: Notification[] }>()
+    if (activeWorkspaceId !== fetchWorkspaceId) return;
     useStore.getState().setAll(data.notifications)
   } catch {
+    if (activeWorkspaceId !== fetchWorkspaceId) return;
     useStore.getState().setStatus('error')
     historyLoaded = false
   }
@@ -114,11 +124,27 @@ function closeStream(): void {
   useStore.getState().setStatus('idle');
 }
 
-export function useNotifications() {
+// 워크스페이스가 바뀌면 이전 ws의 캐시·구독을 버리고 깨끗한 상태로 되돌린다.
+// (ref-count 는 건드리지 않는다 — 같은 mount들이 새 ws로 다시 hydrate 한다.)
+function resetForWorkspace(workspaceId: string | undefined): void {
+  if (workspaceId === activeWorkspaceId) return;
+  activeWorkspaceId = workspaceId;
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+  historyLoaded = false;
+  useStore.getState().setAll([]);
+  useStore.getState().setStatus('idle');
+}
+
+export function useNotifications(workspaceId?: string) {
   const notifications = useStore((s) => s.notifications);
   const status = useStore((s) => s.status);
 
   useEffect(() => {
+    // 워크스페이스 전환 감지 → 싱글톤 리셋 후 새 ws용으로 다시 hydrate.
+    if (workspaceId !== undefined) resetForWorkspace(workspaceId);
     subscribers += 1;
     void loadHistory();
     openStream();
@@ -129,7 +155,7 @@ export function useNotifications() {
         closeStream();
       }
     };
-  }, []);
+  }, [workspaceId]);
 
   const markRead = useCallback(async (id: string) => {
     // optimistic — server roundtrip 후 실패하면 최악으로도 unread 복구는

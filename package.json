@@ -6,7 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "prepare": "git config core.hooksPath .githooks || true",
+    "prepare": "git config core.hooksPath .githooks || true; node scripts/git/install-merge-drivers.mjs || true",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

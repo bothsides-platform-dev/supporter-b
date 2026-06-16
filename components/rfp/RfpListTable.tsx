@@ -2,31 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Chip, type ChipColor } from '@/components/primitives/Chip';
+import { Chip } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
 import { formatDate } from '@/lib/format';
 import type { RFP } from '@/lib/types/rfp';
+import { RFP_STATUS_CHIP } from '@/lib/rfp-status';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { deleteSampleRfpAction } from '@/lib/server/actions/onboarding/deleteSampleRfpAction';
 import { toast } from '@/lib/toast';
-
-const statusLabel: Record<string, string> = {
-  draft: '임시저장',
-  sent: '요청 보냄',
-  closed: '마감',
-  awarded: '선정 완료',
-  cancelled: '취소',
-};
-
-const statusColor: Record<string, ChipColor> = {
-  draft: 'surface',
-  sent: 'warning',
-  closed: 'surface',
-  awarded: 'tertiary',
-  cancelled: 'error',
-};
 
 type Props = { rfps: RFP[] };
 
@@ -120,7 +105,7 @@ export function RfpListTable({ rfps }: Props) {
                     </button>
                   )}
                   {rfp.isSample && <Chip label="샘플" color="surface" />}
-                  <Chip label={statusLabel[rfp.status]} color={statusColor[rfp.status]} />
+                  <Chip label={RFP_STATUS_CHIP[rfp.status].label} color={RFP_STATUS_CHIP[rfp.status].color} />
                 </div>
               </td>
             </tr>

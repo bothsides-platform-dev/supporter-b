@@ -42,6 +42,7 @@ export function resolveShellAccess(
   session: ShellSession,
   workspaces: WorkspaceMembershipSummary[],
   sessionVersions?: SessionVersionPair,
+  emailVerified?: boolean,
 ): ShellAccessDecision {
   // Genuinely unauthenticated → /login (proxy lets unauth users stay on /login).
   if (!session?.user?.id) {
@@ -71,6 +72,17 @@ export function resolveShellAccess(
   // (render-only; the token reconciles on the next explicit switch).
   const active =
     workspaces.find((w) => w.id === session.user!.workspaceId) ?? workspaces[0];
+
+  // Email-verification gate — a 1st-class gate INDEPENDENT of workspace approval
+  // status. /pending-approval renders the email-verify screen whenever
+  // emailVerified is false (regardless of ws status), so an unverified user whose
+  // active workspace is already `active` (e.g. canonical-PG join, which bypasses
+  // the pending status gate below) is still forced to verify. `=== false` only:
+  // `undefined` (caller didn't supply it) fails open so legacy callers/tests are
+  // unaffected. No loop: /pending-approval lives in (public), not behind this guard.
+  if (emailVerified === false) {
+    return { kind: 'redirect', to: '/pending-approval' };
+  }
 
   // Workspace status gate — both pages live in (public) to avoid AppShell noise.
   if (active.status === 'pending') {

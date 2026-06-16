@@ -31,6 +31,7 @@ export type PgKanbanCard = {
   title: string;
   stage: PgKanbanStage;
   deadline: string;
+  rfpUpdatedAt?: string;
   bizGradeLabel?: string;
   bidId?: string;
   submittedAt?: string;
@@ -86,6 +87,7 @@ export function toPgCard(args: {
     title: rfp.title,
     stage,
     deadline: rfp.deadline,
+    rfpUpdatedAt: rfp.updatedAt,
     bizGradeLabel: grade ? GRADE_LABEL[grade] : undefined,
     bidId: bid?.id,
     submittedAt: bid?.submittedAt,
@@ -96,8 +98,8 @@ export function toPgCard(args: {
 
 export function comparePgCards(a: PgKanbanCard, b: PgKanbanCard): number {
   if (a.stage === 'won' || a.stage === 'lost') {
-    const ta = a.submittedAt ?? a.deadline;
-    const tb = b.submittedAt ?? b.deadline;
+    const ta = a.rfpUpdatedAt ?? a.deadline;
+    const tb = b.rfpUpdatedAt ?? b.deadline;
     return new Date(tb).getTime() - new Date(ta).getTime();
   }
   return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();

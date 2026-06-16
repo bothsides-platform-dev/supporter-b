@@ -42,11 +42,11 @@ import { POST } from '../route';
 
 let db: PgliteDB;
 
-function call(body: unknown): Promise<Response> {
+function call(body: unknown, extraHeaders: Record<string, string> = {}): Promise<Response> {
   return POST(
     new Request('http://localhost/api/centrifugo/subscribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...extraHeaders },
       body: JSON.stringify(body),
     }),
   );
@@ -353,5 +353,62 @@ describe('POST /api/centrifugo/subscribe (subscribe proxy ACL)', () => {
       expect(json.result, `channel ${channel} must not allow`).toBeUndefined();
       expect(json.error).toBeDefined();
     }
+  });
+
+  // ── CENTRIFUGO_PROXY_SECRET — 환경변수 기반 공유 비밀 헤더 게이트 ─────────────
+  // env 미설정 → 검사 스킵(하위호환). env 설정 → X-Centrifugo-Proxy-Secret 상수시간 검증.
+
+  describe('secret header gate (CENTRIFUGO_PROXY_SECRET)', () => {
+    const REAL_SECRET = 'test-proxy-secret-abc123';
+
+    afterEach(() => {
+      delete process.env.CENTRIFUGO_PROXY_SECRET;
+    });
+
+    it('(s1) env set + no X-Centrifugo-Proxy-Secret header → deny regardless of ACL', async () => {
+      process.env.CENTRIFUGO_PROXY_SECRET = REAL_SECRET;
+      const { buyerUser, conv } = await seedPairWithMembers();
+
+      const res = await call({ user: buyerUser.id, channel: chatChannel(conv.id) }); // no secret header
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.result).toBeUndefined();
+      expect(json.error).toBeDefined();
+    });
+
+    it('(s2) env set + wrong X-Centrifugo-Proxy-Secret → deny', async () => {
+      process.env.CENTRIFUGO_PROXY_SECRET = REAL_SECRET;
+      const { buyerUser, conv } = await seedPairWithMembers();
+
+      const res = await call(
+        { user: buyerUser.id, channel: chatChannel(conv.id) },
+        { 'X-Centrifugo-Proxy-Secret': 'wrong-secret' },
+      );
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.result).toBeUndefined();
+      expect(json.error).toBeDefined();
+    });
+
+    it('(s3) env set + correct X-Centrifugo-Proxy-Secret → ACL proceeds normally', async () => {
+      process.env.CENTRIFUGO_PROXY_SECRET = REAL_SECRET;
+      const { buyerUser, conv } = await seedPairWithMembers();
+
+      const res = await call(
+        { user: buyerUser.id, channel: chatChannel(conv.id) },
+        { 'X-Centrifugo-Proxy-Secret': REAL_SECRET },
+      );
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ result: {} });
+    });
+
+    it('(s4) env NOT set + no header → existing ACL applies (backward compat)', async () => {
+      // No CENTRIFUGO_PROXY_SECRET set — header check must be skipped entirely.
+      const { buyerUser, conv } = await seedPairWithMembers();
+
+      const res = await call({ user: buyerUser.id, channel: chatChannel(conv.id) });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ result: {} });
+    });
   });
 });

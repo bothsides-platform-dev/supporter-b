@@ -13,6 +13,9 @@ export type {
   LoadThreadResult,
 } from '@/lib/server/actions/chat/conversationLoaders';
 
+// 통합 인박스 항목(상대방 대화 + 팀 스레드) — 인박스 로더가 단일 진실원천.
+export type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
+
 export type CounterpartyType = 'buyer' | 'pg';
 
 export const COUNTERPARTY_TYPE_LABEL: Record<CounterpartyType, string> = {
@@ -28,6 +31,10 @@ export type Counterparty = {
 };
 
 export type RfpContext = {
-  code: string;
-  title: string;
+  /** 전송용 RFP uuid — 화면에 렌더하지 않음. */
+  id: string;
+  /** 사람이 읽는 RFP 코드 (e.g. P-2605-0042) — 있을 때만 표시. */
+  code?: string;
+  /** RFP 제목 — 있을 때만 표시. */
+  title?: string;
 };

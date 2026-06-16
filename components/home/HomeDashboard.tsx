@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/primitives/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckIcon, PlusIcon } from '@/components/icons';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
-import type { ConversationListItem } from '@/components/messages/types';
+import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 
 const EMPTY_DESC: Record<'buyer' | 'pg', string> = {
   buyer: '새 견적이 오거나 마감이 다가오면 여기에 표시돼요.',
@@ -22,12 +22,12 @@ const HOME_OPEN_RFP_PREVIEW = 5;
 export function HomeDashboard({
   dashboard,
   workspaceType,
-  conversations,
+  items,
   unreadCount,
 }: {
   dashboard: Dashboard;
   workspaceType: 'buyer' | 'pg';
-  conversations: ConversationListItem[];
+  items: InboxListItem[];
   unreadCount: number;
 }) {
   return (
@@ -35,16 +35,15 @@ export function HomeDashboard({
       <HomeHeaderActionsRegistrar />
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
-          {/* 샘플 견적이 액션 큐에 잡혀도 구매사가 새 견적을 만들 수 있도록 /rfp 헤더의
-              "견적 요청하기" CTA를 재사용해 상시 노출. */}
-          {workspaceType === 'buyer' && (
-            <div className="flex justify-end">
-              <Link href="/rfp-create">
-                <Button size="sm" icon={<PlusIcon />}>견적 요청하기</Button>
-              </Link>
-            </div>
-          )}
           <KpiStrip kpis={dashboard.kpis} />
+          {/* 샘플 견적이 액션 큐에 잡혀도 구매사가 새 견적을 만들 수 있도록 /rfp 헤더의
+              "견적 요청하기" CTA를 재사용해 상시 노출. KPI strip(선정 완료) 바로 아래에
+              풀-width 큰 버튼으로 강조한다. */}
+          {workspaceType === 'buyer' && (
+            <Link href="/rfp-create" className="block">
+              <Button size="lg" fullWidth icon={<PlusIcon />}>견적 요청하기</Button>
+            </Link>
+          )}
           {dashboard.groups.length > 0 ? (
             <ActionQueue groups={dashboard.groups} />
           ) : (
@@ -70,7 +69,7 @@ export function HomeDashboard({
             )}
         </div>
         <div className="lg:w-[360px] lg:shrink-0">
-          <RecentMessagesPanel conversations={conversations} unreadCount={unreadCount} />
+          <RecentMessagesPanel items={items} unreadCount={unreadCount} />
         </div>
       </div>
     </div>
