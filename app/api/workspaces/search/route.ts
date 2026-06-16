@@ -9,7 +9,6 @@ import { z } from 'zod';
 
 import { auth } from '@/auth';
 import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
-import { db } from '@/lib/db/client';
 import { searchWorkspaces } from '@/lib/server/workspaces/search';
 
 export const runtime = 'nodejs';
@@ -50,7 +49,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const rows = await searchWorkspaces(db, { type, q });
+  const rows = await searchWorkspaces({ type, q });
 
   const nameCount = new Map<string, number>();
   for (const row of rows) {

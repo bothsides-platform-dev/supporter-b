@@ -224,3 +224,28 @@ describe('DrizzleNotificationRepository — user-level (workspaceId null) notifi
     expect(rows[0].status).toBe('read');
   });
 });
+
+describe('DrizzleNotificationRepository.findOwnedById', () => {
+  it('returns id+type for an owned notification', async () => {
+    const { repo, user, ws } = await setup();
+    const n = buildNotification({ userId: user.id, workspaceId: ws.id, channel: 'email', type: 'rfp.invited' });
+    await repo.save(n);
+
+    const owned = await repo.findOwnedById(n.id, user.id);
+    expect(owned).toEqual({ id: n.id, type: 'rfp.invited' });
+  });
+
+  it('returns undefined for another user\'s notification', async () => {
+    const { db, repo, user, ws } = await setup();
+    const other = await seedUser(db);
+    const n = buildNotification({ userId: other.id, workspaceId: ws.id, channel: 'email', type: 'rfp.invited' });
+    await repo.save(n);
+
+    expect(await repo.findOwnedById(n.id, user.id)).toBeUndefined();
+  });
+
+  it('returns undefined for an unknown id', async () => {
+    const { repo, user } = await setup();
+    expect(await repo.findOwnedById(randomUUID(), user.id)).toBeUndefined();
+  });
+});

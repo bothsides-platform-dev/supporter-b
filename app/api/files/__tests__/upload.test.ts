@@ -58,8 +58,6 @@ beforeEach(async () => {
   __resetStorageForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
-  const filesRoute = await import('../upload/route');
-  filesRoute.__setFilesDbForTest(db);
   storage = new InMemoryStorage();
   __setStorageForTest(storage);
   sessionRef.value = null;
@@ -70,8 +68,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  const filesRoute = await import('../upload/route');
-  filesRoute.__setFilesDbForTest(undefined);
   __setStorageForTest(undefined);
   __resetStorageForTest();
   __resetForTest();

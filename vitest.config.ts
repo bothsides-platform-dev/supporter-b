@@ -47,6 +47,7 @@ export default defineConfig({
             "lib/utils/**/*.{test,spec}.{ts,tsx}",
             "lib/types/**/*.{test,spec}.{ts,tsx}",
             "lib/validation/**/*.{test,spec}.{ts,tsx}",
+            "lib/quote/**/*.{test,spec}.{ts,tsx}",
             "lib/db/**/*.{test,spec}.{ts,tsx}",
             "scripts/**/*.{test,spec}.{ts,tsx}",
             "app/api/**/*.{test,spec}.{ts,tsx}",

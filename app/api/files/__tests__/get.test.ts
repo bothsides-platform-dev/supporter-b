@@ -54,9 +54,8 @@ beforeEach(async () => {
   __resetStorageForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
-  // The GET route shares the same global override key as the upload route.
-  const upload = await import('../upload/route');
-  upload.__setFilesDbForTest(db);
+  // canAccessAttachment resolves the owner chain through the repository
+  // factory (configured by __useDrizzleWithDbForTest) — no raw db handle.
   storage = new InMemoryStorage();
   __setStorageForTest(storage);
   sessionRef.value = null;
@@ -67,8 +66,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  const upload = await import('../upload/route');
-  upload.__setFilesDbForTest(undefined);
   __setStorageForTest(undefined);
   __resetStorageForTest();
   __resetForTest();

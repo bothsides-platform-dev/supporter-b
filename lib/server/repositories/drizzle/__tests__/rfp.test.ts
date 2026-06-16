@@ -221,4 +221,236 @@ describe('DrizzleRfpRepository', () => {
     const reason = (rejected[0] as PromiseRejectedResult).reason as Error;
     expect(reason.message).toMatch(/Invalid RFP transition|lost a race/);
   });
+
+  // ─── Phase 2C gap methods ─────────────────────────────────────────────
+
+  describe('setBoardVisible', () => {
+    it('toggles board_visible off then on', async () => {
+      const rfp = makeRfp('P-2605-BV01', ctx.ws.id, ctx.user.id);
+      await repo.save(rfp);
+      // default true
+      expect((await repo.findById(rfp.id))!.boardVisible).toBe(true);
+      await repo.setBoardVisible(rfp.id, false);
+      expect((await repo.findById(rfp.id))!.boardVisible).toBe(false);
+      await repo.setBoardVisible(rfp.id, true);
+      expect((await repo.findById(rfp.id))!.boardVisible).toBe(true);
+    });
+  });
+
+  describe('updateDeadline', () => {
+    it('replaces the deadline without touching status', async () => {
+      const rfp = makeRfp('P-2605-DL01', ctx.ws.id, ctx.user.id, 'sent');
+      await repo.save(rfp);
+      const next = new Date('2030-01-02T03:04:05.000Z');
+      await repo.updateDeadline(rfp.id, next);
+      const fetched = await repo.findById(rfp.id);
+      expect(fetched!.deadline).toBe(next.toISOString());
+      expect(fetched!.status).toBe('sent');
+    });
+  });
+
+  describe('findIdAndOwnerByCode', () => {
+    it('returns id + buyerWsId for a known code', async () => {
+      const rfp = makeRfp('P-2605-OWN1', ctx.ws.id, ctx.user.id);
+      await repo.save(rfp);
+      const res = await repo.findIdAndOwnerByCode('P-2605-OWN1');
+      expect(res).toEqual({ id: rfp.id, buyerWsId: ctx.ws.id });
+    });
+
+    it('returns undefined for an unknown code', async () => {
+      expect(await repo.findIdAndOwnerByCode('P-2605-NONE')).toBeUndefined();
+    });
+  });
+
+  describe('findOwnerById', () => {
+    it('returns buyerWsId for a known id', async () => {
+      const rfp = makeRfp('P-2605-OWN2', ctx.ws.id, ctx.user.id);
+      await repo.save(rfp);
+      expect(await repo.findOwnerById(rfp.id)).toEqual({ buyerWsId: ctx.ws.id });
+    });
+
+    it('returns undefined for an unknown id', async () => {
+      expect(await repo.findOwnerById(randomUUID())).toBeUndefined();
+    });
+  });
+
+  describe('reserveNextCode', () => {
+    it('issues P-YYMM-0001 on first call and increments per month', async () => {
+      expect(await repo.reserveNextCode('2605')).toBe('P-2605-0001');
+      expect(await repo.reserveNextCode('2605')).toBe('P-2605-0002');
+      // independent counter per year-month
+      expect(await repo.reserveNextCode('2606')).toBe('P-2606-0001');
+    });
+  });
+
+  describe('searchForBuyer', () => {
+    it('returns whitelisted projection for ilike matches, scoped to ws', async () => {
+      await repo.save({ ...makeRfp('P-2605-SR01', ctx.ws.id, ctx.user.id), title: 'Alpha 견적' });
+      await repo.save({ ...makeRfp('P-2605-SR02', ctx.ws.id, ctx.user.id), title: 'Beta 견적' });
+      // other ws — must be excluded
+      const otherBiz = await seedBizProfile(db, { bizNo: '8888888888' });
+      const otherWs = await seedBuyerWorkspace(db, { bizProfileId: otherBiz.id });
+      await repo.save({
+        ...makeRfp('P-2605-SR03', otherWs.id, ctx.user.id),
+        title: 'Alpha other',
+        bizProfile: { bizNo: '8888888888', taxType: 'general', status: 'active', gradeSource: 'user_confirmed' },
+      });
+
+      const rows = (await repo.searchForBuyer(ctx.ws.id, '%Alpha%')) as {
+        code: string;
+        title: string;
+        memo: string;
+        status: string;
+      }[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toEqual({
+        code: 'P-2605-SR01',
+        title: 'Alpha 견적',
+        memo: '',
+        status: 'draft',
+      });
+    });
+
+    it('matches on memo as well as title', async () => {
+      await repo.save({ ...makeRfp('P-2605-SR04', ctx.ws.id, ctx.user.id), title: 'T', memo: 'needle' });
+      const rows = (await repo.searchForBuyer(ctx.ws.id, '%needle%')) as { code: string }[];
+      expect(rows.map((r) => r.code)).toEqual(['P-2605-SR04']);
+    });
+  });
+
+  describe('listForBuyer', () => {
+    it('returns the same whitelisted projection as searchForBuyer, ws-scoped, no ilike, ordered desc(createdAt), capped by limit', async () => {
+      await repo.save({ ...makeRfp('P-2605-LB01', ctx.ws.id, ctx.user.id), title: 'first' });
+      await repo.save({ ...makeRfp('P-2605-LB02', ctx.ws.id, ctx.user.id), title: 'second', memo: 'm2' });
+      // other ws — must be excluded
+      const otherBiz = await seedBizProfile(db, { bizNo: '8888888888' });
+      const otherWs = await seedBuyerWorkspace(db, { bizProfileId: otherBiz.id });
+      await repo.save({
+        ...makeRfp('P-2605-LB03', otherWs.id, ctx.user.id),
+        title: 'other ws',
+        bizProfile: { bizNo: '8888888888', taxType: 'general', status: 'active', gradeSource: 'user_confirmed' },
+      });
+
+      const rows = (await repo.listForBuyer(ctx.ws.id, 10)) as {
+        code: string;
+        title: string;
+        memo: string;
+        status: string;
+      }[];
+      // no ilike — both ws rows returned
+      expect(rows).toHaveLength(2);
+      // projection keys exactly match searchForBuyer
+      expect(Object.keys(rows[0]).sort()).toEqual(['code', 'memo', 'status', 'title']);
+      expect(rows.map((r) => r.code).sort()).toEqual(['P-2605-LB01', 'P-2605-LB02']);
+      const second = rows.find((r) => r.code === 'P-2605-LB02')!;
+      expect(second).toEqual({ code: 'P-2605-LB02', title: 'second', memo: 'm2', status: 'draft' });
+    });
+
+    it('respects the limit param', async () => {
+      await repo.save({ ...makeRfp('P-2605-LB04', ctx.ws.id, ctx.user.id), title: 'a' });
+      await repo.save({ ...makeRfp('P-2605-LB05', ctx.ws.id, ctx.user.id), title: 'b' });
+      await repo.save({ ...makeRfp('P-2605-LB06', ctx.ws.id, ctx.user.id), title: 'c' });
+      const rows = (await repo.listForBuyer(ctx.ws.id, 2)) as unknown[];
+      expect(rows).toHaveLength(2);
+    });
+  });
+
+  describe('insertNew', () => {
+    it('inserts all RFP fields verbatim (createRfp path) and reads back via findById', async () => {
+      const sentAt = new Date('2026-01-02T03:04:00Z');
+      const deadline = new Date(Date.now() + 86_400_000);
+      const id = randomUUID();
+      await repo.insertNew({
+        id,
+        code: 'P-2605-NEW1',
+        buyerWsId: ctx.ws.id,
+        bizProfileId: ctx.biz.id,
+        title: '신규 견적',
+        memo: '메모',
+        websiteUrl: 'https://shop.example.com',
+        mainProducts: '패션 잡화',
+        annualPgVolume: '10억',
+        currentFeeRate: '3.4%',
+        currentSettlementLimit: '월 1억',
+        currentGuaranteeInsurance: '3000만원',
+        currentSettlementCycle: 'D+1',
+        deliveryServicePeriod: 'D+3',
+        boardVisible: false,
+        currentFeeVisibleToPg: false,
+        contractType: 'renewal',
+        currentSolution: 'self',
+        currentSolutionDetail: 'ABC몰',
+        deadline,
+        status: 'sent',
+        requiredPaymentMethods: ['card', 'bank_transfer'],
+        customPaymentMethods: [{ id: 'cpm-1', label: '포인트결제' }],
+        createdBy: ctx.user.id,
+        sentAt,
+      });
+
+      const fetched = await repo.findById(id);
+      expect(fetched).toBeDefined();
+      expect(fetched!.code).toBe('P-2605-NEW1');
+      expect(fetched!.title).toBe('신규 견적');
+      expect(fetched!.memo).toBe('메모');
+      expect(fetched!.websiteUrl).toBe('https://shop.example.com');
+      expect(fetched!.mainProducts).toBe('패션 잡화');
+      expect(fetched!.annualPgVolume).toBe('10억');
+      expect(fetched!.currentFeeRate).toBe('3.4%');
+      expect(fetched!.currentSettlementLimit).toBe('월 1억');
+      expect(fetched!.currentGuaranteeInsurance).toBe('3000만원');
+      expect(fetched!.currentSettlementCycle).toBe('D+1');
+      expect(fetched!.deliveryServicePeriod).toBe('D+3');
+      expect(fetched!.boardVisible).toBe(false);
+      expect(fetched!.currentFeeVisibleToPg).toBe(false);
+      expect(fetched!.contractType).toBe('renewal');
+      expect(fetched!.currentSolution).toBe('self');
+      expect(fetched!.currentSolutionDetail).toBe('ABC몰');
+      expect(fetched!.status).toBe('sent');
+      expect(fetched!.requiredPaymentMethods).toEqual(['card', 'bank_transfer']);
+      expect(fetched!.customPaymentMethods).toEqual([{ id: 'cpm-1', label: '포인트결제' }]);
+      expect(fetched!.createdBy).toBe(ctx.user.id);
+      expect(fetched!.sentAt).toBe(sentAt.toISOString());
+    });
+
+    it('stores null bizProfileId / null optional fields when omitted', async () => {
+      const id = randomUUID();
+      await repo.insertNew({
+        id,
+        code: 'P-2605-NEW2',
+        buyerWsId: ctx.ws.id,
+        bizProfileId: null,
+        title: '미니 견적',
+        memo: '',
+        websiteUrl: null,
+        mainProducts: null,
+        annualPgVolume: null,
+        currentFeeRate: null,
+        currentSettlementLimit: null,
+        currentGuaranteeInsurance: null,
+        currentSettlementCycle: null,
+        deliveryServicePeriod: null,
+        boardVisible: true,
+        currentFeeVisibleToPg: true,
+        contractType: null,
+        currentSolution: null,
+        currentSolutionDetail: null,
+        deadline: new Date(Date.now() + 86_400_000),
+        status: 'draft',
+        requiredPaymentMethods: [],
+        customPaymentMethods: [],
+        createdBy: ctx.user.id,
+        sentAt: null,
+      });
+
+      const fetched = await repo.findById(id);
+      expect(fetched).toBeDefined();
+      expect(fetched!.bizProfile).toBeUndefined();
+      expect(fetched!.websiteUrl).toBeUndefined();
+      expect(fetched!.currentSettlementCycle).toBeUndefined();
+      expect(fetched!.contractType).toBeNull();
+      expect(fetched!.status).toBe('draft');
+      expect(fetched!.sentAt).toBeUndefined();
+    });
+  });
 });

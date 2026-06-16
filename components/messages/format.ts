@@ -35,3 +35,19 @@ export const GROUP_WINDOW_MS = 5 * 60 * 1000;
 export function withinGroupWindow(prevIso: string, currIso: string): boolean {
   return Date.parse(currIso) - Date.parse(prevIso) <= GROUP_WINDOW_MS;
 }
+
+/**
+ * 대화 목록 타임스탬프 — 오늘=시각, 어제="어제", 7일 이내=요일명, 그 이전=M/D.
+ * @param now — 테스트 주입용 기준 시각 (기본값: 현재)
+ */
+export function formatListTime(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  const todayUtcMid = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const dUtcMid = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const diffDays = Math.round((todayUtcMid - dUtcMid) / (24 * 60 * 60 * 1000));
+
+  if (diffDays === 0) return formatTime(iso);
+  if (diffDays === 1) return '어제';
+  if (diffDays < 7) return d.toLocaleDateString('ko-KR', { weekday: 'long' });
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}

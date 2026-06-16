@@ -6,12 +6,12 @@
 // generic flush through a single mockable symbol, keeping the route's test
 // focused purely on the auth gate rather than the repository factory.
 import { getOutboxRepo } from '@/lib/server/repositories/factory';
-import type { Sender } from './types';
+import type { BatchSender } from './types';
 
 const FLUSH_BATCH = 50;
 
 export async function flushAllOutbox(
-  sender: Sender,
+  sender: BatchSender,
   limit: number = FLUSH_BATCH,
 ): Promise<{ ok: number; failed: number }> {
   const outbox = await getOutboxRepo();

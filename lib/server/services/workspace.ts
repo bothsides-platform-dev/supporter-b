@@ -1,8 +1,5 @@
-import { and, count, eq, sql } from 'drizzle-orm';
-
-import { workspaceInvitations, workspaceMembers, workspaces } from '@/lib/db/schema';
 import { getMembership } from '@/lib/auth/active-workspace';
-import type { AuditLogRepo, OutboxRepo } from '@/lib/server/repositories/types';
+import type { AuditLogRepo, OutboxRepo, WorkspaceRepo } from '@/lib/server/repositories/types';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
@@ -33,6 +30,7 @@ export class WorkspaceService {
     private readonly _db: any,
     private readonly outboxRepo: OutboxRepo,
     private readonly auditRepo: AuditLogRepo,
+    private readonly workspaceRepo: WorkspaceRepo,
   ) {}
 
   async createWorkspace(
@@ -74,17 +72,13 @@ export class WorkspaceService {
       return { ok: false, error: 'INVALID_INPUT' };
     }
 
-    const membership = await getMembership(this._db, actor.userId, actor.workspaceId);
+    const membership = await getMembership(actor.userId, actor.workspaceId);
     if (!membership || membership.role !== 'admin') {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
-    const [wsRow] = await this._db
-      .select({ name: workspaces.name })
-      .from(workspaces)
-      .where(eq(workspaces.id, actor.workspaceId))
-      .limit(1);
-    if (!wsRow) return { ok: false, error: 'WORKSPACE_NOT_FOUND' };
+    const wsName = await this.workspaceRepo.getName(actor.workspaceId);
+    if (wsName === undefined) return { ok: false, error: 'WORKSPACE_NOT_FOUND' };
 
     const normalizedEmail = normalizeEmail(input.email);
     const rawToken = generateToken();
@@ -96,22 +90,24 @@ export class WorkspaceService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await this._db.transaction(async (tx: any): Promise<ServiceResult> => {
       try {
-        await tx.insert(workspaceInvitations).values({
-          workspaceId: actor.workspaceId,
-          invitedEmail: normalizedEmail,
-          invitedByUserId: actor.userId,
-          role: input.role,
-          tokenHash,
-          expiresAt,
-          status: 'pending',
-        });
+        await this.workspaceRepo.createInvitation(
+          {
+            workspaceId: actor.workspaceId,
+            invitedEmail: normalizedEmail,
+            invitedByUserId: actor.userId,
+            role: input.role,
+            tokenHash,
+            expiresAt,
+          },
+          tx,
+        );
       } catch (err) {
         if (isUniqueViolation(err)) return { ok: false, error: 'ALREADY_INVITED' };
         throw err;
       }
 
       const inviteUrl = `${baseUrl()}/invite/workspace/${rawToken}`;
-      const html = await renderWorkspaceInvited({ workspaceName: wsRow.name, inviteUrl });
+      const html = await renderWorkspaceInvited({ workspaceName: wsName, inviteUrl });
       await this.outboxRepo.enqueue(
         {
           event: 'workspace.invited',
@@ -125,7 +121,7 @@ export class WorkspaceService {
 
       pendingEmit = await dispatchWorkspaceInviteInApp(tx, {
         invitedEmail: normalizedEmail,
-        workspaceName: wsRow.name,
+        workspaceName: wsName,
         linkUrl: `/invite/workspace/${rawToken}`,
       });
 
@@ -156,17 +152,13 @@ export class WorkspaceService {
     input: { email: string },
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
-    const membership = await getMembership(this._db, actor.userId, actor.workspaceId);
+    const membership = await getMembership(actor.userId, actor.workspaceId);
     if (!membership || membership.role !== 'admin') {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
-    const [wsRow] = await this._db
-      .select({ name: workspaces.name })
-      .from(workspaces)
-      .where(eq(workspaces.id, actor.workspaceId))
-      .limit(1);
-    if (!wsRow) return { ok: false, error: 'WORKSPACE_NOT_FOUND' };
+    const wsName = await this.workspaceRepo.getName(actor.workspaceId);
+    if (wsName === undefined) return { ok: false, error: 'WORKSPACE_NOT_FOUND' };
 
     const normalizedEmail = normalizeEmail(input.email);
     const rawToken = generateToken();
@@ -177,22 +169,15 @@ export class WorkspaceService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await this._db.transaction(async (tx: any): Promise<ServiceResult> => {
-      const updated = await tx
-        .update(workspaceInvitations)
-        .set({ tokenHash, expiresAt, updatedAt: new Date() })
-        .where(
-          and(
-            eq(workspaceInvitations.workspaceId, actor.workspaceId),
-            eq(workspaceInvitations.status, 'pending'),
-            sql`lower(${workspaceInvitations.invitedEmail}) = ${normalizedEmail}`,
-          ),
-        )
-        .returning({ id: workspaceInvitations.id });
+      const updated = await this.workspaceRepo.resetPendingInvitationToken(
+        { workspaceId: actor.workspaceId, email: normalizedEmail, tokenHash, expiresAt },
+        tx,
+      );
 
-      if (updated.length === 0) return { ok: false, error: 'INVITE_NOT_FOUND' };
+      if (!updated) return { ok: false, error: 'INVITE_NOT_FOUND' };
 
       const inviteUrl = `${baseUrl()}/invite/workspace/${rawToken}`;
-      const html = await renderWorkspaceInvited({ workspaceName: wsRow.name, inviteUrl });
+      const html = await renderWorkspaceInvited({ workspaceName: wsName, inviteUrl });
       await this.outboxRepo.enqueue(
         {
           event: 'workspace.invited',
@@ -206,7 +191,7 @@ export class WorkspaceService {
 
       pendingEmit = await dispatchWorkspaceInviteInApp(tx, {
         invitedEmail: normalizedEmail,
-        workspaceName: wsRow.name,
+        workspaceName: wsName,
         linkUrl: `/invite/workspace/${rawToken}`,
       });
 
@@ -224,26 +209,19 @@ export class WorkspaceService {
     input: { email: string },
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
-    const membership = await getMembership(this._db, actor.userId, actor.workspaceId);
+    const membership = await getMembership(actor.userId, actor.workspaceId);
     if (!membership || membership.role !== 'admin') {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
     const normalizedEmail = normalizeEmail(input.email);
 
-    const updated = await this._db
-      .update(workspaceInvitations)
-      .set({ status: 'expired', updatedAt: new Date() })
-      .where(
-        and(
-          eq(workspaceInvitations.workspaceId, actor.workspaceId),
-          eq(workspaceInvitations.status, 'pending'),
-          sql`lower(${workspaceInvitations.invitedEmail}) = ${normalizedEmail}`,
-        ),
-      )
-      .returning({ id: workspaceInvitations.id });
+    const updated = await this.workspaceRepo.expirePendingInvitation({
+      workspaceId: actor.workspaceId,
+      email: normalizedEmail,
+    });
 
-    if (updated.length === 0) return { ok: false, error: 'INVITE_NOT_FOUND' };
+    if (!updated) return { ok: false, error: 'INVITE_NOT_FOUND' };
     return { ok: true };
   }
 
@@ -254,11 +232,7 @@ export class WorkspaceService {
     const { hashToken: hashFn } = await import('@/lib/server/token');
     const tokenHash = hashFn(rawToken);
 
-    const [invitation] = await this._db
-      .select()
-      .from(workspaceInvitations)
-      .where(eq(workspaceInvitations.tokenHash, tokenHash))
-      .limit(1);
+    const invitation = await this.workspaceRepo.findInvitationClaimByTokenHash(tokenHash);
 
     if (!invitation) return { ok: false, error: 'INVITE_INVALID' };
 
@@ -294,47 +268,28 @@ export class WorkspaceService {
     input: { targetUserId: string; role: 'admin' | 'member' },
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
-    const membership = await getMembership(this._db, actor.userId, actor.workspaceId);
+    const membership = await getMembership(actor.userId, actor.workspaceId);
     if (!membership || membership.role !== 'admin') {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
-    const [target] = await this._db
-      .select({ role: workspaceMembers.role })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, actor.workspaceId),
-          eq(workspaceMembers.userId, input.targetUserId),
-        ),
-      )
-      .limit(1);
+    const target = await this.workspaceRepo.getMembership(
+      input.targetUserId,
+      actor.workspaceId,
+    );
     if (!target) return { ok: false, error: 'MEMBER_NOT_FOUND' };
 
     if (input.role === 'member' && target.role === 'admin') {
-      const [{ value: adminCount }] = await this._db
-        .select({ value: count() })
-        .from(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, actor.workspaceId),
-            eq(workspaceMembers.role, 'admin'),
-          ),
-        );
+      const adminCount = await this.workspaceRepo.countAdmins(actor.workspaceId);
       if (adminCount <= 1) return { ok: false, error: 'LAST_ADMIN' };
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
-      await tx
-        .update(workspaceMembers)
-        .set({ role: input.role })
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, actor.workspaceId),
-            eq(workspaceMembers.userId, input.targetUserId),
-          ),
-        );
+      await this.workspaceRepo.updateMemberRole(
+        { workspaceId: actor.workspaceId, userId: input.targetUserId, role: input.role },
+        tx,
+      );
       // 감사 로그 (C5) — 역할 변경과 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
         {
@@ -356,7 +311,7 @@ export class WorkspaceService {
     input: { targetUserId: string },
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
-    const membership = await getMembership(this._db, actor.userId, actor.workspaceId);
+    const membership = await getMembership(actor.userId, actor.workspaceId);
     if (!membership || membership.role !== 'admin') {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
@@ -365,28 +320,18 @@ export class WorkspaceService {
       return { ok: false, error: 'SELF_REMOVAL' };
     }
 
-    const [target] = await this._db
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, actor.workspaceId),
-          eq(workspaceMembers.userId, input.targetUserId),
-        ),
-      )
-      .limit(1);
+    const target = await this.workspaceRepo.getMembership(
+      input.targetUserId,
+      actor.workspaceId,
+    );
     if (!target) return { ok: false, error: 'MEMBER_NOT_FOUND' };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
-      await tx
-        .delete(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.workspaceId, actor.workspaceId),
-            eq(workspaceMembers.userId, input.targetUserId),
-          ),
-        );
+      await this.workspaceRepo.removeMember(
+        { workspaceId: actor.workspaceId, userId: input.targetUserId },
+        tx,
+      );
       // 감사 로그 (C5) — 제거와 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
         {
@@ -414,15 +359,23 @@ declare global {
 
 export async function getWorkspaceService(): Promise<WorkspaceService> {
   if (!globalThis.__bidit_workspace_service__) {
-    const [{ db }, { getOutboxRepo, getAuditLogRepo }] = await Promise.all([
+    const [{ db }, { getOutboxRepo, getAuditLogRepo, getWorkspaceRepo }] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const outboxRepo = await getOutboxRepo();
-    const auditRepo = await getAuditLogRepo();
+    const [outboxRepo, auditRepo, workspaceRepo] = await Promise.all([
+      getOutboxRepo(),
+      getAuditLogRepo(),
+      getWorkspaceRepo(),
+    ]);
 
-    globalThis.__bidit_workspace_service__ = new WorkspaceService(db, outboxRepo, auditRepo);
+    globalThis.__bidit_workspace_service__ = new WorkspaceService(
+      db,
+      outboxRepo,
+      auditRepo,
+      workspaceRepo,
+    );
   }
   return globalThis.__bidit_workspace_service__!;
 }

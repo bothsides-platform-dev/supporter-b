@@ -1,11 +1,9 @@
 'use server';
 
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
 
 import { requireBuyerSession } from '@/lib/auth/session';
-import { rfps } from '@/lib/db/schema';
-import { getAuditLogRepo } from '@/lib/server/repositories/factory';
+import { getAuditLogRepo, getRfpRepo } from '@/lib/server/repositories/factory';
 import { actionDb, type RfpActionResult } from './_shared';
 
 const Input = z
@@ -37,18 +35,15 @@ export async function setRfpBoardVisibilityAction(
   const wsId = session.user.workspaceId;
   const db = actionDb();
 
-  const [row] = await db
-    .select({ id: rfps.id, buyerWsId: rfps.buyerWsId })
-    .from(rfps)
-    .where(eq(rfps.code, parsed.data.rfpId))
-    .limit(1);
+  const rfpRepo = await getRfpRepo();
+  const row = await rfpRepo.findIdAndOwnerByCode(parsed.data.rfpId);
   if (!row) return { ok: false, error: 'NOT_FOUND' };
   if (row.buyerWsId !== wsId) return { ok: false, error: 'NOT_OWNED' };
 
   const auditRepo = await getAuditLogRepo();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await db.transaction(async (tx: any) => {
-    await tx.update(rfps).set({ boardVisible: parsed.data.visible }).where(eq(rfps.id, row.id));
+    await rfpRepo.setBoardVisible(row.id, parsed.data.visible, tx);
     // 감사 로그 (C5) — 토글과 같은 트랜잭션에서 커밋.
     await auditRepo.insert(
       {

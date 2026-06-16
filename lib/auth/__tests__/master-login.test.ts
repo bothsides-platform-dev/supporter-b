@@ -4,6 +4,10 @@ import { eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { users, workspaces } from '@/lib/db/schema';
+import {
+  __resetForTest,
+  __useDrizzleWithDbForTest,
+} from '@/lib/server/repositories/factory';
 import { allowSignIn, resolveMasterUser, makeNodeJwtCallback } from '@/lib/auth/master-login';
 import authConfig from '@/auth.config';
 
@@ -39,6 +43,11 @@ describe('resolveMasterUser (auto-provision + workspace resolution)', () => {
   let db: PgliteDB;
   beforeEach(async () => {
     db = await createPgliteDb();
+    // DB access now routes through the repo factory — bind it to this pglite db.
+    await __useDrizzleWithDbForTest(db);
+  });
+  afterEach(() => {
+    __resetForTest();
   });
 
   async function seedActiveWorkspace(type: 'buyer' | 'pg', createdAt: Date, name = '워크스페이스') {
@@ -109,7 +118,12 @@ describe('makeNodeJwtCallback (Google → provisioned master token)', () => {
 
   beforeEach(async () => {
     db = await createPgliteDb();
+    // DB access now routes through the repo factory — bind it to this pglite db.
+    await __useDrizzleWithDbForTest(db);
     process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+  });
+  afterEach(() => {
+    __resetForTest();
   });
 
   it('google 로그인 시 마스터 행을 프로비저닝하고 토큰에 우리 DB id·isMaster를 스탬프한다', async () => {

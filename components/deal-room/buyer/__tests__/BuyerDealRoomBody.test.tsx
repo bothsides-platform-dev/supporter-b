@@ -2,7 +2,8 @@
 // 상단에 SampleRfpBanner(삭제 어포던스)를 노출하는 것 — 정식 페이지 통일 후 구
 // RfpDetailContent 가 갖던 동작을 잃지 않도록 공유 바디로 옮긴 부분이다.
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render as rtlRender, screen, cleanup } from '@testing-library/react';
+import type { ReactElement } from 'react';
 
 class ResizeObserverStub {
   observe() {}
@@ -50,9 +51,13 @@ vi.mock('@/components/rfp/SampleRfpBanner', () => ({
 }));
 
 import { BuyerDealRoomBody } from '../BuyerDealRoomBody';
+import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
+
+// BuyerDealRoomBody 는 useDealRoom() 으로 포커스 PG 를 읽으므로 Provider 안에서 렌더한다.
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: DealRoomProvider });
 
 const baseRfp: RFP = {
   id: 'rfp-1',

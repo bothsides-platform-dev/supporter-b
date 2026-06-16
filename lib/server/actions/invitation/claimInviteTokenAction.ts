@@ -4,7 +4,6 @@ import { requireSession } from '@/lib/auth/session';
 import { getInvitationRepo, getRfpRepo } from '@/lib/server/repositories/factory';
 import { hashToken } from '@/lib/server/token';
 import { getMembership } from '@/lib/auth/active-workspace';
-import { actionDb } from '../auth/_shared';
 
 // `rfpId` here is the human RFP code (P-YYMM-NNNN) — the URL identifier the
 // caller redirects to (/inbox/[code]). Internal FKs use the uuid.
@@ -51,7 +50,7 @@ export async function claimInviteTokenAction(
   // 2. 워크스페이스 멤버십 검사 — 초대된 PG ws 에 '소속된' 사용자만 통과.
   // (활성 ws 일치가 아니라 멤버십 기준 — 한 유저가 여러 ws 소속 가능. 정책 #11.)
   if (!inv.pgWsId) return { ok: false, error: 'INVITE_NOT_MEMBER' };
-  const membership = await getMembership(actionDb(), session.user.id, inv.pgWsId);
+  const membership = await getMembership(session.user.id, inv.pgWsId);
   if (!membership) return { ok: false, error: 'INVITE_NOT_MEMBER' };
 
   // 멤버지만 활성 ws 가 다르면 클라이언트가 인박스 진입 전 전환해야 한다.

@@ -18,7 +18,7 @@ describe('searchWorkspaces excludes demo PGs', () => {
     const real = await seedPgWorkspace(db, '진짜페이');
     await db.transaction((tx) => ensureDemoPgs(tx)); // creates 3 isDemo PGs
 
-    const all = await searchWorkspaces(db, { type: 'pg' });
+    const all = await searchWorkspaces({ type: 'pg' });
     const ids = all.map((w) => w.id);
     expect(ids).toContain(real.id);
     expect(all.some((w) => w.name.startsWith('샘플페이'))).toBe(false);
@@ -26,7 +26,7 @@ describe('searchWorkspaces excludes demo PGs', () => {
 
   it('name search also excludes demo PGs', async () => {
     await db.transaction((tx) => ensureDemoPgs(tx));
-    const hit = await searchWorkspaces(db, { type: 'pg', q: '샘플페이' });
+    const hit = await searchWorkspaces({ type: 'pg', q: '샘플페이' });
     expect(hit).toHaveLength(0); // demo PGs never match
   });
 });

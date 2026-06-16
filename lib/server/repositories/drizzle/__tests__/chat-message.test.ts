@@ -52,3 +52,26 @@ describe('DrizzleChatMessageRepository.listByConversationWithAuthor', () => {
     expect(rows.map((r) => r.authorUserId)).toEqual([buyerUser.id, pgUser.id]);
   });
 });
+
+describe('DrizzleChatMessageRepository.findConversationId', () => {
+  it('returns the conversationId for a known message', async () => {
+    const { convRepo, msgRepo, buyerWs, pgWs, buyerUser } = await setup();
+    const conv = await convRepo.findOrCreatePair(buyerWs.id, pgWs.id);
+    const msgId = randomUUID();
+    await msgRepo.save({
+      id: msgId,
+      conversationId: conv.id,
+      authorUserId: buyerUser.id,
+      authorWsId: buyerWs.id,
+      body: 'hi',
+      rfpId: null,
+      createdAt: new Date('2026-05-26T05:00:00.000Z'),
+    });
+    expect(await msgRepo.findConversationId(msgId)).toEqual({ conversationId: conv.id });
+  });
+
+  it('returns undefined for an unknown message', async () => {
+    const { msgRepo } = await setup();
+    expect(await msgRepo.findConversationId(randomUUID())).toBeUndefined();
+  });
+});

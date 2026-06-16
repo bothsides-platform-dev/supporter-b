@@ -1,7 +1,7 @@
 'use server';
 
-import { getBidQuoteTemplateRepo } from '@/lib/server/repositories/factory';
 import type { BidQuoteTemplate } from '@/lib/server/repositories/types';
+import { getQuoteTemplateService } from '@/lib/server/services/quote-template';
 import { type QuoteActionResult, requirePgWorkspace } from './_shared';
 
 export type ListQuoteTemplatesResult = QuoteActionResult<{
@@ -17,8 +17,8 @@ export async function listQuoteTemplatesAction(): Promise<ListQuoteTemplatesResu
   const ws = await requirePgWorkspace();
   if (!ws.ok) return ws;
 
-  const templates = await (await getBidQuoteTemplateRepo()).listByWorkspace(
-    ws.workspaceId,
-  );
-  return { ok: true, templates };
+  return (await getQuoteTemplateService()).list({
+    userId: ws.userId,
+    workspaceId: ws.workspaceId,
+  });
 }
