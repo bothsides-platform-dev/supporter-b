@@ -37,6 +37,7 @@ export type RFP = {
   createdBy: string;
   createdAt: string;
   sentAt?: string;
+  updatedAt?: string;
   // Unified kanban (buyer pipeline board): explicit custom-column placement;
   // null/undefined ⇒ classifier-derived lifecycle column.
   boardColumnId?: string | null;

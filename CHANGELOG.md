@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.24.2] - 2026-06-17
+
+### Fixed
+
+- **견적 제안 수수료 툴팁 양끝 오버플로 + 접근성**: BidStepFees 의 수수료 입력 표에서 첫 열·마지막 열 툴팁이 테이블 밖으로 잘리는 문제를 고쳤어요. `tooltipAlign` prop(`start`|`center`|`end`)으로 위치를 제어하고, `useId` + `aria-describedby` 로 힌트 텍스트와 입력 필드를 스크린리더가 연결할 수 있게 했어요.
+- **종결·선정 컬럼 최신 전이 시각 기준 정렬**: 구매사 칸반의 종결·선정 컬럼과 PG 칸반의 낙찰·미선정 컬럼이 가장 최근에 상태가 바뀐 견적이 먼저 오도록 정렬해요. 기존에는 생성 시각 기준이었어요. 아울러 `rfps.updated_at` 이 전이 시 실제로 갱신되지 않던 버그를 함께 수정했어요 — `transition()` 이 SET 에 `updated_at = now()` 를 포함하도록 고쳤어요.
 ## [0.2.25.0] - 2026-06-17
 
 ### Fixed

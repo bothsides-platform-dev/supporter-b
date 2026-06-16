@@ -29,6 +29,7 @@ export type BuyerKanbanCard = {
   stage: BuyerKanbanStage;
   deadline: string;
   createdAt: string;
+  updatedAt: string;
   invitedPgCount: number;
   submittedBidCount: number;
   awardedBidId?: string;
@@ -63,6 +64,7 @@ export function toBuyerCard(args: {
     stage,
     deadline: rfp.deadline,
     createdAt: rfp.createdAt,
+    updatedAt: rfp.updatedAt ?? rfp.createdAt,
     invitedPgCount: invitedActive,
     submittedBidCount: bids.filter((b) => b.status === 'submitted').length,
     awardedBidId: rfp.awardedBidId,
@@ -77,7 +79,7 @@ export function compareBuyerCards(
   b: BuyerKanbanCard,
 ): number {
   if (a.stage === 'awarded' || a.stage === 'closed') {
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   }
   return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
 }

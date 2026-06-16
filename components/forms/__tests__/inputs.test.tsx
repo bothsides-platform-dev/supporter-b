@@ -184,6 +184,53 @@ describe('FeeRateCell', () => {
   });
 });
 
+describe('FeeRateCell tooltipAlign', () => {
+  it('input의 aria-describedby가 툴팁 id와 일치한다', () => {
+    render(
+      <FeeRateCell
+        value="1.50"
+        onChange={() => {}}
+        ariaLabel="영세 수수료"
+        tooltipAlign="center"
+      />,
+    );
+    const input = screen.getByRole('textbox');
+    fireEvent.mouseEnter(input.parentElement!);
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.id).toBeTruthy();
+    expect(input.getAttribute('aria-describedby')).toBe(tooltip.id);
+  });
+
+  it('tooltipAlign=start → tooltip 클래스에 left-0 포함, -translate-x-1/2 미포함', () => {
+    render(
+      <FeeRateCell
+        value="1.50"
+        onChange={() => {}}
+        ariaLabel="영세 수수료"
+        tooltipAlign="start"
+      />,
+    );
+    fireEvent.mouseEnter(screen.getByRole('textbox').parentElement!);
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.className).toContain('left-0');
+    expect(tooltip.className).not.toContain('-translate-x-1/2');
+  });
+
+  it('tooltipAlign=end → tooltip 클래스에 right-0 포함', () => {
+    render(
+      <FeeRateCell
+        value="1.50"
+        onChange={() => {}}
+        ariaLabel="일반 수수료"
+        tooltipAlign="end"
+      />,
+    );
+    fireEvent.mouseEnter(screen.getByRole('textbox').parentElement!);
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.className).toContain('right-0');
+  });
+});
+
 describe('infoTerm', () => {
   it('PercentInput renders an info icon button when infoTerm is given', () => {
     render(<PercentInput label="수수료" value="" onChange={() => {}} infoTerm="수수료율" />);

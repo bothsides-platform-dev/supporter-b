@@ -51,6 +51,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     createdBy: row.createdBy,
     createdAt: new Date(row.createdAt).toISOString(),
     sentAt: toIso(row.sentAt),
+    updatedAt: new Date(row.updatedAt).toISOString(),
     boardColumnId: row.boardColumnId,
     requiredPaymentMethods: (row.requiredPaymentMethods ?? []) as PaymentMethod[],
     customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
@@ -272,7 +273,7 @@ export class DrizzleRfpRepository implements RfpRepo {
 
     // Atomic update with `WHERE status=$prev` concurrency guard.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const setPatch: any = { status: to };
+    const setPatch: any = { status: to, updatedAt: new Date() };
     if (patch?.awardedBidId !== undefined) setPatch.awardedBidId = patch.awardedBidId;
     if (patch?.sentAt !== undefined)
       setPatch.sentAt = patch.sentAt ? new Date(patch.sentAt) : null;

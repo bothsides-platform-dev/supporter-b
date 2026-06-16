@@ -24,9 +24,8 @@ Phase 5-7 split 에서 `BoardColumn`·`BoardDraggableCard` 를 `React.memo` 로 
 **Priority:** P2
 `app/(app)/inbox/page.tsx` 의 pairs/bids/pendingRequotes 조립이 `loadBoard.ts` pg 분기와 한 줄 단위 중복이고, 보드 뷰에서는 둘 다 실행돼 동일 쿼리 3쌍이 요청당 2회 나감(행 수 작아 현재 무해). `loadPgInboxData(wsId)` 공유 로더로 추출해 양쪽이 소비하도록. (발견: /ship maintainability·performance 리뷰 2026-06-13)
 
-### 종결 컬럼 정렬을 전이 시각 기준으로
-**Priority:** P3
-결과 컬럼 정렬 키가 buyer=createdAt, pg=submittedAt 이라 방금 취소/철회한 오래된 카드가 limit 10 절단 밖으로 밀려 '증발'처럼 보일 수 있음. 카드에 전이 시각(awarded/cancelled/withdrawn at)을 실어 내림차순 정렬하거나 최근 전이 카드 상단 고정. (발견: /ship red-team 리뷰 2026-06-13)
+### ~~종결 컬럼 정렬을 전이 시각 기준으로~~ ✅ v0.2.24.2
+rfp.updatedAt 기준 내림차순 정렬 적용(buyer awarded/closed, PG won/lost). transition() 에서 updated_at 갱신 누락도 함께 수정. (PR fix+design-todos-p3 2026-06-17)
 
 ### rfp_bids 보드 죽은 표면 정리
 **Priority:** P3
@@ -40,9 +39,8 @@ BidCard·loadBoard rfp_bids 분기·cardType 'bid' 경로가 어디에도 마운
 **Priority:** P2
 `NumericFormat`(decimalScale=2)·cycleNum(isAllowed≤99)은 타이핑은 제대로 막지만, **마운트 시점에 전달된** 값은 정규화/재방출하지 않음. 레거시 데이터(이번 PR 이전 type=number 로 입력된 소수 3자리+ 요율이나 cycleNum 150 등)가 재요청·드래프트 복원으로 사전채움되면 수수료 표는 `1.23`(절삭)으로 보이지만 state·검토 단계·제출은 `1.2345`(원본)을 유지 — 표시와 제출이 어긋남. 검토 단계가 원본 값을 보여줘 발송 전 안전망은 있고, 신규 입력은 항상 ≤2자리라 영향 없음(레거시 한정). 픽스: 사전채움 경로(`bidToDraft`/`fmtPct`)에서 요율을 2자리로 반올림하고 cycleNum 을 99 로 클램프. (발견: /ship adversarial 리뷰 2026-06-14, branch worktree-fix+bid-numeric-inputs)
 
-### 구간 수수료 그리드 환산 툴팁 양끝 열 오버플로 + aria 연결
-**Priority:** P3
-`FeeRateCell` 환산 툴팁이 `left-1/2 -translate-x-1/2` 중앙 정렬이라 5열 그리드의 영세(맨 왼쪽)·일반(맨 오른쪽) 열에서 가장자리로 넘칠 수 있음. 또 `role="tooltip"` 이 입력과 `aria-describedby` 로 연결돼 있지 않아 스크린리더는 환산값을 못 읽음(단, 기존엔 힌트 자체가 없어 순수 개선분). 픽스: 열 위치별 정렬(start/center/end) prop + 안정 id 의 aria-describedby. (발견: /ship 디자인 리뷰 2026-06-14, /design-review 경로)
+### ~~구간 수수료 그리드 환산 툴팁 양끝 열 오버플로 + aria 연결~~ ✅ v0.2.24.2
+tooltipAlign prop(start|center|end) + useId/aria-describedby 연결 완료. (PR fix+design-todos-p3 2026-06-17)
 
 ## Email / Notifications
 
