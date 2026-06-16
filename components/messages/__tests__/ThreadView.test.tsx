@@ -57,6 +57,12 @@ vi.mock('@/lib/toast', () => ({
   toast: (...args: unknown[]) => toast(...args),
 }));
 
+vi.mock('../ContextPanel', () => ({
+  ContextPanel: ({ rfpContext }: { rfpContext?: { title?: string } }) => (
+    <div data-testid="context-panel">{rfpContext?.title ?? ''}</div>
+  ),
+}));
+
 afterEach(() => cleanup());
 beforeEach(() => {
   sendChatMessageAction.mockReset();
@@ -997,13 +1003,11 @@ describe('ThreadView — variant="rail" 갤러리 오버레이', () => {
     expect(container.querySelector('[data-gallery-pane]')).not.toBeInTheDocument();
   });
 
-  it('기본(page) 변형에서는 기존 사이드 패널을 유지한다', async () => {
-    const user = userEvent.setup();
+  it('기본(page) 변형에서는 갤러리 토글 버튼과 사이드 패널이 없다', async () => {
     const { container } = render(base({ messages: messagesWithAttachment }));
 
-    await user.click(screen.getByRole('button', { name: /파일 1/ }));
-
-    expect(container.querySelector('[data-gallery-pane]')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /파일 1/ })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-gallery-pane]')).not.toBeInTheDocument();
     expect(container.querySelector('[data-gallery-overlay]')).not.toBeInTheDocument();
   });
 });
@@ -1104,5 +1108,74 @@ describe('ThreadView — sendDisabled (샘플 RFP)', () => {
     const ta = screen.getByPlaceholderText('메시지를 입력하세요…') as HTMLTextAreaElement;
     fireEvent.keyDown(ta, { key: 'Enter' });
     expect(sendChatMessageAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('variant=tabs', () => {
+  const baseProps = {
+    conversationId: 'conv-1',
+    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const },
+    viewer: { userId: 'u-self', name: '나' },
+    messages: [],
+    variant: 'tabs' as const,
+    rfpContext: { code: 'P-2605-0042', title: '온라인 결제 견적', status: 'sent', deadline: null },
+  };
+
+  it('탭 버튼 3개(채팅·RFP·파일)를 렌더한다', () => {
+    render(<ThreadView {...baseProps} />);
+    expect(screen.getByRole('tab', { name: '채팅' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'RFP' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '파일' })).toBeInTheDocument();
+  });
+
+  it('기본 탭은 채팅이고 컴포저가 보인다', () => {
+    render(<ThreadView {...baseProps} />);
+    // composer textarea or input exists
+    const composer = screen.queryByPlaceholderText('메시지를 입력하세요…')
+      ?? screen.queryByRole('textbox');
+    expect(composer).toBeInTheDocument();
+    expect(screen.queryByTestId('context-panel')).not.toBeInTheDocument();
+  });
+
+  it('RFP 탭 클릭 시 ContextPanel을 렌더하고 컴포저를 숨긴다', async () => {
+    const user = userEvent.setup();
+    render(<ThreadView {...baseProps} />);
+    await user.click(screen.getByRole('tab', { name: 'RFP' }));
+    expect(screen.getByTestId('context-panel')).toBeInTheDocument();
+    const composer = screen.queryByPlaceholderText('메시지를 입력하세요…')
+      ?? screen.queryByRole('textbox');
+    expect(composer).not.toBeInTheDocument();
+  });
+
+  it('파일 탭 클릭 후 채팅 탭 클릭 시 컴포저가 복원된다', async () => {
+    const user = userEvent.setup();
+    render(<ThreadView {...baseProps} />);
+    await user.click(screen.getByRole('tab', { name: '파일' }));
+    await user.click(screen.getByRole('tab', { name: '채팅' }));
+    const composer = screen.queryByPlaceholderText('메시지를 입력하세요…')
+      ?? screen.queryByRole('textbox');
+    expect(composer).toBeInTheDocument();
+  });
+});
+
+describe('variant=page (갤러리 버튼 없음)', () => {
+  const msgWithAttachment = {
+    id: 'm1', authorUserId: 'u-pg', authorName: 'PG', authorEmail: 'p@pg.com',
+    sender: 'other' as const, body: '파일 보냅니다', rfpId: null,
+    createdAt: new Date().toISOString(), readByCounterparty: false,
+    attachments: [{ id: 'a1', name: 'test.pdf', size: 100, mimeType: 'application/pdf', url: '/api/files/a1' }],
+  };
+
+  it('page variant에서는 "파일 N" 토글 버튼이 없다', () => {
+    render(
+      <ThreadView
+        conversationId="conv-1"
+        counterparty={{ workspaceId: 'pg-1', name: 'OO페이', type: 'pg' }}
+        viewer={{ userId: 'u-self', name: '나' }}
+        messages={[msgWithAttachment]}
+        variant="page"
+      />
+    );
+    expect(screen.queryByText(/파일 \d/)).not.toBeInTheDocument();
   });
 });

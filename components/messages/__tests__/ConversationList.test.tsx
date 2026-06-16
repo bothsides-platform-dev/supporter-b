@@ -14,6 +14,10 @@ function makeCounterparty(over: Partial<Extract<InboxListItem, { kind: 'counterp
     conversationId: 'conv-1',
     counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', hasLogo: false },
     rfpId: null,
+    rfpCode: null,
+    rfpTitle: null,
+    rfpStatus: null,
+    rfpDeadline: null,
     preview: '제안 보냅니다.',
     lastMessageAt: '2026-06-02T01:00:00.000Z',
     unread: false,
@@ -131,26 +135,16 @@ describe('ConversationList', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('shows the last message time in Seoul time (absolute, tz-stable)', () => {
-    // toLocaleTimeString('ko-KR') output depends on ICU data in the runner (small-icu
-    // builds return "AM 10:00" instead of "오전 10:00"). Stub to be deterministic while
-    // still asserting the correct locale + timezone are forwarded.
-    const spy = vi
-      .spyOn(Date.prototype, 'toLocaleTimeString')
-      .mockReturnValue('오전 10:00');
+  it('lastMessageAt이 오늘이면 시각(오전/오후 형식)을 표시한다', () => {
+    const todayIso = new Date().toISOString();
     render(
       <ConversationList
-        items={[makeCounterparty({ lastMessageAt: '2026-06-02T01:00:00.000Z' })]}
+        items={[makeCounterparty({ lastMessageAt: todayIso })]}
         selectedKey={null}
         onSelect={vi.fn()}
       />,
     );
-    expect(screen.getByText('오전 10:00')).toBeInTheDocument();
-    expect(spy).toHaveBeenCalledWith(
-      'ko-KR',
-      expect.objectContaining({ timeZone: 'Asia/Seoul' }),
-    );
-    spy.mockRestore();
+    expect(screen.getByText(/^오[전후] \d{1,2}:\d{2}$/)).toBeInTheDocument();
   });
 
   it('renders no time when lastMessageAt is null', () => {
@@ -164,5 +158,51 @@ describe('ConversationList', () => {
     // The row still renders; time slot is simply absent (no crash).
     expect(screen.getByText('OO페이')).toBeInTheDocument();
     expect(screen.queryByText(/오전|오후/)).not.toBeInTheDocument();
+  });
+
+  it('오늘이 아닌 메시지는 날짜/요일을 표시하고 toLocaleTimeString을 호출하지 않는다', () => {
+    const spy = vi.spyOn(Date.prototype, 'toLocaleTimeString');
+    render(
+      <ConversationList
+        items={[makeCounterparty({ lastMessageAt: '2026-01-15T06:00:00.000Z' })]}
+        selectedKey={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('1/15')).toBeInTheDocument();
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('counterparty 항목에 rfpCode가 있으면 RFP 칩을 표시한다', () => {
+    render(
+      <ConversationList
+        items={[makeCounterparty({ rfpCode: 'P-2605-0042', rfpTitle: '결제대행 견적' })]}
+        selectedKey={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('P-2605-0042')).toBeInTheDocument();
+    expect(screen.getByText('결제대행 견적')).toBeInTheDocument();
+  });
+
+  it('counterparty 항목에 rfpCode가 null이면 RFP 칩을 숨긴다', () => {
+    render(
+      <ConversationList
+        items={[makeCounterparty({ rfpCode: null, rfpTitle: null })]}
+        selectedKey={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/P-\d/)).not.toBeInTheDocument();
+  });
+
+  it('팀 스레드 항목에 rfpCode 칩과 미리보기를 렌더한다', () => {
+    render(
+      <ConversationList items={[makeTeam()]} selectedKey={null} onSelect={vi.fn()} />,
+    );
+    expect(screen.getByText('P-2605-0042')).toBeInTheDocument();
+    expect(screen.getByText(/결제대행 견적/)).toBeInTheDocument();
+    expect(screen.getByText('내부 메모입니다.')).toBeInTheDocument();
   });
 });

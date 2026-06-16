@@ -3,6 +3,7 @@
 import { Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
+import { formatListTime } from './format';
 import type { InboxListItem } from './types';
 
 type Props = {
@@ -10,17 +11,6 @@ type Props = {
   selectedKey: string | null;
   onSelect: (key: string) => void;
 };
-
-// 마지막 메시지 시각 — Asia/Seoul 절대시각(예 "오전 10:00"). 러너 TZ에 흔들리지
-// 않도록 timeZone 을 고정해요(상대시각은 Date.now() 의존 → 테스트 플레이키).
-function formatLastMessageTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
 
 export function ConversationList({ items, selectedKey, onSelect }: Props) {
   return (
@@ -71,10 +61,21 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                       dateTime={item.lastMessageAt}
                       className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]"
                     >
-                      {formatLastMessageTime(item.lastMessageAt)}
+                      {formatListTime(item.lastMessageAt)}
                     </time>
                   )}
                 </div>
+                {/* RFP chip — counterparty 항목에서 연결 견적 표시 */}
+                {item.kind === 'counterparty' && item.rfpCode && (
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <span className="md-numeric shrink-0 rounded-[3px] bg-[var(--md-sys-color-primary-container)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--md-sys-color-on-primary-container)]">
+                      {item.rfpCode}
+                    </span>
+                    <span className="truncate text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                      {item.rfpTitle}
+                    </span>
+                  </div>
+                )}
                 <div className="mt-0.5 flex items-center gap-1.5">
                   <p className="min-w-0 flex-1 truncate text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
                     {item.preview}

@@ -10,15 +10,18 @@ export function ThreadPane({
   onBack,
   variant,
   defaultRfpId,
+  rfpContext,
   sendDisabled,
 }: {
   conversationId: string;
   counterpartyFallback: { workspaceId: string; name: string; type: 'buyer' | 'pg'; hasLogo: boolean };
   onBack?: () => void;
-  /** ThreadView 변형 — 'rail' 은 상세 화면 우측 채팅 레일 임베드. */
-  variant?: 'page' | 'rail';
+  /** ThreadView 변형 — 'rail' 은 상세 화면 우측 채팅 레일 임베드, 'tabs' 는 md 폭 탭 전환. */
+  variant?: 'page' | 'rail' | 'tabs';
   /** 레일 컨텍스트 RFP — 컴포저 전송에 기본 태그로 적용. */
   defaultRfpId?: string;
+  /** tabs 변형에서 RFP 탭에 표시할 컨텍스트 정보. */
+  rfpContext?: { code: string; title: string; status?: string; deadline?: string | null };
   /** 샘플 RFP — 컴포저 전송 차단(데모 PG 에게 실제 전송 방지). */
   sendDisabled?: boolean;
 }) {
@@ -38,6 +41,7 @@ export function ThreadPane({
       variant={variant}
       defaultRfpId={defaultRfpId}
       rfpById={rfpById}
+      rfpContext={rfpContext}
       sendDisabled={sendDisabled}
     />
   );
