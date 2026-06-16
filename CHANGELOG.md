@@ -7,6 +7,22 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - **내부 구조 정리 — 실시간 채팅 구독 로직 공용화 (개발자 전용, 사용자 화면·동작 변화 없음)**: 컴포넌트 리팩토링 마지막 항목(D10). 상대방 채팅(`useChatChannel`)과 팀 채팅(`useTeamChannel`)이 똑같이 들고 있던 Centrifugo 채널 구독 생명주기 — 연결·구독·수신 라우팅·연결상태 추적·정리(특히 재마운트 시 핸들러 중복 등록을 막는 `removeSubscription` 처리) — 를 공용 훅 `useCentrifugoSubscription` 으로 모았어요. 채널별 고유 동작(상대방 채팅의 타이핑 표시·온라인 프레즌스·타이핑 전송)은 그대로 해당 훅에 남겨 두고, 두 훅이 공유하던 연결/구독 보일러플레이트만 공유해요. 알림 스트림은 다른 전송 방식(SSE/EventSource, 단일 소비처)이라 의도적으로 합치지 않았어요(YAGNI). 동작·실시간 신호는 그대로(채팅 채널 훅 27개 + 소비 컴포넌트 107개 테스트 통과), 단위 테스트 8개 추가, 전체 3358개 통과.
+## [0.2.24.0] - 2026-06-16
+
+### Changed
+
+- **메시지 화면 3단 레이아웃 + 검색 + RFP 컨텍스트 패널 (xl 이상)**: 메시지(`/messages`) 화면을 대화폭 데스크톱에서 더 쓰기 좋게 개편했어요. 1280px 이상(xl) 화면에서 ① 대화 목록 패널 → ② 스레드 패널 → ③ RFP 컨텍스트 패널 순서의 3단 레이아웃이 펼쳐져요. xl 미만에서는 스레드 패널 내부가 채팅·RFP·파일 탭으로 전환돼 같은 정보를 탭 형태로 볼 수 있어요. 대화 목록 상단엔 검색 입력창을 추가했어요 — 상대방 이름·견적 코드·미리보기 텍스트를 실시간으로 필터링해요. 상대방 대화 행에 연결 견적 코드 칩(RFP 코드 + 제목)을 노출하고, 마지막 메시지 시각을 오늘이면 시각(오전/오후 H:MM), 이번 주면 요일, 그 이전이면 M/D 날짜로 상대적으로 표시해요. 전체·상대방·팀 필터 탭은 그대로예요.
+## [0.2.23.3] - 2026-06-16
+
+### Changed
+
+- **README 전면 재작성 — 아키텍처 중심 문서로 개편 (개발자 문서 전용, 제품 변화 없음)**: 로컬 세팅 가이드를 제거하고 프로젝트 아키텍처를 한눈에 파악할 수 있는 문서로 재작성했어요. 시스템 아키텍처(Caddy → Next.js/Centrifugo → PostgreSQL), 서버 레이어(Actions → Services → Repositories), Transactional Outbox Pattern, 봉인 입찰 보안 경계, Repository Boundary 린트 강제, 테스트 전략(PGlite 기반 TDD)을 Mermaid 다이어그램과 함께 정리했어요.
+
+## [0.2.23.2] - 2026-06-16
+
+### Changed
+
+- **문서 정리 — SCREEN_DESIGN.md 를 현행 딜룸 구조에 맞게 동기화 (개발자 문서 전용, 제품 변화 없음)**: Phase 4 딜룸 전면 개편 때 사라진 컴포넌트·스토어 참조가 SCREEN_DESIGN.md 에 남아 있던 걸 현행 코드 기준으로 고쳤어요. 삭제된 `RfpDetailContent`·`ChatRail`·`ChatRailToggle`·전역 `useChatRailStore`·`StatutoryCardFeeNotice` 참조를 제거하고, 현행 딜룸 구조(`DealRoomModal` `@modal` 인터셉트 + 정식 페이지 `DealRoomFull`/`DealRoomShell`, `BuyerDealRoomBody`/`PgDealRoomBody`, `DealRoomCenter`/`DealRoomActionRail`, `DealRoomChat`→`ChatPanel`, lg 미만 `DealRoomChatFab` 하단 시트, 상대 출처는 딜룸 스코프 `DealRoomContext`)로 B4·P3 화면 행·라우트 맵·채팅 다이어그램을 갱신했어요. 코드 변경 없음 — 문서만.
 
 ## [0.2.23.0] - 2026-06-16
 

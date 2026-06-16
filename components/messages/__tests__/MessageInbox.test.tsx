@@ -47,6 +47,19 @@ vi.mock('@/lib/server/actions/chat/listConversationAttachments', () => ({
   listConversationAttachments: vi.fn().mockResolvedValue([]),
 }));
 
+// ContextPanel mock — prevents server-action transitive imports.
+vi.mock('../ContextPanel', () => ({
+  ContextPanel: ({ conversationId }: { conversationId: string }) => (
+    <div data-testid="context-panel" data-conversation={conversationId} />
+  ),
+}));
+
+// useIsXlUp mock — default to false (non-xl); toggle in xl tests.
+const mockXlUp = { value: false };
+vi.mock('@/hooks/use-xl-up', () => ({
+  useIsXlUp: () => mockXlUp.value,
+}));
+
 // TeamThreadPane imports team-thread-cache → teamThreadLoader (a 'use server'
 // action that transitively pulls in next-auth) — mock the cache + TeamThreadView
 // so the inbox (which now routes team rows to TeamThreadPane) collects without a
@@ -61,7 +74,10 @@ vi.mock('../TeamThreadView', () => ({
   TeamThreadView: () => <div data-testid="team-thread-view" />,
 }));
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  mockXlUp.value = false;
+});
 beforeEach(() => {
   loadConversationThread.mockReset();
   clearAllThreadCache();
@@ -71,16 +87,22 @@ import { MessageInbox } from '../MessageInbox';
 import { clearAllThreadCache } from '../thread-cache';
 import type { InboxListItem } from '../types';
 
-// 기존 대화 픽스처를 통합 인박스 'counterparty' 항목으로 래핑.
-const conv1 = {
-  conversationId: 'conv-1',
-  counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const, hasLogo: false },
-  rfpId: null,
-  preview: '제안 보냅니다.',
-  lastMessageAt: '2026-06-02T01:00:00.000Z',
-  unread: true,
-};
-const items: InboxListItem[] = [{ kind: 'counterparty', key: `c:${conv1.conversationId}`, ...conv1 }];
+const items: InboxListItem[] = [
+  {
+    kind: 'counterparty',
+    key: 'c:conv-1',
+    conversationId: 'conv-1',
+    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', hasLogo: false },
+    rfpId: null,
+    rfpCode: null,
+    rfpTitle: null,
+    rfpStatus: null,
+    rfpDeadline: null,
+    preview: '제안 보냅니다.',
+    lastMessageAt: '2026-06-02T01:00:00.000Z',
+    unread: true,
+  },
+];
 
 describe('MessageInbox', () => {
   it('selecting a conversation loads its thread via the server action', async () => {
@@ -142,6 +164,10 @@ describe('MessageInbox', () => {
         conversationId: 'c1',
         counterparty: { workspaceId: 'w', name: '토스', type: 'pg', hasLogo: false },
         rfpId: null,
+        rfpCode: null,
+        rfpTitle: null,
+        rfpStatus: null,
+        rfpDeadline: null,
         preview: '안녕',
         lastMessageAt: '2026-06-14T03:00:00Z',
         unread: false,
@@ -275,6 +301,28 @@ describe('MessageInbox', () => {
     expect(loadConversationThread).not.toHaveBeenCalled();
   });
 
+  it('검색어 입력 시 이름 기준으로 대화 목록을 필터링한다', async () => {
+    const user = userEvent.setup();
+    const mixed: InboxListItem[] = [
+      {
+        kind: 'counterparty', key: 'c:c1',
+        conversationId: 'c1',
+        counterparty: { workspaceId: 'w1', name: '토스페이', type: 'pg', hasLogo: false },
+        rfpId: null, rfpCode: null, rfpTitle: null, rfpStatus: null, rfpDeadline: null,
+        preview: '안녕하세요', lastMessageAt: null, unread: false,
+      },
+      {
+        kind: 'team', key: 't:r1', rfpId: 'r1',
+        rfpCode: 'P-2605-0001', rfpTitle: '결제 서비스',
+        preview: '내부 메모', lastMessageAt: null, unread: false,
+      },
+    ];
+    render(<MessageInbox items={mixed} />);
+    await user.type(screen.getByPlaceholderText('대화 검색'), '토스');
+    expect(screen.getByRole('button', { name: /토스페이/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /결제 서비스/ })).not.toBeInTheDocument();
+  });
+
   it('팀 스레드 선택 시 모바일 뒤로가기 버튼이 표시되고 클릭하면 목록으로 돌아간다', async () => {
     const user = userEvent.setup();
     const teamItems: InboxListItem[] = [
@@ -301,5 +349,31 @@ describe('MessageInbox', () => {
 
     // After back, selection cleared → empty state shown
     expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
+  });
+});
+
+describe('xl 컨텍스트 패널', () => {
+  beforeEach(() => { mockXlUp.value = true; });
+
+  it('xl에서 대화 미선택 시 ContextPanel을 렌더하지 않는다', () => {
+    render(<MessageInbox items={items} />);
+    expect(screen.queryByTestId('context-panel')).not.toBeInTheDocument();
+  });
+
+  it('xl에서 counterparty 대화 선택 시 ContextPanel이 렌더된다', async () => {
+    const user = userEvent.setup();
+    loadConversationThread.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      viewer: { userId: 'u-self', name: '나' },
+      messages: [],
+    });
+    render(<MessageInbox items={items} />);
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /OO페이/ }));
+    });
+    expect(screen.getByTestId('context-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('context-panel')).toHaveAttribute('data-conversation', 'conv-1');
   });
 });
