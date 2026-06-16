@@ -88,9 +88,9 @@ export function FeeRateCell({
   ariaLabel,
   tooltipAlign = 'center',
 }: FeeRateCellProps) {
+  const tooltipId = useId();
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const tooltipId = useId();
   const hint = formatRatePerManwon(parseFloat(value)) || null;
   const showHint = (focused || hovered) && !!hint;
 

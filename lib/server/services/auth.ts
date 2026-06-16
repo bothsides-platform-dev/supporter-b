@@ -2,7 +2,6 @@ import { randomInt, randomUUID } from 'node:crypto';
 
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { baseUrl } from '@/lib/server/env';
-import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { addMinutes, generateToken, hashToken } from '@/lib/server/token';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderAuthReset } from '@/lib/server/outbox/templates/authReset';
@@ -39,6 +38,27 @@ function generateEmailCode(): string {
 
 // 코드 오입력 허용 횟수 (전화 OTP verifyPhoneOtpAction 과 동일).
 const MAX_CODE_ATTEMPTS = 5;
+
+/**
+ * `users.email` unique violation(23505)이면 EMAIL_TAKEN 으로 매핑, 아니면 재던진다.
+ *
+ * 드문 동시-가입 경쟁: 선검사(purgeUnverifiedSignup) 통과 후 INSERT 직전
+ * 같은 이메일이 들어와 충돌하면 postgres-js 가 tx 종료 후 위반을 재던진다
+ * → tx 경계 밖 `.catch()` 또는 `try/catch` 에서 이 함수로 EMAIL_TAKEN 으로
+ * 매핑한다. 흔한 케이스는 선검사에서 처리된다.
+ *
+ * `users_email_unique` 컨스트레인트에 한정: 다른 테이블/컬럼의 23505
+ * (예: workspaces.canonical_pg_key)는 EMAIL_TAKEN 으로 오진단하지 않고 재던진다.
+ */
+export function mapUniqueViolationToEmailTaken<T extends object = object>(err: unknown): ServiceResult<T> {
+  type PgErrShape = { code?: unknown; constraint?: unknown; cause?: { code?: unknown; constraint?: unknown } } | null;
+  const e = err as PgErrShape;
+  const isEmailUnique =
+    (e?.code === '23505' && e?.constraint === 'users_email_unique') ||
+    (e?.cause?.code === '23505' && e?.cause?.constraint === 'users_email_unique');
+  if (isEmailUnique) return { ok: false, error: 'EMAIL_TAKEN' };
+  throw err;
+}
 
 export type WorkspaceStub = { id: string; name: string };
 
@@ -102,13 +122,7 @@ export class AuthService {
       }
 
       return { ok: true, workspaceId, applicationId, email };
-    }).catch((err: unknown) => {
-      // 드문 동시-가입 경쟁: 선검사 통과 후 INSERT 직전 같은 이메일이 들어와 충돌하면
-      // postgres-js 가 tx 종료 후 위반을 재던진다 → tx 경계 밖에서 잡아 EMAIL_TAKEN 으로 매핑
-      // (confirmEmailChange 와 동일 패턴). 흔한 케이스는 위 선검사가 처리한다.
-      if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-      throw err;
-    });
+    }).catch(mapUniqueViolationToEmailTaken<{ workspaceId: string; applicationId: string; email: string }>);
 
     return result;
   }
@@ -163,11 +177,7 @@ export class AuthService {
       if (err instanceof Error && 'claimError' in err) {
         return { ok: false, error: (err as Error & { claimError: string }).claimError };
       }
-      // 드문 동시-가입 경쟁: 선검사 통과 후 INSERT 직전 같은 이메일이 들어와 충돌하면
-      // postgres-js 가 tx 종료 후 위반을 재던진다 → tx 경계 밖에서 잡아 EMAIL_TAKEN 으로 매핑
-      // (confirmEmailChange 와 동일 패턴). 흔한 케이스는 위 선검사가 처리한다.
-      if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-      throw err;
+      return mapUniqueViolationToEmailTaken<{ workspaceId: string; email: string }>(err);
     });
 
     return result;
@@ -211,13 +221,7 @@ export class AuthService {
       await this.userRepo.setLastActiveWorkspace(userId, input.selectedPgWorkspaceId, tx);
 
       return { ok: true, email };
-    }).catch((err: unknown) => {
-      // 드문 동시-가입 경쟁: 선검사 통과 후 INSERT 직전 같은 이메일이 들어와 충돌하면
-      // postgres-js 가 tx 종료 후 위반을 재던진다 → tx 경계 밖에서 잡아 EMAIL_TAKEN 으로 매핑
-      // (confirmEmailChange 와 동일 패턴). 흔한 케이스는 위 선검사가 처리한다.
-      if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-      throw err;
-    });
+    }).catch(mapUniqueViolationToEmailTaken<{ email: string }>);
 
     return result;
   }
@@ -391,8 +395,7 @@ export class AuthService {
         );
       });
     } catch (err) {
-      if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-      throw err;
+      return mapUniqueViolationToEmailTaken(err);
     }
 
     return { ok: true };

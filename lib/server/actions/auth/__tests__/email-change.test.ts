@@ -163,7 +163,7 @@ describe('emailChangeConfirmAction', () => {
   it('maps a pglite-shaped unique violation (err.cause.code) to EMAIL_TAKEN', async () => {
     const token = await issueToken();
     const [userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo(), getPhoneOtpRepo(), getWorkspaceRepo(), getPgProfileRepo()]);
-    __setAuthServiceForTest(new AuthService(throwingUpdateDb({ cause: { code: '23505' } }), userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo));
+    __setAuthServiceForTest(new AuthService(throwingUpdateDb({ cause: { code: '23505', constraint: 'users_email_unique' } }), userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo));
     const r = await emailChangeConfirmAction({ rawToken: token });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
