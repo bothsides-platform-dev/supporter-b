@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { NumericFormat } from 'react-number-format';
 import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
@@ -70,6 +70,8 @@ type FeeRateCellProps = {
   /** 그리드 셀 식별용 data-testid (예: `fee-cell-card-sole`) */
   testId?: string;
   ariaLabel?: string;
+  /** 툴팁 수평 정렬. 첫 열='start', 마지막 열='end', 나머지='center'(기본). */
+  tooltipAlign?: 'start' | 'center' | 'end';
 };
 
 /**
@@ -81,11 +83,20 @@ export function FeeRateCell({
   onChange,
   testId,
   ariaLabel,
+  tooltipAlign = 'center',
 }: FeeRateCellProps) {
+  const tooltipId = useId();
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState(false);
   const hint = formatRatePerManwon(parseFloat(value)) || null;
   const showHint = (focused || hovered) && !!hint;
+
+  const positionClass =
+    tooltipAlign === 'start'
+      ? 'left-0'
+      : tooltipAlign === 'end'
+        ? 'right-0'
+        : 'left-1/2 -translate-x-1/2';
 
   return (
     // 포커스/호버 감지는 래퍼에 둔다 — React onFocus/onBlur 는 focusin/focusout
@@ -100,6 +111,7 @@ export function FeeRateCell({
       <NumericFormat
         data-testid={testId}
         aria-label={ariaLabel}
+        aria-describedby={showHint ? tooltipId : undefined}
         decimalScale={2}
         allowNegative={false}
         value={value}
@@ -109,8 +121,9 @@ export function FeeRateCell({
       />
       {showHint && (
         <div
+          id={tooltipId}
           role="tooltip"
-          className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface)] shadow-md"
+          className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface)] shadow-md ${positionClass}`}
         >
           {hint}
         </div>

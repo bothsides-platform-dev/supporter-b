@@ -182,6 +182,42 @@ describe('FeeRateCell', () => {
     expect(input.value).toBe('');
     expect(onChange).not.toHaveBeenCalledWith(expect.stringMatching(/[a-z]/i));
   });
+
+  it('tooltipAlign="start" 이면 툴팁이 left-0 를 가지며 left-1/2 는 없다', () => {
+    render(<FeeRateCell value="1.25" onChange={() => {}} testId="c" tooltipAlign="start" />);
+    fireEvent.focusIn(screen.getByTestId('c'));
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.className).toContain('left-0');
+    expect(tooltip.className).not.toContain('left-1/2');
+  });
+
+  it('tooltipAlign="end" 이면 툴팁이 right-0 를 가지며 left-1/2 는 없다', () => {
+    render(<FeeRateCell value="1.25" onChange={() => {}} testId="c" tooltipAlign="end" />);
+    fireEvent.focusIn(screen.getByTestId('c'));
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.className).toContain('right-0');
+    expect(tooltip.className).not.toContain('left-1/2');
+  });
+
+  it('tooltipAlign 미지정이면 기본값으로 left-1/2 클래스를 갖는다', () => {
+    render(<FeeRateCell value="1.25" onChange={() => {}} testId="c" />);
+    fireEvent.focusIn(screen.getByTestId('c'));
+    expect(screen.getByRole('tooltip').className).toContain('left-1/2');
+  });
+
+  it('포커스 시 입력의 aria-describedby 가 툴팁 id 와 일치한다', () => {
+    render(<FeeRateCell value="1.25" onChange={() => {}} testId="c" />);
+    const input = screen.getByTestId('c');
+    fireEvent.focusIn(input);
+    const tooltip = screen.getByRole('tooltip');
+    expect(input).toHaveAttribute('aria-describedby', tooltip.id);
+  });
+
+  it('툴팁 id 는 비어 있지 않다', () => {
+    render(<FeeRateCell value="1.25" onChange={() => {}} testId="c" />);
+    fireEvent.focusIn(screen.getByTestId('c'));
+    expect(screen.getByRole('tooltip').id).not.toBe('');
+  });
 });
 
 describe('infoTerm', () => {
