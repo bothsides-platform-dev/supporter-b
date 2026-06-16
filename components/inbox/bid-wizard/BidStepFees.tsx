@@ -105,8 +105,10 @@ export function BidStepFees({
                   <td className="text-[13px] text-[var(--md-sys-color-on-surface)] pr-2 py-1">
                     {PAYMENT_METHOD_LABELS[m]}
                   </td>
-                  {MERCHANT_TIERS.map((t) => {
+                  {MERCHANT_TIERS.map((t, colIdx) => {
                     const key = `${m}:${t}`;
+                    const isFirst = colIdx === 0;
+                    const isLast = colIdx === MERCHANT_TIERS.length - 1;
                     return (
                       <td key={t} className="px-0.5 py-1">
                         <FeeRateCell
@@ -114,6 +116,7 @@ export function BidStepFees({
                           ariaLabel={`${PAYMENT_METHOD_LABELS[m]} ${MERCHANT_TIER_LABELS[t]} 수수료`}
                           value={fees[key] ?? ''}
                           onChange={(v) => onFee(key, v)}
+                          tooltipAlign={isFirst ? 'start' : isLast ? 'end' : 'center'}
                         />
                       </td>
                     );
