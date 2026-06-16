@@ -65,6 +65,8 @@ export class AuthService {
 
     if (!otpRow) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
+    if (!input.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
+
     const passwordHash = await hashPassword(input.plainPassword);
     const userId = randomUUID();
 
@@ -87,8 +89,6 @@ export class AuthService {
         if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
         throw err;
       }
-
-      if (!input.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
 
       const { workspaceId, applicationId } = await createWorkspaceInTx(tx, {
         userId,

@@ -138,6 +138,25 @@ describe('AuthService.completeSignup', () => {
     expect(r).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
   });
 
+  it('wsName이 빈 문자열이면 user 행 없이 즉시 MISSING_WS_NAME 반환', async () => {
+    const svc = await buildService();
+    const otpId = await seedVerifiedOtp('01077777777');
+
+    const r = await svc.completeSignup({
+      email: 'nowsname@example.com',
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01077777777',
+      phoneVerificationId: otpId,
+      wsKind: 'pg',
+      wsName: '',
+    });
+
+    expect(r).toEqual({ ok: false, error: 'MISSING_WS_NAME' });
+    const rows = await db.select().from(users).where(eq(users.email, 'nowsname@example.com'));
+    expect(rows).toHaveLength(0);
+  });
+
   it('returns EMAIL_TAKEN for a duplicate email (verified user)', async () => {
     const svc = await buildService();
 
