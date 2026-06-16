@@ -635,7 +635,7 @@ describe('signupCompleteAction — insert error tightening', () => {
     await seedVerifiedOtpWithId(FAKE_OTP_ID);
     const [userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo(), getPhoneOtpRepo(), getWorkspaceRepo(), getPgProfileRepo()]);
     __setAuthServiceForTest(new AuthService(
-      throwingInsertDb(Object.assign(new Error('dup'), { code: '23505' })),
+      throwingInsertDb(Object.assign(new Error('dup'), { code: '23505', constraint: 'users_email_unique' })),
       userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
     ));
     const r = await signupCompleteAction(VALID_SIGNUP);
@@ -647,7 +647,7 @@ describe('signupCompleteAction — insert error tightening', () => {
     await seedVerifiedOtpWithId(FAKE_OTP_ID);
     const [userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo(), getPhoneOtpRepo(), getWorkspaceRepo(), getPgProfileRepo()]);
     __setAuthServiceForTest(new AuthService(
-      throwingInsertDb(Object.assign(new Error('dup'), { cause: { code: '23505' } })),
+      throwingInsertDb(Object.assign(new Error('dup'), { cause: { code: '23505', constraint: 'users_email_unique' } })),
       userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
     ));
     const r = await signupCompleteAction(VALID_SIGNUP);

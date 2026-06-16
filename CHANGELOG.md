@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.25.1] - 2026-06-17
+
+### Changed
+
+- **AUTH: unique-violation → EMAIL_TAKEN 매핑 DRY + 컨스트레인트 특정화**: `AuthService` 의 `users.email` unique violation → `EMAIL_TAKEN` 매핑 코드(4곳 중복)를 `mapUniqueViolationToEmailTaken<T>` 단일 헬퍼로 추출했어요. 아울러 `users_email_unique` 컨스트레인트에만 적용되도록 좁혀, 다른 테이블·컬럼의 23505 오류(예: `workspaces.canonical_pg_key`)가 `EMAIL_TAKEN` 으로 오진단되지 않아요. 동작 동일, 3470 green.
+
 ## [0.2.24.2] - 2026-06-17
 
 ### Fixed
