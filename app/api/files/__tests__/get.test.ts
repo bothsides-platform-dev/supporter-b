@@ -152,6 +152,17 @@ describe('GET /api/files/[id]', () => {
     expect(r.status).toBe(401);
   });
 
+  it('403 when email not verified', async () => {
+    sessionRef.value = { user: { id: 'user-1', email: 'u@x.com', sessionVersion: 1 } };
+    getDbEmailVerifiedMock.mockResolvedValue(false);
+    const { GET } = await import('../[id]/route');
+    const r = await GET(
+      new Request('http://localhost/api/files/any-id'),
+      { params: Promise.resolve({ id: 'any-id' }) }
+    );
+    expect(r.status).toBe(403);
+  });
+
   it('404 when attachment row not found', async () => {
     const buyer = await seedUser(db, { email: 'b@x.com' });
     sessionRef.value = {
