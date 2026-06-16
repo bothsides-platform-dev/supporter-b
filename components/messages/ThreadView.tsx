@@ -143,11 +143,6 @@ export function ThreadView({
   const [showGallery, setShowGallery] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'rfp' | 'files'>('chat');
 
-  // variant が변경되면 탭을 채팅으로 리셋한다.
-  useEffect(() => {
-    setActiveTab('chat');
-  }, [variant]);
-
   // Local copy so live receives + optimistic sends append without a refetch.
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>(messages);
   // Track the messages prop identity to resync local state when it changes
