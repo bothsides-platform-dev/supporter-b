@@ -1,0 +1,62 @@
+'use client';
+
+// 활성 견적의 결제수단 요율 행 목록 — 각 행 hover 시 MetricComparePopover 로 전 PG 를
+// 좋은 순으로 줄세운다. 표현 전용; 랭킹은 rankByMetric, 행 구성은 buildFeeRows.
+// memo 로 감싸 무관 상태 변화에서 재렌더를 줄인다.
+import { memo } from 'react';
+import { MetricComparePopover, type CompareRow } from './MetricComparePopover';
+import { rankByMetric } from '@/lib/utils/bid-compare';
+import { formatPct } from '@/lib/format';
+import type { Bid, MerchantTier } from '@/lib/types/bid';
+import type { FeeRow } from './focus-comparison-model';
+
+function FeeComparisonRowsImpl({
+  feeRows,
+  sortedBids,
+  active,
+  tier,
+  pgWsNameMap,
+  onSelect,
+}: {
+  feeRows: FeeRow[];
+  sortedBids: Bid[];
+  active: Bid;
+  tier: MerchantTier;
+  pgWsNameMap: Record<string, string>;
+  onSelect: (pgWsId: string) => void;
+}) {
+  return (
+    <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
+      {feeRows.map((row) => {
+        const ranked = rankByMetric(sortedBids, (b) => row.getValue(b, tier), 'lower');
+        const rows: CompareRow[] = ranked.map((r) => ({
+          bid: r.bid,
+          isBest: r.isBest,
+          valueText: r.value !== null ? formatPct(r.value) : '—',
+        }));
+        const activeValue = row.getValue(active, tier);
+        return (
+          <div key={row.key} className="py-2 flex items-center justify-between">
+            <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              {row.label}
+            </span>
+            <MetricComparePopover
+              label={row.label}
+              rows={rows}
+              activeBidId={active.id}
+              pgWsNameMap={pgWsNameMap}
+              baselineText={row.baseline}
+              onSelect={onSelect}
+            >
+              <span className="md-numeric text-[13px] font-[600] text-[var(--md-sys-color-on-surface)]">
+                {activeValue !== null ? formatPct(activeValue) : '—'}
+              </span>
+            </MetricComparePopover>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export const FeeComparisonRows = memo(FeeComparisonRowsImpl);
