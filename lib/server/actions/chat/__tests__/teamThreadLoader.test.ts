@@ -125,6 +125,26 @@ describe('loadTeamThread', () => {
     expect(r.messages[0].attachments[0].url).toBe(`/api/files/${attId}`);
   });
 
+  it('returns the team roster for mention autocomplete', async () => {
+    const me = await seedUser(db, { email: 'roster@b.com', name: '김구매' });
+    const teammate = await seedUser(db, { email: 'mate2@b.com', name: '이동료' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, teammate.id);
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+
+    sessionRef.value = {
+      user: { id: me.id, email: 'roster@b.com', workspaceId: ws.id, workspaceType: 'buyer' },
+    };
+
+    const r = await loadTeamThread(rfp.id);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.teamMembers.map((m) => m.userId).sort()).toEqual([me.id, teammate.id].sort());
+    const mate = r.teamMembers.find((m) => m.userId === teammate.id);
+    expect(mate?.name).toBe('이동료');
+  });
+
   it('returns UNAUTHENTICATED without a session', async () => {
     sessionRef.value = null;
     const r = await loadTeamThread(randomUUID());

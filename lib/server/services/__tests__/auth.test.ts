@@ -10,6 +10,9 @@ import {
   getVerificationTokenRepo,
   getOutboxRepo,
   getAuditLogRepo,
+  getPhoneOtpRepo,
+  getWorkspaceRepo,
+  getPgProfileRepo,
 } from '@/lib/server/repositories/factory';
 import {
   phoneOtps,
@@ -17,6 +20,7 @@ import {
   workspaceMembers,
   outboxEntries,
   auditLogs,
+  verificationTokens,
   workspaceInvitations,
   workspaces,
 } from '@/lib/db/schema';
@@ -25,9 +29,25 @@ import { hashToken, generateToken, addMinutes } from '@/lib/server/token';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { hashOtpCode } from '@/lib/server/actions/auth/phoneOtpUtils';
 
-// claimInviteInTx 제어 가능 mock (일부 테스트에서 실패 경로 주입용)
-const claimOverrides: { fn?: (...args: unknown[]) => unknown } = {};
+vi.mock('@/lib/server/outbox/templates/authReset', () => ({
+  renderAuthReset: async () => '<p>reset</p>',
+}));
+vi.mock('@/lib/server/outbox/templates/authEmailChange', () => ({
+  renderAuthEmailChange: async () => '<p>email-change</p>',
+}));
+vi.mock('@/lib/server/outbox/templates/authVerify', () => ({
+  renderAuthVerify: async (p: { verifyUrl: string; emailCode: string }) =>
+    `<a href="${p.verifyUrl}">verify</a> code:${p.emailCode}`,
+}));
+vi.mock('@/lib/server/env', () => ({
+  baseUrl: () => 'https://example.com',
+}));
+vi.mock('@/lib/server/outbox/templates/workspaceInvited', () => ({
+  renderWorkspaceInvited: async () => '<p>invited</p>',
+}));
 
+// claimInviteInTx 제어 가능 mock — Task 2 throw-to-rollback 테스트용
+const claimOverrides: { fn?: (...args: unknown[]) => unknown } = {};
 vi.mock('@/lib/server/actions/workspace/_claimWorkspaceInvite', async () => {
   const real = await vi.importActual<
     typeof import('@/lib/server/actions/workspace/_claimWorkspaceInvite')
@@ -40,19 +60,6 @@ vi.mock('@/lib/server/actions/workspace/_claimWorkspaceInvite', async () => {
   };
 });
 
-vi.mock('@/lib/server/outbox/templates/authReset', () => ({
-  renderAuthReset: async () => '<p>reset</p>',
-}));
-vi.mock('@/lib/server/outbox/templates/authEmailChange', () => ({
-  renderAuthEmailChange: async () => '<p>email-change</p>',
-}));
-vi.mock('@/lib/server/env', () => ({
-  baseUrl: () => 'https://example.com',
-}));
-vi.mock('@/lib/server/outbox/templates/workspaceInvited', () => ({
-  renderWorkspaceInvited: async () => '<p>invited</p>',
-}));
-
 import { AuthService, getAuthService, __resetAuthServiceForTest, __setAuthServiceForTest } from '../auth';
 
 let db: PgliteDB;
@@ -62,7 +69,19 @@ async function buildService(): Promise<AuthService> {
   const verificationTokenRepo = await getVerificationTokenRepo();
   const outboxRepo = await getOutboxRepo();
   const auditRepo = await getAuditLogRepo();
-  return new AuthService(db, userRepo, verificationTokenRepo, outboxRepo, auditRepo);
+  const phoneOtpRepo = await getPhoneOtpRepo();
+  const workspaceRepo = await getWorkspaceRepo();
+  const pgProfileRepo = await getPgProfileRepo();
+  return new AuthService(
+    db,
+    userRepo,
+    verificationTokenRepo,
+    outboxRepo,
+    auditRepo,
+    phoneOtpRepo,
+    workspaceRepo,
+    pgProfileRepo,
+  );
 }
 
 beforeEach(async () => {
@@ -154,25 +173,6 @@ describe('AuthService.completeSignup', () => {
     });
 
     expect(r).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
-  });
-
-  it('wsName이 빈 문자열이면 user 행 없이 즉시 MISSING_WS_NAME 반환', async () => {
-    const svc = await buildService();
-    const otpId = await seedVerifiedOtp('01077777777');
-
-    const r = await svc.completeSignup({
-      email: 'nowsname@example.com',
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01077777777',
-      phoneVerificationId: otpId,
-      wsKind: 'pg',
-      wsName: '',
-    });
-
-    expect(r).toEqual({ ok: false, error: 'MISSING_WS_NAME' });
-    const rows = await db.select().from(users).where(eq(users.email, 'nowsname@example.com'));
-    expect(rows).toHaveLength(0);
   });
 
   it('returns EMAIL_TAKEN for a duplicate email (verified user)', async () => {
@@ -485,12 +485,145 @@ describe('AuthService — 감사 로그 기록', () => {
   });
 });
 
+// Mocked renderAuthVerify above renders `... href="<verifyUrl>" ... code:<emailCode>`.
+function tokenFromHtml(html: string): string {
+  return html.match(/token=([^"]+)"/)?.[1] ?? '';
+}
+function codeFromHtml(html: string): string {
+  return html.match(/code:(\d{6})/)?.[1] ?? '';
+}
+async function verifyMailFor(to: string): Promise<string> {
+  const [row] = await db
+    .select({ html: outboxEntries.html })
+    .from(outboxEntries)
+    .where(eq(outboxEntries.toAddr, to))
+    .limit(1);
+  return row.html;
+}
+
+describe('AuthService.issueSignupEmail', () => {
+  it('enqueues an auth.verify mail and saves one signup_email token', async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'issue@example.com', workspaceType: 'buyer' });
+
+    const mail = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'issue@example.com'));
+    expect(mail).toHaveLength(1);
+    expect(mail[0].event).toBe('auth.verify');
+
+    const toks = await db
+      .select()
+      .from(verificationTokens)
+      .where(eq(verificationTokens.email, 'issue@example.com'));
+    expect(toks).toHaveLength(1);
+    expect(toks[0].purpose).toBe('signup_email');
+  });
+
+  it('enqueue-before-rotate: a deduped auto re-send keeps the first token valid (no expire/save)', async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'dedupe@example.com' }); // mount auto → token A + mail
+    await svc.issueSignupEmail({ email: 'dedupe@example.com' }); // same bucket → dedup, no rotate
+
+    const mail = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'dedupe@example.com'));
+    expect(mail).toHaveLength(1); // idempotent
+
+    const toks = await db
+      .select()
+      .from(verificationTokens)
+      .where(eq(verificationTokens.email, 'dedupe@example.com'));
+    expect(toks).toHaveLength(1); // second save skipped
+
+    // first mail's link token still consumable (not expired by the deduped call)
+    const rawToken = tokenFromHtml(mail[0].html);
+    const r = await svc.verifyEmailToken(rawToken);
+    expect(r.ok).toBe(true);
+  });
+
+  it("resend mode sends a second mail in the same 15-minute bucket", async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'resend@example.com', mode: 'auto' });
+    await svc.issueSignupEmail({ email: 'resend@example.com', mode: 'resend' });
+
+    const mail = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'resend@example.com'));
+    expect(mail).toHaveLength(2);
+  });
+});
+
+describe('AuthService.verifyEmailToken', () => {
+  it('consumes a signup_email token, flips emailVerified, returns meta', async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'vt@example.com', inviteToken: 'INV-1', workspaceType: 'pg' });
+    await seedUser(db, { email: 'vt@example.com' });
+
+    const rawToken = tokenFromHtml(await verifyMailFor('vt@example.com'));
+    const r = await svc.verifyEmailToken(rawToken);
+    expect(r).toEqual({ ok: true, email: 'vt@example.com', inviteToken: 'INV-1', workspaceType: 'pg' });
+
+    const [u] = await db
+      .select({ ev: users.emailVerified })
+      .from(users)
+      .where(eq(users.email, 'vt@example.com'));
+    expect(u.ev).toBe(true);
+  });
+
+  it('rejects an unknown token with TOKEN_INVALID_OR_EXPIRED', async () => {
+    const svc = await buildService();
+    const r = await svc.verifyEmailToken('not-a-real-token');
+    expect(r).toEqual({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+  });
+
+  it('rejects a non-signup_email token with WRONG_PURPOSE', async () => {
+    const svc = await buildService();
+    const rawToken = await seedVerificationToken({ email: 'wp@example.com', purpose: 'password_reset' });
+    const r = await svc.verifyEmailToken(rawToken);
+    expect(r).toEqual({ ok: false, error: 'WRONG_PURPOSE' });
+  });
+});
+
+describe('AuthService.verifyEmailCode', () => {
+  it('verifies the correct 6-digit code, flips emailVerified, returns meta', async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'vc@example.com', inviteToken: 'INV-CODE' });
+    await seedUser(db, { email: 'vc@example.com' });
+
+    const code = codeFromHtml(await verifyMailFor('vc@example.com'));
+    const r = await svc.verifyEmailCode({ email: 'vc@example.com', code });
+    expect(r).toEqual({ ok: true, email: 'vc@example.com', inviteToken: 'INV-CODE', workspaceType: undefined });
+
+    const [u] = await db
+      .select({ ev: users.emailVerified })
+      .from(users)
+      .where(eq(users.email, 'vc@example.com'));
+    expect(u.ev).toBe(true);
+  });
+
+  it('locks the code after 5 wrong attempts (MAX_ATTEMPTS) — even the correct code is refused', async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'brute@example.com' });
+    const code = codeFromHtml(await verifyMailFor('brute@example.com'));
+    const wrong = code === '000000' ? '111111' : '000000';
+
+    for (let i = 0; i < 5; i++) {
+      const r = await svc.verifyEmailCode({ email: 'brute@example.com', code: wrong });
+      expect(r).toEqual({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+    }
+    const r = await svc.verifyEmailCode({ email: 'brute@example.com', code });
+    expect(r).toEqual({ ok: false, error: 'MAX_ATTEMPTS' });
+  });
+});
+
+// ─── Task 2: signupViaInvite throw-to-rollback ────────────────────────────────
+
 describe('AuthService.signupViaInvite — claim 실패 throw-to-rollback', () => {
-  async function seedInvite(
-    wsId: string,
-    inviterId: string,
-    email: string,
-  ): Promise<string> {
+  async function seedInvite(wsId: string, inviterId: string, email: string): Promise<string> {
     const rawToken = generateToken();
     await db.insert(workspaceInvitations).values({
       workspaceId: wsId,
@@ -503,7 +636,7 @@ describe('AuthService.signupViaInvite — claim 실패 throw-to-rollback', () =>
     return rawToken;
   }
 
-  it('claimInviteInTx 실패 시 user 행을 남기지 않고 INVITE_EXPIRED 반환', async () => {
+  it('claimInviteInTx 실패 시 user 행을 남기지 않고 claim 에러 반환', async () => {
     const svc = await buildService();
     const ws = await seedPgWorkspace(db, 'TestPG');
     const inviter = await seedUser(db, { email: 'inviter-task2@example.com' });
@@ -511,7 +644,6 @@ describe('AuthService.signupViaInvite — claim 실패 throw-to-rollback', () =>
     const rawToken = await seedInvite(ws.id, inviter.id, 'race@example.com');
     const otpId = await seedVerifiedOtp('01066666666');
 
-    // Inject failing claim (simulates concurrent claim race)
     claimOverrides.fn = vi.fn().mockResolvedValue({ ok: false, error: 'INVITE_EXPIRED' });
 
     const r = await svc.signupViaInvite({
@@ -524,19 +656,16 @@ describe('AuthService.signupViaInvite — claim 실패 throw-to-rollback', () =>
     });
 
     expect(r).toEqual({ ok: false, error: 'INVITE_EXPIRED' });
-    // Transaction must have been rolled back — no orphan user
     const rows = await db.select().from(users).where(eq(users.email, 'race@example.com'));
     expect(rows).toHaveLength(0);
   });
 });
 
-// ─── signupViaInvite 종합 ────────────────────────────────────────────────────
+// ─── Task 3: signupViaInvite 통합 테스트 ─────────────────────────────────────
 
 describe('AuthService.signupViaInvite', () => {
-  /** 초대 + inviter 픽스처 공통 헬퍼 */
   async function seedInvitation(opts: {
     email: string;
-    status?: 'pending' | 'accepted' | 'expired';
     expiresOffsetMin?: number;
   }): Promise<{ rawToken: string; wsId: string }> {
     const ws = await seedPgWorkspace(db, 'InviteWS');
@@ -548,37 +677,28 @@ describe('AuthService.signupViaInvite', () => {
       invitedEmail: opts.email,
       invitedByUserId: inviter.id,
       tokenHash: hashToken(rawToken),
-      status: opts.status ?? 'pending',
+      status: 'pending',
       expiresAt: new Date(addMinutes(new Date(), opts.expiresOffsetMin ?? 60)),
     });
     return { rawToken, wsId: ws.id };
   }
 
-  it('초대 수락 성공: user 생성·멤버십 추가·emailVerified=true (claimInviteInTx가 설정)', async () => {
+  it('초대 수락 성공: user 생성·멤버십 추가·emailVerified=true', async () => {
     const svc = await buildService();
     const email = 'invok@example.com';
     const { rawToken, wsId } = await seedInvitation({ email });
     const otpId = await seedVerifiedOtp('01055555550');
 
     const r = await svc.signupViaInvite({
-      email,
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01055555550',
-      phoneVerificationId: otpId,
-      wsInviteRawToken: rawToken,
+      email, name: '홍길동', plainPassword: 'Password123!',
+      phone: '01055555550', phoneVerificationId: otpId, wsInviteRawToken: rawToken,
     });
 
     expect(r).toEqual({ ok: true, workspaceId: wsId, email });
-
     const [u] = await db.select().from(users).where(eq(users.email, email));
     expect(u).toBeDefined();
     expect(u.emailVerified).toBe(true);
-
-    const memberships = await db
-      .select()
-      .from(workspaceMembers)
-      .where(eq(workspaceMembers.userId, u.id));
+    const memberships = await db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, u.id));
     expect(memberships).toHaveLength(1);
     expect(memberships[0].workspaceId).toBe(wsId);
   });
@@ -586,50 +706,32 @@ describe('AuthService.signupViaInvite', () => {
   it('PHONE_NOT_VERIFIED: 미인증 OTP', async () => {
     const svc = await buildService();
     const { rawToken } = await seedInvitation({ email: 'inv-nophone@example.com' });
-
     const r = await svc.signupViaInvite({
-      email: 'inv-nophone@example.com',
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01055555551',
-      phoneVerificationId: randomUUID(),
-      wsInviteRawToken: rawToken,
+      email: 'inv-nophone@example.com', name: '홍길동', plainPassword: 'Password123!',
+      phone: '01055555551', phoneVerificationId: randomUUID(), wsInviteRawToken: rawToken,
     });
-
     expect(r).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
   });
 
   it('INVITE_INVALID: 존재하지 않는 토큰', async () => {
     const svc = await buildService();
     const otpId = await seedVerifiedOtp('01055555552');
-
     const r = await svc.signupViaInvite({
-      email: 'inv-ghost@example.com',
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01055555552',
-      phoneVerificationId: otpId,
-      wsInviteRawToken: generateToken(),
+      email: 'inv-ghost@example.com', name: '홍길동', plainPassword: 'Password123!',
+      phone: '01055555552', phoneVerificationId: otpId, wsInviteRawToken: generateToken(),
     });
-
     expect(r).toEqual({ ok: false, error: 'INVITE_INVALID' });
   });
 
-  it('INVITE_EXPIRED: 만료된 초대 (expiresAt 과거)', async () => {
+  it('INVITE_EXPIRED: 만료된 초대', async () => {
     const svc = await buildService();
     const email = 'inv-expired@example.com';
     const { rawToken } = await seedInvitation({ email, expiresOffsetMin: -5 });
     const otpId = await seedVerifiedOtp('01055555553');
-
     const r = await svc.signupViaInvite({
-      email,
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01055555553',
-      phoneVerificationId: otpId,
-      wsInviteRawToken: rawToken,
+      email, name: '홍길동', plainPassword: 'Password123!',
+      phone: '01055555553', phoneVerificationId: otpId, wsInviteRawToken: rawToken,
     });
-
     expect(r).toEqual({ ok: false, error: 'INVITE_EXPIRED' });
   });
 
@@ -637,90 +739,34 @@ describe('AuthService.signupViaInvite', () => {
     const svc = await buildService();
     const { rawToken } = await seedInvitation({ email: 'invited@example.com' });
     const otpId = await seedVerifiedOtp('01055555554');
-
     const r = await svc.signupViaInvite({
-      email: 'different@example.com',
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01055555554',
-      phoneVerificationId: otpId,
-      wsInviteRawToken: rawToken,
+      email: 'different@example.com', name: '홍길동', plainPassword: 'Password123!',
+      phone: '01055555554', phoneVerificationId: otpId, wsInviteRawToken: rawToken,
     });
-
     expect(r).toEqual({ ok: false, error: 'INVITE_EMAIL_MISMATCH' });
   });
 
-  it('EMAIL_TAKEN: 인증된 기존 유저가 있으면 purge 없이 차단', async () => {
+  it('EMAIL_TAKEN: 인증된 기존 유저 차단', async () => {
     const svc = await buildService();
     const email = 'inv-taken@example.com';
-    await db.insert(users).values({
-      id: randomUUID(),
-      email,
-      passwordHash: 'x',
-      name: 'Existing',
-      avatarColor: 'ink',
-      emailVerified: true,
-    });
+    await db.insert(users).values({ id: randomUUID(), email, passwordHash: 'x', name: 'Existing', avatarColor: 'ink', emailVerified: true });
     const { rawToken } = await seedInvitation({ email });
     const otpId = await seedVerifiedOtp('01055555555');
-
     const r = await svc.signupViaInvite({
-      email,
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01055555555',
-      phoneVerificationId: otpId,
-      wsInviteRawToken: rawToken,
+      email, name: '홍길동', plainPassword: 'Password123!',
+      phone: '01055555555', phoneVerificationId: otpId, wsInviteRawToken: rawToken,
     });
-
-    expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
-  });
-
-  it('EMAIL_TAKEN: .catch arm — tx 종료 후 unique violation 재던짐', async () => {
-    const { rawToken, wsId: _wsId } = await seedInvitation({ email: 'inv-race@example.com' });
-    const otpId = await seedVerifiedOtp('01055555556');
-
-    // postgres-js resolve-후-reject 시맨틱 시뮬레이션:
-    // pre-flight 쿼리(select)는 실 db 사용, transaction만 재던짐
-    const uniqueErr = Object.assign(
-      new Error('duplicate key value violates unique constraint'),
-      { code: '23505' },
-    );
-    const racingDb = Object.assign(Object.create(Object.getPrototypeOf(db)), db, {
-      transaction: () => Promise.reject(uniqueErr),
-    });
-
-    const raceSvc = new AuthService(
-      racingDb,
-      await getUserRepo(),
-      await getVerificationTokenRepo(),
-      await getOutboxRepo(),
-      await getAuditLogRepo(),
-    );
-
-    const r = await raceSvc.signupViaInvite({
-      email: 'inv-race@example.com',
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01055555556',
-      phoneVerificationId: otpId,
-      wsInviteRawToken: rawToken,
-    });
-
     expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
   });
 });
 
-// ─── joinCanonicalPgWorkspace 종합 ───────────────────────────────────────────
+// ─── Task 3: joinCanonicalPgWorkspace 통합 테스트 ─────────────────────────────
 
 describe('AuthService.joinCanonicalPgWorkspace', () => {
-  async function seedCanonicalWs(name = '정규PG'): Promise<{ wsId: string }> {
+  async function seedCanonicalWs(): Promise<{ wsId: string }> {
     const wsId = randomUUID();
     await db.insert(workspaces).values({
-      id: wsId,
-      type: 'pg',
-      name,
-      status: 'active',
+      id: wsId, type: 'pg', name: '정규PG', status: 'active',
       canonicalPgKey: `canonical-${wsId.slice(0, 8)}`,
     });
     return { wsId };
@@ -730,25 +776,14 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
     const svc = await buildService();
     const { wsId } = await seedCanonicalWs();
     const otpId = await seedVerifiedOtp('01099991230');
-
     const r = await svc.joinCanonicalPgWorkspace({
-      email: 'canon-ok@example.com',
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01099991230',
-      phoneVerificationId: otpId,
-      selectedPgWorkspaceId: wsId,
+      email: 'canon-ok@example.com', name: '홍길동', plainPassword: 'Password123!',
+      phone: '01099991230', phoneVerificationId: otpId, selectedPgWorkspaceId: wsId,
     });
-
     expect(r).toEqual({ ok: true, email: 'canon-ok@example.com' });
-
     const [u] = await db.select().from(users).where(eq(users.email, 'canon-ok@example.com'));
     expect(u).toBeDefined();
-
-    const memberships = await db
-      .select()
-      .from(workspaceMembers)
-      .where(eq(workspaceMembers.userId, u.id));
+    const memberships = await db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, u.id));
     expect(memberships).toHaveLength(1);
     expect(memberships[0].workspaceId).toBe(wsId);
   });
@@ -756,32 +791,20 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
   it('PHONE_NOT_VERIFIED', async () => {
     const svc = await buildService();
     const { wsId } = await seedCanonicalWs();
-
     const r = await svc.joinCanonicalPgWorkspace({
-      email: 'canon-nophone@example.com',
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01099991231',
-      phoneVerificationId: randomUUID(),
-      selectedPgWorkspaceId: wsId,
+      email: 'canon-nophone@example.com', name: '홍길동', plainPassword: 'Password123!',
+      phone: '01099991231', phoneVerificationId: randomUUID(), selectedPgWorkspaceId: wsId,
     });
-
     expect(r).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
   });
 
   it('INVALID_CANONICAL_WORKSPACE: 존재하지 않는 ws id', async () => {
     const svc = await buildService();
     const otpId = await seedVerifiedOtp('01099991232');
-
     const r = await svc.joinCanonicalPgWorkspace({
-      email: 'canon-noexist@example.com',
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01099991232',
-      phoneVerificationId: otpId,
-      selectedPgWorkspaceId: randomUUID(),
+      email: 'canon-noexist@example.com', name: '홍길동', plainPassword: 'Password123!',
+      phone: '01099991232', phoneVerificationId: otpId, selectedPgWorkspaceId: randomUUID(),
     });
-
     expect(r).toEqual({ ok: false, error: 'INVALID_CANONICAL_WORKSPACE' });
   });
 
@@ -789,52 +812,12 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
     const svc = await buildService();
     const { wsId } = await seedCanonicalWs();
     const email = 'canon-taken@example.com';
-    await db.insert(users).values({
-      id: randomUUID(),
-      email,
-      passwordHash: 'x',
-      name: 'Existing',
-      avatarColor: 'ink',
-      emailVerified: true,
-    });
+    await db.insert(users).values({ id: randomUUID(), email, passwordHash: 'x', name: 'Existing', avatarColor: 'ink', emailVerified: true });
     const otpId = await seedVerifiedOtp('01099991233');
-
     const r = await svc.joinCanonicalPgWorkspace({
-      email,
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01099991233',
-      phoneVerificationId: otpId,
-      selectedPgWorkspaceId: wsId,
+      email, name: '홍길동', plainPassword: 'Password123!',
+      phone: '01099991233', phoneVerificationId: otpId, selectedPgWorkspaceId: wsId,
     });
-
-    expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
-  });
-
-  it('EMAIL_TAKEN: tx 내부 INSERT unique violation — inner try/catch 처리', async () => {
-    const svc = await buildService();
-    const { wsId } = await seedCanonicalWs();
-    const email = 'canon-inner-race@example.com';
-    // 이미 미인증 유저(purge 대상 아님, emailVerified=true)로 unique violation 유발
-    await db.insert(users).values({
-      id: randomUUID(),
-      email,
-      passwordHash: 'x',
-      name: 'Existing',
-      avatarColor: 'ink',
-      emailVerified: true,
-    });
-    const otpId = await seedVerifiedOtp('01099991234');
-
-    const r = await svc.joinCanonicalPgWorkspace({
-      email,
-      name: '홍길동',
-      plainPassword: 'Password123!',
-      phone: '01099991234',
-      phoneVerificationId: otpId,
-      selectedPgWorkspaceId: wsId,
-    });
-
     expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
   });
 });

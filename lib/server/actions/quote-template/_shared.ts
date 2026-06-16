@@ -2,12 +2,10 @@
 //
 // Templates (`bid_quote_templates`) are PG-workspace-shared: any member of a PG
 // workspace can save/list/edit/delete that workspace's templates. The security
-// invariant is cross-workspace isolation — enforced here via the active PG
-// session workspace, mirroring chat/_shared's requireActiveWorkspace +
-// requireOwnedTemplate pattern (but PG-only).
+// invariant is cross-workspace isolation. The session boundary lives here
+// (requirePgWorkspace, PG-only); the cross-workspace ownership guard + the cap
+// now live in QuoteTemplateService.
 import { requirePgSession } from '@/lib/auth/session';
-import { getBidQuoteTemplateRepo } from '@/lib/server/repositories/factory';
-import type { BidQuoteTemplate } from '@/lib/server/repositories/types';
 
 // Discriminated result, structurally identical to the chat/bid action result.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -31,21 +29,4 @@ export async function requirePgWorkspace(): Promise<
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'FORBIDDEN_PG' };
   }
-}
-
-// Load a template owned by the session's active PG workspace (cross-workspace
-// guard for update/delete). Returns TEMPLATE_NOT_FOUND when absent, FORBIDDEN
-// when it belongs to another workspace.
-export async function requireOwnedQuoteTemplate(
-  templateId: string,
-): Promise<
-  | { ok: true; template: BidQuoteTemplate; workspaceId: string }
-  | { ok: false; error: string }
-> {
-  const ws = await requirePgWorkspace();
-  if (!ws.ok) return ws;
-  const template = await (await getBidQuoteTemplateRepo()).findById(templateId);
-  if (!template) return { ok: false, error: 'TEMPLATE_NOT_FOUND' };
-  if (template.pgWsId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
-  return { ok: true, template, workspaceId: ws.workspaceId };
 }

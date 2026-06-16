@@ -10,7 +10,7 @@ import { ChannelTalkHideButton } from '@/components/shell/ChannelTalkHideButton'
 import { auth } from '@/auth';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { resolveShellAccess } from '@/lib/auth/shell-access';
-import { getDbSessionVersion } from '@/lib/auth/session-version-db';
+import { getDbSessionVersion, getDbEmailVerified } from '@/lib/auth/session-version-db';
 import { setSentryUser } from '@/lib/observability/sentry-user';
 import { appOrigins, resolveHostRedirect } from '@/lib/site-routing';
 
@@ -51,9 +51,18 @@ export default async function AppLayout({
       }
     : undefined;
 
+  // Email-verification gate input — read live from the DB (NOT the JWT) so a
+  // just-completed verification reflects without re-login. Only fetched when a
+  // membership exists; with no membership resolveShellAccess returns /logout
+  // before the email gate is even consulted, so the read would be wasted.
+  const emailVerified =
+    session?.user?.id && workspaces.length > 0
+      ? await getDbEmailVerified(session.user.id)
+      : undefined;
+
   // The redirect-loop contract (incomplete-but-authenticated → /logout, never
   // /login) lives in lib/auth/shell-access.ts and is enforced by its unit test.
-  const decision = resolveShellAccess(session, workspaces, sessionVersions);
+  const decision = resolveShellAccess(session, workspaces, sessionVersions, emailVerified);
   if (decision.kind === 'redirect') {
     redirect(decision.to);
   }

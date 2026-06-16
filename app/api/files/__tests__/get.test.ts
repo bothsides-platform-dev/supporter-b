@@ -39,8 +39,10 @@ vi.mock('@/auth', () => ({
 }));
 // 폐기 세션(sv stale) 차단용 — requireSession 미사용 라우트도 동일 기준 적용.
 const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
+const getDbEmailVerifiedMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/auth/session-version-db', () => ({
   getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
+  getDbEmailVerified: (...a: unknown[]) => getDbEmailVerifiedMock(...a),
 }));
 
 
@@ -52,19 +54,18 @@ beforeEach(async () => {
   __resetStorageForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
-  // The GET route shares the same global override key as the upload route.
-  const upload = await import('../upload/route');
-  upload.__setFilesDbForTest(db);
+  // canAccessAttachment resolves the owner chain through the repository
+  // factory (configured by __useDrizzleWithDbForTest) — no raw db handle.
   storage = new InMemoryStorage();
   __setStorageForTest(storage);
   sessionRef.value = null;
   getDbSessionVersionMock.mockReset();
   getDbSessionVersionMock.mockResolvedValue(1);
+  getDbEmailVerifiedMock.mockReset();
+  getDbEmailVerifiedMock.mockResolvedValue(true);
 });
 
 afterEach(async () => {
-  const upload = await import('../upload/route');
-  upload.__setFilesDbForTest(undefined);
   __setStorageForTest(undefined);
   __resetStorageForTest();
   __resetForTest();
@@ -146,6 +147,17 @@ describe('GET /api/files/[id]', () => {
     const s = await seedScenario();
     const r = await callGet(s.attachmentId);
     expect(r.status).toBe(401);
+  });
+
+  it('403 when email not verified', async () => {
+    sessionRef.value = { user: { id: 'user-1', email: 'u@x.com', sessionVersion: 1 } };
+    getDbEmailVerifiedMock.mockResolvedValue(false);
+    const { GET } = await import('../[id]/route');
+    const r = await GET(
+      new Request('http://localhost/api/files/any-id'),
+      { params: Promise.resolve({ id: 'any-id' }) }
+    );
+    expect(r.status).toBe(403);
   });
 
   it('404 when attachment row not found', async () => {

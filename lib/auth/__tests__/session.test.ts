@@ -12,15 +12,19 @@ vi.mock('@/auth', () => ({
 }));
 
 const getDbSessionVersionMock = vi.fn();
+const getDbEmailVerifiedMock = vi.fn();
 vi.mock('@/lib/auth/session-version-db', () => ({
   getDbSessionVersion: (userId: string) => getDbSessionVersionMock(userId),
+  getDbEmailVerified: (userId: string) => getDbEmailVerifiedMock(userId),
 }));
 
-import { requireSession, isSessionRevoked } from '../session';
+import { requireSession, isSessionRevoked, isEmailUnverified } from '../session';
 
 beforeEach(() => {
   authMock.mockReset();
   getDbSessionVersionMock.mockReset();
+  getDbEmailVerifiedMock.mockReset();
+  getDbEmailVerifiedMock.mockResolvedValue(true); // default: 인증 완료
 });
 
 describe('requireSession — sessionVersion revocation', () => {
@@ -84,6 +88,45 @@ describe('isSessionRevoked — API 라우트용 폐기 판정', () => {
     getDbSessionVersionMock.mockResolvedValue(1);
     await expect(
       isSessionRevoked({ user: { id: 'u-1', email: 'a@b.c' } } as never),
+    ).resolves.toBe(false);
+  });
+});
+
+describe('requireSession — emailVerified gate', () => {
+  it('이메일 미인증 사용자 → EMAIL_UNVERIFIED', async () => {
+    authMock.mockResolvedValue({
+      user: { id: 'u-1', email: 'a@b.c', sessionVersion: 1 },
+    });
+    getDbSessionVersionMock.mockResolvedValue(1);
+    getDbEmailVerifiedMock.mockResolvedValue(false);
+    await expect(requireSession()).rejects.toThrow('EMAIL_UNVERIFIED');
+  });
+
+  it('인증 완료 + sv 일치 → 세션 반환', async () => {
+    const session = { user: { id: 'u-1', email: 'a@b.c', sessionVersion: 1 } };
+    authMock.mockResolvedValue(session);
+    getDbSessionVersionMock.mockResolvedValue(1);
+    getDbEmailVerifiedMock.mockResolvedValue(true);
+    await expect(requireSession()).resolves.toBe(session);
+  });
+});
+
+describe('isEmailUnverified', () => {
+  it('세션 없음 → true', async () => {
+    await expect(isEmailUnverified(null)).resolves.toBe(true);
+  });
+
+  it('미인증(getDbEmailVerified=false) → true', async () => {
+    getDbEmailVerifiedMock.mockResolvedValue(false);
+    await expect(
+      isEmailUnverified({ user: { id: 'u-1' } } as never),
+    ).resolves.toBe(true);
+  });
+
+  it('인증 완료(getDbEmailVerified=true) → false', async () => {
+    getDbEmailVerifiedMock.mockResolvedValue(true);
+    await expect(
+      isEmailUnverified({ user: { id: 'u-1' } } as never),
     ).resolves.toBe(false);
   });
 });

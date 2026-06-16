@@ -1,0 +1,18 @@
+# Auto-resolve the files that parallel `/ship` runs collide on.
+#
+# Two feature branches that ship at the same time both bump the version to the
+# same next slot, so merging the second one conflicts on these three files.
+# These attributes make those conflicts resolve automatically.
+
+# CHANGELOG: keep BOTH new sections instead of conflicting (built-in `union`
+# driver — honored locally and by GitHub server-side merges).
+CHANGELOG.md merge=union
+
+# VERSION + package.json "version": take the HIGHER semver. Custom driver
+# `semver-max`, registered per-clone by scripts/git/install-merge-drivers.mjs
+# (run automatically by the `prepare` npm script). Runs on local merges only —
+# GitHub's server-side merge does not run custom drivers, so re-running /ship
+# (which merges the base branch locally in Step 3) is what applies it on the
+# losing PR. See scripts/git/version-merge.mjs.
+VERSION merge=semver-max
+package.json merge=semver-max

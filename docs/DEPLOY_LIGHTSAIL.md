@@ -163,11 +163,19 @@ NEXT_PUBLIC_CENTRIFUGO_WS_URL=ws://localhost:8000/connection/websocket
 
 앱은 액션 커밋 직후 outbox 를 즉시 flush(`after()` post-commit)한다. 하지만 채팅 알림 메일은 폭주 방지를 위해 윈도우가 끝나는 미래 시각으로 **지연 예약**(scheduled_at)되며, 그 시점엔 보통 어떤 액션도 돌고 있지 않다 → post-commit flush 가 그 행을 집어 보낼 수 없다. 그래서 **매 1분 crontab** 이 `POST /api/cron/flush-outbox` 를 쳐서 (1) 일반 pending 메일과 (2) due 가 된 chat 다이제스트를 비운다. 라우트는 발송 시점에 본문을 재계산하므로 그 사이 수신자가 온라인이 되거나 다 읽었으면 발송을 취소한다.
 
-crontab 에 1분 주기로 등록 (`crontab -e`). 시크릿은 **crontab 상단에 한 줄로 정의**해야 cron 이 명령 환경으로 export 하고 안쪽 셸이 이를 펼친다:
+### 일괄 발송(batch) + rate-limit 회피
+
+Resend 기본 한도는 **초당 2요청**이라 한 RFP 초대(PG 여러 곳 × 담당자)나 입찰 도착 fan-out 이 메일을 건당 연속 발사하면 다수가 429 로 실패했다. 일반 outbox flush 는 이제 청구한 행 전체를 Resend **batch.send**(콜당 최대 100통, rate-limit 상 **1요청**)로 묶어 보낸다 → N통 fan-out 이 ceil(N/100) 콜로 줄어든다. 실패 행은 일시 오류(429/5xx/네트워크)면 **지수 백오프**로 재예약·재시도하고, 영구 오류(잘못된 주소·미인증 발신 도메인·검증 실패)면 즉시 `failed` 로 종결한다(잔여 시도 낭비 방지). 코알레스되는 chat/team 다이제스트는 발송 시 본문을 재계산해야 해 단건 발송을 유지하되 동일한 백오프/분류를 적용한다.
+
+튜닝 env(전부 선택, 기본값 안전): `EMAIL_BATCH_SIZE`(기본 100, 100 상한) · `EMAIL_BATCH_INTERVAL_MS`(기본 600 — 한 flush 내 배치 콜 사이 간격) · `EMAIL_RETRY_BASE_MS`(기본 30000) · `EMAIL_RETRY_CAP_MS`(기본 1800000). 별도 워커 프로세스는 불필요 — 기존 post-commit + 1분 cron 토폴로지 그대로다. 추가 헤드룸이 필요하면 Resend 대시보드에서 rate-limit 상향을 요청하면 된다.
+
+> **메일 실패는 인앱 알림에 영향 없음.** 도메인 이벤트는 인앱 알림 행과 outbox 메일 행을 같은 트랜잭션에서 함께 커밋하고, 발송 실패 처리(`markResult`)는 `outbox_entries` 만 갱신한다 → 메일이 끝내 실패해도 사용자의 인앱 알림·읽음 상태는 그대로 유지된다(회귀 테스트 `email-failure-decoupling.test.ts` 로 고정).
+
+crontab 에 1분 주기로 등록 (`crontab -e`). 시크릿은 **crontab 상단에 한 줄로 정의**해야 cron 이 명령 환경으로 export 하고 안쪽 셸이 이를 펼친다. `flock -n` 로 감싸 **이전 tick 의 flush 가 아직 안 끝났으면 이번 tick 은 건너뛴다** — chat/team 다이제스트 처리기는 lease 없이 due 행을 읽으므로, 1분 안에 안 끝나는 대량 drain 이 다음 cron 과 겹치면 같은 다이제스트가 두 번 발송될 수 있다(일반 flush 는 SKIP-LOCKED+lease 로 안전):
 
 ```cron
 CRON_SECRET=붙여넣을-시크릿
-* * * * * curl -fsS -XPOST localhost:3000/api/cron/flush-outbox -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
+* * * * * flock -n /tmp/flush-outbox.lock curl -fsS -XPOST localhost:3000/api/cron/flush-outbox -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
 ```
 
 > **주의 — cron 은 셸 프로필도 `.env.production` 도 읽지 않는다.** 시크릿은 위처럼 **crontab 상단 한 줄**(또는 `/etc/cron.d/` 파일 상단의 `CRON_SECRET=...`)로 정의한다. ⚠️ `* * * * * CRON_SECRET=… curl … -H "x-cron-secret: $CRON_SECRET"` 처럼 **명령 줄 앞에 인라인 대입**하는 형태는 동작하지 않는다 — POSIX 셸은 대입을 적용하기 *전에* `$CRON_SECRET` 를 (아직 비어 있는) 현재 환경으로 펼치므로 빈 헤더가 간다. 빈 값이면 라우트가 fail-closed 로 401 → **메일이 조용히 안 나간다**(우회는 안 되지만 flush 도 안 됨). 정 인라인 대입이 싫고 변수도 안 쓰고 싶으면 헤더에 시크릿 리터럴을 직접 박아도 된다(시크릿은 어차피 같은 호스트 `.env.production` 에 있다). 값은 `.env.production` 의 `CRON_SECRET` 와 **동일**해야 하고, 헤더 이름은 `x-cron-secret` 로 라우트와 정확히 일치시킬 것.
@@ -257,7 +265,7 @@ crontab -e
 
 ```cron
 CRON_SECRET=<.env.production 의 CRON_SECRET 와 동일한 값>
-* * * * * curl -fsS -XPOST localhost:3000/api/cron/flush-outbox -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
+* * * * * flock -n /tmp/flush-outbox.lock curl -fsS -XPOST localhost:3000/api/cron/flush-outbox -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
 ```
 
 > `CRON_SECRET=` 는 **명령줄 앞 인라인이 아닌 상단 한 줄**로 정의. 인라인 방식은 빈 값으로 펼쳐져 401이 됨 — §이메일 큐 주기 flush 참조.

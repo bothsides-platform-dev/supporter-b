@@ -4,8 +4,9 @@ import { eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest, __useDrizzleWithDbForTest,
+  getAttachmentRepo,
   getBidRepo, getBizProfileRepo, getContractRepo, getInvitationRepo,
-  getOutboxRepo, getPgRequestRepo, getRfpRepo, getWorkspaceRepo,
+  getOutboxRepo, getPgRequestRepo, getRfpAllowedPgRepo, getRfpRepo, getWorkspaceRepo,
   getRfpRequoteRequestRepo,
   getAuditLogRepo,
 } from '@/lib/server/repositories/factory';
@@ -19,12 +20,13 @@ let db: PgliteDB;
 let service: RfpService;
 
 async function buildService(): Promise<RfpService> {
-  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo] =
+  const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo] =
     await Promise.all([
       getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
       getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(), getAuditLogRepo(),
+      getRfpAllowedPgRepo(), getAttachmentRepo(),
     ]);
-  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo);
+  return new RfpService(db, rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo);
 }
 
 beforeEach(async () => {

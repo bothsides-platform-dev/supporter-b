@@ -17,6 +17,7 @@ import {
   seedBuyerWorkspace,
   seedMembership,
   seedPgWorkspace,
+  seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
@@ -306,6 +307,25 @@ describe('loadConversationThread', () => {
     expect(thread.messages.map((m) => m.authorName)).toEqual(['구매사담당', 'PG영업']);
     expect(thread.messages.map((m) => m.authorEmail)).toEqual(['buyer@b.com', 'sales@pg.com']);
     expect(thread.viewer).toEqual({ userId: buyerUser.id, name: '구매사담당' });
+  });
+
+  it('loadConversationThread returns rfpById map for rfpIds present in the thread', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    // Seed an RFP owned by the buyer workspace.
+    const rfp = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyerUser.id });
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'RFP 관련 메시지',
+      rfpId: rfp.id,
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    const thread = await loadConversationThread(sent.conversationId);
+    expect(thread.ok).toBe(true);
+    if (!thread.ok) return;
+    expect(thread.rfpById[rfp.id]).toEqual({ code: rfp.code, title: 'RFP' });
   });
 
   it('a co-member of the viewer workspace reading does NOT flip readByCounterparty (only the counterparty workspace counts)', async () => {
