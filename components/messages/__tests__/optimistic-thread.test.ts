@@ -81,4 +81,31 @@ describe('applyLiveEcho', () => {
     const out = applyLiveEcho([pending('tmp')], 'real-1', true, undefined as unknown as string);
     expect(out?.[0].createdAt).toBe('T0');
   });
+
+  // ── tempId 정확 매칭 (멀티탭 echo 오인 승격 방지) ─────────────────────────────
+  // tempId 를 제공하면 첫 pending 이 아닌 id 가 정확히 일치하는 행만 승격한다.
+
+  it('promotes the SPECIFIC pending bubble matching tempId, leaves others pending', () => {
+    // 두 탭이 동시 전송: tmp-a 와 tmp-b 각각 pending. echo 는 tmp-b 소유.
+    const msgs = [pending('tmp-a'), pending('tmp-b')];
+    const out = applyLiveEcho(msgs, 'real-2', true, 'TS', 'tmp-b');
+    expect(out).toEqual([
+      pending('tmp-a'),
+      { id: 'real-2', pending: false, createdAt: 'TS', body: 'hi' },
+    ]);
+  });
+
+  it('returns null when tempId is provided but no pending with that id (multi-tab no-op)', () => {
+    // 이 탭의 pending 은 tmp-Y 이고, echo 의 tempId 는 tmp-X(다른 탭 소유).
+    // 승격 대상이 없으므로 null 반환 → 호출처가 새 메시지를 append.
+    const msgs = [pending('tmp-Y')];
+    const out = applyLiveEcho(msgs, 'real-2', true, 'TS', 'tmp-X');
+    expect(out).toBeNull();
+  });
+
+  it('falls back to first-pending match when tempId is omitted (backward compat)', () => {
+    // tempId 없이 호출: 기존 동작 유지 — 첫 pending 을 승격.
+    const out = applyLiveEcho([pending('tmp')], 'real-1', true, 'TS');
+    expect(out).toEqual([{ id: 'real-1', pending: false, createdAt: 'TS', body: 'hi' }]);
+  });
 });

@@ -13,6 +13,8 @@ const Input = z
     rfpId: z.string().uuid(),
     body: z.string().max(4000).default(''),
     attachmentIds: z.array(z.string().uuid()).max(20).default([]),
+    /** 낙관적 말풍선 상관관계 id — 멀티탭 self-echo 정확 매칭에 사용. max 64자. */
+    tempId: z.string().max(64).optional(),
   })
   .strict();
 
@@ -56,6 +58,7 @@ export async function sendTeamMessageAction(
     authorName: result.authorName,
     createdAt: result.createdAt,
     attachments: result.attachments,
+    tempId: parsed.data.tempId ?? null,
   }).catch(() => {});
 
   return {

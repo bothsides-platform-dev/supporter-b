@@ -65,10 +65,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
   });
   const [sending, setSending] = useState(false);
 
-  // RfpContext.code carries the RFP *uuid* at all embed sites (e.g.
-  // RfpBriefPanel passes `code: rfp.id`); sendChatMessageAction expects a uuid
-  // rfpId, so the tag wires straight through.
-  const rfpId = rfpContext?.code;
+  const rfpId = rfpContext?.id;
 
   function resetDraftState() {
     setDraft('');

@@ -31,17 +31,23 @@ export function removeMessage<M extends { id: string }>(messages: M[], tempId: s
 }
 
 // 라이브 echo 수신: 같은 id 가 이미 있으면 원본 배열 그대로 반환(중복 무시 → React bail).
-// 본인 echo 면 진행 중 pending 말풍선을 확정 승격(append 하면 중복). 둘 다 아니면
+// 본인 echo 면 pending 말풍선을 확정 승격(append 하면 중복). 둘 다 아니면
 // null 반환 → 호출처가 자기 뷰모델로 새 메시지를 append.
+//
+// tempId 가 있으면 그 id 를 가진 pending 만 승격(멀티탭 정확 매칭).
+// 없으면 첫 pending 폴백(구 서버 하위호환 — echo 에 tempId 없을 때).
 export function applyLiveEcho<M extends Reconcilable>(
   messages: M[],
   realId: string,
   isSelf: boolean,
   createdAt: string,
+  tempId?: string,
 ): M[] | null {
   if (messages.some((m) => m.id === realId)) return messages;
   if (isSelf) {
-    const idx = messages.findIndex((m) => m.pending);
+    const idx = tempId
+      ? messages.findIndex((m) => m.id === tempId)
+      : messages.findIndex((m) => m.pending);
     if (idx >= 0) {
       const next = messages.slice();
       // 서버 권위 타임스탬프 채택 — 리로드 후 로더 렌더와 일치.

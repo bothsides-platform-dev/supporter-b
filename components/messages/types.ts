@@ -31,6 +31,10 @@ export type Counterparty = {
 };
 
 export type RfpContext = {
-  code: string;
-  title: string;
+  /** 전송용 RFP uuid — 화면에 렌더하지 않음. */
+  id: string;
+  /** 사람이 읽는 RFP 코드 (e.g. P-2605-0042) — 있을 때만 표시. */
+  code?: string;
+  /** RFP 제목 — 있을 때만 표시. */
+  title?: string;
 };

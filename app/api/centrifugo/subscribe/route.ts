@@ -35,6 +35,8 @@
  * generic deny. We never distinguish "not found" from "forbidden": doing so
  * would leak whether a conversation exists, breaking the privacy invariant.
  */
+import { timingSafeEqual } from 'node:crypto';
+
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -48,6 +50,7 @@ import {
   chatChannel,
   TEAM_CHANNEL_PREFIX,
 } from '@/lib/server/realtime/centrifugo';
+import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -74,6 +77,21 @@ const ProxySchema = z.object({
 });
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // env-gated 공유 비밀 헤더 — 설정 시에만 검사(하위호환). 길이·값 모두 상수시간으로
+  // 비교해 타이밍 오라클 차단: envBuf 길이로 cmpBuf 를 먼저 할당한 뒤 hdBytes 를
+  // 복사(초과 분 절사·부족 분 \0 패딩), timingSafeEqual 을 항상 실행한다.
+  const envSecret = process.env.CENTRIFUGO_PROXY_SECRET;
+  if (envSecret) {
+    const headerVal = request.headers.get('X-Centrifugo-Proxy-Secret') ?? '';
+    const envBuf = Buffer.from(envSecret);
+    const hdBytes = Buffer.from(headerVal);
+    const cmpBuf = Buffer.alloc(envBuf.length, 0);
+    hdBytes.copy(cmpBuf); // excess truncated, shortfall zero-padded
+    const byteMatch = timingSafeEqual(envBuf, cmpBuf); // always runs
+    const lenMatch = hdBytes.length === envBuf.length;
+    if (!byteMatch || !lenMatch) return deny();
+  }
+
   let payload: unknown;
   try {
     payload = await request.json();
@@ -131,12 +149,9 @@ async function authorizeTeamChannel(
     const wsRepo = await getWorkspaceRepo();
     if (!(await wsRepo.isMember(user, workspaceId))) return deny();
 
-    const rfp = await (await getRfpRepo()).findById(rfpId);
-    if (!rfp) return deny();
-    if (rfp.buyerWsId === workspaceId) return allow();
-
-    const invited = await (await getInvitationRepo()).canAccess(rfpId, workspaceId);
-    return invited ? allow() : deny();
+    const [rfpRepo, invRepo] = await Promise.all([getRfpRepo(), getInvitationRepo()]);
+    const access = await canWorkspaceAccessRfp(rfpRepo, invRepo, rfpId, workspaceId);
+    return access.allowed ? allow() : deny();
   } catch {
     // Any unexpected error → deny (fail closed). Never leak details.
     return deny();

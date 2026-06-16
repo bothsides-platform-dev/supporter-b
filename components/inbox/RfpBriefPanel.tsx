@@ -61,7 +61,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
           <CounterpartyProfileCard
             variant="avatar"
             counterparty={{ name: buyerName, type: 'buyer', workspaceId: rfp.buyerWsId }}
-            rfpContext={{ code: rfp.id, title: rfp.title }}
+            rfpContext={{ id: rfp.id, title: rfp.title }}
           />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">

@@ -1,7 +1,7 @@
 'use client';
 
-import { use } from 'react';
-import { getThreadPromise } from './thread-cache';
+import { use, useEffect } from 'react';
+import { getThreadPromise, invalidateThread } from './thread-cache';
 import { ThreadView } from './ThreadView';
 
 export function ThreadPane({
@@ -25,6 +25,10 @@ export function ThreadPane({
   /** 샘플 RFP — 컴포저 전송 차단(데모 PG 에게 실제 전송 방지). */
   sendDisabled?: boolean;
 }) {
+  // unmount/conversationId 변경 시 캐시 무효화 → 재진입마다 신선한 스레드.
+  // TeamThreadPane 의 동일 패턴 이식(team-thread-cache.ts invalidateTeamThread).
+  useEffect(() => () => invalidateThread(conversationId), [conversationId]);
+
   const result = use(getThreadPromise(conversationId));
   const counterparty = result.ok ? result.counterparty : counterpartyFallback;
   const messages = result.ok ? result.messages : [];
