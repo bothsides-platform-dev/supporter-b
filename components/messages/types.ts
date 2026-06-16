@@ -13,6 +13,38 @@ export type {
   LoadThreadResult,
 } from '@/lib/server/actions/chat/conversationLoaders';
 
+import type { WorkspaceType } from '@/lib/types/workspace';
+
+/**
+ * 인박스 목록 아이템 — 상대방 채팅(counterparty)과 팀 내부 채팅(team)의
+ * 판별 합집합(discriminated union). key 는 목록 고유 식별자.
+ */
+export type InboxListItem =
+  | {
+      kind: 'counterparty';
+      key: string;
+      conversationId: string;
+      counterparty: { workspaceId: string; name: string; type: WorkspaceType; hasLogo: boolean };
+      rfpId: string | null;
+      rfpCode: string | null;
+      rfpTitle: string | null;
+      rfpStatus: string | null;
+      rfpDeadline: string | null;
+      preview: string;
+      lastMessageAt: string | null;
+      unread: boolean;
+    }
+  | {
+      kind: 'team';
+      key: string;
+      rfpId: string;
+      rfpCode: string;
+      rfpTitle: string;
+      preview: string;
+      lastMessageAt: string | null;
+      unread: boolean;
+    };
+
 export type CounterpartyType = 'buyer' | 'pg';
 
 export const COUNTERPARTY_TYPE_LABEL: Record<CounterpartyType, string> = {

@@ -9,6 +9,7 @@ import { PageEnter } from '@/components/primitives/PageEnter';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { MessageInbox } from '@/components/messages/MessageInbox';
 import { listConversationsForViewer } from '@/lib/server/actions/chat/conversationLoaders';
+import type { InboxListItem } from '@/components/messages/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,10 +24,31 @@ export default async function MessagesPage({
   ]);
   const unread = conversations.filter((conv) => conv.unread).length;
 
+  // Map ConversationListItem → InboxListItem (counterparty kind only for now).
+  const items: InboxListItem[] = conversations.map((conv) => ({
+    kind: 'counterparty' as const,
+    key: `c:${conv.conversationId}`,
+    conversationId: conv.conversationId,
+    counterparty: conv.counterparty,
+    rfpId: conv.rfpId,
+    rfpCode: conv.rfpCode,
+    rfpTitle: conv.rfpTitle,
+    rfpStatus: conv.rfpStatus,
+    rfpDeadline: conv.rfpDeadline,
+    preview: conv.preview,
+    lastMessageAt: conv.lastMessageAt,
+    unread: conv.unread,
+  }));
+
+  // If ?c= was passed, resolve it to the corresponding item key.
+  const initialSelectedKey = initialConvId
+    ? (items.find((i) => i.kind === 'counterparty' && i.conversationId === initialConvId)?.key ?? null)
+    : null;
+
   return (
     <PageEnter className="flex h-full flex-col">
       <PageHeader title="메시지" count={unread} />
-      <MessageInbox conversations={conversations} initialSelectedId={initialConvId ?? null} className="min-h-0 flex-1" />
+      <MessageInbox items={items} initialSelectedKey={initialSelectedKey} className="min-h-0 flex-1" />
     </PageEnter>
   );
 }

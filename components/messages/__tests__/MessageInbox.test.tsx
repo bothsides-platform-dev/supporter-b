@@ -55,13 +55,19 @@ beforeEach(() => {
 
 import { MessageInbox } from '../MessageInbox';
 import { clearAllThreadCache } from '../thread-cache';
-import type { ConversationListItem } from '../types';
+import type { InboxListItem } from '../types';
 
-const conversations: ConversationListItem[] = [
+const items: InboxListItem[] = [
   {
+    kind: 'counterparty',
+    key: 'c:conv-1',
     conversationId: 'conv-1',
     counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', hasLogo: false },
     rfpId: null,
+    rfpCode: null,
+    rfpTitle: null,
+    rfpStatus: null,
+    rfpDeadline: null,
     preview: '제안 보냅니다.',
     lastMessageAt: '2026-06-02T01:00:00.000Z',
     unread: true,
@@ -92,7 +98,7 @@ describe('MessageInbox', () => {
       ],
     });
 
-    render(<MessageInbox conversations={conversations} />);
+    render(<MessageInbox items={items} />);
 
     // Empty panel before selection.
     expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
@@ -108,19 +114,19 @@ describe('MessageInbox', () => {
   });
 
   it('does not call the loader on first render (only on select)', async () => {
-    render(<MessageInbox conversations={conversations} />);
+    render(<MessageInbox items={items} />);
     await waitFor(() => {
       expect(loadConversationThread).not.toHaveBeenCalled();
     });
   });
 
   it('인박스 상단에 새 대화 시작 진입점을 노출한다', () => {
-    render(<MessageInbox conversations={conversations} />);
+    render(<MessageInbox items={items} />);
     expect(screen.getByRole('button', { name: '새 대화' })).toBeInTheDocument();
   });
 
   it('미선택 상태: 목록은 표시하고 스레드 pane 은 모바일에서 숨긴다(데스크톱만 표시)', () => {
-    const { container } = render(<MessageInbox conversations={conversations} />);
+    const { container } = render(<MessageInbox items={items} />);
     const list = container.querySelector('[data-pane="list"]') as HTMLElement;
     const thread = container.querySelector('[data-pane="thread"]') as HTMLElement;
     // 목록: 모바일 전체폭, 데스크톱 고정폭. 미선택 시 항상 보인다.
@@ -141,7 +147,7 @@ describe('MessageInbox', () => {
       viewer: { userId: 'u-self', name: '나' },
       messages: [],
     });
-    const { container } = render(<MessageInbox conversations={conversations} />);
+    const { container } = render(<MessageInbox items={items} />);
     await act(async () => {
       await user.click(screen.getByRole('button', { name: /OO페이/ }));
     });
@@ -161,7 +167,7 @@ describe('MessageInbox', () => {
       viewer: { userId: 'u-self', name: '나' },
       messages: [],
     });
-    render(<MessageInbox conversations={conversations} />);
+    render(<MessageInbox items={items} />);
     await act(async () => {
       await user.click(screen.getByRole('button', { name: /OO페이/ }));
     });
@@ -181,7 +187,7 @@ describe('MessageInbox', () => {
       new Promise((resolve) => { resolveThread = resolve; })
     );
 
-    render(<MessageInbox conversations={conversations} />);
+    render(<MessageInbox items={items} />);
     await user.click(screen.getByRole('button', { name: /OO페이/ }));
 
     // While loading, skeleton is visible (animate-pulse element)
@@ -193,7 +199,7 @@ describe('MessageInbox', () => {
     resolveThread({ ok: false, error: 'CANCELLED' });
   });
 
-  it('initialSelectedId로 마운트 시 해당 대화의 스레드를 즉시 보여준다', async () => {
+  it('initialSelectedKey로 마운트 시 해당 대화의 스레드를 즉시 보여준다', async () => {
     loadConversationThread.mockResolvedValue({
       ok: true,
       conversationId: 'conv-1',
@@ -216,16 +222,38 @@ describe('MessageInbox', () => {
     });
 
     await act(async () => {
-      render(<MessageInbox conversations={conversations} initialSelectedId="conv-1" />);
+      render(<MessageInbox items={items} initialSelectedKey="c:conv-1" />);
     });
 
     expect(loadConversationThread).toHaveBeenCalledWith('conv-1');
     expect(screen.getByText('미리 열린 스레드 메시지입니다.')).toBeInTheDocument();
   });
 
-  it('목록에 없는 initialSelectedId는 무시하고 미선택 상태로 마운트된다', () => {
-    render(<MessageInbox conversations={conversations} initialSelectedId="conv-does-not-exist" />);
+  it('목록에 없는 initialSelectedKey는 무시하고 미선택 상태로 마운트된다', () => {
+    render(<MessageInbox items={items} initialSelectedKey="c:conv-does-not-exist" />);
     expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
     expect(loadConversationThread).not.toHaveBeenCalled();
+  });
+
+  it('검색어 입력 시 이름 기준으로 대화 목록을 필터링한다', async () => {
+    const user = userEvent.setup();
+    const mixed: InboxListItem[] = [
+      {
+        kind: 'counterparty', key: 'c:c1',
+        conversationId: 'c1',
+        counterparty: { workspaceId: 'w1', name: '토스페이', type: 'pg', hasLogo: false },
+        rfpId: null, rfpCode: null, rfpTitle: null, rfpStatus: null, rfpDeadline: null,
+        preview: '안녕하세요', lastMessageAt: null, unread: false,
+      },
+      {
+        kind: 'team', key: 't:r1', rfpId: 'r1',
+        rfpCode: 'P-2605-0001', rfpTitle: '결제 서비스',
+        preview: '내부 메모', lastMessageAt: null, unread: false,
+      },
+    ];
+    render(<MessageInbox items={mixed} />);
+    await user.type(screen.getByPlaceholderText('대화 검색'), '토스');
+    expect(screen.getByRole('button', { name: /토스페이/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /결제 서비스/ })).not.toBeInTheDocument();
   });
 });
