@@ -82,6 +82,14 @@ describe('pgInboxDataToRows', () => {
     expect(rows[0].bidId).toBeUndefined();
   });
 
+  it('received 단계(draft bid 존재)는 bidId 를 생략한다', () => {
+    // draft 상태 bid 가 있어도 stage = received → bidId 생략 규칙 적용.
+    const draftBid = { ...BASE_BID, id: 'bid-draft', status: 'draft' } as unknown as Bid;
+    const rows = pgInboxDataToRows(data({ bidByRfp: new Map([['rfp-1', draftBid]]) }));
+    expect(rows[0].stage).toBe('received');
+    expect(rows[0].bidId).toBeUndefined();
+  });
+
   it('submitted 단계는 bidId 를 포함하고 rfpId 는 rfp.code 와 같다', () => {
     const bid = { ...BASE_BID, id: 'bid-42', status: 'submitted' } as unknown as Bid;
     const rows = pgInboxDataToRows(data({ bidByRfp: new Map([['rfp-1', bid]]) }));

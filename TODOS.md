@@ -24,6 +24,10 @@ Phase 5-7 split 에서 `BoardColumn`·`BoardDraggableCard` 를 `React.memo` 로 
 ### ~~종결 컬럼 정렬을 전이 시각 기준으로~~ ✅ v0.2.24.2
 rfp.updatedAt 기준 내림차순 정렬 적용(buyer awarded/closed, PG won/lost). transition() 에서 updated_at 갱신 누락도 함께 수정. (PR fix+design-todos-p3 2026-06-17)
 
+### findByPgWs ORDER BY round 누락 — 재요청 시 Map 덮어쓰기 비결정적
+**Priority:** P2
+`bidRepo.findByPgWs` 가 `ORDER BY` 없이 전체 bid 를 반환해 `loadPgInboxData` 가 `rfpId → Bid` Map 을 마지막 쓰기 기준으로 조립한다. 재요청(round ≥ 2)이 있으면 round 1·round 2 bid 가 모두 반환되고 DB 플랜 변경·vacuum 에 따라 어느 쪽이 Map 에 남을지 비결정적이다. `findByPgWs` 에 `ORDER BY round DESC` 추가 → 항상 최신 라운드가 Map 에 저장되도록 보장해야 한다. 이 PR 이전부터 존재한 동작이며 `loadPgInboxData` SSOT 추출로 표면화됨. (발견: /ship adversarial 리뷰 2026-06-17, v0.2.25.2)
+
 ### rfp_bids 보드 죽은 표면 정리
 **Priority:** P3
 BidCard·loadBoard rfp_bids 분기·cardType 'bid' 경로가 어디에도 마운트되지 않음(비교 화면 재설계 PR#97 이후). 부활 계획 없으면 제거, 보존이면 'no current mount point' 주석 명시. (발견: /ship red-team 리뷰 2026-06-13)
