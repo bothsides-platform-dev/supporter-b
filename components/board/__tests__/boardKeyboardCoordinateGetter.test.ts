@@ -80,4 +80,17 @@ describe('boardKeyboardCoordinateGetter', () => {
     const result = boardKeyboardCoordinateGetter(event, makeContext({ overId: 'column:a', columns: COLS }));
     expect(result).toBeUndefined();
   });
+
+  it('컬럼이 없을 때 ArrowRight → undefined 반환', () => {
+    const event = new KeyboardEvent('keydown', { code: 'ArrowRight' });
+    const result = boardKeyboardCoordinateGetter(event, makeContext({ overId: 'column:a', columns: [] }));
+    expect(result).toBeUndefined();
+  });
+
+  it('over 가 null 일 때 ArrowRight → 첫 번째 컬럼 중심 반환', () => {
+    const event = new KeyboardEvent('keydown', { code: 'ArrowRight' });
+    const result = boardKeyboardCoordinateGetter(event, makeContext({ overId: undefined, columns: COLS }));
+    // over=null → currentIdx=-1, nextIdx=0 → column:a 중심
+    expect(result).toEqual({ x: 0 + 100, y: 100 + 200 });
+  });
 });
