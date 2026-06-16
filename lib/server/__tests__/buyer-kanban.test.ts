@@ -60,6 +60,23 @@ describe('toBuyerCard', () => {
     });
     expect(card.isCancelled).toBe(false);
   });
+
+  it('updatedAt 있을 때 → card.updatedAt = rfp.updatedAt', () => {
+    const card = toBuyerCard({
+      rfp: makeRfp({ updatedAt: '2026-06-17T12:00:00Z' }),
+      bids: [],
+      invitations: [],
+      stage: 'active',
+    });
+    expect(card.updatedAt).toBe('2026-06-17T12:00:00Z');
+  });
+
+  it('updatedAt 없을 때 → card.updatedAt fallback = createdAt', () => {
+    const rfp = makeRfp({ createdAt: '2026-05-01T00:00:00Z' });
+    // makeRfp 는 updatedAt 을 설정하지 않음 — undefined 보장
+    const card = toBuyerCard({ rfp, bids: [], invitations: [], stage: 'active' });
+    expect(card.updatedAt).toBe('2026-05-01T00:00:00Z');
+  });
 });
 
 describe('compareBuyerCards — 결과 컬럼 정렬', () => {

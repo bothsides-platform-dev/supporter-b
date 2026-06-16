@@ -181,6 +181,24 @@ describe('toPgCard', () => {
     expect(card.hasPendingRequote).toBe(false);
     expect(card.buyerName).toBeUndefined();
   });
+
+  it('rfp.updatedAt 있을 때 → card.rfpUpdatedAt 전달', () => {
+    const card = toPgCard({
+      invitation: makeInv('opened'),
+      rfp: makeRfp({ updatedAt: '2026-06-17T10:00:00Z' }),
+      stage: 'received',
+    });
+    expect(card.rfpUpdatedAt).toBe('2026-06-17T10:00:00Z');
+  });
+
+  it('rfp.updatedAt 없을 때 → card.rfpUpdatedAt undefined', () => {
+    const card = toPgCard({
+      invitation: makeInv('accepted'),
+      rfp: makeRfp(),
+      stage: 'received',
+    });
+    expect(card.rfpUpdatedAt).toBeUndefined();
+  });
 });
 
 describe('comparePgCards — 결과 컬럼 정렬', () => {
@@ -224,5 +242,27 @@ describe('comparePgCards — 결과 컬럼 정렬', () => {
     };
     const later: PgKanbanCard = { ...soon, rfpId: 'P-06', deadline: '2026-07-01T00:00:00Z' };
     expect(comparePgCards(soon, later)).toBeLessThan(0);
+  });
+
+  it('rfpUpdatedAt 없을 때 → deadline 으로 fallback 정렬 (나중 마감일이 먼저)', () => {
+    const withEarlierDeadline: PgKanbanCard = {
+      invitationId: 'inv-7',
+      rfpId: 'P-07',
+      title: 'G',
+      stage: 'won',
+      deadline: '2026-06-05T00:00:00Z',
+      rfpUpdatedAt: undefined,
+      hasPendingRequote: false,
+    };
+    const withLaterDeadline: PgKanbanCard = {
+      ...withEarlierDeadline,
+      rfpId: 'P-08',
+      deadline: '2026-06-10T00:00:00Z',
+    };
+    // 결과 컬럼 최신순: 나중 마감일(withLaterDeadline)이 먼저 오도록 정렬
+    // comparePgCards(withLaterDeadline, withEarlierDeadline):
+    //   ta = '2026-06-10', tb = '2026-06-05'
+    //   new Date(tb) - new Date(ta) < 0 → withLaterDeadline 이 앞
+    expect(comparePgCards(withLaterDeadline, withEarlierDeadline)).toBeLessThan(0);
   });
 });
