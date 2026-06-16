@@ -18,6 +18,7 @@ import {
   outboxEntries,
   auditLogs,
   workspaceInvitations,
+  workspaces,
 } from '@/lib/db/schema';
 import { seedUser, seedPgWorkspace, seedMembership } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { hashToken, generateToken, addMinutes } from '@/lib/server/token';
@@ -526,5 +527,314 @@ describe('AuthService.signupViaInvite — claim 실패 throw-to-rollback', () =>
     // Transaction must have been rolled back — no orphan user
     const rows = await db.select().from(users).where(eq(users.email, 'race@example.com'));
     expect(rows).toHaveLength(0);
+  });
+});
+
+// ─── signupViaInvite 종합 ────────────────────────────────────────────────────
+
+describe('AuthService.signupViaInvite', () => {
+  /** 초대 + inviter 픽스처 공통 헬퍼 */
+  async function seedInvitation(opts: {
+    email: string;
+    status?: 'pending' | 'accepted' | 'expired';
+    expiresOffsetMin?: number;
+  }): Promise<{ rawToken: string; wsId: string }> {
+    const ws = await seedPgWorkspace(db, 'InviteWS');
+    const inviter = await seedUser(db, { email: `inv-${Date.now()}@example.com` });
+    await seedMembership(db, ws.id, inviter.id, 'admin');
+    const rawToken = generateToken();
+    await db.insert(workspaceInvitations).values({
+      workspaceId: ws.id,
+      invitedEmail: opts.email,
+      invitedByUserId: inviter.id,
+      tokenHash: hashToken(rawToken),
+      status: opts.status ?? 'pending',
+      expiresAt: new Date(addMinutes(new Date(), opts.expiresOffsetMin ?? 60)),
+    });
+    return { rawToken, wsId: ws.id };
+  }
+
+  it('초대 수락 성공: user 생성·멤버십 추가·emailVerified=true (claimInviteInTx가 설정)', async () => {
+    const svc = await buildService();
+    const email = 'invok@example.com';
+    const { rawToken, wsId } = await seedInvitation({ email });
+    const otpId = await seedVerifiedOtp('01055555550');
+
+    const r = await svc.signupViaInvite({
+      email,
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01055555550',
+      phoneVerificationId: otpId,
+      wsInviteRawToken: rawToken,
+    });
+
+    expect(r).toEqual({ ok: true, workspaceId: wsId, email });
+
+    const [u] = await db.select().from(users).where(eq(users.email, email));
+    expect(u).toBeDefined();
+    expect(u.emailVerified).toBe(true);
+
+    const memberships = await db
+      .select()
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.userId, u.id));
+    expect(memberships).toHaveLength(1);
+    expect(memberships[0].workspaceId).toBe(wsId);
+  });
+
+  it('PHONE_NOT_VERIFIED: 미인증 OTP', async () => {
+    const svc = await buildService();
+    const { rawToken } = await seedInvitation({ email: 'inv-nophone@example.com' });
+
+    const r = await svc.signupViaInvite({
+      email: 'inv-nophone@example.com',
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01055555551',
+      phoneVerificationId: randomUUID(),
+      wsInviteRawToken: rawToken,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+  });
+
+  it('INVITE_INVALID: 존재하지 않는 토큰', async () => {
+    const svc = await buildService();
+    const otpId = await seedVerifiedOtp('01055555552');
+
+    const r = await svc.signupViaInvite({
+      email: 'inv-ghost@example.com',
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01055555552',
+      phoneVerificationId: otpId,
+      wsInviteRawToken: generateToken(),
+    });
+
+    expect(r).toEqual({ ok: false, error: 'INVITE_INVALID' });
+  });
+
+  it('INVITE_EXPIRED: 만료된 초대 (expiresAt 과거)', async () => {
+    const svc = await buildService();
+    const email = 'inv-expired@example.com';
+    const { rawToken } = await seedInvitation({ email, expiresOffsetMin: -5 });
+    const otpId = await seedVerifiedOtp('01055555553');
+
+    const r = await svc.signupViaInvite({
+      email,
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01055555553',
+      phoneVerificationId: otpId,
+      wsInviteRawToken: rawToken,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'INVITE_EXPIRED' });
+  });
+
+  it('INVITE_EMAIL_MISMATCH: 초대 이메일과 다른 이메일로 시도', async () => {
+    const svc = await buildService();
+    const { rawToken } = await seedInvitation({ email: 'invited@example.com' });
+    const otpId = await seedVerifiedOtp('01055555554');
+
+    const r = await svc.signupViaInvite({
+      email: 'different@example.com',
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01055555554',
+      phoneVerificationId: otpId,
+      wsInviteRawToken: rawToken,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'INVITE_EMAIL_MISMATCH' });
+  });
+
+  it('EMAIL_TAKEN: 인증된 기존 유저가 있으면 purge 없이 차단', async () => {
+    const svc = await buildService();
+    const email = 'inv-taken@example.com';
+    await db.insert(users).values({
+      id: randomUUID(),
+      email,
+      passwordHash: 'x',
+      name: 'Existing',
+      avatarColor: 'ink',
+      emailVerified: true,
+    });
+    const { rawToken } = await seedInvitation({ email });
+    const otpId = await seedVerifiedOtp('01055555555');
+
+    const r = await svc.signupViaInvite({
+      email,
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01055555555',
+      phoneVerificationId: otpId,
+      wsInviteRawToken: rawToken,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
+  });
+
+  it('EMAIL_TAKEN: .catch arm — tx 종료 후 unique violation 재던짐', async () => {
+    const { rawToken, wsId: _wsId } = await seedInvitation({ email: 'inv-race@example.com' });
+    const otpId = await seedVerifiedOtp('01055555556');
+
+    // postgres-js resolve-후-reject 시맨틱 시뮬레이션:
+    // pre-flight 쿼리(select)는 실 db 사용, transaction만 재던짐
+    const uniqueErr = Object.assign(
+      new Error('duplicate key value violates unique constraint'),
+      { code: '23505' },
+    );
+    const racingDb = Object.assign(Object.create(Object.getPrototypeOf(db)), db, {
+      transaction: () => Promise.reject(uniqueErr),
+    });
+
+    const raceSvc = new AuthService(
+      racingDb,
+      await getUserRepo(),
+      await getVerificationTokenRepo(),
+      await getOutboxRepo(),
+      await getAuditLogRepo(),
+    );
+
+    const r = await raceSvc.signupViaInvite({
+      email: 'inv-race@example.com',
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01055555556',
+      phoneVerificationId: otpId,
+      wsInviteRawToken: rawToken,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
+  });
+});
+
+// ─── joinCanonicalPgWorkspace 종합 ───────────────────────────────────────────
+
+describe('AuthService.joinCanonicalPgWorkspace', () => {
+  async function seedCanonicalWs(name = '정규PG'): Promise<{ wsId: string }> {
+    const wsId = randomUUID();
+    await db.insert(workspaces).values({
+      id: wsId,
+      type: 'pg',
+      name,
+      status: 'active',
+      canonicalPgKey: `canonical-${wsId.slice(0, 8)}`,
+    });
+    return { wsId };
+  }
+
+  it('canonical PG 합류 성공: user 생성·멤버십 추가', async () => {
+    const svc = await buildService();
+    const { wsId } = await seedCanonicalWs();
+    const otpId = await seedVerifiedOtp('01099991230');
+
+    const r = await svc.joinCanonicalPgWorkspace({
+      email: 'canon-ok@example.com',
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01099991230',
+      phoneVerificationId: otpId,
+      selectedPgWorkspaceId: wsId,
+    });
+
+    expect(r).toEqual({ ok: true, email: 'canon-ok@example.com' });
+
+    const [u] = await db.select().from(users).where(eq(users.email, 'canon-ok@example.com'));
+    expect(u).toBeDefined();
+
+    const memberships = await db
+      .select()
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.userId, u.id));
+    expect(memberships).toHaveLength(1);
+    expect(memberships[0].workspaceId).toBe(wsId);
+  });
+
+  it('PHONE_NOT_VERIFIED', async () => {
+    const svc = await buildService();
+    const { wsId } = await seedCanonicalWs();
+
+    const r = await svc.joinCanonicalPgWorkspace({
+      email: 'canon-nophone@example.com',
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01099991231',
+      phoneVerificationId: randomUUID(),
+      selectedPgWorkspaceId: wsId,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+  });
+
+  it('INVALID_CANONICAL_WORKSPACE: 존재하지 않는 ws id', async () => {
+    const svc = await buildService();
+    const otpId = await seedVerifiedOtp('01099991232');
+
+    const r = await svc.joinCanonicalPgWorkspace({
+      email: 'canon-noexist@example.com',
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01099991232',
+      phoneVerificationId: otpId,
+      selectedPgWorkspaceId: randomUUID(),
+    });
+
+    expect(r).toEqual({ ok: false, error: 'INVALID_CANONICAL_WORKSPACE' });
+  });
+
+  it('EMAIL_TAKEN: 인증된 기존 유저 차단', async () => {
+    const svc = await buildService();
+    const { wsId } = await seedCanonicalWs();
+    const email = 'canon-taken@example.com';
+    await db.insert(users).values({
+      id: randomUUID(),
+      email,
+      passwordHash: 'x',
+      name: 'Existing',
+      avatarColor: 'ink',
+      emailVerified: true,
+    });
+    const otpId = await seedVerifiedOtp('01099991233');
+
+    const r = await svc.joinCanonicalPgWorkspace({
+      email,
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01099991233',
+      phoneVerificationId: otpId,
+      selectedPgWorkspaceId: wsId,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
+  });
+
+  it('EMAIL_TAKEN: tx 내부 INSERT unique violation — inner try/catch 처리', async () => {
+    const svc = await buildService();
+    const { wsId } = await seedCanonicalWs();
+    const email = 'canon-inner-race@example.com';
+    // 이미 미인증 유저(purge 대상 아님, emailVerified=true)로 unique violation 유발
+    await db.insert(users).values({
+      id: randomUUID(),
+      email,
+      passwordHash: 'x',
+      name: 'Existing',
+      avatarColor: 'ink',
+      emailVerified: true,
+    });
+    const otpId = await seedVerifiedOtp('01099991234');
+
+    const r = await svc.joinCanonicalPgWorkspace({
+      email,
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01099991234',
+      phoneVerificationId: otpId,
+      selectedPgWorkspaceId: wsId,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
   });
 });
