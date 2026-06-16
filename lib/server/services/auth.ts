@@ -74,21 +74,8 @@ export class AuthService {
     const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> => {
       await purgeUnverifiedSignup(tx, email);
 
-      try {
-        await tx.insert(users).values({
-          id: userId,
-          email,
-          passwordHash,
-          name: input.name,
-          phone: input.phone,
-          avatarColor: 'ink',
-          status: 'active',
-          emailVerified: false,
-        });
-      } catch (err) {
-        if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-        throw err;
-      }
+      const insertResult = await this.insertSignupUser(tx, { userId, email, passwordHash, name: input.name, phone: input.phone });
+      if (!insertResult.ok) return insertResult;
 
       const { workspaceId, applicationId } = await createWorkspaceInTx(tx, {
         userId,
@@ -159,21 +146,8 @@ export class AuthService {
     const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ workspaceId: string; email: string }>> => {
       await purgeUnverifiedSignup(tx, email);
 
-      try {
-        await tx.insert(users).values({
-          id: userId,
-          email,
-          passwordHash,
-          name: input.name,
-          phone: input.phone,
-          avatarColor: 'ink',
-          status: 'active',
-          emailVerified: false,
-        });
-      } catch (err) {
-        if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-        throw err;
-      }
+      const insertResult = await this.insertSignupUser(tx, { userId, email, passwordHash, name: input.name, phone: input.phone });
+      if (!insertResult.ok) return insertResult;
 
       const claim = await claimInviteInTx(tx, invitation, userId);
       if (!claim.ok) {
@@ -190,8 +164,7 @@ export class AuthService {
       if (err instanceof Error && 'claimError' in err) {
         return { ok: false, error: (err as Error & { claimError: string }).claimError };
       }
-      if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-      throw err;
+      return this.mapUniqueToEmailTaken<{ workspaceId: string; email: string }>(err);
     });
 
     return result;
@@ -243,21 +216,8 @@ export class AuthService {
     const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ email: string }>> => {
       await purgeUnverifiedSignup(tx, email);
 
-      try {
-        await tx.insert(users).values({
-          id: userId,
-          email,
-          passwordHash,
-          name: input.name,
-          phone: input.phone,
-          avatarColor: 'ink',
-          status: 'active',
-          emailVerified: false,
-        });
-      } catch (err) {
-        if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-        throw err;
-      }
+      const insertResult = await this.insertSignupUser(tx, { userId, email, passwordHash, name: input.name, phone: input.phone });
+      if (!insertResult.ok) return insertResult;
 
       await tx
         .insert(workspaceMembers)
@@ -476,11 +436,45 @@ export class AuthService {
         );
       });
     } catch (err) {
-      if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
-      throw err;
+      return this.mapUniqueToEmailTaken(err);
     }
 
     return { ok: true };
+  }
+
+  /** unique constraint violation을 EMAIL_TAKEN ServiceResult로 매핑, 아니면 re-throw */
+  private mapUniqueToEmailTaken<T extends object>(err: unknown): ServiceResult<T> {
+    if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
+    throw err;
+  }
+
+  /** 세 가입 메서드 공통 user INSERT — 8필드 고정, 스키마 drift 방지 */
+  private async insertSignupUser(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tx: any,
+    params: {
+      userId: string;
+      email: string;
+      passwordHash: string;
+      name: string;
+      phone: string;
+    },
+  ): Promise<ServiceResult> {
+    try {
+      await tx.insert(users).values({
+        id: params.userId,
+        email: params.email,
+        passwordHash: params.passwordHash,
+        name: params.name,
+        phone: params.phone,
+        avatarColor: 'ink',
+        status: 'active',
+        emailVerified: false,
+      });
+      return { ok: true };
+    } catch (err) {
+      return this.mapUniqueToEmailTaken(err);
+    }
   }
 }
 
