@@ -2,26 +2,6 @@
 
 ## Chat / Realtime
 
-### Centrifugo subscribe 프록시 공유 비밀 헤더
-**Priority:** P1
-프록시 ACL 엔드포인트(`/api/centrifugo/subscribe`)가 Caddy catch-all 로 외부에서 POST 가능 — allow/deny 1비트 오라클(악용에는 userId·wsId·rfpId uuid 를 모두 알아야 해 저위험). Centrifugo `proxy_http_headers` 로 정적 비밀 헤더를 보내고 라우트에서 상수시간 비교로 검증. **prod Centrifugo 설정 변경과 동시 배포 필요** — 독립 PR 로. (발견: /ship 보안 리뷰 2026-06-10, branch worktree-feat-chat-rail-team-chat)
-
-### ChatService.sendMessage 의 rfpId 태그 접근권 검증
-**Priority:** P1
-클라이언트 제공 `rfpId` 태그를 접근권 검증 없이 영속(기존 코드 — 레일 defaultRfpId 가 경로를 새로 활성화). 표시 자체는 viewer 스코프 rfpById 로 안전하나, 교차 테넌트 uuid 오염 저장 + FK 에러 경유 존재 오라클. buyer=소유 / pg=canAccess 검증 후 불일치 시 태그 드랍 또는 INVALID_INPUT. (발견: /ship 보안 리뷰 2026-06-10)
-
-### 라이브 self-echo 상관관계 id (멀티탭)
-**Priority:** P2
-낙관적 승격이 "첫 pending" 매칭이라 같은 유저 두 탭 동시 전송 시 echo 가 다른 탭의 pending 을 오인 승격할 수 있음(`components/messages/optimistic-thread.ts` 의 `applyLiveEcho` 가 `findIndex((m) => m.pending)` 로 매칭 — ThreadView·TeamThreadView 공용, v0.2.22.13 에서 추출). 액션 입력에 클라이언트 tempId 를 받아 publish 페이로드로 왕복, tempId 매칭 승격으로 교체. 서버 페이로드 계약 변경 동반 — 별도 PR.
-
-### RFP 접근 게이트 공유 헬퍼
-**Priority:** P2
-buyer-소유/PG-canAccess 규칙이 `TeamChatService.authorize` 와 subscribe 라우트 `authorizeTeamChannel` 두 곳에 중복. `canWorkspaceAccessRfp(rfpId, wsId)` 단일 출처로 추출 (둘 다 테스트 그린 유지).
-
-### 대화 스레드 캐시(thread-cache) remount 신선도
-**Priority:** P2
-`/messages` 의 conversation thread-cache 는 invalidate-on-unmount 가 없어(기존 동작) 소프트 재방문 시 스테일 스냅샷 재생 가능. 팀 채팅에 적용한 패턴(TeamThreadPane unmount invalidate) 을 ThreadPane 에도 이식.
-
 ## Auth / Signup
 
 ### 가입 INSERT 후 비즈니스 early-return 의 고아 user 행 (기존 버그)
@@ -45,18 +25,6 @@ buyer-소유/PG-canAccess 규칙이 `TeamChatService.authorize` 와 subscribe �
 `approval-waiting-screen.tsx` 승인 폴링 성공 시 `router.push('/home')`(소프트 내비)를 쓴다. EmailVerifyScreen 은 0.2.19.0 에서 `window.location.assign` 으로 전환했으나 이 형제 화면은 그대로다. 미인증/승인대기 유저가 다른 호스트의 `/pending-approval` 에 있을 때 (app) 가드의 cross-host redirect 를 RSC fetch 로 따라가다 CORS 에 막힐 수 있음(좁은 윈도우, 기존 동작). `window.location.assign('/home')` 로 통일. (발견: /ship 어드버서리얼 2026-06-14)
 
 ## Design
-
-### PG 인박스 상세 토글 위치 정돈
-**Priority:** P2
-ChatRailToggle 이 본문 위 우측 정렬 스트립에 고아처럼 떠 있음 — 구매사 상세처럼 PgRfpDetailContent 헤더 행 슬롯으로 이동.
-
-### 레일 열림 + 1024px 본문 그리드
-**Priority:** P3
-w-96 레일이 열린 lg(1024px) 뷰포트에서 '내가 요청한 조건' `grid-cols-2` 가 좁아질 수 있음 — 육안 확인 후 `grid-cols-1 xl:grid-cols-2` 검토 (/design-review 경로).
-
-### RecipientCard rfpContext 의 uuid 노출 (기존 버그)
-**Priority:** P2
-FocusComparison → MessageComposeSheet 의 `rfpContext={{ code: props.rfpId(uuid), title: rfpCode }}` — RecipientCard 가 uuid 를 mono 로 표시. `code` 가 전송 rfpId(uuid) 겸 표시값으로 이중 사용되는 구조라 RfpContext 타입을 {id, code, title} 로 분리해야 함 (merge-base 기존 버그, 이 브랜치 비도입).
 
 ## Kanban Board
 
@@ -111,6 +79,15 @@ sessionStorage 가 차단되면(사파리 비공개 등) readSignupDraft 가 {} 
 `RESEND_API_KEY` 가 빈 문자열이면 `ResendSender`/`ResendBatchSender` 가 dev 모드로 떨어져 `[email DEV]` 로그만 남기고 행을 `sent` 로 표시한다 — 운영에서 키를 빈 값으로 잘못 설정하면 메일이 조용히 안 나간다. 부팅/런타임 가드(예: `NODE_ENV==='production'` 이면 빈 키를 에러로)로 오설정을 표면화. 본 PR 비도입(기존 `ResendSender` 동작 미러). (발견: /ship 어드버서리얼 2026-06-15)
 
 ## Completed
+
+- **Chat/Realtime + Design 6건 해소 (v0.2.24.1, 2026-06-16, branch fix/chat-realtime-todos)**:
+  (1) **Centrifugo subscribe 프록시 비밀 헤더** — `CENTRIFUGO_PROXY_SECRET` env-gated `X-Centrifugo-Proxy-Secret` 상수시간 검증(`app/api/centrifugo/subscribe/route.ts`). 미설정 시 스킵(하위호환). `.env.production.example` 에 변수 추가 — **prod 배포 시 Centrifugo config 의 proxy http-headers 에 동일 값 지정 필요**.
+  (2) **ChatService.sendMessage rfpId 접근권 검증** — `canWorkspaceAccessRfp` 로 교차 테넌트 uuid 검증; 불일치 시 태그만 드롭(메시지 정상 전송). `result.rfpId` 를 브로드캐스트에 사용해 드롭된 태그가 라이브로 새지 않도록.
+  (3) **self-echo tempId 왕복** — `applyLiveEcho` 에 `tempId?` 파라미터 추가(정확 매칭, 없으면 첫 pending 폴백). 액션·publish 페이로드·ThreadView·TeamThreadView 전체 왕복.
+  (4) **RFP 접근 게이트 공유 헬퍼** — `lib/server/rfp-access.ts`의 `canWorkspaceAccessRfp` 단일 출처로 `TeamChatService.authorize` + subscribe 라우트 `authorizeTeamChannel` 두 곳 중복 해소.
+  (5) **ThreadPane thread-cache unmount 무효화** — `useEffect(() => () => invalidateThread(conversationId), [conversationId])` 추가. TeamThreadPane 과 동일 패턴 이식.
+  (6) **RecipientCard rfpContext uuid 노출** — `RfpContext = { id, code?, title? }` 타입 분리. `id`(전송 uuid) 는 렌더 금지; `code`·`title` 각각 존재 시만 표시. 호출 사이트 3곳(FocusComparison·RfpBriefPanel·BidContextStrip) 및 MessageComposeSheet 수정.
+  Design stale 항목 2건 제거: "PG 인박스 상세 토글 위치 정돈"(ChatRailToggle 삭제로 해소, PR#186) · "레일 열림 + 1024px 본문 그리드"(재현 불가).
 
 - **리포지토리 경계 ESLint 강제 + 드리프트 가드 (v0.2.22.2, 2026-06-15)**: `@typescript-eslint/no-restricted-imports`(규칙 `repo-boundary/db-access`)로 `repositories/**` 밖의 `@/lib/db/{schema,client}` 값 import 금지(`import type`·서비스 동적 `import()`는 허용) + 독립 fs-walk 드리프트 가드(`lib/server/__tests__/repo-boundary.test.ts`). allowlist 는 SSOT `lib/server/db-boundary-allowlist.mjs`(4개: storage×2·`_purgeUnverifiedSignup`·`_shared`). injection-only 사이트의 죽은 `db` 파라미터(`searchWorkspaces`·`getMembership`·`accountExistsForEmail`·`canAccessAttachment`)를 제거해 allowlist 를 9→4 로 축소. CLAUDE.md 경계 규칙 명문화. (stale "메모리 테스트 구현" 문구·데드 `'memory'` 유니온은 #204 에서 이미 해소.)
 
