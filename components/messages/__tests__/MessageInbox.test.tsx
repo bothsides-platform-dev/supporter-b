@@ -47,6 +47,19 @@ vi.mock('@/lib/server/actions/chat/listConversationAttachments', () => ({
   listConversationAttachments: vi.fn().mockResolvedValue([]),
 }));
 
+// ContextPanel mock
+vi.mock('../ContextPanel', () => ({
+  ContextPanel: ({ conversationId }: { conversationId: string }) => (
+    <div data-testid="context-panel" data-conversation={conversationId} />
+  ),
+}));
+
+// useIsXlUp mock
+const mockXlUp = { value: false };
+vi.mock('@/hooks/use-xl-up', () => ({
+  useIsXlUp: () => mockXlUp.value,
+}));
+
 afterEach(() => cleanup());
 beforeEach(() => {
   loadConversationThread.mockReset();
@@ -255,5 +268,32 @@ describe('MessageInbox', () => {
     await user.type(screen.getByPlaceholderText('대화 검색'), '토스');
     expect(screen.getByRole('button', { name: /토스페이/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /결제 서비스/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('xl 컨텍스트 패널', () => {
+  beforeEach(() => { mockXlUp.value = true; });
+  afterEach(() => { mockXlUp.value = false; });
+
+  it('xl에서 대화 미선택 시 ContextPanel을 렌더하지 않는다', () => {
+    render(<MessageInbox items={items} />);
+    expect(screen.queryByTestId('context-panel')).not.toBeInTheDocument();
+  });
+
+  it('xl에서 counterparty 대화 선택 시 ContextPanel이 렌더된다', async () => {
+    const user = userEvent.setup();
+    loadConversationThread.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      viewer: { userId: 'u-self', name: '나' },
+      messages: [],
+    });
+    render(<MessageInbox items={items} />);
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /OO페이/ }));
+    });
+    expect(screen.getByTestId('context-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('context-panel')).toHaveAttribute('data-conversation', 'conv-1');
   });
 });

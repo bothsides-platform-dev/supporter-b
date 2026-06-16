@@ -5,9 +5,11 @@ import { cn } from '@/lib/utils';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { EnvelopeIcon } from '@/components/icons';
 import { ConversationList } from './ConversationList';
+import { ContextPanel } from './ContextPanel';
 import { NewConversationSheet } from './NewConversationSheet';
 import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
+import { useIsXlUp } from '@/hooks/use-xl-up';
 import type { InboxListItem } from './types';
 
 type Props = {
@@ -20,6 +22,7 @@ type Props = {
 export function MessageInbox({ items, initialSelectedKey = null, className }: Props) {
   const [selectedKey, setSelectedKey] = useState<string | null>(initialSelectedKey);
   const [search, setSearch] = useState('');
+  const isXl = useIsXlUp();
 
   const visible = items
     .filter((i) => {
@@ -47,7 +50,20 @@ export function MessageInbox({ items, initialSelectedKey = null, className }: Pr
   const selectedCounterparty =
     selectedItem?.kind === 'counterparty' ? selectedItem.counterparty : null;
 
-  // 메신저형 레이아웃: 데스크톱은 2-컬럼(목록 + 스레드), 모바일은 단일 컬럼으로
+  const rfpContext =
+    selectedItem?.kind === 'counterparty' && selectedItem.rfpCode
+      ? {
+          code: selectedItem.rfpCode,
+          title: selectedItem.rfpTitle ?? '',
+          status: selectedItem.rfpStatus ?? undefined,
+          deadline: selectedItem.rfpDeadline,
+        }
+      : selectedItem?.kind === 'team'
+        ? { code: selectedItem.rfpCode, title: selectedItem.rfpTitle }
+        : undefined;
+
+  // 메신저형 레이아웃: xl(≥1280)은 3-컬럼(목록 + 스레드 + 컨텍스트 패널),
+  // 데스크톱(md)은 2-컬럼(목록 + 스레드), 모바일은 단일 컬럼으로
   // 목록 ↔ 스레드를 전환한다(선택 시 스레드 전체폭, 뒤로가기로 목록 복귀). 좁은
   // 화면에서 고정 w-80 목록이 스레드를 으스러뜨리던 문제를 해소.
   return (
@@ -90,6 +106,8 @@ export function MessageInbox({ items, initialSelectedKey = null, className }: Pr
               conversationId={selectedConversationId}
               counterpartyFallback={selectedCounterparty}
               onBack={() => setSelectedKey(null)}
+              variant={isXl ? 'page' : 'tabs'}
+              rfpContext={rfpContext}
             />
           </Suspense>
         ) : (
@@ -102,6 +120,22 @@ export function MessageInbox({ items, initialSelectedKey = null, className }: Pr
           </div>
         )}
       </div>
+      {isXl && selectedItem && (
+        <div
+          data-pane="context"
+          className="hidden w-64 shrink-0 flex-col border-l border-[var(--md-sys-color-outline-variant)] xl:flex"
+        >
+          <div className="flex h-[44px] shrink-0 items-center border-b border-[var(--md-sys-color-outline-variant)] px-3 text-[11px] font-medium uppercase tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+            컨텍스트
+          </div>
+          {selectedItem.kind === 'counterparty' && (
+            <ContextPanel conversationId={selectedItem.conversationId} rfpContext={rfpContext} />
+          )}
+          {selectedItem.kind === 'team' && (
+            <ContextPanel conversationId={selectedItem.rfpId} rfpContext={rfpContext} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
