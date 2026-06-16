@@ -163,6 +163,17 @@ describe('DrizzleRfpRepository', () => {
     expect(updated.status).toBe('sent');
   });
 
+  it('transition() sets updatedAt to the transition time, distinct from creation time', async () => {
+    const rfp = makeRfp('P-2605-0099', ctx.ws.id, ctx.user.id);
+    await repo.save(rfp);
+    const saved = await repo.findById(rfp.id);
+    await new Promise<void>((r) => setTimeout(r, 10));
+    const updated = await repo.transition(rfp.id, 'sent');
+    expect(new Date(updated.updatedAt!).getTime()).toBeGreaterThan(
+      new Date(saved!.updatedAt!).getTime(),
+    );
+  });
+
   it('throws on invalid transition (draft → awarded)', async () => {
     const rfp = makeRfp('P-2605-0001', ctx.ws.id, ctx.user.id);
     await repo.save(rfp);

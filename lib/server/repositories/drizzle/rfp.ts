@@ -273,7 +273,7 @@ export class DrizzleRfpRepository implements RfpRepo {
 
     // Atomic update with `WHERE status=$prev` concurrency guard.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const setPatch: any = { status: to };
+    const setPatch: any = { status: to, updatedAt: new Date() };
     if (patch?.awardedBidId !== undefined) setPatch.awardedBidId = patch.awardedBidId;
     if (patch?.sentAt !== undefined)
       setPatch.sentAt = patch.sentAt ? new Date(patch.sentAt) : null;
