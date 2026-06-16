@@ -62,7 +62,11 @@ FocusComparison → MessageComposeSheet 의 `rfpContext={{ code: props.rfpId(uui
 
 ### 보드 카드 이동의 키보드 대체 수단
 **Priority:** P1
-센서 교체(Mouse+Touch)로 보드 드래그가 포인터 전용이 됨 — 기존 KeyboardSensor 는 래퍼 가짜 버튼(role/tabIndex 스프레드, 무라벨·중첩 버튼) 위에서만 동작하던 깨진 affordance 였고, 카드 버튼에 합치면 dnd-kit 이 Enter 클릭을 preventDefault 로 죽여 기각. 올바른 복원은 카드 버튼 **밖** 전용 드래그 핸들(스트레치드 버튼 패턴으로 PipelineCard 루트 재구성) + KeyboardSensor 재도입, 또는 카드 컨텍스트 메뉴 '이동' 액션. 모든 드래그 액션은 상세 화면 버튼 경로로 수행 가능(기능 잠금 아님). (발견: /ship adversarial·design 리뷰 2026-06-13, branch worktree-fix-kanban-board-ux)
+센서 교체(Mouse+Touch)로 보드 드래그가 포인터 전용이 됨 — 기존 KeyboardSensor 는 래퍼 가짜 버튼(role/tabIndex 스프레드, 무라벨·중첩 버튼) 위에서만 동작하던 깨진 affordance 였고, 카드 버튼에 합치면 dnd-kit 이 Enter 클릭을 preventDefault 로 죽여 기각. 올바른 복원은 카드 버튼 **밖** 전용 드래그 핸들(스트레치드 버튼 패턴으로 PipelineCard 루트 재구성) + KeyboardSensor 재도입, 또는 카드 컨텍스트 메뉴 '이동' 액션. 모든 드래그 액션은 상세 화면 버튼 경로로 수행 가능(기능 잠금 아님). (발견: /ship adversarial·design 리뷰 2026-06-13, branch worktree-fix-kanban-board-ux) **진척(Phase 5-7, v0.2.23.0)**: `DndContext` 에 `accessibility`(스크린리더 라이브 리전 + 한국어 드래그 안내, KeyboardSensor 없이) 추가로 SR 내레이션은 확보 — 실제 키보드 재정렬 affordance 는 여전히 미해결(이 항목 유지).
+
+### 보드 컬럼/카드 memo 가 현재 미발현 (children 인라인 패턴)
+**Priority:** P3
+Phase 5-7 split 에서 `BoardColumn`·`BoardDraggableCard` 를 `React.memo` 로 감쌌지만, `KanbanBoard` 가 컬럼에 `children`(컬럼별 카드 목록)을, 카드에 `renderCard(card)` 결과를 인라인으로 주입해 매 렌더 children 참조가 바뀌므로 memo 가 bail 하지 못한다(동작 동일, 최적화 미발현 — 핸들러 useCallback 만 유효). 진짜 컬럼/카드 단위 bail 은 (1) 컬럼이 카드 **데이터**(`grouped` 는 이미 useMemo)+안정 `renderCard` 를 받아 내부 렌더, (2) 소비처(`PipelineBoard`)가 `renderCard`/`columnOverflow` 를 `useCallback` 으로 안정화, (3) 컬럼별 `overflow` 객체 신원 안정화가 필요. DnD 보드라 동작 회귀 위험이 있어 단독 perf 패스로 분리. (발견: /ship adversarial 리뷰 2026-06-16, v0.2.23.0)
 
 ### PG 인박스 데이터 조립 중복 + 보드 뷰 2중 페치
 **Priority:** P2

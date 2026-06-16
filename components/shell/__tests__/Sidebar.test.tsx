@@ -20,9 +20,15 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockRouterPush }),
 }));
 
-const { mockUnread } = vi.hoisted(() => ({ mockUnread: { value: 0 } }));
+const { mockUnread, mockUseNotifications } = vi.hoisted(() => ({
+  mockUnread: { value: 0 },
+  mockUseNotifications: vi.fn(),
+}));
 vi.mock('@/lib/hooks/useNotifications', () => ({
-  useNotifications: () => ({ unreadCount: mockUnread.value }),
+  useNotifications: (workspaceId?: string) => {
+    mockUseNotifications(workspaceId);
+    return { unreadCount: mockUnread.value };
+  },
 }));
 
 vi.mock('@/lib/stores/theme', () => ({
@@ -82,9 +88,25 @@ beforeEach(() => {
   mockSearchParams.mockReturnValue(new URLSearchParams(''));
   mockRouterPush.mockReset();
   mockUnread.value = 0;
+  mockUseNotifications.mockClear();
 });
 
 afterEach(() => cleanup());
+
+describe('Sidebar — notifications workspace scoping', () => {
+  // 워크스페이스 전환 시 useNotifications 싱글턴이 스테일되지 않도록, Sidebar 가
+  // 현재 워크스페이스 id 를 훅에 넘겨야 한다(전달 안 하면 reset 이 안 걸려 이전
+  // 워크스페이스 알림이 남는다 — Phase 7b 버그).
+  it('passes the active workspace id to useNotifications', () => {
+    renderSidebar(buyerProps);
+    expect(mockUseNotifications).toHaveBeenCalledWith('ws1');
+  });
+
+  it('passes the pg workspace id when on a pg workspace', () => {
+    renderSidebar(pgProps);
+    expect(mockUseNotifications).toHaveBeenCalledWith('ws2');
+  });
+});
 
 describe('Sidebar — icon toggle', () => {
   it('renders the collapse trigger inside the sidebar', () => {
