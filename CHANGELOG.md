@@ -7,6 +7,11 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - **메시지 화면 3단 레이아웃 + 검색 + RFP 컨텍스트 패널 (xl 이상)**: 메시지(`/messages`) 화면을 대화폭 데스크톱에서 더 쓰기 좋게 개편했어요. 1280px 이상(xl) 화면에서 ① 대화 목록 패널 → ② 스레드 패널 → ③ RFP 컨텍스트 패널 순서의 3단 레이아웃이 펼쳐져요. xl 미만에서는 스레드 패널 내부가 채팅·RFP·파일 탭으로 전환돼 같은 정보를 탭 형태로 볼 수 있어요. 대화 목록 상단엔 검색 입력창을 추가했어요 — 상대방 이름·견적 코드·미리보기 텍스트를 실시간으로 필터링해요. 상대방 대화 행에 연결 견적 코드 칩(RFP 코드 + 제목)을 노출하고, 마지막 메시지 시각을 오늘이면 시각(오전/오후 H:MM), 이번 주면 요일, 그 이전이면 M/D 날짜로 상대적으로 표시해요. 전체·상대방·팀 필터 탭은 그대로예요.
+## [0.2.23.3] - 2026-06-16
+
+### Changed
+
+- **README 전면 재작성 — 아키텍처 중심 문서로 개편 (개발자 문서 전용, 제품 변화 없음)**: 로컬 세팅 가이드를 제거하고 프로젝트 아키텍처를 한눈에 파악할 수 있는 문서로 재작성했어요. 시스템 아키텍처(Caddy → Next.js/Centrifugo → PostgreSQL), 서버 레이어(Actions → Services → Repositories), Transactional Outbox Pattern, 봉인 입찰 보안 경계, Repository Boundary 린트 강제, 테스트 전략(PGlite 기반 TDD)을 Mermaid 다이어그램과 함께 정리했어요.
 
 ## [0.2.23.2] - 2026-06-16
 
