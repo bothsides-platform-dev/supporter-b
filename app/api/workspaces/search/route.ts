@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { auth } from '@/auth';
-import { isSessionRevoked } from '@/lib/auth/session';
+import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import { searchWorkspaces } from '@/lib/server/workspaces/search';
 
 export const runtime = 'nodejs';
@@ -42,6 +42,10 @@ export async function GET(request: NextRequest) {
     // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
     if (await isSessionRevoked(session)) {
       return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+    }
+    // 이메일 미인증 세션 거부.
+    if (await isEmailUnverified(session)) {
+      return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
     }
   }
 

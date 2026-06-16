@@ -33,7 +33,7 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 
 import { auth } from '@/auth';
-import { isSessionRevoked } from '@/lib/auth/session';
+import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import {
   getAttachmentRepo,
   getBidRepo,
@@ -72,6 +72,8 @@ export async function POST(req: Request): Promise<Response> {
 
   // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
+  // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
+  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
 
   let form: FormData;
   try {

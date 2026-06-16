@@ -12,8 +12,10 @@ vi.mock('@/auth', () => ({
 
 // 폐기 세션(sv stale) 차단용.
 const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
+const getDbEmailVerifiedMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/auth/session-version-db', () => ({
   getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
+  getDbEmailVerified: (...a: unknown[]) => getDbEmailVerifiedMock(...a),
 }));
 
 // 라우트가 모듈 로드 시 postgres-js 클라이언트를 당기지 않도록 차단 —
@@ -34,6 +36,8 @@ beforeEach(() => {
   sessionRef.value = null;
   getDbSessionVersionMock.mockReset();
   getDbSessionVersionMock.mockResolvedValue(1);
+  getDbEmailVerifiedMock.mockReset();
+  getDbEmailVerifiedMock.mockResolvedValue(true);
   searchWorkspacesMock.mockReset();
   searchWorkspacesMock.mockResolvedValue([]);
 });
@@ -56,5 +60,12 @@ describe('GET /api/workspaces/search — auth guard', () => {
   it('pg 검색은 비로그인도 허용 (공개 디스커버리)', async () => {
     const r = await callGet('q=toss&type=pg');
     expect(r.status).toBe(200);
+  });
+
+  it('type=buyer: 미인증 세션 → 403', async () => {
+    sessionRef.value = { user: { id: 'u-1', sessionVersion: 1 } };
+    getDbEmailVerifiedMock.mockResolvedValue(false);
+    const r = await callGet('type=buyer');
+    expect(r.status).toBe(403);
   });
 });

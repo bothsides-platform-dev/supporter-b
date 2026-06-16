@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { isSessionRevoked } from '@/lib/auth/session';
+import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import {
   getWorkspaceLogoRepo,
   getWorkspaceRepo,
@@ -45,6 +45,8 @@ export async function POST(req: Request, ctx: RouteContext): Promise<Response> {
 
   // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
+  // 이메일 미인증 세션 거부.
+  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
 
   const { id } = await ctx.params;
   const wsId = (session.user as { workspaceId?: string }).workspaceId;
@@ -84,6 +86,8 @@ export async function DELETE(
 
   // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
+  // 이메일 미인증 세션 거부.
+  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
 
   const { id } = await ctx.params;
   const wsId = (session.user as { workspaceId?: string }).workspaceId;
