@@ -162,11 +162,11 @@ export function ThreadView({
       const sender: ThreadMessage['sender'] =
         data.authorWsId === counterparty.workspaceId ? 'other' : 'self';
       // Centrifugo recovery can redeliver, and handleSend may have already
-      // promoted the pending bubble to this id → dedup. 본인 echo 면 진행 중
-      // pending 말풍선을 확정 승격(append 하면 중복), 아니면 새로 append.
+      // promoted the pending bubble to this id → dedup. 본인 echo 면 tempId 로
+      // 정확 매칭 후 확정 승격(append 하면 중복), 아니면 새로 append.
       setLocalMessages(
         (prev) =>
-          applyLiveEcho(prev, id, sender === 'self', data.createdAt as string) ?? [
+          applyLiveEcho(prev, id, sender === 'self', data.createdAt as string, data.tempId as string | undefined) ?? [
             ...prev,
             {
               id,
@@ -262,6 +262,7 @@ export function ThreadView({
         body,
         attachmentIds: readyAttachments.map((a) => a.id),
         rfpId: defaultRfpId,
+        tempId,
       });
     } catch {
       setSending(false);

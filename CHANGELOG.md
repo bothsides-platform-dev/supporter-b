@@ -7,6 +7,18 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - **내부 구조 정리 — 실시간 채팅 구독 로직 공용화 (개발자 전용, 사용자 화면·동작 변화 없음)**: 컴포넌트 리팩토링 마지막 항목(D10). 상대방 채팅(`useChatChannel`)과 팀 채팅(`useTeamChannel`)이 똑같이 들고 있던 Centrifugo 채널 구독 생명주기 — 연결·구독·수신 라우팅·연결상태 추적·정리(특히 재마운트 시 핸들러 중복 등록을 막는 `removeSubscription` 처리) — 를 공용 훅 `useCentrifugoSubscription` 으로 모았어요. 채널별 고유 동작(상대방 채팅의 타이핑 표시·온라인 프레즌스·타이핑 전송)은 그대로 해당 훅에 남겨 두고, 두 훅이 공유하던 연결/구독 보일러플레이트만 공유해요. 알림 스트림은 다른 전송 방식(SSE/EventSource, 단일 소비처)이라 의도적으로 합치지 않았어요(YAGNI). 동작·실시간 신호는 그대로(채팅 채널 훅 27개 + 소비 컴포넌트 107개 테스트 통과), 단위 테스트 8개 추가, 전체 3358개 통과.
+## [0.2.24.1] - 2026-06-16
+
+### Fixed
+
+- **채팅 보안·신뢰성 일괄 보강 (개발자 전용 — 사용자 체감 변화 없음)**: 실시간 채팅 도메인의 보안·정합성·신뢰성 이슈 6건을 한꺼번에 해소했어요.
+  - **[보안 P1] Centrifugo 구독 프록시 비밀 헤더**: `/api/centrifugo/subscribe` POST 엔드포인트에 `CENTRIFUGO_PROXY_SECRET` 환경 변수 기반 공유 비밀 헤더 검증을 추가했어요. `Buffer.alloc` + `timingSafeEqual` 로 상수시간 비교해 타이밍 오라클을 차단해요. 환경 변수 미설정 시 기존처럼 동작해요(하위 호환). 배포 시 Centrifugo 의 `subscribe_proxy` 정적 헤더(`X-Centrifugo-Proxy-Secret`)와 값을 맞춰야 해요.
+  - **[보안 P1] rfpId 태그 접근권 검증**: 채팅 메시지 전송 시 클라이언트가 제공한 `rfpId` 를 무검증 영속하던 문제를 수정했어요. 이제 `canWorkspaceAccessRfp` 헬퍼로 buyer-소유/PG-초대 여부를 확인하고, 접근 불가 RFP 태그는 조용히 드롭(메시지는 정상 전송)해요. 교차 테넌트 UUID 오염·존재 오라클을 차단해요.
+  - **[신뢰성 P2] self-echo tempId 상관 관계**: 라이브 self-echo 매칭이 "첫 번째 pending 말풍선" 기준이라 동일 유저가 두 탭에서 동시 전송 시 echo 가 다른 탭 pending 을 오인 승격하던 문제를 해결했어요. 클라이언트가 생성한 `tempId` 를 액션 → Centrifugo 브로드캐스트 → `applyLiveEcho` 까지 왕복시켜 정확 매칭해요.
+  - **[신뢰성 P2] 대화 스레드 캐시 unmount 무효화**: `ThreadPane` 이 unmount 될 때 `invalidateThread` 를 호출하도록 수정했어요. 이전엔 소프트 재방문 시 스테일 스냅샷이 재생됐어요.
+  - **[정합성 P2] RecipientCard `rfpContext` 타입 분리 — UUID 노출 제거**: `RfpContext` 에 전송용 `id`(UUID) 를 별도 필드로 분리했어요. 이전엔 `code` 필드가 UUID 와 사람용 RFP 코드를 이중 사용해 `RecipientCard` 에 UUID 가 그대로 표시됐어요.
+  - **공유 헬퍼 `canWorkspaceAccessRfp` 추출**: `TeamChatService.authorize` 와 subscribe 라우트에 중복됐던 RFP 접근 규칙을 `lib/server/rfp-access.ts` 로 단일화했어요.
+
 ## [0.2.24.0] - 2026-06-16
 
 ### Changed

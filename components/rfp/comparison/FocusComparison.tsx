@@ -192,7 +192,7 @@ export function FocusComparison(props: Props) {
           <CounterpartyProfileCard
             variant="profile"
             counterparty={{ name: pgName(active.pgWsId), type: 'pg', workspaceId: active.pgWsId }}
-            rfpContext={{ code: props.rfpId, title: props.rfpCode }}
+            rfpContext={{ id: props.rfpId, code: props.rfpCode }}
           />
           {isAwarded && (
             <Chip

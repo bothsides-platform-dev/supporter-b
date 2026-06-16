@@ -400,11 +400,13 @@ describe('ThreadView', () => {
     await user.click(screen.getByRole('button', { name: '보내기' }));
 
     await waitFor(() => {
-      expect(sendChatMessageAction).toHaveBeenCalledWith({
-        conversationId: 'conv-1',
-        body: '새 메시지',
-        attachmentIds: [],
-      });
+      expect(sendChatMessageAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: 'conv-1',
+          body: '새 메시지',
+          attachmentIds: [],
+        }),
+      );
     });
     expect(textarea).toHaveValue('');
   });
@@ -446,11 +448,13 @@ describe('ThreadView', () => {
 
     await user.type(textarea, '{Enter}');
     await waitFor(() => {
-      expect(sendChatMessageAction).toHaveBeenCalledWith({
-        conversationId: 'conv-1',
-        body: '첫줄\n둘째줄',
-        attachmentIds: [],
-      });
+      expect(sendChatMessageAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: 'conv-1',
+          body: '첫줄\n둘째줄',
+          attachmentIds: [],
+        }),
+      );
     });
   });
 
@@ -902,12 +906,14 @@ describe('ThreadView — defaultRfpId (레일 컨텍스트 RFP 태그)', () => {
     await user.click(screen.getByRole('button', { name: '보내기' }));
 
     await waitFor(() => {
-      expect(sendChatMessageAction).toHaveBeenCalledWith({
-        conversationId: 'conv-1',
-        body: '레일에서 보낸 메시지',
-        attachmentIds: [],
-        rfpId: 'rfp-uuid-1',
-      });
+      expect(sendChatMessageAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: 'conv-1',
+          body: '레일에서 보낸 메시지',
+          attachmentIds: [],
+          rfpId: 'rfp-uuid-1',
+        }),
+      );
     });
 
     // 낙관적/확정 말풍선에 RFP 컨텍스트 칩(코드, uuid 원문 노출 금지)이 붙는다.
@@ -924,12 +930,13 @@ describe('ThreadView — defaultRfpId (레일 컨텍스트 RFP 태그)', () => {
     await user.click(screen.getByRole('button', { name: '보내기' }));
 
     await waitFor(() => {
-      expect(sendChatMessageAction).toHaveBeenCalledWith({
-        conversationId: 'conv-1',
-        body: '일반 전송',
-        attachmentIds: [],
-        rfpId: undefined,
-      });
+      expect(sendChatMessageAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: 'conv-1',
+          body: '일반 전송',
+          attachmentIds: [],
+        }),
+      );
     });
   });
 });

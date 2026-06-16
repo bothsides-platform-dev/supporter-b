@@ -5,11 +5,14 @@ import type {
   ChatConversationRepo,
   ChatMessageRepo,
   ChatReadRepo,
+  InvitationRepo,
   NotificationRepo,
   OutboxRepo,
+  RfpRepo,
   UserRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
+import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
 import {
   dispatchNotification,
   emitAfterCommit,
@@ -64,6 +67,8 @@ export class ChatService {
     private readonly notifRepo: NotificationRepo,
     private readonly outboxRepo: OutboxRepo,
     private readonly readRepo: ChatReadRepo,
+    private readonly rfpRepo: RfpRepo,
+    private readonly invRepo: InvitationRepo,
   ) {}
 
   async sendMessage(
@@ -76,6 +81,7 @@ export class ChatService {
       createdAt: string;
       authorName: string;
       authorEmail: string;
+      rfpId: string | null;
     }>
   > {
     const body = (input.body ?? '').trim();
@@ -137,6 +143,14 @@ export class ChatService {
       }
     }
 
+    // RFP 태그 접근 검증 — 교차 테넌트 uuid 오염 방지. 검증 실패 시 태그만 드롭
+    // (메시지는 정상 전송). tx 밖에서 실행해 불필요한 DB 락을 피한다.
+    let effectiveRfpId: string | null = input.rfpId ?? null;
+    if (effectiveRfpId) {
+      const access = await canWorkspaceAccessRfp(this.rfpRepo, this.invRepo, effectiveRfpId, actor.workspaceId);
+      if (!access.allowed) effectiveRfpId = null;
+    }
+
     const now = new Date();
     const messageId = randomUUID();
     // 표시 전용 — 보낸 사람 이름/이메일(라이브 수신자가 메시지에 라벨을 붙인다).
@@ -149,6 +163,7 @@ export class ChatService {
       createdAt: string;
       authorName: string;
       authorEmail: string;
+      rfpId: string | null;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     }> = await this._db.transaction(async (tx: any) => {
       const conv = conversationId
@@ -162,7 +177,7 @@ export class ChatService {
           authorUserId: actor.userId,
           authorWsId: actor.workspaceId,
           body,
-          rfpId: input.rfpId ?? null,
+          rfpId: effectiveRfpId,
           createdAt: now,
         },
         tx,
@@ -238,6 +253,7 @@ export class ChatService {
         createdAt: now.toISOString(),
         authorName: me?.name ?? '',
         authorEmail: me?.email ?? '',
+        rfpId: effectiveRfpId,
       };
     });
 
@@ -325,13 +341,15 @@ export async function getChatService(): Promise<ChatService> {
         getNotificationRepo,
         getOutboxRepo,
         getChatReadRepo,
+        getRfpRepo,
+        getInvitationRepo,
       },
     ] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo] =
+    const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo, rfpRepo, invRepo] =
       await Promise.all([
         getChatConversationRepo(),
         getWorkspaceRepo(),
@@ -341,6 +359,8 @@ export async function getChatService(): Promise<ChatService> {
         getNotificationRepo(),
         getOutboxRepo(),
         getChatReadRepo(),
+        getRfpRepo(),
+        getInvitationRepo(),
       ]);
 
     globalThis.__bidit_chat_service__ = new ChatService(
@@ -353,6 +373,8 @@ export async function getChatService(): Promise<ChatService> {
       notifRepo,
       outboxRepo,
       readRepo,
+      rfpRepo,
+      invRepo,
     );
   }
   return globalThis.__bidit_chat_service__!;

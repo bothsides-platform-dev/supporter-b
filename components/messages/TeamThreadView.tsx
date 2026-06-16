@@ -86,11 +86,11 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
       if (!data.id || typeof data.body !== 'string' || !data.createdAt) return;
       const id = data.id;
       const isSelf = data.authorUserId === viewerUserId;
-      // 재전달·승격 선행 케이스는 dedup. 본인 echo 면 진행 중 pending 말풍선을
+      // 재전달·승격 선행 케이스는 dedup. 본인 echo 면 tempId 로 정확 매칭 후
       // 확정 승격(append 하면 중복, 낙관적 첨부 보존), 아니면 새로 append.
       setLocalMessages(
         (prev) =>
-          applyLiveEcho(prev, id, isSelf, data.createdAt as string) ?? [
+          applyLiveEcho(prev, id, isSelf, data.createdAt as string, data.tempId as string | undefined) ?? [
             ...prev,
             {
               id,
@@ -143,6 +143,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
         rfpId,
         body,
         attachmentIds: readyAttachments.map((a) => a.id),
+        tempId,
       });
     } catch {
       result = { ok: false, error: 'NETWORK' };

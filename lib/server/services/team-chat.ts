@@ -20,6 +20,7 @@ import {
 } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { teamDigestDedupeKey, teamDigestWindowEnd } from '@/lib/server/outbox/team-digest';
+import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
 import { extractMentions, mentionsToPlainText } from '@/lib/team-mentions';
 import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
@@ -81,16 +82,9 @@ export class TeamChatService {
     rfpId: string,
     actor: TeamChatActor,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
-    const rfp = await this.rfpRepo.findById(rfpId);
-    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
-    if (actor.workspaceType === 'buyer') {
-      if (rfp.buyerWsId !== actor.workspaceId) {
-        return { ok: false, error: 'FORBIDDEN' };
-      }
-      return { ok: true };
-    }
-    const allowed = await this.invRepo.canAccess(rfpId, actor.workspaceId);
-    return allowed ? { ok: true } : { ok: false, error: 'FORBIDDEN' };
+    const access = await canWorkspaceAccessRfp(this.rfpRepo, this.invRepo, rfpId, actor.workspaceId);
+    if (access.allowed) return { ok: true };
+    return { ok: false, error: access.reason };
   }
 
   async sendMessage(

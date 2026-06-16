@@ -149,11 +149,13 @@ describe('TeamThreadView — 전송', () => {
 
     await screen.findByText('새 팀 메모');
     await waitFor(() => {
-      expect(sendTeamMessageAction).toHaveBeenCalledWith({
-        rfpId: 'rfp-1',
-        body: '새 팀 메모',
-        attachmentIds: [],
-      });
+      expect(sendTeamMessageAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rfpId: 'rfp-1',
+          body: '새 팀 메모',
+          attachmentIds: [],
+        }),
+      );
     });
     // 확정 승격 — pending 표시가 사라진다.
     await waitFor(() => {
@@ -174,11 +176,13 @@ describe('TeamThreadView — 전송', () => {
 
     await user.type(textarea, '{Enter}');
     await waitFor(() => {
-      expect(sendTeamMessageAction).toHaveBeenCalledWith({
-        rfpId: 'rfp-1',
-        body: '줄1\n줄2',
-        attachmentIds: [],
-      });
+      expect(sendTeamMessageAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rfpId: 'rfp-1',
+          body: '줄1\n줄2',
+          attachmentIds: [],
+        }),
+      );
     });
   });
 
@@ -273,11 +277,13 @@ describe('TeamThreadView — 첨부', () => {
     await user.click(screen.getByRole('button', { name: '보내기' }));
 
     await waitFor(() => {
-      expect(sendTeamMessageAction).toHaveBeenCalledWith({
-        rfpId: 'rfp-1',
-        body: '첨부 메모',
-        attachmentIds: ['att-1'],
-      });
+      expect(sendTeamMessageAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rfpId: 'rfp-1',
+          body: '첨부 메모',
+          attachmentIds: ['att-1'],
+        }),
+      );
     });
     const link = await screen.findByRole('link', { name: /제안서.pdf/ });
     expect(link).toHaveAttribute('href', '/api/files/att-1');
@@ -299,11 +305,13 @@ describe('TeamThreadView — 첨부', () => {
     expect(sendBtn).toBeEnabled();
     await user.click(sendBtn);
     await waitFor(() => {
-      expect(sendTeamMessageAction).toHaveBeenCalledWith({
-        rfpId: 'rfp-1',
-        body: '',
-        attachmentIds: ['att-2'],
-      });
+      expect(sendTeamMessageAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rfpId: 'rfp-1',
+          body: '',
+          attachmentIds: ['att-2'],
+        }),
+      );
     });
   });
 
@@ -625,11 +633,13 @@ describe('TeamThreadView — 멘션', () => {
     await user.type(ta, '확인');
     await user.click(screen.getByRole('button', { name: '보내기' }));
     await waitFor(() => {
-      expect(sendTeamMessageAction).toHaveBeenCalledWith({
-        rfpId: 'rfp-1',
-        body: `<@${MATE}> 확인`,
-        attachmentIds: [],
-      });
+      expect(sendTeamMessageAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rfpId: 'rfp-1',
+          body: `<@${MATE}> 확인`,
+          attachmentIds: [],
+        }),
+      );
     });
   });
 

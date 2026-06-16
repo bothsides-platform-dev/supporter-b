@@ -193,6 +193,33 @@ describe('sendChatMessageAction', () => {
     expect(Number.isNaN(Date.parse(payload.createdAt as string))).toBe(false);
   });
 
+  it('tempId 가 전달되면 publishChatEvent 페이로드에 tempId 가 포함된다', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '임시ID 테스트',
+      tempId: 'tmp-abc123',
+    });
+
+    const [, payload] = publishChatEvent.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.tempId).toBe('tmp-abc123');
+  });
+
+  it('tempId 가 없으면 publishChatEvent 페이로드의 tempId 는 null 이다', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+
+    await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '임시ID 없음',
+    });
+
+    const [, payload] = publishChatEvent.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.tempId).toBeNull();
+  });
+
   it('publishes the author identity (userId/name/email) so receivers can label the message', async () => {
     const { buyerUser, buyerWs, pgWs } = await seedPair();
     asBuyer(buyerUser, buyerWs.id);

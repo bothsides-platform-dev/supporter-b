@@ -27,10 +27,12 @@ export function RecipientCard({ counterparty, rfpContext }: Props) {
           </span>
           <Chip label={COUNTERPARTY_TYPE_LABEL[counterparty.type]} color="surface" />
         </div>
-        {rfpContext && (
+        {rfpContext && (rfpContext.code || rfpContext.title) && (
           <p className="mt-0.5 truncate text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-            <span className="font-mono tabular-nums">{rfpContext.code}</span>
-            {' · '}
+            {rfpContext.code && (
+              <span className="font-mono tabular-nums">{rfpContext.code}</span>
+            )}
+            {rfpContext.code && rfpContext.title && ' · '}
             {rfpContext.title}
           </p>
         )}
