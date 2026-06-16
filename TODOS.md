@@ -11,9 +11,8 @@
 
 ## Kanban Board
 
-### 보드 카드 이동의 키보드 대체 수단
-**Priority:** P1
-센서 교체(Mouse+Touch)로 보드 드래그가 포인터 전용이 됨 — 기존 KeyboardSensor 는 래퍼 가짜 버튼(role/tabIndex 스프레드, 무라벨·중첩 버튼) 위에서만 동작하던 깨진 affordance 였고, 카드 버튼에 합치면 dnd-kit 이 Enter 클릭을 preventDefault 로 죽여 기각. 올바른 복원은 카드 버튼 **밖** 전용 드래그 핸들(스트레치드 버튼 패턴으로 PipelineCard 루트 재구성) + KeyboardSensor 재도입, 또는 카드 컨텍스트 메뉴 '이동' 액션. 모든 드래그 액션은 상세 화면 버튼 경로로 수행 가능(기능 잠금 아님). (발견: /ship adversarial·design 리뷰 2026-06-13, branch worktree-fix-kanban-board-ux) **진척(Phase 5-7, v0.2.23.0)**: `DndContext` 에 `accessibility`(스크린리더 라이브 리전 + 한국어 드래그 안내, KeyboardSensor 없이) 추가로 SR 내레이션은 확보 — 실제 키보드 재정렬 affordance 는 여전히 미해결(이 항목 유지).
+### ~~보드 카드 이동의 키보드 대체 수단~~ ✅ v0.2.25.1
+`BoardDraggableCard` 에 전용 드래그 핸들(GripVertical, `setActivatorNodeRef`) 추가 + `KeyboardSensor` 재도입. 핸들에서 Space/Enter 로 카드를 집고 화살표 키로 이동 — 카드 버튼(Enter-to-open)과 분리돼 충돌 없음. SR 지시문·announcements 도 키보드 방법 안내로 갱신. (PR fix/kanban-keyboard-drag-handle 2026-06-17)
 
 ### 보드 컬럼/카드 memo 가 현재 미발현 (children 인라인 패턴)
 **Priority:** P3

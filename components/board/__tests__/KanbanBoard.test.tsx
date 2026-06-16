@@ -149,8 +149,8 @@ describe('KanbanBoard', () => {
     expect(screen.queryByRole('link', { name: '표에서 전체 보기' })).not.toBeInTheDocument();
   });
 
-  it('드래그 래퍼에 명시적 tabIndex 가 없고 내부 버튼이 유일한 포커서블 요소다', () => {
-    const { container } = render(
+  it('드래그 핸들 버튼(키보드 이동용) 과 renderCard 버튼이 각 1개씩 렌더된다', () => {
+    render(
       <KanbanBoard
         kind="pipeline"
         cardType="rfp"
@@ -161,8 +161,8 @@ describe('KanbanBoard', () => {
         )}
       />,
     );
-    expect(container.querySelector('[tabindex]')).toBeNull();
-    // 카드 텍스트를 가진 버튼은 renderCard 의 진짜 버튼 1개뿐 (래퍼는 비인터랙티브).
+    // 드래그 핸들은 전용 tabStop — 카드 버튼과 분리돼 중첩 인터랙티브 없음.
+    expect(screen.getAllByRole('button', { name: /드래그 핸들/ })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: '결제대행 RFP' })).toHaveLength(1);
   });
 });

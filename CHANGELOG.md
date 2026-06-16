@@ -4,16 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.25.1] - 2026-06-17
 
-### Changed
-
-- **AUTH: unique-violation → EMAIL_TAKEN 매핑 DRY + 컨스트레인트 특정화**: `AuthService` 의 `users.email` unique violation → `EMAIL_TAKEN` 매핑 코드(4곳 중복)를 `mapUniqueViolationToEmailTaken<T>` 단일 헬퍼로 추출했어요. 아울러 `users_email_unique` 컨스트레인트에만 적용되도록 좁혀, 다른 테이블·컬럼의 23505 오류(예: `workspaces.canonical_pg_key`)가 `EMAIL_TAKEN` 으로 오진단되지 않아요. 동작 동일, 3470 green.
-
-## [0.2.24.2] - 2026-06-17
-
 ### Fixed
 
-- **견적 제안 수수료 툴팁 양끝 오버플로 + 접근성**: BidStepFees 의 수수료 입력 표에서 첫 열·마지막 열 툴팁이 테이블 밖으로 잘리는 문제를 고쳤어요. `tooltipAlign` prop(`start`|`center`|`end`)으로 위치를 제어하고, `useId` + `aria-describedby` 로 힌트 텍스트와 입력 필드를 스크린리더가 연결할 수 있게 했어요.
-- **종결·선정 컬럼 최신 전이 시각 기준 정렬**: 구매사 칸반의 종결·선정 컬럼과 PG 칸반의 낙찰·미선정 컬럼이 가장 최근에 상태가 바뀐 견적이 먼저 오도록 정렬해요. 기존에는 생성 시각 기준이었어요. 아울러 `rfps.updated_at` 이 전이 시 실제로 갱신되지 않던 버그를 함께 수정했어요 — `transition()` 이 SET 에 `updated_at = now()` 를 포함하도록 고쳤어요.
+- **칸반 키보드 드래그 핸들**: 카드마다 전용 드래그 핸들(GripVertical)이 생겼어요. 핸들에 포커스한 뒤 Space 또는 Enter 를 눌러 카드를 집고, 화살표 키로 다른 컬럼으로 이동할 수 있어요. 카드를 누르면 상세가 열리는 동작은 영향 없어요.
+
 ## [0.2.25.0] - 2026-06-17
 
 ### Fixed
@@ -24,6 +18,17 @@ All notable changes to this project will be documented in this file.
   - **[UX P3] OTP 입력 칸 Enter 키 → 폼 조기 제출 방지**: 인증번호 입력 후 Enter 를 누르면 폼이 제출되던 버그를 수정했어요. 이제 6자리가 모두 입력되어 있으면 Enter 가 `handleVerify` 를 호출하고, 부족하면 아무 일도 하지 않아요(폼 제출도 없음).
   - **[보안 P3] ApprovalWaitingScreen cross-host 내비 수정**: 승인 폴링 성공 시 `router.push('/home')` 대신 `window.location.assign('/home')` 으로 통일했어요. `EmailVerifyScreen` 과 같은 패턴이에요(v0.2.19.0 선례). 다른 호스트에서 `/pending-approval` 에 착지한 유저의 CORS 잠재 경로를 닫아요.
   - **[UX P3] 사파리 비공개 모드 sessionStorage 차단 안내**: `isSignupStorageAvailable()` 헬퍼로 sessionStorage 를 사전 감지해요. 차단 시(사파리 비공개 등) 프로필 단계에서 "브라우저 설정을 확인해주세요" 메시지와 함께 진행을 막아 기존의 '첫 가입 화면으로 무한 redirect' 를 방지해요.
+
+### Changed
+
+- **AUTH: unique-violation → EMAIL_TAKEN 매핑 DRY + 컨스트레인트 특정화**: `AuthService` 의 `users.email` unique violation → `EMAIL_TAKEN` 매핑 코드(4곳 중복)를 `mapUniqueViolationToEmailTaken<T>` 단일 헬퍼로 추출했어요. 아울러 `users_email_unique` 컨스트레인트에만 적용되도록 좁혀, 다른 테이블·컬럼의 23505 오류(예: `workspaces.canonical_pg_key`)가 `EMAIL_TAKEN` 으로 오진단되지 않아요. 동작 동일, 3470 green.
+
+## [0.2.24.2] - 2026-06-17
+
+### Fixed
+
+- **견적 제안 수수료 툴팁 양끝 오버플로 + 접근성**: BidStepFees 의 수수료 입력 표에서 첫 열·마지막 열 툴팁이 테이블 밖으로 잘리는 문제를 고쳤어요. `tooltipAlign` prop(`start`|`center`|`end`)으로 위치를 제어하고, `useId` + `aria-describedby` 로 힌트 텍스트와 입력 필드를 스크린리더가 연결할 수 있게 했어요.
+- **종결·선정 컬럼 최신 전이 시각 기준 정렬**: 구매사 칸반의 종결·선정 컬럼과 PG 칸반의 낙찰·미선정 컬럼이 가장 최근에 상태가 바뀐 견적이 먼저 오도록 정렬해요. 기존에는 생성 시각 기준이었어요. 아울러 `rfps.updated_at` 이 전이 시 실제로 갱신되지 않던 버그를 함께 수정했어요 — `transition()` 이 SET 에 `updated_at = now()` 를 포함하도록 고쳤어요.
 
 ## [0.2.23.1] - 2026-06-16
 
