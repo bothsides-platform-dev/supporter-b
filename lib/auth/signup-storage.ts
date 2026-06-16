@@ -71,3 +71,16 @@ export function clearSignupDraft(): void {
     // ignore
   }
 }
+
+/** sessionStorage가 접근 가능한지 확인. 사파리 비공개 모드 등에서 false. */
+export function isSignupStorageAvailable(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const probe = '__ss_probe__';
+    window.sessionStorage.setItem(probe, '1');
+    window.sessionStorage.removeItem(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}

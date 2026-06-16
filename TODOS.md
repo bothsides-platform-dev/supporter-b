@@ -4,21 +4,9 @@
 
 ## Auth / Signup
 
-### 가입 INSERT 후 비즈니스 early-return 의 고아 user 행 (기존 버그)
-**Priority:** P2
-`completeSignup`(`!input.wsName`)·`signupViaInvite`(`!claim.ok`) 가 `tx.insert(users)` *뒤에* `{ok:false}` 를 반환하면 콜백이 정상 resolve→postgres-js 가 부분 tx 를 commit→워크스페이스 없는 미인증 user 행이 남음. `MISSING_WS_NAME` 은 `signupCompleteAction` 이 액션에서 선검증하므로 현재 도달 불가지만, 서비스 내 가드를 `transaction()` 앞으로 hoist 하면 깔끔. claim 실패 경로는 throw-to-rollback 패턴 필요. 자가치유(재시도 시 멤버십 없어 purge 대상)되지만 의도치 않은 commit. (발견: /ship 어드버서리얼 2026-06-14, branch worktree-fix+signup-email-taken-pg-tx-rethrow. merge-base 기존 동작, 이 브랜치 비도입.)
-
-### 가입 race-collision .catch arm 테스트 (invite·canonical)
-**Priority:** P2
-`signupViaInvite`·`joinCanonicalPgWorkspace` 의 새 outer `.catch`(unique→EMAIL_TAKEN, non-unique→rethrow)는 `completeSignup` 의 throwingInsertDb 테스트와 동일 코드지만 직접 테스트 없음. invite/canonical 진입점은 유효 invitation·workspace 픽스처가 tx 까지 살아남는 더 풍부한 stub 필요. 추가로 postgres-js 의 "콜백 resolve 후 재던짐" 시맨틱을 모사하는 충실한 stub(동기 throw 가 아니라 resolve-후-reject)으로 회귀를 박제. (발견: /ship 테스트·어드버서리얼 2026-06-14)
-
 ### AuthService unique-violation→EMAIL_TAKEN 매핑 DRY
 **Priority:** P3
 `if (isUniqueViolation(err)) return {ok:false, error:'EMAIL_TAKEN'}; throw err;` 가 3개 가입 메서드 `.catch` + `confirmEmailChange` 까지 4곳 중복. 제네릭 헬퍼 `mapUniqueViolationToEmailTaken<T>` 로 추출. 가입 user-insert 8필드 리터럴도 3곳 중복(스키마 컬럼 추가 시 drift 위험) — `insertNewSignupUser(tx, …)` 헬퍼 검토. (발견: /ship 유지보수 리뷰 2026-06-14)
-
-### ApprovalWaitingScreen 의 router.push('/home') cross-host 잠재 위험
-**Priority:** P3
-`approval-waiting-screen.tsx` 승인 폴링 성공 시 `router.push('/home')`(소프트 내비)를 쓴다. EmailVerifyScreen 은 0.2.19.0 에서 `window.location.assign` 으로 전환했으나 이 형제 화면은 그대로다. 미인증/승인대기 유저가 다른 호스트의 `/pending-approval` 에 있을 때 (app) 가드의 cross-host redirect 를 RSC fetch 로 따라가다 CORS 에 막힐 수 있음(좁은 윈도우, 기존 동작). `window.location.assign('/home')` 로 통일. (발견: /ship 어드버서리얼 2026-06-14)
 
 ## Design
 
@@ -45,14 +33,6 @@ Phase 5-7 split 에서 `BoardColumn`·`BoardDraggableCard` 를 `React.memo` 로 
 BidCard·loadBoard rfp_bids 분기·cardType 'bid' 경로가 어디에도 마운트되지 않음(비교 화면 재설계 PR#97 이후). 부활 계획 없으면 제거, 보존이면 'no current mount point' 주석 명시. (발견: /ship red-team 리뷰 2026-06-13)
 
 ## Signup / Auth
-
-### OTP 입력 칸 Enter 키 → 폼 조기 제출
-**Priority:** P3
-담당자 정보 단계에서 인증번호 입력 후 Enter 를 누르면 폼이 제출되어(확인 버튼은 type=button) 인증 전 "휴대전화 인증을 완료해주세요" 가 뜸. OTP 입력의 Enter 를 handleVerify 로 라우팅하거나 그 입력에서 폼 제출을 막기. (발견: /ship 근본원인 분석 2026-06-13, branch worktree-fix-signup-profile-ready-guard-bounce)
-
-### 비공개 모드 sessionStorage 차단 시 가입 막다른 길
-**Priority:** P3
-sessionStorage 가 차단되면(사파리 비공개 등) readSignupDraft 가 {} 반환 → 프로필 단계 ready=false 로 첫 가입 화면 redirect, 폼 진입 불가(기존 동작, 이 브랜치 비도입). 비공개 모드 안내 또는 대체 캐리어 검토. (발견: /ship adversarial 리뷰 2026-06-13)
 
 ## Bid Wizard
 
