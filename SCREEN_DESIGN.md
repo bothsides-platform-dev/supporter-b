@@ -56,9 +56,9 @@ Authenticated AppShell
 ├─ /home
 ├─ /rfp
 │  ├─ /rfp/new
-│  └─ /rfp/:id                     (비교·선정 인라인 — 별도 award 라우트 없음)
+│  └─ /rfp/:id                     (딜룸 — 목록 행 클릭 시 `@modal` 인터셉트 블러 모달, 새로고침·딥링크는 정식 페이지(둘 다 DealRoomFull) · 비교·선정 인라인, 별도 award 라우트 없음)
 ├─ /inbox
-│  ├─ /inbox/:rfpId
+│  ├─ /inbox/:rfpId                (딜룸 — `@modal` 인터셉트 모달 + 정식 페이지)
 │  └─ /inbox/:rfpId/submitted
 ├─ /opportunities                (pg — 오픈 RFP 게시판)
 ├─ /notifications
@@ -88,7 +88,7 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget` |
 | B2 | `/rfp` | RFP 목록. 진행중/마감/선정 완료 탭 (작성중 단계는 제거 — draft RFP는 `?status=draft` URL/표로만 접근). **온보딩 샘플**: 신규·기존 구매사는 `isSample=true` 샘플 견적 요청 1건을 목록 최상단에서 볼 수 있다(`샘플` Chip 표시). 목록 행에서 직접 삭제 가능(삭제 영속 — 재시드 안 함). | `RfpList`, `DataTable`, `Tag`, `SampleRfpBanner` |
 | B3 | `/rfp/new` | 사업자 조회 (선택), 등급 확인 (선택), RFP 첨부, PG 워크스페이스 검색·선택, 발송 | `BizLookupField`, `GradeConfirmPanel`, `RfpCreateForm` (인라인 Popover+cmdk PG 검색), `RfpAttachmentDropzone` |
-| B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / PG 초대·게시판 관리). 견적별 '내 메모'는 제거 — 팀 메모는 채팅 레일 '팀 채팅'으로 일원화(첨부 지원). 표·보드·칸반 제거. **우측 채팅 레일**(헤더 '메시지' 토글, lg+): 탭 [상대방 채팅(FocusComparison 포커스 PG 추종, 전송에 RFP 태그 기본값) \| 팀 채팅(워크스페이스 내부 스레드, PDF·이미지 첨부)]. lg 미만은 `/messages?c=` 폴백. **온보딩 샘플**: `isSample=true` RFP 상세는 받은 견적 3건(데모 PG 워크스페이스)을 보기·비교 전용 샌드박스로 제공한다 — 선정 비활성. **채팅 레일은 샘플에서도 노출**(팀 채팅 정상 동작, 상대방 채팅 탭은 데모 PG라 전송 차단·안내). 상단 `SampleRfpBanner`로 삭제 안내(`deleteSampleRfpAction`, 삭제 영속). | `RfpDetailContent`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `AwardResult`, `BidPdfPane`, `ChatRail`, `ChatRailToggle`, `TeamThreadView`, `MessageAttachmentGrid`, `SampleRfpBanner` |
+| B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **진입**: 목록(B1) 행 클릭 시 블러 모달 딜룸(`@modal` 인터셉트), 새로고침·딥링크는 정식 페이지 — 둘 다 `DealRoomFull`/`DealRoomShell` 공유. 좌측 76px 아이콘 액션 레일(`DealRoomActionRail`) + 중앙 탭(`DealRoomCenter`). **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / PG 초대·게시판 관리). 견적별 '내 메모'는 제거 — 팀 메모는 딜룸 '팀 채팅'으로 일원화(첨부 지원). 표·보드·칸반 제거. **딜룸 채팅**(`DealRoomChat`→`ChatPanel`; lg+ 우측 aside, lg 미만 `DealRoomChatFab` 하단 시트): 탭 [상대방 채팅(FocusComparison 이 `useDealRoom().setCounterparty` 로 포커스 PG 추종, 전송에 RFP 태그 기본값) \| 팀 채팅(워크스페이스 내부 스레드, PDF·이미지 첨부)]. **온보딩 샘플**: `isSample=true` RFP 상세는 받은 견적 3건(데모 PG 워크스페이스)을 보기·비교 전용 샌드박스로 제공한다 — 선정 비활성. **딜룸 채팅은 샘플에서도 노출**(팀 채팅 정상 동작, 상대방 채팅 탭은 데모 PG라 전송 차단·안내). 상단 `SampleRfpBanner`로 삭제 안내(`deleteSampleRfpAction`, 삭제 영속). | `DealRoomModal`, `DealRoomFull`, `DealRoomShell`, `BuyerDealRoomBody`, `DealRoomActionRail`, `DealRoomCenter`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `AwardResult`, `BidPdfPane`, `DealRoomChat`, `DealRoomChatFab`, `ChatPanel`, `DealRoomContext`, `TeamThreadView`, `MessageAttachmentGrid`, `SampleRfpBanner` |
 | B5 | (B4에 통합) | 선정은 B4 포커스 뷰의 CTA → **인라인 `AwardConfirmDialog`**(결과·마감 경고 + 확정) → 확정 후 **`AwardResult` 전체 화면 오버레이**(1회성 축하 결과 — 히어로+혜택 요약+메시지 딥링크). 계약 레코드 생성·선택/미선택 PG 통보는 `awardRfpAction` 불변. 별도 `/rfp/:id/award` 라우트 없음 | `AwardConfirmDialog`, `AwardResult`, `awardRfpAction`, `useCelebrationConfetti` |
 | B6 | `/settings/profile` | 구매사 사업자 프로필과 등급 갱신 상태 | `WorkspaceProfileForm` |
 | B7 | `/settings/members` | buyer 워크스페이스 멤버 관리 | `MemberTable` |
@@ -99,7 +99,7 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 |---|---|---|---|
 | P1 | `/home` | 신규 RFP, 임박 마감, 제출 완료, 수주율 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget` |
 | P2 | `/inbox` | 받은 RFP 함. 신규/견적 보냄/마감 탭 (작성중 단계 제거 — 미제출 응답은 신규로 표시). **온보딩 샘플**: 신규·기존 PG는 데모 구매사가 보낸 `isSample=true` 샘플 견적 요청 1건을 인박스에서 본다(`샘플` Chip). | `InboxList`, `DataTable`, `Tag` |
-| P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성. 사업자번호 미입력 시 안내 배너. 등급 미입력 시 일반 폴백(9개 카드사 입력). 저장된 견적 템플릿(요율표) 불러오기 + 현재 입력 저장. **우측 채팅 레일**(B4 와 동일, 상대 = 구매사 고정) — 견적 작성 중 질의응답·내부 메모. **온보딩 샘플**: `isSample=true` RFP 는 인터랙티브 샌드박스 — PG 가 실제 4단계 위저드로 견적을 제출하면 잠시 뒤 선정을 시뮬레이트하고 전체화면 축하(`SamplePgAwardCelebration`)를 띄운다(`simulateSampleAwardAction`). 채팅 레일 비활성, 상단 `SamplePgRfpBanner`로 삭제 안내(`deleteSamplePgRfpAction`, 삭제 영속). | `RfpBriefPanel`, `BidWizard`, `StatutoryCardFeeNotice`, `ChatRail`, `ChatRailToggle`, `SamplePgRfpBanner`, `SamplePgAwardCelebration` |
+| P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성(딜룸 — B4 와 동일 `@modal` 인터셉트/정식 페이지 구조, `PgDealRoomBody`). 사업자번호 미입력·등급 미입력 안내는 `RfpBriefPanel` 인라인(일반 등급 가정 9개 카드사 폴백). 저장된 견적 템플릿(요율표) 불러오기 + 현재 입력 저장. **딜룸 채팅**(B4 와 동일, 상대 = 구매사 고정 — `DealRoomChat` 이 `fixedCounterparty` 시드) — 견적 작성 중 질의응답·내부 메모. **온보딩 샘플**: `isSample=true` RFP 는 인터랙티브 샌드박스 — PG 가 실제 4단계 위저드로 견적을 제출하면 잠시 뒤 선정을 시뮬레이트하고 전체화면 축하(`SamplePgAwardCelebration`)를 띄운다(`simulateSampleAwardAction`). 딜룸 채팅 비활성, 상단 `SamplePgRfpBanner`로 삭제 안내(`deleteSamplePgRfpAction`, 삭제 영속). | `DealRoomModal`, `DealRoomFull`, `DealRoomShell`, `PgDealRoomBody`, `DealRoomActionRail`, `DealRoomCenter`, `RfpBriefPanel`, `BidWizard`, `DealRoomChat`, `DealRoomChatFab`, `ChatPanel`, `DealRoomContext`, `SamplePgRfpBanner`, `SamplePgAwardCelebration` |
 | P4 | `/inbox/:rfpId/submitted` | 제출 완료, 결과 대기, 수정/철회 정책 안내 | `SubmittedState` |
 | P7 | `/opportunities` | 오픈 RFP 게시판 — 초대받지 않은 PG가 발견·콜드 피치. 공개는 구매사명·제목·홈페이지만(수수료 등 비노출). PG 홈 탐색 섹션의 "전체 보기" 대상 | `OpportunityList`, `OpportunityRequestDialog` |
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처) | `WorkspaceProfileForm` |
@@ -160,11 +160,12 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 ```
 
 ```
-채팅 레일 + 팀 채팅 (확정 결정, 2026-06-10)
-/rfp/:id · /inbox/:rfpId 우측 고정 레일 (sticky, w-96, lg+ 전용 — lg 미만은 /messages?c= 폴백)
-  ├─ 탭 [상대방 채팅]: 기존 buyer↔PG 페어 대화 임베드 (ThreadPane variant='rail')
-  │     ├─ 상대 출처 = chat-rail zustand 스토어 — 구매사: FocusComparison 이 포커스 PG publish(탭 추종),
-  │     │   PG: fixedCounterparty(구매사) 를 마운트 시 시드
+딜룸 채팅 + 팀 채팅 (확정 결정 2026-06-10; 레일 → 딜룸 모달 개편 2026-06-14)
+/rfp/:id · /inbox/:rfpId 딜룸 채팅 (DealRoomShell 우측 aside, w-96, lg+ — lg 미만은 DealRoomChatFab 하단 시트)
+  견적/RFP 클릭 → @modal 인터셉트 블러 모달(DealRoomModal), 새로고침·딥링크는 정식 페이지(DealRoomFull)
+  ├─ 탭 [상대방 채팅]: 기존 buyer↔PG 페어 대화 임베드 (ChatPanel → ThreadPane variant='rail')
+  │     ├─ 상대 출처 = DealRoomContext (딜룸 스코프, DealRoomShell 에 key={code} 마운트 — 전역 스토어 아님) — 구매사: FocusComparison 이 useDealRoom().setCounterparty 로 포커스 PG publish(탭 추종),
+  │     │   PG: DealRoomChat 이 fixedCounterparty(구매사) 를 마운트 시 시드
   │     ├─ wsId→conversationId 는 **읽기 전용** lookupConversationAction 으로 해소 — 열람·포커스만으로는
   │     │   어떤 행도 생성하지 않는다(빈 대화가 상대 인박스에 뜨면 관심 신호 누출 — sealed-bid).
   │     │   대화가 없으면 새 대화 컴포저를 띄우고 **첫 메시지 전송 시점에만** 생성
