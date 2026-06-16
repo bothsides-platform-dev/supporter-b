@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.23.3] - 2026-06-16
+
+### Changed
+
+- **README 전면 재작성 — 아키텍처 중심 문서로 개편 (개발자 문서 전용, 제품 변화 없음)**: 로컬 세팅 가이드를 제거하고 프로젝트 아키텍처를 한눈에 파악할 수 있는 문서로 재작성했어요. 시스템 아키텍처(Caddy → Next.js/Centrifugo → PostgreSQL), 서버 레이어(Actions → Services → Repositories), Transactional Outbox Pattern, 봉인 입찰 보안 경계, Repository Boundary 린트 강제, 테스트 전략(PGlite 기반 TDD)을 Mermaid 다이어그램과 함께 정리했어요.
+
 ## [0.2.23.2] - 2026-06-16
 
 ### Changed

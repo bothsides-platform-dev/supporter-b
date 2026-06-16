@@ -22,17 +22,15 @@ graph TB
     subgraph Lightsail["AWS Lightsail VM"]
         Caddy["Caddy\nReverse Proxy + TLS\nsupporter-b.com\npartner.supporter-b.com"]
 
-        subgraph NextJS["Next.js (PM2)"]
-            RSC["Server Components\n데이터 로딩 / 렌더"]
-            SA["Server Actions\n'use server'"]
-            API["Route Handlers\n/api/*"]
-        end
+            NextJS["Next.js (PM2)\nServer Components / Server Actions\nRoute Handlers — :3000"]
 
         Centrifugo["Centrifugo\nWebSocket 서버\n(자체호스팅)"]
 
         subgraph Docker["Docker"]
             PG[("PostgreSQL\n채팅·이메일·파일\n단일 스토어")]
         end
+
+        Cron["Cron Worker\n(1분 주기)\noutbox flush"]
     end
 
     subgraph External["외부 서비스"]
@@ -43,13 +41,12 @@ graph TB
 
     Browser -- "HTTPS" --> Caddy
     Browser -- "WSS" --> Caddy
-    Caddy --> RSC
-    Caddy --> SA
-    Caddy --> API
+    Caddy -- "reverse_proxy :3000" --> NextJS
     Caddy --> Centrifugo
-    Centrifugo -- "subscribe-proxy\nACL 위임" --> API
-    RSC & SA --> PG
-    SA --> Resend
+    Centrifugo -- "subscribe-proxy\nACL 위임" --> NextJS
+    NextJS --> PG
+    Cron --> PG
+    Cron --> Resend
     NextJS --> Sentry
     NextJS --> Axiom
 ```
@@ -100,11 +97,13 @@ app/
 ├─ (public)/          # 비인증: /login, /signup, /invite/[token], /pending-approval
 └─ (app)/             # 인증 + AppShell (Sidebar + Header)
    ├─ home/
-   ├─ rfp/            # 구매사 — RFP 목록·상세·작성 (/rfp/new)
+   ├─ rfp/            # 구매사 — RFP 목록·상세 (/rfp-create — 실제 작성 라우트)
+   ├─ rfp-create/     # 구매사 — RFP 작성 플로우 (/rfp/new → /rfp-create 리다이렉트)
    ├─ inbox/          # PG사 — 견적 수신함
    ├─ opportunities/  # PG사 — 오픈 RFP 게시판
    ├─ messages/       # 공통 — 실시간 채팅 (Centrifugo)
-   └─ settings/
+   ├─ quote-templates/ # 공통 — 견적 템플릿 관리
+   └─ settings/       # profile / members / notifications / audit-log
 ```
 
 **멀티 호스트 라우팅**: 단일 Next.js 앱이 두 도메인을 서빙합니다. `(app)/layout.tsx`가 요청 호스트를 읽어 세션 워크스페이스 타입(buyer/pg)과 일치하지 않으면 올바른 호스트로 리다이렉트합니다. 세션 쿠키는 `.supporter-b.com`으로 스코프해 크로스 서브도메인 SSO를 지원합니다.
@@ -124,9 +123,9 @@ sequenceDiagram
     participant Cron as Outbox Worker
     participant Resend
 
-    SVC->>DB: INSERT 비즈니스 레코드<br/>+ INSERT outbox_emails (동일 트랜잭션)
+    SVC->>DB: INSERT 비즈니스 레코드<br/>+ INSERT outbox_entries (동일 트랜잭션)
     Note over DB: 원자적 보장
-    Cron->>DB: SELECT pending (30초 주기)
+    Cron->>DB: SELECT pending (1분 주기)
     Cron->>Resend: batch.send() — 최대 100건/회
     Resend-->>Cron: 결과 (부분 실패 포함)
     Cron->>DB: UPDATE outbox (sent / retry / permanent_fail)
@@ -174,7 +173,7 @@ app/                       ← action / server component만 허용
 | Framework | Next.js 16 App Router | RSC로 서버 fetch 레이어 단순화, Server Actions으로 form 처리 |
 | Runtime | React 19 | RSC + Server Actions 풀 지원 |
 | ORM | Drizzle ORM | 트랜잭션 핸들을 직접 전달 가능 → Service 레이어 tx 경계 설계 |
-| Auth | Auth.js v5 | Edge-safe JWT, Custom credentials provider |
+| Auth | Auth.js v5 | Custom credentials provider. 미들웨어 프록시는 edge-safe config, 서버 컴포넌트·액션은 Node 런타임 auth() |
 | Realtime | Centrifugo | 자체호스팅 WebSocket, subscribe-proxy로 ACL을 앱에 보존 |
 | 이메일 | Resend + Outbox | 발송 실패와 비즈니스 로직을 트랜잭션으로 분리 |
 | 테스트 DB | PGlite | 실제 PostgreSQL DDL을 인메모리로 → CI 속도 + 현실적 검증 |
