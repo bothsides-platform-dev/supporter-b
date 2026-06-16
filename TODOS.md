@@ -34,10 +34,6 @@ BidCard·loadBoard rfp_bids 분기·cardType 'bid' 경로가 어디에도 마운
 
 ## Bid Wizard
 
-### 견적 입력 사전채움 값이 표시와 어긋날 수 있음 (소수 3자리+ / cycleNum>99)
-**Priority:** P2
-`NumericFormat`(decimalScale=2)·cycleNum(isAllowed≤99)은 타이핑은 제대로 막지만, **마운트 시점에 전달된** 값은 정규화/재방출하지 않음. 레거시 데이터(이번 PR 이전 type=number 로 입력된 소수 3자리+ 요율이나 cycleNum 150 등)가 재요청·드래프트 복원으로 사전채움되면 수수료 표는 `1.23`(절삭)으로 보이지만 state·검토 단계·제출은 `1.2345`(원본)을 유지 — 표시와 제출이 어긋남. 검토 단계가 원본 값을 보여줘 발송 전 안전망은 있고, 신규 입력은 항상 ≤2자리라 영향 없음(레거시 한정). 픽스: 사전채움 경로(`bidToDraft`/`fmtPct`)에서 요율을 2자리로 반올림하고 cycleNum 을 99 로 클램프. (발견: /ship adversarial 리뷰 2026-06-14, branch worktree-fix+bid-numeric-inputs)
-
 ### ~~구간 수수료 그리드 환산 툴팁 양끝 열 오버플로 + aria 연결~~ ✅ v0.2.24.2
 tooltipAlign prop(start|center|end) + useId/aria-describedby 연결 완료. (PR fix+design-todos-p3 2026-06-17)
 
