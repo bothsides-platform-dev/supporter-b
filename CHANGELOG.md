@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.23.2] - 2026-06-16
+
+### Changed
+
+- **문서 정리 — SCREEN_DESIGN.md 를 현행 딜룸 구조에 맞게 동기화 (개발자 문서 전용, 제품 변화 없음)**: Phase 4 딜룸 전면 개편 때 사라진 컴포넌트·스토어 참조가 SCREEN_DESIGN.md 에 남아 있던 걸 현행 코드 기준으로 고쳤어요. 삭제된 `RfpDetailContent`·`ChatRail`·`ChatRailToggle`·전역 `useChatRailStore`·`StatutoryCardFeeNotice` 참조를 제거하고, 현행 딜룸 구조(`DealRoomModal` `@modal` 인터셉트 + 정식 페이지 `DealRoomFull`/`DealRoomShell`, `BuyerDealRoomBody`/`PgDealRoomBody`, `DealRoomCenter`/`DealRoomActionRail`, `DealRoomChat`→`ChatPanel`, lg 미만 `DealRoomChatFab` 하단 시트, 상대 출처는 딜룸 스코프 `DealRoomContext`)로 B4·P3 화면 행·라우트 맵·채팅 다이어그램을 갱신했어요. 코드 변경 없음 — 문서만.
+
 ## [0.2.23.0] - 2026-06-16
 
 ### Fixed
