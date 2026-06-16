@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.25.1] - 2026-06-17
+
+### Fixed
+
+- **칸반 키보드 드래그 핸들**: 카드마다 전용 드래그 핸들(GripVertical)이 생겼어요. 핸들에 포커스한 뒤 Space 또는 Enter 를 눌러 카드를 집고, 화살표 키로 다른 컬럼으로 이동할 수 있어요. 카드를 누르면 상세가 열리는 동작은 영향 없어요.
+
 ## [0.2.24.2] - 2026-06-17
 
 ### Fixed

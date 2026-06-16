@@ -6,6 +6,7 @@
 import { useMemo, useOptimistic, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  KeyboardSensor,
   MouseSensor,
   TouchSensor,
   useSensor,
@@ -64,9 +65,12 @@ export function useBoardDnd({
 
   // 마우스는 4px 이동 후 드래그(클릭과 구분), 터치는 길게 눌러 드래그 — 카드 위에서도
   // 세로 스크롤이 살아 있도록 touchAction 차단 대신 delay 활성화를 쓴다.
+  // KeyboardSensor 는 전용 드래그 핸들(setActivatorNodeRef)에서만 활성화되므로
+  // 카드 버튼의 Enter/Space 를 죽이지 않는다.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+    useSensor(KeyboardSensor),
   );
 
   // 드래그 중인 카드 — DragOverlay 렌더 + 유효/무효 드롭 컬럼 시각화의 단일 소스.

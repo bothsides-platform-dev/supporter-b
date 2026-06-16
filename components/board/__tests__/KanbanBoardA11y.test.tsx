@@ -63,11 +63,15 @@ describe('KanbanBoard a11y', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
-  it('uses our pointer/touch draggable instruction (no space-bar keyboard pickup)', () => {
+  it('드래그 핸들을 통한 키보드 이동 방법을 광고한다', () => {
     renderBoard();
-    // Our custom instruction replaces dnd-kit's default English "press the space
-    // bar" text — proving the KeyboardSensor pickup affordance is NOT advertised.
-    expect(screen.getByText(/마우스나 터치로 끌어/)).toBeInTheDocument();
-    expect(screen.queryByText(/space bar/i)).not.toBeInTheDocument();
+    // 드래그 핸들(GripVertical) 에서 Space/Enter 로 카드를 집어올릴 수 있음을
+    // 스크린리더 지시문이 안내한다.
+    expect(screen.getByText(/드래그 핸들/)).toBeInTheDocument();
+  });
+
+  it('각 카드마다 드래그 핸들 버튼이 렌더된다', () => {
+    renderBoard();
+    expect(screen.getByRole('button', { name: /드래그 핸들/ })).toBeInTheDocument();
   });
 });

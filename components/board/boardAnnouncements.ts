@@ -1,12 +1,8 @@
 // Screen-reader announcements + instructions for the kanban DnD.
 //
-// a11y NOTE: full keyboard drag-and-drop (@dnd-kit KeyboardSensor) is
-// DELIBERATELY NOT wired up. The KeyboardSensor captures Enter/Space on the
-// draggable to pick a card up, which kills the card's own Enter-to-open click
-// (a known regression — see the board history). Until we ship a dedicated
-// keyboard "move" affordance that doesn't hijack Enter, we give pointer/touch
-// users the drag and give assistive-tech users a live region that narrates the
-// drag instead. These builders are pure so the wording is unit-testable.
+// 키보드 드래그: 각 카드에 전용 드래그 핸들(GripVertical, setActivatorNodeRef)이
+// 있어 KeyboardSensor 가 Enter/Space 를 드래그 핸들에서만 받으므로 카드 버튼의
+// Enter-to-open 클릭을 죽이지 않는다.
 //
 // dnd-kit renders the managed aria-live region itself when we pass
 // `accessibility={{ announcements, screenReaderInstructions }}` to DndContext.
@@ -14,7 +10,7 @@ import type { Announcements, ScreenReaderInstructions } from '@dnd-kit/core';
 
 export const boardScreenReaderInstructions: ScreenReaderInstructions = {
   draggable:
-    '카드를 마우스나 터치로 끌어 다른 컬럼에 놓으면 이동합니다. 카드를 누르면 상세가 열립니다.',
+    '카드를 마우스·터치로 끌거나, 드래그 핸들에서 Space 또는 Enter 를 눌러 카드를 집은 뒤 화살표 키로 이동합니다.',
 };
 
 // over.id for a column droppable is `column:<id>`; strip the prefix to look up
