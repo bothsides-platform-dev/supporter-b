@@ -15,6 +15,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import type { DragAction } from '@/components/home/dragMatrix';
+import { boardKeyboardCoordinateGetter } from './boardKeyboardCoordinateGetter';
 import { resolveBoardDrop } from './resolveBoardDrop';
 import { computeValidDropTargets } from './computeValidDropTargets';
 import { moveCardAction } from '@/lib/server/actions/board/moveCardAction';
@@ -70,7 +71,7 @@ export function useBoardDnd({
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
-    useSensor(KeyboardSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: boardKeyboardCoordinateGetter }),
   );
 
   // 드래그 중인 카드 — DragOverlay 렌더 + 유효/무효 드롭 컬럼 시각화의 단일 소스.
