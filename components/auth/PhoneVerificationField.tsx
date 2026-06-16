@@ -199,6 +199,14 @@ export function PhoneVerificationField({ onVerified }: Props) {
               maxLength={6}
               value={otpCode}
               onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError(null); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (otpCode.length === 6 && !verifying && countdown > 0) {
+                    void handleVerify();
+                  }
+                }
+              }}
               placeholder="6자리 입력"
               disabled={verifying || countdown === 0}
               className={inputClass + ' flex-1 tracking-[0.3em]'}
