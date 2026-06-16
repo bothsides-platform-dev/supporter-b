@@ -71,6 +71,8 @@ export class AuthService {
     const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
     if (!phoneVerified) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
+    if (!input.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
+
     const passwordHash = await hashPassword(input.plainPassword);
     const userId = randomUUID();
 
@@ -84,8 +86,6 @@ export class AuthService {
       }
 
       await this.userRepo.create({ id: userId, email, passwordHash, name: input.name, phone: input.phone }, tx);
-
-      if (!input.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
 
       const { workspaceId, applicationId } = await createWorkspaceInTx(tx, {
         userId,
@@ -152,12 +152,17 @@ export class AuthService {
       await this.userRepo.create({ id: userId, email, passwordHash, name: input.name, phone: input.phone }, tx);
 
       const claim = await claimInviteInTx(tx, invitation, userId);
-      if (!claim.ok) return claim;
+      if (!claim.ok) {
+        throw Object.assign(new Error('CLAIM_FAILED'), { claimError: claim.error });
+      }
 
       await this.userRepo.setLastActiveWorkspace(userId, invitation.workspaceId, tx);
 
       return { ok: true, workspaceId: claim.workspaceId, email };
     }).catch((err: unknown) => {
+      if (err instanceof Error && 'claimError' in err) {
+        return { ok: false, error: (err as Error & { claimError: string }).claimError };
+      }
       // 드문 동시-가입 경쟁: 선검사 통과 후 INSERT 직전 같은 이메일이 들어와 충돌하면
       // postgres-js 가 tx 종료 후 위반을 재던진다 → tx 경계 밖에서 잡아 EMAIL_TAKEN 으로 매핑
       // (confirmEmailChange 와 동일 패턴). 흔한 케이스는 위 선검사가 처리한다.

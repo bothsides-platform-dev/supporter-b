@@ -3,9 +3,6 @@ import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { ApprovalWaitingScreen } from '@/components/pending-approval/approval-waiting-screen';
 
-const { routerPushMock } = vi.hoisted(() => ({ routerPushMock: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: vi.fn(() => ({ push: routerPushMock })) }));
-
 const { approvalActionMock } = vi.hoisted(() => ({ approvalActionMock: vi.fn() }));
 vi.mock('@/lib/server/actions/auth/checkMyWorkspaceApprovalAction', () => ({
   checkMyWorkspaceApprovalAction: approvalActionMock,
@@ -43,7 +40,6 @@ vi.mock('next/link', () => ({
 beforeEach(() => {
   fireMock.mockClear();
   animationStartMock.mockClear();
-  routerPushMock.mockClear();
   approvalActionMock.mockResolvedValue({ approved: false });
   // jsdom은 matchMedia를 미지원 — 모션 감소 없음으로 설정
   Object.defineProperty(window, 'matchMedia', {
@@ -112,29 +108,36 @@ describe('ApprovalWaitingScreen', () => {
   });
 
   describe('승인 폴링', () => {
-    beforeEach(() => vi.useFakeTimers());
-    afterEach(() => vi.useRealTimers());
+    let assignMock: ReturnType<typeof vi.fn>;
 
-    it('10초 경과 전에는 router.push를 호출하지 않는다', async () => {
-      render(<ApprovalWaitingScreen />);
-      await act(async () => { vi.advanceTimersByTime(9999); });
-      expect(routerPushMock).not.toHaveBeenCalled();
+    beforeEach(() => {
+      vi.useFakeTimers();
+      assignMock = vi.fn();
+      Object.defineProperty(window, 'location', { value: { assign: assignMock }, writable: true });
     });
 
-    it('approved=true 반환 시 router.push("/home")을 호출한다', async () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('10초 경과 전에는 window.location.assign을 호출하지 않는다', async () => {
+      render(<ApprovalWaitingScreen />);
+      await act(async () => { vi.advanceTimersByTime(9999); });
+      expect(assignMock).not.toHaveBeenCalled();
+    });
+
+    it('approved=true 반환 시 window.location.assign("/home")을 호출한다', async () => {
       approvalActionMock.mockResolvedValue({ approved: true });
       render(<ApprovalWaitingScreen />);
       await act(async () => { vi.advanceTimersByTime(10_000); });
-      expect(routerPushMock).toHaveBeenCalledWith('/home');
+      expect(assignMock).toHaveBeenCalledWith('/home');
     });
 
-    it('approved=false 동안은 router.push를 호출하지 않는다', async () => {
+    it('approved=false 동안은 window.location.assign을 호출하지 않는다', async () => {
       render(<ApprovalWaitingScreen />);
       await act(async () => { vi.advanceTimersByTime(30_000); });
-      expect(routerPushMock).not.toHaveBeenCalled();
+      expect(assignMock).not.toHaveBeenCalled();
     });
 
-    it('언마운트 후 승인이 와도 router.push를 호출하지 않는다', async () => {
+    it('언마운트 후 승인이 와도 window.location.assign을 호출하지 않는다', async () => {
       approvalActionMock.mockImplementation(
         () => new Promise((resolve) => setTimeout(() => resolve({ approved: true }), 5_000)),
       );
@@ -142,7 +145,7 @@ describe('ApprovalWaitingScreen', () => {
       await act(async () => { vi.advanceTimersByTime(10_000); });
       unmount();
       await act(async () => { vi.advanceTimersByTime(10_000); });
-      expect(routerPushMock).not.toHaveBeenCalled();
+      expect(assignMock).not.toHaveBeenCalled();
     });
   });
 
