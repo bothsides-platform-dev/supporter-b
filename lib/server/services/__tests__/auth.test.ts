@@ -10,6 +10,9 @@ import {
   getVerificationTokenRepo,
   getOutboxRepo,
   getAuditLogRepo,
+  getPhoneOtpRepo,
+  getWorkspaceRepo,
+  getPgProfileRepo,
 } from '@/lib/server/repositories/factory';
 import {
   phoneOtps,
@@ -17,6 +20,7 @@ import {
   workspaceMembers,
   outboxEntries,
   auditLogs,
+  verificationTokens,
 } from '@/lib/db/schema';
 import { seedUser, seedPgWorkspace, seedMembership } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { hashToken, generateToken, addMinutes } from '@/lib/server/token';
@@ -28,6 +32,10 @@ vi.mock('@/lib/server/outbox/templates/authReset', () => ({
 }));
 vi.mock('@/lib/server/outbox/templates/authEmailChange', () => ({
   renderAuthEmailChange: async () => '<p>email-change</p>',
+}));
+vi.mock('@/lib/server/outbox/templates/authVerify', () => ({
+  renderAuthVerify: async (p: { verifyUrl: string; emailCode: string }) =>
+    `<a href="${p.verifyUrl}">verify</a> code:${p.emailCode}`,
 }));
 vi.mock('@/lib/server/env', () => ({
   baseUrl: () => 'https://example.com',
@@ -45,7 +53,19 @@ async function buildService(): Promise<AuthService> {
   const verificationTokenRepo = await getVerificationTokenRepo();
   const outboxRepo = await getOutboxRepo();
   const auditRepo = await getAuditLogRepo();
-  return new AuthService(db, userRepo, verificationTokenRepo, outboxRepo, auditRepo);
+  const phoneOtpRepo = await getPhoneOtpRepo();
+  const workspaceRepo = await getWorkspaceRepo();
+  const pgProfileRepo = await getPgProfileRepo();
+  return new AuthService(
+    db,
+    userRepo,
+    verificationTokenRepo,
+    outboxRepo,
+    auditRepo,
+    phoneOtpRepo,
+    workspaceRepo,
+    pgProfileRepo,
+  );
 }
 
 beforeEach(async () => {
@@ -445,5 +465,140 @@ describe('AuthService — 감사 로그 기록', () => {
     const rows = await rowsFor('auth.account_delete');
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ actorUserId: userId, actorWorkspaceId: null });
+  });
+});
+
+// Mocked renderAuthVerify above renders `... href="<verifyUrl>" ... code:<emailCode>`.
+function tokenFromHtml(html: string): string {
+  return html.match(/token=([^"]+)"/)?.[1] ?? '';
+}
+function codeFromHtml(html: string): string {
+  return html.match(/code:(\d{6})/)?.[1] ?? '';
+}
+async function verifyMailFor(to: string): Promise<string> {
+  const [row] = await db
+    .select({ html: outboxEntries.html })
+    .from(outboxEntries)
+    .where(eq(outboxEntries.toAddr, to))
+    .limit(1);
+  return row.html;
+}
+
+describe('AuthService.issueSignupEmail', () => {
+  it('enqueues an auth.verify mail and saves one signup_email token', async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'issue@example.com', workspaceType: 'buyer' });
+
+    const mail = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'issue@example.com'));
+    expect(mail).toHaveLength(1);
+    expect(mail[0].event).toBe('auth.verify');
+
+    const toks = await db
+      .select()
+      .from(verificationTokens)
+      .where(eq(verificationTokens.email, 'issue@example.com'));
+    expect(toks).toHaveLength(1);
+    expect(toks[0].purpose).toBe('signup_email');
+  });
+
+  it('enqueue-before-rotate: a deduped auto re-send keeps the first token valid (no expire/save)', async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'dedupe@example.com' }); // mount auto → token A + mail
+    await svc.issueSignupEmail({ email: 'dedupe@example.com' }); // same bucket → dedup, no rotate
+
+    const mail = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'dedupe@example.com'));
+    expect(mail).toHaveLength(1); // idempotent
+
+    const toks = await db
+      .select()
+      .from(verificationTokens)
+      .where(eq(verificationTokens.email, 'dedupe@example.com'));
+    expect(toks).toHaveLength(1); // second save skipped
+
+    // first mail's link token still consumable (not expired by the deduped call)
+    const rawToken = tokenFromHtml(mail[0].html);
+    const r = await svc.verifyEmailToken(rawToken);
+    expect(r.ok).toBe(true);
+  });
+
+  it("resend mode sends a second mail in the same 15-minute bucket", async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'resend@example.com', mode: 'auto' });
+    await svc.issueSignupEmail({ email: 'resend@example.com', mode: 'resend' });
+
+    const mail = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'resend@example.com'));
+    expect(mail).toHaveLength(2);
+  });
+});
+
+describe('AuthService.verifyEmailToken', () => {
+  it('consumes a signup_email token, flips emailVerified, returns meta', async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'vt@example.com', inviteToken: 'INV-1', workspaceType: 'pg' });
+    await seedUser(db, { email: 'vt@example.com' });
+
+    const rawToken = tokenFromHtml(await verifyMailFor('vt@example.com'));
+    const r = await svc.verifyEmailToken(rawToken);
+    expect(r).toEqual({ ok: true, email: 'vt@example.com', inviteToken: 'INV-1', workspaceType: 'pg' });
+
+    const [u] = await db
+      .select({ ev: users.emailVerified })
+      .from(users)
+      .where(eq(users.email, 'vt@example.com'));
+    expect(u.ev).toBe(true);
+  });
+
+  it('rejects an unknown token with TOKEN_INVALID_OR_EXPIRED', async () => {
+    const svc = await buildService();
+    const r = await svc.verifyEmailToken('not-a-real-token');
+    expect(r).toEqual({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+  });
+
+  it('rejects a non-signup_email token with WRONG_PURPOSE', async () => {
+    const svc = await buildService();
+    const rawToken = await seedVerificationToken({ email: 'wp@example.com', purpose: 'password_reset' });
+    const r = await svc.verifyEmailToken(rawToken);
+    expect(r).toEqual({ ok: false, error: 'WRONG_PURPOSE' });
+  });
+});
+
+describe('AuthService.verifyEmailCode', () => {
+  it('verifies the correct 6-digit code, flips emailVerified, returns meta', async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'vc@example.com', inviteToken: 'INV-CODE' });
+    await seedUser(db, { email: 'vc@example.com' });
+
+    const code = codeFromHtml(await verifyMailFor('vc@example.com'));
+    const r = await svc.verifyEmailCode({ email: 'vc@example.com', code });
+    expect(r).toEqual({ ok: true, email: 'vc@example.com', inviteToken: 'INV-CODE', workspaceType: undefined });
+
+    const [u] = await db
+      .select({ ev: users.emailVerified })
+      .from(users)
+      .where(eq(users.email, 'vc@example.com'));
+    expect(u.ev).toBe(true);
+  });
+
+  it('locks the code after 5 wrong attempts (MAX_ATTEMPTS) — even the correct code is refused', async () => {
+    const svc = await buildService();
+    await svc.issueSignupEmail({ email: 'brute@example.com' });
+    const code = codeFromHtml(await verifyMailFor('brute@example.com'));
+    const wrong = code === '000000' ? '111111' : '000000';
+
+    for (let i = 0; i < 5; i++) {
+      const r = await svc.verifyEmailCode({ email: 'brute@example.com', code: wrong });
+      expect(r).toEqual({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+    }
+    const r = await svc.verifyEmailCode({ email: 'brute@example.com', code });
+    expect(r).toEqual({ ok: false, error: 'MAX_ATTEMPTS' });
   });
 });

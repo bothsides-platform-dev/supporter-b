@@ -13,9 +13,9 @@ import {
   MERCHANT_TIER_LABELS,
   isTieredMethod,
   type PaymentMethod,
-  type TierRates,
   type QuoteTemplateOption,
 } from '@/lib/types/bid';
+import { buildPaymentFees, parseSettleCycle, templateFeesToFlat } from '@/lib/quote/template-fees';
 import { cn } from '@/lib/utils';
 
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap(
@@ -46,8 +46,6 @@ type EditorState = {
   fees: Record<string, string>;
 };
 
-const fmtPct = (rate: number) => String(Math.round(rate * 1e6) / 1e4);
-
 function blankEditor(): EditorState {
   return {
     name: '',
@@ -60,57 +58,16 @@ function blankEditor(): EditorState {
 }
 
 function editorFromTemplate(t: QuoteTemplateOption): EditorState {
-  const m = /^([DWM])\+(\d+)$/.exec(t.settleCycle);
-  const fees: Record<string, string> = {};
-
-  for (const method of ALL_PAYMENT_METHODS) {
-    const stored = t.paymentFees[method];
-    if (stored === undefined) continue;
-    if (typeof stored === 'object') {
-      for (const tier of MERCHANT_TIERS) {
-        const tierVal = stored[tier];
-        if (tierVal !== undefined) fees[`${method}:${tier}`] = fmtPct(tierVal);
-      }
-    } else {
-      fees[method] = fmtPct(stored);
-    }
-  }
-
+  const { unit, num } = parseSettleCycle(t.settleCycle);
   return {
     id: t.id,
     name: t.name,
-    cycleUnit: (m?.[1] ?? 'D') as 'D' | 'W' | 'M',
-    cycleNum: m?.[2] ?? '1',
+    cycleUnit: unit,
+    cycleNum: num,
     settleLimit: String(t.settleLimit),
     guaranteeInsurance: String(t.guaranteeInsurance),
-    fees,
+    fees: templateFeesToFlat(t.paymentFees, ALL_PAYMENT_METHODS),
   };
-}
-
-function buildPaymentFees(
-  fees: Record<string, string>,
-): Partial<Record<PaymentMethod, number | TierRates>> {
-  const result: Partial<Record<PaymentMethod, number | TierRates>> = {};
-
-  for (const method of ALL_PAYMENT_METHODS) {
-    if (isTieredMethod(method)) {
-      const tiers: TierRates = {};
-      let hasAny = false;
-      for (const tier of MERCHANT_TIERS) {
-        const v = fees[`${method}:${tier}`] ?? '';
-        if (v !== '') {
-          tiers[tier] = parseFloat(v) / 100;
-          hasAny = true;
-        }
-      }
-      if (hasAny) result[method] = tiers;
-    } else {
-      const v = fees[method] ?? '';
-      if (v !== '') result[method] = parseFloat(v) / 100;
-    }
-  }
-
-  return result;
 }
 
 export function QuoteTemplateDrawer({
@@ -153,7 +110,7 @@ export function QuoteTemplateDrawer({
     setError(null);
 
     const settleCycle = `${editor.cycleUnit}+${editor.cycleNum || '1'}`;
-    const paymentFees = buildPaymentFees(editor.fees);
+    const paymentFees = buildPaymentFees(editor.fees, ALL_PAYMENT_METHODS);
     const base = {
       name,
       settleCycle,

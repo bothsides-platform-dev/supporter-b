@@ -1,5 +1,6 @@
 'use client';
 
+import { Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { formatListTime } from './format';
@@ -29,21 +30,26 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                   : 'hover:bg-[var(--md-sys-color-surface-container-low)]',
               )}
             >
-              {item.kind === 'counterparty' ? (
+              {item.kind === 'team' ? (
+                <span
+                  aria-hidden
+                  className="flex size-9 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-full)] bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]"
+                >
+                  <Users size={18} strokeWidth={1.5} />
+                </span>
+              ) : (
                 <WorkspaceAvatar
                   name={item.counterparty.name}
                   size="md"
                   workspaceId={item.counterparty.workspaceId}
                   hasLogo={item.counterparty.hasLogo}
                 />
-              ) : (
-                <WorkspaceAvatar name="팀" size="md" workspaceId={item.rfpId} hasLogo={false} />
               )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   {item.kind === 'team' ? (
                     <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
-                      팀 내부
+                      팀 · <span className="md-numeric">{item.rfpCode}</span> {item.rfpTitle}
                     </span>
                   ) : (
                     <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
@@ -59,8 +65,8 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                     </time>
                   )}
                 </div>
-                {/* RFP chip */}
-                {(item.kind === 'team' || item.rfpCode) && (
+                {/* RFP chip — counterparty 항목에서 연결 견적 표시 */}
+                {item.kind === 'counterparty' && item.rfpCode && (
                   <div className="mt-0.5 flex items-center gap-1.5">
                     <span className="md-numeric shrink-0 rounded-[3px] bg-[var(--md-sys-color-primary-container)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--md-sys-color-on-primary-container)]">
                       {item.rfpCode}

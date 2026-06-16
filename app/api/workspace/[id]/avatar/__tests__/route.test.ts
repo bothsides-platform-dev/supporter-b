@@ -15,6 +15,10 @@ import { workspaces, workspaceLogoBlobs } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { eq } from 'drizzle-orm';
 import {
+  __resetForTest,
+  __useDrizzleWithDbForTest,
+} from '@/lib/server/repositories/factory';
+import {
   seedBuyerWorkspace,
   seedUser,
   seedMembership,
@@ -34,19 +38,19 @@ vi.mock('@/lib/auth/session-version-db', () => ({
 let db: PgliteDB;
 
 beforeEach(async () => {
+  __resetForTest();
   db = await createPgliteDb();
   sessionRef.value = null;
   getDbSessionVersionMock.mockReset();
   getDbSessionVersionMock.mockResolvedValue(1);
 
-  // Install DB override before importing route
-  const mod = await import('../route');
-  mod.__setAvatarDbForTest(db);
+  // Point the repo factory at the pglite handle so the route's repo calls
+  // (workspace-logo / workspace) resolve against the test DB.
+  await __useDrizzleWithDbForTest(db);
 });
 
 afterEach(async () => {
-  const mod = await import('../route');
-  mod.__setAvatarDbForTest(undefined);
+  __resetForTest();
   vi.resetModules();
 });
 

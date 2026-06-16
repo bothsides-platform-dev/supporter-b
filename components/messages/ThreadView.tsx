@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { HTTPError } from 'ky';
-import { http } from '@/lib/http';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Chip } from '@/components/primitives/Chip';
@@ -13,16 +11,21 @@ import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { Avatar } from '@/components/primitives/Avatar';
 import { Paperclip } from 'lucide-react';
 import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, XIcon, EnvelopeIcon } from '@/components/icons';
-import { DRAFT_OWNER_ID, MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES, ACCEPTED_EXTENSIONS } from '@/lib/server/storage/constants';
+import { DRAFT_OWNER_ID, ACCEPT_EXT } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
-import { MessageAttachmentGrid } from './MessageAttachmentGrid';
+import { MessageBubble } from './MessageBubble';
 import { ContextPanel } from './ContextPanel';
-import { formatDayLabel, formatTime, withinGroupWindow } from './format';
+import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
+import { ChatComposerTextarea } from './ChatComposerTextarea';
+import { useStickToBottom } from './useStickToBottom';
+import { useStringDraft } from './useStringDraft';
+import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-thread';
+import { formatDayLabel, withinGroupWindow } from './format';
 
 type Props = {
   conversationId: string;
@@ -72,24 +75,10 @@ type LiveMessagePayload = {
 const TYPING_THROTTLE_MS = 2000;
 
 
-// 하단에서 이만큼(px) 이내면 "하단 근처"로 보고 새 메시지를 자동 추적한다.
-const NEAR_BOTTOM_PX = 120;
 
 // 낙관적 전송 중에만 쓰는 표시 전용 확장 — 서버 로더 타입(ThreadMessage)에는
 // pending 개념이 없으므로 클라이언트 뷰 모델로만 둔다.
 type LocalMessage = ThreadMessage & { pending?: boolean };
-
-// Composer attachment row. `id` is a temp id while `status === 'uploading'`
-// (no server id/url/mime yet), swapped for the real attachment id once ready.
-type Attachment = {
-  id: string;
-  name: string;
-  size?: number;
-  mimeType?: string;
-  url?: string;
-  status: 'uploading' | 'ready' | 'error';
-  error?: string;
-};
 
 // Capturing group so split keeps the URLs; matched per-part with a
 // non-global test (a /g regex carries lastIndex across .test() calls).
@@ -130,15 +119,13 @@ export function ThreadView({
 }: Props) {
   // 대화별 초안 보존 — 대화 전환(remount) 시에도 작성 중이던 내용을 잃지 않는다.
   const draftKey = `chat-draft:${conversationId}`;
-  const [draft, setDraft] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
-    try {
-      return window.localStorage.getItem(draftKey) ?? '';
-    } catch {
-      return '';
-    }
-  });
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [draft, setDraft] = useStringDraft(draftKey);
+  const {
+    rows: attachments,
+    setRows: setAttachments,
+    addFiles,
+    removeRow,
+  } = useComposerAttachments({ ownerKind: 'chat', ownerId: DRAFT_OWNER_ID });
   const [sending, setSending] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'rfp' | 'files'>('chat');
@@ -158,46 +145,12 @@ export function ThreadView({
   // timestamp, so treat its arrival time as "read up to now".
   const [readAt, setReadAt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastTypingSentAt = useRef(0);
-  // 자동 스크롤: 리스트 컨테이너 + 하단 sentinel. prevLen 으로 "새 메시지 도착"을
-  // 감지하고, "하단 근처"일 때만 자동으로 따라간다(위로 올려 과거 글 읽는 중엔 점프 금지).
-  const listRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const prevLenRef = useRef(0);
-  const [showNewMessagePill, setShowNewMessagePill] = useState(false);
-
-  const isNearBottom = useCallback((): boolean => {
-    const el = listRef.current;
-    if (!el) return true; // 메트릭 없으면(초기/jsdom) 하단으로 간주
-    return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
-  }, []);
-
-  const scrollToBottom = useCallback((): void => {
-    bottomRef.current?.scrollIntoView({ block: 'end' });
-    setShowNewMessagePill(false);
-  }, []);
-
-  // 새 메시지(append)에만 반응: 최초 로드/본인 전송/하단 근처면 따라가고,
-  // 위로 올려둔 상태에서 상대 메시지가 오면 "새 메시지" pill 만 띄운다.
-  useEffect(() => {
-    const grew = localMessages.length > prevLenRef.current;
-    const isInitial = prevLenRef.current === 0;
-    prevLenRef.current = localMessages.length;
-    if (!grew) return;
-    const last = localMessages[localMessages.length - 1];
-    const ownSend = last?.sender === 'self';
-    if (isInitial || ownSend || isNearBottom()) {
-      scrollToBottom();
-    } else {
-      setShowNewMessagePill(true);
-    }
-  }, [localMessages, isNearBottom, scrollToBottom]);
-
-  // 사용자가 직접 하단으로 스크롤하면 pill 을 거둔다.
-  const handleListScroll = useCallback((): void => {
-    if (isNearBottom()) setShowNewMessagePill(false);
-  }, [isNearBottom]);
+  // 새 메시지 append 시 하단 자동 추적. 위로 올려 과거 글 읽는 중엔 점프하지 않고
+  // "새 메시지" pill 만 띄운다(useStickToBottom).
+  const lastIsOwn = localMessages[localMessages.length - 1]?.sender === 'self';
+  const { listRef, bottomRef, showNewMessagePill, scrollToBottom, onListScroll } =
+    useStickToBottom({ count: localMessages.length, isOwnLast: lastIsOwn, withPill: true });
 
   // Live channel — graceful no-op when realtime is unconfigured (dev/tests):
   // online stays false, typingUserIds empty, onMessage/onRead never fire, and
@@ -208,43 +161,27 @@ export function ThreadView({
       const id = data.id;
       const sender: ThreadMessage['sender'] =
         data.authorWsId === counterparty.workspaceId ? 'other' : 'self';
-      setLocalMessages((prev) => {
-        // Dedup by id — Centrifugo recovery can redeliver, and the reconcile in
-        // handleSend may have already promoted the pending bubble to this id.
-        if (prev.some((m) => m.id === id)) return prev;
-        // 본인 메시지의 echo: 진행 중 pending 말풍선을 확정으로 승격(실제 id 부여,
-        // 첨부 등 표시 상태 보존) — 새로 append 하면 중복이 된다. `sending` 가드
-        // 덕에 진행 중 self pending 은 항상 최대 1개.
-        if (sender === 'self') {
-          const pendingIdx = prev.findIndex((m) => m.pending);
-          if (pendingIdx >= 0) {
-            const next = prev.slice();
-            next[pendingIdx] = {
-              ...next[pendingIdx],
+      // Centrifugo recovery can redeliver, and handleSend may have already
+      // promoted the pending bubble to this id → dedup. 본인 echo 면 진행 중
+      // pending 말풍선을 확정 승격(append 하면 중복), 아니면 새로 append.
+      setLocalMessages(
+        (prev) =>
+          applyLiveEcho(prev, id, sender === 'self', data.createdAt as string) ?? [
+            ...prev,
+            {
               id,
-              pending: false,
-              // 서버 권위 타임스탬프 채택 — 리로드 후 로더 렌더와 일치.
-              createdAt: data.createdAt ?? next[pendingIdx].createdAt,
-            };
-            return next;
-          }
-        }
-        return [
-          ...prev,
-          {
-            id,
-            authorUserId: data.authorUserId ?? '',
-            authorName: data.authorName ?? '',
-            authorEmail: data.authorEmail ?? '',
-            sender,
-            body: data.body as string,
-            rfpId: data.rfpId ?? null,
-            createdAt: data.createdAt as string,
-            readByCounterparty: false,
-            attachments: data.attachments ?? [],
-          },
-        ];
-      });
+              authorUserId: data.authorUserId ?? '',
+              authorName: data.authorName ?? '',
+              authorEmail: data.authorEmail ?? '',
+              sender,
+              body: data.body as string,
+              rfpId: data.rfpId ?? null,
+              createdAt: data.createdAt as string,
+              readByCounterparty: false,
+              attachments: data.attachments ?? [],
+            },
+          ],
+      );
     },
     onRead: (data) => {
       // Use the server-issued timestamp from the payload to avoid client clock
@@ -262,16 +199,6 @@ export function ThreadView({
     void markConversationReadAction({ conversationId });
   }, [conversationId]);
 
-  // 초안을 localStorage 에 동기 반영(디바운스 없이 — 메시지 길이는 짧아 비용이
-  // 작고, 디바운스 타이밍에 의존하는 테스트 플레이크도 피한다). 비면 제거한다.
-  useEffect(() => {
-    try {
-      if (draft) window.localStorage.setItem(draftKey, draft);
-      else window.localStorage.removeItem(draftKey);
-    } catch {
-      // localStorage 접근 불가(프라이빗 모드 등) — 보존 없이 동작.
-    }
-  }, [draft, draftKey]);
 
   // 읽음 영수증을 붙일 인덱스: 마지막 *읽힌* 보낸 메시지(절대 마지막 보낸
   // 메시지가 아님). 상대 last_read_at 이 두 발신 사이에 떨어지면 로더가 메시지별
@@ -293,67 +220,6 @@ export function ThreadView({
     [localMessages],
   );
 
-  async function uploadOne(file: File, tempId: string): Promise<void> {
-    const form = new FormData();
-    form.append('file', file);
-    form.append('ownerKind', 'chat');
-    form.append('ownerId', DRAFT_OWNER_ID);
-    try {
-      const body = await http
-        .post('/api/files/upload', { body: form })
-        .json<{ id: string; name: string; size: number; mimeType: string }>();
-      // 임시 행을 서버 첨부로 교체(스켈레톤 → 일반 칩).
-      setAttachments((prev) =>
-        prev.map((a) =>
-          a.id === tempId
-            ? {
-                id: body.id,
-                name: body.name,
-                size: body.size,
-                mimeType: body.mimeType,
-                url: `/api/files/${body.id}`,
-                status: 'ready',
-              }
-            : a,
-        ),
-      );
-    } catch (err) {
-      let msg = '업로드 실패';
-      if (err instanceof HTTPError) {
-        msg = err.response.status === 415 ? '지원되지 않는 파일 형식이에요' : `업로드 실패 (${err.response.status})`;
-      }
-      setAttachments((prev) =>
-        prev.map((a) => (a.id === tempId ? { ...a, status: 'error', error: msg } : a)),
-      );
-    }
-  }
-
-  function addFiles(list: FileList | null): void {
-    if (!list) return;
-    const remaining = MAX_FILES - attachments.length;
-    const additions: Attachment[] = [];
-    for (let i = 0; i < Math.min(list.length, remaining); i++) {
-      const f = list[i];
-      const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
-      if (!ACCEPTED_MIMES.has(f.type) && !ACCEPTED_EXTENSIONS.has(ext)) {
-        const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
-        additions.push({ id: tempId, name: f.name, status: 'error', error: '지원되지 않는 파일 형식이에요 (PDF/PNG/JPEG)' });
-        continue;
-      }
-      if (f.size > MAX_BYTES) continue;
-      // 선택 즉시 'uploading' 행(스켈레톤)을 추가해 올리는 중임을 보여준다.
-      const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
-      additions.push({ id: tempId, name: f.name, size: f.size, status: 'uploading' });
-      void uploadOne(f, tempId);
-    }
-    if (additions.length > 0) setAttachments((prev) => [...prev, ...additions]);
-  }
-
-  function autoGrow(el: HTMLTextAreaElement): void {
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
-  }
-
   async function handleSend(): Promise<void> {
     const body = draft.trim();
     if (sending || sendDisabled) return;
@@ -364,11 +230,7 @@ export function ThreadView({
     setSending(true);
 
     // 전송 시점의 첨부를 표시용으로 스냅샷(reload 불필요).
-    const optimisticAttachments = attachments.flatMap((a) =>
-      a.size !== undefined && a.mimeType && a.url
-        ? [{ id: a.id, name: a.name, size: a.size, mimeType: a.mimeType, url: a.url }]
-        : [],
-    );
+    const optimisticAttachments = toReadyMessageAttachments(attachments);
     // 낙관적 말풍선을 *전송 전*에 'pending' 으로 올려 "전송 중"을 즉시 보여준다.
     const tempId = `pending-${Math.random().toString(36).slice(2, 10)}`;
     const restoreDraft = draft;
@@ -392,7 +254,6 @@ export function ThreadView({
     // 컴포저는 즉시 비운다(표준 메신저 동작). 실패하면 아래에서 되돌린다.
     setDraft('');
     setAttachments([]);
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     let result: Awaited<ReturnType<typeof sendChatMessageAction>>;
     try {
@@ -404,7 +265,7 @@ export function ThreadView({
       });
     } catch {
       setSending(false);
-      setLocalMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setLocalMessages((prev) => removeMessage(prev, tempId));
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
@@ -414,21 +275,10 @@ export function ThreadView({
     if (result.ok) {
       // pending 말풍선을 확정으로 교체(실서버 id + pending 해제). 라이브 echo 가
       // 먼저 같은 실제 id 를 추가했다면 임시 행은 버린다(중복 방지).
-      const newId = result.messageId;
-      const serverCreatedAt = result.createdAt;
-      setLocalMessages((prev) => {
-        const hasReal = prev.some((m) => m.id === newId);
-        return prev.flatMap((m) =>
-          m.id === tempId
-            ? hasReal
-              ? []
-              : [{ ...m, id: newId, pending: false, createdAt: serverCreatedAt ?? m.createdAt }]
-            : [m],
-        );
-      });
+      setLocalMessages((prev) => promoteSentMessage(prev, tempId, result.messageId, result.createdAt));
     } else {
       // 실패: 낙관적 말풍선을 제거하고 입력·첨부를 복원해 다시 보낼 수 있게 한다.
-      setLocalMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setLocalMessages((prev) => removeMessage(prev, tempId));
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
@@ -443,16 +293,6 @@ export function ThreadView({
     lastTypingSentAt.current = now;
     sendTyping();
   }, [sendTyping]);
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      // 한글 IME 조합 확정 Enter(keyCode 229)는 전송이 아니다 — 조합 중
-      // 전송되면 글자가 잘리거나 이중 전송된다.
-      if (e.nativeEvent.isComposing) return;
-      e.preventDefault();
-      void handleSend();
-    }
-  }
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1">
@@ -547,7 +387,7 @@ export function ThreadView({
       <div
         ref={listRef}
         data-message-list
-        onScroll={handleListScroll}
+        onScroll={onListScroll}
         className="flex h-full flex-col gap-3 overflow-y-auto px-4 py-4"
       >
         {localMessages.length === 0 && (
@@ -623,34 +463,14 @@ export function ThreadView({
                   </div>
                 )}
 
-                <div className={cn('flex items-end gap-1.5 w-full', isSelf && 'flex-row-reverse')}>
-                  <div
-                    className={cn(
-                      'max-w-[78%] whitespace-pre-wrap break-words rounded-[var(--md-sys-shape-medium)] px-3 py-2 text-[13px] leading-relaxed',
-                      'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]',
-                      isSelf &&
-                        'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]',
-                      m.pending && 'opacity-60',
-                    )}
-                  >
-                    {renderBody(m.body)}
-                    {m.attachments.length > 0 && (
-                      <MessageAttachmentGrid attachments={m.attachments} />
-                    )}
-                  </div>
-                  {/* 타임스탬프는 버블 옆 단일 출처 — 발신자 헤더에는 두지 않는다.
-                      pending 은 본인 메시지에서만 발생(전송 중 점). */}
-                  {m.pending ? (
-                    <span
-                      aria-label="전송 중"
-                      className="size-1.5 shrink-0 animate-pulse rounded-full bg-[var(--md-sys-color-on-surface-variant)]"
-                    />
-                  ) : (
-                    <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                      {formatTime(m.createdAt)}
-                    </span>
-                  )}
-                </div>
+                <MessageBubble
+                  isSelf={isSelf}
+                  pending={m.pending}
+                  createdAt={m.createdAt}
+                  body={m.body}
+                  attachments={m.attachments}
+                  renderBody={renderBody}
+                />
 
                 {showReceipt && (
                   <span className="flex items-center gap-0.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -725,7 +545,7 @@ export function ThreadView({
                 <button
                   type="button"
                   aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  onClick={() => removeRow(a.id)}
                   className="hover:opacity-70"
                 >
                   <XIcon size={12} />
@@ -740,7 +560,7 @@ export function ThreadView({
                 <button
                   type="button"
                   aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  onClick={() => removeRow(a.id)}
                   className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
                 >
                   <XIcon size={12} />
@@ -781,18 +601,15 @@ export function ThreadView({
             e.target.value = '';
           }}
         />
-        <textarea
-          ref={textareaRef}
+        <ChatComposerTextarea
           value={draft}
-          disabled={sendDisabled}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            autoGrow(e.target);
+          onChange={(v) => {
+            setDraft(v);
             handleTyping();
           }}
-          onKeyDown={handleKeyDown}
+          onSubmit={handleSend}
+          disabled={sendDisabled}
           placeholder="메시지를 입력하세요…"
-          rows={1}
           className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-1.5 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
         />
         <Button

@@ -3,18 +3,15 @@
 /**
  * DealRoomChat — 딜룸 모달 우측 채팅 호스트.
  *
- * ChatPanel 을 sticky/aside/open-gate 없이 직접 마운트하고, ChatRail 이 맡던
- * 스토어 수명만 대신 담당한다:
- *   - PG 측은 상대(구매사)가 고정이라 fixedCounterparty 를 시드한다. 구매사 측은
- *     가운데 FocusComparison 이 포커스 PG 를 publish 하므로 시드하지 않는다.
- *   - 모달 닫힘(unmount) 시 스토어를 reset 해 다음 딜룸으로 상대가 새지 않게 한다.
+ * ChatPanel 을 sticky/aside/open-gate 없이 직접 마운트한다.
+ *   - PG 측은 상대(구매사)가 고정이라 fixedCounterparty 를 DealRoom 컨텍스트에 시드한다.
+ *     구매사 측은 가운데 FocusComparison 이 포커스 PG 를 set 하므로 시드하지 않는다.
+ *   - 딜룸 간 상대 누수는 DealRoomProvider 가 code 별로 마운트(key)해 자동 차단한다
+ *     (이전의 unmount-reset 불필요).
  */
 import { useEffect } from 'react';
 
-import {
-  useChatRailStore,
-  type ChatRailCounterparty,
-} from '@/lib/stores/chat-rail';
+import { useDealRoom, type DealRoomCounterparty } from './DealRoomContext';
 import { ChatPanel } from '@/components/messages/ChatPanel';
 
 type Props = {
@@ -23,7 +20,7 @@ type Props = {
   rfpTitle: string;
   isSample?: boolean;
   /** PG 측: 상대(구매사) 고정 시드. 구매사 측은 생략. */
-  fixedCounterparty?: ChatRailCounterparty;
+  fixedCounterparty?: DealRoomCounterparty;
 };
 
 export function DealRoomChat({
@@ -33,15 +30,13 @@ export function DealRoomChat({
   isSample = false,
   fixedCounterparty,
 }: Props) {
-  const setCounterparty = useChatRailStore((s) => s.setCounterparty);
+  const { setCounterparty } = useDealRoom();
 
   const fixedWsId = fixedCounterparty?.workspaceId;
   useEffect(() => {
     if (fixedCounterparty) setCounterparty(fixedCounterparty);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- wsId 로 추적
   }, [fixedWsId, setCounterparty]);
-
-  useEffect(() => () => useChatRailStore.getState().reset(), []);
 
   return (
     <ChatPanel

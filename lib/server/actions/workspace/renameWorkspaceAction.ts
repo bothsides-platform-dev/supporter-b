@@ -1,11 +1,9 @@
 'use server';
 
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
 
 import { requireSession } from '@/lib/auth/session';
-import { workspaces } from '@/lib/db/schema';
-import { actionDb } from '../auth/_shared';
+import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 
 const Input = z.object({ name: z.string().min(1).max(200) }).strict();
 
@@ -23,14 +21,10 @@ export async function renameWorkspaceAction(input: {
   const parsed = Input.safeParse({ name: input?.name?.trim() });
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
-  const db = actionDb();
-  const r = await db
-    .update(workspaces)
-    .set({ name: parsed.data.name })
-    .where(eq(workspaces.id, session.user.workspaceId));
-
-  if (r && typeof r === 'object' && 'rowCount' in r && r.rowCount === 0) {
-    return { ok: false, error: 'NOT_FOUND' };
-  }
+  // The admin session already guarantees a live membership in this workspace, so
+  // the row always exists — NOT_FOUND stays in the result union for the caller
+  // contract but is unreachable here (the prior rowCount guard was dead code).
+  const workspaceRepo = await getWorkspaceRepo();
+  await workspaceRepo.rename(session.user.workspaceId, parsed.data.name);
   return { ok: true };
 }

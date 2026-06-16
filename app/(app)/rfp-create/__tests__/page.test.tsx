@@ -17,13 +17,15 @@ const mockWhere = vi.hoisted(() => vi.fn(() => ({ limit: mockLimit })));
 const mockFrom = vi.hoisted(() => vi.fn(() => ({ where: mockWhere })));
 const mockSelectDb = vi.hoisted(() => vi.fn(() => ({ from: mockFrom })));
 const mockFindById = vi.hoisted(() => vi.fn());
+const mockSearch = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 
 vi.mock('next/navigation', () => ({ redirect: mockRedirect }));
 vi.mock('@/auth', () => ({ auth: mockAuth }));
 vi.mock('@/lib/auth/page-guards', () => ({ requireBuyerPage: mockRequireBuyerPage }));
 vi.mock('@/lib/db/client', () => ({ db: { select: mockSelectDb } }));
 vi.mock('@/lib/server/repositories/factory', () => ({
-  getWorkspaceRepo: () => Promise.resolve({ findById: mockFindById }),
+  getWorkspaceRepo: () =>
+    Promise.resolve({ findById: mockFindById, search: mockSearch }),
 }));
 vi.mock('@/components/rfp/RfpCreateWizard', () => ({
   RfpCreateWizard: () => null,
@@ -48,6 +50,7 @@ describe('RfpNewPage — 인증 가드', () => {
     mockAuth.mockReset();
     mockRequireBuyerPage.mockReset();
     mockLimit.mockResolvedValue([]);
+    mockSearch.mockResolvedValue([]);
     mockFindById.mockResolvedValue({ name: 'Buyer Co', bizProfile: null });
   });
 

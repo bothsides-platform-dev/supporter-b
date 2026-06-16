@@ -47,20 +47,37 @@ vi.mock('@/lib/server/actions/chat/listConversationAttachments', () => ({
   listConversationAttachments: vi.fn().mockResolvedValue([]),
 }));
 
-// ContextPanel mock
+// ContextPanel mock — prevents server-action transitive imports.
 vi.mock('../ContextPanel', () => ({
   ContextPanel: ({ conversationId }: { conversationId: string }) => (
     <div data-testid="context-panel" data-conversation={conversationId} />
   ),
 }));
 
-// useIsXlUp mock
+// useIsXlUp mock — default to false (non-xl); toggle in xl tests.
 const mockXlUp = { value: false };
 vi.mock('@/hooks/use-xl-up', () => ({
   useIsXlUp: () => mockXlUp.value,
 }));
 
-afterEach(() => cleanup());
+// TeamThreadPane imports team-thread-cache → teamThreadLoader (a 'use server'
+// action that transitively pulls in next-auth) — mock the cache + TeamThreadView
+// so the inbox (which now routes team rows to TeamThreadPane) collects without a
+// DB or next-auth. The inbox tests exercise counterparty rows + the filter UI;
+// real team-thread loading is covered by ChatPanel/TeamThreadView suites.
+vi.mock('../team-thread-cache', () => ({
+  getTeamThreadPromise: () =>
+    Promise.resolve({ ok: true, rfpId: 'rfp-1', workspaceId: 'ws-self', viewerUserId: 'u-me', messages: [] }),
+  invalidateTeamThread: vi.fn(),
+}));
+vi.mock('../TeamThreadView', () => ({
+  TeamThreadView: () => <div data-testid="team-thread-view" />,
+}));
+
+afterEach(() => {
+  cleanup();
+  mockXlUp.value = false;
+});
 beforeEach(() => {
   loadConversationThread.mockReset();
   clearAllThreadCache();
@@ -136,6 +153,42 @@ describe('MessageInbox', () => {
   it('인박스 상단에 새 대화 시작 진입점을 노출한다', () => {
     render(<MessageInbox items={items} />);
     expect(screen.getByRole('button', { name: '새 대화' })).toBeInTheDocument();
+  });
+
+  it('renders 전체/상대방/팀 filter and filters the list', async () => {
+    const user = userEvent.setup();
+    const mixed: InboxListItem[] = [
+      {
+        kind: 'counterparty',
+        key: 'c:c1',
+        conversationId: 'c1',
+        counterparty: { workspaceId: 'w', name: '토스', type: 'pg', hasLogo: false },
+        rfpId: null,
+        rfpCode: null,
+        rfpTitle: null,
+        rfpStatus: null,
+        rfpDeadline: null,
+        preview: '안녕',
+        lastMessageAt: '2026-06-14T03:00:00Z',
+        unread: false,
+      },
+      {
+        kind: 'team',
+        key: 't:r1',
+        rfpId: 'r1',
+        rfpCode: 'P-2605-0042',
+        rfpTitle: '제목',
+        preview: '내부 메모',
+        lastMessageAt: '2026-06-14T01:00:00Z',
+        unread: true,
+      },
+    ];
+    render(<MessageInbox items={mixed} initialSelectedKey={null} />);
+    expect(screen.getByText('토스')).toBeInTheDocument();
+    expect(screen.getByText(/내부 메모/)).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /팀/ }));
+    expect(screen.queryByText('토스')).not.toBeInTheDocument();
+    expect(screen.getByText(/내부 메모/)).toBeInTheDocument();
   });
 
   it('미선택 상태: 목록은 표시하고 스레드 pane 은 모바일에서 숨긴다(데스크톱만 표시)', () => {
@@ -269,11 +322,38 @@ describe('MessageInbox', () => {
     expect(screen.getByRole('button', { name: /토스페이/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /결제 서비스/ })).not.toBeInTheDocument();
   });
+
+  it('팀 스레드 선택 시 모바일 뒤로가기 버튼이 표시되고 클릭하면 목록으로 돌아간다', async () => {
+    const user = userEvent.setup();
+    const teamItems: InboxListItem[] = [
+      {
+        kind: 'team',
+        key: 't:r1',
+        rfpId: 'r1',
+        rfpCode: 'P-1',
+        rfpTitle: '제목',
+        preview: '메모',
+        lastMessageAt: '2026-06-14T01:00:00Z',
+        unread: false,
+      },
+    ];
+    render(<MessageInbox items={teamItems} initialSelectedKey="t:r1" />);
+
+    // TeamThreadPane resolves async via getTeamThreadPromise mock — wait for back button
+    const back = await screen.findByRole('button', { name: '대화 목록' });
+    expect(back).toBeInTheDocument();
+
+    await act(async () => {
+      await user.click(back);
+    });
+
+    // After back, selection cleared → empty state shown
+    expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
+  });
 });
 
 describe('xl 컨텍스트 패널', () => {
   beforeEach(() => { mockXlUp.value = true; });
-  afterEach(() => { mockXlUp.value = false; });
 
   it('xl에서 대화 미선택 시 ContextPanel을 렌더하지 않는다', () => {
     render(<MessageInbox items={items} />);

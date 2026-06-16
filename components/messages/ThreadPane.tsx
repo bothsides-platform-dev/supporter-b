@@ -10,7 +10,6 @@ export function ThreadPane({
   onBack,
   variant,
   defaultRfpId,
-  rfpById,
   rfpContext,
   sendDisabled,
 }: {
@@ -21,7 +20,6 @@ export function ThreadPane({
   variant?: 'page' | 'rail' | 'tabs';
   /** 레일 컨텍스트 RFP — 컴포저 전송에 기본 태그로 적용. */
   defaultRfpId?: string;
-  rfpById?: Record<string, { code: string; title: string }>;
   /** tabs 변형에서 RFP 탭에 표시할 컨텍스트 정보. */
   rfpContext?: { code: string; title: string; status?: string; deadline?: string | null };
   /** 샘플 RFP — 컴포저 전송 차단(데모 PG 에게 실제 전송 방지). */
@@ -31,6 +29,7 @@ export function ThreadPane({
   const counterparty = result.ok ? result.counterparty : counterpartyFallback;
   const messages = result.ok ? result.messages : [];
   const viewer = result.ok ? result.viewer : { userId: '', name: '' };
+  const rfpById = result.ok ? result.rfpById : undefined;
   return (
     <ThreadView
       key={conversationId}

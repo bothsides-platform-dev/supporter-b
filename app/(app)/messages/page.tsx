@@ -1,49 +1,28 @@
 // 메시지함 — /messages
 //
-// RFP별 비공개 스레드 모델의 메시지함. 인박스 목록은 서버 액션 로더로 실데이터를
-// 전달하고, 스레드 메시지는 대화 선택 시 클라이언트에서 loadConversationThread 로
-// 로드한다(MessageInbox 내부).
+// 통합 인박스: 상대방 비공개 스레드 + 팀 스레드를 한 목록에 합쳐 전달한다.
+// 목록은 서버 액션 로더(listInboxForViewer)로 실데이터를 전달하고, 각 스레드
+// 메시지는 항목 선택 시 클라이언트에서 로드한다(MessageInbox 내부).
 //
-// ?c=<conversationId> searchParam: 홈 위젯 행 클릭 시 해당 대화를 자동 선택한다.
+// 딥링크 searchParam(상호배타, 동시엔 c 우선):
+//   ?c=<conversationId> — 상대방 대화 자동 선택(홈 위젯·레일 "메시지함에서 열기").
+//   ?t=<rfpId>          — 팀 스레드 자동 선택.
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { MessageInbox } from '@/components/messages/MessageInbox';
-import { listConversationsForViewer } from '@/lib/server/actions/chat/conversationLoaders';
-import type { InboxListItem } from '@/components/messages/types';
+import { listInboxForViewer } from '@/lib/server/actions/chat/inboxLoader';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MessagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ c?: string }>;
+  searchParams: Promise<{ c?: string; t?: string }>;
 }) {
-  const [conversations, { c: initialConvId }] = await Promise.all([
-    listConversationsForViewer(),
-    searchParams,
-  ]);
-  const unread = conversations.filter((conv) => conv.unread).length;
-
-  // Map ConversationListItem → InboxListItem (counterparty kind only for now).
-  const items: InboxListItem[] = conversations.map((conv) => ({
-    kind: 'counterparty' as const,
-    key: `c:${conv.conversationId}`,
-    conversationId: conv.conversationId,
-    counterparty: conv.counterparty,
-    rfpId: conv.rfpId,
-    rfpCode: conv.rfpCode,
-    rfpTitle: conv.rfpTitle,
-    rfpStatus: conv.rfpStatus,
-    rfpDeadline: conv.rfpDeadline,
-    preview: conv.preview,
-    lastMessageAt: conv.lastMessageAt,
-    unread: conv.unread,
-  }));
-
-  // If ?c= was passed, resolve it to the corresponding item key.
-  const initialSelectedKey = initialConvId
-    ? (items.find((i) => i.kind === 'counterparty' && i.conversationId === initialConvId)?.key ?? null)
-    : null;
+  const [items, { c, t }] = await Promise.all([listInboxForViewer(), searchParams]);
+  const unread = items.filter((i) => i.unread).length;
+  // c·t 상호배타, 동시 지정 시 c(상대방 대화) 우선.
+  const initialSelectedKey = c ? `c:${c}` : t ? `t:${t}` : null;
 
   return (
     <PageEnter className="flex h-full flex-col">

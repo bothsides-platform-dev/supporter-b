@@ -52,6 +52,20 @@ describe('ConversationList', () => {
     expect(screen.getByText('제안 보냅니다.')).toBeInTheDocument();
   });
 
+  it('renders a team thread row with 팀 label, rfp code and title', () => {
+    render(
+      <ConversationList
+        items={[makeTeam()]}
+        selectedKey={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    // 코드는 .md-numeric, 제목은 평문. 둘 다 노출.
+    expect(screen.getByText('P-2605-0042')).toBeInTheDocument();
+    expect(screen.getByText(/결제대행 견적/)).toBeInTheDocument();
+    expect(screen.getByText('내부 메모입니다.')).toBeInTheDocument();
+  });
+
   it('shows the unread dot when unread is true', () => {
     render(
       <ConversationList
@@ -74,7 +88,7 @@ describe('ConversationList', () => {
     expect(screen.queryByLabelText('읽지 않음')).not.toBeInTheDocument();
   });
 
-  it('calls onSelect with the item key when a row is clicked', async () => {
+  it('calls onSelect with the item key when a counterparty row is clicked', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     render(
@@ -86,6 +100,20 @@ describe('ConversationList', () => {
     );
     await user.click(screen.getByRole('button', { name: /OO페이/ }));
     expect(onSelect).toHaveBeenCalledWith('c:conv-42');
+  });
+
+  it('calls onSelect with the team key when a team row is clicked', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(
+      <ConversationList
+        items={[makeTeam({ key: 't:rfp-9', rfpId: 'rfp-9' })]}
+        selectedKey={null}
+        onSelect={onSelect}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /결제대행 견적/ }));
+    expect(onSelect).toHaveBeenCalledWith('t:rfp-9');
   });
 
   it('marks the selected row with aria-current', () => {
@@ -102,7 +130,7 @@ describe('ConversationList', () => {
     );
   });
 
-  it('renders nothing for an empty conversation list', () => {
+  it('renders nothing for an empty list', () => {
     render(<ConversationList items={[]} selectedKey={null} onSelect={vi.fn()} />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });

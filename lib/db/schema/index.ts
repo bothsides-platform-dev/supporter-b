@@ -28,5 +28,6 @@ export * from './chat-messages';
 export * from './chat-conversation-reads';
 export * from './chat-message-templates';
 export * from './rfp-team-messages';
+export * from './rfp-team-message-reads';
 export * from './bid-quote-templates';
 export * from './audit-logs';

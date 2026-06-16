@@ -11,9 +11,8 @@
  * 이메일이 아직 가입 전이면 userId 가 없어 인앱 알림이 불가능 → null 반환(이메일만 전달).
  */
 import { randomUUID } from 'node:crypto';
-import { sql } from 'drizzle-orm';
 
-import { users } from '@/lib/db/schema';
+import { getUserRepo } from '@/lib/server/repositories/factory';
 import { dispatchNotification } from '@/lib/server/notifications/dispatch';
 import type { Notification } from '@/lib/types/notification';
 import type { Tx } from '@/lib/server/repositories/types';
@@ -23,17 +22,13 @@ export async function dispatchWorkspaceInviteInApp(
   opts: { invitedEmail: string; workspaceName: string; linkUrl: string },
 ): Promise<Notification | null> {
   // invitedEmail 은 호출부에서 normalizeEmail 로 소문자화된 값.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [user] = await (tx as any)
-    .select({ id: users.id })
-    .from(users)
-    .where(sql`lower(${users.email}) = ${opts.invitedEmail}`)
-    .limit(1);
-  if (!user) return null;
+  const userRepo = await getUserRepo();
+  const userId = await userRepo.findIdByEmailCI(opts.invitedEmail, tx);
+  if (!userId) return null;
 
   const notif: Notification = {
     id: randomUUID(),
-    userId: user.id,
+    userId,
     workspaceId: null,
     type: 'workspace.invited',
     title: `${opts.workspaceName} 워크스페이스에 초대받았어요`,

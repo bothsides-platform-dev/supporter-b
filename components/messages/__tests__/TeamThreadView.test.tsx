@@ -16,6 +16,11 @@ vi.mock('@/lib/server/actions/chat/sendTeamMessageAction', () => ({
   sendTeamMessageAction: (...args: unknown[]) => sendTeamMessageAction(...args),
 }));
 
+vi.mock('@/lib/server/actions/chat/markTeamThreadReadAction', () => ({
+  markTeamThreadReadAction: vi.fn().mockResolvedValue({ ok: true, readAt: '2026-06-14T00:00:00Z' }),
+}));
+import { markTeamThreadReadAction } from '@/lib/server/actions/chat/markTeamThreadReadAction';
+
 // http (ky) — `/api/files/upload` POST. Mock so the test controls the upload.
 const httpPost = vi.fn();
 vi.mock('@/lib/http', () => ({
@@ -80,6 +85,11 @@ const messages: TeamThreadMessage[] = [
   },
 ];
 
+const teamMembers = [
+  { userId: 'u-mate', name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z' },
+  { userId: 'u-me', name: '김구매', joinedAt: '2026-04-01T00:00:00.000Z' },
+];
+
 function base(overrides: Partial<React.ComponentProps<typeof TeamThreadView>> = {}) {
   return (
     <TeamThreadView
@@ -87,6 +97,7 @@ function base(overrides: Partial<React.ComponentProps<typeof TeamThreadView>> = 
       workspaceId="ws-1"
       viewerUserId="u-me"
       messages={messages}
+      teamMembers={teamMembers}
       {...overrides}
     />
   );
@@ -117,6 +128,11 @@ describe('TeamThreadView — 렌더', () => {
   it('메시지가 없으면 내부 전용임을 알리는 빈 상태를 보여준다', () => {
     render(base({ messages: [] }));
     expect(screen.getByText('아직 팀 메시지가 없어요')).toBeInTheDocument();
+  });
+
+  it('마운트 시 팀 스레드를 읽음 처리한다', () => {
+    render(<TeamThreadView rfpId="r1" workspaceId="w1" viewerUserId="u1" messages={[]} />);
+    expect(markTeamThreadReadAction).toHaveBeenCalledWith({ rfpId: 'r1' });
   });
 });
 
@@ -576,5 +592,63 @@ describe('TeamThreadView — 그룹핑', () => {
 
     // 헤더(이름)는 그룹 시작에만 — 1·3번째 메시지에서 두 번.
     expect(screen.getAllByText('이동료')).toHaveLength(2);
+  });
+});
+
+describe('TeamThreadView — 멘션', () => {
+  // parseMentions 는 UUID 형식 토큰만 인식한다(team-mentions.ts MENTION_SOURCE).
+  // 멘션 시나리오는 실제로 토큰화/파싱이 동작하는 UUID id 를 써야 한다.
+  const MATE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const ME = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const mentionMembers = [
+    { userId: MATE, name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z' },
+    { userId: ME, name: '김구매', joinedAt: '2026-04-01T00:00:00.000Z' },
+  ];
+
+  it('@ 입력 시 멤버 드롭다운이 뜨고, 선택하면 @이름 이 삽입된다', async () => {
+    const user = userEvent.setup();
+    render(base({ teamMembers: mentionMembers, viewerUserId: ME }));
+    const ta = screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…');
+    await user.type(ta, '@이');
+    // 드롭다운 옵션에 '이동료'.
+    const option = await screen.findByRole('option', { name: /이동료/ });
+    await user.click(option);
+    expect((ta as HTMLTextAreaElement).value).toContain('@이동료');
+  });
+
+  it('멘션 선택 후 전송하면 body 에 토큰이 들어간다', async () => {
+    const user = userEvent.setup();
+    render(base({ teamMembers: mentionMembers, viewerUserId: ME }));
+    const ta = screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…');
+    await user.type(ta, '@이');
+    await user.click(await screen.findByRole('option', { name: /이동료/ }));
+    await user.type(ta, '확인');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await waitFor(() => {
+      expect(sendTeamMessageAction).toHaveBeenCalledWith({
+        rfpId: 'rfp-1',
+        body: `<@${MATE}> 확인`,
+        attachmentIds: [],
+      });
+    });
+  });
+
+  it('수신된 멘션 메시지를 @이름 으로 강조 렌더한다', () => {
+    render(
+      base({
+        teamMembers: mentionMembers,
+        viewerUserId: ME,
+        messages: [
+          {
+            id: 'tmM', authorUserId: MATE, authorName: '이동료',
+            body: `<@${ME}> 봐주세요`, createdAt: '2026-06-10T05:00:00.000Z',
+            isSelf: false, attachments: [],
+          },
+        ],
+      }),
+    );
+    // 본인(ME) 멘션 → 강조 span.
+    const el = screen.getByText('@김구매');
+    expect(el).toHaveAttribute('data-self-mention', 'true');
   });
 });
