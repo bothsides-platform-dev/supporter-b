@@ -5,6 +5,7 @@ import {
   getChatConversationRepo,
   getChatMessageRepo,
   getChatReadRepo,
+  getRfpRepo,
   getUserRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
@@ -16,6 +17,10 @@ export type ConversationListItem = {
   conversationId: string;
   counterparty: { workspaceId: string; name: string; type: WorkspaceType; hasLogo: boolean };
   rfpId: string | null;
+  rfpCode: string | null;
+  rfpTitle: string | null;
+  rfpStatus: string | null;
+  rfpDeadline: string | null;
   preview: string;
   lastMessageAt: string | null;
   unread: boolean;
@@ -65,6 +70,7 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
   const msgRepo = await getChatMessageRepo();
   const readRepo = await getChatReadRepo();
   const wsRepo = await getWorkspaceRepo();
+  const rfpRepo = await getRfpRepo();
 
   const conversations = await convRepo.listForWorkspace(ws.workspaceId, ws.workspaceType);
 
@@ -82,6 +88,8 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
       ]);
 
       const last = msgs[msgs.length - 1];
+      const rfpId = last?.rfpId ?? null;
+      const rfp = rfpId ? await rfpRepo.findById(rfpId) : undefined;
       const lastReadAt = myRead?.lastReadAt ?? null;
       // Unread if there's a message after my last read AND it isn't my own.
       const unread =
@@ -97,7 +105,11 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
           type: counterpartyType,
           hasLogo: counterpartyWs?.hasLogo ?? false,
         },
-        rfpId: last?.rfpId ?? null,
+        rfpId,
+        rfpCode: rfp?.code ?? null,
+        rfpTitle: rfp?.title ?? null,
+        rfpStatus: rfp?.status ?? null,
+        rfpDeadline: rfp?.deadline ? new Date(rfp.deadline).toISOString() : null,
         preview: last?.body ?? '',
         lastMessageAt: conv.lastMessageAt ? new Date(conv.lastMessageAt).toISOString() : null,
         unread,
