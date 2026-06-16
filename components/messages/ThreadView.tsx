@@ -21,6 +21,7 @@ import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageAttachmentGrid } from './MessageAttachmentGrid';
+import { ContextPanel } from './ContextPanel';
 import { formatDayLabel, formatTime, withinGroupWindow } from './format';
 
 type Props = {
@@ -36,8 +37,11 @@ type Props = {
   /**
    * 'rail' = 상세 화면 우측 채팅 레일 임베드(w-96) — w-64 사이드 갤러리가 말풍선
    * 영역을 짓누르므로 갤러리를 목록 위 오버레이로 전환한다. 기본은 'page'.
+   * 'tabs' = 채팅·RFP·파일 탭 3개를 가진 풀 페이지 뷰.
    */
-  variant?: 'page' | 'rail';
+  variant?: 'page' | 'rail' | 'tabs';
+  /** tabs 변형에서 RFP 탭에 표시할 컨텍스트 정보. */
+  rfpContext?: { code: string; title: string; status?: string; deadline?: string | null };
   /** 레일 컨텍스트의 RFP — 컴포저 전송에 이 RFP 태그를 기본 적용한다. */
   defaultRfpId?: string;
   /**
@@ -120,6 +124,7 @@ export function ThreadView({
   rfpById,
   onBack,
   variant = 'page',
+  rfpContext,
   defaultRfpId,
   sendDisabled = false,
 }: Props) {
@@ -136,6 +141,13 @@ export function ThreadView({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [sending, setSending] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
+  const [activeTab, setActiveTab] = useState<'chat' | 'rfp' | 'files'>('chat');
+
+  // variant が변경되면 탭을 채팅으로 리셋한다.
+  useEffect(() => {
+    setActiveTab('chat');
+  }, [variant]);
+
   // Local copy so live receives + optimistic sends append without a refetch.
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>(messages);
   // Track the messages prop identity to resync local state when it changes
@@ -482,7 +494,7 @@ export function ThreadView({
             <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">입력 중…</span>
           )}
         </div>
-        {totalAttachmentCount > 0 && (
+        {variant === 'rail' && totalAttachmentCount > 0 && (
           <button
             type="button"
             onClick={() => setShowGallery((v) => !v)}
@@ -497,9 +509,45 @@ export function ThreadView({
             <span className="md-numeric">파일 {totalAttachmentCount}</span>
           </button>
         )}
+        {variant === 'tabs' && (
+          <div role="tablist" className="ml-auto flex items-center gap-0.5">
+            {(['chat', 'rfp', 'files'] as const).map((tab) => (
+              <button
+                key={tab}
+                role="tab"
+                type="button"
+                aria-selected={activeTab === tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  'rounded-[var(--md-sys-shape-small)] px-2.5 py-1 text-[11px] transition-colors',
+                  activeTab === tab
+                    ? 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]'
+                    : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-low)]',
+                )}
+              >
+                {tab === 'chat' ? '채팅' : tab === 'rfp' ? 'RFP' : '파일'}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
-      {/* 말풍선 목록 */}
+      {/* 탭 변형: RFP 컨텍스트 패널 */}
+      {variant === 'tabs' && activeTab === 'rfp' && (
+        <div className="flex-1 overflow-y-auto">
+          <ContextPanel conversationId={conversationId} rfpContext={rfpContext} />
+        </div>
+      )}
+
+      {/* 탭 변형: 파일 패널 */}
+      {variant === 'tabs' && activeTab === 'files' && (
+        <div className="flex-1 overflow-y-auto p-3">
+          <AttachmentGalleryPanel conversationId={conversationId} />
+        </div>
+      )}
+
+      {/* 말풍선 목록 — tabs 변형에서는 채팅 탭일 때만 표시 */}
+      {(variant !== 'tabs' || activeTab === 'chat') && (<>
       <div className="relative flex-1 overflow-hidden">
       <div
         ref={listRef}
@@ -767,17 +815,8 @@ export function ThreadView({
           보내기
         </Button>
       </div>
+      </>)}
     </div>
-
-    {/* 우측 첨부파일 갤러리 패널 (page 변형 전용 — rail 은 목록 오버레이) */}
-    {variant === 'page' && showGallery && (
-      <div
-        data-gallery-pane
-        className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-[var(--md-sys-color-outline-variant)] p-3"
-      >
-        <AttachmentGalleryPanel conversationId={conversationId} />
-      </div>
-    )}
     </div>
   );
 }
