@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
+import {
+  __resetForTest,
+  __useDrizzleWithDbForTest,
+} from '@/lib/server/repositories/factory';
 import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -15,32 +19,35 @@ import { accountExistsForEmail } from '../workspaceInviteLanding';
 let db: PgliteDB;
 
 beforeEach(async () => {
+  __resetForTest();
   db = await createPgliteDb();
+  await __useDrizzleWithDbForTest(db);
   __setActionDbForTest(db);
 });
 
 afterEach(() => {
   __setActionDbForTest(undefined);
+  __resetForTest();
 });
 
 describe('accountExistsForEmail', () => {
   it('returns false when no account has that email', async () => {
-    expect(await accountExistsForEmail(db, 'nobody@example.com')).toBe(false);
+    expect(await accountExistsForEmail('nobody@example.com')).toBe(false);
   });
 
   it('returns true when a verified account exists', async () => {
     const u = await seedUser(db, { email: 'has@example.com' });
     await db.update(users).set({ emailVerified: true }).where(eq(users.id, u.id));
-    expect(await accountExistsForEmail(db, 'has@example.com')).toBe(true);
+    expect(await accountExistsForEmail('has@example.com')).toBe(true);
   });
 
   it('returns true even when the existing account is UNVERIFIED (the #8 dead-end population)', async () => {
     await seedUser(db, { email: 'unverified@example.com' }); // emailVerified defaults false
-    expect(await accountExistsForEmail(db, 'unverified@example.com')).toBe(true);
+    expect(await accountExistsForEmail('unverified@example.com')).toBe(true);
   });
 
   it('matches case-insensitively', async () => {
     await seedUser(db, { email: 'mixed@example.com' });
-    expect(await accountExistsForEmail(db, 'Mixed@Example.com')).toBe(true);
+    expect(await accountExistsForEmail('Mixed@Example.com')).toBe(true);
   });
 });

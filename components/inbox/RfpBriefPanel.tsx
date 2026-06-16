@@ -1,13 +1,11 @@
-import { Chip, type ChipColor } from '@/components/primitives/Chip';
-
-const CONTRACT_TYPE_LABELS = { new: '신규 계약', renewal: '갱신 계약' } as const;
-const CONTRACT_TYPE_COLOR: Record<'new' | 'renewal', ChipColor> = { new: 'primary', renewal: 'surface' };
+import { Chip } from '@/components/primitives/Chip';
 import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import { formatDate, formatDeadline, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
+import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
 import type { RFP } from '@/lib/types/rfp';
 
 type Props = { rfp: RFP; buyerName: string };
@@ -63,7 +61,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
           <CounterpartyProfileCard
             variant="avatar"
             counterparty={{ name: buyerName, type: 'buyer', workspaceId: rfp.buyerWsId }}
-            rfpContext={{ code: rfp.id, title: rfp.title }}
+            rfpContext={{ id: rfp.id, title: rfp.title }}
           />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">

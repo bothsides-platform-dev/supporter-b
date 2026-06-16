@@ -2,8 +2,8 @@
 
 import { z } from 'zod';
 
-import { getBidQuoteTemplateRepo } from '@/lib/server/repositories/factory';
-import { type QuoteActionResult, requireOwnedQuoteTemplate } from './_shared';
+import { getQuoteTemplateService } from '@/lib/server/services/quote-template';
+import { type QuoteActionResult, requirePgWorkspace } from './_shared';
 
 const Input = z.object({ templateId: z.string().uuid() }).strict();
 
@@ -20,9 +20,12 @@ export async function deleteQuoteTemplateAction(
 ): Promise<DeleteQuoteTemplateResult> {
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
-  const owned = await requireOwnedQuoteTemplate(parsed.data.templateId);
-  if (!owned.ok) return owned;
 
-  await (await getBidQuoteTemplateRepo()).remove(parsed.data.templateId);
-  return { ok: true };
+  const ws = await requirePgWorkspace();
+  if (!ws.ok) return ws;
+
+  return (await getQuoteTemplateService()).remove(parsed.data.templateId, {
+    userId: ws.userId,
+    workspaceId: ws.workspaceId,
+  });
 }

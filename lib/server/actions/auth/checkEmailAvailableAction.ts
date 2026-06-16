@@ -1,10 +1,9 @@
 'use server';
 
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
 
-import { users } from '@/lib/db/schema';
-import { actionDb, normalizeEmail, type AuthActionResult } from './_shared';
+import { getUserRepo } from '@/lib/server/repositories/factory';
+import { normalizeEmail, type AuthActionResult } from './_shared';
 
 const Input = z.object({
   email: z.string().email(),
@@ -29,14 +28,11 @@ export async function checkEmailAvailableAction(
 
   const email = normalizeEmail(parsed.data.email);
 
-  const [existing] = await actionDb()
-    .select({ emailVerified: users.emailVerified })
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
+  // boolean → 인증 완료 여부, undefined → 미등록 계정.
+  const emailVerified = await (await getUserRepo()).findEmailVerifiedByEmail(email);
 
   // 인증 완료된 계정만 차단. 미인증(중단된 가입)은 이어서 가입 허용 → purge 후 재생성.
-  if (existing?.emailVerified) return { ok: false, error: 'EMAIL_TAKEN' };
+  if (emailVerified) return { ok: false, error: 'EMAIL_TAKEN' };
 
   return { ok: true };
 }

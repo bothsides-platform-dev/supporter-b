@@ -2,24 +2,17 @@
 // 하면 이 페이지가 목록 위 모달로 뜬다. 정식 페이지(app/(app)/rfp/[id]/page.tsx)와
 // 동일한 가드·로더를 쓰고 같은 본문(RfpDetailContent)을 감싸 시각이 일치한다.
 // 새로고침/딥링크는 인터셉터를 건너뛰어 정식 페이지가 풀스크린으로 렌더된다.
-import { Chip, type ChipColor } from '@/components/primitives/Chip';
+import { Chip } from '@/components/primitives/Chip';
 import { DealRoomModal } from '@/components/deal-room/DealRoomModal';
 import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
 import { BuyerDealRoomBody } from '@/components/deal-room/buyer/BuyerDealRoomBody';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
+import { rfpStatusChip } from '@/lib/rfp-status';
 
 export const dynamic = 'force-dynamic';
 
 type Props = { params: Promise<{ id: string }> };
-
-const STATUS: Record<string, { label: string; color: ChipColor }> = {
-  draft: { label: '임시저장', color: 'surface' },
-  sent: { label: '요청 보냄', color: 'warning' },
-  closed: { label: '마감', color: 'surface' },
-  awarded: { label: '선정 완료', color: 'tertiary' },
-  cancelled: { label: '취소', color: 'error' },
-};
 
 export default async function RfpDealRoomModalPage({ params }: Props) {
   const { id } = await params;
@@ -46,7 +39,7 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
     );
   }
 
-  const s = STATUS[data.rfp.status];
+  const s = rfpStatusChip(data.rfp.status);
 
   return (
     <DealRoomModal

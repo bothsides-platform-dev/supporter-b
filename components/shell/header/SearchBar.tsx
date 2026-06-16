@@ -1,7 +1,7 @@
 'use client';
 
 import { SearchIcon } from '@/components/icons';
-import { ModifierShortcut } from '@/components/ui/ModifierShortcut';
+import { ModifierShortcut } from '@/components/primitives/ModifierShortcut';
 import { useUIStore } from '@/lib/stores/ui';
 import { useIsMac } from '@/lib/hooks/usePlatform';
 import { cn } from '@/lib/utils';

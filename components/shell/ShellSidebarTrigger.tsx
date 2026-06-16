@@ -1,7 +1,7 @@
 'use client';
 
 import { PanelLeftIcon } from 'lucide-react';
-import { ModifierShortcut } from '@/components/ui/ModifierShortcut';
+import { ModifierShortcut } from '@/components/primitives/ModifierShortcut';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useIsMac } from '@/lib/hooks/usePlatform';
