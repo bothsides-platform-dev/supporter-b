@@ -2,15 +2,8 @@
 
 import { z } from 'zod';
 
-import { getColumnRepo } from '@/lib/server/repositories/factory';
-import { isSystemColumn } from '@/lib/types/column';
-import {
-  type BoardActionResult,
-  workspaceIdForCard,
-  kindForCard,
-  setCardBoardColumn,
-  cardBelongsToWorkspace,
-} from './_shared';
+import { getBoardService } from '@/lib/server/services/board';
+import { type BoardActionResult, workspaceIdForCard } from './_shared';
 
 const Input = z
   .object({
@@ -38,18 +31,12 @@ export async function moveCardAction(input: MoveCardInput): Promise<MoveCardResu
   const ws = await workspaceIdForCard(cardType);
   if (!ws.ok) return ws;
 
-  const colRepo = await getColumnRepo();
-  const column = await colRepo.findById(toColumnId);
-  if (!column) return { ok: false, error: 'COLUMN_NOT_FOUND' };
-  if (column.workspaceId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
-  if (column.kind !== kindForCard(cardType)) return { ok: false, error: 'CROSS_KIND' };
-  // system (lifecycle-bound) columns ⇒ non-deletable AND non-place-target.
-  if (isSystemColumn(column)) return { ok: false, error: 'NOT_A_DROP_TARGET' };
-
-  if (!(await cardBelongsToWorkspace(cardType, cardId, ws.workspaceId))) {
-    return { ok: false, error: 'FORBIDDEN' };
-  }
-
-  await setCardBoardColumn(cardType, cardId, toColumnId);
-  return { ok: true };
+  // workspaceIdForCard already keyed the workspace by card type (buyer for
+  // rfp/bid, pg for invitation); the service only needs the resolved id +
+  // type. cardType is the discriminator, so type is implied — but moveCard
+  // doesn't use workspaceType, so a sentinel keeps the actor shape uniform.
+  return (await getBoardService()).moveCard(
+    { cardType, cardId, toColumnId },
+    { workspaceId: ws.workspaceId, workspaceType: cardType === 'invitation' ? 'pg' : 'buyer' },
+  );
 }

@@ -11,7 +11,7 @@
 import type { Session } from 'next-auth';
 import { auth } from '@/auth';
 import { isSessionVersionStale } from '@/lib/auth/session-version';
-import { getDbSessionVersion } from '@/lib/auth/session-version-db';
+import { getDbEmailVerified, getDbSessionVersion } from '@/lib/auth/session-version-db';
 
 export type AuthedSession = Session & {
   user: NonNullable<Session['user']> & { id: string };
@@ -49,10 +49,16 @@ export async function isSessionRevoked(session: Session | null): Promise<boolean
   return isSessionVersionStale(session.user.sessionVersion, dbVersion);
 }
 
+export async function isEmailUnverified(session: Session | null): Promise<boolean> {
+  if (!session?.user?.id) return true;
+  return !(await getDbEmailVerified(session.user.id));
+}
+
 export async function requireSession(): Promise<AuthedSession> {
   const session = await auth();
   if (!session?.user?.id) throw new Error('UNAUTHENTICATED');
   if (await isSessionRevoked(session)) throw new Error('UNAUTHENTICATED');
+  if (await isEmailUnverified(session)) throw new Error('EMAIL_UNVERIFIED');
   return session as AuthedSession;
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useId } from 'react';
+import { useId, useState } from 'react';
 import { NumericFormat } from 'react-number-format';
 import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
@@ -70,7 +70,10 @@ type FeeRateCellProps = {
   /** 그리드 셀 식별용 data-testid (예: `fee-cell-card-sole`) */
   testId?: string;
   ariaLabel?: string;
-  /** 툴팁 수평 정렬. 첫 열='start', 마지막 열='end', 나머지='center'(기본). */
+  /**
+   * 툴팁 수평 정렬 — 첫 열(영세)은 'start', 마지막 열(일반)은 'end', 그 외 'center'(기본).
+   * 양끝 열에서 툴팁이 화면 밖으로 오버플로되는 것을 막기 위해 사용한다.
+   */
   tooltipAlign?: 'start' | 'center' | 'end';
 };
 
@@ -91,7 +94,7 @@ export function FeeRateCell({
   const hint = formatRatePerManwon(parseFloat(value)) || null;
   const showHint = (focused || hovered) && !!hint;
 
-  const positionClass =
+  const tooltipPositionClass =
     tooltipAlign === 'start'
       ? 'left-0'
       : tooltipAlign === 'end'
@@ -123,7 +126,7 @@ export function FeeRateCell({
         <div
           id={tooltipId}
           role="tooltip"
-          className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface)] shadow-md ${positionClass}`}
+          className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface)] shadow-md ${tooltipPositionClass}`}
         >
           {hint}
         </div>

@@ -8,8 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { auth } from '@/auth';
-import { isSessionRevoked } from '@/lib/auth/session';
-import { db } from '@/lib/db/client';
+import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import { searchWorkspaces } from '@/lib/server/workspaces/search';
 
 export const runtime = 'nodejs';
@@ -44,9 +43,13 @@ export async function GET(request: NextRequest) {
     if (await isSessionRevoked(session)) {
       return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
     }
+    // 이메일 미인증 세션 거부.
+    if (await isEmailUnverified(session)) {
+      return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
+    }
   }
 
-  const rows = await searchWorkspaces(db, { type, q });
+  const rows = await searchWorkspaces({ type, q });
 
   const nameCount = new Map<string, number>();
   for (const row of rows) {

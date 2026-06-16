@@ -1,4 +1,9 @@
-// Shared helpers for the unified kanban board actions.
+// Shared session-boundary helpers for the unified kanban board actions.
+//
+// The business logic (placement + column CRUD) lives in BoardService
+// (@/lib/server/services/board). What stays here is ONLY the Next-auth session
+// boundary — resolving the active workspace from the session — which services
+// must NOT import. Actions resolve the workspace here, then delegate.
 //
 // DESIGN NOTE (deviates from spec §C, deliberately): moveCard/releaseCard are
 // PLACEMENT-ONLY (custom columns + default-landing release). Drops onto
@@ -12,13 +17,7 @@ import {
   requireBuyerSession,
   requirePgSession,
 } from '@/lib/auth/session';
-import {
-  getColumnRepo,
-  getRfpRepo,
-  getBidRepo,
-  getInvitationRepo,
-} from '@/lib/server/repositories/factory';
-import type { BoardColumn, CardType, ColumnKind } from '@/lib/types/column';
+import type { CardType } from '@/lib/types/column';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { BidActionResult } from '../bid/_shared';
 
@@ -56,63 +55,4 @@ export async function requireActiveWorkspace(): Promise<
   const { workspaceId, workspaceType } = session.user;
   if (!workspaceId || !workspaceType) return { ok: false, error: 'NO_WORKSPACE' };
   return { ok: true, workspaceId, workspaceType };
-}
-
-export function kindForCard(cardType: CardType): ColumnKind {
-  return cardType === 'bid' ? 'rfp_bids' : 'pipeline';
-}
-
-// Load a column owned by the session's active workspace (cross-workspace guard
-// for every column mutation). Used by rename/recolor/reorder/delete.
-export async function requireOwnedColumn(
-  columnId: string,
-): Promise<
-  | { ok: true; column: BoardColumn; workspaceId: string }
-  | { ok: false; error: string }
-> {
-  const ws = await requireActiveWorkspace();
-  if (!ws.ok) return ws;
-  const column = await (await getColumnRepo()).findById(columnId);
-  if (!column) return { ok: false, error: 'COLUMN_NOT_FOUND' };
-  if (column.workspaceId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
-  return { ok: true, column, workspaceId: ws.workspaceId };
-}
-
-// Set (or clear, with null) a card's board_column_id via its own card repo.
-export async function setCardBoardColumn(
-  cardType: CardType,
-  cardId: string,
-  columnId: string | null,
-): Promise<void> {
-  if (cardType === 'rfp') {
-    await (await getRfpRepo()).setBoardColumn(cardId, columnId);
-    return;
-  }
-  if (cardType === 'invitation') {
-    await (await getInvitationRepo()).setBoardColumn(cardId, columnId);
-    return;
-  }
-  await (await getBidRepo()).setBoardColumn(cardId, columnId);
-}
-
-// Does this card belong to the given workspace's board? rfp/bid boards are owned
-// by the buyer workspace (bid via rfp.buyerWsId, NOT bid.pgWsId); invitation
-// boards by the pg workspace.
-export async function cardBelongsToWorkspace(
-  cardType: CardType,
-  cardId: string,
-  workspaceId: string,
-): Promise<boolean> {
-  if (cardType === 'rfp') {
-    const rfp = await (await getRfpRepo()).findById(cardId);
-    return !!rfp && rfp.buyerWsId === workspaceId;
-  }
-  if (cardType === 'bid') {
-    const bid = await (await getBidRepo()).findById(cardId);
-    if (!bid) return false;
-    const rfp = await (await getRfpRepo()).findById(bid.rfpId);
-    return !!rfp && rfp.buyerWsId === workspaceId;
-  }
-  const inv = await (await getInvitationRepo()).findById(cardId);
-  return !!inv && inv.pgWsId === workspaceId;
 }

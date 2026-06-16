@@ -14,13 +14,10 @@ import {
   type TierRates,
 } from '@/lib/types/bid';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
+import { fmtPct } from '@/lib/quote/template-fees';
 
 const MAX_CHIPS = 4;
 const MAX_TEMPLATES = 20;
-
-function fmtPct(rate: number): string {
-  return String(Math.round(rate * 1e6) / 1e4);
-}
 
 function buildChips(paymentFees: Partial<Record<PaymentMethod, number | TierRates>>): string[] {
   const chips: string[] = [];

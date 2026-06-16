@@ -7,6 +7,8 @@ import {
   __resetForTest,
   __useDrizzleWithDbForTest,
   getNotificationRepo,
+  getOutboxRepo,
+  getUserRepo,
 } from '@/lib/server/repositories/factory';
 import { notifications, outboxEntries } from '@/lib/db/schema';
 import type { OutboxEvent } from '@/lib/server/outbox/types';
@@ -22,8 +24,12 @@ import {
 let db: PgliteDB;
 
 async function buildService(): Promise<NotificationService> {
-  const notifRepo = await getNotificationRepo();
-  return new NotificationService(db, notifRepo);
+  const [notifRepo, outboxRepo, userRepo] = await Promise.all([
+    getNotificationRepo(),
+    getOutboxRepo(),
+    getUserRepo(),
+  ]);
+  return new NotificationService(db, notifRepo, outboxRepo, userRepo);
 }
 
 beforeEach(async () => {

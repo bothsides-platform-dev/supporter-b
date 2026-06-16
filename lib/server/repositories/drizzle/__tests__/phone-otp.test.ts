@@ -1,0 +1,125 @@
+// DrizzlePhoneOtpRepository — phone-OTP issuance + verification lifecycle.
+//   - countRecent() powers the send rate-limit.
+//   - create() inserts a hashed-code row and returns its id.
+//   - findActive() returns the oldest unverified, unexpired OTP (verified rows
+//     are EXCLUDED — the load-bearing behavior).
+//   - isVerified() / bumpAttempts() / markVerified() / remove() round-trips.
+import { beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+
+import { phoneOtps } from '@/lib/db/schema';
+import { createPgliteDb } from '@/lib/db/client-pglite';
+import { DrizzlePhoneOtpRepository } from '../phone-otp';
+
+async function setup() {
+  const db = await createPgliteDb();
+  return { db, repo: new DrizzlePhoneOtpRepository(db) };
+}
+
+describe('DrizzlePhoneOtpRepository', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('create() inserts a row and returns its id; findActive() returns it', async () => {
+    const id = await ctx.repo.create({
+      phone: '01012345678',
+      codeHash: 'hash-1',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    expect(id).toMatch(/[0-9a-f-]{36}/);
+
+    const active = await ctx.repo.findActive('01012345678', new Date());
+    expect(active).toEqual({ id, codeHash: 'hash-1', attempts: 0 });
+  });
+
+  it('countRecent() counts OTPs issued after `since` for that phone', async () => {
+    await ctx.repo.create({ phone: '01000000001', codeHash: 'a', expiresAt: new Date(Date.now() + 60_000) });
+    await ctx.repo.create({ phone: '01000000001', codeHash: 'b', expiresAt: new Date(Date.now() + 60_000) });
+    await ctx.repo.create({ phone: '01099999999', codeHash: 'c', expiresAt: new Date(Date.now() + 60_000) });
+
+    const since = new Date(Date.now() - 10 * 60_000);
+    expect(await ctx.repo.countRecent('01000000001', since)).toBe(2);
+    expect(await ctx.repo.countRecent('01099999999', since)).toBe(1);
+    // Window that starts in the future excludes everything.
+    expect(await ctx.repo.countRecent('01000000001', new Date(Date.now() + 60_000))).toBe(0);
+  });
+
+  it('findActive() excludes expired OTPs', async () => {
+    await ctx.repo.create({
+      phone: '01011112222',
+      codeHash: 'expired',
+      expiresAt: new Date(Date.now() - 1000),
+    });
+    expect(await ctx.repo.findActive('01011112222', new Date())).toBeUndefined();
+  });
+
+  it('findActive() excludes verified OTPs (load-bearing)', async () => {
+    const id = await ctx.repo.create({
+      phone: '01022223333',
+      codeHash: 'verified',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await ctx.repo.markVerified(id, new Date());
+    expect(await ctx.repo.findActive('01022223333', new Date())).toBeUndefined();
+  });
+
+  it('findActive() returns the oldest unverified row first', async () => {
+    const older = await ctx.repo.create({
+      phone: '01033334444',
+      codeHash: 'older',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    // Force the second row to have a strictly later created_at.
+    await ctx.db
+      .update(phoneOtps)
+      .set({ createdAt: new Date(Date.now() - 5000) })
+      .where(eq(phoneOtps.id, older));
+    await ctx.repo.create({
+      phone: '01033334444',
+      codeHash: 'newer',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const active = await ctx.repo.findActive('01033334444', new Date());
+    expect(active?.id).toBe(older);
+    expect(active?.codeHash).toBe('older');
+  });
+
+  it('bumpAttempts() increments the attempts counter', async () => {
+    const id = await ctx.repo.create({
+      phone: '01044445555',
+      codeHash: 'h',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await ctx.repo.bumpAttempts(id);
+    await ctx.repo.bumpAttempts(id);
+    const active = await ctx.repo.findActive('01044445555', new Date());
+    expect(active?.attempts).toBe(2);
+  });
+
+  it('isVerified() reflects markVerified()', async () => {
+    const id = await ctx.repo.create({
+      phone: '01055556666',
+      codeHash: 'h',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    expect(await ctx.repo.isVerified(id, '01055556666')).toBe(false);
+
+    await ctx.repo.markVerified(id, new Date());
+    expect(await ctx.repo.isVerified(id, '01055556666')).toBe(true);
+    // Wrong phone → false even though the id is verified.
+    expect(await ctx.repo.isVerified(id, '09999999999')).toBe(false);
+  });
+
+  it('remove() deletes the row', async () => {
+    const id = await ctx.repo.create({
+      phone: '01066667777',
+      codeHash: 'h',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await ctx.repo.remove(id);
+    expect(await ctx.repo.findActive('01066667777', new Date())).toBeUndefined();
+  });
+});

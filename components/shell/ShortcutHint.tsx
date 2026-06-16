@@ -1,7 +1,7 @@
 'use client';
 
-import { ModifierShortcut } from '@/components/ui/ModifierShortcut';
-import { Kbd } from '@/components/ui/Kbd';
+import { ModifierShortcut } from '@/components/primitives/ModifierShortcut';
+import { Kbd } from '@/components/primitives/Kbd';
 import { useIsMac } from '@/lib/hooks/usePlatform';
 import type { NavShortcut } from '@/lib/nav/nav-config';
 

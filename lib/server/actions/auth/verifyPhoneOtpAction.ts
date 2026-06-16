@@ -1,9 +1,8 @@
 'use server';
 
-import { and, eq, isNull, gt } from 'drizzle-orm';
-import { phoneOtps } from '@/lib/db/schema';
+import { getPhoneOtpRepo } from '@/lib/server/repositories/factory';
 import { hashOtpCode, normalizePhone } from './phoneOtpUtils';
-import { actionDb, type AuthActionResult } from './_shared';
+import { type AuthActionResult } from './_shared';
 
 const MAX_ATTEMPTS = 5;
 
@@ -13,21 +12,10 @@ export async function verifyPhoneOtpAction(input: {
 }): Promise<AuthActionResult<{ verificationId: string }>> {
   const phone = normalizePhone(input.phone) ?? input.phone.replace(/[\s\-]/g, '');
 
-  const db = actionDb();
+  const phoneOtpRepo = await getPhoneOtpRepo();
   const now = new Date();
 
-  const [row] = await db
-    .select()
-    .from(phoneOtps)
-    .where(
-      and(
-        eq(phoneOtps.phone, phone),
-        isNull(phoneOtps.verifiedAt),
-        gt(phoneOtps.expiresAt, now),
-      ),
-    )
-    .orderBy(phoneOtps.createdAt)
-    .limit(1);
+  const row = await phoneOtpRepo.findActive(phone, now);
 
   if (!row) return { ok: false, error: 'INVALID_CODE' };
 
@@ -36,17 +24,11 @@ export async function verifyPhoneOtpAction(input: {
   }
 
   if (row.codeHash !== hashOtpCode(input.code)) {
-    await db
-      .update(phoneOtps)
-      .set({ attempts: row.attempts + 1 })
-      .where(eq(phoneOtps.id, row.id));
+    await phoneOtpRepo.bumpAttempts(row.id);
     return { ok: false, error: 'INVALID_CODE' };
   }
 
-  await db
-    .update(phoneOtps)
-    .set({ verifiedAt: now })
-    .where(eq(phoneOtps.id, row.id));
+  await phoneOtpRepo.markVerified(row.id, now);
 
   return { ok: true, verificationId: row.id };
 }

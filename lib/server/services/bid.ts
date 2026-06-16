@@ -1,7 +1,5 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, bids, users, workspaceMembers, workspaces } from '@/lib/db/schema';
 import type {
   AttachmentRepo,
   AuditLogRepo,
@@ -71,7 +69,7 @@ export class BidService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
-      await tx.update(bids).set({ status: 'withdrawn' }).where(eq(bids.id, bid.id));
+      await this.bidRepo.updateStatus(bid.id, 'withdrawn', tx);
       // 감사 로그 (C5) — 철회와 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
         {
@@ -190,37 +188,18 @@ export class BidService {
       );
 
       if (input.proposalAttachmentId) {
-        await tx
-          .update(attachments)
-          .set({ bidId })
-          .where(
-            and(
-              eq(attachments.id, input.proposalAttachmentId),
-              isNull(attachments.rfpId),
-              isNull(attachments.bidId),
-              isNull(attachments.bidNoteId),
-            ),
-          );
+        await this.attachmentRepo.claim(
+          { ids: [input.proposalAttachmentId], owner: { bidId } },
+          tx,
+        );
       }
 
       // 온보딩 샘플 RFP 는 데모 구매사(.invalid 메일)가 소유 — 알림/이메일을 발행하지 않는다.
       // (bid 저장은 위에서 끝났으므로 PG 의 인터랙티브 체험에는 영향이 없다.)
       if (!rfp.isSample) {
-        const buyerMembers = (await tx
-          .select({ userId: workspaceMembers.userId, email: users.email })
-          .from(workspaceMembers)
-          .innerJoin(users, eq(workspaceMembers.userId, users.id))
-          .where(eq(workspaceMembers.workspaceId, rfp.buyerWsId))) as {
-          userId: string;
-          email: string;
-        }[];
+        const buyerMembers = await this.workspaceRepo.memberRecipients(rfp.buyerWsId, tx);
 
-        const [pgWsRow] = (await tx
-          .select({ name: workspaces.name })
-          .from(workspaces)
-          .where(eq(workspaces.id, actor.workspaceId))
-          .limit(1)) as { name: string }[];
-        const pgWsLabel = pgWsRow?.name ?? 'PG';
+        const pgWsLabel = (await this.workspaceRepo.getName(actor.workspaceId, tx)) ?? 'PG';
 
         const submittedHtml = await renderBidSubmitted({
           rfpId: rfp.code,
@@ -290,16 +269,7 @@ export class BidService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const txResult = await this._db.transaction(async (tx: any) => {
       if (input.attachmentIds.length > 0) {
-        const rows = await tx
-          .select({
-            id: attachments.id,
-            rfpId: attachments.rfpId,
-            bidId: attachments.bidId,
-            bidNoteId: attachments.bidNoteId,
-            uploadedBy: attachments.uploadedBy,
-          })
-          .from(attachments)
-          .where(inArray(attachments.id, input.attachmentIds));
+        const rows = await this.attachmentRepo.findUnclaimedByIds(input.attachmentIds, tx);
         if (rows.length !== input.attachmentIds.length) return 'INVALID_ATTACHMENT' as const;
         for (const r of rows) {
           if (r.uploadedBy !== actor.userId || r.rfpId || r.bidId || r.bidNoteId) {
@@ -314,18 +284,10 @@ export class BidService {
       );
 
       if (input.attachmentIds.length > 0) {
-        await tx
-          .update(attachments)
-          .set({ bidNoteId: noteId })
-          .where(
-            and(
-              inArray(attachments.id, input.attachmentIds),
-              eq(attachments.uploadedBy, actor.userId),
-              isNull(attachments.rfpId),
-              isNull(attachments.bidId),
-              isNull(attachments.bidNoteId),
-            ),
-          );
+        await this.attachmentRepo.claim(
+          { ids: input.attachmentIds, owner: { bidNoteId: noteId }, uploadedBy: actor.userId },
+          tx,
+        );
       }
       return 'ok' as const;
     });

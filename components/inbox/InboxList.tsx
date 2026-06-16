@@ -10,6 +10,7 @@ import { useListNavigation } from '@/lib/hooks/useListNavigation';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
 import { PG_KANBAN_LABEL, type PgKanbanStage } from '@/lib/server/pg-kanban';
+import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
 
 // 칩 라벨은 PG 칸반 stage 와 동일 어휘(received→신규 …) — PG_KANBAN_LABEL 재사용.
 const stageColor: Record<PgKanbanStage, ChipColor> = {
@@ -18,8 +19,6 @@ const stageColor: Record<PgKanbanStage, ChipColor> = {
   won: 'tertiary', // 선정됨 — 성공/완료
   lost: 'surface', // 미선정 — 중립
 };
-
-const CONTRACT_TYPE_LABELS = { new: '신규 계약', renewal: '갱신 계약' } as const;
 
 export type InboxRow = {
   invitationId: string;
@@ -104,7 +103,7 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
                     {row.contractType && (
                       <Chip
                         label={CONTRACT_TYPE_LABELS[row.contractType]}
-                        color={row.contractType === 'new' ? 'primary' : 'surface'}
+                        color={CONTRACT_TYPE_COLOR[row.contractType]}
                       />
                     )}
                     {/* 재요청은 재제출로만 resolve — 종결(won/lost) 후엔 응답 불가라 숨김. */}

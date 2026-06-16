@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { attachments, chatMessages } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { Attachment } from '@/lib/types/common';
@@ -93,5 +93,79 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       .where(eq(chatMessages.conversationId, conversationId))
       .orderBy(asc(attachments.uploadedAt));
     return rows.map(toPublicAttachment);
+  }
+
+  async claim(
+    params: {
+      ids: string[];
+      owner: {
+        rfpId?: string;
+        bidId?: string;
+        bidNoteId?: string;
+        chatMessageId?: string;
+        rfpTeamMessageId?: string;
+      };
+      uploadedBy?: string;
+    },
+    tx?: Tx,
+  ): Promise<void> {
+    if (params.ids.length === 0) return; // safe no-op
+    const db = this.h(tx);
+    const { owner } = params;
+    // owner 는 정확히 한 키만 가진다 — 설정된 컬럼만 patch.
+    const patch: Partial<AttachRow> = {};
+    if (owner.rfpId !== undefined) patch.rfpId = owner.rfpId;
+    if (owner.bidId !== undefined) patch.bidId = owner.bidId;
+    if (owner.bidNoteId !== undefined) patch.bidNoteId = owner.bidNoteId;
+    if (owner.chatMessageId !== undefined) patch.chatMessageId = owner.chatMessageId;
+    if (owner.rfpTeamMessageId !== undefined) patch.rfpTeamMessageId = owner.rfpTeamMessageId;
+
+    // 모든 owner 컬럼 IS NULL 가드 — 이미 링크된 행 re-parent 방지.
+    const conds = [
+      inArray(attachments.id, params.ids),
+      isNull(attachments.rfpId),
+      isNull(attachments.bidId),
+      isNull(attachments.bidNoteId),
+      isNull(attachments.chatMessageId),
+      isNull(attachments.rfpTeamMessageId),
+    ];
+    if (params.uploadedBy !== undefined) {
+      conds.push(eq(attachments.uploadedBy, params.uploadedBy));
+    }
+
+    await db.update(attachments).set(patch).where(and(...conds));
+  }
+
+  async findUnclaimedByIds(
+    ids: string[],
+    tx?: Tx,
+  ): Promise<Pick<AttachmentRecord, 'id' | 'rfpId' | 'bidId' | 'bidNoteId' | 'uploadedBy'>[]> {
+    if (ids.length === 0) return [];
+    const db = this.h(tx);
+    const rows: AttachRow[] = await db
+      .select()
+      .from(attachments)
+      .where(
+        and(
+          inArray(attachments.id, ids),
+          isNull(attachments.rfpId),
+          isNull(attachments.bidId),
+          isNull(attachments.bidNoteId),
+          isNull(attachments.chatMessageId),
+          isNull(attachments.rfpTeamMessageId),
+        ),
+      );
+    return rows.map((row) => ({
+      id: row.id,
+      rfpId: row.rfpId ?? undefined,
+      bidId: row.bidId ?? undefined,
+      bidNoteId: row.bidNoteId ?? undefined,
+      uploadedBy: row.uploadedBy,
+    }));
+  }
+
+  async remove(id: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.delete(attachments).where(eq(attachments.id, id));
   }
 }

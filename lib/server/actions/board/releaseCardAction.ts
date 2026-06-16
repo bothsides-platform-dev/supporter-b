@@ -2,12 +2,8 @@
 
 import { z } from 'zod';
 
-import {
-  type BoardActionResult,
-  workspaceIdForCard,
-  setCardBoardColumn,
-  cardBelongsToWorkspace,
-} from './_shared';
+import { getBoardService } from '@/lib/server/services/board';
+import { type BoardActionResult, workspaceIdForCard } from './_shared';
 
 const Input = z
   .object({
@@ -35,10 +31,8 @@ export async function releaseCardAction(
   const ws = await workspaceIdForCard(cardType);
   if (!ws.ok) return ws;
 
-  if (!(await cardBelongsToWorkspace(cardType, cardId, ws.workspaceId))) {
-    return { ok: false, error: 'FORBIDDEN' };
-  }
-
-  await setCardBoardColumn(cardType, cardId, null);
-  return { ok: true };
+  return (await getBoardService()).releaseCard(
+    { cardType, cardId },
+    { workspaceId: ws.workspaceId, workspaceType: cardType === 'invitation' ? 'pg' : 'buyer' },
+  );
 }

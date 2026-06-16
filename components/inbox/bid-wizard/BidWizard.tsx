@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
@@ -19,8 +19,8 @@ import {
   isTieredMethod,
   type PaymentMethod,
   type QuoteTemplateOption,
-  type TierRates,
 } from '@/lib/types/bid';
+import { buildPaymentFees, parseSettleCycle, pctToDecimal, templateFeesToFlat } from '@/lib/quote/template-fees';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
@@ -28,10 +28,12 @@ import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';
 import { BID_WIZARD_STEPS } from './bid-wizard-steps';
 import { getBidWizardValidity, getFirstIncompleteBidStep } from './bid-wizard-validation';
 import { BidContextStrip } from './BidContextStrip';
-import { BidStepSettlement } from './BidStepSettlement';
-import { BidStepFees } from './BidStepFees';
-import { BidStepProposal, type ProposalState } from './BidStepProposal';
-import { BidStepReview } from './BidStepReview';
+import { type ProposalState } from './BidStepProposal';
+import { BidWizardProvider, type BidWizardContextValue } from './bid-wizard-context';
+import { BidStepSettlementContainer } from './BidStepSettlementContainer';
+import { BidStepFeesContainer } from './BidStepFeesContainer';
+import { BidStepProposalContainer } from './BidStepProposalContainer';
+import { BidStepReviewContainer } from './BidStepReviewContainer';
 
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap((c) => c.methods);
 const TOTAL_STEPS = BID_WIZARD_STEPS.length;
@@ -95,10 +97,16 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
       ? bidToDraft(initialBid)
       : { __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees: {}, memo: '' },
   );
-  const setField = <K extends keyof BidDraft>(key: K, value: BidDraft[K]) =>
-    setFields((f) => ({ ...f, [key]: value }));
-  const setFee = (key: string, value: string) =>
-    setFields((f) => ({ ...f, fees: { ...f.fees, [key]: value } }));
+  const setField = useCallback(
+    <K extends keyof BidDraft>(key: K, value: BidDraft[K]) =>
+      setFields((f) => ({ ...f, [key]: value })),
+    [],
+  );
+  const setFee = useCallback(
+    (key: string, value: string) =>
+      setFields((f) => ({ ...f, fees: { ...f.fees, [key]: value } })),
+    [],
+  );
   const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, fees, memo } = fields;
 
   // 초안 자동저장
@@ -120,28 +128,32 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
 
   // 견적서 업로드
   const [proposal, setProposal] = useState<ProposalState>(null);
-  const uploadProposal = async (file: File): Promise<void> => {
-    if (file.type !== 'application/pdf') {
-      setProposal({ name: file.name, status: 'error', error: 'PDF만 업로드 가능합니다.' });
-      return;
-    }
-    setProposal({ name: file.name, status: 'uploading' });
-    const form = new FormData();
-    form.append('file', file);
-    form.append('ownerKind', 'bid_proposal');
-    form.append('ownerId', rfpId);
-    try {
-      const body = await http.post('/api/files/upload', { body: form }).json<{ id: string; name: string; size: number }>();
-      setProposal(body);
-    } catch (err) {
-      let error = err instanceof Error ? err.message : '네트워크 오류';
-      if (err instanceof HTTPError) {
-        const { status } = err.response;
-        error = status === 413 ? '파일이 너무 큽니다 (최대 20MB)' : status === 415 ? '지원되지 않는 파일 형식입니다' : `업로드 실패 (${status})`;
+  const uploadProposal = useCallback(
+    async (file: File): Promise<void> => {
+      if (file.type !== 'application/pdf') {
+        setProposal({ name: file.name, status: 'error', error: 'PDF만 업로드 가능합니다.' });
+        return;
       }
-      setProposal({ name: file.name, status: 'error', error });
-    }
-  };
+      setProposal({ name: file.name, status: 'uploading' });
+      const form = new FormData();
+      form.append('file', file);
+      form.append('ownerKind', 'bid_proposal');
+      form.append('ownerId', rfpId);
+      try {
+        const body = await http.post('/api/files/upload', { body: form }).json<{ id: string; name: string; size: number }>();
+        setProposal(body);
+      } catch (err) {
+        let error = err instanceof Error ? err.message : '네트워크 오류';
+        if (err instanceof HTTPError) {
+          const { status } = err.response;
+          error = status === 413 ? '파일이 너무 큽니다 (최대 20MB)' : status === 415 ? '지원되지 않는 파일 형식입니다' : `업로드 실패 (${status})`;
+        }
+        setProposal({ name: file.name, status: 'error', error });
+      }
+    },
+    [rfpId],
+  );
+  const clearProposal = useCallback(() => setProposal(null), []);
   const proposalReady = proposal && 'id' in proposal;
   const proposalUploading = proposal && 'status' in proposal && proposal.status === 'uploading';
 
@@ -158,71 +170,48 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
   const anyFeeFilled = anyTieredFilled || anySingleFilled;
   const canSubmit = !pending && !proposalUploading && cycleNum !== '' && parseInt(cycleNum) > 0 && anyFeeFilled;
 
-  const pct = (s: string) => parseFloat(s) / 100;
-  const buildPaymentFees = (): Partial<Record<PaymentMethod, number | TierRates>> => {
-    const out: Partial<Record<PaymentMethod, number | TierRates>> = {};
-    for (const m of feeInputMethods) {
-      if (isTieredMethod(m)) {
-        const map: TierRates = {};
-        for (const tier of MERCHANT_TIERS) {
-          const v = fees[`${m}:${tier}`] ?? '';
-          if (v !== '') map[tier] = pct(v);
-        }
-        if (Object.keys(map).length > 0) out[m] = map;
-      } else {
-        const v = fees[m] ?? '';
-        if (v !== '') out[m] = pct(v);
-      }
-    }
-    return out;
-  };
-  // decimal → percent 문자열, 2dp 반올림 (폼 표시와 상태 일치).
-  const fmtPct = (rate: number) => String(Math.round(rate * 1e4) / 100);
   const applyTemplate = (t: QuoteTemplateOption) => {
     clearDraft();
     setShowRestoreBanner(false);
-    const m = /^([DWM])\+(\d+)$/.exec(t.settleCycle);
-    const unit = (m?.[1] ?? 'D') as 'D' | 'W' | 'M';
-    const num = m?.[2] ?? '1';
-    setFields((f) => {
-      const nextFees = { ...f.fees };
-      for (const method of feeInputMethods) {
-        const val = t.paymentFees[method];
-        if (val === undefined) continue;
-        if (typeof val === 'object') {
-          for (const tier of MERCHANT_TIERS) {
-            const r = val[tier];
-            if (r !== undefined) nextFees[`${method}:${tier}`] = fmtPct(r);
-          }
-        } else if (isTieredMethod(method)) {
-          // 구버전 단일요율 템플릿 → 전 구간 동일값으로 전개
-          for (const tier of MERCHANT_TIERS) nextFees[`${method}:${tier}`] = fmtPct(val);
-        } else {
-          nextFees[method] = fmtPct(val);
-        }
-      }
-      return { ...f, cycleUnit: unit, cycleNum: num, settleLimit: String(t.settleLimit), guaranteeInsurance: String(t.guaranteeInsurance), fees: nextFees };
+    const { unit, num } = parseSettleCycle(t.settleCycle);
+    // 입찰 폼은 구버전 단일요율 템플릿을 전 구간으로 전개해 보여준다.
+    const decoded = templateFeesToFlat(t.paymentFees, feeInputMethods, {
+      spreadLegacyTieredSingleRate: true,
     });
+    setFields((f) => ({
+      ...f,
+      cycleUnit: unit,
+      cycleNum: num,
+      settleLimit: String(t.settleLimit),
+      guaranteeInsurance: String(t.guaranteeInsurance),
+      fees: { ...f.fees, ...decoded },
+    }));
   };
 
   // 단계 이동 — 자유 점프(구매사 위저드 미러)
   const completed = getBidWizardValidity({ cycleNum, anyFeeFilled }).map((s) => s.complete);
-  const advance = () => setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1));
-  const back = () => setCurrentStep((s) => Math.max(1, s - 1));
-  const goToStep = (step: number) => setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, step)));
+  const advance = useCallback(() => setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1)), []);
+  const back = useCallback(() => setCurrentStep((s) => Math.max(1, s - 1)), []);
+  const goToStep = useCallback(
+    (step: number) => setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, step))),
+    [],
+  );
 
-  const onSaveTemplate = async (name: string) => {
-    const r = await saveQuoteTemplateAction({
-      name,
-      settleCycle,
-      settleLimit: parseInt(settleLimit) || 0,
-      guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
-      paymentFees: buildPaymentFees(),
-    });
-    return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
-  };
+  const onSaveTemplate = useCallback(
+    async (name: string) => {
+      const r = await saveQuoteTemplateAction({
+        name,
+        settleCycle,
+        settleLimit: parseInt(settleLimit) || 0,
+        guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
+        paymentFees: buildPaymentFees(fees, feeInputMethods),
+      });
+      return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
+    },
+    [settleCycle, settleLimit, guaranteeInsurance, fees, feeInputMethods],
+  );
 
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     // 발송 버튼은 막지 않되, 미충족 단계가 있으면 그 단계로 이동.
     const incomplete = getFirstIncompleteBidStep({ cycleNum, anyFeeFilled });
     if (incomplete) {
@@ -231,15 +220,66 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
     }
     setSubmitError(null);
     setSubmitConfirmOpen(true);
-  };
+  }, [cycleNum, anyFeeFilled]);
+
+  // 4단계가 공유하는 컨텍스트 값 — prop-drilling 제거. 안정 참조(useCallback)
+  // 액션 + 폼 상태를 묶어 useMemo 로 캐싱해, 무관한 단계의 리렌더를 줄인다.
+  const wizardContext: BidWizardContextValue = useMemo(
+    () => ({
+      cycleUnit,
+      cycleNum,
+      settleLimit,
+      guaranteeInsurance,
+      fees,
+      memo,
+      settleCycle,
+      feeInputMethods,
+      customPaymentMethods,
+      proposal,
+      pending,
+      submitError,
+      canSubmit,
+      setField,
+      setFee,
+      uploadProposal: (f) => void uploadProposal(f),
+      clearProposal,
+      advance,
+      back,
+      handleSubmit,
+      onSaveTemplate,
+    }),
+    [
+      cycleUnit,
+      cycleNum,
+      settleLimit,
+      guaranteeInsurance,
+      fees,
+      memo,
+      settleCycle,
+      feeInputMethods,
+      customPaymentMethods,
+      proposal,
+      pending,
+      submitError,
+      canSubmit,
+      setField,
+      setFee,
+      uploadProposal,
+      clearProposal,
+      advance,
+      back,
+      handleSubmit,
+      onSaveTemplate,
+    ],
+  );
 
   const doSubmit = () => {
     setSubmitConfirmOpen(false);
-    const paymentFees = buildPaymentFees();
+    const paymentFees = buildPaymentFees(fees, feeInputMethods);
     const customFees: Record<string, number> = {};
     for (const c of customPaymentMethods) {
       const v = fees[c.id] ?? '';
-      if (v !== '') customFees[c.id] = pct(v);
+      if (v !== '') customFees[c.id] = pctToDecimal(v);
     }
     startTransition(async () => {
       const r = await submitBidAction({
@@ -315,6 +355,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
         </div>
       )}
 
+      <BidWizardProvider value={wizardContext}>
       <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[8px] overflow-hidden">
         <BidContextStrip buyerName={buyerName} rfp={rfp} currentStep={currentStep} feeInputMethods={feeInputMethods} />
 
@@ -360,60 +401,20 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
                       />
                     </div>
                   )}
-                  <BidStepSettlement
-                    cycleUnit={cycleUnit}
-                    cycleNum={cycleNum}
-                    settleLimit={settleLimit}
-                    guaranteeInsurance={guaranteeInsurance}
-                    onField={setField}
-                    onNext={advance}
-                  />
+                  <BidStepSettlementContainer />
                 </div>
               )}
 
-              {currentStep === 2 && (
-                <BidStepFees
-                  feeInputMethods={feeInputMethods}
-                  customPaymentMethods={customPaymentMethods}
-                  fees={fees}
-                  onFee={setFee}
-                  onBack={back}
-                  onNext={advance}
-                />
-              )}
+              {currentStep === 2 && <BidStepFeesContainer />}
 
-              {currentStep === 3 && (
-                <BidStepProposal
-                  proposal={proposal}
-                  memo={memo}
-                  onUpload={(f) => void uploadProposal(f)}
-                  onClear={() => setProposal(null)}
-                  onMemoChange={(v) => setField('memo', v)}
-                  onBack={back}
-                  onNext={advance}
-                />
-              )}
+              {currentStep === 3 && <BidStepProposalContainer />}
 
-              {currentStep === 4 && (
-                <BidStepReview
-                  settleCycle={settleCycle}
-                  settleLimit={settleLimit}
-                  guaranteeInsurance={guaranteeInsurance}
-                  feeInputMethods={feeInputMethods}
-                  customPaymentMethods={customPaymentMethods}
-                  fees={fees}
-                  canSubmit={canSubmit}
-                  pending={pending}
-                  submitError={submitError}
-                  onBack={back}
-                  onSubmit={handleSubmit}
-                  onSaveTemplate={onSaveTemplate}
-                />
-              )}
+              {currentStep === 4 && <BidStepReviewContainer />}
             </div>
           </div>
         </div>
       </div>
+      </BidWizardProvider>
     </>
   );
 }

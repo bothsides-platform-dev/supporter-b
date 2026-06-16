@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { db } from '@/lib/db/client';
 import { getMembership } from '@/lib/auth/active-workspace';
 import { getAuditLogRepo } from '@/lib/server/repositories/factory';
 import { PageEnter } from '@/components/primitives/PageEnter';
@@ -19,7 +18,7 @@ export default async function AuditLogPage() {
   const wsId = session.user.workspaceId;
 
   // admin 전용 — JWT role 은 stale 할 수 있으므로 DB 멤버십으로 판정 (액션과 동일 기준).
-  const membership = await getMembership(db, session.user.id, wsId);
+  const membership = await getMembership(session.user.id, wsId);
   if (!membership || membership.role !== 'admin') {
     return (
       <PageEnter className="px-4 py-6 md:px-8 md:py-8">
