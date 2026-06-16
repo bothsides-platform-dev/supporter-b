@@ -53,19 +53,22 @@ type Props = {
 export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   const m = /^([A-Z]+)\+?(\d+)?$/.exec(b.settleCycle);
   const fees: Record<string, string> = {};
+  // decimal → percent 문자열, 2dp 반올림 (폼 표시와 상태 일치).
+  const fmtPct2dp = (rate: number): string => String(Math.round(rate * 1e4) / 100);
   for (const [k, v] of Object.entries(b.paymentFees ?? {})) {
     if (typeof v === 'number') {
-      fees[k] = String(Math.round(v * 1e6) / 1e4);
+      fees[k] = fmtPct2dp(v);
     }
     // TierRates(object) — 단순화로 생략; 사용자가 직접 입력
   }
   for (const [k, v] of Object.entries(b.customFees ?? {})) {
-    fees[k] = String(Math.round(v * 1e6) / 1e4);
+    fees[k] = fmtPct2dp(v);
   }
+  const rawNum = parseInt(m?.[2] ?? '1');
   return {
     __v: 3,
     cycleUnit: (m?.[1] ?? 'D') as BidDraft['cycleUnit'],
-    cycleNum: m?.[2] ?? '1',
+    cycleNum: String(Math.min(rawNum, 99)),
     settleLimit: String(b.settleLimit ?? 0),
     guaranteeInsurance: String(b.guaranteeInsurance ?? 0),
     fees,
@@ -173,7 +176,8 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
     }
     return out;
   };
-  const fmtPct = (rate: number) => String(Math.round(rate * 1e6) / 1e4);
+  // decimal → percent 문자열, 2dp 반올림 (폼 표시와 상태 일치).
+  const fmtPct = (rate: number) => String(Math.round(rate * 1e4) / 100);
   const applyTemplate = (t: QuoteTemplateOption) => {
     clearDraft();
     setShowRestoreBanner(false);
