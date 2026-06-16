@@ -31,3 +31,21 @@ export const getDbSessionVersion = cache(async (userId: string): Promise<number 
   const { db } = await import('@/lib/db/client');
   return fetchSessionVersion(db, userId);
 });
+
+export async function fetchEmailVerified(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  userId: string,
+): Promise<boolean | null> {
+  const [row] = await db
+    .select({ emailVerified: users.emailVerified })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.emailVerified ?? null;
+}
+
+export const getDbEmailVerified = cache(async (userId: string): Promise<boolean | null> => {
+  const { db } = await import('@/lib/db/client');
+  return fetchEmailVerified(db, userId);
+});
