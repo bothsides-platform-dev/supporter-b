@@ -32,7 +32,7 @@ export function buildBoardAnnouncements(opts?: {
 
   return {
     onDragStart() {
-      return '카드를 잡았어요. 옮길 컬럼 위로 끌어주세요.';
+      return '카드를 잡았어요. 화살표 키로 컬럼을 이동하거나, 끌어 다른 컬럼에 놓으세요.';
     },
     onDragOver({ over }) {
       if (!over) return '카드가 보드 밖에 있어요.';

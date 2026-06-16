@@ -71,7 +71,6 @@ export function KanbanBoard({
   const refresh = useCallback(() => router.refresh(), [router]);
 
   // dnd-kit 의 관리형 aria-live 영역에 도메인 문구를 주입 — 컬럼 id → 제목 해석.
-  // (전체 키보드 DnD 는 KeyboardSensor 가 Enter-열기를 가로채므로 보류 — boardAnnouncements.ts 참조.)
   const announcements = useMemo(() => {
     const titleById = new Map(columns.map((c) => [c.id, c.title]));
     return buildBoardAnnouncements({ columnTitle: (id) => titleById.get(id) ?? null });
