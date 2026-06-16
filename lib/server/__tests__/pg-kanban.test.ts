@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { classifyPgInvitation, toPgCard } from '../pg-kanban';
+import { classifyPgInvitation, toPgCard, comparePgCards } from '../pg-kanban';
+import type { PgKanbanCard } from '../pg-kanban';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { RfpInvitation } from '@/lib/types/invitation';
@@ -179,5 +180,49 @@ describe('toPgCard', () => {
     });
     expect(card.hasPendingRequote).toBe(false);
     expect(card.buyerName).toBeUndefined();
+  });
+});
+
+describe('comparePgCards — 결과 컬럼 정렬', () => {
+  it('won 컬럼: rfpUpdatedAt 최신 카드가 먼저', () => {
+    const a: PgKanbanCard = {
+      invitationId: 'inv-1',
+      rfpId: 'P-01',
+      title: 'A',
+      stage: 'won',
+      deadline: '2026-06-01T00:00:00Z',
+      rfpUpdatedAt: '2026-06-14T00:00:00Z',
+      hasPendingRequote: false,
+    };
+    const b: PgKanbanCard = { ...a, rfpId: 'P-02', rfpUpdatedAt: '2026-06-17T00:00:00Z' };
+    expect(comparePgCards(b, a)).toBeLessThan(0);
+  });
+
+  it('lost 컬럼: rfpUpdatedAt 최신 카드가 먼저', () => {
+    const a: PgKanbanCard = {
+      invitationId: 'inv-3',
+      rfpId: 'P-03',
+      title: 'C',
+      stage: 'lost',
+      deadline: '2026-06-01T00:00:00Z',
+      rfpUpdatedAt: '2026-06-10T00:00:00Z',
+      hasPendingRequote: false,
+    };
+    const b: PgKanbanCard = { ...a, rfpId: 'P-04', rfpUpdatedAt: '2026-06-16T00:00:00Z' };
+    expect(comparePgCards(b, a)).toBeLessThan(0);
+  });
+
+  it('received/submitted 컬럼: deadline 오름차순 유지 (기존 동작 회귀 방지)', () => {
+    const soon: PgKanbanCard = {
+      invitationId: 'inv-5',
+      rfpId: 'P-05',
+      title: 'E',
+      stage: 'received',
+      deadline: '2026-06-20T00:00:00Z',
+      rfpUpdatedAt: '2026-06-01T00:00:00Z',
+      hasPendingRequote: false,
+    };
+    const later: PgKanbanCard = { ...soon, rfpId: 'P-06', deadline: '2026-07-01T00:00:00Z' };
+    expect(comparePgCards(soon, later)).toBeLessThan(0);
   });
 });

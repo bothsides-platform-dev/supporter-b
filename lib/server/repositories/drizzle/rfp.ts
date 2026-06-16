@@ -51,6 +51,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     createdBy: row.createdBy,
     createdAt: new Date(row.createdAt).toISOString(),
     sentAt: toIso(row.sentAt),
+    updatedAt: new Date(row.updatedAt).toISOString(),
     boardColumnId: row.boardColumnId,
     requiredPaymentMethods: (row.requiredPaymentMethods ?? []) as PaymentMethod[],
     customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
