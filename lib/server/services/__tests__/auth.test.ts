@@ -17,11 +17,27 @@ import {
   workspaceMembers,
   outboxEntries,
   auditLogs,
+  workspaceInvitations,
 } from '@/lib/db/schema';
 import { seedUser, seedPgWorkspace, seedMembership } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { hashToken, generateToken, addMinutes } from '@/lib/server/token';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { hashOtpCode } from '@/lib/server/actions/auth/phoneOtpUtils';
+
+// claimInviteInTx 제어 가능 mock (일부 테스트에서 실패 경로 주입용)
+const claimOverrides: { fn?: (...args: unknown[]) => unknown } = {};
+
+vi.mock('@/lib/server/actions/workspace/_claimWorkspaceInvite', async () => {
+  const real = await vi.importActual<
+    typeof import('@/lib/server/actions/workspace/_claimWorkspaceInvite')
+  >('@/lib/server/actions/workspace/_claimWorkspaceInvite');
+  return {
+    claimInviteInTx: (...args: unknown[]) =>
+      claimOverrides.fn
+        ? claimOverrides.fn(...args)
+        : real.claimInviteInTx(...(args as Parameters<typeof real.claimInviteInTx>)),
+  };
+});
 
 vi.mock('@/lib/server/outbox/templates/authReset', () => ({
   renderAuthReset: async () => '<p>reset</p>',
@@ -54,6 +70,7 @@ beforeEach(async () => {
   await __useDrizzleWithDbForTest(db);
 });
 afterEach(() => {
+  delete claimOverrides.fn;
   __resetAuthServiceForTest();
   __resetForTest();
 });
@@ -464,5 +481,50 @@ describe('AuthService — 감사 로그 기록', () => {
     const rows = await rowsFor('auth.account_delete');
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ actorUserId: userId, actorWorkspaceId: null });
+  });
+});
+
+describe('AuthService.signupViaInvite — claim 실패 throw-to-rollback', () => {
+  async function seedInvite(
+    wsId: string,
+    inviterId: string,
+    email: string,
+  ): Promise<string> {
+    const rawToken = generateToken();
+    await db.insert(workspaceInvitations).values({
+      workspaceId: wsId,
+      invitedEmail: email,
+      invitedByUserId: inviterId,
+      tokenHash: hashToken(rawToken),
+      status: 'pending',
+      expiresAt: new Date(addMinutes(new Date(), 60)),
+    });
+    return rawToken;
+  }
+
+  it('claimInviteInTx 실패 시 user 행을 남기지 않고 INVITE_EXPIRED 반환', async () => {
+    const svc = await buildService();
+    const ws = await seedPgWorkspace(db, 'TestPG');
+    const inviter = await seedUser(db, { email: 'inviter-task2@example.com' });
+    await seedMembership(db, ws.id, inviter.id, 'admin');
+    const rawToken = await seedInvite(ws.id, inviter.id, 'race@example.com');
+    const otpId = await seedVerifiedOtp('01066666666');
+
+    // Inject failing claim (simulates concurrent claim race)
+    claimOverrides.fn = vi.fn().mockResolvedValue({ ok: false, error: 'INVITE_EXPIRED' });
+
+    const r = await svc.signupViaInvite({
+      email: 'race@example.com',
+      name: '홍길동',
+      plainPassword: 'Password123!',
+      phone: '01066666666',
+      phoneVerificationId: otpId,
+      wsInviteRawToken: rawToken,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'INVITE_EXPIRED' });
+    // Transaction must have been rolled back — no orphan user
+    const rows = await db.select().from(users).where(eq(users.email, 'race@example.com'));
+    expect(rows).toHaveLength(0);
   });
 });

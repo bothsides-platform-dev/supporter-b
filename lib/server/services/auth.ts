@@ -176,7 +176,9 @@ export class AuthService {
       }
 
       const claim = await claimInviteInTx(tx, invitation, userId);
-      if (!claim.ok) return claim;
+      if (!claim.ok) {
+        throw Object.assign(new Error('CLAIM_FAILED'), { claimError: claim.error });
+      }
 
       await tx
         .update(users)
@@ -184,6 +186,12 @@ export class AuthService {
         .where(eq(users.id, userId));
 
       return { ok: true, workspaceId: claim.workspaceId, email };
+    }).catch((err: unknown) => {
+      if (err instanceof Error && 'claimError' in err) {
+        return { ok: false, error: (err as Error & { claimError: string }).claimError };
+      }
+      if (isUniqueViolation(err)) return { ok: false, error: 'EMAIL_TAKEN' };
+      throw err;
     });
 
     return result;
