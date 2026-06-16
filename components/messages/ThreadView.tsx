@@ -23,6 +23,7 @@ import { useComposerAttachments, toReadyMessageAttachments } from './useComposer
 import { ChatComposerTextarea } from './ChatComposerTextarea';
 import { useStickToBottom } from './useStickToBottom';
 import { useStringDraft } from './useStringDraft';
+import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-thread';
 import { formatDayLabel, withinGroupWindow } from './format';
 
 type Props = {
@@ -153,43 +154,27 @@ export function ThreadView({
       const id = data.id;
       const sender: ThreadMessage['sender'] =
         data.authorWsId === counterparty.workspaceId ? 'other' : 'self';
-      setLocalMessages((prev) => {
-        // Dedup by id — Centrifugo recovery can redeliver, and the reconcile in
-        // handleSend may have already promoted the pending bubble to this id.
-        if (prev.some((m) => m.id === id)) return prev;
-        // 본인 메시지의 echo: 진행 중 pending 말풍선을 확정으로 승격(실제 id 부여,
-        // 첨부 등 표시 상태 보존) — 새로 append 하면 중복이 된다. `sending` 가드
-        // 덕에 진행 중 self pending 은 항상 최대 1개.
-        if (sender === 'self') {
-          const pendingIdx = prev.findIndex((m) => m.pending);
-          if (pendingIdx >= 0) {
-            const next = prev.slice();
-            next[pendingIdx] = {
-              ...next[pendingIdx],
+      // Centrifugo recovery can redeliver, and handleSend may have already
+      // promoted the pending bubble to this id → dedup. 본인 echo 면 진행 중
+      // pending 말풍선을 확정 승격(append 하면 중복), 아니면 새로 append.
+      setLocalMessages(
+        (prev) =>
+          applyLiveEcho(prev, id, sender === 'self', data.createdAt as string) ?? [
+            ...prev,
+            {
               id,
-              pending: false,
-              // 서버 권위 타임스탬프 채택 — 리로드 후 로더 렌더와 일치.
-              createdAt: data.createdAt ?? next[pendingIdx].createdAt,
-            };
-            return next;
-          }
-        }
-        return [
-          ...prev,
-          {
-            id,
-            authorUserId: data.authorUserId ?? '',
-            authorName: data.authorName ?? '',
-            authorEmail: data.authorEmail ?? '',
-            sender,
-            body: data.body as string,
-            rfpId: data.rfpId ?? null,
-            createdAt: data.createdAt as string,
-            readByCounterparty: false,
-            attachments: data.attachments ?? [],
-          },
-        ];
-      });
+              authorUserId: data.authorUserId ?? '',
+              authorName: data.authorName ?? '',
+              authorEmail: data.authorEmail ?? '',
+              sender,
+              body: data.body as string,
+              rfpId: data.rfpId ?? null,
+              createdAt: data.createdAt as string,
+              readByCounterparty: false,
+              attachments: data.attachments ?? [],
+            },
+          ],
+      );
     },
     onRead: (data) => {
       // Use the server-issued timestamp from the payload to avoid client clock
@@ -273,7 +258,7 @@ export function ThreadView({
       });
     } catch {
       setSending(false);
-      setLocalMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setLocalMessages((prev) => removeMessage(prev, tempId));
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
@@ -283,21 +268,10 @@ export function ThreadView({
     if (result.ok) {
       // pending 말풍선을 확정으로 교체(실서버 id + pending 해제). 라이브 echo 가
       // 먼저 같은 실제 id 를 추가했다면 임시 행은 버린다(중복 방지).
-      const newId = result.messageId;
-      const serverCreatedAt = result.createdAt;
-      setLocalMessages((prev) => {
-        const hasReal = prev.some((m) => m.id === newId);
-        return prev.flatMap((m) =>
-          m.id === tempId
-            ? hasReal
-              ? []
-              : [{ ...m, id: newId, pending: false, createdAt: serverCreatedAt ?? m.createdAt }]
-            : [m],
-        );
-      });
+      setLocalMessages((prev) => promoteSentMessage(prev, tempId, result.messageId, result.createdAt));
     } else {
       // 실패: 낙관적 말풍선을 제거하고 입력·첨부를 복원해 다시 보낼 수 있게 한다.
-      setLocalMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setLocalMessages((prev) => removeMessage(prev, tempId));
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });

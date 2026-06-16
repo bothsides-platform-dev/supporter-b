@@ -27,6 +27,7 @@ import type { TeamThreadMessage } from '@/lib/server/actions/chat/teamThreadLoad
 import { MessageBubble } from './MessageBubble';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { useStickToBottom } from './useStickToBottom';
+import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-thread';
 import { formatDayLabel, withinGroupWindow } from './format';
 import { MentionText } from './MentionText';
 import { MentionDropdown } from './MentionDropdown';
@@ -85,38 +86,23 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
       if (!data.id || typeof data.body !== 'string' || !data.createdAt) return;
       const id = data.id;
       const isSelf = data.authorUserId === viewerUserId;
-      setLocalMessages((prev) => {
-        // Dedup by id — 재전달·승격 선행 케이스.
-        if (prev.some((m) => m.id === id)) return prev;
-        // 본인 echo: pending 말풍선을 확정으로 승격(append 하면 중복). 낙관적
-        // 첨부는 그대로 보존한다.
-        if (isSelf) {
-          const pendingIdx = prev.findIndex((m) => m.pending);
-          if (pendingIdx >= 0) {
-            const next = prev.slice();
-            next[pendingIdx] = {
-              ...next[pendingIdx],
+      // 재전달·승격 선행 케이스는 dedup. 본인 echo 면 진행 중 pending 말풍선을
+      // 확정 승격(append 하면 중복, 낙관적 첨부 보존), 아니면 새로 append.
+      setLocalMessages(
+        (prev) =>
+          applyLiveEcho(prev, id, isSelf, data.createdAt as string) ?? [
+            ...prev,
+            {
               id,
-              pending: false,
-              // 서버 권위 타임스탬프 채택 — 리로드 후 로더 렌더와 일치.
-              createdAt: data.createdAt ?? next[pendingIdx].createdAt,
-            };
-            return next;
-          }
-        }
-        return [
-          ...prev,
-          {
-            id,
-            authorUserId: data.authorUserId ?? '',
-            authorName: data.authorName ?? '',
-            body: data.body as string,
-            createdAt: data.createdAt as string,
-            isSelf,
-            attachments: data.attachments ?? [],
-          },
-        ];
-      });
+              authorUserId: data.authorUserId ?? '',
+              authorName: data.authorName ?? '',
+              body: data.body as string,
+              createdAt: data.createdAt as string,
+              isSelf,
+              attachments: data.attachments ?? [],
+            },
+          ],
+      );
     },
   });
 
@@ -163,29 +149,16 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
     }
     setSending(false);
     if (result.ok) {
-      const newId = result.messageId;
-      const serverCreatedAt = result.createdAt;
+      // pending 말풍선을 확정 교체. 서버 첨부로 갈아끼우고, 라이브 echo 가 먼저
+      // 같은 실제 id 를 추가했다면 임시 행은 버린다(중복 방지).
       const serverAttachments = result.attachments ?? optimisticAttachments;
-      setLocalMessages((prev) => {
-        const hasReal = prev.some((m) => m.id === newId);
-        return prev.flatMap((m) =>
-          m.id === tempId
-            ? hasReal
-              ? []
-              : [
-                  {
-                    ...m,
-                    id: newId,
-                    pending: false,
-                    createdAt: serverCreatedAt ?? m.createdAt,
-                    attachments: serverAttachments,
-                  },
-                ]
-            : [m],
-        );
-      });
+      setLocalMessages((prev) =>
+        promoteSentMessage(prev, tempId, result.messageId, result.createdAt, {
+          attachments: serverAttachments,
+        }),
+      );
     } else {
-      setLocalMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setLocalMessages((prev) => removeMessage(prev, tempId));
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메모를 남기지 못했어요. 다시 시도해 주세요.', { type: 'error' });

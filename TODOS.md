@@ -12,7 +12,7 @@
 
 ### 라이브 self-echo 상관관계 id (멀티탭)
 **Priority:** P2
-낙관적 승격이 "첫 pending" 매칭이라 같은 유저 두 탭 동시 전송 시 echo 가 다른 탭의 pending 을 오인 승격할 수 있음(ThreadView·TeamThreadView 동일, 선례 패턴). 액션 입력에 클라이언트 tempId 를 받아 publish 페이로드로 왕복, tempId 매칭 승격으로 교체. 서버 페이로드 계약 변경 동반 — 별도 PR.
+낙관적 승격이 "첫 pending" 매칭이라 같은 유저 두 탭 동시 전송 시 echo 가 다른 탭의 pending 을 오인 승격할 수 있음(`components/messages/optimistic-thread.ts` 의 `applyLiveEcho` 가 `findIndex((m) => m.pending)` 로 매칭 — ThreadView·TeamThreadView 공용, v0.2.22.13 에서 추출). 액션 입력에 클라이언트 tempId 를 받아 publish 페이로드로 왕복, tempId 매칭 승격으로 교체. 서버 페이로드 계약 변경 동반 — 별도 PR.
 
 ### RFP 접근 게이트 공유 헬퍼
 **Priority:** P2
