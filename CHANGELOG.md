@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.25.0] - 2026-06-17
+
+### Fixed
+
+- **Auth / Signup 버그 5건 일괄 수정**: 가입 플로우 전반의 안전성·신뢰성 개선이에요.
+  - **[정합성 P2] 고아 user 행 방지**: `completeSignup` 의 `wsName` 누락 검사를 `transaction()` 호출 **앞**으로 끌어올렸어요. 기존엔 INSERT 후 `{ok:false}` 반환 시 postgres-js 가 tx 를 commit 해 워크스페이스 없는 미인증 user 행이 생길 수 있었어요. `signupViaInvite` 의 초대 claim 실패도 동일 문제 — throw-to-rollback 패턴으로 tx 를 확실히 롤백해요.
+  - **[테스트 P2] invite·canonical 가입 통합 테스트 추가**: `signupViaInvite`(초대 성공·PHONE_NOT_VERIFIED·INVITE_INVALID·INVITE_EXPIRED·INVITE_EMAIL_MISMATCH·EMAIL_TAKEN) 6개, `joinCanonicalPgWorkspace`(성공·PHONE_NOT_VERIFIED·INVALID_CANONICAL_WORKSPACE·EMAIL_TAKEN) 4개, throw-to-rollback 회귀 1개 — 총 11개 테스트로 두 가입 경로를 박제했어요.
+  - **[UX P3] OTP 입력 칸 Enter 키 → 폼 조기 제출 방지**: 인증번호 입력 후 Enter 를 누르면 폼이 제출되던 버그를 수정했어요. 이제 6자리가 모두 입력되어 있으면 Enter 가 `handleVerify` 를 호출하고, 부족하면 아무 일도 하지 않아요(폼 제출도 없음).
+  - **[보안 P3] ApprovalWaitingScreen cross-host 내비 수정**: 승인 폴링 성공 시 `router.push('/home')` 대신 `window.location.assign('/home')` 으로 통일했어요. `EmailVerifyScreen` 과 같은 패턴이에요(v0.2.19.0 선례). 다른 호스트에서 `/pending-approval` 에 착지한 유저의 CORS 잠재 경로를 닫아요.
+  - **[UX P3] 사파리 비공개 모드 sessionStorage 차단 안내**: `isSignupStorageAvailable()` 헬퍼로 sessionStorage 를 사전 감지해요. 차단 시(사파리 비공개 등) 프로필 단계에서 "브라우저 설정을 확인해주세요" 메시지와 함께 진행을 막아 기존의 '첫 가입 화면으로 무한 redirect' 를 방지해요.
+
 ## [0.2.23.1] - 2026-06-16
 
 ### Changed
