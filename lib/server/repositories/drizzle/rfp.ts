@@ -32,8 +32,8 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
         gradeConfirmedAt: toIso(biz.gradeConfirmedAt),
       }
     : undefined;
-  // 읽기 권위 = current_terms 문서 (Phase D). 문서가 비면 개별컬럼으로 폴백(전이기 안전;
-  // 백필 전 레거시 행 보호). 개별컬럼은 Phase F 에서 제거되며 그때 폴백도 함께 삭제.
+  // 읽기 단독 권위 = current_terms 문서 (Phase E). 개별 current_* 컬럼 폴백 없음 — 배포 전
+  // backfill 이 모든 행의 문서를 채운다는 전제. 개별컬럼은 Phase F 에서 DROP.
   const terms = migrateCurrentTerms(row.currentTerms);
   return {
     id: row.id,
@@ -44,15 +44,14 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     memo: row.memo,
     websiteUrl: row.websiteUrl ?? undefined,
     mainProducts: row.mainProducts ?? undefined,
-    annualPgVolume: terms.annualPgVolume ?? row.annualPgVolume ?? undefined,
-    currentFeeRate: terms.feeRate ?? row.currentFeeRate ?? undefined,
-    currentSettlementLimit: terms.settlementLimit ?? row.currentSettlementLimit ?? undefined,
-    currentGuaranteeInsurance:
-      terms.guaranteeInsurance ?? row.currentGuaranteeInsurance ?? undefined,
-    currentSettlementCycle: terms.settlementCycle ?? row.currentSettlementCycle ?? undefined,
-    deliveryServicePeriod: terms.deliveryServicePeriod ?? row.deliveryServicePeriod ?? undefined,
-    currentSolution: terms.solution ?? row.currentSolution ?? undefined,
-    currentSolutionDetail: terms.solutionDetail ?? row.currentSolutionDetail ?? undefined,
+    annualPgVolume: terms.annualPgVolume ?? undefined,
+    currentFeeRate: terms.feeRate ?? undefined,
+    currentSettlementLimit: terms.settlementLimit ?? undefined,
+    currentGuaranteeInsurance: terms.guaranteeInsurance ?? undefined,
+    currentSettlementCycle: terms.settlementCycle ?? undefined,
+    deliveryServicePeriod: terms.deliveryServicePeriod ?? undefined,
+    currentSolution: terms.solution ?? undefined,
+    currentSolutionDetail: terms.solutionDetail ?? undefined,
     rfpFiles: [], // attachments hydrated separately when needed
     allowedPgWorkspaceIds: allowed,
     deadline: new Date(row.deadline).toISOString(),

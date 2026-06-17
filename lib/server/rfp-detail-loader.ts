@@ -66,9 +66,9 @@ export const PG_STRIP: Record<string, (rfp: RFP) => void> = {
 };
 
 function stripHiddenFromPg(rfp: RFP): void {
+  // hidden_from_pg 가 단독 strip 권위 (Phase E — 레거시 currentFeeVisibleToPg 폴백 제거).
+  // 모든 행은 dual-write/backfill 로 hidden_from_pg 가 채워져 있다는 전제(fallback 없음).
   for (const path of rfp.hiddenFromPg ?? []) PG_STRIP[path]?.(rfp);
-  // 레거시 폴백 — 아직 hidden_from_pg 가 백필되지 않은 행 보호. Phase F(컬럼 제거)에서 삭제.
-  if (rfp.currentFeeVisibleToPg === false) rfp.currentFeeRate = undefined;
   // PG 페이로드에 가시성 정책 메타데이터(숨김 경로 목록)를 노출하지 않는다 — 서버 strip 으로 충분.
   rfp.hiddenFromPg = undefined;
 }
