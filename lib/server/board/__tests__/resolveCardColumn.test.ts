@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { resolveCardColumn } from '@/lib/server/board/resolveCardColumn';
-import { DEFAULT_LANDING_KEY } from '@/lib/server/columns/lifecycle-keys';
 import type { BoardColumn } from '@/lib/types/column';
 
 function col(over: Partial<BoardColumn> & { id: string }): BoardColumn {
@@ -39,20 +38,4 @@ describe('resolveCardColumn', () => {
     ).toBe(sent.id);
   });
 
-  it('rfp_bids: the default-landing key resolves to 진행전', () => {
-    const landing = col({
-      id: 'c-landing',
-      kind: 'rfp_bids',
-      lifecycleKey: DEFAULT_LANDING_KEY,
-      title: '진행전',
-    });
-    const nego = col({ id: 'c-nego', kind: 'rfp_bids', title: '협상중' });
-    expect(
-      resolveCardColumn({
-        boardColumnId: null,
-        lifecycleKey: DEFAULT_LANDING_KEY,
-        columns: [landing, nego],
-      }),
-    ).toBe(landing.id);
-  });
 });

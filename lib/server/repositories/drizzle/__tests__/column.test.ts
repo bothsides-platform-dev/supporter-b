@@ -31,7 +31,7 @@ describe('DrizzleColumnRepository', () => {
     ctx = await setup();
   });
 
-  it('createMany + listByBoard returns each kind ordered by position', async () => {
+  it('createMany + listByBoard returns pipeline columns ordered by position', async () => {
     await ctx.repo.createMany(defaultColumns(ctx.ws.id, 'buyer'));
 
     const pipeline = await ctx.repo.listByBoard(ctx.ws.id, 'pipeline');
@@ -40,9 +40,6 @@ describe('DrizzleColumnRepository', () => {
       'awarded',
       'closed',
     ]);
-
-    const rfpBids = await ctx.repo.listByBoard(ctx.ws.id, 'rfp_bids');
-    expect(rfpBids.map((c) => c.title)).toEqual(['진행전', '협상중', '결정']);
   });
 
   it('create + findById round-trips all fields', async () => {

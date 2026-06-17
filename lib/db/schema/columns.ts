@@ -13,7 +13,7 @@ import { workspaces } from './workspaces';
 // Unified kanban column. The board is keyed by (workspace_id, kind) — there is
 // no `boards` table. A column is one of:
 //   - lifecycle-bound (lifecycle_key != null): cards classify into it; non-
-//     deletable. Includes the rfp_bids default-landing "진행전" (key='inbox').
+//     deletable.
 //   - custom          (lifecycle_key = null): user-created, freely deletable;
 //     a card sits here via card.board_column_id.
 // "system" (non-deletable) is derived: lifecycle_key IS NOT NULL — no stored

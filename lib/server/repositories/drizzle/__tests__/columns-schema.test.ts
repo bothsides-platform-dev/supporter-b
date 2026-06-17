@@ -133,7 +133,7 @@ describe('M1 schema — unified kanban columns + embedded placement', () => {
     await ctx.db.insert(columns).values({
       id: colId,
       workspaceId: ctx.buyerWs.id,
-      kind: 'rfp_bids',
+      kind: 'pipeline',
       title: '협상중',
       position: 'a1',
     });

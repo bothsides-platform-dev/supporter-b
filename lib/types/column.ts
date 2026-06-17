@@ -1,7 +1,7 @@
 // Unified kanban domain types. Mirrors the `columns` table + the card tables'
 // `board_column_id`. Pure declarations — usable from both server and client.
 
-export type ColumnKind = 'pipeline' | 'rfp_bids';
+export type ColumnKind = 'pipeline';
 
 // Mirrors the MD3 Chip color roles (chip_color enum).
 export type ChipColorRole = 'primary' | 'tertiary' | 'warning' | 'error' | 'surface';
