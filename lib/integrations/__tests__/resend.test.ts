@@ -207,6 +207,22 @@ describe('ResendSender', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.retryable).toBe(false);
   });
+
+  it('returns permanent failure in production when RESEND_API_KEY is empty string', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('RESEND_API_KEY', '');
+    const { ResendSender, __resetResendClientForTest } = await import('../resend');
+    __resetResendClientForTest();
+
+    const result = await ResendSender(makeEntry());
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe('resend_api_key_empty');
+      expect(result.retryable).toBe(false);
+    }
+    expect(sendMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('classifyResendError', () => {
@@ -378,5 +394,28 @@ describe('ResendBatchSender', () => {
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.retryable).toBe(true);
     }
+  });
+
+  it('returns permanent failure for every entry in production when RESEND_API_KEY is empty string', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('RESEND_API_KEY', '');
+    const { ResendBatchSender, __resetResendClientForTest } = await import('../resend');
+    __resetResendClientForTest();
+
+    const entries = [
+      makeEntry({ id: 'e1', to: 'a@e.com' }),
+      makeEntry({ id: 'e2', to: 'b@e.com' }),
+    ];
+    const results = await ResendBatchSender(entries);
+
+    expect(results).toHaveLength(2);
+    for (const r of results) {
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.error).toBe('resend_api_key_empty');
+        expect(r.retryable).toBe(false);
+      }
+    }
+    expect(batchSendMock).not.toHaveBeenCalled();
   });
 });

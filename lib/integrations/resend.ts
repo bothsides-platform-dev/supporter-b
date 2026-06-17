@@ -122,6 +122,10 @@ export function __resetResendClientForTest(): void {
 export const ResendSender: Sender = async (entry) => {
   const apiKey = process.env.RESEND_API_KEY;
 
+  if (process.env.NODE_ENV === 'production' && apiKey === '') {
+    return { ok: false, error: 'resend_api_key_empty', retryable: false };
+  }
+
   if (!apiKey) {
     devLogEntry(entry);
     return { ok: true };
@@ -206,6 +210,11 @@ export const ResendBatchSender: BatchSender = async (entries) => {
   if (entries.length === 0) return [];
 
   const apiKey = process.env.RESEND_API_KEY;
+
+  if (process.env.NODE_ENV === 'production' && apiKey === '') {
+    return entries.map(() => ({ ok: false as const, error: 'resend_api_key_empty', retryable: false }));
+  }
+
   if (!apiKey) {
     for (const entry of entries) devLogEntry(entry);
     return entries.map(() => ({ ok: true }));

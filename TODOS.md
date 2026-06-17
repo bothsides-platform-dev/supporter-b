@@ -42,9 +42,8 @@ tooltipAlign prop(start|center|end) + useId/aria-describedby 연결 완료. (PR 
 ### ~~채팅·팀 다이제스트 발송 배치화~~ ✅
 `flushChatDigests`·`flushTeamChatDigests` 를 two-phase 구조로 전환: Phase 1 = 수신자당 재계산+취소 필터(변경 없음), Phase 2 = 살아남은 항목을 `sendEntriesInBatches(batchSender, enriched)` 로 일괄 발송. 수신자당 개별 `Sender` 호출(N회) → tick당 ceil(N/100)회 Resend 배치 호출. `route.ts` 도 `getResendSender()` 제거 → 세 flush 모두 동일 `batchSender` 사용. 3467 green. (fix+digest-batch-send 2026-06-17)
 
-### 빈 RESEND_API_KEY dev-fallback 오설정 가드 (기존 동작)
-**Priority:** P3
-`RESEND_API_KEY` 가 빈 문자열이면 `ResendSender`/`ResendBatchSender` 가 dev 모드로 떨어져 `[email DEV]` 로그만 남기고 행을 `sent` 로 표시한다 — 운영에서 키를 빈 값으로 잘못 설정하면 메일이 조용히 안 나간다. 부팅/런타임 가드(예: `NODE_ENV==='production'` 이면 빈 키를 에러로)로 오설정을 표면화. 본 PR 비도입(기존 `ResendSender` 동작 미러). (발견: /ship 어드버서리얼 2026-06-15)
+### ~~빈 RESEND_API_KEY dev-fallback 오설정 가드~~ ✅ PR#233
+`ResendSender`·`ResendBatchSender`·`sendAdminEmail` production 빈 키 → `{ ok: false, error: 'resend_api_key_empty', retryable: false }` + `checkProductionConfig` 부팅 가드(`instrumentation.ts` — PM2 restart loop로 즉각 표면화). (PR fix/resend-empty-key-guard 2026-06-17)
 
 ## Completed
 
