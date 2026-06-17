@@ -41,7 +41,10 @@ export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData>
     requoteRepo.findPendingByPgWs(workspaceId),
   ]);
   const bidByRfp = new Map<string, Bid>();
-  for (const b of bidList) bidByRfp.set(b.rfpId, b);
+  for (const b of bidList) {
+    const existing = bidByRfp.get(b.rfpId);
+    if (!existing || b.round > existing.round) bidByRfp.set(b.rfpId, b);
+  }
   const pendingRequoteRfpIds = new Set(pendingRequotes.map((r) => r.rfpId));
   return { pairs, bidByRfp, pendingRequoteRfpIds };
 }

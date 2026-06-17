@@ -342,6 +342,36 @@ describe('DrizzleBidRepository round', () => {
     const rows = await repo.findByRfp(rfpId);
     expect(rows.map((b) => b.round).sort()).toEqual([1, 2]);
   });
+
+  it('findByPgWs 는 round 오름차순으로 반환한다 (최신 라운드가 Map last-write-wins 로 보존됨)', async () => {
+    const db = await createPgliteDb();
+    const repo = new DrizzleBidRepository(db);
+    const buyer = await seedUser(db);
+    const buyerWs = await seedBuyerWorkspace(db);
+    const pgWs = await seedPgWorkspace(db, 'pg2.io');
+    const { rfpId, invId } = await seedInvited(db, buyerWs.id, buyer.id, pgWs.id);
+
+    const base = {
+      rfpId,
+      pgWsId: pgWs.id,
+      invitationId: invId,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      paymentFees: {},
+      customFees: {},
+      proposalPdfs: [],
+      status: 'submitted' as const,
+      submittedBy: buyer.id,
+      submittedAt: new Date().toISOString(),
+    };
+    // round 2 를 먼저 INSERT — ORDER BY 없으면 삽입 순서(2,1)로 반환될 수 있음
+    await repo.save({ id: randomUUID(), round: 2, ...base });
+    await repo.save({ id: randomUUID(), round: 1, ...base });
+
+    const rows = await repo.findByPgWs(pgWs.id);
+    expect(rows.map((b) => b.round)).toEqual([1, 2]);
+  });
 });
 
 // ─── Phase 2C gap methods ─────────────────────────────────────────────────
