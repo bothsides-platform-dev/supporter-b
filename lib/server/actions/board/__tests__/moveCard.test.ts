@@ -3,18 +3,14 @@
 // branch here.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
-
-import { bids, rfps, rfpInvitations, columns } from '@/lib/db/schema';
+import { rfps, columns } from '@/lib/db/schema';
 import { defaultColumns } from '@/lib/server/columns/seed';
 import {
   seedBizProfile,
   seedBuyerWorkspace,
   seedMembership,
-  seedPgWorkspace,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -43,17 +39,9 @@ vi.mock('@/lib/auth/session', () => ({
 }));
 
 import { moveCardAction } from '../moveCardAction';
-import { getBidRepo } from '@/lib/server/repositories/factory';
+import { getRfpRepo } from '@/lib/server/repositories/factory';
 
 let db: PgliteDB;
-
-async function colByTitle(wsId: string, title: string): Promise<string> {
-  const [c] = await db
-    .select()
-    .from(columns)
-    .where(and(eq(columns.workspaceId, wsId), eq(columns.title, title)));
-  return c.id;
-}
 
 async function setup() {
   const buyer = await seedUser(db, { email: 'b@buyer.com' });
@@ -62,8 +50,6 @@ async function setup() {
   await seedMembership(db, buyerWs.id, buyer.id, 'admin');
   await db.insert(columns).values(defaultColumns(buyerWs.id, 'buyer'));
 
-  const pgWs = await seedPgWorkspace(db, 'toss.im');
-  const pgUser = await seedUser(db, { email: 'sales@toss.im' });
   const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
@@ -76,31 +62,8 @@ async function setup() {
     createdBy: buyer.id,
     sentAt: new Date(),
   });
-  const invId = randomUUID();
-  await db.insert(rfpInvitations).values({
-    id: invId,
-    rfpId,
-    pgWsId: pgWs.id,
-    acceptedByUserId: pgUser.id,
-    tokenHash: hashToken(generateToken()),
-    sentAt: new Date(),
-    expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
-    status: 'accepted',
-  });
-  const bidId = randomUUID();
-  await db.insert(bids).values({
-    id: bidId,
-    rfpId,
-    pgWsId: pgWs.id,
-    invitationId: invId,
-    settleCycle: 'D+1',
-    settleLimit: '0',
-    guaranteeInsurance: '0',
-    paymentFees: {},
-    submittedBy: pgUser.id,
-  });
 
-  return { buyer, buyerWs, bidId };
+  return { buyer, buyerWs, rfpId };
 }
 
 function asBuyer(s: { buyer: { id: string; email: string }; buyerWs: { id: string } }) {
@@ -126,82 +89,48 @@ describe('moveCardAction', () => {
 
   it('rejects without a session', async () => {
     sessionRef.value = null;
+    const s = await setup();
     const r = await moveCardAction({
-      cardType: 'bid',
-      cardId: randomUUID(),
+      cardType: 'rfp',
+      cardId: s.rfpId,
       toColumnId: randomUUID(),
     });
     expect(r.ok).toBe(false);
   });
 
-  it('rejects a column owned by another workspace', async () => {
+  it('rejects an rfp column owned by another workspace', async () => {
     const s = await setup();
     asBuyer(s);
-    // a custom column in a DIFFERENT buyer workspace
     const otherWs = await seedBuyerWorkspace(db, {});
     const otherCol = randomUUID();
     await db.insert(columns).values({
       id: otherCol,
       workspaceId: otherWs.id,
-      kind: 'rfp_bids',
-      title: '협상중',
+      kind: 'pipeline',
+      title: '보류',
       position: 'a1',
       lifecycleKey: null,
     });
-    const r = await moveCardAction({
-      cardType: 'bid',
-      cardId: s.bidId,
-      toColumnId: otherCol,
-    });
+    const r = await moveCardAction({ cardType: 'rfp', cardId: s.rfpId, toColumnId: otherCol });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('FORBIDDEN');
   });
 
-  it('rejects a cross-kind target (bid into a pipeline column)', async () => {
+  it('places an rfp into a custom column (board_column_id)', async () => {
     const s = await setup();
     asBuyer(s);
-    const pipelineCustom = randomUUID();
+    const customCol = randomUUID();
     await db.insert(columns).values({
-      id: pipelineCustom,
+      id: customCol,
       workspaceId: s.buyerWs.id,
       kind: 'pipeline',
       title: '보류',
       position: 'z1',
       lifecycleKey: null,
     });
-    const r = await moveCardAction({
-      cardType: 'bid',
-      cardId: s.bidId,
-      toColumnId: pipelineCustom,
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('CROSS_KIND');
-  });
-
-  it('rejects dropping onto a system column (default-landing / lifecycle)', async () => {
-    const s = await setup();
-    asBuyer(s);
-    const landing = await colByTitle(s.buyerWs.id, '진행전'); // is_system default
-    const r = await moveCardAction({
-      cardType: 'bid',
-      cardId: s.bidId,
-      toColumnId: landing,
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('NOT_A_DROP_TARGET');
-  });
-
-  it('places a bid into a custom column, then moves it (board_column_id)', async () => {
-    const s = await setup();
-    asBuyer(s);
-    const nego = await colByTitle(s.buyerWs.id, '협상중');
-    const decided = await colByTitle(s.buyerWs.id, '결정');
-    const repo = await getBidRepo();
-
-    expect((await moveCardAction({ cardType: 'bid', cardId: s.bidId, toColumnId: nego })).ok).toBe(true);
-    expect((await repo.findById(s.bidId))?.boardColumnId).toBe(nego);
-
-    expect((await moveCardAction({ cardType: 'bid', cardId: s.bidId, toColumnId: decided })).ok).toBe(true);
-    expect((await repo.findById(s.bidId))?.boardColumnId).toBe(decided);
+    const repo = await getRfpRepo();
+    const r = await moveCardAction({ cardType: 'rfp', cardId: s.rfpId, toColumnId: customCol });
+    expect(r.ok).toBe(true);
+    expect((await repo.findById(s.rfpId))?.boardColumnId).toBe(customCol);
   });
 });

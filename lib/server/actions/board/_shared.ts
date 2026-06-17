@@ -3,10 +3,10 @@
 // DESIGN NOTE (deviates from spec §C, deliberately): moveCard/releaseCard are
 // PLACEMENT-ONLY (custom columns + default-landing release). Drops onto
 // lifecycle columns that trigger a domain action (send/award/close/submit/
-// withdraw) are dispatched CLIENT-side to the existing rfp/bid actions — those
-// take RFP codes / bid uuids that the card payload already carries, so routing
-// them through moveCard would add pointless uuid↔code plumbing. Do not "fix"
-// this back into moveCard.
+// withdraw) are dispatched CLIENT-side to the existing rfp/invitation actions —
+// those take RFP codes / bid uuids that the card payload already carries, so
+// routing them through moveCard would add pointless uuid↔code plumbing. Do not
+// "fix" this back into moveCard.
 import {
   requireSession,
   requireBuyerSession,
@@ -15,10 +15,9 @@ import {
 import {
   getColumnRepo,
   getRfpRepo,
-  getBidRepo,
   getInvitationRepo,
 } from '@/lib/server/repositories/factory';
-import type { BoardColumn, CardType, ColumnKind } from '@/lib/types/column';
+import type { BoardColumn, CardType } from '@/lib/types/column';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { BidActionResult } from '../bid/_shared';
 
@@ -30,7 +29,7 @@ type WorkspaceResolve =
   | { ok: true; workspaceId: string }
   | { ok: false; error: string };
 
-// rfp/bid cards live on a buyer board; invitation cards on a pg board.
+// rfp cards live on a buyer board; invitation cards on a pg board.
 export async function workspaceIdForCard(cardType: CardType): Promise<WorkspaceResolve> {
   try {
     if (cardType === 'invitation') {
@@ -56,10 +55,6 @@ export async function requireActiveWorkspace(): Promise<
   const { workspaceId, workspaceType } = session.user;
   if (!workspaceId || !workspaceType) return { ok: false, error: 'NO_WORKSPACE' };
   return { ok: true, workspaceId, workspaceType };
-}
-
-export function kindForCard(cardType: CardType): ColumnKind {
-  return cardType === 'bid' ? 'rfp_bids' : 'pipeline';
 }
 
 // Load a column owned by the session's active workspace (cross-workspace guard
@@ -88,16 +83,11 @@ export async function setCardBoardColumn(
     await (await getRfpRepo()).setBoardColumn(cardId, columnId);
     return;
   }
-  if (cardType === 'invitation') {
-    await (await getInvitationRepo()).setBoardColumn(cardId, columnId);
-    return;
-  }
-  await (await getBidRepo()).setBoardColumn(cardId, columnId);
+  await (await getInvitationRepo()).setBoardColumn(cardId, columnId);
 }
 
-// Does this card belong to the given workspace's board? rfp/bid boards are owned
-// by the buyer workspace (bid via rfp.buyerWsId, NOT bid.pgWsId); invitation
-// boards by the pg workspace.
+// Does this card belong to the given workspace's board? rfp cards are owned by
+// the buyer workspace; invitation cards by the pg workspace.
 export async function cardBelongsToWorkspace(
   cardType: CardType,
   cardId: string,
@@ -105,12 +95,6 @@ export async function cardBelongsToWorkspace(
 ): Promise<boolean> {
   if (cardType === 'rfp') {
     const rfp = await (await getRfpRepo()).findById(cardId);
-    return !!rfp && rfp.buyerWsId === workspaceId;
-  }
-  if (cardType === 'bid') {
-    const bid = await (await getBidRepo()).findById(cardId);
-    if (!bid) return false;
-    const rfp = await (await getRfpRepo()).findById(bid.rfpId);
     return !!rfp && rfp.buyerWsId === workspaceId;
   }
   const inv = await (await getInvitationRepo()).findById(cardId);

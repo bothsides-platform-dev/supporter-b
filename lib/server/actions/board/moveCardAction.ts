@@ -7,14 +7,13 @@ import { isSystemColumn } from '@/lib/types/column';
 import {
   type BoardActionResult,
   workspaceIdForCard,
-  kindForCard,
   setCardBoardColumn,
   cardBelongsToWorkspace,
 } from './_shared';
 
 const Input = z
   .object({
-    cardType: z.enum(['rfp', 'invitation', 'bid']),
+    cardType: z.enum(['rfp', 'invitation']),
     cardId: z.string().uuid(),
     toColumnId: z.string().uuid(),
   })
@@ -25,10 +24,10 @@ export type MoveCardResult = BoardActionResult;
 
 /**
  * Place a card into a CUSTOM column (the only valid drop target). Drops onto
- * system columns — cross-side protocol, private lifecycle skeleton, and the
- * default-landing column — are rejected; releasing a card back to
- * auto-classification goes through releaseCardAction. Lifecycle-column drops
- * that trigger a domain action are handled client-side. See _shared.ts.
+ * system columns — cross-side protocol, lifecycle columns — are rejected;
+ * releasing a card back to auto-classification goes through releaseCardAction.
+ * Lifecycle-column drops that trigger a domain action are handled client-side.
+ * See _shared.ts.
  */
 export async function moveCardAction(input: MoveCardInput): Promise<MoveCardResult> {
   const parsed = Input.safeParse(input);
@@ -42,7 +41,7 @@ export async function moveCardAction(input: MoveCardInput): Promise<MoveCardResu
   const column = await colRepo.findById(toColumnId);
   if (!column) return { ok: false, error: 'COLUMN_NOT_FOUND' };
   if (column.workspaceId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
-  if (column.kind !== kindForCard(cardType)) return { ok: false, error: 'CROSS_KIND' };
+  if (column.kind !== 'pipeline') return { ok: false, error: 'CROSS_KIND' };
   // system (lifecycle-bound) columns ⇒ non-deletable AND non-place-target.
   if (isSystemColumn(column)) return { ok: false, error: 'NOT_A_DROP_TARGET' };
 

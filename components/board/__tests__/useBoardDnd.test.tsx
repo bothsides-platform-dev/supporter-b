@@ -163,29 +163,6 @@ describe('useBoardDnd', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it('default-landing 컬럼 드롭은 releaseCardAction 으로 배치를 해제한다 (bid 보드)', async () => {
-    const landingCol = col({
-      id: 'c-inbox',
-      title: '진행전',
-      lifecycleKey: 'inbox',
-      position: 'a0',
-    });
-    const bidCard: BoardCard = {
-      cardType: 'bid',
-      cardId: 'b1',
-      columnId: 'c-hold',
-      payload: { id: 'b1' },
-    };
-    const { result } = renderHook(() =>
-      useBoardDnd({ cardType: 'bid', columns: [landingCol, customCol], cards: [bidCard] }),
-    );
-    await act(async () => {
-      result.current.handleDragEnd(drop('b1', 'c-inbox'));
-    });
-    expect(release).toHaveBeenCalledWith({ cardType: 'bid', cardId: 'b1' });
-    expect(refresh).toHaveBeenCalled();
-  });
-
   it('over 가 없으면 (보드 밖 드롭) 아무 일도 일어나지 않는다', async () => {
     const { result } = setup();
     await act(async () => {

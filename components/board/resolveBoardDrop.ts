@@ -58,6 +58,6 @@ export function resolveBoardDrop(args: {
     return action ? { kind: 'lifecycle', action } : { kind: 'reject' };
   }
 
-  // bid: rfp_bids has no action-bound lifecycle columns.
+  // Unrecognised lifecycle column — snap back.
   return { kind: 'reject' };
 }
