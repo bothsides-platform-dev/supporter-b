@@ -52,6 +52,7 @@ vi.mock('@/lib/observability/log', () => ({
 }));
 
 import { createRfpAction } from '../createRfpAction';
+import { migrateCurrentTerms, STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
 
 let db: PgliteDB;
 let buyerUserId: string;
@@ -522,12 +523,13 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    const terms = migrateCurrentTerms(row.currentTerms);
     expect(row.websiteUrl).toBe('https://supporter-b.com/');
     expect(row.mainProducts).toBe('의류');
-    expect(row.annualPgVolume).toBe('10억');
-    expect(row.currentFeeRate).toBe('3.4%');
-    expect(row.currentSettlementLimit).toBe('월 1억');
-    expect(row.currentGuaranteeInsurance).toBe('3000만원');
+    expect(terms.annualPgVolume).toBe('10억');
+    expect(terms.feeRate).toBe('3.4%');
+    expect(terms.settlementLimit).toBe('월 1억');
+    expect(terms.guaranteeInsurance).toBe('3000만원');
   });
 
   it('스킴 없는 websiteUrl 은 https:// 를 붙여 저장한다', async () => {
@@ -580,12 +582,13 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    const terms = migrateCurrentTerms(row.currentTerms);
     expect(row.websiteUrl).toBeNull();
     expect(row.mainProducts).toBeNull();
-    expect(row.annualPgVolume).toBeNull();
-    expect(row.currentFeeRate).toBeNull();
-    expect(row.currentSettlementLimit).toBeNull();
-    expect(row.currentGuaranteeInsurance).toBeNull();
+    expect(terms.annualPgVolume).toBeUndefined();
+    expect(terms.feeRate).toBeUndefined();
+    expect(terms.settlementLimit).toBeUndefined();
+    expect(terms.guaranteeInsurance).toBeUndefined();
   });
 
   it('persists currentSolution and currentSolutionDetail when supplied', async () => {
@@ -601,8 +604,9 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
-    expect(row.currentSolution).toBe('self');
-    expect(row.currentSolutionDetail).toBe('ABC몰');
+    const terms = migrateCurrentTerms(row.currentTerms);
+    expect(terms.solution).toBe('self');
+    expect(terms.solutionDetail).toBe('ABC몰');
   });
 
   it('stores NULL for currentSolution / currentSolutionDetail when omitted', async () => {
@@ -616,8 +620,9 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
-    expect(row.currentSolution).toBeNull();
-    expect(row.currentSolutionDetail).toBeNull();
+    const terms = migrateCurrentTerms(row.currentTerms);
+    expect(terms.solution).toBeUndefined();
+    expect(terms.solutionDetail).toBeUndefined();
   });
 
   it('rejects invalid currentSolution value via Zod', async () => {
@@ -645,7 +650,7 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
-    expect(row.currentSettlementCycle).toBe('D+1');
+    expect(migrateCurrentTerms(row.currentTerms).settlementCycle).toBe('D+1');
   });
 
   it('stores NULL for currentSettlementCycle when omitted', async () => {
@@ -659,7 +664,7 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
-    expect(row.currentSettlementCycle).toBeNull();
+    expect(migrateCurrentTerms(row.currentTerms).settlementCycle).toBeUndefined();
   });
 
   it('persists deliveryServicePeriod when supplied', async () => {
@@ -674,7 +679,7 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
-    expect(row.deliveryServicePeriod).toBe('D+3');
+    expect(migrateCurrentTerms(row.currentTerms).deliveryServicePeriod).toBe('D+3');
   });
 
   it('stores NULL for deliveryServicePeriod when omitted', async () => {
@@ -688,7 +693,7 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
-    expect(row.deliveryServicePeriod).toBeNull();
+    expect(migrateCurrentTerms(row.currentTerms).deliveryServicePeriod).toBeUndefined();
   });
 
   it('persists boardVisible=false when opted out', async () => {
@@ -733,9 +738,10 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
-    expect(row.currentFeeVisibleToPg).toBe(false);
-    // 값 자체는 항상 저장된다 (구매사 비교 baseline 보존).
-    expect(row.currentFeeRate).toBe('3.4%');
+    // 비공개 = hidden_from_pg 에 feeRate 경로 포함.
+    expect(row.hiddenFromPg).toContain(STRIP_PATH_FEE_RATE);
+    // 값 자체는 항상 문서에 저장된다 (구매사 비교 baseline 보존).
+    expect(migrateCurrentTerms(row.currentTerms).feeRate).toBe('3.4%');
   });
 
   it('defaults currentFeeVisibleToPg=true when omitted', async () => {
@@ -749,7 +755,7 @@ describe('createRfpAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
-    expect(row.currentFeeVisibleToPg).toBe(true);
+    expect(row.hiddenFromPg).not.toContain(STRIP_PATH_FEE_RATE);
   });
 
   it("contractType: 'renewal' 을 전달하면 DB에 저장한다", async () => {

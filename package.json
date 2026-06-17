@@ -23,8 +23,7 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
     "backfill:sample": "tsx scripts/backfill-sample-rfp.ts",
-    "backfill:sample-pg": "tsx scripts/backfill-sample-pg-rfp.ts",
-    "backfill:current-terms": "tsx scripts/backfill-current-terms.ts"
+    "backfill:sample-pg": "tsx scripts/backfill-sample-pg-rfp.ts"
   },
   "dependencies": {
     "@axiomhq/pino": "^1.6.1",
