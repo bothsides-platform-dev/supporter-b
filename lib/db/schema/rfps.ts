@@ -83,7 +83,7 @@ export const rfps = pgTable(
     // 개별 current_* 컬럼은 Phase F 에서 은퇴, 그 전까지 dual-write 로 공존.
     currentTerms: jsonb('current_terms').notNull().default(sql`'{"_v":1}'::jsonb`),
     // PG 에게 숨길 필드 경로 목록 (예: 'currentTerms.feeRate'). currentFeeVisibleToPg 의 일반화.
-    // loadPgRfpDetail 이 VISIBILITY_STRIPPABLE allowlist 와 교집합만 server-side strip.
+    // loadPgRfpDetail 이 PG_STRIP allowlist(HIDEABLE_PG_PATHS) 와 교집합만 server-side strip.
     hiddenFromPg: text('hidden_from_pg').array().notNull().default([]),
     // 온보딩 샘플 RFP 표식. true면 '샘플' 칩·읽기전용 샌드박스·전용 하드삭제 게이트가 켜진다.
     isSample: boolean('is_sample').notNull().default(false),
