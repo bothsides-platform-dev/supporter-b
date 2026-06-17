@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.25.4] - 2026-06-17
+
+### Changed
+
+- **칸반 보드 렌더링 최적화**: 컬럼 메뉴 열기·router.refresh 같은 보드 내부 상태 변경 시, 관련 없는 컬럼의 카드가 불필요하게 다시 그려지지 않아요. 컬럼·카드 컴포넌트가 `React.memo`를 제대로 활용하게 됐어요.
+
 ## [0.2.25.3] - 2026-06-17
 
 ### Fixed
