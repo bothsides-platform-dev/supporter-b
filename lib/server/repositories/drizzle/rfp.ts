@@ -2,6 +2,10 @@ import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { rfps, bizProfiles, rfpAllowedPg } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
+import {
+  currentTermsFromDiscrete,
+  hiddenFromPgFromVisibility,
+} from '@/lib/types/rfp-terms';
 import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { assertTransition } from '../../rfp-state';
@@ -138,6 +142,8 @@ export class DrizzleRfpRepository implements RfpRepo {
       createdBy: rfp.createdBy,
       sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
       contractType: rfp.contractType ?? null,
+      // dual-write: 개별 current_* 컬럼과 동기되는 버전드 문서 (Phase D 에서 읽기 권위 전환).
+      currentTerms: currentTermsFromDiscrete(rfp),
     };
     // boardVisible 미지정 시 DB default(true). 지정 시에만 반영하고, 업서트
     // conflict set 에는 넣지 않아 — 노출 토글은 전용 액션의 직접 UPDATE 소관이라
@@ -145,8 +151,11 @@ export class DrizzleRfpRepository implements RfpRepo {
     if (rfp.boardVisible !== undefined) values.boardVisible = rfp.boardVisible;
     // currentFeeVisibleToPg 도 동일: 작성 시점 선택을 보존하기 위해 지정 시에만
     // 반영하고 conflict set 에는 넣지 않는다 (일반 저장/수정이 덮어쓰지 않게).
-    if (rfp.currentFeeVisibleToPg !== undefined)
+    // hidden_from_pg 는 그 일반화 — 같은 불변식으로 conflict set 제외.
+    if (rfp.currentFeeVisibleToPg !== undefined) {
       values.currentFeeVisibleToPg = rfp.currentFeeVisibleToPg;
+      values.hiddenFromPg = hiddenFromPgFromVisibility(rfp.currentFeeVisibleToPg);
+    }
 
     await db
       .insert(rfps)
@@ -167,6 +176,8 @@ export class DrizzleRfpRepository implements RfpRepo {
           awardedBidId: rfp.awardedBidId ?? null,
           sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
           contractType: rfp.contractType ?? null,
+          // 개별컬럼과 함께 문서도 갱신 (수정 시 동기 유지). hidden_from_pg 는 opt-out 이라 제외.
+          currentTerms: currentTermsFromDiscrete(rfp),
         },
       });
 
@@ -202,6 +213,9 @@ export class DrizzleRfpRepository implements RfpRepo {
       customPaymentMethods: values.customPaymentMethods,
       createdBy: values.createdBy,
       sentAt: values.sentAt,
+      // dual-write: 개별 current_* 컬럼과 동기되는 버전드 문서 + 일반화된 숨김 목록.
+      currentTerms: currentTermsFromDiscrete(values),
+      hiddenFromPg: hiddenFromPgFromVisibility(values.currentFeeVisibleToPg),
       // 온보딩 샘플 전용 — 미지정 시 DB default(false).
       ...(values.isSample !== undefined ? { isSample: values.isSample } : {}),
     });

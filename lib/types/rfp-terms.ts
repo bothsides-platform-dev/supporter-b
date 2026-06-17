@@ -33,3 +33,36 @@ export function migrateCurrentTerms(raw: unknown): CurrentTerms {
   //   if (v < 2) o = upgradeV1toV2(o);
   return { ...(o as CurrentTermsV1), _v: CURRENT_TERMS_VERSION };
 }
+
+// 마이그레이션 dual-write/backfill 용 — 개별 current_* 컬럼을 버전드 문서로 조립.
+// null/undefined 는 생략(문서는 sparse), 값 있는 키만 담는다.
+type DiscreteBriefFields = {
+  currentFeeRate?: string | null;
+  currentSettlementLimit?: string | null;
+  currentGuaranteeInsurance?: string | null;
+  currentSettlementCycle?: string | null;
+  deliveryServicePeriod?: string | null;
+  currentSolution?: string | null;
+  currentSolutionDetail?: string | null;
+  annualPgVolume?: string | null;
+};
+
+export function currentTermsFromDiscrete(f: DiscreteBriefFields): CurrentTermsV1 {
+  const t: CurrentTermsV1 = { _v: CURRENT_TERMS_VERSION };
+  if (f.currentFeeRate != null) t.feeRate = f.currentFeeRate;
+  if (f.currentSettlementLimit != null) t.settlementLimit = f.currentSettlementLimit;
+  if (f.currentGuaranteeInsurance != null) t.guaranteeInsurance = f.currentGuaranteeInsurance;
+  if (f.currentSettlementCycle != null) t.settlementCycle = f.currentSettlementCycle;
+  if (f.deliveryServicePeriod != null) t.deliveryServicePeriod = f.deliveryServicePeriod;
+  // solution 은 문서에서 enum 으로 좁혀지지만, 기존 데이터 보존이 우선이라 read-tolerant 캐스트.
+  if (f.currentSolution != null) t.solution = f.currentSolution as CurrentTermsV1['solution'];
+  if (f.currentSolutionDetail != null) t.solutionDetail = f.currentSolutionDetail;
+  if (f.annualPgVolume != null) t.annualPgVolume = f.annualPgVolume;
+  return t;
+}
+
+// currentFeeVisibleToPg(opt-out boolean)을 hidden_from_pg 경로 배열로 일반화.
+// false = 현재 카드 수수료를 PG 에 숨김 → 'currentTerms.feeRate' 경로 추가.
+export function hiddenFromPgFromVisibility(currentFeeVisibleToPg: boolean | undefined): string[] {
+  return currentFeeVisibleToPg === false ? ['currentTerms.feeRate'] : [];
+}
