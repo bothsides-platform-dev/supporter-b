@@ -39,6 +39,9 @@ async function insertRfp(db: PgliteDB, o: RfpOpts): Promise<string> {
     currentSettlementLimit: '월 10억',
     currentGuaranteeInsurance: '가입',
     currentSolution: 'cafe24',
+    // 견적 확장 문서/숨김목록도 봉인 — open-board projection 에 절대 새면 안 된다.
+    currentTerms: { _v: 1, feeRate: '2.5%', annualPgVolume: '연 100억' },
+    hiddenFromPg: ['currentTerms.feeRate'],
     deadline: new Date(Date.now() + (o.deadlineMs ?? 86_400_000)),
     status: o.status ?? 'sent',
     boardVisible: o.boardVisible ?? true,
@@ -212,6 +215,9 @@ describe('DrizzleRfpRequestRepository', () => {
       expect(sealed.currentGuaranteeInsurance).toBeUndefined();
       expect(sealed.memo).toBeUndefined();
       expect(sealed.bizProfileId).toBeUndefined();
+      // 견적 확장: 버전드 문서·숨김목록도 절대 노출 금지(봉인 경계 핵심 가드).
+      expect(sealed.currentTerms).toBeUndefined();
+      expect(sealed.hiddenFromPg).toBeUndefined();
     });
   });
 });

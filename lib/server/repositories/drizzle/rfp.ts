@@ -3,6 +3,7 @@ import { rfps, bizProfiles, rfpAllowedPg } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import {
+  migrateCurrentTerms,
   currentTermsFromDiscrete,
   hiddenFromPgFromVisibility,
   backfillRowPatch,
@@ -31,6 +32,9 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
         gradeConfirmedAt: toIso(biz.gradeConfirmedAt),
       }
     : undefined;
+  // 읽기 권위 = current_terms 문서 (Phase D). 문서가 비면 개별컬럼으로 폴백(전이기 안전;
+  // 백필 전 레거시 행 보호). 개별컬럼은 Phase F 에서 제거되며 그때 폴백도 함께 삭제.
+  const terms = migrateCurrentTerms(row.currentTerms);
   return {
     id: row.id,
     code: row.code,
@@ -40,14 +44,15 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     memo: row.memo,
     websiteUrl: row.websiteUrl ?? undefined,
     mainProducts: row.mainProducts ?? undefined,
-    annualPgVolume: row.annualPgVolume ?? undefined,
-    currentFeeRate: row.currentFeeRate ?? undefined,
-    currentSettlementLimit: row.currentSettlementLimit ?? undefined,
-    currentGuaranteeInsurance: row.currentGuaranteeInsurance ?? undefined,
-    currentSettlementCycle: row.currentSettlementCycle ?? undefined,
-    deliveryServicePeriod: row.deliveryServicePeriod ?? undefined,
-    currentSolution: row.currentSolution ?? undefined,
-    currentSolutionDetail: row.currentSolutionDetail ?? undefined,
+    annualPgVolume: terms.annualPgVolume ?? row.annualPgVolume ?? undefined,
+    currentFeeRate: terms.feeRate ?? row.currentFeeRate ?? undefined,
+    currentSettlementLimit: terms.settlementLimit ?? row.currentSettlementLimit ?? undefined,
+    currentGuaranteeInsurance:
+      terms.guaranteeInsurance ?? row.currentGuaranteeInsurance ?? undefined,
+    currentSettlementCycle: terms.settlementCycle ?? row.currentSettlementCycle ?? undefined,
+    deliveryServicePeriod: terms.deliveryServicePeriod ?? row.deliveryServicePeriod ?? undefined,
+    currentSolution: terms.solution ?? row.currentSolution ?? undefined,
+    currentSolutionDetail: terms.solutionDetail ?? row.currentSolutionDetail ?? undefined,
     rfpFiles: [], // attachments hydrated separately when needed
     allowedPgWorkspaceIds: allowed,
     deadline: new Date(row.deadline).toISOString(),
@@ -62,6 +67,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
     boardVisible: row.boardVisible,
     currentFeeVisibleToPg: row.currentFeeVisibleToPg,
+    hiddenFromPg: row.hiddenFromPg ?? [],
     isSample: row.isSample,
     contractType: row.contractType ?? null,
   };

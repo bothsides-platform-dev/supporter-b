@@ -53,6 +53,22 @@ export type PgRfpDetailData = {
 };
 
 
+// 봉인입찰 strip allowlist — 경로 → RFP 페이로드 변이. allowlist 에 없는 경로는
+// (제품 필수 필드 보호를 위해) 무시된다. 새 숨김가능 필드 = 여기 한 줄 추가.
+// 경로는 current_terms 문서 구조 기준(예: 'currentTerms.feeRate'); 전이기 RFP 타입은
+// 평탄(flat) 하므로 평탄 필드로 매핑한다. Phase F 에서 문서 전환 시 정리.
+const PG_STRIP: Record<string, (rfp: RFP) => void> = {
+  'currentTerms.feeRate': (r) => {
+    r.currentFeeRate = undefined;
+  },
+};
+
+function stripHiddenFromPg(rfp: RFP): void {
+  for (const path of rfp.hiddenFromPg ?? []) PG_STRIP[path]?.(rfp);
+  // 레거시 폴백 — 아직 hidden_from_pg 가 백필되지 않은 행 보호. Phase F(컬럼 제거)에서 삭제.
+  if (rfp.currentFeeVisibleToPg === false) rfp.currentFeeRate = undefined;
+}
+
 /** PG별 최신 라운드(submitted)만 남긴다. */
 function pickCurrentBids(submitted: Bid[]): Bid[] {
   const byPg = new Map<string, Bid>();
@@ -185,11 +201,12 @@ export async function loadPgRfpDetail(args: {
   );
   if (mine) await invRepo.markOpened(mine.id, new Date());
 
-  // 봉인입찰 데이터 경계: 구매사가 현재 카드 수수료를 비공개(opt-out)로 두면
-  // 값 자체를 PG 페이로드에서 제거한다. RfpBriefPanel 렌더 게이트는 시각적
-  // 방어선일 뿐 — 서버에서 지워야 PG가 RSC payload/네트워크에서 읽지 못한다.
-  // (rfp 는 findByCode 가 매 호출 새로 만든 request-scoped 객체라 변이 안전.)
-  if (rfp.currentFeeVisibleToPg === false) rfp.currentFeeRate = undefined;
+  // 봉인입찰 데이터 경계: 구매사가 숨기기로 한 필드를 PG 페이로드에서 server-side 제거.
+  // RfpBriefPanel 렌더 게이트는 시각적 방어선일 뿐 — 서버에서 지워야 PG가 RSC
+  // payload/네트워크에서 읽지 못한다. (rfp 는 findByCode 가 매 호출 새로 만든
+  // request-scoped 객체라 변이 안전.) 누출 방지 우선: 일반화된 hidden_from_pg 와
+  // 레거시 boolean 중 하나라도 숨김이면 제거한다.
+  stripHiddenFromPg(rfp);
 
   // 구매사 첨부 hydrate — RfpBriefPanel 미리보기용.
   rfp.rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);
