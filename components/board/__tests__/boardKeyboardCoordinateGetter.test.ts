@@ -20,6 +20,7 @@ function makeContext({
     columns.map((c) => [c.id, { id: c.id }]),
   );
   return {
+    active: 'active-card',
     currentCoordinates: { x: 0, y: 0 },
     context: {
       active: null,

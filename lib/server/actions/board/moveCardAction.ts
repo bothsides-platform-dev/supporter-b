@@ -7,7 +7,7 @@ import { type BoardActionResult, workspaceIdForCard } from './_shared';
 
 const Input = z
   .object({
-    cardType: z.enum(['rfp', 'invitation', 'bid']),
+    cardType: z.enum(['rfp', 'invitation']),
     cardId: z.string().uuid(),
     toColumnId: z.string().uuid(),
   })
@@ -18,10 +18,10 @@ export type MoveCardResult = BoardActionResult;
 
 /**
  * Place a card into a CUSTOM column (the only valid drop target). Drops onto
- * system columns — cross-side protocol, private lifecycle skeleton, and the
- * default-landing column — are rejected; releasing a card back to
- * auto-classification goes through releaseCardAction. Lifecycle-column drops
- * that trigger a domain action are handled client-side. See _shared.ts.
+ * system columns — cross-side protocol, lifecycle columns — are rejected;
+ * releasing a card back to auto-classification goes through releaseCardAction.
+ * Lifecycle-column drops that trigger a domain action are handled client-side.
+ * See services/board.ts.
  */
 export async function moveCardAction(input: MoveCardInput): Promise<MoveCardResult> {
   const parsed = Input.safeParse(input);
@@ -31,10 +31,6 @@ export async function moveCardAction(input: MoveCardInput): Promise<MoveCardResu
   const ws = await workspaceIdForCard(cardType);
   if (!ws.ok) return ws;
 
-  // workspaceIdForCard already keyed the workspace by card type (buyer for
-  // rfp/bid, pg for invitation); the service only needs the resolved id +
-  // type. cardType is the discriminator, so type is implied — but moveCard
-  // doesn't use workspaceType, so a sentinel keeps the actor shape uniform.
   return (await getBoardService()).moveCard(
     { cardType, cardId, toColumnId },
     { workspaceId: ws.workspaceId, workspaceType: cardType === 'invitation' ? 'pg' : 'buyer' },

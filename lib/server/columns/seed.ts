@@ -8,8 +8,6 @@ import type { BoardColumn, ColumnKind } from '@/lib/types/column';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import { BUYER_KANBAN_ORDER, BUYER_KANBAN_LABEL } from '@/lib/server/buyer-kanban';
 import { PG_KANBAN_ORDER, PG_KANBAN_LABEL } from '@/lib/server/pg-kanban';
-import { DEFAULT_LANDING_KEY } from './lifecycle-keys';
-
 // lifecycleKey non-null ⇒ system (non-deletable); null ⇒ custom. No isSystem flag.
 type ColumnSpec = {
   kind: ColumnKind;
@@ -18,18 +16,11 @@ type ColumnSpec = {
 };
 
 function buyerSpecs(): ColumnSpec[] {
-  const pipeline: ColumnSpec[] = BUYER_KANBAN_ORDER.map((key) => ({
-    kind: 'pipeline',
+  return BUYER_KANBAN_ORDER.map((key) => ({
+    kind: 'pipeline' as const,
     title: BUYER_KANBAN_LABEL[key],
     lifecycleKey: key,
   }));
-  const rfpBids: ColumnSpec[] = [
-    // 진행전 = default landing for unplaced bids (non-deletable, not cross-side).
-    { kind: 'rfp_bids', title: '진행전', lifecycleKey: DEFAULT_LANDING_KEY },
-    { kind: 'rfp_bids', title: '협상중', lifecycleKey: null },
-    { kind: 'rfp_bids', title: '결정', lifecycleKey: null },
-  ];
-  return [...pipeline, ...rfpBids];
 }
 
 function pgSpecs(): ColumnSpec[] {

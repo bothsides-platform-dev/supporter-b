@@ -20,7 +20,6 @@ import { resolveBoardDrop } from './resolveBoardDrop';
 import { computeValidDropTargets } from './computeValidDropTargets';
 import { moveCardAction } from '@/lib/server/actions/board/moveCardAction';
 import { releaseCardAction } from '@/lib/server/actions/board/releaseCardAction';
-import { DEFAULT_LANDING_KEY } from '@/lib/server/columns/lifecycle-keys';
 import { toast } from '@/lib/toast';
 import type { BoardCard, BoardColumn, CardType } from '@/lib/types/column';
 
@@ -119,8 +118,7 @@ export function useBoardDnd({
   };
 
   const commitRelease = (card: BoardCard) => {
-    const wantKey =
-      cardType === 'bid' ? DEFAULT_LANDING_KEY : (card.payload as { stage?: string }).stage;
+    const wantKey = (card.payload as { stage?: string }).stage;
     const target = columns.find((c) => c.lifecycleKey === wantKey);
     startTransition(async () => {
       if (target) applyOverride({ cardId: card.cardId, columnId: target.id });

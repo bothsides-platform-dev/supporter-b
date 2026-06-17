@@ -7,7 +7,7 @@ import { type BoardActionResult, requireActiveWorkspace } from './_shared';
 
 const Input = z
   .object({
-    kind: z.enum(['pipeline', 'rfp_bids']),
+    kind: z.enum(['pipeline']),
     title: z.string().min(1).max(40),
     color: z.enum(['primary', 'tertiary', 'warning', 'error', 'surface']).optional(),
     // client-computed fractional index (placed after a chosen neighbor).
@@ -18,8 +18,7 @@ const Input = z
 export type AddColumnInput = z.infer<typeof Input>;
 export type AddColumnResult = BoardActionResult<{ columnId: string }>;
 
-/** Create a custom column on the session's active workspace board. pg has no
- *  rfp_bids board. */
+/** Create a custom column on the session's active workspace board. */
 export async function addColumnAction(input: AddColumnInput): Promise<AddColumnResult> {
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };

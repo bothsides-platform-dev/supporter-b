@@ -8,10 +8,10 @@
 // DESIGN NOTE (deviates from spec §C, deliberately): moveCard/releaseCard are
 // PLACEMENT-ONLY (custom columns + default-landing release). Drops onto
 // lifecycle columns that trigger a domain action (send/award/close/submit/
-// withdraw) are dispatched CLIENT-side to the existing rfp/bid actions — those
-// take RFP codes / bid uuids that the card payload already carries, so routing
-// them through moveCard would add pointless uuid↔code plumbing. Do not "fix"
-// this back into moveCard.
+// withdraw) are dispatched CLIENT-side to the existing rfp/invitation actions —
+// those take RFP codes / bid uuids that the card payload already carries, so
+// routing them through moveCard would add pointless uuid↔code plumbing. Do not
+// "fix" this back into moveCard.
 import {
   requireSession,
   requireBuyerSession,
@@ -29,7 +29,7 @@ type WorkspaceResolve =
   | { ok: true; workspaceId: string }
   | { ok: false; error: string };
 
-// rfp/bid cards live on a buyer board; invitation cards on a pg board.
+// rfp cards live on a buyer board; invitation cards on a pg board.
 export async function workspaceIdForCard(cardType: CardType): Promise<WorkspaceResolve> {
   try {
     if (cardType === 'invitation') {

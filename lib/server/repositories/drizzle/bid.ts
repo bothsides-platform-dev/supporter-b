@@ -190,11 +190,6 @@ export class DrizzleBidRepository implements BidRepo {
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
   }
 
-  async setBoardColumn(bidId: string, columnId: string | null, tx?: Tx): Promise<void> {
-    const db = this.h(tx);
-    await db.update(bids).set({ boardColumnId: columnId }).where(eq(bids.id, bidId));
-  }
-
   async updateStatus(id: string, status: Bid['status'], tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.update(bids).set({ status }).where(eq(bids.id, id));

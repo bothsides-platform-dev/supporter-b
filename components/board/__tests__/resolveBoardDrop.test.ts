@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { resolveBoardDrop } from '../resolveBoardDrop';
-import { DEFAULT_LANDING_KEY } from '@/lib/server/columns/lifecycle-keys';
 import type { BoardColumn } from '@/lib/types/column';
 
 function col(over: Partial<BoardColumn> & { id: string }): BoardColumn {
@@ -20,13 +19,6 @@ describe('resolveBoardDrop', () => {
     const target = col({ id: 'custom', lifecycleKey: null });
     expect(resolveBoardDrop({ cardType: 'rfp', toColumn: target, payload: { stage: 'active' } })).toEqual({
       kind: 'place',
-    });
-  });
-
-  it('default-landing column → release', () => {
-    const target = col({ id: 'landing', kind: 'rfp_bids', lifecycleKey: DEFAULT_LANDING_KEY });
-    expect(resolveBoardDrop({ cardType: 'bid', toColumn: target, payload: {} })).toEqual({
-      kind: 'release',
     });
   });
 
@@ -66,10 +58,4 @@ describe('resolveBoardDrop', () => {
     });
   });
 
-  it('bid into a custom column → place; into 진행전 → release', () => {
-    const custom = col({ id: 'nego', kind: 'rfp_bids', lifecycleKey: null });
-    const landing = col({ id: 'landing', kind: 'rfp_bids', lifecycleKey: DEFAULT_LANDING_KEY });
-    expect(resolveBoardDrop({ cardType: 'bid', toColumn: custom, payload: {} }).kind).toBe('place');
-    expect(resolveBoardDrop({ cardType: 'bid', toColumn: landing, payload: {} }).kind).toBe('release');
-  });
 });

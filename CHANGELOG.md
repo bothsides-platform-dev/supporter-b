@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.25.5] - 2026-06-17
+
+### Removed
+
+- **rfp_bids 칸반 보드 완전 제거**: PR#97(견적 비교 재설계)에서 딜룸 UI로 대체된 후 어떤 라우트에도 마운트되지 않던 rfp_bids 보드 관련 코드를 전면 제거했어요. `BidCard` 컴포넌트, `CardType 'bid'`, `ColumnKind 'rfp_bids'`, `BidRepo.setBoardColumn`, 관련 시드·테스트가 모두 삭제됐어요. 배포 시 별도 DB 마이그레이션이 필요해요(PR 본문 참조).
+
 ## [0.2.25.4] - 2026-06-17
 
 ### Changed

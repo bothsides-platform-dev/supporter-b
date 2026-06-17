@@ -7,7 +7,7 @@ import { type BoardActionResult, workspaceIdForCard } from './_shared';
 
 const Input = z
   .object({
-    cardType: z.enum(['rfp', 'invitation', 'bid']),
+    cardType: z.enum(['rfp', 'invitation']),
     cardId: z.string().uuid(),
   })
   .strict();

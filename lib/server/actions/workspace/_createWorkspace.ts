@@ -81,8 +81,8 @@ export async function createWorkspaceInTx(
     tx,
   );
 
-  // Seed the unified kanban columns (single source: defaultColumns). buyer gets
-  // both pipeline + rfp_bids boards; pg gets only pipeline.
+  // Seed the unified kanban columns (single source: defaultColumns). Both buyer
+  // and pg get a pipeline board; buyer has BUYER_KANBAN_ORDER stages, pg has PG_KANBAN_ORDER.
   await columnRepo.createMany(defaultColumns(wsId, input.type), tx);
 
   // 온보딩 샘플을 같은 tx 에 시드:

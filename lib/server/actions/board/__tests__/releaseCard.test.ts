@@ -1,19 +1,17 @@
 // releaseCardAction — removes a card's explicit placement so it returns to
-// auto-classification (default-landing drop + "자동 분류로 되돌리기" menu).
+// auto-classification ("자동 분류로 되돌리기" menu).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
-import { bids, rfps, rfpInvitations, columns } from '@/lib/db/schema';
+import { rfps, columns } from '@/lib/db/schema';
 import { defaultColumns } from '@/lib/server/columns/seed';
 import {
   seedBizProfile,
   seedBuyerWorkspace,
   seedMembership,
-  seedPgWorkspace,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -42,7 +40,7 @@ vi.mock('@/lib/auth/session', () => ({
 }));
 
 import { releaseCardAction } from '../releaseCardAction';
-import { getBidRepo } from '@/lib/server/repositories/factory';
+import { getRfpRepo } from '@/lib/server/repositories/factory';
 
 let db: PgliteDB;
 
@@ -53,8 +51,6 @@ async function setup() {
   await seedMembership(db, buyerWs.id, buyer.id, 'admin');
   await db.insert(columns).values(defaultColumns(buyerWs.id, 'buyer'));
 
-  const pgWs = await seedPgWorkspace(db, 'toss.im');
-  const pgUser = await seedUser(db, { email: 'sales@toss.im' });
   const rfpId = randomUUID();
   await db.insert(rfps).values({
     id: rfpId,
@@ -67,37 +63,19 @@ async function setup() {
     createdBy: buyer.id,
     sentAt: new Date(),
   });
-  const invId = randomUUID();
-  await db.insert(rfpInvitations).values({
-    id: invId,
-    rfpId,
-    pgWsId: pgWs.id,
-    acceptedByUserId: pgUser.id,
-    tokenHash: hashToken(generateToken()),
-    sentAt: new Date(),
-    expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
-    status: 'accepted',
+  // place the rfp in a custom pipeline column so there is something to release
+  const customColId = randomUUID();
+  await db.insert(columns).values({
+    id: customColId,
+    workspaceId: buyerWs.id,
+    kind: 'pipeline',
+    title: '보류',
+    position: 'z1',
+    lifecycleKey: null,
   });
-  const bidId = randomUUID();
-  await db.insert(bids).values({
-    id: bidId,
-    rfpId,
-    pgWsId: pgWs.id,
-    invitationId: invId,
-    settleCycle: 'D+1',
-    settleLimit: '0',
-    guaranteeInsurance: '0',
-    paymentFees: {},
-    submittedBy: pgUser.id,
-  });
-  // place the bid in 협상중 so there's something to release
-  const [nego] = await db
-    .select()
-    .from(columns)
-    .where(and(eq(columns.workspaceId, buyerWs.id), eq(columns.title, '협상중')));
-  await db.update(bids).set({ boardColumnId: nego.id }).where(eq(bids.id, bidId));
+  await db.update(rfps).set({ boardColumnId: customColId }).where(eq(rfps.id, rfpId));
 
-  return { buyer, buyerWs, bidId };
+  return { buyer, buyerWs, rfpId };
 }
 
 function asBuyer(s: { buyer: { id: string; email: string }; buyerWs: { id: string } }) {
@@ -123,11 +101,11 @@ describe('releaseCardAction', () => {
 
   it('rejects without a session', async () => {
     sessionRef.value = null;
-    const r = await releaseCardAction({ cardType: 'bid', cardId: randomUUID() });
+    const r = await releaseCardAction({ cardType: 'rfp', cardId: randomUUID() });
     expect(r.ok).toBe(false);
   });
 
-  it('rejects a card owned by another workspace', async () => {
+  it('rejects an rfp owned by another workspace', async () => {
     const s = await setup();
     const otherUser = await seedUser(db, { email: 'o@x.com' });
     const otherWs = await seedBuyerWorkspace(db, {});
@@ -140,19 +118,18 @@ describe('releaseCardAction', () => {
         role: 'admin',
       },
     };
-    const r = await releaseCardAction({ cardType: 'bid', cardId: s.bidId });
+    const r = await releaseCardAction({ cardType: 'rfp', cardId: s.rfpId });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('FORBIDDEN');
   });
 
-  it('clears board_column_id (returns the card to auto-classification)', async () => {
+  it('clears board_column_id (returns the rfp to auto-classification)', async () => {
     const s = await setup();
     asBuyer(s);
-    const repo = await getBidRepo();
-    expect((await repo.findById(s.bidId))?.boardColumnId).toBeTruthy();
+    const repo = await getRfpRepo();
 
-    const r = await releaseCardAction({ cardType: 'bid', cardId: s.bidId });
+    const r = await releaseCardAction({ cardType: 'rfp', cardId: s.rfpId });
     expect(r.ok).toBe(true);
-    expect((await repo.findById(s.bidId))?.boardColumnId).toBeNull();
+    expect((await repo.findById(s.rfpId))?.boardColumnId).toBeNull();
   });
 });

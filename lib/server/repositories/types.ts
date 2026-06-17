@@ -571,8 +571,6 @@ export interface BidRepo {
   findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, Bid[]>>;
   /** 한 PG 워크스페이스의 모든 입찰. */
   findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]>;
-  /** 통일 칸반: rfp_bids 보드 커스텀 컬럼 배치. null = 기본착지(진행전) 복귀. */
-  setBoardColumn(bidId: string, columnId: string | null, tx?: Tx): Promise<void>;
   /** 입찰 상태 전이 (withdraw 등). */
   updateStatus(id: string, status: Bid['status'], tx?: Tx): Promise<void>;
   /** 구매사 검색 — bids⋈rfps⋈workspaces projection. pattern 은 호출자가 escape+wrap. */

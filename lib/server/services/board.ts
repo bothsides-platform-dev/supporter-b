@@ -7,7 +7,6 @@ import { randomUUID } from 'node:crypto';
 
 import { isCrossSideLifecycleKey } from '@/lib/server/columns/lifecycle-keys';
 import type {
-  BidRepo,
   ColumnRepo,
   InvitationRepo,
   RfpRepo,
@@ -33,7 +32,6 @@ export class BoardService {
   constructor(
     private readonly columnRepo: ColumnRepo,
     private readonly rfpRepo: RfpRepo,
-    private readonly bidRepo: BidRepo,
     private readonly invitationRepo: InvitationRepo,
   ) {}
 
@@ -53,7 +51,7 @@ export class BoardService {
     const column = await this.columnRepo.findById(toColumnId);
     if (!column) return { ok: false, error: 'COLUMN_NOT_FOUND' };
     if (column.workspaceId !== actor.workspaceId) return { ok: false, error: 'FORBIDDEN' };
-    if (column.kind !== this.kindForCard(cardType)) return { ok: false, error: 'CROSS_KIND' };
+    if (column.kind !== 'pipeline') return { ok: false, error: 'CROSS_KIND' };
     // system (lifecycle-bound) columns ⇒ non-deletable AND non-place-target.
     if (isSystemColumn(column)) return { ok: false, error: 'NOT_A_DROP_TARGET' };
 
@@ -84,17 +82,14 @@ export class BoardService {
   }
 
   /**
-   * Create a custom column on the active workspace board. pg has no rfp_bids
-   * board. Errors: FORBIDDEN_KIND.
+   * Create a custom column on the active workspace board.
+   * Errors: COLUMN_NOT_FOUND | FORBIDDEN.
    */
   async addColumn(
     input: { kind: ColumnKind; title: string; color?: ColumnColor | null; position: string },
     actor: CardActor,
   ): Promise<ServiceResult<{ columnId: string }>> {
     const { kind, title, color, position } = input;
-    if (kind === 'rfp_bids' && actor.workspaceType !== 'buyer') {
-      return { ok: false, error: 'FORBIDDEN_KIND' };
-    }
 
     const columnId = randomUUID();
     await this.columnRepo.create({
@@ -112,7 +107,7 @@ export class BoardService {
   /**
    * Delete a custom column (placements cascade). System columns are
    * non-deletable: cross-side protocol columns return COLUMN_CROSS_SIDE_LOCKED,
-   * the rest (the rfp_bids default-landing) return COLUMN_SYSTEM_LOCKED.
+   * the rest return COLUMN_SYSTEM_LOCKED.
    * Errors: COLUMN_NOT_FOUND | FORBIDDEN | COLUMN_CROSS_SIDE_LOCKED | COLUMN_SYSTEM_LOCKED.
    */
   async deleteColumn(columnId: string, workspaceId: string): Promise<ServiceResult> {
@@ -170,10 +165,6 @@ export class BoardService {
 
   // ─── Private helpers (moved from board/_shared.ts) ──────────────────────────
 
-  private kindForCard(cardType: CardType): ColumnKind {
-    return cardType === 'bid' ? 'rfp_bids' : 'pipeline';
-  }
-
   // Set (or clear, with null) a card's board_column_id via its own card repo.
   private async setCardBoardColumn(
     cardType: CardType,
@@ -184,16 +175,11 @@ export class BoardService {
       await this.rfpRepo.setBoardColumn(cardId, columnId);
       return;
     }
-    if (cardType === 'invitation') {
-      await this.invitationRepo.setBoardColumn(cardId, columnId);
-      return;
-    }
-    await this.bidRepo.setBoardColumn(cardId, columnId);
+    await this.invitationRepo.setBoardColumn(cardId, columnId);
   }
 
-  // Does this card belong to the given workspace's board? rfp/bid boards are
-  // owned by the buyer workspace (bid via rfp.buyerWsId, NOT bid.pgWsId);
-  // invitation boards by the pg workspace.
+  // Does this card belong to the given workspace's board? rfp boards are owned
+  // by the buyer workspace; invitation boards by the pg workspace.
   private async cardBelongsToWorkspace(
     cardType: CardType,
     cardId: string,
@@ -201,12 +187,6 @@ export class BoardService {
   ): Promise<boolean> {
     if (cardType === 'rfp') {
       const rfp = await this.rfpRepo.findById(cardId);
-      return !!rfp && rfp.buyerWsId === workspaceId;
-    }
-    if (cardType === 'bid') {
-      const bid = await this.bidRepo.findById(cardId);
-      if (!bid) return false;
-      const rfp = await this.rfpRepo.findById(bid.rfpId);
       return !!rfp && rfp.buyerWsId === workspaceId;
     }
     const inv = await this.invitationRepo.findById(cardId);
@@ -238,21 +218,15 @@ declare global {
 
 export async function getBoardService(): Promise<BoardService> {
   if (!globalThis.__bidit_board_service__) {
-    const { getColumnRepo, getRfpRepo, getBidRepo, getInvitationRepo } = await import(
+    const { getColumnRepo, getRfpRepo, getInvitationRepo } = await import(
       '@/lib/server/repositories/factory'
     );
-    const [columnRepo, rfpRepo, bidRepo, invitationRepo] = await Promise.all([
+    const [columnRepo, rfpRepo, invitationRepo] = await Promise.all([
       getColumnRepo(),
       getRfpRepo(),
-      getBidRepo(),
       getInvitationRepo(),
     ]);
-    globalThis.__bidit_board_service__ = new BoardService(
-      columnRepo,
-      rfpRepo,
-      bidRepo,
-      invitationRepo,
-    );
+    globalThis.__bidit_board_service__ = new BoardService(columnRepo, rfpRepo, invitationRepo);
   }
   return globalThis.__bidit_board_service__!;
 }

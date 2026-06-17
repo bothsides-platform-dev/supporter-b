@@ -208,8 +208,8 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
   ]);
 
-  // 5b. Unified kanban columns — buyer gets pipeline + rfp_bids boards, each PG
-  //     gets the pipeline board (same source as createWorkspaceInTx).
+  // 5b. Unified kanban columns — buyer and PG both get the pipeline board
+  //     (same source as createWorkspaceInTx).
   await db.insert(columns).values([
     ...defaultColumns(buyerWsId, 'buyer'),
     ...defaultColumns(tossWsId, 'pg'),

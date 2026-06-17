@@ -77,7 +77,7 @@ export async function setupRfpActionEnv(): Promise<PgliteDB> {
   );
   __setWorkspaceServiceForTest(new WorkspaceService(db, outboxRepo, auditRepo, wsRepo));
   __setTeamChatServiceForTest(new TeamChatService(db, rfpRepo, invRepo, userRepo, teamMsgRepo, teamReadRepo, wsRepo, notifRepo, outboxRepo, attRepo));
-  __setBoardServiceForTest(new BoardService(columnRepo, rfpRepo, bidRepo, invRepo));
+  __setBoardServiceForTest(new BoardService(columnRepo, rfpRepo, invRepo));
   __setQuoteTemplateServiceForTest(new QuoteTemplateService(quoteTemplateRepo));
 
   return db;
