@@ -76,7 +76,15 @@ export const rfps = pgTable(
     // 초대 PG에게 현재 카드 수수료(current_fee_rate)를 노출할지 (opt-out). 기본 true = 노출.
     // false면 PG 견적 화면(RfpBriefPanel)에서만 숨김 — 구매사 본인 비교 baseline은 항상 유지.
     // default true ⇒ 기존 행 백필 시 모두 노출.
+    // NOTE(견적 확장): hidden_from_pg 배열로 일반화 예정 — 마이그레이션 Phase B~F 동안 공존.
     currentFeeVisibleToPg: boolean('current_fee_visible_to_pg').notNull().default(true),
+    // 현재조건 브리프의 버전드 JSONB 문서 (lib/types/rfp-terms.ts CurrentTermsV1).
+    // bids.paymentFees 패턴 일반화 — 새 브리프 필드는 DDL 없이 타입+zod 만 수정.
+    // 개별 current_* 컬럼은 Phase F 에서 은퇴, 그 전까지 dual-write 로 공존.
+    currentTerms: jsonb('current_terms').notNull().default(sql`'{"_v":1}'::jsonb`),
+    // PG 에게 숨길 필드 경로 목록 (예: 'currentTerms.feeRate'). currentFeeVisibleToPg 의 일반화.
+    // loadPgRfpDetail 이 PG_STRIP allowlist(HIDEABLE_PG_PATHS) 와 교집합만 server-side strip.
+    hiddenFromPg: text('hidden_from_pg').array().notNull().default([]),
     // 온보딩 샘플 RFP 표식. true면 '샘플' 칩·읽기전용 샌드박스·전용 하드삭제 게이트가 켜진다.
     isSample: boolean('is_sample').notNull().default(false),
     // 계약 유형: 신규 계약('new') 또는 갱신 계약('renewal'). 선택사항 — null이면 미표시.

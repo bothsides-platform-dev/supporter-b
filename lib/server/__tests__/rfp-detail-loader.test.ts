@@ -41,7 +41,11 @@ async function setup() {
 
   async function seedRfp(
     code: string,
-    opts: { currentFeeRate?: string; currentFeeVisibleToPg?: boolean } = {},
+    opts: {
+      currentFeeRate?: string;
+      currentFeeVisibleToPg?: boolean;
+      hiddenFromPg?: string[];
+    } = {},
   ) {
     const id = randomUUID();
     await db.insert(rfps).values({
@@ -59,6 +63,7 @@ async function setup() {
       ...(opts.currentFeeVisibleToPg === undefined
         ? {}
         : { currentFeeVisibleToPg: opts.currentFeeVisibleToPg }),
+      ...(opts.hiddenFromPg === undefined ? {} : { hiddenFromPg: opts.hiddenFromPg }),
     });
     return id;
   }
@@ -352,6 +357,19 @@ describe('loadPgRfpDetail', () => {
     const res = await loadPgRfpDetail({ code: 'P-2606-0061', workspaceId: ctx.tossId });
     expect(res).not.toBeNull();
     expect(res!.rfp.currentFeeRate).toBe('3.4%');
+  });
+
+  it('hidden_from_pg가 currentTerms.feeRate를 포함하면 currentFeeRate를 제거한다(일반화된 경계)', async () => {
+    // boolean 은 건드리지 않고 일반화된 숨김 목록만으로 strip 되는지 — Phase D 핵심.
+    const rfpId = await ctx.seedRfp('P-2606-0062', {
+      currentFeeRate: '3.4%',
+      hiddenFromPg: ['currentTerms.feeRate'],
+    });
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0062', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.rfp.currentFeeRate).toBeUndefined();
   });
 
   it('해당 PG 워크스페이스의 견적 템플릿만 quoteTemplates로 반환(타 워크스페이스 격리)', async () => {

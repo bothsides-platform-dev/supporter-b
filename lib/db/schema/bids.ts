@@ -40,6 +40,9 @@ export const bids = pgTable(
     paymentFees: jsonb('payment_fees').notNull().default(sql`'{}'::jsonb`),
     // 커스텀 결제수단별 수수료 JSONB: { <customId>: 0.02, ... } (rfps.customPaymentMethods.id 기준)
     customFees: jsonb('custom_fees').notNull().default(sql`'{}'::jsonb`),
+    // 비수수료 견적 차원의 버전드 JSONB 문서 (정산일 옵션·롤링 리저브·차지백 처리 등).
+    // 현재 v1 은 빈 문서 — 미래 차원을 DDL 없이 흡수할 forward 슬롯 (rfps.current_terms 와 동일 패턴).
+    quoteTerms: jsonb('quote_terms').notNull().default(sql`'{"_v":1}'::jsonb`),
     memo: text('memo').notNull().default(''),
     /** PG별 제출 순번. 1차=1, 재요청 응답=2…. */
     round: integer('round').notNull().default(1),

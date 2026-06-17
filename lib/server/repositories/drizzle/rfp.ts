@@ -1,7 +1,13 @@
-import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, inArray, or, sql } from 'drizzle-orm';
 import { rfps, bizProfiles, rfpAllowedPg } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
+import {
+  migrateCurrentTerms,
+  currentTermsFromDiscrete,
+  hiddenFromPgFromVisibility,
+  backfillRowPatch,
+} from '@/lib/types/rfp-terms';
 import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { assertTransition } from '../../rfp-state';
@@ -26,6 +32,9 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
         gradeConfirmedAt: toIso(biz.gradeConfirmedAt),
       }
     : undefined;
+  // 읽기 권위 = current_terms 문서 (Phase D). 문서가 비면 개별컬럼으로 폴백(전이기 안전;
+  // 백필 전 레거시 행 보호). 개별컬럼은 Phase F 에서 제거되며 그때 폴백도 함께 삭제.
+  const terms = migrateCurrentTerms(row.currentTerms);
   return {
     id: row.id,
     code: row.code,
@@ -35,14 +44,15 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     memo: row.memo,
     websiteUrl: row.websiteUrl ?? undefined,
     mainProducts: row.mainProducts ?? undefined,
-    annualPgVolume: row.annualPgVolume ?? undefined,
-    currentFeeRate: row.currentFeeRate ?? undefined,
-    currentSettlementLimit: row.currentSettlementLimit ?? undefined,
-    currentGuaranteeInsurance: row.currentGuaranteeInsurance ?? undefined,
-    currentSettlementCycle: row.currentSettlementCycle ?? undefined,
-    deliveryServicePeriod: row.deliveryServicePeriod ?? undefined,
-    currentSolution: row.currentSolution ?? undefined,
-    currentSolutionDetail: row.currentSolutionDetail ?? undefined,
+    annualPgVolume: terms.annualPgVolume ?? row.annualPgVolume ?? undefined,
+    currentFeeRate: terms.feeRate ?? row.currentFeeRate ?? undefined,
+    currentSettlementLimit: terms.settlementLimit ?? row.currentSettlementLimit ?? undefined,
+    currentGuaranteeInsurance:
+      terms.guaranteeInsurance ?? row.currentGuaranteeInsurance ?? undefined,
+    currentSettlementCycle: terms.settlementCycle ?? row.currentSettlementCycle ?? undefined,
+    deliveryServicePeriod: terms.deliveryServicePeriod ?? row.deliveryServicePeriod ?? undefined,
+    currentSolution: terms.solution ?? row.currentSolution ?? undefined,
+    currentSolutionDetail: terms.solutionDetail ?? row.currentSolutionDetail ?? undefined,
     rfpFiles: [], // attachments hydrated separately when needed
     allowedPgWorkspaceIds: allowed,
     deadline: new Date(row.deadline).toISOString(),
@@ -57,6 +67,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
     boardVisible: row.boardVisible,
     currentFeeVisibleToPg: row.currentFeeVisibleToPg,
+    hiddenFromPg: row.hiddenFromPg ?? [],
     isSample: row.isSample,
     contractType: row.contractType ?? null,
   };
@@ -118,6 +129,8 @@ export class DrizzleRfpRepository implements RfpRepo {
       bizProfileId = biz.id;
     }
 
+    // dual-write 문서는 한 번만 계산해 insert/conflict-update 양쪽에 재사용.
+    const currentTerms = currentTermsFromDiscrete(rfp);
     type Insertable = typeof rfps.$inferInsert;
     const values: Insertable = {
       id: rfp.id,
@@ -138,6 +151,8 @@ export class DrizzleRfpRepository implements RfpRepo {
       createdBy: rfp.createdBy,
       sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
       contractType: rfp.contractType ?? null,
+      // dual-write: 개별 current_* 컬럼과 동기되는 버전드 문서 (Phase D 에서 읽기 권위 전환).
+      currentTerms,
     };
     // boardVisible 미지정 시 DB default(true). 지정 시에만 반영하고, 업서트
     // conflict set 에는 넣지 않아 — 노출 토글은 전용 액션의 직접 UPDATE 소관이라
@@ -145,8 +160,11 @@ export class DrizzleRfpRepository implements RfpRepo {
     if (rfp.boardVisible !== undefined) values.boardVisible = rfp.boardVisible;
     // currentFeeVisibleToPg 도 동일: 작성 시점 선택을 보존하기 위해 지정 시에만
     // 반영하고 conflict set 에는 넣지 않는다 (일반 저장/수정이 덮어쓰지 않게).
-    if (rfp.currentFeeVisibleToPg !== undefined)
+    // hidden_from_pg 는 그 일반화 — 같은 불변식으로 conflict set 제외.
+    if (rfp.currentFeeVisibleToPg !== undefined) {
       values.currentFeeVisibleToPg = rfp.currentFeeVisibleToPg;
+      values.hiddenFromPg = hiddenFromPgFromVisibility(rfp.currentFeeVisibleToPg);
+    }
 
     await db
       .insert(rfps)
@@ -167,6 +185,8 @@ export class DrizzleRfpRepository implements RfpRepo {
           awardedBidId: rfp.awardedBidId ?? null,
           sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
           contractType: rfp.contractType ?? null,
+          // 개별컬럼과 함께 문서도 갱신 (수정 시 동기 유지). hidden_from_pg 는 opt-out 이라 제외.
+          currentTerms,
         },
       });
 
@@ -202,6 +222,9 @@ export class DrizzleRfpRepository implements RfpRepo {
       customPaymentMethods: values.customPaymentMethods,
       createdBy: values.createdBy,
       sentAt: values.sentAt,
+      // dual-write: 개별 current_* 컬럼과 동기되는 버전드 문서 + 일반화된 숨김 목록.
+      currentTerms: currentTermsFromDiscrete(values),
+      hiddenFromPg: hiddenFromPgFromVisibility(values.currentFeeVisibleToPg),
       // 온보딩 샘플 전용 — 미지정 시 DB default(false).
       ...(values.isSample !== undefined ? { isSample: values.isSample } : {}),
     });
@@ -211,6 +234,63 @@ export class DrizzleRfpRepository implements RfpRepo {
     const db = this.h(tx);
     // 자식(bids·invitations·allowlist·attachments·team_messages)은 FK ON DELETE CASCADE.
     await db.delete(rfps).where(eq(rfps.id, id));
+  }
+
+  async backfillCurrentTermsChunk(
+    afterId: string | null,
+    limit: number,
+    tx?: Tx,
+  ): Promise<{ scanned: number; updated: number; lastId: string | null }> {
+    const db = this.h(tx);
+    // id 커서로 한 청크 스캔 — 마이그레이션 Phase C. 비클로버는 backfillRowPatch 가 판정.
+    const rows = await db
+      .select({
+        id: rfps.id,
+        currentTerms: rfps.currentTerms,
+        hiddenFromPg: rfps.hiddenFromPg,
+        currentFeeRate: rfps.currentFeeRate,
+        currentSettlementLimit: rfps.currentSettlementLimit,
+        currentGuaranteeInsurance: rfps.currentGuaranteeInsurance,
+        currentSettlementCycle: rfps.currentSettlementCycle,
+        deliveryServicePeriod: rfps.deliveryServicePeriod,
+        currentSolution: rfps.currentSolution,
+        currentSolutionDetail: rfps.currentSolutionDetail,
+        annualPgVolume: rfps.annualPgVolume,
+        currentFeeVisibleToPg: rfps.currentFeeVisibleToPg,
+      })
+      .from(rfps)
+      .where(afterId ? gt(rfps.id, afterId) : undefined)
+      .orderBy(asc(rfps.id))
+      .limit(limit);
+
+    type Row = {
+      id: string;
+      currentTerms: unknown;
+      hiddenFromPg: string[];
+      currentFeeRate: string | null;
+      currentSettlementLimit: string | null;
+      currentGuaranteeInsurance: string | null;
+      currentSettlementCycle: string | null;
+      deliveryServicePeriod: string | null;
+      currentSolution: string | null;
+      currentSolutionDetail: string | null;
+      annualPgVolume: string | null;
+      currentFeeVisibleToPg: boolean;
+    };
+    const typed = rows as Row[];
+    if (typed.length === 0) return { scanned: 0, updated: 0, lastId: afterId };
+
+    let updated = 0;
+    for (const r of typed) {
+      const patch = backfillRowPatch(r);
+      if (!patch) continue;
+      await db
+        .update(rfps)
+        .set({ currentTerms: patch.currentTerms, hiddenFromPg: patch.hiddenFromPg })
+        .where(eq(rfps.id, r.id));
+      updated++;
+    }
+    return { scanned: typed.length, updated, lastId: typed[typed.length - 1].id };
   }
 
   async findById(id: string, tx?: Tx): Promise<RFP | undefined> {

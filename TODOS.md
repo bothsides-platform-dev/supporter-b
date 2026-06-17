@@ -45,6 +45,24 @@ tooltipAlign prop(start|center|end) + useId/aria-describedby 연결 완료. (PR 
 ### ~~빈 RESEND_API_KEY dev-fallback 오설정 가드~~ ✅ PR#233
 `ResendSender`·`ResendBatchSender`·`sendAdminEmail` production 빈 키 → `{ ok: false, error: 'resend_api_key_empty', retryable: false }` + `checkProductionConfig` 부팅 가드(`instrumentation.ts` — PM2 restart loop로 즉각 표면화). (PR fix/resend-empty-key-guard 2026-06-17)
 
+## 견적 확장 (current_terms)
+
+### Phase E — 견적 현재조건 쓰기 권위 컷오버
+**Priority:** P1
+개별 current_* 컬럼 write 중단 + zustand draft store v6→v7(8 flat 필드 → currentTerms 중첩 객체) + createRfpAction/RfpService 가 문서 조립(currentTermsV1Schema 를 write-edge 에 배선). **hidden_from_pg 가 사용자-쓰기 가능해지는 즉시 HIDEABLE_PG_PATHS 로 write-edge 검증을 추가** — 안 하면 PG_STRIP 핸들러 없는 숨김 경로가 fail-open 으로 PG 에 누출(red-team+adversarial 합의; 현재는 hiddenFromPgFromVisibility 만 써서 안전). (발견: /ship 리뷰 2026-06-18, base v0.2.26.0)
+
+### Phase F — 개별 현재조건 컬럼 제거 (파괴적)
+**Priority:** P2
+bake 후 개별 8컬럼 + current_fee_visible_to_pg DROP + rowToRfp 폴백·loadPgRfpDetail 레거시 boolean 폴백 제거. 라이브 prod 데이터 — DB 스냅샷 후 단독 배포. (base v0.2.26.0)
+
+### RfpRepo.save() 문서/컬럼 비대칭
+**Priority:** P2
+save() 는 8필드 문서를 쓰지만 개별 컬럼은 4개만 씀(settlementCycle·deliveryServicePeriod·solution·solutionDetail 누락). 현재 RFP 생성=insertNew 라 save() 는 미사용(읽기 doc-first 라 무해)이나 Phase E 에디트 경로 배선 시 반-row 함정. 데드코드 정리 or 컬럼셋 정렬. (발견: /ship red-team 2026-06-18)
+
+### backfill hidden 재조정 + empty-string 정규화
+**Priority:** P3
+backfillRowPatch 가 doc-present 행을 skip 하므로 doc 는 있는데 hidden_from_pg 가 stale 한 행을 못 고침(Phase F 서 레거시 폴백 제거 시 누출 가능). 또 currentTermsFromDiscrete 가 '' 를 문서에 담음 → Phase F 전 omit 정규화. (발견: /ship 리뷰 2026-06-18)
+
 ## Completed
 
 - **이메일 인증 서버 데이터 경계 강제 (2026-06-17, PR#223 open)**: PR#199(UI 게이트)에서 의도적으로 유예된 서버 액션/API 라우트 레벨 emailVerified 게이트 구현. `requireSession()` 에 `isEmailUnverified()` 추가(→ `requireBuyerSession`·`requirePgSession` 자동 포함) + 7개 `auth()` 직접 호출 API 라우트(centrifugo connection-token, notifications GET/SSE, files GET/upload, workspace avatar POST/DELETE, workspaces search buyer 분기) 각각 403 게이트. verify 3개 액션은 면제 유지. 2871 green.
