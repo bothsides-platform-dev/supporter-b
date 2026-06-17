@@ -50,21 +50,16 @@ tooltipAlign prop(start|center|end) + useId/aria-describedby 연결 완료. (PR 
 ### ~~Phase E — 견적 현재조건 읽기·strip 단독 권위 (fallback 제거)~~ ✅ v0.2.26.1
 rowToRfp 브리프 doc-only(개별 컬럼 폴백 제거) + loadPgRfpDetail hidden_from_pg 단독 strip(레거시 boolean 폴백 제거). dual-write·개별컬럼은 유지(롤백 안전). **배포 전제: backfill 완료 후 배포**(미완 시 레거시 행 현재조건이 구매사 화면에서 빈값 — 누출 아님). (2026-06-18)
 
-### Phase E2 — 견적 현재조건 쓰기 권위 컷오버
-**Priority:** P1
-개별 current_* 컬럼 write 중단(insertNew/save). (선택, doc-edge) zustand draft store v6→v7(flat→currentTerms 중첩) + createRfpAction/RfpService 문서 조립(currentTermsV1Schema write-edge 배선) → 필드 추가 = 타입+zod 2곳. **hidden_from_pg 가 사용자-쓰기 가능해지는 즉시 HIDEABLE_PG_PATHS 로 write-edge 검증 추가** — 안 하면 PG_STRIP 핸들러 없는 숨김 경로 fail-open 누출(red-team+adversarial 합의). (발견: /ship 리뷰 2026-06-18)
+### ~~Phase E2+F — 클린 컷오버 (개별 컬럼 제거, 문서 단독 저장)~~ ✅ v0.2.26.2
+운영 데이터 disposable 전제로 개별 current_* 8컬럼 + current_fee_visible_to_pg DROP + dual-write·backfill 장치 삭제. rowToRfp 가 currentFeeVisibleToPg 를 hidden_from_pg 에서 파생. save() 문서/컬럼 비대칭도 해소(양쪽 문서 단독). 앱 레이어는 flat 유지(flat-edge). 배포=DB wipe→db:push→코드. (2026-06-18)
 
-### Phase F — 개별 현재조건 컬럼 제거 (파괴적)
-**Priority:** P2
-E2(write 중단) 후 bake → 개별 8컬럼 + current_fee_visible_to_pg DROP. 라이브 prod 데이터 — DB 스냅샷 후 단독 배포. (base v0.2.26.0)
-
-### RfpRepo.save() 문서/컬럼 비대칭
-**Priority:** P2
-save() 는 8필드 문서를 쓰지만 개별 컬럼은 4개만 씀(settlementCycle·deliveryServicePeriod·solution·solutionDetail 누락). 현재 RFP 생성=insertNew 라 save() 는 미사용(읽기 doc-first 라 무해)이나 Phase E 에디트 경로 배선 시 반-row 함정. 데드코드 정리 or 컬럼셋 정렬. (발견: /ship red-team 2026-06-18)
-
-### backfill hidden 재조정 + empty-string 정규화
+### (조건부) hidden_from_pg write-edge 검증
 **Priority:** P3
-backfillRowPatch 가 doc-present 행을 skip 하므로 doc 는 있는데 hidden_from_pg 가 stale 한 행을 못 고침(Phase F 서 레거시 폴백 제거 시 누출 가능). 또 currentTermsFromDiscrete 가 '' 를 문서에 담음 → Phase F 전 omit 정규화. (발견: /ship 리뷰 2026-06-18)
+현재는 hidden_from_pg 가 hiddenFromPgFromVisibility(수수료 공개여부)로만 채워져 안전. **추후 buyer 가 임의 필드를 숨길 수 있게 되면** write-edge 에서 HIDEABLE_PG_PATHS 검증 추가 필요 — 안 하면 PG_STRIP 핸들러 없는 숨김 경로 fail-open 누출. (선택, doc-edge 채택 시 함께)
+
+### currentTermsFromDiscrete 빈문자열 정규화
+**Priority:** P3
+'' 입력을 문서에 그대로 담음(현재 falsy 라 UI 무해). omit 으로 정규화하면 더 깔끔. (발견: /ship 리뷰 2026-06-18)
 
 ## Completed
 
