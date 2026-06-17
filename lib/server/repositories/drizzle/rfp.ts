@@ -129,6 +129,8 @@ export class DrizzleRfpRepository implements RfpRepo {
       bizProfileId = biz.id;
     }
 
+    // dual-write 문서는 한 번만 계산해 insert/conflict-update 양쪽에 재사용.
+    const currentTerms = currentTermsFromDiscrete(rfp);
     type Insertable = typeof rfps.$inferInsert;
     const values: Insertable = {
       id: rfp.id,
@@ -150,7 +152,7 @@ export class DrizzleRfpRepository implements RfpRepo {
       sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
       contractType: rfp.contractType ?? null,
       // dual-write: 개별 current_* 컬럼과 동기되는 버전드 문서 (Phase D 에서 읽기 권위 전환).
-      currentTerms: currentTermsFromDiscrete(rfp),
+      currentTerms,
     };
     // boardVisible 미지정 시 DB default(true). 지정 시에만 반영하고, 업서트
     // conflict set 에는 넣지 않아 — 노출 토글은 전용 액션의 직접 UPDATE 소관이라
@@ -184,7 +186,7 @@ export class DrizzleRfpRepository implements RfpRepo {
           sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
           contractType: rfp.contractType ?? null,
           // 개별컬럼과 함께 문서도 갱신 (수정 시 동기 유지). hidden_from_pg 는 opt-out 이라 제외.
-          currentTerms: currentTermsFromDiscrete(rfp),
+          currentTerms,
         },
       });
 

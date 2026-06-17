@@ -68,6 +68,26 @@ describe('rowToRfp 읽기 전환 (Phase D)', () => {
     expect(fetched!.currentSettlementLimit).toBe('월 1억');
   });
 
+  it('문서와 개별컬럼이 모두 있으면 문서 값이 이긴다 (읽기 권위 = 문서)', async () => {
+    // Phase D 핵심 보장: terms.X ?? row.currentX — 둘 다 있을 때 문서가 우선.
+    // 불일치 값으로 머지 순서를 못박는다(컬럼-우선 회귀를 잡는다).
+    const id = randomUUID();
+    await db.insert(rfps).values({
+      id,
+      code: 'P-2605-RD4',
+      buyerWsId: ctx.ws.id,
+      title: 't',
+      deadline: new Date(Date.now() + 86_400_000),
+      createdBy: ctx.user.id,
+      currentFeeRate: '3.4%', // 개별컬럼
+      currentSettlementCycle: 'D+1',
+      currentTerms: { _v: 1, feeRate: '7.7%', settlementCycle: 'W+2' }, // 문서(불일치)
+    });
+    const fetched = await repo.findById(id);
+    expect(fetched!.currentFeeRate).toBe('7.7%');
+    expect(fetched!.currentSettlementCycle).toBe('W+2');
+  });
+
   it('hiddenFromPg 를 RFP 에 노출한다', async () => {
     const id = randomUUID();
     await db.insert(rfps).values({

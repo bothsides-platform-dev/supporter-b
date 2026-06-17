@@ -16,6 +16,7 @@ import {
 } from './repositories/factory';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
+import { STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
 import type { Bid } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
@@ -53,12 +54,13 @@ export type PgRfpDetailData = {
 };
 
 
-// 봉인입찰 strip allowlist — 경로 → RFP 페이로드 변이. allowlist 에 없는 경로는
-// (제품 필수 필드 보호를 위해) 무시된다. 새 숨김가능 필드 = 여기 한 줄 추가.
-// 경로는 current_terms 문서 구조 기준(예: 'currentTerms.feeRate'); 전이기 RFP 타입은
-// 평탄(flat) 하므로 평탄 필드로 매핑한다. Phase F 에서 문서 전환 시 정리.
-const PG_STRIP: Record<string, (rfp: RFP) => void> = {
-  'currentTerms.feeRate': (r) => {
+// 봉인입찰 strip allowlist — 경로 → RFP 페이로드 변이. PG_STRIP 의 키 집합이 곧 처리 가능한
+// 숨김 경로의 전부다. rfp-terms.ts 의 HIDEABLE_PG_PATHS(쓰기측 SSOT)가 이 키들의 부분집합임을
+// pg-strip-coverage 드리프트 테스트가 강제 → 핸들러 없는 숨김 경로가 PG로 새는 fail-open 을 차단
+// (쓰기측이 만들 수 있는 모든 숨김 경로는 반드시 대응 핸들러를 가진다). 경로는 current_terms 문서
+// 구조 기준; 전이기 RFP 타입은 평탄하므로 평탄 필드로 매핑한다. Phase F 에서 문서 전환 시 정리.
+export const PG_STRIP: Record<string, (rfp: RFP) => void> = {
+  [STRIP_PATH_FEE_RATE]: (r) => {
     r.currentFeeRate = undefined;
   },
 };
@@ -67,6 +69,8 @@ function stripHiddenFromPg(rfp: RFP): void {
   for (const path of rfp.hiddenFromPg ?? []) PG_STRIP[path]?.(rfp);
   // 레거시 폴백 — 아직 hidden_from_pg 가 백필되지 않은 행 보호. Phase F(컬럼 제거)에서 삭제.
   if (rfp.currentFeeVisibleToPg === false) rfp.currentFeeRate = undefined;
+  // PG 페이로드에 가시성 정책 메타데이터(숨김 경로 목록)를 노출하지 않는다 — 서버 strip 으로 충분.
+  rfp.hiddenFromPg = undefined;
 }
 
 /** PG별 최신 라운드(submitted)만 남긴다. */
