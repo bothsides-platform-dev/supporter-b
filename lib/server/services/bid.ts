@@ -325,7 +325,6 @@ export class BidService {
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
 declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_bid_service__: BidService | undefined;
 }
 

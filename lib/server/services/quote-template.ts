@@ -150,7 +150,6 @@ export class QuoteTemplateService {
 // ─── Factory (BidService single-global pattern) ──────────────────────────────
 
 declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_quote_template_service__: QuoteTemplateService | undefined;
 }
 

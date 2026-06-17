@@ -324,7 +324,6 @@ export class ChatService {
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
 declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_chat_service__: ChatService | undefined;
 }
 

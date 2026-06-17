@@ -41,7 +41,6 @@ export class OnboardingService {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __bidit_onboarding_service__: OnboardingService | undefined;
 }
 

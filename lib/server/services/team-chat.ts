@@ -328,7 +328,6 @@ export class TeamChatService {
 }
 
 declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_team_chat_service__: TeamChatService | undefined;
 }
 

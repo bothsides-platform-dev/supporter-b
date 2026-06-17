@@ -593,9 +593,7 @@ export class AuthService {
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
 declare global {
-  // eslint-disable-next-line no-var
   var __bidit_auth_service__: AuthService | undefined;
-  // eslint-disable-next-line no-var
   var __bidit_auth_service_override__: AuthService | undefined;
 }
 

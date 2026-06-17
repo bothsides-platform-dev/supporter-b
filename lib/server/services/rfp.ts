@@ -1058,7 +1058,6 @@ export class RfpService {
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
 declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_rfp_service__: RfpService | undefined;
 }
 

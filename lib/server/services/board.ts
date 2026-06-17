@@ -212,7 +212,6 @@ export class BoardService {
 // ─── Factory (BidService single-global pattern) ──────────────────────────────
 
 declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_board_service__: BoardService | undefined;
 }
 

@@ -69,7 +69,6 @@ type RepoBundle = {
 };
 
 declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_repos__: RepoBundle | undefined;
 }
 

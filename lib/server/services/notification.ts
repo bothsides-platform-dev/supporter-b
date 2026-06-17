@@ -73,9 +73,7 @@ export class NotificationService {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __bidit_notification_service__: NotificationService | undefined;
-  // eslint-disable-next-line no-var
   var __bidit_notification_service_override__: NotificationService | undefined;
 }
 

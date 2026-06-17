@@ -353,7 +353,6 @@ export class WorkspaceService {
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
 declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
   var __bidit_workspace_service__: WorkspaceService | undefined;
 }
 
