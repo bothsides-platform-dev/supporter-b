@@ -50,46 +50,9 @@ describe('rowToRfp 읽기 전환 (Phase D)', () => {
     expect(fetched!.annualPgVolume).toBe('월 9억');
   });
 
-  it('문서가 비어 있으면 개별컬럼을 읽지 않는다 (Phase E: doc-only, 폴백 없음)', async () => {
-    // Phase E: 문서가 읽기 단독 권위. 빈 문서 + 개별컬럼 값이어도 컬럼은 안 읽는다.
-    // (배포 전 backfill 이 모든 행의 문서를 채운다는 전제 — fallback 불필요.)
-    const id = randomUUID();
-    await db.insert(rfps).values({
-      id,
-      code: 'P-2605-RD2',
-      buyerWsId: ctx.ws.id,
-      title: 't',
-      deadline: new Date(Date.now() + 86_400_000),
-      createdBy: ctx.user.id,
-      currentFeeRate: '3.4%', // 개별컬럼만, 문서는 빈 기본값
-      currentSettlementLimit: '월 1억',
-    });
-    const fetched = await repo.findById(id);
-    expect(fetched!.currentFeeRate).toBeUndefined();
-    expect(fetched!.currentSettlementLimit).toBeUndefined();
-  });
-
-  it('문서와 개별컬럼이 모두 있으면 문서 값이 이긴다 (읽기 권위 = 문서)', async () => {
-    // Phase D 핵심 보장: terms.X ?? row.currentX — 둘 다 있을 때 문서가 우선.
-    // 불일치 값으로 머지 순서를 못박는다(컬럼-우선 회귀를 잡는다).
-    const id = randomUUID();
-    await db.insert(rfps).values({
-      id,
-      code: 'P-2605-RD4',
-      buyerWsId: ctx.ws.id,
-      title: 't',
-      deadline: new Date(Date.now() + 86_400_000),
-      createdBy: ctx.user.id,
-      currentFeeRate: '3.4%', // 개별컬럼
-      currentSettlementCycle: 'D+1',
-      currentTerms: { _v: 1, feeRate: '7.7%', settlementCycle: 'W+2' }, // 문서(불일치)
-    });
-    const fetched = await repo.findById(id);
-    expect(fetched!.currentFeeRate).toBe('7.7%');
-    expect(fetched!.currentSettlementCycle).toBe('W+2');
-  });
-
-  it('hiddenFromPg 를 RFP 에 노출한다', async () => {
+  it('hiddenFromPg 를 RFP 에 노출하고 currentFeeVisibleToPg 를 거기서 파생한다', async () => {
+    // currentFeeVisibleToPg 컬럼은 안 건드림(기본 true) — hidden_from_pg 가 권위.
+    // 컬럼이 곧 제거되므로 가시성은 hidden_from_pg 에서 파생되어야 한다.
     const id = randomUUID();
     await db.insert(rfps).values({
       id,
@@ -102,5 +65,20 @@ describe('rowToRfp 읽기 전환 (Phase D)', () => {
     });
     const fetched = await repo.findById(id);
     expect(fetched!.hiddenFromPg).toEqual(['currentTerms.feeRate']);
+    expect(fetched!.currentFeeVisibleToPg).toBe(false);
+  });
+
+  it('hidden_from_pg 가 비면 currentFeeVisibleToPg=true (파생)', async () => {
+    const id = randomUUID();
+    await db.insert(rfps).values({
+      id,
+      code: 'P-2605-RD7',
+      buyerWsId: ctx.ws.id,
+      title: 't',
+      deadline: new Date(Date.now() + 86_400_000),
+      createdBy: ctx.user.id,
+    });
+    const fetched = await repo.findById(id);
+    expect(fetched!.currentFeeVisibleToPg).toBe(true);
   });
 });

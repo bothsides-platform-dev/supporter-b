@@ -67,9 +67,6 @@ async function setup() {
       currentTerms:
         opts.currentFeeRate != null ? { _v: 1, feeRate: opts.currentFeeRate } : { _v: 1 },
       hiddenFromPg: hidden,
-      ...(opts.currentFeeVisibleToPg === undefined
-        ? {}
-        : { currentFeeVisibleToPg: opts.currentFeeVisibleToPg }),
     });
     return id;
   }
