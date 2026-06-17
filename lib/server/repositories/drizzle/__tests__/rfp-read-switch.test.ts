@@ -50,8 +50,9 @@ describe('rowToRfp 읽기 전환 (Phase D)', () => {
     expect(fetched!.annualPgVolume).toBe('월 9억');
   });
 
-  it('문서가 비어 있으면 개별컬럼으로 폴백한다 (전이기 안전)', async () => {
-    // 백필 전 레거시 행: 문서 기본값(빈) + 개별컬럼 값.
+  it('문서가 비어 있으면 개별컬럼을 읽지 않는다 (Phase E: doc-only, 폴백 없음)', async () => {
+    // Phase E: 문서가 읽기 단독 권위. 빈 문서 + 개별컬럼 값이어도 컬럼은 안 읽는다.
+    // (배포 전 backfill 이 모든 행의 문서를 채운다는 전제 — fallback 불필요.)
     const id = randomUUID();
     await db.insert(rfps).values({
       id,
@@ -60,12 +61,12 @@ describe('rowToRfp 읽기 전환 (Phase D)', () => {
       title: 't',
       deadline: new Date(Date.now() + 86_400_000),
       createdBy: ctx.user.id,
-      currentFeeRate: '3.4%',
+      currentFeeRate: '3.4%', // 개별컬럼만, 문서는 빈 기본값
       currentSettlementLimit: '월 1억',
     });
     const fetched = await repo.findById(id);
-    expect(fetched!.currentFeeRate).toBe('3.4%');
-    expect(fetched!.currentSettlementLimit).toBe('월 1억');
+    expect(fetched!.currentFeeRate).toBeUndefined();
+    expect(fetched!.currentSettlementLimit).toBeUndefined();
   });
 
   it('문서와 개별컬럼이 모두 있으면 문서 값이 이긴다 (읽기 권위 = 문서)', async () => {

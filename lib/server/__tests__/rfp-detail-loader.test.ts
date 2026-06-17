@@ -48,6 +48,11 @@ async function setup() {
     } = {},
   ) {
     const id = randomUUID();
+    // Phase E: 읽기 단독 권위 = 문서. feeRate 는 current_terms 에 넣고, hidden_from_pg 는
+    // 공개여부에서 파생(프로덕션 dual-write 미러). 개별 currentFeeRate 컬럼은 더 이상 읽지 않는다.
+    const hidden =
+      opts.hiddenFromPg ??
+      (opts.currentFeeVisibleToPg === false ? ['currentTerms.feeRate'] : []);
     await db.insert(rfps).values({
       id,
       code,
@@ -59,11 +64,12 @@ async function setup() {
       status: 'sent',
       createdBy: buyer.id,
       sentAt: new Date(),
-      currentFeeRate: opts.currentFeeRate,
+      currentTerms:
+        opts.currentFeeRate != null ? { _v: 1, feeRate: opts.currentFeeRate } : { _v: 1 },
+      hiddenFromPg: hidden,
       ...(opts.currentFeeVisibleToPg === undefined
         ? {}
         : { currentFeeVisibleToPg: opts.currentFeeVisibleToPg }),
-      ...(opts.hiddenFromPg === undefined ? {} : { hiddenFromPg: opts.hiddenFromPg }),
     });
     return id;
   }
