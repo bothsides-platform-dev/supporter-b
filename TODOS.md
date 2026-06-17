@@ -47,13 +47,16 @@ tooltipAlign prop(start|center|end) + useId/aria-describedby 연결 완료. (PR 
 
 ## 견적 확장 (current_terms)
 
-### Phase E — 견적 현재조건 쓰기 권위 컷오버
+### ~~Phase E — 견적 현재조건 읽기·strip 단독 권위 (fallback 제거)~~ ✅ v0.2.26.1
+rowToRfp 브리프 doc-only(개별 컬럼 폴백 제거) + loadPgRfpDetail hidden_from_pg 단독 strip(레거시 boolean 폴백 제거). dual-write·개별컬럼은 유지(롤백 안전). **배포 전제: backfill 완료 후 배포**(미완 시 레거시 행 현재조건이 구매사 화면에서 빈값 — 누출 아님). (2026-06-18)
+
+### Phase E2 — 견적 현재조건 쓰기 권위 컷오버
 **Priority:** P1
-개별 current_* 컬럼 write 중단 + zustand draft store v6→v7(8 flat 필드 → currentTerms 중첩 객체) + createRfpAction/RfpService 가 문서 조립(currentTermsV1Schema 를 write-edge 에 배선). **hidden_from_pg 가 사용자-쓰기 가능해지는 즉시 HIDEABLE_PG_PATHS 로 write-edge 검증을 추가** — 안 하면 PG_STRIP 핸들러 없는 숨김 경로가 fail-open 으로 PG 에 누출(red-team+adversarial 합의; 현재는 hiddenFromPgFromVisibility 만 써서 안전). (발견: /ship 리뷰 2026-06-18, base v0.2.26.0)
+개별 current_* 컬럼 write 중단(insertNew/save). (선택, doc-edge) zustand draft store v6→v7(flat→currentTerms 중첩) + createRfpAction/RfpService 문서 조립(currentTermsV1Schema write-edge 배선) → 필드 추가 = 타입+zod 2곳. **hidden_from_pg 가 사용자-쓰기 가능해지는 즉시 HIDEABLE_PG_PATHS 로 write-edge 검증 추가** — 안 하면 PG_STRIP 핸들러 없는 숨김 경로 fail-open 누출(red-team+adversarial 합의). (발견: /ship 리뷰 2026-06-18)
 
 ### Phase F — 개별 현재조건 컬럼 제거 (파괴적)
 **Priority:** P2
-bake 후 개별 8컬럼 + current_fee_visible_to_pg DROP + rowToRfp 폴백·loadPgRfpDetail 레거시 boolean 폴백 제거. 라이브 prod 데이터 — DB 스냅샷 후 단독 배포. (base v0.2.26.0)
+E2(write 중단) 후 bake → 개별 8컬럼 + current_fee_visible_to_pg DROP. 라이브 prod 데이터 — DB 스냅샷 후 단독 배포. (base v0.2.26.0)
 
 ### RfpRepo.save() 문서/컬럼 비대칭
 **Priority:** P2
