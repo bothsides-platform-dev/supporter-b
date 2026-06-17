@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, or } from 'drizzle-orm';
 import { bids, attachments, rfps, workspaces } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
@@ -184,7 +184,8 @@ export class DrizzleBidRepository implements BidRepo {
     const rows = (await db
       .select(BID_COLUMNS)
       .from(bids)
-      .where(eq(bids.pgWsId, pgWsId))) as BidRow[];
+      .where(eq(bids.pgWsId, pgWsId))
+      .orderBy(asc(bids.round))) as BidRow[];
     const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
   }
