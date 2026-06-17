@@ -18,12 +18,15 @@
 **Priority:** P3
 Phase 5-7 split 에서 `BoardColumn`·`BoardDraggableCard` 를 `React.memo` 로 감쌌지만, `KanbanBoard` 가 컬럼에 `children`(컬럼별 카드 목록)을, 카드에 `renderCard(card)` 결과를 인라인으로 주입해 매 렌더 children 참조가 바뀌므로 memo 가 bail 하지 못한다(동작 동일, 최적화 미발현 — 핸들러 useCallback 만 유효). 진짜 컬럼/카드 단위 bail 은 (1) 컬럼이 카드 **데이터**(`grouped` 는 이미 useMemo)+안정 `renderCard` 를 받아 내부 렌더, (2) 소비처(`PipelineBoard`)가 `renderCard`/`columnOverflow` 를 `useCallback` 으로 안정화, (3) 컬럼별 `overflow` 객체 신원 안정화가 필요. DnD 보드라 동작 회귀 위험이 있어 단독 perf 패스로 분리. (발견: /ship adversarial 리뷰 2026-06-16, v0.2.23.0)
 
-### PG 인박스 데이터 조립 중복 + 보드 뷰 2중 페치
-**Priority:** P2
-`app/(app)/inbox/page.tsx` 의 pairs/bids/pendingRequotes 조립이 `loadBoard.ts` pg 분기와 한 줄 단위 중복이고, 보드 뷰에서는 둘 다 실행돼 동일 쿼리 3쌍이 요청당 2회 나감(행 수 작아 현재 무해). `loadPgInboxData(wsId)` 공유 로더로 추출해 양쪽이 소비하도록. (발견: /ship maintainability·performance 리뷰 2026-06-13)
+### ~~PG 인박스 데이터 조립 중복 + 보드 뷰 2중 페치~~ ✅ v0.2.25.2
+`loadPgInboxData(wsId)` 공유 로더(`lib/server/board/pgInbox.ts`) 추출 + `pgInboxDataToRows`·`buildPgPipelineCards` 순수 빌더 분리. `inbox/page.tsx` 가 1회 로드 후 행·보드 양쪽에 공급, `loadPgPipelineBoard(wsId, prefetched?)` 진입점 추가로 보드 뷰 3-쿼리 2중 실행 제거. 기존 미테스트 `received→bidId 생략` 규칙도 신규 pgInbox.test.ts(13 케이스)로 커버. 2868 green.
 
 ### ~~종결 컬럼 정렬을 전이 시각 기준으로~~ ✅ v0.2.24.2
 rfp.updatedAt 기준 내림차순 정렬 적용(buyer awarded/closed, PG won/lost). transition() 에서 updated_at 갱신 누락도 함께 수정. (PR fix+design-todos-p3 2026-06-17)
+
+### findByPgWs ORDER BY round 누락 — 재요청 시 Map 덮어쓰기 비결정적
+**Priority:** P2
+`bidRepo.findByPgWs` 가 `ORDER BY` 없이 전체 bid 를 반환해 `loadPgInboxData` 가 `rfpId → Bid` Map 을 마지막 쓰기 기준으로 조립한다. 재요청(round ≥ 2)이 있으면 round 1·round 2 bid 가 모두 반환되고 DB 플랜 변경·vacuum 에 따라 어느 쪽이 Map 에 남을지 비결정적이다. `findByPgWs` 에 `ORDER BY round DESC` 추가 → 항상 최신 라운드가 Map 에 저장되도록 보장해야 한다. 이 PR 이전부터 존재한 동작이며 `loadPgInboxData` SSOT 추출로 표면화됨. (발견: /ship adversarial 리뷰 2026-06-17, v0.2.25.2)
 
 ### rfp_bids 보드 죽은 표면 정리
 **Priority:** P3

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.25.2] - 2026-06-17
+
+### Changed
+
+- **PG 인박스 응답 속도 개선**: 보드 뷰(`칸반` 탭) 진입 시 동일한 데이터를 두 번 불러오던 중복 요청을 제거했어요. 이제 견적 요청 3개 쿼리가 한 번만 실행돼 응답이 더 빠르게 느껴져요.
+
 ## [0.2.25.1] - 2026-06-17
 
 ### Fixed
