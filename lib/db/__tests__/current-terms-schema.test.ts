@@ -14,3 +14,11 @@ describe('rfps current_terms / hidden_from_pg columns', () => {
     expect(ddl).toContain('{"_v":1}');
   });
 });
+
+describe('bids quote_terms forward column (견적 미래 차원 슬롯)', () => {
+  it('생성 DDL 에 quote_terms 컬럼이 포함된다', async () => {
+    // 비수수료 견적 차원(정산일 옵션·롤링 리저브 등)을 DDL 없이 흡수할 빈 버전드 문서 슬롯.
+    const ddl = (await generateSchemaDDL()).join('\n');
+    expect(ddl).toContain('quote_terms');
+  });
+});
