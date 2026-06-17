@@ -45,6 +45,22 @@ tooltipAlign prop(start|center|end) + useId/aria-describedby 연결 완료. (PR 
 ### ~~빈 RESEND_API_KEY dev-fallback 오설정 가드~~ ✅ PR#233
 `ResendSender`·`ResendBatchSender`·`sendAdminEmail` production 빈 키 → `{ ok: false, error: 'resend_api_key_empty', retryable: false }` + `checkProductionConfig` 부팅 가드(`instrumentation.ts` — PM2 restart loop로 즉각 표면화). (PR fix/resend-empty-key-guard 2026-06-17)
 
+## 견적 확장 (current_terms)
+
+### ~~Phase E — 견적 현재조건 읽기·strip 단독 권위 (fallback 제거)~~ ✅ v0.2.26.1
+rowToRfp 브리프 doc-only(개별 컬럼 폴백 제거) + loadPgRfpDetail hidden_from_pg 단독 strip(레거시 boolean 폴백 제거). dual-write·개별컬럼은 유지(롤백 안전). **배포 전제: backfill 완료 후 배포**(미완 시 레거시 행 현재조건이 구매사 화면에서 빈값 — 누출 아님). (2026-06-18)
+
+### ~~Phase E2+F — 클린 컷오버 (개별 컬럼 제거, 문서 단독 저장)~~ ✅ v0.2.26.2
+운영 데이터 disposable 전제로 개별 current_* 8컬럼 + current_fee_visible_to_pg DROP + dual-write·backfill 장치 삭제. rowToRfp 가 currentFeeVisibleToPg 를 hidden_from_pg 에서 파생. save() 문서/컬럼 비대칭도 해소(양쪽 문서 단독). 앱 레이어는 flat 유지(flat-edge). 배포=DB wipe→db:push→코드. (2026-06-18)
+
+### (조건부) hidden_from_pg write-edge 검증
+**Priority:** P3
+현재는 hidden_from_pg 가 hiddenFromPgFromVisibility(수수료 공개여부)로만 채워져 안전. **추후 buyer 가 임의 필드를 숨길 수 있게 되면** write-edge 에서 HIDEABLE_PG_PATHS 검증 추가 필요 — 안 하면 PG_STRIP 핸들러 없는 숨김 경로 fail-open 누출. (선택, doc-edge 채택 시 함께)
+
+### currentTermsFromDiscrete 빈문자열 정규화
+**Priority:** P3
+'' 입력을 문서에 그대로 담음(현재 falsy 라 UI 무해). omit 으로 정규화하면 더 깔끔. (발견: /ship 리뷰 2026-06-18)
+
 ## Completed
 
 - **이메일 인증 서버 데이터 경계 강제 (2026-06-17, PR#223 open)**: PR#199(UI 게이트)에서 의도적으로 유예된 서버 액션/API 라우트 레벨 emailVerified 게이트 구현. `requireSession()` 에 `isEmailUnverified()` 추가(→ `requireBuyerSession`·`requirePgSession` 자동 포함) + 7개 `auth()` 직접 호출 API 라우트(centrifugo connection-token, notifications GET/SSE, files GET/upload, workspace avatar POST/DELETE, workspaces search buyer 분기) 각각 403 게이트. verify 3개 액션은 면제 유지. 2871 green.

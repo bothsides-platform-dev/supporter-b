@@ -16,6 +16,7 @@ import {
 } from './repositories/factory';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
+import { STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
 import type { Bid } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
@@ -52,6 +53,25 @@ export type PgRfpDetailData = {
   pendingRequote: { message: string; deadline: string; round: number } | null;
 };
 
+
+// 봉인입찰 strip allowlist — 경로 → RFP 페이로드 변이. PG_STRIP 의 키 집합이 곧 처리 가능한
+// 숨김 경로의 전부다. rfp-terms.ts 의 HIDEABLE_PG_PATHS(쓰기측 SSOT)가 이 키들의 부분집합임을
+// pg-strip-coverage 드리프트 테스트가 강제 → 핸들러 없는 숨김 경로가 PG로 새는 fail-open 을 차단
+// (쓰기측이 만들 수 있는 모든 숨김 경로는 반드시 대응 핸들러를 가진다). 경로는 current_terms 문서
+// 구조 기준; 전이기 RFP 타입은 평탄하므로 평탄 필드로 매핑한다. Phase F 에서 문서 전환 시 정리.
+export const PG_STRIP: Record<string, (rfp: RFP) => void> = {
+  [STRIP_PATH_FEE_RATE]: (r) => {
+    r.currentFeeRate = undefined;
+  },
+};
+
+function stripHiddenFromPg(rfp: RFP): void {
+  // hidden_from_pg 가 단독 strip 권위 (Phase E — 레거시 currentFeeVisibleToPg 폴백 제거).
+  // 모든 행은 dual-write/backfill 로 hidden_from_pg 가 채워져 있다는 전제(fallback 없음).
+  for (const path of rfp.hiddenFromPg ?? []) PG_STRIP[path]?.(rfp);
+  // PG 페이로드에 가시성 정책 메타데이터(숨김 경로 목록)를 노출하지 않는다 — 서버 strip 으로 충분.
+  rfp.hiddenFromPg = undefined;
+}
 
 /** PG별 최신 라운드(submitted)만 남긴다. */
 function pickCurrentBids(submitted: Bid[]): Bid[] {
@@ -185,11 +205,12 @@ export async function loadPgRfpDetail(args: {
   );
   if (mine) await invRepo.markOpened(mine.id, new Date());
 
-  // 봉인입찰 데이터 경계: 구매사가 현재 카드 수수료를 비공개(opt-out)로 두면
-  // 값 자체를 PG 페이로드에서 제거한다. RfpBriefPanel 렌더 게이트는 시각적
-  // 방어선일 뿐 — 서버에서 지워야 PG가 RSC payload/네트워크에서 읽지 못한다.
-  // (rfp 는 findByCode 가 매 호출 새로 만든 request-scoped 객체라 변이 안전.)
-  if (rfp.currentFeeVisibleToPg === false) rfp.currentFeeRate = undefined;
+  // 봉인입찰 데이터 경계: 구매사가 숨기기로 한 필드를 PG 페이로드에서 server-side 제거.
+  // RfpBriefPanel 렌더 게이트는 시각적 방어선일 뿐 — 서버에서 지워야 PG가 RSC
+  // payload/네트워크에서 읽지 못한다. (rfp 는 findByCode 가 매 호출 새로 만든
+  // request-scoped 객체라 변이 안전.) 누출 방지 우선: 일반화된 hidden_from_pg 와
+  // 레거시 boolean 중 하나라도 숨김이면 제거한다.
+  stripHiddenFromPg(rfp);
 
   // 구매사 첨부 hydrate — RfpBriefPanel 미리보기용.
   rfp.rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);

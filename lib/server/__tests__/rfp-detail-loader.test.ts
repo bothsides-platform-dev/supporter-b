@@ -41,9 +41,18 @@ async function setup() {
 
   async function seedRfp(
     code: string,
-    opts: { currentFeeRate?: string; currentFeeVisibleToPg?: boolean } = {},
+    opts: {
+      currentFeeRate?: string;
+      currentFeeVisibleToPg?: boolean;
+      hiddenFromPg?: string[];
+    } = {},
   ) {
     const id = randomUUID();
+    // Phase E: 읽기 단독 권위 = 문서. feeRate 는 current_terms 에 넣고, hidden_from_pg 는
+    // 공개여부에서 파생(프로덕션 dual-write 미러). 개별 currentFeeRate 컬럼은 더 이상 읽지 않는다.
+    const hidden =
+      opts.hiddenFromPg ??
+      (opts.currentFeeVisibleToPg === false ? ['currentTerms.feeRate'] : []);
     await db.insert(rfps).values({
       id,
       code,
@@ -55,10 +64,9 @@ async function setup() {
       status: 'sent',
       createdBy: buyer.id,
       sentAt: new Date(),
-      currentFeeRate: opts.currentFeeRate,
-      ...(opts.currentFeeVisibleToPg === undefined
-        ? {}
-        : { currentFeeVisibleToPg: opts.currentFeeVisibleToPg }),
+      currentTerms:
+        opts.currentFeeRate != null ? { _v: 1, feeRate: opts.currentFeeRate } : { _v: 1 },
+      hiddenFromPg: hidden,
     });
     return id;
   }
@@ -352,6 +360,19 @@ describe('loadPgRfpDetail', () => {
     const res = await loadPgRfpDetail({ code: 'P-2606-0061', workspaceId: ctx.tossId });
     expect(res).not.toBeNull();
     expect(res!.rfp.currentFeeRate).toBe('3.4%');
+  });
+
+  it('hidden_from_pg가 currentTerms.feeRate를 포함하면 currentFeeRate를 제거한다(일반화된 경계)', async () => {
+    // boolean 은 건드리지 않고 일반화된 숨김 목록만으로 strip 되는지 — Phase D 핵심.
+    const rfpId = await ctx.seedRfp('P-2606-0062', {
+      currentFeeRate: '3.4%',
+      hiddenFromPg: ['currentTerms.feeRate'],
+    });
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0062', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.rfp.currentFeeRate).toBeUndefined();
   });
 
   it('해당 PG 워크스페이스의 견적 템플릿만 quoteTemplates로 반환(타 워크스페이스 격리)', async () => {

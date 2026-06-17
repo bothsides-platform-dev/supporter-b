@@ -36,14 +36,8 @@ export const rfps = pgTable(
     memo: text('memo').notNull().default(''),
     websiteUrl: text('website_url'),
     mainProducts: text('main_products'),
-    annualPgVolume: text('annual_pg_volume'),
-    currentFeeRate: text('current_fee_rate'),
-    currentSettlementLimit: text('current_settlement_limit'),
-    currentGuaranteeInsurance: text('current_guarantee_insurance'),
-    currentSettlementCycle: text('current_settlement_cycle'),
-    deliveryServicePeriod: text('delivery_service_period'),
-    currentSolution: text('current_solution'),
-    currentSolutionDetail: text('current_solution_detail'),
+    // 현재조건 브리프(수수료율·정산한도·보증보험·정산주기·배송주기·솔루션·연거래량)는
+    // current_terms 문서가 단일 저장소 — 개별 컬럼 없음 (lib/types/rfp-terms.ts CurrentTermsV1).
     deadline: timestamp('deadline', { withTimezone: true }).notNull(),
     // RFP-scoped permanent share URL token — buyer distributes to PG workspaces.
     // Plaintext; auto-expires at deadline; default exists for fixtures/backfill,
@@ -73,10 +67,12 @@ export const rfps = pgTable(
     // 오픈 RFP 게시판 노출 여부 (opt-out). 기본 true = 노출. 구매사가 끄면 PG
     // 게시판/홈 탐색에서 사라진다. default true ⇒ 기존 행 백필 시 모두 노출.
     boardVisible: boolean('board_visible').notNull().default(true),
-    // 초대 PG에게 현재 카드 수수료(current_fee_rate)를 노출할지 (opt-out). 기본 true = 노출.
-    // false면 PG 견적 화면(RfpBriefPanel)에서만 숨김 — 구매사 본인 비교 baseline은 항상 유지.
-    // default true ⇒ 기존 행 백필 시 모두 노출.
-    currentFeeVisibleToPg: boolean('current_fee_visible_to_pg').notNull().default(true),
+    // 현재조건 브리프의 버전드 JSONB 문서 (lib/types/rfp-terms.ts CurrentTermsV1) — 단일 저장소.
+    // bids.paymentFees 패턴 일반화 — 새 브리프 필드는 DDL 없이 타입+zod 만 수정.
+    currentTerms: jsonb('current_terms').notNull().default(sql`'{"_v":1}'::jsonb`),
+    // PG 에게 숨길 필드 경로 목록 (예: 'currentTerms.feeRate'). currentFeeVisibleToPg 의 일반화.
+    // loadPgRfpDetail 이 PG_STRIP allowlist(HIDEABLE_PG_PATHS) 와 교집합만 server-side strip.
+    hiddenFromPg: text('hidden_from_pg').array().notNull().default([]),
     // 온보딩 샘플 RFP 표식. true면 '샘플' 칩·읽기전용 샌드박스·전용 하드삭제 게이트가 켜진다.
     isSample: boolean('is_sample').notNull().default(false),
     // 계약 유형: 신규 계약('new') 또는 갱신 계약('renewal'). 선택사항 — null이면 미표시.
