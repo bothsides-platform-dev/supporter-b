@@ -38,6 +38,11 @@ export async function sendAdminEmail(args: {
   }
 
   const apiKey = process.env.RESEND_API_KEY;
+
+  if (process.env.NODE_ENV === 'production' && apiKey === '') {
+    return { ok: false, error: 'resend_api_key_empty' };
+  }
+
   if (!apiKey) {
     // html 은 의도적으로 제외 — 공유 터미널 스크롤백에 본문/링크 노출 방지.
     console.log(`[admin-email DEV] to=${recipients.join(',')} subject=${args.subject}`);

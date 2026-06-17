@@ -137,6 +137,19 @@ describe('sendAdminEmail', () => {
     expect(sendMock).not.toHaveBeenCalled();
   });
 
+  it('returns permanent failure in production when RESEND_API_KEY is empty string', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('RESEND_API_KEY', '');
+    process.env.ADMIN_NOTIFY_EMAIL = 'ops@bidit.test';
+    const { sendAdminEmail } = await import('../admin-email');
+
+    const result = await sendAdminEmail({ subject: 's', html: 'h' });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe('resend_api_key_empty');
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
   it('maps a Resend API error to { ok:false }', async () => {
     process.env.RESEND_API_KEY = 'test-key';
     process.env.ADMIN_NOTIFY_EMAIL = 'ops@bidit.test';
