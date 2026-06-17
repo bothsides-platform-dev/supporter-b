@@ -296,13 +296,13 @@ describe('ResendBatchSender', () => {
       html: expect.stringContaining('<a'),
     });
     expect(opts.batchValidation).toBe('permissive');
-    // Deterministic idempotency key derived from the row ids — a retry of the
-    // identical subset dedupes at Resend; a different subset gets a different key.
+    // Deterministic idempotency key derived from entry ids + content — a retry with
+    // identical ids+html dedupes; recomputed content (digest) gets a fresh key.
     expect(typeof opts.idempotencyKey).toBe('string');
     expect(opts.idempotencyKey.length).toBeGreaterThan(0);
   });
 
-  it('derives a stable batch idempotency key from the entry id set (order-independent)', async () => {
+  it('derives a stable batch idempotency key from entry ids+content (order-independent)', async () => {
     process.env.RESEND_API_KEY = 'test-key';
     batchSendMock.mockResolvedValue({ data: { data: [{ id: 'm1' }, { id: 'm2' }] }, error: null });
 

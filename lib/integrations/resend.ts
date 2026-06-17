@@ -82,18 +82,18 @@ export function classifyResendError(
   return { retryable: true };
 }
 
-// Deterministic idempotency key for a batch send: derived from the sorted set of
-// outbox row ids. A crash/DB-failure between batch.send and markResult re-claims
-// the SAME rows → same key → Resend dedupes (no duplicate emails). A later flush
-// of a DIFFERENT subset (some rows already sent) produces a different key, so it
-// is not falsely deduped. Generic-batch payloads have static html, so deduping an
-// identical-subset retry never serves stale content.
+// Deterministic idempotency key for a batch send: derived from entry ids AND
+// payload content (subject + html). Including content means a crash-then-retry
+// with recomputed html (e.g. digest where a new message arrived) produces a
+// DIFFERENT key, avoiding Resend's `invalid_idempotency_key` 400 which would
+// otherwise permanently fail the row. A retry with identical content gets the
+// same key and is deduped normally.
 function batchIdempotencyKey(entries: OutboxEntry[]): string {
-  const ids = entries
-    .map((e) => e.id)
+  const parts = entries
+    .map((e) => `${e.id}:${e.subject}:${createHash('sha256').update(e.html).digest('hex')}`)
     .sort()
     .join(',');
-  return createHash('sha256').update(ids).digest('hex');
+  return createHash('sha256').update(parts).digest('hex');
 }
 
 function devLogEntry(entry: OutboxEntry): void {

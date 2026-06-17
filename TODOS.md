@@ -38,9 +38,8 @@ tooltipAlign prop(start|center|end) + useId/aria-describedby 연결 완료. (PR 
 
 ## Email / Notifications
 
-### 채팅·팀 다이제스트 발송 배치화
-**Priority:** P3
-일반 outbox flush 는 `resend.batch.send`(콜당 100통, rate-limit 1요청)로 묶어 보내지만, `flushChatDigests`·`flushTeamChatDigests` 는 본문을 발송 시점에 재계산해야 해서 여전히 수신자당 단건 발송이다(백오프/분류는 적용됨). 다이제스트는 (스코프·수신자·3분 윈도) coalesce + tick당 50건 상한이라 버스트가 작지만, 멤버 많은 워크스페이스에서 한 윈도가 동시에 만료되면 단건 발송이 초당 2요청을 넘길 수 있다. 재계산/취소 필터 후 살아남은 다이제스트를 `sendEntriesInBatches` 로 묶어 발송하도록 확장 검토. crontab `flock -n` 로 cron 중첩 더블센드는 이미 차단. (발견: /ship 어드버서리얼 2026-06-15, 본 PR 의도적 연기)
+### ~~채팅·팀 다이제스트 발송 배치화~~ ✅
+`flushChatDigests`·`flushTeamChatDigests` 를 two-phase 구조로 전환: Phase 1 = 수신자당 재계산+취소 필터(변경 없음), Phase 2 = 살아남은 항목을 `sendEntriesInBatches(batchSender, enriched)` 로 일괄 발송. 수신자당 개별 `Sender` 호출(N회) → tick당 ceil(N/100)회 Resend 배치 호출. `route.ts` 도 `getResendSender()` 제거 → 세 flush 모두 동일 `batchSender` 사용. 3467 green. (fix+digest-batch-send 2026-06-17)
 
 ### 빈 RESEND_API_KEY dev-fallback 오설정 가드 (기존 동작)
 **Priority:** P3
