@@ -112,6 +112,26 @@ describe('sendTeamMessageAction', () => {
     });
   });
 
+  it('tempId 가 전달되면 publishTeamChatEvent 페이로드에 tempId 가 포함된다', async () => {
+    const { buyerUser, buyerWs, rfp } = await seedScene();
+    asBuyer(buyerUser, buyerWs.id);
+
+    await sendTeamMessageAction({ rfpId: rfp.id, body: '팀채팅 tempId', tempId: 'tmp-team-99' });
+
+    const [, , payload] = vi.mocked(publishTeamChatEvent).mock.calls[0];
+    expect((payload as Record<string, unknown>).tempId).toBe('tmp-team-99');
+  });
+
+  it('tempId 가 없으면 publishTeamChatEvent 페이로드의 tempId 는 null 이다', async () => {
+    const { buyerUser, buyerWs, rfp } = await seedScene();
+    asBuyer(buyerUser, buyerWs.id);
+
+    await sendTeamMessageAction({ rfpId: rfp.id, body: '팀채팅 tempId 없음' });
+
+    const [, , payload] = vi.mocked(publishTeamChatEvent).mock.calls[0];
+    expect((payload as Record<string, unknown>).tempId).toBeNull();
+  });
+
   it('rejects a non-uuid rfpId with INVALID_INPUT (no publish)', async () => {
     const { buyerUser, buyerWs } = await seedScene();
     asBuyer(buyerUser, buyerWs.id);

@@ -100,6 +100,10 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   const inicisEmail = 'ws-inicis-admin@example.com';
   const kakaoEmail = 'ws-kakao-admin@example.com';
 
+  // emailVerified: true — these are already-onboarded fixtures. The schema
+  // defaults users to emailVerified=false, and the (app) shell guard now sends
+  // unverified members to /pending-approval regardless of workspace status, so
+  // seeded users must be verified or every authed e2e scenario would bounce.
   await db.insert(users).values([
     {
       id: buyerUserId,
@@ -107,6 +111,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       passwordHash,
       name: '이성연',
       avatarColor: 'accent',
+      emailVerified: true,
     },
     {
       id: tossUserId,
@@ -114,6 +119,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       passwordHash,
       name: '서포터 B 페이 관리자',
       avatarColor: 'lavender',
+      emailVerified: true,
     },
     {
       id: inicisUserId,
@@ -121,6 +127,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       passwordHash,
       name: '이니시스 관리자',
       avatarColor: 'moss',
+      emailVerified: true,
     },
     {
       id: kakaoUserId,
@@ -128,6 +135,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       passwordHash,
       name: '카카오페이 관리자',
       avatarColor: 'amber',
+      emailVerified: true,
     },
   ]);
 
@@ -200,8 +208,8 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
     },
   ]);
 
-  // 5b. Unified kanban columns — buyer gets pipeline + rfp_bids boards, each PG
-  //     gets the pipeline board (same source as createWorkspaceInTx).
+  // 5b. Unified kanban columns — buyer and PG both get the pipeline board
+  //     (same source as createWorkspaceInTx).
   await db.insert(columns).values([
     ...defaultColumns(buyerWsId, 'buyer'),
     ...defaultColumns(tossWsId, 'pg'),

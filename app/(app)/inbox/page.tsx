@@ -1,12 +1,10 @@
 import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { requirePgPage } from '@/lib/auth/page-guards';
-import { getInvitationRepo, getBidRepo, getRfpRequoteRequestRepo } from '@/lib/server/repositories/factory';
-import { loadBoard } from '@/lib/server/board/loadBoard';
-import { classifyPgInvitation } from '@/lib/server/pg-kanban';
-import type { Bid } from '@/lib/types/bid';
+import { loadPgInboxData, pgInboxDataToRows, type PgInboxData } from '@/lib/server/board/pgInbox';
+import { loadPgPipelineBoard } from '@/lib/server/board/loadBoard';
 import { GRADE_LABELS } from '@/lib/types/biz-profile';
-import { InboxList, InboxListSkeleton, type InboxRow } from '@/components/inbox/InboxList';
+import { InboxList, InboxListSkeleton } from '@/components/inbox/InboxList';
 import { PipelineBoard } from '@/components/board/PipelineBoard';
 import { BoardViewToggle } from '@/components/board/BoardViewToggle';
 import { BoardFilterBar } from '@/components/board/BoardFilterBar';
@@ -67,41 +65,9 @@ async function InboxListPageLoader({
   view: BoardView;
 }) {
   const now = new Date();
-  const [invRepo, bidRepo, requoteRepo] = await Promise.all([
-    getInvitationRepo(),
-    getBidRepo(),
-    getRfpRequoteRequestRepo(),
-  ]);
-  const [pairs, bidList, pendingRequotes] = await Promise.all([
-    invRepo.findByPgWorkspace(wsId),
-    bidRepo.findByPgWs(wsId),
-    requoteRepo.findPendingByPgWs(wsId),
-  ]);
-  // bid 기반 stage 분류를 위해 RFP별 bid 매핑 (loadBoard PG 파이프라인과 동일 패턴).
-  const bidByRfp = new Map<string, Bid>();
-  for (const b of bidList) bidByRfp.set(b.rfpId, b);
-
-  // pending 재요청 — 워크스페이스 단위 bulk 1쿼리 (loadBoard PG 파이프라인과 동일 소스).
-  const pendingRequoteRfpIds = new Set(pendingRequotes.map((r) => r.rfpId));
-
-  const allRows: InboxRow[] = pairs.map(({ invitation, rfp }) => {
-    const bid = bidByRfp.get(rfp.id);
-    const stage = classifyPgInvitation({ invitation, bid, rfp });
-    return {
-      invitationId: invitation.id,
-      stage,
-      // received(미제출) 단계는 "보낸 견적" 링크를 노출하지 않도록 bidId 생략.
-      bidId: stage === 'received' ? undefined : bid?.id,
-      rfpId: rfp.code,
-      rfpTitle: rfp.title,
-      rfpDeadline: rfp.deadline,
-      grade: rfp.bizProfile?.grade ? GRADE_LABELS[rfp.bizProfile.grade] : '—',
-      gradeRaw: rfp.bizProfile?.grade,
-      contractType: rfp.contractType ?? null,
-      isSample: rfp.isSample ?? false,
-      hasPendingRequote: pendingRequoteRfpIds.has(rfp.id),
-    };
-  });
+  // 3-쿼리 조립의 단일 출처 — pgInboxDataToRows·buildPgPipelineCards 양쪽이 동일 데이터 소비.
+  const pgData = await loadPgInboxData(wsId);
+  const allRows = pgInboxDataToRows(pgData);
   const rows = filterInboxRows(allRows, paramsForView(params, view), now);
 
   // 행 클릭은 딜룸 모달(인터셉트 라우트)을 띄운다 — 과거 ?peek 사이드 패널은 제거됨.
@@ -113,7 +79,11 @@ async function InboxListPageLoader({
         description="필터를 바꾸면 견적 요청을 볼 수 있어요. 구매사가 초대한 견적 요청이 여기에 표시돼요."
       />
     ) : view === 'board' ? (
-      <InboxBoardView wsId={wsId} visibleIds={new Set(rows.map((r) => r.invitationId))} />
+      <InboxBoardView
+        wsId={wsId}
+        visibleIds={new Set(rows.map((r) => r.invitationId))}
+        pgData={pgData}
+      />
     ) : (
       <InboxList rows={rows} />
     );
@@ -134,8 +104,17 @@ async function InboxListPageLoader({
   );
 }
 
-async function InboxBoardView({ wsId, visibleIds }: { wsId: string; visibleIds: Set<string> }) {
-  const board = await loadBoard({ workspaceId: wsId, workspaceType: 'pg', kind: 'pipeline' });
+async function InboxBoardView({
+  wsId,
+  visibleIds,
+  pgData,
+}: {
+  wsId: string;
+  visibleIds: Set<string>;
+  pgData: PgInboxData;
+}) {
+  // prefetched pgData 를 재사용 — 동일 3-쿼리를 보드 뷰에서 다시 실행하지 않는다.
+  const board = await loadPgPipelineBoard(wsId, pgData);
   const cards = board.cards.filter((c) => visibleIds.has(c.cardId));
   return (
     <div className="flex-1 overflow-auto px-6 py-4">

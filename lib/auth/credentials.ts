@@ -1,9 +1,7 @@
-import { eq } from 'drizzle-orm';
-
-import { users } from '@/lib/db/schema';
 import { verifyPassword } from '@/lib/auth/password';
 import { resolveInitialMembership } from '@/lib/auth/active-workspace';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
+import { getUserRepo } from '@/lib/server/repositories/factory';
 
 // A real cost-12 bcrypt hash of a throwaway string. When the email is unknown
 // we still run verifyPassword against this so an absent account costs roughly
@@ -44,13 +42,10 @@ export async function authorizeCredentials(
   const email = String(creds.email).toLowerCase().trim();
   const password = String(creds.password);
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
+  const userRepo = await getUserRepo();
+  const user = await userRepo.findAuthRowByEmail(email);
 
-  if (!user) {
+  if (!user || user.passwordHash === null) {
     // Spend a compare so the unknown-email path isn't measurably faster.
     await verifyPassword(password, DUMMY_HASH);
     return null;
@@ -80,5 +75,5 @@ export async function authorizeCredentials(
     workspaceId: member?.workspaceId,
     workspaceType: member?.workspaceType,
     role: member?.role,
-  };
+  } satisfies AuthorizedUser;
 }

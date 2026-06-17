@@ -36,13 +36,16 @@ export type SidebarProps = {
 
 function SidebarNav({
   workspaceType,
+  workspaceId,
   onNavigate,
 }: {
   workspaceType: WorkspaceType;
+  workspaceId: string;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const { unreadCount } = useNotifications();
+  // 현재 워크스페이스 id 를 넘겨 전환 시 알림 싱글턴이 리셋되게 한다(Phase 7b).
+  const { unreadCount } = useNotifications(workspaceId);
   const { top, sections } = getNavConfig(workspaceType);
 
   return (
@@ -101,7 +104,11 @@ function SidebarBody({
       <SidebarContent className="px-2">
         <nav aria-label="기본 내비게이션" className="flex flex-col gap-0.5">
           <Suspense fallback={null}>
-            <SidebarNav workspaceType={workspaceType} onNavigate={onNavigate} />
+            <SidebarNav
+              workspaceType={workspaceType}
+              workspaceId={current.id}
+              onNavigate={onNavigate}
+            />
           </Suspense>
         </nav>
       </SidebarContent>

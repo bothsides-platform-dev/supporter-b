@@ -2,9 +2,7 @@
 // protocol. These are the columns where one workspace's action changes the
 // other's board state (send→received, submit→active, award→won/lost,
 // close→lost, withdraw→lost). They are mandatory (non-deletable) by user
-// directive. The 작성중(draft/drafting) skeleton stages were removed; the only
-// remaining non-cross-side system column is the rfp_bids default-landing
-// (DEFAULT_LANDING_KEY) — see deleteColumnAction for the distinct error messages.
+// directive. The 작성중(draft/drafting) skeleton stages were removed.
 //
 // Pure, no DB import — usable from client components.
 export const CROSS_SIDE_LIFECYCLE_KEYS: ReadonlySet<string> = new Set([
@@ -23,7 +21,8 @@ export function isCrossSideLifecycleKey(key: string | null | undefined): boolean
   return key != null && CROSS_SIDE_LIFECYCLE_KEYS.has(key);
 }
 
-// The rfp_bids board has no lifecycle classifier — every unplaced bid lands in
-// the "진행전" default column, identified by this key. is_system (non-deletable)
-// but NOT cross-side. resolveCardColumn returns this key for any rfp_bids card.
+// Retained for the release-card pathway (resolveBoardDrop / releaseCardAction):
+// a card placed on a column with this lifecycleKey is released back to
+// auto-classification. No longer seeded as of rfp_bids removal — value reserved
+// for future default-landing use.
 export const DEFAULT_LANDING_KEY = 'inbox';

@@ -1,9 +1,9 @@
-import type { ConversationListItem } from '@/components/messages/types';
+import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 
 export type HomeMessagesSnapshot = {
-  /** Conversations that have at least one message, in loader sort order. */
-  conversations: ConversationListItem[];
-  /** Unread count across ALL conversations (before the preview filter). */
+  /** Inbox items (counterparty + team) that have at least one message, in loader sort order. */
+  items: InboxListItem[];
+  /** Unread count across ALL items (before the preview filter). */
   unreadCount: number;
 };
 
@@ -12,10 +12,10 @@ export type HomeMessagesSnapshot = {
  * Pure function — no I/O, no side effects.
  */
 export function buildHomeMessagesSnapshot(
-  conversations: ConversationListItem[],
+  items: InboxListItem[],
 ): HomeMessagesSnapshot {
   return {
-    conversations: conversations.filter((c) => c.lastMessageAt !== null),
-    unreadCount: conversations.filter((c) => c.unread).length,
+    items: items.filter((i) => i.lastMessageAt !== null),
+    unreadCount: items.filter((i) => i.unread).length,
   };
 }

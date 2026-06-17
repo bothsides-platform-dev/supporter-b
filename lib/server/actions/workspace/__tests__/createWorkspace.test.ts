@@ -115,7 +115,7 @@ describe('createWorkspaceInTx', () => {
     expect(biz.bizNo).toBe('1112223334');
   });
 
-  it('seeds default kanban columns: buyer gets pipeline + rfp_bids boards', async () => {
+  it('seeds default kanban columns: buyer gets pipeline-only board (BUYER_KANBAN_ORDER columns)', async () => {
     const u = await seedUser(db);
     const { workspaceId } = await createWorkspaceInTx(db, {
       userId: u.id,
@@ -131,8 +131,8 @@ describe('createWorkspaceInTx', () => {
     });
 
     const cols = await db.select().from(columns).where(eq(columns.workspaceId, workspaceId));
+    expect(cols.every((c) => c.kind === 'pipeline')).toBe(true);
     expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(3);
-    expect(cols.filter((c) => c.kind === 'rfp_bids')).toHaveLength(3);
   });
 
   it('seeds default kanban columns: pg gets only the pipeline board', async () => {
@@ -145,7 +145,6 @@ describe('createWorkspaceInTx', () => {
 
     const cols = await db.select().from(columns).where(eq(columns.workspaceId, workspaceId));
     expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(4);
-    expect(cols.filter((c) => c.kind === 'rfp_bids')).toHaveLength(0);
   });
 
   it('buyer: seeds a sample RFP (isSample) with 3 bids', async () => {

@@ -6,7 +6,7 @@ import { Button } from '@/components/primitives/Button';
 import { PhoneVerificationField } from '@/components/auth/PhoneVerificationField';
 import { SignupStepper } from '@/components/auth/SignupStepper';
 import { useSignupDraftStore } from '@/lib/stores/signup-draft';
-import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
+import { readSignupDraft, writeSignupDraft, isSignupStorageAvailable } from '@/lib/auth/signup-storage';
 import { finalizeSignup } from '@/lib/auth/finalizeSignup';
 
 export default function PgProfilePage() {
@@ -29,6 +29,8 @@ export default function PgProfilePage() {
   //   초대 경로: wsName/bizNo 불필요 (step 2 건너뜀)
   //   canonical PG 선택 경로: selectedPgWorkspaceId만 필요 (wsName/bizNo 없음)
   //   일반 경로: wsName + bizNo 필수
+  const [storageBlocked] = useState(() => !isSignupStorageAvailable());
+
   const [{ ready, isInvited }] = useState(() => {
     const d = readSignupDraft();
     const invited = !!d.wsInviteToken;
@@ -39,10 +41,10 @@ export default function PgProfilePage() {
   });
 
   useEffect(() => {
-    if (!ready) router.replace('/signup/pg');
-  }, [ready, router]);
+    if (!ready && !storageBlocked) router.replace('/signup/pg');
+  }, [ready, storageBlocked, router]);
 
-  if (!ready) return null;
+  if (!ready && !storageBlocked) return null;
 
   const handleVerified = (phone: string, vid: string) => {
     setVerifiedPhone(phone);
@@ -113,6 +115,13 @@ export default function PgProfilePage() {
       </div>
 
       <form className="space-y-6" onSubmit={handleSubmit}>
+        {storageBlocked && (
+          <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
+            브라우저의 사이트 데이터 저장이 차단되어 있어요.
+            비공개(시크릿) 모드를 해제하거나 일반 탭에서 다시 시도해주세요.
+          </p>
+        )}
+
         <div className="space-y-1">
           <label
             htmlFor="name"

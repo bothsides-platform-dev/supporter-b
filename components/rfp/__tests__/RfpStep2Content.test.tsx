@@ -114,7 +114,7 @@ describe('RfpStep2Content', () => {
     it('정산한도는 천단위 콤마로 표시되고 raw digit로 저장된다', async () => {
       const user = userEvent.setup();
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-      await user.type(screen.getByPlaceholderText('월 1억'), '100000000');
+      await user.type(screen.getByPlaceholderText('100,000,000'), '100000000');
       expect(screen.getByDisplayValue('100,000,000')).toBeInTheDocument();
       expect(useRfpDraftStore.getState().currentSettlementLimit).toBe('100000000');
     });
@@ -122,7 +122,7 @@ describe('RfpStep2Content', () => {
     it('보증보험에 글자를 입력하면 차단된다', async () => {
       const user = userEvent.setup();
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-      const input = screen.getByPlaceholderText('3000만원') as HTMLInputElement;
+      const input = screen.getByPlaceholderText('30,000,000') as HTMLInputElement;
       await user.type(input, '30000000원');
       expect(input.value).toBe('30,000,000');
       expect(useRfpDraftStore.getState().currentGuaranteeInsurance).toBe('30000000');

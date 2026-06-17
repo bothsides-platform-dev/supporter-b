@@ -31,15 +31,14 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
 
 import { auth } from '@/auth';
-import { isSessionRevoked } from '@/lib/auth/session';
-import { attachments, bids, rfps } from '@/lib/db/schema';
-import { db as prodDb } from '@/lib/db/client';
+import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import {
   getAttachmentRepo,
+  getBidRepo,
   getInvitationRepo,
+  getRfpRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
@@ -63,24 +62,6 @@ const MetaInput = z
   })
   .strict();
 
-declare global {
-  // eslint-disable-next-line no-var -- global augmentation requires var
-  var __bidit_files_db_override__: unknown | undefined;
-}
-
-// Test-only override (matches the action-layer pattern). Tests install a
-// pglite db handle so the file route can read/write without the prod
-// postgres-js client.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function routeDb(): any {
-  return globalThis.__bidit_files_db_override__ ?? prodDb;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function __setFilesDbForTest(db: any | undefined): void {
-  globalThis.__bidit_files_db_override__ = db;
-}
-
 function fail(status: number, error: string): Response {
   return NextResponse.json({ ok: false, error }, { status });
 }
@@ -91,6 +72,8 @@ export async function POST(req: Request): Promise<Response> {
 
   // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
+  // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
+  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
 
   let form: FormData;
   try {
@@ -139,11 +122,7 @@ export async function POST(req: Request): Promise<Response> {
     // (literal '__draft__') because the RFP is still being authored.
     if (wsType !== 'buyer' || !wsId) return fail(403, 'FORBIDDEN');
     if (meta.data.ownerId !== DRAFT_OWNER_ID) {
-      const [rfp] = await routeDb()
-        .select({ buyerWsId: rfps.buyerWsId })
-        .from(rfps)
-        .where(eq(rfps.id, meta.data.ownerId))
-        .limit(1);
+      const rfp = await (await getRfpRepo()).findById(meta.data.ownerId);
       if (!rfp) return fail(404, 'RFP_NOT_FOUND');
       if (rfp.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
     }
@@ -163,12 +142,7 @@ export async function POST(req: Request): Promise<Response> {
     // Gate: user must be a member of the buyer ws that owns the RFP behind
     // this bid.
     if (wsType !== 'buyer' || !wsId) return fail(403, 'FORBIDDEN');
-    const [row] = await routeDb()
-      .select({ buyerWsId: rfps.buyerWsId })
-      .from(bids)
-      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
-      .where(eq(bids.id, meta.data.ownerId))
-      .limit(1);
+    const row = await (await getBidRepo()).findRfpOwner(meta.data.ownerId);
     if (!row) return fail(404, 'BID_NOT_FOUND');
     if (row.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
     // Workspace membership — match the post-cutover bid_note ACL in
@@ -183,11 +157,7 @@ export async function POST(req: Request): Promise<Response> {
     // lands). Gate mirrors TeamChatService.authorize.
     if (!wsId) return fail(403, 'FORBIDDEN');
     if (wsType === 'buyer') {
-      const [rfp] = await routeDb()
-        .select({ buyerWsId: rfps.buyerWsId })
-        .from(rfps)
-        .where(eq(rfps.id, meta.data.ownerId))
-        .limit(1);
+      const rfp = await (await getRfpRepo()).findById(meta.data.ownerId);
       if (!rfp) return fail(404, 'RFP_NOT_FOUND');
       if (rfp.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
       // Membership — match the team-message read ACL in storage/permissions.ts.
@@ -243,10 +213,7 @@ export async function POST(req: Request): Promise<Response> {
     });
   } catch (err) {
     // Blob write failed — drop the orphan metadata row (best-effort).
-    await routeDb()
-      .delete(attachments)
-      .where(eq(attachments.id, id))
-      .catch(() => {});
+    await repo.remove(id).catch(() => {});
     throw err;
   }
 }

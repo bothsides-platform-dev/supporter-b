@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { users } from '@/lib/db/schema';
+import {
+  __resetForTest,
+  __useDrizzleWithDbForTest,
+} from '@/lib/server/repositories/factory';
 
 // Spy on the password module so we can assert a bcrypt compare runs even when
 // the account is absent (the constant-time / anti-enumeration contract).
@@ -25,9 +29,12 @@ async function seedUser(email: string, opts: { deletedAt?: Date | null } = {}) {
 
 beforeEach(async () => {
   db = await createPgliteDb();
+  // DB access now routes through the repo factory — bind it to this pglite db.
+  await __useDrizzleWithDbForTest(db);
   verifyPasswordMock.mockReset();
 });
 afterEach(() => {
+  __resetForTest();
   verifyPasswordMock.mockReset();
 });
 

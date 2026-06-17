@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useEffect, type ReactElement, type ReactNode } from 'react';
 
 class ResizeObserverStub {
   observe() {}
@@ -35,8 +36,28 @@ vi.mock('@/components/rfp/comparison/RequoteDialog', () => ({
 vi.mock('@/lib/server/actions/rfp/requestRequoteAction', () => ({ requestRequoteAction: vi.fn() }));
 
 import { FocusComparison } from '../FocusComparison';
-import { useChatRailStore } from '@/lib/stores/chat-rail';
+import { DealRoomProvider, useDealRoom } from '@/components/deal-room/DealRoomContext';
 import type { Bid } from '@/lib/types/bid';
+
+// FocusComparison 은 이제 DealRoomProvider 안에서 포커스 PG 를 publish 한다. 기본 render 를
+// 프로바이더로 감싸고, Probe 가 컨텍스트의 counterparty 를 캡처해 publish 를 검증한다.
+let captured: ReturnType<typeof useDealRoom>['counterparty'] = null;
+function CounterpartyProbe() {
+  const cp = useDealRoom().counterparty;
+  useEffect(() => {
+    captured = cp;
+  }, [cp]);
+  return null;
+}
+function Wrapper({ children }: { children: ReactNode }) {
+  return (
+    <DealRoomProvider>
+      <CounterpartyProbe />
+      {children}
+    </DealRoomProvider>
+  );
+}
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: Wrapper });
 
 function makeBid(over: Partial<Bid>): Bid {
   return {
@@ -249,12 +270,12 @@ describe('FocusComparison — requote CTA + status chips', () => {
 // '상대방 채팅' 탭이 탭 전환을 추종하게 한다 (RSC 경계로 콜백 전달 불가).
 describe('FocusComparison — 채팅 레일 상대 publish', () => {
   beforeEach(() => {
-    useChatRailStore.getState().reset();
+    captured = null;
   });
 
   it('마운트 시 기본 포커스 PG(최저 카드 수수료)를 publish 한다', () => {
     render(<FocusComparison {...baseProps} />);
-    expect(useChatRailStore.getState().counterparty).toEqual({
+    expect(captured).toEqual({
       workspaceId: 'pg-toss',
       name: '토스페이먼츠',
       type: 'pg',
@@ -267,7 +288,7 @@ describe('FocusComparison — 채팅 레일 상대 publish', () => {
 
     await user.click(screen.getByRole('tab', { name: /KG이니시스/ }));
 
-    expect(useChatRailStore.getState().counterparty).toEqual({
+    expect(captured).toEqual({
       workspaceId: 'pg-kg',
       name: 'KG이니시스',
       type: 'pg',
@@ -276,6 +297,6 @@ describe('FocusComparison — 채팅 레일 상대 publish', () => {
 
   it('견적이 없으면 publish 하지 않는다', () => {
     render(<FocusComparison {...baseProps} bids={[]} />);
-    expect(useChatRailStore.getState().counterparty).toBeNull();
+    expect(captured).toBeNull();
   });
 });

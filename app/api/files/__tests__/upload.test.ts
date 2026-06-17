@@ -43,8 +43,10 @@ vi.mock('@/auth', () => ({
 }));
 // 폐기 세션(sv stale) 차단용 — requireSession 미사용 라우트도 동일 기준 적용.
 const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
+const getDbEmailVerifiedMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/auth/session-version-db', () => ({
   getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
+  getDbEmailVerified: (...a: unknown[]) => getDbEmailVerifiedMock(...a),
 }));
 
 
@@ -56,18 +58,16 @@ beforeEach(async () => {
   __resetStorageForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
-  const filesRoute = await import('../upload/route');
-  filesRoute.__setFilesDbForTest(db);
   storage = new InMemoryStorage();
   __setStorageForTest(storage);
   sessionRef.value = null;
   getDbSessionVersionMock.mockReset();
   getDbSessionVersionMock.mockResolvedValue(1);
+  getDbEmailVerifiedMock.mockReset();
+  getDbEmailVerifiedMock.mockResolvedValue(true);
 });
 
 afterEach(async () => {
-  const filesRoute = await import('../upload/route');
-  filesRoute.__setFilesDbForTest(undefined);
   __setStorageForTest(undefined);
   __resetStorageForTest();
   __resetForTest();
@@ -158,6 +158,15 @@ describe('POST /api/files/upload', () => {
     f.append('ownerId', '__draft__');
     const r = await callUpload(f);
     expect(r.status).toBe(401);
+  });
+
+  it('403 when email not verified', async () => {
+    sessionRef.value = { user: { id: 'user-1', email: 'u@x.com', sessionVersion: 1 } };
+    getDbEmailVerifiedMock.mockResolvedValue(false);
+    const { POST } = await import('../upload/route');
+    const form = new FormData();
+    const r = await POST(new Request('http://localhost/api/files/upload', { method: 'POST', body: form }));
+    expect(r.status).toBe(403);
   });
 
   it('400 when file is missing', async () => {

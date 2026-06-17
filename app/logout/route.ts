@@ -1,9 +1,20 @@
 import { NextResponse } from 'next/server';
 import { signOut } from '@/auth';
+import { sessionCookieClearHeaders } from '@/lib/auth/cookie-config';
+
+// signOut() 은 현행 설정의 도메인-스코프 쿠키만 만료시키므로, 도메인 설정 이전
+// 발급된 host-only 레거시 쿠키가 살아남아 무한 리다이렉트를 만든다. 응답에 모든
+// 도메인 변종의 만료 헤더를 직접 부착해 stale 쿠키를 확실히 제거한다.
+function withCookieClears(res: NextResponse): NextResponse {
+  for (const h of sessionCookieClearHeaders()) {
+    res.headers.append('set-cookie', h);
+  }
+  return res;
+}
 
 export async function POST() {
   await signOut({ redirect: false });
-  return new NextResponse(null, { status: 204 });
+  return withCookieClears(new NextResponse(null, { status: 204 }));
 }
 
 // GET 진입점 — (app) 가드가 "JWT는 유효하지만 워크스페이스를 못 쓰는" 세션을 서버
@@ -23,5 +34,5 @@ export async function GET(req: Request) {
   const host = req.headers.get('host');
   const origin =
     proto && host ? `${proto}://${host}` : new URL(req.url).origin;
-  return NextResponse.redirect(`${origin}/login`, 303);
+  return withCookieClears(NextResponse.redirect(`${origin}/login`, 303));
 }

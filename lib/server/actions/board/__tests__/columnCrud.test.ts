@@ -102,23 +102,6 @@ describe('addColumnAction', () => {
     }
   });
 
-  it('rejects pg adding an rfp_bids column (no bid board for pg)', async () => {
-    const pgUser = await seedUser(db, { email: 'p@pg.com' });
-    const pgWs = await seedPgWorkspace(db, 'toss.im');
-    sessionRef.value = {
-      user: {
-        id: pgUser.id,
-        email: pgUser.email,
-        workspaceId: pgWs.id,
-        workspaceType: 'pg',
-        role: 'admin',
-      },
-    };
-    const r = await addColumnAction({ kind: 'rfp_bids', title: 'x', position: 'a1' });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('FORBIDDEN_KIND');
-  });
-
   it('rejects without a session', async () => {
     sessionRef.value = null;
     const r = await addColumnAction({ kind: 'pipeline', title: 'x', position: 'a1' });
@@ -188,17 +171,32 @@ describe('deleteColumnAction', () => {
     if (!r.ok) expect(r.error).toBe('COLUMN_CROSS_SIDE_LOCKED');
   });
 
-  it('rejects the default-landing column', async () => {
+  it('rejects a non-cross-side system column (COLUMN_SYSTEM_LOCKED)', async () => {
     const { buyerWs } = await setupBuyer();
-    const landing = await colByTitle(buyerWs.id, '진행전');
-    const r = await deleteColumnAction({ columnId: landing });
+    // Insert a lifecycle column that is not in CROSS_SIDE_LIFECYCLE_KEYS — the
+    // code path for COLUMN_SYSTEM_LOCKED is latent (no longer seeded) but still
+    // exercised here to guard the deleteColumnAction logic.
+    const syntheticId = randomUUID();
+    await db.insert(columns).values({
+      id: syntheticId,
+      workspaceId: buyerWs.id,
+      kind: 'pipeline',
+      title: '보류(테스트전용)',
+      position: 'z9',
+      lifecycleKey: 'test-only-lifecycle-key',
+    });
+    const r = await deleteColumnAction({ columnId: syntheticId });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('COLUMN_SYSTEM_LOCKED');
   });
 
   it('deletes a custom column and cascades its placements', async () => {
     const { buyer, buyerWs } = await setupBuyer();
-    // a bid placed in 협상중
+    // Create a custom pipeline column, then place a bid in it, then delete it.
+    const addResult = await addColumnAction({ kind: 'pipeline', title: '협상중', position: 'z1' });
+    if (!addResult.ok) throw new Error('addColumnAction failed');
+    const negoId = addResult.columnId;
+
     const pgWs = await seedPgWorkspace(db, 'toss.im');
     const pgUser = await seedUser(db, { email: 's@toss.im' });
     const rfpId = randomUUID();
@@ -235,13 +233,12 @@ describe('deleteColumnAction', () => {
       paymentFees: {},
       submittedBy: pgUser.id,
     });
-    const nego = await colByTitle(buyerWs.id, '협상중');
-    await db.update(bids).set({ boardColumnId: nego }).where(eq(bids.id, bidId));
+    await db.update(bids).set({ boardColumnId: negoId }).where(eq(bids.id, bidId));
 
-    const r = await deleteColumnAction({ columnId: nego });
+    const r = await deleteColumnAction({ columnId: negoId });
     expect(r.ok).toBe(true);
-    expect(await (await getColumnRepo()).findById(nego)).toBeUndefined();
-    // ON DELETE SET NULL ⇒ the bid falls back to auto-classification (진행전).
+    expect(await (await getColumnRepo()).findById(negoId)).toBeUndefined();
+    // ON DELETE SET NULL ⇒ the bid falls back to auto-classification.
     const [after] = await db.select().from(bids).where(eq(bids.id, bidId));
     expect(after.boardColumnId).toBeNull();
   });

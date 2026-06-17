@@ -6,6 +6,7 @@
 import { useMemo, useOptimistic, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  KeyboardSensor,
   MouseSensor,
   TouchSensor,
   useSensor,
@@ -14,13 +15,19 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import type { DragAction } from '@/components/home/dragMatrix';
+import { boardKeyboardCoordinateGetter } from './boardKeyboardCoordinateGetter';
 import { resolveBoardDrop } from './resolveBoardDrop';
 import { computeValidDropTargets } from './computeValidDropTargets';
 import { moveCardAction } from '@/lib/server/actions/board/moveCardAction';
 import { releaseCardAction } from '@/lib/server/actions/board/releaseCardAction';
-import { DEFAULT_LANDING_KEY } from '@/lib/server/columns/lifecycle-keys';
 import { toast } from '@/lib/toast';
 import type { BoardCard, BoardColumn, CardType } from '@/lib/types/column';
+
+// React 19의 useOptimistic 은 액션이 없을 때 첫 번째 인수를 그대로 반환한다.
+// 인라인 {} 리터럴을 넘기면 매 렌더 새 참조 → overrides 가 불안정 → grouped/columnData
+// useMemo 가 매번 재계산 → BoardColumn memo 가 bail 하지 못한다.
+// 모듈-수준 상수를 사용해 참조를 고정한다.
+const EMPTY_OVERRIDES: Record<string, string> = {};
 
 // navigate-* actions must route immediately — KanbanActionDialog renders null
 // for them by design, so funneling them into pendingAction is a silent no-op.
@@ -47,7 +54,7 @@ export function useBoardDnd({
   const [overrides, applyOverride] = useOptimistic<
     Record<string, string>,
     { cardId: string; columnId: string }
-  >({}, (state, patch) => ({ ...state, [patch.cardId]: patch.columnId }));
+  >(EMPTY_OVERRIDES, (state, patch) => ({ ...state, [patch.cardId]: patch.columnId }));
 
   const columnOf = (c: BoardCard): string => overrides[c.cardId] ?? c.columnId;
 
@@ -64,9 +71,12 @@ export function useBoardDnd({
 
   // 마우스는 4px 이동 후 드래그(클릭과 구분), 터치는 길게 눌러 드래그 — 카드 위에서도
   // 세로 스크롤이 살아 있도록 touchAction 차단 대신 delay 활성화를 쓴다.
+  // KeyboardSensor 는 전용 드래그 핸들(setActivatorNodeRef)에서만 활성화되므로
+  // 카드 버튼의 Enter/Space 를 죽이지 않는다.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: boardKeyboardCoordinateGetter }),
   );
 
   // 드래그 중인 카드 — DragOverlay 렌더 + 유효/무효 드롭 컬럼 시각화의 단일 소스.
@@ -108,8 +118,7 @@ export function useBoardDnd({
   };
 
   const commitRelease = (card: BoardCard) => {
-    const wantKey =
-      cardType === 'bid' ? DEFAULT_LANDING_KEY : (card.payload as { stage?: string }).stage;
+    const wantKey = (card.payload as { stage?: string }).stage;
     const target = columns.find((c) => c.lifecycleKey === wantKey);
     startTransition(async () => {
       if (target) applyOverride({ cardId: card.cardId, columnId: target.id });

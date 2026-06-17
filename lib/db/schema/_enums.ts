@@ -71,6 +71,7 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'workspace.approved',
   'workspace.rejected',
   'chat.message',
+  'team_chat.message',
 ]);
 
 export const workspaceInvitationStatusEnum = pgEnum('workspace_invitation_status', [
@@ -86,8 +87,8 @@ export const verificationPurposeEnum = pgEnum('verification_purpose', [
 ]);
 
 // Unified kanban: which board a column belongs to. (workspace_id, kind) is the
-// board key — no `boards` table. `rfp_bids` instances are per-RFP views.
-export const columnKindEnum = pgEnum('column_kind', ['pipeline', 'rfp_bids']);
+// board key — no `boards` table.
+export const columnKindEnum = pgEnum('column_kind', ['pipeline']);
 
 // Column accent color — mirrors the MD3 Chip color roles.
 export const chipColorEnum = pgEnum('chip_color', [

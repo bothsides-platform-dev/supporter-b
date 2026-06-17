@@ -15,6 +15,10 @@ import { workspaces, workspaceLogoBlobs } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { eq } from 'drizzle-orm';
 import {
+  __resetForTest,
+  __useDrizzleWithDbForTest,
+} from '@/lib/server/repositories/factory';
+import {
   seedBuyerWorkspace,
   seedUser,
   seedMembership,
@@ -26,27 +30,31 @@ vi.mock('@/auth', () => ({
 }));
 // 폐기 세션(sv stale) 차단용 — requireSession 미사용 라우트도 동일 기준 적용.
 const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
+const getDbEmailVerifiedMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/auth/session-version-db', () => ({
   getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
+  getDbEmailVerified: (...a: unknown[]) => getDbEmailVerifiedMock(...a),
 }));
 
 
 let db: PgliteDB;
 
 beforeEach(async () => {
+  __resetForTest();
   db = await createPgliteDb();
   sessionRef.value = null;
   getDbSessionVersionMock.mockReset();
   getDbSessionVersionMock.mockResolvedValue(1);
+  getDbEmailVerifiedMock.mockReset();
+  getDbEmailVerifiedMock.mockResolvedValue(true);
 
-  // Install DB override before importing route
-  const mod = await import('../route');
-  mod.__setAvatarDbForTest(db);
+  // Point the repo factory at the pglite handle so the route's repo calls
+  // (workspace-logo / workspace) resolve against the test DB.
+  await __useDrizzleWithDbForTest(db);
 });
 
 afterEach(async () => {
-  const mod = await import('../route');
-  mod.__setAvatarDbForTest(undefined);
+  __resetForTest();
   vi.resetModules();
 });
 
@@ -310,6 +318,28 @@ it('DELETE removes logo blob and clears has_logo', async () => {
     .from(workspaces)
     .where(eq(workspaces.id, wsId));
   expect(ws.hasLogo).toBe(false);
+});
+
+it('403 POST when email not verified', async () => {
+  sessionRef.value = { user: { id: 'u-1', workspaceId: 'ws-1', sessionVersion: 1 } };
+  getDbEmailVerifiedMock.mockResolvedValue(false);
+  const { POST } = await import('../route');
+  const r = await POST(
+    new Request('http://localhost/api/workspace/ws-1/avatar', { method: 'POST', body: new FormData() }),
+    { params: Promise.resolve({ id: 'ws-1' }) }
+  );
+  expect(r.status).toBe(403);
+});
+
+it('403 DELETE when email not verified', async () => {
+  sessionRef.value = { user: { id: 'u-1', workspaceId: 'ws-1', sessionVersion: 1 } };
+  getDbEmailVerifiedMock.mockResolvedValue(false);
+  const { DELETE } = await import('../route');
+  const r = await DELETE(
+    new Request('http://localhost/api/workspace/ws-1/avatar', { method: 'DELETE' }),
+    { params: Promise.resolve({ id: 'ws-1' }) }
+  );
+  expect(r.status).toBe(403);
 });
 
 describe('avatar — 폐기 세션', () => {

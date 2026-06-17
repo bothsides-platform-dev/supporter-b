@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { PartyPopper } from 'lucide-react';
 import { motion, useAnimation } from 'motion/react';
 import { Chip } from '@/components/primitives/Chip';
@@ -16,7 +15,6 @@ function handleLogout() {
 }
 
 export function ApprovalWaitingScreen() {
-  const router = useRouter();
   // 컨페티는 공용 축하 모먼트 훅(DESIGN.md §9), 아이콘 셰이크는 이 화면 고유 연출.
   const { canvasRef, fire } = useCelebrationConfetti();
   const iconControls = useAnimation();
@@ -49,14 +47,14 @@ export function ApprovalWaitingScreen() {
       const r = await checkMyWorkspaceApprovalAction();
       if (active && r.approved) {
         clearInterval(id);
-        router.push('/home');
+        window.location.assign('/home');
       }
     }, 10_000);
     return () => {
       active = false;
       clearInterval(id);
     };
-  }, [router]);
+  }, []);
 
   return (
     <>

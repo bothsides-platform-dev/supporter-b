@@ -8,6 +8,8 @@ export async function register() {
       env: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
       region: process.env.VERCEL_REGION,
     });
+    const { checkProductionConfig } = await import("./lib/env/check-production-config");
+    checkProductionConfig(process.env);
   }
   if (process.env.NEXT_RUNTIME === "edge") {
     await import("./sentry.edge.config");

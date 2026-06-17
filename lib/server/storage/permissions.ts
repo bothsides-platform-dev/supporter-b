@@ -2,7 +2,8 @@
  * `canAccessAttachment` — single source of truth for file route ACLs.
  *
  * Ownership is exclusive-arc (C4): an attachment carries at most one of
- * rfpId / bidId / bidNoteId / chatMessageId. Rules per owner column:
+ * rfpId / bidId / bidNoteId / chatMessageId / rfpTeamMessageId. Rules per
+ * owner column:
  *
  *   `rfpId` set (RFP PDFs attached to a buyer-side RFP)
  *     - Buyer ws members of the RFP owner: ALLOW
@@ -11,8 +12,10 @@
  *     - Otherwise: DENY
  *
  *   `bidId` set (proposal PDF attached to a PG-side bid)
+ *     - Same-PG-workspace as the bid: ALLOW (PG ws peers view submissions) —
+ *       NOTE this grants on `bid.pgWsId === session ws` alone, WITHOUT an
+ *       isMember check and BEFORE the RFP is resolved.
  *     - Buyer ws members of the underlying RFP: ALLOW
- *     - Same-PG-workspace as the bid: ALLOW (PG ws peers view submissions)
  *     - Uploader themselves: ALLOW
  *     - Otherwise: DENY
  *
@@ -38,11 +41,24 @@
  *
  * Cross-PG isolation is preserved — a PG user from a different ws cannot
  * read another PG's proposal even if invited to the same RFP.
+ *
+ * The owner chain is resolved through repository methods (no raw schema/Drizzle
+ * access) — the ACL stays a thin, db-agnostic policy over the repo bundle. The
+ * exact branch order/membership semantics above are characterized in
+ * `__tests__/permissions.test.ts`.
  */
-import { eq } from 'drizzle-orm';
-import { bidNotes, bids, chatConversations, chatMessages, rfpTeamMessages, rfps } from '@/lib/db/schema';
 import type { AttachmentRecord } from '@/lib/server/repositories/attachment-record';
-import type { InvitationRepo, WorkspaceRepo, Tx } from '@/lib/server/repositories/types';
+import type {
+  BidNoteRepo,
+  BidRepo,
+  ChatConversationRepo,
+  ChatMessageRepo,
+  InvitationRepo,
+  RfpRepo,
+  RfpTeamMessageRepo,
+  WorkspaceRepo,
+  Tx,
+} from '@/lib/server/repositories/types';
 
 // Re-export under the legacy name so call sites that import { AttachmentRow }
 // from this module keep compiling (test files mirror this name).
@@ -55,11 +71,18 @@ export type AttachmentSession = {
 export type RepoBundleForAttachment = {
   invitation: InvitationRepo;
   workspace: WorkspaceRepo;
+  rfp: RfpRepo;
+  bid: BidRepo;
+  bidNote: BidNoteRepo;
+  chatMessage: ChatMessageRepo;
+  chatConversation: ChatConversationRepo;
+  rfpTeamMessage: RfpTeamMessageRepo;
 };
 
 export async function canAccessAttachment(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any,
+  // The owner chain is resolved exclusively through `repos` (no raw schema
+  // access). Owner lookups forward `tx` so they share the caller's transaction
+  // when one is supplied.
   att: AttachmentRow,
   session: AttachmentSession,
   repos: RepoBundleForAttachment,
@@ -67,8 +90,6 @@ export async function canAccessAttachment(
 ): Promise<boolean> {
   const userId = session.user.id;
   const wsId = session.user.workspaceId;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const h: any = tx ?? db;
 
   // Uploader themselves can always read their own upload — covers the
   // narrow window between upload and the form action that links the
@@ -80,11 +101,7 @@ export async function canAccessAttachment(
     repos.workspace.isMember(userId, workspaceId, tx);
 
   if (att.rfpId) {
-    const [rfp] = await h
-      .select({ buyerWsId: rfps.buyerWsId })
-      .from(rfps)
-      .where(eq(rfps.id, att.rfpId))
-      .limit(1);
+    const rfp = await repos.rfp.findOwnerById(att.rfpId, tx);
     if (!rfp) return false;
 
     // Buyer ws membership — any member (admin/member) of the owning ws.
@@ -100,50 +117,29 @@ export async function canAccessAttachment(
   if (att.bidNoteId) {
     // bid_note → bid_notes.bid_id → bids.rfp_id → rfps.buyer_ws_id; require
     // membership of that buyer ws. PG users denied (notes are buyer-internal).
-    const [note] = await h
-      .select({ bidId: bidNotes.bidId })
-      .from(bidNotes)
-      .where(eq(bidNotes.id, att.bidNoteId))
-      .limit(1);
+    const note = await repos.bidNote.findById(att.bidNoteId, tx);
     if (!note) return false;
 
-    const [bidRow] = await h
-      .select({ rfpId: bids.rfpId })
-      .from(bids)
-      .where(eq(bids.id, note.bidId))
-      .limit(1);
-    if (!bidRow) return false;
-
-    const [rfpRow] = await h
-      .select({ buyerWsId: rfps.buyerWsId })
-      .from(rfps)
-      .where(eq(rfps.id, bidRow.rfpId))
-      .limit(1);
-    if (!rfpRow) return false;
-    if (!wsId || rfpRow.buyerWsId !== wsId) return false;
+    const owner = await repos.bid.findRfpOwner(note.bidId, tx);
+    if (!owner) return false;
+    if (!wsId || owner.buyerWsId !== wsId) return false;
     return isMember(wsId);
   }
 
   if (att.bidId) {
     // bid_proposal — the attachment carries bid_id directly (exclusive-arc).
-    const [bid] = await h
-      .select({ pgWsId: bids.pgWsId, rfpId: bids.rfpId })
-      .from(bids)
-      .where(eq(bids.id, att.bidId))
-      .limit(1);
+    // Bid-only lookup so the PG fast-path resolves WITHOUT requiring the RFP
+    // row (matches the raw branch order: pgWsId check precedes the rfp lookup).
+    const bid = await repos.bid.findOwner(att.bidId, tx);
     if (!bid) return false;
 
     // PG workspace peers — same workspace as the bid submitter.
     if (wsId && bid.pgWsId === wsId) return true;
 
     // Buyer ws — RFP's owning workspace.
-    const [rfpRow] = await h
-      .select({ buyerWsId: rfps.buyerWsId })
-      .from(rfps)
-      .where(eq(rfps.id, bid.rfpId))
-      .limit(1);
-    if (!rfpRow) return false;
-    if (wsId && rfpRow.buyerWsId === wsId && (await isMember(wsId))) return true;
+    const rfp = await repos.rfp.findOwnerById(bid.rfpId, tx);
+    if (!rfp) return false;
+    if (wsId && rfp.buyerWsId === wsId && (await isMember(wsId))) return true;
     return false;
   }
 
@@ -152,11 +148,7 @@ export async function canAccessAttachment(
     // Sealed-bid: only members of THAT workspace may read it; the opposite side
     // (buyer vs each PG) sees a disjoint thread. Same gate as listByScope, which
     // filters team messages by (rfpId, workspaceId).
-    const [msg] = await h
-      .select({ workspaceId: rfpTeamMessages.workspaceId })
-      .from(rfpTeamMessages)
-      .where(eq(rfpTeamMessages.id, att.rfpTeamMessageId))
-      .limit(1);
+    const msg = await repos.rfpTeamMessage.findOwner(att.rfpTeamMessageId, tx);
     if (!msg) return false;
     if (!wsId || msg.workspaceId !== wsId) return false;
     return isMember(wsId);
@@ -164,18 +156,10 @@ export async function canAccessAttachment(
 
   if (att.chatMessageId) {
     // chat attachment — both workspace sides of the conversation can read it.
-    const [msgRow] = await h
-      .select({ conversationId: chatMessages.conversationId })
-      .from(chatMessages)
-      .where(eq(chatMessages.id, att.chatMessageId))
-      .limit(1);
-    if (!msgRow) return false;
+    const msg = await repos.chatMessage.findConversationId(att.chatMessageId, tx);
+    if (!msg) return false;
 
-    const [conv] = await h
-      .select({ buyerWsId: chatConversations.buyerWsId, pgWsId: chatConversations.pgWsId })
-      .from(chatConversations)
-      .where(eq(chatConversations.id, msgRow.conversationId))
-      .limit(1);
+    const conv = await repos.chatConversation.findById(msg.conversationId, tx);
     if (!conv) return false;
 
     if (!wsId) return false;

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
+  __resetForTest,
+  __useDrizzleWithDbForTest,
+} from '@/lib/server/repositories/factory';
+import {
   LOGIN_LOCK_THRESHOLD,
   LOGIN_LOCK_DURATION_MS,
   checkLoginLock,
@@ -12,10 +16,13 @@ let db: PgliteDB;
 const T0 = new Date('2026-06-06T00:00:00.000Z');
 
 beforeEach(async () => {
+  __resetForTest();
   db = await createPgliteDb();
+  await __useDrizzleWithDbForTest(db);
 });
 afterEach(() => {
   // pglite handle is a per-file singleton + TRUNCATE; nothing to close.
+  __resetForTest();
 });
 
 describe('login-rate-limit', () => {

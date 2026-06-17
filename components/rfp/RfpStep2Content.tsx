@@ -166,14 +166,14 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
         infoTerm="정산한도"
         value={draft.currentSettlementLimit}
         onChange={(v) => draft.setField('currentSettlementLimit', v)}
-        placeholder="월 1억"
+        placeholder="100,000,000"
       />
       <CurrencyInput
         label="현재 보증보험"
         infoTerm="보증보험"
         value={draft.currentGuaranteeInsurance}
         onChange={(v) => draft.setField('currentGuaranteeInsurance', v)}
-        placeholder="3000만원"
+        placeholder="30,000,000"
       />
       <DayOffsetInput
         label="현재 정산주기"

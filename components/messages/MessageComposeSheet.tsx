@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { HTTPError } from 'ky';
-import { http } from '@/lib/http';
 import { formatSize } from '@/lib/format';
 import {
   Sheet,
@@ -20,7 +19,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { PaperclipIcon, ChevronDownIcon, XIcon } from '@/components/icons';
-import { MAX_FILES, MAX_BYTES, ACCEPT_EXT, ACCEPTED_MIMES, ACCEPTED_EXTENSIONS } from '@/lib/server/storage/constants';
+import { ACCEPT_EXT } from '@/lib/server/storage/constants';
+import { useComposerAttachments } from './useComposerAttachments';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { listTemplatesAction } from '@/lib/server/actions/chat/listTemplatesAction';
 import { saveTemplateAction } from '@/lib/server/actions/chat/saveTemplateAction';
@@ -38,15 +38,6 @@ type Props = {
 const LABEL = '메시지 보내기';
 const PLACEHOLDER = '상대에게 보낼 메시지를 입력하세요';
 
-type AttachmentRow = {
-  // tempId until upload resolves, then swapped for the server attachment id.
-  id: string;
-  name: string;
-  size: number;
-  status: 'uploading' | 'ready' | 'error';
-  error?: string;
-};
-
 /**
  * 받는사람이 정해진 리치 작성 드로어(controlled) — 저장된 템플릿 불러오기·템플릿 저장·
  * 파일 첨부(최대 5개·20MB)·본문 작성·전송을 다룬다. '바로 전송' 시 sendChatMessageAction을
@@ -56,17 +47,29 @@ type AttachmentRow = {
 export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpContext }: Props) {
   const [draft, setDraft] = useState('');
   const [templates, setTemplates] = useState<ChatMessageTemplate[]>([]);
-  const [rows, setRows] = useState<AttachmentRow[]>([]);
+  const { rows, addFiles, removeRow, clear } = useComposerAttachments({
+    ownerKind: 'chat',
+    ownerId: '__draft__',
+    dedupeByName: true,
+    mapUploadError: (err) => {
+      if (err instanceof HTTPError) {
+        const { status } = err.response;
+        return status === 413
+          ? '파일이 너무 큽니다 (최대 20MB)'
+          : status === 415
+            ? '지원되지 않는 파일 형식입니다 (PDF/PNG/JPEG만 허용)'
+            : `업로드 실패 (${status})`;
+      }
+      return err instanceof Error ? err.message : '네트워크 오류';
+    },
+  });
   const [sending, setSending] = useState(false);
 
-  // RfpContext.code carries the RFP *uuid* at all embed sites (e.g.
-  // RfpBriefPanel passes `code: rfp.id`); sendChatMessageAction expects a uuid
-  // rfpId, so the tag wires straight through.
-  const rfpId = rfpContext?.code;
+  const rfpId = rfpContext?.id;
 
   function resetDraftState() {
     setDraft('');
-    setRows([]);
+    clear();
   }
 
   // Reset on close happens in the close handler (an event), not the effect, so
@@ -100,66 +103,6 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
     await saveTemplateAction({ title, body });
     const result = await listTemplatesAction();
     if (result.ok) setTemplates(result.templates);
-  }
-
-  async function uploadOne(file: File, tempId: string) {
-    const form = new FormData();
-    form.append('file', file);
-    // Chat attachments are uploaded as ownerless drafts and linked to the
-    // message row by sendChatMessageAction (it validates the rows are unlinked
-    // + uploaded by a session-ws member).
-    form.append('ownerKind', 'chat');
-    form.append('ownerId', '__draft__');
-    try {
-      const body = await http
-        .post('/api/files/upload', { body: form })
-        .json<{ id: string; name: string; size: number }>();
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === tempId ? { id: body.id, name: body.name, size: body.size, status: 'ready' } : r,
-        ),
-      );
-    } catch (err) {
-      let msg = err instanceof Error ? err.message : '네트워크 오류';
-      if (err instanceof HTTPError) {
-        const { status } = err.response;
-        msg =
-          status === 413
-            ? '파일이 너무 큽니다 (최대 20MB)'
-            : status === 415
-              ? '지원되지 않는 파일 형식입니다 (PDF/PNG/JPEG만 허용)'
-              : `업로드 실패 (${status})`;
-      }
-      setRows((prev) =>
-        prev.map((r) => (r.id === tempId ? { ...r, status: 'error', error: msg } : r)),
-      );
-    }
-  }
-
-  function addFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    const remaining = MAX_FILES - rows.length;
-    if (remaining <= 0) return;
-    const additions: AttachmentRow[] = [];
-    for (let i = 0; i < Math.min(fileList.length, remaining); i++) {
-      const f = fileList[i];
-      if (rows.some((r) => r.name === f.name)) continue;
-      const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
-      if (!ACCEPTED_MIMES.has(f.type) && !ACCEPTED_EXTENSIONS.has(ext)) {
-        const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
-        additions.push({ id: tempId, name: f.name, size: f.size, status: 'error', error: '지원되지 않는 파일 형식이에요 (PDF/PNG/JPEG)' });
-        continue;
-      }
-      if (f.size > MAX_BYTES) continue;
-      const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
-      additions.push({ id: tempId, name: f.name, size: f.size, status: 'uploading' });
-      void uploadOne(f, tempId);
-    }
-    if (additions.length > 0) setRows((prev) => [...prev, ...additions]);
-  }
-
-  function removeRow(id: string) {
-    setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
   async function handleSend() {
@@ -280,7 +223,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
                       {r.name}
                     </span>
                     <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-outline)]">
-                      {formatSize(r.size)}
+                      {formatSize(r.size ?? 0)}
                     </span>
                     {r.status === 'uploading' && (
                       <span className="shrink-0 font-mono text-[10px] tracking-[0.12em] text-[var(--md-sys-color-outline)]">

@@ -1,12 +1,12 @@
 {
   "name": "supporter-b",
-  "version": "0.2.15.0",
+  "version": "0.2.25.5",
   "private": true,
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "prepare": "git config core.hooksPath .githooks || true",
+    "prepare": "git config core.hooksPath .githooks || true; node scripts/git/install-merge-drivers.mjs || true",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
