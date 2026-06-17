@@ -2,14 +2,8 @@
 
 import { z } from 'zod';
 
-import { getColumnRepo } from '@/lib/server/repositories/factory';
-import { isSystemColumn } from '@/lib/types/column';
-import {
-  type BoardActionResult,
-  workspaceIdForCard,
-  setCardBoardColumn,
-  cardBelongsToWorkspace,
-} from './_shared';
+import { getBoardService } from '@/lib/server/services/board';
+import { type BoardActionResult, workspaceIdForCard } from './_shared';
 
 const Input = z
   .object({
@@ -27,7 +21,7 @@ export type MoveCardResult = BoardActionResult;
  * system columns — cross-side protocol, lifecycle columns — are rejected;
  * releasing a card back to auto-classification goes through releaseCardAction.
  * Lifecycle-column drops that trigger a domain action are handled client-side.
- * See _shared.ts.
+ * See services/board.ts.
  */
 export async function moveCardAction(input: MoveCardInput): Promise<MoveCardResult> {
   const parsed = Input.safeParse(input);
@@ -37,18 +31,8 @@ export async function moveCardAction(input: MoveCardInput): Promise<MoveCardResu
   const ws = await workspaceIdForCard(cardType);
   if (!ws.ok) return ws;
 
-  const colRepo = await getColumnRepo();
-  const column = await colRepo.findById(toColumnId);
-  if (!column) return { ok: false, error: 'COLUMN_NOT_FOUND' };
-  if (column.workspaceId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
-  if (column.kind !== 'pipeline') return { ok: false, error: 'CROSS_KIND' };
-  // system (lifecycle-bound) columns ⇒ non-deletable AND non-place-target.
-  if (isSystemColumn(column)) return { ok: false, error: 'NOT_A_DROP_TARGET' };
-
-  if (!(await cardBelongsToWorkspace(cardType, cardId, ws.workspaceId))) {
-    return { ok: false, error: 'FORBIDDEN' };
-  }
-
-  await setCardBoardColumn(cardType, cardId, toColumnId);
-  return { ok: true };
+  return (await getBoardService()).moveCard(
+    { cardType, cardId, toColumnId },
+    { workspaceId: ws.workspaceId, workspaceType: cardType === 'invitation' ? 'pg' : 'buyer' },
+  );
 }

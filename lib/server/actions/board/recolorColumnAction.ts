@@ -2,8 +2,8 @@
 
 import { z } from 'zod';
 
-import { getColumnRepo } from '@/lib/server/repositories/factory';
-import { type BoardActionResult, requireOwnedColumn } from './_shared';
+import { getBoardService } from '@/lib/server/services/board';
+import { type BoardActionResult, requireActiveWorkspace } from './_shared';
 
 const Input = z
   .object({
@@ -21,8 +21,11 @@ export async function recolorColumnAction(
 ): Promise<RecolorColumnResult> {
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
-  const owned = await requireOwnedColumn(parsed.data.columnId);
-  if (!owned.ok) return owned;
-  await (await getColumnRepo()).update(parsed.data.columnId, { color: parsed.data.color });
-  return { ok: true };
+  const ws = await requireActiveWorkspace();
+  if (!ws.ok) return ws;
+  return (await getBoardService()).recolorColumn(
+    parsed.data.columnId,
+    parsed.data.color,
+    ws.workspaceId,
+  );
 }

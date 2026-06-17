@@ -1,25 +1,21 @@
-// Unified kanban data loader — server-only (imports the repo factory). A single
-// call returns homogeneous cards (one cardType): pipeline+buyer → rfp,
-// pipeline+pg → invitation. Card placement lives on the card row
-// (board_column_id) — no separate placement query.
+// Unified kanban data loader — subsumes buyer-kanban-loader + pg-kanban-loader.
+// server-only (imports the repo factory). A single call returns homogeneous cards
+// (one cardType): pipeline+buyer → rfp, pipeline+pg → invitation.
+// Card placement lives on the card row (board_column_id) — no separate placement query.
 import {
   getColumnRepo,
   getRfpRepo,
   getBidRepo,
   getInvitationRepo,
-  getRfpRequoteRequestRepo,
 } from '@/lib/server/repositories/factory';
 import {
   classifyBuyerRfp,
   toBuyerCard,
   compareBuyerCards,
 } from '@/lib/server/buyer-kanban';
-import {
-  classifyPgInvitation,
-  toPgCard,
-  comparePgCards,
-} from '@/lib/server/pg-kanban';
+import { comparePgCards } from '@/lib/server/pg-kanban';
 import { resolveCardColumn } from './resolveCardColumn';
+import { loadPgInboxData, buildPgPipelineCards, type PgInboxData } from './pgInbox';
 import type {
   BoardCard,
   BoardColumn,
@@ -28,7 +24,22 @@ import type {
   ColumnKind,
 } from '@/lib/types/column';
 import type { WorkspaceType } from '@/lib/types/workspace';
-import type { Bid } from '@/lib/types/bid';
+
+export type { PgInboxData };
+
+/**
+ * prefetched 데이터(이미 로드된 PgInboxData)가 있으면 재사용해 3-쿼리를 건너뜀.
+ * inbox/page.tsx 에서 행 조립과 보드 카드 조립을 동일 데이터로 공급할 때 사용.
+ */
+export async function loadPgPipelineBoard(
+  workspaceId: string,
+  prefetched?: PgInboxData,
+): Promise<BoardData> {
+  const colRepo = await getColumnRepo();
+  const columns = await colRepo.listByBoard(workspaceId, 'pipeline');
+  const pgData = prefetched ?? (await loadPgInboxData(workspaceId));
+  return { columns, cards: sortCards(buildPgPipelineCards(pgData, columns), columns, 'invitation') };
+}
 
 // Order cards within each column by the domain comparator (deadline / submittedAt).
 // Custom and lifecycle columns alike — there is no per-card manual order.
@@ -65,7 +76,7 @@ export async function loadBoard(args: {
   const colRepo = await getColumnRepo();
   const columns = await colRepo.listByBoard(workspaceId, kind);
 
-  // pipeline
+  // pipeline + buyer
   if (workspaceType === 'buyer') {
     const [rfpRepo, bidRepo, invRepo] = await Promise.all([
       getRfpRepo(),
@@ -100,40 +111,10 @@ export async function loadBoard(args: {
     return { columns, cards: sortCards(cards, columns, 'rfp') };
   }
 
-  // pipeline + pg
-  const [invRepo, bidRepo, requoteRepo] = await Promise.all([
-    getInvitationRepo(),
-    getBidRepo(),
-    getRfpRequoteRequestRepo(),
-  ]);
-  const [pairs, bidList, pendingRequotes] = await Promise.all([
-    invRepo.findByPgWorkspace(workspaceId),
-    bidRepo.findByPgWs(workspaceId),
-    requoteRepo.findPendingByPgWs(workspaceId),
-  ]);
-  const bidByRfp = new Map<string, Bid>();
-  for (const b of bidList) bidByRfp.set(b.rfpId, b);
-  const pendingRequoteRfpIds = new Set(pendingRequotes.map((r) => r.rfpId));
-  const cards: BoardCard[] = pairs.map(({ invitation, rfp, buyerName }) => {
-    const bid = bidByRfp.get(rfp.id);
-    const stage = classifyPgInvitation({ invitation, bid, rfp });
-    return {
-      cardType: 'invitation',
-      cardId: invitation.id,
-      columnId: resolveCardColumn({
-        boardColumnId: invitation.boardColumnId,
-        lifecycleKey: stage,
-        columns,
-      }),
-      payload: toPgCard({
-        invitation,
-        bid,
-        rfp,
-        stage,
-        buyerName,
-        hasPendingRequote: pendingRequoteRfpIds.has(rfp.id),
-      }),
-    };
-  });
-  return { columns, cards: sortCards(cards, columns, 'invitation') };
+  // pipeline + pg — 데이터 조립은 loadPgInboxData(pgInbox.ts) 단일 출처.
+  const pgData = await loadPgInboxData(workspaceId);
+  return {
+    columns,
+    cards: sortCards(buildPgPipelineCards(pgData, columns), columns, 'invitation'),
+  };
 }

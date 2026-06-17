@@ -8,9 +8,11 @@
  * now) on a later tick when no action is running. The cron is what actually
  * sends those window-end digests.
  *
- * It drives BOTH:
- *   - flushAllOutbox  — generic pending rows (everything except chat.message).
- *   - flushChatDigests — coalesced chat.message digests, body recomputed at send.
+ * It drives:
+ *   - flushAllOutbox       — generic pending rows (everything except the
+ *                            coalesced chat digests).
+ *   - flushChatDigests     — coalesced chat.message digests, recomputed at send.
+ *   - flushTeamChatDigests — coalesced team_chat.message digests, recomputed at send.
  *
  * Auth (fail-closed): authorized iff CRON_SECRET is a non-empty string AND the
  * provided value (header `x-cron-secret` or query `?secret=`) equals it. An
@@ -23,7 +25,8 @@ import { NextResponse } from 'next/server';
 
 import { flushAllOutbox } from '@/lib/server/outbox/flush-all';
 import { flushChatDigests } from '@/lib/server/outbox/chat-digest-flush';
-import { getResendSender } from '@/lib/integrations/resend';
+import { flushTeamChatDigests } from '@/lib/server/outbox/team-chat-digest-flush';
+import { getResendBatchSender } from '@/lib/integrations/resend';
 
 export const runtime = 'nodejs';
 
@@ -39,9 +42,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  const sender = getResendSender();
-  const generic = await flushAllOutbox(sender);
-  const digests = await flushChatDigests(sender);
+  // All three flushers now use the batch sender: generic fan-outs are batched
+  // natively; chat/team digests recompute per-row in Phase 1 then batch the
+  // survivors in Phase 2 via sendEntriesInBatches (rate-limit fix).
+  const batchSender = getResendBatchSender();
+  const generic = await flushAllOutbox(batchSender);
+  const digests = await flushChatDigests(batchSender);
+  const teamDigests = await flushTeamChatDigests(batchSender);
 
-  return NextResponse.json({ generic, digests });
+  return NextResponse.json({ generic, digests, teamDigests });
 }

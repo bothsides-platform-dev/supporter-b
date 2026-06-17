@@ -1,9 +1,8 @@
 'use server';
 
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
-import { getColumnRepo } from '@/lib/server/repositories/factory';
+import { getBoardService } from '@/lib/server/services/board';
 import { type BoardActionResult, requireActiveWorkspace } from './_shared';
 
 const Input = z
@@ -27,15 +26,8 @@ export async function addColumnAction(input: AddColumnInput): Promise<AddColumnR
   if (!ws.ok) return ws;
 
   const { kind, title, color, position } = parsed.data;
-  const columnId = randomUUID();
-  await (await getColumnRepo()).create({
-    id: columnId,
-    workspaceId: ws.workspaceId,
-    kind,
-    title,
-    position,
-    color: color ?? null,
-    lifecycleKey: null, // custom column ⇒ deletable
-  });
-  return { ok: true, columnId };
+  return (await getBoardService()).addColumn(
+    { kind, title, color, position },
+    { workspaceId: ws.workspaceId, workspaceType: ws.workspaceType },
+  );
 }

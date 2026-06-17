@@ -1,5 +1,5 @@
-import { eq, inArray } from 'drizzle-orm';
-import { bids, attachments } from '@/lib/db/schema';
+import { and, asc, desc, eq, ilike, inArray, or } from 'drizzle-orm';
+import { bids, attachments, rfps, workspaces } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
@@ -184,9 +184,138 @@ export class DrizzleBidRepository implements BidRepo {
     const rows = (await db
       .select(BID_COLUMNS)
       .from(bids)
-      .where(eq(bids.pgWsId, pgWsId))) as BidRow[];
+      .where(eq(bids.pgWsId, pgWsId))
+      .orderBy(asc(bids.round))) as BidRow[];
     const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
   }
 
+  async updateStatus(id: string, status: Bid['status'], tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.update(bids).set({ status }).where(eq(bids.id, id));
+  }
+
+  async searchForBuyer(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // bids⋈rfps⋈workspaces — mirrors searchEntitiesAction.ts (buyer bid branch).
+    // rfpId is the RFP *code* (human id for URLs); pgWsName is the PG ws name.
+    // Submitted bids only; pattern is escape+wrapped by the caller.
+    return db
+      .select({
+        bidId: bids.id,
+        rfpId: rfps.code,
+        rfpTitle: rfps.title,
+        pgWsName: workspaces.name,
+        memo: bids.memo,
+      })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .innerJoin(workspaces, eq(bids.pgWsId, workspaces.id))
+      .where(
+        and(
+          eq(rfps.buyerWsId, wsId),
+          eq(bids.status, 'submitted'),
+          or(
+            ilike(rfps.title, pattern),
+            ilike(bids.memo, pattern),
+            ilike(workspaces.name, pattern),
+          ),
+        ),
+      )
+      .orderBy(desc(bids.submittedAt))
+      .limit(20);
+  }
+
+  async listForBuyer(wsId: string, limit: number, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // 초성 검색 companion — searchForBuyer 와 동일한 projection, ilike 없이
+    // ws-scope+submitted 만 fetch. 호출자가 getChoseong 로 JS 필터한다.
+    return db
+      .select({
+        bidId: bids.id,
+        rfpId: rfps.code,
+        rfpTitle: rfps.title,
+        pgWsName: workspaces.name,
+        memo: bids.memo,
+      })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .innerJoin(workspaces, eq(bids.pgWsId, workspaces.id))
+      .where(and(eq(rfps.buyerWsId, wsId), eq(bids.status, 'submitted')))
+      .orderBy(desc(bids.submittedAt))
+      .limit(limit);
+  }
+
+  async searchForPg(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // bids⋈rfps — mirrors searchEntitiesAction.ts (pg bid branch). No ws name
+    // (PG sees its own bids). Submitted only; pattern is escape+wrapped.
+    return db
+      .select({
+        bidId: bids.id,
+        rfpId: rfps.code,
+        rfpTitle: rfps.title,
+        memo: bids.memo,
+      })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .where(
+        and(
+          eq(bids.pgWsId, wsId),
+          eq(bids.status, 'submitted'),
+          or(ilike(rfps.title, pattern), ilike(bids.memo, pattern)),
+        ),
+      )
+      .orderBy(desc(bids.submittedAt))
+      .limit(20);
+  }
+
+  async listForPg(wsId: string, limit: number, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // 초성 검색 companion — searchForPg 와 동일한 projection (no pgWsName),
+    // ilike 없이 pg-scope+submitted 만 fetch. 호출자가 getChoseong 로 JS 필터.
+    return db
+      .select({
+        bidId: bids.id,
+        rfpId: rfps.code,
+        rfpTitle: rfps.title,
+        memo: bids.memo,
+      })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .where(and(eq(bids.pgWsId, wsId), eq(bids.status, 'submitted')))
+      .orderBy(desc(bids.submittedAt))
+      .limit(limit);
+  }
+
+  async findRfpOwner(
+    bidId: string,
+    tx?: Tx,
+  ): Promise<{ rfpId: string; buyerWsId: string } | undefined> {
+    const db = this.h(tx);
+    // bids⋈rfps — upload/ACL gate: which RFP a bid belongs to + its owning buyer
+    // ws. rfpId here is the surrogate uuid (FK), matching upload route usage.
+    const [row] = await db
+      .select({ rfpId: bids.rfpId, buyerWsId: rfps.buyerWsId })
+      .from(bids)
+      .innerJoin(rfps, eq(bids.rfpId, rfps.id))
+      .where(eq(bids.id, bidId))
+      .limit(1);
+    return row ?? undefined;
+  }
+
+  async findOwner(
+    bidId: string,
+    tx?: Tx,
+  ): Promise<{ pgWsId: string; rfpId: string } | undefined> {
+    const db = this.h(tx);
+    // bids 단독 (rfps 조인 없음) — 첨부 ACL 의 PG fast-path 가 RFP 존재 여부와
+    // 무관하게 bid.pgWsId 를 봐야 하므로 findRfpOwner 와 분리한 경량 projection.
+    const [row] = await db
+      .select({ pgWsId: bids.pgWsId, rfpId: bids.rfpId })
+      .from(bids)
+      .where(eq(bids.id, bidId))
+      .limit(1);
+    return row ?? undefined;
+  }
 }

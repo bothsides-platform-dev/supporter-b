@@ -1,8 +1,5 @@
 import { redirect } from 'next/navigation';
-import { and, eq, gt } from 'drizzle-orm';
 import { auth } from '@/auth';
-import { db } from '@/lib/db/client';
-import { workspaceInvitations } from '@/lib/db/schema';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { MembersPanel } from '@/components/settings/MembersPanel';
@@ -18,7 +15,8 @@ export default async function MembersPage() {
   const wsId = session.user.workspaceId;
   const userRole = (session.user.role as 'admin' | 'member') ?? 'member';
 
-  const ws = await (await getWorkspaceRepo()).findById(wsId);
+  const workspaceRepo = await getWorkspaceRepo();
+  const ws = await workspaceRepo.findById(wsId);
   if (!ws) {
     return (
       <div className="px-8 py-8">
@@ -29,25 +27,12 @@ export default async function MembersPage() {
     );
   }
 
-  const pendingRows = await db
-    .select({
-      email: workspaceInvitations.invitedEmail,
-      createdAt: workspaceInvitations.createdAt,
-      role: workspaceInvitations.role,
-    })
-    .from(workspaceInvitations)
-    .where(
-      and(
-        eq(workspaceInvitations.workspaceId, wsId),
-        eq(workspaceInvitations.status, 'pending'),
-        gt(workspaceInvitations.expiresAt, new Date()),
-      ),
-    );
+  const pendingRows = await workspaceRepo.listPendingInvitations(wsId);
 
   const pendingInvites = pendingRows.map((r) => ({
     email: r.email,
     createdAt: r.createdAt.toISOString(),
-    role: r.role,
+    role: r.role as 'admin' | 'member',
   }));
 
   return (

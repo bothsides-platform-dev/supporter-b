@@ -1,8 +1,12 @@
 // Active-workspace resolution helpers shared by login (authorize) and the
 // runtime switch action.
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
+import {
+  __resetForTest,
+  __useDrizzleWithDbForTest,
+} from '@/lib/server/repositories/factory';
 import {
   seedUser,
   seedBuyerWorkspace,
@@ -14,6 +18,11 @@ import { getMembership, resolveInitialMembership } from '../active-workspace';
 let db: PgliteDB;
 beforeEach(async () => {
   db = await createPgliteDb();
+  // DB access now routes through the repo factory — bind it to this pglite db.
+  await __useDrizzleWithDbForTest(db);
+});
+afterEach(() => {
+  __resetForTest();
 });
 
 describe('getMembership', () => {
@@ -21,14 +30,14 @@ describe('getMembership', () => {
     const u = await seedUser(db);
     const ws = await seedPgWorkspace(db, 'PG-A');
     await seedMembership(db, ws.id, u.id, 'member');
-    const m = await getMembership(db, u.id, ws.id);
+    const m = await getMembership(u.id, ws.id);
     expect(m).toEqual({ workspaceId: ws.id, role: 'member', workspaceType: 'pg' });
   });
 
   it('returns null when the user is not a member of the workspace', async () => {
     const u = await seedUser(db);
     const ws = await seedPgWorkspace(db, 'PG-A');
-    const m = await getMembership(db, u.id, ws.id);
+    const m = await getMembership(u.id, ws.id);
     expect(m).toBeNull();
   });
 });

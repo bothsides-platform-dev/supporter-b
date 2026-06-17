@@ -10,8 +10,36 @@ class ResizeObserverStub {
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 import type { BoardCard, BoardColumn } from '@/lib/types/column';
 
+// useDroppable/useDraggable 을 안정 스텁으로 교체 — dnd-kit 내부 컨텍스트 갱신
+// (센서 매 렌더 재생성 등)이 React.memo bail 검증에 간섭하지 않도록 한다.
+// 실제 DndContext·useSensors·센서 클래스는 유지한다.
+vi.mock('@dnd-kit/core', async (importOriginal) => {
+  const actual = await importOriginal();
+  const noopRef = () => {};
+  return {
+    ...(actual as object),
+    useDroppable: () => ({ setNodeRef: noopRef, isOver: false }),
+    useDraggable: () => ({
+      attributes: { role: 'button', tabIndex: 0, 'aria-disabled': false, 'aria-pressed': undefined, 'aria-describedby': undefined, 'aria-roledescription': undefined },
+      listeners: {},
+      setNodeRef: noopRef,
+      setActivatorNodeRef: noopRef,
+      isDragging: false,
+      transform: null,
+      node: { current: null },
+      over: null,
+      active: null,
+    }),
+  };
+});
+
 const refresh = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
+const push = vi.fn();
+// mockRouter 는 단일 객체 참조 — useRouter() 가 매 호출마다 새 객체를 반환하면
+// useCallback([router]) 의 deps 가 매 렌더 바뀌어 onRefresh 신원이 불안정해지고
+// BoardColumn memo 가 bail 하지 못한다. 안정 참조가 올바른 생산 환경 동작.
+const mockRouter = { refresh, push };
+vi.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
 vi.mock('@/lib/toast', () => ({ toast: vi.fn() }));
 // Keep the lifecycle dialog (and its server-action import chain) out of jsdom.
 vi.mock('@/components/home/KanbanActionDialog', () => ({
@@ -149,8 +177,8 @@ describe('KanbanBoard', () => {
     expect(screen.queryByRole('link', { name: '표에서 전체 보기' })).not.toBeInTheDocument();
   });
 
-  it('드래그 래퍼에 명시적 tabIndex 가 없고 내부 버튼이 유일한 포커서블 요소다', () => {
-    const { container } = render(
+  it('드래그 핸들 버튼(키보드 이동용) 과 renderCard 버튼이 각 1개씩 렌더된다', () => {
+    render(
       <KanbanBoard
         kind="pipeline"
         cardType="rfp"
@@ -161,8 +189,39 @@ describe('KanbanBoard', () => {
         )}
       />,
     );
-    expect(container.querySelector('[tabindex]')).toBeNull();
-    // 카드 텍스트를 가진 버튼은 renderCard 의 진짜 버튼 1개뿐 (래퍼는 비인터랙티브).
+    // 드래그 핸들은 전용 tabStop — 카드 버튼과 분리돼 중첩 인터랙티브 없음.
+    expect(screen.getAllByRole('button', { name: /드래그 핸들/ })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: '결제대행 RFP' })).toHaveLength(1);
+  });
+
+  it('한 컬럼 메뉴 토글이 다른 컬럼 카드를 재렌더하지 않는다 (memo bail 발현)', async () => {
+    const user = userEvent.setup();
+    const renderCountById: Record<string, number> = {};
+    const renderCardSpy = vi.fn((c: (typeof cards)[0]) => {
+      renderCountById[c.cardId] = (renderCountById[c.cardId] ?? 0) + 1;
+      return <div>{c.cardId}</div>;
+    });
+
+    render(
+      <KanbanBoard
+        kind="pipeline"
+        cardType="rfp"
+        columns={[sysCol, customCol]}
+        cards={cards}
+        renderCard={renderCardSpy}
+      />,
+    );
+
+    // Initial render: each card rendered exactly once (r1 in c-active, r2 in c-hold).
+    expect(renderCountById['r1']).toBe(1);
+    expect(renderCountById['r2']).toBe(1);
+
+    // Open column A (진행중/c-active) menu — triggers setOpenMenu state change in KanbanBoard.
+    await user.click(screen.getByRole('button', { name: '진행중 컬럼 메뉴' }));
+
+    // renderCard 는 BoardDraggableCard 내부에서 호출된다. renderCountById 가 1 로
+    // 유지되면 BoardDraggableCard.memo 가 bail 했음 — children → renderCard prop 전환과
+    // EMPTY_OVERRIDES/columnData useMemo 로 인해 card·renderCard 신원이 안정됐다는 증거.
+    expect(renderCountById['r2']).toBe(1);
   });
 });

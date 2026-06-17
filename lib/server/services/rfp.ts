@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import type {
+  AttachmentRepo,
   AuditLogRepo,
   BidRepo,
   BizProfileRepo,
@@ -9,6 +9,7 @@ import type {
   InvitationRepo,
   OutboxRepo,
   PgRequestRepo,
+  RfpAllowedPgRepo,
   RfpRepo,
   RfpRequoteRequestRepo,
   WorkspaceRepo,
@@ -26,15 +27,6 @@ import { baseUrlFor } from '@/lib/server/env';
 import { nextRfpId } from '@/lib/server/rfp-id';
 import { addMinutes, generateToken } from '@/lib/server/token';
 import type { MerchantGrade } from '@/lib/types/biz-profile';
-import {
-  attachments,
-  rfpAllowedPg,
-  rfpInvitations,
-  rfps,
-  users,
-  workspaceMembers,
-  workspaces,
-} from '@/lib/db/schema';
 import type { Notification } from '@/lib/types/notification';
 import type { Actor, ServiceResult } from './types';
 
@@ -84,6 +76,8 @@ export class RfpService {
     private readonly bizProfileRepo: BizProfileRepo,
     private readonly requoteRepo: RfpRequoteRequestRepo,
     private readonly auditRepo: AuditLogRepo,
+    private readonly rfpAllowedPgRepo: RfpAllowedPgRepo,
+    private readonly attachmentRepo: AttachmentRepo,
   ) {}
 
   async award(
@@ -369,24 +363,17 @@ export class RfpService {
       if (!req) return { ok: false as const, error: 'NOT_FOUND' };
       if (req.status !== 'pending') return { ok: false as const, error: 'NOT_PENDING' };
 
-      const [rfpRow] = await tx
-        .select({ code: rfps.code, buyerWsId: rfps.buyerWsId })
-        .from(rfps)
-        .where(eq(rfps.id, req.rfpId))
-        .limit(1);
+      const rfpRow = await this.rfpRepo.findById(req.rfpId, tx);
       if (!rfpRow) return { ok: false as const, error: 'NOT_FOUND' };
       if (rfpRow.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'NOT_OWNED' };
 
       await this.pgRequestRepo.markDecided(req.id, 'rejected', actor.userId, now, tx);
 
-      const pgMembers = (await tx
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(eq(workspaceMembers.workspaceId, req.pgWsId))) as { userId: string }[];
-      for (const m of pgMembers) {
+      const pgMemberIds = await this.workspaceRepo.memberUserIds(req.pgWsId, tx);
+      for (const userId of pgMemberIds) {
         const notif: Notification = {
           id: randomUUID(),
-          userId: m.userId,
+          userId,
           workspaceId: req.pgWsId,
           type: 'pg.request.rejected',
           title: `[${rfpRow.code}] 참여 요청 마감`,
@@ -412,29 +399,16 @@ export class RfpService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult = await this._db.transaction(async (tx: any) => {
-      const [rfpRow] = await tx
-        .select({
-          id: rfps.id,
-          buyerWsId: rfps.buyerWsId,
-          status: rfps.status,
-          deadline: rfps.deadline,
-          boardVisible: rfps.boardVisible,
-        })
-        .from(rfps)
-        .where(eq(rfps.code, rfpCode))
-        .limit(1);
+      const rfpRow = await this.rfpRepo.findByCode(rfpCode, tx);
       if (!rfpRow || !rfpRow.boardVisible) return { ok: false as const, error: 'NOT_FOUND' };
       if (rfpRow.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
       if (new Date(rfpRow.deadline).getTime() <= now.getTime()) {
         return { ok: false as const, error: 'RFP_DEADLINE_PASSED' };
       }
 
-      const [allowed] = await tx
-        .select({ pgWsId: rfpAllowedPg.pgWsId })
-        .from(rfpAllowedPg)
-        .where(and(eq(rfpAllowedPg.rfpId, rfpRow.id), eq(rfpAllowedPg.pgWsId, actor.workspaceId)))
-        .limit(1);
-      if (allowed) return { ok: false as const, error: 'ALREADY_PARTICIPATING' };
+      if (await this.rfpAllowedPgRepo.has(rfpRow.id, actor.workspaceId, tx)) {
+        return { ok: false as const, error: 'ALREADY_PARTICIPATING' };
+      }
 
       if (await this.pgRequestRepo.findPairStatus(rfpRow.id, actor.workspaceId, tx)) {
         return { ok: false as const, error: 'ALREADY_REQUESTED' };
@@ -458,21 +432,13 @@ export class RfpService {
         throw err;
       }
 
-      const [pgWsRow] = await tx
-        .select({ name: workspaces.name })
-        .from(workspaces)
-        .where(eq(workspaces.id, actor.workspaceId))
-        .limit(1);
-      const pgWsName = pgWsRow?.name ?? 'PG사';
+      const pgWsName = (await this.workspaceRepo.getName(actor.workspaceId, tx)) ?? 'PG사';
 
-      const buyerMembers = (await tx
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(eq(workspaceMembers.workspaceId, rfpRow.buyerWsId))) as { userId: string }[];
-      for (const m of buyerMembers) {
+      const buyerMemberIds = await this.workspaceRepo.memberUserIds(rfpRow.buyerWsId, tx);
+      for (const userId of buyerMemberIds) {
         const notif: Notification = {
           id: randomUUID(),
-          userId: m.userId,
+          userId,
           workspaceId: rfpRow.buyerWsId,
           type: 'pg.request.received',
           title: `[${rfpCode}] 새 참여 요청`,
@@ -503,18 +469,7 @@ export class RfpService {
       if (!req) return { ok: false as const, error: 'NOT_FOUND' };
       if (req.status !== 'pending') return { ok: false as const, error: 'NOT_PENDING' };
 
-      const [rfpRow] = await tx
-        .select({
-          id: rfps.id,
-          code: rfps.code,
-          buyerWsId: rfps.buyerWsId,
-          title: rfps.title,
-          status: rfps.status,
-          deadline: rfps.deadline,
-        })
-        .from(rfps)
-        .where(eq(rfps.id, req.rfpId))
-        .limit(1);
+      const rfpRow = await this.rfpRepo.findById(req.rfpId, tx);
       if (!rfpRow) return { ok: false as const, error: 'NOT_FOUND' };
       if (rfpRow.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'NOT_OWNED' };
       if (rfpRow.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
@@ -522,36 +477,22 @@ export class RfpService {
         return { ok: false as const, error: 'RFP_DEADLINE_PASSED' };
       }
 
-      const [buyerWsRow] = await tx
-        .select({ name: workspaces.name })
-        .from(workspaces)
-        .where(eq(workspaces.id, rfpRow.buyerWsId))
-        .limit(1);
-      const buyerName = buyerWsRow?.name ?? '구매사';
+      const buyerName = (await this.workspaceRepo.getName(rfpRow.buyerWsId, tx)) ?? '구매사';
 
-      await tx
-        .insert(rfpAllowedPg)
-        .values({ rfpId: req.rfpId, pgWsId: req.pgWsId })
-        .onConflictDoNothing();
+      await this.rfpAllowedPgRepo.add(req.rfpId, [req.pgWsId], tx);
 
-      const [existingInv] = await tx
-        .select({ id: rfpInvitations.id, status: rfpInvitations.status })
-        .from(rfpInvitations)
-        .where(and(eq(rfpInvitations.rfpId, req.rfpId), eq(rfpInvitations.pgWsId, req.pgWsId)))
-        .limit(1);
+      const existingInv = await this.invitationRepo.findByRfpAndPg(req.rfpId, req.pgWsId, tx);
       const needsInvite = !existingInv || existingInv.status === 'draft';
       if (needsInvite) {
         const rawToken = generateToken();
         if (existingInv) {
-          await tx
-            .update(rfpInvitations)
-            .set({
-              tokenHash: (await import('@/lib/server/token')).hashToken(rawToken),
-              status: 'pending',
-              sentAt: now,
-              expiresAt: new Date(rfpRow.deadline),
-            })
-            .where(eq(rfpInvitations.id, existingInv.id));
+          await this.invitationRepo.promoteDraft(
+            existingInv.id,
+            rawToken,
+            now,
+            new Date(rfpRow.deadline),
+            tx,
+          );
         } else {
           await this.invitationRepo.save(
             {
@@ -572,16 +513,7 @@ export class RfpService {
           .toISOString()
           .replace('T', ' ')
           .slice(0, 16);
-        const adminRows = (await tx
-          .select({ userId: workspaceMembers.userId, email: users.email })
-          .from(workspaceMembers)
-          .innerJoin(users, eq(workspaceMembers.userId, users.id))
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, req.pgWsId),
-              eq(workspaceMembers.role, 'admin'),
-            ),
-          )) as { userId: string; email: string }[];
+        const adminRows = await this.workspaceRepo.adminRecipients(req.pgWsId, tx);
         for (const admin of adminRows) {
           const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
           const html = await renderRfpInvited({
@@ -604,14 +536,11 @@ export class RfpService {
         }
       }
 
-      const pgMembers = (await tx
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(eq(workspaceMembers.workspaceId, req.pgWsId))) as { userId: string }[];
-      for (const m of pgMembers) {
+      const pgMemberIds = await this.workspaceRepo.memberUserIds(req.pgWsId, tx);
+      for (const userId of pgMemberIds) {
         const notif: Notification = {
           id: randomUUID(),
-          userId: m.userId,
+          userId,
           workspaceId: req.pgWsId,
           type: 'pg.request.accepted',
           title: `[${rfpRow.code}] 참여 요청 수락됨`,
@@ -643,23 +572,10 @@ export class RfpService {
   ): Promise<ServiceResult<{ addedCount: number; skipped: string[] }>> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult<{ addedCount: number; skipped: string[] }> = await this._db.transaction(async (tx: any) => {
-      const [row] = await tx
-        .select({
-          id: rfps.id,
-          buyerWsId: rfps.buyerWsId,
-          status: rfps.status,
-          deadline: rfps.deadline,
-        })
-        .from(rfps)
-        .where(eq(rfps.code, rfpCode))
-        .limit(1);
+      const row = await this.rfpRepo.findByCode(rfpCode, tx);
       if (!row) return { ok: false as const, error: 'NOT_FOUND' };
 
-      const allowedRows: { pgWsId: string }[] = await tx
-        .select({ pgWsId: rfpAllowedPg.pgWsId })
-        .from(rfpAllowedPg)
-        .where(eq(rfpAllowedPg.rfpId, row.id));
-      const currentAllowed = allowedRows.map((r: { pgWsId: string }) => r.pgWsId);
+      const currentAllowed = await this.rfpAllowedPgRepo.listPgWsIds(row.id, tx);
 
       if (row.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'NOT_OWNED' };
       if (row.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
@@ -667,12 +583,8 @@ export class RfpService {
         return { ok: false as const, error: 'RFP_DEADLINE_PASSED' };
       }
 
-      const confirmedPgRows: { id: string }[] = await tx
-        .select({ id: workspaces.id, type: workspaces.type })
-        .from(workspaces)
-        .where(inArray(workspaces.id, pgWsIds))
-        .then((rows: { id: string; type: string }[]) => rows.filter((r) => r.type === 'pg'));
-      const confirmedPgSet = new Set(confirmedPgRows.map((r) => r.id.toLowerCase()));
+      const confirmedPgIds = await this.workspaceRepo.filterPgIds(pgWsIds, tx);
+      const confirmedPgSet = new Set(confirmedPgIds.map((id) => id.toLowerCase()));
       const hasInvalid = pgWsIds.some((id) => !confirmedPgSet.has(id.toLowerCase()));
       if (hasInvalid) return { ok: false as const, error: 'INVALID_WORKSPACE' };
 
@@ -697,20 +609,11 @@ export class RfpService {
         return { ok: false as const, error: 'WORKSPACES_LIMIT_EXCEEDED' };
       }
 
-      await tx.insert(rfpAllowedPg).values(toAdd.map((pgWsId: string) => ({ rfpId: row.id, pgWsId })));
+      await this.rfpAllowedPgRepo.add(row.id, toAdd, tx);
 
       const expiresAt = new Date(row.deadline);
       for (const workspaceId of toAdd) {
-        const invId = randomUUID();
-        await tx.insert(rfpInvitations).values({
-          id: invId,
-          rfpId: row.id,
-          pgWsId: workspaceId,
-          tokenHash: `draft-${invId}`,
-          sentAt: new Date(),
-          expiresAt,
-          status: 'draft',
-        });
+        await this.invitationRepo.saveDraft(randomUUID(), row.id, workspaceId, expiresAt, tx);
       }
 
       return { ok: true as const, addedCount: toAdd.length, skipped };
@@ -727,17 +630,7 @@ export class RfpService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult<{ sentCount: number }> = await this._db.transaction(async (tx: any) => {
-      const [rfpRow] = await tx
-        .select({
-          id: rfps.id,
-          buyerWsId: rfps.buyerWsId,
-          status: rfps.status,
-          deadline: rfps.deadline,
-          title: rfps.title,
-        })
-        .from(rfps)
-        .where(eq(rfps.code, rfpCode))
-        .limit(1);
+      const rfpRow = await this.rfpRepo.findByCode(rfpCode, tx);
       if (!rfpRow) return { ok: false as const, error: 'NOT_FOUND' };
       if (rfpRow.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'NOT_OWNED' };
       if (rfpRow.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
@@ -745,36 +638,17 @@ export class RfpService {
         return { ok: false as const, error: 'RFP_DEADLINE_PASSED' };
       }
 
-      const drafts = (await tx
-        .select()
-        .from(rfpInvitations)
-        .where(and(eq(rfpInvitations.rfpId, rfpRow.id), eq(rfpInvitations.status, 'draft')))) as { id: string; pgWsId: string }[];
+      const drafts = await this.invitationRepo.findDraftsByRfp(rfpRow.id, tx);
       if (drafts.length === 0) return { ok: true as const, sentCount: 0 };
 
-      const [wsRow] = await tx
-        .select({ name: workspaces.name })
-        .from(workspaces)
-        .where(eq(workspaces.id, actor.workspaceId))
-        .limit(1);
-      const buyerName = wsRow?.name ?? '구매사';
+      const buyerName = (await this.workspaceRepo.getName(actor.workspaceId, tx)) ?? '구매사';
       const deadlineDisplay = new Date(rfpRow.deadline)
         .toISOString()
         .replace('T', ' ')
         .slice(0, 16);
 
       const uniquePgWsIds = Array.from(new Set(drafts.map((d) => d.pgWsId)));
-      const allMembers = (await tx
-        .select({
-          workspaceId: workspaceMembers.workspaceId,
-          userId: workspaceMembers.userId,
-          role: workspaceMembers.role,
-          email: users.email,
-        })
-        .from(workspaceMembers)
-        .innerJoin(users, eq(workspaceMembers.userId, users.id))
-        .where(inArray(workspaceMembers.workspaceId, uniquePgWsIds))) as {
-        workspaceId: string; userId: string; role: string; email: string;
-      }[];
+      const allMembers = await this.workspaceRepo.memberRecipientsBatch(uniquePgWsIds, tx);
 
       const membersByWs = new Map<string, typeof allMembers>();
       for (const m of allMembers) {
@@ -915,8 +789,8 @@ export class RfpService {
           tx,
         );
       }
-      // deadline 직접 갱신 (RfpRepo.transition은 status 전용이고 update 메서드가 없으므로 직접 tx 사용)
-      await tx.update(rfps).set({ deadline: input.newDeadline }).where(eq(rfps.id, rfpId));
+      // deadline 직접 갱신 (RfpRepo.transition은 status 전용이라 전용 updateDeadline 사용).
+      await this.rfpRepo.updateDeadline(rfpId, input.newDeadline, tx);
 
       // 감사 로그 (C5) — 재요청과 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
@@ -946,16 +820,7 @@ export class RfpService {
 
       for (const p of plans) {
         // admin 멤버 조회 — acceptPgRequest / createRfp 패턴 그대로 차용 (userId + email 필요)
-        const adminRows = (await tx
-          .select({ userId: workspaceMembers.userId, email: users.email })
-          .from(workspaceMembers)
-          .innerJoin(users, eq(workspaceMembers.userId, users.id))
-          .where(
-            and(
-              eq(workspaceMembers.workspaceId, p.pgWsId),
-              eq(workspaceMembers.role, 'admin'),
-            ),
-          )) as { userId: string; email: string }[];
+        const adminRows = await this.workspaceRepo.adminRecipients(p.pgWsId, tx);
 
         for (const m of adminRows) {
           const notif: Notification = {
@@ -1007,11 +872,7 @@ export class RfpService {
       const code = await nextRfpId(tx);
       const rfpId = randomUUID();
 
-      const [wsRow] = await tx
-        .select({ bizProfileId: workspaces.bizProfileId, name: workspaces.name })
-        .from(workspaces)
-        .where(eq(workspaces.id, actor.workspaceId))
-        .limit(1);
+      const wsRow = await this.workspaceRepo.getBizProfileIdAndName(actor.workspaceId, tx);
       if (!wsRow) return { ok: false as const, error: 'FORBIDDEN_BUYER' };
 
       const now = new Date();
@@ -1058,36 +919,39 @@ export class RfpService {
         );
       }
 
-      await tx.insert(rfps).values({
-        id: rfpId,
-        code,
-        buyerWsId: actor.workspaceId,
-        bizProfileId: snapshotId,
-        title: input.title.trim(),
-        memo: input.memo?.trim() ?? '',
-        websiteUrl: input.websiteUrl?.trim() ?? null,
-        mainProducts: input.mainProducts?.trim() ?? null,
-        annualPgVolume: input.annualPgVolume?.trim() ?? null,
-        currentFeeRate: input.currentFeeRate?.trim() ?? null,
-        currentSettlementLimit: input.currentSettlementLimit?.trim() ?? null,
-        currentGuaranteeInsurance: input.currentGuaranteeInsurance?.trim() ?? null,
-        currentSettlementCycle: input.currentSettlementCycle?.trim() ?? null,
-        deliveryServicePeriod: input.deliveryServicePeriod?.trim() ?? null,
-        boardVisible: input.boardVisible,
-        currentFeeVisibleToPg: input.currentFeeVisibleToPg,
-        contractType: input.contractType ?? null,
-        currentSolution: input.currentSolution ?? null,
-        currentSolutionDetail: input.currentSolutionDetail?.trim() ?? null,
-        deadline: input.deadline,
-        status: send ? 'sent' : 'draft',
-        requiredPaymentMethods: input.requiredPaymentMethods,
-        customPaymentMethods: input.customPaymentMethods.map((m) => ({
-          id: m.id ?? randomUUID(),
-          label: m.label.trim(),
-        })),
-        createdBy: actor.userId,
-        sentAt: send ? now : null,
-      });
+      await this.rfpRepo.insertNew(
+        {
+          id: rfpId,
+          code,
+          buyerWsId: actor.workspaceId,
+          bizProfileId: snapshotId,
+          title: input.title.trim(),
+          memo: input.memo?.trim() ?? '',
+          websiteUrl: input.websiteUrl?.trim() ?? null,
+          mainProducts: input.mainProducts?.trim() ?? null,
+          annualPgVolume: input.annualPgVolume?.trim() ?? null,
+          currentFeeRate: input.currentFeeRate?.trim() ?? null,
+          currentSettlementLimit: input.currentSettlementLimit?.trim() ?? null,
+          currentGuaranteeInsurance: input.currentGuaranteeInsurance?.trim() ?? null,
+          currentSettlementCycle: input.currentSettlementCycle?.trim() ?? null,
+          deliveryServicePeriod: input.deliveryServicePeriod?.trim() ?? null,
+          boardVisible: input.boardVisible,
+          currentFeeVisibleToPg: input.currentFeeVisibleToPg,
+          contractType: input.contractType ?? null,
+          currentSolution: input.currentSolution ?? null,
+          currentSolutionDetail: input.currentSolutionDetail?.trim() ?? null,
+          deadline: input.deadline,
+          status: send ? 'sent' : 'draft',
+          requiredPaymentMethods: input.requiredPaymentMethods,
+          customPaymentMethods: input.customPaymentMethods.map((m) => ({
+            id: m.id ?? randomUUID(),
+            label: m.label.trim(),
+          })),
+          createdBy: actor.userId,
+          sentAt: send ? now : null,
+        },
+        tx,
+      );
 
       // 감사 로그 (C5) — 생성과 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
@@ -1102,26 +966,14 @@ export class RfpService {
         tx,
       );
 
-      if (input.allowedPgWorkspaceIds.length > 0) {
-        await tx.insert(rfpAllowedPg).values(
-          input.allowedPgWorkspaceIds.map((pgWsId) => ({ rfpId, pgWsId })),
-        );
-      }
+      await this.rfpAllowedPgRepo.add(rfpId, input.allowedPgWorkspaceIds, tx);
 
       const rfpIds = input.rfpAttachmentIds ?? [];
       if (rfpIds.length > 0) {
-        await tx
-          .update(attachments)
-          .set({ rfpId })
-          .where(
-            and(
-              inArray(attachments.id, rfpIds),
-              eq(attachments.uploadedBy, actor.userId),
-              isNull(attachments.rfpId),
-              isNull(attachments.bidId),
-              isNull(attachments.bidNoteId),
-            ),
-          );
+        await this.attachmentRepo.claim(
+          { ids: rfpIds, owner: { rfpId }, uploadedBy: actor.userId },
+          tx,
+        );
       }
 
       if (send) {
@@ -1149,16 +1001,7 @@ export class RfpService {
             tx,
           );
 
-          const adminRows = (await tx
-            .select({ userId: workspaceMembers.userId, email: users.email })
-            .from(workspaceMembers)
-            .innerJoin(users, eq(workspaceMembers.userId, users.id))
-            .where(
-              and(
-                eq(workspaceMembers.workspaceId, pgWsId),
-                eq(workspaceMembers.role, 'admin'),
-              ),
-            )) as { userId: string; email: string }[];
+          const adminRows = await this.workspaceRepo.adminRecipients(pgWsId, tx);
 
           for (const admin of adminRows) {
             const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
@@ -1181,14 +1024,11 @@ export class RfpService {
             );
           }
 
-          const allMemberRows = (await tx
-            .select({ userId: workspaceMembers.userId })
-            .from(workspaceMembers)
-            .where(eq(workspaceMembers.workspaceId, pgWsId))) as { userId: string }[];
-          for (const m of allMemberRows) {
+          const allMemberIds = await this.workspaceRepo.memberUserIds(pgWsId, tx);
+          for (const userId of allMemberIds) {
             const notif: Notification = {
               id: randomUUID(),
-              userId: m.userId,
+              userId,
               workspaceId: pgWsId,
               type: 'rfp.invited',
               title: `[${code}] 견적 요청이 도착했어요`,
@@ -1237,25 +1077,41 @@ export async function getRfpService(): Promise<RfpService> {
         getBizProfileRepo,
         getRfpRequoteRequestRepo,
         getAuditLogRepo,
+        getRfpAllowedPgRepo,
+        getAttachmentRepo,
       },
     ] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo] =
-      await Promise.all([
-        getRfpRepo(),
-        getContractRepo(),
-        getOutboxRepo(),
-        getWorkspaceRepo(),
-        getBidRepo(),
-        getInvitationRepo(),
-        getPgRequestRepo(),
-        getBizProfileRepo(),
-        getRfpRequoteRequestRepo(),
-        getAuditLogRepo(),
-      ]);
+    const [
+      rfpRepo,
+      contractRepo,
+      outboxRepo,
+      wsRepo,
+      bidRepo,
+      invRepo,
+      pgReqRepo,
+      bizRepo,
+      requoteRepo,
+      auditRepo,
+      allowedPgRepo,
+      attachmentRepo,
+    ] = await Promise.all([
+      getRfpRepo(),
+      getContractRepo(),
+      getOutboxRepo(),
+      getWorkspaceRepo(),
+      getBidRepo(),
+      getInvitationRepo(),
+      getPgRequestRepo(),
+      getBizProfileRepo(),
+      getRfpRequoteRequestRepo(),
+      getAuditLogRepo(),
+      getRfpAllowedPgRepo(),
+      getAttachmentRepo(),
+    ]);
 
     globalThis.__bidit_rfp_service__ = new RfpService(
       db,
@@ -1269,6 +1125,8 @@ export async function getRfpService(): Promise<RfpService> {
       bizRepo,
       requoteRepo,
       auditRepo,
+      allowedPgRepo,
+      attachmentRepo,
     );
   }
   return globalThis.__bidit_rfp_service__!;

@@ -1,11 +1,11 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { rfps, bizProfiles, rfpAllowedPg } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { assertTransition } from '../../rfp-state';
-import type { RfpRepo, Tx } from '../types';
+import type { NewRfpInsert, RfpRepo, Tx } from '../types';
 
 type RfpRow = typeof rfps.$inferSelect;
 type BizRow = typeof bizProfiles.$inferSelect;
@@ -51,6 +51,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     createdBy: row.createdBy,
     createdAt: new Date(row.createdAt).toISOString(),
     sentAt: toIso(row.sentAt),
+    updatedAt: new Date(row.updatedAt).toISOString(),
     boardColumnId: row.boardColumnId,
     requiredPaymentMethods: (row.requiredPaymentMethods ?? []) as PaymentMethod[],
     customPaymentMethods: (row.customPaymentMethods ?? []) as CustomPaymentMethod[],
@@ -173,6 +174,45 @@ export class DrizzleRfpRepository implements RfpRepo {
     await this.syncAllowlist(db, rfp.id, rfp.allowedPgWorkspaceIds);
   }
 
+  async insertNew(values: NewRfpInsert, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.insert(rfps).values({
+      id: values.id,
+      code: values.code,
+      buyerWsId: values.buyerWsId,
+      bizProfileId: values.bizProfileId,
+      title: values.title,
+      memo: values.memo,
+      websiteUrl: values.websiteUrl,
+      mainProducts: values.mainProducts,
+      annualPgVolume: values.annualPgVolume,
+      currentFeeRate: values.currentFeeRate,
+      currentSettlementLimit: values.currentSettlementLimit,
+      currentGuaranteeInsurance: values.currentGuaranteeInsurance,
+      currentSettlementCycle: values.currentSettlementCycle,
+      deliveryServicePeriod: values.deliveryServicePeriod,
+      boardVisible: values.boardVisible,
+      currentFeeVisibleToPg: values.currentFeeVisibleToPg,
+      contractType: values.contractType,
+      currentSolution: values.currentSolution,
+      currentSolutionDetail: values.currentSolutionDetail,
+      deadline: values.deadline,
+      status: values.status,
+      requiredPaymentMethods: values.requiredPaymentMethods,
+      customPaymentMethods: values.customPaymentMethods,
+      createdBy: values.createdBy,
+      sentAt: values.sentAt,
+      // 온보딩 샘플 전용 — 미지정 시 DB default(false).
+      ...(values.isSample !== undefined ? { isSample: values.isSample } : {}),
+    });
+  }
+
+  async deleteById(id: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    // 자식(bids·invitations·allowlist·attachments·team_messages)은 FK ON DELETE CASCADE.
+    await db.delete(rfps).where(eq(rfps.id, id));
+  }
+
   async findById(id: string, tx?: Tx): Promise<RFP | undefined> {
     const db = this.h(tx);
     const [row] = await db
@@ -233,7 +273,7 @@ export class DrizzleRfpRepository implements RfpRepo {
 
     // Atomic update with `WHERE status=$prev` concurrency guard.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const setPatch: any = { status: to };
+    const setPatch: any = { status: to, updatedAt: new Date() };
     if (patch?.awardedBidId !== undefined) setPatch.awardedBidId = patch.awardedBidId;
     if (patch?.sentAt !== undefined)
       setPatch.sentAt = patch.sentAt ? new Date(patch.sentAt) : null;
@@ -263,5 +303,97 @@ export class DrizzleRfpRepository implements RfpRepo {
   async setBoardColumn(rfpId: string, columnId: string | null, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.update(rfps).set({ boardColumnId: columnId }).where(eq(rfps.id, rfpId));
+  }
+
+  async setBoardVisible(rfpId: string, visible: boolean, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.update(rfps).set({ boardVisible: visible }).where(eq(rfps.id, rfpId));
+  }
+
+  async updateDeadline(id: string, deadline: Date, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.update(rfps).set({ deadline }).where(eq(rfps.id, id));
+  }
+
+  async findIdAndOwnerByCode(
+    code: string,
+    tx?: Tx,
+  ): Promise<{ id: string; buyerWsId: string } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ id: rfps.id, buyerWsId: rfps.buyerWsId })
+      .from(rfps)
+      .where(eq(rfps.code, code))
+      .limit(1);
+    return row ?? undefined;
+  }
+
+  async findOwnerById(id: string, tx?: Tx): Promise<{ buyerWsId: string } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ buyerWsId: rfps.buyerWsId })
+      .from(rfps)
+      .where(eq(rfps.id, id))
+      .limit(1);
+    return row ?? undefined;
+  }
+
+  async reserveNextCode(yearMonth: string, tx?: Tx): Promise<string> {
+    const db = this.h(tx);
+    // Atomic INSERT … ON CONFLICT DO UPDATE … RETURNING — folds the raw SQL in
+    // lib/server/rfp-id.ts so the counter increment can share a tx with the RFP
+    // insert. Output format mirrors nextRfpId byte-for-byte: `P-YYMM-NNNN`.
+    const result = await db.execute(sql`
+      INSERT INTO rfp_counters(year_month, last_seq) VALUES (${yearMonth}, 1)
+      ON CONFLICT (year_month) DO UPDATE SET last_seq = rfp_counters.last_seq + 1
+      RETURNING last_seq
+    `);
+    // postgres-js returns an array of rows; pglite returns `{ rows: [...] }`.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = result as any;
+    const rows: Array<{ last_seq: number }> = Array.isArray(r)
+      ? (r as Array<{ last_seq: number }>)
+      : (r?.rows ?? []);
+    const seq = rows[0].last_seq;
+    return `P-${yearMonth}-${String(seq).padStart(4, '0')}`;
+  }
+
+  async searchForBuyer(wsId: string, pattern: string, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // Whitelisted projection — mirrors searchEntitiesAction.ts (buyer RFP branch).
+    // pattern is escape+wrapped by the caller (`%escaped%`).
+    return db
+      .select({
+        code: rfps.code,
+        title: rfps.title,
+        memo: rfps.memo,
+        status: rfps.status,
+      })
+      .from(rfps)
+      .where(
+        and(
+          eq(rfps.buyerWsId, wsId),
+          or(ilike(rfps.title, pattern), ilike(rfps.memo, pattern)),
+        ),
+      )
+      .orderBy(desc(rfps.createdAt))
+      .limit(20);
+  }
+
+  async listForBuyer(wsId: string, limit: number, tx?: Tx): Promise<unknown[]> {
+    const db = this.h(tx);
+    // 초성 검색 companion — searchForBuyer 와 동일한 화이트리스트 projection,
+    // ilike 없이 ws-scope 만 fetch. 호출자가 getChoseong 로 JS 필터한다.
+    return db
+      .select({
+        code: rfps.code,
+        title: rfps.title,
+        memo: rfps.memo,
+        status: rfps.status,
+      })
+      .from(rfps)
+      .where(eq(rfps.buyerWsId, wsId))
+      .orderBy(desc(rfps.createdAt))
+      .limit(limit);
   }
 }

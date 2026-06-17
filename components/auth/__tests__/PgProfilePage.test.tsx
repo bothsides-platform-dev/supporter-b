@@ -31,6 +31,8 @@ vi.mock('@/lib/auth/signup-storage', () => ({
   writeSignupDraft: (d: Record<string, unknown>) => { mockDraftData = d; },
   // 실제 동작과 동일하게 draft 를 비운다. finalizeSignup 성공 경로가 호출한다.
   clearSignupDraft: () => { mockDraftData = {}; },
+  // 테스트 환경에서는 sessionStorage 가 정상 작동한다고 가정.
+  isSignupStorageAvailable: () => true,
 }));
 
 vi.mock('@/lib/stores/signup-draft', () => ({

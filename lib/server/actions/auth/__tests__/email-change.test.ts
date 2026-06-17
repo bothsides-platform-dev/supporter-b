@@ -6,7 +6,7 @@ import { hashPassword } from '@/lib/auth/password';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import { AuthService, __setAuthServiceForTest } from '@/lib/server/services/auth';
-import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo } from '@/lib/server/repositories/factory';
+import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo, getPhoneOtpRepo, getWorkspaceRepo, getPgProfileRepo } from '@/lib/server/repositories/factory';
 
 // requireSession() is mocked per-test so the request action can be exercised
 // without a real Auth.js JWT cookie. The mock is attached before importing
@@ -162,8 +162,8 @@ describe('emailChangeConfirmAction', () => {
 
   it('maps a pglite-shaped unique violation (err.cause.code) to EMAIL_TAKEN', async () => {
     const token = await issueToken();
-    const [userRepo, vtRepo, outboxRepo, auditRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo()]);
-    __setAuthServiceForTest(new AuthService(throwingUpdateDb({ cause: { code: '23505' } }), userRepo, vtRepo, outboxRepo, auditRepo));
+    const [userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo(), getPhoneOtpRepo(), getWorkspaceRepo(), getPgProfileRepo()]);
+    __setAuthServiceForTest(new AuthService(throwingUpdateDb({ cause: { code: '23505', constraint: 'users_email_unique' } }), userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo));
     const r = await emailChangeConfirmAction({ rawToken: token });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
@@ -171,10 +171,10 @@ describe('emailChangeConfirmAction', () => {
 
   it('rethrows a non-unique DB error instead of masking it as EMAIL_TAKEN', async () => {
     const token = await issueToken();
-    const [userRepo, vtRepo, outboxRepo, auditRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo()]);
+    const [userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo] = await Promise.all([getUserRepo(), getVerificationTokenRepo(), getOutboxRepo(), getAuditLogRepo(), getPhoneOtpRepo(), getWorkspaceRepo(), getPgProfileRepo()]);
     __setAuthServiceForTest(new AuthService(
       throwingUpdateDb(Object.assign(new Error('not null'), { code: '23502' })),
-      userRepo, vtRepo, outboxRepo, auditRepo,
+      userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
     ));
     await expect(emailChangeConfirmAction({ rawToken: token })).rejects.toThrow(
       'not null',

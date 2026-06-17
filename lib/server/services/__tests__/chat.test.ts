@@ -8,8 +8,10 @@ import {
   getChatConversationRepo,
   getChatMessageRepo,
   getChatReadRepo,
+  getInvitationRepo,
   getNotificationRepo,
   getOutboxRepo,
+  getRfpRepo,
   getUserRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
@@ -17,6 +19,7 @@ import {
   seedBuyerWorkspace,
   seedMembership,
   seedPgWorkspace,
+  seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { chatMessages, notifications, outboxEntries } from '@/lib/db/schema';
@@ -37,7 +40,7 @@ let db: PgliteDB;
 let service: ChatService;
 
 async function buildService(): Promise<ChatService> {
-  const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo] =
+  const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo, rfpRepo, invRepo] =
     await Promise.all([
       getChatConversationRepo(),
       getWorkspaceRepo(),
@@ -47,8 +50,10 @@ async function buildService(): Promise<ChatService> {
       getNotificationRepo(),
       getOutboxRepo(),
       getChatReadRepo(),
+      getRfpRepo(),
+      getInvitationRepo(),
     ]);
-  return new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo);
+  return new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo, rfpRepo, invRepo);
 }
 
 async function seedPair() {
@@ -218,6 +223,44 @@ describe('ChatService.sendMessage', () => {
     );
 
     expect(result).toEqual({ ok: false, error: 'INVALID_INPUT' });
+  });
+
+  it('persists rfpId tag when the actor has access to that RFP', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    const rfp = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyerUser.id });
+
+    const result = await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '견적 문의', rfpId: rfp.id, attachmentIds: [] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+
+    expect(result.ok).toBe(true);
+    const [msg] = await db.select().from(chatMessages);
+    expect(msg.rfpId).toBe(rfp.id);
+  });
+
+  it('drops rfpId tag (saves null) when actor cannot access that RFP', async () => {
+    const { buyerWs, pgUser, pgWs } = await seedPair();
+    // Create an RFP owned by a DIFFERENT buyer — pgUser cannot access it
+    const otherBuyerWs = await seedBuyerWorkspace(db, { name: '다른구매사' });
+    const otherBuyerUser = await seedUser(db, { email: 'other@test.com' });
+    await seedMembership(db, otherBuyerWs.id, otherBuyerUser.id, 'admin');
+    const alienRfp = await seedRfp(db, { buyerWsId: otherBuyerWs.id, createdBy: otherBuyerUser.id });
+
+    const result = await service.sendMessage(
+      {
+        counterpartyWorkspaceId: buyerWs.id,
+        body: '교차 테넌트 태그 시도',
+        rfpId: alienRfp.id,
+        attachmentIds: [],
+      },
+      { userId: pgUser.id, workspaceId: pgWs.id, workspaceType: 'pg' },
+    );
+
+    // Message should succeed — only the rfpId tag is dropped
+    expect(result.ok).toBe(true);
+    const [msg] = await db.select().from(chatMessages);
+    expect(msg.rfpId).toBeNull();
   });
 });
 

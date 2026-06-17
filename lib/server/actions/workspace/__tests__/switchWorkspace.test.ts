@@ -8,6 +8,10 @@ import { eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
 import {
+  __resetForTest,
+  __useDrizzleWithDbForTest,
+} from '@/lib/server/repositories/factory';
+import {
   seedUser,
   seedBuyerWorkspace,
   seedPgWorkspace,
@@ -44,7 +48,9 @@ import { switchWorkspaceAction } from '../switchWorkspaceAction';
 
 let db: PgliteDB;
 beforeEach(async () => {
+  __resetForTest();
   db = await createPgliteDb();
+  await __useDrizzleWithDbForTest(db);
   __setActionDbForTest(db);
   unstableUpdate.mockClear();
   revalidatePath.mockClear();
@@ -52,6 +58,7 @@ beforeEach(async () => {
 });
 afterEach(() => {
   __setActionDbForTest(undefined);
+  __resetForTest();
   mockHostRef.value = null;
 });
 

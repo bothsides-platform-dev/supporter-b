@@ -23,6 +23,8 @@ export type LoadTeamThreadResult = ChatActionResult<{
   workspaceId: string;
   /** 세션 유저 id — 라이브 echo 의 self 판별용(클라이언트는 세션을 모른다). */
   viewerUserId: string;
+  /** 멘션 자동완성/렌더용 팀 로스터. */
+  teamMembers: { userId: string; name: string; joinedAt: string }[];
   messages: TeamThreadMessage[];
 }>;
 
@@ -48,11 +50,19 @@ export async function loadTeamThread(
   });
   if (!result.ok) return result;
 
+  const membersResult = await service.listTeamMembers(parsed.data, {
+    userId: ws.userId,
+    workspaceId: ws.workspaceId,
+    workspaceType: ws.workspaceType,
+  });
+  const teamMembers = membersResult.ok ? membersResult.members : [];
+
   return {
     ok: true,
     rfpId: parsed.data,
     workspaceId: ws.workspaceId,
     viewerUserId: ws.userId,
+    teamMembers,
     messages: result.messages.map((m) => ({
       id: m.id,
       authorUserId: m.authorUserId,

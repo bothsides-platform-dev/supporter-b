@@ -34,7 +34,12 @@ export async function loadPgDashboard(workspaceId: string): Promise<Dashboard> {
     bidRepo.findByPgWs(workspaceId),
   ]);
   // bid 기반 stage 분류 (inbox 목록 / loadBoard PG 파이프라인과 동일 패턴).
-  const bidByRfp = new Map(bidList.map((b) => [b.rfpId, b]));
+  // round 오름차순(findByPgWs ORDER BY) + 명시적 max-round 가드 — sort 순서에만 의존하지 않음.
+  const bidByRfp = new Map<string, (typeof bidList)[number]>();
+  for (const b of bidList) {
+    const existing = bidByRfp.get(b.rfpId);
+    if (!existing || b.round > existing.round) bidByRfp.set(b.rfpId, b);
+  }
   const rows: PgDashRow[] = pairs.map(({ invitation, rfp }) => ({
     invitationId: invitation.id,
     stage: classifyPgInvitation({ invitation, bid: bidByRfp.get(rfp.id), rfp }),

@@ -9,10 +9,8 @@
  * 내부 스레드이므로 타인 메시지에 멤버 이름+아바타 헤더를 단다. ChatRail 의
  * '팀 채팅' 탭 전용.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { HTTPError } from 'ky';
-import { http } from '@/lib/http';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar } from '@/components/primitives/Avatar';
@@ -20,20 +18,21 @@ import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Users, Paperclip } from 'lucide-react';
 import { ArrowUpIcon, XIcon } from '@/components/icons';
-import {
-  MAX_FILES,
-  MAX_BYTES,
-  ACCEPT_EXT,
-  ACCEPTED_MIMES,
-  ACCEPTED_EXTENSIONS,
-} from '@/lib/server/storage/constants';
+import { ACCEPT_EXT } from '@/lib/server/storage/constants';
 import { sendTeamMessageAction } from '@/lib/server/actions/chat/sendTeamMessageAction';
+import { markTeamThreadReadAction } from '@/lib/server/actions/chat/markTeamThreadReadAction';
 import { useTeamChannel, type TeamLivePayload } from '@/lib/hooks/useTeamChannel';
 import { toast } from '@/lib/toast';
-import type { Attachment } from '@/lib/types/common';
 import type { TeamThreadMessage } from '@/lib/server/actions/chat/teamThreadLoader';
-import { MessageAttachmentGrid } from './MessageAttachmentGrid';
-import { formatDayLabel, formatTime, withinGroupWindow } from './format';
+import { MessageBubble } from './MessageBubble';
+import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
+import { useStickToBottom } from './useStickToBottom';
+import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-thread';
+import { formatDayLabel, withinGroupWindow } from './format';
+import { MentionText } from './MentionText';
+import { MentionDropdown } from './MentionDropdown';
+import { type MentionCandidate } from './mention-input';
+import { useMentionPicker } from './useMentionPicker';
 
 type Props = {
   rfpId: string;
@@ -42,168 +41,80 @@ type Props = {
   /** 라이브 echo 의 self 판별용 — loadTeamThread 가 반환한 세션 유저 id. */
   viewerUserId: string;
   messages: TeamThreadMessage[];
+  teamMembers?: MentionCandidate[];
 };
 
-// 하단에서 이만큼(px) 이내면 "하단 근처"로 보고 새 메시지를 자동 추적한다.
-const NEAR_BOTTOM_PX = 120;
 
 type LocalMessage = TeamThreadMessage & { pending?: boolean };
 
-// 컴포저 첨부 행. `id` 는 업로드 중에는 임시값(status==='uploading'), 완료되면
-// 서버 attachment id 로 교체된다(ThreadView 패턴).
-type StagedAttachment = {
-  id: string;
-  name: string;
-  size?: number;
-  mimeType?: string;
-  url?: string;
-  status: 'uploading' | 'ready' | 'error';
-  error?: string;
-};
-
-export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: Props) {
+export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, teamMembers = [] }: Props) {
   const [draft, setDraft] = useState('');
-  const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
+  const {
+    rows: attachments,
+    setRows: setAttachments,
+    addFiles,
+    removeRow,
+  } = useComposerAttachments({ ownerKind: 'team_message', ownerId: rfpId });
   const [sending, setSending] = useState(false);
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>(messages);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const prevLenRef = useRef(0);
+  const lastIsOwn = localMessages[localMessages.length - 1]?.isSelf ?? false;
+  const { listRef, bottomRef } = useStickToBottom({
+    count: localMessages.length,
+    isOwnLast: lastIsOwn,
+  });
 
-  // 새 메시지 append 시 하단 추적 — 단, 위로 올려 과거 메모를 읽는 중에 팀원
-  // 메시지가 오면 끌어내리지 않는다(초기 로드·본인 전송·하단 근처만 추적).
+  const mention = useMentionPicker({ teamMembers, viewerUserId, textareaRef, draft, setDraft });
+  // 안정적 렌더러 — MessageBubble(memo)이 컴포저 입력마다 리렌더되지 않도록 ref 고정.
+  const renderTeamBody = useCallback(
+    (body: string) => (
+      <MentionText body={body} nameById={mention.nameById} viewerUserId={viewerUserId} />
+    ),
+    [mention.nameById, viewerUserId],
+  );
+
+  // 마운트(및 rfp 전환) 시 팀 스레드를 읽음 처리한다 — ThreadView 의
+  // markConversationReadAction 패턴 미러링.
   useEffect(() => {
-    const grew = localMessages.length > prevLenRef.current;
-    const isInitial = prevLenRef.current === 0;
-    prevLenRef.current = localMessages.length;
-    if (!grew) return;
-    const last = localMessages[localMessages.length - 1];
-    const el = listRef.current;
-    const nearBottom =
-      !el || el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
-    if (isInitial || last?.isSelf || nearBottom) {
-      bottomRef.current?.scrollIntoView({ block: 'end' });
-    }
-  }, [localMessages]);
+    void markTeamThreadReadAction({ rfpId });
+  }, [rfpId]);
+
 
   useTeamChannel(rfpId, workspaceId, {
     onMessage: (data: TeamLivePayload) => {
       if (!data.id || typeof data.body !== 'string' || !data.createdAt) return;
       const id = data.id;
       const isSelf = data.authorUserId === viewerUserId;
-      setLocalMessages((prev) => {
-        // Dedup by id — 재전달·승격 선행 케이스.
-        if (prev.some((m) => m.id === id)) return prev;
-        // 본인 echo: pending 말풍선을 확정으로 승격(append 하면 중복). 낙관적
-        // 첨부는 그대로 보존한다.
-        if (isSelf) {
-          const pendingIdx = prev.findIndex((m) => m.pending);
-          if (pendingIdx >= 0) {
-            const next = prev.slice();
-            next[pendingIdx] = {
-              ...next[pendingIdx],
+      // 재전달·승격 선행 케이스는 dedup. 본인 echo 면 tempId 로 정확 매칭 후
+      // 확정 승격(append 하면 중복, 낙관적 첨부 보존), 아니면 새로 append.
+      setLocalMessages(
+        (prev) =>
+          applyLiveEcho(prev, id, isSelf, data.createdAt as string, data.tempId as string | undefined) ?? [
+            ...prev,
+            {
               id,
-              pending: false,
-              // 서버 권위 타임스탬프 채택 — 리로드 후 로더 렌더와 일치.
-              createdAt: data.createdAt ?? next[pendingIdx].createdAt,
-            };
-            return next;
-          }
-        }
-        return [
-          ...prev,
-          {
-            id,
-            authorUserId: data.authorUserId ?? '',
-            authorName: data.authorName ?? '',
-            body: data.body as string,
-            createdAt: data.createdAt as string,
-            isSelf,
-            attachments: data.attachments ?? [],
-          },
-        ];
-      });
+              authorUserId: data.authorUserId ?? '',
+              authorName: data.authorName ?? '',
+              body: data.body as string,
+              createdAt: data.createdAt as string,
+              isSelf,
+              attachments: data.attachments ?? [],
+            },
+          ],
+      );
     },
   });
 
-  async function uploadOne(file: File, tempId: string): Promise<void> {
-    const form = new FormData();
-    form.append('file', file);
-    form.append('ownerKind', 'team_message');
-    // 팀 메시지 첨부의 ownerId 는 RFP id — 전송 시 새 메시지로 재부모된다.
-    form.append('ownerId', rfpId);
-    try {
-      const body = await http
-        .post('/api/files/upload', { body: form })
-        .json<{ id: string; name: string; size: number; mimeType: string }>();
-      setAttachments((prev) =>
-        prev.map((a) =>
-          a.id === tempId
-            ? {
-                id: body.id,
-                name: body.name,
-                size: body.size,
-                mimeType: body.mimeType,
-                url: `/api/files/${body.id}`,
-                status: 'ready',
-              }
-            : a,
-        ),
-      );
-    } catch (err) {
-      let msg = '업로드 실패';
-      if (err instanceof HTTPError) {
-        msg =
-          err.response.status === 415
-            ? '지원되지 않는 파일 형식이에요'
-            : `업로드 실패 (${err.response.status})`;
-      }
-      setAttachments((prev) =>
-        prev.map((a) => (a.id === tempId ? { ...a, status: 'error', error: msg } : a)),
-      );
-    }
-  }
-
-  function addFiles(list: FileList | null): void {
-    if (!list) return;
-    const remaining = MAX_FILES - attachments.length;
-    const additions: StagedAttachment[] = [];
-    for (let i = 0; i < Math.min(list.length, remaining); i++) {
-      const f = list[i];
-      const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
-      if (!ACCEPTED_MIMES.has(f.type) && !ACCEPTED_EXTENSIONS.has(ext)) {
-        const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
-        additions.push({
-          id: tempId,
-          name: f.name,
-          status: 'error',
-          error: '지원되지 않는 파일 형식이에요 (PDF/PNG/JPEG)',
-        });
-        continue;
-      }
-      if (f.size > MAX_BYTES) continue;
-      const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
-      additions.push({ id: tempId, name: f.name, size: f.size, status: 'uploading' });
-      void uploadOne(f, tempId);
-    }
-    if (additions.length > 0) setAttachments((prev) => [...prev, ...additions]);
-  }
-
   async function handleSend(): Promise<void> {
     if (sending) return;
-    const body = draft.trim();
+    const body = mention.resolveBody(draft).trim();
     const readyAttachments = attachments.filter((a) => a.status === 'ready');
     if (body.length === 0 && readyAttachments.length === 0) return;
     setSending(true);
 
     // 전송 시점의 첨부 스냅샷(reload 불필요) — 낙관적 말풍선 표시용.
-    const optimisticAttachments: Attachment[] = readyAttachments.flatMap((a) =>
-      a.size !== undefined && a.mimeType && a.url
-        ? [{ id: a.id, name: a.name, size: a.size, mimeType: a.mimeType, url: a.url }]
-        : [],
-    );
+    const optimisticAttachments = toReadyMessageAttachments(attachments);
 
     const tempId = `pending-${Math.random().toString(36).slice(2, 10)}`;
     const restoreDraft = draft;
@@ -222,6 +133,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
       },
     ]);
     setDraft('');
+    mention.reset();
     setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
@@ -231,35 +143,23 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
         rfpId,
         body,
         attachmentIds: readyAttachments.map((a) => a.id),
+        tempId,
       });
     } catch {
       result = { ok: false, error: 'NETWORK' };
     }
     setSending(false);
     if (result.ok) {
-      const newId = result.messageId;
-      const serverCreatedAt = result.createdAt;
+      // pending 말풍선을 확정 교체. 서버 첨부로 갈아끼우고, 라이브 echo 가 먼저
+      // 같은 실제 id 를 추가했다면 임시 행은 버린다(중복 방지).
       const serverAttachments = result.attachments ?? optimisticAttachments;
-      setLocalMessages((prev) => {
-        const hasReal = prev.some((m) => m.id === newId);
-        return prev.flatMap((m) =>
-          m.id === tempId
-            ? hasReal
-              ? []
-              : [
-                  {
-                    ...m,
-                    id: newId,
-                    pending: false,
-                    createdAt: serverCreatedAt ?? m.createdAt,
-                    attachments: serverAttachments,
-                  },
-                ]
-            : [m],
-        );
-      });
+      setLocalMessages((prev) =>
+        promoteSentMessage(prev, tempId, result.messageId, result.createdAt, {
+          attachments: serverAttachments,
+        }),
+      );
     } else {
-      setLocalMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setLocalMessages((prev) => removeMessage(prev, tempId));
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메모를 남기지 못했어요. 다시 시도해 주세요.', { type: 'error' });
@@ -267,6 +167,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
+    if (mention.onKeyDown(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       // 한글 IME 조합 확정 Enter(keyCode 229)는 전송이 아니다.
       if (e.nativeEvent.isComposing) return;
@@ -334,32 +235,14 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
                   </div>
                 )}
 
-                <div className={cn('flex w-full items-end gap-1.5', m.isSelf && 'flex-row-reverse')}>
-                  <div
-                    className={cn(
-                      'max-w-[78%] whitespace-pre-wrap break-words rounded-[var(--md-sys-shape-medium)] px-3 py-2 text-[13px] leading-relaxed',
-                      m.isSelf
-                        ? 'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
-                        : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]',
-                      m.pending && 'opacity-60',
-                    )}
-                  >
-                    {m.body}
-                    {m.attachments.length > 0 && (
-                      <MessageAttachmentGrid attachments={m.attachments} />
-                    )}
-                  </div>
-                  {m.pending ? (
-                    <span
-                      aria-label="전송 중"
-                      className="size-1.5 shrink-0 animate-pulse rounded-full bg-[var(--md-sys-color-on-surface-variant)]"
-                    />
-                  ) : (
-                    <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                      {formatTime(m.createdAt)}
-                    </span>
-                  )}
-                </div>
+                <MessageBubble
+                  isSelf={m.isSelf}
+                  pending={m.pending}
+                  createdAt={m.createdAt}
+                  body={m.body}
+                  attachments={m.attachments}
+                  renderBody={renderTeamBody}
+                />
               </div>
             </div>
           );
@@ -392,7 +275,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
                 <button
                   type="button"
                   aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  onClick={() => removeRow(a.id)}
                   className="hover:opacity-70"
                 >
                   <XIcon size={12} />
@@ -407,7 +290,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
                 <button
                   type="button"
                   aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  onClick={() => removeRow(a.id)}
                   className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
                 >
                   <XIcon size={12} />
@@ -420,7 +303,16 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
 
       {/* 컴포저 — 첨부 + textarea + 보내기 */}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
-        <div className="flex items-end gap-2">
+        <div className="relative flex items-end gap-2">
+          {mention.dropdownVisible && (
+            <MentionDropdown
+              items={mention.items}
+              activeIndex={mention.activeIndex}
+              duplicateNames={mention.duplicateNames}
+              onPick={mention.pick}
+              onHover={mention.onHover}
+            />
+          )}
           <IconButton
             label="파일 첨부"
             size="sm"
@@ -448,9 +340,11 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages }: P
             maxLength={4000}
             placeholder="우리 팀에게만 보이는 메모를 남겨보세요…"
             onChange={(e) => {
-              setDraft(e.target.value);
+              const value = e.target.value;
+              setDraft(value);
               e.target.style.height = 'auto';
               e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+              mention.onTextChange(value, e.target.selectionStart ?? value.length);
             }}
             onKeyDown={handleKeyDown}
             className="min-h-8 max-h-40 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-1.5 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"

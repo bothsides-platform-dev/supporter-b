@@ -15,7 +15,7 @@
  * 참조: prod 다중 인스턴스 swap 시 LISTEN/NOTIFY로 교체.
  */
 import { auth } from '@/auth';
-import { isSessionRevoked } from '@/lib/auth/session';
+import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import { subscribe } from '@/lib/server/notifications/bus';
 import { shouldDeliverToWorkspace } from '@/lib/server/notifications/shouldDeliver';
 
@@ -32,6 +32,7 @@ export async function GET(req: Request): Promise<Response> {
 
   // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return new Response('Unauthorized', { status: 401 });
+  if (await isEmailUnverified(session)) return new Response('Forbidden', { status: 403 });
   if (!session.user.workspaceId) {
     return new Response('Forbidden', { status: 403 });
   }

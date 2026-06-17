@@ -127,3 +127,53 @@ describe('PhoneVerificationField — 외부 API 실패 처리', () => {
     expect(await screen.findByText(/오류가 발생했습니다/)).toBeInTheDocument();
   });
 });
+
+describe('OTP Enter 키 라우팅', () => {
+  it('OTP 6자리 입력 후 Enter를 누르면 verifyPhoneOtpAction을 호출하고 폼 submit을 막는다', async () => {
+    mockSend.mockResolvedValueOnce({ ok: true });
+    mockVerify.mockResolvedValueOnce({ ok: true, verificationId: 'vid-enter' });
+    const formSubmit = vi.fn();
+    const onVerified = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <form onSubmit={formSubmit}>
+        <PhoneVerificationField onVerified={onVerified} />
+        <button type="submit">폼제출</button>
+      </form>,
+    );
+
+    // 전화번호 입력 → 인증하기 클릭 → OTP 단계 진입
+    await user.type(screen.getByLabelText('휴대전화'), '01012345678');
+    await user.click(screen.getByRole('button', { name: '인증하기' }));
+
+    // OTP 6자리 입력 후 Enter
+    await user.type(screen.getByLabelText('인증번호'), '123456');
+    await user.keyboard('{Enter}');
+
+    expect(mockVerify).toHaveBeenCalledOnce();
+    expect(formSubmit).not.toHaveBeenCalled();
+    expect(onVerified).toHaveBeenCalledWith('010-1234-5678', 'vid-enter');
+  });
+
+  it('OTP 입력이 6자리 미만이면 Enter가 verifyPhoneOtpAction을 호출하지 않는다', async () => {
+    mockSend.mockResolvedValueOnce({ ok: true });
+    const formSubmit = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <form onSubmit={formSubmit}>
+        <PhoneVerificationField onVerified={vi.fn()} />
+      </form>,
+    );
+
+    await user.type(screen.getByLabelText('휴대전화'), '01012345678');
+    await user.click(screen.getByRole('button', { name: '인증하기' }));
+    await user.type(screen.getByLabelText('인증번호'), '123');
+
+    await user.keyboard('{Enter}');
+
+    expect(mockVerify).not.toHaveBeenCalled();
+    expect(formSubmit).not.toHaveBeenCalled();
+  });
+});

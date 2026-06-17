@@ -1,14 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
 
 import {
-  bizProfiles,
-  columns,
-  users,
-  workspaceMembers,
-  workspaces,
-  verificationApplications,
-} from '@/lib/db/schema';
+  getBizProfileRepo,
+  getColumnRepo,
+  getUserRepo,
+  getVerificationApplicationRepo,
+  getWorkspaceRepo,
+} from '@/lib/server/repositories/factory';
 import { defaultColumns } from '@/lib/server/columns/seed';
 import { seedSampleRfpInTx } from '@/lib/server/onboarding/sample-rfp';
 import { seedSamplePgRfpInTx } from '@/lib/server/onboarding/sample-pg-rfp';
@@ -42,53 +40,50 @@ export async function createWorkspaceInTx(
   tx: any,
   input: CreateWorkspaceInput,
 ): Promise<{ workspaceId: string; applicationId: string }> {
+  const bizProfileRepo = await getBizProfileRepo();
+  const workspaceRepo = await getWorkspaceRepo();
+  const userRepo = await getUserRepo();
+  const verificationApplicationRepo = await getVerificationApplicationRepo();
+  const columnRepo = await getColumnRepo();
+
   let bizProfileId: string | null = null;
   if (input.type === 'buyer' && input.bizProfile) {
     bizProfileId = randomUUID();
-    await tx.insert(bizProfiles).values({
-      id: bizProfileId,
-      bizNo: input.bizProfile.bizNo,
-      taxType: input.bizProfile.taxType,
-      status: input.bizProfile.status,
-      grade: input.bizProfile.grade ?? null,
-      // 가입 시엔 등급이 없음(admin이 승인 시 지정) — gradeSource:'unset',
-      // gradeConfirmedBy 없음. grade override 경로는 'user_overridden'으로 별도 처리.
-      gradeSource: input.bizProfile.gradeSource ?? 'unset',
-      gradeConfirmedBy: null,
-      gradeConfirmedAt: null,
-    });
+    await bizProfileRepo.save(
+      {
+        id: bizProfileId,
+        bizNo: input.bizProfile.bizNo,
+        taxType: input.bizProfile.taxType,
+        status: input.bizProfile.status,
+        grade: input.bizProfile.grade,
+        // 가입 시엔 등급이 없음(admin이 승인 시 지정) — gradeSource:'unset',
+        // gradeConfirmedBy 없음. grade override 경로는 'user_overridden'으로 별도 처리.
+        gradeSource: input.bizProfile.gradeSource ?? 'unset',
+      },
+      tx,
+    );
   }
 
   const wsId = randomUUID();
-  await tx.insert(workspaces).values({
-    id: wsId,
-    type: input.type,
-    name: input.name,
-    bizProfileId,
-  });
-  await tx.insert(workspaceMembers).values({
-    workspaceId: wsId,
-    userId: input.userId,
-    role: 'admin',
-  });
-  await tx
-    .update(users)
-    .set({ lastActiveWorkspaceId: wsId })
-    .where(eq(users.id, input.userId));
+  await workspaceRepo.createBare(
+    { id: wsId, type: input.type, name: input.name, bizProfileId },
+    tx,
+  );
+  await workspaceRepo.addMember({ workspaceId: wsId, userId: input.userId, role: 'admin' }, tx);
+  await userRepo.setLastActiveWorkspace(input.userId, wsId, tx);
 
   // Insert a verification application for admin review. Its id is returned so
   // callers can build the admin review link (/admin/review/{applicationId})
   // for the new-signup notification.
   const applicationId = randomUUID();
-  await tx.insert(verificationApplications).values({
-    id: applicationId,
-    workspaceId: wsId,
-    orgType: input.type,
-  });
+  await verificationApplicationRepo.create(
+    { id: applicationId, workspaceId: wsId, orgType: input.type },
+    tx,
+  );
 
   // Seed the unified kanban columns (single source: defaultColumns). Both buyer
   // and pg get a pipeline board; buyer has BUYER_KANBAN_ORDER stages, pg has PG_KANBAN_ORDER.
-  await tx.insert(columns).values(defaultColumns(wsId, input.type));
+  await columnRepo.createMany(defaultColumns(wsId, input.type), tx);
 
   // 온보딩 샘플을 같은 tx 에 시드:
   //  - buyer: 샘플 견적 요청 1건 + 데모 PG 3사의 견적(읽기전용 비교 체험)

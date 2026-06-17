@@ -15,6 +15,8 @@ const Input = z
     body: z.string().max(4000).optional().default(''),
     rfpId: z.string().uuid().optional(),
     attachmentIds: z.array(z.string().uuid()).max(5).optional().default([]),
+    /** 낙관적 말풍선 상관관계 id — 멀티탭 self-echo 정확 매칭에 사용. max 64자. */
+    tempId: z.string().max(64).optional(),
   })
   .strict();
 
@@ -72,7 +74,9 @@ export async function sendChatMessageAction(
       authorUserId: ws.userId,
       authorName: result.authorName,
       authorEmail: result.authorEmail,
-      rfpId: data.rfpId ?? null,
+      rfpId: result.rfpId,
+      // 낙관적 말풍선 상관관계 id — self-echo 시 pending 말풍선 정확 매칭에 사용.
+      tempId: data.tempId ?? null,
       // 영속 행과 동일한 서버 타임스탬프 — 라이브 수신자와 리로드 렌더가 일치.
       createdAt: result.createdAt,
       attachments: savedAtts.map(({ chatMessageId: _cid, ...att }) => att),

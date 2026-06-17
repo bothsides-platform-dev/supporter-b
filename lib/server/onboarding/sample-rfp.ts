@@ -1,13 +1,26 @@
 // 온보딩 샘플 견적 요청 — 순수 tx 시딩/삭제 로직 (DB 클라이언트 import 없음).
 // createWorkspaceInTx(신규 구매사)·backfill 스크립트(기존)·OnboardingService(삭제)가 호출.
+// DB 접근은 전부 리포지토리(getXxxRepo 팩토리)를 통하고 tx 를 끝까지 전달한다.
 import { randomUUID } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
-import { users, workspaceMembers, workspaces, rfps, rfpAllowedPg, rfpInvitations, bids } from '@/lib/db/schema';
-import { nextRfpId } from '@/lib/server/rfp-id';
+import {
+  getBidRepo,
+  getInvitationRepo,
+  getRfpAllowedPgRepo,
+  getRfpRepo,
+  getUserRepo,
+  getWorkspaceRepo,
+} from '@/lib/server/repositories/factory';
+import type { Tx } from '@/lib/server/repositories/types';
 
 export const DEMO_PG_NAMES = ['샘플페이 A', '샘플페이 B', '샘플페이 C'] as const;
 
 const SAMPLE_DEADLINE_MS = 3650 * 24 * 60 * 60 * 1000;
+
+// nextRfpId 와 동일한 yymm 파생 — `P-YYMM-NNNN` 코드를 reserveNextCode 로 동일하게 발급한다.
+function currentYearMonth(): string {
+  const now = new Date();
+  return `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
 
 type SampleBidSpec = {
   settleCycle: string;
@@ -61,47 +74,35 @@ export type DemoPg = { wsId: string; userId: string; name: string };
  * 전역 데모 PG 워크스페이스 3개(+로그인 불가 데모 유저)를 보장한다. 이름 기준 멱등 —
  * 모든 구매사의 샘플이 이 3개를 공유한다. isDemo=true 로 실제 PG 발견 표면에서 제외된다.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function ensureDemoPgs(tx: any): Promise<DemoPg[]> {
+export async function ensureDemoPgs(tx: Tx): Promise<DemoPg[]> {
+  const workspaceRepo = await getWorkspaceRepo();
+  const userRepo = await getUserRepo();
+
   const out: DemoPg[] = [];
   for (let i = 0; i < DEMO_PG_NAMES.length; i++) {
     const name = DEMO_PG_NAMES[i];
-    const [existing] = await tx
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(and(eq(workspaces.isDemo, true), eq(workspaces.name, name)))
-      .limit(1);
+    const existing = await workspaceRepo.findDemoByName(name, undefined, tx);
     if (existing) {
-      const [member] = await tx
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(eq(workspaceMembers.workspaceId, existing.id))
-        .limit(1);
-      if (!member) {
+      const memberUserId = await workspaceRepo.firstMemberUserId(existing.id, tx);
+      if (!memberUserId) {
         throw new Error(`demo PG workspace ${existing.id} has no member — data integrity error`);
       }
-      out.push({ wsId: existing.id, userId: member.userId, name });
+      out.push({ wsId: existing.id, userId: memberUserId, name });
       continue;
     }
     const wsId = randomUUID();
     const userId = randomUUID();
     const slug = String.fromCharCode(97 + i); // a, b, c
-    await tx.insert(users).values({
-      id: userId,
-      email: `demo-pg-${slug}@sample.invalid`, // .invalid = 예약된 비배달 TLD
-      passwordHash: '!', // 사용 불가 — 데모 계정은 절대 인증되지 않는다
-      name,
-      isSystemAccount: true,
-      emailVerified: true,
-    });
-    await tx.insert(workspaces).values({
-      id: wsId,
-      type: 'pg',
-      name,
-      status: 'active', // 승인 플로우 우회 — 데모 PG라 실제 계정이 아님
-      isDemo: true,
-    });
-    await tx.insert(workspaceMembers).values({ workspaceId: wsId, userId, role: 'admin' });
+    await userRepo.createSystemAccount(
+      {
+        id: userId,
+        email: `demo-pg-${slug}@sample.invalid`, // .invalid = 예약된 비배달 TLD
+        name,
+      },
+      tx,
+    );
+    await workspaceRepo.createDemo({ id: wsId, type: 'pg', name, bizProfileId: null }, tx);
+    await workspaceRepo.addMember({ workspaceId: wsId, userId, role: 'admin' }, tx);
     out.push({ wsId, userId, name });
   }
   return out;
@@ -112,81 +113,100 @@ export async function ensureDemoPgs(tx: any): Promise<DemoPg[]> {
  * sampleSeededAt 가 이미 설정돼 있으면 no-op(멱등). 반드시 tx 안에서 호출.
  */
 export async function seedSampleRfpInTx(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tx: any,
+  tx: Tx,
   input: { buyerWsId: string; buyerUserId: string },
 ): Promise<{ seeded: boolean; rfpId?: string }> {
   if (SAMPLE_BIDS.length !== DEMO_PG_NAMES.length) {
     throw new Error('SAMPLE_BIDS must have one entry per demo PG');
   }
 
-  const [ws] = await tx
-    .select({ sampleSeededAt: workspaces.sampleSeededAt })
-    .from(workspaces)
-    .where(eq(workspaces.id, input.buyerWsId))
-    .limit(1);
-  if (!ws || ws.sampleSeededAt) return { seeded: false };
+  const workspaceRepo = await getWorkspaceRepo();
+  const rfpRepo = await getRfpRepo();
+  const allowedPgRepo = await getRfpAllowedPgRepo();
+  const invitationRepo = await getInvitationRepo();
+  const bidRepo = await getBidRepo();
+
+  const state = await workspaceRepo.getSampleSeededState(input.buyerWsId, tx);
+  if (!state || state.sampleSeededAt) return { seeded: false };
 
   const demos = await ensureDemoPgs(tx);
   const now = new Date();
   const deadline = new Date(now.getTime() + SAMPLE_DEADLINE_MS);
   const rfpId = randomUUID();
-  const code = await nextRfpId(tx);
+  const code = await rfpRepo.reserveNextCode(currentYearMonth(), tx);
 
-  await tx.insert(rfps).values({
-    id: rfpId,
-    code,
-    buyerWsId: input.buyerWsId,
-    title: '온라인 쇼핑몰 PG 견적 요청 (샘플)',
-    memo: '결제대행사 비교를 위한 샘플 견적 요청이에요. 받은 견적을 비교하고 선정하는 과정을 둘러볼 수 있어요. 다 살펴봤다면 삭제해도 돼요.',
-    mainProducts: '패션 의류 · 잡화',
-    annualPgVolume: '1200000000',
-    currentFeeRate: '2.8%',
-    currentSettlementCycle: 'D+5',
-    currentSettlementLimit: '30000000',
-    currentGuaranteeInsurance: '없음',
-    requiredPaymentMethods: ['card', 'virtual_account', 'naver_pay'],
-    deadline,
-    status: 'sent',
-    boardVisible: false,
-    isSample: true,
-    createdBy: input.buyerUserId,
-    sentAt: now,
-  });
+  await rfpRepo.insertNew(
+    {
+      id: rfpId,
+      code,
+      buyerWsId: input.buyerWsId,
+      bizProfileId: null,
+      title: '온라인 쇼핑몰 PG 견적 요청 (샘플)',
+      memo: '결제대행사 비교를 위한 샘플 견적 요청이에요. 받은 견적을 비교하고 선정하는 과정을 둘러볼 수 있어요. 다 살펴봤다면 삭제해도 돼요.',
+      websiteUrl: null,
+      mainProducts: '패션 의류 · 잡화',
+      annualPgVolume: '1200000000',
+      currentFeeRate: '2.8%',
+      currentSettlementLimit: '30000000',
+      currentGuaranteeInsurance: '없음',
+      currentSettlementCycle: 'D+5',
+      deliveryServicePeriod: null,
+      boardVisible: false,
+      currentFeeVisibleToPg: true,
+      contractType: null,
+      currentSolution: null,
+      currentSolutionDetail: null,
+      deadline,
+      status: 'sent',
+      requiredPaymentMethods: ['card', 'virtual_account', 'naver_pay'],
+      customPaymentMethods: [],
+      createdBy: input.buyerUserId,
+      sentAt: now,
+      isSample: true,
+    },
+    tx,
+  );
 
   for (let i = 0; i < demos.length; i++) {
     const demo = demos[i];
     const spec = SAMPLE_BIDS[i];
     const invitationId = randomUUID();
-    await tx.insert(rfpAllowedPg).values({ rfpId, pgWsId: demo.wsId });
-    await tx.insert(rfpInvitations).values({
-      id: invitationId,
-      rfpId,
-      pgWsId: demo.wsId,
-      acceptedByUserId: demo.userId,
-      tokenHash: randomUUID(), // 샘플은 토큰 진입이 없어 임의 unique 값으로 충분
-      sentAt: now,
-      expiresAt: deadline,
-      status: 'accepted',
-    });
-    await tx.insert(bids).values({
-      id: randomUUID(),
-      rfpId,
-      pgWsId: demo.wsId,
-      invitationId,
-      settleCycle: spec.settleCycle,
-      settleLimit: spec.settleLimit,
-      guaranteeInsurance: spec.guaranteeInsurance,
-      paymentFees: spec.paymentFees,
-      customFees: {},
-      memo: spec.memo,
-      status: 'submitted',
-      submittedBy: demo.userId,
-      submittedAt: now,
-    });
+    await allowedPgRepo.add(rfpId, [demo.wsId], tx);
+    await invitationRepo.insertAccepted(
+      {
+        id: invitationId,
+        rfpId,
+        pgWsId: demo.wsId,
+        acceptedByUserId: demo.userId,
+        tokenHash: randomUUID(), // 샘플은 토큰 진입이 없어 임의 unique 값으로 충분
+        sentAt: now,
+        expiresAt: deadline,
+      },
+      tx,
+    );
+    await bidRepo.save(
+      {
+        id: randomUUID(),
+        rfpId,
+        pgWsId: demo.wsId,
+        invitationId,
+        round: 1,
+        settleCycle: spec.settleCycle,
+        settleLimit: Number(spec.settleLimit),
+        guaranteeInsurance: Number(spec.guaranteeInsurance),
+        paymentFees: spec.paymentFees,
+        customFees: {},
+        proposalPdfs: [],
+        memo: spec.memo,
+        status: 'submitted',
+        submittedBy: demo.userId,
+        submittedAt: now.toISOString(),
+      },
+      tx,
+    );
   }
 
-  await tx.update(workspaces).set({ sampleSeededAt: now }).where(eq(workspaces.id, input.buyerWsId));
+  await workspaceRepo.markSampleSeeded(input.buyerWsId, now, tx);
   return { seeded: true, rfpId };
 }
 
@@ -198,29 +218,15 @@ export async function backfillSampleRfps(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   database: any,
 ): Promise<{ seeded: number }> {
-  const buyers = await database
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(
-      and(
-        eq(workspaces.type, 'buyer'),
-        // 데모 워크스페이스(예: PG 샘플이 쓰는 공유 데모 구매사)는 온보딩 대상이 아니다.
-        eq(workspaces.isDemo, false),
-        isNull(workspaces.sampleSeededAt),
-      ),
-    );
+  const workspaceRepo = await getWorkspaceRepo();
+  const buyers = await workspaceRepo.listWsNeedingSample('buyer', database);
 
   let seeded = 0;
-  for (const b of buyers as { id: string }[]) {
-    const [admin] = await database
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(and(eq(workspaceMembers.workspaceId, b.id), eq(workspaceMembers.role, 'admin')))
-      .limit(1);
-    if (!admin) continue;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r = await database.transaction((tx: any) =>
-      seedSampleRfpInTx(tx, { buyerWsId: b.id, buyerUserId: admin.userId }),
+  for (const b of buyers) {
+    const adminUserId = await workspaceRepo.findAdminMemberUserId(b.id, database);
+    if (!adminUserId) continue;
+    const r = await database.transaction((tx: Tx) =>
+      seedSampleRfpInTx(tx, { buyerWsId: b.id, buyerUserId: adminUserId }),
     );
     if (r.seeded) seeded++;
   }
@@ -233,18 +239,14 @@ export async function backfillSampleRfps(
  * team_messages)은 FK ON DELETE CASCADE 로 함께 제거된다. sampleSeededAt 은 유지 → 재시드 안 함.
  */
 export async function deleteSampleRfpInTx(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tx: any,
+  tx: Tx,
   input: { code: string; workspaceId: string },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const [rfp] = await tx
-    .select({ id: rfps.id, buyerWsId: rfps.buyerWsId, isSample: rfps.isSample })
-    .from(rfps)
-    .where(eq(rfps.code, input.code))
-    .limit(1);
+  const rfpRepo = await getRfpRepo();
+  const rfp = await rfpRepo.findByCode(input.code, tx);
   if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
   if (rfp.buyerWsId !== input.workspaceId) return { ok: false, error: 'FORBIDDEN' };
   if (!rfp.isSample) return { ok: false, error: 'NOT_SAMPLE' };
-  await tx.delete(rfps).where(eq(rfps.id, rfp.id));
+  await rfpRepo.deleteById(rfp.id, tx);
   return { ok: true };
 }

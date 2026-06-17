@@ -135,4 +135,70 @@ describe('resolveShellAccess — (app) shell auth guard contract', () => {
       ).toEqual({ kind: 'redirect', to: INCOMPLETE_SESSION_REDIRECT });
     });
   });
+
+  // 이메일 인증 게이트 — 워크스페이스 승인 상태와 독립한 1급 접근 게이트. 정규 PG
+  // 가입은 active 워크스페이스에 합류해 status 게이트(pending)를 우회하므로, 이 게이트가
+  // 없으면 미인증 사용자가 인증 화면을 영영 못 본다. (4번째 인자 emailVerified)
+  describe('email verification gate', () => {
+    it('미인증 + active 워크스페이스 → /pending-approval (정규 PG 가입 회귀)', () => {
+      expect(
+        resolveShellAccess({ user: completeUser }, [ws({ status: 'active' })], undefined, false),
+      ).toEqual({ kind: 'redirect', to: '/pending-approval' });
+    });
+
+    it('미인증 + pending 워크스페이스 → /pending-approval', () => {
+      expect(
+        resolveShellAccess({ user: completeUser }, [ws({ status: 'pending' })], undefined, false),
+      ).toEqual({ kind: 'redirect', to: '/pending-approval' });
+    });
+
+    it('인증 완료 + active 워크스페이스 → 정상 렌더', () => {
+      const a = ws({ status: 'active' });
+      expect(
+        resolveShellAccess({ user: completeUser }, [a], undefined, true),
+      ).toEqual({ kind: 'render', active: a });
+    });
+
+    it('인증 완료 + pending 워크스페이스 → /pending-approval (심사 대기)', () => {
+      expect(
+        resolveShellAccess({ user: completeUser }, [ws({ status: 'pending' })], undefined, true),
+      ).toEqual({ kind: 'redirect', to: '/pending-approval' });
+    });
+
+    it('인증 완료 + suspended 워크스페이스 → /suspended', () => {
+      expect(
+        resolveShellAccess({ user: completeUser }, [ws({ status: 'suspended' })], undefined, true),
+      ).toEqual({ kind: 'redirect', to: '/suspended' });
+    });
+
+    // 게이트 우선순위: 이메일 인증 게이트가 suspended 상태 게이트보다 앞선다 →
+    // 미인증이면 suspended 워크스페이스라도 /pending-approval(인증 먼저)로 보낸다.
+    it('미인증 + suspended 워크스페이스 → /pending-approval (이메일 게이트가 suspended 보다 우선)', () => {
+      expect(
+        resolveShellAccess({ user: completeUser }, [ws({ status: 'suspended' })], undefined, false),
+      ).toEqual({ kind: 'redirect', to: '/pending-approval' });
+    });
+
+    // 게이트 순서: 멤버십/세션 무효 검사가 이메일 인증 검사보다 먼저다.
+    it('미인증이라도 멤버십 없으면 → /logout (멤버십 검사 우선)', () => {
+      expect(
+        resolveShellAccess({ user: completeUser }, [], undefined, false),
+      ).toEqual({ kind: 'redirect', to: INCOMPLETE_SESSION_REDIRECT });
+    });
+
+    it('미인증이라도 sv가 stale 하면 → /logout (revocation 검사 우선)', () => {
+      expect(
+        resolveShellAccess({ user: completeUser }, [ws()], { token: 1, db: 2 }, false),
+      ).toEqual({ kind: 'redirect', to: INCOMPLETE_SESSION_REDIRECT });
+    });
+
+    // 하위호환: 기존 호출부(emailVerified 미전달)는 게이트가 발동하지 않아야 한다.
+    it('emailVerified 인자 미전달(undefined) + active → 정상 렌더', () => {
+      const a = ws({ status: 'active' });
+      expect(resolveShellAccess({ user: completeUser }, [a])).toEqual({
+        kind: 'render',
+        active: a,
+      });
+    });
+  });
 });

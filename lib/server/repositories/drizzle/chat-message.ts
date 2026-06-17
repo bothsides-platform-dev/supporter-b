@@ -42,6 +42,19 @@ export class DrizzleChatMessageRepository implements ChatMessageRepo {
     });
   }
 
+  async findConversationId(
+    messageId: string,
+    tx?: Tx,
+  ): Promise<{ conversationId: string } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ conversationId: chatMessages.conversationId })
+      .from(chatMessages)
+      .where(eq(chatMessages.id, messageId))
+      .limit(1);
+    return row ?? undefined;
+  }
+
   async listByConversation(
     conversationId: string,
     tx?: Tx,

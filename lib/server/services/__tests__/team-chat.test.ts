@@ -14,10 +14,15 @@ import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getAttachmentRepo,
   getInvitationRepo,
+  getNotificationRepo,
+  getOutboxRepo,
   getRfpRepo,
   getRfpTeamMessageRepo,
+  getRfpTeamMessageReadRepo,
   getUserRepo,
+  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
   seedBuyerWorkspace,
@@ -26,8 +31,8 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { attachments, rfpInvitations } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { attachments, notifications, outboxEntries, rfpInvitations } from '@/lib/db/schema';
+import { and, eq } from 'drizzle-orm';
 import { TeamChatService, type TeamChatActor } from '../team-chat';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -35,13 +40,18 @@ let db: PgliteDB;
 let service: TeamChatService;
 
 async function buildService(): Promise<TeamChatService> {
-  const [rfpRepo, invRepo, userRepo, msgRepo] = await Promise.all([
+  const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo, attRepo] = await Promise.all([
     getRfpRepo(),
     getInvitationRepo(),
     getUserRepo(),
     getRfpTeamMessageRepo(),
+    getRfpTeamMessageReadRepo(),
+    getWorkspaceRepo(),
+    getNotificationRepo(),
+    getOutboxRepo(),
+    getAttachmentRepo(),
   ]);
-  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo);
+  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo, attRepo);
 }
 
 // Draft attachment — all owner FKs null (valid: num_nonnulls <= 1).
@@ -303,5 +313,186 @@ describe('TeamChatService.listMessages', () => {
       workspaceType: 'pg',
     });
     expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+  });
+});
+
+describe('TeamChatService.markRead + listThreads', () => {
+  it('markRead then listThreads clears unread for own read; teammate message raises unread', async () => {
+    const me = await seedUser(db, { email: 'me@b.com', name: '나' });
+    const mate = await seedUser(db, { email: 'mate@b.com', name: '동료' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, mate.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+    const svc = await buildService();
+    const actorMe: TeamChatActor = { userId: me.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    // mate posts a team message
+    await svc.sendMessage({ rfpId: rfp.id, body: '동료 메모' }, { userId: mate.id, workspaceId: ws.id, workspaceType: 'buyer' });
+
+    let r = await svc.listThreads(actorMe);
+    expect(r.ok && r.threads.find((t) => t.rfpId === rfp.id)?.unread).toBe(true);
+
+    const mark = await svc.markRead(rfp.id, actorMe);
+    expect(mark.ok).toBe(true);
+
+    r = await svc.listThreads(actorMe);
+    expect(r.ok && r.threads.find((t) => t.rfpId === rfp.id)?.unread).toBe(false);
+  });
+});
+
+describe('TeamChatService.sendMessage — notification fan-out', () => {
+  it('fans out one inapp notification to teammates (not author) on send, deduped within window', async () => {
+    const me = await seedUser(db, { email: 'me@b.com', name: '나' }); // author
+    const mate = await seedUser(db, { email: 'mate@b.com', name: '동료' }); // recipient
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, mate.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+    const svc = await buildService();
+    const actorMe: TeamChatActor = { userId: me.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    await svc.sendMessage({ rfpId: rfp.id, body: '메모1' }, actorMe);
+    await svc.sendMessage({ rfpId: rfp.id, body: '메모2' }, actorMe);
+
+    const mateNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, mate.id), eq(notifications.type, 'team_chat.message')));
+    expect(mateNotifs).toHaveLength(1); // deduped within the window
+
+    const meNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, me.id), eq(notifications.type, 'team_chat.message')));
+    expect(meNotifs).toHaveLength(0); // author excluded
+  });
+
+  it('enqueues a coalesced team_chat.message email digest row to teammates on send', async () => {
+    const me = await seedUser(db, { email: 'me@b.com', name: '나' }); // author
+    const mate = await seedUser(db, { email: 'mate@b.com', name: '동료' }); // recipient
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, mate.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+    const svc = await buildService();
+    const actorMe: TeamChatActor = { userId: me.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    await svc.sendMessage({ rfpId: rfp.id, body: '메모1' }, actorMe);
+
+    const rows = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'team_chat.message'));
+    // One coalesced row per non-author teammate (author excluded).
+    expect(rows.length).toBe(1);
+    expect(rows[0].toAddr).toBe('mate@b.com');
+  });
+});
+
+describe('TeamChatService.listTeamMembers', () => {
+  it('owning buyer 액터에게 팀 로스터를 반환한다', async () => {
+    const { rfp, buyerActor, buyerUser } = await seedScene();
+    const result = await service.listTeamMembers(rfp.id, buyerActor);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.members.map((m) => m.userId)).toContain(buyerUser.id);
+      expect(result.members.find((m) => m.userId === buyerUser.id)?.name).toBe('김구매');
+    }
+  });
+
+  it('권한 없는 buyer 는 FORBIDDEN', async () => {
+    const { rfp } = await seedScene();
+    const otherWs = await seedBuyerWorkspace(db);
+    const otherUser = await seedUser(db);
+    await seedMembership(db, otherWs.id, otherUser.id, 'admin');
+    const result = await service.listTeamMembers(rfp.id, {
+      userId: otherUser.id, workspaceId: otherWs.id, workspaceType: 'buyer',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe('FORBIDDEN');
+  });
+});
+
+describe('TeamChatService.sendMessage — 멘션', () => {
+  async function buyerSceneWithTwoMembers() {
+    const author = await seedUser(db, { name: '김구매' });
+    const mate = await seedUser(db, { name: '이동료' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, author.id, 'admin');
+    await seedMembership(db, ws.id, mate.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: author.id });
+    const actor: TeamChatActor = { userId: author.id, workspaceId: ws.id, workspaceType: 'buyer' };
+    return { author, mate, ws, rfp, actor };
+  }
+
+  async function notifsFor(userId: string) {
+    return db.select().from(notifications).where(eq(notifications.userId, userId));
+  }
+
+  it('멘션된 멤버는 team_chat.mention, 작성자는 알림 없음', async () => {
+    const { mate, rfp, actor, author } = await buyerSceneWithTwoMembers();
+    const r = await service.sendMessage({ rfpId: rfp.id, body: `<@${mate.id}> 확인해줘` }, actor);
+    expect(r.ok).toBe(true);
+
+    const mateNotifs = await notifsFor(mate.id);
+    expect(mateNotifs).toHaveLength(1);
+    expect(mateNotifs[0].type).toBe('team_chat.mention');
+    // 미리보기는 토큰이 아니라 평문 @이름.
+    expect(mateNotifs[0].body).toContain('@이동료');
+
+    const authorNotifs = await notifsFor(author.id);
+    expect(authorNotifs).toHaveLength(0);
+  });
+
+  it('멘션 안 된 멤버는 기존 team_chat.message 알림', async () => {
+    const { mate, rfp, actor } = await buyerSceneWithTwoMembers();
+    await service.sendMessage({ rfpId: rfp.id, body: '그냥 메모' }, actor);
+    const mateNotifs = await notifsFor(mate.id);
+    expect(mateNotifs).toHaveLength(1);
+    expect(mateNotifs[0].type).toBe('team_chat.message');
+  });
+
+  it('비멤버 uuid 토큰은 무시 — 알림/누출 없음', async () => {
+    const { mate, rfp, actor } = await buyerSceneWithTwoMembers();
+    const stranger = '99999999-9999-4999-8999-999999999999';
+    await service.sendMessage({ rfpId: rfp.id, body: `<@${stranger}> 안녕` }, actor);
+    // 멤버 mate 는 멘션되지 않았으므로 일반 알림.
+    const mateNotifs = await notifsFor(mate.id);
+    expect(mateNotifs).toHaveLength(1);
+    expect(mateNotifs[0].type).toBe('team_chat.message');
+    // stranger 에게는 어떤 알림도 생성되지 않는다.
+    const strangerNotifs = await notifsFor(stranger);
+    expect(strangerNotifs).toHaveLength(0);
+  });
+
+  it('@all 은 작성자 제외 전원에게 team_chat.mention', async () => {
+    const { mate, rfp, actor, author } = await buyerSceneWithTwoMembers();
+    const r = await service.sendMessage({ rfpId: rfp.id, body: '<@all> 공지' }, actor);
+    expect(r.ok).toBe(true);
+    const mateNotifs = await notifsFor(mate.id);
+    expect(mateNotifs).toHaveLength(1);
+    expect(mateNotifs[0].type).toBe('team_chat.mention');
+    expect(await notifsFor(author.id)).toHaveLength(0);
+  });
+});
+
+describe('TeamChatService.listThreads — 미리보기 평문화', () => {
+  it('마지막 메시지의 멘션 토큰을 @이름 평문으로 보여준다', async () => {
+    const author = await seedUser(db, { name: '김구매' });
+    const mate = await seedUser(db, { name: '이동료' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, author.id, 'admin');
+    await seedMembership(db, ws.id, mate.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: author.id });
+    const actor: TeamChatActor = { userId: author.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    await service.sendMessage({ rfpId: rfp.id, body: `<@${mate.id}> 확인` }, actor);
+    const r = await service.listThreads(actor);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const t = r.threads.find((x) => x.rfpId === rfp.id)!;
+      expect(t.preview).toBe('@이동료 확인');
+    }
   });
 });

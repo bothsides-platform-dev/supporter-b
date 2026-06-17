@@ -29,7 +29,7 @@ export function BidContextStrip({ buyerName, rfp, currentStep, feeInputMethods }
           <CounterpartyProfileCard
             variant="profile"
             counterparty={{ name: buyerName, type: 'buyer', workspaceId: rfp.buyerWsId }}
-            rfpContext={{ code: rfp.id, title: rfp.title }}
+            rfpContext={{ id: rfp.id, title: rfp.title }}
           />
           <span className="mx-1 text-[var(--md-sys-color-outline-variant)]">·</span>
           {hint}

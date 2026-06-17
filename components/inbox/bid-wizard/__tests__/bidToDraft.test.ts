@@ -67,6 +67,16 @@ describe('bidToDraft', () => {
       expect(draft.cycleUnit).toBe('D');
       expect(draft.cycleNum).toBe('1');
     });
+
+    it('cycleNum > 99 는 99로 클램프된다: D+150 → cycleNum="99"', () => {
+      const draft = bidToDraft(makeBid({ settleCycle: 'D+150' }));
+      expect(draft.cycleNum).toBe('99');
+    });
+
+    it('cycleNum = 99 는 그대로 유지된다: D+99 → cycleNum="99"', () => {
+      const draft = bidToDraft(makeBid({ settleCycle: 'D+99' }));
+      expect(draft.cycleNum).toBe('99');
+    });
   });
 
   describe('paymentFees → fees (decimal → percent string)', () => {
@@ -79,6 +89,16 @@ describe('bidToDraft', () => {
     it('0.012 → "1.2"', () => {
       const draft = bidToDraft(makeBid({ paymentFees: { bank_transfer: 0.012 } }));
       expect(draft.fees['bank_transfer']).toBe('1.2');
+    });
+
+    it('3자리 이상 소수 수수료는 2자리로 반올림된다: 0.012345 → "1.23"', () => {
+      const draft = bidToDraft(makeBid({ paymentFees: { virtual_account: 0.012345 } }));
+      expect(draft.fees['virtual_account']).toBe('1.23');
+    });
+
+    it('customFees 도 2자리로 반올림된다: 0.005678 → "0.57"', () => {
+      const draft = bidToDraft(makeBid({ customFees: { 'promo-fee': 0.005678 } }));
+      expect(draft.fees['promo-fee']).toBe('0.57');
     });
 
     it('numeric value for a tiered method key is still mapped (value-type check, not method-category check)', () => {

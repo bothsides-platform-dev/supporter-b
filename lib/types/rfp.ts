@@ -4,6 +4,12 @@ import type { CustomPaymentMethod, PaymentMethod } from './bid';
 
 export type RfpStatus = 'draft' | 'sent' | 'closed' | 'cancelled' | 'awarded';
 
+// 계약 유형 칩 — 라벨/색은 product vocabulary 라 단일 출처(여기). 색 리터럴은
+// ChipColor 와 호환되되 lib→components 역의존을 피하려 import 없이 `as const` 로 둔다
+// (소비처 <Chip color> 대입 시점에 ChipColor 적합성이 검증된다).
+export const CONTRACT_TYPE_LABELS = { new: '신규 계약', renewal: '갱신 계약' } as const;
+export const CONTRACT_TYPE_COLOR = { new: 'primary', renewal: 'surface' } as const;
+
 export type RFP = {
   // Surrogate uuid (PK). FKs reference this. Use `code` for URLs/display.
   id: string;
@@ -31,6 +37,7 @@ export type RFP = {
   createdBy: string;
   createdAt: string;
   sentAt?: string;
+  updatedAt?: string;
   // Unified kanban (buyer pipeline board): explicit custom-column placement;
   // null/undefined ⇒ classifier-derived lifecycle column.
   boardColumnId?: string | null;

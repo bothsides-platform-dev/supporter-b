@@ -73,10 +73,12 @@ app/
 │  ├─ workspace/new/          # 워크스페이스 생성
 │  └─ settings/{profile,members,notifications,quote-templates,audit-log}/
 ├─ logout/route.ts            # GET (redirect to /login) + POST (204, for client-side signOut)
-└─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리
+└─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리 (resolveShellAccess)
 ```
 
 Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown — same shell, different navigation.
+
+**Shell-guard gates (`resolveShellAccess` in `lib/auth/shell-access.ts`)**: the `(app)/layout.tsx` guard runs ordered redirects — unauth → `/login`, incomplete-but-authed (no membership) → `/logout`, **email-unverified → `/pending-approval`**, workspace `pending` → `/pending-approval`, workspace `suspended` → `/suspended`. The email-verification gate is **first-class and independent of workspace status** — an unverified member is redirected even when their active workspace is already `active` (closes the canonical-PG-join hole where joining an approved workspace skipped verification). `emailVerified` is read **live from the DB** (`getDbEmailVerified`, not the JWT) so a just-completed verification takes effect without re-login; after verifying, `EmailVerifyScreen` hard-navigates (`window.location.assign('/home')`) so the guard re-branches by workspace status. (Data-boundary enforcement on server actions / API routes is deliberately deferred — see TODOS.md.)
 
 **Host routing (prod only)**: the single Next.js app serves two hostnames — `supporter-b.com` (buyer) and `partner.supporter-b.com` (PG). Route tree is unchanged; `(app)/layout.tsx` reads the request host and redirects a mismatched session to its correct host (`lib/site-routing.ts`). `/signup` also reads the host and redirects to `/signup/buyer` or `/signup/pg` without a role-chooser screen (`signupTargetForHost` in `lib/site-routing.ts`). Session cookie is scoped to `.supporter-b.com` for cross-subdomain SSO (`AUTH_COOKIE_DOMAIN`). Workspace switch navigates across hosts. PG-facing emails link to `partner.supporter-b.com`. Local dev uses a single host (routing disabled). Env vars: `NEXT_PUBLIC_BUYER_ORIGIN`, `NEXT_PUBLIC_PARTNER_ORIGIN`.
 
@@ -96,7 +98,7 @@ lib/server/
 │  ├─ workspace.ts   # WorkspaceService: create / invite / member management
 │  ├─ auth.ts        # AuthService: signup / password reset / email change
 │  └─ notification.ts# NotificationService: markRead / markAllRead / retryEmail
-└─ repositories/     # DB 접근 추상화 (Drizzle 구현 + 메모리 테스트 구현)
+└─ repositories/     # DB 접근 추상화 (Drizzle 구현 — 단위 테스트는 PGlite 로 실 DB 검증)
 ```
 
 **서비스 레이어 규칙:**
@@ -104,6 +106,8 @@ lib/server/
 - `Actor = { userId, workspaceId }` — 세션에서 추출해 액션이 서비스에 전달한다.
 - `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 예외 throw 없이 결과를 반환한다.
 - 서비스 싱글턴은 Next.js `globalThis` 캐싱 패턴 사용 (`getRfpService()` / `getBidService()` 등).
+
+**리포지토리 경계 (ESLint 강제):** 모든 DB 접근은 `lib/server/repositories/**` 가 소유한다. 그 밖의 `lib/`·`app/` 코드는 `@/lib/db/schema`·`@/lib/db/client` 를 **값(value)으로 정적 import 할 수 없다** — 레포를 주입(`repositories/factory` 의 `get*Repo()`)해서 쓴다. `import type { DB }`(타입 전용)와 서비스의 동적 `import('@/lib/db/client')`(트랜잭션 핸들)는 허용. 위반 시 lint 에러(`@typescript-eslint/no-restricted-imports`, 규칙명 `repo-boundary/db-access`) + 독립 드리프트 가드 테스트(`lib/server/__tests__/repo-boundary.test.ts`)가 잡는다. **의도적 예외**(`lib/server/db-boundary-allowlist.mjs` 에 명문화, 단일 출처): storage 바이트-블롭 티어(`storage/{postgres,index}.ts`), 크로스-애그리거트 캐스케이드(`_purgeUnverifiedSignup.ts`), `actionDb()` 테스트-오버라이드 레지스트리(`actions/auth/_shared.ts`). 예외를 늘리려면 allowlist 에 추가하고 리뷰한다.
 
 ## Linear Design Language — Hard Rules
 

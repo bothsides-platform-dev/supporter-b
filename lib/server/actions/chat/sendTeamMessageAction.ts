@@ -13,6 +13,8 @@ const Input = z
     rfpId: z.string().uuid(),
     body: z.string().max(4000).default(''),
     attachmentIds: z.array(z.string().uuid()).max(20).default([]),
+    /** 낙관적 말풍선 상관관계 id — 멀티탭 self-echo 정확 매칭에 사용. max 64자. */
+    tempId: z.string().max(64).optional(),
   })
   .strict();
 
@@ -24,8 +26,9 @@ export type SendTeamMessageResult = ChatActionResult<{
 
 /**
  * RFP 팀 채팅(내부 메모) 전송 — (rfpId, 세션 워크스페이스) 스코프에 append.
- * ACL·검증은 TeamChatService 소유. 성공 시 팀 채널로 best-effort 라이브 팬아웃
- * (알림·이메일 없음 — v1 확정 결정).
+ * ACL·검증은 TeamChatService 소유. 성공 시 팀 채널로 best-effort 라이브 팬아웃.
+ * 인앱/이메일 알림은 TeamChatService.sendMessage 가 소유한다(수신자=워크스페이스
+ * 멤버−작성자, 3분 윈도 dedupe + 윈도 종료 시 이메일 다이제스트).
  */
 export async function sendTeamMessageAction(
   input: z.input<typeof Input>,
@@ -55,6 +58,7 @@ export async function sendTeamMessageAction(
     authorName: result.authorName,
     createdAt: result.createdAt,
     attachments: result.attachments,
+    tempId: parsed.data.tempId ?? null,
   }).catch(() => {});
 
   return {
