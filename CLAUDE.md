@@ -64,14 +64,15 @@ app/
 ├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{,rfp,workspace}/[token], /auth/*, /pending-approval, /suspended
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)
 │  ├─ home/
-│  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id] (비교·선정 인라인 — 별도 award 라우트 없음)
-│  │  └─ new/                 # /rfp/new — RFP 작성 플로우 (AppShell 공유)
-│  ├─ inbox/                  # pg workspace pages (P2~P4): /inbox, /inbox/[rfpId], /inbox/[rfpId]/submitted
+│  ├─ rfp/                    # buyer workspace pages (B1~B7): /rfp, /rfp/[id] (비교·선정 인라인 — 별도 award 라우트 없음), /rfp/@modal/(.)[id] (인터셉트 딜룸 모달)
+│  ├─ rfp-create/             # /rfp-create — RFP 작성 플로우 (AppShell 공유, 인터셉트 라우트)
+│  ├─ inbox/                  # pg workspace pages (P2~P4): /inbox, /inbox/[rfpId] (제출 후 인플레이스 흡수 — 별도 /submitted 라우트 없음), /inbox/@modal/(.)[rfpId] (인터셉트 딜룸 모달)
 │  ├─ opportunities/          # pg — 오픈 RFP 게시판 (비초대 PG 발견·콜드 피치)
 │  ├─ messages/               # buyer+pg 공통 — 라이브 채팅 (Centrifugo WS)
 │  ├─ notifications/          # 인앱 알림 목록 페이지
+│  ├─ quote-templates/        # pg — 견적 템플릿 (정산조건·수수료율 저장, top-level PG 라우트 — settings 하위 아님)
 │  ├─ workspace/new/          # 워크스페이스 생성
-│  └─ settings/{profile,members,notifications,quote-templates,audit-log}/
+│  └─ settings/{profile,members,notifications,audit-log}/
 ├─ logout/route.ts            # GET (redirect to /login) + POST (204, for client-side signOut)
 └─ (no middleware.ts)         # auth guard는 app/(app)/layout.tsx의 서버 redirect로 처리 (resolveShellAccess)
 ```
