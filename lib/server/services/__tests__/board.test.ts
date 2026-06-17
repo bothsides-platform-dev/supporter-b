@@ -1,7 +1,7 @@
 // BoardService — unit tests against in-memory FAKE repos (no DB). Covers the
 // logic moved out of the board actions: cross-kind guard, system-column
 // not-a-drop-target, cross-workspace ownership, system/cross-side delete locks,
-// and the placement write paths (rfp / bid / invitation → setBoardColumn).
+// and the placement write paths (rfp / invitation → setBoardColumn).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
@@ -14,7 +14,6 @@ import {
 } from '../board';
 import type { BoardColumn } from '@/lib/types/column';
 import type {
-  BidRepo,
   ColumnRepo,
   InvitationRepo,
   RfpRepo,
@@ -65,21 +64,6 @@ class FakeRfpRepo {
   }
 }
 
-class FakeBidRepo {
-  private byId = new Map<string, { id: string; rfpId: string }>();
-  placements: { bidId: string; columnId: string | null }[] = [];
-  seed(b: { id: string; rfpId: string }) {
-    this.byId.set(b.id, b);
-    return b;
-  }
-  async findById(id: string) {
-    return this.byId.get(id);
-  }
-  async setBoardColumn(bidId: string, columnId: string | null) {
-    this.placements.push({ bidId, columnId });
-  }
-}
-
 class FakeInvitationRepo {
   private byId = new Map<string, { id: string; pgWsId: string }>();
   placements: { invId: string; columnId: string | null }[] = [];
@@ -99,7 +83,7 @@ function makeColumn(over: Partial<BoardColumn> = {}): BoardColumn {
   return {
     id: randomUUID(),
     workspaceId: 'ws-buyer',
-    kind: 'rfp_bids',
+    kind: 'pipeline',
     title: '협상중',
     position: 'a1',
     color: null,
@@ -114,22 +98,20 @@ const PG: CardActor = { workspaceId: 'ws-pg', workspaceType: 'pg' };
 function build() {
   const columnRepo = new FakeColumnRepo();
   const rfpRepo = new FakeRfpRepo();
-  const bidRepo = new FakeBidRepo();
   const invRepo = new FakeInvitationRepo();
   const service = new BoardService(
     columnRepo as unknown as ColumnRepo,
     rfpRepo as unknown as RfpRepo,
-    bidRepo as unknown as BidRepo,
     invRepo as unknown as InvitationRepo,
   );
-  return { service, columnRepo, rfpRepo, bidRepo, invRepo };
+  return { service, columnRepo, rfpRepo, invRepo };
 }
 
 describe('BoardService.moveCard', () => {
   it('COLUMN_NOT_FOUND when the target column does not exist', async () => {
     const { service } = build();
     const r = await service.moveCard(
-      { cardType: 'bid', cardId: randomUUID(), toColumnId: randomUUID() },
+      { cardType: 'rfp', cardId: randomUUID(), toColumnId: randomUUID() },
       BUYER,
     );
     expect(r).toEqual({ ok: false, error: 'COLUMN_NOT_FOUND' });
@@ -139,55 +121,31 @@ describe('BoardService.moveCard', () => {
     const { service, columnRepo } = build();
     const col = columnRepo.seed(makeColumn({ workspaceId: 'ws-other' }));
     const r = await service.moveCard(
-      { cardType: 'bid', cardId: randomUUID(), toColumnId: col.id },
+      { cardType: 'rfp', cardId: randomUUID(), toColumnId: col.id },
       BUYER,
     );
     expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
-  });
-
-  it('CROSS_KIND when a bid is dropped on a pipeline column', async () => {
-    const { service, columnRepo } = build();
-    const col = columnRepo.seed(makeColumn({ kind: 'pipeline' }));
-    const r = await service.moveCard(
-      { cardType: 'bid', cardId: randomUUID(), toColumnId: col.id },
-      BUYER,
-    );
-    expect(r).toEqual({ ok: false, error: 'CROSS_KIND' });
   });
 
   it('NOT_A_DROP_TARGET when the target is a system (lifecycle) column', async () => {
     const { service, columnRepo } = build();
     const col = columnRepo.seed(makeColumn({ lifecycleKey: 'inbox' }));
     const r = await service.moveCard(
-      { cardType: 'bid', cardId: randomUUID(), toColumnId: col.id },
+      { cardType: 'rfp', cardId: randomUUID(), toColumnId: col.id },
       BUYER,
     );
     expect(r).toEqual({ ok: false, error: 'NOT_A_DROP_TARGET' });
   });
 
-  it('FORBIDDEN when the bid card belongs to another workspace (via rfp.buyerWsId)', async () => {
-    const { service, columnRepo, bidRepo, rfpRepo } = build();
+  it('FORBIDDEN when the rfp card belongs to another workspace', async () => {
+    const { service, columnRepo, rfpRepo } = build();
     const col = columnRepo.seed(makeColumn());
-    const bid = bidRepo.seed({ id: randomUUID(), rfpId: 'rfp-1' });
-    rfpRepo.seed({ id: 'rfp-1', buyerWsId: 'ws-other' }); // not BUYER
+    const rfp = rfpRepo.seed({ id: randomUUID(), buyerWsId: 'ws-other' });
     const r = await service.moveCard(
-      { cardType: 'bid', cardId: bid.id, toColumnId: col.id },
+      { cardType: 'rfp', cardId: rfp.id, toColumnId: col.id },
       BUYER,
     );
     expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
-  });
-
-  it('places a bid into a custom column (bid.setBoardColumn)', async () => {
-    const { service, columnRepo, bidRepo, rfpRepo } = build();
-    const col = columnRepo.seed(makeColumn());
-    const bid = bidRepo.seed({ id: randomUUID(), rfpId: 'rfp-1' });
-    rfpRepo.seed({ id: 'rfp-1', buyerWsId: 'ws-buyer' });
-    const r = await service.moveCard(
-      { cardType: 'bid', cardId: bid.id, toColumnId: col.id },
-      BUYER,
-    );
-    expect(r.ok).toBe(true);
-    expect(bidRepo.placements).toEqual([{ bidId: bid.id, columnId: col.id }]);
   });
 
   it('places an rfp card via rfp.setBoardColumn', async () => {
@@ -217,34 +175,22 @@ describe('BoardService.moveCard', () => {
 
 describe('BoardService.releaseCard', () => {
   it('FORBIDDEN when the card belongs to another workspace', async () => {
-    const { service, bidRepo, rfpRepo } = build();
-    const bid = bidRepo.seed({ id: randomUUID(), rfpId: 'rfp-1' });
-    rfpRepo.seed({ id: 'rfp-1', buyerWsId: 'ws-other' });
-    const r = await service.releaseCard({ cardType: 'bid', cardId: bid.id }, BUYER);
+    const { service, rfpRepo } = build();
+    const rfp = rfpRepo.seed({ id: randomUUID(), buyerWsId: 'ws-other' });
+    const r = await service.releaseCard({ cardType: 'rfp', cardId: rfp.id }, BUYER);
     expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
   });
 
-  it('clears the placement (setBoardColumn null) for an owned card', async () => {
-    const { service, bidRepo, rfpRepo } = build();
-    const bid = bidRepo.seed({ id: randomUUID(), rfpId: 'rfp-1' });
-    rfpRepo.seed({ id: 'rfp-1', buyerWsId: 'ws-buyer' });
-    const r = await service.releaseCard({ cardType: 'bid', cardId: bid.id }, BUYER);
+  it('clears the placement (setBoardColumn null) for an owned rfp card', async () => {
+    const { service, rfpRepo } = build();
+    const rfp = rfpRepo.seed({ id: randomUUID(), buyerWsId: 'ws-buyer' });
+    const r = await service.releaseCard({ cardType: 'rfp', cardId: rfp.id }, BUYER);
     expect(r.ok).toBe(true);
-    expect(bidRepo.placements).toEqual([{ bidId: bid.id, columnId: null }]);
+    expect(rfpRepo.placements).toEqual([{ rfpId: rfp.id, columnId: null }]);
   });
 });
 
 describe('BoardService.addColumn', () => {
-  it('FORBIDDEN_KIND when a pg creates an rfp_bids column', async () => {
-    const { service, columnRepo } = build();
-    const r = await service.addColumn(
-      { kind: 'rfp_bids', title: 'x', position: 'a1' },
-      PG,
-    );
-    expect(r).toEqual({ ok: false, error: 'FORBIDDEN_KIND' });
-    expect(columnRepo.created).toHaveLength(0);
-  });
-
   it('creates a custom column (lifecycleKey null) and returns its id', async () => {
     const { service, columnRepo } = build();
     const r = await service.addColumn(
@@ -294,7 +240,7 @@ describe('BoardService.deleteColumn', () => {
     expect(r).toEqual({ ok: false, error: 'COLUMN_CROSS_SIDE_LOCKED' });
   });
 
-  it('COLUMN_SYSTEM_LOCKED for the default-landing system column', async () => {
+  it('COLUMN_SYSTEM_LOCKED for a system column', async () => {
     const { service, columnRepo } = build();
     const col = columnRepo.seed(makeColumn({ lifecycleKey: 'inbox' })); // system, not cross-side
     const r = await service.deleteColumn(col.id, 'ws-buyer');
