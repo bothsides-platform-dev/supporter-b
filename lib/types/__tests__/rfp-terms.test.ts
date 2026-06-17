@@ -4,6 +4,7 @@ import {
   migrateCurrentTerms,
   currentTermsFromDiscrete,
   hiddenFromPgFromVisibility,
+  backfillRowPatch,
 } from '@/lib/types/rfp-terms';
 
 describe('CURRENT_TERMS_VERSION', () => {
@@ -85,5 +86,61 @@ describe('hiddenFromPgFromVisibility', () => {
   it('true/undefined 면 빈 목록', () => {
     expect(hiddenFromPgFromVisibility(true)).toEqual([]);
     expect(hiddenFromPgFromVisibility(undefined)).toEqual([]);
+  });
+});
+
+describe('backfillRowPatch', () => {
+  const empty = { _v: 1 };
+
+  it('레거시 행(빈 문서 + 개별 필드)은 문서/숨김 패치를 만든다', () => {
+    const patch = backfillRowPatch({
+      currentTerms: empty,
+      currentFeeRate: '2.5%',
+      annualPgVolume: '5억',
+      currentFeeVisibleToPg: true,
+      hiddenFromPg: [],
+    });
+    expect(patch).toEqual({
+      currentTerms: { _v: 1, feeRate: '2.5%', annualPgVolume: '5억' },
+      hiddenFromPg: [],
+    });
+  });
+
+  it('수수료 비공개 레거시 행은 hidden_from_pg 를 채운다', () => {
+    const patch = backfillRowPatch({
+      currentTerms: empty,
+      currentFeeRate: '2.5%',
+      currentFeeVisibleToPg: false,
+      hiddenFromPg: [],
+    });
+    expect(patch?.hiddenFromPg).toEqual(['currentTerms.feeRate']);
+  });
+
+  it('이미 문서 데이터가 있는 행은 건드리지 않는다 (null) — 멱등·비클로버', () => {
+    const patch = backfillRowPatch({
+      currentTerms: { _v: 1, feeRate: '9.9%' },
+      currentFeeRate: '2.5%', // 개별컬럼과 달라도 문서를 덮어쓰지 않는다
+      currentFeeVisibleToPg: true,
+      hiddenFromPg: [],
+    });
+    expect(patch).toBeNull();
+  });
+
+  it('바꿀 게 없으면 null (빈 문서·개별필드 없음·노출·숨김 빈값)', () => {
+    const patch = backfillRowPatch({
+      currentTerms: empty,
+      currentFeeVisibleToPg: true,
+      hiddenFromPg: [],
+    });
+    expect(patch).toBeNull();
+  });
+
+  it('숨김이 이미 목표값이면 null (재실행 멱등)', () => {
+    const patch = backfillRowPatch({
+      currentTerms: empty,
+      currentFeeVisibleToPg: false,
+      hiddenFromPg: ['currentTerms.feeRate'],
+    });
+    expect(patch).toBeNull();
   });
 });

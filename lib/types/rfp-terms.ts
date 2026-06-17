@@ -66,3 +66,30 @@ export function currentTermsFromDiscrete(f: DiscreteBriefFields): CurrentTermsV1
 export function hiddenFromPgFromVisibility(currentFeeVisibleToPg: boolean | undefined): string[] {
   return currentFeeVisibleToPg === false ? ['currentTerms.feeRate'] : [];
 }
+
+function sameStrSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = new Set(a);
+  return b.every((x) => sa.has(x));
+}
+
+// 백필 1행 결정: 개별컬럼 → 문서/숨김 패치. 변경 불필요하거나 이미 문서 데이터가
+// 있으면 null(=skip). 멱등·비클로버 — 재실행해도 기존 문서를 덮어쓰지 않는다.
+export function backfillRowPatch(
+  row: DiscreteBriefFields & {
+    currentTerms: unknown;
+    currentFeeVisibleToPg: boolean | undefined;
+    hiddenFromPg: string[];
+  },
+): { currentTerms: CurrentTermsV1; hiddenFromPg: string[] } | null {
+  const existing = (row.currentTerms ?? {}) as Record<string, unknown>;
+  const existingBriefKeys = Object.keys(existing).filter((k) => k !== '_v');
+  if (existingBriefKeys.length > 0) return null; // 이미 문서화됨 — 보존(비클로버)
+
+  const currentTerms = currentTermsFromDiscrete(row);
+  const hiddenFromPg = hiddenFromPgFromVisibility(row.currentFeeVisibleToPg);
+  const docHasData = Object.keys(currentTerms).some((k) => k !== '_v');
+  const hiddenChanged = !sameStrSet(row.hiddenFromPg ?? [], hiddenFromPg);
+  if (!docHasData && !hiddenChanged) return null; // 바꿀 게 없음
+  return { currentTerms, hiddenFromPg };
+}

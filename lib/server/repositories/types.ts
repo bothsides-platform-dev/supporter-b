@@ -103,6 +103,16 @@ export interface RfpRepo {
   listForBuyer(wsId: string, limit: number, tx?: Tx): Promise<unknown[]>;
   /** RFP 단건 하드삭제(by id). 자식(bids·invitations·allowlist 등)은 FK CASCADE. 온보딩 샘플 삭제 경로. */
   deleteById(id: string, tx?: Tx): Promise<void>;
+  /**
+   * 견적 확장 마이그레이션(Phase C) 전용 — id 커서 기준 한 청크를 스캔해 빈 current_terms 를
+   * 개별 current_* 컬럼에서 채우고 hidden_from_pg 를 설정한다. 이미 문서가 있는 행은 비클로버(skip).
+   * @returns scanned(스캔 행수)·updated(갱신 행수)·lastId(다음 커서). scanned<limit 이면 끝.
+   */
+  backfillCurrentTermsChunk(
+    afterId: string | null,
+    limit: number,
+    tx?: Tx,
+  ): Promise<{ scanned: number; updated: number; lastId: string | null }>;
 }
 
 // ── Invitation ────────────────────────────────────────────────────────

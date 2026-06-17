@@ -1,10 +1,11 @@
-import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, inArray, or, sql } from 'drizzle-orm';
 import { rfps, bizProfiles, rfpAllowedPg } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import {
   currentTermsFromDiscrete,
   hiddenFromPgFromVisibility,
+  backfillRowPatch,
 } from '@/lib/types/rfp-terms';
 import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
@@ -225,6 +226,63 @@ export class DrizzleRfpRepository implements RfpRepo {
     const db = this.h(tx);
     // 자식(bids·invitations·allowlist·attachments·team_messages)은 FK ON DELETE CASCADE.
     await db.delete(rfps).where(eq(rfps.id, id));
+  }
+
+  async backfillCurrentTermsChunk(
+    afterId: string | null,
+    limit: number,
+    tx?: Tx,
+  ): Promise<{ scanned: number; updated: number; lastId: string | null }> {
+    const db = this.h(tx);
+    // id 커서로 한 청크 스캔 — 마이그레이션 Phase C. 비클로버는 backfillRowPatch 가 판정.
+    const rows = await db
+      .select({
+        id: rfps.id,
+        currentTerms: rfps.currentTerms,
+        hiddenFromPg: rfps.hiddenFromPg,
+        currentFeeRate: rfps.currentFeeRate,
+        currentSettlementLimit: rfps.currentSettlementLimit,
+        currentGuaranteeInsurance: rfps.currentGuaranteeInsurance,
+        currentSettlementCycle: rfps.currentSettlementCycle,
+        deliveryServicePeriod: rfps.deliveryServicePeriod,
+        currentSolution: rfps.currentSolution,
+        currentSolutionDetail: rfps.currentSolutionDetail,
+        annualPgVolume: rfps.annualPgVolume,
+        currentFeeVisibleToPg: rfps.currentFeeVisibleToPg,
+      })
+      .from(rfps)
+      .where(afterId ? gt(rfps.id, afterId) : undefined)
+      .orderBy(asc(rfps.id))
+      .limit(limit);
+
+    type Row = {
+      id: string;
+      currentTerms: unknown;
+      hiddenFromPg: string[];
+      currentFeeRate: string | null;
+      currentSettlementLimit: string | null;
+      currentGuaranteeInsurance: string | null;
+      currentSettlementCycle: string | null;
+      deliveryServicePeriod: string | null;
+      currentSolution: string | null;
+      currentSolutionDetail: string | null;
+      annualPgVolume: string | null;
+      currentFeeVisibleToPg: boolean;
+    };
+    const typed = rows as Row[];
+    if (typed.length === 0) return { scanned: 0, updated: 0, lastId: afterId };
+
+    let updated = 0;
+    for (const r of typed) {
+      const patch = backfillRowPatch(r);
+      if (!patch) continue;
+      await db
+        .update(rfps)
+        .set({ currentTerms: patch.currentTerms, hiddenFromPg: patch.hiddenFromPg })
+        .where(eq(rfps.id, r.id));
+      updated++;
+    }
+    return { scanned: typed.length, updated, lastId: typed[typed.length - 1].id };
   }
 
   async findById(id: string, tx?: Tx): Promise<RFP | undefined> {
