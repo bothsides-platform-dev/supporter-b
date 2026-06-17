@@ -24,6 +24,12 @@ import { DEFAULT_LANDING_KEY } from '@/lib/server/columns/lifecycle-keys';
 import { toast } from '@/lib/toast';
 import type { BoardCard, BoardColumn, CardType } from '@/lib/types/column';
 
+// React 19의 useOptimistic 은 액션이 없을 때 첫 번째 인수를 그대로 반환한다.
+// 인라인 {} 리터럴을 넘기면 매 렌더 새 참조 → overrides 가 불안정 → grouped/columnData
+// useMemo 가 매번 재계산 → BoardColumn memo 가 bail 하지 못한다.
+// 모듈-수준 상수를 사용해 참조를 고정한다.
+const EMPTY_OVERRIDES: Record<string, string> = {};
+
 // navigate-* actions must route immediately — KanbanActionDialog renders null
 // for them by design, so funneling them into pendingAction is a silent no-op.
 function navigationHref(action: DragAction): string | null {
@@ -49,7 +55,7 @@ export function useBoardDnd({
   const [overrides, applyOverride] = useOptimistic<
     Record<string, string>,
     { cardId: string; columnId: string }
-  >({}, (state, patch) => ({ ...state, [patch.cardId]: patch.columnId }));
+  >(EMPTY_OVERRIDES, (state, patch) => ({ ...state, [patch.cardId]: patch.columnId }));
 
   const columnOf = (c: BoardCard): string => overrides[c.cardId] ?? c.columnId;
 

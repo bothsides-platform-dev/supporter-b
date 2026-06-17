@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useDroppable } from '@dnd-kit/core';
 import { generateKeyBetween } from 'fractional-indexing';
 import { addColumnAction } from '@/lib/server/actions/board/addColumnAction';
@@ -10,7 +11,9 @@ import { recolorColumnAction } from '@/lib/server/actions/board/recolorColumnAct
 import { toast } from '@/lib/toast';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
+import { BoardDraggableCard } from './BoardDraggableCard';
 import {
+  type BoardCard,
   type BoardColumn as BoardColumnType,
   type ChipColorRole,
   type ColumnKind,
@@ -36,16 +39,17 @@ const COLOR_CHOICES: (ChipColorRole | null)[] = [
   'error',
 ];
 
-// React.memo 로 감싸고 부모는 콜백을 안정 참조(useCallback)로 넘긴다. 다만 현재는
-// 부모가 children(컬럼별 카드 목록)을 인라인 배열로 넘겨 매 렌더 children 참조가
-// 바뀌므로 memo 가 실제로 bail 하지는 못한다 — 동작은 동일하나 컬럼 단위 최적화는
-// 아직 미발현이다. 카드 데이터+안정 renderCard 를 받아 내부에서 렌더하도록 바꾸면
-// 컬럼 단위 bail 이 발현된다(후속 과제). 컬럼별 zero-arg 클로저는 이 컴포넌트 내부에서만 만든다.
+// cards+renderCard+moreHref 를 받아 내부에서 카드 목록을 렌더링한다.
+// 부모가 카드 데이터와 안정 renderCard 를 넘기고 BoardDraggableCard 도 같은 패턴이므로
+// memo 가 컬럼·카드 단위로 bail 한다 — 다른 컬럼의 리렌더가 이 컬럼에 전파되지 않는다.
+// 컬럼별 zero-arg 클로저는 이 컴포넌트 내부에서만 만든다.
 function BoardColumnInner({
   column,
   count,
   dropState,
-  children,
+  cards,
+  renderCard,
+  moreHref,
   menuOpen,
   onToggleMenu,
   onCloseMenu,
@@ -55,7 +59,10 @@ function BoardColumnInner({
   count: number;
   /** 드래그 중 드롭 가능 여부 — invalid 컬럼은 dim, isOver 강조는 valid 만. */
   dropState: 'idle' | 'valid' | 'invalid';
-  children: ReactNode;
+  cards: BoardCard[];
+  renderCard: (card: BoardCard) => ReactNode;
+  /** 표에서 전체 보기 링크 URL — null 이면 표시하지 않음 (종결 컬럼 overflow 전용). */
+  moreHref: string | null;
   menuOpen: boolean;
   onToggleMenu: (columnId: string) => void;
   onCloseMenu: () => void;
@@ -107,7 +114,19 @@ function BoardColumnInner({
             —
           </p>
         )}
-        {children}
+        {cards.map((card) => (
+          <BoardDraggableCard key={card.cardId} card={card} renderCard={renderCard} />
+        ))}
+        {moreHref !== null && (
+          // 라벨에 건수를 넣지 않는다 — 보드의 N(필터 적용·컬럼 폴드)과 표 도착지
+          // 건수가 다를 수 있어 약속이 어긋남. 총 건수는 컬럼 헤더가 이미 보여줌.
+          <Link
+            href={moreHref}
+            className="block text-center py-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+          >
+            표에서 전체 보기
+          </Link>
+        )}
       </div>
     </section>
   );

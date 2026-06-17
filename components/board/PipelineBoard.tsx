@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { KanbanBoard } from './KanbanBoard';
 import { PipelineCard } from './PipelineCard';
@@ -60,12 +61,27 @@ export function PipelineBoard({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // 카드 클릭 → 상세 라우트로 push → 인터셉트 딜룸 모달(표 뷰 행 클릭과 동일).
-  // pathname 은 보드 뷰가 사는 '/rfp' | '/inbox' — 같은 세그먼트라 인터셉트된다.
-  // (과거 ?peek 사이드 패널은 제거됨.)
-  function handleCardSelect(code: string) {
-    router.push(`${pathname}/${code}`);
-  }
+  // 안정 신원 — URL/router 가 바뀌지 않는 한 KanbanBoard 로 흘러내린 renderCard 와
+  // columnOverflow 참조가 고정돼 BoardColumn·BoardDraggableCard memo 가 bail 한다.
+  const handleCardSelect = useCallback(
+    (code: string) => {
+      router.push(`${pathname}/${code}`);
+    },
+    [router, pathname],
+  );
+
+  const renderCard = useCallback(
+    (card: BoardCard) => {
+      const code = (card.payload as { rfpId: string }).rfpId;
+      return <PipelineCard card={card} onSelect={() => handleCardSelect(code)} />;
+    },
+    [handleCardSelect],
+  );
+
+  const columnOverflow = useCallback(
+    (column: BoardColumn) => resultColumnOverflow(cardType, column.lifecycleKey, searchParams),
+    [cardType, searchParams],
+  );
 
   return (
     <KanbanBoard
@@ -73,13 +89,8 @@ export function PipelineBoard({
       cardType={cardType}
       columns={columns}
       cards={cards}
-      renderCard={(card) => {
-        const code = (card.payload as { rfpId: string }).rfpId;
-        return <PipelineCard card={card} onSelect={() => handleCardSelect(code)} />;
-      }}
-      columnOverflow={(column) =>
-        resultColumnOverflow(cardType, column.lifecycleKey, searchParams)
-      }
+      renderCard={renderCard}
+      columnOverflow={columnOverflow}
     />
   );
 }

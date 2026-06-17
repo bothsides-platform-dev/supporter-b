@@ -37,37 +37,27 @@ import { BoardDraggableCard } from '../BoardDraggableCard';
 describe('BoardDraggableCard', () => {
   it('드래그 핸들 버튼이 렌더된다', () => {
     render(
-      <BoardDraggableCard card={card}>
-        <button type="button">카드 버튼</button>
-      </BoardDraggableCard>,
+      <BoardDraggableCard card={card} renderCard={() => <button type="button">카드 버튼</button>} />,
     );
     expect(screen.getByRole('button', { name: /드래그 핸들/ })).toBeInTheDocument();
   });
 
   it('setActivatorNodeRef 가 드래그 핸들에 연결된다', () => {
-    render(
-      <BoardDraggableCard card={card}>
-        <div>내용</div>
-      </BoardDraggableCard>,
-    );
+    render(<BoardDraggableCard card={card} renderCard={() => <div>내용</div>} />);
     expect(mockSetActivatorNodeRef).toHaveBeenCalled();
   });
 
   it('isDragging 시 래퍼에 opacity-30 이 적용된다', () => {
     makeMock(true);
     const { container } = render(
-      <BoardDraggableCard card={card}>
-        <div>내용</div>
-      </BoardDraggableCard>,
+      <BoardDraggableCard card={card} renderCard={() => <div>내용</div>} />,
     );
     expect(container.firstChild).toHaveClass('opacity-30');
   });
 
-  it('children 이 래퍼 안에 렌더된다', () => {
+  it('renderCard(card) 결과가 래퍼 안에 렌더된다', () => {
     render(
-      <BoardDraggableCard card={card}>
-        <span data-testid="child">아이</span>
-      </BoardDraggableCard>,
+      <BoardDraggableCard card={card} renderCard={() => <span data-testid="child">아이</span>} />,
     );
     expect(screen.getByTestId('child')).toBeInTheDocument();
   });

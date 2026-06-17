@@ -1,13 +1,11 @@
 'use client';
 
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { DndContext, closestCorners } from '@dnd-kit/core';
 import { KanbanActionDialog } from '@/components/home/KanbanActionDialog';
 import { useBoardDnd } from './useBoardDnd';
 import { BoardColumn, AddColumnControl, CUSTOM_COLUMNS_ENABLED } from './BoardColumn';
-import { BoardDraggableCard } from './BoardDraggableCard';
 import { BoardDragOverlay } from './BoardDragOverlay';
 import { buildBoardAnnouncements, boardScreenReaderInstructions } from './boardAnnouncements';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -58,10 +56,6 @@ export function KanbanBoard({
     handleDragEnd,
   } = useBoardDnd({ cardType, columns, cards });
 
-  // 안정 참조 콜백(useCallback) — 핸들러 신원을 고정한다. 단, 아래에서 BoardColumn 에
-  // children(컬럼별 카드 목록)을 인라인 배열로 넘기므로 매 렌더 children 참조가 바뀌어
-  // 컬럼 단위 memo 는 아직 bail 하지 못한다(동작 동일, 최적화 미발현). 진짜 컬럼 메모는
-  // 카드 데이터+안정 renderCard 를 넘겨 내부 렌더해야 가능 — 보드 perf 후속 과제(TODOS).
   const toggleMenu = useCallback(
     (columnId: string) =>
       setOpenMenu((prev) => (prev === columnId ? null : columnId)),
@@ -75,6 +69,24 @@ export function KanbanBoard({
     const titleById = new Map(columns.map((c) => [c.id, c.title]));
     return buildBoardAnnouncements({ columnTitle: (id) => titleById.get(id) ?? null });
   }, [columns]);
+
+  // 컬럼별 파생값을 메모화 — grouped/columnOverflow 신원이 안정이면 boards-level state
+  // 변경(메뉴 토글 등)에 columnData 참조가 바뀌지 않아 BoardColumn memo 가 bail 한다.
+  const columnData = useMemo(
+    () =>
+      columns.map((column) => {
+        const columnCards = grouped.get(column.id) ?? [];
+        const overflow = columnOverflow?.(column) ?? null;
+        const truncated = overflow !== null && columnCards.length > overflow.limit;
+        return {
+          column,
+          count: columnCards.length,
+          visibleCards: truncated ? columnCards.slice(0, overflow.limit) : columnCards,
+          moreHref: truncated ? overflow.moreHref : null,
+        };
+      }),
+    [columns, grouped, columnOverflow],
+  );
 
   const lastColumnPos = columns.length ? columns[columns.length - 1].position : null;
 
@@ -102,48 +114,27 @@ export function KanbanBoard({
             !activeCard && 'snap-x snap-proximity',
           )}
         >
-          {columns.map((column) => {
-            const columnCards = grouped.get(column.id) ?? [];
-            const overflow = columnOverflow?.(column) ?? null;
-            const truncated = overflow !== null && columnCards.length > overflow.limit;
-            const visibleCards = truncated
-              ? columnCards.slice(0, overflow.limit)
-              : columnCards;
-            return (
-              <BoardColumn
-                key={column.id}
-                column={column}
-                count={columnCards.length}
-                dropState={
-                  !activeCard
-                    ? 'idle'
-                    : validDropTargets?.has(column.id)
-                      ? 'valid'
-                      : 'invalid'
-                }
-                menuOpen={openMenu === column.id}
-                onToggleMenu={toggleMenu}
-                onCloseMenu={closeMenu}
-                onRefresh={refresh}
-              >
-                {visibleCards.map((card) => (
-                  <BoardDraggableCard key={card.cardId} card={card}>
-                    {renderCard(card)}
-                  </BoardDraggableCard>
-                ))}
-                {truncated && (
-                  // 라벨에 건수를 넣지 않는다 — 보드의 N(필터 적용·컬럼 폴드)과 표 도착지
-                  // 건수가 다를 수 있어 약속이 어긋남. 총 건수는 컬럼 헤더가 이미 보여줌.
-                  <Link
-                    href={overflow.moreHref}
-                    className="block text-center py-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-                  >
-                    표에서 전체 보기
-                  </Link>
-                )}
-              </BoardColumn>
-            );
-          })}
+          {columnData.map(({ column, count, visibleCards, moreHref }) => (
+            <BoardColumn
+              key={column.id}
+              column={column}
+              count={count}
+              dropState={
+                !activeCard
+                  ? 'idle'
+                  : validDropTargets?.has(column.id)
+                    ? 'valid'
+                    : 'invalid'
+              }
+              cards={visibleCards}
+              renderCard={renderCard}
+              moreHref={moreHref}
+              menuOpen={openMenu === column.id}
+              onToggleMenu={toggleMenu}
+              onCloseMenu={closeMenu}
+              onRefresh={refresh}
+            />
+          ))}
           {CUSTOM_COLUMNS_ENABLED && (
             <AddColumnControl kind={kind} afterPosition={lastColumnPos} onRefresh={refresh} />
           )}

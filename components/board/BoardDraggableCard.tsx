@@ -11,13 +11,13 @@ import type { BoardCard } from '@/lib/types/column';
 // listeners 는 래퍼가 아닌 핸들에 스프레드 — attributes(role/tabIndex) 는 핸들이 내장하므로
 // 래퍼에 추가 스프레드 없음. TouchSensor 길게 누르기는 핸들 위에서도 활성화된다.
 //
-// React.memo: 같은 card·children 이면 다른 카드/컬럼의 리렌더에 끌려 재렌더하지 않는다.
+// React.memo: card·renderCard 신원이 안정이면 다른 카드/컬럼의 리렌더에 끌려 재렌더하지 않는다.
 function BoardDraggableCardInner({
   card,
-  children,
+  renderCard,
 }: {
   card: BoardCard;
-  children: ReactNode;
+  renderCard: (card: BoardCard) => ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: `card:${card.cardId}`,
@@ -48,12 +48,9 @@ function BoardDraggableCardInner({
           aria-hidden
         />
       </button>
-      <div className="pl-5">{children}</div>
+      <div className="pl-5">{renderCard(card)}</div>
     </div>
   );
 }
 
-// memo 는 카드 컴포넌트 자체의 리렌더만 방어한다. 현재 부모가 children 으로
-// renderCard(card) 결과를 인라인 주입하므로 children 참조가 매 렌더 바뀌어 bail 은
-// 미발현이다(동작 동일). 카드 데이터+안정 renderCard 패턴으로 가면 발현 — 후속 과제.
 export const BoardDraggableCard = memo(BoardDraggableCardInner);
