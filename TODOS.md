@@ -14,9 +14,8 @@
 ### ~~보드 카드 이동의 키보드 대체 수단~~ ✅ v0.2.25.1
 `BoardDraggableCard` 에 전용 드래그 핸들(GripVertical, `setActivatorNodeRef`) 추가 + `KeyboardSensor` 재도입. 핸들에서 Space/Enter 로 카드를 집고 화살표 키로 이동 — 카드 버튼(Enter-to-open)과 분리돼 충돌 없음. SR 지시문·announcements 도 키보드 방법 안내로 갱신. (PR fix/kanban-keyboard-drag-handle 2026-06-17)
 
-### 보드 컬럼/카드 memo 가 현재 미발현 (children 인라인 패턴)
-**Priority:** P3
-Phase 5-7 split 에서 `BoardColumn`·`BoardDraggableCard` 를 `React.memo` 로 감쌌지만, `KanbanBoard` 가 컬럼에 `children`(컬럼별 카드 목록)을, 카드에 `renderCard(card)` 결과를 인라인으로 주입해 매 렌더 children 참조가 바뀌므로 memo 가 bail 하지 못한다(동작 동일, 최적화 미발현 — 핸들러 useCallback 만 유효). 진짜 컬럼/카드 단위 bail 은 (1) 컬럼이 카드 **데이터**(`grouped` 는 이미 useMemo)+안정 `renderCard` 를 받아 내부 렌더, (2) 소비처(`PipelineBoard`)가 `renderCard`/`columnOverflow` 를 `useCallback` 으로 안정화, (3) 컬럼별 `overflow` 객체 신원 안정화가 필요. DnD 보드라 동작 회귀 위험이 있어 단독 perf 패스로 분리. (발견: /ship adversarial 리뷰 2026-06-16, v0.2.23.0)
+### ~~보드 컬럼/카드 memo 가 현재 미발현 (children 인라인 패턴)~~ ✅ v0.2.25.4
+children→data-prop 전환(BoardColumn·BoardDraggableCard), `EMPTY_OVERRIDES` 모듈 상수(useOptimistic 인라인 {} 방지), `columnData` useMemo, `PipelineBoard` useCallback 안정화. 3508 green. **Completed:** v0.2.25.4 (2026-06-17)
 
 ### ~~PG 인박스 데이터 조립 중복 + 보드 뷰 2중 페치~~ ✅ v0.2.25.2
 `loadPgInboxData(wsId)` 공유 로더(`lib/server/board/pgInbox.ts`) 추출 + `pgInboxDataToRows`·`buildPgPipelineCards` 순수 빌더 분리. `inbox/page.tsx` 가 1회 로드 후 행·보드 양쪽에 공급, `loadPgPipelineBoard(wsId, prefetched?)` 진입점 추가로 보드 뷰 3-쿼리 2중 실행 제거. 기존 미테스트 `received→bidId 생략` 규칙도 신규 pgInbox.test.ts(13 케이스)로 커버. 2868 green.
