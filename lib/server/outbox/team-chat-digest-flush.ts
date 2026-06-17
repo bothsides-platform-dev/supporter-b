@@ -12,13 +12,20 @@
 //               the stored placeholder.
 //   read      — recipient has read everything (N === 0) → cancel (no mail).
 //
-// "Unread" counts only NON-SELF messages newer than the recipient's last_read_at
-// (a team thread is single-sided — no counterparty axis like buyer↔PG chat).
+// "Unread" counts only NON-SELF messages newer than the recipient's last_read_at.
 // There is no presence layer: team threads aren't live-presence-tracked the way
 // buyer↔PG conversations are, so the digest relies on read-state alone.
 //
 // Cancel = markResult sent with no sender call. Malformed dedupeKey → also
 // markResult sent so a junk row can't wedge the queue.
+//
+// Two-phase execution:
+//   Phase 1 — recompute + filter: iterate due rows, cancel ineligible ones
+//             immediately, accumulate eligible rows (subject + html recomputed)
+//             into toSend[].
+//   Phase 2 — batch send: pass all survivors to sendEntriesInBatches so the
+//             entire tick's digests go out in ceil(N/100) Resend API calls
+//             instead of N individual calls (rate-limit fix).
 
 import {
   getOutboxRepo,
@@ -30,19 +37,20 @@ import { parseTeamDigestDedupeKey } from './team-digest';
 import { mentionsToPlainText } from '@/lib/team-mentions';
 import { baseUrlFor } from '@/lib/server/env';
 import { computeBackoff } from './backoff';
+import { sendEntriesInBatches } from './batch-send';
 import { renderChatMessage } from './templates/chatMessage';
-import type { Sender } from './types';
+import type { BatchSender, OutboxEntry } from './types';
 
 const PREVIEW_LEN = 120;
 const EMPTY_PREVIEW = '첨부 파일';
 
 /**
- * Drain due team-chat-digest outbox rows through `sender`, recomputing each body
- * at send time. Returns counts: `sent` = mail actually dispatched, `cancelled` =
- * rows resolved without a mail (already-read / malformed).
+ * Drain due team-chat-digest outbox rows through `batchSender`, recomputing
+ * each body at send time. Survivors are batched into ceil(N/100) Resend API
+ * calls. Returns counts: `sent`, `cancelled`, `failed`.
  */
 export async function flushTeamChatDigests(
-  sender: Sender,
+  batchSender: BatchSender,
   limit: number = 50,
 ): Promise<{ sent: number; cancelled: number; failed: number }> {
   const outbox = await getOutboxRepo();
@@ -56,10 +64,12 @@ export async function flushTeamChatDigests(
   let cancelled = 0;
   let failed = 0;
 
+  // Phase 1 — recompute + filter.
+  const toSend: Array<{ entry: OutboxEntry; subject: string; html: string }> = [];
+
   for (const entry of due) {
     const parsed = parseTeamDigestDedupeKey(entry.dedupeKey);
     if (!parsed) {
-      // Junk row — resolve it so it can't recur forever.
       await outbox.markResult(entry.id, { ok: true });
       cancelled++;
       continue;
@@ -67,8 +77,7 @@ export async function flushTeamChatDigests(
     const { rfpId, workspaceId, recipientUserId } = parsed;
 
     // Read short-circuit — count team messages the recipient hasn't read,
-    // excluding the recipient's own posts. The same query yields N + latest
-    // preview + author name.
+    // excluding the recipient's own posts.
     const read = await readRepo.getFor(rfpId, workspaceId, recipientUserId);
     const lastReadAt = read?.lastReadAt;
     const messages = await msgRepo.listByScope(rfpId, workspaceId);
@@ -105,27 +114,41 @@ export async function flushTeamChatDigests(
         ? `[Supporter B] ${senderName}님의 팀 메시지 ${unread.length}건`
         : `[Supporter B] ${senderName}님의 팀 메시지`;
 
-    // Send the RECOMPUTED body (not the stored placeholder).
-    const result = await sender({ ...entry, subject, html });
-    if (result.ok) {
-      await outbox.markResult(entry.id, { ok: true });
-      sent++;
-    } else {
-      // Reschedule a transient failure with backoff, or fail a permanent one
-      // fast — same policy as the generic flush.
-      const nextScheduledAt =
-        result.retryable === false
-          ? undefined
-          : new Date(
-              Date.now() + computeBackoff(entry.attempts + 1, { retryAfterMs: result.retryAfterMs }),
-            );
-      await outbox.markResult(entry.id, {
-        ok: false,
-        error: result.error ?? 'unknown',
-        retryable: result.retryable,
-        nextScheduledAt,
-      });
-      failed++;
+    toSend.push({ entry, subject, html });
+  }
+
+  // Phase 2 — batch-send all survivors.
+  if (toSend.length > 0) {
+    const enriched = toSend.map(({ entry, subject, html }) => ({
+      ...entry,
+      subject,
+      html,
+    }));
+    const results = await sendEntriesInBatches(batchSender, enriched);
+    for (let i = 0; i < toSend.length; i++) {
+      const result = results[i];
+      const { entry } = toSend[i];
+      if (result.ok) {
+        await outbox.markResult(entry.id, { ok: true });
+        sent++;
+      } else {
+        const nextScheduledAt =
+          result.retryable === false
+            ? undefined
+            : new Date(
+                Date.now() +
+                  computeBackoff(entry.attempts + 1, {
+                    retryAfterMs: result.retryAfterMs,
+                  }),
+              );
+        await outbox.markResult(entry.id, {
+          ok: false,
+          error: result.error ?? 'unknown',
+          retryable: result.retryable,
+          nextScheduledAt,
+        });
+        failed++;
+      }
     }
   }
 
