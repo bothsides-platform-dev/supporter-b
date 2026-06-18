@@ -70,13 +70,22 @@ export default function BuyerProfilePage() {
     });
 
     // 가입 완료(미인증 유저 생성) + 자동 로그인. 이후 가드가 /pending-approval 로 보냄.
-    const r = await finalizeSignup();
+    let r;
+    try {
+      r = await finalizeSignup();
+    } catch (err) {
+      console.error('[signup:buyer] finalizeSignup threw:', err);
+      setSubmitError('가입을 완료하지 못했어요. 잠시 후 다시 시도해요.');
+      setSubmitting(false);
+      return;
+    }
     if (!r.ok) {
       // 초대 경로에서 이미 가입된 이메일이면 로그인 후 초대 링크로 복귀(#8).
       if (r.redirectTo) {
         router.replace(r.redirectTo);
         return;
       }
+      console.error('[signup:buyer] finalizeSignup error:', r.error);
       setSubmitError(
         r.error === 'EMAIL_TAKEN'
           ? '이미 가입된 이메일이에요. 로그인해 주세요.'

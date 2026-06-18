@@ -44,16 +44,26 @@ function BuyerSignupEmailForm() {
 
   const canSubmit =
     emailInput.trim() !== '' &&
+    !emailTaken &&
     agreements.terms &&
     agreements.privacy &&
     isPasswordValid(password) &&
     !confirmError;
 
+  const handleEmailBlur = async () => {
+    const email = emailInput.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    const check = await checkEmailAvailableAction({ email });
+    if (!check.ok && check.error === 'EMAIL_TAKEN') {
+      setEmailTaken(true);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAttemptedSubmit(true);
-    setEmailTaken(false);
     if (!canSubmit || submitting) return;
+    setEmailTaken(false);
 
     setSubmitting(true);
     const email = emailInput.trim().toLowerCase();
@@ -112,6 +122,7 @@ function BuyerSignupEmailForm() {
             name="email"
             value={emailInput}
             onChange={(e) => { setEmailInput(e.target.value); setEmailTaken(false); }}
+            onBlur={handleEmailBlur}
             autoComplete="email"
             placeholder="your@company.com"
             className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"

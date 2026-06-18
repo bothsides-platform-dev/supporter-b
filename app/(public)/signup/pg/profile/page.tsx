@@ -78,13 +78,22 @@ export default function PgProfilePage() {
 
     // 가입 완료(미인증 유저 생성) + 자동 로그인. 일반 가입은 가드가 /pending-approval 로,
     // 초대 가입은 active 워크스페이스라 /home 으로 이동한다.
-    const r = await finalizeSignup();
+    let r;
+    try {
+      r = await finalizeSignup();
+    } catch (err) {
+      console.error('[signup:pg] finalizeSignup threw:', err);
+      setSubmitError('가입을 완료하지 못했어요. 잠시 후 다시 시도해요.');
+      setSubmitting(false);
+      return;
+    }
     if (!r.ok) {
       // 초대 경로에서 이미 가입된 이메일이면 로그인 후 초대 링크로 복귀(#8).
       if (r.redirectTo) {
         router.replace(r.redirectTo);
         return;
       }
+      console.error('[signup:pg] finalizeSignup error:', r.error);
       setSubmitError(
         r.error === 'EMAIL_TAKEN'
           ? '이미 가입된 이메일이에요. 로그인해 주세요.'

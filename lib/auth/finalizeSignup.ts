@@ -93,7 +93,10 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   });
   clearSignupDraft();
 
-  if (signInResult?.error) return { ok: false, error: 'SIGNIN_FAILED' };
+  if (signInResult?.error) {
+    console.error('[signup] signIn failed — error:', signInResult.error, 'status:', signInResult.status);
+    return { ok: false, error: 'SIGNIN_FAILED' };
+  }
   // draft의 next가 안전한 내부 경로면 서버 기본 redirectTo를 오버라이드한다.
   // (초대 경로는 위에서 조기 반환되므로 여기선 일반 가입만 해당)
   const override = safeInternalNext(d.next);
