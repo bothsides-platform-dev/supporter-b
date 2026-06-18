@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.27.0] - 2026-06-18
+
+### Added
+
+- **PG사 선택 버튼에 공식 브랜드 로고 표시**: PG 가입 2단계(소속 PG사 선택) 화면에서 각 PG사 버튼에 해당 PG사의 공식 로고가 함께 표시돼요. KG이니시스·KICC(이지페이)·NHN KCP·나이스페이먼츠·다날·토스페이먼츠·헥토파이낸셜 7개 PG사가 지원되며, 이미지 로드 실패 시에는 회사명 텍스트만 그대로 표시돼요.
+
 ## [0.2.26.4] - 2026-06-18
 
 ### Fixed
