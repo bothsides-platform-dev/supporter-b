@@ -328,7 +328,7 @@ export interface WorkspaceRepo {
     userId: string,
     workspaceId: string,
     tx?: Tx,
-  ): Promise<'approved' | 'pending_approval' | 'rejected' | undefined>;
+  ): Promise<MemberApprovalStatus | undefined>;
   /** 워크스페이스의 pending(미만료) 초대 목록 — 설정 > 멤버 화면. */
   listPendingInvitations(
     workspaceId: string,
