@@ -32,8 +32,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
         gradeConfirmedAt: toIso(biz.gradeConfirmedAt),
       }
     : undefined;
-  // 읽기 단독 권위 = current_terms 문서 (Phase E). 개별 current_* 컬럼 폴백 없음 — 배포 전
-  // backfill 이 모든 행의 문서를 채운다는 전제. 개별컬럼은 Phase F 에서 DROP.
+  // 읽기 단독 권위 = current_terms 문서. 개별 current_* 컬럼은 PR #238(v0.2.26.2) 에서 DROP 완료.
   const terms = migrateCurrentTerms(row.currentTerms);
   return {
     id: row.id,
@@ -129,7 +128,6 @@ export class DrizzleRfpRepository implements RfpRepo {
       bizProfileId = biz.id;
     }
 
-    // dual-write 문서는 한 번만 계산해 insert/conflict-update 양쪽에 재사용.
     const currentTerms = currentTermsFromDiscrete(rfp);
     type Insertable = typeof rfps.$inferInsert;
     const values: Insertable = {
@@ -147,15 +145,9 @@ export class DrizzleRfpRepository implements RfpRepo {
       createdBy: rfp.createdBy,
       sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
       contractType: rfp.contractType ?? null,
-      // 현재조건 브리프는 문서(current_terms)에만 저장 — rfp 의 flat 필드를 조립.
       currentTerms,
     };
-    // boardVisible 미지정 시 DB default(true). 지정 시에만 반영하고, 업서트
-    // conflict set 에는 넣지 않아 — 노출 토글은 전용 액션의 직접 UPDATE 소관이라
-    // 일반 RFP 저장/수정이 구매사의 opt-out 선택을 덮어쓰지 않게 한다.
     if (rfp.boardVisible !== undefined) values.boardVisible = rfp.boardVisible;
-    // 현재 수수료 비공개(hidden_from_pg)도 동일: 작성 시점 선택을 보존하기 위해 지정 시에만
-    // 반영하고 conflict set 에는 넣지 않는다 (일반 저장/수정이 opt-out 을 덮어쓰지 않게).
     if (rfp.currentFeeVisibleToPg !== undefined) {
       values.hiddenFromPg = hiddenFromPgFromVisibility(rfp.currentFeeVisibleToPg);
     }
@@ -175,12 +167,10 @@ export class DrizzleRfpRepository implements RfpRepo {
           awardedBidId: rfp.awardedBidId ?? null,
           sentAt: rfp.sentAt ? new Date(rfp.sentAt) : null,
           contractType: rfp.contractType ?? null,
-          // 현재조건 브리프 문서 갱신. hidden_from_pg 는 opt-out 이라 제외.
           currentTerms,
         },
       });
 
-    // Allowlist is normalized into rfp_allowed_pg (C2).
     await this.syncAllowlist(db, rfp.id, rfp.allowedPgWorkspaceIds);
   }
 

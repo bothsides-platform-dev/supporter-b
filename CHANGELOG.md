@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.26.3] - 2026-06-18
+
+### Changed
+
+- **Centrifugo 설정 파일을 YAML로 전환**: `deploy/centrifugo/config.json` → `config.yaml`. JSON은 주석을 지원하지 않아 운영 설정 안내를 인라인으로 남길 수 없었는데, YAML 전환으로 `#` 주석을 직접 파일에 담을 수 있어요. `CENTRIFUGO_PROXY_SECRET` 활성화 방법·주의사항이 `config.yaml`에 주석으로 포함됐어요. `docker-compose.prod.yml`·`docs/DEPLOY_LIGHTSAIL.md`·`deploy/centrifugo/README.md`의 참조도 함께 업데이트했어요.
+- **`chat_conversation_reads` FK 제약조건명 수정**: Postgres 63바이트 한도를 초과하는 자동 생성 이름을 짧은 명시 이름(`ccr_conversation_id_fk`, `ccr_user_id_fk`)으로 교체했어요.
+
+> 배포 메모: `pnpm db:push`를 실행해 FK 제약조건명을 갱신하세요(`DROP CONSTRAINT` → `ADD CONSTRAINT`, 데이터 손실 없음).
+
 ## [0.2.26.2] - 2026-06-18
 
 ### Changed

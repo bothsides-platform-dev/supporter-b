@@ -26,9 +26,8 @@ rfp.updatedAt 기준 내림차순 정렬 적용(buyer awarded/closed, PG won/los
 ### ~~findByPgWs ORDER BY round 누락 — 재요청 시 Map 덮어쓰기 비결정적~~ ✅ v0.2.25.3
 `findByPgWs` 에 `ORDER BY round ASC` 추가 + `pgInbox.ts`·`loadDashboard.ts` 의 `bidByRfp` Map 조립에 명시적 `max-round` 가드 추가. 정렬·소비 양쪽에서 항상 최신 라운드가 보존됨. 3493 green. **Completed:** v0.2.25.3 (2026-06-17)
 
-### rfp_bids 보드 죽은 표면 정리
-**Priority:** P3
-BidCard·loadBoard rfp_bids 분기·cardType 'bid' 경로가 어디에도 마운트되지 않음(비교 화면 재설계 PR#97 이후). 부활 계획 없으면 제거, 보존이면 'no current mount point' 주석 명시. (발견: /ship red-team 리뷰 2026-06-13)
+### ~~rfp_bids 보드 죽은 표면 정리~~ ✅ v0.2.25.5
+`BidCard` 컴포넌트, `CardType 'bid'`, `ColumnKind 'rfp_bids'`, `BidRepo.setBoardColumn`, 관련 시드·테스트 전면 제거. **Completed:** v0.2.25.5 (2026-06-17)
 
 ## Signup / Auth
 

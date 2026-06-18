@@ -70,7 +70,7 @@ export type NewRfpInsert = {
 };
 
 export interface RfpRepo {
-  /** RFP insert/upsert(by id). 호출자가 id 미리 발급(`rfp-id.ts`). */
+  /** RFP insert/upsert(by id). 테스트 fixture 및 시드 전용 — 프로덕션 쓰기는 insertNew 사용. */
   save(rfp: RFP, tx?: Tx): Promise<void>;
   /** createRfp 전용 신규 insert — 스냅샷 bizProfileId·전 컬럼을 그대로 적재 (save 의 bizNo 룩업 우회). */
   insertNew(values: NewRfpInsert, tx?: Tx): Promise<void>;
