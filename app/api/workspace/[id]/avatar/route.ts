@@ -11,6 +11,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MAX_BYTES = 5 * 1024 * 1024;
+// SVG는 의도적으로 제외: 사용자가 직접 내비게이션하면 <script>가 앱 origin에서 실행됨(XSS).
+// SVG를 허용하려면 반드시 서버 측 sanitize + Content-Disposition: attachment 를 먼저 추가할 것.
+// (canonical PG 로고 SVG는 `pnpm backfill:pg-logos` 스크립트를 통해서만 시드됨.)
 const ALLOWED_MIMES = new Set(['image/png', 'image/jpeg']);
 
 function fail(status: number, error: string): Response {

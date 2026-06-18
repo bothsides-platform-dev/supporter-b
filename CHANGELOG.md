@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.27.1] - 2026-06-18
+
+### Changed
+
+- **PG사 브랜드 로고를 워크스페이스 프로필 사진으로 전환**: PG사 브랜드 로고가 이제 정적 이미지 파일이 아닌 워크스페이스 프로필 사진(DB blob)으로 관리돼요. PG 가입 2단계 선택 버튼은 물론, 사이드바 워크스페이스 스위처·메시지 상대방 카드 등 PG사가 표시되는 모든 곳에서 로고가 일관되게 노출돼요. 배포 후 `pnpm backfill:pg-logos`를 1회 실행해 로고를 DB에 주입하세요(멱등).
+
+### Removed
+
+- **불필요한 정적 이미지 파일 삭제**: `public/` 디렉터리 하위의 미사용 Next.js 기본 이미지(`file.svg`, `globe.svg`, `next.svg`, `window.svg`) 및 PG사 로고 원본 파일을 삭제했어요. 폰트 파일은 유지돼요.
+
 ## [0.2.27.0] - 2026-06-18
 
 ### Added

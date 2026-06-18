@@ -10,6 +10,7 @@ import * as Sentry from '@sentry/nextjs';
 
 import { sendAdminEmail } from '@/lib/integrations/admin-email';
 import { renderAdminSignupReview } from '@/lib/server/outbox/templates/adminSignupReview';
+import { renderAdminMembershipReview } from '@/lib/server/outbox/templates/adminMembershipReview';
 
 export type AdminSignupNotice = {
   workspaceName: string;
@@ -46,5 +47,36 @@ export function notifyAdminNewSignupAfterCommit(notice: AdminSignupNotice): void
     });
   } catch {
     // 요청 스코프 밖(예: vitest) — no-op. 실제 발송은 수동 검증으로 확인한다.
+  }
+}
+
+export type AdminMembershipNotice = {
+  userName: string;
+  workspaceName: string;
+  reviewUrl: string;
+};
+
+export function buildAdminMembershipSubject(notice: AdminMembershipNotice): string {
+  return `[Supporter B] PG사 계정 합류 심사 요청 — ${notice.userName} (${notice.workspaceName})`;
+}
+
+export function notifyAdminNewMembershipAfterCommit(notice: AdminMembershipNotice): void {
+  try {
+    after(async () => {
+      try {
+        const html = await renderAdminMembershipReview({
+          userName: notice.userName,
+          workspaceName: notice.workspaceName,
+          reviewUrl: notice.reviewUrl,
+        });
+        await sendAdminEmail({ subject: buildAdminMembershipSubject(notice), html });
+      } catch (err) {
+        Sentry.captureException(err, {
+          extra: { context: 'admin-membership-notify' },
+        });
+      }
+    });
+  } catch {
+    // 요청 스코프 밖(예: vitest) — no-op.
   }
 }

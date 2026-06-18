@@ -71,6 +71,28 @@ describe('DrizzleWorkspaceRepository.listCanonicalPgWorkspaces', () => {
 
     expect(result).toMatchObject({ id, name: '나이스페이먼츠', canonicalPgKey: 'nicepayments' });
   });
+
+  it('hasLogo=false인 canonical 워크스페이스는 hasLogo: false로 반환된다', async () => {
+    await db.insert(workspaces).values({
+      id: randomUUID(), type: 'pg', name: '토스페이먼츠', status: 'active',
+      canonicalPgKey: 'tosspayments', hasLogo: false,
+    });
+
+    const [result] = await repo.listCanonicalPgWorkspaces();
+
+    expect(result).toMatchObject({ canonicalPgKey: 'tosspayments', hasLogo: false });
+  });
+
+  it('hasLogo=true인 canonical 워크스페이스는 hasLogo: true로 반환된다', async () => {
+    await db.insert(workspaces).values({
+      id: randomUUID(), type: 'pg', name: 'KG이니시스', status: 'active',
+      canonicalPgKey: 'kginicis', hasLogo: true,
+    });
+
+    const [result] = await repo.listCanonicalPgWorkspaces();
+
+    expect(result).toMatchObject({ canonicalPgKey: 'kginicis', hasLogo: true });
+  });
 });
 
 describe('DrizzleWorkspaceRepository — suspended canonical 워크스페이스 제외', () => {

@@ -14,6 +14,7 @@ function ws(
     type: 'buyer',
     status: 'active',
     role: 'admin',
+    memberApprovalStatus: 'approved',
     unreadCount: 0,
     hasLogo: false,
     ...over,
@@ -199,6 +200,41 @@ describe('resolveShellAccess — (app) shell auth guard contract', () => {
         kind: 'render',
         active: a,
       });
+    });
+  });
+
+  describe('membership approval gate', () => {
+    it('멤버십 pending_approval + 이메일 인증 완료 → /pending-approval', () => {
+      expect(
+        resolveShellAccess(
+          { user: completeUser },
+          [ws({ status: 'active', memberApprovalStatus: 'pending_approval' })],
+          undefined,
+          true,
+        ),
+      ).toEqual({ kind: 'redirect', to: '/pending-approval' });
+    });
+
+    it('멤버십 rejected + 이메일 인증 완료 → /suspended', () => {
+      expect(
+        resolveShellAccess(
+          { user: completeUser },
+          [ws({ status: 'active', memberApprovalStatus: 'rejected' })],
+          undefined,
+          true,
+        ),
+      ).toEqual({ kind: 'redirect', to: '/suspended' });
+    });
+
+    it('이메일 미인증 + pending_approval → /pending-approval (email 게이트가 approval 게이트보다 우선)', () => {
+      expect(
+        resolveShellAccess(
+          { user: completeUser },
+          [ws({ status: 'active', memberApprovalStatus: 'pending_approval' })],
+          undefined,
+          false,
+        ),
+      ).toEqual({ kind: 'redirect', to: '/pending-approval' });
     });
   });
 });

@@ -10,6 +10,7 @@ import type { PgRequest, PgRequestStatus, OpportunityListing } from '@/lib/types
 import type {
   Workspace,
   WorkspaceMembershipSummary,
+  MemberApprovalStatus,
   WorkspaceType,
 } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
@@ -233,7 +234,7 @@ export interface WorkspaceRepo {
   /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
-  listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string }[]>;
+  listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean }[]>;
   /** 이름 검색 (isDemo 제외) — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500). */
   search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string }[]>;
   /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
@@ -260,7 +261,7 @@ export interface WorkspaceRepo {
   findActiveCanonicalPgById(
     workspaceId: string,
     tx?: Tx,
-  ): Promise<{ id: string; canonicalPgKey: string } | undefined>;
+  ): Promise<{ id: string; name: string; canonicalPgKey: string } | undefined>;
   /** 가장 먼저 만들어진 active 워크스페이스 (id+type) — 마스터 기본 진입. 없으면 undefined. */
   findEarliestActiveWorkspace(
     tx?: Tx,
@@ -318,7 +319,16 @@ export interface WorkspaceRepo {
     tx?: Tx,
   ): Promise<void>;
   /** 멤버 추가 (onConflictDoNothing — 중복 race 안전). */
-  addMember(params: { workspaceId: string; userId: string; role: string }, tx?: Tx): Promise<void>;
+  addMember(
+    params: { workspaceId: string; userId: string; role: string; approvalStatus?: string },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 멤버십 승인 상태 단건 조회. 행 없으면 undefined. */
+  getMemberApprovalStatus(
+    userId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<MemberApprovalStatus | undefined>;
   /** 워크스페이스의 pending(미만료) 초대 목록 — 설정 > 멤버 화면. */
   listPendingInvitations(
     workspaceId: string,

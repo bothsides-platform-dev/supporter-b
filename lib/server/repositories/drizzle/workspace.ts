@@ -176,6 +176,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         type: workspaces.type,
         status: workspaces.status,
         role: workspaceMembers.role,
+        memberApprovalStatus: workspaceMembers.approvalStatus,
         unreadCount: sql<number>`(
           SELECT COALESCE(COUNT(*)::int, 0)
           FROM notifications
@@ -201,6 +202,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         type: workspaces.type,
         status: workspaces.status,
         role: sql<'admin'>`'admin'`,
+        memberApprovalStatus: sql<'approved'>`'approved'`,
         unreadCount: sql<number>`0`,
         hasLogo: workspaces.hasLogo,
       })
@@ -305,9 +307,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return rows.map((r) => r.email);
   }
 
-  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string }[]> {
+  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean }[]> {
     const rows = (await this._db
-      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey })
+      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey, hasLogo: workspaces.hasLogo })
       .from(workspaces)
       .where(
         and(
@@ -316,7 +318,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           isNotNull(workspaces.canonicalPgKey),
         ),
       )
-      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null }[];
+      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null; hasLogo: boolean }[];
     return rows.map((r) => ({ ...r, canonicalPgKey: r.canonicalPgKey! }));
   }
 
@@ -419,10 +421,10 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async findActiveCanonicalPgById(
     workspaceId: string,
     tx?: Tx,
-  ): Promise<{ id: string; canonicalPgKey: string } | undefined> {
+  ): Promise<{ id: string; name: string; canonicalPgKey: string } | undefined> {
     const db = this.h(tx);
     const [row] = await db
-      .select({ id: workspaces.id, canonicalPgKey: workspaces.canonicalPgKey })
+      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey })
       .from(workspaces)
       .where(
         and(
@@ -434,7 +436,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       )
       .limit(1);
     if (!row) return undefined;
-    return { id: row.id, canonicalPgKey: row.canonicalPgKey as string };
+    return { id: row.id, name: row.name, canonicalPgKey: row.canonicalPgKey as string };
   }
 
   async findEarliestActiveWorkspace(
@@ -468,6 +470,25 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       )
       .limit(1);
     return row ?? undefined;
+  }
+
+  async getMemberApprovalStatus(
+    userId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<'approved' | 'pending_approval' | 'rejected' | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ approvalStatus: workspaceMembers.approvalStatus })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.userId, userId),
+          eq(workspaceMembers.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1);
+    return row?.approvalStatus as 'approved' | 'pending_approval' | 'rejected' | undefined;
   }
 
   async findInitialMembership(
@@ -604,7 +625,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   }
 
   async addMember(
-    params: { workspaceId: string; userId: string; role: string },
+    params: { workspaceId: string; userId: string; role: string; approvalStatus?: string },
     tx?: Tx,
   ): Promise<void> {
     const db = this.h(tx);
@@ -614,6 +635,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         workspaceId: params.workspaceId,
         userId: params.userId,
         role: params.role as MemberRow['role'],
+        approvalStatus: params.approvalStatus ?? 'approved',
       })
       .onConflictDoNothing({
         target: [workspaceMembers.workspaceId, workspaceMembers.userId],
