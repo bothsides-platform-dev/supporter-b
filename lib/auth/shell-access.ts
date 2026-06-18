@@ -84,6 +84,16 @@ export function resolveShellAccess(
     return { kind: 'redirect', to: '/pending-approval' };
   }
 
+  // Membership-level approval gate — joinCanonicalPgWorkspace 로 합류한 PG 담당자
+  // 계정이 admin 승인을 받을 때까지 앱 진입을 차단한다.
+  // email 인증 게이트(위)가 먼저 평가되므로, 여기 도달하면 이메일은 인증된 상태.
+  if (active.memberApprovalStatus === 'pending_approval') {
+    return { kind: 'redirect', to: '/pending-approval' };
+  }
+  if (active.memberApprovalStatus === 'rejected') {
+    return { kind: 'redirect', to: '/suspended' };
+  }
+
   // Workspace status gate — both pages live in (public) to avoid AppShell noise.
   if (active.status === 'pending') {
     return { kind: 'redirect', to: '/pending-approval' };
