@@ -10,6 +10,7 @@ import type { PgRequest, PgRequestStatus, OpportunityListing } from '@/lib/types
 import type {
   Workspace,
   WorkspaceMembershipSummary,
+  MemberApprovalStatus,
   WorkspaceType,
 } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
@@ -260,7 +261,7 @@ export interface WorkspaceRepo {
   findActiveCanonicalPgById(
     workspaceId: string,
     tx?: Tx,
-  ): Promise<{ id: string; canonicalPgKey: string } | undefined>;
+  ): Promise<{ id: string; name: string; canonicalPgKey: string } | undefined>;
   /** 가장 먼저 만들어진 active 워크스페이스 (id+type) — 마스터 기본 진입. 없으면 undefined. */
   findEarliestActiveWorkspace(
     tx?: Tx,
@@ -318,7 +319,16 @@ export interface WorkspaceRepo {
     tx?: Tx,
   ): Promise<void>;
   /** 멤버 추가 (onConflictDoNothing — 중복 race 안전). */
-  addMember(params: { workspaceId: string; userId: string; role: string }, tx?: Tx): Promise<void>;
+  addMember(
+    params: { workspaceId: string; userId: string; role: string; approvalStatus?: string },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 멤버십 승인 상태 단건 조회. 행 없으면 undefined. */
+  getMemberApprovalStatus(
+    userId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<MemberApprovalStatus | undefined>;
   /** 워크스페이스의 pending(미만료) 초대 목록 — 설정 > 멤버 화면. */
   listPendingInvitations(
     workspaceId: string,

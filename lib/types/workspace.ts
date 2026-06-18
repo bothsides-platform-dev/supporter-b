@@ -13,6 +13,8 @@ export type Workspace = {
   createdAt: string;
 };
 
+export type MemberApprovalStatus = 'approved' | 'pending_approval' | 'rejected';
+
 // Lean per-membership summary for the workspace switcher — one row per
 // workspace a user belongs to, with that user's role in it.
 export type WorkspaceMembershipSummary = {
@@ -21,6 +23,7 @@ export type WorkspaceMembershipSummary = {
   type: WorkspaceType;
   status: 'pending' | 'active' | 'suspended';
   role: 'admin' | 'member';
+  memberApprovalStatus: MemberApprovalStatus;
   unreadCount: number;
   hasLogo: boolean;
 };

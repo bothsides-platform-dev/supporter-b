@@ -1,8 +1,9 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
-import { getUserRepo } from '@/lib/server/repositories/factory';
+import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { ApprovalWaitingScreen } from '@/components/pending-approval/approval-waiting-screen';
 import { EmailVerifyScreen } from '@/components/pending-approval/email-verify-screen';
+import { MembershipApprovalWaitingScreen } from '@/components/pending-approval/membership-approval-waiting-screen';
 
 export default async function PendingApprovalPage() {
   const session = await auth();
@@ -15,6 +16,17 @@ export default async function PendingApprovalPage() {
   // 가드가 워크스페이스 상태에 맞는 화면(앱 진입 / 심사 대기 / 정지)으로 재분기한다.
   if (user && !user.emailVerified) {
     return <EmailVerifyScreen email={session.user.email ?? ''} />;
+  }
+
+  const workspaceId = session.user.workspaceId;
+  if (workspaceId) {
+    const memberApprovalStatus = await (await getWorkspaceRepo()).getMemberApprovalStatus(
+      session.user.id,
+      workspaceId,
+    );
+    if (memberApprovalStatus === 'pending_approval') {
+      return <MembershipApprovalWaitingScreen />;
+    }
   }
 
   return <ApprovalWaitingScreen />;

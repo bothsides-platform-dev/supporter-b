@@ -5,6 +5,8 @@ import { passwordSchema } from '@/lib/auth/password-validation';
 import { normalizeEmail, type AuthActionResult } from './_shared';
 import { normalizePhone } from './phoneOtpUtils';
 import { getAuthService } from '@/lib/server/services/auth';
+import { adminBaseUrl } from '@/lib/server/env';
+import { notifyAdminNewMembershipAfterCommit } from '@/lib/server/notifications/admin-signup';
 
 const Input = z
   .object({
@@ -51,9 +53,15 @@ export async function joinCanonicalPgWorkspaceAction(
 
   if (!result.ok) return result;
 
+  notifyAdminNewMembershipAfterCommit({
+    userName: parsed.data.name,
+    workspaceName: result.workspaceName,
+    reviewUrl: `${adminBaseUrl()}/admin/pg-members`,
+  });
+
   return {
     ok: true,
-    redirectTo: '/inbox',
+    redirectTo: '/home',
     email: result.email,
     password: parsed.data.password,
   };
