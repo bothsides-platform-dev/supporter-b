@@ -38,7 +38,7 @@ export function migrateCurrentTerms(raw: unknown): CurrentTerms {
   return { ...(o as CurrentTermsV1), _v: CURRENT_TERMS_VERSION };
 }
 
-// 마이그레이션 dual-write/backfill 용 — 개별 current_* 컬럼을 버전드 문서로 조립.
+// 개별 current_* 필드를 버전드 문서로 조립 — insertNew 쓰기 경로 (SSOT).
 // null/undefined 는 생략(문서는 sparse), 값 있는 키만 담는다.
 type DiscreteBriefFields = {
   currentFeeRate?: string | null;

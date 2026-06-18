@@ -58,7 +58,7 @@ export type PgRfpDetailData = {
 // 숨김 경로의 전부다. rfp-terms.ts 의 HIDEABLE_PG_PATHS(쓰기측 SSOT)가 이 키들의 부분집합임을
 // pg-strip-coverage 드리프트 테스트가 강제 → 핸들러 없는 숨김 경로가 PG로 새는 fail-open 을 차단
 // (쓰기측이 만들 수 있는 모든 숨김 경로는 반드시 대응 핸들러를 가진다). 경로는 current_terms 문서
-// 구조 기준; 전이기 RFP 타입은 평탄하므로 평탄 필드로 매핑한다. Phase F 에서 문서 전환 시 정리.
+// 구조 기준; 앱 레이어는 flat RFP 타입 그대로(flat-edge 영구 설계, PR #238 cutover 완료).
 export const PG_STRIP: Record<string, (rfp: RFP) => void> = {
   [STRIP_PATH_FEE_RATE]: (r) => {
     r.currentFeeRate = undefined;
