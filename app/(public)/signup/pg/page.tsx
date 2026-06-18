@@ -50,16 +50,27 @@ function PgSignupEmailForm() {
 
   const canSubmit =
     emailInput.trim() !== '' &&
+    !emailTaken &&
     agreements.terms &&
     agreements.privacy &&
     isPasswordValid(password) &&
     !confirmError;
 
+  const handleEmailBlur = async () => {
+    if (isInvited) return;
+    const email = emailInput.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    const check = await checkEmailAvailableAction({ email });
+    if (!check.ok && check.error === 'EMAIL_TAKEN') {
+      setEmailTaken(true);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAttemptedSubmit(true);
-    setEmailTaken(false);
     if (!canSubmit || submitting) return;
+    setEmailTaken(false);
 
     setSubmitting(true);
     const email = emailInput.trim().toLowerCase();
@@ -139,6 +150,7 @@ function PgSignupEmailForm() {
             name="email"
             value={emailInput}
             onChange={(e) => { if (!isInvited) { setEmailInput(e.target.value); setEmailTaken(false); } }}
+            onBlur={handleEmailBlur}
             readOnly={isInvited}
             autoComplete="email"
             placeholder="your@pgcompany.com"

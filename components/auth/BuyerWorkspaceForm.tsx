@@ -21,7 +21,10 @@ const ntsLookup = async (bizNo: string) => {
     return { valid: false as const, error: msg };
   }
   if (!r.valid) return { valid: false as const };
-  return { valid: true as const, taxType: r.taxType!, status: r.status! };
+  if (!r.taxType) {
+    return { valid: false as const, error: '지원되지 않는 사업자 유형이에요. 고객센터로 문의해 주세요.' };
+  }
+  return { valid: true as const, taxType: r.taxType, status: r.status! };
 };
 
 type BizProfilePayload = {

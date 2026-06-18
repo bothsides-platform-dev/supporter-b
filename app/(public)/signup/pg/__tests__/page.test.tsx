@@ -1,0 +1,104 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+const mockPush = vi.fn();
+const mockReplace = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+const mockCheckEmail = vi.fn();
+vi.mock('@/lib/server/actions/auth', () => ({
+  checkEmailAvailableAction: (...args: unknown[]) => mockCheckEmail(...args),
+}));
+
+const mockReadDraft = vi.fn();
+vi.mock('@/lib/auth/signup-storage', () => ({
+  readSignupDraft: () => mockReadDraft(),
+  writeSignupDraft: vi.fn(),
+}));
+
+vi.mock('@/lib/stores/signup-draft', () => ({
+  useSignupDraftStore: () => ({
+    setEmail: vi.fn(),
+    setAgreedAt: vi.fn(),
+    setWorkspaceType: vi.fn(),
+  }),
+}));
+
+import PgSignupEmailPage from '../page';
+
+beforeEach(() => {
+  mockPush.mockReset();
+  mockReplace.mockReset();
+  mockCheckEmail.mockReset();
+  mockReadDraft.mockReturnValue({});
+});
+
+afterEach(() => cleanup());
+
+describe('PgSignupEmailPage — 이메일 blur 중복 검사 (비초대)', () => {
+  it('취득 이메일 blur 시 "이미 가입된 이메일입니다." 에러를 노출한다', async () => {
+    mockCheckEmail.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+    const user = userEvent.setup();
+    render(<PgSignupEmailPage />);
+
+    await user.type(screen.getByLabelText('이메일'), 'taken@example.com');
+    await user.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText(/이미 가입된 이메일입니다/)).toBeInTheDocument();
+    });
+    expect(mockCheckEmail).toHaveBeenCalledWith({ email: 'taken@example.com' });
+  });
+
+  it('유효하지 않은 포맷 blur 시 checkEmailAvailableAction을 호출하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(<PgSignupEmailPage />);
+
+    await user.type(screen.getByLabelText('이메일'), 'not-an-email');
+    await user.tab();
+
+    await new Promise((r) => setTimeout(r, 30));
+    expect(mockCheckEmail).not.toHaveBeenCalled();
+  });
+
+  it('취득 이메일 상태에서 다음 클릭 시 에러가 유지되고 페이지 이동이 없다', async () => {
+    mockCheckEmail.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+    const user = userEvent.setup();
+    render(<PgSignupEmailPage />);
+
+    await user.type(screen.getByLabelText('이메일'), 'taken@example.com');
+    await user.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText(/이미 가입된 이메일입니다/)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+
+    expect(screen.getByText(/이미 가입된 이메일입니다/)).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+});
+
+describe('PgSignupEmailPage — 초대 경로 blur 검사 스킵', () => {
+  it('초대(readOnly) 이메일 blur 시 checkEmailAvailableAction을 호출하지 않는다', async () => {
+    mockReadDraft.mockReturnValue({
+      wsInviteToken: 'inv-token',
+      email: 'invited@example.com',
+      inviteWorkspaceName: '테스트 Corp',
+    });
+    const user = userEvent.setup();
+    render(<PgSignupEmailPage />);
+
+    const emailInput = screen.getByLabelText('이메일');
+    await user.click(emailInput);
+    await user.tab();
+
+    await new Promise((r) => setTimeout(r, 30));
+    expect(mockCheckEmail).not.toHaveBeenCalled();
+  });
+});
