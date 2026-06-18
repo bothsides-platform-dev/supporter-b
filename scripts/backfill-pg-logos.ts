@@ -8,7 +8,9 @@
  * - 자산 파일은 scripts/assets/pg-logos/ 에 위치해야 한다.
  * - canonical PG 워크스페이스가 먼저 시드돼 있어야 한다.
  */
-import 'dotenv/config';
+import { config } from 'dotenv';
+config({ path: '.env.production' });
+config(); // .env fallback for local dev
 
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
