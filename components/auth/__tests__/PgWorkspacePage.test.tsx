@@ -5,7 +5,7 @@
  *  - 카드 클릭 시 selectedPgWorkspaceId를 draft에 저장하고 /profile로 이동
  *  - "직접 입력" 클릭 시 기존 워크스페이스 이름 + 사업자번호 폼 표시
  *  - 초대 경로 skip 가드
- *  - 로고 렌더링: canonicalPgKey가 매핑된 회사는 <img> 로고를 표시한다
+ *  - 아바타 렌더링: hasLogo=true면 WorkspaceAvatar 프로필 사진(<img>), false면 이니셜
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
@@ -35,8 +35,8 @@ vi.mock('@/lib/server/actions/rfp', () => ({
 import PgWorkspaceStep from '@/app/(public)/signup/pg/workspace/PgWorkspaceStep';
 
 const CANONICAL_COMPANIES = [
-  { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments' },
-  { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis' },
+  { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', hasLogo: false },
+  { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis', hasLogo: false },
 ];
 
 describe('PgWorkspaceStep — 초대 경로 skip 가드', () => {
@@ -105,7 +105,7 @@ describe('PgWorkspaceStep — canonical PG 선택 모드', () => {
   });
 });
 
-describe('PgWorkspaceStep — 로고 렌더링', () => {
+describe('PgWorkspaceStep — 워크스페이스 아바타 렌더링', () => {
   beforeEach(() => {
     mockReplace.mockReset();
     mockPush.mockReset();
@@ -113,45 +113,57 @@ describe('PgWorkspaceStep — 로고 렌더링', () => {
     mockDraftData = { email: 'sales@toss.im', password: 'Password123!' };
   });
 
-  it('canonicalPgKey가 매핑된 회사 버튼에 로고 <img>가 렌더된다', () => {
-    render(<PgWorkspaceStep canonicalCompanies={CANONICAL_COMPANIES} />);
+  it('hasLogo=true인 회사 버튼에 WorkspaceAvatar 프로필 사진 <img>가 렌더된다', () => {
+    const companies = [
+      { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', hasLogo: true },
+      { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis', hasLogo: false },
+    ];
+    render(<PgWorkspaceStep canonicalCompanies={companies} />);
 
-    // 토스페이먼츠 버튼 내에 img가 있어야 한다
     const tossBtn = screen.getByRole('button', { name: /토스페이먼츠/ });
     const img = tossBtn.querySelector('img');
     expect(img).not.toBeNull();
-    expect(img!.getAttribute('src')).toMatch(/^\/images\/pg\/tosspayments\./);
+    expect(img!.getAttribute('src')).toBe('/api/workspace/ws-toss-id/avatar');
   });
 
-  it('로고 img는 alt=""인 데코레이션 이미지이다', () => {
-    render(<PgWorkspaceStep canonicalCompanies={CANONICAL_COMPANIES} />);
+  it('hasLogo=false인 회사 버튼에는 <img>가 없고 이니셜 아바타가 표시된다', () => {
+    const companies = [
+      { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis', hasLogo: false },
+    ];
+    render(<PgWorkspaceStep canonicalCompanies={companies} />);
+
+    const btn = screen.getByRole('button', { name: /KG이니시스/ });
+    expect(btn.querySelector('img')).toBeNull();
+    // WorkspaceAvatar 이니셜 폴백은 role="img"인 div
+    expect(btn.querySelector('[role="img"]')).not.toBeNull();
+  });
+
+  it('hasLogo=true인 아바타 img의 alt는 워크스페이스 이름이다', () => {
+    const companies = [
+      { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', hasLogo: true },
+    ];
+    render(<PgWorkspaceStep canonicalCompanies={companies} />);
 
     const tossBtn = screen.getByRole('button', { name: /토스페이먼츠/ });
     const img = tossBtn.querySelector('img');
-    expect(img!.getAttribute('alt')).toBe('');
+    expect(img!.getAttribute('alt')).toBe('토스페이먼츠');
   });
 
-  it('canonicalPgKey가 매핑되지 않은 회사 버튼에는 로고 img가 없다', () => {
-    const companiesWithUnknown = [
-      { id: 'ws-x-id', name: '알수없는PG', canonicalPgKey: 'unknownpg' },
+  it('아바타 img 로드 실패 시 이니셜 아바타로 대체된다', () => {
+    const companies = [
+      { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', hasLogo: true },
     ];
-    render(<PgWorkspaceStep canonicalCompanies={companiesWithUnknown} />);
-
-    const btn = screen.getByRole('button', { name: /알수없는PG/ });
-    expect(btn.querySelector('img')).toBeNull();
-  });
-
-  it('로고 img onError 시 display:none으로 숨긴다', () => {
-    render(<PgWorkspaceStep canonicalCompanies={CANONICAL_COMPANIES} />);
+    render(<PgWorkspaceStep canonicalCompanies={companies} />);
 
     const tossBtn = screen.getByRole('button', { name: /토스페이먼츠/ });
     const img = tossBtn.querySelector('img')!;
     expect(img).not.toBeNull();
 
-    // 브라우저가 이미지 로드 실패 시 error 이벤트 발생
+    // 이미지 로드 실패 → WorkspaceAvatar가 imgError=true로 상태 전환 → 이니셜 div 렌더
     fireEvent.error(img);
 
-    expect(img.style.display).toBe('none');
+    expect(tossBtn.querySelector('img')).toBeNull();
+    expect(tossBtn.querySelector('[role="img"]')).not.toBeNull();
   });
 });
 

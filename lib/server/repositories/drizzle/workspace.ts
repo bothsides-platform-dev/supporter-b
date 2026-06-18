@@ -305,9 +305,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return rows.map((r) => r.email);
   }
 
-  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string }[]> {
+  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean }[]> {
     const rows = (await this._db
-      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey })
+      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey, hasLogo: workspaces.hasLogo })
       .from(workspaces)
       .where(
         and(
@@ -316,7 +316,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           isNotNull(workspaces.canonicalPgKey),
         ),
       )
-      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null }[];
+      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null; hasLogo: boolean }[];
     return rows.map((r) => ({ ...r, canonicalPgKey: r.canonicalPgKey! }));
   }
 
