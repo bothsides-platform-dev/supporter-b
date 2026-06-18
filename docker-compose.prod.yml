@@ -30,8 +30,8 @@ services:
   # The Next.js app (PM2:3000, native on the host) publishes via the HTTP API at
   # 127.0.0.1:8000/api. Centrifugo persists nothing — Postgres is canonical.
   #
-  # Secrets live in .env.production, NOT in config.json (Centrifugo does not
-  # interpolate ${VAR} in config.json). docker-compose interpolates the
+  # Secrets live in .env.production, NOT in config.yaml (Centrifugo does not
+  # interpolate ${VAR} in config files). docker-compose interpolates the
   # environment: block below from .env.production and bridges the app-named vars
   # to Centrifugo's v6 nested-key env names (same value, two consumers):
   #   app CENTRIFUGO_TOKEN_HMAC_SECRET -> CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY
@@ -40,14 +40,14 @@ services:
     image: centrifugo/centrifugo:v6
     container_name: bidit-centrifugo-prod
     restart: always
-    command: centrifugo -c /centrifugo/config.json
+    command: centrifugo -c /centrifugo/config.yaml
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      - ./deploy/centrifugo/config.json:/centrifugo/config.json:ro
+      - ./deploy/centrifugo/config.yaml:/centrifugo/config.yaml:ro
     # The app runs natively on the host, not in Docker. The subscribe proxy
     # (Centrifugo -> app) therefore reaches it via host.docker.internal, mapped
-    # to the host gateway (works on Linux/Lightsail). config.json references this.
+    # to the host gateway (works on Linux/Lightsail). config.yaml references this.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:

@@ -1,0 +1,78 @@
+# Centrifugo v6 config — self-hosted realtime chat fanout.
+# Operational runbook: docs/DEPLOY_LIGHTSAIL.md §Centrifugo
+# Field reference:     deploy/centrifugo/README.md
+#
+# SECRETS: Centrifugo does NOT interpolate ${VAR} here — values would be treated
+# as literal strings. All secrets come from env vars injected by docker-compose.
+# See README.md for the .env.production → Centrifugo env name mapping table.
+
+http_server:
+  port: 8000
+
+client:
+  token:
+    # Overridden by env: CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY
+    # (bridged from app's CENTRIFUGO_TOKEN_HMAC_SECRET by docker-compose)
+    hmac_secret_key: ""
+  # Overridden by env: CENTRIFUGO_CLIENT_ALLOWED_ORIGINS
+  # (derived from APP_DOMAIN by docker-compose → "https://<APP_DOMAIN>")
+  allowed_origins: []
+
+http_api:
+  # Overridden by env: CENTRIFUGO_HTTP_API_KEY
+  # (bridged from app's CENTRIFUGO_API_KEY by docker-compose)
+  key: ""
+
+channel:
+  proxy:
+    subscribe:
+      # Private ACL boundary — server-to-server only, intentionally NOT through Caddy.
+      # host.docker.internal resolves to the Lightsail host because the app runs
+      # natively on PM2:3000, not inside Docker. compose maps it via
+      # extra_hosts: host-gateway. app/api/centrifugo/subscribe/route.ts handles it.
+      endpoint: "http://host.docker.internal:3000/api/centrifugo/subscribe"
+      timeout: "5s"
+
+      # ── CENTRIFUGO_PROXY_SECRET (optional, recommended) ──────────────────────
+      # Shared-secret header that hardens the subscribe proxy endpoint.
+      # The app (app/api/centrifugo/subscribe/route.ts) validates the incoming
+      # X-Centrifugo-Proxy-Secret header with constant-time compare against
+      # the app's CENTRIFUGO_PROXY_SECRET env var. Prevents spoofed subscribes.
+      #
+      # To activate — set BOTH sides atomically:
+      #
+      #   1. .env.production:
+      #        CENTRIFUGO_PROXY_SECRET=$(openssl rand -base64 32)
+      #
+      #   2. Uncomment the two blocks below and paste the SAME value literally
+      #      (no ${VAR} — Centrifugo does not interpolate env in config files):
+      #
+      # http_headers:
+      #   - X-Centrifugo-Proxy-Secret
+      # static_http_headers:
+      #   X-Centrifugo-Proxy-Secret: "<paste CENTRIFUGO_PROXY_SECRET value here>"
+      #
+      #   3. Restart in order:
+      #        pm2 restart bidit
+      #        docker compose -f docker-compose.prod.yml --env-file .env.production restart centrifugo
+      #
+      # ⚠️  Set both sides together. If the app env is set but this header is
+      #     absent, ALL subscribes are rejected → chat stops completely.
+      #     Safe direction: set this header first (app env empty = skip check).
+      # ─────────────────────────────────────────────────────────────────────────
+
+  namespaces:
+    # chat namespace — channel convention: chat:conversation:<uuid>
+    # Centrifugo splits at the first colon; this namespace MUST exist or every
+    # subscribe is rejected with "namespace not found" before the proxy is called.
+    - name: chat
+      # presence: email-suppression reads channel presence (online recipient → skip digest mail).
+      presence: true
+      # join_leave: live online/offline presence dots in the UI.
+      join_leave: true
+      # Route every subscribe through the ACL proxy above.
+      subscribe_proxy_enabled: true
+
+    # team namespace — channel convention: team:rfp:<rfpId>:ws:<workspaceId>
+    - name: team
+      subscribe_proxy_enabled: true
