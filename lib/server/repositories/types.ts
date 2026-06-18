@@ -10,6 +10,7 @@ import type { PgRequest, PgRequestStatus, OpportunityListing } from '@/lib/types
 import type {
   Workspace,
   WorkspaceMembershipSummary,
+  MemberApprovalStatus,
   WorkspaceType,
 } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
@@ -318,7 +319,16 @@ export interface WorkspaceRepo {
     tx?: Tx,
   ): Promise<void>;
   /** 멤버 추가 (onConflictDoNothing — 중복 race 안전). */
-  addMember(params: { workspaceId: string; userId: string; role: string }, tx?: Tx): Promise<void>;
+  addMember(
+    params: { workspaceId: string; userId: string; role: string; approvalStatus?: string },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 멤버십 승인 상태 단건 조회. 행 없으면 undefined. */
+  getMemberApprovalStatus(
+    userId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<'approved' | 'pending_approval' | 'rejected' | undefined>;
   /** 워크스페이스의 pending(미만료) 초대 목록 — 설정 > 멤버 화면. */
   listPendingInvitations(
     workspaceId: string,

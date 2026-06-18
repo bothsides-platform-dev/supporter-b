@@ -176,6 +176,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         type: workspaces.type,
         status: workspaces.status,
         role: workspaceMembers.role,
+        memberApprovalStatus: workspaceMembers.approvalStatus,
         unreadCount: sql<number>`(
           SELECT COALESCE(COUNT(*)::int, 0)
           FROM notifications
@@ -201,6 +202,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         type: workspaces.type,
         status: workspaces.status,
         role: sql<'admin'>`'admin'`,
+        memberApprovalStatus: sql<'approved'>`'approved'`,
         unreadCount: sql<number>`0`,
         hasLogo: workspaces.hasLogo,
       })
@@ -470,6 +472,25 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return row ?? undefined;
   }
 
+  async getMemberApprovalStatus(
+    userId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<'approved' | 'pending_approval' | 'rejected' | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ approvalStatus: workspaceMembers.approvalStatus })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.userId, userId),
+          eq(workspaceMembers.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1);
+    return row?.approvalStatus as 'approved' | 'pending_approval' | 'rejected' | undefined;
+  }
+
   async findInitialMembership(
     userId: string,
     tx?: Tx,
@@ -604,7 +625,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   }
 
   async addMember(
-    params: { workspaceId: string; userId: string; role: string },
+    params: { workspaceId: string; userId: string; role: string; approvalStatus?: string },
     tx?: Tx,
   ): Promise<void> {
     const db = this.h(tx);
@@ -614,6 +635,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         workspaceId: params.workspaceId,
         userId: params.userId,
         role: params.role as MemberRow['role'],
+        approvalStatus: params.approvalStatus ?? 'approved',
       })
       .onConflictDoNothing({
         target: [workspaceMembers.workspaceId, workspaceMembers.userId],

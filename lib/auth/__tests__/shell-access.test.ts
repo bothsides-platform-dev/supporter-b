@@ -14,6 +14,7 @@ function ws(
     type: 'buyer',
     status: 'active',
     role: 'admin',
+    memberApprovalStatus: 'approved',
     unreadCount: 0,
     hasLogo: false,
     ...over,
