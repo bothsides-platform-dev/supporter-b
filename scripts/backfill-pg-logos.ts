@@ -82,7 +82,7 @@ async function backfillPgLogos() {
       .values({ workspaceId: row.id, bytes, mime: asset.mime })
       .onConflictDoUpdate({
         target: workspaceLogoBlobs.workspaceId,
-        set: { bytes, mime: asset.mime },
+        set: { bytes, mime: asset.mime, updatedAt: new Date() },
       });
 
     await db
@@ -95,11 +95,12 @@ async function backfillPgLogos() {
   }
 
   console.log(`Done. ${ok} 주입, ${skipped} 건너뜀.`);
+  await client.end();
   process.exit(0);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  backfillPgLogos().catch((err) => {
+  backfillPgLogos().catch(async (err) => {
     console.error(err);
     process.exit(1);
   });
