@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { motion, useAnimation } from 'motion/react';
 import { Chip } from '@/components/primitives/Chip';
@@ -14,6 +14,7 @@ function handleLogout() {
 
 export function MembershipApprovalWaitingScreen() {
   const iconControls = useAnimation();
+  const [isRejected, setIsRejected] = useState(false);
 
   const shake = useCallback(() => {
     if (!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
@@ -33,9 +34,13 @@ export function MembershipApprovalWaitingScreen() {
     let active = true;
     const id = setInterval(async () => {
       const r = await checkMyMembershipApprovalAction();
-      if (active && r.status === 'approved') {
+      if (!active) return;
+      if (r.status === 'approved') {
         clearInterval(id);
         window.location.assign('/home');
+      } else if (r.status === 'rejected') {
+        clearInterval(id);
+        setIsRejected(true);
       }
     }, 10_000);
     return () => {
@@ -43,6 +48,26 @@ export function MembershipApprovalWaitingScreen() {
       clearInterval(id);
     };
   }, []);
+
+  if (isRejected) {
+    return (
+      <div className="relative z-10 flex w-full flex-col items-center gap-4 text-center">
+        <div className="flex flex-col items-center gap-2">
+          <h1 className="text-title-large">담당자 계정 합류 요청이 거부됐어요</h1>
+          <p className="text-body-medium text-on-surface-variant">
+            자세한 내용은 관리자에게 문의해 주세요.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="inline-flex h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 text-body-medium font-medium text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50"
+        >
+          로그아웃
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="relative z-10 flex w-full flex-col items-center gap-4 text-center">

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup, act } from '@testing-library/react';
+import { render, screen, cleanup, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MembershipApprovalWaitingScreen } from '@/components/pending-approval/membership-approval-waiting-screen';
+import { checkMyMembershipApprovalAction } from '@/lib/server/actions/auth/checkMyMembershipApprovalAction';
 
 const { approvalActionMock } = vi.hoisted(() => ({ approvalActionMock: vi.fn() }));
 vi.mock('@/lib/server/actions/auth/checkMyMembershipApprovalAction', () => ({
@@ -89,6 +90,13 @@ describe('MembershipApprovalWaitingScreen', () => {
       render(<MembershipApprovalWaitingScreen />);
       await act(async () => { vi.advanceTimersByTime(30_000); });
       expect(assignMock).not.toHaveBeenCalled();
+    });
+
+    it('rejected 상태 반환 시 거부 메시지를 렌더한다', async () => {
+      approvalActionMock.mockResolvedValue({ status: 'rejected' });
+      render(<MembershipApprovalWaitingScreen />);
+      await act(async () => { vi.advanceTimersByTime(10_000); });
+      expect(screen.getByText('담당자 계정 합류 요청이 거부됐어요')).toBeInTheDocument();
     });
   });
 });
