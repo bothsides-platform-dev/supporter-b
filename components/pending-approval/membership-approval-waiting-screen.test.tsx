@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup, act, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MembershipApprovalWaitingScreen } from '@/components/pending-approval/membership-approval-waiting-screen';
-import { checkMyMembershipApprovalAction } from '@/lib/server/actions/auth/checkMyMembershipApprovalAction';
 
 const { approvalActionMock } = vi.hoisted(() => ({ approvalActionMock: vi.fn() }));
 vi.mock('@/lib/server/actions/auth/checkMyMembershipApprovalAction', () => ({
