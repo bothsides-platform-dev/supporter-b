@@ -421,10 +421,10 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async findActiveCanonicalPgById(
     workspaceId: string,
     tx?: Tx,
-  ): Promise<{ id: string; canonicalPgKey: string } | undefined> {
+  ): Promise<{ id: string; name: string; canonicalPgKey: string } | undefined> {
     const db = this.h(tx);
     const [row] = await db
-      .select({ id: workspaces.id, canonicalPgKey: workspaces.canonicalPgKey })
+      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey })
       .from(workspaces)
       .where(
         and(
@@ -436,7 +436,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       )
       .limit(1);
     if (!row) return undefined;
-    return { id: row.id, canonicalPgKey: row.canonicalPgKey as string };
+    return { id: row.id, name: row.name, canonicalPgKey: row.canonicalPgKey as string };
   }
 
   async findEarliestActiveWorkspace(

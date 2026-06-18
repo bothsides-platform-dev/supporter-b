@@ -261,7 +261,7 @@ export interface WorkspaceRepo {
   findActiveCanonicalPgById(
     workspaceId: string,
     tx?: Tx,
-  ): Promise<{ id: string; canonicalPgKey: string } | undefined>;
+  ): Promise<{ id: string; name: string; canonicalPgKey: string } | undefined>;
   /** 가장 먼저 만들어진 active 워크스페이스 (id+type) — 마스터 기본 진입. 없으면 undefined. */
   findEarliestActiveWorkspace(
     tx?: Tx,

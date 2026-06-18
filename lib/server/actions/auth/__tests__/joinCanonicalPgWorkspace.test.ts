@@ -13,6 +13,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }) }));
 
+vi.mock('@/lib/server/notifications/admin-signup', () => ({
+  notifyAdminNewMembershipAfterCommit: vi.fn(),
+}));
+
+vi.mock('@/lib/server/env', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/server/env')>();
+  return { ...original, adminBaseUrl: () => 'https://admin.example.com' };
+});
+
 import { count, eq } from 'drizzle-orm';
 import { phoneOtps, users, workspaceMembers, workspaces } from '@/lib/db/schema';
 import { randomUUID } from 'node:crypto';
@@ -109,7 +118,7 @@ describe('joinCanonicalPgWorkspaceAction — 성공 케이스', () => {
     expect(membership.role).toBe('member');
   });
 
-  it('redirectTo는 /inbox', async () => {
+  it('redirectTo는 /home', async () => {
     const ws = await seedCanonicalPgWorkspace();
     const phoneId = await seedVerifiedOtp();
 
@@ -119,7 +128,7 @@ describe('joinCanonicalPgWorkspaceAction — 성공 케이스', () => {
     });
 
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.redirectTo).toBe('/inbox');
+    if (r.ok) expect(r.redirectTo).toBe('/home');
   });
 
   it('미인증 계정이지만 canonical ws(active)에 멤버십 있으면 EMAIL_TAKEN — purge는 pending ws만 대상', async () => {
@@ -276,6 +285,50 @@ describe('joinCanonicalPgWorkspaceAction — 입력 유효성 검사', () => {
 
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+});
+
+describe('joinCanonicalPgWorkspaceAction — 멤버십 승인 상태', () => {
+  it('canonical PG 합류 시 멤버십 approval_status가 pending_approval로 생성된다', async () => {
+    const ws = await seedCanonicalPgWorkspace();
+    const phoneId = await seedVerifiedOtp();
+
+    const r = await joinCanonicalPgWorkspaceAction({
+      email: TEST_EMAIL,
+      name: TEST_NAME,
+      password: TEST_PASSWORD,
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: phoneId,
+      selectedPgWorkspaceId: ws.id,
+    });
+
+    expect(r.ok).toBe(true);
+
+    const [newUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, TEST_EMAIL))
+      .limit(1);
+
+    const [membership] = await db
+      .select({ approvalStatus: workspaceMembers.approvalStatus })
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.userId, newUser.id));
+
+    expect(membership.approvalStatus).toBe('pending_approval');
+  });
+
+  it('redirectTo가 /home이다', async () => {
+    const ws = await seedCanonicalPgWorkspace();
+    const phoneId = await seedVerifiedOtp();
+
+    const r = await joinCanonicalPgWorkspaceAction({
+      email: TEST_EMAIL, name: TEST_NAME, password: TEST_PASSWORD,
+      phone: DEFAULT_PHONE, phoneVerificationId: phoneId, selectedPgWorkspaceId: ws.id,
+    });
+
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.redirectTo).toBe('/home');
   });
 });
 

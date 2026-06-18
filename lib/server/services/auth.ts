@@ -190,7 +190,7 @@ export class AuthService {
     phone: string;
     phoneVerificationId: string;
     selectedPgWorkspaceId: string;
-  }): Promise<ServiceResult<{ email: string }>> {
+  }): Promise<ServiceResult<{ email: string; workspaceName: string }>> {
     const email = normalizeEmail(input.email);
 
     const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
@@ -203,7 +203,7 @@ export class AuthService {
     const userId = randomUUID();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ email: string }>> => {
+    const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ email: string; workspaceName: string }>> => {
       // 선검사: 이미 가입된 이메일이면 INSERT 전에 EMAIL_TAKEN 반환. postgres-js 는
       // tx 안에서 발생한 unique violation 을 콜백 종료 후 재던지므로(try/catch 로 못 막음)
       // 충돌을 일으키기 전에 차단한다. 상세는 purgeUnverifiedSignup 주석 참조.
@@ -214,14 +214,14 @@ export class AuthService {
       await this.userRepo.create({ id: userId, email, passwordHash, name: input.name, phone: input.phone }, tx);
 
       await this.workspaceRepo.addMember(
-        { workspaceId: input.selectedPgWorkspaceId, userId, role: 'member' },
+        { workspaceId: input.selectedPgWorkspaceId, userId, role: 'member', approvalStatus: 'pending_approval' },
         tx,
       );
 
       await this.userRepo.setLastActiveWorkspace(userId, input.selectedPgWorkspaceId, tx);
 
-      return { ok: true, email };
-    }).catch(mapUniqueViolationToEmailTaken<{ email: string }>);
+      return { ok: true, email, workspaceName: workspace.name };
+    }).catch(mapUniqueViolationToEmailTaken<{ email: string; workspaceName: string }>);
 
     return result;
   }
