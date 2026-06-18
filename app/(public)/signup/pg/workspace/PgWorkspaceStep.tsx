@@ -17,7 +17,10 @@ type CanonicalCompany = { id: string; name: string; canonicalPgKey: string };
 const ntsLookup = async (bizNo: string) => {
   const r = await lookupBizNoAction(bizNo);
   if (!r.ok || !r.valid) return { valid: false as const };
-  return { valid: true as const, taxType: r.taxType!, status: r.status! };
+  if (!r.taxType) {
+    return { valid: false as const, error: '지원되지 않는 사업자 유형이에요. 고객센터로 문의해 주세요.' };
+  }
+  return { valid: true as const, taxType: r.taxType, status: r.status! };
 };
 
 export default function PgWorkspaceStep({

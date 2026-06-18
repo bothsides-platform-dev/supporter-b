@@ -85,6 +85,7 @@ export default function PgProfilePage() {
         router.replace(r.redirectTo);
         return;
       }
+      console.error('[signup:pg] finalizeSignup error:', r.error);
       setSubmitError(
         r.error === 'EMAIL_TAKEN'
           ? '이미 가입된 이메일이에요. 로그인해 주세요.'
