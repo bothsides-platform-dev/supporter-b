@@ -233,7 +233,7 @@ export interface WorkspaceRepo {
   /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
-  listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string }[]>;
+  listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean }[]>;
   /** 이름 검색 (isDemo 제외) — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500). */
   search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string }[]>;
   /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */

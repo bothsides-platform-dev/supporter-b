@@ -11,9 +11,9 @@ import {
 } from '@/components/rfp/BizLookupField';
 import { lookupBizNoAction } from '@/lib/server/actions/rfp';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
-import { pgLogoSrc } from './pg-logos';
+import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 
-type CanonicalCompany = { id: string; name: string; canonicalPgKey: string };
+type CanonicalCompany = { id: string; name: string; canonicalPgKey: string; hasLogo: boolean };
 
 const ntsLookup = async (bizNo: string) => {
   const r = await lookupBizNoAction(bizNo);
@@ -89,35 +89,29 @@ export default function PgWorkspaceStep({
       {mode === 'select' && (
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3">
-            {canonicalCompanies.map((company) => {
-              const logoSrc = pgLogoSrc(company.canonicalPgKey);
-              return (
-                <button
-                  key={company.id}
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => handleSelectCompany(company)}
-                  className={[
-                    'flex flex-col items-center justify-center gap-2 rounded-[6px] border px-3 py-4',
-                    'text-[13px] font-[500] text-center leading-snug transition-colors',
-                    selectedId === company.id
-                      ? 'border-[var(--md-sys-color-primary)] text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]'
-                      : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] hover:border-[var(--md-sys-color-outline)] hover:bg-[var(--md-sys-color-surface-variant)]',
-                  ].join(' ')}
-                >
-                  {logoSrc != null && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={logoSrc}
-                      alt=""
-                      className="h-5 w-auto max-w-[80px] object-contain flex-shrink-0"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  )}
-                  {company.name}
-                </button>
-              );
-            })}
+            {canonicalCompanies.map((company) => (
+              <button
+                key={company.id}
+                type="button"
+                disabled={submitting}
+                onClick={() => handleSelectCompany(company)}
+                className={[
+                  'flex flex-col items-center justify-center gap-2 rounded-[6px] border px-3 py-4',
+                  'text-[13px] font-[500] text-center leading-snug transition-colors',
+                  selectedId === company.id
+                    ? 'border-[var(--md-sys-color-primary)] text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]'
+                    : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] hover:border-[var(--md-sys-color-outline)] hover:bg-[var(--md-sys-color-surface-variant)]',
+                ].join(' ')}
+              >
+                <WorkspaceAvatar
+                  name={company.name}
+                  workspaceId={company.id}
+                  hasLogo={company.hasLogo}
+                  size="md"
+                />
+                {company.name}
+              </button>
+            ))}
           </div>
 
           <div className="pt-2 text-center">
