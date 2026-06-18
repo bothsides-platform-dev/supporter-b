@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.26.3] - 2026-06-18
+
+### Changed
+
+- **Centrifugo 설정 파일을 YAML로 전환**: `deploy/centrifugo/config.json` → `config.yaml`. JSON은 주석을 지원하지 않아 운영 설정 안내를 인라인으로 남길 수 없었는데, YAML 전환으로 `#` 주석을 직접 파일에 담을 수 있어요. `CENTRIFUGO_PROXY_SECRET` 활성화 방법·주의사항이 `config.yaml`에 주석으로 포함됐어요. `docker-compose.prod.yml`·`docs/DEPLOY_LIGHTSAIL.md`·`deploy/centrifugo/README.md`의 참조도 함께 업데이트했어요.
+
 ## [0.2.26.2] - 2026-06-18
 
 ### Changed
