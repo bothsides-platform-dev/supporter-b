@@ -119,6 +119,22 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
     expect(mockReplace).not.toHaveBeenCalledWith('/signup/buyer');
   });
 
+  it('finalizeSignup 이 예외를 던지면 에러 메시지를 표시하고 제출 버튼을 다시 활성화한다', async () => {
+    mockSignupComplete.mockRejectedValueOnce(new Error('network error'));
+    const user = userEvent.setup();
+    render(<BuyerProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '김구매');
+    await user.click(screen.getByRole('button', { name: 'verify-phone' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('가입을 완료하지 못했어요.'),
+    );
+    expect(assign).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '가입 완료' })).not.toBeDisabled();
+  });
+
   // deny-path: 1·2단계 미완료(draft 불충분)로 프로필 단계에 직접 진입하면 첫 가입 화면으로
   // 돌려보낸다. freeze(useState 초기화) 이후에도 이 가드가 동작함을 보장한다(PgProfilePage 대칭).
   it('미완성 draft 로 직접 진입 시 /signup/buyer 로 redirect', () => {

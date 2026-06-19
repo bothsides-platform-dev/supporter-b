@@ -52,12 +52,19 @@ vi.mock('@/components/auth/PhoneVerificationField', () => ({
 import PgProfilePage from '@/app/(public)/signup/pg/profile/page';
 
 describe('PgProfilePage', () => {
+  let assign: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     mockReplace.mockReset();
     mockPush.mockReset();
     mockSignupComplete.mockReset();
     mockSignupInvite.mockReset();
     mockLoginAction.mockReset().mockResolvedValue({ ok: true });
+    assign = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { host: 'localhost', assign },
+    });
   });
 
   it('초대 경로: email + password만 있으면 wsName/bizNo 없어도 진입 허용', () => {
@@ -141,7 +148,29 @@ describe('PgProfilePage', () => {
       );
     });
     expect(mockSignupComplete).not.toHaveBeenCalled();
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/home'));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
+  });
+
+  it('finalizeSignup 이 예외를 던지면 에러 메시지를 표시하고 제출 버튼을 다시 활성화한다', async () => {
+    mockDraftData = {
+      email: 'sales@toss.im',
+      password: 'Password123!',
+      wsName: '토스페이먼츠',
+      bizNo: '1234567890',
+    };
+    mockSignupComplete.mockRejectedValueOnce(new Error('network error'));
+    const user = userEvent.setup();
+    render(<PgProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '신규 영업');
+    await user.click(screen.getByRole('button', { name: '인증 완료' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('가입을 완료하지 못했어요.'),
+    );
+    expect(assign).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '가입 완료' })).not.toBeDisabled();
   });
 
   // 회귀: 가입 완료 성공 후 clearSignupDraft 로 draft 가 비면, 재렌더 시 ready 가 false 가
@@ -166,7 +195,7 @@ describe('PgProfilePage', () => {
     await user.click(screen.getByRole('button', { name: '인증 완료' }));
     await user.click(screen.getByRole('button', { name: '가입 완료' }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/home'));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
 
     rerender(<PgProfilePage />);
 
@@ -220,7 +249,7 @@ describe('PgProfilePage — cross-host redirect', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('redirectTo 가 같은 호스트 상대경로면 기존대로 router.push 한다', async () => {
+  it('redirectTo 가 같은 호스트 상대경로도 window.location.assign 으로 전체 페이지 이동한다', async () => {
     mockSignupComplete.mockResolvedValue({
       ok: true,
       redirectTo: '/pending-approval',
@@ -234,7 +263,7 @@ describe('PgProfilePage — cross-host redirect', () => {
     await user.click(screen.getByRole('button', { name: '인증 완료' }));
     await user.click(screen.getByRole('button', { name: '가입 완료' }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/pending-approval'));
-    expect(assign).not.toHaveBeenCalled();
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/pending-approval'));
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

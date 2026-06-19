@@ -333,6 +333,24 @@ describe('signupCompleteAction — buyer branch', () => {
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
 
+  it.each(['suspended', 'closed'] as const)(
+    'bizProfile.status=%s 인 buyer 가입은 서버에서 INVALID_INPUT 으로 거부한다',
+    async (status) => {
+      const r = await signupCompleteAction({
+        email: `blocked-${status}@example.com`,
+        name: '김구매',
+        password: 'Password123!',
+        phone: DEFAULT_PHONE,
+        phoneVerificationId: verificationId,
+        wsKind: 'buyer',
+        wsName: '(주)샘플',
+        bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status },
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    },
+  );
+
   it('체크섬이 틀린 bizNo는 INVALID_INPUT 반환한다', async () => {
     const r = await signupCompleteAction({
       email: 'kim3@example.com',

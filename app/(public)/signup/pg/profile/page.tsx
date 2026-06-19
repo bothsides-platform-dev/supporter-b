@@ -102,15 +102,12 @@ export default function PgProfilePage() {
       setSubmitting(false);
       return;
     }
-    // redirectTo 는 workspaceSwitchTarget 산출물 — 가입한 호스트와 워크스페이스 home
-    // 호스트가 다르면 다른 origin 절대 URL이다. router.push 는 그 URL을 RSC fetch 로
-    // 따라가 (app) 셸의 cross-origin redirect 에서 브라우저 CORS 로 막히므로, 절대
-    // URL은 전체 페이지 이동으로 처리한다(같은 호스트 상대경로는 기존대로 soft push).
-    if (/^https?:\/\//.test(r.redirectTo)) {
-      window.location.assign(r.redirectTo);
-      return;
-    }
-    router.push(r.redirectTo);
+    // Hard-navigate for both absolute and relative targets (mirrors buyer/profile/page.tsx).
+    // router.push triggers an RSC fetch that fails when Turbopack hasn't compiled
+    // the target route yet (the compilation race that strands users at /login).
+    // window.location.assign is also required for cross-origin absolute URLs
+    // to avoid CORS blocking on the RSC cross-host redirect.
+    window.location.assign(r.redirectTo);
   };
 
   return (
