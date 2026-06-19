@@ -28,6 +28,12 @@ type Props = {
   onLookup: (bizNo: string) => Promise<LookupResponse>;
   onResult: (profile: BizLookupResult) => void;
   onReset: () => void;
+  /**
+   * 패널을 보여주되 onResult 를 차단할 상태 목록. 기본 [] — 지정하지 않으면
+   * 기존 동작(모든 유효 조회 결과를 onResult 로 전달)이 유지된다.
+   * 구매자 가입 폼에서는 ['closed', 'suspended'] 를 전달한다.
+   */
+  blockedStatuses?: BizLookupResult['status'][];
 };
 
 function formatBizNo(raw: string): string {
@@ -49,7 +55,7 @@ const STATUS_LABEL: Record<BizLookupResult['status'], string> = {
   closed: '폐업',
 };
 
-export function BizLookupField({ onLookup, onResult, onReset }: Props) {
+export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = [] }: Props) {
   const [raw, setRaw] = useState('');
   const [status, setStatus] = useState<Status>('idle');
   const [result, setResult] = useState<BizLookupResult | null>(null);
@@ -72,7 +78,15 @@ export function BizLookupField({ onLookup, onResult, onReset }: Props) {
         };
         setResult(profile);
         setStatus('found');
-        onResult(profile);
+        if (blockedStatuses.includes(response.status)) {
+          // 패널은 렌더(status='found')하되 onResult를 호출하지 않아 부모의
+          // bizProfile 이 null 로 유지된다 → canSubmit 게이트 자동 비활성화.
+          setError(
+            `${STATUS_LABEL[response.status]} 상태인 사업자는 가입할 수 없어요. 정상 영업 중인 사업자번호를 입력해주세요.`,
+          );
+        } else {
+          onResult(profile);
+        }
       } else {
         setResult(null);
         setStatus('notfound');
@@ -159,11 +173,11 @@ export function BizLookupField({ onLookup, onResult, onReset }: Props) {
               ✓ 확인됨
             </span>
           </div>
-          {[
+          {((): [string, string, boolean?][] => [
             ['사업자번호', result.bizNo],
             ['과세 유형', TAX_TYPE_LABEL[result.taxType]],
-            ['사업자 상태', STATUS_LABEL[result.status]],
-          ].map(([label, value]) => (
+            ['사업자 상태', STATUS_LABEL[result.status], blockedStatuses.includes(result.status)],
+          ])().map(([label, value, isError]) => (
             <div
               key={label}
               className="px-4 py-2.5 flex items-baseline justify-between"
@@ -171,7 +185,12 @@ export function BizLookupField({ onLookup, onResult, onReset }: Props) {
               <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                 {label}
               </span>
-              <span className="text-[13px] text-[var(--md-sys-color-on-surface)] font-medium font-mono tabular-nums">
+              <span className={cn(
+                'text-[13px] font-medium font-mono tabular-nums',
+                isError
+                  ? 'text-[var(--md-sys-color-error)]'
+                  : 'text-[var(--md-sys-color-on-surface)]',
+              )}>
                 {value}
               </span>
             </div>

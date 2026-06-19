@@ -65,3 +65,60 @@ describe('BuyerWorkspaceForm — ntsLookup undefined taxType guard', () => {
     );
   });
 });
+
+describe('BuyerWorkspaceForm — 폐업/휴업 사업자 차단', () => {
+  it('keeps submit disabled and shows error when NTS returns closed status', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    mockLookupBizNo.mockResolvedValue({ ok: true, valid: true, taxType: 'general', status: 'closed' });
+
+    render(
+      <BuyerWorkspaceForm onSubmit={onSubmit} submitting={false} />,
+    );
+
+    await user.type(screen.getByPlaceholderText('(주)샘플테크'), '샘플워크스페이스');
+    await user.type(screen.getByLabelText('사업자 등록번호'), '9999999999');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    // 패널은 보여야 한다.
+    await waitFor(() =>
+      expect(screen.getByText('✓ 확인됨')).toBeInTheDocument(),
+    );
+
+    // 오류 메시지가 있어야 한다.
+    expect(screen.getByRole('alert').textContent).toMatch(/가입할 수 없어요/);
+
+    // "워크스페이스 만들기" 버튼은 비활성화 상태여야 한다.
+    expect(screen.getByRole('button', { name: '워크스페이스 만들기' })).toBeDisabled();
+
+    // onSubmit이 호출되면 안 된다.
+    await user.click(screen.getByRole('button', { name: '워크스페이스 만들기' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('keeps submit disabled and shows error when NTS returns suspended status', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    mockLookupBizNo.mockResolvedValue({ ok: true, valid: true, taxType: 'general', status: 'suspended' });
+
+    render(
+      <BuyerWorkspaceForm onSubmit={onSubmit} submitting={false} />,
+    );
+
+    await user.type(screen.getByPlaceholderText('(주)샘플테크'), '샘플워크스페이스');
+    await user.type(screen.getByLabelText('사업자 등록번호'), '8888888888');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('✓ 확인됨')).toBeInTheDocument(),
+    );
+
+    expect(screen.getByRole('alert').textContent).toMatch(/가입할 수 없어요/);
+    expect(screen.getByRole('button', { name: '워크스페이스 만들기' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: '워크스페이스 만들기' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});

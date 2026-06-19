@@ -131,3 +131,131 @@ describe('BizLookupField', () => {
     expect(screen.getByRole('button', { name: '조회' })).toBeInTheDocument();
   });
 });
+
+describe('BizLookupField — blockedStatuses', () => {
+  it('does not call onResult and shows error when closed business is looked up with blockedStatuses', async () => {
+    const user = userEvent.setup();
+    const onLookup = vi.fn(async () => ({
+      valid: true as const,
+      taxType: 'general' as const,
+      status: 'closed' as const,
+    }));
+    const onResult = vi.fn();
+
+    render(
+      <BizLookupField
+        onLookup={onLookup}
+        onResult={onResult}
+        onReset={() => {}}
+        blockedStatuses={['closed', 'suspended']}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('사업자 등록번호'), '9999999999');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('✓ 확인됨')).toBeInTheDocument(),
+    );
+    // 패널은 보여주되 onResult는 호출하지 않아야 한다.
+    expect(onResult).not.toHaveBeenCalled();
+    // 오류 메시지가 표시되어야 한다.
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('alert').textContent).toMatch(/가입할 수 없어요/);
+    // 패널에 "폐업" 텍스트가 보여야 한다.
+    expect(screen.getByText('폐업')).toBeInTheDocument();
+  });
+
+  it('does not call onResult and shows error when suspended business is looked up with blockedStatuses', async () => {
+    const user = userEvent.setup();
+    const onLookup = vi.fn(async () => ({
+      valid: true as const,
+      taxType: 'general' as const,
+      status: 'suspended' as const,
+    }));
+    const onResult = vi.fn();
+
+    render(
+      <BizLookupField
+        onLookup={onLookup}
+        onResult={onResult}
+        onReset={() => {}}
+        blockedStatuses={['closed', 'suspended']}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('사업자 등록번호'), '8888888888');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('✓ 확인됨')).toBeInTheDocument(),
+    );
+    expect(onResult).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('alert').textContent).toMatch(/가입할 수 없어요/);
+    expect(screen.getByText('휴업')).toBeInTheDocument();
+  });
+
+  it('still calls onResult for active business even when blockedStatuses is set', async () => {
+    const user = userEvent.setup();
+    const onLookup = vi.fn(async () => ({
+      valid: true as const,
+      taxType: 'general' as const,
+      status: 'active' as const,
+    }));
+    const onResult = vi.fn();
+
+    render(
+      <BizLookupField
+        onLookup={onLookup}
+        onResult={onResult}
+        onReset={() => {}}
+        blockedStatuses={['closed', 'suspended']}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('사업자 등록번호'), '1234567890');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('✓ 확인됨')).toBeInTheDocument(),
+    );
+    expect(onResult).toHaveBeenCalledWith({
+      bizNo: '123-45-67890',
+      taxType: 'general',
+      status: 'active',
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('calls onResult for closed business when blockedStatuses is not set (backwards compat)', async () => {
+    const user = userEvent.setup();
+    const onLookup = vi.fn(async () => ({
+      valid: true as const,
+      taxType: 'general' as const,
+      status: 'closed' as const,
+    }));
+    const onResult = vi.fn();
+
+    render(
+      <BizLookupField
+        onLookup={onLookup}
+        onResult={onResult}
+        onReset={() => {}}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('사업자 등록번호'), '9999999999');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('✓ 확인됨')).toBeInTheDocument(),
+    );
+    // blockedStatuses 미지정 시 기존 동작 보존.
+    expect(onResult).toHaveBeenCalledWith({
+      bizNo: '999-99-99999',
+      taxType: 'general',
+      status: 'closed',
+    });
+  });
+});
