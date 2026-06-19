@@ -62,6 +62,20 @@ describe('BuyerSignupEmailPage — 이메일 blur 중복 검사', () => {
     });
   });
 
+  it('마스터/운영자 이메일 blur 시 "가입할 수 없어요" 안내를 노출한다', async () => {
+    mockCheckEmail.mockResolvedValue({ ok: false, error: 'MASTER_EMAIL' });
+    const user = userEvent.setup();
+    render(<BuyerSignupEmailPage />);
+
+    await user.type(screen.getByLabelText('이메일'), 'op@supporter-b.com');
+    await user.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText(/이 이메일로는 가입할 수 없어요/)).toBeInTheDocument();
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it('유효하지 않은 이메일 포맷 blur 시 checkEmailAvailableAction을 호출하지 않는다', async () => {
     const user = userEvent.setup();
     render(<BuyerSignupEmailPage />);
