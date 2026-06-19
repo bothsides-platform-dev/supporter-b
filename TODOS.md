@@ -31,6 +31,15 @@ rfp.updatedAt 기준 내림차순 정렬 적용(buyer awarded/closed, PG won/los
 
 ## Signup / Auth
 
+### signupCompleteAction 서버 사이드 bizProfile.status 검증 (P2)
+현재 `signupCompleteAction` 은 클라이언트가 보낸 `bizProfile.status` 를 그대로 신뢰한다. 클라 게이트(`BizLookupField blockedStatuses`)는 UX 보호이며, 수정된 클라이언트라면 `closed`/`suspended` 상태를 `active` 로 바꿔 보낼 수 있다. 완전한 서버 권위 검증을 위해서는 액션 내부에서 NTS 재조회 또는 zod `.refine(p => p.status === 'active')` 추가가 필요하다. (발견: v0.2.27.2 adversarial 2026-06-20, 명시적 후속 유예)
+
+### 설정 페이지 WorkspaceBizNoForm blockedStatuses 누락 (P2)
+워크스페이스 설정의 사업자번호 변경 폼(`WorkspaceBizNoForm.tsx`)이 `BizLookupField` 를 `blockedStatuses` 없이 사용한다. 기존 구매사 회원이 폐업·휴업 상태 번호로 변경할 수 있는 경로. `blockedStatuses={['closed', 'suspended']}` 를 추가해 설정 경로도 닫아야 한다. (발견: v0.2.27.2 adversarial 2026-06-20)
+
+### PG 가입 BizLookupField blockedStatuses 누락 (P3)
+PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses` 가 없다. PG 도메인에서도 폐업·휴업 사업자를 차단해야 하는지 정책 결정 후 `blockedStatuses={['closed', 'suspended']}` 추가. (발견: v0.2.27.2 adversarial 2026-06-20, P3 — 정책 미확정)
+
 ## Bid Wizard
 
 ### ~~구간 수수료 그리드 환산 툴팁 양끝 열 오버플로 + aria 연결~~ ✅ v0.2.24.2

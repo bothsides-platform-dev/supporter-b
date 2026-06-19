@@ -133,67 +133,70 @@ describe('BizLookupField', () => {
 });
 
 describe('BizLookupField — blockedStatuses', () => {
-  it('does not call onResult and shows error when closed business is looked up with blockedStatuses', async () => {
+  it.each([
+    ['closed', '9999999999', '폐업'] as const,
+    ['suspended', '8888888888', '휴업'] as const,
+  ])('does not call onResult and shows error when %s business is looked up with blockedStatuses', async (status, bizNo, statusLabel) => {
+    const user = userEvent.setup();
+    const onLookup = vi.fn(async () => ({
+      valid: true as const,
+      taxType: 'general' as const,
+      status,
+    }));
+    const onResult = vi.fn();
+
+    render(
+      <BizLookupField
+        onLookup={onLookup}
+        onResult={onResult}
+        onReset={() => {}}
+        blockedStatuses={['closed', 'suspended']}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('사업자 등록번호'), bizNo);
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    // 차단된 경우 "✓ 확인됨" 배지는 숨겨지고 오류 메시지가 표시된다.
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toBeInTheDocument(),
+    );
+    expect(onResult).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toMatch(/가입할 수 없어요/);
+    expect(screen.getByText(statusLabel)).toBeInTheDocument();
+    expect(screen.queryByText('✓ 확인됨')).not.toBeInTheDocument();
+  });
+
+  it('초기화 button resets blocked state and returns to idle', async () => {
     const user = userEvent.setup();
     const onLookup = vi.fn(async () => ({
       valid: true as const,
       taxType: 'general' as const,
       status: 'closed' as const,
     }));
-    const onResult = vi.fn();
+    const onReset = vi.fn();
 
     render(
       <BizLookupField
         onLookup={onLookup}
-        onResult={onResult}
-        onReset={() => {}}
+        onResult={() => {}}
+        onReset={onReset}
         blockedStatuses={['closed', 'suspended']}
       />,
     );
 
     await user.type(screen.getByLabelText('사업자 등록번호'), '9999999999');
     await user.click(screen.getByRole('button', { name: '조회' }));
-
     await waitFor(() =>
-      expect(screen.getByText('✓ 확인됨')).toBeInTheDocument(),
-    );
-    // 패널은 보여주되 onResult는 호출하지 않아야 한다.
-    expect(onResult).not.toHaveBeenCalled();
-    // 오류 메시지가 표시되어야 한다.
-    expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(screen.getByRole('alert').textContent).toMatch(/가입할 수 없어요/);
-    // 패널에 "폐업" 텍스트가 보여야 한다.
-    expect(screen.getByText('폐업')).toBeInTheDocument();
-  });
-
-  it('does not call onResult and shows error when suspended business is looked up with blockedStatuses', async () => {
-    const user = userEvent.setup();
-    const onLookup = vi.fn(async () => ({
-      valid: true as const,
-      taxType: 'general' as const,
-      status: 'suspended' as const,
-    }));
-    const onResult = vi.fn();
-
-    render(
-      <BizLookupField
-        onLookup={onLookup}
-        onResult={onResult}
-        onReset={() => {}}
-        blockedStatuses={['closed', 'suspended']}
-      />,
+      expect(screen.getByRole('alert')).toBeInTheDocument(),
     );
 
-    await user.type(screen.getByLabelText('사업자 등록번호'), '8888888888');
-    await user.click(screen.getByRole('button', { name: '조회' }));
+    await user.click(screen.getByRole('button', { name: '초기화' }));
 
-    await waitFor(() =>
-      expect(screen.getByText('✓ 확인됨')).toBeInTheDocument(),
-    );
-    expect(onResult).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(screen.getByRole('alert').textContent).toMatch(/가입할 수 없어요/);
-    expect(screen.getByText('휴업')).toBeInTheDocument();
+    expect(onReset).toHaveBeenCalled();
+    expect(screen.queryByText('✓ 확인됨')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: '조회' })).toBeInTheDocument();
   });
 
   it('still calls onResult for active business even when blockedStatuses is set', async () => {
@@ -251,7 +254,6 @@ describe('BizLookupField — blockedStatuses', () => {
     await waitFor(() =>
       expect(screen.getByText('✓ 확인됨')).toBeInTheDocument(),
     );
-    // blockedStatuses 미지정 시 기존 동작 보존.
     expect(onResult).toHaveBeenCalledWith({
       bizNo: '999-99-99999',
       taxType: 'general',

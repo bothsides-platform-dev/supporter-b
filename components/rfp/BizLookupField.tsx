@@ -169,15 +169,17 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
             <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
               NTS — 국세청 자동 조회
             </span>
-            <span className="font-mono text-[10px] tracking-[0.1em] text-[var(--md-sys-color-tertiary)]">
-              ✓ 확인됨
-            </span>
+            {!blockedStatuses.includes(result.status) && (
+              <span className="font-mono text-[10px] tracking-[0.1em] text-[var(--md-sys-color-tertiary)]">
+                ✓ 확인됨
+              </span>
+            )}
           </div>
-          {((): [string, string, boolean?][] => [
+          {([
             ['사업자번호', result.bizNo],
             ['과세 유형', TAX_TYPE_LABEL[result.taxType]],
             ['사업자 상태', STATUS_LABEL[result.status], blockedStatuses.includes(result.status)],
-          ])().map(([label, value, isError]) => (
+          ] as [string, string, boolean?][]).map(([label, value, isError]) => (
             <div
               key={label}
               className="px-4 py-2.5 flex items-baseline justify-between"
