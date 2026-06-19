@@ -83,6 +83,7 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
         onReset={() => {
           setBizProfile(null);
         }}
+        blockedStatuses={['closed', 'suspended']}
       />
 
       {error && (

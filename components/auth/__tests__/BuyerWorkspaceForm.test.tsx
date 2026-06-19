@@ -65,3 +65,75 @@ describe('BuyerWorkspaceForm — ntsLookup undefined taxType guard', () => {
     );
   });
 });
+
+describe('BuyerWorkspaceForm — 폐업/휴업 사업자 차단', () => {
+  it.each([
+    ['closed', '9999999999'] as const,
+    ['suspended', '8888888888'] as const,
+  ])('keeps submit disabled and shows error when NTS returns %s status', async (status, bizNo) => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    mockLookupBizNo.mockResolvedValue({ ok: true, valid: true, taxType: 'general', status });
+
+    render(
+      <BuyerWorkspaceForm onSubmit={onSubmit} submitting={false} />,
+    );
+
+    await user.type(screen.getByPlaceholderText('(주)샘플테크'), '샘플워크스페이스');
+    await user.type(screen.getByLabelText('사업자 등록번호'), bizNo);
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    // 차단된 경우 "✓ 확인됨" 배지가 아닌 오류 메시지를 기다린다.
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toBeInTheDocument(),
+    );
+
+    expect(screen.getByRole('alert').textContent).toMatch(/가입할 수 없어요/);
+    expect(screen.getByRole('button', { name: '워크스페이스 만들기' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: '워크스페이스 만들기' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('allows submit after resetting blocked lookup and entering an active bizNo', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+
+    // First lookup returns closed; second returns active.
+    mockLookupBizNo
+      .mockResolvedValueOnce({ ok: true, valid: true, taxType: 'general', status: 'closed' })
+      .mockResolvedValueOnce({ ok: true, valid: true, taxType: 'general', status: 'active' });
+
+    render(
+      <BuyerWorkspaceForm onSubmit={onSubmit} submitting={false} />,
+    );
+
+    await user.type(screen.getByPlaceholderText('(주)샘플테크'), '샘플워크스페이스');
+
+    // Step 1: blocked lookup — submit must stay disabled.
+    await user.type(screen.getByLabelText('사업자 등록번호'), '9999999999');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: '워크스페이스 만들기' })).toBeDisabled();
+
+    // Step 2: reset → re-query with active bizNo.
+    await user.click(screen.getByRole('button', { name: '초기화' }));
+    await user.type(screen.getByLabelText('사업자 등록번호'), '1234567890');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+    await waitFor(() =>
+      expect(screen.getByText('✓ 확인됨')).toBeInTheDocument(),
+    );
+
+    // Submit should now be enabled and callable.
+    await user.click(screen.getByRole('button', { name: '워크스페이스 만들기' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({
+        wsName: '샘플워크스페이스',
+        bizProfile: { bizNo: '123-45-67890', taxType: 'general', status: 'active' },
+      }),
+    );
+  });
+});
