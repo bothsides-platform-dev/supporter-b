@@ -6,24 +6,23 @@ import { Label } from '@/components/primitives/Label';
 import { cn } from '@/lib/utils';
 
 // Slim BizProfile-shaped result (matches lib/types/biz-profile + DB schema).
-// The component owns no mock import — callers inject `onLookup` so Step 7 can
-// swap the live `lookupBizNoAction` in without touching this file.
+// Callers inject `onLookup`: buyer signup uses checksum-only; workspace settings uses NTS API.
 export type BizLookupResult = {
   bizNo: string;
-  taxType: 'general' | 'simple' | 'exempt';
-  status: 'active' | 'suspended' | 'closed';
+  taxType?: 'general' | 'simple' | 'exempt';
+  status?: 'active' | 'suspended' | 'closed';
 };
 
 type LookupResponse =
-  | { valid: true; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed' }
+  | { valid: true; taxType?: 'general' | 'simple' | 'exempt'; status?: 'active' | 'suspended' | 'closed' }
   | { valid: false; error?: string };
 
 type Status = 'idle' | 'loading' | 'found' | 'notfound';
 
 type Props = {
   /**
-   * Caller-supplied lookup. Step 7 will inject `lookupBizNoAction` at call
-   * sites; for now sign-up + RFP-create use a stub.
+   * Caller-supplied lookup. Buyer signup uses `bizNoCheck` (checksum-only);
+   * workspace settings uses `ntsLookup` (NTS API).
    */
   onLookup: (bizNo: string) => Promise<LookupResponse>;
   onResult: (profile: BizLookupResult) => void;
@@ -37,13 +36,13 @@ function formatBizNo(raw: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
 }
 
-const TAX_TYPE_LABEL: Record<BizLookupResult['taxType'], string> = {
+const TAX_TYPE_LABEL: Record<NonNullable<BizLookupResult['taxType']>, string> = {
   general: '일반과세',
   simple: '간이과세',
   exempt: '면세',
 };
 
-const STATUS_LABEL: Record<BizLookupResult['status'], string> = {
+const STATUS_LABEL: Record<NonNullable<BizLookupResult['status']>, string> = {
   active: '정상',
   suspended: '휴업',
   closed: '폐업',
@@ -67,8 +66,8 @@ export function BizLookupField({ onLookup, onResult, onReset }: Props) {
       if (response.valid) {
         const profile: BizLookupResult = {
           bizNo: formatted,
-          taxType: response.taxType,
-          status: response.status,
+          ...(response.taxType && { taxType: response.taxType }),
+          ...(response.status && { status: response.status }),
         };
         setResult(profile);
         setStatus('found');
@@ -153,17 +152,17 @@ export function BizLookupField({ onLookup, onResult, onReset }: Props) {
         <div className="border border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)]">
           <div className="px-4 py-2 flex items-center justify-between">
             <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              NTS — 국세청 자동 조회
+              {result.taxType || result.status ? 'NTS — 국세청 자동 조회' : '사업자번호 형식 확인'}
             </span>
             <span className="font-mono text-[10px] tracking-[0.1em] text-[var(--md-sys-color-tertiary)]">
               ✓ 확인됨
             </span>
           </div>
-          {[
+          {([
             ['사업자번호', result.bizNo],
-            ['과세 유형', TAX_TYPE_LABEL[result.taxType]],
-            ['사업자 상태', STATUS_LABEL[result.status]],
-          ].map(([label, value]) => (
+            result.taxType ? ['과세 유형', TAX_TYPE_LABEL[result.taxType]] : null,
+            result.status ? ['사업자 상태', STATUS_LABEL[result.status]] : null,
+          ].filter(Boolean) as [string, string][]).map(([label, value]) => (
             <div
               key={label}
               className="px-4 py-2.5 flex items-baseline justify-between"

@@ -13,8 +13,8 @@ import { seedSamplePgRfpInTx } from '@/lib/server/onboarding/sample-pg-rfp';
 
 export type CreateWorkspaceBizProfile = {
   bizNo: string;
-  taxType: 'general' | 'simple' | 'exempt';
-  status: 'active' | 'suspended' | 'closed';
+  taxType?: 'general' | 'simple' | 'exempt';
+  status?: 'active' | 'suspended' | 'closed';
   grade?: 'small' | 'sme1' | 'sme2' | 'sme3' | 'general';
   gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset';
 };

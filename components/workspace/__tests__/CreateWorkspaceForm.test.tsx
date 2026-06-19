@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 
 const createWorkspaceAction = vi.fn();
 const switchWorkspaceAction = vi.fn();
-const lookupBizNoAction = vi.fn();
 const assign = vi.fn();
 
 vi.mock('@/lib/server/actions/workspace/createWorkspaceAction', () => ({
@@ -13,16 +12,12 @@ vi.mock('@/lib/server/actions/workspace/createWorkspaceAction', () => ({
 vi.mock('@/lib/server/actions/workspace/switchWorkspaceAction', () => ({
   switchWorkspaceAction: (id: string, path?: string) => switchWorkspaceAction(id, path),
 }));
-vi.mock('@/lib/server/actions/rfp', () => ({
-  lookupBizNoAction: (bizNo: string) => lookupBizNoAction(bizNo),
-}));
 
 import { CreateWorkspaceForm } from '../CreateWorkspaceForm';
 
 beforeEach(() => {
   createWorkspaceAction.mockReset();
   switchWorkspaceAction.mockReset();
-  lookupBizNoAction.mockReset();
   assign.mockReset();
   // jsdom's window.location.assign throws "not implemented"; replace with a stub.
   Object.defineProperty(window, 'location', {
@@ -83,12 +78,6 @@ describe('CreateWorkspaceForm — buyer', () => {
 
   it('조회된 bizProfile을 createWorkspaceAction에 전달한다', async () => {
     const user = userEvent.setup();
-    lookupBizNoAction.mockResolvedValue({
-      ok: true,
-      valid: true,
-      taxType: 'general',
-      status: 'active',
-    });
     createWorkspaceAction.mockResolvedValue({ ok: true, workspaceId: 'ws-b2' });
     switchWorkspaceAction.mockResolvedValue({ ok: true, redirectTo: '/home' });
 
@@ -105,8 +94,6 @@ describe('CreateWorkspaceForm — buyer', () => {
         name: 'BuyerCo',
         bizProfile: {
           bizNo: '124-81-00998', // BizLookupField가 하이픈 포맷으로 변환
-          taxType: 'general',
-          status: 'active',
         },
       }),
     );

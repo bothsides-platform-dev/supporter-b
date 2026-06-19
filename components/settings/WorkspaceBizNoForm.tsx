@@ -24,7 +24,7 @@ const ntsLookup = async (bizNo: string) => {
     return { valid: false as const, error: msg };
   }
   if (!r.valid) return { valid: false as const };
-  return { valid: true as const, taxType: r.taxType!, status: r.status! };
+  return { valid: true as const, taxType: r.taxType, status: r.status };
 };
 
 type Props = {
@@ -56,6 +56,10 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
 
   const handleSubmit = async () => {
     if (!dirty || submitting || !next) return;
+    if (!next.taxType || !next.status) {
+      toast('사업자 정보 조회가 완료되지 않았어요. 다시 조회해주세요.', { type: 'error' });
+      return;
+    }
     setSubmitting(true);
     const r = await updateWorkspaceBizProfileAction({
       bizProfile: {

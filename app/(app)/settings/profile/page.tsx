@@ -50,14 +50,18 @@ export default async function ProfilePage({ searchParams }: Props) {
   const wsKvPairs: [string, ReactNode][] = [
     ...(biz
       ? ([
-          [
-            '업태',
-            biz.taxType === 'general'
-              ? '일반과세'
-              : biz.taxType === 'simple'
-                ? '간이과세'
-                : '면세',
-          ],
+          ...(biz.taxType
+            ? ([
+                [
+                  '업태',
+                  biz.taxType === 'general'
+                    ? '일반과세'
+                    : biz.taxType === 'simple'
+                      ? '간이과세'
+                      : '면세',
+                ],
+              ] as [string, ReactNode][])
+            : []),
           ...(grade
             ? ([['가맹점 등급', GRADE_LABELS[grade]]] as [string, ReactNode][])
             : []),

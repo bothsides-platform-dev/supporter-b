@@ -7,30 +7,18 @@ import {
   BizLookupField,
   type BizLookupResult,
 } from '@/components/rfp/BizLookupField';
-import { lookupBizNoAction } from '@/lib/server/actions/rfp';
+import { isValidBizNo } from '@/lib/validation/biz-no';
 
-// Adapter: BizLookupField expects { valid, taxType?, status? }
-// lookupBizNoAction returns { ok, valid?, taxType?, status?, error? }
-const ntsLookup = async (bizNo: string) => {
-  const r = await lookupBizNoAction(bizNo);
-  if (!r.ok) {
-    const msg =
-      r.error === 'NTS_RATE_LIMIT'
-        ? '요청이 너무 많아요. 잠시 후 다시 시도해주세요.'
-        : '사업자번호 조회 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.';
-    return { valid: false as const, error: msg };
+// 체크섬만으로 사업자번호 유효성을 검사한다. NTS API 호출 없음.
+const bizNoCheck = async (bizNo: string) => {
+  if (!isValidBizNo(bizNo)) {
+    return { valid: false as const, error: '유효하지 않은 사업자등록번호입니다.' };
   }
-  if (!r.valid) return { valid: false as const };
-  if (!r.taxType) {
-    return { valid: false as const, error: '지원되지 않는 사업자 유형이에요. 고객센터로 문의해 주세요.' };
-  }
-  return { valid: true as const, taxType: r.taxType, status: r.status! };
+  return { valid: true as const };
 };
 
 type BizProfilePayload = {
   bizNo: string;
-  taxType: 'general' | 'simple' | 'exempt';
-  status: 'active' | 'suspended' | 'closed';
 };
 
 type Props = {
@@ -54,11 +42,7 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
     if (!canSubmit) return;
     await onSubmit({
       wsName: wsName.trim(),
-      bizProfile: {
-        bizNo: bizProfile.bizNo,
-        taxType: bizProfile.taxType,
-        status: bizProfile.status,
-      },
+      bizProfile: { bizNo: bizProfile.bizNo },
     });
   };
 
@@ -76,7 +60,7 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
       </div>
 
       <BizLookupField
-        onLookup={ntsLookup}
+        onLookup={bizNoCheck}
         onResult={(profile) => {
           setBizProfile(profile);
         }}

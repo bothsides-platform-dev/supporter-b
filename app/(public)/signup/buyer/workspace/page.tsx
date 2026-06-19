@@ -8,8 +8,6 @@ import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 
 type BizProfilePayload = {
   bizNo: string;
-  taxType: 'general' | 'simple' | 'exempt';
-  status: 'active' | 'suspended' | 'closed';
 };
 
 export default function BuyerWorkspacePage() {

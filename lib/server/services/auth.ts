@@ -83,7 +83,7 @@ export class AuthService {
     phoneVerificationId: string;
     wsKind: 'buyer' | 'pg';
     wsName: string;
-    bizProfile?: { bizNo: string; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed'; grade?: 'general' | 'small' | 'sme1' | 'sme2' | 'sme3'; gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset' };
+    bizProfile?: { bizNo: string; taxType?: 'general' | 'simple' | 'exempt'; status?: 'active' | 'suspended' | 'closed'; grade?: 'general' | 'small' | 'sme1' | 'sme2' | 'sme3'; gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset' };
     pgProfile?: { bizNo: string; slaDays?: number };
   }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> {
     const email = normalizeEmail(input.email);

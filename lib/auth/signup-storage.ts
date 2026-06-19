@@ -14,8 +14,8 @@ const KEY = 'signupDraft';
 
 export type SignupBizProfile = {
   bizNo: string;
-  taxType: 'general' | 'simple' | 'exempt';
-  status: 'active' | 'suspended' | 'closed';
+  taxType?: 'general' | 'simple' | 'exempt';
+  status?: 'active' | 'suspended' | 'closed';
 };
 
 export type SignupClientDraft = {

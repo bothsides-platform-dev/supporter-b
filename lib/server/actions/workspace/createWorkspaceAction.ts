@@ -11,8 +11,8 @@ import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
 const BizProfileInput = z
   .object({
     bizNo: z.string().min(10).max(12).refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
-    taxType: z.enum(['general', 'simple', 'exempt']),
-    status: z.enum(['active', 'suspended', 'closed']),
+    taxType: z.enum(['general', 'simple', 'exempt']).optional(),
+    status: z.enum(['active', 'suspended', 'closed']).optional(),
   })
   .strict();
 

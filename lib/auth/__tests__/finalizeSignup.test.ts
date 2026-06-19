@@ -55,6 +55,18 @@ const BUYER_DRAFT_BASE = {
   bizProfile: { bizNo: '1234567890', taxType: 'general', status: 'active' },
 };
 
+// Primary buyer signup path after NTS removal: checksum-only, no taxType/status.
+const BUYER_DRAFT_CHECKSUM_ONLY = {
+  email: 'buyer2@example.com',
+  password: 'pw-123456',
+  name: 'Buyer2',
+  phone: '01087654321',
+  phoneVerificationId: 'vid-3',
+  workspaceType: 'buyer',
+  wsName: '체크섬구매사',
+  bizProfile: { bizNo: '124-81-00998' },
+};
+
 beforeEach(() => {
   inviteActionMock.mockReset();
   completeActionMock.mockReset();
@@ -182,6 +194,28 @@ describe('finalizeSignup — next 복귀 URL 오버라이드', () => {
 
     const r = await finalizeSignup();
 
+    expect(r).toEqual({ ok: true, redirectTo: '/rfp' });
+  });
+});
+
+describe('finalizeSignup — buyer checksum-only biz profile', () => {
+  it('bizProfile without taxType/status passes through to signupCompleteAction', async () => {
+    draftRef.value = { ...BUYER_DRAFT_CHECKSUM_ONLY };
+    completeActionMock.mockResolvedValue({
+      ok: true,
+      redirectTo: '/rfp',
+      email: 'buyer2@example.com',
+      password: 'pw-123456',
+    });
+    signInMock.mockResolvedValue({});
+
+    const r = await finalizeSignup();
+
+    expect(completeActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bizProfile: { bizNo: '124-81-00998' },
+      }),
+    );
     expect(r).toEqual({ ok: true, redirectTo: '/rfp' });
   });
 });

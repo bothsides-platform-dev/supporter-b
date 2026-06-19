@@ -71,6 +71,32 @@ describe('BizLookupField', () => {
     expect(screen.queryByText('통신판매업')).toBeNull();
   });
 
+  it('checksum-only 경로(taxType/status 없음): 형식확인 레이블 표시, NTS 레이블 숨김, 과세/상태 행 없음', async () => {
+    const user = userEvent.setup();
+    const onLookup = vi.fn(async () => ({ valid: true as const }));
+    const onResult = vi.fn();
+
+    render(
+      <BizLookupField
+        onLookup={onLookup}
+        onResult={onResult}
+        onReset={() => {}}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('사업자 등록번호'), '1234567890');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('사업자번호 형식 확인')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('NTS — 국세청 자동 조회')).toBeNull();
+    expect(screen.getByText('사업자번호')).toBeInTheDocument();
+    expect(screen.queryByText('과세 유형')).toBeNull();
+    expect(screen.queryByText('사업자 상태')).toBeNull();
+    expect(onResult).toHaveBeenCalledWith({ bizNo: '123-45-67890' });
+  });
+
   it('shows an error message when onLookup returns valid=false', async () => {
     const user = userEvent.setup();
     const onLookup = vi.fn(async () => ({ valid: false as const }));
