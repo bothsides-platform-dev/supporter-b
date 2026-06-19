@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.27.6] - 2026-06-20
+
+### Fixed
+
+- **PG사 화면에서 실시간 채팅이 연결되지 않던 문제를 고쳤어요**: PG사(파트너) 화면(`partner.supporter-b.com`)에서 채팅 실시간 연결(WebSocket)이 열리지 않아 메시지가 즉시 오가지 않던 문제를 고쳤어요. 두 도메인(구매사·PG사)이 같은 실시간 서버에 붙는데, 허용 도메인 목록에 PG사 주소가 빠져 있어 연결이 막혔던 거예요. 이제 PG사 주소도 허용 목록에 포함돼 양쪽 모두 실시간 채팅이 정상 작동해요. (배포 시 Centrifugo 컨테이너 재시작이 필요합니다.)
+
 ## [0.2.27.5] - 2026-06-20
 
 ### Fixed

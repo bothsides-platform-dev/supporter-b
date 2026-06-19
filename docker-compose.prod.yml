@@ -53,7 +53,12 @@ services:
     environment:
       CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_HMAC_SECRET:?set CENTRIFUGO_TOKEN_HMAC_SECRET in .env.production}
       CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY:?set CENTRIFUGO_API_KEY in .env.production}
-      CENTRIFUGO_CLIENT_ALLOWED_ORIGINS: https://${APP_DOMAIN:?set APP_DOMAIN in .env.production}
+      # Both public hosts serve the same bundle and connect to the same WS URL
+      # (wss://<APP_DOMAIN>/connection/websocket). Centrifugo checks the browser
+      # Origin header against this space-separated list, so BOTH the buyer apex
+      # and the PG partner subdomain must be present — otherwise PG handshakes
+      # are rejected and realtime chat silently dies for every PG user.
+      CENTRIFUGO_CLIENT_ALLOWED_ORIGINS: https://${APP_DOMAIN:?set APP_DOMAIN in .env.production} https://partner.${APP_DOMAIN}
     # Centrifugo ships a default ulimit-friendly image; no extra tuning needed
     # for a single 2GB VM with Memory engine.
 
