@@ -154,6 +154,23 @@ describe('finalizeSignup — invite EMAIL_TAKEN recovery (#8)', () => {
   });
 });
 
+describe('finalizeSignup — signIn 실패 감지', () => {
+  it('signIn이 undefined를 반환하면(getProviders 컴파일 레이스) ok:false SIGNIN_FAILED 반환', async () => {
+    draftRef.value = { ...BUYER_DRAFT_BASE };
+    completeActionMock.mockResolvedValue({
+      ok: true,
+      redirectTo: '/rfp',
+      email: 'buyer@example.com',
+      password: 'pw-123456',
+    });
+    signInMock.mockResolvedValue(undefined);
+
+    const r = await finalizeSignup();
+
+    expect(r).toEqual({ ok: false, error: 'SIGNIN_FAILED' });
+  });
+});
+
 describe('finalizeSignup — next 복귀 URL 오버라이드', () => {
   it('buyer draft에 next=/rfp/new가 있으면 redirectTo가 /rfp/new로 오버라이드됨', async () => {
     draftRef.value = { ...BUYER_DRAFT_BASE, next: '/rfp/new' };

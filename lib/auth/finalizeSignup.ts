@@ -93,8 +93,12 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   });
   clearSignupDraft();
 
-  if (signInResult?.error) {
-    console.error('[signup] signIn failed — error:', signInResult.error, 'status:', signInResult.status);
+  // signIn can return undefined when next-auth's getProviders() fails (e.g. during
+  // Turbopack lazy compilation of /api/auth/[...nextauth]). The !providers branch
+  // in next-auth/react does window.location.href + return, so signInResult is
+  // undefined — undefined?.error is falsy, masking the failure.
+  if (!signInResult || signInResult.error) {
+    console.error('[signup] signIn failed — error:', signInResult?.error, 'status:', signInResult?.status);
     return { ok: false, error: 'SIGNIN_FAILED' };
   }
   // draft의 next가 안전한 내부 경로면 서버 기본 redirectTo를 오버라이드한다.
