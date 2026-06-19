@@ -391,3 +391,40 @@ describe('signupViaWorkspaceInviteAction — 인증 게이트', () => {
     expect(u.emailVerified).toBe(true);
   });
 });
+
+describe('signupViaWorkspaceInviteAction — 마스터 이메일 차단', () => {
+  it('MASTER_EMAIL — 마스터 이메일은 초대 가입도 유저 생성 없이 차단', async () => {
+    const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
+    const MASTER = 'op@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = MASTER;
+    try {
+      const ws = await seedPgWorkspace(db, 'PG Co');
+      const admin = await seedUser(db, { email: 'admin@pg.co' });
+      const phoneId = await seedVerifiedOtp();
+      // 초대를 master 이메일로 발급 — 가드가 없으면 정상 가입돼 유저가 생긴다.
+      const { rawToken } = await seedInvitation({
+        workspaceId: ws.id,
+        invitedByUserId: admin.id,
+        invitedEmail: MASTER,
+      });
+
+      const r = await signupViaWorkspaceInviteAction({
+        email: MASTER,
+        name: TEST_NAME,
+        password: TEST_PASSWORD,
+        phone: DEFAULT_PHONE,
+        phoneVerificationId: phoneId,
+        wsInviteToken: rawToken,
+      });
+
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('MASTER_EMAIL');
+
+      const created = await db.select().from(users).where(eq(users.email, MASTER));
+      expect(created).toHaveLength(0);
+    } finally {
+      if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = ORIGINAL;
+    }
+  });
+});

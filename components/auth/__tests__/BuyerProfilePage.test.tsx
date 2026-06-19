@@ -135,6 +135,21 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
     expect(screen.getByRole('button', { name: '가입 완료' })).not.toBeDisabled();
   });
 
+  it('finalizeSignup 이 MASTER_EMAIL 을 반환하면 운영자 가입 불가 안내를 표시한다', async () => {
+    mockSignupComplete.mockResolvedValueOnce({ ok: false, error: 'MASTER_EMAIL' });
+    const user = userEvent.setup();
+    render(<BuyerProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '운영자');
+    await user.click(screen.getByRole('button', { name: 'verify-phone' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('이 이메일로는 가입할 수 없어요'),
+    );
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   // deny-path: 1·2단계 미완료(draft 불충분)로 프로필 단계에 직접 진입하면 첫 가입 화면으로
   // 돌려보낸다. freeze(useState 초기화) 이후에도 이 가드가 동작함을 보장한다(PgProfilePage 대칭).
   it('미완성 draft 로 직접 진입 시 /signup/buyer 로 redirect', () => {
