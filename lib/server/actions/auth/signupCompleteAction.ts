@@ -37,7 +37,8 @@ const BizProfileInput = z
       'unset',
     ),
   })
-  .strict();
+  .strict()
+  .refine((p) => p.status === 'active', { message: 'BIZ_STATUS_NOT_ACTIVE' });
 
 const Input = z
   .object({

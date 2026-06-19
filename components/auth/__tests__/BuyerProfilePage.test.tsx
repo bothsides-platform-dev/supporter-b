@@ -19,8 +19,12 @@ vi.mock('@/lib/server/actions/auth', () => ({
   signupViaWorkspaceInviteAction: (...a: unknown[]) => mockSignupInvite(...a),
 }));
 
-const mockSignIn = vi.fn();
-vi.mock('next-auth/react', () => ({ signIn: (...a: unknown[]) => mockSignIn(...a) }));
+// 자동 로그인은 서버사이드 signIn 액션을 거친다(finalizeSignup 내부). 클라
+// next-auth/react signIn 은 더 이상 호출되지 않는다.
+const mockLoginAction = vi.fn();
+vi.mock('@/lib/server/actions/auth/loginAction', () => ({
+  loginAction: (...a: unknown[]) => mockLoginAction(...a),
+}));
 
 let mockDraft: Record<string, unknown> = {};
 vi.mock('@/lib/auth/signup-storage', () => ({
@@ -53,6 +57,8 @@ const BASE_DRAFT = {
 import BuyerProfilePage from '@/app/(public)/signup/buyer/profile/page';
 
 describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)', () => {
+  let assign: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     mockDraft = { ...BASE_DRAFT };
     mockPush.mockReset();
@@ -63,10 +69,15 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
       email: 'kim@example.com',
       password: 'Password123!',
     });
-    mockSignIn.mockReset().mockResolvedValue({ ok: true });
+    mockLoginAction.mockReset().mockResolvedValue({ ok: true });
+    assign = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { host: 'localhost', assign },
+    });
   });
 
-  it('이름+전화 인증 후 제출 → signupCompleteAction(buyer) + signIn + push(redirectTo)', async () => {
+  it('이름+전화 인증 후 제출 → signupCompleteAction(buyer) + signIn + assign(redirectTo)', async () => {
     const user = userEvent.setup();
     render(<BuyerProfilePage />);
 
@@ -84,12 +95,12 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
         }),
       );
     });
-    await waitFor(() => expect(mockSignIn).toHaveBeenCalled());
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/rfp'));
+    await waitFor(() => expect(mockLoginAction).toHaveBeenCalled());
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/rfp'));
   });
 
   // 회귀: 가입 완료가 성공하면 finalizeSignup 이 clearSignupDraft 로 draft 를 비운다.
-  // 라이브에서는 router.push 전이가 프로필 페이지를 한 번 더 렌더하는데, 그 렌더에서
+  // 라이브에서는 window.location.assign 전이가 프로필 페이지를 한 번 더 렌더하는데, 그 렌더에서
   // draft 가 비어 ready 가 false 가 되면 가드가 /signup/buyer 로 튕겨버린다(P0 버그).
   // rerender 로 그 재렌더를 모사하고, 첫 가입 화면으로 튕기지 않음을 단언한다.
   it('가입 완료 후 draft 가 비워져도 첫 가입 화면(/signup/buyer)으로 튕기지 않는다', async () => {
@@ -100,12 +111,28 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
     await user.click(screen.getByRole('button', { name: 'verify-phone' }));
     await user.click(screen.getByRole('button', { name: '가입 완료' }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/rfp'));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/rfp'));
 
     // finalizeSignup 성공 → clearSignupDraft 로 draft 가 빈 상태에서의 재렌더.
     rerender(<BuyerProfilePage />);
 
     expect(mockReplace).not.toHaveBeenCalledWith('/signup/buyer');
+  });
+
+  it('finalizeSignup 이 예외를 던지면 에러 메시지를 표시하고 제출 버튼을 다시 활성화한다', async () => {
+    mockSignupComplete.mockRejectedValueOnce(new Error('network error'));
+    const user = userEvent.setup();
+    render(<BuyerProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '김구매');
+    await user.click(screen.getByRole('button', { name: 'verify-phone' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('가입을 완료하지 못했어요.'),
+    );
+    expect(assign).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '가입 완료' })).not.toBeDisabled();
   });
 
   // deny-path: 1·2단계 미완료(draft 불충분)로 프로필 단계에 직접 진입하면 첫 가입 화면으로
@@ -129,7 +156,7 @@ describe('BuyerProfilePage — cross-host redirect', () => {
     mockDraft = { ...BASE_DRAFT };
     mockPush.mockReset();
     mockReplace.mockReset();
-    mockSignIn.mockReset().mockResolvedValue({ ok: true });
+    mockLoginAction.mockReset().mockResolvedValue({ ok: true });
     assign = vi.fn();
     // jsdom 의 window.location.assign 은 "not implemented" 를 던지므로 스텁으로 교체.
     Object.defineProperty(window, 'location', {
@@ -158,7 +185,7 @@ describe('BuyerProfilePage — cross-host redirect', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('redirectTo 가 같은 호스트 상대경로면 기존대로 router.push 한다', async () => {
+  it('redirectTo 가 같은 호스트 상대경로도 window.location.assign 으로 전체 페이지 이동한다', async () => {
     mockSignupComplete.mockReset().mockResolvedValue({
       ok: true,
       redirectTo: '/rfp',
@@ -172,7 +199,7 @@ describe('BuyerProfilePage — cross-host redirect', () => {
     await user.click(screen.getByRole('button', { name: 'verify-phone' }));
     await user.click(screen.getByRole('button', { name: '가입 완료' }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/rfp'));
-    expect(assign).not.toHaveBeenCalled();
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/rfp'));
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });
