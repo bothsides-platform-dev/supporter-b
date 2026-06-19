@@ -27,10 +27,13 @@ vi.mock('@/lib/server/actions/auth/joinCanonicalPgWorkspaceAction', () => ({
   joinCanonicalPgWorkspaceAction: (...a: any[]) => joinCanonicalMock(...a),
 }));
 
-const signInMock = vi.fn();
-vi.mock('next-auth/react', () => ({
+// 가입 직후 자동 로그인은 loginAction(서버사이드 signIn + 레이트리밋)을 재사용한다
+// (크로스호스트 CSRF/HTTP 왕복 회피 — partner.supporter-b.com 가입에서 클라 signIn 이
+// 막히던 버그). 클라 next-auth/react signIn 은 더 이상 쓰지 않는다.
+const loginActionMock = vi.fn();
+vi.mock('@/lib/server/actions/auth/loginAction', () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  signIn: (...a: any[]) => signInMock(...a),
+  loginAction: (...a: any[]) => loginActionMock(...a),
 }));
 
 import { finalizeSignup } from '@/lib/auth/finalizeSignup';
@@ -59,7 +62,9 @@ beforeEach(() => {
   inviteActionMock.mockReset();
   completeActionMock.mockReset();
   joinCanonicalMock.mockReset();
-  signInMock.mockReset();
+  loginActionMock.mockReset();
+  // 자동 로그인 기본값: 성공.
+  loginActionMock.mockResolvedValue({ ok: true });
   draftRef.value = {};
 });
 
@@ -81,7 +86,6 @@ describe('finalizeSignup — canonical PG workspace 합류 경로', () => {
       email: 'sales@toss.im',
       password: 'pw-123456',
     });
-    signInMock.mockResolvedValue({});
 
     const r = await finalizeSignup();
 
@@ -99,7 +103,7 @@ describe('finalizeSignup — canonical PG workspace 합류 경로', () => {
     const r = await finalizeSignup();
 
     expect(r).toEqual({ ok: false, error: 'INVALID_CANONICAL_WORKSPACE' });
-    expect(signInMock).not.toHaveBeenCalled();
+    expect(loginActionMock).not.toHaveBeenCalled();
   });
 
   it('selectedPgWorkspaceId가 wsInviteToken보다 우선한다', async () => {
@@ -110,7 +114,6 @@ describe('finalizeSignup — canonical PG workspace 합류 경로', () => {
       email: 'sales@toss.im',
       password: 'pw-123456',
     });
-    signInMock.mockResolvedValue({});
 
     await finalizeSignup();
 
@@ -132,7 +135,7 @@ describe('finalizeSignup — invite EMAIL_TAKEN recovery (#8)', () => {
       redirectTo: `/login?next=${encodeURIComponent('/invite/workspace/TOK123')}`,
     });
     // must NOT attempt auto-login on a failed signup
-    expect(signInMock).not.toHaveBeenCalled();
+    expect(loginActionMock).not.toHaveBeenCalled();
   });
 
   it('does not add a redirect for non-invite EMAIL_TAKEN (normal signup)', async () => {
@@ -154,8 +157,43 @@ describe('finalizeSignup — invite EMAIL_TAKEN recovery (#8)', () => {
   });
 });
 
-describe('finalizeSignup — signIn 실패 감지', () => {
-  it('signIn이 undefined를 반환하면(getProviders 컴파일 레이스) ok:false SIGNIN_FAILED 반환', async () => {
+describe('finalizeSignup — 서버사이드 자동 로그인', () => {
+  it('가입 성공 시 loginAction을 액션이 돌려준 email/password로 호출한다', async () => {
+    draftRef.value = { ...CANONICAL_PG_DRAFT };
+    joinCanonicalMock.mockResolvedValue({
+      ok: true,
+      redirectTo: '/inbox',
+      email: 'sales@toss.im',
+      password: 'pw-123456',
+    });
+
+    await finalizeSignup();
+
+    expect(loginActionMock).toHaveBeenCalledWith({
+      email: 'sales@toss.im',
+      password: 'pw-123456',
+    });
+  });
+
+  it('초대 가입 성공 시 loginAction 호출 후 액션 redirectTo 반환', async () => {
+    draftRef.value = { ...INVITE_DRAFT };
+    inviteActionMock.mockResolvedValue({
+      ok: true,
+      redirectTo: '/inbox',
+      email: 'x@example.com',
+      password: 'pw-123456',
+    });
+
+    const r = await finalizeSignup();
+
+    expect(loginActionMock).toHaveBeenCalledWith({
+      email: 'x@example.com',
+      password: 'pw-123456',
+    });
+    expect(r).toEqual({ ok: true, redirectTo: '/inbox' });
+  });
+
+  it('loginAction이 ok:false면 SIGNIN_FAILED 반환', async () => {
     draftRef.value = { ...BUYER_DRAFT_BASE };
     completeActionMock.mockResolvedValue({
       ok: true,
@@ -163,7 +201,7 @@ describe('finalizeSignup — signIn 실패 감지', () => {
       email: 'buyer@example.com',
       password: 'pw-123456',
     });
-    signInMock.mockResolvedValue(undefined);
+    loginActionMock.mockResolvedValue({ ok: false, error: 'SIGNIN_FAILED' });
 
     const r = await finalizeSignup();
 
@@ -175,7 +213,6 @@ describe('finalizeSignup — next 복귀 URL 오버라이드', () => {
   it('buyer draft에 next=/rfp/new가 있으면 redirectTo가 /rfp/new로 오버라이드됨', async () => {
     draftRef.value = { ...BUYER_DRAFT_BASE, next: '/rfp/new' };
     completeActionMock.mockResolvedValue({ ok: true, redirectTo: '/rfp', email: 'buyer@example.com', password: 'pw-123456' });
-    signInMock.mockResolvedValue({});
 
     const r = await finalizeSignup();
 
@@ -185,7 +222,6 @@ describe('finalizeSignup — next 복귀 URL 오버라이드', () => {
   it('불안전한 next(//evil.com)는 무시하고 서버 기본값 사용', async () => {
     draftRef.value = { ...BUYER_DRAFT_BASE, next: '//evil.com' };
     completeActionMock.mockResolvedValue({ ok: true, redirectTo: '/rfp', email: 'buyer@example.com', password: 'pw-123456' });
-    signInMock.mockResolvedValue({});
 
     const r = await finalizeSignup();
 
@@ -195,7 +231,6 @@ describe('finalizeSignup — next 복귀 URL 오버라이드', () => {
   it('next 없으면 서버 기본값(/rfp) 그대로 사용', async () => {
     draftRef.value = { ...BUYER_DRAFT_BASE };
     completeActionMock.mockResolvedValue({ ok: true, redirectTo: '/rfp', email: 'buyer@example.com', password: 'pw-123456' });
-    signInMock.mockResolvedValue({});
 
     const r = await finalizeSignup();
 

@@ -22,8 +22,12 @@ vi.mock('@/lib/server/actions/auth', () => ({
   signupViaWorkspaceInviteAction: (...a: unknown[]) => mockSignupInvite(...a),
 }));
 
-const mockSignIn = vi.fn();
-vi.mock('next-auth/react', () => ({ signIn: (...a: unknown[]) => mockSignIn(...a) }));
+// 자동 로그인은 서버사이드 signIn 액션을 거친다(finalizeSignup 내부). 클라
+// next-auth/react signIn 은 더 이상 호출되지 않는다.
+const mockLoginAction = vi.fn();
+vi.mock('@/lib/server/actions/auth/loginAction', () => ({
+  loginAction: (...a: unknown[]) => mockLoginAction(...a),
+}));
 
 let mockDraftData: Record<string, unknown> = {};
 vi.mock('@/lib/auth/signup-storage', () => ({
@@ -53,7 +57,7 @@ describe('PgProfilePage', () => {
     mockPush.mockReset();
     mockSignupComplete.mockReset();
     mockSignupInvite.mockReset();
-    mockSignIn.mockReset().mockResolvedValue({ ok: true });
+    mockLoginAction.mockReset().mockResolvedValue({ ok: true });
   });
 
   it('초대 경로: email + password만 있으면 wsName/bizNo 없어도 진입 허용', () => {
@@ -181,7 +185,7 @@ describe('PgProfilePage — cross-host redirect', () => {
     mockPush.mockReset();
     mockSignupComplete.mockReset();
     mockSignupInvite.mockReset();
-    mockSignIn.mockReset().mockResolvedValue({ ok: true });
+    mockLoginAction.mockReset().mockResolvedValue({ ok: true });
     mockDraftData = {
       email: 'sales@toss.im',
       password: 'Password123!',

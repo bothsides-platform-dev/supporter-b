@@ -19,8 +19,12 @@ vi.mock('@/lib/server/actions/auth', () => ({
   signupViaWorkspaceInviteAction: (...a: unknown[]) => mockSignupInvite(...a),
 }));
 
-const mockSignIn = vi.fn();
-vi.mock('next-auth/react', () => ({ signIn: (...a: unknown[]) => mockSignIn(...a) }));
+// 자동 로그인은 서버사이드 signIn 액션을 거친다(finalizeSignup 내부). 클라
+// next-auth/react signIn 은 더 이상 호출되지 않는다.
+const mockLoginAction = vi.fn();
+vi.mock('@/lib/server/actions/auth/loginAction', () => ({
+  loginAction: (...a: unknown[]) => mockLoginAction(...a),
+}));
 
 let mockDraft: Record<string, unknown> = {};
 vi.mock('@/lib/auth/signup-storage', () => ({
@@ -65,7 +69,7 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
       email: 'kim@example.com',
       password: 'Password123!',
     });
-    mockSignIn.mockReset().mockResolvedValue({ ok: true });
+    mockLoginAction.mockReset().mockResolvedValue({ ok: true });
     assign = vi.fn();
     Object.defineProperty(window, 'location', {
       configurable: true,
@@ -91,7 +95,7 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
         }),
       );
     });
-    await waitFor(() => expect(mockSignIn).toHaveBeenCalled());
+    await waitFor(() => expect(mockLoginAction).toHaveBeenCalled());
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/rfp'));
   });
 
@@ -136,7 +140,7 @@ describe('BuyerProfilePage — cross-host redirect', () => {
     mockDraft = { ...BASE_DRAFT };
     mockPush.mockReset();
     mockReplace.mockReset();
-    mockSignIn.mockReset().mockResolvedValue({ ok: true });
+    mockLoginAction.mockReset().mockResolvedValue({ ok: true });
     assign = vi.fn();
     // jsdom 의 window.location.assign 은 "not implemented" 를 던지므로 스텁으로 교체.
     Object.defineProperty(window, 'location', {
