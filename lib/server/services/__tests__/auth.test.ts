@@ -780,7 +780,7 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
       email: 'canon-ok@example.com', name: '홍길동', plainPassword: 'Password123!',
       phone: '01099991230', phoneVerificationId: otpId, selectedPgWorkspaceId: wsId,
     });
-    expect(r).toEqual({ ok: true, email: 'canon-ok@example.com' });
+    expect(r).toEqual({ ok: true, email: 'canon-ok@example.com', workspaceName: '정규PG' });
     const [u] = await db.select().from(users).where(eq(users.email, 'canon-ok@example.com'));
     expect(u).toBeDefined();
     const memberships = await db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, u.id));

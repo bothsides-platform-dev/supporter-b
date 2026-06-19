@@ -1037,7 +1037,7 @@ describe('DrizzleWorkspaceRepository', () => {
         status: 'active',
         canonicalPgKey: 'tosspayments',
       });
-      expect(await repo.findActiveCanonicalPgById(id)).toEqual({ id, canonicalPgKey: 'tosspayments' });
+      expect(await repo.findActiveCanonicalPgById(id)).toEqual({ id, canonicalPgKey: 'tosspayments', name: 'Toss' });
     });
 
     it('returns undefined when the workspace has no canonicalPgKey', async () => {
