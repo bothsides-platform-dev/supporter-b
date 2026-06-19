@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.27.7] - 2026-06-20
+
+### Fixed
+
+- **실시간 채팅이 전혀 연결되지 않던 문제를 고쳤어요(운영 설정)**: 채팅 구독을 보호하는 비밀 헤더 설정이 Centrifugo v6에서는 인식되지 않는 옛 형식(`static_http_headers`)으로 적혀 있어, 헤더가 전송되지 않고 구매사·PG사 양쪽 모두 모든 채팅 구독이 거부되던 문제를 고쳤어요(메시지가 새로고침해야만 보였어요). v6 형식(`channel.proxy.subscribe.http.static_headers`)으로 바꾸고, 비밀값은 `.env.production`의 `CENTRIFUGO_PROXY_SECRET` 한 곳에서만 관리하도록 docker-compose가 `CENTRIFUGO_VAR_PROXY_SECRET`로 자동 연결하게 했어요(v6.3.0+ 환경변수 주입). 한쪽만 설정돼 채팅이 멈추는 실수를 막는 드리프트 가드 테스트도 추가했어요. (운영 배포: `docker compose -f docker-compose.prod.yml up -d centrifugo`로 컨테이너 재생성 후 `pm2 restart bidit`.)
+
 ## [0.2.27.6] - 2026-06-20
 
 ### Fixed

@@ -2,8 +2,11 @@
 # Operational runbook: docs/DEPLOY_LIGHTSAIL.md §Centrifugo
 # Field reference:     deploy/centrifugo/README.md
 #
-# SECRETS: Centrifugo does NOT interpolate ${VAR} here — values would be treated
-# as literal strings. All secrets come from env vars injected by docker-compose.
+# SECRETS: Centrifugo does NOT interpolate arbitrary ${VAR} here — plain values
+# are literal strings, and secrets come from env vars injected by docker-compose
+# under Centrifugo's own nested-key names. The ONE exception is map fields (e.g.
+# proxy http.static_headers): Centrifugo v6.3.0+ extrapolates ${CENTRIFUGO_VAR_*}
+# env vars INTO map values at boot — used below for the subscribe-proxy secret.
 # See README.md for the .env.production → Centrifugo env name mapping table.
 
 http_server:
@@ -33,33 +36,24 @@ channel:
       endpoint: "http://host.docker.internal:3000/api/centrifugo/subscribe"
       timeout: "5s"
 
-      # ── CENTRIFUGO_PROXY_SECRET (optional, recommended) ──────────────────────
-      # Shared-secret header that hardens the subscribe proxy endpoint.
-      # The app (app/api/centrifugo/subscribe/route.ts) validates the incoming
-      # X-Centrifugo-Proxy-Secret header with constant-time compare against
-      # the app's CENTRIFUGO_PROXY_SECRET env var. Prevents spoofed subscribes.
+      # ── Subscribe-proxy shared-secret header (CENTRIFUGO_PROXY_SECRET) ───────
+      # Hardens this endpoint (also publicly reachable via Caddy). The app
+      # (app/api/centrifugo/subscribe/route.ts) constant-time compares the incoming
+      # X-Centrifugo-Proxy-Secret header against its CENTRIFUGO_PROXY_SECRET env
+      # var; an EMPTY app secret skips the check (fail-open, backward compatible).
       #
-      # To activate — set BOTH sides atomically:
-      #
-      #   1. .env.production:
-      #        CENTRIFUGO_PROXY_SECRET=$(openssl rand -base64 32)
-      #
-      #   2. Uncomment the two blocks below and paste the SAME value literally
-      #      (no ${VAR} — Centrifugo does not interpolate env in config files):
-      #
-      # http_headers:
-      #   - X-Centrifugo-Proxy-Secret
-      # static_http_headers:
-      #   X-Centrifugo-Proxy-Secret: "<paste CENTRIFUGO_PROXY_SECRET value here>"
-      #
-      #   3. Restart in order:
-      #        pm2 restart bidit
-      #        docker compose -f docker-compose.prod.yml --env-file .env.production restart centrifugo
-      #
-      # ⚠️  Set both sides together. If the app env is set but this header is
-      #     absent, ALL subscribes are rejected → chat stops completely.
-      #     Safe direction: set this header first (app env empty = skip check).
-      # ─────────────────────────────────────────────────────────────────────────
+      # v6 NOTE (load-bearing — do NOT revert to v5): the field is `http.static_headers`
+      # (a map). The v5 key `static_http_headers` is UNKNOWN to v6 — it logs
+      # "unknown key in configuration file" and silently drops the header, so the
+      # app then rejects EVERY subscribe and realtime chat dies for everyone
+      # (prod outage 2026-06-20). The secret is NOT a literal here: v6.3.0+
+      # extrapolates ${CENTRIFUGO_VAR_*} into map values, so docker-compose bridges
+      # CENTRIFUGO_PROXY_SECRET → CENTRIFUGO_VAR_PROXY_SECRET (one source of truth).
+      # Empty value → empty header → app skips the check → chat still works.
+      # Drift guard: deploy/__tests__/centrifugo-proxy-secret.test.ts
+      http:
+        static_headers:
+          X-Centrifugo-Proxy-Secret: "${CENTRIFUGO_VAR_PROXY_SECRET}"
 
   namespaces:
     # chat namespace — channel convention: chat:conversation:<uuid>
@@ -73,6 +67,6 @@ channel:
       # Route every subscribe through the ACL proxy above.
       subscribe_proxy_enabled: true
 
-    # team namespace — channel convention: team:rfp:<rfpId>:ws:<workspaceId>
+    # team namespace — channel convention: team:rfp:<rfpId>:<workspaceId>
     - name: team
       subscribe_proxy_enabled: true
