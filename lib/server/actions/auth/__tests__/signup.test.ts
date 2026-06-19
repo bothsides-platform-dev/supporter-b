@@ -240,11 +240,101 @@ describe('signupEmailAction + verifyEmailAction', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
   });
+
+  it('MASTER_EMAIL — 마스터/운영자 이메일은 인증코드 발급 없이 차단한다', async () => {
+    const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'op@supporter-b.com';
+    try {
+      const r = await signupEmailAction({ email: 'op@supporter-b.com' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('MASTER_EMAIL');
+
+      // 인증 메일/토큰이 발급되지 않아야 한다.
+      const out = await db
+        .select()
+        .from(outboxEntries)
+        .where(eq(outboxEntries.toAddr, 'op@supporter-b.com'));
+      expect(out).toHaveLength(0);
+      const tokens = await db
+        .select()
+        .from(verificationTokens)
+        .where(eq(verificationTokens.email, 'op@supporter-b.com'));
+      expect(tokens).toHaveLength(0);
+    } finally {
+      if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = ORIGINAL;
+    }
+  });
 });
 
 function tokenFromHtml(html: string): string {
   return decodeURIComponent(html.match(/token=([^"]+)"/)?.[1] ?? '');
 }
+
+describe('checkEmailAvailableAction — 마스터 이메일 차단', () => {
+  beforeEach(async () => {
+    db = await setupActionEnv();
+  });
+  afterEach(teardownActionEnv);
+
+  it('MASTER_EMAIL — 마스터 이메일은 step1 가입가능 검사에서 차단된다', async () => {
+    const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'op@supporter-b.com';
+    try {
+      const r = await checkEmailAvailableAction({ email: 'op@supporter-b.com' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('MASTER_EMAIL');
+    } finally {
+      if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = ORIGINAL;
+    }
+  });
+});
+
+describe('signupCompleteAction — 마스터 이메일 차단', () => {
+  let verificationId: string;
+
+  beforeEach(async () => {
+    db = await setupActionEnv();
+    verificationId = await seedVerifiedOtp();
+  });
+  afterEach(teardownActionEnv);
+
+  it.each(['buyer', 'pg'] as const)(
+    'MASTER_EMAIL — %s 가입도 마스터 이메일이면 유저 생성 전에 차단한다',
+    async (wsKind) => {
+      const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
+      process.env.MASTER_ACCOUNT_EMAILS = 'op@supporter-b.com';
+      try {
+        const r = await signupCompleteAction({
+          email: 'op@supporter-b.com',
+          name: '운영자',
+          password: 'Password123!',
+          phone: DEFAULT_PHONE,
+          phoneVerificationId: verificationId,
+          wsKind,
+          wsName: '(주)테스트',
+          ...(wsKind === 'buyer'
+            ? { bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general' as const, status: 'active' as const } }
+            : { pgProfile: { bizNo: VALID_BIZ_NO } }),
+        });
+
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe('MASTER_EMAIL');
+
+        // 유저가 생성되지 않아야 한다 (orphan 방지).
+        const created = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, 'op@supporter-b.com'));
+        expect(created).toHaveLength(0);
+      } finally {
+        if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+        else process.env.MASTER_ACCOUNT_EMAILS = ORIGINAL;
+      }
+    },
+  );
+});
 
 describe('signupCompleteAction — buyer branch', () => {
   let verificationId: string;

@@ -97,7 +97,9 @@ export default function PgProfilePage() {
       setSubmitError(
         r.error === 'EMAIL_TAKEN'
           ? '이미 가입된 이메일이에요. 로그인해 주세요.'
-          : '가입을 완료하지 못했어요. 잠시 후 다시 시도해요.',
+          : r.error === 'MASTER_EMAIL'
+            ? '이 이메일로는 가입할 수 없어요. 다른 이메일을 사용해 주세요.'
+            : '가입을 완료하지 못했어요. 잠시 후 다시 시도해요.',
       );
       setSubmitting(false);
       return;

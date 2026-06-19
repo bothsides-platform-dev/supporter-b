@@ -173,6 +173,27 @@ describe('PgProfilePage', () => {
     expect(screen.getByRole('button', { name: '가입 완료' })).not.toBeDisabled();
   });
 
+  it('finalizeSignup 이 MASTER_EMAIL 을 반환하면 운영자 가입 불가 안내를 표시한다', async () => {
+    mockDraftData = {
+      email: 'op@supporter-b.com',
+      password: 'Password123!',
+      wsInviteToken: 'invite-token-abc',
+    };
+    mockSignupInvite.mockResolvedValue({ ok: false, error: 'MASTER_EMAIL' });
+
+    const user = userEvent.setup();
+    render(<PgProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '운영자');
+    await user.click(screen.getByRole('button', { name: '인증 완료' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('이 이메일로는 가입할 수 없어요'),
+    );
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   // 회귀: 가입 완료 성공 후 clearSignupDraft 로 draft 가 비면, 재렌더 시 ready 가 false 가
   // 되어 가드가 /signup/pg 로 튕긴다(buyer 와 동일 P0 버그). 튕기지 않아야 한다.
   it('가입 완료 후 draft 가 비워져도 /signup/pg 로 튕기지 않는다', async () => {

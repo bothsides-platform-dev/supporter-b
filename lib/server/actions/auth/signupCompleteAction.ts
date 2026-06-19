@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { z } from 'zod';
 import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
 import { passwordSchema } from '@/lib/auth/password-validation';
+import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import {
   notifyAdminNewSignupAfterCommit,
 } from '@/lib/server/notifications/admin-signup';
@@ -84,6 +85,9 @@ export async function signupCompleteAction(
   if (!parsed.data.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
 
   const email = normalizeEmail(parsed.data.email);
+  // 운영자/마스터 이메일은 가입 불가(비밀번호 로그인이 차단된 Google OAuth 전용 계정).
+  // 유저/워크스페이스 생성·admin 심사 알림 전에 차단해 orphan 계정을 막는다.
+  if (isMasterEmail(email)) return { ok: false, error: 'MASTER_EMAIL' };
   const normalizedPhone = normalizePhone(parsed.data.phone);
   if (!normalizedPhone) return { ok: false, error: 'INVALID_INPUT' };
 

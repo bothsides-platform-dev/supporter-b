@@ -70,6 +70,8 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'workspace.invited',
   'workspace.approved',
   'workspace.rejected',
+  'membership.approved',
+  'membership.rejected',
   'chat.message',
   'team_chat.message',
 ]);

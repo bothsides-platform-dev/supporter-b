@@ -371,3 +371,42 @@ describe('joinCanonicalPgWorkspaceAction — 인증 게이트', () => {
     if (!second.ok) expect(second.error).toBe('EMAIL_TAKEN');
   });
 });
+
+describe('joinCanonicalPgWorkspaceAction — 마스터 이메일 차단', () => {
+  it('MASTER_EMAIL — 마스터 이메일은 유저/멤버십 생성·admin 알림 없이 차단', async () => {
+    const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'op@supporter-b.com';
+    try {
+      const { notifyAdminNewMembershipAfterCommit } = await import(
+        '@/lib/server/notifications/admin-signup'
+      );
+      vi.mocked(notifyAdminNewMembershipAfterCommit).mockClear();
+
+      const ws = await seedCanonicalPgWorkspace();
+      const phoneId = await seedVerifiedOtp();
+
+      const r = await joinCanonicalPgWorkspaceAction({
+        email: 'op@supporter-b.com',
+        name: TEST_NAME,
+        password: TEST_PASSWORD,
+        phone: DEFAULT_PHONE,
+        phoneVerificationId: phoneId,
+        selectedPgWorkspaceId: ws.id,
+      });
+
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('MASTER_EMAIL');
+
+      // orphan(유저+pending 멤버십)·admin 심사 알림이 생기면 안 된다.
+      const created = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, 'op@supporter-b.com'));
+      expect(created).toHaveLength(0);
+      expect(notifyAdminNewMembershipAfterCommit).not.toHaveBeenCalled();
+    } finally {
+      if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = ORIGINAL;
+    }
+  });
+});

@@ -40,6 +40,7 @@ function PgSignupEmailForm() {
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [emailTaken, setEmailTaken] = useState(false);
+  const [masterEmail, setMasterEmail] = useState(false);
 
   const confirmError =
     passwordConfirm.length > 0
@@ -51,6 +52,7 @@ function PgSignupEmailForm() {
   const canSubmit =
     emailInput.trim() !== '' &&
     !emailTaken &&
+    !masterEmail &&
     agreements.terms &&
     agreements.privacy &&
     isPasswordValid(password) &&
@@ -63,6 +65,8 @@ function PgSignupEmailForm() {
     const check = await checkEmailAvailableAction({ email });
     if (!check.ok && check.error === 'EMAIL_TAKEN') {
       setEmailTaken(true);
+    } else if (!check.ok && check.error === 'MASTER_EMAIL') {
+      setMasterEmail(true);
     }
   };
 
@@ -71,6 +75,7 @@ function PgSignupEmailForm() {
     setAttemptedSubmit(true);
     if (!canSubmit || submitting) return;
     setEmailTaken(false);
+    setMasterEmail(false);
 
     setSubmitting(true);
     const email = emailInput.trim().toLowerCase();
@@ -84,6 +89,12 @@ function PgSignupEmailForm() {
         return;
       }
       setEmailTaken(true);
+      setSubmitting(false);
+      return;
+    }
+    if (!check.ok && check.error === 'MASTER_EMAIL') {
+      // 운영자/마스터 이메일은 가입 불가(Google OAuth 전용).
+      setMasterEmail(true);
       setSubmitting(false);
       return;
     }
@@ -149,7 +160,7 @@ function PgSignupEmailForm() {
             type="email"
             name="email"
             value={emailInput}
-            onChange={(e) => { if (!isInvited) { setEmailInput(e.target.value); setEmailTaken(false); } }}
+            onChange={(e) => { if (!isInvited) { setEmailInput(e.target.value); setEmailTaken(false); setMasterEmail(false); } }}
             onBlur={handleEmailBlur}
             readOnly={isInvited}
             autoComplete="email"
@@ -171,6 +182,11 @@ function PgSignupEmailForm() {
                 로그인
               </Link>
               하시겠어요?
+            </p>
+          )}
+          {masterEmail && !isInvited && (
+            <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)] mt-1">
+              이 이메일로는 가입할 수 없어요. 다른 이메일을 사용해 주세요.
             </p>
           )}
         </div>
