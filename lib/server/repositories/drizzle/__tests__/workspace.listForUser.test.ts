@@ -31,8 +31,8 @@ describe('DrizzleWorkspaceRepository.listForUser', () => {
     expect(list).toHaveLength(2);
     expect(list).toEqual(
       expect.arrayContaining([
-        { id: wsBuyer.id, name: '구매사A', type: 'buyer', role: 'admin', status: 'active', unreadCount: 0, hasLogo: false },
-        { id: wsPg.id, name: 'PG-B', type: 'pg', role: 'member', status: 'active', unreadCount: 0, hasLogo: false },
+        { id: wsBuyer.id, name: '구매사A', type: 'buyer', role: 'admin', status: 'active', unreadCount: 0, hasLogo: false, memberApprovalStatus: 'approved' },
+        { id: wsPg.id, name: 'PG-B', type: 'pg', role: 'member', status: 'active', unreadCount: 0, hasLogo: false, memberApprovalStatus: 'approved' },
       ]),
     );
   });
