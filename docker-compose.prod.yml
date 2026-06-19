@@ -59,6 +59,13 @@ services:
       # and the PG partner subdomain must be present — otherwise PG handshakes
       # are rejected and realtime chat silently dies for every PG user.
       CENTRIFUGO_CLIENT_ALLOWED_ORIGINS: https://${APP_DOMAIN:?set APP_DOMAIN in .env.production} https://partner.${APP_DOMAIN}
+      # Subscribe-proxy shared-secret header. The app reads CENTRIFUGO_PROXY_SECRET
+      # directly; the container receives the SAME value under the CENTRIFUGO_VAR_
+      # prefix that Centrifugo v6.3.0+ extrapolates into config.yaml's proxy
+      # http.static_headers map (deploy/centrifugo/config.yaml). ':-' makes it
+      # optional/empty — fail-open: the app skips the check when its own secret is
+      # empty. One source of truth → no half-on footgun (set one side, not both).
+      CENTRIFUGO_VAR_PROXY_SECRET: ${CENTRIFUGO_PROXY_SECRET:-}
     # Centrifugo ships a default ulimit-friendly image; no extra tuning needed
     # for a single 2GB VM with Memory engine.
 
