@@ -37,7 +37,7 @@ export async function GET(_req: Request, ctx: RouteContext): Promise<Response> {
     headers: {
       'Content-Type': row.mime,
       'Content-Length': String(body.length),
-      'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+      'Cache-Control': 'public, max-age=31536000, immutable',
     },
   });
 }

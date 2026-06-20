@@ -30,7 +30,7 @@ export type SidebarProps = {
   user: { id: string; email: string; name: string; avatarUpdatedAt: string | null };
   workspaceType: 'buyer' | 'pg';
   workspaces: WorkspaceMembershipSummary[];
-  current: { id: string; name: string; type: WorkspaceType; hasLogo: boolean };
+  current: { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null };
   isMaster?: boolean;
 };
 

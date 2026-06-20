@@ -120,6 +120,7 @@ it('GET returns image bytes and correct headers when logo exists', async () => {
   expect(res.status).toBe(200);
   expect(res.headers.get('Content-Type')).toBe('image/png');
   expect(res.headers.get('Cache-Control')).toContain('public');
+  expect(res.headers.get('Cache-Control')).toContain('immutable');
   const body = Buffer.from(await res.arrayBuffer());
   expect(body).toEqual(bytes);
 });
