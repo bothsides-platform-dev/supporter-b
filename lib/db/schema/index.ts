@@ -19,6 +19,7 @@ export * from './verification-tokens';
 export * from './attachments';
 export * from './attachment-blobs';
 export * from './workspace-logo-blobs';
+export * from './user-avatar-blobs';
 export * from './rfp-counters';
 export * from './phone-otps';
 export * from './login-attempts';

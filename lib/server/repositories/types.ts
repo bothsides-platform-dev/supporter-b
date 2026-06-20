@@ -1236,6 +1236,20 @@ export interface WorkspaceLogoRepo {
   remove(workspaceId: string, tx?: Tx): Promise<void>;
 }
 
+export interface UserAvatarRepo {
+  /** 아바타 바이트+mime — GET /api/user/[id]/avatar. 없으면 undefined. */
+  find(
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ bytes: Buffer; mime: string } | undefined>;
+  /** 존재 여부만. */
+  exists(userId: string, tx?: Tx): Promise<boolean>;
+  /** upsert(by user_id). */
+  upsert(userId: string, bytes: Buffer, mime: string, tx?: Tx): Promise<void>;
+  /** 단건 삭제. */
+  remove(userId: string, tx?: Tx): Promise<void>;
+}
+
 // ── RfpAllowedPg ──────────────────────────────────────────────────────
 export interface RfpAllowedPgRepo {
   /** RFP 에 PG 워크스페이스들을 allowlist 등록 (onConflictDoNothing). */
