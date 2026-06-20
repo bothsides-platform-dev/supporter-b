@@ -22,7 +22,9 @@ vi.mock('@/components/pending-approval/email-verify-screen', () => ({
   EmailVerifyScreen: ({ email }: { email: string }) => <div>EmailVerifyScreen:{email}</div>,
 }));
 vi.mock('@/components/pending-approval/membership-approval-waiting-screen', () => ({
-  MembershipApprovalWaitingScreen: () => <div>MembershipApprovalWaitingScreen</div>,
+  MembershipApprovalWaitingScreen: ({ initialRejected }: { initialRejected?: boolean }) => (
+    <div>MembershipApprovalWaitingScreen{initialRejected ? ':rejected' : ''}</div>
+  ),
 }));
 vi.mock('@/components/pending-approval/approval-waiting-screen', () => ({
   ApprovalWaitingScreen: () => <div>ApprovalWaitingScreen</div>,
@@ -52,6 +54,12 @@ describe('PendingApprovalPage 분기', () => {
     getMemberApprovalStatusMock.mockResolvedValue('pending_approval');
     render(await PendingApprovalPage());
     expect(screen.getByText('MembershipApprovalWaitingScreen')).toBeInTheDocument();
+  });
+
+  it('emailVerified=true + memberApprovalStatus=rejected → MembershipApprovalWaitingScreen(initialRejected) 렌더', async () => {
+    getMemberApprovalStatusMock.mockResolvedValue('rejected');
+    render(await PendingApprovalPage());
+    expect(screen.getByText('MembershipApprovalWaitingScreen:rejected')).toBeInTheDocument();
   });
 
   it('emailVerified=true + memberApprovalStatus=approved → ApprovalWaitingScreen 렌더', async () => {

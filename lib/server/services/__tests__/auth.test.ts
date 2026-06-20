@@ -786,6 +786,7 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
     const memberships = await db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, u.id));
     expect(memberships).toHaveLength(1);
     expect(memberships[0].workspaceId).toBe(wsId);
+    expect(memberships[0].approvalStatus).toBe('pending_approval');
   });
 
   it('PHONE_NOT_VERIFIED', async () => {

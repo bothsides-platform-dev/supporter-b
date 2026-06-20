@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.27.8] - 2026-06-20
+
+### Fixed
+
+- **담당자 합류 거부 시 '계정 이용 정지' 화면이 잘못 표시되던 문제를 고쳤어요**: 관리자가 담당자 계정 합류 요청을 거부했을 때, '계정 이용 정지' 안내 화면으로 이동하던 문제를 고쳤어요. 이제 '합류 요청이 거부됐어요' 안내와 로그아웃 버튼이 바로 표시돼요(기존에는 10초를 기다려야 거부 화면으로 전환됐어요).
+- **가입 이메일 중복 확인 시 운영자 계정 이메일 노출 문제를 고쳤어요**: 가입 1단계 이메일 중복 확인에서 운영자(마스터) 계정 이메일을 입력하면 `MASTER_EMAIL` 오류 코드가 반환돼 비로그인 상태에서도 운영자 이메일 목록을 유추할 수 있었어요. 이제 일반 중복 이메일과 동일한 오류 코드(`EMAIL_TAKEN`)를 반환해요.
+
+## [0.2.27.7] - 2026-06-20
+
+### Fixed
+
+- **실시간 채팅이 전혀 연결되지 않던 문제를 고쳤어요(운영 설정)**: 채팅 구독을 보호하는 비밀 헤더 설정이 Centrifugo v6에서는 인식되지 않는 옛 형식(`static_http_headers`)으로 적혀 있어, 헤더가 전송되지 않고 구매사·PG사 양쪽 모두 모든 채팅 구독이 거부되던 문제를 고쳤어요(메시지가 새로고침해야만 보였어요). v6 형식(`channel.proxy.subscribe.http.static_headers`)으로 바꾸고, 비밀값은 `.env.production`의 `CENTRIFUGO_PROXY_SECRET` 한 곳에서만 관리하도록 docker-compose가 `CENTRIFUGO_VAR_PROXY_SECRET`로 자동 연결하게 했어요(v6.3.0+ 환경변수 주입). 한쪽만 설정돼 채팅이 멈추는 실수를 막는 드리프트 가드 테스트도 추가했어요. (운영 배포: `docker compose -f docker-compose.prod.yml up -d centrifugo`로 컨테이너 재생성 후 `pm2 restart bidit`.)
+
 ## [0.2.27.6] - 2026-06-20
 
 ### Fixed

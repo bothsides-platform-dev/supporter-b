@@ -277,13 +277,14 @@ describe('checkEmailAvailableAction — 마스터 이메일 차단', () => {
   });
   afterEach(teardownActionEnv);
 
-  it('MASTER_EMAIL — 마스터 이메일은 step1 가입가능 검사에서 차단된다', async () => {
+  it('마스터 이메일은 step1 가입가능 검사에서 EMAIL_TAKEN으로 차단된다 (열거 공격 방지)', async () => {
     const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
     process.env.MASTER_ACCOUNT_EMAILS = 'op@supporter-b.com';
     try {
       const r = await checkEmailAvailableAction({ email: 'op@supporter-b.com' });
       expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.error).toBe('MASTER_EMAIL');
+      // MASTER_EMAIL 대신 EMAIL_TAKEN 반환 — 관리자 계정 이메일 열거 공격 방지
+      if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
     } finally {
       if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
       else process.env.MASTER_ACCOUNT_EMAILS = ORIGINAL;

@@ -70,6 +70,7 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'workspace.invited',
   'workspace.approved',
   'workspace.rejected',
+  // Reserved for future membership-approval notification emails — not yet wired in services/actions/templates.
   'membership.approved',
   'membership.rejected',
   'chat.message',

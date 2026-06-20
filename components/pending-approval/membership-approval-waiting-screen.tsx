@@ -7,14 +7,15 @@ import { Chip } from '@/components/primitives/Chip';
 import { checkMyMembershipApprovalAction } from '@/lib/server/actions/auth/checkMyMembershipApprovalAction';
 
 const ICON_SPAN_STYLE = { display: 'inline-flex' } as const;
+const APPROVAL_POLL_INTERVAL_MS = 10_000;
 
 function handleLogout() {
   window.location.assign('/logout');
 }
 
-export function MembershipApprovalWaitingScreen() {
+export function MembershipApprovalWaitingScreen({ initialRejected = false }: { initialRejected?: boolean } = {}) {
   const iconControls = useAnimation();
-  const [isRejected, setIsRejected] = useState(false);
+  const [isRejected, setIsRejected] = useState(initialRejected);
 
   const shake = useCallback(() => {
     if (!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
@@ -42,7 +43,7 @@ export function MembershipApprovalWaitingScreen() {
         clearInterval(id);
         setIsRejected(true);
       }
-    }, 10_000);
+    }, APPROVAL_POLL_INTERVAL_MS);
     return () => {
       active = false;
       clearInterval(id);

@@ -547,6 +547,45 @@ describe('DrizzleWorkspaceRepository', () => {
       const ids = await repo.memberUserIds(ws.id);
       expect(ids).toEqual([u.id]);
     });
+
+    it('persists approvalStatus: pending_approval to DB', async () => {
+      const ws = await seedPgWorkspace(db, '정규PG');
+      const u = await seedUser(db, { email: 'pending@add.test' });
+      await repo.addMember({ workspaceId: ws.id, userId: u.id, role: 'member', approvalStatus: 'pending_approval' });
+      const [row] = await db.select().from(workspaceMembers)
+        .where(eq(workspaceMembers.userId, u.id));
+      expect(row).toBeDefined();
+      expect(row.approvalStatus).toBe('pending_approval');
+    });
+  });
+
+  describe('getMemberApprovalStatus', () => {
+    it('returns pending_approval when member is awaiting approval', async () => {
+      const ws = await seedPgWorkspace(db, '정규PG2');
+      const u = await seedUser(db, { email: 'pending2@status.test' });
+      await repo.addMember({ workspaceId: ws.id, userId: u.id, role: 'member', approvalStatus: 'pending_approval' });
+      expect(await repo.getMemberApprovalStatus(u.id, ws.id)).toBe('pending_approval');
+    });
+
+    it('returns approved for a standard (approved) member', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const u = await seedUser(db, { email: 'approved@status.test' });
+      await repo.addMember({ workspaceId: ws.id, userId: u.id, role: 'member' });
+      expect(await repo.getMemberApprovalStatus(u.id, ws.id)).toBe('approved');
+    });
+
+    it('returns rejected when member has been rejected', async () => {
+      const ws = await seedPgWorkspace(db, '정규PG3');
+      const u = await seedUser(db, { email: 'rejected@status.test' });
+      await repo.addMember({ workspaceId: ws.id, userId: u.id, role: 'member', approvalStatus: 'rejected' });
+      expect(await repo.getMemberApprovalStatus(u.id, ws.id)).toBe('rejected');
+    });
+
+    it('returns undefined when user is not a member of the workspace', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const u = await seedUser(db, { email: 'nonmember@status.test' });
+      expect(await repo.getMemberApprovalStatus(u.id, ws.id)).toBeUndefined();
+    });
   });
 
   describe('listPendingInvitations', () => {

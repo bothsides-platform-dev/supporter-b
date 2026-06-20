@@ -9,6 +9,7 @@ import {
 } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type {
+  MemberApprovalStatus,
   Workspace,
   WorkspaceMembershipSummary,
   WorkspaceType,
@@ -488,7 +489,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         ),
       )
       .limit(1);
-    return row?.approvalStatus as 'approved' | 'pending_approval' | 'rejected' | undefined;
+    return row?.approvalStatus as MemberApprovalStatus | undefined;
   }
 
   async findInitialMembership(

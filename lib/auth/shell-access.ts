@@ -91,7 +91,7 @@ export function resolveShellAccess(
     return { kind: 'redirect', to: '/pending-approval' };
   }
   if (active.memberApprovalStatus === 'rejected') {
-    return { kind: 'redirect', to: '/suspended' };
+    return { kind: 'redirect', to: '/pending-approval' };
   }
 
   // Workspace status gate — both pages live in (public) to avoid AppShell noise.
