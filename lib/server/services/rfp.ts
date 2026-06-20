@@ -102,7 +102,7 @@ export class RfpService {
       const submitted = allBids.filter((b) => b.status === 'submitted');
       const winner = submitted.find((b) => b.id === awardedBidId);
       if (!winner) return { ok: false as const, error: 'WINNING_BID_NOT_FOUND' };
-      const losers = submitted.filter((b) => b.id !== awardedBidId);
+      const losers = submitted.filter((b) => b.pgWsId !== winner.pgWsId);
 
       try {
         await this.rfpRepo.transition(rfpId, 'awarded', { awardedBidId }, tx);
