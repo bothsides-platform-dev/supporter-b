@@ -54,9 +54,21 @@ export function NavItem({
       onClick={onNavigate}
       className={cn(navItemBase, active ? navItemActive : navItemInactive, className)}
     >
-      {Icon && <Icon size={18} />}
+      {Icon && (
+        <span className="relative inline-flex shrink-0">
+          <Icon size={18} />
+          {badge && (
+            <span
+              aria-hidden="true"
+              className="hidden group-data-[collapsible=icon]:flex absolute -top-1.5 -right-1.5 pointer-events-none"
+            >
+              {badge}
+            </span>
+          )}
+        </span>
+      )}
       <span className="group-data-[collapsible=icon]:sr-only">{label}</span>
-      {badge && <span className="ml-auto group-data-[collapsible=icon]:ml-0">{badge}</span>}
+      {badge && <span className="ml-auto group-data-[collapsible=icon]:hidden">{badge}</span>}
     </Link>
   );
 
