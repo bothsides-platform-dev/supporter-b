@@ -68,7 +68,7 @@ Slack·Teams·Discord·WhatsApp·Figma + Pusher·Ably·Phoenix·Centrifugo 공�
   - `presence: true`, `join_leave: true`, **`force_push_join_leave: true`**(없으면 join/leave가 구독자에 전달 안 됨 — 에러 0인데 점 죽음), `subscribe_proxy_enabled: true`.
   - 명시 튜닝: `presence_ttl: 30s`(전역 또는 네임스페이스), 클라 `ping_interval: 20s` / `pong_timeout: 5s` → 비정상 끊김 ghost 창 ~30–35s.
 - **self-broadcast**: 앱 진입 시 모든 인증 사용자가 자기 `presence:ws:<내ws>` 구독 → "나 접속 중" 등록 + 팀원 로스터. (`<PresenceClient/>`를 `(app)` 셸에 마운트 — 이게 **WS를 즉시 연다**, 지금은 lazy라 채팅 열어야만 연결됨.)
-- **관찰**: 각 면이 화면에 보이는 상대/PG의 `presence:ws:<V>`를 구독(인박스: 활성 대화 상대들 / 비교: 초대 PG들 / 딜룸: 상대). 전부 push.
+- **관찰 (interest-based, Slack `presence_sub` 규율)**: 각 면이 **지금 화면에 렌더되는** 상대/PG의 `presence:ws:<V>`만 구독한다 — 관계 있는 *전체*가 아니라 **viewport 관심 집합**(인박스: viewport 대화 행 / 비교: viewport PG 행 / 딜룸: 상대). 가상 스크롤로 뷰포트만, 스크롤 아웃 시 **unsubscribe**. 동시 관찰 채널 수 **cap**, 집합 변경은 **배치** subscribe/unsubscribe, **재연결 시 현재 관심 집합 재수립**. 비용이 *인구*가 아니라 *렌더하는 것*에 비례 → §6.7 ACL 메모이즈와 상보적으로 subscribe-proxy Postgres 부하를 근본에서 제한(특히 카디널리티 큰 **구매사 비교·인박스** 면). 전부 push. (Centrifugo엔 "1채널+관심 ID 리스트" 네이티브 API가 없으므로 interest는 *구독 채널 집합의 동적 관리*로 구현; 풀 단일-피드 형태는 §15 A3.)
 - **online 판정**: 상대 채널의 owner(self)가 1개 이상 연결돼 있는가. presenceStats의 단순 numClients는 **관찰자까지 세므로 쓰지 않는다** — §6.4의 `chan_info.role==='self'` 필터로 self만 카운트.
 
 ### 6.2 Layer 2 — 활동 (active / idle / fuzzy)
@@ -99,11 +99,13 @@ A1에서 관찰자는 상대 ws 채널을 **직접 구독**한다. **같은 buye
 - online 판정·로스터는 `role==='self'` 항목만 사용. 관찰자는 서로의 정체를 알 수 없다.
 - **활동 publication도 owner(self)만 송신**(§6.2) → 채널에 흐르는 publication 신원은 owner뿐. 관찰자 신원은 어디에도 안 실린다.
 
-**잔여 위험(COUNT) — 구현 시 검증·결정:**
-- identity는 막아도 `presence()`/join·leave가 관찰자 **수(count)** 를 노출하면 약한 competitorCount(대략적 경쟁 수)가 샐 수 있다. 완화책(택1/조합, §13에서 v6 동작 확인 후 확정):
-  - **(권장)** 클라이언트 `presence()` 비활성(`allow_presence_for_subscriber` off) — 클라는 enumerate 불가, online은 **join/leave push + 서버사이드 presence(X-API-Key)** 로만 판정. 관찰자 join/leave가 다른 관찰자에게 push되면 count가 새므로, **owner의 join/leave만 force_push 대상이 되도록** 채널/네임스페이스를 분리하거나 관찰자 구독을 `force_push_join_leave` 비대상으로 둔다.
-  - 위가 v6에서 깔끔히 안 되면 **A3(서버 fan-out, §15)** 로 승급 — 관찰자가 공유 채널에 아예 안 앉으므로 count까지 봉인.
-- 사용자 결정 ②(competitorCount 미노출)에 따라 **identity는 v1 필수**, count 잔여는 §13 검증 결과로 (a) 완화 적용 또는 (b) A3 승급을 택한다.
+**잔여 위험(COUNT) — 검증 완료(2026-06-21), (b)vs(c) 결정 보류:**
+- identity는 막아도 `presence()`/`presence_stats`/join·leave가 관찰자 **수(count)** 를 노출하면 약한 competitorCount(대략적 경쟁 수)가 샐 수 있다.
+- ⚠️ **검증 결과: "owner의 join/leave만 관찰자에 push" 메커니즘은 Centrifugo v6 OSS에 없다.** `join_leave`/`force_push_join_leave`는 네임스페이스 단위 boolean이라 per-client/per-role 스코핑 불가. 따라서 **A1 공유 채널에선 count 완전 봉인 불가** — `allow_presence_for_subscriber=false`로 `presence()`/`presence_stats` 벡터는 닫아도 join/leave delta(±1)는 켜면 그대로 새고, 끄면 실시간성을 잃어 사실상 A3 폴링이 된다. → **"A1 내 완화로 count 봉인"(구 (a))은 불가로 기각.**
+- 실 선택지는 둘:
+  - **(b) 수용 + 값싼 경화**: `allow_presence_for_subscriber=false`(클라 enumerate 차단) + 점은 **boolean만 렌더**(숫자 금지) + `competitorCount`는 코드/DB에 영구 부재. identity 봉인, count는 거친 *watcher* 잔여(buyer self·구경꾼·좀비 탭 포함, 노이즈·상향 편향)로 수용.
+  - **(c) A3 승급(§15)**: 관찰자가 공유 채널에 안 앉으므로 count까지 **구조적** 봉인. 비용·승급 트리거는 §15.
+- **결정 보류**: (b) vs (c)는 사용자 검토 중. identity 봉인(chan_info)은 v1 필수로 확정.
 
 ### 6.5 신뢰성 (flap / 재조정)
 
@@ -138,7 +140,7 @@ A1에서 관찰자는 상대 ws 채널을 **직접 구독**한다. **같은 buye
 | Centrifugo config | `deploy/centrifugo/config.yaml` | `presence` 네임스페이스(+force_push_join_leave) + TTL/ping 튜닝 | M1 |
 | config 드리프트 가드 | `deploy/__tests__/*.test.ts` | presence 네임스페이스 키 단언(기존 proxy-secret 테스트 미러) | M1 |
 | 전역 self-broadcast | `components/shell/*` + 신규 `<PresenceClient/>` | 자기 ws 채널 구독(표시 없음), WS eager open | M1 |
-| 관찰 Provider/훅 | 신규 `WorkspacePresenceProvider` + `useWorkspacePresence(wsId) → {online, activity}` | 활성 상대 ws 구독, `Map` 유지, 비대칭 디바운스, focus 재조정 | M1 |
+| 관찰 Provider/훅 | 신규 `WorkspacePresenceProvider` + `useWorkspacePresence(wsId) → {online, activity}` | **viewport 관심 집합**만 구독(interest-based: cap·배치 subscribe/unsubscribe·재연결 재수립, §6.1), `Map` 유지, 비대칭 디바운스, focus 재조정 | M1 |
 | 활동 훅 | 신규 `useActivityState()` | Page Visibility + 키/마우스, 7분 idle, 전이 publish | M2 |
 | idle 토큰 | `DESIGN.md`, `styles/tokens.css` | idle(흐림) 점 토큰 | M2 |
 | 인박스 목록 | `components/messages/ConversationList.tsx` | 행 아바타에 점(ThreadView 패턴) | M1 |
@@ -188,8 +190,7 @@ A1에서 관찰자는 상대 ws 채널을 **직접 구독**한다. **같은 buye
 
 1. 연결 토큰 `meta` → subscribe-proxy 요청 전달 여부.
 2. subscribe-proxy 응답 `result.info`(chan_info) → presence 항목 반영 + centrifuge-js presence 응답 노출 형태.
-3. `presence()` / join·leave가 관찰자 **count**를 노출하는지(§6.4 잔여 위험) → 완화(클라 presence off + owner-only force_push) 또는 A3 승급 결정.
-4. `force_push_join_leave` + 관찰자 read-only 조합에서 owner 전이만 push되는지.
+3. ✅ **검증 완료(2026-06-21, §6.4)**: `allow_presence_for_subscriber=false`로 `presence()`/`presence_stats` 벡터는 차단되나 join/leave delta로 count가 새며 **owner-only join/leave push는 OSS에 없음** → A1 내 count 봉인 불가. 남은 건 (b) 수용 vs (c) A3 승급 결정(보류).
 
 위가 기대대로 아니면 **서버사이드 판정 폴백**(클라 presence 차단, 서버 X-API-Key presence read만) 또는 A3로 전환.
 
@@ -202,5 +203,5 @@ A1에서 관찰자는 상대 ws 채널을 **직접 구독**한다. **같은 buye
 ## 15. 범위 밖 / 향후 (북극성)
 
 - **완전 오프라인 last-seen**("마지막 접속 2시간 전"): 영속 필요 → `workspace_presence(last_seen_at)` 또는 멤버십 컬럼 + connect/disconnect proxy. v1은 연결-idle fuzzy까지만.
-- **A3 (서버 fan-out 피드)**: 허브 fan-out 천장 또는 §13의 count 봉인이 필요하면 승급 — 관찰자가 공유 채널 대신 자기 피드 1개 구독, 리컨실리에이션 폴러(~5s `presence_stats` 스캔→diff→변화분만 피드 publish, `instrumentation.ts` 싱글턴 또는 PM2 앱). **표시 계약(`useWorkspacePresence(wsId)`)은 불변** — 전송만 교체, UI 변화 ≈0.
+- **A3 (서버 fan-out 피드 = interest-based)**: 허브 fan-out 천장 또는 §6.4의 count 봉인이 필요하면 승급 — 관찰자가 공유 채널 대신 **자기 피드 1개** 구독, **클라가 visible 로스터(관심 ws 집합)를 서버에 선언**(Slack `presence_sub` 식) → 서버가 ACL 해소 후 **그 집합만** watch·diff·push(리컨실리에이션 폴러 ~5s `presence_stats` 스캔→diff→변화분만 피드 publish, `instrumentation.ts` 싱글턴 또는 PM2 앱). 관심 집합 밖 워크스페이스는 폴 자체를 안 하므로 *thundering herd*도 자동 완화. **A1의 viewport 관심 집합(§6.1)이 그대로 A3의 interest 선언이 된다** → 이행 시 표시·관심 로직 재사용. **표시 계약(`useWorkspacePresence(wsId)`)은 불변** — 전송만 교체, UI 변화 ≈0.
 - 숨김/투명 모드.
