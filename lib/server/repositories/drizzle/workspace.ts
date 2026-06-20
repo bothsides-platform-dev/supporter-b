@@ -49,6 +49,9 @@ function rowToUser(u: UserRow, m: MemberRow): User {
     name: u.name,
     email: u.email,
     avatarColor: normalizeAvatarColor(u.avatarColor),
+    avatarUpdatedAt: u.avatarUpdatedAt
+      ? new Date(u.avatarUpdatedAt).toISOString()
+      : null,
     role: m.role,
     status: u.status === 'paused' ? 'paused' : 'active',
     emailVerified: u.emailVerified,

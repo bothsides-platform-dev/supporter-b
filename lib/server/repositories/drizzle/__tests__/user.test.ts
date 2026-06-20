@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import { users } from '@/lib/db/schema';
 import { DrizzleUserRepository } from '../user';
+import { seedUser } from './_seed';
 
 async function setup() {
   const db = await createPgliteDb();
@@ -18,6 +19,7 @@ function makeUser(over?: Partial<{ id: string; email: string; name: string }>) {
     email: over?.email ?? 'kim@toss.im',
     name: over?.name ?? 'Kim',
     avatarColor: 'ink' as const,
+    avatarUpdatedAt: null,
     role: 'member' as const,
     status: 'active' as const,
     emailVerified: false,
@@ -359,5 +361,34 @@ describe('provisionMaster', () => {
     await repo.save(makeUser({ id, email: 'master2@x.com' }));
 
     expect(await repo.provisionMaster({ email: 'master2@x.com', name: 'M2' })).toBe(id);
+  });
+});
+
+describe('DrizzleUserRepository.setAvatarUpdatedAt', () => {
+  it('findById returns avatarUpdatedAt=null for a fresh user', async () => {
+    const db = await createPgliteDb();
+    const { id } = await seedUser(db);
+    const repo = new DrizzleUserRepository(db);
+    const u = await repo.findById(id);
+    expect(u?.avatarUpdatedAt).toBeNull();
+  });
+
+  it('setAvatarUpdatedAt(Date) is reflected as an ISO string on findById', async () => {
+    const db = await createPgliteDb();
+    const { id } = await seedUser(db);
+    const repo = new DrizzleUserRepository(db);
+    await repo.setAvatarUpdatedAt(id, new Date('2026-06-21T00:00:00.000Z'));
+    const u = await repo.findById(id);
+    expect(u?.avatarUpdatedAt).toBe('2026-06-21T00:00:00.000Z');
+  });
+
+  it('setAvatarUpdatedAt(null) clears it back to null', async () => {
+    const db = await createPgliteDb();
+    const { id } = await seedUser(db);
+    const repo = new DrizzleUserRepository(db);
+    await repo.setAvatarUpdatedAt(id, new Date());
+    await repo.setAvatarUpdatedAt(id, null);
+    const u = await repo.findById(id);
+    expect(u?.avatarUpdatedAt).toBeNull();
   });
 });

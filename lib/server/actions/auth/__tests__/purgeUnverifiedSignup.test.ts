@@ -30,6 +30,7 @@ function makeUser(email: string) {
     email,
     name: 'U',
     avatarColor: 'ink' as const,
+    avatarUpdatedAt: null,
     role: 'member' as const,
     status: 'active' as const,
     emailVerified: false,

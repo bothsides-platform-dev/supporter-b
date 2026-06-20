@@ -516,6 +516,8 @@ export interface UserRepo {
   markEmailVerifiedById(userId: string, tx?: Tx): Promise<void>;
   /** 마지막 활성 워크스페이스 기억값 갱신. */
   setLastActiveWorkspace(userId: string, workspaceId: string, tx?: Tx): Promise<void>;
+  /** 프로필 사진 버전 스탬프 — 업로드 시 now(Date), 삭제 시 null. */
+  setAvatarUpdatedAt(userId: string, value: Date | null, tx?: Tx): Promise<void>;
   /**
    * 로그인용 raw auth projection — 도메인 매핑이 버리는 deletedAt·lastActiveWorkspaceId
    * 와 JWT 스탬프에 필요한 name·sessionVersion 포함.
