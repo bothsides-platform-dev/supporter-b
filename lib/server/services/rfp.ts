@@ -103,6 +103,9 @@ export class RfpService {
       const winner = submitted.find((b) => b.id === awardedBidId);
       if (!winner) return { ok: false as const, error: 'WINNING_BID_NOT_FOUND' };
       const losers = submitted.filter((b) => b.pgWsId !== winner.pgWsId);
+      // Deduplicate loser workspaces: a loser PG that had a requote has multiple
+      // submitted rounds — one notification per workspace, not per bid row.
+      const loserWsIds = [...new Set(losers.map((b) => b.pgWsId))];
 
       try {
         await this.rfpRepo.transition(rfpId, 'awarded', { awardedBidId }, tx);
@@ -139,8 +142,8 @@ export class RfpService {
 
       const rfpCode = rfp.code;
 
-      // Batch-fetch member IDs for winner + all losers in a single IN-query.
-      const allPgWsIds = [winner.pgWsId, ...losers.map((l) => l.pgWsId)];
+      // Batch-fetch member IDs for winner + all unique loser workspaces in a single IN-query.
+      const allPgWsIds = [winner.pgWsId, ...loserWsIds];
       const memberIdsMap = await this.workspaceRepo.memberUserIdsBatch(allPgWsIds, tx);
 
       // winner: in-app + email per member
@@ -182,14 +185,14 @@ export class RfpService {
         );
       }
 
-      // losers: in-app only
-      for (const loser of losers) {
-        const loserUserIds = memberIdsMap.get(loser.pgWsId) ?? [];
+      // losers: in-app only — iterate unique workspaces to avoid duplicates
+      for (const loserWsId of loserWsIds) {
+        const loserUserIds = memberIdsMap.get(loserWsId) ?? [];
         for (const userId of loserUserIds) {
           const notif: Notification = {
             id: randomUUID(),
             userId,
-            workspaceId: loser.pgWsId,
+            workspaceId: loserWsId,
             type: 'rfp.rejected',
             title: `[${rfpCode}] 이번엔 선정되지 않았어요`,
             body: '다른 PG가 선정됐어요.',
