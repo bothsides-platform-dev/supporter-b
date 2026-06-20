@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { getAttachmentRepo } from '@/lib/server/repositories/factory';
+import { getAttachmentRepo, getUserRepo } from '@/lib/server/repositories/factory';
 import { publishChatEvent } from '@/lib/server/realtime/centrifugo';
 import { getChatService } from '@/lib/server/services/chat';
 import { type ChatActionResult, requireActiveWorkspace } from './_shared';
@@ -66,6 +66,7 @@ export async function sendChatMessageAction(
     const savedAtts = data.attachmentIds.length > 0
       ? await (await getAttachmentRepo()).findByChatMessageIds([result.messageId])
       : [];
+    const author = await (await getUserRepo()).findById(ws.userId);
     await publishChatEvent(result.conversationId, {
       type: 'message',
       id: result.messageId,
@@ -74,6 +75,7 @@ export async function sendChatMessageAction(
       authorUserId: ws.userId,
       authorName: result.authorName,
       authorEmail: result.authorEmail,
+      authorAvatarUpdatedAt: author?.avatarUpdatedAt ?? null,
       rfpId: result.rfpId,
       // 낙관적 말풍선 상관관계 id — self-echo 시 pending 말풍선 정확 매칭에 사용.
       tempId: data.tempId ?? null,

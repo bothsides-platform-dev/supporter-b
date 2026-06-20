@@ -950,6 +950,7 @@ export type ChatMessageRecord = {
 export type ChatMessageWithAuthor = ChatMessageRecord & {
   authorName: string;
   authorEmail: string;
+  authorAvatarUpdatedAt: Date | null;
 };
 
 export interface ChatMessageRepo {

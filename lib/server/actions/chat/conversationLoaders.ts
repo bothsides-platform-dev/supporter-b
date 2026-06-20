@@ -34,6 +34,8 @@ export type ThreadMessage = {
   authorName: string;
   /** 작성자 이메일(users.email 조인) — 이름 호버로 노출. */
   authorEmail: string;
+  /** 작성자 프로필 사진 버전(users.avatar_updated_at, ISO) — 말풍선 아바타. */
+  authorAvatarUpdatedAt: string | null;
   sender: 'self' | 'other';
   body: string;
   rfpId: string | null;
@@ -53,7 +55,7 @@ export type LoadThreadResult = ChatActionResult<{
   counterparty: { workspaceId: string; name: string; type: WorkspaceType };
   /** 세션 사용자(클라이언트는 세션을 모른다) — 낙관적 self 말풍선이 즉시 자기
    *  이름을 그릴 때 쓴다. */
-  viewer: { userId: string; name: string };
+  viewer: { userId: string; name: string; avatarUpdatedAt: string | null };
   messages: ThreadMessage[];
   /** 스레드에 등장한 rfpId → { code, title } 맵. 메시지 RFP 칩 렌더용. */
   rfpById: Record<string, { code: string; title: string }>;
@@ -178,6 +180,9 @@ export async function loadConversationThread(
       authorUserId: m.authorUserId,
       authorName: m.authorName,
       authorEmail: m.authorEmail,
+      authorAvatarUpdatedAt: m.authorAvatarUpdatedAt
+        ? new Date(m.authorAvatarUpdatedAt).toISOString()
+        : null,
       sender: isSelf ? 'self' : 'other',
       body: m.body,
       rfpId: m.rfpId,
@@ -207,7 +212,7 @@ export async function loadConversationThread(
       name: counterpartyWs?.name ?? '상대',
       type: counterpartyType,
     },
-    viewer: { userId: ws.userId, name: viewerUser?.name ?? '' },
+    viewer: { userId: ws.userId, name: viewerUser?.name ?? '', avatarUpdatedAt: viewerUser?.avatarUpdatedAt ?? null },
     messages,
     rfpById,
   };
