@@ -81,6 +81,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.1",
+    "vite": "^8.0.16",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.2.9",
@@ -95,5 +96,16 @@
     "tsx": "^4.20.6",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
+  },
+  "pnpm": {
+    "overrides": {
+      "undici": ">=7.28.0 <8.0.0",
+      "hono": ">=4.12.25",
+      "vite": ">=8.0.16",
+      "vitest": ">=4.1.9",
+      "js-yaml": ">=4.2.0",
+      "protobufjs": ">=7.6.3",
+      "@opentelemetry/core": ">=2.8.0"
+    }
   }
 }
