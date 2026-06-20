@@ -83,7 +83,7 @@ import { formatTime } from '../format';
 import type { ThreadMessage } from '../types';
 
 const counterparty = { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const };
-const viewer = { userId: 'u-self', name: '나' };
+const viewer = { userId: 'u-self', name: '나', avatarUpdatedAt: null };
 
 // Timestamps in the T03:00Z–T14:00Z window so UTC and KST agree on the
 // calendar day (avoids a TZ-dependent date-divider flake).
@@ -93,6 +93,7 @@ const messages: ThreadMessage[] = [
     authorUserId: 'u-pg',
     authorName: 'OO페이담당',
     authorEmail: 'sales@pg.com',
+    authorAvatarUpdatedAt: null,
     sender: 'other',
     body: '안녕하세요, 제안 드립니다.',
     rfpId: null,
@@ -105,6 +106,7 @@ const messages: ThreadMessage[] = [
     authorUserId: 'u-self',
     authorName: '나',
     authorEmail: 'me@buyer.com',
+    authorAvatarUpdatedAt: null,
     sender: 'self',
     body: '확인했습니다. 감사합니다.',
     rfpId: null,
@@ -167,6 +169,7 @@ describe('ThreadView', () => {
         authorUserId: 'u-self',
         authorName: '나',
         authorEmail: 'me@buyer.com',
+        authorAvatarUpdatedAt: null,
         sender: 'self',
         body: '먼저 보낸 메시지 A',
         rfpId: null,
@@ -179,6 +182,7 @@ describe('ThreadView', () => {
         authorUserId: 'u-self',
         authorName: '나',
         authorEmail: 'me@buyer.com',
+        authorAvatarUpdatedAt: null,
         sender: 'self',
         body: '나중에 보낸 메시지 B',
         rfpId: null,
@@ -347,6 +351,7 @@ describe('ThreadView', () => {
         authorUserId: 'u-pg',
         authorName: 'OO페이담당',
         authorEmail: 'sales@pg.com',
+        authorAvatarUpdatedAt: null,
         sender: 'other',
         body: '입찰표 보냅니다.',
         rfpId: 'rfp-uuid-123',
@@ -374,6 +379,7 @@ describe('ThreadView', () => {
             authorUserId: 'u-pg',
             authorName: 'OO페이담당',
             authorEmail: 'sales@pg.com',
+            authorAvatarUpdatedAt: null,
             sender: 'other',
             body: '여기 https://example.com/rfp 와 https://example.com/bid 보세요',
             rfpId: null,
@@ -668,10 +674,12 @@ describe('ThreadView 초안 보존', () => {
 describe('ThreadView 연속 메시지 그룹핑', () => {
   const other = (id: string, body: string, createdAt: string): ThreadMessage => ({
     id, authorUserId: 'u-pg', authorName: 'OO페이담당', authorEmail: 'sales@pg.com',
+    authorAvatarUpdatedAt: null,
     sender: 'other', body, rfpId: null, createdAt, readByCounterparty: false, attachments: [],
   });
   const self = (id: string, body: string, createdAt: string): ThreadMessage => ({
     id, authorUserId: 'u-self', authorName: '나', authorEmail: 'me@buyer.com',
+    authorAvatarUpdatedAt: null,
     sender: 'self', body, rfpId: null, createdAt, readByCounterparty: false, attachments: [],
   });
 
@@ -981,6 +989,7 @@ describe('ThreadView — variant="rail" 갤러리 오버레이', () => {
       authorUserId: 'u-pg',
       authorName: 'OO페이담당',
       authorEmail: 'sales@pg.com',
+      authorAvatarUpdatedAt: null,
       sender: 'other',
       body: '첨부 보냈어요.',
       rfpId: null,
@@ -1029,7 +1038,7 @@ describe('ThreadView 작성자(담당자) 표시', () => {
     createdAt: string,
     authorEmail = `${authorUserId}@x.com`,
   ): ThreadMessage => ({
-    id, authorUserId, authorName, authorEmail, sender, body, rfpId: null,
+    id, authorUserId, authorName, authorEmail, authorAvatarUpdatedAt: null, sender, body, rfpId: null,
     createdAt, readByCounterparty: false, attachments: [],
   });
 
@@ -1122,7 +1131,7 @@ describe('variant=tabs', () => {
   const baseProps = {
     conversationId: 'conv-1',
     counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const },
-    viewer: { userId: 'u-self', name: '나' },
+    viewer: { userId: 'u-self', name: '나', avatarUpdatedAt: null },
     messages: [],
     variant: 'tabs' as const,
     rfpContext: { code: 'P-2605-0042', title: '온라인 결제 견적', status: 'sent', deadline: null },
@@ -1168,6 +1177,7 @@ describe('variant=tabs', () => {
 describe('variant=page (갤러리 버튼 없음)', () => {
   const msgWithAttachment = {
     id: 'm1', authorUserId: 'u-pg', authorName: 'PG', authorEmail: 'p@pg.com',
+    authorAvatarUpdatedAt: null,
     sender: 'other' as const, body: '파일 보냅니다', rfpId: null,
     createdAt: new Date().toISOString(), readByCounterparty: false,
     attachments: [{ id: 'a1', name: 'test.pdf', size: 100, mimeType: 'application/pdf', url: '/api/files/a1' }],
@@ -1178,7 +1188,7 @@ describe('variant=page (갤러리 버튼 없음)', () => {
       <ThreadView
         conversationId="conv-1"
         counterparty={{ workspaceId: 'pg-1', name: 'OO페이', type: 'pg' }}
-        viewer={{ userId: 'u-self', name: '나' }}
+        viewer={{ userId: 'u-self', name: '나', avatarUpdatedAt: null }}
         messages={[msgWithAttachment]}
         variant="page"
       />

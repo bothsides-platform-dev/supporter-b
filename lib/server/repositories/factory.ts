@@ -28,6 +28,7 @@ import type {
   RfpTeamMessageRepo,
   RfpTeamMessageReadRepo,
   UserRepo,
+  UserAvatarRepo,
   VerificationApplicationRepo,
   VerificationTokenRepo,
   WorkspaceLogoRepo,
@@ -61,6 +62,7 @@ type RepoBundle = {
   auditLog: AuditLogRepo;
   phoneOtp: PhoneOtpRepo;
   workspaceLogo: WorkspaceLogoRepo;
+  userAvatar: UserAvatarRepo;
   rfpAllowedPg: RfpAllowedPgRepo;
   verificationApplication: VerificationApplicationRepo;
   loginAttempt: LoginAttemptRepo;
@@ -73,7 +75,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 13;
+const BUNDLE_VERSION = 14;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,6 +114,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleAuditLogRepository } = await import('./drizzle/audit-log');
   const { DrizzlePhoneOtpRepository } = await import('./drizzle/phone-otp');
   const { DrizzleWorkspaceLogoRepository } = await import('./drizzle/workspace-logo');
+  const { DrizzleUserAvatarRepository } = await import('./drizzle/user-avatar');
   const { DrizzleRfpAllowedPgRepository } = await import('./drizzle/rfp-allowed-pg');
   const { DrizzleVerificationApplicationRepository } = await import(
     './drizzle/verification-application'
@@ -145,6 +148,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     auditLog: new DrizzleAuditLogRepository(db),
     phoneOtp: new DrizzlePhoneOtpRepository(db),
     workspaceLogo: new DrizzleWorkspaceLogoRepository(db),
+    userAvatar: new DrizzleUserAvatarRepository(db),
     rfpAllowedPg: new DrizzleRfpAllowedPgRepository(db),
     verificationApplication: new DrizzleVerificationApplicationRepository(db),
     loginAttempt: new DrizzleLoginAttemptRepository(db),
@@ -252,6 +256,9 @@ export async function getPhoneOtpRepo(): Promise<PhoneOtpRepo> {
 }
 export async function getWorkspaceLogoRepo(): Promise<WorkspaceLogoRepo> {
   return (await getBundle()).workspaceLogo;
+}
+export async function getUserAvatarRepo(): Promise<UserAvatarRepo> {
+  return (await getBundle()).userAvatar;
 }
 export async function getRfpAllowedPgRepo(): Promise<RfpAllowedPgRepo> {
   return (await getBundle()).rfpAllowedPg;

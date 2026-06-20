@@ -77,6 +77,7 @@ export class DrizzleChatMessageRepository implements ChatMessageRepo {
         ...MESSAGE_COLUMNS,
         authorName: users.name,
         authorEmail: users.email,
+        authorAvatarUpdatedAt: users.avatarUpdatedAt,
       })
       .from(chatMessages)
       .innerJoin(users, eq(users.id, chatMessages.authorUserId))

@@ -31,7 +31,7 @@ type Props = {
   conversationId: string;
   counterparty: { workspaceId: string; name: string; type: 'buyer' | 'pg' };
   /** 세션 사용자 — 낙관적 self 말풍선이 즉시 자기 이름을 보여줄 때 쓴다. */
-  viewer: { userId: string; name: string };
+  viewer: { userId: string; name: string; avatarUpdatedAt: string | null };
   messages: ThreadMessage[];
   /** rfpId(uuid) → 표시용 코드/제목. 주어진 항목만 RFP 칩을 렌더(uuid 원문 노출 금지). */
   rfpById?: Record<string, { code: string; title: string }>;
@@ -63,6 +63,7 @@ type LiveMessagePayload = {
   authorUserId?: string;
   authorName?: string;
   authorEmail?: string;
+  authorAvatarUpdatedAt?: string | null;
   rfpId?: string | null;
   createdAt?: string;
   attachments?: { id: string; name: string; size: number; mimeType: string; url: string }[];
@@ -173,6 +174,7 @@ export function ThreadView({
               authorUserId: data.authorUserId ?? '',
               authorName: data.authorName ?? '',
               authorEmail: data.authorEmail ?? '',
+              authorAvatarUpdatedAt: data.authorAvatarUpdatedAt ?? null,
               sender,
               body: data.body as string,
               rfpId: data.rfpId ?? null,
@@ -242,6 +244,7 @@ export function ThreadView({
         authorUserId: viewer.userId,
         authorName: viewer.name,
         authorEmail: '',
+        authorAvatarUpdatedAt: viewer.avatarUpdatedAt,
         sender: 'self',
         body,
         rfpId: defaultRfpId ?? null,
@@ -443,7 +446,7 @@ export function ThreadView({
               >
                 {showAuthorHeader && (
                   <div className="flex items-center gap-1.5">
-                    <Avatar name={m.authorName} size="sm" color={isSelf ? 'primary' : 'surface'} />
+                    <Avatar name={m.authorName} size="sm" color={isSelf ? 'primary' : 'surface'} userId={m.authorUserId} avatarUpdatedAt={m.authorAvatarUpdatedAt} />
                     <span
                       title={m.authorEmail || undefined}
                       className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]"

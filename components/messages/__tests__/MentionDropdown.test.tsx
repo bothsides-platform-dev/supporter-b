@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MentionDropdown } from '../MentionDropdown';
 import type { MentionItem } from '../mention-input';
@@ -8,11 +8,13 @@ const U1 = '11111111-1111-4111-8111-111111111111';
 const U2 = '22222222-2222-4222-8222-222222222222';
 const U3 = '33333333-3333-4333-8333-333333333333';
 
+afterEach(() => cleanup());
+
 const items: MentionItem[] = [
   { kind: 'all' },
-  { kind: 'member', userId: U1, name: '김민수', joinedAt: '2026-03-14T00:00:00.000Z' },
-  { kind: 'member', userId: U2, name: '김민수', joinedAt: '2026-04-01T00:00:00.000Z' },
-  { kind: 'member', userId: U3, name: '이영희', joinedAt: '2026-05-01T00:00:00.000Z' },
+  { kind: 'member', userId: U1, name: '김민수', joinedAt: '2026-03-14T00:00:00.000Z', avatarUpdatedAt: null },
+  { kind: 'member', userId: U2, name: '김민수', joinedAt: '2026-04-01T00:00:00.000Z', avatarUpdatedAt: null },
+  { kind: 'member', userId: U3, name: '이영희', joinedAt: '2026-05-01T00:00:00.000Z', avatarUpdatedAt: null },
 ];
 
 describe('MentionDropdown', () => {
@@ -51,4 +53,13 @@ describe('MentionDropdown', () => {
     await user.click(screen.getByText('이영희'));
     expect(onPick).toHaveBeenCalledWith(items[3]);
   });
+});
+
+it('renders a member photo for a member item with avatarUpdatedAt', () => {
+  const photoItems: MentionItem[] = [
+    { kind: 'member', userId: 'u-3', name: '박멘션', joinedAt: '2026-06-01T00:00:00.000Z', avatarUpdatedAt: '2026-06-21T00:00:00.000Z' },
+  ];
+  render(<MentionDropdown items={photoItems} activeIndex={0} duplicateNames={new Set()} onPick={vi.fn()} onHover={vi.fn()} />);
+  const img = screen.getByRole('img');
+  expect(img).toHaveAttribute('src', `/api/user/u-3/avatar?v=${Date.parse('2026-06-21T00:00:00.000Z')}`);
 });

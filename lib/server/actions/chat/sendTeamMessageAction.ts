@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { publishTeamChatEvent } from '@/lib/server/realtime/centrifugo';
 import { getTeamChatService } from '@/lib/server/services/team-chat';
+import { getUserRepo } from '@/lib/server/repositories/factory';
 import type { Attachment } from '@/lib/types/common';
 import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
@@ -50,12 +51,14 @@ export async function sendTeamMessageAction(
   // best-effort — 영속은 이미 완료. publishToChannel 이 자체적으로 throw 하지
   // 않지만, 그 계약이 회귀해도 전송 결과가 실패로 둔갑하지 않게 여기서도 삼킨다
   // (실패 응답을 받은 클라이언트가 재시도하면 메시지가 중복 저장된다).
+  const author = await (await getUserRepo()).findById(ws.userId);
   await publishTeamChatEvent(parsed.data.rfpId, ws.workspaceId, {
     type: 'message',
     id: result.messageId,
     body: parsed.data.body.trim(),
     authorUserId: ws.userId,
     authorName: result.authorName,
+    authorAvatarUpdatedAt: author?.avatarUpdatedAt ?? null,
     createdAt: result.createdAt,
     attachments: result.attachments,
     tempId: parsed.data.tempId ?? null,

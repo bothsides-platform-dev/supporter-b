@@ -206,7 +206,7 @@ export interface PgRequestRepo {
 }
 
 // ── Workspace ─────────────────────────────────────────────────────────
-export type TeamMember = { userId: string; name: string; joinedAt: string };
+export type TeamMember = { userId: string; name: string; joinedAt: string; avatarUpdatedAt: string | null };
 
 export interface WorkspaceRepo {
   /** 워크스페이스 + 멤버 동기화. */
@@ -516,6 +516,8 @@ export interface UserRepo {
   markEmailVerifiedById(userId: string, tx?: Tx): Promise<void>;
   /** 마지막 활성 워크스페이스 기억값 갱신. */
   setLastActiveWorkspace(userId: string, workspaceId: string, tx?: Tx): Promise<void>;
+  /** 프로필 사진 버전 스탬프 — 업로드 시 now(Date), 삭제 시 null. */
+  setAvatarUpdatedAt(userId: string, value: Date | null, tx?: Tx): Promise<void>;
   /**
    * 로그인용 raw auth projection — 도메인 매핑이 버리는 deletedAt·lastActiveWorkspaceId
    * 와 JWT 스탬프에 필요한 name·sessionVersion 포함.
@@ -948,6 +950,7 @@ export type ChatMessageRecord = {
 export type ChatMessageWithAuthor = ChatMessageRecord & {
   authorName: string;
   authorEmail: string;
+  authorAvatarUpdatedAt: Date | null;
 };
 
 export interface ChatMessageRepo {
@@ -991,6 +994,7 @@ export type RfpTeamMessageRecord = {
  *  exclusive-arc attachments table (empty array when none). */
 export type RfpTeamMessageWithAuthor = RfpTeamMessageRecord & {
   authorName: string;
+  authorAvatarUpdatedAt: Date | null;
   attachments: Attachment[];
 };
 
@@ -1234,6 +1238,20 @@ export interface WorkspaceLogoRepo {
   upsert(workspaceId: string, bytes: Buffer, mime: string, tx?: Tx): Promise<void>;
   /** 단건 삭제. */
   remove(workspaceId: string, tx?: Tx): Promise<void>;
+}
+
+export interface UserAvatarRepo {
+  /** 아바타 바이트+mime — GET /api/user/[id]/avatar. 없으면 undefined. */
+  find(
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ bytes: Buffer; mime: string } | undefined>;
+  /** 존재 여부만. */
+  exists(userId: string, tx?: Tx): Promise<boolean>;
+  /** upsert(by user_id). */
+  upsert(userId: string, bytes: Buffer, mime: string, tx?: Tx): Promise<void>;
+  /** 단건 삭제. */
+  remove(userId: string, tx?: Tx): Promise<void>;
 }
 
 // ── RfpAllowedPg ──────────────────────────────────────────────────────

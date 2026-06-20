@@ -8,7 +8,7 @@ import { GlobalShortcuts } from '@/components/shell/GlobalShortcuts';
 import { SentryUserContext } from '@/components/observability/SentryUserContext';
 import { ChannelTalkHideButton } from '@/components/shell/ChannelTalkHideButton';
 import { auth } from '@/auth';
-import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import { getWorkspaceRepo, getUserRepo } from '@/lib/server/repositories/factory';
 import { resolveShellAccess } from '@/lib/auth/shell-access';
 import { getDbSessionVersion, getDbEmailVerified } from '@/lib/auth/session-version-db';
 import { setSentryUser } from '@/lib/observability/sentry-user';
@@ -78,6 +78,8 @@ export default async function AppLayout({
   // A 'render' decision guarantees a complete authenticated session (see
   // resolveShellAccess) — TS can't link the two, so narrow once here.
   const user = session!.user!;
+  const me = await (await getUserRepo()).findById(user.id);
+  const avatarUpdatedAt = me?.avatarUpdatedAt ?? null;
 
   // Tag the server isolation scope for this request (RSC render errors). Minimal
   // fields only — see lib/observability/sentry-user. The client mirror below
@@ -99,6 +101,7 @@ export default async function AppLayout({
             id: user.id,
             email: user.email,
             name: user.name ?? user.email,
+            avatarUpdatedAt,
           },
           workspaceType: active.type,
           workspaces,
@@ -107,8 +110,10 @@ export default async function AppLayout({
         }}
         header={{
           user: {
+            id: user.id,
             name: user.name ?? user.email,
             email: user.email,
+            avatarUpdatedAt,
           },
           workspaceType: active.type,
         }}

@@ -33,6 +33,7 @@ const TEAM_MESSAGE_COLUMNS = {
   body: rfpTeamMessages.body,
   createdAt: rfpTeamMessages.createdAt,
   authorName: users.name,
+  authorAvatarUpdatedAt: users.avatarUpdatedAt,
 } as const;
 
 export class DrizzleRfpTeamMessageRepository implements RfpTeamMessageRepo {

@@ -27,7 +27,7 @@ import type {
 } from '@/lib/types/workspace';
 
 export type SidebarProps = {
-  user: { id: string; email: string; name: string };
+  user: { id: string; email: string; name: string; avatarUpdatedAt: string | null };
   workspaceType: 'buyer' | 'pg';
   workspaces: WorkspaceMembershipSummary[];
   current: { id: string; name: string; type: WorkspaceType; hasLogo: boolean };
@@ -117,7 +117,7 @@ function SidebarBody({
         <SidebarFooterControls className="min-w-0 flex-1" />
         <div className="ml-auto md:hidden">
           <UserMenu
-            user={{ name: user.name, email: user.email }}
+            user={{ id: user.id, name: user.name, email: user.email, avatarUpdatedAt: user.avatarUpdatedAt }}
             workspaceType={workspaceType}
           />
         </div>

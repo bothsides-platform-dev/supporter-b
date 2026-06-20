@@ -32,7 +32,7 @@ export function ThreadPane({
   const result = use(getThreadPromise(conversationId));
   const counterparty = result.ok ? result.counterparty : counterpartyFallback;
   const messages = result.ok ? result.messages : [];
-  const viewer = result.ok ? result.viewer : { userId: '', name: '' };
+  const viewer = result.ok ? result.viewer : { userId: '', name: '', avatarUpdatedAt: null };
   const rfpById = result.ok ? result.rfpById : undefined;
   return (
     <ThreadView

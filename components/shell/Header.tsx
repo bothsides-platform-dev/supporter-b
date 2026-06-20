@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import type { WorkspaceType } from '@/lib/types/workspace';
 
 type HeaderProps = {
-  user: { name: string; email: string };
+  user: { id: string; name: string; email: string; avatarUpdatedAt: string | null };
   workspaceType: WorkspaceType;
   className?: string;
 };
