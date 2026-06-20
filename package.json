@@ -105,7 +105,9 @@
       "vitest": ">=4.1.9",
       "js-yaml": ">=4.2.0",
       "protobufjs": ">=7.6.3",
-      "@opentelemetry/core": ">=2.8.0"
+      "@opentelemetry/core": ">=2.8.0",
+      "postcss": ">=8.5.10",
+      "esbuild": ">=0.28.1"
     }
   }
 }
