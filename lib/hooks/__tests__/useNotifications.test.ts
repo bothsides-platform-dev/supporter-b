@@ -206,9 +206,13 @@ describe('useNotifications — 라이브 알림 도착 시 toast', () => {
   beforeEach(() => {
     vi.resetModules()
     EventSourceStub.latest = null
+    // 각 테스트는 기본 경로에서 시작한다(F3 경로 게이트가 이전 테스트 상태에
+    // 오염되지 않도록).
+    window.history.pushState({}, '', '/')
   })
   afterEach(() => {
     vi.clearAllMocks()
+    vi.restoreAllMocks()
   })
 
   function makeNotif(id: string, title: string): unknown {
@@ -290,5 +294,64 @@ describe('useNotifications — 라이브 알림 도착 시 toast', () => {
     })
 
     expect(toast).not.toHaveBeenCalled()
+  })
+
+  it('알림 목록 페이지(/notifications)에서는 toast 하지 않는다 (F3)', async () => {
+    window.history.pushState({}, '', '/notifications')
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(makeNotif('n-route', '경로 알림')),
+        }),
+      )
+    })
+
+    expect(toast).not.toHaveBeenCalled()
+  })
+
+  it('coalesce 윈도우 내 연속 알림은 toast 를 1회만 발화한다 (F2)', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    for (const id of ['c-1', 'c-2', 'c-3']) {
+      await act(async () => {
+        EventSourceStub.latest?.onmessage?.(
+          new MessageEvent('message', {
+            data: JSON.stringify(makeNotif(id, id)),
+          }),
+        )
+      })
+    }
+
+    expect(toast).toHaveBeenCalledTimes(1)
+  })
+
+  it('coalesce 윈도우가 지나면 다시 toast 한다 (F2)', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(makeNotif('w-1', '첫째')),
+        }),
+      )
+    })
+
+    nowSpy.mockReturnValue(1_000_000 + 10_000)
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(makeNotif('w-2', '둘째')),
+        }),
+      )
+    })
+
+    expect(toast).toHaveBeenCalledTimes(2)
   })
 })
