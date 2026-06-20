@@ -110,7 +110,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     }
 
     const [logoRow] = await db
-      .select({ workspaceId: workspaceLogoBlobs.workspaceId })
+      .select({ updatedAt: workspaceLogoBlobs.updatedAt })
       .from(workspaceLogoBlobs)
       .where(eq(workspaceLogoBlobs.workspaceId, ws.id))
       .limit(1);
@@ -122,6 +122,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       bizProfile,
       members,
       hasLogo: !!logoRow,
+      logoUpdatedAt: logoRow?.updatedAt ? new Date(logoRow.updatedAt).toISOString() : null,
       createdAt: new Date(ws.createdAt).toISOString(),
     };
   }
@@ -173,7 +174,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     tx?: Tx,
   ): Promise<WorkspaceMembershipSummary[]> {
     const db = this.h(tx);
-    return (await db
+    const rows = await db
       .select({
         id: workspaces.id,
         name: workspaces.name,
@@ -190,16 +191,21 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
             AND read_at IS NULL
         )`,
         hasLogo: workspaces.hasLogo,
+        logoUpdatedAt: workspaces.logoUpdatedAt,
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
       .where(eq(workspaceMembers.userId, userId))
-      .orderBy(asc(workspaceMembers.joinedAt))) as WorkspaceMembershipSummary[];
+      .orderBy(asc(workspaceMembers.joinedAt));
+    return rows.map((r: { logoUpdatedAt: Date | null }) => ({
+      ...r,
+      logoUpdatedAt: r.logoUpdatedAt ? new Date(r.logoUpdatedAt).toISOString() : null,
+    })) as WorkspaceMembershipSummary[];
   }
 
   async listAllWorkspacesForMaster(tx?: Tx): Promise<WorkspaceMembershipSummary[]> {
     const db = this.h(tx);
-    return (await db
+    const rows = await db
       .select({
         id: workspaces.id,
         name: workspaces.name,
@@ -209,11 +215,16 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         memberApprovalStatus: sql<'approved'>`'approved'`,
         unreadCount: sql<number>`0`,
         hasLogo: workspaces.hasLogo,
+        logoUpdatedAt: workspaces.logoUpdatedAt,
       })
       .from(workspaces)
       .where(eq(workspaces.status, 'active'))
       .orderBy(asc(workspaces.name))
-      .limit(500)) as WorkspaceMembershipSummary[];
+      .limit(500);
+    return rows.map((r: { logoUpdatedAt: Date | null }) => ({
+      ...r,
+      logoUpdatedAt: r.logoUpdatedAt ? new Date(r.logoUpdatedAt).toISOString() : null,
+    })) as WorkspaceMembershipSummary[];
   }
 
   async isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean> {
@@ -314,9 +325,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return rows.map((r) => r.email);
   }
 
-  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean }[]> {
+  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean; logoUpdatedAt: string | null }[]> {
     const rows = (await this._db
-      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey, hasLogo: workspaces.hasLogo })
+      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey, hasLogo: workspaces.hasLogo, logoUpdatedAt: workspaces.logoUpdatedAt })
       .from(workspaces)
       .where(
         and(
@@ -325,8 +336,12 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           isNotNull(workspaces.canonicalPgKey),
         ),
       )
-      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null; hasLogo: boolean }[];
-    return rows.map((r) => ({ ...r, canonicalPgKey: r.canonicalPgKey! }));
+      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null; hasLogo: boolean; logoUpdatedAt: Date | null }[];
+    return rows.map((r) => ({
+      ...r,
+      canonicalPgKey: r.canonicalPgKey!,
+      logoUpdatedAt: r.logoUpdatedAt ? new Date(r.logoUpdatedAt).toISOString() : null,
+    }));
   }
 
   async search(
@@ -616,6 +631,11 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async setHasLogo(workspaceId: string, hasLogo: boolean, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.update(workspaces).set({ hasLogo }).where(eq(workspaces.id, workspaceId));
+  }
+
+  async setLogoUpdatedAt(workspaceId: string, value: Date | null, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db.update(workspaces).set({ logoUpdatedAt: value }).where(eq(workspaces.id, workspaceId));
   }
 
   async createBare(

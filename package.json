@@ -24,7 +24,8 @@
     "db:seed": "tsx scripts/seed.ts",
     "backfill:sample": "tsx scripts/backfill-sample-rfp.ts",
     "backfill:sample-pg": "tsx scripts/backfill-sample-pg-rfp.ts",
-    "backfill:pg-logos": "tsx scripts/backfill-pg-logos.ts"
+    "backfill:pg-logos": "tsx scripts/backfill-pg-logos.ts",
+    "backfill:logo-updated-at": "tsx scripts/backfill-logo-updated-at.ts"
   },
   "dependencies": {
     "@axiomhq/pino": "^1.6.1",

@@ -12,7 +12,7 @@ function makeCounterparty(over: Partial<Extract<InboxListItem, { kind: 'counterp
     kind: 'counterparty',
     key: 'c:conv-1',
     conversationId: 'conv-1',
-    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', hasLogo: false },
+    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', hasLogo: false, logoUpdatedAt: null },
     rfpId: null,
     rfpCode: null,
     rfpTitle: null,

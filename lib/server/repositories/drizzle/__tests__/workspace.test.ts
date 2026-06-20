@@ -1132,6 +1132,30 @@ describe('DrizzleWorkspaceRepository', () => {
     });
   });
 
+  describe('setLogoUpdatedAt + logoUpdatedAt exposure', () => {
+    it('findById exposes logoUpdatedAt (ISO) from the logo blob, null when absent', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      expect((await repo.findById(ws.id))!.logoUpdatedAt).toBeNull();
+      await db.insert(workspaceLogoBlobs).values({
+        workspaceId: ws.id,
+        bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+        mime: 'image/png',
+        updatedAt: new Date('2026-06-21T00:00:00.000Z'),
+      });
+      expect((await repo.findById(ws.id))!.logoUpdatedAt).toBe('2026-06-21T00:00:00.000Z');
+    });
+
+    it('setLogoUpdatedAt writes/clears workspaces.logo_updated_at and listForUser reflects it', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const u = await seedUser(db);
+      await seedMembership(db, ws.id, u.id);
+      await repo.setLogoUpdatedAt(ws.id, new Date('2026-06-21T00:00:00.000Z'));
+      expect((await repo.listForUser(u.id))[0].logoUpdatedAt).toBe('2026-06-21T00:00:00.000Z');
+      await repo.setLogoUpdatedAt(ws.id, null);
+      expect((await repo.listForUser(u.id))[0].logoUpdatedAt).toBeNull();
+    });
+  });
+
   describe('removeAllMembershipsForUser', () => {
     it('removes every membership for the user, leaving other members', async () => {
       const ws1 = await seedBuyerWorkspace(db);

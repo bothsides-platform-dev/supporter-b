@@ -234,7 +234,7 @@ export interface WorkspaceRepo {
   /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
-  listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean }[]>;
+  listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean; logoUpdatedAt: string | null }[]>;
   /** 이름 검색 (isDemo 제외) — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500). */
   search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string }[]>;
   /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
@@ -310,6 +310,8 @@ export interface WorkspaceRepo {
   rename(workspaceId: string, name: string, tx?: Tx): Promise<void>;
   /** hasLogo 플래그 갱신. */
   setHasLogo(workspaceId: string, hasLogo: boolean, tx?: Tx): Promise<void>;
+  /** 로고 버전 스탬프 — 업로드 시 now(Date), 삭제 시 null. */
+  setLogoUpdatedAt(workspaceId: string, value: Date | null, tx?: Tx): Promise<void>;
   /**
    * 경량 workspace 생성 (save()는 멤버 동기화까지 하는 무거운 버전 — 이건 단순 insert).
    * 멤버십/컬럼/온보딩 시드는 호출부 책임.

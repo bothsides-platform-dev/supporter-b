@@ -32,7 +32,7 @@ import { RecentMessagesPanel } from '../RecentMessagesPanel';
 function makeConv(overrides?: Partial<ConversationListItem>): InboxListItem {
   const c: ConversationListItem = {
     conversationId: 'conv-abc',
-    counterparty: { workspaceId: 'ws-pg', name: 'NICE페이', type: 'pg', hasLogo: false },
+    counterparty: { workspaceId: 'ws-pg', name: 'NICE페이', type: 'pg', hasLogo: false, logoUpdatedAt: null },
     rfpId: null,
     rfpCode: null,
     rfpTitle: null,
@@ -79,7 +79,7 @@ describe('RecentMessagesPanel', () => {
     const convs = Array.from({ length: 5 }, (_, i) =>
       makeConv({
         conversationId: `conv-${i}`,
-        counterparty: { workspaceId: `ws-${i}`, name: `회사 ${i}`, type: 'pg', hasLogo: false },
+        counterparty: { workspaceId: `ws-${i}`, name: `회사 ${i}`, type: 'pg', hasLogo: false, logoUpdatedAt: null },
       }),
     );
     render(<RecentMessagesPanel items={convs} unreadCount={0} />);

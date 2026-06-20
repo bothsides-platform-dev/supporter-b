@@ -10,6 +10,7 @@ export type Workspace = {
   bizProfile?: BizProfile;
   members: User[];
   hasLogo: boolean;
+  logoUpdatedAt: string | null;
   createdAt: string;
 };
 
@@ -26,4 +27,5 @@ export type WorkspaceMembershipSummary = {
   memberApprovalStatus: MemberApprovalStatus;
   unreadCount: number;
   hasLogo: boolean;
+  logoUpdatedAt: string | null;
 };

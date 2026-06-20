@@ -28,6 +28,7 @@ export type Counterparty = {
   type: CounterpartyType;
   workspaceId?: string;
   hasLogo?: boolean;
+  logoUpdatedAt?: string | null;
 };
 
 export type RfpContext = {

@@ -15,7 +15,7 @@ import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
 export type ConversationListItem = {
   conversationId: string;
-  counterparty: { workspaceId: string; name: string; type: WorkspaceType; hasLogo: boolean };
+  counterparty: { workspaceId: string; name: string; type: WorkspaceType; hasLogo: boolean; logoUpdatedAt: string | null };
   rfpId: string | null;
   rfpCode: string | null;
   rfpTitle: string | null;
@@ -108,6 +108,7 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
           name: counterpartyWs?.name ?? '상대',
           type: counterpartyType,
           hasLogo: counterpartyWs?.hasLogo ?? false,
+          logoUpdatedAt: counterpartyWs?.logoUpdatedAt ?? null,
         },
         rfpId,
         rfpCode: rfp?.code ?? null,
