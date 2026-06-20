@@ -20,12 +20,12 @@
 - **online 정의**: 앱 탭이 열려 있는 동안(어느 페이지든) 온라인. 닫으면 오프라인.
 - 4개 면 노출: 1:1 상대방(인박스 목록·홈 위젯·스레드 헤더) / 같은 워크스페이스 팀원 / 구매사가 보는 각 초대 PG / 딜룸 참여자.
 - **3-state 점**: active(초록) / idle(흐림, "N분 전 활동") / offline(표시 없음).
+- **offline last-seen**: 연결 끊긴 뒤에도 "마지막 접속 N전"(버킷) 표시 — 영속(`workspace_presence`), §6.3·M3.
 - **전부 push**(폴링 없음).
 
 **비목표**
-- 완전 오프라인(연결 끊김) last-seen("마지막 접속 2시간 전") — 영속(DB) 필요, §14.
 - 숨김/투명 모드(invisible) — always-on.
-- 멀티노드 / 무깜빡임 배포(Redis) — §6.5, v1은 Memory 수용.
+- 멀티노드 / 무깜빡임 배포(Redis) — §6.6, v1은 Memory 수용.
 - **입찰 내용 봉인은 본 설계 범위 밖** — 견적 금액·내용 비공개는 기존대로 유지. 본 설계는 *온라인 점*만 다루며 그 점에 한해 PG↔PG 노출을 허용한다(§3).
 
 ## 3. 확정된 결정 (브레인스토밍 기록)
@@ -39,6 +39,7 @@
 | 프라이버시 | always-on, 숨김 없음 / fuzzy last-seen은 **연결-idle 한정**(무DB) | 사용자 |
 | 인프라 | v1 **Memory 엔진**(Redis 미도입), 배포 시 ~수십초 점 공백 수용 | 사용자 |
 | **PG↔PG presence** | **노출 허용**(점 한정) | 사용자(2026-06-21) — 봉인 기계장치 제거, 단순화 |
+| **offline last-seen** | **포함**(버킷 "N전", 영속 `workspace_presence`) | 사용자(2026-06-21) — DB 부하 최소 설계(§6.3) |
 | 아키텍처 | **A1** (워크스페이스 채널 self-broadcast + 관찰) | §6 |
 
 ## 4. 업계 표준 근거 (조사 요약)
@@ -77,29 +78,40 @@ Slack·Teams·Discord·WhatsApp·Figma + Pusher·Ably·Phoenix·Centrifugo 공�
 - **상태 전이 publish**: 클라가 active↔idle 전이 시 자기 채널에 `{ state, at }` publish. 관찰자는 publish하지 않음(read-only).
 - **재조정**: 늦게 구독한 관찰자는 (재)구독 onSubscribed 시 owner 현재 상태를 presence info(또는 직전 publication)로 동기화.
 - **3-state 점**: V의 owner(workspaceId===V) 엔트리 중 **하나라도 active** → active(초록); 있으나 전부 idle → idle(흐림 + "N분 전 활동", `at`에서 클라 계산); 0 → offline.
-- **fuzzy는 무DB**: `at`은 연결 중에만 의미 — presence/publication에 실려 휘발. 끊기면 offline. 완전 오프라인 last-seen은 §14.
+- **fuzzy는 무DB**: `at`은 연결 중에만 의미 — presence/publication에 실려 휘발. 끊기면 offline → 그 뒤 "마지막 접속 N전"은 영속 필요(§6.3).
 - **새 디자인 토큰**: idle 점(흐림/중립). `DESIGN.md` + `styles/tokens.css`(현재 present/absent 2단계뿐).
 - 면별: 구매사-PG·딜룸 3-state. 팀원 면은 3-state 또는 binary 택1(기본 3-state).
 
-### 6.3 표시 단위 (granularity)
+### 6.3 Layer 3 — offline last-seen (영속)
+
+연결이 끊기면 presence가 증발(휘발)하므로 offline의 "마지막 접속 N전"은 **영속**이 필요하다. 원칙: **online 중엔 아무것도 안 쓴다**(라이브 점이 가림) → last_seen은 **offline 전환 시 1회만** 기록 → 쓰기 = `O(세션 종료)`. (DB 부하 최소화의 핵심 레버.)
+
+- **저장**: 신규 좁은 테이블 `workspace_presence(workspace_id PK, last_seen_at timestamptz)`, **`last_seen_at` 보조 인덱스 없음** + `fillfactor 80` → UPDATE가 **HOT**(인덱스·vacuum churn ≈0). 읽기-핫 테이블(workspaces/memberships)엔 컬럼 안 붙임(쓰기 churn 격리). **per-워크스페이스 한 행**(회사 단위; per-user offline last-seen은 후속).
+- **쓰기 트리거**: **Centrifugo disconnect proxy**(연결 끊김 시 앱 콜백) → 세션당 1회. 멱등 upsert `last_seen_at = GREATEST(기존, now())`(멀티탭/순서 무관, 읽기 전 SELECT 불필요). *대안*: footgun 회피 시 클라 스로틀 하트비트(~2–5분) — 약간 더 쓰지만 새 Centrifugo 표면 0·크래시 견고. 둘 다 현 규모 미미.
+- **읽기/표시**: online이면 라이브 점, offline이면 `workspace_presence` 읽어 **버킷**("방금/N분 전/N시간 전/N일 전")으로 표기 — 정확 timestamp 비노출(프라이버시·부하↓). 쓰기도 버킷 안 바뀌면 skip.
+- **blink 면역(보너스)**: last_seen은 Postgres라 **Centrifugo 재시작(§6.6 blink)에도 생존** — 배포 중 online이 잠깐 offline로 보여도 last-seen은 유지.
+- **⚠️ 프라이버시 강도**: last-seen은 binary online보다 노출적(잠수 기간). PG↔PG 노출 허용(§3) 하에선 경쟁 PG도 "저 PG N일 잠수"를 봄 → 더 강한 신호. 거슬리면 §15 숨김 모드와 묶어 last-seen 토글 검토.
+- **첫 DDL**: 본 설계 최초의 DDL(이전 'DDL 0' 무효) — additive 테이블 1개. M3.
+
+### 6.4 표시 단위 (granularity)
 
 - **상대/PG 닿음** = `presence:ws:<V>`에 owner 엔트리 ≥1 (**binary**). 어느 개인인지까지는 표시 안 함(원하면 per-user도 가능 — workspaceId+userId 둘 다 info에 있음).
 - **팀원 로스터** = `presence:ws:<내ws>`에서 `workspaceId===내ws`인 엔트리의 userId(per-user). self는 자기 userId로 제외.
 - **딜룸 참여자 로스터** = 1:1 `chat:conversation:<id>` presence(상대측) + (M2) `team:rfp:<id>:<내ws>` presence(팀측). self는 userId로 제외.
 
-### 6.4 신뢰성 (flap / 재조정)
+### 6.5 신뢰성 (flap / 재조정)
 
 - **비대칭 flap 디바운스**: online은 join/subscribed 시 **즉시**, offline은 leave 후 **4초 유예** — join/subscribed/reconnect가 유예 취소. (딜룸이 **인터셉트 모달**이라 열고닫을 때 재구독=깜빡임, 워크스페이스 전환은 호스트 넘는 하드 재연결 → 디바운스 필수.)
 - **스냅샷 재조정**: 모든 면에서 `subscribed`/reconnect/**window focus·visibilitychange** 시 `presence()`로 재계산 — at-most-once join/leave 유실 자가 치유.
 - ghost 창: 비정상 끊김은 ping/pong(~20–25s) + 잔여 TTL(~30s)로 ~30–35s 내 offline. 약속을 "정상 종료=즉시, 크래시=~30s 내 offline"로 명시(SCREEN_DESIGN).
 
-### 6.5 인프라 (v1 = Memory)
+### 6.6 인프라 (v1 = Memory)
 
 - **Memory 엔진 유지.** presence는 순수 장식(§9 억제 불변으로 알림 무관)이라 수용: **매 `docker compose up -d centrifugo` 시 모든 점이 ~5–30s 사라졌다 자동 복구**.
 - **런북 단언**(`docs/DEPLOY_LIGHTSAIL.md`): "Memory presence는 **단일 Centrifugo 프로세스에서만 정확**." 멀티노드/cluster 금지.
 - **업그레이드 경로**: 멀티노드·무깜빡임이 필요해지면 `presence_manager:{ enabled:true, type:redis }` + Valkey 컨테이너. DDL/코드 변화 없음.
 
-### 6.6 토큰 / 재연결 경화
+### 6.7 토큰 / 재연결 경화
 
 - eager `<PresenceClient/>`로 **모든 탭이 WS를 상시 보유** → Centrifugo 재시작 시 전 탭이 동시에 재연결.
 - `connection-token` 라우트: 토큰을 **세션/JWT 클레임에서 발급**(핫패스 Postgres 조회 제거 또는 revocation ~수초 캐시).
@@ -128,6 +140,9 @@ Slack·Teams·Discord·WhatsApp·Figma + Pusher·Ably·Phoenix·Centrifugo 공�
 | 스레드 헤더 | `components/messages/ThreadView.tsx` | 점 출처를 `useWorkspacePresence`로 교체. **타이핑 우선** | M1 |
 | 비교/선정 | 구매사 비교 화면 | 각 PG 행에 3-state 점, viewport 관찰 | M2 |
 | 딜룸 로스터 | 딜룸 ChatPanel/참여자 영역 | 1:1+팀 presence per-user 로스터 | M2 |
+| last-seen 저장 | 신규 `workspace_presence` 테이블 + drizzle 스키마 + `WorkspacePresenceRepo` | `markOffline(wsId)` GREATEST upsert · `getLastSeen(wsIds)`. 인덱스 없음·fillfactor 80(HOT) | M3 |
+| disconnect 트리거 | 신규 `app/api/centrifugo/disconnect/route.ts` + `deploy/centrifugo/config.yaml` `proxy` 블록 | 끊김 콜백 → `markOffline`. 대안: 클라 스로틀 하트비트(~2–5분) | M3 |
+| last-seen 표시 | `lib/realtime/presence.ts` + 면 컴포넌트 | offline 시 `getLastSeen` → 버킷 포맷("방금/N분/N시간/N일 전") | M3 |
 
 > 기존 `useChatChannel.online`(대화채널 numUsers>=2)은 헤더 점 용도에서 빠지고 타이핑·메시지 수신만 담당.
 
@@ -148,6 +163,7 @@ Slack·Teams·Discord·WhatsApp·Figma + Pusher·Ably·Phoenix·Centrifugo 공�
 
 - **M1 (코어 online, binary)**: `info:{workspaceId}` 토큰 + `presence:ws` 채널 + force_push + 토큰/재연결 경화 + online 순수함수 + self-broadcast + 관찰 Provider(interest-based) + 비대칭 디바운스. 노출: 인박스 목록·홈·스레드 헤더(상대 binary). 억제 회귀 테스트.
 - **M2 (활동 + roster + 확장 면)**: 활동 훅(3-state + fuzzy) + idle 토큰 + 구매사-PG 면 + 딜룸/팀 per-user 로스터.
+- **M3 (offline last-seen 영속)**: `workspace_presence` 테이블 + disconnect proxy(또는 스로틀 하트비트) + HOT upsert(GREATEST) + 버킷 표시. **첫 DDL·첫 Centrifugo `proxy` 추가**라 분리 출시.
 
 ## 11. 그레이스풀 디그레이데이션
 
@@ -170,17 +186,18 @@ Slack·Teams·Discord·WhatsApp·Figma + Pusher·Ably·Phoenix·Centrifugo 공�
 
 1. 연결 토큰 `info`(conn_info) → presence 엔트리에 그대로 노출되는지(centrifuge-js presence 응답의 `connInfo` 형태). 표준 기능이나 단위/통합 확인.
 2. `force_push_join_leave` 켰을 때 join/leave가 구독자에 실제 전달되는지(드리프트 가드 + 통합).
+3. (M3) Centrifugo **disconnect proxy**가 *비정상* 끊김(ping/pong 타임아웃)에도 발화하는지·발화 시점(앱이 last_seen 쓰는 타이밍). 발화 안 하거나 과도하게 늦으면 **클라 스로틀 하트비트로 폴백**.
 
 > 봉인 관련 검증(meta→proxy, chan_info 익명화, count 노출)은 PG↔PG 노출 허용으로 **불필요**해져 제거됨.
 
 ## 14. 배포
 
-- `deploy/centrifugo/config.yaml`에 `presence` 네임스페이스 추가 → **컨테이너 재생성**(`docker compose up -d centrifugo`). 앱 재빌드 불필요. ⚠️ v6 스키마로(메모리 `project_centrifugo-proxy-secret-v6-footgun`), 기존 블록 미러.
-- **DDL 0 / 신규 env 0**. 연결 토큰 `info` 추가는 하위 호환(chat/team 불변).
-- ⚠️ 이 재시작이 **presence-깜빡임 이벤트**(§6.5) — 런북에 결합 명시.
+- `deploy/centrifugo/config.yaml`에 `presence` 네임스페이스 추가 → **컨테이너 재생성**(`docker compose up -d centrifugo`). 앱 재빌드 불필요. ⚠️ v6 스키마로(메모리 `project_centrifugo-proxy-secret-v6-footgun`), 기존 블록 미러. **M3는 `proxy`(disconnect) 블록도 추가** → 동일 재생성.
+- **DDL**: M1/M2 = **0**. **M3에서 `workspace_presence` 테이블 1개**(additive, `db:push`). 신규 env 0. 연결 토큰 `info` 추가는 하위 호환(chat/team 불변).
+- ⚠️ 이 재시작이 **presence-깜빡임 이벤트**(§6.6) — 런북에 결합 명시. (단 last_seen은 DB라 blink 면역, §6.3.)
 
 ## 15. 범위 밖 / 향후
 
-- **완전 오프라인 last-seen**: 영속 필요 → `workspace_presence(last_seen_at)` 또는 멤버십 컬럼 + connect/disconnect proxy. v1은 연결-idle fuzzy까지만.
+- **per-user offline last-seen**: M3은 회사(워크스페이스) 단위 last-seen만. 로스터의 *개인별* offline "마지막 접속"은 per-user 행이 더 필요 → 수요 생기면 후속. (회사 단위 last-seen은 §6.3에서 in-scope.)
 - **A3 (서버 fan-out 피드 = interest-based)** — *순수 확장(scaling)용*: 허브 fan-out 천장(인기 ws 채널에 관찰자 폭증)이 단일 프로세스 한계에 닿으면 승급. 관찰자가 공유 채널 대신 자기 피드 1개 구독 + 클라가 visible 로스터 선언 → 서버가 그 집합만 watch·push. A1의 viewport 관심 집합(§6.1)이 그대로 interest 선언으로 재사용, 표시 계약(`useWorkspacePresence`) 불변. 봉인 목적은 더 이상 없음 — 순전히 fan-out 비용 때문.
 - 숨김/투명 모드.
