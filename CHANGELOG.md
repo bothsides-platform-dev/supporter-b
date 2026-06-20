@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.28.0] - 2026-06-20
+
+### Security
+
+- **Next.js 보안 패치 적용 (16.2.4 → 16.2.9)**: Middleware/Proxy 우회, SSRF, DoS 등 고위험 취약점을 포함한 12개 보안 권고사항을 해소했어요. `eslint-config-next`도 동일 버전으로 맞췄어요.
+
 ## [0.2.27.12] - 2026-06-20
 
 ### Added
