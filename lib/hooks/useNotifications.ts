@@ -18,6 +18,7 @@ import { create } from 'zustand';
 
 import type { Notification } from '@/lib/types/notification';
 import { http } from '@/lib/http';
+import { toast } from '@/lib/toast';
 import { markNotificationReadAction } from '@/lib/server/actions/notifications/markNotificationReadAction';
 import { markAllReadAction } from '@/lib/server/actions/notifications/markAllReadAction';
 import { retryEmailNotificationAction } from '@/lib/server/actions/notifications/retryEmailNotificationAction';
@@ -100,7 +101,14 @@ function openStream(): void {
   es.onmessage = (ev) => {
     try {
       const n = JSON.parse(ev.data) as Notification;
+      // 재구독 race 등으로 동일 id가 다시 올 수 있다. prepend 는 자체 dedupe 하므로,
+      // 중복일 때 toast 가 발화하지 않도록 prepend 전에 신규 여부를 판정한다.
+      // (history hydrate 는 setAll 경로라 이 핸들러를 거치지 않아 자연히 toast 되지 않는다.)
+      const isNew = !useStore
+        .getState()
+        .notifications.some((x) => x.id === n.id);
       useStore.getState().prepend(n);
+      if (isNew) toast(n.title);
     } catch {
       // ignore malformed payload
     }
