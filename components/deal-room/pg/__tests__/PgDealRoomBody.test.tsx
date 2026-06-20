@@ -24,6 +24,11 @@ vi.mock('@/components/inbox/SamplePgRfpBanner', () => ({
   SamplePgRfpBanner: () => <div data-testid="sample-banner" />,
 }));
 
+// use-lg-up mock — PgDealRoomBody 자신은 lgUp 을 쓰지 않지만
+// DealRoomActionRail/Center 가 렌더되는 컨텍스트에서 안전하게 고정.
+const mq = vi.hoisted(() => ({ lgUp: true }));
+vi.mock('@/hooks/use-lg-up', () => ({ useIsLgUp: () => mq.lgUp }));
+
 import { PgDealRoomBody } from '../PgDealRoomBody';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { RFP } from '@/lib/types/rfp';
@@ -57,6 +62,7 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
 }
 
 afterEach(cleanup);
+afterEach(() => { mq.lgUp = true; });
 
 describe('PgDealRoomBody — 샘플 배너', () => {
   it('isSample 면 상단에 SamplePgRfpBanner 를 렌더한다', () => {
@@ -94,5 +100,14 @@ describe('PgDealRoomBody — 제출 완료 상태', () => {
     // SubmittedSummary 의 '보낸 내용 보기' 토글이 인라인으로 — /submitted 페이지로 안 나감.
     expect(screen.getByRole('button', { name: /보낸 내용 보기/ })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /보낸 견적 보기/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('PgDealRoomBody — 소형 화면 레이아웃', () => {
+  it('lg 미만에서 DealRoomCenter 콘텐츠가 DOM 에 존재한다', () => {
+    mq.lgUp = false;
+    render(<PgDealRoomBody data={buildData()} />);
+    // BidWizard 는 '견적 작성' 탭의 기본 콘텐츠 — 소형 화면에서도 보여야 한다.
+    expect(screen.getByTestId('bid-wizard')).toBeInTheDocument();
   });
 });
