@@ -8,8 +8,8 @@ import type { RefObject } from 'react';
 import { useMentionPicker } from '../useMentionPicker';
 
 const members = [
-  { userId: 'u1', name: 'Kim', joinedAt: '2026-01-01' },
-  { userId: 'u2', name: 'Lee', joinedAt: '2026-01-02' },
+  { userId: 'u1', name: 'Kim', joinedAt: '2026-01-01', avatarUpdatedAt: null },
+  { userId: 'u2', name: 'Lee', joinedAt: '2026-01-02', avatarUpdatedAt: null },
 ];
 
 function key(k: string) {

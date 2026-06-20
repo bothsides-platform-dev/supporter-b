@@ -86,8 +86,8 @@ const messages: TeamThreadMessage[] = [
 ];
 
 const teamMembers = [
-  { userId: 'u-mate', name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z' },
-  { userId: 'u-me', name: '김구매', joinedAt: '2026-04-01T00:00:00.000Z' },
+  { userId: 'u-mate', name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z', avatarUpdatedAt: null },
+  { userId: 'u-me', name: '김구매', joinedAt: '2026-04-01T00:00:00.000Z', avatarUpdatedAt: null },
 ];
 
 function base(overrides: Partial<React.ComponentProps<typeof TeamThreadView>> = {}) {
@@ -609,8 +609,8 @@ describe('TeamThreadView — 멘션', () => {
   const MATE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const ME = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const mentionMembers = [
-    { userId: MATE, name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z' },
-    { userId: ME, name: '김구매', joinedAt: '2026-04-01T00:00:00.000Z' },
+    { userId: MATE, name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z', avatarUpdatedAt: null },
+    { userId: ME, name: '김구매', joinedAt: '2026-04-01T00:00:00.000Z', avatarUpdatedAt: null },
   ];
 
   it('@ 입력 시 멤버 드롭다운이 뜨고, 선택하면 @이름 이 삽입된다', async () => {

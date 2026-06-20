@@ -206,7 +206,7 @@ export interface PgRequestRepo {
 }
 
 // ── Workspace ─────────────────────────────────────────────────────────
-export type TeamMember = { userId: string; name: string; joinedAt: string };
+export type TeamMember = { userId: string; name: string; joinedAt: string; avatarUpdatedAt: string | null };
 
 export interface WorkspaceRepo {
   /** 워크스페이스 + 멤버 동기화. */

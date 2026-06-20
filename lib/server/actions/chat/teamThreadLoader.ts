@@ -24,7 +24,7 @@ export type LoadTeamThreadResult = ChatActionResult<{
   /** 세션 유저 id — 라이브 echo 의 self 판별용(클라이언트는 세션을 모른다). */
   viewerUserId: string;
   /** 멘션 자동완성/렌더용 팀 로스터. */
-  teamMembers: { userId: string; name: string; joinedAt: string }[];
+  teamMembers: { userId: string; name: string; joinedAt: string; avatarUpdatedAt: string | null }[];
   messages: TeamThreadMessage[];
 }>;
 

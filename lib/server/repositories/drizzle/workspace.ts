@@ -253,6 +253,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         userId: workspaceMembers.userId,
         name: usersTable.name,
         joinedAt: workspaceMembers.joinedAt,
+        avatarUpdatedAt: usersTable.avatarUpdatedAt,
       })
       .from(workspaceMembers)
       .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
@@ -266,11 +267,13 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       userId: string;
       name: string;
       joinedAt: Date;
+      avatarUpdatedAt: Date | null;
     }[];
     return rows.map((r) => ({
       userId: r.userId,
       name: r.name,
       joinedAt: new Date(r.joinedAt).toISOString(),
+      avatarUpdatedAt: r.avatarUpdatedAt ? new Date(r.avatarUpdatedAt).toISOString() : null,
     }));
   }
 
