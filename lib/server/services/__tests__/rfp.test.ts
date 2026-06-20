@@ -445,6 +445,134 @@ describe('RfpService.award', () => {
     expect(loserNotifs).toHaveLength(1);
     expect(loserNotifs[0]!.type).toBe('rfp.rejected');
   });
+
+  it('requote 후 탈락 PG에도 rfp.rejected가 1건만 발송된다 (loser multi-round dedup)', async () => {
+    // PG-A: round-1 + round-2 submitted (winner, awarded round-2)
+    // PG-B: round-1 + round-2 submitted (loser — both rounds are 'submitted')
+    // Expected: PG-B gets exactly 1 rfp.rejected (not 2)
+    const buyer = await seedUser(db, { email: 'buyer@loser-dedup.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+
+    const winnerWs = await seedPgWorkspace(db, 'winner.loserdedup');
+    const w1 = await seedUser(db, { email: 'w1@winner.loserdedup' });
+    await seedMembership(db, winnerWs.id, w1.id, 'admin');
+
+    const loserWs = await seedPgWorkspace(db, 'loser.loserdedup');
+    const l1 = await seedUser(db, { email: 'l1@loser.loserdedup' });
+    await seedMembership(db, loserWs.id, l1.id, 'admin');
+
+    const rfpId = randomUUID();
+    const rfpCode = 'P-2606-9002';
+    await db.insert(rfps).values({
+      id: rfpId,
+      code: rfpCode,
+      buyerWsId: buyerWs.id,
+      bizProfileId: biz.id,
+      title: 'loser dedup test',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: buyer.id,
+      sentAt: new Date(),
+    });
+
+    // PG-A invitation + round-1 + round-2
+    const winnerInvId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: winnerInvId,
+      rfpId,
+      pgWsId: winnerWs.id,
+      tokenHash: randomUUID(),
+      sentAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000 * 7),
+      status: 'accepted',
+    });
+    await db.insert(bids).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: winnerWs.id,
+      invitationId: winnerInvId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: w1.id,
+      submittedAt: new Date(),
+      round: 1,
+    });
+    const winnerBidId = randomUUID();
+    await db.insert(bids).values({
+      id: winnerBidId,
+      rfpId,
+      pgWsId: winnerWs.id,
+      invitationId: winnerInvId,
+      settleCycle: 'D+2',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: w1.id,
+      submittedAt: new Date(),
+      round: 2,
+    });
+
+    // PG-B invitation + round-1 + round-2 (both submitted — loser that also had a requote)
+    const loserInvId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: loserInvId,
+      rfpId,
+      pgWsId: loserWs.id,
+      tokenHash: randomUUID(),
+      sentAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000 * 7),
+      status: 'accepted',
+    });
+    await db.insert(bids).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: loserWs.id,
+      invitationId: loserInvId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: l1.id,
+      submittedAt: new Date(),
+      round: 1,
+    });
+    await db.insert(bids).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: loserWs.id,
+      invitationId: loserInvId,
+      settleCycle: 'D+2',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: l1.id,
+      submittedAt: new Date(),
+      round: 2,
+    });
+
+    const r = await service.award(rfpId, winnerBidId, {
+      userId: buyer.id,
+      workspaceId: buyerWs.id,
+    });
+    expect(r.ok).toBe(true);
+
+    // PG-B: rfp.rejected exactly 1건 (not 2, even though they have 2 submitted rounds)
+    const loserNotifs = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.workspaceId, loserWs.id));
+    const loserRejected = loserNotifs.filter((n) => n.type === 'rfp.rejected');
+    expect(loserRejected).toHaveLength(1);
+  });
 });
 
 // ─── RfpService.cancel ───────────────────────────────────────────────────────
