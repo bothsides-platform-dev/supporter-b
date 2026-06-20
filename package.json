@@ -1,6 +1,6 @@
 {
   "name": "supporter-b",
-  "version": "0.2.27.13",
+  "version": "0.2.28.0",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -53,7 +53,7 @@
     "ky": "^2.0.2",
     "lucide-react": "^1.14.0",
     "motion": "^12.38.0",
-    "next": "16.2.4",
+    "next": "16.2.9",
     "next-auth": "^5.0.0-beta.31",
     "next-axiom": "^1.10.0",
     "pino": "^10.3.1",
@@ -83,7 +83,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
-    "eslint-config-next": "16.2.4",
+    "eslint-config-next": "16.2.9",
     "eslint-plugin-unused-imports": "^4.4.1",
     "jsdom": "^29.1.1",
     "knip": "^6.14.1",

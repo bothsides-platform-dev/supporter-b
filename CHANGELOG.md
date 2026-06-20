@@ -7,6 +7,11 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - **사이드바가 접힌 상태에서 알림 배지가 있어도 벨 아이콘이 정확히 중앙에 정렬돼요**: 기존에는 배지 래퍼 span이 flex 레이아웃에 영향을 줘서 `gap` 때문에 아이콘이 왼쪽으로 밀렸어요. 이제 배지를 아이콘 래퍼 안에 겹쳐 렌더링하고 행 배지 래퍼를 `display:none`으로 완전히 제거해 아이콘이 항상 정중앙에 위치해요.
+## [0.2.28.0] - 2026-06-20
+
+### Security
+
+- **Next.js 보안 패치 적용 (16.2.4 → 16.2.9)**: Middleware/Proxy 우회, SSRF, DoS 등 고위험 취약점을 포함한 12개 보안 권고사항을 해소했어요. `eslint-config-next`도 동일 버전으로 맞췄어요.
 
 ## [0.2.27.12] - 2026-06-20
 
