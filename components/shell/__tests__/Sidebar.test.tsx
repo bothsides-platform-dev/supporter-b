@@ -289,8 +289,11 @@ describe('Sidebar — notification badge', () => {
   it('shows the unread badge on the 알림 link when count > 0', () => {
     mockUnread.value = 3;
     renderSidebar(buyerProps);
-    const badge = screen.getByTestId('unread-badge');
-    expect(badge).toHaveTextContent('3');
-    expect(document.querySelector('a[href="/notifications"]')).toContainElement(badge);
+    // Badge renders twice: once in the icon wrapper (collapsed overlay) and once in the row (expanded).
+    const badges = screen.getAllByTestId('unread-badge');
+    expect(badges.length).toBeGreaterThan(0);
+    badges.forEach((badge) => expect(badge).toHaveTextContent('3'));
+    const notifLink = document.querySelector('a[href="/notifications"]');
+    badges.forEach((badge) => expect(notifLink).toContainElement(badge));
   });
 });
