@@ -3,6 +3,7 @@
 import { z } from 'zod';
 
 import { getTeamChatService } from '@/lib/server/services/team-chat';
+import { getUserRepo } from '@/lib/server/repositories/factory';
 import type { Attachment } from '@/lib/types/common';
 import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
@@ -12,6 +13,7 @@ export type TeamThreadMessage = {
   id: string;
   authorUserId: string;
   authorName: string;
+  authorAvatarUpdatedAt: string | null;
   body: string;
   createdAt: string;
   isSelf: boolean;
@@ -23,6 +25,8 @@ export type LoadTeamThreadResult = ChatActionResult<{
   workspaceId: string;
   /** 세션 유저 id — 라이브 echo 의 self 판별용(클라이언트는 세션을 모른다). */
   viewerUserId: string;
+  /** 뷰어 아바타 버전 — 낙관적 말풍선 아바타 표시용. */
+  viewerAvatarUpdatedAt: string | null;
   /** 멘션 자동완성/렌더용 팀 로스터. */
   teamMembers: { userId: string; name: string; joinedAt: string; avatarUpdatedAt: string | null }[];
   messages: TeamThreadMessage[];
@@ -57,16 +61,22 @@ export async function loadTeamThread(
   });
   const teamMembers = membersResult.ok ? membersResult.members : [];
 
+  const viewer = await (await getUserRepo()).findById(ws.userId);
+
   return {
     ok: true,
     rfpId: parsed.data,
     workspaceId: ws.workspaceId,
     viewerUserId: ws.userId,
+    viewerAvatarUpdatedAt: viewer?.avatarUpdatedAt ?? null,
     teamMembers,
     messages: result.messages.map((m) => ({
       id: m.id,
       authorUserId: m.authorUserId,
       authorName: m.authorName,
+      authorAvatarUpdatedAt: m.authorAvatarUpdatedAt
+        ? new Date(m.authorAvatarUpdatedAt).toISOString()
+        : null,
       body: m.body,
       createdAt: m.createdAt.toISOString(),
       isSelf: m.authorUserId === ws.userId,

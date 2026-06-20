@@ -994,6 +994,7 @@ export type RfpTeamMessageRecord = {
  *  exclusive-arc attachments table (empty array when none). */
 export type RfpTeamMessageWithAuthor = RfpTeamMessageRecord & {
   authorName: string;
+  authorAvatarUpdatedAt: Date | null;
   attachments: Attachment[];
 };
 
