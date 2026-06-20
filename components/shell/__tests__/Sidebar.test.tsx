@@ -55,14 +55,14 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { Sidebar } from '../Sidebar';
 
 const buyerProps = {
-  user: { id: 'u1', email: 'buyer@test.com', name: '홍길동' },
+  user: { id: 'u1', email: 'buyer@test.com', name: '홍길동', avatarUpdatedAt: null },
   workspaceType: 'buyer' as const,
   workspaces: [{ id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, hasLogo: false }],
   current: { id: 'ws1', name: '구매사A', type: 'buyer' as const, hasLogo: false },
 };
 
 const pgProps = {
-  user: { id: 'u2', email: 'pg@test.com', name: '이순신' },
+  user: { id: 'u2', email: 'pg@test.com', name: '이순신', avatarUpdatedAt: null },
   workspaceType: 'pg' as const,
   workspaces: [{ id: 'ws2', name: '서포터페이', type: 'pg' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, hasLogo: false }],
   current: { id: 'ws2', name: '서포터페이', type: 'pg' as const, hasLogo: false },
