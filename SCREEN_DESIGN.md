@@ -114,6 +114,8 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | S1 | `/messages` | 워크스페이스 페어(구매사↔PG) **라이브 채팅**. 2-컬럼: 좌측 대화 목록(미읽음 점) + 우측 스레드(말풍선·날짜 구분·읽음 영수증·프레즌스·타이핑). RFP는 메시지 태그로 표시(스레드 말풍선에 RFP 칩 — 로더가 `rfpById` 제공). **통합 메시지함**: 좌측 목록은 상대방 대화(쌍 단위·RFP 무관)와 RFP 팀 채팅(`rfp_team_messages`, 워크스페이스 내부)을 `[전체 \| 상대방 \| 팀]` 필터로 한데 보여준다. 팀 스레드도 읽음상태(`rfp_team_message_reads`)·안읽음·인앱/이메일 알림까지 상대방 채팅과 동등(풀 패리티), `?t=<rfpId>` 딥링크로 연다(딜룸 '팀 채팅' 탭의 "메시지함에서 열기" + 홈 위젯 행에서 진입). 리치 작성 드로어(저장 템플릿/첨부/이메일·인앱 알림 토글). `MessageComposeButton`으로 RFP 상세·입찰표에서 진입(ComingSoon 제거). 구매사↔PG만(PG 상호 비공개 유지), 이메일 조회로 콜드 컨택 가능. **스레드 시각 규칙**: 중앙 날짜 구분선(라인 없음)·타임스탬프는 버블 옆 단일 출처·셀프 버블 `primary-container`. `ThreadView`/`ThreadPane`은 `variant='rail'`로 상세 화면 채팅 레일에 재사용(갤러리는 오버레이) | `MessageInbox`, `ConversationList`, `ThreadView`, `TeamThreadPane`, `MessageComposeButton`, `NewConversationSheet`, `useChatChannel`, `listInboxForViewer`, `markTeamThreadReadAction` |
 
 > 실시간 전송은 Centrifugo(자체호스팅 WS) — 미설정 환경에선 정적 로드로 graceful degrade. 이메일 알림은 presence 억제 + 윈도우 digest로 폭주 방지. `/notifications`·`/workspace/new` 도 buyer·pg 공통.
+>
+> 라이브 인앱 알림 toast(`useNotifications`): 접속 중 새 알림이 SSE 로 도착하면 제목을 우하단 toast 로 발화한다(미읽음 배지는 그대로 증가). 폭주 방지로 `TOAST_COALESCE_MS`(4s) 윈도우 안에는 1회만 발화하고, 사용자가 이미 `/notifications` 목록을 보고 있으면 중복 신호이므로 생략한다. 재구독 race 로 같은 id가 다시 와도 prepend 전 신규 판정으로 중복 toast 를 막는다(history hydrate 는 `setAll` 경로라 toast 안 됨). toast 폭은 `min(92vw,24rem)` 로 클램프 + 제목 `line-clamp-2`.
 
 > 칸반 뷰 컬럼: 구매사 `진행중 / 선정 완료 / 마감`(3, 표 탭과 동일 — 발송 전 draft RFP는 보드에 노출 안 함), PG `신규 / 견적 보냄 / 선정됨 / 미선정`(4 — 표 탭 `마감`을 보드에서 `선정됨`/`미선정`으로 분리; 미제출 응답은 `신규`). 작성중 단계 제거로 보드 드래그-발송/취소·드래그-작성 전이도 사라졌다(발송은 RFP 상세의 `초대 발송`, 제출은 inbox 폼).
 >
