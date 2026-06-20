@@ -39,7 +39,6 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
   const [submitting, setSubmitting] = useState(false);
 
   // 마운트 시 localStorage draft의 stale 데이터 정리.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const { allowedPgWorkspaceIds, deadline, rfpFiles, setField } =
       useRfpDraftStore.getState();
@@ -70,6 +69,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
         }
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [serverError, setServerError] = useState('');
   // advance/goToStep 실패를 경험한 step set — back 후 복귀해도 에러 표시 유지
