@@ -84,6 +84,9 @@ vi.mock('next/navigation', () => ({
 import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
 
+// 기존 테스트에서 공통으로 쓰는 PG 픽스처
+const PG_1 = { id: 'pg-1', name: '나이스', displayName: '나이스' };
+
 function resetStore() {
   useRfpDraftStore.setState({
     title: '',
@@ -132,7 +135,7 @@ describe('RfpCreateWizard', () => {
       deadline: '2026-06-30T23:59:59Z',
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
     await user.click(screen.getByText('보내기 확인'));
     expect(screen.getByRole('button', { name: '1개 PG사에 발송' })).toBeInTheDocument();
   });
@@ -153,7 +156,7 @@ describe('RfpCreateWizard', () => {
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -177,7 +180,7 @@ describe('RfpCreateWizard', () => {
     });
     const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} guest />);
+    render(<RfpCreateWizard pgList={[PG_1]} guest />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -199,7 +202,7 @@ describe('RfpCreateWizard', () => {
       // deadline 미설정 → Step 4 미완료
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     // Steps 1→2→3→4 (steps 1-3 유효 → advance() 통과)
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -224,7 +227,7 @@ describe('RfpCreateWizard', () => {
       deliveryServicePeriod: '3~5일',
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -250,7 +253,7 @@ describe('RfpCreateWizard', () => {
       boardVisible: false,
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -273,7 +276,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'renewal',
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -295,7 +298,7 @@ describe('RfpCreateWizard', () => {
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -370,7 +373,7 @@ describe('RfpCreateWizard', () => {
       });
       expect(toast).toHaveBeenCalledWith(
         expect.stringContaining('1개 PG사'),
-        { type: 'warning' },
+        { type: 'info' },
       );
     });
 
@@ -401,7 +404,7 @@ describe('RfpCreateWizard', () => {
       });
       expect(toast).toHaveBeenCalledWith(
         expect.stringContaining('마감일'),
-        { type: 'warning' },
+        { type: 'info' },
       );
     });
 
@@ -435,7 +438,7 @@ describe('RfpCreateWizard', () => {
       expect(verifyDraftFilesAction).toHaveBeenCalledWith(['file-valid', 'file-stale']);
       expect(toast).toHaveBeenCalledWith(
         expect.stringContaining('1개 첨부'),
-        { type: 'warning' },
+        { type: 'info' },
       );
     });
 

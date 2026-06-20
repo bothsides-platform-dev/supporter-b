@@ -49,13 +49,13 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
     const stalePgs = allowedPgWorkspaceIds.filter((w) => !validPgIds.has(w.id));
     if (stalePgs.length > 0) {
       setField('allowedPgWorkspaceIds', allowedPgWorkspaceIds.filter((w) => validPgIds.has(w.id)));
-      toast(`${stalePgs.length}개 PG사가 현재 선택 불가 상태여서 제외됐어요`, { type: 'warning' });
+      toast(`${stalePgs.length}개 PG사가 현재 선택 불가 상태여서 제외됐어요`, { type: 'info' });
     }
 
     // 2. 마감일 만료 확인 — 과거 날짜이면 초기화
     if (deadline && new Date(deadline) < new Date()) {
       setField('deadline', '');
-      toast('저장된 마감일이 지나 초기화했어요', { type: 'warning' });
+      toast('저장된 마감일이 지나 초기화했어요', { type: 'info' });
     }
 
     // 3. 첨부파일 유효성 확인 — DB에 없는(sweep된) 파일 제거
@@ -66,7 +66,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
         const staleFiles = rfpFiles.filter((f) => !validIdSet.has(f.id));
         if (staleFiles.length > 0) {
           setField('rfpFiles', rfpFiles.filter((f) => validIdSet.has(f.id)));
-          toast(`${staleFiles.length}개 첨부 파일이 만료되어 제외됐어요`, { type: 'warning' });
+          toast(`${staleFiles.length}개 첨부 파일이 만료되어 제외됐어요`, { type: 'info' });
         }
       });
     }
