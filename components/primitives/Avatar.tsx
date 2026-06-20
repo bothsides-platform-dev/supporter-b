@@ -39,6 +39,12 @@ type AvatarProps = {
 
 export function Avatar({ name, color = 'primary', size = 'md', className, userId, avatarUpdatedAt }: AvatarProps) {
   const [imgError, setImgError] = useState(false);
+  const [prevAvatarUpdatedAt, setPrevAvatarUpdatedAt] = useState(avatarUpdatedAt);
+  // Reset imgError synchronously on render when avatarUpdatedAt changes (React derived-state pattern).
+  if (avatarUpdatedAt !== prevAvatarUpdatedAt) {
+    setPrevAvatarUpdatedAt(avatarUpdatedAt);
+    setImgError(false);
+  }
 
   if (userId && avatarUpdatedAt && !imgError) {
     return (

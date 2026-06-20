@@ -8,6 +8,8 @@ export const dynamic = 'force-dynamic';
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: RouteContext): Promise<Response> {
+  // 로그인 세션만 확인(폐기 세션 sv 검사는 의도적 생략 — 읽기 전용·저민감 프로필 이미지,
+  // 스펙 §4.3/Known limitations). 쓰기(POST/DELETE)는 sv·이메일 인증까지 검사한다.
   // 개인 사진 — 로그인 세션 필수(워크스페이스 로고의 공개 GET과 다름).
   const session = await auth();
   if (!session?.user?.id) {
