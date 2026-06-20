@@ -215,7 +215,7 @@ describe('resolveShellAccess — (app) shell auth guard contract', () => {
       ).toEqual({ kind: 'redirect', to: '/pending-approval' });
     });
 
-    it('멤버십 rejected + 이메일 인증 완료 → /suspended', () => {
+    it('멤버십 rejected + 이메일 인증 완료 → /pending-approval (거부 안내 페이지)', () => {
       expect(
         resolveShellAccess(
           { user: completeUser },
@@ -223,7 +223,7 @@ describe('resolveShellAccess — (app) shell auth guard contract', () => {
           undefined,
           true,
         ),
-      ).toEqual({ kind: 'redirect', to: '/suspended' });
+      ).toEqual({ kind: 'redirect', to: '/pending-approval' });
     });
 
     it('이메일 미인증 + pending_approval → /pending-approval (email 게이트가 approval 게이트보다 우선)', () => {

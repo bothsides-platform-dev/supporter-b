@@ -320,7 +320,7 @@ export interface WorkspaceRepo {
   ): Promise<void>;
   /** 멤버 추가 (onConflictDoNothing — 중복 race 안전). */
   addMember(
-    params: { workspaceId: string; userId: string; role: string; approvalStatus?: string },
+    params: { workspaceId: string; userId: string; role: string; approvalStatus?: MemberApprovalStatus },
     tx?: Tx,
   ): Promise<void>;
   /** 멤버십 승인 상태 단건 조회. 행 없으면 undefined. */

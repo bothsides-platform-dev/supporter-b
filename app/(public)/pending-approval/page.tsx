@@ -24,6 +24,9 @@ export default async function PendingApprovalPage() {
       session.user.id,
       workspaceId,
     );
+    if (memberApprovalStatus === 'rejected') {
+      return <MembershipApprovalWaitingScreen initialRejected />;
+    }
     if (memberApprovalStatus === 'pending_approval') {
       return <MembershipApprovalWaitingScreen />;
     }

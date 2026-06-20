@@ -29,8 +29,8 @@ export async function checkEmailAvailableAction(
 
   const email = normalizeEmail(parsed.data.email);
 
-  // 운영자/마스터 이메일은 가입 불가 — step1 에서 미리 막아 안내한다.
-  if (isMasterEmail(email)) return { ok: false, error: 'MASTER_EMAIL' };
+  // 운영자/마스터 이메일은 가입 불가. MASTER_EMAIL 대신 EMAIL_TAKEN 반환 — 열거 공격 방지.
+  if (isMasterEmail(email)) return { ok: false, error: 'EMAIL_TAKEN' };
 
   // boolean → 인증 완료 여부, undefined → 미등록 계정.
   const emailVerified = await (await getUserRepo()).findEmailVerifiedByEmail(email);
