@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.27.10] - 2026-06-20
+
+### Fixed
+
+- **채팅 입력창 placeholder 텍스트가 수직으로 정렬되지 않던 문제를 고쳤어요**: 상대방 채팅, 팀 채팅 입력창에서 "메시지를 입력하세요…" placeholder가 입력창 상단에 치우쳐 보이던 문제를 고쳤어요. 패딩을 조정해 placeholder와 입력 텍스트가 입력창 안에서 수직 중앙 정렬되어 표시돼요.
+
 ## [0.2.27.9] - 2026-06-20
 
 ### Fixed
