@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decideRoute } from '../route-decision';
+import { decideRoute, decideProxyRoute } from '../route-decision';
 
 describe('decideRoute — Step 3 four cases', () => {
   it('case 1: unauth + (app)/* redirects to /login?next=<encoded>', () => {
@@ -93,5 +93,29 @@ describe('admin + gate 라우트 패스스루', () => {
 
   it('/suspended 는 로그인된 사용자도 접근 가능', () => {
     expect(decideRoute('/suspended', '', true)).toEqual({ kind: 'next' });
+  });
+});
+
+describe('decideProxyRoute — loop-break escape precedes the auth bounce', () => {
+  // 회로차단기가 트립해 __rl_break 플래그가 있고 /login 이면, authed 라도 /home 으로
+  // 되튕기지 않고 escape(렌더)한다. 이 우선순위가 깨지면 루프가 재발하므로 고정한다.
+  it('escapes on /login when the break flag is set, even for an authed session', () => {
+    expect(decideProxyRoute('/login', '', true, '1')).toEqual({ kind: 'escape' });
+  });
+
+  it('without the break flag, /login authed still bounces to /home (unchanged)', () => {
+    expect(decideProxyRoute('/login', '', true, undefined)).toEqual({
+      kind: 'redirect',
+      to: '/home',
+    });
+  });
+
+  it('the break flag does NOT escape protected (app) routes — delegates to decideRoute', () => {
+    // /home 은 보호 라우트라 플래그가 있어도 escape 하지 않는다 (fail-open 방지).
+    expect(decideProxyRoute('/home', '', true, '1')).toEqual({ kind: 'next' });
+    expect(decideProxyRoute('/rfp/x', '', false, '1')).toEqual({
+      kind: 'redirect',
+      to: `/login?next=${encodeURIComponent('/rfp/x')}`,
+    });
   });
 });
