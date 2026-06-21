@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
 import { PageEnter } from '@/components/primitives/PageEnter';
-import { WorkspaceBizProfileForm } from '@/components/settings/WorkspaceBizProfileForm';
 import { WorkspaceBizNoForm } from '@/components/settings/WorkspaceBizNoForm';
 import { WorkspaceNameForm } from '@/components/settings/WorkspaceNameForm';
 import { WorkspaceLogoForm } from '@/components/settings/WorkspaceLogoForm';
@@ -153,7 +152,6 @@ export default async function ProfilePage({ searchParams }: Props) {
                 currentBizNo={biz?.bizNo ?? null}
                 returnUrl={biz_required === '1' && !biz ? '/rfp-create' : undefined}
               />
-              {biz && <WorkspaceBizProfileForm currentGrade={grade} />}
             </div>
           )}
         </div>
