@@ -78,4 +78,19 @@ describe('requestRequoteAction', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('FORBIDDEN_BUYER');
   });
+
+  it('KST +09:00 오프셋 마감일을 수락한다 (endOfDayKstIso 규약)', async () => {
+    const s = await seedBidder();
+    sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
+    // endOfDayKstIso('2026-07-31') === '2026-07-31T23:59:59+09:00'
+    const kstDeadline = '2026-07-31T23:59:59+09:00';
+    const r = await requestRequoteAction({
+      rfpId: s.rfpId,
+      pgWsIds: [s.pgWs.id],
+      message: 'KST 마감일 테스트',
+      newDeadline: kstDeadline,
+    });
+    // zod datetime({ offset: true }) 가 +09:00 형식을 수락해야 한다
+    expect(r.ok).toBe(true);
+  });
 });

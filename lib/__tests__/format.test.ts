@@ -127,10 +127,9 @@ describe('formatDate', () => {
 /**
  * formatDeadline KST 달력일 기준 테스트
  *
- * 현행 구현은 Math.ceil(ms 차이 / 86400000) 이라 KST 달력일과 어긋남:
- *  - 마감 당일 KST 오후 → "D-1"로 잘못 표시
- *  - KST 자정 직후(다음날) → 아직 미래 UTC이므로 "D-0"으로 잘못 표시 ("마감" 이어야 함)
- *  - 이틀 뒤 달력일 → 시간차 계산으로 "D-3"으로 잘못 표시 ("D-2" 이어야 함)
+ * 신규 규약(+09:00) 마감일은 KST 달력일로 정확하게 계산된다.
+ * 레거시(T23:59:59Z) 마감일은 KST 달력상 실제 마감이 다음날 08:59이므로
+ * KST 기준 달력일 차이가 1 늘어난다 — 의도된 동작, 마이그레이션 없음.
  */
 describe('formatDeadline (KST 달력일 기준)', () => {
   afterEach(() => vi.useRealTimers());
@@ -163,6 +162,15 @@ describe('formatDeadline (KST 달력일 기준)', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-30T00:30:00.000Z'));
     expect(formatDeadline('2026-06-30T23:59:59+09:00')).toBe('D-0');
+  });
+
+  it('레거시 T23:59:59Z 마감일 — KST 달력일 기준으로 하루 더 남은 것으로 계산된다', () => {
+    // '2026-06-30T23:59:59Z' = KST 2026-07-01 08:59:59 → KST 달력일은 7/1
+    // now = 2026-06-30T12:00:00Z = KST 2026-06-30 21:00 → kstNow = '2026-06-30'
+    // diff = 7/1 - 6/30 = 1 → D-1 (사용자가 설정한 날짜 6/30보다 하루 늘어남 — 레거시 인코딩 특성)
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-30T12:00:00.000Z'));
+    expect(formatDeadline('2026-06-30T23:59:59Z')).toBe('D-1');
   });
 });
 

@@ -10,9 +10,10 @@ import {
 import type { RFP } from '@/lib/types/rfp';
 import type { InboxRow } from '@/components/inbox/InboxList';
 
-// Fixed "now": 2026-05-24 (local).
-const NOW = new Date(2026, 4, 24, 9, 0, 0);
-const iso = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12, 0, 0).toISOString();
+// Fixed "now": 2026-05-24 KST. T03:00:00Z = 12:00 KST, safely mid-day regardless of runner TZ.
+const NOW = new Date('2026-05-24T03:00:00.000Z');
+const iso = (y: number, m: number, d: number) =>
+  `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T03:00:00.000Z`;
 
 describe('matchesDeadlineBucket', () => {
   it('returns true when bucket is absent/unknown (no filter)', () => {

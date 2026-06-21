@@ -23,5 +23,6 @@ export function endOfDayKstIso(yyyyMmDd: string): string {
  * HTML date input min 속성 계산 등 KST 날짜 참조가 필요한 곳에서 사용.
  */
 export function kstDateOf(date: Date): string {
+  // 'en-CA' locale produces ISO-format 'YYYY-MM-DD' — the only purpose of this locale choice.
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(date);
 }
