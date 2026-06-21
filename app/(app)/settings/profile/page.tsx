@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
 import { PageEnter } from '@/components/primitives/PageEnter';
-import { WorkspaceBizProfileForm } from '@/components/settings/WorkspaceBizProfileForm';
 import { WorkspaceBizNoForm } from '@/components/settings/WorkspaceBizNoForm';
 import { WorkspaceNameForm } from '@/components/settings/WorkspaceNameForm';
 import { WorkspaceLogoForm } from '@/components/settings/WorkspaceLogoForm';
@@ -113,31 +112,16 @@ export default async function ProfilePage({ searchParams }: Props) {
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
 
-        <div
-          className={
-            ws.type === 'buyer'
-              ? 'grid grid-cols-1 lg:grid-cols-2 lg:gap-x-12'
-              : ''
-          }
-        >
-          {/* Left: meta KV (이름 폼 포함) */}
-          <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
-            <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} />
-            <WorkspaceNameForm
-              currentName={ws.name}
-              canEdit={memberMeta?.role === 'admin'}
-            />
-            {wsKvPairs.map(([k, v]) => (
-              <div key={k} className={kvRowClass}>
-                <span className={kvLabelClass}>{k}</span>
-                <span className={kvValueClass}>{v}</span>
-              </div>
-            ))}
-          </div>
+        <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
+          <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} />
+          <WorkspaceNameForm
+            currentName={ws.name}
+            canEdit={memberMeta?.role === 'admin'}
+          />
 
-          {/* Right: 사업자번호/등급 폼 (buyer only) */}
+          {/* 사업자번호 (buyer only) */}
           {ws.type === 'buyer' && (
-            <div className="mt-6 pt-6 border-t border-[var(--md-sys-color-outline-variant)] space-y-6 lg:mt-0 lg:pt-0 lg:border-t-0 lg:space-y-8">
+            <div className="py-4 space-y-4">
               {biz_required === '1' && !biz && (
                 <>
                   <BizRequiredToast />
@@ -153,9 +137,15 @@ export default async function ProfilePage({ searchParams }: Props) {
                 currentBizNo={biz?.bizNo ?? null}
                 returnUrl={biz_required === '1' && !biz ? '/rfp-create' : undefined}
               />
-              {biz && <WorkspaceBizProfileForm currentGrade={grade} />}
             </div>
           )}
+
+          {wsKvPairs.map(([k, v]) => (
+            <div key={k} className={kvRowClass}>
+              <span className={kvLabelClass}>{k}</span>
+              <span className={kvValueClass}>{v}</span>
+            </div>
+          ))}
         </div>
       </section>
 
