@@ -66,7 +66,24 @@ channel:
       join_leave: true
       # Route every subscribe through the ACL proxy above.
       subscribe_proxy_enabled: true
+      # v6 denies client publish by default (103) — typing (useChatChannel client
+      # publish) was silently dead in prod without this. See presence-namespace test.
+      allow_publish_for_subscriber: true
 
     # team namespace — channel convention: team:rfp:<rfpId>:<workspaceId>
     - name: team
       subscribe_proxy_enabled: true
+
+    # presence namespace — channel convention: presence:ws:<workspaceId>.
+    # Fully PUBLIC (no ACL, design D1): any authenticated connection may observe
+    # any workspace's online status. v6 denies client subscribe/publish by
+    # default, so both are opened explicitly. NO presence_ttl (not a v6 key →
+    # unknown-key footgun); freshness is governed by client.ping_interval/pong.
+    - name: presence
+      presence: true
+      join_leave: true
+      force_push_join_leave: true
+      allow_subscribe_for_client: true
+      allow_publish_for_subscriber: true
+      history_size: 1
+      history_ttl: 60s
