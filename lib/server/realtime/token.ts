@@ -1,30 +1,32 @@
 // Centrifugo connection JWT issuance.
 //
 // A connection token authenticates the WebSocket connection to Centrifugo. It
-// carries only the user identity (`sub`) — channel-level access is enforced
-// separately by the subscribe proxy (`/api/centrifugo/subscribe`), keeping the
-// private 1:N ACL app-side (PIPA/PG 자사 보관). See impl-plan 2026-06-02,
-// §실시간 전송.
+// carries the user identity (`sub`) and optionally the workspace id
+// (`info.workspaceId`) — channel-level access is enforced separately by the
+// subscribe proxy (`/api/centrifugo/subscribe`), keeping the private 1:N ACL
+// app-side (PIPA/PG 자사 보관). See impl-plan 2026-06-02, §실시간 전송.
 //
 // HS256, signed with the Centrifugo `token_hmac_secret_key`
-// (CENTRIFUGO_TOKEN_HMAC_SECRET). `jose` is reused (Auth.js dependency); no new
-// dependency. This module is dependency-pure (jose + process.env only) so it
-// stays edge-safe and trivially unit-testable.
+// (CENTRIFUGO_TOKEN_HMAC_SECRET). TTL ~30 minutes. `jose` is reused
+// (Auth.js dependency); no new dependency. This module is dependency-pure
+// (jose + process.env only) so it stays edge-safe and trivially unit-testable.
 
 import { SignJWT } from 'jose';
 
 /** How long a connection token is valid. The client re-fetches before expiry. */
-const TOKEN_TTL = '10m';
+const TOKEN_TTL = '30m';
 
 /**
  * Issue a short-lived Centrifugo connection JWT for a user.
  *
  * @param userId application user id → JWT `sub` claim.
+ * @param workspaceId optional workspace id → JWT `info.workspaceId` claim.
  * @throws if CENTRIFUGO_TOKEN_HMAC_SECRET is unset/empty (never sign with a
  *   falsy secret — that would let anyone forge a connection token).
  */
 export async function issueCentrifugoConnectionToken(
   userId: string,
+  workspaceId?: string,
 ): Promise<string> {
   const secret = process.env.CENTRIFUGO_TOKEN_HMAC_SECRET;
   if (!secret) {
@@ -32,8 +34,8 @@ export async function issueCentrifugoConnectionToken(
       'CENTRIFUGO_TOKEN_HMAC_SECRET is not set — cannot issue a Centrifugo connection token.',
     );
   }
-
-  return new SignJWT({})
+  const claims = workspaceId ? { info: { workspaceId } } : {};
+  return new SignJWT(claims)
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(userId)
     .setExpirationTime(TOKEN_TTL)

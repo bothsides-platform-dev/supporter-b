@@ -15,6 +15,8 @@ import { DRAFT_OWNER_ID, ACCEPT_EXT } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
+import { useWorkspacePresence } from '@/components/presence/WorkspacePresenceProvider';
+import { PresenceDot } from '@/components/presence/PresenceDot';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
@@ -153,10 +155,13 @@ export function ThreadView({
   const { listRef, bottomRef, showNewMessagePill, scrollToBottom, onListScroll } =
     useStickToBottom({ count: localMessages.length, isOwnLast: lastIsOwn, withPill: true });
 
+  // Live presence — driven by WorkspacePresenceProvider (not useChatChannel).
+  const { online } = useWorkspacePresence(counterparty.workspaceId);
+
   // Live channel — graceful no-op when realtime is unconfigured (dev/tests):
-  // online stays false, typingUserIds empty, onMessage/onRead never fire, and
-  // the thread runs entirely off the static loader + optimistic local append.
-  const { online, typingUserIds, sendTyping, connected } = useChatChannel(conversationId, {
+  // typingUserIds empty, onMessage/onRead never fire, and the thread runs
+  // entirely off the static loader + optimistic local append.
+  const { typingUserIds, sendTyping, connected } = useChatChannel(conversationId, {
     onMessage: (data: LiveMessagePayload) => {
       if (!data.id || typeof data.body !== 'string' || !data.createdAt) return;
       const id = data.id;
@@ -315,12 +320,7 @@ export function ThreadView({
         )}
         <div className="relative">
           <WorkspaceAvatar name={counterparty.name} size="md" workspaceId={counterparty.workspaceId} />
-          {online && (
-            <span
-              aria-label="온라인"
-              className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[var(--md-sys-color-surface)] bg-[var(--md-sys-color-tertiary)]"
-            />
-          )}
+          <PresenceDot activity={online ? 'active' : 'offline'} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

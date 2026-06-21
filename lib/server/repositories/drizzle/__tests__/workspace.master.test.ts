@@ -24,8 +24,8 @@ describe('DrizzleWorkspaceRepository.listAllWorkspacesForMaster', () => {
     expect(list).toHaveLength(2);
     expect(list).toEqual(
       expect.arrayContaining([
-        { id: buyer.id, name: '구매사A', type: 'buyer', role: 'admin', status: 'active', unreadCount: 0, logoUpdatedAt: null, memberApprovalStatus: 'approved' },
-        { id: pg.id, name: 'PG-B', type: 'pg', role: 'admin', status: 'active', unreadCount: 0, logoUpdatedAt: null, memberApprovalStatus: 'approved' },
+        { id: buyer.id, name: '구매사A', type: 'buyer', role: 'admin', status: 'active', unreadCount: 0, logoUpdatedAt: null, isDemo: false, memberApprovalStatus: 'approved' },
+        { id: pg.id, name: 'PG-B', type: 'pg', role: 'admin', status: 'active', unreadCount: 0, logoUpdatedAt: null, isDemo: false, memberApprovalStatus: 'approved' },
       ]),
     );
   });

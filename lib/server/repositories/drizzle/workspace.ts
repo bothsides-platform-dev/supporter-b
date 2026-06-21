@@ -190,6 +190,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
             AND read_at IS NULL
         )`,
         logoUpdatedAt: workspaces.logoUpdatedAt,
+        isDemo: workspaces.isDemo,
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
@@ -213,6 +214,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         memberApprovalStatus: sql<'approved'>`'approved'`,
         unreadCount: sql<number>`0`,
         logoUpdatedAt: workspaces.logoUpdatedAt,
+        isDemo: workspaces.isDemo,
       })
       .from(workspaces)
       .where(eq(workspaces.status, 'active'))

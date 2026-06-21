@@ -37,7 +37,7 @@ vi.mock('@/lib/server/actions/chat/markConversationReadAction', () => ({
   markConversationReadAction: vi.fn().mockResolvedValue({ ok: true }),
 }));
 vi.mock('@/lib/hooks/useChatChannel', () => ({
-  useChatChannel: () => ({ online: false, typingUserIds: [], sendTyping: vi.fn(), connected: null }),
+  useChatChannel: () => ({ typingUserIds: [], sendTyping: vi.fn(), connected: null }),
 }));
 
 // ThreadView mounts AttachmentGalleryPanel, which imports listConversationAttachments

@@ -1,8 +1,18 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { PresenceState } from '@/components/presence/WorkspacePresenceProvider';
 
-afterEach(() => cleanup());
+// useWorkspacePresence drives the online dot.
+let workspacePresenceResult: PresenceState = { online: false, activity: 'offline' };
+vi.mock('@/components/presence/WorkspacePresenceProvider', () => ({
+  useWorkspacePresence: () => workspacePresenceResult,
+}));
+
+afterEach(() => {
+  cleanup();
+  workspacePresenceResult = { online: false, activity: 'offline' };
+});
 
 import { ConversationList } from '../ConversationList';
 import type { InboxListItem } from '../types';
@@ -204,5 +214,29 @@ describe('ConversationList', () => {
     expect(screen.getByText('P-2605-0042')).toBeInTheDocument();
     expect(screen.getByText(/결제대행 견적/)).toBeInTheDocument();
     expect(screen.getByText('내부 메모입니다.')).toBeInTheDocument();
+  });
+
+  it('counterparty 항목에서 상대방이 온라인이면 프레즌스 점을 렌더한다', () => {
+    workspacePresenceResult = { online: true, activity: 'active' };
+    render(
+      <ConversationList
+        items={[makeCounterparty()]}
+        selectedKey={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText('온라인')).toBeInTheDocument();
+  });
+
+  it('counterparty 항목에서 상대방이 오프라인이면 프레즌스 점을 렌더하지 않는다', () => {
+    workspacePresenceResult = { online: false, activity: 'offline' };
+    render(
+      <ConversationList
+        items={[makeCounterparty()]}
+        selectedKey={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText('온라인')).not.toBeInTheDocument();
   });
 });
