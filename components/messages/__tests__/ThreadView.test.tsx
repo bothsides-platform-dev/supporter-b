@@ -31,8 +31,9 @@ vi.mock('@/lib/server/actions/chat/markConversationReadAction', () => ({
 }));
 
 // useChatChannel pulls in the real `centrifuge` SDK — mock it so jsdom stays
-// clean, and so we can control online/typing and capture the onMessage/onRead
-// callbacks the component registers.
+// clean, and so we can control typing and capture the onMessage/onRead
+// callbacks the component registers. (online presence is now driven by
+// useWorkspacePresence, NOT useChatChannel.)
 type ChatPayload = { type?: string; userId?: string; [k: string]: unknown };
 let channelOptions: { onMessage?: (d: ChatPayload) => void; onRead?: (d: ChatPayload) => void } = {};
 const sendTyping = vi.fn();
@@ -42,6 +43,13 @@ vi.mock('@/lib/hooks/useChatChannel', () => ({
     channelOptions = opts;
     return channelResult;
   },
+}));
+
+// useWorkspacePresence drives the presence dot — mock it to control online state.
+import type { PresenceState } from '@/components/presence/WorkspacePresenceProvider';
+let workspacePresenceResult: PresenceState = { online: false, activity: 'offline' };
+vi.mock('@/components/presence/WorkspacePresenceProvider', () => ({
+  useWorkspacePresence: () => workspacePresenceResult,
 }));
 
 // http (ky) is used for the `/api/files/upload` POST. Mock it so the test can
@@ -76,6 +84,7 @@ beforeEach(() => {
   window.localStorage.clear();
   channelOptions = {};
   channelResult = { online: false, typingUserIds: [], sendTyping, connected: null };
+  workspacePresenceResult = { online: false, activity: 'offline' };
 });
 
 import { ThreadView } from '../ThreadView';
@@ -229,13 +238,14 @@ describe('ThreadView', () => {
     expect(await screen.findByText('읽음')).toBeInTheDocument();
   });
 
-  it('useChatChannel.online 이 true 면 프레즌스 점을 렌더한다', () => {
-    channelResult = { online: true, typingUserIds: [], sendTyping, connected: null };
+  it('useWorkspacePresence.online 이 true 면 프레즌스 점을 렌더한다', () => {
+    workspacePresenceResult = { online: true, activity: 'active' };
     render(base());
     expect(screen.getByLabelText('온라인')).toBeInTheDocument();
   });
 
-  it('online 이 false 면 프레즌스 점을 렌더하지 않는다', () => {
+  it('useWorkspacePresence.online 이 false 면 프레즌스 점을 렌더하지 않는다', () => {
+    workspacePresenceResult = { online: false, activity: 'offline' };
     render(base());
     expect(screen.queryByLabelText('온라인')).not.toBeInTheDocument();
   });

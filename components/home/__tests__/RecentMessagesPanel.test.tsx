@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import type { ConversationListItem } from '@/components/messages/types';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
+import type { PresenceState } from '@/components/presence/WorkspacePresenceProvider';
 
 // next/link renders as <a> in jsdom
 vi.mock('next/link', () => ({
@@ -25,7 +26,16 @@ vi.mock('@/components/primitives/WorkspaceAvatar', () => ({
   WorkspaceAvatar: ({ name }: { name: string }) => <span data-testid="avatar">{name}</span>,
 }));
 
-afterEach(() => cleanup());
+// useWorkspacePresence drives the online dot.
+let workspacePresenceResult: PresenceState = { online: false, activity: 'offline' };
+vi.mock('@/components/presence/WorkspacePresenceProvider', () => ({
+  useWorkspacePresence: () => workspacePresenceResult,
+}));
+
+afterEach(() => {
+  cleanup();
+  workspacePresenceResult = { online: false, activity: 'offline' };
+});
 
 import { RecentMessagesPanel } from '../RecentMessagesPanel';
 
@@ -120,5 +130,17 @@ describe('RecentMessagesPanel', () => {
       />,
     );
     expect(screen.getByLabelText('읽지 않음')).toBeInTheDocument();
+  });
+
+  it('counterparty 항목에서 상대방이 온라인이면 프레즌스 점을 렌더한다', () => {
+    workspacePresenceResult = { online: true, activity: 'active' };
+    render(<RecentMessagesPanel items={[makeConv()]} unreadCount={0} />);
+    expect(screen.getByLabelText('온라인')).toBeInTheDocument();
+  });
+
+  it('counterparty 항목에서 상대방이 오프라인이면 프레즌스 점을 렌더하지 않는다', () => {
+    workspacePresenceResult = { online: false, activity: 'offline' };
+    render(<RecentMessagesPanel items={[makeConv()]} unreadCount={0} />);
+    expect(screen.queryByLabelText('온라인')).not.toBeInTheDocument();
   });
 });
