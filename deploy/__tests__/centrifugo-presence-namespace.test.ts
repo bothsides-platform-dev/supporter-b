@@ -14,31 +14,37 @@ const config = readFileSync(
 );
 
 describe('Centrifugo presence namespace (v6)', () => {
+  // Extract the presence block once for all assertions to avoid false positives
+  // from keys that exist in other namespaces (e.g., chat namespace also has
+  // presence/join_leave keys).
+  const presenceBlockStart = config.indexOf('- name: presence');
+  const presenceBlock = config.slice(presenceBlockStart);
+  const nextNsStart = presenceBlock.indexOf('- name:', 5);
+  const presenceBlockScoped =
+    nextNsStart > -1 ? presenceBlock.slice(0, nextNsStart) : presenceBlock;
+
   it('declares a presence namespace', () => {
     expect(config).toMatch(/^\s*-\s*name:\s*presence\s*$/m);
   });
   it('enables presence + join_leave + force_push_join_leave', () => {
-    expect(config).toMatch(/^\s*presence:\s*true\s*$/m);
-    expect(config).toMatch(/^\s*join_leave:\s*true\s*$/m);
-    expect(config).toMatch(/^\s*force_push_join_leave:\s*true\s*$/m);
+    expect(presenceBlockScoped).toMatch(/^\s*presence:\s*true\s*$/m);
+    expect(presenceBlockScoped).toMatch(/^\s*join_leave:\s*true\s*$/m);
+    expect(presenceBlockScoped).toMatch(/^\s*force_push_join_leave:\s*true\s*$/m);
   });
   it('opens client subscribe + publish for the public presence model', () => {
-    expect(config).toMatch(/^\s*allow_subscribe_for_client:\s*true\s*$/m);
-    expect(config).toMatch(/^\s*allow_publish_for_subscriber:\s*true\s*$/m);
+    expect(presenceBlockScoped).toMatch(/^\s*allow_subscribe_for_client:\s*true\s*$/m);
+    expect(presenceBlockScoped).toMatch(/^\s*allow_publish_for_subscriber:\s*true\s*$/m);
   });
   it('keeps a last-state for late-observer activity recovery', () => {
-    expect(config).toMatch(/^\s*history_size:\s*1\s*$/m);
-    expect(config).toMatch(/^\s*history_ttl:/m);
+    expect(presenceBlockScoped).toMatch(/^\s*history_size:\s*1\s*$/m);
+    expect(presenceBlockScoped).toMatch(/^\s*history_ttl:/m);
   });
   it('does NOT use the phantom presence_ttl key (v6 unknown-key footgun)', () => {
     expect(config).not.toMatch(/^\s*presence_ttl\s*:/m);
   });
   it('does NOT route presence subscribes through the ACL proxy (public)', () => {
     // presence block must not enable subscribe_proxy (no relationship ACL, D1).
-    const presenceBlock = config.slice(config.indexOf('name: presence'));
-    const nextNs = presenceBlock.indexOf('- name:', 5);
-    const block = nextNs > -1 ? presenceBlock.slice(0, nextNs) : presenceBlock;
-    expect(block).not.toMatch(/subscribe_proxy_enabled:\s*true/);
+    expect(presenceBlockScoped).not.toMatch(/subscribe_proxy_enabled:\s*true/);
   });
   it('fixes chat typing: chat namespace allows client publish', () => {
     const chatBlock = config.slice(config.indexOf('name: chat'));
