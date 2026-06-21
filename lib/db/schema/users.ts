@@ -8,6 +8,10 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   phone: text('phone'),
   avatarColor: text('avatar_color').notNull().default('#000'),
+  // 프로필 사진 버전/유무 겸용 — NULL=사진 없음(이니셜), non-NULL=사진 있음 +
+  // 그 타임스탬프를 <img> 캐시 버스트 키(?v)로 사용. 업로드 시 now(), 삭제 시 NULL.
+  // 바이트는 user_avatar_blobs(분리 테이블). 비정규화(워크스페이스 has_logo 패턴).
+  avatarUpdatedAt: timestamp('avatar_updated_at', { withTimezone: true }),
   status: text('status').notNull().default('active'),
   // Email-verification flag. New signups are created false and flipped true when
   // the user consumes a signup_email token (link or 6-digit code). Read by the

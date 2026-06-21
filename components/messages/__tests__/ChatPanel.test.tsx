@@ -45,6 +45,7 @@ vi.mock('../team-thread-cache', () => ({
       rfpId: 'rfp-1',
       workspaceId: 'ws-self',
       viewerUserId: 'u-me',
+      viewerAvatarUpdatedAt: null,
       teamMembers: TEAM_ROSTER,
       messages: [],
     }),

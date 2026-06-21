@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation';
 import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
-import { Avatar } from '@/components/primitives/Avatar';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { WorkspaceBizProfileForm } from '@/components/settings/WorkspaceBizProfileForm';
 import { WorkspaceBizNoForm } from '@/components/settings/WorkspaceBizNoForm';
 import { WorkspaceNameForm } from '@/components/settings/WorkspaceNameForm';
 import { WorkspaceLogoForm } from '@/components/settings/WorkspaceLogoForm';
+import { UserAvatarForm } from '@/components/settings/UserAvatarForm';
 import { BizRequiredToast } from '@/components/settings/BizRequiredToast';
 import { DeleteAccountSection } from '@/components/settings/DeleteAccountSection';
 import { auth } from '@/auth';
@@ -82,18 +82,14 @@ export default async function ProfilePage({ searchParams }: Props) {
         </h1>
       </div>
 
-      {/* User profile (read-only for now — name/avatar editing is M9 surface) */}
+      {/* User profile — 프로필 사진 업로드/삭제 가능 */}
       <section>
         <div className="flex items-center gap-3 mb-3">
           <Label size="md" muted={false}>사용자</Label>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="flex items-center gap-4 mb-3">
-          <Avatar
-            name={me.name}
-            color="primary"
-            size="lg"
-          />
+          <UserAvatarForm userId={me.id} name={me.name} avatarUpdatedAt={me.avatarUpdatedAt} />
           <div className="min-w-0">
             <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">{me.name}</p>
             <p className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] break-all">
@@ -126,7 +122,7 @@ export default async function ProfilePage({ searchParams }: Props) {
         >
           {/* Left: meta KV (이름 폼 포함) */}
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
-            <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} hasLogo={ws.hasLogo} />
+            <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} />
             <WorkspaceNameForm
               currentName={ws.name}
               canEdit={memberMeta?.role === 'admin'}

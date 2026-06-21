@@ -17,7 +17,7 @@ const sidebarProviderStyle = {
 export type AppSidebarLayoutProps = {
   sidebar: SidebarProps;
   header?: {
-    user: { name: string; email: string };
+    user: { id: string; name: string; email: string; avatarUpdatedAt: string | null };
     workspaceType: WorkspaceType;
     className?: string;
   };

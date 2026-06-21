@@ -81,7 +81,7 @@ export function RecentMessagesPanel({
                     <AvatarWithPresence
                       name={item.counterparty.name}
                       workspaceId={item.counterparty.workspaceId}
-                      hasLogo={item.counterparty.hasLogo}
+                      logoUpdatedAt={item.counterparty.logoUpdatedAt}
                       size="md"
                     />
                   )}

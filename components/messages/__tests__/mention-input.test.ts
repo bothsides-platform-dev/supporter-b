@@ -11,8 +11,8 @@ import { ALL_TOKEN, serializeMention } from '@/lib/team-mentions';
 const U1 = '11111111-1111-4111-8111-111111111111';
 const U2 = '22222222-2222-4222-8222-222222222222';
 const cands: MentionCandidate[] = [
-  { userId: U1, name: '김민수', joinedAt: '2026-03-14T00:00:00.000Z' },
-  { userId: U2, name: '김민수', joinedAt: '2026-04-01T00:00:00.000Z' },
+  { userId: U1, name: '김민수', joinedAt: '2026-03-14T00:00:00.000Z', avatarUpdatedAt: null },
+  { userId: U2, name: '김민수', joinedAt: '2026-04-01T00:00:00.000Z', avatarUpdatedAt: null },
 ];
 
 describe('detectMentionQuery', () => {

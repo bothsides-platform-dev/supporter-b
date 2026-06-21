@@ -8,7 +8,8 @@ type Props = {
   name: string;
   size?: 'sm' | 'md';
   workspaceId?: string;
-  hasLogo?: boolean;
+  /** 로고 버전(ISO). 있으면 사진 + ?v 캐시 버스트, 없으면 이니셜. */
+  logoUpdatedAt?: string | null;
   className?: string;
 };
 
@@ -22,14 +23,20 @@ const imgSizeMap = {
   md: 'w-7 h-7',
 };
 
-export function WorkspaceAvatar({ name, size = 'sm', workspaceId, hasLogo, className }: Props) {
+export function WorkspaceAvatar({ name, size = 'sm', workspaceId, logoUpdatedAt, className }: Props) {
   const [imgError, setImgError] = useState(false);
+  const [prevLogoUpdatedAt, setPrevLogoUpdatedAt] = useState(logoUpdatedAt);
+  // 로고 버전이 바뀌면 렌더 중 imgError 동기 리셋(React derived-state 패턴).
+  if (logoUpdatedAt !== prevLogoUpdatedAt) {
+    setPrevLogoUpdatedAt(logoUpdatedAt);
+    setImgError(false);
+  }
 
-  if (hasLogo && workspaceId && !imgError) {
+  if (logoUpdatedAt && workspaceId && !imgError) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- bytes served from our own API route; no external domain needed
       <img
-        src={`/api/workspace/${workspaceId}/avatar`}
+        src={`/api/workspace/${workspaceId}/avatar?v=${Date.parse(logoUpdatedAt)}`}
         alt={name}
         role="img"
         onError={() => setImgError(true)}

@@ -34,7 +34,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | Language | TypeScript strict | `typescript@6.0.3` |
 | Auth | Auth.js v5 (no middleware — guard via `(app)/layout.tsx` redirect) | `next-auth@5.0.0-beta.31` |
 | DB | Drizzle ORM + Postgres | `drizzle-orm@0.45.0`, `postgres@3.4.7` |
-| Storage | Postgres bytea (`attachment_blobs` 테이블) — 첨부 바이트가 DB에 저장돼 외부 오브젝트 스토어 없음. `lib/server/storage/{postgres,memory}.ts` — 라우트는 `getStorage()` 만 본다 | (postgres-js 공유) |
+| Storage | Postgres bytea — 외부 오브젝트 스토어 없음. ① 첨부파일: `attachment_blobs` 테이블, `lib/server/storage/{postgres,memory}.ts`, 라우트는 `getStorage()` 만 본다. ② 사용자 프로필 사진: `user_avatar_blobs` 테이블, `UserAvatarRepo`(`getUserAvatarRepo()`) — `getStorage()` 외부, 별도 repo 패턴 | (postgres-js 공유) |
 | Styling | Tailwind v4 + CSS Variables (`@theme` block) | `tailwindcss@4.2.4` |
 | Headless UI | `@base-ui/react` (shadcn base-nova style) + Radix 일부 (`@radix-ui/react-popover`, `@radix-ui/react-slider`) | `@base-ui/react@1.4.1` |
 | Component tooling | shadcn (base-nova) — 컴포넌트 scaffolding 전용 | `shadcn@4.6.0` |

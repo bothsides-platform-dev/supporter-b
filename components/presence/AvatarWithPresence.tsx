@@ -7,7 +7,7 @@ import { PresenceDot } from '@/components/presence/PresenceDot';
 type Props = {
   name: string;
   workspaceId: string;
-  hasLogo?: boolean;
+  logoUpdatedAt?: string | null;
   size?: 'sm' | 'md';
 };
 
@@ -16,11 +16,11 @@ type Props = {
  * driven by `useWorkspacePresence`. Shared by ConversationList and
  * RecentMessagesPanel to avoid duplicating the avatar+dot markup.
  */
-export function AvatarWithPresence({ name, workspaceId, hasLogo, size = 'md' }: Props) {
+export function AvatarWithPresence({ name, workspaceId, logoUpdatedAt, size = 'md' }: Props) {
   const { online } = useWorkspacePresence(workspaceId);
   return (
     <div className="relative shrink-0">
-      <WorkspaceAvatar name={name} workspaceId={workspaceId} hasLogo={hasLogo} size={size} />
+      <WorkspaceAvatar name={name} workspaceId={workspaceId} logoUpdatedAt={logoUpdatedAt} size={size} />
       <PresenceDot activity={online ? 'active' : 'offline'} />
     </div>
   );
