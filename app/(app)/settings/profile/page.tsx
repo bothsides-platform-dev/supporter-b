@@ -122,7 +122,7 @@ export default async function ProfilePage({ searchParams }: Props) {
         >
           {/* Left: meta KV (이름 폼 포함) */}
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
-            <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} hasLogo={ws.hasLogo} />
+            <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} />
             <WorkspaceNameForm
               currentName={ws.name}
               canEdit={memberMeta?.role === 'admin'}

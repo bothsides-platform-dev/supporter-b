@@ -105,7 +105,7 @@ export default async function AppLayout({
           },
           workspaceType: active.type,
           workspaces,
-          current: { id: active.id, name: active.name, type: active.type, hasLogo: active.hasLogo },
+          current: { id: active.id, name: active.name, type: active.type, logoUpdatedAt: active.logoUpdatedAt },
           isMaster: user.isMaster ?? false,
         }}
         header={{

@@ -1,5 +1,10 @@
 # TODOS
 
+## Workspace Logo
+
+### workspaces.has_logo 컬럼 DROP (P3)
+워크스페이스 로고가 `logo_updated_at`(캐시 버스트 `?v` + immutable) 단일 컬럼으로 전환됨. `has_logo` 는 더 이상 코드가 읽지/쓰지 않는 dead 컬럼(expand-contract 의 contract 단계 잔여). 배포 안정 확인 후 schema(`lib/db/schema/workspaces.ts`)에서 제거하고 `pnpm db:push` (또는 `ALTER TABLE workspaces DROP COLUMN has_logo;`). 데이터 손실 없음(재계산 불필요 — `logo_updated_at` 가 단일 출처). (도입: 워크스페이스 로고 캐시버스트, 2026-06-21)
+
 ## Chat / Realtime
 
 ## Auth / Signup

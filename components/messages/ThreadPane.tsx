@@ -14,7 +14,7 @@ export function ThreadPane({
   sendDisabled,
 }: {
   conversationId: string;
-  counterpartyFallback: { workspaceId: string; name: string; type: 'buyer' | 'pg'; hasLogo: boolean };
+  counterpartyFallback: { workspaceId: string; name: string; type: 'buyer' | 'pg'; logoUpdatedAt: string | null };
   onBack?: () => void;
   /** ThreadView 변형 — 'rail' 은 상세 화면 우측 채팅 레일 임베드, 'tabs' 는 md 폭 탭 전환. */
   variant?: 'page' | 'rail' | 'tabs';

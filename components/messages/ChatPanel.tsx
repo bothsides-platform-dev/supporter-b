@@ -114,7 +114,7 @@ export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
                 <Suspense key={conversationId} fallback={<ThreadSkeleton />}>
                   <ThreadPane
                     conversationId={conversationId}
-                    counterpartyFallback={{ ...counterparty, hasLogo: false }}
+                    counterpartyFallback={{ ...counterparty, logoUpdatedAt: null }}
                     variant="rail"
                     defaultRfpId={rfpId}
                     sendDisabled={isSample}

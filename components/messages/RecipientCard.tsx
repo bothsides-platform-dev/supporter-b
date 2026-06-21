@@ -18,7 +18,7 @@ export function RecipientCard({ counterparty, rfpContext }: Props) {
         name={counterparty.name}
         size="md"
         workspaceId={counterparty.workspaceId}
-        hasLogo={counterparty.hasLogo}
+        logoUpdatedAt={counterparty.logoUpdatedAt}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

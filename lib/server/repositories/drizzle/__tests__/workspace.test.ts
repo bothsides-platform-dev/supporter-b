@@ -63,14 +63,14 @@ describe('DrizzleWorkspaceRepository', () => {
     expect(await repo.findById('00000000-0000-0000-0000-000000000000')).toBeUndefined();
   });
 
-  it('findById returns hasLogo: false when no logo blob exists', async () => {
+  it('findById returns logoUpdatedAt: null when no logo blob exists', async () => {
     const ws = await seedBuyerWorkspace(db);
     const fetched = await repo.findById(ws.id);
     expect(fetched).toBeDefined();
-    expect(fetched!.hasLogo).toBe(false);
+    expect(fetched!.logoUpdatedAt).toBeNull();
   });
 
-  it('findById returns hasLogo: true when logo blob exists', async () => {
+  it('findById returns logoUpdatedAt as ISO string when logo blob exists', async () => {
     const ws = await seedBuyerWorkspace(db);
     await db.insert(workspaceLogoBlobs).values({
       workspaceId: ws.id,
@@ -78,40 +78,36 @@ describe('DrizzleWorkspaceRepository', () => {
       mime: 'image/png',
     });
     const fetched = await repo.findById(ws.id);
-    expect(fetched!.hasLogo).toBe(true);
+    expect(fetched!.logoUpdatedAt).not.toBeNull();
   });
 
-  it('listForUser includes hasLogo for each workspace', async () => {
+  it('listForUser returns logoUpdatedAt: null when no logo is set', async () => {
     const ws = await seedBuyerWorkspace(db);
     const u = await seedUser(db);
     await seedMembership(db, ws.id, u.id);
     const list = await repo.listForUser(u.id);
     expect(list).toHaveLength(1);
-    expect(list[0].hasLogo).toBe(false);
+    expect(list[0].logoUpdatedAt).toBeNull();
   });
 
-  it('listForUser returns hasLogo: true when logo blob exists', async () => {
+  it('listForUser returns logoUpdatedAt as ISO string when set', async () => {
     const ws = await seedBuyerWorkspace(db);
     const u = await seedUser(db);
     await seedMembership(db, ws.id, u.id);
-    await db.insert(workspaceLogoBlobs).values({
-      workspaceId: ws.id,
-      bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
-      mime: 'image/png',
-    });
-    await db.update(workspaces).set({ hasLogo: true }).where(eq(workspaces.id, ws.id));
+    await db.update(workspaces).set({ logoUpdatedAt: new Date('2026-01-01T00:00:00Z') }).where(eq(workspaces.id, ws.id));
     const list = await repo.listForUser(u.id);
-    expect(list[0].hasLogo).toBe(true);
+    expect(list[0].logoUpdatedAt).not.toBeNull();
   });
 
-  it('listForUser reads hasLogo from workspaces.has_logo (not logo blob join)', async () => {
+  it('listForUser reads logoUpdatedAt from workspaces.logo_updated_at', async () => {
     const ws = await seedBuyerWorkspace(db);
     const u = await seedUser(db);
     await seedMembership(db, ws.id, u.id);
-    await db.update(workspaces).set({ hasLogo: true }).where(eq(workspaces.id, ws.id));
+    const now = new Date('2026-06-01T12:00:00Z');
+    await db.update(workspaces).set({ logoUpdatedAt: now }).where(eq(workspaces.id, ws.id));
 
     const list = await repo.listForUser(u.id);
-    expect(list[0].hasLogo).toBe(true);
+    expect(list[0].logoUpdatedAt).toBe(now.toISOString());
   });
 
   describe('isMember', () => {
@@ -484,29 +480,6 @@ describe('DrizzleWorkspaceRepository', () => {
       const ws = await seedBuyerWorkspace(db, { name: '옛 이름' });
       await repo.rename(ws.id, '새 이름');
       expect(await repo.getName(ws.id)).toBe('새 이름');
-    });
-  });
-
-  describe('setHasLogo', () => {
-    it('sets has_logo to true', async () => {
-      const ws = await seedBuyerWorkspace(db);
-      await repo.setHasLogo(ws.id, true);
-      const [row] = await db
-        .select({ hasLogo: workspaces.hasLogo })
-        .from(workspaces)
-        .where(eq(workspaces.id, ws.id));
-      expect(row.hasLogo).toBe(true);
-    });
-
-    it('sets has_logo back to false', async () => {
-      const ws = await seedBuyerWorkspace(db);
-      await repo.setHasLogo(ws.id, true);
-      await repo.setHasLogo(ws.id, false);
-      const [row] = await db
-        .select({ hasLogo: workspaces.hasLogo })
-        .from(workspaces)
-        .where(eq(workspaces.id, ws.id));
-      expect(row.hasLogo).toBe(false);
     });
   });
 
@@ -1129,6 +1102,30 @@ describe('DrizzleWorkspaceRepository', () => {
       await repo.deleteWorkspaces([]);
       const [rowA] = await db.select().from(workspaces).where(eq(workspaces.id, a.id));
       expect(rowA).toBeDefined();
+    });
+  });
+
+  describe('setLogoUpdatedAt + logoUpdatedAt exposure', () => {
+    it('findById exposes logoUpdatedAt (ISO) from the logo blob, null when absent', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      expect((await repo.findById(ws.id))!.logoUpdatedAt).toBeNull();
+      await db.insert(workspaceLogoBlobs).values({
+        workspaceId: ws.id,
+        bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+        mime: 'image/png',
+        updatedAt: new Date('2026-06-21T00:00:00.000Z'),
+      });
+      expect((await repo.findById(ws.id))!.logoUpdatedAt).toBe('2026-06-21T00:00:00.000Z');
+    });
+
+    it('setLogoUpdatedAt writes/clears workspaces.logo_updated_at and listForUser reflects it', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const u = await seedUser(db);
+      await seedMembership(db, ws.id, u.id);
+      await repo.setLogoUpdatedAt(ws.id, new Date('2026-06-21T00:00:00.000Z'));
+      expect((await repo.listForUser(u.id))[0].logoUpdatedAt).toBe('2026-06-21T00:00:00.000Z');
+      await repo.setLogoUpdatedAt(ws.id, null);
+      expect((await repo.listForUser(u.id))[0].logoUpdatedAt).toBeNull();
     });
   });
 

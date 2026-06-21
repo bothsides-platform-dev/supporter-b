@@ -16,7 +16,7 @@ function ws(
     role: 'admin',
     memberApprovalStatus: 'approved',
     unreadCount: 0,
-    hasLogo: false,
+    logoUpdatedAt: null,
     ...over,
   };
 }

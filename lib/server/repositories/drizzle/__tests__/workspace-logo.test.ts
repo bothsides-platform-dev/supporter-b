@@ -1,6 +1,6 @@
 // DrizzleWorkspaceLogoRepository — workspace logo bytea blob storage.
 //   - find() returns the raw bytes + mime (Buffer round-trip through pglite).
-//   - exists() is a cheap presence check (Workspace.hasLogo).
+//   - exists() is a cheap presence check for logo blob existence.
 //   - upsert() inserts then overwrites by workspace_id.
 //   - remove() deletes the row.
 import { beforeEach, describe, expect, it } from 'vitest';

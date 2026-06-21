@@ -42,7 +42,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                   name={item.counterparty.name}
                   size="md"
                   workspaceId={item.counterparty.workspaceId}
-                  hasLogo={item.counterparty.hasLogo}
+                  logoUpdatedAt={item.counterparty.logoUpdatedAt}
                 />
               )}
               <div className="min-w-0 flex-1">
