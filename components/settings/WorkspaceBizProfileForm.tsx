@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
 import { Field } from '@/components/primitives/Field';
 import { updateWorkspaceBizProfileAction } from '@/lib/server/actions/rfp';
-import { GRADE_LABELS, type MerchantGrade } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS, type MerchantTier } from '@/lib/types/bid';
 import { toast } from '@/lib/toast';
 
-const ALL_GRADES: MerchantGrade[] = [
-  'small',
+const ALL_GRADES: MerchantTier[] = [
+  'sole',
   'sme1',
   'sme2',
   'sme3',
@@ -17,11 +17,11 @@ const ALL_GRADES: MerchantGrade[] = [
 ];
 
 type Props = {
-  currentGrade: MerchantGrade | undefined;
+  currentGrade: MerchantTier | undefined;
 };
 
 export function WorkspaceBizProfileForm({ currentGrade }: Props) {
-  const [grade, setGrade] = useState<MerchantGrade>(
+  const [grade, setGrade] = useState<MerchantTier>(
     currentGrade ?? 'sme2',
   );
   const [submitting, setSubmitting] = useState(false);
@@ -66,7 +66,7 @@ export function WorkspaceBizProfileForm({ currentGrade }: Props) {
                   className="w-3.5 h-3.5 accent-[var(--md-sys-color-on-surface)]"
                 />
                 <span className="text-[13px] text-[var(--md-sys-color-on-surface)] font-medium min-w-[3rem]">
-                  {GRADE_LABELS[g]}
+                  {MERCHANT_TIER_LABELS[g]}
                 </span>
               </label>
             );

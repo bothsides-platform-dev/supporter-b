@@ -33,7 +33,7 @@ const BizProfileInput = z
       .refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
     taxType: z.enum(['general', 'simple', 'exempt']),
     status: z.enum(['active', 'suspended', 'closed']),
-    grade: z.enum(['small', 'sme1', 'sme2', 'sme3', 'general']).optional(),
+    grade: z.enum(['sole', 'sme1', 'sme2', 'sme3', 'general']).optional(),
     gradeSource: z.enum(['user_confirmed', 'user_overridden', 'unset']).default(
       'unset',
     ),

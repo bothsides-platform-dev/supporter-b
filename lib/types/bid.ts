@@ -1,5 +1,4 @@
 import type { Attachment } from './common';
-import type { MerchantGrade } from './biz-profile';
 
 export type PaymentMethod =
   | 'card'
@@ -47,14 +46,6 @@ export const MERCHANT_TIER_LABELS: Record<MerchantTier, string> = {
 
 // 소수 요율의 구간맵 (부분 허용 — 일부 구간만 채워도 됨)
 export type TierRates = Partial<Record<MerchantTier, number>>;
-
-// 구매사 등급(MerchantGrade)과 견적 구간(MerchantTier)은 라벨은 같지만 영세 식별자가
-// 다르다(등급 small ↔ 구간 sole). 비교 화면이 구매사 등급에 맞는 구간을 먼저 보여줄 때
-// 이 매핑을 거친다. 등급 미설정이면 일반(general)으로 폴백한다.
-export function tierFromMerchantGrade(grade: MerchantGrade | undefined): MerchantTier {
-  if (grade === undefined) return 'general';
-  return grade === 'small' ? 'sole' : grade;
-}
 
 // 구간이 적용되는 카테고리 라벨 (PAYMENT_METHOD_CATEGORIES.label 기준)
 export const TIERED_CATEGORY_LABELS = ['카드', '간편결제'] as const;

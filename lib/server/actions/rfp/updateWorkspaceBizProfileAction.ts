@@ -21,7 +21,7 @@ const BizProfilePatch = z
 
 const Input = z
   .object({
-    grade: z.enum(['small', 'sme1', 'sme2', 'sme3', 'general']).optional(),
+    grade: z.enum(['sole', 'sme1', 'sme2', 'sme3', 'general']).optional(),
     bizProfile: BizProfilePatch.optional(),
   })
   .strict()

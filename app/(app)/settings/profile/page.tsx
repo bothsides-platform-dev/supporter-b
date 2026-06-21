@@ -16,7 +16,7 @@ import {
 } from '@/lib/server/repositories/factory';
 import { LocalDate } from '@/components/primitives/LocalTime';
 import type { ReactNode } from 'react';
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +59,7 @@ export default async function ProfilePage({ searchParams }: Props) {
                 : '면세',
           ],
           ...(grade
-            ? ([['가맹점 등급', GRADE_LABELS[grade]]] as [string, ReactNode][])
+            ? ([['가맹점 등급', MERCHANT_TIER_LABELS[grade]]] as [string, ReactNode][])
             : []),
         ] as [string, ReactNode][])
       : []),

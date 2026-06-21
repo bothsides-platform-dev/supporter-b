@@ -8,7 +8,7 @@ import { logBusinessEvent } from '@/lib/observability/log';
 import { isValidWebsiteUrl, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import type { RfpActionResult } from './_shared';
 
-const MERCHANT_GRADES = ['small', 'sme1', 'sme2', 'sme3', 'general'] as const;
+const MERCHANT_GRADES = ['sole', 'sme1', 'sme2', 'sme3', 'general'] as const;
 
 const PAYMENT_METHODS = [
   'card',

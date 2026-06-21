@@ -4,7 +4,6 @@ import {
   MERCHANT_TIER_LABELS,
   isTieredMethod,
   getMethodRate,
-  tierFromMerchantGrade,
 } from '@/lib/types/bid';
 
 describe('merchant tiers', () => {
@@ -48,19 +47,5 @@ describe('getMethodRate', () => {
   });
   it('undefined면 undefined', () => {
     expect(getMethodRate(undefined, 'general')).toBeUndefined();
-  });
-});
-
-describe('tierFromMerchantGrade', () => {
-  it('구매사 등급(MerchantGrade)을 견적 구간(MerchantTier)으로 매핑한다', () => {
-    // 영세 라벨은 같지만 식별자가 다르다: 등급은 small, 구간은 sole.
-    expect(tierFromMerchantGrade('small')).toBe('sole');
-    expect(tierFromMerchantGrade('sme1')).toBe('sme1');
-    expect(tierFromMerchantGrade('sme2')).toBe('sme2');
-    expect(tierFromMerchantGrade('sme3')).toBe('sme3');
-    expect(tierFromMerchantGrade('general')).toBe('general');
-  });
-  it('등급이 없으면(미설정) 일반(general)으로 폴백한다', () => {
-    expect(tierFromMerchantGrade(undefined)).toBe('general');
   });
 });

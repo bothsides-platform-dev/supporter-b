@@ -3,7 +3,7 @@ import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { formatDate, formatDeadline, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
 import type { RFP } from '@/lib/types/rfp';
@@ -88,7 +88,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
         <div className="flex items-center justify-between py-2.5 border-t border-[var(--md-sys-color-outline-variant)] border-b border-[var(--md-sys-color-outline-variant)]">
           <div className="flex items-center gap-3">
             {grade ? (
-              <Chip label={GRADE_LABELS[grade]} color="surface" />
+              <Chip label={MERCHANT_TIER_LABELS[grade]} color="surface" />
             ) : (
               <>
                 <Chip label="미정" color="surface" />

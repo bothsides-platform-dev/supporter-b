@@ -13,7 +13,7 @@ import {
 } from '@/lib/server/repositories/factory';
 import { classifyPgInvitation, toPgCard } from '@/lib/server/pg-kanban';
 import { resolveCardColumn } from './resolveCardColumn';
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import type { PgInvitationPair } from '@/lib/server/repositories/types';
 import type { Bid } from '@/lib/types/bid';
 import type { BoardCard, BoardColumn } from '@/lib/types/column';
@@ -56,7 +56,7 @@ export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData>
  *
  * - received 단계는 bidId 를 생략(링크 미노출 규칙).
  * - rfpId = rfp.code (URL/표시용 — uuid 아님).
- * - grade 는 GRADE_LABELS 로 변환; bizProfile 없으면 '—'.
+ * - grade 는 MERCHANT_TIER_LABELS 로 변환; bizProfile 없으면 '—'.
  */
 export function pgInboxDataToRows(data: PgInboxData): InboxRow[] {
   return data.pairs.map(({ invitation, rfp }) => {
@@ -70,7 +70,7 @@ export function pgInboxDataToRows(data: PgInboxData): InboxRow[] {
       rfpId: rfp.code,
       rfpTitle: rfp.title,
       rfpDeadline: rfp.deadline,
-      grade: rfp.bizProfile?.grade ? GRADE_LABELS[rfp.bizProfile.grade] : '—',
+      grade: rfp.bizProfile?.grade ? MERCHANT_TIER_LABELS[rfp.bizProfile.grade] : '—',
       gradeRaw: rfp.bizProfile?.grade,
       contractType: rfp.contractType ?? null,
       isSample: rfp.isSample ?? false,

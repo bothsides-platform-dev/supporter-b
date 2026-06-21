@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
-import { GRADE_LABELS, type MerchantGrade } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS, type MerchantTier } from '@/lib/types/bid';
 
 type Source = 'user_confirmed' | 'user_overridden';
 
@@ -11,15 +11,15 @@ type Props = {
   /** Self-declared grade selection. Source is always `user_confirmed` in v0
    *  (Step 6) — `user_overridden` is reserved for the post-NICE flow that
    *  Step 7+ may reintroduce. */
-  onConfirm: (grade: MerchantGrade, source: Source) => void;
+  onConfirm: (grade: MerchantTier, source: Source) => void;
 };
 
-const ALL_GRADES: MerchantGrade[] = ['small', 'sme1', 'sme2', 'sme3', 'general'];
+const ALL_GRADES: MerchantTier[] = ['sole', 'sme1', 'sme2', 'sme3', 'general'];
 
 // Statutory revenue brackets (annual, 카드 가맹점 우대수수료 기준).
 // Used as plain helper text — not a hard validator.
-const REVENUE_HINT: Record<MerchantGrade, string> = {
-  small: '연매출 3억 원 이하',
+const REVENUE_HINT: Record<MerchantTier, string> = {
+  sole: '연매출 3억 원 이하',
   sme1: '연매출 3억 ~ 5억 원',
   sme2: '연매출 5억 ~ 10억 원',
   sme3: '연매출 10억 ~ 30억 원',
@@ -27,7 +27,7 @@ const REVENUE_HINT: Record<MerchantGrade, string> = {
 };
 
 export function GradeConfirmPanel({ onConfirm }: Props) {
-  const [grade, setGrade] = useState<MerchantGrade>('sme1');
+  const [grade, setGrade] = useState<MerchantTier>('sme1');
   const [confirmed, setConfirmed] = useState(false);
 
   if (confirmed) {
@@ -36,7 +36,7 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
         <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
           등급 확정
         </span>
-        <Chip label={GRADE_LABELS[grade]} color="surface" />
+        <Chip label={MERCHANT_TIER_LABELS[grade]} color="surface" />
         <button
           type="button"
           onClick={() => setConfirmed(false)}
@@ -72,7 +72,7 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
                 className="w-3.5 h-3.5 accent-[var(--md-sys-color-on-surface)]"
               />
               <span className="text-[13px] text-[var(--md-sys-color-on-surface)] font-medium min-w-[3rem]">
-                {GRADE_LABELS[g]}
+                {MERCHANT_TIER_LABELS[g]}
               </span>
               <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] flex-1">
                 {REVENUE_HINT[g]}
