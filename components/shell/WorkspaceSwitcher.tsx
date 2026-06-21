@@ -12,6 +12,7 @@ import {
 import { Chip } from '@/components/primitives/Chip';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { switchWorkspaceAction } from '@/lib/server/actions/workspace/switchWorkspaceAction';
+import { disconnectCentrifuge } from '@/lib/realtime/centrifuge-client';
 import type {
   WorkspaceMembershipSummary,
   WorkspaceType,
@@ -39,6 +40,10 @@ export function WorkspaceSwitcher({ current, workspaces, isMaster }: Props) {
     setBusy(true);
     const r = await switchWorkspaceAction(id);
     if (r.ok) {
+      // Tear down the live Centrifuge connection before the hard nav — its
+      // connection-token binds the OLD workspaceId, so presence (and chat ACL)
+      // for the new workspace need a freshly-scoped connection on the next page.
+      disconnectCentrifuge();
       window.location.assign(r.redirectTo);
     } else {
       setPending(null);

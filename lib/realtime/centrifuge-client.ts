@@ -18,6 +18,9 @@ import { Centrifuge } from 'centrifuge';
 
 import { http } from '@/lib/http';
 
+// Presence correctness depends on the workspace-switch path tearing down this
+// connection (disconnectCentrifuge below): the connection-token binds
+// info.workspaceId at construction, so a new active workspace needs a fresh client.
 let client: Centrifuge | null = null;
 // Track that we've resolved the env once, so an unconfigured tab doesn't retry
 // the (cheap) string read on every call. `null` is a valid resolved value.
@@ -49,6 +52,14 @@ export function getCentrifuge(): Centrifuge | null {
     getToken: () => getConnectionToken(),
   });
   return client;
+}
+
+/** Tear down the singleton (workspace switch — the token's info.workspaceId is
+ *  bound at construction, so a new workspace needs a fresh connection). */
+export function disconnectCentrifuge(): void {
+  client?.disconnect();
+  client = null;
+  resolved = false;
 }
 
 /** Test-only — drop the cached singleton + resolution flag. */
