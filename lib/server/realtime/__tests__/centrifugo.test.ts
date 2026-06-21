@@ -11,6 +11,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  disconnectCentrifugoUser,
   isUserPresentInConversation,
   publishChatEvent,
   publishTeamChatEvent,
@@ -201,5 +202,74 @@ describe('isUserPresentInConversation', () => {
     await expect(isUserPresentInConversation('conv-1', 'user-1')).resolves.toBe(
       false,
     );
+  });
+
+  it('NEVER reads a presence:ws channel (digest suppression must stay conversation-scoped)', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', 'http://localhost:8000/api');
+    vi.stubEnv('CENTRIFUGO_API_KEY', 'secret');
+    const fetchSpy = vi.fn().mockResolvedValue({
+      json: async () => ({
+        result: {
+          presence: {
+            'client-a': { client: 'client-a', user: 'user-1' },
+          },
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await isUserPresentInConversation('conv-1', 'user-1');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [, init] = fetchSpy.mock.calls[0];
+    const reqBody = JSON.parse(init.body);
+    expect(reqBody.params.channel.startsWith('chat:conversation:')).toBe(true);
+    expect(reqBody.params.channel.includes('presence:ws')).toBe(false);
+  });
+});
+
+describe('disconnectCentrifugoUser', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('no-ops (resolves, no fetch) when env is unconfigured', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', '');
+    vi.stubEnv('CENTRIFUGO_API_KEY', '');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(disconnectCentrifugoUser('u1')).resolves.toBeUndefined();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('POSTs a disconnect command for the given userId when configured', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', 'http://localhost:8000/api');
+    vi.stubEnv('CENTRIFUGO_API_KEY', 'secret');
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await disconnectCentrifugoUser('u1');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe('http://localhost:8000/api');
+    const body = JSON.parse(init.body);
+    expect(body.method).toBe('disconnect');
+    expect(body.params).toEqual({ user: 'u1' });
+    expect(init.headers['X-API-Key']).toBe('secret');
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('swallows transport errors (best-effort, never throws)', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', 'http://localhost:8000/api');
+    vi.stubEnv('CENTRIFUGO_API_KEY', 'secret');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new Error('connection refused')),
+    );
+
+    await expect(disconnectCentrifugoUser('u1')).resolves.toBeUndefined();
   });
 });

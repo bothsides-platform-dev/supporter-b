@@ -5,6 +5,8 @@ import { AppSidebarLayout } from '@/components/shell/AppSidebarLayout';
 import { ToasterProvider } from '@/components/shell/Toaster';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { GlobalShortcuts } from '@/components/shell/GlobalShortcuts';
+import { WorkspacePresenceProvider } from '@/components/presence/WorkspacePresenceProvider';
+import { PresenceClient } from '@/components/presence/PresenceClient';
 import { SentryUserContext } from '@/components/observability/SentryUserContext';
 import { ChannelTalkHideButton } from '@/components/shell/ChannelTalkHideButton';
 import { auth } from '@/auth';
@@ -94,36 +96,39 @@ export default async function AppLayout({
 
   return (
     <ToasterProvider>
-      <ChannelTalkHideButton />
-      <AppSidebarLayout
-        sidebar={{
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name ?? user.email,
-            avatarUpdatedAt,
-          },
-          workspaceType: active.type,
-          workspaces,
-          current: { id: active.id, name: active.name, type: active.type, logoUpdatedAt: active.logoUpdatedAt },
-          isMaster: user.isMaster ?? false,
-        }}
-        header={{
-          user: {
-            id: user.id,
-            name: user.name ?? user.email,
-            email: user.email,
-            avatarUpdatedAt,
-          },
-          workspaceType: active.type,
-        }}
-        mainClassName="bg-[var(--shell-main-bg)] md:rounded-tl-xl md:border-l md:border-t md:border-[var(--md-sys-color-outline-variant)]"
-      >
-        {children}
-      </AppSidebarLayout>
-      <CommandPalette workspaceType={active.type} />
-      <GlobalShortcuts />
-      <SentryUserContext user={sentryUser} />
+      <WorkspacePresenceProvider>
+        <ChannelTalkHideButton />
+        <AppSidebarLayout
+          sidebar={{
+            user: {
+              id: user.id,
+              email: user.email,
+              name: user.name ?? user.email,
+              avatarUpdatedAt,
+            },
+            workspaceType: active.type,
+            workspaces,
+            current: { id: active.id, name: active.name, type: active.type, logoUpdatedAt: active.logoUpdatedAt },
+            isMaster: user.isMaster ?? false,
+          }}
+          header={{
+            user: {
+              id: user.id,
+              name: user.name ?? user.email,
+              email: user.email,
+              avatarUpdatedAt,
+            },
+            workspaceType: active.type,
+          }}
+          mainClassName="bg-[var(--shell-main-bg)] md:rounded-tl-xl md:border-l md:border-t md:border-[var(--md-sys-color-outline-variant)]"
+        >
+          {children}
+        </AppSidebarLayout>
+        <CommandPalette workspaceType={active.type} />
+        <PresenceClient workspaceId={active.id} isDemo={active.isDemo ?? false} />
+        <GlobalShortcuts />
+        <SentryUserContext user={sentryUser} />
+      </WorkspacePresenceProvider>
     </ToasterProvider>
   );
 }

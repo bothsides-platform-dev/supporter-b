@@ -7,6 +7,12 @@
 
 ## Chat / Realtime
 
+### Presence: document observer-identity exposure in the threat model (P3)
+공개 presence(`presence:ws:<V>`, D1)에서 raw `sub.presence()` 페이로드는 co-subscriber의 `user`(userId)+`connInfo.workspaceId`를 노출한다(앱 UI는 owner 필터로 binary online만 보여줘 새지 않지만, raw WS 클라이언트는 "X가 V를 관찰 중"을 열거 가능). 봉인 입찰 데이터(수수료·경쟁사 수)는 무관. 위협 모델 문서에 한 줄 명기. (발견: online-presence M1 whole-branch review 2026-06-21)
+
+### Presence: guard same-workspace self-subscribe before M2 (P2)
+누군가 `useWorkspacePresence(ownWorkspaceId)`를 호출하면 `<PresenceClient/>`의 self-broadcast와 같은 채널을 공유해 한쪽 `dispose()`가 다른 쪽 `removeSubscription`을 끊는 footgun. M1 wiring에선 소비처가 counterparty id만 넘겨 도달 불가(2-sided 모델). M2에서 같은-워크스페이스 관찰을 추가하기 전에 `managedSubscribe`/Provider에 공유-구독 가드 추가. (발견: M1 whole-branch review 2026-06-21)
+
 ## Auth / Signup
 
 ### ~~AuthService unique-violation→EMAIL_TAKEN 매핑 DRY~~ ✅ v0.2.25.1

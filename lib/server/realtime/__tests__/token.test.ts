@@ -26,22 +26,25 @@ describe('issueCentrifugoConnectionToken', () => {
     vi.unstubAllEnvs();
   });
 
-  it('signs an HS256 JWT with sub = userId and a future exp', async () => {
+  it('signs an HS256 JWT with sub, info.workspaceId, and a ~30m exp', async () => {
     vi.stubEnv('CENTRIFUGO_TOKEN_HMAC_SECRET', SECRET);
 
-    const token = await issueCentrifugoConnectionToken('user-42');
+    const token = await issueCentrifugoConnectionToken('user-42', 'ws-9');
 
-    const { payload, protectedHeader } = await jwtVerify(
-      token,
-      encode(SECRET),
-    );
+    const { payload, protectedHeader } = await jwtVerify(token, encode(SECRET));
     expect(protectedHeader.alg).toBe('HS256');
     expect(payload.sub).toBe('user-42');
-    expect(typeof payload.exp).toBe('number');
-    // ~10 minutes out (allow generous slack so the assertion is not flaky).
+    expect((payload.info as { workspaceId?: string }).workspaceId).toBe('ws-9');
     const now = Math.floor(Date.now() / 1000);
-    expect(payload.exp).toBeGreaterThan(now + 60);
-    expect(payload.exp).toBeLessThanOrEqual(now + 11 * 60);
+    expect(payload.exp).toBeGreaterThan(now + 25 * 60);
+    expect(payload.exp).toBeLessThanOrEqual(now + 31 * 60);
+  });
+
+  it('omits info when no workspaceId is given (back-compat)', async () => {
+    vi.stubEnv('CENTRIFUGO_TOKEN_HMAC_SECRET', SECRET);
+    const token = await issueCentrifugoConnectionToken('user-1');
+    const { payload } = await jwtVerify(token, encode(SECRET));
+    expect(payload.info).toBeUndefined();
   });
 
   it('produces a signature bound to the secret (wrong secret fails to verify)', async () => {

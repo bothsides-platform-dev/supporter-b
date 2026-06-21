@@ -86,7 +86,6 @@ describe('useChatChannel — graceful no-op (URL 미설정)', () => {
     expect(CentrifugeCtor).not.toHaveBeenCalled();
     expect(mockClient.newSubscription).not.toHaveBeenCalled();
     expect(mockSub.subscribe).not.toHaveBeenCalled();
-    expect(result.current.online).toBe(false);
     expect(result.current.typingUserIds).toEqual([]);
     expect(result.current.connected).toBeNull();
   });
