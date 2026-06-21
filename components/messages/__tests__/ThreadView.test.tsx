@@ -37,7 +37,7 @@ vi.mock('@/lib/server/actions/chat/markConversationReadAction', () => ({
 type ChatPayload = { type?: string; userId?: string; [k: string]: unknown };
 let channelOptions: { onMessage?: (d: ChatPayload) => void; onRead?: (d: ChatPayload) => void } = {};
 const sendTyping = vi.fn();
-let channelResult: UseChatChannelResult = { online: false, typingUserIds: [], sendTyping, connected: null };
+let channelResult: UseChatChannelResult = { typingUserIds: [], sendTyping, connected: null };
 vi.mock('@/lib/hooks/useChatChannel', () => ({
   useChatChannel: (_conversationId: string, opts: typeof channelOptions): UseChatChannelResult => {
     channelOptions = opts;
@@ -83,7 +83,7 @@ beforeEach(() => {
   // 초안 보존이 localStorage 를 쓰므로 테스트 간 격리를 위해 매번 비운다.
   window.localStorage.clear();
   channelOptions = {};
-  channelResult = { online: false, typingUserIds: [], sendTyping, connected: null };
+  channelResult = { typingUserIds: [], sendTyping, connected: null };
   workspacePresenceResult = { online: false, activity: 'offline' };
 });
 
@@ -251,7 +251,7 @@ describe('ThreadView', () => {
   });
 
   it('typingUserIds 가 있으면 "입력 중…" 인디케이터를 렌더한다', () => {
-    channelResult = { online: false, typingUserIds: ['pg-user-1'], sendTyping, connected: null };
+    channelResult = { typingUserIds: ['pg-user-1'], sendTyping, connected: null };
     render(base());
     expect(screen.getByText('입력 중…')).toBeInTheDocument();
   });
@@ -475,19 +475,19 @@ describe('ThreadView', () => {
   });
 
   it('connected 가 false 면 "재연결 중" 배너를 렌더한다', () => {
-    channelResult = { online: false, typingUserIds: [], sendTyping, connected: false };
+    channelResult = { typingUserIds: [], sendTyping, connected: false };
     render(base());
     expect(screen.getByRole('status')).toHaveTextContent('재연결 중');
   });
 
   it('connected 가 null 이면 배너를 렌더하지 않는다', () => {
-    channelResult = { online: false, typingUserIds: [], sendTyping, connected: null };
+    channelResult = { typingUserIds: [], sendTyping, connected: null };
     render(base());
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('connected 가 true 면 배너를 렌더하지 않는다', () => {
-    channelResult = { online: false, typingUserIds: [], sendTyping, connected: true };
+    channelResult = { typingUserIds: [], sendTyping, connected: true };
     render(base());
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
