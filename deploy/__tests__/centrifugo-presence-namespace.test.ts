@@ -39,7 +39,8 @@ describe('Centrifugo presence namespace (v6)', () => {
     // WorkspacePresenceProvider derives online via sub.presence(); a late observer
     // recovers last activity via sub.history(). v6 denies BOTH (103) without these
     // dedicated allow flags — the presence/history_size feature toggles are NOT enough.
-    // The integration smoke (presence.integration.test.ts) proves the live 103 path.
+    // This static guard only proves the keys EXIST, not that Centrifugo honors them —
+    // verify by eyeballing live presence dots once after a Centrifugo config deploy.
     expect(presenceBlockScoped).toMatch(/^\s*allow_presence_for_subscriber:\s*true\s*$/m);
     expect(presenceBlockScoped).toMatch(/^\s*allow_history_for_subscriber:\s*true\s*$/m);
   });

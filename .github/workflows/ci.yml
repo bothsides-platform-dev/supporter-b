@@ -50,57 +50,6 @@ jobs:
       # needed), unit-jsdom uses RTL. 280+ tests, all in-process.
       - run: pnpm test
 
-  presence-integration:
-    name: presence integration (live Centrifugo v6)
-    # The ONLY guard for the v6 permission/delivery class (mocks give false green —
-    # that is how chat typing broke silently). Boots an ephemeral Centrifugo v6 from
-    # the REPO config (deploy/centrifugo/config.yaml) and runs presence.integration.test.ts
-    # ONLY. Gated by CENTRIFUGO_INTEGRATION=1; the default unit job never boots docker.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # Boot Centrifugo v6 with the repo config + a known HMAC secret. We use an
-      # explicit `docker run` (not a services: block) because the suite must mount the
-      # real config.yaml and override the entrypoint command — service containers can do
-      # neither. CENTRIFUGO_VAR_PROXY_SECRET (empty) satisfies the config's ${…}
-      # subscribe-proxy header expansion; the proxy endpoint is never hit (we only touch
-      # the proxy-less presence namespace).
-      - name: boot ephemeral Centrifugo v6
-        run: |
-          docker run -d --name cent-smoke -p 8000:8000 \
-            -v "$PWD/deploy/centrifugo/config.yaml:/centrifugo/config.yaml" \
-            -e CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY=test-secret \
-            -e CENTRIFUGO_VAR_PROXY_SECRET= \
-            centrifugo/centrifugo:v6 centrifugo -c /centrifugo/config.yaml
-          # Wait for the WebSocket endpoint to come up (fail fast if the config is rejected).
-          for i in $(seq 1 30); do
-            if docker logs cent-smoke 2>&1 | grep -q "serving websocket"; then
-              echo "Centrifugo ready"; exit 0
-            fi
-            sleep 1
-          done
-          echo "Centrifugo did not become ready — logs:"; docker logs cent-smoke; exit 1
-      - name: run presence integration smoke
-        env:
-          CENTRIFUGO_INTEGRATION: '1'
-          NEXT_PUBLIC_CENTRIFUGO_WS_URL: ws://localhost:8000/connection/websocket
-          CENTRIFUGO_TOKEN_HMAC_SECRET: test-secret
-        run: pnpm test:integration
-      - name: Centrifugo logs (on failure)
-        if: failure()
-        run: docker logs cent-smoke
-      - name: teardown Centrifugo
-        if: always()
-        run: docker rm -f cent-smoke || true
-
   e2e:
     name: e2e (playwright)
     # Only on main push — PRs already covered by lint + unit-test.

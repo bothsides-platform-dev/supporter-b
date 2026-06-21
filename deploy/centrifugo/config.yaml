@@ -90,7 +90,8 @@ channel:
       # derives online state by calling sub.presence(); a late observer recovers the last
       # activity via sub.history({limit:1}). Without these two flags v6 answers BOTH with
       # 103 "permission denied" — every presence dot stays dark in prod even though the
-      # feature is "enabled". Caught by the integration smoke (presence.integration.test.ts).
+      # feature is "enabled". The drift guard asserts these keys exist; verify they're
+      # honored by eyeballing live dots once after deploying this config.
       allow_presence_for_subscriber: true
       allow_history_for_subscriber: true
       history_size: 1

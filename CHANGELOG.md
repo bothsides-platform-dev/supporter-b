@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 - **채팅 입력 중 표시(…타이핑)가 다시 작동해요**: 실시간 서버 설정에 클라이언트 publish 권한이 빠져 있어 입력 중 표시가 조용히 안 뜨던 문제를 함께 고쳤어요.
 
-> 배포 메모: 실시간 서버(Centrifugo) 설정에 `presence` 네임스페이스가 추가되고 `chat`에 publish 권한이 켜져요 → **`docker compose up -d centrifugo`로 컨테이너를 재생성**한 뒤 앱을 재배포하세요. DDL·env 변경은 없어요(`db:push` 불필요). ⚠️ presence 네임스페이스는 v6 클라이언트 권한 4종(`allow_subscribe_for_client`·`allow_publish_for_subscriber`·`allow_presence_for_subscriber`·`allow_history_for_subscriber`)이 모두 있어야 점이 떠요(하나라도 빠지면 무에러로 점이 안 보여요) — `deploy/__tests__` 드리프트 가드와 CI `presence-integration` 잡(실제 Centrifugo 부팅)이 이를 검증해요. 테스트 전용 `ws` devDependency가 추가됐어요(런타임 무관).
+> 배포 메모: 실시간 서버(Centrifugo) 설정에 `presence` 네임스페이스가 추가되고 `chat`에 publish 권한이 켜져요 → **`docker compose up -d centrifugo`로 컨테이너를 재생성**한 뒤 앱을 재배포하세요. DDL·env 변경은 없어요(`db:push` 불필요). ⚠️ presence 네임스페이스는 v6 클라이언트 권한 4종(`allow_subscribe_for_client`·`allow_publish_for_subscriber`·`allow_presence_for_subscriber`·`allow_history_for_subscriber`)이 모두 있어야 점이 떠요(하나라도 빠지면 무에러로 점이 안 보여요) — `deploy/__tests__` 드리프트 가드가 config에 4종 키 존재를 검증해요. 정적 가드는 "키가 있다"까지만 보장하므로, **배포 직후 실제로 점이 뜨는지 1회 육안 확인**하세요(Centrifugo가 키를 실제로 적용하는지는 정적 검사로 알 수 없어요).
 
 ## [0.2.30.0] - 2026-06-21
 

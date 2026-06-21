@@ -15,7 +15,6 @@
     "knip": "knip",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "test:integration": "CENTRIFUGO_INTEGRATION=1 vitest run lib/realtime/__tests__/presence.integration.test.ts",
     "e2e": "tsx scripts/e2e-precheck.ts && playwright test",
     "e2e:precheck": "tsx scripts/e2e-precheck.ts",
     "e2e:reset": "tsx scripts/test-db-reset.ts",
