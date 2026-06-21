@@ -35,11 +35,17 @@ function makeNodeLogger(): AppLogger {
   let transport: ReturnType<typeof pinoLib.transport> | undefined;
   if (AXIOM_TOKEN && AXIOM_DATASET) {
     try {
-      // Anchor to this module's location rather than process.cwd() — cwd is not
-      // guaranteed to be the app root at runtime (seen /var/task in prod, Sentry #7499226682).
       // Pre-resolve to an absolute path because pino transport runs in a worker thread
       // and cannot resolve a bare specifier under bundlers.
-      const axiomPinoPath = createRequire(import.meta.url).resolve('@axiomhq/pino');
+      // Anchor: prefer import.meta.url, but Turbopack's prod server bundle replaces
+      // it with a numeric module ID (e.g. 436869) — createRequire(<number>) then throws
+      // `The "path" argument must be of type string`. Fall back to the app root
+      // (PM2 `next start` runs from there on Lightsail; @axiomhq/pino stays in
+      // node_modules via serverExternalPackages, so cwd-anchored resolve works).
+      const anchor = typeof import.meta.url === 'string'
+        ? import.meta.url
+        : `file://${process.cwd()}/package.json`;
+      const axiomPinoPath = createRequire(anchor).resolve('@axiomhq/pino');
       transport = pinoLib.transport({ target: axiomPinoPath, options: { token: AXIOM_TOKEN, dataset: AXIOM_DATASET } });
     } catch (err) {
       // Degrade to stdout pino — never crash the instrumentation hook over log transport setup.
