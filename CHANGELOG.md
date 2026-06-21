@@ -13,6 +13,13 @@ All notable changes to this project will be documented in this file.
 - **채팅 입력 중 표시(…타이핑)가 다시 작동해요**: 실시간 서버 설정에 클라이언트 publish 권한이 빠져 있어 입력 중 표시가 조용히 안 뜨던 문제를 함께 고쳤어요.
 
 > 배포 메모: 실시간 서버(Centrifugo) 설정에 `presence` 네임스페이스가 추가되고 `chat`에 publish 권한이 켜져요 → **`docker compose up -d centrifugo`로 컨테이너를 재생성**한 뒤 앱을 재배포하세요. DDL·env 변경은 없어요(`db:push` 불필요). ⚠️ presence 네임스페이스는 v6 클라이언트 권한 4종(`allow_subscribe_for_client`·`allow_publish_for_subscriber`·`allow_presence_for_subscriber`·`allow_history_for_subscriber`)이 모두 있어야 점이 떠요(하나라도 빠지면 무에러로 점이 안 보여요) — `deploy/__tests__` 드리프트 가드가 config에 4종 키 존재를 검증해요. 정적 가드는 "키가 있다"까지만 보장하므로, **배포 직후 실제로 점이 뜨는지 1회 육안 확인**하세요(Centrifugo가 키를 실제로 적용하는지는 정적 검사로 알 수 없어요). 또한 배포 재시작 시 전 탭이 동시에 재접속하므로, connection-token 라우트는 동시 발급이 상한(`CENTRIFUGO_TOKEN_MAX_INFLIGHT`, 기본 25, 선택)을 넘으면 503 + 지터된 Retry-After로 흘려보내 Postgres 풀을 보호해요(클라가 자동 분산 재시도). 필수 env 추가는 없어요.
+## [0.2.32.0] - 2026-06-21
+
+### Fixed
+
+- **로그인했는데 화면이 계속 튕기면 자동으로 로그아웃돼 다시 로그인할 수 있어요**: 드물게 예전 로그인 정보(쿠키)가 깔끔히 지워지지 않으면 화면이 `홈 ↔ 로그인` 사이를 무한히 오가며 어디에도 못 들어가는 일이 있었어요. 이제 로그아웃이 여러 번 반복되면(루프 감지) ① 브라우저가 실제로 들고 있는 모든 로그인 쿠키 변종을 찾아 확실히 지우고, ② 그래도 안 풀리면 로그인 화면으로 보내 거기서 멈추도록 해 무한 반복을 끊어요. 로그인 화면에는 "로그인 정보가 만료되어 다시 로그인해 주세요" 안내가 떠요. 다시 로그인하면 새 로그인 정보로 교체돼 정상으로 돌아와요. 운영에서 버전을 올린 직후(재배포) 이 증상이 생겨도 스스로 복구돼요.
+
+> 배포 메모: 코드 변경뿐이라 `next build` 후 `pm2 restart bidit`로 적용돼요. DDL·env 변경 없어요. 미들웨어(proxy) 변경이 포함돼 빌드가 필요해요.
 
 ## [0.2.30.0] - 2026-06-21
 

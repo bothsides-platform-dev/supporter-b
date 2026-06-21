@@ -1,5 +1,10 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { sessionCookie, sessionCookieClearHeaders } from '../cookie-config';
+import {
+  sessionCookie,
+  sessionCookieClearHeaders,
+  parseSessionCookieNames,
+  sessionCookieClearHeadersFor,
+} from '../cookie-config';
 
 const env = { ...process.env };
 afterEach(() => {
@@ -92,5 +97,101 @@ describe('sessionCookieClearHeaders', () => {
     for (const name of DEV_NAMES) {
       expect(headers.some((h: string) => h.startsWith(name))).toBe(true);
     }
+  });
+});
+
+describe('parseSessionCookieNames', () => {
+  it('extracts every session-token variant (prefix + chunk) and ignores non-session cookies', () => {
+    const header =
+      '__Secure-authjs.session-token=aaa; foo=bar; ' +
+      '__Host-authjs.session-token.0=bbb; theme=dark; authjs.csrf-token=ccc';
+    const names = parseSessionCookieNames(header);
+    expect(names).toContain('__Secure-authjs.session-token');
+    expect(names).toContain('__Host-authjs.session-token.0');
+    // csrf-token is NOT a session cookie
+    expect(names).not.toContain('authjs.csrf-token');
+    expect(names).not.toContain('foo');
+    expect(names).not.toContain('theme');
+  });
+
+  it('returns [] for an empty or whitespace-only header', () => {
+    expect(parseSessionCookieNames('')).toEqual([]);
+    expect(parseSessionCookieNames('   ')).toEqual([]);
+  });
+
+  it('dedupes repeated names', () => {
+    const header =
+      'authjs.session-token=aaa; authjs.session-token=bbb';
+    expect(parseSessionCookieNames(header)).toEqual(['authjs.session-token']);
+  });
+});
+
+describe('sessionCookieClearHeadersFor', () => {
+  it('clears a stale chunk variant seen in the request that the static helper would miss', () => {
+    // 루프의 원인이 되는 stale 쿠키가 표준 3종(base/.0/.1) 밖의 변종(.2 청크 등)일
+    // 때, 정적 헬퍼는 못 지운다. 요청 Cookie 헤더에서 실제 보유한 세션 쿠키명을
+    // 동적 수집해 그 변종까지 host-only + 도메인-스코프 둘 다로 만료시킨다.
+    process.env.AUTH_COOKIE_DOMAIN = '.supporter-b.com';
+    vi.stubEnv('NODE_ENV', 'production');
+
+    const header = '__Secure-authjs.session-token.2=stale; other=1';
+    const headers = sessionCookieClearHeadersFor(header);
+
+    expect(
+      headers.some(
+        (h) =>
+          h.startsWith('__Secure-authjs.session-token.2=') && !h.includes('Domain='),
+      ),
+    ).toBe(true);
+    expect(
+      headers.some(
+        (h) =>
+          h.startsWith('__Secure-authjs.session-token.2=') &&
+          h.includes('Domain=.supporter-b.com'),
+      ),
+    ).toBe(true);
+    for (const h of headers) {
+      expect(h).toContain('Max-Age=0');
+      expect(h).toContain('Path=/');
+    }
+  });
+
+  it('does NOT emit a Domain= variant for __Host- names (RFC forbids it — dead header)', () => {
+    // `__Host-` prefix 쿠키는 RFC상 Domain 속성 금지 → Domain= 만료 헤더는
+    // 브라우저에서 no-op(죽은 헤더). host-only 변종만 발행한다.
+    process.env.AUTH_COOKIE_DOMAIN = '.supporter-b.com';
+    vi.stubEnv('NODE_ENV', 'production');
+
+    const headers = sessionCookieClearHeadersFor(
+      '__Host-authjs.session-token=stale',
+    );
+    const hostName = headers.filter((h) =>
+      h.startsWith('__Host-authjs.session-token='),
+    );
+    // host-only 변종은 존재
+    expect(hostName.some((h) => !h.includes('Domain='))).toBe(true);
+    // Domain= 변종은 발행하지 않음
+    expect(hostName.some((h) => h.includes('Domain='))).toBe(false);
+  });
+
+  it('is a superset of the static clear (standard names always present even if not in the header)', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    delete process.env.AUTH_COOKIE_DOMAIN;
+
+    // 헤더에 표준 세션 쿠키가 안 보여도 표준 base 이름은 항상 만료 대상
+    const headers = sessionCookieClearHeadersFor('unrelated=1');
+    expect(
+      headers.some((h) => h.startsWith('__Secure-authjs.session-token=')),
+    ).toBe(true);
+  });
+
+  it('returns standard clears for an empty header', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    delete process.env.AUTH_COOKIE_DOMAIN;
+    const headers = sessionCookieClearHeadersFor('');
+    expect(headers.length).toBeGreaterThanOrEqual(3);
+    expect(
+      headers.every((h) => h.includes('Max-Age=0') && h.includes('session-token')),
+    ).toBe(true);
   });
 });
