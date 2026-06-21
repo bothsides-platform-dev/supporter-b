@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.34.0] - 2026-06-22
+
+### Changed
+- RFP 작성 위저드 '현재 정산주기'·'배송 및 서비스 기간' 필드에서 정산주기 단위를 D(일)·W(주)·M(개월) 중 선택할 수 있도록 변경. 기존에는 D+ 단위로 고정됐으나 이제 주·월 단위 입력도 지원.
+
 ## [0.2.33.0] - 2026-06-21
 
 ### Added
