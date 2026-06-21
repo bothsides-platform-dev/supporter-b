@@ -15,7 +15,10 @@ const load = async () => {
 };
 
 beforeEach(() => vi.resetModules());
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.useRealTimers();
+});
 
 it('passes the session workspaceId into the token', async () => {
   const { auth } = await import('@/auth');
@@ -54,5 +57,6 @@ it('still 401s a revoked session after the cache TTL expires', async () => {
   vi.advanceTimersByTime(11_000);
   const res2 = await POST();
   expect(res2.status).toBe(401);
-  vi.useRealTimers();
+  // Assert cache re-queried after TTL: isSessionRevoked called twice (once before advance, once after)
+  expect(isSessionRevoked).toHaveBeenCalledTimes(2);
 });
