@@ -15,18 +15,35 @@ import { PercentInput, CurrencyInput, FeeRateCell, DayOffsetInput } from '../inp
 afterEach(cleanup);
 
 describe('DayOffsetInput', () => {
-  it('renders the label and a fixed "D+" prefix', () => {
+  it('renders the label and a D/W/M unit selector with D selected by default', () => {
     render(<DayOffsetInput label="현재 정산주기" value="" onChange={() => {}} />);
     expect(screen.getByText('현재 정산주기')).toBeInTheDocument();
-    expect(screen.getByText('D+')).toBeInTheDocument();
+    const select = screen.getByRole('combobox');
+    expect(select).toHaveValue('D');
+    expect(screen.getByRole('option', { name: 'D (일)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'W (주)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'M (개월)' })).toBeInTheDocument();
   });
 
-  it('shows only the numeric part of a stored "D+N" value', () => {
+  it('shows the numeric part and D type for a stored "D+N" value', () => {
     render(<DayOffsetInput label="정산주기" value="D+3" onChange={() => {}} />);
     expect(screen.getByRole('textbox')).toHaveValue('3');
+    expect(screen.getByRole('combobox')).toHaveValue('D');
   });
 
-  it('calls onChange with the canonical "D+N" string when a number is typed', async () => {
+  it('shows the numeric part and W type for a stored "W+N" value', () => {
+    render(<DayOffsetInput label="정산주기" value="W+2" onChange={() => {}} />);
+    expect(screen.getByRole('textbox')).toHaveValue('2');
+    expect(screen.getByRole('combobox')).toHaveValue('W');
+  });
+
+  it('shows the numeric part and M type for a stored "M+N" value', () => {
+    render(<DayOffsetInput label="정산주기" value="M+6" onChange={() => {}} />);
+    expect(screen.getByRole('textbox')).toHaveValue('6');
+    expect(screen.getByRole('combobox')).toHaveValue('M');
+  });
+
+  it('calls onChange with "D+N" when D is selected and a number is typed', async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     render(<DayOffsetInput label="정산주기" value="" onChange={onChange} />);
@@ -34,11 +51,45 @@ describe('DayOffsetInput', () => {
     expect(onChange).toHaveBeenLastCalledWith('D+2');
   });
 
-  it('calls onChange with empty string when the input is cleared', async () => {
+  it('calls onChange with "W+N" when W is selected and a number is typed', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<DayOffsetInput label="정산주기" value="" onChange={onChange} />);
+    await user.selectOptions(screen.getByRole('combobox'), 'W');
+    await user.type(screen.getByRole('textbox'), '3');
+    expect(onChange).toHaveBeenLastCalledWith('W+3');
+  });
+
+  it('calls onChange with "M+N" when M is selected and a number is typed', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<DayOffsetInput label="정산주기" value="" onChange={onChange} />);
+    await user.selectOptions(screen.getByRole('combobox'), 'M');
+    await user.type(screen.getByRole('textbox'), '1');
+    expect(onChange).toHaveBeenLastCalledWith('M+1');
+  });
+
+  it('emits the new type when unit is changed while a number is already entered', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<DayOffsetInput label="정산주기" value="D+5" onChange={onChange} />);
+    await user.selectOptions(screen.getByRole('combobox'), 'W');
+    expect(onChange).toHaveBeenLastCalledWith('W+5');
+  });
+
+  it('calls onChange with empty string when the numeric input is cleared', async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     render(<DayOffsetInput label="정산주기" value="D+5" onChange={onChange} />);
     await user.clear(screen.getByRole('textbox'));
+    expect(onChange).toHaveBeenLastCalledWith('');
+  });
+
+  it('calls onChange with empty string when type is changed but numeric is empty', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<DayOffsetInput label="정산주기" value="" onChange={onChange} />);
+    await user.selectOptions(screen.getByRole('combobox'), 'W');
     expect(onChange).toHaveBeenLastCalledWith('');
   });
 

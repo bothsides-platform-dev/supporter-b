@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.34.0] - 2026-06-22
+
+### Changed
+- 정산주기·배송기간 단위 선택을 D(일)·W(주)·M(개월) 통합 컴포넌트(`DayOffsetInput`)로 일원화. RFP 작성 위저드(step 2), PG 견적 제출 위저드(정산 주기 단계), 견적 템플릿 드로어 모두 동일한 단위 선택 UI를 사용.
+
 ## [0.2.33.1] - 2026-06-22
 
 ### Changed
