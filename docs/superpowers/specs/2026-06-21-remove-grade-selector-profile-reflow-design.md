@@ -30,14 +30,18 @@
    버튼 컴포넌트. 파일 삭제.
 2. **`components/settings/__tests__/WorkspaceBizProfileForm.test.tsx`** — 위 컴포넌트 전용
    테스트. 파일 삭제.
-3. **`lib/server/actions/rfp/updateWorkspaceBizProfileAction.ts`** — 위 폼이 **유일한
-   소비처**인 데드 액션. 삭제.
-   - **전제 조건(플랜에서 검증)**: 제거 전 `updateWorkspaceBizProfileAction`을 레포 전체에서
-     grep 해 다른 참조가 0건임을 확인한다. 0건이 아니면 **멈추고 재검토**한다.
-   - 액션 배럴(`lib/server/actions/rfp/index.ts` 등)에 re-export가 있으면 같이 제거한다.
-   - 해당 액션 전용 테스트가 있으면 같이 삭제한다. (없을 가능성이 높음 — 플랜에서 확인.)
-4. **`app/(app)/settings/profile/page.tsx`** — `WorkspaceBizProfileForm` import 및 사용
+3. **`app/(app)/settings/profile/page.tsx`** — `WorkspaceBizProfileForm` import 및 사용
    지점(현재 line 5, line 156) 제거.
+
+> **⚠️ 스펙 정정 (grep 검증 결과)**: 최초 설계는 `updateWorkspaceBizProfileAction`을
+> "이 폼이 유일 소비처인 데드 액션"으로 보고 삭제 대상에 넣었으나, grep 결과 **틀렸다**.
+> `components/settings/WorkspaceBizNoForm.tsx`(유지되는 사업자번호 폼)가 **사업자번호 저장에
+> 같은 액션을 사용**한다(line 13 import, line 60 호출). 따라서:
+>
+> - **`lib/server/actions/rfp/updateWorkspaceBizProfileAction.ts`는 삭제하지 않는다.**
+> - 액션 export(`lib/server/actions/rfp/index.ts`), 액션 테스트
+>   (`lib/server/actions/rfp/__tests__/update-workspace-biz.test.ts`)도 **유지**한다.
+> - 즉 백엔드는 손대지 않으며, 이번 작업은 **순수 프론트엔드 제거 + 레이아웃 재정렬**이다.
 
 ### 유지 (변경 없음)
 
@@ -103,7 +107,7 @@ KV(업태·가맹점 등급·생성일).
   TDD 규칙상 면제 대상. 신규 테스트를 추가하지 않는다.
 - `WorkspaceBizProfileForm.test.tsx`는 컴포넌트와 함께 **삭제**한다 (제거된 코드의 테스트).
 - 검증 = 삭제·재정렬 후 **기존 전체 스위트가 그대로 green**임을 확인:
-  - `pnpm tsc --noEmit` (제거된 import/액션으로 인한 타입 에러 0)
+  - `pnpm tsc --noEmit` (제거된 컴포넌트 import으로 인한 타입 에러 0)
   - `pnpm lint` (미사용 import 0)
   - `pnpm test` (전체 green — 삭제된 테스트 외 회귀 없음)
 - 시각 확인(선택): 구매사 프로필 단일 컬럼 렌더, PG 프로필 무변화.
@@ -119,6 +123,6 @@ KV(업태·가맹점 등급·생성일).
 
 ## 순효과
 
-컴포넌트 1개 삭제 · 데드 액션 1개 삭제 · 테스트 파일 1개 삭제 · 페이지 1개 재정렬.
-스키마·데이터·동작 변화 없음. 유일한 동작 변화는 "프로필에서 가맹점 등급을 더는 편집할 수
-없다"이다.
+컴포넌트 1개 삭제 · 테스트 파일 1개 삭제 · 페이지 1개 재정렬. **백엔드(액션·스키마·데이터)
+변화 없음** (`updateWorkspaceBizProfileAction`은 사업자번호 폼이 계속 사용하므로 유지).
+유일한 동작 변화는 "프로필에서 가맹점 등급을 더는 편집할 수 없다"이다.
