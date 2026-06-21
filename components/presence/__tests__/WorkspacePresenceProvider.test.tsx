@@ -308,4 +308,172 @@ describe('WorkspacePresenceProvider — 라이브 (realtime 설정)', () => {
     expect(sub.unsubscribe).toHaveBeenCalled();
     expect(mockClient.removeSubscription).toHaveBeenCalledWith(sub);
   });
+
+  // ── A. REGRESSION: in-flight presence() race after sub is disposed ────────
+  // The provider stays mounted (a keeper consumer watches 'ws-keeper'). Only
+  // ws-race's interest drops to 0 mid-flight. If the guard is missing, the
+  // late .then() calls setPresence and the provider's map ends up with an
+  // orphan { online:true } for ws-race — visible when a NEW consumer registers
+  // and reads the shared state.
+  it('presence() 가 in-flight 인 동안 sub 가 dispose 되면 늦은 resolve 는 무시된다 (온라인 상태가 남지 않는다)', async () => {
+    const React = await import('react');
+    const { render, screen, act, waitFor } = await import('@testing-library/react');
+    const { WorkspacePresenceProvider, useWorkspacePresence } = await import(
+      '@/components/presence/WorkspacePresenceProvider'
+    );
+
+    // Render results that components write out so we can assert them.
+    const results: Record<string, string> = {};
+    function Probe({ id }: { id: string }) {
+      const s = useWorkspacePresence(id);
+      results[id] = `${s.online}:${s.activity}`;
+      return React.createElement('span', { 'data-testid': id }, results[id]);
+    }
+
+    // Mount the provider with a keeper consumer (keeps provider alive) and the
+    // race consumer (will be torn down mid-flight).
+    function App({ showRace }: { showRace: boolean }) {
+      return React.createElement(
+        WorkspacePresenceProvider,
+        null,
+        React.createElement(Probe, { id: 'ws-keeper' }),
+        showRace ? React.createElement(Probe, { id: 'ws-race' }) : null,
+      );
+    }
+
+    const { rerender } = render(React.createElement(App, { showRace: true }));
+
+    const raceChannel = 'presence:ws:ws-race';
+    const raceSub = subsByChannel[raceChannel];
+    expect(raceSub).toBeDefined();
+
+    // Set up a deferred presence() so we can control when it resolves.
+    let resolvePresence!: (val: { clients: PresenceClients }) => void;
+    const deferredPresence = new Promise<{ clients: PresenceClients }>((r) => {
+      resolvePresence = r;
+    });
+    raceSub.presence.mockReturnValue(deferredPresence);
+
+    // Trigger recompute → presence() is now in-flight (deferred).
+    act(() => {
+      raceSub.__fire('subscribed', {});
+    });
+
+    // Drop interest to 0 by removing the race consumer while the provider stays up.
+    act(() => {
+      rerender(React.createElement(App, { showRace: false }));
+    });
+    // Confirm sub was disposed (interest == 0).
+    expect(raceSub.unsubscribe).toHaveBeenCalled();
+
+    // NOW resolve the in-flight presence() with an online snapshot.
+    await act(async () => {
+      resolvePresence({ clients: ownerEntry('ws-race', 'active') });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Re-add the race consumer — it should read offline, not the orphan online.
+    act(() => {
+      rerender(React.createElement(App, { showRace: true }));
+    });
+
+    await waitFor(() => {
+      const el = screen.queryByTestId('ws-race');
+      // Must be offline — stale online resolve was discarded.
+      expect(el?.textContent).toBe('false:offline');
+    });
+  });
+
+  // ── B. focus-reconcile POSITIVE: disconnected then focus re-runs presence() ──
+  it('disconnected 이벤트 후 window focus 가 오면 live sub 의 presence() 를 다시 호출한다', async () => {
+    const { renderHook, act, waitFor } = await import('@testing-library/react');
+    const { WorkspacePresenceProvider, useWorkspacePresence } = await import(
+      '@/components/presence/WorkspacePresenceProvider'
+    );
+
+    const { result } = renderHook(() => useWorkspacePresence('ws-focus'), {
+      wrapper: WorkspacePresenceProvider,
+    });
+
+    const channel = 'presence:ws:ws-focus';
+    const sub = subsByChannel[channel];
+    expect(sub).toBeDefined();
+
+    // Bring the workspace online first.
+    sub.__setPresence(ownerEntry('ws-focus', 'active'));
+    await act(async () => {
+      sub.__fire('subscribed', {});
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.online).toBe(true));
+
+    const callsBefore = sub.presence.mock.calls.length;
+
+    // Simulate a disconnection (sets missedEventsRef).
+    act(() => {
+      mockClient.__fire('disconnected', {});
+    });
+
+    // Fire a window focus — the sweep should re-run presence().
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
+    });
+
+    expect(sub.presence.mock.calls.length).toBeGreaterThan(callsBefore);
+  });
+
+  // ── C. focus-reconcile NO-OP: no disconnect + tab not hidden long ────────
+  it('disconnected 없이 focus 만 오고 tab 이 30s 미만 hidden 이었다면 presence() 를 재호출하지 않는다', async () => {
+    vi.useFakeTimers();
+    const { renderHook, act } = await import('@testing-library/react');
+    const { WorkspacePresenceProvider, useWorkspacePresence } = await import(
+      '@/components/presence/WorkspacePresenceProvider'
+    );
+
+    renderHook(() => useWorkspacePresence('ws-noop'), {
+      wrapper: WorkspacePresenceProvider,
+    });
+
+    const channel = 'presence:ws:ws-noop';
+    const sub = subsByChannel[channel];
+    expect(sub).toBeDefined();
+
+    // Bring online synchronously via fake timers.
+    sub.__setPresence(ownerEntry('ws-noop', 'active'));
+    await act(async () => {
+      sub.__fire('subscribed', {});
+      await Promise.resolve();
+    });
+
+    const callsBefore = sub.presence.mock.calls.length;
+
+    // Tab goes hidden for LESS than HIDDEN_RESYNC_MS (10s < 30s threshold).
+    act(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'hidden',
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(10_000);
+    });
+
+    // Tab becomes visible again → triggers sweep.
+    act(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    // Also fire focus — no disconnect was flagged and hidden < 30s.
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    // presence() call count must not have increased — sweep was skipped.
+    expect(sub.presence.mock.calls.length).toBe(callsBefore);
+  });
 });

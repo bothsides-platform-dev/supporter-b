@@ -145,6 +145,10 @@ export function WorkspacePresenceProvider({ children }: { children?: ReactNode }
     if (timers.has(wsId)) return; // already scheduled
     const t = setTimeout(() => {
       timers.delete(wsId);
+      // Defense-in-depth: if the sub was disposed after this timer was
+      // scheduled, skip the state update — the reconcile effect already
+      // cleaned up the presence entry.
+      if (!subsRef.current.has(wsId)) return;
       setPresence((prev) => {
         const cur = prev.get(wsId);
         if (cur && !cur.online) return prev;
@@ -164,6 +168,10 @@ export function WorkspacePresenceProvider({ children }: { children?: ReactNode }
       void entry.sub
         .presence()
         .then((snapshot) => {
+          // Guard: if the sub was disposed while presence() was in-flight,
+          // discard the result — applying it would orphan an online entry for
+          // a workspace nobody watches and could schedule a timer nobody clears.
+          if (!subsRef.current.has(wsId)) return;
           const entries = snapshotToEntries((snapshot as PresenceSnapshot) ?? {});
           const online = onlineWorkspaceIds(entries).has(wsId);
           const activity = deriveActivity(entries, wsId);
