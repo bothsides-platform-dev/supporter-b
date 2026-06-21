@@ -71,9 +71,18 @@ describe('RfpStep2Content', () => {
   it('현재 정산주기 입력 시 숫자만 입력되어 D+N 형식으로 저장된다', async () => {
     const user = userEvent.setup();
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-    // 정산주기 DayOffsetInput — 'D+' 접두 고정, 숫자 placeholder '1'
+    // numeric textbox rejects non-digits; default unit is D, so '2' → 'D+2'
     await user.type(screen.getByPlaceholderText('1'), 'W2');
     expect(useRfpDraftStore.getState().currentSettlementCycle).toBe('D+2');
+  });
+
+  it('현재 정산주기 — W 단위 선택 후 숫자 입력 시 W+N 형식으로 저장된다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    const [cycleSelect] = screen.getAllByRole('combobox');
+    await user.selectOptions(cycleSelect, 'W');
+    await user.type(screen.getByPlaceholderText('1'), '3');
+    expect(useRfpDraftStore.getState().currentSettlementCycle).toBe('W+3');
   });
 
   it('배송 및 서비스 기간 입력 시 숫자만 입력되어 D+N 형식으로 저장된다', async () => {
@@ -81,6 +90,15 @@ describe('RfpStep2Content', () => {
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
     await user.type(screen.getByPlaceholderText('3'), 'D5');
     expect(useRfpDraftStore.getState().deliveryServicePeriod).toBe('D+5');
+  });
+
+  it('배송 및 서비스 기간 — M 단위 선택 후 숫자 입력 시 M+N 형식으로 저장된다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    const [, periodSelect] = screen.getAllByRole('combobox');
+    await user.selectOptions(periodSelect, 'M');
+    await user.type(screen.getByPlaceholderText('3'), '2');
+    expect(useRfpDraftStore.getState().deliveryServicePeriod).toBe('M+2');
   });
 
   describe('현재 카드 수수료 — 숫자+% 제한', () => {

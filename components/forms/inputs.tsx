@@ -4,7 +4,9 @@ import { useId, useState } from 'react';
 import { NumericFormat } from 'react-number-format';
 import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
+import { Select } from '@/components/primitives/Select';
 import { formatKrwReadable, formatRatePerManwon } from '@/lib/format';
+import { formatSettleCycle } from '@/lib/utils/settle-cycle';
 import { cn } from '@/lib/utils';
 
 /**
@@ -174,11 +176,18 @@ export function CurrencyInput({
   );
 }
 
+const CYCLE_TYPE_OPTIONS = [
+  { value: 'D', label: 'D (일)' },
+  { value: 'W', label: 'W (주)' },
+  { value: 'M', label: 'M (개월)' },
+];
+
 /**
- * Labeled integer input with a fixed `D+` prefix. Always emits a `D+N` string
- * (e.g. `"D+1"`); `W+`/`M+` can no longer be entered (only `D+`). Downstream
- * cycle comparison (`CYCLE_RE = /^[DWM]\+\d+$/` in lib/utils/bid-compare.ts)
- * still accepts `W+`/`M+` for legacy rows. An empty input stores `""`.
+ * Labeled integer input with a D/W/M unit selector.
+ * Emits a canonical `${type}+${n}` string (e.g. `"D+1"`, `"W+2"`, `"M+1"`).
+ * An empty numeric input stores `""`. The type is held in local state (seeded
+ * from the initial value) so selecting W before typing a number doesn't snap
+ * back to D — safe because the RFP create wizard is create-only (no re-hydrate).
  */
 export function DayOffsetInput({
   label,
@@ -187,7 +196,12 @@ export function DayOffsetInput({
   placeholder = '0',
   infoTerm,
 }: NumericFieldProps) {
+  const [type, setType] = useState<string>(() => value.match(/^[DWM]/)?.[0] ?? 'D');
   const numeric = value.match(/\d+/)?.[0] ?? '';
+
+  function emit(t: string, n: string) {
+    onChange(n ? formatSettleCycle(t as 'D' | 'W' | 'M', Number(n)) : '');
+  }
 
   return (
     <div className="space-y-1">
@@ -195,13 +209,19 @@ export function DayOffsetInput({
         <Label size="md" muted={false}>{label}</Label>
         {infoTerm && <InfoTip term={infoTerm} />}
       </div>
-      <div className="flex items-end gap-1">
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">D+</span>
+      <div className="flex items-center gap-1">
+        <Select
+          options={CYCLE_TYPE_OPTIONS}
+          value={type}
+          onChange={(t) => { setType(t); emit(t, numeric); }}
+          className="w-[100px] h-8 text-[13px]"
+        />
+        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)]">+</span>
         <NumericFormat
           decimalScale={0}
           allowNegative={false}
           value={numeric}
-          onValueChange={(values) => onChange(values.value ? `D+${values.value}` : '')}
+          onValueChange={(values) => emit(type, values.value)}
           placeholder={placeholder}
           className={cn(numericInputClass, 'flex-1')}
         />
