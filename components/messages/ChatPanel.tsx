@@ -33,6 +33,7 @@ import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import { TeamThreadPane } from './TeamThreadPane';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
+import { SampleSendDisabledNotice } from './SampleSendDisabledNotice';
 import { useConversationLookup } from './useConversationLookup';
 
 type Props = {
@@ -204,11 +205,7 @@ function NewConversationPane({
           className="py-12"
         />
       </div>
-      {sendDisabled && (
-        <p className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-4 py-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-          샘플에서는 메시지를 보낼 수 없어요. 실제 견적 요청을 보내보세요.
-        </p>
-      )}
+      {sendDisabled && <SampleSendDisabledNotice />}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <div className="flex items-end gap-2">
           <ChatComposerTextarea
