@@ -203,6 +203,29 @@ describe('isUserPresentInConversation', () => {
       false,
     );
   });
+
+  it('NEVER reads a presence:ws channel (digest suppression must stay conversation-scoped)', async () => {
+    vi.stubEnv('CENTRIFUGO_HTTP_API_URL', 'http://localhost:8000/api');
+    vi.stubEnv('CENTRIFUGO_API_KEY', 'secret');
+    const fetchSpy = vi.fn().mockResolvedValue({
+      json: async () => ({
+        result: {
+          presence: {
+            'client-a': { client: 'client-a', user: 'user-1' },
+          },
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await isUserPresentInConversation('conv-1', 'user-1');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [, init] = fetchSpy.mock.calls[0];
+    const reqBody = JSON.parse(init.body);
+    expect(reqBody.params.channel.startsWith('chat:conversation:')).toBe(true);
+    expect(reqBody.params.channel.includes('presence:ws')).toBe(false);
+  });
 });
 
 describe('disconnectCentrifugoUser', () => {
