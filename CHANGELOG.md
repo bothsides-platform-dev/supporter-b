@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.29.1] - 2026-06-21
+
+### Fixed
+
+- **운영 로그가 Axiom으로 정상 전송돼요(내부 관측성)**: 프로덕션(Turbopack 번들)에서 `import.meta.url`이 숫자 모듈 ID로 치환돼 `@axiomhq/pino` transport 해석이 매번 실패하고 stdout으로만 떨어지던 문제를 고쳤어요. 앵커가 문자열이 아니면 앱 루트(`process.cwd()`)로 폴백해 transport가 정상적으로 붙어요. 사용자 화면에는 변화가 없고, 코드만 변경돼요(DDL·env 없음).
+
+> 배포 메모: 코드 변경뿐이라 `next build` 후 `pm2 restart bidit`로 적용돼요. 적용 후 `pm2 logs bidit`에 `[logger] @axiomhq/pino transport unavailable` 경고가 더는 안 뜨면 정상이에요.
+
 ## [0.2.29.0] - 2026-06-21
 
 ### Added
