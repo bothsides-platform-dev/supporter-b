@@ -90,6 +90,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           rfpId={rfp.id}
           rfpCode={rfp.code}
           requoteByPg={requoteByPg}
+          buyerGrade={rfp.bizProfile?.grade}
           isSample={rfp.isSample ?? false}
           hideHeader
         />
