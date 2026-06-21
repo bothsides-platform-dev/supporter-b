@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { render } from '@react-email/render';
 
-import { Button, Layout, Mono } from './_layout';
+import { Button, Layout, Mono, MONO_STACK } from './_layout';
 import type { AuthVerifyProps } from './types';
 
 export function AuthVerify({
@@ -39,7 +39,7 @@ export function AuthVerify({
               margin: '0 0 0',
               fontSize: '28px',
               fontWeight: 700,
-              fontFamily: 'monospace',
+              fontFamily: MONO_STACK,
               letterSpacing: '8px',
               color: '#08090A',
             }}

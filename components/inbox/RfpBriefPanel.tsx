@@ -23,13 +23,13 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">{rfp.id}</span>
+        <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{rfp.id}</span>
         <h2 className="text-[22px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] mt-0.5">
           {rfp.title}
         </h2>
         <div className="flex items-center gap-3 mt-2">
           <span
-            className={`font-mono text-[12px] tabular-nums font-medium ${isUrgent ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}
+            className={`md-numeric text-[12px] font-medium ${isUrgent ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}
           >
             마감 {daysLeft} ({formatDate(rfp.deadline)})
           </span>

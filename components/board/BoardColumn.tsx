@@ -92,7 +92,7 @@ function BoardColumnInner({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[12px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-numeric text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
             {count}
           </span>
           <button
