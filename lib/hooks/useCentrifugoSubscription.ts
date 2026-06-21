@@ -23,6 +23,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type { PublicationContext, Subscription } from 'centrifuge';
 
 import { getCentrifuge } from '@/lib/realtime/centrifuge-client';
+import { managedSubscribe } from '@/lib/realtime/managedSubscribe';
 
 export type CentrifugoSubscriptionOptions = {
   // 구독 핸들 노출 — presence(presenceStats)·publish 등 채널별 동작을 소비처가 수행.
@@ -55,30 +56,40 @@ export function useCentrifugoSubscription(
     // 미설정 realtime → graceful no-op.
     if (!client) return;
 
-    const sub = client.getSubscription(channel) ?? client.newSubscription(channel);
+    // subRef 는 caller 가 presence/publish 에 쓰므로 managedSubscribe 호출 전에
+    // 같은 getSubscription-or-new 패턴으로 sub 인스턴스를 확보해 할당한다.
     const subRef = optionsRef.current.subRef;
+    const sub = client.getSubscription(channel) ?? client.newSubscription(channel);
     if (subRef) subRef.current = sub;
 
-    sub.on('publication', (ctx: PublicationContext) => optionsRef.current.onPublication?.(ctx));
+    // managedSubscribe handles getSubscription-or-new (returns the same sub in
+    // production), registers handlers, calls sub.subscribe(), and returns a
+    // disposer that calls sub.unsubscribe() + client.removeSubscription(sub).
+    // publication is always registered via a ref-wrapper (original behavior).
     // presence 핸들러는 제공된 것만 등록 — team 채널은 join/leave/subscribed 미등록.
-    if (optionsRef.current.onSubscribed) sub.on('subscribed', () => optionsRef.current.onSubscribed?.());
-    if (optionsRef.current.onJoin) sub.on('join', () => optionsRef.current.onJoin?.());
-    if (optionsRef.current.onLeave) sub.on('leave', () => optionsRef.current.onLeave?.());
+    const disposeSubscription = managedSubscribe(client, channel, {
+      onPublication: (ctx: PublicationContext) => optionsRef.current.onPublication?.(ctx),
+      onSubscribed: optionsRef.current.onSubscribed
+        ? () => optionsRef.current.onSubscribed?.()
+        : undefined,
+      onJoin: optionsRef.current.onJoin
+        ? () => optionsRef.current.onJoin?.()
+        : undefined,
+      onLeave: optionsRef.current.onLeave
+        ? () => optionsRef.current.onLeave?.()
+        : undefined,
+    });
 
+    // Connection-level listeners stay in the hook (not subscription-level).
     const onConnected = () => setConnected(true);
     const onDisconnected = () => setConnected(false);
     client.on('connected', onConnected);
     client.on('disconnected', onDisconnected);
 
-    sub.subscribe();
     client.connect();
 
     return () => {
-      sub.unsubscribe();
-      // unsubscribe() 는 상태만 바꾸고 sub 은 레지스트리에 남는다. 제거해 같은
-      // 채널 remount 시 newSubscription() 으로 새 sub 을 받게 한다(핸들러 중복
-      // 등록 방지 — 안 그러면 onPublication 이 두 번 호출됨). 단일 소비자 모델 하 안전.
-      client.removeSubscription(sub);
+      disposeSubscription();
       client.off('connected', onConnected);
       client.off('disconnected', onDisconnected);
       if (subRef) subRef.current = null;
