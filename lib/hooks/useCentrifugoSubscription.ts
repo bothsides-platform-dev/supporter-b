@@ -56,18 +56,13 @@ export function useCentrifugoSubscription(
     // 미설정 realtime → graceful no-op.
     if (!client) return;
 
-    // subRef 는 caller 가 presence/publish 에 쓰므로 managedSubscribe 호출 전에
-    // 같은 getSubscription-or-new 패턴으로 sub 인스턴스를 확보해 할당한다.
-    const subRef = optionsRef.current.subRef;
-    const sub = client.getSubscription(channel) ?? client.newSubscription(channel);
-    if (subRef) subRef.current = sub;
-
-    // managedSubscribe handles getSubscription-or-new (returns the same sub in
-    // production), registers handlers, calls sub.subscribe(), and returns a
-    // disposer that calls sub.unsubscribe() + client.removeSubscription(sub).
+    // managedSubscribe handles getSubscription-or-new, registers handlers,
+    // calls sub.subscribe(), and returns { sub, dispose }.
+    // We use sub directly for subRef so there's no duplicate lookup.
     // publication is always registered via a ref-wrapper (original behavior).
     // presence 핸들러는 제공된 것만 등록 — team 채널은 join/leave/subscribed 미등록.
-    const disposeSubscription = managedSubscribe(client, channel, {
+    const subRef = optionsRef.current.subRef;
+    const { sub, dispose: disposeSubscription } = managedSubscribe(client, channel, {
       onPublication: (ctx: PublicationContext) => optionsRef.current.onPublication?.(ctx),
       onSubscribed: optionsRef.current.onSubscribed
         ? () => optionsRef.current.onSubscribed?.()
@@ -79,6 +74,7 @@ export function useCentrifugoSubscription(
         ? () => optionsRef.current.onLeave?.()
         : undefined,
     });
+    if (subRef) subRef.current = sub;
 
     // Connection-level listeners stay in the hook (not subscription-level).
     const onConnected = () => setConnected(true);

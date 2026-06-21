@@ -20,9 +20,11 @@ it('subscribes via getSubscription-or-new and registers only provided handlers',
   };
   const onJoin = vi.fn();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  managedSubscribe(client as any, 'presence:ws:v', { onJoin });
+  const result = managedSubscribe(client as any, 'presence:ws:v', { onJoin });
 
+  expect(client.newSubscription).toHaveBeenCalledOnce();
   expect(client.newSubscription).toHaveBeenCalledWith('presence:ws:v');
+  expect(result.sub).toBe(sub);
   expect(sub.subscribe).toHaveBeenCalled();
   const events = sub.on.mock.calls.map((c) => c[0]);
   expect(events).toContain('join');
@@ -37,7 +39,7 @@ it('disposer unsubscribes AND removes the subscription (no double-handler on rem
     removeSubscription: vi.fn(),
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const dispose = managedSubscribe(client as any, 'presence:ws:v', {});
+  const { dispose } = managedSubscribe(client as any, 'presence:ws:v', {});
   dispose();
   expect(sub.unsubscribe).toHaveBeenCalled();
   expect(client.removeSubscription).toHaveBeenCalledWith(sub);
