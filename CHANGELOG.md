@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.35.0] - 2026-06-22
+
+### Changed
+
+- **견적 비교가 우리 회사 영중소 구간을 먼저 보여줘요**: 견적 비교 화면의 구간 셀렉터(영세·중소1~3·일반)가 이제 항상 '일반'으로 시작하지 않고, 구매사 본인의 가맹점 등급에 맞는 구간을 기본으로 골라 그 구간 수수료를 먼저 보여줘요. 등급이 아직 없으면 예전처럼 '일반'으로 시작해요.
+
+### Removed
+
+- 내부적으로 같은 의미였던 두 등급 타입(가맹점 등급 `MerchantGrade`, 견적 수수료 구간 `MerchantTier`)을 하나(`MerchantTier`)로 통합했어요. 영세 식별자가 한쪽은 `small`, 한쪽은 `sole`로 갈라져 있던 걸 `sole`로 일원화하고, 등급 값 목록을 단일 출처(`MERCHANT_TIERS`)에서 가져오도록 정리했어요. 사용자 화면 동작은 그대로예요.
+
+> 배포 메모: **`db:push` 보다 먼저** `docs/migrations/rename-merchant-grade-small-to-sole.sql`(= `ALTER TYPE merchant_grade RENAME VALUE 'small' TO 'sole'`)을 실행해야 해요. `db:push`는 enum 값 rename을 못 해서, 먼저 안 돌리면 push가 부분 실패하고 기존 `small` 등급 row가 고립돼요. 이 ALTER는 제자리 메타데이터 변경이라 기존 row가 자동으로 `sole`로 읽혀요(데이터 재작성·다운타임 없음). 스크립트는 idempotent라 `small`이 이미 없으면 no-op이에요. ⚠️ 별도 레포 `admin-supporter-b`가 `merchant_grade`를 읽으면 동일 변경을 같이 맞춰야 해요.
+
 ## [0.2.34.0] - 2026-06-22
 
 ### Changed
