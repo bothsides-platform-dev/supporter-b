@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.35.1] - 2026-06-22
+
+### Fixed
+
+- **JetBrains Mono 폰트가 이제 숫자에 실제로 적용돼요**: `JetBrainsMonoVariable.ttf`가 앱에 등록되지 않아서 `--font-mono` 토큰을 쓰는 `.md-numeric`(₩ 금액·수수료율·RFP 번호·마감일) 51개 사이트가 전부 Pretendard로 렌더링되던 문제를 수정했어요. `styles/tokens.css`의 `--font-mono` 값도 Pretendard에서 JetBrains Mono로 바로잡았어요. `font-mono tabular-nums`를 직접 쓰던 7개 파일은 `.md-numeric` 클래스로 통일하고, `Footer.tsx` 인라인 `fontFamily` 스타일 9곳은 Tailwind 유틸로 교체했어요. 이메일 인증 템플릿의 OTP 코드 표시도 `MONO_STACK` 상수를 재사용하도록 수정했어요.
+
 ## [0.2.35.0] - 2026-06-22
 
 ### Changed
