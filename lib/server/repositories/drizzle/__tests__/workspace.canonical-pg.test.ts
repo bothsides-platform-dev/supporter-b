@@ -72,26 +72,27 @@ describe('DrizzleWorkspaceRepository.listCanonicalPgWorkspaces', () => {
     expect(result).toMatchObject({ id, name: '나이스페이먼츠', canonicalPgKey: 'nicepayments' });
   });
 
-  it('hasLogo=false인 canonical 워크스페이스는 hasLogo: false로 반환된다', async () => {
+  it('logoUpdatedAt=null인 canonical 워크스페이스는 logoUpdatedAt: null로 반환된다', async () => {
     await db.insert(workspaces).values({
       id: randomUUID(), type: 'pg', name: '토스페이먼츠', status: 'active',
-      canonicalPgKey: 'tosspayments', hasLogo: false,
+      canonicalPgKey: 'tosspayments',
     });
 
     const [result] = await repo.listCanonicalPgWorkspaces();
 
-    expect(result).toMatchObject({ canonicalPgKey: 'tosspayments', hasLogo: false });
+    expect(result).toMatchObject({ canonicalPgKey: 'tosspayments', logoUpdatedAt: null });
   });
 
-  it('hasLogo=true인 canonical 워크스페이스는 hasLogo: true로 반환된다', async () => {
+  it('logoUpdatedAt이 설정된 canonical 워크스페이스는 ISO string으로 반환된다', async () => {
+    const now = new Date('2026-06-01T00:00:00.000Z');
     await db.insert(workspaces).values({
       id: randomUUID(), type: 'pg', name: 'KG이니시스', status: 'active',
-      canonicalPgKey: 'kginicis', hasLogo: true,
+      canonicalPgKey: 'kginicis', logoUpdatedAt: now,
     });
 
     const [result] = await repo.listCanonicalPgWorkspaces();
 
-    expect(result).toMatchObject({ canonicalPgKey: 'kginicis', hasLogo: true });
+    expect(result).toMatchObject({ canonicalPgKey: 'kginicis', logoUpdatedAt: now.toISOString() });
   });
 });
 

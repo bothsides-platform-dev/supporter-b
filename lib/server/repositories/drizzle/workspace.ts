@@ -121,7 +121,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       name: ws.name,
       bizProfile,
       members,
-      hasLogo: !!logoRow,
       logoUpdatedAt: logoRow?.updatedAt ? new Date(logoRow.updatedAt).toISOString() : null,
       createdAt: new Date(ws.createdAt).toISOString(),
     };
@@ -190,7 +189,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
             AND channel = 'in_app'
             AND read_at IS NULL
         )`,
-        hasLogo: workspaces.hasLogo,
         logoUpdatedAt: workspaces.logoUpdatedAt,
       })
       .from(workspaceMembers)
@@ -214,7 +212,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         role: sql<'admin'>`'admin'`,
         memberApprovalStatus: sql<'approved'>`'approved'`,
         unreadCount: sql<number>`0`,
-        hasLogo: workspaces.hasLogo,
         logoUpdatedAt: workspaces.logoUpdatedAt,
       })
       .from(workspaces)
@@ -325,9 +322,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return rows.map((r) => r.email);
   }
 
-  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean; logoUpdatedAt: string | null }[]> {
+  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; logoUpdatedAt: string | null }[]> {
     const rows = (await this._db
-      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey, hasLogo: workspaces.hasLogo, logoUpdatedAt: workspaces.logoUpdatedAt })
+      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey, logoUpdatedAt: workspaces.logoUpdatedAt })
       .from(workspaces)
       .where(
         and(
@@ -336,7 +333,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           isNotNull(workspaces.canonicalPgKey),
         ),
       )
-      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null; hasLogo: boolean; logoUpdatedAt: Date | null }[];
+      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null; logoUpdatedAt: Date | null }[];
     return rows.map((r) => ({
       ...r,
       canonicalPgKey: r.canonicalPgKey!,
@@ -626,11 +623,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async rename(workspaceId: string, name: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.update(workspaces).set({ name }).where(eq(workspaces.id, workspaceId));
-  }
-
-  async setHasLogo(workspaceId: string, hasLogo: boolean, tx?: Tx): Promise<void> {
-    const db = this.h(tx);
-    await db.update(workspaces).set({ hasLogo }).where(eq(workspaces.id, workspaceId));
   }
 
   async setLogoUpdatedAt(workspaceId: string, value: Date | null, tx?: Tx): Promise<void> {

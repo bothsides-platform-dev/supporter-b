@@ -7,7 +7,7 @@ function conv(overrides?: Partial<Extract<InboxListItem, { kind: 'counterparty' 
     kind: 'counterparty',
     key: 'c:conv-1',
     conversationId: 'conv-1',
-    counterparty: { workspaceId: 'ws-1', name: '회사', type: 'pg', hasLogo: false, logoUpdatedAt: null },
+    counterparty: { workspaceId: 'ws-1', name: '회사', type: 'pg', logoUpdatedAt: null },
     rfpId: null,
     rfpCode: null,
     rfpTitle: null,

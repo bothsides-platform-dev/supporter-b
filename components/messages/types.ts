@@ -27,7 +27,6 @@ export type Counterparty = {
   name: string;
   type: CounterpartyType;
   workspaceId?: string;
-  hasLogo?: boolean;
   logoUpdatedAt?: string | null;
 };
 

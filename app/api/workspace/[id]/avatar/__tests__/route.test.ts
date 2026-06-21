@@ -7,8 +7,8 @@
 //   GET:  404 no logo, 200 + bytes + Content-Type + Cache-Control
 //   POST: 401 unauthenticated, 403 wrong workspace, 400 empty file,
 //         413 too large, 415 mime not allowed, 415 sniff mismatch,
-//         200 upserts blob + sets has_logo
-//   DELETE: 401 unauthenticated, 403 wrong workspace, 200 deletes blob + clears has_logo
+//         200 upserts blob + sets logoUpdatedAt
+//   DELETE: 401 unauthenticated, 403 wrong workspace, 200 deletes blob + clears logoUpdatedAt
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { workspaces, workspaceLogoBlobs } from '@/lib/db/schema';
@@ -211,7 +211,7 @@ it('POST returns 415 when magic bytes mismatch stated mime', async () => {
   expect(res.status).toBe(415);
 });
 
-it('POST upserts logo blob and sets has_logo on workspace', async () => {
+it('POST upserts logo blob and sets logoUpdatedAt on workspace', async () => {
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
   await seedMembership(db, wsId, userId);
@@ -232,10 +232,10 @@ it('POST upserts logo blob and sets has_logo on workspace', async () => {
   expect(blob.mime).toBe('image/png');
 
   const [ws] = await db
-    .select({ hasLogo: workspaces.hasLogo })
+    .select({ logoUpdatedAt: workspaces.logoUpdatedAt })
     .from(workspaces)
     .where(eq(workspaces.id, wsId));
-  expect(ws.hasLogo).toBe(true);
+  expect(ws.logoUpdatedAt).not.toBeNull();
 });
 
 it('POST replaces existing logo on second upload', async () => {
@@ -285,7 +285,7 @@ it('DELETE returns 403 when session workspace differs from target', async () => 
   expect(res.status).toBe(403);
 });
 
-it('DELETE removes logo blob and clears has_logo', async () => {
+it('DELETE removes logo blob and clears logoUpdatedAt', async () => {
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
   await seedMembership(db, wsId, userId);
@@ -298,7 +298,7 @@ it('DELETE removes logo blob and clears has_logo', async () => {
   });
   await db
     .update(workspaces)
-    .set({ hasLogo: true })
+    .set({ logoUpdatedAt: new Date() })
     .where(eq(workspaces.id, wsId));
 
   sessionRef.value = {
@@ -315,10 +315,10 @@ it('DELETE removes logo blob and clears has_logo', async () => {
   expect(blobs).toHaveLength(0);
 
   const [ws] = await db
-    .select({ hasLogo: workspaces.hasLogo })
+    .select({ logoUpdatedAt: workspaces.logoUpdatedAt })
     .from(workspaces)
     .where(eq(workspaces.id, wsId));
-  expect(ws.hasLogo).toBe(false);
+  expect(ws.logoUpdatedAt).toBeNull();
 });
 
 it('403 POST when email not verified', async () => {

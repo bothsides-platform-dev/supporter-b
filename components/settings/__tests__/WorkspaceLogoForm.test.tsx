@@ -45,12 +45,12 @@ describe('WorkspaceLogoForm', () => {
     expect(screen.getByRole('img', { name: '구매사' })).toBeInTheDocument();
   });
 
-  it('does not render 삭제 button when hasLogo is false', () => {
+  it('does not render 삭제 button when logoUpdatedAt is null', () => {
     render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} />);
     expect(screen.queryByRole('button', { name: '삭제' })).not.toBeInTheDocument();
   });
 
-  it('renders 삭제 button when hasLogo is true', () => {
+  it('renders 삭제 button when logoUpdatedAt is set', () => {
     render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt="2026-01-01T00:00:00.000Z" />);
     expect(screen.getByRole('button', { name: '삭제' })).toBeInTheDocument();
   });

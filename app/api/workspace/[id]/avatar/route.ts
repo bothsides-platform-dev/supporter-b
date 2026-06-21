@@ -75,7 +75,6 @@ export async function POST(req: Request, ctx: RouteContext): Promise<Response> {
   if (!sniffed || sniffed !== rawFile.type) return fail(415, 'MIME_MISMATCH');
 
   await (await getWorkspaceLogoRepo()).upsert(id, buffer, sniffed);
-  await (await getWorkspaceRepo()).setHasLogo(id, true);
   await (await getWorkspaceRepo()).setLogoUpdatedAt(id, new Date());
 
   return NextResponse.json({ ok: true });
@@ -98,7 +97,6 @@ export async function DELETE(
   if (wsId !== id) return fail(403, 'FORBIDDEN');
 
   await (await getWorkspaceLogoRepo()).remove(id);
-  await (await getWorkspaceRepo()).setHasLogo(id, false);
   await (await getWorkspaceRepo()).setLogoUpdatedAt(id, null);
 
   return NextResponse.json({ ok: true });
