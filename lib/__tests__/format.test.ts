@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   formatDate,
   formatDateTime,
+  formatDeadline,
   formatSize,
   formatKrwReadable,
   formatRatePerManwon,
@@ -104,16 +105,72 @@ describe('formatRatePerManwon', () => {
 });
 
 describe('formatDate', () => {
-  it('UTC+9 타임존에서 T23:59:59Z 마감일이 같은 날짜로 표시된다', () => {
+  it('UTC+9 타임존에서 T23:59:59Z 마감일(레거시 규약)이 같은 날짜로 표시된다', () => {
     // 2026-06-30T23:59:59Z = 2026-07-01 08:59 KST
     // 사용자가 입력한 날짜(2026-06-30)로 표시되어야 함
     const result = formatDate('2026-06-30T23:59:59Z');
     expect(result).toBe('2026. 06. 30.');
   });
 
+  it('신규 규약 +09:00 오프셋 마감일도 선택한 날짜로 표시된다', () => {
+    // 2026-06-30T23:59:59+09:00 = 2026-06-30T14:59:59Z — 여전히 6/30
+    const result = formatDate('2026-06-30T23:59:59+09:00');
+    expect(result).toBe('2026. 06. 30.');
+  });
+
   it('날짜만 있는 ISO 문자열도 정상 표시된다', () => {
     const result = formatDate('2026-06-30');
     expect(result).toBe('2026. 06. 30.');
+  });
+});
+
+/**
+ * formatDeadline KST 달력일 기준 테스트
+ *
+ * 신규 규약(+09:00) 마감일은 KST 달력일로 정확하게 계산된다.
+ * 레거시(T23:59:59Z) 마감일은 KST 달력상 실제 마감이 다음날 08:59이므로
+ * KST 기준 달력일 차이가 1 늘어난다 — 의도된 동작, 마이그레이션 없음.
+ */
+describe('formatDeadline (KST 달력일 기준)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('마감 당일 KST 오후에도 D-0를 표시한다', () => {
+    // now = 2026-06-30T12:00:00Z = 2026-06-30 21:00 KST — deadline 당일 오후
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-30T12:00:00.000Z'));
+    // deadline KST 6/30 끝
+    expect(formatDeadline('2026-06-30T23:59:59+09:00')).toBe('D-0');
+  });
+
+  it('KST 자정이 지나면 마감(expired)으로 표시한다', () => {
+    // now = 2026-06-30T15:01:00Z = 2026-07-01 00:01 KST — 자정 경과
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-30T15:01:00.000Z'));
+    expect(formatDeadline('2026-06-30T23:59:59+09:00')).toBe('마감');
+  });
+
+  it('KST 달력일로 이틀 뒤 마감은 D-2', () => {
+    // now = 2026-06-28T03:00:00Z = 2026-06-28 12:00 KST
+    // deadline KST 6/30 → 달력일 차이 2
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-28T03:00:00.000Z'));
+    expect(formatDeadline('2026-06-30T23:59:59+09:00')).toBe('D-2');
+  });
+
+  it('당일 오전 이른 시각에도 D-0 (KST 새벽)', () => {
+    // now = 2026-06-30T00:30:00Z = 2026-06-30 09:30 KST — 당일 아침
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-30T00:30:00.000Z'));
+    expect(formatDeadline('2026-06-30T23:59:59+09:00')).toBe('D-0');
+  });
+
+  it('레거시 T23:59:59Z 마감일 — KST 달력일 기준으로 하루 더 남은 것으로 계산된다', () => {
+    // '2026-06-30T23:59:59Z' = KST 2026-07-01 08:59:59 → KST 달력일은 7/1
+    // now = 2026-06-30T12:00:00Z = KST 2026-06-30 21:00 → kstNow = '2026-06-30'
+    // diff = 7/1 - 6/30 = 1 → D-1 (사용자가 설정한 날짜 6/30보다 하루 늘어남 — 레거시 인코딩 특성)
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-30T12:00:00.000Z'));
+    expect(formatDeadline('2026-06-30T23:59:59Z')).toBe('D-1');
   });
 });
 
