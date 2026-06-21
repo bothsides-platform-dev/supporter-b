@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.31.0] - 2026-06-21
+
+### Added
+
+- **상대방이 지금 접속 중인지 한눈에 보여요**: 채팅 상대가 앱을 열어두고 있으면(어느 화면이든) 아바타에 초록 점이 떠요. 인박스 대화 목록, 홈의 최근 메시지, 채팅 상세 헤더에서 모두 확인할 수 있어요. 상대가 앱을 닫으면 점이 사라져요(정상 종료는 즉시, 비정상 종료는 최대 ~1분 안에). 접속 상태는 점으로만 보여주고 "마지막 접속 시각"은 표시하지 않아요.
+
+### Fixed
+
+- **채팅 입력 중 표시(…타이핑)가 다시 작동해요**: 실시간 서버 설정에 클라이언트 publish 권한이 빠져 있어 입력 중 표시가 조용히 안 뜨던 문제를 함께 고쳤어요.
+
+> 배포 메모: 실시간 서버(Centrifugo) 설정에 `presence` 네임스페이스가 추가되고 `chat`에 publish 권한이 켜져요 → **`docker compose up -d centrifugo`로 컨테이너를 재생성**한 뒤 앱을 재배포하세요. DDL·env 변경은 없어요(`db:push` 불필요). ⚠️ presence 네임스페이스는 v6 클라이언트 권한 4종(`allow_subscribe_for_client`·`allow_publish_for_subscriber`·`allow_presence_for_subscriber`·`allow_history_for_subscriber`)이 모두 있어야 점이 떠요(하나라도 빠지면 무에러로 점이 안 보여요) — `deploy/__tests__` 드리프트 가드와 CI `presence-integration` 잡(실제 Centrifugo 부팅)이 이를 검증해요. 테스트 전용 `ws` devDependency가 추가됐어요(런타임 무관).
+
 ## [0.2.30.0] - 2026-06-21
 
 ### Changed
