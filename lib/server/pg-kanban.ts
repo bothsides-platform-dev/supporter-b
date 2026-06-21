@@ -5,7 +5,7 @@
 //
 // 이 파일은 client component 에서도 import 가능 — repo / DB import 없이 순수 도메인.
 // 데이터 로더는 ./board/loadBoard.ts 참조.
-import type { Bid } from '@/lib/types/bid';
+import { MERCHANT_TIER_LABELS, type Bid } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
 
@@ -62,14 +62,6 @@ export function classifyPgInvitation(args: {
   return 'received';
 }
 
-const GRADE_LABEL: Record<string, string> = {
-  small: '영세',
-  sme1: '중소1',
-  sme2: '중소2',
-  sme3: '중소3',
-  general: '일반',
-};
-
 export function toPgCard(args: {
   invitation: RfpInvitation;
   bid?: Bid;
@@ -88,7 +80,7 @@ export function toPgCard(args: {
     stage,
     deadline: rfp.deadline,
     rfpUpdatedAt: rfp.updatedAt,
-    bizGradeLabel: grade ? GRADE_LABEL[grade] : undefined,
+    bizGradeLabel: grade ? MERCHANT_TIER_LABELS[grade] : undefined,
     bidId: bid?.id,
     submittedAt: bid?.submittedAt,
     buyerName,

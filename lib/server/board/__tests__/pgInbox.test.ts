@@ -98,7 +98,7 @@ describe('pgInboxDataToRows', () => {
     expect(rows[0].rfpId).toBe('P-2606-0001'); // rfp.code, not rfp.id
   });
 
-  it('rfp.bizProfile.grade 가 있으면 GRADE_LABELS 로 변환한다', () => {
+  it('rfp.bizProfile.grade 가 있으면 MERCHANT_TIER_LABELS 로 변환한다', () => {
     const rfp: RFP = { ...BASE_RFP, bizProfile: { grade: 'sme1', gradeSource: 'user_confirmed' } };
     const rows = pgInboxDataToRows(data({ pairs: [pair(rfp)] }));
     expect(rows[0].grade).toBe('중소1');

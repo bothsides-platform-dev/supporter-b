@@ -26,7 +26,7 @@ import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { baseUrlFor } from '@/lib/server/env';
 import { nextRfpId } from '@/lib/server/rfp-id';
 import { addMinutes, generateToken } from '@/lib/server/token';
-import type { MerchantGrade } from '@/lib/types/biz-profile';
+import type { MerchantTier } from '@/lib/types/bid';
 import type { Notification } from '@/lib/types/notification';
 import type { Actor, ServiceResult } from './types';
 
@@ -892,7 +892,7 @@ export class RfpService {
           {
             id: snapshotId,
             bizNo: bizNoOverride ?? undefined,
-            grade: gradeOverride as MerchantGrade | undefined,
+            grade: gradeOverride as MerchantTier | undefined,
             gradeSource: gradeOverride ? 'user_overridden' : 'unset',
             gradeConfirmedBy: gradeOverride ? actor.userId : undefined,
             gradeConfirmedAt: gradeOverride ? now.toISOString() : undefined,

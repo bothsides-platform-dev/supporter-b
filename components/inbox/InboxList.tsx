@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatDeadline } from '@/lib/format';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
-import type { MerchantGrade } from '@/lib/types/biz-profile';
+import type { MerchantTier } from '@/lib/types/bid';
 import { PG_KANBAN_LABEL, type PgKanbanStage } from '@/lib/server/pg-kanban';
 import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
 
@@ -31,7 +31,7 @@ export type InboxRow = {
   rfpDeadline: string;
   grade: string;
   /** Raw merchant-grade enum for the grade filter (label lives in `grade`). */
-  gradeRaw?: MerchantGrade;
+  gradeRaw?: MerchantTier;
   /** 계약 유형. null이면 미표시. */
   contractType?: 'new' | 'renewal' | null;
   /** 온보딩 샘플 견적 요청이면 true — '샘플' 칩 노출. */

@@ -3,8 +3,10 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 export const workspaceTypeEnum = pgEnum('workspace_type', ['buyer', 'pg']);
 export const memberRoleEnum = pgEnum('member_role', ['admin', 'member']);
 
+// 영세·중소 가맹점 5구간. 값은 lib/types/bid.ts 의 MERCHANT_TIERS 와 단일화돼 있다
+// (영세=sole). DB 타입명은 호환을 위해 merchant_grade 로 유지.
 export const merchantGradeEnum = pgEnum('merchant_grade', [
-  'small',
+  'sole',
   'sme1',
   'sme2',
   'sme3',

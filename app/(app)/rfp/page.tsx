@@ -13,7 +13,7 @@ import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
 import { filterRfps, paramsForView, resolveBoardView, type BoardView, type BoardFilterParams } from '@/lib/server/board/filterRfps';
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ const STATUS_OPTIONS = [
   { value: 'closed', label: '마감' },
   { value: 'awarded', label: '선정 완료' },
 ];
-const GRADE_OPTIONS = Object.entries(GRADE_LABELS).map(([value, label]) => ({ value, label }));
+const GRADE_OPTIONS = Object.entries(MERCHANT_TIER_LABELS).map(([value, label]) => ({ value, label }));
 
 type Props = {
   searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string }>;

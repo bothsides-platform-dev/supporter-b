@@ -21,6 +21,7 @@ import type {
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
 import type { ServiceResult } from './types';
+import type { MerchantTier } from '@/lib/types/bid';
 
 export type AuthActor = { userId: string };
 
@@ -84,7 +85,7 @@ export class AuthService {
     phoneVerificationId: string;
     wsKind: 'buyer' | 'pg';
     wsName: string;
-    bizProfile?: { bizNo: string; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed'; grade?: 'general' | 'small' | 'sme1' | 'sme2' | 'sme3'; gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset' };
+    bizProfile?: { bizNo: string; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed'; grade?: MerchantTier; gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset' };
     pgProfile?: { bizNo: string; slaDays?: number };
   }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> {
     const email = normalizeEmail(input.email);
