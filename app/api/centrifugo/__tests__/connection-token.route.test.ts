@@ -18,6 +18,7 @@ beforeEach(() => vi.resetModules());
 afterEach(() => {
   vi.clearAllMocks();
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 it('passes the session workspaceId into the token', async () => {
@@ -59,4 +60,23 @@ it('still 401s a revoked session after the cache TTL expires', async () => {
   expect(res2.status).toBe(401);
   // Assert cache re-queried after TTL: isSessionRevoked called twice (once before advance, once after)
   expect(isSessionRevoked).toHaveBeenCalledTimes(2);
+});
+
+it('sheds with 503 + jittered Retry-After when over the in-flight cap', async () => {
+  // Reconnect-storm load shed: cap concurrent token issuance so a Centrifugo
+  // restart can't monopolise the Postgres pool. Cap=0 sheds every request
+  // (deterministic) and exercises the shed path BEFORE auth()/DB are touched.
+  vi.stubEnv('CENTRIFUGO_TOKEN_MAX_INFLIGHT', '0');
+  const { auth } = await import('@/auth');
+  const POST = await load();
+
+  const r = await POST();
+
+  expect(r.status).toBe(503);
+  const retryAfter = Number(r.headers.get('Retry-After'));
+  expect(Number.isInteger(retryAfter)).toBe(true);
+  expect(retryAfter).toBeGreaterThanOrEqual(1);
+  expect(retryAfter).toBeLessThanOrEqual(10);
+  // Shed happens before auth() — no DB/CPU work spent on a shed request.
+  expect(auth).not.toHaveBeenCalled();
 });
