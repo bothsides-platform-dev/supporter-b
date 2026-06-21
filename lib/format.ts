@@ -58,9 +58,9 @@ export function formatSize(bytes: number): string {
 }
 
 export function formatDate(iso: string): string {
-  // Deadlines are stored as T23:59:59Z; the ISO date portion is the
-  // user's intended calendar date. Append T00:00:00Z and format in UTC
-  // to avoid any timezone conversion.
+  // 마감일 저장 규약은 'YYYY-MM-DDT...' 형식이므로 앞 10자가 선택한 날짜다.
+  // 레거시(T23:59:59Z)·신규(T23:59:59+09:00) 모두 slice(0,10) 로 올바른 날짜를 얻는다.
+  // UTC 00:00:00 으로 붙여 formatInTimeZone UTC 포맷 → TZ 변환 없이 의도한 날짜 표시.
   return formatInTimeZone(
     new Date(iso.slice(0, 10) + 'T00:00:00Z'),
     'UTC',
@@ -72,10 +72,25 @@ export function formatDateTime(iso: string, timeZone: string = KST, fmt = 'yyyy-
   return formatInTimeZone(new Date(iso), timeZone, fmt);
 }
 
+/**
+ * 마감일까지의 D-day를 KST 달력일 기준으로 반환한다.
+ * - 마감 당일(KST) 종일 → 'D-0'
+ * - 마감 이후(KST 기준) → '마감'
+ * - N일 후 → 'D-N'
+ *
+ * 기존 ms 차이 ÷ 86400 방식은 KST 달력일과 어긋나는 케이스가 있었다
+ * (예: 당일 KST 오후 → D-1, KST 자정 직후 → D-0).
+ */
 export function formatDeadline(iso: string): string {
-  const diff = Math.ceil(
-    (new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  );
+  const deadlineDate = new Date(iso);
+  const nowDate = new Date();
+  // KST 달력 날짜 'YYYY-MM-DD' 로 변환
+  const kstDeadline = formatInTimeZone(deadlineDate, KST, 'yyyy-MM-dd');
+  const kstNow = formatInTimeZone(nowDate, KST, 'yyyy-MM-dd');
+  // KST 자정 인스턴트로 정규화해 달력일 차이를 정수로 계산
+  const kstDeadlineMs = new Date(`${kstDeadline}T00:00:00+09:00`).getTime();
+  const kstNowMs = new Date(`${kstNow}T00:00:00+09:00`).getTime();
+  const diff = Math.round((kstDeadlineMs - kstNowMs) / (1000 * 60 * 60 * 24));
   if (diff < 0) return '마감';
   if (diff === 0) return 'D-0';
   return `D-${diff}`;
