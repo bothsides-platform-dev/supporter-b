@@ -35,6 +35,14 @@ describe('Centrifugo presence namespace (v6)', () => {
     expect(presenceBlockScoped).toMatch(/^\s*allow_subscribe_for_client:\s*true\s*$/m);
     expect(presenceBlockScoped).toMatch(/^\s*allow_publish_for_subscriber:\s*true\s*$/m);
   });
+  it('opens client presence() + history() reads (v6 gates these separately)', () => {
+    // WorkspacePresenceProvider derives online via sub.presence(); a late observer
+    // recovers last activity via sub.history(). v6 denies BOTH (103) without these
+    // dedicated allow flags — the presence/history_size feature toggles are NOT enough.
+    // The integration smoke (presence.integration.test.ts) proves the live 103 path.
+    expect(presenceBlockScoped).toMatch(/^\s*allow_presence_for_subscriber:\s*true\s*$/m);
+    expect(presenceBlockScoped).toMatch(/^\s*allow_history_for_subscriber:\s*true\s*$/m);
+  });
   it('keeps a last-state for late-observer activity recovery', () => {
     expect(presenceBlockScoped).toMatch(/^\s*history_size:\s*1\s*$/m);
     expect(presenceBlockScoped).toMatch(/^\s*history_ttl:/m);
