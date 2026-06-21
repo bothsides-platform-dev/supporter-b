@@ -9,6 +9,13 @@ All notable changes to this project will be documented in this file.
 - **회사(워크스페이스) 로고를 바꾸면 모든 화면에 즉시 반영돼요**: 로고 주소에 버전을 함께 담아(`?v=…`) 브라우저가 옛 로고를 계속 들고 있지 않도록 했어요. 기존에는 변경·삭제 후 최대 1시간 동안 옛 로고가 보일 수 있었어요. 로고는 지금처럼 공개로 유지돼요(오픈 게시판 노출). 사용자 프로필 사진(v0.2.29.0)과 동일한 캐시 버스트 방식이에요.
 
 > 배포 메모: 추가형 스키마 변경이라 `pnpm db:push`로 안전하게 적용돼요(`workspaces.logo_updated_at` 컬럼 — nullable, 기본값 없음). **push 직후·코드 배포 전에 `pnpm backfill:logo-updated-at`를 1회 실행하세요** — 안 하면 사이드바·PG 가입 회사 선택에서 기존 로고가 잠시 이니셜로 보여요(설정/프로필·상대방 카드는 영향 없음). `has_logo` 컬럼은 이번엔 그대로 두고(미사용) 후속 PR에서 제거해요.
+## [0.2.29.1] - 2026-06-21
+
+### Fixed
+
+- **운영 로그가 Axiom으로 정상 전송돼요(내부 관측성)**: 프로덕션(Turbopack 번들)에서 `import.meta.url`이 숫자 모듈 ID로 치환돼 `@axiomhq/pino` transport 해석이 매번 실패하고 stdout으로만 떨어지던 문제를 고쳤어요. 앵커가 문자열이 아니면 앱 루트(`process.cwd()`)로 폴백해 transport가 정상적으로 붙어요. 사용자 화면에는 변화가 없고, 코드만 변경돼요(DDL·env 없음).
+
+> 배포 메모: 코드 변경뿐이라 `next build` 후 `pm2 restart bidit`로 적용돼요. 적용 후 `pm2 logs bidit`에 `[logger] @axiomhq/pino transport unavailable` 경고가 더는 안 뜨면 정상이에요.
 
 ## [0.2.29.0] - 2026-06-21
 
