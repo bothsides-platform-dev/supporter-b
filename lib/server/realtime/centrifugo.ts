@@ -34,6 +34,12 @@ export function teamChatChannel(rfpId: string, workspaceId: string): string {
   return `${TEAM_CHANNEL_PREFIX}${rfpId}:${workspaceId}`;
 }
 
+/** Channel name for a workspace's presence broadcast. Single source so the
+ *  self-broadcast client and observers stay in lockstep. PUBLIC namespace. */
+export function presenceWsChannel(workspaceId: string): string {
+  return `presence:ws:${workspaceId}`;
+}
+
 /** Shared best-effort publish body — both channel families fan out the same way. */
 async function publishToChannel(
   channel: string,

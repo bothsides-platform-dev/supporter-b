@@ -50,6 +50,7 @@ export default defineConfig({
             "lib/quote/**/*.{test,spec}.{ts,tsx}",
             "lib/db/**/*.{test,spec}.{ts,tsx}",
             "lib/env/**/*.{test,spec}.{ts,tsx}",
+            "lib/realtime/**/*.{test,spec}.{ts,tsx}",
             "scripts/**/*.{test,spec}.{ts,tsx}",
             "deploy/**/*.{test,spec}.{ts,tsx}",
             "app/api/**/*.{test,spec}.{ts,tsx}",
