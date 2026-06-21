@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
-import { MERCHANT_TIER_LABELS, type MerchantTier } from '@/lib/types/bid';
+import { MERCHANT_TIERS, MERCHANT_TIER_LABELS, type MerchantTier } from '@/lib/types/bid';
 
 type Source = 'user_confirmed' | 'user_overridden';
 
@@ -14,7 +14,7 @@ type Props = {
   onConfirm: (grade: MerchantTier, source: Source) => void;
 };
 
-const ALL_GRADES: MerchantTier[] = ['sole', 'sme1', 'sme2', 'sme3', 'general'];
+const ALL_GRADES: readonly MerchantTier[] = MERCHANT_TIERS;
 
 // Statutory revenue brackets (annual, 카드 가맹점 우대수수료 기준).
 // Used as plain helper text — not a hard validator.

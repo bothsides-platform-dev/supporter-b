@@ -89,6 +89,53 @@ describe('updateWorkspaceBizProfileAction', () => {
     expect(ws.bizProfileId).toBe(r.bizProfileId);
   });
 
+  // 영세 등급 식별자 통일 회귀 가드: MerchantGrade('small')→MerchantTier('sole')
+  // 통합 후, grade='sole' 가 zod·DB enum 양쪽을 통과해 영속돼야 한다.
+  it("accepts and persists grade 'sole' (영세) end-to-end after the small→sole unification", async () => {
+    const buyer = await seedUser(db, { email: 'b@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+    sessionRef.value = {
+      user: {
+        id: buyer.id,
+        email: 'b@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+
+    const r = await updateWorkspaceBizProfileAction({ grade: 'sole' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const [row] = await db
+      .select()
+      .from(bizProfiles)
+      .where(eq(bizProfiles.id, r.bizProfileId));
+    expect(row.grade).toBe('sole');
+  });
+
+  // 레거시 식별자 'small' 은 더 이상 유효한 등급이 아니다 — 스키마가 거부해야 한다.
+  it("rejects the legacy grade value 'small' (now invalid)", async () => {
+    const buyer = await seedUser(db, { email: 'b@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+    sessionRef.value = {
+      user: {
+        id: buyer.id,
+        email: 'b@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    // @ts-expect-error 'small' is no longer a valid MerchantTier — pinned at the type layer too.
+    const r = await updateWorkspaceBizProfileAction({ grade: 'small' });
+    expect(r.ok).toBe(false);
+  });
+
   it('accepts a bizProfile patch (bizNo/taxType/status replacement)', async () => {
     const buyer = await seedUser(db, { email: 'b@x.com' });
     const biz = await seedBizProfile(db);

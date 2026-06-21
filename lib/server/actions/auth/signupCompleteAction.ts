@@ -14,6 +14,7 @@ import {
   type AuthActionResult,
 } from './_shared';
 import { normalizePhone } from './phoneOtpUtils';
+import { MERCHANT_TIERS } from '@/lib/types/bid';
 import { getAuthService } from '@/lib/server/services/auth';
 import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
 
@@ -33,7 +34,7 @@ const BizProfileInput = z
       .refine(bizNoRefinement, { message: BIZ_NO_ERROR }),
     taxType: z.enum(['general', 'simple', 'exempt']),
     status: z.enum(['active', 'suspended', 'closed']),
-    grade: z.enum(['sole', 'sme1', 'sme2', 'sme3', 'general']).optional(),
+    grade: z.enum(MERCHANT_TIERS).optional(),
     gradeSource: z.enum(['user_confirmed', 'user_overridden', 'unset']).default(
       'unset',
     ),

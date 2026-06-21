@@ -100,6 +100,12 @@ cd bidit && bash scripts/deploy/lightsail-deploy.sh
 git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 reload). Caddy 는 건드리지 않음.
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
+>
+> enum **값 rename** 등 `db:push` 가 안전하게 못 하는 변경은 `docs/migrations/*.sql` 에
+> 커밋된 스크립트를 **`db:push` 보다 먼저** psql 로 적용한다. 예: v0.2.33.x 의
+> `merchant_grade` 영세 값 `small`→`sole` 통일은
+> `docs/migrations/rename-merchant-grade-small-to-sole.sql` 을 먼저 실행해야 push 가
+> enum diff 를 보지 않는다(미적용 시 push partial-fail + 기존 'small' row 고립).
 
 ## 운영
 
