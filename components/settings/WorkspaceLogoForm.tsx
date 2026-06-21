@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { toast } from '@/lib/toast';
 
-type Props = { workspaceId: string; name: string; hasLogo: boolean };
+type Props = { workspaceId: string; name: string; logoUpdatedAt: string | null };
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg']);
 
-export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
+export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState<'upload' | 'delete' | null>(null);
@@ -79,7 +79,7 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
         <WorkspaceAvatar
           name={name}
           workspaceId={workspaceId}
-          hasLogo={hasLogo}
+          logoUpdatedAt={logoUpdatedAt}
           size="md"
         />
 
@@ -108,7 +108,7 @@ export function WorkspaceLogoForm({ workspaceId, name, hasLogo }: Props) {
             >
               사진 변경
             </button>
-            {hasLogo && (
+            {logoUpdatedAt != null && (
               <button
                 type="button"
                 onClick={handleDelete}

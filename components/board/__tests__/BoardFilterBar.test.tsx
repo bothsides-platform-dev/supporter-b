@@ -15,7 +15,7 @@ vi.mock('next/navigation', () => ({
 import { BoardFilterBar } from '../BoardFilterBar';
 
 const GRADE = [
-  { value: 'small', label: '영세' },
+  { value: 'sole', label: '영세' },
   { value: 'sme1', label: '중소1' },
   { value: 'general', label: '일반' },
 ];

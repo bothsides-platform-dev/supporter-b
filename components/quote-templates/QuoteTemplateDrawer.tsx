@@ -3,8 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
-import { Select } from '@/components/primitives/Select';
-import { CurrencyInput, PercentInput, numericInputClass, underlineInputClass } from '@/components/forms/inputs';
+import { CurrencyInput, DayOffsetInput, PercentInput, numericInputClass, underlineInputClass } from '@/components/forms/inputs';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
 import {
   PAYMENT_METHOD_CATEGORIES,
@@ -15,18 +14,12 @@ import {
   type PaymentMethod,
   type QuoteTemplateOption,
 } from '@/lib/types/bid';
-import { buildPaymentFees, parseSettleCycle, templateFeesToFlat } from '@/lib/quote/template-fees';
+import { buildPaymentFees, templateFeesToFlat } from '@/lib/quote/template-fees';
 import { cn } from '@/lib/utils';
 
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap(
   (c) => c.methods,
 );
-
-const CYCLE_UNITS = [
-  { value: 'D', label: 'D+' },
-  { value: 'W', label: 'W+' },
-  { value: 'M', label: 'M+' },
-] as const;
 
 const ERROR_LABELS: Record<string, string> = {
   INVALID_INPUT: '입력 값을 확인해주세요.',
@@ -38,8 +31,7 @@ const ERROR_LABELS: Record<string, string> = {
 type EditorState = {
   id?: string;
   name: string;
-  cycleUnit: 'D' | 'W' | 'M';
-  cycleNum: string;
+  settleCycle: string;
   settleLimit: string;
   guaranteeInsurance: string;
   /** flat fees map: "method" → pct string for single-rate, "method:tier" → pct string for tiered */
@@ -49,8 +41,7 @@ type EditorState = {
 function blankEditor(): EditorState {
   return {
     name: '',
-    cycleUnit: 'D',
-    cycleNum: '1',
+    settleCycle: 'D+1',
     settleLimit: '0',
     guaranteeInsurance: '0',
     fees: {},
@@ -58,12 +49,10 @@ function blankEditor(): EditorState {
 }
 
 function editorFromTemplate(t: QuoteTemplateOption): EditorState {
-  const { unit, num } = parseSettleCycle(t.settleCycle);
   return {
     id: t.id,
     name: t.name,
-    cycleUnit: unit,
-    cycleNum: num,
+    settleCycle: t.settleCycle,
     settleLimit: String(t.settleLimit),
     guaranteeInsurance: String(t.guaranteeInsurance),
     fees: templateFeesToFlat(t.paymentFees, ALL_PAYMENT_METHODS),
@@ -109,7 +98,7 @@ export function QuoteTemplateDrawer({
     if (!name) return;
     setError(null);
 
-    const settleCycle = `${editor.cycleUnit}+${editor.cycleNum || '1'}`;
+    const settleCycle = editor.settleCycle || 'D+1';
     const paymentFees = buildPaymentFees(editor.fees, ALL_PAYMENT_METHODS);
     const base = {
       name,
@@ -168,26 +157,13 @@ export function QuoteTemplateDrawer({
 
         {/* Settlement cycle + limits */}
         <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-          <div className="col-span-2 space-y-1">
-            <Label size="md" muted={false}>정산 주기 *</Label>
-            <div className="flex items-end gap-2">
-              <div className="w-28">
-                <Select
-                  options={CYCLE_UNITS.map((u) => ({ value: u.value, label: u.label }))}
-                  value={editor.cycleUnit}
-                  onChange={(v) => setField('cycleUnit', v as 'D' | 'W' | 'M')}
-                />
-              </div>
-              <input
-                type="number"
-                min="1"
-                max="99"
-                value={editor.cycleNum}
-                onChange={(e) => setField('cycleNum', e.target.value)}
-                placeholder="1"
-                className={cn(numericInputClass, 'flex-1')}
-              />
-            </div>
+          <div className="col-span-2">
+            <DayOffsetInput
+              label="정산 주기 *"
+              value={editor.settleCycle}
+              onChange={(v) => setField('settleCycle', v || 'D+1')}
+              placeholder="1"
+            />
           </div>
           <CurrencyInput
             label="정산한도 (원/월)"

@@ -318,6 +318,261 @@ describe('RfpService.award', () => {
     const c = await db.select().from(contracts).where(eq(contracts.rfpId, s.rfpId));
     expect(c).toHaveLength(0);
   });
+
+  it('requote 후 동일 PG 선정 시 rfp.awarded만 발송되고 rfp.rejected는 발송되지 않는다', async () => {
+    // Setup: buyer + two PG workspaces
+    const buyer = await seedUser(db, { email: 'buyer@requote-award.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+
+    const winnerWs = await seedPgWorkspace(db, 'winner.requote');
+    const w1 = await seedUser(db, { email: 'w1@winner.requote' });
+    await seedMembership(db, winnerWs.id, w1.id, 'admin');
+
+    const loserWs = await seedPgWorkspace(db, 'loser.requote');
+    const l1 = await seedUser(db, { email: 'l1@loser.requote' });
+    await seedMembership(db, loserWs.id, l1.id, 'admin');
+
+    const rfpId = randomUUID();
+    const rfpCode = 'P-2606-9001';
+    await db.insert(rfps).values({
+      id: rfpId,
+      code: rfpCode,
+      buyerWsId: buyerWs.id,
+      bizProfileId: biz.id,
+      title: 'requote award test',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: buyer.id,
+      sentAt: new Date(),
+    });
+
+    // PG-A invitation (shared across both rounds)
+    const winnerInvId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: winnerInvId,
+      rfpId,
+      pgWsId: winnerWs.id,
+      tokenHash: randomUUID(),
+      sentAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000 * 7),
+      status: 'accepted',
+    });
+
+    // PG-A round-1 bid (submitted, NOT the awarded bid)
+    await db.insert(bids).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: winnerWs.id,
+      invitationId: winnerInvId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: w1.id,
+      submittedAt: new Date(),
+      round: 1,
+    });
+
+    // PG-A round-2 bid (submitted, this is the awarded bid)
+    const round2BidId = randomUUID();
+    await db.insert(bids).values({
+      id: round2BidId,
+      rfpId,
+      pgWsId: winnerWs.id,
+      invitationId: winnerInvId,
+      settleCycle: 'D+2',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: w1.id,
+      submittedAt: new Date(),
+      round: 2,
+    });
+
+    // PG-B round-1 bid
+    const loserInvId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: loserInvId,
+      rfpId,
+      pgWsId: loserWs.id,
+      tokenHash: randomUUID(),
+      sentAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000 * 7),
+      status: 'accepted',
+    });
+    await db.insert(bids).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: loserWs.id,
+      invitationId: loserInvId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: l1.id,
+      submittedAt: new Date(),
+      round: 1,
+    });
+
+    // Award PG-A's round-2 bid
+    const r = await service.award(rfpId, round2BidId, {
+      userId: buyer.id,
+      workspaceId: buyerWs.id,
+    });
+    expect(r.ok).toBe(true);
+
+    // PG-A: rfp.awarded 1건, rfp.rejected 0건
+    const winnerNotifs = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.workspaceId, winnerWs.id));
+    const winnerAwarded = winnerNotifs.filter((n) => n.type === 'rfp.awarded');
+    const winnerRejected = winnerNotifs.filter((n) => n.type === 'rfp.rejected');
+    expect(winnerAwarded).toHaveLength(1);
+    expect(winnerRejected).toHaveLength(0);
+
+    // PG-B: rfp.rejected 1건
+    const loserNotifs = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.workspaceId, loserWs.id));
+    expect(loserNotifs).toHaveLength(1);
+    expect(loserNotifs[0]!.type).toBe('rfp.rejected');
+  });
+
+  it('requote 후 탈락 PG에도 rfp.rejected가 1건만 발송된다 (loser multi-round dedup)', async () => {
+    // PG-A: round-1 + round-2 submitted (winner, awarded round-2)
+    // PG-B: round-1 + round-2 submitted (loser — both rounds are 'submitted')
+    // Expected: PG-B gets exactly 1 rfp.rejected (not 2)
+    const buyer = await seedUser(db, { email: 'buyer@loser-dedup.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+
+    const winnerWs = await seedPgWorkspace(db, 'winner.loserdedup');
+    const w1 = await seedUser(db, { email: 'w1@winner.loserdedup' });
+    await seedMembership(db, winnerWs.id, w1.id, 'admin');
+
+    const loserWs = await seedPgWorkspace(db, 'loser.loserdedup');
+    const l1 = await seedUser(db, { email: 'l1@loser.loserdedup' });
+    await seedMembership(db, loserWs.id, l1.id, 'admin');
+
+    const rfpId = randomUUID();
+    const rfpCode = 'P-2606-9002';
+    await db.insert(rfps).values({
+      id: rfpId,
+      code: rfpCode,
+      buyerWsId: buyerWs.id,
+      bizProfileId: biz.id,
+      title: 'loser dedup test',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: buyer.id,
+      sentAt: new Date(),
+    });
+
+    // PG-A invitation + round-1 + round-2
+    const winnerInvId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: winnerInvId,
+      rfpId,
+      pgWsId: winnerWs.id,
+      tokenHash: randomUUID(),
+      sentAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000 * 7),
+      status: 'accepted',
+    });
+    await db.insert(bids).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: winnerWs.id,
+      invitationId: winnerInvId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: w1.id,
+      submittedAt: new Date(),
+      round: 1,
+    });
+    const winnerBidId = randomUUID();
+    await db.insert(bids).values({
+      id: winnerBidId,
+      rfpId,
+      pgWsId: winnerWs.id,
+      invitationId: winnerInvId,
+      settleCycle: 'D+2',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: w1.id,
+      submittedAt: new Date(),
+      round: 2,
+    });
+
+    // PG-B invitation + round-1 + round-2 (both submitted — loser that also had a requote)
+    const loserInvId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: loserInvId,
+      rfpId,
+      pgWsId: loserWs.id,
+      tokenHash: randomUUID(),
+      sentAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000 * 7),
+      status: 'accepted',
+    });
+    await db.insert(bids).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: loserWs.id,
+      invitationId: loserInvId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: l1.id,
+      submittedAt: new Date(),
+      round: 1,
+    });
+    await db.insert(bids).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: loserWs.id,
+      invitationId: loserInvId,
+      settleCycle: 'D+2',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: l1.id,
+      submittedAt: new Date(),
+      round: 2,
+    });
+
+    const r = await service.award(rfpId, winnerBidId, {
+      userId: buyer.id,
+      workspaceId: buyerWs.id,
+    });
+    expect(r.ok).toBe(true);
+
+    // PG-B: rfp.rejected exactly 1건 (not 2, even though they have 2 submitted rounds)
+    const loserNotifs = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.workspaceId, loserWs.id));
+    const loserRejected = loserNotifs.filter((n) => n.type === 'rfp.rejected');
+    expect(loserRejected).toHaveLength(1);
+  });
 });
 
 // ─── RfpService.cancel ───────────────────────────────────────────────────────

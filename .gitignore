@@ -68,3 +68,6 @@ next-env.d.ts
 # git worktrees
 .worktrees/
 .claude/worktrees/
+
+# git merge-driver temp files (semver-max driver leak guard)
+.merge_file_*

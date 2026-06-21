@@ -12,7 +12,7 @@ const { invalidateThread, getThreadPromise } = vi.hoisted(() => ({
   getThreadPromise: vi.fn((id: string) =>
     Promise.resolve({
       ok: true as const,
-      counterparty: { name: '상대', type: 'pg' as const, workspaceId: 'ws-pg', hasLogo: false },
+      counterparty: { name: '상대', type: 'pg' as const, workspaceId: 'ws-pg', logoUpdatedAt: null },
       messages: [],
       viewer: { userId: 'u-me', name: '나' },
       rfpById: undefined,
@@ -41,7 +41,7 @@ afterEach(() => {
 function makeProps(conversationId: string) {
   return {
     conversationId,
-    counterpartyFallback: { workspaceId: 'ws-pg', name: '상대', type: 'pg' as const, hasLogo: false },
+    counterpartyFallback: { workspaceId: 'ws-pg', name: '상대', type: 'pg' as const, logoUpdatedAt: null },
   };
 }
 

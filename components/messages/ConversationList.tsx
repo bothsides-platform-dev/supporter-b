@@ -2,7 +2,7 @@
 
 import { Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
+import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { formatListTime } from './format';
 import type { InboxListItem } from './types';
 
@@ -38,11 +38,11 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                   <Users size={18} strokeWidth={1.5} />
                 </span>
               ) : (
-                <WorkspaceAvatar
+                <AvatarWithPresence
                   name={item.counterparty.name}
-                  size="md"
                   workspaceId={item.counterparty.workspaceId}
-                  hasLogo={item.counterparty.hasLogo}
+                  logoUpdatedAt={item.counterparty.logoUpdatedAt}
+                  size="md"
                 />
               )}
               <div className="min-w-0 flex-1">

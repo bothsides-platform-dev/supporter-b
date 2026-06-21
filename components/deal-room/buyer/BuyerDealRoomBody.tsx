@@ -90,6 +90,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           rfpId={rfp.id}
           rfpCode={rfp.code}
           requoteByPg={requoteByPg}
+          buyerGrade={rfp.bizProfile?.grade}
           isSample={rfp.isSample ?? false}
           hideHeader
         />
@@ -157,7 +158,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           <SampleRfpBanner rfpCode={rfp.code} />
         </div>
       )}
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 max-lg:flex-col">
         <DealRoomActionRail actions={actions} />
         <div className="min-w-0 flex-1">
           <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />

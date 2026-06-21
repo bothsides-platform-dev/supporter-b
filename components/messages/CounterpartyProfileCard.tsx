@@ -48,7 +48,7 @@ export function CounterpartyProfileCard({ counterparty, rfpContext, variant = 'a
             name={counterparty.name}
             size={variant === 'profile' ? 'sm' : 'md'}
             workspaceId={counterparty.workspaceId}
-            hasLogo={counterparty.hasLogo}
+            logoUpdatedAt={counterparty.logoUpdatedAt}
           />
           {variant === 'profile' && (
             <span className="font-medium text-[13px] text-[var(--md-sys-color-on-surface)] group-hover/msg:text-[var(--md-sys-color-primary)] group-hover/msg:underline">
@@ -69,7 +69,7 @@ export function CounterpartyProfileCard({ counterparty, rfpContext, variant = 'a
                   name={counterparty.name}
                   size="md"
                   workspaceId={counterparty.workspaceId}
-                  hasLogo={counterparty.hasLogo}
+                  logoUpdatedAt={counterparty.logoUpdatedAt}
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">

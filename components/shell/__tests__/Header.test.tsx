@@ -34,7 +34,7 @@ import { http } from '@/lib/http';
 import { useHeaderActionsStore } from '@/lib/stores/header-actions';
 import type { ResponsePromise } from 'ky';
 
-const user = { name: '홍길동', email: 'gildong@test.com' };
+const user = { id: 'u-1', name: '홍길동', email: 'gildong@test.com', avatarUpdatedAt: null };
 
 beforeEach(() => {
   push.mockReset();

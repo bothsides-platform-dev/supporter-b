@@ -15,6 +15,8 @@ import { DRAFT_OWNER_ID, ACCEPT_EXT } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
+import { useWorkspacePresence } from '@/components/presence/WorkspacePresenceProvider';
+import { PresenceDot } from '@/components/presence/PresenceDot';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
@@ -31,7 +33,7 @@ type Props = {
   conversationId: string;
   counterparty: { workspaceId: string; name: string; type: 'buyer' | 'pg' };
   /** 세션 사용자 — 낙관적 self 말풍선이 즉시 자기 이름을 보여줄 때 쓴다. */
-  viewer: { userId: string; name: string };
+  viewer: { userId: string; name: string; avatarUpdatedAt: string | null };
   messages: ThreadMessage[];
   /** rfpId(uuid) → 표시용 코드/제목. 주어진 항목만 RFP 칩을 렌더(uuid 원문 노출 금지). */
   rfpById?: Record<string, { code: string; title: string }>;
@@ -63,6 +65,7 @@ type LiveMessagePayload = {
   authorUserId?: string;
   authorName?: string;
   authorEmail?: string;
+  authorAvatarUpdatedAt?: string | null;
   rfpId?: string | null;
   createdAt?: string;
   attachments?: { id: string; name: string; size: number; mimeType: string; url: string }[];
@@ -152,10 +155,13 @@ export function ThreadView({
   const { listRef, bottomRef, showNewMessagePill, scrollToBottom, onListScroll } =
     useStickToBottom({ count: localMessages.length, isOwnLast: lastIsOwn, withPill: true });
 
+  // Live presence — driven by WorkspacePresenceProvider (not useChatChannel).
+  const { online } = useWorkspacePresence(counterparty.workspaceId);
+
   // Live channel — graceful no-op when realtime is unconfigured (dev/tests):
-  // online stays false, typingUserIds empty, onMessage/onRead never fire, and
-  // the thread runs entirely off the static loader + optimistic local append.
-  const { online, typingUserIds, sendTyping, connected } = useChatChannel(conversationId, {
+  // typingUserIds empty, onMessage/onRead never fire, and the thread runs
+  // entirely off the static loader + optimistic local append.
+  const { typingUserIds, sendTyping, connected } = useChatChannel(conversationId, {
     onMessage: (data: LiveMessagePayload) => {
       if (!data.id || typeof data.body !== 'string' || !data.createdAt) return;
       const id = data.id;
@@ -173,6 +179,7 @@ export function ThreadView({
               authorUserId: data.authorUserId ?? '',
               authorName: data.authorName ?? '',
               authorEmail: data.authorEmail ?? '',
+              authorAvatarUpdatedAt: data.authorAvatarUpdatedAt ?? null,
               sender,
               body: data.body as string,
               rfpId: data.rfpId ?? null,
@@ -242,6 +249,7 @@ export function ThreadView({
         authorUserId: viewer.userId,
         authorName: viewer.name,
         authorEmail: '',
+        authorAvatarUpdatedAt: viewer.avatarUpdatedAt,
         sender: 'self',
         body,
         rfpId: defaultRfpId ?? null,
@@ -312,12 +320,7 @@ export function ThreadView({
         )}
         <div className="relative">
           <WorkspaceAvatar name={counterparty.name} size="md" workspaceId={counterparty.workspaceId} />
-          {online && (
-            <span
-              aria-label="온라인"
-              className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[var(--md-sys-color-surface)] bg-[var(--md-sys-color-tertiary)]"
-            />
-          )}
+          <PresenceDot activity={online ? 'active' : 'offline'} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -443,7 +446,7 @@ export function ThreadView({
               >
                 {showAuthorHeader && (
                   <div className="flex items-center gap-1.5">
-                    <Avatar name={m.authorName} size="sm" color={isSelf ? 'primary' : 'surface'} />
+                    <Avatar name={m.authorName} size="sm" color={isSelf ? 'primary' : 'surface'} userId={m.authorUserId} avatarUpdatedAt={m.authorAvatarUpdatedAt} />
                     <span
                       title={m.authorEmail || undefined}
                       className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]"
@@ -611,7 +614,7 @@ export function ThreadView({
           onSubmit={handleSend}
           disabled={sendDisabled}
           placeholder="메시지를 입력하세요…"
-          className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-1.5 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
+          className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
         />
         <Button
           className="shrink-0"

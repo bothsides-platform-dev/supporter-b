@@ -9,7 +9,7 @@ export type Workspace = {
   name: string;
   bizProfile?: BizProfile;
   members: User[];
-  hasLogo: boolean;
+  logoUpdatedAt: string | null;
   createdAt: string;
 };
 
@@ -25,5 +25,7 @@ export type WorkspaceMembershipSummary = {
   role: 'admin' | 'member';
   memberApprovalStatus: MemberApprovalStatus;
   unreadCount: number;
-  hasLogo: boolean;
+  logoUpdatedAt: string | null;
+  /** Demo/sample workspace — used to suppress self-presence broadcast (OV8). */
+  isDemo: boolean;
 };

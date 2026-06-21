@@ -48,6 +48,8 @@ type Props = {
   rfpCode: string;
   /** 재요청 현황 — pgWsId → 최신 요청 상태. 없으면 재요청 없음. */
   requoteByPg?: Record<string, { status: 'pending' | 'responded'; round: number; deadline: string }>;
+  /** 구매사 자신의 영중소 구간 — 비교 화면이 이 구간을 기본 선택해 먼저 보여준다. */
+  buyerGrade?: MerchantTier;
   /** 온보딩 샘플 — 읽기전용 샌드박스(선정 비활성) */
   isSample?: boolean;
   /** 딜룸 모달의 '견적 비교' 탭에 임베드될 때 — 탭이 제목을 제공하므로 외곽 헤더를 숨긴다. */
@@ -58,7 +60,7 @@ export function FocusComparison(props: Props) {
   const { bids, pgWsNameMap, current, rfpStatus, awardedBidId, requoteByPg } = props;
   const router = useRouter();
 
-  const [tier, setTier] = useState<MerchantTier>('general');
+  const [tier, setTier] = useState<MerchantTier>(props.buyerGrade ?? 'general');
 
   // 정렬: 카드 수수료 낮은 순(기본). 동률·미입력은 뒤로.
   const sortedBids = useMemo(() => sortBidsByCardFee(bids, tier), [bids, tier]);

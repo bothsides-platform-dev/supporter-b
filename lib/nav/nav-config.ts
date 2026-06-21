@@ -245,6 +245,21 @@ export function getNavCommands(workspaceType: WorkspaceType): NavCommand[] {
   return out;
 }
 
+// Account commands for the palette's "계정" group. Separate from the nav tree
+// because they must not appear in the Sidebar or breadcrumbs. `navigate` items
+// use router.push; `logout` uses window.location.assign('/logout') for the
+// full-document-navigation required to clear the session cookie in one round-trip.
+export type AccountCommand =
+  | { id: string; label: string; kind: 'navigate'; href: string }
+  | { id: string; label: string; kind: 'logout' };
+
+export function getAccountCommands(): AccountCommand[] {
+  return [
+    { id: 'account-settings', label: '설정', kind: 'navigate', href: '/settings/profile' },
+    { id: 'account-logout', label: '로그아웃', kind: 'logout' },
+  ];
+}
+
 // One breadcrumb segment. The current page (last segment) has no `href`; every
 // ancestor segment carries the `href` to navigate to when clicked.
 export type BreadcrumbSegment = { label: string; href?: string };

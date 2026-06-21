@@ -152,6 +152,27 @@ describe('FocusComparison', () => {
     expect(screen.getAllByText('0.50%').length).toBeGreaterThan(0);
   });
 
+  it('구매사 등급이 주어지면 해당 구간 탭을 기본 선택해 그 요율을 먼저 보여준다', () => {
+    const bids = [
+      makeBid({ id: 'a', pgWsId: 'pgA', paymentFees: { card: { sole: 0.005, sme1: 0.01, general: 0.018 } } }),
+    ];
+    render(
+      <FocusComparison {...baseProps} bids={bids} requiredPaymentMethods={['card']} buyerGrade="sme1" />,
+    );
+    expect(screen.getByRole('button', { name: '중소1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByText('1.00%').length).toBeGreaterThan(0);
+    // 일반 탭은 기본 선택이 아니다
+    expect(screen.getByRole('button', { name: '일반' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('구매사 등급이 없으면 일반 구간을 기본 선택한다', () => {
+    const bids = [
+      makeBid({ id: 'a', pgWsId: 'pgA', paymentFees: { card: { sole: 0.005, general: 0.018 } } }),
+    ];
+    render(<FocusComparison {...baseProps} bids={bids} requiredPaymentMethods={['card']} />);
+    expect(screen.getByRole('button', { name: '일반' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('구버전 number bid는 구간 무관 동일 값', () => {
     const bids = [makeBid({ id: 'a', pgWsId: 'pgA', paymentFees: { card: 0.012 } })];
     render(<FocusComparison {...baseProps} bids={bids} requiredPaymentMethods={['card']} />);

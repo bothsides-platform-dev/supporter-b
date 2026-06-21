@@ -31,6 +31,9 @@ function rowToUser(row: UserRow): User & { passwordHash: string } {
     name: row.name,
     email: row.email,
     avatarColor: normAvatar(row.avatarColor),
+    avatarUpdatedAt: row.avatarUpdatedAt
+      ? new Date(row.avatarUpdatedAt).toISOString()
+      : null,
     role: 'member',
     status: row.status === 'paused' ? 'paused' : 'active',
     emailVerified: row.emailVerified,
@@ -233,6 +236,18 @@ export class DrizzleUserRepository implements UserRepo {
     await db
       .update(users)
       .set({ lastActiveWorkspaceId: workspaceId })
+      .where(eq(users.id, userId));
+  }
+
+  async setAvatarUpdatedAt(
+    userId: string,
+    value: Date | null,
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(users)
+      .set({ avatarUpdatedAt: value })
       .where(eq(users.id, userId));
   }
 

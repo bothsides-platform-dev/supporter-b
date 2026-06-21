@@ -10,12 +10,13 @@ import {
 import { defaultColumns } from '@/lib/server/columns/seed';
 import { seedSampleRfpInTx } from '@/lib/server/onboarding/sample-rfp';
 import { seedSamplePgRfpInTx } from '@/lib/server/onboarding/sample-pg-rfp';
+import type { MerchantTier } from '@/lib/types/bid';
 
 export type CreateWorkspaceBizProfile = {
   bizNo: string;
   taxType: 'general' | 'simple' | 'exempt';
   status: 'active' | 'suspended' | 'closed';
-  grade?: 'small' | 'sme1' | 'sme2' | 'sme3' | 'general';
+  grade?: MerchantTier;
   gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset';
 };
 

@@ -61,7 +61,7 @@ describe('paramsForView', () => {
   });
 
   it('table 뷰에서는 params 그대로', () => {
-    const p = { status: 'closed', grade: 'small' };
+    const p = { status: 'closed', grade: 'sole' };
     expect(paramsForView(p, 'table')).toEqual(p);
   });
 });

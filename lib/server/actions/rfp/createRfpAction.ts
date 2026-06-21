@@ -6,9 +6,8 @@ import { requireBuyerSession } from '@/lib/auth/session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import { logBusinessEvent } from '@/lib/observability/log';
 import { isValidWebsiteUrl, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { MERCHANT_TIERS } from '@/lib/types/bid';
 import type { RfpActionResult } from './_shared';
-
-const MERCHANT_GRADES = ['small', 'sme1', 'sme2', 'sme3', 'general'] as const;
 
 const PAYMENT_METHODS = [
   'card',
@@ -41,7 +40,7 @@ const Input = z
       .optional()
       .default('inherit'),
     bizNoOverride: z.string().min(1).max(50).optional(),
-    gradeOverride: z.enum(MERCHANT_GRADES).optional(),
+    gradeOverride: z.enum(MERCHANT_TIERS).optional(),
     websiteUrl: z
       .string()
       .max(500)

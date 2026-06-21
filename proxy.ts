@@ -2,7 +2,8 @@ import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 
 import authConfig from './auth.config';
-import { decideRoute } from './lib/auth/route-decision';
+import { decideProxyRoute } from './lib/auth/route-decision';
+import { RL_BREAK } from './lib/auth/logout-loop';
 
 // Edge-runtime-only: instantiated from `auth.config.ts` (no DB, no bcrypt).
 // `auth.ts` would pull postgres-js into the edge bundle and break the build.
@@ -10,10 +11,20 @@ const { auth } = NextAuth(authConfig);
 
 export default auth(async (req) => {
   const { pathname, search } = req.nextUrl;
-
   const isAuthenticated = !!req.auth;
-  const decision = decideRoute(pathname, search, isAuthenticated);
+  // 루프 회로차단기 탈출 플래그. decideProxyRoute 가 escape 보다 평소 라우팅을
+  // 우선시키지 않도록(우선순위는 그 순수 함수가 소유) 값만 넘긴다.
+  const breakFlag = req.cookies.get(RL_BREAK)?.value;
+  const decision = decideProxyRoute(pathname, search, isAuthenticated, breakFlag);
 
+  // escape: /logout 회로차단기가 트립한 뒤 도착한 /login. authed 이지만 막힌 세션이라도
+  // /home 으로 되튕기지 않고 /login 을 실제로 렌더한다(쿠키 클리어가 끝내 실패해도
+  // 재로그인으로 복구 가능). 플래그는 한 번 쓰고 만료시킨다.
+  if (decision.kind === 'escape') {
+    const res = NextResponse.next();
+    res.cookies.delete(RL_BREAK);
+    return res;
+  }
   if (decision.kind === 'redirect') {
     return NextResponse.redirect(new URL(decision.to, req.url));
   }

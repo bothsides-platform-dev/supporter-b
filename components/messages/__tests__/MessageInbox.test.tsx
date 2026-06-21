@@ -37,7 +37,7 @@ vi.mock('@/lib/server/actions/chat/markConversationReadAction', () => ({
   markConversationReadAction: vi.fn().mockResolvedValue({ ok: true }),
 }));
 vi.mock('@/lib/hooks/useChatChannel', () => ({
-  useChatChannel: () => ({ online: false, typingUserIds: [], sendTyping: vi.fn(), connected: null }),
+  useChatChannel: () => ({ typingUserIds: [], sendTyping: vi.fn(), connected: null }),
 }));
 
 // ThreadView mounts AttachmentGalleryPanel, which imports listConversationAttachments
@@ -92,7 +92,7 @@ const items: InboxListItem[] = [
     kind: 'counterparty',
     key: 'c:conv-1',
     conversationId: 'conv-1',
-    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', hasLogo: false },
+    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', logoUpdatedAt: null },
     rfpId: null,
     rfpCode: null,
     rfpTitle: null,
@@ -162,7 +162,7 @@ describe('MessageInbox', () => {
         kind: 'counterparty',
         key: 'c:c1',
         conversationId: 'c1',
-        counterparty: { workspaceId: 'w', name: '토스', type: 'pg', hasLogo: false },
+        counterparty: { workspaceId: 'w', name: '토스', type: 'pg', logoUpdatedAt: null },
         rfpId: null,
         rfpCode: null,
         rfpTitle: null,
@@ -307,7 +307,7 @@ describe('MessageInbox', () => {
       {
         kind: 'counterparty', key: 'c:c1',
         conversationId: 'c1',
-        counterparty: { workspaceId: 'w1', name: '토스페이', type: 'pg', hasLogo: false },
+        counterparty: { workspaceId: 'w1', name: '토스페이', type: 'pg', logoUpdatedAt: null },
         rfpId: null, rfpCode: null, rfpTitle: null, rfpStatus: null, rfpDeadline: null,
         preview: '안녕하세요', lastMessageAt: null, unread: false,
       },

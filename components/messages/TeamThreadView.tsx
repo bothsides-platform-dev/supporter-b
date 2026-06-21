@@ -40,6 +40,8 @@ type Props = {
   workspaceId: string;
   /** 라이브 echo 의 self 판별용 — loadTeamThread 가 반환한 세션 유저 id. */
   viewerUserId: string;
+  /** 낙관적 말풍선 아바타 표시용 — loadTeamThread 가 반환한 뷰어 아바타 버전. */
+  viewerAvatarUpdatedAt: string | null;
   messages: TeamThreadMessage[];
   teamMembers?: MentionCandidate[];
 };
@@ -47,7 +49,7 @@ type Props = {
 
 type LocalMessage = TeamThreadMessage & { pending?: boolean };
 
-export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, teamMembers = [] }: Props) {
+export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarUpdatedAt, messages, teamMembers = [] }: Props) {
   const [draft, setDraft] = useState('');
   const {
     rows: attachments,
@@ -96,6 +98,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
               id,
               authorUserId: data.authorUserId ?? '',
               authorName: data.authorName ?? '',
+              authorAvatarUpdatedAt: data.authorAvatarUpdatedAt ?? null,
               body: data.body as string,
               createdAt: data.createdAt as string,
               isSelf,
@@ -125,6 +128,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
         id: tempId,
         authorUserId: viewerUserId,
         authorName: '',
+        authorAvatarUpdatedAt: viewerAvatarUpdatedAt,
         body,
         createdAt: new Date().toISOString(),
         isSelf: true,
@@ -228,7 +232,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
               >
                 {showAuthorHeader && (
                   <div className="flex items-center gap-1.5">
-                    <Avatar name={m.authorName} size="sm" color="surface" />
+                    <Avatar name={m.authorName} size="sm" color="surface" userId={m.authorUserId} avatarUpdatedAt={m.authorAvatarUpdatedAt} />
                     <span className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]">
                       {m.authorName}
                     </span>
@@ -347,7 +351,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, messages, tea
               mention.onTextChange(value, e.target.selectionStart ?? value.length);
             }}
             onKeyDown={handleKeyDown}
-            className="min-h-8 max-h-40 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-1.5 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
+            className="min-h-8 max-h-40 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
           />
           <Button
             size="sm"

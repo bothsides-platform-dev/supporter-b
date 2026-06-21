@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getNavCommands } from '../nav-config';
+import { getNavCommands, getAccountCommands } from '../nav-config';
 
 // getNavCommands flattens the nav tree (top + workspace section + settings) into
 // a flat list of navigable command-palette destinations, scoped to workspace type.
@@ -67,5 +67,37 @@ describe('getNavCommands — pg', () => {
   it('does NOT leak buyer-only destinations', () => {
     expect(hrefs()).not.toContain('/rfp');
     expect(hrefs()).not.toContain('/rfp-create');
+  });
+});
+
+describe('getAccountCommands', () => {
+  it('returns 설정(navigate) and 로그아웃(logout) in that order', () => {
+    const cmds = getAccountCommands();
+    expect(cmds).toHaveLength(2);
+    expect(cmds[0]).toEqual({
+      id: 'account-settings',
+      label: '설정',
+      kind: 'navigate',
+      href: '/settings/profile',
+    });
+    expect(cmds[1]).toEqual({
+      id: 'account-logout',
+      label: '로그아웃',
+      kind: 'logout',
+    });
+  });
+
+  it('설정 has kind navigate pointing at /settings/profile', () => {
+    const settings = getAccountCommands()[0];
+    expect(settings.kind).toBe('navigate');
+    if (settings.kind === 'navigate') {
+      expect(settings.href).toBe('/settings/profile');
+    }
+  });
+
+  it('로그아웃 has kind logout (no href)', () => {
+    const logout = getAccountCommands()[1];
+    expect(logout.kind).toBe('logout');
+    expect('href' in logout).toBe(false);
   });
 });
