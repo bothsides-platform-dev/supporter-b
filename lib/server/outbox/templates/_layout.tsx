@@ -19,7 +19,7 @@ import * as React from 'react';
 
 const SANS_STACK =
   "'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif";
-const MONO_STACK =
+export const MONO_STACK =
   "'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace";
 
 export const HAIRLINE = (

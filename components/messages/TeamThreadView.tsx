@@ -12,12 +12,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar } from '@/components/primitives/Avatar';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Users, Paperclip } from 'lucide-react';
-import { ArrowUpIcon, XIcon } from '@/components/icons';
+import { ArrowUpIcon } from '@/components/icons';
 import { ACCEPT_EXT } from '@/lib/server/storage/constants';
 import { sendTeamMessageAction } from '@/lib/server/actions/chat/sendTeamMessageAction';
 import { markTeamThreadReadAction } from '@/lib/server/actions/chat/markTeamThreadReadAction';
@@ -25,10 +24,12 @@ import { useTeamChannel, type TeamLivePayload } from '@/lib/hooks/useTeamChannel
 import { toast } from '@/lib/toast';
 import type { TeamThreadMessage } from '@/lib/server/actions/chat/teamThreadLoader';
 import { MessageBubble } from './MessageBubble';
+import { ComposerAttachmentChips } from './ComposerAttachmentChips';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { useStickToBottom } from './useStickToBottom';
 import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-thread';
-import { formatDayLabel, withinGroupWindow } from './format';
+import { computeMessageGrouping } from './message-grouping';
+import { useAutoGrowTextarea } from './useAutoGrowTextarea';
 import { MentionText } from './MentionText';
 import { MentionDropdown } from './MentionDropdown';
 import { type MentionCandidate } from './mention-input';
@@ -56,10 +57,12 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
     setRows: setAttachments,
     addFiles,
     removeRow,
+    readyRows,
+    anyUploading,
   } = useComposerAttachments({ ownerKind: 'team_message', ownerId: rfpId });
   const [sending, setSending] = useState(false);
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>(messages);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { ref: textareaRef, resize: resizeTextarea } = useAutoGrowTextarea(draft);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastIsOwn = localMessages[localMessages.length - 1]?.isSelf ?? false;
   const { listRef, bottomRef } = useStickToBottom({
@@ -112,8 +115,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
   async function handleSend(): Promise<void> {
     if (sending) return;
     const body = mention.resolveBody(draft).trim();
-    const readyAttachments = attachments.filter((a) => a.status === 'ready');
-    if (body.length === 0 && readyAttachments.length === 0) return;
+    if (body.length === 0 && readyRows.length === 0) return;
     setSending(true);
 
     // 전송 시점의 첨부 스냅샷(reload 불필요) — 낙관적 말풍선 표시용.
@@ -139,14 +141,14 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
     setDraft('');
     mention.reset();
     setAttachments([]);
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    // 높이 리셋은 useAutoGrowTextarea 가 draft='' 효과로 처리한다.
 
     let result: Awaited<ReturnType<typeof sendTeamMessageAction>>;
     try {
       result = await sendTeamMessageAction({
         rfpId,
         body,
-        attachmentIds: readyAttachments.map((a) => a.id),
+        attachmentIds: readyRows.map((a) => a.id),
         tempId,
       });
     } catch {
@@ -182,8 +184,11 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
 
   const canSend =
     !sending &&
-    !attachments.some((a) => a.status === 'uploading') &&
-    (draft.trim().length > 0 || attachments.some((a) => a.status === 'ready'));
+    !anyUploading &&
+    (draft.trim().length > 0 || readyRows.length > 0);
+
+  // 날짜 구분선·묶음 파생 — ThreadView 와 공유하는 단일 출처(드리프트 방지).
+  const grouping = computeMessageGrouping(localMessages);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
@@ -203,16 +208,9 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
           </div>
         )}
         {localMessages.map((m, i) => {
-          const dayLabel = formatDayLabel(m.createdAt);
-          const prev = i > 0 ? localMessages[i - 1] : null;
-          const prevDayLabel = prev ? formatDayLabel(prev.createdAt) : null;
-          const showDivider = dayLabel !== prevDayLabel;
-          // 시간 판정은 ThreadView 와 공유(withinGroupWindow — 드리프트 방지 단일 출처).
-          const groupedWithPrev =
-            !showDivider &&
-            prev !== null &&
-            prev.authorUserId === m.authorUserId &&
-            withinGroupWindow(prev.createdAt, m.createdAt);
+          // 날짜 구분선·묶음 판정은 computeMessageGrouping 단일 출처(ThreadView 공유).
+          // 내부 스레드라 self 헤더는 숨긴다(상대 메시지에만 작성자 표시).
+          const { showDivider, dayLabel, groupedWithPrev } = grouping[i];
           const showAuthorHeader = !m.isSelf && !groupedWithPrev;
 
           return (
@@ -255,55 +253,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
       </div>
 
       {/* 첨부 칩 리스트 */}
-      {attachments.length > 0 && (
-        <div className="flex shrink-0 flex-wrap gap-1.5 border-t border-[var(--md-sys-color-outline-variant)] px-3 pt-2 pb-1">
-          {attachments.map((a) =>
-            a.status === 'uploading' ? (
-              <span
-                key={a.id}
-                aria-busy="true"
-                aria-label={`${a.name} 업로드 중`}
-                className="inline-flex animate-pulse items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface-variant)]"
-              >
-                <span className="max-w-[160px] truncate">{a.name}</span>
-                <Skeleton className="size-3 rounded-full" />
-              </span>
-            ) : a.status === 'error' ? (
-              <span
-                key={a.id}
-                aria-label={`${a.name} 업로드 실패`}
-                title={a.error}
-                className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-error)] px-2 py-1 text-[12px] text-[var(--md-sys-color-error)]"
-              >
-                <span className="max-w-[160px] truncate">{a.name}</span>
-                <button
-                  type="button"
-                  aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => removeRow(a.id)}
-                  className="hover:opacity-70"
-                >
-                  <XIcon size={12} />
-                </button>
-              </span>
-            ) : (
-              <span
-                key={a.id}
-                className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface)]"
-              >
-                <span className="max-w-[160px] truncate">{a.name}</span>
-                <button
-                  type="button"
-                  aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => removeRow(a.id)}
-                  className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
-                >
-                  <XIcon size={12} />
-                </button>
-              </span>
-            ),
-          )}
-        </div>
-      )}
+      <ComposerAttachmentChips rows={attachments} onRemove={removeRow} />
 
       {/* 컴포저 — 첨부 + textarea + 보내기 */}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
@@ -346,8 +296,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
             onChange={(e) => {
               const value = e.target.value;
               setDraft(value);
-              e.target.style.height = 'auto';
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+              resizeTextarea();
               mention.onTextChange(value, e.target.selectionStart ?? value.length);
             }}
             onKeyDown={handleKeyDown}

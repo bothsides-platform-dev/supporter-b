@@ -12,6 +12,17 @@ All notable changes to this project will be documented in this file.
 
 > 배포 메모: 프론트엔드·서버 로직만 바뀌었어요 — `next build` 후 `pm2 restart bidit`로 적용돼요. DB 마이그레이션 없어요. 기존 저장된 마감일(UTC 끝, `T23:59:59Z`)은 그대로 유지해요.
 
+## [0.2.36.1] - 2026-06-22
+
+### Fixed
+
+- **JetBrains Mono 폰트가 이제 숫자에 실제로 적용돼요**: `JetBrainsMonoVariable.ttf`가 앱에 등록되지 않아서 `--font-mono` 토큰을 쓰는 `.md-numeric`(₩ 금액·수수료율·RFP 번호·마감일) 51개 사이트가 전부 Pretendard로 렌더링되던 문제를 수정했어요. `styles/tokens.css`의 `--font-mono` 값도 Pretendard에서 JetBrains Mono로 바로잡았어요. `font-mono tabular-nums`를 직접 쓰던 7개 파일은 `.md-numeric` 클래스로 통일하고, `Footer.tsx` 인라인 `fontFamily` 스타일 9곳은 Tailwind 유틸로 교체했어요. 이메일 인증 템플릿의 OTP 코드 표시도 `MONO_STACK` 상수를 재사용하도록 수정했어요.
+
+## [0.2.36.0] - 2026-06-22
+
+### Changed
+
+- **오픈 게시판 노출은 견적 요청을 처음 낼 때만 선택할 수 있어요**: 게시판 공개 여부는 이제 견적 요청 작성 시(마지막 검토 단계)에만 설정할 수 있고, 이후에는 바꿀 수 없어요. 딜룸 PG 관리 탭과 상세 화면 상단에서 현재 공개 상태를 칩으로 확인할 수 있고, 칩에 마우스를 올리면 상세 설명이 표시돼요.
 ## [0.2.35.1] - 2026-06-22
 
 ### Changed

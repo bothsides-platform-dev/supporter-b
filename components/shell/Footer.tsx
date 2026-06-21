@@ -14,16 +14,10 @@ export function Footer() {
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-8">
           {/* Brand */}
           <div className="flex flex-col gap-3">
-            <span
-              className="text-[11px] tracking-[0.18em] uppercase"
-              style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-on-surface-variant)' }}
-            >
+            <span className="font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
               SUPPORTER B CORP.
             </span>
-            <p
-              className="text-[13px] leading-relaxed max-w-[260px]"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--md-sys-color-on-surface-variant)' }}
-            >
+            <p className="font-sans text-[13px] leading-relaxed max-w-[260px] text-[var(--md-sys-color-on-surface-variant)]">
               PG사 영업담당자와 구매사를 연결하는
               <br />
               비공개 1:N 견적 플랫폼
@@ -33,10 +27,7 @@ export function Footer() {
           {/* Nav links */}
           <nav className="flex flex-col sm:flex-row gap-6 sm:gap-12">
             <div className="flex flex-col gap-2">
-              <span
-                className="text-[10px] tracking-[0.2em] uppercase mb-1"
-                style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-outline)' }}
-              >
+              <span className="font-mono text-[10px] tracking-[0.2em] uppercase mb-1 text-[var(--md-sys-color-outline)]">
                 서비스
               </span>
               {[
@@ -47,22 +38,14 @@ export function Footer() {
                 <a
                   key={link.label}
                   href={link.href}
-                  className="text-[13px] transition-opacity duration-150 hover:opacity-100"
-                  style={{
-                    fontFamily: 'var(--font-sans)',
-                    color: 'var(--md-sys-color-on-surface-variant)',
-                    opacity: 0.8,
-                  }}
+                  className="font-sans text-[13px] opacity-80 transition-opacity duration-150 hover:opacity-100 text-[var(--md-sys-color-on-surface-variant)]"
                 >
                   {link.label}
                 </a>
               ))}
             </div>
             <div className="flex flex-col gap-2">
-              <span
-                className="text-[10px] tracking-[0.2em] uppercase mb-1"
-                style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-outline)' }}
-              >
+              <span className="font-mono text-[10px] tracking-[0.2em] uppercase mb-1 text-[var(--md-sys-color-outline)]">
                 법적 고지
               </span>
               {[
@@ -74,22 +57,14 @@ export function Footer() {
                   key={link.label}
                   href={link.href}
                   {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                  className="text-[13px] transition-opacity duration-150 hover:opacity-100"
-                  style={{
-                    fontFamily: 'var(--font-sans)',
-                    color: 'var(--md-sys-color-on-surface-variant)',
-                    opacity: 0.8,
-                  }}
+                  className="font-sans text-[13px] opacity-80 transition-opacity duration-150 hover:opacity-100 text-[var(--md-sys-color-on-surface-variant)]"
                 >
                   {link.label}
                 </a>
               ))}
             </div>
             <div className="flex flex-col gap-2">
-              <span
-                className="text-[10px] tracking-[0.2em] uppercase mb-1"
-                style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-outline)' }}
-              >
+              <span className="font-mono text-[10px] tracking-[0.2em] uppercase mb-1 text-[var(--md-sys-color-outline)]">
                 고객지원
               </span>
               {[
@@ -99,12 +74,7 @@ export function Footer() {
                 <a
                   key={link.label}
                   href={link.href}
-                  className="text-[13px] transition-opacity duration-150 hover:opacity-100"
-                  style={{
-                    fontFamily: 'var(--font-sans)',
-                    color: 'var(--md-sys-color-on-surface-variant)',
-                    opacity: 0.8,
-                  }}
+                  className="font-sans text-[13px] opacity-80 transition-opacity duration-150 hover:opacity-100 text-[var(--md-sys-color-on-surface-variant)]"
                 >
                   {link.label}
                 </a>
@@ -118,10 +88,7 @@ export function Footer() {
 
         {/* Bottom row: copyright + theme */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <span
-            className="text-[11px]"
-            style={{ fontFamily: 'var(--font-mono)', color: 'var(--md-sys-color-outline)' }}
-          >
+          <span className="font-mono text-[11px] text-[var(--md-sys-color-outline)]">
             © {year} SUPPORTER B CORP. ALL RIGHTS RESERVED.
           </span>
           <ThemeToggle />

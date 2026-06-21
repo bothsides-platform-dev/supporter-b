@@ -3,14 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Chip } from '@/components/primitives/Chip';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { Avatar } from '@/components/primitives/Avatar';
 import { Paperclip } from 'lucide-react';
-import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, XIcon, EnvelopeIcon } from '@/components/icons';
+import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, EnvelopeIcon } from '@/components/icons';
 import { DRAFT_OWNER_ID, ACCEPT_EXT } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
@@ -21,13 +20,15 @@ import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageBubble } from './MessageBubble';
+import { ComposerAttachmentChips } from './ComposerAttachmentChips';
+import { SampleSendDisabledNotice } from './SampleSendDisabledNotice';
 import { ContextPanel } from './ContextPanel';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
 import { useStickToBottom } from './useStickToBottom';
 import { useStringDraft } from './useStringDraft';
 import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-thread';
-import { formatDayLabel, withinGroupWindow } from './format';
+import { computeMessageGrouping } from './message-grouping';
 
 type Props = {
   conversationId: string;
@@ -128,6 +129,8 @@ export function ThreadView({
     setRows: setAttachments,
     addFiles,
     removeRow,
+    readyRows,
+    anyUploading,
   } = useComposerAttachments({ ownerKind: 'chat', ownerId: DRAFT_OWNER_ID });
   const [sending, setSending] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
@@ -227,13 +230,15 @@ export function ThreadView({
     [localMessages],
   );
 
+  // 날짜 구분선·묶음 파생 — TeamThreadView 와 공유하는 단일 출처(드리프트 방지).
+  const grouping = useMemo(() => computeMessageGrouping(localMessages), [localMessages]);
+
   async function handleSend(): Promise<void> {
     const body = draft.trim();
     if (sending || sendDisabled) return;
     // 업로드가 끝난(ready) 첨부만 전송한다 — 임시(uploading) 행의 tempId 가
-    // 서버로 새지 않도록.
-    const readyAttachments = attachments.filter((a) => a.status === 'ready');
-    if (body.length === 0 && readyAttachments.length === 0) return;
+    // 서버로 새지 않도록 (readyRows = useComposerAttachments 가 파생).
+    if (body.length === 0 && readyRows.length === 0) return;
     setSending(true);
 
     // 전송 시점의 첨부를 표시용으로 스냅샷(reload 불필요).
@@ -268,7 +273,7 @@ export function ThreadView({
       result = await sendChatMessageAction({
         conversationId,
         body,
-        attachmentIds: readyAttachments.map((a) => a.id),
+        attachmentIds: readyRows.map((a) => a.id),
         rfpId: defaultRfpId,
         tempId,
       });
@@ -405,24 +410,10 @@ export function ThreadView({
         )}
         {localMessages.map((m, i) => {
           const isSelf = m.sender === 'self';
-          // Group on the *displayed* day label so the divider key and the
-          // rendered label can never diverge across a TZ midnight boundary.
-          // Derived from the previous message (no mutable outer var) to stay
-          // React-Compiler-pure.
-          const dayLabel = formatDayLabel(m.createdAt);
-          const prev = i > 0 ? localMessages[i - 1] : null;
-          const prevDayLabel = prev ? formatDayLabel(prev.createdAt) : null;
-          const showDivider = dayLabel !== prevDayLabel;
-          // 같은 상대가 짧은 간격으로 연속해 보낸 메시지는 하나의 묶음으로 보고
-          // 이름·아바타 헤더를 두 번째부터 생략한다(날짜 경계서 리셋). 시간 판정은
-          // TeamThreadView 와 공유(withinGroupWindow — 드리프트 방지 단일 출처).
-          // 작성자(authorUserId) 기준 그룹핑 — 같은 회사라도 담당자가 다르면
-          // 묶음·헤더를 분리한다. 양쪽(self·other) 모두 작성자 헤더를 단다.
-          const groupedWithPrev =
-            !!prev &&
-            prev.authorUserId === m.authorUserId &&
-            !showDivider &&
-            withinGroupWindow(prev.createdAt, m.createdAt);
+          // 날짜 구분선·묶음 판정은 computeMessageGrouping 단일 출처(TeamThreadView 공유).
+          // 양쪽(self·other) 모두 작성자 헤더를 단다 — 같은 회사라도 담당자가 다르면
+          // 묶음·헤더를 분리한다(authorUserId 기준).
+          const { showDivider, dayLabel, groupedWithPrev } = grouping[i];
           const showAuthorHeader = !groupedWithPrev;
           const rfp = m.rfpId ? rfpById?.[m.rfpId] : undefined;
           // Receipt only on the last *read* self message (receiptIndex).
@@ -523,64 +514,10 @@ export function ThreadView({
       )}
 
       {/* 첨부 칩 리스트 */}
-      {attachments.length > 0 && (
-        <div className="flex shrink-0 flex-wrap gap-1.5 border-t border-[var(--md-sys-color-outline-variant)] px-3 pt-2 pb-1">
-          {attachments.map((a) =>
-            a.status === 'uploading' ? (
-              // 업로드 중 — 파일명 + 펄스 스켈레톤(제거 불가, 올리는 중임을 표시).
-              <span
-                key={a.id}
-                aria-busy="true"
-                aria-label={`${a.name} 업로드 중`}
-                className="inline-flex animate-pulse items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface-variant)]"
-              >
-                <span className="max-w-[160px] truncate">{a.name}</span>
-                <Skeleton className="size-3 rounded-full" />
-              </span>
-            ) : a.status === 'error' ? (
-              // 업로드 실패 — 에러 메시지 + 제거 버튼.
-              <span
-                key={a.id}
-                aria-label={`${a.name} 업로드 실패`}
-                title={a.error}
-                className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-error)] px-2 py-1 text-[12px] text-[var(--md-sys-color-error)]"
-              >
-                <span className="max-w-[160px] truncate">{a.name}</span>
-                <button
-                  type="button"
-                  aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => removeRow(a.id)}
-                  className="hover:opacity-70"
-                >
-                  <XIcon size={12} />
-                </button>
-              </span>
-            ) : (
-              <span
-                key={a.id}
-                className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface)]"
-              >
-                <span className="max-w-[160px] truncate">{a.name}</span>
-                <button
-                  type="button"
-                  aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => removeRow(a.id)}
-                  className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
-                >
-                  <XIcon size={12} />
-                </button>
-              </span>
-            ),
-          )}
-        </div>
-      )}
+      <ComposerAttachmentChips rows={attachments} onRemove={removeRow} />
 
       {/* 샘플 안내 — 데모 PG 에게는 실제로 보내지지 않음 */}
-      {sendDisabled && (
-        <p className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-4 py-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-          샘플에서는 메시지를 보낼 수 없어요. 실제 견적 요청을 보내보세요.
-        </p>
-      )}
+      {sendDisabled && <SampleSendDisabledNotice />}
 
       {/* 하단 인라인 컴포저 */}
       <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
@@ -622,8 +559,8 @@ export function ThreadView({
           disabled={
             sendDisabled ||
             sending ||
-            attachments.some((a) => a.status === 'uploading') ||
-            (draft.trim().length === 0 && !attachments.some((a) => a.status === 'ready'))
+            anyUploading ||
+            (draft.trim().length === 0 && readyRows.length === 0)
           }
           aria-label="보내기"
         >

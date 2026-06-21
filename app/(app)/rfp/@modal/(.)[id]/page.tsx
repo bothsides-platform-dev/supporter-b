@@ -3,6 +3,7 @@
 // 동일한 가드·로더를 쓰고 같은 본문(RfpDetailContent)을 감싸 시각이 일치한다.
 // 새로고침/딥링크는 인터셉터를 건너뛰어 정식 페이지가 풀스크린으로 렌더된다.
 import { Chip } from '@/components/primitives/Chip';
+import { RfpBoardVisibilityStatus } from '@/components/rfp/RfpBoardVisibilityStatus';
 import { DealRoomModal } from '@/components/deal-room/DealRoomModal';
 import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
 import { BuyerDealRoomBody } from '@/components/deal-room/buyer/BuyerDealRoomBody';
@@ -45,7 +46,12 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
     <DealRoomModal
       code={data.rfp.code}
       title={data.rfp.title}
-      statusChip={s ? <Chip label={s.label} color={s.color} /> : undefined}
+      statusChip={
+        <>
+          {s ? <Chip label={s.label} color={s.color} /> : null}
+          <RfpBoardVisibilityStatus boardVisible={data.rfp.boardVisible ?? true} />
+        </>
+      }
       chat={
         <DealRoomChat
           rfpId={data.rfp.id}
