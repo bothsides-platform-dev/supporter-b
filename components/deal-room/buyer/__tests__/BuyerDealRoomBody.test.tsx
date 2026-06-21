@@ -25,8 +25,8 @@ vi.mock('@/components/rfp/RequestConditionsView', () => ({
 vi.mock('@/components/rfp/RfpInviteManager', () => ({
   RfpInviteManager: () => <div data-testid="invite-manager" />,
 }));
-vi.mock('@/components/rfp/RfpBoardVisibilityToggle', () => ({
-  RfpBoardVisibilityToggle: () => <div data-testid="board-visibility-toggle" />,
+vi.mock('@/components/rfp/RfpBoardVisibilityStatus', () => ({
+  RfpBoardVisibilityStatus: () => <div data-testid="board-visibility-status" />,
 }));
 vi.mock('@/components/rfp/RfpPendingRequests', () => ({
   RfpPendingRequests: () => <div data-testid="pending-requests" />,

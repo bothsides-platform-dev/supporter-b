@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { Chip } from '@/components/primitives/Chip';
+import { RfpBoardVisibilityStatus } from '@/components/rfp/RfpBoardVisibilityStatus';
 import { DealRoomFull } from '@/components/deal-room/DealRoomFull';
 import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
 import { BuyerDealRoomBody } from '@/components/deal-room/buyer/BuyerDealRoomBody';
@@ -66,7 +67,12 @@ async function RfpDetailLoader({
     <DealRoomFull
       code={data.rfp.code}
       title={data.rfp.title}
-      statusChip={s ? <Chip label={s.label} color={s.color} /> : undefined}
+      statusChip={
+        <>
+          {s ? <Chip label={s.label} color={s.color} /> : null}
+          <RfpBoardVisibilityStatus boardVisible={data.rfp.boardVisible ?? true} />
+        </>
+      }
       chat={
         <DealRoomChat
           rfpId={data.rfp.id}
