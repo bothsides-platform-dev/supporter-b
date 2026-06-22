@@ -1,4 +1,4 @@
-import { Skeleton } from '@/components/primitives/Skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export function ThreadSkeleton() {
   return (

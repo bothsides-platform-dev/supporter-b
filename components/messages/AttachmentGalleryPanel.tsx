@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Paperclip } from 'lucide-react';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
-import { Skeleton } from '@/components/primitives/Skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { listConversationAttachments } from '@/lib/server/actions/chat/listConversationAttachments';
 import type { Attachment } from '@/lib/types/common';
