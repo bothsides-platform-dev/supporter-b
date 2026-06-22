@@ -5,7 +5,7 @@
  *  - 카드 클릭 시 selectedPgWorkspaceId를 draft에 저장하고 /profile로 이동
  *  - "직접 입력" 클릭 시 기존 워크스페이스 이름 + 사업자번호 폼 표시
  *  - 초대 경로 skip 가드
- *  - 아바타 렌더링: hasLogo=true면 WorkspaceAvatar 프로필 사진(<img>), false면 이니셜
+ *  - 아바타 렌더링: logoUpdatedAt이 있으면 WorkspaceAvatar 프로필 사진(<img> ?v), 없으면 이니셜
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
@@ -34,9 +34,11 @@ vi.mock('@/lib/server/actions/rfp', () => ({
 
 import PgWorkspaceStep from '@/app/(public)/signup/pg/workspace/PgWorkspaceStep';
 
+const LOGO_TS = '2026-06-21T00:00:00.000Z';
+
 const CANONICAL_COMPANIES = [
-  { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', hasLogo: false },
-  { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis', hasLogo: false },
+  { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', logoUpdatedAt: null },
+  { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis', logoUpdatedAt: null },
 ];
 
 describe('PgWorkspaceStep — 초대 경로 skip 가드', () => {
@@ -113,22 +115,22 @@ describe('PgWorkspaceStep — 워크스페이스 아바타 렌더링', () => {
     mockDraftData = { email: 'sales@toss.im', password: 'Password123!' };
   });
 
-  it('hasLogo=true인 회사 버튼에 WorkspaceAvatar 프로필 사진 <img>가 렌더된다', () => {
+  it('logoUpdatedAt이 있는 회사 버튼에 WorkspaceAvatar 프로필 사진 <img>가 렌더된다', () => {
     const companies = [
-      { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', hasLogo: true },
-      { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis', hasLogo: false },
+      { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', logoUpdatedAt: LOGO_TS },
+      { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis', logoUpdatedAt: null },
     ];
     render(<PgWorkspaceStep canonicalCompanies={companies} />);
 
     const tossBtn = screen.getByRole('button', { name: /토스페이먼츠/ });
     const img = tossBtn.querySelector('img');
     expect(img).not.toBeNull();
-    expect(img!.getAttribute('src')).toBe('/api/workspace/ws-toss-id/avatar');
+    expect(img!.getAttribute('src')).toBe(`/api/workspace/ws-toss-id/avatar?v=${Date.parse(LOGO_TS)}`);
   });
 
-  it('hasLogo=false인 회사 버튼에는 <img>가 없고 이니셜 아바타가 표시된다', () => {
+  it('logoUpdatedAt이 없는 회사 버튼에는 <img>가 없고 이니셜 아바타가 표시된다', () => {
     const companies = [
-      { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis', hasLogo: false },
+      { id: 'ws-kginicis-id', name: 'KG이니시스', canonicalPgKey: 'kginicis', logoUpdatedAt: null },
     ];
     render(<PgWorkspaceStep canonicalCompanies={companies} />);
 
@@ -138,9 +140,9 @@ describe('PgWorkspaceStep — 워크스페이스 아바타 렌더링', () => {
     expect(btn.querySelector('[role="img"]')).not.toBeNull();
   });
 
-  it('hasLogo=true인 아바타 img의 alt는 워크스페이스 이름이다', () => {
+  it('logoUpdatedAt이 있는 아바타 img의 alt는 워크스페이스 이름이다', () => {
     const companies = [
-      { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', hasLogo: true },
+      { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', logoUpdatedAt: LOGO_TS },
     ];
     render(<PgWorkspaceStep canonicalCompanies={companies} />);
 
@@ -151,7 +153,7 @@ describe('PgWorkspaceStep — 워크스페이스 아바타 렌더링', () => {
 
   it('아바타 img 로드 실패 시 이니셜 아바타로 대체된다', () => {
     const companies = [
-      { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', hasLogo: true },
+      { id: 'ws-toss-id', name: '토스페이먼츠', canonicalPgKey: 'tosspayments', logoUpdatedAt: LOGO_TS },
     ];
     render(<PgWorkspaceStep canonicalCompanies={companies} />);
 

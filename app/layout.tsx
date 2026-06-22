@@ -14,6 +14,13 @@ const pretendard = localFont({
   weight: "45 920",
 });
 
+const jetbrainsMono = localFont({
+  src: "../public/fonts/JetBrainsMonoVariable.ttf",
+  variable: "--font-mono",
+  display: "swap",
+  weight: "100 800",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: { default: siteConfig.title, template: "%s — Supporter B" },
@@ -74,7 +81,7 @@ export default async function RootLayout({
     <html
       lang="ko"
       suppressHydrationWarning
-      className={`${pretendard.variable} h-full antialiased`}
+      className={`${pretendard.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <head>
         {/* Inline script prevents theme flash (FOUC) before React hydration */}

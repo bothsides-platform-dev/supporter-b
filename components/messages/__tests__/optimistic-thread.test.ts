@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 
 import { promoteSentMessage, removeMessage, applyLiveEcho } from '../optimistic-thread';
 
-type Msg = { id: string; pending?: boolean; createdAt: string; body: string; attachments?: string[] };
+type Msg = { id: string; pending?: boolean; createdAt: string; body: string; attachments?: string[]; localKey?: string };
 
 const pending = (id: string): Msg => ({ id, pending: true, createdAt: 'T0', body: 'hi' });
 const real = (id: string): Msg => ({ id, createdAt: 'T1', body: 'yo' });
@@ -32,6 +32,15 @@ describe('promoteSentMessage', () => {
   it('applies a patch (e.g. server attachments) on promote', () => {
     const out = promoteSentMessage([pending('tmp')], 'tmp', 'real-1', 'TS', { attachments: ['f1'] });
     expect(out[0]).toMatchObject({ id: 'real-1', pending: false, attachments: ['f1'] });
+  });
+
+  // morph 안정 키 불변식: 전송 morph 는 행을 localKey 로 키잉하고, 승격 중에도 그
+  // 키가 안정적이어야 클론↔실 말풍선 매칭(opacity-0 게이트)이 유지된다. id 만 real 로
+  // 바뀌고 localKey 는 보존돼야 한다(patch 가 다른 필드를 덮어써도).
+  it('preserves localKey through promotion (id changes, localKey stays — morph key stability)', () => {
+    const opt: Msg = { id: 'tmp', localKey: 'tmp', pending: true, createdAt: 'T0', body: 'hi' };
+    const out = promoteSentMessage([opt], 'tmp', 'real-1', 'TS', { attachments: ['f1'] });
+    expect(out[0]).toMatchObject({ id: 'real-1', localKey: 'tmp', pending: false, attachments: ['f1'] });
   });
 
   it('leaves non-temp messages untouched', () => {
@@ -67,6 +76,12 @@ describe('applyLiveEcho', () => {
   it('promotes the pending bubble for a self echo', () => {
     const out = applyLiveEcho([pending('tmp')], 'real-1', true, 'TS');
     expect(out).toEqual([{ id: 'real-1', pending: false, createdAt: 'TS', body: 'hi' }]);
+  });
+
+  it('preserves localKey on self-echo promotion (morph key stability)', () => {
+    const opt: Msg = { id: 'tmp', localKey: 'tmp', pending: true, createdAt: 'T0', body: 'hi' };
+    const out = applyLiveEcho([opt], 'real-1', true, 'TS');
+    expect(out?.[0]).toMatchObject({ id: 'real-1', localKey: 'tmp', pending: false });
   });
 
   it('returns null for a self echo with no pending bubble (caller appends)', () => {

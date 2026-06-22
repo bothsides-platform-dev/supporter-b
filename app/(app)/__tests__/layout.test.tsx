@@ -101,7 +101,7 @@ describe('AppLayout 인증 가드 — 무한 리다이렉트 루프 방지', () 
       user: { ...FULL_SESSION.user, sessionVersion: 1 },
     });
     mockListForUser.mockResolvedValue([
-      { id: 'ws-1', name: 'W', type: 'buyer', status: 'active', role: 'admin', unreadCount: 0, hasLogo: false },
+      { id: 'ws-1', name: 'W', type: 'buyer', status: 'active', role: 'admin', unreadCount: 0 },
     ]);
     mockGetDbSessionVersion.mockResolvedValue(2);
 
@@ -115,7 +115,7 @@ describe('AppLayout 인증 가드 — 무한 리다이렉트 루프 방지', () 
   it('이메일 미인증 + active 워크스페이스(정규 PG)는 /pending-approval 로 보낸다', async () => {
     mockAuth.mockResolvedValue(FULL_SESSION);
     mockListForUser.mockResolvedValue([
-      { id: 'ws-1', name: 'W', type: 'pg', status: 'active', role: 'admin', unreadCount: 0, hasLogo: false },
+      { id: 'ws-1', name: 'W', type: 'pg', status: 'active', role: 'admin', unreadCount: 0 },
     ]);
     mockGetDbEmailVerified.mockResolvedValue(false);
 

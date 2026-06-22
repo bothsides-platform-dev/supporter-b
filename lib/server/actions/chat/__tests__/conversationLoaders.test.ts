@@ -12,6 +12,8 @@
 //       derived from author_ws_id === my workspace.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
+import { users } from '@/lib/db/schema';
 
 import {
   seedBuyerWorkspace,
@@ -306,7 +308,7 @@ describe('loadConversationThread', () => {
     expect(thread.messages.map((m) => m.authorUserId)).toEqual([buyerUser.id, pgUser.id]);
     expect(thread.messages.map((m) => m.authorName)).toEqual(['구매사담당', 'PG영업']);
     expect(thread.messages.map((m) => m.authorEmail)).toEqual(['buyer@b.com', 'sales@pg.com']);
-    expect(thread.viewer).toEqual({ userId: buyerUser.id, name: '구매사담당' });
+    expect(thread.viewer).toMatchObject({ userId: buyerUser.id, name: '구매사담당' });
   });
 
   it('loadConversationThread returns rfpById map for rfpIds present in the thread', async () => {
@@ -326,6 +328,26 @@ describe('loadConversationThread', () => {
     expect(thread.ok).toBe(true);
     if (!thread.ok) return;
     expect(thread.rfpById[rfp.id]).toEqual({ code: rfp.code, title: 'RFP' });
+  });
+
+  it('ThreadMessage carries authorAvatarUpdatedAt from the users join', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'avatar test',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    // Set the sender's avatar_updated_at.
+    await db.update(users).set({ avatarUpdatedAt: new Date('2026-06-21T00:00:00.000Z') }).where(eq(users.id, buyerUser.id));
+
+    const res = await loadConversationThread(sent.conversationId);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.messages[0].authorAvatarUpdatedAt).toBe('2026-06-21T00:00:00.000Z');
+    expect(res.viewer).toHaveProperty('avatarUpdatedAt');
   });
 
   it('a co-member of the viewer workspace reading does NOT flip readByCounterparty (only the counterparty workspace counts)', async () => {

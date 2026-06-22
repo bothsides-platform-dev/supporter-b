@@ -5,10 +5,12 @@ import { AppSidebarLayout } from '@/components/shell/AppSidebarLayout';
 import { ToasterProvider } from '@/components/shell/Toaster';
 import { CommandPalette } from '@/components/shell/CommandPalette';
 import { GlobalShortcuts } from '@/components/shell/GlobalShortcuts';
+import { WorkspacePresenceProvider } from '@/components/presence/WorkspacePresenceProvider';
+import { PresenceClient } from '@/components/presence/PresenceClient';
 import { SentryUserContext } from '@/components/observability/SentryUserContext';
 import { ChannelTalkHideButton } from '@/components/shell/ChannelTalkHideButton';
 import { auth } from '@/auth';
-import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import { getWorkspaceRepo, getUserRepo } from '@/lib/server/repositories/factory';
 import { resolveShellAccess } from '@/lib/auth/shell-access';
 import { getDbSessionVersion, getDbEmailVerified } from '@/lib/auth/session-version-db';
 import { setSentryUser } from '@/lib/observability/sentry-user';
@@ -78,6 +80,8 @@ export default async function AppLayout({
   // A 'render' decision guarantees a complete authenticated session (see
   // resolveShellAccess) — TS can't link the two, so narrow once here.
   const user = session!.user!;
+  const me = await (await getUserRepo()).findById(user.id);
+  const avatarUpdatedAt = me?.avatarUpdatedAt ?? null;
 
   // Tag the server isolation scope for this request (RSC render errors). Minimal
   // fields only — see lib/observability/sentry-user. The client mirror below
@@ -92,33 +96,39 @@ export default async function AppLayout({
 
   return (
     <ToasterProvider>
-      <ChannelTalkHideButton />
-      <AppSidebarLayout
-        sidebar={{
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name ?? user.email,
-          },
-          workspaceType: active.type,
-          workspaces,
-          current: { id: active.id, name: active.name, type: active.type, hasLogo: active.hasLogo },
-          isMaster: user.isMaster ?? false,
-        }}
-        header={{
-          user: {
-            name: user.name ?? user.email,
-            email: user.email,
-          },
-          workspaceType: active.type,
-        }}
-        mainClassName="bg-[var(--shell-main-bg)] md:rounded-tl-xl md:border-l md:border-t md:border-[var(--md-sys-color-outline-variant)]"
-      >
-        {children}
-      </AppSidebarLayout>
-      <CommandPalette workspaceType={active.type} />
-      <GlobalShortcuts />
-      <SentryUserContext user={sentryUser} />
+      <WorkspacePresenceProvider>
+        <ChannelTalkHideButton />
+        <AppSidebarLayout
+          sidebar={{
+            user: {
+              id: user.id,
+              email: user.email,
+              name: user.name ?? user.email,
+              avatarUpdatedAt,
+            },
+            workspaceType: active.type,
+            workspaces,
+            current: { id: active.id, name: active.name, type: active.type, logoUpdatedAt: active.logoUpdatedAt },
+            isMaster: user.isMaster ?? false,
+          }}
+          header={{
+            user: {
+              id: user.id,
+              name: user.name ?? user.email,
+              email: user.email,
+              avatarUpdatedAt,
+            },
+            workspaceType: active.type,
+          }}
+          mainClassName="bg-[var(--shell-main-bg)] md:rounded-tl-xl md:border-l md:border-t md:border-[var(--md-sys-color-outline-variant)]"
+        >
+          {children}
+        </AppSidebarLayout>
+        <CommandPalette workspaceType={active.type} />
+        <PresenceClient workspaceId={active.id} isDemo={active.isDemo ?? false} />
+        <GlobalShortcuts />
+        <SentryUserContext user={sentryUser} />
+      </WorkspacePresenceProvider>
     </ToasterProvider>
   );
 }

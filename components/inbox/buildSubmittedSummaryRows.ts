@@ -1,4 +1,3 @@
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import {
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
@@ -24,7 +23,7 @@ export function buildSubmittedSummaryRows(rfp: RFP, bid: Bid): [string, string][
   return [
     ['견적 요청 번호', rfp.code],
     ['제목', rfp.title],
-    ['등급', grade ? GRADE_LABELS[grade] : '—'],
+    ['등급', grade ? MERCHANT_TIER_LABELS[grade] : '—'],
     ['마감', formatDate(rfp.deadline)],
     ['정산 주기', bid.settleCycle],
     ['정산한도', formatKRW(bid.settleLimit)],

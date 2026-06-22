@@ -11,7 +11,8 @@ const Input = z
     rfpId: z.string().uuid(),
     pgWsIds: z.array(z.string().uuid()).min(1),
     message: z.string().trim().min(1).max(2000),
-    newDeadline: z.string().datetime(),
+    // offset: true — +09:00 형식(KST 끝) 허용. createRfpAction 과 동일.
+    newDeadline: z.string().datetime({ offset: true }),
   })
   .strict();
 

@@ -32,7 +32,7 @@ describe('UserMenu 로그아웃', () => {
     const user = userEvent.setup()
     render(
       <UserMenu
-        user={{ name: '홍길동', email: 'test@test.com' }}
+        user={{ id: 'u-1', name: '홍길동', email: 'test@test.com', avatarUpdatedAt: null }}
         workspaceType="buyer"
       />,
     )
@@ -54,7 +54,7 @@ describe('UserMenu 로그아웃', () => {
     const user = userEvent.setup()
     render(
       <UserMenu
-        user={{ name: '홍길동', email: 'test@test.com' }}
+        user={{ id: 'u-1', name: '홍길동', email: 'test@test.com', avatarUpdatedAt: null }}
         workspaceType="buyer"
       />,
     )
@@ -65,3 +65,27 @@ describe('UserMenu 로그아웃', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 })
+
+describe('UserMenu avatar', () => {
+  it('renders the user photo in the trigger when avatarUpdatedAt is set', () => {
+    render(
+      <UserMenu
+        user={{ id: 'u-9', name: '김담당', email: 'k@k.com', avatarUpdatedAt: '2026-06-21T00:00:00.000Z' }}
+        workspaceType="buyer"
+      />,
+    );
+    const img = screen.getByRole('img');
+    expect(img.tagName).toBe('IMG');
+    expect(img).toHaveAttribute('src', `/api/user/u-9/avatar?v=${Date.parse('2026-06-21T00:00:00.000Z')}`);
+  });
+
+  it('renders initials when avatarUpdatedAt is null', () => {
+    render(
+      <UserMenu
+        user={{ id: 'u-9', name: '김담당', email: 'k@k.com', avatarUpdatedAt: null }}
+        workspaceType="buyer"
+      />,
+    );
+    expect(screen.queryByRole('img')).toBeNull();
+  });
+});

@@ -1,6 +1,31 @@
 # TODOS
 
+## Workspace Logo
+
+### workspaces.has_logo 컬럼 DROP (P3)
+워크스페이스 로고가 `logo_updated_at`(캐시 버스트 `?v` + immutable) 단일 컬럼으로 전환됨. `has_logo` 는 더 이상 코드가 읽지/쓰지 않는 dead 컬럼(expand-contract 의 contract 단계 잔여). 배포 안정 확인 후 schema(`lib/db/schema/workspaces.ts`)에서 제거하고 `pnpm db:push` (또는 `ALTER TABLE workspaces DROP COLUMN has_logo;`). 데이터 손실 없음(재계산 불필요 — `logo_updated_at` 가 단일 출처). (도입: 워크스페이스 로고 캐시버스트, 2026-06-21)
+
 ## Chat / Realtime
+
+### Presence: document observer-identity exposure in the threat model (P3)
+공개 presence(`presence:ws:<V>`, D1)에서 raw `sub.presence()` 페이로드는 co-subscriber의 `user`(userId)+`connInfo.workspaceId`를 노출한다(앱 UI는 owner 필터로 binary online만 보여줘 새지 않지만, raw WS 클라이언트는 "X가 V를 관찰 중"을 열거 가능). 봉인 입찰 데이터(수수료·경쟁사 수)는 무관. 위협 모델 문서에 한 줄 명기. (발견: online-presence M1 whole-branch review 2026-06-21)
+
+### Presence: guard same-workspace self-subscribe before M2 (P2)
+누군가 `useWorkspacePresence(ownWorkspaceId)`를 호출하면 `<PresenceClient/>`의 self-broadcast와 같은 채널을 공유해 한쪽 `dispose()`가 다른 쪽 `removeSubscription`을 끊는 footgun. M1 wiring에선 소비처가 counterparty id만 넘겨 도달 불가(2-sided 모델). M2에서 같은-워크스페이스 관찰을 추가하기 전에 `managedSubscribe`/Provider에 공유-구독 가드 추가. (발견: M1 whole-branch review 2026-06-21)
+
+## Chat / Morph animation
+
+### 전송 morph 와이어링 중복 추출 (P3)
+`ThreadView`·`TeamThreadView`가 morph 오케스트레이션(reduce/useMessageMorph/pendingFlight state, handleSend의 from-rect 측정, pendingFlight setter, measure-to useEffect 14줄 + eslint-disable 문구, opacity-0 래퍼 + `<MorphFlightLayer>`)을 거의 동일하게 복제. `useMessageMorph`는 상태 컨테이너만 추출하고 측정/스케줄 계약("useStickToBottom 뒤 선언", "clear 전 from 측정", "effect에서 to 측정")이 두 곳에 산재. 해소: `useMessageMorph({ listRef })`가 pendingFlight + measure-to effect까지 소유하고 `scheduleFlight(fromEl, key, text)` 반환 → 각 뷰는 handleSend에서 호출 + 레이어 렌더만. (발견: /ship maintainability 리뷰 2026-06-22)
+
+### morph 클론 z-index가 딜룸 모달 위에 그려짐 (P3)
+`MorphFlightLayer`가 body로 portal(`z-[100]`)되어 딜룸 모달(`z-50`) 위에 클론을 그림. 0.34s 비행 동안 클론이 모달 헤더 영역을 가로지르면 위에 덮어 보일 수 있음(`pointer-events-none`이라 클릭 차단은 없고, 두 끝점이 채팅 영역 안이라 대부분 무해, 비-모달 표면에선 정상). body-portal은 메시지 목록 overflow 클리핑 회피를 위한 의도적 선택 — 모달 안으로 portal하면 클리핑 재발. 필요 시 z를 모달 컨텍스트에 스코프. (발견: /ship adversarial 2026-06-22)
+
+### prop-resync 중 localKey 유실 → 일시적 이중 말풍선 (P3)
+`ThreadView`의 `prevMessages !== messages` 리싱크가 서버 행(localKey 없음)으로 교체 → flight 진행 중이면 행이 realId로 키잉되어 `isMorphing(realId)=false`로 실 말풍선이 즉시 보이고 클론도 비행 중 → 최대 0.34s 이중 표시(클론 완료 시 self-heal). 드문 레이스. 해소: 리싱크 시 활성 flight 전부 clear(hook에 `clearFlights()` 노출). TeamThreadView는 remount라 무영향. (발견: /ship adversarial 2026-06-22)
+
+### 빠른 연속 전송 시 단일 pendingFlight 슬롯 (P3)
+`pendingFlight`가 단일 state 슬롯이라 같은 틱에 두 번 전송하면 마지막 것만 morph(앞 메시지는 애니메이션 없이 즉시 표시 — 안전, 정합성 문제 없음). 연속 전송 일관성을 원하면 큐/배열로 전환. (발견: /ship adversarial 2026-06-22)
 
 ## Auth / Signup
 
@@ -8,6 +33,9 @@
 `mapUniqueViolationToEmailTaken<T>` 헬퍼로 4곳 중복 해소(`completeSignup`·`signupViaInvite`·`joinCanonicalPgWorkspace`·`confirmEmailChange`). `users_email_unique` 컨스트레인트 특정화로 다른 테이블 23505 오진단 방지. user-insert 8필드는 이미 repo `create()` 단일 출처화돼 있어 insert 헬퍼 추출 불필요. 3470 green. (PR refactor+auth-email-taken-dry 2026-06-17)
 
 ## Design
+
+### font-mono uppercase tracking on non-numeric UI labels (C4) (P3)
+`font-mono text-[10px] tracking-[0.1em] uppercase` 패턴이 폼 라벨·버튼·nav 링크 등 비수치 UI 요소 ~180곳에 남아 있음 (DESIGN.md 하드 룰 위반: "no `font-mono uppercase tracking` on labels/nav"). 대표 파일: `app/(public)/login`·`signup`·`password`·`auth`·`invite`, `components/auth/PasswordField`·`PhoneVerificationField`·`ResendCountdown`, `components/inbox/bid-wizard/BidContextStrip`, `components/settings/*`, `components/rfp/*`. 수정 방향: `font-mono text-[10px] tracking-[0.1em] uppercase` → `font-sans text-[11px] tracking-tight` + sentence case. 별도 worktree 권장(시각 변경 광범위). 또한 `font-mono tabular-nums` 직접 사용이 `md-numeric` 미전환 상태로 ~30건 잔존(`components/settings/`, `components/rfp/`, `components/landing/` 등) — C4 스윕 시 병행 정리. (도입: font-system audit PR#280 v0.2.35.1, 2026-06-22)
 
 ## Kanban Board
 

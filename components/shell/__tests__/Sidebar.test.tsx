@@ -55,17 +55,17 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { Sidebar } from '../Sidebar';
 
 const buyerProps = {
-  user: { id: 'u1', email: 'buyer@test.com', name: '홍길동' },
+  user: { id: 'u1', email: 'buyer@test.com', name: '홍길동', avatarUpdatedAt: null },
   workspaceType: 'buyer' as const,
-  workspaces: [{ id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, hasLogo: false }],
-  current: { id: 'ws1', name: '구매사A', type: 'buyer' as const, hasLogo: false },
+  workspaces: [{ id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false }],
+  current: { id: 'ws1', name: '구매사A', type: 'buyer' as const, logoUpdatedAt: null },
 };
 
 const pgProps = {
-  user: { id: 'u2', email: 'pg@test.com', name: '이순신' },
+  user: { id: 'u2', email: 'pg@test.com', name: '이순신', avatarUpdatedAt: null },
   workspaceType: 'pg' as const,
-  workspaces: [{ id: 'ws2', name: '서포터페이', type: 'pg' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, hasLogo: false }],
-  current: { id: 'ws2', name: '서포터페이', type: 'pg' as const, hasLogo: false },
+  workspaces: [{ id: 'ws2', name: '서포터페이', type: 'pg' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false }],
+  current: { id: 'ws2', name: '서포터페이', type: 'pg' as const, logoUpdatedAt: null },
 };
 
 const sidebarProviderStyle = {
@@ -289,8 +289,11 @@ describe('Sidebar — notification badge', () => {
   it('shows the unread badge on the 알림 link when count > 0', () => {
     mockUnread.value = 3;
     renderSidebar(buyerProps);
-    const badge = screen.getByTestId('unread-badge');
-    expect(badge).toHaveTextContent('3');
-    expect(document.querySelector('a[href="/notifications"]')).toContainElement(badge);
+    // Badge renders twice: once in the icon wrapper (collapsed overlay) and once in the row (expanded).
+    const badges = screen.getAllByTestId('unread-badge');
+    expect(badges.length).toBeGreaterThan(0);
+    badges.forEach((badge) => expect(badge).toHaveTextContent('3'));
+    const notifLink = document.querySelector('a[href="/notifications"]');
+    badges.forEach((badge) => expect(notifLink).toContainElement(badge));
   });
 });

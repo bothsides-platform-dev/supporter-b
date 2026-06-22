@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
+import { endOfDayKstIso, kstDateOf } from '@/lib/deadline';
 import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 
@@ -71,7 +72,8 @@ export function RfpStep4Review({
 }: Props) {
   const draft = useRfpDraftStore();
   const [minDate] = useState(() =>
-    new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
+    // KST "내일" 날짜: 이른 KST 새벽(UTC 전날 심야)에 당일이 선택 가능한 엣지를 막는다.
+    kstDateOf(new Date(Date.now() + 86_400_000)),
   );
   const [attempted, setAttempted] = useState(false);
 
@@ -96,7 +98,7 @@ export function RfpStep4Review({
           onChange={(e) =>
             draft.setField(
               'deadline',
-              e.target.value ? `${e.target.value}T23:59:59Z` : '',
+              e.target.value ? endOfDayKstIso(e.target.value) : '',
             )
           }
           aria-invalid={deadlineError}

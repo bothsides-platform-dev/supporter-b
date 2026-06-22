@@ -45,7 +45,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="py-2.5 flex items-baseline justify-between gap-4">
       <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] shrink-0">{label}</span>
-      <span className="font-mono text-[13px] tabular-nums text-[var(--md-sys-color-on-surface)] text-right whitespace-normal break-keep">{value}</span>
+      <span className="md-numeric text-[13px] text-[var(--md-sys-color-on-surface)] text-right whitespace-normal break-keep">{value}</span>
     </div>
   );
 }

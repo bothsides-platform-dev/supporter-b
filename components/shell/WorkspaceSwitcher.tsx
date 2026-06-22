@@ -12,6 +12,7 @@ import {
 import { Chip } from '@/components/primitives/Chip';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { switchWorkspaceAction } from '@/lib/server/actions/workspace/switchWorkspaceAction';
+import { disconnectCentrifuge } from '@/lib/realtime/centrifuge-client';
 import type {
   WorkspaceMembershipSummary,
   WorkspaceType,
@@ -20,7 +21,7 @@ import type {
 const TYPE_LABEL: Record<WorkspaceType, string> = { buyer: '구매사', pg: 'PG' };
 
 type Props = {
-  current: { id: string; name: string; type: WorkspaceType; hasLogo: boolean };
+  current: { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null };
   workspaces: WorkspaceMembershipSummary[];
   /** Master/operator: shows a name search over ALL active workspaces. */
   isMaster?: boolean;
@@ -28,17 +29,21 @@ type Props = {
 
 export function WorkspaceSwitcher({ current, workspaces, isMaster }: Props) {
   const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState<{ id: string; name: string; type: WorkspaceType; hasLogo: boolean } | null>(null);
+  const [pending, setPending] = useState<{ id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null } | null>(null);
   const [search, setSearch] = useState('');
 
   async function handleSelect(id: string) {
     if (id === current.id || busy) return;
     const target = workspaces.find((w) => w.id === id);
     if (!target) return;
-    setPending({ id: target.id, name: target.name, type: target.type, hasLogo: target.hasLogo });
+    setPending({ id: target.id, name: target.name, type: target.type, logoUpdatedAt: target.logoUpdatedAt });
     setBusy(true);
     const r = await switchWorkspaceAction(id);
     if (r.ok) {
+      // Tear down the live Centrifuge connection before the hard nav — its
+      // connection-token binds the OLD workspaceId, so presence (and chat ACL)
+      // for the new workspace need a freshly-scoped connection on the next page.
+      disconnectCentrifuge();
       window.location.assign(r.redirectTo);
     } else {
       setPending(null);
@@ -65,7 +70,7 @@ export function WorkspaceSwitcher({ current, workspaces, isMaster }: Props) {
         className={`flex h-9 w-full min-w-0 flex-nowrap items-center justify-start gap-2 rounded-[var(--md-sys-shape-extra-small)] px-2 hover:bg-[var(--md-sys-color-surface-container-high)] outline-none transition-[color,background-color,opacity] duration-[140ms] group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0${busy ? ' opacity-60' : ''}`}
       >
         {/* 접힘/펼침 모두 표시. 접힘 시 이 아이콘만 남음 */}
-        <WorkspaceAvatar name={display.name} workspaceId={display.id} hasLogo={display.hasLogo} size="sm" />
+        <WorkspaceAvatar name={display.name} workspaceId={display.id} logoUpdatedAt={display.logoUpdatedAt} size="sm" />
         <span className="min-w-0 flex-1 truncate text-[length:var(--md-typescale-label-large-size)] text-[var(--md-sys-color-on-surface)] group-data-[collapsible=icon]:sr-only">
           {display.name}
         </span>
@@ -113,7 +118,7 @@ export function WorkspaceSwitcher({ current, workspaces, isMaster }: Props) {
               <span className="w-4 shrink-0 text-[var(--md-sys-color-primary)]">
                 {active && <CheckIcon size={14} />}
               </span>
-              <WorkspaceAvatar name={ws.name} workspaceId={ws.id} hasLogo={ws.hasLogo} size="sm" />
+              <WorkspaceAvatar name={ws.name} workspaceId={ws.id} logoUpdatedAt={ws.logoUpdatedAt} size="sm" />
               <span className="flex-1 truncate">{ws.name}</span>
               {ws.unreadCount > 0 && (
                 <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--md-sys-color-error)]" />

@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import type { WorkspaceType } from '@/lib/types/workspace';
 
 type UserMenuProps = {
-  user: { name: string; email: string };
+  user: { id: string; name: string; email: string; avatarUpdatedAt: string | null };
   workspaceType: WorkspaceType;
   className?: string;
 };
@@ -45,7 +45,14 @@ export function UserMenu({ user, workspaceType, className }: UserMenuProps) {
           className,
         )}
       >
-        <Avatar name={user.name} color="surface" size="sm" className="cursor-pointer" />
+        <Avatar
+          name={user.name}
+          color="surface"
+          size="sm"
+          userId={user.id}
+          avatarUpdatedAt={user.avatarUpdatedAt}
+          className="cursor-pointer"
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         side="bottom"

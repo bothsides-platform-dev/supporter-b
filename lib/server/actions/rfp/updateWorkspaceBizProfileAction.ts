@@ -9,6 +9,7 @@ import {
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import type { BizProfile } from '@/lib/types/biz-profile';
+import { MERCHANT_TIERS } from '@/lib/types/bid';
 import { actionDb, type RfpActionResult } from './_shared';
 
 const BizProfilePatch = z
@@ -21,7 +22,7 @@ const BizProfilePatch = z
 
 const Input = z
   .object({
-    grade: z.enum(['small', 'sme1', 'sme2', 'sme3', 'general']).optional(),
+    grade: z.enum(MERCHANT_TIERS).optional(),
     bizProfile: BizProfilePatch.optional(),
   })
   .strict()

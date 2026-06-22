@@ -23,6 +23,10 @@ vi.mock('@/lib/auth/session-version-db', () => ({
 
 
 beforeEach(() => {
+  // The route holds a module-scope, per-userId revocation cache (reconnect-storm
+  // mitigation). Reset modules so each test gets a fresh cache — otherwise an
+  // earlier test's verdict for a shared userId leaks into a later test.
+  vi.resetModules();
   sessionRef.value = null;
   getDbSessionVersionMock.mockReset();
   getDbSessionVersionMock.mockResolvedValue(1);

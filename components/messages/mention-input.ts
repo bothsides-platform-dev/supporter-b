@@ -3,11 +3,11 @@
 import { getChoseong } from 'es-hangul';
 import { ALL_TOKEN, serializeMention } from '@/lib/team-mentions';
 
-export type MentionCandidate = { userId: string; name: string; joinedAt: string };
+export type MentionCandidate = { userId: string; name: string; joinedAt: string; avatarUpdatedAt: string | null };
 
 export type MentionItem =
   | { kind: 'all' }
-  | { kind: 'member'; userId: string; name: string; joinedAt: string };
+  | { kind: 'member'; userId: string; name: string; joinedAt: string; avatarUpdatedAt: string | null };
 
 export type MentionPick =
   | { kind: 'all' }
@@ -48,7 +48,7 @@ export function buildMentionItems(candidates: MentionCandidate[], query: string)
   if (allMatches) items.push({ kind: 'all' });
   for (const c of candidates) {
     if (matches(c.name, q)) {
-      items.push({ kind: 'member', userId: c.userId, name: c.name, joinedAt: c.joinedAt });
+      items.push({ kind: 'member', userId: c.userId, name: c.name, joinedAt: c.joinedAt, avatarUpdatedAt: c.avatarUpdatedAt });
     }
   }
   return items;

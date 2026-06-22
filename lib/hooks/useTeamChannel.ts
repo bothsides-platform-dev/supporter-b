@@ -22,6 +22,7 @@ export type TeamLivePayload = {
   body?: string;
   authorUserId?: string;
   authorName?: string;
+  authorAvatarUpdatedAt?: string | null;
   createdAt?: string;
   attachments?: import('@/lib/types/common').Attachment[];
   [k: string]: unknown;

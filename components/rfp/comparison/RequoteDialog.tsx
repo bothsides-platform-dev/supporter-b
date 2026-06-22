@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/primitives/Button';
 import { requestRequoteAction } from '@/lib/server/actions/rfp';
 import { cn } from '@/lib/utils';
+import { endOfDayKstIso, kstDateOf } from '@/lib/deadline';
 
 type Candidate = { pgWsId: string; name: string };
 
@@ -34,7 +35,8 @@ export function RequoteDialog({
   const [message, setMessage] = useState('');
   // Lazy init: computing the min date is impure (Date.now), so it must not run in
   // the render body (react-hooks/purity). It only needs to be evaluated once.
-  const [tomorrow] = useState(() => new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
+  // KST "내일" 날짜: 이른 KST 새벽에 당일이 선택 가능한 엣지를 막는다.
+  const [tomorrow] = useState(() => kstDateOf(new Date(Date.now() + 86_400_000)));
   const [deadline, setDeadline] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -60,7 +62,7 @@ export function RequoteDialog({
       rfpId,
       pgWsIds: [...selected],
       message: message.trim(),
-      newDeadline: `${deadline}T23:59:59Z`,
+      newDeadline: endOfDayKstIso(deadline),
     });
     setSubmitting(false);
     if (!r.ok) { setError(r.error); return; }

@@ -1,37 +1,44 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useReducedMotion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Chip } from '@/components/primitives/Chip';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { Avatar } from '@/components/primitives/Avatar';
 import { Paperclip } from 'lucide-react';
-import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, XIcon, EnvelopeIcon } from '@/components/icons';
+import { PaperclipIcon, ArrowUpIcon, ArrowDownIcon, ChevronLeftIcon, CheckIcon, EnvelopeIcon } from '@/components/icons';
 import { DRAFT_OWNER_ID, ACCEPT_EXT } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
+import { useWorkspacePresence } from '@/components/presence/WorkspacePresenceProvider';
+import { PresenceDot } from '@/components/presence/PresenceDot';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageBubble } from './MessageBubble';
+import { ComposerAttachmentChips } from './ComposerAttachmentChips';
+import { SampleSendDisabledNotice } from './SampleSendDisabledNotice';
 import { ContextPanel } from './ContextPanel';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
 import { useStickToBottom } from './useStickToBottom';
 import { useStringDraft } from './useStringDraft';
 import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-thread';
-import { formatDayLabel, withinGroupWindow } from './format';
+import { computeMessageGrouping } from './message-grouping';
+import { MorphFlightLayer } from './MorphFlightLayer';
+import { useMessageMorph } from './useMessageMorph';
+import type { Rect } from './message-morph';
 
 type Props = {
   conversationId: string;
   counterparty: { workspaceId: string; name: string; type: 'buyer' | 'pg' };
   /** 세션 사용자 — 낙관적 self 말풍선이 즉시 자기 이름을 보여줄 때 쓴다. */
-  viewer: { userId: string; name: string };
+  viewer: { userId: string; name: string; avatarUpdatedAt: string | null };
   messages: ThreadMessage[];
   /** rfpId(uuid) → 표시용 코드/제목. 주어진 항목만 RFP 칩을 렌더(uuid 원문 노출 금지). */
   rfpById?: Record<string, { code: string; title: string }>;
@@ -63,6 +70,7 @@ type LiveMessagePayload = {
   authorUserId?: string;
   authorName?: string;
   authorEmail?: string;
+  authorAvatarUpdatedAt?: string | null;
   rfpId?: string | null;
   createdAt?: string;
   attachments?: { id: string; name: string; size: number; mimeType: string; url: string }[];
@@ -78,7 +86,8 @@ const TYPING_THROTTLE_MS = 2000;
 
 // 낙관적 전송 중에만 쓰는 표시 전용 확장 — 서버 로더 타입(ThreadMessage)에는
 // pending 개념이 없으므로 클라이언트 뷰 모델로만 둔다.
-type LocalMessage = ThreadMessage & { pending?: boolean };
+// localKey — tempId→realId 승격에도 React key·morph 타깃 매칭을 고정하는 안정 키.
+type LocalMessage = ThreadMessage & { pending?: boolean; localKey?: string };
 
 // Capturing group so split keeps the URLs; matched per-part with a
 // non-global test (a /g regex carries lastIndex across .test() calls).
@@ -125,6 +134,8 @@ export function ThreadView({
     setRows: setAttachments,
     addFiles,
     removeRow,
+    readyRows,
+    anyUploading,
   } = useComposerAttachments({ ownerKind: 'chat', ownerId: DRAFT_OWNER_ID });
   const [sending, setSending] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
@@ -152,10 +163,20 @@ export function ThreadView({
   const { listRef, bottomRef, showNewMessagePill, scrollToBottom, onListScroll } =
     useStickToBottom({ count: localMessages.length, isOwnLast: lastIsOwn, withPill: true });
 
+  // 전송 morph — 입력 텍스트가 말풍선으로 변신. useStickToBottom *뒤*에 둬야 측정 effect가
+  // 자동 스크롤 적용 후 실행된다(아래 pendingFlight effect).
+  const reduce = useReducedMotion();
+  const { flights, beginFlight, endFlight, isMorphing } = useMessageMorph();
+  const [pendingFlight, setPendingFlight] = useState<{ key: string; text: string; from: Rect } | null>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
+
+  // Live presence — driven by WorkspacePresenceProvider (not useChatChannel).
+  const { online } = useWorkspacePresence(counterparty.workspaceId);
+
   // Live channel — graceful no-op when realtime is unconfigured (dev/tests):
-  // online stays false, typingUserIds empty, onMessage/onRead never fire, and
-  // the thread runs entirely off the static loader + optimistic local append.
-  const { online, typingUserIds, sendTyping, connected } = useChatChannel(conversationId, {
+  // typingUserIds empty, onMessage/onRead never fire, and the thread runs
+  // entirely off the static loader + optimistic local append.
+  const { typingUserIds, sendTyping, connected } = useChatChannel(conversationId, {
     onMessage: (data: LiveMessagePayload) => {
       if (!data.id || typeof data.body !== 'string' || !data.createdAt) return;
       const id = data.id;
@@ -173,6 +194,7 @@ export function ThreadView({
               authorUserId: data.authorUserId ?? '',
               authorName: data.authorName ?? '',
               authorEmail: data.authorEmail ?? '',
+              authorAvatarUpdatedAt: data.authorAvatarUpdatedAt ?? null,
               sender,
               body: data.body as string,
               rfpId: data.rfpId ?? null,
@@ -220,14 +242,22 @@ export function ThreadView({
     [localMessages],
   );
 
+  // 날짜 구분선·묶음 파생 — TeamThreadView 와 공유하는 단일 출처(드리프트 방지).
+  const grouping = useMemo(() => computeMessageGrouping(localMessages), [localMessages]);
+
   async function handleSend(): Promise<void> {
     const body = draft.trim();
     if (sending || sendDisabled) return;
     // 업로드가 끝난(ready) 첨부만 전송한다 — 임시(uploading) 행의 tempId 가
-    // 서버로 새지 않도록.
-    const readyAttachments = attachments.filter((a) => a.status === 'ready');
-    if (body.length === 0 && readyAttachments.length === 0) return;
+    // 서버로 새지 않도록 (readyRows = useComposerAttachments 가 파생).
+    if (body.length === 0 && readyRows.length === 0) return;
     setSending(true);
+
+    // morph 출발점 — 텍스트가 아직 입력창에 있는 지금(append/clear 전) 측정.
+    const cr = composerRef.current?.getBoundingClientRect();
+    const fromRect: Rect | null = cr
+      ? { left: cr.left, top: cr.top, width: cr.width, height: cr.height }
+      : null;
 
     // 전송 시점의 첨부를 표시용으로 스냅샷(reload 불필요).
     const optimisticAttachments = toReadyMessageAttachments(attachments);
@@ -239,9 +269,11 @@ export function ThreadView({
       ...prev,
       {
         id: tempId,
+        localKey: tempId,
         authorUserId: viewer.userId,
         authorName: viewer.name,
         authorEmail: '',
+        authorAvatarUpdatedAt: viewer.avatarUpdatedAt,
         sender: 'self',
         body,
         rfpId: defaultRfpId ?? null,
@@ -254,19 +286,22 @@ export function ThreadView({
     // 컴포저는 즉시 비운다(표준 메신저 동작). 실패하면 아래에서 되돌린다.
     setDraft('');
     setAttachments([]);
+    // 텍스트가 있으면 morph 발동 예약 — 말풍선 안착 후 effect가 위치 측정.
+    if (fromRect && body.length > 0) setPendingFlight({ key: tempId, text: body, from: fromRect });
 
     let result: Awaited<ReturnType<typeof sendChatMessageAction>>;
     try {
       result = await sendChatMessageAction({
         conversationId,
         body,
-        attachmentIds: readyAttachments.map((a) => a.id),
+        attachmentIds: readyRows.map((a) => a.id),
         rfpId: defaultRfpId,
         tempId,
       });
     } catch {
       setSending(false);
       setLocalMessages((prev) => removeMessage(prev, tempId));
+      endFlight(tempId); // 진행 중인 morph 클론도 함께 정리(롤백된 말풍선과 짝).
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
@@ -280,11 +315,30 @@ export function ThreadView({
     } else {
       // 실패: 낙관적 말풍선을 제거하고 입력·첨부를 복원해 다시 보낼 수 있게 한다.
       setLocalMessages((prev) => removeMessage(prev, tempId));
+      endFlight(tempId); // 진행 중인 morph 클론도 함께 정리(롤백된 말풍선과 짝).
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
     }
   }
+
+  // 낙관적 말풍선이 DOM 에 안착하고 useStickToBottom 자동 스크롤이 적용된 뒤 위치를
+  // 측정해 morph 를 발동한다. 이 effect 가 useStickToBottom 보다 *뒤*에 선언돼 스크롤
+  // 적용 후 실행되는 것이 핵심(둘 다 passive, 선언 순서 = 실행 순서).
+  useEffect(() => {
+    if (!pendingFlight) return;
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-bubble-key="${pendingFlight.key}"]`);
+    beginFlight({
+      key: pendingFlight.key,
+      text: pendingFlight.text,
+      from: pendingFlight.from,
+      isSelf: true,
+      reduce: reduce ?? false,
+      bubbleEl: el ?? null,
+    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 의도된 측정→발동 패턴: 낙관적 말풍선 안착 + 자동 스크롤 적용 후(이 effect가 useStickToBottom 뒤) 위치를 측정해 morph를 1회 발동하고 예약을 비운다(바운드된 1회성 후속 렌더).
+    setPendingFlight(null);
+  }, [pendingFlight, beginFlight, reduce, listRef]);
 
   // Leading-edge throttle: ping typing on the first keystroke, then suppress
   // repeats for the window. Avoids one publish per keystroke.
@@ -296,6 +350,7 @@ export function ThreadView({
   }, [sendTyping]);
 
   return (
+    <>
     <div className="flex h-full min-h-0 min-w-0 flex-1">
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {/* 헤더 — 상대 워크스페이스 + 타입 + 프레즌스 + 타이핑 */}
@@ -312,12 +367,7 @@ export function ThreadView({
         )}
         <div className="relative">
           <WorkspaceAvatar name={counterparty.name} size="md" workspaceId={counterparty.workspaceId} />
-          {online && (
-            <span
-              aria-label="온라인"
-              className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[var(--md-sys-color-surface)] bg-[var(--md-sys-color-tertiary)]"
-            />
-          )}
+          <PresenceDot activity={online ? 'active' : 'offline'} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -402,31 +452,18 @@ export function ThreadView({
         )}
         {localMessages.map((m, i) => {
           const isSelf = m.sender === 'self';
-          // Group on the *displayed* day label so the divider key and the
-          // rendered label can never diverge across a TZ midnight boundary.
-          // Derived from the previous message (no mutable outer var) to stay
-          // React-Compiler-pure.
-          const dayLabel = formatDayLabel(m.createdAt);
-          const prev = i > 0 ? localMessages[i - 1] : null;
-          const prevDayLabel = prev ? formatDayLabel(prev.createdAt) : null;
-          const showDivider = dayLabel !== prevDayLabel;
-          // 같은 상대가 짧은 간격으로 연속해 보낸 메시지는 하나의 묶음으로 보고
-          // 이름·아바타 헤더를 두 번째부터 생략한다(날짜 경계서 리셋). 시간 판정은
-          // TeamThreadView 와 공유(withinGroupWindow — 드리프트 방지 단일 출처).
-          // 작성자(authorUserId) 기준 그룹핑 — 같은 회사라도 담당자가 다르면
-          // 묶음·헤더를 분리한다. 양쪽(self·other) 모두 작성자 헤더를 단다.
-          const groupedWithPrev =
-            !!prev &&
-            prev.authorUserId === m.authorUserId &&
-            !showDivider &&
-            withinGroupWindow(prev.createdAt, m.createdAt);
+          const rowKey = m.localKey ?? m.id; // 승격에도 불변(React key·morph 타깃)
+          // 날짜 구분선·묶음 판정은 computeMessageGrouping 단일 출처(TeamThreadView 공유).
+          // 양쪽(self·other) 모두 작성자 헤더를 단다 — 같은 회사라도 담당자가 다르면
+          // 묶음·헤더를 분리한다(authorUserId 기준).
+          const { showDivider, dayLabel, groupedWithPrev } = grouping[i];
           const showAuthorHeader = !groupedWithPrev;
           const rfp = m.rfpId ? rfpById?.[m.rfpId] : undefined;
           // Receipt only on the last *read* self message (receiptIndex).
           const showReceipt = i === receiptIndex;
 
           return (
-            <div key={m.id} className="flex flex-col gap-3">
+            <div key={rowKey} className="flex flex-col gap-3">
               {showDivider && (
                 // 중앙 라벨만 — 플랭킹 라인 없는 절제된 구분선(레퍼런스 정합).
                 <div role="separator" className="flex justify-center py-1.5">
@@ -443,7 +480,7 @@ export function ThreadView({
               >
                 {showAuthorHeader && (
                   <div className="flex items-center gap-1.5">
-                    <Avatar name={m.authorName} size="sm" color={isSelf ? 'primary' : 'surface'} />
+                    <Avatar name={m.authorName} size="sm" color={isSelf ? 'primary' : 'surface'} userId={m.authorUserId} avatarUpdatedAt={m.authorAvatarUpdatedAt} />
                     <span
                       title={m.authorEmail || undefined}
                       className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]"
@@ -464,14 +501,18 @@ export function ThreadView({
                   </div>
                 )}
 
-                <MessageBubble
-                  isSelf={isSelf}
-                  pending={m.pending}
-                  createdAt={m.createdAt}
-                  body={m.body}
-                  attachments={m.attachments}
-                  renderBody={renderBody}
-                />
+                {/* morph 진행 중인 self 말풍선은 숨김 — 떠오르는 클론으로 대체(안착 후 복귀). */}
+                <div className={cn('w-full', isSelf && isMorphing(rowKey) && 'opacity-0')}>
+                  <MessageBubble
+                    isSelf={isSelf}
+                    pending={m.pending}
+                    createdAt={m.createdAt}
+                    body={m.body}
+                    attachments={m.attachments}
+                    renderBody={renderBody}
+                    bubbleKey={rowKey}
+                  />
+                </div>
 
                 {showReceipt && (
                   <span className="flex items-center gap-0.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -520,64 +561,10 @@ export function ThreadView({
       )}
 
       {/* 첨부 칩 리스트 */}
-      {attachments.length > 0 && (
-        <div className="flex shrink-0 flex-wrap gap-1.5 border-t border-[var(--md-sys-color-outline-variant)] px-3 pt-2 pb-1">
-          {attachments.map((a) =>
-            a.status === 'uploading' ? (
-              // 업로드 중 — 파일명 + 펄스 스켈레톤(제거 불가, 올리는 중임을 표시).
-              <span
-                key={a.id}
-                aria-busy="true"
-                aria-label={`${a.name} 업로드 중`}
-                className="inline-flex animate-pulse items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface-variant)]"
-              >
-                <span className="max-w-[160px] truncate">{a.name}</span>
-                <Skeleton className="size-3 rounded-full" />
-              </span>
-            ) : a.status === 'error' ? (
-              // 업로드 실패 — 에러 메시지 + 제거 버튼.
-              <span
-                key={a.id}
-                aria-label={`${a.name} 업로드 실패`}
-                title={a.error}
-                className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-error)] px-2 py-1 text-[12px] text-[var(--md-sys-color-error)]"
-              >
-                <span className="max-w-[160px] truncate">{a.name}</span>
-                <button
-                  type="button"
-                  aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => removeRow(a.id)}
-                  className="hover:opacity-70"
-                >
-                  <XIcon size={12} />
-                </button>
-              </span>
-            ) : (
-              <span
-                key={a.id}
-                className="inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2 py-1 text-[12px] text-[var(--md-sys-color-on-surface)]"
-              >
-                <span className="max-w-[160px] truncate">{a.name}</span>
-                <button
-                  type="button"
-                  aria-label={`${a.name} 첨부 제거`}
-                  onClick={() => removeRow(a.id)}
-                  className="text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
-                >
-                  <XIcon size={12} />
-                </button>
-              </span>
-            ),
-          )}
-        </div>
-      )}
+      <ComposerAttachmentChips rows={attachments} onRemove={removeRow} />
 
       {/* 샘플 안내 — 데모 PG 에게는 실제로 보내지지 않음 */}
-      {sendDisabled && (
-        <p className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-4 py-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-          샘플에서는 메시지를 보낼 수 없어요. 실제 견적 요청을 보내보세요.
-        </p>
-      )}
+      {sendDisabled && <SampleSendDisabledNotice />}
 
       {/* 하단 인라인 컴포저 */}
       <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
@@ -602,25 +589,28 @@ export function ThreadView({
             e.target.value = '';
           }}
         />
-        <ChatComposerTextarea
-          value={draft}
-          onChange={(v) => {
-            setDraft(v);
-            handleTyping();
-          }}
-          onSubmit={handleSend}
-          disabled={sendDisabled}
-          placeholder="메시지를 입력하세요…"
-          className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-1.5 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
-        />
+        {/* composerRef — morph 출발 위치(텍스트 박스) 측정 타깃. 래퍼는 flex-1 슬롯 유지. */}
+        <div ref={composerRef} className="flex min-w-0 flex-1">
+          <ChatComposerTextarea
+            value={draft}
+            onChange={(v) => {
+              setDraft(v);
+              handleTyping();
+            }}
+            onSubmit={handleSend}
+            disabled={sendDisabled}
+            placeholder="메시지를 입력하세요…"
+            className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
+          />
+        </div>
         <Button
           className="shrink-0"
           onClick={handleSend}
           disabled={
             sendDisabled ||
             sending ||
-            attachments.some((a) => a.status === 'uploading') ||
-            (draft.trim().length === 0 && !attachments.some((a) => a.status === 'ready'))
+            anyUploading ||
+            (draft.trim().length === 0 && readyRows.length === 0)
           }
           aria-label="보내기"
         >
@@ -631,5 +621,7 @@ export function ThreadView({
       </>)}
     </div>
     </div>
+    <MorphFlightLayer flights={flights} onDone={endFlight} renderText={renderBody} />
+    </>
   );
 }

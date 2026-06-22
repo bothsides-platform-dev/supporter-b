@@ -1,12 +1,11 @@
 import { redirect } from 'next/navigation';
 import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
-import { Avatar } from '@/components/primitives/Avatar';
 import { PageEnter } from '@/components/primitives/PageEnter';
-import { WorkspaceBizProfileForm } from '@/components/settings/WorkspaceBizProfileForm';
 import { WorkspaceBizNoForm } from '@/components/settings/WorkspaceBizNoForm';
 import { WorkspaceNameForm } from '@/components/settings/WorkspaceNameForm';
 import { WorkspaceLogoForm } from '@/components/settings/WorkspaceLogoForm';
+import { UserAvatarForm } from '@/components/settings/UserAvatarForm';
 import { BizRequiredToast } from '@/components/settings/BizRequiredToast';
 import { DeleteAccountSection } from '@/components/settings/DeleteAccountSection';
 import { auth } from '@/auth';
@@ -16,7 +15,7 @@ import {
 } from '@/lib/server/repositories/factory';
 import { LocalDate } from '@/components/primitives/LocalTime';
 import type { ReactNode } from 'react';
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +58,7 @@ export default async function ProfilePage({ searchParams }: Props) {
                 : '면세',
           ],
           ...(grade
-            ? ([['가맹점 등급', GRADE_LABELS[grade]]] as [string, ReactNode][])
+            ? ([['가맹점 등급', MERCHANT_TIER_LABELS[grade]]] as [string, ReactNode][])
             : []),
         ] as [string, ReactNode][])
       : []),
@@ -82,18 +81,14 @@ export default async function ProfilePage({ searchParams }: Props) {
         </h1>
       </div>
 
-      {/* User profile (read-only for now — name/avatar editing is M9 surface) */}
+      {/* User profile — 프로필 사진 업로드/삭제 가능 */}
       <section>
         <div className="flex items-center gap-3 mb-3">
           <Label size="md" muted={false}>사용자</Label>
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
         <div className="flex items-center gap-4 mb-3">
-          <Avatar
-            name={me.name}
-            color="primary"
-            size="lg"
-          />
+          <UserAvatarForm userId={me.id} name={me.name} avatarUpdatedAt={me.avatarUpdatedAt} />
           <div className="min-w-0">
             <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">{me.name}</p>
             <p className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] break-all">
@@ -117,31 +112,16 @@ export default async function ProfilePage({ searchParams }: Props) {
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
 
-        <div
-          className={
-            ws.type === 'buyer'
-              ? 'grid grid-cols-1 lg:grid-cols-2 lg:gap-x-12'
-              : ''
-          }
-        >
-          {/* Left: meta KV (이름 폼 포함) */}
-          <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
-            <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} hasLogo={ws.hasLogo} />
-            <WorkspaceNameForm
-              currentName={ws.name}
-              canEdit={memberMeta?.role === 'admin'}
-            />
-            {wsKvPairs.map(([k, v]) => (
-              <div key={k} className={kvRowClass}>
-                <span className={kvLabelClass}>{k}</span>
-                <span className={kvValueClass}>{v}</span>
-              </div>
-            ))}
-          </div>
+        <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
+          <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} />
+          <WorkspaceNameForm
+            currentName={ws.name}
+            canEdit={memberMeta?.role === 'admin'}
+          />
 
-          {/* Right: 사업자번호/등급 폼 (buyer only) */}
+          {/* 사업자번호 (buyer only) */}
           {ws.type === 'buyer' && (
-            <div className="mt-6 pt-6 border-t border-[var(--md-sys-color-outline-variant)] space-y-6 lg:mt-0 lg:pt-0 lg:border-t-0 lg:space-y-8">
+            <div className="py-4 space-y-4">
               {biz_required === '1' && !biz && (
                 <>
                   <BizRequiredToast />
@@ -157,9 +137,15 @@ export default async function ProfilePage({ searchParams }: Props) {
                 currentBizNo={biz?.bizNo ?? null}
                 returnUrl={biz_required === '1' && !biz ? '/rfp-create' : undefined}
               />
-              {biz && <WorkspaceBizProfileForm currentGrade={grade} />}
             </div>
           )}
+
+          {wsKvPairs.map(([k, v]) => (
+            <div key={k} className={kvRowClass}>
+              <span className={kvLabelClass}>{k}</span>
+              <span className={kvValueClass}>{v}</span>
+            </div>
+          ))}
         </div>
       </section>
 

@@ -14,6 +14,9 @@ vi.mock('@/lib/server/actions/notifications/markAllReadAction', () => ({
 vi.mock('@/lib/server/actions/notifications/retryEmailNotificationAction', () => ({
   retryEmailNotificationAction: vi.fn().mockResolvedValue({ ok: true }),
 }))
+vi.mock('@/lib/toast', () => ({
+  toast: vi.fn(),
+}))
 
 vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')))
 
@@ -21,10 +24,15 @@ class EventSourceStub {
   static CONNECTING = 0
   static OPEN = 1
   static CLOSED = 2
+  // 가장 최근에 열린 스텁 인스턴스 — 테스트에서 onmessage 를 수동 호출하기 위해 추적.
+  static latest: EventSourceStub | null = null
   readyState = 1
   onopen: (() => void) | null = null
   onmessage: ((e: MessageEvent) => void) | null = null
   onerror: ((e: Event) => void) | null = null
+  constructor() {
+    EventSourceStub.latest = this
+  }
   close() {}
 }
 vi.stubGlobal('EventSource', EventSourceStub)
@@ -191,5 +199,159 @@ describe('useNotifications — workspace switch (Phase 7b 회귀)', () => {
 
     expect(result.current.notifications.map((n) => n.id)).toEqual(['b-1'])
     expect(result.current.unreadCount).toBe(1)
+  })
+})
+
+describe('useNotifications — 라이브 알림 도착 시 toast', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    EventSourceStub.latest = null
+    // 각 테스트는 기본 경로에서 시작한다(F3 경로 게이트가 이전 테스트 상태에
+    // 오염되지 않도록).
+    window.history.pushState({}, '', '/')
+  })
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.restoreAllMocks()
+  })
+
+  function makeNotif(id: string, title: string): unknown {
+    return {
+      id,
+      userId: 'u-1',
+      workspaceId: 'ws-1',
+      type: 'bid.submitted',
+      title,
+      body: 'msg',
+      channel: 'inapp',
+      status: 'sent',
+      createdAt: new Date().toISOString(),
+    }
+  }
+
+  async function setupHook() {
+    const { http } = await import('@/lib/http')
+    vi.mocked(http.get).mockReturnValue({
+      json: vi.fn().mockResolvedValue({ notifications: [] }),
+    } as unknown as ResponsePromise)
+
+    const { renderHook, act } = await import('@testing-library/react')
+    const { useNotifications } = await import('@/lib/hooks/useNotifications')
+    renderHook(() => useNotifications('ws-1'))
+    // history fetch + openStream 이 끝나길 기다린다.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    return { act }
+  }
+
+  it('라이브 알림이 도착하면 toast 가 알림 title 로 호출된다', async () => {
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    const notif = makeNotif('n-1', '○○님이 견적을 제출했어요')
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', { data: JSON.stringify(notif) }),
+      )
+    })
+
+    expect(toast).toHaveBeenCalledTimes(1)
+    expect(toast).toHaveBeenCalledWith('○○님이 견적을 제출했어요')
+  })
+
+  it('동일 id 알림이 중복 도착해도 toast 는 1회만 호출된다', async () => {
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    const notif = makeNotif('n-dup', '중복 알림')
+    const fire = async () => {
+      await act(async () => {
+        EventSourceStub.latest?.onmessage?.(
+          new MessageEvent('message', { data: JSON.stringify(notif) }),
+        )
+      })
+    }
+    await fire()
+    await fire()
+
+    expect(toast).toHaveBeenCalledTimes(1)
+  })
+
+  it('history 로드는 toast 를 발화하지 않는다', async () => {
+    const { http } = await import('@/lib/http')
+    const history = [makeNotif('h-1', '과거1'), makeNotif('h-2', '과거2')]
+    vi.mocked(http.get).mockReturnValue({
+      json: vi.fn().mockResolvedValue({ notifications: history }),
+    } as unknown as ResponsePromise)
+
+    const { toast } = await import('@/lib/toast')
+    const { renderHook, act } = await import('@testing-library/react')
+    const { useNotifications } = await import('@/lib/hooks/useNotifications')
+    renderHook(() => useNotifications('ws-1'))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+
+    expect(toast).not.toHaveBeenCalled()
+  })
+
+  it('알림 목록 페이지(/notifications)에서는 toast 하지 않는다 (F3)', async () => {
+    window.history.pushState({}, '', '/notifications')
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(makeNotif('n-route', '경로 알림')),
+        }),
+      )
+    })
+
+    expect(toast).not.toHaveBeenCalled()
+  })
+
+  it('coalesce 윈도우 내 연속 알림은 toast 를 1회만 발화한다 (F2)', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    for (const id of ['c-1', 'c-2', 'c-3']) {
+      await act(async () => {
+        EventSourceStub.latest?.onmessage?.(
+          new MessageEvent('message', {
+            data: JSON.stringify(makeNotif(id, id)),
+          }),
+        )
+      })
+    }
+
+    expect(toast).toHaveBeenCalledTimes(1)
+  })
+
+  it('coalesce 윈도우가 지나면 다시 toast 한다 (F2)', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(makeNotif('w-1', '첫째')),
+        }),
+      )
+    })
+
+    nowSpy.mockReturnValue(1_000_000 + 10_000)
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify(makeNotif('w-2', '둘째')),
+        }),
+      )
+    })
+
+    expect(toast).toHaveBeenCalledTimes(2)
   })
 })

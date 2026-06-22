@@ -7,6 +7,7 @@ const switchWorkspaceAction = vi.fn();
 const push = vi.fn();
 const refresh = vi.fn();
 const assign = vi.fn();
+const disconnectCentrifuge = vi.fn();
 
 vi.mock('@/lib/server/actions/workspace/switchWorkspaceAction', () => ({
   switchWorkspaceAction: (id: string) => switchWorkspaceAction(id),
@@ -14,14 +15,17 @@ vi.mock('@/lib/server/actions/workspace/switchWorkspaceAction', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, refresh }),
 }));
+vi.mock('@/lib/realtime/centrifuge-client', () => ({
+  disconnectCentrifuge: () => disconnectCentrifuge(),
+}));
 
 import { WorkspaceSwitcher } from '../WorkspaceSwitcher';
 
 const workspaces = [
-  { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, hasLogo: false },
-  { id: 'ws2', name: '서포터 B 페이', type: 'pg' as const, status: 'active' as const, role: 'member' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, hasLogo: false },
+  { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false },
+  { id: 'ws2', name: '서포터 B 페이', type: 'pg' as const, status: 'active' as const, role: 'member' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false },
 ];
-const current = { id: 'ws1', name: '구매사A', type: 'buyer' as const, hasLogo: false };
+const current = { id: 'ws1', name: '구매사A', type: 'buyer' as const, logoUpdatedAt: null };
 
 function renderInSidebarGroup(
   collapsible: 'expanded' | 'icon',
@@ -48,6 +52,7 @@ beforeEach(() => {
   push.mockReset();
   refresh.mockReset();
   assign.mockReset();
+  disconnectCentrifuge.mockReset();
   // jsdom's window.location.assign throws "not implemented"; replace location
   // with a stub so a hard navigation can be asserted. (.href= is unmockable in
   // jsdom, hence the component uses .assign().)
@@ -95,6 +100,23 @@ describe('WorkspaceSwitcher', () => {
 
     await waitFor(() => expect(switchWorkspaceAction).toHaveBeenCalledWith('ws2'));
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
+  });
+
+  it('tears down the Centrifuge connection before navigating (presence correctness)', async () => {
+    const user = userEvent.setup();
+    switchWorkspaceAction.mockResolvedValue({ ok: true, redirectTo: '/home' });
+
+    render(<WorkspaceSwitcher current={current} workspaces={workspaces} />);
+    await user.click(screen.getByRole('button'));
+    await user.click(await screen.findByText('서포터 B 페이'));
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
+    expect(disconnectCentrifuge).toHaveBeenCalled();
+    // The teardown must precede the hard nav so the next page builds a fresh,
+    // correctly-scoped connection.
+    expect(disconnectCentrifuge.mock.invocationCallOrder[0]).toBeLessThan(
+      assign.mock.invocationCallOrder[0],
+    );
   });
 
   it('optimistically swaps the trigger to the selected workspace while the switch is in flight (immediate paint, before navigation)', async () => {
@@ -179,11 +201,11 @@ describe('WorkspaceSwitcher', () => {
 
 describe('WorkspaceSwitcher — master mode (isMaster)', () => {
   const many = [
-    { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, hasLogo: false },
-    { id: 'ws2', name: 'PG사B', type: 'pg' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, hasLogo: false },
-    { id: 'ws3', name: '구매사C', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, hasLogo: false },
+    { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false },
+    { id: 'ws2', name: 'PG사B', type: 'pg' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false },
+    { id: 'ws3', name: '구매사C', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false },
   ];
-  const masterCurrent = { id: 'ws1', name: '구매사A', type: 'buyer' as const, hasLogo: false };
+  const masterCurrent = { id: 'ws1', name: '구매사A', type: 'buyer' as const, logoUpdatedAt: null };
 
   it('isMaster=false면 드롭다운을 열어도 검색 인풋이 없다', async () => {
     const user = userEvent.setup();

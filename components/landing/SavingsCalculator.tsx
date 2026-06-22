@@ -7,7 +7,7 @@ import { KpiCell } from '@/components/primitives/KpiCell';
 import { Chip } from '@/components/primitives/Chip';
 import { CostComparisonChart } from '@/components/landing/CostComparisonChart';
 import { formatKRW } from '@/lib/format';
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 import {
   SUPPORTER_B_RATE,
@@ -232,7 +232,7 @@ export function SavingsCalculator() {
               <span className="font-mono text-[var(--text-2xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                 가맹점 등급
               </span>
-              <Chip label={GRADE_LABELS[grade]} color="surface" />
+              <Chip label={MERCHANT_TIER_LABELS[grade]} color="surface" />
             </div>
           </div>
         </div>

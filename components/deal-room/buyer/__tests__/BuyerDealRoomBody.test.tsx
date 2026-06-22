@@ -25,8 +25,8 @@ vi.mock('@/components/rfp/RequestConditionsView', () => ({
 vi.mock('@/components/rfp/RfpInviteManager', () => ({
   RfpInviteManager: () => <div data-testid="invite-manager" />,
 }));
-vi.mock('@/components/rfp/RfpBoardVisibilityToggle', () => ({
-  RfpBoardVisibilityToggle: () => <div data-testid="board-visibility-toggle" />,
+vi.mock('@/components/rfp/RfpBoardVisibilityStatus', () => ({
+  RfpBoardVisibilityStatus: () => <div data-testid="board-visibility-status" />,
 }));
 vi.mock('@/components/rfp/RfpPendingRequests', () => ({
   RfpPendingRequests: () => <div data-testid="pending-requests" />,
@@ -49,6 +49,9 @@ vi.mock('@/lib/server/actions/rfp', () => ({
 vi.mock('@/components/rfp/SampleRfpBanner', () => ({
   SampleRfpBanner: () => <div data-testid="sample-banner" />,
 }));
+
+const mq = vi.hoisted(() => ({ lgUp: true }));
+vi.mock('@/hooks/use-lg-up', () => ({ useIsLgUp: () => mq.lgUp }));
 
 import { BuyerDealRoomBody } from '../BuyerDealRoomBody';
 import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
@@ -110,6 +113,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
 }
 
 afterEach(cleanup);
+afterEach(() => { mq.lgUp = true; });
 
 describe('BuyerDealRoomBody — 샘플 배너', () => {
   it('isSample 면 상단에 SampleRfpBanner 를 렌더한다', () => {
@@ -120,5 +124,14 @@ describe('BuyerDealRoomBody — 샘플 배너', () => {
   it('isSample 이 아니면 SampleRfpBanner 를 렌더하지 않는다', () => {
     render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, isSample: false } })} />);
     expect(screen.queryByTestId('sample-banner')).not.toBeInTheDocument();
+  });
+});
+
+describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
+  it('lg 미만에서 DealRoomCenter 콘텐츠가 DOM 에 존재한다', () => {
+    mq.lgUp = false;
+    render(<BuyerDealRoomBody data={buildData()} />);
+    // FocusComparison 은 '견적 비교' 탭의 기본 콘텐츠.
+    expect(screen.getByTestId('focus-comparison')).toBeInTheDocument();
   });
 });

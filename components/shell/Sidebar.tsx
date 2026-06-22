@@ -27,10 +27,10 @@ import type {
 } from '@/lib/types/workspace';
 
 export type SidebarProps = {
-  user: { id: string; email: string; name: string };
+  user: { id: string; email: string; name: string; avatarUpdatedAt: string | null };
   workspaceType: 'buyer' | 'pg';
   workspaces: WorkspaceMembershipSummary[];
-  current: { id: string; name: string; type: WorkspaceType; hasLogo: boolean };
+  current: { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null };
   isMaster?: boolean;
 };
 
@@ -64,7 +64,7 @@ function SidebarNav({
               <span
                 data-testid="unread-badge"
                 aria-label={`미읽음 ${unreadCount}건`}
-                className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[var(--md-sys-color-warning)] px-1 text-[10px] font-medium text-[var(--md-sys-color-on-warning)] md-numeric group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:top-0 group-data-[collapsible=icon]:right-0 group-data-[collapsible=icon]:ml-0"
+                className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[var(--md-sys-color-warning)] px-1 text-[10px] font-medium text-[var(--md-sys-color-on-warning)] md-numeric"
               >
                 {unreadCount}
               </span>
@@ -117,7 +117,7 @@ function SidebarBody({
         <SidebarFooterControls className="min-w-0 flex-1" />
         <div className="ml-auto md:hidden">
           <UserMenu
-            user={{ name: user.name, email: user.email }}
+            user={{ id: user.id, name: user.name, email: user.email, avatarUpdatedAt: user.avatarUpdatedAt }}
             workspaceType={workspaceType}
           />
         </div>

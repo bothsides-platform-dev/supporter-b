@@ -11,12 +11,15 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 // cmdk scrolls the active item into view; jsdom doesn't implement it.
 Element.prototype.scrollIntoView = vi.fn();
 
-const { searchEntitiesMock } = vi.hoisted(() => ({ searchEntitiesMock: vi.fn() }));
+const { searchEntitiesMock, pushMock } = vi.hoisted(() => ({
+  searchEntitiesMock: vi.fn(),
+  pushMock: vi.fn(),
+}));
 vi.mock('@/lib/server/actions/search/searchEntitiesAction', () => ({
   searchEntitiesAction: (q: string) => searchEntitiesMock(q),
 }));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: pushMock }),
 }));
 
 import { CommandPalette } from '../CommandPalette';
@@ -27,6 +30,7 @@ const EMPTY = { rfps: [], bids: [], opportunities: [] };
 beforeEach(() => {
   searchEntitiesMock.mockReset();
   searchEntitiesMock.mockResolvedValue(EMPTY);
+  pushMock.mockReset();
 });
 
 afterEach(() => {
@@ -133,5 +137,103 @@ describe('CommandPalette — 초성 검색 (nav commands)', () => {
     expect(screen.getByText('홈')).toBeInTheDocument();
     // 알림(ㅇㄹ)은 ㅎ 포함 안 함
     expect(screen.queryByText('알림')).not.toBeInTheDocument();
+  });
+});
+
+describe('CommandPalette — 계정 그룹 (설정·로그아웃)', () => {
+  const setupAssignMock = () => {
+    const assignMock = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { assign: assignMock },
+    });
+    return assignMock;
+  };
+
+  it('기본 상태에서 계정 그룹에 설정과 로그아웃이 렌더된다', () => {
+    useUIStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette workspaceType="buyer" />);
+
+    expect(screen.getByText('계정')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '설정' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '로그아웃' })).toBeInTheDocument();
+  });
+
+  it('초성 "ㅅㅈ" 타이핑 시 설정 항목이 계정 그룹에 매칭된다 (choseong 검색)', () => {
+    useUIStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette workspaceType="buyer" />);
+
+    fireEvent.change(screen.getByPlaceholderText('검색...'), {
+      target: { value: 'ㅅㅈ' },
+    });
+
+    expect(screen.getByRole('option', { name: '설정' })).toBeInTheDocument();
+  });
+
+  it('"설정" 타이핑 시 설정 항목이 계정 그룹에 매칭된다 (이전 회귀: 결과 없음)', () => {
+    useUIStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette workspaceType="buyer" />);
+
+    fireEvent.change(screen.getByPlaceholderText('검색...'), {
+      target: { value: '설정' },
+    });
+
+    expect(screen.getByRole('option', { name: '설정' })).toBeInTheDocument();
+  });
+
+  it('설정 선택 시 /settings/profile 로 라우터 push가 호출된다', () => {
+    const assignMock = setupAssignMock();
+    useUIStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette workspaceType="buyer" />);
+
+    fireEvent.click(screen.getByRole('option', { name: '설정' }));
+
+    // router.push('/settings/profile') 가 호출되어야 한다
+    expect(pushMock).toHaveBeenCalledWith('/settings/profile');
+    // window.location.assign 은 호출되지 않아야 한다 (로그아웃 경로 아님)
+    expect(assignMock).not.toHaveBeenCalled();
+  });
+
+  it('로그아웃 선택 시 확인 패널이 표시되고 window.location.assign은 아직 미호출', () => {
+    setupAssignMock();
+    useUIStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette workspaceType="buyer" />);
+
+    fireEvent.click(screen.getByRole('option', { name: '로그아웃' }));
+
+    // 확인 패널: 확인 질문 텍스트가 보여야 한다
+    expect(screen.getByText('로그아웃할까요?')).toBeInTheDocument();
+    // 아직 실제 로그아웃 미실행
+    expect(window.location.assign).not.toHaveBeenCalled();
+  });
+
+  it('확인 패널에서 로그아웃 선택 시 window.location.assign("/logout") 호출', () => {
+    const assignMock = setupAssignMock();
+    useUIStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette workspaceType="buyer" />);
+
+    // 로그아웃 선택 → 확인 패널
+    fireEvent.click(screen.getByRole('option', { name: '로그아웃' }));
+    // 확인 패널의 로그아웃 확인 버튼 클릭
+    fireEvent.click(screen.getByRole('option', { name: '로그아웃' }));
+
+    expect(assignMock).toHaveBeenCalledWith('/logout');
+  });
+
+  it('확인 패널에서 취소 선택 시 평상 목록으로 복귀하고 네비 미발생', () => {
+    const assignMock = setupAssignMock();
+    useUIStore.setState({ commandPaletteOpen: true });
+    render(<CommandPalette workspaceType="buyer" />);
+
+    // 로그아웃 선택 → 확인 패널
+    fireEvent.click(screen.getByRole('option', { name: '로그아웃' }));
+    expect(screen.getByText('로그아웃할까요?')).toBeInTheDocument();
+
+    // 취소 선택
+    fireEvent.click(screen.getByRole('option', { name: '취소' }));
+
+    // 평상 목록 복귀 — 계정 그룹 다시 보임
+    expect(screen.getByRole('option', { name: '설정' })).toBeInTheDocument();
+    expect(assignMock).not.toHaveBeenCalled();
   });
 });

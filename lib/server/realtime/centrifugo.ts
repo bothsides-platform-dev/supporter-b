@@ -34,6 +34,12 @@ export function teamChatChannel(rfpId: string, workspaceId: string): string {
   return `${TEAM_CHANNEL_PREFIX}${rfpId}:${workspaceId}`;
 }
 
+/** Channel name for a workspace's presence broadcast. Single source so the
+ *  self-broadcast client and observers stay in lockstep. PUBLIC namespace. */
+export function presenceWsChannel(workspaceId: string): string {
+  return `presence:ws:${workspaceId}`;
+}
+
 /** Shared best-effort publish body — both channel families fan out the same way. */
 async function publishToChannel(
   channel: string,
@@ -93,6 +99,31 @@ export async function publishTeamChatEvent(
 // each value carrying the connection's `user`. See centrifugal.dev server API.
 interface CentrifugoPresenceResponse {
   result?: { presence?: Record<string, { user?: string }> };
+}
+
+/**
+ * Force-disconnect all WebSocket connections for `userId` via the Centrifugo
+ * HTTP API. Best-effort: resolves to undefined whether or not delivery
+ * happened. Never throws. No-ops when Centrifugo is unconfigured.
+ *
+ * Call this immediately after any session_version bump (password reset, email
+ * change, account deletion) to revoke live sockets in addition to the JWT
+ * session-version gate.
+ */
+export async function disconnectCentrifugoUser(userId: string): Promise<void> {
+  const apiUrl = process.env.CENTRIFUGO_HTTP_API_URL;
+  const apiKey = process.env.CENTRIFUGO_API_KEY;
+  if (!apiUrl || !apiKey) return;
+  try {
+    await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+      body: JSON.stringify({ method: 'disconnect', params: { user: userId } }),
+      signal: AbortSignal.timeout(3000),
+    });
+  } catch (err) {
+    console.warn('[centrifugo] disconnect failed', err);
+  }
 }
 
 /**

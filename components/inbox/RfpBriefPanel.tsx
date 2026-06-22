@@ -3,7 +3,7 @@ import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { formatDate, formatDeadline, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
 import type { RFP } from '@/lib/types/rfp';
@@ -23,13 +23,13 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">{rfp.id}</span>
+        <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{rfp.id}</span>
         <h2 className="text-[22px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] mt-0.5">
           {rfp.title}
         </h2>
         <div className="flex items-center gap-3 mt-2">
           <span
-            className={`font-mono text-[12px] tabular-nums font-medium ${isUrgent ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}
+            className={`md-numeric text-[12px] font-medium ${isUrgent ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}
           >
             마감 {daysLeft} ({formatDate(rfp.deadline)})
           </span>
@@ -88,7 +88,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
         <div className="flex items-center justify-between py-2.5 border-t border-[var(--md-sys-color-outline-variant)] border-b border-[var(--md-sys-color-outline-variant)]">
           <div className="flex items-center gap-3">
             {grade ? (
-              <Chip label={GRADE_LABELS[grade]} color="surface" />
+              <Chip label={MERCHANT_TIER_LABELS[grade]} color="surface" />
             ) : (
               <>
                 <Chip label="미정" color="surface" />

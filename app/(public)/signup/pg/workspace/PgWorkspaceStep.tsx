@@ -13,7 +13,7 @@ import { lookupBizNoAction } from '@/lib/server/actions/rfp';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 
-type CanonicalCompany = { id: string; name: string; canonicalPgKey: string; hasLogo: boolean };
+type CanonicalCompany = { id: string; name: string; canonicalPgKey: string; logoUpdatedAt: string | null };
 
 const ntsLookup = async (bizNo: string) => {
   const r = await lookupBizNoAction(bizNo);
@@ -106,7 +106,7 @@ export default function PgWorkspaceStep({
                 <WorkspaceAvatar
                   name={company.name}
                   workspaceId={company.id}
-                  hasLogo={company.hasLogo}
+                  logoUpdatedAt={company.logoUpdatedAt}
                   size="md"
                 />
                 {company.name}
