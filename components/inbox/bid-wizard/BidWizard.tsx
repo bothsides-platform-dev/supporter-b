@@ -196,7 +196,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
       guaranteeInsurance: String(t.guaranteeInsurance),
       fees: { ...f.fees, ...decoded },
     }));
-    toast(`'${t.name}' 템플릿을 불러왔어요`);
+    toast(`‘${t.name}’ 템플릿을 불러왔어요`);
   };
 
   // 단계 이동 — 자유 점프(구매사 위저드 미러)

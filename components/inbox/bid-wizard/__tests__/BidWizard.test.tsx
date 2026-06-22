@@ -237,7 +237,7 @@ describe('BidWizard 템플릿 적용(1단계)', () => {
       screen.getByRole('option', { name: '표준' }).closest('select')!,
       't1',
     );
-    expect(toast).toHaveBeenCalledWith(`'표준' 템플릿을 불러왔어요`);
+    expect(toast).toHaveBeenCalledWith(`‘표준’ 템플릿을 불러왔어요`);
   });
 });
 
