@@ -27,6 +27,7 @@ vi.mock('@/lib/server/actions/onboarding/simulateSampleAwardAction', () => ({
 vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
   saveQuoteTemplateAction: vi.fn(async () => ({ ok: true as const, templateId: 't1' })),
 }));
+vi.mock('@/lib/toast', () => ({ toast: vi.fn() }));
 vi.mock('../../RfpBriefPanel', () => ({ RfpBriefPanel: () => <div /> }));
 vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
   CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
@@ -35,6 +36,7 @@ vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
 }));
 
 import { BidWizard } from '../BidWizard';
+import { toast } from '@/lib/toast';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 
 const rfp = {
@@ -69,6 +71,7 @@ beforeEach(() => {
   pushMock.mockClear();
   refreshMock.mockClear();
   submitBidMock.mockClear();
+  vi.mocked(toast).mockClear();
 });
 afterEach(cleanup);
 
@@ -112,46 +115,50 @@ describe('BidWizard', () => {
   });
 });
 
-describe('BidWizard 드래프트 복원(1단계)', () => {
-  it('드래프트 없으면 복원 배너 없음', () => {
+describe('BidWizard 드래프트 자동 복원(1단계)', () => {
+  it('드래프트 없으면 복원 토스트도 배너도 없다', () => {
     render(<BidWizard rfp={rfp} buyerName="토스" />);
-    expect(screen.queryByText(/이전에 작성 중이던 내용/)).toBeNull();
+    expect(toast).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '불러오기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '무시' })).toBeNull();
   });
 
-  it('드래프트 있으면 배너 표시 + 불러오기 시 값 반영', async () => {
+  it('의미 있는 드래프트는 묻지 않고 자동 복원 + 토스트 1회', async () => {
     const user = userEvent.setup();
-    // 카드는 구간 수단이므로 draft도 composite 키로 저장
     localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ 'card:general': '0.40' }, '복원됨')));
     render(<BidWizard rfp={rfp} buyerName="토스" />);
-    await user.click(screen.getByRole('button', { name: '불러오기' }));
-    expect(screen.queryByText(/이전에 작성 중이던 내용/)).toBeNull();
+
+    // 묻는 배너/버튼 없음
+    expect(screen.queryByRole('button', { name: '불러오기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '무시' })).toBeNull();
+
+    // 복원 토스트
+    expect(toast).toHaveBeenCalledWith(
+      '이전에 작성하던 내용을 그대로 불러왔어요',
+      expect.objectContaining({ id: expect.stringContaining('bid-draft-restored') }),
+    );
+
+    // 폼이 이미 복원되어 있다
     await user.click(screen.getByRole('button', { name: '수수료' }));
     expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('0.40');
   });
 
-  it('무시 클릭 시 배너 사라지고 localStorage 제거', async () => {
-    const user = userEvent.setup();
-    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ card: '0.50' })));
+  it('빈(pristine) 드래프트는 복원/토스트하지 않는다', () => {
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({})));
     render(<BidWizard rfp={rfp} buyerName="토스" />);
-    await user.click(screen.getByRole('button', { name: '무시' }));
-    expect(screen.queryByText(/이전에 작성 중이던 내용/)).toBeNull();
-    expect(localStorage.getItem('bid-draft:rfp-uuid')).toBeNull();
+    expect(toast).not.toHaveBeenCalled();
   });
 
-  it('무시 후 폼 수정 시 새 draft가 저장된다', async () => {
+  it('초기화 → 처음부터 다시 → 폼이 비워진다', async () => {
     const user = userEvent.setup();
     localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ 'card:general': '0.40' })));
     render(<BidWizard rfp={rfp} buyerName="토스" />);
 
-    await user.click(screen.getByRole('button', { name: '무시' }));
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    await user.type(screen.getByTestId('fee-cell-card-general'), '2.5');
+    await user.click(screen.getByRole('button', { name: '초기화' }));
+    await user.click(screen.getByRole('button', { name: '처음부터 다시' }));
 
-    // saveDraft has a 500ms debounce; waitFor polls until the draft is persisted
-    await waitFor(() => {
-      const saved = JSON.parse(localStorage.getItem('bid-draft:rfp-uuid') ?? 'null');
-      expect(saved?.fees?.['card:general']).toBe('2.5');
-    }, { timeout: 1000 });
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('');
   });
 });
 
@@ -194,21 +201,43 @@ describe('BidWizard 템플릿 적용(1단계)', () => {
     expect((screen.getByTestId('fee-cell-card-sole') as HTMLInputElement).value).toBe('0.5');
   });
 
-  it('템플릿 선택 시 드래프트 복원 배너가 닫힌다', async () => {
+  it('드래프트가 복원돼 있어도 템플릿 선택 시 템플릿 값으로 덮어쓴다', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ card: '0.40' })));
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ 'card:general': '0.40' })));
     const tmpl: QuoteTemplateOption = {
       id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
       paymentFees: { card: 0.005 },
     };
     render(<BidWizard rfp={rfp} buyerName="토스" templates={[tmpl]} />);
 
-    expect(screen.getByText(/이전에 작성 중이던 내용/)).toBeInTheDocument();
     await user.selectOptions(
       screen.getByRole('option', { name: '표준' }).closest('select')!,
       't1',
     );
-    expect(screen.queryByText(/이전에 작성 중이던 내용/)).not.toBeInTheDocument();
+    expect((screen.getByPlaceholderText('1') as HTMLInputElement).value).toBe('2');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('0.5');
+  });
+
+  it('저장된 템플릿이 0개면 빈 상태 안내와 관리 링크를 보인다', () => {
+    render(<BidWizard rfp={rfp} buyerName="토스" templates={[]} />);
+    expect(screen.getByText(/저장된 견적 템플릿이 없어요/)).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: '템플릿 관리' });
+    expect(link).toHaveAttribute('href', '/quote-templates');
+  });
+
+  it('템플릿 적용 시 토스트로 알린다', async () => {
+    const user = userEvent.setup();
+    const tmpl: QuoteTemplateOption = {
+      id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
+      paymentFees: { card: 0.005 },
+    };
+    render(<BidWizard rfp={rfp} buyerName="토스" templates={[tmpl]} />);
+    await user.selectOptions(
+      screen.getByRole('option', { name: '표준' }).closest('select')!,
+      't1',
+    );
+    expect(toast).toHaveBeenCalledWith(`‘표준’ 템플릿을 불러왔어요`);
   });
 });
 
