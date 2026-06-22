@@ -25,22 +25,17 @@ afterEach(() => {
 });
 
 describe('AttachmentGalleryPanel', () => {
-  it('로딩 중에는 LOADING… 텍스트를 표시한다', async () => {
-    // Never resolves — stays loading.
-    mockList.mockReturnValue(new Promise(() => {}));
-
+  it('로딩 중에는 스켈레톤(status)을 표시한다', async () => {
+    mockList.mockReturnValue(new Promise(() => {})); // never resolves
     render(<AttachmentGalleryPanel conversationId="conv-1" />);
-
-    expect(screen.getByText('LOADING…')).toBeDefined();
+    expect(screen.getByRole('status')).toHaveAttribute('aria-label', '첨부파일 불러오는 중');
   });
 
-  it('첨부파일이 없으면 "첨부파일 없음" 텍스트를 표시한다', async () => {
+  it('첨부파일이 없으면 빈 상태 안내를 표시한다', async () => {
     mockList.mockResolvedValue([]);
-
     render(<AttachmentGalleryPanel conversationId="conv-1" />);
-
     await waitFor(() => {
-      expect(screen.getByText('첨부파일 없음')).toBeDefined();
+      expect(screen.getByText('공유된 파일이 없어요')).toBeDefined();
     });
   });
 
