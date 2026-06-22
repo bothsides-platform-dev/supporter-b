@@ -166,6 +166,10 @@ describe('isPristineDraft / EMPTY_BID_DRAFT', () => {
     expect(isPristineDraft({ ...EMPTY_BID_DRAFT, settleLimit: '' }, EMPTY_BID_DRAFT)).toBe(true);
   });
 
+  it("guaranteeInsurance '0'과 ''는 동일하게 취급한다", () => {
+    expect(isPristineDraft({ ...EMPTY_BID_DRAFT, guaranteeInsurance: '' }, EMPTY_BID_DRAFT)).toBe(true);
+  });
+
   it('memo가 바뀌면 pristine 아님', () => {
     expect(isPristineDraft({ ...EMPTY_BID_DRAFT, memo: 'x' }, EMPTY_BID_DRAFT)).toBe(false);
   });
