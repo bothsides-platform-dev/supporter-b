@@ -20,7 +20,10 @@
 
 ---
 
-### Task 1: Avatar `xs` 사이즈 추가
+### Task 1: Avatar `xs` 사이즈 추가 — ⚠️ SKIPPED (실행 시 드리프트 반영)
+
+> **건너뜀 사유:** dev 가 PR#287(v0.2.38.0)로 전진하면서 작성자 헤더 아바타가 인터랙티브 `UserProfileCard` 트리거(클릭→프로필 팝오버)로 바뀌었다. 20px(`xs`)로 줄이면 WCAG 2.5.8(인터랙티브 요소 최소 24px 터치 타깃) 위반. 아바타는 `sm`(24px) 유지하고 "컴팩트" 인상은 날짜 칩(Task 4/7)으로 대신한다. **이 태스크의 아래 단계는 실행하지 않는다.**
+
 
 **Files:**
 - Modify: `components/primitives/Avatar.tsx`
@@ -582,15 +585,17 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 7: 발신자 헤더 컴팩트화 + 날짜 칩 적용 (`ThreadView` + `TeamThreadView`)
+### Task 7: 날짜 칩 구분선 적용 (`ThreadView` + `TeamThreadView`)
+
+> **드리프트 반영:** 아바타 리사이즈는 제외(Task 1 SKIPPED 참조 — 아바타가 인터랙티브 `UserProfileCard`라 24px 유지). 이 태스크는 **날짜 구분선 → `DateDivider` 스왑만** 수행한다. (현재 코드에는 메시지 morph 코드가 추가돼 있지만 구분선 블록은 영향 없음.)
 
 **Files:**
-- Modify: `components/messages/ThreadView.tsx` (작성자 헤더 Avatar + 날짜 구분선)
+- Modify: `components/messages/ThreadView.tsx` (날짜 구분선 블록만)
 - Modify: `components/messages/TeamThreadView.tsx` (동일)
-- Test: 신규 없음 — 기존 `ThreadView.test.tsx`·`TeamThreadView.test.tsx` 의 작성자/구분선 테스트가 회귀 가드(순수 시각 변경).
+- Test: 신규 없음 — 기존 `ThreadView.test.tsx`·`TeamThreadView.test.tsx` 의 구분선 테스트(`role="separator"` + 날짜 텍스트)가 회귀 가드.
 
 **Interfaces:**
-- Consumes: `Avatar size="xs"` (Task 1), `DateDivider` (Task 4).
+- Consumes: `DateDivider` (Task 4).
 
 - [ ] **Step 1: 구현 — `ThreadView.tsx`**
 
@@ -600,13 +605,7 @@ import 추가:
 import { DateDivider } from './DateDivider';
 ```
 
-작성자 헤더의 Avatar 사이즈를 `sm` → `xs` 로 (메시지 묶음 헤더, 현재 `color={isSelf ? 'primary' : 'surface'}` 줄):
-
-```tsx
-                    <Avatar name={m.authorName} size="xs" color={isSelf ? 'primary' : 'surface'} userId={m.authorUserId} avatarUpdatedAt={m.authorAvatarUpdatedAt} />
-```
-
-날짜 구분선 블록(현재 `{showDivider && (<div role="separator" ...>{dayLabel}</div>)}`)을 교체:
+날짜 구분선 블록(주석 포함 `{showDivider && (<div role="separator" className="flex justify-center py-1.5">…{dayLabel}…</div>)}` 전체)을 교체:
 
 ```tsx
               {showDivider && <DateDivider label={dayLabel} />}
@@ -620,13 +619,7 @@ import 추가:
 import { DateDivider } from './DateDivider';
 ```
 
-작성자 헤더 Avatar `sm` → `xs`:
-
-```tsx
-                    <Avatar name={m.authorName} size="xs" color="surface" userId={m.authorUserId} avatarUpdatedAt={m.authorAvatarUpdatedAt} />
-```
-
-날짜 구분선 블록 교체:
+날짜 구분선 블록(`{showDivider && (<div role="separator" className="flex justify-center py-1.5">…{dayLabel}…</div>)}` 전체)을 교체:
 
 ```tsx
               {showDivider && <DateDivider label={dayLabel} />}
