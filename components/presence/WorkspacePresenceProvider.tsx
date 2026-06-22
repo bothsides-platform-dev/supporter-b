@@ -41,7 +41,12 @@ import {
 
 import { getCentrifuge } from '@/lib/realtime/centrifuge-client';
 import { managedSubscribe } from '@/lib/realtime/managedSubscribe';
-import { deriveActivity, onlineWorkspaceIds, type PresenceEntry } from '@/lib/realtime/presence';
+import {
+  deriveActivity,
+  onlineUserIds,
+  onlineWorkspaceIds,
+  type PresenceEntry,
+} from '@/lib/realtime/presence';
 import { presenceWsChannel } from '@/lib/server/realtime/centrifugo';
 
 /** Max distinct workspaceIds we hold live subscriptions for at once. Beyond this
@@ -60,6 +65,8 @@ const OFFLINE: PresenceState = { online: false, activity: 'offline' };
 type PresenceContextValue = {
   /** Read the current presence for a workspace; OFFLINE if unknown/uninterested. */
   get: (wsId: string) => PresenceState;
+  /** Is `userId` currently online in `wsId`'s channel? false if unknown/uninterested. */
+  getUserOnline: (wsId: string, userId: string) => boolean;
   /** Register interest in a workspaceId (mount). No-op for falsy id. */
   acquire: (wsId: string) => void;
   /** Drop interest in a workspaceId (unmount). No-op for falsy id. */
@@ -71,7 +78,10 @@ const PresenceContext = createContext<PresenceContextValue | null>(null);
 // Centrifuge's presence() resolves { clients: Record<id, ClientInfo> } where
 // ClientInfo.connInfo carries the server-signed { workspaceId, state }. Map that
 // to the pure PresenceEntry[] our derivation functions consume.
-type PresenceClientInfo = { connInfo?: { workspaceId?: string; state?: string } };
+// `user` is the connection's authenticated userId (Centrifugo sets it from the
+// JWT `sub` of the connection token — not client-supplied, so trustworthy). We
+// keep it so a single person's online dot can be derived from the same channel.
+type PresenceClientInfo = { user?: string; connInfo?: { workspaceId?: string; state?: string } };
 type PresenceSnapshot = { clients?: Record<string, PresenceClientInfo> };
 
 function snapshotToEntries(snapshot: PresenceSnapshot): PresenceEntry[] {
@@ -79,11 +89,16 @@ function snapshotToEntries(snapshot: PresenceSnapshot): PresenceEntry[] {
   return Object.values(clients).map((c) => ({
     connInfo: c.connInfo ? { workspaceId: c.connInfo.workspaceId } : undefined,
     data: c.connInfo?.state !== undefined ? { state: c.connInfo.state } : undefined,
+    userId: c.user,
   }));
 }
 
 export function WorkspacePresenceProvider({ children }: { children?: ReactNode }) {
   const [presence, setPresence] = useState<Map<string, PresenceState>>(() => new Map());
+  // Per-workspace set of online userIds, refreshed on each presence() recompute.
+  // Unlike the workspace dot, a person's dot is not offline-debounced — the card
+  // is opened on demand and short-lived, so immediate accuracy beats anti-flicker.
+  const [userOnline, setUserOnline] = useState<Map<string, Set<string>>>(() => new Map());
 
   // Interest registry + live subscriptions live in refs (mutated outside render).
   const interestRef = useRef<Map<string, number>>(new Map());
@@ -176,6 +191,15 @@ export function WorkspacePresenceProvider({ children }: { children?: ReactNode }
           const online = onlineWorkspaceIds(entries).has(wsId);
           const activity = deriveActivity(entries, wsId);
           applyState(wsId, online ? { online: true, activity } : OFFLINE);
+          // Per-user online set — applied immediately (no offline debounce).
+          const users = onlineUserIds(entries, wsId);
+          setUserOnline((prev) => {
+            const cur = prev.get(wsId);
+            if (cur && cur.size === users.size && [...users].every((u) => cur.has(u))) return prev;
+            const m = new Map(prev);
+            m.set(wsId, users);
+            return m;
+          });
         })
         .catch(() => {
           // presence() failed (transient) — leave current state untouched.
@@ -203,6 +227,12 @@ export function WorkspacePresenceProvider({ children }: { children?: ReactNode }
           offlineTimersRef.current.delete(wsId);
         }
         setPresence((prev) => {
+          if (!prev.has(wsId)) return prev;
+          const m = new Map(prev);
+          m.delete(wsId);
+          return m;
+        });
+        setUserOnline((prev) => {
           if (!prev.has(wsId)) return prev;
           const m = new Map(prev);
           m.delete(wsId);
@@ -283,10 +313,11 @@ export function WorkspacePresenceProvider({ children }: { children?: ReactNode }
   const value = useMemo<PresenceContextValue>(
     () => ({
       get: (wsId: string) => presence.get(wsId) ?? OFFLINE,
+      getUserOnline: (wsId: string, userId: string) => userOnline.get(wsId)?.has(userId) ?? false,
       acquire,
       release,
     }),
-    [presence, acquire, release],
+    [presence, userOnline, acquire, release],
   );
 
   return <PresenceContext.Provider value={value}>{children}</PresenceContext.Provider>;
@@ -309,4 +340,27 @@ export function useWorkspacePresence(workspaceId: string | undefined): PresenceS
 
   if (!ctx || !workspaceId) return OFFLINE;
   return ctx.get(workspaceId);
+}
+
+/**
+ * Is a single person online? Reads `workspaceId`'s presence channel (registering
+ * interest like `useWorkspacePresence`) and reports whether `userId` has a live
+ * owner connection there. Returns `false` when either id is falsy, realtime is
+ * unconfigured, or the user isn't (yet) known online. Best-effort: a person's dot
+ * only lights when the provider already watches that workspace's channel.
+ */
+export function useUserPresence(
+  workspaceId: string | undefined,
+  userId: string | undefined,
+): boolean {
+  const ctx = useContext(PresenceContext);
+
+  useEffect(() => {
+    if (!ctx || !workspaceId || !userId) return;
+    ctx.acquire(workspaceId);
+    return () => ctx.release(workspaceId);
+  }, [ctx, workspaceId, userId]);
+
+  if (!ctx || !workspaceId || !userId) return false;
+  return ctx.getUserOnline(workspaceId, userId);
 }

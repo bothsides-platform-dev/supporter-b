@@ -114,6 +114,36 @@ describe('WorkspacePresenceProvider — graceful no-op (realtime 미설정)', ()
     expect(result.current).toEqual({ online: false, activity: 'offline' });
     expect(mockClient.newSubscription).not.toHaveBeenCalled();
   });
+
+  it('useUserPresence: URL 미설정이면 false 이고 구독하지 않는다', async () => {
+    vi.stubEnv('NEXT_PUBLIC_CENTRIFUGO_WS_URL', '');
+    const { renderHook } = await import('@testing-library/react');
+    const { WorkspacePresenceProvider, useUserPresence } = await import(
+      '@/components/presence/WorkspacePresenceProvider'
+    );
+
+    const { result } = renderHook(() => useUserPresence('ws-1', 'u-a'), {
+      wrapper: WorkspacePresenceProvider,
+    });
+
+    expect(result.current).toBe(false);
+    expect(mockClient.newSubscription).not.toHaveBeenCalled();
+  });
+
+  it('useUserPresence: wsId 나 userId 가 falsy 면 false 이고 구독하지 않는다', async () => {
+    vi.stubEnv('NEXT_PUBLIC_CENTRIFUGO_WS_URL', 'wss://example.test/connection/websocket');
+    const { renderHook } = await import('@testing-library/react');
+    const { WorkspacePresenceProvider, useUserPresence } = await import(
+      '@/components/presence/WorkspacePresenceProvider'
+    );
+
+    const { result } = renderHook(() => useUserPresence('ws-1', undefined), {
+      wrapper: WorkspacePresenceProvider,
+    });
+
+    expect(result.current).toBe(false);
+    expect(mockClient.newSubscription).not.toHaveBeenCalled();
+  });
 });
 
 describe('WorkspacePresenceProvider — 라이브 (realtime 설정)', () => {
@@ -422,6 +452,83 @@ describe('WorkspacePresenceProvider — 라이브 (realtime 설정)', () => {
     });
 
     expect(sub.presence.mock.calls.length).toBeGreaterThan(callsBefore);
+  });
+
+  // ── D. per-user presence: useUserPresence(wsId, userId) ──────────────────
+  it('해당 워크스페이스 채널에 그 userId 의 owner 연결이 있으면 online(true) 을 반환한다', async () => {
+    const { renderHook, act, waitFor } = await import('@testing-library/react');
+    const { WorkspacePresenceProvider, useUserPresence } = await import(
+      '@/components/presence/WorkspacePresenceProvider'
+    );
+
+    const { result } = renderHook(() => useUserPresence('ws-u', 'u-a'), {
+      wrapper: WorkspacePresenceProvider,
+    });
+
+    const channel = 'presence:ws:ws-u';
+    expect(mockClient.newSubscription).toHaveBeenCalledWith(channel);
+
+    subsByChannel[channel].__setPresence({
+      'c-a': { client: 'c-a', user: 'u-a', connInfo: { workspaceId: 'ws-u', state: 'active' } },
+      'c-b': { client: 'c-b', user: 'u-b', connInfo: { workspaceId: 'ws-u', state: 'active' } },
+    });
+    act(() => {
+      subsByChannel[channel].__fire('subscribed', {});
+    });
+
+    await waitFor(() => expect(result.current).toBe(true));
+  });
+
+  it('같은 채널에서 온라인 유저는 true, 비온라인 유저는 false 로 구분된다', async () => {
+    const React = await import('react');
+    const { render, act, waitFor } = await import('@testing-library/react');
+    const { WorkspacePresenceProvider, useUserPresence } = await import(
+      '@/components/presence/WorkspacePresenceProvider'
+    );
+
+    const seen: Record<string, boolean> = {};
+    function Probe({ u }: { u: string }) {
+      seen[u] = useUserPresence('ws-mix', u);
+      return null;
+    }
+    render(
+      React.createElement(
+        WorkspacePresenceProvider,
+        null,
+        React.createElement(Probe, { key: 'a', u: 'u-a' }),
+        React.createElement(Probe, { key: 'b', u: 'u-b' }),
+      ),
+    );
+
+    const channel = 'presence:ws:ws-mix';
+    subsByChannel[channel].__setPresence({
+      'c-a': { client: 'c-a', user: 'u-a', connInfo: { workspaceId: 'ws-mix', state: 'active' } },
+    });
+    act(() => {
+      subsByChannel[channel].__fire('subscribed', {});
+    });
+
+    await waitFor(() => expect(seen['u-a']).toBe(true));
+    expect(seen['u-b']).toBe(false);
+  });
+
+  it('useWorkspacePresence 와 같은 wsId 를 봐도 채널 구독은 한 번만 만든다 (관심 공유)', async () => {
+    const { renderHook } = await import('@testing-library/react');
+    const { WorkspacePresenceProvider, useUserPresence, useWorkspacePresence } = await import(
+      '@/components/presence/WorkspacePresenceProvider'
+    );
+
+    renderHook(
+      () => {
+        useWorkspacePresence('ws-share');
+        useUserPresence('ws-share', 'u-x');
+      },
+      { wrapper: WorkspacePresenceProvider },
+    );
+
+    const channel = 'presence:ws:ws-share';
+    const created = mockClient.newSubscription.mock.calls.filter((c) => c[0] === channel);
+    expect(created).toHaveLength(1);
   });
 
   // ── C. focus-reconcile NO-OP: no disconnect + tab not hidden long ────────

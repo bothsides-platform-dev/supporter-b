@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { onlineWorkspaceIds, deriveActivity, type PresenceEntry } from '@/lib/realtime/presence';
+import {
+  onlineWorkspaceIds,
+  onlineUserIds,
+  deriveActivity,
+  type PresenceEntry,
+} from '@/lib/realtime/presence';
 
 const owner = (ws: string): PresenceEntry => ({ connInfo: { workspaceId: ws } });
+const ownerU = (ws: string, user: string): PresenceEntry => ({
+  connInfo: { workspaceId: ws },
+  userId: user,
+});
 
 describe('onlineWorkspaceIds', () => {
   it('returns workspaceIds that have at least one owner entry', () => {
@@ -14,6 +23,30 @@ describe('onlineWorkspaceIds', () => {
   it('ignores entries with missing/garbage connInfo (fail-closed)', () => {
     const got = onlineWorkspaceIds([{}, { connInfo: {} }, { connInfo: { workspaceId: '' } }]);
     expect(got.size).toBe(0);
+  });
+});
+
+describe('onlineUserIds', () => {
+  it('returns the userIds of owner connections of the given workspace', () => {
+    const entries = [ownerU('V', 'u1'), ownerU('V', 'u2'), ownerU('X', 'u3')];
+    expect([...onlineUserIds(entries, 'V')].sort()).toEqual(['u1', 'u2']);
+  });
+  it('dedupes a user with multiple connections in the same workspace', () => {
+    expect([...onlineUserIds([ownerU('V', 'u1'), ownerU('V', 'u1')], 'V')]).toEqual(['u1']);
+  });
+  it('excludes owners attributed to another workspace (spoof bound)', () => {
+    expect(onlineUserIds([ownerU('X', 'u3')], 'V').size).toBe(0);
+  });
+  it('ignores entries with missing userId or workspace (fail-closed)', () => {
+    const entries: PresenceEntry[] = [
+      { connInfo: { workspaceId: 'V' } }, // no userId
+      { userId: 'u1' }, // no workspace
+      {},
+    ];
+    expect(onlineUserIds(entries, 'V').size).toBe(0);
+  });
+  it('is empty for an empty map', () => {
+    expect(onlineUserIds([], 'V').size).toBe(0);
   });
 });
 

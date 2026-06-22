@@ -44,3 +44,37 @@ it('disposer unsubscribes AND removes the subscription (no double-handler on rem
   expect(sub.unsubscribe).toHaveBeenCalled();
   expect(client.removeSubscription).toHaveBeenCalledWith(sub);
 });
+
+it('shared channel: tears down only after the LAST owner disposes (refcount)', () => {
+  // PresenceClient self-broadcast + WorkspacePresenceProvider both manage the
+  // SAME presence:ws:<ownWs> channel. Disposing one must NOT kill the other's
+  // subscription (else viewing a teammate card would tear down self-presence).
+  const sub = makeSub();
+  let created = false;
+  const client = {
+    getSubscription: vi.fn(() => (created ? sub : null)),
+    newSubscription: vi.fn(() => {
+      created = true;
+      return sub;
+    }),
+    removeSubscription: vi.fn(),
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const a = managedSubscribe(client as any, 'presence:ws:own', {});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const b = managedSubscribe(client as any, 'presence:ws:own', { onJoin: vi.fn() });
+
+  // Both reuse the one underlying subscription.
+  expect(client.newSubscription).toHaveBeenCalledOnce();
+
+  // First owner releases — subscription must SURVIVE.
+  a.dispose();
+  expect(sub.unsubscribe).not.toHaveBeenCalled();
+  expect(client.removeSubscription).not.toHaveBeenCalled();
+
+  // Last owner releases — now it tears down.
+  b.dispose();
+  expect(sub.unsubscribe).toHaveBeenCalledOnce();
+  expect(client.removeSubscription).toHaveBeenCalledWith(sub);
+});
