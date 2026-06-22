@@ -4,8 +4,9 @@
 // 컨벤션: buyer-kanban-loader.test.ts 와 동일 — pglite + seed, auth mock 없음.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 
-import { bids, bidNotes, rfpInvitations, rfpPgRequests, rfpRequoteRequests, rfps } from '@/lib/db/schema';
+import { bids, bidNotes, columns, rfpAllowedPg, rfpInvitations, rfpPgRequests, rfpRequoteRequests, rfps } from '@/lib/db/schema';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
@@ -411,5 +412,49 @@ describe('loadPgRfpDetail', () => {
         paymentFees: { card: 0.0125 },
       },
     ]);
+  });
+
+  it('PG 페이로드는 allowedPgWorkspaceIds(경쟁사 로스터)를 비운다 — 봉인입찰', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0070');
+    // 허용목록에 toss + inicis 둘 다. toss 는 inicis 가 초대된 사실(경쟁사 신원·수)을 알아선 안 된다.
+    await ctx.db.insert(rfpAllowedPg).values([
+      { rfpId, pgWsId: ctx.tossId },
+      { rfpId, pgWsId: ctx.inicisId },
+    ]);
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0070', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    // 봉인입찰: 경쟁사 로스터는 PG 페이로드(RSC)에 절대 담기지 않는다.
+    expect(res!.rfp.allowedPgWorkspaceIds).toEqual([]);
+  });
+
+  it('PG 페이로드에서 buyer-only 메타·감사 필드를 제거한다', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0071');
+    const inv = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    // 낙찰 입찰 + 커스텀 칸반 컬럼 — 승자 id·내부 보드 상태가 PG 페이로드로 새지 않는지.
+    const colId = randomUUID();
+    await ctx.db.insert(columns).values({
+      id: colId,
+      workspaceId: ctx.buyerWsId,
+      kind: 'pipeline',
+      title: '진행중',
+      position: 'a0',
+    });
+    const bidId = await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted');
+    await ctx.db
+      .update(rfps)
+      .set({ status: 'awarded', awardedBidId: bidId, boardColumnId: colId })
+      .where(eq(rfps.id, rfpId));
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0071', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.rfp.createdBy).toBe('');
+    expect(res!.rfp.awardedBidId).toBeUndefined();
+    expect(res!.rfp.boardColumnId).toBeNull();
+    expect(res!.rfp.boardVisible).toBeUndefined();
+    expect(res!.rfp.currentFeeVisibleToPg).toBeUndefined();
+    // bizProfile 은 bizNo·grade 만 노출, 세무·감사 필드 제거.
+    expect(res!.rfp.bizProfile).toEqual({ bizNo: '1234567890', grade: 'general', gradeSource: 'unset' });
   });
 });
