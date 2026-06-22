@@ -239,6 +239,16 @@ export interface WorkspaceRepo {
   search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string }[]>;
   /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
   getName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /**
+   * 표시용 경량 정보 — 신원 카드/메시지 컴포즈가 상대 워크스페이스를 그리는 데 필요한
+   * 최소 필드(id·상호명·유형·로고 버전)만. 멤버/bizProfile hydration 없음. 없으면 undefined.
+   */
+  getDisplayInfo(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<
+    { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null } | undefined
+  >;
   /** 알림·이메일 팬아웃 대상 (멤버 userId+email). 시스템 계정 제외. 순서 미보장. */
   memberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
   /** admin 멤버 팬아웃 대상 (userId+email). 시스템 계정 제외. 초대 메일 발송 대상. 순서 미보장. */
@@ -478,6 +488,17 @@ export interface UserRepo {
   ): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<User | undefined>;
+  /**
+   * 신원 카드용 프로필 필드 projection — id 매칭 **+ 시스템 계정 제외**(WHERE is_system_account=false).
+   * 시스템/마스터 계정은 모든 멤버 표면에서 숨긴다는 불변식을 이 경로에도 적용(fail-closed):
+   * 시스템 계정이거나 행이 없으면 undefined. (findById 는 시스템 계정도 반환하므로 신원 노출엔 부적합.)
+   */
+  findProfileById(
+    userId: string,
+    tx?: Tx,
+  ): Promise<
+    { id: string; name: string; email: string; avatarUpdatedAt: string | null } | undefined
+  >;
   /** id 로 passwordHash 단건 조회 — 계정 탈퇴 비밀번호 확인용. 없으면 undefined. */
   findPasswordHashById(userId: string, tx?: Tx): Promise<string | undefined>;
   /**

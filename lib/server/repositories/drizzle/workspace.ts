@@ -368,6 +368,32 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return row?.name;
   }
 
+  async getDisplayInfo(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<
+    { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null } | undefined
+  > {
+    const db = this.h(tx);
+    const [row] = (await db
+      .select({
+        id: workspaces.id,
+        name: workspaces.name,
+        type: workspaces.type,
+        logoUpdatedAt: workspaces.logoUpdatedAt,
+      })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1)) as { id: string; name: string; type: WorkspaceType; logoUpdatedAt: Date | null }[];
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      logoUpdatedAt: row.logoUpdatedAt ? new Date(row.logoUpdatedAt).toISOString() : null,
+    };
+  }
+
   async memberRecipients(
     workspaceId: string,
     tx?: Tx,
