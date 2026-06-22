@@ -57,7 +57,15 @@ describe('GET /api/workspaces/search — auth guard', () => {
     expect(r.status).toBe(401);
   });
 
-  it('pg 검색은 비로그인도 허용 (공개 디스커버리)', async () => {
+  it('pg 검색도 비로그인 시 401 (디렉터리 인증 필수 — 봉인입찰 비익명화 오라클 차단)', async () => {
+    const r = await callGet('q=toss&type=pg');
+    expect(r.status).toBe(401);
+  });
+
+  it('pg 검색은 인증된 세션은 200', async () => {
+    sessionRef.value = {
+      user: { id: '00000000-0000-4000-8000-0000000000bb', email: 'b@b.com', sessionVersion: 1 },
+    };
     const r = await callGet('q=toss&type=pg');
     expect(r.status).toBe(200);
   });

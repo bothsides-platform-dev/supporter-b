@@ -65,4 +65,14 @@ describe('RfpPaymentMethodSelect', () => {
     await user.click(screen.getByRole('button', { name: '포인트결제 삭제' }));
     expect(useRfpDraftStore.getState().customPaymentMethods).toEqual([]);
   });
+
+  it('error가 true면 결제수단 안내 에러 문구를 표시한다', () => {
+    render(<RfpPaymentMethodSelect error />);
+    expect(screen.getByText('결제수단을 1개 이상 선택해주세요')).toBeInTheDocument();
+  });
+
+  it('error가 없으면 에러 문구를 표시하지 않는다', () => {
+    render(<RfpPaymentMethodSelect />);
+    expect(screen.queryByText('결제수단을 1개 이상 선택해주세요')).not.toBeInTheDocument();
+  });
 });

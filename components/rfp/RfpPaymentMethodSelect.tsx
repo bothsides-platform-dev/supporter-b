@@ -15,7 +15,12 @@ import { cn } from '@/lib/utils';
 
 const MAX_CUSTOM = 20;
 
-export function RfpPaymentMethodSelect() {
+type Props = {
+  /** step 게이트 미충족 시 결제수단 안내 에러를 표시 */
+  error?: boolean;
+};
+
+export function RfpPaymentMethodSelect({ error }: Props = {}) {
   const draft = useRfpDraftStore();
   const [customInput, setCustomInput] = useState('');
 
@@ -50,6 +55,9 @@ export function RfpPaymentMethodSelect() {
       <Label size="md" muted={false}>
         견적 받을 결제수단 *
       </Label>
+      {error && (
+        <p className="text-[12px] text-[var(--md-sys-color-error)]">결제수단을 1개 이상 선택해주세요</p>
+      )}
       <div className="space-y-3">
         {PAYMENT_METHOD_CATEGORIES.map((category) => (
           <div key={category.label} className="space-y-1.5">

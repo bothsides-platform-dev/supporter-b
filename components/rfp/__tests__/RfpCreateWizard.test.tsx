@@ -105,6 +105,8 @@ function resetStore() {
     currentSolutionDetail: '',
     memo: '',
     boardVisible: true,
+    requiredPaymentMethods: [],
+    customPaymentMethods: [],
   });
 }
 
@@ -133,6 +135,7 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       deadline: '2026-06-30T23:59:59Z',
+      requiredPaymentMethods: ['card'],
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
@@ -154,6 +157,7 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      requiredPaymentMethods: ['card'],
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
@@ -177,6 +181,7 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      requiredPaymentMethods: ['card'],
     });
     const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
     const user = userEvent.setup();
@@ -199,6 +204,7 @@ describe('RfpCreateWizard', () => {
     useRfpDraftStore.setState({
       title: '테스트',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      requiredPaymentMethods: ['card'],
       // deadline 미설정 → Step 4 미완료
     });
     const user = userEvent.setup();
@@ -223,6 +229,7 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      requiredPaymentMethods: ['card'],
       currentSettlementCycle: 'D+2',
       deliveryServicePeriod: '3~5일',
     });
@@ -250,6 +257,7 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      requiredPaymentMethods: ['card'],
       boardVisible: false,
     });
     const user = userEvent.setup();
@@ -273,6 +281,7 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      requiredPaymentMethods: ['card'],
       contractType: 'renewal',
     });
     const user = userEvent.setup();
@@ -296,6 +305,7 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      requiredPaymentMethods: ['card'],
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
@@ -322,8 +332,20 @@ describe('RfpCreateWizard', () => {
     expect(toast).toHaveBeenCalledWith('제목을 입력해주세요', { type: 'error' });
   });
 
-  it('Step 3 미완료(PG 없음) 시 다음 클릭은 step을 유지하고 hint toast를 표시한다', async () => {
+  it('Step 2 결제수단 미선택 시 다음 클릭은 step을 유지하고 결제수단 hint toast를 표시한다', async () => {
+    // 제목은 있으나 결제수단 0개 → Step 2 미완료
     useRfpDraftStore.setState({ title: '테스트 제안건' });
+    const user = userEvent.setup();
+    render(<RfpCreateWizard pgList={[]} />);
+    await user.click(screen.getByRole('button', { name: '다음' })); // Step 1 → 2
+    await user.click(screen.getByRole('button', { name: '다음' })); // 차단: 결제수단 없음
+    // 여전히 Step 2
+    expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
+    expect(toast).toHaveBeenCalledWith('결제수단을 1개 이상 선택해주세요', { type: 'error' });
+  });
+
+  it('Step 3 미완료(PG 없음) 시 다음 클릭은 step을 유지하고 hint toast를 표시한다', async () => {
+    useRfpDraftStore.setState({ title: '테스트 제안건', requiredPaymentMethods: ['card'] });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' })); // → Step 2
