@@ -73,6 +73,63 @@ function stripHiddenFromPg(rfp: RFP): void {
   rfp.hiddenFromPg = undefined;
 }
 
+// 항상-제거되는 buyer 전용 필드 — opt-out(stripHiddenFromPg)과 별개로, PG 가 절대
+// 받아선 안 되는 값들. loadPgRfpDetail 은 full RFP 를 'use client' 컴포넌트로 직렬화
+// 하므로(RSC payload) 렌더 게이트만으론 누출된다 — 여기서 server-side 로 비운다.
+//   - allowedPgWorkspaceIds: 경쟁사 로스터 + 수 (봉인입찰 핵심 불변식)
+//   - awardedBidId: 낙찰 입찰(승자) id
+//   - createdBy / boardColumnId / boardVisible / currentFeeVisibleToPg: 구매사 내부 메타
+//   - bizProfile: bizNo·grade 만 PG 브리프에 노출, 세무·감사 필드는 제거
+//     (gradeSource 는 BizProfile 필수 필드라 중립값 'unset' 으로 둔다)
+// 분류 완전성(모든 RFP 키가 visible/stripped 중 하나)은 아래 컴파일타임 가드가 강제한다.
+function stripBuyerOnlyFromPg(rfp: RFP): void {
+  rfp.allowedPgWorkspaceIds = [];
+  rfp.awardedBidId = undefined;
+  rfp.createdBy = '';
+  rfp.boardColumnId = null;
+  rfp.boardVisible = undefined;
+  rfp.currentFeeVisibleToPg = undefined;
+  if (rfp.bizProfile) {
+    rfp.bizProfile = {
+      bizNo: rfp.bizProfile.bizNo,
+      grade: rfp.bizProfile.grade,
+      gradeSource: 'unset',
+    };
+  }
+}
+
+// ── PG 페이로드 필드 분류 (드리프트 가드, fail-closed) ────────────────────────────
+// 모든 RFP 키는 'PG 노출' 또는 'strip' 중 정확히 하나로 분류돼야 한다. 새 RFP 필드가
+// 추가되면 아래 컴파일타임 단언이 분류될 때까지 빌드를 깨뜨려, 새 필드가 분류 누락으로
+// PG 페이로드(RSC)에 조용히 새는 것을 막는다. (bizProfile 은 키 자체는 노출이되 중첩
+// 필드만 stripBuyerOnlyFromPg 가 좁힌다 — 중첩 경계는 rfp-detail-loader.test.ts 가 고정.)
+const _PG_STRIPPED_RFP_KEYS = [
+  'allowedPgWorkspaceIds',
+  'awardedBidId',
+  'createdBy',
+  'boardColumnId',
+  'boardVisible',
+  'currentFeeVisibleToPg',
+  'hiddenFromPg',
+] as const;
+const _PG_VISIBLE_RFP_KEYS = [
+  'id', 'code', 'buyerWsId', 'bizProfile', 'title', 'memo', 'websiteUrl',
+  'mainProducts', 'annualPgVolume', 'currentFeeRate', 'currentSettlementLimit',
+  'currentGuaranteeInsurance', 'currentSettlementCycle', 'deliveryServicePeriod',
+  'currentSolution', 'currentSolutionDetail', 'rfpFiles', 'deadline', 'status',
+  'createdAt', 'sentAt', 'updatedAt', 'requiredPaymentMethods',
+  'customPaymentMethods', 'isSample', 'contractType',
+] as const;
+type _UnclassifiedRfpKey = Exclude<
+  keyof RFP,
+  (typeof _PG_STRIPPED_RFP_KEYS)[number] | (typeof _PG_VISIBLE_RFP_KEYS)[number]
+>;
+const _assertRfpKeysExhaustive: _UnclassifiedRfpKey extends never
+  ? true
+  : ['UNCLASSIFIED RFP KEY — add to _PG_STRIPPED_RFP_KEYS or _PG_VISIBLE_RFP_KEYS', _UnclassifiedRfpKey] =
+  true;
+void _assertRfpKeysExhaustive;
+
 /** PG별 최신 라운드(submitted)만 남긴다. */
 function pickCurrentBids(submitted: Bid[]): Bid[] {
   const byPg = new Map<string, Bid>();
@@ -211,6 +268,8 @@ export async function loadPgRfpDetail(args: {
   // request-scoped 객체라 변이 안전.) 누출 방지 우선: 일반화된 hidden_from_pg 와
   // 레거시 boolean 중 하나라도 숨김이면 제거한다.
   stripHiddenFromPg(rfp);
+  // 항상-제거되는 buyer 전용 필드(경쟁사 로스터·승자·내부 메타) — opt-out 과 별개.
+  stripBuyerOnlyFromPg(rfp);
 
   // 구매사 첨부 hydrate — RfpBriefPanel 미리보기용.
   rfp.rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);

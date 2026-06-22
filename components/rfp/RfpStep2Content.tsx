@@ -52,6 +52,9 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
   const websiteFormatInvalid = !websiteEmpty && !isValidWebsiteUrlLight(draft.websiteUrl);
   const websiteServerRejected = !!websiteRejected && websiteRejected === draft.websiteUrl.trim();
   const titleError = attempted && draft.title.trim() === '';
+  const paymentError =
+    attempted &&
+    draft.requiredPaymentMethods.length + draft.customPaymentMethods.length === 0;
 
   return (
     <div className="space-y-5">
@@ -258,6 +261,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
           valid: isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods),
           attempted,
         })}
+        error={paymentError}
       />
       <RfpAttachmentDropzone
         value={draft.rfpFiles}

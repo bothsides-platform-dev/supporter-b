@@ -7,6 +7,8 @@
 export type PresenceEntry = {
   connInfo?: { workspaceId?: string };
   data?: { state?: string };
+  /** The connection's authenticated userId (Centrifugo `client.user`, = JWT sub). */
+  userId?: string;
 };
 
 const ACTIVITY = new Set(['active', 'idle']);
@@ -17,6 +19,21 @@ export function onlineWorkspaceIds(entries: PresenceEntry[]): Set<string> {
   for (const e of entries) {
     const ws = e.connInfo?.workspaceId;
     if (ws) out.add(ws);
+  }
+  return out;
+}
+
+/**
+ * userIds online in workspace V — owner connections (connInfo.workspaceId === V)
+ * with a known userId. Both fields are server-signed (connection token / JWT sub),
+ * so neither the workspace attribution nor the userId can be spoofed for a
+ * workspace you aren't a member of. Used to light a single person's online dot.
+ */
+export function onlineUserIds(entries: PresenceEntry[], workspaceId: string): Set<string> {
+  const out = new Set<string>();
+  for (const e of entries) {
+    if (e.connInfo?.workspaceId !== workspaceId) continue;
+    if (e.userId) out.add(e.userId);
   }
   return out;
 }

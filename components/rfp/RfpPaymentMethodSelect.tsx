@@ -19,9 +19,11 @@ const MAX_CUSTOM = 20;
 
 type Props = {
   markerState?: MarkerState;
+  /** step 게이트 미충족 시 결제수단 안내 에러를 표시 */
+  error?: boolean;
 };
 
-export function RfpPaymentMethodSelect({ markerState }: Props = {}) {
+export function RfpPaymentMethodSelect({ markerState, error }: Props = {}) {
   const draft = useRfpDraftStore();
   const [customInput, setCustomInput] = useState('');
 
@@ -57,6 +59,9 @@ export function RfpPaymentMethodSelect({ markerState }: Props = {}) {
         <Label size="md" muted={false}>견적 받을 결제수단</Label>
         {markerState && <RequiredMark state={markerState} />}
       </div>
+      {error && (
+        <p className="text-[12px] text-[var(--md-sys-color-error)]">결제수단을 1개 이상 선택해주세요</p>
+      )}
       <div className="space-y-3">
         {PAYMENT_METHOD_CATEGORIES.map((category) => (
           <div key={category.label} className="space-y-1.5">

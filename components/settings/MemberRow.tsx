@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { josa } from 'es-hangul';
-import { Avatar } from '@/components/primitives/Avatar';
+import { UserProfileCard } from '@/components/profile/UserProfileCard';
 import { Chip } from '@/components/primitives/Chip';
 import {
   DropdownMenu,
@@ -38,7 +38,7 @@ function MemberRowImpl({
 
   return (
     <div className="py-4 flex items-center gap-4 hover:bg-[var(--md-sys-color-surface-container-high)] -mx-4 px-4 transition-colors">
-      <Avatar name={m.name} color="primary" size="md" userId={m.id} avatarUpdatedAt={m.avatarUpdatedAt} />
+      <UserProfileCard name={m.name} color="primary" size="md" userId={m.id} avatarUpdatedAt={m.avatarUpdatedAt} />
       <div className="flex-1 min-w-0">
         <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
           {m.name}

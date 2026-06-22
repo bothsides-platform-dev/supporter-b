@@ -14,6 +14,50 @@ export type BidDraft = {
   memo: string;
 };
 
+export const EMPTY_BID_DRAFT: BidDraft = {
+  __v: 3,
+  cycleUnit: 'D',
+  cycleNum: '1',
+  settleLimit: '0',
+  guaranteeInsurance: '0',
+  fees: {},
+  memo: '',
+};
+
+// '' 와 '0' 을 동일한 "빈 값"으로 본다 (CurrencyInput 마운트 churn 방어).
+const normNum = (s: string) => (s === '' ? '0' : s);
+
+// 빈 문자열 fee 값은 입력이 아닌 것으로 본다.
+function normalizeFees(fees: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(fees)) if (v !== '') out[k] = v;
+  return out;
+}
+
+function feesEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+  const na = normalizeFees(a);
+  const nb = normalizeFees(b);
+  const ka = Object.keys(na).sort();
+  const kb = Object.keys(nb).sort();
+  if (ka.length !== kb.length) return false;
+  return ka.every((k, i) => k === kb[i] && na[k] === nb[k]);
+}
+
+/**
+ * 초안이 baseline(위저드가 처음 열렸을 때 폼)과 의미상 동일한지.
+ * true 이면 "복원할 만한 내용 없음" → 자동 복원/토스트/초기화 노출을 건너뛴다.
+ */
+export function isPristineDraft(d: BidDraft, baseline: BidDraft): boolean {
+  return (
+    d.cycleUnit === baseline.cycleUnit &&
+    d.cycleNum === baseline.cycleNum &&
+    normNum(d.settleLimit) === normNum(baseline.settleLimit) &&
+    normNum(d.guaranteeInsurance) === normNum(baseline.guaranteeInsurance) &&
+    d.memo === baseline.memo &&
+    feesEqual(d.fees, baseline.fees)
+  );
+}
+
 function draftKey(rfpId: string) {
   return `bid-draft:${rfpId}`;
 }

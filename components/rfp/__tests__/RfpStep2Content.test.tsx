@@ -27,6 +27,8 @@ function resetStore() {
     memo: '',
     rfpFiles: [],
     currentFeeVisibleToPg: true,
+    requiredPaymentMethods: [],
+    customPaymentMethods: [],
   });
 }
 
@@ -232,6 +234,39 @@ describe('RfpStep2Content', () => {
       useRfpDraftStore.setState({ title: '테스트 견적건' });
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
       expect(screen.queryByText('제목을 입력해주세요')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('결제수단 인라인 에러 (attempted)', () => {
+    const PAYMENT_ERROR = '결제수단을 1개 이상 선택해주세요';
+
+    it('다음 클릭 전에는 결제수단이 비어있어도 에러 메시지가 표시되지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText(PAYMENT_ERROR)).not.toBeInTheDocument();
+    });
+
+    it('다음 클릭 후 결제수단 미선택 시 에러 메시지가 표시된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      expect(screen.getByText(PAYMENT_ERROR)).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이면 다음 클릭 없이도 결제수단 미선택 에러가 표시된다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.getByText(PAYMENT_ERROR)).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 결제수단이 선택되면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ requiredPaymentMethods: ['card'] });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText(PAYMENT_ERROR)).not.toBeInTheDocument();
+    });
+
+    it('커스텀 결제수단만 있어도 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ customPaymentMethods: [{ label: '포인트결제' }] });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText(PAYMENT_ERROR)).not.toBeInTheDocument();
     });
   });
 

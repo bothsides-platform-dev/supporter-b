@@ -27,8 +27,16 @@ vi.mock('@/lib/server/actions/chat/saveTemplateAction', () => ({
 }));
 vi.mock('@/lib/http', () => ({ http: { post: vi.fn() } }));
 
+const presenceRef: { value: { online: boolean; activity: 'active' | 'idle' | 'offline' } } = {
+  value: { online: false, activity: 'offline' },
+};
+vi.mock('@/components/presence/WorkspacePresenceProvider', () => ({
+  useWorkspacePresence: () => presenceRef.value,
+}));
+
 afterEach(() => cleanup());
 beforeEach(() => {
+  presenceRef.value = { online: false, activity: 'offline' };
   sendChatMessageAction.mockReset().mockResolvedValue({ ok: true, conversationId: 'c1', messageId: 'm1' });
   listTemplatesAction.mockReset().mockResolvedValue({ ok: true, templates: [] });
   saveTemplateAction.mockReset().mockResolvedValue({ ok: true, templateId: 't1' });
@@ -65,6 +73,16 @@ describe('CounterpartyProfileCard', () => {
     expect(
       await screen.findByPlaceholderText('상대에게 보낼 메시지를 입력하세요'),
     ).toBeInTheDocument();
+  });
+
+  it('상대가 온라인이면 카드에 온라인 표시가 보인다', async () => {
+    presenceRef.value = { online: true, activity: 'active' };
+    const user = userEvent.setup();
+    render(<CounterpartyProfileCard counterparty={pg} variant="avatar" />);
+
+    await user.click(screen.getByRole('button', { name: '토스페이먼츠 프로필' }));
+
+    expect(await screen.findByLabelText('온라인')).toBeInTheDocument();
   });
 
   it('workspaceId가 없으면 메시지 보내기 버튼을 노출하지 않는다(신원만 표시)', async () => {

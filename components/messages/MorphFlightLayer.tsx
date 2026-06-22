@@ -1,0 +1,49 @@
+'use client';
+
+import { type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { motion } from 'motion/react';
+import { cn } from '@/lib/utils';
+import { bubbleSurfaceClass } from './MessageBubble';
+import type { Flight } from './message-morph';
+
+// 레포 기존 진입 ease(FadeInView/ProcessSection) — 부드러운 감속(cubic-bezier).
+const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
+// morph 이동 시간(초) — 큰 전환(medium-4 ~350ms)에 해당하는 튜닝값.
+const MORPH_DURATION_S = 0.34;
+
+// 전송 morph 오버레이 — 진행 중인 flight 마다 입력창에서 떠올라 말풍선으로 변신하는 클론을 그린다.
+// 스크롤 컨테이너 클리핑·딜룸 블러 모달 스택 컨텍스트를 피하려고 body 로 portal(fixed, 최상위 z,
+// pointer-events 차단). 클론은 `to`(말풍선 최종 위치) 에 두고 transform 으로 `from`(입력창)에서
+// 출발해 identity 로 이동 → 실제 말풍선(이동 중 opacity:0)로 seamless 핸드오프.
+export function MorphFlightLayer({
+  flights,
+  onDone,
+  renderText,
+}: {
+  flights: Flight[];
+  onDone: (key: string) => void;
+  renderText: (body: string) => ReactNode;
+}) {
+  if (typeof document === 'undefined' || flights.length === 0) return null;
+
+  return createPortal(
+    <div className="pointer-events-none fixed inset-0 z-[100]">
+      {flights.map((f) => (
+        <motion.div
+          key={f.key}
+          className="absolute"
+          style={{ left: f.to.left, top: f.to.top, width: f.to.width, transformOrigin: 'top left' }}
+          initial={{ x: f.dx, y: f.dy, scale: f.scale }}
+          animate={{ x: 0, y: 0, scale: 1 }}
+          transition={{ duration: MORPH_DURATION_S, ease: EASE_OUT }}
+          onAnimationComplete={() => onDone(f.key)}
+        >
+          {/* 클론은 측정된 말풍선 폭(to.width)에 꽉 차게 — 행 기준 max-w-[78%] 는 해제. */}
+          <div className={cn(bubbleSurfaceClass(true), 'w-full max-w-none')}>{renderText(f.text)}</div>
+        </motion.div>
+      ))}
+    </div>,
+    document.body,
+  );
+}
