@@ -12,15 +12,18 @@ import {
 } from '@/lib/types/bid';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { cn } from '@/lib/utils';
+import { RequiredMark } from './RequiredMark';
+import type { MarkerState } from '@/lib/rfp/required-fields';
 
 const MAX_CUSTOM = 20;
 
 type Props = {
+  markerState?: MarkerState;
   /** step 게이트 미충족 시 결제수단 안내 에러를 표시 */
   error?: boolean;
 };
 
-export function RfpPaymentMethodSelect({ error }: Props = {}) {
+export function RfpPaymentMethodSelect({ markerState, error }: Props = {}) {
   const draft = useRfpDraftStore();
   const [customInput, setCustomInput] = useState('');
 
@@ -52,9 +55,10 @@ export function RfpPaymentMethodSelect({ error }: Props = {}) {
 
   return (
     <div className="space-y-3">
-      <Label size="md" muted={false}>
-        견적 받을 결제수단 *
-      </Label>
+      <div className="flex items-center gap-2">
+        <Label size="md" muted={false}>견적 받을 결제수단</Label>
+        {markerState && <RequiredMark state={markerState} />}
+      </div>
       {error && (
         <p className="text-[12px] text-[var(--md-sys-color-error)]">결제수단을 1개 이상 선택해주세요</p>
       )}

@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { RequiredMark } from './RequiredMark';
+import { isPgValid, markerState } from '@/lib/rfp/required-fields';
 
 // name is used server-side to compute displayName (dedup); component uses only id + displayName.
 export type PgWorkspace = { id: string; name: string; displayName: string };
@@ -50,9 +52,17 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-          PG사 선택
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+            초대할 PG사
+          </span>
+          <RequiredMark
+            state={markerState({
+              valid: isPgValid(draft.allowedPgWorkspaceIds),
+              attempted: !!showFieldErrors,
+            })}
+          />
+        </div>
         <button
           type="button"
           onClick={handleToggleAll}

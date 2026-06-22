@@ -316,6 +316,21 @@ describe('RfpStep2Content', () => {
     });
   });
 
+  describe('RfpStep2Content 제목 마커', () => {
+    it('제목 비어있으면 "필수", 입력하면 "입력 완료"로 전환', async () => {
+      const user = userEvent.setup();
+      useRfpDraftStore.getState().reset();
+      render(<RfpStep2Content onBack={() => {}} onNext={() => {}} />);
+      // 제목 마커 초기 상태
+      expect(screen.getAllByText('필수').length).toBeGreaterThan(0);
+
+      const titleInput = screen.getByPlaceholderText('2026 서포트쇼핑몰 결제 인프라 견적 요청');
+      await user.type(titleInput, '견적 요청');
+
+      expect(screen.getAllByText('입력 완료').length).toBeGreaterThan(0);
+    });
+  });
+
   describe('견적 유형 토글', () => {
     it('"신규 계약" 버튼 클릭 시 store contractType 이 new 로 업데이트된다', async () => {
       const user = userEvent.setup();
@@ -337,6 +352,44 @@ describe('RfpStep2Content', () => {
       await user.click(screen.getByRole('button', { name: '신규 계약' }));
       await user.click(screen.getByRole('button', { name: '신규 계약' }));
       expect(useRfpDraftStore.getState().contractType).toBeNull();
+    });
+  });
+
+  describe('서버 거부 홈페이지 (websiteRejected)', () => {
+    it('websiteRejected 가 현재 store URL 과 같으면 마커가 error 상태이고 에러 메시지가 표시된다', () => {
+      useRfpDraftStore.setState({ websiteUrl: 'foo.invalidtld' });
+      render(
+        <RfpStep2Content
+          onBack={vi.fn()}
+          onNext={vi.fn()}
+          websiteRejected="foo.invalidtld"
+        />,
+      );
+      // 마커 error → "필수" 텍스트
+      expect(screen.getAllByText('필수').length).toBeGreaterThan(0);
+      // 에러 메시지 표시
+      expect(screen.getByRole('alert')).toHaveTextContent(WEBSITE_URL_ERROR);
+    });
+
+    it('store URL 을 다른 값으로 바꾸면 거부 상태가 자동 해제된다', async () => {
+      useRfpDraftStore.setState({ websiteUrl: 'foo.invalidtld' });
+      const user = userEvent.setup();
+      render(
+        <RfpStep2Content
+          onBack={vi.fn()}
+          onNext={vi.fn()}
+          websiteRejected="foo.invalidtld"
+        />,
+      );
+      // 초기: error
+      expect(screen.getAllByText('필수').length).toBeGreaterThan(0);
+
+      // 입력을 바꿔서 store URL != websiteRejected
+      const input = screen.getByPlaceholderText('example.com');
+      await user.clear(input);
+      await user.type(input, 'example.com');
+      // 자동 해제 → 마커가 "입력 완료" 로 복귀
+      expect(screen.getAllByText('입력 완료').length).toBeGreaterThan(0);
     });
   });
 });

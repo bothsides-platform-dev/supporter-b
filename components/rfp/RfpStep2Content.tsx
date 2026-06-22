@@ -10,8 +10,10 @@ import { underlineInputClass, numericInputClass, CurrencyInput, DayOffsetInput }
 import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
+import { RequiredMark } from './RequiredMark';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { isTitleValid, isWebsiteValid, isPaymentValid, markerState } from '@/lib/rfp/required-fields';
 import { cn } from '@/lib/utils';
 
 // 카드 수수료는 % 값이라 100을 넘을 수 없다 — 입력 단계에서 상한을 강제한다.
@@ -36,16 +38,22 @@ type Props = {
   onNext: () => void;
   /** 위저드에서 이미 advance 실패를 경험한 step — 다음 클릭 없이도 에러를 표시 */
   showFieldErrors?: boolean;
+  /** 서버가 거부한 홈페이지 URL — 현재 store URL 과 같으면 필드 에러를 표시 */
+  websiteRejected?: string;
 };
 
-export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
+export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteRejected }: Props) {
   const draft = useRfpDraftStore();
-  const [attempted, setAttempted] = useState(false);
+  const [localAttempted, setLocalAttempted] = useState(false);
 
-  const websiteInvalid = !isValidWebsiteUrlLight(draft.websiteUrl);
-  const titleError = (attempted || !!showFieldErrors) && draft.title.trim() === '';
+  const attempted = localAttempted || !!showFieldErrors;
+  // 홈페이지: 빈값(필수 미입력)과 형식 오류를 구분
+  const websiteEmpty = draft.websiteUrl.trim() === '';
+  const websiteFormatInvalid = !websiteEmpty && !isValidWebsiteUrlLight(draft.websiteUrl);
+  const websiteServerRejected = !!websiteRejected && websiteRejected === draft.websiteUrl.trim();
+  const titleError = attempted && draft.title.trim() === '';
   const paymentError =
-    (attempted || !!showFieldErrors) &&
+    attempted &&
     draft.requiredPaymentMethods.length + draft.customPaymentMethods.length === 0;
 
   return (
@@ -77,7 +85,10 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
         </div>
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>제목 *</Label>
+        <div className="flex items-center gap-2">
+          <Label size="md" muted={false}>제목</Label>
+          <RequiredMark state={markerState({ valid: isTitleValid(draft.title), attempted })} />
+        </div>
         <input
           type="text"
           value={draft.title}
@@ -91,7 +102,10 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
         )}
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>사업 운영 홈페이지</Label>
+        <div className="flex items-center gap-2">
+          <Label size="md" muted={false}>사업 운영 홈페이지</Label>
+          <RequiredMark state={markerState({ valid: isWebsiteValid(draft.websiteUrl) && !websiteServerRejected, attempted })} />
+        </div>
         <input
           type="text"
           value={draft.websiteUrl}
@@ -101,10 +115,15 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
             if (normalized !== e.target.value) draft.setField('websiteUrl', normalized);
           }}
           placeholder="example.com"
-          aria-invalid={websiteInvalid}
+          aria-invalid={websiteFormatInvalid || websiteServerRejected || (websiteEmpty && attempted)}
           className={underlineInputClass}
         />
-        {websiteInvalid && (
+        {websiteEmpty && attempted && (
+          <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
+            홈페이지 주소를 입력해주세요
+          </p>
+        )}
+        {(websiteFormatInvalid || websiteServerRejected) && (
           <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
             {WEBSITE_URL_ERROR}
           </p>
@@ -237,7 +256,13 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
           className={cn(underlineInputClass, 'resize-none')}
         />
       </div>
-      <RfpPaymentMethodSelect error={paymentError} />
+      <RfpPaymentMethodSelect
+        markerState={markerState({
+          valid: isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods),
+          attempted,
+        })}
+        error={paymentError}
+      />
       <RfpAttachmentDropzone
         value={draft.rfpFiles}
         onChange={(files) => draft.setField('rfpFiles', files)}
@@ -247,7 +272,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
-        <Button type="button" size="md" onClick={() => { setAttempted(true); onNext(); }}>
+        <Button type="button" size="md" onClick={() => { setLocalAttempted(true); onNext(); }}>
           다음
         </Button>
       </div>
