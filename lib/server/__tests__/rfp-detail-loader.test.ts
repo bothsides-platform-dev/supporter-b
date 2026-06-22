@@ -457,4 +457,47 @@ describe('loadPgRfpDetail', () => {
     // bizProfile 은 bizNo·grade 만 노출, 세무·감사 필드 제거.
     expect(res!.rfp.bizProfile).toEqual({ bizNo: '1234567890', grade: 'general', gradeSource: 'unset' });
   });
+
+  it('내 입찰이 선정되면 awardedToMe=true (승자 id 는 여전히 노출 안 함)', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0072');
+    const inv = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    const bidId = await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted');
+    await ctx.db
+      .update(rfps)
+      .set({ status: 'awarded', awardedBidId: bidId })
+      .where(eq(rfps.id, rfpId));
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0072', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.awardedToMe).toBe(true);
+    expect(res!.rfp.awardedBidId).toBeUndefined();
+  });
+
+  it('다른 PG 가 선정되면 awardedToMe=false (승자 신원 비노출)', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0073');
+    const invToss = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    const invInicis = await ctx.seedInvitation(rfpId, ctx.inicisId, 'accepted');
+    await ctx.seedBid(rfpId, ctx.tossId, invToss, 'submitted');
+    const winnerBidId = await ctx.seedBid(rfpId, ctx.inicisId, invInicis, 'submitted');
+    await ctx.db
+      .update(rfps)
+      .set({ status: 'awarded', awardedBidId: winnerBidId })
+      .where(eq(rfps.id, rfpId));
+
+    // 미선정 PG(toss) 시점에서 로드
+    const res = await loadPgRfpDetail({ code: 'P-2606-0073', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.awardedToMe).toBe(false);
+    expect(res!.rfp.awardedBidId).toBeUndefined();
+  });
+
+  it('선정 전이면 awardedToMe=false', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0074');
+    const inv = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0074', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.awardedToMe).toBe(false);
+  });
 });

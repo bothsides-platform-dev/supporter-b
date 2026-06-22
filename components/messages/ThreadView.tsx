@@ -25,6 +25,7 @@ import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageBubble } from './MessageBubble';
 import { ComposerAttachmentChips } from './ComposerAttachmentChips';
 import { SampleSendDisabledNotice } from './SampleSendDisabledNotice';
+import { ClosedConversationNotice } from './ClosedConversationNotice';
 import { ContextPanel } from './ContextPanel';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
@@ -57,11 +58,16 @@ type Props = {
   /** 레일 컨텍스트의 RFP — 컴포저 전송에 이 RFP 태그를 기본 적용한다. */
   defaultRfpId?: string;
   /**
-   * 전송 차단(읽기 전용 컴포저) — 샘플 RFP 의 상대방 채팅 탭에서 데모 PG 에게
-   * 실제로 메시지가 가지 않도록 입력·전송을 막고 안내 문구를 표시한다.
+   * 전송 차단(읽기 전용 컴포저) 사유 — `null`(기본) 이면 정상 입력.
+   *   - 'sample': 샘플 RFP(데모 PG 에게 실제 전송 방지)
+   *   - 'closed': 선정이 끝난 견적의 미선정 PG(대화 종료)
+   * 사유에 맞는 안내 문구를 컴포저 위에 표시한다.
    */
-  sendDisabled?: boolean;
+  sendDisabledReason?: SendDisabledReason | null;
 };
+
+/** 컴포저 전송 차단 사유 — ThreadView·ChatPanel 공용 단일 출처. */
+export type SendDisabledReason = 'sample' | 'closed';
 
 /** Live `message` event payload published by sendChatMessageAction. */
 type LiveMessagePayload = {
@@ -126,8 +132,9 @@ export function ThreadView({
   variant = 'page',
   rfpContext,
   defaultRfpId,
-  sendDisabled = false,
+  sendDisabledReason = null,
 }: Props) {
+  const sendDisabled = sendDisabledReason != null;
   // 대화별 초안 보존 — 대화 전환(remount) 시에도 작성 중이던 내용을 잃지 않는다.
   const draftKey = `chat-draft:${conversationId}`;
   const [draft, setDraft] = useStringDraft(draftKey);
@@ -569,8 +576,9 @@ export function ThreadView({
       {/* 첨부 칩 리스트 */}
       <ComposerAttachmentChips rows={attachments} onRemove={removeRow} />
 
-      {/* 샘플 안내 — 데모 PG 에게는 실제로 보내지지 않음 */}
-      {sendDisabled && <SampleSendDisabledNotice />}
+      {/* 전송 차단 안내 — 샘플(데모 PG 미전송) / 선정 종료(미선정 PG 대화 닫힘) */}
+      {sendDisabledReason === 'sample' && <SampleSendDisabledNotice />}
+      {sendDisabledReason === 'closed' && <ClosedConversationNotice />}
 
       {/* 하단 인라인 컴포저 */}
       <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
