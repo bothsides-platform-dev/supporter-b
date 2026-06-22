@@ -76,26 +76,32 @@ describe('ConversationList', () => {
     expect(screen.getByText('내부 메모입니다.')).toBeInTheDocument();
   });
 
-  it('shows the unread dot when unread is true', () => {
+  it('안읽음이면 sr-only "읽지 않음" 라벨을 표시하고 시각적 점은 없다', () => {
     render(
-      <ConversationList
-        items={[makeCounterparty({ unread: true })]}
-        selectedKey={null}
-        onSelect={vi.fn()}
-      />,
+      <ConversationList items={[makeCounterparty({ unread: true })]} selectedKey={null} onSelect={vi.fn()} />,
     );
-    expect(screen.getByLabelText('읽지 않음')).toBeInTheDocument();
+    const label = screen.getByText('읽지 않음');
+    expect(label).toBeInTheDocument();
+    expect(label).toHaveClass('sr-only');
   });
 
-  it('hides the unread dot when unread is false', () => {
+  it('읽음이면 "읽지 않음" 라벨을 표시하지 않는다', () => {
     render(
-      <ConversationList
-        items={[makeCounterparty({ unread: false })]}
-        selectedKey={null}
-        onSelect={vi.fn()}
-      />,
+      <ConversationList items={[makeCounterparty({ unread: false })]} selectedKey={null} onSelect={vi.fn()} />,
     );
-    expect(screen.queryByLabelText('읽지 않음')).not.toBeInTheDocument();
+    expect(screen.queryByText('읽지 않음')).not.toBeInTheDocument();
+  });
+
+  it('안읽음이면 이름을 굵게(font-semibold) 표시한다', () => {
+    render(
+      <ConversationList items={[makeCounterparty({ unread: true, counterparty: { workspaceId: 'pg-1', name: '굵은이름', type: 'pg', logoUpdatedAt: null } })]} selectedKey={null} onSelect={vi.fn()} />,
+    );
+    expect(screen.getByText('굵은이름')).toHaveClass('font-semibold');
+  });
+
+  it('팀 항목 이름줄은 "팀 채팅" 으로 표시한다', () => {
+    render(<ConversationList items={[makeTeam()]} selectedKey={null} onSelect={vi.fn()} />);
+    expect(screen.getByText('팀 채팅')).toBeInTheDocument();
   });
 
   it('calls onSelect with the item key when a counterparty row is clicked', async () => {

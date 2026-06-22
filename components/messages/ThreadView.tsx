@@ -19,6 +19,8 @@ import { useWorkspacePresence } from '@/components/presence/WorkspacePresencePro
 import { PresenceDot } from '@/components/presence/PresenceDot';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
+import { TypingDots } from './TypingDots';
+import { DateDivider } from './DateDivider';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageBubble } from './MessageBubble';
 import { ComposerAttachmentChips } from './ComposerAttachmentChips';
@@ -382,10 +384,21 @@ export function ThreadView({
               {counterparty.name}
             </span>
             <Chip label={COUNTERPARTY_TYPE_LABEL[counterparty.type]} color="surface" />
+            {online && (
+              <>
+                <span aria-hidden className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">·</span>
+                <span className="text-[11px] font-medium text-[var(--md-sys-color-tertiary)]">온라인</span>
+              </>
+            )}
           </div>
-          {typingUserIds.length > 0 && (
-            <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">입력 중…</span>
-          )}
+          {typingUserIds.length > 0 ? (
+            <TypingDots className="mt-1" />
+          ) : variant !== 'tabs' && rfpContext?.code ? (
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+              <span className="md-numeric font-medium text-[var(--md-sys-color-primary)]">{rfpContext.code}</span>
+              {rfpContext.title && <span className="truncate">· {rfpContext.title}</span>}
+            </div>
+          ) : null}
         </div>
         {variant === 'rail' && totalAttachmentCount > 0 && (
           <button
@@ -471,14 +484,7 @@ export function ThreadView({
 
           return (
             <div key={rowKey} className="flex flex-col gap-3">
-              {showDivider && (
-                // 중앙 라벨만 — 플랭킹 라인 없는 절제된 구분선(레퍼런스 정합).
-                <div role="separator" className="flex justify-center py-1.5">
-                  <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                    {dayLabel}
-                  </span>
-                </div>
-              )}
+              {showDivider && <DateDivider label={dayLabel} />}
 
               <div
                 data-message-row
