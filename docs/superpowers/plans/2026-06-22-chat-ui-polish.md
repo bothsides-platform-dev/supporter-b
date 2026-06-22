@@ -634,7 +634,7 @@ Expected: PASS — 구분선은 여전히 `role="separator"` + 날짜 텍스트(
 
 ```bash
 git add components/messages/ThreadView.tsx components/messages/TeamThreadView.tsx
-git commit -m "refactor(messages): 발신자 헤더 컴팩트화(xs 아바타) + 날짜 칩 구분선 공용화
+git commit -m "refactor(messages): 날짜 칩 구분선 DateDivider 공용화
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
