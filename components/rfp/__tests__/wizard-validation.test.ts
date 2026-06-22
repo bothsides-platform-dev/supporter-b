@@ -7,6 +7,8 @@ type Draft = {
   websiteUrl: string;
   allowedPgWorkspaceIds: { id: string; displayName: string }[];
   deadline: string;
+  requiredPaymentMethods: string[];
+  customPaymentMethods: { label: string }[];
 };
 
 const emptyDraft: Draft = {
@@ -14,7 +16,13 @@ const emptyDraft: Draft = {
   websiteUrl: '',
   allowedPgWorkspaceIds: [],
   deadline: '',
+  requiredPaymentMethods: [],
+  customPaymentMethods: [],
 };
+
+// Step 2 complete 판정에 결제수단이 추가됐으므로, 제목만 검증하려는
+// 픽스처에는 결제수단 1개를 기본 포함시킨다.
+const withPayment = { requiredPaymentMethods: ['card'] };
 
 function complete(draft: Draft) {
   return Object.fromEntries(getWizardValidity(draft).map((s) => [s.num, s.complete]));
@@ -25,21 +33,41 @@ describe('getWizardValidity', () => {
     expect(complete(emptyDraft)).toEqual({ 1: true, 2: false, 3: false, 4: false });
   });
 
-  it('제목을 채우면 Step 2가 complete이 된다', () => {
-    expect(complete({ ...emptyDraft, title: '제안건' })[2]).toBe(true);
+  it('제목과 결제수단을 채우면 Step 2가 complete이 된다', () => {
+    expect(complete({ ...emptyDraft, title: '제안건', ...withPayment })[2]).toBe(true);
   });
 
   it('공백뿐인 제목은 Step 2를 complete으로 보지 않는다', () => {
-    expect(complete({ ...emptyDraft, title: '   ' })[2]).toBe(false);
+    expect(complete({ ...emptyDraft, title: '   ', ...withPayment })[2]).toBe(false);
   });
 
   it('제목이 있어도 홈페이지 주소 형식이 틀리면 Step 2는 incomplete이다', () => {
-    expect(complete({ ...emptyDraft, title: '제안건', websiteUrl: 'abc' })[2]).toBe(false);
+    expect(
+      complete({ ...emptyDraft, title: '제안건', websiteUrl: 'abc', ...withPayment })[2],
+    ).toBe(false);
   });
 
   it('제목이 있고 홈페이지가 유효한 도메인이면 Step 2는 complete이다', () => {
     expect(
+      complete({ ...emptyDraft, title: '제안건', websiteUrl: 'https://x.com', ...withPayment })[2],
+    ).toBe(true);
+  });
+
+  it('제목·홈페이지가 정상이어도 결제수단이 0개면 Step 2는 incomplete이다', () => {
+    expect(
       complete({ ...emptyDraft, title: '제안건', websiteUrl: 'https://x.com' })[2],
+    ).toBe(false);
+  });
+
+  it('requiredPaymentMethods를 1개 선택하면 Step 2가 complete이 된다', () => {
+    expect(
+      complete({ ...emptyDraft, title: '제안건', requiredPaymentMethods: ['card'] })[2],
+    ).toBe(true);
+  });
+
+  it('customPaymentMethods만 1개여도 Step 2가 complete이 된다', () => {
+    expect(
+      complete({ ...emptyDraft, title: '제안건', customPaymentMethods: [{ label: '포인트결제' }] })[2],
     ).toBe(true);
   });
 
@@ -73,12 +101,12 @@ describe('getFirstIncompleteStep', () => {
     expect(result?.hint).toContain('제목');
   });
 
-  it('제목·PG만 채우면 첫 미충족 step은 Step 4(마감일)이다 — 순서와 무관', () => {
+  it('제목·결제수단·PG만 채우면 첫 미충족 step은 Step 4(마감일)이다 — 순서와 무관', () => {
     const draft: Draft = {
+      ...emptyDraft,
       title: '제안건',
-      websiteUrl: '',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
-      deadline: '',
+      ...withPayment,
     };
     const result = getFirstIncompleteStep(draft);
     expect(result?.num).toBe(4);
@@ -94,6 +122,23 @@ describe('getFirstIncompleteStep', () => {
   });
 
   it('제목은 있으나 홈페이지 형식이 틀리면 Step 2를 반환하고 hint에 홈페이지를 안내한다', () => {
+    const result = getFirstIncompleteStep({
+      ...emptyDraft,
+      title: '제안건',
+      websiteUrl: 'abc',
+      ...withPayment,
+    });
+    expect(result?.num).toBe(2);
+    expect(result?.hint).toContain('홈페이지');
+  });
+
+  it('제목만 있고 결제수단이 0개면 Step 2를 반환하고 hint에 결제수단을 안내한다', () => {
+    const result = getFirstIncompleteStep({ ...emptyDraft, title: '제안건' });
+    expect(result?.num).toBe(2);
+    expect(result?.hint).toContain('결제수단');
+  });
+
+  it('홈페이지 형식 오류와 결제수단 미선택이 동시면 홈페이지 hint가 결제수단보다 우선한다', () => {
     const result = getFirstIncompleteStep({ ...emptyDraft, title: '제안건', websiteUrl: 'abc' });
     expect(result?.num).toBe(2);
     expect(result?.hint).toContain('홈페이지');
@@ -101,10 +146,11 @@ describe('getFirstIncompleteStep', () => {
 
   it('모든 필수값을 채우면 null을 반환한다', () => {
     const draft: Draft = {
+      ...emptyDraft,
       title: '제안건',
-      websiteUrl: '',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       deadline: '2026-06-30T23:59:59Z',
+      ...withPayment,
     };
     expect(getFirstIncompleteStep(draft)).toBeNull();
   });
