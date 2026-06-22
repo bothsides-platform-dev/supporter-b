@@ -2,7 +2,7 @@
 
 import { use, useEffect } from 'react';
 import { getThreadPromise, invalidateThread } from './thread-cache';
-import { ThreadView } from './ThreadView';
+import { ThreadView, type SendDisabledReason } from './ThreadView';
 
 export function ThreadPane({
   conversationId,
@@ -11,7 +11,7 @@ export function ThreadPane({
   variant,
   defaultRfpId,
   rfpContext,
-  sendDisabled,
+  sendDisabledReason,
 }: {
   conversationId: string;
   counterpartyFallback: { workspaceId: string; name: string; type: 'buyer' | 'pg'; logoUpdatedAt: string | null };
@@ -22,8 +22,8 @@ export function ThreadPane({
   defaultRfpId?: string;
   /** tabs 변형에서 RFP 탭에 표시할 컨텍스트 정보. */
   rfpContext?: { code: string; title: string; status?: string; deadline?: string | null };
-  /** 샘플 RFP — 컴포저 전송 차단(데모 PG 에게 실제 전송 방지). */
-  sendDisabled?: boolean;
+  /** 컴포저 전송 차단 사유(샘플/선정 종료). null·미지정이면 정상 입력. */
+  sendDisabledReason?: SendDisabledReason | null;
 }) {
   // unmount/conversationId 변경 시 캐시 무효화 → 재진입마다 신선한 스레드.
   // TeamThreadPane 의 동일 패턴 이식(team-thread-cache.ts invalidateTeamThread).
@@ -46,7 +46,7 @@ export function ThreadPane({
       defaultRfpId={defaultRfpId}
       rfpById={rfpById}
       rfpContext={rfpContext}
-      sendDisabled={sendDisabled}
+      sendDisabledReason={sendDisabledReason}
     />
   );
 }

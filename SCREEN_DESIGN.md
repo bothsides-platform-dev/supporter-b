@@ -171,7 +171,13 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
   │     ├─ wsId→conversationId 는 **읽기 전용** lookupConversationAction 으로 해소 — 열람·포커스만으로는
   │     │   어떤 행도 생성하지 않는다(빈 대화가 상대 인박스에 뜨면 관심 신호 누출 — sealed-bid).
   │     │   대화가 없으면 새 대화 컴포저를 띄우고 **첫 메시지 전송 시점에만** 생성
-  │     └─ 컴포저 전송에 해당 RFP 태그 기본 적용 (ThreadView defaultRfpId)
+  │     ├─ 컴포저 전송에 해당 RFP 태그 기본 적용 (ThreadView defaultRfpId)
+  │     └─ **선정 종료 시 미선정 PG 대화 닫힘**(2026-06-23): RFP 가 `awarded` 면 미선정 PG 와의 상대방
+  │         채팅 컴포저를 비활성화하고 `ClosedConversationNotice`("견적 선정이 끝나 이 대화는 종료됐어요.")를
+  │         띄운다. 구매사는 미선정 PG로 포커스 전환 시(`buyerClosedCounterpartyIds`, 승자 제외·멀티라운드 1회 집계),
+  │         PG는 본인 미선정 시(loader `awardedToMe=false`, 승자 신원 비노출·본인 여부만 파생). 선정 PG·팀 채팅은
+  │         계속 열림. 범위(의도): 이 견적 딜룸 컨텍스트에 한정(대화방 row 는 페어 단위 공유라 다른 RFP 대화 무영향),
+  │         `awarded` 만 대상(`cancelled`/`closed` 제외), **UI 한정**(서버 sendMessage 게이트 없음 — `/messages` 크로스-RFP 뷰는 계속 열림)
   └─ 탭 [팀 채팅]: RFP 단위 워크스페이스 내부 스레드 — v1 확정 결정:
         ├─ 스코프 = (rfpId, workspaceId), rfp_team_messages append-only
         ├─ 멘션/알림/읽음 없음 (의도적 경량). **첨부(PDF·이미지) 지원** — 견적별 '내 메모'를 흡수(2026-06-14):

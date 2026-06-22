@@ -57,6 +57,7 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     buyerName: '(주)테스트',
     quoteTemplates: [],
     pendingRequote: null,
+    awardedToMe: false,
     ...over,
   };
 }
