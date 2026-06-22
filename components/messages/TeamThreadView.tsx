@@ -10,6 +10,7 @@
  * '팀 채팅' 탭 전용.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useReducedMotion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/primitives/Avatar';
@@ -29,6 +30,9 @@ import { useComposerAttachments, toReadyMessageAttachments } from './useComposer
 import { useStickToBottom } from './useStickToBottom';
 import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-thread';
 import { computeMessageGrouping } from './message-grouping';
+import { MorphFlightLayer } from './MorphFlightLayer';
+import { useMessageMorph } from './useMessageMorph';
+import type { Rect } from './message-morph';
 import { useAutoGrowTextarea } from './useAutoGrowTextarea';
 import { MentionText } from './MentionText';
 import { MentionDropdown } from './MentionDropdown';
@@ -48,7 +52,8 @@ type Props = {
 };
 
 
-type LocalMessage = TeamThreadMessage & { pending?: boolean };
+// localKey — tempId→realId 승격에도 React key·morph 타깃 매칭을 고정하는 안정 키.
+type LocalMessage = TeamThreadMessage & { pending?: boolean; localKey?: string };
 
 export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarUpdatedAt, messages, teamMembers = [] }: Props) {
   const [draft, setDraft] = useState('');
@@ -69,6 +74,12 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
     count: localMessages.length,
     isOwnLast: lastIsOwn,
   });
+
+  // 전송 morph — 입력 텍스트가 말풍선으로 변신. useStickToBottom *뒤*에 둬야 측정 effect가
+  // 자동 스크롤 적용 후 실행된다. 출발 위치는 textareaRef(입력창)를 직접 측정.
+  const reduce = useReducedMotion();
+  const { flights, beginFlight, endFlight, isMorphing } = useMessageMorph();
+  const [pendingFlight, setPendingFlight] = useState<{ key: string; text: string; from: Rect } | null>(null);
 
   const mention = useMentionPicker({ teamMembers, viewerUserId, textareaRef, draft, setDraft });
   // 안정적 렌더러 — MessageBubble(memo)이 컴포저 입력마다 리렌더되지 않도록 ref 고정.
@@ -118,6 +129,12 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
     if (body.length === 0 && readyRows.length === 0) return;
     setSending(true);
 
+    // morph 출발점 — 텍스트가 아직 입력창에 있는 지금(append/clear 전) 측정.
+    const cr = textareaRef.current?.getBoundingClientRect();
+    const fromRect: Rect | null = cr
+      ? { left: cr.left, top: cr.top, width: cr.width, height: cr.height }
+      : null;
+
     // 전송 시점의 첨부 스냅샷(reload 불필요) — 낙관적 말풍선 표시용.
     const optimisticAttachments = toReadyMessageAttachments(attachments);
 
@@ -128,6 +145,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
       ...prev,
       {
         id: tempId,
+        localKey: tempId,
         authorUserId: viewerUserId,
         authorName: '',
         authorAvatarUpdatedAt: viewerAvatarUpdatedAt,
@@ -141,6 +159,8 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
     setDraft('');
     mention.reset();
     setAttachments([]);
+    // 텍스트가 있으면 morph 발동 예약 — 말풍선 안착 후 effect가 위치 측정.
+    if (fromRect && body.length > 0) setPendingFlight({ key: tempId, text: body, from: fromRect });
     // 높이 리셋은 useAutoGrowTextarea 가 draft='' 효과로 처리한다.
 
     let result: Awaited<ReturnType<typeof sendTeamMessageAction>>;
@@ -166,11 +186,29 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
       );
     } else {
       setLocalMessages((prev) => removeMessage(prev, tempId));
+      endFlight(tempId); // 진행 중인 morph 클론도 함께 정리(롤백된 말풍선과 짝).
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메모를 남기지 못했어요. 다시 시도해 주세요.', { type: 'error' });
     }
   }
+
+  // 낙관적 말풍선이 안착하고(useStickToBottom 자동 스크롤 후) 위치를 측정해 morph 발동.
+  // useStickToBottom 보다 *뒤*에 선언돼 스크롤 적용 후 실행되는 것이 핵심.
+  useEffect(() => {
+    if (!pendingFlight) return;
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-bubble-key="${pendingFlight.key}"]`);
+    beginFlight({
+      key: pendingFlight.key,
+      text: pendingFlight.text,
+      from: pendingFlight.from,
+      isSelf: true,
+      reduce: reduce ?? false,
+      bubbleEl: el ?? null,
+    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 의도된 측정→발동 패턴: 낙관적 말풍선 안착 + 자동 스크롤 적용 후(이 effect가 useStickToBottom 뒤) 위치를 측정해 morph를 1회 발동하고 예약을 비운다(바운드된 1회성 후속 렌더).
+    setPendingFlight(null);
+  }, [pendingFlight, beginFlight, reduce, listRef]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
     if (mention.onKeyDown(e)) return;
@@ -191,6 +229,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
   const grouping = computeMessageGrouping(localMessages);
 
   return (
+    <>
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {/* 말풍선 목록 */}
       <div
@@ -212,9 +251,10 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
           // 내부 스레드라 self 헤더는 숨긴다(상대 메시지에만 작성자 표시).
           const { showDivider, dayLabel, groupedWithPrev } = grouping[i];
           const showAuthorHeader = !m.isSelf && !groupedWithPrev;
+          const rowKey = m.localKey ?? m.id; // 승격에도 불변(React key·morph 타깃)
 
           return (
-            <div key={m.id} className="flex flex-col gap-3">
+            <div key={rowKey} className="flex flex-col gap-3">
               {showDivider && (
                 <div role="separator" className="flex justify-center py-1.5">
                   <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -237,14 +277,18 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
                   </div>
                 )}
 
-                <MessageBubble
-                  isSelf={m.isSelf}
-                  pending={m.pending}
-                  createdAt={m.createdAt}
-                  body={m.body}
-                  attachments={m.attachments}
-                  renderBody={renderTeamBody}
-                />
+                {/* morph 진행 중인 self 말풍선은 숨김 — 떠오르는 클론으로 대체(안착 후 복귀). */}
+                <div className={cn('w-full', m.isSelf && isMorphing(rowKey) && 'opacity-0')}>
+                  <MessageBubble
+                    isSelf={m.isSelf}
+                    pending={m.pending}
+                    createdAt={m.createdAt}
+                    body={m.body}
+                    attachments={m.attachments}
+                    renderBody={renderTeamBody}
+                    bubbleKey={rowKey}
+                  />
+                </div>
               </div>
             </div>
           );
@@ -314,5 +358,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
         </div>
       </div>
     </div>
+    <MorphFlightLayer flights={flights} onDone={endFlight} renderText={renderTeamBody} />
+    </>
   );
 }
