@@ -94,6 +94,8 @@ function resetStore() {
     allowedPgWorkspaceIds: [],
     rfpFiles: [],
     websiteUrl: '',
+    requiredPaymentMethods: [],
+    customPaymentMethods: [],
     mainProducts: '',
     annualPgVolume: '',
     currentFeeRate: '',
@@ -131,6 +133,8 @@ describe('RfpCreateWizard', () => {
     // Steps 1, 2, 3 완료 조건 충족 → 사이드바에서 Step 4로 바로 이동 가능
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       deadline: '2026-06-30T23:59:59Z',
     });
@@ -152,6 +156,8 @@ describe('RfpCreateWizard', () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0042' });
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
@@ -175,6 +181,8 @@ describe('RfpCreateWizard', () => {
   it('guest 모드에서 발송 시 /signup/buyer로 이동한다', async () => {
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
@@ -198,6 +206,8 @@ describe('RfpCreateWizard', () => {
     // Steps 1, 2, 3 완료 / Step 4(마감일) 미완료 — 순서 강제로 step 4까지 도달 가능
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       // deadline 미설정 → Step 4 미완료
     });
@@ -221,6 +231,8 @@ describe('RfpCreateWizard', () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0099' });
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       currentSettlementCycle: 'D+2',
@@ -248,6 +260,8 @@ describe('RfpCreateWizard', () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0100' });
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       boardVisible: false,
@@ -271,6 +285,8 @@ describe('RfpCreateWizard', () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0101' });
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       contractType: 'renewal',
@@ -294,6 +310,8 @@ describe('RfpCreateWizard', () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: false, error: 'INVALID_INPUT' });
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
@@ -323,7 +341,7 @@ describe('RfpCreateWizard', () => {
   });
 
   it('Step 3 미완료(PG 없음) 시 다음 클릭은 step을 유지하고 hint toast를 표시한다', async () => {
-    useRfpDraftStore.setState({ title: '테스트 제안건' });
+    useRfpDraftStore.setState({ title: '테스트 제안건', websiteUrl: 'https://example.com', requiredPaymentMethods: ['card'] });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' })); // → Step 2
