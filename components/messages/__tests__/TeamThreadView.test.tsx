@@ -46,6 +46,25 @@ vi.mock('@/lib/toast', () => ({
   toast: (...args: unknown[]) => toast(...args),
 }));
 
+// Author avatars now render as UserProfileCard triggers — that pulls in (at import
+// time) getUserProfileAction + MessageComposeSheet's 'use server' chain
+// (next-auth/DB, jsdom-unsafe) and useUserPresence. Mock them all.
+vi.mock('@/lib/server/actions/user/getUserProfileAction', () => ({
+  getUserProfileAction: vi.fn(),
+}));
+vi.mock('@/lib/server/actions/chat/sendChatMessageAction', () => ({
+  sendChatMessageAction: vi.fn(),
+}));
+vi.mock('@/lib/server/actions/chat/listTemplatesAction', () => ({
+  listTemplatesAction: vi.fn().mockResolvedValue({ ok: true, templates: [] }),
+}));
+vi.mock('@/lib/server/actions/chat/saveTemplateAction', () => ({
+  saveTemplateAction: vi.fn(),
+}));
+vi.mock('@/components/presence/WorkspacePresenceProvider', () => ({
+  useUserPresence: () => false,
+}));
+
 afterEach(() => cleanup());
 beforeEach(() => {
   sendTeamMessageAction.mockReset();

@@ -47,6 +47,19 @@ vi.mock('@/lib/server/actions/chat/listConversationAttachments', () => ({
   listConversationAttachments: vi.fn().mockResolvedValue([]),
 }));
 
+// ThreadView message-author avatars now render as UserProfileCard triggers, which
+// import getUserProfileAction + MessageComposeSheet's template actions (all
+// 'use server' → next-auth) at module load — mock them so the suite collects.
+vi.mock('@/lib/server/actions/user/getUserProfileAction', () => ({
+  getUserProfileAction: vi.fn(),
+}));
+vi.mock('@/lib/server/actions/chat/listTemplatesAction', () => ({
+  listTemplatesAction: vi.fn().mockResolvedValue({ ok: true, templates: [] }),
+}));
+vi.mock('@/lib/server/actions/chat/saveTemplateAction', () => ({
+  saveTemplateAction: vi.fn(),
+}));
+
 // ContextPanel mock — prevents server-action transitive imports.
 vi.mock('../ContextPanel', () => ({
   ContextPanel: ({ conversationId }: { conversationId: string }) => (

@@ -103,6 +103,34 @@ export class DrizzleUserRepository implements UserRepo {
     return rest;
   }
 
+  async findProfileById(
+    userId: string,
+    tx?: Tx,
+  ): Promise<
+    { id: string; name: string; email: string; avatarUpdatedAt: string | null } | undefined
+  > {
+    const db = this.h(tx);
+    // is_system_account=false: master/seed accounts are hidden from every member-facing
+    // surface (mirrors hydrate/memberUserIds/teamRoster). Identity cards must too.
+    const [row] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        avatarUpdatedAt: users.avatarUpdatedAt,
+      })
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.isSystemAccount, false)))
+      .limit(1);
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      avatarUpdatedAt: row.avatarUpdatedAt ? new Date(row.avatarUpdatedAt).toISOString() : null,
+    };
+  }
+
   async findByEmail(
     email: string,
     tx?: Tx,

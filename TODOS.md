@@ -8,10 +8,7 @@
 ## Chat / Realtime
 
 ### Presence: document observer-identity exposure in the threat model (P3)
-공개 presence(`presence:ws:<V>`, D1)에서 raw `sub.presence()` 페이로드는 co-subscriber의 `user`(userId)+`connInfo.workspaceId`를 노출한다(앱 UI는 owner 필터로 binary online만 보여줘 새지 않지만, raw WS 클라이언트는 "X가 V를 관찰 중"을 열거 가능). 봉인 입찰 데이터(수수료·경쟁사 수)는 무관. 위협 모델 문서에 한 줄 명기. (발견: online-presence M1 whole-branch review 2026-06-21)
-
-### Presence: guard same-workspace self-subscribe before M2 (P2)
-누군가 `useWorkspacePresence(ownWorkspaceId)`를 호출하면 `<PresenceClient/>`의 self-broadcast와 같은 채널을 공유해 한쪽 `dispose()`가 다른 쪽 `removeSubscription`을 끊는 footgun. M1 wiring에선 소비처가 counterparty id만 넘겨 도달 불가(2-sided 모델). M2에서 같은-워크스페이스 관찰을 추가하기 전에 `managedSubscribe`/Provider에 공유-구독 가드 추가. (발견: M1 whole-branch review 2026-06-21)
+공개 presence(`presence:ws:<V>`, D1)에서 raw `sub.presence()` 페이로드는 co-subscriber의 `user`(userId)+`connInfo.workspaceId`를 노출한다. 앱 UI 는 새지 않는다 — 회사 점은 owner 필터 binary online, 사람 점(UserProfileCard)은 ACL 로더가 내려준 `presenceWorkspaceId`(본인·같은 팀·대화 상대 한정)에 대해서만 per-user online 을 읽는다. 다만 raw WS 클라이언트는 워크스페이스 UUID 만 알면 `sub.presence()` 로 그 채널의 online userId 를 열거 가능(이 노출은 D1 공개 채널의 성질이지 앱 코드 때문이 아님). 봉인 입찰 데이터(수수료·경쟁사 수)는 무관. 위협 모델 문서에 한 줄 명기 + 장기적으로 presence:ws 를 subscribe-proxy(멤버십/대화 게이트)로 ACL 하는 것 검토. (발견: online-presence M1 whole-branch review 2026-06-21; per-user 소비 추가: v0.2.38.0 아바타 신원 카드)
 
 ## Chat / Morph animation
 
@@ -101,6 +98,8 @@ rowToRfp 브리프 doc-only(개별 컬럼 폴백 제거) + loadPgRfpDetail hidde
 `joinCanonicalPgWorkspace` 경로로 생성된 `approval_status = 'pending_approval'` 멤버는 UI 게이트(shell guard + `/pending-approval` 분기)로 차단되지만, 서버 액션/API 라우트(`requirePgSession()`) 레벨에서는 `memberApprovalStatus`를 검증하지 않아 직접 POST 요청으로 우회 가능. PR#199 emailVerified 유예와 동일 패턴 — 이번 PR에서 의도적으로 후속 유예. **구현 시 `requirePgSession()`에 `getMemberApprovalStatus` 체크 추가 또는 별도 미들웨어 gate.** (발견: 최종 코드 리뷰 2026-06-18)
 
 ## Completed
+
+- **Presence 같은-워크스페이스 self-subscribe 가드 (v0.2.38.0, 2026-06-22)**: `managedSubscribe` 에 Subscription 객체 키 refcount 추가 — `<PresenceClient/>` self-broadcast 와 `WorkspacePresenceProvider` 가 같은 `presence:ws:<ownWs>` 채널을 공유해도 마지막 owner 가 dispose 할 때만 `unsubscribe()`+`removeSubscription()`. 아바타 신원 카드(UserProfileCard)가 팀원/본인 카드에서 `useUserPresence(ownWorkspaceId, …)` 를 호출해 같은-워크스페이스 관찰이 처음으로 도달 가능해지면서 필요해진 가드(이전엔 counterparty id 만 넘겨 도달 불가). 카드를 닫아도 본인 presence 가 끊기지 않는다. 3878 green.
 
 - **이메일 인증 서버 데이터 경계 강제 (2026-06-17, PR#223 open)**: PR#199(UI 게이트)에서 의도적으로 유예된 서버 액션/API 라우트 레벨 emailVerified 게이트 구현. `requireSession()` 에 `isEmailUnverified()` 추가(→ `requireBuyerSession`·`requirePgSession` 자동 포함) + 7개 `auth()` 직접 호출 API 라우트(centrifugo connection-token, notifications GET/SSE, files GET/upload, workspace avatar POST/DELETE, workspaces search buyer 분기) 각각 403 게이트. verify 3개 액션은 면제 유지. 2871 green.
 
