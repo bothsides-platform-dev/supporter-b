@@ -281,6 +281,21 @@ describe('RfpStep2Content', () => {
     });
   });
 
+  describe('RfpStep2Content 제목 마커', () => {
+    it('제목 비어있으면 "필수", 입력하면 "입력 완료"로 전환', async () => {
+      const user = userEvent.setup();
+      useRfpDraftStore.getState().reset();
+      render(<RfpStep2Content onBack={() => {}} onNext={() => {}} />);
+      // 제목 마커 초기 상태
+      expect(screen.getAllByText('필수').length).toBeGreaterThan(0);
+
+      const titleInput = screen.getByPlaceholderText('2026 서포트쇼핑몰 결제 인프라 견적 요청');
+      await user.type(titleInput, '견적 요청');
+
+      expect(screen.getAllByText('입력 완료').length).toBeGreaterThan(0);
+    });
+  });
+
   describe('견적 유형 토글', () => {
     it('"신규 계약" 버튼 클릭 시 store contractType 이 new 로 업데이트된다', async () => {
       const user = userEvent.setup();

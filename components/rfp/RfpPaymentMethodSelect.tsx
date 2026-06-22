@@ -12,10 +12,16 @@ import {
 } from '@/lib/types/bid';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { cn } from '@/lib/utils';
+import { RequiredMark } from './RequiredMark';
+import type { MarkerState } from '@/lib/rfp/required-fields';
 
 const MAX_CUSTOM = 20;
 
-export function RfpPaymentMethodSelect() {
+type Props = {
+  markerState?: MarkerState;
+};
+
+export function RfpPaymentMethodSelect({ markerState }: Props = {}) {
   const draft = useRfpDraftStore();
   const [customInput, setCustomInput] = useState('');
 
@@ -47,9 +53,10 @@ export function RfpPaymentMethodSelect() {
 
   return (
     <div className="space-y-3">
-      <Label size="md" muted={false}>
-        견적 받을 결제수단 *
-      </Label>
+      <div className="flex items-center gap-2">
+        <Label size="md" muted={false}>견적 받을 결제수단</Label>
+        {markerState && <RequiredMark state={markerState} />}
+      </div>
       <div className="space-y-3">
         {PAYMENT_METHOD_CATEGORIES.map((category) => (
           <div key={category.label} className="space-y-1.5">
