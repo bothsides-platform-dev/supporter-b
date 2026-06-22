@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { requireBuyerSession } from '@/lib/auth/session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import { logBusinessEvent } from '@/lib/observability/log';
-import { isValidWebsiteUrl, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { isValidWebsiteUrl, isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { MERCHANT_TIERS } from '@/lib/types/bid';
 import type { RfpActionResult } from './_shared';
 
@@ -103,7 +103,17 @@ export async function createRfpAction(
   }
 
   const parsed = Input.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
+  if (!parsed.success) {
+    // 경량 검증은 통과하지만 서버 정밀 검증(TLD 체크)에서만 거부된 websiteUrl → INVALID_WEBSITE
+    // 이 경우는 클라이언트가 잡지 못한 "존재하지 않는 TLD" 오류이므로 Step 2 필드 에러로 표면화한다.
+    // 그 외 모든 입력 오류(빈 값 필수 위반, 결제수단 누락 등)는 INVALID_INPUT.
+    const rawWebsite = (input.websiteUrl ?? '').trim();
+    const websiteServerRejected =
+      rawWebsite !== '' &&
+      isValidWebsiteUrlLight(rawWebsite) &&
+      parsed.error.issues.some((i) => i.path[0] === 'websiteUrl');
+    return { ok: false, error: websiteServerRejected ? 'INVALID_WEBSITE' : 'INVALID_INPUT' };
+  }
 
   const service = await getRfpService();
   const result = await service.createRfp(

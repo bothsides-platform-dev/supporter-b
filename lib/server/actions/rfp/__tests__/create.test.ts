@@ -836,6 +836,23 @@ describe('createRfpAction', () => {
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
 
+  it('send=true 이고 경량검증 통과·정밀검증 실패 websiteUrl → INVALID_WEBSITE', async () => {
+    const pg = await seedPgWorkspace(db, '가짜TLD_PG');
+    const pgAdmin = await seedUser(db, { email: 'admin@faketld.test' });
+    await seedMembership(db, pg.id, pgAdmin.id, 'admin');
+
+    const r = await createRfpAction({
+      title: '가짜 TLD 홈페이지 발송',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pg.id],
+      requiredPaymentMethods: ['card'],
+      websiteUrl: 'foo.invalidtld',
+      send: true,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_WEBSITE');
+  });
+
   // _suppress unused import warnings
   void and;
 

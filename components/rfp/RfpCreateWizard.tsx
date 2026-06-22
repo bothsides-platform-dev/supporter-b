@@ -72,6 +72,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [serverError, setServerError] = useState('');
+  const [websiteRejected, setWebsiteRejected] = useState('');
   // advance/goToStep 실패를 경험한 step set — back 후 복귀해도 에러 표시 유지
   const [failedSteps, setFailedSteps] = useState<Set<number>>(new Set());
 
@@ -177,6 +178,12 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
     setSubmitting(false);
 
     if (!result.ok) {
+      if (result.error === 'INVALID_WEBSITE') {
+        setWebsiteRejected(draft.websiteUrl.trim());
+        markFailed(2);
+        setCurrentStep(2);
+        return;
+      }
       setServerError(result.error);
       return;
     }
@@ -228,7 +235,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
             />
           )}
           {currentStep === 2 && (
-            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} />
+            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} />
           )}
           {currentStep === 3 && (
             <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} showFieldErrors={failedSteps.has(3)} />

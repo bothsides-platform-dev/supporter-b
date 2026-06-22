@@ -38,9 +38,11 @@ type Props = {
   onNext: () => void;
   /** 위저드에서 이미 advance 실패를 경험한 step — 다음 클릭 없이도 에러를 표시 */
   showFieldErrors?: boolean;
+  /** 서버가 거부한 홈페이지 URL — 현재 store URL 과 같으면 필드 에러를 표시 */
+  websiteRejected?: string;
 };
 
-export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
+export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteRejected }: Props) {
   const draft = useRfpDraftStore();
   const [localAttempted, setLocalAttempted] = useState(false);
 
@@ -48,6 +50,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
   // 홈페이지: 빈값(필수 미입력)과 형식 오류를 구분
   const websiteEmpty = draft.websiteUrl.trim() === '';
   const websiteFormatInvalid = !websiteEmpty && !isValidWebsiteUrlLight(draft.websiteUrl);
+  const websiteServerRejected = !!websiteRejected && websiteRejected === draft.websiteUrl.trim();
   const titleError = attempted && draft.title.trim() === '';
 
   return (
@@ -98,7 +101,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <Label size="md" muted={false}>사업 운영 홈페이지</Label>
-          <RequiredMark state={markerState({ valid: isWebsiteValid(draft.websiteUrl), attempted })} />
+          <RequiredMark state={markerState({ valid: isWebsiteValid(draft.websiteUrl) && !websiteServerRejected, attempted })} />
         </div>
         <input
           type="text"
@@ -109,7 +112,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
             if (normalized !== e.target.value) draft.setField('websiteUrl', normalized);
           }}
           placeholder="example.com"
-          aria-invalid={websiteFormatInvalid || (websiteEmpty && attempted)}
+          aria-invalid={websiteFormatInvalid || websiteServerRejected || (websiteEmpty && attempted)}
           className={underlineInputClass}
         />
         {websiteEmpty && attempted && (
@@ -117,7 +120,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
             홈페이지 주소를 입력해주세요
           </p>
         )}
-        {websiteFormatInvalid && (
+        {(websiteFormatInvalid || websiteServerRejected) && (
           <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
             {WEBSITE_URL_ERROR}
           </p>
