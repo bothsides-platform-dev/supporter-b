@@ -47,6 +47,13 @@ describe('buyerClosedCounterpartyIds', () => {
     expect(result).toEqual(['pgA']);
   });
 
+  it('awardedBidId 가 bids 에 없으면(데이터 불일치) 빈 배열 — 닫지 않음', () => {
+    const bids = [bid('b1', 'pgA'), bid('b2', 'pgB')];
+    expect(
+      buyerClosedCounterpartyIds(rfp({ status: 'awarded', awardedBidId: 'missing' }), bids),
+    ).toEqual([]);
+  });
+
   it('승자 PG 가 여러 라운드 입찰해도 승자는 절대 닫지 않음', () => {
     const bids = [
       bid('b1', 'pgA'), // 승자 1라운드
