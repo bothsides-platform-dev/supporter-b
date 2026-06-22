@@ -7,7 +7,8 @@ import { http } from '@/lib/http';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
-import { useBidDraft, type BidDraft } from '../useBidDraft';
+import { toast } from '@/lib/toast';
+import { useBidDraft, EMPTY_BID_DRAFT, isPristineDraft, type BidDraft } from '../useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
 import { simulateSampleAwardAction } from '@/lib/server/actions/onboarding/simulateSampleAwardAction';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
@@ -89,14 +90,20 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
   const [currentStep, setCurrentStep] = useState(1);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   // 온보딩 샘플 전용 흐름: 제출 → '검토중' 안내 → 잠시 뒤 선정 시뮬레이트 → 축하.
   const [samplePhase, setSamplePhase] = useState<'idle' | 'reviewing' | 'awarded'>('idle');
 
-  const [fields, setFields] = useState<BidDraft>(() =>
-    initialBid
-      ? bidToDraft(initialBid)
-      : { __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees: {}, memo: '' },
+  // baseline = 위저드가 처음 열렸을 때의 폼(일반=빈 폼, 재요청=직전 라운드 prefill).
+  const baseline = useMemo<BidDraft>(
+    () => (initialBid ? bidToDraft(initialBid) : EMPTY_BID_DRAFT),
+    [initialBid],
   );
+  // 초안 자동저장/복원
+  const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
+  // 의미 있는 초안이면 묻지 않고 초기값으로 복원.
+  const restoredFromDraft = draft !== null && !isPristineDraft(draft, baseline);
+  const [fields, setFields] = useState<BidDraft>(() => (restoredFromDraft ? draft! : baseline));
   const setField = useCallback(
     <K extends keyof BidDraft>(key: K, value: BidDraft[K]) =>
       setFields((f) => ({ ...f, [key]: value })),
@@ -109,22 +116,17 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
   );
   const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, fees, memo } = fields;
 
-  // 초안 자동저장
-  const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
-  const [showRestoreBanner, setShowRestoreBanner] = useState(draft !== null);
   useEffect(() => {
     saveDraft(fields);
   }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleRestore = () => {
-    if (!draft) return;
-    setFields(draft);
-    setShowRestoreBanner(false);
-  };
-  const handleDismiss = () => {
-    clearDraft();
-    setShowRestoreBanner(false);
-  };
+  // 마운트 1회: 의미 있는 초안을 복원했으면 토스트로만 알린다(묻지 않음).
+  useEffect(() => {
+    if (restoredFromDraft) {
+      toast('이전에 작성하던 내용을 그대로 불러왔어요', { id: `bid-draft-restored:${rfpId}` });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 견적서 업로드
   const [proposal, setProposal] = useState<ProposalState>(null);
@@ -154,6 +156,14 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
     [rfpId],
   );
   const clearProposal = useCallback(() => setProposal(null), []);
+  // 처음부터 다시: 초안 삭제 + baseline 으로 폼 리셋 + 견적서 선택 해제 + 1단계로.
+  const handleReset = () => {
+    clearDraft();
+    setFields(baseline);
+    setProposal(null);
+    setCurrentStep(1);
+    setResetConfirmOpen(false);
+  };
   const proposalReady = proposal && 'id' in proposal;
   const proposalUploading = proposal && 'status' in proposal && proposal.status === 'uploading';
 
@@ -172,7 +182,6 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
 
   const applyTemplate = (t: QuoteTemplateOption) => {
     clearDraft();
-    setShowRestoreBanner(false);
     const { unit, num } = parseSettleCycle(t.settleCycle);
     // 입찰 폼은 구버전 단일요율 템플릿을 전 구간으로 전개해 보여준다.
     const decoded = templateFeesToFlat(t.paymentFees, feeInputMethods, {
@@ -344,16 +353,15 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
         onConfirm={doSubmit}
         loading={pending}
       />
-
-      {currentStep === 1 && showRestoreBanner && (
-        <div className="mb-4 flex items-center justify-between px-4 py-2.5 border border-[var(--md-sys-color-secondary-container)] rounded-[6px] bg-[var(--md-sys-color-secondary-container)]">
-          <span className="text-[13px] text-[var(--md-sys-color-on-secondary-container)]">이전에 작성 중이던 내용이 있습니다</span>
-          <div className="flex gap-2">
-            <button type="button" onClick={handleRestore} className="text-[12px] text-[var(--md-sys-color-on-secondary-container)] underline underline-offset-2">불러오기</button>
-            <button type="button" onClick={handleDismiss} className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">무시</button>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        onOpenChange={(o) => !o && setResetConfirmOpen(false)}
+        title="작성 중인 내용을 지울까요?"
+        description="지금까지 입력한 정산조건·수수료·견적서가 모두 사라져요."
+        confirmLabel="처음부터 다시"
+        variant="danger"
+        onConfirm={handleReset}
+      />
 
       <BidWizardProvider value={wizardContext}>
       <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[8px] overflow-hidden">
@@ -367,10 +375,23 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
             steps={BID_WIZARD_STEPS}
             title="견적 작성"
             footer={
-              savedAt ? (
-                <span className="font-mono text-[10px] text-[var(--md-sys-color-outline)]">
-                  💾 자동저장됨 · {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                </span>
+              !isPristineDraft(fields, baseline) || savedAt ? (
+                <div className="flex flex-col gap-1.5">
+                  {!isPristineDraft(fields, baseline) && (
+                    <button
+                      type="button"
+                      onClick={() => setResetConfirmOpen(true)}
+                      className="self-start font-mono text-[10px] text-[var(--md-sys-color-outline)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface-variant)]"
+                    >
+                      초기화
+                    </button>
+                  )}
+                  {savedAt ? (
+                    <span className="font-mono text-[10px] text-[var(--md-sys-color-outline)]">
+                      💾 자동저장됨 · {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    </span>
+                  ) : null}
+                </div>
               ) : null
             }
           />
