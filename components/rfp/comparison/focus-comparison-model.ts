@@ -2,6 +2,7 @@
 // 변환만 담당하므로 단위 테스트로 직접 검증한다(focus-comparison-model.test.ts).
 import {
   getMethodRate,
+  isTieredMethod,
   PAYMENT_METHOD_LABELS,
   type Bid,
   type CustomPaymentMethod,
@@ -22,6 +23,8 @@ export function sortBidsByCardFee(bids: Bid[], tier: MerchantTier): Bid[] {
 export type FeeRow = {
   key: string;
   label: string;
+  /** true이면 구간(tier) 의존 수치 — 구간 전환 시 flash 대상 */
+  isTiered: boolean;
   getValue: (b: Bid, tier: MerchantTier) => number | null;
   baseline?: string | null;
 };
@@ -40,6 +43,7 @@ export function buildFeeRows(
     rows.push({
       key: method,
       label: PAYMENT_METHOD_LABELS[method],
+      isTiered: isTieredMethod(method),
       getValue: (b, tier) => getMethodRate(b.paymentFees[method], tier) ?? null,
       baseline: method === 'card' ? currentFeeRate : undefined,
     });
@@ -49,6 +53,7 @@ export function buildFeeRows(
     rows.push({
       key: `custom:${cm.id}`,
       label: cm.label,
+      isTiered: false,
       getValue: (b) => b.customFees[cm.id] ?? null,
     });
   }

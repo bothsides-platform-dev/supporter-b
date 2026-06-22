@@ -103,6 +103,7 @@ describe('buildFeeRows', () => {
 const _typecheck: FeeRow = {
   key: 'card',
   label: '카드',
+  isTiered: true,
   getValue: () => null,
 };
 void _typecheck;
