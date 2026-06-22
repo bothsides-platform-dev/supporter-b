@@ -197,6 +197,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
     deadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
     allowedPgWorkspaceIds: [pgWsId],
     requiredPaymentMethods: ['card', 'bank_transfer'],
+    websiteUrl: 'example.com',
     send: true,
   });
   expect(created.ok).toBe(true);

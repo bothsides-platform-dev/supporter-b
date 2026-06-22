@@ -166,6 +166,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       deadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
       allowedPgWorkspaceIds: pgWsIds,
       requiredPaymentMethods: ['card', 'bank_transfer'],
+      websiteUrl: 'example.com',
       send: true,
     });
     expect(created.ok).toBe(true);

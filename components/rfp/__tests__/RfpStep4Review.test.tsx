@@ -210,6 +210,21 @@ describe('RfpStep4Review', () => {
     expect(screen.getByText('3,000만원')).toBeInTheDocument();
   });
 
+  describe('마감일 필수 마커', () => {
+    it('마감일 비어있으면 RequiredMark가 "필수"를 표시한다', () => {
+      // deadline: '' (resetStore 기본값)
+      renderComponent({ showFieldErrors: true });
+      const chips = screen.getAllByText('필수');
+      expect(chips.length).toBeGreaterThan(0);
+    });
+
+    it('마감일이 있으면 RequiredMark가 "입력 완료"를 표시한다', () => {
+      useRfpDraftStore.setState({ deadline: '2026-06-30T23:59:59Z' });
+      renderComponent({ showFieldErrors: true });
+      expect(screen.getByText('입력 완료')).toBeInTheDocument();
+    });
+  });
+
   describe('마감일 인라인 에러 (attempted)', () => {
     it('발송 버튼 클릭 전에는 마감일 미설정이어도 에러 메시지가 표시되지 않는다', () => {
       // deadline: '' (resetStore 기본값)
