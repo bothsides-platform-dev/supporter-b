@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -195,6 +196,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
       guaranteeInsurance: String(t.guaranteeInsurance),
       fees: { ...f.fees, ...decoded },
     }));
+    toast(`'${t.name}' 템플릿을 불러왔어요`);
   };
 
   // 단계 이동 — 자유 점프(구매사 위저드 미러)
@@ -409,9 +411,9 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
 
               {currentStep === 1 && (
                 <div className="space-y-8">
-                  {templates.length > 0 && (
-                    <div className="space-y-1">
-                      <Label size="md" muted={false}>견적 템플릿 불러오기</Label>
+                  <div className="space-y-1">
+                    <Label size="md" muted={false}>견적 템플릿 불러오기</Label>
+                    {templates.length > 0 ? (
                       <Select
                         options={[{ value: '', label: '템플릿 선택…' }, ...templates.map((t) => ({ value: t.id, label: t.name }))]}
                         value=""
@@ -420,8 +422,18 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
                           if (t) applyTemplate(t);
                         }}
                       />
-                    </div>
-                  )}
+                    ) : (
+                      <div className="rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+                        저장된 견적 템플릿이 없어요. 자주 쓰는 정산조건·수수료를 템플릿으로 저장하면 다음부터 한 번에 불러올 수 있어요.{' '}
+                        <Link
+                          href="/quote-templates"
+                          className="text-[var(--md-sys-color-primary)] underline underline-offset-2"
+                        >
+                          템플릿 관리
+                        </Link>
+                      </div>
+                    )}
+                  </div>
                   <BidStepSettlementContainer />
                 </div>
               )}

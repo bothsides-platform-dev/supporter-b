@@ -218,6 +218,27 @@ describe('BidWizard 템플릿 적용(1단계)', () => {
     await user.click(screen.getByRole('button', { name: '수수료' }));
     expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('0.5');
   });
+
+  it('저장된 템플릿이 0개면 빈 상태 안내와 관리 링크를 보인다', () => {
+    render(<BidWizard rfp={rfp} buyerName="토스" templates={[]} />);
+    expect(screen.getByText(/저장된 견적 템플릿이 없어요/)).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: '템플릿 관리' });
+    expect(link).toHaveAttribute('href', '/quote-templates');
+  });
+
+  it('템플릿 적용 시 토스트로 알린다', async () => {
+    const user = userEvent.setup();
+    const tmpl: QuoteTemplateOption = {
+      id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
+      paymentFees: { card: 0.005 },
+    };
+    render(<BidWizard rfp={rfp} buyerName="토스" templates={[tmpl]} />);
+    await user.selectOptions(
+      screen.getByRole('option', { name: '표준' }).closest('select')!,
+      't1',
+    );
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('표준'));
+  });
 });
 
 describe('BidWizard 제출 — paymentFees / customFees 분리', () => {
