@@ -51,6 +51,11 @@ export type PgRfpDetailData = {
   quoteTemplates: QuoteTemplateOption[];
   /** 진행 중인 재요청(있으면 PG가 다시 제출 가능). */
   pendingRequote: { message: string; deadline: string; round: number } | null;
+  /**
+   * 이 견적이 선정되었고 승자가 본인 워크스페이스인지. 승자 신원은 노출하지 않고
+   * 본인 여부만 파생한다(봉인입찰 경계). false 면 미선정(또는 선정 전).
+   */
+  awardedToMe: boolean;
 };
 
 
@@ -268,6 +273,10 @@ export async function loadPgRfpDetail(args: {
   // request-scoped 객체라 변이 안전.) 누출 방지 우선: 일반화된 hidden_from_pg 와
   // 레거시 boolean 중 하나라도 숨김이면 제거한다.
   stripHiddenFromPg(rfp);
+  // 승자 id 는 곧 strip 되므로, "내가 선정됐는지"만 파생하려고 먼저 캡처한다.
+  // 이 boolean 은 승자 신원을 노출하지 않는다(본인 여부만).
+  const awardedStatus = rfp.status;
+  const awardedBidIdBeforeStrip = rfp.awardedBidId;
   // 항상-제거되는 buyer 전용 필드(경쟁사 로스터·승자·내부 메타) — opt-out 과 별개.
   stripBuyerOnlyFromPg(rfp);
 
@@ -280,6 +289,12 @@ export async function loadPgRfpDetail(args: {
   );
   // 최신 라운드 submitted bid (여러 라운드 가능).
   const myBid = submittedMine.sort((a, b) => b.round - a.round)[0] ?? undefined;
+
+  // 선정이 끝났고, 승자 입찰이 내 워크스페이스 것이면 awardedToMe=true.
+  const awardedToMe =
+    awardedStatus === 'awarded' &&
+    !!awardedBidIdBeforeStrip &&
+    allBids.some((b) => b.id === awardedBidIdBeforeStrip && b.pgWsId === args.workspaceId);
 
   // pending 재요청 조회 — PG가 다시 제출 가능한 상태인지 판단.
   const pendingReq = await (await getRfpRequoteRequestRepo()).findPendingByPair(rfp.id, args.workspaceId);
@@ -305,5 +320,5 @@ export async function loadPgRfpDetail(args: {
     paymentFees: t.paymentFees,
   }));
 
-  return { rfp, myBid, pendingRequote, buyerName, quoteTemplates };
+  return { rfp, myBid, pendingRequote, buyerName, quoteTemplates, awardedToMe };
 }

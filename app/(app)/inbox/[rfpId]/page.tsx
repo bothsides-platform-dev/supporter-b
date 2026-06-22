@@ -69,6 +69,11 @@ async function PgRfpDetailLoader({
               name: data.buyerName,
               type: 'buyer',
             }}
+            closedCounterpartyIds={
+              data.rfp.status === 'awarded' && !data.awardedToMe
+                ? [data.rfp.buyerWsId]
+                : []
+            }
           />
         )
       }
