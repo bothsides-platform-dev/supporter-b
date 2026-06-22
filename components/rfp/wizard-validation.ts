@@ -11,15 +11,25 @@ export type WizardValidationDraft = {
   websiteUrl: string;
   allowedPgWorkspaceIds: readonly unknown[];
   deadline: string;
+  requiredPaymentMethods: readonly unknown[];
+  customPaymentMethods: readonly unknown[];
 };
 
 export type StepValidity = { num: number; complete: boolean; hint: string };
 
+function hasPaymentMethod(draft: WizardValidationDraft): boolean {
+  return draft.requiredPaymentMethods.length + draft.customPaymentMethods.length > 0;
+}
+
 function isStepComplete(num: number, draft: WizardValidationDraft): boolean {
   switch (num) {
     case 2:
-      // 제목 필수 + 홈페이지(선택)는 비었거나 유효한 도메인이어야 함.
-      return draft.title.trim() !== '' && isValidWebsiteUrlLight(draft.websiteUrl);
+      // 제목 필수 + 홈페이지(선택)는 비었거나 유효한 도메인 + 결제수단 1개 이상.
+      return (
+        draft.title.trim() !== '' &&
+        isValidWebsiteUrlLight(draft.websiteUrl) &&
+        hasPaymentMethod(draft)
+      );
     case 3:
       return draft.allowedPgWorkspaceIds.length > 0;
     case 4:
@@ -34,9 +44,9 @@ function isStepComplete(num: number, draft: WizardValidationDraft): boolean {
 function hintFor(num: number, draft: WizardValidationDraft): string {
   switch (num) {
     case 2:
-      return draft.title.trim() === ''
-        ? '제목을 입력해주세요'
-        : '홈페이지 주소 형식을 확인해주세요';
+      if (draft.title.trim() === '') return '제목을 입력해주세요';
+      if (!isValidWebsiteUrlLight(draft.websiteUrl)) return '홈페이지 주소 형식을 확인해주세요';
+      return '결제수단을 1개 이상 선택해주세요';
     case 3:
       return 'PG를 1개 이상 선택해주세요';
     case 4:

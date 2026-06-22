@@ -44,6 +44,9 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
 
   const websiteInvalid = !isValidWebsiteUrlLight(draft.websiteUrl);
   const titleError = (attempted || !!showFieldErrors) && draft.title.trim() === '';
+  const paymentError =
+    (attempted || !!showFieldErrors) &&
+    draft.requiredPaymentMethods.length + draft.customPaymentMethods.length === 0;
 
   return (
     <div className="space-y-5">
@@ -234,7 +237,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
           className={cn(underlineInputClass, 'resize-none')}
         />
       </div>
-      <RfpPaymentMethodSelect />
+      <RfpPaymentMethodSelect error={paymentError} />
       <RfpAttachmentDropzone
         value={draft.rfpFiles}
         onChange={(files) => draft.setField('rfpFiles', files)}
