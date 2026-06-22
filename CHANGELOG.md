@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.2.41.0] - 2026-06-23
+## [0.2.42.0] - 2026-06-23
 
 ### Changed
 
@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 - 타이핑·인라인 로딩을 나타내는 `TypingDots`, 날짜 구분 칩 `DateDivider` 공용 컴포넌트.
 
 > 배포 메모: 프론트엔드 시각 변경만(`components/messages/*`). DB·환경 변수·빌드 설정 변경 없어요. 로딩 스켈레톤은 dev #290이 도입한 `components/ui/skeleton.tsx`를 재사용해요.
+
+## [0.2.41.0] - 2026-06-23
+
 ### Added
 
 - **견적을 선정하면, 선정되지 않은 PG와의 대화가 자동으로 닫혀요**: 어떤 PG를 최종 선정하면 그 견적의 딜룸에서 선정되지 않은 PG와의 채팅 입력창이 비활성화되고 "견적 선정이 끝나 이 대화는 종료됐어요."라고 안내가 떠요. 구매사 화면에서는 선정되지 않은 PG로 전환할 때, PG 화면에서는 본인이 선정되지 않았을 때 보여요. 선정된 PG와의 대화와 팀 채팅은 그대로 열려 있고, 같은 PG와 진행 중인 다른 견적 대화도 영향을 받지 않아요.
