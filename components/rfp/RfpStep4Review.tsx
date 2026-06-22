@@ -11,6 +11,8 @@ import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay } f
 import { endOfDayKstIso, kstDateOf } from '@/lib/deadline';
 import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
+import { RequiredMark } from './RequiredMark';
+import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -88,9 +90,15 @@ export function RfpStep4Review({
     <div className="space-y-6">
       {/* 마감일 */}
       <div className="space-y-1">
-        <Label size="md" muted={false}>
-          마감일 *
-        </Label>
+        <div className="flex items-center gap-2">
+          <Label size="md" muted={false}>마감일</Label>
+          <RequiredMark
+            state={markerState({
+              valid: isDeadlineValid(draft.deadline),
+              attempted: !!showFieldErrors,
+            })}
+          />
+        </div>
         <input
           type="date"
           value={draft.deadline ? draft.deadline.slice(0, 10) : ''}
