@@ -103,7 +103,7 @@ function stripBuyerOnlyFromPg(rfp: RFP): void {
 // 추가되면 아래 컴파일타임 단언이 분류될 때까지 빌드를 깨뜨려, 새 필드가 분류 누락으로
 // PG 페이로드(RSC)에 조용히 새는 것을 막는다. (bizProfile 은 키 자체는 노출이되 중첩
 // 필드만 stripBuyerOnlyFromPg 가 좁힌다 — 중첩 경계는 rfp-detail-loader.test.ts 가 고정.)
-const PG_STRIPPED_RFP_KEYS = [
+const _PG_STRIPPED_RFP_KEYS = [
   'allowedPgWorkspaceIds',
   'awardedBidId',
   'createdBy',
@@ -112,7 +112,7 @@ const PG_STRIPPED_RFP_KEYS = [
   'currentFeeVisibleToPg',
   'hiddenFromPg',
 ] as const;
-const PG_VISIBLE_RFP_KEYS = [
+const _PG_VISIBLE_RFP_KEYS = [
   'id', 'code', 'buyerWsId', 'bizProfile', 'title', 'memo', 'websiteUrl',
   'mainProducts', 'annualPgVolume', 'currentFeeRate', 'currentSettlementLimit',
   'currentGuaranteeInsurance', 'currentSettlementCycle', 'deliveryServicePeriod',
@@ -122,11 +122,11 @@ const PG_VISIBLE_RFP_KEYS = [
 ] as const;
 type _UnclassifiedRfpKey = Exclude<
   keyof RFP,
-  (typeof PG_STRIPPED_RFP_KEYS)[number] | (typeof PG_VISIBLE_RFP_KEYS)[number]
+  (typeof _PG_STRIPPED_RFP_KEYS)[number] | (typeof _PG_VISIBLE_RFP_KEYS)[number]
 >;
 const _assertRfpKeysExhaustive: _UnclassifiedRfpKey extends never
   ? true
-  : ['UNCLASSIFIED RFP KEY — add to PG_STRIPPED_RFP_KEYS or PG_VISIBLE_RFP_KEYS', _UnclassifiedRfpKey] =
+  : ['UNCLASSIFIED RFP KEY — add to _PG_STRIPPED_RFP_KEYS or _PG_VISIBLE_RFP_KEYS', _UnclassifiedRfpKey] =
   true;
 void _assertRfpKeysExhaustive;
 
