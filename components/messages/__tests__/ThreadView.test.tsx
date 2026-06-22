@@ -268,15 +268,27 @@ describe('ThreadView', () => {
     expect(screen.queryByLabelText('온라인')).not.toBeInTheDocument();
   });
 
-  it('typingUserIds 가 있으면 "입력 중…" 인디케이터를 렌더한다', () => {
+  it('typingUserIds 가 있으면 타이핑 점(TypingDots)을 렌더한다', () => {
     channelResult = { typingUserIds: ['pg-user-1'], sendTyping, connected: null };
     render(base());
-    expect(screen.getByText('입력 중…')).toBeInTheDocument();
+    expect(screen.getByLabelText('입력 중')).toBeInTheDocument();
   });
 
-  it('typingUserIds 가 비어 있으면 "입력 중…"을 렌더하지 않는다', () => {
+  it('typingUserIds 가 비어 있으면 타이핑 점을 렌더하지 않는다', () => {
     render(base());
-    expect(screen.queryByText('입력 중…')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('입력 중')).not.toBeInTheDocument();
+  });
+
+  it('online 이면 헤더에 "온라인" 텍스트 라벨을 표시한다', () => {
+    workspacePresenceResult = { online: true, activity: 'active' };
+    render(base());
+    expect(screen.getByText('온라인')).toBeInTheDocument();
+  });
+
+  it('rfpContext 가 있으면(page 변형) 헤더에 RFP 코드·제목을 표시한다', () => {
+    render(base({ rfpContext: { code: 'P-2605-0042', title: '온라인 결제 견적' } }));
+    expect(screen.getByText('P-2605-0042')).toBeInTheDocument();
+    expect(screen.getByText(/온라인 결제 견적/)).toBeInTheDocument();
   });
 
   it('onMessage 콜백으로 새 메시지를 받으면 목록에 append 한다(상대 메시지)', async () => {
