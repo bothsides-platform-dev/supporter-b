@@ -34,6 +34,7 @@ import { MorphFlightLayer } from './MorphFlightLayer';
 import { useMessageMorph } from './useMessageMorph';
 import type { Rect } from './message-morph';
 import { useAutoGrowTextarea } from './useAutoGrowTextarea';
+import { DateDivider } from './DateDivider';
 import { MentionText } from './MentionText';
 import { MentionDropdown } from './MentionDropdown';
 import { type MentionCandidate } from './mention-input';
@@ -255,13 +256,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
 
           return (
             <div key={rowKey} className="flex flex-col gap-3">
-              {showDivider && (
-                <div role="separator" className="flex justify-center py-1.5">
-                  <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                    {dayLabel}
-                  </span>
-                </div>
-              )}
+              {showDivider && <DateDivider label={dayLabel} />}
 
               <div
                 data-message-row

@@ -20,6 +20,7 @@ import { PresenceDot } from '@/components/presence/PresenceDot';
 import { toast } from '@/lib/toast';
 import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
 import { TypingDots } from './TypingDots';
+import { DateDivider } from './DateDivider';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageBubble } from './MessageBubble';
 import { ComposerAttachmentChips } from './ComposerAttachmentChips';
@@ -476,14 +477,7 @@ export function ThreadView({
 
           return (
             <div key={rowKey} className="flex flex-col gap-3">
-              {showDivider && (
-                // 중앙 라벨만 — 플랭킹 라인 없는 절제된 구분선(레퍼런스 정합).
-                <div role="separator" className="flex justify-center py-1.5">
-                  <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                    {dayLabel}
-                  </span>
-                </div>
-              )}
+              {showDivider && <DateDivider label={dayLabel} />}
 
               <div
                 data-message-row
