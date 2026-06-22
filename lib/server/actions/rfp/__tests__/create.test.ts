@@ -100,6 +100,7 @@ describe('createRfpAction', () => {
       deadline: new Date(Date.now() + 86_400_000).toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: ['card'],
+      websiteUrl: 'example.com',
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -229,6 +230,7 @@ describe('createRfpAction', () => {
       allowedPgWorkspaceIds: [pg.id],
       requiredPaymentMethods: [],
       customPaymentMethods: [{ label: '포인트결제' }],
+      websiteUrl: 'example.com',
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -260,6 +262,7 @@ describe('createRfpAction', () => {
       deadline: new Date(Date.now() + 86_400_000).toISOString(),
       allowedPgWorkspaceIds: pgWsIds,
       requiredPaymentMethods: ['card'],
+      websiteUrl: 'example.com',
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -787,6 +790,52 @@ describe('createRfpAction', () => {
     expect(row.contractType).toBeNull();
   });
 
+  it('send=true이고 websiteUrl 비면 결과가 ok:false', async () => {
+    const pg = await seedPgWorkspace(db, '홈페이지검증PG');
+    const pgAdmin = await seedUser(db, { email: 'admin@homepage.test' });
+    await seedMembership(db, pg.id, pgAdmin.id, 'admin');
+
+    const r = await createRfpAction({
+      title: '홈페이지 누락 발송',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pg.id],
+      requiredPaymentMethods: ['card'],
+      websiteUrl: '',
+      send: true,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('send=false이면 websiteUrl 비어도 통과', async () => {
+    const r = await createRfpAction({
+      title: '드래프트 홈페이지 없음',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: ['card'],
+      websiteUrl: '',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('send=true이고 형식 오류 websiteUrl → ok:false', async () => {
+    const pg = await seedPgWorkspace(db, '형식오류PG');
+    const pgAdmin = await seedUser(db, { email: 'admin@format.test' });
+    await seedMembership(db, pg.id, pgAdmin.id, 'admin');
+
+    const r = await createRfpAction({
+      title: '형식 오류 홈페이지 발송',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pg.id],
+      requiredPaymentMethods: ['card'],
+      websiteUrl: 'not-a-domain',
+      send: true,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
   // _suppress unused import warnings
   void and;
 
@@ -803,6 +852,7 @@ describe('createRfpAction', () => {
         deadline: new Date(Date.now() + 86_400_000).toISOString(),
         allowedPgWorkspaceIds: [pg.id],
         requiredPaymentMethods: ['card'],
+        websiteUrl: 'example.com',
         send: true,
       });
       expect(r.ok).toBe(true);

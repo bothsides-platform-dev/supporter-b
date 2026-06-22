@@ -70,6 +70,23 @@ const Input = z
         message: '발송하려면 결제수단을 1개 이상 선택해야 합니다.',
       });
     }
+    // 홈페이지: 발송 시 필수 + 형식 검증 (드래프트 저장은 비어도 허용)
+    if (d.send) {
+      const v = (d.websiteUrl ?? '').trim();
+      if (v === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['websiteUrl'],
+          message: '발송하려면 홈페이지 주소를 입력해야 합니다.',
+        });
+      } else if (!isValidWebsiteUrl(v)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['websiteUrl'],
+          message: WEBSITE_URL_ERROR,
+        });
+      }
+    }
   });
 
 export type CreateRfpInput = z.input<typeof Input>;
