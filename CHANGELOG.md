@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.40.1] - 2026-06-23
+
+### Changed
+
+- **(내부 문서) 디자인 시스템 문서를 코드와 정합화**: 사용자에게 보이는 변화는 없어요. 코드에 이미 일관되게 구현돼 있던 컴포넌트·토큰·규칙(스페이싱·z-index·포커스/disabled·아바타 팔레트·Toast·EmptyState·폼 입력 등)을 `DESIGN.md`에 빠짐없이 문서화하고, 코드·최신 스펙과 어긋나 있던 규칙(로딩 모션 허용·버튼 높이 32px·elevation 0–5)을 바로잡았어요. 디자인 작업의 단일 기준 문서를 최신화한 작업이에요(233→414줄).
+
+> 배포 메모: 마크다운 문서만 변경(`DESIGN.md`·`CLAUDE.md`). `tokens.css` 등 코드·빌드·배포·DB·환경 변수 변경 없어요.
+
 ## [0.2.40.0] - 2026-06-23
 
 ### Added
