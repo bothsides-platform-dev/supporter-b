@@ -14,7 +14,7 @@
 **4대 원칙**
 1. **구조는 느껴지되 보이지 않게** — 1px 저대비 보더(`outline-variant`)가 구획을 만든다. 그림자는 떠 있는 요소(팝오버·다이얼로그·command palette)에만.
 2. **표면 명도 계층** — 캔버스 → 사이드바/패널 → elevated 순으로 명도를 한 단계씩 올려(다크)/내려(라이트) 깊이를 표현. 사이드바는 콘텐츠보다 한 톤 dim.
-3. **조밀하고 빠르게** — 행 높이 ~32px, 본문 14px, 버튼 28px. 인터랙션 피드백은 100ms 이내, transform/opacity/color만 애니메이트.
+3. **조밀하고 빠르게** — 행 높이 ~32px, 본문 14px, 버튼 높이 28–36px(기본 `md` 32px). 인터랙션 피드백은 100ms 이내, transform/opacity/color만 애니메이트.
 4. **수치는 모노** — 금융 값(₩, %, 건수, 날짜, 제안번호)은 `.md-numeric`(tabular-nums). 수치 정렬이 신뢰의 시각이다.
 
 ---
@@ -31,14 +31,21 @@
 | `--md-sys-color-primary-container` | `#D1E4FF` | `#004A77` | 선택된 nav 행, 연한 액센트 틴트 |
 | `--md-sys-color-on-primary-container` | `#001D36` | `#D1E4FF` | 위 텍스트 |
 
-### Tertiary / Error / Warning
-| 토큰 | 라이트 | 용도 |
-|---|---|---|
-| `--md-sys-color-tertiary` | `#1F9D55` | 성공, 계약 체결 |
-| `--md-sys-color-error` | `#E5484D` | 오류, 위험 액션 |
-| `--md-sys-color-warning` | `#D9730D` | 보류/대기 |
+### Secondary — 뉴트럴 슬레이트
+| 토큰 | 라이트 | 다크 | 용도 |
+|---|---|---|---|
+| `--md-sys-color-secondary` | `#6B7079` | `#C0C4CC` | 중립 강조(on-surface-variant 계열) |
+| `--md-sys-color-secondary-container` | `#EDEEF2` | `#26282C` | `tonal` IconButton·secondary Avatar 배경 |
+| `--md-sys-color-on-secondary-container` | `#2A2D33` | `#E4E5E9` | 위 텍스트 |
 
-(컨테이너 변형은 `tokens.css` 참조. 다크 값도 동일 파일.)
+### Tertiary / Error / Warning (+ 컨테이너)
+| 토큰 | 라이트 | 컨테이너(라이트) bg / on | 용도 |
+|---|---|---|---|
+| `--md-sys-color-tertiary` | `#1F9D55` | `#D6F5E3` / `#06351C` | 성공·선정·온라인 dot |
+| `--md-sys-color-error` | `#E5484D` | `#FFE5E5` / `#5A1115` | 오류, 위험 액션 |
+| `--md-sys-color-warning` | `#D9730D` | `#FCEBD2` / `#4A2A05` | 보류/대기 |
+
+컨테이너(`*-container` / `on-*-container`)는 Chip·Avatar·tonal 표면의 뮤트 배경/텍스트로 쓰인다 — Chip color 매핑(성공→tertiary·오류→error·보류→warning·중립→surface·주요→primary)이 이 값을 소비한다. 다크 값과 secondary 컨테이너는 `tokens.css`.
 
 ### Surface 계층 — 명도 단계
 ```
@@ -51,6 +58,8 @@ surface-container-high   #EBECEF  선택/강한 hover #1C1D1F
 surface-container-highest #E4E5E9               #202123
 ```
 
+> 계층 끝단·기타: `surface-bright`(라이트 `#FFFFFF` / 다크 `#202123`)·`surface-dim`(라이트 `#ECEDF0` / 다크 `#08090A`)은 명도 계층의 양극단. `surface-container-lowest`(라이트 `#FFFFFF` / 다크 `#08090A`)는 **popover·dropdown 배경**(`--color-popover`). 스켈레톤 바는 `surface-container-high`.
+
 ### 텍스트 · 보더
 | 토큰 | 라이트 | 다크 | 용도 |
 |---|---|---|---|
@@ -60,6 +69,31 @@ surface-container-highest #E4E5E9               #202123
 | `--md-sys-color-outline-variant` | `#E8E9EC` | `#23252A` | **저대비 보더/디바이더 (기본)** |
 
 > 저대비 보더는 의도된 선택이다 — "구조는 느껴지되 보이지 않게". 라이트 `outline-variant`는 WCAG AA 비텍스트 대비(3:1) 미달이며, 이는 Linear 룩의 핵심이지 버그가 아니다.
+
+### Inverse · Scrim · 유틸
+| 토큰 | 라이트 | 다크 | 용도 |
+|---|---|---|---|
+| `--md-sys-color-inverse-surface` | `#1F2023` | `#F7F8F8` | **Toast·Tooltip 배경**(반전 칩) |
+| `--md-sys-color-inverse-on-surface` | `#F7F8F8` | `#1F2023` | inverse 표면 위 텍스트 |
+| `--md-sys-color-inverse-primary` | `#9ECAFF` | `#0061A4` | inverse 표면 위 액센트(Toast 닫기) |
+| `--md-sys-color-scrim` · `-shadow` | `#000000` | `#000000` | 그림자·스크림 베이스 색 |
+| `--md-sys-color-surface-tint` | `#0061A4` | `#9ECAFF` | (예약) 표면 틴트 |
+
+스크림(모달 백드롭)은 토큰이 아니라 유틸로 적용한다 — Dialog·Sheet 는 `bg-black/10 dark:bg-white/10` + `backdrop-blur-xs`, command palette 는 더 짙은 `bg-black/40` + `backdrop-blur-[4px]`. 레이어 순서는 §11 참조.
+
+### 워크스페이스 아바타 팔레트 — 6 hue
+이름 해시로 결정되는 `WorkspaceAvatar` 배경/글자 색(`lib/utils/workspace-avatar.ts` 의 `getWorkspaceColor`). 토큰 쌍 `--workspace-avatar-{hue}-bg` / `-fg`:
+
+| hue | 라이트 bg / fg | 다크 bg / fg |
+|---|---|---|
+| blue | `#D8EAFF` / `#003258` | `#162236` / `#6AADFF` |
+| purple | `#E8E0FF` / `#2A1255` | `#231A45` / `#B59FFF` |
+| teal | `#C8F5E8` / `#0A3025` | `#0E2E25` / `#4FD1A8` |
+| orange | `#FFE8CC` / `#4A2A00` | `#2A1A10` / `#F5A05A` |
+| pink | `#FFD5EE` / `#4A0825` | `#2E1029` / `#F07BB8` |
+| slate | `#DDE3EF` / `#1C2030` | `#1C2030` / `#8AABCF` |
+
+뮤트 파스텔 — 채도 낮고 라벨 대비 충분. **사용자(개인) 아바타**는 이 팔레트가 아니라 `primary/secondary/tertiary/error/surface` 컨테이너 색(§7 Avatar)을 쓴다.
 
 ---
 
@@ -73,6 +107,7 @@ surface-container-highest #E4E5E9               #202123
 |---|---|---|---|---|
 | Display Large | 44px | 600 | -0.025em | 랜딩 히어로 |
 | Display Medium | 36px | 600 | -0.022em | 대형 KPI |
+| Display Small | 28px | 600 | -0.02em | KPI 값(`KpiCell`), 중형 강조 수치 |
 | Headline Large | 28px | 600 | -0.022em | 페이지 제목 |
 | Headline Medium | 24px | 600 | -0.02em | 섹션 제목 |
 | Headline Small | 20px | 600 | -0.018em | 카드 제목 |
@@ -120,11 +155,11 @@ surface-container-highest #E4E5E9               #202123
 1: 0 1px 2px rgba(0,0,0,.04)              0 1px 2px rgba(0,0,0,.40)   ← elevated 카드
 2: 0 2px 8px rgba(0,0,0,.06)              0 2px 8px rgba(0,0,0,.50)   ← 드롭다운
 3: 0 4px 16px rgba(0,0,0,.08)             0 4px 16px rgba(0,0,0,.55)  ← toast
-5: 0 2px 8px rgba(0,0,0,.08),             0 2px 8px rgba(0,0,0,.4),   ← command palette (`--command-palette-shadow`)
-   0 24px 64px -8px rgba(0,0,0,.18)          0 24px 64px -8px rgba(0,0,0,.6)
+4: 0 8px 24px rgba(0,0,0,.10)             0 8px 24px rgba(0,0,0,.60)
+5: 0 8px 32px rgba(0,0,0,.12)             0 8px 32px rgba(0,0,0,.60)
 ```
 
-`--command-palette-shadow` CSS 변수로 추출됨 (`app/globals.css`). 라이트/다크 값이 각각 설정된다.
+`--md-sys-elevation-*`(tokens.css)는 0–5 단계다. 실제 주 소비처는 **elevation-1**(`elevated` 카드·`elevated` 버튼)과 **elevation-3**(toast). 드롭다운·다이얼로그·시트 등 포털 플로팅은 Tailwind `shadow-md`/`shadow-lg` + `ring-1 ring-foreground/10` 헤어라인으로 띄운다(elevation 토큰을 직접 안 씀). **command palette 류 큰 플로팅만 별도 `--command-palette-shadow`** — 2단 그림자 `0 2px 8px` + `0 24px 64px -8px`(라이트 .08/.18 · 다크 .4/.6, `app/globals.css`)로 elevation 토큰과 구분된다.
 
 ---
 
@@ -133,6 +168,8 @@ surface-container-highest #E4E5E9               #202123
 | 토큰 | 값 | 용도 |
 |---|---|---|
 | `--md-sys-motion-easing-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | 기본 전환 (ease-out) |
+| `--md-sys-motion-easing-emphasized-decelerate` | `cubic-bezier(0.05, 0.7, 0.1, 1)` | 강조 감속 — 큰 요소 진입 |
+| `--md-sys-motion-easing-emphasized-accelerate` | `cubic-bezier(0.3, 0, 0.8, 0.15)` | 강조 가속 — 큰 요소 이탈 |
 | `--md-sys-motion-duration-short-4` | **100ms** | 버튼/호버/색 변화 (cause→effect) |
 | `--md-sys-motion-duration-medium-2` | 250ms | 패널/드롭다운 오픈 |
 | `--md-sys-motion-duration-medium-4` | 350ms | 드로어 슬라이드 |
@@ -140,22 +177,28 @@ surface-container-highest #E4E5E9               #202123
 
 규칙: **transform·opacity·color/background/border만 애니메이트**. 레이아웃 속성(width/height/top/left/margin)은 애니메이트하지 않는다. 팝오버는 트리거 요소에서 스케일.
 
+### 로딩 모션 — 기능적 모션 허용
+
+넓은 영역의 로딩은 **펄스 스켈레톤**(`animate-pulse`, `components/ui/skeleton.tsx` — `surface-container-high` 바·`rounded-md`), 인라인·작은 자리(타이핑 인디케이터·전송 대기 점)는 **펄스 점**으로 표시한다. 둘 다 `prefers-reduced-motion: reduce`를 존중해 저감 시 정지/단순화한다. 스피너는 새 표면에 도입하지 않되, 기존 사용처(`RefreshHeaderButton` 의 `--animate-spin`/`--animate-spin-once`, 첨부 업로드 칩)는 유지한다. 짧은 진행 표시로 `LOADING…` 텍스트(body-medium)도 그대로 둔다. **장식적** 컨페티·강한 모멘텀 모션 금지는 §9에서 유지된다(축하 모먼트만 예외). 이 갱신은 코드 현실(스켈레톤이 이미 광범위 사용 중)과 문서를 정합시킨 것이다.
+
+> **추가 키프레임**(`app/globals.css`): `spin-once`(0.6s 1회전 — 리프레시 클릭), `blink-cursor`(0.7s — 타이핑 커서), `process-progress`(5s scaleX — 스텝퍼 자동 전환, `prefers-reduced-motion: no-preference` 게이트). 모두 transform/opacity만 만진다.
+
 ---
 
 ## 7. 컴포넌트 시스템
 
 밀도·6px·저대비 보더·서브틀 호버(배경 미세 변화)가 공통 규칙. 호버에 그림자 승급 금지.
 
-### Button — 5개 변형 (높이 28px 기본)
+### Button — 5개 변형 (높이 sm 28 / md 32 / lg 36px, 기본 `md`)
 | Variant | 외관 | 용도 |
 |---|---|---|
-| `filled` | Primary/Error 솔리드 | 주요 CTA |
-| `outlined` | 저대비 보더, 호버 시 surface 채움 | 보조 액션 |
-| `text` | 고스트, 호버 시 surface 채움 | 3차 액션, 취소 |
+| `filled` | Primary/Error 솔리드(호버 = on-color 10% mix) | 주요 CTA |
+| `outlined` | 저대비 보더, 호버 시 surface-container 채움 | 보조 액션 |
+| `text` | 고스트, 호버 시 surface-container 채움 | 3차 액션, 취소 |
 | `elevated` | surface-low + 보더 + elevation-1 | 카드 위 액션 |
 | `tonal` | secondary/primary 컨테이너 | 중간 강조 |
 
-`color`: `primary`(기본) / `error`. 반경 6px. 호버는 배경 변화만(그림자 없음).
+`color`: `primary`(기본) / `error`. 반경 6px(`shape-small`). 포커스 `ring-2` primary @50%, disabled `opacity-38`(§12). 호버는 배경 변화만(그림자 없음). 코어는 `components/primitives/Button.tsx` — 앱 표준 버튼이다(별개로 shadcn `components/ui/button.tsx` 가 있으나 base-ui 래퍼용).
 
 ### Chip — 4개 유형 (높이 24px, 4px 반경)
 `assist` / `filter` / `input` / `suggestion`. `color`: `primary`/`tertiary`/`warning`/`error`/`surface`(기본). 뮤트 톤.
@@ -167,7 +210,78 @@ surface-container-highest #E4E5E9               #202123
 `outlined`(저대비 보더, 기본 선호) / `elevated`(surface-low + 보더 + elevation-1) / `filled`(surface-container).
 
 ### Tabs
-2px 하단 인디케이터(primary). 활성 텍스트 on-surface, 비활성 on-surface-variant. 높이 36px, label-large.
+2px 하단 인디케이터(primary, `after` 의사요소 `bottom-[-1px]`). 활성 텍스트 on-surface, 비활성 on-surface-variant(호버 on-surface). 높이 36px(`h-9`), label-large. 탭별 카운트는 `.md-numeric` 로 붙는다.
+
+> **두 레이어** — `components/primitives/*` 가 디자인 시스템 코어(앱 표준), `components/ui/*` 는 base-ui/shadcn 래퍼(오버레이·인풋 프리미티브). 둘이 겹치면 `primitives/*` 가 표준이다.
+
+### 7.1 폼 · 입력
+
+밑줄형(underline)과 박스형(boxed) 두 입력 스타일이 공존한다 — 견적/입찰 위저드 숫자·텍스트 필드는 **밑줄형**, 설정·다이얼로그 등 일반 폼은 **박스형**.
+
+**Input** — 두 스타일:
+- **밑줄형** (`underlineInputClass`, `components/forms/inputs.tsx`): `border-b` `outline`, `py-2`, 14px, 포커스 시 하단 보더 `on-surface`. 숫자 필드는 `numericInputClass`(= 밑줄 + `.md-numeric`).
+- **박스형** (`components/ui/input.tsx`, base-ui): `h-8`(32px), `rounded-md`(6px), `border-input`(=outline), 투명 배경, `px-2.5`. 포커스 `ring-3` @50%, `aria-invalid` → error 보더 + error ring, disabled `opacity-50`.
+
+**Field · Label**:
+- `Field`(`primitives/Field.tsx`): label(label-medium, on-surface) + `required` 시 `*`(error) + 자식 + 선택 `hint`(11px, on-surface-variant, `role=note`). **인라인 에러를 렌더하지 않는다** — 저장 에러는 toast 로(멤버스 패리티). `space-y-1`.
+- `Label`(`primitives/Label.tsx`): 크기 `lg/md/sm`(label 타입스케일), `muted` 기본 true(on-surface-variant)/false(on-surface), 다형 `as`.
+
+**Select · Checkbox · Slider**:
+- `Select`(`primitives/Select.tsx`): 네이티브 `<select>` 래퍼, `h-8`(32px), `rounded-md`(6px), `surface-container-low` 배경, `outline-variant` 보더, ▾ 셰브론. 포커스 primary 보더 + `ring-2 @40%`.
+- `Checkbox`(`primitives/Checkbox.tsx`): 16px(`h-4 w-4`), `rounded-md`. 체크 시 primary 배경+보더 + on-primary 체크 SVG(1.4 stroke), 미체크 시 on-surface-variant 보더(호버 on-surface). 커스텀(네이티브 아님).
+- `Slider`(`ui/slider.tsx`, Radix): 트랙 1px `outline`, range 1px `on-surface`, 썸 14×14 `surface` 배경 + `on-surface` 보더 `rounded-md`, 호버 `scale-110`(140ms). Linear 1px 트랙.
+
+**숫자 입력** (`react-number-format`, `components/forms/inputs.tsx`) — 모두 `.md-numeric` + 밑줄형:
+- `CurrencyInput` — 천단위 구분·소수점 차단·`원` 접미·한글 환산 힌트(tertiary 11px).
+- `PercentInput` — 소수 2자리·`%` 접미·"1만원당 N원" 환산 힌트.
+- `DayOffsetInput` — D/W/M `Select` + 정수, `D+N` 정규 문자열 emit(정산주기).
+- `FeeRateCell` — 라벨 없는 그리드 셀(우대수수료 매트릭스). 포커스/호버 시 환산 툴팁(`surface-container` + `outline-variant`, 4px, 11px mono).
+
+라벨 옆 ⓘ 설명은 `InfoTip`(§7.2 용어집).
+
+**RequiredMark — 3상태 필수 마커** (`components/rfp/RequiredMark.tsx`): `Chip`(`variant="assist"`) 위 얇은 래퍼로 필드 입력 상태를 칩으로 표기한다. `empty` = surface 색 "필수", `filled` = tertiary 색 "입력 완료" + Check 아이콘, `error` = error 색 "필수". 상태는 `lib/rfp/required-fields.ts` 의 `MarkerState`(SSOT)에서 파생 — 마커·스텝 게이팅·제출 차단이 한 출처를 공유한다.
+
+### 7.2 표면 · 오버레이
+
+base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 그림자는 floating 에만, 100ms fade + `zoom-95` 진입. 전부 `z-50`(§11).
+
+**Dialog · ConfirmDialog**:
+- `Dialog`(`ui/dialog.tsx`, base-ui): 백드롭 `bg-black/10 dark:bg-white/10` + `backdrop-blur-xs`. 콘텐츠 `shape-extra-large`(12px), `popover` 배경, `p-4`, `ring-1 ring-foreground/10` 헤어라인, `zoom-in-95` 진입. 타이틀 16px(font-heading medium), 푸터 `bg-muted/50` 상단 보더.
+- `ConfirmDialog`(`ui/confirm-dialog.tsx`): 예/아니오 + 로딩. `max-w-420px`, 푸터 = `outlined` 취소 + `filled`(또는 `error`) 확인, `loading` 시 양쪽 disabled + 확인 라벨 `LOADING…`.
+
+**Sheet (Drawer)** (`ui/sheet.tsx`, base-ui): top/right/bottom/left 변형, 모바일 `w-3/4`·`sm:max-w-sm`, `shadow-lg`. 슬라이드 **350ms**(`duration-medium-4`) + opacity. 모바일 사이드바·채팅 시트가 소비.
+
+**DropdownMenu** (`ui/dropdown-menu.tsx`, base-ui Menu): Popup `rounded-md`(6px), `popover` 배경, `p-1`, `shadow-md` + `ring-1 ring-foreground/10`. 아이템 `rounded-md`·`px-1.5 py-1`·text-sm, 포커스 `bg-accent`(primary-container). `variant="destructive"` = error 텍스트 + `bg-destructive/10` 포커스. 구분선 `h-px bg-border`.
+
+**Tooltip · InfoTip**:
+- `Tooltip`(`ui/tooltip.tsx`, base-ui): `shape-extra-small`(4px), `bg-foreground`(반전 near-black/white) + `text-background`, `px-3 py-1.5`, 12px, 화살표. `delay=0`. Toast 와 같은 반전 톤.
+- `InfoTip`(`ui/info-tip.tsx`, base-ui Popover): 어려운 용어 옆 18px ⓘ(아이콘 14px). 카드 `shape-extra-small`(4px) + `outline-variant` 보더 + `surface-container` 배경 + `shadow-md`, 13px. 호버 오픈(delay 150). 설명은 `lib/glossary.ts` 단일 출처. (Tooltip 과 달리 보더 있는 밝은 카드.)
+
+**Accordion · Separator**:
+- `Accordion`(`ui/accordion.tsx`, base-ui): 헤어라인(`border-t` + 아이템 `border-b` `outline-variant`)만, 그림자 없음. 트리거 `py-3`·13px·500. 셰브론 16px `rotate-180`(transform, 150ms). 패널 fade. `badge` 슬롯(예: 대기 N건 칩).
+- `Separator`(`ui/separator.tsx`, base-ui): 1px `outline-variant`(가로 `h-px`/세로 `w-px`). 저대비가 기본.
+
+### 7.3 데이터 · 상태 표시
+
+**EmptyState** (`primitives/EmptyState.tsx`): 중앙 정렬 세로(`gap-4 py-20`), 라인 SVG 아이콘 **48px @1.5 stroke**(on-surface-variant), 타이틀(title-large, on-surface), 설명(body-medium, on-surface-variant, `max-w-sm`), 선택 `action` 슬롯. 빈/에러 상태 통일 진입점(에러 = EmptyState + "다시 시도" 액션). 일러스트 금지(§9).
+
+**Skeleton (로딩)** (`ui/skeleton.tsx`): `animate-pulse` + `rounded-md` + `surface-container-high` 바. 폭/높이는 className. 라우트 `loading.tsx`(messages/rfp/notifications)·홈·칸반·인박스·스레드가 소비. 모션 원칙은 §6.
+
+**Toast** (`shell/Toaster.tsx`, base-ui Toast): 뷰포트 **우하단**(`bottom-5 right-5`, z-50). 칩 `max-w min(92vw,24rem)`, `shape-extra-small`(4px), **`inverse-surface` 배경**(반전), `px-4 py-3`, `elevation-3`, 슬라이드 200ms. `success` = 좌측 `border-l-2` tertiary. 타이틀 body-medium(inverse-on-surface), 닫기 inverse-primary. `import { toast } from '@/lib/toast'`.
+
+**KpiCell** (`primitives/KpiCell.tsx`): 라벨(label-medium, on-surface-variant) + 값(**display-small**, `.md-numeric`, on-surface) + 선택 델타(↑ tertiary / ↓ error / — variant, label-small mono).
+
+**Avatar**:
+- 사용자 `primitives/Avatar.tsx`: 크기 `sm`(24)/`md`(32)/`lg`(40px), `shape-full`. 색 `primary/secondary/tertiary/error/surface`(컨테이너 토큰). 이니셜 폴백, `userId`+`avatarUpdatedAt` 시 사진(`?v` 캐시버스트).
+- 워크스페이스 `primitives/WorkspaceAvatar.tsx`: 크기 `sm`(24)/`md`(28px), **`shape-extra-small`(4px)**(개인과 달리 둥근 사각). 색은 이름 해시 → §2 6-hue 팔레트. 로고 사진 폴백 동일.
+- `AvatarWithPresence`(`presence/`): WorkspaceAvatar + PresenceDot 합성.
+
+**PresenceDot · 배지 · 안읽음**:
+- `PresenceDot`(`presence/PresenceDot.tsx`): 우하단 오버레이 `size-2.5`(10px) `rounded-full` `border-2 surface`. `active`=tertiary, `idle`=outline, `offline`=숨김.
+- 카운트 배지: 공용 컴포넌트 없이 인라인 — 사이드바 `SidebarMenuBadge`, 메시지 미읽음 카운트(원형 `min-w-[18px]` primary 배경 11px `.md-numeric`).
+- 안읽음 dot: `ConversationList` 의 `size-2 rounded-full` primary 점(+ `sr-only "읽지 않음"`).
+
+**Breadcrumb** (`ui/breadcrumb.tsx` base-ui + `shell/Breadcrumb.tsx`): 리스트 label-medium on-surface-variant, 링크 호버 `surface-container` + on-surface, 현재 페이지 on-surface, 구분자 `/`(outline). 헤더에서 사용.
 
 ---
 
@@ -176,6 +290,7 @@ surface-container-highest #E4E5E9               #202123
 ```
 --shell-sidebar: 200px   ← 좌측 사이드바 (텍스트+아이콘 nav, nav 라벨 기준 타이트)
 --shell-subnav:  200px   ← 섹션 내 보조 nav (설정 등)
+--shell-topbar:  48px    ← 헤더(콘텐츠 컬럼 상단 스트립) 높이
 --content-max:   1280px
 ```
 
@@ -209,9 +324,9 @@ surface-container-highest #E4E5E9               #202123
 - **No** 큰 본문(16px+) — 앱 본문은 14px, 조밀하게.
 - **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + JetBrains Mono만.
 - **No** 브래킷 상태 태그 `[ 결재중 ]` — Chip 사용.
-- **No** 컨페티·펄스·강한 모멘텀 모션 — 단 하나의 예외(아래 "축하 모먼트")만 허용.
+- **No** 장식적 컨페티·강한 모멘텀 모션 — 단 하나의 예외(아래 "축하 모먼트")만 허용. **단 기능적 로딩 모션은 허용**: 넓은 영역은 펄스 스켈레톤(`ui/skeleton.tsx`), 인라인·타이핑 인디케이터는 펄스 점. 모두 `prefers-reduced-motion: reduce`를 존중한다(저감 시 정지). 자세한 원칙은 §6 "로딩 모션" 참조.
 
-> **예외 — 축하 모먼트 (Celebration Moment).** 위 컨페티·펄스·강한 모션 금지에는
+> **예외 — 축하 모먼트 (Celebration Moment).** 위 장식적 컨페티·강한 모션 금지에는
 > 단 하나의 좁은 예외가 있다. 다음 4조건을 **모두** 만족하는 종결 성공 순간에 한해
 > 1회성 컨페티/강조 모션을 허용한다:
 > ① 사용자가 직접 일으킨 액션의 결과일 것,
@@ -225,9 +340,75 @@ surface-container-highest #E4E5E9               #202123
 
 ---
 
-## 10. 토큰 파일 참조
+## 10. 스페이싱 · 밀도
+
+Tailwind 기본 4px 스텝 유틸리티(`gap-*`·`p-*`·`m-*`)가 **운영 스페이싱**이다. 별도 스페이싱 토큰 스케일을 강제하지 않는다 — Linear 밀도(조밀)는 작은 값 위주로 표현한다.
+
+| 컨텍스트 | 표준 간격 |
+|---|---|
+| 인라인 아이콘↔텍스트, 칩 내부 | `gap-1`~`gap-1.5` (4–6px) |
+| 폼 라벨↔인풋, 리스트 행 | `gap-1`~`gap-2` / `space-y-1` |
+| 카드·패널 내부 패딩 | `p-3`~`p-4` (12–16px) |
+| 섹션 간, 카드 묶음 | `gap-3`~`gap-6` (12–24px) |
+| 빈 상태 등 큰 여백 | `py-20` |
+
+행 높이는 ~32px(`h-8`)가 기준(버튼·nav·Select·Input). `--s-1`~`--s-11`(4·8·12·16·20·24·32·40·56·80·120px) 토큰이 `tokens.css` 에 있으나 **`landing/*` 레거시 전용 별칭**이다 — 앱 본문에선 Tailwind 유틸을 쓴다.
+
+---
+
+## 11. z-index · 레이어링
+
+토큰 없이 Tailwind `z-*` 유틸로 관리한다. 4단계 관습:
+
+| 레이어 | z | 사용 |
+|---|---|---|
+| 베이스 콘텐츠 | `z-0` | 일반 흐름, 컨페티 배경 |
+| 로컬 스티키 크롬 | `z-10` | 스티키 헤더·사이드바 핸들·랜딩 헤더 |
+| 인-플로우 보조 플로팅 | `z-20` | 모바일 nav, 멘션 드롭다운 |
+| 포털 플로팅(최상위) | `z-50` | Dialog·Sheet·DropdownMenu·Tooltip·Popover·Toast·command palette — **공유 천장** |
+
+스크림 두께: Dialog·Sheet `bg-black/10`(+`blur-xs`), command palette `bg-black/40`(+`blur-4px`). 새 플로팅은 `z-50` 을 따른다 — `z-[100]`/`z-40` 같은 일회성 값은 피한다.
+
+---
+
+## 12. 포커스 · 상태
+
+**포커스 링** — `--color-ring`(= primary). 전역 기본은 `* { outline: outline-ring/50 }`(globals.css). 인터랙티브 코어(`primitives/Button`·`IconButton`·`Tabs`)는 `focus-visible:ring-2 ring-[primary]/50`. 변이: Chip `ring-[3px]`, Select `ring-2 @40%`, Checkbox `ring-2 @30%`, shadcn `ui/input`·`ui/button` `ring-3 @50%`. **신규 코어 컴포넌트는 `ring-2` primary @50% 를 표준으로** 한다.
+
+**Disabled** — 코어 인터랙티브(`primitives/*`: Button·IconButton·Chip)는 `opacity-38` + `cursor-not-allowed` + `pointer-events-none`. shadcn `ui/*` 래퍼는 `opacity-50`. **표준은 `opacity-38`**(0.38).
+
+**상태 레이어 토큰** — `--md-sys-state-hover-opacity` 0.06 / `-pressed-` 0.10 / `-focused-` 0.12. 현재 대부분 컴포넌트는 hover 를 surface 명도 시프트(`surface-container`)로 직접 처리하고 이 토큰은 예약 상태다. solid 버튼 호버는 `color-mix(on-color 10%)`.
+
+---
+
+## 13. 브레이크포인트
+
+Tailwind v4 기본 스크린(커스텀 없음):
+
+| 토큰 | min-width | 본 앱에서의 의미 |
+|---|---|---|
+| `sm` | 640px | 다이얼로그 `max-w-sm` 적용 시작 |
+| `md` | 768px | **사이드바 표시 임계** — 미만은 사이드바 숨김 → 상단 햄버거 + Sheet 드로어, 메인 full-bleed |
+| `lg` | 1024px | 채팅 레일·다단 비교 레이아웃, 데스크톱 밀도 |
+| `xl` | 1280px | `--content-max` 와 동일 |
+| `2xl` | 1536px | (특이 사용 없음) |
+
+`md` 가 모바일↔데스크톱 셸의 분기점이다(§8).
+
+---
+
+## 14. 아이코노그래피
+
+- **커스텀 라인 세트** `components/icons/index.tsx` — nav·앱 아이콘. 기본 `size=20`(viewBox `0 0 20`), **stroke 1.4**, round cap/join. 일부 24px(예: Settings)은 viewBox 24 + stroke 1.7. `size` prop 으로 호출부 오버라이드.
+- **lucide-react** — base-ui 래퍼·부수 아이콘(`XIcon`/`ChevronRightIcon`/`CheckIcon`/`ChevronDownIcon` 등).
+- 빈 상태 아이콘은 **48px @1.5 stroke**(EmptyState, §7.3). 라인 스트로크 1.4–1.5 가 Linear 톤.
+- 아이콘 기본색 `on-surface-variant`, 호버/활성 시 `on-surface`(IconButton 규칙).
+
+---
+
+## 15. 토큰 파일 참조
 
 `styles/tokens.css` ← 시스템 토큰 전체 (`@theme {}` + `.dark` 오버라이드)
 `app/globals.css` ← Tailwind v4 shadcn semantic 매핑 (`@theme inline {}`)
 
-`DESIGN.md`가 변경되면 `styles/tokens.css`도 동기화한다 (단방향).
+`DESIGN.md`가 변경되면 `styles/tokens.css`도 동기화한다 (단방향). 단 본 문서 §2·§5·§7·§10~§14 의 다수 항목은 **기존 토큰/관습을 문서화**한 것이라 토큰 *값* 변경을 동반하지 않는다 — 토큰 값을 새로 바꿀 때만 `tokens.css` 를 함께 수정한다.

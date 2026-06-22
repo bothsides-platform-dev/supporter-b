@@ -119,10 +119,10 @@ These are non-negotiable visual decisions enforced across all screens. The desig
 - **No** hover shadow promotion — hover is a background-lightness shift only.
 - **No** heavy/skeuomorphic shadows — most surfaces use a 1px border or elevation-1; big shadows only on floating elements (popover, dropdown, toast, dialog, command palette).
 - **No** high-contrast dividers — default to `outline-variant` (the deliberately low-contrast border). The faint border IS the Linear look, not a bug.
-- **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28px buttons).
+- **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28–36px buttons / default 32px).
 - **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`.
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
-- **No** pulse/spinner loading. Use `LOADING…` text (body-medium type). (예외: DESIGN.md §9 "축하 모먼트" — 종결 성공 1회성에 한해 컨페티 허용.)
+- **로딩 모션 허용** — 넓은 영역은 펄스 스켈레톤, 인라인·타이핑 인디케이터는 펄스 점(staggered). `prefers-reduced-motion: reduce` 존중(저감 시 정지/단순화). 버튼 진행 등 짧은 `LOADING…` 텍스트 표기는 그대로 두어도 무방. 장식적 컨페티·강한 모멘텀 모션 제한은 유지(DESIGN.md §9 "축하 모먼트" 예외만). 자세히는 DESIGN.md §6 "로딩 모션".
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.
 - **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (mono + tabular-nums). Never on nav/labels/buttons.
 - **Status** uses Chip component — never bracketed plain text `[ 결재중 ]`.
