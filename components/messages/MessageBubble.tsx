@@ -7,6 +7,18 @@ import { MessageAttachmentGrid } from './MessageAttachmentGrid';
 
 type Attachments = ComponentProps<typeof MessageAttachmentGrid>['attachments'];
 
+// 말풍선 표면(배경·여백·모양·최대폭) className — MessageBubble 과 전송 morph 클론
+// (MorphFlightLayer)이 공유해 시각이 어긋나지 않게 한다. pending(전송 중)은 살짝 투명.
+export function bubbleSurfaceClass(isSelf: boolean, pending = false): string {
+  return cn(
+    'max-w-[78%] whitespace-pre-wrap break-words rounded-[var(--md-sys-shape-medium)] px-3 py-2 text-[13px] leading-relaxed',
+    isSelf
+      ? 'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
+      : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]',
+    pending && 'opacity-60',
+  );
+}
+
 // 메시지 말풍선 행(상대방·팀 채팅 공용) — 좌우 정렬 + 말풍선 + 첨부 + 타임스탬프/전송중 점.
 // 본문은 renderBody 슬롯으로 주입한다(ThreadView=URL 자동링크, TeamThreadView=MentionText).
 // 발신자 헤더·날짜 구분선·rfp 칩·읽음 표시 등 화면별 요소는 호출처가 이 컴포넌트 밖에서 그린다.
@@ -22,6 +34,7 @@ export const MessageBubble = memo(function MessageBubble({
   body,
   attachments,
   renderBody,
+  bubbleKey,
 }: {
   isSelf: boolean;
   pending?: boolean;
@@ -29,18 +42,12 @@ export const MessageBubble = memo(function MessageBubble({
   body: string;
   attachments: Attachments;
   renderBody: (body: string) => ReactNode;
+  // 전송 morph 타깃 측정용 안정 키 — 호출처가 말풍선 div 에 data-bubble-key 로 단다.
+  bubbleKey?: string;
 }) {
   return (
     <div className={cn('flex w-full items-end gap-1.5', isSelf && 'flex-row-reverse')}>
-      <div
-        className={cn(
-          'max-w-[78%] whitespace-pre-wrap break-words rounded-[var(--md-sys-shape-medium)] px-3 py-2 text-[13px] leading-relaxed',
-          isSelf
-            ? 'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
-            : 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]',
-          pending && 'opacity-60',
-        )}
-      >
+      <div data-bubble-key={bubbleKey} className={bubbleSurfaceClass(isSelf, pending)}>
         {renderBody(body)}
         {attachments.length > 0 && <MessageAttachmentGrid attachments={attachments} />}
       </div>
