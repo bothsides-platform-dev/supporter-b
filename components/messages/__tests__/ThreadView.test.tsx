@@ -45,11 +45,25 @@ vi.mock('@/lib/hooks/useChatChannel', () => ({
   },
 }));
 
-// useWorkspacePresence drives the presence dot — mock it to control online state.
+// useWorkspacePresence drives the header presence dot; useUserPresence drives the
+// per-author dot in UserProfileCard — mock both from the same module.
 import type { PresenceState } from '@/components/presence/WorkspacePresenceProvider';
 let workspacePresenceResult: PresenceState = { online: false, activity: 'offline' };
 vi.mock('@/components/presence/WorkspacePresenceProvider', () => ({
   useWorkspacePresence: () => workspacePresenceResult,
+  useUserPresence: () => false,
+}));
+
+// Author avatars render as UserProfileCard triggers — pulls in getUserProfileAction
+// + MessageComposeSheet's template actions ('use server', jsdom-unsafe) at import.
+vi.mock('@/lib/server/actions/user/getUserProfileAction', () => ({
+  getUserProfileAction: vi.fn(),
+}));
+vi.mock('@/lib/server/actions/chat/listTemplatesAction', () => ({
+  listTemplatesAction: vi.fn().mockResolvedValue({ ok: true, templates: [] }),
+}));
+vi.mock('@/lib/server/actions/chat/saveTemplateAction', () => ({
+  saveTemplateAction: vi.fn(),
 }));
 
 // http (ky) is used for the `/api/files/upload` POST. Mock it so the test can

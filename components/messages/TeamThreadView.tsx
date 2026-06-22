@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Avatar } from '@/components/primitives/Avatar';
+import { UserProfileCard } from '@/components/profile/UserProfileCard';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Users, Paperclip } from 'lucide-react';
@@ -270,7 +270,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
               >
                 {showAuthorHeader && (
                   <div className="flex items-center gap-1.5">
-                    <Avatar name={m.authorName} size="sm" color="surface" userId={m.authorUserId} avatarUpdatedAt={m.authorAvatarUpdatedAt} />
+                    <UserProfileCard name={m.authorName} size="sm" color="surface" userId={m.authorUserId} avatarUpdatedAt={m.authorAvatarUpdatedAt} />
                     <span className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]">
                       {m.authorName}
                     </span>
