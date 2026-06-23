@@ -23,17 +23,16 @@ import { FeeComparisonRows } from './FeeComparisonRows';
 import { PgMemoPdfPanel } from './PgMemoPdfPanel';
 import { AwardCtaBar } from './AwardCtaBar';
 import { sortBidsByCardFee, buildFeeRows } from './focus-comparison-model';
+import { TierContextHeader } from './TierContextHeader';
+import { useFlashOnChange } from './useFlashOnChange';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
 import {
-  MERCHANT_TIERS,
-  MERCHANT_TIER_LABELS,
   type Bid,
   type CustomPaymentMethod,
   type MerchantTier,
   type PaymentMethod,
 } from '@/lib/types/bid';
-import { cn } from '@/lib/utils';
 
 type Props = {
   bids: Bid[];
@@ -61,6 +60,7 @@ export function FocusComparison(props: Props) {
   const router = useRouter();
 
   const [tier, setTier] = useState<MerchantTier>(props.buyerGrade ?? 'general');
+  const flash = useFlashOnChange(tier);
 
   // 정렬: 카드 수수료 낮은 순(기본). 동률·미입력은 뒤로.
   const sortedBids = useMemo(() => sortBidsByCardFee(bids, tier), [bids, tier]);
@@ -155,24 +155,7 @@ export function FocusComparison(props: Props) {
         </div>
       )}
 
-      <div role="group" aria-label="구간 선택" className="flex gap-1 mb-3">
-        {MERCHANT_TIERS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            aria-pressed={tier === t}
-            onClick={() => setTier(t)}
-            className={cn(
-              'h-7 px-2.5 rounded-[6px] text-[12px] transition-colors',
-              tier === t
-                ? 'bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]'
-                : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
-            )}
-          >
-            {MERCHANT_TIER_LABELS[t]}
-          </button>
-        ))}
-      </div>
+      <TierContextHeader tier={tier} onTierChange={setTier} />
 
       <BidTabStrip
         sortedBids={sortedBids}
@@ -204,7 +187,7 @@ export function FocusComparison(props: Props) {
           )}
         </div>
 
-        <ImprovementSummary bid={active} current={current} tier={tier} />
+        <ImprovementSummary bid={active} current={current} tier={tier} flash={flash} />
 
         <Accordion>
           <AccordionItem value="rates" title={`전체 결제수단 요율 (${feeRows.length})`}>
@@ -216,6 +199,7 @@ export function FocusComparison(props: Props) {
               tier={tier}
               pgWsNameMap={pgWsNameMap}
               onSelect={onSelectByPgWs}
+              flash={flash}
             />
           </AccordionItem>
 
