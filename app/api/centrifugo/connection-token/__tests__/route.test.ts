@@ -106,6 +106,23 @@ describe('connection-token — 게이트 캐시 TTL', () => {
     await POST();
     expect(getDbSessionVersionMock.mock.calls.length).toBe(callsBefore);
   });
+
+  it('TTL 만료 후 재접속하면 DB 를 재조회한다 (폐기 캐시 무효화)', async () => {
+    // Use fake timers so Date.now() is controllable.
+    vi.useFakeTimers();
+    sessionRef.value = { user: { id: 'user-ttl-expire', email: 'ttl@x.com', sessionVersion: 1 } };
+    // First call — populates the gate cache at t=0.
+    const r1 = await callPost();
+    expect(r1.status).toBe(200);
+    const callsAfterFirst = getDbSessionVersionMock.mock.calls.length;
+    // Advance past the 10 s GATE_TTL_MS.
+    vi.advanceTimersByTime(11_000);
+    // Second call — same module instance, but cache is stale → DB re-queried.
+    const { POST } = await import('../route');
+    await POST();
+    vi.useRealTimers();
+    expect(getDbSessionVersionMock.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+  });
 });
 
 describe('connection-token — workspaceId', () => {

@@ -25,19 +25,6 @@ export async function requirePgActor(): Promise<ActorResult> {
   }
 }
 
-/** Resolve any authenticated workspace member. Returns UNAUTHENTICATED or NO_WORKSPACE on failure. */
-export async function requireWorkspaceActor(): Promise<ActorResult> {
-  let session;
-  try {
-    session = await requireSession();
-  } catch {
-    return { ok: false, error: 'UNAUTHENTICATED' };
-  }
-  const { id, workspaceId } = session.user;
-  if (!workspaceId) return { ok: false, error: 'NO_WORKSPACE' };
-  return { ok: true, userId: id, workspaceId };
-}
-
 export type WorkspaceActorResult =
   | { ok: true; userId: string; workspaceId: string; workspaceType: WorkspaceType }
   | { ok: false; error: string };

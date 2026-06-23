@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.42.1] - 2026-06-23
+
+### Changed
+
+- **코드 내부 구조 정리 (동작 변경 없음)**: 액션·서비스·레포지터리 계층 전반의 중복 코드를 공통 모듈로 통합했습니다.
+  - `ActionResult<T>` 단일 타입 정의 (`lib/server/actions/_result.ts`) — 6개 도메인 파일의 동일 타입 선언 제거
+  - `requireBuyerActor` / `requirePgActor` / `requireActiveWorkspace` 세션 헬퍼 공통화 (`lib/server/actions/_session.ts`)
+  - `normalizeEmail` / `bucket15Min` 서비스 유틸 (`lib/server/services/_service-utils.ts`), `CHAT_DIGEST_WINDOW_MS` / `chatDigestBucket` 채팅 상수 (`lib/server/services/_chat-constants.ts`)
+  - `PaymentFeesSchema` (Zod) 단일 출처 (`lib/rfp/payment-fees-schema.ts`) — 견적 제출·템플릿 저장 공유
+  - `normalizeAvatarColor` / `VALID_AVATAR_COLORS` 추출 (`lib/server/repositories/drizzle/_avatar-color.ts`)
+  - `toIso` 날짜 변환 헬퍼 추출 (`lib/server/repositories/drizzle/_repo-utils.ts`)
+  - `isEditable` DOM 체크 함수 추출 (`lib/hooks/keyboard-utils.ts`) — 3개 단축키 훅 공유
+  - Centrifugo 연결 토큰 라우트 TTL 만료 후 DB 재조회 테스트 추가
+
 ## [0.2.42.0] - 2026-06-23
 
 ### Changed
