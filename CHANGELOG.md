@@ -30,6 +30,7 @@ All notable changes to this project will be documented in this file.
 - 타이핑·인라인 로딩을 나타내는 `TypingDots`, 날짜 구분 칩 `DateDivider` 공용 컴포넌트.
 
 > 배포 메모: 프론트엔드 시각 변경만(`components/messages/*`). DB·환경 변수·빌드 설정 변경 없어요. 로딩 스켈레톤은 dev #290이 도입한 `components/ui/skeleton.tsx`를 재사용해요.
+
 ## [0.2.41.1] - 2026-06-23
 
 ### Added

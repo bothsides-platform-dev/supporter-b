@@ -29,7 +29,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 
 | Layer | Choice | Version |
 |---|---|---|
-| Framework | Next.js App Router, Turbopack default, async `params`/`searchParams` | `next@16.2.4` |
+| Framework | Next.js App Router, Turbopack default, async `params`/`searchParams` | `next@16.2.9` |
 | Runtime | React | `react@19.2.4` |
 | Language | TypeScript strict | `typescript@6.0.3` |
 | Auth | Auth.js v5 (no middleware — guard via `(app)/layout.tsx` redirect) | `next-auth@5.0.0-beta.31` |
@@ -105,7 +105,9 @@ lib/server/
 **서비스 레이어 규칙:**
 - 서비스는 트랜잭션·알림 팬아웃·이메일 아웃박스를 소유한다. 액션은 이를 직접 다루지 않는다.
 - `Actor = { userId, workspaceId }` — 세션에서 추출해 액션이 서비스에 전달한다.
-- `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 예외 throw 없이 결과를 반환한다.
+- `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 서비스 레이어 반환 타입. 예외 throw 없이 결과를 반환한다.
+- `ActionResult<T> = { ok: true } & T | { ok: false; error: string }` — 액션 레이어 반환 타입 SSOT (`lib/server/actions/_result.ts`). 각 도메인 파일의 동일 타입 선언을 대체한다.
+- 액션 공통 세션 헬퍼: `requireBuyerActor` / `requirePgActor` / `requireActiveWorkspace` (`lib/server/actions/_session.ts`) — 세션 검증·Actor 추출 로직의 단일 출처. 신규 액션 작성 시 `_shared.ts` 대신 이 헬퍼를 사용한다.
 - 서비스 싱글턴은 Next.js `globalThis` 캐싱 패턴 사용 (`getRfpService()` / `getBidService()` 등).
 
 **리포지토리 경계 (ESLint 강제):** 모든 DB 접근은 `lib/server/repositories/**` 가 소유한다. 그 밖의 `lib/`·`app/` 코드는 `@/lib/db/schema`·`@/lib/db/client` 를 **값(value)으로 정적 import 할 수 없다** — 레포를 주입(`repositories/factory` 의 `get*Repo()`)해서 쓴다. `import type { DB }`(타입 전용)와 서비스의 동적 `import('@/lib/db/client')`(트랜잭션 핸들)는 허용. 위반 시 lint 에러(`@typescript-eslint/no-restricted-imports`, 규칙명 `repo-boundary/db-access`) + 독립 드리프트 가드 테스트(`lib/server/__tests__/repo-boundary.test.ts`)가 잡는다. **의도적 예외**(`lib/server/db-boundary-allowlist.mjs` 에 명문화, 단일 출처): storage 바이트-블롭 티어(`storage/{postgres,index}.ts`), 크로스-애그리거트 캐스케이드(`_purgeUnverifiedSignup.ts`), `actionDb()` 테스트-오버라이드 레지스트리(`actions/auth/_shared.ts`). 예외를 늘리려면 allowlist 에 추가하고 리뷰한다.
