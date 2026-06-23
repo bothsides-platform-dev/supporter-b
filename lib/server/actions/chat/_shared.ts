@@ -13,12 +13,11 @@ import type { WorkspaceType } from '@/lib/types/workspace';
 // actionDb()/baseUrl() are reused from auth/_shared (same pglite-injectable
 // handle the other action trees use).
 export { actionDb, baseUrl } from '../auth/_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 // Discriminated result, structurally identical to the bid/board action result.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export type ChatActionResult<T extends object = {}> =
-  | ({ ok: true } & T)
-  | { ok: false; error: string };
+export type ChatActionResult<T extends object = {}> = ActionResult<T>;
 
 // The session's active workspace, for any-workspace-type chat actions.
 export async function requireActiveWorkspace(): Promise<

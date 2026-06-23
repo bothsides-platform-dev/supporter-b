@@ -11,9 +11,8 @@
 // 않는다.
 
 export { actionDb, baseUrl } from '../auth/_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 // `T` defaults to {} so callers without payload can write `RfpActionResult`.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export type RfpActionResult<T extends object = {}> =
-  | ({ ok: true } & T)
-  | { ok: false; error: string };
+export type RfpActionResult<T extends object = {}> = ActionResult<T>;

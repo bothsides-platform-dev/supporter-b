@@ -6,13 +6,13 @@
 //   real templates + Sender. Don't build a template helper here.
 import { db as prodDb } from '@/lib/db/client';
 
+import type { ActionResult } from '@/lib/server/actions/_result';
+
 // `T` is the success-payload shape. Default is an empty object so callers
 // that don't carry data can write `Promise<AuthActionResult>` without
 // listing a generic.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export type AuthActionResult<T extends object = {}> =
-  | ({ ok: true } & T)
-  | { ok: false; error: string };
+export type AuthActionResult<T extends object = {}> = ActionResult<T>;
 
 // Tests install a pglite handle here via __setActionDbForTest so the few
 // actions that need raw drizzle access (the workspace-creation transaction

@@ -4,33 +4,7 @@ import { z } from 'zod';
 
 import { getQuoteTemplateService } from '@/lib/server/services/quote-template';
 import { type QuoteActionResult, requirePgWorkspace } from './_shared';
-
-// Mirrors submitBidAction's fee envelope: per-method decimal rates 0..1, or tier-rate maps.
-const tierRatesSchema = z
-  .object({
-    sole: z.number().min(0).max(1).optional(),
-    sme1: z.number().min(0).max(1).optional(),
-    sme2: z.number().min(0).max(1).optional(),
-    sme3: z.number().min(0).max(1).optional(),
-    general: z.number().min(0).max(1).optional(),
-  })
-  .strict();
-
-const feeField = z.union([z.number().min(0).max(1), tierRatesSchema]).optional();
-
-const PaymentFeesSchema = z
-  .object({
-    card: feeField,
-    overseas_card: feeField,
-    virtual_account: feeField,
-    bank_transfer: feeField,
-    naver_pay: feeField,
-    kakao_pay: feeField,
-    toss_pay: feeField,
-    mobile: feeField,
-    gift_card: feeField,
-  })
-  .strict();
+import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
 
 const Input = z
   .object({

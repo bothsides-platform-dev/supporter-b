@@ -4,11 +4,12 @@ import { z } from 'zod';
 
 import { requireBuyerSession } from '@/lib/auth/session';
 import { getOnboardingService } from '@/lib/server/services/onboarding';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z.object({ code: z.string().min(1) }).strict();
 
 export type DeleteSampleRfpInput = z.infer<typeof Input>;
-export type DeleteSampleRfpResult = { ok: true } | { ok: false; error: string };
+export type DeleteSampleRfpResult = ActionResult;
 
 /** 온보딩 샘플 견적 요청 삭제. 세션/입력 파싱 후 OnboardingService 에 위임. */
 export async function deleteSampleRfpAction(

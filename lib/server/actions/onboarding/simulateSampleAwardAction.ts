@@ -4,11 +4,12 @@ import { z } from 'zod';
 
 import { requirePgSession } from '@/lib/auth/session';
 import { getOnboardingService } from '@/lib/server/services/onboarding';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z.object({ code: z.string().min(1) }).strict();
 
 export type SimulateSampleAwardInput = z.infer<typeof Input>;
-export type SimulateSampleAwardResult = { ok: true } | { ok: false; error: string };
+export type SimulateSampleAwardResult = ActionResult;
 
 /**
  * PG 온보딩 샘플 견적 선정 시뮬레이트. PG 가 견적을 제출한 직후(클라이언트가 잠시 뒤) 호출한다.

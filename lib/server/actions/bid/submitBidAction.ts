@@ -6,32 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { requirePgSession } from '@/lib/auth/session';
 import { getBidService } from '@/lib/server/services/bid';
 import type { BidActionResult } from './_shared';
-
-const tierRatesSchema = z
-  .object({
-    sole: z.number().min(0).max(1).optional(),
-    sme1: z.number().min(0).max(1).optional(),
-    sme2: z.number().min(0).max(1).optional(),
-    sme3: z.number().min(0).max(1).optional(),
-    general: z.number().min(0).max(1).optional(),
-  })
-  .strict();
-
-const feeField = z.union([z.number().min(0).max(1), tierRatesSchema]).optional();
-
-const PaymentFeesSchema = z
-  .object({
-    card: feeField,
-    overseas_card: feeField,
-    virtual_account: feeField,
-    bank_transfer: feeField,
-    naver_pay: feeField,
-    kakao_pay: feeField,
-    toss_pay: feeField,
-    mobile: feeField,
-    gift_card: feeField,
-  })
-  .strict();
+import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
 
 const Input = z
   .object({
