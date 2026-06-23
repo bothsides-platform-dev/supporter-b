@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const tierRatesSchema = z
+const tierRatesSchema = z
   .object({
     sole: z.number().min(0).max(1).optional(),
     sme1: z.number().min(0).max(1).optional(),
@@ -10,7 +10,7 @@ export const tierRatesSchema = z
   })
   .strict();
 
-export const feeField = z.union([z.number().min(0).max(1), tierRatesSchema]).optional();
+const feeField = z.union([z.number().min(0).max(1), tierRatesSchema]).optional();
 
 export const PaymentFeesSchema = z
   .object({
