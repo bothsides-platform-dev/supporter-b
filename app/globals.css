@@ -105,6 +105,35 @@
   }
 }
 
+/*
+  .tier-flash — 구간 전환 시 구간-의존 수치 1회성 강조.
+  opacity만 사용(layout 불변, 글자 이동 없음). 스태거는 인라인 animation-delay(행 index * 40ms)로.
+  - opacity 전용 → layout 완전 무관, DESIGN.md 모션 규칙 준수
+  - 펄스/반복 없음 — 1회 fade-in, forwards는 opacity:1(기본값)이라 제거 후 부작용 없음
+  - prefers-reduced-motion: animation: none
+*/
+@keyframes tier-flash {
+  0%   { background-color: var(--md-sys-color-secondary-container); opacity: 0.15; }
+  40%  { background-color: var(--md-sys-color-secondary-container); opacity: 1; }
+  100% { background-color: transparent; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tier-flash {
+    display: inline-block;
+    vertical-align: baseline;
+    border-radius: 3px;
+    padding-inline: 3px;
+    margin-inline: -3px;
+    animation: tier-flash 650ms ease-out forwards;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tier-flash {
+    animation: none;
+  }
+}
+
 @keyframes spin-once {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }

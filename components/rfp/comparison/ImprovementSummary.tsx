@@ -2,6 +2,7 @@
 // 카드 수수료·정산주기·월 정산한도·보증보험. 현재 조건(자유 텍스트)이 파싱되면 개선폭
 // 배지, 아니면 병기만. 현재 조건이 전혀 없으면 '핵심 수치' 요약으로 강등 + 입력 안내.
 import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 import { formatKRW, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import { parseCurrentValue, improvement, metricVerdict, cycleQuality } from '@/lib/utils/bid-compare';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
@@ -23,10 +24,12 @@ export function ImprovementSummary({
   bid,
   current,
   tier = 'general',
+  flash,
 }: {
   bid: Bid;
   current: CurrentConditions;
   tier?: MerchantTier;
+  flash?: boolean;
 }) {
   const hasAnyCurrent = Boolean(
     current.feeRate || current.settlementCycle || current.settlementLimit || current.guaranteeInsurance,
@@ -76,6 +79,8 @@ export function ImprovementSummary({
             currentText={formatFeeRateDisplay(current.feeRate)}
             proposedText={formatPct(cardRate)}
             trailing={badgeNode(feeBadge(current.feeRate, cardRate))}
+            proposedFlash={flash}
+            proposedFlashTestId="flash-card-fee"
           />
         ) : null}
         <MetricRow
@@ -147,12 +152,16 @@ function MetricRow({
   currentText,
   proposedText,
   trailing,
+  proposedFlash,
+  proposedFlashTestId,
 }: {
   testId: string;
   label: string;
   currentText?: string | null;
   proposedText: string;
   trailing?: ReactNode;
+  proposedFlash?: boolean;
+  proposedFlashTestId?: string;
 }) {
   return (
     <div
@@ -176,7 +185,13 @@ function MetricRow({
       ) : (
         <span />
       )}
-      <span className="md-numeric text-[13px] font-[600] text-[var(--md-sys-color-on-surface)]">
+      <span
+        data-testid={proposedFlashTestId}
+        className={cn(
+          'md-numeric text-[13px] font-[600] text-[var(--md-sys-color-on-surface)]',
+          proposedFlash && 'tier-flash',
+        )}
+      >
         {proposedText}
       </span>
       <span>{trailing}</span>
