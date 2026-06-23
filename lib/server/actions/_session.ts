@@ -1,4 +1,5 @@
 import { requireBuyerSession, requirePgSession, requireSession } from '@/lib/auth/session';
+import type { WorkspaceType } from '@/lib/types/workspace';
 
 export type ActorResult =
   | { ok: true; userId: string; workspaceId: string }
@@ -35,4 +36,22 @@ export async function requireWorkspaceActor(): Promise<ActorResult> {
   const { id, workspaceId } = session.user;
   if (!workspaceId) return { ok: false, error: 'NO_WORKSPACE' };
   return { ok: true, userId: id, workspaceId };
+}
+
+export type WorkspaceActorResult =
+  | { ok: true; userId: string; workspaceId: string; workspaceType: WorkspaceType }
+  | { ok: false; error: string };
+
+/** Resolve any authenticated workspace member including workspaceType.
+ *  Superset of requireWorkspaceActor — use where workspaceType is needed. */
+export async function requireActiveWorkspace(): Promise<WorkspaceActorResult> {
+  let session;
+  try {
+    session = await requireSession();
+  } catch {
+    return { ok: false, error: 'UNAUTHENTICATED' };
+  }
+  const { id, workspaceId, workspaceType } = session.user;
+  if (!workspaceId || !workspaceType) return { ok: false, error: 'NO_WORKSPACE' };
+  return { ok: true, userId: id, workspaceId, workspaceType };
 }

@@ -2,21 +2,12 @@
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
+import { isEditable } from './keyboard-utils';
+
 export type ShortcutOptions = {
   meta?: boolean; // ⌘ (mac) or Ctrl (win/linux)
   shift?: boolean;
   preventInInput?: boolean; // skip when focus is on input/textarea/contenteditable
-};
-
-const isEditable = (el: EventTarget | null): boolean => {
-  if (!(el instanceof HTMLElement)) return false;
-  const tag = el.tagName;
-  return (
-    tag === 'INPUT' ||
-    tag === 'TEXTAREA' ||
-    tag === 'SELECT' ||
-    el.isContentEditable
-  );
 };
 
 export function useShortcut(

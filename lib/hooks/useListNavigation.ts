@@ -1,16 +1,11 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { isEditable } from './keyboard-utils';
 
 export type ListKeyHandlers = {
   onEnter?: (index: number) => void;
   onEdit?: (index: number) => void;
-};
-
-const isEditable = (el: EventTarget | null): boolean => {
-  if (!(el instanceof HTMLElement)) return false;
-  const tag = el.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
 };
 
 export function useListNavigation(length: number, handlers: ListKeyHandlers = {}) {

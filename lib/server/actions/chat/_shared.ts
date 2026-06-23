@@ -5,10 +5,10 @@
 // invariant is cross-workspace isolation — enforced here via the active
 // session workspace, mirroring board/_shared's requireActiveWorkspace +
 // requireOwnedColumn pattern.
-import { requireSession } from '@/lib/auth/session';
+import { requireActiveWorkspace } from '@/lib/server/actions/_session';
+export { requireActiveWorkspace };
 import { getChatTemplateRepo } from '@/lib/server/repositories/factory';
 import type { ChatMessageTemplate } from '@/lib/server/repositories/types';
-import type { WorkspaceType } from '@/lib/types/workspace';
 
 // actionDb()/baseUrl() are reused from auth/_shared (same pglite-injectable
 // handle the other action trees use).
@@ -18,22 +18,6 @@ import type { ActionResult } from '@/lib/server/actions/_result';
 // Discriminated result, structurally identical to the bid/board action result.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export type ChatActionResult<T extends object = {}> = ActionResult<T>;
-
-// The session's active workspace, for any-workspace-type chat actions.
-export async function requireActiveWorkspace(): Promise<
-  | { ok: true; userId: string; workspaceId: string; workspaceType: WorkspaceType }
-  | { ok: false; error: string }
-> {
-  let session;
-  try {
-    session = await requireSession();
-  } catch {
-    return { ok: false, error: 'UNAUTHENTICATED' };
-  }
-  const { id, workspaceId, workspaceType } = session.user;
-  if (!workspaceId || !workspaceType) return { ok: false, error: 'NO_WORKSPACE' };
-  return { ok: true, userId: id, workspaceId, workspaceType };
-}
 
 // Load a template owned by the session's active workspace (cross-workspace
 // guard for delete). Returns TEMPLATE_NOT_FOUND when absent, FORBIDDEN when it

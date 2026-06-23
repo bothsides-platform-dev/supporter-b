@@ -16,9 +16,7 @@ import type { NewRfpInsert, RfpRepo, Tx } from '../types';
 type RfpRow = typeof rfps.$inferSelect;
 type BizRow = typeof bizProfiles.$inferSelect;
 
-function toIso(d: Date | null | undefined): string | undefined {
-  return d ? new Date(d).toISOString() : undefined;
-}
+import { toIso } from './_repo-utils';
 
 function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
   const profile: BizProfile | undefined = biz

@@ -27,21 +27,7 @@ type MemberRow = typeof workspaceMembers.$inferSelect;
 type UserRow = typeof usersTable.$inferSelect;
 type BizRow = typeof bizProfiles.$inferSelect;
 
-const VALID_AVATAR_COLORS = [
-  'lavender',
-  'amber',
-  'moss',
-  'accent',
-  'terra',
-  'ink',
-] as const;
-type AvatarColor = (typeof VALID_AVATAR_COLORS)[number];
-
-function normalizeAvatarColor(raw: string | null | undefined): AvatarColor {
-  return (VALID_AVATAR_COLORS as readonly string[]).includes(raw ?? '')
-    ? (raw as AvatarColor)
-    : 'ink';
-}
+import { normalizeAvatarColor } from './_avatar-color';
 
 function rowToUser(u: UserRow, m: MemberRow): User {
   return {

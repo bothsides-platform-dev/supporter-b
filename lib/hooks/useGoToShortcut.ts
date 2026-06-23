@@ -2,17 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-
-const isEditable = (el: EventTarget | null): boolean => {
-  if (!(el instanceof HTMLElement)) return false;
-  const tag = el.tagName;
-  return (
-    tag === 'INPUT' ||
-    tag === 'TEXTAREA' ||
-    tag === 'SELECT' ||
-    el.isContentEditable
-  );
-};
+import { isEditable } from './keyboard-utils';
 
 /**
  * useGoToShortcut — Linear-style "G then X" chord navigation.
