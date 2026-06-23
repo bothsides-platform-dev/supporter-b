@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { requireBuyerSession } from '@/lib/auth/session';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import type { RfpActionResult } from './_shared';
 
@@ -22,19 +22,15 @@ export type AwardRfpResult = RfpActionResult;
 export async function awardRfpAction(
   input: AwardRfpInput,
 ): Promise<AwardRfpResult> {
-  let session;
-  try {
-    session = await requireBuyerSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_BUYER' };
-  }
+  const actor = await requireBuyerActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
   const service = await getRfpService();
   return service.award(parsed.data.rfpId, parsed.data.awardedBidId, {
-    userId: session.user.id,
-    workspaceId: session.user.workspaceId,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
   });
 }

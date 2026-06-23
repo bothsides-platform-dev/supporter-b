@@ -13,6 +13,7 @@ import {
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { cn } from '@/lib/utils';
 import { RequiredMark } from './RequiredMark';
+import { FieldError } from '@/components/primitives/FieldError';
 import type { MarkerState } from '@/lib/rfp/required-fields';
 
 const MAX_CUSTOM = 20;
@@ -60,7 +61,7 @@ export function RfpPaymentMethodSelect({ markerState, error }: Props = {}) {
         {markerState && <RequiredMark state={markerState} />}
       </div>
       {error && (
-        <p className="text-[12px] text-[var(--md-sys-color-error)]">결제수단을 1개 이상 선택해주세요</p>
+        <FieldError error="결제수단을 1개 이상 선택해주세요" />
       )}
       <div className="space-y-3">
         {PAYMENT_METHOD_CATEGORIES.map((category) => (

@@ -1,6 +1,6 @@
 'use server';
 
-import { requireBuyerSession } from '@/lib/auth/session';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getAttachmentRepo } from '@/lib/server/repositories/factory';
 
 /**
@@ -8,11 +8,8 @@ import { getAttachmentRepo } from '@/lib/server/repositories/factory';
  * 24h 고아 sweep 이후 사라진 파일 ID를 클라이언트가 정리하는 데 사용.
  */
 export async function verifyDraftFilesAction(ids: string[]): Promise<{ validIds: string[] }> {
-  try {
-    await requireBuyerSession();
-  } catch {
-    return { validIds: [] };
-  }
+  const actor = await requireBuyerActor();
+  if (!actor.ok) return { validIds: [] };
   if (ids.length === 0) return { validIds: [] };
 
   const repo = await getAttachmentRepo();

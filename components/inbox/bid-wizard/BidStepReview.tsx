@@ -13,6 +13,7 @@ import {
   type PaymentMethod,
 } from '@/lib/types/bid';
 import { formatKRW } from '@/lib/format';
+import { Divider } from '@/components/ui/Divider';
 
 const ERROR_LABELS: Record<string, string> = {
   FORBIDDEN_PG: 'PG 사용자 권한이 필요합니다.',
@@ -104,7 +105,7 @@ export function BidStepReview({
       <div>
         <div className="flex items-center gap-3 mb-3">
           <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">보낼 견적</span>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           <Row label="정산 주기" value={settleCycle} />

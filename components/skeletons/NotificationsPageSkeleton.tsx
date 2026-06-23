@@ -1,4 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton';
+import { Divider } from '@/components/ui/Divider';
 
 export function NotificationsPageSkeleton() {
   return (
@@ -13,7 +14,7 @@ export function NotificationsPageSkeleton() {
         <div className="flex items-center gap-3 mb-4">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-3 w-16" />
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
           {Array.from({ length: 5 }).map((_, i) => (

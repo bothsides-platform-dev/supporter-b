@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 
-import { requirePgSession } from '@/lib/auth/session';
+import { requirePgActor } from '@/lib/server/actions/_session';
 import { getBidService } from '@/lib/server/services/bid';
 import type { BidActionResult } from './_shared';
 import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
@@ -25,12 +25,8 @@ export type SubmitBidInput = z.input<typeof Input>;
 export type SubmitBidResult = BidActionResult<{ bidId: string }>;
 
 export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidResult> {
-  let session;
-  try {
-    session = await requirePgSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_PG' };
-  }
+  const actor = await requirePgActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
@@ -47,7 +43,7 @@ export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidR
       proposalAttachmentId: parsed.data.proposalAttachmentId,
       memo: parsed.data.memo,
     },
-    { userId: session.user.id, workspaceId: session.user.workspaceId },
+    { userId: actor.userId, workspaceId: actor.workspaceId },
   );
 
   if (result.ok) {

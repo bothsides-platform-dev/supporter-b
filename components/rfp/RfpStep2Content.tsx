@@ -13,6 +13,7 @@ import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
 import { RequiredMark } from './RequiredMark';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { FieldError } from '@/components/primitives/FieldError';
 import { isTitleValid, isWebsiteValid, isPaymentValid, markerState } from '@/lib/rfp/required-fields';
 import { cn } from '@/lib/utils';
 
@@ -97,9 +98,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
           aria-invalid={titleError}
           className={cn(underlineInputClass, titleError && 'border-[var(--md-sys-color-error)]')}
         />
-        {titleError && (
-          <p className="text-[12px] text-[var(--md-sys-color-error)]">제목을 입력해주세요</p>
-        )}
+        <FieldError error={titleError ? '제목을 입력해주세요' : undefined} />
       </div>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
@@ -118,16 +117,8 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
           aria-invalid={websiteFormatInvalid || websiteServerRejected || (websiteEmpty && attempted)}
           className={underlineInputClass}
         />
-        {websiteEmpty && attempted && (
-          <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
-            홈페이지 주소를 입력해주세요
-          </p>
-        )}
-        {(websiteFormatInvalid || websiteServerRejected) && (
-          <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
-            {WEBSITE_URL_ERROR}
-          </p>
-        )}
+        <FieldError error={websiteEmpty && attempted ? '홈페이지 주소를 입력해주세요' : undefined} />
+        <FieldError error={websiteFormatInvalid || websiteServerRejected ? WEBSITE_URL_ERROR : undefined} />
       </div>
       <div className="space-y-1">
         <Label size="md" muted={false}>주요 판매 상품</Label>

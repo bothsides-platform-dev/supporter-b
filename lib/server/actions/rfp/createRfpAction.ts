@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { requireBuyerSession } from '@/lib/auth/session';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import { logBusinessEvent } from '@/lib/observability/log';
 import { isValidWebsiteUrl, isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
@@ -95,12 +95,8 @@ export type CreateRfpResult = RfpActionResult<{ rfpId: string }>;
 export async function createRfpAction(
   input: CreateRfpInput,
 ): Promise<CreateRfpResult> {
-  let session;
-  try {
-    session = await requireBuyerSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_BUYER' };
-  }
+  const actor = await requireBuyerActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) {
@@ -145,7 +141,7 @@ export async function createRfpAction(
       currentSolution: parsed.data.currentSolution,
       currentSolutionDetail: parsed.data.currentSolutionDetail,
     },
-    { userId: session.user.id, workspaceId: session.user.workspaceId },
+    { userId: actor.userId, workspaceId: actor.workspaceId },
   );
 
   if (result.ok && parsed.data.send) {

@@ -5,6 +5,7 @@ import { Button } from '@/components/primitives/Button';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { RequiredMark } from './RequiredMark';
 import { isPgValid, markerState } from '@/lib/rfp/required-fields';
+import { FieldError } from '@/components/primitives/FieldError';
 
 // name is used server-side to compute displayName (dedup); component uses only id + displayName.
 export type PgWorkspace = { id: string; name: string; displayName: string };
@@ -98,7 +99,7 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
         </p>
       )}
       {pgError && (
-        <p className="text-[12px] text-[var(--md-sys-color-error)]">PG를 1개 이상 선택해주세요</p>
+        <FieldError error="PG를 1개 이상 선택해주세요" />
       )}
 
       <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">

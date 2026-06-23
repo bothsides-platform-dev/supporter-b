@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { FileTextIcon } from '@/components/icons';
 import type { Attachment } from '@/lib/types/common';
+import { Divider } from '@/components/ui/Divider';
 
 // 구매사가 RFP에 붙인 첨부파일을 썸네일 목록으로 보여주고, 클릭 시 MD3 Dialog
 // 라이트박스 안에서 이미지/PDF 를 인라인으로 미리본다. 구매사 상세 + PG 인박스
@@ -25,7 +26,7 @@ export function AttachmentPreviewList({ files }: { files: Attachment[] }) {
         <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
           첨부파일 ({files.length})
         </span>
-        <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+        <Divider />
       </div>
       <ul className="flex flex-wrap gap-3">
         {files.map((f) => (

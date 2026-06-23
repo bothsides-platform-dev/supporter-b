@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { requirePgSession } from '@/lib/auth/session';
+import { requirePgActor } from '@/lib/server/actions/_session';
 import { getOnboardingService } from '@/lib/server/services/onboarding';
 import type { ActionResult } from '@/lib/server/actions/_result';
 
@@ -18,19 +18,15 @@ export type SimulateSampleAwardResult = ActionResult;
 export async function simulateSampleAwardAction(
   input: SimulateSampleAwardInput,
 ): Promise<SimulateSampleAwardResult> {
-  let session;
-  try {
-    session = await requirePgSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_PG' };
-  }
+  const actor = await requirePgActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
   const service = await getOnboardingService();
   return service.simulateSampleAward(parsed.data.code, {
-    userId: session.user.id,
-    workspaceId: session.user.workspaceId,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
   });
 }

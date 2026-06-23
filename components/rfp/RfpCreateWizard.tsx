@@ -18,6 +18,7 @@ import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from './RfpStep3PgSelect';
 import { STEP_LABELS } from './wizard-steps';
 import { getWizardValidity, getFirstIncompleteStep } from './wizard-validation';
+import { Divider } from '@/components/ui/Divider';
 
 const TOTAL_STEPS = STEP_LABELS.length;
 
@@ -223,7 +224,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
             <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
               {String(currentStep).padStart(2, '0')} — {STEP_LABELS[currentStep - 1]}
             </span>
-            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+            <Divider />
           </div>
 
           {currentStep === 1 && (

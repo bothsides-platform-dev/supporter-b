@@ -25,15 +25,7 @@ import { extractMentions, mentionsToPlainText } from '@/lib/team-mentions';
 import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';
-
-// 인앱 알림 dedupe 윈도 — ChatService 와 동일한 3분 버킷(채팅 digest 패턴 미러).
-// 액션 레이어(`actions/chat/_shared`)의 동명 헬퍼와 값은 같지만, 서비스가
-// 액션을 import 하면 next-auth(requireSession) 까지 끌려와 vitest 수집이 깨지므로
-// 여기서 로컬로 정의한다(ChatService 도 동일하게 자체 정의).
-const CHAT_DIGEST_WINDOW_MS = 3 * 60_000;
-function chatDigestBucket(now: Date): number {
-  return Math.floor(now.getTime() / CHAT_DIGEST_WINDOW_MS);
-}
+import { CHAT_DIGEST_WINDOW_MS, chatDigestBucket } from './_chat-constants';
 
 export type TeamChatActor = {
   userId: string;

@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 
-import { requireBuyerSession } from '@/lib/auth/session';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
 import {
   getBizProfileRepo,
   getWorkspaceRepo,
@@ -49,18 +49,14 @@ export type UpdateWorkspaceBizProfileResult = RfpActionResult<{
 export async function updateWorkspaceBizProfileAction(
   input: UpdateWorkspaceBizProfileInput,
 ): Promise<UpdateWorkspaceBizProfileResult> {
-  let session;
-  try {
-    session = await requireBuyerSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_BUYER' };
-  }
+  const actor = await requireBuyerActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
-  const wsId = session.user.workspaceId;
-  const userId = session.user.id;
+  const wsId = actor.workspaceId;
+  const userId = actor.userId;
   const db = actionDb();
 
   const workspaceRepo = await getWorkspaceRepo();

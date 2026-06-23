@@ -5,6 +5,7 @@ import { AttachmentPreviewList } from '@/components/attachments/AttachmentPrevie
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
+import { Divider } from '@/components/ui/Divider';
 
 const SOLUTION_LABELS: Record<string, string> = {
   cafe24: '카페24',
@@ -46,7 +47,7 @@ function SectionHead({ children }: { children: React.ReactNode }) {
       <Label size="md" muted={false}>
         {children}
       </Label>
-      <div className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
+      <Divider />
     </div>
   );
 }

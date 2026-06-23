@@ -23,6 +23,7 @@ import { isUserPresentInConversation } from '@/lib/server/realtime/centrifugo';
 import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';
+import { CHAT_DIGEST_WINDOW_MS, chatDigestBucket } from './_chat-constants';
 
 export type ChatActor = {
   userId: string;
@@ -40,12 +41,6 @@ export type SendMessageInput = {
 };
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
-
-const CHAT_DIGEST_WINDOW_MS = 3 * 60_000;
-
-function chatDigestBucket(now: Date): number {
-  return Math.floor(now.getTime() / CHAT_DIGEST_WINDOW_MS);
-}
 
 function chatDigestDedupeKey(conversationId: string, recipientUserId: string, now: Date): string {
   return `chat-digest:${conversationId}:${recipientUserId}:${chatDigestBucket(now)}`;

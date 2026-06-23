@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
+import { Divider } from '@/components/ui/Divider';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
@@ -406,7 +407,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
                 <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                   {String(currentStep).padStart(2, '0')} — {BID_WIZARD_STEPS[currentStep - 1].label}
                 </span>
-                <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+                <Divider />
               </div>
 
               {currentStep === 1 && (

@@ -7,6 +7,7 @@ import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { formatDate, formatDeadline, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
 import type { RFP } from '@/lib/types/rfp';
+import { Divider } from '@/components/ui/Divider';
 
 type Props = { rfp: RFP; buyerName: string };
 
@@ -57,7 +58,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
       <div>
         <div className="flex items-center gap-3 mb-3">
           <Label size="md" muted={false}>구매사 정보</Label>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
           <CounterpartyProfileCard
             variant="avatar"
             counterparty={{ name: buyerName, type: 'buyer', workspaceId: rfp.buyerWsId }}
@@ -83,7 +84,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
         <div className="flex items-center gap-3 mb-3">
           <Label size="md" muted={false}>가맹점 등급</Label>
           <InfoTip term="가맹점등급" />
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         <div className="flex items-center justify-between py-2.5 border-t border-[var(--md-sys-color-outline-variant)] border-b border-[var(--md-sys-color-outline-variant)]">
           <div className="flex items-center gap-3">
@@ -106,7 +107,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
         <div>
           <div className="flex items-center gap-3 mb-3">
             <Label size="md" muted={false}>사업 운영 정보</Label>
-            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+            <Divider />
           </div>
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
             {(
@@ -137,7 +138,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
         <div>
           <div className="flex items-center gap-3 mb-3">
             <Label size="md" muted={false}>견적 요청 세부 내용</Label>
-            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+            <Divider />
           </div>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed whitespace-pre-wrap">
             {rfp.memo}
