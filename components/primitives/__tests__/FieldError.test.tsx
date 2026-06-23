@@ -17,6 +17,11 @@ describe('FieldError', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it('renders nothing when error is whitespace-only', () => {
+    const { container } = render(<FieldError error="   " />);
+    expect(container.firstChild).toBeNull();
+  });
+
   it('renders error message when error is provided', () => {
     render(<FieldError error="이메일을 입력해주세요" />);
     expect(screen.getByRole('alert')).toHaveTextContent('이메일을 입력해주세요');

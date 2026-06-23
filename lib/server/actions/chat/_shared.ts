@@ -57,11 +57,8 @@ export async function requireOwnedTemplate(
 // per recipient via a time-bucketed dedupe key. Putting the bucket IN the key
 // (rather than narrowing the unique to status='pending') means a later window
 // mints a fresh key, so coalescing self-heals after a previous digest is sent.
-export const CHAT_DIGEST_WINDOW_MS = 3 * 60_000;
-
-export function chatDigestBucket(now: Date = new Date()): number {
-  return Math.floor(now.getTime() / CHAT_DIGEST_WINDOW_MS);
-}
+import { CHAT_DIGEST_WINDOW_MS, chatDigestBucket } from '@/lib/server/services/_chat-constants';
+export { CHAT_DIGEST_WINDOW_MS, chatDigestBucket };
 
 /** Windowed dedupe key — coalesces a window of messages into one mail per
  *  recipient. Shape: `chat-digest:<conversationId>:<recipientUserId>:<bucket>`. */
