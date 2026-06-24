@@ -6,6 +6,7 @@ import { Button } from '@/components/primitives/Button';
 import { Select } from '@/components/primitives/Select';
 import type { Role } from '@/lib/types/user';
 import { ROLE_OPTIONS, isValidInviteEmail } from './members-panel-utils';
+import { Divider } from '@/components/ui/Divider';
 
 type InviteResult = { ok: true } | { ok: false; error: string };
 
@@ -51,7 +52,7 @@ export function InviteMemberForm({ isPending, onInvite }: Props) {
     <section>
       <div className="flex items-center gap-3 mb-4">
         <Label size="md" muted={false}>멤버 초대</Label>
-        <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+        <Divider />
       </div>
       <form onSubmit={handleInvite} className="space-y-4">
         <div className="flex flex-col md:flex-row md:items-end gap-4">

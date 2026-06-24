@@ -2,10 +2,9 @@
 
 import { requireSession } from '@/lib/auth/session';
 import { getWorkspaceService } from '@/lib/server/services/workspace';
+import type { WorkspaceActionResult } from './_shared';
 
-export type InviteWorkspaceMemberResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type InviteWorkspaceMemberResult = WorkspaceActionResult;
 
 /**
  * Admin-only: invite an external user to the current workspace by email.

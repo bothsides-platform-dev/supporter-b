@@ -8,21 +8,7 @@ import type { UserRepo, Tx } from '../types';
 
 type UserRow = typeof users.$inferSelect;
 
-const VALID_AVATAR_COLORS = [
-  'lavender',
-  'amber',
-  'moss',
-  'accent',
-  'terra',
-  'ink',
-] as const;
-type AvatarColor = (typeof VALID_AVATAR_COLORS)[number];
-
-function normAvatar(raw: string | null | undefined): AvatarColor {
-  return (VALID_AVATAR_COLORS as readonly string[]).includes(raw ?? '')
-    ? (raw as AvatarColor)
-    : 'ink';
-}
+import { normalizeAvatarColor } from './_avatar-color';
 
 // User row carries no role — role is per-workspace_member. Use 'member' default.
 function rowToUser(row: UserRow): User & { passwordHash: string } {
@@ -30,7 +16,7 @@ function rowToUser(row: UserRow): User & { passwordHash: string } {
     id: row.id,
     name: row.name,
     email: row.email,
-    avatarColor: normAvatar(row.avatarColor),
+    avatarColor: normalizeAvatarColor(row.avatarColor),
     avatarUpdatedAt: row.avatarUpdatedAt
       ? new Date(row.avatarUpdatedAt).toISOString()
       : null,

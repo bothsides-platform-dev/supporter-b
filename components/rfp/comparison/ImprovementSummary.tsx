@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { formatKRW, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import { parseCurrentValue, improvement, metricVerdict, cycleQuality } from '@/lib/utils/bid-compare';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
+import { Divider } from '@/components/ui/Divider';
 
 export type CurrentConditions = {
   feeRate?: string | null;
@@ -60,7 +61,7 @@ export function ImprovementSummary({
         <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
           {heading}
         </span>
-        <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+        <Divider />
       </div>
 
       {!hasAnyCurrent && (

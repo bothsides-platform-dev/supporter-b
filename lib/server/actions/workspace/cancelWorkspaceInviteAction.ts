@@ -2,10 +2,9 @@
 
 import { requireSession } from '@/lib/auth/session';
 import { getWorkspaceService } from '@/lib/server/services/workspace';
+import type { WorkspaceActionResult } from './_shared';
 
-export type CancelWorkspaceInviteResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type CancelWorkspaceInviteResult = WorkspaceActionResult;
 
 /**
  * Admin-only: cancel a pending workspace invitation by email.

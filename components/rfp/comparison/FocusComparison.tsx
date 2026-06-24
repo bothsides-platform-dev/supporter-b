@@ -27,6 +27,7 @@ import { TierContextHeader } from './TierContextHeader';
 import { useFlashOnChange } from './useFlashOnChange';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
+import { Divider } from '@/components/ui/Divider';
 import {
   type Bid,
   type CustomPaymentMethod,
@@ -148,7 +149,7 @@ export function FocusComparison(props: Props) {
           <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
             견적 비교
           </span>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
           <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
             정렬: 카드 수수료 낮은 순
           </span>

@@ -1,4 +1,5 @@
 import { getMembership } from '@/lib/auth/active-workspace';
+import { normalizeEmail, bucket15Min } from './_service-utils';
 import type { AuditLogRepo, OutboxRepo, WorkspaceRepo } from '@/lib/server/repositories/types';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
@@ -15,14 +16,6 @@ import type { ServiceResult } from './types';
 export type WorkspaceActor = { userId: string; workspaceId: string };
 
 export type AcceptInviteActor = { userId: string; userEmail: string; workspaceId: string };
-
-function normalizeEmail(raw: string): string {
-  return raw.trim().toLowerCase();
-}
-
-function bucket15Min(now: Date = new Date()): number {
-  return Math.floor(now.getTime() / (15 * 60 * 1000));
-}
 
 export class WorkspaceService {
   constructor(

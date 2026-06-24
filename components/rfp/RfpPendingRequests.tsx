@@ -10,6 +10,7 @@ import {
   rejectPgRequestAction,
 } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
+import { Divider } from '@/components/ui/Divider';
 
 export type PendingRequestView = {
   id: string;
@@ -59,7 +60,7 @@ export function RfpPendingRequests({
         <Label size="md" muted={false}>
           참여 요청 {requests.length}건
         </Label>
-        <div className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
+        <Divider />
       </div>
       <ul className="flex flex-col divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
         {requests.map((r) => (

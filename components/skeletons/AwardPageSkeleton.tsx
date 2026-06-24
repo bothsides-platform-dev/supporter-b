@@ -1,4 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton';
+import { Divider } from '@/components/ui/Divider';
 
 export function AwardPageSkeleton() {
   return (
@@ -12,7 +13,7 @@ export function AwardPageSkeleton() {
       <section>
         <div className="flex items-center gap-3 mb-3">
           <Skeleton className="h-3 w-20" />
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           {(['w-8', 'w-16', 'w-16', 'w-14', 'w-20', 'w-8', 'w-16'] as const).map((lw, i) => (
@@ -27,7 +28,7 @@ export function AwardPageSkeleton() {
       <section>
         <div className="flex items-center gap-3 mb-3">
           <Skeleton className="h-3 w-20" />
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           {(['w-12', 'w-20', 'w-8', 'w-8', 'w-16', 'w-16'] as const).map((lw, i) => (

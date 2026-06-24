@@ -13,6 +13,8 @@ import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { RequiredMark } from './RequiredMark';
 import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
+import { FieldError } from '@/components/primitives/FieldError';
+import { Divider } from '@/components/ui/Divider';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -44,7 +46,7 @@ function SectionHeader({ label }: { label: string }) {
       <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
         {label}
       </span>
-      <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+      <Divider />
     </div>
   );
 }
@@ -117,9 +119,7 @@ export function RfpStep4Review({
               : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',
           )}
         />
-        {deadlineError && (
-          <p className="text-[12px] text-[var(--md-sys-color-error)]">마감일을 선택해주세요</p>
-        )}
+        <FieldError error={deadlineError ? '마감일을 선택해주세요' : undefined} />
       </div>
 
       {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true) */}
@@ -242,14 +242,7 @@ export function RfpStep4Review({
         </div>
       </div>
 
-      {serverError && (
-        <p
-          role="alert"
-          className="text-[12px] text-[var(--md-sys-color-error)]"
-        >
-          {ERROR_MESSAGES[serverError] ?? serverError}
-        </p>
-      )}
+      <FieldError error={serverError ? (ERROR_MESSAGES[serverError] ?? serverError) : undefined} />
 
       <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
         <Button

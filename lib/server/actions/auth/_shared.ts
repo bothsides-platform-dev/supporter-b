@@ -6,13 +6,13 @@
 //   real templates + Sender. Don't build a template helper here.
 import { db as prodDb } from '@/lib/db/client';
 
+import type { ActionResult } from '@/lib/server/actions/_result';
+
 // `T` is the success-payload shape. Default is an empty object so callers
 // that don't carry data can write `Promise<AuthActionResult>` without
 // listing a generic.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export type AuthActionResult<T extends object = {}> =
-  | ({ ok: true } & T)
-  | { ok: false; error: string };
+export type AuthActionResult<T extends object = {}> = ActionResult<T>;
 
 // Tests install a pglite handle here via __setActionDbForTest so the few
 // actions that need raw drizzle access (the workspace-creation transaction
@@ -44,18 +44,7 @@ export { baseUrl, adminBaseUrl } from '@/lib/server/env';
 // when `RESEND_API_KEY` is unset, so every action's verify URL surfaces
 // through the unified outbox path instead of action-specific helpers.
 
-// 15-minute bucket used for `signup-verify` dedupe keys so a flurry of resend
-// clicks within the same window don't spam the queue. Step 1 bucket = floor
-// of unix-minutes / 15.
-export function bucket15Min(now: Date = new Date()): number {
-  return Math.floor(now.getTime() / (15 * 60_000));
-}
-
-// Email normalisation — Auth.js authorize already lowercases + trims; do the
-// same here so equal addresses dedupe at the action layer too.
-export function normalizeEmail(raw: string): string {
-  return raw.trim().toLowerCase();
-}
+export { normalizeEmail, bucket15Min } from '@/lib/server/services/_service-utils';
 
 export function emailDomain(email: string): string | null {
   const at = email.indexOf('@');

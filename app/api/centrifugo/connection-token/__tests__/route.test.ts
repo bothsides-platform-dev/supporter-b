@@ -81,3 +81,59 @@ describe('connection-token — 이메일 미인증', () => {
     expect(r.status).toBe(403);
   });
 });
+
+describe('connection-token — 부하 차단(load shedding)', () => {
+  it('CENTRIFUGO_TOKEN_MAX_INFLIGHT=0 이면 503 Retry-After 를 반환한다', async () => {
+    // MAX_INFLIGHT is read at module load; resetModules() + stubEnv before
+    // callPost() ensures the freshly-imported route sees the value 0.
+    vi.stubEnv('CENTRIFUGO_TOKEN_MAX_INFLIGHT', '0');
+    const r = await callPost();
+    expect(r.status).toBe(503);
+    expect(r.headers.get('Retry-After')).toBeTruthy();
+  });
+});
+
+describe('connection-token — 게이트 캐시 TTL', () => {
+  it('TTL 안에 재접속하면 DB 재조회 없이 캐시를 사용한다', async () => {
+    sessionRef.value = { user: { id: 'user-cache', email: 'c@x.com', sessionVersion: 1 } };
+    // First call — populates the per-userId gate cache.
+    const r1 = await callPost();
+    expect(r1.status).toBe(200);
+    const callsBefore = getDbSessionVersionMock.mock.calls.length;
+    // Second call — must reuse the same module (no resetModules between calls)
+    // so the in-memory cache survives. Within the 10 s TTL, no extra DB query.
+    const { POST } = await import('../route');
+    await POST();
+    expect(getDbSessionVersionMock.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('TTL 만료 후 재접속하면 DB 를 재조회한다 (폐기 캐시 무효화)', async () => {
+    // Use fake timers so Date.now() is controllable.
+    vi.useFakeTimers();
+    sessionRef.value = { user: { id: 'user-ttl-expire', email: 'ttl@x.com', sessionVersion: 1 } };
+    // First call — populates the gate cache at t=0.
+    const r1 = await callPost();
+    expect(r1.status).toBe(200);
+    const callsAfterFirst = getDbSessionVersionMock.mock.calls.length;
+    // Advance past the 10 s GATE_TTL_MS.
+    vi.advanceTimersByTime(11_000);
+    // Second call — same module instance, but cache is stale → DB re-queried.
+    const { POST } = await import('../route');
+    await POST();
+    vi.useRealTimers();
+    expect(getDbSessionVersionMock.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+  });
+});
+
+describe('connection-token — workspaceId', () => {
+  it('세션 workspaceId 를 JWT info.workspaceId 클레임에 포함한다', async () => {
+    sessionRef.value = {
+      user: { id: 'user-ws', email: 'ws@x.com', workspaceId: 'ws-42', sessionVersion: 1 },
+    };
+    const r = await callPost();
+    expect(r.status).toBe(200);
+    const { token } = await r.json();
+    const { payload } = await jwtVerify(token, encode(SECRET));
+    expect((payload.info as { workspaceId: string }).workspaceId).toBe('ws-42');
+  });
+});

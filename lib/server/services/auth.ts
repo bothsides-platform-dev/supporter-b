@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 
+import { normalizeEmail, bucket15Min } from './_service-utils';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { baseUrl } from '@/lib/server/env';
 import { addMinutes, generateToken, hashToken } from '@/lib/server/token';
@@ -24,14 +25,6 @@ import type { ServiceResult } from './types';
 import type { MerchantTier } from '@/lib/types/bid';
 
 export type AuthActor = { userId: string };
-
-function normalizeEmail(raw: string): string {
-  return raw.trim().toLowerCase();
-}
-
-function bucket15Min(now: Date = new Date()): number {
-  return Math.floor(now.getTime() / (15 * 60 * 1000));
-}
 
 /** 6자리 숫자 OTP 코드 생성 (000000~999999). */
 function generateEmailCode(): string {

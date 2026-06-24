@@ -2,13 +2,14 @@
 
 import { z } from 'zod';
 
-import { requirePgSession } from '@/lib/auth/session';
+import { requirePgActor } from '@/lib/server/actions/_session';
 import { getOnboardingService } from '@/lib/server/services/onboarding';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z.object({ code: z.string().min(1) }).strict();
 
 export type SimulateSampleAwardInput = z.infer<typeof Input>;
-export type SimulateSampleAwardResult = { ok: true } | { ok: false; error: string };
+export type SimulateSampleAwardResult = ActionResult;
 
 /**
  * PG 온보딩 샘플 견적 선정 시뮬레이트. PG 가 견적을 제출한 직후(클라이언트가 잠시 뒤) 호출한다.
@@ -17,19 +18,15 @@ export type SimulateSampleAwardResult = { ok: true } | { ok: false; error: strin
 export async function simulateSampleAwardAction(
   input: SimulateSampleAwardInput,
 ): Promise<SimulateSampleAwardResult> {
-  let session;
-  try {
-    session = await requirePgSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_PG' };
-  }
+  const actor = await requirePgActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
   const service = await getOnboardingService();
   return service.simulateSampleAward(parsed.data.code, {
-    userId: session.user.id,
-    workspaceId: session.user.workspaceId,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
   });
 }

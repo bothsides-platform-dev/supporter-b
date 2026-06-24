@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ComposeIcon } from '@/components/icons';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
+import { FieldError } from '@/components/primitives/FieldError';
 
 // 간단 이메일 검증 — 액션이 권위 있는 검증을 한 번 더 하므로 여기선 빈 호출만 막는다.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -133,11 +134,7 @@ export function NewConversationSheet() {
               />
             </div>
 
-            {error && (
-              <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
-                {error}
-              </p>
-            )}
+            <FieldError error={error ?? undefined} />
           </div>
 
           <div className="flex justify-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] p-4">

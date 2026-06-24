@@ -6,12 +6,11 @@
 // (requirePgWorkspace, PG-only); the cross-workspace ownership guard + the cap
 // now live in QuoteTemplateService.
 import { requirePgSession } from '@/lib/auth/session';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 // Discriminated result, structurally identical to the chat/bid action result.
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export type QuoteActionResult<T extends object = {}> =
-  | ({ ok: true } & T)
-  | { ok: false; error: string };
+export type QuoteActionResult<T extends object = {}> = ActionResult<T>;
 
 // The session's active PG workspace. requirePgSession throws on a
 // missing/non-PG session — translate that into a discriminated failure.
