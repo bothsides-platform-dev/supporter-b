@@ -29,7 +29,7 @@ async function buildService(): Promise<NotificationService> {
     getOutboxRepo(),
     getUserRepo(),
   ]);
-  return new NotificationService(db, notifRepo, outboxRepo, userRepo);
+  return new NotificationService(notifRepo, outboxRepo, userRepo);
 }
 
 beforeEach(async () => {

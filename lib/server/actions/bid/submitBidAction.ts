@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 
 import { requirePgActor } from '@/lib/server/actions/_session';
 import { getBidService } from '@/lib/server/services/bid';
-import type { BidActionResult } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
 
 const Input = z
@@ -22,7 +22,7 @@ const Input = z
   .strict();
 
 export type SubmitBidInput = z.input<typeof Input>;
-export type SubmitBidResult = BidActionResult<{ bidId: string }>;
+export type SubmitBidResult = ActionResult<{ bidId: string }>;
 
 export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidResult> {
   const actor = await requirePgActor();

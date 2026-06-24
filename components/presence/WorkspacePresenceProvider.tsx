@@ -47,7 +47,7 @@ import {
   onlineWorkspaceIds,
   type PresenceEntry,
 } from '@/lib/realtime/presence';
-import { presenceWsChannel } from '@/lib/server/realtime/centrifugo';
+import { presenceWsChannel } from '@/lib/realtime/channels';
 
 /** Max distinct workspaceIds we hold live subscriptions for at once. Beyond this
  *  the overflow simply reads offline — a soft ceiling on socket/channel fanout. */

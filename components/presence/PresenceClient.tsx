@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 
 import { getCentrifuge } from '@/lib/realtime/centrifuge-client';
 import { managedSubscribe } from '@/lib/realtime/managedSubscribe';
-import { presenceWsChannel } from '@/lib/server/realtime/centrifugo';
+import { presenceWsChannel } from '@/lib/realtime/channels';
 
 /** Eagerly opens the WS and self-broadcasts this user's workspace presence.
  *  Renders nothing. No-op when realtime is unconfigured or the workspace is a

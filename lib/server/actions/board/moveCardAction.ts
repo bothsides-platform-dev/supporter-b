@@ -3,7 +3,8 @@
 import { z } from 'zod';
 
 import { getBoardService } from '@/lib/server/services/board';
-import { type BoardActionResult, workspaceIdForCard } from './_shared';
+import { workspaceIdForCard } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
   .object({
@@ -14,7 +15,7 @@ const Input = z
   .strict();
 
 export type MoveCardInput = z.infer<typeof Input>;
-export type MoveCardResult = BoardActionResult;
+export type MoveCardResult = ActionResult;
 
 /**
  * Place a card into a CUSTOM column (the only valid drop target). Drops onto

@@ -21,10 +21,6 @@ type NotifActor = { userId: string };
 
 export class NotificationService {
   constructor(
-    // _db retained for constructor-shape parity with the singleton/test injectors;
-    // every read in this service now routes through repos, so it is no longer stored.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    _db: any,
     private readonly notifRepo: NotificationRepo,
     private readonly outboxRepo: OutboxRepo,
     private readonly userRepo: UserRepo,
@@ -87,9 +83,7 @@ export async function getNotificationService(): Promise<NotificationService> {
       getOutboxRepo(),
       getUserRepo(),
     ]);
-    const { actionDb } = await import('@/lib/server/actions/notifications/_shared');
     globalThis.__bidit_notification_service__ = new NotificationService(
-      actionDb(),
       notifRepo,
       outboxRepo,
       userRepo,

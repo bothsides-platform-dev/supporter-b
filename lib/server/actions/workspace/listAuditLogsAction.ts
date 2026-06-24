@@ -6,7 +6,7 @@ import { requireSession } from '@/lib/auth/session';
 import { getMembership } from '@/lib/auth/active-workspace';
 import { getAuditLogRepo } from '@/lib/server/repositories/factory';
 import type { AuditLogCursor, AuditLogRecord } from '@/lib/server/repositories/types';
-import type { WorkspaceActionResult } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
   .object({
@@ -20,7 +20,7 @@ const Input = z
   .strict();
 
 export type ListAuditLogsInput = z.input<typeof Input>;
-export type ListAuditLogsResult = WorkspaceActionResult<{
+export type ListAuditLogsResult = ActionResult<{
   logs: AuditLogRecord[];
   nextCursor: AuditLogCursor | null;
 }>;

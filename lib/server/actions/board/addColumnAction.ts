@@ -3,7 +3,8 @@
 import { z } from 'zod';
 
 import { getBoardService } from '@/lib/server/services/board';
-import { type BoardActionResult, requireActiveWorkspace } from './_shared';
+import { requireActiveWorkspace } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
   .object({
@@ -16,7 +17,7 @@ const Input = z
   .strict();
 
 export type AddColumnInput = z.infer<typeof Input>;
-export type AddColumnResult = BoardActionResult<{ columnId: string }>;
+export type AddColumnResult = ActionResult<{ columnId: string }>;
 
 /** Create a custom column on the session's active workspace board. */
 export async function addColumnAction(input: AddColumnInput): Promise<AddColumnResult> {
