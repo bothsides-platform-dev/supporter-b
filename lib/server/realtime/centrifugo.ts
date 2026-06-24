@@ -17,28 +17,15 @@ export type ChatRealtimeEvent =
   | { type: 'read'; userId: string; readAt: string; [k: string]: unknown }
   | { type: string; [k: string]: unknown };
 
-/** Channel name for a conversation. Single source so the subscribe proxy and
- *  publish stay in lockstep. */
-export function chatChannel(conversationId: string): string {
-  return `chat:conversation:${conversationId}`;
-}
-
-/** RFP-scoped internal team thread channel namespace. The wsId suffix keeps
- *  the buyer team and each PG team on disjoint channels (sealed-bid invariant
- *  — the subscribe proxy enforces membership + RFP access per side). */
-export const TEAM_CHANNEL_PREFIX = 'team:rfp:';
-
-/** Channel name for an (rfp, workspace) team thread. Single source so the
- *  subscribe proxy and publish stay in lockstep. */
-export function teamChatChannel(rfpId: string, workspaceId: string): string {
-  return `${TEAM_CHANNEL_PREFIX}${rfpId}:${workspaceId}`;
-}
-
-/** Channel name for a workspace's presence broadcast. Single source so the
- *  self-broadcast client and observers stay in lockstep. PUBLIC namespace. */
-export function presenceWsChannel(workspaceId: string): string {
-  return `presence:ws:${workspaceId}`;
-}
+// Channel name helpers live in the shared (non-server) lib so client hooks can
+// import them without pulling the Centrifugo HTTP-API module into the bundle.
+import {
+  chatChannel,
+  teamChatChannel,
+  presenceWsChannel,
+  TEAM_CHANNEL_PREFIX,
+} from '@/lib/realtime/channels';
+export { chatChannel, teamChatChannel, presenceWsChannel, TEAM_CHANNEL_PREFIX };
 
 /** Shared best-effort publish body — both channel families fan out the same way. */
 async function publishToChannel(

@@ -13,7 +13,7 @@
  */
 import type { PublicationContext } from 'centrifuge';
 
-import { teamChatChannel } from '@/lib/server/realtime/centrifugo';
+import { teamChatChannel } from '@/lib/realtime/channels';
 import { useCentrifugoSubscription } from '@/lib/hooks/useCentrifugoSubscription';
 
 export type TeamLivePayload = {

@@ -5,8 +5,3 @@
 //   `r.ok` discriminated union으로 분기.
 
 export { actionDb, baseUrl } from '../auth/_shared';
-import type { ActionResult } from '@/lib/server/actions/_result';
-
-// `T` defaults to {} so callers without payload can write `BidActionResult`.
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export type BidActionResult<T extends object = {}> = ActionResult<T>;

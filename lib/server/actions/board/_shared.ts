@@ -17,13 +17,8 @@ import {
   requirePgSession,
 } from '@/lib/auth/session';
 import type { CardType } from '@/lib/types/column';
-import type { BidActionResult } from '../bid/_shared';
 import { requireActiveWorkspace } from '../_session';
 export { requireActiveWorkspace };
-
-// Structurally identical to the bid action result — reuse the shape.
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export type BoardActionResult<T extends object = {}> = BidActionResult<T>;
 
 type WorkspaceResolve =
   | { ok: true; workspaceId: string }

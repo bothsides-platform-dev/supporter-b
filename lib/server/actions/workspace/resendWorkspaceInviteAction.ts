@@ -2,9 +2,9 @@
 
 import { requireSession } from '@/lib/auth/session';
 import { getWorkspaceService } from '@/lib/server/services/workspace';
-import type { WorkspaceActionResult } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
-export type ResendWorkspaceInviteResult = WorkspaceActionResult;
+export type ResendWorkspaceInviteResult = ActionResult;
 
 /**
  * Admin-only: resend the invitation email for a pending workspace invitation.

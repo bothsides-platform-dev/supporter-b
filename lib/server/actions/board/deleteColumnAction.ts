@@ -3,12 +3,13 @@
 import { z } from 'zod';
 
 import { getBoardService } from '@/lib/server/services/board';
-import { type BoardActionResult, requireActiveWorkspace } from './_shared';
+import { requireActiveWorkspace } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z.object({ columnId: z.string().uuid() }).strict();
 
 export type DeleteColumnInput = z.infer<typeof Input>;
-export type DeleteColumnResult = BoardActionResult;
+export type DeleteColumnResult = ActionResult;
 
 /**
  * Delete a custom column (its placements cascade — cards fall back to

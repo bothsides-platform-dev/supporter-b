@@ -3,14 +3,15 @@
 import { z } from 'zod';
 
 import { getBoardService } from '@/lib/server/services/board';
-import { type BoardActionResult, requireActiveWorkspace } from './_shared';
+import { requireActiveWorkspace } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
   .object({ columnId: z.string().uuid(), title: z.string().min(1).max(40) })
   .strict();
 
 export type RenameColumnInput = z.infer<typeof Input>;
-export type RenameColumnResult = BoardActionResult;
+export type RenameColumnResult = ActionResult;
 
 /** Rename a column — allowed on system columns too (only delete is locked). */
 export async function renameColumnAction(

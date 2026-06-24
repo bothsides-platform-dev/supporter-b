@@ -3,14 +3,15 @@
 import { z } from 'zod';
 
 import { getBoardService } from '@/lib/server/services/board';
-import { type BoardActionResult, requireActiveWorkspace } from './_shared';
+import { requireActiveWorkspace } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
   .object({ columnId: z.string().uuid(), position: z.string().min(1) })
   .strict();
 
 export type ReorderColumnInput = z.infer<typeof Input>;
-export type ReorderColumnResult = BoardActionResult;
+export type ReorderColumnResult = ActionResult;
 
 /** Move a column to a new position (client-computed fractional index). Allowed
  *  on system columns. */

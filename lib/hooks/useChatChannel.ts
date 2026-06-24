@@ -28,7 +28,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PublicationContext, Subscription } from 'centrifuge';
 
-import { chatChannel } from '@/lib/server/realtime/centrifugo';
+import { chatChannel } from '@/lib/realtime/channels';
 import { useCentrifugoSubscription } from '@/lib/hooks/useCentrifugoSubscription';
 
 type ChatPayload = { type?: string; userId?: string; readAt?: string; [k: string]: unknown };
