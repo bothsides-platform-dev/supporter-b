@@ -29,6 +29,26 @@ export function isDeadlineValid(deadline: string): boolean {
   return deadline !== '' && !Number.isNaN(new Date(deadline).getTime());
 }
 
+// 견적 유형(신규/갱신)은 필수: 둘 중 하나가 선택되어야 한다.
+export function isContractTypeValid(
+  contractType: 'new' | 'renewal' | null | undefined,
+): boolean {
+  return contractType === 'new' || contractType === 'renewal';
+}
+
+export function isMainProductsValid(mainProducts: string): boolean {
+  return mainProducts.trim() !== '';
+}
+
+// 연간 PG 총 거래액은 필수이면서 0보다 큰 정수여야 한다 — 0원은 사실상 오입.
+// CurrencyInput(decimalScale=0)은 정수 자릿수 문자열만 방출하므로 정수 외 형태
+// (Infinity·지수·16진수·소수)는 거부한다. 서버가 trust boundary이므로(탈취 draft·직접
+// 호출) Number() 만으로는 'Infinity'·'1e120' 등이 JSONB·PG 브리프에 그대로 새는 것을 막는다.
+export function isAnnualPgVolumeValid(annualPgVolume: string): boolean {
+  const trimmed = annualPgVolume.trim();
+  return /^\d+$/.test(trimmed) && Number(trimmed) > 0;
+}
+
 export type MarkerState = 'empty' | 'filled' | 'error';
 
 export function markerState(input: { valid: boolean; attempted: boolean }): MarkerState {

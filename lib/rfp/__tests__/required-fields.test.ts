@@ -5,6 +5,9 @@ import {
   isPaymentValid,
   isPgValid,
   isDeadlineValid,
+  isContractTypeValid,
+  isMainProductsValid,
+  isAnnualPgVolumeValid,
   markerState,
 } from '@/lib/rfp/required-fields';
 
@@ -38,6 +41,34 @@ describe('required-fields predicates', () => {
     expect(isDeadlineValid('')).toBe(false);
     expect(isDeadlineValid('nope')).toBe(false);
     expect(isDeadlineValid('2099-01-01T23:59:59+09:00')).toBe(true);
+  });
+
+  it('isContractTypeValid: null/undefined false, new·renewal true', () => {
+    expect(isContractTypeValid(null)).toBe(false);
+    expect(isContractTypeValid(undefined)).toBe(false);
+    expect(isContractTypeValid('new')).toBe(true);
+    expect(isContractTypeValid('renewal')).toBe(true);
+  });
+
+  it('isMainProductsValid: 공백/빈값 false, 내용 true', () => {
+    expect(isMainProductsValid('')).toBe(false);
+    expect(isMainProductsValid('   ')).toBe(false);
+    expect(isMainProductsValid('의류')).toBe(true);
+  });
+
+  it('isAnnualPgVolumeValid: 공백/빈값/0 false, 양의 정수면 true', () => {
+    expect(isAnnualPgVolumeValid('')).toBe(false);
+    expect(isAnnualPgVolumeValid('   ')).toBe(false);
+    expect(isAnnualPgVolumeValid('0')).toBe(false);
+    expect(isAnnualPgVolumeValid('1000000000')).toBe(true);
+  });
+
+  it('isAnnualPgVolumeValid: 숫자 외 형태(Infinity·지수·16진수·소수)는 false — CurrencyInput 은 정수 자릿수만 방출', () => {
+    expect(isAnnualPgVolumeValid('Infinity')).toBe(false);
+    expect(isAnnualPgVolumeValid('1e3')).toBe(false);
+    expect(isAnnualPgVolumeValid('0x10')).toBe(false);
+    expect(isAnnualPgVolumeValid('1.5')).toBe(false);
+    expect(isAnnualPgVolumeValid('  500  ')).toBe(true);
   });
 });
 
