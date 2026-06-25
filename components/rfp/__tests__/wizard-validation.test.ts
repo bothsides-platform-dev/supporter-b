@@ -5,10 +5,20 @@ import { getWizardValidity, getFirstIncompleteStep, type WizardValidationDraft }
 const emptyDraft: WizardValidationDraft = {
   title: '',
   websiteUrl: '',
+  contractType: null,
+  mainProducts: '',
+  annualPgVolume: '',
   requiredPaymentMethods: [],
   customPaymentMethods: [],
   allowedPgWorkspaceIds: [],
   deadline: '',
+};
+
+// Step 2 필수 3종(견적 유형·주요 판매 상품·연간 거래액)을 모두 채운 값.
+const step2Extras = {
+  contractType: 'new' as const,
+  mainProducts: '의류',
+  annualPgVolume: '1000000000',
 };
 
 function complete(draft: WizardValidationDraft) {
@@ -21,7 +31,7 @@ describe('getWizardValidity', () => {
   });
 
   it('제목을 채우면 Step 2가 complete이 된다', () => {
-    expect(complete({ ...emptyDraft, title: '제안건', websiteUrl: 'https://x.com', requiredPaymentMethods: ['card'] })[2]).toBe(true);
+    expect(complete({ ...emptyDraft, ...step2Extras, title: '제안건', websiteUrl: 'https://x.com', requiredPaymentMethods: ['card'] })[2]).toBe(true);
   });
 
   it('공백뿐인 제목은 Step 2를 complete으로 보지 않는다', () => {
@@ -34,7 +44,7 @@ describe('getWizardValidity', () => {
 
   it('제목이 있고 홈페이지가 유효한 도메인이면 Step 2는 complete이다', () => {
     expect(
-      complete({ ...emptyDraft, title: '제안건', websiteUrl: 'https://x.com', requiredPaymentMethods: ['card'] })[2],
+      complete({ ...emptyDraft, ...step2Extras, title: '제안건', websiteUrl: 'https://x.com', requiredPaymentMethods: ['card'] })[2],
     ).toBe(true);
   });
 
@@ -70,6 +80,7 @@ describe('getFirstIncompleteStep', () => {
 
   it('제목·PG만 채우면 첫 미충족 step은 Step 4(마감일)이다 — 순서와 무관', () => {
     const draft: WizardValidationDraft = {
+      ...step2Extras,
       title: '제안건',
       websiteUrl: 'https://x.com',
       requiredPaymentMethods: ['card'],
@@ -98,6 +109,7 @@ describe('getFirstIncompleteStep', () => {
 
   it('모든 필수값을 채우면 null을 반환한다', () => {
     const draft: WizardValidationDraft = {
+      ...step2Extras,
       title: '제안건',
       websiteUrl: 'https://x.com',
       requiredPaymentMethods: ['card'],
@@ -113,6 +125,9 @@ describe('wizard-validation Step 2 필수 (SSOT 리팩터)', () => {
   const base: WizardValidationDraft = {
     title: '견적 요청',
     websiteUrl: 'example.com',
+    contractType: 'new',
+    mainProducts: '의류',
+    annualPgVolume: '1000000000',
     requiredPaymentMethods: ['card'],
     customPaymentMethods: [],
     allowedPgWorkspaceIds: [{ id: 'pg1' }],
@@ -149,5 +164,23 @@ describe('wizard-validation Step 2 필수 (SSOT 리팩터)', () => {
     const d = { ...base, title: '  ' };
     expect(step(d, 2).complete).toBe(false);
     expect(step(d, 2).hint).toBe('제목을 입력해주세요');
+  });
+
+  it('견적 유형 미선택이면 미완료 + 견적 유형 안내', () => {
+    const d = { ...base, contractType: null };
+    expect(step(d, 2).complete).toBe(false);
+    expect(step(d, 2).hint).toBe('견적 유형을 선택해주세요');
+  });
+
+  it('주요 판매 상품 빈값이면 미완료 + 상품 안내', () => {
+    const d = { ...base, mainProducts: '   ' };
+    expect(step(d, 2).complete).toBe(false);
+    expect(step(d, 2).hint).toBe('주요 판매 상품을 입력해주세요');
+  });
+
+  it('연간 PG 총 거래액 빈값이면 미완료 + 거래액 안내', () => {
+    const d = { ...base, annualPgVolume: '' };
+    expect(step(d, 2).complete).toBe(false);
+    expect(step(d, 2).hint).toBe('전년도 연간 PG 총 거래액을 입력해주세요');
   });
 });

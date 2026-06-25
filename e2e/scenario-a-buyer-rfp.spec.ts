@@ -54,13 +54,17 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await expect(page.getByText('123-45-67890')).toBeVisible();
     await page.getByRole('button', { name: '다음' }).click();
 
-    // ── 3. Step 2 제안 내용 — 필수: 제목 + 견적 받을 결제수단 ────
-    // 나머지 사업 컨텍스트 input(홈페이지/주판/거래액/…)은 optional.
-    // createRfpAction 은 send 시 requiredPaymentMethods+custom ≥1 을 강제하므로
-    // (zod superRefine → 미선택 시 INVALID_INPUT, 발송 차단) 결제수단도 선택.
+    // ── 3. Step 2 제안 내용 — 필수: 제목 + 홈페이지 + 견적 유형 +
+    // 주요 판매 상품 + 연간 PG 총 거래액 + 견적 받을 결제수단 ────
+    // 위저드 'use client' 검증(wizard-validation)이 이 6개를 모두 채워야 '다음'을
+    // 허용하고, createRfpAction 은 send 시 동일 필드를 zod superRefine 으로 재강제한다.
     await page
       .getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 견적 요청')
       .fill('e2e-A-2026 결제 인프라 제안');
+    await page.getByPlaceholder('example.com').fill('example.com');
+    await page.getByRole('button', { name: '신규 계약' }).click();
+    await page.getByPlaceholder('의류').fill('의류');
+    await page.getByPlaceholder('10억').fill('1000000000');
     // 견적 요청 세부 내용(memo)은 optional. placeholder 가 자주 바뀌므로 step 2
     // 의 유일한 <textarea> 를 직접 노린다.
     await page

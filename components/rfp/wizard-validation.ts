@@ -11,11 +11,17 @@ import {
   isPaymentValid,
   isPgValid,
   isDeadlineValid,
+  isContractTypeValid,
+  isMainProductsValid,
+  isAnnualPgVolumeValid,
 } from '@/lib/rfp/required-fields';
 
 export type WizardValidationDraft = {
   title: string;
   websiteUrl: string;
+  contractType: 'new' | 'renewal' | null | undefined;
+  mainProducts: string;
+  annualPgVolume: string;
   requiredPaymentMethods: readonly unknown[];
   customPaymentMethods: readonly unknown[];
   allowedPgWorkspaceIds: readonly unknown[];
@@ -30,6 +36,9 @@ function isStepComplete(num: number, draft: WizardValidationDraft): boolean {
       return (
         isTitleValid(draft.title) &&
         isWebsiteValid(draft.websiteUrl) &&
+        isContractTypeValid(draft.contractType) &&
+        isMainProductsValid(draft.mainProducts) &&
+        isAnnualPgVolumeValid(draft.annualPgVolume) &&
         isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods)
       );
     case 3:
@@ -42,13 +51,17 @@ function isStepComplete(num: number, draft: WizardValidationDraft): boolean {
   }
 }
 
-// step별 미충족 사유 안내. Step 2는 제목 → 홈페이지 → 결제수단 순으로 분기.
+// step별 미충족 사유 안내. Step 2는 제목 → 홈페이지 → 견적 유형 →
+// 주요 판매 상품 → 연간 거래액 → 결제수단 순으로 분기.
 function hintFor(num: number, draft: WizardValidationDraft): string {
   switch (num) {
     case 2:
       if (!isTitleValid(draft.title)) return '제목을 입력해주세요';
       if (draft.websiteUrl.trim() === '') return '홈페이지 주소를 입력해주세요';
       if (!isWebsiteValid(draft.websiteUrl)) return '홈페이지 주소 형식을 확인해주세요';
+      if (!isContractTypeValid(draft.contractType)) return '견적 유형을 선택해주세요';
+      if (!isMainProductsValid(draft.mainProducts)) return '주요 판매 상품을 입력해주세요';
+      if (!isAnnualPgVolumeValid(draft.annualPgVolume)) return '전년도 연간 PG 총 거래액을 입력해주세요';
       return '견적 받을 결제수단을 1개 이상 선택해주세요';
     case 3:
       return 'PG를 1개 이상 선택해주세요';

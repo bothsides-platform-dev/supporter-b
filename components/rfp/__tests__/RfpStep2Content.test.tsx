@@ -15,6 +15,7 @@ function resetStore() {
   useRfpDraftStore.setState({
     title: '',
     websiteUrl: '',
+    contractType: null,
     mainProducts: '',
     annualPgVolume: '',
     currentFeeRate: '',
@@ -352,6 +353,68 @@ describe('RfpStep2Content', () => {
       await user.click(screen.getByRole('button', { name: '신규 계약' }));
       await user.click(screen.getByRole('button', { name: '신규 계약' }));
       expect(useRfpDraftStore.getState().contractType).toBeNull();
+    });
+  });
+
+  describe('견적 유형 인라인 에러 (attempted)', () => {
+    const ERR = '견적 유형을 선택해주세요';
+
+    it('다음 클릭 전에는 견적 유형 미선택 에러가 표시되지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+
+    it('다음 클릭 후 견적 유형 미선택 시 에러 메시지가 표시된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      expect(screen.getByText(ERR)).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 견적 유형을 선택하면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ contractType: 'new' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('주요 판매 상품 인라인 에러 (attempted)', () => {
+    const ERR = '주요 판매 상품을 입력해주세요';
+
+    it('다음 클릭 전에는 주요 판매 상품 미입력 에러가 표시되지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이면 주요 판매 상품 미입력 에러가 표시된다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.getByText(ERR)).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 주요 판매 상품을 입력하면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ mainProducts: '의류' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('연간 PG 총 거래액 인라인 에러 (attempted)', () => {
+    const ERR = '전년도 연간 PG 총 거래액을 입력해주세요';
+
+    it('다음 클릭 전에는 거래액 미입력 에러가 표시되지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이면 거래액 미입력 에러가 표시된다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.getByText(ERR)).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 거래액을 입력하면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ annualPgVolume: '1000000000' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
     });
   });
 

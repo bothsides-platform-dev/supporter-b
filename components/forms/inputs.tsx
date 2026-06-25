@@ -5,6 +5,9 @@ import { NumericFormat } from 'react-number-format';
 import { Label } from '@/components/primitives/Label';
 import { InfoTip } from '@/components/ui/info-tip';
 import { Select } from '@/components/primitives/Select';
+import { FieldError } from '@/components/primitives/FieldError';
+import { RequiredMark } from '@/components/rfp/RequiredMark';
+import type { MarkerState } from '@/lib/rfp/required-fields';
 import { formatKrwReadable, formatRatePerManwon } from '@/lib/format';
 import { formatSettleCycle } from '@/lib/utils/settle-cycle';
 import { cn } from '@/lib/utils';
@@ -137,6 +140,13 @@ export function FeeRateCell({
   );
 }
 
+type CurrencyInputProps = NumericFieldProps & {
+  /** 전달 시 라벨 옆에 필수 마커 칩을 렌더(선택 필드는 미전달). */
+  markerState?: MarkerState;
+  /** 전달 시 하단에 에러 메시지를 렌더. */
+  error?: string;
+};
+
 /** Labeled numeric input with a `원` suffix, stepping by 1,000. */
 export function CurrencyInput({
   label,
@@ -144,16 +154,21 @@ export function CurrencyInput({
   onChange,
   placeholder = '0',
   infoTerm,
-}: NumericFieldProps) {
+  markerState,
+  error,
+}: CurrencyInputProps) {
   const numVal = parseFloat(value);
   const hint =
     !isNaN(numVal) && numVal > 0 ? `= ${formatKrwReadable(numVal)}` : null;
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-1">
-        <Label size="md" muted={false}>{label}</Label>
-        {infoTerm && <InfoTip term={infoTerm} />}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>{label}</Label>
+          {infoTerm && <InfoTip term={infoTerm} />}
+        </div>
+        {markerState && <RequiredMark state={markerState} />}
       </div>
       <div className="flex items-end gap-1">
         <NumericFormat
@@ -172,6 +187,7 @@ export function CurrencyInput({
           {hint}
         </p>
       )}
+      <FieldError error={error} />
     </div>
   );
 }

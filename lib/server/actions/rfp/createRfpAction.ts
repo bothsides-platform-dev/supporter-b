@@ -6,6 +6,7 @@ import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import { logBusinessEvent } from '@/lib/observability/log';
 import { isValidWebsiteUrl, isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { isContractTypeValid, isMainProductsValid, isAnnualPgVolumeValid } from '@/lib/rfp/required-fields';
 import { MERCHANT_TIERS } from '@/lib/types/bid';
 import type { RfpActionResult } from './_shared';
 
@@ -84,6 +85,31 @@ const Input = z
           code: z.ZodIssueCode.custom,
           path: ['websiteUrl'],
           message: WEBSITE_URL_ERROR,
+        });
+      }
+    }
+    // 발송 시 필수: 견적 유형·주요 판매 상품·연간 PG 총 거래액 (드래프트는 비어도 허용)
+    // 클라이언트 위저드와 동일한 SSOT(lib/rfp/required-fields) 판정을 공유해 드리프트를 막는다.
+    if (d.send) {
+      if (!isContractTypeValid(d.contractType)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['contractType'],
+          message: '발송하려면 견적 유형을 선택해야 합니다.',
+        });
+      }
+      if (!isMainProductsValid(d.mainProducts ?? '')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['mainProducts'],
+          message: '발송하려면 주요 판매 상품을 입력해야 합니다.',
+        });
+      }
+      if (!isAnnualPgVolumeValid(d.annualPgVolume ?? '')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['annualPgVolume'],
+          message: '발송하려면 전년도 연간 PG 총 거래액을 입력해야 합니다.',
         });
       }
     }
