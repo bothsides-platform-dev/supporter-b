@@ -216,11 +216,25 @@ describe('RfpStep4Review', () => {
     expect(screen.getByText('3,000만원')).toBeInTheDocument();
   });
 
+  it('현재 솔루션이 없으면 현재 솔루션 행을 미입력으로 표시한다', () => {
+    useRfpDraftStore.setState({ currentSolution: '' });
+    renderComponent();
+    expect(screen.getByText('현재 솔루션')).toBeInTheDocument();
+    expect(screen.getAllByText('미입력').length).toBeGreaterThan(0);
+  });
+
   it('견적 유형(contractType)이 신규면 신규 계약을 표시한다', () => {
     useRfpDraftStore.setState({ contractType: 'new' });
     renderComponent();
     expect(screen.getByText('견적 유형')).toBeInTheDocument();
     expect(screen.getByText('신규 계약')).toBeInTheDocument();
+  });
+
+  it('견적 유형(contractType)이 갱신이면 갱신 계약을 표시한다', () => {
+    useRfpDraftStore.setState({ contractType: 'renewal' });
+    renderComponent();
+    expect(screen.getByText('견적 유형')).toBeInTheDocument();
+    expect(screen.getByText('갱신 계약')).toBeInTheDocument();
   });
 
   it('견적 유형(contractType)이 없으면 견적 유형 행을 미입력으로 표시한다', () => {
