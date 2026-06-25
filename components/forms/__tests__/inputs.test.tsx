@@ -173,6 +173,32 @@ describe('CurrencyInput', () => {
     rerender(<CurrencyInput label="정산한도" value="0" onChange={() => {}} />);
     expect(screen.queryByText(/^=/)).toBeNull();
   });
+
+  it('markerState 미전달이면 필수 칩을 렌더하지 않는다 (기존 선택 필드 회귀)', () => {
+    render(<CurrencyInput label="정산한도" value="" onChange={() => {}} />);
+    expect(screen.queryByText('필수')).toBeNull();
+    expect(screen.queryByText('입력 완료')).toBeNull();
+  });
+
+  it('markerState="empty" 이면 "필수" 칩을 렌더한다', () => {
+    render(<CurrencyInput label="연간 거래액" value="" onChange={() => {}} markerState="empty" />);
+    expect(screen.getByText('필수')).toBeInTheDocument();
+  });
+
+  it('markerState="filled" 이면 "입력 완료" 칩을 렌더한다', () => {
+    render(<CurrencyInput label="연간 거래액" value="10000" onChange={() => {}} markerState="filled" />);
+    expect(screen.getByText('입력 완료')).toBeInTheDocument();
+  });
+
+  it('error 가 있으면 에러 메시지를 렌더한다', () => {
+    render(<CurrencyInput label="연간 거래액" value="" onChange={() => {}} error="값을 입력해주세요" />);
+    expect(screen.getByRole('alert')).toHaveTextContent('값을 입력해주세요');
+  });
+
+  it('error 가 없으면 alert 를 렌더하지 않는다', () => {
+    render(<CurrencyInput label="연간 거래액" value="" onChange={() => {}} markerState="empty" />);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
 });
 
 describe('FeeRateCell', () => {

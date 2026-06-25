@@ -135,6 +135,9 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       websiteUrl: 'https://example.com',
       requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       deadline: '2026-06-30T23:59:59Z',
     });
@@ -158,6 +161,9 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       websiteUrl: 'https://example.com',
       requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
@@ -183,6 +189,9 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       websiteUrl: 'https://example.com',
       requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
@@ -208,6 +217,9 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       websiteUrl: 'https://example.com',
       requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       // deadline 미설정 → Step 4 미완료
     });
@@ -233,6 +245,9 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       websiteUrl: 'https://example.com',
       requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       currentSettlementCycle: 'D+2',
@@ -262,6 +277,9 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       websiteUrl: 'https://example.com',
       requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       boardVisible: false,
@@ -287,6 +305,8 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       websiteUrl: 'https://example.com',
       requiredPaymentMethods: ['card'],
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       contractType: 'renewal',
@@ -312,6 +332,9 @@ describe('RfpCreateWizard', () => {
       title: '테스트',
       websiteUrl: 'https://example.com',
       requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
@@ -341,7 +364,7 @@ describe('RfpCreateWizard', () => {
   });
 
   it('Step 3 미완료(PG 없음) 시 다음 클릭은 step을 유지하고 hint toast를 표시한다', async () => {
-    useRfpDraftStore.setState({ title: '테스트 제안건', websiteUrl: 'https://example.com', requiredPaymentMethods: ['card'] });
+    useRfpDraftStore.setState({ title: '테스트 제안건', websiteUrl: 'https://example.com', requiredPaymentMethods: ['card'], contractType: 'new', mainProducts: '의류', annualPgVolume: '1000000000' });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' })); // → Step 2

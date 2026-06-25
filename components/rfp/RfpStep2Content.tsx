@@ -14,7 +14,15 @@ import { RequiredMark } from './RequiredMark';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { FieldError } from '@/components/primitives/FieldError';
-import { isTitleValid, isWebsiteValid, isPaymentValid, markerState } from '@/lib/rfp/required-fields';
+import {
+  isTitleValid,
+  isWebsiteValid,
+  isPaymentValid,
+  isContractTypeValid,
+  isMainProductsValid,
+  isAnnualPgVolumeValid,
+  markerState,
+} from '@/lib/rfp/required-fields';
 import { cn } from '@/lib/utils';
 
 // 카드 수수료는 % 값이라 100을 넘을 수 없다 — 입력 단계에서 상한을 강제한다.
@@ -53,6 +61,9 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
   const websiteFormatInvalid = !websiteEmpty && !isValidWebsiteUrlLight(draft.websiteUrl);
   const websiteServerRejected = !!websiteRejected && websiteRejected === draft.websiteUrl.trim();
   const titleError = attempted && draft.title.trim() === '';
+  const contractTypeError = attempted && !isContractTypeValid(draft.contractType);
+  const mainProductsError = attempted && !isMainProductsValid(draft.mainProducts);
+  const annualPgVolumeError = attempted && !isAnnualPgVolumeValid(draft.annualPgVolume);
   const paymentError =
     attempted &&
     draft.requiredPaymentMethods.length + draft.customPaymentMethods.length === 0;
@@ -60,9 +71,12 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <div className="flex items-center gap-1">
-          <Label size="md" muted>견적 유형 <span className="text-[var(--md-sys-color-on-surface-variant)]">(선택)</span></Label>
-          <InfoTip term="견적유형" />
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <Label size="md" muted={false}>견적 유형</Label>
+            <InfoTip term="견적유형" />
+          </div>
+          <RequiredMark state={markerState({ valid: isContractTypeValid(draft.contractType), attempted })} />
         </div>
         <div className="flex gap-2">
           {CONTRACT_TYPE_OPTIONS.map(({ value, label }) => (
@@ -84,6 +98,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
             </button>
           ))}
         </div>
+        <FieldError error={contractTypeError ? '견적 유형을 선택해주세요' : undefined} />
       </div>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
@@ -121,20 +136,27 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
         <FieldError error={websiteFormatInvalid || websiteServerRejected ? WEBSITE_URL_ERROR : undefined} />
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>주요 판매 상품</Label>
+        <div className="flex items-center gap-2">
+          <Label size="md" muted={false}>주요 판매 상품</Label>
+          <RequiredMark state={markerState({ valid: isMainProductsValid(draft.mainProducts), attempted })} />
+        </div>
         <input
           type="text"
           value={draft.mainProducts}
           onChange={(e) => draft.setField('mainProducts', e.target.value)}
           placeholder="의류"
-          className={underlineInputClass}
+          aria-invalid={mainProductsError}
+          className={cn(underlineInputClass, mainProductsError && 'border-[var(--md-sys-color-error)]')}
         />
+        <FieldError error={mainProductsError ? '주요 판매 상품을 입력해주세요' : undefined} />
       </div>
       <CurrencyInput
         label="전년도 연간 PG 총 거래액"
         value={draft.annualPgVolume}
         onChange={(v) => draft.setField('annualPgVolume', v)}
         placeholder="10억"
+        markerState={markerState({ valid: isAnnualPgVolumeValid(draft.annualPgVolume), attempted })}
+        error={annualPgVolumeError ? '전년도 연간 PG 총 거래액을 입력해주세요' : undefined}
       />
       <div className="space-y-1">
         <div className="flex items-center gap-1">
