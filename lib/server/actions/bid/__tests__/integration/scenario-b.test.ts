@@ -198,6 +198,9 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
     allowedPgWorkspaceIds: [pgWsId],
     requiredPaymentMethods: ['card', 'bank_transfer'],
     websiteUrl: 'example.com',
+    contractType: 'new',
+    mainProducts: '의류',
+    annualPgVolume: '1000000000',
     send: true,
   });
   expect(created.ok).toBe(true);
