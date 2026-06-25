@@ -88,7 +88,7 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
       .slice(0, 10);
     await page.locator('input[type="date"]').fill(tomorrow);
     // Send button text reflects count: "3개 PG사에 보내기". Anchor the full name so
-    // it doesn't also match the sidebar step button "보내기 확인" (strict-mode).
+    // it doesn't also match the sidebar step button "최종 견적 요청 정보 확인" (strict-mode).
     await page.getByRole('button', { name: /^\d+개 PG사에 보내기$/ }).click();
 
     // ── 5. Land on /rfp/<rfpId> ──────────────────────────────────

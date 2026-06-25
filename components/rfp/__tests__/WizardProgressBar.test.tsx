@@ -47,7 +47,7 @@ describe('WizardProgressBar', () => {
 
   it('steps prop: 단계 수·라벨이 바뀐다', () => {
     // currentStep=4 → span에 "Step 4 / 4 — 검토·발송"이 보임.
-    // 기본 4단계 라벨은 "보내기 확인"이므로 "검토·발송"이 보이면 steps prop이 적용된 것.
+    // 기본 4단계 라벨은 "최종 견적 요청 정보 확인"이므로 "검토·발송"이 보이면 steps prop이 적용된 것.
     render(
       <WizardProgressBar
         currentStep={4}
