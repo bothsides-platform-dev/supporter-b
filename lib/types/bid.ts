@@ -67,6 +67,17 @@ export function isTieredMethod(m: PaymentMethod): boolean {
   return TIERED_METHODS.has(m);
 }
 
+// 정액(건당) 수단 — 수수료가 정률(%)이 아니라 결제 건당 고정 금액(정수 원)으로 부과된다.
+// 가상계좌가 대표 예. paymentFees[정액수단] 의 number 값은 0~1 소수 요율이 아니라 '원' 단위
+// 정수다(단위 판별은 isTieredMethod 와 같이 카테고리/수단 상수로만, 값 모양에 의존하지 않는다).
+// 정액 수단은 구간(tiered) 수단과 상호배타 — 영세·중소 우대수수료 구간이 적용되지 않는다.
+const FLAT_FEE_METHODS: ReadonlySet<PaymentMethod> = new Set<PaymentMethod>(['virtual_account']);
+
+/** 정액(건당 원) 수단이면 true. 입력·저장·표시 사이트가 % vs 원 분기에 이 함수를 거친다. */
+export function isFlatFeeMethod(m: PaymentMethod): boolean {
+  return FLAT_FEE_METHODS.has(m);
+}
+
 /**
  * 관대한 요율 접근자. value가 number면 구버전 단일요율로 해석(구간 무관),
  * 구간맵이면 해당 구간 값(없으면 undefined). 모든 읽기 사이트가 이 함수를 거친다.
@@ -99,7 +110,9 @@ export type Bid = {
   settleLimit: number;
   // 월 보증보험 (원/연)
   guaranteeInsurance: number;
-  // 결제수단별 수수료 (key: PaymentMethod, value: 소수 요율 또는 구간맵)
+  // 결제수단별 수수료 (key: PaymentMethod). value 의 단위는 수단이 결정한다:
+  //  · 정률(%) 수단 → 0~1 소수 요율(number) 또는 구간맵(TierRates)
+  //  · 정액(건당) 수단(isFlatFeeMethod) → '원' 단위 정수(number, 구간맵 없음)
   paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
   // 커스텀 결제수단별 수수료 (key: CustomPaymentMethod.id, value: 소수 요율)
   customFees: Record<string, number>;

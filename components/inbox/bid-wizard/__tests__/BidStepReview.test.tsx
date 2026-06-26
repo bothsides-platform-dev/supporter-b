@@ -56,6 +56,22 @@ describe('BidStepReview', () => {
     expect(onSaveTemplate).toHaveBeenCalledWith('기본요율');
   });
 
+  it('정액(건당) 수단은 % 가 아니라 원으로 요약 표시한다', () => {
+    render(
+      <BidStepReview
+        settleCycle="D+1" settleLimit="0" guaranteeInsurance="0"
+        feeInputMethods={['virtual_account'] as PaymentMethod[]}
+        customPaymentMethods={[]}
+        fees={{ virtual_account: '300' }}
+        canSubmit pending={false} submitError={null}
+        onBack={() => {}} onSubmit={() => {}} onSaveTemplate={async () => ({ ok: true })}
+      />,
+    );
+    expect(screen.getByText(/가상계좌/)).toBeInTheDocument();
+    expect(screen.getByText('300원')).toBeInTheDocument();
+    expect(screen.queryByText('300%')).toBeNull();
+  });
+
   it('구간 수단은 구간별 요율을 요약 표시한다', () => {
     render(
       <BidStepReview

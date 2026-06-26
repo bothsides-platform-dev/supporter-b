@@ -79,11 +79,11 @@ describe('bidToDraft', () => {
     });
   });
 
-  describe('paymentFees → fees (decimal → percent string)', () => {
+  describe('paymentFees → fees (정률 수단: decimal → percent string)', () => {
     it('number value converts decimal to percent string: 0.0125 → "1.25"', () => {
-      // virtual_account is non-tiered; value is plain number in Bid
-      const draft = bidToDraft(makeBid({ paymentFees: { virtual_account: 0.0125 } }));
-      expect(draft.fees['virtual_account']).toBe('1.25');
+      // bank_transfer is a non-tiered 정률(%) method; value is plain decimal in Bid
+      const draft = bidToDraft(makeBid({ paymentFees: { bank_transfer: 0.0125 } }));
+      expect(draft.fees['bank_transfer']).toBe('1.25');
     });
 
     it('0.012 → "1.2"', () => {
@@ -92,8 +92,8 @@ describe('bidToDraft', () => {
     });
 
     it('3자리 이상 소수 수수료는 2자리로 반올림된다: 0.012345 → "1.23"', () => {
-      const draft = bidToDraft(makeBid({ paymentFees: { virtual_account: 0.012345 } }));
-      expect(draft.fees['virtual_account']).toBe('1.23');
+      const draft = bidToDraft(makeBid({ paymentFees: { bank_transfer: 0.012345 } }));
+      expect(draft.fees['bank_transfer']).toBe('1.23');
     });
 
     it('customFees 도 2자리로 반올림된다: 0.005678 → "0.57"', () => {
@@ -115,19 +115,26 @@ describe('bidToDraft', () => {
       expect(draft.fees).not.toHaveProperty('card');
     });
 
-    it('multiple methods: number values mapped, TierRates silently skipped', () => {
+    it('multiple methods: 정률은 percent, 정액은 원 그대로, TierRates는 skip', () => {
       const draft = bidToDraft(
         makeBid({
           paymentFees: {
-            virtual_account: 0.01,
+            virtual_account: 300, // 정액(건당) → 원 정수 문자열 그대로
             card: { general: 0.012 }, // skipped
-            bank_transfer: 0.02,
+            bank_transfer: 0.02, // 정률 → percent
           },
         }),
       );
-      expect(draft.fees['virtual_account']).toBe('1');
+      expect(draft.fees['virtual_account']).toBe('300');
       expect(draft.fees['bank_transfer']).toBe('2');
       expect(draft.fees).not.toHaveProperty('card');
+    });
+  });
+
+  describe('paymentFees → fees (정액 수단: 원 정수 그대로)', () => {
+    it('가상계좌는 fmtPct 변환 없이 원 정수 문자열로 prefill: 300 → "300"', () => {
+      const draft = bidToDraft(makeBid({ paymentFees: { virtual_account: 300 } }));
+      expect(draft.fees['virtual_account']).toBe('300');
     });
   });
 

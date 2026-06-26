@@ -1,6 +1,7 @@
 import {
   MERCHANT_TIERS,
   isTieredMethod,
+  isFlatFeeMethod,
   type PaymentMethod,
   type TierRates,
 } from '@/lib/types/bid';
@@ -41,6 +42,10 @@ export function buildPaymentFees(
         if (v !== '') map[tier] = pctToDecimal(v);
       }
       if (Object.keys(map).length > 0) out[m] = map;
+    } else if (isFlatFeeMethod(m)) {
+      // 정액(건당) 수단 — % 변환(÷100) 없이 '원' 단위 정수 그대로.
+      const v = fees[m] ?? '';
+      if (v !== '') out[m] = parseInt(v, 10);
     } else {
       const v = fees[m] ?? '';
       if (v !== '') out[m] = pctToDecimal(v);
@@ -67,6 +72,9 @@ export function templateFeesToFlat(
         const r = val[tier];
         if (r !== undefined) fees[feeKey(method, tier)] = fmtPct(r);
       }
+    } else if (isFlatFeeMethod(method)) {
+      // 정액(건당) 수단 — fmtPct(×100) 없이 '원' 단위 정수 문자열 그대로.
+      fees[method] = String(val);
     } else if (opts.spreadLegacyTieredSingleRate && isTieredMethod(method)) {
       for (const tier of MERCHANT_TIERS) fees[feeKey(method, tier)] = fmtPct(val);
     } else {

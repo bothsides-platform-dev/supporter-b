@@ -20,6 +20,7 @@ import {
   MERCHANT_TIERS,
   PAYMENT_METHOD_CATEGORIES,
   isTieredMethod,
+  isFlatFeeMethod,
   type PaymentMethod,
   type QuoteTemplateOption,
 } from '@/lib/types/bid';
@@ -62,7 +63,8 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   const fmtPct2dp = (rate: number): string => String(Math.round(rate * 1e4) / 100);
   for (const [k, v] of Object.entries(b.paymentFees ?? {})) {
     if (typeof v === 'number') {
-      fees[k] = fmtPct2dp(v);
+      // 정액(건당) 수단은 '원' 정수 그대로, 정률 수단은 decimal → percent 문자열.
+      fees[k] = isFlatFeeMethod(k as PaymentMethod) ? String(v) : fmtPct2dp(v);
     }
     // TierRates(object) — 단순화로 생략; 사용자가 직접 입력
   }

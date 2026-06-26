@@ -97,6 +97,20 @@ describe('buildFeeRows', () => {
     const rows = buildFeeRows(active, cm, null);
     expect(rows.map((r) => r.key)).toEqual(['card']);
   });
+
+  it('정률 수단 행은 unit="percent", 정액(건당) 수단 행은 unit="flat"', () => {
+    const active = makeBid({ paymentFees: { card: 0.022, virtual_account: 300 } });
+    const rows = buildFeeRows(active, [], null);
+    expect(rows.find((r) => r.key === 'card')!.unit).toBe('percent');
+    expect(rows.find((r) => r.key === 'virtual_account')!.unit).toBe('flat');
+  });
+
+  it('커스텀 수단 행은 unit="percent"', () => {
+    const cm: CustomPaymentMethod[] = [{ id: 'cm1', label: '포인트' }];
+    const active = makeBid({ paymentFees: { card: 0.022 }, customFees: { cm1: 0.01 } });
+    const rows = buildFeeRows(active, cm, null);
+    expect(rows.find((r) => r.key === 'custom:cm1')!.unit).toBe('percent');
+  });
 });
 
 // type guard so the FeeRow shape stays the contract the component consumes
@@ -104,6 +118,7 @@ const _typecheck: FeeRow = {
   key: 'card',
   label: '카드',
   isTiered: true,
+  unit: 'percent',
   getValue: () => null,
 };
 void _typecheck;

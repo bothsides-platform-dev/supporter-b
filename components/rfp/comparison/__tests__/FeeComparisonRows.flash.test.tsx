@@ -27,6 +27,7 @@ const tieredRow = {
   key: 'card',
   label: '카드',
   isTiered: true,
+  unit: 'percent' as const,
   getValue: (b: Bid, tier: string) =>
     typeof b.paymentFees.card === 'object'
       ? (b.paymentFees.card as Record<string, number>)[tier] ?? null
@@ -37,9 +38,22 @@ const flatRow = {
   key: 'overseas_card',
   label: '해외카드',
   isTiered: false,
+  unit: 'percent' as const,
   getValue: (b: Bid) =>
     typeof b.paymentFees.overseas_card === 'number' ? b.paymentFees.overseas_card : null,
 };
+
+// unit='flat' 인 정액(건당 원) 수단 행 — 표기는 원, % 아님.
+const flatFeeRow = {
+  key: 'virtual_account',
+  label: '가상계좌',
+  isTiered: false,
+  unit: 'flat' as const,
+  getValue: (b: Bid) =>
+    typeof b.paymentFees.virtual_account === 'number' ? b.paymentFees.virtual_account : null,
+};
+
+const flatFeeBid: Bid = { ...baseBid, paymentFees: { virtual_account: 300 } };
 
 describe('FeeComparisonRows flash', () => {
   it('flash=true이면 isTiered 행의 값 span에 tier-flash 클래스가 붙는다', () => {
@@ -72,6 +86,20 @@ describe('FeeComparisonRows flash', () => {
     );
     const span = screen.getByTestId('fee-value-card');
     expect(span).not.toHaveClass('tier-flash');
+  });
+
+  it('unit="flat" 행의 값은 % 가 아니라 원(formatKRW)으로 표기한다', () => {
+    render(
+      <FeeComparisonRows
+        feeRows={[flatFeeRow]}
+        sortedBids={[flatFeeBid]}
+        active={flatFeeBid}
+        tier="sole"
+        pgWsNameMap={{ pg1: 'PG사' }}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('fee-value-virtual_account')).toHaveTextContent('300원');
   });
 
   it('isTiered=false인 행은 flash=true여도 tier-flash 클래스가 없다', () => {
