@@ -108,6 +108,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     authorName: '담당자',
     requoteByPg: {},
     priorBidByPg: {},
+    awardedPgContact: null,
     ...over,
   };
 }
