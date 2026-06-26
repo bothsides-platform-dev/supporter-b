@@ -38,7 +38,8 @@ export const bidQuoteTemplates = pgTable(
     guaranteeInsurance: numeric('guarantee_insurance', { precision: 14, scale: 2 })
       .notNull()
       .default('0'),
-    // 표준 결제수단별 수수료 JSONB: { card: 0.0125, virtual_account: 0.005, ... } (소수 요율)
+    // 표준 결제수단별 수수료 JSONB: 정률 수단은 소수 요율, 정액 수단은 '원' 정수.
+    // 예: { card: 0.0125, virtual_account: 300 } (가상계좌=건당 300원)
     paymentFees: jsonb('payment_fees').notNull().default(sql`'{}'::jsonb`),
     createdBy: uuid('created_by')
       .notNull()
