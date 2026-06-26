@@ -392,3 +392,35 @@ describe('DrizzleUserRepository.setAvatarUpdatedAt', () => {
     expect(u?.avatarUpdatedAt).toBeNull();
   });
 });
+
+describe('findContactById', () => {
+  it('returns name/email/phone for a normal user', async () => {
+    const { db, repo } = await setup();
+    const u = await seedUser(db, { email: 'sales@toss.im', name: '김영업', phone: '010-1234-5678' });
+
+    const contact = await repo.findContactById(u.id);
+
+    expect(contact).toEqual({ name: '김영업', email: 'sales@toss.im', phone: '010-1234-5678' });
+  });
+
+  it('returns phone=null when the user has no phone', async () => {
+    const { db, repo } = await setup();
+    const u = await seedUser(db, { email: 'nophone@x.com', name: '담당자' });
+
+    const contact = await repo.findContactById(u.id);
+
+    expect(contact).toEqual({ name: '담당자', email: 'nophone@x.com', phone: null });
+  });
+
+  it('returns undefined for a system account (hidden from member surfaces)', async () => {
+    const { db, repo } = await setup();
+    const u = await seedUser(db, { email: 'master@ops.com', name: 'Ops', isSystemAccount: true });
+
+    expect(await repo.findContactById(u.id)).toBeUndefined();
+  });
+
+  it('returns undefined for an unknown id', async () => {
+    const { repo } = await setup();
+    expect(await repo.findContactById(randomUUID())).toBeUndefined();
+  });
+});

@@ -499,6 +499,14 @@ export interface UserRepo {
   ): Promise<
     { id: string; name: string; email: string; avatarUpdatedAt: string | null } | undefined
   >;
+  /**
+   * 연락처 projection — id 매칭 **+ 시스템 계정 제외**(findProfileById 와 동일 fail-closed).
+   * 선정 후 담당자 연락처 교환용. 시스템 계정이거나 행이 없으면 undefined. phone 은 nullable.
+   */
+  findContactById(
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ name: string; email: string; phone: string | null } | undefined>;
   /** id 로 passwordHash 단건 조회 — 계정 탈퇴 비밀번호 확인용. 없으면 undefined. */
   findPasswordHashById(userId: string, tx?: Tx): Promise<string | undefined>;
   /**

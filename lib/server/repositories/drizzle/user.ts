@@ -117,6 +117,20 @@ export class DrizzleUserRepository implements UserRepo {
     };
   }
 
+  async findContactById(
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ name: string; email: string; phone: string | null } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ name: users.name, email: users.email, phone: users.phone })
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.isSystemAccount, false)))
+      .limit(1);
+    if (!row) return undefined;
+    return { name: row.name, email: row.email, phone: row.phone ?? null };
+  }
+
   async findByEmail(
     email: string,
     tx?: Tx,
