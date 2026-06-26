@@ -94,7 +94,7 @@ const VALID: SaveQuoteTemplateServiceInput = {
   settleCycle: 'M+1',
   settleLimit: 5_000_000,
   guaranteeInsurance: 500_000,
-  paymentFees: { card: 0.0125, virtual_account: 0.005 },
+  paymentFees: { card: 0.0125, virtual_account: 300 },
 };
 
 function seededTemplate(
@@ -134,7 +134,7 @@ describe('QuoteTemplateService.save (create)', () => {
     expect(created.pgWsId).toBe(WS_A);
     expect(created.createdBy).toBe('user-a');
     expect(created.name).toBe('표준 요율');
-    expect(created.paymentFees).toEqual({ card: 0.0125, virtual_account: 0.005 });
+    expect(created.paymentFees).toEqual({ card: 0.0125, virtual_account: 300 });
   });
 
   it('caps a workspace at MAX_TEMPLATES (20) → LIMIT_REACHED', async () => {

@@ -83,11 +83,11 @@ describe('useBidDraft', () => {
   it('__v=3 복합 키 draft를 복원한다', () => {
     localStorage.setItem(
       'bid-draft:rfp-y',
-      JSON.stringify({ __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees: { 'card:sole': '0.5', virtual_account: '0.3' }, memo: '' }),
+      JSON.stringify({ __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees: { 'card:sole': '0.5', virtual_account: '300' }, memo: '' }),
     );
     const { result } = renderHook(() => useBidDraft('rfp-y'));
     expect(result.current.draft?.fees['card:sole']).toBe('0.5');
-    expect(result.current.draft?.fees.virtual_account).toBe('0.3');
+    expect(result.current.draft?.fees.virtual_account).toBe('300');
   });
 
   it('구버전(bankPct/cardPct) 드래프트는 무시하고 항목을 삭제한다', () => {

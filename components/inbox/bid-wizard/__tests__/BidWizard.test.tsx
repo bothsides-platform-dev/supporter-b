@@ -295,10 +295,10 @@ describe('BidWizard 구간 수수료 조립', () => {
     await user.type(screen.getByPlaceholderText('1'), '1');
     await user.click(screen.getByRole('button', { name: '수수료' }));
 
-    // step2: 카드 구간 셀(영세·일반) + 가상계좌 단일
+    // step2: 카드 구간 셀(영세·일반) + 가상계좌 건당 정액(원)
     await user.type(screen.getByTestId('fee-cell-card-sole'), '0.5');
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.8');
-    await user.type(feeInput('가상계좌 수수료'), '0.3');
+    await user.type(feeInput('가상계좌 건당 수수료'), '300');
     await user.click(screen.getByRole('button', { name: '견적서' }));
 
     // step3 → step4
@@ -314,7 +314,7 @@ describe('BidWizard 구간 수수료 조립', () => {
     };
     expect(arg.paymentFees).toMatchObject({
       card: { sole: 0.005, general: expect.closeTo(0.018, 5) },
-      virtual_account: 0.003,
+      virtual_account: 300,
     });
   });
 });

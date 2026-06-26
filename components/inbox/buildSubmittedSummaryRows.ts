@@ -2,6 +2,7 @@ import {
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
   PAYMENT_METHOD_LABELS,
+  isFlatFeeMethod,
   type PaymentMethod,
   type TierRates,
 } from '@/lib/types/bid';
@@ -38,6 +39,10 @@ export function buildSubmittedSummaryRows(rfp: RFP, bid: Bid): [string, string][
               string,
             ],
         );
+      }
+      // 정액(건당) 수단은 % 가 아니라 '건당' 라벨 + 원 금액으로.
+      if (isFlatFeeMethod(m as PaymentMethod)) {
+        return [[`${label} (건당)`, formatKRW(fee as number)] as [string, string]];
       }
       return [[label, formatPct(fee as number)] as [string, string]];
     }),

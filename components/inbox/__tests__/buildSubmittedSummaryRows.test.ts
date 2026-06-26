@@ -48,4 +48,11 @@ describe('buildSubmittedSummaryRows', () => {
     // 커스텀 수수료 라벨이 행으로.
     expect(rows.some(([k]) => k === '포인트결제')).toBe(true);
   });
+
+  it('정액(건당) 수단은 % 가 아니라 "건당" 라벨 + 원 금액으로 표기한다', () => {
+    const flatBid: Bid = { ...bid, paymentFees: { virtual_account: 300 } };
+    const map = new Map(buildSubmittedSummaryRows(rfp, flatBid));
+    expect(map.get('가상계좌 (건당)')).toBe('300원');
+    expect(map.has('가상계좌')).toBe(false);
+  });
 });

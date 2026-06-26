@@ -31,7 +31,7 @@ const tmpl = (over: Partial<QuoteTemplateOption> = {}): QuoteTemplateOption => (
   settleCycle: 'D+1',
   settleLimit: 5_000_000,
   guaranteeInsurance: 0,
-  paymentFees: { card: 0.0125, virtual_account: 0.005 },
+  paymentFees: { card: 0.0125, virtual_account: 300 },
   ...over,
 });
 
@@ -56,6 +56,11 @@ describe('QuoteTemplateList', () => {
     expect(screen.getByText('카드 1.25%')).toBeInTheDocument();
   });
 
+  it('정액(건당) 수단은 "가상계좌 건당 300원" chip으로 표시한다', () => {
+    render(<QuoteTemplateList initialTemplates={[tmpl({ paymentFees: { virtual_account: 300 } })]} />);
+    expect(screen.getByText('가상계좌 건당 300원')).toBeInTheDocument();
+  });
+
   it('구간요율 수단은 "카드 구간별" chip으로 표시한다', () => {
     render(
       <QuoteTemplateList
@@ -73,7 +78,7 @@ describe('QuoteTemplateList', () => {
             paymentFees: {
               card: 0.0125,
               overseas_card: 0.018,
-              virtual_account: 0.005,
+              virtual_account: 300,
               bank_transfer: 0.004,
               naver_pay: 0.015,
             },

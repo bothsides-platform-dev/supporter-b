@@ -11,6 +11,7 @@ import {
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
   isTieredMethod,
+  isFlatFeeMethod,
   type PaymentMethod,
   type QuoteTemplateOption,
 } from '@/lib/types/bid';
@@ -220,7 +221,19 @@ export function QuoteTemplateDrawer({
                 );
               }
 
-              // Single-rate method
+              // 정액(건당) 수단 — % 가 아니라 건당 '원' 정수로 입력받는다.
+              if (isFlatFeeMethod(method)) {
+                return (
+                  <CurrencyInput
+                    key={method}
+                    label={`${PAYMENT_METHOD_LABELS[method]} 건당 수수료`}
+                    value={editor.fees[method] ?? ''}
+                    onChange={(v) => setFee(method, v)}
+                  />
+                );
+              }
+
+              // Single-rate (정률) method
               return (
                 <PercentInput
                   key={method}
