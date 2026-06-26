@@ -51,6 +51,7 @@ function makeConv(overrides?: Partial<ConversationListItem>): InboxListItem {
     preview: '검토 부탁드립니다.',
     lastMessageAt: '2026-06-06T01:00:00.000Z',
     unread: false,
+    closedAfterAward: false,
     ...overrides,
   };
   return { kind: 'counterparty', key: `c:${c.conversationId}`, ...c };

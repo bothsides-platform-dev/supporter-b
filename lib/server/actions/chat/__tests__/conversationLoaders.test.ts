@@ -24,7 +24,7 @@ import {
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
-import { attachments } from '@/lib/db/schema';
+import { attachments, bids, rfpInvitations, rfps } from '@/lib/db/schema';
 
 type SessionUser = {
   id: string;
@@ -130,6 +130,127 @@ describe('listConversationsForViewer', () => {
     await seedMembership(db, otherPgWs.id, otherPgUser.id, 'admin');
     asPg(otherPgUser, otherPgWs.id);
     expect(await listConversationsForViewer()).toEqual([]);
+  });
+});
+
+describe('listConversationsForViewer closedAfterAward', () => {
+  beforeEach(async () => {
+    db = await setupRfpActionEnv();
+  });
+  afterEach(() => {
+    teardownRfpActionEnv();
+    sessionRef.value = null;
+  });
+
+  // RFP 에 초대된 PG 가 (메시지에 rfpId 가 붙으려면 접근권 필요) 구매사와 대화를
+  // 갖는 선정 시나리오. 승자·패자 모두 accepted 초대를 받은 뒤 메시지를 보낸다.
+  async function seedInvitation(rfpId: string, pgWsId: string) {
+    const invId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: invId,
+      rfpId,
+      pgWsId,
+      tokenHash: randomUUID(),
+      sentAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000),
+      status: 'accepted',
+    });
+    return invId;
+  }
+
+  async function seedAwardScenario() {
+    const buyerUser = await seedUser(db, { email: 'buyer@b.com', name: '구매사담당' });
+    const buyerWs = await seedBuyerWorkspace(db, { name: '구매사' });
+    await seedMembership(db, buyerWs.id, buyerUser.id, 'admin');
+
+    const winUser = await seedUser(db, { email: 'win@pg.com', name: '승자영업' });
+    const winWs = await seedPgWorkspace(db, 'WIN', { name: '승자페이' });
+    await seedMembership(db, winWs.id, winUser.id, 'admin');
+
+    const loseUser = await seedUser(db, { email: 'lose@pg.com', name: '패자영업' });
+    const loseWs = await seedPgWorkspace(db, 'LOSE', { name: '패자페이' });
+    await seedMembership(db, loseWs.id, loseUser.id, 'admin');
+
+    const rfp = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyerUser.id });
+    const winInv = await seedInvitation(rfp.id, winWs.id);
+    await seedInvitation(rfp.id, loseWs.id);
+
+    // 두 PG 모두 이 RFP 를 마지막 메시지로 갖는 대화 생성(초대됐으므로 rfpId 보존).
+    asPg(winUser, winWs.id);
+    await sendChatMessageAction({ counterpartyWorkspaceId: buyerWs.id, body: '승자 제안', rfpId: rfp.id });
+    asPg(loseUser, loseWs.id);
+    await sendChatMessageAction({ counterpartyWorkspaceId: buyerWs.id, body: '패자 제안', rfpId: rfp.id });
+
+    return { buyerUser, buyerWs, winUser, winWs, loseUser, loseWs, rfp, winInv };
+  }
+
+  // 승자 PG 의 submitted bid 를 만들고(초대 재사용) RFP 를 그 bid 로 선정.
+  async function awardTo(rfpId: string, winnerPgWsId: string, winnerInvId: string, submittedBy: string) {
+    const bidId = randomUUID();
+    await db.insert(bids).values({
+      id: bidId,
+      rfpId,
+      pgWsId: winnerPgWsId,
+      invitationId: winnerInvId,
+      settleCycle: 'D+1',
+      submittedBy,
+      status: 'submitted',
+    });
+    await db.update(rfps).set({ status: 'awarded', awardedBidId: bidId }).where(eq(rfps.id, rfpId));
+    return bidId;
+  }
+
+  function rowFor(
+    list: Awaited<ReturnType<typeof listConversationsForViewer>>,
+    counterpartyWsId: string,
+  ) {
+    return list.find((c) => c.counterparty.workspaceId === counterpartyWsId);
+  }
+
+  it('buyer 뷰어: 미선정 PG 대화는 closedAfterAward=true, 승자 PG 대화는 false', async () => {
+    const { buyerUser, buyerWs, winWs, winInv, loseWs, rfp } = await seedAwardScenario();
+    await awardTo(rfp.id, winWs.id, winInv, buyerUser.id);
+
+    asBuyer(buyerUser, buyerWs.id);
+    const list = await listConversationsForViewer();
+    expect(rowFor(list, winWs.id)?.closedAfterAward).toBe(false);
+    expect(rowFor(list, loseWs.id)?.closedAfterAward).toBe(true);
+  });
+
+  it('미선정 PG 뷰어: 자기 대화가 closedAfterAward=true', async () => {
+    const { buyerUser, winWs, winInv, loseUser, loseWs, rfp } = await seedAwardScenario();
+    await awardTo(rfp.id, winWs.id, winInv, buyerUser.id);
+
+    asPg(loseUser, loseWs.id);
+    const list = await listConversationsForViewer();
+    expect(list[0].closedAfterAward).toBe(true);
+  });
+
+  it('승자 PG 뷰어: 자기 대화는 closedAfterAward=false', async () => {
+    const { buyerUser, winUser, winWs, winInv, rfp } = await seedAwardScenario();
+    await awardTo(rfp.id, winWs.id, winInv, buyerUser.id);
+
+    asPg(winUser, winWs.id);
+    const list = await listConversationsForViewer();
+    expect(list[0].closedAfterAward).toBe(false);
+  });
+
+  it('선정 전(sent)에는 어떤 대화도 닫지 않는다', async () => {
+    const { buyerUser, buyerWs } = await seedAwardScenario();
+    asBuyer(buyerUser, buyerWs.id);
+    const list = await listConversationsForViewer();
+    expect(list.every((c) => c.closedAfterAward === false)).toBe(true);
+  });
+
+  it('승자 신원은 클라이언트로 새지 않는다 — closedAfterAward 불리언만', async () => {
+    const { buyerUser, buyerWs, winWs, winInv, loseWs, rfp } = await seedAwardScenario();
+    await awardTo(rfp.id, winWs.id, winInv, buyerUser.id);
+
+    asBuyer(buyerUser, buyerWs.id);
+    const loseRow = rowFor(await listConversationsForViewer(), loseWs.id);
+    expect(loseRow).not.toHaveProperty('awardedBidId');
+    expect(loseRow).not.toHaveProperty('winnerPgWsId');
+    expect(loseRow?.closedAfterAward).toBe(true);
   });
 });
 
