@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
+import { PAYMENT_METHOD_CATEGORIES, isFlatFeeMethod } from '@/lib/types/bid';
+
+const ALL_METHODS = PAYMENT_METHOD_CATEGORIES.flatMap((c) => c.methods);
 
 describe('PaymentFeesSchema — 가상계좌 정액(건당 원)', () => {
   it('가상계좌는 1을 초과하는 정수 원 금액을 허용한다 (예: 300원)', () => {
@@ -39,4 +42,23 @@ describe('PaymentFeesSchema — 정률(%) 수단은 0~1 소수 유지', () => {
       PaymentFeesSchema.safeParse({ card: { sole: 0.005, general: 0.018 } }).success,
     ).toBe(true);
   });
+});
+
+// 드리프트 가드 — FLAT_FEE_METHODS(isFlatFeeMethod)와 스키마의 단위가 따로 관리되므로,
+// 둘 중 하나만 바꾸면 단위가 어긋난다. 모든 수단에 대해 스키마가 isFlatFeeMethod 과
+// 같은 단위(정액=정수 원 / 정률=0~1 소수)로 검증하는지 행위로 고정한다.
+describe('PaymentFeesSchema 단위 ↔ isFlatFeeMethod 드리프트 가드', () => {
+  it.each(ALL_METHODS)(
+    '%s: 정액 수단은 정수 원 허용·소수 거부, 정률 수단은 0~1 소수 허용·>1 거부',
+    (m) => {
+      const accepts = (v: unknown) => PaymentFeesSchema.safeParse({ [m]: v }).success;
+      if (isFlatFeeMethod(m)) {
+        expect(accepts(300)).toBe(true); // '원' 정수
+        expect(accepts(0.5)).toBe(false); // 소수 거부
+      } else {
+        expect(accepts(0.005)).toBe(true); // 0~1 소수 요율
+        expect(accepts(300)).toBe(false); // >1 거부 (정률은 0~1)
+      }
+    },
+  );
 });

@@ -8,6 +8,7 @@ import {
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
   isTieredMethod,
+  isFlatFeeMethod,
   PAYMENT_METHOD_LABELS,
   type CustomPaymentMethod,
   type PaymentMethod,
@@ -78,7 +79,12 @@ export function BidStepReview({
         .map((t) => `${MERCHANT_TIER_LABELS[t]} ${fees[`${m}:${t}`]}%`);
       if (parts.length > 0) feeRows.push([PAYMENT_METHOD_LABELS[m], parts.join(' · ')]);
     } else if ((fees[m] ?? '') !== '') {
-      feeRows.push([PAYMENT_METHOD_LABELS[m], `${fees[m]}%`]);
+      // 정액(건당) 수단은 % 가 아니라 원으로 요약 표시.
+      feeRows.push(
+        isFlatFeeMethod(m)
+          ? [`${PAYMENT_METHOD_LABELS[m]} (건당)`, formatKRW(parseInt(fees[m], 10))]
+          : [PAYMENT_METHOD_LABELS[m], `${fees[m]}%`],
+      );
     }
   }
   for (const c of customPaymentMethods) {
