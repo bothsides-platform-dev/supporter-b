@@ -85,7 +85,7 @@ import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rf
 import { toast } from '@/lib/toast';
 
 // 기존 테스트에서 공통으로 쓰는 PG 픽스처
-const PG_1 = { id: 'pg-1', name: '나이스', displayName: '나이스' };
+const PG_1 = { id: 'pg-1', name: '나이스', displayName: '나이스', logoUpdatedAt: null };
 
 function resetStore() {
   useRfpDraftStore.setState({
@@ -138,7 +138,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       deadline: '2026-06-30T23:59:59Z',
     });
     const user = userEvent.setup();
@@ -165,7 +165,7 @@ describe('RfpCreateWizard', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
@@ -193,7 +193,7 @@ describe('RfpCreateWizard', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
     const user = userEvent.setup();
@@ -220,7 +220,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       // deadline 미설정 → Step 4 미완료
     });
     const user = userEvent.setup();
@@ -249,7 +249,7 @@ describe('RfpCreateWizard', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       currentSettlementCycle: 'D+2',
       deliveryServicePeriod: '3~5일',
     });
@@ -281,7 +281,7 @@ describe('RfpCreateWizard', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       boardVisible: false,
     });
     const user = userEvent.setup();
@@ -308,7 +308,7 @@ describe('RfpCreateWizard', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       contractType: 'renewal',
     });
     const user = userEvent.setup();
@@ -336,7 +336,7 @@ describe('RfpCreateWizard', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
+      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
@@ -397,13 +397,13 @@ describe('RfpCreateWizard', () => {
     it('pgList에 없는 stale PG를 제거하고 warning toast를 표시한다', async () => {
       useRfpDraftStore.setState({
         allowedPgWorkspaceIds: [
-          { id: 'pg-valid', displayName: '나이스' },
-          { id: 'pg-stale', displayName: '구 PG사' },
+          { id: 'pg-valid', displayName: '나이스', logoUpdatedAt: null },
+          { id: 'pg-stale', displayName: '구 PG사', logoUpdatedAt: null },
         ],
       });
       render(
         <RfpCreateWizard
-          pgList={[{ id: 'pg-valid', name: '나이스', displayName: '나이스' }]}
+          pgList={[{ id: 'pg-valid', name: '나이스', displayName: '나이스', logoUpdatedAt: null }]}
         />,
       );
 
@@ -420,11 +420,11 @@ describe('RfpCreateWizard', () => {
 
     it('모든 PG가 유효하면 PG 관련 warning을 표시하지 않는다', async () => {
       useRfpDraftStore.setState({
-        allowedPgWorkspaceIds: [{ id: 'pg-valid', displayName: '나이스' }],
+        allowedPgWorkspaceIds: [{ id: 'pg-valid', displayName: '나이스', logoUpdatedAt: null }],
       });
       render(
         <RfpCreateWizard
-          pgList={[{ id: 'pg-valid', name: '나이스', displayName: '나이스' }]}
+          pgList={[{ id: 'pg-valid', name: '나이스', displayName: '나이스', logoUpdatedAt: null }]}
         />,
       );
 

@@ -2,13 +2,20 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
+import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { RequiredMark } from './RequiredMark';
 import { isPgValid, markerState } from '@/lib/rfp/required-fields';
 import { FieldError } from '@/components/primitives/FieldError';
 
-// name is used server-side to compute displayName (dedup); component uses only id + displayName.
-export type PgWorkspace = { id: string; name: string; displayName: string };
+// name is used server-side to compute displayName (dedup) and for avatar initials fallback;
+// displayName is the visible label, logoUpdatedAt the workspace-logo cache-bust version.
+export type PgWorkspace = {
+  id: string;
+  name: string;
+  displayName: string;
+  logoUpdatedAt: string | null;
+};
 
 type Props = {
   pgList: PgWorkspace[];
@@ -34,7 +41,7 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
     } else {
       draft.setField('allowedPgWorkspaceIds', [
         ...draft.allowedPgWorkspaceIds,
-        { id: ws.id, displayName: ws.displayName },
+        { id: ws.id, displayName: ws.displayName, logoUpdatedAt: ws.logoUpdatedAt },
       ]);
     }
   };
@@ -45,7 +52,11 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
     } else {
       draft.setField(
         'allowedPgWorkspaceIds',
-        pgList.map((ws) => ({ id: ws.id, displayName: ws.displayName })),
+        pgList.map((ws) => ({
+          id: ws.id,
+          displayName: ws.displayName,
+          logoUpdatedAt: ws.logoUpdatedAt,
+        })),
       );
     }
   };
@@ -83,10 +94,19 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
               onClick={() => handleToggle(ws)}
               className={
                 selected
-                  ? 'py-[5px] px-3 rounded-[6px] text-[13px] bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] border border-[var(--md-sys-color-primary)]'
-                  : 'py-[5px] px-3 rounded-[6px] text-[13px] bg-transparent text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline-variant)]'
+                  ? 'inline-flex items-center gap-1.5 py-[5px] pl-[5px] pr-3 rounded-[6px] text-[13px] bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] border border-[var(--md-sys-color-primary)]'
+                  : 'inline-flex items-center gap-1.5 py-[5px] pl-[5px] pr-3 rounded-[6px] text-[13px] bg-transparent text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline-variant)]'
               }
             >
+              {/* 로고는 장식 — 칩 텍스트가 이미 PG명을 알리므로 a11y 트리에서 숨김 */}
+              <span aria-hidden className="inline-flex">
+                <WorkspaceAvatar
+                  size="sm"
+                  name={ws.name}
+                  workspaceId={ws.id}
+                  logoUpdatedAt={ws.logoUpdatedAt}
+                />
+              </span>
               {ws.displayName}
             </button>
           );

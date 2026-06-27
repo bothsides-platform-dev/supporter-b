@@ -332,16 +332,21 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async search(
     opts: { type: WorkspaceType; q?: string },
     tx?: Tx,
-  ): Promise<{ id: string; name: string }[]> {
+  ): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]> {
     const db = this.h(tx);
     const { type, q } = opts;
     // 데모 PG(isDemo)는 항상 제외 — 실제 RFP 초대·이메일이 가짜 PG로 새지 않도록(봉인입찰/온보딩 격리).
     const base = and(eq(workspaces.type, type), eq(workspaces.isDemo, false));
-    return (await db
-      .select({ id: workspaces.id, name: workspaces.name })
+    const rows = (await db
+      .select({ id: workspaces.id, name: workspaces.name, logoUpdatedAt: workspaces.logoUpdatedAt })
       .from(workspaces)
       .where(q ? and(base, ilike(workspaces.name, `%${escapeIlike(q)}%`)) : base)
-      .limit(q ? 20 : 500)) as { id: string; name: string }[];
+      .limit(q ? 20 : 500)) as { id: string; name: string; logoUpdatedAt: Date | null }[];
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      logoUpdatedAt: r.logoUpdatedAt ? new Date(r.logoUpdatedAt).toISOString() : null,
+    }));
   }
 
   async getName(workspaceId: string, tx?: Tx): Promise<string | undefined> {
