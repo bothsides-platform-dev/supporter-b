@@ -16,6 +16,7 @@ function conv(overrides?: Partial<Extract<InboxListItem, { kind: 'counterparty' 
     preview: '안녕하세요',
     lastMessageAt: '2026-06-06T10:00:00.000Z',
     unread: false,
+    closedAfterAward: false,
     ...overrides,
   };
 }
