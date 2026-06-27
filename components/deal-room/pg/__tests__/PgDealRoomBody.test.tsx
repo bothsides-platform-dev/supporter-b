@@ -142,6 +142,18 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
   });
 
+  it('미선정 분기는 buyerContact 가 (오류로) 채워져 있어도 연락처를 렌더하지 않는다(봉인입찰 방어)', () => {
+    render(<PgDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      myBid: submittedBid,
+      awardedToMe: false,
+      buyerContact: { workspaceName: '(주)테스트', name: '구매 담당자', email: 'buyer@buy.com', phone: '010-1111-2222' },
+    })} />);
+    expect(screen.getByText('이번엔 선정되지 않았어요')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /buyer@buy\.com/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /010-1111-2222/ })).not.toBeInTheDocument();
+  });
+
   it('선정 전(sent)에는 결과 헤더를 렌더하지 않는다', () => {
     render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
     expect(screen.queryByText('이 견적이 선정됐어요')).not.toBeInTheDocument();
