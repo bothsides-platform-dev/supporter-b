@@ -102,6 +102,8 @@ rowToRfp 브리프 doc-only(개별 컬럼 폴백 제거) + loadPgRfpDetail hidde
 ### PG 멤버십 승인 서버 데이터 경계 강제 (P2)
 `joinCanonicalPgWorkspace` 경로로 생성된 `approval_status = 'pending_approval'` 멤버는 UI 게이트(shell guard + `/pending-approval` 분기)로 차단되지만, 서버 액션/API 라우트(`requirePgSession()`) 레벨에서는 `memberApprovalStatus`를 검증하지 않아 직접 POST 요청으로 우회 가능. PR#199 emailVerified 유예와 동일 패턴 — 이번 PR에서 의도적으로 후속 유예. **구현 시 `requirePgSession()`에 `getMemberApprovalStatus` 체크 추가 또는 별도 미들웨어 gate.** (발견: 최종 코드 리뷰 2026-06-18)
 
+**부분 해소 (v0.2.48.0)**: admin 권한 표면(WorkspaceService invite/resend/cancel/changeRole/removeMember + renameWorkspace + listAuditLogs + audit-log 페이지)은 `isApprovedAdmin`(role=admin AND approvalStatus=approved)로 서버에서 차단했고, countAdmins·adminRecipients·deleteAccount last-admin 판정·rfp 초대 메일 수신자도 승인된 admin 만 집계/수신. **남은 범위**: 비-admin pg 서버액션 전반에 대한 blanket `requirePgSession()` 승인 게이트는 여전히 미구현.
+
 ## Completed
 
 - **Presence 같은-워크스페이스 self-subscribe 가드 (v0.2.38.0, 2026-06-22)**: `managedSubscribe` 에 Subscription 객체 키 refcount 추가 — `<PresenceClient/>` self-broadcast 와 `WorkspacePresenceProvider` 가 같은 `presence:ws:<ownWs>` 채널을 공유해도 마지막 owner 가 dispose 할 때만 `unsubscribe()`+`removeSubscription()`. 아바타 신원 카드(UserProfileCard)가 팀원/본인 카드에서 `useUserPresence(ownWorkspaceId, …)` 를 호출해 같은-워크스페이스 관찰이 처음으로 도달 가능해지면서 필요해진 가드(이전엔 counterparty id 만 넘겨 도달 불가). 카드를 닫아도 본인 presence 가 끊기지 않는다. 3878 green.
