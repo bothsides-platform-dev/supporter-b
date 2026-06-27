@@ -377,7 +377,7 @@ describe('DrizzleWorkspaceRepository', () => {
       const ws = await seedPgWorkspace(db, 'mem.test');
       const u = await seedUser(db, { email: 'm@mem.test' });
       await seedMembership(db, ws.id, u.id, 'admin');
-      expect(await repo.getMembership(u.id, ws.id)).toEqual({ role: 'admin', type: 'pg' });
+      expect(await repo.getMembership(u.id, ws.id)).toEqual({ role: 'admin', type: 'pg', approvalStatus: 'approved' });
     });
 
     it('returns undefined when the user is not a member', async () => {
@@ -408,6 +408,7 @@ describe('DrizzleWorkspaceRepository', () => {
         workspaceId: wsA.id,
         role: 'admin',
         type: 'buyer',
+        approvalStatus: 'approved',
       });
     });
 
@@ -507,7 +508,7 @@ describe('DrizzleWorkspaceRepository', () => {
       const ws = await seedBuyerWorkspace(db);
       const u = await seedUser(db, { email: 'added@add.test' });
       await repo.addMember({ workspaceId: ws.id, userId: u.id, role: 'admin' });
-      expect(await repo.getMembership(u.id, ws.id)).toEqual({ role: 'admin', type: 'buyer' });
+      expect(await repo.getMembership(u.id, ws.id)).toEqual({ role: 'admin', type: 'buyer', approvalStatus: 'approved' });
     });
 
     it('is idempotent (onConflictDoNothing) on a duplicate member', async () => {
@@ -516,7 +517,7 @@ describe('DrizzleWorkspaceRepository', () => {
       await repo.addMember({ workspaceId: ws.id, userId: u.id, role: 'admin' });
       await repo.addMember({ workspaceId: ws.id, userId: u.id, role: 'member' });
       // Role of the first insert wins (no update on conflict).
-      expect(await repo.getMembership(u.id, ws.id)).toEqual({ role: 'admin', type: 'buyer' });
+      expect(await repo.getMembership(u.id, ws.id)).toEqual({ role: 'admin', type: 'buyer', approvalStatus: 'approved' });
       const ids = await repo.memberUserIds(ws.id);
       expect(ids).toEqual([u.id]);
     });
@@ -1025,7 +1026,7 @@ describe('DrizzleWorkspaceRepository', () => {
       const u = await seedUser(db, { email: 'u@update-role.test' });
       await seedMembership(db, ws.id, u.id, 'member');
       await repo.updateMemberRole({ workspaceId: ws.id, userId: u.id, role: 'admin' });
-      expect(await repo.getMembership(u.id, ws.id)).toEqual({ role: 'admin', type: 'buyer' });
+      expect(await repo.getMembership(u.id, ws.id)).toEqual({ role: 'admin', type: 'buyer', approvalStatus: 'approved' });
     });
   });
 
@@ -1143,7 +1144,24 @@ describe('DrizzleWorkspaceRepository', () => {
 
       expect(await repo.getMembership(me.id, ws1.id)).toBeUndefined();
       expect(await repo.getMembership(me.id, ws2.id)).toBeUndefined();
-      expect(await repo.getMembership(other.id, ws1.id)).toEqual({ role: 'member', type: 'buyer' });
+      expect(await repo.getMembership(other.id, ws1.id)).toEqual({ role: 'member', type: 'buyer', approvalStatus: 'approved' });
+    });
+  });
+
+  describe('getMembership approvalStatus', () => {
+    it('returns approvalStatus for approved and pending members', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const approved = await seedUser(db, { email: 'approved@appr.test' });
+      const pending = await seedUser(db, { email: 'pending@appr.test' });
+      await seedMembership(db, ws.id, approved.id, 'admin');
+      await seedMembership(db, ws.id, pending.id, 'admin', { approvalStatus: 'pending_approval' });
+
+      expect(await repo.getMembership(approved.id, ws.id)).toEqual({
+        role: 'admin',
+        type: 'buyer',
+        approvalStatus: 'approved',
+      });
+      expect((await repo.getMembership(pending.id, ws.id))?.approvalStatus).toBe('pending_approval');
     });
   });
 });

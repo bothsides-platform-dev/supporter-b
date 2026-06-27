@@ -489,10 +489,14 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     userId: string,
     workspaceId: string,
     tx?: Tx,
-  ): Promise<{ role: string; type: WorkspaceType } | undefined> {
+  ): Promise<{ role: string; type: WorkspaceType; approvalStatus: MemberApprovalStatus } | undefined> {
     const db = this.h(tx);
     const [row] = await db
-      .select({ role: workspaceMembers.role, type: workspaces.type })
+      .select({
+        role: workspaceMembers.role,
+        type: workspaces.type,
+        approvalStatus: workspaceMembers.approvalStatus,
+      })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
       .where(
@@ -502,7 +506,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         ),
       )
       .limit(1);
-    return row ?? undefined;
+    return row
+      ? { ...row, approvalStatus: row.approvalStatus as MemberApprovalStatus }
+      : undefined;
   }
 
   async getMemberApprovalStatus(
@@ -527,20 +533,25 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async findInitialMembership(
     userId: string,
     tx?: Tx,
-  ): Promise<{ workspaceId: string; role: string; type: WorkspaceType } | undefined> {
+  ): Promise<
+    { workspaceId: string; role: string; type: WorkspaceType; approvalStatus: MemberApprovalStatus } | undefined
+  > {
     const db = this.h(tx);
     const [row] = await db
       .select({
         workspaceId: workspaceMembers.workspaceId,
         role: workspaceMembers.role,
         type: workspaces.type,
+        approvalStatus: workspaceMembers.approvalStatus,
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
       .where(eq(workspaceMembers.userId, userId))
       .orderBy(asc(workspaceMembers.joinedAt))
       .limit(1);
-    return row ?? undefined;
+    return row
+      ? { ...row, approvalStatus: row.approvalStatus as MemberApprovalStatus }
+      : undefined;
   }
 
   async listMembershipsWithMembers(

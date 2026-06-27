@@ -187,6 +187,62 @@ describe('WorkspaceService.removeMember', () => {
   });
 });
 
+// ─── pending_approval admin has NO admin authority ─────────────────────────────
+// Canonical-PG joiners are role='admin' but approvalStatus='pending_approval'
+// until vetted. The shell only gates RSC renders, not server actions, so the
+// service gates MUST treat an unapproved admin as a non-admin.
+
+describe('WorkspaceService — pending_approval admin is not an effective admin', () => {
+  it('changeMemberRole returns FORBIDDEN_NOT_ADMIN for a pending admin actor', async () => {
+    const pending = await seedUser(db, { email: 'pending@test.com' });
+    const target = await seedUser(db, { email: 'target@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, pending.id, 'admin', { approvalStatus: 'pending_approval' });
+    await seedMembership(db, ws.id, target.id, 'member');
+
+    const result = await service.changeMemberRole(
+      { targetUserId: target.id, role: 'admin' },
+      { userId: pending.id, workspaceId: ws.id },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
+  });
+
+  it('removeMember returns FORBIDDEN_NOT_ADMIN for a pending admin actor', async () => {
+    const pending = await seedUser(db, { email: 'pending@test.com' });
+    const victim = await seedUser(db, { email: 'victim@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, pending.id, 'admin', { approvalStatus: 'pending_approval' });
+    await seedMembership(db, ws.id, victim.id, 'admin');
+
+    const result = await service.removeMember(
+      { targetUserId: victim.id },
+      { userId: pending.id, workspaceId: ws.id },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
+
+    const rows = await db
+      .select()
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, victim.id)));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('inviteMember returns FORBIDDEN_NOT_ADMIN for a pending admin actor', async () => {
+    const pending = await seedUser(db, { email: 'pending@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, pending.id, 'admin', { approvalStatus: 'pending_approval' });
+
+    const result = await service.inviteMember(
+      { email: 'confederate@test.com', role: 'admin' },
+      { userId: pending.id, workspaceId: ws.id },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
+  });
+});
+
 // ─── inviteMember ─────────────────────────────────────────────────────────────
 
 describe('WorkspaceService.inviteMember', () => {
