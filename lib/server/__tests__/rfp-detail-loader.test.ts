@@ -572,8 +572,9 @@ describe('연락처 교환 (awarded)', () => {
     expect(data?.awardedToMe).toBe(false);
     expect(data?.buyerContact).toBeNull();
     // 누출 회귀: 미선정 PG 페이로드에 구매사 이메일도, 어떤 전화번호도(승자 PG 전화 포함)
-    // 새지 않아야 한다. ('010-' 는 시드된 승자 PG 전화 '010-9999-0000' 를 잡는다.)
+    // 새지 않아야 한다. 시드된 승자 PG 전화 전체('010-9999-0000')로 검사한다 —
+    // 느슨한 '010-' 접두만 보면 무작위 UUID 세그먼트('…-4010-…')에 충돌해 거짓 실패한다.
     expect(JSON.stringify(data)).not.toContain('buyer@buy.com');
-    expect(JSON.stringify(data)).not.toContain('010-');
+    expect(JSON.stringify(data)).not.toContain('010-9999-0000');
   });
 });
