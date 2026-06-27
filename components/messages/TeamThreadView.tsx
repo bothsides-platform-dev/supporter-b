@@ -326,22 +326,27 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
               e.target.value = '';
             }}
           />
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={draft}
-            maxLength={4000}
-            placeholder="우리 팀에게만 보이는 메모를 남겨보세요…"
-            onChange={(e) => {
-              const value = e.target.value;
-              setDraft(value);
-              resizeTextarea();
-              mention.onTextChange(value, e.target.selectionStart ?? value.length);
-            }}
-            onKeyDown={handleKeyDown}
-            className="min-h-8 max-h-40 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
-          />
+          {/* min-w-0 flex-1 — ThreadView 컴포저와 동일. 레일 폭에서 textarea 가 가로 공간을
+              끝까지 쓰게 하고, placeholder 는 truncate 로 한 줄 유지(두 줄 잘림 방지). */}
+          <div className="flex min-w-0 flex-1">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={draft}
+              maxLength={4000}
+              placeholder="우리 팀에게만 보이는 메모를 남겨보세요…"
+              onChange={(e) => {
+                const value = e.target.value;
+                setDraft(value);
+                resizeTextarea();
+                mention.onTextChange(value, e.target.selectionStart ?? value.length);
+              }}
+              onKeyDown={handleKeyDown}
+              className="box-border max-h-40 min-h-8 w-full flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:truncate placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
+            />
+          </div>
           <Button
+            className="shrink-0"
             size="sm"
             onClick={() => void handleSend()}
             disabled={!canSend}
