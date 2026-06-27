@@ -10,8 +10,19 @@ import { underlineInputClass, numericInputClass, CurrencyInput, DayOffsetInput }
 import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
+import { RequiredMark } from './RequiredMark';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { FieldError } from '@/components/primitives/FieldError';
+import {
+  isTitleValid,
+  isWebsiteValid,
+  isPaymentValid,
+  isContractTypeValid,
+  isMainProductsValid,
+  isAnnualPgVolumeValid,
+  markerState,
+} from '@/lib/rfp/required-fields';
 import { cn } from '@/lib/utils';
 
 // 카드 수수료는 % 값이라 100을 넘을 수 없다 — 입력 단계에서 상한을 강제한다.
@@ -36,21 +47,36 @@ type Props = {
   onNext: () => void;
   /** 위저드에서 이미 advance 실패를 경험한 step — 다음 클릭 없이도 에러를 표시 */
   showFieldErrors?: boolean;
+  /** 서버가 거부한 홈페이지 URL — 현재 store URL 과 같으면 필드 에러를 표시 */
+  websiteRejected?: string;
 };
 
-export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
+export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteRejected }: Props) {
   const draft = useRfpDraftStore();
-  const [attempted, setAttempted] = useState(false);
+  const [localAttempted, setLocalAttempted] = useState(false);
 
-  const websiteInvalid = !isValidWebsiteUrlLight(draft.websiteUrl);
-  const titleError = (attempted || !!showFieldErrors) && draft.title.trim() === '';
+  const attempted = localAttempted || !!showFieldErrors;
+  // 홈페이지: 빈값(필수 미입력)과 형식 오류를 구분
+  const websiteEmpty = draft.websiteUrl.trim() === '';
+  const websiteFormatInvalid = !websiteEmpty && !isValidWebsiteUrlLight(draft.websiteUrl);
+  const websiteServerRejected = !!websiteRejected && websiteRejected === draft.websiteUrl.trim();
+  const titleError = attempted && draft.title.trim() === '';
+  const contractTypeError = attempted && !isContractTypeValid(draft.contractType);
+  const mainProductsError = attempted && !isMainProductsValid(draft.mainProducts);
+  const annualPgVolumeError = attempted && !isAnnualPgVolumeValid(draft.annualPgVolume);
+  const paymentError =
+    attempted &&
+    draft.requiredPaymentMethods.length + draft.customPaymentMethods.length === 0;
 
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <div className="flex items-center gap-1">
-          <Label size="md" muted>견적 유형 <span className="text-[var(--md-sys-color-on-surface-variant)]">(선택)</span></Label>
-          <InfoTip term="견적유형" />
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <Label size="md" muted={false}>견적 유형</Label>
+            <InfoTip term="견적유형" />
+          </div>
+          <RequiredMark state={markerState({ valid: isContractTypeValid(draft.contractType), attempted })} />
         </div>
         <div className="flex gap-2">
           {CONTRACT_TYPE_OPTIONS.map(({ value, label }) => (
@@ -72,9 +98,13 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
             </button>
           ))}
         </div>
+        <FieldError error={contractTypeError ? '견적 유형을 선택해주세요' : undefined} />
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>제목 *</Label>
+        <div className="flex items-center gap-2">
+          <Label size="md" muted={false}>제목</Label>
+          <RequiredMark state={markerState({ valid: isTitleValid(draft.title), attempted })} />
+        </div>
         <input
           type="text"
           value={draft.title}
@@ -83,12 +113,13 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
           aria-invalid={titleError}
           className={cn(underlineInputClass, titleError && 'border-[var(--md-sys-color-error)]')}
         />
-        {titleError && (
-          <p className="text-[12px] text-[var(--md-sys-color-error)]">제목을 입력해주세요</p>
-        )}
+        <FieldError error={titleError ? '제목을 입력해주세요' : undefined} />
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>사업 운영 홈페이지</Label>
+        <div className="flex items-center gap-2">
+          <Label size="md" muted={false}>사업 운영 홈페이지</Label>
+          <RequiredMark state={markerState({ valid: isWebsiteValid(draft.websiteUrl) && !websiteServerRejected, attempted })} />
+        </div>
         <input
           type="text"
           value={draft.websiteUrl}
@@ -98,30 +129,34 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
             if (normalized !== e.target.value) draft.setField('websiteUrl', normalized);
           }}
           placeholder="example.com"
-          aria-invalid={websiteInvalid}
+          aria-invalid={websiteFormatInvalid || websiteServerRejected || (websiteEmpty && attempted)}
           className={underlineInputClass}
         />
-        {websiteInvalid && (
-          <p role="alert" className="text-[12px] text-[var(--md-sys-color-error)]">
-            {WEBSITE_URL_ERROR}
-          </p>
-        )}
+        <FieldError error={websiteEmpty && attempted ? '홈페이지 주소를 입력해주세요' : undefined} />
+        <FieldError error={websiteFormatInvalid || websiteServerRejected ? WEBSITE_URL_ERROR : undefined} />
       </div>
       <div className="space-y-1">
-        <Label size="md" muted={false}>주요 판매 상품</Label>
+        <div className="flex items-center gap-2">
+          <Label size="md" muted={false}>주요 판매 상품</Label>
+          <RequiredMark state={markerState({ valid: isMainProductsValid(draft.mainProducts), attempted })} />
+        </div>
         <input
           type="text"
           value={draft.mainProducts}
           onChange={(e) => draft.setField('mainProducts', e.target.value)}
           placeholder="의류"
-          className={underlineInputClass}
+          aria-invalid={mainProductsError}
+          className={cn(underlineInputClass, mainProductsError && 'border-[var(--md-sys-color-error)]')}
         />
+        <FieldError error={mainProductsError ? '주요 판매 상품을 입력해주세요' : undefined} />
       </div>
       <CurrencyInput
         label="전년도 연간 PG 총 거래액"
         value={draft.annualPgVolume}
         onChange={(v) => draft.setField('annualPgVolume', v)}
         placeholder="10억"
+        markerState={markerState({ valid: isAnnualPgVolumeValid(draft.annualPgVolume), attempted })}
+        error={annualPgVolumeError ? '전년도 연간 PG 총 거래액을 입력해주세요' : undefined}
       />
       <div className="space-y-1">
         <div className="flex items-center gap-1">
@@ -229,12 +264,18 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
         <textarea
           value={draft.memo}
           onChange={(e) => draft.setField('memo', e.target.value)}
-          rows={4}
-          placeholder={"결제 수수료 최소화 요청\n결제 전환율 최적화 레퍼런스 요청\n정산주기 D+4 이내 요청"}
+          rows={5}
+          placeholder={"OO 쇼핑몰 신규 견적 요청\n결제 창에서의 결제 전환율 최적화\n카드/계좌 결제 수수료 최소화 요청\n정산주기 단축\n가입비/연회비 면제 요청"}
           className={cn(underlineInputClass, 'resize-none')}
         />
       </div>
-      <RfpPaymentMethodSelect />
+      <RfpPaymentMethodSelect
+        markerState={markerState({
+          valid: isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods),
+          attempted,
+        })}
+        error={paymentError}
+      />
       <RfpAttachmentDropzone
         value={draft.rfpFiles}
         onChange={(files) => draft.setField('rfpFiles', files)}
@@ -244,7 +285,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors }: Props) {
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
-        <Button type="button" size="md" onClick={() => { setAttempted(true); onNext(); }}>
+        <Button type="button" size="md" onClick={() => { setLocalAttempted(true); onNext(); }}>
           다음
         </Button>
       </div>

@@ -13,6 +13,7 @@ import { resendWorkspaceInviteAction } from '@/lib/server/actions/workspace/rese
 import type { Role, User } from '@/lib/types/user';
 import { mutationErrorMessage, roleLabel } from './members-panel-utils';
 import { MemberRow } from './MemberRow';
+import { Divider } from '@/components/ui/Divider';
 import { PendingInviteRow, type PendingInvite } from './PendingInviteRow';
 import { InviteMemberForm } from './InviteMemberForm';
 
@@ -166,7 +167,7 @@ export function MembersPanel({
           <span className="font-mono tabular-nums text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
             {String(members.length).padStart(2, '0')}
           </span>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
           {members.map((m) => (
@@ -191,7 +192,7 @@ export function MembersPanel({
             <span className="font-mono tabular-nums text-[11px] text-[var(--md-sys-color-warning)]">
               {String(pendingInvites.length).padStart(2, '0')}
             </span>
-            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+            <Divider />
           </div>
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
             {pendingInvites.map((p, i) => (

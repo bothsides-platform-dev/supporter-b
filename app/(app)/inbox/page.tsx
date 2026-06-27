@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { requirePgPage } from '@/lib/auth/page-guards';
 import { loadPgInboxData, pgInboxDataToRows, type PgInboxData } from '@/lib/server/board/pgInbox';
 import { loadPgPipelineBoard } from '@/lib/server/board/loadBoard';
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { InboxList, InboxListSkeleton } from '@/components/inbox/InboxList';
 import { PipelineBoard } from '@/components/board/PipelineBoard';
 import { BoardViewToggle } from '@/components/board/BoardViewToggle';
@@ -26,7 +26,7 @@ const STATUS_OPTIONS = [
   { value: 'submitted', label: '견적 보냄' },
   { value: 'closed', label: '마감' },
 ];
-const GRADE_OPTIONS = Object.entries(GRADE_LABELS).map(([value, label]) => ({ value, label }));
+const GRADE_OPTIONS = Object.entries(MERCHANT_TIER_LABELS).map(([value, label]) => ({ value, label }));
 
 type Props = {
   searchParams: Promise<{ status?: string; deadline?: string; grade?: string; view?: string }>;

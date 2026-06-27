@@ -45,6 +45,7 @@ function resetStore() {
     boardVisible: true,
     currentFeeRate: '',
     currentFeeVisibleToPg: true,
+    contractType: null,
     memo: '',
     rfpFiles: [],
   });
@@ -106,16 +107,18 @@ describe('RfpStep4Review', () => {
     ).toBeInTheDocument();
   });
 
-  it('메모가 비어 있으면 상세 요청사항 섹션을 표시하지 않는다', () => {
+  it('메모가 비어 있으면 상세 요청사항 섹션을 미입력으로 표시한다', () => {
     useRfpDraftStore.setState({ memo: '' });
     renderComponent();
-    expect(screen.queryByText('상세 요청사항')).not.toBeInTheDocument();
+    expect(screen.getByText('상세 요청사항')).toBeInTheDocument();
+    expect(screen.getAllByText('미입력').length).toBeGreaterThan(0);
   });
 
-  it('공백뿐인 메모는 상세 요청사항 섹션을 표시하지 않는다 (발송 시 trim되어 빠지므로)', () => {
+  it('공백뿐인 메모는 trim 후 미입력으로 표시한다 (발송 시 trim되어 빠지므로)', () => {
     useRfpDraftStore.setState({ memo: '   \n  ' });
     renderComponent();
-    expect(screen.queryByText('상세 요청사항')).not.toBeInTheDocument();
+    expect(screen.getByText('상세 요청사항')).toBeInTheDocument();
+    expect(screen.getAllByText('미입력').length).toBeGreaterThan(0);
   });
 
   it('첨부파일이 있으면 파일명과 크기가 표시된다', () => {
@@ -132,10 +135,11 @@ describe('RfpStep4Review', () => {
     expect(screen.getByText('5 KB')).toBeInTheDocument();
   });
 
-  it('첨부파일이 없으면 첨부파일 섹션을 표시하지 않는다', () => {
+  it('첨부파일이 없으면 첨부파일 섹션에 없음 안내를 표시한다', () => {
     useRfpDraftStore.setState({ rfpFiles: [] });
     renderComponent();
-    expect(screen.queryByText(/첨부파일/)).not.toBeInTheDocument();
+    expect(screen.getByText('첨부파일 (0개)')).toBeInTheDocument();
+    expect(screen.getByText('첨부파일이 없어요')).toBeInTheDocument();
   });
 
   it('currentSettlementCycle이 있으면 정산주기 행을 표시한다', () => {
@@ -145,10 +149,11 @@ describe('RfpStep4Review', () => {
     expect(screen.getByText('D+2')).toBeInTheDocument();
   });
 
-  it('currentSettlementCycle이 없으면 정산주기 행을 표시하지 않는다', () => {
+  it('currentSettlementCycle이 없으면 정산주기 행을 미입력으로 표시한다', () => {
     useRfpDraftStore.setState({ currentSettlementCycle: '' });
     renderComponent();
-    expect(screen.queryByText('정산주기')).not.toBeInTheDocument();
+    expect(screen.getByText('정산주기')).toBeInTheDocument();
+    expect(screen.getAllByText('미입력').length).toBeGreaterThan(0);
   });
 
   it('deliveryServicePeriod가 있으면 배송 및 서비스 기간 행을 표시한다', () => {
@@ -158,10 +163,11 @@ describe('RfpStep4Review', () => {
     expect(screen.getByText('3~5일')).toBeInTheDocument();
   });
 
-  it('deliveryServicePeriod가 없으면 배송 및 서비스 기간 행을 표시하지 않는다', () => {
+  it('deliveryServicePeriod가 없으면 배송 및 서비스 기간 행을 미입력으로 표시한다', () => {
     useRfpDraftStore.setState({ deliveryServicePeriod: '' });
     renderComponent();
-    expect(screen.queryByText('배송 및 서비스 기간')).not.toBeInTheDocument();
+    expect(screen.getByText('배송 및 서비스 기간')).toBeInTheDocument();
+    expect(screen.getAllByText('미입력').length).toBeGreaterThan(0);
   });
 
   it('오픈 게시판 노출 체크박스가 기본 노출(체크) 상태로 표시된다', () => {
@@ -208,6 +214,57 @@ describe('RfpStep4Review', () => {
     expect(screen.getByText('3.4%')).toBeInTheDocument();
     expect(screen.getByText('1억원')).toBeInTheDocument();
     expect(screen.getByText('3,000만원')).toBeInTheDocument();
+  });
+
+  it('현재 솔루션이 없으면 현재 솔루션 행을 미입력으로 표시한다', () => {
+    useRfpDraftStore.setState({ currentSolution: '' });
+    renderComponent();
+    expect(screen.getByText('현재 솔루션')).toBeInTheDocument();
+    expect(screen.getAllByText('미입력').length).toBeGreaterThan(0);
+  });
+
+  it('견적 유형(contractType)이 신규면 신규 계약을 표시한다', () => {
+    useRfpDraftStore.setState({ contractType: 'new' });
+    renderComponent();
+    expect(screen.getByText('견적 유형')).toBeInTheDocument();
+    expect(screen.getByText('신규 계약')).toBeInTheDocument();
+  });
+
+  it('견적 유형(contractType)이 갱신이면 갱신 계약을 표시한다', () => {
+    useRfpDraftStore.setState({ contractType: 'renewal' });
+    renderComponent();
+    expect(screen.getByText('견적 유형')).toBeInTheDocument();
+    expect(screen.getByText('갱신 계약')).toBeInTheDocument();
+  });
+
+  it('견적 유형(contractType)이 없으면 견적 유형 행을 미입력으로 표시한다', () => {
+    useRfpDraftStore.setState({ contractType: null });
+    renderComponent();
+    expect(screen.getByText('견적 유형')).toBeInTheDocument();
+    expect(screen.getAllByText('미입력').length).toBeGreaterThan(0);
+  });
+
+  it('입력하지 않은 항목(상호명 등)은 요약에서 미입력으로 노출된다', () => {
+    // workspaceName / bizProfile 미전달 → 상호명·사업자번호 행은 미입력으로 표시
+    renderComponent();
+    expect(screen.getByText('상호명')).toBeInTheDocument();
+    expect(screen.getByText('사업자번호')).toBeInTheDocument();
+    expect(screen.getAllByText('미입력').length).toBeGreaterThan(0);
+  });
+
+  describe('마감일 필수 마커', () => {
+    it('마감일 비어있으면 RequiredMark가 "필수"를 표시한다', () => {
+      // deadline: '' (resetStore 기본값)
+      renderComponent({ showFieldErrors: true });
+      const chips = screen.getAllByText('필수');
+      expect(chips.length).toBeGreaterThan(0);
+    });
+
+    it('마감일이 있으면 RequiredMark가 "입력 완료"를 표시한다', () => {
+      useRfpDraftStore.setState({ deadline: '2026-06-30T23:59:59Z' });
+      renderComponent({ showFieldErrors: true });
+      expect(screen.getByText('입력 완료')).toBeInTheDocument();
+    });
   });
 
   describe('마감일 인라인 에러 (attempted)', () => {

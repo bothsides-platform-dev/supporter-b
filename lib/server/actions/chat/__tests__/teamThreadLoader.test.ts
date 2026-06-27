@@ -11,7 +11,8 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { attachments, rfpTeamMessages } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
+import { attachments, rfpTeamMessages, users } from '@/lib/db/schema';
 import { __resetTeamChatServiceForTest } from '@/lib/server/services/team-chat';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
@@ -184,5 +185,39 @@ describe('loadTeamThread', () => {
 
     const r = await loadTeamThread(rfp.id);
     expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+  });
+
+  it('TeamThreadMessage carries authorAvatarUpdatedAt', async () => {
+    const author = await seedUser(db, { email: 'avatar@b.com', name: '아바타작성자' });
+    const me = await seedUser(db, { email: 'viewer@b.com', name: '뷰어' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, author.id, 'admin');
+    await seedMembership(db, ws.id, me.id);
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: author.id });
+
+    await db
+      .update(users)
+      .set({ avatarUpdatedAt: new Date('2026-06-21T00:00:00.000Z') })
+      .where(eq(users.id, author.id));
+
+    await db.insert(rfpTeamMessages).values({
+      id: randomUUID(),
+      rfpId: rfp.id,
+      workspaceId: ws.id,
+      authorUserId: author.id,
+      body: '아바타 테스트 메시지',
+      createdAt: new Date('2026-06-21T00:00:00.000Z'),
+    });
+
+    sessionRef.value = {
+      user: { id: me.id, email: 'viewer@b.com', workspaceId: ws.id, workspaceType: 'buyer' },
+    };
+
+    const res = await loadTeamThread(rfp.id);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.messages[0].authorAvatarUpdatedAt).toBe('2026-06-21T00:00:00.000Z');
+      expect(res).toHaveProperty('viewerAvatarUpdatedAt');
+    }
   });
 });

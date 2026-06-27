@@ -59,6 +59,18 @@ describe('QuoteTemplateDrawer', () => {
     expect(screen.getAllByText('일반').length).toBeGreaterThan(0);
   });
 
+  it('가상계좌는 % 정률이 아니라 건당 정액(원) 입력으로 받는다', () => {
+    const t: QuoteTemplateOption = {
+      id: 'va', name: '가상계좌 요율', settleCycle: 'D+1',
+      settleLimit: 0, guaranteeInsurance: 0,
+      paymentFees: { virtual_account: 300 },
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    // CurrencyInput: "가상계좌 건당 수수료" 라벨 + 원 정수 값 그대로 (× ÷100/×100)
+    expect(screen.getByText('가상계좌 건당 수수료')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('300')).toBeInTheDocument();
+  });
+
   it('TierRates 수단에 기존값이 채워진다', () => {
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={tieredTmpl} />);
     // sole → 0.008 → display 0.8 (%)
@@ -104,5 +116,35 @@ describe('QuoteTemplateDrawer', () => {
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
     await user.click(screen.getByRole('button', { name: '취소' }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('정산주기 단위 선택에 D(일)·W(주)·M(개월) 옵션이 표시된다', () => {
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    expect(screen.getByRole('option', { name: 'D (일)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'W (주)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'M (개월)' })).toBeInTheDocument();
+  });
+
+  it('W 단위 선택 후 저장 시 W+N 형식으로 전달된다', async () => {
+    const user = userEvent.setup();
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    await user.type(screen.getByPlaceholderText('템플릿 이름'), '테스트');
+    await user.selectOptions(screen.getByRole('combobox'), 'W');
+    await user.clear(screen.getByPlaceholderText('1'));
+    await user.type(screen.getByPlaceholderText('1'), '2');
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(saveMock).toHaveBeenCalled());
+    const call = saveMock.mock.calls[0][0] as { settleCycle: string };
+    expect(call.settleCycle).toBe('W+2');
+  });
+
+  it('기존 M+2 템플릿 로드 시 M 단위와 2가 표시된다', () => {
+    const t: QuoteTemplateOption = {
+      id: 't3', name: '월 주기', settleCycle: 'M+2',
+      settleLimit: 0, guaranteeInsurance: 0, paymentFees: {},
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    expect(screen.getByRole('combobox')).toHaveValue('M');
+    expect(screen.getByPlaceholderText('1')).toHaveValue('2');
   });
 });

@@ -37,7 +37,7 @@ vi.mock('@/lib/server/actions/chat/markConversationReadAction', () => ({
   markConversationReadAction: vi.fn().mockResolvedValue({ ok: true }),
 }));
 vi.mock('@/lib/hooks/useChatChannel', () => ({
-  useChatChannel: () => ({ online: false, typingUserIds: [], sendTyping: vi.fn(), connected: null }),
+  useChatChannel: () => ({ typingUserIds: [], sendTyping: vi.fn(), connected: null }),
 }));
 
 // ThreadView mounts AttachmentGalleryPanel, which imports listConversationAttachments
@@ -45,6 +45,19 @@ vi.mock('@/lib/hooks/useChatChannel', () => ({
 // suite collects without resolving next-auth's `next/server` import under vitest.
 vi.mock('@/lib/server/actions/chat/listConversationAttachments', () => ({
   listConversationAttachments: vi.fn().mockResolvedValue([]),
+}));
+
+// ThreadView message-author avatars now render as UserProfileCard triggers, which
+// import getUserProfileAction + MessageComposeSheet's template actions (all
+// 'use server' → next-auth) at module load — mock them so the suite collects.
+vi.mock('@/lib/server/actions/user/getUserProfileAction', () => ({
+  getUserProfileAction: vi.fn(),
+}));
+vi.mock('@/lib/server/actions/chat/listTemplatesAction', () => ({
+  listTemplatesAction: vi.fn().mockResolvedValue({ ok: true, templates: [] }),
+}));
+vi.mock('@/lib/server/actions/chat/saveTemplateAction', () => ({
+  saveTemplateAction: vi.fn(),
 }));
 
 // ContextPanel mock — prevents server-action transitive imports.
@@ -92,7 +105,7 @@ const items: InboxListItem[] = [
     kind: 'counterparty',
     key: 'c:conv-1',
     conversationId: 'conv-1',
-    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', hasLogo: false },
+    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', logoUpdatedAt: null },
     rfpId: null,
     rfpCode: null,
     rfpTitle: null,
@@ -101,6 +114,7 @@ const items: InboxListItem[] = [
     preview: '제안 보냅니다.',
     lastMessageAt: '2026-06-02T01:00:00.000Z',
     unread: true,
+    closedAfterAward: false,
   },
 ];
 
@@ -162,7 +176,7 @@ describe('MessageInbox', () => {
         kind: 'counterparty',
         key: 'c:c1',
         conversationId: 'c1',
-        counterparty: { workspaceId: 'w', name: '토스', type: 'pg', hasLogo: false },
+        counterparty: { workspaceId: 'w', name: '토스', type: 'pg', logoUpdatedAt: null },
         rfpId: null,
         rfpCode: null,
         rfpTitle: null,
@@ -171,6 +185,7 @@ describe('MessageInbox', () => {
         preview: '안녕',
         lastMessageAt: '2026-06-14T03:00:00Z',
         unread: false,
+        closedAfterAward: false,
       },
       {
         kind: 'team',
@@ -307,9 +322,9 @@ describe('MessageInbox', () => {
       {
         kind: 'counterparty', key: 'c:c1',
         conversationId: 'c1',
-        counterparty: { workspaceId: 'w1', name: '토스페이', type: 'pg', hasLogo: false },
+        counterparty: { workspaceId: 'w1', name: '토스페이', type: 'pg', logoUpdatedAt: null },
         rfpId: null, rfpCode: null, rfpTitle: null, rfpStatus: null, rfpDeadline: null,
-        preview: '안녕하세요', lastMessageAt: null, unread: false,
+        preview: '안녕하세요', lastMessageAt: null, unread: false, closedAfterAward: false,
       },
       {
         kind: 'team', key: 't:r1', rfpId: 'r1',
@@ -321,6 +336,55 @@ describe('MessageInbox', () => {
     await user.type(screen.getByPlaceholderText('대화 검색'), '토스');
     expect(screen.getByRole('button', { name: /토스페이/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /결제 서비스/ })).not.toBeInTheDocument();
+  });
+
+  it('closedAfterAward=true 대화를 선택하면 선정 종료 안내를 띄운다', async () => {
+    const user = userEvent.setup();
+    loadConversationThread.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-closed',
+      counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      viewer: { userId: 'u-self', name: '나' },
+      messages: [],
+    });
+    const closedItems: InboxListItem[] = [
+      {
+        kind: 'counterparty',
+        key: 'c:conv-closed',
+        conversationId: 'conv-closed',
+        counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', logoUpdatedAt: null },
+        rfpId: 'rfp-1',
+        rfpCode: 'P-2605-0042',
+        rfpTitle: '제목',
+        rfpStatus: 'awarded',
+        rfpDeadline: null,
+        preview: '제안',
+        lastMessageAt: '2026-06-02T01:00:00.000Z',
+        unread: false,
+        closedAfterAward: true,
+      },
+    ];
+    render(<MessageInbox items={closedItems} />);
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /OO페이/ }));
+    });
+    expect(screen.getByText('견적 선정이 끝나 이 대화는 종료됐어요.')).toBeInTheDocument();
+  });
+
+  it('closedAfterAward=false 대화는 선정 종료 안내가 없다', async () => {
+    const user = userEvent.setup();
+    loadConversationThread.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      viewer: { userId: 'u-self', name: '나' },
+      messages: [],
+    });
+    render(<MessageInbox items={items} />);
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /OO페이/ }));
+    });
+    expect(screen.queryByText('견적 선정이 끝나 이 대화는 종료됐어요.')).not.toBeInTheDocument();
   });
 
   it('팀 스레드 선택 시 모바일 뒤로가기 버튼이 표시되고 클릭하면 목록으로 돌아간다', async () => {

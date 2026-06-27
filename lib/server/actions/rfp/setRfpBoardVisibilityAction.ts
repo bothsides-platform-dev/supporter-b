@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { requireBuyerSession } from '@/lib/auth/session';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getAuditLogRepo, getRfpRepo } from '@/lib/server/repositories/factory';
 import { actionDb, type RfpActionResult } from './_shared';
 
@@ -22,17 +22,13 @@ export type SetRfpBoardVisibilityResult = RfpActionResult;
 export async function setRfpBoardVisibilityAction(
   input: SetRfpBoardVisibilityInput,
 ): Promise<SetRfpBoardVisibilityResult> {
-  let session;
-  try {
-    session = await requireBuyerSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_BUYER' };
-  }
+  const actor = await requireBuyerActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
-  const wsId = session.user.workspaceId;
+  const wsId = actor.workspaceId;
   const db = actionDb();
 
   const rfpRepo = await getRfpRepo();
@@ -47,7 +43,7 @@ export async function setRfpBoardVisibilityAction(
     // 감사 로그 (C5) — 토글과 같은 트랜잭션에서 커밋.
     await auditRepo.insert(
       {
-        actorUserId: session.user.id,
+        actorUserId: actor.userId,
         actorWorkspaceId: wsId,
         action: 'rfp.board_visibility',
         entityType: 'rfp',

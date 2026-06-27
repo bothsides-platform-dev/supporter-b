@@ -46,6 +46,25 @@ vi.mock('@/lib/toast', () => ({
   toast: (...args: unknown[]) => toast(...args),
 }));
 
+// Author avatars now render as UserProfileCard triggers — that pulls in (at import
+// time) getUserProfileAction + MessageComposeSheet's 'use server' chain
+// (next-auth/DB, jsdom-unsafe) and useUserPresence. Mock them all.
+vi.mock('@/lib/server/actions/user/getUserProfileAction', () => ({
+  getUserProfileAction: vi.fn(),
+}));
+vi.mock('@/lib/server/actions/chat/sendChatMessageAction', () => ({
+  sendChatMessageAction: vi.fn(),
+}));
+vi.mock('@/lib/server/actions/chat/listTemplatesAction', () => ({
+  listTemplatesAction: vi.fn().mockResolvedValue({ ok: true, templates: [] }),
+}));
+vi.mock('@/lib/server/actions/chat/saveTemplateAction', () => ({
+  saveTemplateAction: vi.fn(),
+}));
+vi.mock('@/components/presence/WorkspacePresenceProvider', () => ({
+  useUserPresence: () => false,
+}));
+
 afterEach(() => cleanup());
 beforeEach(() => {
   sendTeamMessageAction.mockReset();
@@ -69,6 +88,7 @@ const messages: TeamThreadMessage[] = [
     id: 'tm1',
     authorUserId: 'u-mate',
     authorName: '이동료',
+    authorAvatarUpdatedAt: null,
     body: '이 견적 수수료 괜찮은데요?',
     createdAt: '2026-06-09T05:00:00.000Z',
     isSelf: false,
@@ -78,6 +98,7 @@ const messages: TeamThreadMessage[] = [
     id: 'tm2',
     authorUserId: 'u-me',
     authorName: '김구매',
+    authorAvatarUpdatedAt: null,
     body: '내일 회의에서 정리하시죠.',
     createdAt: '2026-06-10T05:00:00.000Z',
     isSelf: true,
@@ -86,8 +107,8 @@ const messages: TeamThreadMessage[] = [
 ];
 
 const teamMembers = [
-  { userId: 'u-mate', name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z' },
-  { userId: 'u-me', name: '김구매', joinedAt: '2026-04-01T00:00:00.000Z' },
+  { userId: 'u-mate', name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z', avatarUpdatedAt: null },
+  { userId: 'u-me', name: '김구매', joinedAt: '2026-04-01T00:00:00.000Z', avatarUpdatedAt: null },
 ];
 
 function base(overrides: Partial<React.ComponentProps<typeof TeamThreadView>> = {}) {
@@ -96,6 +117,7 @@ function base(overrides: Partial<React.ComponentProps<typeof TeamThreadView>> = 
       rfpId="rfp-1"
       workspaceId="ws-1"
       viewerUserId="u-me"
+      viewerAvatarUpdatedAt={null}
       messages={messages}
       teamMembers={teamMembers}
       {...overrides}
@@ -131,7 +153,7 @@ describe('TeamThreadView — 렌더', () => {
   });
 
   it('마운트 시 팀 스레드를 읽음 처리한다', () => {
-    render(<TeamThreadView rfpId="r1" workspaceId="w1" viewerUserId="u1" messages={[]} />);
+    render(<TeamThreadView rfpId="r1" workspaceId="w1" viewerUserId="u1" viewerAvatarUpdatedAt={null} messages={[]} />);
     expect(markTeamThreadReadAction).toHaveBeenCalledWith({ rfpId: 'r1' });
   });
 });
@@ -321,6 +343,7 @@ describe('TeamThreadView — 첨부', () => {
         id: 'a1',
         authorUserId: 'u-mate',
         authorName: '이동료',
+        authorAvatarUpdatedAt: null,
         body: '파일 봐주세요',
         createdAt: '2026-06-10T05:00:00.000Z',
         isSelf: false,
@@ -572,6 +595,7 @@ describe('TeamThreadView — 그룹핑', () => {
         id: 'g1',
         authorUserId: 'u-mate',
         authorName: '이동료',
+        authorAvatarUpdatedAt: null,
         body: '첫 메시지',
         createdAt: '2026-06-10T05:00:00.000Z',
         isSelf: false,
@@ -581,6 +605,7 @@ describe('TeamThreadView — 그룹핑', () => {
         id: 'g2',
         authorUserId: 'u-mate',
         authorName: '이동료',
+        authorAvatarUpdatedAt: null,
         body: '바로 이어진 메시지',
         createdAt: '2026-06-10T05:02:00.000Z', // 2분 뒤 — 그룹핑
         isSelf: false,
@@ -590,6 +615,7 @@ describe('TeamThreadView — 그룹핑', () => {
         id: 'g3',
         authorUserId: 'u-mate',
         authorName: '이동료',
+        authorAvatarUpdatedAt: null,
         body: '한참 뒤 메시지',
         createdAt: '2026-06-10T05:30:00.000Z', // 28분 뒤 — 새 그룹
         isSelf: false,
@@ -609,8 +635,8 @@ describe('TeamThreadView — 멘션', () => {
   const MATE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const ME = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const mentionMembers = [
-    { userId: MATE, name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z' },
-    { userId: ME, name: '김구매', joinedAt: '2026-04-01T00:00:00.000Z' },
+    { userId: MATE, name: '이동료', joinedAt: '2026-03-14T00:00:00.000Z', avatarUpdatedAt: null },
+    { userId: ME, name: '김구매', joinedAt: '2026-04-01T00:00:00.000Z', avatarUpdatedAt: null },
   ];
 
   it('@ 입력 시 멤버 드롭다운이 뜨고, 선택하면 @이름 이 삽입된다', async () => {
@@ -651,6 +677,7 @@ describe('TeamThreadView — 멘션', () => {
         messages: [
           {
             id: 'tmM', authorUserId: MATE, authorName: '이동료',
+            authorAvatarUpdatedAt: null,
             body: `<@${ME}> 봐주세요`, createdAt: '2026-06-10T05:00:00.000Z',
             isSelf: false, attachments: [],
           },

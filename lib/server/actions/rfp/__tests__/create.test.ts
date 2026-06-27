@@ -94,12 +94,88 @@ describe('createRfpAction', () => {
     sessionRef.value = null;
   });
 
+  describe('send=true 신규 필수 필드 (견적 유형·주요 판매 상품·연간 거래액)', () => {
+    const base = () => ({
+      title: '신규 필수 검증',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: ['card' as const],
+      websiteUrl: 'example.com',
+      contractType: 'new' as const,
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
+      send: true,
+    });
+
+    it('모든 필수 필드를 채우면 발송 성공', async () => {
+      const r = await createRfpAction(base());
+      expect(r.ok).toBe(true);
+    });
+
+    it('견적 유형 미선택이면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({ ...base(), contractType: undefined });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('견적 유형이 null이면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({ ...base(), contractType: null });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('주요 판매 상품이 비면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({ ...base(), mainProducts: '' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('주요 판매 상품이 공백뿐이면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({ ...base(), mainProducts: '   ' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('연간 PG 총 거래액이 비면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({ ...base(), annualPgVolume: '' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('연간 PG 총 거래액이 공백뿐이면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({ ...base(), annualPgVolume: '   ' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('연간 PG 총 거래액이 0이면 INVALID_INPUT (양수 필수)', async () => {
+      const r = await createRfpAction({ ...base(), annualPgVolume: '0' });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('draft(send=false)는 세 필드가 비어도 통과', async () => {
+      const r = await createRfpAction({
+        ...base(),
+        contractType: undefined,
+        mainProducts: '',
+        annualPgVolume: '',
+        send: false,
+      });
+      expect(r.ok).toBe(true);
+    });
+  });
+
   it('logs an rfp.sent business event on send', async () => {
     const r = await createRfpAction({
       title: '로그 검증',
       deadline: new Date(Date.now() + 86_400_000).toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: ['card'],
+      websiteUrl: 'example.com',
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -229,6 +305,10 @@ describe('createRfpAction', () => {
       allowedPgWorkspaceIds: [pg.id],
       requiredPaymentMethods: [],
       customPaymentMethods: [{ label: '포인트결제' }],
+      websiteUrl: 'example.com',
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -260,6 +340,10 @@ describe('createRfpAction', () => {
       deadline: new Date(Date.now() + 86_400_000).toISOString(),
       allowedPgWorkspaceIds: pgWsIds,
       requiredPaymentMethods: ['card'],
+      websiteUrl: 'example.com',
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -787,6 +871,69 @@ describe('createRfpAction', () => {
     expect(row.contractType).toBeNull();
   });
 
+  it('send=true이고 websiteUrl 비면 결과가 ok:false', async () => {
+    const pg = await seedPgWorkspace(db, '홈페이지검증PG');
+    const pgAdmin = await seedUser(db, { email: 'admin@homepage.test' });
+    await seedMembership(db, pg.id, pgAdmin.id, 'admin');
+
+    const r = await createRfpAction({
+      title: '홈페이지 누락 발송',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pg.id],
+      requiredPaymentMethods: ['card'],
+      websiteUrl: '',
+      send: true,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('send=false이면 websiteUrl 비어도 통과', async () => {
+    const r = await createRfpAction({
+      title: '드래프트 홈페이지 없음',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: ['card'],
+      websiteUrl: '',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('send=true이고 형식 오류 websiteUrl → ok:false', async () => {
+    const pg = await seedPgWorkspace(db, '형식오류PG');
+    const pgAdmin = await seedUser(db, { email: 'admin@format.test' });
+    await seedMembership(db, pg.id, pgAdmin.id, 'admin');
+
+    const r = await createRfpAction({
+      title: '형식 오류 홈페이지 발송',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pg.id],
+      requiredPaymentMethods: ['card'],
+      websiteUrl: 'not-a-domain',
+      send: true,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('send=true 이고 경량검증 통과·정밀검증 실패 websiteUrl → INVALID_WEBSITE', async () => {
+    const pg = await seedPgWorkspace(db, '가짜TLD_PG');
+    const pgAdmin = await seedUser(db, { email: 'admin@faketld.test' });
+    await seedMembership(db, pg.id, pgAdmin.id, 'admin');
+
+    const r = await createRfpAction({
+      title: '가짜 TLD 홈페이지 발송',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pg.id],
+      requiredPaymentMethods: ['card'],
+      websiteUrl: 'foo.invalidtld',
+      send: true,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_WEBSITE');
+  });
+
   // _suppress unused import warnings
   void and;
 
@@ -803,6 +950,10 @@ describe('createRfpAction', () => {
         deadline: new Date(Date.now() + 86_400_000).toISOString(),
         allowedPgWorkspaceIds: [pg.id],
         requiredPaymentMethods: ['card'],
+        websiteUrl: 'example.com',
+        contractType: 'new',
+        mainProducts: '의류',
+        annualPgVolume: '1000000000',
         send: true,
       });
       expect(r.ok).toBe(true);

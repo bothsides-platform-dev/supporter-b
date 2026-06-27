@@ -1,8 +1,8 @@
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
 import {
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
   PAYMENT_METHOD_LABELS,
+  isFlatFeeMethod,
   type PaymentMethod,
   type TierRates,
 } from '@/lib/types/bid';
@@ -24,7 +24,7 @@ export function buildSubmittedSummaryRows(rfp: RFP, bid: Bid): [string, string][
   return [
     ['견적 요청 번호', rfp.code],
     ['제목', rfp.title],
-    ['등급', grade ? GRADE_LABELS[grade] : '—'],
+    ['등급', grade ? MERCHANT_TIER_LABELS[grade] : '—'],
     ['마감', formatDate(rfp.deadline)],
     ['정산 주기', bid.settleCycle],
     ['정산한도', formatKRW(bid.settleLimit)],
@@ -39,6 +39,10 @@ export function buildSubmittedSummaryRows(rfp: RFP, bid: Bid): [string, string][
               string,
             ],
         );
+      }
+      // 정액(건당) 수단은 % 가 아니라 '건당' 라벨 + 원 금액으로.
+      if (isFlatFeeMethod(m as PaymentMethod)) {
+        return [[`${label} (건당)`, formatKRW(fee as number)] as [string, string]];
       }
       return [[label, formatPct(fee as number)] as [string, string]];
     }),

@@ -2,13 +2,13 @@
 
 import { z } from 'zod';
 
-import { requireBuyerSession } from '@/lib/auth/session';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import { logBusinessEvent } from '@/lib/observability/log';
-import { isValidWebsiteUrl, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { isValidWebsiteUrl, isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
+import { isContractTypeValid, isMainProductsValid, isAnnualPgVolumeValid } from '@/lib/rfp/required-fields';
+import { MERCHANT_TIERS } from '@/lib/types/bid';
 import type { RfpActionResult } from './_shared';
-
-const MERCHANT_GRADES = ['small', 'sme1', 'sme2', 'sme3', 'general'] as const;
 
 const PAYMENT_METHODS = [
   'card',
@@ -41,7 +41,7 @@ const Input = z
       .optional()
       .default('inherit'),
     bizNoOverride: z.string().min(1).max(50).optional(),
-    gradeOverride: z.enum(MERCHANT_GRADES).optional(),
+    gradeOverride: z.enum(MERCHANT_TIERS).optional(),
     websiteUrl: z
       .string()
       .max(500)
@@ -71,6 +71,48 @@ const Input = z
         message: '발송하려면 결제수단을 1개 이상 선택해야 합니다.',
       });
     }
+    // 홈페이지: 발송 시 필수 + 형식 검증 (드래프트 저장은 비어도 허용)
+    if (d.send) {
+      const v = (d.websiteUrl ?? '').trim();
+      if (v === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['websiteUrl'],
+          message: '발송하려면 홈페이지 주소를 입력해야 합니다.',
+        });
+      } else if (!isValidWebsiteUrl(v)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['websiteUrl'],
+          message: WEBSITE_URL_ERROR,
+        });
+      }
+    }
+    // 발송 시 필수: 견적 유형·주요 판매 상품·연간 PG 총 거래액 (드래프트는 비어도 허용)
+    // 클라이언트 위저드와 동일한 SSOT(lib/rfp/required-fields) 판정을 공유해 드리프트를 막는다.
+    if (d.send) {
+      if (!isContractTypeValid(d.contractType)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['contractType'],
+          message: '발송하려면 견적 유형을 선택해야 합니다.',
+        });
+      }
+      if (!isMainProductsValid(d.mainProducts ?? '')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['mainProducts'],
+          message: '발송하려면 주요 판매 상품을 입력해야 합니다.',
+        });
+      }
+      if (!isAnnualPgVolumeValid(d.annualPgVolume ?? '')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['annualPgVolume'],
+          message: '발송하려면 전년도 연간 PG 총 거래액을 입력해야 합니다.',
+        });
+      }
+    }
   });
 
 export type CreateRfpInput = z.input<typeof Input>;
@@ -79,15 +121,21 @@ export type CreateRfpResult = RfpActionResult<{ rfpId: string }>;
 export async function createRfpAction(
   input: CreateRfpInput,
 ): Promise<CreateRfpResult> {
-  let session;
-  try {
-    session = await requireBuyerSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_BUYER' };
-  }
+  const actor = await requireBuyerActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
+  if (!parsed.success) {
+    // 경량 검증은 통과하지만 서버 정밀 검증(TLD 체크)에서만 거부된 websiteUrl → INVALID_WEBSITE
+    // 이 경우는 클라이언트가 잡지 못한 "존재하지 않는 TLD" 오류이므로 Step 2 필드 에러로 표면화한다.
+    // 그 외 모든 입력 오류(빈 값 필수 위반, 결제수단 누락 등)는 INVALID_INPUT.
+    const rawWebsite = (input.websiteUrl ?? '').trim();
+    const websiteServerRejected =
+      rawWebsite !== '' &&
+      isValidWebsiteUrlLight(rawWebsite) &&
+      parsed.error.issues.some((i) => i.path[0] === 'websiteUrl');
+    return { ok: false, error: websiteServerRejected ? 'INVALID_WEBSITE' : 'INVALID_INPUT' };
+  }
 
   const service = await getRfpService();
   const result = await service.createRfp(
@@ -119,7 +167,7 @@ export async function createRfpAction(
       currentSolution: parsed.data.currentSolution,
       currentSolutionDetail: parsed.data.currentSolutionDetail,
     },
-    { userId: session.user.id, workspaceId: session.user.workspaceId },
+    { userId: actor.userId, workspaceId: actor.workspaceId },
   );
 
   if (result.ok && parsed.data.send) {

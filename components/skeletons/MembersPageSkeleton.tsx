@@ -1,4 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton';
+import { Divider } from '@/components/ui/Divider';
 
 export function MembersPageSkeleton() {
   return (
@@ -14,7 +15,7 @@ export function MembersPageSkeleton() {
         <div className="flex items-center gap-3 mb-4">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-3 w-6" />
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
           {(['w-28', 'w-24', 'w-32'] as const).map((nw, i) => (
@@ -33,7 +34,7 @@ export function MembersPageSkeleton() {
       <section>
         <div className="flex items-center gap-3 mb-4">
           <Skeleton className="h-3 w-20" />
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         <div className="flex items-center gap-3 border border-[var(--md-sys-color-outline-variant)] rounded-md px-3 py-2">
           <Skeleton className="flex-1 h-3" />
@@ -47,7 +48,7 @@ export function MembersPageSkeleton() {
       <section>
         <div className="flex items-center gap-3 mb-4">
           <Skeleton className="h-3 w-16" />
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         <div className="flex flex-col md:flex-row md:items-end gap-4">
           <div className="flex-1 space-y-1">

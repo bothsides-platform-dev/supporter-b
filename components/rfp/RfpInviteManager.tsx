@@ -17,6 +17,7 @@ import {
 import { useLazyPgWorkspaces } from '@/hooks/useLazyPgWorkspaces';
 import type { PgWorkspace } from '@/hooks/useLazyPgWorkspaces';
 import { toast } from '@/lib/toast';
+import { Divider } from '@/components/ui/Divider';
 import type { InvitationStatus } from '@/lib/types/invitation';
 
 /**
@@ -109,7 +110,7 @@ export function RfpInviteManager({
       <div>
         <div className="flex items-center gap-3 mb-3">
           <Label size="md" muted={false}>초대 PG</Label>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         {invitations.length === 0 ? (
           <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">

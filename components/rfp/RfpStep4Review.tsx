@@ -8,8 +8,14 @@ import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
+import { endOfDayKstIso, kstDateOf } from '@/lib/deadline';
 import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
+import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 import type { BizProfile } from '@/lib/types/biz-profile';
+import { RequiredMark } from './RequiredMark';
+import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
+import { FieldError } from '@/components/primitives/FieldError';
+import { Divider } from '@/components/ui/Divider';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -22,14 +28,22 @@ type Props = {
 };
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
-  if (!value) return null;
+  // 최종 확인 화면 — 빈 값도 숨기지 않고 '미입력'으로 노출해 누락을 알아챌 수 있게 한다.
+  const empty = !value;
   return (
     <div className="px-4 py-2.5 flex items-baseline justify-between border-b border-[var(--md-sys-color-outline-variant)] last:border-0">
       <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
         {label}
       </span>
-      <span className="text-[13px] text-[var(--md-sys-color-on-surface)] font-mono tabular-nums">
-        {value}
+      <span
+        className={cn(
+          'text-[13px] font-mono tabular-nums',
+          empty
+            ? 'text-[var(--md-sys-color-outline)]'
+            : 'text-[var(--md-sys-color-on-surface)]',
+        )}
+      >
+        {value || '미입력'}
       </span>
     </div>
   );
@@ -41,7 +55,7 @@ function SectionHeader({ label }: { label: string }) {
       <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
         {label}
       </span>
-      <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+      <Divider />
     </div>
   );
 }
@@ -71,7 +85,8 @@ export function RfpStep4Review({
 }: Props) {
   const draft = useRfpDraftStore();
   const [minDate] = useState(() =>
-    new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
+    // KST "내일" 날짜: 이른 KST 새벽(UTC 전날 심야)에 당일이 선택 가능한 엣지를 막는다.
+    kstDateOf(new Date(Date.now() + 86_400_000)),
   );
   const [attempted, setAttempted] = useState(false);
 
@@ -86,9 +101,15 @@ export function RfpStep4Review({
     <div className="space-y-6">
       {/* 마감일 */}
       <div className="space-y-1">
-        <Label size="md" muted={false}>
-          마감일 *
-        </Label>
+        <div className="flex items-center gap-2">
+          <Label size="md" muted={false}>마감일</Label>
+          <RequiredMark
+            state={markerState({
+              valid: isDeadlineValid(draft.deadline),
+              attempted: !!showFieldErrors,
+            })}
+          />
+        </div>
         <input
           type="date"
           value={draft.deadline ? draft.deadline.slice(0, 10) : ''}
@@ -96,7 +117,7 @@ export function RfpStep4Review({
           onChange={(e) =>
             draft.setField(
               'deadline',
-              e.target.value ? `${e.target.value}T23:59:59Z` : '',
+              e.target.value ? endOfDayKstIso(e.target.value) : '',
             )
           }
           aria-invalid={deadlineError}
@@ -107,9 +128,7 @@ export function RfpStep4Review({
               : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',
           )}
         />
-        {deadlineError && (
-          <p className="text-[12px] text-[var(--md-sys-color-error)]">마감일을 선택해주세요</p>
-        )}
+        <FieldError error={deadlineError ? '마감일을 선택해주세요' : undefined} />
       </div>
 
       {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true) */}
@@ -135,10 +154,12 @@ export function RfpStep4Review({
       <div>
         <SectionHeader label="견적 요청 요약" />
         <div className="border border-[var(--md-sys-color-outline-variant)]">
-          {workspaceName && <ReviewRow label="상호명" value={workspaceName} />}
-          {bizProfile?.bizNo && (
-            <ReviewRow label="사업자번호" value={bizProfile.bizNo} />
-          )}
+          <ReviewRow label="상호명" value={workspaceName ?? ''} />
+          <ReviewRow label="사업자번호" value={bizProfile?.bizNo ?? ''} />
+          <ReviewRow
+            label="견적 유형"
+            value={draft.contractType ? CONTRACT_TYPE_LABELS[draft.contractType] : ''}
+          />
           <ReviewRow label="제목" value={draft.title} />
           <ReviewRow label="홈페이지" value={draft.websiteUrl} />
           <ReviewRow label="주요 상품" value={draft.mainProducts} />
@@ -164,36 +185,40 @@ export function RfpStep4Review({
             label="배송 및 서비스 기간"
             value={draft.deliveryServicePeriod}
           />
-          {draft.currentSolution && (
-            <ReviewRow
-              label="현재 솔루션"
-              value={
-                (SOLUTION_LABELS[draft.currentSolution] ??
-                  draft.currentSolution) +
-                (draft.currentSolutionDetail
-                  ? ` — ${draft.currentSolutionDetail}`
-                  : '')
-              }
-            />
-          )}
+          <ReviewRow
+            label="현재 솔루션"
+            value={
+              draft.currentSolution
+                ? (SOLUTION_LABELS[draft.currentSolution] ??
+                    draft.currentSolution) +
+                  (draft.currentSolutionDetail
+                    ? ` — ${draft.currentSolutionDetail}`
+                    : '')
+                : ''
+            }
+          />
           <ReviewRow label="견적 결제수단" value={paymentMethodSummary} />
         </div>
       </div>
 
-      {/* 상세 요청사항 (메모) — 발송 시 trim되어 빠지므로 공백뿐이면 숨김 */}
-      {draft.memo.trim() && (
-        <div>
-          <SectionHeader label="상세 요청사항" />
+      {/* 상세 요청사항 (메모) — 발송 시 trim되어 빠지므로 공백뿐이면 미입력 표기 */}
+      <div>
+        <SectionHeader label="상세 요청사항" />
+        {draft.memo.trim() ? (
           <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)] whitespace-pre-wrap break-words border border-[var(--md-sys-color-outline-variant)] p-4">
             {draft.memo}
           </p>
-        </div>
-      )}
+        ) : (
+          <p className="text-[13px] text-[var(--md-sys-color-outline)] border border-[var(--md-sys-color-outline-variant)] p-4">
+            미입력
+          </p>
+        )}
+      </div>
 
       {/* 첨부파일 */}
-      {draft.rfpFiles.length > 0 && (
-        <div>
-          <SectionHeader label={`첨부파일 (${draft.rfpFiles.length}개)`} />
+      <div>
+        <SectionHeader label={`첨부파일 (${draft.rfpFiles.length}개)`} />
+        {draft.rfpFiles.length > 0 ? (
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
             {draft.rfpFiles.map((file, i) => (
               <div
@@ -212,8 +237,12 @@ export function RfpStep4Review({
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-[13px] text-[var(--md-sys-color-outline)] border-t border-[var(--md-sys-color-outline-variant)] py-2">
+            첨부파일이 없어요
+          </p>
+        )}
+      </div>
 
       {/* 초대 PG 목록 */}
       <div>
@@ -232,14 +261,7 @@ export function RfpStep4Review({
         </div>
       </div>
 
-      {serverError && (
-        <p
-          role="alert"
-          className="text-[12px] text-[var(--md-sys-color-error)]"
-        >
-          {ERROR_MESSAGES[serverError] ?? serverError}
-        </p>
-      )}
+      <FieldError error={serverError ? (ERROR_MESSAGES[serverError] ?? serverError) : undefined} />
 
       <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
         <Button

@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { RequiredMark } from './RequiredMark';
+import { isPgValid, markerState } from '@/lib/rfp/required-fields';
+import { FieldError } from '@/components/primitives/FieldError';
 
 // name is used server-side to compute displayName (dedup); component uses only id + displayName.
 export type PgWorkspace = { id: string; name: string; displayName: string };
@@ -50,9 +53,17 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-          PG사 선택
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+            초대할 PG사
+          </span>
+          <RequiredMark
+            state={markerState({
+              valid: isPgValid(draft.allowedPgWorkspaceIds),
+              attempted: !!showFieldErrors,
+            })}
+          />
+        </div>
         <button
           type="button"
           onClick={handleToggleAll}
@@ -88,7 +99,7 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
         </p>
       )}
       {pgError && (
-        <p className="text-[12px] text-[var(--md-sys-color-error)]">PG를 1개 이상 선택해주세요</p>
+        <FieldError error="PG를 1개 이상 선택해주세요" />
       )}
 
       <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">

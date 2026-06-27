@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { User } from '@/lib/types/user';
@@ -8,21 +8,7 @@ import type { UserRepo, Tx } from '../types';
 
 type UserRow = typeof users.$inferSelect;
 
-const VALID_AVATAR_COLORS = [
-  'lavender',
-  'amber',
-  'moss',
-  'accent',
-  'terra',
-  'ink',
-] as const;
-type AvatarColor = (typeof VALID_AVATAR_COLORS)[number];
-
-function normAvatar(raw: string | null | undefined): AvatarColor {
-  return (VALID_AVATAR_COLORS as readonly string[]).includes(raw ?? '')
-    ? (raw as AvatarColor)
-    : 'ink';
-}
+import { normalizeAvatarColor } from './_avatar-color';
 
 // User row carries no role — role is per-workspace_member. Use 'member' default.
 function rowToUser(row: UserRow): User & { passwordHash: string } {
@@ -30,7 +16,10 @@ function rowToUser(row: UserRow): User & { passwordHash: string } {
     id: row.id,
     name: row.name,
     email: row.email,
-    avatarColor: normAvatar(row.avatarColor),
+    avatarColor: normalizeAvatarColor(row.avatarColor),
+    avatarUpdatedAt: row.avatarUpdatedAt
+      ? new Date(row.avatarUpdatedAt).toISOString()
+      : null,
     role: 'member',
     status: row.status === 'paused' ? 'paused' : 'active',
     emailVerified: row.emailVerified,
@@ -98,6 +87,54 @@ export class DrizzleUserRepository implements UserRepo {
     const { passwordHash: _ph, ...rest } = u;
     void _ph;
     return rest;
+  }
+
+  async findProfileById(
+    userId: string,
+    tx?: Tx,
+  ): Promise<
+    { id: string; name: string; email: string; avatarUpdatedAt: string | null } | undefined
+  > {
+    const db = this.h(tx);
+    // is_system_account=false: master/seed accounts are hidden from every member-facing
+    // surface (mirrors hydrate/memberUserIds/teamRoster). Identity cards must too.
+    const [row] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        avatarUpdatedAt: users.avatarUpdatedAt,
+      })
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.isSystemAccount, false)))
+      .limit(1);
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      avatarUpdatedAt: row.avatarUpdatedAt ? new Date(row.avatarUpdatedAt).toISOString() : null,
+    };
+  }
+
+  async findContactById(
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ name: string; email: string; phone: string | null } | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ name: users.name, email: users.email, phone: users.phone })
+      .from(users)
+      .where(
+        and(
+          eq(users.id, userId),
+          eq(users.isSystemAccount, false),
+          isNull(users.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) return undefined;
+    return { name: row.name, email: row.email, phone: row.phone ?? null };
   }
 
   async findByEmail(
@@ -233,6 +270,18 @@ export class DrizzleUserRepository implements UserRepo {
     await db
       .update(users)
       .set({ lastActiveWorkspaceId: workspaceId })
+      .where(eq(users.id, userId));
+  }
+
+  async setAvatarUpdatedAt(
+    userId: string,
+    value: Date | null,
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(users)
+      .set({ avatarUpdatedAt: value })
       .where(eq(users.id, userId));
   }
 

@@ -19,7 +19,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 
 - **Two-sided platform**: `buyer` workspace (구매사) sends RFPs; `pg` workspace (결제대행사 영업담당) responds with bids
 - **Bidding is sealed 1:N; discovery is open (opt-out)**: participation (who can bid) is buyer-controlled via the workspace-ID allowlist (`rfp_allowed_pg`), and **bids stay sealed — PGs never see each other or a competitor count (`Bid.competitorCount` does not exist by design).** Two axes, kept separate:
-  - **Discovery = open by default, buyer opt-out.** Every `sent` RFP with `deadline > now` and `board_visible=true` (the default) appears on the PG-facing open board (`/opportunities` + PG home 탐색 section). The board listing exposes **only `구매사명`(workspace name)·`제목`·`홈페이지`** — never fees/current-terms/volume/bizNo/memo/attachments (whitelist enforced at the query layer in `lib/server/repositories/drizzle/rfp-pg-request.ts`). A buyer can hide a specific RFP via `setRfpBoardVisibilityAction`.
+  - **Discovery = open by default, buyer opt-out.** Every `sent` RFP with `deadline > now` and `board_visible=true` (the default) appears on the PG-facing open board (`/opportunities` + PG home 탐색 section). The board listing exposes **only `구매사명`(workspace name)·`제목`·`홈페이지`** — never fees/current-terms/volume/bizNo/memo/attachments (whitelist enforced at the query layer in `lib/server/repositories/drizzle/rfp-pg-request.ts`). **Board visibility is set once at RFP creation (wizard step 4, `RfpStep4Review` checkbox) and is read-only thereafter** — the UI shows a status chip (`RfpBoardVisibilityStatus`) with no toggle. `setRfpBoardVisibilityAction`/`rfpRepo.setBoardVisible` are kept server-side for admin/recovery use but no UI surface calls them.
   - **Participation = buyer-gated.** A non-invited PG sends a one-time cold-pitch request (`rfp_pg_requests`, UNIQUE per (rfp, pg), rejection permanent). Buyer **accept** adds them to the allowlist + a real invitation (full info then visible in their inbox); **reject** is final.
   - **Per-field opt-out for invited PGs — `현재 카드 수수료`.** Even an invited PG who sees the full brief can be denied one field: the buyer's **current card fee** (default shown, opt-out per RFP). When off, the value is stripped server-side in `loadPgRfpDetail` (the PG never reads it from the RSC payload/network — `RfpBriefPanel`'s render gate is only the visual fallback). The buyer's own comparison baseline always keeps the fee. Toggle lives in the RFP create wizard (step 2, under 현재 카드 수수료). **Implementation note (v0.2.26.x, migration complete):** current-terms is stored as a versioned JSONB document (`current_terms` column, `lib/types/rfp-terms.ts`). PG field visibility is controlled by a `hidden_from_pg` text-array (path allowlist) — `loadPgRfpDetail` strips any path that has a handler in `PG_STRIP` (fail-closed). The legacy `current_fee_visible_to_pg` boolean column and individual `current_*` columns were dropped in v0.2.26.2 — `current_terms` is the sole authoritative store. `currentFeeVisibleToPg` is derived at the app layer from `hiddenFromPg`. User-facing behavior is unchanged.
 - **Per-RFP unique URL + token** in invitation email; token authoritative only for first entry, then workspace membership takes over
@@ -29,12 +29,12 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 
 | Layer | Choice | Version |
 |---|---|---|
-| Framework | Next.js App Router, Turbopack default, async `params`/`searchParams` | `next@16.2.4` |
+| Framework | Next.js App Router, Turbopack default, async `params`/`searchParams` | `next@16.2.9` |
 | Runtime | React | `react@19.2.4` |
 | Language | TypeScript strict | `typescript@6.0.3` |
 | Auth | Auth.js v5 (no middleware — guard via `(app)/layout.tsx` redirect) | `next-auth@5.0.0-beta.31` |
 | DB | Drizzle ORM + Postgres | `drizzle-orm@0.45.0`, `postgres@3.4.7` |
-| Storage | Postgres bytea (`attachment_blobs` 테이블) — 첨부 바이트가 DB에 저장돼 외부 오브젝트 스토어 없음. `lib/server/storage/{postgres,memory}.ts` — 라우트는 `getStorage()` 만 본다 | (postgres-js 공유) |
+| Storage | Postgres bytea — 외부 오브젝트 스토어 없음. ① 첨부파일: `attachment_blobs` 테이블, `lib/server/storage/{postgres,memory}.ts`, 라우트는 `getStorage()` 만 본다. ② 사용자 프로필 사진: `user_avatar_blobs` 테이블, `UserAvatarRepo`(`getUserAvatarRepo()`) — `getStorage()` 외부, 별도 repo 패턴 | (postgres-js 공유) |
 | Styling | Tailwind v4 + CSS Variables (`@theme` block) | `tailwindcss@4.2.4` |
 | Headless UI | `@base-ui/react` (shadcn base-nova style) + Radix 일부 (`@radix-ui/react-popover`, `@radix-ui/react-slider`) | `@base-ui/react@1.4.1` |
 | Component tooling | shadcn (base-nova) — 컴포넌트 scaffolding 전용 | `shadcn@4.6.0` |
@@ -105,7 +105,9 @@ lib/server/
 **서비스 레이어 규칙:**
 - 서비스는 트랜잭션·알림 팬아웃·이메일 아웃박스를 소유한다. 액션은 이를 직접 다루지 않는다.
 - `Actor = { userId, workspaceId }` — 세션에서 추출해 액션이 서비스에 전달한다.
-- `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 예외 throw 없이 결과를 반환한다.
+- `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 서비스 레이어 반환 타입. 예외 throw 없이 결과를 반환한다.
+- `ActionResult<T> = { ok: true } & T | { ok: false; error: string }` — 액션 레이어 반환 타입 SSOT (`lib/server/actions/_result.ts`). 각 도메인 파일의 동일 타입 선언을 대체한다.
+- 액션 공통 세션 헬퍼: `requireBuyerActor` / `requirePgActor` / `requireActiveWorkspace` (`lib/server/actions/_session.ts`) — 세션 검증·Actor 추출 로직의 단일 출처. 신규 액션 작성 시 `_shared.ts` 대신 이 헬퍼를 사용한다.
 - 서비스 싱글턴은 Next.js `globalThis` 캐싱 패턴 사용 (`getRfpService()` / `getBidService()` 등).
 
 **리포지토리 경계 (ESLint 강제):** 모든 DB 접근은 `lib/server/repositories/**` 가 소유한다. 그 밖의 `lib/`·`app/` 코드는 `@/lib/db/schema`·`@/lib/db/client` 를 **값(value)으로 정적 import 할 수 없다** — 레포를 주입(`repositories/factory` 의 `get*Repo()`)해서 쓴다. `import type { DB }`(타입 전용)와 서비스의 동적 `import('@/lib/db/client')`(트랜잭션 핸들)는 허용. 위반 시 lint 에러(`@typescript-eslint/no-restricted-imports`, 규칙명 `repo-boundary/db-access`) + 독립 드리프트 가드 테스트(`lib/server/__tests__/repo-boundary.test.ts`)가 잡는다. **의도적 예외**(`lib/server/db-boundary-allowlist.mjs` 에 명문화, 단일 출처): storage 바이트-블롭 티어(`storage/{postgres,index}.ts`), 크로스-애그리거트 캐스케이드(`_purgeUnverifiedSignup.ts`), `actionDb()` 테스트-오버라이드 레지스트리(`actions/auth/_shared.ts`). 예외를 늘리려면 allowlist 에 추가하고 리뷰한다.
@@ -119,10 +121,10 @@ These are non-negotiable visual decisions enforced across all screens. The desig
 - **No** hover shadow promotion — hover is a background-lightness shift only.
 - **No** heavy/skeuomorphic shadows — most surfaces use a 1px border or elevation-1; big shadows only on floating elements (popover, dropdown, toast, dialog, command palette).
 - **No** high-contrast dividers — default to `outline-variant` (the deliberately low-contrast border). The faint border IS the Linear look, not a bug.
-- **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28px buttons).
+- **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28–36px buttons / default 32px).
 - **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`.
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
-- **No** pulse/spinner loading. Use `LOADING…` text (body-medium type). (예외: DESIGN.md §9 "축하 모먼트" — 종결 성공 1회성에 한해 컨페티 허용.)
+- **로딩 모션 허용** — 넓은 영역은 펄스 스켈레톤, 인라인·타이핑 인디케이터는 펄스 점(staggered). `prefers-reduced-motion: reduce` 존중(저감 시 정지/단순화). 버튼 진행 등 짧은 `LOADING…` 텍스트 표기는 그대로 두어도 무방. 장식적 컨페티·강한 모멘텀 모션 제한은 유지(DESIGN.md §9 "축하 모먼트" 예외만). 자세히는 DESIGN.md §6 "로딩 모션".
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.
 - **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (mono + tabular-nums). Never on nav/labels/buttons.
 - **Status** uses Chip component — never bracketed plain text `[ 결재중 ]`.

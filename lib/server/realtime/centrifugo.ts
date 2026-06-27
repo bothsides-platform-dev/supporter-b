@@ -17,22 +17,15 @@ export type ChatRealtimeEvent =
   | { type: 'read'; userId: string; readAt: string; [k: string]: unknown }
   | { type: string; [k: string]: unknown };
 
-/** Channel name for a conversation. Single source so the subscribe proxy and
- *  publish stay in lockstep. */
-export function chatChannel(conversationId: string): string {
-  return `chat:conversation:${conversationId}`;
-}
-
-/** RFP-scoped internal team thread channel namespace. The wsId suffix keeps
- *  the buyer team and each PG team on disjoint channels (sealed-bid invariant
- *  — the subscribe proxy enforces membership + RFP access per side). */
-export const TEAM_CHANNEL_PREFIX = 'team:rfp:';
-
-/** Channel name for an (rfp, workspace) team thread. Single source so the
- *  subscribe proxy and publish stay in lockstep. */
-export function teamChatChannel(rfpId: string, workspaceId: string): string {
-  return `${TEAM_CHANNEL_PREFIX}${rfpId}:${workspaceId}`;
-}
+// Channel name helpers live in the shared (non-server) lib so client hooks can
+// import them without pulling the Centrifugo HTTP-API module into the bundle.
+import {
+  chatChannel,
+  teamChatChannel,
+  presenceWsChannel,
+  TEAM_CHANNEL_PREFIX,
+} from '@/lib/realtime/channels';
+export { chatChannel, teamChatChannel, presenceWsChannel, TEAM_CHANNEL_PREFIX };
 
 /** Shared best-effort publish body — both channel families fan out the same way. */
 async function publishToChannel(
@@ -93,6 +86,31 @@ export async function publishTeamChatEvent(
 // each value carrying the connection's `user`. See centrifugal.dev server API.
 interface CentrifugoPresenceResponse {
   result?: { presence?: Record<string, { user?: string }> };
+}
+
+/**
+ * Force-disconnect all WebSocket connections for `userId` via the Centrifugo
+ * HTTP API. Best-effort: resolves to undefined whether or not delivery
+ * happened. Never throws. No-ops when Centrifugo is unconfigured.
+ *
+ * Call this immediately after any session_version bump (password reset, email
+ * change, account deletion) to revoke live sockets in addition to the JWT
+ * session-version gate.
+ */
+export async function disconnectCentrifugoUser(userId: string): Promise<void> {
+  const apiUrl = process.env.CENTRIFUGO_HTTP_API_URL;
+  const apiKey = process.env.CENTRIFUGO_API_KEY;
+  if (!apiUrl || !apiKey) return;
+  try {
+    await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+      body: JSON.stringify({ method: 'disconnect', params: { user: userId } }),
+      signal: AbortSignal.timeout(3000),
+    });
+  } catch (err) {
+    console.warn('[centrifugo] disconnect failed', err);
+  }
 }
 
 /**

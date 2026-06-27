@@ -206,7 +206,7 @@ export interface PgRequestRepo {
 }
 
 // ── Workspace ─────────────────────────────────────────────────────────
-export type TeamMember = { userId: string; name: string; joinedAt: string };
+export type TeamMember = { userId: string; name: string; joinedAt: string; avatarUpdatedAt: string | null };
 
 export interface WorkspaceRepo {
   /** 워크스페이스 + 멤버 동기화. */
@@ -234,11 +234,21 @@ export interface WorkspaceRepo {
   /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
-  listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean }[]>;
+  listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; logoUpdatedAt: string | null }[]>;
   /** 이름 검색 (isDemo 제외) — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500). */
   search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string }[]>;
   /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
   getName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /**
+   * 표시용 경량 정보 — 신원 카드/메시지 컴포즈가 상대 워크스페이스를 그리는 데 필요한
+   * 최소 필드(id·상호명·유형·로고 버전)만. 멤버/bizProfile hydration 없음. 없으면 undefined.
+   */
+  getDisplayInfo(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<
+    { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null } | undefined
+  >;
   /** 알림·이메일 팬아웃 대상 (멤버 userId+email). 시스템 계정 제외. 순서 미보장. */
   memberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
   /** admin 멤버 팬아웃 대상 (userId+email). 시스템 계정 제외. 초대 메일 발송 대상. 순서 미보장. */
@@ -308,8 +318,8 @@ export interface WorkspaceRepo {
   filterPgIds(ids: string[], tx?: Tx): Promise<string[]>;
   /** 상호명 변경. */
   rename(workspaceId: string, name: string, tx?: Tx): Promise<void>;
-  /** hasLogo 플래그 갱신. */
-  setHasLogo(workspaceId: string, hasLogo: boolean, tx?: Tx): Promise<void>;
+  /** 로고 버전 스탬프 — 업로드 시 now(Date), 삭제 시 null. */
+  setLogoUpdatedAt(workspaceId: string, value: Date | null, tx?: Tx): Promise<void>;
   /**
    * 경량 workspace 생성 (save()는 멤버 동기화까지 하는 무거운 버전 — 이건 단순 insert).
    * 멤버십/컬럼/온보딩 시드는 호출부 책임.
@@ -478,6 +488,25 @@ export interface UserRepo {
   ): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<User | undefined>;
+  /**
+   * 신원 카드용 프로필 필드 projection — id 매칭 **+ 시스템 계정 제외**(WHERE is_system_account=false).
+   * 시스템/마스터 계정은 모든 멤버 표면에서 숨긴다는 불변식을 이 경로에도 적용(fail-closed):
+   * 시스템 계정이거나 행이 없으면 undefined. (findById 는 시스템 계정도 반환하므로 신원 노출엔 부적합.)
+   */
+  findProfileById(
+    userId: string,
+    tx?: Tx,
+  ): Promise<
+    { id: string; name: string; email: string; avatarUpdatedAt: string | null } | undefined
+  >;
+  /**
+   * 연락처 projection — id 매칭 **+ 시스템 계정 제외**(findProfileById 와 동일 fail-closed).
+   * 선정 후 담당자 연락처 교환용. 시스템 계정이거나 행이 없으면 undefined. phone 은 nullable.
+   */
+  findContactById(
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ name: string; email: string; phone: string | null } | undefined>;
   /** id 로 passwordHash 단건 조회 — 계정 탈퇴 비밀번호 확인용. 없으면 undefined. */
   findPasswordHashById(userId: string, tx?: Tx): Promise<string | undefined>;
   /**
@@ -516,6 +545,8 @@ export interface UserRepo {
   markEmailVerifiedById(userId: string, tx?: Tx): Promise<void>;
   /** 마지막 활성 워크스페이스 기억값 갱신. */
   setLastActiveWorkspace(userId: string, workspaceId: string, tx?: Tx): Promise<void>;
+  /** 프로필 사진 버전 스탬프 — 업로드 시 now(Date), 삭제 시 null. */
+  setAvatarUpdatedAt(userId: string, value: Date | null, tx?: Tx): Promise<void>;
   /**
    * 로그인용 raw auth projection — 도메인 매핑이 버리는 deletedAt·lastActiveWorkspaceId
    * 와 JWT 스탬프에 필요한 name·sessionVersion 포함.
@@ -948,6 +979,7 @@ export type ChatMessageRecord = {
 export type ChatMessageWithAuthor = ChatMessageRecord & {
   authorName: string;
   authorEmail: string;
+  authorAvatarUpdatedAt: Date | null;
 };
 
 export interface ChatMessageRepo {
@@ -991,6 +1023,7 @@ export type RfpTeamMessageRecord = {
  *  exclusive-arc attachments table (empty array when none). */
 export type RfpTeamMessageWithAuthor = RfpTeamMessageRecord & {
   authorName: string;
+  authorAvatarUpdatedAt: Date | null;
   attachments: Attachment[];
 };
 
@@ -1228,12 +1261,26 @@ export interface WorkspaceLogoRepo {
     workspaceId: string,
     tx?: Tx,
   ): Promise<{ bytes: Buffer; mime: string } | undefined>;
-  /** 존재 여부만 — Workspace.findById 의 hasLogo 계산용. */
+  /** 존재 여부만 — 로고 blob 존재 여부 체크. */
   exists(workspaceId: string, tx?: Tx): Promise<boolean>;
   /** upsert(by workspace_id). */
   upsert(workspaceId: string, bytes: Buffer, mime: string, tx?: Tx): Promise<void>;
   /** 단건 삭제. */
   remove(workspaceId: string, tx?: Tx): Promise<void>;
+}
+
+export interface UserAvatarRepo {
+  /** 아바타 바이트+mime — GET /api/user/[id]/avatar. 없으면 undefined. */
+  find(
+    userId: string,
+    tx?: Tx,
+  ): Promise<{ bytes: Buffer; mime: string } | undefined>;
+  /** 존재 여부만. */
+  exists(userId: string, tx?: Tx): Promise<boolean>;
+  /** upsert(by user_id). */
+  upsert(userId: string, bytes: Buffer, mime: string, tx?: Tx): Promise<void>;
+  /** 단건 삭제. */
+  remove(userId: string, tx?: Tx): Promise<void>;
 }
 
 // ── RfpAllowedPg ──────────────────────────────────────────────────────

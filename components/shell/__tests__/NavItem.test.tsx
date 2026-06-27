@@ -61,16 +61,25 @@ describe('NavItem', () => {
     expect(screen.getByRole('link', { name: /홈/ })).not.toHaveAttribute('aria-current');
   });
 
-  it('renders a provided badge inside the link', () => {
+  it('renders badge twice: inside icon wrapper (for collapsed overlay) and in the row (for expanded)', () => {
     renderItem(
       <NavItem
         href="/notifications"
         label="알림"
+        icon={HomeIcon}
         badge={<span data-testid="unread-badge">3</span>}
       />,
     );
     const link = screen.getByRole('link', { name: /알림/ });
-    expect(link).toContainElement(screen.getByTestId('unread-badge'));
+    const badges = screen.getAllByTestId('unread-badge');
+    expect(badges).toHaveLength(2);
+    // Both instances should be inside the link
+    badges.forEach((badge) => expect(link).toContainElement(badge));
+    // First badge must be inside the icon wrapper span (adjacent to the SVG)
+    const svgEl = link.querySelector('svg');
+    const iconWrapper = svgEl?.closest('span');
+    expect(iconWrapper).not.toBeNull();
+    expect(iconWrapper).toContainElement(badges[0]);
   });
 
   it('reveals the keyboard shortcut in a tooltip on hover when collapsed', async () => {

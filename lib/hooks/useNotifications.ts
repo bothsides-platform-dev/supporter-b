@@ -18,6 +18,7 @@ import { create } from 'zustand';
 
 import type { Notification } from '@/lib/types/notification';
 import { http } from '@/lib/http';
+import { toast } from '@/lib/toast';
 import { markNotificationReadAction } from '@/lib/server/actions/notifications/markNotificationReadAction';
 import { markAllReadAction } from '@/lib/server/actions/notifications/markAllReadAction';
 import { retryEmailNotificationAction } from '@/lib/server/actions/notifications/retryEmailNotificationAction';
@@ -60,6 +61,30 @@ const useStore = create<NotifStore>((set) => ({
     })),
 }));
 
+// 팬아웃 폭주(예: 다수 수신자 award/close, 수다스러운 상대방)로 짧은 시간에
+// 알림이 몰리면 toast 가 줄줄이 큐에 쌓여 수 분간 흘러나온다. 이 윈도우 안에는
+// toast 를 1회만 발화해 storm 을 막는다. 미읽음 배지는 그대로 모두 증가한다.
+const TOAST_COALESCE_MS = 4000;
+let lastToastAt = 0;
+
+// 사용자가 이미 알림 목록(/notifications)을 보고 있으면 toast 는 같은 항목의
+// 중복 신호이므로 생략한다.
+function onNotificationsRoute(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.location.pathname.startsWith('/notifications')
+  );
+}
+
+// 새 라이브 알림에 대해 경로 게이트 + coalesce 를 적용해 toast 를 발화한다.
+function maybeToastNew(n: Notification): void {
+  if (onNotificationsRoute()) return;
+  const now = Date.now();
+  if (now - lastToastAt < TOAST_COALESCE_MS) return;
+  lastToastAt = now;
+  toast(n.title);
+}
+
 // ── Singleton EventSource + history fetch (ref-counted) ────────────────
 let subscribers = 0;
 let eventSource: EventSource | null = null;
@@ -100,7 +125,14 @@ function openStream(): void {
   es.onmessage = (ev) => {
     try {
       const n = JSON.parse(ev.data) as Notification;
+      // 재구독 race 등으로 동일 id가 다시 올 수 있다. prepend 는 자체 dedupe 하므로,
+      // 중복일 때 toast 가 발화하지 않도록 prepend 전에 신규 여부를 판정한다.
+      // (history hydrate 는 setAll 경로라 이 핸들러를 거치지 않아 자연히 toast 되지 않는다.)
+      const isNew = !useStore
+        .getState()
+        .notifications.some((x) => x.id === n.id);
       useStore.getState().prepend(n);
+      if (isNew) maybeToastNew(n);
     } catch {
       // ignore malformed payload
     }

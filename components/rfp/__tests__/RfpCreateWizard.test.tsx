@@ -67,6 +67,7 @@ vi.mock('../RfpStep4Review', () => ({
 // Server action mock
 vi.mock('@/lib/server/actions/rfp', () => ({
   createRfpAction: vi.fn(),
+  verifyDraftFilesAction: vi.fn(),
 }));
 
 // Toast mock
@@ -80,8 +81,11 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-import { createRfpAction } from '@/lib/server/actions/rfp';
+import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
+
+// 기존 테스트에서 공통으로 쓰는 PG 픽스처
+const PG_1 = { id: 'pg-1', name: '나이스', displayName: '나이스' };
 
 function resetStore() {
   useRfpDraftStore.setState({
@@ -90,6 +94,8 @@ function resetStore() {
     allowedPgWorkspaceIds: [],
     rfpFiles: [],
     websiteUrl: '',
+    requiredPaymentMethods: [],
+    customPaymentMethods: [],
     mainProducts: '',
     annualPgVolume: '',
     currentFeeRate: '',
@@ -127,12 +133,17 @@ describe('RfpCreateWizard', () => {
     // Steps 1, 2, 3 완료 조건 충족 → 사이드바에서 Step 4로 바로 이동 가능
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       deadline: '2026-06-30T23:59:59Z',
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
-    await user.click(screen.getByText('보내기 확인'));
+    render(<RfpCreateWizard pgList={[PG_1]} />);
+    await user.click(screen.getByText('최종 견적 요청 정보 확인'));
     expect(screen.getByRole('button', { name: '1개 PG사에 발송' })).toBeInTheDocument();
   });
 
@@ -148,11 +159,16 @@ describe('RfpCreateWizard', () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0042' });
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -171,12 +187,17 @@ describe('RfpCreateWizard', () => {
   it('guest 모드에서 발송 시 /signup/buyer로 이동한다', async () => {
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
     const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} guest />);
+    render(<RfpCreateWizard pgList={[PG_1]} guest />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -194,11 +215,16 @@ describe('RfpCreateWizard', () => {
     // Steps 1, 2, 3 완료 / Step 4(마감일) 미완료 — 순서 강제로 step 4까지 도달 가능
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       // deadline 미설정 → Step 4 미완료
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     // Steps 1→2→3→4 (steps 1-3 유효 → advance() 통과)
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -217,13 +243,18 @@ describe('RfpCreateWizard', () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0099' });
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       currentSettlementCycle: 'D+2',
       deliveryServicePeriod: '3~5일',
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -244,12 +275,17 @@ describe('RfpCreateWizard', () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0100' });
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       boardVisible: false,
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -267,12 +303,16 @@ describe('RfpCreateWizard', () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0101' });
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
       contractType: 'renewal',
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -290,11 +330,16 @@ describe('RfpCreateWizard', () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: false, error: 'INVALID_INPUT' });
     useRfpDraftStore.setState({
       title: '테스트',
+      websiteUrl: 'https://example.com',
+      requiredPaymentMethods: ['card'],
+      contractType: 'new',
+      mainProducts: '의류',
+      annualPgVolume: '1000000000',
       deadline: '2026-06-30T23:59:59Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스' }],
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -319,7 +364,7 @@ describe('RfpCreateWizard', () => {
   });
 
   it('Step 3 미완료(PG 없음) 시 다음 클릭은 step을 유지하고 hint toast를 표시한다', async () => {
-    useRfpDraftStore.setState({ title: '테스트 제안건' });
+    useRfpDraftStore.setState({ title: '테스트 제안건', websiteUrl: 'https://example.com', requiredPaymentMethods: ['card'], contractType: 'new', mainProducts: '의류', annualPgVolume: '1000000000' });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' })); // → Step 2
@@ -336,8 +381,128 @@ describe('RfpCreateWizard', () => {
     const user = userEvent.setup();
     // store 비어있음 → Step 2 미완료(title 없음)
     render(<RfpCreateWizard pgList={[]} />);
-    await user.click(screen.getByText('보내기 확인')); // goToStep(4) — Step 2 미완료라 차단
+    await user.click(screen.getByText('최종 견적 요청 정보 확인')); // goToStep(4) — Step 2 미완료라 차단
     expect(screen.queryByRole('button', { name: '발송' })).not.toBeInTheDocument();
     expect(toast).toHaveBeenCalledWith('제목을 입력해주세요', { type: 'error' });
+  });
+
+  // ── Draft 재조정 — 마운트 시 stale 데이터 정리 ────────────────────────────
+
+  describe('Draft 재조정', () => {
+    beforeEach(() => {
+      // 파일 없는 기본 케이스에서 verifyDraftFilesAction 호출 없도록
+      vi.mocked(verifyDraftFilesAction).mockResolvedValue({ validIds: [] });
+    });
+
+    it('pgList에 없는 stale PG를 제거하고 warning toast를 표시한다', async () => {
+      useRfpDraftStore.setState({
+        allowedPgWorkspaceIds: [
+          { id: 'pg-valid', displayName: '나이스' },
+          { id: 'pg-stale', displayName: '구 PG사' },
+        ],
+      });
+      render(
+        <RfpCreateWizard
+          pgList={[{ id: 'pg-valid', name: '나이스', displayName: '나이스' }]}
+        />,
+      );
+
+      await waitFor(() => {
+        const { allowedPgWorkspaceIds } = useRfpDraftStore.getState();
+        expect(allowedPgWorkspaceIds).toHaveLength(1);
+        expect(allowedPgWorkspaceIds[0].id).toBe('pg-valid');
+      });
+      expect(toast).toHaveBeenCalledWith(
+        expect.stringContaining('1개 PG사'),
+        { type: 'info' },
+      );
+    });
+
+    it('모든 PG가 유효하면 PG 관련 warning을 표시하지 않는다', async () => {
+      useRfpDraftStore.setState({
+        allowedPgWorkspaceIds: [{ id: 'pg-valid', displayName: '나이스' }],
+      });
+      render(
+        <RfpCreateWizard
+          pgList={[{ id: 'pg-valid', name: '나이스', displayName: '나이스' }]}
+        />,
+      );
+
+      // effect 실행 대기
+      await waitFor(() => {});
+      expect(toast).not.toHaveBeenCalledWith(
+        expect.stringContaining('PG사'),
+        expect.objectContaining({ type: 'warning' }),
+      );
+    });
+
+    it('만료된 마감일을 초기화하고 warning toast를 표시한다', async () => {
+      useRfpDraftStore.setState({ deadline: '2020-01-01T00:00:00Z' });
+      render(<RfpCreateWizard pgList={[]} />);
+
+      await waitFor(() => {
+        expect(useRfpDraftStore.getState().deadline).toBe('');
+      });
+      expect(toast).toHaveBeenCalledWith(
+        expect.stringContaining('마감일'),
+        { type: 'info' },
+      );
+    });
+
+    it('유효한 미래 마감일은 그대로 유지한다', async () => {
+      useRfpDraftStore.setState({ deadline: '2099-01-01T00:00:00Z' });
+      render(<RfpCreateWizard pgList={[]} />);
+
+      await waitFor(() => {});
+      expect(useRfpDraftStore.getState().deadline).toBe('2099-01-01T00:00:00Z');
+      expect(toast).not.toHaveBeenCalledWith(
+        expect.stringContaining('마감일'),
+        expect.anything(),
+      );
+    });
+
+    it('서버에 없는 stale 첨부파일을 제거하고 warning toast를 표시한다', async () => {
+      vi.mocked(verifyDraftFilesAction).mockResolvedValue({ validIds: ['file-valid'] });
+      useRfpDraftStore.setState({
+        rfpFiles: [
+          { id: 'file-valid', name: 'valid.pdf', size: 1024 },
+          { id: 'file-stale', name: 'stale.pdf', size: 512 },
+        ],
+      });
+      render(<RfpCreateWizard pgList={[]} />);
+
+      await waitFor(() => {
+        const { rfpFiles } = useRfpDraftStore.getState();
+        expect(rfpFiles).toHaveLength(1);
+        expect(rfpFiles[0].id).toBe('file-valid');
+      });
+      expect(verifyDraftFilesAction).toHaveBeenCalledWith(['file-valid', 'file-stale']);
+      expect(toast).toHaveBeenCalledWith(
+        expect.stringContaining('1개 첨부'),
+        { type: 'info' },
+      );
+    });
+
+    it('모든 첨부파일이 유효하면 첨부 관련 toast를 표시하지 않는다', async () => {
+      vi.mocked(verifyDraftFilesAction).mockResolvedValue({ validIds: ['file-valid'] });
+      useRfpDraftStore.setState({
+        rfpFiles: [{ id: 'file-valid', name: 'valid.pdf', size: 1024 }],
+      });
+      render(<RfpCreateWizard pgList={[]} />);
+
+      await waitFor(() => {
+        expect(useRfpDraftStore.getState().rfpFiles).toHaveLength(1);
+      });
+      expect(toast).not.toHaveBeenCalledWith(
+        expect.stringContaining('첨부'),
+        expect.anything(),
+      );
+    });
+
+    it('첨부파일이 없으면 verifyDraftFilesAction을 호출하지 않는다', async () => {
+      render(<RfpCreateWizard pgList={[]} />);
+      await waitFor(() => {});
+      expect(verifyDraftFilesAction).not.toHaveBeenCalled();
+    });
   });
 });

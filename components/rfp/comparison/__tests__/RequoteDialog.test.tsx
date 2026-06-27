@@ -43,8 +43,10 @@ describe('RequoteDialog', () => {
     await user.type(screen.getByLabelText('새 마감일'), future);
     await user.click(screen.getByRole('button', { name: '재요청 보내기' }));
     await waitFor(() => expect(requestRequoteAction).toHaveBeenCalledTimes(1));
-    const arg = requestRequoteAction.mock.calls[0]![0] as { pgWsIds: string[]; message: string };
+    const arg = requestRequoteAction.mock.calls[0]![0] as { pgWsIds: string[]; message: string; newDeadline: string };
     expect(arg.pgWsIds).toEqual(['pg-1']);
     expect(arg.message).toBe('카드 수수료를 낮춰주세요');
+    // endOfDayKstIso: 마감일이 KST 끝(T23:59:59+09:00) 형식으로 제출돼야 한다
+    expect(arg.newDeadline).toBe(`${future}T23:59:59+09:00`);
   });
 });

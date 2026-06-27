@@ -7,7 +7,7 @@ function conv(overrides?: Partial<Extract<InboxListItem, { kind: 'counterparty' 
     kind: 'counterparty',
     key: 'c:conv-1',
     conversationId: 'conv-1',
-    counterparty: { workspaceId: 'ws-1', name: '회사', type: 'pg', hasLogo: false },
+    counterparty: { workspaceId: 'ws-1', name: '회사', type: 'pg', logoUpdatedAt: null },
     rfpId: null,
     rfpCode: null,
     rfpTitle: null,
@@ -16,6 +16,7 @@ function conv(overrides?: Partial<Extract<InboxListItem, { kind: 'counterparty' 
     preview: '안녕하세요',
     lastMessageAt: '2026-06-06T10:00:00.000Z',
     unread: false,
+    closedAfterAward: false,
     ...overrides,
   };
 }

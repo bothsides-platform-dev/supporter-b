@@ -3,35 +3,10 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 
-import { requirePgSession } from '@/lib/auth/session';
+import { requirePgActor } from '@/lib/server/actions/_session';
 import { getBidService } from '@/lib/server/services/bid';
-import type { BidActionResult } from './_shared';
-
-const tierRatesSchema = z
-  .object({
-    sole: z.number().min(0).max(1).optional(),
-    sme1: z.number().min(0).max(1).optional(),
-    sme2: z.number().min(0).max(1).optional(),
-    sme3: z.number().min(0).max(1).optional(),
-    general: z.number().min(0).max(1).optional(),
-  })
-  .strict();
-
-const feeField = z.union([z.number().min(0).max(1), tierRatesSchema]).optional();
-
-const PaymentFeesSchema = z
-  .object({
-    card: feeField,
-    overseas_card: feeField,
-    virtual_account: feeField,
-    bank_transfer: feeField,
-    naver_pay: feeField,
-    kakao_pay: feeField,
-    toss_pay: feeField,
-    mobile: feeField,
-    gift_card: feeField,
-  })
-  .strict();
+import type { ActionResult } from '@/lib/server/actions/_result';
+import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
 
 const Input = z
   .object({
@@ -47,15 +22,11 @@ const Input = z
   .strict();
 
 export type SubmitBidInput = z.input<typeof Input>;
-export type SubmitBidResult = BidActionResult<{ bidId: string }>;
+export type SubmitBidResult = ActionResult<{ bidId: string }>;
 
 export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidResult> {
-  let session;
-  try {
-    session = await requirePgSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_PG' };
-  }
+  const actor = await requirePgActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
@@ -72,7 +43,7 @@ export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidR
       proposalAttachmentId: parsed.data.proposalAttachmentId,
       memo: parsed.data.memo,
     },
-    { userId: session.user.id, workspaceId: session.user.workspaceId },
+    { userId: actor.userId, workspaceId: actor.workspaceId },
   );
 
   if (result.ok) {

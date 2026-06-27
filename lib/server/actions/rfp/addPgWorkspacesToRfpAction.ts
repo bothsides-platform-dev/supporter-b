@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { requireBuyerSession } from '@/lib/auth/session';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import type { RfpActionResult } from './_shared';
 
@@ -22,12 +22,8 @@ export type AddPgWorkspacesResult = RfpActionResult<{
 export async function addPgWorkspacesToRfpAction(
   input: AddPgWorkspacesInput,
 ): Promise<AddPgWorkspacesResult> {
-  let session;
-  try {
-    session = await requireBuyerSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_BUYER' };
-  }
+  const actor = await requireBuyerActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
@@ -36,6 +32,6 @@ export async function addPgWorkspacesToRfpAction(
   return service.addPgWorkspaces(
     parsed.data.rfpId,
     parsed.data.workspaceIds,
-    { userId: session.user.id, workspaceId: session.user.workspaceId },
+    { userId: actor.userId, workspaceId: actor.workspaceId },
   );
 }

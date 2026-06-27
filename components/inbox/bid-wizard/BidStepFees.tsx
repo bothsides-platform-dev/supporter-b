@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/primitives/Button';
-import { PercentInput, FeeRateCell } from '@/components/forms/inputs';
+import { PercentInput, CurrencyInput, FeeRateCell } from '@/components/forms/inputs';
 import {
   PAYMENT_METHOD_CATEGORIES,
   PAYMENT_METHOD_LABELS,
@@ -9,6 +9,7 @@ import {
   MERCHANT_TIER_LABELS,
   TIERED_CATEGORY_LABELS,
   isTieredMethod,
+  isFlatFeeMethod,
   type CustomPaymentMethod,
   type PaymentMethod,
 } from '@/lib/types/bid';
@@ -138,14 +139,24 @@ export function BidStepFees({
             계좌 · 기타 (단일요율)
           </span>
           <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-            {singleMethods.map((m) => (
-              <PercentInput
-                key={m}
-                label={`${PAYMENT_METHOD_LABELS[m]} 수수료`}
-                value={fees[m] ?? ''}
-                onChange={(v) => onFee(m, v)}
-              />
-            ))}
+            {singleMethods.map((m) =>
+              isFlatFeeMethod(m) ? (
+                // 정액(건당) 수단 — % 가 아니라 건당 '원' 정수로 입력받는다.
+                <CurrencyInput
+                  key={m}
+                  label={`${PAYMENT_METHOD_LABELS[m]} 건당 수수료`}
+                  value={fees[m] ?? ''}
+                  onChange={(v) => onFee(m, v)}
+                />
+              ) : (
+                <PercentInput
+                  key={m}
+                  label={`${PAYMENT_METHOD_LABELS[m]} 수수료`}
+                  value={fees[m] ?? ''}
+                  onChange={(v) => onFee(m, v)}
+                />
+              ),
+            )}
             {customPaymentMethods.map((c) => (
               <PercentInput
                 key={c.id}

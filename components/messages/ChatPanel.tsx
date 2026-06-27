@@ -33,6 +33,9 @@ import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import { TeamThreadPane } from './TeamThreadPane';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
+import { SampleSendDisabledNotice } from './SampleSendDisabledNotice';
+import { ClosedConversationNotice } from './ClosedConversationNotice';
+import type { SendDisabledReason } from './ThreadView';
 import { useConversationLookup } from './useConversationLookup';
 
 type Props = {
@@ -42,6 +45,11 @@ type Props = {
   rfpTitle: string;
   /** 샘플 RFP — 상대방 채팅 전송 차단(팀 채팅은 정상). */
   isSample?: boolean;
+  /**
+   * 선정이 끝나 대화를 닫아야 할 상대(워크스페이스) ID 목록. 포커스된 상대가 이
+   * 목록에 있으면 상대방 채팅을 'closed' 사유로 비활성화한다(팀 채팅은 정상).
+   */
+  closedCounterpartyIds?: string[];
   /** 제공되면 헤더에 닫기 버튼을 렌더(레일용). 모달은 생략한다. */
   onClose?: () => void;
 };
@@ -51,7 +59,12 @@ const RAIL_TABS = [
   { id: 'team', label: '팀 채팅' },
 ];
 
-export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
+export function ChatPanel({
+  rfpId,
+  isSample = false,
+  closedCounterpartyIds,
+  onClose,
+}: Props) {
   const { tab, counterparty, setTab } = useDealRoom();
 
   // wsId → conversationId 읽기 전용 해소 — 열람만으로 대화를 만들지 않는다(sealed-bid).
@@ -61,6 +74,15 @@ export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
     activeWsId,
     tab === 'counterparty',
   );
+
+  // 상대방 채팅 전송 차단 사유 — 샘플이 우선, 그다음 선정 종료(미선정 PG). 팀 탭 무관.
+  const counterpartyClosed =
+    !!activeWsId && (closedCounterpartyIds?.includes(activeWsId) ?? false);
+  const sendDisabledReason: SendDisabledReason | null = isSample
+    ? 'sample'
+    : counterpartyClosed
+      ? 'closed'
+      : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-surface)]">
@@ -105,7 +127,7 @@ export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
             <NewConversationPane
               counterparty={counterparty}
               rfpId={rfpId}
-              sendDisabled={isSample}
+              sendDisabledReason={sendDisabledReason}
               onCreated={markCreated}
             />
           ) : (
@@ -114,10 +136,10 @@ export function ChatPanel({ rfpId, isSample = false, onClose }: Props) {
                 <Suspense key={conversationId} fallback={<ThreadSkeleton />}>
                   <ThreadPane
                     conversationId={conversationId}
-                    counterpartyFallback={{ ...counterparty, hasLogo: false }}
+                    counterpartyFallback={{ ...counterparty, logoUpdatedAt: null }}
                     variant="rail"
                     defaultRfpId={rfpId}
-                    sendDisabled={isSample}
+                    sendDisabledReason={sendDisabledReason}
                   />
                 </Suspense>
               </div>
@@ -161,13 +183,14 @@ function NewConversationPane({
   counterparty,
   rfpId,
   onCreated,
-  sendDisabled = false,
+  sendDisabledReason = null,
 }: {
   counterparty: DealRoomCounterparty;
   rfpId: string;
   onCreated: (wsId: string, conversationId: string) => void;
-  sendDisabled?: boolean;
+  sendDisabledReason?: SendDisabledReason | null;
 }) {
+  const sendDisabled = sendDisabledReason != null;
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -204,11 +227,8 @@ function NewConversationPane({
           className="py-12"
         />
       </div>
-      {sendDisabled && (
-        <p className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-4 py-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-          샘플에서는 메시지를 보낼 수 없어요. 실제 견적 요청을 보내보세요.
-        </p>
-      )}
+      {sendDisabledReason === 'sample' && <SampleSendDisabledNotice />}
+      {sendDisabledReason === 'closed' && <ClosedConversationNotice />}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <div className="flex items-end gap-2">
           <ChatComposerTextarea
@@ -218,7 +238,7 @@ function NewConversationPane({
             disabled={sendDisabled}
             placeholder="메시지를 입력하세요…"
             maxLength={4000}
-            className="min-h-8 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-1.5 text-[13px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
+            className="min-h-8 flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-2.5 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
           />
           <Button
             size="sm"

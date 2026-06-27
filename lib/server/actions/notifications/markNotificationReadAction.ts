@@ -3,13 +3,13 @@
 import { z } from 'zod';
 
 import { requireSession } from '@/lib/auth/session';
-import { type NotificationActionResult } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 import { getNotificationService } from '@/lib/server/services/notification';
 
 const Input = z.object({ notificationId: z.string().uuid() }).strict();
 
 export type MarkNotificationReadInput = z.infer<typeof Input>;
-export type MarkNotificationReadResult = NotificationActionResult;
+export type MarkNotificationReadResult = ActionResult;
 
 export async function markNotificationReadAction(
   input: MarkNotificationReadInput,

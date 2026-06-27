@@ -2,7 +2,6 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PaymentMethod } from '@/lib/types/bid';
 
 // 구매사 직접입력 커스텀 결제수단 (작성 단계 — id는 서버가 발급하므로 label만 보관).
@@ -20,7 +19,6 @@ export type RfpMockFile = { id: string; name: string; size: number };
 export type PgWorkspaceItem = { id: string; displayName: string };
 
 type RfpDraftStore = {
-  bizProfile: BizProfile | null;
   title: string;
   websiteUrl: string;
   mainProducts: string;
@@ -41,13 +39,11 @@ type RfpDraftStore = {
   boardVisible: boolean;
   currentFeeVisibleToPg: boolean;
   contractType: 'new' | 'renewal' | null;
-  setBizProfile: (biz: BizProfile | null) => void;
   setField: <K extends keyof RfpDraftStore>(key: K, value: RfpDraftStore[K]) => void;
   reset: () => void;
 };
 
 const defaultState = {
-  bizProfile: null,
   title: '',
   websiteUrl: '',
   mainProducts: '',
@@ -74,7 +70,6 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
   persist(
     (set) => ({
       ...defaultState,
-      setBizProfile: (bizProfile) => set({ bizProfile }),
       setField: (key, value) => set({ [key]: value } as Partial<RfpDraftStore>),
       reset: () => set(defaultState),
     }),

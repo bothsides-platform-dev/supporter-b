@@ -1,10 +1,10 @@
 'use server';
 
 import { requireSession } from '@/lib/auth/session';
-import { type NotificationActionResult } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 import { getNotificationService } from '@/lib/server/services/notification';
 
-export type MarkAllReadResult = NotificationActionResult;
+export type MarkAllReadResult = ActionResult;
 
 export async function markAllReadAction(): Promise<MarkAllReadResult> {
   let session;

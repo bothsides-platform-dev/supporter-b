@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { requireBuyerSession } from '@/lib/auth/session';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import type { RfpActionResult } from './_shared';
 
@@ -11,7 +11,8 @@ const Input = z
     rfpId: z.string().uuid(),
     pgWsIds: z.array(z.string().uuid()).min(1),
     message: z.string().trim().min(1).max(2000),
-    newDeadline: z.string().datetime(),
+    // offset: true — +09:00 형식(KST 끝) 허용. createRfpAction 과 동일.
+    newDeadline: z.string().datetime({ offset: true }),
   })
   .strict();
 
@@ -25,12 +26,8 @@ export type RequestRequoteResult = RfpActionResult;
 export async function requestRequoteAction(
   input: RequestRequoteInput,
 ): Promise<RequestRequoteResult> {
-  let session;
-  try {
-    session = await requireBuyerSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_BUYER' };
-  }
+  const actor = await requireBuyerActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
@@ -43,6 +40,6 @@ export async function requestRequoteAction(
       message: parsed.data.message,
       newDeadline: new Date(parsed.data.newDeadline),
     },
-    { userId: session.user.id, workspaceId: session.user.workspaceId },
+    { userId: actor.userId, workspaceId: actor.workspaceId },
   );
 }

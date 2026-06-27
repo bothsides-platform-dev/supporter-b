@@ -27,21 +27,7 @@ type MemberRow = typeof workspaceMembers.$inferSelect;
 type UserRow = typeof usersTable.$inferSelect;
 type BizRow = typeof bizProfiles.$inferSelect;
 
-const VALID_AVATAR_COLORS = [
-  'lavender',
-  'amber',
-  'moss',
-  'accent',
-  'terra',
-  'ink',
-] as const;
-type AvatarColor = (typeof VALID_AVATAR_COLORS)[number];
-
-function normalizeAvatarColor(raw: string | null | undefined): AvatarColor {
-  return (VALID_AVATAR_COLORS as readonly string[]).includes(raw ?? '')
-    ? (raw as AvatarColor)
-    : 'ink';
-}
+import { normalizeAvatarColor } from './_avatar-color';
 
 function rowToUser(u: UserRow, m: MemberRow): User {
   return {
@@ -49,6 +35,9 @@ function rowToUser(u: UserRow, m: MemberRow): User {
     name: u.name,
     email: u.email,
     avatarColor: normalizeAvatarColor(u.avatarColor),
+    avatarUpdatedAt: u.avatarUpdatedAt
+      ? new Date(u.avatarUpdatedAt).toISOString()
+      : null,
     role: m.role,
     status: u.status === 'paused' ? 'paused' : 'active',
     emailVerified: u.emailVerified,
@@ -107,7 +96,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     }
 
     const [logoRow] = await db
-      .select({ workspaceId: workspaceLogoBlobs.workspaceId })
+      .select({ updatedAt: workspaceLogoBlobs.updatedAt })
       .from(workspaceLogoBlobs)
       .where(eq(workspaceLogoBlobs.workspaceId, ws.id))
       .limit(1);
@@ -118,7 +107,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       name: ws.name,
       bizProfile,
       members,
-      hasLogo: !!logoRow,
+      logoUpdatedAt: logoRow?.updatedAt ? new Date(logoRow.updatedAt).toISOString() : null,
       createdAt: new Date(ws.createdAt).toISOString(),
     };
   }
@@ -170,7 +159,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     tx?: Tx,
   ): Promise<WorkspaceMembershipSummary[]> {
     const db = this.h(tx);
-    return (await db
+    const rows = await db
       .select({
         id: workspaces.id,
         name: workspaces.name,
@@ -186,17 +175,22 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
             AND channel = 'in_app'
             AND read_at IS NULL
         )`,
-        hasLogo: workspaces.hasLogo,
+        logoUpdatedAt: workspaces.logoUpdatedAt,
+        isDemo: workspaces.isDemo,
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
       .where(eq(workspaceMembers.userId, userId))
-      .orderBy(asc(workspaceMembers.joinedAt))) as WorkspaceMembershipSummary[];
+      .orderBy(asc(workspaceMembers.joinedAt));
+    return rows.map((r: { logoUpdatedAt: Date | null }) => ({
+      ...r,
+      logoUpdatedAt: r.logoUpdatedAt ? new Date(r.logoUpdatedAt).toISOString() : null,
+    })) as WorkspaceMembershipSummary[];
   }
 
   async listAllWorkspacesForMaster(tx?: Tx): Promise<WorkspaceMembershipSummary[]> {
     const db = this.h(tx);
-    return (await db
+    const rows = await db
       .select({
         id: workspaces.id,
         name: workspaces.name,
@@ -205,12 +199,17 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         role: sql<'admin'>`'admin'`,
         memberApprovalStatus: sql<'approved'>`'approved'`,
         unreadCount: sql<number>`0`,
-        hasLogo: workspaces.hasLogo,
+        logoUpdatedAt: workspaces.logoUpdatedAt,
+        isDemo: workspaces.isDemo,
       })
       .from(workspaces)
       .where(eq(workspaces.status, 'active'))
       .orderBy(asc(workspaces.name))
-      .limit(500)) as WorkspaceMembershipSummary[];
+      .limit(500);
+    return rows.map((r: { logoUpdatedAt: Date | null }) => ({
+      ...r,
+      logoUpdatedAt: r.logoUpdatedAt ? new Date(r.logoUpdatedAt).toISOString() : null,
+    })) as WorkspaceMembershipSummary[];
   }
 
   async isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean> {
@@ -250,6 +249,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         userId: workspaceMembers.userId,
         name: usersTable.name,
         joinedAt: workspaceMembers.joinedAt,
+        avatarUpdatedAt: usersTable.avatarUpdatedAt,
       })
       .from(workspaceMembers)
       .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
@@ -263,11 +263,13 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       userId: string;
       name: string;
       joinedAt: Date;
+      avatarUpdatedAt: Date | null;
     }[];
     return rows.map((r) => ({
       userId: r.userId,
       name: r.name,
       joinedAt: new Date(r.joinedAt).toISOString(),
+      avatarUpdatedAt: r.avatarUpdatedAt ? new Date(r.avatarUpdatedAt).toISOString() : null,
     }));
   }
 
@@ -308,9 +310,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return rows.map((r) => r.email);
   }
 
-  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; hasLogo: boolean }[]> {
+  async listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; logoUpdatedAt: string | null }[]> {
     const rows = (await this._db
-      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey, hasLogo: workspaces.hasLogo })
+      .select({ id: workspaces.id, name: workspaces.name, canonicalPgKey: workspaces.canonicalPgKey, logoUpdatedAt: workspaces.logoUpdatedAt })
       .from(workspaces)
       .where(
         and(
@@ -319,8 +321,12 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           isNotNull(workspaces.canonicalPgKey),
         ),
       )
-      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null; hasLogo: boolean }[];
-    return rows.map((r) => ({ ...r, canonicalPgKey: r.canonicalPgKey! }));
+      .orderBy(asc(workspaces.name))) as { id: string; name: string; canonicalPgKey: string | null; logoUpdatedAt: Date | null }[];
+    return rows.map((r) => ({
+      ...r,
+      canonicalPgKey: r.canonicalPgKey!,
+      logoUpdatedAt: r.logoUpdatedAt ? new Date(r.logoUpdatedAt).toISOString() : null,
+    }));
   }
 
   async search(
@@ -346,6 +352,32 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(eq(workspaces.id, workspaceId))
       .limit(1);
     return row?.name;
+  }
+
+  async getDisplayInfo(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<
+    { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null } | undefined
+  > {
+    const db = this.h(tx);
+    const [row] = (await db
+      .select({
+        id: workspaces.id,
+        name: workspaces.name,
+        type: workspaces.type,
+        logoUpdatedAt: workspaces.logoUpdatedAt,
+      })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1)) as { id: string; name: string; type: WorkspaceType; logoUpdatedAt: Date | null }[];
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      logoUpdatedAt: row.logoUpdatedAt ? new Date(row.logoUpdatedAt).toISOString() : null,
+    };
   }
 
   async memberRecipients(
@@ -607,9 +639,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     await db.update(workspaces).set({ name }).where(eq(workspaces.id, workspaceId));
   }
 
-  async setHasLogo(workspaceId: string, hasLogo: boolean, tx?: Tx): Promise<void> {
+  async setLogoUpdatedAt(workspaceId: string, value: Date | null, tx?: Tx): Promise<void> {
     const db = this.h(tx);
-    await db.update(workspaces).set({ hasLogo }).where(eq(workspaces.id, workspaceId));
+    await db.update(workspaces).set({ logoUpdatedAt: value }).where(eq(workspaces.id, workspaceId));
   }
 
   async createBare(

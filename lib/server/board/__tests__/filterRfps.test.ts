@@ -10,9 +10,10 @@ import {
 import type { RFP } from '@/lib/types/rfp';
 import type { InboxRow } from '@/components/inbox/InboxList';
 
-// Fixed "now": 2026-05-24 (local).
-const NOW = new Date(2026, 4, 24, 9, 0, 0);
-const iso = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12, 0, 0).toISOString();
+// Fixed "now": 2026-05-24 KST. T03:00:00Z = 12:00 KST, safely mid-day regardless of runner TZ.
+const NOW = new Date('2026-05-24T03:00:00.000Z');
+const iso = (y: number, m: number, d: number) =>
+  `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T03:00:00.000Z`;
 
 describe('matchesDeadlineBucket', () => {
   it('returns true when bucket is absent/unknown (no filter)', () => {
@@ -61,7 +62,7 @@ describe('paramsForView', () => {
   });
 
   it('table 뷰에서는 params 그대로', () => {
-    const p = { status: 'closed', grade: 'small' };
+    const p = { status: 'closed', grade: 'sole' };
     expect(paramsForView(p, 'table')).toEqual(p);
   });
 });
@@ -142,5 +143,51 @@ describe('filterInboxRows (status + deadline + grade, AND)', () => {
   });
   it('grade=sme1', () => {
     expect(filterInboxRows(rows, { grade: 'sme1' }, NOW).map((r) => r.invitationId)).toEqual(['a', 'c']);
+  });
+});
+
+/**
+ * KST 경계 — TZ-비의존 테스트
+ *
+ * 이 블록의 테스트는 TZ=UTC와 TZ=Asia/Seoul 환경 모두에서 동일한 결과를 내야 한다.
+ * 마감일은 신규 규약(+09:00)으로 작성하고, "KST 기준" 달력일 비교가 올바른지 검증한다.
+ *
+ * 시나리오:
+ *   deadline = 2026-06-30T23:59:59+09:00  (= 2026-06-30T14:59:59Z, KST 6월 30일 끝)
+ *   now      = 2026-06-30T15:00:00Z       (= 2026-07-01T00:00:00+09:00, KST 7월 1일 자정)
+ *
+ * KST 관점: 마감은 "6/30" 이었고, 지금은 "7/1 00:00" → 마감 지남(overdue), 다른 달.
+ */
+describe('KST 경계 — TZ-비의존', () => {
+  // KST 7월 1일 00:00:00
+  const nowKstJul1Midnight = new Date('2026-06-30T15:00:00.000Z');
+  // KST 6월 30일 23:59:59 (신규 저장 규약)
+  const deadlineKstJun30End = '2026-06-30T23:59:59+09:00';
+
+  it('KST 자정이 지나면 마감일이 overdue로 분류된다', () => {
+    expect(matchesDeadlineBucket(deadlineKstJun30End, 'overdue', nowKstJul1Midnight)).toBe(true);
+  });
+
+  it('KST 자정이 지나면 마감일이 이번 달(month)에 해당하지 않는다', () => {
+    expect(matchesDeadlineBucket(deadlineKstJun30End, 'month', nowKstJul1Midnight)).toBe(false);
+  });
+
+  it('KST 자정이 지나면 d7 범위에서 벗어난다', () => {
+    expect(matchesDeadlineBucket(deadlineKstJun30End, 'd7', nowKstJul1Midnight)).toBe(false);
+  });
+
+  it('KST 자정 직전에는 아직 overdue가 아니다', () => {
+    // now = 2026-06-30T14:59:58Z = 2026-06-30T23:59:58+09:00 (1초 전)
+    const nowJustBefore = new Date('2026-06-30T14:59:58.000Z');
+    expect(matchesDeadlineBucket(deadlineKstJun30End, 'overdue', nowJustBefore)).toBe(false);
+  });
+
+  it('KST 같은 달 내에서 d7 이내이면 true', () => {
+    // now = 2026-06-28T03:00:00Z = 2026-06-28T12:00:00+09:00 (KST 6/28 정오)
+    // deadline = 2026-06-30T23:59:59+09:00 → 2일 후 → d7 내
+    const nowKstJun28Noon = new Date('2026-06-28T03:00:00.000Z');
+    expect(matchesDeadlineBucket(deadlineKstJun30End, 'd7', nowKstJun28Noon)).toBe(true);
+    expect(matchesDeadlineBucket(deadlineKstJun30End, 'month', nowKstJun28Noon)).toBe(true);
+    expect(matchesDeadlineBucket(deadlineKstJun30End, 'overdue', nowKstJun28Noon)).toBe(false);
   });
 });

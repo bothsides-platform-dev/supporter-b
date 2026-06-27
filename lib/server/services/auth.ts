@@ -1,9 +1,11 @@
 import { randomInt, randomUUID } from 'node:crypto';
 
+import { normalizeEmail, bucket15Min } from './_service-utils';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { baseUrl } from '@/lib/server/env';
 import { addMinutes, generateToken, hashToken } from '@/lib/server/token';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
+import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
 import { renderAuthReset } from '@/lib/server/outbox/templates/authReset';
 import { renderAuthEmailChange } from '@/lib/server/outbox/templates/authEmailChange';
 import { renderAuthVerify } from '@/lib/server/outbox/templates/authVerify';
@@ -20,16 +22,9 @@ import type {
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
 import type { ServiceResult } from './types';
+import type { MerchantTier } from '@/lib/types/bid';
 
 export type AuthActor = { userId: string };
-
-function normalizeEmail(raw: string): string {
-  return raw.trim().toLowerCase();
-}
-
-function bucket15Min(now: Date = new Date()): number {
-  return Math.floor(now.getTime() / (15 * 60 * 1000));
-}
 
 /** 6자리 숫자 OTP 코드 생성 (000000~999999). */
 function generateEmailCode(): string {
@@ -83,7 +78,7 @@ export class AuthService {
     phoneVerificationId: string;
     wsKind: 'buyer' | 'pg';
     wsName: string;
-    bizProfile?: { bizNo: string; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed'; grade?: 'general' | 'small' | 'sme1' | 'sme2' | 'sme3'; gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset' };
+    bizProfile?: { bizNo: string; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed'; grade?: MerchantTier; gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset' };
     pgProfile?: { bizNo: string; slaDays?: number };
   }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> {
     const email = normalizeEmail(input.email);
@@ -273,6 +268,9 @@ export class AuthService {
       );
     });
 
+    // Post-commit: force-disconnect live WS sockets now that session_version is bumped.
+    void disconnectCentrifugoUser(input.userId);
+
     return { ok: true };
   }
 
@@ -341,6 +339,9 @@ export class AuthService {
       }
     });
 
+    // Post-commit: force-disconnect live WS sockets now that session_version is bumped.
+    if (resetUser) void disconnectCentrifugoUser(resetUser.id);
+
     return { ok: true, email: consumed.email };
   }
 
@@ -397,6 +398,9 @@ export class AuthService {
     } catch (err) {
       return mapUniqueViolationToEmailTaken(err);
     }
+
+    // Post-commit: force-disconnect live WS sockets now that session_version is bumped.
+    void disconnectCentrifugoUser(userId);
 
     return { ok: true };
   }

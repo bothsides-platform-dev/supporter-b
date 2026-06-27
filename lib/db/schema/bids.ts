@@ -36,7 +36,8 @@ export const bids = pgTable(
     settleLimit: numeric('settle_limit', { precision: 14, scale: 2 }).notNull().default('0'),
     // 월 보증보험 (원/연)
     guaranteeInsurance: numeric('guarantee_insurance', { precision: 14, scale: 2 }).notNull().default('0'),
-    // 결제수단별 수수료 JSONB: { card: 0.0125, virtual_account: 0.005, ... }
+    // 결제수단별 수수료 JSONB: 정률 수단은 소수 요율, 정액 수단은 '원' 정수.
+    // 예: { card: 0.0125, virtual_account: 300 } (가상계좌=건당 300원)
     paymentFees: jsonb('payment_fees').notNull().default(sql`'{}'::jsonb`),
     // 커스텀 결제수단별 수수료 JSONB: { <customId>: 0.02, ... } (rfps.customPaymentMethods.id 기준)
     customFees: jsonb('custom_fees').notNull().default(sql`'{}'::jsonb`),

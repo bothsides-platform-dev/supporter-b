@@ -13,7 +13,7 @@
  */
 import type { PublicationContext } from 'centrifuge';
 
-import { teamChatChannel } from '@/lib/server/realtime/centrifugo';
+import { teamChatChannel } from '@/lib/realtime/channels';
 import { useCentrifugoSubscription } from '@/lib/hooks/useCentrifugoSubscription';
 
 export type TeamLivePayload = {
@@ -22,6 +22,7 @@ export type TeamLivePayload = {
   body?: string;
   authorUserId?: string;
   authorName?: string;
+  authorAvatarUpdatedAt?: string | null;
   createdAt?: string;
   attachments?: import('@/lib/types/common').Attachment[];
   [k: string]: unknown;

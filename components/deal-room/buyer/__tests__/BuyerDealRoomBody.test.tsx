@@ -25,8 +25,8 @@ vi.mock('@/components/rfp/RequestConditionsView', () => ({
 vi.mock('@/components/rfp/RfpInviteManager', () => ({
   RfpInviteManager: () => <div data-testid="invite-manager" />,
 }));
-vi.mock('@/components/rfp/RfpBoardVisibilityToggle', () => ({
-  RfpBoardVisibilityToggle: () => <div data-testid="board-visibility-toggle" />,
+vi.mock('@/components/rfp/RfpBoardVisibilityStatus', () => ({
+  RfpBoardVisibilityStatus: () => <div data-testid="board-visibility-status" />,
 }));
 vi.mock('@/components/rfp/RfpPendingRequests', () => ({
   RfpPendingRequests: () => <div data-testid="pending-requests" />,
@@ -49,6 +49,9 @@ vi.mock('@/lib/server/actions/rfp', () => ({
 vi.mock('@/components/rfp/SampleRfpBanner', () => ({
   SampleRfpBanner: () => <div data-testid="sample-banner" />,
 }));
+
+const mq = vi.hoisted(() => ({ lgUp: true }));
+vi.mock('@/hooks/use-lg-up', () => ({ useIsLgUp: () => mq.lgUp }));
 
 import { BuyerDealRoomBody } from '../BuyerDealRoomBody';
 import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
@@ -105,11 +108,13 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     authorName: '담당자',
     requoteByPg: {},
     priorBidByPg: {},
+    awardedPgContact: null,
     ...over,
   };
 }
 
 afterEach(cleanup);
+afterEach(() => { mq.lgUp = true; });
 
 describe('BuyerDealRoomBody — 샘플 배너', () => {
   it('isSample 면 상단에 SampleRfpBanner 를 렌더한다', () => {
@@ -120,5 +125,32 @@ describe('BuyerDealRoomBody — 샘플 배너', () => {
   it('isSample 이 아니면 SampleRfpBanner 를 렌더하지 않는다', () => {
     render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, isSample: false } })} />);
     expect(screen.queryByTestId('sample-banner')).not.toBeInTheDocument();
+  });
+});
+
+describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
+  it('lg 미만에서 DealRoomCenter 콘텐츠가 DOM 에 존재한다', () => {
+    mq.lgUp = false;
+    render(<BuyerDealRoomBody data={buildData()} />);
+    // FocusComparison 은 '견적 비교' 탭의 기본 콘텐츠.
+    expect(screen.getByTestId('focus-comparison')).toBeInTheDocument();
+  });
+});
+
+describe('BuyerDealRoomBody — 선정 PG 연락처', () => {
+  const awardedPgContact = { workspaceName: '토스페이먼츠', name: '김영업', email: 'sales@toss.im', phone: '010-1234-5678' };
+
+  it('awarded + awardedPgContact 면 선정 PG 담당자 연락처 카드를 렌더한다', () => {
+    render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      awardedPgContact,
+    })} />);
+    expect(screen.getByText('선정한 PG 담당자 연락처')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sales@toss\.im/ })).toBeInTheDocument();
+  });
+
+  it('sent(선정 전)에는 연락처 카드를 렌더하지 않는다', () => {
+    render(<BuyerDealRoomBody data={buildData()} />);
+    expect(screen.queryByText('선정한 PG 담당자 연락처')).not.toBeInTheDocument();
   });
 });

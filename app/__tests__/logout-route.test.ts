@@ -60,6 +60,44 @@ describe('GET /logout', () => {
     expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
   });
 
+  it('카운터가 없으면 평소처럼 /login 으로 보내고 __rl 카운터를 1로 세운다', async () => {
+    signOutMock.mockResolvedValue(undefined);
+
+    const res = await GET(new Request('https://supporter-b.com/logout'));
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
+    const setCookies = res.headers.getSetCookie();
+    expect(
+      setCookies.some((c) => /^__rl=1\b/.test(c) && /Max-Age=\d+/.test(c)),
+    ).toBe(true);
+  });
+
+  it('카운터가 임계치에 도달하면 회로를 끊는다 — /login?reason=session + __rl 만료 + __rl_break 세팅', async () => {
+    // stale 쿠키가 끝내 안 지워져 /logout 이 반복 진입되면, 임계치에서 회로차단기가
+    // 트립해 공격적 클리어 + 탈출 플래그로 루프를 끊고 안내 화면으로 보낸다.
+    signOutMock.mockResolvedValue(undefined);
+
+    const req = new Request('https://supporter-b.com/logout', {
+      headers: { cookie: '__rl=3; __Secure-authjs.session-token=stale' },
+    });
+    const res = await GET(req);
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      'https://supporter-b.com/login?reason=session',
+    );
+    const setCookies = res.headers.getSetCookie();
+    // __rl 자체는 만료(다음 진입은 0부터)
+    expect(
+      setCookies.some((c) => /^__rl=;/.test(c) && c.includes('Max-Age=0')),
+    ).toBe(true);
+    // proxy 가 authed→/home 바운스를 억제하도록 탈출 플래그를 세운다
+    expect(setCookies.some((c) => /^__rl_break=/.test(c) && !/__rl_break=;/.test(c))).toBe(
+      true,
+    );
+  });
+
   it('레거시 host-only stale 쿠키를 확실히 만료시키는 Set-Cookie 헤더를 부착한다', async () => {
     // 근본 원인: signOut() 은 현행 도메인-스코프 쿠키만 만료시켜, 도메인 설정 이전
     // 발급된 host-only 레거시 쿠키는 살아남아 무한 리다이렉트가 된다. /logout 응답이

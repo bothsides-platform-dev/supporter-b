@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useBidDraft } from '../useBidDraft';
+import { useBidDraft, EMPTY_BID_DRAFT, isPristineDraft } from '../useBidDraft';
 
 const RFP_ID = 'rfp-abc';
 const KEY = `bid-draft:${RFP_ID}`;
@@ -83,11 +83,11 @@ describe('useBidDraft', () => {
   it('__v=3 복합 키 draft를 복원한다', () => {
     localStorage.setItem(
       'bid-draft:rfp-y',
-      JSON.stringify({ __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees: { 'card:sole': '0.5', virtual_account: '0.3' }, memo: '' }),
+      JSON.stringify({ __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees: { 'card:sole': '0.5', virtual_account: '300' }, memo: '' }),
     );
     const { result } = renderHook(() => useBidDraft('rfp-y'));
     expect(result.current.draft?.fees['card:sole']).toBe('0.5');
-    expect(result.current.draft?.fees.virtual_account).toBe('0.3');
+    expect(result.current.draft?.fees.virtual_account).toBe('300');
   });
 
   it('구버전(bankPct/cardPct) 드래프트는 무시하고 항목을 삭제한다', () => {
@@ -146,5 +146,43 @@ describe('useBidDraft', () => {
       });
       expect(result.current.savedAt).not.toBe(first);
     });
+  });
+});
+
+describe('isPristineDraft / EMPTY_BID_DRAFT', () => {
+  it('EMPTY_BID_DRAFT는 자기 자신에 대해 pristine', () => {
+    expect(isPristineDraft(EMPTY_BID_DRAFT, EMPTY_BID_DRAFT)).toBe(true);
+  });
+
+  it('fee가 채워지면 pristine 아님', () => {
+    expect(isPristineDraft({ ...EMPTY_BID_DRAFT, fees: { card: '1.0' } }, EMPTY_BID_DRAFT)).toBe(false);
+  });
+
+  it('빈 문자열 fee 값은 무시한다(pristine 유지)', () => {
+    expect(isPristineDraft({ ...EMPTY_BID_DRAFT, fees: { card: '' } }, EMPTY_BID_DRAFT)).toBe(true);
+  });
+
+  it("settleLimit '0'과 ''는 동일하게 취급한다", () => {
+    expect(isPristineDraft({ ...EMPTY_BID_DRAFT, settleLimit: '' }, EMPTY_BID_DRAFT)).toBe(true);
+  });
+
+  it("guaranteeInsurance '0'과 ''는 동일하게 취급한다", () => {
+    expect(isPristineDraft({ ...EMPTY_BID_DRAFT, guaranteeInsurance: '' }, EMPTY_BID_DRAFT)).toBe(true);
+  });
+
+  it('memo가 바뀌면 pristine 아님', () => {
+    expect(isPristineDraft({ ...EMPTY_BID_DRAFT, memo: 'x' }, EMPTY_BID_DRAFT)).toBe(false);
+  });
+
+  it('fees 키 순서가 달라도 내용이 같으면 pristine', () => {
+    const base = { ...EMPTY_BID_DRAFT, fees: { a: '1', b: '2' } };
+    const other = { ...EMPTY_BID_DRAFT, fees: { b: '2', a: '1' } };
+    expect(isPristineDraft(other, base)).toBe(true);
+  });
+
+  it('baseline(재요청 prefill)과 동일하면 pristine, 편집되면 아님', () => {
+    const baseline = { ...EMPTY_BID_DRAFT, cycleUnit: 'M' as const, cycleNum: '2', fees: { card: '0.5' } };
+    expect(isPristineDraft({ ...baseline }, baseline)).toBe(true);
+    expect(isPristineDraft({ ...baseline, fees: { card: '0.9' } }, baseline)).toBe(false);
   });
 });

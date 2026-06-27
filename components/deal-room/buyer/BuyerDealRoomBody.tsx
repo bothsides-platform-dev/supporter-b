@@ -28,7 +28,8 @@ import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { RequestConditionsView } from '@/components/rfp/RequestConditionsView';
 import { SampleRfpBanner } from '@/components/rfp/SampleRfpBanner';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
-import { RfpBoardVisibilityToggle } from '@/components/rfp/RfpBoardVisibilityToggle';
+import { RfpBoardVisibilityStatus } from '@/components/rfp/RfpBoardVisibilityStatus';
+import { Label } from '@/components/primitives/Label';
 import { RfpPendingRequests } from '@/components/rfp/RfpPendingRequests';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { AwardConfirmDialog } from '@/components/rfp/comparison/AwardConfirmDialog';
@@ -36,6 +37,7 @@ import { RequoteDialog } from '@/components/rfp/comparison/RequoteDialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { closeRfpAction, cancelRfpAction } from '@/lib/server/actions/rfp';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
+import { CounterpartyContactCard } from '@/components/deal-room/CounterpartyContactCard';
 import { toast } from '@/lib/toast';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
@@ -49,6 +51,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
     pendingRequests,
     canEdit,
     requoteByPg,
+    awardedPgContact,
   } = data;
   const router = useRouter();
   const [tab, setTab] = useState('compare');
@@ -90,6 +93,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           rfpId={rfp.id}
           rfpCode={rfp.code}
           requoteByPg={requoteByPg}
+          buyerGrade={rfp.bizProfile?.grade}
           isSample={rfp.isSample ?? false}
           hideHeader
         />
@@ -103,11 +107,10 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       content: (
         <div className="space-y-6">
           <RfpInviteManager rfpId={rfp.code} invitations={inviteList} canEdit={canEdit} />
-          <RfpBoardVisibilityToggle
-            rfpCode={rfp.code}
-            boardVisible={rfp.boardVisible ?? true}
-            canEdit={canEdit}
-          />
+          <div className="flex items-center justify-between gap-3">
+            <Label size="md" muted={false}>오픈 게시판 노출</Label>
+            <RfpBoardVisibilityStatus boardVisible={rfp.boardVisible ?? true} />
+          </div>
           <RfpPendingRequests requests={pendingRequests} canEdit={canEdit} />
         </div>
       ),
@@ -157,7 +160,12 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           <SampleRfpBanner rfpCode={rfp.code} />
         </div>
       )}
-      <div className="flex min-h-0 flex-1">
+      {rfp.status === 'awarded' && awardedPgContact && (
+        <div className="shrink-0 px-6 pt-4">
+          <CounterpartyContactCard title="선정한 PG 담당자 연락처" contact={awardedPgContact} />
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 max-lg:flex-col">
         <DealRoomActionRail actions={actions} />
         <div className="min-w-0 flex-1">
           <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />

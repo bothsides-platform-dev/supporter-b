@@ -2,10 +2,9 @@
 
 import { requireSession } from '@/lib/auth/session';
 import { getWorkspaceService } from '@/lib/server/services/workspace';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
-export type AcceptWorkspaceInviteResult =
-  | { ok: true; workspaceId: string }
-  | { ok: false; error: string };
+export type AcceptWorkspaceInviteResult = ActionResult<{ workspaceId: string }>;
 
 /**
  * Claim a workspace invitation token.

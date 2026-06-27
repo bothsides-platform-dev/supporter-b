@@ -3,6 +3,7 @@ import {
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
   isTieredMethod,
+  isFlatFeeMethod,
   getMethodRate,
 } from '@/lib/types/bid';
 
@@ -30,6 +31,24 @@ describe('isTieredMethod', () => {
     expect(isTieredMethod('bank_transfer')).toBe(false);
     expect(isTieredMethod('mobile')).toBe(false);
     expect(isTieredMethod('gift_card')).toBe(false);
+  });
+});
+
+describe('isFlatFeeMethod', () => {
+  it('가상계좌만 정액(건당 원) 수단이라 true', () => {
+    // 가상계좌는 결제 건당 고정 금액(정액)으로 부과 — 정률(%) 아님.
+    expect(isFlatFeeMethod('virtual_account')).toBe(true);
+  });
+  it('그 외 수단은 모두 정률(%)이라 false', () => {
+    expect(isFlatFeeMethod('card')).toBe(false);
+    expect(isFlatFeeMethod('overseas_card')).toBe(false);
+    expect(isFlatFeeMethod('bank_transfer')).toBe(false);
+    expect(isFlatFeeMethod('naver_pay')).toBe(false);
+    expect(isFlatFeeMethod('mobile')).toBe(false);
+    expect(isFlatFeeMethod('gift_card')).toBe(false);
+  });
+  it('정액 수단은 구간(tiered) 수단과 상호배타', () => {
+    expect(isTieredMethod('virtual_account')).toBe(false);
   });
 });
 

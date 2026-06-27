@@ -4,8 +4,9 @@
 // 컨벤션: buyer-kanban-loader.test.ts 와 동일 — pglite + seed, auth mock 없음.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 
-import { bids, bidNotes, rfpInvitations, rfpPgRequests, rfpRequoteRequests, rfps } from '@/lib/db/schema';
+import { bids, bidNotes, columns, rfpAllowedPg, rfpInvitations, rfpPgRequests, rfpRequoteRequests, rfps, users } from '@/lib/db/schema';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
@@ -142,12 +143,36 @@ async function setup() {
     inicisId: inicis.id,
     buyerId: buyer.id,
     buyerName: buyer.name,
+    pgUserId: pgUser.id,
     seedRfp,
     seedInvitation,
     seedBid,
     seedNote,
     seedPgRequest,
   };
+}
+
+// 선정 시나리오: 승자 PG=toss, 패자 PG=inicis. PG 담당자(pgUser)에 이름·전화를 부여하고
+// 구매사 담당자(buyer)는 전화 없음(기본). opts.awarded 면 rfp 를 awarded 로 전이한다.
+async function seedAwardScenario(opts: { awarded: boolean }): Promise<{ code: string }> {
+  await ctx.db
+    .update(users)
+    .set({ name: '토스 담당자', phone: '010-9999-0000' })
+    .where(eq(users.id, ctx.pgUserId));
+
+  const rfpId = await ctx.seedRfp('AWARD-1');
+  const winnerInv = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+  const winnerBid = await ctx.seedBid(rfpId, ctx.tossId, winnerInv, 'submitted');
+  const loserInv = await ctx.seedInvitation(rfpId, ctx.inicisId, 'accepted');
+  await ctx.seedBid(rfpId, ctx.inicisId, loserInv, 'submitted');
+
+  if (opts.awarded) {
+    await ctx.db
+      .update(rfps)
+      .set({ status: 'awarded', awardedBidId: winnerBid })
+      .where(eq(rfps.id, rfpId));
+  }
+  return { code: 'AWARD-1' };
 }
 
 beforeEach(async () => {
@@ -411,5 +436,145 @@ describe('loadPgRfpDetail', () => {
         paymentFees: { card: 0.0125 },
       },
     ]);
+  });
+
+  it('PG 페이로드는 allowedPgWorkspaceIds(경쟁사 로스터)를 비운다 — 봉인입찰', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0070');
+    // 허용목록에 toss + inicis 둘 다. toss 는 inicis 가 초대된 사실(경쟁사 신원·수)을 알아선 안 된다.
+    await ctx.db.insert(rfpAllowedPg).values([
+      { rfpId, pgWsId: ctx.tossId },
+      { rfpId, pgWsId: ctx.inicisId },
+    ]);
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0070', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    // 봉인입찰: 경쟁사 로스터는 PG 페이로드(RSC)에 절대 담기지 않는다.
+    expect(res!.rfp.allowedPgWorkspaceIds).toEqual([]);
+  });
+
+  it('PG 페이로드에서 buyer-only 메타·감사 필드를 제거한다', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0071');
+    const inv = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    // 낙찰 입찰 + 커스텀 칸반 컬럼 — 승자 id·내부 보드 상태가 PG 페이로드로 새지 않는지.
+    const colId = randomUUID();
+    await ctx.db.insert(columns).values({
+      id: colId,
+      workspaceId: ctx.buyerWsId,
+      kind: 'pipeline',
+      title: '진행중',
+      position: 'a0',
+    });
+    const bidId = await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted');
+    await ctx.db
+      .update(rfps)
+      .set({ status: 'awarded', awardedBidId: bidId, boardColumnId: colId })
+      .where(eq(rfps.id, rfpId));
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0071', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.rfp.createdBy).toBe('');
+    expect(res!.rfp.awardedBidId).toBeUndefined();
+    expect(res!.rfp.boardColumnId).toBeNull();
+    expect(res!.rfp.boardVisible).toBeUndefined();
+    expect(res!.rfp.currentFeeVisibleToPg).toBeUndefined();
+    // bizProfile 은 bizNo·grade 만 노출, 세무·감사 필드 제거.
+    expect(res!.rfp.bizProfile).toEqual({ bizNo: '1234567890', grade: 'general', gradeSource: 'unset' });
+  });
+
+  it('내 입찰이 선정되면 awardedToMe=true (승자 id 는 여전히 노출 안 함)', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0072');
+    const inv = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    const bidId = await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted');
+    await ctx.db
+      .update(rfps)
+      .set({ status: 'awarded', awardedBidId: bidId })
+      .where(eq(rfps.id, rfpId));
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0072', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.awardedToMe).toBe(true);
+    expect(res!.rfp.awardedBidId).toBeUndefined();
+  });
+
+  it('다른 PG 가 선정되면 awardedToMe=false (승자 신원 비노출)', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0073');
+    const invToss = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    const invInicis = await ctx.seedInvitation(rfpId, ctx.inicisId, 'accepted');
+    await ctx.seedBid(rfpId, ctx.tossId, invToss, 'submitted');
+    const winnerBidId = await ctx.seedBid(rfpId, ctx.inicisId, invInicis, 'submitted');
+    await ctx.db
+      .update(rfps)
+      .set({ status: 'awarded', awardedBidId: winnerBidId })
+      .where(eq(rfps.id, rfpId));
+
+    // 미선정 PG(toss) 시점에서 로드
+    const res = await loadPgRfpDetail({ code: 'P-2606-0073', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.awardedToMe).toBe(false);
+    expect(res!.rfp.awardedBidId).toBeUndefined();
+  });
+
+  it('선정 전이면 awardedToMe=false', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-0074');
+    const inv = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    await ctx.seedBid(rfpId, ctx.tossId, inv, 'submitted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2606-0074', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    expect(res!.awardedToMe).toBe(false);
+  });
+});
+
+describe('연락처 교환 (awarded)', () => {
+  it('구매사 로더: awarded 면 선정 PG 담당자 연락처를 부착한다', async () => {
+    const { code } = await seedAwardScenario({ awarded: true });
+    const data = await loadBuyerRfpDetail({
+      code,
+      workspaceId: ctx.buyerWsId,
+      userId: ctx.buyerId,
+      userName: ctx.buyerName,
+    });
+    expect(data?.awardedPgContact).toEqual({
+      workspaceName: 'toss.im',
+      name: '토스 담당자',
+      email: 'pg@toss.im',
+      phone: '010-9999-0000',
+    });
+  });
+
+  it('구매사 로더: sent(미선정) 면 awardedPgContact 가 null', async () => {
+    const { code } = await seedAwardScenario({ awarded: false });
+    const data = await loadBuyerRfpDetail({
+      code,
+      workspaceId: ctx.buyerWsId,
+      userId: ctx.buyerId,
+      userName: ctx.buyerName,
+    });
+    expect(data?.awardedPgContact).toBeNull();
+  });
+
+  it('PG 로더: awardedToMe(승자=toss) 면 구매사 담당자 연락처를 부착한다', async () => {
+    const { code } = await seedAwardScenario({ awarded: true });
+    const data = await loadPgRfpDetail({ code, workspaceId: ctx.tossId });
+    expect(data?.awardedToMe).toBe(true);
+    expect(data?.buyerContact).toEqual({
+      workspaceName: '구매사',
+      name: '구매 담당자',
+      email: 'buyer@buy.com',
+      phone: null,
+    });
+  });
+
+  it('PG 로더(경계): 미선정 PG(inicis) 페이로드엔 구매사 연락처가 없다', async () => {
+    const { code } = await seedAwardScenario({ awarded: true });
+    const data = await loadPgRfpDetail({ code, workspaceId: ctx.inicisId });
+    expect(data?.awardedToMe).toBe(false);
+    expect(data?.buyerContact).toBeNull();
+    // 누출 회귀: 미선정 PG 페이로드에 구매사 이메일도, 어떤 전화번호도(승자 PG 전화 포함)
+    // 새지 않아야 한다. 시드된 승자 PG 전화 전체('010-9999-0000')로 검사한다 —
+    // 느슨한 '010-' 접두만 보면 무작위 UUID 세그먼트('…-4010-…')에 충돌해 거짓 실패한다.
+    expect(JSON.stringify(data)).not.toContain('buyer@buy.com');
+    expect(JSON.stringify(data)).not.toContain('010-9999-0000');
   });
 });

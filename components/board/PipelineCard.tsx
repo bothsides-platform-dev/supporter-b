@@ -42,7 +42,7 @@ export function PipelineCard({
 function CardHead({ code, deadline, hideDday }: { code: string; deadline: string; hideDday: boolean }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
-      <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] tracking-[0.04em]">
+      <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] tracking-[0.04em]">
         {code}
       </span>
       {!hideDday && <Chip label={formatDeadline(deadline)} color={ddayChipColor(deadline)} />}
@@ -69,9 +69,9 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
       {card.invitedPgCount > 0 && (
         <div className="pt-2 border-t border-[var(--md-sys-color-outline-variant)] flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-            초대 PG<span className="font-mono tabular-nums ml-1">{card.invitedPgCount}</span>
+            초대 PG<span className="md-numeric ml-1">{card.invitedPgCount}</span>
           </span>
-          <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
             견적 {card.submittedBidCount}/{card.invitedPgCount}
           </span>
         </div>

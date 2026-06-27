@@ -21,6 +21,8 @@ type Props = {
   isSample?: boolean;
   /** PG 측: 상대(구매사) 고정 시드. 구매사 측은 생략. */
   fixedCounterparty?: DealRoomCounterparty;
+  /** 선정 종료로 대화를 닫을 상대 워크스페이스 ID 목록(ChatPanel 로 전달). */
+  closedCounterpartyIds?: string[];
 };
 
 export function DealRoomChat({
@@ -29,6 +31,7 @@ export function DealRoomChat({
   rfpTitle,
   isSample = false,
   fixedCounterparty,
+  closedCounterpartyIds,
 }: Props) {
   const { setCounterparty } = useDealRoom();
 
@@ -44,6 +47,7 @@ export function DealRoomChat({
       rfpCode={rfpCode}
       rfpTitle={rfpTitle}
       isSample={isSample}
+      closedCounterpartyIds={closedCounterpartyIds}
     />
   );
 }

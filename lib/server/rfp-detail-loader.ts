@@ -11,6 +11,7 @@ import {
   getInvitationRepo,
   getPgRequestRepo,
   getRfpRepo,
+  getUserRepo,
   getWorkspaceRepo,
   getRfpRequoteRequestRepo,
 } from './repositories/factory';
@@ -21,6 +22,14 @@ import type { Bid } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
+
+/** 선정 후 교환되는 담당자 연락처 — 회사명 + 개인 이름·이메일·전화(nullable). */
+export type DealContact = {
+  workspaceName: string;
+  name: string;
+  email: string;
+  phone: string | null;
+};
 
 export type BuyerRfpDetailData = {
   rfp: RFP;
@@ -39,6 +48,8 @@ export type BuyerRfpDetailData = {
   canEdit: boolean;
   authorId: string;
   authorName: string;
+  /** awarded 일 때만 — 선정된 PG 담당자 연락처. 그 외 상태는 null. */
+  awardedPgContact: DealContact | null;
 };
 
 export type PgRfpDetailData = {
@@ -51,6 +62,13 @@ export type PgRfpDetailData = {
   quoteTemplates: QuoteTemplateOption[];
   /** 진행 중인 재요청(있으면 PG가 다시 제출 가능). */
   pendingRequote: { message: string; deadline: string; round: number } | null;
+  /**
+   * 이 견적이 선정되었고 승자가 본인 워크스페이스인지. 승자 신원은 노출하지 않고
+   * 본인 여부만 파생한다(봉인입찰 경계). false 면 미선정(또는 선정 전).
+   */
+  awardedToMe: boolean;
+  /** awardedToMe 일 때만 — 구매사 담당자 연락처. 미선정/선정 전은 null(누출 방지). */
+  buyerContact: DealContact | null;
 };
 
 
@@ -72,6 +90,63 @@ function stripHiddenFromPg(rfp: RFP): void {
   // PG 페이로드에 가시성 정책 메타데이터(숨김 경로 목록)를 노출하지 않는다 — 서버 strip 으로 충분.
   rfp.hiddenFromPg = undefined;
 }
+
+// 항상-제거되는 buyer 전용 필드 — opt-out(stripHiddenFromPg)과 별개로, PG 가 절대
+// 받아선 안 되는 값들. loadPgRfpDetail 은 full RFP 를 'use client' 컴포넌트로 직렬화
+// 하므로(RSC payload) 렌더 게이트만으론 누출된다 — 여기서 server-side 로 비운다.
+//   - allowedPgWorkspaceIds: 경쟁사 로스터 + 수 (봉인입찰 핵심 불변식)
+//   - awardedBidId: 낙찰 입찰(승자) id
+//   - createdBy / boardColumnId / boardVisible / currentFeeVisibleToPg: 구매사 내부 메타
+//   - bizProfile: bizNo·grade 만 PG 브리프에 노출, 세무·감사 필드는 제거
+//     (gradeSource 는 BizProfile 필수 필드라 중립값 'unset' 으로 둔다)
+// 분류 완전성(모든 RFP 키가 visible/stripped 중 하나)은 아래 컴파일타임 가드가 강제한다.
+function stripBuyerOnlyFromPg(rfp: RFP): void {
+  rfp.allowedPgWorkspaceIds = [];
+  rfp.awardedBidId = undefined;
+  rfp.createdBy = '';
+  rfp.boardColumnId = null;
+  rfp.boardVisible = undefined;
+  rfp.currentFeeVisibleToPg = undefined;
+  if (rfp.bizProfile) {
+    rfp.bizProfile = {
+      bizNo: rfp.bizProfile.bizNo,
+      grade: rfp.bizProfile.grade,
+      gradeSource: 'unset',
+    };
+  }
+}
+
+// ── PG 페이로드 필드 분류 (드리프트 가드, fail-closed) ────────────────────────────
+// 모든 RFP 키는 'PG 노출' 또는 'strip' 중 정확히 하나로 분류돼야 한다. 새 RFP 필드가
+// 추가되면 아래 컴파일타임 단언이 분류될 때까지 빌드를 깨뜨려, 새 필드가 분류 누락으로
+// PG 페이로드(RSC)에 조용히 새는 것을 막는다. (bizProfile 은 키 자체는 노출이되 중첩
+// 필드만 stripBuyerOnlyFromPg 가 좁힌다 — 중첩 경계는 rfp-detail-loader.test.ts 가 고정.)
+const _PG_STRIPPED_RFP_KEYS = [
+  'allowedPgWorkspaceIds',
+  'awardedBidId',
+  'createdBy',
+  'boardColumnId',
+  'boardVisible',
+  'currentFeeVisibleToPg',
+  'hiddenFromPg',
+] as const;
+const _PG_VISIBLE_RFP_KEYS = [
+  'id', 'code', 'buyerWsId', 'bizProfile', 'title', 'memo', 'websiteUrl',
+  'mainProducts', 'annualPgVolume', 'currentFeeRate', 'currentSettlementLimit',
+  'currentGuaranteeInsurance', 'currentSettlementCycle', 'deliveryServicePeriod',
+  'currentSolution', 'currentSolutionDetail', 'rfpFiles', 'deadline', 'status',
+  'createdAt', 'sentAt', 'updatedAt', 'requiredPaymentMethods',
+  'customPaymentMethods', 'isSample', 'contractType',
+] as const;
+type _UnclassifiedRfpKey = Exclude<
+  keyof RFP,
+  (typeof _PG_STRIPPED_RFP_KEYS)[number] | (typeof _PG_VISIBLE_RFP_KEYS)[number]
+>;
+const _assertRfpKeysExhaustive: _UnclassifiedRfpKey extends never
+  ? true
+  : ['UNCLASSIFIED RFP KEY — add to _PG_STRIPPED_RFP_KEYS or _PG_VISIBLE_RFP_KEYS', _UnclassifiedRfpKey] =
+  true;
+void _assertRfpKeysExhaustive;
 
 /** PG별 최신 라운드(submitted)만 남긴다. */
 function pickCurrentBids(submitted: Bid[]): Bid[] {
@@ -163,6 +238,18 @@ export async function loadBuyerRfpDetail(args: {
     createdAt: r.createdAt,
   }));
 
+  // 선정 완료 시에만 선정 PG 담당자 연락처를 부착(연락처 교환). 그 외 상태는 null.
+  let awardedPgContact: DealContact | null = null;
+  if (rfp.status === 'awarded' && rfp.awardedBidId) {
+    const awardedBid = allBids.find((b) => b.id === rfp.awardedBidId);
+    if (awardedBid) {
+      const contact = await (await getUserRepo()).findContactById(awardedBid.submittedBy);
+      if (contact) {
+        awardedPgContact = { workspaceName: pgWsNameMap[awardedBid.pgWsId] ?? '—', ...contact };
+      }
+    }
+  }
+
   const canEdit = rfp.status === 'sent' && new Date(rfp.deadline).getTime() > Date.now();
 
   return {
@@ -178,6 +265,7 @@ export async function loadBuyerRfpDetail(args: {
     canEdit,
     authorId: args.userId,
     authorName: args.userName,
+    awardedPgContact,
   };
 }
 
@@ -211,6 +299,13 @@ export async function loadPgRfpDetail(args: {
   // request-scoped 객체라 변이 안전.) 누출 방지 우선: 일반화된 hidden_from_pg 와
   // 레거시 boolean 중 하나라도 숨김이면 제거한다.
   stripHiddenFromPg(rfp);
+  // 승자 id 는 곧 strip 되므로, "내가 선정됐는지"만 파생하려고 먼저 캡처한다.
+  // 이 boolean 은 승자 신원을 노출하지 않는다(본인 여부만).
+  const awardedStatus = rfp.status;
+  const awardedBidIdBeforeStrip = rfp.awardedBidId;
+  const createdByBeforeStrip = rfp.createdBy;
+  // 항상-제거되는 buyer 전용 필드(경쟁사 로스터·승자·내부 메타) — opt-out 과 별개.
+  stripBuyerOnlyFromPg(rfp);
 
   // 구매사 첨부 hydrate — RfpBriefPanel 미리보기용.
   rfp.rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);
@@ -222,6 +317,12 @@ export async function loadPgRfpDetail(args: {
   // 최신 라운드 submitted bid (여러 라운드 가능).
   const myBid = submittedMine.sort((a, b) => b.round - a.round)[0] ?? undefined;
 
+  // 선정이 끝났고, 승자 입찰이 내 워크스페이스 것이면 awardedToMe=true.
+  const awardedToMe =
+    awardedStatus === 'awarded' &&
+    !!awardedBidIdBeforeStrip &&
+    allBids.some((b) => b.id === awardedBidIdBeforeStrip && b.pgWsId === args.workspaceId);
+
   // pending 재요청 조회 — PG가 다시 제출 가능한 상태인지 판단.
   const pendingReq = await (await getRfpRequoteRequestRepo()).findPendingByPair(rfp.id, args.workspaceId);
   const pendingRequote = pendingReq
@@ -232,6 +333,13 @@ export async function loadPgRfpDetail(args: {
   const wsRepo = await getWorkspaceRepo();
   const buyerWs = await wsRepo.findById(rfp.buyerWsId);
   const buyerName = buyerWs?.name ?? '—';
+
+  // awardedToMe 일 때만 구매사 담당자 연락처 부착. 미선정/선정 전은 조회조차 안 함(누출 방지).
+  let buyerContact: DealContact | null = null;
+  if (awardedToMe && createdByBeforeStrip) {
+    const contact = await (await getUserRepo()).findContactById(createdByBeforeStrip);
+    if (contact) buyerContact = { workspaceName: buyerName, ...contact };
+  }
 
   // 본 PG 워크스페이스 공유 견적 템플릿(요율표) — 폼 채우기용 직렬화 부분집합.
   const templates = await (await getBidQuoteTemplateRepo()).listByWorkspace(
@@ -246,5 +354,5 @@ export async function loadPgRfpDetail(args: {
     paymentFees: t.paymentFees,
   }));
 
-  return { rfp, myBid, pendingRequote, buyerName, quoteTemplates };
+  return { rfp, myBid, pendingRequote, buyerName, quoteTemplates, awardedToMe, buyerContact };
 }

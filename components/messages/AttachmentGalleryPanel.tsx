@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Paperclip } from 'lucide-react';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/primitives/EmptyState';
 import { listConversationAttachments } from '@/lib/server/actions/chat/listConversationAttachments';
 import type { Attachment } from '@/lib/types/common';
 
@@ -25,13 +28,21 @@ export function AttachmentGalleryPanel({ conversationId }: Props) {
 
   if (files === null) {
     return (
-      <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">LOADING…</p>
+      <div role="status" aria-label="첨부파일 불러오는 중" className="flex flex-col gap-2">
+        <Skeleton className="h-16 w-full rounded-[var(--md-sys-shape-medium)]" />
+        <Skeleton className="h-16 w-full rounded-[var(--md-sys-shape-medium)]" />
+      </div>
     );
   }
 
   if (files.length === 0) {
     return (
-      <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">첨부파일 없음</p>
+      <EmptyState
+        icon={<Paperclip />}
+        title="공유된 파일이 없어요"
+        description="대화에서 주고받은 파일이 여기 모여요."
+        className="py-12"
+      />
     );
   }
 

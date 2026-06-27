@@ -11,7 +11,7 @@ import type { PgliteDB } from '@/lib/db/client-pglite';
 
 export async function seedUser(
   db: PgliteDB,
-  overrides?: { id?: string; email?: string; name?: string },
+  overrides?: { id?: string; email?: string; name?: string; isSystemAccount?: boolean; phone?: string },
 ): Promise<{ id: string; email: string; name: string }> {
   const id = overrides?.id ?? randomUUID();
   const email = overrides?.email ?? `u-${id.slice(0, 8)}@example.com`;
@@ -22,6 +22,8 @@ export async function seedUser(
     passwordHash: 'x',
     name,
     avatarColor: 'ink',
+    ...(overrides?.isSystemAccount ? { isSystemAccount: true } : {}),
+    ...(overrides?.phone ? { phone: overrides.phone } : {}),
   });
   return { id, email, name };
 }

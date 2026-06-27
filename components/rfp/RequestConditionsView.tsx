@@ -2,9 +2,10 @@
 // RfpDetailContent 의 아코디언 본문에서 추출. 딜룸 모달의 '요청 조건' 탭이 재사용한다.
 import { Label } from '@/components/primitives/Label';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
-import { GRADE_LABELS } from '@/lib/types/biz-profile';
+import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
+import { Divider } from '@/components/ui/Divider';
 
 const SOLUTION_LABELS: Record<string, string> = {
   cafe24: '카페24',
@@ -46,7 +47,7 @@ function SectionHead({ children }: { children: React.ReactNode }) {
       <Label size="md" muted={false}>
         {children}
       </Label>
-      <div className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
+      <Divider />
     </div>
   );
 }
@@ -79,7 +80,7 @@ export function RequestConditionsView({ data }: { data: BuyerRfpDetailData }) {
           rows={[
             ['상호명', companyName],
             ['사업자번호', bizProfile?.bizNo ?? '미입력'],
-            ['등급', bizProfile?.grade ? GRADE_LABELS[bizProfile.grade] : '미정'],
+            ['등급', bizProfile?.grade ? MERCHANT_TIER_LABELS[bizProfile.grade] : '미정'],
           ]}
         />
       </section>

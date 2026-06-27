@@ -12,6 +12,8 @@
  *   4. any    + `/logout`              → pass-through
  */
 
+import { isLoopBreakEscape } from './logout-loop';
+
 const PUBLIC_PREFIXES = [
   '/login',
   '/signup',
@@ -42,6 +44,8 @@ const GUEST_ACCESSIBLE_PATHS: string[] = [];
 export type RouteDecision =
   | { kind: 'next' }
   | { kind: 'redirect'; to: string };
+
+export type ProxyDecision = RouteDecision | { kind: 'escape' };
 
 export function decideRoute(
   pathname: string,
@@ -76,4 +80,20 @@ export function decideRoute(
   }
 
   return { kind: 'next' };
+}
+
+/**
+ * proxy.ts 가 쓰는 결정 — 루프 회로차단기 탈출이 평소 라우팅보다 **우선**한다.
+ * `/logout` 회로차단기가 트립해 `__rl_break` 플래그가 세워진 채 `/login` 에 오면,
+ * authed 라도 `/home` 으로 되튕기지 않고 `escape`(렌더)한다. 그 외엔 `decideRoute`
+ * 에 위임한다. 이 우선순위를 순수 함수로 고정해 루프 회귀를 테스트로 막는다.
+ */
+export function decideProxyRoute(
+  pathname: string,
+  search: string,
+  isAuthenticated: boolean,
+  breakFlag: string | undefined | null,
+): ProxyDecision {
+  if (isLoopBreakEscape(pathname, breakFlag)) return { kind: 'escape' };
+  return decideRoute(pathname, search, isAuthenticated);
 }

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Users } from 'lucide-react';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { EnvelopeIcon } from '@/components/icons';
-import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
+import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 
 /** Max items previewed in the home widget; the rest are in /messages. */
@@ -78,11 +78,11 @@ export function RecentMessagesPanel({
                       <Users size={18} strokeWidth={1.5} />
                     </span>
                   ) : (
-                    <WorkspaceAvatar
+                    <AvatarWithPresence
                       name={item.counterparty.name}
-                      size="md"
                       workspaceId={item.counterparty.workspaceId}
-                      hasLogo={item.counterparty.hasLogo}
+                      logoUpdatedAt={item.counterparty.logoUpdatedAt}
+                      size="md"
                     />
                   )}
                   <div className="min-w-0 flex-1">

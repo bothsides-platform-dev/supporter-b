@@ -45,6 +45,7 @@ vi.mock('../team-thread-cache', () => ({
       rfpId: 'rfp-1',
       workspaceId: 'ws-self',
       viewerUserId: 'u-me',
+      viewerAvatarUpdatedAt: null,
       teamMembers: TEAM_ROSTER,
       messages: [],
     }),
@@ -79,7 +80,11 @@ function Seed({ counterparty }: { counterparty: DealRoomCounterparty }) {
 }
 
 function renderPanel(
-  props: Partial<typeof baseProps> & { isSample?: boolean; onClose?: () => void } = {},
+  props: Partial<typeof baseProps> & {
+    isSample?: boolean;
+    onClose?: () => void;
+    closedCounterpartyIds?: string[];
+  } = {},
   counterparty?: DealRoomCounterparty,
 ) {
   return render(
@@ -123,11 +128,35 @@ describe('ChatPanel', () => {
     );
   });
 
-  it('isSample 면 ThreadPane 에 sendDisabled=true 를 넘긴다', async () => {
+  it('isSample 면 ThreadPane 에 sendDisabledReason="sample" 을 넘긴다', async () => {
     renderPanel({ isSample: true }, PG);
     await screen.findByTestId('thread-pane');
     expect(threadPaneProps).toHaveBeenCalledWith(
-      expect.objectContaining({ sendDisabled: true }),
+      expect.objectContaining({ sendDisabledReason: 'sample' }),
+    );
+  });
+
+  it('포커스 상대가 closedCounterpartyIds 에 있으면 sendDisabledReason="closed"', async () => {
+    renderPanel({ closedCounterpartyIds: ['pg-ws-1'] }, PG);
+    await screen.findByTestId('thread-pane');
+    expect(threadPaneProps).toHaveBeenCalledWith(
+      expect.objectContaining({ sendDisabledReason: 'closed' }),
+    );
+  });
+
+  it('포커스 상대가 닫힘 목록에 없으면(승자) 정상 입력(sendDisabledReason=null)', async () => {
+    renderPanel({ closedCounterpartyIds: ['pg-ws-other'] }, PG);
+    await screen.findByTestId('thread-pane');
+    expect(threadPaneProps).toHaveBeenCalledWith(
+      expect.objectContaining({ sendDisabledReason: null }),
+    );
+  });
+
+  it('isSample 이 closedCounterpartyIds 보다 우선한다', async () => {
+    renderPanel({ isSample: true, closedCounterpartyIds: ['pg-ws-1'] }, PG);
+    await screen.findByTestId('thread-pane');
+    expect(threadPaneProps).toHaveBeenCalledWith(
+      expect.objectContaining({ sendDisabledReason: 'sample' }),
     );
   });
 

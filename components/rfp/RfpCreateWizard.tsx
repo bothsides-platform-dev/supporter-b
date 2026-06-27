@@ -1,7 +1,7 @@
 // components/rfp/RfpCreateWizard.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { WizardStepSidebar } from './WizardStepSidebar';
@@ -11,13 +11,14 @@ import { RfpStep2Content } from './RfpStep2Content';
 import { RfpStep3PgSelect } from './RfpStep3PgSelect';
 import { RfpStep4Review } from './RfpStep4Review';
 
-import { createRfpAction } from '@/lib/server/actions/rfp';
+import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rfp';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { toast } from '@/lib/toast';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from './RfpStep3PgSelect';
 import { STEP_LABELS } from './wizard-steps';
 import { getWizardValidity, getFirstIncompleteStep } from './wizard-validation';
+import { Divider } from '@/components/ui/Divider';
 
 const TOTAL_STEPS = STEP_LABELS.length;
 
@@ -37,7 +38,42 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
 
   const [currentStep, setCurrentStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+
+  // 마운트 시 localStorage draft의 stale 데이터 정리.
+  useEffect(() => {
+    const { allowedPgWorkspaceIds, deadline, rfpFiles, setField } =
+      useRfpDraftStore.getState();
+
+    // 1. PG 워크스페이스 재조정 — 현재 pgList에 없는 ID 제거
+    const validPgIds = new Set(pgList.map((w) => w.id));
+    const stalePgs = allowedPgWorkspaceIds.filter((w) => !validPgIds.has(w.id));
+    if (stalePgs.length > 0) {
+      setField('allowedPgWorkspaceIds', allowedPgWorkspaceIds.filter((w) => validPgIds.has(w.id)));
+      toast(`${stalePgs.length}개 PG사가 현재 선택 불가 상태여서 제외됐어요`, { type: 'info' });
+    }
+
+    // 2. 마감일 만료 확인 — 과거 날짜이면 초기화
+    if (deadline && new Date(deadline) < new Date()) {
+      setField('deadline', '');
+      toast('저장된 마감일이 지나 초기화했어요', { type: 'info' });
+    }
+
+    // 3. 첨부파일 유효성 확인 — DB에 없는(sweep된) 파일 제거
+    const fileIds = rfpFiles.map((f) => f.id);
+    if (fileIds.length > 0) {
+      verifyDraftFilesAction(fileIds).then((result) => {
+        const validIdSet = new Set(result.validIds);
+        const staleFiles = rfpFiles.filter((f) => !validIdSet.has(f.id));
+        if (staleFiles.length > 0) {
+          setField('rfpFiles', rfpFiles.filter((f) => validIdSet.has(f.id)));
+          toast(`${staleFiles.length}개 첨부 파일이 만료되어 제외됐어요`, { type: 'info' });
+        }
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [serverError, setServerError] = useState('');
+  const [websiteRejected, setWebsiteRejected] = useState('');
   // advance/goToStep 실패를 경험한 step set — back 후 복귀해도 에러 표시 유지
   const [failedSteps, setFailedSteps] = useState<Set<number>>(new Set());
 
@@ -143,6 +179,12 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
     setSubmitting(false);
 
     if (!result.ok) {
+      if (result.error === 'INVALID_WEBSITE') {
+        setWebsiteRejected(draft.websiteUrl.trim());
+        markFailed(2);
+        setCurrentStep(2);
+        return;
+      }
       setServerError(result.error);
       return;
     }
@@ -182,7 +224,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
             <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
               {String(currentStep).padStart(2, '0')} — {STEP_LABELS[currentStep - 1]}
             </span>
-            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+            <Divider />
           </div>
 
           {currentStep === 1 && (
@@ -194,7 +236,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
             />
           )}
           {currentStep === 2 && (
-            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} />
+            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} />
           )}
           {currentStep === 3 && (
             <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} showFieldErrors={failedSteps.has(3)} />

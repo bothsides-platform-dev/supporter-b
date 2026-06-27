@@ -7,6 +7,7 @@ import { Button } from '@/components/primitives/Button';
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { PasswordField } from '@/components/auth/PasswordField';
 import { LoginSignupCallout } from '@/components/auth/LoginSignupCallout';
+import { SessionExpiredNotice } from '@/components/auth/SessionExpiredNotice';
 import { loginAction } from '@/lib/server/actions/auth';
 import { safeInternalNext } from '@/lib/auth/safe-next';
 import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
@@ -119,6 +120,7 @@ function LoginContent() {
 
   return (
     <div className="space-y-8">
+      <SessionExpiredNotice reason={searchParams.get('reason')} />
       <LoginSignupCallout next={rawNext} />
 
       <div className="flex items-center gap-3" aria-hidden>

@@ -3,12 +3,13 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 
-import { requireBuyerSession } from '@/lib/auth/session';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
 import {
   getBizProfileRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import type { BizProfile } from '@/lib/types/biz-profile';
+import { MERCHANT_TIERS } from '@/lib/types/bid';
 import { actionDb, type RfpActionResult } from './_shared';
 
 const BizProfilePatch = z
@@ -21,7 +22,7 @@ const BizProfilePatch = z
 
 const Input = z
   .object({
-    grade: z.enum(['small', 'sme1', 'sme2', 'sme3', 'general']).optional(),
+    grade: z.enum(MERCHANT_TIERS).optional(),
     bizProfile: BizProfilePatch.optional(),
   })
   .strict()
@@ -48,18 +49,14 @@ export type UpdateWorkspaceBizProfileResult = RfpActionResult<{
 export async function updateWorkspaceBizProfileAction(
   input: UpdateWorkspaceBizProfileInput,
 ): Promise<UpdateWorkspaceBizProfileResult> {
-  let session;
-  try {
-    session = await requireBuyerSession();
-  } catch {
-    return { ok: false, error: 'FORBIDDEN_BUYER' };
-  }
+  const actor = await requireBuyerActor();
+  if (!actor.ok) return actor;
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
-  const wsId = session.user.workspaceId;
-  const userId = session.user.id;
+  const wsId = actor.workspaceId;
+  const userId = actor.userId;
   const db = actionDb();
 
   const workspaceRepo = await getWorkspaceRepo();

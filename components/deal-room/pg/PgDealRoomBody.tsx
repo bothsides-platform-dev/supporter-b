@@ -23,10 +23,12 @@ import { LocalTime } from '@/components/primitives/LocalTime';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { withdrawBidAction } from '@/lib/server/actions/bid/withdrawBidAction';
 import { toast } from '@/lib/toast';
+import { CounterpartyContactCard } from '@/components/deal-room/CounterpartyContactCard';
+import { NotSelectedNotice } from '@/components/deal-room/NotSelectedNotice';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
-  const { rfp, myBid, buyerName, quoteTemplates, pendingRequote } = data;
+  const { rfp, myBid, buyerName, quoteTemplates, pendingRequote, awardedToMe, buyerContact } = data;
   const router = useRouter();
   const [tab, setTab] = useState('write');
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -78,7 +80,17 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
           <SamplePgRfpBanner rfpCode={rfp.code} />
         </div>
       )}
-      <div className="flex min-h-0 flex-1">
+      {awardedToMe && buyerContact && (
+        <div className="shrink-0 px-6 pt-4">
+          <CounterpartyContactCard title="구매사 담당자 연락처" contact={buyerContact} />
+        </div>
+      )}
+      {rfp.status === 'awarded' && !awardedToMe && (
+        <div className="shrink-0 px-6 pt-4">
+          <NotSelectedNotice />
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 max-lg:flex-col">
         <DealRoomActionRail actions={actions} />
         <div className="min-w-0 flex-1">
           <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />

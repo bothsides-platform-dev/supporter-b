@@ -2,7 +2,7 @@
 
 import { Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
+import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
 import { formatListTime } from './format';
 import type { InboxListItem } from './types';
 
@@ -17,6 +17,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
     <ul className="flex flex-col">
       {items.map((item) => {
         const active = item.key === selectedKey;
+        const name = item.kind === 'team' ? '팀 채팅' : item.counterparty.name;
         return (
           <li key={item.key}>
             <button
@@ -24,10 +25,10 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
               onClick={() => onSelect(item.key)}
               aria-current={active ? 'true' : undefined}
               className={cn(
-                'flex w-full items-start gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-3 py-3 text-left transition-colors',
+                'flex w-full items-start gap-2.5 border-b border-l-2 border-b-[var(--md-sys-color-outline-variant)] px-3 py-3 text-left transition-colors',
                 active
-                  ? 'bg-[var(--md-sys-color-surface-container)]'
-                  : 'hover:bg-[var(--md-sys-color-surface-container-low)]',
+                  ? 'border-l-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container)]'
+                  : 'border-l-transparent hover:bg-[var(--md-sys-color-surface-container-low)]',
               )}
             >
               {item.kind === 'team' ? (
@@ -38,24 +39,23 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                   <Users size={18} strokeWidth={1.5} />
                 </span>
               ) : (
-                <WorkspaceAvatar
+                <AvatarWithPresence
                   name={item.counterparty.name}
-                  size="md"
                   workspaceId={item.counterparty.workspaceId}
-                  hasLogo={item.counterparty.hasLogo}
+                  logoUpdatedAt={item.counterparty.logoUpdatedAt}
+                  size="md"
                 />
               )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  {item.kind === 'team' ? (
-                    <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
-                      팀 · <span className="md-numeric">{item.rfpCode}</span> {item.rfpTitle}
-                    </span>
-                  ) : (
-                    <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
-                      {item.counterparty.name}
-                    </span>
-                  )}
+                  <span
+                    className={cn(
+                      'truncate text-[13px] text-[var(--md-sys-color-on-surface)]',
+                      item.unread ? 'font-semibold' : 'font-medium',
+                    )}
+                  >
+                    {name}
+                  </span>
                   {item.lastMessageAt && (
                     <time
                       dateTime={item.lastMessageAt}
@@ -65,27 +65,27 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                     </time>
                   )}
                 </div>
-                {/* RFP chip — counterparty 항목에서 연결 견적 표시 */}
-                {item.kind === 'counterparty' && item.rfpCode && (
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <span className="md-numeric shrink-0 rounded-[3px] bg-[var(--md-sys-color-primary-container)] px-1.5 py-0.5 text-[9px] font-medium text-[var(--md-sys-color-on-primary-container)]">
+                {/* RFP 줄 — counterparty·team 공통(코드 · 제목) */}
+                {item.rfpCode && (
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                    <span className="md-numeric shrink-0 font-medium text-[var(--md-sys-color-primary)]">
                       {item.rfpCode}
                     </span>
-                    <span className="truncate text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                      {item.rfpTitle}
-                    </span>
+                    <span className="truncate"><span aria-hidden>·</span> {item.rfpTitle}</span>
                   </div>
                 )}
                 <div className="mt-0.5 flex items-center gap-1.5">
-                  <p className="min-w-0 flex-1 truncate text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                  <p
+                    className={cn(
+                      'min-w-0 flex-1 truncate text-[12px]',
+                      item.unread
+                        ? 'text-[var(--md-sys-color-on-surface)]'
+                        : 'text-[var(--md-sys-color-on-surface-variant)]',
+                    )}
+                  >
                     {item.preview}
                   </p>
-                  {item.unread && (
-                    <span
-                      aria-label="읽지 않음"
-                      className="size-2 shrink-0 rounded-full bg-[var(--md-sys-color-primary)]"
-                    />
-                  )}
+                  {item.unread && <span className="sr-only">읽지 않음</span>}
                 </div>
               </div>
             </button>

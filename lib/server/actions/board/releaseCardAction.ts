@@ -3,7 +3,8 @@
 import { z } from 'zod';
 
 import { getBoardService } from '@/lib/server/services/board';
-import { type BoardActionResult, workspaceIdForCard } from './_shared';
+import { workspaceIdForCard } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
   .object({
@@ -13,7 +14,7 @@ const Input = z
   .strict();
 
 export type ReleaseCardInput = z.infer<typeof Input>;
-export type ReleaseCardResult = BoardActionResult;
+export type ReleaseCardResult = ActionResult;
 
 /**
  * Remove a card's explicit placement so it falls back to auto-classification

@@ -57,3 +57,5 @@ export type {
 
 export { requestRequoteAction } from './requestRequoteAction';
 export type { RequestRequoteInput, RequestRequoteResult } from './requestRequoteAction';
+
+export { verifyDraftFilesAction } from './verifyDraftFilesAction';

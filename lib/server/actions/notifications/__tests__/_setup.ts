@@ -19,7 +19,7 @@ export async function setupNotifActionEnv(): Promise<PgliteDB> {
     getOutboxRepo(),
     getUserRepo(),
   ]);
-  __setNotificationServiceForTest(new NotificationService(db, notifRepo, outboxRepo, userRepo));
+  __setNotificationServiceForTest(new NotificationService(notifRepo, outboxRepo, userRepo));
   return db;
 }
 

@@ -2,6 +2,7 @@
 
 import {
   getAttachmentRepo,
+  getBidRepo,
   getChatConversationRepo,
   getChatMessageRepo,
   getChatReadRepo,
@@ -9,13 +10,14 @@ import {
   getUserRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
+import { isConversationClosedAfterAward } from '@/lib/rfp/closed-counterparties';
 import type { Attachment } from '@/lib/types/common';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
 export type ConversationListItem = {
   conversationId: string;
-  counterparty: { workspaceId: string; name: string; type: WorkspaceType; hasLogo: boolean };
+  counterparty: { workspaceId: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null };
   rfpId: string | null;
   rfpCode: string | null;
   rfpTitle: string | null;
@@ -24,6 +26,12 @@ export type ConversationListItem = {
   preview: string;
   lastMessageAt: string | null;
   unread: boolean;
+  /**
+   * 이 대화의 (마지막 메시지) RFP 가 선정 종료됐고 이 대화의 PG 측이 미선정이면 true.
+   * /messages 통합 인박스에서 입력창을 닫는 UI 신호 — 승자 신원은 직렬화하지 않는다
+   * (봉인 입찰 보존). 딜룸의 closedCounterpartyIds 와 같은 규칙(awarded 한정).
+   */
+  closedAfterAward: boolean;
 };
 
 export type ThreadMessage = {
@@ -34,6 +42,8 @@ export type ThreadMessage = {
   authorName: string;
   /** 작성자 이메일(users.email 조인) — 이름 호버로 노출. */
   authorEmail: string;
+  /** 작성자 프로필 사진 버전(users.avatar_updated_at, ISO) — 말풍선 아바타. */
+  authorAvatarUpdatedAt: string | null;
   sender: 'self' | 'other';
   body: string;
   rfpId: string | null;
@@ -53,7 +63,7 @@ export type LoadThreadResult = ChatActionResult<{
   counterparty: { workspaceId: string; name: string; type: WorkspaceType };
   /** 세션 사용자(클라이언트는 세션을 모른다) — 낙관적 self 말풍선이 즉시 자기
    *  이름을 그릴 때 쓴다. */
-  viewer: { userId: string; name: string };
+  viewer: { userId: string; name: string; avatarUpdatedAt: string | null };
   messages: ThreadMessage[];
   /** 스레드에 등장한 rfpId → { code, title } 맵. 메시지 RFP 칩 렌더용. */
   rfpById: Record<string, { code: string; title: string }>;
@@ -73,6 +83,20 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
   const readRepo = await getChatReadRepo();
   const wsRepo = await getWorkspaceRepo();
   const rfpRepo = await getRfpRepo();
+  const bidRepo = await getBidRepo();
+
+  // 선정된 RFP 의 승자 PG ws 조회를 awardedBidId 단위로 캐시(같은 RFP 의 여러 미선정
+  // 대화가 같은 bid 를 가리키므로 중복 조회 방지). 승자 신원은 서버에만 머물고
+  // 클라이언트로는 boolean closedAfterAward 만 나간다.
+  const winnerCache = new Map<string, string | null>();
+  async function winnerPgWsIdFor(awardedBidId: string): Promise<string | null> {
+    const cached = winnerCache.get(awardedBidId);
+    if (cached !== undefined) return cached;
+    const bid = await bidRepo.findById(awardedBidId);
+    const winner = bid?.pgWsId ?? null;
+    winnerCache.set(awardedBidId, winner);
+    return winner;
+  }
 
   const conversations = await convRepo.listForWorkspace(ws.workspaceId, ws.workspaceType);
 
@@ -92,6 +116,20 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
       const last = msgs[msgs.length - 1];
       const rfpId = last?.rfpId ?? null;
       const rfp = rfpId ? await rfpRepo.findById(rfpId) : undefined;
+
+      // 선정 종료 닫힘 — 이 대화의 PG 측(구매사 뷰어면 상대 PG, PG 뷰어면 자기 ws)이
+      // 승자가 아니면 true. 승자 식별은 awardedBidId → bid.pgWsId 로 서버에서만 한다.
+      let closedAfterAward = false;
+      if (rfp?.status === 'awarded' && rfp.awardedBidId) {
+        const pgSideWsId = ws.workspaceType === 'buyer' ? counterpartyWsId : ws.workspaceId;
+        closedAfterAward = isConversationClosedAfterAward({
+          rfpStatus: rfp.status,
+          awardedBidId: rfp.awardedBidId,
+          winnerPgWsId: await winnerPgWsIdFor(rfp.awardedBidId),
+          pgSideWsId,
+        });
+      }
+
       const lastReadAt = myRead?.lastReadAt ?? null;
       // Unread if there's a message after my last read AND it isn't my own.
       const unread =
@@ -105,7 +143,7 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
           workspaceId: counterpartyWsId,
           name: counterpartyWs?.name ?? '상대',
           type: counterpartyType,
-          hasLogo: counterpartyWs?.hasLogo ?? false,
+          logoUpdatedAt: counterpartyWs?.logoUpdatedAt ?? null,
         },
         rfpId,
         rfpCode: rfp?.code ?? null,
@@ -115,6 +153,7 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
         preview: last?.body ?? '',
         lastMessageAt: conv.lastMessageAt ? new Date(conv.lastMessageAt).toISOString() : null,
         unread,
+        closedAfterAward,
       } satisfies ConversationListItem;
     }),
   );
@@ -178,6 +217,9 @@ export async function loadConversationThread(
       authorUserId: m.authorUserId,
       authorName: m.authorName,
       authorEmail: m.authorEmail,
+      authorAvatarUpdatedAt: m.authorAvatarUpdatedAt
+        ? new Date(m.authorAvatarUpdatedAt).toISOString()
+        : null,
       sender: isSelf ? 'self' : 'other',
       body: m.body,
       rfpId: m.rfpId,
@@ -207,7 +249,7 @@ export async function loadConversationThread(
       name: counterpartyWs?.name ?? '상대',
       type: counterpartyType,
     },
-    viewer: { userId: ws.userId, name: viewerUser?.name ?? '' },
+    viewer: { userId: ws.userId, name: viewerUser?.name ?? '', avatarUpdatedAt: viewerUser?.avatarUpdatedAt ?? null },
     messages,
     rfpById,
   };

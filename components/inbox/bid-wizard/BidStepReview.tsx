@@ -8,11 +8,13 @@ import {
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
   isTieredMethod,
+  isFlatFeeMethod,
   PAYMENT_METHOD_LABELS,
   type CustomPaymentMethod,
   type PaymentMethod,
 } from '@/lib/types/bid';
 import { formatKRW } from '@/lib/format';
+import { Divider } from '@/components/ui/Divider';
 
 const ERROR_LABELS: Record<string, string> = {
   FORBIDDEN_PG: 'PG 사용자 권한이 필요합니다.',
@@ -45,7 +47,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="py-2.5 flex items-baseline justify-between gap-4">
       <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] shrink-0">{label}</span>
-      <span className="font-mono text-[13px] tabular-nums text-[var(--md-sys-color-on-surface)] text-right whitespace-normal break-keep">{value}</span>
+      <span className="md-numeric text-[13px] text-[var(--md-sys-color-on-surface)] text-right whitespace-normal break-keep">{value}</span>
     </div>
   );
 }
@@ -77,7 +79,12 @@ export function BidStepReview({
         .map((t) => `${MERCHANT_TIER_LABELS[t]} ${fees[`${m}:${t}`]}%`);
       if (parts.length > 0) feeRows.push([PAYMENT_METHOD_LABELS[m], parts.join(' · ')]);
     } else if ((fees[m] ?? '') !== '') {
-      feeRows.push([PAYMENT_METHOD_LABELS[m], `${fees[m]}%`]);
+      // 정액(건당) 수단은 % 가 아니라 원으로 요약 표시.
+      feeRows.push(
+        isFlatFeeMethod(m)
+          ? [`${PAYMENT_METHOD_LABELS[m]} (건당)`, formatKRW(parseInt(fees[m], 10))]
+          : [PAYMENT_METHOD_LABELS[m], `${fees[m]}%`],
+      );
     }
   }
   for (const c of customPaymentMethods) {
@@ -104,7 +111,7 @@ export function BidStepReview({
       <div>
         <div className="flex items-center gap-3 mb-3">
           <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">보낼 견적</span>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          <Divider />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           <Row label="정산 주기" value={settleCycle} />

@@ -13,17 +13,12 @@
 // routing them through moveCard would add pointless uuid↔code plumbing. Do not
 // "fix" this back into moveCard.
 import {
-  requireSession,
   requireBuyerSession,
   requirePgSession,
 } from '@/lib/auth/session';
 import type { CardType } from '@/lib/types/column';
-import type { WorkspaceType } from '@/lib/types/workspace';
-import type { BidActionResult } from '../bid/_shared';
-
-// Structurally identical to the bid action result — reuse the shape.
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export type BoardActionResult<T extends object = {}> = BidActionResult<T>;
+import { requireActiveWorkspace } from '../_session';
+export { requireActiveWorkspace };
 
 type WorkspaceResolve =
   | { ok: true; workspaceId: string }
@@ -41,18 +36,3 @@ export async function workspaceIdForCard(cardType: CardType): Promise<WorkspaceR
   }
 }
 
-// The session's active workspace, for column-CRUD actions (any workspace type).
-export async function requireActiveWorkspace(): Promise<
-  | { ok: true; workspaceId: string; workspaceType: WorkspaceType }
-  | { ok: false; error: string }
-> {
-  let session;
-  try {
-    session = await requireSession();
-  } catch {
-    return { ok: false, error: 'UNAUTHENTICATED' };
-  }
-  const { workspaceId, workspaceType } = session.user;
-  if (!workspaceId || !workspaceType) return { ok: false, error: 'NO_WORKSPACE' };
-  return { ok: true, workspaceId, workspaceType };
-}

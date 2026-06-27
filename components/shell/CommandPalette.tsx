@@ -7,7 +7,7 @@ import { Command } from 'cmdk';
 import { XIcon } from '@/components/icons';
 import { IconButton } from '@/components/primitives/IconButton';
 import { ShortcutHint } from '@/components/shell/ShortcutHint';
-import { getNavCommands } from '@/lib/nav/nav-config';
+import { getNavCommands, getAccountCommands } from '@/lib/nav/nav-config';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import { getChoseong } from 'es-hangul';
 import {
@@ -30,8 +30,10 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
   const [loading, setLoading] = useState(false);
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
 
   const navCommands = getNavCommands(workspaceType);
+  const accountCommands = getAccountCommands();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -52,6 +54,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
       setQuery('');
       setResults(EMPTY_RESULTS);
       setLoading(false);
+      setConfirmingLogout(false);
     }, 0);
     return () => clearTimeout(t);
   }, [commandPaletteOpen]);
@@ -98,6 +101,14 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
         return label.includes(q) || getChoseong(label).includes(q);
       })
     : navCommands;
+
+  // Account commands (설정, 로그아웃) are filtered the same way as nav commands.
+  const accountMatches = q
+    ? accountCommands.filter((c) => {
+        const label = c.label.toLowerCase();
+        return label.includes(q) || getChoseong(label).includes(q);
+      })
+    : accountCommands;
 
   // Normalize the three entity result types into one shape so a single loop
   // renders them — primary text, an optional inline aside, an optional sub line.
@@ -166,65 +177,124 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
               결과 없음
             </Command.Empty>
 
-            {navMatches.length > 0 && (
-              <Command.Group heading={<span className={HEADING_CLASS}>이동</span>}>
-                {navMatches.map((cmd) => (
-                  <Command.Item
-                    key={cmd.id}
-                    value={cmd.id}
-                    onSelect={() => {
-                      router.push(cmd.href);
-                      closeCommandPalette();
-                    }}
-                    className={ITEM_CLASS}
-                  >
-                    <span>{cmd.label}</span>
-                    {cmd.shortcut && <ShortcutHint shortcut={cmd.shortcut} />}
-                  </Command.Item>
-                ))}
+            {confirmingLogout ? (
+              // Logout confirmation panel — replaces the normal list to prevent
+              // accidental navigation. Uses Command.Items so keyboard nav still works.
+              <Command.Group
+                heading={
+                  <span className={HEADING_CLASS}>로그아웃할까요?</span>
+                }
+              >
+                <Command.Item
+                  value="logout-confirm"
+                  onSelect={() => {
+                    // GET /logout clears the session cookie and redirects to /login
+                    // in a single round-trip. Must use window.location.assign (not
+                    // router.push) so the Set-Cookie response chain runs correctly.
+                    window.location.assign('/logout');
+                  }}
+                  className={`${ITEM_CLASS} text-[var(--md-sys-color-error)]`}
+                >
+                  로그아웃
+                </Command.Item>
+                <Command.Item
+                  value="logout-cancel"
+                  onSelect={() => setConfirmingLogout(false)}
+                  className={ITEM_CLASS}
+                >
+                  취소
+                </Command.Item>
               </Command.Group>
-            )}
-
-            {loading && (
-              <span className="px-4 py-3 block font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                LOADING…
-              </span>
-            )}
-
-            {entityGroups.map(
-              (group) =>
-                group.items.length > 0 && (
-                  <Command.Group
-                    key={group.heading}
-                    heading={<span className={HEADING_CLASS}>{group.heading}</span>}
-                  >
-                    {group.items.map((item) => (
+            ) : (
+              <>
+                {navMatches.length > 0 && (
+                  <Command.Group heading={<span className={HEADING_CLASS}>이동</span>}>
+                    {navMatches.map((cmd) => (
                       <Command.Item
-                        key={item.key}
-                        value={item.value}
+                        key={cmd.id}
+                        value={cmd.id}
                         onSelect={() => {
-                          router.push(item.href);
+                          router.push(cmd.href);
                           closeCommandPalette();
                         }}
-                        className={ENTITY_ITEM_CLASS}
+                        className={ITEM_CLASS}
                       >
-                        <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
-                          {item.primary}
-                          {item.aside && (
-                            <span className="ml-2 text-[var(--md-sys-color-on-surface-variant)]">
-                              {item.aside}
-                            </span>
-                          )}
-                        </span>
-                        {item.sub && (
-                          <span className="text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] truncate max-w-[540px]">
-                            {item.sub}
-                          </span>
-                        )}
+                        <span>{cmd.label}</span>
+                        {cmd.shortcut && <ShortcutHint shortcut={cmd.shortcut} />}
                       </Command.Item>
                     ))}
                   </Command.Group>
-                ),
+                )}
+
+                {loading && (
+                  <span className="px-4 py-3 block font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                    LOADING…
+                  </span>
+                )}
+
+                {entityGroups.map(
+                  (group) =>
+                    group.items.length > 0 && (
+                      <Command.Group
+                        key={group.heading}
+                        heading={<span className={HEADING_CLASS}>{group.heading}</span>}
+                      >
+                        {group.items.map((item) => (
+                          <Command.Item
+                            key={item.key}
+                            value={item.value}
+                            onSelect={() => {
+                              router.push(item.href);
+                              closeCommandPalette();
+                            }}
+                            className={ENTITY_ITEM_CLASS}
+                          >
+                            <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
+                              {item.primary}
+                              {item.aside && (
+                                <span className="ml-2 text-[var(--md-sys-color-on-surface-variant)]">
+                                  {item.aside}
+                                </span>
+                              )}
+                            </span>
+                            {item.sub && (
+                              <span className="text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] truncate max-w-[540px]">
+                                {item.sub}
+                              </span>
+                            )}
+                          </Command.Item>
+                        ))}
+                      </Command.Group>
+                    ),
+                )}
+
+                {accountMatches.length > 0 && (
+                  <Command.Group heading={<span className={HEADING_CLASS}>계정</span>}>
+                    {accountMatches.map((cmd) => (
+                      <Command.Item
+                        key={cmd.id}
+                        value={cmd.id}
+                        onSelect={() => {
+                          if (cmd.kind === 'navigate') {
+                            router.push(cmd.href);
+                            closeCommandPalette();
+                          } else {
+                            // kind === 'logout': show inline confirmation instead of
+                            // navigating immediately, to prevent accidental sign-out.
+                            // Clear the query so the debounced search short-circuits
+                            // while the confirmation panel is displayed.
+                            setQuery('');
+                            setConfirmingLogout(true);
+                          }
+                        }}
+                        className={ITEM_CLASS}
+                      >
+                        <span>{cmd.label}</span>
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                )}
+              </>
             )}
           </Command.List>
         </Command>

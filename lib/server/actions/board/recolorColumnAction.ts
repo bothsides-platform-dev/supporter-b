@@ -3,7 +3,8 @@
 import { z } from 'zod';
 
 import { getBoardService } from '@/lib/server/services/board';
-import { type BoardActionResult, requireActiveWorkspace } from './_shared';
+import { requireActiveWorkspace } from './_shared';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
   .object({
@@ -13,7 +14,7 @@ const Input = z
   .strict();
 
 export type RecolorColumnInput = z.infer<typeof Input>;
-export type RecolorColumnResult = BoardActionResult;
+export type RecolorColumnResult = ActionResult;
 
 /** Set (or clear, with null) a column's accent color. */
 export async function recolorColumnAction(

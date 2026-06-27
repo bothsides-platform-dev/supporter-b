@@ -15,6 +15,7 @@ function resetStore() {
   useRfpDraftStore.setState({
     title: '',
     websiteUrl: '',
+    contractType: null,
     mainProducts: '',
     annualPgVolume: '',
     currentFeeRate: '',
@@ -27,6 +28,8 @@ function resetStore() {
     memo: '',
     rfpFiles: [],
     currentFeeVisibleToPg: true,
+    requiredPaymentMethods: [],
+    customPaymentMethods: [],
   });
 }
 
@@ -71,9 +74,18 @@ describe('RfpStep2Content', () => {
   it('현재 정산주기 입력 시 숫자만 입력되어 D+N 형식으로 저장된다', async () => {
     const user = userEvent.setup();
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-    // 정산주기 DayOffsetInput — 'D+' 접두 고정, 숫자 placeholder '1'
+    // numeric textbox rejects non-digits; default unit is D, so '2' → 'D+2'
     await user.type(screen.getByPlaceholderText('1'), 'W2');
     expect(useRfpDraftStore.getState().currentSettlementCycle).toBe('D+2');
+  });
+
+  it('현재 정산주기 — W 단위 선택 후 숫자 입력 시 W+N 형식으로 저장된다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    const [cycleSelect] = screen.getAllByRole('combobox');
+    await user.selectOptions(cycleSelect, 'W');
+    await user.type(screen.getByPlaceholderText('1'), '3');
+    expect(useRfpDraftStore.getState().currentSettlementCycle).toBe('W+3');
   });
 
   it('배송 및 서비스 기간 입력 시 숫자만 입력되어 D+N 형식으로 저장된다', async () => {
@@ -81,6 +93,15 @@ describe('RfpStep2Content', () => {
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
     await user.type(screen.getByPlaceholderText('3'), 'D5');
     expect(useRfpDraftStore.getState().deliveryServicePeriod).toBe('D+5');
+  });
+
+  it('배송 및 서비스 기간 — M 단위 선택 후 숫자 입력 시 M+N 형식으로 저장된다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    const [, periodSelect] = screen.getAllByRole('combobox');
+    await user.selectOptions(periodSelect, 'M');
+    await user.type(screen.getByPlaceholderText('3'), '2');
+    expect(useRfpDraftStore.getState().deliveryServicePeriod).toBe('M+2');
   });
 
   describe('현재 카드 수수료 — 숫자+% 제한', () => {
@@ -217,6 +238,39 @@ describe('RfpStep2Content', () => {
     });
   });
 
+  describe('결제수단 인라인 에러 (attempted)', () => {
+    const PAYMENT_ERROR = '결제수단을 1개 이상 선택해주세요';
+
+    it('다음 클릭 전에는 결제수단이 비어있어도 에러 메시지가 표시되지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText(PAYMENT_ERROR)).not.toBeInTheDocument();
+    });
+
+    it('다음 클릭 후 결제수단 미선택 시 에러 메시지가 표시된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      expect(screen.getByText(PAYMENT_ERROR)).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이면 다음 클릭 없이도 결제수단 미선택 에러가 표시된다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.getByText(PAYMENT_ERROR)).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 결제수단이 선택되면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ requiredPaymentMethods: ['card'] });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText(PAYMENT_ERROR)).not.toBeInTheDocument();
+    });
+
+    it('커스텀 결제수단만 있어도 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ customPaymentMethods: [{ label: '포인트결제' }] });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText(PAYMENT_ERROR)).not.toBeInTheDocument();
+    });
+  });
+
   describe('전년도 연간 PG 총 거래액 — CurrencyInput', () => {
     it('숫자를 입력하면 천단위 콤마로 표시된다', async () => {
       const user = userEvent.setup();
@@ -263,6 +317,21 @@ describe('RfpStep2Content', () => {
     });
   });
 
+  describe('RfpStep2Content 제목 마커', () => {
+    it('제목 비어있으면 "필수", 입력하면 "입력 완료"로 전환', async () => {
+      const user = userEvent.setup();
+      useRfpDraftStore.getState().reset();
+      render(<RfpStep2Content onBack={() => {}} onNext={() => {}} />);
+      // 제목 마커 초기 상태
+      expect(screen.getAllByText('필수').length).toBeGreaterThan(0);
+
+      const titleInput = screen.getByPlaceholderText('2026 서포트쇼핑몰 결제 인프라 견적 요청');
+      await user.type(titleInput, '견적 요청');
+
+      expect(screen.getAllByText('입력 완료').length).toBeGreaterThan(0);
+    });
+  });
+
   describe('견적 유형 토글', () => {
     it('"신규 계약" 버튼 클릭 시 store contractType 이 new 로 업데이트된다', async () => {
       const user = userEvent.setup();
@@ -284,6 +353,106 @@ describe('RfpStep2Content', () => {
       await user.click(screen.getByRole('button', { name: '신규 계약' }));
       await user.click(screen.getByRole('button', { name: '신규 계약' }));
       expect(useRfpDraftStore.getState().contractType).toBeNull();
+    });
+  });
+
+  describe('견적 유형 인라인 에러 (attempted)', () => {
+    const ERR = '견적 유형을 선택해주세요';
+
+    it('다음 클릭 전에는 견적 유형 미선택 에러가 표시되지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+
+    it('다음 클릭 후 견적 유형 미선택 시 에러 메시지가 표시된다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      expect(screen.getByText(ERR)).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 견적 유형을 선택하면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ contractType: 'new' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('주요 판매 상품 인라인 에러 (attempted)', () => {
+    const ERR = '주요 판매 상품을 입력해주세요';
+
+    it('다음 클릭 전에는 주요 판매 상품 미입력 에러가 표시되지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이면 주요 판매 상품 미입력 에러가 표시된다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.getByText(ERR)).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 주요 판매 상품을 입력하면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ mainProducts: '의류' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('연간 PG 총 거래액 인라인 에러 (attempted)', () => {
+    const ERR = '전년도 연간 PG 총 거래액을 입력해주세요';
+
+    it('다음 클릭 전에는 거래액 미입력 에러가 표시되지 않는다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이면 거래액 미입력 에러가 표시된다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.getByText(ERR)).toBeInTheDocument();
+    });
+
+    it('showFieldErrors=true 이어도 거래액을 입력하면 에러가 표시되지 않는다', () => {
+      useRfpDraftStore.setState({ annualPgVolume: '1000000000' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />);
+      expect(screen.queryByText(ERR)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('서버 거부 홈페이지 (websiteRejected)', () => {
+    it('websiteRejected 가 현재 store URL 과 같으면 마커가 error 상태이고 에러 메시지가 표시된다', () => {
+      useRfpDraftStore.setState({ websiteUrl: 'foo.invalidtld' });
+      render(
+        <RfpStep2Content
+          onBack={vi.fn()}
+          onNext={vi.fn()}
+          websiteRejected="foo.invalidtld"
+        />,
+      );
+      // 마커 error → "필수" 텍스트
+      expect(screen.getAllByText('필수').length).toBeGreaterThan(0);
+      // 에러 메시지 표시
+      expect(screen.getByRole('alert')).toHaveTextContent(WEBSITE_URL_ERROR);
+    });
+
+    it('store URL 을 다른 값으로 바꾸면 거부 상태가 자동 해제된다', async () => {
+      useRfpDraftStore.setState({ websiteUrl: 'foo.invalidtld' });
+      const user = userEvent.setup();
+      render(
+        <RfpStep2Content
+          onBack={vi.fn()}
+          onNext={vi.fn()}
+          websiteRejected="foo.invalidtld"
+        />,
+      );
+      // 초기: error
+      expect(screen.getAllByText('필수').length).toBeGreaterThan(0);
+
+      // 입력을 바꿔서 store URL != websiteRejected
+      const input = screen.getByPlaceholderText('example.com');
+      await user.clear(input);
+      await user.type(input, 'example.com');
+      // 자동 해제 → 마커가 "입력 완료" 로 복귀
+      expect(screen.getAllByText('입력 완료').length).toBeGreaterThan(0);
     });
   });
 });
