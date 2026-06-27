@@ -53,7 +53,7 @@ const VALID = {
   settleCycle: 'M+1',
   settleLimit: 5_000_000,
   guaranteeInsurance: 500_000,
-  paymentFees: { card: 0.0125, virtual_account: 0.005 },
+  paymentFees: { card: 0.0125, virtual_account: 300 },
 } as const;
 
 async function setupPg(name = 'toss.im') {
@@ -93,7 +93,7 @@ describe('saveQuoteTemplateAction (create)', () => {
         settleCycle: 'M+1',
         settleLimit: 5_000_000,
         guaranteeInsurance: 500_000,
-        paymentFees: { card: 0.0125, virtual_account: 0.005 },
+        paymentFees: { card: 0.0125, virtual_account: 300 },
         createdBy: user.id,
       });
     }

@@ -63,19 +63,31 @@ describe('buildPaymentFees (flat fees map → paymentFees, ÷100)', () => {
     expect(buildPaymentFees({}, ['card'])).toEqual({});
   });
 
-  it('single-rate method: number ÷100', () => {
-    expect(buildPaymentFees({ virtual_account: '1.2' }, ['virtual_account'])).toEqual({
-      virtual_account: 0.012,
+  it('single-rate (정률) method: number ÷100', () => {
+    expect(buildPaymentFees({ bank_transfer: '1.2' }, ['bank_transfer'])).toEqual({
+      bank_transfer: 0.012,
     });
   });
 
   it('empty string is omitted', () => {
-    expect(buildPaymentFees({ virtual_account: '' }, ['virtual_account'])).toEqual({});
+    expect(buildPaymentFees({ bank_transfer: '' }, ['bank_transfer'])).toEqual({});
   });
 
   it('only processes the methods passed in', () => {
-    const fees = { 'card:sole': '0.8', virtual_account: '1.2' };
-    expect(buildPaymentFees(fees, ['virtual_account'])).toEqual({ virtual_account: 0.012 });
+    const fees = { 'card:sole': '0.8', bank_transfer: '1.2' };
+    expect(buildPaymentFees(fees, ['bank_transfer'])).toEqual({ bank_transfer: 0.012 });
+  });
+});
+
+describe('buildPaymentFees — 정액(건당) 수단은 원 단위 정수, 변환 없음', () => {
+  it('가상계좌: percent 변환(÷100) 없이 정수 원 그대로', () => {
+    expect(buildPaymentFees({ virtual_account: '300' }, ['virtual_account'])).toEqual({
+      virtual_account: 300,
+    });
+  });
+
+  it('가상계좌 빈 칸은 제외', () => {
+    expect(buildPaymentFees({ virtual_account: '' }, ['virtual_account'])).toEqual({});
   });
 });
 
@@ -86,9 +98,15 @@ describe('templateFeesToFlat (paymentFees → flat fees map, fmtPct)', () => {
     ).toEqual({ 'card:sole': '0.8', 'card:general': '2.5' });
   });
 
-  it('single-rate NON-tiered method → flat percent string', () => {
-    expect(templateFeesToFlat({ virtual_account: 0.012 }, ['virtual_account'])).toEqual({
-      virtual_account: '1.2',
+  it('single-rate NON-tiered (정률) method → flat percent string', () => {
+    expect(templateFeesToFlat({ bank_transfer: 0.012 }, ['bank_transfer'])).toEqual({
+      bank_transfer: '1.2',
+    });
+  });
+
+  it('정액(건당) 수단 → fmtPct(×100) 없이 정수 원 문자열 그대로', () => {
+    expect(templateFeesToFlat({ virtual_account: 300 }, ['virtual_account'])).toEqual({
+      virtual_account: '300',
     });
   });
 

@@ -10,11 +10,13 @@ import { deleteQuoteTemplateAction } from '@/lib/server/actions/quote-template/d
 import { duplicateQuoteTemplateAction } from '@/lib/server/actions/quote-template/duplicateQuoteTemplateAction';
 import {
   PAYMENT_METHOD_LABELS,
+  isFlatFeeMethod,
   type PaymentMethod,
   type TierRates,
 } from '@/lib/types/bid';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { fmtPct } from '@/lib/quote/template-fees';
+import { formatKRW } from '@/lib/format';
 
 const MAX_CHIPS = 4;
 const MAX_TEMPLATES = 20;
@@ -25,6 +27,9 @@ function buildChips(paymentFees: Partial<Record<PaymentMethod, number | TierRate
     const label = PAYMENT_METHOD_LABELS[method] ?? method;
     if (typeof value === 'object') {
       chips.push(`${label} 구간별`);
+    } else if (isFlatFeeMethod(method)) {
+      // 정액(건당) 수단 — % 가 아니라 건당 '원' 금액.
+      chips.push(`${label} 건당 ${formatKRW(value)}`);
     } else {
       chips.push(`${label} ${fmtPct(value)}%`);
     }

@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 
-import { buyerClosedCounterpartyIds } from '../closed-counterparties';
+import {
+  buyerClosedCounterpartyIds,
+  isConversationClosedAfterAward,
+} from '../closed-counterparties';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 
@@ -65,5 +68,62 @@ describe('buyerClosedCounterpartyIds', () => {
       bids,
     );
     expect(result).toEqual(['pgB']);
+  });
+});
+
+describe('isConversationClosedAfterAward', () => {
+  it('선정 전(status!=="awarded")이면 닫지 않음', () => {
+    expect(
+      isConversationClosedAfterAward({
+        rfpStatus: 'sent',
+        awardedBidId: null,
+        winnerPgWsId: 'pgWinner',
+        pgSideWsId: 'pgLoser',
+      }),
+    ).toBe(false);
+  });
+
+  it('awarded 라도 awardedBidId 가 없으면 닫지 않음', () => {
+    expect(
+      isConversationClosedAfterAward({
+        rfpStatus: 'awarded',
+        awardedBidId: null,
+        winnerPgWsId: 'pgWinner',
+        pgSideWsId: 'pgLoser',
+      }),
+    ).toBe(false);
+  });
+
+  it('승자 bid 를 못 찾으면(winnerPgWsId null) 닫지 않음 — 데이터 불일치 fail-open', () => {
+    expect(
+      isConversationClosedAfterAward({
+        rfpStatus: 'awarded',
+        awardedBidId: 'b1',
+        winnerPgWsId: null,
+        pgSideWsId: 'pgLoser',
+      }),
+    ).toBe(false);
+  });
+
+  it('선정 후 이 대화의 PG 측이 승자가 아니면 닫음', () => {
+    expect(
+      isConversationClosedAfterAward({
+        rfpStatus: 'awarded',
+        awardedBidId: 'b1',
+        winnerPgWsId: 'pgWinner',
+        pgSideWsId: 'pgLoser',
+      }),
+    ).toBe(true);
+  });
+
+  it('선정 후 이 대화의 PG 측이 승자면 닫지 않음', () => {
+    expect(
+      isConversationClosedAfterAward({
+        rfpStatus: 'awarded',
+        awardedBidId: 'b1',
+        winnerPgWsId: 'pgWinner',
+        pgSideWsId: 'pgWinner',
+      }),
+    ).toBe(false);
   });
 });

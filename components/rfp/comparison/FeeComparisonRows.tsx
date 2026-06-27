@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { cn } from '@/lib/utils';
 import { MetricComparePopover, type CompareRow } from './MetricComparePopover';
 import { rankByMetric } from '@/lib/utils/bid-compare';
-import { formatPct } from '@/lib/format';
+import { formatPct, formatKRW } from '@/lib/format';
 import type { Bid, MerchantTier } from '@/lib/types/bid';
 import type { FeeRow } from './focus-comparison-model';
 
@@ -33,10 +33,12 @@ function FeeComparisonRowsImpl({
     <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
       {feeRows.map((row) => {
         const ranked = rankByMetric(sortedBids, (b) => row.getValue(b, tier), 'lower');
+        // 정액(건당) 행은 원, 정률 행은 % 로 표기.
+        const fmtFee = (v: number) => (row.unit === 'flat' ? formatKRW(v) : formatPct(v));
         const rows: CompareRow[] = ranked.map((r) => ({
           bid: r.bid,
           isBest: r.isBest,
-          valueText: r.value !== null ? formatPct(r.value) : '—',
+          valueText: r.value !== null ? fmtFee(r.value) : '—',
         }));
         const activeValue = row.getValue(active, tier);
         const shouldFlash = flash && row.isTiered;
@@ -62,7 +64,7 @@ function FeeComparisonRowsImpl({
                 )}
                 style={shouldFlash ? { animationDelay: `${delay}ms` } : undefined}
               >
-                {activeValue !== null ? formatPct(activeValue) : '—'}
+                {activeValue !== null ? fmtFee(activeValue) : '—'}
               </span>
             </MetricComparePopover>
           </div>

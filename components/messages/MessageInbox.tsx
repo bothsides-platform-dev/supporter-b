@@ -120,6 +120,8 @@ export function MessageInbox({ items, initialSelectedKey = null, className }: Pr
               onBack={() => setSelectedKey(null)}
               variant={isXl ? 'page' : 'tabs'}
               rfpContext={rfpContext}
+              // 선정 종료된 미선정 대화는 입력 비활성(딜룸과 동일, /messages 갭 차단).
+              sendDisabledReason={selected.closedAfterAward ? 'closed' : null}
             />
           </Suspense>
         ) : (

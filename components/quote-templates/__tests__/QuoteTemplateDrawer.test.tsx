@@ -59,6 +59,18 @@ describe('QuoteTemplateDrawer', () => {
     expect(screen.getAllByText('일반').length).toBeGreaterThan(0);
   });
 
+  it('가상계좌는 % 정률이 아니라 건당 정액(원) 입력으로 받는다', () => {
+    const t: QuoteTemplateOption = {
+      id: 'va', name: '가상계좌 요율', settleCycle: 'D+1',
+      settleLimit: 0, guaranteeInsurance: 0,
+      paymentFees: { virtual_account: 300 },
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    // CurrencyInput: "가상계좌 건당 수수료" 라벨 + 원 정수 값 그대로 (× ÷100/×100)
+    expect(screen.getByText('가상계좌 건당 수수료')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('300')).toBeInTheDocument();
+  });
+
   it('TierRates 수단에 기존값이 채워진다', () => {
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={tieredTmpl} />);
     // sole → 0.008 → display 0.8 (%)

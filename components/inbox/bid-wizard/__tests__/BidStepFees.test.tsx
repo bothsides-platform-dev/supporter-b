@@ -35,6 +35,14 @@ describe('BidStepFees 구간 매트릭스', () => {
     expect(screen.getByText(/가상계좌/)).toBeInTheDocument();
   });
 
+  it('가상계좌는 % 정률이 아니라 건당 정액(원) 입력으로 받는다', () => {
+    setup();
+    // CurrencyInput: "가상계좌 건당 수수료" 라벨 + "원" suffix (PercentInput 의 % 아님)
+    expect(screen.getByText('가상계좌 건당 수수료')).toBeInTheDocument();
+    expect(screen.getByText('원')).toBeInTheDocument();
+    expect(screen.queryByText('%')).toBeNull();
+  });
+
   it('구간 셀 입력 시 "<method>:<tier>" 복합 키로 onFee 호출', () => {
     const { onFee } = setup();
     const cell = screen.getByTestId('fee-cell-card-sole');

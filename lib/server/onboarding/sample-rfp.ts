@@ -39,7 +39,7 @@ const SAMPLE_BIDS: SampleBidSpec[] = [
     guaranteeInsurance: '5000000',
     paymentFees: {
       card: { sole: 0.005, sme1: 0.008, sme2: 0.011, sme3: 0.013, general: 0.018 },
-      virtual_account: 0.003,
+      virtual_account: 300,
       naver_pay: 0.025,
     },
     memo: '카드 수수료가 가장 낮아요. 정산은 D+2예요.',
@@ -50,7 +50,7 @@ const SAMPLE_BIDS: SampleBidSpec[] = [
     guaranteeInsurance: '3000000',
     paymentFees: {
       card: { sole: 0.006, sme1: 0.009, sme2: 0.012, sme3: 0.015, general: 0.02 },
-      virtual_account: 0.0025,
+      virtual_account: 250,
       naver_pay: 0.023,
     },
     memo: '정산이 D+1로 빠르고 한도가 높아요.',
@@ -61,7 +61,7 @@ const SAMPLE_BIDS: SampleBidSpec[] = [
     guaranteeInsurance: '0',
     paymentFees: {
       card: { sole: 0.007, sme1: 0.01, sme2: 0.013, sme3: 0.016, general: 0.022 },
-      virtual_account: 0.002,
+      virtual_account: 200,
       naver_pay: 0.019,
     },
     memo: '간편결제 수수료가 낮고 보증보험이 없어요.',

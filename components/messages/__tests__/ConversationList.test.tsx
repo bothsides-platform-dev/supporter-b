@@ -31,6 +31,7 @@ function makeCounterparty(over: Partial<Extract<InboxListItem, { kind: 'counterp
     preview: '제안 보냅니다.',
     lastMessageAt: '2026-06-02T01:00:00.000Z',
     unread: false,
+    closedAfterAward: false,
     ...over,
   };
 }
