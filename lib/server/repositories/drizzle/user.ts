@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { User } from '@/lib/types/user';
@@ -125,7 +125,13 @@ export class DrizzleUserRepository implements UserRepo {
     const [row] = await db
       .select({ name: users.name, email: users.email, phone: users.phone })
       .from(users)
-      .where(and(eq(users.id, userId), eq(users.isSystemAccount, false)))
+      .where(
+        and(
+          eq(users.id, userId),
+          eq(users.isSystemAccount, false),
+          isNull(users.deletedAt),
+        ),
+      )
       .limit(1);
     if (!row) return undefined;
     return { name: row.name, email: row.email, phone: row.phone ?? null };

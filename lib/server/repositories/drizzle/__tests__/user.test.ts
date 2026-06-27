@@ -419,6 +419,15 @@ describe('findContactById', () => {
     expect(await repo.findContactById(u.id)).toBeUndefined();
   });
 
+  it('returns undefined for a soft-deleted user (no cross-org PII after deletion)', async () => {
+    const { db, repo } = await setup();
+    const u = await seedUser(db, { email: 'gone@x.com', name: '탈퇴', phone: '010-0000-0000' });
+
+    await repo.softDelete(u.id);
+
+    expect(await repo.findContactById(u.id)).toBeUndefined();
+  });
+
   it('returns undefined for an unknown id', async () => {
     const { repo } = await setup();
     expect(await repo.findContactById(randomUUID())).toBeUndefined();
