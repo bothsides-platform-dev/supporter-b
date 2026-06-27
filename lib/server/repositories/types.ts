@@ -260,7 +260,9 @@ export interface WorkspaceRepo {
   memberRecipientsBatch(
     wsIds: string[],
     tx?: Tx,
-  ): Promise<{ workspaceId: string; userId: string; role: string; email: string }[]>;
+  ): Promise<
+    { workspaceId: string; userId: string; role: string; approvalStatus: MemberApprovalStatus; email: string }[]
+  >;
   /** active 상태 워크스페이스 (id+type) — 마스터/스위치. 없거나 비활성이면 undefined. */
   findActiveById(workspaceId: string, tx?: Tx): Promise<{ id: string; type: WorkspaceType } | undefined>;
   /**
@@ -276,17 +278,19 @@ export interface WorkspaceRepo {
   findEarliestActiveWorkspace(
     tx?: Tx,
   ): Promise<{ id: string; type: WorkspaceType } | undefined>;
-  /** (userId, workspaceId) 멤버십 — role+type. 없으면 undefined. */
+  /** (userId, workspaceId) 멤버십 — role+type+승인상태. 없으면 undefined. */
   getMembership(
     userId: string,
     workspaceId: string,
     tx?: Tx,
-  ): Promise<{ role: string; type: WorkspaceType } | undefined>;
+  ): Promise<{ role: string; type: WorkspaceType; approvalStatus: MemberApprovalStatus } | undefined>;
   /** 유저의 최초 가입 멤버십 (earliest joinedAt). 없으면 undefined. */
   findInitialMembership(
     userId: string,
     tx?: Tx,
-  ): Promise<{ workspaceId: string; role: string; type: WorkspaceType } | undefined>;
+  ): Promise<
+    { workspaceId: string; role: string; type: WorkspaceType; approvalStatus: MemberApprovalStatus } | undefined
+  >;
   /**
    * 유저의 모든 멤버십 + 각 워크스페이스의 전체 멤버 — 탈퇴 상태 화면(마지막 admin / solo 판정).
    * createdAt 순서 미보장; 호출부가 멤버 수·역할로 분기한다.
@@ -299,7 +303,8 @@ export interface WorkspaceRepo {
       workspaceId: string;
       name: string;
       role: string;
-      members: { userId: string; role: string }[];
+      approvalStatus: MemberApprovalStatus;
+      members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
     }[]
   >;
   /** bizProfile 포인터 갱신. */

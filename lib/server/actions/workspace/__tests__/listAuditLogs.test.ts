@@ -56,6 +56,16 @@ describe('listAuditLogsAction', () => {
     expect(r).toEqual({ ok: false, error: 'UNAUTHENTICATED' });
   });
 
+  it('미승인(pending_approval) admin 은 거부한다 (서버액션 권한 차단)', async () => {
+    const pending = await seedUser(db, { email: 'pending@audit.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, pending.id, 'admin', { approvalStatus: 'pending_approval' });
+    sessionRef.value = { user: { id: pending.id, workspaceId: ws.id, role: 'admin' } };
+
+    const r = await listAuditLogsAction({});
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
+  });
+
   it('member 역할은 거부한다 (DB 멤버십 기준)', async () => {
     const { member, ws } = await seedEnv();
     sessionRef.value = { user: { id: member.id, workspaceId: ws.id, role: 'member' } };

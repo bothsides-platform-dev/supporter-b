@@ -79,7 +79,7 @@ afterEach(teardownActionEnv);
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('joinCanonicalPgWorkspaceAction — 성공 케이스', () => {
-  it('canonical PG 워크스페이스에 member로 합류, 새 워크스페이스 생성 없음', async () => {
+  it('canonical PG 워크스페이스에 admin으로 합류, 새 워크스페이스 생성 없음', async () => {
     const ws = await seedCanonicalPgWorkspace();
     const phoneId = await seedVerifiedOtp();
 
@@ -108,14 +108,14 @@ describe('joinCanonicalPgWorkspaceAction — 성공 케이스', () => {
     expect(newUser.emailVerified).toBe(false); // 이메일 인증 증거 없음 → false
     expect(newUser.lastActiveWorkspaceId).toBe(ws.id);
 
-    // 멤버십: canonical 워크스페이스에 member로
+    // 멤버십: canonical 워크스페이스에 admin으로 (승인 게이트는 pending_approval 유지)
     const [membership] = await db
       .select()
       .from(workspaceMembers)
       .where(eq(workspaceMembers.userId, newUser.id));
     expect(membership).toBeDefined();
     expect(membership.workspaceId).toBe(ws.id);
-    expect(membership.role).toBe('member');
+    expect(membership.role).toBe('admin');
   });
 
   it('redirectTo는 /home', async () => {

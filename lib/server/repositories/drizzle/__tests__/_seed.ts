@@ -80,13 +80,14 @@ export async function seedMembership(
   workspaceId: string,
   userId: string,
   role: 'admin' | 'member' = 'member',
-  overrides?: { joinedAt?: Date },
+  overrides?: { joinedAt?: Date; approvalStatus?: 'approved' | 'pending_approval' | 'rejected' },
 ): Promise<void> {
   await db.insert(workspaceMembers).values({
     workspaceId,
     userId,
     role,
     ...(overrides?.joinedAt ? { joinedAt: overrides.joinedAt } : {}),
+    ...(overrides?.approvalStatus ? { approvalStatus: overrides.approvalStatus } : {}),
   });
 }
 
