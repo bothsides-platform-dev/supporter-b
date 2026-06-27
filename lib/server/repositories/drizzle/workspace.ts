@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, ilike, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, ilike, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import {
   workspaces,
   workspaceMembers,
@@ -21,6 +21,13 @@ import type { WorkspaceRepo, Tx, TeamMember } from '../types';
 function escapeIlike(s: string): string {
   return s.replace(/[\\%_]/g, '\\$&');
 }
+
+// 알림(인앱/이메일) 수신 대상 판별. 영구 로그인 불가 데모/온보딩 placeholder
+// (passwordHash '!' sentinel — createSystemAccount)만 제외하고, 화면에선 숨겨지지만
+// 실제 로그인해 알림을 읽는 master/ops 계정(실 해시)은 **포함**한다. 표시용
+// surface(teamRoster/findProfileById/search)는 계속 isSystemAccount 로 master 를
+// 숨기므로, 알림 수신자에 포함해도 신원/이메일이 다른 멤버에게 노출되지 않는다.
+const notifiableAccount = ne(usersTable.passwordHash, '!');
 
 type WsRow = typeof workspaces.$inferSelect;
 type MemberRow = typeof workspaceMembers.$inferSelect;
@@ -236,7 +243,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(
         and(
           eq(workspaceMembers.workspaceId, workspaceId),
-          eq(usersTable.isSystemAccount, false),
+          notifiableAccount,
         ),
       )) as Pick<MemberRow, 'userId'>[];
     return rows.map((r) => r.userId);
@@ -283,7 +290,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(
         and(
           inArray(workspaceMembers.workspaceId, wsIds),
-          eq(usersTable.isSystemAccount, false),
+          notifiableAccount,
         ),
       )) as Pick<MemberRow, 'workspaceId' | 'userId'>[];
     const map = new Map<string, string[]>();
@@ -397,7 +404,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(
         and(
           eq(workspaceMembers.workspaceId, workspaceId),
-          eq(usersTable.isSystemAccount, false),
+          notifiableAccount,
         ),
       )) as { userId: string; email: string }[];
   }
@@ -417,7 +424,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           eq(workspaceMembers.role, 'admin'),
           // 미승인 admin 은 admin 대상 알림/메일 수신자에서 제외.
           eq(workspaceMembers.approvalStatus, 'approved'),
-          eq(usersTable.isSystemAccount, false),
+          notifiableAccount,
         ),
       )) as { userId: string; email: string }[];
   }
@@ -443,7 +450,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(
         and(
           inArray(workspaceMembers.workspaceId, wsIds),
-          eq(usersTable.isSystemAccount, false),
+          notifiableAccount,
         ),
       )) as {
       workspaceId: string;
