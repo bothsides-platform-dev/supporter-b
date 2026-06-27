@@ -3,7 +3,7 @@
 import { z } from 'zod';
 
 import { requireSession } from '@/lib/auth/session';
-import { getMembership } from '@/lib/auth/active-workspace';
+import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { getAuditLogRepo } from '@/lib/server/repositories/factory';
 import type { AuditLogCursor, AuditLogRecord } from '@/lib/server/repositories/types';
 import type { ActionResult } from '@/lib/server/actions/_result';
@@ -48,7 +48,7 @@ export async function listAuditLogsAction(
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
   const membership = await getMembership(session.user.id, wsId);
-  if (!membership || membership.role !== 'admin') {
+  if (!isApprovedAdmin(membership)) {
     return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
   }
 

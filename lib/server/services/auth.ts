@@ -242,9 +242,10 @@ export class AuthService {
 
       if (allMembers.length === 1) {
         soloWorkspaceIds.push(membership.workspaceId);
-      } else if (membership.role === 'admin') {
+      } else if (membership.role === 'admin' && membership.approvalStatus === 'approved') {
         const otherAdmins = allMembers.filter(
-          (m: { userId: string; role: string }) => m.userId !== input.userId && m.role === 'admin',
+          (m: { userId: string; role: string; approvalStatus: string }) =>
+            m.userId !== input.userId && m.role === 'admin' && m.approvalStatus === 'approved',
         );
         if (otherAdmins.length === 0) {
           blockingWorkspaces.push({ id: membership.workspaceId, name: membership.name });

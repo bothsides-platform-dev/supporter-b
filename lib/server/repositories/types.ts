@@ -260,7 +260,9 @@ export interface WorkspaceRepo {
   memberRecipientsBatch(
     wsIds: string[],
     tx?: Tx,
-  ): Promise<{ workspaceId: string; userId: string; role: string; email: string }[]>;
+  ): Promise<
+    { workspaceId: string; userId: string; role: string; approvalStatus: MemberApprovalStatus; email: string }[]
+  >;
   /** active 상태 워크스페이스 (id+type) — 마스터/스위치. 없거나 비활성이면 undefined. */
   findActiveById(workspaceId: string, tx?: Tx): Promise<{ id: string; type: WorkspaceType } | undefined>;
   /**
@@ -301,7 +303,8 @@ export interface WorkspaceRepo {
       workspaceId: string;
       name: string;
       role: string;
-      members: { userId: string; role: string }[];
+      approvalStatus: MemberApprovalStatus;
+      members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
     }[]
   >;
   /** bizProfile 포인터 갱신. */
