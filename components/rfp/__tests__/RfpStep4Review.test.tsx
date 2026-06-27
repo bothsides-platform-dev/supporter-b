@@ -34,8 +34,8 @@ function resetStore() {
     title: '테스트 제안건',
     deadline: '',
     allowedPgWorkspaceIds: [
-      { id: 'pg-1', displayName: '나이스페이먼츠' },
-      { id: 'pg-2', displayName: 'KG이니시스' },
+      { id: 'pg-1', displayName: '나이스페이먼츠', logoUpdatedAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'pg-2', displayName: 'KG이니시스', logoUpdatedAt: null },
     ],
     websiteUrl: 'https://example.com',
     annualPgVolume: '10억',
@@ -70,6 +70,13 @@ describe('RfpStep4Review', () => {
   it('제안 제목이 요약에 표시된다', () => {
     renderComponent();
     expect(screen.getByText('테스트 제안건')).toBeInTheDocument();
+  });
+
+  it('초대 PG 목록에 워크스페이스 로고 이미지가 함께 표시된다', () => {
+    const { container } = renderComponent();
+    expect(
+      container.querySelector('img[src*="/api/workspace/pg-1/avatar"]'),
+    ).not.toBeNull();
   });
 
   it('선택된 PG 수가 발송 버튼 텍스트에 표시된다', () => {

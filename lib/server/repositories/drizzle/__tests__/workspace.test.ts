@@ -264,6 +264,22 @@ describe('DrizzleWorkspaceRepository', () => {
       const results = await repo.search({ type: 'pg', q: 'buyer-typed' });
       expect(results).toEqual([]);
     });
+
+    it('returns logoUpdatedAt: null when the workspace has no logo', async () => {
+      await seedPgWorkspace(db, 'pg-no-logo');
+      const results = await repo.search({ type: 'pg', q: 'pg-no-logo' });
+      expect(results).toHaveLength(1);
+      expect(results[0].logoUpdatedAt).toBeNull();
+    });
+
+    it('returns logoUpdatedAt as ISO string when the workspace has a logo', async () => {
+      const ws = await seedPgWorkspace(db, 'pg-with-logo');
+      const at = new Date('2026-01-01T00:00:00.000Z');
+      await db.update(workspaces).set({ logoUpdatedAt: at }).where(eq(workspaces.id, ws.id));
+      const results = await repo.search({ type: 'pg', q: 'pg-with-logo' });
+      expect(results).toHaveLength(1);
+      expect(results[0].logoUpdatedAt).toBe(at.toISOString());
+    });
   });
 
   describe('getName', () => {

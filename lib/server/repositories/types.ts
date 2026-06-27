@@ -236,7 +236,7 @@ export interface WorkspaceRepo {
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
   listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; logoUpdatedAt: string | null }[]>;
   /** 이름 검색 (isDemo 제외) — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500). */
-  search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string }[]>;
+  search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]>;
   /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
   getName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
   /**
