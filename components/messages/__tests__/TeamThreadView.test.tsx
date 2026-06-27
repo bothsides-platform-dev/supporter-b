@@ -156,6 +156,14 @@ describe('TeamThreadView — 렌더', () => {
     render(<TeamThreadView rfpId="r1" workspaceId="w1" viewerUserId="u1" viewerAvatarUpdatedAt={null} messages={[]} />);
     expect(markTeamThreadReadAction).toHaveBeenCalledWith({ rfpId: 'r1' });
   });
+
+  it('컴포저는 좁은 레일에서 placeholder 가 두 줄로 잘리지 않도록 min-w-0 슬롯과 한 줄 placeholder 를 쓴다', () => {
+    render(base({ messages: [] }));
+    const ta = screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…');
+    expect(ta.parentElement).toHaveClass('min-w-0');
+    expect(ta).toHaveClass('placeholder:truncate');
+    expect(ta).toHaveClass('box-border');
+  });
 });
 
 describe('TeamThreadView — 전송', () => {
