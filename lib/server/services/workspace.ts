@@ -1,4 +1,4 @@
-import { getMembership } from '@/lib/auth/active-workspace';
+import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { normalizeEmail, bucket15Min } from './_service-utils';
 import type { AuditLogRepo, OutboxRepo, WorkspaceRepo } from '@/lib/server/repositories/types';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
@@ -66,7 +66,8 @@ export class WorkspaceService {
     }
 
     const membership = await getMembership(actor.userId, actor.workspaceId);
-    if (!membership || membership.role !== 'admin') {
+    // 승인된 admin 만 관리 권한 — 미승인(pending_approval) admin 은 차단.
+    if (!isApprovedAdmin(membership)) {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
@@ -146,7 +147,8 @@ export class WorkspaceService {
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
     const membership = await getMembership(actor.userId, actor.workspaceId);
-    if (!membership || membership.role !== 'admin') {
+    // 승인된 admin 만 관리 권한 — 미승인(pending_approval) admin 은 차단.
+    if (!isApprovedAdmin(membership)) {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
@@ -203,7 +205,8 @@ export class WorkspaceService {
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
     const membership = await getMembership(actor.userId, actor.workspaceId);
-    if (!membership || membership.role !== 'admin') {
+    // 승인된 admin 만 관리 권한 — 미승인(pending_approval) admin 은 차단.
+    if (!isApprovedAdmin(membership)) {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
@@ -262,7 +265,8 @@ export class WorkspaceService {
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
     const membership = await getMembership(actor.userId, actor.workspaceId);
-    if (!membership || membership.role !== 'admin') {
+    // 승인된 admin 만 관리 권한 — 미승인(pending_approval) admin 은 차단.
+    if (!isApprovedAdmin(membership)) {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
@@ -305,7 +309,8 @@ export class WorkspaceService {
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
     const membership = await getMembership(actor.userId, actor.workspaceId);
-    if (!membership || membership.role !== 'admin') {
+    // 승인된 admin 만 관리 권한 — 미승인(pending_approval) admin 은 차단.
+    if (!isApprovedAdmin(membership)) {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 

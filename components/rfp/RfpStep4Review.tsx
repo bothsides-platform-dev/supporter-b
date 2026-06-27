@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
+import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
@@ -252,6 +253,15 @@ export function RfpStep4Review({
             <div key={ws.id} className="py-2 flex items-center gap-3">
               <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)]">
                 {String(i + 1).padStart(2, '0')}
+              </span>
+              {/* 로고는 장식 — 옆 텍스트가 이미 PG명을 알리므로 a11y 트리에서 숨김 */}
+              <span aria-hidden className="inline-flex">
+                <WorkspaceAvatar
+                  size="sm"
+                  name={ws.displayName}
+                  workspaceId={ws.id}
+                  logoUpdatedAt={ws.logoUpdatedAt}
+                />
               </span>
               <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
                 {ws.displayName}

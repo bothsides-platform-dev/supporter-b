@@ -38,9 +38,10 @@ export async function getDeleteAccountStatus(): Promise<GetDeleteAccountStatusRe
 
     if (allMembers.length === 1) {
       soloWorkspaces.push(stub);
-    } else if (membership.role === 'admin') {
+    } else if (membership.role === 'admin' && membership.approvalStatus === 'approved') {
       const otherAdmins = allMembers.filter(
-        (m: { userId: string; role: string }) => m.userId !== userId && m.role === 'admin',
+        (m: { userId: string; role: string; approvalStatus: string }) =>
+          m.userId !== userId && m.role === 'admin' && m.approvalStatus === 'approved',
       );
       if (otherAdmins.length === 0) {
         blockingWorkspaces.push(stub);

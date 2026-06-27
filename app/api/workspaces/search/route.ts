@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
       (nameCount.get(row.name) ?? 1) > 1
         ? `${row.name} #${row.id.slice(0, 8)}`
         : row.name,
+    logoUpdatedAt: row.logoUpdatedAt,
   }));
 
   return NextResponse.json({ workspaces: result });

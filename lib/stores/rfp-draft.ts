@@ -16,7 +16,7 @@ export type DraftCustomPaymentMethod = { label: string };
 // Name kept for blast-radius reasons (Step 13 will sweep `Mock` naming).
 export type RfpMockFile = { id: string; name: string; size: number };
 
-export type PgWorkspaceItem = { id: string; displayName: string };
+export type PgWorkspaceItem = { id: string; displayName: string; logoUpdatedAt: string | null };
 
 type RfpDraftStore = {
   title: string;

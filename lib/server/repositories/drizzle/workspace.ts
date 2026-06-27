@@ -332,16 +332,21 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async search(
     opts: { type: WorkspaceType; q?: string },
     tx?: Tx,
-  ): Promise<{ id: string; name: string }[]> {
+  ): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]> {
     const db = this.h(tx);
     const { type, q } = opts;
     // 데모 PG(isDemo)는 항상 제외 — 실제 RFP 초대·이메일이 가짜 PG로 새지 않도록(봉인입찰/온보딩 격리).
     const base = and(eq(workspaces.type, type), eq(workspaces.isDemo, false));
-    return (await db
-      .select({ id: workspaces.id, name: workspaces.name })
+    const rows = (await db
+      .select({ id: workspaces.id, name: workspaces.name, logoUpdatedAt: workspaces.logoUpdatedAt })
       .from(workspaces)
       .where(q ? and(base, ilike(workspaces.name, `%${escapeIlike(q)}%`)) : base)
-      .limit(q ? 20 : 500)) as { id: string; name: string }[];
+      .limit(q ? 20 : 500)) as { id: string; name: string; logoUpdatedAt: Date | null }[];
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      logoUpdatedAt: r.logoUpdatedAt ? new Date(r.logoUpdatedAt).toISOString() : null,
+    }));
   }
 
   async getName(workspaceId: string, tx?: Tx): Promise<string | undefined> {
@@ -410,6 +415,8 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         and(
           eq(workspaceMembers.workspaceId, workspaceId),
           eq(workspaceMembers.role, 'admin'),
+          // 미승인 admin 은 admin 대상 알림/메일 수신자에서 제외.
+          eq(workspaceMembers.approvalStatus, 'approved'),
           eq(usersTable.isSystemAccount, false),
         ),
       )) as { userId: string; email: string }[];
@@ -418,7 +425,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async memberRecipientsBatch(
     wsIds: string[],
     tx?: Tx,
-  ): Promise<{ workspaceId: string; userId: string; role: string; email: string }[]> {
+  ): Promise<
+    { workspaceId: string; userId: string; role: string; approvalStatus: MemberApprovalStatus; email: string }[]
+  > {
     if (wsIds.length === 0) return [];
     const db = this.h(tx);
     return (await db
@@ -426,6 +435,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         workspaceId: workspaceMembers.workspaceId,
         userId: workspaceMembers.userId,
         role: workspaceMembers.role,
+        approvalStatus: workspaceMembers.approvalStatus,
         email: usersTable.email,
       })
       .from(workspaceMembers)
@@ -435,7 +445,13 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           inArray(workspaceMembers.workspaceId, wsIds),
           eq(usersTable.isSystemAccount, false),
         ),
-      )) as { workspaceId: string; userId: string; role: string; email: string }[];
+      )) as {
+      workspaceId: string;
+      userId: string;
+      role: string;
+      approvalStatus: MemberApprovalStatus;
+      email: string;
+    }[];
   }
 
   async findActiveById(
@@ -489,10 +505,14 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     userId: string,
     workspaceId: string,
     tx?: Tx,
-  ): Promise<{ role: string; type: WorkspaceType } | undefined> {
+  ): Promise<{ role: string; type: WorkspaceType; approvalStatus: MemberApprovalStatus } | undefined> {
     const db = this.h(tx);
     const [row] = await db
-      .select({ role: workspaceMembers.role, type: workspaces.type })
+      .select({
+        role: workspaceMembers.role,
+        type: workspaces.type,
+        approvalStatus: workspaceMembers.approvalStatus,
+      })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
       .where(
@@ -502,7 +522,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         ),
       )
       .limit(1);
-    return row ?? undefined;
+    return row
+      ? { ...row, approvalStatus: row.approvalStatus as MemberApprovalStatus }
+      : undefined;
   }
 
   async getMemberApprovalStatus(
@@ -527,20 +549,25 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async findInitialMembership(
     userId: string,
     tx?: Tx,
-  ): Promise<{ workspaceId: string; role: string; type: WorkspaceType } | undefined> {
+  ): Promise<
+    { workspaceId: string; role: string; type: WorkspaceType; approvalStatus: MemberApprovalStatus } | undefined
+  > {
     const db = this.h(tx);
     const [row] = await db
       .select({
         workspaceId: workspaceMembers.workspaceId,
         role: workspaceMembers.role,
         type: workspaces.type,
+        approvalStatus: workspaceMembers.approvalStatus,
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
       .where(eq(workspaceMembers.userId, userId))
       .orderBy(asc(workspaceMembers.joinedAt))
       .limit(1);
-    return row ?? undefined;
+    return row
+      ? { ...row, approvalStatus: row.approvalStatus as MemberApprovalStatus }
+      : undefined;
   }
 
   async listMembershipsWithMembers(
@@ -551,7 +578,8 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       workspaceId: string;
       name: string;
       role: string;
-      members: { userId: string; role: string }[];
+      approvalStatus: MemberApprovalStatus;
+      members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
     }[]
   > {
     const db = this.h(tx);
@@ -559,6 +587,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .select({
         workspaceId: workspaceMembers.workspaceId,
         role: workspaceMembers.role,
+        approvalStatus: workspaceMembers.approvalStatus,
         name: workspaces.name,
       })
       .from(workspaceMembers)
@@ -566,6 +595,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(eq(workspaceMembers.userId, userId))) as {
       workspaceId: string;
       role: string;
+      approvalStatus: MemberApprovalStatus;
       name: string;
     }[];
 
@@ -573,17 +603,29 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       workspaceId: string;
       name: string;
       role: string;
-      members: { userId: string; role: string }[];
+      approvalStatus: MemberApprovalStatus;
+      members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
     }[] = [];
     for (const m of myMemberships) {
       const members = (await db
-        .select({ userId: workspaceMembers.userId, role: workspaceMembers.role })
+        .select({
+          userId: workspaceMembers.userId,
+          role: workspaceMembers.role,
+          approvalStatus: workspaceMembers.approvalStatus,
+        })
         .from(workspaceMembers)
         .where(eq(workspaceMembers.workspaceId, m.workspaceId))) as {
         userId: string;
         role: string;
+        approvalStatus: MemberApprovalStatus;
       }[];
-      result.push({ workspaceId: m.workspaceId, name: m.name, role: m.role, members });
+      result.push({
+        workspaceId: m.workspaceId,
+        name: m.name,
+        role: m.role,
+        approvalStatus: m.approvalStatus,
+        members,
+      });
     }
     return result;
   }
@@ -870,6 +912,8 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         and(
           eq(workspaceMembers.workspaceId, workspaceId),
           eq(workspaceMembers.role, 'admin'),
+          // 미승인(pending_approval/rejected) admin 은 진짜 admin 으로 세지 않는다.
+          eq(workspaceMembers.approvalStatus, 'approved'),
         ),
       );
     return value;

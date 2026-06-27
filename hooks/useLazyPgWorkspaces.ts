@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { http } from '@/lib/http';
 
-export type PgWorkspace = { id: string; name: string; displayName: string };
+export type PgWorkspace = { id: string; name: string; displayName: string; logoUpdatedAt: string | null };
 
 export function useLazyPgWorkspaces() {
   const [pgList, setPgList] = useState<PgWorkspace[]>([]);

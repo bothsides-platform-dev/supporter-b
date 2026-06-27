@@ -76,4 +76,19 @@ describe('GET /api/workspaces/search — auth guard', () => {
     const r = await callGet('type=buyer');
     expect(r.status).toBe(403);
   });
+
+  it('pg 검색 응답 항목에 logoUpdatedAt 가 포함된다', async () => {
+    sessionRef.value = {
+      user: { id: '00000000-0000-4000-8000-0000000000cc', email: 'c@c.com', sessionVersion: 1 },
+    };
+    searchWorkspacesMock.mockResolvedValue([
+      { id: 'ws-1', name: '토스페이먼츠', logoUpdatedAt: '2026-01-01T00:00:00.000Z' },
+    ]);
+    const r = await callGet('type=pg');
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as {
+      workspaces: { id: string; logoUpdatedAt: string | null }[];
+    };
+    expect(body.workspaces[0].logoUpdatedAt).toBe('2026-01-01T00:00:00.000Z');
+  });
 });

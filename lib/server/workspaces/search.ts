@@ -12,6 +12,6 @@ export function escapeIlike(s: string): string {
  */
 export async function searchWorkspaces(
   opts: { type: 'buyer' | 'pg'; q?: string },
-): Promise<{ id: string; name: string }[]> {
+): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]> {
   return (await getWorkspaceRepo()).search(opts);
 }
