@@ -122,8 +122,12 @@ export class BidService {
       if (!att || att.rfpId || att.bidId || att.bidNoteId) {
         return { ok: false, error: 'INVALID_ATTACHMENT' };
       }
-      const isMember = await this.workspaceRepo.isMember(att.uploadedBy, actor.workspaceId);
-      if (!isMember) return { ok: false, error: 'INVALID_ATTACHMENT' };
+      // 본인이 올린 미링크 첨부만 허용 — team-chat·bid-note 와 동일 기준.
+      // (isMember 기준은 마스터/운영 임퍼소네이션 계정을 false 처리하는 버그였다:
+      //  마스터는 workspace_members 행이 없어 자기가 올린 견적서도 거부됐다.)
+      if (att.uploadedBy !== actor.userId) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
     }
 
     const existingBids = await this.bidRepo.findByRfp(input.rfpId);
