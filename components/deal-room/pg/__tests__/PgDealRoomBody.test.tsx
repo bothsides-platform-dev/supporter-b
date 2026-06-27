@@ -117,18 +117,20 @@ describe('PgDealRoomBody — 소형 화면 레이아웃', () => {
 describe('PgDealRoomBody — 선정 결과 안내', () => {
   const buyerContact = { workspaceName: '(주)테스트', name: '구매 담당자', email: 'buyer@buy.com', phone: null };
 
-  it('awardedToMe 면 구매사 담당자 연락처 카드를 렌더한다', () => {
+  it('awardedToMe 면 견적 작성 탭에 선정 결과 헤더 + 구매사 연락처를 보여준다', () => {
     render(<PgDealRoomBody data={buildData({
       rfp: { ...baseRfp, status: 'awarded' },
       myBid: submittedBid,
       awardedToMe: true,
       buyerContact,
     })} />);
-    expect(screen.getByText('구매사 담당자 연락처')).toBeInTheDocument();
+    expect(screen.getByText('이 견적이 선정됐어요')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /buyer@buy\.com/ })).toBeInTheDocument();
+    // 보낸 내용은 계속 확인 가능.
+    expect(screen.getByRole('button', { name: /보낸 내용 보기/ })).toBeInTheDocument();
   });
 
-  it('타사 선정(awarded, awardedToMe=false)이면 미선정 안내를 렌더한다', () => {
+  it('타사 선정(awarded, awardedToMe=false)이면 미선정 결과 헤더 + 연락처 없음 + BidWizard 미노출', () => {
     render(<PgDealRoomBody data={buildData({
       rfp: { ...baseRfp, status: 'awarded' },
       myBid: submittedBid,
@@ -136,12 +138,13 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
       buyerContact: null,
     })} />);
     expect(screen.getByText('이번엔 선정되지 않았어요')).toBeInTheDocument();
-    expect(screen.queryByText('구매사 담당자 연락처')).not.toBeInTheDocument();
+    expect(screen.queryByText('이 견적이 선정됐어요')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
   });
 
-  it('선정 전(sent)에는 어떤 안내도 렌더하지 않는다', () => {
+  it('선정 전(sent)에는 결과 헤더를 렌더하지 않는다', () => {
     render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
-    expect(screen.queryByText('구매사 담당자 연락처')).not.toBeInTheDocument();
+    expect(screen.queryByText('이 견적이 선정됐어요')).not.toBeInTheDocument();
     expect(screen.queryByText('이번엔 선정되지 않았어요')).not.toBeInTheDocument();
   });
 });
