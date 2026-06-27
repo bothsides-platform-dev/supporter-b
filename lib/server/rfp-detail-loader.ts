@@ -11,6 +11,7 @@ import {
   getInvitationRepo,
   getPgRequestRepo,
   getRfpRepo,
+  getUserRepo,
   getWorkspaceRepo,
   getRfpRequoteRequestRepo,
 } from './repositories/factory';
@@ -21,6 +22,14 @@ import type { Bid } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
+
+/** 선정 후 교환되는 담당자 연락처 — 회사명 + 개인 이름·이메일·전화(nullable). */
+export type DealContact = {
+  workspaceName: string;
+  name: string;
+  email: string;
+  phone: string | null;
+};
 
 export type BuyerRfpDetailData = {
   rfp: RFP;
@@ -39,6 +48,8 @@ export type BuyerRfpDetailData = {
   canEdit: boolean;
   authorId: string;
   authorName: string;
+  /** awarded 일 때만 — 선정된 PG 담당자 연락처. 그 외 상태는 null. */
+  awardedPgContact: DealContact | null;
 };
 
 export type PgRfpDetailData = {
@@ -56,6 +67,8 @@ export type PgRfpDetailData = {
    * 본인 여부만 파생한다(봉인입찰 경계). false 면 미선정(또는 선정 전).
    */
   awardedToMe: boolean;
+  /** awardedToMe 일 때만 — 구매사 담당자 연락처. 미선정/선정 전은 null(누출 방지). */
+  buyerContact: DealContact | null;
 };
 
 
@@ -225,6 +238,18 @@ export async function loadBuyerRfpDetail(args: {
     createdAt: r.createdAt,
   }));
 
+  // 선정 완료 시에만 선정 PG 담당자 연락처를 부착(연락처 교환). 그 외 상태는 null.
+  let awardedPgContact: DealContact | null = null;
+  if (rfp.status === 'awarded' && rfp.awardedBidId) {
+    const awardedBid = allBids.find((b) => b.id === rfp.awardedBidId);
+    if (awardedBid) {
+      const contact = await (await getUserRepo()).findContactById(awardedBid.submittedBy);
+      if (contact) {
+        awardedPgContact = { workspaceName: pgWsNameMap[awardedBid.pgWsId] ?? '—', ...contact };
+      }
+    }
+  }
+
   const canEdit = rfp.status === 'sent' && new Date(rfp.deadline).getTime() > Date.now();
 
   return {
@@ -240,6 +265,7 @@ export async function loadBuyerRfpDetail(args: {
     canEdit,
     authorId: args.userId,
     authorName: args.userName,
+    awardedPgContact,
   };
 }
 
@@ -277,6 +303,7 @@ export async function loadPgRfpDetail(args: {
   // 이 boolean 은 승자 신원을 노출하지 않는다(본인 여부만).
   const awardedStatus = rfp.status;
   const awardedBidIdBeforeStrip = rfp.awardedBidId;
+  const createdByBeforeStrip = rfp.createdBy;
   // 항상-제거되는 buyer 전용 필드(경쟁사 로스터·승자·내부 메타) — opt-out 과 별개.
   stripBuyerOnlyFromPg(rfp);
 
@@ -307,6 +334,13 @@ export async function loadPgRfpDetail(args: {
   const buyerWs = await wsRepo.findById(rfp.buyerWsId);
   const buyerName = buyerWs?.name ?? '—';
 
+  // awardedToMe 일 때만 구매사 담당자 연락처 부착. 미선정/선정 전은 조회조차 안 함(누출 방지).
+  let buyerContact: DealContact | null = null;
+  if (awardedToMe && createdByBeforeStrip) {
+    const contact = await (await getUserRepo()).findContactById(createdByBeforeStrip);
+    if (contact) buyerContact = { workspaceName: buyerName, ...contact };
+  }
+
   // 본 PG 워크스페이스 공유 견적 템플릿(요율표) — 폼 채우기용 직렬화 부분집합.
   const templates = await (await getBidQuoteTemplateRepo()).listByWorkspace(
     args.workspaceId,
@@ -320,5 +354,5 @@ export async function loadPgRfpDetail(args: {
     paymentFees: t.paymentFees,
   }));
 
-  return { rfp, myBid, pendingRequote, buyerName, quoteTemplates, awardedToMe };
+  return { rfp, myBid, pendingRequote, buyerName, quoteTemplates, awardedToMe, buyerContact };
 }

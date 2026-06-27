@@ -108,6 +108,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     authorName: '담당자',
     requoteByPg: {},
     priorBidByPg: {},
+    awardedPgContact: null,
     ...over,
   };
 }
@@ -133,5 +134,23 @@ describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
     render(<BuyerDealRoomBody data={buildData()} />);
     // FocusComparison 은 '견적 비교' 탭의 기본 콘텐츠.
     expect(screen.getByTestId('focus-comparison')).toBeInTheDocument();
+  });
+});
+
+describe('BuyerDealRoomBody — 선정 PG 연락처', () => {
+  const awardedPgContact = { workspaceName: '토스페이먼츠', name: '김영업', email: 'sales@toss.im', phone: '010-1234-5678' };
+
+  it('awarded + awardedPgContact 면 선정 PG 담당자 연락처 카드를 렌더한다', () => {
+    render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      awardedPgContact,
+    })} />);
+    expect(screen.getByText('선정한 PG 담당자 연락처')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sales@toss\.im/ })).toBeInTheDocument();
+  });
+
+  it('sent(선정 전)에는 연락처 카드를 렌더하지 않는다', () => {
+    render(<BuyerDealRoomBody data={buildData()} />);
+    expect(screen.queryByText('선정한 PG 담당자 연락처')).not.toBeInTheDocument();
   });
 });

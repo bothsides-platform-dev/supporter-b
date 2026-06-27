@@ -58,6 +58,7 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     quoteTemplates: [],
     pendingRequote: null,
     awardedToMe: false,
+    buyerContact: null,
     ...over,
   };
 }
@@ -110,5 +111,37 @@ describe('PgDealRoomBody — 소형 화면 레이아웃', () => {
     render(<PgDealRoomBody data={buildData()} />);
     // BidWizard 는 '견적 작성' 탭의 기본 콘텐츠 — 소형 화면에서도 보여야 한다.
     expect(screen.getByTestId('bid-wizard')).toBeInTheDocument();
+  });
+});
+
+describe('PgDealRoomBody — 선정 결과 안내', () => {
+  const buyerContact = { workspaceName: '(주)테스트', name: '구매 담당자', email: 'buyer@buy.com', phone: null };
+
+  it('awardedToMe 면 구매사 담당자 연락처 카드를 렌더한다', () => {
+    render(<PgDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      myBid: submittedBid,
+      awardedToMe: true,
+      buyerContact,
+    })} />);
+    expect(screen.getByText('구매사 담당자 연락처')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /buyer@buy\.com/ })).toBeInTheDocument();
+  });
+
+  it('타사 선정(awarded, awardedToMe=false)이면 미선정 안내를 렌더한다', () => {
+    render(<PgDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      myBid: submittedBid,
+      awardedToMe: false,
+      buyerContact: null,
+    })} />);
+    expect(screen.getByText('이번엔 선정되지 않았어요')).toBeInTheDocument();
+    expect(screen.queryByText('구매사 담당자 연락처')).not.toBeInTheDocument();
+  });
+
+  it('선정 전(sent)에는 어떤 안내도 렌더하지 않는다', () => {
+    render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
+    expect(screen.queryByText('구매사 담당자 연락처')).not.toBeInTheDocument();
+    expect(screen.queryByText('이번엔 선정되지 않았어요')).not.toBeInTheDocument();
   });
 });

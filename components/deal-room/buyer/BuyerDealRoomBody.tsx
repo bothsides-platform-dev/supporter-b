@@ -37,6 +37,7 @@ import { RequoteDialog } from '@/components/rfp/comparison/RequoteDialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { closeRfpAction, cancelRfpAction } from '@/lib/server/actions/rfp';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
+import { CounterpartyContactCard } from '@/components/deal-room/CounterpartyContactCard';
 import { toast } from '@/lib/toast';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
@@ -50,6 +51,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
     pendingRequests,
     canEdit,
     requoteByPg,
+    awardedPgContact,
   } = data;
   const router = useRouter();
   const [tab, setTab] = useState('compare');
@@ -156,6 +158,11 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       {rfp.isSample && (
         <div className="shrink-0 px-6 pt-4">
           <SampleRfpBanner rfpCode={rfp.code} />
+        </div>
+      )}
+      {rfp.status === 'awarded' && awardedPgContact && (
+        <div className="shrink-0 px-6 pt-4">
+          <CounterpartyContactCard title="선정한 PG 담당자 연락처" contact={awardedPgContact} />
         </div>
       )}
       <div className="flex min-h-0 flex-1 max-lg:flex-col">
