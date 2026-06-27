@@ -208,8 +208,10 @@ export class AuthService {
 
       await this.userRepo.create({ id: userId, email, passwordHash, name: input.name, phone: input.phone }, tx);
 
+      // 기존 PG사(canonical 워크스페이스)에 합류하는 담당자는 admin 으로 들어온다.
+      // 단, 승인 게이트(pending_approval)는 유지 — 승인 전까지 /pending-approval 에서 막힌다.
       await this.workspaceRepo.addMember(
-        { workspaceId: input.selectedPgWorkspaceId, userId, role: 'member', approvalStatus: 'pending_approval' },
+        { workspaceId: input.selectedPgWorkspaceId, userId, role: 'admin', approvalStatus: 'pending_approval' },
         tx,
       );
 
@@ -240,9 +242,10 @@ export class AuthService {
 
       if (allMembers.length === 1) {
         soloWorkspaceIds.push(membership.workspaceId);
-      } else if (membership.role === 'admin') {
+      } else if (membership.role === 'admin' && membership.approvalStatus === 'approved') {
         const otherAdmins = allMembers.filter(
-          (m: { userId: string; role: string }) => m.userId !== input.userId && m.role === 'admin',
+          (m: { userId: string; role: string; approvalStatus: string }) =>
+            m.userId !== input.userId && m.role === 'admin' && m.approvalStatus === 'approved',
         );
         if (otherAdmins.length === 0) {
           blockingWorkspaces.push({ id: membership.workspaceId, name: membership.name });

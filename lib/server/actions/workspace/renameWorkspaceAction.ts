@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { requireSession } from '@/lib/auth/session';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
 
 const Input = z.object({ name: z.string().min(1).max(200) }).strict();
 
@@ -16,7 +17,9 @@ export async function renameWorkspaceAction(input: {
 }): Promise<RenameWorkspaceResult> {
   const session = await requireSession().catch(() => null);
   if (!session?.user?.workspaceId) return { ok: false, error: 'FORBIDDEN' };
-  if (session.user.role !== 'admin') return { ok: false, error: 'FORBIDDEN' };
+  // JWT role 은 stale 가능 + 미승인 admin 포함 가능 → DB 에서 승인된 admin 인지 재확인.
+  const membership = await getMembership(session.user.id, session.user.workspaceId);
+  if (!isApprovedAdmin(membership)) return { ok: false, error: 'FORBIDDEN' };
 
   const parsed = Input.safeParse({ name: input?.name?.trim() });
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };

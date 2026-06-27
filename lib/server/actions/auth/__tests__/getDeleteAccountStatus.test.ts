@@ -68,6 +68,22 @@ describe('getDeleteAccountStatus', () => {
     });
   });
 
+  it('does NOT count a pending-approval admin as another admin (sole approved admin is blocked)', async () => {
+    const ws = await seedBuyerWorkspace(db, { name: '구매사P' });
+    const admin = await seedUser(db, { email: 'soleadmin@example.com' });
+    const pendingAdmin = await seedUser(db, { email: 'pendingadmin@example.com' });
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, pendingAdmin.id, 'admin', { approvalStatus: 'pending_approval' });
+    sessionRef.value = { user: { id: admin.id, workspaceId: ws.id } };
+
+    const r = await getDeleteAccountStatus();
+    expect(r).toEqual({
+      ok: true,
+      blockingWorkspaces: [{ id: ws.id, name: '구매사P' }],
+      soloWorkspaces: [],
+    });
+  });
+
   it('returns workspace in blockingWorkspaces when user is last admin with other members', async () => {
     const ws = await seedBuyerWorkspace(db, { name: '구매사A' });
     const admin = await seedUser(db, { email: 'admin@example.com' });
