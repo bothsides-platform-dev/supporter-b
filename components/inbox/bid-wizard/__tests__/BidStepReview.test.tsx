@@ -88,4 +88,12 @@ describe('BidStepReview', () => {
     expect(screen.getByText(/0\.5%/)).toBeInTheDocument();
     expect(screen.getByText(/1\.8%/)).toBeInTheDocument();
   });
+
+  it('INVALID_ATTACHMENT 는 친절한 한국어로 보여주고 raw 코드는 노출하지 않는다', () => {
+    renderStep({ submitError: 'INVALID_ATTACHMENT' });
+    expect(
+      screen.getByText('첨부한 견적서를 확인할 수 없어요. 다시 올려주세요.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('INVALID_ATTACHMENT')).toBeNull();
+  });
 });

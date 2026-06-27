@@ -408,3 +408,98 @@ describe('BidService.withdraw — 감사 로그 기록', () => {
     expect(rows).toHaveLength(1);
   });
 });
+
+// ─── BidService.submit — 첨부(견적서) 업로더 검증 ─────────────────────────────────
+
+type SubmitSetup = {
+  pgUser: { id: string };
+  pgWs: { id: string };
+  /** 마스터/운영 계정: workspace_members 행이 없는 채로 PG 워크스페이스에 진입. */
+  masterUser: { id: string };
+  rfp: { id: string; code: string };
+};
+
+async function seedSubmitEnv(): Promise<SubmitSetup> {
+  const buyer = await seedUser(db, { email: 'buyer@submit.com' });
+  const buyerWs = await seedBuyerWorkspace(db);
+  await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+
+  const pgUser = await seedUser(db, { email: 'pg@submit.com' });
+  const pgWs = await seedPgWorkspace(db, 'pg.submit');
+  await seedMembership(db, pgWs.id, pgUser.id, 'admin');
+
+  // 마스터/운영 계정 — users 행만 있고 어떤 워크스페이스의 멤버도 아니다
+  // (switchWorkspaceAction 의 마스터 우회로 PG 워크스페이스에 진입한 상태를 재현).
+  const masterUser = await seedUser(db, { email: 'master@ops.com' });
+
+  const rfp = await seedRfp(db, {
+    buyerWsId: buyerWs.id,
+    createdBy: buyer.id,
+    code: 'P-2606-0020',
+  });
+  const schema = await import('@/lib/db/schema');
+  await db
+    .update(schema.rfps)
+    .set({ status: 'sent', sentAt: new Date() })
+    .where(eq(schema.rfps.id, rfp.id));
+
+  await db.insert(rfpInvitations).values({
+    id: randomUUID(),
+    rfpId: rfp.id,
+    pgWsId: pgWs.id,
+    tokenHash: randomUUID(),
+    sentAt: new Date(),
+    expiresAt: new Date(Date.now() + 86_400_000 * 7),
+    status: 'accepted',
+  });
+
+  return { pgUser, pgWs, masterUser, rfp };
+}
+
+function submitInput(rfpId: string, proposalAttachmentId: string) {
+  return {
+    rfpId,
+    settleCycle: 'D+1',
+    settleLimit: 0,
+    guaranteeInsurance: 0,
+    paymentFees: {},
+    customFees: {},
+    proposalAttachmentId,
+  };
+}
+
+describe('BidService.submit — 견적서 첨부 검증', () => {
+  it('마스터(비멤버)가 자기가 올린 견적서로 제출하면 성공한다', async () => {
+    const s = await seedSubmitEnv();
+    // 마스터가 직접 업로드한 미링크 첨부 (uploadedBy === 제출자).
+    const attId = await seedUnlinkedAttachment(s.masterUser.id);
+    const r = await service.submit(submitInput(s.rfp.id, attId), {
+      userId: s.masterUser.id,
+      workspaceId: s.pgWs.id,
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('일반 PG 멤버가 자기 견적서로 제출하면 성공한다 (회귀 가드)', async () => {
+    const s = await seedSubmitEnv();
+    const attId = await seedUnlinkedAttachment(s.pgUser.id);
+    const r = await service.submit(submitInput(s.rfp.id, attId), {
+      userId: s.pgUser.id,
+      workspaceId: s.pgWs.id,
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('제출자가 올리지 않은 남의 첨부는 INVALID_ATTACHMENT 로 거부한다 (보안 가드)', async () => {
+    const s = await seedSubmitEnv();
+    const stranger = await seedUser(db, { email: 'stranger@submit.com' });
+    const attId = await seedUnlinkedAttachment(stranger.id);
+    const r = await service.submit(submitInput(s.rfp.id, attId), {
+      userId: s.pgUser.id,
+      workspaceId: s.pgWs.id,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('INVALID_ATTACHMENT');
+  });
+});

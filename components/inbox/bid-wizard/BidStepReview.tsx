@@ -25,6 +25,7 @@ const ERROR_LABELS: Record<string, string> = {
   INVITATION_NOT_FOUND: '초대 내역을 찾을 수 없어요.',
   BID_ALREADY_SUBMITTED: '이미 견적을 보냈어요.',
   PAYMENT_METHOD_NOT_REQUESTED: '구매사가 요청하지 않은 결제수단입니다.',
+  INVALID_ATTACHMENT: '첨부한 견적서를 확인할 수 없어요. 다시 올려주세요.',
   LIMIT_REACHED: '템플릿은 최대 20개까지 저장할 수 있어요.',
 };
 
