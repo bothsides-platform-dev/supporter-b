@@ -571,7 +571,8 @@ describe('연락처 교환 (awarded)', () => {
     const data = await loadPgRfpDetail({ code, workspaceId: ctx.inicisId });
     expect(data?.awardedToMe).toBe(false);
     expect(data?.buyerContact).toBeNull();
-    // 누출 회귀: 직렬화 페이로드 어디에도 구매사 이메일/전화가 없어야 한다.
+    // 누출 회귀: 미선정 PG 페이로드에 구매사 이메일도, 어떤 전화번호도(승자 PG 전화 포함)
+    // 새지 않아야 한다. ('010-' 는 시드된 승자 PG 전화 '010-9999-0000' 를 잡는다.)
     expect(JSON.stringify(data)).not.toContain('buyer@buy.com');
     expect(JSON.stringify(data)).not.toContain('010-');
   });

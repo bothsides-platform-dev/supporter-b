@@ -22,7 +22,7 @@ export function CounterpartyContactCard({
       <div className="mt-2 space-y-1">
         <a
           href={`mailto:${contact.email}`}
-          className="flex w-fit items-center gap-2 text-[13px] text-[var(--md-sys-color-primary)] hover:underline"
+          className="flex w-fit items-center gap-1.5 text-[13px] text-[var(--md-sys-color-primary)] hover:underline"
         >
           <Mail size={14} aria-hidden />
           <span>{contact.email}</span>
@@ -30,7 +30,7 @@ export function CounterpartyContactCard({
         {contact.phone && (
           <a
             href={`tel:${contact.phone}`}
-            className="flex w-fit items-center gap-2 text-[13px] text-[var(--md-sys-color-primary)] hover:underline"
+            className="flex w-fit items-center gap-1.5 text-[13px] text-[var(--md-sys-color-primary)] hover:underline"
           >
             <Phone size={14} aria-hidden />
             <span className="md-numeric">{contact.phone}</span>
