@@ -32,6 +32,7 @@ export default async function RfpNewPage() {
       (nameCount.get(row.name) ?? 1) > 1
         ? `${row.name} #${row.id.slice(0, 8)}`
         : row.name,
+    logoUpdatedAt: row.logoUpdatedAt,
   }));
 
   const ws = await (await getWorkspaceRepo()).findById(session.user.workspaceId);

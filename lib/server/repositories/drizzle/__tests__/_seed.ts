@@ -11,7 +11,16 @@ import type { PgliteDB } from '@/lib/db/client-pglite';
 
 export async function seedUser(
   db: PgliteDB,
-  overrides?: { id?: string; email?: string; name?: string; isSystemAccount?: boolean; phone?: string },
+  overrides?: {
+    id?: string;
+    email?: string;
+    name?: string;
+    isSystemAccount?: boolean;
+    phone?: string;
+    // passwordHash '!' = 영구 로그인 불가 데모/온보딩 placeholder(createSystemAccount).
+    // master/ops 등 실제 사람 계정은 실 해시(기본 'x')를 갖는다.
+    passwordHash?: string;
+  },
 ): Promise<{ id: string; email: string; name: string }> {
   const id = overrides?.id ?? randomUUID();
   const email = overrides?.email ?? `u-${id.slice(0, 8)}@example.com`;
@@ -19,7 +28,7 @@ export async function seedUser(
   await db.insert(users).values({
     id,
     email,
-    passwordHash: 'x',
+    passwordHash: overrides?.passwordHash ?? 'x',
     name,
     avatarColor: 'ink',
     ...(overrides?.isSystemAccount ? { isSystemAccount: true } : {}),
@@ -80,13 +89,14 @@ export async function seedMembership(
   workspaceId: string,
   userId: string,
   role: 'admin' | 'member' = 'member',
-  overrides?: { joinedAt?: Date },
+  overrides?: { joinedAt?: Date; approvalStatus?: 'approved' | 'pending_approval' | 'rejected' },
 ): Promise<void> {
   await db.insert(workspaceMembers).values({
     workspaceId,
     userId,
     role,
     ...(overrides?.joinedAt ? { joinedAt: overrides.joinedAt } : {}),
+    ...(overrides?.approvalStatus ? { approvalStatus: overrides.approvalStatus } : {}),
   });
 }
 

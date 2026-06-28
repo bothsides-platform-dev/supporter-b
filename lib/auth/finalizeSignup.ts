@@ -27,7 +27,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
 
   let r;
   if (d.selectedPgWorkspaceId) {
-    // 주요 PG사 선택 경로 — canonical 워크스페이스에 member로 즉시 합류.
+    // 주요 PG사 선택 경로 — canonical 워크스페이스에 admin으로 즉시 합류(승인 대기).
     r = await joinCanonicalPgWorkspaceAction({
       email: d.email,
       name: d.name,

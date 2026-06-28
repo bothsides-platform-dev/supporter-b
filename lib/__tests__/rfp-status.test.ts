@@ -56,4 +56,25 @@ describe('pgRequestChip', () => {
       color: 'warning',
     });
   });
+
+  it('선정됐고 본인 선정이면 선정됨 칩', () => {
+    expect(pgRequestChip({ pendingRequote: false, hasBid: true, awarded: true, awardedToMe: true })).toEqual({
+      label: '선정됨',
+      color: 'tertiary',
+    });
+  });
+
+  it('선정됐고 타사 선정이면 선정 마감 칩(중립)', () => {
+    expect(pgRequestChip({ pendingRequote: false, hasBid: true, awarded: true, awardedToMe: false })).toEqual({
+      label: '선정 마감',
+      color: 'surface',
+    });
+  });
+
+  it('선정 상태는 재요청/제출보다 우선한다', () => {
+    expect(pgRequestChip({ pendingRequote: true, hasBid: true, awarded: true, awardedToMe: true })).toEqual({
+      label: '선정됨',
+      color: 'tertiary',
+    });
+  });
 });

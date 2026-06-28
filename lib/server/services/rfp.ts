@@ -697,7 +697,7 @@ export class RfpService {
         });
 
         const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
-        const admins = wsMembers.filter((m) => m.role === 'admin');
+        const admins = wsMembers.filter((m) => m.role === 'admin' && m.approvalStatus === 'approved');
         for (const admin of admins) {
           await this.outboxRepo.enqueue(
             {

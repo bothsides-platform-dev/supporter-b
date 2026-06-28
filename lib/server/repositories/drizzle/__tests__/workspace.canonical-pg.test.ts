@@ -146,21 +146,30 @@ describe('DrizzleWorkspaceRepository — memberEmails/memberUserIds isSystemAcco
     expect(emails).not.toContain('master@tosspayments.internal');
   });
 
-  it('memberUserIds: is_system_account=true 마스터 계정 userId 제외', async () => {
+  it('memberUserIds: 숨겨진 master 계정은 알림 수신자로 포함, 데모 placeholder(!) 만 제외', async () => {
     const ws = await seedPgWorkspace(db, '나이스');
     const regular = await seedUser(db, { email: 'r@nice.im' });
     await seedMembership(db, ws.id, regular.id, 'member');
+    // master/ops: 화면에선 숨겨지지만(isSystemAccount) 실 해시 → 본인 알림은 수신해야 한다.
     const masterId = randomUUID();
     await db.insert(users).values({
       id: masterId, email: 'master@nice.internal', passwordHash: 'x',
       name: '마스터', avatarColor: 'ink', isSystemAccount: true,
     });
     await db.insert(workspaceMembers).values({ workspaceId: ws.id, userId: masterId, role: 'admin' });
+    // 데모 placeholder: passwordHash '!' → 영구 로그인 불가 → 알림 수신자에서 제외.
+    const demoId = randomUUID();
+    await db.insert(users).values({
+      id: demoId, email: 'demo@sample.invalid', passwordHash: '!',
+      name: '데모', avatarColor: 'ink', isSystemAccount: true,
+    });
+    await db.insert(workspaceMembers).values({ workspaceId: ws.id, userId: demoId, role: 'member' });
 
     const ids = await repo.memberUserIds(ws.id);
 
     expect(ids).toContain(regular.id);
-    expect(ids).not.toContain(masterId);
+    expect(ids).toContain(masterId);
+    expect(ids).not.toContain(demoId);
   });
 });
 
