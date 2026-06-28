@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 
 import { createPgliteDb } from '@/lib/db/client-pglite';
@@ -8,13 +8,14 @@ import {
   getOutboxRepo,
   getAuditLogRepo,
   getWorkspaceRepo,
+  getUserRepo,
 } from '@/lib/server/repositories/factory';
 import {
   seedBuyerWorkspace,
   seedMembership,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { auditLogs, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
+import { auditLogs, users, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
 import { WorkspaceService } from '../workspace';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -25,7 +26,8 @@ async function buildService(): Promise<WorkspaceService> {
   const outboxRepo = await getOutboxRepo();
   const auditRepo = await getAuditLogRepo();
   const workspaceRepo = await getWorkspaceRepo();
-  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo);
+  const userRepo = await getUserRepo();
+  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo);
 }
 
 beforeEach(async () => {
@@ -156,6 +158,29 @@ describe('WorkspaceService.removeMember', () => {
       .from(workspaceMembers)
       .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, member.id)));
     expect(rows).toHaveLength(0);
+  });
+
+  it('bumps sessionVersion of removed member and calls disconnectCentrifugoUser', async () => {
+    const disconnectMock = vi.fn().mockResolvedValue(undefined);
+    vi.doMock('@/lib/server/realtime/centrifugo', () => ({
+      disconnectCentrifugoUser: disconnectMock,
+    }));
+
+    const admin = await seedUser(db, { email: 'admin@test.com' });
+    const member = await seedUser(db, { email: 'member@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, member.id, 'member');
+
+    const [before] = await db.select({ sv: users.sessionVersion }).from(users).where(eq(users.id, member.id));
+
+    await service.removeMember(
+      { targetUserId: member.id },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+
+    const [after] = await db.select({ sv: users.sessionVersion }).from(users).where(eq(users.id, member.id));
+    expect(after.sv).toBe(before.sv + 1);
   });
 
   it('returns SELF_REMOVAL when trying to remove yourself', async () => {

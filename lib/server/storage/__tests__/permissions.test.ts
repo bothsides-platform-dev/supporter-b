@@ -32,7 +32,6 @@ import {
   getInvitationRepo,
   getRfpRepo,
   getRfpTeamMessageRepo,
-  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
   seedBizProfile,
@@ -234,7 +233,6 @@ async function seedScenario(): Promise<Scenario> {
 async function repos() {
   return {
     invitation: await getInvitationRepo(),
-    workspace: await getWorkspaceRepo(),
     rfp: await getRfpRepo(),
     bid: await getBidRepo(),
     bidNote: await getBidNoteRepo(),

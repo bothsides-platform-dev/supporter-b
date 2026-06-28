@@ -431,6 +431,7 @@ describe('GET /api/files/[id] — master account', () => {
     const s = await seedScenario();
     // Master has workspaceId matching the buyer workspace but is NOT in workspaceMembers
     // (listAllWorkspacesForMaster bypasses workspaceMembers; isMember returns false).
+    // isMaster flag no longer needed — workspaceId match alone is sufficient.
     sessionRef.value = {
       user: {
         id: randomUUID(),
@@ -438,7 +439,6 @@ describe('GET /api/files/[id] — master account', () => {
         workspaceId: s.buyerWsId,
         workspaceType: 'buyer' as const,
         role: 'admin',
-        isMaster: true,
       },
     };
     const r = await callGet(s.attachmentId);

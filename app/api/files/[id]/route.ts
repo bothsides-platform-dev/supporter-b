@@ -51,7 +51,6 @@ import {
   getInvitationRepo,
   getRfpRepo,
   getRfpTeamMessageRepo,
-  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 
 export const runtime = 'nodejs';
@@ -128,7 +127,6 @@ export async function GET(
 
   const repos: RepoBundleForAttachment = {
     invitation: await getInvitationRepo(),
-    workspace: await getWorkspaceRepo(),
     rfp: await getRfpRepo(),
     bid: await getBidRepo(),
     bidNote: await getBidNoteRepo(),
@@ -146,7 +144,6 @@ export async function GET(
         workspaceType: (
           session.user as { workspaceType?: 'buyer' | 'pg' }
         ).workspaceType,
-        isMaster: (session.user as { isMaster?: boolean }).isMaster,
       },
     },
     repos,
