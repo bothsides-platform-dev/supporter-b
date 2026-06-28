@@ -200,6 +200,13 @@ export class DrizzleUserRepository implements UserRepo {
       .where(eq(users.id, userId));
   }
 
+  async bumpSessionVersion(userId: string, tx?: Tx): Promise<void> {
+    await this.h(tx)
+      .update(users)
+      .set({ sessionVersion: sql`${users.sessionVersion} + 1` })
+      .where(eq(users.id, userId));
+  }
+
   async getSessionVersion(userId: string, tx?: Tx): Promise<number | undefined> {
     const db = this.h(tx);
     const [row] = await db

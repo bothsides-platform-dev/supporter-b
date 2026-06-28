@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - **파일 업로드 시 불필요한 DB 조회 3회를 제거했어요**: `chat`·`bid_note`·`team_message` 첨부 업로드 경로에서 멤버십을 DB에 재확인하던 `isMember` 호출 3개를 삭제했어요. 45b44e43 커밋에서 `removeMember`가 세션버전을 즉시 올리고 `isSessionRevoked()`로 만료된 세션을 차단하는 정책으로 전환됐는데, 다운로드 경로·`permissions.ts`는 업데이트됐지만 업로드 경로만 누락됐어요. 이번 수정으로 업로드마다 발생하던 DB 왕복 3회가 사라지고, download/upload ACL 정책이 일관되게 유지돼요.
+- **워크스페이스에서 멤버를 제거하면 세션이 즉시 무효화돼요**: 그동안 멤버를 제거해도 기존 JWT 세션이 만료되기 전까지 파일·채널 접근이 이론상 가능했어요. 이제 멤버를 제거하는 즉시 세션 버전이 올라가 이후 모든 파일 요청이 차단되고, Centrifugo 실시간 WS 연결도 끊어져요. 파일 접근 권한 검사도 단순해졌어요 — 서명된 JWT의 워크스페이스 클레임을 멤버십 증명으로 신뢰하고, 요청마다 DB 멤버십을 재조회하지 않아요.
 
 ## [0.2.51.1] - 2026-06-28
 

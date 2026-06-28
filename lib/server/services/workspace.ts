@@ -1,6 +1,6 @@
 import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { normalizeEmail, bucket15Min } from './_service-utils';
-import type { AuditLogRepo, OutboxRepo, WorkspaceRepo } from '@/lib/server/repositories/types';
+import type { AuditLogRepo, OutboxRepo, UserRepo, WorkspaceRepo } from '@/lib/server/repositories/types';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
@@ -10,6 +10,7 @@ import { baseUrl } from '@/lib/server/env';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
 import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceInvite';
 import { dispatchWorkspaceInviteInApp } from '@/lib/server/actions/workspace/_workspaceInviteNotify';
+import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
 import type { Notification } from '@/lib/types/notification';
 import type { ServiceResult } from './types';
 
@@ -24,6 +25,7 @@ export class WorkspaceService {
     private readonly outboxRepo: OutboxRepo,
     private readonly auditRepo: AuditLogRepo,
     private readonly workspaceRepo: WorkspaceRepo,
+    private readonly userRepo: UserRepo,
   ) {}
 
   async createWorkspace(
@@ -330,6 +332,8 @@ export class WorkspaceService {
         { workspaceId: actor.workspaceId, userId: input.targetUserId },
         tx,
       );
+      // 제거된 멤버의 JWT를 즉시 무효화 — 다음 요청에서 isSessionRevoked가 401 반환.
+      await this.userRepo.bumpSessionVersion(input.targetUserId, tx);
       // 감사 로그 (C5) — 제거와 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
         {
@@ -344,6 +348,9 @@ export class WorkspaceService {
       );
     });
 
+    // 라이브 WS 연결 즉시 차단 — password reset 패턴 동일.
+    void disconnectCentrifugoUser(input.targetUserId);
+
     return { ok: true };
   }
 }
@@ -356,15 +363,16 @@ declare global {
 
 export async function getWorkspaceService(): Promise<WorkspaceService> {
   if (!globalThis.__bidit_workspace_service__) {
-    const [{ db }, { getOutboxRepo, getAuditLogRepo, getWorkspaceRepo }] = await Promise.all([
+    const [{ db }, { getOutboxRepo, getAuditLogRepo, getWorkspaceRepo, getUserRepo }] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [outboxRepo, auditRepo, workspaceRepo] = await Promise.all([
+    const [outboxRepo, auditRepo, workspaceRepo, userRepo] = await Promise.all([
       getOutboxRepo(),
       getAuditLogRepo(),
       getWorkspaceRepo(),
+      getUserRepo(),
     ]);
 
     globalThis.__bidit_workspace_service__ = new WorkspaceService(
@@ -372,6 +380,7 @@ export async function getWorkspaceService(): Promise<WorkspaceService> {
       outboxRepo,
       auditRepo,
       workspaceRepo,
+      userRepo,
     );
   }
   return globalThis.__bidit_workspace_service__!;
