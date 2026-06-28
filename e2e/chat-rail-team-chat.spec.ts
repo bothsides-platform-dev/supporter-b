@@ -43,10 +43,15 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
     const composer = page.getByPlaceholder('우리 팀에게만 보이는 메모를 남겨보세요…');
     await composer.fill(BUYER_MEMO);
     await page.getByRole('button', { name: '보내기' }).click();
-    // MorphFlightLayer creates a 340ms animation clone with the same text.
-    // Wait for it to disappear (count reaches 1) before asserting visibility.
-    await expect(page.getByText(BUYER_MEMO)).toHaveCount(1);
-    await expect(page.getByText(BUYER_MEMO)).toBeVisible();
+    // Wait for the server-confirmed bubble: after promoteSentMessage the bubble
+    // keeps localKey='pending-…' (stable key prevents React churn), so
+    // data-bubble-key still starts with "pending-". Pending bubbles carry
+    // opacity-60; confirmed ones don't. The MorphFlightLayer clone has neither
+    // data-bubble-key nor opacity-60 but lacks the data attribute entirely.
+    // Selecting [data-bubble-key]:not(.opacity-60) uniquely targets confirmed.
+    await expect(
+      page.locator('[data-bubble-key]:not(.opacity-60)', { hasText: BUYER_MEMO }),
+    ).toBeVisible();
 
     // 재로드 후에도 영속 — 로더 경로 검증.
     await page.reload();
@@ -70,8 +75,9 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
     // PG 자체 메모는 정상 동작.
     await composer.fill(PG_MEMO);
     await page.getByRole('button', { name: '보내기' }).click();
-    await expect(page.getByText(PG_MEMO)).toHaveCount(1);
-    await expect(page.getByText(PG_MEMO)).toBeVisible();
+    await expect(
+      page.locator('[data-bubble-key]:not(.opacity-60)', { hasText: PG_MEMO }),
+    ).toBeVisible();
   });
 
   test('buyer: PG 팀 메모도 구매사 팀 채팅에 보이지 않는다 (역방향)', async ({
