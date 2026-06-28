@@ -8,7 +8,7 @@ type ProblemCardProps = {
 export function ProblemCard({ num, title, desc }: ProblemCardProps) {
   return (
     <div className="flex gap-[var(--s-5)] md:gap-[var(--s-7)] border border-[var(--md-sys-color-outline-variant)] rounded-md p-[var(--s-6)]">
-      <span className="shrink-0 font-mono tabular-nums text-[var(--text-xl)] leading-none text-[var(--md-sys-color-outline)] tracking-[-0.02em]">
+      <span className="shrink-0 tabular-nums text-[var(--text-xl)] leading-none font-medium text-[var(--md-sys-color-outline)] tracking-[-0.01em]">
         {num}
       </span>
       <div className="flex flex-col gap-[var(--s-2)]">

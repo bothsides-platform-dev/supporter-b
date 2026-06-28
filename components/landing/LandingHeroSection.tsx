@@ -91,17 +91,27 @@ export function LandingHeroSection() {
           </motion.div>
         </div>
 
+        <motion.p
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.34, ease: EASE_OUT }}
+          className="max-w-[680px] text-[clamp(15px,1.6vw,19px)] leading-[1.62] tracking-[-0.008em] text-[var(--md-sys-color-on-surface-variant)]"
+        >
+          여러 PG사의 제안을 동일한 기준으로 받아보고, 계약 조건을 표준화된 비교표로 검토하세요.
+          수수료뿐 아니라 정산주기, 보증금, 셋업비까지 협상 가능한 조건으로 정리합니다.
+        </motion.p>
+
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.36, delay: 0.46, ease: EASE_OUT }}
+          transition={{ duration: 0.36, delay: 0.5, ease: EASE_OUT }}
           className="flex flex-col items-start gap-[var(--s-4)]"
         >
           <Link href="/rfp-create">
             <Button size="lg">PG 비교 견적 무료로 시작하기 →</Button>
           </Link>
           <span className="font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-outline)]">
-            신용카드 불필요 — 입찰 시작까지 5분
+            입찰 시작까지 5분 · 비공개 견적 요청
           </span>
         </motion.div>
       </div>

@@ -39,17 +39,18 @@ describe('ProcessSection', () => {
     expect(screen.getByText(/기본적인 사업자 정보를 입력/)).toBeInTheDocument();
   });
 
-  it('renders the first step example view as a filled business-info form', () => {
+  it('renders the first step example view as a registered-business confirmation table', () => {
     render(<ProcessSection />);
-    expect(screen.getByText('(주)서포터비')).toBeInTheDocument();
-    expect(screen.getByText('일반과세자')).toBeInTheDocument();
+    expect(screen.getByText('노온')).toBeInTheDocument();
+    expect(screen.getByText('일반과세')).toBeInTheDocument();
+    expect(screen.getByText('확인됨')).toBeInTheDocument();
   });
 
   it('switches the detail and example view when another step is selected', () => {
     render(<ProcessSection />);
     fireEvent.click(screen.getByRole('button', { name: /PG 선택/ }));
     expect(screen.getByText(/견적을 받고 싶은 PG사를 선택/)).toBeInTheDocument();
-    expect(screen.getByText('2개 선택됨')).toBeInTheDocument();
+    expect(screen.getByText('3개 선택됨')).toBeInTheDocument();
   });
 
   it('marks the active step with aria-current', () => {
@@ -81,13 +82,14 @@ describe('ProcessSection — animated example-view typing', () => {
     delete window.matchMedia;
   });
 
-  it('types the business-info form to completion without crashing', () => {
+  it('types the quote-detail form to completion without crashing', () => {
     render(<ProcessSection />);
-    // Advance less than the 5s auto-advance so we stay on step 1; the form
-    // finishes typing (~3.5s) — the final field must not throw.
+    // 견적 내용 입력 단계를 직접 선택하면 자동 전환이 멈춘다(제어권 이양).
+    fireEvent.click(screen.getByRole('button', { name: /견적 내용 입력/ }));
+    // 폼이 위에서부터 타이핑된다(~3.5s) — 마지막 필드까지 throw 없이 완료돼야 한다.
     act(() => {
       vi.advanceTimersByTime(4500);
     });
-    expect(screen.getByText('계속사업자')).toBeInTheDocument();
+    expect(screen.getByText('3.4 %')).toBeInTheDocument();
   });
 });

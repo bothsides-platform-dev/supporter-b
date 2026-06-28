@@ -242,8 +242,6 @@ export function SavingsCalculator() {
         <CostComparisonChart
           currentCost={currentCost}
           supporterBCost={supporterBCost}
-          currentRatePct={currentRate * 100}
-          supporterBRatePct={supporterBRate * 100}
         />
       </div>
 
