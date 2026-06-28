@@ -80,27 +80,34 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       id: 'compare',
       label: '견적 비교',
       content: (
-        <FocusComparison
-          bids={bids}
-          pgWsNameMap={pgWsNameMap}
-          pgWsLogoUpdatedAtMap={pgWsLogoUpdatedAtMap}
-          current={{
-            feeRate: rfp.currentFeeRate,
-            settlementCycle: rfp.currentSettlementCycle,
-            settlementLimit: rfp.currentSettlementLimit,
-            guaranteeInsurance: rfp.currentGuaranteeInsurance,
-          }}
-          rfpStatus={rfp.status}
-          awardedBidId={rfp.awardedBidId}
-          requiredPaymentMethods={rfp.requiredPaymentMethods}
-          customPaymentMethods={rfp.customPaymentMethods}
-          rfpId={rfp.id}
-          rfpCode={rfp.code}
-          requoteByPg={requoteByPg}
-          buyerGrade={rfp.bizProfile?.grade}
-          isSample={rfp.isSample ?? false}
-          hideHeader
-        />
+        <>
+          {rfp.status === 'awarded' && awardedPgContact && (
+            <div className="mb-4">
+              <ContactBlock contact={awardedPgContact} counterpartyKind="pg" />
+            </div>
+          )}
+          <FocusComparison
+            bids={bids}
+            pgWsNameMap={pgWsNameMap}
+            pgWsLogoUpdatedAtMap={pgWsLogoUpdatedAtMap}
+            current={{
+              feeRate: rfp.currentFeeRate,
+              settlementCycle: rfp.currentSettlementCycle,
+              settlementLimit: rfp.currentSettlementLimit,
+              guaranteeInsurance: rfp.currentGuaranteeInsurance,
+            }}
+            rfpStatus={rfp.status}
+            awardedBidId={rfp.awardedBidId}
+            requiredPaymentMethods={rfp.requiredPaymentMethods}
+            customPaymentMethods={rfp.customPaymentMethods}
+            rfpId={rfp.id}
+            rfpCode={rfp.code}
+            requoteByPg={requoteByPg}
+            buyerGrade={rfp.bizProfile?.grade}
+            isSample={rfp.isSample ?? false}
+            hideHeader
+          />
+        </>
       ),
     },
     { id: 'request', label: '요청 조건', content: <RequestConditionsView data={data} /> },
@@ -169,9 +176,8 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           <DealResultHeader
             tone="award"
             title={`${josa(awardedPgContact.workspaceName, '을/를')} 선정했어요`}
-          >
-            <ContactBlock contact={awardedPgContact} counterpartyKind="pg" />
-          </DealResultHeader>
+            subtitle="담당처와 연락을 이어나가보세요."
+          />
         </div>
       )}
       <div className="flex min-h-0 flex-1 max-lg:flex-col">
