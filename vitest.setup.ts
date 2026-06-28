@@ -1,9 +1,10 @@
 import "@testing-library/jest-dom";
-import { vi } from "vitest";
+import { vi, beforeEach } from "vitest";
 
 // Node 22+ exposes a process-level `localStorage` that requires --localstorage-file
 // and throws on access, shadowing jsdom's implementation in the unit-jsdom project.
 // Stub with an in-memory map so component tests can use localStorage normally.
+// Note: the store is shared within a file; beforeEach clears it to prevent cross-test pollution.
 const _localStorageStore: Record<string, string> = {};
 vi.stubGlobal("localStorage", {
   getItem: (k: string) => _localStorageStore[k] ?? null,
@@ -13,6 +14,7 @@ vi.stubGlobal("localStorage", {
   get length() { return Object.keys(_localStorageStore).length; },
   key: (i: number) => Object.keys(_localStorageStore)[i] ?? null,
 });
+beforeEach(() => { localStorage.clear(); });
 
 // `next/cache`의 revalidatePath/Tag는 Next.js 요청·액션 컨텍스트 (static
 // generation store)를 요구해 vitest에서 직접 호출하면 throw 한다. 액션 본문이
