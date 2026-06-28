@@ -451,6 +451,24 @@ describe('loadConversationThread', () => {
     expect(thread.rfpById[rfp.id]).toEqual({ code: rfp.code, title: 'RFP' });
   });
 
+  it('counterparty includes logoUpdatedAt field (null when no logo set)', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'logo field test',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    const thread = await loadConversationThread(sent.conversationId);
+    expect(thread.ok).toBe(true);
+    if (!thread.ok) return;
+    expect(thread.counterparty).toHaveProperty('logoUpdatedAt');
+    // No logo seeded → null
+    expect(thread.counterparty.logoUpdatedAt).toBeNull();
+  });
+
   it('ThreadMessage carries authorAvatarUpdatedAt from the users join', async () => {
     const { buyerUser, buyerWs, pgWs } = await seedPair();
     asBuyer(buyerUser, buyerWs.id);

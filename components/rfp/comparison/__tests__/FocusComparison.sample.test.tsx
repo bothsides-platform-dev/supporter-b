@@ -45,6 +45,7 @@ function bid(id: string, pgWsId: string): Bid {
 const baseProps = {
   bids: [bid('b1', 'pgA'), bid('b2', 'pgB')],
   pgWsNameMap: { pgA: '샘플페이 A', pgB: '샘플페이 B' },
+  pgWsLogoUpdatedAtMap: {} as Record<string, string | null>,
   current: {},
   awardedBidId: null,
   requiredPaymentMethods: ['card'] as const,

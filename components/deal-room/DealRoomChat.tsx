@@ -36,10 +36,11 @@ export function DealRoomChat({
   const { setCounterparty } = useDealRoom();
 
   const fixedWsId = fixedCounterparty?.workspaceId;
+  const fixedLogoTs = fixedCounterparty?.logoUpdatedAt;
   useEffect(() => {
     if (fixedCounterparty) setCounterparty(fixedCounterparty);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- wsId 로 추적
-  }, [fixedWsId, setCounterparty]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 원시값(wsId·logoTs)으로 추적해 inline 객체 재생성 무시
+  }, [fixedWsId, fixedLogoTs, setCounterparty]);
 
   return (
     <ChatPanel
