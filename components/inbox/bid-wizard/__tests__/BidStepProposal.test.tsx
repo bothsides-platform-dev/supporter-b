@@ -15,8 +15,6 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepProposal>> 
       onUpload={onUpload}
       onClear={vi.fn()}
       onMemoChange={onMemoChange}
-      onBack={vi.fn()}
-      onNext={vi.fn()}
       {...over}
     />,
   );

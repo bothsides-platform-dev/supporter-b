@@ -9,7 +9,7 @@ import { useBidWizardContext } from './bid-wizard-context';
  * BidWizard 의 prop-drilling 만 제거한다.
  */
 export const BidStepSettlementContainer = memo(function BidStepSettlementContainer() {
-  const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, setField, advance } =
+  const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, setField } =
     useBidWizardContext();
   return (
     <BidStepSettlement
@@ -18,7 +18,6 @@ export const BidStepSettlementContainer = memo(function BidStepSettlementContain
       settleLimit={settleLimit}
       guaranteeInsurance={guaranteeInsurance}
       onField={setField}
-      onNext={advance}
     />
   );
 });
