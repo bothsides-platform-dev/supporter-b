@@ -426,6 +426,26 @@ describe('GET /api/files/[id]', () => {
 
 });
 
+describe('GET /api/files/[id] — master account', () => {
+  it('200 for master/operator account accessing RFP attachment without workspaceMembers row', async () => {
+    const s = await seedScenario();
+    // Master has workspaceId matching the buyer workspace but is NOT in workspaceMembers
+    // (listAllWorkspacesForMaster bypasses workspaceMembers; isMember returns false).
+    sessionRef.value = {
+      user: {
+        id: randomUUID(),
+        email: 'master@supporter-b.com',
+        workspaceId: s.buyerWsId,
+        workspaceType: 'buyer' as const,
+        role: 'admin',
+        isMaster: true,
+      },
+    };
+    const r = await callGet(s.attachmentId);
+    expect(r.status).toBe(200);
+  });
+});
+
 describe('GET /api/files/[id] — 폐기 세션', () => {
   it('sv 가 stale 한(폐기된) 세션은 401', async () => {
     sessionRef.value = { user: { id: '00000000-0000-4000-8000-0000000000aa', email: 'x@x.com', sessionVersion: 1 } };

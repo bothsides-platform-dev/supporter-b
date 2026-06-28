@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Attachment } from '@/lib/types/common';
 
@@ -60,5 +60,16 @@ describe('AttachmentPreviewList', () => {
     const frame = screen.getByTitle('spec.pdf');
     expect(frame.tagName).toBe('IFRAME');
     expect(frame).toHaveAttribute('src', '/api/files/a2');
+  });
+
+  it('shows FileTextIcon fallback in thumbnail when image load fails', () => {
+    render(<AttachmentPreviewList files={[img]} />);
+
+    const thumbImg = screen.getByAltText('logo.png');
+    // Trigger React's onError synthetic handler via fireEvent
+    fireEvent.error(thumbImg);
+
+    // After onError, the broken <img> should be replaced by a fallback icon
+    expect(screen.queryByAltText('logo.png')).toBeNull();
   });
 });

@@ -146,6 +146,7 @@ export async function GET(
         workspaceType: (
           session.user as { workspaceType?: 'buyer' | 'pg' }
         ).workspaceType,
+        isMaster: (session.user as { isMaster?: boolean }).isMaster,
       },
     },
     repos,

@@ -65,7 +65,7 @@ import type {
 export type AttachmentRow = AttachmentRecord;
 
 export type AttachmentSession = {
-  user: { id: string; workspaceId?: string; workspaceType?: 'buyer' | 'pg' };
+  user: { id: string; workspaceId?: string; workspaceType?: 'buyer' | 'pg'; isMaster?: boolean };
 };
 
 export type RepoBundleForAttachment = {
@@ -90,6 +90,7 @@ export async function canAccessAttachment(
 ): Promise<boolean> {
   const userId = session.user.id;
   const wsId = session.user.workspaceId;
+  const isMasterUser = session.user.isMaster === true;
 
   // Uploader themselves can always read their own upload — covers the
   // narrow window between upload and the form action that links the
@@ -97,8 +98,10 @@ export async function canAccessAttachment(
   if (att.uploadedBy === userId) return true;
 
   // Membership boolean — single source of truth in WorkspaceRepo.isMember.
+  // Master/operator accounts are not in workspaceMembers (listAllWorkspacesForMaster
+  // synthesises membership without DB rows), so bypass the DB check for them.
   const isMember = (workspaceId: string): Promise<boolean> =>
-    repos.workspace.isMember(userId, workspaceId, tx);
+    isMasterUser ? Promise.resolve(true) : repos.workspace.isMember(userId, workspaceId, tx);
 
   if (att.rfpId) {
     const rfp = await repos.rfp.findOwnerById(att.rfpId, tx);
