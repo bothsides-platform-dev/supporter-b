@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - **검색·AI 노출이 더 잘 되도록 sitemap과 robots를 정비했어요**: 사이트맵이 그동안 3개 주소만 담았는데, 이제 공개 페이지 전체와 새 AI 텍스트 파일까지 포함해요. robots 설정에 주요 AI 크롤러(GPTBot·ClaudeBot·PerplexityBot 등)를 명시적으로 허용하고, 구매사·PG 두 사이트가 각각 자기 주소를 가리키도록 정리했어요. (사용자 화면 변화는 없어요.)
+## [0.2.50.0] - 2026-06-28
 
 ### Changed
 
