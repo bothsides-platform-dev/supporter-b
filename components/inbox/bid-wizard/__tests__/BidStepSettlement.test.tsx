@@ -16,7 +16,6 @@ afterEach(cleanup);
 
 function renderStep(over: Partial<React.ComponentProps<typeof BidStepSettlement>> = {}) {
   const onField = vi.fn();
-  const onNext = vi.fn();
   render(
     <BidStepSettlement
       cycleUnit="D"
@@ -24,11 +23,10 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepSettlement>
       settleLimit="0"
       guaranteeInsurance="0"
       onField={onField}
-      onNext={onNext}
       {...over}
     />,
   );
-  return { onField, onNext };
+  return { onField };
 }
 
 describe('BidStepSettlement', () => {
@@ -63,10 +61,4 @@ describe('BidStepSettlement', () => {
     expect(cycleVals.some((v: string) => v.includes('.'))).toBe(false);
   });
 
-  it('다음 버튼 클릭 시 onNext 호출', async () => {
-    const user = userEvent.setup();
-    const { onNext } = renderStep();
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    expect(onNext).toHaveBeenCalled();
-  });
 });

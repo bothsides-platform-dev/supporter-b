@@ -84,6 +84,7 @@ const kg = makeBid({ id: 'b-kg', pgWsId: 'pg-kg', settleCycle: 'D+2', settleLimi
 const baseProps = {
   bids: [kg, toss], // intentionally not pre-sorted
   pgWsNameMap: { 'pg-toss': '토스페이먼츠', 'pg-kg': 'KG이니시스' },
+  pgWsLogoUpdatedAtMap: {} as Record<string, string | null>,
   current: { feeRate: '2.8%' },
   rfpStatus: 'sent',
   awardedBidId: null,
@@ -235,6 +236,7 @@ describe('FocusComparison — requote CTA + status chips', () => {
       <FocusComparison
         bids={[bid]}
         pgWsNameMap={{ 'pg-1': 'OO페이' }}
+        pgWsLogoUpdatedAtMap={{}}
         current={{ feeRate: null, settlementCycle: null, settlementLimit: null, guaranteeInsurance: null }}
         rfpStatus="sent"
         awardedBidId={null}
@@ -255,6 +257,7 @@ describe('FocusComparison — requote CTA + status chips', () => {
       <FocusComparison
         bids={[bid]}
         pgWsNameMap={{ 'pg-1': 'OO페이' }}
+        pgWsLogoUpdatedAtMap={{}}
         current={{ feeRate: null, settlementCycle: null, settlementLimit: null, guaranteeInsurance: null }}
         rfpStatus="sent"
         awardedBidId={null}
@@ -274,6 +277,7 @@ describe('FocusComparison — requote CTA + status chips', () => {
       <FocusComparison
         bids={[bid]}
         pgWsNameMap={{ 'pg-1': 'OO페이' }}
+        pgWsLogoUpdatedAtMap={{}}
         current={{ feeRate: null }}
         rfpStatus="sent"
         awardedBidId={null}
@@ -300,6 +304,7 @@ describe('FocusComparison — 채팅 레일 상대 publish', () => {
       workspaceId: 'pg-toss',
       name: '토스페이먼츠',
       type: 'pg',
+      logoUpdatedAt: null,
     });
   });
 
@@ -313,11 +318,32 @@ describe('FocusComparison — 채팅 레일 상대 publish', () => {
       workspaceId: 'pg-kg',
       name: 'KG이니시스',
       type: 'pg',
+      logoUpdatedAt: null,
     });
   });
 
   it('견적이 없으면 publish 하지 않는다', () => {
     render(<FocusComparison {...baseProps} bids={[]} />);
     expect(captured).toBeNull();
+  });
+});
+
+describe('FocusComparison — pgWsLogoUpdatedAtMap → BidTabStrip 로고 전달', () => {
+  it('pgWsLogoUpdatedAtMap에 값이 있으면 BidTabStrip이 WorkspaceAvatar 이미지를 렌더한다', () => {
+    const logoTs = '2026-01-01T00:00:00.000Z';
+    render(
+      <FocusComparison
+        {...baseProps}
+        pgWsLogoUpdatedAtMap={{ 'pg-toss': logoTs, 'pg-kg': null }}
+      />,
+    );
+    const expectedSrc = `/api/workspace/pg-toss/avatar?v=${Date.parse(logoTs)}`;
+    const img = document.querySelector(`img[src="${expectedSrc}"]`);
+    expect(img).not.toBeNull();
+  });
+
+  it('pgWsLogoUpdatedAtMap이 비어 있으면 로고 이미지가 렌더되지 않는다', () => {
+    render(<FocusComparison {...baseProps} pgWsLogoUpdatedAtMap={{}} />);
+    expect(document.querySelector('img[src*="/api/workspace/"]')).toBeNull();
   });
 });

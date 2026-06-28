@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http } from '@/lib/http';
 import { HTTPError } from 'ky';
@@ -316,5 +316,22 @@ describe('BidWizard 구간 수수료 조립', () => {
       card: { sole: 0.005, general: expect.closeTo(0.018, 5) },
       virtual_account: 300,
     });
+  });
+});
+
+describe('BidWizard 네비게이션 푸터', () => {
+  it('wizard-nav-footer가 항상 렌더된다', () => {
+    render(<BidWizard rfp={rfp} buyerName="토스" />);
+    expect(screen.getByTestId('wizard-nav-footer')).toBeInTheDocument();
+  });
+
+  it('4단계: 수수료 미입력 시 견적 보내기 비활성', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="토스" />);
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    const footer = screen.getByTestId('wizard-nav-footer');
+    expect(within(footer).getByRole('button', { name: '견적 보내기' })).toBeDisabled();
   });
 });

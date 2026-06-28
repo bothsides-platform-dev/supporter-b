@@ -5,7 +5,7 @@ import { BidStepFees } from './BidStepFees';
 import { useBidWizardContext } from './bid-wizard-context';
 
 export const BidStepFeesContainer = memo(function BidStepFeesContainer() {
-  const { feeInputMethods, customPaymentMethods, fees, setFee, back, advance } =
+  const { feeInputMethods, customPaymentMethods, fees, setFee } =
     useBidWizardContext();
   return (
     <BidStepFees
@@ -13,8 +13,6 @@ export const BidStepFeesContainer = memo(function BidStepFeesContainer() {
       customPaymentMethods={customPaymentMethods}
       fees={fees}
       onFee={setFee}
-      onBack={back}
-      onNext={advance}
     />
   );
 });
