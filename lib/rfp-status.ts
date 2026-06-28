@@ -22,11 +22,20 @@ export function rfpStatusChip(status: string): StatusChip | undefined {
   return RFP_STATUS_CHIP[status as RfpStatus];
 }
 
-// PG 인박스/딜룸 요청 상태 칩 — 재요청 > 견적 보냄 > 신규 우선순위.
+// PG 인박스/딜룸 요청 상태 칩 — 선정 종료 > 재요청 > 견적 보냄 > 신규 우선순위.
 export function pgRequestChip(args: {
   pendingRequote: boolean;
   hasBid: boolean;
+  awarded?: boolean;
+  awardedToMe?: boolean;
 }): StatusChip {
+  if (args.awarded) {
+    // '선정 마감'(딜룸 헤더 칩)은 RFP 라운드 종결을 가리키는 중립 표현 — 칸반/목록의 PG lost
+    // 컬럼 라벨 '미선정'(개인 결과 버킷)과 의도적으로 다르다. 통일하지 말 것(승자 신원 비노출).
+    return args.awardedToMe
+      ? { label: '선정됨', color: 'tertiary' }
+      : { label: '선정 마감', color: 'surface' };
+  }
   if (args.pendingRequote) return { label: '재요청', color: 'warning' };
   if (args.hasBid) return { label: '견적 보냄', color: 'tertiary' };
   return { label: '신규', color: 'warning' };

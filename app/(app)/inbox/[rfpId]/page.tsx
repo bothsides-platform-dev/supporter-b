@@ -49,6 +49,8 @@ async function PgRfpDetailLoader({
   const chip = pgRequestChip({
     pendingRequote: !!data.pendingRequote,
     hasBid: !!data.myBid,
+    awarded: data.rfp.status === 'awarded',
+    awardedToMe: data.awardedToMe,
   });
 
   return (

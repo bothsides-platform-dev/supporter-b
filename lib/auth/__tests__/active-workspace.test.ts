@@ -31,7 +31,7 @@ describe('getMembership', () => {
     const ws = await seedPgWorkspace(db, 'PG-A');
     await seedMembership(db, ws.id, u.id, 'member');
     const m = await getMembership(u.id, ws.id);
-    expect(m).toEqual({ workspaceId: ws.id, role: 'member', workspaceType: 'pg' });
+    expect(m).toEqual({ workspaceId: ws.id, role: 'member', workspaceType: 'pg', approvalStatus: 'approved' });
   });
 
   it('returns null when the user is not a member of the workspace', async () => {
@@ -50,7 +50,7 @@ describe('resolveInitialMembership', () => {
     await seedMembership(db, wsBuyer.id, u.id, 'admin');
     await seedMembership(db, wsPg.id, u.id, 'member');
     const m = await resolveInitialMembership(db, u.id, wsPg.id);
-    expect(m).toEqual({ workspaceId: wsPg.id, role: 'member', workspaceType: 'pg' });
+    expect(m).toEqual({ workspaceId: wsPg.id, role: 'member', workspaceType: 'pg', approvalStatus: 'approved' });
   });
 
   it('falls back to the only membership when lastActive is null', async () => {
@@ -58,7 +58,7 @@ describe('resolveInitialMembership', () => {
     const wsBuyer = await seedBuyerWorkspace(db);
     await seedMembership(db, wsBuyer.id, u.id, 'admin');
     const m = await resolveInitialMembership(db, u.id, null);
-    expect(m).toEqual({ workspaceId: wsBuyer.id, role: 'admin', workspaceType: 'buyer' });
+    expect(m).toEqual({ workspaceId: wsBuyer.id, role: 'admin', workspaceType: 'buyer', approvalStatus: 'approved' });
   });
 
   it('falls back when lastActive points to a workspace the user is not in', async () => {
@@ -66,7 +66,7 @@ describe('resolveInitialMembership', () => {
     const wsBuyer = await seedBuyerWorkspace(db);
     await seedMembership(db, wsBuyer.id, u.id, 'admin');
     const m = await resolveInitialMembership(db, u.id, randomUUID());
-    expect(m).toEqual({ workspaceId: wsBuyer.id, role: 'admin', workspaceType: 'buyer' });
+    expect(m).toEqual({ workspaceId: wsBuyer.id, role: 'admin', workspaceType: 'buyer', approvalStatus: 'approved' });
   });
 
   it('returns null when the user has no memberships', async () => {
