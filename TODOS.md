@@ -7,6 +7,9 @@
 
 ## Workspace Logo
 
+### CounterpartyProfileCard에 logoUpdatedAt 미전달 (P3)
+`FocusComparison`의 `CounterpartyProfileCard`(활성 PG 프로필 카드, 클릭→팝오버)는 `pgWsLogoUpdatedAtMap`이 추가된 이번 버전에서도 `logoUpdatedAt`을 받지 않아, 탭(BidTabStrip)에는 로고가 보이지만 프로필 팝오버는 여전히 이니셜. 후속: `CounterpartyProfileCard`에 `logoUpdatedAt` 전달 추가. (발견: /ship pre-landing 리뷰 v0.2.51.1)
+
 ### workspaces.has_logo 컬럼 DROP (P3)
 워크스페이스 로고가 `logo_updated_at`(캐시 버스트 `?v` + immutable) 단일 컬럼으로 전환됨. `has_logo` 는 더 이상 코드가 읽지/쓰지 않는 dead 컬럼(expand-contract 의 contract 단계 잔여). 배포 안정 확인 후 schema(`lib/db/schema/workspaces.ts`)에서 제거하고 `pnpm db:push` (또는 `ALTER TABLE workspaces DROP COLUMN has_logo;`). 데이터 손실 없음(재계산 불필요 — `logo_updated_at` 가 단일 출처). (도입: 워크스페이스 로고 캐시버스트, 2026-06-21)
 

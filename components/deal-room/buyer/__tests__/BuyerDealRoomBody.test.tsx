@@ -102,6 +102,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     companyName: '구매사',
     inviteList: [],
     pgWsNameMap: {},
+    pgWsLogoUpdatedAtMap: {},
     pendingRequests: [],
     canEdit: true,
     authorId: 'u1',

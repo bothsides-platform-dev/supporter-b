@@ -105,7 +105,7 @@ import { ThreadView } from '../ThreadView';
 import { formatTime } from '../format';
 import type { ThreadMessage } from '../types';
 
-const counterparty = { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const };
+const counterparty = { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const, logoUpdatedAt: null };
 const viewer = { userId: 'u-self', name: '나', avatarUpdatedAt: null };
 
 // Timestamps in the T03:00Z–T14:00Z window so UTC and KST agree on the
@@ -1191,7 +1191,7 @@ describe('ThreadView — sendDisabledReason 없음(기본)', () => {
 describe('variant=tabs', () => {
   const baseProps = {
     conversationId: 'conv-1',
-    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const },
+    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' as const, logoUpdatedAt: null },
     viewer: { userId: 'u-self', name: '나', avatarUpdatedAt: null },
     messages: [],
     variant: 'tabs' as const,
@@ -1248,7 +1248,7 @@ describe('variant=page (갤러리 버튼 없음)', () => {
     render(
       <ThreadView
         conversationId="conv-1"
-        counterparty={{ workspaceId: 'pg-1', name: 'OO페이', type: 'pg' }}
+        counterparty={{ workspaceId: 'pg-1', name: 'OO페이', type: 'pg', logoUpdatedAt: null }}
         viewer={{ userId: 'u-self', name: '나', avatarUpdatedAt: null }}
         messages={[msgWithAttachment]}
         variant="page"

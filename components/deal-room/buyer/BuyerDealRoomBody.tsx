@@ -49,6 +49,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
     bids,
     rfpFiles,
     pgWsNameMap,
+    pgWsLogoUpdatedAtMap,
     inviteList,
     pendingRequests,
     canEdit,
@@ -88,6 +89,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           <FocusComparison
             bids={bids}
             pgWsNameMap={pgWsNameMap}
+            pgWsLogoUpdatedAtMap={pgWsLogoUpdatedAtMap}
             current={{
               feeRate: rfp.currentFeeRate,
               settlementCycle: rfp.currentSettlementCycle,
