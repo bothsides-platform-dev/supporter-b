@@ -83,10 +83,18 @@ export type RepoBundleForAttachment = {
   rfpTeamMessage: RfpTeamMessageRepo;
 };
 
+/**
+ * ACL gate for file downloads. Returns true iff `session` may read `att`.
+ *
+ * PRE-CONDITION (security-critical): the caller MUST verify the session is not
+ * revoked (e.g. `isSessionRevoked`) BEFORE calling this function. Membership
+ * in `workspace_members` is NOT re-checked here — the signed JWT `workspaceId`
+ * claim is treated as proof. Stale sessions after member removal are handled by
+ * `WorkspaceService.removeMember` bumping `sessionVersion`, which `isSessionRevoked`
+ * catches on every subsequent request. Skipping that pre-condition silently grants
+ * file access to ex-members for the remaining JWT lifetime.
+ */
 export async function canAccessAttachment(
-  // The owner chain is resolved exclusively through `repos` (no raw schema
-  // access). Owner lookups forward `tx` so they share the caller's transaction
-  // when one is supplied.
   att: AttachmentRow,
   session: AttachmentSession,
   repos: RepoBundleForAttachment,

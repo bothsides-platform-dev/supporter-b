@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 
+// Must be hoisted before workspace.ts is imported so the static import in
+// workspace.ts resolves to the mock, not the real Centrifugo client.
+vi.mock('@/lib/server/realtime/centrifugo', () => ({
+  disconnectCentrifugoUser: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
@@ -17,6 +23,7 @@ import {
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { auditLogs, users, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
 import { WorkspaceService } from '../workspace';
+import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 let db: PgliteDB;
@@ -161,10 +168,7 @@ describe('WorkspaceService.removeMember', () => {
   });
 
   it('bumps sessionVersion of removed member and calls disconnectCentrifugoUser', async () => {
-    const disconnectMock = vi.fn().mockResolvedValue(undefined);
-    vi.doMock('@/lib/server/realtime/centrifugo', () => ({
-      disconnectCentrifugoUser: disconnectMock,
-    }));
+    vi.mocked(disconnectCentrifugoUser).mockClear();
 
     const admin = await seedUser(db, { email: 'admin@test.com' });
     const member = await seedUser(db, { email: 'member@test.com' });
@@ -181,6 +185,8 @@ describe('WorkspaceService.removeMember', () => {
 
     const [after] = await db.select({ sv: users.sessionVersion }).from(users).where(eq(users.id, member.id));
     expect(after.sv).toBe(before.sv + 1);
+    expect(disconnectCentrifugoUser).toHaveBeenCalledWith(member.id);
+    expect(disconnectCentrifugoUser).toHaveBeenCalledTimes(1);
   });
 
   it('returns SELF_REMOVAL when trying to remove yourself', async () => {
