@@ -39,6 +39,8 @@ export type BuyerRfpDetailData = {
   companyName: string;
   inviteList: { wsId: string; wsName: string; status: InvitationStatus }[];
   pgWsNameMap: Record<string, string>;
+  /** pgWsId → 워크스페이스 로고 갱신 타임스탬프(ISO 8601). 로고 없으면 null. */
+  pgWsLogoUpdatedAtMap: Record<string, string | null>;
   /** 오픈 게시판에서 들어온 미결(pending) 참여 요청 — 구매사 검토용. */
   pendingRequests: { id: string; pgWsId: string; pgWsName: string; message: string; createdAt: string }[];
   /** pgWsId → 최신 재요청 요약(없으면 키 없음). */
@@ -58,6 +60,8 @@ export type PgRfpDetailData = {
   myBid: Bid | undefined;
   /** 구매사 워크스페이스 상호명 (workspaces.name). */
   buyerName: string;
+  /** 구매사 워크스페이스 로고 갱신 타임스탬프 (ISO 8601). 로고 없으면 null. */
+  buyerLogoUpdatedAt: string | null;
   /** 본 PG 워크스페이스 공유 견적 템플릿 — BidForm 불러오기용(요율표). */
   quoteTemplates: QuoteTemplateOption[];
   /** 진행 중인 재요청(있으면 PG가 다시 제출 가능). */
@@ -211,8 +215,12 @@ export async function loadBuyerRfpDetail(args: {
   );
   const allPgWorkspaces = await Promise.all(allPgWsIds.map((pgId) => wsRepo.findById(pgId)));
   const pgWsNameMap: Record<string, string> = {};
+  const pgWsLogoUpdatedAtMap: Record<string, string | null> = {};
   allPgWorkspaces.forEach((w, i) => {
-    if (w) pgWsNameMap[allPgWsIds[i]] = w.name;
+    if (w) {
+      pgWsNameMap[allPgWsIds[i]] = w.name;
+      pgWsLogoUpdatedAtMap[allPgWsIds[i]] = w.logoUpdatedAt ?? null;
+    }
   });
 
   const inviteList = rfp.allowedPgWorkspaceIds.map((wsId) => ({
@@ -259,6 +267,7 @@ export async function loadBuyerRfpDetail(args: {
     companyName,
     inviteList,
     pgWsNameMap,
+    pgWsLogoUpdatedAtMap,
     pendingRequests,
     requoteByPg,
     priorBidByPg,
@@ -333,6 +342,7 @@ export async function loadPgRfpDetail(args: {
   const wsRepo = await getWorkspaceRepo();
   const buyerWs = await wsRepo.findById(rfp.buyerWsId);
   const buyerName = buyerWs?.name ?? '—';
+  const buyerLogoUpdatedAt = buyerWs?.logoUpdatedAt ?? null;
 
   // awardedToMe 일 때만 구매사 담당자 연락처 부착. 미선정/선정 전은 조회조차 안 함(누출 방지).
   let buyerContact: DealContact | null = null;
@@ -354,5 +364,5 @@ export async function loadPgRfpDetail(args: {
     paymentFees: t.paymentFees,
   }));
 
-  return { rfp, myBid, pendingRequote, buyerName, quoteTemplates, awardedToMe, buyerContact };
+  return { rfp, myBid, pendingRequote, buyerName, buyerLogoUpdatedAt, quoteTemplates, awardedToMe, buyerContact };
 }

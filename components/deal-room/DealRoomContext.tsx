@@ -8,6 +8,7 @@ export type DealRoomCounterparty = {
   workspaceId: string;
   name: string;
   type: 'buyer' | 'pg';
+  logoUpdatedAt: string | null;
 };
 
 type DealRoomContextValue = {
