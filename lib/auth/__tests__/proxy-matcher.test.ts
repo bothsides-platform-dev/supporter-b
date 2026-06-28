@@ -29,6 +29,13 @@ describe('auth proxy matcher', () => {
     expect(proxyRuns('/rfp/q-2605-0042')).toBe(true);
   });
 
+  it('skips the AI text endpoints (llms.txt / llms-full.txt) so crawlers reach them', () => {
+    // Same rationale as robots.txt / sitemap.xml — must serve to unauth crawlers,
+    // not redirect to /login.
+    expect(proxyRuns('/llms.txt')).toBe(false);
+    expect(proxyRuns('/llms-full.txt')).toBe(false);
+  });
+
   it('still skips the Sentry monitoring tunnel and api routes', () => {
     expect(proxyRuns('/monitoring')).toBe(false);
     expect(proxyRuns('/api/auth/session')).toBe(false);

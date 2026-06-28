@@ -43,6 +43,9 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
     const composer = page.getByPlaceholder('우리 팀에게만 보이는 메모를 남겨보세요…');
     await composer.fill(BUYER_MEMO);
     await page.getByRole('button', { name: '보내기' }).click();
+    // MorphFlightLayer creates a 340ms animation clone with the same text.
+    // Wait for it to disappear (count reaches 1) before asserting visibility.
+    await expect(page.getByText(BUYER_MEMO)).toHaveCount(1);
     await expect(page.getByText(BUYER_MEMO)).toBeVisible();
 
     // 재로드 후에도 영속 — 로더 경로 검증.
@@ -67,6 +70,7 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
     // PG 자체 메모는 정상 동작.
     await composer.fill(PG_MEMO);
     await page.getByRole('button', { name: '보내기' }).click();
+    await expect(page.getByText(PG_MEMO)).toHaveCount(1);
     await expect(page.getByText(PG_MEMO)).toBeVisible();
   });
 

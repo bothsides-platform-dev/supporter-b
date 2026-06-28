@@ -22,6 +22,8 @@ const EXCLUDED_SEGMENTS = [
   'manifest.webmanifest',
   'robots.txt',
   'sitemap.xml',
+  'llms.txt', // AI/GEO text endpoint — serve to unauth crawlers (app/llms.txt)
+  'llms-full.txt', // full markdown export (app/llms-full.txt)
   'fonts',
   'file',
   'globe',

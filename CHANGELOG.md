@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.51.0] - 2026-06-28
+
+### Added
+
+- **AI 검색엔진이 서포터비를 더 잘 이해하도록 llms.txt를 추가했어요**: ChatGPT·Claude·Perplexity 같은 생성형 AI가 사이트를 읽을 때 참고하는 `/llms.txt`·`/llms-full.txt` 파일을 새로 제공해요. 구매사 사이트(supporter-b.com)와 PG 파트너 사이트(partner.supporter-b.com)가 각각 자기 청중에 맞는 서비스 소개·이용 절차·자주 묻는 질문을 깔끔한 텍스트로 담아, AI가 서포터비를 정확하게 소개하고 인용할 수 있어요. 무료 정책·수수료 절감 통계·봉인 입찰 같은 핵심 사실도 함께 담겨요.
+
+### Changed
+
+- **검색·AI 노출이 더 잘 되도록 sitemap과 robots를 정비했어요**: 사이트맵이 그동안 3개 주소만 담았는데, 이제 공개 페이지 전체와 새 AI 텍스트 파일까지 포함해요. robots 설정에 주요 AI 크롤러(GPTBot·ClaudeBot·PerplexityBot 등)를 명시적으로 허용하고, 구매사·PG 두 사이트가 각각 자기 주소를 가리키도록 정리했어요. (사용자 화면 변화는 없어요.)
 ## [0.2.50.0] - 2026-06-28
 
 ### Changed

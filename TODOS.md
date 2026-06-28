@@ -104,6 +104,25 @@ rowToRfp 브리프 doc-only(개별 컬럼 폴백 제거) + loadPgRfpDetail hidde
 
 **부분 해소 (v0.2.48.0)**: admin 권한 표면(WorkspaceService invite/resend/cancel/changeRole/removeMember + renameWorkspace + listAuditLogs + audit-log 페이지)은 `isApprovedAdmin`(role=admin AND approvalStatus=approved)로 서버에서 차단했고, countAdmins·adminRecipients·deleteAccount last-admin 판정·rfp 초대 메일 수신자도 승인된 admin 만 집계/수신. **남은 범위**: 비-admin pg 서버액션 전반에 대한 blanket `requirePgSession()` 승인 게이트는 여전히 미구현.
 
+### changeMemberRole — LAST_ADMIN 오탐: pending_approval admin 강등 (P1)
+`WorkspaceService.changeMemberRole` 의 LAST_ADMIN 가드(`if (input.role === 'member' && target.role === 'admin')`)가 `countAdmins`(승인된 admin 만 집계)를 호출하기 전에 `target.approvalStatus`를 검사하지 않는다. 결과: 유일한 승인 admin 이 아직 미승인(pending_approval) admin 을 member 로 강등하려 하면 — 그 미승인 admin 은 실질 권한을 행사한 적 없음에도 — 거짓 `LAST_ADMIN` 에러가 발생한다. **수정**: `changeMemberRole` line 279 조건에 `&& target.approvalStatus === 'approved'` 추가. TDD: pending_approval target 강등 시 LAST_ADMIN 없이 성공하는 회귀 테스트 먼저 작성. (발견: /ship adversarial v0.2.51.0, 2026-06-28)
+
+## GEO / SEO
+
+### llms.txt 쌍 route handler — 공통 헤더 상수 추출 (P2)
+`app/llms.txt/route.ts`와 `app/llms-full.txt/route.ts`의 `Content-Type`·`Cache-Control`·`Vary` 헤더가 두 파일에 중복 선언된다. `lib/seo/llms.ts` 또는 공용 `route-utils` 모듈에 `TEXT_PLAIN_HEADERS` 상수를 추출해 단일 출처화하면 TTL 변경 등 헤더 수정이 한 곳만 건드린다. (발견: /ship maintainability v0.2.51.0, 2026-06-28)
+
+### llms.ts buildLlmsTxt / buildLlmsFullTxt 머리말 블록 DRY 추출 (P2)
+H1→blockquote→intro→'핵심 정보'→'검증 지표' preamble 렌더링 블록이 두 빌더 함수에 거의 동일하게 복사돼 있다. `pushPreamble(lines, origin, f)` 내부 헬퍼 추출로 단일 출처화. (발견: /ship maintainability v0.2.51.0, 2026-06-28)
+
+### product-facts.ts BUYER_FACTS.metrics — LandingHero 드리프트 가드 (P2)
+`BUYER_FACTS.metrics` 캡션 문자열이 `LandingHero.tsx:METRICS`를 수동 미러하며 드리프트 위험을 코멘트로 문서화해 뒀다. 두 파일을 공유 상수로 연결하거나 드리프트 가드 테스트(캡션 문자열 일치 단언)를 추가한다. (발견: /ship maintainability v0.2.51.0, 2026-06-28)
+
+### proxy-matcher.ts EXCLUDED_SEGMENTS — 정규식 `.` 미이스케이프 (P2)
+`'llms.txt'`·`'llms-full.txt'`(및 기존 `'robots.txt'`·`'sitemap.xml'`)를 그대로 negative lookahead 정규식에 합치면 `.`이 임의 문자와 매치된다. 현재 `/llmsXtxt` 같은 라우트가 없어 실 익스플로잇 경로는 없지만, 미래 경로 추가 시 의도치 않은 auth bypass 가능성. `EXCLUDED_SEGMENTS` 문자열에서 `.`을 `\\.`으로 이스케이프하거나 `escapeRegex` 헬퍼를 도입. (발견: /ship adversarial v0.2.51.0, 2026-06-28)
+
+### rel=alternate 자동발견 링크 (P3)
+buyer `<head>`에 `<link rel="alternate" type="text/plain" href="/llms.txt">` 추가로 AI 크롤러가 llms.txt를 head에서 자동발견 가능. Next.js `metadata.alternates` API로 추가. (llms.txt 계획 deferred 항목)
 ## Completed
 
 - **Presence 같은-워크스페이스 self-subscribe 가드 (v0.2.38.0, 2026-06-22)**: `managedSubscribe` 에 Subscription 객체 키 refcount 추가 — `<PresenceClient/>` self-broadcast 와 `WorkspacePresenceProvider` 가 같은 `presence:ws:<ownWs>` 채널을 공유해도 마지막 owner 가 dispose 할 때만 `unsubscribe()`+`removeSubscription()`. 아바타 신원 카드(UserProfileCard)가 팀원/본인 카드에서 `useUserPresence(ownWorkspaceId, …)` 를 호출해 같은-워크스페이스 관찰이 처음으로 도달 가능해지면서 필요해진 가드(이전엔 counterparty id 만 넘겨 도달 불가). 카드를 닫아도 본인 presence 가 끊기지 않는다. 3878 green.
