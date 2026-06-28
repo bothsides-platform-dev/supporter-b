@@ -476,6 +476,21 @@ describe('canAccessAttachment — bid_note', () => {
     );
     expect(ok).toBe(true);
   });
+
+  // Contract: after isMember() removal, wsId JWT claim alone gates access.
+  // A user whose session.workspaceId matches the bid's buyer ws is ALLOWED
+  // even if they are not in workspaceMembers — stale-session security is
+  // handled by removeMember → bumpSessionVersion, not by isMember() here.
+  it('ALLOW for user claiming buyer wsId even if not a DB member (wsId claim is authoritative)', async () => {
+    const s = await seedScenario();
+    // randomUserId is NOT a member of buyerWs — only wsId claim is checked.
+    const ok = await canAccessAttachment(
+      s.bidNoteAttachment,
+      { user: { id: s.randomUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
+      await repos(),
+    );
+    expect(ok).toBe(true);
+  });
 });
 
 describe('canAccessAttachment — chatMessageId branch', () => {
@@ -611,6 +626,32 @@ describe('canAccessAttachment — chatMessageId branch', () => {
       await repos(),
     );
     expect(ok).toBe(false);
+  });
+
+  // Contract: wsId claim alone gates — no isMember() DB check after the redesign.
+  it('ALLOW for user claiming conversation\'s buyer wsId even if not a DB member', async () => {
+    const s = await seedScenario();
+    const { chatConversations, chatMessages } = await import('@/lib/db/schema');
+    const convId = randomUUID();
+    await db.insert(chatConversations).values({ id: convId, buyerWsId: s.buyerWsId, pgWsId: s.pgWsId });
+    const msgId = randomUUID();
+    await db.insert(chatMessages).values({
+      id: msgId, conversationId: convId, authorUserId: s.buyerUserId, authorWsId: s.buyerWsId, body: 'test',
+    });
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf',
+      uploadedBy: s.buyerUserId,
+    });
+    // uploadedBy=pgUserId to bypass uploader fast-path; randomUserId claims buyerWsId
+    const att: AttachmentRow = { id: attId, chatMessageId: msgId, name: 'chat.pdf', size: 100, mimeType: 'application/pdf', url: '', uploadedBy: s.pgUserId };
+    // randomUserId is NOT in workspaceMembers for buyerWs — wsId claim alone grants.
+    const ok = await canAccessAttachment(
+      att,
+      { user: { id: s.randomUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
+      await repos(),
+    );
+    expect(ok).toBe(true);
   });
 
   it('DENY when conversation row is not in DB (orphan message — chatConversation repo stub)', async () => {
@@ -776,5 +817,23 @@ describe('canAccessAttachment — rfpTeamMessageId branch (sealed-bid)', () => {
       await repos(),
     );
     expect(ok).toBe(false);
+  });
+
+  // Contract: wsId claim alone is sufficient — no isMember() DB check.
+  it('ALLOW for user claiming the thread workspace even if not a DB member', async () => {
+    const s = await seedScenario();
+    const att = await seedTeamAtt(s, {
+      workspaceId: s.buyerWsId,
+      authorUserId: s.buyerUserId,
+      uploadedBy: s.buyerUserId,
+    });
+    // randomUserId is NOT a member of buyerWs — wsId JWT claim alone grants.
+    // uploadedBy=buyerUserId (≠ randomUserId) so uploader fast-path does not fire.
+    const ok = await canAccessAttachment(
+      att,
+      { user: { id: s.randomUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
+      await repos(),
+    );
+    expect(ok).toBe(true);
   });
 });
