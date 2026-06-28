@@ -29,6 +29,8 @@ const DISALLOW = [
   '/quote-templates',
   '/workspace',
   '/settings',
+  '/pending-approval',
+  '/suspended',
   '/api/',
   '/invite/',
   '/auth/',
