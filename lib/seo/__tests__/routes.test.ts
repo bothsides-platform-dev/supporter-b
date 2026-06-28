@@ -19,13 +19,12 @@ function withHost(host: string | null) {
   } as unknown as Awaited<ReturnType<typeof headers>>);
 }
 
-const origEnv = { ...process.env };
 beforeEach(() => {
-  process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
-  process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+  vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'https://supporter-b.com');
+  vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.supporter-b.com');
 });
 afterAll(() => {
-  process.env = origEnv;
+  vi.unstubAllEnvs();
 });
 
 describe('GET /llms.txt', () => {

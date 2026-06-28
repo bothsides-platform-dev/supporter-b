@@ -8,7 +8,6 @@ import {
 
 /** Join a relative path or in-page anchor to the host origin. */
 function abs(origin: string, path: string): string {
-  if (/^https?:\/\//.test(path)) return path;
   return `${origin}${path}`;
 }
 
