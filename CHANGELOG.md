@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.51.2] - 2026-06-29
+
+### Fixed
+
+- **파일 업로드 시 불필요한 DB 조회 3회를 제거했어요**: `chat`·`bid_note`·`team_message` 첨부 업로드 경로에서 멤버십을 DB에 재확인하던 `isMember` 호출 3개를 삭제했어요. 45b44e43 커밋에서 `removeMember`가 세션버전을 즉시 올리고 `isSessionRevoked()`로 만료된 세션을 차단하는 정책으로 전환됐는데, 다운로드 경로·`permissions.ts`는 업데이트됐지만 업로드 경로만 누락됐어요. 이번 수정으로 업로드마다 발생하던 DB 왕복 3회가 사라지고, download/upload ACL 정책이 일관되게 유지돼요.
+
 ## [0.2.51.1] - 2026-06-28
 
 ### Fixed
