@@ -153,4 +153,22 @@ describe('BuyerDealRoomBody — 선정 결과 패널', () => {
     render(<BuyerDealRoomBody data={buildData()} />);
     expect(screen.queryByText(/선정했어요/)).not.toBeInTheDocument();
   });
+
+  it('awarded 면 "담당처와 연락을 이어나가보세요." 부제목을 렌더한다', () => {
+    render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      awardedPgContact,
+    })} />);
+    expect(screen.getByText('담당처와 연락을 이어나가보세요.')).toBeInTheDocument();
+  });
+
+  it('awarded 면 연락처 이메일 링크가 견적 비교 탭 콘텐츠 영역에 위치한다', () => {
+    const { container } = render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      awardedPgContact,
+    })} />);
+    const focusComp = container.querySelector('[data-testid="focus-comparison"]')!;
+    const emailLink = screen.getByRole('link', { name: /sales@toss\.im/ });
+    expect(focusComp.parentElement).toContainElement(emailLink as HTMLElement);
+  });
 });
