@@ -368,6 +368,26 @@ describe('TeamChatService.sendMessage — notification fan-out', () => {
     expect(meNotifs).toHaveLength(0); // author excluded
   });
 
+  it('숨겨진 master 멤버(isSystemAccount)에게도 team_chat 인앱 알림을 보낸다', async () => {
+    const me = await seedUser(db, { email: 'me-tc@b.com', name: '나' });
+    // 화면 roster 엔 숨겨지지만 실제 사람인 master/ops 계정 — 본인 팀 알림은 받아야 한다.
+    const master = await seedUser(db, { email: 'ops-tc@b.com', name: '운영자', isSystemAccount: true });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, master.id, 'member');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+    const svc = await buildService();
+    const actorMe: TeamChatActor = { userId: me.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    await svc.sendMessage({ rfpId: rfp.id, body: '팀 메모' }, actorMe);
+
+    const masterNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, master.id), eq(notifications.type, 'team_chat.message')));
+    expect(masterNotifs).toHaveLength(1);
+  });
+
   it('enqueues a coalesced team_chat.message email digest row to teammates on send', async () => {
     const me = await seedUser(db, { email: 'me@b.com', name: '나' }); // author
     const mate = await seedUser(db, { email: 'mate@b.com', name: '동료' }); // recipient

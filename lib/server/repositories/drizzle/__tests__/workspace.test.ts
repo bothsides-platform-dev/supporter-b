@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb } from '@/lib/db/client-pglite';
-import { users as usersForTest, workspaceInvitations, workspaceLogoBlobs, workspaceMembers, workspaces } from '@/lib/db/schema';
+import { workspaceInvitations, workspaceLogoBlobs, workspaceMembers, workspaces } from '@/lib/db/schema';
 import { DrizzleWorkspaceRepository } from '../workspace';
 import {
   seedBizProfile,
@@ -743,23 +743,25 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(await repo.adminRecipients(ws.id)).toEqual([]);
     });
 
-    it('excludes system accounts even when they are admins', async () => {
+    it('숨겨진 master admin(실 해시)은 포함하되 데모 placeholder(!) 는 제외', async () => {
       const ws = await seedPgWorkspace(db, 'sys-admin-recip.test');
       const human = await seedUser(db, { email: 'human@sys-admin-recip.test' });
-      const sysId = randomUUID();
-      await db.insert(usersForTest).values({
-        id: sysId,
-        email: 'system@sys-admin-recip.test',
-        passwordHash: 'x',
-        name: 'System',
-        avatarColor: 'ink',
+      // master/ops: 화면 숨김(isSystemAccount)이지만 실 해시 → 알림/메일 수신 대상.
+      const master = await seedUser(db, { email: 'ops@sys-admin-recip.test', isSystemAccount: true });
+      // 데모 placeholder: 영구 로그인 불가('!') → 수신자 제외.
+      const demo = await seedUser(db, {
+        email: 'demo@sample.invalid',
         isSystemAccount: true,
+        passwordHash: '!',
       });
       await seedMembership(db, ws.id, human.id, 'admin');
-      await seedMembership(db, ws.id, sysId, 'admin');
+      await seedMembership(db, ws.id, master.id, 'admin');
+      await seedMembership(db, ws.id, demo.id, 'admin');
 
-      const recipients = await repo.adminRecipients(ws.id);
-      expect(recipients).toEqual([{ userId: human.id, email: 'human@sys-admin-recip.test' }]);
+      const userIds = (await repo.adminRecipients(ws.id)).map((r) => r.userId);
+      expect(userIds).toContain(human.id);
+      expect(userIds).toContain(master.id);
+      expect(userIds).not.toContain(demo.id);
     });
 
     it('does not include admins of a different workspace', async () => {
@@ -799,25 +801,25 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(await repo.memberRecipientsBatch([])).toEqual([]);
     });
 
-    it('excludes system accounts', async () => {
+    it('데모 placeholder(passwordHash "!")는 제외하되 숨겨진 master(실 해시)는 포함', async () => {
       const ws = await seedPgWorkspace(db, 'mrb-sys.com');
       const human = await seedUser(db, { email: 'human@mrb-sys.com' });
-      const sysId = randomUUID();
-      await db.insert(usersForTest).values({
-        id: sysId,
-        email: 'system@mrb-sys.com',
-        passwordHash: 'x',
-        name: 'System',
-        avatarColor: 'ink',
+      // master/ops: 화면 숨김(isSystemAccount)이지만 실 해시 → 알림 수신 대상.
+      const master = await seedUser(db, { email: 'ops@mrb-sys.com', isSystemAccount: true });
+      // 데모 placeholder: 영구 로그인 불가('!') → 알림 수신자 제외.
+      const demo = await seedUser(db, {
+        email: 'demo@sample.invalid',
         isSystemAccount: true,
+        passwordHash: '!',
       });
       await seedMembership(db, ws.id, human.id, 'admin');
-      await seedMembership(db, ws.id, sysId, 'admin');
+      await seedMembership(db, ws.id, master.id, 'admin');
+      await seedMembership(db, ws.id, demo.id, 'member');
 
-      const rows = await repo.memberRecipientsBatch([ws.id]);
-      expect(rows).toEqual([
-        { workspaceId: ws.id, userId: human.id, role: 'admin', approvalStatus: 'approved', email: 'human@mrb-sys.com' },
-      ]);
+      const userIds = (await repo.memberRecipientsBatch([ws.id])).map((r) => r.userId);
+      expect(userIds).toContain(human.id);
+      expect(userIds).toContain(master.id);
+      expect(userIds).not.toContain(demo.id);
     });
   });
 

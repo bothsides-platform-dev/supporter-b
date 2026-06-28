@@ -156,19 +156,24 @@ export class TeamChatService {
       // team_chat.message(일반 dedupe). 이메일 digest 는 윈도당 멤버 1회 enqueue.
       const now = createdAt;
       const windowStart = new Date(chatDigestBucket(now) * CHAT_DIGEST_WINDOW_MS);
+      // roster(표시용) 는 화면에 노출되는 멤버만 — 이름 멘션 검증·미리보기에 쓴다.
       const roster = await this.wsRepo.teamRoster(actor.workspaceId, tx);
       const nameById = new Map(roster.map((r) => [r.userId, r.name]));
-      const memberIdSet = new Set(roster.map((r) => r.userId));
+      const rosterIdSet = new Set(roster.map((r) => r.userId));
+      // 팬아웃 수신자는 화면엔 숨겨지지만 실제 알림을 읽는 master/ops 계정까지 포함해야
+      // 하므로 표시용 roster 가 아닌 알림 수신자 목록(memberUserIds)을 쓴다.
+      const recipientIds = await this.wsRepo.memberUserIds(actor.workspaceId, tx);
       const { userIds: mentionedRaw, all } = extractMentions(body);
-      // 서버에서 멤버십 재검증 — 비멤버 토큰은 드롭(크로스팀 누출/알림 방지).
+      // 서버에서 멤버십 재검증 — 이름 멘션은 화면 멤버(roster)만 허용하고 비멤버 토큰은
+      // 드롭한다(크로스팀 누출/알림 방지). @전체는 숨은 master 포함 전체 수신자가 대상.
       const mentioned = new Set<string>(
-        all ? [...memberIdSet] : mentionedRaw.filter((uid) => memberIdSet.has(uid)),
+        all ? recipientIds : mentionedRaw.filter((uid) => rosterIdSet.has(uid)),
       );
       // 미리보기는 토큰이 아닌 평문(@이름/@전체).
       const preview =
         body.length > 0 ? mentionsToPlainText(body, nameById).slice(0, 120) : '첨부 파일';
 
-      for (const memberId of memberIdSet) {
+      for (const memberId of recipientIds) {
         if (memberId === actor.userId) continue;
 
         // 디스패치 전에 윈도 내 기존 팀 알림을 스냅샷(이메일 1회 enqueue 게이트용).
