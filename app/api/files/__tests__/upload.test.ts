@@ -598,6 +598,33 @@ describe('POST /api/files/upload', () => {
   });
 });
 
+describe('POST /api/files/upload — isMember 없이 세션 workspaceId 만으로 허용', () => {
+  // isSessionRevoked() 가 멤버십 보증을 제공하므로, workspaceMembers 행 없는
+  // (마스터/운영 계정) 세션도 chat/bid_note/team_message 업로드를 허용해야 한다.
+  it('chat: workspaceMembers 행 없는 유효 세션도 200', async () => {
+    const masterUser = await seedUser(db, { email: 'master@supporter-b.com' });
+    const biz = await seedBizProfile(db, { bizNo: '1111111111' });
+    const ws = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    // 의도적으로 seedMembership 호출 안 함 — workspaceMembers 행 없음
+    sessionRef.value = {
+      user: {
+        id: masterUser.id,
+        email: masterUser.email,
+        workspaceId: ws.id,
+        workspaceType: 'buyer',
+        role: 'admin',
+        sessionVersion: 1,
+      },
+    };
+    const f = new FormData();
+    f.append('file', makeFile('m.pdf', 'application/pdf', PDF_HEAD));
+    f.append('ownerKind', 'chat');
+    f.append('ownerId', '__draft__');
+    const r = await callUpload(f);
+    expect(r.status).toBe(200);
+  });
+});
+
 describe('POST /api/files/upload — 폐기 세션', () => {
   it('sv 가 stale 한(폐기된) 세션은 401', async () => {
     sessionRef.value = { user: { id: '00000000-0000-4000-8000-0000000000aa', email: 'x@x.com', sessionVersion: 1 } };
