@@ -3,8 +3,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BidStepFees } from '../BidStepFees';
 
-const noop = () => {};
-
 function setup(over: Partial<React.ComponentProps<typeof BidStepFees>> = {}) {
   const onFee = vi.fn();
   render(
@@ -13,8 +11,6 @@ function setup(over: Partial<React.ComponentProps<typeof BidStepFees>> = {}) {
       customPaymentMethods={[]}
       fees={{}}
       onFee={onFee}
-      onBack={noop}
-      onNext={noop}
       {...over}
     />,
   );

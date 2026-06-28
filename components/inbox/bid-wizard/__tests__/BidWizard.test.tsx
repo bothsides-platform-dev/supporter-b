@@ -319,8 +319,7 @@ describe('BidWizard 구간 수수료 조립', () => {
   });
 });
 
-// RED: sticky nav footer not yet implemented (planned in 2026-06-28-bid-wizard-sticky-nav-footer.md)
-describe.skip('BidWizard 네비게이션 푸터', () => {
+describe('BidWizard 네비게이션 푸터', () => {
   it('wizard-nav-footer가 항상 렌더된다', () => {
     render(<BidWizard rfp={rfp} buyerName="토스" />);
     expect(screen.getByTestId('wizard-nav-footer')).toBeInTheDocument();

@@ -168,7 +168,6 @@ describe('BuyerDealRoomBody — 선정 결과 패널', () => {
       rfp: { ...baseRfp, status: 'awarded' },
       awardedPgContact,
     })} />);
-    // FocusComparison mock(data-testid="focus-comparison")과 같은 스크롤 컨테이너 안에 있어야 한다
     const focusComp = container.querySelector('[data-testid="focus-comparison"]')!;
     const emailLink = screen.getByRole('link', { name: /sales@toss\.im/ });
     expect(focusComp.parentElement).toContainElement(emailLink as HTMLElement);

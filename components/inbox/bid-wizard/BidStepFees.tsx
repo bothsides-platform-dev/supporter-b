@@ -1,6 +1,5 @@
 'use client';
 
-import { Button } from '@/components/primitives/Button';
 import { PercentInput, CurrencyInput, FeeRateCell } from '@/components/forms/inputs';
 import {
   PAYMENT_METHOD_CATEGORIES,
@@ -19,8 +18,6 @@ type Props = {
   customPaymentMethods: CustomPaymentMethod[];
   fees: Record<string, string>;
   onFee: (key: string, value: string) => void;
-  onBack: () => void;
-  onNext: () => void;
 };
 
 const TIERED_LABELS: readonly string[] = TIERED_CATEGORY_LABELS;
@@ -30,8 +27,6 @@ export function BidStepFees({
   customPaymentMethods,
   fees,
   onFee,
-  onBack,
-  onNext,
 }: Props) {
   const requested = new Set(feeInputMethods);
 
@@ -169,14 +164,6 @@ export function BidStepFees({
         </div>
       )}
 
-      <div className="flex justify-between">
-        <Button type="button" variant="text" onClick={onBack} icon={<span aria-hidden>←</span>}>
-          정산 조건
-        </Button>
-        <Button type="button" onClick={onNext} trailingIcon={<span aria-hidden>→</span>}>
-          견적서
-        </Button>
-      </div>
     </div>
   );
 }
