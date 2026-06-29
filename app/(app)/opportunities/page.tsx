@@ -5,11 +5,21 @@ import { OpportunityList } from '@/components/opportunities/OpportunityList';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { InboxIcon } from '@/components/icons';
+import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
+import { OpportunitiesUnavailable } from '@/components/opportunities/OpportunitiesUnavailable';
 
 export const dynamic = 'force-dynamic';
 
 export default async function OpportunitiesPage() {
   const session = await requirePgPage('/opportunities');
+  if (!OPEN_BOARD_ENABLED) {
+    return (
+      <div className="flex h-full flex-col">
+        <PageHeader title="참여 가능한 견적" />
+        <OpportunitiesUnavailable />
+      </div>
+    );
+  }
   return (
     <div className="flex h-full flex-col">
       <Suspense

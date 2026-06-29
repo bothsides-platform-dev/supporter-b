@@ -41,6 +41,7 @@ import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
 import { josa } from 'es-hangul';
 import { toast } from '@/lib/toast';
+import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
@@ -118,10 +119,12 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       content: (
         <div className="space-y-6">
           <RfpInviteManager rfpId={rfp.code} invitations={inviteList} canEdit={canEdit} />
-          <div className="flex items-center justify-between gap-3">
-            <Label size="md" muted={false}>오픈 게시판 노출</Label>
-            <RfpBoardVisibilityStatus boardVisible={rfp.boardVisible ?? true} />
-          </div>
+          {OPEN_BOARD_ENABLED && (
+            <div className="flex items-center justify-between gap-3">
+              <Label size="md" muted={false}>오픈 게시판 노출</Label>
+              <RfpBoardVisibilityStatus boardVisible={rfp.boardVisible ?? true} />
+            </div>
+          )}
           <RfpPendingRequests requests={pendingRequests} canEdit={canEdit} />
         </div>
       ),
