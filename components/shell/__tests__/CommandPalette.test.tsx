@@ -21,6 +21,7 @@ vi.mock('@/lib/server/actions/search/searchEntitiesAction', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock }),
 }));
+vi.mock('@/lib/features/open-board', () => ({ OPEN_BOARD_ENABLED: true }));
 
 import { CommandPalette } from '../CommandPalette';
 import { useUIStore } from '@/lib/stores/ui';

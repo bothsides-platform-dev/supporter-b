@@ -9,6 +9,7 @@ import {
   LayoutTemplateIcon,
 } from '@/components/icons';
 import type { WorkspaceType } from '@/lib/types/workspace';
+import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 
 export type IconComponent = ComponentType<
   SVGProps<SVGSVGElement> & { size?: number }
@@ -177,8 +178,18 @@ const QUOTE_TEMPLATES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'q' },
 };
 
+// 오픈게시판이 꺼져 있으면 PG inbox 섹션에서 '참여 가능한 견적'(opportunities)
+// 진입점을 제거한다. getNavConfig 를 통해 사이드바·단축키·팔레트 nav 가 한 번에 반영된다.
+function inboxSection(): NavSection {
+  if (OPEN_BOARD_ENABLED) return INBOX_SECTION;
+  return {
+    ...INBOX_SECTION,
+    links: (INBOX_SECTION.links ?? []).filter((l) => l.id !== 'opportunities'),
+  };
+}
+
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
-  const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : INBOX_SECTION;
+  const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : inboxSection();
   const top: NavLeaf[] =
     workspaceType === 'pg'
       ? [HOME, NOTIFICATIONS, MESSAGES, QUOTE_TEMPLATES]

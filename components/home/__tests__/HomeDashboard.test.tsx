@@ -8,6 +8,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 // Mock the server-action barrel so the jsdom suite doesn't load next-auth
 // (pulled transitively via the OpportunityRequestDialog in the discovery section).
 vi.mock('@/lib/server/actions/rfp', () => ({ createPgRequestAction: vi.fn() }));
+vi.mock('@/lib/features/open-board', () => ({ OPEN_BOARD_ENABLED: true }));
 
 import { HomeDashboard } from '../HomeDashboard';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
