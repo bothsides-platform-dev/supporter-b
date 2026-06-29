@@ -1,10 +1,5 @@
 # TODOS
 
-## Testing / CI
-
-### unit-jsdom 대규모 타임아웃 — 환경 이슈 (P2)
-`pnpm test` 전체 실행 시 `unit-jsdom` 프로젝트에서 100개 이상 테스트 파일이 5초 타임아웃으로 실패해요(코드 변경 없이, origin/dev에서도 동일). jsdom 환경의 `localStorage` 초기화 또는 async setup 지연이 원인으로 추정돼요. **단독 실행(`pnpm test --project unit-node`)은 정상**. 진단 방향: `vitest.setup.ts` jsdom localStorage mock 확인·`testEnvironmentOptions` 점검·jest-environment-jsdom→vitest 환경 설정 비교. (발견: v0.2.51.3 /ship, 2026-06-30)
-
 ## Deal Room / Award
 
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
