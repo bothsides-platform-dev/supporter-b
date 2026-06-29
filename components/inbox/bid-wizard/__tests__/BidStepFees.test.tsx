@@ -102,11 +102,22 @@ describe('BidStepFees 검증 피드백', () => {
     expect(screen.queryByText('수수료를 1칸 이상 입력해주세요')).toBeNull();
   });
 
-  it('구간 셀에 100 초과 값은 입력되지 않는다 (max 상한)', async () => {
+  it('구간 셀에 100 초과 값은 입력되지 않는다 (수수료 % 상한 유지)', async () => {
     const user = userEvent.setup();
     setup();
     const cell = screen.getByTestId('fee-cell-card-sole') as HTMLInputElement;
     await user.type(cell, '150');
     expect(cell.value).toBe('15');
+  });
+
+  it('가상계좌 건당 금액은 상한이 없다 (큰 금액도 입력 가능)', async () => {
+    const user = userEvent.setup();
+    setup();
+    const input = screen
+      .getByText('가상계좌 건당 수수료')
+      .closest('.space-y-1')!
+      .querySelector('input') as HTMLInputElement;
+    await user.type(input, '200000');
+    expect(input.value).toBe('200,000');
   });
 });

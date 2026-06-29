@@ -145,13 +145,12 @@ export function BidStepFees({
           <div className="grid grid-cols-2 gap-x-6 gap-y-5">
             {singleMethods.map((m) =>
               isFlatFeeMethod(m) ? (
-                // 정액(건당) 수단 — % 가 아니라 건당 '원' 정수로 입력받는다. 상한 10만원(fat-finger 가드).
+                // 정액(건당) 수단 — % 가 아니라 건당 '원' 정수로 입력받는다(상한 없음).
                 <CurrencyInput
                   key={m}
                   label={`${PAYMENT_METHOD_LABELS[m]} 건당 수수료`}
                   value={fees[m] ?? ''}
                   onChange={(v) => onFee(m, v)}
-                  max={100_000}
                 />
               ) : (
                 <PercentInput
