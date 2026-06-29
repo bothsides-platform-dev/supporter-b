@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+vi.mock('@/lib/features/open-board', () => ({ OPEN_BOARD_ENABLED: true }));
 import {
   getNavConfig,
   getBreadcrumbSegments,
