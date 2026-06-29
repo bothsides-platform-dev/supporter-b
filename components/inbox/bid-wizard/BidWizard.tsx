@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
 import { Divider } from '@/components/ui/Divider';
+import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
@@ -369,10 +370,10 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
       />
 
       <BidWizardProvider value={wizardContext}>
-      <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[8px] overflow-hidden">
+      <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[8px] overflow-hidden h-full flex flex-col">
         <BidContextStrip buyerName={buyerName} rfp={rfp} currentStep={currentStep} feeInputMethods={feeInputMethods} />
 
-        <div className="flex min-h-0">
+        <div className="flex flex-1 min-h-0">
           <WizardStepSidebar
             currentStep={currentStep}
             completed={completed}
@@ -401,10 +402,10 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
             }
           />
 
-          <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex-1 min-w-0 flex flex-col min-h-0">
             <WizardProgressBar currentStep={currentStep} completed={completed} onStepClick={goToStep} steps={BID_WIZARD_STEPS} />
 
-            <div className="px-6 py-6">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
               <div className="flex items-center gap-3 mb-6">
                 <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                   {String(currentStep).padStart(2, '0')} — {BID_WIZARD_STEPS[currentStep - 1].label}
@@ -446,6 +447,35 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
               {currentStep === 3 && <BidStepProposalContainer />}
 
               {currentStep === 4 && <BidStepReviewContainer />}
+            </div>
+
+            <div
+              data-testid="wizard-nav-footer"
+              className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-6 py-4 flex items-center justify-between"
+            >
+              <div>
+                {currentStep > 1 && (
+                  <Button type="button" variant="text" onClick={back} icon={<span aria-hidden>←</span>}>
+                    {BID_WIZARD_STEPS[currentStep - 2].label}
+                  </Button>
+                )}
+              </div>
+              <div>
+                {currentStep < TOTAL_STEPS ? (
+                  <Button type="button" onClick={advance} trailingIcon={<span aria-hidden>→</span>}>
+                    {BID_WIZARD_STEPS[currentStep].label}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="lg"
+                    onClick={handleSubmit}
+                    disabled={!canSubmit}
+                  >
+                    {pending ? '보내는 중…' : '견적 보내기'}
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -5,6 +5,7 @@
 // 감싸 hover/탭 전환 시 본문(요율 표·아코디언) 재렌더를 막는다.
 import { memo } from 'react';
 import { Chip } from '@/components/primitives/Chip';
+import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
 import { formatKRW, formatPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,7 @@ function BidTabStripImpl({
   tier,
   peek,
   pgName,
+  pgLogoFn,
   onSelect,
   onPeekEnter,
   onPeekLeave,
@@ -32,6 +34,7 @@ function BidTabStripImpl({
   tier: MerchantTier;
   peek: Bid | null;
   pgName: (wsId: string) => string;
+  pgLogoFn: (wsId: string) => string | null;
   onSelect: (bidId: string) => void;
   onPeekEnter: (bidId: string) => void;
   onPeekLeave: (bidId: string) => void;
@@ -58,6 +61,12 @@ function BidTabStripImpl({
                   : 'text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)]',
               )}
             >
+              <WorkspaceAvatar
+                name={pgName(bid.pgWsId)}
+                size="sm"
+                workspaceId={bid.pgWsId}
+                logoUpdatedAt={pgLogoFn(bid.pgWsId)}
+              />
               {pgName(bid.pgWsId)}
               {isAwarded && (
                 <Chip

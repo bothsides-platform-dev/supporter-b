@@ -1,6 +1,5 @@
 'use client';
 
-import { Button } from '@/components/primitives/Button';
 import { CurrencyInput, DayOffsetInput } from '@/components/forms/inputs';
 import { formatSettleCycle } from '@/lib/utils/settle-cycle';
 import type { SetBidField } from './types';
@@ -11,7 +10,6 @@ type Props = {
   settleLimit: string;
   guaranteeInsurance: string;
   onField: SetBidField;
-  onNext: () => void;
 };
 
 export function BidStepSettlement({
@@ -20,7 +18,6 @@ export function BidStepSettlement({
   settleLimit,
   guaranteeInsurance,
   onField,
-  onNext,
 }: Props) {
   const cycleValue = cycleNum ? formatSettleCycle(cycleUnit, Number(cycleNum)) : '';
 
@@ -62,15 +59,6 @@ export function BidStepSettlement({
         />
       </div>
 
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          onClick={onNext}
-          trailingIcon={<span aria-hidden>→</span>}
-        >
-          수수료
-        </Button>
-      </div>
     </div>
   );
 }

@@ -70,7 +70,7 @@ beforeEach(() => {
 });
 
 const baseProps = { rfpId: 'rfp-1', rfpCode: 'P-2606-0001', rfpTitle: '결제 견적 요청' };
-const PG: DealRoomCounterparty = { workspaceId: 'pg-ws-1', name: 'OO페이', type: 'pg' };
+const PG: DealRoomCounterparty = { workspaceId: 'pg-ws-1', name: 'OO페이', type: 'pg', logoUpdatedAt: null };
 
 // 컨텍스트에 상대방을 시드(딜룸 가운데 FocusComparison 이 publish 하는 것과 동일 효과).
 function Seed({ counterparty }: { counterparty: DealRoomCounterparty }) {
@@ -125,6 +125,22 @@ describe('ChatPanel', () => {
     expect(getOrCreateConversationAction).not.toHaveBeenCalled();
     expect(threadPaneProps).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: 'conv-9', variant: 'rail', defaultRfpId: 'rfp-1' }),
+    );
+  });
+
+  it('counterpartyFallback에 logoUpdatedAt을 그대로 전달한다 (null 강제 오버라이드 없음)', async () => {
+    const PG_WITH_LOGO: DealRoomCounterparty = {
+      workspaceId: 'pg-ws-1',
+      name: 'OO페이',
+      type: 'pg',
+      logoUpdatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    renderPanel({}, PG_WITH_LOGO);
+    await screen.findByTestId('thread-pane');
+    expect(threadPaneProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        counterpartyFallback: expect.objectContaining({ logoUpdatedAt: '2026-01-01T00:00:00.000Z' }),
+      }),
     );
   });
 

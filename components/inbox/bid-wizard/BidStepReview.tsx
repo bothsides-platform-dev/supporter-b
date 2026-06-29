@@ -36,11 +36,7 @@ type Props = {
   feeInputMethods: PaymentMethod[];
   customPaymentMethods: CustomPaymentMethod[];
   fees: Record<string, string>;
-  canSubmit: boolean;
-  pending: boolean;
   submitError: string | null;
-  onBack: () => void;
-  onSubmit: () => void;
   onSaveTemplate: (name: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
@@ -60,11 +56,7 @@ export function BidStepReview({
   feeInputMethods,
   customPaymentMethods,
   fees,
-  canSubmit,
-  pending,
   submitError,
-  onBack,
-  onSubmit,
   onSaveTemplate,
 }: Props) {
   const [tplOpen, setTplOpen] = useState(false);
@@ -173,14 +165,6 @@ export function BidStepReview({
         </p>
       )}
 
-      <div className="flex items-center justify-between gap-4">
-        <Button type="button" variant="text" onClick={onBack} icon={<span aria-hidden>←</span>}>
-          견적서
-        </Button>
-        <Button type="button" size="lg" onClick={onSubmit} disabled={!canSubmit}>
-          {pending ? '보내는 중…' : '견적 보내기'}
-        </Button>
-      </div>
     </div>
   );
 }

@@ -318,6 +318,19 @@ describe('updateEmail', () => {
   });
 });
 
+describe('bumpSessionVersion', () => {
+  it('increments sessionVersion by 1', async () => {
+    const { db, repo } = await setup();
+    const id = randomUUID();
+    await db.insert(users).values({ id, email: 'bump@x.com', passwordHash: 'p', name: 'U', sessionVersion: 5 });
+
+    await repo.bumpSessionVersion(id);
+
+    const [row] = await db.select().from(users).where(eq(users.id, id));
+    expect(row.sessionVersion).toBe(6);
+  });
+});
+
 describe('softDelete', () => {
   it('stamps deletedAt, clears lastActiveWorkspaceId, bumps sessionVersion', async () => {
     const { db, repo } = await setup();

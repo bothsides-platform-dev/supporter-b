@@ -269,6 +269,25 @@ describe('loadBuyerRfpDetail', () => {
     expect(res!.priorBidByPg[ctx.tossId]!.round).toBe(1);
   });
 
+  it('pgWsLogoUpdatedAtMap — invited PG 의 wsId 를 키로, logoUpdatedAt(null 포함)을 값으로 반환', async () => {
+    const rfpId = await ctx.seedRfp('P-2606-LOGO1');
+    const invToss = await ctx.seedInvitation(rfpId, ctx.tossId);
+    await ctx.seedBid(rfpId, ctx.tossId, invToss, 'submitted');
+
+    const res = await loadBuyerRfpDetail({
+      code: 'P-2606-LOGO1',
+      workspaceId: ctx.buyerWsId,
+      userId: ctx.buyerId,
+      userName: ctx.buyerName,
+    });
+
+    expect(res).not.toBeNull();
+    // 반환 객체에 pgWsLogoUpdatedAtMap 필드가 존재해야 한다.
+    expect(res).toHaveProperty('pgWsLogoUpdatedAtMap');
+    // 시드된 PG 워크스페이스에 로고가 없으므로 null.
+    expect(res!.pgWsLogoUpdatedAtMap[ctx.tossId]).toBeNull();
+  });
+
   it('pendingRequests에 pending 콜드 피치만 PG명+메시지와 함께 반환', async () => {
     const rfpId = await ctx.seedRfp('P-2605-0003');
     await ctx.seedPgRequest(rfpId, ctx.tossId, '제안 드리고 싶어요', 'pending');
@@ -337,6 +356,16 @@ describe('loadPgRfpDetail', () => {
     const res = await loadPgRfpDetail({ code: 'P-2605-0013', workspaceId: ctx.tossId });
     expect(res).not.toBeNull();
     expect(res!.buyerName).toBe('구매사');
+  });
+
+  it('buyerLogoUpdatedAt을 반환한다 (로고 없으면 null)', async () => {
+    const rfpId = await ctx.seedRfp('P-2605-0015');
+    await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+
+    const res = await loadPgRfpDetail({ code: 'P-2605-0015', workspaceId: ctx.tossId });
+    expect(res).not.toBeNull();
+    // 시드 워크스페이스는 logoUpdatedAt을 설정하지 않으므로 null.
+    expect(res!.buyerLogoUpdatedAt).toBeNull();
   });
 
   it('pending 재요청이 있으면 pendingRequote 반환; 없으면 null', async () => {

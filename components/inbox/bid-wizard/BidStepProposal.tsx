@@ -2,7 +2,6 @@
 
 import { useRef } from 'react';
 import { Label } from '@/components/primitives/Label';
-import { Button } from '@/components/primitives/Button';
 import { underlineInputClass } from '@/components/forms/inputs';
 import { cn } from '@/lib/utils';
 
@@ -18,8 +17,6 @@ type Props = {
   onUpload: (file: File) => void;
   onClear: () => void;
   onMemoChange: (value: string) => void;
-  onBack: () => void;
-  onNext: () => void;
 };
 
 export function BidStepProposal({
@@ -28,8 +25,6 @@ export function BidStepProposal({
   onUpload,
   onClear,
   onMemoChange,
-  onBack,
-  onNext,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const proposalReady = proposal && 'id' in proposal;
@@ -115,14 +110,6 @@ export function BidStepProposal({
         </div>
       </div>
 
-      <div className="flex justify-between">
-        <Button type="button" variant="text" onClick={onBack} icon={<span aria-hidden>←</span>}>
-          수수료
-        </Button>
-        <Button type="button" onClick={onNext} trailingIcon={<span aria-hidden>→</span>}>
-          검토·발송
-        </Button>
-      </div>
     </div>
   );
 }
