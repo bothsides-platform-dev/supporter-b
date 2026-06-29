@@ -10,7 +10,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "eslint . --cache",
     "typecheck": "tsc --noEmit",
     "knip": "knip",
     "test": "vitest run --passWithNoTests",
