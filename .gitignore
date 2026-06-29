@@ -46,6 +46,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# eslint incremental cache (per-worktree, never shared across branches)
+.eslintcache
+
 # Playwright artifacts (Step 14)
 /test-results
 /playwright-report

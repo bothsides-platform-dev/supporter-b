@@ -3,6 +3,13 @@
 # 먼저 돌린다. react-hooks/set-state-in-effect 류의 lint 에러나 타입 에러가
 # 커밋에 섞여 들어가는 것을 막는다 (이 훅이 추가된 계기).
 #
+# 속도: 스테이지된 변경 파일만 본다.
+#   - eslint : 스테이지된 lint 대상 파일만 검사(--cache). 변경 없으면 스킵.
+#   - tsc    : tsc 는 whole-program 이라 파일 단위로 안전하게 못 쪼갠다
+#              (교차파일 타입에러를 놓침 → 이 훅의 취지와 충돌). 그래서
+#              .ts/.tsx 변경이 하나라도 있으면 incremental 캐시로 전체를
+#              검사하고(웜 ~44s), 타입 무관 커밋이면 통째로 스킵한다.
+#
 # 활성화: git 의 core.hooksPath=.githooks (package.json 의 prepare 스크립트가
 #         pnpm install 시 자동 설정). 수동: git config core.hooksPath .githooks
 # 우회:   git commit --no-verify
@@ -10,13 +17,31 @@
 # 주의: 훅은 Claude Code 의 RTK 프록시를 거치지 않으므로 raw eslint 가 돈다.
 #       raw eslint 는 no-var 를 declare global 에 발동하지 않아, 8개의
 #       eslint-disable 주석을 "unused directive" 경고로 보고한다 (RTK 와의
-#       알려진 불일치, 에러 아님 → 커밋은 통과). 자세한 내용은 lib/db/client.ts 등 참조.
+#       알려진 불일치, 에러 아님 → 커밋은 통과). 그래서 --max-warnings 는
+#       두지 않는다(경고는 통과, 에러만 차단). 자세한 내용은 lib/db/client.ts 등 참조.
+#
+# 참고: 스테이지/워킹트리가 다른 파일은 워킹트리 버전을 검사한다(기존 훅과 동일).
 set -e
 
-echo "[pre-commit] pnpm lint"
-pnpm lint
+# 스테이지된 lint 대상 파일(Added/Copied/Modified/Renamed, 삭제 제외)
+LINT_FILES=$(git diff --cached --name-only --diff-filter=ACMR \
+  -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs')
 
-echo "[pre-commit] pnpm typecheck"
-pnpm typecheck
+if [ -n "$LINT_FILES" ]; then
+  COUNT=$(printf '%s\n' "$LINT_FILES" | wc -l | tr -d ' ')
+  echo "[pre-commit] eslint — 변경 파일 ${COUNT}개"
+  printf '%s\n' "$LINT_FILES" | xargs pnpm exec eslint --cache --no-warn-ignored
+else
+  echo "[pre-commit] eslint skip — lint 대상 변경 없음"
+fi
+
+TS_FILES=$(git diff --cached --name-only --diff-filter=ACMR -- '*.ts' '*.tsx')
+
+if [ -n "$TS_FILES" ]; then
+  echo "[pre-commit] tsc --noEmit (incremental, 전체)"
+  pnpm typecheck
+else
+  echo "[pre-commit] typecheck skip — .ts/.tsx 변경 없음"
+fi
 
 echo "[pre-commit] passed"

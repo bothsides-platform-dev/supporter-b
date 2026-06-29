@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.51.4] - 2026-06-30
+
+### Changed
+
+- **로컬 lint·타입체크가 훨씬 빨라졌어요 (개발자용)**: `pnpm lint`에 ESLint 증분 캐시(`--cache`)를 켜서 재실행이 280초→14초로 줄었어요. pre-commit 훅도 매번 전체를 검사하던 방식에서 **스테이지된 변경 파일만** 검사하도록 바꿨어요 — eslint는 바뀐 파일만 보고, 타입체크는 `.ts/.tsx` 변경이 있을 때만 전체를 돌리고 없으면 건너뛰어요(타입체크는 whole-program이라 안전하게 파일 단위로 쪼갤 수 없어 전체 검사를 유지). worktree마다 생기는 `.eslintcache`는 git에서 무시해요. (사용자 화면 변화 없음 — 개발 도구 개선)
+
+## [0.2.51.3] - 2026-06-30
+
+### Added
+
+- **GitHub Actions에서 k6 성능 테스트가 자동으로 실행돼요**: 격리된 Docker 환경에서 Postgres를 새로 세팅하고, smoke 테스트(2VU·1분)는 PR마다, load 테스트(10VU·20분 램프)는 main 브랜치 push마다 실행해요. 고정 UUID 시드(구매사 1개·PG 10개·RFP 10개)로 일관된 재현이 가능하고, Server Action 해시를 빌드 산출물에서 자동 추출해 인증된 사용자처럼 POST할 수 있어요. (사용자 화면 변화 없음 — CI 인프라 추가)
+
 ## [0.2.51.2] - 2026-06-29
 
 ### Fixed
