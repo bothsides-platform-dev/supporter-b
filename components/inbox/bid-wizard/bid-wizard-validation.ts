@@ -16,10 +16,14 @@ const HINTS: Record<number, string> = {
   2: '수수료를 1개 이상 입력해주세요',
 };
 
+export function isCycleValid(cycleNum: string): boolean {
+  return cycleNum !== '' && parseInt(cycleNum) > 0;
+}
+
 function isStepComplete(num: number, input: BidValidationInput): boolean {
   switch (num) {
     case 1:
-      return input.cycleNum !== '' && parseInt(input.cycleNum) > 0;
+      return isCycleValid(input.cycleNum);
     case 2:
       return input.anyFeeFilled;
     default:
