@@ -196,7 +196,6 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
     feeInputMethods.some((m) => !isTieredMethod(m) && feeFilled(m)) ||
     customPaymentMethods.some((c) => feeFilled(c.id));
   const anyFeeFilled = anyTieredFilled || anySingleFilled;
-  const canSubmit = !pending && !proposalUploading && cycleNum !== '' && parseInt(cycleNum) > 0 && anyFeeFilled;
 
   const applyTemplate = (t: QuoteTemplateOption) => {
     clearDraft();
@@ -269,7 +268,6 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
       proposal,
       pending,
       submitError,
-      canSubmit,
       settlementAttempted: failedSteps.has(1),
       feesAttempted: failedSteps.has(2),
       setField,
@@ -294,7 +292,6 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
       proposal,
       pending,
       submitError,
-      canSubmit,
       failedSteps,
       setField,
       setFee,

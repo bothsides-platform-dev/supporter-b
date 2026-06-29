@@ -31,7 +31,6 @@ export type BidWizardContextValue = {
   proposal: ProposalState;
   pending: boolean;
   submitError: string | null;
-  canSubmit: boolean;
   /** step1(정산주기) 제출 시도 후 → 필수 필드 빨강 escalate. */
   settlementAttempted: boolean;
   /** step2(수수료) 제출 시도 후 → 0칸이면 단계 메시지 표시. */

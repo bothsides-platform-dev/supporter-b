@@ -23,7 +23,6 @@ function makeValue(over: Partial<BidWizardContextValue> = {}): BidWizardContextV
     proposal: null,
     pending: false,
     submitError: null,
-    canSubmit: false,
     settlementAttempted: false,
     feesAttempted: false,
     setField: vi.fn(),
