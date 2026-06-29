@@ -325,13 +325,26 @@ describe('BidWizard 네비게이션 푸터', () => {
     expect(screen.getByTestId('wizard-nav-footer')).toBeInTheDocument();
   });
 
-  it('4단계: 수수료 미입력 시 견적 보내기 비활성', async () => {
+  it('4단계: 수수료 미입력 시 견적 보내기는 비활성이 아니라, 누르면 수수료 단계로 이동·안내', async () => {
     const user = userEvent.setup();
-    render(<BidWizard rfp={rfp} buyerName="토스" />);
+    render(<BidWizard rfp={rfp} buyerName="토스" />); // cycleNum 기본 '1'(유효) → 첫 미충족 = 수수료(2단계)
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
     await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
     const footer = screen.getByTestId('wizard-nav-footer');
-    expect(within(footer).getByRole('button', { name: '견적 보내기' })).toBeDisabled();
+    const sendBtn = within(footer).getByRole('button', { name: '견적 보내기' });
+    expect(sendBtn).not.toBeDisabled();
+
+    await user.click(sendBtn);
+    // 수수료(2단계)로 이동 → 수수료 카운터가 보인다
+    expect(screen.getByTestId('fees-count')).toBeInTheDocument();
+    // 안내 토스트(미충족 단계 hint)
+    expect(toast).toHaveBeenCalledWith(
+      expect.stringContaining('수수료'),
+      expect.objectContaining({ type: 'error' }),
+    );
+    // 제출 다이얼로그는 열리지 않는다
+    expect(submitBidMock).not.toHaveBeenCalled();
   });
 });
