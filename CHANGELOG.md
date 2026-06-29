@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.51.3] - 2026-06-30
+
+### Added
+
+- **GitHub Actions에서 k6 성능 테스트가 자동으로 실행돼요**: 격리된 Docker 환경에서 Postgres를 새로 세팅하고, smoke 테스트(2VU·1분)는 PR마다, load 테스트(10VU·20분 램프)는 main 브랜치 push마다 실행해요. 고정 UUID 시드(구매사 1개·PG 10개·RFP 10개)로 일관된 재현이 가능하고, Server Action 해시를 빌드 산출물에서 자동 추출해 인증된 사용자처럼 POST할 수 있어요. (사용자 화면 변화 없음 — CI 인프라 추가)
+
 ## [0.2.51.2] - 2026-06-29
 
 ### Fixed
