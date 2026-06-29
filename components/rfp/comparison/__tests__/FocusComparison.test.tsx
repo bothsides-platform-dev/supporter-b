@@ -10,10 +10,20 @@ class ResizeObserverStub {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
+const cardSpy = vi.hoisted(() => ({
+  lastCounterparty: null as
+    | null
+    | { name: string; workspaceId?: string; logoUpdatedAt?: string | null },
+}));
 vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
-  CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
-    <span>{counterparty.name}</span>
-  ),
+  CounterpartyProfileCard: ({
+    counterparty,
+  }: {
+    counterparty: { name: string; workspaceId?: string; logoUpdatedAt?: string | null };
+  }) => {
+    cardSpy.lastCounterparty = counterparty;
+    return <span>{counterparty.name}</span>;
+  },
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock('@/lib/http', () => ({ http: { post: vi.fn() } }));
@@ -345,5 +355,31 @@ describe('FocusComparison — pgWsLogoUpdatedAtMap → BidTabStrip 로고 전달
   it('pgWsLogoUpdatedAtMap이 비어 있으면 로고 이미지가 렌더되지 않는다', () => {
     render(<FocusComparison {...baseProps} pgWsLogoUpdatedAtMap={{}} />);
     expect(document.querySelector('img[src*="/api/workspace/"]')).toBeNull();
+  });
+});
+
+describe('FocusComparison — pgWsLogoUpdatedAtMap → CounterpartyProfileCard 로고 전달', () => {
+  beforeEach(() => {
+    cardSpy.lastCounterparty = null;
+  });
+
+  it('활성 PG의 logoUpdatedAt을 CounterpartyProfileCard에 전달한다', () => {
+    const logoTs = '2026-01-01T00:00:00.000Z';
+    render(
+      <FocusComparison {...baseProps} pgWsLogoUpdatedAtMap={{ 'pg-toss': logoTs, 'pg-kg': null }} />,
+    );
+    // 기본 활성 = 최저 카드수수료(토스, pg-toss)
+    expect(cardSpy.lastCounterparty).toMatchObject({
+      workspaceId: 'pg-toss',
+      logoUpdatedAt: logoTs,
+    });
+  });
+
+  it('로고가 없는 활성 PG에는 logoUpdatedAt=null을 전달한다', () => {
+    render(<FocusComparison {...baseProps} pgWsLogoUpdatedAtMap={{}} />);
+    expect(cardSpy.lastCounterparty).toMatchObject({
+      workspaceId: 'pg-toss',
+      logoUpdatedAt: null,
+    });
   });
 });
