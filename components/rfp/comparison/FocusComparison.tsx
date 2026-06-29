@@ -185,7 +185,12 @@ export function FocusComparison(props: Props) {
         <div className="mb-2 flex items-center justify-between gap-3">
           <CounterpartyProfileCard
             variant="profile"
-            counterparty={{ name: pgName(active.pgWsId), type: 'pg', workspaceId: active.pgWsId }}
+            counterparty={{
+              name: pgName(active.pgWsId),
+              type: 'pg',
+              workspaceId: active.pgWsId,
+              logoUpdatedAt: pgLogoFn(active.pgWsId),
+            }}
             rfpContext={{ id: props.rfpId, code: props.rfpCode }}
           />
           {isAwarded && (
