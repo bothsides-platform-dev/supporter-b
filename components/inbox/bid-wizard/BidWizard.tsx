@@ -43,6 +43,13 @@ import { BidStepReviewContainer } from './BidStepReviewContainer';
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap((c) => c.methods);
 const TOTAL_STEPS = BID_WIZARD_STEPS.length;
 
+// 서버 거부코드 → 그 원인이 있는 단계. 없으면 step4(검토)에서 일반 메시지.
+// (UI상 정상 발생 불가한 PAYMENT_METHOD_NOT_REQUESTED 도 변조·직접호출 안전망으로 매핑.)
+const SERVER_ERROR_STEP: Record<string, number> = {
+  PAYMENT_METHOD_NOT_REQUESTED: 2,
+  INVALID_ATTACHMENT: 3,
+};
+
 type Props = {
   rfp: PgRfpDetailData['rfp'];
   buyerName: string;
@@ -333,7 +340,9 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
         }
       } else {
         setSubmitError(r.error);
-        setCurrentStep(4);
+        const step = SERVER_ERROR_STEP[r.error] ?? 4;
+        if (step !== 4) markFailed(step);
+        setCurrentStep(step);
       }
     });
   };

@@ -348,3 +348,24 @@ describe('BidWizard 네비게이션 푸터', () => {
     expect(submitBidMock).not.toHaveBeenCalled();
   });
 });
+
+describe('BidWizard 서버 거부 매핑', () => {
+  it('INVALID_ATTACHMENT 거부 시 견적서(3) 단계로 이동한다', async () => {
+    const user = userEvent.setup();
+    submitBidMock.mockResolvedValueOnce({ ok: false as const, error: 'INVALID_ATTACHMENT' });
+    render(<BidWizard rfp={rfp} buyerName="토스" />); // cycleNum 기본 '1'
+
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    // 견적서(3단계)로 이동 → 파일 입력이 보인다
+    await waitFor(() =>
+      expect(document.querySelector('input[type="file"]')).toBeInTheDocument(),
+    );
+  });
+});
