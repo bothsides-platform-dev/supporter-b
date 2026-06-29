@@ -5,7 +5,7 @@
 //
 // 이 파일은 client component 에서도 import 가능 — repo / DB import 없이 순수 도메인.
 // 데이터 로더는 ./board/loadBoard.ts 참조.
-import type { RFP } from '@/lib/types/rfp';
+import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { RfpInvitation } from '@/lib/types/invitation';
 
@@ -34,6 +34,8 @@ export type BuyerKanbanCard = {
   submittedBidCount: number;
   awardedBidId?: string;
   isSample: boolean;
+  /** raw RFP status — 마감 컬럼 안 결과 칩(선정완료/미선정/취소) 도출용. */
+  status: RfpStatus;
   /** status='cancelled' — 마감 컬럼 안에서 취소 칩으로 구분. */
   isCancelled: boolean;
 };
@@ -69,6 +71,7 @@ export function toBuyerCard(args: {
     submittedBidCount: bids.filter((b) => b.status === 'submitted').length,
     awardedBidId: rfp.awardedBidId,
     isSample: rfp.isSample ?? false,
+    status: rfp.status,
     isCancelled: rfp.status === 'cancelled',
   };
 }
