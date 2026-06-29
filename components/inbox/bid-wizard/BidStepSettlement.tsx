@@ -1,7 +1,7 @@
 'use client';
 
 import { CurrencyInput, DayOffsetInput } from '@/components/forms/inputs';
-import { formatSettleCycle } from '@/lib/utils/settle-cycle';
+import { formatSettleCycle, SETTLE_CYCLE_PARSE_RE } from '@/lib/utils/settle-cycle';
 import { isCycleValid } from './bid-wizard-validation';
 import { markerState } from '@/lib/rfp/required-fields';
 import type { SetBidField } from './types';
@@ -28,7 +28,7 @@ export function BidStepSettlement({
   const cycleValid = isCycleValid(cycleNum);
 
   function handleCycleChange(v: string) {
-    const m = v.match(/^([DWM])\+(\d+)$/);
+    const m = v.match(SETTLE_CYCLE_PARSE_RE);
     if (m) {
       onField('cycleUnit', m[1] as 'D' | 'W' | 'M');
       onField('cycleNum', m[2]);
