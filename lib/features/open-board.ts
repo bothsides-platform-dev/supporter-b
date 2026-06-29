@@ -10,5 +10,8 @@
  *
  * 타입을 `boolean` 으로 명시한 건 의도적입니다 — `false` 리터럴로 좁혀지면
  * `if (OPEN_BOARD_ENABLED)` 분기가 dead-code 로 취급돼 lint 에 걸립니다.
+ *
+ * re-enable 시 주의: `*.open-board.test.*` 파일(off-branch 회귀 테스트)이 빨개집니다.
+ * `true` 로 바꿀 때는 해당 파일들을 삭제하고, 기존 테스트의 `vi.mock('.../open-board', …true)` 행도 제거하세요.
  */
 export const OPEN_BOARD_ENABLED: boolean = false;

@@ -11,6 +11,7 @@ const SURFACES = [
   'components/shell/CommandPalette.tsx',
   'components/rfp/RfpStep4Review.tsx',
   'components/rfp/RfpBoardVisibilityStatus.tsx',
+  'components/deal-room/buyer/BuyerDealRoomBody.tsx',
 ];
 
 function readSurface(rel: string): string {
