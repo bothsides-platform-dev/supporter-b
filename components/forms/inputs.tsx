@@ -23,6 +23,17 @@ export const underlineInputClass =
 
 export const numericInputClass = cn(underlineInputClass, 'md-numeric');
 
+/**
+ * `react-number-format` isAllowed 가드. max 가 주어지면 그 값을 초과하는 입력을
+ * 키 입력 단계에서 거부한다(예: 수수료 % 상한 100, 가상계좌 건당 금액 한도).
+ * max 미전달이면 undefined → 제한 없음(기존 동작 유지).
+ */
+const maxAllowed = (max: number | undefined) =>
+  max === undefined
+    ? undefined
+    : ({ floatValue }: { floatValue?: number }) =>
+        floatValue === undefined || floatValue <= max;
+
 type NumericFieldProps = {
   label: string;
   value: string;
@@ -30,6 +41,8 @@ type NumericFieldProps = {
   placeholder?: string;
   /** 라벨 옆에 ⓘ 설명 아이콘을 붙일 용어집 키 (예: '정산한도') */
   infoTerm?: string;
+  /** 전달 시 이 값을 초과하는 입력을 거부 (예: 수수료 % 상한 100, 금액 한도). */
+  max?: number;
 };
 
 /** Labeled numeric input with a `%` suffix and a "per ₩10,000" hint. */
@@ -39,6 +52,7 @@ export function PercentInput({
   onChange,
   placeholder = '0.00',
   infoTerm,
+  max,
 }: NumericFieldProps) {
   const rate = formatRatePerManwon(parseFloat(value));
   const hint = rate ? `= ${rate}` : null;
@@ -53,6 +67,7 @@ export function PercentInput({
         <NumericFormat
           decimalScale={2}
           allowNegative={false}
+          isAllowed={maxAllowed(max)}
           value={value}
           onValueChange={(values) => onChange(values.value)}
           placeholder={placeholder}
@@ -80,6 +95,8 @@ type FeeRateCellProps = {
    * 양끝 열에서 툴팁이 화면 밖으로 오버플로되는 것을 막기 위해 사용한다.
    */
   tooltipAlign?: 'start' | 'center' | 'end';
+  /** 전달 시 이 값을 초과하는 입력을 거부 (수수료 % 상한 100). */
+  max?: number;
 };
 
 /**
@@ -92,6 +109,7 @@ export function FeeRateCell({
   testId,
   ariaLabel,
   tooltipAlign = 'center',
+  max,
 }: FeeRateCellProps) {
   const tooltipId = useId();
   const [focused, setFocused] = useState(false);
@@ -122,6 +140,7 @@ export function FeeRateCell({
         aria-describedby={showHint ? tooltipId : undefined}
         decimalScale={2}
         allowNegative={false}
+        isAllowed={maxAllowed(max)}
         value={value}
         onValueChange={(values) => onChange(values.value)}
         placeholder="0.00"
@@ -156,6 +175,7 @@ export function CurrencyInput({
   infoTerm,
   markerState,
   error,
+  max,
 }: CurrencyInputProps) {
   const numVal = parseFloat(value);
   const hint =
@@ -175,6 +195,7 @@ export function CurrencyInput({
           thousandSeparator=","
           decimalScale={0}
           allowNegative={false}
+          isAllowed={maxAllowed(max)}
           value={value}
           onValueChange={(values) => onChange(values.value)}
           placeholder={placeholder}
@@ -198,6 +219,13 @@ const CYCLE_TYPE_OPTIONS = [
   { value: 'M', label: 'M (개월)' },
 ];
 
+type DayOffsetInputProps = NumericFieldProps & {
+  /** 전달 시 라벨 옆에 필수 마커 칩을 렌더(선택 필드는 미전달). */
+  markerState?: MarkerState;
+  /** 전달 시 하단에 에러 메시지를 렌더. */
+  error?: string;
+};
+
 /**
  * Labeled integer input with a D/W/M unit selector.
  * Emits a canonical `${type}+${n}` string (e.g. `"D+1"`, `"W+2"`, `"M+1"`).
@@ -211,7 +239,9 @@ export function DayOffsetInput({
   onChange,
   placeholder = '0',
   infoTerm,
-}: NumericFieldProps) {
+  markerState,
+  error,
+}: DayOffsetInputProps) {
   const [type, setType] = useState<string>(() => value.match(/^[DWM]/)?.[0] ?? 'D');
   const numeric = value.match(/\d+/)?.[0] ?? '';
 
@@ -221,9 +251,12 @@ export function DayOffsetInput({
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-1">
-        <Label size="md" muted={false}>{label}</Label>
-        {infoTerm && <InfoTip term={infoTerm} />}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <Label size="md" muted={false}>{label}</Label>
+          {infoTerm && <InfoTip term={infoTerm} />}
+        </div>
+        {markerState && <RequiredMark state={markerState} />}
       </div>
       <div className="flex items-center gap-1">
         <Select
@@ -242,6 +275,7 @@ export function DayOffsetInput({
           className={cn(numericInputClass, 'flex-1')}
         />
       </div>
+      <FieldError error={error} />
     </div>
   );
 }
