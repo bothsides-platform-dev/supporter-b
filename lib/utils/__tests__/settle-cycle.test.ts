@@ -4,20 +4,18 @@ import { compareSettleCycle, formatSettleCycle, SETTLE_CYCLE_RE } from '../settl
 describe('SETTLE_CYCLE_RE (canonical D+N format)', () => {
   const ok = (s: string) => SETTLE_CYCLE_RE.test(s);
 
-  it('accepts D/W/M with a 1–999 offset', () => {
+  it('accepts D/W/M with any positive offset — no upper bound (matches the wizard gate of cycleNum > 0)', () => {
     expect(ok('D+1')).toBe(true);
     expect(ok('W+2')).toBe(true);
     expect(ok('M+99')).toBe(true);
     expect(ok('D+999')).toBe(true);
+    expect(ok('D+1000')).toBe(true);
+    expect(ok('D+99999')).toBe(true);
   });
 
   it('rejects a zero or leading-zero offset', () => {
     expect(ok('D+0')).toBe(false);
     expect(ok('D+01')).toBe(false);
-  });
-
-  it('rejects offsets longer than 3 digits', () => {
-    expect(ok('D+1000')).toBe(false);
   });
 
   it('rejects an unknown unit', () => {

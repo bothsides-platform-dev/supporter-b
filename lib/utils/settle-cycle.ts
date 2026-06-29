@@ -1,8 +1,8 @@
-// 정산주기/배송주기의 정본(canonical) 형식. 단위 D/W/M + "+" + 1~999 (선행 0·D+0 불가).
+// 정산주기/배송주기의 정본(canonical) 형식. 단위 D/W/M + "+" + 양의 정수(선행 0·D+0 불가, 상한 없음).
 // 견적 제출·템플릿 저장의 권위적 검증 출처(submitBidAction·saveQuoteTemplateAction 공유).
-// 위저드 클라이언트 게이트(isCycleValid)는 N≥1만 보장하고 상한은 두지 않으므로
-// (DayOffsetInput에 max 없음), 1000 이상 같은 비정상 값은 이 RE가 서버에서 거부한다(fail-closed).
-export const SETTLE_CYCLE_RE = /^[DWM]\+[1-9]\d{0,2}$/;
+// 위저드 클라이언트 게이트(isCycleValid)와 동일하게 "양의 정수"만 요구한다 — 상한을 두지 않아
+// (DayOffsetInput에 max 없음) 클라이언트가 통과시킨 값은 서버에서도 통과한다(불일치 없음).
+export const SETTLE_CYCLE_RE = /^[DWM]\+[1-9]\d*$/;
 
 // "D+N" 문자열을 { 단위, 숫자 }로 분해하는 파서 정규식(캡처 그룹 보유). 검증용
 // SETTLE_CYCLE_RE 와 달리 의도적으로 느슨하다(레거시·중간 입력값도 분해). 단위 집합
