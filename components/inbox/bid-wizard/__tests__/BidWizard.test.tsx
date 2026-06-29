@@ -16,7 +16,12 @@ const pushMock = vi.fn();
 const refreshMock = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
 
-const submitBidMock = vi.fn(async (_i: unknown) => ({ ok: true as const, bidId: 'b1' }));
+const submitBidMock = vi.fn(
+  async (_i: unknown): Promise<{ ok: true; bidId: string } | { ok: false; error: string }> => ({
+    ok: true,
+    bidId: 'b1',
+  }),
+);
 vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: (i: unknown) => submitBidMock(i),
 }));
