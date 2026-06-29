@@ -78,7 +78,7 @@ afterEach(cleanup);
 describe('BidWizard', () => {
   it('1단계 정산조건이 먼저 보인다 (수수료 입력칸은 2단계로 이동해야 보임)', () => {
     render(<BidWizard rfp={rfp} buyerName="토스" />);
-    expect(screen.getByText('정산 주기 *')).toBeInTheDocument();
+    expect(screen.getByText('정산 주기')).toBeInTheDocument();
     expect(screen.queryByText(/카드 수수료/)).not.toBeInTheDocument();
   });
 
