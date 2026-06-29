@@ -16,7 +16,12 @@ const pushMock = vi.fn();
 const refreshMock = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
 
-const submitBidMock = vi.fn(async (_i: unknown) => ({ ok: true as const, bidId: 'b1' }));
+const submitBidMock = vi.fn(
+  async (_i: unknown): Promise<{ ok: true; bidId: string } | { ok: false; error: string }> => ({
+    ok: true,
+    bidId: 'b1',
+  }),
+);
 vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: (i: unknown) => submitBidMock(i),
 }));
@@ -78,7 +83,7 @@ afterEach(cleanup);
 describe('BidWizard', () => {
   it('1단계 정산조건이 먼저 보인다 (수수료 입력칸은 2단계로 이동해야 보임)', () => {
     render(<BidWizard rfp={rfp} buyerName="토스" />);
-    expect(screen.getByText('정산 주기 *')).toBeInTheDocument();
+    expect(screen.getByText('정산 주기')).toBeInTheDocument();
     expect(screen.queryByText(/카드 수수료/)).not.toBeInTheDocument();
   });
 
@@ -325,13 +330,47 @@ describe('BidWizard 네비게이션 푸터', () => {
     expect(screen.getByTestId('wizard-nav-footer')).toBeInTheDocument();
   });
 
-  it('4단계: 수수료 미입력 시 견적 보내기 비활성', async () => {
+  it('4단계: 수수료 미입력 시 견적 보내기는 비활성이 아니라, 누르면 수수료 단계로 이동·안내', async () => {
     const user = userEvent.setup();
-    render(<BidWizard rfp={rfp} buyerName="토스" />);
+    render(<BidWizard rfp={rfp} buyerName="토스" />); // cycleNum 기본 '1'(유효) → 첫 미충족 = 수수료(2단계)
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
     await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
     const footer = screen.getByTestId('wizard-nav-footer');
-    expect(within(footer).getByRole('button', { name: '견적 보내기' })).toBeDisabled();
+    const sendBtn = within(footer).getByRole('button', { name: '견적 보내기' });
+    expect(sendBtn).not.toBeDisabled();
+
+    await user.click(sendBtn);
+    // 수수료(2단계)로 이동 → 수수료 카운터가 보인다
+    expect(screen.getByTestId('fees-count')).toBeInTheDocument();
+    // 안내 토스트(미충족 단계 hint)
+    expect(toast).toHaveBeenCalledWith(
+      expect.stringContaining('수수료'),
+      expect.objectContaining({ type: 'error' }),
+    );
+    // 제출 다이얼로그는 열리지 않는다
+    expect(submitBidMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('BidWizard 서버 거부 매핑', () => {
+  it('INVALID_ATTACHMENT 거부 시 견적서(3) 단계로 이동한다', async () => {
+    const user = userEvent.setup();
+    submitBidMock.mockResolvedValueOnce({ ok: false as const, error: 'INVALID_ATTACHMENT' });
+    render(<BidWizard rfp={rfp} buyerName="토스" />); // cycleNum 기본 '1'
+
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    // 견적서(3단계)로 이동 → 파일 입력이 보인다
+    await waitFor(() =>
+      expect(document.querySelector('input[type="file"]')).toBeInTheDocument(),
+    );
   });
 });

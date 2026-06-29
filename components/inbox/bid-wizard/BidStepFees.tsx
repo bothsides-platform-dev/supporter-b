@@ -1,6 +1,7 @@
 'use client';
 
 import { PercentInput, CurrencyInput, FeeRateCell } from '@/components/forms/inputs';
+import { FieldError } from '@/components/primitives/FieldError';
 import {
   PAYMENT_METHOD_CATEGORIES,
   PAYMENT_METHOD_LABELS,
@@ -18,6 +19,8 @@ type Props = {
   customPaymentMethods: CustomPaymentMethod[];
   fees: Record<string, string>;
   onFee: (key: string, value: string) => void;
+  /** 제출 시도 후 true — 채운 칸이 0개면 단계-레벨 에러를 표시. */
+  attempted?: boolean;
 };
 
 const TIERED_LABELS: readonly string[] = TIERED_CATEGORY_LABELS;
@@ -27,6 +30,7 @@ export function BidStepFees({
   customPaymentMethods,
   fees,
   onFee,
+  attempted = false,
 }: Props) {
   const requested = new Set(feeInputMethods);
 
@@ -76,6 +80,10 @@ export function BidStepFees({
         </span>
       </div>
 
+      {attempted && filledUnits === 0 && (
+        <FieldError error="수수료를 1칸 이상 입력해주세요" />
+      )}
+
       {tieredGroups.map((group) => (
         <div key={group.label} className="space-y-2">
           <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
@@ -117,6 +125,7 @@ export function BidStepFees({
                           value={fees[key] ?? ''}
                           onChange={(v) => onFee(key, v)}
                           tooltipAlign={tooltipAlign}
+                          max={100}
                         />
                       </td>
                     );
@@ -136,7 +145,7 @@ export function BidStepFees({
           <div className="grid grid-cols-2 gap-x-6 gap-y-5">
             {singleMethods.map((m) =>
               isFlatFeeMethod(m) ? (
-                // 정액(건당) 수단 — % 가 아니라 건당 '원' 정수로 입력받는다.
+                // 정액(건당) 수단 — % 가 아니라 건당 '원' 정수로 입력받는다(상한 없음).
                 <CurrencyInput
                   key={m}
                   label={`${PAYMENT_METHOD_LABELS[m]} 건당 수수료`}
@@ -149,6 +158,7 @@ export function BidStepFees({
                   label={`${PAYMENT_METHOD_LABELS[m]} 수수료`}
                   value={fees[m] ?? ''}
                   onChange={(v) => onFee(m, v)}
+                  max={100}
                 />
               ),
             )}
@@ -158,6 +168,7 @@ export function BidStepFees({
                 label={`${c.label} 수수료`}
                 value={fees[c.id] ?? ''}
                 onChange={(v) => onFee(c.id, v)}
+                max={100}
               />
             ))}
           </div>
