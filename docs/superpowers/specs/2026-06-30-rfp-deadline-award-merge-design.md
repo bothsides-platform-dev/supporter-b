@@ -2,7 +2,7 @@
 
 - 작성일: 2026-06-30
 - 상태: 설계 확정 (구현 대기)
-- 범위: buyer RFP 상태 표시 (칸반 보드 + 목록 테이블 + 딜룸/모달 + 홈 미니보드)
+- 범위: buyer RFP 상태 표시 (칸반 보드 + 목록 테이블 + 딜룸/모달 + 홈 미니보드 + **상태 필터 + 사이드바 내비 + 홈 KPI**)
 
 ## 1. 목표
 
@@ -153,7 +153,82 @@ messages는 공통 화면이고 ContextPanel은 viewer 역할을 모른 채 `rfp
   - `components/home/KanbanActionDialog.tsx`: `cancel-rfp` 케이스 제거(navigate-rfp-detail은 다이얼로그 없이 `useBoardDnd`가 `/rfp/{id}`로 이동, 기존 동작).
   - cancel 자체(`cancelRfpAction`/`RfpService.cancel`)는 상세 페이지에서 계속 호출되므로 **서버 로직은 불변**.
 
-## 6. 영향받는 테스트 (TDD — RED 먼저)
+### 5.6 종결 컬럼 "더보기" 링크 (`components/board/PipelineBoard.tsx`)
+
+`resultColumnOverflow`는 종결 컬럼(10장 제한)의 "더보기" 링크를 만든다. 병합 후 rfp 종결 컬럼은 `closed` 하나뿐이므로 `awarded` 분기를 제거한다.
+
+```diff
+  if (cardType === 'rfp') {
+    if (lifecycleKey === 'closed')
+      return { limit: RESULT_COLUMN_LIMIT, moreHref: tableDeepLink('/rfp', 'closed', current) };
+-   if (lifecycleKey === 'awarded')
+-     return { limit: RESULT_COLUMN_LIMIT, moreHref: tableDeepLink('/rfp', 'awarded', current) };
+    return null;
+  }
+```
+
+`closed` 분기의 `tableDeepLink('/rfp', 'closed', ...)`는 그대로 — `closed` 토큰이 awarded까지 폴드하므로(§6.2) 더보기 링크가 통합 마감 목록으로 정확히 이동한다.
+
+## 6. Part 3 — 필터·사이드바·홈 KPI 통합
+
+"사이드바·필터에 마감만 남기기" — 선정완료(awarded)를 마감 필터/내비로 폴드한다.
+
+### 6.1 RFP 목록 필터 옵션 (`app/(app)/rfp/page.tsx`)
+
+```diff
+  const STATUS_OPTIONS = [
+    { value: 'active', label: '진행중' },
+    { value: 'closed', label: '마감' },
+-   { value: 'awarded', label: '선정 완료' },
+  ];
+```
+
+→ `BoardFilterBar`의 상태 칩은 **진행중 / 마감** 두 개만 노출.
+
+### 6.2 필터 토큰 매핑 (`lib/server/status-filter.ts`)
+
+`RFP_PARAM_MAP`에서 `awarded` 토큰을 제거하고, `closed`(마감) 토큰이 awarded를 폴드하도록 한다. 상단 주석 블록(token→statuses 표)도 함께 갱신.
+
+```diff
+  const RFP_PARAM_MAP = {
+    active: ['sent'],
+-   closed: ['closed', 'cancelled'],
+-   awarded: ['awarded'],
++   closed: ['closed', 'cancelled', 'awarded'],
+  };
+```
+
+- **불변식 유지**: "표 필터 토큰 ↔ 칸반 컬럼 모집단 1:1". 병합 후 칸반 2컬럼(active/closed)과 필터 2토큰(active/closed)이 1:1로 일치한다.
+- 마감 필터를 누르면 closed ∪ cancelled ∪ awarded 전부 표시 → 표에서 결과 칩(선정완료/미선정/취소)으로 구분.
+
+### 6.3 사이드바 내비 라벨 (`lib/nav/nav-config.ts`)
+
+```diff
+  STATUS_LABELS['/rfp'] = {
+    active: '진행중',
+    closed: '마감',
+-   awarded: '선정 완료',
+  }
+```
+
+→ `SidebarSection`이 생성하는 RFP 하위 메뉴가 **진행중 / 마감** 두 개만. (`SidebarSection.tsx`·`SidebarSubItem`는 데이터 주도라 코드 변경 불필요.)
+
+### 6.4 홈 대시보드 '선정 완료' KPI 카드 (`lib/server/dashboard/buildDashboard.ts`) — 확정
+
+'선정 완료' KPI 카드는 **유지**(awarded 건수는 유용한 지표)하되, 링크만 통합 마감 목록으로 변경.
+
+```diff
+  { id: 'awarded', label: '선정 완료',
+    value: rfps.filter((r) => r.status === 'awarded').length,
+-   href: '/rfp?status=awarded' },
++   href: '/rfp?status=closed' },
+```
+
+- `value`(awarded 건수)는 그대로 — 홈에서 "몇 건 선정 완료됐는지" 지표 유지.
+- 클릭 시 통합 마감 목록(`/rfp?status=closed`)으로 이동, awarded RFP가 선정완료 칩과 함께 보인다.
+- `awarded` 딥링크 토큰을 제거해도(§6.2) 깨지는 링크가 없도록 이 KPI가 마지막 `?status=awarded` 소비처였음을 확인함(grep 검증 완료).
+
+## 7. 영향받는 테스트 (TDD — RED 먼저)
 
 기존 테스트 갱신:
 - `lib/__tests__/rfp-status.test.ts` — awarded → '선정완료', closed → '미선정' 단언.
@@ -165,19 +240,24 @@ messages는 공통 화면이고 ContextPanel은 viewer 역할을 모른 채 `rfp
 - `components/board/__tests__/resolveBoardDrop.test.ts` — active→closed lifecycle = navigate(상세 이동).
 - `components/board/__tests__/useBoardDnd.test.tsx` — cancel-rfp 경로 제거 반영.
 - `components/home/__tests__/KanbanActionDialog.test.tsx` — cancel-rfp 다이얼로그 테스트 제거.
+- `lib/server/__tests__/status-filter.test.ts` (있으면) — `closed` 토큰이 awarded 폴드, `awarded` 토큰 제거 반영.
+- `lib/nav/` nav-config 테스트(있으면) — `/rfp` 하위 메뉴 active/closed 2개.
+- `lib/server/dashboard/` buildDashboard 테스트(있으면) — '선정 완료' KPI href `/rfp?status=closed`.
+- `components/board/` PipelineBoard/resultColumnOverflow 테스트(있으면) — rfp awarded 분기 제거.
 
 신규 테스트:
 - `PipelineCard` — '마감' 컬럼 카드가 status별 결과 칩(선정완료/미선정/취소)을 렌더하는지.
 - (선택) 마이그레이션 스크립트 — 기존 `remove-draft-kanban-columns` 테스트 유무에 맞춤.
 
-## 7. 배포 체크리스트
+## 8. 배포 체크리스트
 
 1. 코드 배포.
 2. **`tsx scripts/remove-awarded-kanban-columns.ts` 1회 실행** (기존 워크스페이스 '선정 완료' 컬럼 제거 — 안 하면 빈 컬럼 잔존).
 3. DDL 없음. 일괄 로그아웃 없음.
 
-## 8. 비범위 (Out of scope)
+## 9. 비범위 (Out of scope)
 
 - PG 칸반/딜룸/목록 — 별도 `pgRequestChip()` 사용, 변경 없음.
 - `RfpStatus` enum·DB 컬럼 변경 — 없음.
 - 컬럼 추가/커스터마이즈 — 없음(현행 lifecycle 컬럼 구조 유지, 개수만 3→2).
+- 도메인 로직(`lib/server/rfp-state.ts`, `lib/rfp/closed-counterparties.ts` 등)에서 'awarded'를 그룹으로 다루는 부분 — 표시가 아니라 상태머신/봉인 로직이므로 **불변**.
