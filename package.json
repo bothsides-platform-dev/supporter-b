@@ -1,6 +1,6 @@
 {
   "name": "supporter-b",
-  "version": "0.2.51.2",
+  "version": "0.2.51.3",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -22,6 +22,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
+    "perf:seed": "tsx scripts/perf-seed.ts",
     "backfill:sample": "tsx scripts/backfill-sample-rfp.ts",
     "backfill:sample-pg": "tsx scripts/backfill-sample-pg-rfp.ts",
     "backfill:pg-logos": "tsx scripts/backfill-pg-logos.ts",
