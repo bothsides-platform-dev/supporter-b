@@ -60,6 +60,11 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### changeMemberRole — LAST_ADMIN 오탐: pending_approval admin 강등 (P1)
 `WorkspaceService.changeMemberRole` 의 LAST_ADMIN 가드(`if (input.role === 'member' && target.role === 'admin')`)가 `countAdmins`(승인된 admin 만 집계)를 호출하기 전에 `target.approvalStatus`를 검사하지 않는다. 결과: 유일한 승인 admin 이 아직 미승인(pending_approval) admin 을 member 로 강등하려 하면 — 그 미승인 admin 은 실질 권한을 행사한 적 없음에도 — 거짓 `LAST_ADMIN` 에러가 발생한다. **수정**: `changeMemberRole` line 279 조건에 `&& target.approvalStatus === 'approved'` 추가. TDD: pending_approval target 강등 시 LAST_ADMIN 없이 성공하는 회귀 테스트 먼저 작성. (발견: /ship adversarial v0.2.51.0, 2026-06-28)
 
+## 견적 작성 (Bid Wizard)
+
+### 정산주기 클라이언트 입력 상한을 서버 검증과 정렬 (P3)
+`DayOffsetInput`(`components/forms/inputs.tsx`)에 상한이 없고 클라이언트 게이트 `isCycleValid`(`bid-wizard-validation.ts`)는 `cycleNum > 0`만 본다. 반면 서버 SSOT `SETTLE_CYCLE_RE`(`lib/utils/settle-cycle.ts`)는 1~999(3자리)만 허용 → PG가 `1000` 이상을 입력하면 1단계는 통과(초록 체크)하지만 제출 시 서버가 `INVALID_INPUT`으로 거절하고, `BidWizard`에 `SERVER_ERROR_STEP['INVALID_INPUT']` 매핑이 없어 검토(4단계)에서 필드 지목 없는 일반 오류로 끝난다. 비정상 입력(1000일 정산)이라 fail-closed·드묾·누출 아님. 수정: ① `DayOffsetInput`에 `isAllowed`로 상한(예: 999) 추가(공유 컴포넌트 — RFP 현재조건·배송주기 호출처도 함께 캡됨), ② `isCycleValid`를 `/^[1-9]\d{0,2}$/`로 강화해 1단계가 자체 힌트로 막게, ③ `SERVER_ERROR_STEP['INVALID_INPUT']`을 정산 단계로 매핑. 완료 시 `settle-cycle.ts` 주석의 "UI는 N≥1만 보장" 단서도 갱신. 관련: `bidToDraft`(`BidWizard.tsx`)는 재요청 prefill 시 `cycleNum`을 99로 클램프 → SETTLE_CYCLE_RE의 999 상한과 불일치(레거시 `D+150` 같은 값을 `D+99`로 조용히 정규화, PG가 재검토하므로 영향 낮음). 상한 정렬 시 함께 정리. (발견: /ship maintainability+adversarial 리뷰 v0.2.53.2, 2026-06-30)
+
 ## GEO / SEO
 
 ### llms.txt 쌍 route handler — 공통 헤더 상수 추출 (P2)
