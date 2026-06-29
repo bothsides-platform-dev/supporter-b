@@ -32,7 +32,7 @@
 - Modify: `components/home/KanbanActionDialog.tsx` — cancel-rfp 제거.
 - Modify: `lib/server/columns/lifecycle-keys.ts` — CROSS_SIDE 집합.
 - Create: `scripts/remove-awarded-kanban-columns.ts` — 마이그레이션.
-- Test: `lib/server/__tests__/buyer-kanban.test.ts`, `components/board/__tests__/{resolveBoardDrop,useBoardDnd}.test.tsx`, `components/home/__tests__/{dragMatrix,KanbanActionDialog}.test.tsx`, `lib/server/columns/__tests__/lifecycle-keys.test.ts`, `lib/server/actions/workspace/__tests__/createWorkspace.test.ts`, **Create** `components/board/__tests__/PipelineCard.test.tsx`.
+- Test: `lib/server/__tests__/buyer-kanban.test.ts`, `components/board/__tests__/{resolveBoardDrop,useBoardDnd}.test.tsx`, `components/home/__tests__/{dragMatrix,KanbanActionDialog}.test.tsx`, `lib/server/columns/__tests__/lifecycle-keys.test.ts`, `lib/server/actions/workspace/__tests__/createWorkspace.test.ts`, `components/board/__tests__/PipelineCard.test.tsx` (이미 존재 — 수정).
 
 **Part 3 — 필터·사이드바·홈 KPI**
 - Modify: `lib/server/status-filter.ts` — `RFP_PARAM_MAP`.
@@ -247,60 +247,54 @@ Expected: PASS.
 
 - [ ] **Step 5: PipelineCard 결과 칩 테스트 작성 (RED)**
 
-`components/board/__tests__/PipelineCard.test.tsx` 생성:
+**주의: `components/board/__tests__/PipelineCard.test.tsx`는 이미 존재한다**(PG 배지·재요청 테스트 + `makeBuyerCard` 헬퍼 보유, Task 2에서 헬퍼에 `status` 추가됨). **생성하지 말고 수정**한다 — `describe('PipelineCard — 구매사 카드 정보 보강', …)` 블록 전체를 아래로 교체한다. 기존 `취소된 RFP…'취소됨'` 테스트는 결과 칩 체계로 바뀌므로 갱신, `stage: 'awarded'` 픽스처는 union 제거로 타입 에러라 `stage:'closed', status:'awarded'`로 교체.
+
+기존 블록(대략):
 ```tsx
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { PipelineCard } from '../PipelineCard';
-import type { BoardCard } from '@/lib/types/column';
-import type { BuyerKanbanCard } from '@/lib/server/buyer-kanban';
+describe('PipelineCard — 구매사 카드 정보 보강', () => {
+  beforeEach(() => mockStore(() => false));
+  it('취소된 RFP 카드에 "취소됨" 칩을 표시한다', () => { … makeBuyerCard({ stage: 'closed', isCancelled: true }) … '취소됨' … });
+  it('취소가 아닌 마감 카드에는 칩이 없다', () => { … });
+  it('결과 컬럼(awarded/closed) 카드는 D-day 칩을 숨긴다', () => { … makeBuyerCard({ stage: 'awarded' }) … });
+  it('closed 단계 카드도 D-day 칩을 숨긴다 …', () => { … });
+  it('진행중(active) 카드는 D-day 칩을 표시한다', () => { … });
+});
+```
 
-function buyerCard(over: Partial<BuyerKanbanCard>): BoardCard {
-  const payload: BuyerKanbanCard = {
-    rfpId: 'P-2605-0001',
-    title: 'RFP',
-    stage: 'closed',
-    deadline: '2026-05-20T00:00:00Z',
-    createdAt: '2026-05-01T00:00:00Z',
-    updatedAt: '2026-05-10T00:00:00Z',
-    invitedPgCount: 0,
-    submittedBidCount: 0,
-    isSample: false,
-    isCancelled: false,
-    status: 'closed',
-    ...over,
-  };
-  return { cardType: 'rfp', cardId: 'r1', columnId: 'c-closed', payload };
-}
+교체 후:
+```tsx
+describe('PipelineCard — 구매사 카드 결과 칩', () => {
+  beforeEach(() => mockStore(() => false));
 
-describe('PipelineCard — buyer 결과 칩', () => {
-  it('status=awarded → 선정완료 칩', () => {
-    render(<PipelineCard card={buyerCard({ status: 'awarded' })} onSelect={() => {}} />);
+  it('선정완료(awarded) 카드에 "선정완료" 칩을 표시한다', () => {
+    render(<PipelineCard card={makeBuyerCard({ stage: 'closed', status: 'awarded' })} onSelect={vi.fn()} />);
     expect(screen.getByText('선정완료')).toBeInTheDocument();
   });
 
-  it('status=closed → 미선정 칩', () => {
-    render(<PipelineCard card={buyerCard({ status: 'closed' })} onSelect={() => {}} />);
+  it('선정 없이 마감된(closed) 카드에 "미선정" 칩을 표시한다', () => {
+    render(<PipelineCard card={makeBuyerCard({ stage: 'closed', status: 'closed' })} onSelect={vi.fn()} />);
     expect(screen.getByText('미선정')).toBeInTheDocument();
   });
 
-  it('status=cancelled → 취소 칩', () => {
-    render(<PipelineCard card={buyerCard({ status: 'cancelled', isCancelled: true })} onSelect={() => {}} />);
+  it('취소된(cancelled) 카드에 "취소" 칩을 표시한다', () => {
+    render(<PipelineCard card={makeBuyerCard({ stage: 'closed', status: 'cancelled', isCancelled: true })} onSelect={vi.fn()} />);
     expect(screen.getByText('취소')).toBeInTheDocument();
   });
 
-  it('진행중(sent) 카드 → 결과 칩 없음', () => {
-    render(
-      <PipelineCard
-        card={buyerCard({ stage: 'active', status: 'sent', deadline: '2027-01-01T00:00:00Z' })}
-        onSelect={() => {}}
-      />,
-    );
-    expect(screen.queryByText('선정완료')).toBeNull();
-    expect(screen.queryByText('미선정')).toBeNull();
+  it('결과(마감) 카드는 D-day 칩을 숨긴다', () => {
+    render(<PipelineCard card={makeBuyerCard({ stage: 'closed', status: 'awarded' })} onSelect={vi.fn()} />);
+    expect(screen.queryByText(/^D-\d+$/)).not.toBeInTheDocument();
+  });
+
+  it('진행중(active) 카드는 결과 칩 없이 D-day 칩을 표시한다', () => {
+    render(<PipelineCard card={makeBuyerCard({ stage: 'active', status: 'sent' })} onSelect={vi.fn()} />);
+    expect(screen.getByText(/^D-\d+$/)).toBeInTheDocument();
+    expect(screen.queryByText('선정완료')).not.toBeInTheDocument();
+    expect(screen.queryByText('미선정')).not.toBeInTheDocument();
   });
 });
 ```
+(PG 카드 describe 블록들은 변경하지 않는다 — PgBody 미변경.)
 
 - [ ] **Step 6: RED 확인**
 
@@ -338,7 +332,7 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
 - [ ] **Step 8: GREEN 확인**
 
 Run: `pnpm test components/board/__tests__/PipelineCard.test.tsx`
-Expected: PASS (4 tests).
+Expected: PASS — 전체 파일(PG 배지·재요청 테스트 + 갱신된 구매사 결과 칩 5개) green.
 
 - [ ] **Step 9: dragMatrix 테스트 갱신 (RED)**
 
