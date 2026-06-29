@@ -11,8 +11,8 @@ export type StatusChip = { label: string; color: ChipColor };
 export const RFP_STATUS_CHIP: Record<RfpStatus, StatusChip> = {
   draft: { label: '임시저장', color: 'surface' },
   sent: { label: '요청 보냄', color: 'warning' },
-  closed: { label: '마감', color: 'surface' },
-  awarded: { label: '선정 완료', color: 'tertiary' },
+  closed: { label: '미선정', color: 'surface' },
+  awarded: { label: '선정완료', color: 'tertiary' },
   cancelled: { label: '취소', color: 'error' },
 };
 

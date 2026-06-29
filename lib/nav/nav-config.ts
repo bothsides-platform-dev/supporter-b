@@ -57,7 +57,6 @@ const STATUS_LABELS = {
   '/rfp': {
     active: '진행중',
     closed: '마감',
-    awarded: '선정 완료',
   },
   '/inbox': {
     new: '신규',

@@ -6,7 +6,6 @@ import type { BuyerKanbanStage } from '@/lib/server/buyer-kanban';
 import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 
 export type DragAction =
-  | { kind: 'cancel-rfp'; rfpId: string; title: string }
   | { kind: 'navigate-rfp-detail'; rfpId: string }
   | { kind: 'navigate-inbox'; rfpId: string }
   | { kind: 'withdraw-bid'; bidId: string; rfpId: string; title: string };
@@ -38,14 +37,9 @@ export function resolveDrag(input: BuyerInput | PgInput): DragAction | null {
 function resolveBuyer(i: BuyerInput): DragAction | null {
   if (i.from === i.to) return null;
 
-  // active → awarded: 낙찰은 PG 선택 필요 → RFP 상세(BidBoard)로 이동
-  if (i.from === 'active' && i.to === 'awarded') {
-    return { kind: 'navigate-rfp-detail', rfpId: i.rfpId };
-  }
-
-  // active → closed: 취소 (작성중 단계 제거 — draft 발송/취소 드래그 없음)
+  // 진행중 → 마감: 선정/취소는 상세(BidBoard)에서 결정 → 상세로 이동.
   if (i.from === 'active' && i.to === 'closed') {
-    return { kind: 'cancel-rfp', rfpId: i.rfpId, title: i.title };
+    return { kind: 'navigate-rfp-detail', rfpId: i.rfpId };
   }
 
   return null;
