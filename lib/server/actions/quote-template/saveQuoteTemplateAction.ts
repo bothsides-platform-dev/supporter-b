@@ -5,14 +5,15 @@ import { z } from 'zod';
 import { getQuoteTemplateService } from '@/lib/server/services/quote-template';
 import { type QuoteActionResult, requirePgWorkspace } from './_shared';
 import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
+import { SETTLE_CYCLE_RE } from '@/lib/utils/settle-cycle';
 
 const Input = z
   .object({
     // present → update existing; absent → create new
     id: z.string().uuid().optional(),
     name: z.string().min(1).max(80),
-    // 정산주기 "D+1" / "W+2" / "M+1" 형식
-    settleCycle: z.string().regex(/^[DWM]\+[1-9]\d{0,2}$/),
+    // 정산주기 정본 형식("D+1"/"W+2"/"M+1") — submitBidAction 과 동일한 단일 출처.
+    settleCycle: z.string().regex(SETTLE_CYCLE_RE),
     settleLimit: z.number().nonnegative(),
     guaranteeInsurance: z.number().nonnegative(),
     paymentFees: PaymentFeesSchema,

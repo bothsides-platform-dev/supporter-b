@@ -5,6 +5,10 @@ import { compareSettleCycle } from './settle-cycle';
 
 export type MetricDirection = 'lower' | 'higher';
 
+// 구매사 "현재 조건"(자유 텍스트) 이 비교 가능한 주기인지 판별하는 detector.
+// 입력 검증용 SETTLE_CYCLE_RE(settle-cycle.ts) 보다 의도적으로 느슨하다 — 현재조건은
+// 신규 견적이 아니라 기존 값이라 D+0(당일정산)·여러 자릿수도 그대로 비교해야 한다.
+// 통일하지 말 것: 이 둘은 역할이 다르다(검증 vs 탐지).
 const CYCLE_RE = /^[DWM]\+\d+$/;
 
 /**

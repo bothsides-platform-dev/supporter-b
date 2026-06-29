@@ -7,11 +7,14 @@ import { requirePgActor } from '@/lib/server/actions/_session';
 import { getBidService } from '@/lib/server/services/bid';
 import type { ActionResult } from '@/lib/server/actions/_result';
 import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
+import { SETTLE_CYCLE_RE } from '@/lib/utils/settle-cycle';
 
 const Input = z
   .object({
     rfpId: z.string().min(1),
-    settleCycle: z.string().min(1),
+    // 정산주기 정본 형식("D+1"/"W+2"/"M+1"). UI 우회 호출이 자유 텍스트를
+    // 봉인입찰에 기록하지 못하도록 신뢰 경계에서 강제 (saveQuoteTemplateAction 과 대칭).
+    settleCycle: z.string().regex(SETTLE_CYCLE_RE),
     settleLimit: z.number().nonnegative(),
     guaranteeInsurance: z.number().nonnegative(),
     paymentFees: PaymentFeesSchema,
