@@ -121,47 +121,33 @@ describe('PipelineCard — PG 카드 정보 보강', () => {
   });
 });
 
-describe('PipelineCard — 구매사 카드 정보 보강', () => {
+describe('PipelineCard — 구매사 카드 결과 칩', () => {
   beforeEach(() => mockStore(() => false));
 
-  it('취소된 RFP 카드에 "취소됨" 칩을 표시한다', () => {
-    render(
-      <PipelineCard
-        card={makeBuyerCard({ stage: 'closed', isCancelled: true })}
-        onSelect={vi.fn()}
-      />,
-    );
-    expect(screen.getByText('취소됨')).toBeInTheDocument();
+  it('선정완료(awarded) 카드에 "선정완료" 칩을 표시한다', () => {
+    render(<PipelineCard card={makeBuyerCard({ stage: 'closed', status: 'awarded' })} onSelect={vi.fn()} />);
+    expect(screen.getByText('선정완료')).toBeInTheDocument();
   });
 
-  it('취소가 아닌 마감 카드에는 칩이 없다', () => {
-    render(
-      <PipelineCard
-        card={makeBuyerCard({ stage: 'closed', isCancelled: false })}
-        onSelect={vi.fn()}
-      />,
-    );
-    expect(screen.queryByText('취소됨')).not.toBeInTheDocument();
+  it('선정 없이 마감된(closed) 카드에 "미선정" 칩을 표시한다', () => {
+    render(<PipelineCard card={makeBuyerCard({ stage: 'closed', status: 'closed' })} onSelect={vi.fn()} />);
+    expect(screen.getByText('미선정')).toBeInTheDocument();
   });
 
-  it('결과 컬럼(awarded/closed) 카드는 D-day 칩을 숨긴다', () => {
-    render(
-      <PipelineCard card={makeBuyerCard({ stage: 'awarded' })} onSelect={vi.fn()} />,
-    );
+  it('취소된(cancelled) 카드에 "취소" 칩을 표시한다', () => {
+    render(<PipelineCard card={makeBuyerCard({ stage: 'closed', status: 'cancelled', isCancelled: true })} onSelect={vi.fn()} />);
+    expect(screen.getByText('취소')).toBeInTheDocument();
+  });
+
+  it('결과(마감) 카드는 D-day 칩을 숨긴다', () => {
+    render(<PipelineCard card={makeBuyerCard({ stage: 'closed', status: 'awarded' })} onSelect={vi.fn()} />);
     expect(screen.queryByText(/^D-\d+$/)).not.toBeInTheDocument();
   });
 
-  it('closed 단계 카드도 D-day 칩을 숨긴다 (isResult 의 || 절 회귀 가드)', () => {
-    render(
-      <PipelineCard card={makeBuyerCard({ stage: 'closed' })} onSelect={vi.fn()} />,
-    );
-    expect(screen.queryByText(/^D-\d+$/)).not.toBeInTheDocument();
-  });
-
-  it('진행중(active) 카드는 D-day 칩을 표시한다', () => {
-    render(
-      <PipelineCard card={makeBuyerCard({ stage: 'active' })} onSelect={vi.fn()} />,
-    );
+  it('진행중(active) 카드는 결과 칩 없이 D-day 칩을 표시한다', () => {
+    render(<PipelineCard card={makeBuyerCard({ stage: 'active', status: 'sent' })} onSelect={vi.fn()} />);
     expect(screen.getByText(/^D-\d+$/)).toBeInTheDocument();
+    expect(screen.queryByText('선정완료')).not.toBeInTheDocument();
+    expect(screen.queryByText('미선정')).not.toBeInTheDocument();
   });
 });

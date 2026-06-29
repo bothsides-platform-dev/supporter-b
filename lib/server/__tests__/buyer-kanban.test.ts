@@ -27,8 +27,8 @@ describe('classifyBuyerRfp', () => {
     expect(classifyBuyerRfp({ rfp: makeRfp({ status: 'sent' }) })).toBe('active');
   });
 
-  it('awarded: status=awarded', () => {
-    expect(classifyBuyerRfp({ rfp: makeRfp({ status: 'awarded', awardedBidId: 'b1' }) })).toBe('awarded');
+  it('awarded → closed (선정완료도 마감 버킷)', () => {
+    expect(classifyBuyerRfp({ rfp: makeRfp({ status: 'awarded', awardedBidId: 'b1' }) })).toBe('closed');
   });
 
   it('closed: status=closed', () => {
@@ -83,18 +83,18 @@ describe('toBuyerCard', () => {
       rfp: makeRfp({ status: 'awarded', awardedBidId: 'b1' }),
       bids: [],
       invitations: [],
-      stage: 'awarded',
+      stage: 'closed',
     });
     expect(card.status).toBe('awarded');
   });
 });
 
 describe('compareBuyerCards — 결과 컬럼 정렬', () => {
-  it('awarded 컬럼: updatedAt 최신 카드가 먼저 (createdAt 무관)', () => {
+  it('결과(마감) 컬럼: 선정완료 카드 updatedAt 최신 우선', () => {
     const older: BuyerKanbanCard = {
       rfpId: 'P-01',
       title: 'A',
-      stage: 'awarded',
+      stage: 'closed',
       deadline: '2026-06-01T00:00:00Z',
       createdAt: '2026-01-01T00:00:00Z',
       updatedAt: '2026-06-14T00:00:00Z',

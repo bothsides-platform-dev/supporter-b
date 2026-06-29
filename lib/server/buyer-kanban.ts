@@ -1,4 +1,4 @@
-// Buyer 파이프라인 칸반 — RFP 1건 = 카드 1장. 3개 컬럼 (진행중/선정 완료/마감).
+// Buyer 파이프라인 칸반 — RFP 1건 = 카드 1장. 2개 컬럼 (진행중/마감).
 // 분류는 `RFP.status` 로 도출되는 derived 값.
 // 사용자가 임의로 컬럼을 옮기는 건 드래그 매트릭스가 허락하는 전이만 가능 (각각이
 // 도메인 액션 또는 상세 이동을 트리거 — awardRfpAction / cancelRfpAction).
@@ -9,17 +9,15 @@ import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { RfpInvitation } from '@/lib/types/invitation';
 
-export type BuyerKanbanStage = 'active' | 'awarded' | 'closed';
+export type BuyerKanbanStage = 'active' | 'closed';
 
 export const BUYER_KANBAN_ORDER: readonly BuyerKanbanStage[] = [
   'active',
-  'awarded',
   'closed',
 ] as const;
 
 export const BUYER_KANBAN_LABEL: Record<BuyerKanbanStage, string> = {
   active: '진행중',
-  awarded: '선정 완료',
   closed: '마감',
 };
 
@@ -45,7 +43,7 @@ export type BuyerKanbanCard = {
 // 전에 걸러지므로, 방어적으로 여기 도달하면 'active' 로 폴백한다(실사용 경로 아님).
 export function classifyBuyerRfp(args: { rfp: RFP }): BuyerKanbanStage {
   const { rfp } = args;
-  if (rfp.status === 'awarded') return 'awarded';
+  if (rfp.status === 'awarded') return 'closed'; // 선정완료도 '마감' 버킷
   if (rfp.status === 'closed' || rfp.status === 'cancelled') return 'closed';
   return 'active'; // status === 'sent'
 }
@@ -81,7 +79,7 @@ export function compareBuyerCards(
   a: BuyerKanbanCard,
   b: BuyerKanbanCard,
 ): number {
-  if (a.stage === 'awarded' || a.stage === 'closed') {
+  if (a.stage === 'closed') {
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   }
   return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
