@@ -53,7 +53,7 @@ export function buildBuyerDashboard(
     { id: 'active', label: '진행중', value: sent.length, href: '/rfp?status=active' },
     { id: 'due', label: '마감 임박', value: sent.filter(isUrgent).length, href: '/rfp?status=active&deadline=d7' },
     { id: 'review', label: '견적 검토대기', value: sent.filter((r) => countOf(r) >= 1).length, href: '/rfp?status=active' },
-    { id: 'awarded', label: '선정 완료', value: rfps.filter((r) => r.status === 'awarded').length, href: '/rfp?status=awarded' },
+    { id: 'awarded', label: '선정 완료', value: rfps.filter((r) => r.status === 'awarded').length, href: '/rfp?status=closed' },
   ];
 
   const dueItems: ActionItem[] = [...sent]

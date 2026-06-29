@@ -2,19 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { resolveDrag } from '../dragMatrix';
 
 describe('resolveDrag — buyer', () => {
-  it('active → awarded: navigate-rfp-detail', () => {
-    const a = resolveDrag({ role: 'buyer', from: 'active', to: 'awarded', rfpId: 'P-2605-0001', title: 'RFP 1' });
-    expect(a).toEqual({ kind: 'navigate-rfp-detail', rfpId: 'P-2605-0001' });
-  });
-
-  it('active → closed: cancel-rfp', () => {
+  it('active → closed: navigate-rfp-detail (선정/취소는 상세에서)', () => {
     const a = resolveDrag({ role: 'buyer', from: 'active', to: 'closed', rfpId: 'P-2605-0001', title: 'RFP 1' });
-    expect(a).toEqual({ kind: 'cancel-rfp', rfpId: 'P-2605-0001', title: 'RFP 1' });
-  });
-
-  it('invalid: awarded → closed (역방향/응답 후 단계)', () => {
-    const a = resolveDrag({ role: 'buyer', from: 'awarded', to: 'closed', rfpId: 'P-2605-0001', title: 'RFP 1' });
-    expect(a).toBeNull();
+    expect(a).toEqual({ kind: 'navigate-rfp-detail', rfpId: 'P-2605-0001' });
   });
 
   it('invalid: same column', () => {

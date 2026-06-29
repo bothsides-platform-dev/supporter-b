@@ -22,18 +22,18 @@ describe('resolveBoardDrop', () => {
     });
   });
 
-  it('rfp awarded → closed (no valid transition) → reject', () => {
+  it('rfp 종결 카드 → 마감 컬럼(동일 스테이지) → reject', () => {
     const target = col({ id: 'closed', lifecycleKey: 'closed' });
     expect(
       resolveBoardDrop({
         cardType: 'rfp',
         toColumn: target,
-        payload: { stage: 'awarded', rfpId: 'P-2605-0001', title: 'RFP' },
+        payload: { stage: 'closed', rfpId: 'P-2605-0001', title: 'RFP' },
       }),
     ).toEqual({ kind: 'reject' });
   });
 
-  it('rfp active → closed lifecycle column → cancel-rfp action', () => {
+  it('rfp active → closed lifecycle column → navigate-rfp-detail action', () => {
     const target = col({ id: 'closed', lifecycleKey: 'closed' });
     expect(
       resolveBoardDrop({
@@ -41,7 +41,7 @@ describe('resolveBoardDrop', () => {
         toColumn: target,
         payload: { stage: 'active', rfpId: 'P-2605-0009', title: 'RFP9' },
       }),
-    ).toEqual({ kind: 'lifecycle', action: { kind: 'cancel-rfp', rfpId: 'P-2605-0009', title: 'RFP9' } });
+    ).toEqual({ kind: 'lifecycle', action: { kind: 'navigate-rfp-detail', rfpId: 'P-2605-0009' } });
   });
 
   it('invitation submitted → lost lifecycle column → withdraw-bid action', () => {

@@ -6,6 +6,7 @@ import type { BoardCard } from '@/lib/types/column';
 import type { BuyerKanbanCard } from '@/lib/server/buyer-kanban';
 import type { PgKanbanCard } from '@/lib/server/pg-kanban';
 import { useRecentlyViewedInbox } from '@/lib/stores/recently-viewed-inbox';
+import { RFP_STATUS_CHIP } from '@/lib/rfp-status';
 
 // Presentational pipeline card (RFP for buyer / invitation for pg) for the
 // unified board's renderCard slot. Drag is handled by the board's DraggableCard
@@ -51,15 +52,16 @@ function CardHead({ code, deadline, hideDday }: { code: string; deadline: string
 }
 
 function BuyerBody({ card }: { card: BuyerKanbanCard }) {
-  // 결과 컬럼(선정 완료/마감) 카드의 D-day 는 노이즈 — PgBody 와 동일 규칙으로 숨김.
-  const isResult = card.stage === 'awarded' || card.stage === 'closed';
+  // 종결(마감) 컬럼 카드의 D-day 는 노이즈 — 컬럼명이 이미 마감을 전달하므로 숨김.
+  const isResult = card.stage === 'closed';
+  const result = isResult ? RFP_STATUS_CHIP[card.status] : undefined;
   return (
     <div className="space-y-2">
       <CardHead code={card.rfpId} deadline={card.deadline} hideDday={isResult} />
-      {(card.isCancelled || card.isSample) && (
-        // 두 칩이 동시 렌더될 수 있어(취소된 샘플) 한 행으로 묶어 간격을 보장한다.
+      {(result || card.isSample) && (
+        // 결과 칩(선정완료/미선정/취소) + 샘플 칩이 동시 렌더 가능 — 한 행으로 묶어 간격 보장.
         <div className="flex flex-wrap gap-1">
-          {card.isCancelled && <Chip label="취소됨" color="error" />}
+          {result && <Chip label={result.label} color={result.color} />}
           {card.isSample && <Chip label="샘플" color="surface" />}
         </div>
       )}

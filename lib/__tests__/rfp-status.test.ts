@@ -10,8 +10,8 @@ describe('RFP_STATUS_CHIP', () => {
     expect(RFP_STATUS_CHIP).toEqual({
       draft: { label: '임시저장', color: 'surface' },
       sent: { label: '요청 보냄', color: 'warning' },
-      closed: { label: '마감', color: 'surface' },
-      awarded: { label: '선정 완료', color: 'tertiary' },
+      closed: { label: '미선정', color: 'surface' },
+      awarded: { label: '선정완료', color: 'tertiary' },
       cancelled: { label: '취소', color: 'error' },
     });
   });
@@ -20,7 +20,7 @@ describe('RFP_STATUS_CHIP', () => {
 describe('rfpStatusChip', () => {
   it('알려진 상태는 라벨/색을 돌려준다', () => {
     expect(rfpStatusChip('sent')).toEqual({ label: '요청 보냄', color: 'warning' });
-    expect(rfpStatusChip('awarded')).toEqual({ label: '선정 완료', color: 'tertiary' });
+    expect(rfpStatusChip('awarded')).toEqual({ label: '선정완료', color: 'tertiary' });
   });
 
   it('알 수 없는 상태는 undefined 다 (호출처가 칩을 렌더하지 않도록)', () => {

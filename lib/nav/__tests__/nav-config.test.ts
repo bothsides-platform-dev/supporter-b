@@ -53,12 +53,10 @@ describe('getNavConfig — buyer RFP section', () => {
     expect(rfp?.statuses?.map((s) => s.status)).toEqual([
       'active',
       'closed',
-      'awarded',
     ]);
     expect(rfp?.statuses?.map((s) => s.label)).toEqual([
       '진행중',
       '마감',
-      '선정 완료',
     ]);
     expect(rfp?.links?.map((l) => l.href)).toEqual(['/rfp-create']);
     expect(rfp?.links?.[0]?.label).toBe('새 견적 요청');
@@ -190,7 +188,7 @@ describe('getBreadcrumbSegments', () => {
 });
 
 describe('getChordMap', () => {
-  it('routes the buyer "g" chords incl. submenu (statuses 1-3, 새 RFP c, messages m, settings p/t)', () => {
+  it('routes the buyer "g" chords incl. submenu (statuses 1-2, 새 RFP c, messages m, settings p/t)', () => {
     expect(getChordMap('buyer')).toEqual({
       h: '/home',
       n: '/notifications',
@@ -199,7 +197,6 @@ describe('getChordMap', () => {
       s: '/settings/profile',
       '1': '/rfp?status=active',
       '2': '/rfp?status=closed',
-      '3': '/rfp?status=awarded',
       c: '/rfp-create',
       p: '/settings/profile',
       t: '/settings/members',
@@ -249,7 +246,6 @@ describe('submenu shortcuts', () => {
     expect(rfp?.statuses?.map((s) => s.shortcut)).toEqual([
       { kind: 'chord', lead: 'g', key: '1' },
       { kind: 'chord', lead: 'g', key: '2' },
-      { kind: 'chord', lead: 'g', key: '3' },
     ]);
   });
 

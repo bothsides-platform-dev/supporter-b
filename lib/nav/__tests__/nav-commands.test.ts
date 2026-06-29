@@ -16,7 +16,6 @@ describe('getNavCommands — buyer', () => {
         '/rfp',
         '/rfp?status=active',
         '/rfp?status=closed',
-        '/rfp?status=awarded',
         '/rfp-create',
         '/settings/profile',
         '/settings/members',
