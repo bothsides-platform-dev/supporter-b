@@ -1,7 +1,7 @@
 // Buyer 파이프라인 칸반 — RFP 1건 = 카드 1장. 2개 컬럼 (진행중/마감).
 // 분류는 `RFP.status` 로 도출되는 derived 값.
-// 사용자가 임의로 컬럼을 옮기는 건 드래그 매트릭스가 허락하는 전이만 가능 (각각이
-// 도메인 액션 또는 상세 이동을 트리거 — awardRfpAction / cancelRfpAction).
+// 사용자가 임의로 컬럼을 옮기는 건 드래그 매트릭스가 허락하는 전이만 가능 (진행중→마감
+// 드롭은 RFP 상세로 이동 — 선정/취소는 상세에서 결정).
 //
 // 이 파일은 client component 에서도 import 가능 — repo / DB import 없이 순수 도메인.
 // 데이터 로더는 ./board/loadBoard.ts 참조.
@@ -34,11 +34,11 @@ export type BuyerKanbanCard = {
   isSample: boolean;
   /** raw RFP status — 마감 컬럼 안 결과 칩(선정완료/미선정/취소) 도출용. */
   status: RfpStatus;
-  /** status='cancelled' — 마감 컬럼 안에서 취소 칩으로 구분. */
+  /** status==='cancelled' 파생 플래그 (결과 칩 자체는 status 로 도출). */
   isCancelled: boolean;
 };
 
-// pure — 단위 테스트 가능. status 만으로 3단계 분류 (진행중/마감/계약완료).
+// pure — 단위 테스트 가능. status 만으로 2단계 분류 (진행중/마감 — 선정완료·취소는 마감으로 폴드).
 // draft(작성중)는 보드 단계에서 제거됐다 — draft RFP 는 loadBoard 에서 카드로 만들어지기
 // 전에 걸러지므로, 방어적으로 여기 도달하면 'active' 로 폴백한다(실사용 경로 아님).
 export function classifyBuyerRfp(args: { rfp: RFP }): BuyerKanbanStage {
