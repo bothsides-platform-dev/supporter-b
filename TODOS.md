@@ -57,21 +57,6 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 
 ## GEO / SEO
 
-### llms.txt 쌍 route handler — 공통 헤더 상수 추출 (P2)
-`app/llms.txt/route.ts`와 `app/llms-full.txt/route.ts`의 `Content-Type`·`Cache-Control`·`Vary` 헤더가 두 파일에 중복 선언된다. `lib/seo/llms.ts` 또는 공용 `route-utils` 모듈에 `TEXT_PLAIN_HEADERS` 상수를 추출해 단일 출처화하면 TTL 변경 등 헤더 수정이 한 곳만 건드린다. (발견: /ship maintainability v0.2.51.0, 2026-06-28)
-
-### llms.ts buildLlmsTxt / buildLlmsFullTxt 머리말 블록 DRY 추출 (P2)
-H1→blockquote→intro→'핵심 정보'→'검증 지표' preamble 렌더링 블록이 두 빌더 함수에 거의 동일하게 복사돼 있다. `pushPreamble(lines, origin, f)` 내부 헬퍼 추출로 단일 출처화. (발견: /ship maintainability v0.2.51.0, 2026-06-28)
-
-### product-facts.ts BUYER_FACTS.metrics — LandingHero 드리프트 가드 (P2)
-`BUYER_FACTS.metrics` 캡션 문자열이 `LandingHero.tsx:METRICS`를 수동 미러하며 드리프트 위험을 코멘트로 문서화해 뒀다. 두 파일을 공유 상수로 연결하거나 드리프트 가드 테스트(캡션 문자열 일치 단언)를 추가한다. (발견: /ship maintainability v0.2.51.0, 2026-06-28)
-
-### proxy-matcher.ts EXCLUDED_SEGMENTS — 정규식 `.` 미이스케이프 (P2)
-`'llms.txt'`·`'llms-full.txt'`(및 기존 `'robots.txt'`·`'sitemap.xml'`)를 그대로 negative lookahead 정규식에 합치면 `.`이 임의 문자와 매치된다. 현재 `/llmsXtxt` 같은 라우트가 없어 실 익스플로잇 경로는 없지만, 미래 경로 추가 시 의도치 않은 auth bypass 가능성. `EXCLUDED_SEGMENTS` 문자열에서 `.`을 `\\.`으로 이스케이프하거나 `escapeRegex` 헬퍼를 도입. (발견: /ship adversarial v0.2.51.0, 2026-06-28)
-
-### rel=alternate 자동발견 링크 (P3)
-buyer `<head>`에 `<link rel="alternate" type="text/plain" href="/llms.txt">` 추가로 AI 크롤러가 llms.txt를 head에서 자동발견 가능. Next.js `metadata.alternates` API로 추가. (llms.txt 계획 deferred 항목)
-
 ## Completed
 
 ### workspaces.has_logo 컬럼 DROP

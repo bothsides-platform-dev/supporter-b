@@ -6,6 +6,12 @@ import {
   type SeoLink,
 } from '@/lib/seo/product-facts';
 
+export const TEXT_PLAIN_HEADERS: HeadersInit = {
+  'Content-Type': 'text/plain; charset=utf-8',
+  'Cache-Control': 'public, max-age=3600, s-maxage=3600',
+  'Vary': 'Host',
+};
+
 /** Join a relative path or in-page anchor to the host origin. */
 function abs(origin: string, path: string): string {
   return `${origin}${path}`;
@@ -14,6 +20,24 @@ function abs(origin: string, path: string): string {
 function renderLink(origin: string, link: SeoLink): string {
   const url = abs(origin, link.path);
   return link.desc ? `- [${link.title}](${url}): ${link.desc}` : `- [${link.title}](${url})`;
+}
+
+function pushPreamble(lines: string[], f: AudienceFacts, fullFormat: boolean): void {
+  lines.push(`# ${PRODUCT_NAME}`, '');
+  lines.push(`> ${f.summary}`, '');
+  lines.push(f.intro, '');
+
+  lines.push(...(fullFormat ? ['## 핵심 정보', ''] : ['## 핵심 정보']));
+  for (const fact of f.facts) lines.push(`- ${fact}`);
+  lines.push('');
+
+  if (f.metrics?.length) {
+    lines.push(...(fullFormat ? ['## 검증 지표', ''] : ['## 검증 지표']));
+    for (const m of f.metrics) {
+      lines.push(fullFormat ? `- **${m.value}** — ${m.caption}` : `- ${m.value} — ${m.caption}`);
+    }
+    lines.push('');
+  }
 }
 
 /**
@@ -25,19 +49,7 @@ export function buildLlmsTxt(ctx: SeoHostContext): string {
   const f: AudienceFacts = audienceFacts(ctx.type);
   const lines: string[] = [];
 
-  lines.push(`# ${PRODUCT_NAME}`, '');
-  lines.push(`> ${f.summary}`, '');
-  lines.push(f.intro, '');
-
-  lines.push('## 핵심 정보');
-  for (const fact of f.facts) lines.push(`- ${fact}`);
-  lines.push('');
-
-  if (f.metrics?.length) {
-    lines.push('## 검증 지표');
-    for (const m of f.metrics) lines.push(`- ${m.value} — ${m.caption}`);
-    lines.push('');
-  }
+  pushPreamble(lines, f, false);
 
   lines.push(`## ${f.highlightsTitle}`);
   for (const h of f.highlights) lines.push(`- ${h.title}: ${h.desc}`);
@@ -71,19 +83,7 @@ export function buildLlmsFullTxt(ctx: SeoHostContext): string {
   const f: AudienceFacts = audienceFacts(ctx.type);
   const lines: string[] = [];
 
-  lines.push(`# ${PRODUCT_NAME}`, '');
-  lines.push(`> ${f.summary}`, '');
-  lines.push(f.intro, '');
-
-  lines.push('## 핵심 정보', '');
-  for (const fact of f.facts) lines.push(`- ${fact}`);
-  lines.push('');
-
-  if (f.metrics?.length) {
-    lines.push('## 검증 지표', '');
-    for (const m of f.metrics) lines.push(`- **${m.value}** — ${m.caption}`);
-    lines.push('');
-  }
+  pushPreamble(lines, f, true);
 
   lines.push(`## ${f.highlightsTitle}`, '');
   for (const h of f.highlights) lines.push(`### ${h.title}`, '', h.desc, '');
