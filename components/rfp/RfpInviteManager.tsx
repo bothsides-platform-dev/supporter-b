@@ -1,14 +1,12 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import * as Popover from '@radix-ui/react-popover';
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from 'cmdk';
-import { getChoseong } from 'es-hangul';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
 import type { ChipColor } from '@/components/primitives/Chip';
+import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import {
   addPgWorkspacesToRfpAction,
@@ -19,18 +17,6 @@ import type { PgWorkspace } from '@/hooks/useLazyPgWorkspaces';
 import { toast } from '@/lib/toast';
 import { Divider } from '@/components/ui/Divider';
 import type { InvitationStatus } from '@/lib/types/invitation';
-
-/**
- * cmdk의 filter prop에 사용하는 한국어 초성 검색 필터.
- * 부분 문자열(대소문자 무관) 또는 초성 연속 중 하나가 일치하면 1, 모두 불일치면 0을 반환한다.
- * cmdk v1 spec: 0 = hidden, 양수 = visible.
- */
-export function chosungCommandFilter(value: string, search: string): number {
-  if (search === '') return 1;
-  if (value.toLowerCase().includes(search.toLowerCase())) return 1;
-  if (getChoseong(value).includes(search)) return 1;
-  return 0;
-}
 
 type InvitationView = {
   wsId: string;
@@ -68,16 +54,24 @@ export function RfpInviteManager({
   canEdit,
 }: Props) {
   const router = useRouter();
-  const { pgList, loading: pgLoading, error: pgError, load: loadPg } = useLazyPgWorkspaces();
-  const [pgOpen, setPgOpen] = useState(false);
+  const { pgList, error: pgError, load: loadPg } = useLazyPgWorkspaces();
   const [inputError, setInputError] = useState('');
   const [pending, startTransition] = useTransition();
 
+  // 추가 영역(canEdit)에서만 PG 목록을 불러온다. 트리거(팝오버)가 없어졌으므로
+  // 마운트 시 eager-load. 비편집 RFP는 추가 영역이 없어 fetch 도 발생하지 않는다.
+  // (훅 규칙상 effect 는 최상위에 두고 canEdit 으로 본문을 가드.)
+  useEffect(() => {
+    if (canEdit) loadPg();
+  }, [canEdit, loadPg]);
+
   const draftCount = invitations.filter((i) => i.status === 'draft').length;
+  const invitedIds = new Set(invitations.map((i) => i.wsId));
+  const availablePgs = pgList.filter((pg) => !invitedIds.has(pg.id));
 
   const handleSelect = (ws: PgWorkspace) => {
     setInputError('');
-    if (invitations.some((i) => i.wsId === ws.id)) {
+    if (invitedIds.has(ws.id)) {
       setInputError('이미 추가된 워크스페이스입니다.');
       return;
     }
@@ -141,69 +135,57 @@ export function RfpInviteManager({
 
       {canEdit && (
         <>
-          {/* PG 검색 추가 */}
+          {/* PG 칩 추가 */}
           <div className="space-y-2">
             <Label size="md" muted={false}>PG 워크스페이스 추가</Label>
-            <Popover.Root
-              open={pgOpen}
-              onOpenChange={(v) => {
-                setPgOpen(v);
-                if (v) loadPg();
-              }}
-            >
-              <Popover.Trigger asChild>
-                <button
-                  type="button"
-                  disabled={pending}
-                  className="w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-left text-[14px] text-[var(--md-sys-color-outline)] hover:border-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors disabled:opacity-50"
-                >
-                  PG사 검색…
-                </button>
-              </Popover.Trigger>
-              <Popover.Portal>
-                <Popover.Content
-                  align="start"
-                  sideOffset={4}
-                  className="z-50 w-[var(--radix-popover-trigger-width)] bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] rounded-md shadow-sm overflow-hidden"
-                >
-                  <Command filter={chosungCommandFilter}>
-                    <CommandInput
-                      placeholder="PG사 이름 검색"
-                      className="w-full bg-transparent px-3 py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none border-b border-[var(--md-sys-color-outline-variant)]"
-                    />
-                    <CommandList className="max-h-[200px] overflow-y-auto">
-                      <CommandEmpty className="py-2 px-3 font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-                        {pgLoading ? 'LOADING…' : pgError ?? '결과 없음'}
-                      </CommandEmpty>
-                      {pgList.map((pg) => {
-                        const alreadyAdded = invitations.some((i) => i.wsId === pg.id);
-                        return (
-                          <CommandItem
-                            key={pg.id}
-                            value={pg.displayName}
-                            disabled={alreadyAdded}
-                            onSelect={() => {
-                              handleSelect(pg);
-                              setPgOpen(false);
-                            }}
-                            className="px-3 py-2 text-[13px] text-[var(--md-sys-color-on-surface)] data-[selected=true]:bg-[var(--md-sys-color-surface-container-high)] aria-disabled:opacity-40 cursor-pointer"
-                          >
-                            {pg.displayName}
-                          </CommandItem>
-                        );
-                      })}
-                    </CommandList>
-                  </Command>
-                </Popover.Content>
-              </Popover.Portal>
-            </Popover.Root>
+
+            {pgError ? (
+              <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]">
+                {pgError}
+              </p>
+            ) : pgList.length === 0 ? (
+              <p
+                role="status"
+                className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]"
+              >
+                불러오는 중…
+              </p>
+            ) : availablePgs.length === 0 ? (
+              <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+                모든 PG를 이미 추가했어요.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-[6px]">
+                {availablePgs.map((pg) => (
+                  <button
+                    key={pg.id}
+                    type="button"
+                    disabled={pending}
+                    onClick={() => handleSelect(pg)}
+                    className="inline-flex items-center gap-1.5 py-[5px] pl-[5px] pr-3 rounded-[6px] text-[13px] bg-transparent text-[var(--md-sys-color-on-surface)] border border-[var(--md-sys-color-outline-variant)] hover:border-[var(--md-sys-color-outline)] disabled:opacity-50 transition-colors"
+                  >
+                    {/* 로고는 장식 — 칩 텍스트가 이미 PG명을 알리므로 a11y 트리에서 숨김 */}
+                    <span aria-hidden className="inline-flex">
+                      <WorkspaceAvatar
+                        size="sm"
+                        name={pg.name}
+                        workspaceId={pg.id}
+                        logoUpdatedAt={pg.logoUpdatedAt}
+                      />
+                    </span>
+                    {pg.displayName}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {inputError && (
               <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]">
                 {inputError}
               </p>
             )}
             <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-              추가된 PG는 [ 대기중 ] 상태로 쌓여요. 아래 &ldquo;초대 보내기&rdquo;를
+              칩을 누르면 &ldquo;대기중&rdquo;으로 쌓여요. 아래 &ldquo;초대 보내기&rdquo;를
               누르면 메일이 나가요.
             </p>
           </div>
@@ -225,7 +207,6 @@ export function RfpInviteManager({
                   : '보낼 대기 PG 없음'}
             </Button>
           </div>
-
         </>
       )}
     </div>
