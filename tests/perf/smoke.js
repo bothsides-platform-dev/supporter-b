@@ -28,8 +28,13 @@ export default function smokeScenario() {
   login(BUYER_EMAIL, BUYER_PASSWORD);
 
   // 홈 페이지 로드
+  // r.url 은 리다이렉트 추종 후 최종 URL — 미인증이면 (app) 가드가 /login 으로
+  // 보내므로, 세션 쿠키가 실제로 재전송돼 인증 페이지를 측정 중인지 확인한다.
   const homeRes = http.get(`${BASE_URL}/home`, { tags: { name: 'home' } });
-  check(homeRes, { 'home 200': (r) => r.status === 200 });
+  check(homeRes, {
+    'home 200': (r) => r.status === 200,
+    'home authenticated (not /login)': (r) => !r.url.includes('/login'),
+  });
 
   // RFP 목록
   const rfpRes = http.get(`${BASE_URL}/rfp`, { tags: { name: 'rfp-list' } });
@@ -42,7 +47,10 @@ export default function smokeScenario() {
 
   // 인박스 목록
   const inboxRes = http.get(`${BASE_URL}/inbox`, { tags: { name: 'inbox' } });
-  check(inboxRes, { 'inbox 200': (r) => r.status === 200 });
+  check(inboxRes, {
+    'inbox 200': (r) => r.status === 200,
+    'inbox authenticated (not /login)': (r) => !r.url.includes('/login'),
+  });
 
   if (RFP_ID) {
     // 인박스 상세 (견적 작성 페이지)

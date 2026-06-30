@@ -38,7 +38,10 @@ export default function loadScenario() {
   login(BUYER_EMAIL, BUYER_PASSWORD);
 
   const rfpListRes = http.get(`${BASE_URL}/rfp`, { tags: { name: 'rfp-list' } });
-  check(rfpListRes, { 'rfp-list 200': (r) => r.status === 200 });
+  check(rfpListRes, {
+    'rfp-list 200': (r) => r.status === 200,
+    'rfp-list authenticated (not /login)': (r) => !r.url.includes('/login'),
+  });
 
   sleep(2);
 
@@ -48,7 +51,10 @@ export default function loadScenario() {
   login(pgEmail, PG_PASSWORD);
 
   const inboxRes = http.get(`${BASE_URL}/inbox`, { tags: { name: 'inbox' } });
-  check(inboxRes, { 'inbox 200': (r) => r.status === 200 });
+  check(inboxRes, {
+    'inbox 200': (r) => r.status === 200,
+    'inbox authenticated (not /login)': (r) => !r.url.includes('/login'),
+  });
 
   if (RFP_ID) {
     const detailRes = http.get(`${BASE_URL}/inbox/${RFP_ID}`, { tags: { name: 'inbox-detail' } });
