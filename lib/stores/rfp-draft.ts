@@ -39,6 +39,9 @@ type RfpDraftStore = {
   boardVisible: boolean;
   currentFeeVisibleToPg: boolean;
   contractType: 'new' | 'renewal' | null;
+  // 위저드 마운트 시 사용 가능한 PG를 1회 전체 기본선택했는지 여부.
+  // 사용자가 이후 일부/전체를 해제해도 재진입 때 다시 채우지 않도록 하는 가드.
+  pgSelectionInitialized: boolean;
   setField: <K extends keyof RfpDraftStore>(key: K, value: RfpDraftStore[K]) => void;
   reset: () => void;
 };
@@ -64,6 +67,7 @@ const defaultState = {
   boardVisible: true,
   currentFeeVisibleToPg: true,
   contractType: null as 'new' | 'renewal' | null,
+  pgSelectionInitialized: false,
 };
 
 export const useRfpDraftStore = create<RfpDraftStore>()(
@@ -78,7 +82,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       storage: createJSONStorage(() => localStorage),
       // 계약 유형 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
       // 백필하므로 진행 중인 draft가 폐기되지 않는다.
-      version: 6,
+      version: 7,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<RfpDraftStore>;
         if (version < 1) {
@@ -118,6 +122,14 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
             currentFeeVisibleToPg: state.currentFeeVisibleToPg ?? true,
           };
         }
+        if (version < 7) {
+          // 배포 시점에 이미 진행 중이던 draft는 "초기화됨"으로 취급해 기존
+          // PG 선택을 덮어쓰지 않는다. 신규 draft는 defaultState의 false를 받는다.
+          return {
+            ...state,
+            pgSelectionInitialized: state.pgSelectionInitialized ?? true,
+          };
+        }
         return state;
       },
       // Only persist form data fields, not UI/method state
@@ -142,6 +154,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         boardVisible: state.boardVisible,
         currentFeeVisibleToPg: state.currentFeeVisibleToPg,
         contractType: state.contractType,
+        pgSelectionInitialized: state.pgSelectionInitialized,
       }),
     },
   ),
