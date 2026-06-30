@@ -33,11 +33,9 @@ function resultColumnOverflow(
   current: URLSearchParams,
 ): { limit: number; moreHref: string } | null {
   if (cardType === 'rfp') {
-    // 표의 'closed' 토큰은 cancelled 를 폴드 (status-filter.ts) — 마감 컬럼 모집단과 일치.
+    // 표의 'closed' 토큰은 cancelled+awarded 를 폴드 (status-filter.ts) — 마감 컬럼 모집단과 일치.
     if (lifecycleKey === 'closed')
       return { limit: RESULT_COLUMN_LIMIT, moreHref: tableDeepLink('/rfp', 'closed', current) };
-    if (lifecycleKey === 'awarded')
-      return { limit: RESULT_COLUMN_LIMIT, moreHref: tableDeepLink('/rfp', 'awarded', current) };
     return null;
   }
   // invitation — 표의 '마감' 필터가 won/lost 를 함께 폴드한다.

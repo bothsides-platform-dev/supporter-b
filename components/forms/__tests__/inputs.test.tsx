@@ -360,3 +360,51 @@ describe('infoTerm', () => {
     expect(screen.queryByRole('button', { name: /설명/ })).toBeNull();
   });
 });
+
+describe('PercentInput max (isAllowed 상한)', () => {
+  it('max 초과 값은 입력되지 않는다', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<PercentInput label="수수료" value="" onChange={onChange} max={100} />);
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    await user.type(input, '150'); // 1→"1", 5→"15", 0→"150"(>100 거부)
+    expect(input.value).toBe('15');
+    expect(onChange).not.toHaveBeenCalledWith('150');
+  });
+});
+
+describe('CurrencyInput max (isAllowed 상한)', () => {
+  it('max 초과 금액은 입력되지 않는다', async () => {
+    const user = userEvent.setup();
+    render(<CurrencyInput label="가상계좌 건당 수수료" value="" onChange={() => {}} max={100000} />);
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    await user.type(input, '150000'); // 15,000까지 허용, 6번째 0(150000>100000) 거부
+    expect(input.value).toBe('15,000');
+  });
+});
+
+describe('FeeRateCell max (isAllowed 상한)', () => {
+  it('max 초과 값은 입력되지 않는다', async () => {
+    const user = userEvent.setup();
+    render(<FeeRateCell value="" onChange={() => {}} testId="c" max={100} />);
+    const input = screen.getByTestId('c') as HTMLInputElement;
+    await user.type(input, '150');
+    expect(input.value).toBe('15');
+  });
+});
+
+describe('DayOffsetInput marker/error', () => {
+  it('markerState="empty" 이면 "필수" 칩을 렌더한다', () => {
+    render(<DayOffsetInput label="정산 주기" value="" onChange={() => {}} markerState="empty" />);
+    expect(screen.getByText('필수')).toBeInTheDocument();
+  });
+  it('markerState 미전달이면 칩을 렌더하지 않는다 (회귀)', () => {
+    render(<DayOffsetInput label="정산 주기" value="" onChange={() => {}} />);
+    expect(screen.queryByText('필수')).toBeNull();
+    expect(screen.queryByText('입력 완료')).toBeNull();
+  });
+  it('error 가 있으면 에러 메시지를 alert 로 렌더한다', () => {
+    render(<DayOffsetInput label="정산 주기" value="" onChange={() => {}} error="정산 주기를 입력해주세요" />);
+    expect(screen.getByRole('alert')).toHaveTextContent('정산 주기를 입력해주세요');
+  });
+});

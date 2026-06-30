@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { HTTPError } from 'ky';
 import { http } from '@/lib/http';
 import { Divider } from '@/components/ui/Divider';
+import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
 import { Select } from '@/components/primitives/Select';
@@ -41,6 +42,13 @@ import { BidStepReviewContainer } from './BidStepReviewContainer';
 
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap((c) => c.methods);
 const TOTAL_STEPS = BID_WIZARD_STEPS.length;
+
+// 서버 거부코드 → 그 원인이 있는 단계. 없으면 step4(검토)에서 일반 메시지.
+// (UI상 정상 발생 불가한 PAYMENT_METHOD_NOT_REQUESTED 도 변조·직접호출 안전망으로 매핑.)
+const SERVER_ERROR_STEP: Record<string, number> = {
+  PAYMENT_METHOD_NOT_REQUESTED: 2,
+  INVALID_ATTACHMENT: 3,
+};
 
 type Props = {
   rfp: PgRfpDetailData['rfp'];
@@ -95,6 +103,12 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  // 제출/이동 시도 후 미충족이 확인된 단계 — 사이드바·프로그레스바에 ✗(error) 표시.
+  const [failedSteps, setFailedSteps] = useState<Set<number>>(new Set());
+  const markFailed = useCallback(
+    (n: number) => setFailedSteps((prev) => { const next = new Set(prev); next.add(n); return next; }),
+    [],
+  );
   // 온보딩 샘플 전용 흐름: 제출 → '검토중' 안내 → 잠시 뒤 선정 시뮬레이트 → 축하.
   const [samplePhase, setSamplePhase] = useState<'idle' | 'reviewing' | 'awarded'>('idle');
 
@@ -182,7 +196,6 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
     feeInputMethods.some((m) => !isTieredMethod(m) && feeFilled(m)) ||
     customPaymentMethods.some((c) => feeFilled(c.id));
   const anyFeeFilled = anyTieredFilled || anySingleFilled;
-  const canSubmit = !pending && !proposalUploading && cycleNum !== '' && parseInt(cycleNum) > 0 && anyFeeFilled;
 
   const applyTemplate = (t: QuoteTemplateOption) => {
     clearDraft();
@@ -204,6 +217,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
 
   // 단계 이동 — 자유 점프(구매사 위저드 미러)
   const completed = getBidWizardValidity({ cycleNum, anyFeeFilled }).map((s) => s.complete);
+  const failedAt = BID_WIZARD_STEPS.map((s) => failedSteps.has(s.num));
   const advance = useCallback(() => setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1)), []);
   const back = useCallback(() => setCurrentStep((s) => Math.max(1, s - 1)), []);
   const goToStep = useCallback(
@@ -226,15 +240,17 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
   );
 
   const handleSubmit = useCallback(() => {
-    // 발송 버튼은 막지 않되, 미충족 단계가 있으면 그 단계로 이동.
+    // 발송 버튼은 막지 않는다. 미충족 단계가 있으면 hint 토스트 + 그 단계로 이동 + ✗ 표시.
     const incomplete = getFirstIncompleteBidStep({ cycleNum, anyFeeFilled });
     if (incomplete) {
+      toast(incomplete.hint, { type: 'error' });
+      markFailed(incomplete.num);
       setCurrentStep(incomplete.num);
       return;
     }
     setSubmitError(null);
     setSubmitConfirmOpen(true);
-  }, [cycleNum, anyFeeFilled]);
+  }, [cycleNum, anyFeeFilled, markFailed]);
 
   // 4단계가 공유하는 컨텍스트 값 — prop-drilling 제거. 안정 참조(useCallback)
   // 액션 + 폼 상태를 묶어 useMemo 로 캐싱해, 무관한 단계의 리렌더를 줄인다.
@@ -252,7 +268,8 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
       proposal,
       pending,
       submitError,
-      canSubmit,
+      settlementAttempted: failedSteps.has(1),
+      feesAttempted: failedSteps.has(2),
       setField,
       setFee,
       uploadProposal: (f) => void uploadProposal(f),
@@ -275,7 +292,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
       proposal,
       pending,
       submitError,
-      canSubmit,
+      failedSteps,
       setField,
       setFee,
       uploadProposal,
@@ -320,7 +337,9 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
         }
       } else {
         setSubmitError(r.error);
-        setCurrentStep(4);
+        const step = SERVER_ERROR_STEP[r.error] ?? 4;
+        if (step !== 4) markFailed(step);
+        setCurrentStep(step);
       }
     });
   };
@@ -369,13 +388,14 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
       />
 
       <BidWizardProvider value={wizardContext}>
-      <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[8px] overflow-hidden">
+      <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[8px] overflow-hidden h-full flex flex-col">
         <BidContextStrip buyerName={buyerName} rfp={rfp} currentStep={currentStep} feeInputMethods={feeInputMethods} />
 
-        <div className="flex min-h-0">
+        <div className="flex flex-1 min-h-0">
           <WizardStepSidebar
             currentStep={currentStep}
             completed={completed}
+            failedAt={failedAt}
             onStepClick={goToStep}
             steps={BID_WIZARD_STEPS}
             title="견적 작성"
@@ -401,10 +421,10 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
             }
           />
 
-          <div className="flex-1 min-w-0 flex flex-col">
-            <WizardProgressBar currentStep={currentStep} completed={completed} onStepClick={goToStep} steps={BID_WIZARD_STEPS} />
+          <div className="flex-1 min-w-0 flex flex-col min-h-0">
+            <WizardProgressBar currentStep={currentStep} completed={completed} failedAt={failedAt} onStepClick={goToStep} steps={BID_WIZARD_STEPS} />
 
-            <div className="px-6 py-6">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
               <div className="flex items-center gap-3 mb-6">
                 <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                   {String(currentStep).padStart(2, '0')} — {BID_WIZARD_STEPS[currentStep - 1].label}
@@ -446,6 +466,35 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
               {currentStep === 3 && <BidStepProposalContainer />}
 
               {currentStep === 4 && <BidStepReviewContainer />}
+            </div>
+
+            <div
+              data-testid="wizard-nav-footer"
+              className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-6 py-4 flex items-center justify-between"
+            >
+              <div>
+                {currentStep > 1 && (
+                  <Button type="button" variant="text" onClick={back} icon={<span aria-hidden>←</span>}>
+                    {BID_WIZARD_STEPS[currentStep - 2].label}
+                  </Button>
+                )}
+              </div>
+              <div>
+                {currentStep < TOTAL_STEPS ? (
+                  <Button type="button" onClick={advance} trailingIcon={<span aria-hidden>→</span>}>
+                    {BID_WIZARD_STEPS[currentStep].label}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="lg"
+                    onClick={handleSubmit}
+                    disabled={pending || !!proposalUploading}
+                  >
+                    {pending ? '보내는 중…' : '견적 보내기'}
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>

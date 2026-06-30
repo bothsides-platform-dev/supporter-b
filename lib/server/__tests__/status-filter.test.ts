@@ -1,5 +1,5 @@
 // Status filter — param token → domain status mapping.
-// RFP: sidebar uses /rfp?status=draft|active|closed|awarded
+// RFP: sidebar uses /rfp?status=draft|active|closed
 //      'active' is not a domain enum value — it maps to domain 'sent'
 // Inbox: sidebar uses /inbox?status=new|submitted|closed, mapped to bid-aware
 //      PG kanban stages (classifyPgInvitation) — NOT invitation status:
@@ -29,12 +29,12 @@ describe('mapRfpParam', () => {
     expect(mapRfpParam('active')).toEqual(['sent']);
   });
 
-  it('closed 토큰은 cancelled 를 폴드한다 (칸반 마감 컬럼과 동일 모집단)', () => {
-    expect(mapRfpParam('closed')).toEqual(['closed', 'cancelled']);
+  it('closed 토큰은 cancelled·awarded 를 폴드한다 (칸반 마감 컬럼과 동일 모집단)', () => {
+    expect(mapRfpParam('closed')).toEqual(['closed', 'cancelled', 'awarded']);
   });
 
-  it('maps awarded → [awarded]', () => {
-    expect(mapRfpParam('awarded')).toEqual(['awarded']);
+  it('awarded 토큰 제거 — 마감으로 폴드되어 undefined', () => {
+    expect(mapRfpParam('awarded')).toBeUndefined();
   });
 
   it('returns undefined for unknown / missing param', () => {
@@ -87,16 +87,14 @@ describe('filterRfpsByParam', () => {
     expect(result[0].status).toBe('sent');
   });
 
-  it('param=closed 는 closed + cancelled 둘 다 반환 (보드 마감 컬럼 딥링크 모집단 일치)', () => {
+  it('param=closed 는 closed + cancelled + awarded 반환 (보드 마감 컬럼 딥링크 모집단 일치)', () => {
     const result = filterRfpsByParam(allRfps, 'closed');
-    expect(result).toHaveLength(2);
-    expect(result.map((r) => r.status).sort()).toEqual(['cancelled', 'closed']);
+    expect(result).toHaveLength(3);
+    expect(result.map((r) => r.status).sort()).toEqual(['awarded', 'cancelled', 'closed']);
   });
 
-  it('filters to awarded when param=awarded', () => {
-    const result = filterRfpsByParam(allRfps, 'awarded');
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe('awarded');
+  it('param=awarded 는 빈 배열 (토큰 제거 — 마감으로 통합)', () => {
+    expect(filterRfpsByParam(allRfps, 'awarded')).toHaveLength(0);
   });
 
   it('returns empty array for unknown param (no match)', () => {

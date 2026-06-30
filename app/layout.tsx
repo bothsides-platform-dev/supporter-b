@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   keywords: [...siteConfig.keywords],
   applicationName: siteConfig.name,
   authors: [{ name: siteConfig.name }],
-  alternates: { canonical: "/" },
+  alternates: { canonical: "/", types: { "text/plain": "/llms.txt" } },
   openGraph: {
     type: "website",
     locale: siteConfig.locale,

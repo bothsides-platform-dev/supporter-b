@@ -538,6 +538,8 @@ export interface UserRepo {
   markEmailVerified(email: string, tx?: Tx): Promise<void>;
   /** JWT 무효화용 sessionVersion 단건 조회. 유저 없으면 undefined. */
   getSessionVersion(userId: string, tx?: Tx): Promise<number | undefined>;
+  /** sessionVersion +1 — 멤버 제거 등 세션 무효화가 필요한 경우. */
+  bumpSessionVersion(userId: string, tx?: Tx): Promise<void>;
   /** 이메일 인증 플래그 단건 조회(DB 라이브 read). 유저 없으면 undefined. */
   getEmailVerified(userId: string, tx?: Tx): Promise<boolean | undefined>;
   /** 이메일로 인증 플래그 조회 — 계정 없으면 undefined(미등록 식별용). */

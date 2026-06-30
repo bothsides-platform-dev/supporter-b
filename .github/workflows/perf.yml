@@ -1,0 +1,161 @@
+name: perf
+
+# PR: smoke (2 VU, 1분) — 빠른 회귀 확인
+# main push: load (10 VU, 20분) — 평균 부하 검증
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  perf:
+    name: k6 performance test
+    runs-on: ubuntu-latest
+    # load 테스트(main push)는 20분 + 빌드/설치 오버헤드 → 35분 백스톱.
+    # PR(smoke만)은 ~5분이지만 동일 잡이라 최악(=load) 기준으로 잡는다.
+    timeout-minutes: 35
+    # 잡 전체를 격리된 Node.js 컨테이너 안에서 실행
+    container:
+      image: node:22-bookworm-slim
+      options: --user root
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: supporter_b
+          POSTGRES_PASSWORD: supporter_b
+          POSTGRES_DB: supporter_b_perf
+        # container: 사용 시 서비스는 서비스 이름(postgres)이 호스트명 —
+        # 외부 포트 매핑 불필요
+        options: >-
+          --health-cmd "pg_isready -U supporter_b -d supporter_b_perf"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      # localhost → postgres (컨테이너 간 Docker 네트워크 호스트명)
+      DATABASE_URL: postgres://supporter_b:supporter_b@postgres:5432/supporter_b_perf
+      DATABASE_URL_TEST: postgres://supporter_b:supporter_b@postgres:5432/supporter_b_perf
+      AUTH_SECRET: perf-test-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      AUTH_TRUST_HOST: "true"
+      NEXT_PUBLIC_BASE_URL: http://localhost:3002
+      NEXT_PUBLIC_BUYER_ORIGIN: http://localhost:3002
+      NEXT_PUBLIC_PARTNER_ORIGIN: http://localhost:3002
+      # 빈 문자열은 production 부팅 가드(lib/env/check-production-config.ts)에 걸려
+      # `pnpm start`가 안 뜸. 가짜(non-empty) 키로 부팅만 통과시킨다.
+      # 이메일은 outbox→cron flush 경로라 k6 부하만으로는 실제 Resend 호출이 없다.
+      RESEND_API_KEY: "re_perf_fake_0000000000000000000000"
+      NTS_SERVICE_KEY: ""
+      CENTRIFUGO_URL: ""
+      NEXT_PUBLIC_CENTRIFUGO_URL: ""
+
+    steps:
+      # bookworm-slim에는 git·jq·curl이 없으므로 checkout 전에 설치
+      - name: Install system deps
+        run: apt-get update -qq && apt-get install -y -qq git jq curl
+
+      - uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@9 --activate
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: /root/.local/share/pnpm/store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── DB 세팅 ─────────────────────────────────────────────────────────
+      - name: Apply schema
+        run: pnpm exec drizzle-kit push --force
+
+      - name: Seed perf data
+        id: seed
+        run: |
+          mkdir -p tests/perf
+          # pnpm perf:seed가 출력하는 JSON을 파일 저장 + GITHUB_OUTPUT에 주입
+          SEED_JSON=$(pnpm perf:seed)
+          echo "$SEED_JSON" > tests/perf/seed-data.json
+          echo "BUYER_EMAIL=$(echo "$SEED_JSON" | jq -r '.buyerEmail')"  >> "$GITHUB_OUTPUT"
+          echo "PG_EMAIL_0=$(echo "$SEED_JSON"  | jq -r '.pgEmails[0]')" >> "$GITHUB_OUTPUT"
+          echo "RFP_ID_0=$(echo "$SEED_JSON"    | jq -r '.rfpIds[0]')"   >> "$GITHUB_OUTPUT"
+
+      # ── Next.js 빌드 + action ID 추출 ───────────────────────────────────
+      - name: Build Next.js
+        run: pnpm build
+
+      - name: Extract Server Action IDs
+        run: node scripts/extract-action-ids.mjs
+
+      # ── 서버 기동 ────────────────────────────────────────────────────────
+      - name: Start Next.js server
+        # 백그라운드 서버 로그를 파일로 캡처 — 기동 실패 원인을 진단 가능하게
+        run: |
+          PORT=3002 nohup pnpm start > /tmp/next-server.log 2>&1 &
+          echo "started next server (pid $!)"
+
+      - name: Wait for server
+        # curl 자체가 무한 대기(연결됐지만 응답 없음)하는 행을 막는 하드 백스톱
+        timeout-minutes: 3
+        run: |
+          for i in $(seq 1 30); do
+            # --connect-timeout: 부팅 중 거부는 즉시 실패(빠른 재시도)
+            # --max-time: 연결됐지만 응답 없는 요청도 5초에 끊어 루프 카운터를 살린다
+            if curl -sf --connect-timeout 3 --max-time 5 http://localhost:3002/api/auth/csrf > /dev/null; then
+              echo "Server ready"; exit 0
+            fi
+            echo "Waiting... ($i/30)"; sleep 2
+          done
+          echo "Server failed to start — last 100 lines of server log:"
+          tail -n 100 /tmp/next-server.log || true
+          exit 1
+
+      # ── k6 설치 ─────────────────────────────────────────────────────────
+      - name: Install k6
+        run: |
+          curl -L https://github.com/grafana/k6/releases/download/v0.55.0/k6-v0.55.0-linux-amd64.tar.gz \
+            | tar xz --strip-components=1 k6-v0.55.0-linux-amd64/k6
+          mv k6 /usr/local/bin/k6
+
+      # ── Smoke test (PR + main) ───────────────────────────────────────────
+      - name: Run smoke test
+        run: |
+          k6 run \
+            -e BASE_URL=http://localhost:3002 \
+            -e TEST_BUYER_EMAIL=${{ steps.seed.outputs.BUYER_EMAIL }} \
+            -e TEST_BUYER_PASSWORD=perf-password-123 \
+            -e TEST_PG_EMAIL=${{ steps.seed.outputs.PG_EMAIL_0 }} \
+            -e TEST_PG_PASSWORD=perf-password-123 \
+            -e TEST_RFP_ID=${{ steps.seed.outputs.RFP_ID_0 }} \
+            tests/perf/smoke.js
+
+      # ── Load test (main push 전용) ───────────────────────────────────────
+      - name: Run load test
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          k6 run \
+            -e BASE_URL=http://localhost:3002 \
+            -e TEST_BUYER_EMAIL=${{ steps.seed.outputs.BUYER_EMAIL }} \
+            -e TEST_BUYER_PASSWORD=perf-password-123 \
+            -e TEST_PG_EMAIL=${{ steps.seed.outputs.PG_EMAIL_0 }} \
+            -e TEST_PG_PASSWORD=perf-password-123 \
+            -e TEST_RFP_ID=${{ steps.seed.outputs.RFP_ID_0 }} \
+            tests/perf/load.js
+
+      # ── 결과 아티팩트 ────────────────────────────────────────────────────
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results-${{ github.run_number }}
+          path: |
+            tests/perf/action-ids.json
+            tests/perf/seed-data.json
+          retention-days: 14

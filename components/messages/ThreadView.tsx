@@ -39,7 +39,7 @@ import type { Rect } from './message-morph';
 
 type Props = {
   conversationId: string;
-  counterparty: { workspaceId: string; name: string; type: 'buyer' | 'pg' };
+  counterparty: { workspaceId: string; name: string; type: 'buyer' | 'pg'; logoUpdatedAt: string | null };
   /** 세션 사용자 — 낙관적 self 말풍선이 즉시 자기 이름을 보여줄 때 쓴다. */
   viewer: { userId: string; name: string; avatarUpdatedAt: string | null };
   messages: ThreadMessage[];
@@ -375,7 +375,7 @@ export function ThreadView({
           </button>
         )}
         <div className="relative">
-          <WorkspaceAvatar name={counterparty.name} size="md" workspaceId={counterparty.workspaceId} />
+          <WorkspaceAvatar name={counterparty.name} size="md" workspaceId={counterparty.workspaceId} logoUpdatedAt={counterparty.logoUpdatedAt} />
           <PresenceDot activity={online ? 'active' : 'offline'} />
         </div>
         <div className="min-w-0 flex-1">

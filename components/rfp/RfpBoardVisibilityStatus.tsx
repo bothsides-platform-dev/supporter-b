@@ -7,6 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 
 /**
  * 구매사 RFP 오픈 게시판 노출 상태 — 읽기전용.
@@ -15,6 +16,9 @@ import {
  * 변경은 불가 — 오픈 게시판 노출 여부는 처음 견적 요청 작성 시에만 선택 가능하다.
  */
 export function RfpBoardVisibilityStatus({ boardVisible }: { boardVisible: boolean }) {
+  // 오픈게시판 kill switch 동안에는 노출 상태 칩 자체를 숨긴다 (3개 호출처 일괄).
+  if (!OPEN_BOARD_ENABLED) return null;
+
   const chipLabel = boardVisible ? '게시판 노출 중' : '게시판 비노출';
   const description = boardVisible
     ? '다른 PG사가 이 견적 요청을 발견하고 참여를 요청할 수 있어요.'

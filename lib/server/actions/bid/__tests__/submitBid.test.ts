@@ -153,6 +153,30 @@ describe('submitBidAction', () => {
     expect(r.ok).toBe(false);
   });
 
+  it('rejects a malformed settleCycle and writes no bid (server trust boundary)', async () => {
+    const s = await seedSetup();
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+
+    const r = await submitBidAction({
+      rfpId: s.rfpId,
+      ...baseInput,
+      settleCycle: '협의', // free text — must not reach the DB
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+
+    const [bid] = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
+    expect(bid).toBeUndefined();
+  });
+
   it('canAccess passes — workspace peer who never claimed token can still submit', async () => {
     const s = await seedSetup();
     // 같은 PG 워크스페이스 동료 — 토큰 미클레임. 정책상 ws 멤버이면 제출 가능.

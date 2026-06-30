@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+vi.mock('@/lib/features/open-board', () => ({ OPEN_BOARD_ENABLED: true }));
 import { getNavCommands, getAccountCommands } from '../nav-config';
 
 // getNavCommands flattens the nav tree (top + workspace section + settings) into
@@ -15,7 +16,6 @@ describe('getNavCommands — buyer', () => {
         '/rfp',
         '/rfp?status=active',
         '/rfp?status=closed',
-        '/rfp?status=awarded',
         '/rfp-create',
         '/settings/profile',
         '/settings/members',

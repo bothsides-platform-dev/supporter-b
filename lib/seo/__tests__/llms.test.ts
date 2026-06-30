@@ -1,11 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { buildLlmsTxt, buildLlmsFullTxt } from '@/lib/seo/llms';
+import { buildLlmsTxt, buildLlmsFullTxt, TEXT_PLAIN_HEADERS } from '@/lib/seo/llms';
 import type { SeoHostContext } from '@/lib/seo/host';
 import { FAQ_ITEMS } from '@/components/landing/faq-data';
 import { PG_FAQ_ITEMS } from '@/components/landing/pg-faq-data';
 
 const BUYER: SeoHostContext = { type: 'buyer', origin: 'https://supporter-b.com' };
 const PG: SeoHostContext = { type: 'pg', origin: 'https://partner.supporter-b.com' };
+
+it('exports TEXT_PLAIN_HEADERS with correct response header values', () => {
+  expect((TEXT_PLAIN_HEADERS as Record<string, string>)['Content-Type']).toBe('text/plain; charset=utf-8');
+  expect((TEXT_PLAIN_HEADERS as Record<string, string>)['Cache-Control']).toBe('public, max-age=3600, s-maxage=3600');
+  expect((TEXT_PLAIN_HEADERS as Record<string, string>)['Vary']).toBe('Host');
+});
 
 describe('buildLlmsTxt', () => {
   it('starts with the product H1 and a blockquote summary (spec shape)', () => {
@@ -45,6 +51,31 @@ describe('buildLlmsTxt', () => {
     const pg = buildLlmsTxt(PG);
     expect(pg).not.toContain('0.89'); // buyer-only stat
     expect(buyer).not.toContain('콜드콜'); // pg-only framing
+  });
+});
+
+describe('preamble format', () => {
+  it('buildLlmsTxt: H2 heading immediately followed by list (no blank line)', () => {
+    const out = buildLlmsTxt(BUYER);
+    expect(out).toMatch(/## 핵심 정보\n- /);
+    expect(out).toMatch(/## 검증 지표\n- /);
+  });
+
+  it('buildLlmsTxt: metric values are NOT bolded', () => {
+    const out = buildLlmsTxt(BUYER);
+    expect(out).not.toMatch(/\*\*0\.89%\*\*/);
+    expect(out).toContain('- 0.89% — ');
+  });
+
+  it('buildLlmsFullTxt: H2 heading followed by blank line', () => {
+    const out = buildLlmsFullTxt(BUYER);
+    expect(out).toMatch(/## 핵심 정보\n\n- /);
+    expect(out).toMatch(/## 검증 지표\n\n- /);
+  });
+
+  it('buildLlmsFullTxt: metric values ARE bolded', () => {
+    const out = buildLlmsFullTxt(BUYER);
+    expect(out).toMatch(/\*\*0\.89%\*\* — /);
   });
 });
 

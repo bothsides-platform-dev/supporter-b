@@ -12,11 +12,7 @@ export const BidStepReviewContainer = memo(function BidStepReviewContainer() {
     feeInputMethods,
     customPaymentMethods,
     fees,
-    canSubmit,
-    pending,
     submitError,
-    back,
-    handleSubmit,
     onSaveTemplate,
   } = useBidWizardContext();
   return (
@@ -27,11 +23,7 @@ export const BidStepReviewContainer = memo(function BidStepReviewContainer() {
       feeInputMethods={feeInputMethods}
       customPaymentMethods={customPaymentMethods}
       fees={fees}
-      canSubmit={canSubmit}
-      pending={pending}
       submitError={submitError}
-      onBack={back}
-      onSubmit={handleSubmit}
       onSaveTemplate={onSaveTemplate}
     />
   );

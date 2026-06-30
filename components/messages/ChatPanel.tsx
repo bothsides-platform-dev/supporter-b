@@ -136,7 +136,7 @@ export function ChatPanel({
                 <Suspense key={conversationId} fallback={<ThreadSkeleton />}>
                   <ThreadPane
                     conversationId={conversationId}
-                    counterpartyFallback={{ ...counterparty, logoUpdatedAt: null }}
+                    counterpartyFallback={counterparty}
                     variant="rail"
                     defaultRfpId={rfpId}
                     sendDisabledReason={sendDisabledReason}

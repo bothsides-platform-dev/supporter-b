@@ -16,7 +16,6 @@ afterEach(cleanup);
 
 function renderStep(over: Partial<React.ComponentProps<typeof BidStepSettlement>> = {}) {
   const onField = vi.fn();
-  const onNext = vi.fn();
   render(
     <BidStepSettlement
       cycleUnit="D"
@@ -24,11 +23,10 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepSettlement>
       settleLimit="0"
       guaranteeInsurance="0"
       onField={onField}
-      onNext={onNext}
       {...over}
     />,
   );
-  return { onField, onNext };
+  return { onField };
 }
 
 describe('BidStepSettlement', () => {
@@ -63,10 +61,28 @@ describe('BidStepSettlement', () => {
     expect(cycleVals.some((v: string) => v.includes('.'))).toBe(false);
   });
 
-  it('다음 버튼 클릭 시 onNext 호출', async () => {
-    const user = userEvent.setup();
-    const { onNext } = renderStep();
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    expect(onNext).toHaveBeenCalled();
+});
+
+describe('BidStepSettlement 필수 마커/에러 (정산주기)', () => {
+  it('라벨에서 임시 별표(*)를 떼고 필수 칩으로 대체한다', () => {
+    renderStep({ cycleNum: '' });
+    expect(screen.queryByText('정산 주기 *')).toBeNull();
+    expect(screen.getByText('정산 주기')).toBeInTheDocument();
+    expect(screen.getByText('필수')).toBeInTheDocument(); // 비었으므로 'empty' → '필수'
+  });
+
+  it('정산주기가 채워지면 "입력 완료" 칩을 보인다', () => {
+    renderStep({ cycleNum: '1' });
+    expect(screen.getByText('입력 완료')).toBeInTheDocument();
+  });
+
+  it('attempted=true 이고 정산주기가 비면 빨간 에러 메시지를 보인다', () => {
+    renderStep({ cycleNum: '', attempted: true });
+    expect(screen.getByRole('alert')).toHaveTextContent('정산 주기를 입력해주세요');
+  });
+
+  it('attempted=false 이면 비어 있어도 에러 메시지는 없다', () => {
+    renderStep({ cycleNum: '' });
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

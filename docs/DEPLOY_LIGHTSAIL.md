@@ -106,6 +106,12 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > `merchant_grade` 영세 값 `small`→`sole` 통일은
 > `docs/migrations/rename-merchant-grade-small-to-sole.sql` 을 먼저 실행해야 push 가
 > enum diff 를 보지 않는다(미적용 시 push partial-fail + 기존 'small' row 고립).
+>
+> **v0.2.54.0 one-shot migration**: 칸반 '선정 완료' 컬럼이 '마감'으로 통합됨. 기존 워크스페이스에 남아 있는 `lifecycle_key='awarded'` 컬럼을 정리하려면 배포 후 1회 실행:
+> ```bash
+> cd bidit && tsx scripts/remove-awarded-kanban-columns.ts
+> ```
+> 멱등 스크립트 — 재실행 안전. 카드 FK는 `ON DELETE SET NULL` 이라 `resolveCardColumn` 이 lifecycle 에서 컬럼을 재도출해 자동 복구된다.
 
 ## 운영
 
