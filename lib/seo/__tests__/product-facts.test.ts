@@ -12,4 +12,14 @@ describe('hero-metrics drift guard', () => {
   it('HERO_METRICS count matches BUYER_FACTS.metrics count', () => {
     expect(HERO_METRICS.length).toBe(audienceFacts('buyer').metrics!.length);
   });
+
+  it('HERO_METRICS formatted values match BUYER_FACTS.metrics value strings', () => {
+    const fmt = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const heroValues = [...HERO_METRICS].map((m) => {
+      const num = m.decimals === 0 ? fmt.format(m.to) : m.to.toFixed(m.decimals);
+      return `${num}${m.unit}`;
+    });
+    const seoValues = audienceFacts('buyer').metrics!.map((m) => m.value);
+    expect(heroValues).toEqual(seoValues);
+  });
 });

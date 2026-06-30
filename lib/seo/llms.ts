@@ -6,11 +6,11 @@ import {
   type SeoLink,
 } from '@/lib/seo/product-facts';
 
-export const TEXT_PLAIN_HEADERS: HeadersInit = {
+export const TEXT_PLAIN_HEADERS = {
   'Content-Type': 'text/plain; charset=utf-8',
   'Cache-Control': 'public, max-age=3600, s-maxage=3600',
   'Vary': 'Host',
-};
+} as const satisfies Record<string, string>;
 
 /** Join a relative path or in-page anchor to the host origin. */
 function abs(origin: string, path: string): string {
