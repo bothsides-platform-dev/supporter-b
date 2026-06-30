@@ -55,10 +55,3 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### changeMemberRole — LAST_ADMIN 오탐: pending_approval admin 강등 (P1)
 `WorkspaceService.changeMemberRole` 의 LAST_ADMIN 가드(`if (input.role === 'member' && target.role === 'admin')`)가 `countAdmins`(승인된 admin 만 집계)를 호출하기 전에 `target.approvalStatus`를 검사하지 않는다. 결과: 유일한 승인 admin 이 아직 미승인(pending_approval) admin 을 member 로 강등하려 하면 — 그 미승인 admin 은 실질 권한을 행사한 적 없음에도 — 거짓 `LAST_ADMIN` 에러가 발생한다. **수정**: `changeMemberRole` line 279 조건에 `&& target.approvalStatus === 'approved'` 추가. TDD: pending_approval target 강등 시 LAST_ADMIN 없이 성공하는 회귀 테스트 먼저 작성. (발견: /ship adversarial v0.2.51.0, 2026-06-28)
 
-## GEO / SEO
-
-## Completed
-
-### workspaces.has_logo 컬럼 DROP
-**Completed:** v0.2.54.2 (2026-06-30)
-워크스페이스 로고가 `logo_updated_at` 단일 컬럼으로 전환됨. `has_logo` dead 컬럼을 스키마에서 제거. 배포 후 `pnpm db:push`로 DB에 적용.
