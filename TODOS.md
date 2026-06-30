@@ -5,11 +5,6 @@
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
 선정 연락처 교환(`CounterpartyContactCard`)은 `findContactById`가 fail-closed라, 구매사 담당자(RFP `createdBy`)가 탈퇴/시스템계정이면 `buyerContact=null`이 된다. 승자 PG 분기는 `awardedToMe && buyerContact`로 카드를, `awarded && !awardedToMe`로 미선정 안내를 그리므로 — 승자인데 buyerContact만 null이면 카드도 안내도 안 떠 빈 화면이 된다(드묾·누출 아님·정상 fail-closed). 후속: 연락처 없음 안내 폴백 또는 워크스페이스 대표 담당자 폴백 검토. (발견: /ship 적대 리뷰 2026-06-27)
 
-## Workspace Logo
-
-### workspaces.has_logo 컬럼 DROP (P3)
-워크스페이스 로고가 `logo_updated_at`(캐시 버스트 `?v` + immutable) 단일 컬럼으로 전환됨. `has_logo` 는 더 이상 코드가 읽지/쓰지 않는 dead 컬럼(expand-contract 의 contract 단계 잔여). 배포 안정 확인 후 schema(`lib/db/schema/workspaces.ts`)에서 제거하고 `pnpm db:push` (또는 `ALTER TABLE workspaces DROP COLUMN has_logo;`). 데이터 손실 없음(재계산 불필요 — `logo_updated_at` 가 단일 출처). (도입: 워크스페이스 로고 캐시버스트, 2026-06-21)
-
 ## Chat / Realtime
 
 ### Presence: document observer-identity exposure in the threat model (P3)
@@ -76,3 +71,9 @@ H1→blockquote→intro→'핵심 정보'→'검증 지표' preamble 렌더링 �
 
 ### rel=alternate 자동발견 링크 (P3)
 buyer `<head>`에 `<link rel="alternate" type="text/plain" href="/llms.txt">` 추가로 AI 크롤러가 llms.txt를 head에서 자동발견 가능. Next.js `metadata.alternates` API로 추가. (llms.txt 계획 deferred 항목)
+
+## Completed
+
+### workspaces.has_logo 컬럼 DROP
+**Completed:** v0.2.54.2 (2026-06-30)
+워크스페이스 로고가 `logo_updated_at` 단일 컬럼으로 전환됨. `has_logo` dead 컬럼을 스키마에서 제거. 배포 후 `pnpm db:push`로 DB에 적용.

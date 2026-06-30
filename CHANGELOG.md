@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.54.2] - 2026-06-30
+
+### Removed
+
+- **워크스페이스 테이블에서 사용하지 않는 `has_logo` 컬럼을 정리했어요**: 로고 유무를 `logo_updated_at` 단일 컬럼으로 관리하도록 전환한 뒤 남아있던 `has_logo` 컬럼을 스키마에서 제거했어요. 배포 후 `pnpm db:push`로 DB에 적용하면 돼요. 사용자에게 보이는 변화는 없어요.
+
 ## [0.2.54.1] - 2026-06-30
 
 ### Fixed
