@@ -506,3 +506,73 @@ describe('RfpCreateWizard', () => {
     });
   });
 });
+
+// 랜딩 데모가 마법사를 자동재생/조작 하이브리드로 구동하기 위한 controlled-step 시드.
+// step prop이 있으면 부모가 단계를 소유하고, 내부 state는 우회된다. prop이 없으면
+// 기존 uncontrolled 동작 그대로(회귀 보호는 위 describe 블록이 담당).
+describe('RfpCreateWizard — controlled step', () => {
+  beforeEach(() => {
+    resetStore();
+    vi.clearAllMocks();
+  });
+
+  it('step prop이 주어지면 내부 state와 무관하게 해당 step을 렌더한다', () => {
+    render(<RfpCreateWizard pgList={[]} step={2} onStepChange={vi.fn()} />);
+    expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
+  });
+
+  it('controlled 모드에서 다음 클릭 시 onStepChange를 호출하고 내부 step은 바뀌지 않는다', async () => {
+    const onStepChange = vi.fn();
+    const user = userEvent.setup();
+    render(<RfpCreateWizard pgList={[]} step={1} onStepChange={onStepChange} />);
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    expect(onStepChange).toHaveBeenCalledWith(2);
+    // 부모가 step prop을 갱신하지 않았으므로 화면은 여전히 step 1.
+    expect(screen.queryByPlaceholderText(/서포트쇼핑몰/)).not.toBeInTheDocument();
+  });
+});
+
+// 랜딩 데모(격리된 draft)에서 종결 "보내기"가 실제 guest 핸드오프(localStorage draft +
+// /signup/buyer 리다이렉트)를 타지 않도록 하는 시드. onGuestSubmit이 있으면 그쪽으로만
+// 위임하고, 없으면 기존 guest 동작 그대로(회귀 보호).
+describe('RfpCreateWizard — guest submit seam', () => {
+  beforeEach(() => {
+    resetStore();
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('guest + onGuestSubmit이면 그것만 호출하고 localStorage/redirect를 건너뛴다', async () => {
+    const onGuestSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <RfpCreateWizard pgList={[]} guest step={4} onStepChange={vi.fn()} onGuestSubmit={onGuestSubmit} />,
+    );
+    await user.click(screen.getByRole('button', { name: '발송' }));
+    expect(onGuestSubmit).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(localStorage.getItem('supporter-b-rfp-next')).toBeNull();
+  });
+  // 기본 guest 동작(localStorage 저장 + /signup/buyer) 회귀는 위 'guest 모드에서 발송 시
+  // /signup/buyer로 이동한다' 테스트가 이미 보장하므로 여기서 중복하지 않는다.
+});
+
+// 랜딩 데모는 마법사의 작은 내부 네비(사이드바/진행바) 대신 자체 데모 스테퍼를 쓴다.
+// hideNav가 내부 네비를 숨긴다(추가형, 기본 false → 실제 앱 영향 없음). 스텝 본문은 유지.
+describe('RfpCreateWizard — hideNav (데모 크롬 숨김)', () => {
+  beforeEach(() => {
+    resetStore();
+    vi.clearAllMocks();
+  });
+
+  it('기본값(hideNav 미지정)은 내부 네비(사이드바)를 렌더한다', () => {
+    render(<RfpCreateWizard pgList={[]} />);
+    expect(screen.getByRole('navigation')).toBeInTheDocument();
+  });
+
+  it('hideNav면 내부 네비를 렌더하지 않되 스텝 본문은 유지한다', () => {
+    render(<RfpCreateWizard pgList={[]} hideNav step={1} onStepChange={vi.fn()} />);
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(screen.getByText('사업자 확인')).toBeInTheDocument(); // mocked step1 body
+  });
+});

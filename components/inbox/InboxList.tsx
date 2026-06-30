@@ -40,7 +40,14 @@ export type InboxRow = {
   hasPendingRequote?: boolean;
 };
 
-export function InboxList({ rows }: { rows: InboxRow[] }) {
+export function InboxList({
+  rows,
+  onOpenRfp,
+}: {
+  rows: InboxRow[];
+  /** 랜딩 데모 전용(opt-in). 주어지면 상세 열기를 router.push 대신 이 콜백으로 처리한다. */
+  onOpenRfp?: (rfpId: string) => void;
+}) {
   const router = useRouter();
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
@@ -53,6 +60,10 @@ export function InboxList({ rows }: { rows: InboxRow[] }) {
   // 행 클릭/Enter → 상세 라우트로 push. 인터셉트 라우트가 목록 위에 딜룸 모달을
   // 띄우고 URL 은 /inbox/<code> 로 바뀐다(새로고침 시 정식 페이지). ?peek 대체.
   function openDealRoom(rfpId: string) {
+    if (onOpenRfp) {
+      onOpenRfp(rfpId);
+      return;
+    }
     router.push(`/inbox/${rfpId}`);
   }
 

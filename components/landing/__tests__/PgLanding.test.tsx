@@ -13,6 +13,11 @@ vi.mock('@/components/shell/Footer', () => ({
   Footer: () => <footer>footer</footer>,
 }));
 
+// 임베드 PG 제품 데모(실제 페이지·사이드바 의존)는 스모크에서 마커로 대체한다.
+vi.mock('@/components/landing/demo-app/PgDemoAppShell', () => ({
+  PgDemoAppShell: () => <div>PG_PRODUCT_DEMO</div>,
+}));
+
 // motion 을 평탄화해 whileInView/IntersectionObserver 없이 자식을 그대로 렌더.
 vi.mock('motion/react', () => {
   const makeEl = (tag: string) => {
@@ -49,11 +54,12 @@ describe('PgLanding — PG 전용 랜딩', () => {
     expect(screen.getByText('PG 변경을 검토하는 기존 가맹점')).toBeInTheDocument();
   });
 
-  it('화면4 검증/공정 섹션 제목을 렌더한다', () => {
+  it('화면4 검증 섹션 제목을 렌더한다 (공정 대신 동일)', () => {
     render(<PgLanding />);
     expect(
-      screen.getByText('검증된 고객사의 영업기회를 빠르고 공정하게 제공합니다'),
+      screen.getByText('검증된 고객사의 영업기회를 동일한 기준으로 제공합니다'),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/공정/)).toBeNull();
   });
 
   it('화면5 참여 프로세스 5단계 중 1단계를 렌더한다', () => {
@@ -62,10 +68,15 @@ describe('PgLanding — PG 전용 랜딩', () => {
     expect(screen.getByText('파트너 등록')).toBeInTheDocument();
   });
 
-  it('화면6 핵심 이점 섹션과 카드를 렌더한다', () => {
+  it('화면5에 제품 데모를 임베드한다', () => {
+    render(<PgLanding />);
+    expect(screen.getByText('PG_PRODUCT_DEMO')).toBeInTheDocument();
+  });
+
+  it('화면6 파트너 사례 섹션과 사례 카드를 렌더한다', () => {
     render(<PgLanding />);
     expect(screen.getByText('영업팀은 더 좋은 기회에 집중할 수 있습니다')).toBeInTheDocument();
-    expect(screen.getByText('신규 가맹점 인바운드 확대')).toBeInTheDocument();
+    expect(screen.getByText('K사 영업 팀장')).toBeInTheDocument();
   });
 
   it('화면7 PG 전용 FAQ 문항을 렌더한다', () => {

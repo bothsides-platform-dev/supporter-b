@@ -48,6 +48,11 @@ type Props = {
   templates?: QuoteTemplateOption[];
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
   initialBid?: PgRfpDetailData['myBid'];
+  /**
+   * 랜딩 데모 전용(opt-in). 주어지면 제출 시 서버 액션 대신 이 콜백을 호출한다
+   * — 비로그인 임베디드 데모에서 실제 submitBidAction 을 치지 않도록(가입 유도). 프로덕션 미전달 시 no-op.
+   */
+  onGuestSubmit?: () => void;
 };
 
 /**
@@ -83,7 +88,7 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   };
 }
 
-export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props) {
+export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const rfpCode = rfp.code;
@@ -289,6 +294,11 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid }: Props)
 
   const doSubmit = () => {
     setSubmitConfirmOpen(false);
+    // 랜딩 데모(게스트): 실제 제출 대신 가입 유도 콜백만 호출하고 종료.
+    if (onGuestSubmit) {
+      onGuestSubmit();
+      return;
+    }
     const paymentFees = buildPaymentFees(fees, feeInputMethods);
     const customFees: Record<string, number> = {};
     for (const c of customPaymentMethods) {

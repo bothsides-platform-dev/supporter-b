@@ -13,6 +13,7 @@ import {
   SUPPORTER_B_RATE,
   annualMaxSavings,
   gradeFromVolume,
+  minCurrentRate,
 } from '@/lib/landing/savings';
 
 const VOL_T_MAX = 1000;
@@ -21,7 +22,6 @@ const VOL_DECADES = 3;
 const DEFAULT_VOL_T = 492;
 
 const RATE_DEFAULT = 240;
-const RATE_MIN = 50;
 const RATE_MAX = 400;
 const RATE_STEP = 5;
 
@@ -29,6 +29,12 @@ const IDLE_MS = 6000;
 
 function tToVolume(t: number): number {
   return VOL_BASE * Math.pow(10, (t / VOL_T_MAX) * VOL_DECADES);
+}
+
+// 현재 수수료율 슬라이더의 하한(베이시스 포인트). 거래액 등급별 달성 요율 위로 마진을
+// 둔 값을 슬라이더 step에 맞춰 스냅한다. 이 아래로는 선택할 수 없어 절감액이 항상 양수다.
+function rateFloorBp(volume: number): number {
+  return Math.round((minCurrentRate(volume) * 10000) / RATE_STEP) * RATE_STEP;
 }
 
 function formatVolume(v: number): string {
@@ -132,6 +138,7 @@ export function SavingsCalculator() {
   }, [inView]);
 
   const volume = useMemo(() => tToVolume(volT), [volT]);
+  const rateMinBp = useMemo(() => rateFloorBp(volume), [volume]);
   const currentRate = rateBp / 10000;
   const grade = gradeFromVolume(volume);
   const supporterBRate = SUPPORTER_B_RATE[grade];
@@ -162,6 +169,9 @@ export function SavingsCalculator() {
                 onValueChange={(v) => {
                   resetIdleRef.current?.();
                   setVolT(v);
+                  // 거래액이 상위 등급으로 올라가 하한이 현재 요율을 넘어서면 핸들을 끌어올린다.
+                  const floor = rateFloorBp(tToVolume(v));
+                  setRateBp((r) => Math.max(r, floor));
                 }}
                 ariaLabel="연간 거래액"
               />
@@ -205,17 +215,17 @@ export function SavingsCalculator() {
             </div>
             <Slider
               value={rateBp}
-              min={RATE_MIN}
+              min={rateMinBp}
               max={RATE_MAX}
               step={RATE_STEP}
               onValueChange={(v) => {
                 resetIdleRef.current?.();
-                setRateBp(v);
+                setRateBp(Math.max(v, rateMinBp));
               }}
               ariaLabel="현재 PG 수수료율"
             />
             <div className="flex justify-between font-mono text-[var(--text-2xs)] tracking-[0.1em] text-[var(--md-sys-color-outline)] uppercase">
-              <span>0.50 %</span>
+              <span>{formatRate(rateMinBp / 100)}</span>
               <span>4.00 %</span>
             </div>
           </div>

@@ -25,6 +25,7 @@ type NavItemProps = {
   badge?: React.ReactNode;
   className?: string;
   onNavigate?: () => void;
+  inert?: boolean;
 };
 
 /**
@@ -41,11 +42,32 @@ export function NavItem({
   badge,
   className,
   onNavigate,
+  inert = false,
 }: NavItemProps) {
   const { state, isMobile } = useSidebar();
   const isCollapsed = state === 'collapsed' && !isMobile;
   const showShortcutTooltip = state === 'expanded' && !isMobile && shortcut != null;
   const showTooltip = isCollapsed || showShortcutTooltip;
+
+  if (inert) {
+    return (
+      <span
+        aria-disabled="true"
+        className={cn(
+          navItemBase,
+          'text-[var(--md-sys-color-on-surface-variant)] opacity-50 cursor-default select-none',
+          className,
+        )}
+      >
+        {Icon && (
+          <span className="relative inline-flex shrink-0">
+            <Icon size={18} />
+          </span>
+        )}
+        <span className="group-data-[collapsible=icon]:sr-only">{label}</span>
+      </span>
+    );
+  }
 
   const link = (
     <Link

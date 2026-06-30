@@ -4,7 +4,7 @@ import { Footer } from '@/components/shell/Footer';
 import { Logo } from '@/components/primitives/Logo';
 import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
 import { SolutionShowcase } from '@/components/landing/SolutionShowcase';
-import { ProcessSection } from '@/components/landing/ProcessSection';
+import { DemoAppShell } from '@/components/landing/demo-app/DemoAppShell';
 import { FaqList } from '@/components/landing/FaqList';
 import { ProblemCard } from '@/components/landing/ProblemCard';
 import { MetricCard } from '@/components/landing/MetricCard';
@@ -93,10 +93,16 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           </div>
         </section>
 
-        {/* ── Process ── */}
+        {/* ── Process: 실제 대시보드를 그대로 체험하는 임베디드 데모 ── */}
         <section id="process" className={sectionCls}>
           <div className={containerCls}>
-            <ProcessSection />
+            <div className="flex flex-col gap-[var(--s-4)]">
+              <SectionHeading>실제 화면을 미리 둘러보세요</SectionHeading>
+              <p className="text-[var(--text-md)] leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
+                회원가입 없이 SupporterB 실제 화면을 그대로 체험할 수 있어요. 아래 단계를 눌러 직접 둘러보세요.
+              </p>
+            </div>
+            <DemoAppShell />
           </div>
         </section>
 
@@ -165,7 +171,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                 <span className="font-mono text-[var(--text-xs)] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                   — 도입문의
                 </span>
-                <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-surface)]">
+                <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-surface)] text-balance break-keep">
                   지금 바로 불필요한 비용은 줄이고,<br />사업의 본질에 집중하세요.
                 </h2>
               </div>

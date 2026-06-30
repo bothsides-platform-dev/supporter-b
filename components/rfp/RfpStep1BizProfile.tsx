@@ -22,16 +22,9 @@ function InfoBox({ children }: { children: React.ReactNode }) {
 export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = false, onNext }: Props) {
   return (
     <div className="space-y-6">
-      {guest ? (
-        <InfoBox>
-          <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)]">
-            가입 후 사업자 정보가 자동으로 연동돼요.
-          </p>
-          <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
-            견적 요청 내용을 먼저 작성한 뒤, 보낼 때 가입 페이지로 이동해요.
-          </p>
-        </InfoBox>
-      ) : bizProfile ? (
+      {bizProfile ? (
+        // bizProfile이 있으면 guest여도 등록된 사업자 테이블을 우선 표시한다.
+        // (실제 guest는 bizProfile이 없어 영향 없음 — 랜딩 데모가 fixture를 주입하는 경로.)
         <>
           <div className="border border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)]">
             <div className="px-4 py-2 flex items-center justify-between">
@@ -82,6 +75,15 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
             사업자 정보 갱신은 설정 → 프로필에서 가능합니다.
           </p>
         </>
+      ) : guest ? (
+        <InfoBox>
+          <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)]">
+            가입 후 사업자 정보가 자동으로 연동돼요.
+          </p>
+          <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+            견적 요청 내용을 먼저 작성한 뒤, 보낼 때 가입 페이지로 이동해요.
+          </p>
+        </InfoBox>
       ) : (
         <InfoBox>
           <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)]">

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { Button } from '@/components/primitives/Button';
+import { LANDING_TYPE } from '@/components/landing/landing-type';
 
 const TYPING_VALUES = [
   '협상의 주도권을',
@@ -70,7 +71,7 @@ export function LandingHeroSection() {
             initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.44, delay: 0.08, ease: EASE_OUT }}
-            className="text-[clamp(30px,5.5vw,72px)] leading-[1.06] tracking-[-0.028em] font-medium text-[var(--md-sys-color-on-surface)]"
+            className="text-[clamp(30px,5.5vw,72px)] leading-[1.06] tracking-[-0.028em] font-medium text-[var(--md-sys-color-on-surface)] break-keep"
           >
             Supporter B를 통해
           </motion.h1>
@@ -95,7 +96,7 @@ export function LandingHeroSection() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.34, ease: EASE_OUT }}
-          className="max-w-[680px] text-[clamp(15px,1.6vw,19px)] leading-[1.62] tracking-[-0.008em] text-[var(--md-sys-color-on-surface-variant)]"
+          className={`max-w-[680px] ${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface-variant)]`}
         >
           여러 PG사의 제안을 동일한 기준으로 받아보고, 계약 조건을 표준화된 비교표로 검토하세요.
           수수료뿐 아니라 정산주기, 보증금, 셋업비까지 협상 가능한 조건으로 정리합니다.
