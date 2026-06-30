@@ -32,6 +32,30 @@ describe('sessionCookie', () => {
     expect(c.options.secure).toBe(false);
     expect(c.name).toBe('authjs.session-token');
   });
+
+  // perf 회귀 방지: production(next start) + 평문 http 로드 제너레이터(k6)는
+  // Secure 세션 쿠키를 재전송하지 못해 인증 화면을 측정하지 못한다. AUTH_INSECURE_COOKIES
+  // 로 그 환경에서만 비-Secure 쿠키를 발급한다 — 단, https 배포에선 무시(실 prod 보호).
+  it('serves a NON-secure session cookie when AUTH_INSECURE_COOKIES=true on an http deployment', () => {
+    delete process.env.AUTH_COOKIE_DOMAIN;
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('AUTH_INSECURE_COOKIES', 'true');
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'http://localhost:3002');
+    const c = sessionCookie();
+    expect(c.options.secure).toBe(false);
+    // __Secure- prefix REQUIRES Secure, so the name must drop it too.
+    expect(c.name).toBe('authjs.session-token');
+  });
+
+  it('IGNORES AUTH_INSECURE_COOKIES on an https deployment — cannot weaken real production', () => {
+    delete process.env.AUTH_COOKIE_DOMAIN;
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('AUTH_INSECURE_COOKIES', 'true');
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'https://supporter-b.com');
+    const c = sessionCookie();
+    expect(c.options.secure).toBe(true);
+    expect(c.name).toBe('__Secure-authjs.session-token');
+  });
 });
 
 describe('sessionCookieClearHeaders', () => {

@@ -48,6 +48,10 @@ jobs:
       # `pnpm start`가 안 뜸. 가짜(non-empty) 키로 부팅만 통과시킨다.
       # 이메일은 outbox→cron flush 경로라 k6 부하만으로는 실제 Resend 호출이 없다.
       RESEND_API_KEY: "re_perf_fake_0000000000000000000000"
+      # perf 서버는 production(next start)이라 세션 쿠키가 Secure → 평문 http 의 k6 가
+      # 재전송 못 해 인증 페이지를 못 잰다. http 오리진에서만 비-Secure 쿠키를 발급하게
+      # 한다(lib/auth/cookie-config.ts; https 배포에선 무시되어 실 prod 불가침).
+      AUTH_INSECURE_COOKIES: "true"
       NTS_SERVICE_KEY: ""
       CENTRIFUGO_URL: ""
       NEXT_PUBLIC_CENTRIFUGO_URL: ""
