@@ -172,4 +172,18 @@ describe('BuyerDealRoomBody — 선정 결과 패널', () => {
     const emailLink = screen.getByRole('link', { name: /sales@toss\.im/ });
     expect(focusComp.parentElement).toContainElement(emailLink as HTMLElement);
   });
+
+  it('awarded 면 선정 제목·안내 문구가 견적 비교 탭(연락처 카드와 같은 영역)에 렌더된다', () => {
+    const { container } = render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      awardedPgContact,
+    })} />);
+    const focusComp = container.querySelector('[data-testid="focus-comparison"]')!;
+    expect(focusComp.parentElement).toContainElement(
+      screen.getByText(/토스페이먼츠를 선정했어요/),
+    );
+    expect(focusComp.parentElement).toContainElement(
+      screen.getByText('담당처와 연락을 이어나가보세요.'),
+    );
+  });
 });
