@@ -10,7 +10,7 @@
  * PG 10개 × RFP 10개 시드로 bid UNIQUE 충돌 없음.
  */
 import { sleep } from 'k6';
-import { thresholds } from './lib/thresholds.js';
+import { loadThresholds } from './lib/thresholds.js';
 import { login } from './lib/auth.js';
 import http from 'k6/http';
 import { check } from 'k6';
@@ -27,11 +27,8 @@ export const options = {
     { duration: '15m', target: 10 }, // 유지
     { duration: '3m',  target: 0  }, // 램프다운
   ],
-  thresholds: {
-    ...thresholds,
-    // load test는 좀 더 관대한 임계값
-    http_req_duration: ['p(95)<1000', 'p(99)<2000'],
-  },
+  // load 는 고부하 프리셋 — bcrypt 동시성으로 login·페이지 모두 여유를 둔다.
+  thresholds: loadThresholds,
 };
 
 export default function loadScenario() {

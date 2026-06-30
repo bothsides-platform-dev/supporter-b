@@ -1,7 +1,8 @@
 /**
  * Auth helper — Auth.js v5 credentials 로그인
  * 흐름: GET /api/auth/csrf → POST /api/auth/callback/credentials
- * 성공 시 Set-Cookie 헤더(next-auth.session-token)를 포함한 jar 반환
+ * 성공 시 Set-Cookie 헤더(Auth.js v5: authjs.session-token / prod 는
+ * __Secure-authjs.session-token)를 포함한 jar 반환
  */
 import http from 'k6/http';
 import { check } from 'k6';
@@ -36,9 +37,11 @@ export function login(email, password) {
 
   check(loginRes, {
     'login 302 or 200': (r) => r.status === 302 || r.status === 200,
+    // Auth.js v5 쿠키 이름: dev=authjs.session-token, prod=__Secure-authjs.session-token
+    // (lib/auth/cookie-config.ts). perf 서버는 NODE_ENV=production 이라 __Secure- 변종.
     'session cookie set': (r) =>
-      r.cookies['next-auth.session-token'] !== undefined ||
-      r.cookies['__Secure-next-auth.session-token'] !== undefined,
+      r.cookies['authjs.session-token'] !== undefined ||
+      r.cookies['__Secure-authjs.session-token'] !== undefined,
   });
 
   return csrfRes.cookies; // k6 jar — 이후 요청에 자동 전송됨
