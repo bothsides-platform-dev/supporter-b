@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { useThemeStore } from '@/lib/stores/theme';
+import { applyThemeWithTransition } from '@/lib/theme/view-transition';
 import { IconButton } from '@/components/primitives/IconButton';
 import { SunIcon, MoonIcon } from '@/components/icons';
 
@@ -33,7 +34,13 @@ export function ThemeToggle() {
     <IconButton
       label={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}
       size="md"
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        applyThemeWithTransition(
+          { x: r.left + r.width / 2, y: r.top + r.height / 2 },
+          () => setTheme(isDark ? 'light' : 'dark'),
+        );
+      }}
     >
       {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
     </IconButton>
