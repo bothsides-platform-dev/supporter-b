@@ -84,7 +84,13 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
         <>
           {rfp.status === 'awarded' && awardedPgContact && (
             <div className="mb-4">
-              <ContactBlock contact={awardedPgContact} counterpartyKind="pg" />
+              <DealResultHeader
+                tone="award"
+                title={`${josa(awardedPgContact.workspaceName, '을/를')} 선정했어요`}
+                subtitle="담당처와 연락을 이어나가보세요."
+              >
+                <ContactBlock contact={awardedPgContact} counterpartyKind="pg" />
+              </DealResultHeader>
             </div>
           )}
           <FocusComparison
@@ -172,15 +178,6 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       {rfp.isSample && (
         <div className="shrink-0 px-6 pt-4">
           <SampleRfpBanner rfpCode={rfp.code} />
-        </div>
-      )}
-      {rfp.status === 'awarded' && awardedPgContact && (
-        <div className="shrink-0 px-6 pt-4">
-          <DealResultHeader
-            tone="award"
-            title={`${josa(awardedPgContact.workspaceName, '을/를')} 선정했어요`}
-            subtitle="담당처와 연락을 이어나가보세요."
-          />
         </div>
       )}
       <div className="flex min-h-0 flex-1 max-lg:flex-col">
