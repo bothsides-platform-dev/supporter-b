@@ -41,8 +41,18 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
 
   // 마운트 시 localStorage draft의 stale 데이터 정리.
   useEffect(() => {
-    const { allowedPgWorkspaceIds, deadline, rfpFiles, setField } =
+    const { allowedPgWorkspaceIds, deadline, rfpFiles, pgSelectionInitialized, setField } =
       useRfpDraftStore.getState();
+
+    // 0. 최초 진입 시 사용 가능한 PG 전체를 기본 선택 (사용자가 이후 해제하면 존중).
+    //    아직 한 번도 초기화 안 됨 + 선택이 비어 있음 + 선택 가능한 PG가 있을 때만.
+    if (!pgSelectionInitialized && allowedPgWorkspaceIds.length === 0 && pgList.length > 0) {
+      setField(
+        'allowedPgWorkspaceIds',
+        pgList.map((w) => ({ id: w.id, displayName: w.displayName, logoUpdatedAt: w.logoUpdatedAt })),
+      );
+      setField('pgSelectionInitialized', true);
+    }
 
     // 1. PG 워크스페이스 재조정 — 현재 pgList에 없는 ID 제거
     const validPgIds = new Set(pgList.map((w) => w.id));
