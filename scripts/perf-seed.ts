@@ -9,7 +9,7 @@
  */
 import 'dotenv/config';
 
-import { sql } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -52,17 +52,16 @@ export async function runPerfSeed(db: DB) {
   const now      = new Date();
   const deadline = new Date(now.getTime() + 7 * 24 * 3_600_000);
 
-  await db.execute(sql`
-    DELETE FROM rfp_invitations  WHERE id      = ANY(${invitationIds}::uuid[]);
-    DELETE FROM rfp_allowed_pg   WHERE rfp_id  = ANY(${rfpIds}::uuid[]);
-    DELETE FROM rfps             WHERE id      = ANY(${rfpIds}::uuid[]);
-    DELETE FROM columns          WHERE workspace_id = ${BUYER_WS_ID}
-                                    OR workspace_id = ANY(${pgWsIds}::uuid[]);
-    DELETE FROM workspace_members WHERE workspace_id = ${BUYER_WS_ID}
-                                      OR workspace_id = ANY(${pgWsIds}::uuid[]);
-    DELETE FROM workspaces WHERE id = ${BUYER_WS_ID} OR id = ANY(${pgWsIds}::uuid[]);
-    DELETE FROM users      WHERE id = ${BUYER_USER_ID} OR id = ANY(${pgUserIds}::uuid[]);
-  `);
+  const allWsIds   = [BUYER_WS_ID, ...pgWsIds];
+  const allUserIds = [BUYER_USER_ID, ...pgUserIds];
+
+  await db.delete(rfpInvitations).where(inArray(rfpInvitations.id, invitationIds));
+  await db.delete(rfpAllowedPg).where(inArray(rfpAllowedPg.rfpId, rfpIds));
+  await db.delete(rfps).where(inArray(rfps.id, rfpIds));
+  await db.delete(columns).where(inArray(columns.workspaceId, allWsIds));
+  await db.delete(workspaceMembers).where(inArray(workspaceMembers.workspaceId, allWsIds));
+  await db.delete(workspaces).where(inArray(workspaces.id, allWsIds));
+  await db.delete(users).where(inArray(users.id, allUserIds));
 
   const passwordHash = await hashPassword(BUYER_PASSWORD);
 
