@@ -6,8 +6,18 @@
  * 실행: node scripts/extract-action-ids.mjs
  * 출력: tests/perf/action-ids.json
  */
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { globSync } from 'glob';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
+import { join } from 'path';
+
+function findJsFiles(dir) {
+  const results = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) results.push(...findJsFiles(full));
+    else if (entry.name.endsWith('.js')) results.push(full);
+  }
+  return results;
+}
 
 // 추출 대상 — { k6 키: Next.js 함수명 }
 const TARGET = {
@@ -18,7 +28,7 @@ const TARGET = {
   withdrawBid:  'withdrawBidAction',
 };
 
-const chunks = globSync('.next/server/**/*.js', { absolute: true });
+const chunks = findJsFiles('.next/server');
 const found  = {};
 
 for (const file of chunks) {
