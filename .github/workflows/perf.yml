@@ -12,6 +12,9 @@ jobs:
   perf:
     name: k6 performance test
     runs-on: ubuntu-latest
+    # load 테스트(main push)는 20분 + 빌드/설치 오버헤드 → 35분 백스톱.
+    # PR(smoke만)은 ~5분이지만 동일 잡이라 최악(=load) 기준으로 잡는다.
+    timeout-minutes: 35
     # 잡 전체를 격리된 Node.js 컨테이너 안에서 실행
     container:
       image: node:22-bookworm-slim
@@ -90,17 +93,26 @@ jobs:
 
       # ── 서버 기동 ────────────────────────────────────────────────────────
       - name: Start Next.js server
-        run: PORT=3002 pnpm start &
+        # 백그라운드 서버 로그를 파일로 캡처 — 기동 실패 원인을 진단 가능하게
+        run: |
+          PORT=3002 nohup pnpm start > /tmp/next-server.log 2>&1 &
+          echo "started next server (pid $!)"
 
       - name: Wait for server
+        # curl 자체가 무한 대기(연결됐지만 응답 없음)하는 행을 막는 하드 백스톱
+        timeout-minutes: 3
         run: |
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:3002/api/auth/csrf > /dev/null; then
+            # --connect-timeout: 부팅 중 거부는 즉시 실패(빠른 재시도)
+            # --max-time: 연결됐지만 응답 없는 요청도 5초에 끊어 루프 카운터를 살린다
+            if curl -sf --connect-timeout 3 --max-time 5 http://localhost:3002/api/auth/csrf > /dev/null; then
               echo "Server ready"; exit 0
             fi
             echo "Waiting... ($i/30)"; sleep 2
           done
-          echo "Server failed to start" && exit 1
+          echo "Server failed to start — last 100 lines of server log:"
+          tail -n 100 /tmp/next-server.log || true
+          exit 1
 
       # ── k6 설치 ─────────────────────────────────────────────────────────
       - name: Install k6
