@@ -26,21 +26,21 @@ import { hashPassword } from '@/lib/auth/password';
 import { generateToken, hashToken } from '@/lib/server/token';
 import type { DB } from '@/lib/db/client';
 
-const BUYER_USER_ID = 'perf0000-0000-0000-0000-000000000001';
-const BUYER_WS_ID   = 'perf0000-0000-0000-0000-000000000010';
+const BUYER_USER_ID = 'beef0000-0000-0000-0000-000000000001';
+const BUYER_WS_ID   = 'beef0000-0000-0000-0000-000000000010';
 
 const PG_COUNT = 10;
 const pgUserIds = Array.from({ length: PG_COUNT }, (_, i) =>
-  `perf0000-0000-0000-0001-${String(i + 1).padStart(12, '0')}`,
+  `beef0000-0000-0000-0001-${String(i + 1).padStart(12, '0')}`,
 );
 const pgWsIds = Array.from({ length: PG_COUNT }, (_, i) =>
-  `perf0000-0000-0000-0002-${String(i + 1).padStart(12, '0')}`,
+  `beef0000-0000-0000-0002-${String(i + 1).padStart(12, '0')}`,
 );
 const rfpIds = Array.from({ length: PG_COUNT }, (_, i) =>
-  `perf0000-0000-0000-0003-${String(i + 1).padStart(12, '0')}`,
+  `beef0000-0000-0000-0003-${String(i + 1).padStart(12, '0')}`,
 );
 const invitationIds = Array.from({ length: PG_COUNT }, (_, i) =>
-  `perf0000-0000-0000-0004-${String(i + 1).padStart(12, '0')}`,
+  `beef0000-0000-0000-0004-${String(i + 1).padStart(12, '0')}`,
 );
 
 const BUYER_EMAIL    = 'perf-buyer@supporter-b.test';
