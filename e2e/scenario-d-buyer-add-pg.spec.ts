@@ -119,11 +119,10 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     await page.getByRole('tab', { name: 'PG 관리' }).click({ timeout: 15_000 });
     await expect(page.getByText('초대 PG')).toBeVisible();
 
-    // ── 3. Add a new PG workspace via Popover + cmdk ─────────────
-    // Trigger lazy fetch (/api/workspaces/search?type=pg) and click the
-    // newly seeded workspace by name.
-    await page.getByRole('button', { name: 'PG사 검색…' }).click();
-    await page.getByRole('option', { name: NEW_PG_NAME }).click();
+    // ── 3. Add a new PG workspace by clicking its chip ───────────
+    // 마운트 시 lazy fetch(/api/workspaces/search?type=pg)가 칩을 채운다.
+    // 새로 시드된 워크스페이스는 칩 버튼으로 렌더되므로 바로 클릭한다.
+    await page.getByRole('button', { name: NEW_PG_NAME }).click({ timeout: 15_000 });
 
     // ── 4. UI: new row renders with status chip '대기중' (draft) ───
     await expect(page.getByText(NEW_PG_NAME)).toBeVisible({ timeout: 10_000 });
@@ -211,10 +210,11 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
       await expect(page).toHaveURL(/\/home$/, { timeout: 15_000 });
 
       await page.goto(`/rfp/${RFP_ID}`);
-      // canEdit=false → "PG사 검색…" trigger 자체가 렌더되지 않음.
-      await expect(
-        page.getByRole('button', { name: 'PG사 검색…' }),
-      ).toHaveCount(0);
+      // canEdit=false → 'PG 관리' 탭은 '초대 PG' 목록만 보이고
+      // 'PG 워크스페이스 추가' 영역(칩 포함)은 통째로 숨김.
+      await page.getByRole('tab', { name: 'PG 관리' }).click({ timeout: 15_000 });
+      await expect(page.getByText('초대 PG')).toBeVisible();
+      await expect(page.getByText('PG 워크스페이스 추가')).toHaveCount(0);
     } finally {
       // 복원 — 후속 테스트가 마감 전 상태를 가정할 수 있도록 try/finally.
       await db.execute(
