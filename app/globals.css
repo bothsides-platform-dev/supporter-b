@@ -154,6 +154,22 @@
   scroll-behavior: smooth;
 }
 
+/*
+  View Transitions — theme toggle circle reveal (DESIGN.md §9 sanctioned exception).
+  Disable the browser's default cross-fade so only our JS-driven clip-path animation
+  runs. The JS helper (lib/theme/view-transition.ts) skips startViewTransition
+  entirely when prefers-reduced-motion: reduce is set, making the CSS guard
+  belt-and-suspenders only.
+*/
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;       /* kill default cross-fade; clip-path driven by JS */
+  mix-blend-mode: normal;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) { animation: none; }
+}
+
 /* Process stepper auto-advance progress bar (duration matches AUTO_ADVANCE_MS). */
 @keyframes process-progress {
   from { transform: scaleX(0); }
