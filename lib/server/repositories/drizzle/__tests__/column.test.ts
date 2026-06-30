@@ -35,9 +35,10 @@ describe('DrizzleColumnRepository', () => {
     await ctx.repo.createMany(defaultColumns(ctx.ws.id, 'buyer'));
 
     const pipeline = await ctx.repo.listByBoard(ctx.ws.id, 'pipeline');
+    // 선정완료(awarded)는 v0.2.54.0(#325)에서 '마감'(closed) 컬럼으로 흡수됨 —
+    // BUYER_KANBAN_ORDER 는 이제 active/closed 2단계.
     expect(pipeline.map((c) => c.lifecycleKey)).toEqual([
       'active',
-      'awarded',
       'closed',
     ]);
   });
