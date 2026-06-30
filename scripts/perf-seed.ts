@@ -141,8 +141,14 @@ const invokedDirectly = (() => {
 })();
 
 if (invokedDirectly) {
-  const { db } = await import('@/lib/db/client');
-  const result = await runPerfSeed(db);
-  process.stdout.write(JSON.stringify(result) + '\n');
-  process.exit(0);
+  async function main() {
+    const { db } = await import('@/lib/db/client');
+    const result = await runPerfSeed(db);
+    process.stdout.write(JSON.stringify(result) + '\n');
+    process.exit(0);
+  }
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
 }
