@@ -44,7 +44,10 @@ jobs:
       NEXT_PUBLIC_BASE_URL: http://localhost:3002
       NEXT_PUBLIC_BUYER_ORIGIN: http://localhost:3002
       NEXT_PUBLIC_PARTNER_ORIGIN: http://localhost:3002
-      RESEND_API_KEY: ""
+      # 빈 문자열은 production 부팅 가드(lib/env/check-production-config.ts)에 걸려
+      # `pnpm start`가 안 뜸. 가짜(non-empty) 키로 부팅만 통과시킨다.
+      # 이메일은 outbox→cron flush 경로라 k6 부하만으로는 실제 Resend 호출이 없다.
+      RESEND_API_KEY: "re_perf_fake_0000000000000000000000"
       NTS_SERVICE_KEY: ""
       CENTRIFUGO_URL: ""
       NEXT_PUBLIC_CENTRIFUGO_URL: ""
