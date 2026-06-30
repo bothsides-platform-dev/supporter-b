@@ -2,17 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.2.54.2] - 2026-06-30
-
-### Removed
-
-- **워크스페이스 테이블에서 사용하지 않는 `has_logo` 컬럼을 정리했어요**: 로고 유무를 `logo_updated_at` 단일 컬럼으로 관리하도록 전환한 뒤 남아있던 `has_logo` 컬럼을 스키마에서 제거했어요. 배포 후 `pnpm db:push`로 DB에 적용하면 돼요. 사용자에게 보이는 변화는 없어요.
 ## [0.2.54.3] - 2026-06-30
 
 ### Changed
 
 - **AI 크롤러가 `/llms.txt`를 자동으로 찾을 수 있어요**: `<head>`에 `<link rel="alternate" type="text/plain" href="/llms.txt">` 링크를 추가했어요. ChatGPT·Perplexity 같은 AI 크롤러가 표준 방식으로 제품 설명 파일을 자동 발견해요.
 - **프록시 우회 경로 보안 강화**: `/robots.txt`, `/sitemap.xml`, `/llms.txt` 등 정적 파일 경로를 프록시 제외 패턴에서 정확히 매칭하도록 수정했어요. 이전에는 `llms.txt`가 정규식에서 점(`.`)을 임의 문자로 취급해 `/llmsXtxt` 같은 경로도 우회 대상에 포함될 수 있었어요. 이제 파일명의 점은 점으로만 매칭해요.
+
+## [0.2.54.2] - 2026-06-30
+
+### Removed
+
+- **워크스페이스 테이블에서 사용하지 않는 `has_logo` 컬럼을 정리했어요**: 로고 유무를 `logo_updated_at` 단일 컬럼으로 관리하도록 전환한 뒤 남아있던 `has_logo` 컬럼을 스키마에서 제거했어요. 배포 후 `pnpm db:push`로 DB에 적용하면 돼요. 사용자에게 보이는 변화는 없어요.
 
 ## [0.2.54.1] - 2026-06-30
 
