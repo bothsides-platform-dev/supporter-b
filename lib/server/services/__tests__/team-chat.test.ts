@@ -17,7 +17,6 @@ import {
   getAttachmentRepo,
   getInvitationRepo,
   getNotificationRepo,
-  getOutboxRepo,
   getRfpRepo,
   getRfpTeamMessageRepo,
   getRfpTeamMessageReadRepo,
@@ -40,7 +39,7 @@ let db: PgliteDB;
 let service: TeamChatService;
 
 async function buildService(): Promise<TeamChatService> {
-  const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo, attRepo] = await Promise.all([
+  const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, attRepo] = await Promise.all([
     getRfpRepo(),
     getInvitationRepo(),
     getUserRepo(),
@@ -48,10 +47,9 @@ async function buildService(): Promise<TeamChatService> {
     getRfpTeamMessageReadRepo(),
     getWorkspaceRepo(),
     getNotificationRepo(),
-    getOutboxRepo(),
     getAttachmentRepo(),
   ]);
-  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo, attRepo);
+  return new TeamChatService(db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, attRepo);
 }
 
 // Draft attachment — all owner FKs null (valid: num_nonnulls <= 1).
