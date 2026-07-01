@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.54.7] - 2026-07-01
+
+### Changed
+
+- **테마를 바꾸면 전환 효과가 생겼어요**: 라이트/다크 모드를 바꿀 때 클릭한 버튼 위치에서 원이 펼쳐지며 새 테마로 전환돼요. 사용자가 움직임 줄이기(prefers-reduced-motion)를 설정했거나 지원하지 않는 환경에서는 기존처럼 즉시 전환돼요.
+
 ## [0.2.54.6] - 2026-06-30
 
 ### Changed
