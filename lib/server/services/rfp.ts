@@ -526,36 +526,37 @@ export class RfpService {
             deadline: deadlineDisplay,
             inviteUrl,
           });
-          await this.outboxRepo.enqueue(
-            {
+          await notify(tx, {
+            recipients: [{ userId: admin.userId, workspaceId: req.pgWsId, email: admin.email }],
+            channels: ['email'],
+            type: 'rfp.invited',
+            title: '',
+            body: '',
+            email: {
               event: 'rfp.invited',
-              to: admin.email,
               subject: `[Supporter B · ${rfpRow.code}] 견적 요청이 도착했어요`,
               html,
-              dedupeKey: `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${admin.userId}`,
+              dedupeKey: () => `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${admin.userId}`,
             },
-            tx,
-          );
+          });
         }
       }
 
-      const pgMemberIds = await this.workspaceRepo.memberUserIds(req.pgWsId, tx);
-      for (const userId of pgMemberIds) {
-        const notif: Notification = {
-          id: randomUUID(),
-          userId,
-          workspaceId: req.pgWsId,
+      const acceptRecipients = (await this.workspaceRepo.memberRecipients(req.pgWsId, tx)).map((m) => ({
+        userId: m.userId,
+        workspaceId: req.pgWsId,
+        email: m.email,
+      }));
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: acceptRecipients,
+          channels: ['inapp'],
           type: 'pg.request.accepted',
           title: `[${rfpRow.code}] 참여 요청 수락됨`,
           body: `${buyerName}가 참여 요청을 수락했어요. 이제 견적을 보낼 수 있어요.`,
-          channel: 'inapp',
-          status: 'pending',
           linkUrl: `/inbox/${rfpRow.code}`,
-          createdAt: now.toISOString(),
-        };
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
-      }
+        })),
+      );
 
       await this.pgRequestRepo.markDecided(req.id, 'accepted', actor.userId, now, tx);
       return { ok: true as const };
@@ -662,22 +663,21 @@ export class RfpService {
 
       for (const pgWsId of uniquePgWsIds) {
         const members = membersByWs.get(pgWsId) ?? [];
-        for (const m of members) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId: m.userId,
-            workspaceId: pgWsId,
+        const recipients = members.map((m) => ({
+          userId: m.userId,
+          workspaceId: pgWsId,
+          email: m.email,
+        }));
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients,
+            channels: ['inapp'],
             type: 'rfp.invited',
             title: `[${rfpCode}] 견적 요청이 도착했어요`,
             body: `${buyerName}가 견적을 요청했어요.`,
-            channel: 'inapp',
-            status: 'pending',
             linkUrl: `/inbox/${rfpCode}`,
-            createdAt: new Date().toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-        }
+          })),
+        );
       }
 
       const now = new Date();
@@ -699,16 +699,19 @@ export class RfpService {
         const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
         const admins = wsMembers.filter((m) => m.role === 'admin' && m.approvalStatus === 'approved');
         for (const admin of admins) {
-          await this.outboxRepo.enqueue(
-            {
+          await notify(tx, {
+            recipients: [{ userId: admin.userId, workspaceId: draft.pgWsId, email: admin.email }],
+            channels: ['email'],
+            type: 'rfp.invited',
+            title: '',
+            body: '',
+            email: {
               event: 'rfp.invited',
-              to: admin.email,
               subject: `[Supporter B · ${rfpCode}] 견적 요청이 도착했어요`,
               html,
-              dedupeKey: `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${admin.userId}`,
+              dedupeKey: () => `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${admin.userId}`,
             },
-            tx,
-          );
+          });
         }
         sentCount += 1;
       }
@@ -826,29 +829,21 @@ export class RfpService {
         const adminRows = await this.workspaceRepo.adminRecipients(p.pgWsId, tx);
 
         for (const m of adminRows) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId: m.userId,
-            workspaceId: p.pgWsId,
-            type: 'rfp.requote_requested',
-            title: `[${rfp.code}] 견적 재요청이 도착했어요`,
-            body: `${buyerName}가 조건 개선을 요청했어요.`,
-            channel: 'inapp',
-            status: 'pending',
-            linkUrl: `/inbox/${rfp.code}`,
-            createdAt: now.toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-          await this.outboxRepo.enqueue(
-            {
-              event: 'rfp.requote_requested',
-              to: m.email,
-              subject: `[Supporter B · ${rfp.code}] 견적 재요청이 도착했어요`,
-              html,
-              dedupeKey: `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:user:${m.userId}`,
-            },
-            tx,
+          pendingEmits.push(
+            ...(await notify(tx, {
+              recipients: [{ userId: m.userId, workspaceId: p.pgWsId, email: m.email }],
+              channels: ['inapp', 'email'],
+              type: 'rfp.requote_requested',
+              title: `[${rfp.code}] 견적 재요청이 도착했어요`,
+              body: `${buyerName}가 조건 개선을 요청했어요.`,
+              linkUrl: `/inbox/${rfp.code}`,
+              email: {
+                event: 'rfp.requote_requested',
+                subject: `[Supporter B · ${rfp.code}] 견적 재요청이 도착했어요`,
+                html,
+                dedupeKey: () => `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:user:${m.userId}`,
+              },
+            })),
           );
         }
       }
