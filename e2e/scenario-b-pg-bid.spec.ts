@@ -27,17 +27,19 @@ import { sql, eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
 import { rfpInvitations, bids, workspaces } from '@/lib/db/schema';
 import { generateToken, hashToken } from '@/lib/server/token';
-import { rfpUuidFromCode } from './_helpers';
+import { loginAs, rfpUuidFromCode } from './_helpers';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
-const TOSS_EMAIL = 'ws-toss-admin@example.com';
-const TOSS_PASSWORD = 'password123';
 const RFP_ID = 'P-2604-0001';
 
 test.describe.serial('Scenario B — PG submits a bid', () => {
+  // /invite/rfp/[token] is the first test to compile this route — Turbopack
+  // cold-compilation can exceed the 30 s global default. Give the test 90 s.
+  test.setTimeout(90_000);
+
   test('toss claims invitation, submits bid, shows in-place submitted state', async ({
     page,
   }) => {
@@ -86,18 +88,15 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     // admin already exists, so we log in first and exercise the
     // InviteAuthedClient path that claims via claimInviteTokenAction
     // and redirects straight to /inbox/<rfpId>.
-    await page.goto('/login');
-    await page.fill('input[name="email"]', TOSS_EMAIL);
-    await page.fill('input[name="password"]', TOSS_PASSWORD);
-    await page.getByRole('button', { name: '로그인' }).click();
-    await page.waitForURL(/\/home$/, { timeout: 15_000 });
+    await loginAs(page, 'pg-toss');
 
     // ── 2. Visit invite URL while logged in ──────────────────────
     await page.goto(`/invite/rfp/${rawToken}`);
 
     // ── 3. Land on /inbox/<rfpId> ────────────────────────────────
+    // /invite/rfp/[token] may be cold-compiled on first access — 45 s covers it.
     await page.waitForURL(new RegExp(`/inbox/${RFP_ID}$`), {
-      timeout: 15_000,
+      timeout: 45_000,
     });
 
     // ── 4. Fill the bid wizard ───────────────────────────────────

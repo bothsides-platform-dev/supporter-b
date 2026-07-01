@@ -22,17 +22,19 @@ import { test, expect } from 'playwright/test';
 import { sql, eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
 import { bids, workspaces } from '@/lib/db/schema';
-import { rfpUuidFromCode } from './_helpers';
+import { loginAs, rfpUuidFromCode } from './_helpers';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
-const TOSS_EMAIL = 'ws-toss-admin@example.com';
-const TOSS_PASSWORD = 'password123';
 const RFP_CODE = 'P-2604-0001';
 
 test.describe.serial('Scenario E — 재요청 → 재제출', () => {
+  // The BidWizard re-submission flow accumulates ~30 s under cold conditions.
+  // Give the test 90 s to avoid a brittle boundary failure.
+  test.setTimeout(90_000);
+
   test('requote banner shows; toss PG sees banner and resubmits round 2', async ({ page }) => {
     const rfpUuid = await rfpUuidFromCode(RFP_CODE);
 
@@ -115,15 +117,11 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     // ── Phase 2: PG (toss) — sees banner, resubmits ──────────────────────
 
     // 2a. Login as toss PG
-    await page.goto('/login');
-    await page.fill('input[name="email"]', TOSS_EMAIL);
-    await page.fill('input[name="password"]', TOSS_PASSWORD);
-    await page.getByRole('button', { name: '로그인' }).click();
-    await expect(page).toHaveURL(/\/home$/, { timeout: 15_000 });
+    await loginAs(page, 'pg-toss');
 
     // 2b. Navigate to inbox
     await page.goto(`/inbox/${RFP_CODE}`);
-    await page.waitForURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 15_000 });
+    await page.waitForURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 45_000 });
 
     // 2c. Assert the requote banner is visible
     await expect(page.getByText(/견적 재요청을 받았어요/)).toBeVisible({ timeout: 15_000 });

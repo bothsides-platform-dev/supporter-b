@@ -7,6 +7,7 @@ import {
   metricVerdict,
   cycleQuality,
 } from '../bid-compare';
+import { SETTLE_CYCLE_RE } from '../settle-cycle';
 import { getMethodRate, type Bid } from '@/lib/types/bid';
 
 function makeBid(over: Partial<Bid>): Bid {
@@ -176,5 +177,16 @@ describe('cycleQuality', () => {
   });
   it('returns null when current is not a valid cycle string', () => {
     expect(cycleQuality('협의', 'D+1')).toBeNull();
+  });
+
+  // Regression guard for the intentional validator/detector divergence:
+  // SETTLE_CYCLE_RE (input validation) rejects D+0, but the buyer's free-text
+  // current-terms detector must still compare D+0 (당일정산). A future
+  // "unification" swapping CYCLE_RE for SETTLE_CYCLE_RE would silently drop
+  // D+0 current-terms from comparison — this test makes that fail loudly.
+  it('keeps D+0 (당일정산) current-terms comparable even though the validator rejects D+0', () => {
+    expect(cycleQuality('D+0', 'D+1')).toBe('slower');
+    expect(cycleQuality('D+0', 'D+0')).toBe('same');
+    expect(SETTLE_CYCLE_RE.test('D+0')).toBe(false);
   });
 });

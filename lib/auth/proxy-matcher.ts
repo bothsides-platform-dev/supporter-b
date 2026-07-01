@@ -8,20 +8,26 @@
  * route, a Next.js internal, or a metadata/static asset that must serve to
  * unauthenticated users (SEO + social-card crawlers). Anything not excluded
  * runs through `decideRoute` and may be redirected to `/login`.
+ *
+ * Dots in filenames are escaped (`\\.`) so the negative lookahead only matches
+ * a literal dot — not any character. Without escaping, 'llms.txt' in the regex
+ * would exclude paths like '/llmsXtxt'.
  */
 const EXCLUDED_SEGMENTS = [
   'monitoring', // Sentry tunnelRoute
   '_axiom', // next-axiom web-vitals/logs beacons (rewritten to api.axiom.co)
   'api', // NextAuth handlers + route handlers
   '_next',
-  'favicon.ico',
-  'icon.svg',
+  'favicon\\.ico',
+  'icon\\.svg',
   'apple-icon',
   'opengraph-image',
   'twitter-image',
-  'manifest.webmanifest',
-  'robots.txt',
-  'sitemap.xml',
+  'manifest\\.webmanifest',
+  'robots\\.txt',
+  'sitemap\\.xml',
+  'llms\\.txt', // AI/GEO text endpoint — serve to unauth crawlers (app/llms.txt)
+  'llms-full\\.txt', // full markdown export (app/llms-full.txt)
   'fonts',
   'file',
   'globe',

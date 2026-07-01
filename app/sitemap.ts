@@ -1,26 +1,12 @@
 import type { MetadataRoute } from 'next';
-import { siteConfig } from '@/lib/site-config';
+import { headers } from 'next/headers';
+import { appOrigins } from '@/lib/site-routing';
+import { seoHostContext } from '@/lib/seo/host';
+import { buildSitemap } from '@/lib/seo/sitemap';
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date();
-  return [
-    {
-      url: siteConfig.url,
-      lastModified,
-      changeFrequency: 'weekly',
-      priority: 1,
-    },
-    {
-      url: `${siteConfig.url}/login`,
-      lastModified,
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    },
-    {
-      url: `${siteConfig.url}/signup`,
-      lastModified,
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    },
-  ];
+// Host-aware: each host lists its own public routes with its own origin.
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const host = (await headers()).get('host');
+  const ctx = seoHostContext(host, appOrigins());
+  return buildSitemap(ctx, new Date());
 }

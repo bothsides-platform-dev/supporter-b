@@ -23,6 +23,7 @@ export function DealRoomPageHost({ showCue = false }: { showCue?: boolean }) {
         <FocusComparison
           bids={demoCompareBids}
           pgWsNameMap={demoPgNameMap}
+          pgWsLogoUpdatedAtMap={{}}
           current={demoCompareCurrent}
           rfpStatus="sent"
           awardedBidId={null}

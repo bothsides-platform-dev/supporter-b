@@ -11,6 +11,7 @@ import { MetricCard } from '@/components/landing/MetricCard';
 import { LandingHeroSection } from '@/components/landing/LandingHeroSection';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { SectionHeading } from '@/components/landing/SectionHeading';
+import { HERO_METRICS } from '@/components/landing/hero-metrics';
 
 const PROBLEM_ITEMS = [
   {
@@ -42,11 +43,6 @@ const SOLUTION_POINTS = [
   '견적 비교와 협상 과정을 단순화하여 더 빠르게 최적 조건을 찾을 수 있습니다.',
 ];
 
-const METRICS = [
-  { to: 0.89, decimals: 2, unit: '%', qualifier: '절감', trend: 'down' as const, caption: 'PoC 고객사 평균 수수료 절감 비율' },
-  { to: 4.5, decimals: 1, unit: '주', qualifier: '감소', trend: 'down' as const, caption: 'PG사 견적 비교 시 소요 시간 감소' },
-  { to: 2300, decimals: 0, unit: '만원', qualifier: undefined, trend: 'up' as const, caption: 'PoC 고객사 연간 평균 수수료 절감액' },
-];
 
 const sectionCls =
   'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--shell-topbar)]';
@@ -113,7 +109,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
               SupporterB를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
             </SectionHeading>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-[var(--s-8)]">
-              {METRICS.map((m) => (
+              {HERO_METRICS.map((m) => (
                 <MetricCard
                   key={m.caption}
                   to={m.to}

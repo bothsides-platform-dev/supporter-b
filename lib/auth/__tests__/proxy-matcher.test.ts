@@ -29,9 +29,25 @@ describe('auth proxy matcher', () => {
     expect(proxyRuns('/rfp/q-2605-0042')).toBe(true);
   });
 
+  it('skips the AI text endpoints (llms.txt / llms-full.txt) so crawlers reach them', () => {
+    // Same rationale as robots.txt / sitemap.xml — must serve to unauth crawlers,
+    // not redirect to /login.
+    expect(proxyRuns('/llms.txt')).toBe(false);
+    expect(proxyRuns('/llms-full.txt')).toBe(false);
+  });
+
   it('still skips the Sentry monitoring tunnel and api routes', () => {
     expect(proxyRuns('/monitoring')).toBe(false);
     expect(proxyRuns('/api/auth/session')).toBe(false);
+  });
+
+  it('does NOT exclude paths that merely resemble static filenames (dot-escape guard)', () => {
+    // Unescaped '.' in the lookahead matches any character, so 'llms.txt' would
+    // exclude paths like '/llmsXtxt'. Verify literal-dot-only matching.
+    expect(proxyRuns('/llmsXtxt')).toBe(true);
+    expect(proxyRuns('/robotsXtxt')).toBe(true);
+    expect(proxyRuns('/faviconXico')).toBe(true);
+    expect(proxyRuns('/sitemapXxml')).toBe(true);
   });
 });
 
@@ -57,6 +73,11 @@ describe('auth proxy config (proxy.ts)', () => {
   });
 
   it('keeps the inlined matcher equal to the canonical PROXY_MATCHER', () => {
-    expect(inlined?.[1]).toBe(PROXY_MATCHER);
+    // readFileSync returns raw source bytes. `\\.` in the single-quoted literal
+    // (a backslash escape for the regex dot) appears as two chars in the file.
+    // Decode JS string escape sequences so the raw source matches the runtime value.
+    const raw = inlined?.[1] ?? '';
+    const decoded = raw.replace(/\\([\s\S])/g, (_, c: string) => (c === '\\' ? '\\' : c));
+    expect(decoded).toBe(PROXY_MATCHER);
   });
 });

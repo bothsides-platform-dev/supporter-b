@@ -54,7 +54,7 @@ describe('buildBuyerDashboard', () => {
     expect(byId.due.href).toBe('/rfp?status=active&deadline=d7');
     expect(byId.review.value).toBe(1);
     expect(byId.awarded.value).toBe(1);
-    expect(byId.awarded.href).toBe('/rfp?status=awarded');
+    expect(byId.awarded.href).toBe('/rfp?status=closed');
   });
 
   it('builds action groups, omitting empty ones', () => {

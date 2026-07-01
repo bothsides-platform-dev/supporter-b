@@ -12,7 +12,6 @@ describe('cross-side lifecycle keys', () => {
       [
         // buyer side
         'active',
-        'awarded',
         'closed',
         // pg side
         'received',
@@ -34,6 +33,7 @@ describe('cross-side lifecycle keys', () => {
     expect(isCrossSideLifecycleKey('draft')).toBe(false); // 제거된 단계 (작성중 — buyer)
     expect(isCrossSideLifecycleKey('drafting')).toBe(false); // 제거된 단계 (작성중 — pg)
     expect(isCrossSideLifecycleKey('reviewing')).toBe(false); // 제거된 단계 — cross-side 에 추가되지 않도록 가드
+    expect(isCrossSideLifecycleKey('awarded')).toBe(false); // 병합 — 선정완료는 마감으로 폴드
     expect(isCrossSideLifecycleKey('active')).toBe(true);
     expect(isCrossSideLifecycleKey(null)).toBe(false); // custom / default-landing
   });

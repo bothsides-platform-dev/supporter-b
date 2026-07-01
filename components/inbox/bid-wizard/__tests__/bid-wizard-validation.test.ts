@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   getBidWizardValidity,
   getFirstIncompleteBidStep,
+  isCycleValid,
 } from '../bid-wizard-validation';
 
 describe('getBidWizardValidity', () => {
@@ -35,5 +36,17 @@ describe('getFirstIncompleteBidStep', () => {
 
   it('모두 충족 시 null', () => {
     expect(getFirstIncompleteBidStep({ cycleNum: '1', anyFeeFilled: true })).toBeNull();
+  });
+});
+
+describe('isCycleValid', () => {
+  it('빈 문자열은 무효', () => {
+    expect(isCycleValid('')).toBe(false);
+  });
+  it('0 이하는 무효', () => {
+    expect(isCycleValid('0')).toBe(false);
+  });
+  it('양의 정수는 유효', () => {
+    expect(isCycleValid('3')).toBe(true);
   });
 });

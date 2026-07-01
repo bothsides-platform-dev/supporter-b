@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CheckIcon, PlusIcon } from '@/components/icons';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
+import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 
 const EMPTY_DESC: Record<'buyer' | 'pg', string> = {
   buyer: '새 견적이 오거나 마감이 다가오면 여기에 표시돼요.',
@@ -53,7 +54,8 @@ export function HomeDashboard({
               description={EMPTY_DESC[workspaceType]}
             />
           )}
-          {workspaceType === 'pg' &&
+          {OPEN_BOARD_ENABLED &&
+            workspaceType === 'pg' &&
             dashboard.openRfps != null &&
             dashboard.openRfps.length > 0 && (
               <section>

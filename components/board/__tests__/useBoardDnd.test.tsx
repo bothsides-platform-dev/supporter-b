@@ -31,9 +31,8 @@ function col(over: Partial<BoardColumn> & { id: string; title: string }): BoardC
 }
 
 const activeCol = col({ id: 'c-active', title: '진행중', lifecycleKey: 'active', position: 'a1' });
-const awardedCol = col({ id: 'c-awarded', title: '선정 완료', lifecycleKey: 'awarded', position: 'a2' });
-const closedCol = col({ id: 'c-closed', title: '마감', lifecycleKey: 'closed', position: 'a3' });
-const customCol = col({ id: 'c-hold', title: '보류', position: 'a4' });
+const closedCol = col({ id: 'c-closed', title: '마감', lifecycleKey: 'closed', position: 'a2' });
+const customCol = col({ id: 'c-hold', title: '보류', position: 'a3' });
 
 const rfpCard: BoardCard = {
   cardType: 'rfp',
@@ -42,7 +41,7 @@ const rfpCard: BoardCard = {
   payload: { rfpId: 'P-2605-0001', title: '결제대행 RFP', stage: 'active' },
 };
 
-const columns = [activeCol, awardedCol, closedCol, customCol];
+const columns = [activeCol, closedCol, customCol];
 
 function drop(cardId: string, toColumnId: string): DragEndEvent {
   return {
@@ -69,23 +68,10 @@ describe('useBoardDnd', () => {
   it('navigate lifecycle drop routes to the rfp detail immediately (no dialog)', async () => {
     const { result } = setup();
     await act(async () => {
-      result.current.handleDragEnd(drop('r1', 'c-awarded'));
+      result.current.handleDragEnd(drop('r1', 'c-closed'));
     });
     expect(push).toHaveBeenCalledWith('/rfp/P-2605-0001');
     expect(result.current.pendingAction).toBeNull();
-  });
-
-  it('action lifecycle drop opens the confirm dialog instead of routing', async () => {
-    const { result } = setup();
-    await act(async () => {
-      result.current.handleDragEnd(drop('r1', 'c-closed'));
-    });
-    expect(push).not.toHaveBeenCalled();
-    expect(result.current.pendingAction).toEqual({
-      kind: 'cancel-rfp',
-      rfpId: 'P-2605-0001',
-      title: '결제대행 RFP',
-    });
   });
 
   it('custom column drop places the card via moveCardAction', async () => {
@@ -102,15 +88,15 @@ describe('useBoardDnd', () => {
   });
 
   it('invalid lifecycle transition rejects with a toast and no side effects', async () => {
-    const awardedCard: BoardCard = {
+    const closedCard: BoardCard = {
       cardType: 'rfp',
       cardId: 'r2',
-      columnId: 'c-awarded',
-      payload: { rfpId: 'P-2605-0002', title: '끝난 RFP', stage: 'awarded' },
+      columnId: 'c-closed',
+      payload: { rfpId: 'P-2605-0002', title: '끝난 RFP', stage: 'closed' },
     };
-    const { result } = setup([awardedCard]);
+    const { result } = setup([closedCard]);
     await act(async () => {
-      result.current.handleDragEnd(drop('r2', 'c-closed'));
+      result.current.handleDragEnd(drop('r2', 'c-active'));
     });
     expect(toast).toHaveBeenCalledWith('이 컬럼으로는 이동할 수 없습니다.', { type: 'info' });
     expect(push).not.toHaveBeenCalled();
@@ -182,7 +168,7 @@ describe('useBoardDnd', () => {
       } as never);
     });
     expect(result.current.activeCard?.cardId).toBe('r1');
-    expect(result.current.validDropTargets?.has('c-awarded')).toBe(true);
+    expect(result.current.validDropTargets?.has('c-closed')).toBe(true);
     expect(result.current.validDropTargets?.has('c-hold')).toBe(true);
   });
 

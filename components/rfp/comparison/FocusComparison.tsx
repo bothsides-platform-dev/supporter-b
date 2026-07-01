@@ -38,6 +38,7 @@ import {
 type Props = {
   bids: Bid[];
   pgWsNameMap: Record<string, string>;
+  pgWsLogoUpdatedAtMap: Record<string, string | null>;
   current: CurrentConditions;
   rfpStatus: string;
   awardedBidId?: string | null;
@@ -57,7 +58,7 @@ type Props = {
 };
 
 export function FocusComparison(props: Props) {
-  const { bids, pgWsNameMap, current, rfpStatus, awardedBidId, requoteByPg } = props;
+  const { bids, pgWsNameMap, pgWsLogoUpdatedAtMap, current, rfpStatus, awardedBidId, requoteByPg } = props;
   const router = useRouter();
 
   const [tier, setTier] = useState<MerchantTier>(props.buyerGrade ?? 'general');
@@ -87,12 +88,18 @@ export function FocusComparison(props: Props) {
       workspaceId: activePgWsId,
       name: pgWsNameMap[activePgWsId] ?? activePgWsId,
       type: 'pg',
+      logoUpdatedAt: pgWsLogoUpdatedAtMap[activePgWsId] ?? null,
     });
-  }, [activePgWsId, pgWsNameMap, setCounterparty]);
+  }, [activePgWsId, pgWsNameMap, pgWsLogoUpdatedAtMap, setCounterparty]);
 
   const pgName = useCallback(
     (wsId: string) => pgWsNameMap[wsId] ?? wsId,
     [pgWsNameMap],
+  );
+
+  const pgLogoFn = useCallback(
+    (wsId: string) => pgWsLogoUpdatedAtMap[wsId] ?? null,
+    [pgWsLogoUpdatedAtMap],
   );
 
   // 탭/peek/요율-비교 콜백은 안정 참조로 — memo 된 서브패널의 재렌더를 막는다.
@@ -167,6 +174,7 @@ export function FocusComparison(props: Props) {
         tier={tier}
         peek={peek}
         pgName={pgName}
+        pgLogoFn={pgLogoFn}
         onSelect={setActiveBidId}
         onPeekEnter={onPeekEnter}
         onPeekLeave={onPeekLeave}
@@ -177,7 +185,12 @@ export function FocusComparison(props: Props) {
         <div className="mb-2 flex items-center justify-between gap-3">
           <CounterpartyProfileCard
             variant="profile"
-            counterparty={{ name: pgName(active.pgWsId), type: 'pg', workspaceId: active.pgWsId }}
+            counterparty={{
+              name: pgName(active.pgWsId),
+              type: 'pg',
+              workspaceId: active.pgWsId,
+              logoUpdatedAt: pgLogoFn(active.pgWsId),
+            }}
             rfpContext={{ id: props.rfpId, code: props.rfpCode }}
           />
           {isAwarded && (

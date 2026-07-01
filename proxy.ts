@@ -46,6 +46,6 @@ export default auth(async (req) => {
 // two cannot drift.
 export const config = {
   matcher: [
-    '/((?!monitoring|_axiom|api|_next|favicon.ico|icon.svg|apple-icon|opengraph-image|twitter-image|manifest.webmanifest|robots.txt|sitemap.xml|fonts|file|globe|next|vercel|window).*)',
+    '/((?!monitoring|_axiom|api|_next|favicon\\.ico|icon\\.svg|apple-icon|opengraph-image|twitter-image|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|fonts|file|globe|next|vercel|window).*)',
   ],
 };

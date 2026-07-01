@@ -1,9 +1,8 @@
 import * as React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { BidStepFees } from '../BidStepFees';
-
-const noop = () => {};
 
 function setup(over: Partial<React.ComponentProps<typeof BidStepFees>> = {}) {
   const onFee = vi.fn();
@@ -13,8 +12,6 @@ function setup(over: Partial<React.ComponentProps<typeof BidStepFees>> = {}) {
       customPaymentMethods={[]}
       fees={{}}
       onFee={onFee}
-      onBack={noop}
-      onNext={noop}
       {...over}
     />,
   );
@@ -86,5 +83,41 @@ describe('BidStepFees 구간 매트릭스', () => {
     setup({ fees: { 'card:sme2': '1.00' } });
     fireEvent.focusIn(screen.getByTestId('fee-cell-card-sme2'));
     expect(screen.getByRole('tooltip').className).toContain('left-1/2');
+  });
+});
+
+describe('BidStepFees 검증 피드백', () => {
+  it('attempted=true 이고 채운 칸이 0개면 "1칸 이상" 에러를 보인다', () => {
+    setup({ fees: {}, attempted: true });
+    expect(screen.getByText('수수료를 1칸 이상 입력해주세요')).toBeInTheDocument();
+  });
+
+  it('attempted=false 이면 0칸이어도 에러가 없다', () => {
+    setup({ fees: {} });
+    expect(screen.queryByText('수수료를 1칸 이상 입력해주세요')).toBeNull();
+  });
+
+  it('attempted=true 라도 1칸 이상 채우면 에러가 사라진다', () => {
+    setup({ fees: { 'card:general': '1.5' }, attempted: true });
+    expect(screen.queryByText('수수료를 1칸 이상 입력해주세요')).toBeNull();
+  });
+
+  it('구간 셀에 100 초과 값은 입력되지 않는다 (수수료 % 상한 유지)', async () => {
+    const user = userEvent.setup();
+    setup();
+    const cell = screen.getByTestId('fee-cell-card-sole') as HTMLInputElement;
+    await user.type(cell, '150');
+    expect(cell.value).toBe('15');
+  });
+
+  it('가상계좌 건당 금액은 상한이 없다 (큰 금액도 입력 가능)', async () => {
+    const user = userEvent.setup();
+    setup();
+    const input = screen
+      .getByText('가상계좌 건당 수수료')
+      .closest('.space-y-1')!
+      .querySelector('input') as HTMLInputElement;
+    await user.type(input, '200000');
+    expect(input.value).toBe('200,000');
   });
 });

@@ -2,9 +2,8 @@
 //
 // Sidebar tokens are user-facing labels; domain enums are the actual DB values.
 // RFP mapping (token → statuses it folds — 칸반 컬럼 모집단과 1:1):
-//   active   → ['sent']                 (sidebar calls in-flight RFPs "active")
-//   closed   → ['closed', 'cancelled']  (칸반 마감 컬럼이 둘을 폴드 — 표/딥링크도 동일 모집단)
-//   awarded  → ['awarded']
+//   active   → ['sent']                              (sidebar calls in-flight RFPs "active")
+//   closed   → ['closed', 'cancelled', 'awarded']    (마감 컬럼이 셋을 폴드 — 선정완료 통합, 표/딥링크 동일 모집단)
 //   undefined / '' / unknown → undefined (show all)
 //   (draft RFPs are hidden from the kanban; surfaced only in the unfiltered table)
 //
@@ -24,8 +23,7 @@ import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 
 const RFP_PARAM_MAP: Record<string, readonly RfpStatus[]> = {
   active: ['sent'],
-  closed: ['closed', 'cancelled'],
-  awarded: ['awarded'],
+  closed: ['closed', 'cancelled', 'awarded'],
 };
 
 /** Map a sidebar URL token to the domain statuses it folds, or undefined if no match. */

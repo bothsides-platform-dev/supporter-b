@@ -6,16 +6,37 @@
  * supporter-b.com and partner.supporter-b.com (cross-host SSO). Leave unset
  * locally for a host-only cookie on localhost.
  */
+/**
+ * Test/perf escape hatch — serve a NON-secure session cookie so an HTTP-only
+ * load generator (k6) can replay it across requests. Without this, perf runs
+ * `next start` (NODE_ENV=production) which forces a `Secure` session cookie that
+ * a plaintext-http client never re-sends → every "authenticated" page actually
+ * measures the /login redirect.
+ *
+ * Self-defending: IGNORED on an https deployment (NEXT_PUBLIC_BASE_URL/AUTH_URL
+ * starts with `https://`). So even if `AUTH_INSECURE_COOKIES=true` leaks into the
+ * real production env, it cannot weaken the live session cookie — the flag only
+ * takes effect on an http origin (perf/local). NEVER rely on it in production.
+ */
+export function insecureCookiesEnabled(): boolean {
+  if (process.env.AUTH_INSECURE_COOKIES !== 'true') return false;
+  const origin = process.env.NEXT_PUBLIC_BASE_URL || process.env.AUTH_URL || '';
+  return !origin.startsWith('https://');
+}
+
 export function sessionCookie() {
   const prod = process.env.NODE_ENV === 'production';
+  // `__Secure-` prefix REQUIRES the Secure attribute, so name and `secure` flip
+  // together. Insecure mode (perf over http) drops both.
+  const secure = prod && !insecureCookiesEnabled();
   const domain = process.env.AUTH_COOKIE_DOMAIN || undefined;
   return {
-    name: prod ? '__Secure-authjs.session-token' : 'authjs.session-token',
+    name: secure ? '__Secure-authjs.session-token' : 'authjs.session-token',
     options: {
       httpOnly: true,
       sameSite: 'lax' as const,
       path: '/',
-      secure: prod,
+      secure,
       ...(domain ? { domain } : {}),
     },
   };

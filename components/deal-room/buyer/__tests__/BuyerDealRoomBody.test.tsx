@@ -102,6 +102,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     companyName: '구매사',
     inviteList: [],
     pgWsNameMap: {},
+    pgWsLogoUpdatedAtMap: {},
     pendingRequests: [],
     canEdit: true,
     authorId: 'u1',
@@ -152,5 +153,37 @@ describe('BuyerDealRoomBody — 선정 결과 패널', () => {
   it('sent(선정 전)에는 결과 패널을 렌더하지 않는다', () => {
     render(<BuyerDealRoomBody data={buildData()} />);
     expect(screen.queryByText(/선정했어요/)).not.toBeInTheDocument();
+  });
+
+  it('awarded 면 "담당처와 연락을 이어나가보세요." 부제목을 렌더한다', () => {
+    render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      awardedPgContact,
+    })} />);
+    expect(screen.getByText('담당처와 연락을 이어나가보세요.')).toBeInTheDocument();
+  });
+
+  it('awarded 면 연락처 이메일 링크가 견적 비교 탭 콘텐츠 영역에 위치한다', () => {
+    const { container } = render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      awardedPgContact,
+    })} />);
+    const focusComp = container.querySelector('[data-testid="focus-comparison"]')!;
+    const emailLink = screen.getByRole('link', { name: /sales@toss\.im/ });
+    expect(focusComp.parentElement).toContainElement(emailLink as HTMLElement);
+  });
+
+  it('awarded 면 선정 제목·안내 문구가 견적 비교 탭(연락처 카드와 같은 영역)에 렌더된다', () => {
+    const { container } = render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      awardedPgContact,
+    })} />);
+    const focusComp = container.querySelector('[data-testid="focus-comparison"]')!;
+    expect(focusComp.parentElement).toContainElement(
+      screen.getByText(/토스페이먼츠를 선정했어요/),
+    );
+    expect(focusComp.parentElement).toContainElement(
+      screen.getByText('담당처와 연락을 이어나가보세요.'),
+    );
   });
 });

@@ -14,10 +14,9 @@ function col(over: Partial<BoardColumn> & { id: string; title: string }): BoardC
 }
 
 const activeCol = col({ id: 'c-active', title: '진행중', lifecycleKey: 'active' });
-const awardedCol = col({ id: 'c-awarded', title: '선정 완료', lifecycleKey: 'awarded' });
 const closedCol = col({ id: 'c-closed', title: '마감', lifecycleKey: 'closed' });
 const customCol = col({ id: 'c-hold', title: '보류' });
-const columns = [activeCol, awardedCol, closedCol, customCol];
+const columns = [activeCol, closedCol, customCol];
 
 function rfpCard(stage: string, columnId: string): BoardCard {
   return {
@@ -29,14 +28,13 @@ function rfpCard(stage: string, columnId: string): BoardCard {
 }
 
 describe('computeValidDropTargets', () => {
-  it('active 카드: awarded(이동)·closed(취소)·커스텀(배치) 모두 유효', () => {
+  it('active 카드: 마감(상세 이동)·커스텀(배치)이 유효', () => {
     const set = computeValidDropTargets({
       card: rfpCard('active', 'c-active'),
       columns,
       cardType: 'rfp',
       currentColumnId: 'c-active',
     });
-    expect(set.has('c-awarded')).toBe(true);
     expect(set.has('c-closed')).toBe(true);
     expect(set.has('c-hold')).toBe(true);
   });
@@ -51,14 +49,13 @@ describe('computeValidDropTargets', () => {
     expect(set.has('c-active')).toBe(true);
   });
 
-  it('awarded 카드: closed 로의 전이는 무효, 커스텀 배치만 유효', () => {
+  it('종결(마감) 카드: 진행중 으로의 전이는 무효, 커스텀 배치만 유효', () => {
     const set = computeValidDropTargets({
-      card: rfpCard('awarded', 'c-awarded'),
+      card: rfpCard('closed', 'c-closed'),
       columns,
       cardType: 'rfp',
-      currentColumnId: 'c-awarded',
+      currentColumnId: 'c-closed',
     });
-    expect(set.has('c-closed')).toBe(false);
     expect(set.has('c-active')).toBe(false);
     expect(set.has('c-hold')).toBe(true);
   });

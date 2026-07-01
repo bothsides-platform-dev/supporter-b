@@ -41,6 +41,7 @@ import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
 import { josa } from 'es-hangul';
 import { toast } from '@/lib/toast';
+import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
@@ -49,6 +50,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
     bids,
     rfpFiles,
     pgWsNameMap,
+    pgWsLogoUpdatedAtMap,
     inviteList,
     pendingRequests,
     canEdit,
@@ -79,26 +81,40 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       id: 'compare',
       label: '견적 비교',
       content: (
-        <FocusComparison
-          bids={bids}
-          pgWsNameMap={pgWsNameMap}
-          current={{
-            feeRate: rfp.currentFeeRate,
-            settlementCycle: rfp.currentSettlementCycle,
-            settlementLimit: rfp.currentSettlementLimit,
-            guaranteeInsurance: rfp.currentGuaranteeInsurance,
-          }}
-          rfpStatus={rfp.status}
-          awardedBidId={rfp.awardedBidId}
-          requiredPaymentMethods={rfp.requiredPaymentMethods}
-          customPaymentMethods={rfp.customPaymentMethods}
-          rfpId={rfp.id}
-          rfpCode={rfp.code}
-          requoteByPg={requoteByPg}
-          buyerGrade={rfp.bizProfile?.grade}
-          isSample={rfp.isSample ?? false}
-          hideHeader
-        />
+        <>
+          {rfp.status === 'awarded' && awardedPgContact && (
+            <div className="mb-4">
+              <DealResultHeader
+                tone="award"
+                title={`${josa(awardedPgContact.workspaceName, '을/를')} 선정했어요`}
+                subtitle="담당처와 연락을 이어나가보세요."
+              >
+                <ContactBlock contact={awardedPgContact} counterpartyKind="pg" />
+              </DealResultHeader>
+            </div>
+          )}
+          <FocusComparison
+            bids={bids}
+            pgWsNameMap={pgWsNameMap}
+            pgWsLogoUpdatedAtMap={pgWsLogoUpdatedAtMap}
+            current={{
+              feeRate: rfp.currentFeeRate,
+              settlementCycle: rfp.currentSettlementCycle,
+              settlementLimit: rfp.currentSettlementLimit,
+              guaranteeInsurance: rfp.currentGuaranteeInsurance,
+            }}
+            rfpStatus={rfp.status}
+            awardedBidId={rfp.awardedBidId}
+            requiredPaymentMethods={rfp.requiredPaymentMethods}
+            customPaymentMethods={rfp.customPaymentMethods}
+            rfpId={rfp.id}
+            rfpCode={rfp.code}
+            requoteByPg={requoteByPg}
+            buyerGrade={rfp.bizProfile?.grade}
+            isSample={rfp.isSample ?? false}
+            hideHeader
+          />
+        </>
       ),
     },
     { id: 'request', label: '요청 조건', content: <RequestConditionsView data={data} /> },
@@ -109,10 +125,12 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       content: (
         <div className="space-y-6">
           <RfpInviteManager rfpId={rfp.code} invitations={inviteList} canEdit={canEdit} />
-          <div className="flex items-center justify-between gap-3">
-            <Label size="md" muted={false}>오픈 게시판 노출</Label>
-            <RfpBoardVisibilityStatus boardVisible={rfp.boardVisible ?? true} />
-          </div>
+          {OPEN_BOARD_ENABLED && (
+            <div className="flex items-center justify-between gap-3">
+              <Label size="md" muted={false}>오픈 게시판 노출</Label>
+              <RfpBoardVisibilityStatus boardVisible={rfp.boardVisible ?? true} />
+            </div>
+          )}
           <RfpPendingRequests requests={pendingRequests} canEdit={canEdit} />
         </div>
       ),
@@ -160,16 +178,6 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       {rfp.isSample && (
         <div className="shrink-0 px-6 pt-4">
           <SampleRfpBanner rfpCode={rfp.code} />
-        </div>
-      )}
-      {rfp.status === 'awarded' && awardedPgContact && (
-        <div className="shrink-0 px-6 pt-4">
-          <DealResultHeader
-            tone="award"
-            title={`${josa(awardedPgContact.workspaceName, '을/를')} 선정했어요`}
-          >
-            <ContactBlock contact={awardedPgContact} counterpartyKind="pg" />
-          </DealResultHeader>
         </div>
       )}
       <div className="flex min-h-0 flex-1 max-lg:flex-col">
