@@ -33,10 +33,12 @@ export default auth(async (req) => {
 
 // Excludes external telemetry proxies (Sentry `/monitoring`, next-axiom
 // `/_axiom/*` beacons), `/api` (especially `/api/auth/*` for NextAuth
-// handlers), Next internals/static assets, and Next.js metadata file
+// handlers), Next internals/static assets, Next.js metadata file
 // conventions (robots.txt, sitemap.xml, manifest.webmanifest, opengraph-image,
-// twitter-image, icon.svg, apple-icon) which must serve to unauth users for
-// SEO and social-card crawlers.
+// twitter-image, icon.svg, apple-icon), and `public/landing/**` marketing
+// images — all of which must serve to unauth users (SEO/social-card crawlers,
+// anonymous landing-page visitors, and next/image's own internal optimizer
+// fetch, which re-requests local sources unauthenticated).
 //
 // Inlined as a string literal: Next.js statically analyzes `config.matcher` at
 // build time WITHOUT executing the module, so an imported/computed value fails
@@ -46,6 +48,6 @@ export default auth(async (req) => {
 // two cannot drift.
 export const config = {
   matcher: [
-    '/((?!monitoring|_axiom|api|_next|favicon\\.ico|icon\\.svg|apple-icon|opengraph-image|twitter-image|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|fonts|file|globe|next|vercel|window).*)',
+    '/((?!monitoring|_axiom|api|_next|favicon\\.ico|icon\\.svg|apple-icon|opengraph-image|twitter-image|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|landing|fonts|file|globe|next|vercel|window).*)',
   ],
 };
