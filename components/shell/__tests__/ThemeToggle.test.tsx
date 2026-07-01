@@ -6,10 +6,15 @@ import { ThemeToggle } from '../ThemeToggle';
 const mockSetTheme = vi.fn();
 let mockResolvedTheme: 'light' | 'dark' = 'light';
 
-vi.mock('@/lib/stores/theme', () => ({
-  useThemeStore: (selector: (s: { resolvedTheme: string; setTheme: (t: string) => void }) => unknown) =>
-    selector({ resolvedTheme: mockResolvedTheme, setTheme: mockSetTheme }),
-}));
+vi.mock('@/lib/stores/theme', () => {
+  type MockState = { resolvedTheme: 'light' | 'dark'; setTheme: (t: string) => void };
+  const getState = (): MockState => ({ resolvedTheme: mockResolvedTheme, setTheme: mockSetTheme });
+  const useThemeStore = Object.assign(
+    (selector: (s: MockState) => unknown) => selector(getState()),
+    { getState },
+  );
+  return { useThemeStore };
+});
 
 describe('ThemeToggle', () => {
   beforeEach(() => {

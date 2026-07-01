@@ -84,10 +84,11 @@ describe('applyThemeWithTransition', () => {
     stubMatchMedia(false);
     const apply = vi.fn();
     const readyResolve = Promise.resolve();
+    const finishedResolve = Promise.resolve();
     const animate = vi.fn();
     const startViewTransition = vi.fn().mockImplementation((cb: () => void) => {
       cb(); // invoke the callback synchronously (apply the theme)
-      return { ready: readyResolve };
+      return { ready: readyResolve, finished: finishedResolve };
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -99,8 +100,9 @@ describe('applyThemeWithTransition', () => {
     expect(startViewTransition).toHaveBeenCalledOnce();
     expect(apply).toHaveBeenCalledOnce(); // called inside the transition callback
 
-    // Wait for ready promise microtask
+    // Wait for ready and finished microtasks (finished resets inFlight)
     await readyResolve;
+    await finishedResolve;
 
     expect(animate).toHaveBeenCalledOnce();
     const [keyframes, options] = animate.mock.calls[0];
@@ -123,34 +125,78 @@ describe('applyThemeWithTransition', () => {
   it('computes endRadius to cover the farthest viewport corner', async () => {
     stubMatchMedia(false);
 
+    const origWidth = window.innerWidth;
+    const origHeight = window.innerHeight;
+
     // Simulate button at top-left (100, 50); viewport 800×600
     Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 800 });
     Object.defineProperty(window, 'innerHeight', { writable: true, configurable: true, value: 600 });
 
-    const buttonOrigin = { x: 100, y: 50 };
-    // farthest corner = bottom-right: (800-100)=700, (600-50)=550 → hypot(700,550) ≈ 891
-    const expectedRadius = Math.hypot(
-      Math.max(buttonOrigin.x, 800 - buttonOrigin.x),
-      Math.max(buttonOrigin.y, 600 - buttonOrigin.y),
-    );
+    try {
+      const buttonOrigin = { x: 100, y: 50 };
+      // farthest corner = bottom-right: (800-100)=700, (600-50)=550 → hypot(700,550) ≈ 891
+      const expectedRadius = Math.hypot(
+        Math.max(buttonOrigin.x, 800 - buttonOrigin.x),
+        Math.max(buttonOrigin.y, 600 - buttonOrigin.y),
+      );
 
-    const animate = vi.fn();
-    const readyResolve = Promise.resolve();
+      const animate = vi.fn();
+      const readyResolve = Promise.resolve();
+      const finishedResolve = Promise.resolve();
+      const startViewTransition = vi.fn().mockImplementation((cb: () => void) => {
+        cb();
+        return { ready: readyResolve, finished: finishedResolve };
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (document as any).startViewTransition = startViewTransition;
+      document.documentElement.animate = animate;
+
+      applyThemeWithTransition(buttonOrigin, vi.fn());
+      await readyResolve;
+      await finishedResolve;
+
+      const [{ clipPath }] = animate.mock.calls[0];
+      const endClip: string = clipPath[1];
+      expect(endClip).toBe(
+        `circle(${expectedRadius}px at ${buttonOrigin.x}px ${buttonOrigin.y}px)`,
+      );
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: origWidth });
+      Object.defineProperty(window, 'innerHeight', { writable: true, configurable: true, value: origHeight });
+    }
+  });
+
+  // ── 4. In-flight guard ────────────────────────────────────────────────────
+
+  it('falls back to instant switch when a transition is already in flight', async () => {
+    stubMatchMedia(false);
+
+    let resolveFinished!: () => void;
+    const finishedPromise = new Promise<void>((resolve) => {
+      resolveFinished = resolve;
+    });
+
     const startViewTransition = vi.fn().mockImplementation((cb: () => void) => {
       cb();
-      return { ready: readyResolve };
+      return { ready: Promise.resolve(), finished: finishedPromise };
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (document as any).startViewTransition = startViewTransition;
-    document.documentElement.animate = animate;
+    document.documentElement.animate = vi.fn();
 
-    applyThemeWithTransition(buttonOrigin, vi.fn());
-    await readyResolve;
+    // First call — starts an in-flight transition
+    applyThemeWithTransition(origin, vi.fn());
 
-    const [{ clipPath }] = animate.mock.calls[0];
-    const endClip: string = clipPath[1];
-    expect(endClip).toBe(
-      `circle(${expectedRadius}px at ${buttonOrigin.x}px ${buttonOrigin.y}px)`,
-    );
+    // Second call while finishedPromise is still pending (inFlight = true)
+    const apply2 = vi.fn();
+    applyThemeWithTransition(origin, apply2);
+
+    // apply2 must have been called immediately (instant fallback, not a second VT)
+    expect(apply2).toHaveBeenCalledOnce();
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+
+    // Resolve so inFlight resets before the next test
+    resolveFinished();
+    await finishedPromise;
   });
 });
