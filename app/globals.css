@@ -161,6 +161,10 @@
   entirely when prefers-reduced-motion: reduce is set, making the CSS guard
   belt-and-suspenders only.
 */
+/* ⚠ SCOPE: These rules apply to ALL root-level view transitions, not only the
+   theme toggle. If you add page-level transitions, React <ViewTransition>, or
+   any other document.startViewTransition() call, override these pseudo-elements
+   in that feature's own CSS — otherwise its animations will be silenced here. */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;       /* kill default cross-fade; clip-path driven by JS */

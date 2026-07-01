@@ -2,15 +2,15 @@
 
 import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 
-// Emphasized-decelerate easing from --md-sys-motion-easing-emphasized-decelerate.
 // Hardcoded because the Web Animations API requires a literal string (cannot
 // read CSS custom properties at animation time).
 const EASING = 'cubic-bezier(0.05, 0.7, 0.1, 1)';
-
-// Duration matches --md-sys-motion-duration-medium-4 (350ms) — "Linear-snappy"
-// agreed with the user: snappier than rdsx.dev's ~500ms to suit the app's
-// dense/fast design ethos without feeling sluggish on repeat toggles.
 const DURATION = 350;
+
+// Prevents mid-animation re-entry: the browser tears a partial circle if a
+// new transition starts before the previous one finishes. While in-flight,
+// fall back to an instant switch instead.
+let inFlight = false;
 
 /**
  * Wraps a theme-apply callback in a View Transitions clip-path circle reveal
@@ -19,6 +19,7 @@ const DURATION = 350;
  * Falls back to an instant switch when:
  *   • the browser does not support `document.startViewTransition`
  *   • the user prefers-reduced-motion: reduce
+ *   • a transition is already in progress (rapid re-click)
  *
  * DESIGN.md §9 sanctioned exception: user-initiated, GPU-composited
  * clip-path on a pseudo-element, brand-neutral, respects reduced-motion.
@@ -32,24 +33,28 @@ export function applyThemeWithTransition(
     typeof (document as Document & { startViewTransition?: unknown })
       .startViewTransition === 'function';
 
-  if (!supported || prefersReducedMotion()) {
+  if (!supported || prefersReducedMotion() || inFlight) {
     apply();
     return;
   }
 
   const { x, y } = origin;
 
-  // Compute radius to the farthest viewport corner so the circle fully covers
-  // the screen regardless of where the button sits.
   const endRadius = Math.hypot(
     Math.max(x, window.innerWidth - x),
     Math.max(y, window.innerHeight - y),
   );
 
+  inFlight = true;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const transition = (document as any).startViewTransition(() => {
     apply();
-  }) as { ready: Promise<void> };
+  }) as { ready: Promise<void>; finished: Promise<void> };
+
+  transition.finished.catch(() => {}).finally(() => {
+    inFlight = false;
+  });
 
   transition.ready
     .then(() => {
@@ -67,8 +72,8 @@ export function applyThemeWithTransition(
         },
       );
     })
-    .catch(() => {
-      // The transition was aborted (document hidden, etc.). The theme is
-      // already applied — just suppress the unhandled-rejection noise.
+    .catch((err: unknown) => {
+      if (err instanceof DOMException) return; // VT aborted — theme already applied
+      console.error('[view-transition]', err);
     });
 }

@@ -38,7 +38,13 @@ export function ThemeToggle() {
         const r = e.currentTarget.getBoundingClientRect();
         applyThemeWithTransition(
           { x: r.left + r.width / 2, y: r.top + r.height / 2 },
-          () => setTheme(isDark ? 'light' : 'dark'),
+          () => {
+            // Read current state from the store, not from the render closure,
+            // to avoid a stale-closure double-click bug where isDark reflects
+            // the pre-click render snapshot rather than the live store value.
+            const current = useThemeStore.getState().resolvedTheme;
+            setTheme(current === 'dark' ? 'light' : 'dark');
+          },
         );
       }}
     >
