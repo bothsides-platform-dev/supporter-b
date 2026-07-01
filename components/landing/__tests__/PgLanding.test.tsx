@@ -36,7 +36,12 @@ vi.mock('motion/react', () => {
     El.displayName = `motion.${tag}`;
     return El;
   };
-  return { motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }) };
+  return {
+    motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }),
+    // ScrollPinnedSection(스크롤 pin) 이 쓰는 훅 — jsdom 폴백 경로에서도 호출되므로 스텁 제공.
+    useScroll: () => ({ scrollYProgress: { on: vi.fn() } }),
+    useMotionValueEvent: vi.fn(),
+  };
 });
 
 import { PgLanding } from '../PgLanding';
