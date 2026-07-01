@@ -18,11 +18,14 @@ export type PinnedState = {
 export function ScrollPinnedSection({
   steps,
   stepVh = 80,
+  align = 'center',
   className,
   children,
 }: {
   steps: number;
   stepVh?: number;
+  /** pin 콘텐츠 세로 정렬. 'start'는 화면 위쪽에 고정(누적 등장처럼 위→아래로 쌓이는 섹션용). */
+  align?: 'center' | 'start';
   className?: string;
   children: (s: PinnedState) => ReactNode;
 }) {
@@ -82,7 +85,7 @@ export function ScrollPinnedSection({
   return (
     <div ref={trackRef} style={{ height: `${steps * stepVh}vh` }}>
       <div
-        className={`sticky top-[var(--shell-topbar)] flex min-h-[calc(100svh-var(--shell-topbar))] flex-col justify-center ${className ?? ''}`}
+        className={`sticky top-[var(--shell-topbar)] flex min-h-[calc(100svh-var(--shell-topbar))] flex-col ${align === 'start' ? 'justify-start pt-[8vh]' : 'justify-center'} ${className ?? ''}`}
       >
         {/* scrollToStep은 클릭 핸들러에서만 trackRef.current를 읽는다(렌더 중엔 호출 안 됨) —
             컴파일러의 정적 ref-taint 분석이 "ref를 읽는 클로저가 렌더 출력에 포함"만 보고

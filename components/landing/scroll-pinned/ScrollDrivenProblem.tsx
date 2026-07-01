@@ -23,7 +23,7 @@ export function ScrollDrivenProblem({
   stagger?: number;
 }) {
   return (
-    <ScrollPinnedSection steps={items.length}>
+    <ScrollPinnedSection steps={items.length} align="start">
       {({ pinned, activeStep }) => (
         <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-9)]">
           <div className="flex flex-col gap-[var(--s-5)]">
