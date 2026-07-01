@@ -1101,3 +1101,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Type consistency:** `NotifyChannel`/`NotifyRecipient`/`NotifyEmail`/`NotifyInput`/`notify` 이름과 시그니처가 Task 1 정의와 Task 2–7 사용에서 일치. `memberRecipientsBatch` 반환 필드(workspaceId/userId/role/approvalStatus/email)와 그룹핑 사용 일치. `dedupeKey: (email) => string` 시그니처를 userId-기반 사이트에서는 `() => ...`(인자 무시)로 사용 — 타입 호환(인자 적은 함수는 할당 가능).
 
 **주의(구현자용):** userId-기반 dedupeKey 사이트(accept/sendDraft/requote/bid/chat/team_chat digest)는 반드시 **단일-recipient notify** 로 호출해야 dedupeKey 값이 원본과 일치한다(다중 recipient + `()=>고정키` 는 outbox UNIQUE 충돌로 1건만 저장되는 회귀). 각 Task 코드가 이미 단일-recipient 로 되어 있으니 그대로 따를 것.
+
+---
+
+## Addendum — 실행 중 추가된 Task 7b (플랜 갭 보완)
+
+구현 중 발견: 원래 탐색이 놓친 **12번째 알림 사이트** `createRfp`의 `if (send)` 경로가 `sendDraftInvitations`와 동일한 both-channel 초대 패턴(admin 이메일 per-admin + 전체 멤버 인앱)을 인라인으로 갖고 있었다. 이 사이트가 각 서비스의 `outboxRepo`/`dispatchNotification` 마지막 사용처였기 때문에, Task 5–7·7b 에서 마이그레이션 완료 후 해당 서비스(bid/chat/team-chat/rfp) 생성자의 **미사용 `outboxRepo` param 제거 + 모든 생성 사이트(factory·`_setup.ts`·테스트) 동기화**가 수반되었다(TS `noUnusedLocals`/TS6138 강제). 초안이 예상하지 못한 부수 작업이지만 behavior-preserving하며 각 태스크 리뷰에서 검증됨.
+
+**최종 스코프**: 마이그레이션 12개 흐름 = award·cancel·close·rejectPgRequest·createPgRequest·acceptPgRequest·sendDraftInvitations·requote·**createRfp(send)** (rfp 9) + bid.submitBid + chat.sendMessage + team_chat.sendMessage. 범위 밖 유지(직접 outbox/dispatch): `auth.*`, `workspace.*`, `_workspaceInviteNotify.ts`.

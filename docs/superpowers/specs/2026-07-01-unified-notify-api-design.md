@@ -96,17 +96,17 @@ export async function notify(tx: Tx, input: NotifyInput): Promise<Notification[]
 
 이유: 아웃박스는 `user_id` FK가 없는 순수 딜리버리 큐다. auth/invite 흐름은 아직 유저가 아니거나(`workspace.invited`), 유저의 등록 주소와 다른 새 주소로 나가야 한다(`auth.email-change` → `newEmail`). 이런 흐름은 recipient의 `userId`가 존재하지 않거나 무의미하므로 통합 대상이 아니다.
 
-## repo 추가
+## repo (신규 추가 불필요 — 기존 메서드 재사용)
 
-통합 recipient가 `{userId, email}` 쌍을 필요로 하므로 `WorkspaceRepo`에 2개 추가한다. **기존 `memberEmails`/`memberUserIds`/`memberUserIdsBatch`와 동일하게 `isSystemAccount` 필터를 계승**한다(마스터/운영자 이메일 누출 방지 — 과거 보안 회귀 이슈).
+> **정정(구현 중 확인):** 스펙 초안은 `members`/`membersBatch` 신규 추가를 가정했으나, 통합 recipient(`{userId, email}`) 조회는 **이미 존재하는** 메서드로 전부 충족된다. 신규 repo 메서드 0.
 
-```ts
-// WorkspaceRepo
-members(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
-membersBatch(workspaceIds: string[], tx?: Tx): Promise<Map<string, { userId: string; email: string }[]>>;
-```
+모두 `notifiableAccount`(`passwordHash != '!'`, 데모/시스템 계정 제외) 필터를 적용한다 — 마스터/운영자 이메일 누출 방지.
 
-`membersBatch`는 award/cancel/close의 다중 워크스페이스 루프에서 기존 `memberUserIdsBatch`를 대체한다.
+- `WorkspaceRepo.memberRecipients(wsId): {userId, email}[]` — 단일 ws 전체 멤버 (bid/chat/reject·createPgRequest/accept in-app)
+- `WorkspaceRepo.adminRecipients(wsId): {userId, email}[]` — admin + approved (requote·accept·sendDraftInvitations·createRfp 이메일)
+- `WorkspaceRepo.memberRecipientsBatch(wsIds): {workspaceId, userId, role, approvalStatus, email}[]` — 다중 ws(award/cancel/close), 앱 레이어에서 wsId 로 그룹핑
+
+유일한 필터 변화: `award` 이메일이 `memberEmails`(isSystemAccount) → `memberRecipientsBatch`(notifiableAccount)로 통일됨. 실계정 대상 델타 0(위 "확정 델타" 참조).
 
 ## 호출부 마이그레이션 (11곳, 한 PR)
 
@@ -164,9 +164,7 @@ notify()의 두 쓰기 모두 tx 안 `await` → 비즈니스 트랜잭션과 �
    - `dedupeKey` 파생: `email.dedupeKey?.(recipient.email)`이 recipient별로 적용됨.
    - 반환값 = in-app 알림만(email 채널 recipient는 반환에 없음).
    - `'email'` 채널인데 `email` 미제공 → throw.
-2. **repo 단위** (`members`/`membersBatch`):
-   - `isSystemAccount = true` 계정 제외(마스터 이메일 누출 회귀 가드).
-   - 빈 워크스페이스 → 빈 배열/빈 맵. batch가 요청한 모든 wsId를 키로 포함.
+2. **repo 단위** — 신규 메서드 없음(기존 `memberRecipients`/`adminRecipients`/`memberRecipientsBatch` 재사용). 이들의 `notifiableAccount` 필터·빈 ws 처리는 기존 workspace repo 테스트가 이미 커버.
 3. **behavior-preservation (핵심 게이트)**:
    - 마이그레이션 전후 각 서비스 흐름이 **동일한 notifications row + outbox 엔트리**를 생성하는지. 기존 서비스 테스트 그린 유지가 1차 게이트.
    - 명시 케이스: award 승/패 채널 분기, chat 조건부(dedupe/presence 4가지 조합), team_chat digest `scheduledAt`.
@@ -180,5 +178,5 @@ notify()의 두 쓰기 모두 tx 안 `await` → 비즈니스 트랜잭션과 �
 ## 영향 범위 요약
 
 - 신규: `lib/server/notifications/notify.ts` + 단위 테스트.
-- 수정: `lib/server/repositories`(WorkspaceRepo `members`/`membersBatch` + types), `lib/server/services/{rfp,bid,chat,team-chat}.ts` 11개 흐름.
-- 불변: `dispatch.ts`·`bus.ts`·`emitAfterCommit`·outbox flush·스키마(DDL 0).
+- 수정: `lib/server/services/{rfp,bid,chat,team-chat}.ts` **12개 흐름**(구현 중 확인: 초안의 11개 + `createRfp` send-path 1개). 마이그레이션으로 각 서비스의 마지막 `outboxRepo`(rfp/bid/chat/team-chat) 사용처가 사라져 해당 서비스 생성자에서 미사용 `outboxRepo` param 제거 + 생성 사이트(factory·`_setup.ts`·테스트) 동기화 수반.
+- 불변: `dispatch.ts`·`bus.ts`·`emitAfterCommit`·outbox flush·스키마(DDL 0), repo 메서드(신규 0). 범위 밖 유지: `auth.*`·`workspace.*` 이메일, `_workspaceInviteNotify.ts` 인앱.
