@@ -6,15 +6,12 @@ import type {
   BidNoteRepo,
   BidRepo,
   InvitationRepo,
-  OutboxRepo,
   RfpRepo,
   RfpRequoteRequestRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
-import {
-  dispatchNotification,
-  emitAfterCommit,
-} from '@/lib/server/notifications/dispatch';
+import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
+import { notify } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderBidSubmitted } from '@/lib/server/outbox/templates/bidSubmitted';
 import { getStorage } from '@/lib/server/storage';
@@ -41,7 +38,6 @@ export class BidService {
     private readonly bidRepo: BidRepo,
     private readonly invitationRepo: InvitationRepo,
     private readonly rfpRepo: RfpRepo,
-    private readonly outboxRepo: OutboxRepo,
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly attachmentRepo: AttachmentRepo,
     private readonly bidNoteRepo: BidNoteRepo,
@@ -213,29 +209,21 @@ export class BidService {
         });
 
         for (const m of buyerMembers) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId: m.userId,
-            workspaceId: rfp.buyerWsId,
-            type: 'bid.submitted',
-            title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-            body: `${pgWsLabel}가 견적을 보냈어요.`,
-            channel: 'inapp',
-            status: 'pending',
-            linkUrl: `/rfp/${rfp.code}`,
-            createdAt: now.toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-          await this.outboxRepo.enqueue(
-            {
-              event: 'bid.submitted',
-              to: m.email,
-              subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-              html: submittedHtml,
-              dedupeKey: `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
-            },
-            tx,
+          pendingEmits.push(
+            ...(await notify(tx, {
+              recipients: [{ userId: m.userId, workspaceId: rfp.buyerWsId, email: m.email }],
+              channels: ['inapp', 'email'],
+              type: 'bid.submitted',
+              title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+              body: `${pgWsLabel}가 견적을 보냈어요.`,
+              linkUrl: `/rfp/${rfp.code}`,
+              email: {
+                event: 'bid.submitted',
+                subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+                html: submittedHtml,
+                dedupeKey: () => `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
+              },
+            })),
           );
         }
       }
@@ -336,21 +324,21 @@ export async function getBidService(): Promise<BidService> {
   if (!globalThis.__bidit_bid_service__) {
     const [
       { db },
-      { getBidRepo, getInvitationRepo, getRfpRepo, getOutboxRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo },
+      { getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo },
     ] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] =
+    const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] =
       await Promise.all([
         getBidRepo(), getInvitationRepo(), getRfpRepo(),
-        getOutboxRepo(), getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
+        getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
         getRfpRequoteRequestRepo(), getAuditLogRepo(),
       ]);
 
     globalThis.__bidit_bid_service__ = new BidService(
-      db, bidRepo, invRepo, rfpRepo, outboxRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo,
+      db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo,
     );
   }
   return globalThis.__bidit_bid_service__!;
