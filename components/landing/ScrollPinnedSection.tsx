@@ -49,6 +49,7 @@ export function ScrollPinnedSection({
   });
   const [activeStep, setActiveStep] = useState(0);
   useMotionValueEvent(scrollYProgress, 'change', (v) => {
+    if (!pinned) return; // 폴백 땐 progress를 쓰지 않으므로 불필요한 setState 리렌더를 막는다.
     const s = Math.min(steps - 1, Math.max(0, Math.floor(v * steps)));
     setActiveStep(s);
   });
@@ -57,7 +58,11 @@ export function ScrollPinnedSection({
     const el = trackRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const top = window.scrollY + rect.top + ((index + 0.5) / steps) * rect.height;
+    // useScroll offset ['start start','end end']는 진행률을 (트랙높이 − 뷰포트높이) 구간에
+    // 정규화한다. 클릭 목표 스크롤도 rect.height가 아니라 그 구간으로 매핑해야 그 스텝에
+    // 정확히 안착한다(중간 스텝이 한 페이지 밀리던 버그 수정 — 리뷰 Finding 1).
+    const range = Math.max(0, rect.height - window.innerHeight);
+    const top = window.scrollY + rect.top + ((index + 0.5) / steps) * range;
     window.scrollTo({ top, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   };
 
