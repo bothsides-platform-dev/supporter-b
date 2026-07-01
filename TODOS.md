@@ -37,6 +37,12 @@
 ### PG 가입 BizLookupField blockedStatuses 누락 (P3)
 PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses` 가 없다. PG 도메인에서도 폐업·휴업 사업자를 차단해야 하는지 정책 결정 후 `blockedStatuses={['closed', 'suspended']}` 추가. (발견: v0.2.27.2 adversarial 2026-06-20, P3 — 정책 미확정)
 
+### proxy-matcher EXCLUDED_SEGMENTS가 세그먼트 경계 없이 prefix 매칭 (P3)
+`lib/auth/proxy-matcher.ts`의 `PROXY_MATCHER` 음의 전방탐색은 세그먼트 경계(`/` 또는 끝)를 강제하지 않아, `api`·`_next`·`fonts`·`file`·`globe`·`next`·`vercel`·`window`·`landing` 등 모든 항목이 접두어 매칭된다(예: 미래에 `/landing-editor`·`/next-steps` 같은 실제 보호 라우트가 생기면 인증 미들웨어를 통째로 건너뛴다). 현재는 충돌하는 라우트가 없어 무해하지만, 새 라우트 추가 시 이 목록과의 충돌을 확인하는 절차나 세그먼트 경계 강제(`(?:/|$)` 등)를 검토할 것. (발견: /ship coverage+adversarial 리뷰 2026-07-01, `fix/pg-landing-image-auth-redirect`)
+
+### proxy-matcher 죽은 제외 항목 4개 정리 (P4)
+`file`·`globe`·`next`·`vercel`·`window` 는 create-next-app 기본 SVG 에셋(`public/next.svg` 등) 때문에 추가됐던 항목인데, 해당 파일들은 이미 삭제되어 `public/`에 `fonts/`·`landing/`만 남아 있다. 지금은 아무것도 제외하지 않으면서 흔한 영어 단어라 미래 라우트와 충돌 여지만 남기는 상태. 제거 검토(단, 위 세그먼트 경계 이슈와 함께 처리하는 게 효율적). (발견: /ship adversarial 리뷰 2026-07-01, `fix/pg-landing-image-auth-redirect`)
+
 ## 견적 확장 (current_terms)
 
 ### (조건부) hidden_from_pg write-edge 검증

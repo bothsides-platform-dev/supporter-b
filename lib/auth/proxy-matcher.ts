@@ -28,6 +28,7 @@ const EXCLUDED_SEGMENTS = [
   'sitemap\\.xml',
   'llms\\.txt', // AI/GEO text endpoint — serve to unauth crawlers (app/llms.txt)
   'llms-full\\.txt', // full markdown export (app/llms-full.txt)
+  'landing', // public/landing/** marketing images — must serve to anonymous visitors + next/image's internal optimizer fetch
   'fonts',
   'file',
   'globe',
