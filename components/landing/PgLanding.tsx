@@ -1,4 +1,4 @@
-import { Logo } from '@/components/primitives/Logo';
+import Image from 'next/image';
 import { Footer } from '@/components/shell/Footer';
 import { siteConfig } from '@/lib/site-config';
 import { PgLandingHeaderNav } from '@/components/landing/PgLandingHeaderNav';
@@ -7,8 +7,10 @@ import { SectionHeading } from '@/components/landing/SectionHeading';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { ProblemCard } from '@/components/landing/ProblemCard';
 import { PgCustomerCarousel } from '@/components/landing/PgCustomerCarousel';
-import { PgFeatureCard } from '@/components/landing/PgFeatureCard';
+import { PgCaseCard } from '@/components/landing/PgCaseCard';
+import { LANDING_TYPE } from '@/components/landing/landing-type';
 import { PgProcessSteps } from '@/components/landing/PgProcessSteps';
+import { PgDemoAppShell } from '@/components/landing/demo-app/PgDemoAppShell';
 import { FaqList } from '@/components/landing/FaqList';
 import { ConsultButton } from '@/components/landing/ConsultButton';
 import { PG_FAQ_ITEMS } from '@/components/landing/pg-faq-data';
@@ -57,21 +59,27 @@ const CUSTOMER_TYPES = [
   },
 ];
 
-// ── 화면4: 검증된 리드 / 공정한 기회 (3 메시지) ──
+// ── 화면4: 검증된 리드 / 동일한 기회 (3 메시지) ──
 const VERIFIED_POINTS = [
   {
     index: '01',
     title: '확실한 니즈',
+    img: '/landing/pg/need.webp',
+    alt: '고객사가 PG 조건 비교 요청서를 직접 제출하는 모습',
     desc: '고객사가 직접 PG 조건 비교 요청을 제출합니다. 단순 문의가 아니라, 실제 조건 검토 의사가 있는 고객사를 대상으로 합니다.',
   },
   {
     index: '02',
     title: '정리된 정보',
+    img: '/landing/pg/info.webp',
+    alt: '거래액·업종·정산주기 등 제안 정보가 정리된 RFP',
     desc: '월 거래액, 업종, 현재 PG 조건, 희망 정산주기, 보증금 조건 등 제안에 필요한 정보를 RFP로 확인합니다.',
   },
   {
     index: '03',
-    title: '공정한 기회',
+    title: '동일한 기회',
+    img: '/landing/pg/equal.webp',
+    alt: '여러 PG사에게 동일한 기준으로 주어지는 제안 기회',
     desc: '조건에 맞는 파트너 PG사에게 동일한 기준의 제안 기회를 제공합니다. 고객사는 제출된 조건을 표준화된 방식으로 비교합니다.',
   },
 ];
@@ -110,37 +118,28 @@ const PROCESS_STEPS = [
   },
 ];
 
-// ── 화면6: PG사가 얻는 핵심 이점 (6 카드) ──
-const BENEFITS = [
+// ── 화면6: 파트너사 영업 성과 사례 (3 카드) ──
+const CASES: { metric: string; metricCaption: string; quote: string; role: string }[] = [
   {
-    index: '01',
-    title: '신규 가맹점 인바운드 확대',
-    desc: 'PG 조건을 검토하는 성장 고객사의 요청을 파트너 PG사에게 연결합니다.',
+    metric: '300%',
+    metricCaption: '리드 검증·획득 단가 절감',
+    quote:
+      '신규 PG 도입을 검토하는 고객사 리드를 거래액·업종·조건까지 검증해 제공받아, 좋은 리드를 확보할 수 있었습니다. 덕분에 신규 영업 리드에 대한 고민을 덜었습니다.',
+    role: 'K사 영업 팀장',
   },
   {
-    index: '02',
-    title: '리드 검증 시간 단축',
-    desc: '거래액, 업종, 현재 조건, 희망 조건이 정리된 상태에서 검토를 시작합니다.',
+    metric: '150%',
+    metricCaption: '제안 효율 개선·제안 리소스 절감',
+    quote:
+      '표준화된 요청 정보에 맞춰 고객사가 필요한 조건을 빠르게 제안할 수 있었습니다. 실제 도입 의사가 확실한 고객사에 집중하니 영업 리소스를 효율적으로 쓸 수 있었습니다.',
+    role: 'K사 영업 대리',
   },
   {
-    index: '03',
-    title: '제안 효율 개선',
-    desc: '표준화된 RFP에 맞춰 필요한 조건만 빠르게 제안할 수 있습니다.',
-  },
-  {
-    index: '04',
-    title: '수주 가능성 높은 기회 집중',
-    desc: '실제 비교 의사가 있는 고객사를 대상으로 영업 리소스를 사용할 수 있습니다.',
-  },
-  {
-    index: '05',
-    title: '비가격 경쟁력 전달',
-    desc: '정산 안정성, 보증금 조건, 심사 속도, 운영지원 같은 PG사의 강점을 함께 보여줄 수 있습니다.',
-  },
-  {
-    index: '06',
-    title: '공정한 참여 기회',
-    desc: '조건에 맞는 파트너 PG사에게 동일한 기준으로 제안 기회를 제공합니다.',
+    metric: '200%',
+    metricCaption: '중소형 PG사 신규 영업 기회 확대',
+    quote:
+      '메이저 PG사만 얻던 영업 기회를 중소형 PG사인 저희도 얻을 수 있었어요. 덕분에 상반기에 부족했던 영업 리커버리 보충 계획을 채울 수 있었습니다.',
+    role: 'S사 영업 본부장',
   },
 ];
 
@@ -166,8 +165,7 @@ const faqPageJsonLd = {
 const sectionCls =
   'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--shell-topbar)]';
 const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9)]';
-const subCls =
-  'max-w-[760px] text-[clamp(15px,1.9vw,19px)] leading-[1.7] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)]';
+const subCls = `max-w-[760px] ${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface-variant)]`;
 
 export function PgLanding() {
   return (
@@ -182,11 +180,8 @@ export function PgLanding() {
       />
 
       {/* ── Nav ── */}
-      <header className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-8 h-[var(--shell-topbar)] border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]">
-        <Logo />
-        <div className="flex items-center gap-[var(--s-3)]">
-          <PgLandingHeaderNav />
-        </div>
+      <header className="fixed top-0 left-0 right-0 z-10 px-8 h-[var(--shell-topbar)] border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]">
+        <PgLandingHeaderNav />
       </header>
 
       <main className="flex-1 pt-[var(--shell-topbar)]">
@@ -203,12 +198,13 @@ export function PgLanding() {
               </SectionHeading>
               <FadeInView>
                 <p className={subCls}>
-                  많은 고객사를 만나도 실제로 PG 변경이나 신규 도입을 검토하는 곳은 많지 않습니다.
-                  Supporter B는 결제 도입을 고민하고 있는 고객사를 선별하여 파트너 PG사에게 전달합니다.
+                  고객사를 아무리 많이 만나도, 실제로 PG를 바꾸거나 새로 도입하려는 곳은 많지
+                  않습니다. 의사가 불분명한 리드에 제안서와 미팅이 쌓일수록, 정작 수주로 이어지는
+                  기회는 줄어듭니다.
                 </p>
               </FadeInView>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-[var(--s-4)]">
+            <div className="flex flex-col gap-[var(--s-4)]">
               {PROBLEM_ITEMS.map((item, i) => (
                 <FadeInView key={item.num} delay={i * 0.06}>
                   <ProblemCard num={item.num} title={item.title} desc={item.desc} />
@@ -225,10 +221,10 @@ export function PgLanding() {
               <p className="text-[clamp(20px,3vw,32px)] leading-[1.32] tracking-[-0.018em] font-medium text-[var(--md-sys-color-on-surface)]">
                 콜드콜보다 빠르게.
                 <br />
-                광고 리드보다 선명하게.
+                광고 리드보다 정확하게.
                 <br />
                 <span className="text-[var(--md-sys-color-primary)]">
-                  실제 결제 조건을 비교하는 고객사를 만나세요.
+                  이미 PG 조건을 비교 중인 고객사에게 먼저 닿으세요.
                 </span>
               </p>
             </FadeInView>
@@ -236,39 +232,70 @@ export function PgLanding() {
               <SectionHeading>새로운 성장 고객사가 PG사를 찾아오게 만듭니다</SectionHeading>
               <FadeInView>
                 <p className={subCls}>
-                  PG 수수료, 정산주기, 보증금, 운영 조건을 비교하려는 고객사가 Supporter B에 RFP를
-                  제출합니다. 파트너 PG사는 고객사의 실제 검토 요청을 기반으로 신규 영업기회를 받을 수
-                  있습니다.
+                  수수료율·정산주기·보증금·운영 조건을 비교하려는 고객사가 Supporter B에 견적을
+                  올립니다. 파트너 PG사는 먼저 연락하지 않아도, 조건에 맞는 요청을 인바운드로 받아
+                  새로운 영업 기회를 확보합니다.
                 </p>
               </FadeInView>
             </div>
             <FadeInView>
+              <Image
+                src="/landing/pg/inbound.webp"
+                alt="PG 조건을 검토하는 고객사들"
+                width={960}
+                height={540}
+                sizes="(max-width: 768px) 100vw, 560px"
+                className="mx-auto w-full max-w-[560px] h-auto"
+              />
+            </FadeInView>
+            <FadeInView>
               <PgCustomerCarousel items={CUSTOMER_TYPES} />
             </FadeInView>
             <FadeInView>
-              <p className="text-[clamp(16px,2vw,20px)] leading-[1.6] tracking-[-0.01em] text-[var(--md-sys-color-on-surface)]">
-                Supporter B는 “PG 조건을 비교하고 싶다”는 명확한 신호가 있는 고객사를 먼저 선별합니다.
+              <p className={`${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface)]`}>
+                Supporter B는 “PG 조건을 비교하고 싶다”는 분명한 신호가 있는 고객사만 골라
+                연결합니다.
               </p>
             </FadeInView>
           </div>
         </section>
 
-        {/* ── 화면4: 검증된 리드 / 공정한 기회 ── */}
-        <section className={sectionCls}>
+        {/* ── 화면4: 검증된 리드 / 동일한 기회 ── */}
+        <section id="advantage" className={sectionCls}>
           <div className={containerCls}>
             <div className="flex flex-col gap-[var(--s-5)]">
-              <SectionHeading>검증된 고객사의 영업기회를 빠르고 공정하게 제공합니다</SectionHeading>
+              <SectionHeading>검증된 고객사의 영업기회를 동일한 기준으로 제공합니다</SectionHeading>
               <FadeInView>
                 <p className={subCls}>
-                  모든 리드가 같은 가치는 아닙니다. Supporter B는 고객사의 업종, 거래 규모, 현재 조건,
-                  희망 조건을 정리한 뒤 조건에 맞는 파트너 PG사에게 확실한 영업 기회를 제공합니다.
+                  모든 리드의 가치가 같지는 않습니다. 업종·거래 규모·현재 조건·희망 조건을 미리
+                  정리해 전달하고, 조건이 맞는 파트너 PG사에게 같은 기준으로 제안 기회를 드립니다.
                 </p>
               </FadeInView>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-[var(--s-4)]">
+            <div className="flex flex-col gap-[var(--s-10)]">
               {VERIFIED_POINTS.map((p, i) => (
-                <FadeInView key={p.index} delay={i * 0.06}>
-                  <PgFeatureCard index={p.index} title={p.title} desc={p.desc} />
+                <FadeInView key={p.index}>
+                  <div className="grid items-center gap-[var(--s-6)] md:grid-cols-2 md:gap-[var(--s-9)]">
+                    <Image
+                      src={p.img}
+                      alt={p.alt}
+                      width={960}
+                      height={720}
+                      sizes="(max-width: 768px) 100vw, 480px"
+                      className={`w-full max-w-[480px] h-auto ${i % 2 ? 'md:order-2' : ''}`}
+                    />
+                    <div className={`flex flex-col gap-[var(--s-3)] ${i % 2 ? 'md:order-1' : ''}`}>
+                      <span className="font-mono tabular-nums text-[var(--text-md)] tracking-[-0.02em] text-[var(--md-sys-color-primary)]">
+                        {p.index}
+                      </span>
+                      <h3 className={`${LANDING_TYPE.heading3} text-[var(--md-sys-color-on-surface)]`}>
+                        {p.title}
+                      </h3>
+                      <p className={`${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface-variant)]`}>
+                        {p.desc}
+                      </p>
+                    </div>
+                  </div>
                 </FadeInView>
               ))}
             </div>
@@ -279,6 +306,7 @@ export function PgLanding() {
         <section id="process" className={sectionCls}>
           <div className={`${containerCls} gap-[var(--s-8)]`}>
             <SectionHeading>파트너 참여 방식은 간단합니다</SectionHeading>
+            <PgDemoAppShell />
             <FadeInView>
               <PgProcessSteps steps={PROCESS_STEPS} />
             </FadeInView>
@@ -290,14 +318,19 @@ export function PgLanding() {
           </div>
         </section>
 
-        {/* ── 화면6: PG사가 얻는 핵심 이점 ── */}
-        <section id="benefits" className={sectionCls}>
+        {/* ── 화면6: 파트너사 영업 성과 사례 ── */}
+        <section id="cases" className={sectionCls}>
           <div className={containerCls}>
             <SectionHeading>영업팀은 더 좋은 기회에 집중할 수 있습니다</SectionHeading>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[var(--s-4)]">
-              {BENEFITS.map((b, i) => (
-                <FadeInView key={b.index} delay={i * 0.05}>
-                  <PgFeatureCard index={b.index} title={b.title} desc={b.desc} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-[var(--s-4)]">
+              {CASES.map((c, i) => (
+                <FadeInView key={c.role} delay={i * 0.06}>
+                  <PgCaseCard
+                    metric={c.metric}
+                    metricCaption={c.metricCaption}
+                    quote={c.quote}
+                    role={c.role}
+                  />
                 </FadeInView>
               ))}
             </div>
@@ -324,12 +357,12 @@ export function PgLanding() {
                 <span className="font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                   — 파트너 제휴
                 </span>
-                <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-surface)]">
+                <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-surface)] text-balance break-keep">
                   확실한 니즈가 있는 고객사를 먼저 만나세요
                 </h2>
-                <p className="max-w-[680px] text-[clamp(15px,1.9vw,18px)] leading-[1.7] tracking-[-0.006em] text-[color-mix(in_srgb,var(--md-sys-color-surface)_72%,transparent)]">
+                <p className={`max-w-[680px] ${LANDING_TYPE.lead} text-[color-mix(in_srgb,var(--md-sys-color-surface)_72%,transparent)]`}>
                   Supporter B는 성장 고객사의 PG 비교 요청을 검증된 RFP로 정리해 파트너 PG사에게
-                  제공합니다. 새로운 가맹점 영업 기회를 더 빠르고 공정하게 만나보세요.
+                  제공합니다. 새로운 가맹점 영업 기회를 더 빠르게 만나보세요.
                 </p>
               </div>
             </FadeInView>

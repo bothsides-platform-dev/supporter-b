@@ -30,13 +30,29 @@ type Props = {
   workspaceName?: string;
   guest?: boolean;
   pgList: PgWorkspace[];
+  // controlled-step 시드 (랜딩 데모 자동재생용). 없으면 내부 state로 동작(uncontrolled).
+  step?: number;
+  onStepChange?: (step: number) => void;
+  // guest 종결 "보내기" 오버라이드 (랜딩 데모). 없으면 기존 draft 핸드오프 동작.
+  onGuestSubmit?: () => void;
+  // 내부 네비(사이드바/진행바/스텝 헤더)를 숨긴다 — 랜딩 데모가 자체 스테퍼를 제공할 때.
+  hideNav?: boolean;
 };
 
-export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Props) {
+export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step, onStepChange, onGuestSubmit, hideNav }: Props) {
   const router = useRouter();
   const draft = useRfpDraftStore();
 
-  const [currentStep, setCurrentStep] = useState(1);
+  // controlled(step prop)/uncontrolled(내부 state) 양립. setCurrentStep 호출부는
+  // 값/함수 업데이터 양쪽을 그대로 쓰며, controlled일 땐 내부 state를 건너뛰고
+  // onStepChange로만 통지한다.
+  const [internalStep, setInternalStep] = useState(1);
+  const currentStep = step ?? internalStep;
+  const setCurrentStep = (updater: number | ((prev: number) => number)) => {
+    const next = typeof updater === 'function' ? updater(currentStep) : updater;
+    if (step === undefined) setInternalStep(next);
+    onStepChange?.(next);
+  };
   const [submitting, setSubmitting] = useState(false);
 
   // 마운트 시 localStorage draft의 stale 데이터 정리.
@@ -114,8 +130,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
   const back = () => setCurrentStep((s) => Math.max(1, s - 1));
 
   // goToStep: 이전 step이 모두 complete일 때만 이동. blocker step을 failedSteps에 기록.
-  const goToStep = (step: number) => {
-    const clamped = Math.min(TOTAL_STEPS, Math.max(1, step));
+  const goToStep = (target: number) => {
+    const clamped = Math.min(TOTAL_STEPS, Math.max(1, target));
     if (!canNavigateTo(clamped)) {
       const blocker = validity.find((s) => s.num < clamped && !s.complete);
       if (blocker) {
@@ -131,6 +147,11 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
     if (submitting) return;
 
     if (guest) {
+      // 랜딩 데모(격리 draft)는 onGuestSubmit으로 위임 — 실제 draft 핸드오프를 타지 않는다.
+      if (onGuestSubmit) {
+        onGuestSubmit();
+        return;
+      }
       localStorage.setItem('supporter-b-rfp-next', '/rfp-create');
       router.push('/signup/buyer');
       return;
@@ -210,32 +231,42 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList }: Pr
     // 사이드바는 sticky로 고정, 구분선은 우측 컬럼 border-l로 전체 높이 유지.
     <div className="flex h-full min-h-0 lg:overflow-y-auto">
       {/* Desktop: left step sidebar (hidden on mobile via WizardStepSidebar internal class) */}
-      <WizardStepSidebar
-        currentStep={currentStep}
-        completed={completed}
-        failedAt={failedAt}
-        onStepClick={goToStep}
-        className="sticky top-0 self-start border-r-0"
-      />
-
-      {/* Content area */}
-      <div className="flex-1 flex flex-col min-w-0 lg:border-l border-[var(--md-sys-color-outline-variant)]">
-        {/* Mobile: top progress bar (hidden on desktop via WizardProgressBar internal class) */}
-        <WizardProgressBar
+      {!hideNav && (
+        <WizardStepSidebar
           currentStep={currentStep}
           completed={completed}
           failedAt={failedAt}
           onStepClick={goToStep}
+          className="sticky top-0 self-start border-r-0"
         />
+      )}
+
+      {/* Content area */}
+      <div
+        className={`flex-1 flex flex-col min-w-0${
+          hideNav ? '' : ' lg:border-l border-[var(--md-sys-color-outline-variant)]'
+        }`}
+      >
+        {/* Mobile: top progress bar (hidden on desktop via WizardProgressBar internal class) */}
+        {!hideNav && (
+          <WizardProgressBar
+            currentStep={currentStep}
+            completed={completed}
+            failedAt={failedAt}
+            onStepClick={goToStep}
+          />
+        )}
 
         <div className="flex-1 px-6 py-6">
           {/* Step header */}
-          <div className="flex items-center gap-3 mb-6">
-            <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              {String(currentStep).padStart(2, '0')} — {STEP_LABELS[currentStep - 1]}
-            </span>
-            <Divider />
-          </div>
+          {!hideNav && (
+            <div className="flex items-center gap-3 mb-6">
+              <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                {String(currentStep).padStart(2, '0')} — {STEP_LABELS[currentStep - 1]}
+              </span>
+              <Divider />
+            </div>
+          )}
 
           {currentStep === 1 && (
             <RfpStep1BizProfile

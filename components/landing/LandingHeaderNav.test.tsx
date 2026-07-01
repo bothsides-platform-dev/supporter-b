@@ -9,10 +9,10 @@ vi.mock('@/auth', () => ({
 import { auth } from '@/auth'
 
 describe('LandingHeaderNav', () => {
-  it('shows Sign in link when not authenticated', async () => {
+  it('shows 로그인 link when not authenticated', async () => {
     vi.mocked(auth).mockResolvedValue(null as never)
     render(await LandingHeaderNav())
-    expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login')
+    expect(screen.getByRole('link', { name: '로그인' })).toHaveAttribute('href', '/login')
     expect(screen.queryByRole('link', { name: /앱으로 이동/i })).toBeNull()
   })
 
@@ -20,6 +20,6 @@ describe('LandingHeaderNav', () => {
     vi.mocked(auth).mockResolvedValue({ user: { id: '1' } } as never)
     render(await LandingHeaderNav())
     expect(screen.getByRole('link', { name: /앱으로 이동/i })).toHaveAttribute('href', '/home')
-    expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: '로그인' })).toBeNull()
   })
 })

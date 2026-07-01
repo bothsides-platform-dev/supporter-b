@@ -6,15 +6,11 @@ import { formatKRW } from '@/lib/format';
 type CostComparisonChartProps = {
   currentCost: number;
   supporterBCost: number;
-  currentRatePct: number;
-  supporterBRatePct: number;
 };
 
 export function CostComparisonChart({
   currentCost,
   supporterBCost,
-  currentRatePct,
-  supporterBRatePct,
 }: CostComparisonChartProps) {
   const max = Math.max(currentCost, supporterBCost, 1);
   const currentRatio = currentCost / max;
@@ -36,14 +32,12 @@ export function CostComparisonChart({
       <div className="flex flex-col gap-[var(--s-4)]">
         <BarRow
           label="현재"
-          rateNote={`${currentRatePct.toFixed(2)}%`}
           ratio={currentRatio}
           cost={currentCost}
           variant="current"
         />
         <BarRow
           label="Supporter B"
-          rateNote={`${supporterBRatePct.toFixed(2)}%`}
           ratio={supporterBRatio}
           cost={supporterBCost}
           variant="supporter-b"
@@ -71,13 +65,12 @@ export function CostComparisonChart({
 
 type BarRowProps = {
   label: string;
-  rateNote: string;
   ratio: number;
   cost: number;
   variant: 'current' | 'supporter-b';
 };
 
-function BarRow({ label, rateNote, ratio, cost, variant }: BarRowProps) {
+function BarRow({ label, ratio, cost, variant }: BarRowProps) {
   const fillClass =
     variant === 'current'
       ? 'bg-[var(--md-sys-color-outline)]'
@@ -93,8 +86,7 @@ function BarRow({ label, rateNote, ratio, cost, variant }: BarRowProps) {
         <span
           className={`font-mono text-[var(--text-xs)] tracking-[0.16em] uppercase ${labelClass}`}
         >
-          {label}{' '}
-          <span className="opacity-60">@ {rateNote}</span>
+          {label}
         </span>
         <span className="font-mono tabular-nums text-[var(--text-base)] tracking-[0.02em] text-[var(--md-sys-color-on-surface)]">
           {formatKRW(cost)}

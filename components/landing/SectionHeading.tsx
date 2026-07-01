@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 const h2Cls =
-  'text-[clamp(22px,3.2vw,42px)] leading-[1.1] tracking-[-0.022em] font-medium text-[var(--md-sys-color-on-surface)]';
+  'text-[clamp(22px,3.2vw,42px)] leading-[1.1] tracking-[-0.022em] font-medium text-[var(--md-sys-color-on-surface)] text-balance break-keep';
 
 export function SectionHeading({ children }: { children: ReactNode }) {
   return (

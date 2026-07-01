@@ -184,3 +184,19 @@
     animation: process-progress 5000ms linear forwards;
   }
 }
+
+/* Demo guided-tour: brief "simulated click" flash applied to the element that
+   triggers each step transition (sidebar item / list row), just before the
+   tour auto-advances. Duration matches FLASH_MS in DemoAppShell. */
+@keyframes demo-click-flash {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; background-color: transparent; }
+  35%      { box-shadow: 0 0 0 2px var(--md-sys-color-primary); background-color: var(--md-sys-color-primary-container); }
+}
+.demo-click-flash {
+  border-radius: var(--md-sys-shape-small);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .demo-click-flash {
+    animation: demo-click-flash 650ms ease-out;
+  }
+}

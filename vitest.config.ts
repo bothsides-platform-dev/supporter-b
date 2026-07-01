@@ -52,6 +52,7 @@ export default defineConfig({
             "lib/db/**/*.{test,spec}.{ts,tsx}",
             "lib/env/**/*.{test,spec}.{ts,tsx}",
             "lib/realtime/**/*.{test,spec}.{ts,tsx}",
+            "lib/landing/**/*.{test,spec}.{ts,tsx}",
             "lib/seo/**/*.{test,spec}.{ts,tsx}",
             "lib/features/**/*.{test,spec}.{ts,tsx}",
             "scripts/**/*.{test,spec}.{ts,tsx}",
