@@ -152,10 +152,14 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── FAQ ── */}
+        {/* 다른 섹션과 동일한 1080 컬럼에 좌측 정렬해 세로 레이아웃을 맞춘다.
+            (heading 은 좌측 끝, FAQ 목록은 가독성 위해 760으로 제한하되 좌측 정렬) */}
         <section id="faq" className={sectionCls}>
-          <div className="mx-auto w-full max-w-[760px] flex flex-col gap-[var(--s-9)]">
+          <div className={containerCls}>
             <SectionHeading>자주 묻는 질문</SectionHeading>
-            <FaqList />
+            <div className="w-full max-w-[760px]">
+              <FaqList />
+            </div>
           </div>
         </section>
 
