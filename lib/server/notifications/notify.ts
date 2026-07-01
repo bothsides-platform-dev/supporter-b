@@ -25,7 +25,13 @@ export type NotifyEmail = {
   event: OutboxEvent;
   subject: string;
   html: string;
-  /** 수신자 email 로부터 파생. 생략 시 dedupeKey 없음. */
+  /**
+   * 수신자 email 로부터 파생. 생략 시 dedupeKey 없음.
+   * ⚠️ 키가 email 이 아닌 값(예: userId)에 기반해 호출-불변(`() => ...`)이면
+   * 반드시 recipients 를 **단일 항목**으로 호출해야 한다 — 다중 recipient 에서
+   * 동일 키를 내면 outbox 의 dedupe UNIQUE 인덱스에 걸려 1건만 저장되고
+   * 나머지 이메일이 조용히 유실된다.
+   */
   dedupeKey?: (email: string) => string;
   /** digest 코얼레싱용 미래 시각. 생략 시 즉시 발송. */
   scheduledAt?: Date;
