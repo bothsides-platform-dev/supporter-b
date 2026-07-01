@@ -15,7 +15,7 @@ export function ScrollDrivenSolution({
   points: string[];
 }) {
   return (
-    <ScrollPinnedSection steps={points.length}>
+    <ScrollPinnedSection steps={points.length} align="start">
       {({ pinned, activeStep }) => (
         <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-9)]">
           {heading}
