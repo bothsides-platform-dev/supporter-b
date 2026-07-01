@@ -73,7 +73,7 @@ export async function setupRfpActionEnv(): Promise<PgliteDB> {
     new BidService(db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo),
   );
   __setChatServiceForTest(
-    new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo, rfpRepo, invRepo),
+    new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo),
   );
   __setWorkspaceServiceForTest(new WorkspaceService(db, outboxRepo, auditRepo, wsRepo, userRepo));
   __setTeamChatServiceForTest(new TeamChatService(db, rfpRepo, invRepo, userRepo, teamMsgRepo, teamReadRepo, wsRepo, notifRepo, outboxRepo, attRepo));
