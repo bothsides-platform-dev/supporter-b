@@ -18,6 +18,7 @@ import {
   dispatchNotification,
   emitAfterCommit,
 } from '@/lib/server/notifications/dispatch';
+import { notify } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderRfpAwarded } from '@/lib/server/outbox/templates/rfpAwarded';
 import { renderRfpInvited } from '@/lib/server/outbox/templates/rfpInvited';
@@ -142,68 +143,63 @@ export class RfpService {
 
       const rfpCode = rfp.code;
 
-      // Batch-fetch member IDs for winner + all unique loser workspaces in a single IN-query.
+      // Batch-fetch recipients (userId + email) for winner + all unique loser
+      // workspaces in a single IN-query, grouped by workspace.
       const allPgWsIds = [winner.pgWsId, ...loserWsIds];
-      const memberIdsMap = await this.workspaceRepo.memberUserIdsBatch(allPgWsIds, tx);
-
-      // winner: in-app + email per member
-      const winnerUserIds = memberIdsMap.get(winner.pgWsId) ?? [];
-      for (const userId of winnerUserIds) {
-        const notif: Notification = {
-          id: randomUUID(),
-          userId,
-          workspaceId: winner.pgWsId,
-          type: 'rfp.awarded',
-          title: `[${rfpCode}] 선정됐어요`,
-          body: '보내신 견적이 최종 선정됐어요.',
-          channel: 'inapp',
-          status: 'pending',
-          linkUrl: `/inbox/${rfpCode}`,
-          createdAt: new Date().toISOString(),
-        };
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
+      const recipientRows = await this.workspaceRepo.memberRecipientsBatch(allPgWsIds, tx);
+      const recipientsByWs = new Map<string, { userId: string; email: string }[]>();
+      for (const row of recipientRows) {
+        const list = recipientsByWs.get(row.workspaceId) ?? [];
+        list.push({ userId: row.userId, email: row.email });
+        recipientsByWs.set(row.workspaceId, list);
       }
 
-      const winnerEmails = await this.workspaceRepo.memberEmails(winner.pgWsId, tx);
+      // winner: in-app + email per member
+      const winnerRecipients = (recipientsByWs.get(winner.pgWsId) ?? []).map((m) => ({
+        userId: m.userId,
+        workspaceId: winner.pgWsId,
+        email: m.email,
+      }));
       const awardedHtml = await renderRfpAwarded({
         rfpId: rfpCode,
         rfpTitle: rfp.title,
         bidId: awardedBidId,
         settlementCycle: winner.settleCycle,
       });
-      for (const email of winnerEmails) {
-        await this.outboxRepo.enqueue(
-          {
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: winnerRecipients,
+          channels: ['inapp', 'email'],
+          type: 'rfp.awarded',
+          title: `[${rfpCode}] 선정됐어요`,
+          body: '보내신 견적이 최종 선정됐어요.',
+          linkUrl: `/inbox/${rfpCode}`,
+          email: {
             event: 'rfp.awarded',
-            to: email,
             subject: `[Supporter B · ${rfpCode}] 선정 결과`,
             html: awardedHtml,
-            dedupeKey: `rfp:${rfpId}:awarded:${email}`,
+            dedupeKey: (email) => `rfp:${rfpId}:awarded:${email}`,
           },
-          tx,
-        );
-      }
+        })),
+      );
 
       // losers: in-app only — iterate unique workspaces to avoid duplicates
       for (const loserWsId of loserWsIds) {
-        const loserUserIds = memberIdsMap.get(loserWsId) ?? [];
-        for (const userId of loserUserIds) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId,
-            workspaceId: loserWsId,
+        const loserRecipients = (recipientsByWs.get(loserWsId) ?? []).map((m) => ({
+          userId: m.userId,
+          workspaceId: loserWsId,
+          email: m.email,
+        }));
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: loserRecipients,
+            channels: ['inapp'],
             type: 'rfp.rejected',
             title: `[${rfpCode}] 이번엔 선정되지 않았어요`,
             body: '다른 PG가 선정됐어요.',
-            channel: 'inapp',
-            status: 'pending',
             linkUrl: `/inbox/${rfpCode}`,
-            createdAt: new Date().toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-        }
+          })),
+        );
       }
 
       return { ok: true as const };
