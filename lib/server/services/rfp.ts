@@ -7,17 +7,13 @@ import type {
   BizProfileRepo,
   ContractRepo,
   InvitationRepo,
-  OutboxRepo,
   PgRequestRepo,
   RfpAllowedPgRepo,
   RfpRepo,
   RfpRequoteRequestRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
-import {
-  dispatchNotification,
-  emitAfterCommit,
-} from '@/lib/server/notifications/dispatch';
+import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderRfpAwarded } from '@/lib/server/outbox/templates/rfpAwarded';
@@ -69,7 +65,6 @@ export class RfpService {
     private readonly _db: any,
     private readonly rfpRepo: RfpRepo,
     private readonly contractRepo: ContractRepo,
-    private readonly outboxRepo: OutboxRepo,
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly bidRepo: BidRepo,
     private readonly invitationRepo: InvitationRepo,
@@ -1000,7 +995,6 @@ export class RfpService {
           );
 
           const adminRows = await this.workspaceRepo.adminRecipients(pgWsId, tx);
-
           for (const admin of adminRows) {
             const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
             const html = await renderRfpInvited({
@@ -1010,35 +1004,36 @@ export class RfpService {
               deadline: deadlineDisplay,
               inviteUrl,
             });
-            await this.outboxRepo.enqueue(
-              {
+            await notify(tx, {
+              recipients: [{ userId: admin.userId, workspaceId: pgWsId, email: admin.email }],
+              channels: ['email'],
+              type: 'rfp.invited',
+              title: '',
+              body: '',
+              email: {
                 event: 'rfp.invited',
-                to: admin.email,
                 subject: `[Supporter B · ${code}] 견적 요청이 도착했어요`,
                 html,
-                dedupeKey: `rfp:${rfpId}:invite:ws:${pgWsId}:user:${admin.userId}`,
+                dedupeKey: () => `rfp:${rfpId}:invite:ws:${pgWsId}:user:${admin.userId}`,
               },
-              tx,
-            );
+            });
           }
 
-          const allMemberIds = await this.workspaceRepo.memberUserIds(pgWsId, tx);
-          for (const userId of allMemberIds) {
-            const notif: Notification = {
-              id: randomUUID(),
-              userId,
-              workspaceId: pgWsId,
+          const inviteRecipients = (await this.workspaceRepo.memberRecipients(pgWsId, tx)).map((m) => ({
+            userId: m.userId,
+            workspaceId: pgWsId,
+            email: m.email,
+          }));
+          pendingEmits.push(
+            ...(await notify(tx, {
+              recipients: inviteRecipients,
+              channels: ['inapp'],
               type: 'rfp.invited',
               title: `[${code}] 견적 요청이 도착했어요`,
               body: `${buyerName}가 견적을 요청했어요.`,
-              channel: 'inapp',
-              status: 'pending',
               linkUrl: `/inbox/${code}`,
-              createdAt: now.toISOString(),
-            };
-            await dispatchNotification(tx, notif);
-            pendingEmits.push(notif);
-          }
+            })),
+          );
         }
       }
 
@@ -1066,7 +1061,6 @@ export async function getRfpService(): Promise<RfpService> {
       {
         getRfpRepo,
         getContractRepo,
-        getOutboxRepo,
         getWorkspaceRepo,
         getBidRepo,
         getInvitationRepo,
@@ -1085,7 +1079,6 @@ export async function getRfpService(): Promise<RfpService> {
     const [
       rfpRepo,
       contractRepo,
-      outboxRepo,
       wsRepo,
       bidRepo,
       invRepo,
@@ -1098,7 +1091,6 @@ export async function getRfpService(): Promise<RfpService> {
     ] = await Promise.all([
       getRfpRepo(),
       getContractRepo(),
-      getOutboxRepo(),
       getWorkspaceRepo(),
       getBidRepo(),
       getInvitationRepo(),
@@ -1114,7 +1106,6 @@ export async function getRfpService(): Promise<RfpService> {
       db,
       rfpRepo,
       contractRepo,
-      outboxRepo,
       wsRepo,
       bidRepo,
       invRepo,
