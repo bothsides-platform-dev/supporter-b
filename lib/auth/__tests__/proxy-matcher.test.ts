@@ -36,6 +36,16 @@ describe('auth proxy matcher', () => {
     expect(proxyRuns('/llms-full.txt')).toBe(false);
   });
 
+  it('skips public/landing/** marketing images so anonymous visitors and next/image are not redirected to /login', () => {
+    // Bug: /landing/pg/need.webp was caught by the proxy → decideRoute redirected
+    // anonymous requests to /login?next=... (empty body). Real anonymous visitors
+    // to the landing page saw broken images, and Next's own /_next/image
+    // optimizer (which re-fetches local sources unauthenticated) failed with
+    // "isn't a valid image ... received null" for the same reason.
+    expect(proxyRuns('/landing/pg/need.webp')).toBe(false);
+    expect(proxyRuns('/landing/buyer/hero.webp')).toBe(false);
+  });
+
   it('still skips the Sentry monitoring tunnel and api routes', () => {
     expect(proxyRuns('/monitoring')).toBe(false);
     expect(proxyRuns('/api/auth/session')).toBe(false);
