@@ -21,10 +21,16 @@ describe('PgLandingNav — PG 랜딩 헤더 내비게이션', () => {
     expect(app).toHaveAttribute('href', '/home');
   });
 
-  it('섹션 앵커 링크(FAQ)를 렌더한다', () => {
+  it('서비스 설명 앵커 링크를 렌더한다', () => {
     render(<PgLandingNav authed={false} />);
-    const faqLinks = screen.getAllByRole('link', { name: /자주 묻는 질문/ });
-    expect(faqLinks.some((a) => a.getAttribute('href') === '#faq')).toBe(true);
+    const links = screen.getAllByRole('link', { name: /서비스 설명/ });
+    expect(links.some((a) => a.getAttribute('href') === '#inbound')).toBe(true);
+  });
+
+  it('고객사 사례 앵커 링크를 렌더한다', () => {
+    render(<PgLandingNav authed={false} />);
+    const links = screen.getAllByRole('link', { name: /고객사 사례/ });
+    expect(links.some((a) => a.getAttribute('href') === '#cases')).toBe(true);
   });
 
   it('햄버거 버튼으로 모바일 메뉴를 토글한다', async () => {

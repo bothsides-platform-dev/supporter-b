@@ -50,6 +50,35 @@ describe('SavingsCalculator', () => {
     render(<SavingsCalculator />);
     expect(screen.queryByText(/드래그/)).toBeNull();
   });
+
+  it('never reads ₩0 savings even at max volume and the lowest selectable rate', () => {
+    render(<SavingsCalculator />);
+    const [volumeThumb, rateThumb] = screen.getAllByRole('slider');
+    act(() => {
+      fireEvent.keyDown(volumeThumb, { key: 'End' }); // max volume → general tier
+    });
+    act(() => {
+      fireEvent.keyDown(rateThumb, { key: 'Home' }); // lowest rate the slider allows
+    });
+    const savings = screen.getByText(/원$/);
+    expect(savings.textContent).not.toMatch(/^0원$/);
+  });
+
+  it('lifts the current-rate handle up to the new floor when volume crosses into a higher tier', () => {
+    render(<SavingsCalculator />);
+    const [volumeThumb, rateThumb] = screen.getAllByRole('slider');
+    act(() => {
+      fireEvent.keyDown(volumeThumb, { key: 'Home' }); // smallest volume → lowest floor
+    });
+    act(() => {
+      fireEvent.keyDown(rateThumb, { key: 'Home' }); // rate sits on that low floor
+    });
+    const lowFloor = Number(rateThumb.getAttribute('aria-valuenow'));
+    act(() => {
+      fireEvent.keyDown(volumeThumb, { key: 'End' }); // jump to the top tier
+    });
+    expect(Number(rateThumb.getAttribute('aria-valuenow'))).toBeGreaterThan(lowFloor);
+  });
 });
 
 describe('SavingsCalculator — idle slider hint', () => {

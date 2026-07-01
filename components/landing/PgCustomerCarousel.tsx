@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/components/icons';
 import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 import { cn } from '@/lib/utils';
+import { LANDING_TYPE } from '@/components/landing/landing-type';
 
 export type CarouselItem = { title: string; desc: string };
 
@@ -42,7 +43,7 @@ export function PgCustomerCarousel({ items }: { items: CarouselItem[] }) {
           <span className="font-mono tabular-nums text-[var(--text-md)] tracking-[-0.02em] text-[var(--md-sys-color-primary)]">
             {String(index + 1).padStart(2, '0')} / {String(count).padStart(2, '0')}
           </span>
-          <h3 className="text-[clamp(18px,2.6vw,26px)] font-medium leading-[1.3] tracking-[-0.014em] text-[var(--md-sys-color-on-surface)]">
+          <h3 className={`${LANDING_TYPE.heading3} text-[var(--md-sys-color-on-surface)]`}>
             {active.title}
           </h3>
           <p className="text-[var(--text-md)] leading-[1.68] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)]">

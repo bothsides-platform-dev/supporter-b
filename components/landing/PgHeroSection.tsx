@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useCrossFadeRotation } from './useCrossFadeRotation';
 import { ConsultButton } from './ConsultButton';
+import { LANDING_TYPE } from '@/components/landing/landing-type';
 
 // 번갈아 노출되는 두 메인 카피(값 제안 라인). 브랜드("Supporter B")는 고정.
 const HERO_LEADS = [
@@ -13,7 +14,7 @@ const HERO_LEADS = [
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 const heroType =
-  'text-[clamp(28px,4.6vw,60px)] leading-[1.1] tracking-[-0.026em] font-medium';
+  'text-[clamp(28px,4.6vw,60px)] leading-[1.1] tracking-[-0.026em] font-medium break-keep';
 
 export function PgHeroSection() {
   const active = useCrossFadeRotation(HERO_LEADS.length, 4200);
@@ -58,10 +59,10 @@ export function PgHeroSection() {
           transition={{ duration: 0.4, delay: 0.28, ease: EASE_OUT }}
           className="flex flex-col gap-[var(--s-6)]"
         >
-          <p className="max-w-[680px] text-[clamp(15px,1.9vw,19px)] leading-[1.7] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)]">
-            Supporter B는 PG 도입 의사가 있는 고객사의 기회를 선별해 파트너 PG사에게 제공합니다.
+          <p className={`${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface-variant)]`}>
+            고객사가 거래 조건을 직접 정리해 견적을 요청하면, 조건이 맞는 파트너 PG사에게 그대로 전달됩니다.
             <br />
-            확실한 니즈가 있는 고객사를 먼저 만나고, 리소스를 수주 가능성이 높은 기회에 집중하세요.
+            리드 발굴과 자격 검증에 쓰던 시간을 아끼고, 수주 가능성이 높은 기회부터 제안하세요.
           </p>
           <div>
             <ConsultButton>파트너 상담 신청 →</ConsultButton>

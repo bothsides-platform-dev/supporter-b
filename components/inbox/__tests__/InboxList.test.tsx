@@ -44,6 +44,15 @@ describe('InboxList', () => {
     expect(screen.getByText('신규')).toBeInTheDocument();
   });
 
+  it('onOpenRfp 가 있으면 행 클릭 시 router.push 대신 콜백을 호출한다 (랜딩 데모)', async () => {
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
+    render(<InboxList rows={[row]} onOpenRfp={onOpen} />);
+    await user.click(screen.getByText('PG 결제대행 RFP'));
+    expect(onOpen).toHaveBeenCalledWith('P-2604-0001');
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it('isSample 행에는 샘플 칩을 표시한다', () => {
     render(<InboxList rows={[{ ...row, isSample: true }]} />);
     expect(screen.getByText('샘플')).toBeInTheDocument();

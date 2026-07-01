@@ -13,9 +13,13 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { deleteSampleRfpAction } from '@/lib/server/actions/onboarding/deleteSampleRfpAction';
 import { toast } from '@/lib/toast';
 
-type Props = { rfps: RFP[] };
+type Props = {
+  rfps: RFP[];
+  // 랜딩 데모: 행 열기를 인플레이스로 가로챈다. 없으면 기존대로 상세 라우트로 push.
+  onOpenRfp?: (code: string) => void;
+};
 
-export function RfpListTable({ rfps }: Props) {
+export function RfpListTable({ rfps, onOpenRfp }: Props) {
   const router = useRouter();
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
@@ -31,6 +35,10 @@ export function RfpListTable({ rfps }: Props) {
   // 목록 위에 딜룸 모달을 띄우고 URL 은 /rfp/<code> 로 바뀐다(새로고침 시 정식
   // 페이지). 과거 ?peek 패널을 대체한다.
   function openDealRoom(code: string) {
+    if (onOpenRfp) {
+      onOpenRfp(code);
+      return;
+    }
     router.push(`/rfp/${code}`);
   }
 

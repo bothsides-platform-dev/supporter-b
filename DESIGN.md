@@ -179,7 +179,7 @@ surface-container-highest #E4E5E9               #202123
 
 ### 로딩 모션 — 기능적 모션 허용
 
-넓은 영역의 로딩은 **펄스 스켈레톤**(`animate-pulse`, `components/ui/skeleton.tsx` — `surface-container-high` 바·`rounded-md`), 인라인·작은 자리(타이핑 인디케이터·전송 대기 점)는 **펄스 점**으로 표시한다. 둘 다 `prefers-reduced-motion: reduce`를 존중해 저감 시 정지/단순화한다. 스피너는 새 표면에 도입하지 않되, 기존 사용처(`RefreshHeaderButton` 의 `--animate-spin`/`--animate-spin-once`, 첨부 업로드 칩)는 유지한다. 짧은 진행 표시로 `LOADING…` 텍스트(body-medium)도 그대로 둔다. **장식적** 컨페티·강한 모멘텀 모션 금지는 §9에서 유지된다(축하 모먼트만 예외). 이 갱신은 코드 현실(스켈레톤이 이미 광범위 사용 중)과 문서를 정합시킨 것이다.
+넓은 영역의 로딩은 **펄스 스켈레톤**(`animate-pulse`, `components/ui/skeleton.tsx` — `surface-container-high` 바·`rounded-md`), 인라인·작은 자리(타이핑 인디케이터·전송 대기 점)는 **펄스 점**으로 표시한다. 둘 다 `prefers-reduced-motion: reduce`를 존중해 저감 시 정지/단순화한다. 스피너는 새 표면에 도입하지 않되, 기존 사용처(`RefreshHeaderButton` 의 `--animate-spin`/`--animate-spin-once`, 첨부 업로드 칩)는 유지한다. 짧은 진행 표시로 `LOADING…` 텍스트(body-medium)도 그대로 둔다. **장식적** 컨페티·강한 모멘텀 모션 금지는 §9에서 유지된다(두 예외: 축하 모먼트·테마 전환 리빌). 이 갱신은 코드 현실(스켈레톤이 이미 광범위 사용 중)과 문서를 정합시킨 것이다.
 
 > **추가 키프레임**(`app/globals.css`): `spin-once`(0.6s 1회전 — 리프레시 클릭), `blink-cursor`(0.7s — 타이핑 커서), `process-progress`(5s scaleX — 스텝퍼 자동 전환, `prefers-reduced-motion: no-preference` 게이트). 모두 transform/opacity만 만진다.
 
@@ -324,7 +324,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - **No** 큰 본문(16px+) — 앱 본문은 14px, 조밀하게.
 - **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + JetBrains Mono만.
 - **No** 브래킷 상태 태그 `[ 결재중 ]` — Chip 사용.
-- **No** 장식적 컨페티·강한 모멘텀 모션 — 단 하나의 예외(아래 "축하 모먼트")만 허용. **단 기능적 로딩 모션은 허용**: 넓은 영역은 펄스 스켈레톤(`ui/skeleton.tsx`), 인라인·타이핑 인디케이터는 펄스 점. 모두 `prefers-reduced-motion: reduce`를 존중한다(저감 시 정지). 자세한 원칙은 §6 "로딩 모션" 참조.
+- **No** 장식적 컨페티·강한 모멘텀 모션 — 아래 두 예외(축하 모먼트·테마 전환 리빌)를 제외하고 허용하지 않는다. **단 기능적 로딩 모션은 허용**: 넓은 영역은 펄스 스켈레톤(`ui/skeleton.tsx`), 인라인·타이핑 인디케이터는 펄스 점. 모두 `prefers-reduced-motion: reduce`를 존중한다(저감 시 정지). 자세한 원칙은 §6 "로딩 모션" 참조.
 
 > **예외 — 축하 모먼트 (Celebration Moment).** 위 장식적 컨페티·강한 모션 금지에는
 > 단 하나의 좁은 예외가 있다. 다음 4조건을 **모두** 만족하는 종결 성공 순간에 한해
@@ -337,6 +337,16 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 > 현재 등록된 발동 지점: **(1) 입점 심사 대기 화면**(`approval-waiting-screen`),
 > **(2) 견적 선정 완료 결과 화면**(`AwardResult`). 새 발동 지점을 추가할 때는
 > 위 4조건 충족을 PR에서 명시할 것.
+
+> **예외 — 테마 전환 리빌 (Theme Toggle Reveal).** 다크/라이트 모드 토글 클릭 시
+> View Transitions API를 이용해 토글 버튼 위치에서 원형 `clip-path`가 뷰포트 전체로
+> 펼쳐지는 리빌 효과를 허용한다. 이 예외는 다음 조건을 모두 충족하기 때문에 인정된다:
+> ① 사용자가 직접 클릭한 경우에만 발동,
+> ② GPU-합성 슈도엘리먼트(`::view-transition-new(root)`)의 `clip-path`만 사용 — 실 DOM 레이아웃 불변,
+> ③ 색상·그라데이션·컨페티 없이 형상(clip-path)만 변형 — 브랜드 중립,
+> ④ `prefers-reduced-motion: reduce` 설정 시 또는 `startViewTransition` 미지원 브라우저에서 즉시 전환(애니메이션 없음).
+> 구현: `lib/theme/view-transition.ts` (`applyThemeWithTransition`) ←
+> `components/shell/ThemeToggle.tsx`. CSS: `app/globals.css` `::view-transition-*` 규칙.
 
 ---
 

@@ -22,6 +22,7 @@ type SidebarSubItemProps = {
   shortcut?: NavShortcut;
   active?: boolean;
   onNavigate?: () => void;
+  inert?: boolean;
 };
 
 /**
@@ -37,9 +38,24 @@ export function SidebarSubItem({
   shortcut,
   active = false,
   onNavigate,
+  inert = false,
 }: SidebarSubItemProps) {
   const { state, isMobile } = useSidebar();
   const showTooltip = state === 'expanded' && !isMobile && shortcut != null;
+
+  if (inert) {
+    return (
+      <span
+        aria-disabled="true"
+        className={cn(
+          subItemBase,
+          'text-[var(--md-sys-color-on-surface-variant)] opacity-50 cursor-default select-none',
+        )}
+      >
+        {label}
+      </span>
+    );
+  }
 
   const link = (
     <Link

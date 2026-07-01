@@ -20,7 +20,7 @@ vi.mock('./FadeInView', () => ({
 }))
 vi.mock('@/components/landing/SavingsCalculator', () => ({ SavingsCalculator: () => null }))
 vi.mock('@/components/landing/SolutionShowcase', () => ({ SolutionShowcase: () => null }))
-vi.mock('@/components/landing/ProcessSection', () => ({ ProcessSection: () => null }))
+vi.mock('@/components/landing/demo-app/DemoAppShell', () => ({ DemoAppShell: () => null }))
 vi.mock('@/components/landing/FaqList', () => ({ FaqList: () => null }))
 
 vi.mock('@/lib/stores/theme', () => ({
@@ -60,8 +60,9 @@ describe('LandingHero', () => {
     }
   })
 
-  it('drops the standalone process section heading', () => {
+  it('labels the demo/process section with a heading and intro', () => {
     render(<LandingHero />)
-    expect(screen.queryByText('SupporterB 이용 프로세스')).toBeNull()
+    expect(screen.getByText('실제 화면을 미리 둘러보세요')).toBeInTheDocument()
+    expect(screen.getByText(/직접 둘러보세요/)).toBeInTheDocument()
   })
 })

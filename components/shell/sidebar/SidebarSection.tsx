@@ -1,7 +1,7 @@
 'use client';
 
-import { usePathname, useSearchParams } from 'next/navigation';
 import { ChevronDownIcon, ChevronRightIcon } from '@/components/icons';
+import { useNavPathname, useNavSearchParams } from '@/lib/nav/demo-nav-context';
 import { NavItem } from '@/components/shell/sidebar/NavItem';
 import { SidebarSubItem } from '@/components/shell/sidebar/SidebarSubItem';
 import { useSidebarSectionsStore } from '@/lib/stores/sidebar-sections';
@@ -11,6 +11,7 @@ import { isNavHrefActive, isNavSectionHeaderActive } from '@/lib/nav/is-nav-acti
 type SidebarSectionProps = {
   section: NavSection;
   onNavigate?: () => void;
+  inertHref?: (href: string) => boolean;
 };
 
 /**
@@ -19,11 +20,12 @@ type SidebarSectionProps = {
  * status sub-items (/base?status=…) or static sub-links (settings). Collapse
  * state persists via the sidebar-sections store.
  */
-export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+export function SidebarSection({ section, onNavigate, inertHref }: SidebarSectionProps) {
+  const pathname = useNavPathname();
+  const searchParams = useNavSearchParams();
   const collapsed = useSidebarSectionsStore((s) => s.isCollapsed(section.id));
   const toggle = useSidebarSectionsStore((s) => s.toggle);
+  const demoInert = inertHref != null;
 
   const status = searchParams.get('status');
   const headerActive =
@@ -34,15 +36,24 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
   return (
     <div className="mt-3 group-data-[collapsible=icon]:mt-1">
       <div className="flex items-center">
-        <button
-          type="button"
-          aria-label={`${section.label} 섹션`}
-          aria-expanded={!collapsed}
-          onClick={() => toggle(section.id)}
-          className="inline-flex h-8 w-6 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] group-data-[collapsible=icon]:hidden"
-        >
-          {collapsed ? <ChevronRightIcon size={14} /> : <ChevronDownIcon size={14} />}
-        </button>
+        {demoInert ? (
+          <span
+            aria-hidden
+            className="inline-flex h-8 w-6 shrink-0 items-center justify-center text-[var(--md-sys-color-on-surface-variant)] opacity-50 group-data-[collapsible=icon]:hidden"
+          >
+            <ChevronDownIcon size={14} />
+          </span>
+        ) : (
+          <button
+            type="button"
+            aria-label={`${section.label} 섹션`}
+            aria-expanded={!collapsed}
+            onClick={() => toggle(section.id)}
+            className="inline-flex h-8 w-6 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] group-data-[collapsible=icon]:hidden"
+          >
+            {collapsed ? <ChevronRightIcon size={14} /> : <ChevronDownIcon size={14} />}
+          </button>
+        )}
         <NavItem
           href={section.href}
           label={section.label}
@@ -50,11 +61,12 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
           shortcut={section.shortcut}
           active={headerActive}
           onNavigate={onNavigate}
+          inert={inertHref?.(section.href)}
           className="min-w-0 flex-1"
         />
       </div>
 
-      {!collapsed && (
+      {(!collapsed || demoInert) && (
         <div className="mt-0.5 flex flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
           {section.links?.map((link) => (
             <SidebarSubItem
@@ -64,6 +76,7 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
               shortcut={link.shortcut}
               active={isNavHrefActive(pathname, link.href)}
               onNavigate={onNavigate}
+              inert={inertHref?.(link.href)}
             />
           ))}
           {section.statuses?.map(({ status: s, label, shortcut }) => (
@@ -74,6 +87,7 @@ export function SidebarSection({ section, onNavigate }: SidebarSectionProps) {
               shortcut={shortcut}
               active={onListBase && status === s}
               onNavigate={onNavigate}
+              inert={inertHref?.(`${section.base}?status=${s}`)}
             />
           ))}
         </div>
