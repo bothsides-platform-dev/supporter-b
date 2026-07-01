@@ -7,7 +7,7 @@ import { MobileShellBar } from '@/components/shell/MobileShellBar';
 import { DemoNavProvider, hrefToPgDemoPage, isInertPgDemoNavHref } from '@/lib/nav/demo-nav-context';
 import { useDemoStepAutoplay } from '@/components/landing/useDemoStepAutoplay';
 import { DemoSidebar } from './DemoSidebar';
-import { DemoStepBar } from './DemoStepBar';
+import { DemoCursor } from './DemoCursor';
 import { PgHomePageHost } from './pg/PgHomePageHost';
 import { PgInboxPageHost } from './pg/PgInboxPageHost';
 import { PgDealRoomPageHost } from './pg/PgDealRoomPageHost';
@@ -17,7 +17,6 @@ import { demoPgWorkspaceName } from './pg/pg-demo-fixtures';
 const TOTAL_PAGES = 4;
 const PAGE_AUTO_MS = 4800;
 const FLASH_MS = 650;
-const STEP_LABELS = ['홈', '받은 요청', '견적 작성', '메시지'] as const;
 
 const PAGE_PATH: Record<number, string> = {
   1: '/home',
@@ -84,14 +83,6 @@ export function PgDemoAppShell({
   const autoplaying = !controlled && inView && !userInteracted && page < TOTAL_PAGES;
   const guiding = !controlled && inView && !userInteracted;
 
-  const replay = useCallback(() => {
-    if (controlled) {
-      onStepSelect?.(1);
-      return;
-    }
-    setUserInteracted(false);
-    tour.setStep(1);
-  }, [controlled, onStepSelect, tour]);
 
   // 전환 직전, 다음 단계로 넘기는 실제 요소에 잠깐 클릭 하이라이트(구매사 데모와 동일).
   useEffect(() => {
@@ -156,15 +147,10 @@ export function PgDemoAppShell({
               </div>
             </SidebarInset>
           </SidebarProvider>
+          {controlled && (
+            <DemoCursor windowRef={rootRef} selector={PAGE_TRIGGER[page] || null} page={page} />
+          )}
         </div>
-        <DemoStepBar
-          current={page}
-          autoplaying={autoplaying}
-          intervalMs={PAGE_AUTO_MS}
-          onSelect={goToPage}
-          onReplay={replay}
-          labels={STEP_LABELS}
-        />
       </div>
     </DemoNavProvider>
   );

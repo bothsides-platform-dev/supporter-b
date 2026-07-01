@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { ScrollPinnedSection } from '@/components/landing/ScrollPinnedSection';
 
 describe('ScrollPinnedSection', () => {
-  it('reduced-motion(jsdom)에서는 pin 없이 children을 폴백으로 렌더한다', () => {
+  it('항상 pin으로 렌더하고 children에 pinned=true·activeStep(초기 0)을 넘긴다', () => {
     render(
       <ScrollPinnedSection steps={4}>
         {({ pinned, activeStep }) => (
@@ -14,8 +14,8 @@ describe('ScrollPinnedSection', () => {
         )}
       </ScrollPinnedSection>,
     );
-    // jsdom엔 matchMedia 없음 → prefersReducedMotion()=true → motionOk=false → 폴백
-    expect(screen.getByTestId('pinned').textContent).toBe('false');
-    expect(screen.getByTestId('step').textContent).toBe('3'); // steps-1
+    // 정적 폴백 제거 — 모바일·저감모션 포함 항상 pin(사용자 요청). 초기 진행률 0 → activeStep 0.
+    expect(screen.getByTestId('pinned').textContent).toBe('true');
+    expect(screen.getByTestId('step').textContent).toBe('0');
   });
 });

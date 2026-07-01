@@ -80,17 +80,6 @@ describe('DemoAppShell — 인플레이스 내비게이션', () => {
     vi.useRealTimers();
   });
 
-  it('스텝 바 클릭이 페이지를 전환하고 자동 투어를 멈춘다', () => {
-    vi.useFakeTimers();
-    render(<DemoAppShell />);
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: '3 견적 비교·선정' }));
-    });
-    expect(screen.getByTestId('page-deal')).toBeInTheDocument();
-    for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(5000));
-    expect(screen.getByTestId('page-deal')).toBeInTheDocument();
-    vi.useRealTimers();
-  });
 });
 
 describe('DemoAppShell — 자동 투어/조작 하이브리드', () => {

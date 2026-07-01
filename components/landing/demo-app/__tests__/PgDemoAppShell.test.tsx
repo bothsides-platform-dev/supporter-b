@@ -72,13 +72,6 @@ describe('PgDemoAppShell — 인플레이스 내비게이션', () => {
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 
-  it('스텝 바 메시지 클릭이 메시지 페이지로 전환한다', () => {
-    render(<PgDemoAppShell />);
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: '4 메시지' }));
-    });
-    expect(screen.getByTestId('page-messages')).toBeInTheDocument();
-  });
 });
 
 describe('PgDemoAppShell — 자동 투어/조작 하이브리드', () => {

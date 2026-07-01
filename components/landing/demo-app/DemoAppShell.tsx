@@ -8,7 +8,7 @@ import { DemoNavProvider, hrefToDemoPage } from '@/lib/nav/demo-nav-context';
 import { useDemoStepAutoplay } from '@/components/landing/useDemoStepAutoplay';
 import { demoWorkspaceName } from '@/components/landing/demo-fixtures';
 import { DemoSidebar } from './DemoSidebar';
-import { DemoStepBar } from './DemoStepBar';
+import { DemoCursor } from './DemoCursor';
 import { demoTriggerSelector } from './demo-triggers';
 import { HomePageHost } from './pages/HomePageHost';
 import { RfpListPageHost } from './pages/RfpListPageHost';
@@ -82,14 +82,6 @@ export function DemoAppShell({
 
   const autoplaying = !controlled && inView && !userInteracted && page < TOTAL_PAGES;
   const guiding = !controlled && inView && !userInteracted;
-  const replay = useCallback(() => {
-    if (controlled) {
-      onStepSelect?.(1);
-      return;
-    }
-    setUserInteracted(false);
-    tour.setStep(1);
-  }, [controlled, onStepSelect, tour]);
 
   // 자동 전환 직전, 다음 단계로 넘어가게 만드는 실제 요소(사이드바 항목·목록 행)에 잠깐
   // 클릭 하이라이트를 입혀 "이걸 누르면 넘어가요"를 보여준다. 전환되면 정리에서 다시 뗀다.
@@ -147,14 +139,10 @@ export function DemoAppShell({
               </div>
             </SidebarInset>
           </SidebarProvider>
+          {controlled && (
+            <DemoCursor windowRef={rootRef} selector={demoTriggerSelector(page)} page={page} />
+          )}
         </div>
-        <DemoStepBar
-          current={page}
-          autoplaying={autoplaying}
-          intervalMs={PAGE_AUTO_MS}
-          onSelect={goToPage}
-          onReplay={replay}
-        />
       </div>
     </DemoNavProvider>
   );

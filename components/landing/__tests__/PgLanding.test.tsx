@@ -38,9 +38,10 @@ vi.mock('motion/react', () => {
   };
   return {
     motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }),
-    // ScrollPinnedSection(스크롤 pin) 이 쓰는 훅 — jsdom 폴백 경로에서도 호출되므로 스텁 제공.
+    // ScrollPinnedSection·PinnedDemoFrame(스크롤 pin) 이 쓰는 훅 스텁(always-pin이라 항상 호출).
     useScroll: () => ({ scrollYProgress: { on: vi.fn() } }),
     useMotionValueEvent: vi.fn(),
+    useTransform: () => 1,
   };
 });
 
