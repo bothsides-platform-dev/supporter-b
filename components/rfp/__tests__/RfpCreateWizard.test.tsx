@@ -141,7 +141,7 @@ describe('RfpCreateWizard', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
@@ -166,7 +166,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const user = userEvent.setup();
@@ -194,7 +194,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
@@ -250,7 +250,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       currentSettlementCycle: 'D+2',
       deliveryServicePeriod: '3~5일',
@@ -282,7 +282,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       boardVisible: false,
     });
@@ -309,7 +309,7 @@ describe('RfpCreateWizard', () => {
       requiredPaymentMethods: ['card'],
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       contractType: 'renewal',
     });
@@ -337,7 +337,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const user = userEvent.setup();
