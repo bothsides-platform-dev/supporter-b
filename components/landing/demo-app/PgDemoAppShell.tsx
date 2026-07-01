@@ -44,20 +44,33 @@ const sidebarStyle = {
 // PG 파트너 랜딩 임베디드 데모 — 실제 사이드바 + 실제 페이지(홈·받은요청·딜룸·메시지)를
 // 인플레이스로 순회한다. 구매사 DemoAppShell과 동일한 자동투어·클릭 인터셉트·하이라이트
 // 메커니즘. 견적 제출은 게스트 모드라 가입(/signup/pg)으로 연결된다.
-export function PgDemoAppShell() {
+export function PgDemoAppShell({
+  controlledStep,
+  onStepSelect,
+  scrollLocked,
+}: {
+  controlledStep?: number;
+  onStepSelect?: (n: number) => void;
+  scrollLocked?: boolean;
+} = {}) {
+  const controlled = controlledStep != null;
   const rootRef = useRef<HTMLDivElement>(null);
   const inView = useInView(rootRef, { once: true, amount: 0.3 });
   const [userInteracted, setUserInteracted] = useState(false);
 
-  const tour = useDemoStepAutoplay(TOTAL_PAGES, PAGE_AUTO_MS, inView && !userInteracted);
-  const page = tour.step;
+  const tour = useDemoStepAutoplay(TOTAL_PAGES, PAGE_AUTO_MS, !controlled && inView && !userInteracted);
+  const page = controlledStep ?? tour.step;
 
   const goToPage = useCallback(
     (n: number) => {
+      if (controlled) {
+        onStepSelect?.(n);
+        return;
+      }
       setUserInteracted(true);
       tour.setStep(n);
     },
-    [tour],
+    [controlled, onStepSelect, tour],
   );
 
   const navigate = useCallback(
@@ -68,13 +81,17 @@ export function PgDemoAppShell() {
     [goToPage],
   );
 
-  const autoplaying = inView && !userInteracted && page < TOTAL_PAGES;
-  const guiding = inView && !userInteracted;
+  const autoplaying = !controlled && inView && !userInteracted && page < TOTAL_PAGES;
+  const guiding = !controlled && inView && !userInteracted;
 
   const replay = useCallback(() => {
+    if (controlled) {
+      onStepSelect?.(1);
+      return;
+    }
     setUserInteracted(false);
     tour.setStep(1);
-  }, [tour]);
+  }, [controlled, onStepSelect, tour]);
 
   // 전환 직전, 다음 단계로 넘기는 실제 요소에 잠깐 클릭 하이라이트(구매사 데모와 동일).
   useEffect(() => {
@@ -125,7 +142,7 @@ export function PgDemoAppShell() {
               <div
                 onPointerDownCapture={() => setUserInteracted(true)}
                 onKeyDownCapture={() => setUserInteracted(true)}
-                className="min-h-0 min-w-0 flex-1 overflow-y-auto"
+                className={`min-h-0 min-w-0 flex-1 ${scrollLocked ? 'overflow-hidden' : 'overflow-y-auto'}`}
               >
                 {page === 1 && <PgHomePageHost showCue={guiding} />}
                 {page === 2 && <PgInboxPageHost onOpenRfp={() => goToPage(3)} showCue={guiding} />}

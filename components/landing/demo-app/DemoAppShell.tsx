@@ -38,40 +38,58 @@ const sidebarStyle = {
 // 뷰에 들어오면 자동 투어로 페이지를 넘기다, 방문자가 한 번이라도 조작하면 멈추고
 // 제어권을 넘긴다. 사이드바/콘텐츠 내부 링크 클릭은 캡처 단계에서 가로채 페이지를
 // 전환하므로 URL이 바뀌거나 랜딩을 이탈하지 않는다.
-export function DemoAppShell() {
+export function DemoAppShell({
+  controlledStep,
+  onStepSelect,
+  scrollLocked,
+}: {
+  controlledStep?: number;
+  onStepSelect?: (n: number) => void;
+  scrollLocked?: boolean;
+} = {}) {
+  const controlled = controlledStep != null;
   const rootRef = useRef<HTMLDivElement>(null);
   const inView = useInView(rootRef, { once: true, amount: 0.3 });
   const [userInteracted, setUserInteracted] = useState(false);
 
-  const tour = useDemoStepAutoplay(TOTAL_PAGES, PAGE_AUTO_MS, inView && !userInteracted);
-  const page = tour.step;
+  // controlled(스크롤 구동)면 내부 타이머 자동재생을 끈다.
+  const tour = useDemoStepAutoplay(TOTAL_PAGES, PAGE_AUTO_MS, !controlled && inView && !userInteracted);
+  // controlledStep은 number | undefined — ?? 로 좁혀 page를 항상 number로 유지(TS narrowing).
+  const page = controlledStep ?? tour.step;
 
   const freeze = useCallback(() => setUserInteracted(true), []);
 
   const goToPage = useCallback(
     (n: number) => {
+      if (controlled) {
+        // 클릭 = "그 스텝으로 스크롤" — 실제 페이지 전환은 스크롤이 되돌려준다.
+        onStepSelect?.(n);
+        return;
+      }
       setUserInteracted(true);
       tour.setStep(n);
     },
-    [tour],
+    [controlled, onStepSelect, tour],
   );
 
   const navigate = useCallback(
     (href: string) => {
       const target = hrefToDemoPage(href);
-      // 데모에 없는 라우트(알림/메시지/설정/상태 필터)는 무시 — 페이지 유지·투어 유지.
       if (target) goToPage(target);
     },
     [goToPage],
   );
 
-  const autoplaying = inView && !userInteracted && page < TOTAL_PAGES;
-  // 코치마크는 마지막 단계에서도 보여야 하므로 page<TOTAL 게이트를 두지 않는다.
-  const guiding = inView && !userInteracted;
+  const autoplaying = !controlled && inView && !userInteracted && page < TOTAL_PAGES;
+  const guiding = !controlled && inView && !userInteracted;
   const replay = useCallback(() => {
+    if (controlled) {
+      onStepSelect?.(1);
+      return;
+    }
     setUserInteracted(false);
     tour.setStep(1);
-  }, [tour]);
+  }, [controlled, onStepSelect, tour]);
 
   // 자동 전환 직전, 다음 단계로 넘어가게 만드는 실제 요소(사이드바 항목·목록 행)에 잠깐
   // 클릭 하이라이트를 입혀 "이걸 누르면 넘어가요"를 보여준다. 전환되면 정리에서 다시 뗀다.
@@ -120,7 +138,7 @@ export function DemoAppShell() {
               <div
                 onPointerDownCapture={freeze}
                 onKeyDownCapture={freeze}
-                className="min-h-0 min-w-0 flex-1 overflow-y-auto"
+                className={`min-h-0 min-w-0 flex-1 ${scrollLocked ? 'overflow-hidden' : 'overflow-y-auto'}`}
               >
                 {page === 1 && <HomePageHost showCue={guiding} />}
                 {page === 2 && <RfpListPageHost onOpenRfp={() => goToPage(3)} showCue={guiding} />}
