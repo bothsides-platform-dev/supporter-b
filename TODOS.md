@@ -40,6 +40,9 @@
 ### useCappedEntryScale이 window resize에만 반응 (P4)
 `use-capped-entry-scale.ts`의 상한 재계산이 `window`의 `resize` 이벤트에만 걸려 있어 `ResizeObserver`가 없다. 데모 창 자체는 뷰포트 폭에만 종속된 레이아웃(고정 `h-[600px]`, 사이드바는 CSS var 고정폭, 콘텐츠는 `flex-1`)이라 내부 콘텐츠 변화로 폭이 바뀌는 경로가 없고, 폰트는 `next/font`라 스왑 리플로우도 없음 — 그래서 지금은 무해(OfferComparisonTable과 동일한 판단, YAGNI). `useIsMobile`(matchMedia 기반)과 별도 구독이라 768px 경계를 넘는 순간 한 프레임 어긋날 수 있지만, 상한 계산 자체가 항상 `clientWidth` 이내로 안전해 오버플로우로는 이어지지 않음. 이 훅을 다른 레이아웃(콘텐츠 종속적 폭)에 재사용할 경우 재검토. (발견: /ship adversarial 리뷰 2026-07-03)
 
+### ScrambleText rAF 루프가 헤드라인이 화면 밖으로 스크롤돼도 계속 돎 (P3)
+`components/landing/hero/ScrambleText.tsx`의 순환 문구 스크램블 애니메이션은 `document.hidden`(탭 백그라운드)에만 반응해 일시정지하고, 히어로 섹션 자체가 스크롤로 화면 밖에 나가도 rAF 루프(60ms 글리프 갱신 + 프레임당 setState)가 계속 돈다(리크는 아님 — cleanup은 정상, 비용도 작은 span 10여 개 스타일 재계산 정도로 트리비얼). `DemoCursor`(위 항목)와 동일한 패턴. 수정 방향: `HeroPinnedScene`이 이미 갖고 있는 `scrollYProgress`를 prop으로 내려받아 히어로 트랙을 벗어나면 정지하거나(`HeroAsciiField`가 쓰는 방식과 동일), 또는 별도 IntersectionObserver를 둔다. (발견: /ship performance+adversarial 리뷰 2026-07-03, `feat/hero-headline-scramble` — 두 리뷰어가 독립적으로 동일 지점 지적)
+
 ### DemoCursor rAF 루프가 데모가 화면 밖으로 나가도 계속 돎 (P3)
 `components/landing/demo-app/DemoCursor.tsx`의 `requestAnimationFrame` 루프는 매 프레임 `querySelector` + `getBoundingClientRect`(강제 리플로우)를 무조건 재예약한다. 두 데모 셸이 `useInView(..., { once: true })` 뒤에서 마운트하므로 데모가 한 번 화면에 들어오면 커서가 영영 언마운트되지 않고, 탭이 열려 있는 한 스크롤을 벗어나도 초당 ~60회 강제 리플로우가 지속된다(리크는 아님 — cleanup은 정상). 수정 방향: IntersectionObserver로 데모 창이 뷰포트에 있을 때만 루프를 돌리거나, 대상을 찾은 뒤 정적이면 cadence를 낮춘다. 랜딩 모션 예외 표면이라 무해하지만 CPU/배터리 낭비. (발견: /ship adversarial 리뷰 2026-07-02, `feat/landing-scroll-pin-sections`)
 
