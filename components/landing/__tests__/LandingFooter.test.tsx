@@ -13,10 +13,13 @@ vi.mock('motion/react', () => {
   const motion = new Proxy({}, { get: (_, tag: string) => makeEl(tag as string) });
   return {
     motion,
-    useScroll: () => ({ scrollYProgress: { on: vi.fn() } }),
+    useScroll: () => ({ scrollYProgress: { get: () => 0, on: vi.fn() } }),
     useMotionValueEvent: vi.fn(),
     useTransform: () => 1,
     useInView: () => true,
+    // 히어로 마그네틱 CTA(useMagneticHover) 스텁
+    useMotionValue: () => ({ set: vi.fn(), get: () => 0 }),
+    useSpring: () => 0,
   };
 });
 

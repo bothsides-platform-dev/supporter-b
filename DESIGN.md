@@ -319,7 +319,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - **No** 호버 시 그림자 승급 — 호버는 배경 명도 변화만.
 - **No** 과도한 고도/스큐어모픽 그림자 — 대부분 보더 또는 elevation-1, 큰 그림자는 floating에만.
 - **No** 강한(고대비) 디바이더 — 기본은 `outline-variant`(저대비).
-- **No** 네온/글로우/글래스모피즘/블러 오브.
+- **No** 네온/글로우/글래스모피즘/블러 오브 — 단 하나의 좁은 예외: **랜딩 히어로 다크 씬의 소프트 블룸**(아래 "랜딩·마케팅 모션" 예외 블록 ⑤에 등록).
 - **No** 내비/라벨에 font-mono uppercase wide-tracking — sentence case + 약한 음수 자간. `.md-numeric`은 금융 수치에만.
 - **No** 큰 본문(16px+) — 앱 본문은 14px, 조밀하게.
 - **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + JetBrains Mono만.
@@ -352,10 +352,11 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 > (`components/landing/**`, `app/page.tsx`)은 위 "장식적·강한 모멘텀 모션 금지"와 §1·§6의
 > "transform/opacity만 애니메이트 + `prefers-reduced-motion` 존중" 하드룰에서 **전면 면제**된다.
 > 제품을 파는 마케팅 면이라 몰입형 스크롤 모션이 전환 목적에 부합하기 때문이다. 허용 범위:
-> ① 스크롤 연동 pin·패럴랙스·진입 스케일(`components/landing/ScrollPinnedSection.tsx` — sticky 트랙 + `motion/react` `useScroll`),
+> ① 스크롤 연동 pin·패럴랙스·진입 스케일(`components/landing/ScrollPinnedSection.tsx` — sticky 트랙 + `motion/react` `useScroll`; 히어로 전용 240vh 핀 트랙 `components/landing/hero/HeroPinnedScene.tsx` 포함),
 > ② 단계별 가이드 커서·코치마크(`components/landing/demo-app/DemoCursor.tsx` 등),
 > ③ 누적 등장·크로스페이드·타이프라이터·캐러셀,
-> ④ **`prefers-reduced-motion: reduce`를 존중하지 않고 모바일 포함 항상 재생해도 된다**(랜딩 한정 제품 결정).
+> ④ **`prefers-reduced-motion: reduce`를 존중하지 않고 모바일 포함 항상 재생해도 된다**(랜딩 한정 제품 결정),
+> ⑤ **히어로 다크 오프닝 씬의 소프트 블룸·앰비언트 글로우**(`components/landing/hero/HeroAsciiField.tsx` — 커서 궤적 글로우 + 앰비언트 워시). 모션 규칙이 아니라 위 "네온/글로우 금지" 시각 하드룰의 **사용자 승인 예외**로, 랜딩 히어로 다크 씬에 한정된다(터치 기기·동작 줄이기 선호에서는 커서 궤적 글로우 없이 정적 베이스 필드 + 앰비언트 워시만 렌더).
 > 인증 앱 면(`(app)/**`)에는 적용되지 않는다 — 그쪽은 §6 하드룰과 축하 모먼트·테마 전환 리빌 두 예외만 유효하다.
 
 ---

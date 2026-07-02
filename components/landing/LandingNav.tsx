@@ -47,6 +47,10 @@ const NAV_LINKS: { label: string; href: string }[] = [
 // Pretendard sentence-case — 디자인 하드룰(nav 라벨에 mono·uppercase·tracking 금지) 준수.
 const linkCls =
   'text-[var(--text-sm)] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]';
+// 히어로 다크 씬 위(over-dark: LandingHeader의 group/lheader data 상태) 라이트 톤.
+// 헤더 바에 상주하는 요소에만 붙인다 — 드롭다운·모바일 패널은 솔리드 surface 배경이므로 제외.
+const overDarkLinkCls =
+  'group-data-[over-dark]/lheader:text-[color-mix(in_srgb,var(--md-sys-color-inverse-on-surface)_72%,transparent)] group-data-[over-dark]/lheader:hover:text-[var(--md-sys-color-inverse-on-surface)]';
 
 export function LandingNav({ authed }: { authed: boolean }) {
   const [open, setOpen] = useState(false);
@@ -56,11 +60,11 @@ export function LandingNav({ authed }: { authed: boolean }) {
   // 동작한다. 부드러운 스크롤·헤더 오프셋은 랜딩에 스코프된 CSS(.landing-scroll +
   // 섹션의 scroll-mt)가 처리한다.
   const authLink = authed ? (
-    <Link href="/home" className={linkCls}>
+    <Link href="/home" className={`${linkCls} ${overDarkLinkCls}`}>
       앱으로 이동 →
     </Link>
   ) : (
-    <Link href="/login" className={linkCls}>
+    <Link href="/login" className={`${linkCls} ${overDarkLinkCls}`}>
       로그인
     </Link>
   );
@@ -69,7 +73,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
   const primaryCta = authed ? null : (
     <Link
       href="/rfp-create"
-      className="hidden md:inline-flex items-center h-9 px-4 rounded-md bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] text-[var(--text-sm)] font-medium tracking-[-0.006em] transition-opacity duration-[140ms] hover:opacity-90 active:scale-[0.98]"
+      className="hidden md:inline-flex items-center h-9 px-4 rounded-md bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] text-[var(--text-sm)] font-medium tracking-[-0.006em] transition-opacity duration-[140ms] hover:opacity-90 active:scale-[0.98] group-data-[over-dark]/lheader:[--md-sys-color-primary:var(--md-sys-color-inverse-primary)] group-data-[over-dark]/lheader:[--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]"
     >
       무료로 시작하기
     </Link>
@@ -87,7 +91,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
         >
           <button
             type="button"
-            className={`inline-flex items-center gap-1 ${linkCls}`}
+            className={`inline-flex items-center gap-1 ${linkCls} ${overDarkLinkCls}`}
             aria-expanded={serviceOpen}
             aria-haspopup="true"
             onClick={() => setServiceOpen((v) => !v)}
@@ -148,7 +152,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
         </div>
 
         {NAV_LINKS.map((l) => (
-          <a key={l.href} href={l.href} className={linkCls}>
+          <a key={l.href} href={l.href} className={`${linkCls} ${overDarkLinkCls}`}>
             {l.label}
           </a>
         ))}
@@ -161,7 +165,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
       {/* Mobile hamburger */}
       <button
         type="button"
-        className="md:hidden grid place-items-center h-8 w-8 -mr-1 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+        className={`md:hidden grid place-items-center h-8 w-8 -mr-1 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors ${overDarkLinkCls}`}
         aria-label={open ? '메뉴 닫기' : '메뉴 열기'}
         aria-expanded={open}
         aria-controls="landing-mobile-menu"
