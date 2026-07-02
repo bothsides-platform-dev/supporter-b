@@ -147,7 +147,7 @@ export function HeroPinnedScene() {
               scale: windowScale,
               transformPerspective: 1200,
             }}
-            className="h-[min(68svh,680px)] w-full max-w-[980px] origin-top will-change-transform"
+            className="h-[min(68svh,680px)] w-full max-w-[1080px] origin-top will-change-transform"
           >
             <HeroProductWindow />
           </motion.div>
