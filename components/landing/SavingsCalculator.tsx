@@ -3,12 +3,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useInView } from 'motion/react';
 import { Slider } from '@/components/ui/slider';
-import { KpiCell } from '@/components/primitives/KpiCell';
 import { Chip } from '@/components/primitives/Chip';
 import { CostComparisonChart } from '@/components/landing/CostComparisonChart';
 import { formatKRW } from '@/lib/format';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
+import { useAnimatedNumber } from '@/lib/landing/use-animated-number';
 import {
   SUPPORTER_B_RATE,
   annualMaxSavings,
@@ -146,6 +146,8 @@ export function SavingsCalculator() {
   const currentCost = Math.round(currentRate * volume);
   const supporterBCost = Math.round(supporterBRate * volume);
 
+  const animatedSavings = useAnimatedNumber(savings);
+
   const cursorPct = (volT / VOL_T_MAX) * 100;
 
   return (
@@ -245,10 +247,14 @@ export function SavingsCalculator() {
 
         {/* Output panel — result + chart */}
         <div className="flex flex-col md:pl-[var(--s-8)]">
-          <KpiCell
-            label="EST. ANNUAL SAVINGS"
-            value={formatKRW(savings)}
-          />
+          <div className="flex flex-col gap-[var(--s-2)]">
+            <span className="font-mono text-[var(--text-xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              EST. ANNUAL SAVINGS
+            </span>
+            <span className="md-numeric text-[clamp(32px,4vw,40px)] font-semibold leading-none tracking-[-0.02em] text-[var(--md-sys-color-tertiary)]">
+              {formatKRW(Math.round(animatedSavings))}
+            </span>
+          </div>
 
           <div className="mt-[var(--s-6)] pt-[var(--s-6)] border-t border-[var(--md-sys-color-outline-variant)]">
             <CostComparisonChart
