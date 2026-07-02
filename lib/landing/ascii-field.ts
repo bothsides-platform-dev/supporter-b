@@ -76,6 +76,19 @@ export function accentHash(col: number, row: number): number {
   return hashCell(col, row, 7);
 }
 
+/** 셀별 색 지터 버킷 수 — 0=하늘(기준) 1=시안 편향 2=보라 편향. */
+export const HUE_BUCKETS = 3;
+
+/** 셀별 색 지터 선택용 정적 해시 — accentHash 와 salt 를 달리해 상관을 끊는다. */
+export function hueHash(col: number, row: number): number {
+  return hashCell(col, row, 11);
+}
+
+/** [0,1) 해시값 → 색 지터 버킷. */
+export function hueBucket(hash: number): number {
+  return Math.min(HUE_BUCKETS - 1, Math.floor(hash * HUE_BUCKETS));
+}
+
 /** 에너지 → 글리프. 해시가 정적이라 한 잔상 동안 글리프가 바뀌지 않는다(깜빡임 없음). */
 export function charForEnergy(e: number, staticHash: number): string {
   if (e >= RAMP_T4) {
