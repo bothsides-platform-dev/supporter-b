@@ -8,6 +8,7 @@ import { MobileShellBar } from '@/components/shell/MobileShellBar';
 import { DemoNavProvider, hrefToPgDemoPage, isInertPgDemoNavHref } from '@/lib/nav/demo-nav-context';
 import { DemoSidebar } from './DemoSidebar';
 import { DemoCursor } from './DemoCursor';
+import { useCappedEntryScale } from './use-capped-entry-scale';
 import { PgHomePageHost } from './pg/PgHomePageHost';
 import { PgInboxPageHost } from './pg/PgInboxPageHost';
 import { PgDealRoomPageHost } from './pg/PgDealRoomPageHost';
@@ -56,6 +57,7 @@ export function PgDemoAppShell() {
   const containerRef = useRef<HTMLDivElement>(null);
   const inView = useInView(rootRef, { once: true, amount: 0.3 });
   const isMobile = useIsMobile();
+  const maxScale = useCappedEntryScale(rootRef, 1.1);
   const [page, setPage] = useState(1);
   useBlockSidebarShortcut();
 
@@ -91,13 +93,14 @@ export function PgDemoAppShell() {
             containerRef = 커서의 offset parent(scale 없음) → 커서 좌표 계산 기준. */}
         <div ref={containerRef} className="relative">
           {/* 스크롤로 데모가 뷰포트에 들어오면 100%→110%로 살짝 확대(랜딩 진입 스케일 —
-              DESIGN.md §9③ 예외). 모바일은 가로 크롭을 피하려 확대하지 않는다.
+              DESIGN.md §9③ 예외). 단, 확대된 너비가 현재 window 너비를 넘지 않도록
+              useCappedEntryScale로 상한을 둔다. 모바일은 가로 크롭을 피하려 확대하지 않는다.
               translateZ(0)는 컴포지팅 레이어 승격용으로 스케일과 함께 유지. */}
           <div
             ref={rootRef}
             onClickCapture={onClickCapture}
             style={{
-              transform: `translateZ(0) scale(${inView && !isMobile ? 1.1 : 1})`,
+              transform: `translateZ(0) scale(${inView && !isMobile ? maxScale : 1})`,
               transition: 'transform 700ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
             className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)]"
