@@ -7,8 +7,8 @@ import { Button } from '@/components/primitives/Button';
 import { ChevronDownIcon } from '@/components/icons';
 import { LANDING_TYPE } from '@/components/landing/landing-type';
 import { EASE_OUT } from '@/lib/landing/ease';
+import { HeroAsciiField } from './HeroAsciiField';
 import { HeroKineticHeadline } from './HeroKineticHeadline';
-import { HeroPointerGrid } from './HeroPointerGrid';
 import { HeroProductWindow } from './HeroProductWindow';
 import { useHeroToneStore } from './hero-tone-store';
 import { useMagneticHover } from './useMagneticHover';
@@ -70,13 +70,14 @@ export function HeroPinnedScene() {
           않고, 모든 모션은 씬 내부 자식에만 건다. */}
       <div className="sticky top-0 h-svh overflow-hidden bg-[var(--md-sys-color-surface)]">
         {/* 다크 오프닝 레이어 — 후반부 opacity 페이드로 라이트 리빌(배경색 보간 대신 레이어
-            페이드: 토큰 네이티브 + GPU-cheap) */}
+            페이드: 토큰 네이티브 + GPU-cheap). 배경은 ASCII 문자 필드: 커서 궤적을 따라
+            문자가 깨어나고, 은은한 블룸은 §9(블러 금지)의 사용자 승인 예외(랜딩 히어로 한정). */}
         <motion.div
           aria-hidden
           style={{ opacity: darkOpacity }}
           className="absolute inset-0 z-0 bg-[var(--md-sys-color-inverse-surface)]"
         >
-          <HeroPointerGrid />
+          <HeroAsciiField scrollYProgress={scrollYProgress} />
         </motion.div>
 
         {/* 텍스트 블록 — 스크롤 transform(외부)과 진입 모션(내부)을 분리해 충돌을 피한다 */}
@@ -93,6 +94,7 @@ export function HeroPinnedScene() {
               className={`max-w-[920px] text-pretty ${LANDING_TYPE.lead} text-[var(--md-sys-color-inverse-on-surface)]/72`}
             >
               여러 PG사의 제안을 동일한 기준으로 받아보고, 계약 조건을 표준화된 비교표로 검토하세요.
+              <br />
               수수료뿐 아니라 정산주기, 보증금, 셋업비까지 협상 가능한 조건으로 정리합니다.
             </motion.p>
           </motion.div>
