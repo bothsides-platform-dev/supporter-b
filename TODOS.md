@@ -31,6 +31,12 @@
 
 ## Landing
 
+### OfferComparisonTable 스크롤 힌트 testid가 두 인스턴스에서 중복 (P4)
+`OfferComparisonTable`이 `SolutionShowcase`(실제 표)와 `HeroProductWindow`(장식용 목업, `showScrollFade={false}`)에서 동시에 렌더될 때 `data-testid="offer-table-scroll-container"`가 두 인스턴스 모두에 남는다(런타임 버그 아님 — React state/effect는 인스턴스별로 정상 격리). 향후 조립된 랜딩 페이지 전체를 대상으로 `getByTestId`를 쓰는 e2e를 추가하면 다중 매치로 실패한다. 필요해지면 testid를 용도별로 구분. (발견: /ship adversarial 리뷰 2026-07-02, `worktree-fix+landing-table-mobile-scroll`)
+
+### OfferComparisonTable 스크롤 힌트가 window resize에만 반응 (P4)
+스크롤 힌트의 `canScrollRight` 재계산이 컨테이너의 `scroll`과 `window`의 `resize` 이벤트에만 걸려 있어 `ResizeObserver`가 없다. 윈도우 리사이즈 없이 컨테이너 폭만 바뀌는 경우(예: 폰트 스왑 리플로우)는 다음 스크롤/리사이즈 전까지 상태가 낡을 수 있다. 이 표는 콘텐츠·레이아웃이 정적이라 실질 영향은 낮음(설계 단계에서 의도적으로 ResizeObserver 생략, YAGNI). 재사용 시 재검토. (발견: /ship adversarial 리뷰 2026-07-02, `worktree-fix+landing-table-mobile-scroll`)
+
 ### DemoCursor rAF 루프가 데모가 화면 밖으로 나가도 계속 돎 (P3)
 `components/landing/demo-app/DemoCursor.tsx`의 `requestAnimationFrame` 루프는 매 프레임 `querySelector` + `getBoundingClientRect`(강제 리플로우)를 무조건 재예약한다. 두 데모 셸이 `useInView(..., { once: true })` 뒤에서 마운트하므로 데모가 한 번 화면에 들어오면 커서가 영영 언마운트되지 않고, 탭이 열려 있는 한 스크롤을 벗어나도 초당 ~60회 강제 리플로우가 지속된다(리크는 아님 — cleanup은 정상). 수정 방향: IntersectionObserver로 데모 창이 뷰포트에 있을 때만 루프를 돌리거나, 대상을 찾은 뒤 정적이면 cadence를 낮춘다. 랜딩 모션 예외 표면이라 무해하지만 CPU/배터리 낭비. (발견: /ship adversarial 리뷰 2026-07-02, `feat/landing-scroll-pin-sections`)
 
