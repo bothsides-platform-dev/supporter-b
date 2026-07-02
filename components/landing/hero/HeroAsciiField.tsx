@@ -57,6 +57,10 @@ const HUE_OFFSETS: Rgb[] = [
   [-18, 10, 14],
   [16, -10, 18],
 ];
+// hueBucket()이 낼 수 있는 모든 인덱스를 커버해야 한다 — 어긋나면 tierColors[bucket] undefined.
+if (HUE_OFFSETS.length !== HUE_BUCKETS) {
+  throw new Error('HUE_OFFSETS must have exactly HUE_BUCKETS entries');
+}
 
 type Rgb = [number, number, number];
 
