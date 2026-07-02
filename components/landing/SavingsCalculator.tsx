@@ -149,10 +149,13 @@ export function SavingsCalculator() {
   const cursorPct = (volT / VOL_T_MAX) * 100;
 
   return (
-    <section ref={rootRef} className="border-t border-b border-[var(--md-sys-color-outline)] py-[var(--s-9)]">
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-[var(--s-9)] md:gap-[var(--s-10)] items-end">
-        {/* Sliders */}
-        <div className="flex flex-col gap-[var(--s-8)]">
+    <section
+      ref={rootRef}
+      className="rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-[var(--s-8)]"
+    >
+      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-[var(--s-8)] md:gap-0">
+        {/* Sidebar — inputs */}
+        <div className="flex flex-col gap-[var(--s-8)] md:border-r md:border-[var(--md-sys-color-outline-variant)] md:pr-[var(--s-8)]">
           <div className="flex flex-col gap-[var(--s-3)]">
             <div className="flex items-baseline justify-between">
               <span className="font-mono text-[var(--text-xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">연간 거래액</span>
@@ -213,49 +216,50 @@ export function SavingsCalculator() {
                 {formatRate(rateBp / 100)}
               </span>
             </div>
-            <Slider
-              value={rateBp}
-              min={rateMinBp}
-              max={RATE_MAX}
-              step={RATE_STEP}
-              onValueChange={(v) => {
-                resetIdleRef.current?.();
-                setRateBp(Math.max(v, rateMinBp));
-              }}
-              ariaLabel="현재 PG 수수료율"
-            />
+            <div className="relative">
+              <Slider
+                value={rateBp}
+                min={rateMinBp}
+                max={RATE_MAX}
+                step={RATE_STEP}
+                onValueChange={(v) => {
+                  resetIdleRef.current?.();
+                  setRateBp(Math.max(v, rateMinBp));
+                }}
+                ariaLabel="현재 PG 수수료율"
+              />
+            </div>
             <div className="flex justify-between font-mono text-[var(--text-2xs)] tracking-[0.1em] text-[var(--md-sys-color-outline)] uppercase">
               <span>{formatRate(rateMinBp / 100)}</span>
               <span>4.00 %</span>
             </div>
           </div>
+
+          <div className="flex items-center gap-2 mt-auto pt-[var(--s-2)]">
+            <span className="font-mono text-[var(--text-2xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              가맹점 등급
+            </span>
+            <Chip label={MERCHANT_TIER_LABELS[grade]} color="surface" />
+          </div>
         </div>
 
-        {/* Result — emphasized savings */}
-        <div className="md:min-w-[360px]">
-          <div className="flex flex-col gap-[var(--s-4)] rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-tertiary-container)]/20 p-[var(--s-6)] md:items-end md:text-right">
-            <KpiCell
-              label="EST. ANNUAL SAVINGS"
-              value={formatKRW(savings)}
+        {/* Output panel — result + chart */}
+        <div className="flex flex-col md:pl-[var(--s-8)]">
+          <KpiCell
+            label="EST. ANNUAL SAVINGS"
+            value={formatKRW(savings)}
+          />
+
+          <div className="mt-[var(--s-6)] pt-[var(--s-6)] border-t border-[var(--md-sys-color-outline-variant)]">
+            <CostComparisonChart
+              currentCost={currentCost}
+              supporterBCost={supporterBCost}
             />
-            <div className="flex items-center gap-3 md:justify-end">
-              <span className="font-mono text-[var(--text-2xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                가맹점 등급
-              </span>
-              <Chip label={MERCHANT_TIER_LABELS[grade]} color="surface" />
-            </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-[var(--s-9)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)]">
-        <CostComparisonChart
-          currentCost={currentCost}
-          supporterBCost={supporterBCost}
-        />
-      </div>
-
-      <p className="mt-[var(--s-7)] font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+      <p className="mt-[var(--s-7)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)] font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
         * 예상 절감액은 추정치입니다. 카드 수수료를 포함한 모든 항목(정산주기·보증보험·가입비 등)이
         협상 대상이며, 실제 절감액은 PG사 견적·조건에 따라 달라질 수 있습니다.
       </p>
