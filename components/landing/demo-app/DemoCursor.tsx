@@ -158,24 +158,19 @@ export function DemoCursor({
         opacity: { duration: 0.35, ease: 'easeOut' },
       }}
     >
-      {/* 대상 위에 얹힌 뒤에도 멈추지 않고 미세하게 떠다닌다. */}
+      {/* 대상 위에 얹힌 뒤에도 멈추지 않고 점멸(깜빡임)해 시선을 끈다 — 흔들림(위치 이동) 없음. */}
       <motion.span
         className="block"
-        animate={{ x: [0, 6, -4, 2, 0], y: [0, -5, 3, -2, 0] }}
-        transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut' }}
+        animate={{ opacity: [1, 0.25, 1] }}
+        transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
       >
         <span className="block -translate-x-1/2 -translate-y-1/2">
-          {/* 배경 원·물결 없이 아이콘만 — 아주 조금 커졌다 작아지며 시선을 끈다. */}
-          <motion.span
-            className="block"
-            animate={{ scale: [1, 1.12, 1] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <MousePointerClick
-              className="size-5 text-[var(--md-sys-color-on-surface)] drop-shadow"
-              strokeWidth={2.25}
-            />
-          </motion.span>
+          {/* mix-blend-mode: difference — 흰색 기준으로 배경색을 반전시켜, 데모 안 콘텐츠가
+              밝든 어둡든(버튼·배지 등 국소 배경 포함) 커서가 항상 대비되어 보이게 한다. */}
+          <MousePointerClick
+            className="size-5 text-white mix-blend-difference"
+            strokeWidth={2.25}
+          />
         </span>
       </motion.span>
 
