@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Footer } from '@/components/shell/Footer';
-import { Logo } from '@/components/primitives/Logo';
+import { LandingHeader } from '@/components/landing/LandingHeader';
 import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
 import { FaqList } from '@/components/landing/FaqList';
 import { ScrollDrivenProblem } from '@/components/landing/scroll-pinned/ScrollDrivenProblem';
@@ -52,11 +52,8 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
   return (
     <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col">
 
-      {/* ── Nav ── */}
-      <header className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-8 h-[var(--shell-topbar)] border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]">
-        <Logo />
-        <div className="flex items-center gap-[var(--s-3)]">{nav}</div>
-      </header>
+      {/* ── Nav — 히어로 다크 씬 위에서는 투명+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
+      <LandingHeader>{nav}</LandingHeader>
 
       <main className="flex-1 pt-[var(--shell-topbar)]">
 

@@ -9,7 +9,16 @@ vi.mock('motion/react', () => {
     El.displayName = `motion.${tag}`;
     return El;
   };
-  return { motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }) };
+  return {
+    motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }),
+    // 핀 씬(HeroPinnedScene)의 스크롤 스크럽 훅 — jsdom에는 스크롤 레이아웃이 없으므로 정지값 스텁.
+    useScroll: () => ({ scrollYProgress: { get: () => 0, on: () => () => {} } }),
+    useTransform: () => 0,
+    useMotionValueEvent: () => {},
+    // 마그네틱 CTA(useMagneticHover) 스텁 — set 가능한 정지 MotionValue 흉내.
+    useMotionValue: () => ({ set: () => {}, get: () => 0 }),
+    useSpring: () => 0,
+  };
 });
 
 vi.mock('@/components/primitives/Button', () => ({
