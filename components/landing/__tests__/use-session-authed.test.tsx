@@ -1,11 +1,18 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
+import { SWRConfig } from 'swr';
 import { useSessionAuthed } from '../use-session-authed';
 
 function Harness({ onValue }: { onValue: (v: boolean) => void }) {
   const authed = useSessionAuthed();
   onValue(authed);
   return null;
+}
+
+// 각 테스트가 독립된 SWR 캐시를 쓰도록 격리 — 그렇지 않으면 같은 키
+// ('/api/auth/session')를 공유해 테스트 간 캐시된 응답이 새어 나간다.
+function renderIsolated(node: React.ReactNode) {
+  return render(<SWRConfig value={{ provider: () => new Map() }}>{node}</SWRConfig>);
 }
 
 describe('useSessionAuthed', () => {
@@ -19,7 +26,7 @@ describe('useSessionAuthed', () => {
       vi.fn(() => new Promise(() => {})), // never resolves
     );
     const values: boolean[] = [];
-    render(<Harness onValue={(v) => values.push(v)} />);
+    renderIsolated(<Harness onValue={(v) => values.push(v)} />);
     expect(values[0]).toBe(false);
   });
 
@@ -32,9 +39,9 @@ describe('useSessionAuthed', () => {
       }),
     );
     const values: boolean[] = [];
-    render(<Harness onValue={(v) => values.push(v)} />);
+    renderIsolated(<Harness onValue={(v) => values.push(v)} />);
     await waitFor(() => expect(values.at(-1)).toBe(true));
-    expect(fetch).toHaveBeenCalledWith('/api/auth/session');
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe('/api/auth/session');
   });
 
   it('stays false when the session response has no user (empty object)', async () => {
@@ -46,7 +53,7 @@ describe('useSessionAuthed', () => {
       }),
     );
     const values: boolean[] = [];
-    const { unmount } = render(<Harness onValue={(v) => values.push(v)} />);
+    const { unmount } = renderIsolated(<Harness onValue={(v) => values.push(v)} />);
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     unmount();
     expect(values.every((v) => v === false)).toBe(true);
@@ -63,7 +70,7 @@ describe('useSessionAuthed', () => {
       }),
     );
     const values: boolean[] = [];
-    const { unmount } = render(<Harness onValue={(v) => values.push(v)} />);
+    const { unmount } = renderIsolated(<Harness onValue={(v) => values.push(v)} />);
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     unmount();
     expect(values.every((v) => v === false)).toBe(true);
@@ -75,8 +82,31 @@ describe('useSessionAuthed', () => {
       vi.fn().mockRejectedValue(new Error('network down')),
     );
     const values: boolean[] = [];
-    render(<Harness onValue={(v) => values.push(v)} />);
+    renderIsolated(<Harness onValue={(v) => values.push(v)} />);
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(values.every((v) => v === false)).toBe(true);
+  });
+
+  // 랜딩 헤더 2개(LandingHeaderNav, PgLandingHeaderNav)가 각각 훅을 마운트할 수 있어
+  // SWR의 키 기반 중복 제거로 단일 fetch만 나가는지 검증한다.
+  it('dedupes concurrent mounts into a single /api/auth/session fetch (SWR cache sharing)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ user: { id: 'u1' } }),
+      }),
+    );
+    const valuesA: boolean[] = [];
+    const valuesB: boolean[] = [];
+    renderIsolated(
+      <>
+        <Harness onValue={(v) => valuesA.push(v)} />
+        <Harness onValue={(v) => valuesB.push(v)} />
+      </>,
+    );
+    await waitFor(() => expect(valuesA.at(-1)).toBe(true));
+    await waitFor(() => expect(valuesB.at(-1)).toBe(true));
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
