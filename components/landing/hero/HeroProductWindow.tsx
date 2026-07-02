@@ -31,7 +31,7 @@ export function HeroProductWindow() {
           </span>
           <Chip label="입찰 3건 도착" color="primary" />
         </div>
-        <OfferComparisonTable />
+        <OfferComparisonTable showScrollFade={false} />
       </div>
     </div>
   );

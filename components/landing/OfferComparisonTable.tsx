@@ -121,7 +121,17 @@ function Cell({
   );
 }
 
-export function OfferComparisonTable({ activeStep = null }: { activeStep?: number | null }) {
+export function OfferComparisonTable({
+  activeStep = null,
+  showScrollFade = true,
+}: {
+  activeStep?: number | null;
+  /** 장식용 목업(예: HeroProductWindow)처럼 overflow-x-clip 등으로 실제 스크롤이
+   *  불가능한 컨테이너에 렌더될 때는 false로 꺼야 한다. 그런 컨테이너는 scrollLeft가
+   *  0에 고정돼 스크롤 이벤트가 절대 발생하지 않으므로, 켜두면 canScrollRight가
+   *  마운트 시점 상태로 영구 고정된 채(대개 true) 페이드가 계속 떠 있게 된다. */
+  showScrollFade?: boolean;
+}) {
   const activeCols = activeStep != null ? (STEP_COLUMNS[activeStep] ?? []) : [];
   const activeRow = activeStep != null ? (STEP_ROW[activeStep] ?? null) : null;
 
@@ -129,6 +139,7 @@ export function OfferComparisonTable({ activeStep = null }: { activeStep?: numbe
   const [canScrollRight, setCanScrollRight] = useState(false);
 
   useEffect(() => {
+    if (!showScrollFade) return;
     const el = scrollRef.current;
     if (!el) return;
     const update = () => setCanScrollRight(computeCanScrollRight(el));
@@ -139,7 +150,7 @@ export function OfferComparisonTable({ activeStep = null }: { activeStep?: numbe
       el.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
     };
-  }, []);
+  }, [showScrollFade]);
 
   return (
     <motion.div
@@ -241,17 +252,19 @@ export function OfferComparisonTable({ activeStep = null }: { activeStep?: numbe
             </tbody>
           </table>
         </div>
-        <div
-          aria-hidden
-          data-testid="offer-table-scroll-fade"
-          className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[var(--md-sys-color-surface)] to-transparent transition-opacity duration-200"
-          style={{ opacity: canScrollRight ? 1 : 0 }}
-        >
-          <ChevronRightIcon
-            size={16}
-            className="absolute right-1 top-1/2 -translate-y-1/2 text-[var(--md-sys-color-on-surface-variant)]"
-          />
-        </div>
+        {showScrollFade && (
+          <div
+            aria-hidden
+            data-testid="offer-table-scroll-fade"
+            className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[var(--md-sys-color-surface)] to-transparent transition-opacity duration-200"
+            style={{ opacity: canScrollRight ? 1 : 0 }}
+          >
+            <ChevronRightIcon
+              size={16}
+              className="absolute right-1 top-1/2 -translate-y-1/2 text-[var(--md-sys-color-on-surface-variant)]"
+            />
+          </div>
+        )}
       </div>
       <p className="font-mono text-[var(--text-2xs)] tracking-[0.04em] text-[var(--md-sys-color-on-surface-variant)]">
         * 표시 값은 이해를 돕기 위한 예시이며, 실제 견적은 PG사·조건에 따라 달라집니다.

@@ -154,4 +154,15 @@ describe('scroll fade hint', () => {
     expect(containerRemoveSpy).toHaveBeenCalledWith('scroll', expect.any(Function));
     expect(windowRemoveSpy).toHaveBeenCalledWith('resize', expect.any(Function));
   });
+
+  it('does not render the fade hint when showScrollFade is false, even when the wrapper never scrolls', () => {
+    render(<OfferComparisonTable showScrollFade={false} />);
+    const container = screen.getByTestId('offer-table-scroll-container');
+    // Mirrors the decorative hero mockup: overflow-x-clip pins scrollLeft at 0
+    // forever while scrollWidth keeps overflowing clientWidth — canScrollRight
+    // would otherwise get stuck true with no scroll event to ever flip it back.
+    stubScrollMetrics(container, { scrollWidth: 680, clientWidth: 320, scrollLeft: 0 });
+    fireEvent.scroll(container);
+    expect(screen.queryByTestId('offer-table-scroll-fade')).not.toBeInTheDocument();
+  });
 });
