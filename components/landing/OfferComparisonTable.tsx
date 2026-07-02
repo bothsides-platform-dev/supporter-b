@@ -146,12 +146,13 @@ export function OfferComparisonTable({
     update();
     el.addEventListener('scroll', update);
     window.addEventListener('resize', update);
-    const resizeObserver = new ResizeObserver(update);
-    resizeObserver.observe(el);
+    // jsdom(테스트 환경)엔 ResizeObserver가 없으므로 방어적으로 가드한다 — 실제 브라우저는 항상 지원.
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : undefined;
+    resizeObserver?.observe(el);
     return () => {
       el.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
-      resizeObserver.disconnect();
+      resizeObserver?.disconnect();
     };
   }, [showScrollFade]);
 
