@@ -6,7 +6,7 @@ import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
 import { FaqList } from '@/components/landing/FaqList';
 import { ScrollDrivenProblem } from '@/components/landing/scroll-pinned/ScrollDrivenProblem';
 import { ScrollDrivenSolution } from '@/components/landing/scroll-pinned/ScrollDrivenSolution';
-import { BuyerScrollDemo } from '@/components/landing/scroll-pinned/BuyerScrollDemo';
+import { DemoAppShell } from '@/components/landing/demo-app/DemoAppShell';
 import { MetricCard } from '@/components/landing/MetricCard';
 import { LandingHeroSection } from '@/components/landing/LandingHeroSection';
 import { FadeInView } from '@/components/landing/FadeInView';
@@ -97,7 +97,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                 회원가입 없이 SupporterB 실제 화면을 그대로 체험할 수 있어요. 아래 단계를 눌러 직접 둘러보세요.
               </p>
             </div>
-            <BuyerScrollDemo />
+            <DemoAppShell />
           </div>
         </section>
 

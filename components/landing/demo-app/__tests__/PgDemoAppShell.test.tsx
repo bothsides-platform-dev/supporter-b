@@ -5,6 +5,7 @@ import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 
 vi.mock('motion/react', () => ({ useInView: () => true }));
 vi.mock('@/lib/landing/prefers-reduced-motion', () => ({ prefersReducedMotion: () => false }));
+vi.mock('../DemoCursor', () => ({ DemoCursor: () => null }));
 
 vi.mock('../DemoSidebar', () => ({
   DemoSidebar: () => (
@@ -44,7 +45,7 @@ function stubMatchMedia() {
 
 afterEach(cleanup);
 
-describe('PgDemoAppShell — 인플레이스 내비게이션', () => {
+describe('PgDemoAppShell — 클릭 인플레이스 내비게이션', () => {
   beforeEach(stubMatchMedia);
 
   it('초기에는 홈 페이지를 보여준다', () => {
@@ -71,48 +72,27 @@ describe('PgDemoAppShell — 인플레이스 내비게이션', () => {
     fireEvent.click(screen.getByRole('link', { name: '기회' }));
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
-
 });
 
-describe('PgDemoAppShell — 자동 투어/조작 하이브리드', () => {
+describe('PgDemoAppShell — 클릭 대기(자동재생 없음)', () => {
   beforeEach(() => {
     stubMatchMedia();
     vi.useFakeTimers();
   });
   afterEach(() => vi.useRealTimers());
 
-  it('뷰 안에서 시간이 지나면 마지막 페이지(메시지)까지 자동 전진한다', () => {
+  it('시간이 지나도 자동 전진하지 않는다', () => {
     render(<PgDemoAppShell />);
-    expect(screen.getByTestId('page-home')).toBeInTheDocument();
-    for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(4800));
-    expect(screen.getByTestId('page-messages')).toBeInTheDocument();
-  });
-
-  it('사용자가 조작하면 자동 투어가 멈춘다', () => {
-    render(<PgDemoAppShell />);
-    fireEvent.pointerDown(screen.getByTestId('page-home'));
     for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(4800));
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 });
 
-describe('PgDemoAppShell — 코치마크/하이라이트', () => {
+describe('PgDemoAppShell — 코치마크', () => {
   beforeEach(stubMatchMedia);
 
-  it('가이드 중에는 showCue를 켜고, 방문자가 조작하면 끈다', () => {
+  it('데모가 뷰에 들어오면 showCue를 켠다', () => {
     render(<PgDemoAppShell />);
     expect(screen.getByTestId('page-home')).toHaveAttribute('data-cue', 'true');
-    fireEvent.pointerDown(screen.getByTestId('page-home'));
-    expect(screen.getByTestId('page-home')).toHaveAttribute('data-cue', 'false');
-  });
-
-  it('자동 전환 직전 트리거(큐 항목)에 클릭 하이라이트 클래스를 입힌다', () => {
-    vi.useFakeTimers();
-    render(<PgDemoAppShell />);
-    const trigger = screen.getByRole('link', { name: '큐 항목' });
-    expect(trigger).not.toHaveClass('demo-click-flash');
-    act(() => vi.advanceTimersByTime(4300));
-    expect(trigger).toHaveClass('demo-click-flash');
-    vi.useRealTimers();
   });
 });

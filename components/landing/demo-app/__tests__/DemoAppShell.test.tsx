@@ -5,8 +5,10 @@ import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 
 vi.mock('motion/react', () => ({ useInView: () => true }));
 vi.mock('@/lib/landing/prefers-reduced-motion', () => ({ prefersReducedMotion: () => false }));
+// 커서는 자체 관심사 — 셸의 오케스트레이션(클릭 인터셉트) 테스트에서는 stub.
+vi.mock('../DemoCursor', () => ({ DemoCursor: () => null }));
 
-// 자식은 각각 자체 테스트 보유 — 셸의 오케스트레이션(투어 + 링크 인터셉트)에 집중하도록 stub.
+// 자식은 각각 자체 테스트 보유 — 셸의 오케스트레이션(클릭 내비게이션)에 집중하도록 stub.
 vi.mock('../DemoSidebar', () => ({
   DemoSidebar: () => (
     <nav>
@@ -47,7 +49,7 @@ function stubMatchMedia() {
 
 afterEach(cleanup);
 
-describe('DemoAppShell — 인플레이스 내비게이션', () => {
+describe('DemoAppShell — 클릭 인플레이스 내비게이션', () => {
   beforeEach(stubMatchMedia);
 
   it('초기에는 홈 페이지를 보여준다', () => {
@@ -70,35 +72,22 @@ describe('DemoAppShell — 인플레이스 내비게이션', () => {
     expect(screen.getByTestId('page-deal')).toBeInTheDocument();
   });
 
-  it('데모에 없는 라우트(알림) 클릭은 페이지를 유지하고 투어도 멈추지 않는다', () => {
-    vi.useFakeTimers();
+  it('데모에 없는 라우트(알림) 클릭은 페이지를 유지한다', () => {
     render(<DemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '알림' }));
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
-    for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(5000));
-    expect(screen.getByTestId('page-wizard')).toBeInTheDocument();
-    vi.useRealTimers();
   });
-
 });
 
-describe('DemoAppShell — 자동 투어/조작 하이브리드', () => {
+describe('DemoAppShell — 클릭 대기(자동재생 없음)', () => {
   beforeEach(() => {
     stubMatchMedia();
     vi.useFakeTimers();
   });
   afterEach(() => vi.useRealTimers());
 
-  it('뷰 안에서 시간이 지나면 페이지가 자동 전진한다', () => {
+  it('시간이 지나도 자동 전진하지 않는다 (클릭해야 넘어간다)', () => {
     render(<DemoAppShell />);
-    expect(screen.getByTestId('page-home')).toBeInTheDocument();
-    for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(5000));
-    expect(screen.getByTestId('page-wizard')).toBeInTheDocument();
-  });
-
-  it('사용자가 조작하면 자동 투어가 멈춘다', () => {
-    render(<DemoAppShell />);
-    fireEvent.pointerDown(screen.getByTestId('page-home'));
     for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(5000));
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
@@ -107,27 +96,8 @@ describe('DemoAppShell — 자동 투어/조작 하이브리드', () => {
 describe('DemoAppShell — 코치마크 신호', () => {
   beforeEach(stubMatchMedia);
 
-  it('가이드 중에는 showCue를 켜고, 방문자가 조작하면 끈다', () => {
+  it('데모가 뷰에 들어오면 각 화면에 showCue를 켠다', () => {
     render(<DemoAppShell />);
     expect(screen.getByTestId('page-home')).toHaveAttribute('data-cue', 'true');
-    fireEvent.pointerDown(screen.getByTestId('page-home'));
-    expect(screen.getByTestId('page-home')).toHaveAttribute('data-cue', 'false');
-  });
-});
-
-describe('DemoAppShell — 전환 직전 클릭 하이라이트', () => {
-  beforeEach(() => {
-    stubMatchMedia();
-    vi.useFakeTimers();
-  });
-  afterEach(() => vi.useRealTimers());
-
-  it('자동 전환 직전 트리거 요소(견적 요청)에 클릭 하이라이트 클래스를 입힌다', () => {
-    render(<DemoAppShell />);
-    const trigger = screen.getByRole('link', { name: '목록' }); // a[href="/rfp"]
-    expect(trigger).not.toHaveClass('demo-click-flash');
-    // 전환(5000ms) 직전: 하이라이트가 켜진다
-    act(() => vi.advanceTimersByTime(4000));
-    expect(trigger).toHaveClass('demo-click-flash');
   });
 });

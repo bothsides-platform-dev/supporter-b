@@ -10,7 +10,7 @@ import { PgCustomerCarousel } from '@/components/landing/PgCustomerCarousel';
 import { PgCaseCard } from '@/components/landing/PgCaseCard';
 import { LANDING_TYPE } from '@/components/landing/landing-type';
 import { PgProcessSteps } from '@/components/landing/PgProcessSteps';
-import { PgScrollDemo } from '@/components/landing/scroll-pinned/PgScrollDemo';
+import { PgDemoAppShell } from '@/components/landing/demo-app/PgDemoAppShell';
 import { FaqList } from '@/components/landing/FaqList';
 import { ConsultButton } from '@/components/landing/ConsultButton';
 import { PG_FAQ_ITEMS } from '@/components/landing/pg-faq-data';
@@ -303,7 +303,7 @@ export function PgLanding() {
         <section id="process" className={sectionCls}>
           <div className={`${containerCls} gap-[var(--s-8)]`}>
             <SectionHeading>파트너 참여 방식은 간단합니다</SectionHeading>
-            <PgScrollDemo />
+            <PgDemoAppShell />
             <FadeInView>
               <PgProcessSteps steps={PROCESS_STEPS} />
             </FadeInView>

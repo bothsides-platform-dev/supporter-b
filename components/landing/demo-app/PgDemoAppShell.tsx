@@ -1,11 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useInView } from 'motion/react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { MobileShellBar } from '@/components/shell/MobileShellBar';
 import { DemoNavProvider, hrefToPgDemoPage, isInertPgDemoNavHref } from '@/lib/nav/demo-nav-context';
-import { useDemoStepAutoplay } from '@/components/landing/useDemoStepAutoplay';
 import { DemoSidebar } from './DemoSidebar';
 import { DemoCursor } from './DemoCursor';
 import { PgHomePageHost } from './pg/PgHomePageHost';
@@ -14,10 +13,6 @@ import { PgDealRoomPageHost } from './pg/PgDealRoomPageHost';
 import { PgMessagesPageHost } from './pg/PgMessagesPageHost';
 import { demoPgWorkspaceName } from './pg/pg-demo-fixtures';
 
-const TOTAL_PAGES = 4;
-const PAGE_AUTO_MS = 4800;
-const FLASH_MS = 650;
-
 const PAGE_PATH: Record<number, string> = {
   1: '/home',
   2: '/inbox',
@@ -25,11 +20,12 @@ const PAGE_PATH: Record<number, string> = {
   4: '/messages',
 };
 
-// 자동 전환 직전 하이라이트할 트리거 셀렉터(없으면 생략).
+// 각 화면에서 '여기를 누르면 다음 화면'을 가리키는 커서 대상. 클릭하면 다음 페이지로 진행하는
+// 실제 요소여야 한다(사이드바 항목·목록 행). 마지막(4)은 다음이 없어 빈 값.
 const PAGE_TRIGGER: Record<number, string> = {
-  1: 'a[href="/inbox/P-2606-0042"]',
-  2: 'tbody tr',
-  3: '',
+  1: 'a[href="/inbox"]', // 사이드바 '받은 견적 요청' → 인박스
+  2: 'tbody tr', // 받은 요청 첫 행 → 딜룸
+  3: 'a[href="/messages"]', // 사이드바 '메시지' → 메시지
   4: '',
 };
 
@@ -41,36 +37,15 @@ const sidebarStyle = {
 } as React.CSSProperties;
 
 // PG 파트너 랜딩 임베디드 데모 — 실제 사이드바 + 실제 페이지(홈·받은요청·딜룸·메시지)를
-// 인플레이스로 순회한다. 구매사 DemoAppShell과 동일한 자동투어·클릭 인터셉트·하이라이트
-// 메커니즘. 견적 제출은 게스트 모드라 가입(/signup/pg)으로 연결된다.
-export function PgDemoAppShell({
-  controlledStep,
-  onStepSelect,
-  scrollLocked,
-}: {
-  controlledStep?: number;
-  onStepSelect?: (n: number) => void;
-  scrollLocked?: boolean;
-} = {}) {
-  const controlled = controlledStep != null;
+// 인플레이스로 순회한다. 스크롤 구동·자동재생 없이, 각 화면에서 가이드 커서가 다음으로
+// 넘어갈 클릭 대상을 가리키고 방문자가 클릭하면 진행한다. 견적 제출은 게스트 모드라
+// 가입(/signup/pg)으로 연결된다.
+export function PgDemoAppShell() {
   const rootRef = useRef<HTMLDivElement>(null);
   const inView = useInView(rootRef, { once: true, amount: 0.3 });
-  const [userInteracted, setUserInteracted] = useState(false);
+  const [page, setPage] = useState(1);
 
-  const tour = useDemoStepAutoplay(TOTAL_PAGES, PAGE_AUTO_MS, !controlled && inView && !userInteracted);
-  const page = controlledStep ?? tour.step;
-
-  const goToPage = useCallback(
-    (n: number) => {
-      if (controlled) {
-        onStepSelect?.(n);
-        return;
-      }
-      setUserInteracted(true);
-      tour.setStep(n);
-    },
-    [controlled, onStepSelect, tour],
-  );
+  const goToPage = useCallback((n: number) => setPage(n), []);
 
   const navigate = useCallback(
     (href: string) => {
@@ -79,27 +54,6 @@ export function PgDemoAppShell({
     },
     [goToPage],
   );
-
-  const autoplaying = !controlled && inView && !userInteracted && page < TOTAL_PAGES;
-  const guiding = !controlled && inView && !userInteracted;
-
-
-  // 전환 직전, 다음 단계로 넘기는 실제 요소에 잠깐 클릭 하이라이트(구매사 데모와 동일).
-  useEffect(() => {
-    const win = rootRef.current;
-    if (!autoplaying || !win) return;
-    const selector = PAGE_TRIGGER[page];
-    if (!selector) return;
-    let flashed: Element | null = null;
-    const id = setTimeout(() => {
-      flashed = win.querySelector(selector);
-      flashed?.classList.add('demo-click-flash');
-    }, PAGE_AUTO_MS - FLASH_MS);
-    return () => {
-      clearTimeout(id);
-      flashed?.classList.remove('demo-click-flash');
-    };
-  }, [page, autoplaying]);
 
   const onClickCapture = useCallback(
     (e: React.MouseEvent) => {
@@ -130,24 +84,20 @@ export function PgDemoAppShell({
             />
             <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
               <MobileShellBar workspaceName={demoPgWorkspaceName} />
-              <div
-                onPointerDownCapture={() => setUserInteracted(true)}
-                onKeyDownCapture={() => setUserInteracted(true)}
-                className={`min-h-0 min-w-0 flex-1 ${scrollLocked ? 'overflow-hidden' : 'overflow-y-auto'}`}
-              >
-                {page === 1 && <PgHomePageHost showCue={guiding} />}
-                {page === 2 && <PgInboxPageHost onOpenRfp={() => goToPage(3)} showCue={guiding} />}
+              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+                {page === 1 && <PgHomePageHost showCue={inView} />}
+                {page === 2 && <PgInboxPageHost onOpenRfp={() => goToPage(3)} showCue={inView} />}
                 {page === 3 && (
                   <PgDealRoomPageHost
                     onGuestSubmit={() => window.location.assign('/signup/pg')}
-                    showCue={guiding}
+                    showCue={inView}
                   />
                 )}
-                {page === 4 && <PgMessagesPageHost showCue={guiding} />}
+                {page === 4 && <PgMessagesPageHost showCue={inView} />}
               </div>
             </SidebarInset>
           </SidebarProvider>
-          {controlled && (
+          {inView && (
             <DemoCursor windowRef={rootRef} selector={PAGE_TRIGGER[page] || null} page={page} />
           )}
         </div>
