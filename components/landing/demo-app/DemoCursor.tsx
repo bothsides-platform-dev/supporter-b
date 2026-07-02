@@ -88,6 +88,9 @@ export function DemoCursor({
     const down = state.off === 'down';
     return (
       <motion.div
+        // 스크롤 안내 pill과 커서는 서로 다른 key라 off↔on 전환 시 React가 확실히
+        // 언마운트/재마운트한다 → 커서가 다시 생길 때마다 아래 initial 진입이 재실행된다.
+        key="scroll-guide"
         aria-hidden
         // 래퍼가 아니라 실제 데모 창 기준으로 우하단 안쪽(16px)에 앵커한다.
         // w-max로 폭을 콘텐츠에 고정(글자 줄바꿈 없음), translate은 motion x/y(퍼센트)로.
@@ -117,10 +120,12 @@ export function DemoCursor({
   }
 
   // 대상이 화면 안 — 커서 + 옆 힌트 라벨.
-  // 커서가 처음 생길 때는 데모 창 우하단(winW,winH) 밖에서 대상으로 스르륵 들어온다.
-  // initial은 마운트 1회만 적용되므로 이후 단계 전환은 spring 추적만 하고 재진입하지 않는다.
+  // 커서가 생길 때(첫 등장 + pill에서 되돌아올 때)는 데모 창 우하단(winW,winH)에서 대상으로
+  // 스르륵 들어온다. key="cursor"로 pill과 분리해 재마운트되므로 매 등장마다 initial이 재실행되고,
+  // 같은 화면 안 단계 전환은 (key 동일하므로) 재진입 없이 spring 추적만 한다.
   return (
     <motion.div
+      key="cursor"
       aria-hidden
       className="pointer-events-none absolute left-0 top-0 z-30"
       initial={{ x: state.winW, y: state.winH, opacity: 0 }}
