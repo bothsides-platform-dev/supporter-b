@@ -119,9 +119,6 @@ export function HeroPinnedScene() {
                   <Button size="lg">PG 비교 견적 무료로 시작하기 →</Button>
                 </Link>
               </motion.span>
-              <span className="font-mono text-[12px] tracking-[0.06em] text-[var(--md-sys-color-outline)]">
-                입찰 시작까지 5분 · 비공개 견적 요청
-              </span>
             </motion.div>
           </motion.div>
         </div>
