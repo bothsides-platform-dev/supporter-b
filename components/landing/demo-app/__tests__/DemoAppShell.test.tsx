@@ -135,6 +135,12 @@ describe('DemoAppShell — 사이드바 토글 비활성화', () => {
     // 클릭이 새 나가면 SidebarProvider.setOpen 이 sidebar_state 쿠키를 기록한다.
     expect(document.cookie).not.toContain('sidebar_state=false');
   });
+
+  it('⌘/Ctrl+B 단축키가 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<DemoAppShell />);
+    fireEvent.keyDown(window, { key: 'b', metaKey: true });
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
 });
 
 describe('DemoAppShell — 클릭 대기(자동재생 없음)', () => {

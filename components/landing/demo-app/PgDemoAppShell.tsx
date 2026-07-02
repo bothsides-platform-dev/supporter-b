@@ -13,6 +13,7 @@ import { PgInboxPageHost } from './pg/PgInboxPageHost';
 import { PgDealRoomPageHost } from './pg/PgDealRoomPageHost';
 import { PgMessagesPageHost } from './pg/PgMessagesPageHost';
 import { demoPgWorkspaceName } from './pg/pg-demo-fixtures';
+import { useBlockSidebarShortcut } from './use-block-sidebar-shortcut';
 
 const PAGE_PATH: Record<number, string> = {
   1: '/home',
@@ -56,6 +57,7 @@ export function PgDemoAppShell() {
   const inView = useInView(rootRef, { once: true, amount: 0.3 });
   const isMobile = useIsMobile();
   const [page, setPage] = useState(1);
+  useBlockSidebarShortcut();
 
   const goToPage = useCallback((n: number) => setPage(n), []);
 

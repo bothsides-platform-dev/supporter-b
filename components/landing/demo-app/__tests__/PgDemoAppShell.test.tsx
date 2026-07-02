@@ -87,6 +87,12 @@ describe('PgDemoAppShell — 사이드바 토글 비활성화', () => {
     fireEvent.click(trigger!);
     expect(document.cookie).not.toContain('sidebar_state=false');
   });
+
+  it('⌘/Ctrl+B 단축키가 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<PgDemoAppShell />);
+    fireEvent.keyDown(window, { key: 'b', metaKey: true });
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
 });
 
 describe('PgDemoAppShell — 클릭 대기(자동재생 없음)', () => {
