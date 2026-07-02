@@ -10,6 +10,7 @@ import { demoWorkspaceName } from '@/components/landing/demo-fixtures';
 import { DemoSidebar } from './DemoSidebar';
 import { DemoCursor } from './DemoCursor';
 import { demoTriggerSelector, demoCursorHint } from './demo-triggers';
+import { useBlockSidebarShortcut, blockSidebarTriggerClick } from './use-block-sidebar-shortcut';
 import { HomePageHost } from './pages/HomePageHost';
 import { RfpListPageHost } from './pages/RfpListPageHost';
 import { DealRoomPageHost } from './pages/DealRoomPageHost';
@@ -40,6 +41,7 @@ export function DemoAppShell() {
   const inView = useInView(rootRef, { once: true, amount: 0.3 });
   const isMobile = useIsMobile();
   const [page, setPage] = useState(1);
+  useBlockSidebarShortcut();
 
   const goToPage = useCallback((n: number) => setPage(n), []);
 
@@ -53,6 +55,7 @@ export function DemoAppShell() {
 
   const onClickCapture = useCallback(
     (e: React.MouseEvent) => {
+      if (blockSidebarTriggerClick(e)) return;
       const anchor = (e.target as HTMLElement).closest('a[href]');
       if (!anchor) return;
       const href = anchor.getAttribute('href') ?? '';

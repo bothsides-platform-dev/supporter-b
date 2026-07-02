@@ -121,6 +121,51 @@ describe('DemoAppShell — 모바일(사이드바 off-canvas 대체)', () => {
   });
 });
 
+describe('DemoAppShell — 사이드바 토글 비활성화', () => {
+  beforeEach(() => {
+    stubMatchMedia();
+    document.cookie = 'sidebar_state=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  });
+
+  it('모바일 헤더의 사이드바 토글 클릭이 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<DemoAppShell />);
+    const trigger = document.querySelector('[data-sidebar="trigger"]');
+    expect(trigger).not.toBeNull();
+    fireEvent.click(trigger!);
+    // 클릭이 새 나가면 SidebarProvider.setOpen 이 sidebar_state 쿠키를 기록한다.
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('⌘/Ctrl+B 단축키가 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<DemoAppShell />);
+    fireEvent.keyDown(window, { key: 'b', metaKey: true });
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('Ctrl+B(모디파이어 조합)도 동일하게 막는다', () => {
+    render(<DemoAppShell />);
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('모디파이어 없는 b, 또는 b가 아닌 단축키는 막지 않는다', () => {
+    render(<DemoAppShell />);
+    const plainB = fireEvent.keyDown(window, { key: 'b' });
+    const cmdK = fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    // dispatchEvent 는 preventDefault 되지 않은 이벤트에서 true 를 반환한다.
+    expect(plainB).toBe(true);
+    expect(cmdK).toBe(true);
+  });
+
+  it('언마운트 시 keydown 캡처 리스너를 정리한다', () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = render(<DemoAppShell />);
+    unmount();
+    expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    removeSpy.mockRestore();
+  });
+});
+
 describe('DemoAppShell — 클릭 대기(자동재생 없음)', () => {
   beforeEach(() => {
     stubMatchMedia();
