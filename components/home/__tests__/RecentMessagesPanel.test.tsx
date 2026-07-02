@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { act } from 'react';
+import { renderToString } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
 import { render, screen, cleanup } from '@testing-library/react';
 import type { ConversationListItem } from '@/components/messages/types';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
@@ -143,5 +146,28 @@ describe('RecentMessagesPanel', () => {
     workspacePresenceResult = { online: false, activity: 'offline' };
     render(<RecentMessagesPanel items={[makeConv()]} unreadCount={0} />);
     expect(screen.queryByLabelText('온라인')).not.toBeInTheDocument();
+  });
+
+  // BuyerHome/PgHome server-render this panel from a fresh DB read each
+  // request; the last-message timestamp is live data that can tick forward
+  // between the SSR pass and the client hydrate pass (slow connection, dev
+  // Fast Refresh, etc). That drift must not blow away the whole tree.
+  it('does not raise a hydration error when lastMessageAt ticks forward between server render and client hydrate', () => {
+    const serverItem = [makeConv({ lastMessageAt: '2026-07-02T07:12:18.159Z' })];
+    const clientItem = [makeConv({ lastMessageAt: '2026-07-02T07:22:43.441Z' })];
+    const html = renderToString(<RecentMessagesPanel items={serverItem} unreadCount={0} />);
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    const recoverableErrors: unknown[] = [];
+    act(() => {
+      hydrateRoot(container, <RecentMessagesPanel items={clientItem} unreadCount={0} />, {
+        onRecoverableError: (error) => recoverableErrors.push(error),
+      });
+    });
+
+    expect(recoverableErrors).toEqual([]);
+    container.remove();
   });
 });
