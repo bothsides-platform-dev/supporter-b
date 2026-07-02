@@ -120,4 +120,38 @@ describe('scroll fade hint', () => {
     fireEvent.scroll(container);
     expect(screen.getByTestId('offer-table-scroll-fade')).toHaveStyle({ opacity: '1' });
   });
+
+  it('stays hidden exactly at the 4px threshold boundary', () => {
+    render(<OfferComparisonTable />);
+    const container = screen.getByTestId('offer-table-scroll-container');
+    stubScrollMetrics(container, { scrollWidth: 1000, clientWidth: 680, scrollLeft: 316 });
+    fireEvent.scroll(container);
+    expect(screen.getByTestId('offer-table-scroll-fade')).toHaveStyle({ opacity: '0' });
+  });
+
+  it('shows the fade just past the threshold boundary', () => {
+    render(<OfferComparisonTable />);
+    const container = screen.getByTestId('offer-table-scroll-container');
+    stubScrollMetrics(container, { scrollWidth: 1000, clientWidth: 680, scrollLeft: 315 });
+    fireEvent.scroll(container);
+    expect(screen.getByTestId('offer-table-scroll-fade')).toHaveStyle({ opacity: '1' });
+  });
+
+  it('updates the fade on window resize', () => {
+    render(<OfferComparisonTable />);
+    const container = screen.getByTestId('offer-table-scroll-container');
+    stubScrollMetrics(container, { scrollWidth: 1000, clientWidth: 680, scrollLeft: 0 });
+    fireEvent(window, new Event('resize'));
+    expect(screen.getByTestId('offer-table-scroll-fade')).toHaveStyle({ opacity: '1' });
+  });
+
+  it('removes the scroll and resize listeners on unmount', () => {
+    const { unmount } = render(<OfferComparisonTable />);
+    const container = screen.getByTestId('offer-table-scroll-container');
+    const containerRemoveSpy = vi.spyOn(container, 'removeEventListener');
+    const windowRemoveSpy = vi.spyOn(window, 'removeEventListener');
+    unmount();
+    expect(containerRemoveSpy).toHaveBeenCalledWith('scroll', expect.any(Function));
+    expect(windowRemoveSpy).toHaveBeenCalledWith('resize', expect.any(Function));
+  });
 });
