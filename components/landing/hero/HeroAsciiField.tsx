@@ -109,6 +109,10 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     // 가드 ③·④: 동작 줄이기·터치 기기는 정적 베이스 필드만(루프·포인터 리스너 없음).
     const animate = !prefersReducedMotion() && window.matchMedia('(pointer: fine)').matches;
 
+    // 앵커 딥링크(#pricing 등)로 트랙 아래에서 진입하면 첫 change 이벤트 전에도 루프가 돌지
+    // 않아야 한다 — HeroPinnedScene의 톤 스위치 mount-sync와 같은 패턴으로 초기값을 동기화.
+    hiddenByScrollRef.current = scrollYProgress.get() >= SCROLL_HIDE_AT;
+
     const base = document.createElement('canvas');
     const baseCtx = base.getContext('2d');
     const glow = document.createElement('canvas');
@@ -405,7 +409,7 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       window.removeEventListener('pointermove', onPointerMove);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []);
+  }, [scrollYProgress]);
 
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0">
