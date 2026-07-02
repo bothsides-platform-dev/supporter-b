@@ -13,7 +13,7 @@ import { PgInboxPageHost } from './pg/PgInboxPageHost';
 import { PgDealRoomPageHost } from './pg/PgDealRoomPageHost';
 import { PgMessagesPageHost } from './pg/PgMessagesPageHost';
 import { demoPgWorkspaceName } from './pg/pg-demo-fixtures';
-import { useBlockSidebarShortcut } from './use-block-sidebar-shortcut';
+import { useBlockSidebarShortcut, blockSidebarTriggerClick } from './use-block-sidebar-shortcut';
 
 const PAGE_PATH: Record<number, string> = {
   1: '/home',
@@ -71,15 +71,8 @@ export function PgDemoAppShell() {
 
   const onClickCapture = useCallback(
     (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      // 모바일 헤더의 사이드바 토글(ShellSidebarTrigger)은 body에 포탈되는 실제 Sheet를
-      // 열어 스케일된 데모 창 밖으로 전체화면 오버레이가 튀어나온다 — 캡처 단계에서 눌러 무시.
-      if (target.closest('[data-sidebar="trigger"]')) {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-      const anchor = target.closest('a[href]');
+      if (blockSidebarTriggerClick(e)) return;
+      const anchor = (e.target as HTMLElement).closest('a[href]');
       if (!anchor) return;
       const href = anchor.getAttribute('href') ?? '';
       if (!href.startsWith('/')) return;
