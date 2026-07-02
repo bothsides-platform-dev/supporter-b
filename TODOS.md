@@ -37,14 +37,17 @@
 ### OfferComparisonTable 스크롤 힌트가 window resize에만 반응 (P4)
 스크롤 힌트의 `canScrollRight` 재계산이 컨테이너의 `scroll`과 `window`의 `resize` 이벤트에만 걸려 있어 `ResizeObserver`가 없다. 윈도우 리사이즈 없이 컨테이너 폭만 바뀌는 경우(예: 폰트 스왑 리플로우)는 다음 스크롤/리사이즈 전까지 상태가 낡을 수 있다. 이 표는 콘텐츠·레이아웃이 정적이라 실질 영향은 낮음(설계 단계에서 의도적으로 ResizeObserver 생략, YAGNI). 재사용 시 재검토. (발견: /ship adversarial 리뷰 2026-07-02, `worktree-fix+landing-table-mobile-scroll`)
 
+### useCappedEntryScale이 window resize에만 반응 (P4)
+`use-capped-entry-scale.ts`의 상한 재계산이 `window`의 `resize` 이벤트에만 걸려 있어 `ResizeObserver`가 없다. 데모 창 자체는 뷰포트 폭에만 종속된 레이아웃(고정 `h-[600px]`, 사이드바는 CSS var 고정폭, 콘텐츠는 `flex-1`)이라 내부 콘텐츠 변화로 폭이 바뀌는 경로가 없고, 폰트는 `next/font`라 스왑 리플로우도 없음 — 그래서 지금은 무해(OfferComparisonTable과 동일한 판단, YAGNI). `useIsMobile`(matchMedia 기반)과 별도 구독이라 768px 경계를 넘는 순간 한 프레임 어긋날 수 있지만, 상한 계산 자체가 항상 `clientWidth` 이내로 안전해 오버플로우로는 이어지지 않음. 이 훅을 다른 레이아웃(콘텐츠 종속적 폭)에 재사용할 경우 재검토. (발견: /ship adversarial 리뷰 2026-07-03)
+
 ### DemoCursor rAF 루프가 데모가 화면 밖으로 나가도 계속 돎 (P3)
 `components/landing/demo-app/DemoCursor.tsx`의 `requestAnimationFrame` 루프는 매 프레임 `querySelector` + `getBoundingClientRect`(강제 리플로우)를 무조건 재예약한다. 두 데모 셸이 `useInView(..., { once: true })` 뒤에서 마운트하므로 데모가 한 번 화면에 들어오면 커서가 영영 언마운트되지 않고, 탭이 열려 있는 한 스크롤을 벗어나도 초당 ~60회 강제 리플로우가 지속된다(리크는 아님 — cleanup은 정상). 수정 방향: IntersectionObserver로 데모 창이 뷰포트에 있을 때만 루프를 돌리거나, 대상을 찾은 뒤 정적이면 cadence를 낮춘다. 랜딩 모션 예외 표면이라 무해하지만 CPU/배터리 낭비. (발견: /ship adversarial 리뷰 2026-07-02, `feat/landing-scroll-pin-sections`)
 
 ### ScrollPinnedSection의 미사용 progress·scrollToStep + steps=0 잠재 나눗셈 (P4)
 `components/landing/ScrollPinnedSection.tsx`가 render-prop payload로 `progress`(MotionValue)·`scrollToStep`을 노출하지만 현재 소비처(`ScrollDrivenProblem`·`ScrollDrivenSolution`)는 `pinned`·`activeStep`만 쓴다(옛 `DemoStepBar` 소비처는 삭제됨). `scrollToStep`은 `(index+0.5)/steps`, `activeStep`은 `Math.floor(v*steps)`로 `steps===0`이면 `Infinity`/`-1`이 나온다 — 현재는 배열 길이가 상수 ≥4라 도달 불가. 미사용 필드 제거하거나 `steps<=0` 가드 추가. (발견: /ship maintainability+adversarial 리뷰 2026-07-02, `feat/landing-scroll-pin-sections`)
 
-### 랜딩 데모 셸 DRY: PG 트리거/힌트 맵·진입 스케일 스타일 중복 (P4)
-PG 데모 셸(`PgDemoAppShell.tsx`)은 페이지별 트리거/힌트를 로컬 `PAGE_TRIGGER`/`PAGE_HINT` 맵으로 인라인하는데, 구매사 셸은 `demo-triggers.ts`의 공용 함수(`demoTriggerSelector`/`demoCursorHint`)를 쓴다 — 같은 개념을 두 방식으로 구현해 드리프트 위험. 또 진입 스케일 인라인 스타일(`scale(1.1)`·`700ms cubic-bezier(...)`)이 두 셸에 그대로 복붙됨. 공용 함수/상수로 통합 검토. (발견: /ship maintainability 리뷰 2026-07-02, `feat/landing-scroll-pin-sections`)
+### 랜딩 데모 셸 DRY: PG 트리거/힌트 맵 중복 (P4)
+PG 데모 셸(`PgDemoAppShell.tsx`)은 페이지별 트리거/힌트를 로컬 `PAGE_TRIGGER`/`PAGE_HINT` 맵으로 인라인하는데, 구매사 셸은 `demo-triggers.ts`의 공용 함수(`demoTriggerSelector`/`demoCursorHint`)를 쓴다 — 같은 개념을 두 방식으로 구현해 드리프트 위험. 공용 함수/상수로 통합 검토. (발견: /ship maintainability 리뷰 2026-07-02, `feat/landing-scroll-pin-sections`. **진입 스케일 배율 계산 중복은 v0.2.60.1에서 `use-capped-entry-scale.ts` 공용 훅으로 해소됨** — 남은 건 트리거/힌트 맵과 `700ms cubic-bezier(...)` 트랜지션 문자열 중복.)
 
 ## Signup / Auth
 
