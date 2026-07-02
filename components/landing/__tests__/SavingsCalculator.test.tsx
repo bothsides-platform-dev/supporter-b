@@ -79,6 +79,11 @@ describe('SavingsCalculator', () => {
     });
     expect(Number(rateThumb.getAttribute('aria-valuenow'))).toBeGreaterThan(lowFloor);
   });
+
+  it('shows an info trigger next to the merchant grade explaining the tier boundary', () => {
+    render(<SavingsCalculator />);
+    expect(screen.getByLabelText('등급 산정 기준')).toBeInTheDocument();
+  });
 });
 
 describe('SavingsCalculator — idle slider hint', () => {
