@@ -117,13 +117,20 @@ export function DemoCursor({
   }
 
   // 대상이 화면 안 — 커서 + 옆 힌트 라벨.
+  // 커서가 처음 생길 때는 데모 창 우하단(winW,winH) 밖에서 대상으로 스르륵 들어온다.
+  // initial은 마운트 1회만 적용되므로 이후 단계 전환은 spring 추적만 하고 재진입하지 않는다.
   return (
     <motion.div
       aria-hidden
       className="pointer-events-none absolute left-0 top-0 z-30"
-      initial={false}
-      animate={{ x: state.x, y: state.y }}
-      transition={{ type: 'spring', stiffness: 240, damping: 24 }}
+      initial={{ x: state.winW, y: state.winH, opacity: 0 }}
+      animate={{ x: state.x, y: state.y, opacity: 1 }}
+      transition={{
+        type: 'spring',
+        stiffness: 240,
+        damping: 24,
+        opacity: { duration: 0.35, ease: 'easeOut' },
+      }}
     >
       {/* 대상 위에 얹힌 뒤에도 멈추지 않고 미세하게 떠다닌다. */}
       <motion.span
