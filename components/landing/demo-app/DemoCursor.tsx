@@ -11,6 +11,9 @@ type CursorState = {
   off: 'up' | 'down' | null;
   /** 힌트 라벨을 커서의 어느 쪽에 붙일지(우측 가장자리 근처면 왼쪽). */
   side: 'left' | 'right';
+  /** 데모 창 실제 크기 — 스크롤 안내 pill을 래퍼가 아니라 데모 창 우하단 안쪽에 앵커한다. */
+  winW: number;
+  winH: number;
 };
 
 // 스크롤 가이드 커서 — 현재 단계에서 '무엇을 클릭하면 되는지'를 데모 윈도 안 대상 요소 위에
@@ -45,10 +48,17 @@ export function DemoCursor({
           const y = er.top - wr.top + er.height / 2;
           const off = y < 12 ? 'up' : y > wr.height - 12 ? 'down' : null;
           const side = x > wr.width * 0.62 ? 'left' : 'right';
-          next = { x, y, off, side };
+          next = { x, y, off, side, winW: wr.width, winH: wr.height };
         } else if (!selector) {
           // 클릭 대상이 없는 단계 — 우하단(주요 액션 자리)에 머문다.
-          next = { x: wr.width * 0.74, y: wr.height * 0.84, off: null, side: 'left' };
+          next = {
+            x: wr.width * 0.74,
+            y: wr.height * 0.84,
+            off: null,
+            side: 'left',
+            winW: wr.width,
+            winH: wr.height,
+          };
         }
         // selector가 있는데 아직 못 찾음(전환 중)이면 next=null → 이전 상태 유지.
         if (next) {
@@ -58,7 +68,8 @@ export function DemoCursor({
             Math.abs(p.x - n.x) < 0.5 &&
             Math.abs(p.y - n.y) < 0.5 &&
             p.off === n.off &&
-            p.side === n.side
+            p.side === n.side &&
+            Math.abs(p.winW - n.winW) < 0.5
               ? p
               : n,
           );
@@ -78,10 +89,12 @@ export function DemoCursor({
     return (
       <motion.div
         aria-hidden
-        // 오른쪽 기준으로 앵커 → 폭이 콘텐츠에 맞게 왼쪽으로 늘어난다(글자 줄바꿈 없음).
-        className="pointer-events-none absolute bottom-4 right-8 z-40 flex items-center gap-2 whitespace-nowrap rounded-full border border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-high)] py-1.5 pl-3 pr-1.5 shadow-lg"
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
+        // 래퍼가 아니라 실제 데모 창 기준으로 우하단 안쪽(16px)에 앵커한다.
+        // w-max로 폭을 콘텐츠에 고정(글자 줄바꿈 없음), translate은 motion x/y(퍼센트)로.
+        className="pointer-events-none absolute z-40 flex w-max items-center gap-2 whitespace-nowrap rounded-full border border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-high)] py-1.5 pl-3 pr-1.5 shadow-lg"
+        style={{ left: state.winW - 16, top: state.winH - 16 }}
+        initial={{ opacity: 0, x: '-100%', y: '-100%' }}
+        animate={{ opacity: 1, x: '-100%', y: '-100%' }}
       >
         {hint && (
           <span className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]">
