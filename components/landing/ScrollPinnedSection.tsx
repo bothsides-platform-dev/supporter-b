@@ -1,14 +1,12 @@
 'use client';
 
 import { useRef, useState, type ReactNode } from 'react';
-import { useScroll, useMotionValueEvent, type MotionValue } from 'motion/react';
+import { useScroll, useMotionValueEvent } from 'motion/react';
 
 export type PinnedState = {
   /** 항상 true. 소비처 render-prop 분기 호환을 위해 유지(폴백 경로는 코드로 보존). */
   pinned: boolean;
   activeStep: number;
-  progress: MotionValue<number>;
-  scrollToStep: (index: number) => void;
 };
 
 // 섹션을 스크롤 동안 화면에 고정(pin)하고, 트랙 진행률(0→1)로 이산 단계(0..steps-1)와 연속
@@ -30,6 +28,10 @@ export function ScrollPinnedSection({
   className?: string;
   children: (s: PinnedState) => ReactNode;
 }) {
+  // 방어적 가드: steps<=0은 현재 모든 호출부가 상수 배열 길이(>=4)를 넘겨 도달 불가능하지만,
+  // 0으로 나눗셈/음수 clamp로 깨지는 것을 막기 위해 최소 1로 바닥을 둔다. steps>=1인 모든
+  // 실사용 입력에서는 safeSteps === steps로 동작이 완전히 동일하다.
+  const safeSteps = Math.max(1, steps);
   const trackRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: trackRef,
@@ -37,29 +39,15 @@ export function ScrollPinnedSection({
   });
   const [activeStep, setActiveStep] = useState(0);
   useMotionValueEvent(scrollYProgress, 'change', (v) => {
-    setActiveStep(Math.min(steps - 1, Math.max(0, Math.floor(v * steps))));
+    setActiveStep(Math.min(safeSteps - 1, Math.max(0, Math.floor(v * safeSteps))));
   });
-
-  const scrollToStep = (index: number) => {
-    const el = trackRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    // useScroll offset ['start start','end end']는 진행률을 (트랙높이 − 뷰포트높이)로 정규화하므로
-    // 클릭 목표 스크롤도 그 구간으로 매핑해야 그 스텝에 정확히 안착한다.
-    const range = Math.max(0, rect.height - window.innerHeight);
-    const top = window.scrollY + rect.top + ((index + 0.5) / steps) * range;
-    window.scrollTo({ top, behavior: 'smooth' });
-  };
 
   return (
     <div ref={trackRef} style={{ height: `${steps * stepVh}vh` }}>
       <div
         className={`sticky top-[var(--shell-topbar)] flex min-h-[calc(100svh-var(--shell-topbar))] flex-col ${align === 'start' ? 'justify-start pt-[8vh]' : 'justify-center'} ${className ?? ''}`}
       >
-        {/* scrollToStep은 클릭 핸들러에서만 trackRef.current를 읽는다 — 렌더 중 ref 접근이 아니라
-            컴파일러 정적 분석의 false positive. */}
-        {/* eslint-disable-next-line react-hooks/refs */}
-        {children({ pinned: true, activeStep, progress: scrollYProgress, scrollToStep })}
+        {children({ pinned: true, activeStep })}
       </div>
     </div>
   );

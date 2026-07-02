@@ -146,9 +146,13 @@ export function OfferComparisonTable({
     update();
     el.addEventListener('scroll', update);
     window.addEventListener('resize', update);
+    // jsdom(테스트 환경)엔 ResizeObserver가 없으므로 방어적으로 가드한다 — 실제 브라우저는 항상 지원.
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : undefined;
+    resizeObserver?.observe(el);
     return () => {
       el.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
+      resizeObserver?.disconnect();
     };
   }, [showScrollFade]);
 
@@ -163,7 +167,7 @@ export function OfferComparisonTable({
       <div className="relative">
         <div
           ref={scrollRef}
-          data-testid="offer-table-scroll-container"
+          data-testid={showScrollFade ? 'offer-table-scroll-container' : undefined}
           className="overflow-x-auto snap-x snap-proximity rounded-md border border-[var(--md-sys-color-outline-variant)]"
         >
           <table className="w-full min-w-[680px] border-collapse text-left">

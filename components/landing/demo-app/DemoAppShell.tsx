@@ -10,7 +10,7 @@ import { demoWorkspaceName } from '@/components/landing/demo-fixtures';
 import { DemoSidebar } from './DemoSidebar';
 import { DemoCursor } from './DemoCursor';
 import { useCappedEntryScale } from './use-capped-entry-scale';
-import { demoTriggerSelector, demoCursorHint } from './demo-triggers';
+import { demoTriggerSelector, demoCursorHint, DEMO_WINDOW_TRANSITION } from './demo-triggers';
 import { useBlockSidebarShortcut, blockSidebarTriggerClick } from './use-block-sidebar-shortcut';
 import { HomePageHost } from './pages/HomePageHost';
 import { RfpListPageHost } from './pages/RfpListPageHost';
@@ -86,7 +86,7 @@ export function DemoAppShell() {
             onClickCapture={onClickCapture}
             style={{
               transform: `translateZ(0) scale(${inView && !isMobile ? maxScale : 1})`,
-              transition: 'transform 700ms cubic-bezier(0.22, 1, 0.36, 1)',
+              transition: DEMO_WINDOW_TRANSITION,
             }}
             className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)]"
           >

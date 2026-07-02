@@ -9,6 +9,7 @@ import { DemoNavProvider, hrefToPgDemoPage, isInertPgDemoNavHref } from '@/lib/n
 import { DemoSidebar } from './DemoSidebar';
 import { DemoCursor } from './DemoCursor';
 import { useCappedEntryScale } from './use-capped-entry-scale';
+import { pgDemoTriggerSelector, pgDemoCursorHint, DEMO_WINDOW_TRANSITION } from './demo-triggers';
 import { PgHomePageHost } from './pg/PgHomePageHost';
 import { PgInboxPageHost } from './pg/PgInboxPageHost';
 import { PgDealRoomPageHost } from './pg/PgDealRoomPageHost';
@@ -21,24 +22,6 @@ const PAGE_PATH: Record<number, string> = {
   2: '/inbox',
   3: '/inbox/P-2606-0042',
   4: '/messages',
-};
-
-// 각 화면에서 가이드 커서가 가리키는 대상. 1~3은 클릭 시 다음 화면으로 진행하는 실제 요소
-// (사이드바 항목·목록 행). 4(메시지)는 진짜 종착이라 다음은 없지만, 커서는 전송 버튼을 가리킨다.
-const PAGE_TRIGGER: Record<number, string> = {
-  1: 'a[href="/inbox"]', // 사이드바 '받은 견적 요청' → 인박스
-  2: 'tbody tr', // 받은 요청 첫 행 → 딜룸
-  3: 'a[href="/messages"]', // 사이드바 '메시지' → 메시지
-  4: '[data-demo-cursor]', // 메시지 전송 버튼(종착 — 커서만 얹음)
-};
-
-// 각 단계에서 커서 옆에 힌트처럼 붙이는 안내 메시지(PG 데모).
-// 커서가 가리키는 클릭 대상이 하는 동작과 일치시킨다.
-const PAGE_HINT: Record<number, string> = {
-  1: '받은 견적 요청을 확인해요', // 커서: 사이드바 '받은 견적 요청'
-  2: '받은 견적 요청을 눌러 상세를 확인해요', // 커서: 목록 행
-  3: '구매사와 메시지를 주고받아요', // 커서: 사이드바 '메시지'
-  4: '여기서 바로 메시지를 보내요', // 커서: 전송 버튼(종착)
 };
 
 const sidebarStyle = {
@@ -101,7 +84,7 @@ export function PgDemoAppShell() {
             onClickCapture={onClickCapture}
             style={{
               transform: `translateZ(0) scale(${inView && !isMobile ? maxScale : 1})`,
-              transition: 'transform 700ms cubic-bezier(0.22, 1, 0.36, 1)',
+              transition: DEMO_WINDOW_TRANSITION,
             }}
             className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)]"
           >
@@ -142,13 +125,9 @@ export function PgDemoAppShell() {
             <DemoCursor
               windowRef={rootRef}
               containerRef={containerRef}
-              selector={
-                isMobile && (page === 1 || page === 3)
-                  ? '[data-demo-mobile-next]'
-                  : PAGE_TRIGGER[page] || null
-              }
+              selector={pgDemoTriggerSelector(page, isMobile)}
               page={page}
-              hint={PAGE_HINT[page]}
+              hint={pgDemoCursorHint(page)}
             />
           )}
         </div>

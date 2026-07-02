@@ -40,3 +40,41 @@ export function demoCursorHint(page: number): string {
       return '';
   }
 }
+
+// PG 데모 셸(PgDemoAppShell)용 트리거 셀렉터 — 위 demoTriggerSelector와 동일한 구조(모바일
+// 오버라이드 포함)이나, PG 화면(받은요청·딜룸·메시지)의 클릭 대상을 가리킨다.
+export function pgDemoTriggerSelector(page: number, isMobile = false): string | null {
+  if (isMobile && (page === 1 || page === 3)) return '[data-demo-mobile-next]';
+  switch (page) {
+    case 1:
+      return 'a[href="/inbox"]'; // 사이드바 '받은 견적 요청' → 인박스
+    case 2:
+      return 'tbody tr'; // 받은 요청 첫 행 → 딜룸
+    case 3:
+      return 'a[href="/messages"]'; // 사이드바 '메시지' → 메시지
+    case 4:
+      return '[data-demo-cursor]'; // 메시지 전송 버튼(종착 — 커서만 얹음)
+    default:
+      return null;
+  }
+}
+
+// 각 단계에서 커서 옆에 힌트처럼 붙이는 안내 메시지(PG 데모).
+// 커서가 가리키는 클릭 대상이 하는 동작과 일치시킨다.
+export function pgDemoCursorHint(page: number): string {
+  switch (page) {
+    case 1:
+      return '받은 견적 요청을 확인해요'; // 커서: 사이드바 '받은 견적 요청'
+    case 2:
+      return '받은 견적 요청을 눌러 상세를 확인해요'; // 커서: 목록 행
+    case 3:
+      return '구매사와 메시지를 주고받아요'; // 커서: 사이드바 '메시지'
+    case 4:
+      return '여기서 바로 메시지를 보내요'; // 커서: 전송 버튼(종착)
+    default:
+      return '';
+  }
+}
+
+// 데모 창(.demo-app-window)의 진입 스케일 트랜지션 — 구매사·PG 셸이 공유한다.
+export const DEMO_WINDOW_TRANSITION = 'transform 700ms cubic-bezier(0.22, 1, 0.36, 1)';
