@@ -3,10 +3,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useInView } from 'motion/react';
 import { Slider } from '@/components/ui/slider';
-import { Chip } from '@/components/primitives/Chip';
 import { CostComparisonChart } from '@/components/landing/CostComparisonChart';
 import { formatKRW } from '@/lib/format';
-import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 import { useAnimatedNumber } from '@/lib/landing/use-animated-number';
 import {
@@ -14,10 +12,7 @@ import {
   annualMaxSavings,
   gradeFromVolume,
   minCurrentRate,
-  tierRangeLabel,
 } from '@/lib/landing/savings';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { InfoIcon } from '@/components/icons';
 
 const VOL_T_MAX = 1000;
 const VOL_BASE = 1e8;
@@ -226,10 +221,6 @@ export function SavingsCalculator() {
                 <SliderValueBubble pct={cursorPct} text={formatVolume(volume)} testId="volume-drag-bubble" />
               )}
             </div>
-            <div className="flex justify-between font-mono text-[var(--text-2xs)] tracking-[0.1em] text-[var(--md-sys-color-outline)] uppercase">
-              <span>1 억</span>
-              <span>1,000 억</span>
-            </div>
           </div>
 
           <div className="flex flex-col gap-[var(--s-3)]">
@@ -267,29 +258,6 @@ export function SavingsCalculator() {
               <span>{formatRate(rateMinBp / 100)}</span>
               <span>4.00 %</span>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 mt-auto pt-[var(--s-2)]">
-            <span className="font-mono text-[var(--text-2xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              가맹점 등급
-            </span>
-            <Chip label={MERCHANT_TIER_LABELS[grade]} color="surface" />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <span
-                      tabIndex={0}
-                      aria-label="등급 산정 기준"
-                      className="inline-flex items-center text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] cursor-help"
-                    >
-                      <InfoIcon size={14} aria-hidden />
-                    </span>
-                  }
-                />
-                <TooltipContent side="top">{tierRangeLabel(grade)}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           </div>
         </div>
 
