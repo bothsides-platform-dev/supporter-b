@@ -3,14 +3,18 @@ import {
   DECAY_DT_CLAMP_MS,
   DECAY_TAU_MS,
   ENERGY_EPSILON,
+  HUE_BUCKETS,
   PITCH,
   REST_ALPHA_MIN,
   REST_ALPHA_SPAN,
   TWINKLE_WINDOW_MS,
+  accentHash,
   charForEnergy,
   createField,
   decayField,
   hashCell,
+  hueBucket,
+  hueHash,
   restAlpha,
   stampTrail,
   twinkleEnvelope,
@@ -126,6 +130,38 @@ describe('twinkle', () => {
     expect(ratio).toBeGreaterThan(0.008);
     expect(ratio).toBeLessThan(0.04);
     expect(twinkleIndices(60, 40, 4)).not.toEqual(a);
+  });
+});
+
+describe('hueHash', () => {
+  it('결정적이고 [0, 1) 범위다', () => {
+    expect(hueHash(3, 7)).toBe(hueHash(3, 7));
+    for (let c = 0; c < 20; c++) {
+      for (let r = 0; r < 20; r++) {
+        const h = hueHash(c, r);
+        expect(h).toBeGreaterThanOrEqual(0);
+        expect(h).toBeLessThan(1);
+      }
+    }
+  });
+
+  it('accentHash 와 상관이 끊긴다(스폿 체크)', () => {
+    expect(hueHash(2, 5)).not.toBe(accentHash(2, 5));
+  });
+});
+
+describe('hueBucket', () => {
+  it('경계에서 0/1/2 를 반환하고 항상 유효 범위다', () => {
+    expect(hueBucket(0)).toBe(0);
+    expect(hueBucket(1 / HUE_BUCKETS - 0.001)).toBe(0);
+    expect(hueBucket(1 / HUE_BUCKETS)).toBe(1);
+    expect(hueBucket((2 * 1) / HUE_BUCKETS)).toBe(2);
+    expect(hueBucket(0.999999)).toBe(HUE_BUCKETS - 1);
+    for (let i = 0; i < 1000; i++) {
+      const b = hueBucket(i / 1000);
+      expect(b).toBeGreaterThanOrEqual(0);
+      expect(b).toBeLessThan(HUE_BUCKETS);
+    }
   });
 });
 

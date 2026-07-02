@@ -6,12 +6,15 @@ import type { MotionValue } from 'motion/react';
 import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 import {
   FONT_PX,
+  HUE_BUCKETS,
   PITCH,
   REST_CHAR,
   accentHash,
   charForEnergy,
   createField,
   decayField,
+  hueBucket,
+  hueHash,
   restAlpha,
   stampTrail,
   twinkleEnvelope,
@@ -47,6 +50,13 @@ const GLOW_SIZE_PX = PITCH * 2.6;
 const GLOW_LAYER_ALPHA = 0.85;
 // 에너지 → 색 리프트를 24티어 rgba 문자열로 사전계산해 프레임당 문자열 생성을 없앤다.
 const COLOR_TIERS = 24;
+// 셀별 색 지터 — blue 기준 채널 오프셋(0=하늘 그대로, 1=시안 편향, 2=보라 편향). "약간"이라
+// 채널당 최대 이동폭을 작게 둔다(§9 랜딩 예외 범위 안의 은은한 반짝임).
+const HUE_OFFSETS: Rgb[] = [
+  [0, 0, 0],
+  [-18, 10, 14],
+  [16, -10, 18],
+];
 
 type Rgb = [number, number, number];
 
@@ -77,6 +87,19 @@ function parseColor(raw: string, fallback: Rgb): Rgb {
 
 function rgba([r, g, b]: Rgb, a: number): string {
   return `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`;
+}
+
+function clamp255(v: number): number {
+  return Math.min(255, Math.max(0, Math.round(v)));
+}
+
+// blue 에 버킷별 오프셋을 더한 지터 타깃(0~255 clamp). 테마가 뒤집혀도 항상 resolved blue 기준.
+function hueTarget(blueRgb: Rgb, offset: Rgb): Rgb {
+  return [
+    clamp255(blueRgb[0] + offset[0]),
+    clamp255(blueRgb[1] + offset[1]),
+    clamp255(blueRgb[2] + offset[2]),
+  ];
 }
 
 function smoothstep(a: number, b: number, x: number): number {
@@ -117,9 +140,10 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     const baseCtx = base.getContext('2d');
     const glow = document.createElement('canvas');
     const glowCtx = glow.getContext('2d');
-    const sprite = document.createElement('canvas');
-    const spriteCtx = sprite.getContext('2d');
-    if (!baseCtx || !glowCtx || !spriteCtx) return;
+    const sprites = Array.from({ length: HUE_BUCKETS }, () => document.createElement('canvas'));
+    const spriteCtxs = sprites.map((s) => s.getContext('2d'));
+    if (!baseCtx || !glowCtx || spriteCtxs.some((c) => !c)) return;
+    const spriteContexts = spriteCtxs as CanvasRenderingContext2D[];
 
     let disposed = false;
     let running = false;
@@ -134,12 +158,14 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     let field: AsciiField = createField(0, 0);
     let restAlphas = new Float32Array(0);
     let accentHashes = new Float32Array(0);
+    let hueBuckets = new Uint8Array(0);
 
     // 팔레트·폰트 (mount + 재개 시 해석)
     let ink = INK_FALLBACK;
     let blue = BLUE_FALLBACK;
     let fontString = `500 ${FONT_PX}px ui-monospace, monospace`;
-    let tierColors: string[] = [];
+    // tierColors[bucket][tier] — 버킷별 ink→hueTarget 24티어 램프.
+    let tierColors: string[][] = [];
 
     // 타이밍·포인터
     let lastFrame = 0;
@@ -166,26 +192,35 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       // next/font 가 --font-mono 에 해시 패밀리를 넣으므로 var 값을 그대로 폰트 스택으로 쓴다.
       const family = cs.getPropertyValue('--font-mono').trim();
       fontString = `500 ${FONT_PX}px ${family || 'ui-monospace, monospace'}`;
-      tierColors = Array.from({ length: COLOR_TIERS }, (_, t) => {
-        const e = t / (COLOR_TIERS - 1);
-        const mix = smoothstep(0.15, 0.75, e);
-        const c: Rgb = [
-          Math.round(ink[0] + (blue[0] - ink[0]) * mix),
-          Math.round(ink[1] + (blue[1] - ink[1]) * mix),
-          Math.round(ink[2] + (blue[2] - ink[2]) * mix),
-        ];
-        return rgba(c, 0.1 + 0.85 * e);
+      tierColors = HUE_OFFSETS.map((offset) => {
+        const target = hueTarget(blue, offset);
+        return Array.from({ length: COLOR_TIERS }, (_, t) => {
+          const e = t / (COLOR_TIERS - 1);
+          const mix = smoothstep(0.15, 0.75, e);
+          const c: Rgb = [
+            Math.round(ink[0] + (target[0] - ink[0]) * mix),
+            Math.round(ink[1] + (target[1] - ink[1]) * mix),
+            Math.round(ink[2] + (target[2] - ink[2]) * mix),
+          ];
+          return rgba(c, 0.1 + 0.85 * e);
+        });
       });
-      // 글로우 스프라이트(부드러운 라디얼 1장) — 팔레트가 바뀌면 다시 굽는다
-      sprite.width = GLOW_SPRITE_PX;
-      sprite.height = GLOW_SPRITE_PX;
+      // 글로우 스프라이트(부드러운 라디얼) — 버킷별 지터 색으로 하나씩 굽는다. 팔레트가
+      // 바뀌면 전부 다시 굽는다.
       const half = GLOW_SPRITE_PX / 2;
-      const grad = spriteCtx.createRadialGradient(half, half, 0, half, half, half);
-      grad.addColorStop(0, rgba(blue, 0.55));
-      grad.addColorStop(1, rgba(blue, 0));
-      spriteCtx.clearRect(0, 0, GLOW_SPRITE_PX, GLOW_SPRITE_PX);
-      spriteCtx.fillStyle = grad;
-      spriteCtx.fillRect(0, 0, GLOW_SPRITE_PX, GLOW_SPRITE_PX);
+      HUE_OFFSETS.forEach((offset, b) => {
+        const target = hueTarget(blue, offset);
+        const s = sprites[b];
+        const sc = spriteContexts[b];
+        s.width = GLOW_SPRITE_PX;
+        s.height = GLOW_SPRITE_PX;
+        const grad = sc.createRadialGradient(half, half, 0, half, half, half);
+        grad.addColorStop(0, rgba(target, 0.55));
+        grad.addColorStop(1, rgba(target, 0));
+        sc.clearRect(0, 0, GLOW_SPRITE_PX, GLOW_SPRITE_PX);
+        sc.fillStyle = grad;
+        sc.fillRect(0, 0, GLOW_SPRITE_PX, GLOW_SPRITE_PX);
+      });
     };
 
     // 휴지 글리프 전체를 오프스크린에 프리렌더 — 매 프레임은 blit 한 번이면 된다.
@@ -225,11 +260,13 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       field = createField(cols, rows);
       restAlphas = new Float32Array(cols * rows);
       accentHashes = new Float32Array(cols * rows);
+      hueBuckets = new Uint8Array(cols * rows);
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const i = r * cols + c;
           restAlphas[i] = restAlpha(c, r);
           accentHashes[i] = accentHash(c, r);
+          hueBuckets[i] = hueBucket(hueHash(c, r));
         }
       }
       glow.width = Math.max(1, Math.ceil(cssW * GLOW_SCALE));
@@ -307,7 +344,7 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
         const size = GLOW_SIZE_PX * GLOW_SCALE;
         glowCtx.globalAlpha = e * e * 0.5;
         glowCtx.drawImage(
-          sprite,
+          sprites[hueBuckets[i]],
           cellX(i) * GLOW_SCALE - size / 2,
           cellY(i) * GLOW_SCALE - size / 2,
           size,
@@ -336,7 +373,8 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       }
       for (const i of field.active) {
         const e = field.energy[i];
-        ctx.fillStyle = tierColors[Math.min(COLOR_TIERS - 1, Math.floor(e * COLOR_TIERS))];
+        const tier = Math.min(COLOR_TIERS - 1, Math.floor(e * COLOR_TIERS));
+        ctx.fillStyle = tierColors[hueBuckets[i]][tier];
         ctx.fillText(charForEnergy(e, accentHashes[i]), cellX(i), cellY(i));
       }
     };
