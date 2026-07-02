@@ -15,6 +15,23 @@ describe('demoTriggerSelector', () => {
   it('정의되지 않은 페이지는 트리거가 없다', () => {
     expect(demoTriggerSelector(5)).toBeNull();
   });
+
+  it('모바일에서는 사이드바 단계(1·3)를 인-프레임 다음 버튼으로 대체한다', () => {
+    // 사이드바가 off-canvas Sheet(body portal)로 접혀 windowRef 안에서 못 찾으므로,
+    // 창 안의 [data-demo-mobile-next] 버튼을 가리켜 진행을 보장한다.
+    expect(demoTriggerSelector(1, true)).toBe('[data-demo-mobile-next]');
+    expect(demoTriggerSelector(3, true)).toBe('[data-demo-mobile-next]');
+  });
+
+  it('모바일이라도 콘텐츠 내부 대상(2·4)은 기존 셀렉터를 유지한다', () => {
+    expect(demoTriggerSelector(2, true)).toBe('tbody tr');
+    expect(demoTriggerSelector(4, true)).toBe('[data-demo-cursor]');
+  });
+
+  it('isMobile 기본값(false)은 데스크톱 동작을 유지한다', () => {
+    expect(demoTriggerSelector(1)).toBe('a[href="/rfp"]');
+    expect(demoTriggerSelector(3)).toBe('a[href="/rfp-create"]');
+  });
 });
 
 describe('demoCursorHint', () => {

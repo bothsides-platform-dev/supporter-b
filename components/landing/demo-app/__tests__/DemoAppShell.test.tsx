@@ -6,7 +6,14 @@ import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 vi.mock('motion/react', () => ({ useInView: () => true }));
 vi.mock('@/lib/landing/prefers-reduced-motion', () => ({ prefersReducedMotion: () => false }));
 // 커서는 자체 관심사 — 셸의 오케스트레이션(클릭 인터셉트) 테스트에서는 stub.
-vi.mock('../DemoCursor', () => ({ DemoCursor: () => null }));
+// 단, 모바일 분기 검증을 위해 넘겨받은 selector 를 캡처한다.
+const cursorCapture = vi.hoisted(() => ({ selector: undefined as string | null | undefined }));
+vi.mock('../DemoCursor', () => ({
+  DemoCursor: ({ selector }: { selector: string | null }) => {
+    cursorCapture.selector = selector;
+    return null;
+  },
+}));
 
 // 자식은 각각 자체 테스트 보유 — 셸의 오케스트레이션(클릭 내비게이션)에 집중하도록 stub.
 vi.mock('../DemoSidebar', () => ({
@@ -74,6 +81,43 @@ describe('DemoAppShell — 클릭 인플레이스 내비게이션', () => {
     render(<DemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '알림' }));
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
+  });
+});
+
+describe('DemoAppShell — 모바일(사이드바 off-canvas 대체)', () => {
+  const realWidth = window.innerWidth;
+  beforeEach(() => {
+    // useIsMobile 은 window.innerWidth < 768 을 본다.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true, media: '', onchange: null,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+    }) as unknown as typeof window.matchMedia;
+    cursorCapture.selector = undefined;
+  });
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: realWidth });
+  });
+
+  it('사이드바 단계(홈)에서 인-프레임 다음 버튼을 렌더하고 커서가 이를 가리킨다', () => {
+    render(<DemoAppShell />);
+    const next = document.querySelector('[data-demo-mobile-next]');
+    expect(next).not.toBeNull();
+    expect(cursorCapture.selector).toBe('[data-demo-mobile-next]');
+  });
+
+  it('다음 버튼 클릭이 다음 화면(목록)으로 진행한다', () => {
+    render(<DemoAppShell />);
+    fireEvent.click(document.querySelector('[data-demo-mobile-next]')!);
+    expect(screen.getByTestId('page-list')).toBeInTheDocument();
+  });
+
+  it('콘텐츠 내부 대상 단계(목록)에서는 다음 버튼 없이 기존 셀렉터를 유지한다', () => {
+    render(<DemoAppShell />);
+    fireEvent.click(document.querySelector('[data-demo-mobile-next]')!); // 홈→목록
+    expect(document.querySelector('[data-demo-mobile-next]')).toBeNull();
+    expect(cursorCapture.selector).toBe('tbody tr');
   });
 });
 
