@@ -39,6 +39,9 @@ export function HeroPinnedScene() {
   const subOpacity = useTransform(scrollYProgress, [0.13, 0.35, 1], [1, 0, 0]);
   const ctaY = useTransform(scrollYProgress, [0.1, 0.4, 1], [0, -48, -48]);
   const ctaOpacity = useTransform(scrollYProgress, [0.16, 0.38, 1], [1, 0, 0]);
+  // 페이드아웃(0.38)된 뒤에도 opacity:0 요소는 클릭을 가로채므로, 포인터 이벤트를
+  // 스크롤 진행도에 연동해 CTA가 사라지면 클릭 대상에서도 제외한다(뒤 제품 창 위 오클릭 방지).
+  const ctaPointerEvents = useTransform(scrollYProgress, (v) => (v > 0.38 ? 'none' : 'auto'));
 
   const windowY = useTransform(scrollYProgress, [0.06, 0.68, 1], ['82%', '0%', '0%']);
   const windowRotateX = useTransform(scrollYProgress, [0.06, 0.68, 1], [16, 0, 0]);
@@ -100,7 +103,7 @@ export function HeroPinnedScene() {
             </motion.p>
           </motion.div>
 
-          <motion.div style={{ y: ctaY, opacity: ctaOpacity }}>
+          <motion.div style={{ y: ctaY, opacity: ctaOpacity, pointerEvents: ctaPointerEvents }}>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
