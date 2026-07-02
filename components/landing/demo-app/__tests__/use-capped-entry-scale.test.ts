@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { renderHook, fireEvent } from '@testing-library/react';
 import { useCappedEntryScale } from '../use-capped-entry-scale';
 
 function stubClientWidth(width: number) {
@@ -47,5 +47,26 @@ describe('useCappedEntryScale — 콘텐츠 영역 너비를 넘지 않는 진�
     const ref = refWithWidth(0);
     const { result } = renderHook(() => useCappedEntryScale(ref, 1.1));
     expect(result.current).toBe(1.1);
+  });
+
+  it('window resize 시 재계산해 새 상한을 반영한다', () => {
+    stubClientWidth(1920); // 처음엔 여백이 충분해 designMax 그대로
+    const ref = refWithWidth(1080);
+    const { result } = renderHook(() => useCappedEntryScale(ref, 1.1));
+    expect(result.current).toBeCloseTo(1.1);
+
+    stubClientWidth(1100); // 창을 좁힘 — 이제 1.1배는 콘텐츠 영역을 넘는다
+    fireEvent(window, new Event('resize'));
+    expect(result.current).toBeCloseTo(1100 / 1080);
+  });
+
+  it('언마운트 시 resize 리스너를 정리한다', () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    stubClientWidth(1100);
+    const ref = refWithWidth(1080);
+    const { unmount } = renderHook(() => useCappedEntryScale(ref, 1.1));
+    unmount();
+    expect(removeSpy).toHaveBeenCalledWith('resize', expect.any(Function));
+    removeSpy.mockRestore();
   });
 });
