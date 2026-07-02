@@ -8,7 +8,7 @@ import { DemoNavProvider, hrefToDemoPage } from '@/lib/nav/demo-nav-context';
 import { demoWorkspaceName } from '@/components/landing/demo-fixtures';
 import { DemoSidebar } from './DemoSidebar';
 import { DemoCursor } from './DemoCursor';
-import { demoTriggerSelector } from './demo-triggers';
+import { demoTriggerSelector, demoCursorHint } from './demo-triggers';
 import { HomePageHost } from './pages/HomePageHost';
 import { RfpListPageHost } from './pages/RfpListPageHost';
 import { DealRoomPageHost } from './pages/DealRoomPageHost';
@@ -75,15 +75,20 @@ export function DemoAppShell() {
             <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
               <MobileShellBar workspaceName={demoWorkspaceName} />
               <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-                {page === 1 && <HomePageHost showCue={inView} />}
-                {page === 2 && <RfpListPageHost onOpenRfp={() => goToPage(3)} showCue={inView} />}
-                {page === 3 && <DealRoomPageHost showCue={inView} />}
-                {page === 4 && <WizardPageHost enabled={false} showCue={inView} />}
+                {page === 1 && <HomePageHost />}
+                {page === 2 && <RfpListPageHost onOpenRfp={() => goToPage(3)} />}
+                {page === 3 && <DealRoomPageHost />}
+                {page === 4 && <WizardPageHost enabled={false} />}
               </div>
             </SidebarInset>
           </SidebarProvider>
           {inView && (
-            <DemoCursor windowRef={rootRef} selector={demoTriggerSelector(page)} page={page} />
+            <DemoCursor
+              windowRef={rootRef}
+              selector={demoTriggerSelector(page)}
+              page={page}
+              hint={demoCursorHint(page)}
+            />
           )}
         </div>
       </div>

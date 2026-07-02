@@ -93,11 +93,3 @@ describe('DemoAppShell — 클릭 대기(자동재생 없음)', () => {
   });
 });
 
-describe('DemoAppShell — 코치마크 신호', () => {
-  beforeEach(stubMatchMedia);
-
-  it('데모가 뷰에 들어오면 각 화면에 showCue를 켠다', () => {
-    render(<DemoAppShell />);
-    expect(screen.getByTestId('page-home')).toHaveAttribute('data-cue', 'true');
-  });
-});

@@ -17,3 +17,19 @@ export function demoTriggerSelector(page: number): string | null {
       return null;
   }
 }
+
+// 각 단계에서 커서 옆에 힌트처럼 붙이는 안내 메시지(구매사 데모).
+export function demoCursorHint(page: number): string {
+  switch (page) {
+    case 1:
+      return '내 견적 현황을 한눈에 볼 수 있어요';
+    case 2:
+      return '견적 요청을 눌러 받은 견적을 확인해요';
+    case 3:
+      return 'PG별 견적을 비교하고 선정해요';
+    case 4:
+      return '정보를 입력하고 견적을 요청해요';
+    default:
+      return '';
+  }
+}

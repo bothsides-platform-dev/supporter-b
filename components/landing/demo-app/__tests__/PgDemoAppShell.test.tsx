@@ -88,11 +88,3 @@ describe('PgDemoAppShell — 클릭 대기(자동재생 없음)', () => {
   });
 });
 
-describe('PgDemoAppShell — 코치마크', () => {
-  beforeEach(stubMatchMedia);
-
-  it('데모가 뷰에 들어오면 showCue를 켠다', () => {
-    render(<PgDemoAppShell />);
-    expect(screen.getByTestId('page-home')).toHaveAttribute('data-cue', 'true');
-  });
-});

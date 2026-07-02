@@ -29,6 +29,14 @@ const PAGE_TRIGGER: Record<number, string> = {
   4: '[data-demo-cursor]', // 메시지 전송 버튼(종착 — 커서만 얹음)
 };
 
+// 각 단계에서 커서 옆에 힌트처럼 붙이는 안내 메시지(PG 데모).
+const PAGE_HINT: Record<number, string> = {
+  1: '받은 요청과 메시지를 한눈에 볼 수 있어요',
+  2: '받은 견적 요청을 눌러 상세를 확인해요',
+  3: '조건을 입력하고 견적을 제출해요',
+  4: '구매사와 바로 메시지를 주고받아요',
+};
+
 const sidebarStyle = {
   '--sidebar-width': 'var(--shell-sidebar)',
   '--sidebar-width-icon': '3rem',
@@ -85,20 +93,22 @@ export function PgDemoAppShell() {
             <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
               <MobileShellBar workspaceName={demoPgWorkspaceName} />
               <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-                {page === 1 && <PgHomePageHost showCue={inView} />}
-                {page === 2 && <PgInboxPageHost onOpenRfp={() => goToPage(3)} showCue={inView} />}
+                {page === 1 && <PgHomePageHost />}
+                {page === 2 && <PgInboxPageHost onOpenRfp={() => goToPage(3)} />}
                 {page === 3 && (
-                  <PgDealRoomPageHost
-                    onGuestSubmit={() => window.location.assign('/signup/pg')}
-                    showCue={inView}
-                  />
+                  <PgDealRoomPageHost onGuestSubmit={() => window.location.assign('/signup/pg')} />
                 )}
-                {page === 4 && <PgMessagesPageHost showCue={inView} />}
+                {page === 4 && <PgMessagesPageHost />}
               </div>
             </SidebarInset>
           </SidebarProvider>
           {inView && (
-            <DemoCursor windowRef={rootRef} selector={PAGE_TRIGGER[page] || null} page={page} />
+            <DemoCursor
+              windowRef={rootRef}
+              selector={PAGE_TRIGGER[page] || null}
+              page={page}
+              hint={PAGE_HINT[page]}
+            />
           )}
         </div>
       </div>
