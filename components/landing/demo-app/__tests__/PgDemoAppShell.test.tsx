@@ -74,6 +74,21 @@ describe('PgDemoAppShell — 클릭 인플레이스 내비게이션', () => {
   });
 });
 
+describe('PgDemoAppShell — 사이드바 토글 비활성화', () => {
+  beforeEach(() => {
+    stubMatchMedia();
+    document.cookie = 'sidebar_state=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  });
+
+  it('모바일 헤더의 사이드바 토글 클릭이 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<PgDemoAppShell />);
+    const trigger = document.querySelector('[data-sidebar="trigger"]');
+    expect(trigger).not.toBeNull();
+    fireEvent.click(trigger!);
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+});
+
 describe('PgDemoAppShell — 클릭 대기(자동재생 없음)', () => {
   beforeEach(() => {
     stubMatchMedia();

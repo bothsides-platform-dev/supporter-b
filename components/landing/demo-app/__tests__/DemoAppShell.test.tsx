@@ -121,6 +121,22 @@ describe('DemoAppShell — 모바일(사이드바 off-canvas 대체)', () => {
   });
 });
 
+describe('DemoAppShell — 사이드바 토글 비활성화', () => {
+  beforeEach(() => {
+    stubMatchMedia();
+    document.cookie = 'sidebar_state=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  });
+
+  it('모바일 헤더의 사이드바 토글 클릭이 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<DemoAppShell />);
+    const trigger = document.querySelector('[data-sidebar="trigger"]');
+    expect(trigger).not.toBeNull();
+    fireEvent.click(trigger!);
+    // 클릭이 새 나가면 SidebarProvider.setOpen 이 sidebar_state 쿠키를 기록한다.
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+});
+
 describe('DemoAppShell — 클릭 대기(자동재생 없음)', () => {
   beforeEach(() => {
     stubMatchMedia();
