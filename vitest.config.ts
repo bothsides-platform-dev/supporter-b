@@ -79,6 +79,7 @@ export default defineConfig({
             "app/__tests__/**/*.{test,spec}.{ts,tsx}",
             "app/\\(app\\)/**/*.{test,spec}.{ts,tsx}",
             "app/\\(public\\)/**/*.{test,spec}.{ts,tsx}",
+            "app/pg-landing/**/*.{test,spec}.{ts,tsx}",
             "lib/hooks/**/*.{test,spec}.{ts,tsx}",
             "lib/stores/**/*.{test,spec}.{ts,tsx}",
             "lib/nav/**/*.{test,spec}.{ts,tsx}",
