@@ -146,9 +146,12 @@ export function OfferComparisonTable({
     update();
     el.addEventListener('scroll', update);
     window.addEventListener('resize', update);
+    const resizeObserver = new ResizeObserver(update);
+    resizeObserver.observe(el);
     return () => {
       el.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
+      resizeObserver.disconnect();
     };
   }, [showScrollFade]);
 
@@ -163,7 +166,7 @@ export function OfferComparisonTable({
       <div className="relative">
         <div
           ref={scrollRef}
-          data-testid="offer-table-scroll-container"
+          data-testid={showScrollFade ? 'offer-table-scroll-container' : undefined}
           className="overflow-x-auto snap-x snap-proximity rounded-md border border-[var(--md-sys-color-outline-variant)]"
         >
           <table className="w-full min-w-[680px] border-collapse text-left">
