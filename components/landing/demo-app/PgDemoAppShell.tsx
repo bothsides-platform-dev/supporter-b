@@ -83,10 +83,16 @@ export function PgDemoAppShell() {
         {/* relative 래퍼(overflow-hidden 아님) — 커서를 데모 창 밖에 두어, 힌트·스크롤 안내가
             창 경계를 넘어가도 잘리지 않고 데모 섹션 밖으로 보이게 한다. */}
         <div className="relative">
+          {/* 스크롤로 데모가 뷰포트에 들어오면 100%→110%로 살짝 확대(랜딩 진입 스케일 —
+              DESIGN.md §9③ 예외). translateZ(0)는 컴포지팅 레이어 승격용으로 스케일과 함께 유지. */}
           <div
             ref={rootRef}
             onClickCapture={onClickCapture}
-            className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)] [transform:translateZ(0)]"
+            style={{
+              transform: `translateZ(0) scale(${inView ? 1.1 : 1})`,
+              transition: 'transform 700ms cubic-bezier(0.22, 1, 0.36, 1)',
+            }}
+            className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)]"
           >
             <SidebarProvider style={sidebarStyle}>
               <DemoSidebar
