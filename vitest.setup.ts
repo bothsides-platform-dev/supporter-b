@@ -34,6 +34,18 @@ if (typeof window !== "undefined") {
   const realLocalStorage = jsdomWindow?.localStorage;
   const realSessionStorage = jsdomWindow?.sessionStorage;
   const realStorageCtor = jsdomWindow?.Storage;
+  // `window.jsdom` is a vitest-internal stash, not a public API — if a future
+  // vitest upgrade removes/renames it, every check below silently becomes a
+  // no-op and this file quietly regresses to the exact shadowed-Storage bug
+  // it exists to fix (with no test to catch it, since the bug only manifests
+  // as unrelated test files crashing). Fail loudly instead.
+  if (!jsdomWindow) {
+    console.warn(
+      "[vitest.setup] window.jsdom not found — jsdom localStorage/sessionStorage/Storage " +
+        "may be shadowed by Node's own globals again. Check vitest's internal environments.js " +
+        "still sets `dom.window.jsdom = dom`.",
+    );
+  }
   if (realStorageCtor) {
     Object.defineProperty(globalThis, "Storage", {
       configurable: true,
