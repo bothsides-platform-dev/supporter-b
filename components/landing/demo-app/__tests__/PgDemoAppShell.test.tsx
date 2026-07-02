@@ -74,6 +74,49 @@ describe('PgDemoAppShell — 클릭 인플레이스 내비게이션', () => {
   });
 });
 
+describe('PgDemoAppShell — 사이드바 토글 비활성화', () => {
+  beforeEach(() => {
+    stubMatchMedia();
+    document.cookie = 'sidebar_state=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  });
+
+  it('모바일 헤더의 사이드바 토글 클릭이 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<PgDemoAppShell />);
+    const trigger = document.querySelector('[data-sidebar="trigger"]');
+    expect(trigger).not.toBeNull();
+    fireEvent.click(trigger!);
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('⌘/Ctrl+B 단축키가 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<PgDemoAppShell />);
+    fireEvent.keyDown(window, { key: 'b', metaKey: true });
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('Ctrl+B(모디파이어 조합)도 동일하게 막는다', () => {
+    render(<PgDemoAppShell />);
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('모디파이어 없는 b, 또는 b가 아닌 단축키는 막지 않는다', () => {
+    render(<PgDemoAppShell />);
+    const plainB = fireEvent.keyDown(window, { key: 'b' });
+    const cmdK = fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    expect(plainB).toBe(true);
+    expect(cmdK).toBe(true);
+  });
+
+  it('언마운트 시 keydown 캡처 리스너를 정리한다', () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = render(<PgDemoAppShell />);
+    unmount();
+    expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    removeSpy.mockRestore();
+  });
+});
+
 describe('PgDemoAppShell — 클릭 대기(자동재생 없음)', () => {
   beforeEach(() => {
     stubMatchMedia();
