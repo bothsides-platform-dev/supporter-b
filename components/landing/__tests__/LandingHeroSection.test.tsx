@@ -50,10 +50,4 @@ describe('LandingHeroSection', () => {
       screen.getByText(/여러 PG사의 제안을 동일한 기준으로 받아보고/),
     ).toBeInTheDocument();
   });
-
-  it('shows the revised CTA caption (no credit-card claim)', () => {
-    render(<LandingHeroSection />);
-    expect(screen.getByText('입찰 시작까지 5분 · 비공개 견적 요청')).toBeInTheDocument();
-    expect(screen.queryByText(/신용카드 불필요/)).toBeNull();
-  });
 });

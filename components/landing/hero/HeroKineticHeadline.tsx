@@ -1,8 +1,9 @@
 'use client';
 
-import { Fragment, useState, useEffect } from 'react';
+import { Fragment } from 'react';
 import { motion } from 'motion/react';
 import { EASE_OUT } from '@/lib/landing/ease';
+import { ScrambleText } from './ScrambleText';
 
 const TYPING_VALUES = [
   '협상의 주도권을',
@@ -13,44 +14,6 @@ const TYPING_VALUES = [
 ];
 
 const LINE1_WORDS = ['Supporter', 'B를', '통해'];
-
-function useTypewriter(
-  values: string[],
-  typingMs = 60,
-  deletingMs = 30,
-  holdMs = 1800,
-): string {
-  const [displayText, setDisplayText] = useState(values[0]);
-  const [index, setIndex] = useState(0);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    const current = values[index];
-
-    if (!isDeleting && displayText === current) {
-      const hold = setTimeout(() => setIsDeleting(true), holdMs);
-      return () => clearTimeout(hold);
-    }
-
-    if (isDeleting && displayText === '') {
-      const advance = setTimeout(() => {
-        setIsDeleting(false);
-        setIndex((i) => (i + 1) % values.length);
-      }, 0);
-      return () => clearTimeout(advance);
-    }
-
-    const speed = isDeleting ? deletingMs : typingMs;
-    const next = isDeleting
-      ? displayText.slice(0, -1)
-      : current.slice(0, displayText.length + 1);
-
-    const timer = setTimeout(() => setDisplayText(next), speed);
-    return () => clearTimeout(timer);
-  }, [displayText, index, isDeleting, values, typingMs, deletingMs, holdMs]);
-
-  return displayText;
-}
 
 const headlineCls =
   'text-[clamp(30px,5.5vw,72px)] leading-[1.06] tracking-[-0.028em] font-medium break-keep';
@@ -75,8 +38,6 @@ function MaskedWord({ word, delay }: { word: string; delay: number }) {
 // 다크 오프닝 씬 위의 헤드라인 — 색은 inverse-* 토큰(라이트 테마에서 near-black 위 라이트 텍스트,
 // 다크 테마에서는 반전)으로 해석돼 파이널 CTA 인버티드 섹션과 같은 규칙을 따른다.
 export function HeroKineticHeadline() {
-  const displayText = useTypewriter(TYPING_VALUES);
-
   return (
     <div className="flex flex-col gap-0">
       <h1 className={`${headlineCls} text-[var(--md-sys-color-inverse-on-surface)]`}>
@@ -94,13 +55,10 @@ export function HeroKineticHeadline() {
           transition={{ duration: 0.6, delay: 0.32, ease: EASE_OUT }}
           className="flex items-baseline flex-wrap will-change-transform"
         >
-          <span
-            suppressHydrationWarning
+          <ScrambleText
+            phrases={TYPING_VALUES}
             className="text-[var(--md-sys-color-inverse-primary)]"
-          >
-            {displayText}
-          </span>
-          <span className="blink-cursor text-[var(--md-sys-color-inverse-primary)]">|</span>
+          />
           <span className="text-[var(--md-sys-color-inverse-on-surface)]">&nbsp;만듭니다.</span>
         </motion.div>
       </div>
