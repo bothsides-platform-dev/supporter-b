@@ -13,6 +13,7 @@
  */
 
 import { isLoopBreakEscape } from './logout-loop';
+import { appOrigins, hostServes } from '../site-routing';
 
 const PUBLIC_PREFIXES = [
   '/login',
@@ -32,6 +33,7 @@ const ALWAYS_PASSTHROUGH_PREFIXES = [
   '/pending-approval',
   '/suspended',
   '/auth/verify', // 이메일 매직링크는 인증 상태와 무관하게 항상 접근 가능해야 함
+  '/pg-landing', // PG 호스트 "/" 의 rewrite 대상 — 직접 접근도 항상 공개
 ];
 
 const CLAIMABLE_PUBLIC_PREFIXES = ['/invite/rfp'];
@@ -43,7 +45,8 @@ const GUEST_ACCESSIBLE_PATHS: string[] = [];
 
 export type RouteDecision =
   | { kind: 'next' }
-  | { kind: 'redirect'; to: string };
+  | { kind: 'redirect'; to: string }
+  | { kind: 'rewrite'; to: string };
 
 export type ProxyDecision = RouteDecision | { kind: 'escape' };
 
@@ -51,8 +54,14 @@ export function decideRoute(
   pathname: string,
   search: string,
   isAuthenticated: boolean,
+  host: string | null = null,
 ): RouteDecision {
   if (pathname === '/') {
+    // partner 호스트(PG)는 정적으로 미리 빌드된 /pg-landing 을 내부적으로 서빙한다
+    // (URL은 "/" 그대로). buyer 호스트/단일 호스트(local·dev)는 그대로 통과.
+    if (hostServes(host, appOrigins()) === 'pg') {
+      return { kind: 'rewrite', to: '/pg-landing' };
+    }
     return { kind: 'next' };
   }
 
@@ -93,7 +102,8 @@ export function decideProxyRoute(
   search: string,
   isAuthenticated: boolean,
   breakFlag: string | undefined | null,
+  host: string | null = null,
 ): ProxyDecision {
   if (isLoopBreakEscape(pathname, breakFlag)) return { kind: 'escape' };
-  return decideRoute(pathname, search, isAuthenticated);
+  return decideRoute(pathname, search, isAuthenticated, host);
 }

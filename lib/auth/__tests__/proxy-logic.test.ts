@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { decideRoute, decideProxyRoute } from '../route-decision';
 
 describe('decideRoute — Step 3 four cases', () => {
@@ -93,6 +93,32 @@ describe('admin + gate 라우트 패스스루', () => {
 
   it('/suspended 는 로그인된 사용자도 접근 가능', () => {
     expect(decideRoute('/suspended', '', true)).toEqual({ kind: 'next' });
+  });
+});
+
+describe('decideRoute — PG 호스트 "/" 는 정적 /pg-landing 으로 rewrite', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'https://supporter-b.com');
+    vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.supporter-b.com');
+  });
+
+  it('partner 호스트의 "/" 는 /pg-landing 으로 rewrite된다', () => {
+    expect(decideRoute('/', '', false, 'partner.supporter-b.com')).toEqual({
+      kind: 'rewrite',
+      to: '/pg-landing',
+    });
+  });
+
+  it('buyer 호스트의 "/" 는 그대로 pass-through', () => {
+    expect(decideRoute('/', '', false, 'supporter-b.com')).toEqual({ kind: 'next' });
+  });
+
+  it('단일 호스트(local/dev, host 없음)는 그대로 pass-through', () => {
+    expect(decideRoute('/', '', false, null)).toEqual({ kind: 'next' });
+  });
+
+  it('host 인자를 생략해도 기존과 동일하게 pass-through (하위호환)', () => {
+    expect(decideRoute('/', '', false)).toEqual({ kind: 'next' });
   });
 });
 
