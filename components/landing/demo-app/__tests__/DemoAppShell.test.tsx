@@ -5,8 +5,17 @@ import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 
 vi.mock('motion/react', () => ({ useInView: () => true }));
 vi.mock('@/lib/landing/prefers-reduced-motion', () => ({ prefersReducedMotion: () => false }));
+// 커서는 자체 관심사 — 셸의 오케스트레이션(클릭 인터셉트) 테스트에서는 stub.
+// 단, 모바일 분기 검증을 위해 넘겨받은 selector 를 캡처한다.
+const cursorCapture = vi.hoisted(() => ({ selector: undefined as string | null | undefined }));
+vi.mock('../DemoCursor', () => ({
+  DemoCursor: ({ selector }: { selector: string | null }) => {
+    cursorCapture.selector = selector;
+    return null;
+  },
+}));
 
-// 자식은 각각 자체 테스트 보유 — 셸의 오케스트레이션(투어 + 링크 인터셉트)에 집중하도록 stub.
+// 자식은 각각 자체 테스트 보유 — 셸의 오케스트레이션(클릭 내비게이션)에 집중하도록 stub.
 vi.mock('../DemoSidebar', () => ({
   DemoSidebar: () => (
     <nav>
@@ -17,9 +26,7 @@ vi.mock('../DemoSidebar', () => ({
   ),
 }));
 vi.mock('../pages/HomePageHost', () => ({
-  HomePageHost: ({ showCue }: { showCue?: boolean }) => (
-    <div data-testid="page-home" data-cue={String(showCue)} />
-  ),
+  HomePageHost: () => <div data-testid="page-home" />,
 }));
 vi.mock('../pages/RfpListPageHost', () => ({
   RfpListPageHost: ({ onOpenRfp }: { onOpenRfp: (c: string) => void }) => (
@@ -47,7 +54,7 @@ function stubMatchMedia() {
 
 afterEach(cleanup);
 
-describe('DemoAppShell — 인플레이스 내비게이션', () => {
+describe('DemoAppShell — 클릭 인플레이스 내비게이션', () => {
   beforeEach(stubMatchMedia);
 
   it('초기에는 홈 페이지를 보여준다', () => {
@@ -70,75 +77,106 @@ describe('DemoAppShell — 인플레이스 내비게이션', () => {
     expect(screen.getByTestId('page-deal')).toBeInTheDocument();
   });
 
-  it('데모에 없는 라우트(알림) 클릭은 페이지를 유지하고 투어도 멈추지 않는다', () => {
-    vi.useFakeTimers();
+  it('데모에 없는 라우트(알림) 클릭은 페이지를 유지한다', () => {
     render(<DemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '알림' }));
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
-    for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(5000));
-    expect(screen.getByTestId('page-wizard')).toBeInTheDocument();
-    vi.useRealTimers();
-  });
-
-  it('스텝 바 클릭이 페이지를 전환하고 자동 투어를 멈춘다', () => {
-    vi.useFakeTimers();
-    render(<DemoAppShell />);
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: '3 견적 비교·선정' }));
-    });
-    expect(screen.getByTestId('page-deal')).toBeInTheDocument();
-    for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(5000));
-    expect(screen.getByTestId('page-deal')).toBeInTheDocument();
-    vi.useRealTimers();
   });
 });
 
-describe('DemoAppShell — 자동 투어/조작 하이브리드', () => {
+describe('DemoAppShell — 모바일(사이드바 off-canvas 대체)', () => {
+  const realWidth = window.innerWidth;
+  beforeEach(() => {
+    // useIsMobile 은 window.innerWidth < 768 을 본다.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 375 });
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true, media: '', onchange: null,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+    }) as unknown as typeof window.matchMedia;
+    cursorCapture.selector = undefined;
+  });
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: realWidth });
+  });
+
+  it('사이드바 단계(홈)에서 인-프레임 다음 버튼을 렌더하고 커서가 이를 가리킨다', () => {
+    render(<DemoAppShell />);
+    const next = document.querySelector('[data-demo-mobile-next]');
+    expect(next).not.toBeNull();
+    expect(cursorCapture.selector).toBe('[data-demo-mobile-next]');
+  });
+
+  it('다음 버튼 클릭이 다음 화면(목록)으로 진행한다', () => {
+    render(<DemoAppShell />);
+    fireEvent.click(document.querySelector('[data-demo-mobile-next]')!);
+    expect(screen.getByTestId('page-list')).toBeInTheDocument();
+  });
+
+  it('콘텐츠 내부 대상 단계(목록)에서는 다음 버튼 없이 기존 셀렉터를 유지한다', () => {
+    render(<DemoAppShell />);
+    fireEvent.click(document.querySelector('[data-demo-mobile-next]')!); // 홈→목록
+    expect(document.querySelector('[data-demo-mobile-next]')).toBeNull();
+    expect(cursorCapture.selector).toBe('tbody tr');
+  });
+});
+
+describe('DemoAppShell — 사이드바 토글 비활성화', () => {
+  beforeEach(() => {
+    stubMatchMedia();
+    document.cookie = 'sidebar_state=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  });
+
+  it('모바일 헤더의 사이드바 토글 클릭이 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<DemoAppShell />);
+    const trigger = document.querySelector('[data-sidebar="trigger"]');
+    expect(trigger).not.toBeNull();
+    fireEvent.click(trigger!);
+    // 클릭이 새 나가면 SidebarProvider.setOpen 이 sidebar_state 쿠키를 기록한다.
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('⌘/Ctrl+B 단축키가 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<DemoAppShell />);
+    fireEvent.keyDown(window, { key: 'b', metaKey: true });
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('Ctrl+B(모디파이어 조합)도 동일하게 막는다', () => {
+    render(<DemoAppShell />);
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('모디파이어 없는 b, 또는 b가 아닌 단축키는 막지 않는다', () => {
+    render(<DemoAppShell />);
+    const plainB = fireEvent.keyDown(window, { key: 'b' });
+    const cmdK = fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    // dispatchEvent 는 preventDefault 되지 않은 이벤트에서 true 를 반환한다.
+    expect(plainB).toBe(true);
+    expect(cmdK).toBe(true);
+  });
+
+  it('언마운트 시 keydown 캡처 리스너를 정리한다', () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = render(<DemoAppShell />);
+    unmount();
+    expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    removeSpy.mockRestore();
+  });
+});
+
+describe('DemoAppShell — 클릭 대기(자동재생 없음)', () => {
   beforeEach(() => {
     stubMatchMedia();
     vi.useFakeTimers();
   });
   afterEach(() => vi.useRealTimers());
 
-  it('뷰 안에서 시간이 지나면 페이지가 자동 전진한다', () => {
+  it('시간이 지나도 자동 전진하지 않는다 (클릭해야 넘어간다)', () => {
     render(<DemoAppShell />);
-    expect(screen.getByTestId('page-home')).toBeInTheDocument();
-    for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(5000));
-    expect(screen.getByTestId('page-wizard')).toBeInTheDocument();
-  });
-
-  it('사용자가 조작하면 자동 투어가 멈춘다', () => {
-    render(<DemoAppShell />);
-    fireEvent.pointerDown(screen.getByTestId('page-home'));
     for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(5000));
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 });
 
-describe('DemoAppShell — 코치마크 신호', () => {
-  beforeEach(stubMatchMedia);
-
-  it('가이드 중에는 showCue를 켜고, 방문자가 조작하면 끈다', () => {
-    render(<DemoAppShell />);
-    expect(screen.getByTestId('page-home')).toHaveAttribute('data-cue', 'true');
-    fireEvent.pointerDown(screen.getByTestId('page-home'));
-    expect(screen.getByTestId('page-home')).toHaveAttribute('data-cue', 'false');
-  });
-});
-
-describe('DemoAppShell — 전환 직전 클릭 하이라이트', () => {
-  beforeEach(() => {
-    stubMatchMedia();
-    vi.useFakeTimers();
-  });
-  afterEach(() => vi.useRealTimers());
-
-  it('자동 전환 직전 트리거 요소(견적 요청)에 클릭 하이라이트 클래스를 입힌다', () => {
-    render(<DemoAppShell />);
-    const trigger = screen.getByRole('link', { name: '목록' }); // a[href="/rfp"]
-    expect(trigger).not.toHaveClass('demo-click-flash');
-    // 전환(5000ms) 직전: 하이라이트가 켜진다
-    act(() => vi.advanceTimersByTime(4000));
-    expect(trigger).toHaveClass('demo-click-flash');
-  });
-});

@@ -15,8 +15,6 @@ export function CostComparisonChart({
   const max = Math.max(currentCost, supporterBCost, 1);
   const currentRatio = currentCost / max;
   const supporterBRatio = supporterBCost / max;
-  const savings = Math.max(0, currentCost - supporterBCost);
-  const savingsPct = currentCost > 0 ? (savings / currentCost) * 100 : 0;
 
   return (
     <div className="flex flex-col gap-[var(--s-5)]">
@@ -42,22 +40,6 @@ export function CostComparisonChart({
           cost={supporterBCost}
           variant="supporter-b"
         />
-      </div>
-
-      <div className="flex items-baseline justify-between border-t border-[var(--md-sys-color-outline-variant)] pt-[var(--s-4)]">
-        <span className="font-mono text-[var(--text-2xs)] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-          연간 절감
-        </span>
-        <div className="flex items-baseline gap-3">
-          <span className="font-mono tabular-nums text-[var(--text-2xl)] tracking-[-0.02em] text-[var(--md-sys-color-tertiary)] font-light">
-            {formatKRW(savings)}
-          </span>
-          {currentCost > 0 && (
-            <span className="font-mono tabular-nums text-[var(--text-xs)] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)]">
-              ▾ {savingsPct.toFixed(1)}%
-            </span>
-          )}
-        </div>
       </div>
     </div>
   );

@@ -7,17 +7,14 @@ import type {
   BizProfileRepo,
   ContractRepo,
   InvitationRepo,
-  OutboxRepo,
   PgRequestRepo,
   RfpAllowedPgRepo,
   RfpRepo,
   RfpRequoteRequestRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
-import {
-  dispatchNotification,
-  emitAfterCommit,
-} from '@/lib/server/notifications/dispatch';
+import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
+import { notify } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderRfpAwarded } from '@/lib/server/outbox/templates/rfpAwarded';
 import { renderRfpInvited } from '@/lib/server/outbox/templates/rfpInvited';
@@ -68,7 +65,6 @@ export class RfpService {
     private readonly _db: any,
     private readonly rfpRepo: RfpRepo,
     private readonly contractRepo: ContractRepo,
-    private readonly outboxRepo: OutboxRepo,
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly bidRepo: BidRepo,
     private readonly invitationRepo: InvitationRepo,
@@ -142,68 +138,63 @@ export class RfpService {
 
       const rfpCode = rfp.code;
 
-      // Batch-fetch member IDs for winner + all unique loser workspaces in a single IN-query.
+      // Batch-fetch recipients (userId + email) for winner + all unique loser
+      // workspaces in a single IN-query, grouped by workspace.
       const allPgWsIds = [winner.pgWsId, ...loserWsIds];
-      const memberIdsMap = await this.workspaceRepo.memberUserIdsBatch(allPgWsIds, tx);
-
-      // winner: in-app + email per member
-      const winnerUserIds = memberIdsMap.get(winner.pgWsId) ?? [];
-      for (const userId of winnerUserIds) {
-        const notif: Notification = {
-          id: randomUUID(),
-          userId,
-          workspaceId: winner.pgWsId,
-          type: 'rfp.awarded',
-          title: `[${rfpCode}] 선정됐어요`,
-          body: '보내신 견적이 최종 선정됐어요.',
-          channel: 'inapp',
-          status: 'pending',
-          linkUrl: `/inbox/${rfpCode}`,
-          createdAt: new Date().toISOString(),
-        };
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
+      const recipientRows = await this.workspaceRepo.memberRecipientsBatch(allPgWsIds, tx);
+      const recipientsByWs = new Map<string, { userId: string; email: string }[]>();
+      for (const row of recipientRows) {
+        const list = recipientsByWs.get(row.workspaceId) ?? [];
+        list.push({ userId: row.userId, email: row.email });
+        recipientsByWs.set(row.workspaceId, list);
       }
 
-      const winnerEmails = await this.workspaceRepo.memberEmails(winner.pgWsId, tx);
+      // winner: in-app + email per member
+      const winnerRecipients = (recipientsByWs.get(winner.pgWsId) ?? []).map((m) => ({
+        userId: m.userId,
+        workspaceId: winner.pgWsId,
+        email: m.email,
+      }));
       const awardedHtml = await renderRfpAwarded({
         rfpId: rfpCode,
         rfpTitle: rfp.title,
         bidId: awardedBidId,
         settlementCycle: winner.settleCycle,
       });
-      for (const email of winnerEmails) {
-        await this.outboxRepo.enqueue(
-          {
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: winnerRecipients,
+          channels: ['inapp', 'email'],
+          type: 'rfp.awarded',
+          title: `[${rfpCode}] 선정됐어요`,
+          body: '보내신 견적이 최종 선정됐어요.',
+          linkUrl: `/inbox/${rfpCode}`,
+          email: {
             event: 'rfp.awarded',
-            to: email,
             subject: `[Supporter B · ${rfpCode}] 선정 결과`,
             html: awardedHtml,
-            dedupeKey: `rfp:${rfpId}:awarded:${email}`,
+            dedupeKey: (email) => `rfp:${rfpId}:awarded:${email}`,
           },
-          tx,
-        );
-      }
+        })),
+      );
 
       // losers: in-app only — iterate unique workspaces to avoid duplicates
       for (const loserWsId of loserWsIds) {
-        const loserUserIds = memberIdsMap.get(loserWsId) ?? [];
-        for (const userId of loserUserIds) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId,
-            workspaceId: loserWsId,
+        const loserRecipients = (recipientsByWs.get(loserWsId) ?? []).map((m) => ({
+          userId: m.userId,
+          workspaceId: loserWsId,
+          email: m.email,
+        }));
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: loserRecipients,
+            channels: ['inapp'],
             type: 'rfp.rejected',
             title: `[${rfpCode}] 이번엔 선정되지 않았어요`,
             body: '다른 PG가 선정됐어요.',
-            channel: 'inapp',
-            status: 'pending',
             linkUrl: `/inbox/${rfpCode}`,
-            createdAt: new Date().toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-        }
+          })),
+        );
       }
 
       return { ok: true as const };
@@ -257,25 +248,29 @@ export class RfpService {
         ),
       ];
 
-      const cancelMemberMap = await this.workspaceRepo.memberUserIdsBatch(submittedPgWsIds, tx);
+      const cancelRecipientRows = await this.workspaceRepo.memberRecipientsBatch(submittedPgWsIds, tx);
+      const cancelByWs = new Map<string, { userId: string; email: string }[]>();
+      for (const row of cancelRecipientRows) {
+        const list = cancelByWs.get(row.workspaceId) ?? [];
+        list.push({ userId: row.userId, email: row.email });
+        cancelByWs.set(row.workspaceId, list);
+      }
       for (const pgWsId of submittedPgWsIds) {
-        const memberIds = cancelMemberMap.get(pgWsId) ?? [];
-        for (const userId of memberIds) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId,
-            workspaceId: pgWsId,
+        const recipients = (cancelByWs.get(pgWsId) ?? []).map((m) => ({
+          userId: m.userId,
+          workspaceId: pgWsId,
+          email: m.email,
+        }));
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients,
+            channels: ['inapp'],
             type: 'rfp.cancelled',
             title: `[${rfpCode}] 취소됨`,
             body: '구매사가 견적 요청을 취소했어요.',
-            channel: 'inapp',
-            status: 'pending',
             linkUrl: `/inbox/${rfpCode}`,
-            createdAt: new Date().toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-        }
+          })),
+        );
       }
 
       return { ok: true as const };
@@ -327,25 +322,29 @@ export class RfpService {
         ),
       ];
 
-      const closeMemberMap = await this.workspaceRepo.memberUserIdsBatch(submittedPgWsIds, tx);
+      const closeRecipientRows = await this.workspaceRepo.memberRecipientsBatch(submittedPgWsIds, tx);
+      const closeByWs = new Map<string, { userId: string; email: string }[]>();
+      for (const row of closeRecipientRows) {
+        const list = closeByWs.get(row.workspaceId) ?? [];
+        list.push({ userId: row.userId, email: row.email });
+        closeByWs.set(row.workspaceId, list);
+      }
       for (const pgWsId of submittedPgWsIds) {
-        const memberIds = closeMemberMap.get(pgWsId) ?? [];
-        for (const userId of memberIds) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId,
-            workspaceId: pgWsId,
+        const recipients = (closeByWs.get(pgWsId) ?? []).map((m) => ({
+          userId: m.userId,
+          workspaceId: pgWsId,
+          email: m.email,
+        }));
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients,
+            channels: ['inapp'],
             type: 'rfp.closed',
             title: `[${rfpCode}] 마감됨`,
             body: '구매사가 견적 요청을 마감했어요.',
-            channel: 'inapp',
-            status: 'pending',
             linkUrl: `/inbox/${rfpCode}`,
-            createdAt: new Date().toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-        }
+          })),
+        );
       }
 
       return { ok: true as const };
@@ -372,22 +371,20 @@ export class RfpService {
 
       await this.pgRequestRepo.markDecided(req.id, 'rejected', actor.userId, now, tx);
 
-      const pgMemberIds = await this.workspaceRepo.memberUserIds(req.pgWsId, tx);
-      for (const userId of pgMemberIds) {
-        const notif: Notification = {
-          id: randomUUID(),
-          userId,
-          workspaceId: req.pgWsId,
+      const rejectRecipients = (await this.workspaceRepo.memberRecipients(req.pgWsId, tx)).map((m) => ({
+        userId: m.userId,
+        workspaceId: req.pgWsId,
+        email: m.email,
+      }));
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: rejectRecipients,
+          channels: ['inapp'],
           type: 'pg.request.rejected',
           title: `[${rfpRow.code}] 참여 요청 마감`,
           body: '아쉽지만 이번 RFP에는 참여가 어려워요.',
-          channel: 'inapp',
-          status: 'pending',
-          createdAt: now.toISOString(),
-        };
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
-      }
+        })),
+      );
 
       return { ok: true as const };
     });
@@ -437,23 +434,21 @@ export class RfpService {
 
       const pgWsName = (await this.workspaceRepo.getName(actor.workspaceId, tx)) ?? 'PG사';
 
-      const buyerMemberIds = await this.workspaceRepo.memberUserIds(rfpRow.buyerWsId, tx);
-      for (const userId of buyerMemberIds) {
-        const notif: Notification = {
-          id: randomUUID(),
-          userId,
-          workspaceId: rfpRow.buyerWsId,
+      const createReqRecipients = (await this.workspaceRepo.memberRecipients(rfpRow.buyerWsId, tx)).map((m) => ({
+        userId: m.userId,
+        workspaceId: rfpRow.buyerWsId,
+        email: m.email,
+      }));
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: createReqRecipients,
+          channels: ['inapp'],
           type: 'pg.request.received',
           title: `[${rfpCode}] 새 참여 요청`,
           body: `${pgWsName}가 이 견적 요청에 참여를 요청했어요.`,
-          channel: 'inapp',
-          status: 'pending',
           linkUrl: `/rfp/${rfpCode}`,
-          createdAt: now.toISOString(),
-        };
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
-      }
+        })),
+      );
 
       return { ok: true as const };
     });
@@ -526,36 +521,37 @@ export class RfpService {
             deadline: deadlineDisplay,
             inviteUrl,
           });
-          await this.outboxRepo.enqueue(
-            {
+          await notify(tx, {
+            recipients: [{ userId: admin.userId, workspaceId: req.pgWsId, email: admin.email }],
+            channels: ['email'],
+            type: 'rfp.invited',
+            title: '',
+            body: '',
+            email: {
               event: 'rfp.invited',
-              to: admin.email,
               subject: `[Supporter B · ${rfpRow.code}] 견적 요청이 도착했어요`,
               html,
-              dedupeKey: `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${admin.userId}`,
+              dedupeKey: () => `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${admin.userId}`,
             },
-            tx,
-          );
+          });
         }
       }
 
-      const pgMemberIds = await this.workspaceRepo.memberUserIds(req.pgWsId, tx);
-      for (const userId of pgMemberIds) {
-        const notif: Notification = {
-          id: randomUUID(),
-          userId,
-          workspaceId: req.pgWsId,
+      const acceptRecipients = (await this.workspaceRepo.memberRecipients(req.pgWsId, tx)).map((m) => ({
+        userId: m.userId,
+        workspaceId: req.pgWsId,
+        email: m.email,
+      }));
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: acceptRecipients,
+          channels: ['inapp'],
           type: 'pg.request.accepted',
           title: `[${rfpRow.code}] 참여 요청 수락됨`,
           body: `${buyerName}가 참여 요청을 수락했어요. 이제 견적을 보낼 수 있어요.`,
-          channel: 'inapp',
-          status: 'pending',
           linkUrl: `/inbox/${rfpRow.code}`,
-          createdAt: now.toISOString(),
-        };
-        await dispatchNotification(tx, notif);
-        pendingEmits.push(notif);
-      }
+        })),
+      );
 
       await this.pgRequestRepo.markDecided(req.id, 'accepted', actor.userId, now, tx);
       return { ok: true as const };
@@ -662,22 +658,21 @@ export class RfpService {
 
       for (const pgWsId of uniquePgWsIds) {
         const members = membersByWs.get(pgWsId) ?? [];
-        for (const m of members) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId: m.userId,
-            workspaceId: pgWsId,
+        const recipients = members.map((m) => ({
+          userId: m.userId,
+          workspaceId: pgWsId,
+          email: m.email,
+        }));
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients,
+            channels: ['inapp'],
             type: 'rfp.invited',
             title: `[${rfpCode}] 견적 요청이 도착했어요`,
             body: `${buyerName}가 견적을 요청했어요.`,
-            channel: 'inapp',
-            status: 'pending',
             linkUrl: `/inbox/${rfpCode}`,
-            createdAt: new Date().toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-        }
+          })),
+        );
       }
 
       const now = new Date();
@@ -699,16 +694,19 @@ export class RfpService {
         const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
         const admins = wsMembers.filter((m) => m.role === 'admin' && m.approvalStatus === 'approved');
         for (const admin of admins) {
-          await this.outboxRepo.enqueue(
-            {
+          await notify(tx, {
+            recipients: [{ userId: admin.userId, workspaceId: draft.pgWsId, email: admin.email }],
+            channels: ['email'],
+            type: 'rfp.invited',
+            title: '',
+            body: '',
+            email: {
               event: 'rfp.invited',
-              to: admin.email,
               subject: `[Supporter B · ${rfpCode}] 견적 요청이 도착했어요`,
               html,
-              dedupeKey: `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${admin.userId}`,
+              dedupeKey: () => `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${admin.userId}`,
             },
-            tx,
-          );
+          });
         }
         sentCount += 1;
       }
@@ -826,29 +824,21 @@ export class RfpService {
         const adminRows = await this.workspaceRepo.adminRecipients(p.pgWsId, tx);
 
         for (const m of adminRows) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId: m.userId,
-            workspaceId: p.pgWsId,
-            type: 'rfp.requote_requested',
-            title: `[${rfp.code}] 견적 재요청이 도착했어요`,
-            body: `${buyerName}가 조건 개선을 요청했어요.`,
-            channel: 'inapp',
-            status: 'pending',
-            linkUrl: `/inbox/${rfp.code}`,
-            createdAt: now.toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-          await this.outboxRepo.enqueue(
-            {
-              event: 'rfp.requote_requested',
-              to: m.email,
-              subject: `[Supporter B · ${rfp.code}] 견적 재요청이 도착했어요`,
-              html,
-              dedupeKey: `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:user:${m.userId}`,
-            },
-            tx,
+          pendingEmits.push(
+            ...(await notify(tx, {
+              recipients: [{ userId: m.userId, workspaceId: p.pgWsId, email: m.email }],
+              channels: ['inapp', 'email'],
+              type: 'rfp.requote_requested',
+              title: `[${rfp.code}] 견적 재요청이 도착했어요`,
+              body: `${buyerName}가 조건 개선을 요청했어요.`,
+              linkUrl: `/inbox/${rfp.code}`,
+              email: {
+                event: 'rfp.requote_requested',
+                subject: `[Supporter B · ${rfp.code}] 견적 재요청이 도착했어요`,
+                html,
+                dedupeKey: () => `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:user:${m.userId}`,
+              },
+            })),
           );
         }
       }
@@ -1005,7 +995,6 @@ export class RfpService {
           );
 
           const adminRows = await this.workspaceRepo.adminRecipients(pgWsId, tx);
-
           for (const admin of adminRows) {
             const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
             const html = await renderRfpInvited({
@@ -1015,35 +1004,36 @@ export class RfpService {
               deadline: deadlineDisplay,
               inviteUrl,
             });
-            await this.outboxRepo.enqueue(
-              {
+            await notify(tx, {
+              recipients: [{ userId: admin.userId, workspaceId: pgWsId, email: admin.email }],
+              channels: ['email'],
+              type: 'rfp.invited',
+              title: '',
+              body: '',
+              email: {
                 event: 'rfp.invited',
-                to: admin.email,
                 subject: `[Supporter B · ${code}] 견적 요청이 도착했어요`,
                 html,
-                dedupeKey: `rfp:${rfpId}:invite:ws:${pgWsId}:user:${admin.userId}`,
+                dedupeKey: () => `rfp:${rfpId}:invite:ws:${pgWsId}:user:${admin.userId}`,
               },
-              tx,
-            );
+            });
           }
 
-          const allMemberIds = await this.workspaceRepo.memberUserIds(pgWsId, tx);
-          for (const userId of allMemberIds) {
-            const notif: Notification = {
-              id: randomUUID(),
-              userId,
-              workspaceId: pgWsId,
+          const inviteRecipients = (await this.workspaceRepo.memberRecipients(pgWsId, tx)).map((m) => ({
+            userId: m.userId,
+            workspaceId: pgWsId,
+            email: m.email,
+          }));
+          pendingEmits.push(
+            ...(await notify(tx, {
+              recipients: inviteRecipients,
+              channels: ['inapp'],
               type: 'rfp.invited',
               title: `[${code}] 견적 요청이 도착했어요`,
               body: `${buyerName}가 견적을 요청했어요.`,
-              channel: 'inapp',
-              status: 'pending',
               linkUrl: `/inbox/${code}`,
-              createdAt: now.toISOString(),
-            };
-            await dispatchNotification(tx, notif);
-            pendingEmits.push(notif);
-          }
+            })),
+          );
         }
       }
 
@@ -1071,7 +1061,6 @@ export async function getRfpService(): Promise<RfpService> {
       {
         getRfpRepo,
         getContractRepo,
-        getOutboxRepo,
         getWorkspaceRepo,
         getBidRepo,
         getInvitationRepo,
@@ -1090,7 +1079,6 @@ export async function getRfpService(): Promise<RfpService> {
     const [
       rfpRepo,
       contractRepo,
-      outboxRepo,
       wsRepo,
       bidRepo,
       invRepo,
@@ -1103,7 +1091,6 @@ export async function getRfpService(): Promise<RfpService> {
     ] = await Promise.all([
       getRfpRepo(),
       getContractRepo(),
-      getOutboxRepo(),
       getWorkspaceRepo(),
       getBidRepo(),
       getInvitationRepo(),
@@ -1119,7 +1106,6 @@ export async function getRfpService(): Promise<RfpService> {
       db,
       rfpRepo,
       contractRepo,
-      outboxRepo,
       wsRepo,
       bidRepo,
       invRepo,

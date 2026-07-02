@@ -14,7 +14,7 @@
 **4대 원칙**
 1. **구조는 느껴지되 보이지 않게** — 1px 저대비 보더(`outline-variant`)가 구획을 만든다. 그림자는 떠 있는 요소(팝오버·다이얼로그·command palette)에만.
 2. **표면 명도 계층** — 캔버스 → 사이드바/패널 → elevated 순으로 명도를 한 단계씩 올려(다크)/내려(라이트) 깊이를 표현. 사이드바는 콘텐츠보다 한 톤 dim.
-3. **조밀하고 빠르게** — 행 높이 ~32px, 본문 14px, 버튼 높이 28–36px(기본 `md` 32px). 인터랙션 피드백은 100ms 이내, transform/opacity/color만 애니메이트.
+3. **조밀하고 빠르게** — 행 높이 ~32px, 본문 14px, 버튼 높이 28–36px(기본 `md` 32px). 인터랙션 피드백은 100ms 이내, transform/opacity/color만 애니메이트. **랜딩·마케팅 면은 이 모션 제약에서 면제**된다(§9 "랜딩·마케팅 모션" 예외).
 4. **수치는 모노** — 금융 값(₩, %, 건수, 날짜, 제안번호)은 `.md-numeric`(tabular-nums). 수치 정렬이 신뢰의 시각이다.
 
 ---
@@ -175,13 +175,13 @@ surface-container-highest #E4E5E9               #202123
 | `--md-sys-motion-duration-medium-4` | 350ms | 드로어 슬라이드 |
 | `--md-sys-motion-duration-long-2` | 450ms | 큰 전환 |
 
-규칙: **transform·opacity·color/background/border만 애니메이트**. 레이아웃 속성(width/height/top/left/margin)은 애니메이트하지 않는다. 팝오버는 트리거 요소에서 스케일.
+규칙: **transform·opacity·color/background/border만 애니메이트**. 레이아웃 속성(width/height/top/left/margin)은 애니메이트하지 않는다. 팝오버는 트리거 요소에서 스케일. **단 랜딩·마케팅 면은 이 규칙과 `prefers-reduced-motion` 존중에서 면제된다** — §9 "랜딩·마케팅 모션" 예외.
 
 ### 로딩 모션 — 기능적 모션 허용
 
-넓은 영역의 로딩은 **펄스 스켈레톤**(`animate-pulse`, `components/ui/skeleton.tsx` — `surface-container-high` 바·`rounded-md`), 인라인·작은 자리(타이핑 인디케이터·전송 대기 점)는 **펄스 점**으로 표시한다. 둘 다 `prefers-reduced-motion: reduce`를 존중해 저감 시 정지/단순화한다. 스피너는 새 표면에 도입하지 않되, 기존 사용처(`RefreshHeaderButton` 의 `--animate-spin`/`--animate-spin-once`, 첨부 업로드 칩)는 유지한다. 짧은 진행 표시로 `LOADING…` 텍스트(body-medium)도 그대로 둔다. **장식적** 컨페티·강한 모멘텀 모션 금지는 §9에서 유지된다(두 예외: 축하 모먼트·테마 전환 리빌). 이 갱신은 코드 현실(스켈레톤이 이미 광범위 사용 중)과 문서를 정합시킨 것이다.
+넓은 영역의 로딩은 **펄스 스켈레톤**(`animate-pulse`, `components/ui/skeleton.tsx` — `surface-container-high` 바·`rounded-md`), 인라인·작은 자리(타이핑 인디케이터·전송 대기 점)는 **펄스 점**으로 표시한다. 둘 다 `prefers-reduced-motion: reduce`를 존중해 저감 시 정지/단순화한다. 스피너는 새 표면에 도입하지 않되, 기존 사용처(`RefreshHeaderButton` 의 `--animate-spin`/`--animate-spin-once`, 첨부 업로드 칩)는 유지한다. 짧은 진행 표시로 `LOADING…` 텍스트(body-medium)도 그대로 둔다. **장식적** 컨페티·강한 모멘텀 모션 금지는 §9에서 유지된다(세 예외: 축하 모먼트·테마 전환 리빌·랜딩/마케팅 모션). 이 갱신은 코드 현실(스켈레톤이 이미 광범위 사용 중)과 문서를 정합시킨 것이다.
 
-> **추가 키프레임**(`app/globals.css`): `spin-once`(0.6s 1회전 — 리프레시 클릭), `blink-cursor`(0.7s — 타이핑 커서), `process-progress`(5s scaleX — 스텝퍼 자동 전환, `prefers-reduced-motion: no-preference` 게이트). 모두 transform/opacity만 만진다.
+> **추가 키프레임**(`app/globals.css`): `spin-once`(0.6s 1회전 — 리프레시 클릭), `process-progress`(5s scaleX — 스텝퍼 자동 전환, `prefers-reduced-motion: no-preference` 게이트). 모두 transform/opacity만 만진다.
 
 ---
 
@@ -319,12 +319,12 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - **No** 호버 시 그림자 승급 — 호버는 배경 명도 변화만.
 - **No** 과도한 고도/스큐어모픽 그림자 — 대부분 보더 또는 elevation-1, 큰 그림자는 floating에만.
 - **No** 강한(고대비) 디바이더 — 기본은 `outline-variant`(저대비).
-- **No** 네온/글로우/글래스모피즘/블러 오브.
+- **No** 네온/글로우/글래스모피즘/블러 오브 — 단 하나의 좁은 예외: **랜딩 히어로 다크 씬의 소프트 블룸**(아래 "랜딩·마케팅 모션" 예외 블록 ⑤에 등록).
 - **No** 내비/라벨에 font-mono uppercase wide-tracking — sentence case + 약한 음수 자간. `.md-numeric`은 금융 수치에만.
 - **No** 큰 본문(16px+) — 앱 본문은 14px, 조밀하게.
 - **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + JetBrains Mono만.
 - **No** 브래킷 상태 태그 `[ 결재중 ]` — Chip 사용.
-- **No** 장식적 컨페티·강한 모멘텀 모션 — 아래 두 예외(축하 모먼트·테마 전환 리빌)를 제외하고 허용하지 않는다. **단 기능적 로딩 모션은 허용**: 넓은 영역은 펄스 스켈레톤(`ui/skeleton.tsx`), 인라인·타이핑 인디케이터는 펄스 점. 모두 `prefers-reduced-motion: reduce`를 존중한다(저감 시 정지). 자세한 원칙은 §6 "로딩 모션" 참조.
+- **No** 장식적 컨페티·강한 모멘텀 모션 — 아래 세 예외(축하 모먼트·테마 전환 리빌·랜딩/마케팅 모션)를 제외하고 허용하지 않는다. **단 기능적 로딩 모션은 허용**: 넓은 영역은 펄스 스켈레톤(`ui/skeleton.tsx`), 인라인·타이핑 인디케이터는 펄스 점. 모두 `prefers-reduced-motion: reduce`를 존중한다(저감 시 정지). 자세한 원칙은 §6 "로딩 모션" 참조.
 
 > **예외 — 축하 모먼트 (Celebration Moment).** 위 장식적 컨페티·강한 모션 금지에는
 > 단 하나의 좁은 예외가 있다. 다음 4조건을 **모두** 만족하는 종결 성공 순간에 한해
@@ -347,6 +347,17 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 > ④ `prefers-reduced-motion: reduce` 설정 시 또는 `startViewTransition` 미지원 브라우저에서 즉시 전환(애니메이션 없음).
 > 구현: `lib/theme/view-transition.ts` (`applyThemeWithTransition`) ←
 > `components/shell/ThemeToggle.tsx`. CSS: `app/globals.css` `::view-transition-*` 규칙.
+
+> **예외 — 랜딩·마케팅 모션 (Landing / Marketing Surfaces).** 비인증 랜딩·마케팅 면
+> (`components/landing/**`, `app/page.tsx`)은 위 "장식적·강한 모멘텀 모션 금지"와 §1·§6의
+> "transform/opacity만 애니메이트 + `prefers-reduced-motion` 존중" 하드룰에서 **전면 면제**된다.
+> 제품을 파는 마케팅 면이라 몰입형 스크롤 모션이 전환 목적에 부합하기 때문이다. 허용 범위:
+> ① 스크롤 연동 pin·패럴랙스·진입 스케일(`components/landing/ScrollPinnedSection.tsx` — sticky 트랙 + `motion/react` `useScroll`; 히어로 전용 240vh 핀 트랙 `components/landing/hero/HeroPinnedScene.tsx` 포함),
+> ② 단계별 가이드 커서·코치마크(`components/landing/demo-app/DemoCursor.tsx` 등),
+> ③ 누적 등장·크로스페이드·스크램블 조립(`components/landing/hero/ScrambleText.tsx` — 히어로 헤드라인 순환 문구, 배경 ASCII 필드와 같은 글리프 팔레트)·캐러셀,
+> ④ **`prefers-reduced-motion: reduce`를 존중하지 않고 모바일 포함 항상 재생해도 된다**(랜딩 한정 제품 결정),
+> ⑤ **히어로 다크 오프닝 씬의 소프트 블룸·앰비언트 글로우**(`components/landing/hero/HeroAsciiField.tsx` — 커서 궤적 글로우 + 앰비언트 워시). 모션 규칙이 아니라 위 "네온/글로우 금지" 시각 하드룰의 **사용자 승인 예외**로, 랜딩 히어로 다크 씬에 한정된다(터치 기기·동작 줄이기 선호에서는 커서 궤적 글로우 없이 정적 베이스 필드 + 앰비언트 워시만 렌더).
+> 인증 앱 면(`(app)/**`)에는 적용되지 않는다 — 그쪽은 §6 하드룰과 축하 모먼트·테마 전환 리빌 두 예외만 유효하다.
 
 ---
 

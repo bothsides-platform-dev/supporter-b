@@ -15,7 +15,8 @@ export default auth(async (req) => {
   // 루프 회로차단기 탈출 플래그. decideProxyRoute 가 escape 보다 평소 라우팅을
   // 우선시키지 않도록(우선순위는 그 순수 함수가 소유) 값만 넘긴다.
   const breakFlag = req.cookies.get(RL_BREAK)?.value;
-  const decision = decideProxyRoute(pathname, search, isAuthenticated, breakFlag);
+  const host = req.headers.get('host');
+  const decision = decideProxyRoute(pathname, search, isAuthenticated, breakFlag, host);
 
   // escape: /logout 회로차단기가 트립한 뒤 도착한 /login. authed 이지만 막힌 세션이라도
   // /home 으로 되튕기지 않고 /login 을 실제로 렌더한다(쿠키 클리어가 끝내 실패해도
@@ -27,6 +28,9 @@ export default auth(async (req) => {
   }
   if (decision.kind === 'redirect') {
     return NextResponse.redirect(new URL(decision.to, req.url));
+  }
+  if (decision.kind === 'rewrite') {
+    return NextResponse.rewrite(new URL(decision.to, req.url));
   }
   return NextResponse.next();
 });

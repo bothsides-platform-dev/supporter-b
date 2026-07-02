@@ -12,7 +12,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { rfps, rfpInvitations, bids } from '@/lib/db/schema';
+import { rfps, rfpInvitations, bids, outboxEntries } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 import {
   seedBizProfile,
   seedBuyerWorkspace,
@@ -296,5 +297,15 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     expect(recvWinner[0].type).toBe('rfp.awarded');
     expect(recvLoser).toHaveLength(1);
     expect(recvLoser[0].type).toBe('rfp.rejected');
+
+    // 통합 후: winner 이메일은 memberRecipientsBatch(notifiableAccount) 경유.
+    // 실계정 winnerUser 는 두 필터 모두 통과 → 이메일 1건 enqueue (델타 0 확인).
+    const winnerOutbox = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'rfp.awarded'));
+    expect(winnerOutbox).toHaveLength(1);
+    expect(winnerOutbox[0].toAddr).toBe('w@toss.im');
+    expect(winnerOutbox[0].dedupeKey).toBe(`rfp:${rfpId}:awarded:w@toss.im`);
   });
 });

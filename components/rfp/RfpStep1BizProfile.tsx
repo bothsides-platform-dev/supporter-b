@@ -96,7 +96,7 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
       )}
 
       <div className="flex justify-end pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
-        <Button type="button" size="md" onClick={onNext}>
+        <Button data-demo-cursor type="button" size="md" onClick={onNext}>
           다음
         </Button>
       </div>

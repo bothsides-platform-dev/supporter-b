@@ -5,6 +5,7 @@ import {
   annualMaxSavings,
   gradeFromVolume,
   minCurrentRate,
+  tierRangeLabel,
 } from '../savings';
 
 describe('minCurrentRate', () => {
@@ -30,5 +31,15 @@ describe('minCurrentRate', () => {
       const floor = minCurrentRate(volume);
       expect(annualMaxSavings(volume, floor)).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('tierRangeLabel', () => {
+  it('describes each tier boundary in human-readable 억 units', () => {
+    expect(tierRangeLabel('sole')).toBe('연 거래액 3억 이하');
+    expect(tierRangeLabel('sme1')).toBe('연 거래액 3억 초과 5억 이하');
+    expect(tierRangeLabel('sme2')).toBe('연 거래액 5억 초과 10억 이하');
+    expect(tierRangeLabel('sme3')).toBe('연 거래액 10억 초과 30억 이하');
+    expect(tierRangeLabel('general')).toBe('연 거래액 30억 초과');
   });
 });

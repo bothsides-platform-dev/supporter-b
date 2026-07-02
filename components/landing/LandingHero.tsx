@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Footer } from '@/components/shell/Footer';
-import { Logo } from '@/components/primitives/Logo';
+import { LandingHeader } from '@/components/landing/LandingHeader';
 import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
-import { SolutionShowcase } from '@/components/landing/SolutionShowcase';
-import { DemoAppShell } from '@/components/landing/demo-app/DemoAppShell';
 import { FaqList } from '@/components/landing/FaqList';
-import { ProblemCard } from '@/components/landing/ProblemCard';
+import { ScrollDrivenProblem } from '@/components/landing/scroll-pinned/ScrollDrivenProblem';
+import { ScrollDrivenSolution } from '@/components/landing/scroll-pinned/ScrollDrivenSolution';
+import { DemoAppShell } from '@/components/landing/demo-app/DemoAppShell';
 import { MetricCard } from '@/components/landing/MetricCard';
 import { LandingHeroSection } from '@/components/landing/LandingHeroSection';
 import { FadeInView } from '@/components/landing/FadeInView';
@@ -50,43 +50,39 @@ const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9
 
 export function LandingHero({ nav }: { nav?: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[var(--md-sys-color-surface)] flex flex-col">
+    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col">
 
-      {/* ── Nav ── */}
-      <header className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-8 h-[var(--shell-topbar)] border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]">
-        <Logo />
-        <div className="flex items-center gap-[var(--s-3)]">{nav}</div>
-      </header>
+      {/* ── Nav — 히어로 다크 씬 위에서는 투명+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
+      <LandingHeader>{nav}</LandingHeader>
 
       <main className="flex-1 pt-[var(--shell-topbar)]">
 
         {/* ── Hero (client: 타이핑·애니메이션·landing-scroll 이펙트) ── */}
         <LandingHeroSection />
 
-        {/* ── Problem ── */}
+        {/* ── Problem (pin: 누적 등장) ── */}
         <section className={sectionCls}>
-          <div className={containerCls}>
-            <SectionHeading>
-              기존 PG 계약을 하면서<br />이런 불편함을 겪지 않으셨나요?
-            </SectionHeading>
-            <div className="flex flex-col gap-[var(--s-4)]">
-              {PROBLEM_ITEMS.map((item, i) => (
-                <FadeInView key={item.num} delay={i * 0.08}>
-                  <ProblemCard num={item.num} title={item.title} desc={item.desc} />
-                </FadeInView>
-              ))}
-            </div>
-          </div>
+          <ScrollDrivenProblem
+            heading={
+              <SectionHeading>
+                기존 PG 계약을 하면서<br />이런 불편함을 겪지 않으셨나요?
+              </SectionHeading>
+            }
+            items={PROBLEM_ITEMS}
+            stagger={0.08}
+          />
         </section>
 
-        {/* ── Solution ── */}
+        {/* ── Solution (pin: 스크롤 구동 강조, 타이머 없음) ── */}
         <section id="service" className={sectionCls}>
-          <div className={containerCls}>
-            <SectionHeading>
-              SupporterB를 통해<br />PG 도입 문제를 해결해보세요
-            </SectionHeading>
-            <SolutionShowcase points={SOLUTION_POINTS} />
-          </div>
+          <ScrollDrivenSolution
+            heading={
+              <SectionHeading>
+                SupporterB를 통해<br />PG 도입 문제를 해결해보세요
+              </SectionHeading>
+            }
+            points={SOLUTION_POINTS}
+          />
         </section>
 
         {/* ── Process: 실제 대시보드를 그대로 체험하는 임베디드 데모 ── */}

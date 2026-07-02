@@ -106,6 +106,7 @@ lib/server/
 
 **서비스 레이어 규칙:**
 - 서비스는 트랜잭션·알림 팬아웃·이메일 아웃박스를 소유한다. 액션은 이를 직접 다루지 않는다.
+- **알림 팬아웃 단일 API**: `lib/server/notifications/notify.ts`의 `notify(tx, input)` — 수신자별 in-app row insert(`dispatchNotification`)와 email outbox enqueue를 채널(`inapp`/`email`) 지정 한 번으로 처리하고, 생성된 `Notification[]`을 반환한다(호출자가 `pendingEmits`에 모아 commit 후 emit). `rfp.ts`/`bid.ts`/`chat.ts`/`team-chat.ts`의 알림 발송 흐름 12곳(`notify()` 호출 지점 기준으로는 18곳 — 한 흐름이 수신자 그룹·채널별로 여러 번 호출하기도 한다)이 모두 이 API로 통일되어 있다 — 신규 알림 발송 코드는 `dispatchNotification`+`outboxRepo.enqueue` 두 호출을 직접 조합하지 말고 `notify()`를 쓴다. **범위 밖(의도적)**: `auth.*`/`workspace.*` 서비스와 `lib/server/actions/workspace/_workspaceInviteNotify.ts`는 기존 `dispatchNotification`/outbox 직접 호출 패턴을 그대로 유지한다.
 - `Actor = { userId, workspaceId }` — 세션에서 추출해 액션이 서비스에 전달한다.
 - `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 서비스 레이어 반환 타입. 예외 throw 없이 결과를 반환한다.
 - `ActionResult<T> = { ok: true } & T | { ok: false; error: string }` — 액션 레이어 반환 타입 SSOT (`lib/server/actions/_result.ts`). 각 도메인 파일의 동일 타입 선언을 대체한다.
@@ -124,15 +125,15 @@ These are non-negotiable visual decisions enforced across all screens. The desig
 - **No** heavy/skeuomorphic shadows — most surfaces use a 1px border or elevation-1; big shadows only on floating elements (popover, dropdown, toast, dialog, command palette).
 - **No** high-contrast dividers — default to `outline-variant` (the deliberately low-contrast border). The faint border IS the Linear look, not a bug.
 - **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28–36px buttons / default 32px).
-- **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`.
+- **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`. (단 하나의 좁은 예외: 랜딩 히어로 다크 씬 소프트 블룸 — DESIGN.md §9 랜딩·마케팅 예외 ⑤.)
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
-- **로딩 모션 허용** — 넓은 영역은 펄스 스켈레톤, 인라인·타이핑 인디케이터는 펄스 점(staggered). `prefers-reduced-motion: reduce` 존중(저감 시 정지/단순화). 버튼 진행 등 짧은 `LOADING…` 텍스트 표기는 그대로 두어도 무방. 장식적 컨페티·강한 모멘텀 모션 제한은 유지(DESIGN.md §9 두 예외 — "축하 모먼트"·"테마 전환 리빌"). 자세히는 DESIGN.md §6 "로딩 모션".
+- **로딩 모션 허용** — 넓은 영역은 펄스 스켈레톤, 인라인·타이핑 인디케이터는 펄스 점(staggered). `prefers-reduced-motion: reduce` 존중(저감 시 정지/단순화). 버튼 진행 등 짧은 `LOADING…` 텍스트 표기는 그대로 두어도 무방. 장식적 컨페티·강한 모멘텀 모션 제한은 유지(DESIGN.md §9 세 예외 — "축하 모먼트"·"테마 전환 리빌"·"랜딩/마케팅 모션"). 자세히는 DESIGN.md §6 "로딩 모션".
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.
 - **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (mono + tabular-nums). Never on nav/labels/buttons.
 - **Status** uses Chip component — never bracketed plain text `[ 결재중 ]`.
 - **Typography** uses the typescale tokens — no `font-mono uppercase tracking` on labels/nav; sentence case with slight negative tracking.
 - **Chip color** mapping: 성공/완료→tertiary, 실패/오류→error, 보류/신규→warning, 중립→surface, 주요→primary.
-- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`). 단, DESIGN.md §9의 두 예외(① "축하 모먼트" — 종결 성공 1회성 컨페티, ② "테마 전환 리빌" — View Transitions clip-path)는 별도.
+- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`). 단, DESIGN.md §9의 세 예외(① "축하 모먼트" — 종결 성공 1회성 컨페티, ② "테마 전환 리빌" — View Transitions clip-path, ③ "랜딩·마케팅 모션" — 랜딩/마케팅 면은 스크롤 pin·진입 스케일·가이드 커서 등 몰입형 모션 및 `prefers-reduced-motion` 미존중 허용)는 별도.
 
 If frontend code looks "generic SaaS", check DESIGN.md §9 (anti-patterns) before defending it.
 
