@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { motion } from 'motion/react';
+import { motion, useInView } from 'motion/react';
 import { MousePointerClick, ChevronDown, ChevronUp } from 'lucide-react';
 
 type CursorState = {
@@ -67,8 +67,13 @@ export function DemoCursor({
   const [state, setState] = useState<CursorState | null>(null);
   // 데모 앱은 라이트 톤이 기본이라 검정 아이콘으로 시작 — 히스테리시스 기준값(직전 상태 유지).
   const iconDarkRef = useRef(true);
+  // 데모 창이 뷰포트에서 완전히 벗어나면 rAF 측정 루프를 멈춘다(P3: 스크롤 아웃 후에도 영구
+  // 루프가 돌던 문제). once 없이 써서 양방향(들어옴/나감) 모두 토글 — amount:0은 1px이라도
+  // 걸치면 true라 경계에서 자주 튀지 않는다(작은 값으로 edge flicker 방지).
+  const visible = useInView(windowRef, { amount: 0 });
 
   useEffect(() => {
+    if (!visible) return;
     let raf = 0;
     const measure = () => {
       const w = windowRef.current;
@@ -132,7 +137,7 @@ export function DemoCursor({
     };
     raf = requestAnimationFrame(measure);
     return () => cancelAnimationFrame(raf);
-  }, [windowRef, containerRef, selector, page]);
+  }, [windowRef, containerRef, selector, page, visible]);
 
   if (!state) return null;
 
