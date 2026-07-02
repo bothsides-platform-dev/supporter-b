@@ -33,12 +33,31 @@ describe('buildTransition', () => {
     expect(schedules[2]).toMatchObject({ from: '', to: '마' });
   });
 
+  it('to가 from보다 짧아지는 전환도 다룬다(슬롯 수는 from 길이 유지, 남는 자리는 to가 빈 문자열)', () => {
+    const schedules = buildTransition('가나다라마', '가나', () => 0.5);
+    expect(schedules).toHaveLength(5);
+    expect(schedules[2]).toMatchObject({ from: '다', to: '' });
+    expect(schedules[3]).toMatchObject({ from: '라', to: '' });
+    expect(schedules[4]).toMatchObject({ from: '마', to: '' });
+  });
+
   it('rng로 정착 시점이 [0.55, 1.0) 구간에서 결정적으로 스태거된다', () => {
     const lo = buildTransition('a', 'b', () => 0);
     const hi = buildTransition('a', 'b', () => 0.999999);
     expect(lo[0].end).toBeCloseTo(0.55, 5);
     expect(hi[0].end).toBeGreaterThan(0.999);
     expect(hi[0].end).toBeLessThan(1);
+  });
+
+  it('한 전환 안에서 슬롯마다 rng를 별도로 호출해 서로 다른 end를 받는다(스태거 자체의 검증)', () => {
+    const seq = [0, 0.5, 0.999999];
+    let i = 0;
+    const rng = () => seq[i++];
+    const schedules = buildTransition('가나다', '라마바', rng);
+    expect(schedules[0].end).toBeCloseTo(0.55, 5);
+    expect(schedules[1].end).toBeCloseTo(0.775, 5);
+    expect(schedules[2].end).toBeGreaterThan(0.999);
+    expect(new Set(schedules.map((s) => s.end)).size).toBe(3);
   });
 
   it('같은 rng 입력은 항상 같은 스케줄을 만든다(결정적)', () => {

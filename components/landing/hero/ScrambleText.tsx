@@ -173,6 +173,10 @@ export function ScrambleText({
           style={{
             display: 'inline-block',
             opacity: slot.opacity,
+            // 스크램블 글리프는 고정폭 폰트로 그려 문자 교체(≈60ms 간격)가 인라인블록 폭을
+            // 흔들지 않게 한다 — 가변폭 폰트에서는 글리프마다 advance width가 달라 지터와
+            // 별개로 박스가 계속 리사이즈되며 "떠는" 부작용이 생긴다(디자인 리뷰 발견).
+            fontFamily: slot.active ? 'var(--font-mono)' : undefined,
             transform: slot.active
               ? `translate(${slot.dx}px, ${slot.dy}px) scale(${slot.scale})`
               : undefined,
