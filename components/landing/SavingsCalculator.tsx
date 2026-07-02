@@ -3,18 +3,21 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useInView } from 'motion/react';
 import { Slider } from '@/components/ui/slider';
-import { KpiCell } from '@/components/primitives/KpiCell';
 import { Chip } from '@/components/primitives/Chip';
 import { CostComparisonChart } from '@/components/landing/CostComparisonChart';
 import { formatKRW } from '@/lib/format';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
+import { useAnimatedNumber } from '@/lib/landing/use-animated-number';
 import {
   SUPPORTER_B_RATE,
   annualMaxSavings,
   gradeFromVolume,
   minCurrentRate,
+  tierRangeLabel,
 } from '@/lib/landing/savings';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { InfoIcon } from '@/components/icons';
 
 const VOL_T_MAX = 1000;
 const VOL_BASE = 1e8;
@@ -48,6 +51,34 @@ function formatRate(rate: number): string {
   return `${rate.toFixed(2)} %`;
 }
 
+function SliderValueBubble({ pct, text, testId }: { pct: number; text: string; testId?: string }) {
+  return (
+    <div
+      aria-hidden
+      data-testid={testId}
+      className="pointer-events-none absolute top-1/2 z-10"
+      style={{ left: `${pct}%` }}
+    >
+      <div className="-translate-x-1 -translate-y-1 flex flex-col items-start">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="var(--md-sys-color-on-surface)"
+          stroke="var(--md-sys-color-surface)"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        >
+          <path d="M5 2.5l13.5 7.8-5.9 1.5-1.5 5.9z" />
+        </svg>
+        <span className="ml-3 -mt-1 whitespace-nowrap rounded-md bg-[var(--md-sys-color-on-surface)] px-2 py-0.5 text-[10px] font-medium text-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-2)]">
+          {text}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function SavingsCalculator() {
   const [volT, setVolT] = useState(DEFAULT_VOL_T);
   const [rateBp, setRateBp] = useState(RATE_DEFAULT);
@@ -59,6 +90,7 @@ export function SavingsCalculator() {
   // 사용자가 슬라이더를 한 번이라도 만지면 true. 이후로는 힌트 데모를 영구 중단한다
   // (입력을 덮어쓰지 않도록). inView 토글로 effect가 재실행돼도 유지돼야 하므로 ref.
   const interactedRef = useRef(false);
+  const [draggingSlider, setDraggingSlider] = useState<'volume' | 'rate' | null>(null);
 
   // 계산기가 화면에 보이고 일정 시간(IDLE_MS) 입력이 없으면 가짜 커서가 슬라이더를
   // 훑으며 사용법을 보여준다. 사용자가 만지면 즉시 멈추고 다시 재생하지 않는다. 데모가
@@ -146,13 +178,19 @@ export function SavingsCalculator() {
   const currentCost = Math.round(currentRate * volume);
   const supporterBCost = Math.round(supporterBRate * volume);
 
+  const animatedSavings = useAnimatedNumber(savings);
+
   const cursorPct = (volT / VOL_T_MAX) * 100;
+  const rateCursorPct = ((rateBp - rateMinBp) / (RATE_MAX - rateMinBp)) * 100;
 
   return (
-    <section ref={rootRef} className="border-t border-b border-[var(--md-sys-color-outline)] py-[var(--s-9)]">
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-[var(--s-9)] md:gap-[var(--s-10)] items-end">
-        {/* Sliders */}
-        <div className="flex flex-col gap-[var(--s-8)]">
+    <section
+      ref={rootRef}
+      className="rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-[var(--s-8)]"
+    >
+      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-[var(--s-8)] md:gap-0">
+        {/* Sidebar — inputs */}
+        <div className="flex flex-col gap-[var(--s-8)] md:border-r md:border-[var(--md-sys-color-outline-variant)] md:pr-[var(--s-8)]">
           <div className="flex flex-col gap-[var(--s-3)]">
             <div className="flex items-baseline justify-between">
               <span className="font-mono text-[var(--text-xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">연간 거래액</span>
@@ -160,7 +198,15 @@ export function SavingsCalculator() {
                 {formatVolume(volume)}
               </span>
             </div>
-            <div className="relative">
+            <div
+              className="relative"
+              onPointerDown={() => {
+                resetIdleRef.current?.();
+                setDraggingSlider('volume');
+              }}
+              onPointerUp={() => setDraggingSlider(null)}
+              onPointerCancel={() => setDraggingSlider(null)}
+            >
               <Slider
                 value={volT}
                 min={0}
@@ -175,29 +221,9 @@ export function SavingsCalculator() {
                 }}
                 ariaLabel="연간 거래액"
               />
-              {hintActive && (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute top-1/2 z-10"
-                  style={{ left: `${cursorPct}%` }}
-                >
-                  <div className="-translate-x-1 -translate-y-1 flex flex-col items-start">
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="var(--md-sys-color-on-surface)"
-                      stroke="var(--md-sys-color-surface)"
-                      strokeWidth="1.5"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M5 2.5l13.5 7.8-5.9 1.5-1.5 5.9z" />
-                    </svg>
-                    <span className="ml-3 -mt-1 whitespace-nowrap rounded-md bg-[var(--md-sys-color-on-surface)] px-2 py-0.5 text-[10px] font-medium text-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-2)]">
-                      드래그해서 조정해 보세요
-                    </span>
-                  </div>
-                </div>
+              {hintActive && <SliderValueBubble pct={cursorPct} text="드래그해서 조정해 보세요" />}
+              {draggingSlider === 'volume' && !hintActive && (
+                <SliderValueBubble pct={cursorPct} text={formatVolume(volume)} testId="volume-drag-bubble" />
               )}
             </div>
             <div className="flex justify-between font-mono text-[var(--text-2xs)] tracking-[0.1em] text-[var(--md-sys-color-outline)] uppercase">
@@ -213,49 +239,81 @@ export function SavingsCalculator() {
                 {formatRate(rateBp / 100)}
               </span>
             </div>
-            <Slider
-              value={rateBp}
-              min={rateMinBp}
-              max={RATE_MAX}
-              step={RATE_STEP}
-              onValueChange={(v) => {
+            <div
+              className="relative"
+              onPointerDown={() => {
                 resetIdleRef.current?.();
-                setRateBp(Math.max(v, rateMinBp));
+                setDraggingSlider('rate');
               }}
-              ariaLabel="현재 PG 수수료율"
-            />
+              onPointerUp={() => setDraggingSlider(null)}
+              onPointerCancel={() => setDraggingSlider(null)}
+            >
+              <Slider
+                value={rateBp}
+                min={rateMinBp}
+                max={RATE_MAX}
+                step={RATE_STEP}
+                onValueChange={(v) => {
+                  resetIdleRef.current?.();
+                  setRateBp(Math.max(v, rateMinBp));
+                }}
+                ariaLabel="현재 PG 수수료율"
+              />
+              {draggingSlider === 'rate' && (
+                <SliderValueBubble pct={rateCursorPct} text={formatRate(rateBp / 100)} testId="rate-drag-bubble" />
+              )}
+            </div>
             <div className="flex justify-between font-mono text-[var(--text-2xs)] tracking-[0.1em] text-[var(--md-sys-color-outline)] uppercase">
               <span>{formatRate(rateMinBp / 100)}</span>
               <span>4.00 %</span>
             </div>
           </div>
+
+          <div className="flex items-center gap-2 mt-auto pt-[var(--s-2)]">
+            <span className="font-mono text-[var(--text-2xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              가맹점 등급
+            </span>
+            <Chip label={MERCHANT_TIER_LABELS[grade]} color="surface" />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      tabIndex={0}
+                      aria-label="등급 산정 기준"
+                      className="inline-flex items-center text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] cursor-help"
+                    >
+                      <InfoIcon size={14} aria-hidden />
+                    </span>
+                  }
+                />
+                <TooltipContent side="top">{tierRangeLabel(grade)}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
 
-        {/* Result — emphasized savings */}
-        <div className="md:min-w-[360px]">
-          <div className="flex flex-col gap-[var(--s-4)] rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-tertiary-container)]/20 p-[var(--s-6)] md:items-end md:text-right">
-            <KpiCell
-              label="EST. ANNUAL SAVINGS"
-              value={formatKRW(savings)}
+        {/* Output panel — result + chart */}
+        <div className="flex flex-col md:pl-[var(--s-8)]">
+          <div className="flex flex-col gap-[var(--s-2)]">
+            <span className="font-mono text-[var(--text-xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              EST. ANNUAL SAVINGS
+            </span>
+            <span className="md-numeric text-[clamp(32px,4vw,40px)] font-semibold leading-none tracking-[-0.02em] text-[var(--md-sys-color-tertiary)]">
+              {formatKRW(Math.round(animatedSavings))}
+            </span>
+          </div>
+
+          <div className="mt-[var(--s-6)] pt-[var(--s-6)] border-t border-[var(--md-sys-color-outline-variant)]">
+            <CostComparisonChart
+              currentCost={currentCost}
+              supporterBCost={supporterBCost}
             />
-            <div className="flex items-center gap-3 md:justify-end">
-              <span className="font-mono text-[var(--text-2xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-                가맹점 등급
-              </span>
-              <Chip label={MERCHANT_TIER_LABELS[grade]} color="surface" />
-            </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-[var(--s-9)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)]">
-        <CostComparisonChart
-          currentCost={currentCost}
-          supporterBCost={supporterBCost}
-        />
-      </div>
-
-      <p className="mt-[var(--s-7)] font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+      <p className="mt-[var(--s-7)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)] font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
         * 예상 절감액은 추정치입니다. 카드 수수료를 포함한 모든 항목(정산주기·보증보험·가입비 등)이
         협상 대상이며, 실제 절감액은 PG사 견적·조건에 따라 달라질 수 있습니다.
       </p>

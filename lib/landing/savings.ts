@@ -12,12 +12,36 @@ export const SUPPORTER_B_RATE: Record<MerchantTier, number> = {
   general: GENERAL_ASSUMED_RATE,
 };
 
+// 등급 구간(연 거래액 상한, KRW). gradeFromVolume·tierRangeLabel의 단일 출처 —
+// 여기 값을 바꾸면 등급 판정과 계산기 툴팁 표기가 함께 갱신된다.
+const TIER_UPPER_BOUNDS: Array<{ tier: MerchantTier; maxKRW: number }> = [
+  { tier: 'sole', maxKRW: 3e8 },
+  { tier: 'sme1', maxKRW: 5e8 },
+  { tier: 'sme2', maxKRW: 1e9 },
+  { tier: 'sme3', maxKRW: 3e9 },
+];
+
 export function gradeFromVolume(annualKRW: number): MerchantTier {
-  if (annualKRW <= 3e8) return 'sole';
-  if (annualKRW <= 5e8) return 'sme1';
-  if (annualKRW <= 1e9) return 'sme2';
-  if (annualKRW <= 3e9) return 'sme3';
-  return 'general';
+  const found = TIER_UPPER_BOUNDS.find(({ maxKRW }) => annualKRW <= maxKRW);
+  return found ? found.tier : 'general';
+}
+
+function eokLabel(krw: number): string {
+  return `${Math.round(krw / 1e8).toLocaleString('ko-KR')}억`;
+}
+
+// 계산기 "가맹점 등급" 옆 툴팁에 쓰는, 사람이 읽는 구간 설명.
+export function tierRangeLabel(tier: MerchantTier): string {
+  const idx = TIER_UPPER_BOUNDS.findIndex((t) => t.tier === tier);
+  if (idx === -1) {
+    const prevMax = TIER_UPPER_BOUNDS[TIER_UPPER_BOUNDS.length - 1].maxKRW;
+    return `연 거래액 ${eokLabel(prevMax)} 초과`;
+  }
+  const { maxKRW } = TIER_UPPER_BOUNDS[idx];
+  const prevMax = idx > 0 ? TIER_UPPER_BOUNDS[idx - 1].maxKRW : 0;
+  return prevMax === 0
+    ? `연 거래액 ${eokLabel(maxKRW)} 이하`
+    : `연 거래액 ${eokLabel(prevMax)} 초과 ${eokLabel(maxKRW)} 이하`;
 }
 
 // 현재 수수료율 슬라이더의 하한. 우리가 가정하는 달성 요율보다 항상 이 마진만큼 위에
