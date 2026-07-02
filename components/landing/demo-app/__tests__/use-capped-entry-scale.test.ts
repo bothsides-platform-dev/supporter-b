@@ -2,6 +2,13 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderHook, fireEvent } from '@testing-library/react';
 import { useCappedEntryScale } from '../use-capped-entry-scale';
 
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+
 function stubClientWidth(width: number) {
   Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: width });
 }
@@ -68,5 +75,18 @@ describe('useCappedEntryScale — 콘텐츠 영역 너비를 넘지 않는 진�
     unmount();
     expect(removeSpy).toHaveBeenCalledWith('resize', expect.any(Function));
     removeSpy.mockRestore();
+  });
+
+  it('마운트 시 요소를 ResizeObserver로 관찰하고, 언마운트 시 해제한다', () => {
+    const observeSpy = vi.spyOn(ResizeObserverStub.prototype, 'observe');
+    const disconnectSpy = vi.spyOn(ResizeObserverStub.prototype, 'disconnect');
+    stubClientWidth(1920);
+    const ref = refWithWidth(1080);
+    const { unmount } = renderHook(() => useCappedEntryScale(ref, 1.1));
+    expect(observeSpy).toHaveBeenCalledWith(ref.current);
+    unmount();
+    expect(disconnectSpy).toHaveBeenCalledTimes(1);
+    observeSpy.mockRestore();
+    disconnectSpy.mockRestore();
   });
 });
