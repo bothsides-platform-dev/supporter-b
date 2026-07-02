@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 
 vi.mock('motion/react', () => {
   const makeEl = (tag: string) => {
@@ -66,5 +66,58 @@ describe('OfferComparisonTable', () => {
     const fee = headers.find((h) => h.textContent === '수수료');
     expect(negotiate).toHaveAttribute('data-active', 'true');
     expect(fee).not.toHaveAttribute('data-active');
+  });
+});
+
+describe('scroll fade hint', () => {
+  function stubScrollMetrics(
+    el: HTMLElement,
+    { scrollWidth, clientWidth, scrollLeft }: { scrollWidth: number; clientWidth: number; scrollLeft: number },
+  ) {
+    Object.defineProperty(el, 'scrollWidth', { value: scrollWidth, configurable: true });
+    Object.defineProperty(el, 'clientWidth', { value: clientWidth, configurable: true });
+    Object.defineProperty(el, 'scrollLeft', { value: scrollLeft, configurable: true });
+  }
+
+  it('hides the fade when content does not overflow', () => {
+    render(<OfferComparisonTable />);
+    const fade = screen.getByTestId('offer-table-scroll-fade');
+    expect(fade).toHaveStyle({ opacity: '0' });
+  });
+
+  it('shows the fade when content overflows and scrollLeft is 0', () => {
+    render(<OfferComparisonTable />);
+    const container = screen.getByTestId('offer-table-scroll-container');
+    stubScrollMetrics(container, { scrollWidth: 1000, clientWidth: 680, scrollLeft: 0 });
+    fireEvent.scroll(container);
+    expect(screen.getByTestId('offer-table-scroll-fade')).toHaveStyle({ opacity: '1' });
+  });
+
+  it('hides the fade once scrolled to the true end', () => {
+    render(<OfferComparisonTable />);
+    const container = screen.getByTestId('offer-table-scroll-container');
+    stubScrollMetrics(container, { scrollWidth: 1000, clientWidth: 680, scrollLeft: 320 });
+    fireEvent.scroll(container);
+    expect(screen.getByTestId('offer-table-scroll-fade')).toHaveStyle({ opacity: '0' });
+  });
+
+  it('keeps the fade hidden when within the 4px threshold of the end', () => {
+    render(<OfferComparisonTable />);
+    const container = screen.getByTestId('offer-table-scroll-container');
+    stubScrollMetrics(container, { scrollWidth: 1000, clientWidth: 680, scrollLeft: 318 });
+    fireEvent.scroll(container);
+    expect(screen.getByTestId('offer-table-scroll-fade')).toHaveStyle({ opacity: '0' });
+  });
+
+  it('re-shows the fade if the user scrolls back away from the end', () => {
+    render(<OfferComparisonTable />);
+    const container = screen.getByTestId('offer-table-scroll-container');
+    stubScrollMetrics(container, { scrollWidth: 1000, clientWidth: 680, scrollLeft: 320 });
+    fireEvent.scroll(container);
+    expect(screen.getByTestId('offer-table-scroll-fade')).toHaveStyle({ opacity: '0' });
+
+    stubScrollMetrics(container, { scrollWidth: 1000, clientWidth: 680, scrollLeft: 100 });
+    fireEvent.scroll(container);
+    expect(screen.getByTestId('offer-table-scroll-fade')).toHaveStyle({ opacity: '1' });
   });
 });
