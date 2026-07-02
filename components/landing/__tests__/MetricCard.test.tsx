@@ -14,7 +14,11 @@ describe('MetricCard', () => {
     // jsdom has no matchMedia → prefersReducedMotion → final value immediately
     render(<MetricCard to={0.89} decimals={2} unit="%" qualifier="절감" caption="평균 절감 비율" />);
     expect(screen.getByText('0.89%')).toBeInTheDocument();
-    expect(screen.getByText('절감')).toBeInTheDocument();
+  });
+
+  it('does not render the qualifier text even when provided', () => {
+    render(<MetricCard to={0.89} decimals={2} unit="%" qualifier="절감" caption="평균 절감 비율" />);
+    expect(screen.queryByText('절감')).toBeNull();
   });
 
   it('shows a downward trend arrow for a reduction metric', () => {
