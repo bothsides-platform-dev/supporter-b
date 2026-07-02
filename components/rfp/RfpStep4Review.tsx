@@ -287,6 +287,7 @@ export function RfpStep4Review({
           이전
         </Button>
         <Button
+          data-demo-cursor
           type="button"
           size="lg"
           disabled={submitting}

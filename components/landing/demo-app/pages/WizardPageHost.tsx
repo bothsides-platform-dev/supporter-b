@@ -28,7 +28,6 @@ export function WizardPageHost({ enabled, showCue = false }: { enabled: boolean;
       <DemoCue show={showCue} label="정보를 입력하고 견적을 요청해요" />
       <RfpCreateWizard
         guest
-        hideNav
         bizProfile={fixtureBizProfile}
         workspaceName={demoWorkspaceName}
         pgList={fixturePgs}

@@ -21,35 +21,33 @@ export function DemoCursor({
 }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
+  // 대상을 매 프레임 다시 재서 따라간다 — 위저드처럼 한 화면 안에서 버튼 위치가 바뀌어도
+  // 커서가 붙어 있게. 위치가 실제로 바뀔 때만 setState(스프링이 그쪽으로 미끄러진다).
   useEffect(() => {
-    const win = windowRef.current;
-    if (!win) return;
-    let raf1 = 0;
-    let raf2 = 0;
+    let raf = 0;
     const measure = () => {
       const w = windowRef.current;
-      if (!w) return;
-      const wr = w.getBoundingClientRect();
-      const el = selector ? (w.querySelector(selector) as HTMLElement | null) : null;
-      if (el) {
-        const er = el.getBoundingClientRect();
-        setPos({
-          x: er.left - wr.left + er.width / 2,
-          y: er.top - wr.top + er.height / 2,
-        });
-      } else {
-        // 클릭 대상이 없는 단계 — 숨기지 않고 콘텐츠 우하단(주요 액션이 놓이는 자리)에 머문다.
-        setPos({ x: wr.width * 0.74, y: wr.height * 0.84 });
+      if (w) {
+        const wr = w.getBoundingClientRect();
+        const el = selector ? (w.querySelector(selector) as HTMLElement | null) : null;
+        let next: { x: number; y: number } | null = null;
+        if (el) {
+          const er = el.getBoundingClientRect();
+          next = { x: er.left - wr.left + er.width / 2, y: er.top - wr.top + er.height / 2 };
+        } else if (!selector) {
+          // 클릭 대상이 없는 단계 — 숨기지 않고 콘텐츠 우하단(주요 액션 자리)에 머문다.
+          next = { x: wr.width * 0.74, y: wr.height * 0.84 };
+        }
+        // selector가 있는데 아직 못 찾음(전환 중)이면 next=null → 이전 위치 유지.
+        if (next) {
+          const n = next;
+          setPos((p) => (p && Math.abs(p.x - n.x) < 0.5 && Math.abs(p.y - n.y) < 0.5 ? p : n));
+        }
       }
+      raf = requestAnimationFrame(measure);
     };
-    // 페이지 전환 후 새 대상이 렌더된 다음(두 프레임 뒤) 측정한다.
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(measure);
-    });
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
+    raf = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(raf);
   }, [windowRef, selector, page]);
 
   if (!pos) return null;

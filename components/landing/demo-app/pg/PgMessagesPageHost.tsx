@@ -64,7 +64,10 @@ export function PgMessagesPageHost({ showCue = false }: { showCue?: boolean }) {
             <div className="flex h-9 flex-1 items-center rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
               메시지를 입력하세요…
             </div>
-            <span className="grid h-9 w-9 place-items-center rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]">
+            <span
+              data-demo-cursor
+              className="grid h-9 w-9 place-items-center rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]"
+            >
               ↑
             </span>
           </div>

@@ -89,10 +89,11 @@ describe('WizardPageHost', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('마법사를 hideNav·guest로 마운트한다', () => {
+  it('마법사를 guest로, nav를 노출한 채(hideNav 미지정) 마운트한다', () => {
     render(<WizardPageHost enabled={false} />);
     const w = screen.getByTestId('wizard');
-    expect(w).toHaveAttribute('data-hidenav', 'true');
+    // 클릭 진행 데모라 위저드 자체 nav('다음'/'보내기')를 보여준다.
+    expect(w).not.toHaveAttribute('data-hidenav', 'true');
     expect(w).toHaveAttribute('data-guest', 'true');
   });
 
