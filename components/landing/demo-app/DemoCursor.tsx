@@ -90,10 +90,11 @@ export function DemoCursor({
       <motion.div
         aria-hidden
         // 래퍼가 아니라 실제 데모 창 우하단 안쪽(16px 여백)에 코너를 앵커한다.
+        // translate은 motion x/y(퍼센트)로 줘야 한다 — style transform은 motion이 덮어써 깨진다.
         className="pointer-events-none absolute z-40 flex max-w-[240px] items-center gap-2 rounded-full border border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-high)] py-1.5 pl-3 pr-1.5 shadow-lg"
-        style={{ left: state.winW - 16, top: state.winH - 16, transform: 'translate(-100%, -100%)' }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
+        style={{ left: state.winW - 16, top: state.winH - 16 }}
+        initial={{ opacity: 0, x: '-100%', y: '-100%' }}
+        animate={{ opacity: 1, x: '-100%', y: '-100%' }}
       >
         {hint && (
           <span className="text-[12px] font-medium text-[var(--md-sys-color-on-surface)]">
