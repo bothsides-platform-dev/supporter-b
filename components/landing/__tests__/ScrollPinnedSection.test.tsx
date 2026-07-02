@@ -18,4 +18,15 @@ describe('ScrollPinnedSection', () => {
     expect(screen.getByTestId('pinned').textContent).toBe('true');
     expect(screen.getByTestId('step').textContent).toBe('0');
   });
+
+  it('steps<=0에서도 safeSteps 가드로 activeStep이 유한한 값으로 clamp된다', () => {
+    render(
+      <ScrollPinnedSection steps={0}>
+        {({ activeStep }) => <span data-testid="step">{activeStep}</span>}
+      </ScrollPinnedSection>,
+    );
+    const step = Number(screen.getByTestId('step').textContent);
+    expect(Number.isFinite(step)).toBe(true);
+    expect(step).toBe(0);
+  });
 });

@@ -2,6 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+
 vi.mock('motion/react', () => {
   const makeEl = (tag: string) => {
     const El = ({ children, ...props }: Record<string, unknown>) =>
@@ -155,9 +162,22 @@ describe('scroll fade hint', () => {
     expect(windowRemoveSpy).toHaveBeenCalledWith('resize', expect.any(Function));
   });
 
+  it('disconnects the ResizeObserver on unmount', () => {
+    const disconnectSpy = vi.spyOn(ResizeObserverStub.prototype, 'disconnect');
+    const { unmount } = render(<OfferComparisonTable />);
+    unmount();
+    expect(disconnectSpy).toHaveBeenCalledTimes(1);
+    disconnectSpy.mockRestore();
+  });
+
   it('does not render the fade hint when showScrollFade is false, even when the wrapper never scrolls', () => {
-    render(<OfferComparisonTable showScrollFade={false} />);
-    const container = screen.getByTestId('offer-table-scroll-container');
+    const { container: root } = render(<OfferComparisonTable showScrollFade={false} />);
+    // showScrollFade=false also omits the testid (it would otherwise collide with
+    // the real table's instance on an assembled page), so select via the scroll
+    // container's structural class instead.
+    const container = root.querySelector('.overflow-x-auto') as HTMLElement;
+    expect(container).toBeInTheDocument();
+    expect(container).not.toHaveAttribute('data-testid');
     // Mirrors the decorative hero mockup: overflow-x-clip pins scrollLeft at 0
     // forever while scrollWidth keeps overflowing clientWidth — canScrollRight
     // would otherwise get stuck true with no scroll event to ever flip it back.

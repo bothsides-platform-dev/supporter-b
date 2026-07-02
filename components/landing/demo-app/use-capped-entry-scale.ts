@@ -21,7 +21,21 @@ export function useCappedEntryScale(ref: RefObject<HTMLElement | null>, designMa
     };
     compute();
     window.addEventListener('resize', compute);
-    return () => window.removeEventListener('resize', compute);
+
+    // Also react to the observed element's own width changes independently
+    // of window resize (e.g. future content-driven layout shifts). jsdom
+    // (the test environment) does not implement ResizeObserver, so guard
+    // defensively — real browsers always have it.
+    let resizeObserver: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== 'undefined' && ref.current) {
+      resizeObserver = new ResizeObserver(compute);
+      resizeObserver.observe(ref.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', compute);
+      resizeObserver?.disconnect();
+    };
   }, [ref, designMax]);
 
   return scale;
