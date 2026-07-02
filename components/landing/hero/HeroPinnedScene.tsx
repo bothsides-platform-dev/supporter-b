@@ -67,8 +67,9 @@ export function HeroPinnedScene() {
       style={{ height: `${TRACK_VH}vh` }}
     >
       {/* sticky 씬 — 조상에 transform이 있으면 sticky가 죽으므로 트랙·씬에는 transform을 두지
-          않고, 모든 모션은 씬 내부 자식에만 건다. */}
-      <div className="sticky top-0 h-svh overflow-hidden bg-[var(--md-sys-color-surface)]">
+          않고, 모든 모션은 씬 내부 자식에만 건다. 높이는 dvh: svh 고정이면 모바일 주소창이
+          접힐 때 (lvh−svh)만큼 씬 아래로 라이트 배경 띠가 노출된다. */}
+      <div className="sticky top-0 h-dvh overflow-hidden bg-[var(--md-sys-color-surface)]">
         {/* 다크 오프닝 레이어 — 후반부 opacity 페이드로 라이트 리빌(배경색 보간 대신 레이어
             페이드: 토큰 네이티브 + GPU-cheap). 배경은 ASCII 문자 필드: 커서 궤적을 따라
             문자가 깨어나고, 은은한 블룸은 §9(블러 금지)의 사용자 승인 예외(랜딩 히어로 한정). */}

@@ -210,10 +210,13 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
 
     const rebuildGrid = (): boolean => {
       const rect = canvas.getBoundingClientRect();
-      cssW = Math.round(rect.width);
-      cssH = Math.round(rect.height);
-      if (cssW <= 0 || cssH <= 0) return false;
+      const nextW = Math.round(rect.width);
+      const nextH = Math.round(rect.height);
+      if (nextW <= 0 || nextH <= 0) return false;
+      cssW = nextW;
+      cssH = nextH;
       dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+      watchDpr();
       canvas.width = cssW * dpr;
       canvas.height = cssH * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -364,14 +367,52 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     };
 
     const onVisibility = () => {
-      if (!document.hidden) resume();
+      if (document.hidden) {
+        // rAF는 hidden 즉시 서스펜드되어 frame() 안의 가드가 실행되지 못한다 — 여기서
+        // 명시적으로 멈춰야 복귀 시 resume()의 팔레트 재해석 경로가 실제로 탄다.
+        if (running) {
+          running = false;
+          cancelAnimationFrame(rafId);
+        }
+      } else {
+        resume();
+      }
     };
 
+    // 연속 RO 콜백은 rAF로 코얼레싱하고, 실제 크기·DPR 변화가 없으면 재래스터를 생략한다
+    // (마운트 직후 RO 초기 콜백의 중복 렌더도 여기서 걸러진다).
+    let resizeRaf = 0;
     const onResize = () => {
-      if (disposed) return;
-      if (!rebuildGrid()) return;
-      if (!running) paintStatic();
+      if (disposed || resizeRaf) return;
+      resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = 0;
+        if (disposed) return;
+        const rect = canvas.getBoundingClientRect();
+        const nextDpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+        if (Math.round(rect.width) === cssW && Math.round(rect.height) === cssH && nextDpr === dpr) {
+          return;
+        }
+        if (!rebuildGrid()) return;
+        if (!running) paintStatic();
+      });
     };
+
+    // 모니터 간 이동 등 CSS 크기 변화 없는 DPR 변화는 RO가 못 잡는다 — 해상도 쿼리로 감지.
+    let dprMql: MediaQueryList | null = null;
+    const watchDpr = () => {
+      dprMql?.removeEventListener?.('change', onResize);
+      dprMql = window.matchMedia(`(resolution: ${dpr}dppx)`);
+      dprMql.addEventListener?.('change', onResize);
+    };
+
+    // 테마 전환(html.dark 토글 — 시스템 자동 전환 포함)은 CSS 변수만 즉시 뒤집는다.
+    // 캔버스는 해석된 색을 들고 있으므로 클래스 변화를 관찰해 팔레트를 다시 굽는다.
+    const themeObserver = new MutationObserver(() => {
+      if (disposed || cols === 0) return;
+      resolvePalette();
+      renderBase();
+      if (!running) paintStatic();
+    });
 
     resolvePalette();
     if (rebuildGrid()) paintStatic();
@@ -392,6 +433,10 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     } else {
       window.addEventListener('resize', onResize);
     }
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
 
     if (animate) {
       window.addEventListener('pointermove', onPointerMove, { passive: true });
@@ -404,7 +449,10 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       disposed = true;
       resumeRef.current = null;
       if (rafId) cancelAnimationFrame(rafId);
+      if (resizeRaf) cancelAnimationFrame(resizeRaf);
       ro?.disconnect();
+      themeObserver.disconnect();
+      dprMql?.removeEventListener?.('change', onResize);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('pointermove', onPointerMove);
       document.removeEventListener('visibilitychange', onVisibility);
