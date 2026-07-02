@@ -19,7 +19,7 @@ export function HeroProductWindow() {
           <span className="h-2 w-2 rounded-full bg-[var(--md-sys-color-outline-variant)]" />
         </span>
         <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--md-sys-color-on-surface-variant)]">
-          견적 비교 · <span className="md-numeric">P-2606-0042</span>
+          견적 비교 <span className="md-numeric">P-2042-0042</span>
         </span>
       </div>
 
