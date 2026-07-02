@@ -78,7 +78,7 @@ export function DemoCursor({
     return (
       <motion.div
         aria-hidden
-        className="pointer-events-none absolute bottom-4 right-4 z-40 flex max-w-[240px] items-center gap-2 rounded-full border border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-high)] py-1.5 pl-3 pr-1.5 shadow-lg"
+        className="pointer-events-none absolute bottom-4 right-8 z-40 flex max-w-[240px] items-center gap-2 rounded-full border border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-high)] py-1.5 pl-3 pr-1.5 shadow-lg"
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
       >
