@@ -12,6 +12,11 @@ vi.stubGlobal(
   },
 );
 
+// Radix Slider's pointer-down handler calls pointer-capture APIs jsdom doesn't implement.
+if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = () => false;
+if (!Element.prototype.setPointerCapture) Element.prototype.setPointerCapture = () => {};
+if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => {};
+
 // CostComparisonChart pulls in motion/react — stub it; this suite is about the
 // calculator's copy/value surface, not the bar chart.
 vi.mock('@/components/landing/CostComparisonChart', () => ({
@@ -83,6 +88,30 @@ describe('SavingsCalculator', () => {
   it('shows an info trigger next to the merchant grade explaining the tier boundary', () => {
     render(<SavingsCalculator />);
     expect(screen.getByLabelText('등급 산정 기준')).toBeInTheDocument();
+  });
+
+  it('shows a live value bubble while dragging the volume slider, hides it on release', () => {
+    render(<SavingsCalculator />);
+    const [volumeThumb] = screen.getAllByRole('slider');
+    const wrapper = volumeThumb.closest('.relative') as HTMLElement;
+
+    expect(screen.queryByTestId('volume-drag-bubble')).toBeNull();
+    fireEvent.pointerDown(wrapper);
+    expect(screen.getByTestId('volume-drag-bubble')).toBeInTheDocument();
+    fireEvent.pointerUp(wrapper);
+    expect(screen.queryByTestId('volume-drag-bubble')).toBeNull();
+  });
+
+  it('shows a live value bubble while dragging the rate slider, hides it on pointer cancel', () => {
+    render(<SavingsCalculator />);
+    const [, rateThumb] = screen.getAllByRole('slider');
+    const wrapper = rateThumb.closest('.relative') as HTMLElement;
+
+    expect(screen.queryByTestId('rate-drag-bubble')).toBeNull();
+    fireEvent.pointerDown(wrapper);
+    expect(screen.getByTestId('rate-drag-bubble')).toBeInTheDocument();
+    fireEvent.pointerCancel(wrapper);
+    expect(screen.queryByTestId('rate-drag-bubble')).toBeNull();
   });
 });
 
