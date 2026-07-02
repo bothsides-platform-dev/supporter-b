@@ -41,7 +41,7 @@ describe('SavingsCalculator', () => {
     render(<SavingsCalculator />);
     // savings value is rendered as a KRW string (…원)
     expect(screen.getByText(/원$/)).toBeInTheDocument();
-    expect(screen.getByText('EST. ANNUAL SAVINGS')).toBeInTheDocument();
+    expect(screen.getByText('예상 연간 절감액')).toBeInTheDocument();
   });
 
   it('keeps an estimate disclaimer without claiming a floor rate', () => {

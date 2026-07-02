@@ -172,6 +172,7 @@ export function SavingsCalculator() {
   const savings = annualMaxSavings(volume, currentRate);
   const currentCost = Math.round(currentRate * volume);
   const supporterBCost = Math.round(supporterBRate * volume);
+  const savingsPct = currentCost > 0 ? (savings / currentCost) * 100 : 0;
 
   const animatedSavings = useAnimatedNumber(savings);
 
@@ -265,11 +266,18 @@ export function SavingsCalculator() {
         <div className="flex flex-col md:pl-[var(--s-8)]">
           <div className="flex flex-col gap-[var(--s-2)]">
             <span className="font-mono text-[var(--text-xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              EST. ANNUAL SAVINGS
+              예상 연간 절감액
             </span>
-            <span className="md-numeric text-[clamp(32px,4vw,40px)] font-semibold leading-none tracking-[-0.02em] text-[var(--md-sys-color-tertiary)]">
-              {formatKRW(Math.round(animatedSavings))}
-            </span>
+            <div className="flex items-baseline gap-3">
+              <span className="md-numeric text-[clamp(32px,4vw,40px)] font-semibold leading-none tracking-[-0.02em] text-[var(--md-sys-color-tertiary)]">
+                {formatKRW(Math.round(animatedSavings))}
+              </span>
+              {currentCost > 0 && (
+                <span className="font-mono tabular-nums text-[var(--text-xs)] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)]">
+                  ▾ {savingsPct.toFixed(1)}%
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="mt-[var(--s-6)] pt-[var(--s-6)] border-t border-[var(--md-sys-color-outline-variant)]">
@@ -281,7 +289,7 @@ export function SavingsCalculator() {
         </div>
       </div>
 
-      <p className="mt-[var(--s-7)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)] font-mono text-[var(--text-2xs)] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+      <p className="mt-[var(--s-7)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)] font-mono text-[10px] tracking-[0.06em] text-[var(--md-sys-color-outline)] leading-relaxed">
         * 예상 절감액은 추정치입니다. 카드 수수료를 포함한 모든 항목(정산주기·보증보험·가입비 등)이
         협상 대상이며, 실제 절감액은 PG사 견적·조건에 따라 달라질 수 있습니다.
       </p>
