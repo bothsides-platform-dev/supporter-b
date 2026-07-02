@@ -5,6 +5,8 @@ import { Chip } from '@/components/primitives/Chip';
 // 실데모(DemoAppShell) 임베드 금지: 데모 fixtures가 모듈 스코프 Date.now()를 쓰는
 // hydration mismatch 지뢰(기지 버그)가 있다. 이 창의 내용물은 전부 결정적 리터럴이어야 한다.
 // 장식용 비주얼이므로 인터랙션·접근성 트리에서 제외한다(pointer-events-none + aria-hidden).
+// 단, 비교표는 모바일 폭에서 7열이 다 안 들어가므로 예외적으로 가로 스크롤만 허용한다
+// (표 wrapper에 pointer-events-auto, OfferComparisonTable은 기본 showScrollFade=true 사용).
 export function HeroProductWindow() {
   return (
     <div
@@ -23,15 +25,17 @@ export function HeroProductWindow() {
         </span>
       </div>
 
-      {/* 표의 overflow-x-auto를 clip으로 눌러, 장식 창 안에서 스크롤바가 생기지 않게 한다 */}
-      <div className="flex flex-1 flex-col gap-[var(--s-4)] overflow-hidden p-5 md:p-6 [&_.overflow-x-auto]:overflow-x-clip">
+      <div className="flex flex-1 flex-col gap-[var(--s-4)] overflow-hidden p-5 md:p-6">
         <div className="flex items-center gap-[var(--s-3)]">
           <span className="text-[15px] font-medium tracking-[-0.01em] text-[var(--md-sys-color-on-surface)]">
             받은 견적
           </span>
           <Chip label="입찰 3건 도착" color="primary" />
         </div>
-        <OfferComparisonTable showScrollFade={false} />
+        {/* 표만 예외적으로 인터랙션 허용 — 모바일 폭에서 가로 드래그로 나머지 열을 볼 수 있다 */}
+        <div className="pointer-events-auto">
+          <OfferComparisonTable />
+        </div>
       </div>
     </div>
   );
