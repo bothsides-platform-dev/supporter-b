@@ -1,7 +1,8 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ChevronRightIcon } from '@/components/icons';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 
 // 정적 예시 비교표 — 기존 'LiveBidSimulation'(스크롤 구동·토스트)을 대체한다.
@@ -75,6 +76,14 @@ const STEP_COLUMNS: readonly (readonly number[])[] = [
 ];
 const STEP_ROW: readonly (number | null)[] = [null, null, null, 0];
 
+// 서브픽셀 반올림/스냅으로 실제 끝인데도 scrollLeft가 미세하게 모자란 경우 페이드가
+// 깜빡이는 것을 막기 위한 여유값.
+const SCROLL_FADE_THRESHOLD_PX = 4;
+
+function computeCanScrollRight(el: HTMLElement): boolean {
+  return el.scrollWidth - el.clientWidth - el.scrollLeft > SCROLL_FADE_THRESHOLD_PX;
+}
+
 const headCls =
   'px-[var(--s-4)] py-[var(--s-3)] text-left font-mono text-[var(--text-2xs)] tracking-[0.12em] uppercase whitespace-nowrap transition-colors duration-300';
 const cellCls =
@@ -112,9 +121,36 @@ function Cell({
   );
 }
 
-export function OfferComparisonTable({ activeStep = null }: { activeStep?: number | null }) {
+export function OfferComparisonTable({
+  activeStep = null,
+  showScrollFade = true,
+}: {
+  activeStep?: number | null;
+  /** 장식용 목업(예: HeroProductWindow)처럼 overflow-x-clip 등으로 실제 스크롤이
+   *  불가능한 컨테이너에 렌더될 때는 false로 꺼야 한다. 그런 컨테이너는 scrollLeft가
+   *  0에 고정돼 스크롤 이벤트가 절대 발생하지 않으므로, 켜두면 canScrollRight가
+   *  마운트 시점 상태로 영구 고정된 채(대개 true) 페이드가 계속 떠 있게 된다. */
+  showScrollFade?: boolean;
+}) {
   const activeCols = activeStep != null ? (STEP_COLUMNS[activeStep] ?? []) : [];
   const activeRow = activeStep != null ? (STEP_ROW[activeStep] ?? null) : null;
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  useEffect(() => {
+    if (!showScrollFade) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const update = () => setCanScrollRight(computeCanScrollRight(el));
+    update();
+    el.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    return () => {
+      el.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [showScrollFade]);
 
   return (
     <motion.div
@@ -124,91 +160,111 @@ export function OfferComparisonTable({ activeStep = null }: { activeStep?: numbe
       transition={{ duration: 0.4, ease: EASE_OUT }}
       className="flex flex-col gap-[var(--s-3)]"
     >
-      <div className="overflow-x-auto rounded-md border border-[var(--md-sys-color-outline-variant)]">
-        <table className="w-full min-w-[680px] border-collapse text-left">
-          <thead className="bg-[var(--md-sys-color-surface-container-low)]">
-            <tr>
-              {COLUMNS.map((col, ci) => {
-                const colActive = activeCols.includes(ci);
-                return (
-                  <th
-                    key={col}
-                    scope="col"
-                    data-active={colActive ? 'true' : undefined}
-                    className={[
-                      headCls,
-                      colActive
-                        ? 'text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/30'
-                        : 'text-[var(--md-sys-color-on-surface-variant)]',
-                    ].join(' ')}
-                  >
-                    {col}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {OFFERS.map((o, i) => {
-              const rowActive = activeRow === i;
-              return (
-                <tr
-                  key={o.pg}
-                  className={[
-                    'transition-colors duration-300',
-                    rowActive
-                      ? 'bg-[var(--md-sys-color-tertiary-container)]/50'
-                      : o.recommended
-                        ? 'bg-[var(--md-sys-color-tertiary-container)]/25'
-                        : '',
-                  ].join(' ')}
-                >
-                  <Cell col={0} activeCols={activeCols} rowActive={rowActive}>
-                    {o.recommended && (
-                      <span
-                        aria-hidden
-                        className="inline-block h-3.5 w-0.5 rounded-full bg-[var(--md-sys-color-tertiary)]"
-                      />
-                    )}
-                    <span
+      <div className="relative">
+        <div
+          ref={scrollRef}
+          data-testid="offer-table-scroll-container"
+          className="overflow-x-auto snap-x snap-proximity rounded-md border border-[var(--md-sys-color-outline-variant)]"
+        >
+          <table className="w-full min-w-[680px] border-collapse text-left">
+            <thead className="bg-[var(--md-sys-color-surface-container-low)]">
+              <tr>
+                {COLUMNS.map((col, ci) => {
+                  const colActive = activeCols.includes(ci);
+                  return (
+                    <th
+                      key={col}
+                      scope="col"
+                      data-active={colActive ? 'true' : undefined}
                       className={[
-                        'text-[var(--text-base)] font-medium transition-colors duration-300',
-                        rowActive
-                          ? 'text-[var(--md-sys-color-primary)]'
-                          : 'text-[var(--md-sys-color-on-surface)]',
+                        headCls,
+                        'snap-start',
+                        colActive
+                          ? 'text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/30'
+                          : 'text-[var(--md-sys-color-on-surface-variant)]',
                       ].join(' ')}
                     >
-                      {o.pg}
-                    </span>
-                    {o.recommended && <Chip label="추천" color="tertiary" />}
-                  </Cell>
-                  <Cell col={1} activeCols={activeCols} rowActive={rowActive}>
-                    <span className={numCls}>{o.fee}</span>
-                  </Cell>
-                  <Cell col={2} activeCols={activeCols} rowActive={rowActive}>
-                    <span className={numCls}>{o.settlement}</span>
-                  </Cell>
-                  <Cell col={3} activeCols={activeCols} rowActive={rowActive}>
-                    <span className="text-[var(--text-sm)] text-[var(--md-sys-color-on-surface-variant)]">
-                      {o.guarantee}
-                    </span>
-                  </Cell>
-                  <Cell col={4} activeCols={activeCols} rowActive={rowActive}>
-                    <span className="text-[var(--text-sm)] text-[var(--md-sys-color-on-surface-variant)]">
-                      {o.joinFee}
-                    </span>
-                  </Cell>
-                  <Cell col={5} activeCols={activeCols} rowActive={rowActive}>
-                    <Chip label={o.approval.label} color={o.approval.color} />
-                  </Cell>
-                  <Cell col={6} activeCols={activeCols} rowActive={rowActive}>
-                    <Chip label={o.negotiable.label} color={o.negotiable.color} />
-                  </Cell>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      {col}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {OFFERS.map((o, i) => {
+                const rowActive = activeRow === i;
+                return (
+                  <tr
+                    key={o.pg}
+                    className={[
+                      'transition-colors duration-300',
+                      rowActive
+                        ? 'bg-[var(--md-sys-color-tertiary-container)]/50'
+                        : o.recommended
+                          ? 'bg-[var(--md-sys-color-tertiary-container)]/25'
+                          : '',
+                    ].join(' ')}
+                  >
+                    <Cell col={0} activeCols={activeCols} rowActive={rowActive}>
+                      {o.recommended && (
+                        <span
+                          aria-hidden
+                          className="inline-block h-3.5 w-0.5 rounded-full bg-[var(--md-sys-color-tertiary)]"
+                        />
+                      )}
+                      <span
+                        className={[
+                          'text-[var(--text-base)] font-medium transition-colors duration-300',
+                          rowActive
+                            ? 'text-[var(--md-sys-color-primary)]'
+                            : 'text-[var(--md-sys-color-on-surface)]',
+                        ].join(' ')}
+                      >
+                        {o.pg}
+                      </span>
+                      {o.recommended && <Chip label="추천" color="tertiary" />}
+                    </Cell>
+                    <Cell col={1} activeCols={activeCols} rowActive={rowActive}>
+                      <span className={numCls}>{o.fee}</span>
+                    </Cell>
+                    <Cell col={2} activeCols={activeCols} rowActive={rowActive}>
+                      <span className={numCls}>{o.settlement}</span>
+                    </Cell>
+                    <Cell col={3} activeCols={activeCols} rowActive={rowActive}>
+                      <span className="text-[var(--text-sm)] text-[var(--md-sys-color-on-surface-variant)]">
+                        {o.guarantee}
+                      </span>
+                    </Cell>
+                    <Cell col={4} activeCols={activeCols} rowActive={rowActive}>
+                      <span className="text-[var(--text-sm)] text-[var(--md-sys-color-on-surface-variant)]">
+                        {o.joinFee}
+                      </span>
+                    </Cell>
+                    <Cell col={5} activeCols={activeCols} rowActive={rowActive}>
+                      <Chip label={o.approval.label} color={o.approval.color} />
+                    </Cell>
+                    <Cell col={6} activeCols={activeCols} rowActive={rowActive}>
+                      <Chip label={o.negotiable.label} color={o.negotiable.color} />
+                    </Cell>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {showScrollFade && (
+          <div
+            aria-hidden
+            data-testid="offer-table-scroll-fade"
+            className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[var(--md-sys-color-surface)] to-transparent transition-opacity duration-200"
+            style={{ opacity: canScrollRight ? 1 : 0 }}
+          >
+            <ChevronRightIcon
+              size={16}
+              className="absolute right-1 top-1/2 -translate-y-1/2 text-[var(--md-sys-color-on-surface-variant)]"
+            />
+          </div>
+        )}
       </div>
       <p className="font-mono text-[var(--text-2xs)] tracking-[0.04em] text-[var(--md-sys-color-on-surface-variant)]">
         * 표시 값은 이해를 돕기 위한 예시이며, 실제 견적은 PG사·조건에 따라 달라집니다.
