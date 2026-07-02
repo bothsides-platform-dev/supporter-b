@@ -69,7 +69,8 @@ export function DemoCursor({
             Math.abs(p.y - n.y) < 0.5 &&
             p.off === n.off &&
             p.side === n.side &&
-            Math.abs(p.winW - n.winW) < 0.5
+            Math.abs(p.winW - n.winW) < 0.5 &&
+            Math.abs(p.winH - n.winH) < 0.5
               ? p
               : n,
           );

@@ -50,7 +50,7 @@ const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9
 
 export function LandingHero({ nav }: { nav?: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[var(--md-sys-color-surface)] flex flex-col">
+    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col">
 
       {/* ── Nav ── */}
       <header className="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-8 h-[var(--shell-topbar)] border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]">

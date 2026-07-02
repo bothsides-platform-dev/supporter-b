@@ -169,7 +169,7 @@ const subCls = `max-w-[760px] ${LANDING_TYPE.lead} text-[var(--md-sys-color-on-s
 
 export function PgLanding() {
   return (
-    <div className="min-h-screen bg-[var(--md-sys-color-surface)] flex flex-col">
+    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
