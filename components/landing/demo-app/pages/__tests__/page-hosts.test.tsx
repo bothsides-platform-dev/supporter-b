@@ -51,11 +51,6 @@ describe('HomePageHost', () => {
     expect(screen.getByText('진행 중')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /견적 요청하기/ })).toBeInTheDocument();
   });
-
-  it('showCue면 안내 코치마크를 노출한다', () => {
-    render(<HomePageHost showCue />);
-    expect(screen.getByText('내 견적 현황을 한눈에 볼 수 있어요')).toBeInTheDocument();
-  });
 });
 
 describe('RfpListPageHost', () => {
@@ -65,11 +60,6 @@ describe('RfpListPageHost', () => {
     fireEvent.click(screen.getByText('2026 결제 인프라 견적 요청'));
     expect(onOpenRfp).toHaveBeenCalledWith('P-2606-0042');
   });
-
-  it('showCue면 "어디를 눌러야 하는지" 코치마크를 노출한다', () => {
-    render(<RfpListPageHost onOpenRfp={vi.fn()} showCue />);
-    expect(screen.getByText('견적 요청을 눌러 받은 견적을 확인해요')).toBeInTheDocument();
-  });
 });
 
 describe('DealRoomPageHost', () => {
@@ -78,21 +68,17 @@ describe('DealRoomPageHost', () => {
     expect(screen.getByText('지금 조건보다 이만큼 좋아져요')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /시작하기/ })).toBeInTheDocument();
   });
-
-  it('showCue면 비교·선정 안내 코치마크를 노출한다', () => {
-    render(<DealRoomPageHost showCue />);
-    expect(screen.getByText('PG별 견적을 비교하고 선정해요')).toBeInTheDocument();
-  });
 });
 
 describe('WizardPageHost', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('마법사를 hideNav·guest로 마운트한다', () => {
+  it('마법사를 guest로, nav를 노출한 채(hideNav 미지정) 마운트한다', () => {
     render(<WizardPageHost enabled={false} />);
     const w = screen.getByTestId('wizard');
-    expect(w).toHaveAttribute('data-hidenav', 'true');
+    // 클릭 진행 데모라 위저드 자체 nav('다음'/'보내기')를 보여준다.
+    expect(w).not.toHaveAttribute('data-hidenav', 'true');
     expect(w).toHaveAttribute('data-guest', 'true');
   });
 
@@ -101,10 +87,5 @@ describe('WizardPageHost', () => {
     expect(useRfpDraftStore.getState().title).toBe('');
     act(() => vi.advanceTimersByTime(5000));
     expect(useRfpDraftStore.getState().title).toBe('2026 결제 인프라 견적 요청');
-  });
-
-  it('showCue면 작성 안내 코치마크를 노출한다', () => {
-    render(<WizardPageHost enabled={false} showCue />);
-    expect(screen.getByText('정보를 입력하고 견적을 요청해요')).toBeInTheDocument();
   });
 });

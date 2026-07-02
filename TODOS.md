@@ -29,6 +29,17 @@
 ### font-mono uppercase tracking on non-numeric UI labels (C4) (P3)
 `font-mono text-[10px] tracking-[0.1em] uppercase` 패턴이 폼 라벨·버튼·nav 링크 등 비수치 UI 요소 ~180곳에 남아 있음 (DESIGN.md 하드 룰 위반: "no `font-mono uppercase tracking` on labels/nav"). 대표 파일: `app/(public)/login`·`signup`·`password`·`auth`·`invite`, `components/auth/PasswordField`·`PhoneVerificationField`·`ResendCountdown`, `components/inbox/bid-wizard/BidContextStrip`, `components/settings/*`, `components/rfp/*`. 수정 방향: `font-mono text-[10px] tracking-[0.1em] uppercase` → `font-sans text-[11px] tracking-tight` + sentence case. 별도 worktree 권장(시각 변경 광범위). 또한 `font-mono tabular-nums` 직접 사용이 `md-numeric` 미전환 상태로 ~30건 잔존(`components/settings/`, `components/rfp/`, `components/landing/` 등) — C4 스윕 시 병행 정리. (도입: font-system audit PR#280 v0.2.35.1, 2026-06-22)
 
+## Landing
+
+### DemoCursor rAF 루프가 데모가 화면 밖으로 나가도 계속 돎 (P3)
+`components/landing/demo-app/DemoCursor.tsx`의 `requestAnimationFrame` 루프는 매 프레임 `querySelector` + `getBoundingClientRect`(강제 리플로우)를 무조건 재예약한다. 두 데모 셸이 `useInView(..., { once: true })` 뒤에서 마운트하므로 데모가 한 번 화면에 들어오면 커서가 영영 언마운트되지 않고, 탭이 열려 있는 한 스크롤을 벗어나도 초당 ~60회 강제 리플로우가 지속된다(리크는 아님 — cleanup은 정상). 수정 방향: IntersectionObserver로 데모 창이 뷰포트에 있을 때만 루프를 돌리거나, 대상을 찾은 뒤 정적이면 cadence를 낮춘다. 랜딩 모션 예외 표면이라 무해하지만 CPU/배터리 낭비. (발견: /ship adversarial 리뷰 2026-07-02, `feat/landing-scroll-pin-sections`)
+
+### ScrollPinnedSection의 미사용 progress·scrollToStep + steps=0 잠재 나눗셈 (P4)
+`components/landing/ScrollPinnedSection.tsx`가 render-prop payload로 `progress`(MotionValue)·`scrollToStep`을 노출하지만 현재 소비처(`ScrollDrivenProblem`·`ScrollDrivenSolution`)는 `pinned`·`activeStep`만 쓴다(옛 `DemoStepBar` 소비처는 삭제됨). `scrollToStep`은 `(index+0.5)/steps`, `activeStep`은 `Math.floor(v*steps)`로 `steps===0`이면 `Infinity`/`-1`이 나온다 — 현재는 배열 길이가 상수 ≥4라 도달 불가. 미사용 필드 제거하거나 `steps<=0` 가드 추가. (발견: /ship maintainability+adversarial 리뷰 2026-07-02, `feat/landing-scroll-pin-sections`)
+
+### 랜딩 데모 셸 DRY: PG 트리거/힌트 맵·진입 스케일 스타일 중복 (P4)
+PG 데모 셸(`PgDemoAppShell.tsx`)은 페이지별 트리거/힌트를 로컬 `PAGE_TRIGGER`/`PAGE_HINT` 맵으로 인라인하는데, 구매사 셸은 `demo-triggers.ts`의 공용 함수(`demoTriggerSelector`/`demoCursorHint`)를 쓴다 — 같은 개념을 두 방식으로 구현해 드리프트 위험. 또 진입 스케일 인라인 스타일(`scale(1.1)`·`700ms cubic-bezier(...)`)이 두 셸에 그대로 복붙됨. 공용 함수/상수로 통합 검토. (발견: /ship maintainability 리뷰 2026-07-02, `feat/landing-scroll-pin-sections`)
+
 ## Signup / Auth
 
 ### 설정 페이지 WorkspaceBizNoForm blockedStatuses 누락 (P2)

@@ -1,24 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useInView } from 'motion/react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { MobileShellBar } from '@/components/shell/MobileShellBar';
 import { DemoNavProvider, hrefToDemoPage } from '@/lib/nav/demo-nav-context';
-import { useDemoStepAutoplay } from '@/components/landing/useDemoStepAutoplay';
 import { demoWorkspaceName } from '@/components/landing/demo-fixtures';
 import { DemoSidebar } from './DemoSidebar';
-import { DemoStepBar } from './DemoStepBar';
-import { demoTriggerSelector } from './demo-triggers';
+import { DemoCursor } from './DemoCursor';
+import { demoTriggerSelector, demoCursorHint } from './demo-triggers';
 import { HomePageHost } from './pages/HomePageHost';
 import { RfpListPageHost } from './pages/RfpListPageHost';
 import { DealRoomPageHost } from './pages/DealRoomPageHost';
 import { WizardPageHost } from './pages/WizardPageHost';
 
-const TOTAL_PAGES = 4;
-const PAGE_AUTO_MS = 4500;
-// 전환 직전, 트리거 요소에 클릭 하이라이트를 비추는 시간. globals.css의 demo-click-flash와 일치.
-const FLASH_MS = 650;
 const PAGE_PATH: Record<number, string> = {
   1: '/home',
   2: '/rfp',
@@ -35,61 +30,23 @@ const sidebarStyle = {
 } as React.CSSProperties;
 
 // 랜딩 임베디드 데모 — 실제 사이드바 + 4개 실제 페이지를 인플레이스로 순회한다.
-// 뷰에 들어오면 자동 투어로 페이지를 넘기다, 방문자가 한 번이라도 조작하면 멈추고
-// 제어권을 넘긴다. 사이드바/콘텐츠 내부 링크 클릭은 캡처 단계에서 가로채 페이지를
-// 전환하므로 URL이 바뀌거나 랜딩을 이탈하지 않는다.
+// 스크롤 구동·자동재생 없이, 각 화면에서 가이드 커서가 '여기를 누르면 다음 화면'을 가리키고
+// 방문자가 그 대상을 클릭하면 다음 화면으로 넘어간다. 사이드바/콘텐츠 내부 링크 클릭은
+// 캡처 단계에서 가로채 페이지를 전환하므로 URL이 바뀌거나 랜딩을 이탈하지 않는다.
 export function DemoAppShell() {
   const rootRef = useRef<HTMLDivElement>(null);
   const inView = useInView(rootRef, { once: true, amount: 0.3 });
-  const [userInteracted, setUserInteracted] = useState(false);
+  const [page, setPage] = useState(1);
 
-  const tour = useDemoStepAutoplay(TOTAL_PAGES, PAGE_AUTO_MS, inView && !userInteracted);
-  const page = tour.step;
-
-  const freeze = useCallback(() => setUserInteracted(true), []);
-
-  const goToPage = useCallback(
-    (n: number) => {
-      setUserInteracted(true);
-      tour.setStep(n);
-    },
-    [tour],
-  );
+  const goToPage = useCallback((n: number) => setPage(n), []);
 
   const navigate = useCallback(
     (href: string) => {
       const target = hrefToDemoPage(href);
-      // 데모에 없는 라우트(알림/메시지/설정/상태 필터)는 무시 — 페이지 유지·투어 유지.
       if (target) goToPage(target);
     },
     [goToPage],
   );
-
-  const autoplaying = inView && !userInteracted && page < TOTAL_PAGES;
-  // 코치마크는 마지막 단계에서도 보여야 하므로 page<TOTAL 게이트를 두지 않는다.
-  const guiding = inView && !userInteracted;
-  const replay = useCallback(() => {
-    setUserInteracted(false);
-    tour.setStep(1);
-  }, [tour]);
-
-  // 자동 전환 직전, 다음 단계로 넘어가게 만드는 실제 요소(사이드바 항목·목록 행)에 잠깐
-  // 클릭 하이라이트를 입혀 "이걸 누르면 넘어가요"를 보여준다. 전환되면 정리에서 다시 뗀다.
-  useEffect(() => {
-    const win = rootRef.current;
-    if (!autoplaying || !win) return;
-    const selector = demoTriggerSelector(page);
-    if (!selector) return;
-    let flashed: Element | null = null;
-    const id = setTimeout(() => {
-      flashed = win.querySelector(selector);
-      flashed?.classList.add('demo-click-flash');
-    }, PAGE_AUTO_MS - FLASH_MS);
-    return () => {
-      clearTimeout(id);
-      flashed?.classList.remove('demo-click-flash');
-    };
-  }, [page, autoplaying]);
 
   const onClickCapture = useCallback(
     (e: React.MouseEvent) => {
@@ -108,35 +65,42 @@ export function DemoAppShell() {
   return (
     <DemoNavProvider value={{ pathname: PAGE_PATH[page], search: '', navigate }}>
       <div className="flex flex-col gap-3">
-        <div
-          ref={rootRef}
-          onClickCapture={onClickCapture}
-          className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)] [transform:translateZ(0)]"
-        >
-          <SidebarProvider style={sidebarStyle}>
-            <DemoSidebar workspaceName={demoWorkspaceName} />
-            <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
-              <MobileShellBar workspaceName={demoWorkspaceName} />
-              <div
-                onPointerDownCapture={freeze}
-                onKeyDownCapture={freeze}
-                className="min-h-0 min-w-0 flex-1 overflow-y-auto"
-              >
-                {page === 1 && <HomePageHost showCue={guiding} />}
-                {page === 2 && <RfpListPageHost onOpenRfp={() => goToPage(3)} showCue={guiding} />}
-                {page === 3 && <DealRoomPageHost showCue={guiding} />}
-                {page === 4 && <WizardPageHost enabled={guiding} showCue={guiding} />}
-              </div>
-            </SidebarInset>
-          </SidebarProvider>
+        {/* relative 래퍼(overflow-hidden 아님) — 커서를 데모 창 밖에 두어, 힌트·스크롤 안내가
+            창 경계를 넘어가도 잘리지 않고 데모 섹션 밖으로 보이게 한다. */}
+        <div className="relative">
+          {/* 스크롤로 데모가 뷰포트에 들어오면 100%→110%로 살짝 확대(랜딩 진입 스케일 —
+              DESIGN.md §9③ 예외). translateZ(0)는 컴포지팅 레이어 승격용으로 스케일과 함께 유지. */}
+          <div
+            ref={rootRef}
+            onClickCapture={onClickCapture}
+            style={{
+              transform: `translateZ(0) scale(${inView ? 1.1 : 1})`,
+              transition: 'transform 700ms cubic-bezier(0.22, 1, 0.36, 1)',
+            }}
+            className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)]"
+          >
+            <SidebarProvider style={sidebarStyle}>
+              <DemoSidebar workspaceName={demoWorkspaceName} />
+              <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
+                <MobileShellBar workspaceName={demoWorkspaceName} />
+                <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+                  {page === 1 && <HomePageHost />}
+                  {page === 2 && <RfpListPageHost onOpenRfp={() => goToPage(3)} />}
+                  {page === 3 && <DealRoomPageHost />}
+                  {page === 4 && <WizardPageHost enabled={false} />}
+                </div>
+              </SidebarInset>
+            </SidebarProvider>
+          </div>
+          {inView && (
+            <DemoCursor
+              windowRef={rootRef}
+              selector={demoTriggerSelector(page)}
+              page={page}
+              hint={demoCursorHint(page)}
+            />
+          )}
         </div>
-        <DemoStepBar
-          current={page}
-          autoplaying={autoplaying}
-          intervalMs={PAGE_AUTO_MS}
-          onSelect={goToPage}
-          onReplay={replay}
-        />
       </div>
     </DemoNavProvider>
   );

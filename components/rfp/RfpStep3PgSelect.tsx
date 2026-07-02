@@ -126,7 +126,7 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
-        <Button type="button" size="md" onClick={() => { setAttempted(true); onNext(); }}>
+        <Button data-demo-cursor type="button" size="md" onClick={() => { setAttempted(true); onNext(); }}>
           다음
         </Button>
       </div>
