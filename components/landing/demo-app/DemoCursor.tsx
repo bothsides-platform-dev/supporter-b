@@ -172,7 +172,7 @@ export function DemoCursor({
             transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
           >
             <MousePointerClick
-              className="size-5 text-[var(--md-sys-color-primary)] drop-shadow"
+              className="size-5 text-[var(--md-sys-color-on-surface)] drop-shadow"
               strokeWidth={2.25}
             />
           </motion.span>
