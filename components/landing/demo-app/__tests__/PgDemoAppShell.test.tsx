@@ -17,8 +17,8 @@ vi.mock('../DemoSidebar', () => ({
   ),
 }));
 vi.mock('../pg/PgHomePageHost', () => ({
-  PgHomePageHost: ({ showCue }: { showCue?: boolean }) => (
-    <div data-testid="page-home" data-cue={String(showCue)}>
+  PgHomePageHost: () => (
+    <div data-testid="page-home">
       <a href="/inbox/P-2606-0042">큐 항목</a>
     </div>
   ),

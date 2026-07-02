@@ -1,7 +1,5 @@
 'use client';
 
-import { DemoCue } from '../DemoCue';
-
 // 데모 메시지 — 실시간(Centrifugo) 의존 없이 고정 대화로 채팅 기능을 보여준다.
 const THREADS = [
   { id: 't1', name: '와이즐리컴퍼니', preview: '정산주기 조건만 확인 부탁드려요.', active: true, unread: true },
@@ -14,10 +12,9 @@ const MESSAGES = [
   { id: 'm3', mine: false, who: '와이즐리컴퍼니', text: '좋아요. 그럼 그 조건으로 검토해볼게요. 감사합니다!' },
 ] as const;
 
-export function PgMessagesPageHost({ showCue = false }: { showCue?: boolean }) {
+export function PgMessagesPageHost() {
   return (
     <div className="relative flex h-full min-h-0 flex-col px-6 py-6">
-      <DemoCue show={showCue} label="구매사와 바로 메시지를 주고받아요" />
       <h1 className="mb-4 text-[18px] font-medium tracking-[-0.01em] text-[var(--md-sys-color-on-surface)]">
         메시지
       </h1>

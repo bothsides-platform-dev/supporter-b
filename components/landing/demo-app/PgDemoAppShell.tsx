@@ -30,11 +30,12 @@ const PAGE_TRIGGER: Record<number, string> = {
 };
 
 // 각 단계에서 커서 옆에 힌트처럼 붙이는 안내 메시지(PG 데모).
+// 커서가 가리키는 클릭 대상이 하는 동작과 일치시킨다.
 const PAGE_HINT: Record<number, string> = {
-  1: '받은 요청과 메시지를 한눈에 볼 수 있어요',
-  2: '받은 견적 요청을 눌러 상세를 확인해요',
-  3: '조건을 입력하고 견적을 제출해요',
-  4: '구매사와 바로 메시지를 주고받아요',
+  1: '받은 견적 요청을 확인해요', // 커서: 사이드바 '받은 견적 요청'
+  2: '받은 견적 요청을 눌러 상세를 확인해요', // 커서: 목록 행
+  3: '구매사와 메시지를 주고받아요', // 커서: 사이드바 '메시지'
+  4: '여기서 바로 메시지를 보내요', // 커서: 전송 버튼(종착)
 };
 
 const sidebarStyle = {
@@ -79,29 +80,33 @@ export function PgDemoAppShell() {
   return (
     <DemoNavProvider value={{ pathname: PAGE_PATH[page], search: '', navigate }}>
       <div className="flex flex-col gap-3">
-        <div
-          ref={rootRef}
-          onClickCapture={onClickCapture}
-          className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)] [transform:translateZ(0)]"
-        >
-          <SidebarProvider style={sidebarStyle}>
-            <DemoSidebar
-              workspaceName={demoPgWorkspaceName}
-              workspaceType="pg"
-              isInert={isInertPgDemoNavHref}
-            />
-            <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
-              <MobileShellBar workspaceName={demoPgWorkspaceName} />
-              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-                {page === 1 && <PgHomePageHost />}
-                {page === 2 && <PgInboxPageHost onOpenRfp={() => goToPage(3)} />}
-                {page === 3 && (
-                  <PgDealRoomPageHost onGuestSubmit={() => window.location.assign('/signup/pg')} />
-                )}
-                {page === 4 && <PgMessagesPageHost />}
-              </div>
-            </SidebarInset>
-          </SidebarProvider>
+        {/* relative 래퍼(overflow-hidden 아님) — 커서를 데모 창 밖에 두어, 힌트·스크롤 안내가
+            창 경계를 넘어가도 잘리지 않고 데모 섹션 밖으로 보이게 한다. */}
+        <div className="relative">
+          <div
+            ref={rootRef}
+            onClickCapture={onClickCapture}
+            className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)] [transform:translateZ(0)]"
+          >
+            <SidebarProvider style={sidebarStyle}>
+              <DemoSidebar
+                workspaceName={demoPgWorkspaceName}
+                workspaceType="pg"
+                isInert={isInertPgDemoNavHref}
+              />
+              <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
+                <MobileShellBar workspaceName={demoPgWorkspaceName} />
+                <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+                  {page === 1 && <PgHomePageHost />}
+                  {page === 2 && <PgInboxPageHost onOpenRfp={() => goToPage(3)} />}
+                  {page === 3 && (
+                    <PgDealRoomPageHost onGuestSubmit={() => window.location.assign('/signup/pg')} />
+                  )}
+                  {page === 4 && <PgMessagesPageHost />}
+                </div>
+              </SidebarInset>
+            </SidebarProvider>
+          </div>
           {inView && (
             <DemoCursor
               windowRef={rootRef}

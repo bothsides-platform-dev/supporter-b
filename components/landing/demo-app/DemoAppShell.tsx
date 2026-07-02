@@ -65,23 +65,27 @@ export function DemoAppShell() {
   return (
     <DemoNavProvider value={{ pathname: PAGE_PATH[page], search: '', navigate }}>
       <div className="flex flex-col gap-3">
-        <div
-          ref={rootRef}
-          onClickCapture={onClickCapture}
-          className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)] [transform:translateZ(0)]"
-        >
-          <SidebarProvider style={sidebarStyle}>
-            <DemoSidebar workspaceName={demoWorkspaceName} />
-            <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
-              <MobileShellBar workspaceName={demoWorkspaceName} />
-              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-                {page === 1 && <HomePageHost />}
-                {page === 2 && <RfpListPageHost onOpenRfp={() => goToPage(3)} />}
-                {page === 3 && <DealRoomPageHost />}
-                {page === 4 && <WizardPageHost enabled={false} />}
-              </div>
-            </SidebarInset>
-          </SidebarProvider>
+        {/* relative 래퍼(overflow-hidden 아님) — 커서를 데모 창 밖에 두어, 힌트·스크롤 안내가
+            창 경계를 넘어가도 잘리지 않고 데모 섹션 밖으로 보이게 한다. */}
+        <div className="relative">
+          <div
+            ref={rootRef}
+            onClickCapture={onClickCapture}
+            className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)] [transform:translateZ(0)]"
+          >
+            <SidebarProvider style={sidebarStyle}>
+              <DemoSidebar workspaceName={demoWorkspaceName} />
+              <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
+                <MobileShellBar workspaceName={demoWorkspaceName} />
+                <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+                  {page === 1 && <HomePageHost />}
+                  {page === 2 && <RfpListPageHost onOpenRfp={() => goToPage(3)} />}
+                  {page === 3 && <DealRoomPageHost />}
+                  {page === 4 && <WizardPageHost enabled={false} />}
+                </div>
+              </SidebarInset>
+            </SidebarProvider>
+          </div>
           {inView && (
             <DemoCursor
               windowRef={rootRef}

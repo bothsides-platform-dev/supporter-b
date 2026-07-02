@@ -19,16 +19,17 @@ export function demoTriggerSelector(page: number): string | null {
 }
 
 // 각 단계에서 커서 옆에 힌트처럼 붙이는 안내 메시지(구매사 데모).
+// 커서가 가리키는 클릭 대상이 하는 동작과 일치시킨다.
 export function demoCursorHint(page: number): string {
   switch (page) {
     case 1:
-      return '내 견적 현황을 한눈에 볼 수 있어요';
+      return '보낸 견적 요청을 확인해요'; // 커서: 사이드바 '견적 요청'
     case 2:
-      return '견적 요청을 눌러 받은 견적을 확인해요';
+      return '견적 요청을 눌러 받은 견적을 확인해요'; // 커서: 목록 행
     case 3:
-      return 'PG별 견적을 비교하고 선정해요';
+      return '새로 견적을 요청해요'; // 커서: 사이드바 '새 견적 요청'
     case 4:
-      return '정보를 입력하고 견적을 요청해요';
+      return '정보를 입력하고 견적을 요청해요'; // 커서: 위저드 '다음'/'보내기'
     default:
       return '';
   }

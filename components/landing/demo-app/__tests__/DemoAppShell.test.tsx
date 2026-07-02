@@ -19,9 +19,7 @@ vi.mock('../DemoSidebar', () => ({
   ),
 }));
 vi.mock('../pages/HomePageHost', () => ({
-  HomePageHost: ({ showCue }: { showCue?: boolean }) => (
-    <div data-testid="page-home" data-cue={String(showCue)} />
-  ),
+  HomePageHost: () => <div data-testid="page-home" />,
 }));
 vi.mock('../pages/RfpListPageHost', () => ({
   RfpListPageHost: ({ onOpenRfp }: { onOpenRfp: (c: string) => void }) => (
