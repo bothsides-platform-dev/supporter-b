@@ -6,7 +6,7 @@ import { XIcon } from '@/components/icons';
 import { Logo } from '@/components/primitives/Logo';
 import { ConsultButton } from './ConsultButton';
 
-// 일반 B2B 사이트처럼 로고(좌) · 메뉴(중앙) · 액션(우) 3분할. 메뉴는 섹션 흐름 순서.
+// 로고(좌) · 메뉴+액션(우) 2분할. 메뉴는 앱으로 이동/로그인 링크 옆에 붙여 한 그룹으로 묶는다.
 const NAV_LINKS: { label: string; href: string }[] = [
   { label: '서비스 설명', href: '#inbound' },
   { label: '핵심 이점', href: '#advantage' },
@@ -30,45 +30,44 @@ export function PgLandingNav({ authed }: { authed: boolean }) {
   );
 
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center h-full">
+    <div className="flex items-center justify-between h-full">
       {/* Left — logo */}
-      <div className="justify-self-start">
-        <Logo />
-      </div>
+      <Logo />
 
-      {/* Center — section anchors (desktop) */}
-      <nav className="hidden md:flex items-center gap-[var(--s-7)] justify-self-center">
-        {NAV_LINKS.map((l) => (
-          <a key={l.href} href={l.href} className={linkCls}>
-            {l.label}
-          </a>
-        ))}
-      </nav>
+      {/* Right — section anchors + auth + CTA + mobile hamburger, one group */}
+      <div className="flex items-center gap-[var(--s-7)]">
+        <nav className="hidden md:flex items-center gap-[var(--s-7)]">
+          {NAV_LINKS.map((l) => (
+            <a key={l.href} href={l.href} className={linkCls}>
+              {l.label}
+            </a>
+          ))}
+        </nav>
 
-      {/* Right — auth + CTA + mobile hamburger */}
-      <div className="justify-self-end flex items-center gap-[var(--s-4)]">
-        {authLink}
-        <ConsultButton variant="primary" size="sm">
-          파트너 상담 신청
-        </ConsultButton>
-        <button
-          type="button"
-          className="md:hidden grid place-items-center h-8 w-8 -mr-1 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-          aria-label={open ? '메뉴 닫기' : '메뉴 열기'}
-          aria-expanded={open}
-          aria-controls="pg-landing-mobile-menu"
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? (
-            <XIcon size={18} />
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          )}
-        </button>
+        <div className="flex items-center gap-[var(--s-4)]">
+          {authLink}
+          <ConsultButton variant="primary" size="sm">
+            파트너 상담 신청
+          </ConsultButton>
+          <button
+            type="button"
+            className="md:hidden grid place-items-center h-8 w-8 -mr-1 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+            aria-label={open ? '메뉴 닫기' : '메뉴 열기'}
+            aria-expanded={open}
+            aria-controls="pg-landing-mobile-menu"
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? (
+              <XIcon size={18} />
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Mobile menu panel */}
