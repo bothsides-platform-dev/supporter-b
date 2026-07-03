@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.65.3] - 2026-07-03
+
+### Fixed
+
+- **마스터(운영자) Google 로그인이 파트너 주소에서 시작해도 더 이상 간헐적으로 실패하지 않아요**: `partner.supporter-b.com/login/ops`에서 로그인을 시작하면 OAuth 보안 쿠키(PKCE)가 파트너 호스트에만 심기고 Google 콜백은 구매사 호스트로 돌아와, `pkceCodeVerifier` 검증 실패(`error=Configuration`)로 로그인이 실패하던 문제를 고쳤어요. 이제 파트너 호스트의 `/login/ops`는 구매사 호스트로 자동 이동해 항상 콜백과 같은 호스트에서 로그인을 시작해요.
+- **Google OAuth 클라이언트가 반쪽만 설정되면 마스터 로그인 화면이 아예 열리지 않아요**: `AUTH_GOOGLE_ID`만 있고 `AUTH_GOOGLE_SECRET`이 비어 있으면, 죽은 로그인 버튼(클릭 시 Configuration 에러) 대신 `/login/ops`가 404로 닫히고 Google 프로바이더 등록도 건너뛰도록 두 게이트(프로바이더 등록·화면 노출)를 ID+SECRET 쌍 확인으로 맞췄어요.
+
 ## [0.2.65.2] - 2026-07-03
 
 ### Fixed

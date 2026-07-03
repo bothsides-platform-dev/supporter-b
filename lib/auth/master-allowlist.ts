@@ -31,13 +31,25 @@ export function isMasterEmail(email: string | null | undefined): boolean {
 }
 
 /**
+ * Whether the Google OAuth client is fully configured. Both halves are required —
+ * a half-set client (ID without SECRET) would register/render but fail the OAuth
+ * handshake at `signIn('google')` with `error=Configuration`. Shared by the
+ * provider registration gate (`auth.ts`) and the UI gate below so they can never
+ * diverge.
+ */
+export function googleClientConfigured(): boolean {
+  return !!process.env.AUTH_GOOGLE_ID && !!process.env.AUTH_GOOGLE_SECRET;
+}
+
+/**
  * Whether the hidden operator Google-login route (`/login/ops`) should render.
  * Requires BOTH the explicit kill switch (build-time `NEXT_PUBLIC_MASTER_OAUTH_ENABLED`)
- * AND a configured Google client (`AUTH_GOOGLE_ID`) — otherwise the page would show a
- * button that calls `signIn('google')` for an unregistered provider (dead end). When
- * either is missing the route 404s. NOTE: this gates the UI only; the security boundary
- * is the default-deny `MASTER_ACCOUNT_EMAILS` allowlist in the Google `signIn` callback.
+ * AND a fully configured Google client (`AUTH_GOOGLE_ID` + `AUTH_GOOGLE_SECRET`) —
+ * otherwise the page would show a button that calls `signIn('google')` for an
+ * unregistered/broken provider (dead end). When either is missing the route 404s.
+ * NOTE: this gates the UI only; the security boundary is the default-deny
+ * `MASTER_ACCOUNT_EMAILS` allowlist in the Google `signIn` callback.
  */
 export function masterOAuthEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_MASTER_OAUTH_ENABLED === 'true' && !!process.env.AUTH_GOOGLE_ID;
+  return process.env.NEXT_PUBLIC_MASTER_OAUTH_ENABLED === 'true' && googleClientConfigured();
 }
