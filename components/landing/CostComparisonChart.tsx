@@ -18,11 +18,11 @@ export function CostComparisonChart({
 
   return (
     <div className="flex flex-col gap-[var(--s-5)]">
-      <div className="flex items-baseline justify-between">
-        <span className="font-mono text-[var(--text-2xs)] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+      <div className="flex items-baseline justify-between gap-x-2 gap-y-1 flex-wrap">
+        <span className="font-mono text-[var(--text-2xs)] tracking-[0.06em] md:tracking-[0.18em] uppercase whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">
           ANNUAL PG COST
         </span>
-        <span className="font-mono text-[var(--text-2xs)] tracking-[0.1em] text-[var(--md-sys-color-outline)]">
+        <span className="font-mono text-[var(--text-2xs)] tracking-[0.04em] md:tracking-[0.1em] whitespace-nowrap text-[var(--md-sys-color-outline)]">
           단위 ₩ / 연
         </span>
       </div>
@@ -64,13 +64,13 @@ function BarRow({ label, ratio, cost, variant }: BarRowProps) {
 
   return (
     <div className="flex flex-col gap-[var(--s-2)]">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-x-2 gap-y-1 flex-wrap">
         <span
-          className={`font-mono text-[var(--text-xs)] tracking-[0.16em] uppercase ${labelClass}`}
+          className={`font-mono text-[var(--text-xs)] tracking-[0.04em] md:tracking-[0.16em] uppercase whitespace-nowrap ${labelClass}`}
         >
           {label}
         </span>
-        <span className="font-mono tabular-nums text-[var(--text-base)] tracking-[0.02em] text-[var(--md-sys-color-on-surface)]">
+        <span className="font-mono tabular-nums text-[var(--text-base)] tracking-[0.02em] whitespace-nowrap text-[var(--md-sys-color-on-surface)]">
           {formatKRW(cost)}
         </span>
       </div>
