@@ -18,10 +18,13 @@ import authConfig from './auth.config';
 import { db } from '@/lib/db/client';
 import { authorizeCredentials } from '@/lib/auth/credentials';
 import { allowSignIn, makeNodeJwtCallback } from '@/lib/auth/master-login';
+import { googleClientConfigured } from '@/lib/auth/master-allowlist';
 
-// Google is wired only when its OAuth client is configured (master/operator
-// sign-in). Local dev / test without AUTH_GOOGLE_ID omit it entirely.
-const googleEnabled = !!process.env.AUTH_GOOGLE_ID;
+// Google is wired only when its OAuth client is FULLY configured (both
+// AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET — master/operator sign-in). Local dev /
+// test without them omit it entirely. Same gate as the /login/ops UI
+// (masterOAuthEnabled) so a half-set client can never expose a broken button.
+const googleEnabled = googleClientConfigured();
 
 export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
