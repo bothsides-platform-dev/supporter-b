@@ -25,7 +25,10 @@ export function Slider({
   return (
     <RadixSlider.Root
       className={cn(
-        'relative flex items-center select-none touch-none w-full h-5',
+        // touch-pan-y: 세로 스와이프(스크롤)는 브라우저에 넘기고 가로 드래그(값 조정)만
+        // 슬라이더가 캡처한다. touch-none 은 세로 스크롤까지 삼켜 모바일에서 슬라이더 위를
+        // 지날 때 페이지 스크롤이 걸리게 한다. 현행 슬라이더는 전부 가로.
+        'relative flex items-center select-none touch-pan-y w-full h-5',
         className,
       )}
       value={[value]}
