@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 
 // __v 3: 카드·간편결제 구간화로 fees 키에 "<method>:<tier>" 복합 키 도입.
 export type BidDraft = {
@@ -93,10 +93,15 @@ export function useBidDraft(rfpId: string) {
   const [draft] = useState<BidDraft | null>(() => readDraft(rfpId));
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 디바운스 대기 중인(아직 쓰이지 않은) 드래프트. 언마운트 시 flush 대상.
+  const pendingRef = useRef<BidDraft | null>(null);
 
   const saveDraft = useCallback((d: BidDraft) => {
     if (timerRef.current !== null) clearTimeout(timerRef.current);
+    pendingRef.current = d;
     timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      pendingRef.current = null;
       localStorage.setItem(draftKey(rfpId), JSON.stringify(d));
       setSavedAt(new Date());
     }, 500);
@@ -107,8 +112,25 @@ export function useBidDraft(rfpId: string) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    pendingRef.current = null;
     localStorage.removeItem(draftKey(rfpId));
   }
+
+  // 언마운트 시 대기 타이머를 취소하고 미저장 드래프트를 동기 flush.
+  // 타이머가 살아남으면 (테스트) 환경 teardown 뒤 발화해 localStorage
+  // ReferenceError가 나고, (실사용) 모달을 빨리 닫으면 마지막 입력이 유실된다.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (pendingRef.current !== null) {
+        localStorage.setItem(draftKey(rfpId), JSON.stringify(pendingRef.current));
+        pendingRef.current = null;
+      }
+    };
+  }, [rfpId]);
 
   return { draft, saveDraft, clearDraft, savedAt };
 }
