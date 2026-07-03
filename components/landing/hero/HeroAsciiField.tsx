@@ -27,7 +27,8 @@ import {
 // 필드는 거의 정적(셀 2%의 미세 twinkle만)이고, 커서 궤적을 따라 문자가 · : + * # 로
 // 깨어났다가 ~2–3초에 걸쳐 잔상처럼 식는다. 잉크→inverse-primary 색 리프트 + 소프트 블룸.
 // 블룸·앰비언트 글로우는 §9(블러 금지)의 사용자 승인 예외 — 랜딩 히어로 한정(§9 랜딩·마케팅
-// 예외 범주). 터치 기기·동작 줄이기 선호는 정적 베이스 필드만 본다(루프·리스너 없음).
+// 예외 범주). 터치 기기는 손가락 드래그(pointermove, pointerType=touch) 로 같은 궤적을
+// 스탬프한다 — 동작 줄이기 선호일 때만 정적 베이스 필드로 폴백한다(루프·리스너 없음).
 // 순수 계산(에너지·램프·해시)은 lib/landing/ascii-field.ts 가 소유한다.
 
 interface HeroAsciiFieldProps {
@@ -134,8 +135,10 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 가드 ③·④: 동작 줄이기·터치 기기는 정적 베이스 필드만(루프·포인터 리스너 없음).
-    const animate = !prefersReducedMotion() && window.matchMedia('(pointer: fine)').matches;
+    // 가드 ③: 동작 줄이기 선호만 정적 베이스 필드로 폴백한다(루프·포인터 리스너 없음).
+    // 터치 기기는 제외하지 않는다 — pointermove 는 드래그 중 pointerType=touch 로도
+    // 발생하므로 기존 onPointerMove/stampTrail 경로가 손가락 궤적에도 그대로 먹힌다.
+    const animate = !prefersReducedMotion();
 
     // 앵커 딥링크(#pricing 등)로 트랙 아래에서 진입하면 첫 change 이벤트 전에도 루프가 돌지
     // 않아야 한다 — HeroPinnedScene의 톤 스위치 mount-sync와 같은 패턴으로 초기값을 동기화.
