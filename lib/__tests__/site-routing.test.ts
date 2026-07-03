@@ -4,6 +4,7 @@ import {
   resolveHostRedirect,
   workspaceSwitchTarget,
   signupTargetForHost,
+  opsLoginRedirectTarget,
   type AppOrigins,
 } from '../site-routing';
 
@@ -96,5 +97,25 @@ describe('signupTargetForHost', () => {
   });
   it('falls back to the buyer flow in single-host local/dev', () => {
     expect(signupTargetForHost('localhost', LOCAL)).toBe('/signup/buyer');
+  });
+});
+
+describe('opsLoginRedirectTarget', () => {
+  // OAuth PKCE 쿠키는 host-only인데 콜백은 buyer 호스트로 고정 —
+  // partner에서 시작한 마스터 로그인은 반드시 buyer 호스트로 넘겨 시작해야 한다.
+  it('redirects the partner host to the buyer origin /login/ops (PKCE cookie must live on the callback host)', () => {
+    expect(opsLoginRedirectTarget('partner.supporter-b.com', PROD)).toBe(
+      'https://supporter-b.com/login/ops',
+    );
+  });
+  it('stays (null) on the buyer host', () => {
+    expect(opsLoginRedirectTarget('supporter-b.com', PROD)).toBeNull();
+  });
+  it('stays on an unknown host or null host (no loop risk)', () => {
+    expect(opsLoginRedirectTarget('52.78.126.178', PROD)).toBeNull();
+    expect(opsLoginRedirectTarget(null, PROD)).toBeNull();
+  });
+  it('stays in single-host local/dev (routing disabled)', () => {
+    expect(opsLoginRedirectTarget('localhost', LOCAL)).toBeNull();
   });
 });
