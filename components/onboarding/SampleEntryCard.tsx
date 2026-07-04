@@ -37,7 +37,8 @@ export function SampleEntryCard({ variant }: { variant: Variant }) {
 
   const handleDismiss = async () => {
     setHidden(true);
-    await updateOnboardingAction({ key: copy.key, event: 'dismissed' });
+    // 실패해도 카드는 이미 숨겼다 — 다음 방문 시 다시 보일 뿐, 사용자를 막지 않는다.
+    await updateOnboardingAction({ key: copy.key, event: 'dismissed' }).catch(() => {});
     router.refresh();
   };
 

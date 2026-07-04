@@ -22,7 +22,8 @@ export function SamplePgDealRoom() {
 
   const onSampleSubmit = () => {
     setSubmitted(true);
-    void updateOnboardingAction({ key: 'pgSample', event: 'completed' });
+    // fire-and-forget — 실패해도 로컬 결과 화면(체험)은 그대로 진행한다.
+    void updateOnboardingAction({ key: 'pgSample', event: 'completed' }).catch(() => {});
   };
 
   const tabs: DealRoomTab[] = [

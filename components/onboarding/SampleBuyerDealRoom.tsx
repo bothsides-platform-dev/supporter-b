@@ -16,6 +16,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check } from 'lucide-react';
 import { motion } from 'motion/react';
+import { josa } from 'es-hangul';
 import { Button } from '@/components/primitives/Button';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { useCelebrationConfetti } from '@/lib/hooks/useCelebrationConfetti';
@@ -47,7 +48,7 @@ function SampleBuyerAwardCelebration({ pgName, onDone }: { pgName: string; onDon
           <Check className="size-8" strokeWidth={2} />
         </span>
         <div className="flex flex-col items-center gap-1.5">
-          <h1 className="text-title-large">{pgName}을 선정했어요</h1>
+          <h1 className="text-title-large">{josa(pgName, '을/를')} 선정했어요</h1>
           <p className="text-body-medium text-on-surface-variant">
             실제 요청에서는 선정 즉시 PG에게 알림이 가요.
           </p>
@@ -64,7 +65,8 @@ export function SampleBuyerDealRoom() {
 
   const onSampleAward = (bidId: string) => {
     setAwardedBidId(bidId);
-    void updateOnboardingAction({ key: 'buyerSample', event: 'completed' });
+    // fire-and-forget — 실패해도 로컬 축하 화면(체험)은 그대로 진행한다.
+    void updateOnboardingAction({ key: 'buyerSample', event: 'completed' }).catch(() => {});
   };
 
   const awardedBid = sampleBids.find((b) => b.id === awardedBidId);
