@@ -31,9 +31,6 @@ export type HeroContent = {
   subCopy?: ReactNode;
   cta?: ReactNode;
   productWindow?: ReactNode;
-  // 제품 창이 부상 후 자리에 멈추는(기본, 구매사) 대신 스크롤 마지막 구간에서 위로 계속
-  // 미끄러져 빠져나가게 한다(PG). 구매사 히어로 기본값은 false — 렌더/모션 변화 없음.
-  windowSlidesThrough?: boolean;
 };
 
 const BUYER_SUBCOPY = (
@@ -59,7 +56,6 @@ export function HeroPinnedScene({
   subCopy = BUYER_SUBCOPY,
   cta = BUYER_CTA,
   productWindow = <HeroProductWindow />,
-  windowSlidesThrough = false,
 }: HeroContent = {}) {
   const trackRef = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
@@ -80,13 +76,7 @@ export function HeroPinnedScene({
   // 스크롤 진행도에 연동해 CTA가 사라지면 클릭 대상에서도 제외한다(뒤 제품 창 위 오클릭 방지).
   const ctaPointerEvents = useTransform(scrollYProgress, (v) => (v > 0.38 ? 'none' : 'auto'));
 
-  // PG(windowSlidesThrough)는 마지막 구간(0.68→1)에서 창이 위로 계속 미끄러져 빠져나가고,
-  // 구매사(기본)는 0%에 머문다 — 뒤 구간 인라인 값 되살아남 방지를 위해 1 키프레임을 명시한다.
-  const windowY = useTransform(
-    scrollYProgress,
-    [0.06, 0.68, 1],
-    ['82%', '0%', windowSlidesThrough ? '-72%' : '0%'],
-  );
+  const windowY = useTransform(scrollYProgress, [0.06, 0.68, 1], ['82%', '0%', '0%']);
   const windowRotateX = useTransform(scrollYProgress, [0.06, 0.68, 1], [16, 0, 0]);
   const windowScale = useTransform(scrollYProgress, [0.06, 0.68, 1], [0.94, 1, 1]);
 
