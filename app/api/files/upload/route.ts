@@ -15,18 +15,17 @@
  *   `createRfpAction` later patches the row's `ownerId` to the real
  *   RFP id once the form is submitted.
  *
- * Storage-then-DB ordering (advisor pin 6):
+ * DB-then-storage ordering (what the code below actually does):
  *   1. Sniff + validate buffer.
- *   2. Compute key via `newAttachmentPath(filename)`.
- *   3. `storage.save(key, buffer, mime)`.
- *   4. `attachmentRepo.save({...})`.
- *   5. If step 4 throws — best-effort `storage.delete(key)`. The stored
- *      object is the orphan, not the row; deleting the storage entry
- *      first means the system can never claim a row whose payload is
- *      missing.
+ *   2. `attachmentRepo.save({...})` — metadata row first (key = row id).
+ *   3. `getStorage().save(id, buffer, mime)`.
+ *   4. If step 3 throws — best-effort `attachmentRepo.remove(id)`. If that
+ *      compensation also fails, the leftover is a row whose object is
+ *      missing; the download route serves 410 for it.
  *
- * Orphan rows from interrupted uploads are NOT cleaned up in v0. v1
- * cron sweeper deletes attachments older than 24h with no parent row.
+ * Orphan rows from interrupted uploads are NOT cleaned up in v0, and the
+ * planned R2 sweeper (TODOS.md) only reaps the opposite direction
+ * (objects with no row) — row-without-object cleanup remains manual.
  */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
