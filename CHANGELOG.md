@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.66.0] - 2026-07-05
+
+### Changed
+
+- **첨부파일 저장소가 Cloudflare R2로 이전됐어요**: 견적 요청·견적·채팅에 올리는 첨부파일이 이제 데이터베이스(Postgres bytea) 대신 Cloudflare R2 오브젝트 스토리지에 저장돼요. 대용량 파일을 여러 명이 동시에 내려받아도 서버 메모리 부담 없이 스트리밍되고, DB 백업이 첨부파일 용량과 분리돼 가벼워져요. 다운로드 주소·권한 검사(봉인 견적 접근 제어 포함)·PDF 미리보기의 구간(Range) 로딩은 기존과 완전히 동일하게 동작해요.
+- **운영 환경에서 저장소 설정이 빠지면 배포 즉시 알 수 있어요**: R2 접속 정보 4종 중 하나라도 빠진 채 프로덕션을 기동하면 첫 파일 요청에서야 실패하는 대신 서버 부팅 시점에 바로 에러로 멈춰요(PM2 crash로 가시화).
+
+### Removed
+
+- **Postgres bytea 첨부 저장 백엔드(`attachment_blobs`)를 제거했어요**: 기존 첨부 데이터는 폐기하기로 결정돼 마이그레이션 없이 전환해요. 배포 시 1회 데이터 정리 절차는 `docs/DEPLOY_LIGHTSAIL.md` 런북을 따라요.
+
+### Infrastructure
+
+- 로컬 e2e/개발 환경은 R2 없이 동작해요 — `FILE_STORAGE_DIR` 지정 시 디스크 폴백, 미지정 시 메모리 폴백(휘발). Playwright e2e는 테스트 프로세스와 dev 서버가 디스크 폴백을 공유하도록 자동 배선돼요.
+- `@aws-sdk/client-s3` 의존성 추가, R2 환경변수 예시(`.env.production.example`)와 배포 런북 갱신.
+
 ## [0.2.65.4] - 2026-07-03
 
 ### Fixed
