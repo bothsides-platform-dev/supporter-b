@@ -116,12 +116,17 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > **DB 샘플 시딩 시스템 제거 (virtual-sample-onboarding stage 3)**: 온보딩 샘플 체험이
 > DB 시딩(`rfps.is_sample`/`workspaces.is_demo`/`workspaces.sample_seeded_at`)에서
 > 클라이언트 fixture(`lib/onboarding/fixtures.ts`)로 전환됨 — 3개 컬럼이 DROP된다.
-> 배포 순서(반드시 이 순서로):
+> 배포 순서(반드시 이 순서로 — **`db:push`를 배포보다 먼저 하면 안 된다**: 컬럼을
+> 먼저 지우면 아직 떠 있는 구버전 코드(`WorkspaceRepo.listForUser`/`search` 등이
+> `is_demo` 를 SELECT)가 "column does not exist" 로 즉시 깨진다 — 워크스페이스
+> 스위처는 인증된 모든 페이지의 셸 레이아웃에서 조회되므로 전 사용자 장애로 번진다):
 > 1. `docs/migrations/2026-07-cleanup-sample-data.sql` 을 psql 로 먼저 실행 — 기존 시더가
->    남긴 샘플 RFP/데모 워크스페이스/데모 유저/데모 biz_profile 을 정리(DML only).
-> 2. `pnpm db:push` — `rfps.is_sample`/`workspaces.is_demo`/`workspaces.sample_seeded_at`
->    3개 컬럼 DROP(계획에 다른 additive 변경이 섞여 있어도 이 DROP 들은 의도된 것이므로 승인).
-> 3. 평소대로 배포.
+>    남긴 샘플 RFP/데모 워크스페이스/데모 유저/데모 biz_profile 을 정리(DML only,
+>    컬럼이 아직 존재하는 상태에서 실행해야 하므로 반드시 이 단계에서).
+> 2. 평소대로 배포(이 커밋) — 새 코드는 `is_sample`/`is_demo`/`sample_seeded_at` 를
+>    더 이상 읽지 않으므로, 컬럼이 아직 DB에 남아 있어도 무해하다.
+> 3. 배포(빌드+`pm2 reload`)가 끝난 뒤에만 `pnpm db:push` — 3개 컬럼 DROP(계획에 다른
+>    additive 변경이 섞여 있어도 이 DROP 들은 의도된 것이므로 승인).
 
 ## 운영
 
