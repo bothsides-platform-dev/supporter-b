@@ -65,26 +65,22 @@ export default async function InboxDealRoomModalPage({ params }: Props) {
         title={data.rfp.title}
         statusChip={<Chip label={chip.label} color={chip.color} />}
         chat={
-          // 온보딩 샘플은 데모 구매사라 채팅 비노출(정식 페이지와 동일). 그 외엔
-          // 상대(구매사) 고정 시드.
-          data.rfp.isSample ? undefined : (
-            <DealRoomChat
-              rfpId={data.rfp.id}
-              rfpCode={data.rfp.code}
-              rfpTitle={data.rfp.title}
-              fixedCounterparty={{
-                workspaceId: data.rfp.buyerWsId,
-                name: data.buyerName,
-                type: 'buyer',
-                logoUpdatedAt: data.buyerLogoUpdatedAt,
-              }}
-              closedCounterpartyIds={
-                data.rfp.status === 'awarded' && !data.awardedToMe
-                  ? [data.rfp.buyerWsId]
-                  : []
-              }
-            />
-          )
+          <DealRoomChat
+            rfpId={data.rfp.id}
+            rfpCode={data.rfp.code}
+            rfpTitle={data.rfp.title}
+            fixedCounterparty={{
+              workspaceId: data.rfp.buyerWsId,
+              name: data.buyerName,
+              type: 'buyer',
+              logoUpdatedAt: data.buyerLogoUpdatedAt,
+            }}
+            closedCounterpartyIds={
+              data.rfp.status === 'awarded' && !data.awardedToMe
+                ? [data.rfp.buyerWsId]
+                : []
+            }
+          />
         }
       >
         <PgDealRoomBody data={data} />

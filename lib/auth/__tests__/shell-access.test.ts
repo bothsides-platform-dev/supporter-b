@@ -17,7 +17,7 @@ function ws(
     memberApprovalStatus: 'approved',
     unreadCount: 0,
     logoUpdatedAt: null,
-    isDemo: false,
+    
     ...over,
   };
 }

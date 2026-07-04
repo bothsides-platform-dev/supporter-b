@@ -73,7 +73,6 @@ export function pgInboxDataToRows(data: PgInboxData): InboxRow[] {
       grade: rfp.bizProfile?.grade ? MERCHANT_TIER_LABELS[rfp.bizProfile.grade] : '—',
       gradeRaw: rfp.bizProfile?.grade,
       contractType: rfp.contractType ?? null,
-      isSample: rfp.isSample ?? false,
       hasPendingRequote: data.pendingRequoteRfpIds.has(rfp.id),
     };
   });

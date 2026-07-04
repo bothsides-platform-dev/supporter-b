@@ -56,19 +56,15 @@ const baseProps = {
 };
 
 describe('FocusComparison onSampleAward (가상 샘플 온보딩 — 가짜 선정)', () => {
-  it('onSampleAward가 주어지면 isSample이어도 선정 CTA가 활성화된다', () => {
-    render(<FocusComparison {...baseProps} rfpStatus="sent" isSample onSampleAward={vi.fn()} />);
+  it('onSampleAward가 주어지면 선정 CTA가 활성화된다', () => {
+    render(<FocusComparison {...baseProps} rfpStatus="sent" onSampleAward={vi.fn()} />);
     expect(screen.getByText('이 견적 선정하기 →')).toBeInTheDocument();
-    // 샘플 비활성 안내문은 뜨지 않는다.
-    expect(
-      screen.queryByText('샘플에서는 선정할 수 없어요. 실제 견적 요청을 보내보세요.'),
-    ).not.toBeInTheDocument();
   });
 
   it('선정 CTA 클릭 시 실제 awardRfpAction 대신 onSampleAward(bidId)를 호출한다', async () => {
     const user = userEvent.setup();
     const onSampleAward = vi.fn();
-    render(<FocusComparison {...baseProps} rfpStatus="sent" isSample onSampleAward={onSampleAward} />);
+    render(<FocusComparison {...baseProps} rfpStatus="sent" onSampleAward={onSampleAward} />);
     await user.click(screen.getByText('이 견적 선정하기 →'));
     expect(onSampleAward).toHaveBeenCalledWith('b1');
     expect(awardRfpAction).not.toHaveBeenCalled();
@@ -82,7 +78,7 @@ describe('FocusComparison onSampleAward (가상 샘플 온보딩 — 가짜 선�
   });
 
   it('onSampleAward가 있으면 견적 재요청 버튼은 숨긴다', () => {
-    render(<FocusComparison {...baseProps} rfpStatus="sent" isSample onSampleAward={vi.fn()} />);
+    render(<FocusComparison {...baseProps} rfpStatus="sent" onSampleAward={vi.fn()} />);
     expect(screen.queryByText('견적 재요청')).not.toBeInTheDocument();
   });
 });

@@ -90,7 +90,6 @@ async function RfpDetailLoader({
           rfpId={data.rfp.id}
           rfpCode={data.rfp.code}
           rfpTitle={data.rfp.title}
-          isSample={data.rfp.isSample}
           closedCounterpartyIds={buyerClosedCounterpartyIds(data.rfp, data.bids)}
         />
       }

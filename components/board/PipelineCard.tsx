@@ -58,11 +58,9 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
   return (
     <div className="space-y-2">
       <CardHead code={card.rfpId} deadline={card.deadline} hideDday={isResult} />
-      {(result || card.isSample) && (
-        // 결과 칩(선정완료/미선정/취소) + 샘플 칩이 동시 렌더 가능 — 한 행으로 묶어 간격 보장.
+      {result && (
         <div className="flex flex-wrap gap-1">
-          {result && <Chip label={result.label} color={result.color} />}
-          {card.isSample && <Chip label="샘플" color="surface" />}
+          <Chip label={result.label} color={result.color} />
         </div>
       )}
       <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)] line-clamp-2">

@@ -93,7 +93,6 @@ export function SampleBuyerDealRoom() {
             customPaymentMethods={sampleBuyerRfp.customPaymentMethods}
             rfpId={sampleBuyerRfp.id}
             rfpCode={sampleBuyerRfp.code}
-            isSample
             onSampleAward={onSampleAward}
           />
         </div>

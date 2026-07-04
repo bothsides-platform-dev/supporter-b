@@ -112,6 +112,16 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > cd bidit && tsx scripts/remove-awarded-kanban-columns.ts
 > ```
 > 멱등 스크립트 — 재실행 안전. 카드 FK는 `ON DELETE SET NULL` 이라 `resolveCardColumn` 이 lifecycle 에서 컬럼을 재도출해 자동 복구된다.
+>
+> **DB 샘플 시딩 시스템 제거 (virtual-sample-onboarding stage 3)**: 온보딩 샘플 체험이
+> DB 시딩(`rfps.is_sample`/`workspaces.is_demo`/`workspaces.sample_seeded_at`)에서
+> 클라이언트 fixture(`lib/onboarding/fixtures.ts`)로 전환됨 — 3개 컬럼이 DROP된다.
+> 배포 순서(반드시 이 순서로):
+> 1. `docs/migrations/2026-07-cleanup-sample-data.sql` 을 psql 로 먼저 실행 — 기존 시더가
+>    남긴 샘플 RFP/데모 워크스페이스/데모 유저/데모 biz_profile 을 정리(DML only).
+> 2. `pnpm db:push` — `rfps.is_sample`/`workspaces.is_demo`/`workspaces.sample_seeded_at`
+>    3개 컬럼 DROP(계획에 다른 additive 변경이 섞여 있어도 이 DROP 들은 의도된 것이므로 승인).
+> 3. 평소대로 배포.
 
 ## 운영
 

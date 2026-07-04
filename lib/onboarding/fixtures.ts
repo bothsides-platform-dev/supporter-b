@@ -1,9 +1,8 @@
 // 가상 샘플 온보딩 — DB 행을 만들지 않고 고정 데이터로 구매사/PG 딜룸 체험을 재현한다.
 // 실제 타입(RFP/Bid)으로 선언해 제품 타입이 바뀌면 빌드가 깨지게 한다(단일소스 가드 —
 // components/landing/demo-app/demo-app-fixtures.ts 와 같은 패턴). 서버·클라 양쪽에서
-// import 가능 — DB 클라이언트·리포지토리 import 없음(client-safe). 값은 기존 DB 시드
-// (lib/server/onboarding/sample-rfp.ts SAMPLE_BIDS)를 그대로 포팅했다 — 그 시더는
-// stage 3까지 유지되므로 값을 바꿀 때는 양쪽을 함께 검토한다.
+// import 가능 — DB 클라이언트·리포지토리 import 없음(client-safe). 값은 과거 DB 시더
+// (stage 3에서 제거된 lib/server/onboarding/sample-rfp.ts SAMPLE_BIDS)를 그대로 포팅했다.
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid, MerchantTier, TierRates } from '@/lib/types/bid';
 
@@ -60,7 +59,6 @@ export const sampleBuyerRfp: RFP = {
   customPaymentMethods: [],
   boardVisible: false,
   currentFeeVisibleToPg: true,
-  isSample: true,
   contractType: null,
 };
 

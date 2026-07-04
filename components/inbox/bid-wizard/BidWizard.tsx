@@ -13,10 +13,7 @@ import { Select } from '@/components/primitives/Select';
 import { toast } from '@/lib/toast';
 import { useBidDraft, EMPTY_BID_DRAFT, isPristineDraft, type BidDraft } from '../useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
-import { simulateSampleAwardAction } from '@/lib/server/actions/onboarding/simulateSampleAwardAction';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
-import { SamplePgAwardCelebration } from '../SamplePgAwardCelebration';
-import { SAMPLE_AWARD_DELAY_MS } from './sample-award';
 import {
   MERCHANT_TIERS,
   PAYMENT_METHOD_CATEGORIES,
@@ -62,9 +59,8 @@ type Props = {
    */
   onGuestSubmit?: () => void;
   /**
-   * 가상 샘플 온보딩 전용(opt-in). 주어지면 제출 시 서버 액션(submitBidAction)과
-   * rfp.isSample 기반의 옛 '검토중 → 시뮬레이트 선정' 흐름(simulateSampleAwardAction)
-   * 대신 이 콜백만 호출한다 — 서버 호출도 지연도 없다. onGuestSubmit 과 상호배타.
+   * 가상 샘플 온보딩 전용(opt-in). 주어지면 제출 시 서버 액션(submitBidAction) 대신
+   * 이 콜백만 호출한다 — 서버 호출도 지연도 없다. onGuestSubmit 과 상호배타.
    */
   onSampleSubmit?: () => void;
 };
@@ -105,7 +101,6 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
 export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestSubmit, onSampleSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
-  const rfpCode = rfp.code;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
   const customPaymentMethods = rfp.customPaymentMethods;
 
@@ -120,8 +115,6 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
     (n: number) => setFailedSteps((prev) => { const next = new Set(prev); next.add(n); return next; }),
     [],
   );
-  // 온보딩 샘플 전용 흐름: 제출 → '검토중' 안내 → 잠시 뒤 선정 시뮬레이트 → 축하.
-  const [samplePhase, setSamplePhase] = useState<'idle' | 'reviewing' | 'awarded'>('idle');
 
   // baseline = 위저드가 처음 열렸을 때의 폼(일반=빈 폼, 재요청=직전 라운드 prefill).
   const baseline = useMemo<BidDraft>(
@@ -322,8 +315,8 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
       onGuestSubmit();
       return;
     }
-    // 가상 샘플 온보딩: 서버 제출도 없고, rfp.isSample 기반 옛 시뮬레이션 흐름도 타지
-    // 않는다 — fixture 에는 실제 rfpId/pgWsId 가 없어 그 흐름을 그대로 태우면 깨진다.
+    // 가상 샘플 온보딩: 서버 제출 없이 콜백만 호출한다 — fixture 에는 실제
+    // rfpId/pgWsId 가 없어 실제 submitBidAction 을 태우면 깨진다.
     if (onSampleSubmit) {
       onSampleSubmit();
       return;
@@ -347,16 +340,11 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
       });
       if (r.ok) {
         clearDraft();
-        if (rfp.isSample) {
-          // 샘플은 제출 후 리다이렉트하지 않고 '검토중 → 선정' 시뮬레이션으로 이어간다.
-          setSamplePhase('reviewing');
-        } else {
-          // 별도 /submitted 페이지로 이탈하지 않고 같은 창에서 갱신 — submitBidAction 이
-          // revalidatePath('/inbox/<code>') 했으므로 refresh 면 로더 재실행 → myBid 존재 →
-          // PgDealRoomBody 가 제출 완료 상태를 인플레이스 렌더. (push+refresh 동시 금지:
-          // Next 16 useTransition 행, vercel/next.js#86055.)
-          router.refresh();
-        }
+        // 별도 /submitted 페이지로 이탈하지 않고 같은 창에서 갱신 — submitBidAction 이
+        // revalidatePath('/inbox/<code>') 했으므로 refresh 면 로더 재실행 → myBid 존재 →
+        // PgDealRoomBody 가 제출 완료 상태를 인플레이스 렌더. (push+refresh 동시 금지:
+        // Next 16 useTransition 행, vercel/next.js#86055.)
+        router.refresh();
       } else {
         setSubmitError(r.error);
         const step = SERVER_ERROR_STEP[r.error] ?? 4;
@@ -366,29 +354,8 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
     });
   };
 
-  // 샘플 '검토중' 진입 후 잠시 뒤 선정을 시뮬레이트하고 축하 화면으로 전환한다.
-  useEffect(() => {
-    if (samplePhase !== 'reviewing') return;
-    const t = setTimeout(async () => {
-      await simulateSampleAwardAction({ code: rfpCode });
-      setSamplePhase('awarded');
-      router.refresh(); // 인박스가 '선정됨'을 반영하도록
-    }, SAMPLE_AWARD_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [samplePhase, rfpCode, router]);
-
-  if (samplePhase === 'awarded') {
-    return <SamplePgAwardCelebration buyerName={buyerName} />;
-  }
-
   return (
     <>
-      {samplePhase === 'reviewing' && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-2 bg-[var(--md-sys-color-surface)] px-6 text-center">
-          <p className="text-title-medium">구매사가 검토하고 있어요</p>
-          <p className="text-body-medium text-on-surface-variant">잠시만 기다려 주세요…</p>
-        </div>
-      )}
       <ConfirmDialog
         open={submitConfirmOpen}
         onOpenChange={(o) => !o && setSubmitConfirmOpen(false)}

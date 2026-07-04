@@ -12,8 +12,8 @@ import {
 
 const DEMO_METHODS = ['card', 'virtual_account', 'naver_pay'] as const;
 
-// 데모 딜룸 비교 — 실제 FocusComparison을 fixture로. isSample로 선정/재요청 서버액션을
-// 비활성화하고, 전환은 별도 가입 배너로 유도한다.
+// 데모 딜룸 비교 — 실제 FocusComparison을 fixture로. onSampleAward(no-op)로 실제
+// awardRfpAction 서버액션을 비활성화하고, 전환은 별도 가입 배너로 유도한다.
 export function DealRoomPageHost() {
   return (
     <div className="relative flex flex-col gap-4 px-6 py-6">
@@ -30,7 +30,7 @@ export function DealRoomPageHost() {
           rfpId="demo-rfp-1"
           rfpCode="P-2606-0042"
           buyerGrade={demoBuyerGrade}
-          isSample
+          onSampleAward={() => {}}
         />
       </DealRoomProvider>
 

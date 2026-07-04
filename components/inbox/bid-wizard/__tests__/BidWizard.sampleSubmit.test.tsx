@@ -21,11 +21,6 @@ vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: (i: unknown) => submitBidMock(i),
 }));
 
-const simulateAwardMock = vi.fn(async (_i: unknown) => ({ ok: true as const }));
-vi.mock('@/lib/server/actions/onboarding/simulateSampleAwardAction', () => ({
-  simulateSampleAwardAction: (i: unknown) => simulateAwardMock(i),
-}));
-vi.mock('../sample-award', () => ({ SAMPLE_AWARD_DELAY_MS: 20 }));
 vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
   saveQuoteTemplateAction: vi.fn(async () => ({ ok: true as const, templateId: 't1' })),
 }));
@@ -59,14 +54,12 @@ vi.mock('motion/react', () => ({
 
 import { BidWizard } from '../BidWizard';
 
-// 가상 샘플 온보딩 fixture rfp — isSample true 이지만 onSampleSubmit 이 제공되면 그
-// 값과 무관하게 옛 samplePhase(rfp.isSample 기반) 흐름을 타지 않는다(early return).
+// 가상 샘플 온보딩 fixture rfp — onSampleSubmit 이 제공되면 서버 제출 없이 콜백만 호출한다.
 const rfp = {
   id: 'sample-rfp',
   code: 'sample',
   requiredPaymentMethods: ['card'] as PaymentMethod[],
   customPaymentMethods: [],
-  isSample: true,
 } as never;
 
 beforeEach(() => {
@@ -74,7 +67,6 @@ beforeEach(() => {
   pushMock.mockClear();
   refreshMock.mockClear();
   submitBidMock.mockClear();
-  simulateAwardMock.mockClear();
 });
 afterEach(cleanup);
 
@@ -98,7 +90,5 @@ describe('BidWizard onSampleSubmit (가상 샘플 온보딩 — PG 투어)', () 
 
     await waitFor(() => expect(onSampleSubmit).toHaveBeenCalledTimes(1));
     expect(submitBidMock).not.toHaveBeenCalled();
-    expect(simulateAwardMock).not.toHaveBeenCalled();
-    expect(screen.queryByText(/검토하고 있어요/)).not.toBeInTheDocument();
   });
 });
