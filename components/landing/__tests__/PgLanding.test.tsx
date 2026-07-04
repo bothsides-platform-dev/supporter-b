@@ -18,6 +18,12 @@ vi.mock('@/components/landing/demo-app/PgDemoAppShell', () => ({
   PgDemoAppShell: () => <div>PG_PRODUCT_DEMO</div>,
 }));
 
+// 화면1 히어로는 캔버스 ASCII·마그네틱 훅에 의존하는 스크롤 핀 씬(구매사 히어로 풀 패리티)이라
+// 이 컴포지션 스모크에서는 마커로 격리한다(히어로 자체는 PgHeroSection.test 에서 커버).
+vi.mock('@/components/landing/PgHeroSection', () => ({
+  PgHeroSection: () => <div>PG_HERO</div>,
+}));
+
 // motion 을 평탄화해 whileInView/IntersectionObserver 없이 자식을 그대로 렌더.
 vi.mock('motion/react', () => {
   const makeEl = (tag: string) => {
@@ -112,5 +118,10 @@ describe('PgLanding — PG 전용 랜딩', () => {
     expect(faq).toBeTruthy();
     expect(Array.isArray(faq.mainEntity)).toBe(true);
     expect(faq.mainEntity.length).toBe(7);
+  });
+
+  it('일러스트(webp) 이미지를 렌더하지 않는다', () => {
+    const { container } = render(<PgLanding />);
+    expect(container.querySelectorAll('img')).toHaveLength(0);
   });
 });

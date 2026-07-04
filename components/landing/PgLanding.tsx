@@ -1,7 +1,7 @@
-import Image from 'next/image';
 import { Footer } from '@/components/shell/Footer';
 import { siteConfig } from '@/lib/site-config';
 import { PgLandingHeaderNav } from '@/components/landing/PgLandingHeaderNav';
+import { LandingHeader } from '@/components/landing/LandingHeader';
 import { PgHeroSection } from '@/components/landing/PgHeroSection';
 import { SectionHeading } from '@/components/landing/SectionHeading';
 import { FadeInView } from '@/components/landing/FadeInView';
@@ -64,22 +64,16 @@ const VERIFIED_POINTS = [
   {
     index: '01',
     title: '확실한 니즈',
-    img: '/landing/pg/need.webp',
-    alt: '고객사가 PG 조건 비교 요청서를 직접 제출하는 모습',
     desc: '고객사가 직접 PG 조건 비교 요청을 제출합니다. 단순 문의가 아니라, 실제 조건 검토 의사가 있는 고객사를 대상으로 합니다.',
   },
   {
     index: '02',
     title: '정리된 정보',
-    img: '/landing/pg/info.webp',
-    alt: '거래액·업종·정산주기 등 제안 정보가 정리된 RFP',
     desc: '월 거래액, 업종, 현재 PG 조건, 희망 정산주기, 보증금 조건 등 제안에 필요한 정보를 RFP로 확인합니다.',
   },
   {
     index: '03',
     title: '동일한 기회',
-    img: '/landing/pg/equal.webp',
-    alt: '여러 PG사에게 동일한 기준으로 주어지는 제안 기회',
     desc: '조건에 맞는 파트너 PG사에게 동일한 기준의 제안 기회를 제공합니다. 고객사는 제출된 조건을 표준화된 방식으로 비교합니다.',
   },
 ];
@@ -179,10 +173,10 @@ export function PgLanding() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageJsonLd) }}
       />
 
-      {/* ── Nav ── */}
-      <header className="fixed top-0 left-0 right-0 z-10 px-8 h-[var(--shell-topbar)] border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]">
+      {/* ── Nav — 히어로 다크 씬 위에서는 투명+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
+      <LandingHeader>
         <PgLandingHeaderNav />
-      </header>
+      </LandingHeader>
 
       <main className="flex-1 pt-[var(--shell-topbar)]">
         {/* ── 화면1: Hero ── */}
@@ -236,16 +230,6 @@ export function PgLanding() {
               </FadeInView>
             </div>
             <FadeInView>
-              <Image
-                src="/landing/pg/inbound.webp"
-                alt="PG 조건을 검토하는 고객사들"
-                width={960}
-                height={540}
-                sizes="(max-width: 768px) 100vw, 560px"
-                className="mx-auto w-full max-w-[560px] h-auto"
-              />
-            </FadeInView>
-            <FadeInView>
               <PgCustomerCarousel items={CUSTOMER_TYPES} />
             </FadeInView>
             <FadeInView>
@@ -269,29 +253,19 @@ export function PgLanding() {
                 </p>
               </FadeInView>
             </div>
-            <div className="flex flex-col gap-[var(--s-10)]">
+            <div className="grid grid-cols-1 gap-[var(--s-4)] md:grid-cols-3">
               {VERIFIED_POINTS.map((p, i) => (
-                <FadeInView key={p.index}>
-                  <div className="grid items-center gap-[var(--s-6)] md:grid-cols-2 md:gap-[var(--s-9)]">
-                    <Image
-                      src={p.img}
-                      alt={p.alt}
-                      width={960}
-                      height={720}
-                      sizes="(max-width: 768px) 100vw, 480px"
-                      className={`w-full max-w-[480px] h-auto ${i % 2 ? 'md:order-2' : ''}`}
-                    />
-                    <div className={`flex flex-col gap-[var(--s-3)] ${i % 2 ? 'md:order-1' : ''}`}>
-                      <span className="font-mono tabular-nums text-[var(--text-md)] tracking-[-0.02em] text-[var(--md-sys-color-primary)]">
-                        {p.index}
-                      </span>
-                      <h3 className={`${LANDING_TYPE.heading3} text-[var(--md-sys-color-on-surface)]`}>
-                        {p.title}
-                      </h3>
-                      <p className={`${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface-variant)]`}>
-                        {p.desc}
-                      </p>
-                    </div>
+                <FadeInView key={p.index} delay={i * 0.06}>
+                  <div className="flex h-full flex-col gap-[var(--s-3)] rounded-lg border border-[var(--md-sys-color-outline-variant)] p-[var(--s-6)]">
+                    <span className="font-mono tabular-nums text-[var(--text-md)] tracking-[-0.02em] text-[var(--md-sys-color-primary)]">
+                      {p.index}
+                    </span>
+                    <h3 className={`${LANDING_TYPE.heading3} text-[var(--md-sys-color-on-surface)]`}>
+                      {p.title}
+                    </h3>
+                    <p className={`${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface-variant)]`}>
+                      {p.desc}
+                    </p>
                   </div>
                 </FadeInView>
               ))}

@@ -3,72 +3,78 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { XIcon } from '@/components/icons';
-import { Logo } from '@/components/primitives/Logo';
 import { ConsultButton } from './ConsultButton';
 
-// 로고(좌) · 메뉴+액션(우) 2분할. 메뉴는 앱으로 이동/로그인 링크 옆에 붙여 한 그룹으로 묶는다.
+// 우측 액션 클러스터 — 로고는 LandingHeader(구매사 랜딩과 공유)가 소유한다. 섹션 앵커·인증
+// 링크·상담 CTA·모바일 햄버거를 한 그룹으로 묶는다.
 const NAV_LINKS: { label: string; href: string }[] = [
   { label: '서비스 설명', href: '#inbound' },
   { label: '핵심 이점', href: '#advantage' },
   { label: '고객사 사례', href: '#cases' },
 ];
 
+// Pretendard sentence-case — 디자인 하드룰(nav 라벨에 mono·uppercase·tracking 금지) 준수.
 const linkCls =
-  'font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]';
+  'text-[var(--text-sm)] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]';
+// 히어로 다크 씬 위(LandingHeader의 group/lheader data-[over-dark]) 라이트 톤. 헤더 바에
+// 상주하는 요소에만 붙인다 — 모바일 패널은 솔리드 surface 배경이므로 제외.
+const overDarkLinkCls =
+  'group-data-[over-dark]/lheader:text-[color-mix(in_srgb,var(--md-sys-color-inverse-on-surface)_72%,transparent)] group-data-[over-dark]/lheader:hover:text-[var(--md-sys-color-inverse-on-surface)]';
 
 export function PgLandingNav({ authed }: { authed: boolean }) {
   const [open, setOpen] = useState(false);
 
   const authLink = authed ? (
-    <Link href="/home" className={linkCls}>
+    <Link href="/home" className={`${linkCls} ${overDarkLinkCls}`}>
       앱으로 이동 →
     </Link>
   ) : (
-    <Link href="/login" className={linkCls}>
+    <Link href="/login" className={`${linkCls} ${overDarkLinkCls}`}>
       로그인 →
     </Link>
   );
 
   return (
-    <div className="flex items-center justify-between h-full">
-      {/* Left — logo */}
-      <Logo />
-
-      {/* Right — section anchors + auth + CTA + mobile hamburger, one group */}
-      <div className="flex items-center gap-[var(--s-7)]">
-        <nav className="hidden md:flex items-center gap-[var(--s-7)]">
-          {NAV_LINKS.map((l) => (
-            <a key={l.href} href={l.href} className={linkCls}>
-              {l.label}
-            </a>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-[var(--s-4)]">
-          {authLink}
-          <ConsultButton variant="primary" size="sm">
-            파트너 상담 신청
-          </ConsultButton>
-          <button
-            type="button"
-            className="md:hidden grid place-items-center h-8 w-8 -mr-1 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-            aria-label={open ? '메뉴 닫기' : '메뉴 열기'}
-            aria-expanded={open}
-            aria-controls="pg-landing-mobile-menu"
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? (
-              <XIcon size={18} />
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            )}
-          </button>
-        </div>
+    <nav className="flex items-center gap-[var(--s-5)]">
+      {/* Desktop section anchors */}
+      <div className="hidden md:flex items-center gap-[var(--s-5)]">
+        {NAV_LINKS.map((l) => (
+          <a key={l.href} href={l.href} className={`${linkCls} ${overDarkLinkCls}`}>
+            {l.label}
+          </a>
+        ))}
       </div>
+
+      {authLink}
+
+      {/* 상담 CTA — 다크 씬 위에서는 primary 토큰을 inverse로 뒤집어 대비를 맞춘다. */}
+      <ConsultButton
+        variant="primary"
+        size="sm"
+        className="group-data-[over-dark]/lheader:[--md-sys-color-primary:var(--md-sys-color-inverse-primary)] group-data-[over-dark]/lheader:[--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]"
+      >
+        파트너 상담 신청
+      </ConsultButton>
+
+      {/* Mobile hamburger */}
+      <button
+        type="button"
+        className={`md:hidden grid place-items-center h-8 w-8 -mr-1 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors ${overDarkLinkCls}`}
+        aria-label={open ? '메뉴 닫기' : '메뉴 열기'}
+        aria-expanded={open}
+        aria-controls="pg-landing-mobile-menu"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? (
+          <XIcon size={18} />
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        )}
+      </button>
 
       {/* Mobile menu panel */}
       {open && (
@@ -89,6 +95,6 @@ export function PgLandingNav({ authed }: { authed: boolean }) {
           ))}
         </div>
       )}
-    </div>
+    </nav>
   );
 }
