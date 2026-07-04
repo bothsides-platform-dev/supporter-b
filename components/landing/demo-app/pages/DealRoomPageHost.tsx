@@ -9,20 +9,19 @@ import {
   demoCompareCurrent,
   demoBuyerGrade,
 } from '../demo-app-fixtures';
-import { DemoCue } from '../DemoCue';
 
 const DEMO_METHODS = ['card', 'virtual_account', 'naver_pay'] as const;
 
 // 데모 딜룸 비교 — 실제 FocusComparison을 fixture로. isSample로 선정/재요청 서버액션을
 // 비활성화하고, 전환은 별도 가입 배너로 유도한다.
-export function DealRoomPageHost({ showCue = false }: { showCue?: boolean }) {
+export function DealRoomPageHost() {
   return (
     <div className="relative flex flex-col gap-4 px-6 py-6">
-      <DemoCue show={showCue} label="PG별 견적을 비교하고 선정해요" />
       <DealRoomProvider>
         <FocusComparison
           bids={demoCompareBids}
           pgWsNameMap={demoPgNameMap}
+          pgWsLogoUpdatedAtMap={{}}
           current={demoCompareCurrent}
           rfpStatus="sent"
           awardedBidId={null}

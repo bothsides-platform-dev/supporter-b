@@ -19,8 +19,9 @@ describe('PaymentFeesSchema — 가상계좌 정액(건당 원)', () => {
     expect(PaymentFeesSchema.safeParse({ virtual_account: -100 }).success).toBe(false);
   });
 
-  it('가상계좌는 fat-finger 상한(100,000원)을 초과하면 거부한다', () => {
-    expect(PaymentFeesSchema.safeParse({ virtual_account: 100_001 }).success).toBe(false);
+  it('가상계좌는 상한 없이 큰 정수 원 금액을 허용한다 (fat-finger 가드 제거)', () => {
+    expect(PaymentFeesSchema.safeParse({ virtual_account: 100_001 }).success).toBe(true);
+    expect(PaymentFeesSchema.safeParse({ virtual_account: 5_000_000 }).success).toBe(true);
   });
 
   it('가상계좌는 구간맵(TierRates)을 거부한다 — 정액 수단은 단일 정수만', () => {

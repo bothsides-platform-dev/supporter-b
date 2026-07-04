@@ -8,6 +8,7 @@ import {
   getOutboxRepo,
   getAuditLogRepo,
   getWorkspaceRepo,
+  getUserRepo,
 } from '@/lib/server/repositories/factory';
 import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
 import {
@@ -22,10 +23,10 @@ export async function setupWorkspaceActionEnv(): Promise<PgliteDB> {
   await __useDrizzleWithDbForTest(db);
   __setActionDbForTest(db);
 
-  const outboxRepo = await getOutboxRepo();
-  const auditRepo = await getAuditLogRepo();
-  const workspaceRepo = await getWorkspaceRepo();
-  __setWorkspaceServiceForTest(new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo));
+  const [outboxRepo, auditRepo, workspaceRepo, userRepo] = await Promise.all([
+    getOutboxRepo(), getAuditLogRepo(), getWorkspaceRepo(), getUserRepo(),
+  ]);
+  __setWorkspaceServiceForTest(new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo));
 
   return db;
 }

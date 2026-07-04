@@ -11,7 +11,7 @@ vi.mock('motion/react', () => {
     return El
   }
   const motion = new Proxy({}, { get: (_, tag: string) => makeEl(tag) })
-  return { motion, useScroll: () => ({ scrollYProgress: { on: vi.fn() } }), useMotionValueEvent: vi.fn(), useInView: () => true }
+  return { motion, useScroll: () => ({ scrollYProgress: { on: vi.fn() } }), useMotionValueEvent: vi.fn(), useTransform: () => 1, useInView: () => true }
 })
 
 vi.mock('./LandingHeroSection', () => ({ LandingHeroSection: () => null }))

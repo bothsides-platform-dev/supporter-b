@@ -12,6 +12,11 @@ vi.stubGlobal(
   },
 );
 
+// Radix Slider's pointer-down handler calls pointer-capture APIs jsdom doesn't implement.
+if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = () => false;
+if (!Element.prototype.setPointerCapture) Element.prototype.setPointerCapture = () => {};
+if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => {};
+
 // CostComparisonChart pulls in motion/react — stub it; this suite is about the
 // calculator's copy/value surface, not the bar chart.
 vi.mock('@/components/landing/CostComparisonChart', () => ({
@@ -36,7 +41,7 @@ describe('SavingsCalculator', () => {
     render(<SavingsCalculator />);
     // savings value is rendered as a KRW string (…원)
     expect(screen.getByText(/원$/)).toBeInTheDocument();
-    expect(screen.getByText('EST. ANNUAL SAVINGS')).toBeInTheDocument();
+    expect(screen.getByText('예상 연간 절감액')).toBeInTheDocument();
   });
 
   it('keeps an estimate disclaimer without claiming a floor rate', () => {

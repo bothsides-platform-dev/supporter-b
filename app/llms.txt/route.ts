@@ -1,0 +1,13 @@
+import { headers } from 'next/headers';
+import { appOrigins } from '@/lib/site-routing';
+import { seoHostContext } from '@/lib/seo/host';
+import { buildLlmsTxt, TEXT_PLAIN_HEADERS } from '@/lib/seo/llms';
+
+// Host-aware (buyer vs pg) → per-request. Cached at the edge via Cache-Control.
+export const dynamic = 'force-dynamic';
+
+export async function GET(): Promise<Response> {
+  const host = (await headers()).get('host');
+  const ctx = seoHostContext(host, appOrigins());
+  return new Response(buildLlmsTxt(ctx), { headers: TEXT_PLAIN_HEADERS });
+}

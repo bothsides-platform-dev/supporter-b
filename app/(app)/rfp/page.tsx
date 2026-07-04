@@ -20,7 +20,6 @@ export const dynamic = 'force-dynamic';
 const STATUS_OPTIONS = [
   { value: 'active', label: '진행중' },
   { value: 'closed', label: '마감' },
-  { value: 'awarded', label: '선정 완료' },
 ];
 const GRADE_OPTIONS = Object.entries(MERCHANT_TIER_LABELS).map(([value, label]) => ({ value, label }));
 

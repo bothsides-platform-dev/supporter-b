@@ -5,7 +5,7 @@ import { PgLandingHeaderNav } from '@/components/landing/PgLandingHeaderNav';
 import { PgHeroSection } from '@/components/landing/PgHeroSection';
 import { SectionHeading } from '@/components/landing/SectionHeading';
 import { FadeInView } from '@/components/landing/FadeInView';
-import { ProblemCard } from '@/components/landing/ProblemCard';
+import { ScrollDrivenProblem } from '@/components/landing/scroll-pinned/ScrollDrivenProblem';
 import { PgCustomerCarousel } from '@/components/landing/PgCustomerCarousel';
 import { PgCaseCard } from '@/components/landing/PgCaseCard';
 import { LANDING_TYPE } from '@/components/landing/landing-type';
@@ -169,7 +169,7 @@ const subCls = `max-w-[760px] ${LANDING_TYPE.lead} text-[var(--md-sys-color-on-s
 
 export function PgLanding() {
   return (
-    <div className="min-h-screen bg-[var(--md-sys-color-surface)] flex flex-col">
+    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
@@ -188,14 +188,16 @@ export function PgLanding() {
         {/* ── 화면1: Hero ── */}
         <PgHeroSection />
 
-        {/* ── 화면2: PG 영업 문제 제기 ── */}
+        {/* ── 화면2: PG 영업 문제 제기 (pin: 누적 등장) ── */}
         <section id="problem" className={sectionCls}>
-          <div className={containerCls}>
-            <div className="flex flex-col gap-[var(--s-5)]">
+          <ScrollDrivenProblem
+            heading={
               <SectionHeading>
                 PG 영업에서 가장 어려운 건<br />
                 리드 수가 아니라, 확실한 니즈입니다
               </SectionHeading>
+            }
+            intro={
               <FadeInView>
                 <p className={subCls}>
                   고객사를 아무리 많이 만나도, 실제로 PG를 바꾸거나 새로 도입하려는 곳은 많지
@@ -203,15 +205,10 @@ export function PgLanding() {
                   기회는 줄어듭니다.
                 </p>
               </FadeInView>
-            </div>
-            <div className="flex flex-col gap-[var(--s-4)]">
-              {PROBLEM_ITEMS.map((item, i) => (
-                <FadeInView key={item.num} delay={i * 0.06}>
-                  <ProblemCard num={item.num} title={item.title} desc={item.desc} />
-                </FadeInView>
-              ))}
-            </div>
-          </div>
+            }
+            items={PROBLEM_ITEMS}
+            stagger={0.06}
+          />
         </section>
 
         {/* ── 화면3: 신규 성장 고객사 인바운드 ── */}

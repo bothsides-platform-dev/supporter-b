@@ -43,6 +43,20 @@ export function AttachmentPreviewList({ files }: { files: Attachment[] }) {
   );
 }
 
+function ThumbImage({ url, name }: { url: string; name: string }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) return <FileTextIcon size={28} />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={name}
+      onError={() => setBroken(true)}
+      className="h-full w-full object-cover"
+    />
+  );
+}
+
 function AttachmentThumb({
   attachment,
   onClick,
@@ -59,12 +73,7 @@ function AttachmentThumb({
     >
       <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] transition-colors group-hover:border-[var(--md-sys-color-outline)]">
         {isImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={attachment.url}
-            alt={attachment.name}
-            className="h-full w-full object-cover"
-          />
+          <ThumbImage url={attachment.url} name={attachment.name} />
         ) : (
           <FileTextIcon size={28} />
         )}

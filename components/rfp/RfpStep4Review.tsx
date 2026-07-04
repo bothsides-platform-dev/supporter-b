@@ -17,6 +17,7 @@ import { RequiredMark } from './RequiredMark';
 import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
 import { FieldError } from '@/components/primitives/FieldError';
 import { Divider } from '@/components/ui/Divider';
+import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -132,24 +133,26 @@ export function RfpStep4Review({
         <FieldError error={deadlineError ? '마감일을 선택해주세요' : undefined} />
       </div>
 
-      {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true) */}
-      <div className="flex items-start gap-3">
-        <Checkbox
-          id="rfp-board-visible"
-          checked={draft.boardVisible}
-          onCheckedChange={(checked) => draft.setField('boardVisible', checked)}
-          aria-label="오픈 게시판에 노출하기"
-          className="mt-0.5"
-        />
-        <label htmlFor="rfp-board-visible" className="cursor-pointer">
-          <span className="block text-[14px] text-[var(--md-sys-color-on-surface)]">
-            오픈 게시판에 노출하기
-          </span>
-          <span className="block text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-            다른 PG사가 이 견적 요청을 발견하고 참여를 요청할 수 있어요.
-          </span>
-        </label>
-      </div>
+      {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true). kill switch 시 숨김 */}
+      {OPEN_BOARD_ENABLED && (
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="rfp-board-visible"
+            checked={draft.boardVisible}
+            onCheckedChange={(checked) => draft.setField('boardVisible', checked)}
+            aria-label="오픈 게시판에 노출하기"
+            className="mt-0.5"
+          />
+          <label htmlFor="rfp-board-visible" className="cursor-pointer">
+            <span className="block text-[14px] text-[var(--md-sys-color-on-surface)]">
+              오픈 게시판에 노출하기
+            </span>
+            <span className="block text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+              다른 PG사가 이 견적 요청을 발견하고 참여를 요청할 수 있어요.
+            </span>
+          </label>
+        </div>
+      )}
 
       {/* 견적 요청 요약 */}
       <div>
@@ -284,6 +287,7 @@ export function RfpStep4Review({
           이전
         </Button>
         <Button
+          data-demo-cursor
           type="button"
           size="lg"
           disabled={submitting}

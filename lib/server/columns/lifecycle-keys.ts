@@ -8,7 +8,6 @@
 export const CROSS_SIDE_LIFECYCLE_KEYS: ReadonlySet<string> = new Set([
   // buyer side
   'active',
-  'awarded',
   'closed',
   // pg side
   'received',

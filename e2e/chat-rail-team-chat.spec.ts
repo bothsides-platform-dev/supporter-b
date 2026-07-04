@@ -43,7 +43,13 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
     const composer = page.getByPlaceholder('우리 팀에게만 보이는 메모를 남겨보세요…');
     await composer.fill(BUYER_MEMO);
     await page.getByRole('button', { name: '보내기' }).click();
-    await expect(page.getByText(BUYER_MEMO)).toBeVisible();
+    // Wait for the server-confirmed bubble.
+    // [data-bubble-key] exists on the actual bubble div; the MorphFlightLayer
+    // clone has no data-bubble-key, so this locator is strict (exactly 1 match).
+    // Pending bubbles have opacity-60; confirmed ones don't — poll until removed.
+    const buyerBubble = page.locator('[data-bubble-key]', { hasText: BUYER_MEMO });
+    await expect(buyerBubble).toBeVisible();
+    await expect(buyerBubble).not.toHaveClass(/opacity-60/);
 
     // 재로드 후에도 영속 — 로더 경로 검증.
     await page.reload();
@@ -67,7 +73,9 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
     // PG 자체 메모는 정상 동작.
     await composer.fill(PG_MEMO);
     await page.getByRole('button', { name: '보내기' }).click();
-    await expect(page.getByText(PG_MEMO)).toBeVisible();
+    const pgBubble = page.locator('[data-bubble-key]', { hasText: PG_MEMO });
+    await expect(pgBubble).toBeVisible();
+    await expect(pgBubble).not.toHaveClass(/opacity-60/);
   });
 
   test('buyer: PG 팀 메모도 구매사 팀 채팅에 보이지 않는다 (역방향)', async ({

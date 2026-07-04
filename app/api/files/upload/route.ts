@@ -39,7 +39,6 @@ import {
   getBidRepo,
   getInvitationRepo,
   getRfpRepo,
-  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
 import { DRAFT_OWNER_ID } from '@/lib/server/storage/path';
@@ -131,39 +130,32 @@ export async function POST(req: Request): Promise<Response> {
     // upload an ownerless draft; sendChatMessageAction links it to the
     // chat_messages row and re-checks the uploader is a session-ws member.
     // ownerId is the literal '__draft__' placeholder (no parent yet).
+    // Membership guaranteed by isSessionRevoked() above (removeMember bumps
+    // sessionVersion — stale sessions are rejected before reaching here).
     if (!wsId) return fail(403, 'FORBIDDEN');
-    if (!(await (await getWorkspaceRepo()).isMember(userId, wsId))) {
-      return fail(403, 'FORBIDDEN');
-    }
   } else if (meta.data.ownerKind === 'bid_note') {
     // Buyer-only memo attachment. ownerId here is the *bid id* (the parent
     // bid_notes row may not exist yet — the action layer creates it and
     // re-points owner_id to the new bid_notes.id after this row lands).
-    // Gate: user must be a member of the buyer ws that owns the RFP behind
-    // this bid.
+    // Gate: buyer ws that owns the RFP behind this bid.
+    // Membership guaranteed by isSessionRevoked() above (same policy as
+    // storage/permissions.ts — no live isMember re-check needed).
     if (wsType !== 'buyer' || !wsId) return fail(403, 'FORBIDDEN');
     const row = await (await getBidRepo()).findRfpOwner(meta.data.ownerId);
     if (!row) return fail(404, 'BID_NOT_FOUND');
     if (row.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
-    // Workspace membership — match the post-cutover bid_note ACL in
-    // storage/permissions.ts so the upload and the read share one matrix.
-    if (!(await (await getWorkspaceRepo()).isMember(userId, wsId))) {
-      return fail(403, 'FORBIDDEN');
-    }
   } else if (meta.data.ownerKind === 'team_message') {
     // Team-thread attachment — buyer (owns the RFP) or invited PG. ownerId is
     // the *RFP id* (the parent rfp_team_messages row may not exist yet —
     // sendTeamMessageAction creates it and re-points owner_id after this row
     // lands). Gate mirrors TeamChatService.authorize.
+    // Membership guaranteed by isSessionRevoked() above (same policy as
+    // storage/permissions.ts — no live isMember re-check needed).
     if (!wsId) return fail(403, 'FORBIDDEN');
     if (wsType === 'buyer') {
       const rfp = await (await getRfpRepo()).findById(meta.data.ownerId);
       if (!rfp) return fail(404, 'RFP_NOT_FOUND');
       if (rfp.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
-      // Membership — match the team-message read ACL in storage/permissions.ts.
-      if (!(await (await getWorkspaceRepo()).isMember(userId, wsId))) {
-        return fail(403, 'FORBIDDEN');
-      }
     } else {
       // PG — invitation gate (same as loadPgRfpDetail / bid_proposal).
       const invRepo = await getInvitationRepo();

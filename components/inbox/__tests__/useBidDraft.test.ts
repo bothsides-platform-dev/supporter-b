@@ -108,6 +108,68 @@ describe('useBidDraft', () => {
     expect(localStorage.getItem(KEY)).toBeNull();
   });
 
+  describe('언마운트 — 대기 중인 디바운스 타이머 정리', () => {
+    // 회귀: 타이머가 언마운트 후 살아남으면 테스트 환경 teardown 뒤에 발화해
+    // "localStorage is not defined" unhandled error를 낸다 (BidWizard.test.tsx 플레이크).
+    it('언마운트 시 대기 타이머를 취소하고 드래프트를 즉시 저장(flush)한다', () => {
+      const { result, unmount } = renderHook(() => useBidDraft(RFP_ID));
+
+      act(() => {
+        result.current.saveDraft(SAMPLE_DRAFT);
+      });
+      expect(localStorage.getItem(KEY)).toBeNull();
+
+      unmount();
+
+      // 디바운스를 기다리지 않고 동기적으로 저장돼 있어야 한다
+      expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual(SAMPLE_DRAFT);
+
+      // 언마운트 뒤 남은 타이머가 localStorage를 다시 건드리면 안 된다
+      // (환경 teardown 후 발화하면 ReferenceError가 나는 바로 그 경로)
+      const setItem = vi.spyOn(Storage.prototype, 'setItem');
+      vi.runAllTimers();
+      expect(setItem).not.toHaveBeenCalled();
+      setItem.mockRestore();
+    });
+
+    it('clearDraft 후 언마운트하면 아무것도 저장하지 않는다', () => {
+      const { result, unmount } = renderHook(() => useBidDraft(RFP_ID));
+
+      act(() => {
+        result.current.saveDraft(SAMPLE_DRAFT);
+        result.current.clearDraft();
+      });
+
+      unmount();
+
+      const setItem = vi.spyOn(Storage.prototype, 'setItem');
+      vi.runAllTimers();
+      expect(setItem).not.toHaveBeenCalled();
+      setItem.mockRestore();
+
+      expect(localStorage.getItem(KEY)).toBeNull();
+    });
+
+    it('저장이 이미 완료된 뒤 언마운트하면 중복 저장 없이 그대로 둔다', () => {
+      const { result, unmount } = renderHook(() => useBidDraft(RFP_ID));
+
+      act(() => {
+        result.current.saveDraft(SAMPLE_DRAFT);
+        vi.advanceTimersByTime(500);
+      });
+      expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual(SAMPLE_DRAFT);
+
+      unmount();
+
+      const setItem = vi.spyOn(Storage.prototype, 'setItem');
+      vi.runAllTimers();
+      expect(setItem).not.toHaveBeenCalled();
+      setItem.mockRestore();
+
+      expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual(SAMPLE_DRAFT);
+    });
+  });
+
   describe('savedAt — 자동저장 피드백 신호', () => {
     it('초기에는 savedAt이 null이다', () => {
       const { result } = renderHook(() => useBidDraft(RFP_ID));

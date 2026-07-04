@@ -14,6 +14,7 @@ import {
   searchEntitiesAction,
   type SearchResults,
 } from '@/lib/server/actions/search/searchEntitiesAction';
+import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 
 const EMPTY_RESULTS: SearchResults = { rfps: [], bids: [], opportunities: [] };
 
@@ -137,16 +138,21 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
         sub: b.memo,
       })),
     },
-    {
-      heading: '참여 가능한 견적',
-      items: results.opportunities.map((o) => ({
-        key: o.rfpCode,
-        value: `opp-${o.rfpCode}`,
-        href: o.href,
-        primary: o.title,
-        aside: o.buyerName,
-      })),
-    },
+    // 오픈게시판이 켜져 있을 때만 "참여 가능한 견적" 그룹을 노출한다.
+    ...(OPEN_BOARD_ENABLED
+      ? [
+          {
+            heading: '참여 가능한 견적',
+            items: results.opportunities.map((o) => ({
+              key: o.rfpCode,
+              value: `opp-${o.rfpCode}`,
+              href: o.href,
+              primary: o.title,
+              aside: o.buyerName,
+            })),
+          },
+        ]
+      : []),
   ];
 
   if (!commandPaletteOpen) return null;

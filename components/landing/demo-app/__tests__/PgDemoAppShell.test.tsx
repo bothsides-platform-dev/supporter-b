@@ -5,6 +5,7 @@ import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 
 vi.mock('motion/react', () => ({ useInView: () => true }));
 vi.mock('@/lib/landing/prefers-reduced-motion', () => ({ prefersReducedMotion: () => false }));
+vi.mock('../DemoCursor', () => ({ DemoCursor: () => null }));
 
 vi.mock('../DemoSidebar', () => ({
   DemoSidebar: () => (
@@ -16,8 +17,8 @@ vi.mock('../DemoSidebar', () => ({
   ),
 }));
 vi.mock('../pg/PgHomePageHost', () => ({
-  PgHomePageHost: ({ showCue }: { showCue?: boolean }) => (
-    <div data-testid="page-home" data-cue={String(showCue)}>
+  PgHomePageHost: () => (
+    <div data-testid="page-home">
       <a href="/inbox/P-2606-0042">큐 항목</a>
     </div>
   ),
@@ -44,7 +45,7 @@ function stubMatchMedia() {
 
 afterEach(cleanup);
 
-describe('PgDemoAppShell — 인플레이스 내비게이션', () => {
+describe('PgDemoAppShell — 클릭 인플레이스 내비게이션', () => {
   beforeEach(stubMatchMedia);
 
   it('초기에는 홈 페이지를 보여준다', () => {
@@ -71,55 +72,62 @@ describe('PgDemoAppShell — 인플레이스 내비게이션', () => {
     fireEvent.click(screen.getByRole('link', { name: '기회' }));
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
+});
 
-  it('스텝 바 메시지 클릭이 메시지 페이지로 전환한다', () => {
+describe('PgDemoAppShell — 사이드바 토글 비활성화', () => {
+  beforeEach(() => {
+    stubMatchMedia();
+    document.cookie = 'sidebar_state=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  });
+
+  it('모바일 헤더의 사이드바 토글 클릭이 실제 사이드바 상태를 바꾸지 않는다', () => {
     render(<PgDemoAppShell />);
-    act(() => {
-      fireEvent.click(screen.getByRole('button', { name: '4 메시지' }));
-    });
-    expect(screen.getByTestId('page-messages')).toBeInTheDocument();
+    const trigger = document.querySelector('[data-sidebar="trigger"]');
+    expect(trigger).not.toBeNull();
+    fireEvent.click(trigger!);
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('⌘/Ctrl+B 단축키가 실제 사이드바 상태를 바꾸지 않는다', () => {
+    render(<PgDemoAppShell />);
+    fireEvent.keyDown(window, { key: 'b', metaKey: true });
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('Ctrl+B(모디파이어 조합)도 동일하게 막는다', () => {
+    render(<PgDemoAppShell />);
+    fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+    expect(document.cookie).not.toContain('sidebar_state=false');
+  });
+
+  it('모디파이어 없는 b, 또는 b가 아닌 단축키는 막지 않는다', () => {
+    render(<PgDemoAppShell />);
+    const plainB = fireEvent.keyDown(window, { key: 'b' });
+    const cmdK = fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    expect(plainB).toBe(true);
+    expect(cmdK).toBe(true);
+  });
+
+  it('언마운트 시 keydown 캡처 리스너를 정리한다', () => {
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = render(<PgDemoAppShell />);
+    unmount();
+    expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+    removeSpy.mockRestore();
   });
 });
 
-describe('PgDemoAppShell — 자동 투어/조작 하이브리드', () => {
+describe('PgDemoAppShell — 클릭 대기(자동재생 없음)', () => {
   beforeEach(() => {
     stubMatchMedia();
     vi.useFakeTimers();
   });
   afterEach(() => vi.useRealTimers());
 
-  it('뷰 안에서 시간이 지나면 마지막 페이지(메시지)까지 자동 전진한다', () => {
+  it('시간이 지나도 자동 전진하지 않는다', () => {
     render(<PgDemoAppShell />);
-    expect(screen.getByTestId('page-home')).toBeInTheDocument();
-    for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(4800));
-    expect(screen.getByTestId('page-messages')).toBeInTheDocument();
-  });
-
-  it('사용자가 조작하면 자동 투어가 멈춘다', () => {
-    render(<PgDemoAppShell />);
-    fireEvent.pointerDown(screen.getByTestId('page-home'));
     for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(4800));
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 });
 
-describe('PgDemoAppShell — 코치마크/하이라이트', () => {
-  beforeEach(stubMatchMedia);
-
-  it('가이드 중에는 showCue를 켜고, 방문자가 조작하면 끈다', () => {
-    render(<PgDemoAppShell />);
-    expect(screen.getByTestId('page-home')).toHaveAttribute('data-cue', 'true');
-    fireEvent.pointerDown(screen.getByTestId('page-home'));
-    expect(screen.getByTestId('page-home')).toHaveAttribute('data-cue', 'false');
-  });
-
-  it('자동 전환 직전 트리거(큐 항목)에 클릭 하이라이트 클래스를 입힌다', () => {
-    vi.useFakeTimers();
-    render(<PgDemoAppShell />);
-    const trigger = screen.getByRole('link', { name: '큐 항목' });
-    expect(trigger).not.toHaveClass('demo-click-flash');
-    act(() => vi.advanceTimersByTime(4300));
-    expect(trigger).toHaveClass('demo-click-flash');
-    vi.useRealTimers();
-  });
-});

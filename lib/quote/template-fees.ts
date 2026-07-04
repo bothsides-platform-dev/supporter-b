@@ -5,6 +5,7 @@ import {
   type PaymentMethod,
   type TierRates,
 } from '@/lib/types/bid';
+import { SETTLE_CYCLE_PARSE_RE } from '@/lib/utils/settle-cycle';
 
 // 견적 템플릿/입찰 폼 공유 수수료 매핑 (순수). BidWizard·QuoteTemplateDrawer·QuoteTemplateList
 // 이 각자 복제하던 fmtPct/buildPaymentFees/decode 의 단일 출처. 봉인입찰 제출 경로의 금액
@@ -24,7 +25,7 @@ export const feeKey = (method: PaymentMethod | string, tier: string): string =>
 
 // 정산주기 문자열("D+3") → { unit, num }. 매칭 실패 시 D+1 로 폴백(템플릿 표기 규약).
 export function parseSettleCycle(s: string): { unit: 'D' | 'W' | 'M'; num: string } {
-  const m = /^([DWM])\+(\d+)$/.exec(s);
+  const m = SETTLE_CYCLE_PARSE_RE.exec(s);
   return { unit: (m?.[1] ?? 'D') as 'D' | 'W' | 'M', num: m?.[2] ?? '1' };
 }
 

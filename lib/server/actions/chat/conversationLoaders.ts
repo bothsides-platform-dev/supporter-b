@@ -60,7 +60,7 @@ export type ThreadMessage = {
 
 export type LoadThreadResult = ChatActionResult<{
   conversationId: string;
-  counterparty: { workspaceId: string; name: string; type: WorkspaceType };
+  counterparty: { workspaceId: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null };
   /** 세션 사용자(클라이언트는 세션을 모른다) — 낙관적 self 말풍선이 즉시 자기
    *  이름을 그릴 때 쓴다. */
   viewer: { userId: string; name: string; avatarUpdatedAt: string | null };
@@ -248,6 +248,7 @@ export async function loadConversationThread(
       workspaceId: counterpartyWsId,
       name: counterpartyWs?.name ?? '상대',
       type: counterpartyType,
+      logoUpdatedAt: counterpartyWs?.logoUpdatedAt ?? null,
     },
     viewer: { userId: ws.userId, name: viewerUser?.name ?? '', avatarUpdatedAt: viewerUser?.avatarUpdatedAt ?? null },
     messages,

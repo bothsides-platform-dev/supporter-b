@@ -7,16 +7,13 @@ import type {
   ChatReadRepo,
   InvitationRepo,
   NotificationRepo,
-  OutboxRepo,
   RfpRepo,
   UserRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
 import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
-import {
-  dispatchNotification,
-  emitAfterCommit,
-} from '@/lib/server/notifications/dispatch';
+import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
+import { notify, type NotifyChannel } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderChatMessage } from '@/lib/server/outbox/templates/chatMessage';
 import { isUserPresentInConversation } from '@/lib/server/realtime/centrifugo';
@@ -60,7 +57,6 @@ export class ChatService {
     private readonly attRepo: AttachmentRepo,
     private readonly msgRepo: ChatMessageRepo,
     private readonly notifRepo: NotificationRepo,
-    private readonly outboxRepo: OutboxRepo,
     private readonly readRepo: ChatReadRepo,
     private readonly rfpRepo: RfpRepo,
     private readonly invRepo: InvitationRepo,
@@ -205,41 +201,33 @@ export class ChatService {
       for (const m of recipients) {
         if (m.userId === actor.userId) continue;
 
+        const channels: NotifyChannel[] = [];
         const alreadyNotified = await this.notifRepo.hasPendingChatNotification(
           m.userId,
           counterpartyWsId,
           inappWindowStart,
           tx,
         );
-        if (!alreadyNotified) {
-          const notif: Notification = {
-            id: randomUUID(),
-            userId: m.userId,
-            workspaceId: counterpartyWsId,
+        if (!alreadyNotified) channels.push('inapp');
+        const present = await isUserPresentInConversation(conv.id, m.userId);
+        if (!present) channels.push('email');
+
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: [{ userId: m.userId, workspaceId: counterpartyWsId, email: m.email }],
+            channels,
             type: 'chat.message',
             title: `${senderName}님의 새 메시지`,
             body: preview,
-            channel: 'inapp',
-            status: 'pending',
             linkUrl: '/messages',
-            createdAt: now.toISOString(),
-          };
-          await dispatchNotification(tx, notif);
-          pendingEmits.push(notif);
-        }
-
-        if (await isUserPresentInConversation(conv.id, m.userId)) continue;
-
-        await this.outboxRepo.enqueue(
-          {
-            event: 'chat.message',
-            to: m.email,
-            subject: `[Supporter B] ${senderName}님의 새 메시지`,
-            html,
-            dedupeKey: chatDigestDedupeKey(conv.id, m.userId, now),
-            scheduledAt: digestScheduledAt,
-          },
-          tx,
+            email: {
+              event: 'chat.message',
+              subject: `[Supporter B] ${senderName}님의 새 메시지`,
+              html,
+              dedupeKey: () => chatDigestDedupeKey(conv.id, m.userId, now),
+              scheduledAt: digestScheduledAt,
+            },
+          })),
         );
       }
 
@@ -337,7 +325,6 @@ export async function getChatService(): Promise<ChatService> {
         getAttachmentRepo,
         getChatMessageRepo,
         getNotificationRepo,
-        getOutboxRepo,
         getChatReadRepo,
         getRfpRepo,
         getInvitationRepo,
@@ -347,7 +334,7 @@ export async function getChatService(): Promise<ChatService> {
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo, rfpRepo, invRepo] =
+    const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo] =
       await Promise.all([
         getChatConversationRepo(),
         getWorkspaceRepo(),
@@ -355,7 +342,6 @@ export async function getChatService(): Promise<ChatService> {
         getAttachmentRepo(),
         getChatMessageRepo(),
         getNotificationRepo(),
-        getOutboxRepo(),
         getChatReadRepo(),
         getRfpRepo(),
         getInvitationRepo(),
@@ -369,7 +355,6 @@ export async function getChatService(): Promise<ChatService> {
       attRepo,
       msgRepo,
       notifRepo,
-      outboxRepo,
       readRepo,
       rfpRepo,
       invRepo,

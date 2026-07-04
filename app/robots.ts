@@ -1,25 +1,12 @@
 import type { MetadataRoute } from 'next';
-import { siteConfig } from '@/lib/site-config';
+import { headers } from 'next/headers';
+import { appOrigins } from '@/lib/site-routing';
+import { seoHostContext } from '@/lib/seo/host';
+import { buildRobots } from '@/lib/seo/robots';
 
-export default function robots(): MetadataRoute.Robots {
-  return {
-    rules: [
-      {
-        userAgent: '*',
-        allow: ['/', '/login', '/signup', '/password'],
-        disallow: [
-          '/home',
-          '/inbox',
-          '/rfp',
-          '/settings',
-          '/api/',
-          '/invite/',
-          '/auth/',
-          '/logout',
-        ],
-      },
-    ],
-    sitemap: `${siteConfig.url}/sitemap.xml`,
-    host: siteConfig.url,
-  };
+// Host-aware: each host (buyer / partner) gets robots referencing its own origin.
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const host = (await headers()).get('host');
+  const { origin } = seoHostContext(host, appOrigins());
+  return buildRobots(origin);
 }

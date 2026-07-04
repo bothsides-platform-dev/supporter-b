@@ -73,16 +73,14 @@ describe('PipelineBoard', () => {
     expect(mockPush).toHaveBeenCalledWith('/rfp/P-2604-0001');
   });
 
-  it('buyer: 종결 컬럼(closed/awarded)에 표 뷰 딥링크 overflow 를 주입한다', () => {
+  it('buyer: 마감 컬럼에 표 뷰 딥링크 overflow 를 주입한다 (선정완료 병합 후 awarded 컬럼 없음)', () => {
     render(<PipelineBoard cardType="rfp" columns={[]} cards={[]} />);
     expect(lastColumnOverflow?.({ lifecycleKey: 'closed' })).toEqual({
       limit: 10,
       moreHref: '/rfp?view=table&status=closed',
     });
-    expect(lastColumnOverflow?.({ lifecycleKey: 'awarded' })).toEqual({
-      limit: 10,
-      moreHref: '/rfp?view=table&status=awarded',
-    });
+    // 선정완료·마감 병합 후 awarded lifecycle 컬럼은 더 이상 시드되지 않으며 overflow 도 없다.
+    expect(lastColumnOverflow?.({ lifecycleKey: 'awarded' })).toBeNull();
     expect(lastColumnOverflow?.({ lifecycleKey: 'active' })).toBeNull();
   });
 

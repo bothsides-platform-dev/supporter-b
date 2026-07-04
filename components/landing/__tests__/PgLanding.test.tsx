@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 
-// PgLandingHeaderNav 는 `@/auth`(next-auth) 를 임포트하는 async 서버 컴포넌트라
-// jsdom 렌더에 끌어오면 수집 단계에서 깨진다 → 스텁으로 대체(nav 는 PgLandingNav.test 에서 커버).
+// PgLandingHeaderNav 는 클라이언트에서 /api/auth/session 을 fetch 하는 훅(useSessionAuthed)을
+// 쓴다 — 이 스모크 테스트는 그 세션 조회와 무관하므로 스텁으로 대체(nav 자체는 PgLandingNav.test 에서 커버).
 vi.mock('../PgLandingHeaderNav', () => ({
   PgLandingHeaderNav: () => <a href="/login">로그인</a>,
 }));
@@ -36,7 +36,13 @@ vi.mock('motion/react', () => {
     El.displayName = `motion.${tag}`;
     return El;
   };
-  return { motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }) };
+  return {
+    motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }),
+    // ScrollPinnedSection·PinnedDemoFrame(스크롤 pin) 이 쓰는 훅 스텁(always-pin이라 항상 호출).
+    useScroll: () => ({ scrollYProgress: { on: vi.fn() } }),
+    useMotionValueEvent: vi.fn(),
+    useTransform: () => 1,
+  };
 });
 
 import { PgLanding } from '../PgLanding';

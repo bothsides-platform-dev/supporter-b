@@ -1,5 +1,79 @@
 import "@testing-library/jest-dom";
-import { vi } from "vitest";
+import { vi, beforeEach } from "vitest";
+
+// Node 22+ exposes process-level `localStorage`/`sessionStorage`/`Storage` globals
+// that vitest's jsdom environment does NOT overwrite: vitest's populateGlobal()
+// skips any key already present on `global` unless it's in vitest's fixed
+// override list (see getWindowKeys in vitest/dist — `if (k in global) return
+// keysArray.includes(k)`). Since Node defines these globally before jsdom's
+// environment ever runs, `window.localStorage`/`sessionStorage` end up aliased
+// to Node's own (mostly non-functional without --localstorage-file, and
+// always a *different* Storage instance/class than jsdom's) globals instead of
+// jsdom's real implementation — even though `window === globalThis` in these
+// tests. A prior version of this guard read `window.localStorage` directly to
+// find jsdom's storage, but that reads the very same shadowed global — it
+// never actually reached jsdom's instance, which is why the guard silently
+// no-op'd and every `beforeEach(() => jsdomStorage.clear())` consumer crashed.
+//
+// vitest's jsdom environment stashes the real JSDOM instance at `window.jsdom`
+// (`dom.window.jsdom = dom` in vitest's environments.js) — reach through that
+// to get jsdom's actual Storage objects/class and rebind the globals to them.
+// Rebinding `Storage` itself (not just the two instances) keeps
+// `vi.spyOn(Storage.prototype, ...)` working, since bare `Storage` in test
+// files would otherwise resolve to Node's unrelated Storage class.
+//
+// Scoped to jsdom only: server (unit-node) tests without the jsdom pragma have
+// no `window` and never touch storage. Crucially we do NOT use `vi.stubGlobal`
+// here — node test files that call `vi.unstubAllGlobals()` in afterEach would
+// otherwise wipe this stub and make the shared `beforeEach` below throw
+// `localStorage is not defined`. `defineProperty` stays outside vitest's stub
+// registry, and the beforeEach is registered jsdom-only.
+if (typeof window !== "undefined") {
+  const jsdomWindow = (window as unknown as { jsdom?: { window?: typeof window } }).jsdom
+    ?.window;
+  const realLocalStorage = jsdomWindow?.localStorage;
+  const realSessionStorage = jsdomWindow?.sessionStorage;
+  const realStorageCtor = jsdomWindow?.Storage;
+  // `window.jsdom` is a vitest-internal stash, not a public API — if a future
+  // vitest upgrade removes/renames it, every check below silently becomes a
+  // no-op and this file quietly regresses to the exact shadowed-Storage bug
+  // it exists to fix (with no test to catch it, since the bug only manifests
+  // as unrelated test files crashing). Fail loudly instead.
+  if (!jsdomWindow) {
+    console.warn(
+      "[vitest.setup] window.jsdom not found — jsdom localStorage/sessionStorage/Storage " +
+        "may be shadowed by Node's own globals again. Check vitest's internal environments.js " +
+        "still sets `dom.window.jsdom = dom`.",
+    );
+  }
+  if (realStorageCtor) {
+    Object.defineProperty(globalThis, "Storage", {
+      configurable: true,
+      writable: true,
+      value: realStorageCtor,
+    });
+  }
+  if (realLocalStorage) {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      writable: true,
+      value: realLocalStorage,
+    });
+  }
+  if (realSessionStorage) {
+    Object.defineProperty(globalThis, "sessionStorage", {
+      configurable: true,
+      writable: true,
+      value: realSessionStorage,
+    });
+  }
+  if (realLocalStorage || realSessionStorage) {
+    beforeEach(() => {
+      realLocalStorage?.clear();
+      realSessionStorage?.clear();
+    });
+  }
+}
 
 // `next/cache`의 revalidatePath/Tag는 Next.js 요청·액션 컨텍스트 (static
 // generation store)를 요구해 vitest에서 직접 호출하면 throw 한다. 액션 본문이

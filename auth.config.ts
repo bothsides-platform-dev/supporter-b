@@ -11,7 +11,7 @@
  */
 import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { sessionCookie } from '@/lib/auth/cookie-config';
+import { sessionCookie, insecureCookiesEnabled } from '@/lib/auth/cookie-config';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
 
 export default {
@@ -25,6 +25,10 @@ export default {
   // would be 30d. Server-side revocation rides the `sv` claim stamped below.
   session: { strategy: 'jwt', maxAge: 60 * 60 * 24 * 7 },
   cookies: { sessionToken: sessionCookie() },
+  // Force the rest of the Auth.js cookie family (csrf/callback/pkce) non-secure
+  // only in the perf/test escape hatch (http origin); otherwise leave Auth.js's
+  // default (https → secure). Self-defending — see insecureCookiesEnabled().
+  useSecureCookies: insecureCookiesEnabled() ? false : undefined,
   pages: { signIn: '/login' },
   callbacks: {
     async jwt({ token, user, trigger, session }) {

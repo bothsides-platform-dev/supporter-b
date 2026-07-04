@@ -139,19 +139,31 @@
   to   { transform: rotate(360deg); }
 }
 
-@keyframes blink-cursor {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0; }
-}
-.blink-cursor {
-  animation: blink-cursor 0.7s step-end infinite;
-}
-
 /* Landing in-page anchor nav — smooth scroll scoped to the landing (class
    toggled on <html> while mounted) so app keyboard/list/chat scrolls stay
    instant. Fixed-header offset is handled per-section via scroll-mt. */
 .landing-scroll {
   scroll-behavior: smooth;
+}
+
+/*
+  View Transitions — theme toggle circle reveal (DESIGN.md §9 sanctioned exception).
+  Disable the browser's default cross-fade so only our JS-driven clip-path animation
+  runs. The JS helper (lib/theme/view-transition.ts) skips startViewTransition
+  entirely when prefers-reduced-motion: reduce is set, making the CSS guard
+  belt-and-suspenders only.
+*/
+/* ⚠ SCOPE: These rules apply to ALL root-level view transitions, not only the
+   theme toggle. If you add page-level transitions, React <ViewTransition>, or
+   any other document.startViewTransition() call, override these pseudo-elements
+   in that feature's own CSS — otherwise its animations will be silenced here. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;       /* kill default cross-fade; clip-path driven by JS */
+  mix-blend-mode: normal;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*) { animation: none; }
 }
 
 /* Process stepper auto-advance progress bar (duration matches AUTO_ADVANCE_MS). */
@@ -162,21 +174,5 @@
 @media (prefers-reduced-motion: no-preference) {
   .process-progress {
     animation: process-progress 5000ms linear forwards;
-  }
-}
-
-/* Demo guided-tour: brief "simulated click" flash applied to the element that
-   triggers each step transition (sidebar item / list row), just before the
-   tour auto-advances. Duration matches FLASH_MS in DemoAppShell. */
-@keyframes demo-click-flash {
-  0%, 100% { box-shadow: 0 0 0 0 transparent; background-color: transparent; }
-  35%      { box-shadow: 0 0 0 2px var(--md-sys-color-primary); background-color: var(--md-sys-color-primary-container); }
-}
-.demo-click-flash {
-  border-radius: var(--md-sys-shape-small);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .demo-click-flash {
-    animation: demo-click-flash 650ms ease-out;
   }
 }

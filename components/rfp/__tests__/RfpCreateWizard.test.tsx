@@ -86,6 +86,7 @@ import { toast } from '@/lib/toast';
 
 // 기존 테스트에서 공통으로 쓰는 PG 픽스처
 const PG_1 = { id: 'pg-1', name: '나이스', displayName: '나이스', logoUpdatedAt: null };
+const PG_2 = { id: 'pg-2', name: 'KG이니시스', displayName: 'KG이니시스', logoUpdatedAt: null };
 
 function resetStore() {
   useRfpDraftStore.setState({
@@ -107,6 +108,7 @@ function resetStore() {
     currentSolutionDetail: '',
     memo: '',
     boardVisible: true,
+    pgSelectionInitialized: false,
   });
 }
 
@@ -139,7 +141,7 @@ describe('RfpCreateWizard', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
@@ -164,7 +166,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const user = userEvent.setup();
@@ -192,7 +194,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
@@ -248,7 +250,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       currentSettlementCycle: 'D+2',
       deliveryServicePeriod: '3~5일',
@@ -280,7 +282,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       boardVisible: false,
     });
@@ -307,7 +309,7 @@ describe('RfpCreateWizard', () => {
       requiredPaymentMethods: ['card'],
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       contractType: 'renewal',
     });
@@ -335,7 +337,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
-      deadline: '2026-06-30T23:59:59Z',
+      deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const user = userEvent.setup();
@@ -434,6 +436,29 @@ describe('RfpCreateWizard', () => {
         expect.stringContaining('PG사'),
         expect.objectContaining({ type: 'warning' }),
       );
+    });
+
+    it('최초 진입(미초기화 + 선택 없음) 시 pgList 전체가 기본 선택되고 초기화 플래그가 선다', async () => {
+      // resetStore가 pgSelectionInitialized=false, allowedPgWorkspaceIds=[]로 설정
+      render(<RfpCreateWizard pgList={[PG_1, PG_2]} />);
+
+      await waitFor(() => {
+        const state = useRfpDraftStore.getState();
+        expect(state.allowedPgWorkspaceIds.map((w) => w.id).sort()).toEqual(['pg-1', 'pg-2']);
+        expect(state.pgSelectionInitialized).toBe(true);
+      });
+    });
+
+    it('전체 해제 상태(초기화됨 + 선택 없음)로 재진입해도 다시 선택되지 않는다', async () => {
+      useRfpDraftStore.setState({
+        pgSelectionInitialized: true,
+        allowedPgWorkspaceIds: [],
+      });
+      render(<RfpCreateWizard pgList={[PG_1]} />);
+
+      // 마운트 effect 실행 대기 후에도 선택은 비어 있어야 한다(사용자 해제 존중)
+      await waitFor(() => {});
+      expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toEqual([]);
     });
 
     it('만료된 마감일을 초기화하고 warning toast를 표시한다', async () => {

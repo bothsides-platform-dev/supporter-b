@@ -55,6 +55,7 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     rfp: baseRfp,
     myBid: undefined,
     buyerName: '(주)테스트',
+    buyerLogoUpdatedAt: null,
     quoteTemplates: [],
     pendingRequote: null,
     awardedToMe: false,

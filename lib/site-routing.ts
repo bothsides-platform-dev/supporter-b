@@ -54,6 +54,20 @@ export function workspaceSwitchTarget(
   return `${origins[targetType]}${path}`;
 }
 
+/**
+ * Where `/login/ops` on this host should bounce to, or null to stay.
+ *
+ * The Google OAuth PKCE/state cookies are host-only (Auth.js defaults — only the
+ * session cookie is domain-scoped), while the OAuth callback is pinned to the
+ * buyer origin (`AUTH_URL`). Starting the flow on the partner host plants the
+ * PKCE cookie there, the callback lands on the buyer host without it, and
+ * Auth.js fails with `InvalidCheck` → `error=Configuration`. So the master
+ * sign-in must always START on the buyer host.
+ */
+export function opsLoginRedirectTarget(host: string | null, origins: AppOrigins): string | null {
+  return hostServes(host, origins) === 'pg' ? `${origins.buyer}/login/ops` : null;
+}
+
 /** Which signup entry path a request host should land on. Unknown host → buyer (mirrors the root landing in app/page.tsx). */
 export function signupTargetForHost(
   host: string | null,

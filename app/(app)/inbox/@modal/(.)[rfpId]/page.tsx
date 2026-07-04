@@ -65,6 +65,7 @@ export default async function InboxDealRoomModalPage({ params }: Props) {
                 workspaceId: data.rfp.buyerWsId,
                 name: data.buyerName,
                 type: 'buyer',
+                logoUpdatedAt: data.buyerLogoUpdatedAt,
               }}
               closedCounterpartyIds={
                 data.rfp.status === 'awarded' && !data.awardedToMe

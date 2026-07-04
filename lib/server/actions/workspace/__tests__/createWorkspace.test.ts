@@ -132,7 +132,7 @@ describe('createWorkspaceInTx', () => {
 
     const cols = await db.select().from(columns).where(eq(columns.workspaceId, workspaceId));
     expect(cols.every((c) => c.kind === 'pipeline')).toBe(true);
-    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(3);
+    expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(2);
   });
 
   it('seeds default kanban columns: pg gets only the pipeline board', async () => {

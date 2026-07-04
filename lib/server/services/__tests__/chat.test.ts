@@ -10,7 +10,6 @@ import {
   getChatReadRepo,
   getInvitationRepo,
   getNotificationRepo,
-  getOutboxRepo,
   getRfpRepo,
   getUserRepo,
   getWorkspaceRepo,
@@ -40,7 +39,7 @@ let db: PgliteDB;
 let service: ChatService;
 
 async function buildService(): Promise<ChatService> {
-  const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo, rfpRepo, invRepo] =
+  const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo] =
     await Promise.all([
       getChatConversationRepo(),
       getWorkspaceRepo(),
@@ -48,12 +47,11 @@ async function buildService(): Promise<ChatService> {
       getAttachmentRepo(),
       getChatMessageRepo(),
       getNotificationRepo(),
-      getOutboxRepo(),
       getChatReadRepo(),
       getRfpRepo(),
       getInvitationRepo(),
     ]);
-  return new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, outboxRepo, readRepo, rfpRepo, invRepo);
+  return new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo);
 }
 
 async function seedPair() {

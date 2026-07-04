@@ -5,7 +5,6 @@ import type {
   AttachmentRepo,
   InvitationRepo,
   NotificationRepo,
-  OutboxRepo,
   RfpRepo,
   RfpTeamMessageReadRepo,
   RfpTeamMessageRepo,
@@ -14,10 +13,8 @@ import type {
   UserRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
-import {
-  dispatchNotification,
-  emitAfterCommit,
-} from '@/lib/server/notifications/dispatch';
+import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
+import { notify } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { teamDigestDedupeKey, teamDigestWindowEnd } from '@/lib/server/outbox/team-digest';
 import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
@@ -66,7 +63,6 @@ export class TeamChatService {
     private readonly readRepo: RfpTeamMessageReadRepo,
     private readonly wsRepo: WorkspaceRepo,
     private readonly notifRepo: NotificationRepo,
-    private readonly outboxRepo: OutboxRepo,
     private readonly attRepo: AttachmentRepo,
   ) {}
 
@@ -186,37 +182,29 @@ export class TeamChatService {
 
         if (mentioned.has(memberId)) {
           if (!hadMention) {
-            const notif: Notification = {
-              id: randomUUID(),
-              userId: memberId,
-              workspaceId: actor.workspaceId,
-              type: 'team_chat.mention',
-              title: `${authorName}님이 회원님을 언급했어요`,
-              body: preview,
-              channel: 'inapp',
-              status: 'pending',
-              linkUrl: `/messages?t=${input.rfpId}`,
-              createdAt: now.toISOString(),
-            };
-            await dispatchNotification(tx, notif);
-            pendingEmits.push(notif);
+            pendingEmits.push(
+              ...(await notify(tx, {
+                recipients: [{ userId: memberId, workspaceId: actor.workspaceId, email: '' }],
+                channels: ['inapp'],
+                type: 'team_chat.mention',
+                title: `${authorName}님이 회원님을 언급했어요`,
+                body: preview,
+                linkUrl: `/messages?t=${input.rfpId}`,
+              })),
+            );
           }
         } else {
           if (!hadGeneric) {
-            const notif: Notification = {
-              id: randomUUID(),
-              userId: memberId,
-              workspaceId: actor.workspaceId,
-              type: 'team_chat.message',
-              title: `${authorName}님의 팀 메시지`,
-              body: preview,
-              channel: 'inapp',
-              status: 'pending',
-              linkUrl: `/messages?t=${input.rfpId}`,
-              createdAt: now.toISOString(),
-            };
-            await dispatchNotification(tx, notif);
-            pendingEmits.push(notif);
+            pendingEmits.push(
+              ...(await notify(tx, {
+                recipients: [{ userId: memberId, workspaceId: actor.workspaceId, email: '' }],
+                channels: ['inapp'],
+                type: 'team_chat.message',
+                title: `${authorName}님의 팀 메시지`,
+                body: preview,
+                linkUrl: `/messages?t=${input.rfpId}`,
+              })),
+            );
           }
         }
 
@@ -226,17 +214,20 @@ export class TeamChatService {
         if (!hadGeneric && !hadMention) {
           const member = await this.userRepo.findById(memberId, tx);
           if (member?.email) {
-            await this.outboxRepo.enqueue(
-              {
+            await notify(tx, {
+              recipients: [{ userId: memberId, workspaceId: actor.workspaceId, email: member.email }],
+              channels: ['email'],
+              type: 'team_chat.message',
+              title: '',
+              body: '',
+              email: {
                 event: 'team_chat.message',
-                to: member.email,
                 subject: '[Supporter B] 새 팀 메시지',
                 html: '<p>새 팀 메시지가 있어요.</p>', // placeholder — processor recomputes at send
-                dedupeKey: teamDigestDedupeKey(input.rfpId, actor.workspaceId, memberId, now),
+                dedupeKey: () => teamDigestDedupeKey(input.rfpId, actor.workspaceId, memberId, now),
                 scheduledAt: teamDigestWindowEnd(now),
               },
-              tx,
-            );
+            });
           }
         }
       }
@@ -336,7 +327,6 @@ export async function getTeamChatService(): Promise<TeamChatService> {
         getAttachmentRepo,
         getInvitationRepo,
         getNotificationRepo,
-        getOutboxRepo,
         getRfpRepo,
         getRfpTeamMessageRepo,
         getRfpTeamMessageReadRepo,
@@ -347,7 +337,7 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
-    const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, outboxRepo, attRepo] = await Promise.all([
+    const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, attRepo] = await Promise.all([
       getRfpRepo(),
       getInvitationRepo(),
       getUserRepo(),
@@ -355,7 +345,6 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       getRfpTeamMessageReadRepo(),
       getWorkspaceRepo(),
       getNotificationRepo(),
-      getOutboxRepo(),
       getAttachmentRepo(),
     ]);
     globalThis.__bidit_team_chat_service__ = new TeamChatService(
@@ -367,7 +356,6 @@ export async function getTeamChatService(): Promise<TeamChatService> {
       readRepo,
       wsRepo,
       notifRepo,
-      outboxRepo,
       attRepo,
     );
   }

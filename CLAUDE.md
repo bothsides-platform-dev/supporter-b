@@ -19,7 +19,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 
 - **Two-sided platform**: `buyer` workspace (구매사) sends RFPs; `pg` workspace (결제대행사 영업담당) responds with bids
 - **Bidding is sealed 1:N; discovery is open (opt-out)**: participation (who can bid) is buyer-controlled via the workspace-ID allowlist (`rfp_allowed_pg`), and **bids stay sealed — PGs never see each other or a competitor count (`Bid.competitorCount` does not exist by design).** Two axes, kept separate:
-  - **Discovery = open by default, buyer opt-out.** Every `sent` RFP with `deadline > now` and `board_visible=true` (the default) appears on the PG-facing open board (`/opportunities` + PG home 탐색 section). The board listing exposes **only `구매사명`(workspace name)·`제목`·`홈페이지`** — never fees/current-terms/volume/bizNo/memo/attachments (whitelist enforced at the query layer in `lib/server/repositories/drizzle/rfp-pg-request.ts`). **Board visibility is set once at RFP creation (wizard step 4, `RfpStep4Review` checkbox) and is read-only thereafter** — the UI shows a status chip (`RfpBoardVisibilityStatus`) with no toggle. `setRfpBoardVisibilityAction`/`rfpRepo.setBoardVisible` are kept server-side for admin/recovery use but no UI surface calls them.
+  - **Discovery = open by default, buyer opt-out.** Every `sent` RFP with `deadline > now` and `board_visible=true` (the default) appears on the PG-facing open board (`/opportunities` + PG home 탐색 section). The board listing exposes **only `구매사명`(workspace name)·`제목`·`홈페이지`** — never fees/current-terms/volume/bizNo/memo/attachments (whitelist enforced at the query layer in `lib/server/repositories/drizzle/rfp-pg-request.ts`). **Board visibility is set once at RFP creation (wizard step 4, `RfpStep4Review` checkbox — gated on `OPEN_BOARD_ENABLED`) and is read-only thereafter** — the UI shows a status chip (`RfpBoardVisibilityStatus`) with no toggle. `setRfpBoardVisibilityAction`/`rfpRepo.setBoardVisible` are kept server-side for admin/recovery use but no UI surface calls them. **Kill switch**: `OPEN_BOARD_ENABLED = false` in `lib/features/open-board.ts` temporarily hides the entire open-board surface (board page, nav, home 탐색 section, wizard checkbox). Data and server logic are intact — flip to `true` to restore. (v0.2.52.0)
   - **Participation = buyer-gated.** A non-invited PG sends a one-time cold-pitch request (`rfp_pg_requests`, UNIQUE per (rfp, pg), rejection permanent). Buyer **accept** adds them to the allowlist + a real invitation (full info then visible in their inbox); **reject** is final.
   - **Per-field opt-out for invited PGs — `현재 카드 수수료`.** Even an invited PG who sees the full brief can be denied one field: the buyer's **current card fee** (default shown, opt-out per RFP). When off, the value is stripped server-side in `loadPgRfpDetail` (the PG never reads it from the RSC payload/network — `RfpBriefPanel`'s render gate is only the visual fallback). The buyer's own comparison baseline always keeps the fee. Toggle lives in the RFP create wizard (step 2, under 현재 카드 수수료). **Implementation note (v0.2.26.x, migration complete):** current-terms is stored as a versioned JSONB document (`current_terms` column, `lib/types/rfp-terms.ts`). PG field visibility is controlled by a `hidden_from_pg` text-array (path allowlist) — `loadPgRfpDetail` strips any path that has a handler in `PG_STRIP` (fail-closed). The legacy `current_fee_visible_to_pg` boolean column and individual `current_*` columns were dropped in v0.2.26.2 — `current_terms` is the sole authoritative store. `currentFeeVisibleToPg` is derived at the app layer from `hiddenFromPg`. User-facing behavior is unchanged.
 - **Per-RFP unique URL + token** in invitation email; token authoritative only for first entry, then workspace membership takes over
@@ -40,6 +40,7 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 | Component tooling | shadcn (base-nova) — 컴포넌트 scaffolding 전용 | `shadcn@4.6.0` |
 | State | Zustand (UI toggles, signup draft, page→shell header-actions slot) | `zustand@5.0.13` |
 | Forms | zod v4 검증 + Server Actions (react-hook-form 미사용 — 폼은 useState + zod) | `zod@4.4.3` |
+| Client data fetching | SWR — `force-static` 랜딩 헤더(`LandingHeaderNav`/`PgLandingHeaderNav`)가 마운트 후 `/api/auth/session`을 클라이언트에서 재조회해 로그인 상태를 반영(`components/landing/use-session-authed.ts`); 같은 키를 쓰는 두 헤더 인스턴스 요청을 SWR 캐시가 자동 중복제거 | `swr@2.4.2` |
 | Numeric input | `react-number-format` — 원화 금액 입력 천단위 구분·소수점 차단 (`CurrencyInput`) + `D+N` 정수 전용 정산주기 입력 (`DayOffsetInput`) | `react-number-format@5.4.5` |
 | Korean i18n | `es-hangul` (toss) — 조사 자동 선택(`josa()`), 초성 검색(`disassemble`), 숫자→한글 혼합 표기(`numberToHangulMixed`). 한글 텍스트 처리 단일 출처 | `es-hangul@2.3.8` |
 | Icons | lucide-react | `lucide-react@1.14.0` |
@@ -83,6 +84,8 @@ Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown
 
 **Host routing (prod only)**: the single Next.js app serves two hostnames — `supporter-b.com` (buyer) and `partner.supporter-b.com` (PG). Route tree is unchanged; `(app)/layout.tsx` reads the request host and redirects a mismatched session to its correct host (`lib/site-routing.ts`). `/signup` also reads the host and redirects to `/signup/buyer` or `/signup/pg` without a role-chooser screen (`signupTargetForHost` in `lib/site-routing.ts`). Session cookie is scoped to `.supporter-b.com` for cross-subdomain SSO (`AUTH_COOKIE_DOMAIN`). Workspace switch navigates across hosts. PG-facing emails link to `partner.supporter-b.com`. Local dev uses a single host (routing disabled). Env vars: `NEXT_PUBLIC_BUYER_ORIGIN`, `NEXT_PUBLIC_PARTNER_ORIGIN`.
 
+**SEO / AI(GEO) 텍스트 엔드포인트**: `/llms.txt`(큐레이션 인덱스)·`/llms-full.txt`(전체 마크다운)는 host-aware route handler(`app/llms.txt`·`app/llms-full.txt`)로 buyer/PG 청중별 사실을 `text/plain`으로 제공한다. `app/robots.ts`·`app/sitemap.ts`도 host-aware로 전환(각 호스트가 자기 origin 참조 + 주요 AI 크롤러 명시 허용). 콘텐츠 SSOT는 `lib/seo/{host,product-facts,llms,robots,sitemap}.ts`이며 FAQ는 랜딩 상수(`faq-data`·`pg-faq-data`)를 재사용해 드리프트가 없다. 랜딩 히어로 지표(`HERO_METRICS`)는 `components/landing/hero-metrics.ts`에 단일 출처로 추출돼 `LandingHero.tsx`와 `product-facts.ts`(BUYER_FACTS.metrics)가 공유하며, `lib/seo/__tests__/product-facts.test.ts` 드리프트 가드 테스트가 양쪽 캡션 일치를 보장한다. 두 txt 경로는 `proxy.ts`/`lib/auth/proxy-matcher.ts` 매처에서 robots/sitemap과 함께 제외해 비인증 크롤러가 접근한다. `app/layout.tsx` metadata의 `alternates.types['text/plain'] = '/llms.txt'` 선언으로 ChatGPT·Perplexity 등 AI 크롤러가 `<head>`에서 자동발견 가능하다. 매처 세그먼트의 점(`.`)은 `\\.`으로 이스케이프해 파일명이 리터럴 점으로만 매칭된다(`llmsXtxt` 같은 경로가 의도치 않게 제외되는 것을 방지).
+
 **Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
 
 ## Server Architecture (lib/server/)
@@ -104,6 +107,7 @@ lib/server/
 
 **서비스 레이어 규칙:**
 - 서비스는 트랜잭션·알림 팬아웃·이메일 아웃박스를 소유한다. 액션은 이를 직접 다루지 않는다.
+- **알림 팬아웃 단일 API**: `lib/server/notifications/notify.ts`의 `notify(tx, input)` — 수신자별 in-app row insert(`dispatchNotification`)와 email outbox enqueue를 채널(`inapp`/`email`) 지정 한 번으로 처리하고, 생성된 `Notification[]`을 반환한다(호출자가 `pendingEmits`에 모아 commit 후 emit). `rfp.ts`/`bid.ts`/`chat.ts`/`team-chat.ts`의 알림 발송 흐름 12곳(`notify()` 호출 지점 기준으로는 18곳 — 한 흐름이 수신자 그룹·채널별로 여러 번 호출하기도 한다)이 모두 이 API로 통일되어 있다 — 신규 알림 발송 코드는 `dispatchNotification`+`outboxRepo.enqueue` 두 호출을 직접 조합하지 말고 `notify()`를 쓴다. **범위 밖(의도적)**: `auth.*`/`workspace.*` 서비스와 `lib/server/actions/workspace/_workspaceInviteNotify.ts`는 기존 `dispatchNotification`/outbox 직접 호출 패턴을 그대로 유지한다.
 - `Actor = { userId, workspaceId }` — 세션에서 추출해 액션이 서비스에 전달한다.
 - `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` — 서비스 레이어 반환 타입. 예외 throw 없이 결과를 반환한다.
 - `ActionResult<T> = { ok: true } & T | { ok: false; error: string }` — 액션 레이어 반환 타입 SSOT (`lib/server/actions/_result.ts`). 각 도메인 파일의 동일 타입 선언을 대체한다.
@@ -122,15 +126,15 @@ These are non-negotiable visual decisions enforced across all screens. The desig
 - **No** heavy/skeuomorphic shadows — most surfaces use a 1px border or elevation-1; big shadows only on floating elements (popover, dropdown, toast, dialog, command palette).
 - **No** high-contrast dividers — default to `outline-variant` (the deliberately low-contrast border). The faint border IS the Linear look, not a bug.
 - **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28–36px buttons / default 32px).
-- **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`.
+- **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`. (단 하나의 좁은 예외: 랜딩 히어로 다크 씬 소프트 블룸 — DESIGN.md §9 랜딩·마케팅 예외 ⑤.)
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
-- **로딩 모션 허용** — 넓은 영역은 펄스 스켈레톤, 인라인·타이핑 인디케이터는 펄스 점(staggered). `prefers-reduced-motion: reduce` 존중(저감 시 정지/단순화). 버튼 진행 등 짧은 `LOADING…` 텍스트 표기는 그대로 두어도 무방. 장식적 컨페티·강한 모멘텀 모션 제한은 유지(DESIGN.md §9 "축하 모먼트" 예외만). 자세히는 DESIGN.md §6 "로딩 모션".
+- **로딩 모션 허용** — 넓은 영역은 펄스 스켈레톤, 인라인·타이핑 인디케이터는 펄스 점(staggered). `prefers-reduced-motion: reduce` 존중(저감 시 정지/단순화). 버튼 진행 등 짧은 `LOADING…` 텍스트 표기는 그대로 두어도 무방. 장식적 컨페티·강한 모멘텀 모션 제한은 유지(DESIGN.md §9 세 예외 — "축하 모먼트"·"테마 전환 리빌"·"랜딩/마케팅 모션"). 자세히는 DESIGN.md §6 "로딩 모션".
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.
 - **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (mono + tabular-nums). Never on nav/labels/buttons.
 - **Status** uses Chip component — never bracketed plain text `[ 결재중 ]`.
 - **Typography** uses the typescale tokens — no `font-mono uppercase tracking` on labels/nav; sentence case with slight negative tracking.
 - **Chip color** mapping: 성공/완료→tertiary, 실패/오류→error, 보류/신규→warning, 중립→surface, 주요→primary.
-- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`). 단, DESIGN.md §9의 "축하 모먼트" 예외(종결 성공 1회성 컨페티)는 별도.
+- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`). 단, DESIGN.md §9의 세 예외(① "축하 모먼트" — 종결 성공 1회성 컨페티, ② "테마 전환 리빌" — View Transitions clip-path, ③ "랜딩·마케팅 모션" — 랜딩/마케팅 면은 스크롤 pin·진입 스케일·가이드 커서 등 몰입형 모션 및 `prefers-reduced-motion` 미존중 허용)는 별도.
 
 If frontend code looks "generic SaaS", check DESIGN.md §9 (anti-patterns) before defending it.
 

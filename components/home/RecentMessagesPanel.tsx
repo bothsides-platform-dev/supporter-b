@@ -99,6 +99,7 @@ export function RecentMessagesPanel({
                       {item.lastMessageAt && (
                         <time
                           dateTime={item.lastMessageAt}
+                          suppressHydrationWarning
                           className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]"
                         >
                           {formatLastMessageTime(item.lastMessageAt)}

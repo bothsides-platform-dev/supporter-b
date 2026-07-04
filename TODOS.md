@@ -5,11 +5,6 @@
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
 선정 연락처 교환(`CounterpartyContactCard`)은 `findContactById`가 fail-closed라, 구매사 담당자(RFP `createdBy`)가 탈퇴/시스템계정이면 `buyerContact=null`이 된다. 승자 PG 분기는 `awardedToMe && buyerContact`로 카드를, `awarded && !awardedToMe`로 미선정 안내를 그리므로 — 승자인데 buyerContact만 null이면 카드도 안내도 안 떠 빈 화면이 된다(드묾·누출 아님·정상 fail-closed). 후속: 연락처 없음 안내 폴백 또는 워크스페이스 대표 담당자 폴백 검토. (발견: /ship 적대 리뷰 2026-06-27)
 
-## Workspace Logo
-
-### workspaces.has_logo 컬럼 DROP (P3)
-워크스페이스 로고가 `logo_updated_at`(캐시 버스트 `?v` + immutable) 단일 컬럼으로 전환됨. `has_logo` 는 더 이상 코드가 읽지/쓰지 않는 dead 컬럼(expand-contract 의 contract 단계 잔여). 배포 안정 확인 후 schema(`lib/db/schema/workspaces.ts`)에서 제거하고 `pnpm db:push` (또는 `ALTER TABLE workspaces DROP COLUMN has_logo;`). 데이터 손실 없음(재계산 불필요 — `logo_updated_at` 가 단일 출처). (도입: 워크스페이스 로고 캐시버스트, 2026-06-21)
-
 ## Chat / Realtime
 
 ### Presence: document observer-identity exposure in the threat model (P3)
@@ -29,40 +24,17 @@
 ### 빠른 연속 전송 시 단일 pendingFlight 슬롯 (P3)
 `pendingFlight`가 단일 state 슬롯이라 같은 틱에 두 번 전송하면 마지막 것만 morph(앞 메시지는 애니메이션 없이 즉시 표시 — 안전, 정합성 문제 없음). 연속 전송 일관성을 원하면 큐/배열로 전환. (발견: /ship adversarial 2026-06-22)
 
-## Auth / Signup
-
-### ~~AuthService unique-violation→EMAIL_TAKEN 매핑 DRY~~ ✅ v0.2.25.1
-`mapUniqueViolationToEmailTaken<T>` 헬퍼로 4곳 중복 해소(`completeSignup`·`signupViaInvite`·`joinCanonicalPgWorkspace`·`confirmEmailChange`). `users_email_unique` 컨스트레인트 특정화로 다른 테이블 23505 오진단 방지. user-insert 8필드는 이미 repo `create()` 단일 출처화돼 있어 insert 헬퍼 추출 불필요. 3470 green. (PR refactor+auth-email-taken-dry 2026-06-17)
-
 ## Design
 
 ### font-mono uppercase tracking on non-numeric UI labels (C4) (P3)
 `font-mono text-[10px] tracking-[0.1em] uppercase` 패턴이 폼 라벨·버튼·nav 링크 등 비수치 UI 요소 ~180곳에 남아 있음 (DESIGN.md 하드 룰 위반: "no `font-mono uppercase tracking` on labels/nav"). 대표 파일: `app/(public)/login`·`signup`·`password`·`auth`·`invite`, `components/auth/PasswordField`·`PhoneVerificationField`·`ResendCountdown`, `components/inbox/bid-wizard/BidContextStrip`, `components/settings/*`, `components/rfp/*`. 수정 방향: `font-mono text-[10px] tracking-[0.1em] uppercase` → `font-sans text-[11px] tracking-tight` + sentence case. 별도 worktree 권장(시각 변경 광범위). 또한 `font-mono tabular-nums` 직접 사용이 `md-numeric` 미전환 상태로 ~30건 잔존(`components/settings/`, `components/rfp/`, `components/landing/` 등) — C4 스윕 시 병행 정리. (도입: font-system audit PR#280 v0.2.35.1, 2026-06-22)
 
-## Kanban Board
+## Landing
 
-### ~~보드 카드 이동의 키보드 대체 수단~~ ✅ v0.2.25.1
-`BoardDraggableCard` 에 전용 드래그 핸들(GripVertical, `setActivatorNodeRef`) 추가 + `KeyboardSensor` 재도입. 핸들에서 Space/Enter 로 카드를 집고 화살표 키로 이동 — 카드 버튼(Enter-to-open)과 분리돼 충돌 없음. SR 지시문·announcements 도 키보드 방법 안내로 갱신. (PR fix/kanban-keyboard-drag-handle 2026-06-17)
-
-### ~~보드 컬럼/카드 memo 가 현재 미발현 (children 인라인 패턴)~~ ✅ v0.2.25.4
-children→data-prop 전환(BoardColumn·BoardDraggableCard), `EMPTY_OVERRIDES` 모듈 상수(useOptimistic 인라인 {} 방지), `columnData` useMemo, `PipelineBoard` useCallback 안정화. 3508 green. **Completed:** v0.2.25.4 (2026-06-17)
-
-### ~~PG 인박스 데이터 조립 중복 + 보드 뷰 2중 페치~~ ✅ v0.2.25.2
-`loadPgInboxData(wsId)` 공유 로더(`lib/server/board/pgInbox.ts`) 추출 + `pgInboxDataToRows`·`buildPgPipelineCards` 순수 빌더 분리. `inbox/page.tsx` 가 1회 로드 후 행·보드 양쪽에 공급, `loadPgPipelineBoard(wsId, prefetched?)` 진입점 추가로 보드 뷰 3-쿼리 2중 실행 제거. 기존 미테스트 `received→bidId 생략` 규칙도 신규 pgInbox.test.ts(13 케이스)로 커버. 2868 green.
-
-### ~~종결 컬럼 정렬을 전이 시각 기준으로~~ ✅ v0.2.24.2
-rfp.updatedAt 기준 내림차순 정렬 적용(buyer awarded/closed, PG won/lost). transition() 에서 updated_at 갱신 누락도 함께 수정. (PR fix+design-todos-p3 2026-06-17)
-
-### ~~findByPgWs ORDER BY round 누락 — 재요청 시 Map 덮어쓰기 비결정적~~ ✅ v0.2.25.3
-`findByPgWs` 에 `ORDER BY round ASC` 추가 + `pgInbox.ts`·`loadDashboard.ts` 의 `bidByRfp` Map 조립에 명시적 `max-round` 가드 추가. 정렬·소비 양쪽에서 항상 최신 라운드가 보존됨. 3493 green. **Completed:** v0.2.25.3 (2026-06-17)
-
-### ~~rfp_bids 보드 죽은 표면 정리~~ ✅ v0.2.25.5
-`BidCard` 컴포넌트, `CardType 'bid'`, `ColumnKind 'rfp_bids'`, `BidRepo.setBoardColumn`, 관련 시드·테스트 전면 제거. **Completed:** v0.2.25.5 (2026-06-17)
+### ScrambleText rAF 루프가 헤드라인이 화면 밖으로 스크롤돼도 계속 돎 (P3)
+`components/landing/hero/ScrambleText.tsx`의 순환 문구 스크램블 애니메이션은 `document.hidden`(탭 백그라운드)에만 반응해 일시정지하고, 히어로 섹션 자체가 스크롤로 화면 밖에 나가도 rAF 루프(60ms 글리프 갱신 + 프레임당 setState)가 계속 돈다(리크는 아님 — cleanup은 정상, 비용도 작은 span 10여 개 스타일 재계산 정도로 트리비얼). 수정 방향: `HeroPinnedScene`이 이미 갖고 있는 `scrollYProgress`를 prop으로 내려받아 히어로 트랙을 벗어나면 정지하거나(`HeroAsciiField`가 쓰는 방식과 동일), 또는 별도 IntersectionObserver를 둔다. (발견: /ship performance+adversarial 리뷰 2026-07-03, `feat/hero-headline-scramble` — 두 리뷰어가 독립적으로 동일 지점 지적)
 
 ## Signup / Auth
-
-### signupCompleteAction 서버 사이드 bizProfile.status 검증 (P2)
-현재 `signupCompleteAction` 은 클라이언트가 보낸 `bizProfile.status` 를 그대로 신뢰한다. 클라 게이트(`BizLookupField blockedStatuses`)는 UX 보호이며, 수정된 클라이언트라면 `closed`/`suspended` 상태를 `active` 로 바꿔 보낼 수 있다. 완전한 서버 권위 검증을 위해서는 액션 내부에서 NTS 재조회 또는 zod `.refine(p => p.status === 'active')` 추가가 필요하다. (발견: v0.2.27.2 adversarial 2026-06-20, 명시적 후속 유예)
 
 ### 설정 페이지 WorkspaceBizNoForm blockedStatuses 누락 (P2)
 워크스페이스 설정의 사업자번호 변경 폼(`WorkspaceBizNoForm.tsx`)이 `BizLookupField` 를 `blockedStatuses` 없이 사용한다. 기존 구매사 회원이 폐업·휴업 상태 번호로 변경할 수 있는 경로. `blockedStatuses={['closed', 'suspended']}` 를 추가해 설정 경로도 닫아야 한다. (발견: v0.2.27.2 adversarial 2026-06-20)
@@ -70,26 +42,13 @@ rfp.updatedAt 기준 내림차순 정렬 적용(buyer awarded/closed, PG won/los
 ### PG 가입 BizLookupField blockedStatuses 누락 (P3)
 PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses` 가 없다. PG 도메인에서도 폐업·휴업 사업자를 차단해야 하는지 정책 결정 후 `blockedStatuses={['closed', 'suspended']}` 추가. (발견: v0.2.27.2 adversarial 2026-06-20, P3 — 정책 미확정)
 
-## Bid Wizard
+### proxy-matcher EXCLUDED_SEGMENTS가 세그먼트 경계 없이 prefix 매칭 (P3)
+`lib/auth/proxy-matcher.ts`의 `PROXY_MATCHER` 음의 전방탐색은 세그먼트 경계(`/` 또는 끝)를 강제하지 않아, `api`·`_next`·`fonts`·`file`·`globe`·`next`·`vercel`·`window`·`landing` 등 모든 항목이 접두어 매칭된다(예: 미래에 `/landing-editor`·`/next-steps` 같은 실제 보호 라우트가 생기면 인증 미들웨어를 통째로 건너뛴다). 현재는 충돌하는 라우트가 없어 무해하지만, 새 라우트 추가 시 이 목록과의 충돌을 확인하는 절차나 세그먼트 경계 강제(`(?:/|$)` 등)를 검토할 것. (발견: /ship coverage+adversarial 리뷰 2026-07-01, `fix/pg-landing-image-auth-redirect`)
 
-### ~~구간 수수료 그리드 환산 툴팁 양끝 열 오버플로 + aria 연결~~ ✅ v0.2.24.2
-tooltipAlign prop(start|center|end) + useId/aria-describedby 연결 완료. (PR fix+design-todos-p3 2026-06-17)
-
-## Email / Notifications
-
-### ~~채팅·팀 다이제스트 발송 배치화~~ ✅
-`flushChatDigests`·`flushTeamChatDigests` 를 two-phase 구조로 전환: Phase 1 = 수신자당 재계산+취소 필터(변경 없음), Phase 2 = 살아남은 항목을 `sendEntriesInBatches(batchSender, enriched)` 로 일괄 발송. 수신자당 개별 `Sender` 호출(N회) → tick당 ceil(N/100)회 Resend 배치 호출. `route.ts` 도 `getResendSender()` 제거 → 세 flush 모두 동일 `batchSender` 사용. 3467 green. (fix+digest-batch-send 2026-06-17)
-
-### ~~빈 RESEND_API_KEY dev-fallback 오설정 가드~~ ✅ PR#233
-`ResendSender`·`ResendBatchSender`·`sendAdminEmail` production 빈 키 → `{ ok: false, error: 'resend_api_key_empty', retryable: false }` + `checkProductionConfig` 부팅 가드(`instrumentation.ts` — PM2 restart loop로 즉각 표면화). (PR fix/resend-empty-key-guard 2026-06-17)
+### proxy-matcher 죽은 제외 항목 4개 정리 (P4)
+`file`·`globe`·`next`·`vercel`·`window` 는 create-next-app 기본 SVG 에셋(`public/next.svg` 등) 때문에 추가됐던 항목인데, 해당 파일들은 이미 삭제되어 `public/`에 `fonts/`·`landing/`만 남아 있다. 지금은 아무것도 제외하지 않으면서 흔한 영어 단어라 미래 라우트와 충돌 여지만 남기는 상태. 제거 검토(단, 위 세그먼트 경계 이슈와 함께 처리하는 게 효율적). (발견: /ship adversarial 리뷰 2026-07-01, `fix/pg-landing-image-auth-redirect`)
 
 ## 견적 확장 (current_terms)
-
-### ~~Phase E — 견적 현재조건 읽기·strip 단독 권위 (fallback 제거)~~ ✅ v0.2.26.1
-rowToRfp 브리프 doc-only(개별 컬럼 폴백 제거) + loadPgRfpDetail hidden_from_pg 단독 strip(레거시 boolean 폴백 제거). dual-write·개별컬럼은 유지(롤백 안전). **배포 전제: backfill 완료 후 배포**(미완 시 레거시 행 현재조건이 구매사 화면에서 빈값 — 누출 아님). (2026-06-18)
-
-### ~~Phase E2+F — 클린 컷오버 (개별 컬럼 제거, 문서 단독 저장)~~ ✅ v0.2.26.2
-운영 데이터 disposable 전제로 개별 current_* 8컬럼 + current_fee_visible_to_pg DROP + dual-write·backfill 장치 삭제. rowToRfp 가 currentFeeVisibleToPg 를 hidden_from_pg 에서 파생. save() 문서/컬럼 비대칭도 해소(양쪽 문서 단독). 앱 레이어는 flat 유지(flat-edge). 배포=DB wipe→db:push→코드. (2026-06-18)
 
 ### (조건부) hidden_from_pg write-edge 검증
 **Priority:** P3
@@ -104,21 +63,6 @@ rowToRfp 브리프 doc-only(개별 컬럼 폴백 제거) + loadPgRfpDetail hidde
 
 **부분 해소 (v0.2.48.0)**: admin 권한 표면(WorkspaceService invite/resend/cancel/changeRole/removeMember + renameWorkspace + listAuditLogs + audit-log 페이지)은 `isApprovedAdmin`(role=admin AND approvalStatus=approved)로 서버에서 차단했고, countAdmins·adminRecipients·deleteAccount last-admin 판정·rfp 초대 메일 수신자도 승인된 admin 만 집계/수신. **남은 범위**: 비-admin pg 서버액션 전반에 대한 blanket `requirePgSession()` 승인 게이트는 여전히 미구현.
 
-## Completed
+### changeMemberRole — LAST_ADMIN 오탐: pending_approval admin 강등 (P1)
+`WorkspaceService.changeMemberRole` 의 LAST_ADMIN 가드(`if (input.role === 'member' && target.role === 'admin')`)가 `countAdmins`(승인된 admin 만 집계)를 호출하기 전에 `target.approvalStatus`를 검사하지 않는다. 결과: 유일한 승인 admin 이 아직 미승인(pending_approval) admin 을 member 로 강등하려 하면 — 그 미승인 admin 은 실질 권한을 행사한 적 없음에도 — 거짓 `LAST_ADMIN` 에러가 발생한다. **수정**: `changeMemberRole` line 279 조건에 `&& target.approvalStatus === 'approved'` 추가. TDD: pending_approval target 강등 시 LAST_ADMIN 없이 성공하는 회귀 테스트 먼저 작성. (발견: /ship adversarial v0.2.51.0, 2026-06-28)
 
-- **Presence 같은-워크스페이스 self-subscribe 가드 (v0.2.38.0, 2026-06-22)**: `managedSubscribe` 에 Subscription 객체 키 refcount 추가 — `<PresenceClient/>` self-broadcast 와 `WorkspacePresenceProvider` 가 같은 `presence:ws:<ownWs>` 채널을 공유해도 마지막 owner 가 dispose 할 때만 `unsubscribe()`+`removeSubscription()`. 아바타 신원 카드(UserProfileCard)가 팀원/본인 카드에서 `useUserPresence(ownWorkspaceId, …)` 를 호출해 같은-워크스페이스 관찰이 처음으로 도달 가능해지면서 필요해진 가드(이전엔 counterparty id 만 넘겨 도달 불가). 카드를 닫아도 본인 presence 가 끊기지 않는다. 3878 green.
-
-- **이메일 인증 서버 데이터 경계 강제 (2026-06-17, PR#223 open)**: PR#199(UI 게이트)에서 의도적으로 유예된 서버 액션/API 라우트 레벨 emailVerified 게이트 구현. `requireSession()` 에 `isEmailUnverified()` 추가(→ `requireBuyerSession`·`requirePgSession` 자동 포함) + 7개 `auth()` 직접 호출 API 라우트(centrifugo connection-token, notifications GET/SSE, files GET/upload, workspace avatar POST/DELETE, workspaces search buyer 분기) 각각 403 게이트. verify 3개 액션은 면제 유지. 2871 green.
-
-- **Chat/Realtime + Design 6건 해소 (v0.2.24.1, 2026-06-16, branch fix/chat-realtime-todos)**:
-  (1) **Centrifugo subscribe 프록시 비밀 헤더** — `CENTRIFUGO_PROXY_SECRET` env-gated `X-Centrifugo-Proxy-Secret` 상수시간 검증(`app/api/centrifugo/subscribe/route.ts`). 미설정 시 스킵(하위호환). `.env.production.example` 에 변수 추가 — **prod 배포 시 Centrifugo config 의 proxy http-headers 에 동일 값 지정 필요**.
-  (2) **ChatService.sendMessage rfpId 접근권 검증** — `canWorkspaceAccessRfp` 로 교차 테넌트 uuid 검증; 불일치 시 태그만 드롭(메시지 정상 전송). `result.rfpId` 를 브로드캐스트에 사용해 드롭된 태그가 라이브로 새지 않도록.
-  (3) **self-echo tempId 왕복** — `applyLiveEcho` 에 `tempId?` 파라미터 추가(정확 매칭, 없으면 첫 pending 폴백). 액션·publish 페이로드·ThreadView·TeamThreadView 전체 왕복.
-  (4) **RFP 접근 게이트 공유 헬퍼** — `lib/server/rfp-access.ts`의 `canWorkspaceAccessRfp` 단일 출처로 `TeamChatService.authorize` + subscribe 라우트 `authorizeTeamChannel` 두 곳 중복 해소.
-  (5) **ThreadPane thread-cache unmount 무효화** — `useEffect(() => () => invalidateThread(conversationId), [conversationId])` 추가. TeamThreadPane 과 동일 패턴 이식.
-  (6) **RecipientCard rfpContext uuid 노출** — `RfpContext = { id, code?, title? }` 타입 분리. `id`(전송 uuid) 는 렌더 금지; `code`·`title` 각각 존재 시만 표시. 호출 사이트 3곳(FocusComparison·RfpBriefPanel·BidContextStrip) 및 MessageComposeSheet 수정.
-  Design stale 항목 2건 제거: "PG 인박스 상세 토글 위치 정돈"(ChatRailToggle 삭제로 해소, PR#186) · "레일 열림 + 1024px 본문 그리드"(재현 불가).
-
-- **리포지토리 경계 ESLint 강제 + 드리프트 가드 (v0.2.22.2, 2026-06-15)**: `@typescript-eslint/no-restricted-imports`(규칙 `repo-boundary/db-access`)로 `repositories/**` 밖의 `@/lib/db/{schema,client}` 값 import 금지(`import type`·서비스 동적 `import()`는 허용) + 독립 fs-walk 드리프트 가드(`lib/server/__tests__/repo-boundary.test.ts`). allowlist 는 SSOT `lib/server/db-boundary-allowlist.mjs`(4개: storage×2·`_purgeUnverifiedSignup`·`_shared`). injection-only 사이트의 죽은 `db` 파라미터(`searchWorkspaces`·`getMembership`·`accountExistsForEmail`·`canAccessAttachment`)를 제거해 allowlist 를 9→4 로 축소. CLAUDE.md 경계 규칙 명문화. (stale "메모리 테스트 구현" 문구·데드 `'memory'` 유니온은 #204 에서 이미 해소.)
-
-- **딜룸 후속 TODO 4건 해소 (2026-06-14, dev 머지)**: 정식 페이지 통일(`DealRoomFull`, PR #186) · `/submitted` 견적작성 탭 흡수(PR #188) · `<lg` 하단시트 채팅 + 반응형 레일(PR #189) · 전체화면 이전/다음 결정성(`useDealRoomNav` 슬라이스, PR #187). 딜룸 모달 본 PR #185 위 스택으로 진행.

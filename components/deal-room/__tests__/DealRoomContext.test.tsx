@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
-import { DealRoomProvider, useDealRoom } from '../DealRoomContext';
+import { DealRoomProvider, useDealRoom, type DealRoomCounterparty } from '../DealRoomContext';
 
 const wrapper = ({ children }: { children: ReactNode }) => (
   <DealRoomProvider>{children}</DealRoomProvider>
@@ -21,8 +21,20 @@ describe('useDealRoom', () => {
 
   it('setCounterparty updates the focused counterparty', () => {
     const { result } = renderHook(() => useDealRoom(), { wrapper });
-    act(() => result.current.setCounterparty({ workspaceId: 'pg-1', name: 'OO페이', type: 'pg' }));
-    expect(result.current.counterparty).toEqual({ workspaceId: 'pg-1', name: 'OO페이', type: 'pg' });
+    act(() =>
+      result.current.setCounterparty({
+        workspaceId: 'pg-1',
+        name: 'OO페이',
+        type: 'pg',
+        logoUpdatedAt: null,
+      }),
+    );
+    expect(result.current.counterparty).toEqual({
+      workspaceId: 'pg-1',
+      name: 'OO페이',
+      type: 'pg',
+      logoUpdatedAt: null,
+    });
   });
 
   it('setTab switches the active tab', () => {
@@ -33,5 +45,28 @@ describe('useDealRoom', () => {
 
   it('throws when used outside a DealRoomProvider', () => {
     expect(() => renderHook(() => useDealRoom())).toThrow(/DealRoomProvider/);
+  });
+
+  it('DealRoomCounterparty includes logoUpdatedAt field', () => {
+    const cp: DealRoomCounterparty = {
+      workspaceId: 'w',
+      name: 'N',
+      type: 'pg',
+      logoUpdatedAt: null,
+    };
+    expect(cp.logoUpdatedAt).toBeNull();
+  });
+
+  it('setCounterparty stores logoUpdatedAt value', () => {
+    const { result } = renderHook(() => useDealRoom(), { wrapper });
+    act(() =>
+      result.current.setCounterparty({
+        workspaceId: 'pg-1',
+        name: 'OO페이',
+        type: 'pg',
+        logoUpdatedAt: '2024-01-01T00:00:00.000Z',
+      }),
+    );
+    expect(result.current.counterparty?.logoUpdatedAt).toBe('2024-01-01T00:00:00.000Z');
   });
 });

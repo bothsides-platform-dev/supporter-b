@@ -1,5 +1,11 @@
-import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+
+// hoisted 핸들 — vi.mock 팩토리에서 안전하게 참조하려면 vi.hoisted 사용.
+const { useLazyPgWorkspacesMock, addPgWorkspacesToRfpActionMock } = vi.hoisted(() => ({
+  useLazyPgWorkspacesMock: vi.fn(),
+  addPgWorkspacesToRfpActionMock: vi.fn(),
+}));
 
 vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
   CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
@@ -8,55 +14,103 @@ vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/hooks/useLazyPgWorkspaces', () => ({
-  useLazyPgWorkspaces: () => ({ pgList: [], loading: false, error: null, load: vi.fn() }),
+  useLazyPgWorkspaces: () => useLazyPgWorkspacesMock(),
 }));
 vi.mock('@/lib/toast', () => ({ toast: vi.fn() }));
 vi.mock('@/lib/server/actions/rfp', () => ({
-  addPgWorkspacesToRfpAction: vi.fn(),
+  addPgWorkspacesToRfpAction: addPgWorkspacesToRfpActionMock,
   sendDraftInvitationsAction: vi.fn(),
 }));
 
-import { RfpInviteManager, chosungCommandFilter } from '../RfpInviteManager';
+import { RfpInviteManager } from '../RfpInviteManager';
 
+const PG_A = { id: 'pg-a', name: 'KG이니시스', displayName: 'KG이니시스', logoUpdatedAt: null };
+const PG_B = { id: 'pg-b', name: 'NHN KCP', displayName: 'NHN KCP', logoUpdatedAt: null };
+
+function mockHook(over: Partial<{ pgList: typeof PG_A[]; loading: boolean; error: string | null }> = {}) {
+  useLazyPgWorkspacesMock.mockReturnValue({
+    pgList: over.pgList ?? [],
+    loading: over.loading ?? false,
+    error: over.error ?? null,
+    load: vi.fn(),
+  });
+}
+
+beforeEach(() => {
+  useLazyPgWorkspacesMock.mockReset();
+  addPgWorkspacesToRfpActionMock.mockReset();
+  addPgWorkspacesToRfpActionMock.mockResolvedValue({ ok: true });
+});
 afterEach(cleanup);
 
-describe('RfpInviteManager', () => {
-  it('canEdit=true 여도 공유 링크 섹션이 노출되지 않는다', () => {
-    render(
-      <RfpInviteManager
-        rfpId="rfp-1"
-        invitations={[]}
-        canEdit={true}
-      />,
-    );
+describe('RfpInviteManager — 인라인 칩 추가', () => {
+  it('공유 링크 섹션은 노출되지 않는다', () => {
+    mockHook({ pgList: [PG_A, PG_B] });
+    render(<RfpInviteManager rfpId="rfp-1" invitations={[]} canEdit />);
     expect(screen.queryByText('공유 링크')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '복사' })).not.toBeInTheDocument();
   });
-});
 
-describe('chosungCommandFilter', () => {
-  it('초성 입력으로 일치하는 한국어 이름은 1을 반환한다', () => {
-    // 나이스(ㄴㅇㅅ): 나이스페이먼츠만 매칭, 토스·한국정보통신은 미매칭
-    expect(chosungCommandFilter('나이스페이먼츠', 'ㄴㅇㅅ')).toBe(1);
-    expect(chosungCommandFilter('한국정보통신', 'ㅎㄱ')).toBe(1);
+  it('추가 가능한 PG를 칩 버튼으로 렌더한다', () => {
+    mockHook({ pgList: [PG_A, PG_B] });
+    render(<RfpInviteManager rfpId="rfp-1" invitations={[]} canEdit />);
+    expect(screen.getByRole('button', { name: 'KG이니시스' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'NHN KCP' })).toBeInTheDocument();
   });
 
-  it('초성이 포함되지 않는 이름은 0을 반환한다', () => {
-    expect(chosungCommandFilter('토스페이먼츠', 'ㄴㅇㅅ')).toBe(0);
-    expect(chosungCommandFilter('나이스페이먼츠', 'ㅎㄱ')).toBe(0);
+  it('이미 초대된 PG는 칩 버튼으로 렌더하지 않는다', () => {
+    mockHook({ pgList: [PG_A, PG_B] });
+    render(
+      <RfpInviteManager
+        rfpId="rfp-1"
+        invitations={[{ wsId: 'pg-a', wsName: 'KG이니시스', status: 'draft' }]}
+        canEdit
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'KG이니시스' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'NHN KCP' })).toBeInTheDocument();
   });
 
-  it('부분 문자열 검색도 동작한다', () => {
-    expect(chosungCommandFilter('토스페이먼츠', '토스')).toBe(1);
-    expect(chosungCommandFilter('KG이니시스', 'KG')).toBe(1);
+  it('칩 클릭 시 addPgWorkspacesToRfpAction을 해당 wsId로 호출한다', async () => {
+    mockHook({ pgList: [PG_A, PG_B] });
+    render(<RfpInviteManager rfpId="rfp-1" invitations={[]} canEdit />);
+    fireEvent.click(screen.getByRole('button', { name: 'NHN KCP' }));
+    await waitFor(() =>
+      expect(addPgWorkspacesToRfpActionMock).toHaveBeenCalledWith({
+        rfpId: 'rfp-1',
+        workspaceIds: ['pg-b'],
+      }),
+    );
   });
 
-  it('대소문자를 구분하지 않는다', () => {
-    expect(chosungCommandFilter('KG이니시스', 'kg')).toBe(1);
+  it('목록이 비어있으면 불러오는 중 안내를 보여준다', () => {
+    mockHook({ pgList: [], loading: true });
+    render(<RfpInviteManager rfpId="rfp-1" invitations={[]} canEdit />);
+    expect(screen.getByText('불러오는 중…')).toBeInTheDocument();
   });
 
-  it('빈 검색어는 모든 항목을 표시한다', () => {
-    expect(chosungCommandFilter('토스페이먼츠', '')).toBe(1);
-    expect(chosungCommandFilter('한국정보통신', '')).toBe(1);
+  it('모든 PG가 이미 초대되면 빈 안내를 보여준다', () => {
+    mockHook({ pgList: [PG_A] });
+    render(
+      <RfpInviteManager
+        rfpId="rfp-1"
+        invitations={[{ wsId: 'pg-a', wsName: 'KG이니시스', status: 'draft' }]}
+        canEdit
+      />,
+    );
+    expect(screen.getByText('모든 PG를 이미 추가했어요.')).toBeInTheDocument();
+  });
+
+  it('에러 시 에러 문구를 보여준다', () => {
+    mockHook({ error: '불러오기 실패. 다시 시도해주세요.' });
+    render(<RfpInviteManager rfpId="rfp-1" invitations={[]} canEdit />);
+    expect(screen.getByText('불러오기 실패. 다시 시도해주세요.')).toBeInTheDocument();
+  });
+
+  it('canEdit=false면 추가 영역을 렌더하지 않는다', () => {
+    mockHook({ pgList: [PG_A, PG_B] });
+    render(<RfpInviteManager rfpId="rfp-1" invitations={[]} canEdit={false} />);
+    expect(screen.queryByText('PG 워크스페이스 추가')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'KG이니시스' })).not.toBeInTheDocument();
   });
 });

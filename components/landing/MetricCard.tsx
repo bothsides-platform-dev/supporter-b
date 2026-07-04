@@ -56,7 +56,7 @@ function useCountUp(to: number, play: boolean): { value: number; done: boolean }
   return { value: current, done };
 }
 
-export function MetricCard({ to, decimals, unit, caption, qualifier, trend }: MetricCardProps) {
+export function MetricCard({ to, decimals, unit, caption, trend }: MetricCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, amount: 0.5 });
   const { value: current, done } = useCountUp(to, inView);
@@ -69,11 +69,6 @@ export function MetricCard({ to, decimals, unit, caption, qualifier, trend }: Me
           {current.toFixed(decimals)}
           {unit}
         </span>
-        {qualifier && (
-          <span className="text-[var(--text-md)] font-medium text-[var(--md-sys-color-on-surface-variant)]">
-            {qualifier}
-          </span>
-        )}
         {trend && (
           <Arrow
             size={26}

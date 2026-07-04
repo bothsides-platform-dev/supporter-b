@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpStep4Review } from '../RfpStep4Review';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+vi.mock('@/lib/features/open-board', () => ({ OPEN_BOARD_ENABLED: true }));
 
 function renderComponent({
   onBack = vi.fn(),

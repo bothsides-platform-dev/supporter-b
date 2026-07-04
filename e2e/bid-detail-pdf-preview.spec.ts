@@ -22,6 +22,11 @@ import {
 const RFP_ID = 'P-2604-0001';
 
 test.describe.serial('FocusComparison — 제안서 PDF 미리보기 iframe', () => {
+  // This spec is the first to cold-navigate to /rfp/[id] in dev mode.
+  // Next.js Turbopack compiles the route on first request — this can exceed
+  // the global 30 s test timeout. Give the describe block 90 s to cover it.
+  test.setTimeout(90_000);
+
   let attachmentId: string;
 
   test.beforeAll(async () => {
