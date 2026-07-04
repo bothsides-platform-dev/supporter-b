@@ -5,6 +5,8 @@ import {
   simulateSampleAwardInTx,
   deleteSamplePgRfpInTx,
 } from '@/lib/server/onboarding/sample-pg-rfp';
+import { DrizzleUserRepository } from '@/lib/server/repositories/drizzle/user';
+import type { OnboardingKey } from '@/lib/types/onboarding';
 
 export class OnboardingService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,6 +39,22 @@ export class OnboardingService {
   async deleteSamplePgRfp(code: string, actor: Actor): Promise<ServiceResult> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return this._db.transaction((tx: any) => deleteSamplePgRfpInTx(tx, { code, pgWsId: actor.workspaceId }));
+  }
+
+  // 온보딩 태스크 완료/닫기 스탬프 — 유저 단위(users.onboarding jsonb). 멱등.
+  async mark(
+    actor: { userId: string },
+    key: OnboardingKey,
+    event: 'completed' | 'dismissed',
+  ): Promise<ServiceResult> {
+    const userRepo = new DrizzleUserRepository(this._db);
+    const now = new Date().toISOString();
+    await userRepo.markOnboarding(
+      actor.userId,
+      key,
+      event === 'completed' ? { completedAt: now } : { dismissedAt: now },
+    );
+    return { ok: true };
   }
 }
 

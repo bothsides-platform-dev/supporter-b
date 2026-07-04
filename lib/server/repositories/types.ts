@@ -14,6 +14,7 @@ import type {
   WorkspaceType,
 } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
+import type { UserOnboarding, OnboardingKey, OnboardingTaskState } from '@/lib/types/onboarding';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { BoardColumn, ColumnKind } from '@/lib/types/column';
@@ -583,6 +584,18 @@ export interface UserRepo {
    */
   createSystemAccount(
     params: { id: string; email: string; name: string },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 유저 단위 온보딩 상태 조회 — 관대한 읽기(migrateUserOnboarding 통과). 없으면 빈 문서. */
+  getOnboarding(userId: string, tx?: Tx): Promise<UserOnboarding>;
+  /**
+   * 온보딩 태스크 상태 병합 patch — 단일 statement jsonb merge, 다른 키/기존 필드를
+   * 덮어쓰지 않는다. 멱등(같은 patch 재호출 시 결과 동일).
+   */
+  markOnboarding(
+    userId: string,
+    key: OnboardingKey,
+    patch: OnboardingTaskState,
     tx?: Tx,
   ): Promise<void>;
 }
