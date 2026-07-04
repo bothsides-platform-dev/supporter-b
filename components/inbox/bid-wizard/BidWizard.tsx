@@ -61,6 +61,12 @@ type Props = {
    * — 비로그인 임베디드 데모에서 실제 submitBidAction 을 치지 않도록(가입 유도). 프로덕션 미전달 시 no-op.
    */
   onGuestSubmit?: () => void;
+  /**
+   * 가상 샘플 온보딩 전용(opt-in). 주어지면 제출 시 서버 액션(submitBidAction)과
+   * rfp.isSample 기반의 옛 '검토중 → 시뮬레이트 선정' 흐름(simulateSampleAwardAction)
+   * 대신 이 콜백만 호출한다 — 서버 호출도 지연도 없다. onGuestSubmit 과 상호배타.
+   */
+  onSampleSubmit?: () => void;
 };
 
 /**
@@ -96,7 +102,7 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   };
 }
 
-export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestSubmit }: Props) {
+export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestSubmit, onSampleSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const rfpCode = rfp.code;
@@ -314,6 +320,12 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
     // 랜딩 데모(게스트): 실제 제출 대신 가입 유도 콜백만 호출하고 종료.
     if (onGuestSubmit) {
       onGuestSubmit();
+      return;
+    }
+    // 가상 샘플 온보딩: 서버 제출도 없고, rfp.isSample 기반 옛 시뮬레이션 흐름도 타지
+    // 않는다 — fixture 에는 실제 rfpId/pgWsId 가 없어 그 흐름을 그대로 태우면 깨진다.
+    if (onSampleSubmit) {
+      onSampleSubmit();
       return;
     }
     const paymentFees = buildPaymentFees(fees, feeInputMethods);

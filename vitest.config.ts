@@ -49,6 +49,7 @@ export default defineConfig({
             "lib/validation/**/*.{test,spec}.{ts,tsx}",
             "lib/quote/**/*.{test,spec}.{ts,tsx}",
             "lib/rfp/**/*.{test,spec}.{ts,tsx}",
+            "lib/onboarding/**/*.{test,spec}.{ts,tsx}",
             "lib/db/**/*.{test,spec}.{ts,tsx}",
             "lib/env/**/*.{test,spec}.{ts,tsx}",
             "lib/realtime/**/*.{test,spec}.{ts,tsx}",

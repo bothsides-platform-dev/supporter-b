@@ -55,10 +55,16 @@ type Props = {
   isSample?: boolean;
   /** 딜룸 모달의 '견적 비교' 탭에 임베드될 때 — 탭이 제목을 제공하므로 외곽 헤더를 숨긴다. */
   hideHeader?: boolean;
+  /**
+   * 가상 샘플 온보딩 전용(opt-in) — 주어지면 isSample이어도 선정 CTA가 활성화되고,
+   * 클릭 시 실제 awardRfpAction(AwardConfirmDialog) 대신 이 콜백을 호출한다(가짜 선정).
+   * 재요청 버튼은 숨긴다. 프로덕션 실 딜룸에는 전달되지 않는다.
+   */
+  onSampleAward?: (bidId: string) => void;
 };
 
 export function FocusComparison(props: Props) {
-  const { bids, pgWsNameMap, pgWsLogoUpdatedAtMap, current, rfpStatus, awardedBidId, requoteByPg } = props;
+  const { bids, pgWsNameMap, pgWsLogoUpdatedAtMap, current, rfpStatus, awardedBidId, requoteByPg, onSampleAward } = props;
   const router = useRouter();
 
   const [tier, setTier] = useState<MerchantTier>(props.buyerGrade ?? 'general');
@@ -116,7 +122,13 @@ export function FocusComparison(props: Props) {
     [sortedBids],
   );
   const onRequoteOpen = useCallback(() => setRequoteOpen(true), []);
-  const onAwardOpen = useCallback(() => setDialogOpen(true), []);
+  const onAwardOpen = useCallback(() => {
+    if (onSampleAward && active) {
+      onSampleAward(active.id);
+      return;
+    }
+    setDialogOpen(true);
+  }, [onSampleAward, active]);
 
   // 활성 견적의 결제수단 요율 행 — 각 행 hover 시 전 PG 줄세움.
   const feeRows = useMemo(
@@ -134,7 +146,7 @@ export function FocusComparison(props: Props) {
   }
 
   const isAwarded = rfpStatus === 'awarded' || rfpStatus === 'closed';
-  const canAward = rfpStatus === 'sent' && !props.isSample;
+  const canAward = rfpStatus === 'sent' && (!props.isSample || !!props.onSampleAward);
   const peek = peekBidId ? sortedBids.find((b) => b.id === peekBidId) ?? null : null;
 
   if (resultBid) {
@@ -226,6 +238,7 @@ export function FocusComparison(props: Props) {
         <AwardCtaBar
           canAward={canAward}
           isSample={props.isSample}
+          showRequote={!props.onSampleAward}
           onRequote={onRequoteOpen}
           onAward={onAwardOpen}
         />
