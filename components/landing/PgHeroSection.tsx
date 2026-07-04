@@ -33,6 +33,7 @@ export function PgHeroSection() {
       subCopy={PG_SUBCOPY}
       cta={<ConsultButton variant="on-dark">파트너 상담 신청 →</ConsultButton>}
       productWindow={<PgHeroProductWindow />}
+      windowSlidesThrough
     />
   );
 }
