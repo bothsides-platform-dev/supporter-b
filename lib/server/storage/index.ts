@@ -3,32 +3,25 @@
  *
  * `Storage` is the contract every file route (`app/api/files/*`) and
  * action (`removeBidNoteAction`) uses to persist + retrieve attachment
- * payloads. The production backend is `R2Storage` — attachment bytes live
- * in a Cloudflare R2 bucket, addressed via the S3-compatible API
+ * payloads. The only backend is `R2Storage` — attachment bytes live in a
+ * Cloudflare R2 bucket, addressed via the S3-compatible API
  * (`@aws-sdk/client-s3`). Bytes are served back through the app (routes
  * stream them to the client), not via a signed R2 URL, so sealed-bid ACL
  * enforcement never leaves the route layer.
  *
- * When the R2 env vars are incomplete, dev/test fall back to
- * `InMemoryStorage` (ephemeral, process-local) so local work doesn't need
- * a live bucket. If `FILE_STORAGE_DIR` is set (and NODE_ENV isn't
- * production), `FsStorage` is used instead — a directory on disk, unlike
- * `InMemoryStorage`, is visible across processes. e2e needs exactly that:
- * the Playwright process (spec helpers calling `getStorage().save()`)
- * and the `pnpm dev` webServer under test are two separate processes, so
- * `playwright.config.ts` sets `FILE_STORAGE_DIR` for both. Production
- * fails fast instead: an incomplete R2 configuration throws at
- * `getStorage()` call time rather than silently running on ephemeral or
- * local-disk storage, even if `FILE_STORAGE_DIR` happens to be set.
- * Tests inject `InMemoryStorage` (or any fake) via `__setStorageForTest`.
+ * There is deliberately no fallback backend, in any environment: if the
+ * R2 env vars are incomplete, `getStorage()` throws — production and
+ * local dev both require real R2 configuration. Unit tests never hit
+ * `buildStorage()` at all; they inject `InMemoryStorage` (a pure test
+ * double, see `./memory`) via `__setStorageForTest`. The e2e PDF spec
+ * that needs real cross-process attachment bytes self-skips when R2 env
+ * is absent (see `e2e/bid-detail-pdf-preview.spec.ts`).
  *
  * NOTE: `read` returns only `{ stream, size }` — mime is **not** sniffed
  * on read. The route layer uses the attachment row's stored `mime_type`
  * (magic-byte sniffed at upload time) for the `Content-Type` header.
  */
 import { S3Client } from '@aws-sdk/client-s3';
-import { FsStorage } from './fs';
-import { InMemoryStorage } from './memory';
 import { R2Storage } from './r2';
 import type { Storage } from './types';
 
@@ -38,8 +31,6 @@ export type { ReadRange } from './types';
 declare global {
   var __bidit_storage__: Storage | undefined;
 }
-
-let warnedEphemeral = false;
 
 function buildStorage(): Storage {
   const accountId = process.env.R2_ACCOUNT_ID;
@@ -59,29 +50,15 @@ function buildStorage(): Storage {
     return new R2Storage(client, bucket);
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    const missing = [
-      !accountId && 'R2_ACCOUNT_ID',
-      !accessKeyId && 'R2_ACCESS_KEY_ID',
-      !secretAccessKey && 'R2_SECRET_ACCESS_KEY',
-      !bucket && 'R2_BUCKET',
-    ].filter(Boolean);
-    throw new Error(
-      `getStorage(): missing R2 configuration in production: ${missing.join(', ')}`,
-    );
-  }
-
-  if (process.env.FILE_STORAGE_DIR) {
-    return new FsStorage(process.env.FILE_STORAGE_DIR);
-  }
-
-  if (!warnedEphemeral) {
-    warnedEphemeral = true;
-    console.warn(
-      'getStorage(): R2 env incomplete — falling back to InMemoryStorage (ephemeral, dev/test only)',
-    );
-  }
-  return new InMemoryStorage();
+  const missing = [
+    !accountId && 'R2_ACCOUNT_ID',
+    !accessKeyId && 'R2_ACCESS_KEY_ID',
+    !secretAccessKey && 'R2_SECRET_ACCESS_KEY',
+    !bucket && 'R2_BUCKET',
+  ].filter(Boolean);
+  throw new Error(
+    `getStorage(): missing R2 configuration: ${missing.join(', ')} — set the four R2_* vars in .env (see docs/DEPLOY_LIGHTSAIL.md); tests inject a mock via __setStorageForTest`,
+  );
 }
 
 /**

@@ -7,10 +7,9 @@
  * HTTP-inclusive, and missing keys throw with `code: 'ENOENT'` so the
  * file route can serve 410 uniformly across backends.
  *
- * Now also imported by prod code: `getStorage()` (`./index.ts`) uses it
- * as the dev/test fallback when the R2 env vars are incomplete (fails
- * fast in production instead). Tests still wire it in explicitly via
- * `__setStorageForTest`.
+ * Never imported by prod code — `getStorage()` (`./index.ts`) is
+ * R2Storage-or-throw in every environment, with no fallback backend.
+ * This is a pure test double, wired in only via `__setStorageForTest`.
  */
 import type { ReadRange, Storage } from './types';
 

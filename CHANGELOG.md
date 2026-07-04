@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 
 ### Infrastructure
 
-- 로컬 e2e/개발 환경은 R2 없이 동작해요 — `FILE_STORAGE_DIR` 지정 시 디스크 폴백, 미지정 시 메모리 폴백(휘발). Playwright e2e는 테스트 프로세스와 dev 서버가 디스크 폴백을 공유하도록 자동 배선돼요.
+- 로컬 개발도 프로덕션과 동일하게 실제 R2 버킷을 사용해요 — 폴백 백엔드는 의도적으로 없어요. 단위 테스트는 mock(InMemoryStorage 주입)으로 동작하고, 실제 바이트가 필요한 e2e PDF 스펙은 R2 설정이 없으면 자동으로 건너뛰어요.
 - `@aws-sdk/client-s3` 의존성 추가, R2 환경변수 예시(`.env.production.example`)와 배포 런북 갱신.
 
 ## [0.2.65.4] - 2026-07-03

@@ -314,7 +314,7 @@ R2_SECRET_ACCESS_KEY=<발급받은 Secret Access Key>
 R2_BUCKET=supporter-b-attachments
 ```
 
-4개 모두 채워야 한다 — 하나라도 비면 `getStorage()` 가 프로덕션에서 throw 하며 첨부파일 관련 라우트가 전부 fail-fast 에러를 낸다(dev/test 만 `InMemoryStorage` 로 조용히 폴백).
+4개 모두 채워야 한다 — 하나라도 비면 `getStorage()` 가 **모든 환경에서** throw 하며 첨부파일 관련 라우트가 전부 fail-fast 에러를 낸다. 폴백 백엔드는 의도적으로 없다 — 로컬 dev도 동일하게 R2 env 가 필요하니, 로컬에서 작업하는 개발자는 같은 4개 변수를 `.env` 에 넣어 두면 된다(단위 테스트는 `__setStorageForTest` 로 mock 을 주입하므로 영향 없음).
 
 ```bash
 pm2 reload bidit

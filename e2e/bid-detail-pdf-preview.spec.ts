@@ -8,9 +8,11 @@
  * real browser.
  *
  * `attachTossProposalPdf` uploads a tiny PDF to the toss bid on
- * P-2604-0001 (via the shared FILE_STORAGE_DIR storage backend the route
- * reads from — see playwright.config.ts) so the buyer has something to
- * preview.
+ * P-2604-0001 via `getStorage().save()` directly in the Playwright
+ * process, then the webServer's `/api/files/{id}` route reads it back
+ * in a separate process — that only works when both processes point at
+ * the same real R2 bucket (see playwright.config.ts). Self-skips when
+ * R2 env is absent.
  */
 import { test, expect } from 'playwright/test';
 
@@ -23,6 +25,11 @@ import {
 const RFP_ID = 'P-2604-0001';
 
 test.describe.serial('FocusComparison — 제안서 PDF 미리보기 iframe', () => {
+  test.skip(
+    !process.env.R2_BUCKET,
+    'requires real R2 config (R2_* env) — attachment bytes must be shared cross-process',
+  );
+
   // This spec is the first to cold-navigate to /rfp/[id] in dev mode.
   // Next.js Turbopack compiles the route on first request — this can exceed
   // the global 30 s test timeout. Give the describe block 90 s to cover it.
