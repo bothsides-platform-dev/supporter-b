@@ -19,7 +19,20 @@
  * Then:
  *   pnpm e2e
  */
+import path from 'node:path';
+
 import { defineConfig, devices } from 'playwright/test';
+
+// Attachment bytes now live in R2 in production, and the dev/test fallback
+// (InMemoryStorage) is process-local — that breaks e2e, where the
+// Playwright process (spec helpers calling `getStorage().save()`) and the
+// `pnpm dev` webServer under test are two separate processes. Pointing
+// both at the same FILE_STORAGE_DIR makes `getStorage()` pick FsStorage
+// (see lib/server/storage/index.ts) so bytes written by one process are
+// readable by the other. Set here (module scope) so it's in effect before
+// any spec helper in this process calls `getStorage()`, and passed through
+// to the webServer's env below so the server process picks it up too.
+process.env.FILE_STORAGE_DIR ??= path.resolve(__dirname, '.next-e2e/storage');
 
 export default defineConfig({
   testDir: './e2e',
@@ -72,9 +85,13 @@ export default defineConfig({
       //   needs lookup, inject MockNtsClient via __setNtsClientForTest.
       RESEND_API_KEY: '',
       NTS_SERVICE_KEY: '',
-      // Attachment bytes live in Postgres (`attachment_blobs`), reached via
-      // the DATABASE_URL above — `getStorage()` needs no separate env, so the
-      // webServer and the Playwright-process spec helpers share one backend.
+      // Attachment bytes are shared between the Playwright process (spec
+      // helpers call `getStorage().save()` directly) and this webServer
+      // process via FILE_STORAGE_DIR (FsStorage — see module-scope note
+      // above): prod storage is R2, and the default dev fallback
+      // (InMemoryStorage) is process-local, so without this the webServer
+      // could never read bytes the Playwright process wrote.
+      FILE_STORAGE_DIR: process.env.FILE_STORAGE_DIR,
       // Isolate this dev server's build dir + lock so it can boot alongside a
       // developer's local `pnpm dev` on :3000. Next 16's `<distDir>/dev/lock`
       // is per-distDir (not per-port) — sharing `.next` makes the second

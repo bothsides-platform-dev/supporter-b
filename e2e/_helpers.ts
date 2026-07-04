@@ -30,10 +30,13 @@ process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
-// `getStorage()` (PostgresStorage) reads + writes attachment bytes through
-// the same postgres-js client as the DB, so pinning DATABASE_URL above is
-// all any spec helper that calls getStorage() (e.g. attachTossProposalPdf)
-// needs — there is no separate object store to point at.
+// `getStorage()` reads + writes attachment bytes through the shared
+// FILE_STORAGE_DIR directory (FsStorage) that playwright.config.ts sets
+// for both this process and the webServer under test — see the
+// module-scope note there. Attachment bytes are not in Postgres anymore
+// (prod storage is R2), so this pin is DB-only; storage needs no
+// separate env here because FILE_STORAGE_DIR is already set before this
+// module loads.
 
 // Plaintext credentials from scripts/seed.ts:58, 91-94. Centralised so
 // future spec churn (e.g. renaming a workspace) needs one edit.
@@ -125,8 +128,8 @@ export async function findSeededBidIds(rfpCode: string): Promise<{
 // Minimal valid PDF — small enough to inline, big enough that the browser
 // renders it as an empty page in the iframe preview. Specs that need an
 // attached file (e.g. bid-detail-pdf-preview.spec.ts) upload these bytes
-// via `attachTossProposalPdf` so the Postgres storage backend actually
-// carries the object.
+// via `attachTossProposalPdf` so the shared FILE_STORAGE_DIR storage
+// backend actually carries the object.
 const MINIMAL_PDF = Buffer.from(
   [
     '%PDF-1.4',
@@ -152,8 +155,10 @@ const MINIMAL_PDF = Buffer.from(
  *  RFP. Replaces the seed's old `withAttachment: true` path — the seed no
  *  longer creates attachments, so specs that need iframe-renderable bytes
  *  call this in their `beforeAll`. Writes to the Storage backend
- *  `getStorage()` returns (Postgres `attachment_blobs`). Returns the new
- *  attachment id, which `bids.proposalAttachmentId` is also updated to. */
+ *  `getStorage()` returns — the shared FILE_STORAGE_DIR directory (FsStorage)
+ *  in e2e, so the webServer process can read back what this process wrote.
+ *  Returns the new attachment id, which `bids.proposalAttachmentId` is also
+ *  updated to. */
 export async function attachTossProposalPdf(rfpCode: string): Promise<string> {
   // URL/seed 식별자는 code — bids.rfpId(uuid) 매칭 위해 먼저 해석.
   const [rfpRow] = await db

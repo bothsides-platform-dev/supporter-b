@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { R2Storage } from '../r2';
 import { InMemoryStorage } from '../memory';
+import { FsStorage } from '../fs';
 import {
   getStorage,
   __setStorageForTest,
@@ -23,6 +24,7 @@ const R2_ENV_KEYS = [
 ] as const;
 
 let savedEnv: Record<string, string | undefined>;
+let savedFileStorageDir: string | undefined;
 
 beforeEach(() => {
   savedEnv = {};
@@ -30,6 +32,8 @@ beforeEach(() => {
     savedEnv[key] = process.env[key];
     delete process.env[key];
   }
+  savedFileStorageDir = process.env.FILE_STORAGE_DIR;
+  delete process.env.FILE_STORAGE_DIR;
   __resetStorageForTest();
 });
 
@@ -38,6 +42,8 @@ afterEach(() => {
     if (savedEnv[key] === undefined) delete process.env[key];
     else process.env[key] = savedEnv[key];
   }
+  if (savedFileStorageDir === undefined) delete process.env.FILE_STORAGE_DIR;
+  else process.env.FILE_STORAGE_DIR = savedFileStorageDir;
   __resetStorageForTest();
   vi.unstubAllEnvs();
 });
@@ -79,5 +85,17 @@ describe('getStorage()', () => {
     const fake = new InMemoryStorage();
     __setStorageForTest(fake);
     expect(getStorage()).toBe(fake);
+  });
+
+  it('returns FsStorage when FILE_STORAGE_DIR is set and R2 env is incomplete', () => {
+    process.env.FILE_STORAGE_DIR = '/tmp/fs-storage-index-test';
+    const storage = getStorage();
+    expect(storage).toBeInstanceOf(FsStorage);
+  });
+
+  it('still throws in production when FILE_STORAGE_DIR is set but R2 env is incomplete', () => {
+    process.env.FILE_STORAGE_DIR = '/tmp/fs-storage-index-test';
+    vi.stubEnv('NODE_ENV', 'production');
+    expect(() => getStorage()).toThrow();
   });
 });

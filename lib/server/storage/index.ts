@@ -11,16 +11,23 @@
  *
  * When the R2 env vars are incomplete, dev/test fall back to
  * `InMemoryStorage` (ephemeral, process-local) so local work doesn't need
- * a live bucket. Production fails fast instead: an incomplete R2
- * configuration throws at `getStorage()` call time rather than silently
- * running on ephemeral storage. Tests inject `InMemoryStorage` (or any
- * fake) via `__setStorageForTest`.
+ * a live bucket. If `FILE_STORAGE_DIR` is set (and NODE_ENV isn't
+ * production), `FsStorage` is used instead — a directory on disk, unlike
+ * `InMemoryStorage`, is visible across processes. e2e needs exactly that:
+ * the Playwright process (spec helpers calling `getStorage().save()`)
+ * and the `pnpm dev` webServer under test are two separate processes, so
+ * `playwright.config.ts` sets `FILE_STORAGE_DIR` for both. Production
+ * fails fast instead: an incomplete R2 configuration throws at
+ * `getStorage()` call time rather than silently running on ephemeral or
+ * local-disk storage, even if `FILE_STORAGE_DIR` happens to be set.
+ * Tests inject `InMemoryStorage` (or any fake) via `__setStorageForTest`.
  *
  * NOTE: `read` returns only `{ stream, size }` — mime is **not** sniffed
  * on read. The route layer uses the attachment row's stored `mime_type`
  * (magic-byte sniffed at upload time) for the `Content-Type` header.
  */
 import { S3Client } from '@aws-sdk/client-s3';
+import { FsStorage } from './fs';
 import { InMemoryStorage } from './memory';
 import { R2Storage } from './r2';
 import type { Storage } from './types';
@@ -62,6 +69,10 @@ function buildStorage(): Storage {
     throw new Error(
       `getStorage(): missing R2 configuration in production: ${missing.join(', ')}`,
     );
+  }
+
+  if (process.env.FILE_STORAGE_DIR) {
+    return new FsStorage(process.env.FILE_STORAGE_DIR);
   }
 
   if (!warnedEphemeral) {
