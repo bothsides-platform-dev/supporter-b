@@ -5,7 +5,10 @@
 -- seedSampleRfpInTx/seedSamplePgRfpInTx on every signup) before the is_sample/is_demo/
 -- sample_seeded_at columns are dropped by `pnpm db:push`.
 --
--- DML ONLY — no DDL. Column drops happen via `pnpm db:push` in the next deploy step.
+-- DML + expand-DDL. Column DROPs (contract) happen via `pnpm db:push` AFTER deploy;
+-- the users.onboarding ADD COLUMN (expand) runs HERE so the new code — which reads
+-- users.onboarding on every /rfp and /inbox request — never sees a missing column
+-- during the deploy window. Additive, so old code running against it is unaffected.
 --
 -- FK cascade verified against lib/db/schema (2026-07):
 --   bids.rfp_id                 → rfps.id            ON DELETE CASCADE
@@ -38,6 +41,10 @@
 --   - demo buyer biz_no: '0000000000'                     (biz_profiles.biz_no)
 
 BEGIN;
+
+-- 0) Expand: the new code reads users.onboarding immediately after deploy — add it
+--    BEFORE the app deploys. Idempotent; db:push afterwards sees no diff for it.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 -- Pre-counts (uncomment to sanity-check before running in prod):
 -- SELECT count(*) AS sample_rfps FROM rfps WHERE is_sample = true;

@@ -120,9 +120,11 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > 먼저 지우면 아직 떠 있는 구버전 코드(`WorkspaceRepo.listForUser`/`search` 등이
 > `is_demo` 를 SELECT)가 "column does not exist" 로 즉시 깨진다 — 워크스페이스
 > 스위처는 인증된 모든 페이지의 셸 레이아웃에서 조회되므로 전 사용자 장애로 번진다):
-> 1. `docs/migrations/2026-07-cleanup-sample-data.sql` 을 psql 로 먼저 실행 — 기존 시더가
->    남긴 샘플 RFP/데모 워크스페이스/데모 유저/데모 biz_profile 을 정리(DML only,
->    컬럼이 아직 존재하는 상태에서 실행해야 하므로 반드시 이 단계에서).
+> 1. `docs/migrations/2026-07-cleanup-sample-data.sql` 을 psql 로 먼저 실행 — ① expand:
+>    `users.onboarding` jsonb ADD COLUMN(새 코드가 `/rfp`·`/inbox` 매 요청마다 읽으므로
+>    배포 전에 반드시 존재해야 한다; additive 라 구버전 코드에는 무해) + ② 기존 시더가
+>    남긴 샘플 RFP/데모 워크스페이스/데모 유저/데모 biz_profile DML 정리(`is_sample`/
+>    `is_demo` 컬럼이 아직 존재하는 상태에서 실행해야 하므로 반드시 이 단계에서).
 > 2. 평소대로 배포(이 커밋) — 새 코드는 `is_sample`/`is_demo`/`sample_seeded_at` 를
 >    더 이상 읽지 않으므로, 컬럼이 아직 DB에 남아 있어도 무해하다.
 > 3. 배포(빌드+`pm2 reload`)가 끝난 뒤에만 `pnpm db:push` — 3개 컬럼 DROP(계획에 다른
