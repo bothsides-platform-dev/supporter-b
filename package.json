@@ -29,6 +29,7 @@
     "backfill:logo-updated-at": "tsx scripts/backfill-logo-updated-at.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1079.0",
     "@axiomhq/pino": "^1.6.1",
     "@base-ui/react": "^1.4.1",
     "@channel.io/channel-web-sdk-loader": "^2.0.2",
