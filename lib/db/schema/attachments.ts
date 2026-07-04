@@ -11,8 +11,8 @@ import { rfpTeamMessages } from './rfp-team-messages';
 // pair. Exactly one of rfp_id / bid_id / bid_note_id / chat_message_id /
 // rfp_team_message_id is set once linked; all NULL is allowed for draft uploads
 // (file uploaded before its owner row exists). CHECK enforces "at most one" so an
-// attachment can never point at multiple owners. Bytes live 1:1 in
-// attachment_blobs keyed by this id (C4).
+// attachment can never point at multiple owners. Bytes live in Cloudflare R2
+// under `attachments/<id>` keyed by this id (C4) — see lib/server/storage/r2.ts.
 export const attachments = pgTable(
   'attachments',
   {

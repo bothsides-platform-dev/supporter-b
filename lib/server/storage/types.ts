@@ -1,10 +1,9 @@
 /**
- * Storage contract for file uploads. Every backend (Postgres bytea in
- * prod, InMemory in tests) implements this interface — the `getStorage()`
- * factory is the single mutation point that decides which one is in
- * play. Routes / actions only ever talk through this interface, so
- * storage-specific concerns never leak out of the
- * `lib/server/storage` module.
+ * Storage contract for file uploads. Every backend (R2 in prod, InMemory
+ * in dev/test) implements this interface — the `getStorage()` factory is
+ * the single mutation point that decides which one is in play. Routes /
+ * actions only ever talk through this interface, so storage-specific
+ * concerns never leak out of the `lib/server/storage` module.
  *
  * `read` does not return mime — the route layer composes `Content-Type`
  * from the attachment row's `mime_type` (magic-byte sniffed at upload).
@@ -21,9 +20,9 @@ export interface ReadRange {
 
 export interface Storage {
   /** Persist `buffer` at `key`. Mime is recorded in the attachment row
-   *  (not relied on at read time); the Postgres backend stores it on the
-   *  blob row too, but the route composes Content-Type from the attachment
-   *  row's `mime_type`. */
+   *  (not relied on at read time); the R2 backend stores it as the object's
+   *  ContentType too, but the route composes Content-Type from the
+   *  attachment row's `mime_type`. */
   save(key: string, buffer: Buffer, mime: string): Promise<void>;
   /** Open a streaming reader. When `range` is supplied the stream emits
    *  only that slice; `size` always carries the **total** file size.

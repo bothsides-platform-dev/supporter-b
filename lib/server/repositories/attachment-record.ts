@@ -7,8 +7,9 @@ import type { Attachment } from '@/lib/types/common';
 //
 // Exclusive-arc ownership (C3): at most one of rfpId / bidId / bidNoteId /
 // chatMessageId / rfpTeamMessageId is set once linked; all undefined is a valid
-// draft (uploaded before its owner row exists). Storage bytes live 1:1 in
-// attachment_blobs keyed by `id` (C4) — no separate storage path.
+// draft (uploaded before its owner row exists). Storage bytes live in
+// Cloudflare R2 under `attachments/<id>` (C4), keyed by this `id` — see
+// lib/server/storage/r2.ts.
 export type AttachmentRecord = Attachment & {
   rfpId?: string;
   bidId?: string;

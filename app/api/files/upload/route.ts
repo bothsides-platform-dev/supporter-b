@@ -171,9 +171,9 @@ export async function POST(req: Request): Promise<Response> {
     if (!ok) return fail(403, 'FORBIDDEN');
   }
 
-  // DB metadata first, blob second — attachment_blobs.attachment_id FKs the
-  // attachments row (C4), so the metadata must exist before the bytes. The
-  // storage key is the attachment id.
+  // DB metadata first, blob second — the R2 object at attachments/<id> (C4)
+  // is only ever referenced once the attachments row exists. The storage
+  // key is the attachment id.
   const id = randomUUID();
   const repo = await getAttachmentRepo();
 

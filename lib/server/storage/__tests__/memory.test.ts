@@ -1,6 +1,6 @@
-// InMemoryStorage round-trip — mirrors the PostgresStorage contract
-// (in-memory slice on Range, `size` is total bytes, missing key throws
-// `ENOENT`). Used as the test-only backend so route + action specs run
+// InMemoryStorage round-trip — mirrors the R2Storage contract (in-memory
+// slice on Range, `size` is total bytes, missing key throws `ENOENT`).
+// Used as the dev/test fallback backend so route + action specs run
 // without disk or network.
 import { describe, expect, it } from 'vitest';
 

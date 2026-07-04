@@ -3,9 +3,9 @@
  */
 // R2Storage — Cloudflare R2 (S3-compatible) backed Storage. Exercised
 // against a mocked S3 client ({ send: vi.fn() }) so we can assert on the
-// exact commands issued without a live bucket. Mirrors the
-// PostgresStorage/InMemoryStorage contract: `size` is always the TOTAL
-// object size, Range is HTTP-inclusive, missing keys throw `code: 'ENOENT'`.
+// exact commands issued without a live bucket. Mirrors the InMemoryStorage
+// contract: `size` is always the TOTAL object size, Range is
+// HTTP-inclusive, missing keys throw `code: 'ENOENT'`.
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 

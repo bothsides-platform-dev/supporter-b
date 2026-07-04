@@ -1,13 +1,16 @@
 /**
  * InMemoryStorage — Map-backed `Storage` implementation for tests.
  *
- * Mirrors `PostgresStorage`'s semantics so a spec that passes against
- * one passes against the other: `size` is always the **total** byte
- * count (not the range length), Range slicing is HTTP-inclusive, and
- * missing keys throw with `code: 'ENOENT'` so the file route can serve
- * 410 uniformly across backends.
+ * Mirrors `R2Storage`'s semantics (the `Storage` contract) so a spec that
+ * passes against one passes against the other: `size` is always the
+ * **total** byte count (not the range length), Range slicing is
+ * HTTP-inclusive, and missing keys throw with `code: 'ENOENT'` so the
+ * file route can serve 410 uniformly across backends.
  *
- * Never imported by prod code — wired in only via `__setStorageForTest`.
+ * Now also imported by prod code: `getStorage()` (`./index.ts`) uses it
+ * as the dev/test fallback when the R2 env vars are incomplete (fails
+ * fast in production instead). Tests still wire it in explicitly via
+ * `__setStorageForTest`.
  */
 import type { ReadRange, Storage } from './types';
 
