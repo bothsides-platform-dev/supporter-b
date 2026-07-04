@@ -295,6 +295,58 @@ docker compose -f docker-compose.prod.yml logs centrifugo
 
 문제 발생 시 §트러블슈팅의 "채팅 메시지가 실시간으로 안 옴" 항목 참조.
 
+## 첨부파일 저장소 전환 (Postgres bytea → Cloudflare R2)
+
+첨부파일 바이트는 더 이상 Postgres `attachment_blobs` 테이블에 저장되지 않고 Cloudflare R2(S3 호환 API, `lib/server/storage/r2.ts`)로 이전됐다. 서빙은 그대로 앱 프록시 방식(라우트가 스트리밍, sealed-bid ACL 유지) — R2 URL 을 직접 서명해 내려주지 않는다. `feat+r2-attachment-storage` 가 처음 배포될 때 한 번만 필요한 작업이다.
+
+### 1. Cloudflare 대시보드 — R2 버킷 + API 토큰 발급
+
+1. Cloudflare 대시보드 → R2 → **Create bucket** (버킷명 예: `supporter-b-attachments`).
+2. R2 → **Manage API tokens** → **Create API token**, 권한 **Object Read & Write**(해당 버킷 스코프)로 발급 → Access Key ID / Secret Access Key 확보.
+3. 계정 ID 확인: R2 개요 페이지 우측 또는 대시보드 URL 에 노출된 Account ID.
+
+### 2. 서버 — `.env.production` 에 R2 변수 4종 추가
+
+```bash
+R2_ACCOUNT_ID=<위에서 확인한 계정 ID>
+R2_ACCESS_KEY_ID=<발급받은 Access Key ID>
+R2_SECRET_ACCESS_KEY=<발급받은 Secret Access Key>
+R2_BUCKET=supporter-b-attachments
+```
+
+4개 모두 채워야 한다 — 하나라도 비면 `getStorage()` 가 프로덕션에서 throw 하며 첨부파일 관련 라우트가 전부 fail-fast 에러를 낸다(dev/test 만 `InMemoryStorage` 로 조용히 폴백).
+
+```bash
+pm2 reload bidit
+```
+
+### 3. 전환 1회 데이터 정리 — 기존 bytea 첨부 폐기
+
+기존 Postgres bytea 첨부 데이터는 R2 로 마이그레이션하지 않고 **폐기하기로 결정**했다. 배포 전 서버에서 1회 수동 실행:
+
+```bash
+docker compose -f docker-compose.prod.yml exec pg psql -U supporter_b -c 'TRUNCATE attachments CASCADE;'
+```
+
+이어서 더 이상 쓰지 않는 `attachment_blobs` 테이블 제거는 `drizzle-kit push`(대화형, **`--force` 금지**)로 수행한다:
+
+```bash
+set -a; . ./.env.production; set +a
+pnpm db:push
+```
+
+표시되는 변경 statement가 **`DROP TABLE attachment_blobs` 단 하나뿐인지 확인한 뒤에만 승인**한다. 예상 밖의 DROP/ALTER 가 함께 보이면 승인하지 말고 중단한 뒤, 수동으로 아래만 실행한다:
+
+```sql
+DROP TABLE attachment_blobs;
+```
+
+### 4. 검증
+
+- R2 env 4종이 모두 채워진 상태에서 앱이 정상 기동하는지(`pm2 logs bidit` 에 `getStorage()` 관련 에러 없음).
+- 첨부파일 업로드/다운로드가 정상 동작하는지 확인.
+- R2 대시보드에서 업로드된 객체가 `attachments/<id>` 키로 쌓이는지 확인.
+
 ## partner.supporter-b.com 서브도메인 (PG 호스트 라우팅) 롤아웃
 
 `partner.supporter-b.com` 은 **별도 프로세스 없이** 동일한 `:3000` Next.js 앱이 서빙한다. PM2 앱을 새로 띄우지 않아도 된다 — Caddy 가 두 호스트를 한 블록에서 처리한다.

@@ -48,6 +48,11 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### proxy-matcher 죽은 제외 항목 4개 정리 (P4)
 `file`·`globe`·`next`·`vercel`·`window` 는 create-next-app 기본 SVG 에셋(`public/next.svg` 등) 때문에 추가됐던 항목인데, 해당 파일들은 이미 삭제되어 `public/`에 `fonts/`·`landing/`만 남아 있다. 지금은 아무것도 제외하지 않으면서 흔한 영어 단어라 미래 라우트와 충돌 여지만 남기는 상태. 제거 검토(단, 위 세그먼트 경계 이슈와 함께 처리하는 게 효율적). (발견: /ship adversarial 리뷰 2026-07-01, `fix/pg-landing-image-auth-redirect`)
 
+## Storage / R2
+
+### R2 고아 객체 sweeper (P3)
+`scripts/sweep-r2-orphans.ts` — ListObjectsV2(prefix `attachments/`) → `attachmentRepo.findExistingIds` 배치 대사 → row 없는 키 중 LastModified 24h 초과만 DeleteObjects. `--dry-run` 지원, PM2 cron(일 1회) 등록. 고아 발생 경로: RFP 삭제 cascade(`rfpRepo.deleteById`, `_purgeUnverifiedSignup`). bid_note 삭제는 bid.ts가 storage.delete() 명시 호출로 이미 커버.
+
 ## 견적 확장 (current_terms)
 
 ### (조건부) hidden_from_pg write-edge 검증

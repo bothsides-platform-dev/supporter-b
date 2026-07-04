@@ -66,7 +66,6 @@ function buildStorage(): Storage {
 
   if (!warnedEphemeral) {
     warnedEphemeral = true;
-    // eslint-disable-next-line no-console
     console.warn(
       'getStorage(): R2 env incomplete — falling back to InMemoryStorage (ephemeral, dev/test only)',
     );
