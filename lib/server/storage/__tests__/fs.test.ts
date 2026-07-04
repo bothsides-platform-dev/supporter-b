@@ -159,4 +159,19 @@ describe('FsStorage', () => {
       s.save('a\\b', Buffer.from('x'), 'text/plain'),
     ).rejects.toThrow();
   });
+
+  // The traversal guard must hold on every method, not just save() — a
+  // refactor that inlines path resolution per-method could silently drop
+  // it from the read/delete paths.
+  it('read() rejects traversal keys', async () => {
+    const s = new FsStorage(dir);
+    await expect(s.read('../escape')).rejects.toThrow(/unsafe key/);
+    await expect(s.read('a/b')).rejects.toThrow(/unsafe key/);
+  });
+
+  it('delete() rejects traversal keys', async () => {
+    const s = new FsStorage(dir);
+    await expect(s.delete('../escape')).rejects.toThrow(/unsafe key/);
+    await expect(s.delete('a\\b')).rejects.toThrow(/unsafe key/);
+  });
 });
