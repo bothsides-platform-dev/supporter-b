@@ -7,13 +7,11 @@
 // 추가로 보여준다. 그 컴포넌트를 직접 마운트하지 않는 이유는 문구·CTA가 이 화면
 // 전용이라서다(props 로 오버라이드할 표면이 없다).
 import { Check } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { Button } from '@/components/primitives/Button';
 import { useCelebrationConfetti } from '@/lib/hooks/useCelebrationConfetti';
 
 export function SamplePgResultScreen({ buyerName }: { buyerName: string }) {
-  const router = useRouter();
   const { canvasRef } = useCelebrationConfetti();
 
   return (
@@ -41,7 +39,9 @@ export function SamplePgResultScreen({ buyerName }: { buyerName: string }) {
             다른 PG의 견적과 참여 수는 서로 공개되지 않아요
           </p>
         </div>
-        <Button onClick={() => router.push('/inbox')}>받은 요청으로 돌아가기</Button>
+        {/* 하드 내비게이션 필수 — 인터셉트 모달 컨텍스트에서 router.push 는 @modal
+            슬롯을 pop 하지 못하고, soft-nav 는 목록 온보딩 카드 가시성도 stale 로 남긴다. */}
+        <Button onClick={() => window.location.assign('/inbox')}>받은 요청으로 돌아가기</Button>
       </motion.div>
     </div>
   );

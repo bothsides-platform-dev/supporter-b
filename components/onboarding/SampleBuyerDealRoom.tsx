@@ -13,7 +13,6 @@
 // SamplePgAwardCelebration(PG 샘플 축하)이 이미 공유하는 시각 셸(useCelebrationConfetti +
 // 카드형 레이아웃)을 세 번째로 재구성한다 — 이 파일 안의 3번째 합성이 그 컨벤션을 따른다.
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Check } from 'lucide-react';
 import { motion } from 'motion/react';
 import { josa } from 'es-hangul';
@@ -60,7 +59,6 @@ function SampleBuyerAwardCelebration({ pgName, onDone }: { pgName: string; onDon
 }
 
 export function SampleBuyerDealRoom() {
-  const router = useRouter();
   const [awardedBidId, setAwardedBidId] = useState<string | null>(null);
 
   const onSampleAward = (bidId: string) => {
@@ -100,7 +98,10 @@ export function SampleBuyerDealRoom() {
       {awardedBid && (
         <SampleBuyerAwardCelebration
           pgName={samplePgNames[awardedBid.pgWsId] ?? awardedBid.pgWsId}
-          onDone={() => router.push('/rfp')}
+          // 하드 내비게이션 필수 — 인터셉트 모달 컨텍스트에서 router.push 는 @modal
+          // 슬롯을 pop 하지 못해 모달이 화면에 남고, soft-nav 는 목록의 온보딩 카드
+          // 가시성(서버 read)도 stale 캐시로 남긴다.
+          onDone={() => window.location.assign('/rfp')}
         />
       )}
     </>

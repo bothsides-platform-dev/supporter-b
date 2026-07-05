@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render as rtlRender, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
@@ -65,11 +65,22 @@ beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => {};
 });
 
+// jsdom 의 window.location.assign 은 "not implemented" 를 던지므로 스텁으로 교체.
+// 인터셉트 모달 컨텍스트에서 router.push 는 @modal 슬롯을 pop 하지 못해 하드 내비를 쓴다.
+const locationAssignMock = vi.fn();
+beforeEach(() => {
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { assign: locationAssignMock },
+  });
+});
+
 afterEach(() => {
   cleanup();
   routerPushMock.mockClear();
   awardRfpActionMock.mockClear();
   updateOnboardingMock.mockClear();
+  locationAssignMock.mockClear();
 });
 
 describe('SampleBuyerDealRoom', () => {
@@ -89,5 +100,16 @@ describe('SampleBuyerDealRoom', () => {
     expect(screen.queryByTestId('real-award-result')).not.toBeInTheDocument();
     expect(updateOnboardingMock).toHaveBeenCalledWith({ key: 'buyerSample', event: 'completed' });
     expect(screen.getByText(/실제 요청에서는 선정 즉시 PG에게 알림이 가요/)).toBeInTheDocument();
+  });
+
+  it('둘러보기 끝내기는 하드 내비게이션으로 /rfp 목록에 복귀한다 (인터셉트 모달 pop + 카드 상태 재조회)', async () => {
+    const user = userEvent.setup();
+    render(<SampleBuyerDealRoom />);
+
+    await user.click(screen.getByText('이 견적 선정하기 →'));
+    await user.click(screen.getByRole('button', { name: '둘러보기 끝내기' }));
+
+    expect(locationAssignMock).toHaveBeenCalledWith('/rfp');
+    expect(routerPushMock).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -38,9 +38,20 @@ beforeAll(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 });
 
+// jsdom 의 window.location.assign 은 "not implemented" 를 던지므로 스텁으로 교체.
+// 인터셉트 모달 컨텍스트에서 router.push 는 @modal 슬롯을 pop 하지 못해 하드 내비를 쓴다.
+const locationAssignMock = vi.fn();
+beforeEach(() => {
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { assign: locationAssignMock },
+  });
+});
+
 afterEach(() => {
   cleanup();
   routerPushMock.mockClear();
+  locationAssignMock.mockClear();
 });
 
 describe('SamplePgResultScreen', () => {
@@ -52,10 +63,11 @@ describe('SamplePgResultScreen', () => {
     ).toBeInTheDocument();
   });
 
-  it("CTA 클릭 시 '/inbox'로 이동한다", async () => {
+  it("CTA 클릭 시 하드 내비게이션으로 '/inbox'에 복귀한다 (인터셉트 모달 pop + 카드 상태 재조회)", async () => {
     const user = userEvent.setup();
     render(<SamplePgResultScreen buyerName="샘플 쇼핑몰" />);
     await user.click(screen.getByRole('button', { name: '받은 요청으로 돌아가기' }));
-    expect(routerPushMock).toHaveBeenCalledWith('/inbox');
+    expect(locationAssignMock).toHaveBeenCalledWith('/inbox');
+    expect(routerPushMock).not.toHaveBeenCalled();
   });
 });
