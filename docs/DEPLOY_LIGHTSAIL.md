@@ -297,13 +297,27 @@ docker compose -f docker-compose.prod.yml logs centrifugo
 
 ## 첨부파일 저장소 전환 (Postgres bytea → Cloudflare R2)
 
-첨부파일 바이트는 더 이상 Postgres `attachment_blobs` 테이블에 저장되지 않고 Cloudflare R2(S3 호환 API, `lib/server/storage/r2.ts`)로 이전됐다. 서빙은 그대로 앱 프록시 방식(라우트가 스트리밍, sealed-bid ACL 유지) — R2 URL 을 직접 서명해 내려주지 않는다. `feat+r2-attachment-storage` 가 처음 배포될 때 한 번만 필요한 작업이다.
+첨부파일 바이트는 더 이상 Postgres `attachment_blobs` 테이블에 저장되지 않고 Cloudflare R2(S3 호환 API, `lib/server/storage/r2.ts`)로 이전됐다. 업로드는 **presigned PUT 직행**(브라우저 → R2, 서버는 발급/검증만 — `POST /api/files/presign` → PUT → `POST /api/files/{id}/complete`), 다운로드는 `GET /api/files/{id}` 가 ACL 검증 후 **302 → presigned GET URL**(TTL 15분)로 넘긴다 — 파일 바이트가 VM 을 지나지 않는다. `feat+r2-attachment-storage` 가 처음 배포될 때 한 번만 필요한 작업이다.
 
-### 1. Cloudflare 대시보드 — R2 버킷 + API 토큰 발급
+### 1. Cloudflare 대시보드 — R2 버킷 + API 토큰 발급 + CORS
 
 1. Cloudflare 대시보드 → R2 → **Create bucket** (버킷명 예: `supporter-b-attachments`).
 2. R2 → **Manage API tokens** → **Create API token**, 권한 **Object Read & Write**(해당 버킷 스코프)로 발급 → Access Key ID / Secret Access Key 확보.
 3. 계정 ID 확인: R2 개요 페이지 우측 또는 대시보드 URL 에 노출된 Account ID.
+4. **버킷 CORS 설정 (presigned PUT 직행 업로드에 필수)**: 버킷 → Settings → CORS policy 에 아래를 등록한다. 이게 없으면 브라우저의 R2 직행 PUT 이 CORS preflight 에서 전부 실패한다(업로드가 "업로드 실패"로만 보임).
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://supporter-b.com", "https://partner.supporter-b.com"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["content-type"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+로컬 dev 전용 버킷에는 `"AllowedOrigins": ["http://localhost:3000"]` 로 동일하게 등록한다. 다운로드(presigned GET)는 302 내비게이션/iframe 로드라 CORS 불필요.
 
 ### 2. 서버 — `.env.production` 에 R2 변수 4종 추가
 
@@ -320,6 +334,16 @@ R2_BUCKET=supporter-b-attachments
 pm2 reload bidit
 ```
 
+### 2-b. crontab — 버려진 pending 업로드 청소 (sweep-uploads)
+
+presigned 2-phase 업로드는 presign 발급 후 PUT/complete 에 도달하지 못한 `status='pending'` row 를 구조적으로 남긴다. 1시간 초과 pending row(+ R2 객체)는 `POST /api/cron/sweep-uploads` 가 청소한다 — flush-outbox 와 같은 `CRON_SECRET` 게이트(fail-closed). crontab 에 한 줄 추가(시간당 1회면 충분):
+
+```cron
+17 * * * * flock -n /tmp/sweep-uploads.lock curl -fsS -XPOST localhost:3000/api/cron/sweep-uploads -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
+```
+
+(`CRON_SECRET` 정의 방식·인라인 대입 함정은 위 flush-outbox 절의 주의 사항과 동일.)
+
 ### 3. 전환 1회 데이터 정리 — 기존 bytea 첨부 폐기
 
 기존 Postgres bytea 첨부 데이터는 R2 로 마이그레이션하지 않고 **폐기하기로 결정**했다. 배포 전 서버에서 1회 수동 실행:
@@ -335,17 +359,22 @@ set -a; . ./.env.production; set +a
 pnpm db:push
 ```
 
-표시되는 변경 statement가 **`DROP TABLE attachment_blobs` 단 하나뿐인지 확인한 뒤에만 승인**한다. 예상 밖의 DROP/ALTER 가 함께 보이면 승인하지 말고 중단한 뒤, 수동으로 아래만 실행한다:
+표시되는 변경 statement가 **아래 3종(첨부 R2 전환분)뿐인지 확인한 뒤에만 승인**한다: ① `DROP TABLE attachment_blobs` ② `attachments` 에 `status` 컬럼 추가(+ `attachments_status_check` CHECK) ③ `attachments_pending_idx` 부분 인덱스 생성. 예상 밖의 DROP/ALTER 가 함께 보이면 승인하지 말고 중단한 뒤, 수동으로 아래만 실행한다:
 
 ```sql
 DROP TABLE attachment_blobs;
+ALTER TABLE attachments ADD COLUMN status text NOT NULL DEFAULT 'ready';
+ALTER TABLE attachments ADD CONSTRAINT attachments_status_check CHECK (status IN ('pending','ready'));
+CREATE INDEX attachments_pending_idx ON attachments (uploaded_at) WHERE status = 'pending';
 ```
 
 ### 4. 검증
 
 - R2 env 4종이 모두 채워진 상태에서 앱이 정상 기동하는지(`pm2 logs bidit` 에 `getStorage()` 관련 에러 없음).
-- 첨부파일 업로드/다운로드가 정상 동작하는지 확인.
+- 첨부파일 업로드가 정상 동작하는지(브라우저 devtools Network 에서 R2 도메인으로의 직행 PUT 200 → complete 200 — CORS 미설정이면 여기서 실패).
+- 다운로드/미리보기: `GET /api/files/{id}` 가 302 로 R2 presigned URL 에 넘기고 PDF iframe 이 뜨는지.
 - R2 대시보드에서 업로드된 객체가 `attachments/<id>` 키로 쌓이는지 확인.
+- sweep-uploads cron 등록 후 `curl -XPOST localhost:3000/api/cron/sweep-uploads -H "x-cron-secret: $CRON_SECRET"` 가 `{"deletedRows":0,...}` 형태로 응답하는지.
 
 ## partner.supporter-b.com 서브도메인 (PG 호스트 라우팅) 롤아웃
 
