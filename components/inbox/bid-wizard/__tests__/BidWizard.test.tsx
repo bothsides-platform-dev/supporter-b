@@ -1,16 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http } from '@/lib/http';
 import { HTTPError } from 'ky';
-import type { NormalizedOptions, ResponsePromise } from 'ky';
+import type { NormalizedOptions } from 'ky';
 import type { PaymentMethod } from '@/lib/types/bid';
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
-vi.mock('@/lib/http', () => ({ http: { post: vi.fn() } }));
-vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')));
+const uploadAttachment = vi.fn();
+vi.mock('@/lib/attachments/upload-client', () => ({
+  uploadAttachment: (...a: unknown[]) => uploadAttachment(...a),
+}));
 
 const pushMock = vi.fn();
 const refreshMock = vi.fn();
@@ -76,6 +77,7 @@ beforeEach(() => {
   pushMock.mockClear();
   refreshMock.mockClear();
   submitBidMock.mockClear();
+  uploadAttachment.mockReset();
   vi.mocked(toast).mockClear();
 });
 afterEach(cleanup);
@@ -177,12 +179,10 @@ describe('BidWizard 413 업로드 오류(3단계)', () => {
 
     const error413 = new HTTPError(
       new Response('', { status: 413 }),
-      new Request('http://localhost/api/files/upload'),
+      new Request('http://localhost/api/files/presign'),
       {} as unknown as NormalizedOptions,
     );
-    vi.mocked(http.post).mockReturnValue({
-      json: vi.fn().mockRejectedValue(error413),
-    } as unknown as ResponsePromise);
+    uploadAttachment.mockRejectedValue(error413);
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     await user.upload(input, new File(['x'], 'big.pdf', { type: 'application/pdf' }));
