@@ -33,20 +33,15 @@ import { randomUUID } from 'node:crypto';
 
 import { auth } from '@/auth';
 import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
-import {
-  getAttachmentRepo,
-  getBidRepo,
-  getInvitationRepo,
-  getRfpRepo,
-} from '@/lib/server/repositories/factory';
+import { getAttachmentRepo } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
-import { DRAFT_OWNER_ID } from '@/lib/server/storage/path';
+import { MAX_BYTES } from '@/lib/server/storage/constants';
 import { sniffMime, type AcceptedMime } from '@/lib/server/storage/sniff';
+import { authorizeAttachmentUpload, OWNER_KINDS } from '../_upload-acl';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const MAX_BYTES = 20 * 1024 * 1024;
 const ALLOWED_MIMES = new Set<AcceptedMime>([
   'application/pdf',
   'image/png',
@@ -55,7 +50,7 @@ const ALLOWED_MIMES = new Set<AcceptedMime>([
 
 const MetaInput = z
   .object({
-    ownerKind: z.enum(['rfp', 'bid_proposal', 'bid_note', 'chat', 'team_message']),
+    ownerKind: z.enum(OWNER_KINDS),
     ownerId: z.string().min(1).max(64),
   })
   .strict();
@@ -109,80 +104,24 @@ export async function POST(req: Request): Promise<Response> {
     return fail(415, 'MIME_MISMATCH');
   }
 
-  // Per-ownerKind ACL on the upload itself.
+  // Per-ownerKind ACL on the upload itself (shared with the presign route).
   const userId = session.user.id;
   const wsId = (session.user as { workspaceId?: string }).workspaceId;
   const wsType = (session.user as { workspaceType?: 'buyer' | 'pg' })
     .workspaceType;
 
-  if (meta.data.ownerKind === 'rfp') {
-    // Buyer-only upload path. Draft window: ownerId may be a placeholder
-    // (literal '__draft__') because the RFP is still being authored.
-    if (wsType !== 'buyer' || !wsId) return fail(403, 'FORBIDDEN');
-    if (meta.data.ownerId !== DRAFT_OWNER_ID) {
-      const rfp = await (await getRfpRepo()).findById(meta.data.ownerId);
-      if (!rfp) return fail(404, 'RFP_NOT_FOUND');
-      if (rfp.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
-    }
-  } else if (meta.data.ownerKind === 'chat') {
-    // Chat attachment — buyer↔PG IM. Any authenticated workspace member may
-    // upload an ownerless draft; sendChatMessageAction links it to the
-    // chat_messages row and re-checks the uploader is a session-ws member.
-    // ownerId is the literal '__draft__' placeholder (no parent yet).
-    // Membership guaranteed by isSessionRevoked() above (removeMember bumps
-    // sessionVersion — stale sessions are rejected before reaching here).
-    if (!wsId) return fail(403, 'FORBIDDEN');
-  } else if (meta.data.ownerKind === 'bid_note') {
-    // Buyer-only memo attachment. ownerId here is the *bid id* (the parent
-    // bid_notes row may not exist yet — the action layer creates it and
-    // re-points owner_id to the new bid_notes.id after this row lands).
-    // Gate: buyer ws that owns the RFP behind this bid.
-    // Membership guaranteed by isSessionRevoked() above (same policy as
-    // storage/permissions.ts — no live isMember re-check needed).
-    if (wsType !== 'buyer' || !wsId) return fail(403, 'FORBIDDEN');
-    const row = await (await getBidRepo()).findRfpOwner(meta.data.ownerId);
-    if (!row) return fail(404, 'BID_NOT_FOUND');
-    if (row.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
-  } else if (meta.data.ownerKind === 'team_message') {
-    // Team-thread attachment — buyer (owns the RFP) or invited PG. ownerId is
-    // the *RFP id* (the parent rfp_team_messages row may not exist yet —
-    // sendTeamMessageAction creates it and re-points owner_id after this row
-    // lands). Gate mirrors TeamChatService.authorize.
-    // Membership guaranteed by isSessionRevoked() above (same policy as
-    // storage/permissions.ts — no live isMember re-check needed).
-    if (!wsId) return fail(403, 'FORBIDDEN');
-    if (wsType === 'buyer') {
-      const rfp = await (await getRfpRepo()).findById(meta.data.ownerId);
-      if (!rfp) return fail(404, 'RFP_NOT_FOUND');
-      if (rfp.buyerWsId !== wsId) return fail(403, 'FORBIDDEN');
-    } else {
-      // PG — invitation gate (same as loadPgRfpDetail / bid_proposal).
-      const invRepo = await getInvitationRepo();
-      if (!(await invRepo.canAccess(meta.data.ownerId, wsId))) {
-        return fail(403, 'FORBIDDEN');
-      }
-    }
-  } else {
-    // bid_proposal — PG-only, must be a member of an invited PG ws for ownerId.
-    if (wsType !== 'pg' || !wsId) return fail(403, 'FORBIDDEN');
-    const invRepo = await getInvitationRepo();
-    const ok = await invRepo.canAccess(meta.data.ownerId, wsId);
-    if (!ok) return fail(403, 'FORBIDDEN');
-  }
+  const authz = await authorizeAttachmentUpload(
+    { userId, workspaceId: wsId, workspaceType: wsType },
+    { ownerKind: meta.data.ownerKind, ownerId: meta.data.ownerId },
+  );
+  if (!authz.ok) return fail(authz.status, authz.error);
 
   // DB metadata first, blob second — the R2 object at attachments/<id> (C4)
   // is only ever referenced once the attachments row exists. The storage
   // key is the attachment id.
   const id = randomUUID();
   const repo = await getAttachmentRepo();
-
-  // Owner link at upload: only the 'rfp' non-draft path links immediately.
-  // bid_proposal/bid_note (and the rfp draft window) start ownerless and are
-  // linked by their action (createRfp / submitBid / addBidNote).
-  const rfpLink =
-    meta.data.ownerKind === 'rfp' && meta.data.ownerId !== DRAFT_OWNER_ID
-      ? { rfpId: meta.data.ownerId }
-      : {};
+  const rfpLink = authz.rfpLink;
 
   await repo.save({
     id,
