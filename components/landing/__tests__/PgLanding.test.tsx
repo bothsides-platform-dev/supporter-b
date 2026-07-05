@@ -60,10 +60,12 @@ describe('PgLanding — PG 전용 랜딩', () => {
     expect(screen.getByText('관심은 있지만 움직이지 않는 고객사')).toBeInTheDocument();
   });
 
-  it('화면3 성장 고객사 인바운드 섹션과 캐러셀 첫 카드를 렌더한다', () => {
+  it('화면3 성장 고객사 인바운드 섹션과 고객사 유형 카드를 누적 리스트로 렌더한다', () => {
     render(<PgLanding />);
     expect(screen.getByText('새로운 성장 고객사가 PG사를 찾아오게 만듭니다')).toBeInTheDocument();
+    // 누적 스택은 모든 카드를 한 번에 렌더한다(과거 캐러셀은 활성 카드 1개만 렌더).
     expect(screen.getByText('PG 변경을 검토하는 기존 가맹점')).toBeInTheDocument();
+    expect(screen.getByText('복수 PG 조건을 비교하는 구매 의사 보유 고객사')).toBeInTheDocument();
   });
 
   it('화면4 검증 섹션 제목을 렌더한다 (공정 대신 동일)', () => {

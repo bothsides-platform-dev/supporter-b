@@ -6,7 +6,7 @@ import { PgHeroSection } from '@/components/landing/PgHeroSection';
 import { SectionHeading } from '@/components/landing/SectionHeading';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { ScrollDrivenProblem } from '@/components/landing/scroll-pinned/ScrollDrivenProblem';
-import { PgCustomerCarousel } from '@/components/landing/PgCustomerCarousel';
+import { ScrollDrivenCustomerTypes } from '@/components/landing/scroll-pinned/ScrollDrivenCustomerTypes';
 import { PgCaseCard } from '@/components/landing/PgCaseCard';
 import { LANDING_TYPE } from '@/components/landing/landing-type';
 import { PgProcessSteps } from '@/components/landing/PgProcessSteps';
@@ -205,7 +205,7 @@ export function PgLanding() {
           />
         </section>
 
-        {/* ── 화면3: 신규 성장 고객사 인바운드 ── */}
+        {/* ── 화면3: 신규 성장 고객사 인바운드 (pin: 누적 등장) ── */}
         <section id="inbound" className={sectionCls}>
           <div className={containerCls}>
             <FadeInView>
@@ -219,8 +219,10 @@ export function PgLanding() {
                 </span>
               </p>
             </FadeInView>
-            <div className="flex flex-col gap-[var(--s-5)]">
-              <SectionHeading>새로운 성장 고객사가 PG사를 찾아오게 만듭니다</SectionHeading>
+          </div>
+          <ScrollDrivenCustomerTypes
+            heading={<SectionHeading>새로운 성장 고객사가 PG사를 찾아오게 만듭니다</SectionHeading>}
+            intro={
               <FadeInView>
                 <p className={subCls}>
                   수수료율·정산주기·보증금·운영 조건을 비교하려는 고객사가 Supporter B에 견적을
@@ -228,10 +230,10 @@ export function PgLanding() {
                   새로운 영업 기회를 확보합니다.
                 </p>
               </FadeInView>
-            </div>
-            <FadeInView>
-              <PgCustomerCarousel items={CUSTOMER_TYPES} />
-            </FadeInView>
+            }
+            items={CUSTOMER_TYPES}
+          />
+          <div className={`${containerCls} mt-[var(--s-9)]`}>
             <FadeInView>
               <p className={`${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface)]`}>
                 Supporter B는 “PG 조건을 비교하고 싶다”는 분명한 신호가 있는 고객사만 골라
