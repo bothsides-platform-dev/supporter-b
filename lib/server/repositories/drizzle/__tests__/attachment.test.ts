@@ -515,3 +515,247 @@ describe('DrizzleAttachmentRepository.remove', () => {
     expect(await ctx.repo.findById(att)).toBeUndefined();
   });
 });
+
+// ── Two-phase presigned upload: pending/ready status ────────────────────────
+
+async function insertPendingAttachment(
+  db: PgliteDB,
+  opts: { uploaderId: string; rfpId?: string; uploadedAt?: Date },
+) {
+  const id = randomUUID();
+  await db.insert(attachments).values({
+    id,
+    name: 'pending.pdf',
+    size: 512,
+    mimeType: 'application/pdf',
+    uploadedBy: opts.uploaderId,
+    rfpId: opts.rfpId,
+    status: 'pending',
+    uploadedAt: opts.uploadedAt,
+  });
+  return id;
+}
+
+describe('DrizzleAttachmentRepository — status column defaults + findById', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('save() without status defaults the row to ready', async () => {
+    const id = randomUUID();
+    await ctx.repo.save({
+      id,
+      name: 'default.pdf',
+      size: 100,
+      mimeType: 'application/pdf',
+      url: `/api/files/${id}`,
+      uploadedBy: ctx.uploader.id,
+    });
+
+    const row = await ctx.repo.findById(id);
+    expect(row!.status).toBe('ready');
+  });
+
+  it('save() with status: pending persists pending', async () => {
+    const id = randomUUID();
+    await ctx.repo.save({
+      id,
+      name: 'presigned.pdf',
+      size: 100,
+      mimeType: 'application/pdf',
+      url: `/api/files/${id}`,
+      uploadedBy: ctx.uploader.id,
+      status: 'pending',
+    });
+
+    const row = await ctx.repo.findById(id);
+    expect(row!.status).toBe('pending');
+  });
+
+  it('findById returns a pending row (no status filter — complete route needs it)', async () => {
+    const id = await insertPendingAttachment(ctx.db, { uploaderId: ctx.uploader.id });
+
+    const row = await ctx.repo.findById(id);
+
+    expect(row).toBeDefined();
+    expect(row!.status).toBe('pending');
+  });
+});
+
+describe('DrizzleAttachmentRepository — ready filter on list reads', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('findByRfp excludes pending attachments', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, { buyerWsId: ws.id, createdBy: ctx.uploader.id });
+    const ready = await insertRfpAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      rfpId: rfp.id,
+      name: 'ready.pdf',
+      uploadedAt: new Date('2026-05-01T00:00:00Z'),
+    });
+    await insertPendingAttachment(ctx.db, { uploaderId: ctx.uploader.id, rfpId: rfp.id });
+
+    const files = await ctx.repo.findByRfp(rfp.id);
+
+    expect(files.map((f) => f.id)).toEqual([ready]);
+  });
+
+  it('findByChatMessageIds excludes pending attachments', async () => {
+    const buyerWs = await seedBuyerWorkspace(ctx.db);
+    const pgWs = await seedPgWorkspace(ctx.db, 'PG사');
+    const convId = await seedConversation(ctx.db, buyerWs.id, pgWs.id);
+    const msgId = await seedChatMessage(ctx.db, {
+      conversationId: convId,
+      authorUserId: ctx.uploader.id,
+      authorWsId: buyerWs.id,
+    });
+    const ready = await insertChatAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      chatMessageId: msgId,
+      name: 'ready.pdf',
+    });
+    const pendingId = randomUUID();
+    await ctx.db.insert(attachments).values({
+      id: pendingId,
+      name: 'pending.pdf',
+      size: 512,
+      mimeType: 'application/pdf',
+      uploadedBy: ctx.uploader.id,
+      chatMessageId: msgId,
+      status: 'pending',
+    });
+
+    const files = await ctx.repo.findByChatMessageIds([msgId]);
+
+    expect(files.map((f) => f.id)).toEqual([ready]);
+  });
+
+  it('findByConversationId excludes pending attachments', async () => {
+    const buyerWs = await seedBuyerWorkspace(ctx.db);
+    const pgWs = await seedPgWorkspace(ctx.db, 'PG사');
+    const convId = await seedConversation(ctx.db, buyerWs.id, pgWs.id);
+    const msgId = await seedChatMessage(ctx.db, {
+      conversationId: convId,
+      authorUserId: ctx.uploader.id,
+      authorWsId: buyerWs.id,
+    });
+    const ready = await insertChatAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      chatMessageId: msgId,
+      name: 'ready.pdf',
+    });
+    const pendingId = randomUUID();
+    await ctx.db.insert(attachments).values({
+      id: pendingId,
+      name: 'pending.pdf',
+      size: 512,
+      mimeType: 'application/pdf',
+      uploadedBy: ctx.uploader.id,
+      chatMessageId: msgId,
+      status: 'pending',
+    });
+
+    const files = await ctx.repo.findByConversationId(convId);
+
+    expect(files.map((f) => f.id)).toEqual([ready]);
+  });
+});
+
+describe('DrizzleAttachmentRepository — claim/findUnclaimedByIds guard pending rows', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('claim() does not link a pending attachment (fail-closed)', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, { buyerWsId: ws.id, createdBy: ctx.uploader.id });
+    const pending = await insertPendingAttachment(ctx.db, { uploaderId: ctx.uploader.id });
+
+    await ctx.repo.claim({ ids: [pending], owner: { rfpId: rfp.id }, uploadedBy: ctx.uploader.id });
+
+    const row = await ctx.repo.findById(pending);
+    expect(row!.rfpId).toBeUndefined();
+  });
+
+  it('findUnclaimedByIds excludes pending attachments', async () => {
+    const draft = await insertAttachment(ctx.db, ctx.uploader.id);
+    const pending = await insertPendingAttachment(ctx.db, { uploaderId: ctx.uploader.id });
+
+    const rows = await ctx.repo.findUnclaimedByIds([draft, pending]);
+
+    expect(rows.map((r) => r.id)).toEqual([draft]);
+  });
+});
+
+describe('DrizzleAttachmentRepository.markReady', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('flips a pending row to ready and returns true', async () => {
+    const id = await insertPendingAttachment(ctx.db, { uploaderId: ctx.uploader.id });
+
+    const result = await ctx.repo.markReady(id);
+
+    expect(result).toBe(true);
+    expect((await ctx.repo.findById(id))!.status).toBe('ready');
+  });
+
+  it('returns false for an already-ready row (no-op)', async () => {
+    const id = await insertAttachment(ctx.db, ctx.uploader.id);
+
+    const result = await ctx.repo.markReady(id);
+
+    expect(result).toBe(false);
+  });
+
+  it('returns false for an unknown id', async () => {
+    expect(await ctx.repo.markReady(randomUUID())).toBe(false);
+  });
+});
+
+describe('DrizzleAttachmentRepository.deleteStalePending', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('deletes pending rows older than the cutoff and returns their ids', async () => {
+    const stale = await insertPendingAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      uploadedAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const fresh = await insertPendingAttachment(ctx.db, {
+      uploaderId: ctx.uploader.id,
+      uploadedAt: new Date('2026-06-01T00:00:00Z'),
+    });
+    const readyOld = await insertAttachment(ctx.db, ctx.uploader.id);
+    await ctx.db
+      .update(attachments)
+      .set({ uploadedAt: new Date('2026-01-01T00:00:00Z') })
+      .where(eq(attachments.id, readyOld));
+
+    const deletedIds = await ctx.repo.deleteStalePending(new Date('2026-03-01T00:00:00Z'));
+
+    expect(deletedIds).toEqual([stale]);
+    expect(await ctx.repo.findById(stale)).toBeUndefined();
+    expect(await ctx.repo.findById(fresh)).toBeDefined();
+    expect(await ctx.repo.findById(readyOld)).toBeDefined();
+  });
+
+  it('returns [] when no stale pending rows exist', async () => {
+    expect(await ctx.repo.deleteStalePending(new Date('2020-01-01T00:00:00Z'))).toEqual([]);
+  });
+});

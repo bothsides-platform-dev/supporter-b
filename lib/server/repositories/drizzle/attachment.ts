@@ -1,8 +1,8 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lt } from 'drizzle-orm';
 import { attachments, chatMessages } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { Attachment } from '@/lib/types/common';
-import type { AttachmentRecord } from '../attachment-record';
+import type { AttachmentRecord, AttachmentStatus } from '../attachment-record';
 import type { AttachmentRepo, Tx } from '../types';
 
 type AttachRow = typeof attachments.$inferSelect;
@@ -21,6 +21,7 @@ function rowToAttachment(row: AttachRow): AttachmentRecord {
     chatMessageId: row.chatMessageId ?? undefined,
     rfpTeamMessageId: row.rfpTeamMessageId ?? undefined,
     uploadedBy: row.uploadedBy,
+    status: row.status as AttachmentStatus,
   };
 }
 
@@ -50,6 +51,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       rfpId: a.rfpId ?? null,
       bidId: a.bidId ?? null,
       bidNoteId: a.bidNoteId ?? null,
+      status: a.status ?? 'ready',
     });
   }
 
@@ -68,7 +70,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
     const rows: AttachRow[] = await db
       .select()
       .from(attachments)
-      .where(eq(attachments.rfpId, rfpId))
+      .where(and(eq(attachments.rfpId, rfpId), eq(attachments.status, 'ready')))
       .orderBy(asc(attachments.uploadedAt));
     return rows.map(toPublicAttachment);
   }
@@ -79,7 +81,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
     const rows: AttachRow[] = await db
       .select()
       .from(attachments)
-      .where(inArray(attachments.chatMessageId, ids))
+      .where(and(inArray(attachments.chatMessageId, ids), eq(attachments.status, 'ready')))
       .orderBy(asc(attachments.uploadedAt));
     return rows.map((row) => ({ ...toPublicAttachment(row), chatMessageId: row.chatMessageId! }));
   }
@@ -90,7 +92,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       .select({ ...attachments })
       .from(attachments)
       .innerJoin(chatMessages, eq(attachments.chatMessageId, chatMessages.id))
-      .where(eq(chatMessages.conversationId, conversationId))
+      .where(and(eq(chatMessages.conversationId, conversationId), eq(attachments.status, 'ready')))
       .orderBy(asc(attachments.uploadedAt));
     return rows.map(toPublicAttachment);
   }
@@ -121,6 +123,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
     if (owner.rfpTeamMessageId !== undefined) patch.rfpTeamMessageId = owner.rfpTeamMessageId;
 
     // 모든 owner 컬럼 IS NULL 가드 — 이미 링크된 행 re-parent 방지.
+    // status='ready' 가드 — 검증 안 된 pending 첨부는 owner에 연결될 수 없다(fail-closed).
     const conds = [
       inArray(attachments.id, params.ids),
       isNull(attachments.rfpId),
@@ -128,6 +131,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       isNull(attachments.bidNoteId),
       isNull(attachments.chatMessageId),
       isNull(attachments.rfpTeamMessageId),
+      eq(attachments.status, 'ready'),
     ];
     if (params.uploadedBy !== undefined) {
       conds.push(eq(attachments.uploadedBy, params.uploadedBy));
@@ -153,6 +157,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
           isNull(attachments.bidNoteId),
           isNull(attachments.chatMessageId),
           isNull(attachments.rfpTeamMessageId),
+          eq(attachments.status, 'ready'),
         ),
       );
     return rows.map((row) => ({
@@ -167,5 +172,27 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
   async remove(id: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.delete(attachments).where(eq(attachments.id, id));
+  }
+
+  async markReady(id: string, tx?: Tx): Promise<boolean> {
+    const db = this.h(tx);
+    // Only a 'pending' row transitions — already-ready or unknown ids are a
+    // no-op (returns false so the complete route can distinguish "just
+    // verified" from "nothing to do").
+    const rows: { id: string }[] = await db
+      .update(attachments)
+      .set({ status: 'ready' })
+      .where(and(eq(attachments.id, id), eq(attachments.status, 'pending')))
+      .returning({ id: attachments.id });
+    return rows.length > 0;
+  }
+
+  async deleteStalePending(cutoff: Date, tx?: Tx): Promise<string[]> {
+    const db = this.h(tx);
+    const rows: { id: string }[] = await db
+      .delete(attachments)
+      .where(and(eq(attachments.status, 'pending'), lt(attachments.uploadedAt, cutoff)))
+      .returning({ id: attachments.id });
+    return rows.map((r) => r.id);
   }
 }

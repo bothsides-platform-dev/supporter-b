@@ -86,7 +86,7 @@ export class DrizzleRfpTeamMessageRepository implements RfpTeamMessageRepo {
     const attRows: AttRow[] = await db
       .select()
       .from(attachments)
-      .where(inArray(attachments.rfpTeamMessageId, ids));
+      .where(and(inArray(attachments.rfpTeamMessageId, ids), eq(attachments.status, 'ready')));
 
     const byMessage = new Map<string, Attachment[]>();
     for (const row of attRows) {
