@@ -1,9 +1,10 @@
 /**
  * authorizeAttachmentUpload — per-`ownerKind` ACL for a new attachment,
- * shared by the multipart upload route (`upload/route.ts`) and the
- * presigned-PUT route (`presign/route.ts`). Both routes gate on the exact
- * same rules — only how the bytes eventually reach storage differs
- * (server-buffered multipart vs. client-direct PUT to a presigned URL).
+ * used by the presigned-PUT route (`presign/route.ts`). The legacy
+ * server-buffered multipart upload route (`upload/route.ts`) shared this
+ * same ACL before it was removed once every client moved to the 2-phase
+ * presigned flow — kept as its own module since a future upload entry
+ * point (if any) would gate on the identical rules.
  *
  * Also resolves `rfpLink` — the immediate owner link at row-creation time.
  * Only the 'rfp' non-draft path links immediately; bid_proposal/bid_note/

@@ -7,7 +7,7 @@
 //   - 401 unauthenticated / 403 email unverified
 //   - 400 invalid input (bad ownerKind/name/size/mime)
 //   - 413 too large / 415 mime not allowed
-//   - 403 ACL denial (same matrix as /api/files/upload)
+//   - 403 ACL denial (shared authorizeAttachmentUpload ACL, `_upload-acl.ts`)
 //   - happy path: pending row inserted, presignPut called, {id, uploadUrl} returned
 //   - presign failure → row is best-effort removed, 500
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
