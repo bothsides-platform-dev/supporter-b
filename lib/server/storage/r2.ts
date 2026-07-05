@@ -18,9 +18,18 @@ import { Readable } from 'node:stream';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
-import type { ReadRange, Storage } from './types';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { S3Client } from '@aws-sdk/client-s3';
+import type {
+  PresignGetOptions,
+  PresignPutOptions,
+  ReadRange,
+  Storage,
+} from './types';
+import { contentDispositionHeader } from './content-disposition';
 
 class EnoentError extends Error {
   code = 'ENOENT' as const;
@@ -46,7 +55,11 @@ function isNotFound(err: unknown): boolean {
     name?: string;
     $metadata?: { httpStatusCode?: number };
   };
-  return e.name === 'NoSuchKey' || e.$metadata?.httpStatusCode === 404;
+  return (
+    e.name === 'NoSuchKey' ||
+    e.name === 'NotFound' || // HeadObjectCommand's not-found error name
+    e.$metadata?.httpStatusCode === 404
+  );
 }
 
 /** Parse the total size out of an S3 `Content-Range: bytes N-M/total`
@@ -68,6 +81,15 @@ async function toWebStream(body: any): Promise<ReadableStream<Uint8Array>> {
 }
 
 export class R2Storage implements Storage {
+  /** `_client` is typed as the narrow `S3ClientLike` so `save`/`read`/
+   *  `delete`/`head` tests can inject `{ send: vi.fn() }`. `presignPut`/
+   *  `presignGet` additionally need a **real** `S3Client` instance (it
+   *  carries the signing config — region/credentials/endpoint) because
+   *  `getSignedUrl` reads `client.config` directly; `buildStorage()`
+   *  (`./index.ts`) always constructs a real `S3Client`, so this is safe
+   *  in every non-test caller. Presign tests construct a real `S3Client`
+   *  with dummy credentials — signing is a local computation, no network
+   *  call is made. */
   constructor(
     private readonly _client: S3ClientLike,
     private readonly _bucket: string,
@@ -129,5 +151,56 @@ export class R2Storage implements Storage {
       if (isNotFound(err)) return;
       throw err;
     }
+  }
+
+  async head(key: string): Promise<{ size: number }> {
+    let response;
+    try {
+      response = await this._client.send(
+        new HeadObjectCommand({
+          Bucket: this._bucket,
+          Key: objectKey(key),
+        }),
+      );
+    } catch (err) {
+      if (isNotFound(err)) throw new EnoentError(key);
+      throw err;
+    }
+    return { size: response.ContentLength };
+  }
+
+  async presignPut(key: string, opts: PresignPutOptions): Promise<string> {
+    // signableHeaders must be explicit — the v3 presigner otherwise only
+    // signs `host`, so a client PUTting a different Content-Type/Length
+    // than declared here wouldn't be caught by the signature.
+    return getSignedUrl(
+      this._client as unknown as S3Client,
+      new PutObjectCommand({
+        Bucket: this._bucket,
+        Key: objectKey(key),
+        ContentType: opts.mime,
+        ContentLength: opts.size,
+      }),
+      {
+        expiresIn: opts.expiresInSeconds,
+        signableHeaders: new Set(['content-type', 'content-length']),
+      },
+    );
+  }
+
+  async presignGet(key: string, opts: PresignGetOptions): Promise<string> {
+    return getSignedUrl(
+      this._client as unknown as S3Client,
+      new GetObjectCommand({
+        Bucket: this._bucket,
+        Key: objectKey(key),
+        ResponseContentDisposition: contentDispositionHeader(
+          opts.filename,
+          opts.disposition ?? 'inline',
+        ),
+        ResponseContentType: opts.mime,
+      }),
+      { expiresIn: opts.expiresInSeconds },
+    );
   }
 }

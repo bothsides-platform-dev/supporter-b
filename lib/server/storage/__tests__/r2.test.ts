@@ -12,12 +12,25 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
 
 import { R2Storage } from '../r2';
 
 const BUCKET = 'test-bucket';
+
+// A real S3Client (dummy creds/endpoint) so getSignedUrl can sign locally
+// — presigning is offline (no network call), so no live bucket is needed.
+function realClient(): S3Client {
+  return new S3Client({
+    region: 'auto',
+    endpoint: 'https://acc.r2.cloudflarestorage.com',
+    credentials: { accessKeyId: 'AKIA_DUMMY', secretAccessKey: 'dummy-secret' },
+    forcePathStyle: true,
+  });
+}
 
 async function collectStream(s: ReadableStream<Uint8Array>): Promise<Buffer> {
   const reader = s.getReader();
@@ -216,5 +229,118 @@ describe('R2Storage', () => {
     const storage = new R2Storage({ send }, BUCKET);
 
     await expect(storage.delete('att-1')).rejects.toThrow('boom');
+  });
+
+  it('head() sends HeadObjectCommand with the prefixed key and returns size', async () => {
+    const send = vi.fn().mockResolvedValue({ ContentLength: 42 });
+    const storage = new R2Storage({ send }, BUCKET);
+
+    await expect(storage.head('att-1')).resolves.toEqual({ size: 42 });
+    const command = send.mock.calls[0][0];
+    expect(command).toBeInstanceOf(HeadObjectCommand);
+    expect(command.input).toEqual({ Bucket: BUCKET, Key: 'attachments/att-1' });
+  });
+
+  it('head() throws ENOENT when the SDK rejects with name NotFound (HeadObject convention)', async () => {
+    const send = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('NotFound'), { name: 'NotFound' }));
+    const storage = new R2Storage({ send }, BUCKET);
+
+    await expect(storage.head('missing')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('head() throws ENOENT when the SDK rejects with $metadata.httpStatusCode 404', async () => {
+    const send = vi.fn().mockRejectedValue(
+      Object.assign(new Error('not found'), {
+        $metadata: { httpStatusCode: 404 },
+      }),
+    );
+    const storage = new R2Storage({ send }, BUCKET);
+
+    await expect(storage.head('missing')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('head() rethrows unrelated errors', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('boom'));
+    const storage = new R2Storage({ send }, BUCKET);
+
+    await expect(storage.head('att-1')).rejects.toThrow('boom');
+  });
+});
+
+describe('R2Storage.presignPut', () => {
+  it('signs a PUT URL whose X-Amz-Expires matches expiresInSeconds, whose signed headers include content-type/content-length, and whose path carries the bucket + prefixed key', async () => {
+    const storage = new R2Storage(realClient(), BUCKET);
+    const url = await storage.presignPut('att-1', {
+      mime: 'application/pdf',
+      size: 12345,
+      expiresInSeconds: 900,
+    });
+
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get('X-Amz-Expires')).toBe('900');
+    const signedHeaders = parsed.searchParams.get('X-Amz-SignedHeaders') ?? '';
+    expect(signedHeaders).toContain('content-type');
+    expect(signedHeaders).toContain('content-length');
+    // forcePathStyle → /<bucket>/<prefixed-key>
+    expect(parsed.pathname).toBe(`/${BUCKET}/attachments/att-1`);
+  });
+});
+
+describe('R2Storage.presignGet', () => {
+  it('signs a GET URL with response-content-disposition (ASCII filename), response-content-type, and X-Amz-Expires', async () => {
+    const storage = new R2Storage(realClient(), BUCKET);
+    const url = await storage.presignGet('att-1', {
+      filename: 'rfp.pdf',
+      mime: 'application/pdf',
+      expiresInSeconds: 300,
+    });
+
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get('X-Amz-Expires')).toBe('300');
+    expect(parsed.searchParams.get('response-content-type')).toBe(
+      'application/pdf',
+    );
+    const disposition = parsed.searchParams.get(
+      'response-content-disposition',
+    );
+    expect(disposition).toBe(
+      `inline; filename="rfp.pdf"; filename*=UTF-8''rfp.pdf`,
+    );
+    expect(parsed.pathname).toBe(`/${BUCKET}/attachments/att-1`);
+  });
+
+  it('encodes a Korean filename via filename* in response-content-disposition', async () => {
+    const storage = new R2Storage(realClient(), BUCKET);
+    const url = await storage.presignGet('att-2', {
+      filename: '견적서.pdf',
+      mime: 'application/pdf',
+      expiresInSeconds: 300,
+    });
+
+    const parsed = new URL(url);
+    const disposition = parsed.searchParams.get(
+      'response-content-disposition',
+    );
+    expect(disposition).toBe(
+      `inline; filename="___.pdf"; filename*=UTF-8''${encodeURIComponent('견적서.pdf')}`,
+    );
+  });
+
+  it('defaults disposition to inline, honors explicit attachment', async () => {
+    const storage = new R2Storage(realClient(), BUCKET);
+    const url = await storage.presignGet('att-3', {
+      filename: 'a.pdf',
+      mime: 'application/pdf',
+      expiresInSeconds: 300,
+      disposition: 'attachment',
+    });
+
+    const parsed = new URL(url);
+    const disposition = parsed.searchParams.get(
+      'response-content-disposition',
+    );
+    expect(disposition?.startsWith('attachment;')).toBe(true);
   });
 });

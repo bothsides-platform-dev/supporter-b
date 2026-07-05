@@ -18,6 +18,26 @@ export interface ReadRange {
   end?: number;
 }
 
+/** Options for `presignPut` — a client-direct upload URL. `size` and `mime`
+ *  are baked into the signature (`Content-Length`/`Content-Type` signed
+ *  headers) so a client can't PUT a different byte count or type than it
+ *  declared without invalidating the signature. */
+export interface PresignPutOptions {
+  mime: string;
+  size: number;
+  expiresInSeconds: number;
+}
+
+/** Options for `presignGet` — a client-direct download URL. `filename`
+ *  drives the `Content-Disposition` the browser sees on download;
+ *  `disposition` defaults to `'inline'` (preview iframes need inline). */
+export interface PresignGetOptions {
+  filename: string;
+  mime: string;
+  expiresInSeconds: number;
+  disposition?: 'inline' | 'attachment';
+}
+
 export interface Storage {
   /** Persist `buffer` at `key`. Mime is recorded in the attachment row
    *  (not relied on at read time); the R2 backend stores it as the object's
@@ -35,4 +55,13 @@ export interface Storage {
   /** Best-effort delete; ENOENT is swallowed so cleanup paths after
    *  failed inserts don't double-fault. */
   delete(key: string): Promise<void>;
+  /** Cheap metadata probe — total object size, no body transfer. Missing
+   *  keys throw with `code: 'ENOENT'`, same contract as `read`. */
+  head(key: string): Promise<{ size: number }>;
+  /** Mint a time-limited URL the client can `PUT` bytes to directly,
+   *  bypassing the app proxy. */
+  presignPut(key: string, opts: PresignPutOptions): Promise<string>;
+  /** Mint a time-limited URL the client can `GET` bytes from directly,
+   *  bypassing the app proxy. */
+  presignGet(key: string, opts: PresignGetOptions): Promise<string>;
 }

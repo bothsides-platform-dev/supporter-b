@@ -11,7 +11,13 @@
  * R2Storage-or-throw in every environment, with no fallback backend.
  * This is a pure test double, wired in only via `__setStorageForTest`.
  */
-import type { ReadRange, Storage } from './types';
+import type {
+  PresignGetOptions,
+  PresignPutOptions,
+  ReadRange,
+  Storage,
+} from './types';
+import { contentDispositionHeader } from './content-disposition';
 
 class EnoentError extends Error {
   code = 'ENOENT' as const;
@@ -61,5 +67,38 @@ export class InMemoryStorage implements Storage {
 
   async delete(key: string): Promise<void> {
     this.store.delete(key);
+  }
+
+  async head(key: string): Promise<{ size: number }> {
+    const entry = this.store.get(key);
+    if (!entry) throw new EnoentError(key);
+    return { size: entry.buffer.length };
+  }
+
+  /** Deterministic fake URL — no real network involved. Just enough
+   *  structure (query params) for route/e2e tests to assert against
+   *  without depending on the real R2Storage signing implementation. */
+  async presignPut(key: string, opts: PresignPutOptions): Promise<string> {
+    const params = new URLSearchParams({
+      mime: opts.mime,
+      size: String(opts.size),
+      expires: String(opts.expiresInSeconds),
+    });
+    return `memory://put/${encodeURIComponent(key)}?${params.toString()}`;
+  }
+
+  async presignGet(key: string, opts: PresignGetOptions): Promise<string> {
+    const disposition = opts.disposition ?? 'inline';
+    const params = new URLSearchParams({
+      filename: opts.filename,
+      mime: opts.mime,
+      expires: String(opts.expiresInSeconds),
+      disposition,
+      'content-disposition': contentDispositionHeader(
+        opts.filename,
+        disposition,
+      ),
+    });
+    return `memory://get/${encodeURIComponent(key)}?${params.toString()}`;
   }
 }
