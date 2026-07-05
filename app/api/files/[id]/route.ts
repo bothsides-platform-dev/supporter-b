@@ -43,6 +43,7 @@ import {
   type RepoBundleForAttachment,
 } from '@/lib/server/storage/permissions';
 import { getStorage } from '@/lib/server/storage';
+import { contentDispositionHeader } from '@/lib/server/storage/content-disposition';
 import {
   getBidNoteRepo,
   getBidRepo,
