@@ -368,7 +368,7 @@ export class RfpService {
 
       await this.pgRequestRepo.markDecided(req.id, 'rejected', actor.userId, now, tx);
 
-      const rejectRecipients = (await this.workspaceRepo.memberRecipients(req.pgWsId, tx)).map((m) => ({
+      const rejectRecipients = (await this.workspaceRepo.approvedMemberRecipients(req.pgWsId, tx)).map((m) => ({
         userId: m.userId,
         workspaceId: req.pgWsId,
         email: m.email,
@@ -431,7 +431,7 @@ export class RfpService {
 
       const pgWsName = (await this.workspaceRepo.getName(actor.workspaceId, tx)) ?? 'PG사';
 
-      const createReqRecipients = (await this.workspaceRepo.memberRecipients(rfpRow.buyerWsId, tx)).map((m) => ({
+      const createReqRecipients = (await this.workspaceRepo.approvedMemberRecipients(rfpRow.buyerWsId, tx)).map((m) => ({
         userId: m.userId,
         workspaceId: rfpRow.buyerWsId,
         email: m.email,
@@ -534,7 +534,7 @@ export class RfpService {
         }
       }
 
-      const acceptRecipients = (await this.workspaceRepo.memberRecipients(req.pgWsId, tx)).map((m) => ({
+      const acceptRecipients = (await this.workspaceRepo.approvedMemberRecipients(req.pgWsId, tx)).map((m) => ({
         userId: m.userId,
         workspaceId: req.pgWsId,
         email: m.email,
@@ -688,9 +688,9 @@ export class RfpService {
           inviteUrl,
         });
 
+        // memberRecipientsBatch가 이미 승인된 멤버만 반환하므로 별도 필터가 불필요.
         const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
-        const emailTargets = wsMembers.filter((m) => m.approvalStatus === 'approved');
-        for (const member of emailTargets) {
+        for (const member of wsMembers) {
           await notify(tx, {
             recipients: [{ userId: member.userId, workspaceId: draft.pgWsId, email: member.email }],
             channels: ['email'],
@@ -1016,7 +1016,7 @@ export class RfpService {
             });
           }
 
-          const inviteRecipients = (await this.workspaceRepo.memberRecipients(pgWsId, tx)).map((m) => ({
+          const inviteRecipients = (await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx)).map((m) => ({
             userId: m.userId,
             workspaceId: pgWsId,
             email: m.email,

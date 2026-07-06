@@ -280,42 +280,6 @@ describe('DrizzleWorkspaceRepository', () => {
     });
   });
 
-  describe('memberRecipients', () => {
-    it('returns userId + email for every member', async () => {
-      const ws = await seedPgWorkspace(db, 'recip.test');
-      const u1 = await seedUser(db, { email: 'r1@recip.test' });
-      const u2 = await seedUser(db, { email: 'r2@recip.test' });
-      await seedMembership(db, ws.id, u1.id, 'admin');
-      await seedMembership(db, ws.id, u2.id, 'member');
-
-      const recipients = await repo.memberRecipients(ws.id);
-      expect(recipients).toHaveLength(2);
-      expect(recipients).toEqual(
-        expect.arrayContaining([
-          { userId: u1.id, email: 'r1@recip.test' },
-          { userId: u2.id, email: 'r2@recip.test' },
-        ]),
-      );
-    });
-
-    it('returns empty array for a workspace with no members', async () => {
-      const ws = await seedBuyerWorkspace(db);
-      expect(await repo.memberRecipients(ws.id)).toEqual([]);
-    });
-
-    it('does not include members of a different workspace', async () => {
-      const wsA = await seedPgWorkspace(db, 'recip-a.com');
-      const wsB = await seedPgWorkspace(db, 'recip-b.com');
-      const uA = await seedUser(db, { email: 'a@recip-a.com' });
-      const uB = await seedUser(db, { email: 'b@recip-b.com' });
-      await seedMembership(db, wsA.id, uA.id);
-      await seedMembership(db, wsB.id, uB.id);
-
-      const recipients = await repo.memberRecipients(wsA.id);
-      expect(recipients).toEqual([{ userId: uA.id, email: 'a@recip-a.com' }]);
-    });
-  });
-
   describe('findActiveById', () => {
     it('returns id + type for an active workspace', async () => {
       const ws = await seedPgWorkspace(db, 'active.test');
@@ -1182,12 +1146,15 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(await repo.countAdmins(ws.id)).toBe(1);
     });
 
-    it('memberRecipientsBatch includes approvalStatus', async () => {
+    it('memberRecipientsBatch excludes pending-approval members entirely (approved only)', async () => {
       const ws = await seedBuyerWorkspace(db);
+      const a = await seedUser(db, { email: 'a@batch.test' });
       const p = await seedUser(db, { email: 'p@batch.test' });
+      await seedMembership(db, ws.id, a.id, 'admin');
       await seedMembership(db, ws.id, p.id, 'admin', { approvalStatus: 'pending_approval' });
       const rows = await repo.memberRecipientsBatch([ws.id]);
-      expect(rows.find((r) => r.userId === p.id)?.approvalStatus).toBe('pending_approval');
+      expect(rows.find((r) => r.userId === a.id)?.approvalStatus).toBe('approved');
+      expect(rows.find((r) => r.userId === p.id)).toBeUndefined();
     });
 
     it('listMembershipsWithMembers includes approvalStatus per member', async () => {

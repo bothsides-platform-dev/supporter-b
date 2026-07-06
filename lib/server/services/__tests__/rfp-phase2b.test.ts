@@ -32,6 +32,7 @@ import {
   rfpPgRequests,
   rfps,
   bizProfiles,
+  notifications,
   outboxEntries,
 } from '@/lib/db/schema';
 import { RfpService } from '../rfp';
@@ -515,6 +516,28 @@ describe('RfpService.sendDraftInvitations', () => {
     expect(invitedEmails).toContain('pg@senddraft.com'); // admin
     expect(invitedEmails).toContain('member@senddraft.com'); // approved member
     expect(invitedEmails).not.toContain('pending@senddraft.com'); // pending-approval member excluded
+  });
+
+  it('승인 대기(pending_approval) PG 멤버에게는 rfp.invited 인앱 알림을 보내지 않는다', async () => {
+    const env = await seedSendDraftEnv();
+    const pendingMember = await seedUser(db, { email: 'pending-inapp@senddraft.com' });
+    await seedMembership(db, env.pgWsId, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    await db.insert(rfpAllowedPg).values({ rfpId: env.rfpId, pgWsId: env.pgWsId });
+    const invId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: invId, rfpId: env.rfpId, pgWsId: env.pgWsId,
+      tokenHash: `draft-${invId}`, sentAt: new Date(), expiresAt: new Date(Date.now() + 7 * 86400_000), status: 'draft',
+    });
+
+    const result = await service.sendDraftInvitations(env.rfpCode, { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+    expect(result).toMatchObject({ ok: true, sentCount: 1 });
+
+    const pendingNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, pendingMember.id), eq(notifications.type, 'rfp.invited')));
+    expect(pendingNotifs).toHaveLength(0);
   });
 });
 

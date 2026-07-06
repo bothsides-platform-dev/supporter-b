@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
@@ -134,6 +135,34 @@ describe('ChatService.sendMessage', () => {
     const outbox = await db.select().from(outboxEntries);
     expect(outbox.length).toBeGreaterThan(0);
     expect(outbox[0].event).toBe('chat.message');
+  });
+
+  it('does not notify a pending-approval counterparty member (in-app or email)', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    const pendingMember = await seedUser(db, { email: 'pending@chat.com', name: '대기' });
+    await seedMembership(db, pgWs.id, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const result = await service.sendMessage(
+      {
+        counterpartyWorkspaceId: pgWs.id,
+        body: '대기 멤버 제외 테스트',
+        attachmentIds: [],
+      },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+
+    expect(result.ok).toBe(true);
+    const notifs = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, pendingMember.id));
+    expect(notifs).toHaveLength(0);
+
+    const outbox = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'pending@chat.com'));
+    expect(outbox).toHaveLength(0);
   });
 
   it('reuses an existing conversation for the same buyer↔PG pair', async () => {

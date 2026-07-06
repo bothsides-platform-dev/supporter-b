@@ -47,7 +47,7 @@ describe('DrizzleWorkspaceRepository — 알림 수신자는 master 계정 포�
     expect(map.get(ws.id)).not.toContain(demo.id);
   });
 
-  it('memberRecipients: master 포함, 데모 placeholder 제외', async () => {
+  it('approvedMemberRecipients: master 포함, 데모 placeholder 제외', async () => {
     const ws = await seedBuyerWorkspace(db);
     const master = await seedUser(db, { name: '운영자', email: 'ops@real.com', isSystemAccount: true });
     const demo = await seedUser(db, {
@@ -59,7 +59,7 @@ describe('DrizzleWorkspaceRepository — 알림 수신자는 master 계정 포�
     await seedMembership(db, ws.id, master.id, 'admin');
     await seedMembership(db, ws.id, demo.id, 'member');
 
-    const recipients = await repo.memberRecipients(ws.id);
+    const recipients = await repo.approvedMemberRecipients(ws.id);
     const userIds = recipients.map((r) => r.userId);
 
     expect(userIds).toContain(master.id);
@@ -83,5 +83,19 @@ describe('DrizzleWorkspaceRepository — 알림 수신자는 master 계정 포�
 
     expect(userIds).toContain(master.id);
     expect(userIds).not.toContain(demo.id);
+  });
+
+  it('memberRecipientsBatch: 승인 대기(pending_approval) 멤버는 제외', async () => {
+    const ws = await seedBuyerWorkspace(db);
+    const approved = await seedUser(db, { name: '승인됨', email: 'approved3@real.com' });
+    const pending = await seedUser(db, { name: '대기중', email: 'pending3@real.com' });
+    await seedMembership(db, ws.id, approved.id, 'admin');
+    await seedMembership(db, ws.id, pending.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const rows = await repo.memberRecipientsBatch([ws.id]);
+    const userIds = rows.map((r) => r.userId);
+
+    expect(userIds).toContain(approved.id);
+    expect(userIds).not.toContain(pending.id);
   });
 });

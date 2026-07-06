@@ -233,13 +233,11 @@ export interface WorkspaceRepo {
   ): Promise<
     { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null } | undefined
   >;
-  /** 알림·이메일 팬아웃 대상 (멤버 userId+email). 시스템 계정 제외. 순서 미보장. */
-  memberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
-  /** 승인된(approvalStatus='approved') 멤버 전원 팬아웃 대상 (userId+email), role 무관. 시스템 계정 제외. 견적 요청 초대 메일 발송 대상. 순서 미보장. */
+  /** 승인된(approvalStatus='approved') 멤버 전원 팬아웃 대상 (userId+email), role 무관. 시스템 계정 제외. 인앱/이메일 알림 발송 대상. 순서 미보장. */
   approvedMemberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
   /**
-   * 여러 워크스페이스의 멤버를 (workspaceId, userId, role, email) 평면 목록으로 배치 조회.
-   * 시스템 계정 제외. 빈 입력은 빈 배열. 초대 일괄 발송(멤버 알림 + 승인된 멤버 전원 메일)용.
+   * 여러 워크스페이스의 승인된(approvalStatus='approved') 멤버를 (workspaceId, userId, role, email)
+   * 평면 목록으로 배치 조회. 시스템 계정 제외. 빈 입력은 빈 배열. 초대 일괄 발송(멤버 알림 + 메일)용.
    */
   memberRecipientsBatch(
     wsIds: string[],

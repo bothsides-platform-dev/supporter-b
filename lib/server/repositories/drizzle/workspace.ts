@@ -389,23 +389,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     };
   }
 
-  async memberRecipients(
-    workspaceId: string,
-    tx?: Tx,
-  ): Promise<{ userId: string; email: string }[]> {
-    const db = this.h(tx);
-    return (await db
-      .select({ userId: workspaceMembers.userId, email: usersTable.email })
-      .from(workspaceMembers)
-      .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaceId),
-          notifiableAccount,
-        ),
-      )) as { userId: string; email: string }[];
-  }
-
   async approvedMemberRecipients(
     workspaceId: string,
     tx?: Tx,
@@ -445,6 +428,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(
         and(
           inArray(workspaceMembers.workspaceId, wsIds),
+          eq(workspaceMembers.approvalStatus, 'approved'),
           notifiableAccount,
         ),
       )) as {

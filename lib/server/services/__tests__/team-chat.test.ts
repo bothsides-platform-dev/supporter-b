@@ -386,6 +386,31 @@ describe('TeamChatService.sendMessage — notification fan-out', () => {
     expect(masterNotifs).toHaveLength(1);
   });
 
+  it('승인 대기(pending_approval) 멤버에게는 인앱/이메일 알림 모두 보내지 않는다', async () => {
+    const me = await seedUser(db, { email: 'me-pending-tc@b.com', name: '나' });
+    const pending = await seedUser(db, { email: 'pending-tc@b.com', name: '대기중' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, pending.id, 'member', { approvalStatus: 'pending_approval' });
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+    const svc = await buildService();
+    const actorMe: TeamChatActor = { userId: me.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    await svc.sendMessage({ rfpId: rfp.id, body: '팀 메모' }, actorMe);
+
+    const pendingNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, pending.id), eq(notifications.type, 'team_chat.message')));
+    expect(pendingNotifs).toHaveLength(0);
+
+    const pendingEmails = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'pending-tc@b.com'));
+    expect(pendingEmails).toHaveLength(0);
+  });
+
   it('enqueues a coalesced team_chat.message email digest row to teammates on send', async () => {
     const me = await seedUser(db, { email: 'me@b.com', name: '나' }); // author
     const mate = await seedUser(db, { email: 'mate@b.com', name: '동료' }); // recipient
