@@ -4,6 +4,7 @@ import { ActionQueue } from './ActionQueue';
 import { RecentMessagesPanel } from './RecentMessagesPanel';
 import { HomeHeaderActionsRegistrar } from './HomeHeaderActionsRegistrar';
 import { OpportunityList } from '@/components/opportunities/OpportunityList';
+import { SampleEntryCard } from '@/components/onboarding/SampleEntryCard';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,11 +26,13 @@ export function HomeDashboard({
   workspaceType,
   items,
   unreadCount,
+  showSampleEntry,
 }: {
   dashboard: Dashboard;
   workspaceType: 'buyer' | 'pg';
   items: InboxListItem[];
   unreadCount: number;
+  showSampleEntry?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -45,6 +48,7 @@ export function HomeDashboard({
               <Button size="lg" fullWidth icon={<PlusIcon />}>견적 요청하기</Button>
             </Link>
           )}
+          {showSampleEntry && <SampleEntryCard variant={workspaceType} />}
           {dashboard.groups.length > 0 ? (
             <ActionQueue groups={dashboard.groups} />
           ) : (

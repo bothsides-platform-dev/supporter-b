@@ -9,6 +9,11 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 // (pulled transitively via the OpportunityRequestDialog in the discovery section).
 vi.mock('@/lib/server/actions/rfp', () => ({ createPgRequestAction: vi.fn() }));
 vi.mock('@/lib/features/open-board', () => ({ OPEN_BOARD_ENABLED: true }));
+// SampleEntryCard (rendered when showSampleEntry) calls this server action on
+// dismiss; mock it so the jsdom suite doesn't transitively pull next-auth.
+vi.mock('@/lib/server/actions/onboarding/updateOnboardingAction', () => ({
+  updateOnboardingAction: vi.fn(async () => ({ ok: true as const })),
+}));
 
 import { HomeDashboard } from '../HomeDashboard';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
@@ -95,5 +100,47 @@ describe('HomeDashboard', () => {
     const cta = screen.getByRole('link', { name: /견적 요청하기/ });
     // CTA must FOLLOW the KPI link in document order (it currently precedes it → RED).
     expect(kpi.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('showSampleEntry=true인 buyer는 CTA 다음, ActionQueue 이전에 SampleEntryCard(variant=buyer)를 렌더한다', () => {
+    render(
+      <HomeDashboard
+        dashboard={withGroups}
+        workspaceType="buyer"
+        items={[]}
+        unreadCount={0}
+        showSampleEntry
+      />,
+    );
+    const cta = screen.getByRole('link', { name: /견적 요청하기/ });
+    const sample = screen.getByText('샘플로 둘러보기');
+    const actionItem = screen.getByRole('link', { name: /A/ });
+    expect(sample).toBeInTheDocument();
+    expect(cta.compareDocumentPosition(sample) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sample.compareDocumentPosition(actionItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('showSampleEntry=true인 pg는 KPI strip 다음에 SampleEntryCard(variant=pg)를 렌더한다', () => {
+    render(
+      <HomeDashboard
+        dashboard={withGroups}
+        workspaceType="pg"
+        items={[]}
+        unreadCount={0}
+        showSampleEntry
+      />,
+    );
+    const kpi = screen.getByRole('link', { name: /진행중/ });
+    const sample = screen.getByText('샘플로 둘러보기');
+    expect(sample).toBeInTheDocument();
+    expect(kpi.compareDocumentPosition(sample) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 링크의 접근성 이름은 title+description 두 <p>가 합쳐진 전체 텍스트라 정확한 문자열이 아닌
+    // 정규식으로 부분 매치한다 (SampleEntryCard 자체 테스트도 이름 매칭 없이 getByRole('link')만 사용).
+    expect(screen.getByRole('link', { name: /샘플로 둘러보기/ })).toHaveAttribute('href', '/inbox/sample');
+  });
+
+  it('showSampleEntry가 false/미지정이면 SampleEntryCard를 렌더하지 않는다', () => {
+    render(<HomeDashboard dashboard={withGroups} workspaceType="buyer" items={[]} unreadCount={0} />);
+    expect(screen.queryByText('샘플로 둘러보기')).not.toBeInTheDocument();
   });
 });

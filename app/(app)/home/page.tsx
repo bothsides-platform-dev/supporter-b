@@ -23,7 +23,7 @@ export default async function HomePage({
       <>
         {notice === 'pg-rfp-blocked' && <PgRfpBlockedToast />}
         <Suspense fallback={<div className="px-8 py-10"><HomeDashboardSkeleton /></div>}>
-          <PgHome workspaceId={session.user.workspaceId} />
+          <PgHome workspaceId={session.user.workspaceId} userId={session.user.id} />
         </Suspense>
       </>
     );
@@ -32,7 +32,7 @@ export default async function HomePage({
   if (session.user.workspaceType === 'buyer' && session.user.workspaceId) {
     return (
       <Suspense fallback={<div className="px-8 py-10"><HomeDashboardSkeleton /></div>}>
-        <BuyerHome workspaceId={session.user.workspaceId} />
+        <BuyerHome workspaceId={session.user.workspaceId} userId={session.user.id} />
       </Suspense>
     );
   }
