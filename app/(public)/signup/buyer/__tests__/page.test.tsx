@@ -134,7 +134,7 @@ describe('BuyerSignupEmailPage — 회사 이메일 권장 안내', () => {
 
     await user.type(screen.getByLabelText('이메일'), 'kim@gmail.com');
 
-    expect(screen.getByText(/개인 이메일이에요/)).toBeInTheDocument();
+    expect(screen.getByText(/별도 심사 과정이 추가될 수 있어요/)).toBeInTheDocument();
   });
 
   it('취득 이메일 에러가 표시되면 안내를 숨긴다', async () => {
@@ -148,7 +148,7 @@ describe('BuyerSignupEmailPage — 회사 이메일 권장 안내', () => {
     await waitFor(() => {
       expect(screen.getByText(/이미 가입된 이메일입니다/)).toBeInTheDocument();
     });
-    expect(screen.queryByText(/개인 이메일이에요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/별도 심사 과정이 추가될 수 있어요/)).not.toBeInTheDocument();
   });
 
   it('마스터/운영자 이메일 에러가 표시되면 안내를 숨긴다', async () => {
@@ -162,7 +162,7 @@ describe('BuyerSignupEmailPage — 회사 이메일 권장 안내', () => {
     await waitFor(() => {
       expect(screen.getByText(/이 이메일로는 가입할 수 없어요/)).toBeInTheDocument();
     });
-    expect(screen.queryByText(/개인 이메일이에요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/별도 심사 과정이 추가될 수 있어요/)).not.toBeInTheDocument();
     expect(screen.queryByText('회사 이메일로 가입하면 팀원과 함께 쓰기 쉬워요.')).not.toBeInTheDocument();
   });
 });

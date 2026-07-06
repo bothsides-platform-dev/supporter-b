@@ -33,7 +33,7 @@ export function SignupEmailGuide({ email, hidden }: SignupEmailGuideProps) {
       {warning ? (
         <>
           <TriangleAlert aria-hidden="true" className="mt-[1px] size-3 shrink-0" strokeWidth={2} />
-          <span>개인 이메일이에요. 회사 이메일로 가입하면 팀원과 함께 쓰기 쉬워요.</span>
+          <span>기업 메일 없는 사업장이나 공동 도메인 이메일이 없는 분들은 별도 심사 과정이 추가될 수 있어요.</span>
         </>
       ) : (
         '회사 이메일로 가입하면 팀원과 함께 쓰기 쉬워요.'

@@ -124,7 +124,7 @@ describe('PgSignupEmailPage — 초대 경로 blur 검사 스킵', () => {
     });
     render(<PgSignupEmailPage />);
 
-    expect(screen.queryByText(/개인 이메일이에요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/별도 심사 과정이 추가될 수 있어요/)).not.toBeInTheDocument();
     expect(screen.queryByText(/회사 이메일로 가입하면/)).not.toBeInTheDocument();
   });
 });
@@ -138,7 +138,7 @@ describe('PgSignupEmailPage — 회사 이메일 권장 안내 (비초대)', () 
 
     await user.type(screen.getByLabelText('이메일'), 'kim@naver.com');
 
-    expect(screen.getByText(/개인 이메일이에요/)).toBeInTheDocument();
+    expect(screen.getByText(/별도 심사 과정이 추가될 수 있어요/)).toBeInTheDocument();
   });
 
   it('마스터/운영자 이메일 에러가 표시되면 안내를 숨긴다', async () => {
@@ -152,7 +152,7 @@ describe('PgSignupEmailPage — 회사 이메일 권장 안내 (비초대)', () 
     await waitFor(() => {
       expect(screen.getByText(/이 이메일로는 가입할 수 없어요/)).toBeInTheDocument();
     });
-    expect(screen.queryByText(/개인 이메일이에요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/별도 심사 과정이 추가될 수 있어요/)).not.toBeInTheDocument();
     expect(screen.queryByText('회사 이메일로 가입하면 팀원과 함께 쓰기 쉬워요.')).not.toBeInTheDocument();
   });
 });
