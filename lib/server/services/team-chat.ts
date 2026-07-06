@@ -222,7 +222,7 @@ export class TeamChatService {
               body: '',
               email: {
                 event: 'team_chat.message',
-                subject: '[Supporter B] 새 팀 메시지',
+                subject: '[서포트 B] 새 팀 메시지',
                 html: '<p>새 팀 메시지가 있어요.</p>', // placeholder — processor recomputes at send
                 dedupeKey: () => teamDigestDedupeKey(input.rfpId, actor.workspaceId, memberId, now),
                 scheduledAt: teamDigestWindowEnd(now),

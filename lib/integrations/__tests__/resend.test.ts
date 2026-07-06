@@ -31,7 +31,7 @@ function makeEntry(overrides?: Partial<OutboxEntry>): OutboxEntry {
     id: 'entry-id',
     event: 'auth.verify',
     to: 'kim@toss.im',
-    subject: 'Supporter B 인증',
+    subject: '서포트 B 인증',
     html: '<a href="https://x.test/v?t=1">click</a>',
     dedupeKey: 'signup-verify:kim@toss.im:0',
     status: 'pending',
@@ -104,7 +104,7 @@ describe('ResendSender', () => {
       {
         from: 'noreply@bidit.test',
         to: 'kim@toss.im',
-        subject: 'Supporter B 인증',
+        subject: '서포트 B 인증',
         html: expect.stringContaining('<a'),
       },
       // Idempotency key = the outbox row id, so a crash/DB-failure after a
@@ -308,7 +308,7 @@ describe('ResendBatchSender', () => {
     expect(payload[0]).toEqual({
       from: 'noreply@bidit.test',
       to: 'a@e.com',
-      subject: 'Supporter B 인증',
+      subject: '서포트 B 인증',
       html: expect.stringContaining('<a'),
     });
     expect(opts.batchValidation).toBe('permissive');

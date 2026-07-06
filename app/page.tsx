@@ -30,8 +30,8 @@ const faqPageJsonLd = {
 const softwareApplicationJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
-  name: '서포터비 (Supporter B)',
-  alternateName: ['Supporter B', '서포터비'],
+  name: '서포트 B',
+  alternateName: ['서포트 B'],
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'Web',
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'KRW' },
