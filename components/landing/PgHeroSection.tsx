@@ -1,13 +1,13 @@
 import { ConsultButton } from './ConsultButton';
 import { LandingHeroSection } from './LandingHeroSection';
-import { HeroKineticHeadline } from './hero/HeroKineticHeadline';
+import { BrandWordB, HeroKineticHeadline } from './hero/HeroKineticHeadline';
 import { PgHeroProductWindow } from './hero/PgHeroProductWindow';
 
 // PG 파트너 히어로 — 구매사 히어로와 동일한 핀 씬(다크 오프닝 ASCII → 제품 창 부상 → 라이트
 // 리빌 → 헤더 톤 스위치)을 PG 카피·CTA·목업으로 재사용한다. 씬 튜닝은 HeroPinnedScene 이
 // 단일 소유. 여기선 콘텐츠 슬롯만 주입한다.
 // 랜딩/마케팅 면이라 '경쟁 입찰' 프레이밍 허용(CLAUDE.md). '만나세요' = 인바운드 수신 강조.
-const PG_LINE1_WORDS = ['Supporter', 'B로'];
+const PG_LINE1_WORDS = ['서포트', <BrandWordB key="b" particle="로" />];
 const PG_PHRASES = [
   '확실한 니즈의 고객사를',
   '검증된 영업 기회를',

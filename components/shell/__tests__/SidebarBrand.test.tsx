@@ -36,17 +36,17 @@ import { SidebarBrand } from '../SidebarBrand';
 afterEach(cleanup);
 
 describe('SidebarBrand', () => {
-  it('renders the Supporter B wordmark as a /home link with the icon mark', () => {
+  it('renders the 서포트 B wordmark as a /home link with the icon mark', () => {
     render(
       <SidebarProvider>
         <SidebarBrand />
       </SidebarProvider>,
     );
 
-    const link = screen.getByRole('link', { name: 'Supporter B 홈' });
+    const link = screen.getByRole('link', { name: '서포트 B 홈' });
     expect(link.getAttribute('href')).toBe('/home');
     // wordmark is split into per-character spans; concatenated text is preserved
-    expect(link.textContent).toContain('Supporter B');
+    expect(link.textContent).toContain('서포트 B');
     // icon mark is rendered inline
     expect(link.querySelector('svg')).not.toBeNull();
   });
