@@ -189,7 +189,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
       const r = await signupCompleteAction({ ...BASE, phoneVerificationId: verificationId });
       expect(r.ok).toBe(true);
       const arg = notifyMock.mock.calls[0][0] as { reviewUrl: string };
-      expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.supporter-b\.com\/admin\/review\//);
+      expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.support-b\.com\/admin\/review\//);
     } finally {
       if (saved === undefined) delete process.env.ADMIN_ORIGIN;
       else process.env.ADMIN_ORIGIN = saved;

@@ -32,9 +32,9 @@ describe('isMasterEmail', () => {
   });
 
   it('대소문자를 무시하고 매칭한다', () => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'Help@Supporter-B.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'Help@Support-B.com';
     expect(isMasterEmail('help@support-b.com')).toBe(true);
-    expect(isMasterEmail('HELP@SUPPORTER-B.COM')).toBe(true);
+    expect(isMasterEmail('HELP@SUPPORT-B.COM')).toBe(true);
   });
 
   it('이메일 사이 공백을 정규화한다', () => {

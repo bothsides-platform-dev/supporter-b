@@ -20,7 +20,7 @@ describe('hostServes', () => {
     expect(hostServes('partner.support-b.com', PROD)).toBe('pg');
   });
   it('ignores the port and is case-insensitive', () => {
-    expect(hostServes('Partner.Supporter-B.com:443', PROD)).toBe('pg');
+    expect(hostServes('Partner.Support-B.com:443', PROD)).toBe('pg');
   });
   it('returns null for an unknown host (IP, preview domain)', () => {
     expect(hostServes('52.78.126.178', PROD)).toBeNull();

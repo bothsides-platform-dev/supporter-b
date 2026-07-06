@@ -57,7 +57,7 @@ describe('resolveMasterUser (auto-provision + workspace resolution)', () => {
   }
 
   it('최초 로그인 시 마스터 users 행을 자동 생성한다 (이메일 정규화·emailVerified·name)', async () => {
-    const r = await resolveMasterUser(db, 'OPS@Supporter-B.com', '운영자');
+    const r = await resolveMasterUser(db, 'OPS@Support-B.com', '운영자');
 
     const rows = await db.select().from(users);
     expect(rows).toHaveLength(1);
