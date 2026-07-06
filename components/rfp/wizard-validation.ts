@@ -13,7 +13,7 @@ import {
   isDeadlineValid,
   isContractTypeValid,
   isMainProductsValid,
-  isAnnualPgVolumeValid,
+  isAnnualPgVolumeSatisfied,
 } from '@/lib/rfp/required-fields';
 
 export type WizardValidationDraft = {
@@ -38,7 +38,7 @@ function isStepComplete(num: number, draft: WizardValidationDraft): boolean {
         isWebsiteValid(draft.websiteUrl) &&
         isContractTypeValid(draft.contractType) &&
         isMainProductsValid(draft.mainProducts) &&
-        isAnnualPgVolumeValid(draft.annualPgVolume) &&
+        isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType) &&
         isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods)
       );
     case 3:
@@ -61,7 +61,7 @@ function hintFor(num: number, draft: WizardValidationDraft): string {
       if (!isWebsiteValid(draft.websiteUrl)) return '홈페이지 주소 형식을 확인해주세요';
       if (!isContractTypeValid(draft.contractType)) return '견적 유형을 선택해주세요';
       if (!isMainProductsValid(draft.mainProducts)) return '주요 판매 상품을 입력해주세요';
-      if (!isAnnualPgVolumeValid(draft.annualPgVolume)) return '전년도 연간 PG 총 거래액을 입력해주세요';
+      if (!isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType)) return '전년도 연간 PG 총 거래액을 입력해주세요';
       return '견적 받을 결제수단을 1개 이상 선택해주세요';
     case 3:
       return 'PG를 1개 이상 선택해주세요';
