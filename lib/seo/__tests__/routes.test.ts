@@ -36,7 +36,7 @@ describe('GET /llms.txt', () => {
     expect(res.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=3600');
     expect(res.headers.get('vary')).toBe('Host');
     const body = await res.text();
-    expect(body.startsWith('# Supporter B')).toBe(true);
+    expect(body.startsWith('# 서포트 B')).toBe(true);
     expect(body).toContain('https://supporter-b.com/signup/buyer');
   });
 

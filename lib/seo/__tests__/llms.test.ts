@@ -16,7 +16,7 @@ it('exports TEXT_PLAIN_HEADERS with correct response header values', () => {
 describe('buildLlmsTxt', () => {
   it('starts with the product H1 and a blockquote summary (spec shape)', () => {
     const out = buildLlmsTxt(BUYER);
-    expect(out.startsWith('# Supporter B')).toBe(true);
+    expect(out.startsWith('# 서포트 B')).toBe(true);
     // exactly one H1
     expect(out.match(/^# /gm)?.length).toBe(1);
     expect(out).toMatch(/^> /m); // blockquote summary line
@@ -40,7 +40,7 @@ describe('buildLlmsTxt', () => {
 
   it('pg file carries PG facts and pg absolute URLs', () => {
     const out = buildLlmsTxt(PG);
-    expect(out.startsWith('# Supporter B')).toBe(true);
+    expect(out.startsWith('# 서포트 B')).toBe(true);
     expect(out).toMatch(/인바운드|검증된 리드|영업/);
     expect(out).toContain('https://partner.supporter-b.com/signup/pg');
     expect(out).toContain('https://partner.supporter-b.com/llms-full.txt');
@@ -85,7 +85,7 @@ describe('buildLlmsFullTxt', () => {
     expect(out).toContain(FAQ_ITEMS[0].q);
     expect(out).toContain(FAQ_ITEMS[0].a);
     expect(out).toMatch(/^## /m); // markdown section headings
-    expect(out.startsWith('# Supporter B')).toBe(true);
+    expect(out.startsWith('# 서포트 B')).toBe(true);
   });
 
   it('pg full file embeds the canonical PG FAQ verbatim', () => {

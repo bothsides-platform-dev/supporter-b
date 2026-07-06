@@ -15,7 +15,7 @@ export function Footer() {
           {/* Brand */}
           <div className="flex flex-col gap-3">
             <span className="font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              SUPPORTER B CORP.
+              서포트 B CORP.
             </span>
             <p className="font-sans text-[13px] leading-relaxed max-w-[260px] text-[var(--md-sys-color-on-surface-variant)]">
               PG사 영업담당자와 구매사를 연결하는
@@ -89,7 +89,7 @@ export function Footer() {
         {/* Bottom row: copyright + theme */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <span className="font-mono text-[11px] text-[var(--md-sys-color-outline)]">
-            © {year} SUPPORTER B CORP. ALL RIGHTS RESERVED.
+            © {year} 서포트 B CORP. ALL RIGHTS RESERVED.
           </span>
           <ThemeToggle />
         </div>
