@@ -509,15 +509,15 @@ export class RfpService {
           .replace('T', ' ')
           .slice(0, 16);
         const emailRows = await this.workspaceRepo.approvedMemberRecipients(req.pgWsId, tx);
+        const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
+        const html = await renderRfpInvited({
+          rfpId: rfpRow.code,
+          rfpTitle: rfpRow.title,
+          buyerName,
+          deadline: deadlineDisplay,
+          inviteUrl,
+        });
         for (const member of emailRows) {
-          const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
-          const html = await renderRfpInvited({
-            rfpId: rfpRow.code,
-            rfpTitle: rfpRow.title,
-            buyerName,
-            deadline: deadlineDisplay,
-            inviteUrl,
-          });
           await notify(tx, {
             recipients: [{ userId: member.userId, workspaceId: req.pgWsId, email: member.email }],
             channels: ['email'],
@@ -992,15 +992,15 @@ export class RfpService {
           );
 
           const emailRows = await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx);
+          const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
+          const html = await renderRfpInvited({
+            rfpId: code,
+            rfpTitle: input.title.trim(),
+            buyerName,
+            deadline: deadlineDisplay,
+            inviteUrl,
+          });
           for (const member of emailRows) {
-            const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
-            const html = await renderRfpInvited({
-              rfpId: code,
-              rfpTitle: input.title.trim(),
-              buyerName,
-              deadline: deadlineDisplay,
-              inviteUrl,
-            });
             await notify(tx, {
               recipients: [{ userId: member.userId, workspaceId: pgWsId, email: member.email }],
               channels: ['email'],

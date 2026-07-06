@@ -235,8 +235,6 @@ export interface WorkspaceRepo {
   >;
   /** 알림·이메일 팬아웃 대상 (멤버 userId+email). 시스템 계정 제외. 순서 미보장. */
   memberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
-  /** admin 멤버 팬아웃 대상 (userId+email). 시스템 계정 제외. 초대 메일 발송 대상. 순서 미보장. */
-  adminRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
   /** 승인된(approvalStatus='approved') 멤버 전원 팬아웃 대상 (userId+email), role 무관. 시스템 계정 제외. 견적 요청 초대 메일 발송 대상. 순서 미보장. */
   approvedMemberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
   /**
