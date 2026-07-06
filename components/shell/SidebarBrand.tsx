@@ -69,7 +69,7 @@ export function SidebarBrand({ className }: { className?: string }) {
         initial={false}
         animate={expanded ? 'visible' : 'hidden'}
         variants={container}
-        className="inline-block whitespace-pre font-sans text-[22px] font-extrabold leading-none tracking-[-0.04em] text-[var(--md-sys-color-on-surface)]"
+        className="inline-block whitespace-pre font-sans text-[22px] font-black leading-none tracking-[-0.04em] text-[var(--md-sys-color-on-surface)]"
       >
         {WORDMARK.split('').map((ch, i) => (
           <motion.span key={i} variants={charV} className="inline-block whitespace-pre">

@@ -31,7 +31,13 @@ export function BrandMark({
       className={className}
     >
       <g transform="translate(0 1254) scale(0.1 -0.1)" fill="var(--md-sys-color-on-surface)">
-        <path d={BRAND_MARK_PATH} />
+        {/* stroke = 은은한 볼드 처리 — 채움 실루엣 위에 같은 색 stroke를 덧씌워 윤곽만 균일하게 두껍힘 */}
+        <path
+          d={BRAND_MARK_PATH}
+          stroke="var(--md-sys-color-on-surface)"
+          strokeWidth={100}
+          strokeLinejoin="round"
+        />
       </g>
     </svg>
   )
@@ -71,7 +77,7 @@ export function Logo({ variant = 'default', className, href }: LogoProps) {
       )}
     >
       <BrandMark />
-      <span className="font-sans font-extrabold text-[22px] leading-none tracking-[-0.04em] whitespace-nowrap text-[var(--md-sys-color-on-surface)]">
+      <span className="font-sans font-black text-[22px] leading-none tracking-[-0.04em] whitespace-nowrap text-[var(--md-sys-color-on-surface)]">
         서포트 B
       </span>
     </Link>
