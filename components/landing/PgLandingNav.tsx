@@ -47,13 +47,15 @@ export function PgLandingNav({ authed }: { authed: boolean }) {
 
       {authLink}
 
-      {/* 상담 CTA — 다크 씬 위에서는 primary 토큰을 inverse로 뒤집어 대비를 맞춘다. */}
+      {/* 시작하기 CTA — 파트너 가입(/signup/pg)으로 이동. 다크 씬 위에서는 primary 토큰을
+          inverse로 뒤집어 대비를 맞춘다. */}
       <ConsultButton
+        href="/signup/pg"
         variant="primary"
         size="sm"
         className="group-data-[over-dark]/lheader:[--md-sys-color-primary:var(--md-sys-color-inverse-primary)] group-data-[over-dark]/lheader:[--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]"
       >
-        파트너 상담 신청
+        파트너 시작하기
       </ConsultButton>
 
       {/* Mobile hamburger */}

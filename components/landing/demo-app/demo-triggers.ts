@@ -76,5 +76,12 @@ export function pgDemoCursorHint(page: number): string {
   }
 }
 
+// PG 데모 가이드 커서 표시 여부 — 진행 단계(1·2·3)에서만 다음 클릭 대상을 가리킨다.
+// 종착 단계(메시지=4)는 게스트가 클릭해도 진행할 동작이 없어 커서·힌트를 아예 띄우지 않는다
+// (클릭을 유도하는 점멸 커서가 아무것도 하지 않아 오해를 주던 문제).
+export function pgDemoShowsGuideCursor(page: number): boolean {
+  return page < 4;
+}
+
 // 데모 창(.demo-app-window)의 진입 스케일 트랜지션 — 구매사·PG 셸이 공유한다.
 export const DEMO_WINDOW_TRANSITION = 'transform 700ms cubic-bezier(0.22, 1, 0.36, 1)';

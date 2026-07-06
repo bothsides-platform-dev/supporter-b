@@ -6,10 +6,9 @@ import { PgHeroSection } from '@/components/landing/PgHeroSection';
 import { SectionHeading } from '@/components/landing/SectionHeading';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { ScrollDrivenProblem } from '@/components/landing/scroll-pinned/ScrollDrivenProblem';
-import { ScrollDrivenCustomerTypes } from '@/components/landing/scroll-pinned/ScrollDrivenCustomerTypes';
+import { CustomerTypesGrid } from '@/components/landing/CustomerTypesGrid';
 import { PgCaseCard } from '@/components/landing/PgCaseCard';
 import { LANDING_TYPE } from '@/components/landing/landing-type';
-import { PgProcessSteps } from '@/components/landing/PgProcessSteps';
 import { PgDemoAppShell } from '@/components/landing/demo-app/PgDemoAppShell';
 import { FaqList } from '@/components/landing/FaqList';
 import { ConsultButton } from '@/components/landing/ConsultButton';
@@ -205,22 +204,9 @@ export function PgLanding() {
           />
         </section>
 
-        {/* ── 화면3: 신규 성장 고객사 인바운드 (pin: 누적 등장) ── */}
+        {/* ── 화면3: 신규 성장 고객사 인바운드 (정적 2x2 그리드) ── */}
         <section id="inbound" className={sectionCls}>
-          <div className={containerCls}>
-            <FadeInView>
-              <p className="text-[clamp(20px,3vw,32px)] leading-[1.32] tracking-[-0.018em] font-medium text-[var(--md-sys-color-on-surface)]">
-                콜드콜보다 빠르게.
-                <br />
-                광고 리드보다 정확하게.
-                <br />
-                <span className="text-[var(--md-sys-color-primary)]">
-                  이미 PG 조건을 비교 중인 고객사에게 먼저 닿으세요.
-                </span>
-              </p>
-            </FadeInView>
-          </div>
-          <ScrollDrivenCustomerTypes
+          <CustomerTypesGrid
             heading={<SectionHeading>새로운 성장 고객사가 PG사를 찾아오게 만듭니다</SectionHeading>}
             intro={
               <FadeInView>
@@ -279,13 +265,10 @@ export function PgLanding() {
         <section id="process" className={sectionCls}>
           <div className={`${containerCls} gap-[var(--s-8)]`}>
             <SectionHeading>파트너 참여 방식은 간단합니다</SectionHeading>
-            <PgDemoAppShell />
-            <FadeInView>
-              <PgProcessSteps steps={PROCESS_STEPS} />
-            </FadeInView>
+            <PgDemoAppShell steps={PROCESS_STEPS} />
             <FadeInView>
               <div>
-                <ConsultButton>파트너 상담 신청하기 →</ConsultButton>
+                <ConsultButton href="/signup/pg">파트너로 시작하기 →</ConsultButton>
               </div>
             </FadeInView>
           </div>
@@ -341,8 +324,12 @@ export function PgLanding() {
             </FadeInView>
             <FadeInView delay={0.15}>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-[var(--s-3)]">
-                <ConsultButton variant="on-dark">파트너 상담 신청 →</ConsultButton>
-                <ConsultButton variant="ghost">제휴 소개서 받기</ConsultButton>
+                <ConsultButton href="/signup/pg" variant="on-dark">
+                  파트너로 시작하기 →
+                </ConsultButton>
+                <ConsultButton href="/login" variant="ghost">
+                  로그인
+                </ConsultButton>
               </div>
             </FadeInView>
           </div>

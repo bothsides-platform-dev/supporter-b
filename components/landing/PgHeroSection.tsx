@@ -24,6 +24,19 @@ const PG_SUBCOPY = (
   </>
 );
 
+// 제품 창 바로 위 리드 카피 — 라이트 리빌 때 목업과 함께 자리잡는 인바운드 가치 한 줄.
+const PG_PRODUCT_LEAD = (
+  <p className="text-center text-[clamp(20px,3vw,32px)] font-medium leading-[1.32] tracking-[-0.018em] text-[var(--md-sys-color-on-surface)] text-balance break-keep">
+    콜드콜보다 빠르게.
+    <br />
+    광고 리드보다 정확하게.
+    <br />
+    <span className="text-[var(--md-sys-color-primary)]">
+      이미 PG 조건을 비교 중인 고객사에게 먼저 닿으세요.
+    </span>
+  </p>
+);
+
 export function PgHeroSection() {
   return (
     <LandingHeroSection
@@ -31,8 +44,13 @@ export function PgHeroSection() {
         <HeroKineticHeadline line1Words={PG_LINE1_WORDS} phrases={PG_PHRASES} suffix="만나세요." />
       }
       subCopy={PG_SUBCOPY}
-      cta={<ConsultButton variant="on-dark">파트너 상담 신청 →</ConsultButton>}
+      cta={
+        <ConsultButton href="/signup/pg" variant="on-dark">
+          파트너로 시작하기 →
+        </ConsultButton>
+      }
       productWindow={<PgHeroProductWindow />}
+      productLead={PG_PRODUCT_LEAD}
     />
   );
 }

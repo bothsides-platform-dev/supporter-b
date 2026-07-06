@@ -39,15 +39,23 @@ describe('PgHeroSection — PG 파트너 랜딩 히어로 (구매사 히어로 �
     expect(screen.getByText('만나세요.')).toBeInTheDocument();
   });
 
-  it('파트너 상담 신청 CTA 버튼을 렌더한다', () => {
+  it('파트너 시작하기 CTA 를 내부 가입 링크(/signup/pg)로 렌더한다', () => {
     render(<PgHeroSection />);
-    expect(screen.getByRole('button', { name: /파트너 상담 신청/ })).toBeInTheDocument();
+    const cta = screen.getByRole('link', { name: /파트너로 시작하기/ });
+    expect(cta).toHaveAttribute('href', '/signup/pg');
   });
 
   it('PG 가치 제안 서브카피를 렌더한다', () => {
     render(<PgHeroSection />);
     expect(
       screen.getByText(/리드 발굴과 자격 검증에 쓰던 시간을 아끼고/),
+    ).toBeInTheDocument();
+  });
+
+  it('제품 창 위 리드 카피(먼저 닿으세요)를 렌더한다', () => {
+    render(<PgHeroSection />);
+    expect(
+      screen.getByText(/이미 PG 조건을 비교 중인 고객사에게 먼저 닿으세요/),
     ).toBeInTheDocument();
   });
 });
