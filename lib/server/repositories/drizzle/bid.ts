@@ -95,7 +95,7 @@ export class DrizzleBidRepository implements BidRepo {
     const rows = (await db
       .select(ATTACHMENT_COLUMNS)
       .from(attachments)
-      .where(inArray(attachments.bidId, bidIds))) as AttachmentRow[];
+      .where(and(inArray(attachments.bidId, bidIds), eq(attachments.status, 'ready')))) as AttachmentRow[];
     for (const att of rows) {
       const list = map.get(att.bidId!) ?? [];
       list.push(asAttachment(att));

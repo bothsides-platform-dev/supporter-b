@@ -60,11 +60,11 @@ export function LandingNav({ authed }: { authed: boolean }) {
   // 동작한다. 부드러운 스크롤·헤더 오프셋은 랜딩에 스코프된 CSS(.landing-scroll +
   // 섹션의 scroll-mt)가 처리한다.
   const authLink = authed ? (
-    <Link href="/home" className={`${linkCls} ${overDarkLinkCls}`}>
+    <Link href="/home" className={`${linkCls} ${overDarkLinkCls} whitespace-nowrap`}>
       앱으로 이동 →
     </Link>
   ) : (
-    <Link href="/login" className={`${linkCls} ${overDarkLinkCls}`}>
+    <Link href="/login" className={`${linkCls} ${overDarkLinkCls} whitespace-nowrap`}>
       로그인
     </Link>
   );

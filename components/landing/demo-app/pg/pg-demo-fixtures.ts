@@ -11,7 +11,7 @@ const DAY = 86_400_000;
 const iso = (offsetDays: number) => new Date(now + offsetDays * DAY).toISOString();
 
 export const demoPgWorkspaceName = '파트너 PG사';
-export const demoPgBuyerName = '와이즐리컴퍼니';
+export const demoPgBuyerName = '브링콘파트너스';
 
 // ── 받은 견적 요청 목록(InboxList rows) ────────────────────────────
 export const demoPgInboxRows: InboxRow[] = [
@@ -74,7 +74,7 @@ export const demoPgInboxItems: InboxListItem[] = [
     rfpId: 'demo-rfp-1',
     rfpCode: 'P-2606-0042',
     rfpTitle: '2026 결제 인프라 견적 요청',
-    preview: '와이즐리컴퍼니: 정산주기 조건 한 번만 확인 부탁드려요.',
+    preview: '브링콘파트너스: 정산주기 조건 한 번만 확인 부탁드려요.',
     lastMessageAt: new Date(now - 3 * 3_600_000).toISOString(),
     unread: true,
   },

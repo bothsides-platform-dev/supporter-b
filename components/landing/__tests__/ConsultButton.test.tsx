@@ -23,6 +23,13 @@ describe('ConsultButton — 채널톡 상담 CTA', () => {
     expect(mockChannelIO).toHaveBeenCalledWith('showMessenger');
   });
 
+  it('href를 주면 채널톡 버튼 대신 내부 링크로 렌더한다', () => {
+    render(<ConsultButton href="/signup/pg">파트너로 시작하기</ConsultButton>);
+    const link = screen.getByRole('link', { name: '파트너로 시작하기' });
+    expect(link).toHaveAttribute('href', '/signup/pg');
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('variant 에 따라 다른 클래스를 입힌다', () => {
     const { rerender } = render(<ConsultButton variant="primary">A</ConsultButton>);
     const primaryCls = screen.getByRole('button').className;

@@ -14,6 +14,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
+import { attachments } from '@/lib/db/schema';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import { DrizzleRfpTeamMessageRepository } from '../rfp-team-message';
 import {
@@ -92,6 +93,42 @@ describe('DrizzleRfpTeamMessageRepository', () => {
   it('returns an empty list for a scope with no messages', async () => {
     const { repo, rfp } = await setup();
     expect(await repo.listByScope(rfp.id, randomUUID())).toEqual([]);
+  });
+
+  it('excludes status=pending attachments (unverified presigned upload) from the hydrated list', async () => {
+    const { db, repo, buyer, author, rfp } = await setup();
+    const msgId = randomUUID();
+    await repo.save({
+      id: msgId,
+      rfpId: rfp.id,
+      workspaceId: buyer.id,
+      authorUserId: author.id,
+      body: 'with attachment',
+      createdAt: new Date('2026-06-10T10:00:00Z'),
+    });
+    const readyId = randomUUID();
+    await db.insert(attachments).values({
+      id: readyId,
+      rfpTeamMessageId: msgId,
+      name: 'ready.pdf',
+      size: 100,
+      mimeType: 'application/pdf',
+      uploadedBy: author.id,
+    });
+    const pendingId = randomUUID();
+    await db.insert(attachments).values({
+      id: pendingId,
+      rfpTeamMessageId: msgId,
+      name: 'pending.pdf',
+      size: 100,
+      mimeType: 'application/pdf',
+      uploadedBy: author.id,
+      status: 'pending',
+    });
+
+    const rows = await repo.listByScope(rfp.id, buyer.id);
+
+    expect(rows[0].attachments.map((a) => a.id)).toEqual([readyId]);
   });
 
   it('listThreadsForWorkspace aggregates one summary per rfp with its last message', async () => {

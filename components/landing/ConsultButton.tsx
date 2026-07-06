@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
 type ConsultVariant = 'primary' | 'on-dark' | 'ghost';
@@ -11,6 +12,8 @@ type ConsultButtonProps = {
   variant?: ConsultVariant;
   size?: ConsultSize;
   className?: string;
+  /** 지정하면 채널톡 대신 내부 페이지로 이동하는 링크로 렌더한다(랜딩 CTA 전환용). */
+  href?: string;
 };
 
 const sizeCls: Record<ConsultSize, string> = {
@@ -30,27 +33,34 @@ const variantCls: Record<ConsultVariant, string> = {
     'bg-transparent text-[var(--md-sys-color-surface)] border border-[color-mix(in_srgb,var(--md-sys-color-surface)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-surface)_10%,transparent)]',
 };
 
-// 랜딩 전역 CTA — 클릭 시 채널톡 상담 메신저를 연다(기존 SidebarFooterControls 패턴).
+// 랜딩 전역 CTA — href 지정 시 내부 페이지 링크, 미지정 시 채널톡 상담 메신저를 연다.
 export function ConsultButton({
   children,
   variant = 'primary',
   size = 'lg',
   className,
+  href,
 }: ConsultButtonProps) {
+  const cls = cn(
+    'inline-flex items-center justify-center gap-2 rounded-[var(--md-sys-shape-small)]',
+    'font-mono tracking-[0.06em] uppercase whitespace-nowrap',
+    'transition-[background-color,opacity,transform] duration-[140ms] active:scale-[0.98]',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
+    sizeCls[size],
+    variantCls[variant],
+    className,
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className={cls}>
+        {children}
+      </Link>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      onClick={() => window.ChannelIO?.('showMessenger')}
-      className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-[var(--md-sys-shape-small)]',
-        'font-mono tracking-[0.06em] uppercase whitespace-nowrap',
-        'transition-[background-color,opacity,transform] duration-[140ms] active:scale-[0.98]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
-        sizeCls[size],
-        variantCls[variant],
-        className,
-      )}
-    >
+    <button type="button" onClick={() => window.ChannelIO?.('showMessenger')} className={cls}>
       {children}
     </button>
   );

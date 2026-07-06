@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
 // PgLandingHeaderNav 는 클라이언트에서 /api/auth/session 을 fetch 하는 훅(useSessionAuthed)을
 // 쓴다 — 이 스모크 테스트는 그 세션 조회와 무관하므로 스텁으로 대체(nav 자체는 PgLandingNav.test 에서 커버).
@@ -16,6 +16,12 @@ vi.mock('@/components/shell/Footer', () => ({
 // 임베드 PG 제품 데모(실제 페이지·사이드바 의존)는 스모크에서 마커로 대체한다.
 vi.mock('@/components/landing/demo-app/PgDemoAppShell', () => ({
   PgDemoAppShell: () => <div>PG_PRODUCT_DEMO</div>,
+}));
+
+// 화면1 히어로는 캔버스 ASCII·마그네틱 훅에 의존하는 스크롤 핀 씬(구매사 히어로 풀 패리티)이라
+// 이 컴포지션 스모크에서는 마커로 격리한다(히어로 자체는 PgHeroSection.test 에서 커버).
+vi.mock('@/components/landing/PgHeroSection', () => ({
+  PgHeroSection: () => <div>PG_HERO</div>,
 }));
 
 // motion 을 평탄화해 whileInView/IntersectionObserver 없이 자식을 그대로 렌더.
@@ -54,10 +60,12 @@ describe('PgLanding — PG 전용 랜딩', () => {
     expect(screen.getByText('관심은 있지만 움직이지 않는 고객사')).toBeInTheDocument();
   });
 
-  it('화면3 성장 고객사 인바운드 섹션과 캐러셀 첫 카드를 렌더한다', () => {
+  it('화면3 성장 고객사 인바운드 섹션과 고객사 유형 카드를 정적 2x2 그리드로 렌더한다', () => {
     render(<PgLanding />);
     expect(screen.getByText('새로운 성장 고객사가 PG사를 찾아오게 만듭니다')).toBeInTheDocument();
+    // 정적 그리드는 모든 카드를 한 번에 렌더한다(과거 캐러셀은 활성 카드 1개만 렌더).
     expect(screen.getByText('PG 변경을 검토하는 기존 가맹점')).toBeInTheDocument();
+    expect(screen.getByText('복수 PG 조건을 비교하는 구매 의사 보유 고객사')).toBeInTheDocument();
   });
 
   it('화면4 검증 섹션 제목을 렌더한다 (공정 대신 동일)', () => {
@@ -68,10 +76,9 @@ describe('PgLanding — PG 전용 랜딩', () => {
     expect(screen.queryByText(/공정/)).toBeNull();
   });
 
-  it('화면5 참여 프로세스 5단계 중 1단계를 렌더한다', () => {
+  it('화면5 참여 프로세스 섹션 헤딩을 렌더한다 (스텝 상세는 데모 셸의 스테퍼가 담당)', () => {
     render(<PgLanding />);
     expect(screen.getByText('파트너 참여 방식은 간단합니다')).toBeInTheDocument();
-    expect(screen.getByText('파트너 등록')).toBeInTheDocument();
   });
 
   it('화면5에 제품 데모를 임베드한다', () => {
@@ -92,16 +99,23 @@ describe('PgLanding — PG 전용 랜딩', () => {
     ).toBeInTheDocument();
   });
 
-  it('화면8 최종 CTA 의 보조 버튼 제휴 소개서 받기를 렌더한다', () => {
-    render(<PgLanding />);
+  it('화면8 최종 CTA 는 시작하기(가입)·로그인 내부 링크를 렌더한다', () => {
+    const { container } = render(<PgLanding />);
     expect(screen.getByText('확실한 니즈가 있는 고객사를 먼저 만나세요')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /제휴 소개서 받기/ })).toBeInTheDocument();
+    const sections = container.querySelectorAll('section');
+    const finalCta = sections[sections.length - 1];
+    expect(within(finalCta).getByRole('link', { name: /파트너로 시작하기/ })).toHaveAttribute(
+      'href',
+      '/signup/pg',
+    );
+    expect(within(finalCta).getByRole('link', { name: '로그인' })).toHaveAttribute('href', '/login');
   });
 
-  it('파트너 상담 신청 CTA 가 본문에 1개 이상 존재한다', () => {
+  it('본문 CTA 는 채널톡이 아닌 내부 가입 페이지(/signup/pg)로 연결된다', () => {
     render(<PgLanding />);
-    const ctas = screen.getAllByRole('button', { name: /파트너 상담 신청/ });
-    expect(ctas.length).toBeGreaterThanOrEqual(1);
+    const starts = screen.getAllByRole('link', { name: /파트너로 시작하기/ });
+    expect(starts.length).toBeGreaterThanOrEqual(1);
+    expect(starts.every((a) => a.getAttribute('href') === '/signup/pg')).toBe(true);
   });
 
   it('PG FAQPage JSON-LD 를 렌더한다', () => {
@@ -112,5 +126,10 @@ describe('PgLanding — PG 전용 랜딩', () => {
     expect(faq).toBeTruthy();
     expect(Array.isArray(faq.mainEntity)).toBe(true);
     expect(faq.mainEntity.length).toBe(7);
+  });
+
+  it('일러스트(webp) 이미지를 렌더하지 않는다', () => {
+    const { container } = render(<PgLanding />);
+    expect(container.querySelectorAll('img')).toHaveLength(0);
   });
 });

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { HTTPError } from 'ky';
-import { http } from '@/lib/http';
+import { uploadAttachment } from '@/lib/attachments/upload-client';
 import { Divider } from '@/components/ui/Divider';
 import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -159,12 +159,8 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
         return;
       }
       setProposal({ name: file.name, status: 'uploading' });
-      const form = new FormData();
-      form.append('file', file);
-      form.append('ownerKind', 'bid_proposal');
-      form.append('ownerId', rfpId);
       try {
-        const body = await http.post('/api/files/upload', { body: form }).json<{ id: string; name: string; size: number }>();
+        const body = await uploadAttachment(file, { ownerKind: 'bid_proposal', ownerId: rfpId });
         setProposal(body);
       } catch (err) {
         let error = err instanceof Error ? err.message : '네트워크 오류';
