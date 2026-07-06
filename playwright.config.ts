@@ -21,6 +21,16 @@
  */
 import { defineConfig, devices } from 'playwright/test';
 
+// `getStorage()` (lib/server/storage/index.ts) is R2-or-throw in every
+// environment — there is no dev/test fallback backend. Attachment bytes
+// therefore require real R2 config (R2_* env). Specs that need bytes to
+// cross process boundaries (the Playwright process calling
+// `getStorage().save()` directly, and the `pnpm dev` webServer under
+// test reading them back) self-skip when that env is absent — see
+// e2e/bid-detail-pdf-preview.spec.ts. When R2 env is present, both
+// processes read `process.env.R2_*` and therefore talk to the same
+// bucket, so no extra wiring is needed here beyond the passthrough below.
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
@@ -72,9 +82,16 @@ export default defineConfig({
       //   needs lookup, inject MockNtsClient via __setNtsClientForTest.
       RESEND_API_KEY: '',
       NTS_SERVICE_KEY: '',
-      // Attachment bytes live in Postgres (`attachment_blobs`), reached via
-      // the DATABASE_URL above — `getStorage()` needs no separate env, so the
-      // webServer and the Playwright-process spec helpers share one backend.
+      // `getStorage()` requires real R2 config in every environment (see
+      // module-scope note above). Pass the four R2_* vars through so the
+      // webServer process talks to the same bucket as the Playwright
+      // process. Left empty when unset — specs needing attachment bytes
+      // self-skip in that case rather than the server failing to boot
+      // (only routes that actually call `getStorage()` would throw).
+      R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID ?? '',
+      R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? '',
+      R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? '',
+      R2_BUCKET: process.env.R2_BUCKET ?? '',
       // Isolate this dev server's build dir + lock so it can boot alongside a
       // developer's local `pnpm dev` on :3000. Next 16's `<distDir>/dev/lock`
       // is per-distDir (not per-port) — sharing `.next` makes the second

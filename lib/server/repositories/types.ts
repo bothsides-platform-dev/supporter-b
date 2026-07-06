@@ -851,6 +851,16 @@ export interface AttachmentRepo {
   ): Promise<Pick<AttachmentRecord, 'id' | 'rfpId' | 'bidId' | 'bidNoteId' | 'uploadedBy'>[]>;
   /** 단건 삭제 (고아 정리). */
   remove(id: string, tx?: Tx): Promise<void>;
+  /**
+   * 두 단계 presigned 업로드 완료 시 호출 — status='pending' 인 행만 'ready' 로
+   * 전환한다. 전환됐으면 true, 이미 ready 이거나 존재하지 않으면 false.
+   */
+  markReady(id: string, tx?: Tx): Promise<boolean>;
+  /**
+   * cutoff 이전에 업로드된 status='pending' 행을 전부 삭제 — 호출자가 R2 객체도
+   * 함께 정리할 수 있도록 삭제된 id 배열을 반환한다.
+   */
+  deleteStalePending(cutoff: Date, tx?: Tx): Promise<string[]>;
 }
 
 // ── Outbox ────────────────────────────────────────────────────────────

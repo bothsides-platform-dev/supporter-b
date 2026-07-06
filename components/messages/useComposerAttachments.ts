@@ -2,7 +2,7 @@
 
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { HTTPError } from 'ky';
-import { http } from '@/lib/http';
+import { uploadAttachment } from '@/lib/attachments/upload-client';
 import {
   MAX_FILES,
   MAX_BYTES,
@@ -62,14 +62,8 @@ export function useComposerAttachments({
   const [rows, setRows] = useState<ComposerAttachment[]>([]);
 
   async function uploadOne(file: File, tempId: string): Promise<void> {
-    const form = new FormData();
-    form.append('file', file);
-    form.append('ownerKind', ownerKind);
-    form.append('ownerId', ownerId);
     try {
-      const body = await http
-        .post('/api/files/upload', { body: form })
-        .json<{ id: string; name: string; size: number; mimeType?: string }>();
+      const body = await uploadAttachment(file, { ownerKind, ownerId });
       // 임시 행을 서버 첨부로 교체(스켈레톤 → 일반 칩).
       setRows((prev) =>
         prev.map((a) =>

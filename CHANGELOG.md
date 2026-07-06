@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.66.0] - 2026-07-05
+
+### Changed
+
+- **첨부파일 저장소가 Cloudflare R2로 이전됐어요**: 견적 요청·견적·채팅에 올리는 첨부파일이 이제 데이터베이스(Postgres bytea) 대신 Cloudflare R2 오브젝트 스토리지에 저장돼요. DB 백업이 첨부파일 용량과 분리돼 가벼워져요. 다운로드 주소와 권한 검사(봉인 견적 접근 제어 포함)는 기존과 동일하게 동작해요.
+- **첨부파일 업로드가 브라우저에서 R2로 바로 올라가요**: 서버가 짧은 유효기간의 서명 URL을 발급하면(선언한 파일 크기·형식이 서명에 포함) 브라우저가 R2에 직접 업로드하고, 완료 시점에 서버가 파일 시그니처(매직바이트)를 검증한 뒤에야 첨부가 노출돼요. 검증 전(pending) 첨부는 어디에도 보이지 않고 연결도 안 되며, 1시간 넘게 방치되면 자동 청소돼요(`/api/cron/sweep-uploads`).
+- **다운로드·PDF 미리보기도 R2에서 직접 받아요**: `GET /api/files/{id}`가 권한 검사 후 15분짜리 서명 URL로 302 리다이렉트해요. 파일 바이트가 앱 서버를 거치지 않아 동시 다운로드가 서버 대역폭과 완전히 분리되고, PDF 구간(Range) 로딩은 R2가 네이티브로 처리해요.
+- **운영 환경에서 저장소 설정이 빠지면 배포 즉시 알 수 있어요**: R2 접속 정보 4종 중 하나라도 빠진 채 프로덕션을 기동하면 첫 파일 요청에서야 실패하는 대신 서버 부팅 시점에 바로 에러로 멈춰요(PM2 crash로 가시화).
+
+### Removed
+
+- **Postgres bytea 첨부 저장 백엔드(`attachment_blobs`)를 제거했어요**: 기존 첨부 데이터는 폐기하기로 결정돼 마이그레이션 없이 전환해요. 배포 시 1회 데이터 정리 절차는 `docs/DEPLOY_LIGHTSAIL.md` 런북을 따라요.
+- **서버 경유 멀티파트 업로드 라우트(`POST /api/files/upload`)를 제거했어요**: 모든 업로드 진입점(채팅 컴포저·견적 요청 첨부·견적서 업로드)이 presigned 직행 업로드 공용 헬퍼로 전환됐어요.
+
+### Infrastructure
+
+- 로컬 개발도 프로덕션과 동일하게 실제 R2 버킷을 사용해요 — 폴백 백엔드는 의도적으로 없어요. 단위 테스트는 mock(InMemoryStorage 주입)으로 동작하고, 실제 바이트가 필요한 e2e PDF 스펙은 R2 설정이 없으면 자동으로 건너뛰어요.
+- `@aws-sdk/client-s3`·`@aws-sdk/s3-request-presigner` 의존성 추가, R2 환경변수 예시(`.env.production.example`)와 배포 런북 갱신(버킷 CORS 설정·sweep-uploads crontab 등록 절차 포함).
+- 직행 업로드에는 R2 버킷 CORS 설정(PUT 허용)이 필수예요 — 절차는 `docs/DEPLOY_LIGHTSAIL.md` §첨부파일 저장소 전환을 따라요.
 ## [0.2.66.0] - 2026-07-06
 
 ### Changed

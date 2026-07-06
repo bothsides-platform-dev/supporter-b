@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { attachments, bidNotes, users } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { Attachment } from '@/lib/types/common';
@@ -60,7 +60,7 @@ export class DrizzleBidNoteRepository implements BidNoteRepo {
     const attRows: AttRow[] = await db
       .select()
       .from(attachments)
-      .where(inArray(attachments.bidNoteId, noteIds));
+      .where(and(inArray(attachments.bidNoteId, noteIds), eq(attachments.status, 'ready')));
 
     const byNote = new Map<string, Attachment[]>();
     for (const row of attRows) {
