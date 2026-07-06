@@ -27,10 +27,24 @@ export default defineConfig({
         resolve: {
           alias: {
             "@": path.resolve(__dirname, "."),
+            // next-auth's ESM build does `import ... from "next/server"`
+            // (no extension). Next's package.json has no `exports` map, so
+            // once next-auth is routed through Vite's resolver below, it
+            // still needs an explicit file to land on.
+            "next/server": "next/server.js",
           },
         },
         test: {
           name: "unit-node",
+          // Force next-auth through Vite's transform/resolve pipeline
+          // instead of being externalized to Node's native ESM resolver,
+          // which can't resolve the extensionless "next/server" bare
+          // specifier the alias above maps.
+          server: {
+            deps: {
+              inline: [/next-auth/, /@auth\/core/],
+            },
+          },
           environment: "node",
           globals: true,
           // pglite (WASM compile + migrations + queries) is CPU-heavy; under
@@ -68,10 +82,24 @@ export default defineConfig({
         resolve: {
           alias: {
             "@": path.resolve(__dirname, "."),
+            // next-auth's ESM build does `import ... from "next/server"`
+            // (no extension). Next's package.json has no `exports` map, so
+            // once next-auth is routed through Vite's resolver below, it
+            // still needs an explicit file to land on.
+            "next/server": "next/server.js",
           },
         },
         test: {
           name: "unit-jsdom",
+          // Force next-auth through Vite's transform/resolve pipeline
+          // instead of being externalized to Node's native ESM resolver,
+          // which can't resolve the extensionless "next/server" bare
+          // specifier the alias above maps.
+          server: {
+            deps: {
+              inline: [/next-auth/, /@auth\/core/],
+            },
+          },
           environment: "jsdom",
           globals: true,
           setupFiles: ["./vitest.setup.ts"],
