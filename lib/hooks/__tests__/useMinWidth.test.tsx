@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 
 import { createMinWidthHook } from '../useMinWidth';
 import { useIsLgUp } from '../useIsLgUp';
@@ -43,6 +44,15 @@ describe('createMinWidthHook', () => {
     const useMinWidth = createMinWidthHook(1280);
     const { result } = renderHook(() => useMinWidth());
     expect(result.current).toBe(true);
+  });
+
+  it('서버 렌더(SSR) 스냅샷은 데스크톱 우선(true)이다', () => {
+    // 뷰포트가 좁아도 서버 렌더는 항상 min-width 충족으로 렌더돼야 한다(하이드레이션 깜빡임 방지 계약).
+    const useMinWidth = createMinWidthHook(1280);
+    function Probe() {
+      return <span>{String(useMinWidth())}</span>;
+    }
+    expect(renderToString(<Probe />)).toContain('true');
   });
 
   it('matchMedia change 이벤트로 값이 갱신되고 언마운트 시 리스너를 해제한다', () => {

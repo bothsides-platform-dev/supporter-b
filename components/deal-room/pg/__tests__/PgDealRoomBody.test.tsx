@@ -18,7 +18,7 @@ vi.mock('@/components/inbox/RequoteBanner', () => ({ RequoteBanner: () => <div d
 vi.mock('@/components/attachments/AttachmentPreviewList', () => ({ AttachmentPreviewList: () => <div data-testid="attachments" /> }));
 vi.mock('@/lib/server/actions/bid/withdrawBidAction', () => ({ withdrawBidAction: vi.fn() }));
 
-// use-lg-up mock — PgDealRoomBody 자신은 lgUp 을 쓰지 않지만
+// useIsLgUp mock — PgDealRoomBody 자신은 lgUp 을 쓰지 않지만
 // DealRoomActionRail/Center 가 렌더되는 컨텍스트에서 안전하게 고정.
 const mq = vi.hoisted(() => ({ lgUp: true }));
 vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
