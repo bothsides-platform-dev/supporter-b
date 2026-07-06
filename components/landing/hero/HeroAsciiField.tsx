@@ -3,7 +3,6 @@
 import { useEffect, useRef } from 'react';
 import { useMotionValueEvent } from 'motion/react';
 import type { MotionValue } from 'motion/react';
-import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 import {
   FONT_PX,
   HUE_BUCKETS,
@@ -135,10 +134,11 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 가드 ③: 동작 줄이기 선호만 정적 베이스 필드로 폴백한다(루프·포인터 리스너 없음).
-    // 터치 기기는 제외하지 않는다 — pointermove 는 드래그 중 pointerType=touch 로도
-    // 발생하므로 기존 onPointerMove/stampTrail 경로가 손가락 궤적에도 그대로 먹힌다.
-    const animate = !prefersReducedMotion();
+    // 가드 ③(제거됨): 랜딩 연출은 사용자의 동작 줄이기 선호를 무시하고 항상 실행한다
+    // (제품 결정 — DESIGN.md §9 예외 ③). 터치 기기는 제외하지 않는다 — pointermove 는
+    // 드래그 중 pointerType=touch 로도 발생하므로 기존 onPointerMove/stampTrail 경로가
+    // 손가락 궤적에도 그대로 먹힌다.
+    const animate = true;
 
     // 앵커 딥링크(#pricing 등)로 트랙 아래에서 진입하면 첫 change 이벤트 전에도 루프가 돌지
     // 않아야 한다 — HeroPinnedScene의 톤 스위치 mount-sync와 같은 패턴으로 초기값을 동기화.

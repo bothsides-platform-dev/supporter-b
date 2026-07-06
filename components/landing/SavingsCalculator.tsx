@@ -5,7 +5,6 @@ import { useInView } from 'motion/react';
 import { Slider } from '@/components/ui/slider';
 import { CostComparisonChart } from '@/components/landing/CostComparisonChart';
 import { formatKRW } from '@/lib/format';
-import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 import { useAnimatedNumber } from '@/lib/landing/use-animated-number';
 import {
   SUPPORTER_B_RATE,
@@ -89,9 +88,9 @@ export function SavingsCalculator() {
 
   // 계산기가 화면에 보이고 일정 시간(IDLE_MS) 입력이 없으면 가짜 커서가 슬라이더를
   // 훑으며 사용법을 보여준다. 사용자가 만지면 즉시 멈추고 다시 재생하지 않는다. 데모가
-  // 끝나면 (아직 미조작이면) 다시 idle 카운트다운. 화면 밖이거나 동작 줄이기 선호 시 중단.
+  // 끝나면 (아직 미조작이면) 다시 idle 카운트다운. 화면 밖이면 중단(동작 줄이기 선호는 무시).
   useEffect(() => {
-    if (!inView || prefersReducedMotion() || interactedRef.current) return;
+    if (!inView || interactedRef.current) return;
 
     const path: [number, number][] = [
       [0, DEFAULT_VOL_T],

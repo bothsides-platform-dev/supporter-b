@@ -77,13 +77,4 @@ describe('useAnimatedNumber', () => {
     });
     expect(result.current).toBe(50);
   });
-
-  it('shows the new target immediately when reduced motion is preferred', () => {
-    stubMatchMedia(true);
-    const { result, rerender } = renderHook(({ target }) => useAnimatedNumber(target, 200), {
-      initialProps: { target: 0 },
-    });
-    rerender({ target: 100 });
-    expect(result.current).toBe(100);
-  });
 });
