@@ -14,6 +14,7 @@ import type {
   WorkspaceType,
 } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
+import type { UserOnboarding, OnboardingKey, OnboardingTaskState } from '@/lib/types/onboarding';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { BoardColumn, ColumnKind } from '@/lib/types/column';
@@ -66,8 +67,6 @@ export type NewRfpInsert = {
   customPaymentMethods: { id: string; label: string }[];
   createdBy: string;
   sentAt: Date | null;
-  /** 온보딩 샘플 시드 전용 — true 면 is_sample 컬럼을 켠다. 미지정 시 DB default(false). */
-  isSample?: boolean;
 };
 
 export interface RfpRepo {
@@ -131,22 +130,6 @@ export interface InvitationRepo {
   findByRfpAndPg(rfpId: string, pgWsId: string, tx?: Tx): Promise<RfpInvitation | undefined>;
   /** draft row 삽입 (tokenHash = 'draft-{invId}' placeholder). */
   saveDraft(invId: string, rfpId: string, pgWsId: string, expiresAt: Date, tx?: Tx): Promise<void>;
-  /**
-   * 이미 수락된(accepted) 초대 row 를 주어진 tokenHash 그대로 삽입 — 온보딩 샘플 전용.
-   * 샘플은 토큰 진입이 없어 호출자가 임의 unique 값(uuid)을 그대로 적재한다(해시하지 않음).
-   */
-  insertAccepted(
-    params: {
-      id: string;
-      rfpId: string;
-      pgWsId: string;
-      acceptedByUserId: string;
-      tokenHash: string;
-      sentAt: Date;
-      expiresAt: Date;
-    },
-    tx?: Tx,
-  ): Promise<void>;
   /** draft → pending: rawToken hash 갱신 + status='pending' + sentAt/expiresAt 갱신. */
   promoteDraft(invId: string, rawToken: string, now: Date, expiresAt: Date, tx?: Tx): Promise<void>;
   /** PG 워크스페이스에 발송된 활성 초대 + RFP pair — 인박스/칸반 공통 fetcher. */
@@ -235,7 +218,7 @@ export interface WorkspaceRepo {
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
   listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; logoUpdatedAt: string | null }[]>;
-  /** 이름 검색 (isDemo 제외) — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500). */
+  /** 이름 검색 — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500). */
   search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]>;
   /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
   getName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
@@ -441,41 +424,6 @@ export interface WorkspaceRepo {
   deleteWorkspaces(ids: string[], tx?: Tx): Promise<void>;
   /** 한 유저의 모든 멤버십 row 삭제 — 계정 탈퇴용. */
   removeAllMembershipsForUser(userId: string, tx?: Tx): Promise<void>;
-
-  // ── 온보딩 샘플 시드 지원 ──────────────────────────────────────────────
-  /**
-   * 데모 워크스페이스 생성 — 온보딩 샘플의 공유 데모 PG/구매사. status='active'(승인
-   * 우회)·isDemo=true 로 고정한다. bizProfileId 는 데모 구매사만 사용(데모 PG 는 null).
-   */
-  createDemo(
-    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null },
-    tx?: Tx,
-  ): Promise<void>;
-  /** 이름(+옵션 type) 기준 데모 워크스페이스(isDemo=true) 단건 조회 — 샘플 멱등성. 없으면 undefined. */
-  findDemoByName(
-    name: string,
-    type?: WorkspaceType,
-    tx?: Tx,
-  ): Promise<{ id: string } | undefined>;
-  /** 한 워크스페이스의 임의 멤버 user id 1명 — 데모 ws 무결성 확인용. 없으면 undefined. */
-  firstMemberUserId(workspaceId: string, tx?: Tx): Promise<string | undefined>;
-  /**
-   * 샘플 시드 상태 — sampleSeededAt 값. ws 가 없으면 undefined(존재 게이트), 있으면
-   * { sampleSeededAt } (미시드는 null). 시드 멱등성 판정용.
-   */
-  getSampleSeededState(
-    workspaceId: string,
-    tx?: Tx,
-  ): Promise<{ sampleSeededAt: Date | null } | undefined>;
-  /** sampleSeededAt 스탬프 — 샘플 시드 완료 표식(재시드 차단). */
-  markSampleSeeded(workspaceId: string, at: Date, tx?: Tx): Promise<void>;
-  /**
-   * 온보딩 샘플이 아직 없는(sampleSeededAt IS NULL) 비-데모 워크스페이스 목록 — 백필 스크립트용.
-   * 데모(isDemo) 워크스페이스는 제외한다(샘플이 데모로 새지 않도록).
-   */
-  listWsNeedingSample(type: WorkspaceType, tx?: Tx): Promise<{ id: string }[]>;
-  /** 한 워크스페이스의 admin 멤버 user id 1명 — 백필 시드 createdBy/수락자. 없으면 undefined. */
-  findAdminMemberUserId(workspaceId: string, tx?: Tx): Promise<string | undefined>;
 }
 
 // ── User ──────────────────────────────────────────────────────────────
@@ -576,13 +524,16 @@ export interface UserRepo {
   >;
   /** 마스터/운영자 계정 insert-if-absent — 인증 완료·시스템 계정으로 생성, userId 반환. */
   provisionMaster(params: { email: string; name: string }, tx?: Tx): Promise<string>;
+  /** 유저 단위 온보딩 상태 조회 — 관대한 읽기(migrateUserOnboarding 통과). 없으면 빈 문서. */
+  getOnboarding(userId: string, tx?: Tx): Promise<UserOnboarding>;
   /**
-   * 데모/시스템 계정 생성 — 온보딩 샘플의 데모 PG/구매사 유저. 로그인 불가 sentinel
-   * passwordHash('!')·isSystemAccount=true·emailVerified=true 로 고정한다. id/email 은
-   * 호출자가 발급한 값을 그대로 적재(정규화·해싱 없음).
+   * 온보딩 태스크 상태 병합 patch — 단일 statement jsonb merge, 다른 키/기존 필드를
+   * 덮어쓰지 않는다. 멱등(같은 patch 재호출 시 결과 동일).
    */
-  createSystemAccount(
-    params: { id: string; email: string; name: string },
+  markOnboarding(
+    userId: string,
+    key: OnboardingKey,
+    patch: OnboardingTaskState,
     tx?: Tx,
   ): Promise<void>;
 }
@@ -851,6 +802,16 @@ export interface AttachmentRepo {
   ): Promise<Pick<AttachmentRecord, 'id' | 'rfpId' | 'bidId' | 'bidNoteId' | 'uploadedBy'>[]>;
   /** 단건 삭제 (고아 정리). */
   remove(id: string, tx?: Tx): Promise<void>;
+  /**
+   * 두 단계 presigned 업로드 완료 시 호출 — status='pending' 인 행만 'ready' 로
+   * 전환한다. 전환됐으면 true, 이미 ready 이거나 존재하지 않으면 false.
+   */
+  markReady(id: string, tx?: Tx): Promise<boolean>;
+  /**
+   * cutoff 이전에 업로드된 status='pending' 행을 전부 삭제 — 호출자가 R2 객체도
+   * 함께 정리할 수 있도록 삭제된 id 배열을 반환한다.
+   */
+  deleteStalePending(cutoff: Date, tx?: Tx): Promise<string[]>;
 }
 
 // ── Outbox ────────────────────────────────────────────────────────────

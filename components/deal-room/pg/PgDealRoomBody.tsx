@@ -13,7 +13,6 @@ import { Pencil, FileText, Paperclip, Undo2 } from 'lucide-react';
 import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
 import { RfpBriefPanel } from '@/components/inbox/RfpBriefPanel';
-import { SamplePgRfpBanner } from '@/components/inbox/SamplePgRfpBanner';
 import { SubmittedSummary } from '@/components/inbox/SubmittedSummary';
 import { buildSubmittedSummaryRows } from '@/components/inbox/buildSubmittedSummaryRows';
 import { BidWizard } from '@/components/inbox/bid-wizard/BidWizard';
@@ -105,11 +104,6 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {rfp.isSample && (
-        <div className="shrink-0 px-6 pt-4">
-          <SamplePgRfpBanner rfpCode={rfp.code} />
-        </div>
-      )}
       <div className="flex min-h-0 flex-1 max-lg:flex-col">
         <DealRoomActionRail actions={actions} />
         <div className="min-w-0 flex-1">

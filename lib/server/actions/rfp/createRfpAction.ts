@@ -6,7 +6,7 @@ import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import { logBusinessEvent } from '@/lib/observability/log';
 import { isValidWebsiteUrl, isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
-import { isContractTypeValid, isMainProductsValid, isAnnualPgVolumeValid } from '@/lib/rfp/required-fields';
+import { isContractTypeValid, isMainProductsValid, isAnnualPgVolumeSatisfied } from '@/lib/rfp/required-fields';
 import { MERCHANT_TIERS } from '@/lib/types/bid';
 import type { RfpActionResult } from './_shared';
 
@@ -105,7 +105,8 @@ const Input = z
           message: '발송하려면 주요 판매 상품을 입력해야 합니다.',
         });
       }
-      if (!isAnnualPgVolumeValid(d.annualPgVolume ?? '')) {
+      // 신규 계약은 전년도 PG 거래액이 존재할 수 없어 필수 제외 (SSOT 공유).
+      if (!isAnnualPgVolumeSatisfied(d.annualPgVolume ?? '', d.contractType)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['annualPgVolume'],
@@ -137,6 +138,11 @@ export async function createRfpAction(
     return { ok: false, error: websiteServerRejected ? 'INVALID_WEBSITE' : 'INVALID_INPUT' };
   }
 
+  // 신규 계약(첫 PG 계약)은 전년도 PG 거래액·현재 수수료 등 PG 계약 이력 값이 존재할 수
+  // 없으므로 서버에서 제거한다 — 탈취 draft·직접 호출로도 current_terms JSONB 에 새지 않게
+  // 하는 단일 choke point. 배송·서비스 기간·현재 운영 솔루션은 PG 무관 사업 속성이라 보존한다.
+  const isNewContract = parsed.data.contractType === 'new';
+
   const service = await getRfpService();
   const result = await service.createRfp(
     {
@@ -149,7 +155,9 @@ export async function createRfpAction(
       customPaymentMethods: parsed.data.customPaymentMethods,
       send: parsed.data.send,
       boardVisible: parsed.data.boardVisible,
-      currentFeeVisibleToPg: parsed.data.currentFeeVisibleToPg,
+      // 신규 계약은 현재 수수료 자체가 strip 되므로 PG 공개 여부도 공개(true)로 강제한다.
+      // 그렇지 않으면 존재하지 않는 fee 를 가리키는 hiddenFromPg strip 경로가 남는다.
+      currentFeeVisibleToPg: isNewContract ? true : parsed.data.currentFeeVisibleToPg,
       contractType: parsed.data.contractType,
       bizProfileMode: parsed.data.bizProfileMode,
       bizNoOverride: parsed.data.bizNoOverride,
@@ -158,11 +166,11 @@ export async function createRfpAction(
         ? normalizeWebsiteUrl(parsed.data.websiteUrl.trim()) || undefined
         : undefined,
       mainProducts: parsed.data.mainProducts,
-      annualPgVolume: parsed.data.annualPgVolume,
-      currentFeeRate: parsed.data.currentFeeRate,
-      currentSettlementLimit: parsed.data.currentSettlementLimit,
-      currentGuaranteeInsurance: parsed.data.currentGuaranteeInsurance,
-      currentSettlementCycle: parsed.data.currentSettlementCycle,
+      annualPgVolume: isNewContract ? undefined : parsed.data.annualPgVolume,
+      currentFeeRate: isNewContract ? undefined : parsed.data.currentFeeRate,
+      currentSettlementLimit: isNewContract ? undefined : parsed.data.currentSettlementLimit,
+      currentGuaranteeInsurance: isNewContract ? undefined : parsed.data.currentGuaranteeInsurance,
+      currentSettlementCycle: isNewContract ? undefined : parsed.data.currentSettlementCycle,
       deliveryServicePeriod: parsed.data.deliveryServicePeriod,
       currentSolution: parsed.data.currentSolution,
       currentSolutionDetail: parsed.data.currentSolutionDetail,

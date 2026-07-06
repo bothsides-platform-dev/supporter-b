@@ -29,11 +29,11 @@ vi.mock('@/lib/server/actions/chat/saveTemplateAction', () => ({
   saveTemplateAction: (...args: unknown[]) => saveTemplateAction(...args),
 }));
 
-// File upload goes through the shared ky `http` client — mock the upload so the
-// drawer collects an attachment id without hitting /api/files/upload.
-const httpPost = vi.fn();
-vi.mock('@/lib/http', () => ({
-  http: { post: (...args: unknown[]) => httpPost(...args) },
+// File upload goes through the shared presigned upload-client helper — mock it
+// so the drawer collects an attachment id without hitting the real 3-step flow.
+const uploadAttachment = vi.fn();
+vi.mock('@/lib/attachments/upload-client', () => ({
+  uploadAttachment: (...args: unknown[]) => uploadAttachment(...args),
 }));
 
 afterEach(() => cleanup());
@@ -41,7 +41,7 @@ beforeEach(() => {
   sendChatMessageAction.mockReset().mockResolvedValue({ ok: true, conversationId: 'c1', messageId: 'm1' });
   listTemplatesAction.mockReset().mockResolvedValue({ ok: true, templates: [] });
   saveTemplateAction.mockReset().mockResolvedValue({ ok: true, templateId: 't1' });
-  httpPost.mockReset();
+  uploadAttachment.mockReset();
 });
 
 import { MessageComposeSheet } from '../MessageComposeSheet';
@@ -136,9 +136,7 @@ describe('MessageComposeSheet (controlled rich compose drawer)', () => {
   });
 
   it('f.type이 빈 문자열인 PDF 파일도 확장자 기반으로 첨부 칩에 노출된다', async () => {
-    httpPost.mockReturnValue({
-      json: () => Promise.resolve({ id: 'att-empty-mime', name: '보고서.pdf', size: 2048 }),
-    });
+    uploadAttachment.mockResolvedValue({ id: 'att-empty-mime', name: '보고서.pdf', size: 2048, mimeType: 'application/pdf' });
     const user = userEvent.setup();
     renderSheet();
 
@@ -147,7 +145,7 @@ describe('MessageComposeSheet (controlled rich compose drawer)', () => {
     await user.upload(input, file);
 
     expect(await screen.findByText('보고서.pdf')).toBeInTheDocument();
-    await waitFor(() => expect(httpPost).toHaveBeenCalled());
+    await waitFor(() => expect(uploadAttachment).toHaveBeenCalled());
   });
 
   it('지원하지 않는 파일 형식 선택 시 ERROR 칩이 노출된다', async () => {
@@ -162,13 +160,11 @@ describe('MessageComposeSheet (controlled rich compose drawer)', () => {
 
     expect(await screen.findByText('보고서.docx')).toBeInTheDocument();
     expect(screen.getByText('ERROR')).toBeInTheDocument();
-    expect(httpPost).not.toHaveBeenCalled();
+    expect(uploadAttachment).not.toHaveBeenCalled();
   });
 
   it('첨부 추가 → 칩 노출 → 전송 시 attachmentIds 포함, 제거하면 빠진다', async () => {
-    httpPost.mockReturnValue({
-      json: () => Promise.resolve({ id: 'att-1', name: '제안서.pdf', size: 1234 }),
-    });
+    uploadAttachment.mockResolvedValue({ id: 'att-1', name: '제안서.pdf', size: 1234, mimeType: 'application/pdf' });
     const user = userEvent.setup();
     renderSheet();
 
@@ -179,7 +175,7 @@ describe('MessageComposeSheet (controlled rich compose drawer)', () => {
     await user.upload(input, file);
 
     expect(await screen.findByText('제안서.pdf')).toBeInTheDocument();
-    await waitFor(() => expect(httpPost).toHaveBeenCalled());
+    await waitFor(() => expect(uploadAttachment).toHaveBeenCalled());
 
     await user.click(screen.getByRole('button', { name: '바로 전송' }));
     await waitFor(() =>

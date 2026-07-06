@@ -194,38 +194,34 @@ export class BidService {
         );
       }
 
-      // 온보딩 샘플 RFP 는 데모 구매사(.invalid 메일)가 소유 — 알림/이메일을 발행하지 않는다.
-      // (bid 저장은 위에서 끝났으므로 PG 의 인터랙티브 체험에는 영향이 없다.)
-      if (!rfp.isSample) {
-        const buyerMembers = await this.workspaceRepo.memberRecipients(rfp.buyerWsId, tx);
+      const buyerMembers = await this.workspaceRepo.memberRecipients(rfp.buyerWsId, tx);
 
-        const pgWsLabel = (await this.workspaceRepo.getName(actor.workspaceId, tx)) ?? 'PG';
+      const pgWsLabel = (await this.workspaceRepo.getName(actor.workspaceId, tx)) ?? 'PG';
 
-        const submittedHtml = await renderBidSubmitted({
-          rfpId: rfp.code,
-          rfpTitle: rfp.title,
-          pgName: pgWsLabel,
-          submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
-        });
+      const submittedHtml = await renderBidSubmitted({
+        rfpId: rfp.code,
+        rfpTitle: rfp.title,
+        pgName: pgWsLabel,
+        submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
+      });
 
-        for (const m of buyerMembers) {
-          pendingEmits.push(
-            ...(await notify(tx, {
-              recipients: [{ userId: m.userId, workspaceId: rfp.buyerWsId, email: m.email }],
-              channels: ['inapp', 'email'],
-              type: 'bid.submitted',
-              title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-              body: `${pgWsLabel}가 견적을 보냈어요.`,
-              linkUrl: `/rfp/${rfp.code}`,
-              email: {
-                event: 'bid.submitted',
-                subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-                html: submittedHtml,
-                dedupeKey: () => `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
-              },
-            })),
-          );
-        }
+      for (const m of buyerMembers) {
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: [{ userId: m.userId, workspaceId: rfp.buyerWsId, email: m.email }],
+            channels: ['inapp', 'email'],
+            type: 'bid.submitted',
+            title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+            body: `${pgWsLabel}가 견적을 보냈어요.`,
+            linkUrl: `/rfp/${rfp.code}`,
+            email: {
+              event: 'bid.submitted',
+              subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+              html: submittedHtml,
+              dedupeKey: () => `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
+            },
+          })),
+        );
       }
 
       return { ok: true as const, bidId, rfpCode: rfp.code };

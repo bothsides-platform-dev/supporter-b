@@ -178,9 +178,27 @@ describe('wizard-validation Step 2 필수 (SSOT 리팩터)', () => {
     expect(step(d, 2).hint).toBe('주요 판매 상품을 입력해주세요');
   });
 
-  it('연간 PG 총 거래액 빈값이면 미완료 + 거래액 안내', () => {
-    const d = { ...base, annualPgVolume: '' };
+  it('갱신 계약에서 연간 PG 총 거래액 빈값이면 미완료 + 거래액 안내', () => {
+    const d = { ...base, contractType: 'renewal' as const, annualPgVolume: '' };
     expect(step(d, 2).complete).toBe(false);
     expect(step(d, 2).hint).toBe('전년도 연간 PG 총 거래액을 입력해주세요');
+  });
+
+  it('신규 계약은 연간 PG 총 거래액이 비어도 complete (존재할 수 없는 값 필수 제외)', () => {
+    const d = { ...base, contractType: 'new' as const, annualPgVolume: '' };
+    expect(step(d, 2).complete).toBe(true);
+  });
+
+  it('신규 계약에서 연간 거래액이 비어도 hint는 거래액을 요구하지 않는다', () => {
+    // 결제수단만 비워 미완료로 만든 뒤, hint가 거래액이 아닌 결제수단을 안내하는지 확인
+    const d = {
+      ...base,
+      contractType: 'new' as const,
+      annualPgVolume: '',
+      requiredPaymentMethods: [],
+      customPaymentMethods: [],
+    };
+    expect(step(d, 2).complete).toBe(false);
+    expect(step(d, 2).hint).toBe('견적 받을 결제수단을 1개 이상 선택해주세요');
   });
 });

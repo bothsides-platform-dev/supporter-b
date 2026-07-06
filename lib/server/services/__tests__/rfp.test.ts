@@ -304,20 +304,6 @@ describe('RfpService.award', () => {
     expect(r.error).toContain('WINNING_BID_NOT_FOUND');
   });
 
-  it('refuses to award a sample RFP (SAMPLE_READONLY)', async () => {
-    const s = await seedAwardEnv();
-    await db.update(rfps).set({ isSample: true }).where(eq(rfps.id, s.rfpId));
-    const r = await service.award(s.rfpId, s.winnerBidId, {
-      userId: s.buyerUserId,
-      workspaceId: s.buyerWsId,
-    });
-    expect(r).toEqual({ ok: false, error: 'SAMPLE_READONLY' });
-    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.id, s.rfpId));
-    expect(rfpRow!.status).not.toBe('awarded');
-    const c = await db.select().from(contracts).where(eq(contracts.rfpId, s.rfpId));
-    expect(c).toHaveLength(0);
-  });
-
   it('requote 후 동일 PG 선정 시 rfp.awarded만 발송되고 rfp.rejected는 발송되지 않는다', async () => {
     // Setup: buyer + two PG workspaces
     const buyer = await seedUser(db, { email: 'buyer@requote-award.com' });

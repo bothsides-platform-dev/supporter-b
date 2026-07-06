@@ -8,6 +8,7 @@ import {
   isContractTypeValid,
   isMainProductsValid,
   isAnnualPgVolumeValid,
+  isAnnualPgVolumeSatisfied,
   markerState,
 } from '@/lib/rfp/required-fields';
 
@@ -69,6 +70,29 @@ describe('required-fields predicates', () => {
     expect(isAnnualPgVolumeValid('0x10')).toBe(false);
     expect(isAnnualPgVolumeValid('1.5')).toBe(false);
     expect(isAnnualPgVolumeValid('  500  ')).toBe(true);
+  });
+});
+
+describe('isAnnualPgVolumeSatisfied: 신규 계약은 전년도 PG 거래액이 존재할 수 없어 필수 제외', () => {
+  it("contractType='new' 이면 빈값이어도 충족(true)", () => {
+    expect(isAnnualPgVolumeSatisfied('', 'new')).toBe(true);
+    expect(isAnnualPgVolumeSatisfied('   ', 'new')).toBe(true);
+  });
+
+  it("contractType='new' 이면 값이 있어도 충족(true)", () => {
+    expect(isAnnualPgVolumeSatisfied('1000000000', 'new')).toBe(true);
+  });
+
+  it("contractType='renewal' 이면 기존대로 양의 정수 문자열을 요구", () => {
+    expect(isAnnualPgVolumeSatisfied('', 'renewal')).toBe(false);
+    expect(isAnnualPgVolumeSatisfied('0', 'renewal')).toBe(false);
+    expect(isAnnualPgVolumeSatisfied('1000000000', 'renewal')).toBe(true);
+  });
+
+  it('contractType 미선택(null/undefined)은 여전히 필수', () => {
+    expect(isAnnualPgVolumeSatisfied('', null)).toBe(false);
+    expect(isAnnualPgVolumeSatisfied('', undefined)).toBe(false);
+    expect(isAnnualPgVolumeSatisfied('1000000000', null)).toBe(true);
   });
 });
 

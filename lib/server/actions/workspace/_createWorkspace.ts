@@ -8,8 +8,6 @@ import {
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { defaultColumns } from '@/lib/server/columns/seed';
-import { seedSampleRfpInTx } from '@/lib/server/onboarding/sample-rfp';
-import { seedSamplePgRfpInTx } from '@/lib/server/onboarding/sample-pg-rfp';
 import type { MerchantTier } from '@/lib/types/bid';
 
 export type CreateWorkspaceBizProfile = {
@@ -86,14 +84,8 @@ export async function createWorkspaceInTx(
   // and pg get a pipeline board; buyer has BUYER_KANBAN_ORDER stages, pg has PG_KANBAN_ORDER.
   await columnRepo.createMany(defaultColumns(wsId, input.type), tx);
 
-  // 온보딩 샘플을 같은 tx 에 시드:
-  //  - buyer: 샘플 견적 요청 1건 + 데모 PG 3사의 견적(읽기전용 비교 체험)
-  //  - pg: 데모 구매사가 보낸 샘플 견적 요청 초대 1건(직접 견적을 제출해보는 인터랙티브 체험)
-  if (input.type === 'buyer') {
-    await seedSampleRfpInTx(tx, { buyerWsId: wsId, buyerUserId: input.userId });
-  } else if (input.type === 'pg') {
-    await seedSamplePgRfpInTx(tx, { pgWsId: wsId, pgUserId: input.userId });
-  }
+  // 온보딩 체험은 더 이상 DB 시딩이 아니다 — 가상 샘플 딜룸(lib/onboarding/fixtures.ts +
+  // components/onboarding/*)이 고정 데이터로 재현한다. 실 rfps/bids/invitations row 없음.
 
   return { workspaceId: wsId, applicationId };
 }
