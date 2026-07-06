@@ -1,10 +1,5 @@
 # TODOS
 
-## Deploy / Domain
-
-### 도메인 전환(supporter-b.com → support-b.com) 운영 시퀀싱 (P1)
-코드·문서·테스트의 도메인 표기를 support-b.com으로 전환했으나, 실제 배포 반영은 별도 수동 시퀀싱이 필요하다 — 순서가 어긋나면 전체 운영자 로그인이 fail-closed된다. 체크리스트: (1) 실 DNS가 support-b.com으로 등록/전환됨 확인, (2) Lightsail 서버의 `/etc/caddy/caddy.env`(`APP_DOMAIN`)·`.env.production`(`AUTH_COOKIE_DOMAIN`·`NEXT_PUBLIC_BUYER_ORIGIN`·`NEXT_PUBLIC_PARTNER_ORIGIN`·`ADMIN_ORIGIN`·`MASTER_ACCOUNT_EMAILS`)을 새 도메인으로 갱신, (3) Google OAuth 콘솔의 redirect URI를 `https://support-b.com/api/auth/callback/google`로 갱신 — 이게 안 되면 `/login/ops` 전체 실패, (4) `deploy/Caddyfile`의 old→new 마이그레이션 리다이렉트 블록(현 supporter-b.com 유지, 의도적)은 트래픽 소진 확인 후 제거. `lib/integrations/resend.ts`의 발신 이메일(`send@supporter-b.store`)과 `components/shell/Footer.tsx`의 문의 메일(`support@supporter-b.io`)은 다른 TLD라 이번 범위에서 의도적으로 미변경 — 실제로도 유지할지 별도 확인 필요. (발견: /ship 적대 리뷰 2026-07-07)
-
 ## Deal Room / Award
 
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
