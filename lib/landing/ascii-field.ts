@@ -8,8 +8,8 @@
 export const PITCH = 26;
 /** 글리프 크기(px). */
 export const FONT_PX = 13;
-/** 에너지 지수 감쇠 시간상수(ms). 체감 잔상 ≈ τ·ln(1/ε) ≈ 2.9s. */
-export const DECAY_TAU_MS = 900;
+/** 에너지 지수 감쇠 시간상수(ms). 체감 잔상 ≈ τ·ln(1/ε) ≈ 1s. */
+export const DECAY_TAU_MS = 300;
 /** 이 미만으로 식은 에너지는 0으로 스냅하고 active 집합에서 퇴출한다. */
 export const ENERGY_EPSILON = 0.02;
 /** 감쇠 dt 상한(ms) — 탭 복귀 등 큰 시간 점프에서 잔상이 한 번에 다 식지 않게. */

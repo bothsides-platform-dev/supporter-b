@@ -10,6 +10,7 @@ import { demoWorkspaceName } from '@/components/landing/demo-fixtures';
 import { DemoSidebar } from './DemoSidebar';
 import { DemoCursor } from './DemoCursor';
 import { useCappedEntryScale } from './use-capped-entry-scale';
+import { useDemoFitScale } from './use-demo-fit-scale';
 import { demoTriggerSelector, demoCursorHint, DEMO_WINDOW_TRANSITION } from './demo-triggers';
 import { useBlockSidebarShortcut, blockSidebarTriggerClick } from './use-block-sidebar-shortcut';
 import { HomePageHost } from './pages/HomePageHost';
@@ -23,6 +24,11 @@ const PAGE_PATH: Record<number, string> = {
   3: '/rfp/P-2606-0042',
   4: '/rfp-create',
 };
+
+// 데스크톱 데모는 이 고정 폭 캔버스에 그린 뒤 창 폭에 맞게 축소한다(useDemoFitScale). 창이
+// 화면보다 좁은 768~1080px 구간에서 테이블 등이 짓눌려 줄바꿈되던 문제를 없앤다. 폰(<768)은
+// 모바일 레이아웃. 1080 은 랜딩 컨테이너 폭과 동일 — 넓은 화면(box=1080)에선 배율 1(무변경).
+const DESKTOP_CANVAS_W = 1080;
 
 // SidebarProvider 인라인 스타일이 ui/sidebar의 h-dvh/min-h-svh를 이겨 프레임 안에 가둔다.
 const sidebarStyle = {
@@ -42,6 +48,7 @@ export function DemoAppShell() {
   const inView = useInView(rootRef, { once: true, amount: 0.3 });
   const isMobile = useIsMobile();
   const maxScale = useCappedEntryScale(rootRef, 1.1);
+  const fitScale = useDemoFitScale(rootRef, DESKTOP_CANVAS_W);
   const [page, setPage] = useState(1);
   useBlockSidebarShortcut();
 
@@ -70,6 +77,22 @@ export function DemoAppShell() {
     [navigate],
   );
 
+  // 사이드바 + 실제 페이지 — 데스크톱은 고정 캔버스에 그려 축소, 모바일은 자연 폭(동일 콘텐츠).
+  const appContent = (
+    <SidebarProvider style={sidebarStyle}>
+      <DemoSidebar workspaceName={demoWorkspaceName} />
+      <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
+        <MobileShellBar workspaceName={demoWorkspaceName} />
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+          {page === 1 && <HomePageHost />}
+          {page === 2 && <RfpListPageHost onOpenRfp={() => goToPage(3)} />}
+          {page === 3 && <DealRoomPageHost />}
+          {page === 4 && <WizardPageHost enabled={false} />}
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+
   return (
     <DemoNavProvider value={{ pathname: PAGE_PATH[page], search: '', navigate }}>
       <div className="flex flex-col gap-3">
@@ -90,18 +113,22 @@ export function DemoAppShell() {
             }}
             className="demo-app-window relative h-[600px] overflow-hidden rounded-xl border border-[var(--md-sys-color-outline-variant)]"
           >
-            <SidebarProvider style={sidebarStyle}>
-              <DemoSidebar workspaceName={demoWorkspaceName} />
-              <SidebarInset className="flex min-w-0 flex-1 flex-col bg-[var(--shell-chrome-bg)]">
-                <MobileShellBar workspaceName={demoWorkspaceName} />
-                <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-                  {page === 1 && <HomePageHost />}
-                  {page === 2 && <RfpListPageHost onOpenRfp={() => goToPage(3)} />}
-                  {page === 3 && <DealRoomPageHost />}
-                  {page === 4 && <WizardPageHost enabled={false} />}
-                </div>
-              </SidebarInset>
-            </SidebarProvider>
+            {isMobile ? (
+              appContent
+            ) : (
+              // 데스크톱 고정 캔버스(1080) — 창보다 좁으면 fitScale 로 축소해 줄바꿈을 막는다.
+              // height = 600/fitScale 이라 축소 후 시각 높이가 정확히 창(600px)을 채운다.
+              <div
+                className="absolute left-0 top-0 origin-top-left"
+                style={{
+                  width: DESKTOP_CANVAS_W,
+                  height: `${600 / fitScale}px`,
+                  transform: `scale(${fitScale})`,
+                }}
+              >
+                {appContent}
+              </div>
+            )}
 
             {/* 모바일 진행 어포던스 — 사이드바(1·3 단계)가 off-canvas Sheet로 접혀 못 누르므로,
                 창 안에 '다음 화면' 버튼을 두어 커서가 이를 가리키고 방문자가 눌러 진행한다.

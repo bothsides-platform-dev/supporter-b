@@ -1,13 +1,13 @@
 {
   "name": "supporter-b",
-  "version": "0.2.65.4",
+  "version": "0.2.66.0",
   "private": true,
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true; node scripts/git/install-merge-drivers.mjs || true",
-    "dev": "next dev",
+    "dev": "NODE_OPTIONS='--max-old-space-size=4096' next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --cache",
