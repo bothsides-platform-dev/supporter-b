@@ -18,11 +18,15 @@ export function BrandMark({
   size = 20,
   className,
   colorVar = '--md-sys-color-on-surface',
+  strokeWidth = 450,
 }: {
   size?: number | string
   className?: string
   /** 마크 잉크 색으로 쓸 CSS 커스텀 프로퍼티 이름(-- 접두 포함). 다크 씬 등 inverse 토큰 컨텍스트에서 오버라이드. */
   colorVar?: string
+  /** path-space 단위 stroke 굵기 — 기본값은 Logo/SidebarBrand의 font-black 워드마크와 짝을 맞춘 값.
+      본문 텍스트(예: font-medium 헤드라인) 옆에 쓸 때는 더 낮은 값으로 오버라이드해 무게감을 맞춘다. */
+  strokeWidth?: number
 }) {
   const color = `var(${colorVar})`
   return (
@@ -36,7 +40,7 @@ export function BrandMark({
     >
       <g transform="translate(0 1254) scale(0.1 -0.1)" fill={color}>
         {/* stroke = 은은한 볼드 처리 — 채움 실루엣 위에 같은 색 stroke를 덧씌워 윤곽만 균일하게 두껍힘 */}
-        <path d={BRAND_MARK_PATH} stroke={color} strokeWidth={450} strokeLinejoin="round" />
+        <path d={BRAND_MARK_PATH} stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" />
       </g>
     </svg>
   )

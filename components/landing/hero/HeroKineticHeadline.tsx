@@ -26,6 +26,7 @@ export function BrandWordB({ particle }: { particle: string }) {
         size="0.82em"
         className="inline-block translate-y-[0.15em]"
         colorVar="--md-sys-color-inverse-on-surface"
+        strokeWidth={100}
       />
       {particle}
     </span>
