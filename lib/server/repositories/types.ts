@@ -239,7 +239,7 @@ export interface WorkspaceRepo {
   approvedMemberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
   /**
    * 여러 워크스페이스의 멤버를 (workspaceId, userId, role, email) 평면 목록으로 배치 조회.
-   * 시스템 계정 제외. 빈 입력은 빈 배열. 초대 일괄 발송(멤버 알림 + admin 메일)용.
+   * 시스템 계정 제외. 빈 입력은 빈 배열. 초대 일괄 발송(멤버 알림 + 승인된 멤버 전원 메일)용.
    */
   memberRecipientsBatch(
     wsIds: string[],

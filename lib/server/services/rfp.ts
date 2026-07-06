@@ -803,7 +803,7 @@ export class RfpService {
         tx,
       );
 
-      // 3) 알림 + 이메일 팬아웃 (대상 PG admin 멤버).
+      // 3) 알림 + 이메일 팬아웃 (대상 PG 승인된 멤버 전원).
       const deadlineLabel = input.newDeadline.toISOString().replace('T', ' ').slice(0, 16);
       const inboxUrl = `${baseUrlFor('pg')}/inbox/${rfp.code}`;
       const buyerName = (await this.workspaceRepo.findById(rfp.buyerWsId, tx))?.name ?? '구매사';
