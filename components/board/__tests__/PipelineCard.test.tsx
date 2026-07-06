@@ -35,7 +35,6 @@ function makeBuyerCard(overrides: Partial<BuyerKanbanCard> = {}): BoardCard {
     updatedAt: new Date().toISOString(),
     invitedPgCount: 3,
     submittedBidCount: 1,
-    isSample: false,
     status: 'sent',
     isCancelled: false,
     ...overrides,

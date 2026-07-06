@@ -54,8 +54,6 @@ export type RFP = {
   // PG에게 숨길 필드 경로 목록(예: 'currentTerms.feeRate'). currentFeeVisibleToPg의 일반화.
   // loadPgRfpDetail이 STRIP allowlist와 교집합만 server-side로 제거한다.
   hiddenFromPg?: string[];
-  // 온보딩 샘플 RFP 여부. 목록·상세에서 '샘플' 칩 + 읽기전용 샌드박스를 구동.
-  isSample?: boolean;
   // 계약 유형(선택사항). null이면 미표시.
   contractType?: 'new' | 'renewal' | null;
 };

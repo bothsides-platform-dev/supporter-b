@@ -26,7 +26,6 @@ import { DealRoomActionRail, type RailAction } from '@/components/deal-room/Deal
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { RequestConditionsView } from '@/components/rfp/RequestConditionsView';
-import { SampleRfpBanner } from '@/components/rfp/SampleRfpBanner';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { RfpBoardVisibilityStatus } from '@/components/rfp/RfpBoardVisibilityStatus';
 import { Label } from '@/components/primitives/Label';
@@ -73,7 +72,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
     ? bids.find((b) => b.pgWsId === focusedWsId)
     : undefined;
   const pgName = (wsId?: string) => (wsId ? (pgWsNameMap[wsId] ?? wsId) : '');
-  const canAward = rfp.status === 'sent' && !rfp.isSample;
+  const canAward = rfp.status === 'sent';
   const isOpenStatus = rfp.status === 'sent';
 
   const tabs: DealRoomTab[] = [
@@ -111,7 +110,6 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
             rfpCode={rfp.code}
             requoteByPg={requoteByPg}
             buyerGrade={rfp.bizProfile?.grade}
-            isSample={rfp.isSample ?? false}
             hideHeader
           />
         </>
@@ -175,11 +173,6 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {rfp.isSample && (
-        <div className="shrink-0 px-6 pt-4">
-          <SampleRfpBanner rfpCode={rfp.code} />
-        </div>
-      )}
       <div className="flex min-h-0 flex-1 max-lg:flex-col">
         <DealRoomActionRail actions={actions} />
         <div className="min-w-0 flex-1">

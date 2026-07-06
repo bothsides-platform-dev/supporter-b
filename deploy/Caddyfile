@@ -8,8 +8,9 @@
 {$APP_DOMAIN}, partner.{$APP_DOMAIN} {
 	encode zstd gzip
 
-	# Attachments are stored as Postgres bytea and posted through the app.
-	# Raise the proxy body limit above the default to allow file uploads.
+	# Attachment bytes go browser -> R2 directly (presigned PUT) and no longer
+	# pass through this proxy. The raised body limit remains for the app-proxied
+	# uploads that are left: user avatar / workspace logo (5MB cap each).
 	request_body {
 		max_size 25MB
 	}

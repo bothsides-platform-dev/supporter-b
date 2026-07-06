@@ -73,8 +73,6 @@ export const rfps = pgTable(
     // PG 에게 숨길 필드 경로 목록 (예: 'currentTerms.feeRate'). currentFeeVisibleToPg 의 일반화.
     // loadPgRfpDetail 이 PG_STRIP allowlist(HIDEABLE_PG_PATHS) 와 교집합만 server-side strip.
     hiddenFromPg: text('hidden_from_pg').array().notNull().default([]),
-    // 온보딩 샘플 RFP 표식. true면 '샘플' 칩·읽기전용 샌드박스·전용 하드삭제 게이트가 켜진다.
-    isSample: boolean('is_sample').notNull().default(false),
     // 계약 유형: 신규 계약('new') 또는 갱신 계약('renewal'). 선택사항 — null이면 미표시.
     contractType: contractTypeEnum('contract_type'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),

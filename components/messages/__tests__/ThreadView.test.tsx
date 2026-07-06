@@ -66,11 +66,11 @@ vi.mock('@/lib/server/actions/chat/saveTemplateAction', () => ({
   saveTemplateAction: vi.fn(),
 }));
 
-// http (ky) is used for the `/api/files/upload` POST. Mock it so the test can
+// uploadAttachment (presigned 3-step client helper). Mock it so the test can
 // hold the upload promise open and assert the in-progress (uploading) UI.
-const httpPost = vi.fn();
-vi.mock('@/lib/http', () => ({
-  http: { post: (...args: unknown[]) => httpPost(...args) },
+const uploadAttachment = vi.fn();
+vi.mock('@/lib/attachments/upload-client', () => ({
+  uploadAttachment: (...args: unknown[]) => uploadAttachment(...args),
 }));
 
 // toast — capture failure feedback calls.
@@ -92,7 +92,7 @@ beforeEach(() => {
   markConversationReadAction.mockReset();
   markConversationReadAction.mockResolvedValue({ ok: true });
   sendTyping.mockReset();
-  httpPost.mockReset();
+  uploadAttachment.mockReset();
   toast.mockReset();
   // 초안 보존이 localStorage 를 쓰므로 테스트 간 격리를 위해 매번 비운다.
   window.localStorage.clear();
@@ -526,9 +526,7 @@ describe('ThreadView', () => {
 
   it('f.type이 빈 문자열인 PDF 파일도 확장자 기반으로 업로드 스켈레톤 칩이 뜬다', async () => {
     const user = userEvent.setup();
-    httpPost.mockReturnValue({
-      json: () => Promise.resolve({ id: 'att-empty-mime', name: '보고서.pdf', size: 2048, mimeType: 'application/pdf' }),
-    });
+    uploadAttachment.mockResolvedValue({ id: 'att-empty-mime', name: '보고서.pdf', size: 2048, mimeType: 'application/pdf' });
 
     const { container } = render(base());
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
@@ -542,9 +540,7 @@ describe('ThreadView', () => {
 
   it('서버 업로드 실패 시 행이 제거되지 않고 에러 칩으로 전환되며, X 버튼으로 제거할 수 있다', async () => {
     const user = userEvent.setup();
-    httpPost.mockReturnValue({
-      json: () => Promise.reject(new Error('network error')),
-    });
+    uploadAttachment.mockRejectedValue(new Error('network error'));
 
     const { container } = render(base());
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
@@ -576,10 +572,10 @@ describe('ThreadView', () => {
     // Construct a minimal HTTPError with a response stub carrying status 415.
     const { HTTPError } = await import('ky');
     const fakeResponse = { status: 415, statusText: 'Unsupported Media Type' } as Response;
-    const fakeRequest = new Request('https://example.com/api/files/upload', { method: 'POST' });
+    const fakeRequest = new Request('https://example.com/api/files/att/complete', { method: 'POST' });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const kyErr = new HTTPError(fakeResponse, fakeRequest, {} as any);
-    httpPost.mockReturnValue({ json: () => Promise.reject(kyErr) });
+    uploadAttachment.mockRejectedValue(kyErr);
 
     const { container } = render(base());
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
@@ -604,17 +600,15 @@ describe('ThreadView', () => {
       expect(screen.queryByLabelText('큰파일.pdf 업로드 중')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('큰파일.pdf 업로드 실패')).not.toBeInTheDocument();
     });
-    // httpPost must not have been called either.
-    expect(httpPost).not.toHaveBeenCalled();
+    // uploadAttachment must not have been called either.
+    expect(uploadAttachment).not.toHaveBeenCalled();
   });
 
   it('첨부 업로드 중에는 "업로드 중" 스켈레톤 칩을 보여주고 전송을 잠그며, 완료되면 일반 칩으로 바뀐다', async () => {
     const user = userEvent.setup();
     // 업로드 응답을 테스트가 직접 resolve 하도록 promise 를 붙잡는다.
     let resolveUpload: ((v: unknown) => void) | null = null;
-    httpPost.mockReturnValue({
-      json: () => new Promise((res) => { resolveUpload = res; }),
-    });
+    uploadAttachment.mockReturnValue(new Promise((res) => { resolveUpload = res; }));
 
     const { container } = render(base());
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
@@ -666,7 +660,7 @@ describe('ThreadView 실패 피드백', () => {
 
   it('첨부 업로드 실패 시 에러 칩으로 전환되고 토스트는 띄우지 않는다', async () => {
     const user = userEvent.setup();
-    httpPost.mockReturnValue({ json: () => Promise.reject(new Error('upload failed')) });
+    uploadAttachment.mockRejectedValue(new Error('upload failed'));
     const { container } = render(base());
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File([new Uint8Array([1, 2, 3])], '실패.pdf', { type: 'application/pdf' });
@@ -1147,27 +1141,10 @@ describe('ThreadView 작성자(담당자) 표시', () => {
   });
 });
 
-describe('ThreadView — sendDisabledReason="sample" (샘플 RFP)', () => {
-  it('샘플 안내 문구를 보여주고 전송 버튼·입력을 막는다', () => {
-    render(base({ sendDisabledReason: 'sample' }));
-    expect(screen.getByText(/샘플에서는 메시지를 보낼 수 없어요/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
-    expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toBeDisabled();
-  });
-
-  it('Enter 로도 전송되지 않는다', async () => {
-    render(base({ sendDisabledReason: 'sample' }));
-    const ta = screen.getByPlaceholderText('메시지를 입력하세요…') as HTMLTextAreaElement;
-    fireEvent.keyDown(ta, { key: 'Enter' });
-    expect(sendChatMessageAction).not.toHaveBeenCalled();
-  });
-});
-
 describe('ThreadView — sendDisabledReason="closed" (선정 종료)', () => {
   it('종료 안내 문구를 보여주고 전송 버튼·입력을 막는다', () => {
     render(base({ sendDisabledReason: 'closed' }));
     expect(screen.getByText(/선정이 끝나 이 대화는 종료됐어요/)).toBeInTheDocument();
-    expect(screen.queryByText(/샘플에서는 메시지를 보낼 수 없어요/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
     expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toBeDisabled();
   });

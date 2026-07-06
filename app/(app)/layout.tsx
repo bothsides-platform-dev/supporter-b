@@ -125,7 +125,7 @@ export default async function AppLayout({
           {children}
         </AppSidebarLayout>
         <CommandPalette workspaceType={active.type} />
-        <PresenceClient workspaceId={active.id} isDemo={active.isDemo ?? false} />
+        <PresenceClient workspaceId={active.id} />
         <GlobalShortcuts />
         <SentryUserContext user={sentryUser} />
       </WorkspacePresenceProvider>

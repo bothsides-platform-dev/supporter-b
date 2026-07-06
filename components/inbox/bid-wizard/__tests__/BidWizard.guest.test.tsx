@@ -21,11 +21,6 @@ vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: (i: unknown) => submitBidMock(i),
 }));
 
-const simulateAwardMock = vi.fn(async (_i: unknown) => ({ ok: true as const }));
-vi.mock('@/lib/server/actions/onboarding/simulateSampleAwardAction', () => ({
-  simulateSampleAwardAction: (i: unknown) => simulateAwardMock(i),
-}));
-vi.mock('../sample-award', () => ({ SAMPLE_AWARD_DELAY_MS: 20 }));
 vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
   saveQuoteTemplateAction: vi.fn(async () => ({ ok: true as const, templateId: 't1' })),
 }));
@@ -64,7 +59,6 @@ const rfp = {
   code: 'P-2606-0001',
   requiredPaymentMethods: ['card'] as PaymentMethod[],
   customPaymentMethods: [],
-  isSample: false,
 } as never;
 
 beforeEach(() => {

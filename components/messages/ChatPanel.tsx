@@ -33,7 +33,6 @@ import { ThreadPane } from './ThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import { TeamThreadPane } from './TeamThreadPane';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
-import { SampleSendDisabledNotice } from './SampleSendDisabledNotice';
 import { ClosedConversationNotice } from './ClosedConversationNotice';
 import type { SendDisabledReason } from './ThreadView';
 import { useConversationLookup } from './useConversationLookup';
@@ -43,8 +42,6 @@ type Props = {
   rfpId: string;
   rfpCode: string;
   rfpTitle: string;
-  /** 샘플 RFP — 상대방 채팅 전송 차단(팀 채팅은 정상). */
-  isSample?: boolean;
   /**
    * 선정이 끝나 대화를 닫아야 할 상대(워크스페이스) ID 목록. 포커스된 상대가 이
    * 목록에 있으면 상대방 채팅을 'closed' 사유로 비활성화한다(팀 채팅은 정상).
@@ -61,7 +58,6 @@ const RAIL_TABS = [
 
 export function ChatPanel({
   rfpId,
-  isSample = false,
   closedCounterpartyIds,
   onClose,
 }: Props) {
@@ -75,14 +71,10 @@ export function ChatPanel({
     tab === 'counterparty',
   );
 
-  // 상대방 채팅 전송 차단 사유 — 샘플이 우선, 그다음 선정 종료(미선정 PG). 팀 탭 무관.
+  // 상대방 채팅 전송 차단 사유 — 선정 종료(미선정 PG). 팀 탭 무관.
   const counterpartyClosed =
     !!activeWsId && (closedCounterpartyIds?.includes(activeWsId) ?? false);
-  const sendDisabledReason: SendDisabledReason | null = isSample
-    ? 'sample'
-    : counterpartyClosed
-      ? 'closed'
-      : null;
+  const sendDisabledReason: SendDisabledReason | null = counterpartyClosed ? 'closed' : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-surface)]">
@@ -227,7 +219,6 @@ function NewConversationPane({
           className="py-12"
         />
       </div>
-      {sendDisabledReason === 'sample' && <SampleSendDisabledNotice />}
       {sendDisabledReason === 'closed' && <ClosedConversationNotice />}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <div className="flex items-end gap-2">

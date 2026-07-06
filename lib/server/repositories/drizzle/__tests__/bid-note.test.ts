@@ -159,6 +159,33 @@ describe('DrizzleBidNoteRepository', () => {
     expect(list[1].attachments[0].url).toBe(`/api/files/${attLate}`);
   });
 
+  it('excludes status=pending attachments (unverified presigned upload) from the hydrated list', async () => {
+    const noteId = randomUUID();
+    await ctx.repo.save({
+      id: noteId,
+      bidId: ctx.bidId,
+      authorId: ctx.buyer.id,
+      body: '첨부 대기',
+      createdAt: new Date(),
+    });
+    const ready = await insertAttachment(ctx.db, noteId, ctx.buyer.id, 'ready.pdf');
+    const pendingId = randomUUID();
+    await ctx.db.insert(attachments).values({
+      id: pendingId,
+      bidNoteId: noteId,
+      name: 'pending.pdf',
+      size: 1024,
+      mimeType: 'application/pdf',
+      uploadedBy: ctx.buyer.id,
+      status: 'pending',
+    });
+
+    const list = await ctx.repo.findByBid(ctx.bidId);
+    const note = list.find((n) => n.id === noteId)!;
+
+    expect(note.attachments.map((a) => a.id)).toEqual([ready]);
+  });
+
   it('remove() deletes a note; subsequent findByBid() excludes it', async () => {
     const noteId = randomUUID();
     await ctx.repo.save({

@@ -81,7 +81,6 @@ function Seed({ counterparty }: { counterparty: DealRoomCounterparty }) {
 
 function renderPanel(
   props: Partial<typeof baseProps> & {
-    isSample?: boolean;
     onClose?: () => void;
     closedCounterpartyIds?: string[];
   } = {},
@@ -144,14 +143,6 @@ describe('ChatPanel', () => {
     );
   });
 
-  it('isSample 면 ThreadPane 에 sendDisabledReason="sample" 을 넘긴다', async () => {
-    renderPanel({ isSample: true }, PG);
-    await screen.findByTestId('thread-pane');
-    expect(threadPaneProps).toHaveBeenCalledWith(
-      expect.objectContaining({ sendDisabledReason: 'sample' }),
-    );
-  });
-
   it('포커스 상대가 closedCounterpartyIds 에 있으면 sendDisabledReason="closed"', async () => {
     renderPanel({ closedCounterpartyIds: ['pg-ws-1'] }, PG);
     await screen.findByTestId('thread-pane');
@@ -165,14 +156,6 @@ describe('ChatPanel', () => {
     await screen.findByTestId('thread-pane');
     expect(threadPaneProps).toHaveBeenCalledWith(
       expect.objectContaining({ sendDisabledReason: null }),
-    );
-  });
-
-  it('isSample 이 closedCounterpartyIds 보다 우선한다', async () => {
-    renderPanel({ isSample: true, closedCounterpartyIds: ['pg-ws-1'] }, PG);
-    await screen.findByTestId('thread-pane');
-    expect(threadPaneProps).toHaveBeenCalledWith(
-      expect.objectContaining({ sendDisabledReason: 'sample' }),
     );
   });
 
