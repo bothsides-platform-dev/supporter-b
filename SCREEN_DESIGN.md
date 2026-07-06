@@ -28,7 +28,7 @@
 
 ### 0.1 Route Map
 
-> **호스트 라우팅 (prod)**: 단일 앱이 두 호스트를 서비스한다 — `supporter-b.com` (buyer), `partner.supporter-b.com` (PG). 아래 라우트 트리는 동일하며, `(app)/layout.tsx`가 요청 호스트를 확인해 세션 타입 불일치 시 올바른 호스트로 리다이렉트한다. 로컬 개발은 단일 호스트(라우팅 비활성).
+> **호스트 라우팅 (prod)**: 단일 앱이 두 호스트를 서비스한다 — `support-b.com` (buyer), `partner.support-b.com` (PG). 아래 라우트 트리는 동일하며, `(app)/layout.tsx`가 요청 호스트를 확인해 세션 타입 불일치 시 올바른 호스트로 리다이렉트한다. 로컬 개발은 단일 호스트(라우팅 비활성).
 
 ```
 Public
@@ -200,7 +200,7 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 
 ## 1. 인증 / 가입 (Public 영역)
 
-구매사(셀러)와 PG사 영업담당은 **처음부터 별도 경로**로 가입한다. `/signup` 진입 시 역할 선택 화면 없이 **요청 호스트**가 자동으로 분기한다(`supporter-b.com` → /signup/buyer, `partner.supporter-b.com` → /signup/pg). 각자에게 맞는 컨텍스트와 필드로 진행하며, 단일 P6 워크스페이스 선택 화면은 제거됐다.
+구매사(셀러)와 PG사 영업담당은 **처음부터 별도 경로**로 가입한다. `/signup` 진입 시 역할 선택 화면 없이 **요청 호스트**가 자동으로 분기한다(`support-b.com` → /signup/buyer, `partner.support-b.com` → /signup/pg). 각자에게 맞는 컨텍스트와 필드로 진행하며, 단일 P6 워크스페이스 선택 화면은 제거됐다.
 
 > **화면 ID 규칙**: B1~B7 = 구매사 앱 화면, P1~P6 = PG 앱 화면. 가입 전용 ID는 `s` 접미사 사용 — Rs1(호스트 redirect, 화면 없음), Bs1~Bs4(구매사 가입), Gs1~Gs4(PG 가입).
 
@@ -276,8 +276,8 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 
 #### Rs1 가입 진입점 `/signup` (화면 없음 — 서버사이드 redirect)
 - 사용자에게 보이는 화면 없음. 서버 컴포넌트가 요청 `Host` 헤더를 읽어 즉시 redirect.
-- `partner.supporter-b.com` → `/signup/pg` (Gs1)
-- 그 외 (`supporter-b.com`, 단일호스트 로컬, 미상) → `/signup/buyer` (Bs1)
+- `partner.support-b.com` → `/signup/pg` (Gs1)
+- 그 외 (`support-b.com`, 단일호스트 로컬, 미상) → `/signup/buyer` (Bs1)
 - `?next=` 쿼리스트링은 목적지로 그대로 전달, step-1 페이지(Bs1/Gs1)가 흡수함
 - 구현: `lib/site-routing.ts` → `signupTargetForHost(host, appOrigins())`
 - 기 세팅된 `SignupDraft`(초대 토큰 진입 시) 존재하면 Rs1 건너뜀 (기존과 동일)

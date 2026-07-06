@@ -54,9 +54,9 @@ describe('DrizzleAuditLogRepository', () => {
 
   it('actor 이메일이 MASTER_ACCOUNT_EMAILS면 viaMaster=true, 아니면 false (운영자 행위 식별)', async () => {
     const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
-    process.env.MASTER_ACCOUNT_EMAILS = 'ops@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'ops@support-b.com';
     try {
-      const master = await seedUser(db, { email: 'ops@supporter-b.com', name: '운영팀' });
+      const master = await seedUser(db, { email: 'ops@support-b.com', name: '운영팀' });
       await repo.insert({ actorUserId: master.id, actorWorkspaceId: wsId, action: 'rfp.award' });
       await repo.insert({ actorUserId: actorId, actorWorkspaceId: wsId, action: 'rfp.cancel' });
 

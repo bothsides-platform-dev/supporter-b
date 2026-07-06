@@ -64,17 +64,17 @@ describe('auth.config jwt callback — isMaster (env allowlist 유도)', () => {
   });
 
   it('로그인 시 allowlist 이메일이면 token.isMaster=true (+ token.email 스탬프)', async () => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
     const result = await jwt({
       token: {},
-      user: { id: 'm1', email: 'help@supporter-b.com', sessionVersion: 1 },
+      user: { id: 'm1', email: 'help@support-b.com', sessionVersion: 1 },
     });
-    expect(result.email).toBe('help@supporter-b.com');
+    expect(result.email).toBe('help@support-b.com');
     expect(result.isMaster).toBe(true);
   });
 
   it('로그인 시 allowlist가 아니면 token.isMaster=false', async () => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
     const result = await jwt({
       token: {},
       user: { id: 'u2', email: 'buyer@example.com', sessionVersion: 1 },
@@ -83,13 +83,13 @@ describe('auth.config jwt callback — isMaster (env allowlist 유도)', () => {
   });
 
   it('갱신(user 없음) 시에도 token.email에서 isMaster를 재유도한다', async () => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
-    const result = await jwt({ token: { id: 'm1', email: 'help@supporter-b.com' } });
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
+    const result = await jwt({ token: { id: 'm1', email: 'help@support-b.com' } });
     expect(result.isMaster).toBe(true);
   });
 
   it('위조 토큰(isMaster:true지만 email이 allowlist 아님)은 false로 재유도된다', async () => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
     const result = await jwt({ token: { id: 'x', email: 'intruder@gmail.com', isMaster: true } });
     expect(result.isMaster).toBe(false);
   });
@@ -109,7 +109,7 @@ describe('auth.config session callback', () => {
 
   it('token.isMaster를 session.user.isMaster로 노출한다', async () => {
     const result = await session({
-      session: { user: { id: 'm1', email: 'help@supporter-b.com' } },
+      session: { user: { id: 'm1', email: 'help@support-b.com' } },
       token: { id: 'm1', isMaster: true },
     });
     expect(result.user.isMaster).toBe(true);

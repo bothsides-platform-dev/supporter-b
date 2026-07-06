@@ -327,8 +327,8 @@ describe('flushChatDigests', () => {
   it('PG recipient digest email uses the partner host conversationUrl', async () => {
     const savedBuyer = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
     const savedPartner = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
-    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
-    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://support-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.support-b.com';
     try {
       const { buyerUser, buyerWs, pgUser, conv } = await seedScene();
       const base = new Date(Date.now() - 60_000);
@@ -340,8 +340,8 @@ describe('flushChatDigests', () => {
 
       expect(batchSender).toHaveBeenCalledTimes(1);
       const sent = batchSender.mock.calls[0][0][0];
-      expect(sent.html).toContain('https://partner.supporter-b.com/messages');
-      expect(sent.html).not.toContain('https://supporter-b.com/messages');
+      expect(sent.html).toContain('https://partner.support-b.com/messages');
+      expect(sent.html).not.toContain('https://support-b.com/messages');
     } finally {
       if (savedBuyer === undefined) delete process.env.NEXT_PUBLIC_BUYER_ORIGIN;
       else process.env.NEXT_PUBLIC_BUYER_ORIGIN = savedBuyer;
@@ -353,8 +353,8 @@ describe('flushChatDigests', () => {
   it('buyer recipient digest email uses the buyer host conversationUrl', async () => {
     const savedBuyer = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
     const savedPartner = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
-    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
-    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://support-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.support-b.com';
     try {
       const { buyerUser, pgUser, pgWs, conv } = await seedScene();
       const base = new Date(Date.now() - 60_000);
@@ -366,8 +366,8 @@ describe('flushChatDigests', () => {
 
       expect(batchSender).toHaveBeenCalledTimes(1);
       const sent = batchSender.mock.calls[0][0][0];
-      expect(sent.html).toContain('https://supporter-b.com/messages');
-      expect(sent.html).not.toContain('https://partner.supporter-b.com/messages');
+      expect(sent.html).toContain('https://support-b.com/messages');
+      expect(sent.html).not.toContain('https://partner.support-b.com/messages');
     } finally {
       if (savedBuyer === undefined) delete process.env.NEXT_PUBLIC_BUYER_ORIGIN;
       else process.env.NEXT_PUBLIC_BUYER_ORIGIN = savedBuyer;

@@ -21,11 +21,11 @@ describe('GET /logout', () => {
   it('세션을 비우고 /login 으로 리다이렉트한다', async () => {
     signOutMock.mockResolvedValue(undefined);
 
-    const res = await GET(new Request('https://supporter-b.com/logout'));
+    const res = await GET(new Request('https://support-b.com/logout'));
 
     expect(signOutMock).toHaveBeenCalledWith({ redirect: false });
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
+    expect(res.headers.get('location')).toBe('https://support-b.com/login');
   });
 
   it('Caddy 뒤 프로덕션 환경 — req.url이 localhost:3000이어도 Host 헤더 도메인으로 리다이렉트한다', async () => {
@@ -35,13 +35,13 @@ describe('GET /logout', () => {
     // req.url을 'https://localhost:3000/logout'으로 구성한다.
     // Caddy는 실제 도메인을 Host 헤더로 전달하므로 이를 우선 사용해야 한다.
     const req = new Request('https://localhost:3000/logout', {
-      headers: { host: 'supporter-b.com', 'x-forwarded-proto': 'https' },
+      headers: { host: 'support-b.com', 'x-forwarded-proto': 'https' },
     });
 
     const res = await GET(req);
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
+    expect(res.headers.get('location')).toBe('https://support-b.com/login');
   });
 
   it('X-Forwarded-Proto가 multi-value("https, http")여도 첫 번째 값으로 올바르게 리다이렉트한다', async () => {
@@ -51,22 +51,22 @@ describe('GET /logout', () => {
     // 쉼표 구분 복수값("https, http")으로 올 수 있다. split으로 첫 값을
     // 취하지 않으면 new URL("https, http://host/login") 이 TypeError를 던진다.
     const req = new Request('https://localhost:3000/logout', {
-      headers: { host: 'supporter-b.com', 'x-forwarded-proto': 'https, http' },
+      headers: { host: 'support-b.com', 'x-forwarded-proto': 'https, http' },
     });
 
     const res = await GET(req);
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
+    expect(res.headers.get('location')).toBe('https://support-b.com/login');
   });
 
   it('카운터가 없으면 평소처럼 /login 으로 보내고 __rl 카운터를 1로 세운다', async () => {
     signOutMock.mockResolvedValue(undefined);
 
-    const res = await GET(new Request('https://supporter-b.com/logout'));
+    const res = await GET(new Request('https://support-b.com/logout'));
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('https://supporter-b.com/login');
+    expect(res.headers.get('location')).toBe('https://support-b.com/login');
     const setCookies = res.headers.getSetCookie();
     expect(
       setCookies.some((c) => /^__rl=1\b/.test(c) && /Max-Age=\d+/.test(c)),
@@ -78,14 +78,14 @@ describe('GET /logout', () => {
     // 트립해 공격적 클리어 + 탈출 플래그로 루프를 끊고 안내 화면으로 보낸다.
     signOutMock.mockResolvedValue(undefined);
 
-    const req = new Request('https://supporter-b.com/logout', {
+    const req = new Request('https://support-b.com/logout', {
       headers: { cookie: '__rl=3; __Secure-authjs.session-token=stale' },
     });
     const res = await GET(req);
 
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe(
-      'https://supporter-b.com/login?reason=session',
+      'https://support-b.com/login?reason=session',
     );
     const setCookies = res.headers.getSetCookie();
     // __rl 자체는 만료(다음 진입은 0부터)
@@ -104,7 +104,7 @@ describe('GET /logout', () => {
     // host-only 변종까지 명시적으로 만료시켜야 stale 쿠키가 제거되고 루프가 끊긴다.
     signOutMock.mockResolvedValue(undefined);
 
-    const res = await GET(new Request('https://supporter-b.com/logout'));
+    const res = await GET(new Request('https://support-b.com/logout'));
 
     const setCookies = res.headers.getSetCookie();
     const expired = setCookies.filter(

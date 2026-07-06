@@ -600,7 +600,7 @@ describe('createRfpAction', () => {
       title: '신규 필드 테스트',
       deadline: new Date(Date.now() + 86_400_000).toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
-      websiteUrl: 'https://supporter-b.com/',
+      websiteUrl: 'https://support-b.com/',
       mainProducts: '의류',
       annualPgVolume: '10억',
       currentFeeRate: '3.4%',
@@ -613,7 +613,7 @@ describe('createRfpAction', () => {
 
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
     const terms = migrateCurrentTerms(row.currentTerms);
-    expect(row.websiteUrl).toBe('https://supporter-b.com/');
+    expect(row.websiteUrl).toBe('https://support-b.com/');
     expect(row.mainProducts).toBe('의류');
     expect(terms.annualPgVolume).toBe('10억');
     expect(terms.feeRate).toBe('3.4%');
@@ -1001,7 +1001,7 @@ describe('createRfpAction', () => {
 
   it('invite outbox HTML uses the partner host when NEXT_PUBLIC_PARTNER_ORIGIN is set', async () => {
     const savedPartner = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
-    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.support-b.com';
     try {
       const pg = await seedPgWorkspace(db, 'PartnerHostPG');
       const pgAdmin = await seedUser(db, { email: 'admin@partnerhost.test' });
@@ -1026,7 +1026,7 @@ describe('createRfpAction', () => {
         .from(outboxEntries)
         .where(eq(outboxEntries.event, 'rfp.invited'));
       expect(inviteRows).toHaveLength(1);
-      expect(inviteRows[0].html).toContain('https://partner.supporter-b.com/invite/rfp/');
+      expect(inviteRows[0].html).toContain('https://partner.support-b.com/invite/rfp/');
     } finally {
       if (savedPartner === undefined) delete process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
       else process.env.NEXT_PUBLIC_PARTNER_ORIGIN = savedPartner;

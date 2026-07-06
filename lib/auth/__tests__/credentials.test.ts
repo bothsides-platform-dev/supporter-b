@@ -85,12 +85,12 @@ describe('authorizeCredentials', () => {
 
   it('마스터/운영자 이메일은 비밀번호가 맞아도 로그인 불가 (Google 강제) — 단, compare는 수행', async () => {
     const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
     try {
-      await seedUser('help@supporter-b.com');
+      await seedUser('help@support-b.com');
       verifyPasswordMock.mockResolvedValue(true); // 올바른 비밀번호여도
       const r = await authorizeCredentials(db, {
-        email: 'help@supporter-b.com',
+        email: 'help@support-b.com',
         password: 'correct',
       });
       expect(r).toBeNull();

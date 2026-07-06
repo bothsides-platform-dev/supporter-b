@@ -8,20 +8,20 @@ describe('isValidWebsiteUrl', () => {
   });
 
   it('http(s):// 스킴 + 도메인 형태를 통과시킨다', () => {
-    expect(isValidWebsiteUrl('https://supporter-b.com/')).toBe(true);
+    expect(isValidWebsiteUrl('https://support-b.com/')).toBe(true);
     expect(isValidWebsiteUrl('http://www.a.co.kr')).toBe(true);
     expect(isValidWebsiteUrl('https://sub.domain.example.com/path?q=1')).toBe(true);
   });
 
   it('스킴 없는 도메인도 허용한다', () => {
-    expect(isValidWebsiteUrl('supporter-b.com')).toBe(true);
-    expect(isValidWebsiteUrl('www.supporter-b.com')).toBe(true);
+    expect(isValidWebsiteUrl('support-b.com')).toBe(true);
+    expect(isValidWebsiteUrl('www.support-b.com')).toBe(true);
     expect(isValidWebsiteUrl('sub.example.co.kr')).toBe(true);
   });
 
   it('앞뒤 공백이 있어도 트림 후 판정한다', () => {
-    expect(isValidWebsiteUrl('  https://supporter-b.com  ')).toBe(true);
-    expect(isValidWebsiteUrl('  supporter-b.com  ')).toBe(true);
+    expect(isValidWebsiteUrl('  https://support-b.com  ')).toBe(true);
+    expect(isValidWebsiteUrl('  support-b.com  ')).toBe(true);
   });
 
   it('http(s)가 아닌 스킴은 거부한다', () => {

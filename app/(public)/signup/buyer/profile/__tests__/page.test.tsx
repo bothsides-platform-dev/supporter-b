@@ -75,7 +75,7 @@ describe('BuyerProfilePage — 가입 완료 후 리디렉션', () => {
   });
 
   it('finalizeSignup이 절대 URL을 반환해도 window.location.assign으로 이동한다', async () => {
-    finalizeMock.mockResolvedValue({ ok: true, redirectTo: 'https://partner.supporter-b.com/inbox' });
+    finalizeMock.mockResolvedValue({ ok: true, redirectTo: 'https://partner.support-b.com/inbox' });
     const user = userEvent.setup();
     render(<BuyerProfilePage />);
 
@@ -84,7 +84,7 @@ describe('BuyerProfilePage — 가입 완료 후 리디렉션', () => {
     await user.click(screen.getByRole('button', { name: '가입 완료' }));
 
     await waitFor(() => {
-      expect(assignSpy).toHaveBeenCalledWith('https://partner.supporter-b.com/inbox');
+      expect(assignSpy).toHaveBeenCalledWith('https://partner.support-b.com/inbox');
     });
     expect(mockPush).not.toHaveBeenCalled();
   });

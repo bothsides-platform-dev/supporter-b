@@ -176,14 +176,14 @@ describe('BuyerProfilePage — cross-host redirect', () => {
     // jsdom 의 window.location.assign 은 "not implemented" 를 던지므로 스텁으로 교체.
     Object.defineProperty(window, 'location', {
       configurable: true,
-      value: { host: 'partner.supporter-b.com', assign },
+      value: { host: 'partner.support-b.com', assign },
     });
   });
 
   it('redirectTo 가 다른 호스트 절대 URL이면 router.push 대신 전체 페이지 이동한다', async () => {
     mockSignupComplete.mockReset().mockResolvedValue({
       ok: true,
-      redirectTo: 'https://supporter-b.com/rfp',
+      redirectTo: 'https://support-b.com/rfp',
       email: 'kim@example.com',
       password: 'Password123!',
     });
@@ -195,7 +195,7 @@ describe('BuyerProfilePage — cross-host redirect', () => {
     await user.click(screen.getByRole('button', { name: '가입 완료' }));
 
     await waitFor(() =>
-      expect(assign).toHaveBeenCalledWith('https://supporter-b.com/rfp'),
+      expect(assign).toHaveBeenCalledWith('https://support-b.com/rfp'),
     );
     expect(mockPush).not.toHaveBeenCalled();
   });

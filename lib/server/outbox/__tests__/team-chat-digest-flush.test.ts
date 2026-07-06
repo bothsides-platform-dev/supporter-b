@@ -327,8 +327,8 @@ describe('flushTeamChatDigests', () => {
   it('PG workspace team digest uses the partner host URL', async () => {
     const savedBuyer = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
     const savedPartner = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
-    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
-    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
+    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://support-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.support-b.com';
     try {
       const pgUser1 = await seedUser(db, { email: 'pg1@pg.com', name: 'PG담당' });
       const pgUser2 = await seedUser(db, { email: 'pg2@pg.com', name: 'PG동료' });
@@ -349,8 +349,8 @@ describe('flushTeamChatDigests', () => {
 
       expect(batchSender).toHaveBeenCalledTimes(1);
       const sent = batchSender.mock.calls[0][0][0];
-      expect(sent.html).toContain('partner.supporter-b.com');
-      expect(sent.html).not.toContain('https://supporter-b.com/messages');
+      expect(sent.html).toContain('partner.support-b.com');
+      expect(sent.html).not.toContain('https://support-b.com/messages');
     } finally {
       if (savedBuyer === undefined) delete process.env.NEXT_PUBLIC_BUYER_ORIGIN;
       else process.env.NEXT_PUBLIC_BUYER_ORIGIN = savedBuyer;
