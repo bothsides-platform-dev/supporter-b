@@ -23,6 +23,7 @@ import type {
 } from '@/lib/server/repositories/types';
 import type { ServiceResult } from './types';
 import type { MerchantTier } from '@/lib/types/bid';
+import type { SignupSource } from '@/lib/types/signup-source';
 
 export type AuthActor = { userId: string };
 
@@ -80,6 +81,7 @@ export class AuthService {
     wsName: string;
     bizProfile?: { bizNo: string; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed'; grade?: MerchantTier; gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset' };
     pgProfile?: { bizNo: string; slaDays?: number };
+    signupSource?: SignupSource;
   }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> {
     const email = normalizeEmail(input.email);
 
@@ -100,7 +102,10 @@ export class AuthService {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
-      await this.userRepo.create({ id: userId, email, passwordHash, name: input.name, phone: input.phone }, tx);
+      await this.userRepo.create(
+        { id: userId, email, passwordHash, name: input.name, phone: input.phone, signupSource: input.signupSource },
+        tx,
+      );
 
       const { workspaceId, applicationId } = await createWorkspaceInTx(tx, {
         userId,

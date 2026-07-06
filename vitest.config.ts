@@ -87,6 +87,7 @@ export default defineConfig({
             "lib/nav/**/*.{test,spec}.{ts,tsx}",
             "lib/__tests__/**/*.{test,spec}.{ts,tsx}",
             "lib/theme/**/*.{test,spec}.{ts,tsx}",
+            "lib/attribution/**/*.{test,spec}.{ts,tsx}",
           ],
         },
       },

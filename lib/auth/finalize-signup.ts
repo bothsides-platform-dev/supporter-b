@@ -6,6 +6,7 @@ import { joinCanonicalPgWorkspaceAction } from '@/lib/server/actions/auth/joinCa
 import { loginAction } from '@/lib/server/actions/auth/loginAction';
 import { clearSignupDraft, readSignupDraft } from '@/lib/auth/signup-storage';
 import { safeInternalNext } from '@/lib/auth/safe-next';
+import { readFirstTouch } from '@/lib/attribution/first-touch';
 
 export type FinalizeResult =
   | { ok: true; redirectTo: string }
@@ -24,6 +25,11 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   if (!d.email || !d.password || !d.name || !d.phone || !d.phoneVerificationId) {
     return { ok: false, error: 'SESSION_EXPIRED' };
   }
+
+  // First-touch 유입 경로(lib/attribution/first-touch.ts) — buyer/pg 자가가입에만
+  // 실어 보낸다. 초대/canonical-PG 합류는 유입처가 초대 이메일로 자명하므로 제외
+  // (아래 두 분기는 signupSource 를 넘기지 않는다).
+  const signupSource = readFirstTouch() ?? undefined;
 
   let r;
   if (d.selectedPgWorkspaceId) {
@@ -57,6 +63,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
       wsKind: 'pg',
       wsName: d.wsName,
       pgProfile: { bizNo: d.bizNo },
+      signupSource,
     });
   } else {
     if (!d.wsName || !d.bizProfile) return { ok: false, error: 'SESSION_EXPIRED' };
@@ -69,6 +76,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
       wsKind: 'buyer',
       wsName: d.wsName,
       bizProfile: d.bizProfile,
+      signupSource,
     });
   }
 

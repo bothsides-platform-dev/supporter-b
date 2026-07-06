@@ -159,6 +159,27 @@ describe('AuthService.completeSignup', () => {
     expect(m.role).toBe('admin');
   });
 
+  it('persists signupSource on the created user when provided', async () => {
+    const svc = await buildService();
+    const otpId = await seedVerifiedOtp('01099999999');
+
+    const r = await svc.completeSignup({
+      email: 'buyer-attrib@example.com',
+      name: '김구매',
+      plainPassword: 'Password123!',
+      phone: '01099999999',
+      phoneVerificationId: otpId,
+      wsKind: 'buyer',
+      wsName: '테스트구매사',
+      bizProfile: { bizNo: '1234567890', taxType: 'general', status: 'active' },
+      signupSource: { _v: 1, utmSource: 'google', utmCampaign: 'brand' },
+    });
+
+    expect(r.ok).toBe(true);
+    const [u] = await db.select().from(users).where(eq(users.email, 'buyer-attrib@example.com'));
+    expect(u.signupSource).toEqual({ _v: 1, utmSource: 'google', utmCampaign: 'brand' });
+  });
+
   it('returns PHONE_NOT_VERIFIED when OTP is not verified', async () => {
     const svc = await buildService();
     const r = await svc.completeSignup({

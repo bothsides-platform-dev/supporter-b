@@ -6,6 +6,7 @@ import type { User } from '@/lib/types/user';
 import { hashPassword } from '@/lib/auth/password';
 import { migrateUserOnboarding } from '@/lib/types/onboarding';
 import type { UserOnboarding, OnboardingKey, OnboardingTaskState } from '@/lib/types/onboarding';
+import type { SignupSource } from '@/lib/types/signup-source';
 import type { UserRepo, Tx } from '../types';
 
 type UserRow = typeof users.$inferSelect;
@@ -64,7 +65,14 @@ export class DrizzleUserRepository implements UserRepo {
   }
 
   async create(
-    params: { id: string; email: string; passwordHash: string; name: string; phone: string },
+    params: {
+      id: string;
+      email: string;
+      passwordHash: string;
+      name: string;
+      phone: string;
+      signupSource?: SignupSource;
+    },
     tx?: Tx,
   ): Promise<void> {
     const db = this.h(tx);
@@ -77,6 +85,7 @@ export class DrizzleUserRepository implements UserRepo {
       avatarColor: 'ink',
       status: 'active',
       emailVerified: false,
+      ...(params.signupSource ? { signupSource: params.signupSource } : {}),
     });
   }
 

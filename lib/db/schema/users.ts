@@ -37,6 +37,11 @@ export const users = pgTable('users', {
   // 유저 단위 온보딩 상태의 버전드 JSONB 문서 (lib/types/onboarding.ts UserOnboardingV1).
   // rfps.current_terms 패턴과 동일 — 새 온보딩 태스크는 DDL 없이 타입 수정만.
   onboarding: jsonb('onboarding').notNull().default(sql`'{}'::jsonb`),
+  // First-touch 가입 유입 경로(UTM/외부 referrer/랜딩 경로) 버전드 JSONB 문서
+  // (lib/types/signup-source.ts SignupSourceV1). onboarding 과 동일 패턴 — 새 유입
+  // 필드 추가는 DDL 없이 타입 수정만. 초대/canonical-PG 합류 경로는 이 필드를 채우지
+  // 않는다(유입처가 초대 이메일로 자명) — lib/auth/finalizeSignup.ts 참조.
+  signupSource: jsonb('signup_source').notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   // Auto-maintained by the `set_updated_at` trigger (see 0000 migration).

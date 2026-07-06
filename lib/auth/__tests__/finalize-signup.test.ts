@@ -27,6 +27,11 @@ vi.mock('@/lib/server/actions/auth/joinCanonicalPgWorkspaceAction', () => ({
   joinCanonicalPgWorkspaceAction: (...a: any[]) => joinCanonicalMock(...a),
 }));
 
+const readFirstTouchMock = vi.fn();
+vi.mock('@/lib/attribution/first-touch', () => ({
+  readFirstTouch: () => readFirstTouchMock(),
+}));
+
 // 가입 직후 자동 로그인은 loginAction(서버사이드 signIn + 레이트리밋)을 재사용한다
 // (크로스호스트 CSRF/HTTP 왕복 회피 — partner.supporter-b.com 가입에서 클라 signIn 이
 // 막히던 버그). 클라 next-auth/react signIn 은 더 이상 쓰지 않는다.
@@ -65,6 +70,8 @@ beforeEach(() => {
   loginActionMock.mockReset();
   // 자동 로그인 기본값: 성공.
   loginActionMock.mockResolvedValue({ ok: true });
+  readFirstTouchMock.mockReset();
+  readFirstTouchMock.mockReturnValue(null);
   draftRef.value = {};
 });
 
@@ -206,6 +213,77 @@ describe('finalizeSignup — 서버사이드 자동 로그인', () => {
     const r = await finalizeSignup();
 
     expect(r).toEqual({ ok: false, error: 'SIGNIN_FAILED' });
+  });
+});
+
+describe('finalizeSignup — signupSource(first-touch 유입 경로) 전달', () => {
+  const SIGNUP_SOURCE = { _v: 1, utmSource: 'google', utmCampaign: 'brand' };
+
+  it('buyer 가입 시 readFirstTouch() 결과를 signupCompleteAction payload에 포함한다', async () => {
+    draftRef.value = { ...BUYER_DRAFT_BASE };
+    readFirstTouchMock.mockReturnValue(SIGNUP_SOURCE);
+    completeActionMock.mockResolvedValue({ ok: true, redirectTo: '/rfp', email: 'buyer@example.com', password: 'pw-123456' });
+
+    await finalizeSignup();
+
+    expect(completeActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ signupSource: SIGNUP_SOURCE }),
+    );
+  });
+
+  it('pg 가입 시에도 signupCompleteAction payload에 포함한다', async () => {
+    draftRef.value = {
+      email: 'pg@example.com',
+      password: 'pw-123456',
+      name: 'PG',
+      phone: '01012345678',
+      phoneVerificationId: 'vid-3',
+      workspaceType: 'pg',
+      wsName: 'PG사',
+      bizNo: '1234567890',
+    };
+    readFirstTouchMock.mockReturnValue(SIGNUP_SOURCE);
+    completeActionMock.mockResolvedValue({ ok: true, redirectTo: '/inbox', email: 'pg@example.com', password: 'pw-123456' });
+
+    await finalizeSignup();
+
+    expect(completeActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ signupSource: SIGNUP_SOURCE }),
+    );
+  });
+
+  it('초대 경로는 signupSource를 전달하지 않는다(유입처가 초대 이메일로 자명)', async () => {
+    draftRef.value = { ...INVITE_DRAFT };
+    readFirstTouchMock.mockReturnValue(SIGNUP_SOURCE);
+    inviteActionMock.mockResolvedValue({ ok: true, redirectTo: '/inbox', email: 'x@example.com', password: 'pw-123456' });
+
+    await finalizeSignup();
+
+    const callArg = inviteActionMock.mock.calls[0][0];
+    expect(callArg).not.toHaveProperty('signupSource');
+  });
+
+  it('canonical PG 합류 경로도 signupSource를 전달하지 않는다', async () => {
+    draftRef.value = { ...CANONICAL_PG_DRAFT };
+    readFirstTouchMock.mockReturnValue(SIGNUP_SOURCE);
+    joinCanonicalMock.mockResolvedValue({ ok: true, redirectTo: '/inbox', email: 'sales@toss.im', password: 'pw-123456' });
+
+    await finalizeSignup();
+
+    const callArg = joinCanonicalMock.mock.calls[0][0];
+    expect(callArg).not.toHaveProperty('signupSource');
+  });
+
+  it('first-touch 캡처가 없으면 signupSource는 undefined로 전달된다', async () => {
+    draftRef.value = { ...BUYER_DRAFT_BASE };
+    readFirstTouchMock.mockReturnValue(null);
+    completeActionMock.mockResolvedValue({ ok: true, redirectTo: '/rfp', email: 'buyer@example.com', password: 'pw-123456' });
+
+    await finalizeSignup();
+
+    expect(completeActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ signupSource: undefined }),
+    );
   });
 });
 
