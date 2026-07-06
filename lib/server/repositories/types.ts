@@ -15,6 +15,7 @@ import type {
 } from '@/lib/types/workspace';
 import type { User } from '@/lib/types/user';
 import type { UserOnboarding, OnboardingKey, OnboardingTaskState } from '@/lib/types/onboarding';
+import type { SignupSource } from '@/lib/types/signup-source';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { BoardColumn, ColumnKind } from '@/lib/types/column';
@@ -436,7 +437,15 @@ export interface UserRepo {
    * isUniqueViolation 로 EMAIL_TAKEN 분기). save(upsert)와 달리 충돌 시 갱신하지 않는다.
    */
   create(
-    params: { id: string; email: string; passwordHash: string; name: string; phone: string },
+    params: {
+      id: string;
+      email: string;
+      passwordHash: string;
+      name: string;
+      phone: string;
+      /** First-touch 가입 유입 경로(lib/types/signup-source.ts). 모든 가입 경로가 전달할 수 있다. */
+      signupSource?: SignupSource;
+    },
     tx?: Tx,
   ): Promise<void>;
   /** id 조회. */

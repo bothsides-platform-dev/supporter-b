@@ -159,6 +159,27 @@ describe('AuthService.completeSignup', () => {
     expect(m.role).toBe('admin');
   });
 
+  it('persists signupSource on the created user when provided', async () => {
+    const svc = await buildService();
+    const otpId = await seedVerifiedOtp('01099999999');
+
+    const r = await svc.completeSignup({
+      email: 'buyer-attrib@example.com',
+      name: '김구매',
+      plainPassword: 'Password123!',
+      phone: '01099999999',
+      phoneVerificationId: otpId,
+      wsKind: 'buyer',
+      wsName: '테스트구매사',
+      bizProfile: { bizNo: '1234567890', taxType: 'general', status: 'active' },
+      signupSource: { _v: 1, utmSource: 'google', utmCampaign: 'brand' },
+    });
+
+    expect(r.ok).toBe(true);
+    const [u] = await db.select().from(users).where(eq(users.email, 'buyer-attrib@example.com'));
+    expect(u.signupSource).toEqual({ _v: 1, utmSource: 'google', utmCampaign: 'brand' });
+  });
+
   it('returns PHONE_NOT_VERIFIED when OTP is not verified', async () => {
     const svc = await buildService();
     const r = await svc.completeSignup({
@@ -758,6 +779,21 @@ describe('AuthService.signupViaInvite', () => {
     });
     expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
   });
+
+  it('signupSource가 전달되면 그대로 영속된다', async () => {
+    const svc = await buildService();
+    const email = 'inv-attrib@example.com';
+    const { rawToken } = await seedInvitation({ email });
+    const otpId = await seedVerifiedOtp('01055555556');
+    const r = await svc.signupViaInvite({
+      email, name: '홍길동', plainPassword: 'Password123!',
+      phone: '01055555556', phoneVerificationId: otpId, wsInviteRawToken: rawToken,
+      signupSource: { _v: 1, utmSource: 'google' },
+    });
+    expect(r.ok).toBe(true);
+    const [u] = await db.select().from(users).where(eq(users.email, email));
+    expect(u.signupSource).toEqual({ _v: 1, utmSource: 'google' });
+  });
 });
 
 // ─── Task 3: joinCanonicalPgWorkspace 통합 테스트 ─────────────────────────────
@@ -820,6 +856,20 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
       phone: '01099991233', phoneVerificationId: otpId, selectedPgWorkspaceId: wsId,
     });
     expect(r).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
+  });
+
+  it('signupSource가 전달되면 그대로 영속된다', async () => {
+    const svc = await buildService();
+    const { wsId } = await seedCanonicalWs();
+    const otpId = await seedVerifiedOtp('01099991234');
+    const r = await svc.joinCanonicalPgWorkspace({
+      email: 'canon-attrib@example.com', name: '홍길동', plainPassword: 'Password123!',
+      phone: '01099991234', phoneVerificationId: otpId, selectedPgWorkspaceId: wsId,
+      signupSource: { _v: 1, utmSource: 'naver' },
+    });
+    expect(r.ok).toBe(true);
+    const [u] = await db.select().from(users).where(eq(users.email, 'canon-attrib@example.com'));
+    expect(u.signupSource).toEqual({ _v: 1, utmSource: 'naver' });
   });
 });
 

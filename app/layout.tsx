@@ -5,6 +5,7 @@ import { siteConfig } from "@/lib/site-config";
 import { getChannelMember } from "@/lib/channel-io/server";
 import { ChannelTalk } from "@/components/shell/ChannelTalk";
 import { Analytics } from "@/components/shell/Analytics";
+import { FirstTouchCapture } from "@/components/shell/FirstTouchCapture";
 import "./globals.css";
 
 const pretendard = localFont({
@@ -93,6 +94,7 @@ export default async function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <AxiomWebVitals />
+        <FirstTouchCapture />
         {children}
         <ChannelTalk pluginKey={pluginKey} member={member} />
         <Analytics gaId={gaId} />

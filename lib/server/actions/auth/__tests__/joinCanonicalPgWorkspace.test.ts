@@ -410,3 +410,27 @@ describe('joinCanonicalPgWorkspaceAction — 마스터 이메일 차단', () => 
     }
   });
 });
+
+describe('joinCanonicalPgWorkspaceAction — signupSource', () => {
+  it('signupSource가 전달되면 users.signup_source에 저장된다', async () => {
+    const ws = await seedCanonicalPgWorkspace();
+    const phoneId = await seedVerifiedOtp();
+
+    const r = await joinCanonicalPgWorkspaceAction({
+      email: TEST_EMAIL,
+      name: TEST_NAME,
+      password: TEST_PASSWORD,
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: phoneId,
+      selectedPgWorkspaceId: ws.id,
+      signupSource: { _v: 1, utmSource: 'google' },
+    });
+
+    expect(r.ok).toBe(true);
+    const [u] = await db
+      .select({ signupSource: users.signupSource })
+      .from(users)
+      .where(eq(users.email, TEST_EMAIL));
+    expect(u.signupSource).toEqual({ _v: 1, utmSource: 'google' });
+  });
+});
