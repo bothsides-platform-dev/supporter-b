@@ -7,14 +7,14 @@ describe('SignupEmailGuide', () => {
   it('입력 전에는 중립 힌트를 보여준다', () => {
     render(<SignupEmailGuide email="" />);
     const guide = screen.getByRole('status');
-    expect(guide).toHaveTextContent('회사 이메일로 가입하면 팀원과 함께 쓰기 쉬워요.');
+    expect(guide).toHaveTextContent('회사 이메일을 입력해주세요');
     expect(guide).not.toHaveTextContent('별도 심사 과정이 추가될 수 있어요');
   });
 
   it('회사 도메인 이메일도 중립 힌트를 유지한다', () => {
     render(<SignupEmailGuide email="kim@acme.co.kr" />);
     const guide = screen.getByRole('status');
-    expect(guide).toHaveTextContent('회사 이메일로 가입하면 팀원과 함께 쓰기 쉬워요.');
+    expect(guide).toHaveTextContent('회사 이메일을 입력해주세요');
     expect(guide).not.toHaveTextContent('별도 심사 과정이 추가될 수 있어요');
   });
 
@@ -34,7 +34,7 @@ describe('SignupEmailGuide', () => {
   it('형식이 미완성인 입력은 힌트를 유지한다', () => {
     render(<SignupEmailGuide email="kim@gmail" />);
     const guide = screen.getByRole('status');
-    expect(guide).toHaveTextContent('회사 이메일로 가입하면');
+    expect(guide).toHaveTextContent('회사 이메일을 입력해주세요');
     expect(guide).not.toHaveTextContent('별도 심사 과정이 추가될 수 있어요');
   });
 

@@ -125,7 +125,7 @@ describe('BuyerSignupEmailPage — 이메일 blur 중복 검사', () => {
 describe('BuyerSignupEmailPage — 회사 이메일 권장 안내', () => {
   it('입력 전에는 중립 힌트를 보여준다', () => {
     render(<BuyerSignupEmailPage />);
-    expect(screen.getByText('회사 이메일로 가입하면 팀원과 함께 쓰기 쉬워요.')).toBeInTheDocument();
+    expect(screen.getByText('회사 이메일을 입력해주세요')).toBeInTheDocument();
   });
 
   it('무료 도메인 입력 시 개인 이메일 경고로 전환한다', async () => {
@@ -163,6 +163,6 @@ describe('BuyerSignupEmailPage — 회사 이메일 권장 안내', () => {
       expect(screen.getByText(/이 이메일로는 가입할 수 없어요/)).toBeInTheDocument();
     });
     expect(screen.queryByText(/별도 심사 과정이 추가될 수 있어요/)).not.toBeInTheDocument();
-    expect(screen.queryByText('회사 이메일로 가입하면 팀원과 함께 쓰기 쉬워요.')).not.toBeInTheDocument();
+    expect(screen.queryByText('회사 이메일을 입력해주세요')).not.toBeInTheDocument();
   });
 });
