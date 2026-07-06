@@ -247,6 +247,21 @@ describe('RfpService.rejectPgRequest', () => {
     const [req] = await db.select({ status: rfpPgRequests.status }).from(rfpPgRequests).where(eq(rfpPgRequests.id, env.requestId));
     expect(req!.status).toBe('rejected');
   });
+
+  it('승인 대기(pending_approval) PG 멤버에게는 pg.request.rejected 인앱 알림을 보내지 않는다', async () => {
+    const env = await seedRejectEnv();
+    const pendingMember = await seedUser(db, { email: 'pending@reject.com' });
+    await seedMembership(db, env.pgWsId, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const result = await service.rejectPgRequest(env.requestId, { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+    expect(result).toEqual({ ok: true });
+
+    const pendingNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, pendingMember.id), eq(notifications.type, 'pg.request.rejected')));
+    expect(pendingNotifs).toHaveLength(0);
+  });
 });
 
 // ─── RfpService.createPgRequest ──────────────────────────────────────────────
@@ -304,6 +319,21 @@ describe('RfpService.createPgRequest', () => {
     const rows = await db.select().from(rfpPgRequests).where(and(eq(rfpPgRequests.rfpId, env.rfpId), eq(rfpPgRequests.pgWsId, env.pgWsId)));
     expect(rows).toHaveLength(1);
     expect(rows[0]!.message).toBe('hello buyer!');
+  });
+
+  it('승인 대기(pending_approval) 구매사 멤버에게는 pg.request.received 인앱 알림을 보내지 않는다', async () => {
+    const env = await seedCreatePgRequestEnv();
+    const pendingMember = await seedUser(db, { email: 'pending@cpgreq.com' });
+    await seedMembership(db, env.buyerWsId, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const result = await service.createPgRequest(env.rfpCode, 'hello buyer!', { userId: env.pgUserId, workspaceId: env.pgWsId });
+    expect(result).toEqual({ ok: true });
+
+    const pendingNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, pendingMember.id), eq(notifications.type, 'pg.request.received')));
+    expect(pendingNotifs).toHaveLength(0);
   });
 });
 
@@ -395,6 +425,21 @@ describe('RfpService.acceptPgRequest', () => {
     expect(invitedEmails).toContain('pg@accept.com'); // admin
     expect(invitedEmails).toContain('member@accept.com'); // approved member
     expect(invitedEmails).not.toContain('pending@accept.com'); // pending-approval member excluded
+  });
+
+  it('승인 대기(pending_approval) PG 멤버에게는 pg.request.accepted 인앱 알림을 보내지 않는다', async () => {
+    const env = await seedAcceptEnv();
+    const pendingMember = await seedUser(db, { email: 'pending-inapp@accept.com' });
+    await seedMembership(db, env.pgWsId, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const result = await service.acceptPgRequest(env.requestId, { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+    expect(result).toEqual({ ok: true });
+
+    const pendingNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, pendingMember.id), eq(notifications.type, 'pg.request.accepted')));
+    expect(pendingNotifs).toHaveLength(0);
   });
 });
 
@@ -642,6 +687,26 @@ describe('RfpService.createRfp', () => {
     expect(invitedEmails).toContain('pg@crfp.com'); // admin
     expect(invitedEmails).toContain('member@crfp.com'); // approved member
     expect(invitedEmails).not.toContain('pending@crfp.com'); // pending-approval member excluded
+  });
+
+  it('즉시 발송(send=true) 시 승인 대기(pending_approval) PG 멤버에게는 rfp.invited 인앱 알림을 보내지 않는다', async () => {
+    const { buyerUserId, buyerWsId, pgWsId } = await seedCreateRfpEnv();
+    const pendingMember = await seedUser(db, { email: 'pending-inapp@crfp.com' });
+    await seedMembership(db, pgWsId, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const result = await service.createRfp({
+      title: 'Sent RFP Pending Excluded', deadline: new Date(Date.now() + 7 * 86400_000),
+      allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
+      requiredPaymentMethods: ['card'], customPaymentMethods: [],
+      send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
+    }, { userId: buyerUserId, workspaceId: buyerWsId });
+    expect(result.ok).toBe(true);
+
+    const pendingNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, pendingMember.id), eq(notifications.type, 'rfp.invited')));
+    expect(pendingNotifs).toHaveLength(0);
   });
 });
 
