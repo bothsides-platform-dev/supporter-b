@@ -25,11 +25,11 @@ export function PgLandingNav({ authed }: { authed: boolean }) {
   const [open, setOpen] = useState(false);
 
   const authLink = authed ? (
-    <Link href="/home" className={`${linkCls} ${overDarkLinkCls}`}>
+    <Link href="/home" className={`${linkCls} ${overDarkLinkCls} whitespace-nowrap`}>
       앱으로 이동 →
     </Link>
   ) : (
-    <Link href="/login" className={`${linkCls} ${overDarkLinkCls}`}>
+    <Link href="/login" className={`${linkCls} ${overDarkLinkCls} whitespace-nowrap`}>
       로그인 →
     </Link>
   );
@@ -47,13 +47,14 @@ export function PgLandingNav({ authed }: { authed: boolean }) {
 
       {authLink}
 
-      {/* 시작하기 CTA — 파트너 가입(/signup/pg)으로 이동. 다크 씬 위에서는 primary 토큰을
+      {/* 시작하기 CTA — 파트너 가입(/signup/pg)으로 이동. 모바일에선 숨기고(햄버거로 대체)
+          데스크톱에만 노출해 헤더 과밀·줄바꿈을 막는다. 다크 씬 위에서는 primary 토큰을
           inverse로 뒤집어 대비를 맞춘다. */}
       <ConsultButton
         href="/signup/pg"
         variant="primary"
         size="sm"
-        className="group-data-[over-dark]/lheader:[--md-sys-color-primary:var(--md-sys-color-inverse-primary)] group-data-[over-dark]/lheader:[--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]"
+        className="hidden md:inline-flex group-data-[over-dark]/lheader:[--md-sys-color-primary:var(--md-sys-color-inverse-primary)] group-data-[over-dark]/lheader:[--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]"
       >
         파트너 시작하기
       </ConsultButton>
