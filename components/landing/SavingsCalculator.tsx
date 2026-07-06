@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useInView } from 'motion/react';
 import { Slider } from '@/components/ui/slider';
 import { CostComparisonChart } from '@/components/landing/CostComparisonChart';
-import { formatKRW } from '@/lib/format';
+import { formatKRW } from '@/lib/utils/format';
 import { useAnimatedNumber } from '@/lib/landing/use-animated-number';
 import {
   SUPPORTER_B_RATE,

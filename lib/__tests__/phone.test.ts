@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatPhoneInput, isCompletePhone } from '@/lib/phone';
+import { formatPhoneInput, isCompletePhone } from '@/lib/utils/phone';
 
 describe('formatPhoneInput', () => {
   it('formats 11 raw digits into 010-XXXX-XXXX', () => {

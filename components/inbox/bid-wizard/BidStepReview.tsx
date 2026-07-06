@@ -13,7 +13,7 @@ import {
   type CustomPaymentMethod,
   type PaymentMethod,
 } from '@/lib/types/bid';
-import { formatKRW } from '@/lib/format';
+import { formatKRW } from '@/lib/utils/format';
 import { Divider } from '@/components/ui/Divider';
 
 const ERROR_LABELS: Record<string, string> = {

@@ -3,7 +3,7 @@
 // 배지, 아니면 병기만. 현재 조건이 전혀 없으면 '핵심 수치' 요약으로 강등 + 입력 안내.
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { formatKRW, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
+import { formatKRW, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import { parseCurrentValue, improvement, metricVerdict, cycleQuality } from '@/lib/utils/bid-compare';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
 import { Divider } from '@/components/ui/Divider';

@@ -6,9 +6,9 @@ import { Chip } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
-import { formatDate } from '@/lib/format';
+import { formatDate } from '@/lib/utils/format';
 import type { RFP } from '@/lib/types/rfp';
-import { RFP_STATUS_CHIP } from '@/lib/rfp-status';
+import { RFP_STATUS_CHIP } from '@/lib/rfp/rfp-status';
 
 type Props = {
   rfps: RFP[];

@@ -23,7 +23,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type { PublicationContext, Subscription } from 'centrifuge';
 
 import { getCentrifuge } from '@/lib/realtime/centrifuge-client';
-import { managedSubscribe } from '@/lib/realtime/managedSubscribe';
+import { managedSubscribe } from '@/lib/realtime/managed-subscribe';
 
 export type CentrifugoSubscriptionOptions = {
   // 구독 핸들 노출 — presence(presenceStats)·publish 등 채널별 동작을 소비처가 수행.

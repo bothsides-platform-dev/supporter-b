@@ -7,7 +7,7 @@ import { PhoneVerificationField } from '@/components/auth/PhoneVerificationField
 import { SignupStepper } from '@/components/auth/SignupStepper';
 import { useSignupDraftStore } from '@/lib/stores/signup-draft';
 import { readSignupDraft, writeSignupDraft, isSignupStorageAvailable } from '@/lib/auth/signup-storage';
-import { finalizeSignup } from '@/lib/auth/finalizeSignup';
+import { finalizeSignup } from '@/lib/auth/finalize-signup';
 
 export default function PgProfilePage() {
   const router = useRouter();

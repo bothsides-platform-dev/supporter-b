@@ -6,7 +6,7 @@ import {
   resolveMentionsToBody,
   type MentionCandidate,
 } from '../mention-input';
-import { ALL_TOKEN, serializeMention } from '@/lib/team-mentions';
+import { ALL_TOKEN, serializeMention } from '@/lib/utils/team-mentions';
 
 const U1 = '11111111-1111-4111-8111-111111111111';
 const U2 = '22222222-2222-4222-8222-222222222222';

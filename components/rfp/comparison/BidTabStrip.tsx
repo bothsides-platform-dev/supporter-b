@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { Chip } from '@/components/primitives/Chip';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
-import { formatKRW, formatPct } from '@/lib/format';
+import { formatKRW, formatPct } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 
 type RequoteByPg = Record<string, { status: 'pending' | 'responded'; round: number; deadline: string }>;

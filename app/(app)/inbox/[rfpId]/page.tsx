@@ -11,7 +11,7 @@ import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
 import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { DealRoomPageSkeleton } from '@/components/skeletons';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
-import { pgRequestChip } from '@/lib/rfp-status';
+import { pgRequestChip } from '@/lib/rfp/rfp-status';
 import { SamplePgDealRoom } from '@/components/onboarding/SamplePgDealRoom';
 import { SAMPLE_RFP_CODE, samplePgRfp } from '@/lib/onboarding/fixtures';
 

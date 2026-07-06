@@ -6,7 +6,7 @@ import {
   type PaymentMethod,
   type TierRates,
 } from '@/lib/types/bid';
-import { formatDate, formatPct, formatKRW } from '@/lib/format';
+import { formatDate, formatPct, formatKRW } from '@/lib/utils/format';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 

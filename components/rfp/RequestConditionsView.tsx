@@ -3,7 +3,7 @@
 import { Label } from '@/components/primitives/Label';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
-import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
+import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import { Divider } from '@/components/ui/Divider';
 

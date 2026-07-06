@@ -36,7 +36,7 @@ vi.mock('@/lib/server/actions/auth/loginAction', () => ({
   loginAction: (...a: any[]) => loginActionMock(...a),
 }));
 
-import { finalizeSignup } from '@/lib/auth/finalizeSignup';
+import { finalizeSignup } from '@/lib/auth/finalize-signup';
 
 const INVITE_DRAFT = {
   email: 'x@example.com',

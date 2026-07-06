@@ -3,7 +3,7 @@
 import { Avatar } from '@/components/primitives/Avatar';
 import { Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { formatDate } from '@/lib/format';
+import { formatDate } from '@/lib/utils/format';
 import type { MentionItem } from './mention-input';
 
 type Props = {
