@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
+import { BrandMark } from '@/components/primitives/Logo';
 import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 
@@ -61,18 +62,8 @@ export function SidebarBrand({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* icon mark — bar + circle, ink on transparent (Logo default variant과 동일) */}
-      <svg
-        viewBox="0 0 32 32"
-        width="22"
-        height="22"
-        aria-hidden="true"
-        xmlns="http://www.w3.org/2000/svg"
-        className="shrink-0"
-      >
-        <rect x="5.5" y="5" width="4.5" height="22" rx="2.25" fill="var(--md-sys-color-on-surface)" />
-        <circle cx="21" cy="16" r="9" fill="var(--md-sys-color-on-surface)" />
-      </svg>
+      {/* icon mark — "B" 브랜드 마크, ink on transparent (Logo default variant과 동일) */}
+      <BrandMark className="shrink-0" />
       <motion.span
         aria-hidden="true"
         initial={false}
