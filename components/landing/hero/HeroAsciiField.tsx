@@ -134,11 +134,9 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 가드 ③(제거됨): 랜딩 연출은 사용자의 동작 줄이기 선호를 무시하고 항상 실행한다
-    // (제품 결정 — DESIGN.md §9 예외 ③). 터치 기기는 제외하지 않는다 — pointermove 는
-    // 드래그 중 pointerType=touch 로도 발생하므로 기존 onPointerMove/stampTrail 경로가
-    // 손가락 궤적에도 그대로 먹힌다.
-    const animate = true;
+    // 랜딩 연출은 사용자의 동작 줄이기 선호를 무시하고 항상 실행한다(제품 결정 — DESIGN.md §9
+    // 예외 ③). 터치 기기는 제외하지 않는다 — pointermove 는 드래그 중 pointerType=touch 로도
+    // 발생하므로 기존 onPointerMove/stampTrail 경로가 손가락 궤적에도 그대로 먹힌다.
 
     // 앵커 딥링크(#pricing 등)로 트랙 아래에서 진입하면 첫 change 이벤트 전에도 루프가 돌지
     // 않아야 한다 — HeroPinnedScene의 톤 스위치 mount-sync와 같은 패턴으로 초기값을 동기화.
@@ -388,7 +386,7 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     };
 
     const kick = () => {
-      if (disposed || !animate || running) return;
+      if (disposed || running) return;
       if (document.hidden || hiddenByScrollRef.current) return;
       running = true;
       lastFrame = 0;
@@ -398,7 +396,7 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     };
 
     const resume = () => {
-      if (disposed || !animate || running) return;
+      if (disposed || running) return;
       if (document.hidden || hiddenByScrollRef.current) return;
       // 일시정지 사이 테마 토글(푸터)로 토큰이 바뀌었을 수 있어 재개 시 팔레트를 재해석한다.
       resolvePalette();
@@ -484,12 +482,10 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       attributeFilter: ['class'],
     });
 
-    if (animate) {
-      window.addEventListener('pointermove', onPointerMove, { passive: true });
-      document.addEventListener('visibilitychange', onVisibility);
-      resumeRef.current = resume;
-      kick();
-    }
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    document.addEventListener('visibilitychange', onVisibility);
+    resumeRef.current = resume;
+    kick();
 
     return () => {
       disposed = true;

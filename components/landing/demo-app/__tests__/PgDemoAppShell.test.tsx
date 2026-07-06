@@ -28,7 +28,6 @@ vi.mock('motion/react', () => {
     useInView: () => true,
   };
 });
-vi.mock('@/lib/landing/prefers-reduced-motion', () => ({ prefersReducedMotion: () => false }));
 vi.mock('../DemoCursor', () => ({ DemoCursor: () => <div data-testid="demo-cursor" /> }));
 
 vi.mock('../DemoSidebar', () => ({
