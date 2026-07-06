@@ -26,6 +26,4 @@ export type WorkspaceMembershipSummary = {
   memberApprovalStatus: MemberApprovalStatus;
   unreadCount: number;
   logoUpdatedAt: string | null;
-  /** Demo/sample workspace — used to suppress self-presence broadcast (OV8). */
-  isDemo: boolean;
 };

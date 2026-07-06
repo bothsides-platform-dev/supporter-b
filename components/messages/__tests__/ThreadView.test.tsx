@@ -1141,27 +1141,10 @@ describe('ThreadView 작성자(담당자) 표시', () => {
   });
 });
 
-describe('ThreadView — sendDisabledReason="sample" (샘플 RFP)', () => {
-  it('샘플 안내 문구를 보여주고 전송 버튼·입력을 막는다', () => {
-    render(base({ sendDisabledReason: 'sample' }));
-    expect(screen.getByText(/샘플에서는 메시지를 보낼 수 없어요/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
-    expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toBeDisabled();
-  });
-
-  it('Enter 로도 전송되지 않는다', async () => {
-    render(base({ sendDisabledReason: 'sample' }));
-    const ta = screen.getByPlaceholderText('메시지를 입력하세요…') as HTMLTextAreaElement;
-    fireEvent.keyDown(ta, { key: 'Enter' });
-    expect(sendChatMessageAction).not.toHaveBeenCalled();
-  });
-});
-
 describe('ThreadView — sendDisabledReason="closed" (선정 종료)', () => {
   it('종료 안내 문구를 보여주고 전송 버튼·입력을 막는다', () => {
     render(base({ sendDisabledReason: 'closed' }));
     expect(screen.getByText(/선정이 끝나 이 대화는 종료됐어요/)).toBeInTheDocument();
-    expect(screen.queryByText(/샘플에서는 메시지를 보낼 수 없어요/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
     expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toBeDisabled();
   });

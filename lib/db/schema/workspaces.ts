@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { workspaceTypeEnum, workspaceStatusEnum } from './_enums';
 import { bizProfiles } from './biz-profiles';
@@ -22,10 +22,6 @@ export const workspaces = pgTable(
     // NULL on all user-created workspaces. Used to populate the PG signup company-selector
     // and to validate joinCanonicalPgWorkspaceAction inputs.
     canonicalPgKey: text('canonical_pg_key').unique(),
-    // 가공의 데모 PG(샘플 견적의 비더) 표식. true면 실제 PG 발견 표면에서 제외.
-    isDemo: boolean('is_demo').notNull().default(false),
-    // 이 구매사 워크스페이스에 온보딩 샘플을 심은 시각. 시드 멱등성 + 삭제 영속성의 근거.
-    sampleSeededAt: timestamp('sample_seeded_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },

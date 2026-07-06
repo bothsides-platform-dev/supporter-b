@@ -24,7 +24,6 @@ import { DateDivider } from './DateDivider';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageBubble } from './MessageBubble';
 import { ComposerAttachmentChips } from './ComposerAttachmentChips';
-import { SampleSendDisabledNotice } from './SampleSendDisabledNotice';
 import { ClosedConversationNotice } from './ClosedConversationNotice';
 import { ContextPanel } from './ContextPanel';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
@@ -59,7 +58,6 @@ type Props = {
   defaultRfpId?: string;
   /**
    * 전송 차단(읽기 전용 컴포저) 사유 — `null`(기본) 이면 정상 입력.
-   *   - 'sample': 샘플 RFP(데모 PG 에게 실제 전송 방지)
    *   - 'closed': 선정이 끝난 견적의 미선정 PG(대화 종료)
    * 사유에 맞는 안내 문구를 컴포저 위에 표시한다.
    */
@@ -67,7 +65,7 @@ type Props = {
 };
 
 /** 컴포저 전송 차단 사유 — ThreadView·ChatPanel 공용 단일 출처. */
-export type SendDisabledReason = 'sample' | 'closed';
+export type SendDisabledReason = 'closed';
 
 /** Live `message` event payload published by sendChatMessageAction. */
 type LiveMessagePayload = {
@@ -576,8 +574,7 @@ export function ThreadView({
       {/* 첨부 칩 리스트 */}
       <ComposerAttachmentChips rows={attachments} onRemove={removeRow} />
 
-      {/* 전송 차단 안내 — 샘플(데모 PG 미전송) / 선정 종료(미선정 PG 대화 닫힘) */}
-      {sendDisabledReason === 'sample' && <SampleSendDisabledNotice />}
+      {/* 전송 차단 안내 — 선정 종료(미선정 PG 대화 닫힘) */}
       {sendDisabledReason === 'closed' && <ClosedConversationNotice />}
 
       {/* 하단 인라인 컴포저 */}

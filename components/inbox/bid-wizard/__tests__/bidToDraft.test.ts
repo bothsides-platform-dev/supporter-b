@@ -4,9 +4,6 @@ import { describe, it, expect, vi } from 'vitest';
 // (next-auth / next/server are incompatible with the jsdom environment).
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/lib/server/actions/bid', () => ({ submitBidAction: vi.fn() }));
-vi.mock('@/lib/server/actions/onboarding/simulateSampleAwardAction', () => ({
-  simulateSampleAwardAction: vi.fn(),
-}));
 vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
   saveQuoteTemplateAction: vi.fn(),
 }));

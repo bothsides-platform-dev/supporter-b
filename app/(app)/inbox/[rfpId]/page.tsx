@@ -12,6 +12,8 @@ import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { DealRoomPageSkeleton } from '@/components/skeletons';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 import { pgRequestChip } from '@/lib/rfp-status';
+import { SamplePgDealRoom } from '@/components/onboarding/SamplePgDealRoom';
+import { SAMPLE_RFP_CODE, samplePgRfp } from '@/lib/onboarding/fixtures';
 
 type Props = { params: Promise<{ rfpId: string }> };
 
@@ -24,6 +26,15 @@ export default async function InboxDetailPage({ params }: Props) {
   const session = await auth();
   if (!session?.user?.id || !session.user.workspaceId) {
     redirect(`/login?next=/inbox/${rfpCode}`);
+  }
+
+  // 가상 샘플 온보딩 — DB 행 없이 fixture 로 딜룸을 재현한다. MarkInboxViewed·로더 모두 건너뛴다.
+  if (rfpCode === SAMPLE_RFP_CODE) {
+    return (
+      <DealRoomFull code={samplePgRfp.code} title={samplePgRfp.title}>
+        <SamplePgDealRoom />
+      </DealRoomFull>
+    );
   }
 
   return (
@@ -59,26 +70,22 @@ async function PgRfpDetailLoader({
       title={data.rfp.title}
       statusChip={<Chip label={chip.label} color={chip.color} />}
       chat={
-        // 온보딩 샘플은 데모 구매사가 보낸 가공 견적 — 채팅 비노출(샌드박스). 그 외엔
-        // 상대(구매사) 고정 시드.
-        data.rfp.isSample ? undefined : (
-          <DealRoomChat
-            rfpId={data.rfp.id}
-            rfpCode={data.rfp.code}
-            rfpTitle={data.rfp.title}
-            fixedCounterparty={{
-              workspaceId: data.rfp.buyerWsId,
-              name: data.buyerName,
-              type: 'buyer',
-              logoUpdatedAt: data.buyerLogoUpdatedAt,
-            }}
-            closedCounterpartyIds={
-              data.rfp.status === 'awarded' && !data.awardedToMe
-                ? [data.rfp.buyerWsId]
-                : []
-            }
-          />
-        )
+        <DealRoomChat
+          rfpId={data.rfp.id}
+          rfpCode={data.rfp.code}
+          rfpTitle={data.rfp.title}
+          fixedCounterparty={{
+            workspaceId: data.rfp.buyerWsId,
+            name: data.buyerName,
+            type: 'buyer',
+            logoUpdatedAt: data.buyerLogoUpdatedAt,
+          }}
+          closedCounterpartyIds={
+            data.rfp.status === 'awarded' && !data.awardedToMe
+              ? [data.rfp.buyerWsId]
+              : []
+          }
+        />
       }
     >
       <PgDealRoomBody data={data} />

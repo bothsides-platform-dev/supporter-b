@@ -4,6 +4,8 @@ import { users } from '@/lib/db/schema';
 import type { DB } from '@/lib/db/client';
 import type { User } from '@/lib/types/user';
 import { hashPassword } from '@/lib/auth/password';
+import { migrateUserOnboarding } from '@/lib/types/onboarding';
+import type { UserOnboarding, OnboardingKey, OnboardingTaskState } from '@/lib/types/onboarding';
 import type { UserRepo, Tx } from '../types';
 
 type UserRow = typeof users.$inferSelect;
@@ -368,5 +370,33 @@ export class DrizzleUserRepository implements UserRepo {
       })
       .returning({ id: users.id });
     return created.id;
+  }
+
+  async getOnboarding(userId: string, tx?: Tx): Promise<UserOnboarding> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ onboarding: users.onboarding })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return migrateUserOnboarding(row?.onboarding);
+  }
+
+  async markOnboarding(
+    userId: string,
+    key: OnboardingKey,
+    patch: OnboardingTaskState,
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(users)
+      .set({
+        onboarding: sql`${users.onboarding} || jsonb_build_object(
+          ${key}::text,
+          coalesce(${users.onboarding} -> ${key}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb
+        )`,
+      })
+      .where(eq(users.id, userId));
   }
 }

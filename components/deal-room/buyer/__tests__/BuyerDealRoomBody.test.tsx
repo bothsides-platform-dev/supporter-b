@@ -1,6 +1,4 @@
-// BuyerDealRoomBody — 구매사 딜룸 본문(레일 + 탭). 자체 책임 중 하나는 샘플 견적일 때
-// 상단에 SampleRfpBanner(삭제 어포던스)를 노출하는 것 — 정식 페이지 통일 후 구
-// RfpDetailContent 가 갖던 동작을 잃지 않도록 공유 바디로 옮긴 부분이다.
+// BuyerDealRoomBody — 구매사 딜룸 본문(레일 + 탭).
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render as rtlRender, screen, cleanup } from '@testing-library/react';
 import type { ReactElement } from 'react';
@@ -43,11 +41,6 @@ vi.mock('@/components/rfp/comparison/RequoteDialog', () => ({
 vi.mock('@/lib/server/actions/rfp', () => ({
   closeRfpAction: vi.fn(),
   cancelRfpAction: vi.fn(),
-}));
-// SampleRfpBanner 는 deleteSampleRfpAction(→ next-auth 체인)을 정적 임포트해 jsdom 수집을
-// 깨뜨린다 — 자체 테스트(SampleRfpBanner.test)가 커버. 여기선 마운트 여부만 본다.
-vi.mock('@/components/rfp/SampleRfpBanner', () => ({
-  SampleRfpBanner: () => <div data-testid="sample-banner" />,
 }));
 
 const mq = vi.hoisted(() => ({ lgUp: true }));
@@ -116,18 +109,6 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
 
 afterEach(cleanup);
 afterEach(() => { mq.lgUp = true; });
-
-describe('BuyerDealRoomBody — 샘플 배너', () => {
-  it('isSample 면 상단에 SampleRfpBanner 를 렌더한다', () => {
-    render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, isSample: true } })} />);
-    expect(screen.getByTestId('sample-banner')).toBeInTheDocument();
-  });
-
-  it('isSample 이 아니면 SampleRfpBanner 를 렌더하지 않는다', () => {
-    render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, isSample: false } })} />);
-    expect(screen.queryByTestId('sample-banner')).not.toBeInTheDocument();
-  });
-});
 
 describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
   it('lg 미만에서 DealRoomCenter 콘텐츠가 DOM 에 존재한다', () => {

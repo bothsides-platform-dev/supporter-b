@@ -22,7 +22,6 @@ const BASE_RFP: RFP = {
   createdAt: '2026-06-01T00:00:00Z',
   requiredPaymentMethods: [],
   customPaymentMethods: [],
-  isSample: false,
   contractType: null,
 };
 
@@ -121,10 +120,9 @@ describe('pgInboxDataToRows', () => {
     expect(rows[0].hasPendingRequote).toBe(false);
   });
 
-  it('isSample·contractType 을 그대로 전달한다', () => {
-    const rfp: RFP = { ...BASE_RFP, isSample: true, contractType: 'renewal' };
+  it('contractType 을 그대로 전달한다', () => {
+    const rfp: RFP = { ...BASE_RFP, contractType: 'renewal' };
     const rows = pgInboxDataToRows(data({ pairs: [pair(rfp)] }));
-    expect(rows[0].isSample).toBe(true);
     expect(rows[0].contractType).toBe('renewal');
   });
 

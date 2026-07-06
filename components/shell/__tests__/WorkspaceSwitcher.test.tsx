@@ -22,8 +22,8 @@ vi.mock('@/lib/realtime/centrifuge-client', () => ({
 import { WorkspaceSwitcher } from '../WorkspaceSwitcher';
 
 const workspaces = [
-  { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false },
-  { id: 'ws2', name: '서포터 B 페이', type: 'pg' as const, status: 'active' as const, role: 'member' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false },
+  { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null },
+  { id: 'ws2', name: '서포터 B 페이', type: 'pg' as const, status: 'active' as const, role: 'member' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null },
 ];
 const current = { id: 'ws1', name: '구매사A', type: 'buyer' as const, logoUpdatedAt: null };
 
@@ -201,9 +201,9 @@ describe('WorkspaceSwitcher', () => {
 
 describe('WorkspaceSwitcher — master mode (isMaster)', () => {
   const many = [
-    { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false },
-    { id: 'ws2', name: 'PG사B', type: 'pg' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false },
-    { id: 'ws3', name: '구매사C', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false },
+    { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null },
+    { id: 'ws2', name: 'PG사B', type: 'pg' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null },
+    { id: 'ws3', name: '구매사C', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null },
   ];
   const masterCurrent = { id: 'ws1', name: '구매사A', type: 'buyer' as const, logoUpdatedAt: null };
 

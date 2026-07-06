@@ -1,5 +1,4 @@
-// PgDealRoomBody — PG 딜룸 본문(레일 + 탭). 샘플 견적일 때 상단에 SamplePgRfpBanner
-// (삭제 어포던스)를 노출 — 정식 페이지 통일 후 구 PgRfpDetailContent 의 동작 보존.
+// PgDealRoomBody — PG 딜룸 본문(레일 + 탭).
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 
@@ -18,11 +17,6 @@ vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({ BidWizard: () => <di
 vi.mock('@/components/inbox/RequoteBanner', () => ({ RequoteBanner: () => <div data-testid="requote-banner" /> }));
 vi.mock('@/components/attachments/AttachmentPreviewList', () => ({ AttachmentPreviewList: () => <div data-testid="attachments" /> }));
 vi.mock('@/lib/server/actions/bid/withdrawBidAction', () => ({ withdrawBidAction: vi.fn() }));
-// SamplePgRfpBanner 는 deleteSamplePgRfpAction(→ next-auth 체인)을 정적 임포트해 jsdom 수집을
-// 깨뜨린다 — 자체 테스트가 커버. 여기선 마운트 여부만 본다.
-vi.mock('@/components/inbox/SamplePgRfpBanner', () => ({
-  SamplePgRfpBanner: () => <div data-testid="sample-banner" />,
-}));
 
 // use-lg-up mock — PgDealRoomBody 자신은 lgUp 을 쓰지 않지만
 // DealRoomActionRail/Center 가 렌더되는 컨텍스트에서 안전하게 고정.
@@ -66,18 +60,6 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
 
 afterEach(cleanup);
 afterEach(() => { mq.lgUp = true; });
-
-describe('PgDealRoomBody — 샘플 배너', () => {
-  it('isSample 면 상단에 SamplePgRfpBanner 를 렌더한다', () => {
-    render(<PgDealRoomBody data={buildData({ rfp: { ...baseRfp, isSample: true } })} />);
-    expect(screen.getByTestId('sample-banner')).toBeInTheDocument();
-  });
-
-  it('isSample 이 아니면 SamplePgRfpBanner 를 렌더하지 않는다', () => {
-    render(<PgDealRoomBody data={buildData({ rfp: { ...baseRfp, isSample: false } })} />);
-    expect(screen.queryByTestId('sample-banner')).not.toBeInTheDocument();
-  });
-});
 
 const submittedBid: Bid = {
   id: 'b1',

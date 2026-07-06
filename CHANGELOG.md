@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.67.0] - 2026-07-05
+
+### Changed
+
+- **샘플 견적 체험이 더 이상 실제 데이터에 쌓이지 않아요**: 가입할 때마다 DB에 샘플 견적 요청·데모 워크스페이스·데모 입찰이 계속 생성되던 구조를 걷어내고, 화면에서만 동작하는 가상 샘플 체험으로 바꿨어요. 구매사는 샘플 딜룸에서 3개 견적 비교부터 선정(축하 화면 포함)까지 전체 흐름을 체험할 수 있고, PG는 요청 조건 열람과 견적 작성·제출 투어를 체험할 수 있어요. 체험을 마치거나 숨기면 다시 나타나지 않아요(유저 단위 저장 — 워크스페이스를 새로 만들어도 다시 뜨지 않아요).
+- **운영 데이터 정리**: 기존에 누적된 샘플 견적·데모 워크스페이스(샘플페이 A/B/C·샘플 쇼핑몰)·데모 계정을 일괄 삭제하는 마이그레이션(`docs/migrations/2026-07-cleanup-sample-data.sql`)이 포함되어 있어요. `rfps.is_sample`·`workspaces.is_demo`·`workspaces.sample_seeded_at` 컬럼은 제거되고 `users.onboarding`(jsonb)이 추가돼요. 배포 순서는 `docs/DEPLOY_LIGHTSAIL.md` 참조.
+
 ## [0.2.66.0] - 2026-07-05
 
 ### Changed
@@ -21,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - 로컬 개발도 프로덕션과 동일하게 실제 R2 버킷을 사용해요 — 폴백 백엔드는 의도적으로 없어요. 단위 테스트는 mock(InMemoryStorage 주입)으로 동작하고, 실제 바이트가 필요한 e2e PDF 스펙은 R2 설정이 없으면 자동으로 건너뛰어요.
 - `@aws-sdk/client-s3`·`@aws-sdk/s3-request-presigner` 의존성 추가, R2 환경변수 예시(`.env.production.example`)와 배포 런북 갱신(버킷 CORS 설정·sweep-uploads crontab 등록 절차 포함).
 - 직행 업로드에는 R2 버킷 CORS 설정(PUT 허용)이 필수예요 — 절차는 `docs/DEPLOY_LIGHTSAIL.md` §첨부파일 저장소 전환을 따라요.
+
 ## [0.2.66.0] - 2026-07-06
 
 ### Changed

@@ -53,12 +53,12 @@ afterEach(() => {
 });
 
 describe('PresenceClient', () => {
-  it('realtime 설정 + isDemo=false 이면 presence:ws:<id> 를 구독하고 connect 한다', async () => {
+  it('realtime 설정이면 presence:ws:<id> 를 구독하고 connect 한다', async () => {
     vi.stubEnv('NEXT_PUBLIC_CENTRIFUGO_WS_URL', 'wss://example.test/connection/websocket');
     const { render } = await import('@testing-library/react');
     const { PresenceClient } = await import('@/components/presence/PresenceClient');
 
-    const { container } = render(<PresenceClient workspaceId="ws-1" isDemo={false} />);
+    const { container } = render(<PresenceClient workspaceId="ws-1" />);
 
     const channel = 'presence:ws:ws-1';
     expect(mockClient.newSubscription).toHaveBeenCalledWith(channel);
@@ -68,23 +68,12 @@ describe('PresenceClient', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('isDemo=true 이면 구독도 connect 도 하지 않는다 (데모 격리, OV8)', async () => {
-    vi.stubEnv('NEXT_PUBLIC_CENTRIFUGO_WS_URL', 'wss://example.test/connection/websocket');
-    const { render } = await import('@testing-library/react');
-    const { PresenceClient } = await import('@/components/presence/PresenceClient');
-
-    render(<PresenceClient workspaceId="ws-demo" isDemo={true} />);
-
-    expect(mockClient.newSubscription).not.toHaveBeenCalled();
-    expect(mockClient.connect).not.toHaveBeenCalled();
-  });
-
   it('realtime 미설정이면 구독하지 않고 throw 하지 않는다', async () => {
     vi.stubEnv('NEXT_PUBLIC_CENTRIFUGO_WS_URL', '');
     const { render } = await import('@testing-library/react');
     const { PresenceClient } = await import('@/components/presence/PresenceClient');
 
-    expect(() => render(<PresenceClient workspaceId="ws-1" isDemo={false} />)).not.toThrow();
+    expect(() => render(<PresenceClient workspaceId="ws-1" />)).not.toThrow();
     expect(mockClient.newSubscription).not.toHaveBeenCalled();
     expect(mockClient.connect).not.toHaveBeenCalled();
   });

@@ -10,7 +10,6 @@ import {
   columns,
   verificationApplications,
   verificationTokens,
-  rfpInvitations,
 } from '@/lib/db/schema';
 import { DrizzleUserRepository } from '@/lib/server/repositories/drizzle/user';
 import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
@@ -79,25 +78,17 @@ describe('purgeUnverifiedSignup', () => {
     ).toBe(0);
   });
 
-  it('removes an abandoned unverified PG signup — the seeded sample invitation must not block the workspace delete', async () => {
+  it('removes an abandoned unverified PG signup', async () => {
     const { db, repo } = await setup();
     const u = makeUser('pg-abandon@x.com');
     await repo.save(u);
-    // createWorkspaceInTx 가 PG 인박스에 데모 구매사 샘플 초대를 시드한다(pg_ws_id FK, non-cascade).
     const { workspaceId } = await createWorkspaceInTx(db, { userId: u.id, type: 'pg', name: 'PG' });
-    expect(
-      (await db.select().from(rfpInvitations).where(eq(rfpInvitations.pgWsId, workspaceId))).length,
-    ).toBe(1);
 
     await purgeUnverifiedSignup(db, 'pg-abandon@x.com');
 
     expect(await repo.findByEmail('pg-abandon@x.com')).toBeUndefined();
     expect(
       (await db.select().from(workspaces).where(eq(workspaces.id, workspaceId))).length,
-    ).toBe(0);
-    // 샘플 초대도 함께 제거 — 고아 FK 없음
-    expect(
-      (await db.select().from(rfpInvitations).where(eq(rfpInvitations.pgWsId, workspaceId))).length,
     ).toBe(0);
   });
 
