@@ -11,8 +11,6 @@ import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { pgRequestChip } from '@/lib/rfp/rfp-status';
-import { SamplePgDealRoom } from '@/components/onboarding/SamplePgDealRoom';
-import { SAMPLE_RFP_CODE, samplePgRfp } from '@/lib/onboarding/fixtures';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,15 +22,6 @@ export default async function InboxDealRoomModalPage({ params }: Props) {
   const session = await auth();
   if (!session?.user?.id || !session.user.workspaceId) {
     redirect(`/login?next=/inbox/${rfpCode}`);
-  }
-
-  // 가상 샘플 온보딩 — DB 행 없이 fixture 로 딜룸을 재현한다. MarkInboxViewed·로더 모두 건너뛴다.
-  if (rfpCode === SAMPLE_RFP_CODE) {
-    return (
-      <DealRoomModal code={samplePgRfp.code} title={samplePgRfp.title}>
-        <SamplePgDealRoom />
-      </DealRoomModal>
-    );
   }
 
   const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: session.user.workspaceId });
