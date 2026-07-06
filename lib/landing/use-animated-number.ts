@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
+import { landingMotionUnavailable } from '@/lib/landing/prefers-reduced-motion';
 
 const DEFAULT_DURATION_MS = 220;
 
@@ -19,7 +19,7 @@ export function useAnimatedNumber(target: number, durationMs: number = DEFAULT_D
   const rafRef = useRef(0);
 
   useEffect(() => {
-    if (prefersReducedMotion()) {
+    if (landingMotionUnavailable()) {
       displayRef.current = target;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDisplay(target);

@@ -69,7 +69,7 @@ vi.mock('../ContextPanel', () => ({
 
 // useIsXlUp mock — default to false (non-xl); toggle in xl tests.
 const mockXlUp = { value: false };
-vi.mock('@/hooks/use-xl-up', () => ({
+vi.mock('@/lib/hooks/useIsXlUp', () => ({
   useIsXlUp: () => mockXlUp.value,
 }));
 

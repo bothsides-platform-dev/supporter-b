@@ -36,7 +36,7 @@ vi.mock('@/components/auth/PhoneVerificationField', () => ({
 }));
 
 const finalizeMock = vi.fn();
-vi.mock('@/lib/auth/finalizeSignup', () => ({
+vi.mock('@/lib/auth/finalize-signup', () => ({
   finalizeSignup: () => finalizeMock(),
 }));
 

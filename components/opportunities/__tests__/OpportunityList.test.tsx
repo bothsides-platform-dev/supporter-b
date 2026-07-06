@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { formatDate } from '@/lib/format';
+import { formatDate } from '@/lib/utils/format';
 import type { OpportunityListing } from '@/lib/types/pg-request';
 
 // OpportunityList 는 행마다 OpportunityRequestDialog(클라이언트)를 렌더하므로

@@ -11,6 +11,9 @@ import { BoardFilterBar } from '@/components/board/BoardFilterBar';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { InboxIcon } from '@/components/icons';
+import { SampleEntryCard } from '@/components/onboarding/SampleEntryCard';
+import { shouldShowSampleEntry } from '@/lib/onboarding/visibility';
+import { getUserRepo } from '@/lib/server/repositories/factory';
 import {
   filterInboxRows,
   paramsForView,
@@ -49,7 +52,7 @@ export default async function InboxPage({ searchParams }: Props) {
           </>
         }
       >
-        <InboxListPageLoader wsId={session.user.workspaceId} params={sp} view={view} />
+        <InboxListPageLoader wsId={session.user.workspaceId} userId={session.user.id} params={sp} view={view} />
       </Suspense>
     </div>
   );
@@ -57,10 +60,12 @@ export default async function InboxPage({ searchParams }: Props) {
 
 async function InboxListPageLoader({
   wsId,
+  userId,
   params,
   view,
 }: {
   wsId: string;
+  userId: string;
   params: BoardFilterParams;
   view: BoardView;
 }) {
@@ -70,14 +75,20 @@ async function InboxListPageLoader({
   const allRows = pgInboxDataToRows(pgData);
   const rows = filterInboxRows(allRows, paramsForView(params, view), now);
 
+  const onboarding = await (await getUserRepo()).getOnboarding(userId);
+  const showSampleEntry = shouldShowSampleEntry(onboarding, 'pgSample');
+
   // 행 클릭은 딜룸 모달(인터셉트 라우트)을 띄운다 — 과거 ?peek 사이드 패널은 제거됨.
   const listContent =
     rows.length === 0 ? (
-      <EmptyState
-        icon={<InboxIcon size={32} />}
-        title="아직 받은 견적 요청이 없어요."
-        description="필터를 바꾸면 견적 요청을 볼 수 있어요. 구매사가 초대한 견적 요청이 여기에 표시돼요."
-      />
+      <div className="space-y-4 px-6 pt-4">
+        {showSampleEntry && <SampleEntryCard variant="pg" />}
+        <EmptyState
+          icon={<InboxIcon size={32} />}
+          title="아직 받은 견적 요청이 없어요."
+          description="필터를 바꾸면 견적 요청을 볼 수 있어요. 구매사가 초대한 견적 요청이 여기에 표시돼요."
+        />
+      </div>
     ) : view === 'board' ? (
       <InboxBoardView
         wsId={wsId}
@@ -99,6 +110,11 @@ async function InboxListPageLoader({
         />
         <BoardViewToggle view={view} cookieName="inboxBoardView" tableCount={rows.length} />
       </div>
+      {showSampleEntry && rows.length > 0 && (
+        <div className="px-6 pt-3">
+          <SampleEntryCard variant="pg" />
+        </div>
+      )}
       {listContent}
     </>
   );

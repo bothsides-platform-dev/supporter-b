@@ -2,11 +2,11 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { HTTPError } from 'ky';
-import { http } from '@/lib/http';
+import { uploadAttachment } from '@/lib/attachments/upload-client';
 import { Label } from '@/components/primitives/Label';
 import type { RfpMockFile } from '@/lib/stores/rfp-draft';
 import { DRAFT_OWNER_ID } from '@/lib/server/storage/constants';
-import { formatSize } from '@/lib/format';
+import { formatSize } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -63,15 +63,8 @@ export function RfpAttachmentDropzone({ value, onChange }: Props) {
   }, [rows]);
 
   const uploadOne = async (file: File, tempId: string): Promise<void> => {
-    const form = new FormData();
-    form.append('file', file);
-    form.append('ownerKind', 'rfp');
-    form.append('ownerId', DRAFT_OWNER_ID);
-
     try {
-      const body = await http
-        .post('/api/files/upload', { body: form })
-        .json<{ id: string; name: string; size: number }>()
+      const body = await uploadAttachment(file, { ownerKind: 'rfp', ownerId: DRAFT_OWNER_ID })
       setRows((prev) =>
         prev.map((row) =>
           row.id === tempId

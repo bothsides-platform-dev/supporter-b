@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { formatKRW } from '@/lib/format';
+import { formatKRW } from '@/lib/utils/format';
 
 type CostComparisonChartProps = {
   currentCost: number;

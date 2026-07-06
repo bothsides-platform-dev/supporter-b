@@ -2,14 +2,14 @@
 
 // 데모 메시지 — 실시간(Centrifugo) 의존 없이 고정 대화로 채팅 기능을 보여준다.
 const THREADS = [
-  { id: 't1', name: '와이즐리컴퍼니', preview: '정산주기 조건만 확인 부탁드려요.', active: true, unread: true },
-  { id: 't2', name: '글로우서울', preview: '제안서 잘 받았습니다. 검토할게요.', active: false, unread: false },
+  { id: 't1', name: '브링콘파트너스', preview: '정산주기 조건만 확인 부탁드려요.', active: true, unread: true },
+  { id: 't2', name: '미팅학개론', preview: '제안서 잘 받았습니다. 검토할게요.', active: false, unread: false },
 ] as const;
 
 const MESSAGES = [
-  { id: 'm1', mine: false, who: '와이즐리컴퍼니', text: '안녕하세요, 견적 잘 봤어요. 정산주기 D+2도 가능할까요?' },
+  { id: 'm1', mine: false, who: '브링콘파트너스', text: '안녕하세요, 견적 잘 봤어요. 정산주기 D+2도 가능할까요?' },
   { id: 'm2', mine: true, who: '나', text: '네, D+2 가능합니다. 보증보험도 면제 조건으로 제안드릴게요.' },
-  { id: 'm3', mine: false, who: '와이즐리컴퍼니', text: '좋아요. 그럼 그 조건으로 검토해볼게요. 감사합니다!' },
+  { id: 'm3', mine: false, who: '브링콘파트너스', text: '좋아요. 그럼 그 조건으로 검토해볼게요. 감사합니다!' },
 ] as const;
 
 export function PgMessagesPageHost() {
@@ -40,7 +40,7 @@ export function PgMessagesPageHost() {
         {/* conversation */}
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex h-11 shrink-0 items-center border-b border-[var(--md-sys-color-outline-variant)] px-4 text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
-            와이즐리컴퍼니
+            브링콘파트너스
           </div>
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
             {MESSAGES.map((m) => (

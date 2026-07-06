@@ -18,7 +18,6 @@ type Props = {
   rfpId: string;
   rfpCode: string;
   rfpTitle: string;
-  isSample?: boolean;
   /** PG 측: 상대(구매사) 고정 시드. 구매사 측은 생략. */
   fixedCounterparty?: DealRoomCounterparty;
   /** 선정 종료로 대화를 닫을 상대 워크스페이스 ID 목록(ChatPanel 로 전달). */
@@ -29,7 +28,6 @@ export function DealRoomChat({
   rfpId,
   rfpCode,
   rfpTitle,
-  isSample = false,
   fixedCounterparty,
   closedCounterpartyIds,
 }: Props) {
@@ -47,7 +45,6 @@ export function DealRoomChat({
       rfpId={rfpId}
       rfpCode={rfpCode}
       rfpTitle={rfpTitle}
-      isSample={isSample}
       closedCounterpartyIds={closedCounterpartyIds}
     />
   );

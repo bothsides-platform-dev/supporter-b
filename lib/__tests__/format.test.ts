@@ -8,7 +8,7 @@ import {
   formatRatePerManwon,
   formatFeeRateDisplay,
   formatKrwField,
-} from '../format';
+} from '../utils/format';
 
 describe('formatFeeRateDisplay', () => {
   it('숫자만 저장된 신규 값에는 % 를 붙인다', () => {

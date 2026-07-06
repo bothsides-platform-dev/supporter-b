@@ -18,7 +18,7 @@ import { notify } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { teamDigestDedupeKey, teamDigestWindowEnd } from '@/lib/server/outbox/team-digest';
 import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
-import { extractMentions, mentionsToPlainText } from '@/lib/team-mentions';
+import { extractMentions, mentionsToPlainText } from '@/lib/utils/team-mentions';
 import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';

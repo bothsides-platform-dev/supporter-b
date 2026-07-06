@@ -11,7 +11,7 @@ import { NewConversationSheet } from './NewConversationSheet';
 import { ThreadPane } from './ThreadPane';
 import { TeamThreadPane } from './TeamThreadPane';
 import { ThreadSkeleton } from './ThreadSkeleton';
-import { useIsXlUp } from '@/hooks/use-xl-up';
+import { useIsXlUp } from '@/lib/hooks/useIsXlUp';
 import type { InboxListItem } from './types';
 
 type Filter = 'all' | 'counterparty' | 'team';

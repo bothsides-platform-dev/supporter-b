@@ -13,7 +13,7 @@ vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
   ),
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock('@/hooks/useLazyPgWorkspaces', () => ({
+vi.mock('@/lib/hooks/useLazyPgWorkspaces', () => ({
   useLazyPgWorkspaces: () => useLazyPgWorkspacesMock(),
 }));
 vi.mock('@/lib/toast', () => ({ toast: vi.fn() }));

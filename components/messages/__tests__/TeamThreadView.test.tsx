@@ -21,10 +21,10 @@ vi.mock('@/lib/server/actions/chat/markTeamThreadReadAction', () => ({
 }));
 import { markTeamThreadReadAction } from '@/lib/server/actions/chat/markTeamThreadReadAction';
 
-// http (ky) — `/api/files/upload` POST. Mock so the test controls the upload.
-const httpPost = vi.fn();
-vi.mock('@/lib/http', () => ({
-  http: { post: (...args: unknown[]) => httpPost(...args) },
+// uploadAttachment (presigned 3-step client helper) — mock so the test controls the upload.
+const uploadAttachment = vi.fn();
+vi.mock('@/lib/attachments/upload-client', () => ({
+  uploadAttachment: (...args: unknown[]) => uploadAttachment(...args),
 }));
 
 type TeamPayload = { type?: string; [k: string]: unknown };
@@ -74,7 +74,7 @@ beforeEach(() => {
     createdAt: '2026-06-10T10:05:00.000Z',
   });
   toast.mockReset();
-  httpPost.mockReset();
+  uploadAttachment.mockReset();
   channelOptions = {};
   channelResult = { connected: null };
 });
@@ -275,10 +275,7 @@ describe('TeamThreadView — 전송', () => {
 
 describe('TeamThreadView — 첨부', () => {
   it('파일 업로드 후 보내기 시 attachmentIds 를 함께 전송하고 버블에 첨부를 렌더한다', async () => {
-    httpPost.mockReturnValue({
-      json: () =>
-        Promise.resolve({ id: 'att-1', name: '제안서.pdf', size: 1234, mimeType: 'application/pdf' }),
-    });
+    uploadAttachment.mockResolvedValue({ id: 'att-1', name: '제안서.pdf', size: 1234, mimeType: 'application/pdf' });
     sendTeamMessageAction.mockResolvedValue({
       ok: true,
       messageId: 'tm-att',
@@ -296,9 +293,10 @@ describe('TeamThreadView — 첨부', () => {
     await screen.findByLabelText('제안서.pdf 첨부 제거');
 
     // 업로드는 team_message 소유로, ownerId 는 rfpId 로 보낸다.
-    const uploadBody = httpPost.mock.calls[0][1].body as FormData;
-    expect(uploadBody.get('ownerKind')).toBe('team_message');
-    expect(uploadBody.get('ownerId')).toBe('rfp-1');
+    expect(uploadAttachment).toHaveBeenCalledWith(expect.any(File), {
+      ownerKind: 'team_message',
+      ownerId: 'rfp-1',
+    });
 
     await user.type(
       screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…'),
@@ -320,10 +318,7 @@ describe('TeamThreadView — 첨부', () => {
   });
 
   it('본문이 비어도 첨부만 있으면 전송할 수 있다', async () => {
-    httpPost.mockReturnValue({
-      json: () =>
-        Promise.resolve({ id: 'att-2', name: '이미지.png', size: 500, mimeType: 'image/png' }),
-    });
+    uploadAttachment.mockResolvedValue({ id: 'att-2', name: '이미지.png', size: 500, mimeType: 'image/png' });
     const user = userEvent.setup();
     const { container } = render(base());
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
@@ -396,7 +391,7 @@ describe('TeamThreadView — 첨부 검증·에러', () => {
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
     expect(await screen.findByLabelText('보고서.docx 업로드 실패')).toBeInTheDocument();
-    expect(httpPost).not.toHaveBeenCalled();
+    expect(uploadAttachment).not.toHaveBeenCalled();
   });
 
   it('MAX_BYTES 초과 파일은 칩에 추가되지 않는다(silent skip)', async () => {
@@ -410,13 +405,13 @@ describe('TeamThreadView — 첨부 검증·에러', () => {
       expect(screen.queryByLabelText('큰파일.pdf 업로드 중')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('큰파일.pdf 업로드 실패')).not.toBeInTheDocument();
     });
-    expect(httpPost).not.toHaveBeenCalled();
+    expect(uploadAttachment).not.toHaveBeenCalled();
   });
 
   it('업로드 중에는 스켈레톤 칩 + 전송 잠금, 완료되면 일반 칩으로 바뀐다', async () => {
     const user = userEvent.setup();
     let resolveUpload: ((v: unknown) => void) | null = null;
-    httpPost.mockReturnValue({ json: () => new Promise((res) => { resolveUpload = res; }) });
+    uploadAttachment.mockReturnValue(new Promise((res) => { resolveUpload = res; }));
     const { container } = render(base());
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File([new Uint8Array([1, 2, 3])], '제안서.pdf', { type: 'application/pdf' });
@@ -438,7 +433,7 @@ describe('TeamThreadView — 첨부 검증·에러', () => {
 
   it('업로드 실패 시 에러 칩으로 전환되고 토스트는 띄우지 않으며, 제거할 수 있다', async () => {
     const user = userEvent.setup();
-    httpPost.mockReturnValue({ json: () => Promise.reject(new Error('upload failed')) });
+    uploadAttachment.mockRejectedValue(new Error('upload failed'));
     const { container } = render(base());
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File([new Uint8Array([1, 2, 3])], '실패.pdf', { type: 'application/pdf' });

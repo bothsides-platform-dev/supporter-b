@@ -1,7 +1,7 @@
 'use client';
 
 import { Chip } from '@/components/primitives/Chip';
-import { rfpStatusChip } from '@/lib/rfp-status';
+import { rfpStatusChip } from '@/lib/rfp/rfp-status';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 
 type RfpContext = {

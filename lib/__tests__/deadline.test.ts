@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { endOfDayKstIso, kstDateOf } from '../deadline';
+import { endOfDayKstIso, kstDateOf } from '../utils/deadline';
 
 describe('kstDateOf', () => {
   it('KST 자정 경계 — UTC 6/30 15:00 이후는 KST 7/1', () => {

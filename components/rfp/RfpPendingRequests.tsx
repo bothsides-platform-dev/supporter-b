@@ -10,7 +10,7 @@ import {
   rejectPgRequestAction,
 } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 
 export type PendingRequestView = {
   id: string;

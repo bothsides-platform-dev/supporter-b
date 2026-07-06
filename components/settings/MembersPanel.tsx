@@ -13,7 +13,7 @@ import { resendWorkspaceInviteAction } from '@/lib/server/actions/workspace/rese
 import type { Role, User } from '@/lib/types/user';
 import { mutationErrorMessage, roleLabel } from './members-panel-utils';
 import { MemberRow } from './MemberRow';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 import { PendingInviteRow, type PendingInvite } from './PendingInviteRow';
 import { InviteMemberForm } from './InviteMemberForm';
 

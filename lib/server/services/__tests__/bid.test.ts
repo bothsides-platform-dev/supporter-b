@@ -23,6 +23,11 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { attachments, auditLogs, bids, rfpInvitations } from '@/lib/db/schema';
+import {
+  __resetStorageForTest,
+  __setStorageForTest,
+} from '@/lib/server/storage';
+import { InMemoryStorage } from '@/lib/server/storage/memory';
 import { BidService } from '../bid';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -41,6 +46,9 @@ async function buildService(): Promise<BidService> {
 
 beforeEach(async () => {
   __resetForTest();
+  // removeNote deletes attachment bytes through getStorage(), which is
+  // R2-or-throw — inject the test double so no real bucket is needed.
+  __setStorageForTest(new InMemoryStorage());
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
   service = await buildService();
@@ -48,6 +56,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   __resetForTest();
+  __resetStorageForTest();
 });
 
 // ─── seed helpers ────────────────────────────────────────────────────────────

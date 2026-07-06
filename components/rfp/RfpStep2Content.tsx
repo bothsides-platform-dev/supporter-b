@@ -20,26 +20,19 @@ import {
   isPaymentValid,
   isContractTypeValid,
   isMainProductsValid,
-  isAnnualPgVolumeValid,
+  isAnnualPgVolumeSatisfied,
   markerState,
 } from '@/lib/rfp/required-fields';
 import { cn } from '@/lib/utils';
+import { SOLUTION_OPTIONS } from '@/lib/rfp/solutions';
+import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 
 // 카드 수수료는 % 값이라 100을 넘을 수 없다 — 입력 단계에서 상한을 강제한다.
 const MAX_FEE_RATE_PCT = 100;
 
 const CONTRACT_TYPE_OPTIONS = [
-  { value: 'new', label: '신규 계약' },
-  { value: 'renewal', label: '갱신 계약' },
-] as const;
-
-const SOLUTION_OPTIONS = [
-  { value: 'cafe24', label: '카페24' },
-  { value: 'imweb', label: '아임웹' },
-  { value: 'makeshop', label: '메이크샵' },
-  { value: 'godo', label: '고도몰' },
-  { value: 'self', label: '자체 개발' },
-  { value: 'other', label: '기타' },
+  { value: 'new', label: CONTRACT_TYPE_LABELS.new },
+  { value: 'renewal', label: CONTRACT_TYPE_LABELS.renewal },
 ] as const;
 
 type Props = {
@@ -63,7 +56,12 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
   const titleError = attempted && draft.title.trim() === '';
   const contractTypeError = attempted && !isContractTypeValid(draft.contractType);
   const mainProductsError = attempted && !isMainProductsValid(draft.mainProducts);
-  const annualPgVolumeError = attempted && !isAnnualPgVolumeValid(draft.annualPgVolume);
+  const annualPgVolumeError =
+    attempted && !isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType);
+  // 신규 계약(첫 PG 계약)은 전년도 PG 거래액·현재 수수료 등 PG 계약 이력 값이 존재할 수
+  // 없으므로 해당 입력란을 숨긴다. 배송·서비스 기간과 현재 운영 솔루션은 PG와 무관한
+  // 사업 속성이라 유지한다. store 값은 보존(유형 토글 복원)하고 저장 시 서버에서 strip 한다.
+  const showPgHistoryFields = draft.contractType !== 'new';
   const paymentError =
     attempted &&
     draft.requiredPaymentMethods.length + draft.customPaymentMethods.length === 0;
@@ -150,12 +148,14 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
         />
         <FieldError error={mainProductsError ? '주요 판매 상품을 입력해주세요' : undefined} />
       </div>
+      {showPgHistoryFields && (
+      <>{/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어 숨김 */}
       <CurrencyInput
         label="전년도 연간 PG 총 거래액"
         value={draft.annualPgVolume}
         onChange={(v) => draft.setField('annualPgVolume', v)}
         placeholder="10억"
-        markerState={markerState({ valid: isAnnualPgVolumeValid(draft.annualPgVolume), attempted })}
+        markerState={markerState({ valid: isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType), attempted })}
         error={annualPgVolumeError ? '전년도 연간 PG 총 거래액을 입력해주세요' : undefined}
       />
       <div className="space-y-1">
@@ -217,6 +217,8 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
         onChange={(v) => draft.setField('currentSettlementCycle', v)}
         placeholder="1"
       />
+      </>
+      )}
       <DayOffsetInput
         label="배송 및 서비스 기간"
         infoTerm="NDX"

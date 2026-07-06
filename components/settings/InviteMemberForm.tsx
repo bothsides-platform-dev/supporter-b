@@ -6,7 +6,7 @@ import { Button } from '@/components/primitives/Button';
 import { Select } from '@/components/primitives/Select';
 import type { Role } from '@/lib/types/user';
 import { ROLE_OPTIONS, isValidInviteEmail } from './members-panel-utils';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 
 type InviteResult = { ok: true } | { ok: false; error: string };
 

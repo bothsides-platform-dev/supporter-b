@@ -1,7 +1,7 @@
 // 팀 채팅 멘션 컴포저 순수 로직 — textarea 평문 표시 ↔ 전송 시 구조화 토큰 변환.
 // 무의존 순수 함수(렌더/상태 없음)로 TDD. TeamThreadView 가 이를 조립한다.
 import { getChoseong } from 'es-hangul';
-import { ALL_TOKEN, serializeMention } from '@/lib/team-mentions';
+import { ALL_TOKEN, serializeMention } from '@/lib/utils/team-mentions';
 
 export type MentionCandidate = { userId: string; name: string; joinedAt: string; avatarUpdatedAt: string | null };
 

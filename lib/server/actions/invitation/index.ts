@@ -1,4 +1,4 @@
 export { claimInviteTokenAction } from './claimInviteTokenAction';
 export type { ClaimInviteTokenResult } from './claimInviteTokenAction';
 
-export { markInvitationOpenedAction } from './markOpenedAction';
+export { markInvitationOpenedAction } from './markInvitationOpenedAction';

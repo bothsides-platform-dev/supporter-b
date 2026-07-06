@@ -3,7 +3,7 @@
 // whitespace-pre-wrap 을 그대로 보존하도록 평문 문자열로 렌더한다.
 import { Fragment } from 'react';
 import { cn } from '@/lib/utils';
-import { parseMentions } from '@/lib/team-mentions';
+import { parseMentions } from '@/lib/utils/team-mentions';
 
 type Props = {
   body: string;

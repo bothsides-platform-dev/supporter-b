@@ -28,7 +28,6 @@ vi.mock('@/lib/server/actions/chat/getOrCreateConversationAction', () => ({
 vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
   CounterpartyProfileCard: () => <div data-testid="counterparty" />,
 }));
-vi.mock('@/lib/landing/prefers-reduced-motion', () => ({ prefersReducedMotion: () => false }));
 
 // 실제 마법사는 자체 테스트 보유 — 호스트 배선만 검증하도록 stub.
 vi.mock('@/components/rfp/RfpCreateWizard', () => ({

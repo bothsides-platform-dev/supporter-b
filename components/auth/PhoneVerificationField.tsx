@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { sendPhoneOtpAction } from '@/lib/server/actions/auth/sendPhoneOtpAction';
 import { verifyPhoneOtpAction } from '@/lib/server/actions/auth/verifyPhoneOtpAction';
-import { formatPhoneInput, isCompletePhone } from '@/lib/phone';
+import { formatPhoneInput, isCompletePhone } from '@/lib/utils/phone';
 
 const OTP_TTL_SECONDS = 5 * 60;
 

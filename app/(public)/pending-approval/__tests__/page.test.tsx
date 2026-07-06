@@ -18,15 +18,15 @@ vi.mock('@/lib/server/repositories/factory', () => ({
   }),
 }));
 
-vi.mock('@/components/pending-approval/email-verify-screen', () => ({
+vi.mock('@/components/pending-approval/EmailVerifyScreen', () => ({
   EmailVerifyScreen: ({ email }: { email: string }) => <div>EmailVerifyScreen:{email}</div>,
 }));
-vi.mock('@/components/pending-approval/membership-approval-waiting-screen', () => ({
+vi.mock('@/components/pending-approval/MembershipApprovalWaitingScreen', () => ({
   MembershipApprovalWaitingScreen: ({ initialRejected }: { initialRejected?: boolean }) => (
     <div>MembershipApprovalWaitingScreen{initialRejected ? ':rejected' : ''}</div>
   ),
 }));
-vi.mock('@/components/pending-approval/approval-waiting-screen', () => ({
+vi.mock('@/components/pending-approval/ApprovalWaitingScreen', () => ({
   ApprovalWaitingScreen: () => <div>ApprovalWaitingScreen</div>,
 }));
 

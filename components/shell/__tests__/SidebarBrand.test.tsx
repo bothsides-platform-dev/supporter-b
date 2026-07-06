@@ -26,7 +26,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), prefetch: vi.fn() }),
 }));
 
-vi.mock('@/hooks/use-mobile', () => ({
+vi.mock('@/lib/hooks/useIsMobile', () => ({
   useIsMobile: () => false,
 }));
 

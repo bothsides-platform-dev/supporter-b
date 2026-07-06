@@ -10,7 +10,9 @@ import { buyerClosedCounterpartyIds } from '@/lib/rfp/closed-counterparties';
 import { BuyerDealRoomBody } from '@/components/deal-room/buyer/BuyerDealRoomBody';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
-import { rfpStatusChip } from '@/lib/rfp-status';
+import { rfpStatusChip } from '@/lib/rfp/rfp-status';
+import { SampleBuyerDealRoom } from '@/components/onboarding/SampleBuyerDealRoom';
+import { SAMPLE_RFP_CODE, sampleBuyerRfp } from '@/lib/onboarding/fixtures';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +21,16 @@ type Props = { params: Promise<{ id: string }> };
 export default async function RfpDealRoomModalPage({ params }: Props) {
   const { id } = await params;
   const session = await requireBuyerPage(`/rfp/${id}`);
+
+  // 가상 샘플 온보딩 — DB 행 없이 fixture 로 딜룸을 재현한다. 로더·DB 접근 전부 건너뛴다.
+  if (id === SAMPLE_RFP_CODE) {
+    return (
+      <DealRoomModal code={sampleBuyerRfp.code} title={sampleBuyerRfp.title}>
+        <SampleBuyerDealRoom />
+      </DealRoomModal>
+    );
+  }
+
   const { workspaceId, id: userId, name, email } = session.user;
 
   const data = await loadBuyerRfpDetail({
@@ -58,7 +70,6 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
           rfpId={data.rfp.id}
           rfpCode={data.rfp.code}
           rfpTitle={data.rfp.title}
-          isSample={data.rfp.isSample}
           closedCounterpartyIds={buyerClosedCounterpartyIds(data.rfp, data.bids)}
         />
       }

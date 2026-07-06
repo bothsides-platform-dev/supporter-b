@@ -8,16 +8,17 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
-import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
-import { endOfDayKstIso, kstDateOf } from '@/lib/deadline';
+import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
+import { endOfDayKstIso, kstDateOf } from '@/lib/utils/deadline';
 import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { RequiredMark } from './RequiredMark';
 import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
 import { FieldError } from '@/components/primitives/FieldError';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
+import { SOLUTION_LABELS } from '@/lib/rfp/solutions';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -65,15 +66,6 @@ function SectionHeader({ label }: { label: string }) {
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_INPUT: '입력 값을 확인해주세요.',
   NETWORK_ERROR: '네트워크 오류가 발생했습니다. 다시 시도해주세요.',
-};
-
-const SOLUTION_LABELS: Record<string, string> = {
-  cafe24: '카페24',
-  imweb: '아임웹',
-  makeshop: '메이크샵',
-  godo: '고도몰',
-  self: '자체 개발',
-  other: '기타',
 };
 
 export function RfpStep4Review({
@@ -167,24 +159,29 @@ export function RfpStep4Review({
           <ReviewRow label="제목" value={draft.title} />
           <ReviewRow label="홈페이지" value={draft.websiteUrl} />
           <ReviewRow label="주요 상품" value={draft.mainProducts} />
-          <ReviewRow label="연간 거래액" value={draft.annualPgVolume ? (formatKrwReadable(Number(draft.annualPgVolume)) || draft.annualPgVolume) : ''} />
-          <ReviewRow
-            label={
-              draft.currentFeeRate && !draft.currentFeeVisibleToPg
-                ? '카드 수수료 (PG 비공개)'
-                : '카드 수수료'
-            }
-            value={formatFeeRateDisplay(draft.currentFeeRate)}
-          />
-          <ReviewRow label="월 정산한도" value={formatKrwField(draft.currentSettlementLimit)} />
-          <ReviewRow
-            label="보증보험"
-            value={formatKrwField(draft.currentGuaranteeInsurance)}
-          />
-          <ReviewRow
-            label="정산주기"
-            value={draft.currentSettlementCycle}
-          />
+          {/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어(서버에서도 strip) 요약에서 숨긴다. */}
+          {draft.contractType !== 'new' && (
+            <>
+              <ReviewRow label="연간 거래액" value={draft.annualPgVolume ? (formatKrwReadable(Number(draft.annualPgVolume)) || draft.annualPgVolume) : ''} />
+              <ReviewRow
+                label={
+                  draft.currentFeeRate && !draft.currentFeeVisibleToPg
+                    ? '카드 수수료 (PG 비공개)'
+                    : '카드 수수료'
+                }
+                value={formatFeeRateDisplay(draft.currentFeeRate)}
+              />
+              <ReviewRow label="월 정산한도" value={formatKrwField(draft.currentSettlementLimit)} />
+              <ReviewRow
+                label="보증보험"
+                value={formatKrwField(draft.currentGuaranteeInsurance)}
+              />
+              <ReviewRow
+                label="정산주기"
+                value={draft.currentSettlementCycle}
+              />
+            </>
+          )}
           <ReviewRow
             label="배송 및 서비스 기간"
             value={draft.deliveryServicePeriod}
