@@ -35,7 +35,7 @@ export function BrandMark({
         <path
           d={BRAND_MARK_PATH}
           stroke="var(--md-sys-color-on-surface)"
-          strokeWidth={100}
+          strokeWidth={600}
           strokeLinejoin="round"
         />
       </g>
