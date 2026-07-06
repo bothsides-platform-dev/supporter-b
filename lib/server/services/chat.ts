@@ -222,7 +222,7 @@ export class ChatService {
             linkUrl: '/messages',
             email: {
               event: 'chat.message',
-              subject: `[Supporter B] ${senderName}님의 새 메시지`,
+              subject: `[서포트 B] ${senderName}님의 새 메시지`,
               html,
               dedupeKey: () => chatDigestDedupeKey(conv.id, m.userId, now),
               scheduledAt: digestScheduledAt,

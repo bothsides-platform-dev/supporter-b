@@ -125,8 +125,8 @@ export async function flushChatDigests(
     });
     const subject =
       unread.length >= 2
-        ? `[Supporter B] ${senderName}님의 새 메시지 ${unread.length}건`
-        : `[Supporter B] ${senderName}님의 새 메시지`;
+        ? `[서포트 B] ${senderName}님의 새 메시지 ${unread.length}건`
+        : `[서포트 B] ${senderName}님의 새 메시지`;
 
     toSend.push({ entry, subject, html });
   }

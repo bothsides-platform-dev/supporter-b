@@ -216,7 +216,7 @@ export class BidService {
             linkUrl: `/rfp/${rfp.code}`,
             email: {
               event: 'bid.submitted',
-              subject: `[Supporter B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+              subject: `[서포트 B · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
               html: submittedHtml,
               dedupeKey: () => `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
             },
