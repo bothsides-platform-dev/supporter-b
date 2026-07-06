@@ -8,7 +8,7 @@ export function baseUrl(): string {
   );
 }
 
-/** Absolute origin for the admin console (admin.supporter-b.com). */
+/** Absolute origin for the admin console (admin.support-b.com). */
 export function adminBaseUrl(): string {
   return process.env.ADMIN_ORIGIN ?? baseUrl();
 }

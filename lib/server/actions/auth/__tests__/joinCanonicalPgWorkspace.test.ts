@@ -375,7 +375,7 @@ describe('joinCanonicalPgWorkspaceAction — 인증 게이트', () => {
 describe('joinCanonicalPgWorkspaceAction — 마스터 이메일 차단', () => {
   it('MASTER_EMAIL — 마스터 이메일은 유저/멤버십 생성·admin 알림 없이 차단', async () => {
     const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
-    process.env.MASTER_ACCOUNT_EMAILS = 'op@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'op@support-b.com';
     try {
       const { notifyAdminNewMembershipAfterCommit } = await import(
         '@/lib/server/notifications/admin-signup'
@@ -386,7 +386,7 @@ describe('joinCanonicalPgWorkspaceAction — 마스터 이메일 차단', () => 
       const phoneId = await seedVerifiedOtp();
 
       const r = await joinCanonicalPgWorkspaceAction({
-        email: 'op@supporter-b.com',
+        email: 'op@support-b.com',
         name: TEST_NAME,
         password: TEST_PASSWORD,
         phone: DEFAULT_PHONE,
@@ -401,7 +401,7 @@ describe('joinCanonicalPgWorkspaceAction — 마스터 이메일 차단', () => 
       const created = await db
         .select()
         .from(users)
-        .where(eq(users.email, 'op@supporter-b.com'));
+        .where(eq(users.email, 'op@support-b.com'));
       expect(created).toHaveLength(0);
       expect(notifyAdminNewMembershipAfterCommit).not.toHaveBeenCalled();
     } finally {

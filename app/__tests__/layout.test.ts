@@ -7,7 +7,7 @@ vi.mock('next/font/local', () => ({
 vi.mock('next-axiom', () => ({ AxiomWebVitals: () => null }));
 vi.mock('@/lib/site-config', () => ({
   siteConfig: {
-    url: 'https://supporter-b.com',
+    url: 'https://support-b.com',
     title: '서포트 B',
     description: 'Test',
     name: '서포트 B',

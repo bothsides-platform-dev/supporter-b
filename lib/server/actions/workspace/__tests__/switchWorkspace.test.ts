@@ -139,7 +139,7 @@ describe('switchWorkspaceAction', () => {
   describe('master account (env allowlist)', () => {
     const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
     beforeEach(() => {
-      process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+      process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
     });
     afterEach(() => {
       if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
@@ -147,9 +147,9 @@ describe('switchWorkspaceAction', () => {
     });
 
     it('마스터는 멤버십 없는 active 워크스페이스로도 전환할 수 있다 (role admin)', async () => {
-      const master = await seedUser(db, { email: 'help@supporter-b.com' });
+      const master = await seedUser(db, { email: 'help@support-b.com' });
       const ws = await seedBuyerWorkspace(db); // 멤버십 행 없음
-      sessionRef.value = { user: { id: master.id, email: 'help@supporter-b.com' } };
+      sessionRef.value = { user: { id: master.id, email: 'help@support-b.com' } };
 
       const r = await switchWorkspaceAction(ws.id);
 
@@ -174,10 +174,10 @@ describe('switchWorkspaceAction', () => {
     });
 
     it('마스터는 pending 워크스페이스로 전환할 수 없다 → INVALID_INPUT', async () => {
-      const master = await seedUser(db, { email: 'help@supporter-b.com' });
+      const master = await seedUser(db, { email: 'help@support-b.com' });
       const pendingId = randomUUID();
       await db.insert(workspaces).values({ id: pendingId, type: 'buyer', name: '심사중', status: 'pending' });
-      sessionRef.value = { user: { id: master.id, email: 'help@supporter-b.com' } };
+      sessionRef.value = { user: { id: master.id, email: 'help@support-b.com' } };
 
       const r = await switchWorkspaceAction(pendingId);
 
@@ -186,8 +186,8 @@ describe('switchWorkspaceAction', () => {
     });
 
     it('마스터는 존재하지 않는 워크스페이스로 전환할 수 없다 → INVALID_INPUT', async () => {
-      const master = await seedUser(db, { email: 'help@supporter-b.com' });
-      sessionRef.value = { user: { id: master.id, email: 'help@supporter-b.com' } };
+      const master = await seedUser(db, { email: 'help@support-b.com' });
+      sessionRef.value = { user: { id: master.id, email: 'help@support-b.com' } };
 
       const r = await switchWorkspaceAction(randomUUID());
 
@@ -198,9 +198,9 @@ describe('switchWorkspaceAction', () => {
   it('cross-host: switching to a pg workspace from the buyer host returns an absolute partner URL', async () => {
     const savedBuyer = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
     const savedPartner = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
-    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
-    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
-    mockHostRef.value = 'supporter-b.com';
+    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://support-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.support-b.com';
+    mockHostRef.value = 'support-b.com';
 
     try {
       const u = await seedUser(db);
@@ -212,7 +212,7 @@ describe('switchWorkspaceAction', () => {
 
       const r = await switchWorkspaceAction(wsPg.id);
 
-      expect(r).toEqual({ ok: true, redirectTo: 'https://partner.supporter-b.com/home' });
+      expect(r).toEqual({ ok: true, redirectTo: 'https://partner.support-b.com/home' });
     } finally {
       if (savedBuyer === undefined) delete process.env.NEXT_PUBLIC_BUYER_ORIGIN;
       else process.env.NEXT_PUBLIC_BUYER_ORIGIN = savedBuyer;

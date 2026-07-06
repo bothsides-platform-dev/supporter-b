@@ -89,7 +89,7 @@ pm2 save
 - `NEXT_PUBLIC_BASE_URL=https://<YOUR_DOMAIN>` — **빌드 타임에 인라인**되므로 deploy(빌드) 전에 설정
 - **Centrifugo(채팅)** — `CENTRIFUGO_TOKEN_HMAC_SECRET`, `CENTRIFUGO_API_KEY` 는 `openssl rand -base64 48` 로 강하게 생성. **이름 브리지 주의**: 이 값들은 `docker-compose.prod.yml` 가 컨테이너에 v6 환경변수명(`CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` / `CENTRIFUGO_HTTP_API_KEY`)으로 다시 주입한다 — **한 번만 설정하면 앱과 컨테이너가 같은 값을 공유**. `CENTRIFUGO_HTTP_API_URL=http://127.0.0.1:8000/api`, `NEXT_PUBLIC_CENTRIFUGO_WS_URL=wss://<YOUR_DOMAIN>/connection/websocket`(빌드 타임 인라인 — deploy 전에 설정). 컨테이너의 `allowed_origins` 는 `APP_DOMAIN` 에서 자동 도출.
 - `AXIOM_TOKEN` / `AXIOM_DATASET` — 둘 다 설정하면 운영 로그(pino)가 Axiom으로 전송된다. 미설정 시 `pm2 logs bidit` 으로만 확인.
-- **마스터/운영자 계정 (Google OAuth 전용)** — `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`(Google OAuth 클라이언트, 승인된 리디렉션 URI = `https://supporter-b.com/api/auth/callback/google` 1개), `MASTER_ACCOUNT_EMAILS`(쉼표로 구분된 운영자 Google 이메일 allowlist — 복수 가능), `NEXT_PUBLIC_MASTER_OAUTH_ENABLED=true`(숨겨진 `/login/ops` 라우트 활성화 — **빌드 타임 인라인**, deploy 전 설정). 라우트는 이 플래그가 true이고 `AUTH_GOOGLE_ID` 도 설정됐을 때만 렌더(아니면 404). 운영자는 `/login/ops` 주소를 직접 입력해 Google로만 로그인하며, allowlist에 없는 Google 계정은 거부된다. **보안 경계는 라우트 404가 아니라 allowlist default-deny** — `AUTH_GOOGLE_ID` 가 설정된 한 OAuth 콜백 엔드포인트는 플래그와 무관하게 존재하지만 allowlist 이메일만 로그인 완료 가능. 기능을 완전히 끄려면 `AUTH_GOOGLE_ID` 를 비운다. **시드 스크립트 불필요** — 최초 로그인 시 users 행이 자동 생성된다. `AUTH_GOOGLE_ID` 가 비어 있으면 Google 프로바이더 자체가 비활성. 스키마는 `is_master` 컬럼 없이 env allowlist 로만 판정하므로 추가 DDL 은 `workspaces_status_idx`(additive) 뿐.
+- **마스터/운영자 계정 (Google OAuth 전용)** — `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`(Google OAuth 클라이언트, 승인된 리디렉션 URI = `https://support-b.com/api/auth/callback/google` 1개), `MASTER_ACCOUNT_EMAILS`(쉼표로 구분된 운영자 Google 이메일 allowlist — 복수 가능), `NEXT_PUBLIC_MASTER_OAUTH_ENABLED=true`(숨겨진 `/login/ops` 라우트 활성화 — **빌드 타임 인라인**, deploy 전 설정). 라우트는 이 플래그가 true이고 `AUTH_GOOGLE_ID` 도 설정됐을 때만 렌더(아니면 404). 운영자는 `/login/ops` 주소를 직접 입력해 Google로만 로그인하며, allowlist에 없는 Google 계정은 거부된다. **보안 경계는 라우트 404가 아니라 allowlist default-deny** — `AUTH_GOOGLE_ID` 가 설정된 한 OAuth 콜백 엔드포인트는 플래그와 무관하게 존재하지만 allowlist 이메일만 로그인 완료 가능. 기능을 완전히 끄려면 `AUTH_GOOGLE_ID` 를 비운다. **시드 스크립트 불필요** — 최초 로그인 시 users 행이 자동 생성된다. `AUTH_GOOGLE_ID` 가 비어 있으면 Google 프로바이더 자체가 비활성. 스키마는 `is_master` 컬럼 없이 env allowlist 로만 판정하므로 추가 DDL 은 `workspaces_status_idx`(additive) 뿐.
 - `RESEND_*`, `SENTRY_*`, `SOLAPI_*` 등 — 사용하는 것만
 
 ## 갱신 배포 (이후 매번)
@@ -233,7 +233,7 @@ CRON_SECRET=$(openssl rand -base64 32)
 CENTRIFUGO_TOKEN_HMAC_SECRET=<위에서 생성>
 CENTRIFUGO_API_KEY=<위에서 생성>
 CENTRIFUGO_HTTP_API_URL=http://127.0.0.1:8000/api
-NEXT_PUBLIC_CENTRIFUGO_WS_URL=wss://supporter-b.com/connection/websocket
+NEXT_PUBLIC_CENTRIFUGO_WS_URL=wss://support-b.com/connection/websocket
 CRON_SECRET=<위에서 생성>
 ```
 
@@ -326,7 +326,7 @@ docker compose -f docker-compose.prod.yml logs centrifugo
 ```json
 [
   {
-    "AllowedOrigins": ["https://supporter-b.com", "https://partner.supporter-b.com"],
+    "AllowedOrigins": ["https://support-b.com", "https://partner.support-b.com"],
     "AllowedMethods": ["PUT"],
     "AllowedHeaders": ["content-type"],
     "MaxAgeSeconds": 3600
@@ -393,19 +393,19 @@ CREATE INDEX attachments_pending_idx ON attachments (uploaded_at) WHERE status =
 - R2 대시보드에서 업로드된 객체가 `attachments/<id>` 키로 쌓이는지 확인.
 - sweep-uploads cron 등록 후 `curl -XPOST localhost:3000/api/cron/sweep-uploads -H "x-cron-secret: $CRON_SECRET"` 가 `{"deletedRows":0,...}` 형태로 응답하는지.
 
-## partner.supporter-b.com 서브도메인 (PG 호스트 라우팅) 롤아웃
+## partner.support-b.com 서브도메인 (PG 호스트 라우팅) 롤아웃
 
-`partner.supporter-b.com` 은 **별도 프로세스 없이** 동일한 `:3000` Next.js 앱이 서빙한다. PM2 앱을 새로 띄우지 않아도 된다 — Caddy 가 두 호스트를 한 블록에서 처리한다.
+`partner.support-b.com` 은 **별도 프로세스 없이** 동일한 `:3000` Next.js 앱이 서빙한다. PM2 앱을 새로 띄우지 않아도 된다 — Caddy 가 두 호스트를 한 블록에서 처리한다.
 
 ### 1. DNS — deploy 전에 선행 필수
 
 도메인 DNS 에 A 레코드를 추가한다:
 
 ```
-partner.supporter-b.com  A  <Lightsail 고정 IP>
+partner.support-b.com  A  <Lightsail 고정 IP>
 ```
 
-> **⚠️ Caddy 리로드 전에 레코드가 전파돼 있어야 한다.** Caddy 는 호스트별로 Let's Encrypt ACME 챌린지를 시도하므로, `dig +short partner.supporter-b.com` 이 고정 IP 를 반환하는 것을 확인한 뒤 Caddy 를 리로드할 것.
+> **⚠️ Caddy 리로드 전에 레코드가 전파돼 있어야 한다.** Caddy 는 호스트별로 Let's Encrypt ACME 챌린지를 시도하므로, `dig +short partner.support-b.com` 이 고정 IP 를 반환하는 것을 확인한 뒤 Caddy 를 리로드할 것.
 
 ### 2. `.env.production` 에 신규 변수 추가
 
@@ -415,11 +415,11 @@ partner.supporter-b.com  A  <Lightsail 고정 IP>
 
 ```bash
 # 런타임 변수 (restart 로 반영)
-AUTH_COOKIE_DOMAIN=.supporter-b.com
+AUTH_COOKIE_DOMAIN=.support-b.com
 
 # 빌드 타임 변수 (변경 후 반드시 pnpm build 재실행)
-NEXT_PUBLIC_BUYER_ORIGIN=https://supporter-b.com
-NEXT_PUBLIC_PARTNER_ORIGIN=https://partner.supporter-b.com
+NEXT_PUBLIC_BUYER_ORIGIN=https://support-b.com
+NEXT_PUBLIC_PARTNER_ORIGIN=https://partner.support-b.com
 ```
 
 ### 3. Caddyfile 교체 + 리로드
@@ -445,10 +445,10 @@ bash scripts/deploy/lightsail-deploy.sh
 
 배포 후 아래를 직접 확인한다:
 
-- [ ] PG 계정으로 `supporter-b.com/home` 접속 → `partner.supporter-b.com/home` 으로 307 리다이렉트되고 로그인 유지
+- [ ] PG 계정으로 `support-b.com/home` 접속 → `partner.support-b.com/home` 으로 307 리다이렉트되고 로그인 유지
 - [ ] 두 워크스페이스를 가진 유저가 워크스페이스 전환 시 서브도메인 간 이동 후 로그인 유지
-- [ ] `supporter-b.com` / `partner.supporter-b.com` 양쪽에서 채팅 실시간 수신 정상 동작
-- [ ] RFP 초대 이메일의 링크가 `partner.supporter-b.com` 도메인을 가리킴
+- [ ] `support-b.com` / `partner.support-b.com` 양쪽에서 채팅 실시간 수신 정상 동작
+- [ ] RFP 초대 이메일의 링크가 `partner.support-b.com` 도메인을 가리킴
 
 ## Node 설치 (Amazon Linux 2023)
 

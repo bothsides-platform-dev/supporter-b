@@ -4,8 +4,8 @@ import type { SeoHostContext } from '@/lib/seo/host';
 import { FAQ_ITEMS } from '@/components/landing/faq-data';
 import { PG_FAQ_ITEMS } from '@/components/landing/pg-faq-data';
 
-const BUYER: SeoHostContext = { type: 'buyer', origin: 'https://supporter-b.com' };
-const PG: SeoHostContext = { type: 'pg', origin: 'https://partner.supporter-b.com' };
+const BUYER: SeoHostContext = { type: 'buyer', origin: 'https://support-b.com' };
+const PG: SeoHostContext = { type: 'pg', origin: 'https://partner.support-b.com' };
 
 it('exports TEXT_PLAIN_HEADERS with correct response header values', () => {
   expect((TEXT_PLAIN_HEADERS as Record<string, string>)['Content-Type']).toBe('text/plain; charset=utf-8');
@@ -32,18 +32,18 @@ describe('buildLlmsTxt', () => {
 
   it('buyer file uses buyer absolute URLs and links the full + signup pages', () => {
     const out = buildLlmsTxt(BUYER);
-    expect(out).toContain('https://supporter-b.com/signup/buyer');
-    expect(out).toContain('https://supporter-b.com/llms-full.txt');
+    expect(out).toContain('https://support-b.com/signup/buyer');
+    expect(out).toContain('https://support-b.com/llms-full.txt');
     // no foreign origin leaks
-    expect(out).not.toContain('partner.supporter-b.com');
+    expect(out).not.toContain('partner.support-b.com');
   });
 
   it('pg file carries PG facts and pg absolute URLs', () => {
     const out = buildLlmsTxt(PG);
     expect(out.startsWith('# 서포트 B')).toBe(true);
     expect(out).toMatch(/인바운드|검증된 리드|영업/);
-    expect(out).toContain('https://partner.supporter-b.com/signup/pg');
-    expect(out).toContain('https://partner.supporter-b.com/llms-full.txt');
+    expect(out).toContain('https://partner.support-b.com/signup/pg');
+    expect(out).toContain('https://partner.support-b.com/llms-full.txt');
   });
 
   it('keeps the two audiences separated (no cross-audience copy)', () => {
@@ -92,6 +92,6 @@ describe('buildLlmsFullTxt', () => {
     const out = buildLlmsFullTxt(PG);
     expect(out).toContain(PG_FAQ_ITEMS[0].q);
     expect(out).toContain(PG_FAQ_ITEMS[0].a);
-    expect(out).toContain('https://partner.supporter-b.com');
+    expect(out).toContain('https://partner.support-b.com');
   });
 });

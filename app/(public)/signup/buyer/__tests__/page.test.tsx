@@ -67,7 +67,7 @@ describe('BuyerSignupEmailPage — 이메일 blur 중복 검사', () => {
     const user = userEvent.setup();
     render(<BuyerSignupEmailPage />);
 
-    await user.type(screen.getByLabelText('이메일'), 'op@supporter-b.com');
+    await user.type(screen.getByLabelText('이메일'), 'op@support-b.com');
     await user.tab();
 
     await waitFor(() => {

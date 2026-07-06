@@ -315,7 +315,7 @@ describe('GET /api/files/[id] — master account', () => {
     sessionRef.value = {
       user: {
         id: randomUUID(),
-        email: 'master@supporter-b.com',
+        email: 'master@support-b.com',
         workspaceId: s.buyerWsId,
         workspaceType: 'buyer' as const,
         role: 'admin',

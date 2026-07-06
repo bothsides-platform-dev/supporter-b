@@ -14,10 +14,10 @@ afterEach(() => {
 
 describe('sessionCookie', () => {
   it('scopes the cookie to the parent domain when AUTH_COOKIE_DOMAIN is set', () => {
-    process.env.AUTH_COOKIE_DOMAIN = '.supporter-b.com';
+    process.env.AUTH_COOKIE_DOMAIN = '.support-b.com';
     vi.stubEnv('NODE_ENV', 'production');
     const c = sessionCookie();
-    expect(c.options.domain).toBe('.supporter-b.com');
+    expect(c.options.domain).toBe('.support-b.com');
     expect(c.options.secure).toBe(true);
     expect(c.options.sameSite).toBe('lax');
     expect(c.options.httpOnly).toBe(true);
@@ -51,7 +51,7 @@ describe('sessionCookie', () => {
     delete process.env.AUTH_COOKIE_DOMAIN;
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('AUTH_INSECURE_COOKIES', 'true');
-    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'https://supporter-b.com');
+    vi.stubEnv('NEXT_PUBLIC_BASE_URL', 'https://support-b.com');
     const c = sessionCookie();
     expect(c.options.secure).toBe(true);
     expect(c.name).toBe('__Secure-authjs.session-token');
@@ -74,10 +74,10 @@ describe('sessionCookieClearHeaders', () => {
   ];
 
   it('expires base + chunk variants in both host-only and domain scope (production)', () => {
-    // 도메인 설정 후 발급된 현행 쿠키(Domain=.supporter-b.com)와, 그 이전
+    // 도메인 설정 후 발급된 현행 쿠키(Domain=.support-b.com)와, 그 이전
     // 발급된 레거시 host-only 쿠키를 둘 다 만료시켜야 stale 쿠키가 살아남지
     // 못한다 — 이게 무한 리다이렉트 루프의 근본 원인 제거점이다.
-    process.env.AUTH_COOKIE_DOMAIN = '.supporter-b.com';
+    process.env.AUTH_COOKIE_DOMAIN = '.support-b.com';
     vi.stubEnv('NODE_ENV', 'production');
 
     const headers = sessionCookieClearHeaders();
@@ -99,7 +99,7 @@ describe('sessionCookieClearHeaders', () => {
       expect(
         headers.some(
           (h: string) =>
-            h.startsWith(name) && h.includes('Domain=.supporter-b.com'),
+            h.startsWith(name) && h.includes('Domain=.support-b.com'),
         ),
       ).toBe(true);
     }
@@ -155,7 +155,7 @@ describe('sessionCookieClearHeadersFor', () => {
     // 루프의 원인이 되는 stale 쿠키가 표준 3종(base/.0/.1) 밖의 변종(.2 청크 등)일
     // 때, 정적 헬퍼는 못 지운다. 요청 Cookie 헤더에서 실제 보유한 세션 쿠키명을
     // 동적 수집해 그 변종까지 host-only + 도메인-스코프 둘 다로 만료시킨다.
-    process.env.AUTH_COOKIE_DOMAIN = '.supporter-b.com';
+    process.env.AUTH_COOKIE_DOMAIN = '.support-b.com';
     vi.stubEnv('NODE_ENV', 'production');
 
     const header = '__Secure-authjs.session-token.2=stale; other=1';
@@ -171,7 +171,7 @@ describe('sessionCookieClearHeadersFor', () => {
       headers.some(
         (h) =>
           h.startsWith('__Secure-authjs.session-token.2=') &&
-          h.includes('Domain=.supporter-b.com'),
+          h.includes('Domain=.support-b.com'),
       ),
     ).toBe(true);
     for (const h of headers) {
@@ -183,7 +183,7 @@ describe('sessionCookieClearHeadersFor', () => {
   it('does NOT emit a Domain= variant for __Host- names (RFC forbids it — dead header)', () => {
     // `__Host-` prefix 쿠키는 RFC상 Domain 속성 금지 → Domain= 만료 헤더는
     // 브라우저에서 no-op(죽은 헤더). host-only 변종만 발행한다.
-    process.env.AUTH_COOKIE_DOMAIN = '.supporter-b.com';
+    process.env.AUTH_COOKIE_DOMAIN = '.support-b.com';
     vi.stubEnv('NODE_ENV', 'production');
 
     const headers = sessionCookieClearHeadersFor(
