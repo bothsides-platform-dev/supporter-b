@@ -429,6 +429,24 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       )) as { userId: string; email: string }[];
   }
 
+  async approvedMemberRecipients(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<{ userId: string; email: string }[]> {
+    const db = this.h(tx);
+    return (await db
+      .select({ userId: workspaceMembers.userId, email: usersTable.email })
+      .from(workspaceMembers)
+      .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.approvalStatus, 'approved'),
+          notifiableAccount,
+        ),
+      )) as { userId: string; email: string }[];
+  }
+
   async memberRecipientsBatch(
     wsIds: string[],
     tx?: Tx,

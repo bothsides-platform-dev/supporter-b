@@ -32,6 +32,7 @@ import {
   rfpPgRequests,
   rfps,
   bizProfiles,
+  outboxEntries,
 } from '@/lib/db/schema';
 import { RfpService } from '../rfp';
 import type { PgliteDB } from '@/lib/db/client-pglite';
@@ -472,6 +473,31 @@ describe('RfpService.sendDraftInvitations', () => {
     expect(row!.status).toBe('pending');
     expect(row!.tokenHash).not.toMatch(/^draft-/);
   });
+
+  it('sends the rfp.invited email to every approved PG member, not just admins', async () => {
+    const env = await seedSendDraftEnv();
+    const approvedMember = await seedUser(db, { email: 'member@senddraft.com' });
+    await seedMembership(db, env.pgWsId, approvedMember.id, 'member');
+    const pendingMember = await seedUser(db, { email: 'pending@senddraft.com' });
+    await seedMembership(db, env.pgWsId, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    await db.insert(rfpAllowedPg).values({ rfpId: env.rfpId, pgWsId: env.pgWsId });
+    const invId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: invId, rfpId: env.rfpId, pgWsId: env.pgWsId,
+      tokenHash: `draft-${invId}`, sentAt: new Date(), expiresAt: new Date(Date.now() + 7 * 86400_000), status: 'draft',
+    });
+
+    const result = await service.sendDraftInvitations(env.rfpCode, { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+    expect(result).toMatchObject({ ok: true, sentCount: 1 });
+
+    const invitedEmails = (
+      await db.select({ toAddr: outboxEntries.toAddr }).from(outboxEntries).where(eq(outboxEntries.event, 'rfp.invited'))
+    ).map((r) => r.toAddr);
+    expect(invitedEmails).toContain('pg@senddraft.com'); // admin
+    expect(invitedEmails).toContain('member@senddraft.com'); // approved member
+    expect(invitedEmails).not.toContain('pending@senddraft.com'); // pending-approval member excluded
+  });
 });
 
 // ─── RfpService.createRfp ────────────────────────────────────────────────────
@@ -552,6 +578,29 @@ describe('RfpService.createRfp', () => {
     const invRows = await db.select().from(rfpInvitations).where(eq(rfpInvitations.pgWsId, pgWsId));
     expect(invRows).toHaveLength(1);
     expect(invRows[0]!.status).toBe('pending');
+  });
+
+  it('sends the rfp.invited email to every approved PG member, not just admins', async () => {
+    const { buyerUserId, buyerWsId, pgWsId } = await seedCreateRfpEnv();
+    const approvedMember = await seedUser(db, { email: 'member@crfp.com' });
+    await seedMembership(db, pgWsId, approvedMember.id, 'member');
+    const pendingMember = await seedUser(db, { email: 'pending@crfp.com' });
+    await seedMembership(db, pgWsId, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const result = await service.createRfp({
+      title: 'Sent RFP All Members', deadline: new Date(Date.now() + 7 * 86400_000),
+      allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
+      requiredPaymentMethods: ['card'], customPaymentMethods: [],
+      send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
+    }, { userId: buyerUserId, workspaceId: buyerWsId });
+    expect(result.ok).toBe(true);
+
+    const invitedEmails = (
+      await db.select({ toAddr: outboxEntries.toAddr }).from(outboxEntries).where(eq(outboxEntries.event, 'rfp.invited'))
+    ).map((r) => r.toAddr);
+    expect(invitedEmails).toContain('pg@crfp.com'); // admin
+    expect(invitedEmails).toContain('member@crfp.com'); // approved member
+    expect(invitedEmails).not.toContain('pending@crfp.com'); // pending-approval member excluded
   });
 });
 

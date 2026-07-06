@@ -692,10 +692,10 @@ export class RfpService {
         });
 
         const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
-        const admins = wsMembers.filter((m) => m.role === 'admin' && m.approvalStatus === 'approved');
-        for (const admin of admins) {
+        const emailTargets = wsMembers.filter((m) => m.approvalStatus === 'approved');
+        for (const member of emailTargets) {
           await notify(tx, {
-            recipients: [{ userId: admin.userId, workspaceId: draft.pgWsId, email: admin.email }],
+            recipients: [{ userId: member.userId, workspaceId: draft.pgWsId, email: member.email }],
             channels: ['email'],
             type: 'rfp.invited',
             title: '',
@@ -704,7 +704,7 @@ export class RfpService {
               event: 'rfp.invited',
               subject: `[Supporter B · ${rfpCode}] 견적 요청이 도착했어요`,
               html,
-              dedupeKey: () => `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${admin.userId}`,
+              dedupeKey: () => `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${member.userId}`,
             },
           });
         }
@@ -820,10 +820,10 @@ export class RfpService {
       });
 
       for (const p of plans) {
-        // admin 멤버 조회 — acceptPgRequest / createRfp 패턴 그대로 차용 (userId + email 필요)
-        const adminRows = await this.workspaceRepo.adminRecipients(p.pgWsId, tx);
+        // 승인된 멤버 전원 조회 (role 무관) — 견적 재요청도 admin 한정이 아닌 전 멤버 대상.
+        const memberRows = await this.workspaceRepo.approvedMemberRecipients(p.pgWsId, tx);
 
-        for (const m of adminRows) {
+        for (const m of memberRows) {
           pendingEmits.push(
             ...(await notify(tx, {
               recipients: [{ userId: m.userId, workspaceId: p.pgWsId, email: m.email }],
@@ -994,8 +994,8 @@ export class RfpService {
             tx,
           );
 
-          const adminRows = await this.workspaceRepo.adminRecipients(pgWsId, tx);
-          for (const admin of adminRows) {
+          const emailRows = await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx);
+          for (const member of emailRows) {
             const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
             const html = await renderRfpInvited({
               rfpId: code,
@@ -1005,7 +1005,7 @@ export class RfpService {
               inviteUrl,
             });
             await notify(tx, {
-              recipients: [{ userId: admin.userId, workspaceId: pgWsId, email: admin.email }],
+              recipients: [{ userId: member.userId, workspaceId: pgWsId, email: member.email }],
               channels: ['email'],
               type: 'rfp.invited',
               title: '',
@@ -1014,7 +1014,7 @@ export class RfpService {
                 event: 'rfp.invited',
                 subject: `[Supporter B · ${code}] 견적 요청이 도착했어요`,
                 html,
-                dedupeKey: () => `rfp:${rfpId}:invite:ws:${pgWsId}:user:${admin.userId}`,
+                dedupeKey: () => `rfp:${rfpId}:invite:ws:${pgWsId}:user:${member.userId}`,
               },
             });
           }

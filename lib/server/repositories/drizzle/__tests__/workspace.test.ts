@@ -775,6 +775,67 @@ describe('DrizzleWorkspaceRepository', () => {
     });
   });
 
+  describe('approvedMemberRecipients', () => {
+    it('returns userId + email for every approved member regardless of role', async () => {
+      const ws = await seedPgWorkspace(db, 'approved-recip.test');
+      const admin = await seedUser(db, { email: 'admin@approved-recip.test' });
+      const member = await seedUser(db, { email: 'member@approved-recip.test' });
+      await seedMembership(db, ws.id, admin.id, 'admin');
+      await seedMembership(db, ws.id, member.id, 'member');
+
+      const recipients = await repo.approvedMemberRecipients(ws.id);
+      expect(recipients).toHaveLength(2);
+      expect(recipients).toEqual(
+        expect.arrayContaining([
+          { userId: admin.id, email: 'admin@approved-recip.test' },
+          { userId: member.id, email: 'member@approved-recip.test' },
+        ]),
+      );
+    });
+
+    it('excludes pending-approval members', async () => {
+      const ws = await seedPgWorkspace(db, 'approved-recip-pending.test');
+      const approved = await seedUser(db, { email: 'approved@approved-recip-pending.test' });
+      const pending = await seedUser(db, { email: 'pending@approved-recip-pending.test' });
+      await seedMembership(db, ws.id, approved.id, 'admin');
+      await seedMembership(db, ws.id, pending.id, 'member', { approvalStatus: 'pending_approval' });
+
+      const recipients = await repo.approvedMemberRecipients(ws.id);
+      expect(recipients.map((r) => r.email)).toEqual(['approved@approved-recip-pending.test']);
+    });
+
+    it('숨겨진 master(실 해시)는 포함하되 데모 placeholder(!) 는 제외', async () => {
+      const ws = await seedPgWorkspace(db, 'sys-approved-recip.test');
+      const human = await seedUser(db, { email: 'human@sys-approved-recip.test' });
+      const master = await seedUser(db, { email: 'ops@sys-approved-recip.test', isSystemAccount: true });
+      const demo = await seedUser(db, {
+        email: 'demo@sample.invalid',
+        isSystemAccount: true,
+        passwordHash: '!',
+      });
+      await seedMembership(db, ws.id, human.id, 'member');
+      await seedMembership(db, ws.id, master.id, 'member');
+      await seedMembership(db, ws.id, demo.id, 'member');
+
+      const userIds = (await repo.approvedMemberRecipients(ws.id)).map((r) => r.userId);
+      expect(userIds).toContain(human.id);
+      expect(userIds).toContain(master.id);
+      expect(userIds).not.toContain(demo.id);
+    });
+
+    it('does not include members of a different workspace', async () => {
+      const wsA = await seedPgWorkspace(db, 'approved-recip-a.com');
+      const wsB = await seedPgWorkspace(db, 'approved-recip-b.com');
+      const a = await seedUser(db, { email: 'a@approved-recip-a.com' });
+      const b = await seedUser(db, { email: 'b@approved-recip-b.com' });
+      await seedMembership(db, wsA.id, a.id, 'member');
+      await seedMembership(db, wsB.id, b.id, 'member');
+      expect(await repo.approvedMemberRecipients(wsA.id)).toEqual([
+        { userId: a.id, email: 'a@approved-recip-a.com' },
+      ]);
+    });
+  });
+
   describe('memberRecipientsBatch', () => {
     it('returns workspaceId + userId + role + email for all members across workspaces', async () => {
       const ws1 = await seedPgWorkspace(db, 'mrb-1.com');
