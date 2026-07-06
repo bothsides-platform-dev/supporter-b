@@ -92,6 +92,31 @@ describe('RfpService.requote', () => {
     expect(emails.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('notifies every approved PG member (not just admin), excludes pending-approval members', async () => {
+    const s = await seedBidderEnv();
+    const approvedMember = await seedUser(db, { email: 'member@pg.io' });
+    await seedMembership(db, s.pgWs.id, approvedMember.id, 'member');
+    const pendingMember = await seedUser(db, { email: 'pending@pg.io' });
+    await seedMembership(db, s.pgWs.id, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const r = await service.requote(
+      s.rfpId,
+      { targetPgWsIds: [s.pgWs.id], message: '카드 수수료를 낮춰주세요', newDeadline: future() },
+      { userId: s.buyer.id, workspaceId: s.buyerWs.id },
+    );
+    expect(r.ok).toBe(true);
+
+    const memberNotifs = await db.select().from(notifications).where(eq(notifications.userId, approvedMember.id));
+    expect(memberNotifs.some((n) => n.type === 'rfp.requote_requested')).toBe(true);
+
+    const invitedEmails = (
+      await db.select({ toAddr: outboxEntries.toAddr }).from(outboxEntries).where(eq(outboxEntries.event, 'rfp.requote_requested'))
+    ).map((r) => r.toAddr);
+    expect(invitedEmails).toContain('admin@pg.io');
+    expect(invitedEmails).toContain('member@pg.io');
+    expect(invitedEmails).not.toContain('pending@pg.io');
+  });
+
   it('rejects a target PG with no submitted bid', async () => {
     const s = await seedBidderEnv();
     const otherPg = await seedPgWorkspace(db, 'no-bid.io');
