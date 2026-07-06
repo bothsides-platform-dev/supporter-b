@@ -69,6 +69,7 @@ app/
 │  ├─ rfp-create/             # /rfp-create — RFP 작성 플로우 (AppShell 공유, 인터셉트 라우트)
 │  ├─ inbox/                  # pg workspace pages (P2~P4): /inbox, /inbox/[rfpId] (제출 후 인플레이스 흡수 — 별도 /submitted 라우트 없음), /inbox/@modal/(.)[rfpId] (인터셉트 딜룸 모달)
 │  ├─ opportunities/          # pg — 오픈 RFP 게시판 (비초대 PG 발견·콜드 피치)
+│  ├─ tutorial/               # buyer+pg — 온보딩 튜토리얼. 홈 환영 모달(WelcomeModal)/재유도 배너(TutorialNudge)의 진입점. v0는 스텁(완료 시 /home) — 콘텐츠는 후속 PR
 │  ├─ messages/               # buyer+pg 공통 — 라이브 채팅 (Centrifugo WS)
 │  ├─ notifications/          # 인앱 알림 목록 페이지
 │  ├─ quote-templates/        # pg — 견적 템플릿 (정산조건·수수료율 저장, top-level PG 라우트 — settings 하위 아님)

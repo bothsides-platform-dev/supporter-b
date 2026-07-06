@@ -4,7 +4,7 @@ import { listInboxForViewer } from '@/lib/server/actions/chat/inboxLoader';
 import { buildHomeMessagesSnapshot } from '@/lib/server/dashboard/homeMessages';
 import { HomeDashboard } from '@/components/home/HomeDashboard';
 import { getUserRepo } from '@/lib/server/repositories/factory';
-import { shouldShowSampleEntry } from '@/lib/onboarding/visibility';
+import { resolveWelcomeState } from '@/lib/onboarding/visibility';
 
 export async function PgHome({ workspaceId, userId }: { workspaceId: string; userId: string }) {
   const [dashboard, allItems, onboarding] = await Promise.all([
@@ -13,7 +13,7 @@ export async function PgHome({ workspaceId, userId }: { workspaceId: string; use
     (await getUserRepo()).getOnboarding(userId),
   ]);
   const { items, unreadCount } = buildHomeMessagesSnapshot(allItems);
-  const showSampleEntry = shouldShowSampleEntry(onboarding, 'pgSample');
+  const welcomeState = resolveWelcomeState(onboarding, 'pgTutorial');
   return (
     <PageEnter className="px-8 py-10">
       <HomeDashboard
@@ -21,7 +21,7 @@ export async function PgHome({ workspaceId, userId }: { workspaceId: string; use
         workspaceType="pg"
         items={items}
         unreadCount={unreadCount}
-        showSampleEntry={showSampleEntry}
+        welcomeState={welcomeState}
       />
     </PageEnter>
   );
