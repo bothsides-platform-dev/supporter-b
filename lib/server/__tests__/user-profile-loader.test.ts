@@ -116,7 +116,7 @@ describe('loadUserProfileForViewer', () => {
     // 시드된 canonical PG/데모 워크스페이스의 admin 은 isSystemAccount=true 인 실제 멤버다.
     // 다른 멤버 조회는 모두 시스템 계정을 거른다 — 이 신원 로더도 같아야 한다(이메일 비노출).
     const sysUser = await seedUser(ctx.db, {
-      email: 'ops@supporter-b.com',
+      email: 'ops@support-b.com',
       name: '운영자',
       isSystemAccount: true,
     });

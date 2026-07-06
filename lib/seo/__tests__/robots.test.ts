@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildRobots, AI_CRAWLER_USER_AGENTS } from '@/lib/seo/robots';
 
-const ORIGIN = 'https://partner.supporter-b.com';
+const ORIGIN = 'https://partner.support-b.com';
 
 describe('buildRobots', () => {
   it('points host + sitemap at the given origin (host-aware)', () => {

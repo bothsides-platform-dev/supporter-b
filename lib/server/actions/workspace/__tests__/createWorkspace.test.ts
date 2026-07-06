@@ -207,7 +207,7 @@ describe('createWorkspaceAction', () => {
 
   it('ADMIN_ORIGIN 설정 시 reviewUrl 이 해당 origin 으로 시작한다', async () => {
     const saved = process.env.ADMIN_ORIGIN;
-    process.env.ADMIN_ORIGIN = 'https://admin.supporter-b.com';
+    process.env.ADMIN_ORIGIN = 'https://admin.support-b.com';
     notifyMock.mockClear();
     try {
       const u = await seedUser(db);
@@ -215,7 +215,7 @@ describe('createWorkspaceAction', () => {
       const r = await createWorkspaceAction({ type: 'pg', name: 'AdminPG' });
       expect(r.ok).toBe(true);
       const arg = notifyMock.mock.calls[0][0] as { reviewUrl: string };
-      expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.supporter-b\.com\/admin\/review\//);
+      expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.support-b\.com\/admin\/review\//);
     } finally {
       if (saved === undefined) delete process.env.ADMIN_ORIGIN;
       else process.env.ADMIN_ORIGIN = saved;

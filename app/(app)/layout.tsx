@@ -69,8 +69,8 @@ export default async function AppLayout({
     redirect(decision.to);
   }
   const active = decision.active;
-  // Host routing: a PG-active session on supporter-b.com (or a buyer-active
-  // session on partner.supporter-b.com) is bounced to its correct host. No-op on
+  // Host routing: a PG-active session on support-b.com (or a buyer-active
+  // session on partner.support-b.com) is bounced to its correct host. No-op on
   // unknown hosts and in local/dev (single host) — see lib/site-routing.
   const host = (await headers()).get('host');
   const hostRedirect = resolveHostRedirect(active.type, host, appOrigins());

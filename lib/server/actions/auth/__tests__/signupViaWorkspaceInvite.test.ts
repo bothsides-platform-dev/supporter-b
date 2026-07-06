@@ -395,7 +395,7 @@ describe('signupViaWorkspaceInviteAction — 인증 게이트', () => {
 describe('signupViaWorkspaceInviteAction — 마스터 이메일 차단', () => {
   it('MASTER_EMAIL — 마스터 이메일은 초대 가입도 유저 생성 없이 차단', async () => {
     const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
-    const MASTER = 'op@supporter-b.com';
+    const MASTER = 'op@support-b.com';
     process.env.MASTER_ACCOUNT_EMAILS = MASTER;
     try {
       const ws = await seedPgWorkspace(db, 'PG Co');

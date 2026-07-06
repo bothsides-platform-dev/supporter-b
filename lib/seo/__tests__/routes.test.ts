@@ -20,8 +20,8 @@ function withHost(host: string | null) {
 }
 
 beforeEach(() => {
-  vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'https://supporter-b.com');
-  vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.supporter-b.com');
+  vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'https://support-b.com');
+  vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.support-b.com');
 });
 afterAll(() => {
   vi.unstubAllEnvs();
@@ -29,7 +29,7 @@ afterAll(() => {
 
 describe('GET /llms.txt', () => {
   it('returns text/plain with cache headers and buyer content on the buyer host', async () => {
-    withHost('supporter-b.com');
+    withHost('support-b.com');
     const res = await llmsTxtGet();
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');
@@ -37,26 +37,26 @@ describe('GET /llms.txt', () => {
     expect(res.headers.get('vary')).toBe('Host');
     const body = await res.text();
     expect(body.startsWith('# 서포트 B')).toBe(true);
-    expect(body).toContain('https://supporter-b.com/signup/buyer');
+    expect(body).toContain('https://support-b.com/signup/buyer');
   });
 
   it('serves PG content + pg origin on the partner host', async () => {
-    withHost('partner.supporter-b.com');
+    withHost('partner.support-b.com');
     const body = await (await llmsTxtGet()).text();
-    expect(body).toContain('https://partner.supporter-b.com/signup/pg');
+    expect(body).toContain('https://partner.support-b.com/signup/pg');
     expect(body).not.toContain('0.89'); // buyer-only stat must not leak to pg host
   });
 
   it('falls back to buyer content when the host header is missing', async () => {
     withHost(null);
     const body = await (await llmsTxtGet()).text();
-    expect(body).toContain('https://supporter-b.com/');
+    expect(body).toContain('https://support-b.com/');
   });
 });
 
 describe('GET /llms-full.txt', () => {
   it('returns the full markdown export with the canonical FAQ verbatim', async () => {
-    withHost('supporter-b.com');
+    withHost('support-b.com');
     const res = await llmsFullGet();
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');

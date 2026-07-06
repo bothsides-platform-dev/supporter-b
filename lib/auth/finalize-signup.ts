@@ -97,9 +97,9 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
 
   // 자동 로그인은 loginAction(서버사이드 signIn)으로 처리한다. 클라이언트
   // signIn(next-auth/react)은 GET /csrf + POST /callback 풀 HTTP 왕복이라, AUTH_URL 이
-  // 단일 호스트로 고정된 프로덕션에서 partner.supporter-b.com 가입 시 origin/CSRF
+  // 단일 호스트로 고정된 프로덕션에서 partner.support-b.com 가입 시 origin/CSRF
   // 검증에 막혀 CredentialsSignin 으로 실패했다(buyer 호스트만 성공). loginAction 은
-  // 인프로세스 signIn 이라 HTTP/CSRF 왕복이 없고 쿠키를 .supporter-b.com 도메인으로
+  // 인프로세스 signIn 이라 HTTP/CSRF 왕복이 없고 쿠키를 .support-b.com 도메인으로
   // 세팅해 두 호스트 모두 동작한다. 또한 loginAction 의 레이트리밋(F1/F3)을 그대로
   // 재사용한다 — 별도 미보호 자격증명 엔드포인트를 새로 만들지 않는다.
   const signInResult = await loginAction({

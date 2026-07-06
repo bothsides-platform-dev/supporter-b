@@ -97,7 +97,7 @@ describe('LoginPage — 실패 카운트 / 락 mock', () => {
 });
 
 describe('LoginPage — cross-host 로그인 리다이렉트', () => {
-  // Two hosts in prod: supporter-b.com (buyer) / partner.supporter-b.com (pg).
+  // Two hosts in prod: support-b.com (buyer) / partner.support-b.com (pg).
   // The (app) shell bounces a session whose home host ≠ the host it logged in on
   // via a server `redirect()` to an absolute cross-origin URL. Reached through a
   // client-side router.push (RSC fetch), the browser blocks that cross-origin
@@ -116,10 +116,10 @@ describe('LoginPage — cross-host 로그인 리다이렉트', () => {
     // with a stub exposing host + assign so a hard navigation can be asserted.
     Object.defineProperty(window, 'location', {
       configurable: true,
-      value: { host: 'partner.supporter-b.com', assign },
+      value: { host: 'partner.support-b.com', assign },
     });
-    vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'https://supporter-b.com');
-    vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.supporter-b.com');
+    vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'https://support-b.com');
+    vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.support-b.com');
   });
 
   afterEach(() => {
@@ -147,7 +147,7 @@ describe('LoginPage — cross-host 로그인 리다이렉트', () => {
     await submitLogin();
 
     await waitFor(() =>
-      expect(assign).toHaveBeenCalledWith('https://supporter-b.com/home'),
+      expect(assign).toHaveBeenCalledWith('https://support-b.com/home'),
     );
     expect(routerPush).not.toHaveBeenCalled();
   });

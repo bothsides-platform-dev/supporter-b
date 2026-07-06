@@ -19,15 +19,15 @@ afterEach(() => {
 
 describe('allowSignIn (default-deny for Google)', () => {
   beforeEach(() => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com,ops@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com,ops@support-b.com';
   });
 
   it('google + 이메일 검증 + allowlist → 허용', () => {
-    expect(allowSignIn({ provider: 'google', emailVerified: true, email: 'ops@supporter-b.com' })).toBe(true);
+    expect(allowSignIn({ provider: 'google', emailVerified: true, email: 'ops@support-b.com' })).toBe(true);
   });
 
   it('google + allowlist지만 이메일 미검증 → 거부', () => {
-    expect(allowSignIn({ provider: 'google', emailVerified: false, email: 'ops@supporter-b.com' })).toBe(false);
+    expect(allowSignIn({ provider: 'google', emailVerified: false, email: 'ops@support-b.com' })).toBe(false);
   });
 
   it('google + 검증됐지만 allowlist 아님 → 거부', () => {
@@ -57,23 +57,23 @@ describe('resolveMasterUser (auto-provision + workspace resolution)', () => {
   }
 
   it('최초 로그인 시 마스터 users 행을 자동 생성한다 (이메일 정규화·emailVerified·name)', async () => {
-    const r = await resolveMasterUser(db, 'OPS@Supporter-B.com', '운영자');
+    const r = await resolveMasterUser(db, 'OPS@Support-B.com', '운영자');
 
     const rows = await db.select().from(users);
     expect(rows).toHaveLength(1);
-    expect(rows[0].email).toBe('ops@supporter-b.com');
+    expect(rows[0].email).toBe('ops@support-b.com');
     expect(rows[0].emailVerified).toBe(true);
     expect(rows[0].name).toBe('운영자');
     expect(rows[0].passwordHash.length).toBeGreaterThan(0);
     // 멤버 목록 비표시 + 시스템 계정 의도와 일치 (workspace.ts의 isSystemAccount 필터).
     expect(rows[0].isSystemAccount).toBe(true);
     expect(r.id).toBe(rows[0].id);
-    expect(r.email).toBe('ops@supporter-b.com');
+    expect(r.email).toBe('ops@support-b.com');
   });
 
   it('재로그인 시 기존 행을 재사용한다 (중복 생성 없음)', async () => {
-    const first = await resolveMasterUser(db, 'ops@supporter-b.com', '운영자');
-    const second = await resolveMasterUser(db, 'ops@supporter-b.com', '운영자');
+    const first = await resolveMasterUser(db, 'ops@support-b.com', '운영자');
+    const second = await resolveMasterUser(db, 'ops@support-b.com', '운영자');
 
     const rows = await db.select().from(users);
     expect(rows).toHaveLength(1);
@@ -84,7 +84,7 @@ describe('resolveMasterUser (auto-provision + workspace resolution)', () => {
     const older = await seedActiveWorkspace('buyer', new Date('2026-01-01T00:00:00Z'), '먼저');
     await seedActiveWorkspace('pg', new Date('2026-02-01T00:00:00Z'), '나중');
 
-    const r = await resolveMasterUser(db, 'ops@supporter-b.com', '운영자');
+    const r = await resolveMasterUser(db, 'ops@support-b.com', '운영자');
 
     expect(r.workspaceId).toBe(older);
     expect(r.workspaceType).toBe('buyer');
@@ -95,17 +95,17 @@ describe('resolveMasterUser (auto-provision + workspace resolution)', () => {
     await seedActiveWorkspace('buyer', new Date('2026-01-01T00:00:00Z'), '먼저');
     const remembered = await seedActiveWorkspace('pg', new Date('2026-02-01T00:00:00Z'), '기억된');
     // 마스터 행을 먼저 만들고 lastActiveWorkspaceId 설정
-    const created = await resolveMasterUser(db, 'ops@supporter-b.com', '운영자');
+    const created = await resolveMasterUser(db, 'ops@support-b.com', '운영자');
     await db.update(users).set({ lastActiveWorkspaceId: remembered }).where(eq(users.id, created.id));
 
-    const r = await resolveMasterUser(db, 'ops@supporter-b.com', '운영자');
+    const r = await resolveMasterUser(db, 'ops@support-b.com', '운영자');
 
     expect(r.workspaceId).toBe(remembered);
     expect(r.workspaceType).toBe('pg');
   });
 
   it('active 워크스페이스가 없으면 workspaceId는 undefined', async () => {
-    const r = await resolveMasterUser(db, 'ops@supporter-b.com', '운영자');
+    const r = await resolveMasterUser(db, 'ops@support-b.com', '운영자');
     expect(r.workspaceId).toBeUndefined();
     expect(r.role).toBeUndefined();
   });
@@ -120,7 +120,7 @@ describe('makeNodeJwtCallback (Google → provisioned master token)', () => {
     db = await createPgliteDb();
     // DB access now routes through the repo factory — bind it to this pglite db.
     await __useDrizzleWithDbForTest(db);
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
   });
   afterEach(() => {
     __resetForTest();
@@ -133,13 +133,13 @@ describe('makeNodeJwtCallback (Google → provisioned master token)', () => {
 
     const token = await jwt({
       token: {},
-      user: { id: 'google-sub-123', email: 'help@supporter-b.com', name: '운영팀' },
+      user: { id: 'google-sub-123', email: 'help@support-b.com', name: '운영팀' },
       account: { provider: 'google' },
-      profile: { email: 'help@supporter-b.com', email_verified: true, name: '운영팀' },
+      profile: { email: 'help@support-b.com', email_verified: true, name: '운영팀' },
     });
 
     const [row] = await db.select().from(users);
-    expect(row.email).toBe('help@supporter-b.com');
+    expect(row.email).toBe('help@support-b.com');
     expect(token.id).toBe(row.id); // google sub이 아니라 우리 DB id
     expect(token.id).not.toBe('google-sub-123');
     expect(token.isMaster).toBe(true);

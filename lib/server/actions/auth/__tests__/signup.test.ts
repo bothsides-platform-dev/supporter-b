@@ -243,9 +243,9 @@ describe('signupEmailAction + verifyEmailAction', () => {
 
   it('MASTER_EMAIL — 마스터/운영자 이메일은 인증코드 발급 없이 차단한다', async () => {
     const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
-    process.env.MASTER_ACCOUNT_EMAILS = 'op@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'op@support-b.com';
     try {
-      const r = await signupEmailAction({ email: 'op@supporter-b.com' });
+      const r = await signupEmailAction({ email: 'op@support-b.com' });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error).toBe('MASTER_EMAIL');
 
@@ -253,12 +253,12 @@ describe('signupEmailAction + verifyEmailAction', () => {
       const out = await db
         .select()
         .from(outboxEntries)
-        .where(eq(outboxEntries.toAddr, 'op@supporter-b.com'));
+        .where(eq(outboxEntries.toAddr, 'op@support-b.com'));
       expect(out).toHaveLength(0);
       const tokens = await db
         .select()
         .from(verificationTokens)
-        .where(eq(verificationTokens.email, 'op@supporter-b.com'));
+        .where(eq(verificationTokens.email, 'op@support-b.com'));
       expect(tokens).toHaveLength(0);
     } finally {
       if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
@@ -279,9 +279,9 @@ describe('checkEmailAvailableAction — 마스터 이메일 차단', () => {
 
   it('마스터 이메일은 step1 가입가능 검사에서 EMAIL_TAKEN으로 차단된다 (열거 공격 방지)', async () => {
     const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
-    process.env.MASTER_ACCOUNT_EMAILS = 'op@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'op@support-b.com';
     try {
-      const r = await checkEmailAvailableAction({ email: 'op@supporter-b.com' });
+      const r = await checkEmailAvailableAction({ email: 'op@support-b.com' });
       expect(r.ok).toBe(false);
       // MASTER_EMAIL 대신 EMAIL_TAKEN 반환 — 관리자 계정 이메일 열거 공격 방지
       if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
@@ -305,10 +305,10 @@ describe('signupCompleteAction — 마스터 이메일 차단', () => {
     'MASTER_EMAIL — %s 가입도 마스터 이메일이면 유저 생성 전에 차단한다',
     async (wsKind) => {
       const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
-      process.env.MASTER_ACCOUNT_EMAILS = 'op@supporter-b.com';
+      process.env.MASTER_ACCOUNT_EMAILS = 'op@support-b.com';
       try {
         const r = await signupCompleteAction({
-          email: 'op@supporter-b.com',
+          email: 'op@support-b.com',
           name: '운영자',
           password: 'Password123!',
           phone: DEFAULT_PHONE,
@@ -327,7 +327,7 @@ describe('signupCompleteAction — 마스터 이메일 차단', () => {
         const created = await db
           .select()
           .from(users)
-          .where(eq(users.email, 'op@supporter-b.com'));
+          .where(eq(users.email, 'op@support-b.com'));
         expect(created).toHaveLength(0);
       } finally {
         if (ORIGINAL === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
@@ -869,9 +869,9 @@ describe('signupCompleteAction — cross-host redirect for pg signup', () => {
     await seedVerifiedEmail('sales.crosshost@toss.im');
     savedBuyer.val = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
     savedPartner.val = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
-    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://supporter-b.com';
-    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.supporter-b.com';
-    signupMockHostRef.value = 'supporter-b.com';
+    process.env.NEXT_PUBLIC_BUYER_ORIGIN = 'https://support-b.com';
+    process.env.NEXT_PUBLIC_PARTNER_ORIGIN = 'https://partner.support-b.com';
+    signupMockHostRef.value = 'support-b.com';
   });
   afterEach(() => {
     teardownActionEnv();
@@ -897,6 +897,6 @@ describe('signupCompleteAction — cross-host redirect for pg signup', () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.redirectTo).toBe('https://partner.supporter-b.com/inbox');
+    expect(r.redirectTo).toBe('https://partner.support-b.com/inbox');
   });
 });
