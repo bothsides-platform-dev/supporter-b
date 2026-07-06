@@ -8,6 +8,8 @@ import { normalizePhone } from './phoneOtpUtils';
 import { getAuthService } from '@/lib/server/services/auth';
 import { adminBaseUrl } from '@/lib/server/env';
 import { notifyAdminNewMembershipAfterCommit } from '@/lib/server/notifications/admin-signup';
+import { SignupSourceInput } from './_signupSourceInput';
+import { migrateSignupSource } from '@/lib/types/signup-source';
 
 const Input = z
   .object({
@@ -17,6 +19,7 @@ const Input = z
     phone: z.string().min(9).max(15),
     phoneVerificationId: z.string().uuid(),
     selectedPgWorkspaceId: z.string().uuid(),
+    signupSource: SignupSourceInput.optional(),
   })
   .strict();
 
@@ -53,6 +56,9 @@ export async function joinCanonicalPgWorkspaceAction(
     phone: normalizedPhone,
     phoneVerificationId: parsed.data.phoneVerificationId,
     selectedPgWorkspaceId: parsed.data.selectedPgWorkspaceId,
+    signupSource: parsed.data.signupSource
+      ? migrateSignupSource(parsed.data.signupSource)
+      : undefined,
   });
 
   if (!result.ok) return result;

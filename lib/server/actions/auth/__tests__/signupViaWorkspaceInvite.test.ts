@@ -428,3 +428,30 @@ describe('signupViaWorkspaceInviteAction — 마스터 이메일 차단', () => 
     }
   });
 });
+
+describe('signupViaWorkspaceInviteAction — signupSource', () => {
+  it('signupSource가 전달되면 users.signup_source에 저장된다', async () => {
+    const ws = await seedPgWorkspace(db, 'PG Co');
+    const admin = await seedUser(db, { email: 'admin@pg.co' });
+    const phoneId = await seedVerifiedOtp();
+    await seedVerifiedEmail(TEST_EMAIL);
+    const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
+
+    const r = await signupViaWorkspaceInviteAction({
+      email: TEST_EMAIL,
+      name: TEST_NAME,
+      password: TEST_PASSWORD,
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: phoneId,
+      wsInviteToken: rawToken,
+      signupSource: { _v: 1, utmSource: 'google' },
+    });
+
+    expect(r.ok).toBe(true);
+    const [u] = await db
+      .select({ signupSource: users.signupSource })
+      .from(users)
+      .where(eq(users.email, TEST_EMAIL));
+    expect(u.signupSource).toEqual({ _v: 1, utmSource: 'google' });
+  });
+});

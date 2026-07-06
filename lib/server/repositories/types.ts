@@ -443,7 +443,7 @@ export interface UserRepo {
       passwordHash: string;
       name: string;
       phone: string;
-      /** First-touch 가입 유입 경로(lib/types/signup-source.ts). 초대/canonical-PG 합류 경로는 전달하지 않는다. */
+      /** First-touch 가입 유입 경로(lib/types/signup-source.ts). 모든 가입 경로가 전달할 수 있다. */
       signupSource?: SignupSource;
     },
     tx?: Tx,

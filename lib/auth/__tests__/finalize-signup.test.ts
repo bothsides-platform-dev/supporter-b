@@ -252,26 +252,28 @@ describe('finalizeSignup — signupSource(first-touch 유입 경로) 전달', ()
     );
   });
 
-  it('초대 경로는 signupSource를 전달하지 않는다(유입처가 초대 이메일로 자명)', async () => {
+  it('초대 경로도 signupSource를 전달한다', async () => {
     draftRef.value = { ...INVITE_DRAFT };
     readFirstTouchMock.mockReturnValue(SIGNUP_SOURCE);
     inviteActionMock.mockResolvedValue({ ok: true, redirectTo: '/inbox', email: 'x@example.com', password: 'pw-123456' });
 
     await finalizeSignup();
 
-    const callArg = inviteActionMock.mock.calls[0][0];
-    expect(callArg).not.toHaveProperty('signupSource');
+    expect(inviteActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ signupSource: SIGNUP_SOURCE }),
+    );
   });
 
-  it('canonical PG 합류 경로도 signupSource를 전달하지 않는다', async () => {
+  it('canonical PG 합류 경로도 signupSource를 전달한다', async () => {
     draftRef.value = { ...CANONICAL_PG_DRAFT };
     readFirstTouchMock.mockReturnValue(SIGNUP_SOURCE);
     joinCanonicalMock.mockResolvedValue({ ok: true, redirectTo: '/inbox', email: 'sales@toss.im', password: 'pw-123456' });
 
     await finalizeSignup();
 
-    const callArg = joinCanonicalMock.mock.calls[0][0];
-    expect(callArg).not.toHaveProperty('signupSource');
+    expect(joinCanonicalMock).toHaveBeenCalledWith(
+      expect.objectContaining({ signupSource: SIGNUP_SOURCE }),
+    );
   });
 
   it('first-touch 캡처가 없으면 signupSource는 undefined로 전달된다', async () => {

@@ -26,9 +26,8 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
     return { ok: false, error: 'SESSION_EXPIRED' };
   }
 
-  // First-touch 유입 경로(lib/attribution/first-touch.ts) — buyer/pg 자가가입에만
-  // 실어 보낸다. 초대/canonical-PG 합류는 유입처가 초대 이메일로 자명하므로 제외
-  // (아래 두 분기는 signupSource 를 넘기지 않는다).
+  // First-touch 유입 경로(lib/attribution/first-touch.ts) — 모든 가입 경로(초대/
+  // canonical-PG 합류 포함)에 실어 보낸다.
   const signupSource = readFirstTouch() ?? undefined;
 
   let r;
@@ -41,6 +40,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
       phone: d.phone,
       phoneVerificationId: d.phoneVerificationId,
       selectedPgWorkspaceId: d.selectedPgWorkspaceId,
+      signupSource,
     });
   } else if (d.wsInviteToken) {
     // 초대 경로 — 기존(승인된) 워크스페이스에 member 합류.
@@ -51,6 +51,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
       phone: d.phone,
       phoneVerificationId: d.phoneVerificationId,
       wsInviteToken: d.wsInviteToken,
+      signupSource,
     });
   } else if (d.workspaceType === 'pg') {
     if (!d.wsName || !d.bizNo) return { ok: false, error: 'SESSION_EXPIRED' };

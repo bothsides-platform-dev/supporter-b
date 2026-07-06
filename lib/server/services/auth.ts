@@ -134,6 +134,7 @@ export class AuthService {
     phone: string;
     phoneVerificationId: string;
     wsInviteRawToken: string;
+    signupSource?: SignupSource;
   }): Promise<ServiceResult<{ workspaceId: string; email: string }>> {
     const email = normalizeEmail(input.email);
 
@@ -163,7 +164,10 @@ export class AuthService {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
-      await this.userRepo.create({ id: userId, email, passwordHash, name: input.name, phone: input.phone }, tx);
+      await this.userRepo.create(
+        { id: userId, email, passwordHash, name: input.name, phone: input.phone, signupSource: input.signupSource },
+        tx,
+      );
 
       const claim = await claimInviteInTx(tx, invitation, userId);
       if (!claim.ok) {
@@ -190,6 +194,7 @@ export class AuthService {
     phone: string;
     phoneVerificationId: string;
     selectedPgWorkspaceId: string;
+    signupSource?: SignupSource;
   }): Promise<ServiceResult<{ email: string; workspaceName: string }>> {
     const email = normalizeEmail(input.email);
 
@@ -211,7 +216,10 @@ export class AuthService {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
-      await this.userRepo.create({ id: userId, email, passwordHash, name: input.name, phone: input.phone }, tx);
+      await this.userRepo.create(
+        { id: userId, email, passwordHash, name: input.name, phone: input.phone, signupSource: input.signupSource },
+        tx,
+      );
 
       // 기존 PG사(canonical 워크스페이스)에 합류하는 담당자는 admin 으로 들어온다.
       // 단, 승인 게이트(pending_approval)는 유지 — 승인 전까지 /pending-approval 에서 막힌다.
