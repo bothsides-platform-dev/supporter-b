@@ -16,7 +16,7 @@ import type { BizProfile } from '@/lib/types/biz-profile';
 import { RequiredMark } from './RequiredMark';
 import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
 import { FieldError } from '@/components/primitives/FieldError';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 
 type Props = {

@@ -27,7 +27,7 @@ import { TierContextHeader } from './TierContextHeader';
 import { useFlashOnChange } from './useFlashOnChange';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 import {
   type Bid,
   type CustomPaymentMethod,

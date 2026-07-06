@@ -18,7 +18,7 @@ import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from './RfpStep3PgSelect';
 import { STEP_LABELS } from './wizard-steps';
 import { getWizardValidity, getFirstIncompleteStep } from './wizard-validation';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 
 const TOTAL_STEPS = STEP_LABELS.length;
 

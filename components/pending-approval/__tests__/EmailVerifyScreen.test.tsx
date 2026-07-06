@@ -25,7 +25,7 @@ vi.mock('next/link', () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
-import { EmailVerifyScreen } from '../email-verify-screen';
+import { EmailVerifyScreen } from '../EmailVerifyScreen';
 
 describe('EmailVerifyScreen', () => {
   beforeEach(() => {

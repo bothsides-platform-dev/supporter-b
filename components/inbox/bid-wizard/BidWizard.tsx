@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { HTTPError } from 'ky';
 import { uploadAttachment } from '@/lib/attachments/upload-client';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';

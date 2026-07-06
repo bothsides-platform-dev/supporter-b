@@ -7,7 +7,7 @@ import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { formatDate, formatDeadline, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
 import type { RFP } from '@/lib/types/rfp';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 
 type Props = { rfp: RFP; buyerName: string };
 

@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { formatKRW, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import { parseCurrentValue, improvement, metricVerdict, cycleQuality } from '@/lib/utils/bid-compare';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 
 export type CurrentConditions = {
   feeRate?: string | null;

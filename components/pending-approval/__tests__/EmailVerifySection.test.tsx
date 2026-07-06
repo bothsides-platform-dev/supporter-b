@@ -20,7 +20,7 @@ vi.mock('@/lib/server/actions/auth/verifyEmailCodeAction', () => ({
   verifyEmailCodeAction: (...a: unknown[]) => mockVerifyCode(...a),
 }));
 
-import { EmailVerifySection } from '../email-verify-section';
+import { EmailVerifySection } from '../EmailVerifySection';
 
 describe('EmailVerifySection', () => {
   beforeEach(() => {
