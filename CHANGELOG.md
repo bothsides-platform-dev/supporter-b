@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.71.0] - 2026-07-06
+
+### Changed
+
+- **새 "B" 브랜드 로고로 바뀌었어요**: 앱·랜딩 헤더와 사이드바의 로고 마크, 브라우저 탭 아이콘(favicon), 홈 화면 추가 아이콘(apple-touch-icon)이 새 마크로 교체됐어요. 로고 마크는 벡터(SVG)라 어떤 크기에서도 선명하고, 라이트/다크 테마 색을 자동으로 따라가요. 'Supporter B' 워드마크 텍스트와 사이드바 접힘 애니메이션은 그대로예요.
+
 ## [0.2.70.0] - 2026-07-06
 
 ### Changed
