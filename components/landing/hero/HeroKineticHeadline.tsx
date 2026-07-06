@@ -2,6 +2,7 @@
 
 import { Fragment, type ReactNode } from 'react';
 import { motion } from 'motion/react';
+import { BrandMark } from '@/components/primitives/Logo';
 import { EASE_OUT } from '@/lib/landing/ease';
 import { ScrambleText } from './ScrambleText';
 
@@ -13,14 +14,32 @@ const TYPING_VALUES = [
   '5분짜리 경쟁 입찰을',
 ];
 
-const LINE1_WORDS = ['Supporter', 'B를', '통해'];
+// "B" 글자 자리에 브랜드 마크를 넣은 로고 락업. 실제 "B" 텍스트는 sr-only로 남겨
+// 스크린리더·텍스트 검색(toHaveTextContent 등)에서는 그대로 "B"로 읽히고,
+// 화면에는 마크 아이콘이 대신 보인다. 아이콘은 폰트 크기에 비례하는 em 단위라
+// 헤드라인의 반응형 clamp() 크기를 그대로 따라간다.
+export function BrandWordB({ particle }: { particle: string }) {
+  return (
+    <span className="inline-flex items-baseline">
+      <span className="sr-only">B</span>
+      <BrandMark
+        size="0.82em"
+        className="inline-block translate-y-[0.15em]"
+        colorVar="--md-sys-color-inverse-on-surface"
+      />
+      {particle}
+    </span>
+  );
+}
+
+const LINE1_WORDS: ReactNode[] = ['서포트', <BrandWordB key="b" particle="를" />, '통해'];
 
 const headlineCls =
   'text-[clamp(30px,5.5vw,72px)] max-md:text-[clamp(22px,7.2vw,34px)] leading-[1.06] tracking-[-0.028em] font-medium break-keep';
 
 // 단어별 마스크 리빌 — overflow-hidden 마스크 안에서 글자가 아래에서 솟아오른다(키네틱 타이포).
 // 마스크에 살짝 세로 여유(pb/-mb)를 줘 정착 후 글리프가 잘리지 않게 한다.
-function MaskedWord({ word, delay }: { word: string; delay: number }) {
+function MaskedWord({ word, delay }: { word: ReactNode; delay: number }) {
   return (
     <span className="inline-block overflow-hidden align-top pb-[0.08em] -mb-[0.08em]">
       <motion.span
@@ -62,7 +81,7 @@ export function HeroKineticHeadline({
   phrases = TYPING_VALUES,
   suffix = '만듭니다.',
 }: {
-  line1Words?: string[];
+  line1Words?: ReactNode[];
   phrases?: string[];
   suffix?: string;
 } = {}) {
@@ -70,7 +89,7 @@ export function HeroKineticHeadline({
     <div className="flex flex-col gap-0">
       <h1 className={`${headlineCls} text-[var(--md-sys-color-inverse-on-surface)]`}>
         {line1Words.map((word, i) => (
-          <Fragment key={word}>
+          <Fragment key={i}>
             <MaskedWord word={word} delay={0.08 + i * 0.07} />
             {i < line1Words.length - 1 ? ' ' : null}
           </Fragment>

@@ -30,7 +30,7 @@ import { LandingHeroSection } from '../LandingHeroSection';
 describe('LandingHeroSection', () => {
   it('renders the static h1 text', () => {
     render(<LandingHeroSection />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Supporter B를 통해');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('서포트 B를 통해');
   });
 
   it('renders the first TYPING_VALUE as initial text (not empty)', () => {

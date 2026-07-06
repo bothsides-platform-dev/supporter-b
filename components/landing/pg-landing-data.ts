@@ -95,7 +95,7 @@ export const PROCESS_STEPS = [
     n: '05',
     title: '계약 논의',
     body: '고객사가 선택한 PG사와 최종 계약 조건을 직접 논의합니다.',
-    note: 'Supporter B는 비교와 연결 과정을 지원합니다.',
+    note: '서포트 B는 비교와 연결 과정을 지원합니다.',
   },
 ];
 
