@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { HTTPError } from 'ky';
-import { formatSize } from '@/lib/format';
+import { formatSize } from '@/lib/utils/format';
 import {
   Sheet,
   SheetContent,

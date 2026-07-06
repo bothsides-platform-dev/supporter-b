@@ -17,19 +17,19 @@ type InboxRow = {
 const ROWS: InboxRow[] = [
   {
     title: '2026 결제 인프라 견적 요청',
-    buyer: '와이즐리컴퍼니',
+    buyer: '브링콘파트너스',
     dday: 'D-3',
     status: { label: '새 요청', color: 'primary' },
   },
   {
     title: '정기결제(빌링) 전환 견적',
-    buyer: '그로우앤파트너스',
+    buyer: '미팅학개론',
     dday: 'D-5',
     status: { label: '검토중', color: 'warning' },
   },
   {
     title: '해외카드 수수료 재협상',
-    buyer: '다올커머스',
+    buyer: '보스사이드 커머스',
     dday: 'D-1',
     status: { label: '선정됨', color: 'tertiary' },
   },

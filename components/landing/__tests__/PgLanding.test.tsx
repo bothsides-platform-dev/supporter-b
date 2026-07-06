@@ -95,7 +95,7 @@ describe('PgLanding — PG 전용 랜딩', () => {
   it('화면7 PG 전용 FAQ 문항을 렌더한다', () => {
     render(<PgLanding />);
     expect(
-      screen.getByText('Supporter B의 리드는 어떤 기준으로 검증되나요?'),
+      screen.getByText('서포트 B의 리드는 어떤 기준으로 검증되나요?'),
     ).toBeInTheDocument();
   });
 

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 import {
   buildTransition,
   randomGlyph,
@@ -58,7 +57,6 @@ export function ScrambleText({
 
   useEffect(() => {
     if (phrases.length === 0) return;
-    const reduced = prefersReducedMotion();
 
     let disposed = false;
     let running = false;
@@ -94,13 +92,7 @@ export function ScrambleText({
 
       if (phase === 'hold') {
         if (phaseElapsed < holdMs) return;
-        if (reduced) {
-          index = (index + 1) % phrases.length;
-          setState({ kind: 'settled', text: phrases[index] });
-          enterHold();
-        } else {
-          enterScramble();
-        }
+        enterScramble();
         return;
       }
 

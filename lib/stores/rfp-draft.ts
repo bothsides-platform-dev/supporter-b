@@ -7,8 +7,10 @@ import type { PaymentMethod } from '@/lib/types/bid';
 // 구매사 직접입력 커스텀 결제수단 (작성 단계 — id는 서버가 발급하므로 label만 보관).
 export type DraftCustomPaymentMethod = { label: string };
 
-// `id` is the attachment row id returned by POST /api/files/upload
-// (Step 11). Pre-Step 11 the dropzone carried only name/size in
+// `id` is the attachment row id returned by the presigned 3-step upload flow
+// (`uploadAttachment` in `lib/attachments/upload-client.ts`: POST
+// /api/files/presign → PUT to R2 → POST /api/files/{id}/complete). Pre-Step
+// 11 the dropzone carried only name/size in
 // memory; the file now lives in the storage backend + the `attachments`
 // row at upload time (`ownerId='__draft__'`), and `createRfpAction`
 // patches the row's ownerId to the freshly minted RFP id at form

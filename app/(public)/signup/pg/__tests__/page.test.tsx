@@ -115,4 +115,44 @@ describe('PgSignupEmailPage — 초대 경로 blur 검사 스킵', () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(mockCheckEmail).not.toHaveBeenCalled();
   });
+
+  it('초대 유입 시 회사 이메일 권장 안내를 렌더하지 않는다', () => {
+    mockReadDraft.mockReturnValue({
+      wsInviteToken: 'inv-token',
+      email: 'invited@gmail.com',
+      inviteWorkspaceName: '테스트 Corp',
+    });
+    render(<PgSignupEmailPage />);
+
+    expect(screen.queryByText(/별도 심사 과정이 추가될 수 있어요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/회사 이메일을 입력해주세요/)).not.toBeInTheDocument();
+  });
+});
+
+describe('PgSignupEmailPage — 회사 이메일 권장 안내 (비초대)', () => {
+  it('무료 도메인 입력 시 개인 이메일 경고로 전환한다', async () => {
+    const user = userEvent.setup();
+    render(<PgSignupEmailPage />);
+
+    expect(screen.getByText('회사 이메일을 입력해주세요')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('이메일'), 'kim@naver.com');
+
+    expect(screen.getByText(/별도 심사 과정이 추가될 수 있어요/)).toBeInTheDocument();
+  });
+
+  it('마스터/운영자 이메일 에러가 표시되면 안내를 숨긴다', async () => {
+    mockCheckEmail.mockResolvedValue({ ok: false, error: 'MASTER_EMAIL' });
+    const user = userEvent.setup();
+    render(<PgSignupEmailPage />);
+
+    await user.type(screen.getByLabelText('이메일'), 'op@gmail.com');
+    await user.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText(/이 이메일로는 가입할 수 없어요/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/별도 심사 과정이 추가될 수 있어요/)).not.toBeInTheDocument();
+    expect(screen.queryByText('회사 이메일을 입력해주세요')).not.toBeInTheDocument();
+  });
 });

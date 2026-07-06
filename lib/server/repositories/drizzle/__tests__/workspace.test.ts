@@ -246,19 +246,6 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(results).toHaveLength(2);
     });
 
-    it('excludes isDemo workspaces', async () => {
-      const demoId = randomUUID();
-      await db.insert(workspaces).values({
-        id: demoId,
-        type: 'pg',
-        name: '데모 PG',
-        status: 'active',
-        isDemo: true,
-      });
-      const results = await repo.search({ type: 'pg', q: '데모' });
-      expect(results).toEqual([]);
-    });
-
     it('does not return workspaces of the other type', async () => {
       await seedBuyerWorkspace(db, { name: 'buyer-typed' });
       const results = await repo.search({ type: 'pg', q: 'buyer-typed' });

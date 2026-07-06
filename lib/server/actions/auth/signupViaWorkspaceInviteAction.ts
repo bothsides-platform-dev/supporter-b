@@ -6,6 +6,8 @@ import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import { normalizeEmail, type AuthActionResult } from './_shared';
 import { normalizePhone } from './phoneOtpUtils';
 import { getAuthService } from '@/lib/server/services/auth';
+import { SignupSourceInput } from './_signupSourceInput';
+import { migrateSignupSource } from '@/lib/types/signup-source';
 
 const Input = z
   .object({
@@ -15,6 +17,7 @@ const Input = z
     phone: z.string().min(9).max(15),
     phoneVerificationId: z.string().uuid(),
     wsInviteToken: z.string().min(1),
+    signupSource: SignupSourceInput.optional(),
   })
   .strict();
 
@@ -51,6 +54,9 @@ export async function signupViaWorkspaceInviteAction(
     phone: normalizedPhone,
     phoneVerificationId: parsed.data.phoneVerificationId,
     wsInviteRawToken: parsed.data.wsInviteToken,
+    signupSource: parsed.data.signupSource
+      ? migrateSignupSource(parsed.data.signupSource)
+      : undefined,
   });
 
   if (!result.ok) return result;

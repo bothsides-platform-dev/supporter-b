@@ -3,18 +3,10 @@
 import { Label } from '@/components/primitives/Label';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
-import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/format';
+import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
-import { Divider } from '@/components/ui/Divider';
-
-const SOLUTION_LABELS: Record<string, string> = {
-  cafe24: '카페24',
-  imweb: '아임웹',
-  makeshop: '메이크샵',
-  godo: '고도몰',
-  self: '자체 개발',
-  other: '기타',
-};
+import { Divider } from '@/components/primitives/Divider';
+import { SOLUTION_LABELS } from '@/lib/rfp/solutions';
 
 function formatSolution(solution?: string | null, detail?: string | null): string | undefined {
   if (!solution) return undefined;

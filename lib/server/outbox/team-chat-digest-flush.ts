@@ -34,7 +34,7 @@ import {
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { parseTeamDigestDedupeKey } from './team-digest';
-import { mentionsToPlainText } from '@/lib/team-mentions';
+import { mentionsToPlainText } from '@/lib/utils/team-mentions';
 import { baseUrlFor } from '@/lib/server/env';
 import { computeBackoff } from './backoff';
 import { sendEntriesInBatches } from './batch-send';

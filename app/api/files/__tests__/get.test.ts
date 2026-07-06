@@ -1,15 +1,15 @@
 /**
  * @vitest-environment node
  */
-// GET /api/files/[id] — auth + ACL + headers + body bytes.
+// GET /api/files/[id] — auth + ACL + 302 redirect to a presigned GET URL.
 //
 // Coverage:
 //   - 401 unauthenticated
 //   - 404 row not found
+//   - 404 when row is pending (existence hidden until upload completes)
 //   - 403 authenticated but not allowed
-//   - 200 + Content-Type / Content-Length / Cache-Control / Content-Disposition
-//   - 200 body bytes equal stored bytes
-//   - 410 when row exists but storage object is missing (advisor pin: orphan path)
+//   - 302 Location === storage.presignGet(...) result + Cache-Control: private, no-store
+//   - disposition/filename/mime/TTL passed through to presignGet
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
@@ -77,11 +77,6 @@ async function callGet(id: string, headers?: HeadersInit) {
   const { GET } = await import('../[id]/route');
   const req = new Request(`http://localhost/api/files/${id}`, { headers });
   return GET(req, { params: Promise.resolve({ id }) });
-}
-
-async function readBody(res: Response): Promise<Buffer> {
-  const arr = await res.arrayBuffer();
-  return Buffer.from(arr);
 }
 
 async function seedScenario() {
@@ -175,6 +170,31 @@ describe('GET /api/files/[id]', () => {
     expect(r.status).toBe(404);
   });
 
+  it('404 when attachment row is pending (existence hidden)', async () => {
+    const s = await seedScenario();
+    const pendingId = randomUUID();
+    await db.insert(attachments).values({
+      id: pendingId,
+      rfpId: s.rfpId,
+      name: 'pending.pdf',
+      size: PDF_HEAD.length,
+      mimeType: 'application/pdf',
+      uploadedBy: s.buyerUserId,
+      status: 'pending',
+    });
+    sessionRef.value = {
+      user: {
+        id: s.buyerUserId,
+        email: 'buyer@buy.com',
+        workspaceId: s.buyerWsId,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    const r = await callGet(pendingId);
+    expect(r.status).toBe(404);
+  });
+
   it('403 when authenticated user has no access', async () => {
     const s = await seedScenario();
     sessionRef.value = {
@@ -184,7 +204,7 @@ describe('GET /api/files/[id]', () => {
     expect(r.status).toBe(403);
   });
 
-  it('200 with required headers + body bytes for buyer ws member', async () => {
+  it('302 to a presigned GET URL for buyer ws member', async () => {
     const s = await seedScenario();
     sessionRef.value = {
       user: {
@@ -195,147 +215,24 @@ describe('GET /api/files/[id]', () => {
         role: 'admin',
       },
     };
+    const presignSpy = vi.spyOn(storage, 'presignGet');
     const r = await callGet(s.attachmentId);
-    expect(r.status).toBe(200);
-    expect(r.headers.get('content-type')).toBe('application/pdf');
-    expect(r.headers.get('content-length')).toBe(String(PDF_HEAD.length));
-    // ACL revalidation via ETag — browser may cache (private only) but must
-    // re-check on every use. no-store dropped so If-None-Match works.
-    expect(r.headers.get('cache-control')).toBe(
-      'private, max-age=0, must-revalidate',
+    expect(r.status).toBe(302);
+    expect(presignSpy).toHaveBeenCalledWith(
+      s.attachmentId,
+      expect.objectContaining({
+        filename: 'rfp.pdf',
+        mime: 'application/pdf',
+        expiresInSeconds: 900,
+      }),
     );
-    expect(r.headers.get('etag')).toBe(`"${s.attachmentId}"`);
-    expect(r.headers.get('accept-ranges')).toBe('bytes');
-    expect(r.headers.get('content-disposition')).toContain(
-      'inline; filename="rfp.pdf"',
-    );
-    const body = await readBody(r);
-    expect(body.equals(PDF_HEAD as unknown as Uint8Array)).toBe(true);
+    const location = r.headers.get('location');
+    expect(location).toBeTruthy();
+    expect(location).toContain(`memory://get/${encodeURIComponent(s.attachmentId)}`);
+    expect(r.headers.get('cache-control')).toBe('private, no-store');
   });
 
-  it('304 when If-None-Match matches and user still has access', async () => {
-    const s = await seedScenario();
-    sessionRef.value = {
-      user: {
-        id: s.buyerUserId,
-        email: 'buyer@buy.com',
-        workspaceId: s.buyerWsId,
-        workspaceType: 'buyer',
-        role: 'admin',
-      },
-    };
-    const r = await callGet(s.attachmentId, {
-      'If-None-Match': `"${s.attachmentId}"`,
-    });
-    expect(r.status).toBe(304);
-    // 304 must not carry a body (browser revalidates from its cache).
-    const body = await readBody(r);
-    expect(body.length).toBe(0);
-    // ETag echoed so the browser can keep its cached representation.
-    expect(r.headers.get('etag')).toBe(`"${s.attachmentId}"`);
-  });
-
-  it('403 wins over 304 — ACL is enforced before If-None-Match', async () => {
-    const s = await seedScenario();
-    // Stranger with a (somehow) valid ETag for someone else's attachment
-    // must still get 403. Caching can never widen access.
-    sessionRef.value = {
-      user: { id: s.strangerId, email: 'rando@x.com' },
-    };
-    const r = await callGet(s.attachmentId, {
-      'If-None-Match': `"${s.attachmentId}"`,
-    });
-    expect(r.status).toBe(403);
-  });
-
-  it('206 with Content-Range for valid Range request', async () => {
-    const s = await seedScenario();
-    sessionRef.value = {
-      user: {
-        id: s.buyerUserId,
-        email: 'buyer@buy.com',
-        workspaceId: s.buyerWsId,
-        workspaceType: 'buyer',
-        role: 'admin',
-      },
-    };
-    // bytes=0-4 → first 5 bytes (HTTP inclusive end)
-    const r = await callGet(s.attachmentId, { Range: 'bytes=0-4' });
-    expect(r.status).toBe(206);
-    expect(r.headers.get('content-range')).toBe(
-      `bytes 0-4/${PDF_HEAD.length}`,
-    );
-    expect(r.headers.get('content-length')).toBe('5');
-    expect(r.headers.get('accept-ranges')).toBe('bytes');
-    const body = await readBody(r);
-    expect(body.equals(PDF_HEAD.subarray(0, 5) as unknown as Uint8Array)).toBe(
-      true,
-    );
-  });
-
-  it('206 with suffix Range (bytes=-N → last N bytes)', async () => {
-    const s = await seedScenario();
-    sessionRef.value = {
-      user: {
-        id: s.buyerUserId,
-        email: 'buyer@buy.com',
-        workspaceId: s.buyerWsId,
-        workspaceType: 'buyer',
-        role: 'admin',
-      },
-    };
-    const r = await callGet(s.attachmentId, { Range: 'bytes=-7' });
-    expect(r.status).toBe(206);
-    const len = PDF_HEAD.length;
-    expect(r.headers.get('content-range')).toBe(
-      `bytes ${len - 7}-${len - 1}/${len}`,
-    );
-    expect(r.headers.get('content-length')).toBe('7');
-    const body = await readBody(r);
-    expect(
-      body.equals(PDF_HEAD.subarray(len - 7) as unknown as Uint8Array),
-    ).toBe(true);
-  });
-
-  it('clamps Range end to file size (bytes=N-huge → bytes N-(size-1))', async () => {
-    const s = await seedScenario();
-    sessionRef.value = {
-      user: {
-        id: s.buyerUserId,
-        email: 'buyer@buy.com',
-        workspaceId: s.buyerWsId,
-        workspaceType: 'buyer',
-        role: 'admin',
-      },
-    };
-    const r = await callGet(s.attachmentId, { Range: 'bytes=3-9999' });
-    expect(r.status).toBe(206);
-    const len = PDF_HEAD.length;
-    expect(r.headers.get('content-range')).toBe(`bytes 3-${len - 1}/${len}`);
-    expect(r.headers.get('content-length')).toBe(String(len - 3));
-  });
-
-  it('416 when Range is unsatisfiable (start beyond size)', async () => {
-    const s = await seedScenario();
-    sessionRef.value = {
-      user: {
-        id: s.buyerUserId,
-        email: 'buyer@buy.com',
-        workspaceId: s.buyerWsId,
-        workspaceType: 'buyer',
-        role: 'admin',
-      },
-    };
-    const r = await callGet(s.attachmentId, {
-      Range: `bytes=${PDF_HEAD.length + 100}-`,
-    });
-    expect(r.status).toBe(416);
-    expect(r.headers.get('content-range')).toBe(
-      `bytes */${PDF_HEAD.length}`,
-    );
-  });
-
-  it('200 for accepted PG invitation user', async () => {
+  it('302 for accepted PG invitation user', async () => {
     const s = await seedScenario();
     sessionRef.value = {
       user: {
@@ -347,24 +244,7 @@ describe('GET /api/files/[id]', () => {
       },
     };
     const r = await callGet(s.attachmentId);
-    expect(r.status).toBe(200);
-  });
-
-  it('410 when row exists but storage object is missing', async () => {
-    const s = await seedScenario();
-    // Delete the stored bytes but keep the row.
-    await storage.delete(s.storageKey);
-    sessionRef.value = {
-      user: {
-        id: s.buyerUserId,
-        email: 'buyer@buy.com',
-        workspaceId: s.buyerWsId,
-        workspaceType: 'buyer',
-        role: 'admin',
-      },
-    };
-    const r = await callGet(s.attachmentId);
-    expect(r.status).toBe(410);
+    expect(r.status).toBe(302);
   });
 
   it('200 for chat attachment — buyer side, pg side; 403 for stranger', async () => {
@@ -405,7 +285,7 @@ describe('GET /api/files/[id]', () => {
         role: 'admin',
       },
     };
-    expect((await callGet(chatAttId)).status).toBe(200);
+    expect((await callGet(chatAttId)).status).toBe(302);
 
     sessionRef.value = {
       user: {
@@ -416,7 +296,7 @@ describe('GET /api/files/[id]', () => {
         role: 'admin',
       },
     };
-    expect((await callGet(chatAttId)).status).toBe(200);
+    expect((await callGet(chatAttId)).status).toBe(302);
 
     sessionRef.value = {
       user: { id: s.strangerId, email: 'rando@x.com' },
@@ -427,7 +307,7 @@ describe('GET /api/files/[id]', () => {
 });
 
 describe('GET /api/files/[id] — master account', () => {
-  it('200 for master/operator account accessing RFP attachment without workspaceMembers row', async () => {
+  it('302 for master/operator account accessing RFP attachment without workspaceMembers row', async () => {
     const s = await seedScenario();
     // Master has workspaceId matching the buyer workspace but is NOT in workspaceMembers
     // (listAllWorkspacesForMaster bypasses workspaceMembers; isMember returns false).
@@ -442,7 +322,7 @@ describe('GET /api/files/[id] — master account', () => {
       },
     };
     const r = await callGet(s.attachmentId);
-    expect(r.status).toBe(200);
+    expect(r.status).toBe(302);
   });
 });
 

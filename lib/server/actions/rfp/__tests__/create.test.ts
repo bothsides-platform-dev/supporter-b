@@ -136,22 +136,27 @@ describe('createRfpAction', () => {
       if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
     });
 
-    it('연간 PG 총 거래액이 비면 INVALID_INPUT', async () => {
-      const r = await createRfpAction({ ...base(), annualPgVolume: '' });
+    it('갱신 계약에서 연간 PG 총 거래액이 비면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({ ...base(), contractType: 'renewal', annualPgVolume: '' });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
     });
 
-    it('연간 PG 총 거래액이 공백뿐이면 INVALID_INPUT', async () => {
-      const r = await createRfpAction({ ...base(), annualPgVolume: '   ' });
+    it('갱신 계약에서 연간 PG 총 거래액이 공백뿐이면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({ ...base(), contractType: 'renewal', annualPgVolume: '   ' });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
     });
 
-    it('연간 PG 총 거래액이 0이면 INVALID_INPUT (양수 필수)', async () => {
-      const r = await createRfpAction({ ...base(), annualPgVolume: '0' });
+    it('갱신 계약에서 연간 PG 총 거래액이 0이면 INVALID_INPUT (양수 필수)', async () => {
+      const r = await createRfpAction({ ...base(), contractType: 'renewal', annualPgVolume: '0' });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('신규 계약은 연간 PG 총 거래액이 비어도 발송 성공 (존재할 수 없는 값 필수 제외)', async () => {
+      const r = await createRfpAction({ ...base(), contractType: 'new', annualPgVolume: '' });
+      expect(r.ok).toBe(true);
     });
 
     it('draft(send=false)는 세 필드가 비어도 통과', async () => {
@@ -614,6 +619,63 @@ describe('createRfpAction', () => {
     expect(terms.feeRate).toBe('3.4%');
     expect(terms.settlementLimit).toBe('월 1억');
     expect(terms.guaranteeInsurance).toBe('3000만원');
+  });
+
+  it('신규 계약이면 PG 이력 5개 필드를 넘겨도 current_terms 에 저장하지 않는다 (서버 strip)', async () => {
+    const r = await createRfpAction({
+      title: '신규 계약 strip 검증',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      contractType: 'new',
+      // 탈취 draft·직접 호출 시나리오 — 신규 계약에 존재할 수 없는 PG 이력 값을 함께 전달
+      annualPgVolume: '1000000000',
+      currentFeeRate: '3.4%',
+      currentSettlementLimit: '월 1억',
+      currentGuaranteeInsurance: '3000만원',
+      currentSettlementCycle: 'D+1',
+      // PG 무관 사업 속성 — 신규에서도 보존되어야 한다
+      deliveryServicePeriod: 'D+3',
+      currentSolution: 'self',
+      currentSolutionDetail: 'ABC몰',
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    const terms = migrateCurrentTerms(row.currentTerms);
+    // 존재할 수 없는 값 → strip (문서에 부재)
+    expect(terms.annualPgVolume).toBeUndefined();
+    expect(terms.feeRate).toBeUndefined();
+    expect(terms.settlementLimit).toBeUndefined();
+    expect(terms.guaranteeInsurance).toBeUndefined();
+    expect(terms.settlementCycle).toBeUndefined();
+    // fee 공개 경로도 남지 않는다 (수수료 자체가 없으므로)
+    expect(row.hiddenFromPg ?? []).not.toContain(STRIP_PATH_FEE_RATE);
+    // 사업 속성은 보존
+    expect(terms.deliveryServicePeriod).toBe('D+3');
+    expect(terms.solution).toBe('self');
+    expect(terms.solutionDetail).toBe('ABC몰');
+  });
+
+  it('신규 계약이면 PG 비공개(currentFeeVisibleToPg=false)여도 hiddenFromPg 에 fee 경로를 남기지 않는다', async () => {
+    // 갱신에서 수수료 비공개로 설정하다 신규로 전환한 시나리오 — 수수료가 strip 되므로
+    // 존재하지 않는 fee 를 가리키는 orphan strip 경로가 남으면 안 된다.
+    const r = await createRfpAction({
+      title: '신규 계약 fee 가시성 strip 검증',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      contractType: 'new',
+      currentFeeRate: '3.4%',
+      currentFeeVisibleToPg: false,
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.hiddenFromPg ?? []).not.toContain(STRIP_PATH_FEE_RATE);
+    expect(migrateCurrentTerms(row.currentTerms).feeRate).toBeUndefined();
   });
 
   it('스킴 없는 websiteUrl 은 https:// 를 붙여 저장한다', async () => {

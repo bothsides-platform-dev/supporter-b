@@ -1,17 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Chip } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
-import { formatDate } from '@/lib/format';
+import { formatDate } from '@/lib/utils/format';
 import type { RFP } from '@/lib/types/rfp';
-import { RFP_STATUS_CHIP } from '@/lib/rfp-status';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { deleteSampleRfpAction } from '@/lib/server/actions/onboarding/deleteSampleRfpAction';
-import { toast } from '@/lib/toast';
+import { RFP_STATUS_CHIP } from '@/lib/rfp/rfp-status';
 
 type Props = {
   rfps: RFP[];
@@ -28,8 +25,6 @@ export function RfpListTable({ rfps, onOpenRfp }: Props) {
   useEffect(() => {
     setNavOrder('/rfp', rfps.map((r) => r.code));
   }, [rfps, setNavOrder]);
-  const [deleteCode, setDeleteCode] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   // 행 클릭/Enter → 상세 라우트로 push. 인터셉트 라우트(@modal/(.)[id])가
   // 목록 위에 딜룸 모달을 띄우고 URL 은 /rfp/<code> 로 바뀐다(새로고침 시 정식
@@ -99,20 +94,6 @@ export function RfpListTable({ rfps, onOpenRfp }: Props) {
               </td>
               <td className="px-3 py-4 text-right">
                 <div className="inline-flex items-center gap-2">
-                  {rfp.isSample && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteCode(rfp.code);
-                      }}
-                      className="font-mono text-[10px] text-[var(--md-sys-color-error)] hover:underline"
-                      aria-label="샘플 삭제"
-                    >
-                      삭제
-                    </button>
-                  )}
-                  {rfp.isSample && <Chip label="샘플" color="surface" />}
                   <Chip label={RFP_STATUS_CHIP[rfp.status].label} color={RFP_STATUS_CHIP[rfp.status].color} />
                 </div>
               </td>
@@ -121,28 +102,6 @@ export function RfpListTable({ rfps, onOpenRfp }: Props) {
         </tbody>
       </table>
     </div>
-      <ConfirmDialog
-        open={deleteCode !== null}
-        onOpenChange={(o) => !busy && !o && setDeleteCode(null)}
-        title="샘플 견적 요청을 삭제할까요?"
-        description="삭제하면 다시 표시되지 않아요."
-        confirmLabel="삭제"
-        variant="danger"
-        loading={busy}
-        onConfirm={async () => {
-          if (!deleteCode) return;
-          setBusy(true);
-          const r = await deleteSampleRfpAction({ code: deleteCode });
-          setBusy(false);
-          if (!r.ok) {
-            toast(`삭제하지 못했어요 — ${r.error}`, { type: 'error' });
-            return;
-          }
-          setDeleteCode(null);
-          toast('샘플 견적 요청을 삭제했어요.');
-          router.refresh();
-        }}
-      />
     </>
   );
 }

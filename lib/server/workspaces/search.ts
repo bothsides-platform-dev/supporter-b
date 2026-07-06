@@ -6,9 +6,7 @@ export function escapeIlike(s: string): string {
 }
 
 /**
- * 워크스페이스 이름 검색. 데모 PG(isDemo)는 항상 제외 — 구매사 PG 피커/검색에 노출되면
- * 실제 RFP 초대·이메일이 가짜 PG로 나가므로(봉인입찰/온보딩 격리) 절대 포함하지 않는다.
- * 데이터 접근은 WorkspaceRepo.search 에 위임(escapeIlike·isDemo 제외·limit 동일).
+ * 워크스페이스 이름 검색. 데이터 접근은 WorkspaceRepo.search 에 위임(escapeIlike·limit 동일).
  */
 export async function searchWorkspaces(
   opts: { type: 'buyer' | 'pg'; q?: string },

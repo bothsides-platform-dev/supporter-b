@@ -48,11 +48,8 @@ vi.mock('@/lib/server/actions/rfp', () => ({
   closeRfpAction: vi.fn(),
   cancelRfpAction: vi.fn(),
 }));
-vi.mock('@/components/rfp/SampleRfpBanner', () => ({
-  SampleRfpBanner: () => <div data-testid="sample-banner" />,
-}));
 
-vi.mock('@/hooks/use-lg-up', () => ({ useIsLgUp: () => true }));
+vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => true }));
 
 import { BuyerDealRoomBody } from '../BuyerDealRoomBody';
 import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';

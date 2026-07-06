@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MentionText } from '../MentionText';
-import { serializeMention, ALL_TOKEN } from '@/lib/team-mentions';
+import { serializeMention, ALL_TOKEN } from '@/lib/utils/team-mentions';
 
 const U1 = '11111111-1111-4111-8111-111111111111';
 const U2 = '22222222-2222-4222-8222-222222222222';

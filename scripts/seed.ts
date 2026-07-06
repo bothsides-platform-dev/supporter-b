@@ -5,7 +5,7 @@
  * Postgres. Also imported by `scripts/__tests__/seed.test.ts` which passes a
  * pglite handle to `runSeed(db)` for fast in-process verification.
  *
- * Strategy: TRUNCATE all 13 tables CASCADE RESTART IDENTITY in one statement
+ * Strategy: TRUNCATE all 14 tables CASCADE RESTART IDENTITY in one statement
  * (FK order resolved by CASCADE), then bulk INSERT. Re-running drops and
  * recreates everything — safe to call repeatedly during development.
  *
@@ -64,8 +64,6 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   // 1. TRUNCATE everything in one CASCADE — FK order doesn't matter.
   // RESTART IDENTITY also covers the rfp_counters integer (though the table
   // has no serial). All 14 tables explicitly listed for grep visibility.
-  // attachment_blobs has no FK to attachments (the path is the join key), so
-  // it must be named explicitly — CASCADE from attachments won't reach it.
   await db.execute(sql`
     TRUNCATE TABLE
       contracts,
@@ -73,7 +71,6 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       rfp_invitations,
       rfps,
       attachments,
-      attachment_blobs,
       notifications,
       outbox_entries,
       verification_tokens,
@@ -369,8 +366,9 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   // Note: this seed does **not** create bid_proposal attachments. Specs
   // that need an attached PDF (e.g. e2e/bid-detail-pdf-preview.spec.ts)
   // upload one in their setup via `attachTossProposalPdf` so the bytes
-  // live in the same Postgres `attachment_blobs` backend the route reads
-  // from at runtime.
+  // land in the Storage backend `getStorage()` returns (a shared
+  // filesystem dir in e2e, R2 in prod) — the same backend the route
+  // reads from at runtime.
   // sme2 grade ⇒ card fees are statutory; cardFeesByIssuer is omitted.
   await db.insert(bids).values([
     {

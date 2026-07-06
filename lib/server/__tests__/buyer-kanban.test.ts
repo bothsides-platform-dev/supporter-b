@@ -100,7 +100,6 @@ describe('compareBuyerCards — 결과 컬럼 정렬', () => {
       updatedAt: '2026-06-14T00:00:00Z',
       invitedPgCount: 1,
       submittedBidCount: 1,
-      isSample: false,
       status: 'awarded',
       isCancelled: false,
     };
@@ -123,7 +122,6 @@ describe('compareBuyerCards — 결과 컬럼 정렬', () => {
       updatedAt: '2026-06-10T00:00:00Z',
       invitedPgCount: 0,
       submittedBidCount: 0,
-      isSample: false,
       status: 'cancelled',
       isCancelled: true,
     };
@@ -141,7 +139,6 @@ describe('compareBuyerCards — 결과 컬럼 정렬', () => {
       updatedAt: '2026-06-01T00:00:00Z',
       invitedPgCount: 1,
       submittedBidCount: 0,
-      isSample: false,
       status: 'sent',
       isCancelled: false,
     };

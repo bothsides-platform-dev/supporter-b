@@ -90,9 +90,6 @@ export class RfpService {
       if (rfp.buyerWsId !== actor.workspaceId) {
         return { ok: false as const, error: 'FORBIDDEN_BUYER' };
       }
-      // 온보딩 샘플은 읽기전용 샌드박스 — 서버에서도 선정을 막는다(UI 게이트 보강).
-      if (rfp.isSample) return { ok: false as const, error: 'SAMPLE_READONLY' };
-
       // Validate winner exists before transitioning to avoid FK violation.
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
       const submitted = allBids.filter((b) => b.status === 'submitted');

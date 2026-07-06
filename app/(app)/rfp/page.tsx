@@ -10,10 +10,12 @@ import { BoardViewToggle } from '@/components/board/BoardViewToggle';
 import { BoardFilterBar } from '@/components/board/BoardFilterBar';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
-import { getRfpRepo } from '@/lib/server/repositories/factory';
+import { getRfpRepo, getUserRepo } from '@/lib/server/repositories/factory';
 import { loadBoard } from '@/lib/server/board/loadBoard';
 import { filterRfps, paramsForView, resolveBoardView, type BoardView, type BoardFilterParams } from '@/lib/server/board/filterRfps';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
+import { SampleEntryCard } from '@/components/onboarding/SampleEntryCard';
+import { shouldShowSampleEntry } from '@/lib/onboarding/visibility';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +55,7 @@ export default async function RfpListPage({ searchParams }: Props) {
           </>
         }
       >
-        <RfpListPageLoader wsId={wsId} params={sp} view={view} newRfpAction={newRfpAction} />
+        <RfpListPageLoader wsId={wsId} userId={session.user.id} params={sp} view={view} newRfpAction={newRfpAction} />
       </Suspense>
     </div>
   );
@@ -61,11 +63,13 @@ export default async function RfpListPage({ searchParams }: Props) {
 
 async function RfpListPageLoader({
   wsId,
+  userId,
   params,
   view,
   newRfpAction,
 }: {
   wsId: string;
+  userId: string;
   params: BoardFilterParams;
   view: BoardView;
   newRfpAction: React.ReactNode;
@@ -74,14 +78,20 @@ async function RfpListPageLoader({
   const allRfps = await (await getRfpRepo()).findByBuyerWs(wsId);
   const rfps = filterRfps(allRfps, paramsForView(params, view), now);
 
+  const onboarding = await (await getUserRepo()).getOnboarding(userId);
+  const showSampleEntry = shouldShowSampleEntry(onboarding, 'buyerSample');
+
   // 행 클릭은 딜룸 모달(인터셉트 라우트)을 띄운다 — 과거 ?peek 사이드 패널은 제거됨.
   const listContent =
     rfps.length === 0 ? (
-      <EmptyState
-        icon={<FileTextIcon size={32} />}
-        title="아직 보낸 견적 요청이 없어요."
-        description="필터를 바꾸거나 첫 견적 요청을 보내보세요."
-      />
+      <div className="space-y-4 px-6 pt-4">
+        {showSampleEntry && <SampleEntryCard variant="buyer" />}
+        <EmptyState
+          icon={<FileTextIcon size={32} />}
+          title="아직 보낸 견적 요청이 없어요."
+          description="필터를 바꾸거나 첫 견적 요청을 보내보세요."
+        />
+      </div>
     ) : view === 'board' ? (
       <RfpBoardView wsId={wsId} visibleIds={new Set(rfps.map((r) => r.id))} />
     ) : (
@@ -99,6 +109,11 @@ async function RfpListPageLoader({
         />
         <BoardViewToggle view={view} cookieName="rfpBoardView" tableCount={rfps.length} />
       </div>
+      {showSampleEntry && rfps.length > 0 && (
+        <div className="px-6 pt-3">
+          <SampleEntryCard variant="buyer" />
+        </div>
+      )}
       {listContent}
     </>
   );

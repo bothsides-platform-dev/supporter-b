@@ -65,7 +65,6 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     // currentFeeVisibleToPg 는 hidden_from_pg 에서 파생 (전용 컬럼 제거됨). 숨김이면 false.
     currentFeeVisibleToPg: !(row.hiddenFromPg ?? []).includes(STRIP_PATH_FEE_RATE),
     hiddenFromPg: row.hiddenFromPg ?? [],
-    isSample: row.isSample,
     contractType: row.contractType ?? null,
   };
 }
@@ -194,8 +193,6 @@ export class DrizzleRfpRepository implements RfpRepo {
       // 현재조건 브리프는 문서(current_terms)에만 저장 — flat 입력을 조립. 숨김은 hidden_from_pg.
       currentTerms: currentTermsFromDiscrete(values),
       hiddenFromPg: hiddenFromPgFromVisibility(values.currentFeeVisibleToPg),
-      // 온보딩 샘플 전용 — 미지정 시 DB default(false).
-      ...(values.isSample !== undefined ? { isSample: values.isSample } : {}),
     });
   }
 

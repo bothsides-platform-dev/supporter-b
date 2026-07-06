@@ -2,15 +2,15 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HTTPError } from 'ky'
-import type { NormalizedOptions, ResponsePromise } from 'ky'
+import type { NormalizedOptions } from 'ky'
 
-vi.mock('@/lib/http', () => ({
-  http: { post: vi.fn() },
+const uploadAttachment = vi.fn()
+vi.mock('@/lib/attachments/upload-client', () => ({
+  uploadAttachment: (...a: unknown[]) => uploadAttachment(...a),
 }))
-vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')))
 
-import { http } from '@/lib/http'
 import { RfpAttachmentDropzone } from '../RfpAttachmentDropzone'
+import { DRAFT_OWNER_ID } from '@/lib/server/storage/constants'
 
 afterEach(() => {
   cleanup()
@@ -19,11 +19,9 @@ afterEach(() => {
 })
 
 describe('RfpAttachmentDropzone 파일 업로드', () => {
-  it('파일 선택 시 http.post로 업로드 성공', async () => {
+  it('파일 선택 시 uploadAttachment로 업로드 성공', async () => {
     const user = userEvent.setup()
-    vi.mocked(http.post).mockReturnValue({
-      json: vi.fn().mockResolvedValue({ id: 'att-1', name: 'doc.pdf', size: 2048 }),
-    } as unknown as ResponsePromise)
+    uploadAttachment.mockResolvedValue({ id: 'att-1', name: 'doc.pdf', size: 2048, mimeType: 'application/pdf' })
 
     render(<RfpAttachmentDropzone value={[]} onChange={vi.fn()} />)
 
@@ -31,10 +29,10 @@ describe('RfpAttachmentDropzone 파일 업로드', () => {
     await user.upload(input, new File(['content'], 'doc.pdf', { type: 'application/pdf' }))
 
     await waitFor(() =>
-      expect(http.post).toHaveBeenCalledWith(
-        '/api/files/upload',
-        expect.objectContaining({ body: expect.any(FormData) }),
-      ),
+      expect(uploadAttachment).toHaveBeenCalledWith(expect.any(File), {
+        ownerKind: 'rfp',
+        ownerId: DRAFT_OWNER_ID,
+      }),
     )
   })
 
@@ -55,12 +53,10 @@ describe('RfpAttachmentDropzone 파일 업로드', () => {
     const user = userEvent.setup()
     const error415 = new HTTPError(
       new Response('', { status: 415 }),
-      new Request('http://localhost/api/files/upload'),
+      new Request('http://localhost/api/files/att/complete'),
       {} as unknown as NormalizedOptions,
     )
-    vi.mocked(http.post).mockReturnValue({
-      json: vi.fn().mockRejectedValue(error415),
-    } as unknown as ResponsePromise)
+    uploadAttachment.mockRejectedValue(error415)
 
     render(<RfpAttachmentDropzone value={[]} onChange={vi.fn()} />)
 

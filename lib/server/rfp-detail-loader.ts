@@ -140,7 +140,7 @@ const _PG_VISIBLE_RFP_KEYS = [
   'currentGuaranteeInsurance', 'currentSettlementCycle', 'deliveryServicePeriod',
   'currentSolution', 'currentSolutionDetail', 'rfpFiles', 'deadline', 'status',
   'createdAt', 'sentAt', 'updatedAt', 'requiredPaymentMethods',
-  'customPaymentMethods', 'isSample', 'contractType',
+  'customPaymentMethods', 'contractType',
 ] as const;
 type _UnclassifiedRfpKey = Exclude<
   keyof RFP,

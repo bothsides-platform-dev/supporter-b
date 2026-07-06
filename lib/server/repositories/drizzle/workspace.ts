@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, ilike, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, ilike, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 import {
   workspaces,
   workspaceMembers,
@@ -183,7 +183,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
             AND read_at IS NULL
         )`,
         logoUpdatedAt: workspaces.logoUpdatedAt,
-        isDemo: workspaces.isDemo,
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
@@ -207,7 +206,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         memberApprovalStatus: sql<'approved'>`'approved'`,
         unreadCount: sql<number>`0`,
         logoUpdatedAt: workspaces.logoUpdatedAt,
-        isDemo: workspaces.isDemo,
       })
       .from(workspaces)
       .where(eq(workspaces.status, 'active'))
@@ -342,8 +340,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   ): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]> {
     const db = this.h(tx);
     const { type, q } = opts;
-    // 데모 PG(isDemo)는 항상 제외 — 실제 RFP 초대·이메일이 가짜 PG로 새지 않도록(봉인입찰/온보딩 격리).
-    const base = and(eq(workspaces.type, type), eq(workspaces.isDemo, false));
+    const base = eq(workspaces.type, type);
     const rows = (await db
       .select({ id: workspaces.id, name: workspaces.name, logoUpdatedAt: workspaces.logoUpdatedAt })
       .from(workspaces)
@@ -984,101 +981,5 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async removeAllMembershipsForUser(userId: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.delete(workspaceMembers).where(eq(workspaceMembers.userId, userId));
-  }
-
-  // ── 온보딩 샘플 시드 지원 ──────────────────────────────────────────────
-  async createDemo(
-    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null },
-    tx?: Tx,
-  ): Promise<void> {
-    const db = this.h(tx);
-    await db.insert(workspaces).values({
-      id: params.id,
-      type: params.type,
-      name: params.name,
-      // status='active' 로 승인 플로우 우회(데모라 실제 계정이 아님), isDemo 로 실제 발견 표면에서 제외.
-      status: 'active',
-      isDemo: true,
-      bizProfileId: params.bizProfileId,
-    });
-  }
-
-  async findDemoByName(
-    name: string,
-    type?: WorkspaceType,
-    tx?: Tx,
-  ): Promise<{ id: string } | undefined> {
-    const db = this.h(tx);
-    const where = type
-      ? and(eq(workspaces.isDemo, true), eq(workspaces.name, name), eq(workspaces.type, type))
-      : and(eq(workspaces.isDemo, true), eq(workspaces.name, name));
-    const [row] = await db
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(where)
-      .limit(1);
-    return row ?? undefined;
-  }
-
-  async firstMemberUserId(workspaceId: string, tx?: Tx): Promise<string | undefined> {
-    const db = this.h(tx);
-    const [row] = await db
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(eq(workspaceMembers.workspaceId, workspaceId))
-      .limit(1);
-    return row?.userId ?? undefined;
-  }
-
-  async getSampleSeededState(
-    workspaceId: string,
-    tx?: Tx,
-  ): Promise<{ sampleSeededAt: Date | null } | undefined> {
-    const db = this.h(tx);
-    const [row] = await db
-      .select({ sampleSeededAt: workspaces.sampleSeededAt })
-      .from(workspaces)
-      .where(eq(workspaces.id, workspaceId))
-      .limit(1);
-    if (!row) return undefined;
-    return { sampleSeededAt: row.sampleSeededAt ?? null };
-  }
-
-  async markSampleSeeded(workspaceId: string, at: Date, tx?: Tx): Promise<void> {
-    const db = this.h(tx);
-    await db
-      .update(workspaces)
-      .set({ sampleSeededAt: at })
-      .where(eq(workspaces.id, workspaceId));
-  }
-
-  async listWsNeedingSample(type: WorkspaceType, tx?: Tx): Promise<{ id: string }[]> {
-    const db = this.h(tx);
-    return (await db
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.type, type),
-          // 데모 워크스페이스는 온보딩 대상이 아니다 (샘플이 데모로 새지 않도록).
-          eq(workspaces.isDemo, false),
-          isNull(workspaces.sampleSeededAt),
-        ),
-      )) as { id: string }[];
-  }
-
-  async findAdminMemberUserId(workspaceId: string, tx?: Tx): Promise<string | undefined> {
-    const db = this.h(tx);
-    const [row] = await db
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaceId),
-          eq(workspaceMembers.role, 'admin'),
-        ),
-      )
-      .limit(1);
-    return row?.userId ?? undefined;
   }
 }

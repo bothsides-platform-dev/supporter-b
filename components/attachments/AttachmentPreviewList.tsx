@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { FileTextIcon } from '@/components/icons';
 import type { Attachment } from '@/lib/types/common';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 
 // 구매사가 RFP에 붙인 첨부파일을 썸네일 목록으로 보여주고, 클릭 시 MD3 Dialog
 // 라이트박스 안에서 이미지/PDF 를 인라인으로 미리본다. 구매사 상세 + PG 인박스

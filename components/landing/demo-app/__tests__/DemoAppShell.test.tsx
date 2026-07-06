@@ -4,7 +4,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 
 vi.mock('motion/react', () => ({ useInView: () => true }));
-vi.mock('@/lib/landing/prefers-reduced-motion', () => ({ prefersReducedMotion: () => false }));
 // 커서는 자체 관심사 — 셸의 오케스트레이션(클릭 인터셉트) 테스트에서는 stub.
 // 단, 모바일 분기 검증을 위해 넘겨받은 selector 를 캡처한다.
 const cursorCapture = vi.hoisted(() => ({ selector: undefined as string | null | undefined }));
