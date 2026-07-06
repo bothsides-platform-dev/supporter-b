@@ -64,7 +64,7 @@ export function Logo({ variant = 'default', className, href }: LogoProps) {
         <rect x="5.5" y="5" width="4.5" height="22" rx="2.25" fill="var(--md-sys-color-on-surface)" />
         <circle cx="21" cy="16" r="9" fill="var(--md-sys-color-on-surface)" />
       </svg>
-      <span className="font-sans font-extrabold text-[22px] leading-none tracking-[-0.04em] text-[var(--md-sys-color-on-surface)]">
+      <span className="font-sans font-extrabold text-[22px] leading-none tracking-[-0.04em] whitespace-nowrap text-[var(--md-sys-color-on-surface)]">
         Supporter B
       </span>
     </Link>

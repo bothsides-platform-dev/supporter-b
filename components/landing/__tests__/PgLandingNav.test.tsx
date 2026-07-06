@@ -4,9 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { PgLandingNav } from '../PgLandingNav';
 
 describe('PgLandingNav — PG 랜딩 헤더 내비게이션', () => {
-  it('파트너 상담 신청 CTA 버튼을 렌더한다', () => {
+  it('파트너 시작하기 CTA 를 내부 가입 링크(/signup/pg)로 렌더한다', () => {
     render(<PgLandingNav authed={false} />);
-    expect(screen.getByRole('button', { name: /파트너 상담 신청/ })).toBeInTheDocument();
+    const cta = screen.getByRole('link', { name: /파트너 시작하기/ });
+    expect(cta).toHaveAttribute('href', '/signup/pg');
   });
 
   it('비로그인 시 로그인 링크를 렌더한다', () => {
