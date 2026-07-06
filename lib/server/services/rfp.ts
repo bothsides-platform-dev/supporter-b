@@ -511,8 +511,8 @@ export class RfpService {
           .toISOString()
           .replace('T', ' ')
           .slice(0, 16);
-        const adminRows = await this.workspaceRepo.adminRecipients(req.pgWsId, tx);
-        for (const admin of adminRows) {
+        const emailRows = await this.workspaceRepo.approvedMemberRecipients(req.pgWsId, tx);
+        for (const member of emailRows) {
           const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
           const html = await renderRfpInvited({
             rfpId: rfpRow.code,
@@ -522,7 +522,7 @@ export class RfpService {
             inviteUrl,
           });
           await notify(tx, {
-            recipients: [{ userId: admin.userId, workspaceId: req.pgWsId, email: admin.email }],
+            recipients: [{ userId: member.userId, workspaceId: req.pgWsId, email: member.email }],
             channels: ['email'],
             type: 'rfp.invited',
             title: '',
@@ -531,7 +531,7 @@ export class RfpService {
               event: 'rfp.invited',
               subject: `[Supporter B · ${rfpRow.code}] 견적 요청이 도착했어요`,
               html,
-              dedupeKey: () => `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${admin.userId}`,
+              dedupeKey: () => `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${member.userId}`,
             },
           });
         }

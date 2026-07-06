@@ -377,6 +377,24 @@ describe('RfpService.acceptPgRequest', () => {
     const [req] = await db.select({ status: rfpPgRequests.status }).from(rfpPgRequests).where(eq(rfpPgRequests.id, env.requestId));
     expect(req!.status).toBe('accepted');
   });
+
+  it('sends the rfp.invited email to every approved PG member, not just admins', async () => {
+    const env = await seedAcceptEnv();
+    const approvedMember = await seedUser(db, { email: 'member@accept.com' });
+    await seedMembership(db, env.pgWsId, approvedMember.id, 'member');
+    const pendingMember = await seedUser(db, { email: 'pending@accept.com' });
+    await seedMembership(db, env.pgWsId, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const result = await service.acceptPgRequest(env.requestId, { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+    expect(result).toEqual({ ok: true });
+
+    const invitedEmails = (
+      await db.select({ toAddr: outboxEntries.toAddr }).from(outboxEntries).where(eq(outboxEntries.event, 'rfp.invited'))
+    ).map((r) => r.toAddr);
+    expect(invitedEmails).toContain('pg@accept.com'); // admin
+    expect(invitedEmails).toContain('member@accept.com'); // approved member
+    expect(invitedEmails).not.toContain('pending@accept.com'); // pending-approval member excluded
+  });
 });
 
 // ─── RfpService.addPgWorkspaces ───────────────────────────────────────────────
