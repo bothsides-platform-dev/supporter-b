@@ -115,4 +115,29 @@ describe('PgSignupEmailPage — 초대 경로 blur 검사 스킵', () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(mockCheckEmail).not.toHaveBeenCalled();
   });
+
+  it('초대 유입 시 회사 이메일 권장 안내를 렌더하지 않는다', () => {
+    mockReadDraft.mockReturnValue({
+      wsInviteToken: 'inv-token',
+      email: 'invited@gmail.com',
+      inviteWorkspaceName: '테스트 Corp',
+    });
+    render(<PgSignupEmailPage />);
+
+    expect(screen.queryByText(/개인 이메일이에요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/회사 이메일로 가입하면/)).not.toBeInTheDocument();
+  });
+});
+
+describe('PgSignupEmailPage — 회사 이메일 권장 안내 (비초대)', () => {
+  it('무료 도메인 입력 시 개인 이메일 경고로 전환한다', async () => {
+    const user = userEvent.setup();
+    render(<PgSignupEmailPage />);
+
+    expect(screen.getByText('회사 이메일로 가입하면 팀원과 함께 쓰기 쉬워요.')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('이메일'), 'kim@naver.com');
+
+    expect(screen.getByText(/개인 이메일이에요/)).toBeInTheDocument();
+  });
 });

@@ -121,3 +121,33 @@ describe('BuyerSignupEmailPage — 이메일 blur 중복 검사', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 });
+
+describe('BuyerSignupEmailPage — 회사 이메일 권장 안내', () => {
+  it('입력 전에는 중립 힌트를 보여준다', () => {
+    render(<BuyerSignupEmailPage />);
+    expect(screen.getByText('회사 이메일로 가입하면 팀원과 함께 쓰기 쉬워요.')).toBeInTheDocument();
+  });
+
+  it('무료 도메인 입력 시 개인 이메일 경고로 전환한다', async () => {
+    const user = userEvent.setup();
+    render(<BuyerSignupEmailPage />);
+
+    await user.type(screen.getByLabelText('이메일'), 'kim@gmail.com');
+
+    expect(screen.getByText(/개인 이메일이에요/)).toBeInTheDocument();
+  });
+
+  it('취득 이메일 에러가 표시되면 안내를 숨긴다', async () => {
+    mockCheckEmail.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+    const user = userEvent.setup();
+    render(<BuyerSignupEmailPage />);
+
+    await user.type(screen.getByLabelText('이메일'), 'taken@gmail.com');
+    await user.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText(/이미 가입된 이메일입니다/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/개인 이메일이에요/)).not.toBeInTheDocument();
+  });
+});
