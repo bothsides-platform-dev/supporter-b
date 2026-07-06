@@ -19,11 +19,13 @@ if [ ! -f .env.production ]; then
   exit 1
 fi
 
-# Export prod env so the build sees NEXT_PUBLIC_* values (and so a manual
-# `pnpm db:push` picks up DATABASE_URL). Next also auto-loads .env.production;
-# belt-and-suspenders.
-log "Loading .env.production"
-set -a; . ./.env.production; set +a
+# ── Runtime env: `.env.production` 파일이 단일 출처 ─────────────────────────
+# 여기서 .env.production 을 셸 전역에 export 하지 않는다. PM2 는 프로세스를 띄운
+# 시점의 셸 env 를 스냅샷해 restart/reload 에서 재사용하고(`pm2 save` 로 dump 에도
+# 영속), 프로세스 env 는 `next start` 가 부팅 때 읽는 .env.production 파일보다
+# 우선한다. 과거에 전역 export + `--update-env` 조합이 구 도메인 AUTH_URL 을 PM2 에
+# 박제해, 파일을 고쳐도 반영되지 않는 장애를 만들었다. env 가 필요한 단계(빌드의
+# NEXT_PUBLIC_* 인라인 등)만 서브셸로 국한한다.
 
 log "Pulling latest"
 git pull --ff-only
@@ -34,9 +36,10 @@ pnpm install --frozen-lockfile
 log "Ensuring Postgres container is up"
 docker compose -f docker-compose.prod.yml up -d
 # Wait for Postgres to accept connections before the app starts.
+PG_USER="$( ( set -a; . ./.env.production; set +a; echo "${POSTGRES_USER:-supporter_b}" ) )"
 for i in $(seq 1 30); do
   if docker compose -f docker-compose.prod.yml exec -T pg \
-       pg_isready -U "${POSTGRES_USER:-supporter_b}" >/dev/null 2>&1; then
+       pg_isready -U "$PG_USER" >/dev/null 2>&1; then
     break
   fi
   [ "$i" = "30" ] && { echo "Postgres did not become ready in time" >&2; exit 1; }
@@ -59,12 +62,19 @@ done
 
 # Cap V8 heap below total RAM so the build hits GC before the OOM-killer. On a
 # 2GB box (+4GB swap) 1536MB leaves headroom for Postgres and the OS during build.
-log "Building (NODE_OPTIONS=--max-old-space-size=${NODE_BUILD_HEAP_MB:-1536})"
-NODE_OPTIONS="--max-old-space-size=${NODE_BUILD_HEAP_MB:-1536}" pnpm build
+# 서브셸: 빌드가 NEXT_PUBLIC_* 를 인라인하도록 env 를 빌드에만 노출한다.
+log "Building"
+(
+  set -a; . ./.env.production; set +a
+  NODE_OPTIONS="--max-old-space-size=${NODE_BUILD_HEAP_MB:-1536}" pnpm build
+)
 
+# PM2 는 깨끗한 셸 env 에서 기동/리로드한다 — 앱 런타임 env 는 next start 가
+# .env.production 에서 직접 읽는다. `--update-env` 를 쓰지 않는다: 셸에 export 된
+# 값을 프로세스 env 로 캡처해 이후 파일 수정을 영구히 가리는 박제를 만든다.
 log "Reloading PM2"
 if pm2 describe bidit >/dev/null 2>&1; then
-  pm2 reload ecosystem.config.cjs --update-env
+  pm2 reload ecosystem.config.cjs
 else
   pm2 start ecosystem.config.cjs
 fi
