@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.73.1] - 2026-07-07
+
+### Changed
+
+- **화면에 보이는 브랜드 표기가 "서포트 B"로 통일됐어요**: 브라우저 탭 타이틀, 검색결과 미리보기, 이메일·SMS 인증문자, 안내 메일 헤더/푸터, 랜딩 Footer 저작권 표기 등에 남아있던 "Supporter B"·"서포터비" 표기가 이미 적용돼 있던 워드마크 표기 "서포트 B"로 통일됐어요. 화면 동작이나 기능 변화는 없어요.
+
 ## [0.2.73.0] - 2026-07-07
 
 ### Changed

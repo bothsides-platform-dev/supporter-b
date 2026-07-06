@@ -39,7 +39,7 @@ export async function sendPhoneOtpAction(input: {
   });
 
   try {
-    await sendSms(phone, `Supporter B 인증번호: ${code} (5분 이내 입력)`);
+    await sendSms(phone, `서포트 B 인증번호: ${code} (5분 이내 입력)`);
   } catch {
     await phoneOtpRepo.remove(id);
     return { ok: false, error: 'SMS_FAILED' };
