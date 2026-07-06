@@ -1,16 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
-const mockReduced = vi.hoisted(() => vi.fn(() => false));
-vi.mock('@/lib/landing/prefers-reduced-motion', () => ({
-  prefersReducedMotion: mockReduced,
-}));
-
 import { useDemoStepAutoplay } from '../useDemoStepAutoplay';
 
 describe('useDemoStepAutoplay — 자동재생→조작 하이브리드', () => {
   beforeEach(() => {
-    mockReduced.mockReturnValue(false);
     vi.useFakeTimers();
   });
   afterEach(() => {
@@ -45,13 +39,6 @@ describe('useDemoStepAutoplay — 자동재생→조작 하이브리드', () => 
     act(() => result.current.stop());
     act(() => result.current.setStep(4));
     expect(result.current.step).toBe(4);
-  });
-
-  it('동작 줄이기 선호 시 자동 전진하지 않는다', () => {
-    mockReduced.mockReturnValue(true);
-    const { result } = renderHook(() => useDemoStepAutoplay(5, 1000));
-    act(() => vi.advanceTimersByTime(5000));
-    expect(result.current.step).toBe(1);
   });
 
   it('enabled=false면 자동 전진하지 않는다 (뷰 진입 전 대기)', () => {

@@ -106,7 +106,9 @@
 }
 
 /*
-  .tier-flash — 구간 전환 시 구간-의존 수치 1회성 강조.
+  .tier-flash — 구간 전환 시 구간-의존 수치 1회성 강조. RFP 비교 화면(components/rfp/comparison/*)
+  전용 — 랜딩이 아니므로 동작 줄이기 무시 예외 대상이 아니다(DESIGN.md §9 예외 ③은 랜딩·마케팅
+  한정). reduce 선호를 그대로 존중한다.
   opacity만 사용(layout 불변, 글자 이동 없음). 스태거는 인라인 animation-delay(행 index * 40ms)로.
   - opacity 전용 → layout 완전 무관, DESIGN.md 모션 규칙 준수
   - 펄스/반복 없음 — 1회 fade-in, forwards는 opacity:1(기본값)이라 제거 후 부작용 없음

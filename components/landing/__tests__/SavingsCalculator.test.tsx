@@ -147,4 +147,23 @@ describe('SavingsCalculator — idle slider hint', () => {
     });
     expect(screen.queryByText('드래그해서 조정해 보세요')).toBeNull();
   });
+
+  it('still plays the idle hint when the OS prefers reduced motion (landing ignores the preference)', () => {
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true,
+      media: '',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }) as unknown as typeof window.matchMedia;
+
+    render(<SavingsCalculator />);
+    act(() => {
+      vi.advanceTimersByTime(6500); // past IDLE_MS + a few rAF frames
+    });
+    expect(screen.getByText('드래그해서 조정해 보세요')).toBeInTheDocument();
+  });
 });
