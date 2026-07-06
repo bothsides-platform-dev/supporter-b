@@ -31,12 +31,13 @@ vi.mock('@/lib/hooks/useIsMobile', () => ({
 }));
 
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { WORDMARK_PATHS } from '@/components/primitives/wordmark-paths.generated';
 import { SidebarBrand } from '../SidebarBrand';
 
 afterEach(cleanup);
 
 describe('SidebarBrand', () => {
-  it('renders the 서포트 B wordmark as a /home link with the icon mark', () => {
+  it('renders the 서포트 B wordmark as a /home link with the fixed icon mark + vector wordmark', () => {
     render(
       <SidebarProvider>
         <SidebarBrand />
@@ -45,9 +46,15 @@ describe('SidebarBrand', () => {
 
     const link = screen.getByRole('link', { name: '서포트 B 홈' });
     expect(link.getAttribute('href')).toBe('/home');
-    // wordmark is split into per-character spans; concatenated text is preserved
+    // wordmark is now a vector glyph run (sr-only text keeps it readable for a11y/text search)
     expect(link.textContent).toContain('서포트 B');
-    // icon mark is rendered inline
-    expect(link.querySelector('svg')).not.toBeNull();
+
+    const svgs = link.querySelectorAll('svg');
+    // 1) 고정 아이콘(BrandMark) + 2) 펼침/접힘 stagger 워드마크 svg
+    expect(svgs.length).toBe(2);
+
+    const wordmarkSvg = svgs[1];
+    // 워드마크는 이제 글자 단위(motion.span)가 아니라 글리프 단위(motion.path)로 stagger된다.
+    expect(wordmarkSvg.querySelectorAll('path').length).toBe(WORDMARK_PATHS.glyphs.length);
   });
 });

@@ -2,11 +2,17 @@
 
 import Link from 'next/link';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
-import { BrandMark } from '@/components/primitives/Logo';
+import {
+  BrandMark,
+  WORDMARK_HEIGHT_EM,
+  WORDMARK_VALIGN_EM,
+  WORDMARK_VIEWBOX,
+  WORDMARK_WIDTH_EM,
+} from '@/components/primitives/Logo';
+import { WORDMARK_PATHS } from '@/components/primitives/wordmark-paths.generated';
 import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 
-const WORDMARK = '서포트 B';
 const EASE_DECEL = [0.05, 0.7, 0.1, 1] as const;
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
@@ -38,7 +44,7 @@ export function SidebarBrand({ className }: { className?: string }) {
     },
   };
 
-  const charV: Variants = {
+  const glyphV: Variants = {
     visible: {
       opacity: 1,
       y: 0,
@@ -62,21 +68,29 @@ export function SidebarBrand({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* icon mark — "B" 브랜드 마크, ink on transparent (Logo default variant과 동일) */}
+      {/* icon mark — "B" 브랜드 마크, ink on transparent (Logo default variant과 동일).
+          워드마크가 접혀 사라져도 이 아이콘은 접힌 레일의 유일한 브랜드 앵커로 고정된다. */}
       <BrandMark className="shrink-0" />
-      <motion.span
-        aria-hidden="true"
-        initial={false}
-        animate={expanded ? 'visible' : 'hidden'}
-        variants={container}
-        className="inline-block whitespace-pre font-sans text-[22px] font-black leading-none tracking-[-0.04em] text-[var(--md-sys-color-on-surface)]"
-      >
-        {WORDMARK.split('').map((ch, i) => (
-          <motion.span key={i} variants={charV} className="inline-block whitespace-pre">
-            {ch}
-          </motion.span>
-        ))}
-      </motion.span>
+      <span aria-hidden="true" className="inline-block text-[22px] leading-none">
+        <span className="sr-only">서포트 B</span>
+        <motion.svg
+          initial={false}
+          animate={expanded ? 'visible' : 'hidden'}
+          variants={container}
+          viewBox={WORDMARK_VIEWBOX}
+          style={{
+            width: `${WORDMARK_WIDTH_EM}em`,
+            height: `${WORDMARK_HEIGHT_EM}em`,
+            verticalAlign: `${WORDMARK_VALIGN_EM}em`,
+          }}
+          fill="var(--md-sys-color-on-surface)"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          {WORDMARK_PATHS.glyphs.map((d, i) => (
+            <motion.path key={i} d={d} variants={glyphV} />
+          ))}
+        </motion.svg>
+      </span>
     </Link>
   );
 }

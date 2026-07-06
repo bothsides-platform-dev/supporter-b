@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
 import { BRAND_MARK_PATH } from '@/lib/brand/brand-mark-path'
+import { cn } from '@/lib/utils'
+import { WORDMARK_PATHS } from './wordmark-paths.generated'
 
 type LogoVariant = 'default' | 'compact'
 
@@ -49,6 +50,15 @@ export function BrandMark({
   )
 }
 
+/* "서포트 B" 워드마크 벡터 패스 — components/primitives/wordmark-paths.generated.ts(코드젠 산출물,
+   `pnpm brand:wordmark`) SSOT. 좌표계가 Pretendard 폰트 단위(unitsPerEm)를 그대로 쓰므로, svg를
+   폰트와 동일한 em 스케일(unitsPerEm = 1em)로 그리면 주변 실제 텍스트와 크기·베이스라인이
+   자동으로 맞는다 — vertical-align을 descent 비율만큼 내려 베이스라인을 정렬한다. */
+export const WORDMARK_VIEWBOX = `0 ${-WORDMARK_PATHS.ascent} ${WORDMARK_PATHS.totalWidth} ${WORDMARK_PATHS.ascent - WORDMARK_PATHS.descent}`
+export const WORDMARK_WIDTH_EM = WORDMARK_PATHS.totalWidth / WORDMARK_PATHS.unitsPerEm
+export const WORDMARK_HEIGHT_EM = (WORDMARK_PATHS.ascent - WORDMARK_PATHS.descent) / WORDMARK_PATHS.unitsPerEm
+export const WORDMARK_VALIGN_EM = WORDMARK_PATHS.descent / WORDMARK_PATHS.unitsPerEm
+
 export function SupportBWordmark({
   particle = '',
   className,
@@ -59,12 +69,24 @@ export function SupportBWordmark({
   colorVar?: string
 }) {
   return (
-    <span
-      className={cn('inline-flex items-baseline whitespace-nowrap', className)}
-      style={{ color: `var(${colorVar})` }}
-    >
-      <span className="font-sans font-black leading-none tracking-[-0.04em]">서포트 B</span>
-      {particle ? <span>{particle}</span> : null}
+    <span className={cn('inline-flex items-baseline whitespace-nowrap', className)}>
+      <span className="sr-only">서포트 B</span>
+      <svg
+        aria-hidden="true"
+        viewBox={WORDMARK_VIEWBOX}
+        style={{
+          width: `${WORDMARK_WIDTH_EM}em`,
+          height: `${WORDMARK_HEIGHT_EM}em`,
+          verticalAlign: `${WORDMARK_VALIGN_EM}em`,
+        }}
+        fill={`var(${colorVar})`}
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        {WORDMARK_PATHS.glyphs.map((d, i) => (
+          <path key={i} d={d} />
+        ))}
+      </svg>
+      {particle ? <span style={{ color: `var(${colorVar})` }}>{particle}</span> : null}
     </span>
   )
 }
@@ -95,14 +117,15 @@ export function Logo({ variant = 'default', className, href }: LogoProps) {
       href={href ?? '/'}
       aria-label="서포트 B 홈"
       className={cn(
-        'group inline-flex items-center gap-3',
+        'group inline-flex items-center',
         'opacity-100 hover:opacity-70 transition-opacity duration-[140ms]',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-on-surface)]',
         'rounded-md',
         className,
       )}
     >
-      <BrandMark />
+      {/* 워드마크 자체가 마지막 글자 자리에 브랜드 마크를 품고 있어(SupportBWordmark 참고)
+          별도 아이콘을 앞에 두면 같은 B 형태가 한 줄에 두 번 반복돼 중복으로 읽힌다. */}
       <SupportBWordmark className="text-[22px]" />
     </Link>
   )

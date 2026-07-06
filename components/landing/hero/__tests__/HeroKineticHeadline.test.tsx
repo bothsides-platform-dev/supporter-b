@@ -21,18 +21,23 @@ vi.mock('../ScrambleText', () => ({
   ),
 }));
 
+import { WORDMARK_PATHS } from '@/components/primitives/wordmark-paths.generated';
 import { HeroKineticHeadline, BrandWordB } from '../HeroKineticHeadline';
 
 describe('HeroKineticHeadline', () => {
-  it('renders the buyer brand line as text-only 서포트 B를 통해 without an inline svg mark', () => {
+  it('renders the buyer brand line as 서포트 B를 통해, with 서포트 B drawn as the vector wordmark', () => {
     render(<HeroKineticHeadline />);
 
     const heading = screen.getByRole('heading', { level: 1 });
+    // sr-only 텍스트가 접근성/텍스트 검색용으로 "서포트 B" 를 그대로 노출한다
     expect(heading).toHaveTextContent('서포트 B를 통해');
-    expect(heading.querySelector('svg')).toBeNull();
+    const svg = heading.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(svg).toHaveAttribute('aria-hidden', 'true');
+    expect(svg?.querySelectorAll('path').length).toBe(WORDMARK_PATHS.glyphs.length);
   });
 
-  it('renders only 서포트 B in bold while leaving the trailing particle unbolded', () => {
+  it('renders the trailing particle as plain text next to the vector wordmark', () => {
     render(
       <h1>
         <BrandWordB particle="로" />
@@ -41,7 +46,6 @@ describe('HeroKineticHeadline', () => {
 
     const heading = screen.getByRole('heading', { level: 1 });
     expect(heading).toHaveTextContent('서포트 B로');
-    expect(screen.getByText('서포트 B')).toHaveClass('font-black');
-    expect(screen.getByText('로')).not.toHaveClass('font-black');
+    expect(screen.getByText('로').closest('svg')).toBeNull();
   });
 });
