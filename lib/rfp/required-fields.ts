@@ -49,6 +49,16 @@ export function isAnnualPgVolumeValid(annualPgVolume: string): boolean {
   return /^\d+$/.test(trimmed) && Number(trimmed) > 0;
 }
 
+// 신규 계약(첫 PG 계약)은 이전 PG가 없어 전년도 PG 거래액이 존재할 수 없으므로
+// 필수에서 제외한다. 갱신·미선택은 기존대로 양의 정수 문자열을 요구한다.
+export function isAnnualPgVolumeSatisfied(
+  annualPgVolume: string,
+  contractType: 'new' | 'renewal' | null | undefined,
+): boolean {
+  if (contractType === 'new') return true;
+  return isAnnualPgVolumeValid(annualPgVolume);
+}
+
 export type MarkerState = 'empty' | 'filled' | 'error';
 
 export function markerState(input: { valid: boolean; attempted: boolean }): MarkerState {

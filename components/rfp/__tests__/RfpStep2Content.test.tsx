@@ -418,6 +418,53 @@ describe('RfpStep2Content', () => {
     });
   });
 
+  describe('신규 계약: 존재할 수 없는 PG 이력 필드 숨김', () => {
+    const HIDDEN_LABELS = [
+      '전년도 연간 PG 총 거래액',
+      '현재 카드 수수료',
+      '현재 월 정산한도',
+      '현재 보증보험',
+      '현재 정산주기',
+    ];
+
+    it("contractType='new' 이면 5개 PG 이력 필드가 렌더되지 않는다", () => {
+      useRfpDraftStore.setState({ contractType: 'new' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      for (const label of HIDDEN_LABELS) {
+        expect(screen.queryByText(label)).not.toBeInTheDocument();
+      }
+      // PG 공개 체크박스도 함께 사라진다
+      expect(
+        screen.queryByRole('checkbox', { name: '현재 카드 수수료를 PG사에 공개하기' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("contractType='renewal' 이면 5개 PG 이력 필드가 렌더된다", () => {
+      useRfpDraftStore.setState({ contractType: 'renewal' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      for (const label of HIDDEN_LABELS) {
+        expect(screen.getByText(label)).toBeInTheDocument();
+      }
+    });
+
+    it('배송 및 서비스 기간·현재 운영 솔루션은 신규 계약에서도 유지된다', () => {
+      useRfpDraftStore.setState({ contractType: 'new' });
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getByText('배송 및 서비스 기간')).toBeInTheDocument();
+      expect(screen.getByText('현재 운영 솔루션 유무')).toBeInTheDocument();
+    });
+
+    it("신규 계약이면 다음 클릭 후에도 거래액 미입력 에러가 표시되지 않는다", async () => {
+      useRfpDraftStore.setState({ contractType: 'new' });
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      expect(
+        screen.queryByText('전년도 연간 PG 총 거래액을 입력해주세요'),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   describe('서버 거부 홈페이지 (websiteRejected)', () => {
     it('websiteRejected 가 현재 store URL 과 같으면 마커가 error 상태이고 에러 메시지가 표시된다', () => {
       useRfpDraftStore.setState({ websiteUrl: 'foo.invalidtld' });
