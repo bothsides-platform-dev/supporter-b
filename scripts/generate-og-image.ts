@@ -94,7 +94,7 @@ function ogHtml(pretendard: string) {
   .wordmark {
     font-family: 'Pretendard', sans-serif;
     font-weight: 800;
-    font-size: 120px;
+    font-size: 145px;
     line-height: 1;
     letter-spacing: -0.04em;
     color: ${COLOR_ON_SURFACE};
