@@ -18,6 +18,7 @@ import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
 import { FieldError } from '@/components/primitives/FieldError';
 import { Divider } from '@/components/primitives/Divider';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
+import { SOLUTION_LABELS } from '@/lib/rfp/solutions';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -65,15 +66,6 @@ function SectionHeader({ label }: { label: string }) {
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_INPUT: '입력 값을 확인해주세요.',
   NETWORK_ERROR: '네트워크 오류가 발생했습니다. 다시 시도해주세요.',
-};
-
-const SOLUTION_LABELS: Record<string, string> = {
-  cafe24: '카페24',
-  imweb: '아임웹',
-  makeshop: '메이크샵',
-  godo: '고도몰',
-  self: '자체 개발',
-  other: '기타',
 };
 
 export function RfpStep4Review({
