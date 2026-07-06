@@ -16,7 +16,7 @@ import {
 } from '@/lib/types/bid';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { fmtPct } from '@/lib/quote/template-fees';
-import { formatKRW } from '@/lib/format';
+import { formatKRW } from '@/lib/utils/format';
 
 const MAX_CHIPS = 4;
 const MAX_TEMPLATES = 20;

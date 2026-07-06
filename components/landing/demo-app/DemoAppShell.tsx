@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useInView } from 'motion/react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { MobileShellBar } from '@/components/shell/MobileShellBar';
 import { DemoNavProvider, hrefToDemoPage } from '@/lib/nav/demo-nav-context';
 import { demoWorkspaceName } from '@/components/landing/demo-fixtures';

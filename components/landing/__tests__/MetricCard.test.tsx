@@ -78,5 +78,30 @@ describe('MetricCard', () => {
       });
       expect(arrow()!.style.opacity).toBe('1');
     });
+
+    it('still counts up (does not jump instantly) when the OS prefers reduced motion (landing ignores the preference)', () => {
+      window.matchMedia = vi.fn().mockReturnValue({
+        matches: true,
+        media: '',
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }) as unknown as typeof window.matchMedia;
+
+      render(<MetricCard to={2300} decimals={0} unit="만원" caption="연간 절감액" />);
+      // still mid-flight before COUNT_MS elapses — not yet the target value
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.queryByText('2300만원')).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(2000); // past COUNT_MS → lands on target
+      });
+      expect(screen.getByText('2300만원')).toBeInTheDocument();
+    });
   });
 });

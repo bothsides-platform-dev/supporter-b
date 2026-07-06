@@ -1,6 +1,6 @@
-// InMemoryStorage round-trip — mirrors the PostgresStorage contract
-// (in-memory slice on Range, `size` is total bytes, missing key throws
-// `ENOENT`). Used as the test-only backend so route + action specs run
+// InMemoryStorage round-trip — mirrors the R2Storage contract (in-memory
+// slice on Range, `size` is total bytes, missing key throws `ENOENT`).
+// Used as the dev/test fallback backend so route + action specs run
 // without disk or network.
 import { describe, expect, it } from 'vitest';
 
@@ -79,6 +79,58 @@ describe('InMemoryStorage', () => {
     await expect(s.read(key)).rejects.toMatchObject({ code: 'ENOENT' });
     // Second delete on already-missing key must not throw.
     await expect(s.delete(key)).resolves.toBeUndefined();
+  });
+
+  it('head() returns the stored total size', async () => {
+    const s = new InMemoryStorage();
+    const key = newAttachmentPath('head.pdf');
+    await s.save(key, Buffer.from('0123456789', 'utf8'), 'application/pdf');
+
+    await expect(s.head(key)).resolves.toEqual({ size: 10 });
+  });
+
+  it('head() throws ENOENT-coded error when key is missing', async () => {
+    const s = new InMemoryStorage();
+    await expect(s.head('no/such/key.pdf')).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('presignPut() returns a deterministic fake URL carrying key/mime/size/expiry', async () => {
+    const s = new InMemoryStorage();
+    const key = newAttachmentPath('put.pdf');
+    const url = await s.presignPut(key, {
+      mime: 'application/pdf',
+      size: 1234,
+      expiresInSeconds: 300,
+    });
+    expect(url).toContain(encodeURIComponent(key));
+    expect(url).toContain('expires=300');
+  });
+
+  it('presignGet() returns a deterministic fake URL carrying filename/mime/disposition/expiry', async () => {
+    const s = new InMemoryStorage();
+    const key = newAttachmentPath('get.pdf');
+    const url = await s.presignGet(key, {
+      filename: '견적서.pdf',
+      mime: 'application/pdf',
+      expiresInSeconds: 60,
+    });
+    expect(url).toContain(encodeURIComponent(key));
+    expect(url).toContain('expires=60');
+    expect(url).toContain('disposition=inline');
+  });
+
+  it('presignGet() honors an explicit attachment disposition', async () => {
+    const s = new InMemoryStorage();
+    const key = newAttachmentPath('get2.pdf');
+    const url = await s.presignGet(key, {
+      filename: 'a.pdf',
+      mime: 'application/pdf',
+      expiresInSeconds: 60,
+      disposition: 'attachment',
+    });
+    expect(url).toContain('disposition=attachment');
   });
 
   it('save() upserts (second save with same key overwrites)', async () => {

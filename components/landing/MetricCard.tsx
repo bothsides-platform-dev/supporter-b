@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useInView } from 'motion/react';
 import { ArrowUpIcon, ArrowDownIcon } from '@/components/icons';
-import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
+import { landingMotionUnavailable } from '@/lib/landing/prefers-reduced-motion';
 
 type MetricCardProps = {
   /** 카운트업 목표값 */
@@ -23,14 +23,14 @@ const COUNT_MS = 1400;
 
 // 화면에 들어오면 0 → 목표값으로 숫자가 차오른다(실시간으로 개선되는 느낌).
 // 카운트업이 끝나면 done=true 가 되어 추세 화살표가 슬라이드+페이드 인 한다.
-// 동작 줄이기/SSR/테스트에서는 즉시 목표값 + done.
+// 동작 줄이기 선호는 무시(랜딩 연출 항상 실행) — SSR/테스트(matchMedia 없음)에서만 즉시 목표값 + done.
 function useCountUp(to: number, play: boolean): { value: number; done: boolean } {
   const [current, setCurrent] = useState(0);
   const [done, setDone] = useState(false);
   useEffect(() => {
     if (!play) return;
-    if (prefersReducedMotion()) {
-      /* eslint-disable react-hooks/set-state-in-effect -- 동작 줄이기: 1회 즉시 표시 */
+    if (landingMotionUnavailable()) {
+      /* eslint-disable react-hooks/set-state-in-effect -- SSR/테스트: 1회 즉시 표시 */
       setCurrent(to);
       setDone(true);
       /* eslint-enable react-hooks/set-state-in-effect */

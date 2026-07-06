@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { LocalTime, LocalDate } from '../LocalTime';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime } from '@/lib/utils/format';
 
 describe('LocalTime', () => {
   it('명시적 timezone으로 렌더링된다 (Asia/Seoul)', async () => {

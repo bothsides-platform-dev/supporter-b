@@ -147,40 +147,25 @@ describe('createWorkspaceInTx', () => {
     expect(cols.filter((c) => c.kind === 'pipeline')).toHaveLength(4);
   });
 
-  it('buyer: seeds a sample RFP (isSample) with 3 bids', async () => {
+  it('buyer: creates zero RFPs/bids/invitations — onboarding sample is a client-side fixture, not a DB seed', async () => {
     const u = await seedUser(db);
     const { workspaceId } = await createWorkspaceInTx(db, { userId: u.id, type: 'buyer', name: 'BuyerCo' });
 
-    const sample = await db.select().from(rfps).where(eq(rfps.buyerWsId, workspaceId));
-    expect(sample).toHaveLength(1);
-    expect(sample[0].isSample).toBe(true);
-    const bidRows = await db.select().from(bids).where(eq(bids.rfpId, sample[0].id));
-    expect(bidRows).toHaveLength(3);
+    expect(await db.select().from(rfps).where(eq(rfps.buyerWsId, workspaceId))).toHaveLength(0);
+    expect(await db.select().from(bids)).toHaveLength(0);
+    expect(await db.select().from(rfpInvitations)).toHaveLength(0);
+    expect(await db.select().from(workspaces).where(eq(workspaces.type, 'buyer'))).toHaveLength(1);
   });
 
-  it('pg: seeds a sample RFP invitation in the inbox (demo-buyer-owned, accepted, no bid)', async () => {
+  it('pg: creates zero RFPs/bids/invitations and no demo counterpart workspace', async () => {
     const u = await seedUser(db);
     const { workspaceId } = await createWorkspaceInTx(db, { userId: u.id, type: 'pg', name: 'NewPG' });
 
-    // the PG owns no RFP itself — the sample is owned by the shared demo buyer
-    expect(await db.select().from(rfps).where(eq(rfps.buyerWsId, workspaceId))).toHaveLength(0);
-
-    // it has exactly one accepted invitation to an isSample RFP
-    const invs = await db.select().from(rfpInvitations).where(eq(rfpInvitations.pgWsId, workspaceId));
-    expect(invs).toHaveLength(1);
-    expect(invs[0].status).toBe('accepted');
-
-    const [rfp] = await db.select().from(rfps).where(eq(rfps.id, invs[0].rfpId));
-    expect(rfp.isSample).toBe(true);
-    const [owner] = await db.select().from(workspaces).where(eq(workspaces.id, rfp.buyerWsId));
-    expect(owner.isDemo).toBe(true);
-
-    // no bid yet — the PG submits it themselves
-    expect(await db.select().from(bids).where(eq(bids.rfpId, rfp.id))).toHaveLength(0);
-
-    // sampleSeededAt marker set on the PG workspace
-    const [ws] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId));
-    expect(ws.sampleSeededAt).not.toBeNull();
+    expect(await db.select().from(rfps)).toHaveLength(0);
+    expect(await db.select().from(bids)).toHaveLength(0);
+    expect(await db.select().from(rfpInvitations).where(eq(rfpInvitations.pgWsId, workspaceId))).toHaveLength(0);
+    // only the one PG workspace exists — no shared demo buyer workspace got created
+    expect(await db.select().from(workspaces)).toHaveLength(1);
   });
 });
 

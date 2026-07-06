@@ -21,7 +21,7 @@ vi.mock('@/lib/hooks/usePlatform', () => ({
   useIsMac: () => false,
 }));
 
-vi.mock('@/hooks/use-mobile', () => ({
+vi.mock('@/lib/hooks/useIsMobile', () => ({
   useIsMobile: () => false,
 }));
 

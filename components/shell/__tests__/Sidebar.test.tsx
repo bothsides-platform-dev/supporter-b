@@ -47,7 +47,7 @@ vi.mock('@/lib/hooks/usePlatform', async (importOriginal) => ({
   useIsMac: () => false,
 }));
 
-vi.mock('@/hooks/use-mobile', () => ({
+vi.mock('@/lib/hooks/useIsMobile', () => ({
   useIsMobile: () => false,
 }));
 
@@ -57,14 +57,14 @@ import { Sidebar } from '../Sidebar';
 const buyerProps = {
   user: { id: 'u1', email: 'buyer@test.com', name: '홍길동', avatarUpdatedAt: null },
   workspaceType: 'buyer' as const,
-  workspaces: [{ id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false }],
+  workspaces: [{ id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null }],
   current: { id: 'ws1', name: '구매사A', type: 'buyer' as const, logoUpdatedAt: null },
 };
 
 const pgProps = {
   user: { id: 'u2', email: 'pg@test.com', name: '이순신', avatarUpdatedAt: null },
   workspaceType: 'pg' as const,
-  workspaces: [{ id: 'ws2', name: '서포터페이', type: 'pg' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null, isDemo: false }],
+  workspaces: [{ id: 'ws2', name: '서포터페이', type: 'pg' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null }],
   current: { id: 'ws2', name: '서포터페이', type: 'pg' as const, logoUpdatedAt: null },
 };
 

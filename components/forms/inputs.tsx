@@ -8,7 +8,7 @@ import { Select } from '@/components/primitives/Select';
 import { FieldError } from '@/components/primitives/FieldError';
 import { RequiredMark } from '@/components/rfp/RequiredMark';
 import type { MarkerState } from '@/lib/rfp/required-fields';
-import { formatKrwReadable, formatRatePerManwon } from '@/lib/format';
+import { formatKrwReadable, formatRatePerManwon } from '@/lib/utils/format';
 import { formatSettleCycle } from '@/lib/utils/settle-cycle';
 import { cn } from '@/lib/utils';
 

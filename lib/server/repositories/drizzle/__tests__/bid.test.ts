@@ -136,6 +136,24 @@ describe('DrizzleBidRepository — proposalPdfs url 계약', () => {
     expect(bid).toBeDefined();
     expect(bid!.proposalPdfs).toEqual([]);
   });
+
+  it('status=pending 인 첨부(검증 전)는 proposalPdfs 에서 제외한다', async () => {
+    const { bidId, attachmentIds } = await insertBid(ctx.db, ctx, 1);
+    const pendingId = randomUUID();
+    await ctx.db.insert(attachments).values({
+      id: pendingId,
+      bidId,
+      name: 'unverified.pdf',
+      size: 2048,
+      mimeType: 'application/pdf',
+      uploadedBy: ctx.pgUser.id,
+      status: 'pending',
+    });
+
+    const bid = await ctx.repo.findById(bidId);
+
+    expect(bid!.proposalPdfs.map((p) => p.id)).toEqual(attachmentIds);
+  });
 });
 
 describe('DrizzleBidRepository — 전체 필드 라운드트립 (명시적 projection 회귀 방지)', () => {

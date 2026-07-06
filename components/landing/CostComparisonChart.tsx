@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { formatKRW } from '@/lib/format';
+import { formatKRW } from '@/lib/utils/format';
 
 type CostComparisonChartProps = {
   currentCost: number;
@@ -35,7 +35,7 @@ export function CostComparisonChart({
           variant="current"
         />
         <BarRow
-          label="Supporter B"
+          label="서포트 B"
           ratio={supporterBRatio}
           cost={supporterBCost}
           variant="supporter-b"

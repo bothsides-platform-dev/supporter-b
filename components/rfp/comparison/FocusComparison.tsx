@@ -27,7 +27,7 @@ import { TierContextHeader } from './TierContextHeader';
 import { useFlashOnChange } from './useFlashOnChange';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 import {
   type Bid,
   type CustomPaymentMethod,
@@ -51,14 +51,18 @@ type Props = {
   requoteByPg?: Record<string, { status: 'pending' | 'responded'; round: number; deadline: string }>;
   /** 구매사 자신의 영중소 구간 — 비교 화면이 이 구간을 기본 선택해 먼저 보여준다. */
   buyerGrade?: MerchantTier;
-  /** 온보딩 샘플 — 읽기전용 샌드박스(선정 비활성) */
-  isSample?: boolean;
   /** 딜룸 모달의 '견적 비교' 탭에 임베드될 때 — 탭이 제목을 제공하므로 외곽 헤더를 숨긴다. */
   hideHeader?: boolean;
+  /**
+   * 가상 샘플 온보딩 전용(opt-in) — 주어지면 클릭 시 실제 awardRfpAction(AwardConfirmDialog)
+   * 대신 이 콜백을 호출한다(가짜 선정).
+   * 재요청 버튼은 숨긴다. 프로덕션 실 딜룸에는 전달되지 않는다.
+   */
+  onSampleAward?: (bidId: string) => void;
 };
 
 export function FocusComparison(props: Props) {
-  const { bids, pgWsNameMap, pgWsLogoUpdatedAtMap, current, rfpStatus, awardedBidId, requoteByPg } = props;
+  const { bids, pgWsNameMap, pgWsLogoUpdatedAtMap, current, rfpStatus, awardedBidId, requoteByPg, onSampleAward } = props;
   const router = useRouter();
 
   const [tier, setTier] = useState<MerchantTier>(props.buyerGrade ?? 'general');
@@ -116,7 +120,13 @@ export function FocusComparison(props: Props) {
     [sortedBids],
   );
   const onRequoteOpen = useCallback(() => setRequoteOpen(true), []);
-  const onAwardOpen = useCallback(() => setDialogOpen(true), []);
+  const onAwardOpen = useCallback(() => {
+    if (onSampleAward && active) {
+      onSampleAward(active.id);
+      return;
+    }
+    setDialogOpen(true);
+  }, [onSampleAward, active]);
 
   // 활성 견적의 결제수단 요율 행 — 각 행 hover 시 전 PG 줄세움.
   const feeRows = useMemo(
@@ -134,7 +144,7 @@ export function FocusComparison(props: Props) {
   }
 
   const isAwarded = rfpStatus === 'awarded' || rfpStatus === 'closed';
-  const canAward = rfpStatus === 'sent' && !props.isSample;
+  const canAward = rfpStatus === 'sent';
   const peek = peekBidId ? sortedBids.find((b) => b.id === peekBidId) ?? null : null;
 
   if (resultBid) {
@@ -225,7 +235,7 @@ export function FocusComparison(props: Props) {
 
         <AwardCtaBar
           canAward={canAward}
-          isSample={props.isSample}
+          showRequote={!props.onSampleAward}
           onRequote={onRequoteOpen}
           onAward={onAwardOpen}
         />

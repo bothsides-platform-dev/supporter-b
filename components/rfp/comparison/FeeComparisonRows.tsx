@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { cn } from '@/lib/utils';
 import { MetricComparePopover, type CompareRow } from './MetricComparePopover';
 import { rankByMetric } from '@/lib/utils/bid-compare';
-import { formatPct, formatKRW } from '@/lib/format';
+import { formatPct, formatKRW } from '@/lib/utils/format';
 import type { Bid, MerchantTier } from '@/lib/types/bid';
 import type { FeeRow } from './focus-comparison-model';
 

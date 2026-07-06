@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { RFP_STATUS_CHIP, rfpStatusChip, pgRequestChip } from '../rfp-status';
+import { RFP_STATUS_CHIP, rfpStatusChip, pgRequestChip } from '../rfp/rfp-status';
 
 describe('RFP_STATUS_CHIP', () => {
   it('5개 RfpStatus 를 모두 매핑한다 (라벨/색)', () => {

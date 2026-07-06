@@ -78,7 +78,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           <ScrollDrivenSolution
             heading={
               <SectionHeading>
-                SupporterB를 통해<br />PG 도입 문제를 해결해보세요
+                서포트 B를 통해<br />PG 도입 문제를 해결해보세요
               </SectionHeading>
             }
             points={SOLUTION_POINTS}
@@ -91,7 +91,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
             <div className="flex flex-col gap-[var(--s-4)]">
               <SectionHeading>실제 화면을 미리 둘러보세요</SectionHeading>
               <p className="text-[var(--text-md)] leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
-                회원가입 없이 SupporterB 실제 화면을 그대로 체험할 수 있어요. 아래 단계를 눌러 직접 둘러보세요.
+                회원가입 없이 서포트 B 실제 화면을 그대로 체험할 수 있어요. 아래 단계를 눌러 직접 둘러보세요.
               </p>
             </div>
             <DemoAppShell />
@@ -102,7 +102,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         <section className={sectionCls}>
           <div className={containerCls}>
             <SectionHeading>
-              SupporterB를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
+              서포트 B를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
             </SectionHeading>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-[var(--s-8)]">
               {HERO_METRICS.map((m) => (
@@ -129,7 +129,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-4)]">
                 <p className="text-[clamp(18px,2.2vw,24px)] leading-[1.5] tracking-[-0.012em] text-[var(--md-sys-color-on-surface)]">
-                  SupporterB는 현재(2026년) 무료로 이용 가능합니다.
+                  서포트 B는 현재(2026년) 무료로 이용 가능합니다.
                 </p>
                 <p className="text-[var(--text-md)] leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
                   추후 유료로 전환될 수 있으며, 전환 2달 전 사전 공유 예정입니다.

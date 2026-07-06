@@ -31,7 +31,6 @@ export type BuyerKanbanCard = {
   invitedPgCount: number;
   submittedBidCount: number;
   awardedBidId?: string;
-  isSample: boolean;
   /** raw RFP status — 마감 컬럼 안 결과 칩(선정완료/미선정/취소) 도출용. */
   status: RfpStatus;
   /** status==='cancelled' 파생 플래그 (결과 칩 자체는 status 로 도출). */
@@ -68,7 +67,6 @@ export function toBuyerCard(args: {
     invitedPgCount: invitedActive,
     submittedBidCount: bids.filter((b) => b.status === 'submitted').length,
     awardedBidId: rfp.awardedBidId,
-    isSample: rfp.isSample ?? false,
     status: rfp.status,
     isCancelled: rfp.status === 'cancelled',
   };

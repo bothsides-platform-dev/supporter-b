@@ -17,6 +17,8 @@ import { normalizePhone } from './phoneOtpUtils';
 import { MERCHANT_TIERS } from '@/lib/types/bid';
 import { getAuthService } from '@/lib/server/services/auth';
 import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
+import { migrateSignupSource } from '@/lib/types/signup-source';
+import { SignupSourceInput } from './_signupSourceInput';
 
 const PgProfileInput = z
   .object({
@@ -53,6 +55,7 @@ const Input = z
     wsName: z.string().min(1).max(200).optional(),
     bizProfile: BizProfileInput.optional(),
     pgProfile: PgProfileInput.optional(),
+    signupSource: SignupSourceInput.optional(),
   })
   .strict()
   .refine(
@@ -103,6 +106,9 @@ export async function signupCompleteAction(
     wsName: parsed.data.wsName,
     bizProfile: parsed.data.bizProfile,
     pgProfile: parsed.data.pgProfile,
+    signupSource: parsed.data.signupSource
+      ? migrateSignupSource(parsed.data.signupSource)
+      : undefined,
   });
 
   if (!result.ok) return result;

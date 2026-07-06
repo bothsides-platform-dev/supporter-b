@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, integer, jsonb } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 export const users = pgTable('users', {
@@ -34,6 +34,14 @@ export const users = pgTable('users', {
   // System-managed master accounts (pre-seeded PG company admins).
   // Hidden from all member-list UIs; never shown to end users.
   isSystemAccount: boolean('is_system_account').notNull().default(false),
+  // 유저 단위 온보딩 상태의 버전드 JSONB 문서 (lib/types/onboarding.ts UserOnboardingV1).
+  // rfps.current_terms 패턴과 동일 — 새 온보딩 태스크는 DDL 없이 타입 수정만.
+  onboarding: jsonb('onboarding').notNull().default(sql`'{}'::jsonb`),
+  // First-touch 가입 유입 경로(UTM/외부 referrer/랜딩 경로) 버전드 JSONB 문서
+  // (lib/types/signup-source.ts SignupSourceV1). onboarding 과 동일 패턴 — 새 유입
+  // 필드 추가는 DDL 없이 타입 수정만. 모든 가입 경로(초대/canonical-PG 합류 포함)에서
+  // 채워진다 — lib/auth/finalize-signup.ts 참조.
+  signupSource: jsonb('signup_source').notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   // Auto-maintained by the `set_updated_at` trigger (see 0000 migration).

@@ -40,7 +40,7 @@ import {
 } from 'react';
 
 import { getCentrifuge } from '@/lib/realtime/centrifuge-client';
-import { managedSubscribe } from '@/lib/realtime/managedSubscribe';
+import { managedSubscribe } from '@/lib/realtime/managed-subscribe';
 import {
   deriveActivity,
   onlineUserIds,

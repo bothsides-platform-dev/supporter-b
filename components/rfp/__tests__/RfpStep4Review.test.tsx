@@ -260,6 +260,43 @@ describe('RfpStep4Review', () => {
     expect(screen.getAllByText('미입력').length).toBeGreaterThan(0);
   });
 
+  describe('신규 계약: 존재할 수 없는 PG 이력 행 숨김', () => {
+    const HIDDEN_ROWS = ['연간 거래액', '카드 수수료', '월 정산한도', '보증보험', '정산주기'];
+
+    it("contractType='new' 이면 5개 PG 이력 요약 행이 표시되지 않는다", () => {
+      // 갱신에서 입력하다 신규로 전환한 stale 값이 남아 있어도 요약에 새면 안 된다
+      useRfpDraftStore.setState({
+        contractType: 'new',
+        annualPgVolume: '10억',
+        currentFeeRate: '3.4',
+        currentSettlementLimit: '100000000',
+        currentGuaranteeInsurance: '30000000',
+        currentSettlementCycle: 'D+2',
+      });
+      renderComponent();
+      for (const label of HIDDEN_ROWS) {
+        expect(screen.queryByText(label)).not.toBeInTheDocument();
+      }
+      // stale 값도 요약에 노출되지 않는다 (서버가 strip 하므로)
+      expect(screen.queryByText('3.4%')).not.toBeInTheDocument();
+    });
+
+    it("contractType='renewal' 이면 5개 PG 이력 요약 행이 표시된다", () => {
+      useRfpDraftStore.setState({ contractType: 'renewal' });
+      renderComponent();
+      for (const label of HIDDEN_ROWS) {
+        expect(screen.getByText(label)).toBeInTheDocument();
+      }
+    });
+
+    it('배송 및 서비스 기간·현재 솔루션 행은 신규 계약에서도 유지된다', () => {
+      useRfpDraftStore.setState({ contractType: 'new' });
+      renderComponent();
+      expect(screen.getByText('배송 및 서비스 기간')).toBeInTheDocument();
+      expect(screen.getByText('현재 솔루션')).toBeInTheDocument();
+    });
+  });
+
   describe('마감일 필수 마커', () => {
     it('마감일 비어있으면 RequiredMark가 "필수"를 표시한다', () => {
       // deadline: '' (resetStore 기본값)

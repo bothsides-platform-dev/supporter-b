@@ -14,7 +14,7 @@ import type { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, X } from 'lucide-react';
 
 import { IconButton } from '@/components/primitives/IconButton';
-import { useIsLgUp } from '@/hooks/use-lg-up';
+import { useIsLgUp } from '@/lib/hooks/useIsLgUp';
 import { DealRoomChatFab } from './DealRoomChatFab';
 import { DealRoomProvider } from './DealRoomContext';
 
