@@ -77,4 +77,23 @@ describe('useAnimatedNumber', () => {
     });
     expect(result.current).toBe(50);
   });
+
+  it('still animates toward the new target when the OS prefers reduced motion (landing ignores the preference)', () => {
+    stubMatchMedia(true);
+    const { result, rerender } = renderHook(({ target }) => useAnimatedNumber(target, 200), {
+      initialProps: { target: 0 },
+    });
+    rerender({ target: 100 });
+
+    act(() => {
+      vi.advanceTimersByTime(100); // halfway through the 200ms duration
+    });
+    expect(result.current).toBeGreaterThan(0);
+    expect(result.current).toBeLessThan(100);
+
+    act(() => {
+      vi.advanceTimersByTime(200); // past the end
+    });
+    expect(result.current).toBe(100);
+  });
 });
