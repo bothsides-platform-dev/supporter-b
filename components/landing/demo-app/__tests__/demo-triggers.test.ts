@@ -4,6 +4,7 @@ import {
   demoCursorHint,
   pgDemoTriggerSelector,
   pgDemoCursorHint,
+  pgDemoShowsGuideCursor,
   DEMO_WINDOW_TRANSITION,
 } from '../demo-triggers';
 
@@ -94,6 +95,18 @@ describe('pgDemoCursorHint', () => {
 
   it('정의되지 않은 페이지는 빈 문구를 돌려준다', () => {
     expect(pgDemoCursorHint(5)).toBe('');
+  });
+});
+
+describe('pgDemoShowsGuideCursor', () => {
+  it('진행 단계(1·2·3)에서는 가이드 커서를 표시한다', () => {
+    expect(pgDemoShowsGuideCursor(1)).toBe(true);
+    expect(pgDemoShowsGuideCursor(2)).toBe(true);
+    expect(pgDemoShowsGuideCursor(3)).toBe(true);
+  });
+
+  it('종착 단계(메시지=4)는 클릭해도 진행이 없어 커서·힌트를 표시하지 않는다', () => {
+    expect(pgDemoShowsGuideCursor(4)).toBe(false);
   });
 });
 

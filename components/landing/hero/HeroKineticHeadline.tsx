@@ -56,14 +56,23 @@ function MaskedLine({ children, delay }: { children: ReactNode; delay: number })
 
 // 다크 오프닝 씬 위의 헤드라인 — 색은 inverse-* 토큰(라이트 테마에서 near-black 위 라이트 텍스트,
 // 다크 테마에서는 반전)으로 해석돼 파이널 CTA 인버티드 섹션과 같은 규칙을 따른다.
-export function HeroKineticHeadline() {
+// 카피는 구매사 기본값을 프롭으로 두어(값 미지정 시 기존과 동일) PG 히어로가 자기 문구로 재사용한다.
+export function HeroKineticHeadline({
+  line1Words = LINE1_WORDS,
+  phrases = TYPING_VALUES,
+  suffix = '만듭니다.',
+}: {
+  line1Words?: string[];
+  phrases?: string[];
+  suffix?: string;
+} = {}) {
   return (
     <div className="flex flex-col gap-0">
       <h1 className={`${headlineCls} text-[var(--md-sys-color-inverse-on-surface)]`}>
-        {LINE1_WORDS.map((word, i) => (
+        {line1Words.map((word, i) => (
           <Fragment key={word}>
             <MaskedWord word={word} delay={0.08 + i * 0.07} />
-            {i < LINE1_WORDS.length - 1 ? ' ' : null}
+            {i < line1Words.length - 1 ? ' ' : null}
           </Fragment>
         ))}
       </h1>
@@ -72,12 +81,12 @@ export function HeroKineticHeadline() {
       >
         <MaskedLine delay={0.32}>
           <ScrambleText
-            phrases={TYPING_VALUES}
+            phrases={phrases}
             className="whitespace-nowrap text-[var(--md-sys-color-inverse-primary)]"
           />
         </MaskedLine>
         <MaskedLine delay={0.32}>
-          <span className="text-[var(--md-sys-color-inverse-on-surface)]">만듭니다.</span>
+          <span className="text-[var(--md-sys-color-inverse-on-surface)]">{suffix}</span>
         </MaskedLine>
       </div>
     </div>
