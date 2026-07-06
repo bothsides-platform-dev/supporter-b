@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { EmailVerifySection } from './email-verify-section';
+import { EmailVerifySection } from './EmailVerifySection';
 
 /**
  * 가입 후 이메일 인증 전용 화면 — /pending-approval 이 *미인증* 유저에게 보여준다.

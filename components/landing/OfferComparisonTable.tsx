@@ -3,78 +3,21 @@
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronRightIcon } from '@/components/icons';
-import { Chip, type ChipColor } from '@/components/primitives/Chip';
+import { Chip } from '@/components/primitives/Chip';
+import {
+  COLUMNS,
+  OFFERS,
+  STEP_COLUMNS,
+  STEP_ROW,
+} from '@/components/landing/offer-comparison-data';
 
 // 정적 예시 비교표 — 기존 'LiveBidSimulation'(스크롤 구동·토스트)을 대체한다.
 // 실제 견적이 아닌 표현용 예시값. 다수 PG사의 조건을 한 화면에서 비교하는 현실적인
 // B2B 뷰를 보여주되, AI 챗/결과 느낌을 배제한다. 표는 부모(SolutionShowcase)가 내려주는
 // activeStep 에 따라, 그 단계의 해결 포인트가 말하는 컬럼을 또렷하게 하이라이트한다.
-
-type Status = { label: string; color: ChipColor };
-
-type Offer = {
-  pg: string;
-  fee: string;
-  settlement: string;
-  guarantee: string;
-  joinFee: string;
-  approval: Status;
-  negotiable: Status;
-  recommended?: boolean;
-};
-
-const COLUMNS = [
-  'PG사',
-  '수수료',
-  '정산주기',
-  '보증보험',
-  '가입비',
-  '승인 상태',
-  '협의 가능 여부',
-] as const;
-
-const OFFERS: Offer[] = [
-  {
-    pg: 'PG A',
-    fee: '1.85%',
-    settlement: 'D+1',
-    guarantee: '면제',
-    joinFee: '면제',
-    approval: { label: '승인 가능', color: 'tertiary' },
-    negotiable: { label: '가능', color: 'tertiary' },
-    recommended: true,
-  },
-  {
-    pg: 'PG B',
-    fee: '1.95%',
-    settlement: 'D+1',
-    guarantee: '1천만원',
-    joinFee: '면제',
-    approval: { label: '검토중', color: 'warning' },
-    negotiable: { label: '가능', color: 'tertiary' },
-  },
-  {
-    pg: 'PG C',
-    fee: '2.10%',
-    settlement: 'D+2',
-    guarantee: '면제',
-    joinFee: '10만원',
-    approval: { label: '승인 가능', color: 'tertiary' },
-    negotiable: { label: '제한', color: 'surface' },
-  },
-];
+// 예시값·컬럼·단계 매핑은 offer-comparison-data.ts 에서 수정한다.
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
-
-// 컬럼 인덱스: 0 PG사 · 1 수수료 · 2 정산주기 · 3 보증보험 · 4 가입비 · 5 승인 상태 · 6 협의 가능 여부
-// 해결 포인트(SolutionShowcase) 단계 → 강조할 컬럼(들). 마지막 단계는 컬럼 대신 추천 PG '행'을 강조.
-const STEP_COLUMNS: readonly (readonly number[])[] = [
-  [1], // 투명한 수수료 견적
-  [2, 3, 4, 5], // 정산·보증·가입·승인 조건 비교
-  [6], // 추가 협의
-  [], // 최적 조건 = 추천 PG 행
-];
-const STEP_ROW: readonly (number | null)[] = [null, null, null, 0];
 
 // 서브픽셀 반올림/스냅으로 실제 끝인데도 scrollLeft가 미세하게 모자란 경우 페이드가
 // 깜빡이는 것을 막기 위한 여유값.

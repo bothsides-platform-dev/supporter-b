@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { managedSubscribe } from '@/lib/realtime/managedSubscribe';
+import { managedSubscribe } from '@/lib/realtime/managed-subscribe';
 
 function makeSub() {
   const handlers: Record<string, ((c: unknown) => void)[]> = {};

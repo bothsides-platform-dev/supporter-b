@@ -18,11 +18,11 @@ import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from './RfpStep3PgSelect';
 import { STEP_LABELS } from './wizard-steps';
 import { getWizardValidity, getFirstIncompleteStep } from './wizard-validation';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
+import { SOLUTION_VALUES } from '@/lib/rfp/solutions';
 
 const TOTAL_STEPS = STEP_LABELS.length;
 
-const SOLUTION_VALUES = ['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other'] as const;
 type SolutionValue = (typeof SOLUTION_VALUES)[number];
 
 type Props = {

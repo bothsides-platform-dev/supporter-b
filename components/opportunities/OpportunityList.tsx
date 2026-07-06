@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { OpportunityRequestDialog } from './OpportunityRequestDialog';
 import type { OpportunityListing } from '@/lib/types/pg-request';
-import { formatDate, formatDeadline } from '@/lib/format';
+import { formatDate, formatDeadline } from '@/lib/utils/format';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
 import { cn } from '@/lib/utils';
 import { Chip } from '@/components/primitives/Chip';

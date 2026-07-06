@@ -24,7 +24,7 @@ class ResizeObserverStub {
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 let mockIsMobile = false;
-vi.mock('@/hooks/use-mobile', () => ({
+vi.mock('@/lib/hooks/useIsMobile', () => ({
   useIsMobile: () => mockIsMobile,
 }));
 

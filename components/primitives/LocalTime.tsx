@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime } from '@/lib/utils/format';
 
 interface LocalTimeProps {
   iso: string;

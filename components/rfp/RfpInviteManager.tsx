@@ -12,10 +12,10 @@ import {
   addPgWorkspacesToRfpAction,
   sendDraftInvitationsAction,
 } from '@/lib/server/actions/rfp';
-import { useLazyPgWorkspaces } from '@/hooks/useLazyPgWorkspaces';
-import type { PgWorkspace } from '@/hooks/useLazyPgWorkspaces';
+import { useLazyPgWorkspaces } from '@/lib/hooks/useLazyPgWorkspaces';
+import type { PgWorkspace } from '@/lib/hooks/useLazyPgWorkspaces';
 import { toast } from '@/lib/toast';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 import type { InvitationStatus } from '@/lib/types/invitation';
 
 type InvitationView = {

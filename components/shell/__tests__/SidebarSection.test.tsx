@@ -29,7 +29,7 @@ vi.mock('@/lib/hooks/usePlatform', async (importOriginal) => ({
   useIsMac: () => false,
 }));
 
-vi.mock('@/hooks/use-mobile', () => ({
+vi.mock('@/lib/hooks/useIsMobile', () => ({
   useIsMobile: () => false,
 }));
 

@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/primitives/Button';
 import { requestRequoteAction } from '@/lib/server/actions/rfp';
 import { cn } from '@/lib/utils';
-import { endOfDayKstIso, kstDateOf } from '@/lib/deadline';
+import { endOfDayKstIso, kstDateOf } from '@/lib/utils/deadline';
 
 type Candidate = { pgWsId: string; name: string };
 

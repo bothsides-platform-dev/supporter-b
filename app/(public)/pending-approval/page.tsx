@@ -1,9 +1,9 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
-import { ApprovalWaitingScreen } from '@/components/pending-approval/approval-waiting-screen';
-import { EmailVerifyScreen } from '@/components/pending-approval/email-verify-screen';
-import { MembershipApprovalWaitingScreen } from '@/components/pending-approval/membership-approval-waiting-screen';
+import { ApprovalWaitingScreen } from '@/components/pending-approval/ApprovalWaitingScreen';
+import { EmailVerifyScreen } from '@/components/pending-approval/EmailVerifyScreen';
+import { MembershipApprovalWaitingScreen } from '@/components/pending-approval/MembershipApprovalWaitingScreen';
 
 export default async function PendingApprovalPage() {
   const session = await auth();

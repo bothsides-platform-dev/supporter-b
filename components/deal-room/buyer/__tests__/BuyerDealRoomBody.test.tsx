@@ -44,7 +44,7 @@ vi.mock('@/lib/server/actions/rfp', () => ({
 }));
 
 const mq = vi.hoisted(() => ({ lgUp: true }));
-vi.mock('@/hooks/use-lg-up', () => ({ useIsLgUp: () => mq.lgUp }));
+vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
 
 import { BuyerDealRoomBody } from '../BuyerDealRoomBody';
 import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';

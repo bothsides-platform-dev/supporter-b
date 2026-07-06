@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { HTTPError } from 'ky';
 import { uploadAttachment } from '@/lib/attachments/upload-client';
-import { Divider } from '@/components/ui/Divider';
+import { Divider } from '@/components/primitives/Divider';
 import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
@@ -27,7 +27,7 @@ import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
 import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';
-import { BID_WIZARD_STEPS } from './bid-wizard-steps';
+import { BID_WIZARD_STEPS, SERVER_ERROR_STEP } from './bid-wizard-steps';
 import { getBidWizardValidity, getFirstIncompleteBidStep } from './bid-wizard-validation';
 import { BidContextStrip } from './BidContextStrip';
 import { type ProposalState } from './BidStepProposal';
@@ -39,13 +39,6 @@ import { BidStepReviewContainer } from './BidStepReviewContainer';
 
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap((c) => c.methods);
 const TOTAL_STEPS = BID_WIZARD_STEPS.length;
-
-// 서버 거부코드 → 그 원인이 있는 단계. 없으면 step4(검토)에서 일반 메시지.
-// (UI상 정상 발생 불가한 PAYMENT_METHOD_NOT_REQUESTED 도 변조·직접호출 안전망으로 매핑.)
-const SERVER_ERROR_STEP: Record<string, number> = {
-  PAYMENT_METHOD_NOT_REQUESTED: 2,
-  INVALID_ATTACHMENT: 3,
-};
 
 type Props = {
   rfp: PgRfpDetailData['rfp'];

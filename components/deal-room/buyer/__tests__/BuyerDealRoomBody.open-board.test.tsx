@@ -49,7 +49,7 @@ vi.mock('@/lib/server/actions/rfp', () => ({
   cancelRfpAction: vi.fn(),
 }));
 
-vi.mock('@/hooks/use-lg-up', () => ({ useIsLgUp: () => true }));
+vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => true }));
 
 import { BuyerDealRoomBody } from '../BuyerDealRoomBody';
 import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';

@@ -8,7 +8,7 @@ vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')))
 
 import { http } from '@/lib/http'
 import type { ResponsePromise } from 'ky'
-import { useLazyPgWorkspaces } from '@/hooks/useLazyPgWorkspaces'
+import { useLazyPgWorkspaces } from '@/lib/hooks/useLazyPgWorkspaces'
 
 afterEach(() => {
   vi.clearAllMocks()

@@ -24,22 +24,15 @@ import {
   markerState,
 } from '@/lib/rfp/required-fields';
 import { cn } from '@/lib/utils';
+import { SOLUTION_OPTIONS } from '@/lib/rfp/solutions';
+import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 
 // 카드 수수료는 % 값이라 100을 넘을 수 없다 — 입력 단계에서 상한을 강제한다.
 const MAX_FEE_RATE_PCT = 100;
 
 const CONTRACT_TYPE_OPTIONS = [
-  { value: 'new', label: '신규 계약' },
-  { value: 'renewal', label: '갱신 계약' },
-] as const;
-
-const SOLUTION_OPTIONS = [
-  { value: 'cafe24', label: '카페24' },
-  { value: 'imweb', label: '아임웹' },
-  { value: 'makeshop', label: '메이크샵' },
-  { value: 'godo', label: '고도몰' },
-  { value: 'self', label: '자체 개발' },
-  { value: 'other', label: '기타' },
+  { value: 'new', label: CONTRACT_TYPE_LABELS.new },
+  { value: 'renewal', label: CONTRACT_TYPE_LABELS.renewal },
 ] as const;
 
 type Props = {

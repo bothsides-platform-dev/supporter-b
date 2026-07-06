@@ -11,7 +11,7 @@ import {
   type Bid,
   type PaymentMethod,
 } from '@/lib/types/bid';
-import { formatPct } from '@/lib/format';
+import { formatPct } from '@/lib/utils/format';
 
 function FeeMatrixTablesImpl({ active }: { active: Bid }) {
   return (

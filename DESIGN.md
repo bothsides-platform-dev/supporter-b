@@ -334,7 +334,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 > ③ 1회성일 것(재방문·재렌더로 반복 발화 금지),
 > ④ `prefers-reduced-motion: reduce`를 존중하고(컨페티 `disableForReducedMotion`),
 >    네온·그라데이션 없이 브랜드 컬러만 사용할 것.
-> 현재 등록된 발동 지점: **(1) 입점 심사 대기 화면**(`approval-waiting-screen`),
+> 현재 등록된 발동 지점: **(1) 입점 심사 대기 화면**(`ApprovalWaitingScreen`),
 > **(2) 견적 선정 완료 결과 화면**(`AwardResult`). 새 발동 지점을 추가할 때는
 > 위 4조건 충족을 PR에서 명시할 것.
 

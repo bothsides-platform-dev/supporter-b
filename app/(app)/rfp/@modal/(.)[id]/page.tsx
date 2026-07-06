@@ -10,7 +10,7 @@ import { buyerClosedCounterpartyIds } from '@/lib/rfp/closed-counterparties';
 import { BuyerDealRoomBody } from '@/components/deal-room/buyer/BuyerDealRoomBody';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
-import { rfpStatusChip } from '@/lib/rfp-status';
+import { rfpStatusChip } from '@/lib/rfp/rfp-status';
 import { SampleBuyerDealRoom } from '@/components/onboarding/SampleBuyerDealRoom';
 import { SAMPLE_RFP_CODE, sampleBuyerRfp } from '@/lib/onboarding/fixtures';
 

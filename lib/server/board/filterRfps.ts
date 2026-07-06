@@ -4,7 +4,7 @@
 import type { RFP } from '@/lib/types/rfp';
 import { filterRfpsByParam, filterInboxRowsByParam } from '@/lib/server/status-filter';
 import type { InboxRow } from '@/components/inbox/InboxList';
-import { kstDateOf } from '@/lib/deadline';
+import { kstDateOf } from '@/lib/utils/deadline';
 
 export type BoardView = 'table' | 'board';
 
