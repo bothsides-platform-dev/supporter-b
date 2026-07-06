@@ -155,7 +155,9 @@ export async function createRfpAction(
       customPaymentMethods: parsed.data.customPaymentMethods,
       send: parsed.data.send,
       boardVisible: parsed.data.boardVisible,
-      currentFeeVisibleToPg: parsed.data.currentFeeVisibleToPg,
+      // 신규 계약은 현재 수수료 자체가 strip 되므로 PG 공개 여부도 공개(true)로 강제한다.
+      // 그렇지 않으면 존재하지 않는 fee 를 가리키는 hiddenFromPg strip 경로가 남는다.
+      currentFeeVisibleToPg: isNewContract ? true : parsed.data.currentFeeVisibleToPg,
       contractType: parsed.data.contractType,
       bizProfileMode: parsed.data.bizProfileMode,
       bizNoOverride: parsed.data.bizNoOverride,

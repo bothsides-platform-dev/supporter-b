@@ -658,6 +658,26 @@ describe('createRfpAction', () => {
     expect(terms.solutionDetail).toBe('ABC몰');
   });
 
+  it('신규 계약이면 PG 비공개(currentFeeVisibleToPg=false)여도 hiddenFromPg 에 fee 경로를 남기지 않는다', async () => {
+    // 갱신에서 수수료 비공개로 설정하다 신규로 전환한 시나리오 — 수수료가 strip 되므로
+    // 존재하지 않는 fee 를 가리키는 orphan strip 경로가 남으면 안 된다.
+    const r = await createRfpAction({
+      title: '신규 계약 fee 가시성 strip 검증',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      contractType: 'new',
+      currentFeeRate: '3.4%',
+      currentFeeVisibleToPg: false,
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.hiddenFromPg ?? []).not.toContain(STRIP_PATH_FEE_RATE);
+    expect(migrateCurrentTerms(row.currentTerms).feeRate).toBeUndefined();
+  });
+
   it('스킴 없는 websiteUrl 은 https:// 를 붙여 저장한다', async () => {
     const r = await createRfpAction({
       title: '스킴 없는 홈페이지 테스트',

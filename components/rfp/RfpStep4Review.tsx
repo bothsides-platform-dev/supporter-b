@@ -167,24 +167,29 @@ export function RfpStep4Review({
           <ReviewRow label="제목" value={draft.title} />
           <ReviewRow label="홈페이지" value={draft.websiteUrl} />
           <ReviewRow label="주요 상품" value={draft.mainProducts} />
-          <ReviewRow label="연간 거래액" value={draft.annualPgVolume ? (formatKrwReadable(Number(draft.annualPgVolume)) || draft.annualPgVolume) : ''} />
-          <ReviewRow
-            label={
-              draft.currentFeeRate && !draft.currentFeeVisibleToPg
-                ? '카드 수수료 (PG 비공개)'
-                : '카드 수수료'
-            }
-            value={formatFeeRateDisplay(draft.currentFeeRate)}
-          />
-          <ReviewRow label="월 정산한도" value={formatKrwField(draft.currentSettlementLimit)} />
-          <ReviewRow
-            label="보증보험"
-            value={formatKrwField(draft.currentGuaranteeInsurance)}
-          />
-          <ReviewRow
-            label="정산주기"
-            value={draft.currentSettlementCycle}
-          />
+          {/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어(서버에서도 strip) 요약에서 숨긴다. */}
+          {draft.contractType !== 'new' && (
+            <>
+              <ReviewRow label="연간 거래액" value={draft.annualPgVolume ? (formatKrwReadable(Number(draft.annualPgVolume)) || draft.annualPgVolume) : ''} />
+              <ReviewRow
+                label={
+                  draft.currentFeeRate && !draft.currentFeeVisibleToPg
+                    ? '카드 수수료 (PG 비공개)'
+                    : '카드 수수료'
+                }
+                value={formatFeeRateDisplay(draft.currentFeeRate)}
+              />
+              <ReviewRow label="월 정산한도" value={formatKrwField(draft.currentSettlementLimit)} />
+              <ReviewRow
+                label="보증보험"
+                value={formatKrwField(draft.currentGuaranteeInsurance)}
+              />
+              <ReviewRow
+                label="정산주기"
+                value={draft.currentSettlementCycle}
+              />
+            </>
+          )}
           <ReviewRow
             label="배송 및 서비스 기간"
             value={draft.deliveryServicePeriod}
