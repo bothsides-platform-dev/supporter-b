@@ -36,3 +36,21 @@ admin.{$APP_DOMAIN} {
 
 	reverse_proxy 127.0.0.1:4242
 }
+
+# --- Domain migration: supporter-b.com -> support-b.com (temporary) ---------
+# APP_DOMAIN on the server must be support-b.com by the time this reloads.
+# Old domain's DNS must stay pointed at this server or the redirect (and its
+# cert renewal) breaks. {$APP_DOMAIN} below resolves to the NEW domain via env,
+# so these blocks stay correct even if APP_DOMAIN changes again later.
+# Remove once supporter-b.com traffic has died down (check access logs).
+supporter-b.com {
+	redir https://{$APP_DOMAIN}{uri} permanent
+}
+
+partner.supporter-b.com {
+	redir https://partner.{$APP_DOMAIN}{uri} permanent
+}
+
+admin.supporter-b.com {
+	redir https://admin.{$APP_DOMAIN}{uri} permanent
+}
