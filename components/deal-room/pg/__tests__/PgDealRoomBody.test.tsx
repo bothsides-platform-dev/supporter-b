@@ -21,7 +21,7 @@ vi.mock('@/lib/server/actions/bid/withdrawBidAction', () => ({ withdrawBidAction
 // use-lg-up mock — PgDealRoomBody 자신은 lgUp 을 쓰지 않지만
 // DealRoomActionRail/Center 가 렌더되는 컨텍스트에서 안전하게 고정.
 const mq = vi.hoisted(() => ({ lgUp: true }));
-vi.mock('@/hooks/use-lg-up', () => ({ useIsLgUp: () => mq.lgUp }));
+vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
 
 import { PgDealRoomBody } from '../PgDealRoomBody';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';

@@ -11,7 +11,7 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 // 브레이크포인트를 테스트에서 제어 — 기본 lg 이상(aside).
 const mq = vi.hoisted(() => ({ lgUp: true }));
-vi.mock('@/hooks/use-lg-up', () => ({ useIsLgUp: () => mq.lgUp }));
+vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
 
 import { DealRoomShell } from '../DealRoomShell';
 
