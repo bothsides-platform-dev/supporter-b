@@ -121,3 +121,48 @@ describe('BuyerSignupEmailPage — 이메일 blur 중복 검사', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 });
+
+describe('BuyerSignupEmailPage — 회사 이메일 권장 안내', () => {
+  it('입력 전에는 중립 힌트를 보여준다', () => {
+    render(<BuyerSignupEmailPage />);
+    expect(screen.getByText('회사 이메일을 입력해주세요')).toBeInTheDocument();
+  });
+
+  it('무료 도메인 입력 시 개인 이메일 경고로 전환한다', async () => {
+    const user = userEvent.setup();
+    render(<BuyerSignupEmailPage />);
+
+    await user.type(screen.getByLabelText('이메일'), 'kim@gmail.com');
+
+    expect(screen.getByText(/별도 심사 과정이 추가될 수 있어요/)).toBeInTheDocument();
+  });
+
+  it('취득 이메일 에러가 표시되면 안내를 숨긴다', async () => {
+    mockCheckEmail.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+    const user = userEvent.setup();
+    render(<BuyerSignupEmailPage />);
+
+    await user.type(screen.getByLabelText('이메일'), 'taken@gmail.com');
+    await user.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText(/이미 가입된 이메일입니다/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/별도 심사 과정이 추가될 수 있어요/)).not.toBeInTheDocument();
+  });
+
+  it('마스터/운영자 이메일 에러가 표시되면 안내를 숨긴다', async () => {
+    mockCheckEmail.mockResolvedValue({ ok: false, error: 'MASTER_EMAIL' });
+    const user = userEvent.setup();
+    render(<BuyerSignupEmailPage />);
+
+    await user.type(screen.getByLabelText('이메일'), 'op@gmail.com');
+    await user.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText(/이 이메일로는 가입할 수 없어요/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/별도 심사 과정이 추가될 수 있어요/)).not.toBeInTheDocument();
+    expect(screen.queryByText('회사 이메일을 입력해주세요')).not.toBeInTheDocument();
+  });
+});

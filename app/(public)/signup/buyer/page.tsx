@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Button } from '@/components/primitives/Button';
 import { AgreementCheckboxes } from '@/components/auth/AgreementCheckboxes';
 import { PasswordField } from '@/components/auth/PasswordField';
+import { SignupEmailGuide } from '@/components/auth/SignupEmailGuide';
 import { SignupStepper } from '@/components/auth/SignupStepper';
 import { useSignupDraftStore } from '@/lib/stores/signup-draft';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
@@ -155,6 +156,7 @@ function BuyerSignupEmailForm() {
               이 이메일로는 가입할 수 없어요. 다른 이메일을 사용해 주세요.
             </p>
           )}
+          <SignupEmailGuide email={emailInput} hidden={emailTaken || masterEmail} />
         </div>
 
         <PasswordField
