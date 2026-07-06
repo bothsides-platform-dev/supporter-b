@@ -2,7 +2,7 @@
 
 import { Fragment, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { BrandMark } from '@/components/primitives/Logo';
+import { SupportBWordmark } from '@/components/primitives/Logo';
 import { EASE_OUT } from '@/lib/landing/ease';
 import { ScrambleText } from './ScrambleText';
 
@@ -14,26 +14,15 @@ const TYPING_VALUES = [
   '5분짜리 경쟁 입찰을',
 ];
 
-// "B" 글자 자리에 브랜드 마크를 넣은 로고 락업. 실제 "B" 텍스트는 sr-only로 남겨
-// 스크린리더·텍스트 검색(toHaveTextContent 등)에서는 그대로 "B"로 읽히고,
-// 화면에는 마크 아이콘이 대신 보인다. 아이콘은 폰트 크기에 비례하는 em 단위라
-// 헤드라인의 반응형 clamp() 크기를 그대로 따라간다.
+// 헤드라인용 서포트B 워드마크. 파티클까지 같은 단어로 묶어
+// "서포트B를/로"가 줄바꿈 없이 한 덩어리로 읽히게 한다.
 export function BrandWordB({ particle }: { particle: string }) {
   return (
-    <span className="inline-flex items-baseline">
-      <span className="sr-only">B</span>
-      <BrandMark
-        size="0.82em"
-        className="inline-block translate-y-[0.15em]"
-        colorVar="--md-sys-color-inverse-on-surface"
-        strokeWidth={100}
-      />
-      {particle}
-    </span>
+    <SupportBWordmark particle={particle} colorVar="--md-sys-color-inverse-on-surface" />
   );
 }
 
-const LINE1_WORDS: ReactNode[] = ['서포트', <BrandWordB key="b" particle="를" />, '통해'];
+const LINE1_WORDS: ReactNode[] = [<BrandWordB key="support-b" particle="를" />, '통해'];
 
 const headlineCls =
   'text-[clamp(30px,5.5vw,72px)] max-md:text-[clamp(22px,7.2vw,34px)] leading-[1.06] tracking-[-0.028em] font-medium break-keep';

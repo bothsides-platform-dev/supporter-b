@@ -46,6 +46,26 @@ export function BrandMark({
   )
 }
 
+export function SupportBWordmark({
+  particle = '',
+  className,
+  colorVar = '--md-sys-color-on-surface',
+}: {
+  particle?: string
+  className?: string
+  colorVar?: string
+}) {
+  return (
+    <span
+      className={cn('inline-flex items-baseline whitespace-nowrap', className)}
+      style={{ color: `var(${colorVar})` }}
+    >
+      <span className="font-sans font-black leading-none tracking-[-0.04em]">서포트 B</span>
+      {particle ? <span>{particle}</span> : null}
+    </span>
+  )
+}
+
 export function Logo({ variant = 'default', className, href }: LogoProps) {
   if (variant === 'compact') {
     return (
@@ -80,9 +100,7 @@ export function Logo({ variant = 'default', className, href }: LogoProps) {
       )}
     >
       <BrandMark />
-      <span className="font-sans font-black text-[22px] leading-none tracking-[-0.04em] whitespace-nowrap text-[var(--md-sys-color-on-surface)]">
-        서포트 B
-      </span>
+      <SupportBWordmark className="text-[22px]" />
     </Link>
   )
 }
