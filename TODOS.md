@@ -1,10 +1,5 @@
 # TODOS
 
-## Brand
-
-### OG 이미지(app/opengraph-image.png)가 2세대 전 구형 디자인 (P2)
-소셜/채팅 링크 미리보기 이미지가 PR#373 이전의 구형 원형 "P" 마크 + "Supporter B" 워드마크 + `SUPPORTER-B.STORE` 구 도메인을 그대로 노출 중 — 현행 favicon/로고와 브랜드 불일치. `scripts/generate-og-image.ts`도 같은 구형 디자인이라 새 BrandMark path(`lib/brand/brand-mark-path.ts`) + '서포트 B' 워드마크 + support-b.com으로 재디자인 후 재생성 필요. 병행 권장: `app/icon.svg`의 path `d`와 SSOT 상수를 비교하는 드리프트 가드 테스트(수동 동기화 파일이라 무보호). (v0.2.73.1 favicon 재생성 시 사용자 결정으로 범위 제외, 2026-07-07)
-
 ## Deal Room / Award
 
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
