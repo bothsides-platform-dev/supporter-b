@@ -24,9 +24,9 @@ vi.mock('motion/react', () => {
 import { PgHeroSection } from '../PgHeroSection';
 
 describe('PgHeroSection — PG 파트너 랜딩 히어로 (구매사 히어로 풀 패리티)', () => {
-  it('브랜드 라인(서포트 B로)을 h1로 렌더한다', () => {
+  it('브랜드 라인(서포트비로)을 h1로 렌더한다', () => {
     render(<PgHeroSection />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('서포트 B로');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('서포트비로');
   });
 
   it('첫 순환 문구를 초기 정착 텍스트로 렌더한다', () => {
