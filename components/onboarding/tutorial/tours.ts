@@ -39,3 +39,34 @@ export const buyerCompareTour: CoachmarkStep[] = [
     body: '이 버튼으로 원하는 PG를 최종 선정할 수 있어요.',
   },
 ];
+
+// pg 튜토리얼(PgTutorialFlow) 코치마크 투어 데이터. target은 RfpBriefPanel/BidWizard에
+// 심어둔 data-coachmark 속성과 매칭된다.
+export const pgBriefTour: CoachmarkStep[] = [
+  {
+    target: 'tutorial-brief-panel',
+    title: '요청 조건을 확인해요',
+    placement: 'right',
+    body: '구매사가 보낸 견적 요청의 조건이에요. 확인 후 견적을 작성해요.',
+  },
+];
+
+export const pgWriteTour: CoachmarkStep[] = [
+  {
+    target: 'tutorial-bid-form',
+    title: '견적을 작성해요',
+    placement: 'right',
+    body: '정산조건·수수료를 입력하는 실제 화면이에요.',
+  },
+];
+
+// 제출 버튼(tutorial-bid-submit)은 위저드 4단계(검토·발송)에만 렌더된다 — buyer의
+// buyerSubmitTour와 같은 이유로, 4단계 도달 시점에 PgTutorialFlow가 별도로 띄운다.
+export const pgSubmitTour: CoachmarkStep[] = [
+  {
+    target: 'tutorial-bid-submit',
+    title: '작성이 끝나면 보내요',
+    placement: 'top',
+    body: '내용을 확인하고 이 버튼으로 견적을 보내요.',
+  },
+];
