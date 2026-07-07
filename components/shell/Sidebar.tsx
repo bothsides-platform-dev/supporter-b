@@ -91,11 +91,13 @@ function SidebarBody({
   return (
     <>
       <SidebarHeader className="flex flex-col gap-0 p-2 pb-1">
-        {/* 아이콘 고정 + 워드마크는 글자 단위 stagger 애니메이션 (SidebarBrand). overflow-hidden으로 접힘 시 글자 spill 방지 */}
-        <div className="flex h-9 items-center px-1 overflow-hidden">
+        {/* 아이콘 고정 + 워드마크는 글자 단위 stagger 애니메이션 (SidebarBrand). overflow-hidden으로 접힘 시 글자 spill 방지(기본 justify-start로
+            B 마크가 좌측에 고정되어 접힘 시에도 잘리지 않고 보임 — WorkspaceSwitcher와 달리 텍스트를 숨기지 않고 opacity로만 접기 때문에 justify-center를 쓰지 않는다).
+            px-2로 아래 WorkspaceSwitcher(px-2)와 좌측 아이콘·텍스트 열을 맞춘다(B 마크·워크스페이스 아바타 좌엣지 정렬). */}
+        <div className="flex h-9 items-center px-2 overflow-hidden">
           <SidebarBrand />
         </div>
-        <div className="border-b border-[var(--md-sys-color-outline-variant)] group-data-[collapsible=icon]:hidden mb-1" />
+        <div className="border-b border-[var(--md-sys-color-outline-variant)] group-data-[collapsible=icon]:hidden mt-0.5 mb-1" />
         <div className="min-w-0">
           <WorkspaceSwitcher current={current} workspaces={workspaces} isMaster={isMaster} />
         </div>
