@@ -128,6 +128,17 @@ describe('PgLanding — PG 전용 랜딩', () => {
     expect(faq.mainEntity.length).toBe(7);
   });
 
+  it('Organization JSON-LD 가 브랜드 별칭(alternateName)을 포함한다', () => {
+    const { container } = render(<PgLanding />);
+    const scripts = container.querySelectorAll('script[type="application/ld+json"]');
+    const schemas = Array.from(scripts).map((s) => JSON.parse(s.textContent!));
+    const org = schemas.find((s) => s['@type'] === 'Organization');
+    expect(org).toBeTruthy();
+    expect(org.name).toBe('서포트 B');
+    expect(org.alternateName).toContain('서포트비');
+    expect(org.description).toBe('PG 영업담당자를 위한 신규 가맹점 인바운드 채널');
+  });
+
   it('일러스트(webp) 이미지를 렌더하지 않는다', () => {
     const { container } = render(<PgLanding />);
     expect(container.querySelectorAll('img')).toHaveLength(0);

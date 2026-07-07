@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.77.0] - 2026-07-07
+
+### Added
+
+- **'서포트비'로 검색해도 서포트 B를 찾을 수 있어요**: ChatGPT·퍼플렉시티 같은 AI 검색과 일반 검색엔진이 한글 음차 표기 '서포트비'(그리고 '서포트B', 'Support B', 'Supporter B')를 공식 브랜드 '서포트 B'의 별칭으로 인식하도록 했어요. AI 크롤러용 소개 문서(llms.txt·llms-full.txt), 검색엔진용 구조화 데이터(JSON-LD alternateName), 메타 키워드에 별칭을 명시하고, 랜딩 푸터의 브랜드 표기에도 '서포트 B(서포트비) CORP.'로 병기했어요.
+
+### Fixed
+
+- **랜딩 페이지 구조화 데이터 삽입을 더 안전하게 만들었어요 (화면 변화 없음)**: 검색엔진용 JSON-LD를 페이지에 넣을 때 특수 문자를 이스케이프하도록 해, 앞으로 FAQ 등 문구에 어떤 내용이 들어와도 스크립트 태그가 깨지지 않아요.
+
 ## [0.2.75.4] - 2026-07-07
 
 ### Changed
