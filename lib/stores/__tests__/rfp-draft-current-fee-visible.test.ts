@@ -24,7 +24,7 @@ describe('rfp-draft store — 현재 카드 수수료 PG 노출 필드', () => {
   it('currentFeeVisibleToPg 없는 v5 draft를 복원하면 migrate가 노출(true)로 백필한다', async () => {
     // 진행 중이던 v5 draft(필드 없음, boardVisible=false)를 localStorage에 심는다.
     localStorage.setItem(
-      'supporter-b-rfp-draft',
+      'support-b-rfp-draft',
       JSON.stringify({ state: { title: '복원된 견적', boardVisible: false }, version: 5 }),
     );
     await useRfpDraftStore.persist.rehydrate();
@@ -32,6 +32,6 @@ describe('rfp-draft store — 현재 카드 수수료 PG 노출 필드', () => {
     expect(useRfpDraftStore.getState().currentFeeVisibleToPg).toBe(true);
     // blob을 실제로 읽었음을 증명 — boardVisible=false는 그대로 보존된다.
     expect(useRfpDraftStore.getState().boardVisible).toBe(false);
-    localStorage.removeItem('supporter-b-rfp-draft');
+    localStorage.removeItem('support-b-rfp-draft');
   });
 });

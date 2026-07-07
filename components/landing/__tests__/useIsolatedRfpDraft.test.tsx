@@ -3,7 +3,7 @@ import { render } from '@testing-library/react';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { useIsolatedRfpDraft } from '../useIsolatedRfpDraft';
 
-const KEY = 'supporter-b-rfp-draft';
+const KEY = 'support-b-rfp-draft';
 
 function Harness() {
   useIsolatedRfpDraft();

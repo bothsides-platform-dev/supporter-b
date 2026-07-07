@@ -157,8 +157,11 @@ export class TeamChatService {
       const nameById = new Map(roster.map((r) => [r.userId, r.name]));
       const rosterIdSet = new Set(roster.map((r) => r.userId));
       // 팬아웃 수신자는 화면엔 숨겨지지만 실제 알림을 읽는 master/ops 계정까지 포함해야
-      // 하므로 표시용 roster 가 아닌 알림 수신자 목록(memberUserIds)을 쓴다.
-      const recipientIds = await this.wsRepo.memberUserIds(actor.workspaceId, tx);
+      // 하므로 표시용 roster 가 아닌 승인된(approved) 알림 수신자 목록을 쓴다.
+      // 승인 대기(pending_approval) 멤버는 앱에 접근할 수 없어 알림 대상에서도 제외한다.
+      const recipients = await this.wsRepo.approvedMemberRecipients(actor.workspaceId, tx);
+      const recipientIds = recipients.map((r) => r.userId);
+      const emailByUserId = new Map(recipients.map((r) => [r.userId, r.email]));
       const { userIds: mentionedRaw, all } = extractMentions(body);
       // 서버에서 멤버십 재검증 — 이름 멘션은 화면 멤버(roster)만 허용하고 비멤버 토큰은
       // 드롭한다(크로스팀 누출/알림 방지). @전체는 숨은 master 포함 전체 수신자가 대상.
@@ -212,10 +215,10 @@ export class TeamChatService {
         // 시점에만 enqueue(outbox dedupeKey UNIQUE 로 coalesce). 본문은 placeholder;
         // flushTeamChatDigests 가 발송 시 재계산·읽음 단락.
         if (!hadGeneric && !hadMention) {
-          const member = await this.userRepo.findById(memberId, tx);
-          if (member?.email) {
+          const memberEmail = emailByUserId.get(memberId);
+          if (memberEmail) {
             await notify(tx, {
-              recipients: [{ userId: memberId, workspaceId: actor.workspaceId, email: member.email }],
+              recipients: [{ userId: memberId, workspaceId: actor.workspaceId, email: memberEmail }],
               channels: ['email'],
               type: 'team_chat.message',
               title: '',

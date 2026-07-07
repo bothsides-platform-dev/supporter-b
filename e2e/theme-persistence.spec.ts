@@ -11,7 +11,7 @@
  */
 import { test, expect } from 'playwright/test';
 
-const THEME_KEY = 'supporter-b-theme';
+const THEME_KEY = 'support-b-theme';
 
 test.describe('theme persistence', () => {
   test.beforeEach(async ({ page }) => {

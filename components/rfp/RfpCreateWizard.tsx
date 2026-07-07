@@ -167,7 +167,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
         onGuestSubmit();
         return;
       }
-      localStorage.setItem('supporter-b-rfp-next', '/rfp-create');
+      localStorage.setItem('support-b-rfp-next', '/rfp-create');
       router.push('/signup/buyer');
       return;
     }
