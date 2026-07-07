@@ -13,6 +13,7 @@ import { RfpStep4Review } from './RfpStep4Review';
 
 import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rfp';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { restoreOrphanedTutorialDraftBackup } from '@/components/onboarding/tutorial/useIsolatedRfpDraft';
 import { toast } from '@/lib/toast';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from './RfpStep3PgSelect';
@@ -35,11 +36,15 @@ type Props = {
   onStepChange?: (step: number) => void;
   // guest 종결 "보내기" 오버라이드 (랜딩 데모). 없으면 기존 draft 핸드오프 동작.
   onGuestSubmit?: () => void;
+  // 가상 샘플 온보딩(buyer 튜토리얼) 종결 "보내기" 오버라이드 — 주어지면 실제
+  // createRfpAction/draft 핸드오프 대신 이 콜백만 호출한다(fixture rfp에는 실제
+  // PG/워크스페이스가 없어 실 액션을 태우면 깨진다). BidWizard의 onSampleSubmit과 대칭.
+  onSampleSubmit?: () => void;
   // 내부 네비(사이드바/진행바/스텝 헤더)를 숨긴다 — 랜딩 데모가 자체 스테퍼를 제공할 때.
   hideNav?: boolean;
 };
 
-export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step, onStepChange, onGuestSubmit, hideNav }: Props) {
+export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav }: Props) {
   const router = useRouter();
   const draft = useRfpDraftStore();
 
@@ -57,6 +62,10 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
 
   // 마운트 시 localStorage draft의 stale 데이터 정리.
   useEffect(() => {
+    // 고아 스냅샷 가드 — 튜토리얼이 비정상 종료돼 sessionStorage에 실제 draft 백업이
+    // 남아있으면 정리 로직보다 먼저 복원한다(useIsolatedRfpDraft.ts 참조). 정상 상태면 no-op.
+    restoreOrphanedTutorialDraftBackup();
+
     const { allowedPgWorkspaceIds, deadline, rfpFiles, pgSelectionInitialized, setField } =
       useRfpDraftStore.getState();
 
@@ -145,6 +154,12 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
 
   const handleSubmit = async () => {
     if (submitting) return;
+
+    // 가상 샘플 온보딩(buyer 튜토리얼): 서버 제출 없이 콜백만 호출한다.
+    if (onSampleSubmit) {
+      onSampleSubmit();
+      return;
+    }
 
     if (guest) {
       // 랜딩 데모(격리 draft)는 onGuestSubmit으로 위임 — 실제 draft 핸드오프를 타지 않는다.
@@ -257,7 +272,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
           />
         )}
 
-        <div className="flex-1 px-6 py-6">
+        <div className="flex-1 px-6 py-6" data-coachmark="tutorial-wizard-content">
           {/* Step header */}
           {!hideNav && (
             <div className="flex items-center gap-3 mb-6">
