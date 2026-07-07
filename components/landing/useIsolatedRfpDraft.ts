@@ -5,7 +5,7 @@ import { createJSONStorage } from 'zustand/middleware';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 
 // 데모가 흘리는 쓰기를 버리는 no-op 스토리지 — persist를 무력화해 실제 localStorage
-// draft(`supporter-b-rfp-draft`)를 건드리지 않게 한다.
+// draft(`support-b-rfp-draft`)를 건드리지 않게 한다.
 const noopStorage = createJSONStorage(() => ({
   getItem: () => null,
   setItem: () => {},

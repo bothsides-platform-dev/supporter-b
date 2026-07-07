@@ -267,7 +267,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
           value={draft.memo}
           onChange={(e) => draft.setField('memo', e.target.value)}
           rows={5}
-          placeholder={"OO 쇼핑몰 신규 견적 요청\n결제 창에서의 결제 전환율 최적화\n카드/계좌 결제 수수료 최소화 요청\n정산주기 단축\n가입비/연회비 면제 요청"}
+          placeholder={"OO 쇼핑몰 신규 견적 요청\n결제 창에서의 결제 전환율 최적화\n카드/계좌 결제 수수료 최소화 요청\n정산주기 단축"}
           className={cn(underlineInputClass, 'resize-none')}
         />
       </div>

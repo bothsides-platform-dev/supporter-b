@@ -80,7 +80,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       reset: () => set(defaultState),
     }),
     {
-      name: 'supporter-b-rfp-draft',
+      name: 'support-b-rfp-draft',
       storage: createJSONStorage(() => localStorage),
       // 계약 유형 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
       // 백필하므로 진행 중인 draft가 폐기되지 않는다.

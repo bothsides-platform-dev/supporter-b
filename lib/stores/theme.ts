@@ -56,7 +56,7 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: 'supporter-b-theme',
+      name: 'support-b-theme',
       partialize: (state) => ({ theme: state.theme }),
       onRehydrateStorage: () => (state) => {
         if (state && typeof window !== 'undefined') state.setTheme(state.theme);
