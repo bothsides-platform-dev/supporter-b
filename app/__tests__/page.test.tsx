@@ -42,6 +42,16 @@ describe('RootPage — buyer 랜딩', () => {
     expect(schemas.some((s) => s['@type'] === 'SoftwareApplication')).toBe(true);
   });
 
+  it('Organization·SoftwareApplication JSON-LD가 브랜드 별칭(alternateName)을 포함한다', () => {
+    const { container } = render(RootPage());
+    const scripts = container.querySelectorAll('script[type="application/ld+json"]');
+    const schemas = Array.from(scripts).map((s) => JSON.parse(s.textContent!));
+    const org = schemas.find((s) => s['@type'] === 'Organization');
+    const app = schemas.find((s) => s['@type'] === 'SoftwareApplication');
+    expect(org.alternateName).toContain('테스트비');
+    expect(app.alternateName).toContain('테스트비');
+  });
+
   it('FAQPage JSON-LD에 mainEntity 배열이 있다', () => {
     const { container } = render(RootPage());
     const scripts = container.querySelectorAll('script[type="application/ld+json"]');
