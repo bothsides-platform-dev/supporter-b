@@ -12,4 +12,9 @@ describe('Footer', () => {
     render(<Footer />);
     expect(screen.getByRole('button', { name: '다크 모드로 전환' })).toBeInTheDocument();
   });
+
+  it('brand line surfaces the phonetic alias 서포트비 once', () => {
+    render(<Footer />);
+    expect(screen.getByText(/서포트 B\(서포트비\) CORP\./)).toBeInTheDocument();
+  });
 });

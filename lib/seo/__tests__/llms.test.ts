@@ -3,6 +3,7 @@ import { buildLlmsTxt, buildLlmsFullTxt, TEXT_PLAIN_HEADERS } from '@/lib/seo/ll
 import type { SeoHostContext } from '@/lib/seo/host';
 import { FAQ_ITEMS } from '@/components/landing/faq-data';
 import { PG_FAQ_ITEMS } from '@/components/landing/pg-faq-data';
+import { BRAND_ALIASES } from '@/lib/site-config';
 
 const BUYER: SeoHostContext = { type: 'buyer', origin: 'https://support-b.com' };
 const PG: SeoHostContext = { type: 'pg', origin: 'https://partner.support-b.com' };
@@ -76,6 +77,30 @@ describe('preamble format', () => {
   it('buildLlmsFullTxt: metric values ARE bolded', () => {
     const out = buildLlmsFullTxt(BUYER);
     expect(out).toMatch(/\*\*0\.89%\*\* — /);
+  });
+});
+
+describe('brand aliases (GEO)', () => {
+  const outputs = [
+    buildLlmsTxt(BUYER),
+    buildLlmsTxt(PG),
+    buildLlmsFullTxt(BUYER),
+    buildLlmsFullTxt(PG),
+  ];
+
+  it('every builder × host output states all brand aliases', () => {
+    for (const out of outputs) {
+      for (const alias of BRAND_ALIASES) {
+        expect(out).toContain(alias);
+      }
+    }
+  });
+
+  it('alias sentence appears before ## 핵심 정보 (entity-adjacent placement)', () => {
+    for (const out of outputs) {
+      expect(out.indexOf('서포트비')).toBeGreaterThan(-1);
+      expect(out.indexOf('서포트비')).toBeLessThan(out.indexOf('## 핵심 정보'));
+    }
   });
 });
 
