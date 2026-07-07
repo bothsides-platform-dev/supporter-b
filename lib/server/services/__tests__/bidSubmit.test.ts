@@ -213,6 +213,30 @@ describe('BidService.submit', () => {
     expect(entries.length).toBeGreaterThan(0);
   });
 
+  it('does not notify a pending-approval buyer member (in-app or email)', async () => {
+    const s = await seedSubmitEnv();
+    const pendingMember = await seedUser(db, { email: 'pending@submit.com' });
+    await seedMembership(db, s.buyerWs.id, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const r = await service.submit(
+      { ...BASE, rfpId: s.rfpId },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+    );
+    expect(r.ok).toBe(true);
+
+    const notifs = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, pendingMember.id));
+    expect(notifs).toHaveLength(0);
+
+    const entries = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'pending@submit.com'));
+    expect(entries).toHaveLength(0);
+  });
+
   it('every submit notifies the buyer — no sample-flag skip exists anymore', async () => {
     const s = await seedSubmitEnv();
 

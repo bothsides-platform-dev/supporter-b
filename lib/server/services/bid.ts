@@ -194,7 +194,7 @@ export class BidService {
         );
       }
 
-      const buyerMembers = await this.workspaceRepo.memberRecipients(rfp.buyerWsId, tx);
+      const buyerMembers = await this.workspaceRepo.approvedMemberRecipients(rfp.buyerWsId, tx);
 
       const pgWsLabel = (await this.workspaceRepo.getName(actor.workspaceId, tx)) ?? 'PG';
 

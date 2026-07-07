@@ -1,5 +1,22 @@
 # TODOS
 
+## Notifications
+
+### 알림 환경설정 미구현 — 이메일 수신 거부 불가 (P2)
+`/settings/notifications` 는 "들어갈 예정입니다" 스텁이고, 발송 경로(`notify()`)에 사용자 선호도 체크가 전혀 없다 — 모든 이메일이 무조건 발송되며 수신 거부 수단이 없다. 타입/채널별 수신 토글 스키마 + `notify()` enforcement + 설정 UI 가 필요. (발견: 알림 시스템 전수 조사 2026-07-07, v0.2.75.1)
+
+### outbox requeue가 scheduled_at을 리셋하지 않음 (P3)
+`NotificationService.retryEmail` → `outboxRepo.requeue`(`drizzle/outbox.ts`)가 status만 `failed→pending`으로 뒤집고 `scheduled_at`을 리셋하지 않아, 백오프로 미래 시각에 밀린 행은 수동 재시도해도 그 시각까지 발송되지 않는다. `requeue`에서 `scheduled_at = now()` 리셋 필요. 참고: `retryEmail`은 서비스·액션·훅·테스트까지 완비됐지만 UI 호출 지점이 0인 데드코드 상태(배선 여부는 별도 결정 — 2026-07-07 보류 결정됨). (발견: 알림 시스템 전수 조사 2026-07-07)
+
+### ALLOWED_OUTBOX_EVENTS 스테일 — requote 재시도 불가 (P3)
+`lib/server/services/notification.ts`의 이메일 재시도 화이트리스트에 `rfp.requote_requested` 등 이메일을 실제 발송하는 타입이 누락되어 `retryEmail`이 `NO_EMAIL`을 반환한다. 화이트리스트를 outbox enum 기준으로 갱신하거나 파생하도록 정리. (발견: 알림 시스템 전수 조사 2026-07-07)
+
+### 승인/거절 알림 미배선 (P3)
+`workspace.approved/rejected`, `rfp.sent`, `membership.approved/rejected` 템플릿·outbox enum은 존재하지만 어디서도 발송하지 않는다. 승인 액션 자체는 admin 별도 레포(`admin-supporter-b`) 소관이라 발송 지점을 어느 레포에 둘지 경계 결정 필요. 관련: master/ops 멤버십 row를 admin 레포가 직접 insert하면서 `approval_status`를 명시적으로 non-approved로 쓰는 곳이 없는지 1줄 확인 필요(있다면 v0.2.75.1의 approved 필터로 master가 조용히 수신 중단됨). (발견: 알림 시스템 전수 조사 + /ship 적대 리뷰 2026-07-07)
+
+### 알림 소소한 정합성 묶음 (P4)
+① 알림 페이지 RSC는 100건, 훅 스토어(`useNotifications`)는 API 50건 하이드레이트 — 51~100번째 항목에서 배지/읽음 처리 불일치 가능. ② 인앱 알림 row는 `pending→read`만 전이하는데 렌더러(`NotificationActivityList`)와 `unreadCount`에 도달 불가능한 `sent`/`failed` 분기(빨간색 미읽음 렌더 포함)가 남아 있음. ③ 알림 `type`이 free-form text로 SSOT enum이 없고 렌더러에 타입별 라벨/아이콘 매핑도 없음. (발견: 알림 시스템 전수 조사 2026-07-07)
+
 ## Deal Room / Award
 
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
