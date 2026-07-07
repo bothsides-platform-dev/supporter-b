@@ -44,7 +44,7 @@ export function BuyerTutorialFlow() {
   const [submitTourDone, setSubmitTourDone] = useState(false);
   const [compareTourDone, setCompareTourDone] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
-  const { canvasRef, fire } = useCelebrationConfetti();
+  const { canvasRef } = useCelebrationConfetti();
   const { restore } = useIsolatedRfpDraft(tutorialRfpDraftSeed);
 
   const stepNum = PHASE_ORDER.indexOf(phase) + 1;
@@ -60,18 +60,21 @@ export function BuyerTutorialFlow() {
   };
 
   const handleAward = () => {
-    fire();
     void updateOnboardingAction({ key: 'buyerTutorial', event: 'completed' });
     setPhase('done');
   };
 
   return (
     <div className="flex flex-1 flex-col">
-      <canvas
-        ref={canvasRef}
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-50 h-full w-full"
-      />
+      {/* useCelebrationConfetti 는 캔버스 마운트 시 자동 발사하는 계약(축하 순간에
+          마운트되는 화면용) — 상시 마운트하면 튜토리얼 시작 시 터진다. done 에서만. */}
+      {phase === 'done' && (
+        <canvas
+          ref={canvasRef}
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-50 h-full w-full"
+        />
+      )}
       <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-3">
         <div className="flex items-center gap-3">
           <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">

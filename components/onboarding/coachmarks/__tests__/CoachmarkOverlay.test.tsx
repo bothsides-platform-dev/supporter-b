@@ -130,4 +130,40 @@ describe('CoachmarkOverlay', () => {
     await user.click(screen.getByRole('button', { name: '건너뛰기' }));
     expect(onSkip).toHaveBeenCalledTimes(1);
   });
+
+  it('타깃이 뷰포트 위로 걸쳐 rect.top이 음수여도 말풍선 top은 뷰포트 안으로 클램프된다', () => {
+    render(
+      <CoachmarkOverlay
+        rect={makeRect({ top: -300, bottom: 500, height: 800, left: 100, right: 900, width: 800 })}
+        step={{ ...step, placement: 'right' }}
+        stepIndex={0}
+        stepCount={1}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast
+      />,
+    );
+    const bubble = screen.getByRole('dialog');
+    const top = parseFloat(String((bubble as HTMLElement).style.top));
+    expect(top).toBeGreaterThanOrEqual(8);
+  });
+
+  it('타깃이 거의 풀폭이라 좌우 플립이 모두 넘칠 때도 말풍선 left는 뷰포트 안으로 클램프된다', () => {
+    // jsdom 기본 innerWidth=1024. rect가 거의 풀폭 → right 배치도 left 플립도 넘친다.
+    render(
+      <CoachmarkOverlay
+        rect={makeRect({ top: 50, bottom: 900, height: 850, left: 20, right: 1010, width: 990 })}
+        step={{ ...step, placement: 'right' }}
+        stepIndex={0}
+        stepCount={1}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast
+      />,
+    );
+    const bubble = screen.getByRole('dialog');
+    const left = parseFloat(String((bubble as HTMLElement).style.left));
+    expect(left).toBeGreaterThanOrEqual(8);
+    expect(left).toBeLessThanOrEqual(1024 - 280 - 8);
+  });
 });

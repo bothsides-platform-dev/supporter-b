@@ -87,4 +87,26 @@ describe('useAnchorRect', () => {
     expect(result.current.status).toBe('searching');
     expect(result.current.rect).toBeNull();
   });
+
+  it('스크롤/리사이즈 이벤트 없이 요소 위치만 변해도 rect를 갱신한다 (폴링)', async () => {
+    vi.useFakeTimers();
+    const el = document.createElement('div');
+    el.setAttribute('data-coachmark', 'step-poll');
+    stubRect(el, { top: 100, left: 100, width: 120, height: 32 });
+    el.scrollIntoView = vi.fn();
+    document.body.appendChild(el);
+
+    const { result } = renderHook(() => useAnchorRect('step-poll'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.rect?.top).toBe(100);
+
+    // 이벤트 없이 위치만 이동 (형제 요소 리플로우 등) — 폴링이 잡아야 한다.
+    stubRect(el, { top: 600, left: 100, width: 120, height: 32 });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(result.current.rect?.top).toBe(600);
+  });
 });

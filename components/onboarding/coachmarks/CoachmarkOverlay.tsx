@@ -127,14 +127,14 @@ function computeBubbleStyle(
     case 'left':
       return {
         ...base,
-        left: rect.left - BUBBLE_OFFSET - BUBBLE_WIDTH,
-        top: rect.top,
+        left: clamp(rect.left - BUBBLE_OFFSET - BUBBLE_WIDTH, viewportWidth),
+        top: clampTop(rect.top, viewportHeight),
       };
     case 'right':
       return {
         ...base,
-        left: rect.right + BUBBLE_OFFSET,
-        top: rect.top,
+        left: clamp(rect.right + BUBBLE_OFFSET, viewportWidth),
+        top: clampTop(rect.top, viewportHeight),
       };
     case 'bottom':
     default:
@@ -150,4 +150,12 @@ function clamp(left: number, viewportWidth: number): number {
   const min = VIEWPORT_MARGIN;
   const max = viewportWidth - BUBBLE_WIDTH - VIEWPORT_MARGIN;
   return Math.min(Math.max(left, min), Math.max(min, max));
+}
+
+// 좌/우 배치에서 타깃이 뷰포트 위(rect.top<0)나 아래로 걸치면 말풍선이 화면 밖으로
+// 잘린다 — 세로 위치를 뷰포트 안으로 클램프한다(대략적 말풍선 높이 여유 160px).
+function clampTop(top: number, viewportHeight: number): number {
+  const min = VIEWPORT_MARGIN;
+  const max = Math.max(min, viewportHeight - 160);
+  return Math.min(Math.max(top, min), max);
 }

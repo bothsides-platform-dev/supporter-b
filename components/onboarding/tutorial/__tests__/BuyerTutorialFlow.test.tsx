@@ -97,19 +97,31 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
     expect(screen.getByText(/3\s*\/\s*4/)).toBeInTheDocument();
   });
 
-  it('견적 선정 시 컨페티 발사 + completed 스탬프 + done phase(4/4)로 전환한다', async () => {
+  it('견적 선정 시 completed 스탬프 + done phase(4/4)로 전환한다', async () => {
     const user = userEvent.setup();
     render(<BuyerTutorialFlow />);
     await user.click(screen.getByRole('button', { name: 'wizard-submit' }));
     await user.click(screen.getByRole('button', { name: 'arrival-proceed' }));
     await user.click(screen.getByRole('button', { name: 'compare-award' }));
 
-    expect(confettiFireMock).toHaveBeenCalled();
     expect(updateOnboardingActionMock).toHaveBeenCalledWith({
       key: 'buyerTutorial',
       event: 'completed',
     });
     expect(screen.getByText(/4\s*\/\s*4/)).toBeInTheDocument();
+  });
+
+  it('컨페티 캔버스는 done phase에서만 마운트된다 (훅이 마운트 시 자동 발사하는 계약)', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<BuyerTutorialFlow />);
+    expect(container.querySelector('canvas')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'wizard-submit' }));
+    await user.click(screen.getByRole('button', { name: 'arrival-proceed' }));
+    expect(container.querySelector('canvas')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'compare-award' }));
+    expect(container.querySelector('canvas')).not.toBeNull();
   });
 
   it('done phase에서 "실제 견적 요청 보내기" 클릭 시 draft를 복원하고 /rfp-create로 이동한다', async () => {

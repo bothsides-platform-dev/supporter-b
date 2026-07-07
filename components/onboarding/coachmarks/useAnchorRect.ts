@@ -39,11 +39,18 @@ export function useAnchorRect(
     let mutationObserver: MutationObserver | undefined;
     let resizeObserver: ResizeObserver | undefined;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let pollId: ReturnType<typeof setInterval> | undefined;
     let trackedEl: HTMLElement | null = null;
 
+    let lastKey = '';
     const updateRect = () => {
       if (cancelled || !trackedEl) return;
-      setResult({ rect: trackedEl.getBoundingClientRect(), status: 'found' });
+      const rect = trackedEl.getBoundingClientRect();
+      // 동일 rect 재-set 방지 — 폴링이 매 tick 불필요한 리렌더를 만들지 않도록.
+      const key = `${rect.top},${rect.left},${rect.width},${rect.height}`;
+      if (key === lastKey) return;
+      lastKey = key;
+      setResult({ rect, status: 'found' });
     };
 
     const attach = (el: HTMLElement) => {
@@ -66,6 +73,10 @@ export function useAnchorRect(
         resizeObserver = new ResizeObserver(updateRect);
         resizeObserver.observe(el);
       }
+
+      // 스크롤/리사이즈 이벤트 없이 형제 요소 리플로우로 타깃 "위치"만 밀리는 경우
+      // (ResizeObserver 는 타깃 자신의 크기 변화만 감지) — 저빈도 폴링으로 보정한다.
+      pollId = setInterval(updateRect, 250);
     };
 
     const existing = queryTarget(target);
@@ -92,6 +103,7 @@ export function useAnchorRect(
       window.removeEventListener('resize', updateRect);
       window.removeEventListener('scroll', updateRect, { capture: true });
       if (timeoutId) clearTimeout(timeoutId);
+      if (pollId) clearInterval(pollId);
     };
   }, [target, timeoutMs]);
 

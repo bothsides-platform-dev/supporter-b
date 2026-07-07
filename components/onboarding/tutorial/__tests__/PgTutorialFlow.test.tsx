@@ -82,19 +82,31 @@ describe('PgTutorialFlow (pg 튜토리얼 여정)', () => {
     expect(screen.getByText(/3\s*\/\s*4/)).toBeInTheDocument();
   });
 
-  it('견적 제출 시 컨페티 발사 + completed 스탬프 + done phase(4/4)로 전환한다', async () => {
+  it('견적 제출 시 completed 스탬프 + done phase(4/4)로 전환한다', async () => {
     const user = userEvent.setup();
     render(<PgTutorialFlow />);
     await user.click(screen.getByRole('button', { name: 'invite-proceed' }));
     await user.click(screen.getByRole('button', { name: '견적 작성하기' }));
     await user.click(screen.getByRole('button', { name: 'bid-submit' }));
 
-    expect(confettiFireMock).toHaveBeenCalled();
     expect(updateOnboardingActionMock).toHaveBeenCalledWith({
       key: 'pgTutorial',
       event: 'completed',
     });
     expect(screen.getByText(/4\s*\/\s*4/)).toBeInTheDocument();
+  });
+
+  it('컨페티 캔버스는 done phase에서만 마운트된다 (훅이 마운트 시 자동 발사하는 계약)', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<PgTutorialFlow />);
+    expect(container.querySelector('canvas')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'invite-proceed' }));
+    await user.click(screen.getByRole('button', { name: '견적 작성하기' }));
+    expect(container.querySelector('canvas')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'bid-submit' }));
+    expect(container.querySelector('canvas')).not.toBeNull();
   });
 
   it('done phase는 봉인 입찰(경쟁사 비공개) 안내와 "받은 견적 요청 보기"·"홈으로" 버튼을 보여준다', async () => {
