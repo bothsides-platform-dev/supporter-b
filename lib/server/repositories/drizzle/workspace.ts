@@ -261,6 +261,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(
         and(
           eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.approvalStatus, 'approved'),
           eq(usersTable.isSystemAccount, false),
         ),
       )
@@ -276,28 +277,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       joinedAt: new Date(r.joinedAt).toISOString(),
       avatarUpdatedAt: r.avatarUpdatedAt ? new Date(r.avatarUpdatedAt).toISOString() : null,
     }));
-  }
-
-  async memberUserIdsBatch(wsIds: string[], tx?: Tx): Promise<Map<string, string[]>> {
-    if (wsIds.length === 0) return new Map();
-    const db = this.h(tx);
-    const rows = (await db
-      .select({ workspaceId: workspaceMembers.workspaceId, userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
-      .where(
-        and(
-          inArray(workspaceMembers.workspaceId, wsIds),
-          notifiableAccount,
-        ),
-      )) as Pick<MemberRow, 'workspaceId' | 'userId'>[];
-    const map = new Map<string, string[]>();
-    for (const r of rows) {
-      const list = map.get(r.workspaceId) ?? [];
-      list.push(r.userId);
-      map.set(r.workspaceId, list);
-    }
-    return map;
   }
 
   async memberEmails(workspaceId: string, tx?: Tx): Promise<string[]> {
@@ -389,23 +368,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     };
   }
 
-  async memberRecipients(
-    workspaceId: string,
-    tx?: Tx,
-  ): Promise<{ userId: string; email: string }[]> {
-    const db = this.h(tx);
-    return (await db
-      .select({ userId: workspaceMembers.userId, email: usersTable.email })
-      .from(workspaceMembers)
-      .innerJoin(usersTable, eq(workspaceMembers.userId, usersTable.id))
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaceId),
-          notifiableAccount,
-        ),
-      )) as { userId: string; email: string }[];
-  }
-
   async approvedMemberRecipients(
     workspaceId: string,
     tx?: Tx,
@@ -427,9 +389,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   async memberRecipientsBatch(
     wsIds: string[],
     tx?: Tx,
-  ): Promise<
-    { workspaceId: string; userId: string; role: string; approvalStatus: MemberApprovalStatus; email: string }[]
-  > {
+  ): Promise<{ workspaceId: string; userId: string; role: string; email: string }[]> {
     if (wsIds.length === 0) return [];
     const db = this.h(tx);
     return (await db
@@ -437,7 +397,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         workspaceId: workspaceMembers.workspaceId,
         userId: workspaceMembers.userId,
         role: workspaceMembers.role,
-        approvalStatus: workspaceMembers.approvalStatus,
         email: usersTable.email,
       })
       .from(workspaceMembers)
@@ -445,13 +404,13 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(
         and(
           inArray(workspaceMembers.workspaceId, wsIds),
+          eq(workspaceMembers.approvalStatus, 'approved'),
           notifiableAccount,
         ),
       )) as {
       workspaceId: string;
       userId: string;
       role: string;
-      approvalStatus: MemberApprovalStatus;
       email: string;
     }[];
   }
