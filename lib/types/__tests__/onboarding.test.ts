@@ -3,7 +3,6 @@ import {
   USER_ONBOARDING_VERSION,
   ONBOARDING_KEYS,
   migrateUserOnboarding,
-  isOnboardingTaskDone,
 } from '@/lib/types/onboarding';
 
 describe('USER_ONBOARDING_VERSION', () => {
@@ -51,20 +50,5 @@ describe('migrateUserOnboarding', () => {
   it('멱등하다 — 한 번 정규화한 문서를 다시 넣어도 동일', () => {
     const once = migrateUserOnboarding({ buyerTutorial: { completedAt: '2026-07-01T00:00:00.000Z' } });
     expect(migrateUserOnboarding(once)).toEqual(once);
-  });
-});
-
-describe('isOnboardingTaskDone', () => {
-  it('undefined 면 false', () => {
-    expect(isOnboardingTaskDone(undefined)).toBe(false);
-  });
-  it('completedAt 만 있어도 true', () => {
-    expect(isOnboardingTaskDone({ completedAt: '2026-07-01T00:00:00.000Z' })).toBe(true);
-  });
-  it('dismissedAt 만 있어도 true', () => {
-    expect(isOnboardingTaskDone({ dismissedAt: '2026-07-01T00:00:00.000Z' })).toBe(true);
-  });
-  it('둘 다 없으면 false', () => {
-    expect(isOnboardingTaskDone({})).toBe(false);
   });
 });

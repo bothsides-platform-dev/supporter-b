@@ -74,4 +74,19 @@ describe('RfpCreateWizard onSampleSubmit (가상 샘플 온보딩 — buyer 튜�
     expect(createRfpAction).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
+
+  it('마운트 시 고아 튜토리얼 draft 백업을 복원한다 (튜토리얼 비정상 종료 가드)', async () => {
+    // 튜토리얼 탭 강제 종료로 sessionStorage에 실제 draft 백업이 남은 상황 —
+    // 실제 작성 위저드 마운트가 stale-draft 정리보다 먼저 이를 복원해야 한다.
+    sessionStorage.setItem(
+      'tutorial-rfp-draft-backup',
+      JSON.stringify({ title: '고아 백업에서 복원된 제목' }),
+    );
+    render(<RfpCreateWizard pgList={[]} step={1} onStepChange={vi.fn()} />);
+
+    await waitFor(() =>
+      expect(useRfpDraftStore.getState().title).toBe('고아 백업에서 복원된 제목'),
+    );
+    expect(sessionStorage.getItem('tutorial-rfp-draft-backup')).toBeNull();
+  });
 });

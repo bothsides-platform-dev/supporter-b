@@ -35,7 +35,3 @@ export function migrateUserOnboarding(raw: unknown): UserOnboarding {
   }
   return out;
 }
-
-export function isOnboardingTaskDone(s: OnboardingTaskState | undefined): boolean {
-  return !!(s && (s.completedAt || s.dismissedAt));
-}
