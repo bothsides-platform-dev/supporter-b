@@ -15,7 +15,7 @@ export function Footer() {
           {/* Brand */}
           <div className="flex flex-col gap-3">
             <span className="font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              서포트 B CORP.
+              서포트 B(서포트비) CORP.
             </span>
             <p className="font-sans text-[13px] leading-relaxed max-w-[260px] text-[var(--md-sys-color-on-surface-variant)]">
               PG사 영업담당자와 구매사를 연결하는

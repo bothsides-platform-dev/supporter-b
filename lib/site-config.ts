@@ -1,3 +1,6 @@
+/** 공식 표기 '서포트 B'의 검색·AI 인용용 별칭 (공식 표기 자체는 제외). */
+export const BRAND_ALIASES = ['서포트비', '서포트B', 'Support B', 'Supporter B'] as const;
+
 export const siteConfig = {
   name: '서포트 B',
   title: '서포트 B — PG사 비교 견적 플랫폼',
@@ -18,5 +21,7 @@ export const siteConfig = {
     '결제대행사 비교',
     'PG사 비교',
     '서포트 B',
+    '서포트비',
+    '서포트B',
   ],
 } as const;

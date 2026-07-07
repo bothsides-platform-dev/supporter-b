@@ -1,5 +1,5 @@
 // PG 랜딩 콘텐츠 단일 출처 — 카피 수정은 이 파일에서. (렌더 구조는 PgLanding.tsx)
-import { siteConfig } from '@/lib/site-config';
+import { buildOrganizationJsonLd } from '@/lib/seo/jsonld';
 import { PG_FAQ_ITEMS } from '@/components/landing/pg-faq-data';
 
 // ── 화면2: PG 영업 문제 제기 (4 카드) ──
@@ -124,14 +124,9 @@ export const CASES: { metric: string; metricCaption: string; quote: string; role
   },
 ];
 
-export const organizationJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'Organization',
-  name: siteConfig.name,
-  url: siteConfig.url,
-  logo: `${siteConfig.url}/icon.svg`,
+export const organizationJsonLd = buildOrganizationJsonLd({
   description: 'PG 영업담당자를 위한 신규 가맹점 인바운드 채널',
-};
+});
 
 export const faqPageJsonLd = {
   '@context': 'https://schema.org',
