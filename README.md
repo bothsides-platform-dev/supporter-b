@@ -20,7 +20,7 @@ graph TB
     end
 
     subgraph Lightsail["AWS Lightsail VM"]
-        Caddy["Caddy\nReverse Proxy + TLS\nsupporter-b.com\npartner.supporter-b.com"]
+        Caddy["Caddy\nReverse Proxy + TLS\nsupport-b.com\npartner.support-b.com"]
 
             NextJS["Next.js (PM2)\nServer Components / Server Actions\nRoute Handlers — :3000"]
 
@@ -106,7 +106,7 @@ app/
    └─ settings/       # profile / members / notifications / audit-log
 ```
 
-**멀티 호스트 라우팅**: 단일 Next.js 앱이 두 도메인을 서빙합니다. `(app)/layout.tsx`가 요청 호스트를 읽어 세션 워크스페이스 타입(buyer/pg)과 일치하지 않으면 올바른 호스트로 리다이렉트합니다. 세션 쿠키는 `.supporter-b.com`으로 스코프해 크로스 서브도메인 SSO를 지원합니다.
+**멀티 호스트 라우팅**: 단일 Next.js 앱이 두 도메인을 서빙합니다. `(app)/layout.tsx`가 요청 호스트를 읽어 세션 워크스페이스 타입(buyer/pg)과 일치하지 않으면 올바른 호스트로 리다이렉트합니다. 세션 쿠키는 `.support-b.com`으로 스코프해 크로스 서브도메인 SSO를 지원합니다.
 
 ---
 

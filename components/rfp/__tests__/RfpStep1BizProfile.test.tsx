@@ -25,10 +25,10 @@ describe('RfpStep1BizProfile', () => {
 
   it('guest여도 bizProfile이 주어지면 등록된 사업자 테이블을 표시한다 (랜딩 데모)', () => {
     render(
-      <RfpStep1BizProfile guest bizProfile={mockBizProfile} workspaceName="서포터비" onNext={vi.fn()} />,
+      <RfpStep1BizProfile guest bizProfile={mockBizProfile} workspaceName="서포트 B" onNext={vi.fn()} />,
     );
     expect(screen.getByText('123-45-67890')).toBeInTheDocument();
-    expect(screen.getByText('서포터비')).toBeInTheDocument();
+    expect(screen.getByText('서포트 B')).toBeInTheDocument();
     expect(screen.queryByText(/가입 후 사업자 정보가 자동으로 연동/)).not.toBeInTheDocument();
   });
 

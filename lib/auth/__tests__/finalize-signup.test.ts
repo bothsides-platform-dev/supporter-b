@@ -33,7 +33,7 @@ vi.mock('@/lib/attribution/first-touch', () => ({
 }));
 
 // 가입 직후 자동 로그인은 loginAction(서버사이드 signIn + 레이트리밋)을 재사용한다
-// (크로스호스트 CSRF/HTTP 왕복 회피 — partner.supporter-b.com 가입에서 클라 signIn 이
+// (크로스호스트 CSRF/HTTP 왕복 회피 — partner.support-b.com 가입에서 클라 signIn 이
 // 막히던 버그). 클라 next-auth/react signIn 은 더 이상 쓰지 않는다.
 const loginActionMock = vi.fn();
 vi.mock('@/lib/server/actions/auth/loginAction', () => ({

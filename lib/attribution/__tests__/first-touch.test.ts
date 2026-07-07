@@ -26,7 +26,7 @@ describe('first-touch attribution capture', () => {
 
   it('captures utm params and external referrer on first visit', () => {
     setLocation(
-      'https://supporter-b.com/?utm_source=google&utm_medium=cpc&utm_campaign=brand',
+      'https://support-b.com/?utm_source=google&utm_medium=cpc&utm_campaign=brand',
       'https://google.com/search',
     );
     captureFirstTouch();
@@ -40,13 +40,13 @@ describe('first-touch attribution capture', () => {
   });
 
   it('ignores an internal referrer (same host)', () => {
-    setLocation('https://supporter-b.com/rfp', 'https://supporter-b.com/home');
+    setLocation('https://support-b.com/rfp', 'https://support-b.com/home');
     captureFirstTouch();
     expect(readFirstTouch()?.referrer).toBeUndefined();
   });
 
   it('records landingPath even with no utm/referrer at all', () => {
-    setLocation('https://supporter-b.com/opportunities', '');
+    setLocation('https://support-b.com/opportunities', '');
     captureFirstTouch();
     const stored = readFirstTouch();
     expect(stored?.landingPath).toBe('/opportunities');
@@ -54,9 +54,9 @@ describe('first-touch attribution capture', () => {
   });
 
   it('is write-once: a second capture does not overwrite the first', () => {
-    setLocation('https://supporter-b.com/?utm_source=google', 'https://google.com');
+    setLocation('https://support-b.com/?utm_source=google', 'https://google.com');
     captureFirstTouch();
-    setLocation('https://supporter-b.com/?utm_source=naver', 'https://naver.com');
+    setLocation('https://support-b.com/?utm_source=naver', 'https://naver.com');
     captureFirstTouch();
     expect(readFirstTouch()?.utmSource).toBe('google');
   });
@@ -71,7 +71,7 @@ describe('first-touch attribution capture', () => {
       .mockImplementation(() => {
         throw new Error('QuotaExceededError');
       });
-    setLocation('https://supporter-b.com/?utm_source=google', '');
+    setLocation('https://support-b.com/?utm_source=google', '');
     expect(() => captureFirstTouch()).not.toThrow();
     spy.mockRestore();
   });

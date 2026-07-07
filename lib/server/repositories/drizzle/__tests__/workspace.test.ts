@@ -703,62 +703,64 @@ describe('DrizzleWorkspaceRepository', () => {
     });
   });
 
-  describe('adminRecipients', () => {
-    it('returns userId + email for every admin member only', async () => {
-      const ws = await seedPgWorkspace(db, 'admin-recip.test');
-      const a1 = await seedUser(db, { email: 'a1@admin-recip.test' });
-      const a2 = await seedUser(db, { email: 'a2@admin-recip.test' });
-      const m1 = await seedUser(db, { email: 'm1@admin-recip.test' });
-      await seedMembership(db, ws.id, a1.id, 'admin');
-      await seedMembership(db, ws.id, a2.id, 'admin');
-      await seedMembership(db, ws.id, m1.id, 'member');
+  describe('approvedMemberRecipients', () => {
+    it('returns userId + email for every approved member regardless of role', async () => {
+      const ws = await seedPgWorkspace(db, 'approved-recip.test');
+      const admin = await seedUser(db, { email: 'admin@approved-recip.test' });
+      const member = await seedUser(db, { email: 'member@approved-recip.test' });
+      await seedMembership(db, ws.id, admin.id, 'admin');
+      await seedMembership(db, ws.id, member.id, 'member');
 
-      const recipients = await repo.adminRecipients(ws.id);
+      const recipients = await repo.approvedMemberRecipients(ws.id);
       expect(recipients).toHaveLength(2);
       expect(recipients).toEqual(
         expect.arrayContaining([
-          { userId: a1.id, email: 'a1@admin-recip.test' },
-          { userId: a2.id, email: 'a2@admin-recip.test' },
+          { userId: admin.id, email: 'admin@approved-recip.test' },
+          { userId: member.id, email: 'member@approved-recip.test' },
         ]),
       );
     });
 
-    it('returns an empty array when there is no admin member', async () => {
-      const ws = await seedPgWorkspace(db, 'no-admin-recip.test');
-      const m = await seedUser(db, { email: 'm@no-admin-recip.test' });
-      await seedMembership(db, ws.id, m.id, 'member');
-      expect(await repo.adminRecipients(ws.id)).toEqual([]);
+    it('excludes pending-approval members', async () => {
+      const ws = await seedPgWorkspace(db, 'approved-recip-pending.test');
+      const approved = await seedUser(db, { email: 'approved@approved-recip-pending.test' });
+      const pending = await seedUser(db, { email: 'pending@approved-recip-pending.test' });
+      await seedMembership(db, ws.id, approved.id, 'admin');
+      await seedMembership(db, ws.id, pending.id, 'member', { approvalStatus: 'pending_approval' });
+
+      const recipients = await repo.approvedMemberRecipients(ws.id);
+      expect(recipients.map((r) => r.email)).toEqual(['approved@approved-recip-pending.test']);
     });
 
-    it('숨겨진 master admin(실 해시)은 포함하되 데모 placeholder(!) 는 제외', async () => {
-      const ws = await seedPgWorkspace(db, 'sys-admin-recip.test');
-      const human = await seedUser(db, { email: 'human@sys-admin-recip.test' });
-      // master/ops: 화면 숨김(isSystemAccount)이지만 실 해시 → 알림/메일 수신 대상.
-      const master = await seedUser(db, { email: 'ops@sys-admin-recip.test', isSystemAccount: true });
-      // 데모 placeholder: 영구 로그인 불가('!') → 수신자 제외.
+    it('숨겨진 master(실 해시)는 포함하되 데모 placeholder(!) 는 제외', async () => {
+      const ws = await seedPgWorkspace(db, 'sys-approved-recip.test');
+      const human = await seedUser(db, { email: 'human@sys-approved-recip.test' });
+      const master = await seedUser(db, { email: 'ops@sys-approved-recip.test', isSystemAccount: true });
       const demo = await seedUser(db, {
         email: 'demo@sample.invalid',
         isSystemAccount: true,
         passwordHash: '!',
       });
-      await seedMembership(db, ws.id, human.id, 'admin');
-      await seedMembership(db, ws.id, master.id, 'admin');
-      await seedMembership(db, ws.id, demo.id, 'admin');
+      await seedMembership(db, ws.id, human.id, 'member');
+      await seedMembership(db, ws.id, master.id, 'member');
+      await seedMembership(db, ws.id, demo.id, 'member');
 
-      const userIds = (await repo.adminRecipients(ws.id)).map((r) => r.userId);
+      const userIds = (await repo.approvedMemberRecipients(ws.id)).map((r) => r.userId);
       expect(userIds).toContain(human.id);
       expect(userIds).toContain(master.id);
       expect(userIds).not.toContain(demo.id);
     });
 
-    it('does not include admins of a different workspace', async () => {
-      const wsA = await seedPgWorkspace(db, 'admin-recip-a.com');
-      const wsB = await seedPgWorkspace(db, 'admin-recip-b.com');
-      const a = await seedUser(db, { email: 'a@admin-recip-a.com' });
-      const b = await seedUser(db, { email: 'b@admin-recip-b.com' });
-      await seedMembership(db, wsA.id, a.id, 'admin');
-      await seedMembership(db, wsB.id, b.id, 'admin');
-      expect(await repo.adminRecipients(wsA.id)).toEqual([{ userId: a.id, email: 'a@admin-recip-a.com' }]);
+    it('does not include members of a different workspace', async () => {
+      const wsA = await seedPgWorkspace(db, 'approved-recip-a.com');
+      const wsB = await seedPgWorkspace(db, 'approved-recip-b.com');
+      const a = await seedUser(db, { email: 'a@approved-recip-a.com' });
+      const b = await seedUser(db, { email: 'b@approved-recip-b.com' });
+      await seedMembership(db, wsA.id, a.id, 'member');
+      await seedMembership(db, wsB.id, b.id, 'member');
+      expect(await repo.approvedMemberRecipients(wsA.id)).toEqual([
+        { userId: a.id, email: 'a@approved-recip-a.com' },
+      ]);
     });
   });
 
@@ -1178,16 +1180,6 @@ describe('DrizzleWorkspaceRepository', () => {
       await seedMembership(db, ws.id, a.id, 'admin');
       await seedMembership(db, ws.id, p.id, 'admin', { approvalStatus: 'pending_approval' });
       expect(await repo.countAdmins(ws.id)).toBe(1);
-    });
-
-    it('adminRecipients excludes pending-approval admins', async () => {
-      const ws = await seedBuyerWorkspace(db);
-      const a = await seedUser(db, { email: 'a@rcpt.test' });
-      const p = await seedUser(db, { email: 'p@rcpt.test' });
-      await seedMembership(db, ws.id, a.id, 'admin');
-      await seedMembership(db, ws.id, p.id, 'admin', { approvalStatus: 'pending_approval' });
-      const recipients = await repo.adminRecipients(ws.id);
-      expect(recipients.map((r) => r.email)).toEqual(['a@rcpt.test']);
     });
 
     it('memberRecipientsBatch includes approvalStatus', async () => {

@@ -16,7 +16,7 @@ function renderSidebar(pathname: string) {
   return render(
     <SidebarProvider>
       <DemoNavProvider value={value}>
-        <DemoSidebar workspaceName="서포터비" />
+        <DemoSidebar workspaceName="서포트 B" />
       </DemoNavProvider>
     </SidebarProvider>,
   );
@@ -53,7 +53,7 @@ describe('DemoSidebar — 임베디드 데모 사이드바', () => {
 
   it('워크스페이스 이름을 정적 표기한다 (전환 드롭다운 없음)', () => {
     renderSidebar('/home');
-    expect(screen.getByText('서포터비')).toBeInTheDocument();
+    expect(screen.getByText('서포트 B')).toBeInTheDocument();
   });
 
   it('미읽음 알림 배지를 그리지 않는다 (useNotifications 미연결)', () => {

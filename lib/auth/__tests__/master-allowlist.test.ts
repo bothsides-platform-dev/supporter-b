@@ -20,45 +20,45 @@ afterEach(() => {
 
 describe('isMasterEmail', () => {
   it('단일 allowlist 이메일과 일치하면 true', () => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
-    expect(isMasterEmail('help@supporter-b.com')).toBe(true);
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
+    expect(isMasterEmail('help@support-b.com')).toBe(true);
   });
 
   it('쉼표로 구분된 여러 이메일 각각을 허용한다 (복수 운영자)', () => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com,ops@supporter-b.com,ceo@supporter-b.com';
-    expect(isMasterEmail('help@supporter-b.com')).toBe(true);
-    expect(isMasterEmail('ops@supporter-b.com')).toBe(true);
-    expect(isMasterEmail('ceo@supporter-b.com')).toBe(true);
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com,ops@support-b.com,ceo@support-b.com';
+    expect(isMasterEmail('help@support-b.com')).toBe(true);
+    expect(isMasterEmail('ops@support-b.com')).toBe(true);
+    expect(isMasterEmail('ceo@support-b.com')).toBe(true);
   });
 
   it('대소문자를 무시하고 매칭한다', () => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'Help@Supporter-B.com';
-    expect(isMasterEmail('help@supporter-b.com')).toBe(true);
-    expect(isMasterEmail('HELP@SUPPORTER-B.COM')).toBe(true);
+    process.env.MASTER_ACCOUNT_EMAILS = 'Help@Support-B.com';
+    expect(isMasterEmail('help@support-b.com')).toBe(true);
+    expect(isMasterEmail('HELP@SUPPORT-B.COM')).toBe(true);
   });
 
   it('이메일 사이 공백을 정규화한다', () => {
-    process.env.MASTER_ACCOUNT_EMAILS = '  help@supporter-b.com ,  ops@supporter-b.com  ';
-    expect(isMasterEmail('ops@supporter-b.com')).toBe(true);
+    process.env.MASTER_ACCOUNT_EMAILS = '  help@support-b.com ,  ops@support-b.com  ';
+    expect(isMasterEmail('ops@support-b.com')).toBe(true);
   });
 
   it('목록에 없는 이메일은 false', () => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
     expect(isMasterEmail('intruder@gmail.com')).toBe(false);
   });
 
   it('환경변수 미설정이면 모두 false', () => {
     delete process.env.MASTER_ACCOUNT_EMAILS;
-    expect(isMasterEmail('help@supporter-b.com')).toBe(false);
+    expect(isMasterEmail('help@support-b.com')).toBe(false);
   });
 
   it('환경변수가 빈 문자열이면 모두 false', () => {
     process.env.MASTER_ACCOUNT_EMAILS = '';
-    expect(isMasterEmail('help@supporter-b.com')).toBe(false);
+    expect(isMasterEmail('help@support-b.com')).toBe(false);
   });
 
   it('빈 이메일 입력은 false (allowlist에 빈 항목이 있어도)', () => {
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com, ,';
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com, ,';
     expect(isMasterEmail('')).toBe(false);
     expect(isMasterEmail('   ')).toBe(false);
   });

@@ -43,10 +43,10 @@ describe('passwordForgotAction', () => {
 
   it('마스터/운영자 이메일은 재설정 토큰을 발급하지 않는다 (env로만 관리, ok:true 위장)', async () => {
     const ORIGINAL = process.env.MASTER_ACCOUNT_EMAILS;
-    process.env.MASTER_ACCOUNT_EMAILS = 'help@supporter-b.com';
+    process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
     try {
-      await seedUser('help@supporter-b.com');
-      const r = await passwordForgotAction({ email: 'help@supporter-b.com' });
+      await seedUser('help@support-b.com');
+      const r = await passwordForgotAction({ email: 'help@support-b.com' });
       expect(r).toEqual({ ok: true });
       const out = await db.select().from(outboxEntries);
       expect(out).toHaveLength(0);

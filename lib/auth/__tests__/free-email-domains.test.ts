@@ -31,7 +31,7 @@ describe('isFreeEmailDomain', () => {
 
   it.each([
     'kim@acme.co.kr',
-    'kim@supporter-b.com',
+    'kim@support-b.com',
     'kim@dooray.com',
   ])('회사 도메인이면 false — %s', (email) => {
     expect(isFreeEmailDomain(email)).toBe(false);

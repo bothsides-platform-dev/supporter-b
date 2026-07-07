@@ -7,7 +7,7 @@ import { PgHeroProductWindow } from './hero/PgHeroProductWindow';
 // 리빌 → 헤더 톤 스위치)을 PG 카피·CTA·목업으로 재사용한다. 씬 튜닝은 HeroPinnedScene 이
 // 단일 소유. 여기선 콘텐츠 슬롯만 주입한다.
 // 랜딩/마케팅 면이라 '경쟁 입찰' 프레이밍 허용(CLAUDE.md). '만나세요' = 인바운드 수신 강조.
-const PG_LINE1_WORDS = ['서포트', <BrandWordB key="b" particle="로" />];
+const PG_LINE1_WORDS = [<BrandWordB key="support-b" particle="로" />];
 const PG_PHRASES = [
   '확실한 니즈의 고객사를',
   '검증된 영업 기회를',

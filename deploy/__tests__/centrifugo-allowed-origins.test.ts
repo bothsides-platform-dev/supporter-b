@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 //
 // The browser bundle ships a single build-time NEXT_PUBLIC_CENTRIFUGO_WS_URL
 // (wss://<APP_DOMAIN>/connection/websocket) that BOTH public hosts serve:
-//   - supporter-b.com          (buyer)
-//   - partner.supporter-b.com  (PG)
+//   - support-b.com          (buyer)
+//   - partner.support-b.com  (PG)
 // Caddy serves both from one site block (deploy/Caddyfile) and proxies
 // /connection/* to Centrifugo. Centrifugo v6 rejects the WS handshake when the
 // browser Origin header is not in client.allowed_origins. So the allowlist MUST

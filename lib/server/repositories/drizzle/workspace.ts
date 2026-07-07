@@ -406,7 +406,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       )) as { userId: string; email: string }[];
   }
 
-  async adminRecipients(
+  async approvedMemberRecipients(
     workspaceId: string,
     tx?: Tx,
   ): Promise<{ userId: string; email: string }[]> {
@@ -418,8 +418,6 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(
         and(
           eq(workspaceMembers.workspaceId, workspaceId),
-          eq(workspaceMembers.role, 'admin'),
-          // 미승인 admin 은 admin 대상 알림/메일 수신자에서 제외.
           eq(workspaceMembers.approvalStatus, 'approved'),
           notifiableAccount,
         ),

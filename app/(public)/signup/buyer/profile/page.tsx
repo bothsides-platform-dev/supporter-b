@@ -101,7 +101,7 @@ export default function BuyerProfilePage() {
     // the target route yet (the compilation race that strands users at /login).
     // window.location.assign is also required for cross-origin absolute URLs
     // because router.push would follow the (app) shell redirect via RSC fetch,
-    // hitting browser CORS on partner.supporter-b.com.
+    // hitting browser CORS on partner.support-b.com.
     window.location.assign(r.redirectTo);
   };
 

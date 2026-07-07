@@ -168,7 +168,7 @@ export class RfpService {
           linkUrl: `/inbox/${rfpCode}`,
           email: {
             event: 'rfp.awarded',
-            subject: `[Supporter B · ${rfpCode}] 선정 결과`,
+            subject: `[서포트 B · ${rfpCode}] 선정 결과`,
             html: awardedHtml,
             dedupeKey: (email) => `rfp:${rfpId}:awarded:${email}`,
           },
@@ -508,27 +508,27 @@ export class RfpService {
           .toISOString()
           .replace('T', ' ')
           .slice(0, 16);
-        const adminRows = await this.workspaceRepo.adminRecipients(req.pgWsId, tx);
-        for (const admin of adminRows) {
-          const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
-          const html = await renderRfpInvited({
-            rfpId: rfpRow.code,
-            rfpTitle: rfpRow.title,
-            buyerName,
-            deadline: deadlineDisplay,
-            inviteUrl,
-          });
+        const emailRows = await this.workspaceRepo.approvedMemberRecipients(req.pgWsId, tx);
+        const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
+        const html = await renderRfpInvited({
+          rfpId: rfpRow.code,
+          rfpTitle: rfpRow.title,
+          buyerName,
+          deadline: deadlineDisplay,
+          inviteUrl,
+        });
+        for (const member of emailRows) {
           await notify(tx, {
-            recipients: [{ userId: admin.userId, workspaceId: req.pgWsId, email: admin.email }],
+            recipients: [{ userId: member.userId, workspaceId: req.pgWsId, email: member.email }],
             channels: ['email'],
             type: 'rfp.invited',
             title: '',
             body: '',
             email: {
               event: 'rfp.invited',
-              subject: `[Supporter B · ${rfpRow.code}] 견적 요청이 도착했어요`,
+              subject: `[서포트 B · ${rfpRow.code}] 견적 요청이 도착했어요`,
               html,
-              dedupeKey: () => `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${admin.userId}`,
+              dedupeKey: () => `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${member.userId}`,
             },
           });
         }
@@ -689,19 +689,19 @@ export class RfpService {
         });
 
         const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
-        const admins = wsMembers.filter((m) => m.role === 'admin' && m.approvalStatus === 'approved');
-        for (const admin of admins) {
+        const emailTargets = wsMembers.filter((m) => m.approvalStatus === 'approved');
+        for (const member of emailTargets) {
           await notify(tx, {
-            recipients: [{ userId: admin.userId, workspaceId: draft.pgWsId, email: admin.email }],
+            recipients: [{ userId: member.userId, workspaceId: draft.pgWsId, email: member.email }],
             channels: ['email'],
             type: 'rfp.invited',
             title: '',
             body: '',
             email: {
               event: 'rfp.invited',
-              subject: `[Supporter B · ${rfpCode}] 견적 요청이 도착했어요`,
+              subject: `[서포트 B · ${rfpCode}] 견적 요청이 도착했어요`,
               html,
-              dedupeKey: () => `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${admin.userId}`,
+              dedupeKey: () => `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${member.userId}`,
             },
           });
         }
@@ -803,7 +803,7 @@ export class RfpService {
         tx,
       );
 
-      // 3) 알림 + 이메일 팬아웃 (대상 PG admin 멤버).
+      // 3) 알림 + 이메일 팬아웃 (대상 PG 승인된 멤버 전원).
       const deadlineLabel = input.newDeadline.toISOString().replace('T', ' ').slice(0, 16);
       const inboxUrl = `${baseUrlFor('pg')}/inbox/${rfp.code}`;
       const buyerName = (await this.workspaceRepo.findById(rfp.buyerWsId, tx))?.name ?? '구매사';
@@ -817,10 +817,10 @@ export class RfpService {
       });
 
       for (const p of plans) {
-        // admin 멤버 조회 — acceptPgRequest / createRfp 패턴 그대로 차용 (userId + email 필요)
-        const adminRows = await this.workspaceRepo.adminRecipients(p.pgWsId, tx);
+        // 승인된 멤버 전원 조회 (role 무관) — 견적 재요청도 admin 한정이 아닌 전 멤버 대상.
+        const memberRows = await this.workspaceRepo.approvedMemberRecipients(p.pgWsId, tx);
 
-        for (const m of adminRows) {
+        for (const m of memberRows) {
           pendingEmits.push(
             ...(await notify(tx, {
               recipients: [{ userId: m.userId, workspaceId: p.pgWsId, email: m.email }],
@@ -831,7 +831,7 @@ export class RfpService {
               linkUrl: `/inbox/${rfp.code}`,
               email: {
                 event: 'rfp.requote_requested',
-                subject: `[Supporter B · ${rfp.code}] 견적 재요청이 도착했어요`,
+                subject: `[서포트 B · ${rfp.code}] 견적 재요청이 도착했어요`,
                 html,
                 dedupeKey: () => `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:user:${m.userId}`,
               },
@@ -991,27 +991,27 @@ export class RfpService {
             tx,
           );
 
-          const adminRows = await this.workspaceRepo.adminRecipients(pgWsId, tx);
-          for (const admin of adminRows) {
-            const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
-            const html = await renderRfpInvited({
-              rfpId: code,
-              rfpTitle: input.title.trim(),
-              buyerName,
-              deadline: deadlineDisplay,
-              inviteUrl,
-            });
+          const emailRows = await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx);
+          const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
+          const html = await renderRfpInvited({
+            rfpId: code,
+            rfpTitle: input.title.trim(),
+            buyerName,
+            deadline: deadlineDisplay,
+            inviteUrl,
+          });
+          for (const member of emailRows) {
             await notify(tx, {
-              recipients: [{ userId: admin.userId, workspaceId: pgWsId, email: admin.email }],
+              recipients: [{ userId: member.userId, workspaceId: pgWsId, email: member.email }],
               channels: ['email'],
               type: 'rfp.invited',
               title: '',
               body: '',
               email: {
                 event: 'rfp.invited',
-                subject: `[Supporter B · ${code}] 견적 요청이 도착했어요`,
+                subject: `[서포트 B · ${code}] 견적 요청이 도착했어요`,
                 html,
-                dedupeKey: () => `rfp:${rfpId}:invite:ws:${pgWsId}:user:${admin.userId}`,
+                dedupeKey: () => `rfp:${rfpId}:invite:ws:${pgWsId}:user:${member.userId}`,
               },
             });
           }

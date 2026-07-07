@@ -175,7 +175,7 @@ describe('PgProfilePage', () => {
 
   it('finalizeSignup 이 MASTER_EMAIL 을 반환하면 운영자 가입 불가 안내를 표시한다', async () => {
     mockDraftData = {
-      email: 'op@supporter-b.com',
+      email: 'op@support-b.com',
       password: 'Password123!',
       wsInviteToken: 'invite-token-abc',
     };
@@ -246,14 +246,14 @@ describe('PgProfilePage — cross-host redirect', () => {
     assign = vi.fn();
     Object.defineProperty(window, 'location', {
       configurable: true,
-      value: { host: 'supporter-b.com', assign },
+      value: { host: 'support-b.com', assign },
     });
   });
 
   it('redirectTo 가 다른 호스트 절대 URL이면 router.push 대신 전체 페이지 이동한다', async () => {
     mockSignupComplete.mockResolvedValue({
       ok: true,
-      redirectTo: 'https://partner.supporter-b.com/home',
+      redirectTo: 'https://partner.support-b.com/home',
       email: 'sales@toss.im',
       password: 'Password123!',
     });
@@ -265,7 +265,7 @@ describe('PgProfilePage — cross-host redirect', () => {
     await user.click(screen.getByRole('button', { name: '가입 완료' }));
 
     await waitFor(() =>
-      expect(assign).toHaveBeenCalledWith('https://partner.supporter-b.com/home'),
+      expect(assign).toHaveBeenCalledWith('https://partner.support-b.com/home'),
     );
     expect(mockPush).not.toHaveBeenCalled();
   });

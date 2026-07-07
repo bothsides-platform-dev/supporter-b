@@ -9,7 +9,7 @@ afterEach(() => {
 
 describe('WorkspaceAvatar', () => {
   it('renders initials when logoUpdatedAt is not provided', () => {
-    render(<WorkspaceAvatar name="Supporter B" workspaceId="ws-1" />);
+    render(<WorkspaceAvatar name="서포트 B" workspaceId="ws-1" />);
     expect(screen.getByRole('img')).toHaveTextContent('B');
   });
 
@@ -19,15 +19,15 @@ describe('WorkspaceAvatar', () => {
   });
 
   it('renders img element when logoUpdatedAt is set and workspaceId is provided', () => {
-    render(<WorkspaceAvatar name="Supporter B" workspaceId="ws-123" logoUpdatedAt="2026-06-21T00:00:00.000Z" />);
+    render(<WorkspaceAvatar name="서포트 B" workspaceId="ws-123" logoUpdatedAt="2026-06-21T00:00:00.000Z" />);
     const img = screen.getByRole('img');
     expect(img.tagName).toBe('IMG');
     expect(img).toHaveAttribute('src', `/api/workspace/ws-123/avatar?v=${Date.parse('2026-06-21T00:00:00.000Z')}`);
-    expect(img).toHaveAttribute('alt', 'Supporter B');
+    expect(img).toHaveAttribute('alt', '서포트 B');
   });
 
   it('falls back to initials when img onError fires', () => {
-    render(<WorkspaceAvatar name="Supporter B" workspaceId="ws-123" logoUpdatedAt="2026-06-21T00:00:00.000Z" />);
+    render(<WorkspaceAvatar name="서포트 B" workspaceId="ws-123" logoUpdatedAt="2026-06-21T00:00:00.000Z" />);
     const img = screen.getByRole('img');
     expect(img.tagName).toBe('IMG');
 
@@ -40,7 +40,7 @@ describe('WorkspaceAvatar', () => {
   });
 
   it('renders img with ?v cache-bust when logoUpdatedAt is set', () => {
-    render(<WorkspaceAvatar name="Supporter B" workspaceId="ws-9" logoUpdatedAt="2026-06-21T00:00:00.000Z" />);
+    render(<WorkspaceAvatar name="서포트 B" workspaceId="ws-9" logoUpdatedAt="2026-06-21T00:00:00.000Z" />);
     const img = screen.getByRole('img');
     expect(img.tagName).toBe('IMG');
     expect(img).toHaveAttribute('src', `/api/workspace/ws-9/avatar?v=${Date.parse('2026-06-21T00:00:00.000Z')}`);

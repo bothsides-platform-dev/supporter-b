@@ -1,32 +1,50 @@
 /**
- * One-shot generator for `app/opengraph-image.png` (1200×630) and
- * `app/apple-icon.png` (180×180).
+ * One-shot generator for `app/opengraph-image.png` (1200×630).
  *
- * Renders an HTML page with the project's actual Pretendard Variable +
- * JetBrains Mono fonts (inlined as base64 data URIs so no dev server is
- * needed) and screenshots it via Playwright Chromium. Korean glyphs are
- * rendered by the same font binary used in production, so what you see in
- * the OG card == what the app uses.
+ * Renders an HTML page with the project's actual Pretendard Variable font
+ * (inlined as a base64 data URI so no dev server is needed) and screenshots
+ * it via Playwright Chromium. Korean glyphs are rendered by the same font
+ * binary used in production, so what you see in the OG card == what the app
+ * uses. Dark Linear theme — solid near-black background, brand mark +
+ * wordmark, no gradients/glow/blur.
  *
- * Run: `pnpm tsx scripts/generate-og-image.ts`
+ * apple-icon.png has its own separate manual pipeline — this script must
+ * never write it.
+ *
+ * Run: `pnpm og:generate` (== `pnpm tsx scripts/generate-og-image.ts`)
  */
 import { chromium } from 'playwright';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { BRAND_MARK_PATH } from '../lib/brand/brand-mark-path';
 
 const ROOT = path.resolve(__dirname, '..');
 const PRETENDARD = path.join(ROOT, 'public/fonts/PretendardVariable.woff2');
-const JETBRAINS = path.join(ROOT, 'public/fonts/JetBrainsMonoVariable.ttf');
 
 const OUT_OG = path.join(ROOT, 'app/opengraph-image.png');
-const OUT_ICON = path.join(ROOT, 'app/apple-icon.png');
+
+// Dark-mode Linear tokens (styles/tokens.css .dark block) — hardcoded here
+// since this script runs outside the app's CSS pipeline.
+const COLOR_BACKGROUND = '#08090A';
+const COLOR_ON_SURFACE = '#F7F8F8';
+const COLOR_ON_SURFACE_VARIANT = '#8A8F98';
+const COLOR_OUTLINE_VARIANT = '#23252A';
+const COLOR_PRIMARY = '#9ECAFF';
 
 async function loadFontDataUri(p: string, mime: string) {
   const buf = await fs.readFile(p);
   return `data:${mime};base64,${buf.toString('base64')}`;
 }
 
-function ogHtml(pretendard: string, jetbrains: string) {
+function brandMarkSvg(size: number, color: string) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="334 294 636 636" width="${size}" height="${size}">
+    <g transform="translate(0 1254) scale(0.1 -0.1)" fill="${color}">
+      <path d="${BRAND_MARK_PATH}" stroke="${color}" stroke-width="450" stroke-linejoin="miter" stroke-linecap="butt" />
+    </g>
+  </svg>`;
+}
+
+function ogHtml(pretendard: string) {
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -36,13 +54,6 @@ function ogHtml(pretendard: string, jetbrains: string) {
     font-family: 'Pretendard';
     src: url('${pretendard}') format('woff2-variations');
     font-weight: 45 920;
-    font-style: normal;
-    font-display: block;
-  }
-  @font-face {
-    font-family: 'JetBrainsMono';
-    src: url('${jetbrains}') format('truetype-variations');
-    font-weight: 100 800;
     font-style: normal;
     font-display: block;
   }
@@ -50,65 +61,74 @@ function ogHtml(pretendard: string, jetbrains: string) {
   body {
     width: 1200px;
     height: 630px;
-    background: #faf7f0;
+    background: ${COLOR_BACKGROUND};
     font-family: 'Pretendard', sans-serif;
-    color: #0a0a0f;
+    color: ${COLOR_ON_SURFACE};
     -webkit-font-smoothing: antialiased;
     text-rendering: geometricPrecision;
+    position: relative;
   }
   .frame {
     position: absolute;
-    inset: 48px;
-    border: 1px solid #ece5d2;
+    inset: 44px;
+    border: 1px solid ${COLOR_OUTLINE_VARIANT};
   }
-  .mono {
-    font-family: 'JetBrainsMono', monospace;
-    font-weight: 400;
-    font-size: 18px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: #8c8690;
-  }
-  .corner { position: absolute; }
-  .top-left   { top: 84px;    left: 96px; }
-  .top-right  { top: 84px;    right: 96px; }
-  .bot-right  { bottom: 84px; right: 96px; color: #1a3a52; letter-spacing: 0.16em; }
-  .bot-right .b { opacity: 0.5; }
-
   .hero {
     position: absolute;
     left: 50%;
-    top: 50%;
+    top: 46%;
     transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .brand-row {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 64px;
+    gap: 40px;
   }
-  .logo svg {
+  .mark svg {
     display: block;
-  }
-  .hero-text {
-    display: flex;
-    flex-direction: column;
   }
   .wordmark {
     font-family: 'Pretendard', sans-serif;
     font-weight: 800;
-    font-size: 96px;
+    font-size: 145px;
     line-height: 1;
     letter-spacing: -0.04em;
-    color: #0a0a0f;
+    color: ${COLOR_ON_SURFACE};
     margin: 0;
     white-space: nowrap;
   }
-  .subline {
+  .tagline {
+    font-family: 'Pretendard', sans-serif;
+    font-weight: 600;
+    font-size: 38px;
+    letter-spacing: -0.02em;
+    color: ${COLOR_ON_SURFACE_VARIANT};
+    margin: 28px 0 0 4px;
+  }
+  .domain-row {
+    position: absolute;
+    left: 96px;
+    bottom: 76px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .domain-dot {
+    width: 9px;
+    height: 9px;
+    background: ${COLOR_PRIMARY};
+    flex-shrink: 0;
+  }
+  .domain {
     font-family: 'Pretendard', sans-serif;
     font-weight: 500;
-    font-size: 32px;
-    letter-spacing: -0.02em;
-    color: #5a5560;
-    margin: 20px 0 0 4px;
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    color: ${COLOR_ON_SURFACE_VARIANT};
   }
 </style>
 </head>
@@ -116,71 +136,17 @@ function ogHtml(pretendard: string, jetbrains: string) {
   <div class="frame"></div>
 
   <div class="hero">
-    <div class="logo">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="144" height="144">
-        <rect x="5.5" y="5" width="4.5" height="22" rx="2.25" fill="#0a0a0f"/>
-        <circle cx="21" cy="16" r="9" fill="#0a0a0f"/>
-        <rect x="10" y="0" width="3" height="32" fill="#faf7f0"/>
-      </svg>
+    <div class="brand-row">
+      <div class="mark">${brandMarkSvg(132, COLOR_ON_SURFACE)}</div>
+      <div class="wordmark">서포트 B</div>
     </div>
-    <div class="hero-text">
-      <div class="wordmark">Supporter B</div>
-      <div class="subline">PG사 비교 견적 플랫폼</div>
-    </div>
+    <div class="tagline">PG사 비교 견적 플랫폼</div>
   </div>
 
-  <div class="corner bot-right mono"><span class="b">[</span>&nbsp;SUPPORTER-B.STORE&nbsp;<span class="b">]</span></div>
-</body>
-</html>`;
-}
-
-function iconHtml(pretendard: string) {
-  return `<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="utf-8" />
-<style>
-  @font-face {
-    font-family: 'Pretendard';
-    src: url('${pretendard}') format('woff2-variations');
-    font-weight: 45 920;
-    font-style: normal;
-    font-display: block;
-  }
-  html, body { margin: 0; padding: 0; }
-  body {
-    width: 180px;
-    height: 180px;
-    background: #faf7f0;
-    -webkit-font-smoothing: antialiased;
-    text-rendering: geometricPrecision;
-    position: relative;
-  }
-  .frame {
-    position: absolute;
-    inset: 8px;
-    border: 1px solid #ece5d2;
-  }
-  .glyph {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Pretendard', sans-serif;
-    font-weight: 800;
-    font-size: 132px;
-    line-height: 1;
-    letter-spacing: -0.04em;
-    color: #0a0a0f;
-    /* optical centering — descender of "b" pulls the visual center down */
-    padding-bottom: 4px;
-  }
-</style>
-</head>
-<body>
-  <div class="frame"></div>
-  <div class="glyph">b</div>
+  <div class="domain-row">
+    <div class="domain-dot"></div>
+    <div class="domain">support-b.com</div>
+  </div>
 </body>
 </html>`;
 }
@@ -214,26 +180,15 @@ async function shoot({
 }
 
 async function main() {
-  const [pretendard, jetbrains] = await Promise.all([
-    loadFontDataUri(PRETENDARD, 'font/woff2'),
-    loadFontDataUri(JETBRAINS, 'font/ttf'),
-  ]);
+  const pretendard = await loadFontDataUri(PRETENDARD, 'font/woff2');
 
   await shoot({
-    html: ogHtml(pretendard, jetbrains),
+    html: ogHtml(pretendard),
     width: 1200,
     height: 630,
     out: OUT_OG,
   });
-  console.log(`✓ ${path.relative(ROOT, OUT_OG)}`);
-
-  await shoot({
-    html: iconHtml(pretendard),
-    width: 180,
-    height: 180,
-    out: OUT_ICON,
-  });
-  console.log(`✓ ${path.relative(ROOT, OUT_ICON)}`);
+  console.log(`OK ${path.relative(ROOT, OUT_OG)}`);
 }
 
 main().catch((err) => {
