@@ -206,7 +206,7 @@ describe('RfpCreateWizard', () => {
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
 
-    expect(localStorageSpy).toHaveBeenCalledWith('supporter-b-rfp-next', '/rfp-create');
+    expect(localStorageSpy).toHaveBeenCalledWith('support-b-rfp-next', '/rfp-create');
     expect(mockPush).toHaveBeenCalledWith('/signup/buyer');
     expect(createRfpAction).not.toHaveBeenCalled();
 
@@ -576,7 +576,7 @@ describe('RfpCreateWizard — guest submit seam', () => {
     await user.click(screen.getByRole('button', { name: '발송' }));
     expect(onGuestSubmit).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalled();
-    expect(localStorage.getItem('supporter-b-rfp-next')).toBeNull();
+    expect(localStorage.getItem('support-b-rfp-next')).toBeNull();
   });
   // 기본 guest 동작(localStorage 저장 + /signup/buyer) 회귀는 위 'guest 모드에서 발송 시
   // /signup/buyer로 이동한다' 테스트가 이미 보장하므로 여기서 중복하지 않는다.
