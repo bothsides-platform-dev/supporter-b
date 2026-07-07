@@ -75,18 +75,27 @@ describe('RfpCreateWizard onSampleSubmit (가상 샘플 온보딩 — buyer 튜�
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('마운트 시 고아 튜토리얼 draft 백업을 복원한다 (튜토리얼 비정상 종료 가드)', async () => {
-    // 튜토리얼 탭 강제 종료로 sessionStorage에 실제 draft 백업이 남은 상황 —
-    // 실제 작성 위저드 마운트가 stale-draft 정리보다 먼저 이를 복원해야 한다.
-    sessionStorage.setItem(
-      'tutorial-rfp-draft-backup',
-      JSON.stringify({ title: '고아 백업에서 복원된 제목' }),
+  it('샘플 모드에서는 마운트 stale-draft 정리를 건너뛴다 (실 draft 오염 방지)', async () => {
+    // React는 자식 effect를 부모보다 먼저 실행한다 — 튜토리얼(부모)의 격리 스냅샷 전에
+    // 위저드(자식)의 PG 재조정이 fixture pgList 기준으로 실제 draft를 훼손하면 안 된다.
+    useRfpDraftStore.setState({
+      allowedPgWorkspaceIds: [{ id: 'real-pg-uuid', displayName: '실PG', logoUpdatedAt: null }],
+      pgSelectionInitialized: true,
+    });
+    render(
+      <RfpCreateWizard
+        pgList={[{ id: 'tutorial-pg-a', name: '튜토리얼페이 A', displayName: '튜토리얼페이 A', logoUpdatedAt: null }]}
+        step={1}
+        onStepChange={vi.fn()}
+        onSampleSubmit={vi.fn()}
+      />,
     );
-    render(<RfpCreateWizard pgList={[]} step={1} onStepChange={vi.fn()} />);
 
+    // 정리 로직이 돌았다면 real-pg-uuid는 pgList에 없어 제거됐을 것.
     await waitFor(() =>
-      expect(useRfpDraftStore.getState().title).toBe('고아 백업에서 복원된 제목'),
+      expect(useRfpDraftStore.getState().allowedPgWorkspaceIds.map((w) => w.id)).toEqual([
+        'real-pg-uuid',
+      ]),
     );
-    expect(sessionStorage.getItem('tutorial-rfp-draft-backup')).toBeNull();
   });
 });

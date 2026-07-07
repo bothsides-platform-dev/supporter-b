@@ -3,7 +3,7 @@
 // 첫 홈 진입 시 자동으로 뜨는 환영 모달 — /tutorial 진입 CTA와 '나중에 하기'(dismiss)를
 // 제공한다. 완주/이탈 시점의 완료 스탬프는 튜토리얼 화면(후속 PR)이 찍는다 — 이 모달은
 // dismissed 만 찍는다.
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dialog,
@@ -31,21 +31,35 @@ const SUBTITLE: Record<Variant, string> = {
 
 export function WelcomeModal({ variant }: { variant: Variant }) {
   const [open, setOpen] = useState(true);
+  const stampedRef = useRef(false);
   const router = useRouter();
+
+  const stampDismissed = () => {
+    if (stampedRef.current) return;
+    stampedRef.current = true;
+    void updateOnboardingAction({ key: ONBOARDING_KEY_FOR_VARIANT[variant], event: 'dismissed' }).catch(
+      () => {},
+    );
+  };
 
   const handleStart = () => {
     router.push('/tutorial');
   };
 
   const handleDismiss = () => {
-    void updateOnboardingAction({ key: ONBOARDING_KEY_FOR_VARIANT[variant], event: 'dismissed' }).catch(
-      () => {},
-    );
+    stampDismissed();
     setOpen(false);
   };
 
+  // Esc·바깥 클릭 등 어떤 경로로 닫혀도 dismissed를 찍는다 — 스탬프 없이 닫히면
+  // shouldShowWelcome이 계속 true라 홈 방문마다 모달이 무한 재등장한다.
+  const handleOpenChange = (next: boolean) => {
+    if (!next) stampDismissed();
+    setOpen(next);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false} className="sm:max-w-[440px]">
         <DialogHeader>
           <DialogTitle>서포트 B에 오신 걸 환영해요</DialogTitle>

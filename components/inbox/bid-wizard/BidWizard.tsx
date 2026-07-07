@@ -318,6 +318,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
     // 가상 샘플 온보딩: 서버 제출 없이 콜백만 호출한다 — fixture 에는 실제
     // rfpId/pgWsId 가 없어 실제 submitBidAction 을 태우면 깨진다.
     if (onSampleSubmit) {
+      clearDraft(); // 자동저장된 bid-draft:<fixture-id> 잔존 방지.
       onSampleSubmit();
       return;
     }

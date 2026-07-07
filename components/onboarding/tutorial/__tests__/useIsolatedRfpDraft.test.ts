@@ -1,12 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+// buyer 튜토리얼 draft 격리 — persist 무력화 방식(landing useIsolatedRfpDraft 패턴).
+// 핵심 계약: 튜토리얼 동안 localStorage('support-b-rfp-draft')는 절대 건드리지 않는다.
+// 탭 크래시·동시 탭 시나리오에서도 실제 draft가 소실/오염되지 않는 것이 불변식이다
+// (적대적 리뷰에서 발견된 sessionStorage 백업 방식의 데이터 손실 결함을 대체).
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
-import {
-  useIsolatedRfpDraft,
-  restoreOrphanedTutorialDraftBackup,
-  TUTORIAL_DRAFT_BACKUP_KEY,
-} from '../useIsolatedRfpDraft';
+import { useIsolatedRfpDraft } from '../useIsolatedRfpDraft';
 import type { RfpDraftSeedFields } from '@/lib/onboarding/tutorial-fixtures';
+
+const LS_KEY = 'support-b-rfp-draft';
 
 const seed: RfpDraftSeedFields = {
   title: '',
@@ -41,78 +43,62 @@ function resetStoreToRealDraft() {
   });
 }
 
-describe('useIsolatedRfpDraft', () => {
+describe('useIsolatedRfpDraft (persist 무력화 격리)', () => {
   beforeEach(() => {
+    localStorage.clear();
     sessionStorage.clear();
     resetStoreToRealDraft();
-  });
-  afterEach(() => {
-    sessionStorage.clear();
+    // 실제 draft가 localStorage에 영속돼 있는 상황을 재현.
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify({ state: { title: '실제 작성중이던 제목' }, version: 3 }),
+    );
   });
 
-  it('마운트 시 현재 draft를 백업하고 스토어를 seed로 교체한다', () => {
+  it('마운트 시 스토어를 seed로 교체하되 localStorage의 실제 draft는 건드리지 않는다', () => {
     renderHook(() => useIsolatedRfpDraft(seed));
 
-    expect(useRfpDraftStore.getState().title).toBe('');
-    expect(useRfpDraftStore.getState().websiteUrl).toBe('https://seed.example.com');
-
-    const raw = sessionStorage.getItem(TUTORIAL_DRAFT_BACKUP_KEY);
-    expect(raw).toBeTruthy();
-    const backup = JSON.parse(raw!);
-    expect(backup.title).toBe('실제 작성중이던 제목');
+    expect(useRfpDraftStore.getState().mainProducts).toBe('시드 상품');
+    // 불변식: 튜토리얼 seed가 영속 스토리지에 새어나가지 않는다.
+    expect(localStorage.getItem(LS_KEY)).toContain('실제 작성중이던 제목');
+    expect(localStorage.getItem(LS_KEY)).not.toContain('시드 상품');
   });
 
-  it('반환된 restore 함수 호출 시 백업값으로 되돌리고 sessionStorage 키를 제거한다', () => {
+  it('튜토리얼 중의 스토어 편집도 localStorage에 기록되지 않는다 (persist 무력화)', () => {
+    renderHook(() => useIsolatedRfpDraft(seed));
+
+    useRfpDraftStore.getState().setField('title', '튜토리얼에서 입력한 제목');
+    expect(localStorage.getItem(LS_KEY)).not.toContain('튜토리얼에서 입력한 제목');
+  });
+
+  it('restore 호출 시 스냅샷을 복원하고 persist를 재활성화한다', () => {
     const { result } = renderHook(() => useIsolatedRfpDraft(seed));
 
+    useRfpDraftStore.getState().setField('title', '튜토리얼 제목');
     result.current.restore();
 
     expect(useRfpDraftStore.getState().title).toBe('실제 작성중이던 제목');
-    expect(useRfpDraftStore.getState().websiteUrl).toBe('https://real.example.com');
-    expect(sessionStorage.getItem(TUTORIAL_DRAFT_BACKUP_KEY)).toBeNull();
+    // persist 재활성화 확인 — 이후 편집은 다시 localStorage에 기록된다.
+    useRfpDraftStore.getState().setField('title', '복원 후 편집');
+    expect(localStorage.getItem(LS_KEY)).toContain('복원 후 편집');
   });
 
-  it('명시적 restore 없이 언마운트해도 자동으로 복원된다', () => {
+  it('언마운트 시에도 복원된다 (restore 미호출 이탈 가드)', () => {
     const { unmount } = renderHook(() => useIsolatedRfpDraft(seed));
+
+    useRfpDraftStore.getState().setField('title', '튜토리얼 제목');
     unmount();
 
     expect(useRfpDraftStore.getState().title).toBe('실제 작성중이던 제목');
-    expect(sessionStorage.getItem(TUTORIAL_DRAFT_BACKUP_KEY)).toBeNull();
   });
 
-  it('restore를 두 번 호출해도 안전하다(멱등)', () => {
-    const { result } = renderHook(() => useIsolatedRfpDraft(seed));
+  it('restore는 멱등 — 두 번 호출해도 복원 상태가 유지된다', () => {
+    const { result, unmount } = renderHook(() => useIsolatedRfpDraft(seed));
+
     result.current.restore();
-    expect(() => result.current.restore()).not.toThrow();
-    expect(useRfpDraftStore.getState().title).toBe('실제 작성중이던 제목');
-  });
-});
+    useRfpDraftStore.getState().setField('title', '복원 후 사용자 편집');
+    unmount(); // cleanup의 restore가 다시 스냅샷을 덮어쓰면 안 된다.
 
-describe('restoreOrphanedTutorialDraftBackup (고아 스냅샷 가드)', () => {
-  beforeEach(() => {
-    sessionStorage.clear();
-  });
-  afterEach(() => {
-    sessionStorage.clear();
-  });
-
-  it('백업 키가 없으면 아무 것도 하지 않는다', () => {
-    resetStoreToRealDraft();
-    const before = useRfpDraftStore.getState().title;
-    restoreOrphanedTutorialDraftBackup();
-    expect(useRfpDraftStore.getState().title).toBe(before);
-  });
-
-  it('백업 키가 남아있으면(튜토리얼 탭 강제 종료 등) 복원하고 키를 제거한다', () => {
-    sessionStorage.setItem(
-      TUTORIAL_DRAFT_BACKUP_KEY,
-      JSON.stringify({ title: '오래된 실제 작성중 제목' }),
-    );
-    useRfpDraftStore.setState({ title: '튜토리얼 seed 잔재' });
-
-    restoreOrphanedTutorialDraftBackup();
-
-    expect(useRfpDraftStore.getState().title).toBe('오래된 실제 작성중 제목');
-    expect(sessionStorage.getItem(TUTORIAL_DRAFT_BACKUP_KEY)).toBeNull();
+    expect(useRfpDraftStore.getState().title).toBe('복원 후 사용자 편집');
   });
 });

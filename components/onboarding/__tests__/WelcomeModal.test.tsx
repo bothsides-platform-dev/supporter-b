@@ -57,4 +57,13 @@ describe('WelcomeModal', () => {
     await user.click(screen.getByRole('button', { name: '나중에 하기' }));
     expect(updateOnboardingMock).toHaveBeenCalledWith({ key: 'pgTutorial', event: 'dismissed' });
   });
+
+  it('Esc 등 어떤 방식으로 닫혀도 dismissed 스탬프를 찍는다 (무한 재노출 방지)', async () => {
+    const user = userEvent.setup();
+    render(<WelcomeModal variant="buyer" />);
+    await user.keyboard('{Escape}');
+
+    expect(updateOnboardingMock).toHaveBeenCalledWith({ key: 'buyerTutorial', event: 'dismissed' });
+    expect(updateOnboardingMock).toHaveBeenCalledTimes(1);
+  });
 });

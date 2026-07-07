@@ -13,7 +13,6 @@ import { RfpStep4Review } from './RfpStep4Review';
 
 import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rfp';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
-import { restoreOrphanedTutorialDraftBackup } from '@/components/onboarding/tutorial/useIsolatedRfpDraft';
 import { toast } from '@/lib/toast';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from './RfpStep3PgSelect';
@@ -62,9 +61,10 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
 
   // 마운트 시 localStorage draft의 stale 데이터 정리.
   useEffect(() => {
-    // 고아 스냅샷 가드 — 튜토리얼이 비정상 종료돼 sessionStorage에 실제 draft 백업이
-    // 남아있으면 정리 로직보다 먼저 복원한다(useIsolatedRfpDraft.ts 참조). 정상 상태면 no-op.
-    restoreOrphanedTutorialDraftBackup();
+    // 샘플 모드(buyer 튜토리얼)에서는 전부 스킵 — React는 자식 effect를 부모보다 먼저
+    // 실행하므로, 이 정리가 튜토리얼(부모)의 draft 격리 스냅샷보다 먼저 fixture pgList
+    // 기준으로 실제 draft를 훼손할 수 있다. 튜토리얼에선 seed가 곧 정답이라 정리 불필요.
+    if (onSampleSubmit) return;
 
     const { allowedPgWorkspaceIds, deadline, rfpFiles, pgSelectionInitialized, setField } =
       useRfpDraftStore.getState();
