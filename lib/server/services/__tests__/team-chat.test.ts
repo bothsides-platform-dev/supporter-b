@@ -386,6 +386,31 @@ describe('TeamChatService.sendMessage — notification fan-out', () => {
     expect(masterNotifs).toHaveLength(1);
   });
 
+  it('승인 대기(pending_approval) 멤버에게는 인앱/이메일 알림 모두 보내지 않는다', async () => {
+    const me = await seedUser(db, { email: 'me-pending-tc@b.com', name: '나' });
+    const pending = await seedUser(db, { email: 'pending-tc@b.com', name: '대기중' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, me.id, 'admin');
+    await seedMembership(db, ws.id, pending.id, 'member', { approvalStatus: 'pending_approval' });
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: me.id });
+    const svc = await buildService();
+    const actorMe: TeamChatActor = { userId: me.id, workspaceId: ws.id, workspaceType: 'buyer' };
+
+    await svc.sendMessage({ rfpId: rfp.id, body: '팀 메모' }, actorMe);
+
+    const pendingNotifs = await db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.userId, pending.id), eq(notifications.type, 'team_chat.message')));
+    expect(pendingNotifs).toHaveLength(0);
+
+    const pendingEmails = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, 'pending-tc@b.com'));
+    expect(pendingEmails).toHaveLength(0);
+  });
+
   it('enqueues a coalesced team_chat.message email digest row to teammates on send', async () => {
     const me = await seedUser(db, { email: 'me@b.com', name: '나' }); // author
     const mate = await seedUser(db, { email: 'mate@b.com', name: '동료' }); // recipient
@@ -429,6 +454,18 @@ describe('TeamChatService.listTeamMembers', () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toBe('FORBIDDEN');
+  });
+
+  it('승인 대기(pending_approval) 멤버는 멘션 피커 로스터에 노출되지 않는다', async () => {
+    const { rfp, buyerActor, buyerWs } = await seedScene();
+    const pending = await seedUser(db, { name: '대기멤버' });
+    await seedMembership(db, buyerWs.id, pending.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const result = await service.listTeamMembers(rfp.id, buyerActor);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.members.map((m) => m.userId)).not.toContain(pending.id);
+    }
   });
 });
 
@@ -482,6 +519,23 @@ describe('TeamChatService.sendMessage — 멘션', () => {
     // stranger 에게는 어떤 알림도 생성되지 않는다.
     const strangerNotifs = await notifsFor(stranger);
     expect(strangerNotifs).toHaveLength(0);
+  });
+
+  it('승인 대기(pending_approval) 멤버 토큰은 roster 검증에서 드롭 — 미리보기는 fallback 렌더', async () => {
+    const { mate, rfp, actor } = await buyerSceneWithTwoMembers();
+    const pending = await seedUser(db, { name: '대기멤버' });
+    await seedMembership(db, actor.workspaceId, pending.id, 'member', { approvalStatus: 'pending_approval' });
+
+    await service.sendMessage({ rfpId: rfp.id, body: `<@${pending.id}> 확인해줘` }, actor);
+
+    // 대기 멤버에게는 어떤 알림도 생성되지 않는다.
+    expect(await notifsFor(pending.id)).toHaveLength(0);
+    // roster 에 없는 토큰이므로 동료의 미리보기는 이름이 아닌 fallback 으로 렌더된다.
+    const mateNotifs = await notifsFor(mate.id);
+    expect(mateNotifs).toHaveLength(1);
+    expect(mateNotifs[0].type).toBe('team_chat.message');
+    expect(mateNotifs[0].body).toContain('@(알 수 없음)');
+    expect(mateNotifs[0].body).not.toContain('대기멤버');
   });
 
   it('@all 은 작성자 제외 전원에게 team_chat.mention', async () => {

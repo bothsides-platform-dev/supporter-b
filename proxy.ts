@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import authConfig from './auth.config';
 import { decideProxyRoute } from './lib/auth/route-decision';
+import { proxyDecisionUrl } from './lib/auth/proxy-url';
 import { RL_BREAK } from './lib/auth/logout-loop';
 
 // Edge-runtime-only: instantiated from `auth.config.ts` (no DB, no bcrypt).
@@ -26,11 +27,18 @@ export default auth(async (req) => {
     res.cookies.delete(RL_BREAK);
     return res;
   }
+  // 베이스를 req.url 이 아닌 실제 Host 헤더로 복원한다. next-auth 의 auth() 래퍼가
+  // AUTH_URL 로 req.url origin 을 치환하므로(reqWithEnvURL), req.url 기준이면
+  // partner 호스트의 rewrite/redirect 가 buyer origin 으로 새어 cross-origin 이 된다.
   if (decision.kind === 'redirect') {
-    return NextResponse.redirect(new URL(decision.to, req.url));
+    return NextResponse.redirect(
+      proxyDecisionUrl(decision.to, host, req.nextUrl.protocol, req.url),
+    );
   }
   if (decision.kind === 'rewrite') {
-    return NextResponse.rewrite(new URL(decision.to, req.url));
+    return NextResponse.rewrite(
+      proxyDecisionUrl(decision.to, host, req.nextUrl.protocol, req.url),
+    );
   }
   return NextResponse.next();
 });

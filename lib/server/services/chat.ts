@@ -189,7 +189,7 @@ export class ChatService {
 
       const senderName = (await this.wsRepo.getName(actor.workspaceId, tx)) ?? '상대';
 
-      const recipients = await this.wsRepo.memberRecipients(counterpartyWsId, tx);
+      const recipients = await this.wsRepo.approvedMemberRecipients(counterpartyWsId, tx);
 
       const preview = body.length > 0 ? body.slice(0, 120) : '첨부 파일을 보냈어요.';
       const conversationUrl = `${BASE_URL}/messages`;

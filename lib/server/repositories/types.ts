@@ -209,12 +209,14 @@ export interface WorkspaceRepo {
   listAllWorkspacesForMaster(tx?: Tx): Promise<WorkspaceMembershipSummary[]>;
   /** 유저가 해당 워크스페이스의 멤버인지 여부 (boolean). 권한 게이트 단일 소스. */
   isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
-  /** 해당 워크스페이스 멤버 user id 배열 — 알림 fanout + Centrifugo subscribe ACL용. 순서 미보장. */
+  /**
+   * 해당 워크스페이스 멤버 user id 배열 — 읽음(read-receipt) 계산(conversationLoaders) 전용.
+   * 승인 상태 필터가 없으므로 알림 팬아웃에는 쓰지 말 것 — approvedMemberRecipients 를 사용한다.
+   * 순서 미보장.
+   */
   memberUserIds(workspaceId: string, tx?: Tx): Promise<string[]>;
-  /** 멘션 자동완성/렌더용 팀 로스터 — {userId, name, joinedAt}. 시스템 계정 제외. */
+  /** 멘션 자동완성/렌더용 팀 로스터 — {userId, name, joinedAt}. 승인된(approved) 멤버만, 시스템 계정 제외. */
   teamRoster(workspaceId: string, tx?: Tx): Promise<TeamMember[]>;
-  /** 여러 워크스페이스 멤버 user id를 workspaceId 키 Map으로 배치 조회 — N+1 제거용. */
-  memberUserIdsBatch(wsIds: string[], tx?: Tx): Promise<Map<string, string[]>>;
   /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
@@ -233,20 +235,16 @@ export interface WorkspaceRepo {
   ): Promise<
     { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null } | undefined
   >;
-  /** 알림·이메일 팬아웃 대상 (멤버 userId+email). 시스템 계정 제외. 순서 미보장. */
-  memberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
-  /** 승인된(approvalStatus='approved') 멤버 전원 팬아웃 대상 (userId+email), role 무관. 시스템 계정 제외. 견적 요청 초대 메일 발송 대상. 순서 미보장. */
+  /** 승인된(approvalStatus='approved') 멤버 전원 팬아웃 대상 (userId+email), role 무관. 시스템 계정 제외. 인앱/이메일 알림 발송 대상. 순서 미보장. */
   approvedMemberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
   /**
-   * 여러 워크스페이스의 멤버를 (workspaceId, userId, role, email) 평면 목록으로 배치 조회.
-   * 시스템 계정 제외. 빈 입력은 빈 배열. 초대 일괄 발송(멤버 알림 + 승인된 멤버 전원 메일)용.
+   * 여러 워크스페이스의 승인된(approvalStatus='approved') 멤버를 (workspaceId, userId, role, email)
+   * 평면 목록으로 배치 조회. 시스템 계정 제외. 빈 입력은 빈 배열. 초대 일괄 발송(멤버 알림 + 메일)용.
    */
   memberRecipientsBatch(
     wsIds: string[],
     tx?: Tx,
-  ): Promise<
-    { workspaceId: string; userId: string; role: string; approvalStatus: MemberApprovalStatus; email: string }[]
-  >;
+  ): Promise<{ workspaceId: string; userId: string; role: string; email: string }[]>;
   /** active 상태 워크스페이스 (id+type) — 마스터/스위치. 없거나 비활성이면 undefined. */
   findActiveById(workspaceId: string, tx?: Tx): Promise<{ id: string; type: WorkspaceType } | undefined>;
   /**

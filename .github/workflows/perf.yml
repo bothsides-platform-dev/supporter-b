@@ -48,6 +48,12 @@ jobs:
       # `pnpm start`가 안 뜸. 가짜(non-empty) 키로 부팅만 통과시킨다.
       # 이메일은 outbox→cron flush 경로라 k6 부하만으로는 실제 Resend 호출이 없다.
       RESEND_API_KEY: "re_perf_fake_0000000000000000000000"
+      # R2는 첨부파일 전용 스토리지 — perf 부하 시나리오(smoke/load)가 첨부 업/다운로드를
+      # 다루지 않아 실제 버킷 접근이 없다. checkProductionConfig 부팅 가드만 통과시키는 가짜 값.
+      R2_ACCOUNT_ID: "perf0000000000000000000000fake0"
+      R2_ACCESS_KEY_ID: "perf_fake_access_key_id_00000000"
+      R2_SECRET_ACCESS_KEY: "perf_fake_secret_access_key_0000000000000000000000000000"
+      R2_BUCKET: "perf-fake-bucket"
       # perf 서버는 production(next start)이라 세션 쿠키가 Secure → 평문 http 의 k6 가
       # 재전송 못 해 인증 페이지를 못 잰다. http 오리진에서만 비-Secure 쿠키를 발급하게
       # 한다(lib/auth/cookie-config.ts; https 배포에선 무시되어 실 prod 불가침).
