@@ -138,7 +138,7 @@ function ogHtml(pretendard: string) {
   <div class="hero">
     <div class="brand-row">
       <div class="mark">${brandMarkSvg(132, COLOR_ON_SURFACE)}</div>
-      <div class="wordmark">서포트 B</div>
+      <div class="wordmark">서포트비</div>
     </div>
     <div class="tagline">PG사 비교 견적 플랫폼</div>
   </div>

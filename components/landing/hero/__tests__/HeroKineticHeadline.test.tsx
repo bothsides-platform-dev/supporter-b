@@ -24,15 +24,15 @@ vi.mock('../ScrambleText', () => ({
 import { HeroKineticHeadline, BrandWordB } from '../HeroKineticHeadline';
 
 describe('HeroKineticHeadline', () => {
-  it('renders the buyer brand line as text-only 서포트 B를 통해 without an inline svg mark', () => {
+  it('renders the buyer brand line as text-only 서포트비를 통해 without an inline svg mark', () => {
     render(<HeroKineticHeadline />);
 
     const heading = screen.getByRole('heading', { level: 1 });
-    expect(heading).toHaveTextContent('서포트 B를 통해');
+    expect(heading).toHaveTextContent('서포트비를 통해');
     expect(heading.querySelector('svg')).toBeNull();
   });
 
-  it('renders only 서포트 B in bold while leaving the trailing particle unbolded', () => {
+  it('renders only 서포트비 in bold while leaving the trailing particle unbolded', () => {
     render(
       <h1>
         <BrandWordB particle="로" />
@@ -40,8 +40,8 @@ describe('HeroKineticHeadline', () => {
     );
 
     const heading = screen.getByRole('heading', { level: 1 });
-    expect(heading).toHaveTextContent('서포트 B로');
-    expect(screen.getByText('서포트 B')).toHaveClass('font-black');
+    expect(heading).toHaveTextContent('서포트비로');
+    expect(screen.getByText('서포트비')).toHaveClass('font-black');
     expect(screen.getByText('로')).not.toHaveClass('font-black');
   });
 });

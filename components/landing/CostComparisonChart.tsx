@@ -35,7 +35,7 @@ export function CostComparisonChart({
           variant="current"
         />
         <BarRow
-          label="서포트 B"
+          label="서포트비"
           ratio={supporterBRatio}
           cost={supporterBCost}
           variant="supporter-b"

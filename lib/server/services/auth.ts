@@ -306,7 +306,7 @@ export class AuthService {
         {
           event: 'auth.reset',
           to: input.email,
-          subject: '[서포트 B] 비밀번호 재설정 안내',
+          subject: '[서포트비] 비밀번호 재설정 안내',
           html,
           dedupeKey,
         },
@@ -381,7 +381,7 @@ export class AuthService {
     await this.outboxRepo.enqueue({
       event: 'auth.email-change',
       to: input.newEmail,
-      subject: '[서포트 B] 이메일 변경 확인',
+      subject: '[서포트비] 이메일 변경 확인',
       html,
       dedupeKey: `email-change:${input.userId}:${input.newEmail}:${bucket15Min()}`,
     });
@@ -482,7 +482,7 @@ export class AuthService {
           {
             event: 'auth.verify',
             to: email,
-            subject: '[서포트 B] 이메일 인증을 완료해 주세요',
+            subject: '[서포트비] 이메일 인증을 완료해 주세요',
             html,
             dedupeKey,
           },

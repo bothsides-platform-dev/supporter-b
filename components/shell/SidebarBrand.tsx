@@ -6,12 +6,12 @@ import { BrandMark } from '@/components/primitives/Logo';
 import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 
-const WORDMARK = '서포트 B';
+const WORDMARK = '서포트비';
 const EASE_DECEL = [0.05, 0.7, 0.1, 1] as const;
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 /**
- * 사이드바 브랜드 로고. 아이콘은 좌측 고정, 워드마크("서포트 B")는
+ * 사이드바 브랜드 로고. 아이콘은 좌측 고정, 워드마크("서포트비")는
  * 펼침/접힘 시 글자 단위 stagger로 페이드 인/아웃한다.
  * - 펼침: 왼쪽→오른쪽, 접힘: 오른쪽→왼쪽(사이드바가 오른쪽부터 좁아지는 방향과 일치)
  * - 모바일 Sheet는 collapsible 래퍼가 없어 항상 펼침으로 표시
@@ -54,7 +54,7 @@ export function SidebarBrand({ className }: { className?: string }) {
   return (
     <Link
       href="/home"
-      aria-label="서포트 B 홈"
+      aria-label="서포트비 홈"
       className={cn(
         'group inline-flex items-center gap-3 rounded-md',
         'transition-opacity duration-[140ms] hover:opacity-70',
