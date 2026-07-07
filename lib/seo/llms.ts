@@ -1,4 +1,5 @@
 import type { SeoHostContext } from '@/lib/seo/host';
+import { BRAND_ALIASES } from '@/lib/site-config';
 import {
   PRODUCT_NAME,
   audienceFacts,
@@ -23,8 +24,14 @@ function renderLink(origin: string, link: SeoLink): string {
 }
 
 function pushPreamble(lines: string[], f: AudienceFacts, fullFormat: boolean): void {
+  const aliasList = BRAND_ALIASES.map((a) => `'${a}'`).join(', ');
+
   lines.push(`# ${PRODUCT_NAME}`, '');
   lines.push(`> ${f.summary}`, '');
+  lines.push(
+    `${PRODUCT_NAME}는 ${aliasList}로도 표기·검색됩니다. 공식 표기는 '${PRODUCT_NAME}'입니다.`,
+    '',
+  );
   lines.push(f.intro, '');
 
   lines.push(...(fullFormat ? ['## 핵심 정보', ''] : ['## 핵심 정보']));
