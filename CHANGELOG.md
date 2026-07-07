@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.77.1] - 2026-07-07
+
+### Added
+
+- **화면 사용 패턴을 더 잘 이해할 수 있게 됐어요 (사용자 화면 변화 없음)**: Microsoft Clarity 세션 리플레이·히트맵 분석 태그를 추가했어요. 실제 운영 환경에서만 동작하고, 로컬 개발 중에는 로드되지 않아요.
+
 ## [0.2.77.0] - 2026-07-07
 
 ### Added
