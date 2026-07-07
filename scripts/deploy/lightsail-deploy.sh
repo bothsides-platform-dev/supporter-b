@@ -34,11 +34,13 @@ log "Installing dependencies (frozen lockfile, pnpm 9)"
 pnpm install --frozen-lockfile
 
 log "Ensuring Postgres container is up"
-docker compose -f docker-compose.prod.yml up -d
+# --env-file: compose 인터폴레이션(${POSTGRES_PASSWORD:?} 등)에 필요한 값을 셸에
+# export 하지 않고 컨테이너 정의에만 공급한다.
+docker compose --env-file ./.env.production -f docker-compose.prod.yml up -d
 # Wait for Postgres to accept connections before the app starts.
 PG_USER="$( ( set -a; . ./.env.production; set +a; echo "${POSTGRES_USER:-supporter_b}" ) )"
 for i in $(seq 1 30); do
-  if docker compose -f docker-compose.prod.yml exec -T pg \
+  if docker compose --env-file ./.env.production -f docker-compose.prod.yml exec -T pg \
        pg_isready -U "$PG_USER" >/dev/null 2>&1; then
     break
   fi
