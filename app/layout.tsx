@@ -25,7 +25,7 @@ const jetbrainsMono = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
-  title: { default: siteConfig.title, template: "%s — 서포트 B" },
+  title: { default: siteConfig.title, template: "%s — 서포트비" },
   description: siteConfig.description,
   keywords: [...siteConfig.keywords],
   applicationName: siteConfig.name,

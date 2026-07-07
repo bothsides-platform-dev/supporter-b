@@ -63,7 +63,7 @@ export function SupportBWordmark({
       className={cn('inline-flex items-baseline whitespace-nowrap', className)}
       style={{ color: `var(${colorVar})` }}
     >
-      <span className="font-sans font-black leading-none tracking-[-0.04em]">서포트 B</span>
+      <span className="font-sans font-black leading-none tracking-[-0.04em]">서포트비</span>
       {particle ? <span>{particle}</span> : null}
     </span>
   )
@@ -74,7 +74,7 @@ export function Logo({ variant = 'default', className, href }: LogoProps) {
     return (
       <Link
         href={href ?? '/home'}
-        aria-label="서포트 B 홈"
+        aria-label="서포트비 홈"
         className={cn(
           'group flex items-center justify-center',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-surface)]',
@@ -93,7 +93,7 @@ export function Logo({ variant = 'default', className, href }: LogoProps) {
   return (
     <Link
       href={href ?? '/'}
-      aria-label="서포트 B 홈"
+      aria-label="서포트비 홈"
       className={cn(
         'group inline-flex items-center gap-3',
         'opacity-100 hover:opacity-70 transition-opacity duration-[140ms]',

@@ -48,7 +48,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # vitest workspace projects: unit-node uses pglite (no docker
       # needed), unit-jsdom uses RTL. 280+ tests, all in-process.
-      - run: pnpm test
+      # --maxWorkers=4: default fork-pool concurrency over-provisions workers
+      # relative to runner RAM, occasionally crashing a worker fork under
+      # memory pressure ("Worker exited unexpectedly" unhandled error, seen
+      # locally too — see project memory: full-suite-slow-swap-thrash).
+      - run: pnpm test -- --maxWorkers=4
 
   e2e:
     name: e2e (playwright)

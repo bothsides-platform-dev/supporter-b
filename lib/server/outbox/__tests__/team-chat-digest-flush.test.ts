@@ -76,7 +76,7 @@ async function seedDueDigest(
   await db.insert(outboxEntries).values({
     event: 'team_chat.message',
     toAddr: to,
-    subject: '[서포트 B] placeholder',
+    subject: '[서포트비] placeholder',
     html: '<p>placeholder</p>',
     dedupeKey,
     scheduledAt: new Date(Date.now() - 1000),

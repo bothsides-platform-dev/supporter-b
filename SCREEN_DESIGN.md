@@ -1,8 +1,8 @@
-# Supporter B PG RFP 화면 설계
+# 서포트비 PG RFP 화면 설계
 
 ## Context
 
-본 문서는 PG(결제대행사) 비공개 1:N RFP 플랫폼 **Supporter B** 의 화면 설계 명세이다.
+본 문서는 PG(결제대행사) 비공개 1:N RFP 플랫폼 **서포트비** 의 화면 설계 명세이다.
 
 본 문서 **§0 PG v0 화면 IA** 가 v0 제품 정의이자 구현 대상의 최상위 기준이다 (레거시 `PG_RFP_SPEC.md` 는 제거됨 — 제품 규칙은 아래 "확정 결정" 블록 + 코드·테스트가 캐노니컬).
 
@@ -264,7 +264,7 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 ### 1.3 화면 명세
 
 #### 로그인 `/login`
-- 좌상단 워드마크 `B  Support B` + serial `EDITION 01`
+- 좌상단 워드마크 `B  서포트비` + serial `EDITION 01`
 - 중앙 카드 max-w 380, 헤어라인 외곽
 - 필드: 이메일(`autocomplete=email`) / 비밀번호(`autocomplete=current-password`, 보기 토글)
 - "로그인 유지" 체크박스 (30일 세션)

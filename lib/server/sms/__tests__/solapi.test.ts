@@ -22,7 +22,7 @@ describe('sendSms', () => {
       json: async () => ({ groupInfo: { count: { registeredSuccess: 1 } } }),
     });
 
-    await sendSms('01098765432', '서포트 B 인증번호: 123456');
+    await sendSms('01098765432', '서포트비 인증번호: 123456');
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -35,7 +35,7 @@ describe('sendSms', () => {
     expect(auth).toMatch(/^HMAC-SHA256 apiKey=NCSAYU7YDBXYORXC, date=/);
     expect(auth).toMatch(/, salt=[0-9a-f]{64}, signature=[0-9a-f]{64}$/);
     expect(JSON.parse(String(init.body))).toEqual({
-      messages: [{ to: '01098765432', from: '01012345678', text: '서포트 B 인증번호: 123456' }],
+      messages: [{ to: '01098765432', from: '01012345678', text: '서포트비 인증번호: 123456' }],
     });
   });
 

@@ -8,9 +8,9 @@ vi.mock('next-axiom', () => ({ AxiomWebVitals: () => null }));
 vi.mock('@/lib/site-config', () => ({
   siteConfig: {
     url: 'https://support-b.com',
-    title: '서포트 B',
+    title: '서포트비',
     description: 'Test',
-    name: '서포트 B',
+    name: '서포트비',
     locale: 'ko_KR',
     keywords: [],
     ogImageAlt: 'Test',

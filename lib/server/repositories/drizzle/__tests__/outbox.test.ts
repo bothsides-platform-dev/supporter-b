@@ -292,7 +292,7 @@ describe('DrizzleOutboxRepository / chat-digest separation', () => {
     await db.insert(outboxEntries).values({
       event: 'chat.message',
       toAddr: to,
-      subject: `[서포트 B] ${to}`,
+      subject: `[서포트비] ${to}`,
       html: '<a>x</a>',
       dedupeKey,
       scheduledAt,

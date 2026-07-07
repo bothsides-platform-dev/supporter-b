@@ -95,7 +95,7 @@ describe('PgLanding — PG 전용 랜딩', () => {
   it('화면7 PG 전용 FAQ 문항을 렌더한다', () => {
     render(<PgLanding />);
     expect(
-      screen.getByText('서포트 B의 리드는 어떤 기준으로 검증되나요?'),
+      screen.getByText('서포트비의 리드는 어떤 기준으로 검증되나요?'),
     ).toBeInTheDocument();
   });
 
@@ -134,8 +134,8 @@ describe('PgLanding — PG 전용 랜딩', () => {
     const schemas = Array.from(scripts).map((s) => JSON.parse(s.textContent!));
     const org = schemas.find((s) => s['@type'] === 'Organization');
     expect(org).toBeTruthy();
-    expect(org.name).toBe('서포트 B');
-    expect(org.alternateName).toContain('서포트비');
+    expect(org.name).toBe('서포트비');
+    expect(org.alternateName).toContain('서포트 B');
     expect(org.description).toBe('PG 영업담당자를 위한 신규 가맹점 인바운드 채널');
   });
 

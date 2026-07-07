@@ -108,7 +108,7 @@ export class WorkspaceService {
         {
           event: 'workspace.invited',
           to: normalizedEmail,
-          subject: '[서포트 B] 워크스페이스 초대장',
+          subject: '[서포트비] 워크스페이스 초대장',
           html,
           dedupeKey: `ws-invite:${actor.workspaceId}:${normalizedEmail}:${bucket15Min()}`,
         },
@@ -179,7 +179,7 @@ export class WorkspaceService {
         {
           event: 'workspace.invited',
           to: normalizedEmail,
-          subject: '[서포트 B] 워크스페이스 초대장',
+          subject: '[서포트비] 워크스페이스 초대장',
           html,
           dedupeKey: `ws-invite-resend:${actor.workspaceId}:${normalizedEmail}:${tokenHash}`,
         },

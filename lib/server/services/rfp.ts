@@ -169,7 +169,7 @@ export class RfpService {
           linkUrl: `/inbox/${rfpCode}`,
           email: {
             event: 'rfp.awarded',
-            subject: `[서포트 B · ${rfpCode}] 선정 결과`,
+            subject: `[서포트비 · ${rfpCode}] 선정 결과`,
             html: awardedHtml,
             dedupeKey: (email) => `rfp:${rfpId}:awarded:${email}`,
           },
@@ -527,7 +527,7 @@ export class RfpService {
             body: '',
             email: {
               event: 'rfp.invited',
-              subject: `[서포트 B · ${rfpRow.code}] 견적 요청이 도착했어요`,
+              subject: `[서포트비 · ${rfpRow.code}] 견적 요청이 도착했어요`,
               html,
               dedupeKey: () => `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${member.userId}`,
             },
@@ -707,7 +707,7 @@ export class RfpService {
             body: '',
             email: {
               event: 'rfp.invited',
-              subject: `[서포트 B · ${rfpCode}] 견적 요청이 도착했어요`,
+              subject: `[서포트비 · ${rfpCode}] 견적 요청이 도착했어요`,
               html,
               dedupeKey: () => `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${member.userId}`,
             },
@@ -839,7 +839,7 @@ export class RfpService {
               linkUrl: `/inbox/${rfp.code}`,
               email: {
                 event: 'rfp.requote_requested',
-                subject: `[서포트 B · ${rfp.code}] 견적 재요청이 도착했어요`,
+                subject: `[서포트비 · ${rfp.code}] 견적 재요청이 도착했어요`,
                 html,
                 dedupeKey: () => `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:user:${m.userId}`,
               },
@@ -1024,7 +1024,7 @@ export class RfpService {
               body: '',
               email: {
                 event: 'rfp.invited',
-                subject: `[서포트 B · ${code}] 견적 요청이 도착했어요`,
+                subject: `[서포트비 · ${code}] 견적 요청이 도착했어요`,
                 html,
                 dedupeKey: () => `rfp:${rfpId}:invite:ws:${pgWsId}:user:${member.userId}`,
               },
