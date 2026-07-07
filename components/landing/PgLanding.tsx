@@ -22,6 +22,7 @@ import {
   organizationJsonLd,
   faqPageJsonLd,
 } from '@/components/landing/pg-landing-data';
+import { serializeJsonLd } from '@/lib/seo/jsonld';
 
 const sectionCls =
   'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--shell-topbar)]';
@@ -33,11 +34,11 @@ export function PgLanding() {
     <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(organizationJsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(faqPageJsonLd) }}
       />
 
       {/* ── Nav — 히어로 다크 씬 위에서는 투명+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}

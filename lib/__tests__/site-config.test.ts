@@ -36,4 +36,11 @@ describe('BRAND_ALIASES', () => {
   it('does not include the official notation itself', () => {
     expect(BRAND_ALIASES).not.toContain('서포트 B');
   });
+
+  it('drift guard: every Korean alias is mirrored into siteConfig.keywords', () => {
+    const koreanAliases = BRAND_ALIASES.filter((a) => /[가-힣]/.test(a));
+    for (const alias of koreanAliases) {
+      expect(siteConfig.keywords).toContain(alias);
+    }
+  });
 });

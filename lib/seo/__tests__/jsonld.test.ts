@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { buildOrganizationJsonLd, buildSoftwareApplicationJsonLd } from '@/lib/seo/jsonld';
+import {
+  buildOrganizationJsonLd,
+  buildSoftwareApplicationJsonLd,
+  serializeJsonLd,
+} from '@/lib/seo/jsonld';
 import { siteConfig, BRAND_ALIASES } from '@/lib/site-config';
 
 describe('buildOrganizationJsonLd', () => {
@@ -37,5 +41,26 @@ describe('buildSoftwareApplicationJsonLd', () => {
     expect(app.applicationCategory).toBe('BusinessApplication');
     expect(app.operatingSystem).toBe('Web');
     expect(app.offers).toEqual({ '@type': 'Offer', price: '0', priceCurrency: 'KRW' });
+  });
+});
+
+describe('serializeJsonLd', () => {
+  it('escapes < so </script> in content cannot break out of the script tag', () => {
+    const out = serializeJsonLd({ name: 'x</script><img src=x onerror=alert(1)>' });
+    expect(out).not.toContain('</script>');
+    expect(out).toContain('\\u003c/script\\u003e');
+    expect(JSON.parse(out)).toEqual({ name: 'x</script><img src=x onerror=alert(1)>' });
+  });
+
+  it('escapes U+2028/U+2029 line separators', () => {
+    const out = serializeJsonLd({ name: 'a b c' });
+    expect(out).toContain('\\u2028');
+    expect(out).toContain('\\u2029');
+    expect(JSON.parse(out)).toEqual({ name: 'a b c' });
+  });
+
+  it('round-trips plain Korean content unchanged', () => {
+    const org = buildOrganizationJsonLd();
+    expect(JSON.parse(serializeJsonLd(org))).toEqual(org);
   });
 });

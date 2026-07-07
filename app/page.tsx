@@ -1,7 +1,7 @@
 import { LandingHero } from '@/components/landing/LandingHero';
 import { LandingHeaderNav } from '@/components/landing/LandingHeaderNav';
 import { FAQ_ITEMS } from '@/components/landing/faq-data';
-import { buildOrganizationJsonLd, buildSoftwareApplicationJsonLd } from '@/lib/seo/jsonld';
+import { buildOrganizationJsonLd, buildSoftwareApplicationJsonLd, serializeJsonLd } from '@/lib/seo/jsonld';
 
 // buyer 호스트/단일 호스트(local·dev)의 "/" 는 정적으로 프리렌더된다. partner(PG) 호스트의
 // "/" 는 proxy.ts 의 decideRoute rewrite 가 /pg-landing 으로 내부 전달하므로 이 페이지는
@@ -27,15 +27,15 @@ export default function RootPage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(organizationJsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(faqPageJsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareApplicationJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(softwareApplicationJsonLd) }}
       />
       <LandingHero nav={<LandingHeaderNav />} />
     </>

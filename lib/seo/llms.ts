@@ -28,8 +28,9 @@ function pushPreamble(lines: string[], f: AudienceFacts, fullFormat: boolean): v
 
   lines.push(`# ${PRODUCT_NAME}`, '');
   lines.push(`> ${f.summary}`, '');
+  // '등' 뒤에 조사를 붙여 마지막 별칭이 무엇이든 문법이 깨지지 않게 한다.
   lines.push(
-    `${PRODUCT_NAME}는 ${aliasList}로도 표기·검색됩니다. 공식 표기는 '${PRODUCT_NAME}'입니다.`,
+    `공식 표기는 '${PRODUCT_NAME}'입니다. ${aliasList} 등으로도 표기·검색됩니다.`,
     '',
   );
   lines.push(f.intro, '');
