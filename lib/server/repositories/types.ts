@@ -209,12 +209,14 @@ export interface WorkspaceRepo {
   listAllWorkspacesForMaster(tx?: Tx): Promise<WorkspaceMembershipSummary[]>;
   /** 유저가 해당 워크스페이스의 멤버인지 여부 (boolean). 권한 게이트 단일 소스. */
   isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
-  /** 해당 워크스페이스 멤버 user id 배열 — 알림 fanout + Centrifugo subscribe ACL용. 순서 미보장. */
+  /**
+   * 해당 워크스페이스 멤버 user id 배열 — 읽음(read-receipt) 계산(conversationLoaders) 전용.
+   * 승인 상태 필터가 없으므로 알림 팬아웃에는 쓰지 말 것 — approvedMemberRecipients 를 사용한다.
+   * 순서 미보장.
+   */
   memberUserIds(workspaceId: string, tx?: Tx): Promise<string[]>;
-  /** 멘션 자동완성/렌더용 팀 로스터 — {userId, name, joinedAt}. 시스템 계정 제외. */
+  /** 멘션 자동완성/렌더용 팀 로스터 — {userId, name, joinedAt}. 승인된(approved) 멤버만, 시스템 계정 제외. */
   teamRoster(workspaceId: string, tx?: Tx): Promise<TeamMember[]>;
-  /** 여러 워크스페이스 멤버 user id를 workspaceId 키 Map으로 배치 조회 — N+1 제거용. */
-  memberUserIdsBatch(wsIds: string[], tx?: Tx): Promise<Map<string, string[]>>;
   /** 해당 워크스페이스 멤버 이메일 배열 — outbox 발송 fanout용. 순서 미보장. */
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
@@ -242,9 +244,7 @@ export interface WorkspaceRepo {
   memberRecipientsBatch(
     wsIds: string[],
     tx?: Tx,
-  ): Promise<
-    { workspaceId: string; userId: string; role: string; approvalStatus: MemberApprovalStatus; email: string }[]
-  >;
+  ): Promise<{ workspaceId: string; userId: string; role: string; email: string }[]>;
   /** active 상태 워크스페이스 (id+type) — 마스터/스위치. 없거나 비활성이면 undefined. */
   findActiveById(workspaceId: string, tx?: Tx): Promise<{ id: string; type: WorkspaceType } | undefined>;
   /**

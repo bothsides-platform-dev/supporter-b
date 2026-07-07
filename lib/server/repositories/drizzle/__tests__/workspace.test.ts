@@ -164,39 +164,6 @@ describe('DrizzleWorkspaceRepository', () => {
     });
   });
 
-  describe('memberUserIdsBatch', () => {
-    it('returns empty Map for empty input', async () => {
-      const result = await repo.memberUserIdsBatch([]);
-      expect(result).toEqual(new Map());
-    });
-
-    it('returns Map keyed by workspaceId with member IDs', async () => {
-      const ws1 = await seedPgWorkspace(db, 'batch-ws1.com');
-      const ws2 = await seedPgWorkspace(db, 'batch-ws2.com');
-      const u1 = await seedUser(db, { email: 'u1@batch-ws1.com' });
-      const u2 = await seedUser(db, { email: 'u2@batch-ws2.com' });
-      const u3 = await seedUser(db, { email: 'u3@batch-ws1.com' });
-      await seedMembership(db, ws1.id, u1.id);
-      await seedMembership(db, ws1.id, u3.id);
-      await seedMembership(db, ws2.id, u2.id);
-
-      const result = await repo.memberUserIdsBatch([ws1.id, ws2.id]);
-      expect(result.get(ws1.id)?.sort()).toEqual([u1.id, u3.id].sort());
-      expect(result.get(ws2.id)).toEqual([u2.id]);
-    });
-
-    it('workspaceId not in input is absent from Map', async () => {
-      const ws1 = await seedPgWorkspace(db, 'batch-absent-a.com');
-      const ws2 = await seedPgWorkspace(db, 'batch-absent-b.com');
-      const u1 = await seedUser(db, { email: 'absent-u1@batch-a.com' });
-      await seedMembership(db, ws1.id, u1.id);
-
-      const result = await repo.memberUserIdsBatch([ws1.id]);
-      expect(result.has(ws1.id)).toBe(true);
-      expect(result.has(ws2.id)).toBe(false);
-    });
-  });
-
   describe('memberEmails', () => {
     it('returns email addresses for every member of the workspace', async () => {
       const ws = await seedPgWorkspace(db, 'pg.email.test');
@@ -743,9 +710,9 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(rows).toHaveLength(3);
       expect(rows).toEqual(
         expect.arrayContaining([
-          { workspaceId: ws1.id, userId: a1.id, role: 'admin', approvalStatus: 'approved', email: 'a1@mrb-1.com' },
-          { workspaceId: ws1.id, userId: m1.id, role: 'member', approvalStatus: 'approved', email: 'm1@mrb-1.com' },
-          { workspaceId: ws2.id, userId: a2.id, role: 'admin', approvalStatus: 'approved', email: 'a2@mrb-2.com' },
+          { workspaceId: ws1.id, userId: a1.id, role: 'admin', email: 'a1@mrb-1.com' },
+          { workspaceId: ws1.id, userId: m1.id, role: 'member', email: 'm1@mrb-1.com' },
+          { workspaceId: ws2.id, userId: a2.id, role: 'admin', email: 'a2@mrb-2.com' },
         ]),
       );
     });
@@ -1153,7 +1120,7 @@ describe('DrizzleWorkspaceRepository', () => {
       await seedMembership(db, ws.id, a.id, 'admin');
       await seedMembership(db, ws.id, p.id, 'admin', { approvalStatus: 'pending_approval' });
       const rows = await repo.memberRecipientsBatch([ws.id]);
-      expect(rows.find((r) => r.userId === a.id)?.approvalStatus).toBe('approved');
+      expect(rows.find((r) => r.userId === a.id)).toBeDefined();
       expect(rows.find((r) => r.userId === p.id)).toBeUndefined();
     });
 

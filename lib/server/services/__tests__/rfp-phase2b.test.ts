@@ -1,6 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
+import { logger } from '@/lib/observability/logger';
+
+vi.mock('@/lib/observability/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
@@ -60,6 +65,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   __resetForTest();
+  vi.clearAllMocks();
 });
 
 // ─── Seed helpers ─────────────────────────────────────────────────────────────
@@ -584,6 +590,30 @@ describe('RfpService.sendDraftInvitations', () => {
       .where(and(eq(notifications.userId, pendingMember.id), eq(notifications.type, 'rfp.invited')));
     expect(pendingNotifs).toHaveLength(0);
   });
+
+  it('승인된 수신자가 0명인 PG 워크스페이스 초대는 warn 로그를 남긴다 (발송 자체는 진행)', async () => {
+    const env = await seedSendDraftEnv();
+    // 승인 대기 멤버만 있는 PG 워크스페이스 — approved 수신자 0명.
+    const pendingOnly = await seedUser(db, { email: 'pending-only@senddraft.com' });
+    const emptyPgWs = await seedPgWorkspace(db, 'pg-empty-senddraft');
+    await seedMembership(db, emptyPgWs.id, pendingOnly.id, 'member', { approvalStatus: 'pending_approval' });
+
+    await db.insert(rfpAllowedPg).values({ rfpId: env.rfpId, pgWsId: emptyPgWs.id });
+    const invId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: invId, rfpId: env.rfpId, pgWsId: emptyPgWs.id,
+      tokenHash: `draft-${invId}`, sentAt: new Date(), expiresAt: new Date(Date.now() + 7 * 86400_000), status: 'draft',
+    });
+
+    const result = await service.sendDraftInvitations(env.rfpCode, { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+    expect(result).toMatchObject({ ok: true, sentCount: 1 });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('no approved recipients'),
+      expect.objectContaining({ rfpId: env.rfpId, pgWsId: emptyPgWs.id }),
+    );
+    expect(await db.select().from(notifications).where(eq(notifications.userId, pendingOnly.id))).toHaveLength(0);
+  });
 });
 
 // ─── RfpService.createRfp ────────────────────────────────────────────────────
@@ -707,6 +737,28 @@ describe('RfpService.createRfp', () => {
       .from(notifications)
       .where(and(eq(notifications.userId, pendingMember.id), eq(notifications.type, 'rfp.invited')));
     expect(pendingNotifs).toHaveLength(0);
+  });
+
+  it('즉시 발송(send=true)에서 승인된 수신자가 0명인 PG 워크스페이스는 warn 로그를 남긴다', async () => {
+    const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
+    // 승인 대기 멤버만 있는 PG 워크스페이스 — approved 수신자 0명.
+    const pendingOnly = await seedUser(db, { email: 'pending-only@crfp.com' });
+    const emptyPgWs = await seedPgWorkspace(db, 'pg-empty-crfp');
+    await seedMembership(db, emptyPgWs.id, pendingOnly.id, 'member', { approvalStatus: 'pending_approval' });
+
+    const result = await service.createRfp({
+      title: 'Sent RFP Empty Recipients', deadline: new Date(Date.now() + 7 * 86400_000),
+      allowedPgWorkspaceIds: [emptyPgWs.id], rfpAttachmentIds: [],
+      requiredPaymentMethods: ['card'], customPaymentMethods: [],
+      send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
+    }, { userId: buyerUserId, workspaceId: buyerWsId });
+    expect(result.ok).toBe(true);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('no approved recipients'),
+      expect.objectContaining({ pgWsId: emptyPgWs.id }),
+    );
+    expect(await db.select().from(notifications).where(eq(notifications.userId, pendingOnly.id))).toHaveLength(0);
   });
 });
 

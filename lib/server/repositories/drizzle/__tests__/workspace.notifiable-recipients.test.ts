@@ -34,19 +34,6 @@ describe('DrizzleWorkspaceRepository — 알림 수신자는 master 계정 포�
     expect(ids).not.toContain(demo.id);
   });
 
-  it('memberUserIdsBatch: master 포함, 데모 placeholder 제외', async () => {
-    const ws = await seedBuyerWorkspace(db);
-    const master = await seedUser(db, { name: '운영자', isSystemAccount: true });
-    const demo = await seedUser(db, { name: '데모', isSystemAccount: true, passwordHash: '!' });
-    await seedMembership(db, ws.id, master.id, 'admin');
-    await seedMembership(db, ws.id, demo.id, 'member');
-
-    const map = await repo.memberUserIdsBatch([ws.id]);
-
-    expect(map.get(ws.id)).toContain(master.id);
-    expect(map.get(ws.id)).not.toContain(demo.id);
-  });
-
   it('approvedMemberRecipients: master 포함, 데모 placeholder 제외', async () => {
     const ws = await seedBuyerWorkspace(db);
     const master = await seedUser(db, { name: '운영자', email: 'ops@real.com', isSystemAccount: true });
