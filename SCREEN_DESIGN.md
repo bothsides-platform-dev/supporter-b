@@ -62,7 +62,7 @@ Authenticated AppShell
 │  ├─ /inbox/:rfpId                (딜룸 — `@modal` 인터셉트 모달 + 정식 페이지)
 │  └─ /inbox/:rfpId/submitted
 ├─ /opportunities                (pg — 오픈 RFP 게시판)
-├─ /tutorial                     (buyer+pg — 온보딩 튜토리얼. 홈 환영 모달/재유도 배너의 진입점. v0는 스텁 — 완료 시 /home 리다이렉트)
+├─ /tutorial                     (buyer+pg — 온보딩 튜토리얼. 홈 환영 모달/재유도 배너의 진입점. buyer는 BuyerTutorialFlow가 실제 여정(작성→도착연출→비교·선정→완료) 제공, pg는 아직 플레이스홀더. 완료 시 /home 리다이렉트)
 ├─ /notifications
 ├─ /messages
 ├─ /workspace/new
