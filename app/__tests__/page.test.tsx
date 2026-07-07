@@ -17,6 +17,7 @@ vi.mock('@/components/landing/faq-data', () => ({
 }));
 vi.mock('@/lib/site-config', () => ({
   siteConfig: { name: 'Test', url: 'https://test.com', description: 'Test' },
+  BRAND_ALIASES: ['테스트비'],
 }));
 
 import RootPage from '../page';
