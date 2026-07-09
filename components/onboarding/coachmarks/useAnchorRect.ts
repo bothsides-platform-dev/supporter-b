@@ -45,6 +45,16 @@ export function useAnchorRect(
     let lastKey = '';
     const updateRect = () => {
       if (cancelled || !trackedEl) return;
+      // 같은 target 문자열이 유지된 채 요소가 리마운트되면(위저드 리렌더) 추적이
+      // 분리된 요소에 남아 rect가 동결된다 — 폴 tick에서 재query해 재부착한다.
+      // scrollIntoView는 재발사하지 않는다(scrolledRef가 이미 true).
+      if (!trackedEl.isConnected) {
+        const replacement = queryTarget(target);
+        if (!replacement) return; // 다음 tick/MutationObserver에서 재시도
+        trackedEl = replacement;
+        resizeObserver?.disconnect();
+        resizeObserver?.observe(replacement);
+      }
       const rect = trackedEl.getBoundingClientRect();
       // 동일 rect 재-set 방지 — 폴링이 매 tick 불필요한 리렌더를 만들지 않도록.
       const key = `${rect.top},${rect.left},${rect.width},${rect.height}`;
