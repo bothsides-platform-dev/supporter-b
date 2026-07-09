@@ -26,7 +26,7 @@ const ORG_LABEL: Record<AdminSignupNotice['orgType'], string> = {
 };
 
 export function buildAdminSignupSubject(notice: AdminSignupNotice): string {
-  return `[서포트 B] 새 입점 심사 요청 — ${notice.workspaceName} (${ORG_LABEL[notice.orgType]})`;
+  return `[서포트비] 새 입점 심사 요청 — ${notice.workspaceName} (${ORG_LABEL[notice.orgType]})`;
 }
 
 export function notifyAdminNewSignupAfterCommit(notice: AdminSignupNotice): void {
@@ -57,7 +57,7 @@ export type AdminMembershipNotice = {
 };
 
 export function buildAdminMembershipSubject(notice: AdminMembershipNotice): string {
-  return `[서포트 B] PG사 계정 합류 심사 요청 — ${notice.userName} (${notice.workspaceName})`;
+  return `[서포트비] PG사 계정 합류 심사 요청 — ${notice.userName} (${notice.workspaceName})`;
 }
 
 export function notifyAdminNewMembershipAfterCommit(notice: AdminMembershipNotice): void {

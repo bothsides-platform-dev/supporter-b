@@ -6,7 +6,7 @@ import type { PgWorkspace } from '@/components/rfp/RfpStep3PgSelect';
 import type { CurrentConditions } from '@/components/rfp/comparison/ImprovementSummary';
 
 // 마법사 step 1(사업자 확인)에 노출할 등록 사업자 — 데모에서 "연동된 상태"를 실제 테이블로 보여준다.
-export const demoWorkspaceName = '서포트 B';
+export const demoWorkspaceName = '서포트비';
 export const fixtureBizProfile: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'> = {
   bizNo: '205-88-01505',
   taxType: 'general',

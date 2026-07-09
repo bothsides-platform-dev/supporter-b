@@ -22,6 +22,7 @@ import {
   organizationJsonLd,
   faqPageJsonLd,
 } from '@/components/landing/pg-landing-data';
+import { serializeJsonLd } from '@/lib/seo/jsonld';
 
 const sectionCls =
   'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--shell-topbar)]';
@@ -33,11 +34,11 @@ export function PgLanding() {
     <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(organizationJsonLd) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(faqPageJsonLd) }}
       />
 
       {/* ── Nav — 히어로 다크 씬 위에서는 투명+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
@@ -79,7 +80,7 @@ export function PgLanding() {
             intro={
               <FadeInView>
                 <p className={subCls}>
-                  수수료율·정산주기·보증금·운영 조건을 비교하려는 고객사가 서포트 B에 견적을
+                  수수료율·정산주기·보증금·운영 조건을 비교하려는 고객사가 서포트비에 견적을
                   올립니다. 파트너 PG사는 먼저 연락하지 않아도, 조건에 맞는 요청을 인바운드로 받아
                   새로운 영업 기회를 확보합니다.
                 </p>
@@ -90,7 +91,7 @@ export function PgLanding() {
           <div className={`${containerCls} mt-[var(--s-9)]`}>
             <FadeInView>
               <p className={`${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface)]`}>
-                서포트 B는 “PG 조건을 비교하고 싶다”는 분명한 신호가 있는 고객사만 골라
+                서포트비는 “PG 조건을 비교하고 싶다”는 분명한 신호가 있는 고객사만 골라
                 연결합니다.
               </p>
             </FadeInView>
@@ -185,7 +186,7 @@ export function PgLanding() {
                   확실한 니즈가 있는 고객사를 먼저 만나세요
                 </h2>
                 <p className={`max-w-[680px] ${LANDING_TYPE.lead} text-[color-mix(in_srgb,var(--md-sys-color-surface)_72%,transparent)]`}>
-                  서포트 B는 성장 고객사의 PG 비교 요청을 검증된 RFP로 정리해 파트너 PG사에게
+                  서포트비는 성장 고객사의 PG 비교 요청을 검증된 RFP로 정리해 파트너 PG사에게
                   제공합니다. 새로운 가맹점 영업 기회를 더 빠르게 만나보세요.
                 </p>
               </div>

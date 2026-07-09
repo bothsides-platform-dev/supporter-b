@@ -3,6 +3,7 @@ import { buildLlmsTxt, buildLlmsFullTxt, TEXT_PLAIN_HEADERS } from '@/lib/seo/ll
 import type { SeoHostContext } from '@/lib/seo/host';
 import { FAQ_ITEMS } from '@/components/landing/faq-data';
 import { PG_FAQ_ITEMS } from '@/components/landing/pg-faq-data';
+import { BRAND_ALIASES } from '@/lib/site-config';
 
 const BUYER: SeoHostContext = { type: 'buyer', origin: 'https://support-b.com' };
 const PG: SeoHostContext = { type: 'pg', origin: 'https://partner.support-b.com' };
@@ -16,7 +17,7 @@ it('exports TEXT_PLAIN_HEADERS with correct response header values', () => {
 describe('buildLlmsTxt', () => {
   it('starts with the product H1 and a blockquote summary (spec shape)', () => {
     const out = buildLlmsTxt(BUYER);
-    expect(out.startsWith('# 서포트 B')).toBe(true);
+    expect(out.startsWith('# 서포트비')).toBe(true);
     // exactly one H1
     expect(out.match(/^# /gm)?.length).toBe(1);
     expect(out).toMatch(/^> /m); // blockquote summary line
@@ -40,7 +41,7 @@ describe('buildLlmsTxt', () => {
 
   it('pg file carries PG facts and pg absolute URLs', () => {
     const out = buildLlmsTxt(PG);
-    expect(out.startsWith('# 서포트 B')).toBe(true);
+    expect(out.startsWith('# 서포트비')).toBe(true);
     expect(out).toMatch(/인바운드|검증된 리드|영업/);
     expect(out).toContain('https://partner.support-b.com/signup/pg');
     expect(out).toContain('https://partner.support-b.com/llms-full.txt');
@@ -79,13 +80,37 @@ describe('preamble format', () => {
   });
 });
 
+describe('brand aliases (GEO)', () => {
+  const outputs = [
+    buildLlmsTxt(BUYER),
+    buildLlmsTxt(PG),
+    buildLlmsFullTxt(BUYER),
+    buildLlmsFullTxt(PG),
+  ];
+
+  it('every builder × host output states all brand aliases', () => {
+    for (const out of outputs) {
+      for (const alias of BRAND_ALIASES) {
+        expect(out).toContain(alias);
+      }
+    }
+  });
+
+  it('alias sentence appears before ## 핵심 정보 (entity-adjacent placement)', () => {
+    for (const out of outputs) {
+      expect(out.indexOf('서포트 B')).toBeGreaterThan(-1);
+      expect(out.indexOf('서포트 B')).toBeLessThan(out.indexOf('## 핵심 정보'));
+    }
+  });
+});
+
 describe('buildLlmsFullTxt', () => {
   it('buyer full file embeds the canonical FAQ verbatim (DRY, no drift)', () => {
     const out = buildLlmsFullTxt(BUYER);
     expect(out).toContain(FAQ_ITEMS[0].q);
     expect(out).toContain(FAQ_ITEMS[0].a);
     expect(out).toMatch(/^## /m); // markdown section headings
-    expect(out.startsWith('# 서포트 B')).toBe(true);
+    expect(out.startsWith('# 서포트비')).toBe(true);
   });
 
   it('pg full file embeds the canonical PG FAQ verbatim', () => {

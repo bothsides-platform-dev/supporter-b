@@ -1,4 +1,4 @@
-# Supporter B — 디자인 시스템 (Linear)
+# 서포트비 — 디자인 시스템 (Linear)
 
 > 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) (화면·IA·UX) · [CLAUDE.md](./CLAUDE.md) (스택·라우팅·규칙)
 > 본 문서: Linear 디자인 언어 토큰, 타이포그래피, 컬러, 컴포넌트 시각 원칙

@@ -5,6 +5,7 @@ import { siteConfig } from "@/lib/site-config";
 import { getChannelMember } from "@/lib/channel-io/server";
 import { ChannelTalk } from "@/components/shell/ChannelTalk";
 import { Analytics } from "@/components/shell/Analytics";
+import { Clarity } from "@/components/shell/Clarity";
 import { FirstTouchCapture } from "@/components/shell/FirstTouchCapture";
 import "./globals.css";
 
@@ -24,7 +25,7 @@ const jetbrainsMono = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
-  title: { default: siteConfig.title, template: "%s — 서포트 B" },
+  title: { default: siteConfig.title, template: "%s — 서포트비" },
   description: siteConfig.description,
   keywords: [...siteConfig.keywords],
   applicationName: siteConfig.name,
@@ -91,6 +92,7 @@ export default async function RootLayout({
             __html: `(function(){var s=localStorage.getItem('support-b-theme');var t=s?JSON.parse(s)?.state?.theme:null;var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark');})();`,
           }}
         />
+        <Clarity />
       </head>
       <body className="min-h-full flex flex-col">
         <AxiomWebVitals />

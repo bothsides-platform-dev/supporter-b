@@ -12,4 +12,9 @@ describe('Footer', () => {
     render(<Footer />);
     expect(screen.getByRole('button', { name: '다크 모드로 전환' })).toBeInTheDocument();
   });
+
+  it('brand line renders the official name 서포트비', () => {
+    render(<Footer />);
+    expect(screen.getAllByText(/서포트비 CORP\./)).toHaveLength(2);
+  });
 });
