@@ -73,33 +73,69 @@ export const buyerCompareTour: CoachmarkStep[] = [
   },
 ];
 
-// pg 튜토리얼(PgTutorialFlow) 코치마크 투어 데이터. target은 RfpBriefPanel/BidWizard에
-// 심어둔 data-coachmark 속성과 매칭된다.
+// pg 튜토리얼(PgTutorialFlow) 코치마크 투어 데이터. target은 InviteScene/RfpBriefPanel/
+// BidWizard에 심어둔 data-coachmark 속성과 매칭된다. buyer와 동일하게 클릭-온리.
+export const pgInviteTour: CoachmarkStep[] = [
+  {
+    target: 'tutorial-invite-cta',
+    kind: 'action',
+    title: '여기를 눌러 요청을 확인해요',
+    placement: 'top',
+    body: '구매사가 견적 요청에 초대했어요.',
+  },
+];
+
 export const pgBriefTour: CoachmarkStep[] = [
   {
     target: 'tutorial-brief-panel',
+    kind: 'info',
     title: '요청 조건을 확인해요',
     placement: 'right',
-    body: '구매사가 보낸 견적 요청의 조건이에요. 확인 후 견적을 작성해요.',
+    body: '구매사가 보낸 견적 요청의 조건이에요.',
+  },
+  {
+    target: 'tutorial-brief-cta',
+    kind: 'action',
+    title: '여기를 눌러 견적을 작성해요',
+    placement: 'top',
+    body: '조건을 확인했으면 견적 작성으로 넘어가요.',
   },
 ];
 
 export const pgWriteTour: CoachmarkStep[] = [
   {
     target: 'tutorial-bid-form',
+    kind: 'info',
     title: '견적을 작성해요',
     placement: 'right',
-    body: '정산조건·수수료를 입력하는 실제 화면이에요.',
+    body: '실제로 사용하는 화면 그대로예요. 정산조건과 수수료가 미리 채워져 있어요.',
   },
-];
-
-// 제출 버튼(tutorial-bid-submit)은 위저드 4단계(검토·발송)에만 렌더된다 — buyer의
-// buyerSubmitTour와 같은 이유로, 4단계 도달 시점에 PgTutorialFlow가 별도로 띄운다.
-export const pgSubmitTour: CoachmarkStep[] = [
+  {
+    target: 'tutorial-bid-next-1',
+    kind: 'action',
+    title: '여기를 눌러 다음으로 가요',
+    placement: 'top',
+    body: '정산조건이 채워져 있어요. 확인만 하면 돼요.',
+  },
+  {
+    target: 'tutorial-bid-next-2',
+    kind: 'action',
+    title: '여기를 눌러 다음으로 가요',
+    placement: 'top',
+    body: '결제수단별 수수료가 채워져 있어요.',
+  },
+  {
+    target: 'tutorial-bid-next-3',
+    kind: 'action',
+    title: '여기를 눌러 다음으로 가요',
+    placement: 'top',
+    body: '견적서 PDF는 선택 사항이라 건너뛰어도 돼요.',
+  },
   {
     target: 'tutorial-bid-submit',
-    title: '작성이 끝나면 보내요',
+    kind: 'action',
+    title: '여기를 눌러 견적을 보내요',
     placement: 'top',
-    body: '내용을 확인하고 이 버튼으로 견적을 보내요.',
+    body: '확인 창에서 한 번 더 누르면 견적이 봉인돼서 전달돼요.',
   },
 ];

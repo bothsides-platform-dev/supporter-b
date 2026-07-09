@@ -9,6 +9,8 @@ import type { RFP } from '@/lib/types/rfp';
 import type { Bid, MerchantTier, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from '@/components/rfp/RfpStep3PgSelect';
+// 타입 전용 import — useBidDraft는 'use client' 모듈이지만 type-only라 client-safe 유지.
+import type { BidDraft } from '@/components/inbox/useBidDraft';
 import type {
   DraftCustomPaymentMethod,
   PgWorkspaceItem,
@@ -173,6 +175,34 @@ export const tutorialBids: Bid[] = [
     submittedAt: TUTORIAL_CREATED_AT,
   },
 ];
+
+/**
+ * BidWizard(pg 튜토리얼) 프리필 시드 — tutorialBids[0](튜토리얼페이 A)와 동일 조건.
+ * pg 튜토리얼도 입력 없이 클릭만으로 진행한다(키보드는 useTutorialKeyboardLock이 차단).
+ * fees 키 규약: 구간제 수단(card·간편결제)은 "<method>:<tier>" percent 문자열,
+ * 정액 수단(virtual_account)은 건당 원 정수 문자열.
+ */
+export const tutorialBidDraftSeed: BidDraft = {
+  __v: 3,
+  cycleUnit: 'D',
+  cycleNum: '2',
+  settleLimit: '50000000',
+  guaranteeInsurance: '5000000',
+  fees: {
+    'card:sole': '0.5',
+    'card:sme1': '0.8',
+    'card:sme2': '1.1',
+    'card:sme3': '1.3',
+    'card:general': '1.8',
+    'naver_pay:sole': '2.5',
+    'naver_pay:sme1': '2.5',
+    'naver_pay:sme2': '2.5',
+    'naver_pay:sme3': '2.5',
+    'naver_pay:general': '2.5',
+    virtual_account: '300',
+  },
+  memo: '카드 수수료가 가장 낮아요. 정산은 D+2예요.',
+};
 
 const tutorialPgWorkspaceItems: PgWorkspaceItem[] = TUTORIAL_PG_IDS.map((id) => ({
   id,

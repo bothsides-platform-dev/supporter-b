@@ -17,11 +17,17 @@ import { Divider } from '@/components/primitives/Divider';
 import { CoachmarkTour } from '@/components/onboarding/coachmarks';
 import { RfpBriefPanel } from '@/components/inbox/RfpBriefPanel';
 import { BidWizard } from '@/components/inbox/bid-wizard/BidWizard';
+import { clearStoredBidDraft } from '@/components/inbox/useBidDraft';
 import { InviteScene } from './InviteScene';
-import { pgBriefTour, pgWriteTour, pgSubmitTour } from './tours';
+import { useTutorialKeyboardLock } from './useTutorialKeyboardLock';
+import { pgInviteTour, pgBriefTour, pgWriteTour } from './tours';
 import { useCelebrationConfetti } from '@/lib/hooks/useCelebrationConfetti';
 import { updateOnboardingAction } from '@/lib/server/actions/onboarding/updateOnboardingAction';
-import { tutorialBuyerRfp, tutorialBuyerName } from '@/lib/onboarding/tutorial-fixtures';
+import {
+  tutorialBuyerRfp,
+  tutorialBuyerName,
+  tutorialBidDraftSeed,
+} from '@/lib/onboarding/tutorial-fixtures';
 
 type Phase = 'invite' | 'brief' | 'write' | 'done';
 
@@ -36,11 +42,12 @@ const PHASE_LABELS: Record<Phase, string> = {
 export function PgTutorialFlow() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('invite');
+  const [inviteTourDone, setInviteTourDone] = useState(false);
   const [briefTourDone, setBriefTourDone] = useState(false);
   const [writeTourDone, setWriteTourDone] = useState(false);
-  const [submitTourDone, setSubmitTourDone] = useState(false);
-  const [wizardStep, setWizardStep] = useState(1);
   const { canvasRef } = useCelebrationConfetti();
+  // 튜토리얼은 클릭 전용 — 프리필 값을 키보드로 지우거나 덮어쓸 수 없게 잠근다.
+  useTutorialKeyboardLock();
 
   const stepNum = PHASE_ORDER.indexOf(phase) + 1;
 
@@ -79,12 +86,17 @@ export function PgTutorialFlow() {
 
       <div className="flex-1 min-h-0">
         {phase === 'invite' && (
-          <InviteScene
-            buyerName={tutorialBuyerName}
-            rfpTitle={tutorialBuyerRfp.title}
-            deadline={tutorialBuyerRfp.deadline}
-            onProceed={() => setPhase('brief')}
-          />
+          <>
+            <InviteScene
+              buyerName={tutorialBuyerName}
+              rfpTitle={tutorialBuyerRfp.title}
+              deadline={tutorialBuyerRfp.deadline}
+              onProceed={() => setPhase('brief')}
+            />
+            {!inviteTourDone && (
+              <CoachmarkTour steps={pgInviteTour} onFinish={() => setInviteTourDone(true)} onSkip={() => setInviteTourDone(true)} />
+            )}
+          </>
         )}
 
         {phase === 'brief' && (
@@ -92,7 +104,17 @@ export function PgTutorialFlow() {
             <div className="px-6 py-6">
               <RfpBriefPanel rfp={tutorialBuyerRfp} buyerName={tutorialBuyerName} />
               <div className="mt-6">
-                <Button onClick={() => setPhase('write')}>견적 작성하기</Button>
+                <Button
+                  data-coachmark="tutorial-brief-cta"
+                  onClick={() => {
+                    // 과거 튜토리얼(타이핑 허용 시절)의 잔존 초안이 시드를 이기지 않도록
+                    // BidWizard 마운트 전에 지운다.
+                    clearStoredBidDraft(tutorialBuyerRfp.id);
+                    setPhase('write');
+                  }}
+                >
+                  견적 작성하기
+                </Button>
               </div>
             </div>
             {!briefTourDone && (
@@ -106,15 +128,14 @@ export function PgTutorialFlow() {
             <BidWizard
               rfp={tutorialBuyerRfp}
               buyerName={tutorialBuyerName}
-              onStepChange={setWizardStep}
+              initialDraft={tutorialBidDraftSeed}
               onSampleSubmit={handleSampleSubmit}
             />
+            {/* 단일 연속 투어 — 위저드 각 단계의 다음 버튼(action)을 실제로 클릭하며
+                제출까지 이어진다. 제출 클릭 후 ConfirmDialog는 자체 포커스 모달이라
+                별도 코치마크가 필요 없다(투어는 제출 클릭에서 끝나 오버레이가 언마운트). */}
             {!writeTourDone && (
               <CoachmarkTour steps={pgWriteTour} onFinish={() => setWriteTourDone(true)} onSkip={() => setWriteTourDone(true)} />
-            )}
-            {/* 제출 팁은 제출 버튼이 실제로 존재하는 4단계(검토·발송) 도달 시점에 표시한다. */}
-            {writeTourDone && !submitTourDone && wizardStep === 4 && (
-              <CoachmarkTour steps={pgSubmitTour} onFinish={() => setSubmitTourDone(true)} onSkip={() => setSubmitTourDone(true)} />
             )}
           </>
         )}

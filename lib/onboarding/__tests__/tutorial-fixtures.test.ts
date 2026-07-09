@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { getWizardValidity } from '@/components/rfp/wizard-validation';
+import { getBidWizardValidity } from '@/components/inbox/bid-wizard/bid-wizard-validation';
+import { isTieredMethod, MERCHANT_TIERS } from '@/lib/types/bid';
 import {
+  tutorialBidDraftSeed,
   tutorialBuyerRfp,
   tutorialBids,
   tutorialPgNames,
@@ -47,5 +50,31 @@ describe('tutorial-fixtures (buyer 튜토리얼 가상 데이터)', () => {
   it('tutorialBuyerName/tutorialBizProfile가 정의돼 있다', () => {
     expect(tutorialBuyerName).toBeTruthy();
     expect(tutorialBizProfile).toBeDefined();
+  });
+
+  it('tutorialBidDraftSeed는 입력 없이 모든 견적 스텝이 완료 상태다 (pg 튜토리얼 클릭 전용)', () => {
+    // BidWizard의 anyFeeFilled 파생 로직을 그대로 재현해 검증한다.
+    const feeFilled = (key: string) =>
+      (tutorialBidDraftSeed.fees[key] ?? '') !== '' &&
+      parseFloat(tutorialBidDraftSeed.fees[key]) >= 0;
+    const anyFeeFilled = tutorialBuyerRfp.requiredPaymentMethods.some((m) =>
+      isTieredMethod(m) ? MERCHANT_TIERS.some((t) => feeFilled(`${m}:${t}`)) : feeFilled(m),
+    );
+    const validity = getBidWizardValidity({
+      cycleNum: tutorialBidDraftSeed.cycleNum,
+      anyFeeFilled,
+    });
+    expect(validity.filter((s) => !s.complete)).toEqual([]);
+  });
+
+  it('tutorialBidDraftSeed는 tutorialBids[0](튜토리얼페이 A) 조건을 미러링한다', () => {
+    expect(tutorialBidDraftSeed.cycleUnit).toBe('D');
+    expect(tutorialBidDraftSeed.cycleNum).toBe('2');
+    expect(tutorialBidDraftSeed.settleLimit).toBe(String(tutorialBids[0].settleLimit));
+    expect(tutorialBidDraftSeed.guaranteeInsurance).toBe(String(tutorialBids[0].guaranteeInsurance));
+    // tiered: decimal(0.005) → percent 문자열('0.5'); flat: 원 정수 그대로.
+    expect(tutorialBidDraftSeed.fees['card:sole']).toBe('0.5');
+    expect(tutorialBidDraftSeed.fees['virtual_account']).toBe('300');
+    expect(tutorialBidDraftSeed.memo).toBe(tutorialBids[0].memo);
   });
 });

@@ -22,6 +22,8 @@ vi.mock('@/lib/server/actions/bid', () => ({
 vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
   saveQuoteTemplateAction: vi.fn(async () => ({ ok: true as const, templateId: 't1' })),
 }));
+const toastMock = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (...args: unknown[]) => toastMock(...args) }));
 vi.mock('../../RfpBriefPanel', () => ({ RfpBriefPanel: () => <div /> }));
 vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
   CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
@@ -40,6 +42,7 @@ const rfp = {
 
 beforeEach(() => {
   localStorage.clear();
+  toastMock.mockClear();
 });
 afterEach(cleanup);
 
@@ -59,6 +62,29 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     await user.click(screen.getByRole('button', { name: '검토·발송' }));
 
     expect(document.querySelector('[data-coachmark="tutorial-bid-submit"]')).toBeInTheDocument();
+  });
+
+  it('푸터 다음 버튼에 스텝별 tutorial-bid-next-N 앵커가 붙는다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" />);
+    expect(document.querySelector('[data-coachmark="tutorial-bid-next-1"]')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    expect(document.querySelector('[data-coachmark="tutorial-bid-next-2"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-coachmark="tutorial-bid-next-1"]')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    expect(document.querySelector('[data-coachmark="tutorial-bid-next-3"]')).toBeInTheDocument();
+  });
+
+  it('저장된 초안이 initialDraft 시드와 동일하면 복원 토스트를 띄우지 않는다 (baseline이 시드)', async () => {
+    const { tutorialBidDraftSeed } = await import('@/lib/onboarding/tutorial-fixtures');
+    localStorage.setItem('bid-draft:tutorial-rfp', JSON.stringify(tutorialBidDraftSeed));
+    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" initialDraft={tutorialBidDraftSeed} />);
+    expect(toastMock).not.toHaveBeenCalledWith(
+      '이전에 작성하던 내용을 그대로 불러왔어요',
+      expect.anything(),
+    );
   });
 
   it('onStepChange가 주어지면 단계 이동마다 현재 단계 번호로 호출된다', async () => {

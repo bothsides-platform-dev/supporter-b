@@ -47,6 +47,12 @@ type Props = {
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
   initialBid?: PgRfpDetailData['myBid'];
   /**
+   * pg 튜토리얼 전용(opt-in) — 폼 baseline을 통째로 시드해 타이핑 없이 클릭만으로
+   * 제출까지 진행하게 한다. initialBid보다 우선(둘 다 오면 이쪽).
+   * initialBid(bidToDraft)는 TierRates를 생략해 구간제 수수료를 prefill할 수 없다.
+   */
+  initialDraft?: BidDraft;
+  /**
    * 랜딩 데모 전용(opt-in). 주어지면 제출 시 서버 액션 대신 이 콜백을 호출한다
    * — 비로그인 임베디드 데모에서 실제 submitBidAction 을 치지 않도록(가입 유도). 프로덕션 미전달 시 no-op.
    */
@@ -97,7 +103,7 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   };
 }
 
-export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestSubmit, onSampleSubmit, onStepChange }: Props) {
+export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialDraft, onGuestSubmit, onSampleSubmit, onStepChange }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
@@ -117,8 +123,8 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
 
   // baseline = 위저드가 처음 열렸을 때의 폼(일반=빈 폼, 재요청=직전 라운드 prefill).
   const baseline = useMemo<BidDraft>(
-    () => (initialBid ? bidToDraft(initialBid) : EMPTY_BID_DRAFT),
-    [initialBid],
+    () => initialDraft ?? (initialBid ? bidToDraft(initialBid) : EMPTY_BID_DRAFT),
+    [initialDraft, initialBid],
   );
   // 초안 자동저장/복원
   const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
@@ -471,7 +477,12 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
               </div>
               <div>
                 {currentStep < TOTAL_STEPS ? (
-                  <Button type="button" onClick={advance} trailingIcon={<span aria-hidden>→</span>}>
+                  <Button
+                    type="button"
+                    data-coachmark={`tutorial-bid-next-${currentStep}`}
+                    onClick={advance}
+                    trailingIcon={<span aria-hidden>→</span>}
+                  >
                     {BID_WIZARD_STEPS[currentStep].label}
                   </Button>
                 ) : (
