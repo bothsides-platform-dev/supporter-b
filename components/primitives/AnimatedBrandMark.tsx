@@ -3,7 +3,8 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { BRAND_MARK_PATH } from '@/lib/brand/brand-mark-path';
 
-const EASE_DECEL = [0.05, 0.7, 0.1, 1] as const;
+// 표준 커브 — 강한 감속 커브(EASE_DECEL)는 초반에 외곽선을 거의 다 그려버려 draw 진행이 체감되지 않는다
+const EASE_STANDARD = [0.4, 0, 0.2, 1] as const;
 
 /**
  * 마운트 시 1회 stroke draw-on → fill fade로 등장하는 BrandMark.
@@ -54,8 +55,8 @@ export function AnimatedBrandMark({
             initial={{ pathLength: 0, fillOpacity: 0 }}
             animate={{ pathLength: 1, fillOpacity: 1 }}
             transition={{
-              pathLength: { duration: 0.5, ease: EASE_DECEL },
-              fillOpacity: { delay: 0.45, duration: 0.35, ease: 'easeOut' },
+              pathLength: { duration: 0.6, ease: EASE_STANDARD },
+              fillOpacity: { delay: 0.5, duration: 0.3, ease: 'easeOut' },
             }}
           />
         )}
