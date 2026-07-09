@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"grep -n \\\"render(\\\\|describe(\\\\|it(\\\" components/rfp/__tests__/RfpStep1BizProfile.test.tsx | head -12; echo ===; sed -n 1,40p components/rfp/__tests__/RfpStep1BizProfile.test.tsx\",\"descrip...",
+  "error": "Exit code 1\n9:describe('RfpStep1BizProfile', () => {\n10:  it('bizProfile 있으면 사업자번호를 표시한다', () => {\n11:    render(\n21:  it('guest 모드면 \"가입 후 연동\" 안내를 표시한다', () => {\n22:    render(<RfpStep1BizProfile guest onNext={vi.fn()} />);\n26:  it('guest여도 bizProfile이 주어지면 등록된 사업자 테이블을 표시한다 (랜딩 데모)', () => {\n27:    render(\n35:  it('bizProfile 없으면 \"사업자번호 미입력\" 안내를 표시한다', () => {\n36:    render(<RfpStep1BizProfile onNext={vi.fn()} />);\n40:  it('다음 버튼 클릭 시 onNext가 호출된다', async () => {\n43:    render(<RfpStep1BizProfi...",
+  "timestamp": "2026-07-09T13:43:51.799Z",
+  "retry_count": 1
+}
