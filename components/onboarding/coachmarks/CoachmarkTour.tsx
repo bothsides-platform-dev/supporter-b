@@ -39,6 +39,28 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
   }, [status]);
 
   useEffect(() => {
+    if (!currentStep || currentStep.kind !== 'action' || status !== 'found') return;
+    const target = currentStep.target;
+    const advanceIsLast = isLast;
+    // 문서 레벨 capture 리스너 — 요소 identity가 리렌더로 바뀌어도 data-coachmark로
+    // 매칭한다. capture 시점에 진행을 예약해도 실제 버튼의 React 핸들러는 그대로
+    // 실행되고, 다음 step의 리스너는 post-render effect에 붙으므로 같은 클릭을
+    // 이중 소비하지 않는다.
+    const handleClick = (event: MouseEvent) => {
+      const el = event.target instanceof Element ? event.target : null;
+      if (!el?.closest(`[data-coachmark="${CSS.escape(target)}"]`)) return;
+      if (advanceIsLast) {
+        onFinish?.();
+      } else {
+        setStepIndex((index) => index + 1);
+      }
+    };
+    document.addEventListener('click', handleClick, { capture: true });
+    return () => document.removeEventListener('click', handleClick, { capture: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep?.target, currentStep?.kind, status, isLast]);
+
+  useEffect(() => {
     if (!hasSteps) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onSkip?.();
