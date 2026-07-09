@@ -56,6 +56,12 @@ type Props = {
    * 이 콜백만 호출한다 — 서버 호출도 지연도 없다. onGuestSubmit 과 상호배타.
    */
   onSampleSubmit?: () => void;
+  /**
+   * pg 튜토리얼 전용(opt-in). 단계 이동마다 현재 단계 번호를 통지한다 —
+   * 제출 투어(tutorial-bid-submit)가 4단계(검토·발송) 도달 시점에만 표시되도록
+   * PgTutorialFlow가 이 통지로 타이밍을 맞춘다. RfpCreateWizard의 onStepChange와 대칭.
+   */
+  onStepChange?: (step: number) => void;
 };
 
 /**
@@ -91,7 +97,7 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   };
 }
 
-export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestSubmit, onSampleSubmit }: Props) {
+export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestSubmit, onSampleSubmit, onStepChange }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
@@ -134,6 +140,11 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
   useEffect(() => {
     saveDraft(fields);
   }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    onStepChange?.(currentStep);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 단계 변경 시에만 통지, onStepChange 참조는 무시
+  }, [currentStep]);
 
   // 마운트 1회: 의미 있는 초안을 복원했으면 토스트로만 알린다(묻지 않음).
   useEffect(() => {
@@ -307,6 +318,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
     // 가상 샘플 온보딩: 서버 제출 없이 콜백만 호출한다 — fixture 에는 실제
     // rfpId/pgWsId 가 없어 실제 submitBidAction 을 태우면 깨진다.
     if (onSampleSubmit) {
+      clearDraft(); // 자동저장된 bid-draft:<fixture-id> 잔존 방지.
       onSampleSubmit();
       return;
     }
@@ -402,7 +414,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
             <WizardProgressBar currentStep={currentStep} completed={completed} failedAt={failedAt} onStepClick={goToStep} steps={BID_WIZARD_STEPS} />
 
-            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6" data-coachmark="tutorial-bid-form">
               <div className="flex items-center gap-3 mb-6">
                 <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                   {String(currentStep).padStart(2, '0')} — {BID_WIZARD_STEPS[currentStep - 1].label}
@@ -466,6 +478,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, onGuestS
                   <Button
                     type="button"
                     size="lg"
+                    data-coachmark="tutorial-bid-submit"
                     onClick={handleSubmit}
                     disabled={pending || !!proposalUploading}
                   >

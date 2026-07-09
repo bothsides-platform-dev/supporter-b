@@ -84,8 +84,9 @@ export async function createWorkspaceInTx(
   // and pg get a pipeline board; buyer has BUYER_KANBAN_ORDER stages, pg has PG_KANBAN_ORDER.
   await columnRepo.createMany(defaultColumns(wsId, input.type), tx);
 
-  // 온보딩 체험은 더 이상 DB 시딩이 아니다 — 가상 샘플 딜룸(lib/onboarding/fixtures.ts +
-  // components/onboarding/*)이 고정 데이터로 재현한다. 실 rfps/bids/invitations row 없음.
+  // 온보딩 체험은 DB 시딩이 아니다 — /tutorial 튜토리얼 화면이 유저 단위 상태
+  // (users.onboarding jsonb, lib/types/onboarding.ts)로 진행을 추적한다. 실
+  // rfps/bids/invitations row 없음.
 
   return { workspaceId: wsId, applicationId };
 }

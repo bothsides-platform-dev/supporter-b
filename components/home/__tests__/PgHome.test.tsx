@@ -40,21 +40,29 @@ afterEach(() => {
 });
 
 describe('PgHome', () => {
-  it('pgSample 태스크가 미완료면 showSampleEntry=true를 HomeDashboard에 전달한다', async () => {
+  it('pgTutorial 태스크가 미완료면 welcomeState="welcome"을 HomeDashboard에 전달한다', async () => {
     getOnboardingMock.mockResolvedValue({ _v: 1 });
     render(await PgHome({ workspaceId: 'ws-1', userId: 'u-1' }));
     expect(screen.getByText('HomeDashboard')).toBeInTheDocument();
     expect(getOnboardingMock).toHaveBeenCalledWith('u-1');
     expect(homeDashboardPropsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ showSampleEntry: true, workspaceType: 'pg' }),
+      expect.objectContaining({ welcomeState: 'welcome', workspaceType: 'pg' }),
     );
   });
 
-  it('pgSample 태스크가 dismissed면 showSampleEntry=false를 전달한다', async () => {
-    getOnboardingMock.mockResolvedValue({ _v: 1, pgSample: { dismissedAt: '2026-01-01T00:00:00Z' } });
+  it('pgTutorial 태스크가 dismissed면 welcomeState="nudge"를 전달한다', async () => {
+    getOnboardingMock.mockResolvedValue({ _v: 1, pgTutorial: { dismissedAt: '2026-01-01T00:00:00Z' } });
     render(await PgHome({ workspaceId: 'ws-1', userId: 'u-1' }));
     expect(homeDashboardPropsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ showSampleEntry: false }),
+      expect.objectContaining({ welcomeState: 'nudge' }),
+    );
+  });
+
+  it('pgTutorial 태스크가 completed면 welcomeState="none"을 전달한다', async () => {
+    getOnboardingMock.mockResolvedValue({ _v: 1, pgTutorial: { completedAt: '2026-01-01T00:00:00Z' } });
+    render(await PgHome({ workspaceId: 'ws-1', userId: 'u-1' }));
+    expect(homeDashboardPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ welcomeState: 'none' }),
     );
   });
 });

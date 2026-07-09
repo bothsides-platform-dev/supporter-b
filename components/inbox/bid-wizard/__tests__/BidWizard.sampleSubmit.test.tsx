@@ -91,4 +91,14 @@ describe('BidWizard onSampleSubmit (가상 샘플 온보딩 — PG 투어)', () 
     await waitFor(() => expect(onSampleSubmit).toHaveBeenCalledTimes(1));
     expect(submitBidMock).not.toHaveBeenCalled();
   });
+
+  it('샘플 제출 시 로컬 draft를 정리한다 (bid-draft:<rfpId> 잔존 방지)', async () => {
+    const onSampleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="샘플 쇼핑몰" onSampleSubmit={onSampleSubmit} />);
+    await driveToSubmit(user);
+
+    await waitFor(() => expect(onSampleSubmit).toHaveBeenCalledTimes(1));
+    expect(localStorage.getItem('bid-draft:sample-rfp')).toBeNull();
+  });
 });

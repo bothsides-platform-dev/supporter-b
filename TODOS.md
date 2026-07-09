@@ -93,3 +93,11 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### changeMemberRole — LAST_ADMIN 오탐: pending_approval admin 강등 (P1)
 `WorkspaceService.changeMemberRole` 의 LAST_ADMIN 가드(`if (input.role === 'member' && target.role === 'admin')`)가 `countAdmins`(승인된 admin 만 집계)를 호출하기 전에 `target.approvalStatus`를 검사하지 않는다. 결과: 유일한 승인 admin 이 아직 미승인(pending_approval) admin 을 member 로 강등하려 하면 — 그 미승인 admin 은 실질 권한을 행사한 적 없음에도 — 거짓 `LAST_ADMIN` 에러가 발생한다. **수정**: `changeMemberRole` line 279 조건에 `&& target.approvalStatus === 'approved'` 추가. TDD: pending_approval target 강등 시 LAST_ADMIN 없이 성공하는 회귀 테스트 먼저 작성. (발견: /ship adversarial v0.2.51.0, 2026-06-28)
 
+
+## Onboarding / Tutorial
+
+### 튜토리얼 플로우 셸 중복 추출 (P3)
+`BuyerTutorialFlow`와 `PgTutorialFlow`가 phase 상태머신 스캐폴딩(PHASE_ORDER/LABELS, 진행 헤더+나가기 버튼, done 전용 컨페티 캔버스)을 거의 그대로 중복. 공용 `TutorialFlowShell`/`useTutorialPhase` 추출 검토. (발견: /ship maintainability 리뷰 v0.2.76.0, 2026-07-07)
+
+### 온보딩 e2e (Playwright) — buyer/PG 풀 여정 (P3)
+계획서 PR5(선택) 유예분. buyer: 환영 모달→작성→도착→선정→홈 카드 소멸 / PG: 나중에 하기→재유도→초대→제출. `data-coachmark` 셀렉터로 타깃팅 가능. 현재는 단위+수동 QA로 커버. (유예: 온보딩 재구축 v0.2.76.0, 2026-07-07)

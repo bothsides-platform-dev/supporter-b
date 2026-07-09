@@ -162,7 +162,7 @@ export function FocusComparison(props: Props) {
   return (
     <section>
       {!props.hideHeader && (
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-4" data-coachmark="tutorial-compare-header">
           <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
             견적 비교
           </span>
@@ -198,7 +198,9 @@ export function FocusComparison(props: Props) {
             counterparty={{
               name: pgName(active.pgWsId),
               type: 'pg',
-              workspaceId: active.pgWsId,
+              // 샘플 모드(튜토리얼)는 workspaceId를 비워 라이브 메시지 CTA·프레즌스
+              // 구독을 차단한다 — fixture ID로 실제 액션/WS 채널을 태우면 안 된다.
+              workspaceId: onSampleAward ? '' : active.pgWsId,
               logoUpdatedAt: pgLogoFn(active.pgWsId),
             }}
             rfpContext={{ id: props.rfpId, code: props.rfpCode }}

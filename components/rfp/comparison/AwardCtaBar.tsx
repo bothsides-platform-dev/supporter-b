@@ -21,7 +21,7 @@ function AwardCtaBarImpl({
   return (
     <div className="pt-4 flex items-center justify-end gap-2">
       {showRequote && <Button variant="outlined" onClick={onRequote}>견적 재요청</Button>}
-      <Button onClick={onAward}>이 견적 선정하기 →</Button>
+      <Button data-coachmark="tutorial-award-cta" onClick={onAward}>이 견적 선정하기 →</Button>
     </div>
   );
 }

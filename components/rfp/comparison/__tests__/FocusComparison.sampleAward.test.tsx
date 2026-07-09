@@ -81,4 +81,9 @@ describe('FocusComparison onSampleAward (가상 샘플 온보딩 — 가짜 선�
     render(<FocusComparison {...baseProps} rfpStatus="sent" onSampleAward={vi.fn()} />);
     expect(screen.queryByText('견적 재요청')).not.toBeInTheDocument();
   });
+
+  it('onSampleAward가 있으면 라이브 메시지 CTA를 노출하지 않는다 (fixture ID 실 액션 차단)', () => {
+    render(<FocusComparison {...baseProps} rfpStatus="sent" onSampleAward={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /메시지/ })).not.toBeInTheDocument();
+  });
 });
