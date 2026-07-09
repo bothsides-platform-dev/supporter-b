@@ -50,4 +50,19 @@ describe('SidebarBrand', () => {
     // icon mark is rendered inline
     expect(link.querySelector('svg')).not.toBeNull();
   });
+
+  it('mounts the icon mark in its pre-draw state (fill hidden) so it draws on after hard load', () => {
+    render(
+      <SidebarProvider>
+        <SidebarBrand />
+      </SidebarProvider>,
+    );
+
+    const link = screen.getByRole('link', { name: '서포트비 홈' });
+    const path = link.querySelector('svg path') as SVGPathElement;
+    expect(path).not.toBeNull();
+    const fillHidden =
+      path.style.fillOpacity === '0' || path.getAttribute('fill-opacity') === '0';
+    expect(fillHidden).toBe(true);
+  });
 });

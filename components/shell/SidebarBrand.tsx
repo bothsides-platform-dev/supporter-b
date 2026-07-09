@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
-import { BrandMark } from '@/components/primitives/Logo';
+import { AnimatedBrandMark } from '@/components/primitives/AnimatedBrandMark';
 import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 
@@ -62,8 +62,8 @@ export function SidebarBrand({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* icon mark — "B" 브랜드 마크, ink on transparent (Logo default variant과 동일) */}
-      <BrandMark className="shrink-0" />
+      {/* icon mark — "B" 브랜드 마크, ink on transparent. 하드 로드 시 1회 draw-on 등장 */}
+      <AnimatedBrandMark className="shrink-0" />
       <motion.span
         aria-hidden="true"
         initial={false}
