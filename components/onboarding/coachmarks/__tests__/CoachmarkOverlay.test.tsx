@@ -148,6 +148,97 @@ describe('CoachmarkOverlay', () => {
     expect(top).toBeGreaterThanOrEqual(8);
   });
 
+  describe('action kind (클릭-스루 스포트라이트)', () => {
+    const actionStep: CoachmarkStep = { ...step, kind: 'action', title: '여기를 눌러 다음으로 가요' };
+
+    it('root가 pointer-events:none이고 클릭 흡수 onClick이 없다', () => {
+      const { container } = render(
+        <CoachmarkOverlay
+          rect={makeRect()}
+          step={actionStep}
+          stepIndex={0}
+          stepCount={3}
+          onNext={() => {}}
+          onSkip={() => {}}
+          isLast={false}
+        />,
+      );
+      const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
+      expect(root.className).toContain('pointer-events-none');
+    });
+
+    it('구멍 주위 4개 dim rect를 렌더하고 각각 pointer-events:auto로 밖 클릭을 흡수한다', () => {
+      const { container } = render(
+        <CoachmarkOverlay
+          rect={makeRect()}
+          step={actionStep}
+          stepIndex={0}
+          stepCount={3}
+          onNext={() => {}}
+          onSkip={() => {}}
+          isLast={false}
+        />,
+      );
+      const dims = container.querySelectorAll('[data-slot="coachmark-dim"]');
+      expect(dims).toHaveLength(4);
+      dims.forEach((dim) => {
+        expect((dim as HTMLElement).style.pointerEvents).toBe('auto');
+      });
+    });
+
+    it('다음/확인 버튼이 없고 건너뛰기만 있다', () => {
+      render(
+        <CoachmarkOverlay
+          rect={makeRect()}
+          step={actionStep}
+          stepIndex={2}
+          stepCount={3}
+          onNext={() => {}}
+          onSkip={() => {}}
+          isLast={true}
+        />,
+      );
+      expect(screen.queryByRole('button', { name: '다음' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '확인' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '건너뛰기' })).toBeInTheDocument();
+    });
+
+    it('구멍(스포트라이트) 영역에는 클릭을 막는 요소가 없다 — 링은 pointer-events:none', () => {
+      const { container } = render(
+        <CoachmarkOverlay
+          rect={makeRect()}
+          step={actionStep}
+          stepIndex={0}
+          stepCount={3}
+          onNext={() => {}}
+          onSkip={() => {}}
+          isLast={false}
+        />,
+      );
+      const ring = container.querySelector('[data-slot="coachmark-ring"]') as HTMLElement;
+      expect(ring).not.toBeNull();
+      expect(ring.style.pointerEvents).toBe('none');
+    });
+
+    it('info step(기본)은 기존 전 화면 흡수 마크업을 유지한다', () => {
+      const { container } = render(
+        <CoachmarkOverlay
+          rect={makeRect()}
+          step={step}
+          stepIndex={0}
+          stepCount={3}
+          onNext={() => {}}
+          onSkip={() => {}}
+          isLast={false}
+        />,
+      );
+      const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
+      expect(root.className).not.toContain('pointer-events-none');
+      expect(container.querySelectorAll('[data-slot="coachmark-dim"]')).toHaveLength(0);
+      expect(screen.getByRole('button', { name: '다음' })).toBeInTheDocument();
+    });
+  });
+
   it('타깃이 거의 풀폭이라 좌우 플립이 모두 넘칠 때도 말풍선 left는 뷰포트 안으로 클램프된다', () => {
     // jsdom 기본 innerWidth=1024. rect가 거의 풀폭 → right 배치도 left 플립도 넘친다.
     render(

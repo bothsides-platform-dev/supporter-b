@@ -38,19 +38,100 @@ export function CoachmarkOverlay({
     setReducedMotion(prefersReducedMotion());
   }, []);
 
-  const spotlightStyle: CSSProperties = {
-    position: 'fixed',
+  const isAction = step.kind === 'action';
+
+  const padded = {
     top: rect.top - SPOTLIGHT_PADDING,
     left: rect.left - SPOTLIGHT_PADDING,
     width: rect.width + SPOTLIGHT_PADDING * 2,
     height: rect.height + SPOTLIGHT_PADDING * 2,
+  };
+
+  const rectTransition = reducedMotion
+    ? 'none'
+    : 'top 200ms, left 200ms, width 200ms, height 200ms';
+
+  const spotlightStyle: CSSProperties = {
+    position: 'fixed',
+    ...padded,
     borderRadius: 6,
     boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
-    transition: reducedMotion ? 'none' : 'top 200ms, left 200ms, width 200ms, height 200ms',
+    transition: rectTransition,
     zIndex: 50,
   };
 
   const bubbleStyle = computeBubbleStyle(rect, step.placement, reducedMotion);
+
+  const bubble = (
+    <div
+      role="dialog"
+      aria-label={step.title}
+      style={isAction ? { ...bubbleStyle, pointerEvents: 'auto' } : bubbleStyle}
+      className="rounded-md border border-[var(--md-sys-color-outline-variant)] bg-[var(--color-popover)] p-3 shadow-md ring-1 ring-foreground/10"
+    >
+      <p className="text-sm font-semibold text-foreground">{step.title}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
+      <div className="mt-3 flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">
+          {stepIndex + 1}/{stepCount}
+        </span>
+        <div className="flex gap-1.5">
+          <Button type="button" variant="text" size="sm" onClick={onSkip}>
+            건너뛰기
+          </Button>
+          {/* action step은 실제 타깃 클릭이 곧 진행 — 말풍선엔 다음/확인 버튼이 없다. */}
+          {!isAction && (
+            <Button type="button" variant="filled" size="sm" onClick={onNext}>
+              {isLast ? '확인' : '다음'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  if (isAction) {
+    // 클릭-스루 스포트라이트: root는 pointer-events:none, 구멍 주위 4개 dim 스트립만
+    // 클릭을 흡수한다 — 구멍 영역엔 요소가 없어 사용자의 클릭이 실제 타깃에 닿는다.
+    const dimBase: CSSProperties = {
+      position: 'fixed',
+      background: 'rgba(0, 0, 0, 0.5)',
+      pointerEvents: 'auto',
+      transition: rectTransition,
+      zIndex: 50,
+    };
+    const dimRects: CSSProperties[] = [
+      { ...dimBase, top: 0, left: 0, right: 0, height: Math.max(0, padded.top) },
+      { ...dimBase, top: padded.top + padded.height, left: 0, right: 0, bottom: 0 },
+      { ...dimBase, top: padded.top, left: 0, width: Math.max(0, padded.left), height: padded.height },
+      { ...dimBase, top: padded.top, left: padded.left + padded.width, right: 0, height: padded.height },
+    ];
+    return (
+      <div data-slot="coachmark-overlay" className="fixed inset-0 z-50 pointer-events-none">
+        {dimRects.map((style, index) => (
+          <div
+            key={index}
+            data-slot="coachmark-dim"
+            style={style}
+            onClick={(event) => event.stopPropagation()}
+          />
+        ))}
+        <div
+          data-slot="coachmark-ring"
+          style={{
+            position: 'fixed',
+            ...padded,
+            borderRadius: 6,
+            border: '2px solid var(--md-sys-color-primary)',
+            pointerEvents: 'none',
+            transition: rectTransition,
+            zIndex: 50,
+          }}
+        />
+        {bubble}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -61,28 +142,7 @@ export function CoachmarkOverlay({
       onClick={(event) => event.stopPropagation()}
     >
       <div style={spotlightStyle} />
-      <div
-        role="dialog"
-        aria-label={step.title}
-        style={bubbleStyle}
-        className="rounded-md border border-[var(--md-sys-color-outline-variant)] bg-[var(--color-popover)] p-3 shadow-md ring-1 ring-foreground/10"
-      >
-        <p className="text-sm font-semibold text-foreground">{step.title}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">
-            {stepIndex + 1}/{stepCount}
-          </span>
-          <div className="flex gap-1.5">
-            <Button type="button" variant="text" size="sm" onClick={onSkip}>
-              건너뛰기
-            </Button>
-            <Button type="button" variant="filled" size="sm" onClick={onNext}>
-              {isLast ? '확인' : '다음'}
-            </Button>
-          </div>
-        </div>
-      </div>
+      {bubble}
     </div>
   );
 }
