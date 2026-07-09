@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"grep -n \\\"render(\\\\|describe(\\\\|it(\\\" components/rfp/__tests__/RfpStep1BizProfile.test.tsx | head -12; echo ===; sed -n 1,40p components/rfp/__tests__/RfpStep1BizProfile.test.tsx\",\"descrip...",
-  "error": "Exit code 1\n9:describe('RfpStep1BizProfile', () => {\n10:  it('bizProfile 있으면 사업자번호를 표시한다', () => {\n11:    render(\n21:  it('guest 모드면 \"가입 후 연동\" 안내를 표시한다', () => {\n22:    render(<RfpStep1BizProfile guest onNext={vi.fn()} />);\n26:  it('guest여도 bizProfile이 주어지면 등록된 사업자 테이블을 표시한다 (랜딩 데모)', () => {\n27:    render(\n35:  it('bizProfile 없으면 \"사업자번호 미입력\" 안내를 표시한다', () => {\n36:    render(<RfpStep1BizProfile onNext={vi.fn()} />);\n40:  it('다음 버튼 클릭 시 onNext가 호출된다', async () => {\n43:    render(<RfpStep1BizProfi...",
-  "timestamp": "2026-07-09T13:43:51.799Z",
+  "tool_input_preview": "{\"command\":\"docker exec supporter-b-pg psql -U supporter_b -d supporter_b_tutqa -c \\\"UPDATE users SET onboarding=NULL;\\\" && node ./kb-lock-qa.tmp.mjs 2>&1 | tail -5\",\"timeout\":180000,\"description\":\"Re...",
+  "error": "Exit code 1\nERROR:  null value in column \"onboarding\" of relation \"users\" violates not-null constraint\nDETAIL:  Failing row contains (da78f259-75e4-4bca-a147-3839e5c53e65, ws-inicis-admin@example.com, $2b$12$DQlr5v6uo2Q3TEH3NzNawe.4RlVS3q2LT9J6pm5RyCy9zZvJr/5Eu, 이니시스 관리자, null, moss, null, active, t, null, 1, f0bb1209-fc91-4fc0-9a0b-78d966fa619e, f, null, {}, 2026-07-09 14:04:02.88854+00, null, 2026-07-09 14:04:02.88854+00).",
+  "timestamp": "2026-07-09T14:18:30.141Z",
   "retry_count": 1
 }
