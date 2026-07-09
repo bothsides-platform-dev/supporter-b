@@ -287,7 +287,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
-        <Button data-demo-cursor type="button" size="md" onClick={() => { setLocalAttempted(true); onNext(); }}>
+        <Button data-demo-cursor data-coachmark="tutorial-wizard-next-2" type="button" size="md" onClick={() => { setLocalAttempted(true); onNext(); }}>
           다음
         </Button>
       </div>

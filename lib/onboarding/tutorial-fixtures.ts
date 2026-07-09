@@ -181,11 +181,12 @@ const tutorialPgWorkspaceItems: PgWorkspaceItem[] = TUTORIAL_PG_IDS.map((id) => 
 }));
 
 /**
- * useRfpDraftStore 시드 — 위저드 스텝 대부분을 프리필해 입력 체험을 짧게 유도한다.
- * 제목만 비워 사용자가 실제로 타이핑해보는 스텝을 하나는 겪게 한다.
+ * useRfpDraftStore 시드 — 모든 스텝을 프리필한다. 튜토리얼은 입력 없이
+ * "여기를 눌러" 코치마크를 따라 클릭만으로 진행하는 가이드 투어다
+ * (키보드 입력은 useTutorialKeyboardLock이 차단).
  */
 export const tutorialRfpDraftSeed: RfpDraftSeedFields = {
-  title: '',
+  title: tutorialBuyerRfp.title,
   websiteUrl: 'https://tutorial-shop.example.com',
   mainProducts: '패션 의류 · 잡화',
   annualPgVolume: '1200000000',

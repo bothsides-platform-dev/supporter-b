@@ -14,7 +14,8 @@ import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
 import { BidsArrivalScene } from './BidsArrivalScene';
 import { useIsolatedRfpDraft } from './useIsolatedRfpDraft';
-import { buyerCreateTour, buyerSubmitTour, buyerCompareTour } from './tours';
+import { useTutorialKeyboardLock } from './useTutorialKeyboardLock';
+import { buyerCreateTour, buyerArrivalTour, buyerCompareTour } from './tours';
 import { useCelebrationConfetti } from '@/lib/hooks/useCelebrationConfetti';
 import { updateOnboardingAction } from '@/lib/server/actions/onboarding/updateOnboardingAction';
 import {
@@ -41,11 +42,12 @@ export function BuyerTutorialFlow() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('create');
   const [createTourDone, setCreateTourDone] = useState(false);
-  const [submitTourDone, setSubmitTourDone] = useState(false);
+  const [arrivalTourDone, setArrivalTourDone] = useState(false);
   const [compareTourDone, setCompareTourDone] = useState(false);
-  const [wizardStep, setWizardStep] = useState(1);
   const { canvasRef } = useCelebrationConfetti();
   const { restore } = useIsolatedRfpDraft(tutorialRfpDraftSeed);
+  // 튜토리얼은 클릭 전용 — 프리필 값을 키보드로 지우거나 덮어쓸 수 없게 잠근다.
+  useTutorialKeyboardLock();
 
   const stepNum = PHASE_ORDER.indexOf(phase) + 1;
 
@@ -94,24 +96,28 @@ export function BuyerTutorialFlow() {
               bizProfile={tutorialBizProfile}
               workspaceName={tutorialBuyerName}
               pgList={tutorialPgList}
-              onStepChange={setWizardStep}
               onSampleSubmit={() => setPhase('arrival')}
             />
+            {/* 단일 연속 투어 — 각 스텝의 다음 버튼(action)을 실제로 클릭하며 제출까지
+                이어진다. 마지막 action(제출) 클릭은 onFinish와 phase 전환(onSampleSubmit)을
+                동시에 일으키지만 onFinish는 로컬 state만 닫으므로 충돌 없음. */}
             {!createTourDone && (
               <CoachmarkTour steps={buyerCreateTour} onFinish={() => setCreateTourDone(true)} onSkip={() => setCreateTourDone(true)} />
-            )}
-            {/* 제출 팁은 제출 버튼이 실제로 존재하는 4단계 도달 시점에 표시한다. */}
-            {createTourDone && !submitTourDone && wizardStep === 4 && (
-              <CoachmarkTour steps={buyerSubmitTour} onFinish={() => setSubmitTourDone(true)} onSkip={() => setSubmitTourDone(true)} />
             )}
           </>
         )}
 
         {phase === 'arrival' && (
-          <BidsArrivalScene
-            pgNames={tutorialBids.map((b) => tutorialPgNames[b.pgWsId] ?? b.pgWsId)}
-            onProceed={() => setPhase('compare')}
-          />
+          <>
+            <BidsArrivalScene
+              pgNames={tutorialBids.map((b) => tutorialPgNames[b.pgWsId] ?? b.pgWsId)}
+              onProceed={() => setPhase('compare')}
+            />
+            {/* CTA가 도착 연출 스태거(~1.8s) 후에 등장하므로 기본 3s보다 넉넉히 기다린다. */}
+            {!arrivalTourDone && (
+              <CoachmarkTour steps={buyerArrivalTour} timeoutMs={5000} onFinish={() => setArrivalTourDone(true)} onSkip={() => setArrivalTourDone(true)} />
+            )}
+          </>
         )}
 
         {phase === 'compare' && (

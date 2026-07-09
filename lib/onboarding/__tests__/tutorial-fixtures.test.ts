@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { getWizardValidity } from '@/components/rfp/wizard-validation';
 import {
   tutorialBuyerRfp,
   tutorialBids,
@@ -33,11 +34,14 @@ describe('tutorial-fixtures (buyer 튜토리얼 가상 데이터)', () => {
     expect(new Set(cycles).size).toBeGreaterThan(1);
   });
 
-  it('tutorialRfpDraftSeed는 제목이 비어 입력 체험을 유도한다', () => {
-    expect(tutorialRfpDraftSeed.title).toBe('');
-    // 나머지 대부분 필드는 프리필돼 있어야 한다
-    expect(tutorialRfpDraftSeed.mainProducts).not.toBe('');
-    expect(tutorialRfpDraftSeed.allowedPgWorkspaceIds.length).toBeGreaterThan(0);
+  it('tutorialRfpDraftSeed는 모든 위저드 스텝이 입력 없이 완료 상태다 (클릭만으로 진행)', () => {
+    const validity = getWizardValidity(tutorialRfpDraftSeed);
+    const incomplete = validity.filter((s) => !s.complete);
+    expect(incomplete).toEqual([]);
+  });
+
+  it('tutorialRfpDraftSeed 제목이 RFP 픽스처 제목과 일치한다 (pg 튜토리얼과 동일 세계관)', () => {
+    expect(tutorialRfpDraftSeed.title).toBe(tutorialBuyerRfp.title);
   });
 
   it('tutorialBuyerName/tutorialBizProfile가 정의돼 있다', () => {
