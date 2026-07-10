@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import type { WorkspaceType } from '@/lib/types/workspace';
 
 /**
  * AI crawler user-agents we explicitly welcome (GEO intent). Mostly declarative
@@ -37,8 +38,16 @@ const DISALLOW = [
   '/logout',
 ];
 
-/** Host-aware robots: host + sitemap reference the serving origin. */
-export function buildRobots(origin: string): MetadataRoute.Robots {
+/**
+ * Host-aware robots: host + sitemap reference the serving origin. The partner
+ * (pg) host is blocked outright — it's not meant to compete with the buyer
+ * host for search visibility — so every crawler gets a blanket disallow with
+ * no sitemap reference.
+ */
+export function buildRobots(origin: string, type: WorkspaceType = 'buyer'): MetadataRoute.Robots {
+  if (type === 'pg') {
+    return { rules: [{ userAgent: '*', disallow: ['/'] }] };
+  }
   return {
     rules: [
       { userAgent: '*', allow: ALLOW, disallow: DISALLOW },

@@ -7,6 +7,6 @@ import { buildRobots } from '@/lib/seo/robots';
 // Host-aware: each host (buyer / partner) gets robots referencing its own origin.
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const host = (await headers()).get('host');
-  const { origin } = seoHostContext(host, appOrigins());
-  return buildRobots(origin);
+  const { origin, type } = seoHostContext(host, appOrigins());
+  return buildRobots(origin, type);
 }

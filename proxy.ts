@@ -5,6 +5,7 @@ import authConfig from './auth.config';
 import { decideProxyRoute } from './lib/auth/route-decision';
 import { proxyDecisionUrl } from './lib/auth/proxy-url';
 import { RL_BREAK } from './lib/auth/logout-loop';
+import { appOrigins, shouldNoindexHost } from './lib/site-routing';
 
 // Edge-runtime-only: instantiated from `auth.config.ts` (no DB, no bcrypt).
 // `auth.ts` would pull postgres-js into the edge bundle and break the build.
@@ -27,20 +28,25 @@ export default auth(async (req) => {
     res.cookies.delete(RL_BREAK);
     return res;
   }
+
+  let res: Response;
   // 베이스를 req.url 이 아닌 실제 Host 헤더로 복원한다. next-auth 의 auth() 래퍼가
   // AUTH_URL 로 req.url origin 을 치환하므로(reqWithEnvURL), req.url 기준이면
   // partner 호스트의 rewrite/redirect 가 buyer origin 으로 새어 cross-origin 이 된다.
   if (decision.kind === 'redirect') {
-    return NextResponse.redirect(
-      proxyDecisionUrl(decision.to, host, req.nextUrl.protocol, req.url),
-    );
+    res = NextResponse.redirect(proxyDecisionUrl(decision.to, host, req.nextUrl.protocol, req.url));
+  } else if (decision.kind === 'rewrite') {
+    res = NextResponse.rewrite(proxyDecisionUrl(decision.to, host, req.nextUrl.protocol, req.url));
+  } else {
+    res = NextResponse.next();
   }
-  if (decision.kind === 'rewrite') {
-    return NextResponse.rewrite(
-      proxyDecisionUrl(decision.to, host, req.nextUrl.protocol, req.url),
-    );
+
+  // partner 호스트는 robots.txt 의 blanket disallow 를 보강 — 외부 링크로 이미
+  // 색인된 페이지도 강제로 빠지도록 응답 헤더에도 noindex 를 싣는다.
+  if (shouldNoindexHost(host, appOrigins())) {
+    res.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
-  return NextResponse.next();
+  return res;
 });
 
 // Excludes external telemetry proxies (Sentry `/monitoring`, next-axiom

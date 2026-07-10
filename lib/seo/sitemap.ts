@@ -13,7 +13,9 @@ const PRIORITY_AI_ENDPOINT = 0.3;
 
 export function buildSitemap(ctx: SeoHostContext, lastModified: Date): MetadataRoute.Sitemap {
   const { origin, type } = ctx;
-  const signupPath = type === 'pg' ? '/signup/pg' : '/signup/buyer';
+  // Partner host is noindexed (see lib/seo/robots.ts) — nothing to submit.
+  if (type === 'pg') return [];
+  const signupPath = '/signup/buyer';
   return [
     { url: `${origin}/`, lastModified, changeFrequency: 'weekly', priority: PRIORITY_ROOT },
     { url: `${origin}${signupPath}`, lastModified, changeFrequency: 'monthly', priority: PRIORITY_SIGNUP },
