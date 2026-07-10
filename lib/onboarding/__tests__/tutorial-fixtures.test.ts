@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { getWizardValidity } from '@/components/rfp/wizard-validation';
 import {
+  getBidWizardValidity,
+  deriveAnyFeeFilled,
+} from '@/components/inbox/bid-wizard/bid-wizard-validation';
+import {
+  tutorialBidDraftSeed,
   tutorialBuyerRfp,
   tutorialBids,
   tutorialPgNames,
@@ -33,15 +39,43 @@ describe('tutorial-fixtures (buyer 튜토리얼 가상 데이터)', () => {
     expect(new Set(cycles).size).toBeGreaterThan(1);
   });
 
-  it('tutorialRfpDraftSeed는 제목이 비어 입력 체험을 유도한다', () => {
-    expect(tutorialRfpDraftSeed.title).toBe('');
-    // 나머지 대부분 필드는 프리필돼 있어야 한다
-    expect(tutorialRfpDraftSeed.mainProducts).not.toBe('');
-    expect(tutorialRfpDraftSeed.allowedPgWorkspaceIds.length).toBeGreaterThan(0);
+  it('tutorialRfpDraftSeed는 모든 위저드 스텝이 입력 없이 완료 상태다 (클릭만으로 진행)', () => {
+    const validity = getWizardValidity(tutorialRfpDraftSeed);
+    const incomplete = validity.filter((s) => !s.complete);
+    expect(incomplete).toEqual([]);
+  });
+
+  it('tutorialRfpDraftSeed 제목이 RFP 픽스처 제목과 일치한다 (pg 튜토리얼과 동일 세계관)', () => {
+    expect(tutorialRfpDraftSeed.title).toBe(tutorialBuyerRfp.title);
   });
 
   it('tutorialBuyerName/tutorialBizProfile가 정의돼 있다', () => {
     expect(tutorialBuyerName).toBeTruthy();
     expect(tutorialBizProfile).toBeDefined();
+  });
+
+  it('tutorialBidDraftSeed는 입력 없이 모든 견적 스텝이 완료 상태다 (pg 튜토리얼 클릭 전용)', () => {
+    // BidWizard와 같은 파생 헬퍼를 공유해 드리프트 없이 검증한다.
+    const anyFeeFilled = deriveAnyFeeFilled(
+      tutorialBidDraftSeed.fees,
+      tutorialBuyerRfp.requiredPaymentMethods,
+      tutorialBuyerRfp.customPaymentMethods,
+    );
+    const validity = getBidWizardValidity({
+      cycleNum: tutorialBidDraftSeed.cycleNum,
+      anyFeeFilled,
+    });
+    expect(validity.filter((s) => !s.complete)).toEqual([]);
+  });
+
+  it('tutorialBidDraftSeed는 tutorialBids[0](튜토리얼페이 A) 조건을 미러링한다', () => {
+    expect(tutorialBidDraftSeed.cycleUnit).toBe('D');
+    expect(tutorialBidDraftSeed.cycleNum).toBe('2');
+    expect(tutorialBidDraftSeed.settleLimit).toBe(String(tutorialBids[0].settleLimit));
+    expect(tutorialBidDraftSeed.guaranteeInsurance).toBe(String(tutorialBids[0].guaranteeInsurance));
+    // tiered: decimal(0.005) → percent 문자열('0.5'); flat: 원 정수 그대로.
+    expect(tutorialBidDraftSeed.fees['card:sole']).toBe('0.5');
+    expect(tutorialBidDraftSeed.fees['virtual_account']).toBe('300');
+    expect(tutorialBidDraftSeed.memo).toBe(tutorialBids[0].memo);
   });
 });

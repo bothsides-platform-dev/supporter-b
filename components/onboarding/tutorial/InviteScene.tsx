@@ -55,7 +55,7 @@ export function InviteScene({
         </p>
       </div>
 
-      <Button onClick={onProceed}>요청 확인하기</Button>
+      <Button data-coachmark="tutorial-invite-cta" onClick={onProceed}>요청 확인하기</Button>
     </div>
   );
 }

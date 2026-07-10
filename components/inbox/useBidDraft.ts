@@ -62,6 +62,16 @@ function draftKey(rfpId: string) {
   return `bid-draft:${rfpId}`;
 }
 
+/**
+ * 특정 rfp의 저장된 초안을 즉시 제거한다 — pg 튜토리얼이 write phase 진입 전에
+ * 과거 튜토리얼(타이핑 허용 시절)의 잔존 초안을 지워 initialDraft 시드가 항상
+ * 이기게 한다(저장 초안은 baseline과 다르면 복원이 우선이므로).
+ */
+export function clearStoredBidDraft(rfpId: string) {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(draftKey(rfpId));
+}
+
 function readDraft(rfpId: string): BidDraft | null {
   // SSR 가드: useState 초기화로 render 중에 호출되므로 서버엔 localStorage 가 없다.
   // 딜룸 모달이 BidWizard 를 SSR 하는 경로에서 ReferenceError 가 나던 것을 막는다

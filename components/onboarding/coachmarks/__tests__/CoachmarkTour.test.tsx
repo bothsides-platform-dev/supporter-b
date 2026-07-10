@@ -113,6 +113,150 @@ describe('CoachmarkTour', () => {
     vi.useRealTimers();
   });
 
+  describe('action step (실클릭 진행)', () => {
+    const actionSteps: CoachmarkStep[] = [
+      { target: 'a', title: '여기를 눌러 A', body: 'A 설명', placement: 'bottom', kind: 'action' },
+      { target: 'b', title: '여기를 눌러 B', body: 'B 설명', placement: 'bottom', kind: 'action' },
+    ];
+
+    it('타깃 요소를 실제로 클릭하면 다음 step으로 진행한다', async () => {
+      const user = userEvent.setup();
+      const a = appendTarget('a');
+      appendTarget('b');
+      render(<CoachmarkTour steps={actionSteps} />);
+
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A'),
+      );
+      await user.click(a);
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 B'),
+      );
+    });
+
+    it('타깃 내부 자식 요소 클릭도 진행한다 (closest 매칭)', async () => {
+      const user = userEvent.setup();
+      const a = appendTarget('a');
+      const child = document.createElement('span');
+      child.textContent = '자식';
+      a.appendChild(child);
+      appendTarget('b');
+      render(<CoachmarkTour steps={actionSteps} />);
+
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A'),
+      );
+      await user.click(child);
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 B'),
+      );
+    });
+
+    it('타깃 밖 클릭은 진행하지 않는다', async () => {
+      const user = userEvent.setup();
+      appendTarget('a');
+      const outside = appendTarget('unrelated');
+      render(<CoachmarkTour steps={actionSteps} />);
+
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A'),
+      );
+      await user.click(outside);
+      await user.click(document.body);
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A');
+    });
+
+    it('마지막 action step 클릭 시 onFinish를 정확히 1회 호출한다', async () => {
+      const user = userEvent.setup();
+      const a = appendTarget('a');
+      const b = appendTarget('b');
+      const onFinish = vi.fn();
+      render(<CoachmarkTour steps={actionSteps} onFinish={onFinish} />);
+
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A'),
+      );
+      await user.click(a);
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 B'),
+      );
+      await user.click(b);
+      await waitFor(() => expect(onFinish).toHaveBeenCalledTimes(1));
+    });
+
+    it('타깃 요소가 리렌더로 교체돼도 새 요소 클릭으로 진행한다 (문서 레벨 리스너)', async () => {
+      const user = userEvent.setup();
+      const original = appendTarget('a');
+      appendTarget('b');
+      render(<CoachmarkTour steps={actionSteps} />);
+
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A'),
+      );
+      original.remove();
+      const replacement = appendTarget('a');
+      await user.click(replacement);
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 B'),
+      );
+    });
+
+    it('action step 중에도 Esc는 onSkip을 호출한다', async () => {
+      const user = userEvent.setup();
+      appendTarget('a');
+      const onSkip = vi.fn();
+      render(<CoachmarkTour steps={actionSteps} onSkip={onSkip} />);
+
+      await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+      await user.keyboard('{Escape}');
+      expect(onSkip).toHaveBeenCalledTimes(1);
+    });
+
+    it('info → action 혼합 시퀀스가 동작한다', async () => {
+      const user = userEvent.setup();
+      appendTarget('a');
+      const b = appendTarget('b');
+      const onFinish = vi.fn();
+      const mixed: CoachmarkStep[] = [
+        { target: 'a', title: '읽어보세요', body: '설명', placement: 'bottom' },
+        { target: 'b', title: '여기를 눌러 B', body: '설명', placement: 'bottom', kind: 'action' },
+      ];
+      render(<CoachmarkTour steps={mixed} onFinish={onFinish} />);
+
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '읽어보세요'),
+      );
+      // info step은 말풍선 다음 버튼으로 진행
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 B'),
+      );
+      // action step은 실제 타깃 클릭으로 종료
+      await user.click(b);
+      await waitFor(() => expect(onFinish).toHaveBeenCalledTimes(1));
+    });
+  });
+
+  it('같은 target을 쓰는 연속 step이 둘 다 미존재여도 스킵이 멈추지 않고 onFinish까지 간다', async () => {
+    vi.useFakeTimers();
+    const onFinish = vi.fn();
+    const sameTarget: CoachmarkStep[] = [
+      { target: 'ghost', title: 'A', body: 'a', placement: 'bottom' },
+      { target: 'ghost', title: 'B', body: 'b', placement: 'bottom' },
+    ];
+    render(<CoachmarkTour steps={sameTarget} onFinish={onFinish} timeoutMs={100} />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(onFinish).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it('마지막 step까지 target을 못 찾으면 onFinish를 호출한다', async () => {
     vi.useFakeTimers();
     const onFinish = vi.fn();

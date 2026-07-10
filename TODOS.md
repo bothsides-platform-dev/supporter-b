@@ -97,7 +97,7 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ## Onboarding / Tutorial
 
 ### 튜토리얼 플로우 셸 중복 추출 (P3)
-`BuyerTutorialFlow`와 `PgTutorialFlow`가 phase 상태머신 스캐폴딩(PHASE_ORDER/LABELS, 진행 헤더+나가기 버튼, done 전용 컨페티 캔버스)을 거의 그대로 중복. 공용 `TutorialFlowShell`/`useTutorialPhase` 추출 검토. (발견: /ship maintainability 리뷰 v0.2.76.0, 2026-07-07)
+`BuyerTutorialFlow`와 `PgTutorialFlow`가 phase 상태머신 스캐폴딩(PHASE_ORDER/LABELS, 진행 헤더+나가기 버튼, done 전용 컨페티 캔버스)을 거의 그대로 중복. 공용 `TutorialFlowShell`/`useTutorialPhase` 추출 검토. 두 플로우 테스트의 CoachmarkTour/키보드락 mock 중복도 같은 작업에서 공용 test-double로 추출. (발견: /ship maintainability 리뷰 v0.2.76.0, 2026-07-07 · mock 중복 추가: v0.2.79.0, 2026-07-10)
 
-### 온보딩 e2e (Playwright) — buyer/PG 풀 여정 (P3)
-계획서 PR5(선택) 유예분. buyer: 환영 모달→작성→도착→선정→홈 카드 소멸 / PG: 나중에 하기→재유도→초대→제출. `data-coachmark` 셀렉터로 타깃팅 가능. 현재는 단위+수동 QA로 커버. (유예: 온보딩 재구축 v0.2.76.0, 2026-07-07)
+### 온보딩 e2e — 진입면(환영 모달·재유도 배너) 여정 (P4)
+클릭-스루 본여정(buyer 작성→도착→선정 / PG 초대→조건→제출)은 `e2e/tutorial-click-through.spec.ts`가 커버(v0.2.79.0, 2026-07-10). 남은 유예분: 홈 환영 모달→체험 시작, '나중에 하기'→재유도 배너→재진입, 완주 후 배너 소멸. (유예: 온보딩 재구축 v0.2.76.0)

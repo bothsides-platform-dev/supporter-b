@@ -22,6 +22,8 @@ vi.mock('@/lib/server/actions/bid', () => ({
 vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
   saveQuoteTemplateAction: vi.fn(async () => ({ ok: true as const, templateId: 't1' })),
 }));
+const toastMock = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (...args: unknown[]) => toastMock(...args) }));
 vi.mock('../../RfpBriefPanel', () => ({ RfpBriefPanel: () => <div /> }));
 vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
   CounterpartyProfileCard: ({ counterparty }: { counterparty: { name: string } }) => (
@@ -40,6 +42,7 @@ const rfp = {
 
 beforeEach(() => {
   localStorage.clear();
+  toastMock.mockClear();
 });
 afterEach(cleanup);
 
@@ -61,13 +64,40 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     expect(document.querySelector('[data-coachmark="tutorial-bid-submit"]')).toBeInTheDocument();
   });
 
-  it('onStepChange가 주어지면 단계 이동마다 현재 단계 번호로 호출된다', async () => {
-    const onStepChange = vi.fn();
+  it('푸터 다음 버튼에 스텝별 tutorial-bid-next-N 앵커가 붙는다', async () => {
     const user = userEvent.setup();
-    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" onStepChange={onStepChange} />);
-    expect(onStepChange).toHaveBeenCalledWith(1);
+    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" />);
+    expect(document.querySelector('[data-coachmark="tutorial-bid-next-1"]')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '수수료' }));
-    expect(onStepChange).toHaveBeenCalledWith(2);
+    expect(document.querySelector('[data-coachmark="tutorial-bid-next-2"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-coachmark="tutorial-bid-next-1"]')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    expect(document.querySelector('[data-coachmark="tutorial-bid-next-3"]')).toBeInTheDocument();
+  });
+
+  it('저장된 초안이 initialDraft 시드와 동일하면 복원 토스트를 띄우지 않는다 (baseline이 시드)', async () => {
+    const { tutorialBidDraftSeed } = await import('@/lib/onboarding/tutorial-fixtures');
+    localStorage.setItem('bid-draft:tutorial-rfp', JSON.stringify(tutorialBidDraftSeed));
+    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" initialDraft={tutorialBidDraftSeed} />);
+    expect(toastMock).not.toHaveBeenCalledWith(
+      '이전에 작성하던 내용을 그대로 불러왔어요',
+      expect.anything(),
+    );
+  });
+
+  it('저장된 초안이 initialDraft와 다르면 초안이 이긴다 (복원 우선 계약 — clearStoredBidDraft의 존재 이유)', async () => {
+    const { tutorialBidDraftSeed } = await import('@/lib/onboarding/tutorial-fixtures');
+    const divergent = { ...tutorialBidDraftSeed, memo: '과거에 타이핑한 내용', cycleNum: '7' };
+    localStorage.setItem('bid-draft:tutorial-rfp', JSON.stringify(divergent));
+    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" initialDraft={tutorialBidDraftSeed} />);
+
+    // 정산주기 입력이 시드(2)가 아니라 저장 초안(7)에서 온다 + 복원 토스트 발화.
+    expect(screen.getByDisplayValue('7')).toBeInTheDocument();
+    expect(toastMock).toHaveBeenCalledWith(
+      '이전에 작성하던 내용을 그대로 불러왔어요',
+      expect.anything(),
+    );
   });
 });

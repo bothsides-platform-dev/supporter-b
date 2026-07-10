@@ -68,7 +68,7 @@ export function BidsArrivalScene({
       </div>
 
       {allArrived && (
-        <Button onClick={onProceed}>견적 비교하기</Button>
+        <Button data-coachmark="tutorial-arrival-cta" onClick={onProceed}>견적 비교하기</Button>
       )}
     </div>
   );

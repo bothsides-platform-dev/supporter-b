@@ -69,7 +69,7 @@ app/
 │  ├─ rfp-create/             # /rfp-create — RFP 작성 플로우 (AppShell 공유, 인터셉트 라우트)
 │  ├─ inbox/                  # pg workspace pages (P2~P4): /inbox, /inbox/[rfpId] (제출 후 인플레이스 흡수 — 별도 /submitted 라우트 없음), /inbox/@modal/(.)[rfpId] (인터셉트 딜룸 모달)
 │  ├─ opportunities/          # pg — 오픈 RFP 게시판 (비초대 PG 발견·콜드 피치)
-│  ├─ tutorial/               # buyer+pg — 온보딩 튜토리얼. 홈 환영 모달(WelcomeModal)/재유도 배너(TutorialNudge)의 진입점. buyer는 BuyerTutorialFlow(components/onboarding/tutorial/)가 같은 라우트 내 phase 전환(작성→도착연출→비교·선정→완료, 전부 fixture)으로 실제 여정 제공. pg는 PgTutorialFlow가 같은 방식으로 초대 수신 연출→요청 조건 확인(RfpBriefPanel)→견적 작성·제출(BidWizard)→완료(봉인 입찰 안내) 여정 제공
+│  ├─ tutorial/               # buyer+pg — 온보딩 튜토리얼. 홈 환영 모달(WelcomeModal)/재유도 배너(TutorialNudge)의 진입점. buyer는 BuyerTutorialFlow(components/onboarding/tutorial/)가 같은 라우트 내 phase 전환(작성→도착연출→비교·선정→완료, 전부 fixture)으로 실제 여정 제공. pg는 PgTutorialFlow가 같은 방식으로 초대 수신 연출→요청 조건 확인(RfpBriefPanel)→견적 작성·제출(BidWizard)→완료(봉인 입찰 안내) 여정 제공. **클릭-온리 계약(v0.2.79.0)**: 폼은 전부 프리필(제목·견적 시드 포함), 코치마크 action step이 스포트라이트 구멍으로 실제 버튼 클릭을 유도해 무입력 완주 — useTutorialKeyboardLock이 편집 요소 타이핑만 차단(버튼 Tab/Enter·Esc는 통과), e2e/tutorial-click-through.spec.ts가 실부품 여정을 커버
 │  ├─ messages/               # buyer+pg 공통 — 라이브 채팅 (Centrifugo WS)
 │  ├─ notifications/          # 인앱 알림 목록 페이지
 │  ├─ quote-templates/        # pg — 견적 템플릿 (정산조건·수수료율 저장, top-level PG 라우트 — settings 하위 아님)

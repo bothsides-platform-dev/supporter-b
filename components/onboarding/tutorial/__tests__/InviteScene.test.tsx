@@ -34,4 +34,19 @@ describe('InviteScene (pg 튜토리얼 — 초대 수신 연출)', () => {
     await user.click(screen.getByRole('button', { name: '요청 확인하기' }));
     expect(onProceed).toHaveBeenCalledTimes(1);
   });
+
+  it('CTA 버튼에 튜토리얼 코치마크 앵커가 있다', () => {
+    render(
+      <InviteScene
+        buyerName="튜토리얼 쇼핑몰"
+        rfpTitle="온라인 쇼핑몰 PG 견적 요청 (튜토리얼)"
+        deadline="2026-07-21T00:00:00.000Z"
+        onProceed={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: '요청 확인하기' })).toHaveAttribute(
+      'data-coachmark',
+      'tutorial-invite-cta',
+    );
+  });
 });

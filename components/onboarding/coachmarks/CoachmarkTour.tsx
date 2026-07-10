@@ -29,14 +29,42 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
 
   useEffect(() => {
     if (status !== 'notFound') return;
-    if (isLast) {
+    // 같은 target 문자열을 쓰는 연속 step은 함께 건너뛴다 — target이 안 바뀌면
+    // useAnchorRect가 리셋되지 않아 status가 notFound에 머물러 투어가 조용히
+    // 멈추기 때문(zombie). 다른 target에 도달하면 hook이 리셋되어 재탐색한다.
+    const missingTarget = currentStep?.target;
+    let next = stepIndex + 1;
+    while (next < steps.length && steps[next].target === missingTarget) next += 1;
+    if (next >= steps.length) {
       onFinish?.();
     } else {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- notFound 타임아웃 시 다음 step으로 자동 스킵하는 의도된 반응(투어가 멈추지 않는 것이 불변식)
-      setStepIndex((index) => index + 1);
+      setStepIndex(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  useEffect(() => {
+    if (!currentStep || currentStep.kind !== 'action' || status !== 'found') return;
+    const target = currentStep.target;
+    const advanceIsLast = isLast;
+    // 문서 레벨 capture 리스너 — 요소 identity가 리렌더로 바뀌어도 data-coachmark로
+    // 매칭한다. capture 시점에 진행을 예약해도 실제 버튼의 React 핸들러는 그대로
+    // 실행되고, 다음 step의 리스너는 post-render effect에 붙으므로 같은 클릭을
+    // 이중 소비하지 않는다.
+    const handleClick = (event: MouseEvent) => {
+      const el = event.target instanceof Element ? event.target : null;
+      if (!el?.closest(`[data-coachmark="${CSS.escape(target)}"]`)) return;
+      if (advanceIsLast) {
+        onFinish?.();
+      } else {
+        setStepIndex((index) => index + 1);
+      }
+    };
+    document.addEventListener('click', handleClick, { capture: true });
+    return () => document.removeEventListener('click', handleClick, { capture: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep?.target, currentStep?.kind, status, isLast]);
 
   useEffect(() => {
     if (!hasSteps) return;

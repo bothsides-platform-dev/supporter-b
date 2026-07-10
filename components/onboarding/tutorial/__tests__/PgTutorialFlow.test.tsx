@@ -17,10 +17,18 @@ vi.mock('@/lib/hooks/useCelebrationConfetti', () => ({
 
 vi.mock('@/components/onboarding/coachmarks', () => ({
   CoachmarkTour: ({ steps, onFinish }: { steps: { target: string }[]; onFinish?: () => void }) => (
-    <div data-testid={`tour-${steps[0]?.target}`}>
+    <div
+      data-testid={`tour-${steps[0]?.target}`}
+      data-targets={steps.map((s) => s.target).join(',')}
+    >
       <button type="button" onClick={onFinish}>{`tour-finish-${steps[0]?.target}`}</button>
     </div>
   ),
+}));
+
+const keyboardLockMock = vi.fn();
+vi.mock('../useTutorialKeyboardLock', () => ({
+  useTutorialKeyboardLock: () => keyboardLockMock(),
 }));
 
 vi.mock('../InviteScene', () => ({
@@ -36,23 +44,21 @@ vi.mock('@/components/inbox/RfpBriefPanel', () => ({
   RfpBriefPanel: () => <div>BRIEF</div>,
 }));
 
+const bidWizardPropsSpy = vi.fn();
 vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({
-  BidWizard: ({
-    onSampleSubmit,
-    onStepChange,
-  }: {
-    onSampleSubmit?: () => void;
-    onStepChange?: (step: number) => void;
-  }) => (
-    <div>
-      <span>WRITE</span>
-      <button type="button" onClick={onSampleSubmit}>bid-submit</button>
-      <button type="button" onClick={() => onStepChange?.(4)}>bid-goto-step4</button>
-    </div>
-  ),
+  BidWizard: (props: { onSampleSubmit?: () => void; initialDraft?: unknown }) => {
+    bidWizardPropsSpy(props);
+    return (
+      <div>
+        <span>WRITE</span>
+        <button type="button" onClick={props.onSampleSubmit}>bid-submit</button>
+      </div>
+    );
+  },
 }));
 
 import { PgTutorialFlow } from '../PgTutorialFlow';
+import { tutorialBidDraftSeed } from '@/lib/onboarding/tutorial-fixtures';
 
 afterEach(cleanup);
 
@@ -61,6 +67,9 @@ describe('PgTutorialFlow (pg 튜토리얼 여정)', () => {
     mockPush.mockClear();
     updateOnboardingActionMock.mockClear();
     confettiFireMock.mockClear();
+    bidWizardPropsSpy.mockClear();
+    keyboardLockMock.mockClear();
+    localStorage.clear();
   });
 
   it('초기 phase는 invite — 초대 연출과 1/4 진행 표시를 렌더한다', () => {
@@ -153,17 +162,50 @@ describe('PgTutorialFlow (pg 튜토리얼 여정)', () => {
     expect(screen.getByTestId('tour-tutorial-brief-panel')).toBeInTheDocument();
   });
 
-  it('write 진입 시 콘텐츠 투어만 표시하고, 4단계 도달 시 제출 투어를 표시한다', async () => {
+  it('invite 진입 시 초대 CTA 투어를 표시한다', () => {
+    render(<PgTutorialFlow />);
+    expect(screen.getByTestId('tour-tutorial-invite-cta')).toBeInTheDocument();
+  });
+
+  it('write 투어는 단일 연속 투어로 제출 버튼(tutorial-bid-submit)에서 끝난다', async () => {
     const user = userEvent.setup();
     render(<PgTutorialFlow />);
     await user.click(screen.getByRole('button', { name: 'invite-proceed' }));
     await user.click(screen.getByRole('button', { name: '견적 작성하기' }));
 
-    expect(screen.getByTestId('tour-tutorial-bid-form')).toBeInTheDocument();
+    const tour = screen.getByTestId('tour-tutorial-bid-form');
+    const targets = (tour.getAttribute('data-targets') ?? '').split(',');
+    expect(targets[targets.length - 1]).toBe('tutorial-bid-submit');
+    // 별도의 step-4 게이트 제출 투어는 더 이상 존재하지 않는다.
     expect(screen.queryByTestId('tour-tutorial-bid-submit')).not.toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole('button', { name: 'tour-finish-tutorial-bid-form' }));
-    await user.click(screen.getByRole('button', { name: 'bid-goto-step4' }));
-    expect(screen.getByTestId('tour-tutorial-bid-submit')).toBeInTheDocument();
+  it('BidWizard에 tutorialBidDraftSeed를 initialDraft로 전달한다 (타이핑 제로 프리필)', async () => {
+    const user = userEvent.setup();
+    render(<PgTutorialFlow />);
+    await user.click(screen.getByRole('button', { name: 'invite-proceed' }));
+    await user.click(screen.getByRole('button', { name: '견적 작성하기' }));
+
+    expect(bidWizardPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ initialDraft: tutorialBidDraftSeed }),
+    );
+  });
+
+  it('견적 작성하기 클릭 시 과거 튜토리얼의 잔존 draft를 지운다 (시드가 항상 이기도록)', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(
+      'bid-draft:tutorial-rfp',
+      JSON.stringify({ ...tutorialBidDraftSeed, memo: '과거에 타이핑한 내용' }),
+    );
+    render(<PgTutorialFlow />);
+    await user.click(screen.getByRole('button', { name: 'invite-proceed' }));
+    await user.click(screen.getByRole('button', { name: '견적 작성하기' }));
+
+    expect(localStorage.getItem('bid-draft:tutorial-rfp')).toBeNull();
+  });
+
+  it('튜토리얼 전 구간에서 키보드 락이 마운트된다 (클릭 전용)', () => {
+    render(<PgTutorialFlow />);
+    expect(keyboardLockMock).toHaveBeenCalled();
   });
 });

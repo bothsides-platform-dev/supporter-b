@@ -22,10 +22,18 @@ vi.mock('@/lib/hooks/useCelebrationConfetti', () => ({
 
 vi.mock('@/components/onboarding/coachmarks', () => ({
   CoachmarkTour: ({ steps, onFinish }: { steps: { target: string }[]; onFinish?: () => void }) => (
-    <div data-testid={`tour-${steps[0]?.target}`}>
+    <div
+      data-testid={`tour-${steps[0]?.target}`}
+      data-targets={steps.map((s) => s.target).join(',')}
+    >
       <button type="button" onClick={onFinish}>{`tour-finish-${steps[0]?.target}`}</button>
     </div>
   ),
+}));
+
+const keyboardLockMock = vi.fn();
+vi.mock('../useTutorialKeyboardLock', () => ({
+  useTutorialKeyboardLock: () => keyboardLockMock(),
 }));
 
 vi.mock('@/components/rfp/RfpCreateWizard', () => ({
@@ -150,20 +158,24 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
     expect(mockPush).toHaveBeenCalledWith('/home');
   });
 
-  it('create 진입 시 콘텐츠 투어만 표시하고 제출 투어는 표시하지 않는다', () => {
+  it('create 투어는 단일 연속 투어로 제출 버튼(tutorial-wizard-submit)에서 끝난다', () => {
     render(<BuyerTutorialFlow />);
-    expect(screen.getByTestId('tour-tutorial-wizard-content')).toBeInTheDocument();
+    const tour = screen.getByTestId('tour-tutorial-wizard-content');
+    const targets = (tour.getAttribute('data-targets') ?? '').split(',');
+    expect(targets[targets.length - 1]).toBe('tutorial-wizard-submit');
+    // 별도의 step-4 게이트 제출 투어는 더 이상 존재하지 않는다.
     expect(screen.queryByTestId('tour-tutorial-wizard-submit')).not.toBeInTheDocument();
   });
 
-  it('콘텐츠 투어 종료 후 위저드 4단계 도달 시 제출 투어를 표시한다', async () => {
+  it('arrival phase에서 arrival CTA 투어를 마운트한다', async () => {
     const user = userEvent.setup();
     render(<BuyerTutorialFlow />);
+    await user.click(screen.getByRole('button', { name: 'wizard-submit' }));
+    expect(screen.getByTestId('tour-tutorial-arrival-cta')).toBeInTheDocument();
+  });
 
-    await user.click(screen.getByText('tour-finish-tutorial-wizard-content'));
-    expect(screen.queryByTestId('tour-tutorial-wizard-submit')).not.toBeInTheDocument();
-
-    await user.click(screen.getByText('wizard-goto-step4'));
-    expect(screen.getByTestId('tour-tutorial-wizard-submit')).toBeInTheDocument();
+  it('튜토리얼 전 구간에서 키보드 락이 마운트된다 (클릭 전용)', () => {
+    render(<BuyerTutorialFlow />);
+    expect(keyboardLockMock).toHaveBeenCalled();
   });
 });

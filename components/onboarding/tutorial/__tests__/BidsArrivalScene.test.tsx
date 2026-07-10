@@ -60,4 +60,13 @@ describe('BidsArrivalScene', () => {
     await user.click(screen.getByRole('button', { name: '견적 비교하기' }));
     expect(onProceed).toHaveBeenCalledTimes(1);
   });
+
+  it('CTA 버튼에 튜토리얼 코치마크 앵커가 있다', () => {
+    reducedMotion = true;
+    render(<BidsArrivalScene pgNames={pgNames} onProceed={vi.fn()} />);
+    expect(screen.getByRole('button', { name: '견적 비교하기' })).toHaveAttribute(
+      'data-coachmark',
+      'tutorial-arrival-cta',
+    );
+  });
 });

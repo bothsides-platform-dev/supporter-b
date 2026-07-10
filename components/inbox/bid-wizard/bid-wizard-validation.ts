@@ -3,6 +3,7 @@
 // 견적 작성 wizard 단일 검증 소스. 구매사 wizard-validation.ts 미러.
 // step1=정산주기, step2=수수료1개+. step3(견적서)·step4(검토)는 선택/요약이라 항상 complete.
 import { BID_WIZARD_STEPS } from './bid-wizard-steps';
+import { MERCHANT_TIERS, isTieredMethod, type PaymentMethod } from '@/lib/types/bid';
 
 export type BidValidationInput = {
   cycleNum: string;
@@ -18,6 +19,26 @@ const HINTS: Record<number, string> = {
 
 export function isCycleValid(cycleNum: string): boolean {
   return cycleNum !== '' && parseInt(cycleNum) > 0;
+}
+
+/**
+ * "수수료 1칸 이상 입력" 판정의 단일 출처 — BidWizard의 anyFeeFilled 파생과
+ * 픽스처 검증 테스트가 공유한다(재구현 드리프트 방지). fees 키 규약:
+ * 구간제 수단은 `"<method>:<tier>"`, 정액/정률 단일 수단·커스텀은 그대로.
+ */
+export function deriveAnyFeeFilled(
+  fees: Record<string, string>,
+  feeInputMethods: readonly PaymentMethod[],
+  customPaymentMethods: readonly { id: string }[],
+): boolean {
+  const feeFilled = (key: string) => (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
+  const anyTieredFilled = feeInputMethods.some(
+    (m) => isTieredMethod(m) && MERCHANT_TIERS.some((t) => feeFilled(`${m}:${t}`)),
+  );
+  const anySingleFilled =
+    feeInputMethods.some((m) => !isTieredMethod(m) && feeFilled(m)) ||
+    customPaymentMethods.some((c) => feeFilled(c.id));
+  return anyTieredFilled || anySingleFilled;
 }
 
 function isStepComplete(num: number, input: BidValidationInput): boolean {
