@@ -1,17 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { buildRobots, AI_CRAWLER_USER_AGENTS } from '@/lib/seo/robots';
 
-const ORIGIN = 'https://partner.support-b.com';
+const ORIGIN = 'https://support-b.com';
+const PG_ORIGIN = 'https://partner.support-b.com';
 
 describe('buildRobots', () => {
   it('points host + sitemap at the given origin (host-aware)', () => {
-    const r = buildRobots(ORIGIN);
+    const r = buildRobots(ORIGIN, 'buyer');
     expect(r.host).toBe(ORIGIN);
     expect(r.sitemap).toBe(`${ORIGIN}/sitemap.xml`);
   });
 
   it('keeps the wildcard rule allowing public and blocking app routes', () => {
-    const r = buildRobots(ORIGIN);
+    const r = buildRobots(ORIGIN, 'buyer');
     const rules = Array.isArray(r.rules) ? r.rules : [r.rules];
     const wildcard = rules.find((rule) => rule?.userAgent === '*');
     expect(wildcard).toBeDefined();
@@ -21,7 +22,7 @@ describe('buildRobots', () => {
   });
 
   it('explicitly welcomes the major AI crawlers but still blocks app routes', () => {
-    const r = buildRobots(ORIGIN);
+    const r = buildRobots(ORIGIN, 'buyer');
     const rules = Array.isArray(r.rules) ? r.rules : [r.rules];
     const aiRule = rules.find((rule) => {
       const ua = rule?.userAgent;
@@ -49,5 +50,13 @@ describe('buildRobots', () => {
         'Applebot-Extended',
       ]),
     );
+  });
+
+  it('blanket-disallows every crawler on the partner (pg) host — not meant to be indexed', () => {
+    const r = buildRobots(PG_ORIGIN, 'pg');
+    const rules = Array.isArray(r.rules) ? r.rules : [r.rules];
+    expect(rules).toEqual([{ userAgent: '*', disallow: ['/'] }]);
+    expect(r.sitemap).toBeUndefined();
+    expect(r.host).toBeUndefined();
   });
 });
