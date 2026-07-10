@@ -12,7 +12,9 @@ export type AnchorRectResult = {
 const DEFAULT_TIMEOUT_MS = 3000;
 
 function queryTarget(target: string): HTMLElement | null {
-  return document.querySelector(`[data-coachmark="${target}"]`);
+  // CoachmarkTour의 클릭 매칭(closest)과 동일하게 CSS.escape로 이스케이프 —
+  // 특수문자 target이 querySelector SyntaxError로 폴링 tick을 죽이지 않게.
+  return document.querySelector(`[data-coachmark="${CSS.escape(target)}"]`);
 }
 
 /**
@@ -43,6 +45,7 @@ export function useAnchorRect(
     let trackedEl: HTMLElement | null = null;
 
     let lastKey = '';
+    let detachedSinceMs: number | null = null;
     const updateRect = () => {
       if (cancelled || !trackedEl) return;
       // 같은 target 문자열이 유지된 채 요소가 리마운트되면(위저드 리렌더) 추적이
@@ -50,10 +53,25 @@ export function useAnchorRect(
       // scrollIntoView는 재발사하지 않는다(scrolledRef가 이미 true).
       if (!trackedEl.isConnected) {
         const replacement = queryTarget(target);
-        if (!replacement) return; // 다음 tick/MutationObserver에서 재시도
+        if (!replacement) {
+          // 대체 요소가 영원히 안 나타나면 스포트라이트가 허공에 얼어붙는다 —
+          // timeoutMs 경과 시 notFound로 전환해 투어의 자동 스킵 불변식에 합류.
+          detachedSinceMs ??= Date.now();
+          if (Date.now() - detachedSinceMs >= timeoutMs) {
+            resizeObserver?.disconnect();
+            if (pollId) clearInterval(pollId);
+            window.removeEventListener('resize', updateRect);
+            window.removeEventListener('scroll', updateRect, { capture: true });
+            setResult({ rect: null, status: 'notFound' });
+          }
+          return; // 다음 tick에서 재시도
+        }
+        detachedSinceMs = null;
         trackedEl = replacement;
         resizeObserver?.disconnect();
         resizeObserver?.observe(replacement);
+      } else {
+        detachedSinceMs = null;
       }
       const rect = trackedEl.getBoundingClientRect();
       // 동일 rect 재-set 방지 — 폴링이 매 tick 불필요한 리렌더를 만들지 않도록.

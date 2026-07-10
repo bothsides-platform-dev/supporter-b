@@ -119,6 +119,42 @@ describe('useAnchorRect', () => {
     expect(replacement.scrollIntoView).not.toHaveBeenCalled();
   });
 
+  it('특수문자가 든 target도 안전하게 매칭한다 (CSS.escape)', async () => {
+    const el = document.createElement('div');
+    el.setAttribute('data-coachmark', 'weird"target]');
+    stubRect(el, { top: 10, left: 20, width: 100, height: 50 });
+    el.scrollIntoView = vi.fn();
+    document.body.appendChild(el);
+
+    const { result } = renderHook(() => useAnchorRect('weird"target]'));
+    await waitFor(() => expect(result.current.status).toBe('found'));
+    expect(result.current.rect?.top).toBe(10);
+  });
+
+  it('추적 요소가 영구 제거되고 대체 요소가 나타나지 않으면 timeoutMs 내 notFound로 전환한다', async () => {
+    vi.useFakeTimers();
+    const el = document.createElement('div');
+    el.setAttribute('data-coachmark', 'step-vanish');
+    stubRect(el, { top: 100, left: 100, width: 120, height: 32 });
+    el.scrollIntoView = vi.fn();
+    document.body.appendChild(el);
+
+    const { result } = renderHook(() => useAnchorRect('step-vanish', { timeoutMs: 1000 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('found');
+
+    // 요소가 사라지고 다시는 안 돌아온다 — 스포트라이트가 허공에 얼어붙지 않도록
+    // notFound로 전환해 투어의 자동 스킵 불변식에 합류해야 한다.
+    el.remove();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(result.current.status).toBe('notFound');
+    expect(result.current.rect).toBeNull();
+  });
+
   it('스크롤/리사이즈 이벤트 없이 요소 위치만 변해도 rect를 갱신한다 (폴링)', async () => {
     vi.useFakeTimers();
     const el = document.createElement('div');

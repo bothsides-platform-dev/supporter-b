@@ -237,6 +237,26 @@ describe('CoachmarkTour', () => {
     });
   });
 
+  it('같은 target을 쓰는 연속 step이 둘 다 미존재여도 스킵이 멈추지 않고 onFinish까지 간다', async () => {
+    vi.useFakeTimers();
+    const onFinish = vi.fn();
+    const sameTarget: CoachmarkStep[] = [
+      { target: 'ghost', title: 'A', body: 'a', placement: 'bottom' },
+      { target: 'ghost', title: 'B', body: 'b', placement: 'bottom' },
+    ];
+    render(<CoachmarkTour steps={sameTarget} onFinish={onFinish} timeoutMs={100} />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(onFinish).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it('마지막 step까지 target을 못 찾으면 onFinish를 호출한다', async () => {
     vi.useFakeTimers();
     const onFinish = vi.fn();
