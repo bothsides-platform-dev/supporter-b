@@ -5,6 +5,7 @@ import {
   workspaceSwitchTarget,
   signupTargetForHost,
   opsLoginRedirectTarget,
+  shouldNoindexHost,
   type AppOrigins,
 } from '../site-routing';
 
@@ -117,5 +118,18 @@ describe('opsLoginRedirectTarget', () => {
   });
   it('stays in single-host local/dev (routing disabled)', () => {
     expect(opsLoginRedirectTarget('localhost', LOCAL)).toBeNull();
+  });
+});
+
+describe('shouldNoindexHost', () => {
+  it('is true on the partner host — not meant to be search-indexed', () => {
+    expect(shouldNoindexHost('partner.support-b.com', PROD)).toBe(true);
+  });
+  it('is false on the buyer host', () => {
+    expect(shouldNoindexHost('support-b.com', PROD)).toBe(false);
+  });
+  it('is false for an unknown host or in single-host local/dev', () => {
+    expect(shouldNoindexHost('52.78.126.178', PROD)).toBe(false);
+    expect(shouldNoindexHost('localhost', LOCAL)).toBe(false);
   });
 });
