@@ -75,3 +75,12 @@ export function signupTargetForHost(
 ): '/signup/buyer' | '/signup/pg' {
   return hostServes(host, origins) === 'pg' ? '/signup/pg' : '/signup/buyer';
 }
+
+/**
+ * Whether responses on this host should carry `X-Robots-Tag: noindex`. Only
+ * the partner (pg) host is blocked — backs up robots.txt's blanket disallow
+ * for pages a crawler may already have indexed via an external link.
+ */
+export function shouldNoindexHost(host: string | null, origins: AppOrigins): boolean {
+  return hostServes(host, origins) === 'pg';
+}

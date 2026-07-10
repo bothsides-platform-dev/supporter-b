@@ -17,18 +17,8 @@ describe('buildSitemap', () => {
     expect(urls).not.toContain('https://support-b.com/signup/pg');
   });
 
-  it('lists the pg signup path on the partner host', () => {
-    const urls = buildSitemap(PG, NOW).map((e) => e.url);
-    expect(urls).toContain('https://partner.support-b.com/signup/pg');
-    expect(urls).not.toContain('https://partner.support-b.com/signup/buyer');
-  });
-
-  it('uses the host origin for every url and stamps the given lastModified', () => {
-    const entries = buildSitemap(PG, NOW);
-    for (const e of entries) {
-      expect(e.url.startsWith('https://partner.support-b.com')).toBe(true);
-      expect(e.lastModified).toBe(NOW);
-    }
+  it('is empty on the partner (pg) host — noindexed, nothing to submit', () => {
+    expect(buildSitemap(PG, NOW)).toEqual([]);
   });
 
   it('gives the landing root top priority', () => {
