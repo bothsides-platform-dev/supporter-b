@@ -17,7 +17,7 @@ export function LandingHeader({ children }: { children?: ReactNode }) {
       className="group/lheader fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-8 h-[var(--shell-topbar)] border-b transition-colors duration-300 bg-[var(--md-sys-color-surface)] border-[var(--md-sys-color-outline-variant)] data-[over-dark]:bg-transparent data-[over-dark]:border-transparent"
     >
       <span className="group-data-[over-dark]/lheader:[--md-sys-color-on-surface:var(--md-sys-color-inverse-on-surface)]">
-        <Logo />
+        <Logo animated />
       </span>
       <div className="flex items-center gap-[var(--s-3)]">{children}</div>
     </header>

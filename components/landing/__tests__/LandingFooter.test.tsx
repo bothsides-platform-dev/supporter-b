@@ -20,6 +20,7 @@ vi.mock('motion/react', () => {
     // 히어로 마그네틱 CTA(useMagneticHover) 스텁
     useMotionValue: () => ({ set: vi.fn(), get: () => 0 }),
     useSpring: () => 0,
+    useReducedMotion: () => false,
   };
 });
 
