@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"docker exec supporter-b-pg psql -U supporter_b -d supporter_b_tutqa -c \\\"UPDATE users SET onboarding=NULL;\\\" && node ./kb-lock-qa.tmp.mjs 2>&1 | tail -5\",\"timeout\":180000,\"description\":\"Re...",
-  "error": "Exit code 1\nERROR:  null value in column \"onboarding\" of relation \"users\" violates not-null constraint\nDETAIL:  Failing row contains (da78f259-75e4-4bca-a147-3839e5c53e65, ws-inicis-admin@example.com, $2b$12$DQlr5v6uo2Q3TEH3NzNawe.4RlVS3q2LT9J6pm5RyCy9zZvJr/5Eu, 이니시스 관리자, null, moss, null, active, t, null, 1, f0bb1209-fc91-4fc0-9a0b-78d966fa619e, f, null, {}, 2026-07-09 14:04:02.88854+00, null, 2026-07-09 14:04:02.88854+00).",
-  "timestamp": "2026-07-09T14:18:30.141Z",
+  "tool_input_preview": "{\"command\":\"ls e2e/ | head -20; echo ---; grep -rn \\\"tutorial\\\\|onboarding\\\" e2e/*.ts | head -5; echo ---; sed -n 1,50p e2e/helpers.ts 2>/dev/null || ls e2e/helpers* e2e/fixtures* e2e/support* 2>/dev/...",
+  "error": "Exit code 1\n_helpers.ts\nbid-detail-pdf-preview.spec.ts\nchat-rail-team-chat.spec.ts\nglobal-setup.ts\nglobal-teardown.ts\nrfp-detail-navigation.spec.ts\nscenario-a-buyer-rfp.spec.ts\nscenario-b-pg-bid.spec.ts\nscenario-c-buyer-award.spec.ts\nscenario-d-buyer-add-pg.spec.ts\nscenario-e-requote.spec.ts\ntheme-persistence.spec.ts\n---\ne2e/scenario-b-pg-bid.spec.ts:87:    // the /signup/pg/verify funnel (first-time PG onboarding). The toss\n---\n(eval):1: no matches found: e2e/helpers*",
+  "timestamp": "2026-07-10T02:17:51.804Z",
   "retry_count": 1
 }

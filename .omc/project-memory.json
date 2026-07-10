@@ -57,7 +57,7 @@
     "runtime": "Node.js 22"
   },
   "build": {
-    "buildCommand": "pnpm build",
+    "buildCommand": "cat /tmp/ship_tests2.txt; COREPACK_INTEGRITY_KEYS=0 corepack pnpm@9 lint 2>&1 | tail -2; echo LINT_EXIT=$?; COREPACK_INTEGRITY_KEYS=0 corepack pnpm@9 tsc --noEmit 2>&1 | tail -2; echo TSC_EXIT=$?",
     "testCommand": "pnpm test",
     "lintCommand": "pnpm lint",
     "devCommand": "pnpm dev",
@@ -288,6 +288,127 @@
       "keyFiles": []
     }
   },
-  "hotPaths": [],
+  "hotPaths": [
+    {
+      "path": "components/onboarding/coachmarks/__tests__/CoachmarkOverlay.test.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1783649369598,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/coachmarks/CoachmarkTour.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1783649569865,
+      "type": "file"
+    },
+    {
+      "path": "components/inbox/bid-wizard/BidWizard.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1783649783000,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/coachmarks/useAnchorRect.ts",
+      "accessCount": 4,
+      "lastAccessed": 1783649503204,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/coachmarks/CoachmarkOverlay.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1783649412010,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/tutorial/__tests__/useTutorialKeyboardLock.test.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1783649634082,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/tutorial/useTutorialKeyboardLock.ts",
+      "accessCount": 2,
+      "lastAccessed": 1783649661479,
+      "type": "file"
+    },
+    {
+      "path": "lib/onboarding/__tests__/tutorial-fixtures.test.ts",
+      "accessCount": 2,
+      "lastAccessed": 1783649723071,
+      "type": "file"
+    },
+    {
+      "path": "components/inbox/bid-wizard/bid-wizard-validation.ts",
+      "accessCount": 2,
+      "lastAccessed": 1783649761673,
+      "type": "file"
+    },
+    {
+      "path": "TODOS.md",
+      "accessCount": 2,
+      "lastAccessed": 1783650454027,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/tutorial/tours.ts",
+      "accessCount": 1,
+      "lastAccessed": 1783648431837,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/coachmarks/types.ts",
+      "accessCount": 1,
+      "lastAccessed": 1783648433230,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/tutorial/PgTutorialFlow.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1783648439086,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/tutorial/BuyerTutorialFlow.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1783648439684,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/coachmarks/__tests__/useAnchorRect.test.ts",
+      "accessCount": 1,
+      "lastAccessed": 1783649456527,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/coachmarks/__tests__/CoachmarkTour.test.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1783649461135,
+      "type": "file"
+    },
+    {
+      "path": "components/inbox/bid-wizard/__tests__/BidWizard.tutorial.test.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1783649740914,
+      "type": "file"
+    },
+    {
+      "path": "e2e/_helpers.ts",
+      "accessCount": 1,
+      "lastAccessed": 1783649879307,
+      "type": "file"
+    },
+    {
+      "path": "e2e/tutorial-click-through.spec.ts",
+      "accessCount": 1,
+      "lastAccessed": 1783649979311,
+      "type": "file"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "accessCount": 1,
+      "lastAccessed": 1783650376979,
+      "type": "file"
+    }
+  ],
   "userDirectives": []
 }
