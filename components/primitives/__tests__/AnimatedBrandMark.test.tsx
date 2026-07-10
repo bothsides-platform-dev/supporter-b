@@ -70,13 +70,12 @@ describe('AnimatedBrandMark', () => {
     expect(path.getAttribute('fill-opacity')).not.toBe('0');
   });
 
-  it('renders the static path with no draw/fill motion attributes at all (truly static, not just settled)', () => {
+  it('renders the same element type under reduced motion (initial===animate, no type swap) to avoid SSR hydration mismatch', () => {
     reduce = true;
-    const { container } = render(<AnimatedBrandMark />);
-    const path = container.querySelector('path')!;
-    expect(path.getAttribute('fill-opacity')).toBeNull();
-    expect(path.getAttribute('stroke-dasharray')).toBeNull();
-    expect(path.getAttribute('stroke-dashoffset')).toBeNull();
+    render(<AnimatedBrandMark />);
+    expect(captured.pathProps?.initial).toMatchObject({ pathLength: 1, fillOpacity: 1 });
+    expect(captured.pathProps?.animate).toMatchObject({ pathLength: 1, fillOpacity: 1 });
+    expect((captured.pathProps?.transition as { duration: number }).duration).toBe(0);
   });
 
   it('reflects custom size, className, colorVar and strokeWidth props', () => {

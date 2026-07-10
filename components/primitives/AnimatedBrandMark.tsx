@@ -37,29 +37,28 @@ export function AnimatedBrandMark({
       className={className}
     >
       <g transform="translate(0 1254) scale(0.1 -0.1)" fill={color}>
-        {reduce ? (
-          <path
-            d={BRAND_MARK_PATH}
-            stroke={color}
-            strokeWidth={strokeWidth}
-            strokeLinejoin="miter"
-            strokeLinecap="butt"
-          />
-        ) : (
-          <motion.path
-            d={BRAND_MARK_PATH}
-            stroke={color}
-            strokeWidth={strokeWidth}
-            strokeLinejoin="miter"
-            strokeLinecap="butt"
-            initial={{ pathLength: 0, fillOpacity: 0 }}
-            animate={{ pathLength: 1, fillOpacity: 1 }}
-            transition={{
-              pathLength: { duration: 0.6, ease: EASE_STANDARD },
-              fillOpacity: { delay: 0.5, duration: 0.3, ease: 'easeOut' },
-            }}
-          />
-        )}
+        {/* reduce와 무관하게 항상 같은 엘리먼트 타입(motion.path)을 렌더링한다 —
+            SSR에서는 reduce가 항상 false로 해석되므로, reduce 분기로 엘리먼트
+            타입 자체를 바꾸면 reduced-motion 클라이언트에서 하이드레이션
+            시점에 타입 불일치(마운트 해제 후 재마운트)가 발생한다.
+            대신 initial=animate·transition duration 0으로 애니메이션만 무효화한다. */}
+        <motion.path
+          d={BRAND_MARK_PATH}
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="miter"
+          strokeLinecap="butt"
+          initial={reduce ? { pathLength: 1, fillOpacity: 1 } : { pathLength: 0, fillOpacity: 0 }}
+          animate={{ pathLength: 1, fillOpacity: 1 }}
+          transition={
+            reduce
+              ? { duration: 0 }
+              : {
+                  pathLength: { duration: 0.6, ease: EASE_STANDARD },
+                  fillOpacity: { delay: 0.5, duration: 0.3, ease: 'easeOut' },
+                }
+          }
+        />
       </g>
     </svg>
   );
