@@ -76,7 +76,7 @@ describe('SidebarBrand', () => {
     expect(fillHidden).toBe(true);
   });
 
-  it('renders the icon mark fully drawn and filled (no draw-on) under prefers-reduced-motion', () => {
+  it('renders the icon mark fully drawn with a clean stroke (no draw-on, no dash residue) under prefers-reduced-motion', () => {
     reduce = true;
 
     render(
@@ -88,7 +88,10 @@ describe('SidebarBrand', () => {
     const link = screen.getByRole('link', { name: '서포트비 홈' });
     const path = link.querySelector('svg path') as SVGPathElement;
     expect(path).not.toBeNull();
-    expect(path.getAttribute('fill-opacity')).toBe('1');
-    expect(path.getAttribute('stroke-dasharray')).toBe('1 1');
+    // 정착된 순수 path — draw-on 잔여 속성(dasharray/pathLength)이 스트로크를 열화시키지 않는다
+    expect(path.getAttribute('fill-opacity')).not.toBe('0');
+    expect(path.getAttribute('stroke-dasharray')).toBeNull();
+    expect(path.getAttribute('pathLength')).toBeNull();
+    expect(path.getAttribute('stroke-width')).toBe('450');
   });
 });
