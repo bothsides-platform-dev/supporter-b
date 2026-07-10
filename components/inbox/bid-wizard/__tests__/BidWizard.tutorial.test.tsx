@@ -87,13 +87,17 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     );
   });
 
-  it('onStepChange가 주어지면 단계 이동마다 현재 단계 번호로 호출된다', async () => {
-    const onStepChange = vi.fn();
-    const user = userEvent.setup();
-    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" onStepChange={onStepChange} />);
-    expect(onStepChange).toHaveBeenCalledWith(1);
+  it('저장된 초안이 initialDraft와 다르면 초안이 이긴다 (복원 우선 계약 — clearStoredBidDraft의 존재 이유)', async () => {
+    const { tutorialBidDraftSeed } = await import('@/lib/onboarding/tutorial-fixtures');
+    const divergent = { ...tutorialBidDraftSeed, memo: '과거에 타이핑한 내용', cycleNum: '7' };
+    localStorage.setItem('bid-draft:tutorial-rfp', JSON.stringify(divergent));
+    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" initialDraft={tutorialBidDraftSeed} />);
 
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    expect(onStepChange).toHaveBeenCalledWith(2);
+    // 정산주기 입력이 시드(2)가 아니라 저장 초안(7)에서 온다 + 복원 토스트 발화.
+    expect(screen.getByDisplayValue('7')).toBeInTheDocument();
+    expect(toastMock).toHaveBeenCalledWith(
+      '이전에 작성하던 내용을 그대로 불러왔어요',
+      expect.anything(),
+    );
   });
 });

@@ -15,9 +15,7 @@ import { useBidDraft, EMPTY_BID_DRAFT, isPristineDraft, type BidDraft } from '..
 import { submitBidAction } from '@/lib/server/actions/bid';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
 import {
-  MERCHANT_TIERS,
   PAYMENT_METHOD_CATEGORIES,
-  isTieredMethod,
   isFlatFeeMethod,
   type PaymentMethod,
   type QuoteTemplateOption,
@@ -28,7 +26,7 @@ import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
 import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';
 import { BID_WIZARD_STEPS, SERVER_ERROR_STEP } from './bid-wizard-steps';
-import { getBidWizardValidity, getFirstIncompleteBidStep } from './bid-wizard-validation';
+import { getBidWizardValidity, getFirstIncompleteBidStep, deriveAnyFeeFilled } from './bid-wizard-validation';
 import { BidContextStrip } from './BidContextStrip';
 import { type ProposalState } from './BidStepProposal';
 import { BidWizardProvider, type BidWizardContextValue } from './bid-wizard-context';
@@ -62,12 +60,6 @@ type Props = {
    * 이 콜백만 호출한다 — 서버 호출도 지연도 없다. onGuestSubmit 과 상호배타.
    */
   onSampleSubmit?: () => void;
-  /**
-   * pg 튜토리얼 전용(opt-in). 단계 이동마다 현재 단계 번호를 통지한다 —
-   * 제출 투어(tutorial-bid-submit)가 4단계(검토·발송) 도달 시점에만 표시되도록
-   * PgTutorialFlow가 이 통지로 타이밍을 맞춘다. RfpCreateWizard의 onStepChange와 대칭.
-   */
-  onStepChange?: (step: number) => void;
 };
 
 /**
@@ -103,7 +95,7 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   };
 }
 
-export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialDraft, onGuestSubmit, onSampleSubmit, onStepChange }: Props) {
+export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
@@ -146,11 +138,6 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
   useEffect(() => {
     saveDraft(fields);
   }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    onStepChange?.(currentStep);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 단계 변경 시에만 통지, onStepChange 참조는 무시
-  }, [currentStep]);
 
   // 마운트 1회: 의미 있는 초안을 복원했으면 토스트로만 알린다(묻지 않음).
   useEffect(() => {
@@ -198,14 +185,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
   // 파생값
   const feeInputMethods = requiredPaymentMethods.length > 0 ? requiredPaymentMethods : ALL_PAYMENT_METHODS;
   const settleCycle = `${cycleUnit}+${cycleNum || '1'}`;
-  const feeFilled = (key: string) => (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
-  const anyTieredFilled = feeInputMethods.some(
-    (m) => isTieredMethod(m) && MERCHANT_TIERS.some((t) => feeFilled(`${m}:${t}`)),
-  );
-  const anySingleFilled =
-    feeInputMethods.some((m) => !isTieredMethod(m) && feeFilled(m)) ||
-    customPaymentMethods.some((c) => feeFilled(c.id));
-  const anyFeeFilled = anyTieredFilled || anySingleFilled;
+  const anyFeeFilled = deriveAnyFeeFilled(fees, feeInputMethods, customPaymentMethods);
 
   const applyTemplate = (t: QuoteTemplateOption) => {
     clearDraft();

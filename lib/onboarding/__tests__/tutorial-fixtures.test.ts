@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { getWizardValidity } from '@/components/rfp/wizard-validation';
-import { getBidWizardValidity } from '@/components/inbox/bid-wizard/bid-wizard-validation';
-import { isTieredMethod, MERCHANT_TIERS } from '@/lib/types/bid';
+import {
+  getBidWizardValidity,
+  deriveAnyFeeFilled,
+} from '@/components/inbox/bid-wizard/bid-wizard-validation';
 import {
   tutorialBidDraftSeed,
   tutorialBuyerRfp,
@@ -53,12 +55,11 @@ describe('tutorial-fixtures (buyer 튜토리얼 가상 데이터)', () => {
   });
 
   it('tutorialBidDraftSeed는 입력 없이 모든 견적 스텝이 완료 상태다 (pg 튜토리얼 클릭 전용)', () => {
-    // BidWizard의 anyFeeFilled 파생 로직을 그대로 재현해 검증한다.
-    const feeFilled = (key: string) =>
-      (tutorialBidDraftSeed.fees[key] ?? '') !== '' &&
-      parseFloat(tutorialBidDraftSeed.fees[key]) >= 0;
-    const anyFeeFilled = tutorialBuyerRfp.requiredPaymentMethods.some((m) =>
-      isTieredMethod(m) ? MERCHANT_TIERS.some((t) => feeFilled(`${m}:${t}`)) : feeFilled(m),
+    // BidWizard와 같은 파생 헬퍼를 공유해 드리프트 없이 검증한다.
+    const anyFeeFilled = deriveAnyFeeFilled(
+      tutorialBidDraftSeed.fees,
+      tutorialBuyerRfp.requiredPaymentMethods,
+      tutorialBuyerRfp.customPaymentMethods,
     );
     const validity = getBidWizardValidity({
       cycleNum: tutorialBidDraftSeed.cycleNum,
