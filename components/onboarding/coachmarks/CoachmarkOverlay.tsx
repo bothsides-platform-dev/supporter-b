@@ -11,6 +11,10 @@ const SPOTLIGHT_PADDING = 4;
 const BUBBLE_OFFSET = 8;
 const BUBBLE_WIDTH = 280;
 const VIEWPORT_MARGIN = 8;
+const OVERLAY_Z = 50;
+// 스크림은 토큰이 아니라 유틸로(DESIGN.md §스크림) — 스포트라이트는 command palette
+// 급의 짙은 스크림, 다크모드에선 white/10으로 반전해 구멍 대비를 유지한다.
+const DIM_SCRIM_CLASS = 'bg-black/40 dark:bg-white/10';
 
 export type CoachmarkOverlayProps = {
   rect: DOMRect;
@@ -47,27 +51,22 @@ export function CoachmarkOverlay({
     height: rect.height + SPOTLIGHT_PADDING * 2,
   };
 
-  const rectTransition = reducedMotion
-    ? 'none'
-    : 'top 200ms, left 200ms, width 200ms, height 200ms';
-
-  const spotlightStyle: CSSProperties = {
-    position: 'fixed',
-    ...padded,
-    borderRadius: 6,
-    boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.5)',
-    transition: rectTransition,
-    zIndex: 50,
-  };
-
-  const bubbleStyle = computeBubbleStyle(rect, step.placement, reducedMotion);
+  // 모션 하드룰(DESIGN.md): 레이아웃 속성은 애니메이션하지 않는다. 위치는 항상 즉시
+  // 반영(스크롤 추종 시 dim 구멍이 타깃과 어긋나 클릭을 삼키는 문제도 함께 방지),
+  // step 전환의 등장만 opacity 페이드 — key={step.target} 리마운트로 재생한다.
+  const fadeClass = reducedMotion ? '' : 'animate-in fade-in-0 duration-150';
 
   const bubble = (
     <div
+      key={`bubble-${step.target}`}
       role="dialog"
       aria-label={step.title}
-      style={isAction ? { ...bubbleStyle, pointerEvents: 'auto' } : bubbleStyle}
-      className="rounded-md border border-[var(--md-sys-color-outline-variant)] bg-[var(--color-popover)] p-3 shadow-md ring-1 ring-foreground/10"
+      style={
+        isAction
+          ? { ...computeBubbleStyle(rect, step.placement), pointerEvents: 'auto' }
+          : computeBubbleStyle(rect, step.placement)
+      }
+      className={`rounded-md border border-[var(--md-sys-color-outline-variant)] bg-[var(--color-popover)] p-3 shadow-md ring-1 ring-foreground/10 ${fadeClass}`}
     >
       <p className="text-sm font-semibold text-foreground">{step.title}</p>
       <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
@@ -90,44 +89,54 @@ export function CoachmarkOverlay({
     </div>
   );
 
+  // 구멍 주위 4-rect dim — info/action 공통 스크림 표현(9999px box-shadow 리페인트 제거).
+  // action에서는 각 rect가 pointer-events:auto로 밖 클릭을 흡수하고 구멍(요소 없음)만
+  // 실제 타깃으로 클릭을 통과시킨다. info에서는 root가 전 화면을 흡수하므로 시각 전용.
+  const dimBase: CSSProperties = {
+    position: 'fixed',
+    pointerEvents: 'auto',
+    zIndex: OVERLAY_Z,
+  };
+  const dimRects: CSSProperties[] = [
+    { ...dimBase, top: 0, left: 0, right: 0, height: Math.max(0, padded.top) },
+    { ...dimBase, top: padded.top + padded.height, left: 0, right: 0, bottom: 0 },
+    { ...dimBase, top: padded.top, left: 0, width: Math.max(0, padded.left), height: padded.height },
+    { ...dimBase, top: padded.top, left: padded.left + padded.width, right: 0, height: padded.height },
+  ];
+
+  const dims = dimRects.map((style, index) => (
+    <div
+      key={index}
+      data-slot="coachmark-dim"
+      className={DIM_SCRIM_CLASS}
+      style={style}
+      onClick={(event) => event.stopPropagation()}
+    />
+  ));
+
+  const ring = (
+    <div
+      key={`ring-${step.target}`}
+      data-slot="coachmark-ring"
+      className={fadeClass}
+      style={{
+        position: 'fixed',
+        ...padded,
+        borderRadius: 6,
+        border: '2px solid var(--md-sys-color-primary)',
+        pointerEvents: 'none',
+        zIndex: OVERLAY_Z,
+      }}
+    />
+  );
+
   if (isAction) {
-    // 클릭-스루 스포트라이트: root는 pointer-events:none, 구멍 주위 4개 dim 스트립만
-    // 클릭을 흡수한다 — 구멍 영역엔 요소가 없어 사용자의 클릭이 실제 타깃에 닿는다.
-    const dimBase: CSSProperties = {
-      position: 'fixed',
-      background: 'rgba(0, 0, 0, 0.5)',
-      pointerEvents: 'auto',
-      transition: rectTransition,
-      zIndex: 50,
-    };
-    const dimRects: CSSProperties[] = [
-      { ...dimBase, top: 0, left: 0, right: 0, height: Math.max(0, padded.top) },
-      { ...dimBase, top: padded.top + padded.height, left: 0, right: 0, bottom: 0 },
-      { ...dimBase, top: padded.top, left: 0, width: Math.max(0, padded.left), height: padded.height },
-      { ...dimBase, top: padded.top, left: padded.left + padded.width, right: 0, height: padded.height },
-    ];
+    // 클릭-스루 스포트라이트: root는 pointer-events:none — 구멍 영역엔 요소가 없어
+    // 사용자의 클릭이 실제 타깃에 닿는다.
     return (
       <div data-slot="coachmark-overlay" className="fixed inset-0 z-50 pointer-events-none">
-        {dimRects.map((style, index) => (
-          <div
-            key={index}
-            data-slot="coachmark-dim"
-            style={style}
-            onClick={(event) => event.stopPropagation()}
-          />
-        ))}
-        <div
-          data-slot="coachmark-ring"
-          style={{
-            position: 'fixed',
-            ...padded,
-            borderRadius: 6,
-            border: '2px solid var(--md-sys-color-primary)',
-            pointerEvents: 'none',
-            transition: rectTransition,
-            zIndex: 50,
-          }}
-        />
+        {dims}
+        {ring}
         {bubble}
       </div>
     );
@@ -141,7 +150,8 @@ export function CoachmarkOverlay({
       // 뒤 화면 요소를 조작하지 못하게).
       onClick={(event) => event.stopPropagation()}
     >
-      <div style={spotlightStyle} />
+      {dims}
+      {ring}
       {bubble}
     </div>
   );
@@ -150,15 +160,13 @@ export function CoachmarkOverlay({
 function computeBubbleStyle(
   rect: DOMRect,
   placement: CoachmarkStep['placement'],
-  reducedMotion: boolean,
 ): CSSProperties {
   const base: CSSProperties = {
     position: 'fixed',
     width: BUBBLE_WIDTH,
     maxWidth: `calc(100vw - ${VIEWPORT_MARGIN * 2}px)`,
     opacity: 1,
-    transition: reducedMotion ? 'none' : 'top 200ms, left 200ms, opacity 150ms',
-    zIndex: 51,
+    zIndex: OVERLAY_Z + 1,
   };
 
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;

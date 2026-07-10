@@ -86,7 +86,25 @@ describe('CoachmarkOverlay', () => {
     expect(onNext).toHaveBeenCalledTimes(1);
   });
 
-  it('prefers-reduced-motion이면 스포트라이트/말풍선에 transition을 넣지 않는다', () => {
+  it('레이아웃 속성(top/left/width/height) transition을 어떤 요소에도 걸지 않는다 (DESIGN.md 모션 하드룰)', () => {
+    const { container } = render(
+      <CoachmarkOverlay
+        rect={makeRect()}
+        step={step}
+        stepIndex={0}
+        stepCount={3}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+    const all = container.querySelectorAll<HTMLElement>('*');
+    all.forEach((el) => {
+      expect(el.style.transition).not.toMatch(/top|left|width|height/);
+    });
+  });
+
+  it('prefers-reduced-motion이면 페이드 애니메이션 클래스를 붙이지 않는다', () => {
     const matchMediaMock = vi.fn().mockReturnValue({ matches: true });
     vi.stubGlobal('matchMedia', matchMediaMock);
 
@@ -103,13 +121,53 @@ describe('CoachmarkOverlay', () => {
     );
 
     const dialog = screen.getByRole('dialog');
-    const spotlight = container.querySelector('[data-slot="coachmark-overlay"]')
-      ?.firstElementChild as HTMLElement;
-
-    expect(spotlight.style.transition).toBe('none');
-    expect(dialog.style.transition).toBe('none');
+    expect(dialog.className).not.toContain('animate-in');
+    const ring = container.querySelector('[data-slot="coachmark-ring"]') as HTMLElement;
+    expect(ring.className ?? '').not.toContain('animate-in');
 
     vi.unstubAllGlobals();
+  });
+
+  it('일반 모션에서는 말풍선/링이 opacity 페이드로 등장한다 (transform/opacity만)', () => {
+    // jsdom은 matchMedia 미정의 → 기본 reduced. 일반 모션을 명시적으로 스텁.
+    const matchMediaMock = vi.fn().mockReturnValue({ matches: false });
+    vi.stubGlobal('matchMedia', matchMediaMock);
+    const { container } = render(
+      <CoachmarkOverlay
+        rect={makeRect()}
+        step={step}
+        stepIndex={0}
+        stepCount={3}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).toContain('fade-in');
+    const ring = container.querySelector('[data-slot="coachmark-ring"]') as HTMLElement;
+    expect(ring.className).toContain('fade-in');
+    vi.unstubAllGlobals();
+  });
+
+  it('dim 스크림은 테마 인지 유틸 클래스를 쓴다 (다크모드 반전)', () => {
+    const { container } = render(
+      <CoachmarkOverlay
+        rect={makeRect()}
+        step={step}
+        stepIndex={0}
+        stepCount={3}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+    const dims = container.querySelectorAll<HTMLElement>('[data-slot="coachmark-dim"]');
+    expect(dims.length).toBe(4);
+    dims.forEach((dim) => {
+      expect(dim.className).toContain('bg-black/40');
+      expect(dim.className).toContain('dark:bg-white/10');
+    });
   });
 
   it('건너뛰기 버튼 클릭 시 onSkip을 호출한다', async () => {
@@ -220,7 +278,7 @@ describe('CoachmarkOverlay', () => {
       expect(ring.style.pointerEvents).toBe('none');
     });
 
-    it('info step(기본)은 기존 전 화면 흡수 마크업을 유지한다', () => {
+    it('info step(기본)은 전 화면 클릭 흡수를 유지한다 — root가 클릭 가능(비 pointer-events-none)이고 다음 버튼이 있다', () => {
       const { container } = render(
         <CoachmarkOverlay
           rect={makeRect()}
@@ -234,7 +292,8 @@ describe('CoachmarkOverlay', () => {
       );
       const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
       expect(root.className).not.toContain('pointer-events-none');
-      expect(container.querySelectorAll('[data-slot="coachmark-dim"]')).toHaveLength(0);
+      // 스크림 표현은 action과 동일한 4-rect dim으로 통일 (9999px box-shadow 제거)
+      expect(container.querySelectorAll('[data-slot="coachmark-dim"]')).toHaveLength(4);
       expect(screen.getByRole('button', { name: '다음' })).toBeInTheDocument();
     });
   });
