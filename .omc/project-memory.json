@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1783605459710,
-  "projectRoot": "/Users/yeonseong/project/bidit/.claude/worktrees/feat+tutorial-click-through",
+  "lastScanned": 1783758645452,
+  "projectRoot": "/Users/yeonseong/project/bidit/.claude/worktrees/fix-biz-lookup-nts-errors",
   "techStack": {
     "languages": [
       {
@@ -57,7 +57,7 @@
     "runtime": "Node.js 22"
   },
   "build": {
-    "buildCommand": "cat /tmp/ship_tests2.txt; COREPACK_INTEGRITY_KEYS=0 corepack pnpm@9 lint 2>&1 | tail -2; echo LINT_EXIT=$?; COREPACK_INTEGRITY_KEYS=0 corepack pnpm@9 tsc --noEmit 2>&1 | tail -2; echo TSC_EXIT=$?",
+    "buildCommand": "pnpm build",
     "testCommand": "pnpm test",
     "lintCommand": "pnpm lint",
     "devCommand": "pnpm dev",
@@ -112,7 +112,7 @@
       "path": "app",
       "purpose": "Application code",
       "fileCount": 13,
-      "lastAccessed": 1783605459668,
+      "lastAccessed": 1783758645420,
       "keyFiles": [
         "apple-icon.png",
         "favicon.ico",
@@ -125,14 +125,14 @@
       "path": "components",
       "purpose": "UI components",
       "fileCount": 0,
-      "lastAccessed": 1783605459669,
+      "lastAccessed": 1783758645422,
       "keyFiles": []
     },
     "deploy": {
       "path": "deploy",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1783605459695,
+      "lastAccessed": 1783758645437,
       "keyFiles": [
         "Caddyfile"
       ]
@@ -141,7 +141,7 @@
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 1,
-      "lastAccessed": 1783605459698,
+      "lastAccessed": 1783758645438,
       "keyFiles": [
         "DEPLOY_LIGHTSAIL.md"
       ]
@@ -149,8 +149,8 @@
     "e2e": {
       "path": "e2e",
       "purpose": null,
-      "fileCount": 12,
-      "lastAccessed": 1783605459700,
+      "fileCount": 13,
+      "lastAccessed": 1783758645439,
       "keyFiles": [
         "_helpers.ts",
         "bid-detail-pdf-preview.spec.ts",
@@ -163,7 +163,7 @@
       "path": "lib",
       "purpose": "Library code",
       "fileCount": 7,
-      "lastAccessed": 1783605459700,
+      "lastAccessed": 1783758645439,
       "keyFiles": [
         "glossary.ts",
         "http.ts",
@@ -176,7 +176,7 @@
       "path": "public",
       "purpose": "Public files",
       "fileCount": 1,
-      "lastAccessed": 1783605459700,
+      "lastAccessed": 1783758645440,
       "keyFiles": [
         "naverc0e607e11bc419371519800f1235a0b4.html"
       ]
@@ -185,7 +185,7 @@
       "path": "scripts",
       "purpose": "Build/utility scripts",
       "fileCount": 12,
-      "lastAccessed": 1783605459701,
+      "lastAccessed": 1783758645440,
       "keyFiles": [
         "backfill-kanban-columns.ts",
         "backfill-logo-updated-at.ts",
@@ -198,7 +198,7 @@
       "path": "styles",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1783605459701,
+      "lastAccessed": 1783758645441,
       "keyFiles": [
         "tokens.css"
       ]
@@ -207,14 +207,14 @@
       "path": "tests",
       "purpose": "Test files",
       "fileCount": 0,
-      "lastAccessed": 1783605459703,
+      "lastAccessed": 1783758645442,
       "keyFiles": []
     },
     "types": {
       "path": "types",
       "purpose": "Type definitions",
       "fileCount": 1,
-      "lastAccessed": 1783605459704,
+      "lastAccessed": 1783758645442,
       "keyFiles": [
         "next-auth.d.ts"
       ]
@@ -223,7 +223,7 @@
       "path": "app/__tests__",
       "purpose": "Test files",
       "fileCount": 4,
-      "lastAccessed": 1783605459704,
+      "lastAccessed": 1783758645443,
       "keyFiles": [
         "layout.test.ts",
         "logout-route.test.ts",
@@ -234,14 +234,14 @@
       "path": "app/api",
       "purpose": "API routes",
       "fileCount": 0,
-      "lastAccessed": 1783605459706,
+      "lastAccessed": 1783758645444,
       "keyFiles": []
     },
     "deploy/__tests__": {
       "path": "deploy/__tests__",
       "purpose": "Test files",
       "fileCount": 3,
-      "lastAccessed": 1783605459707,
+      "lastAccessed": 1783758645447,
       "keyFiles": [
         "centrifugo-allowed-origins.test.ts",
         "centrifugo-presence-namespace.test.ts",
@@ -252,7 +252,7 @@
       "path": "docs/migrations",
       "purpose": "Database migrations",
       "fileCount": 3,
-      "lastAccessed": 1783605459707,
+      "lastAccessed": 1783758645449,
       "keyFiles": [
         "2026-07-cleanup-sample-data.sql",
         "activate-existing-workspaces.sql",
@@ -263,7 +263,7 @@
       "path": "lib/__tests__",
       "purpose": "Test files",
       "fileCount": 10,
-      "lastAccessed": 1783605459708,
+      "lastAccessed": 1783758645450,
       "keyFiles": [
         "deadline.test.ts",
         "format.test.ts",
@@ -274,7 +274,7 @@
       "path": "scripts/__tests__",
       "purpose": "Test files",
       "fileCount": 2,
-      "lastAccessed": 1783605459708,
+      "lastAccessed": 1783758645451,
       "keyFiles": [
         "pg-logo-assets.test.ts",
         "seed.test.ts"
@@ -284,131 +284,10 @@
       "path": "scripts/assets",
       "purpose": "Static assets",
       "fileCount": 0,
-      "lastAccessed": 1783605459709,
+      "lastAccessed": 1783758645451,
       "keyFiles": []
     }
   },
-  "hotPaths": [
-    {
-      "path": "components/onboarding/coachmarks/__tests__/CoachmarkOverlay.test.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1783649369598,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/coachmarks/CoachmarkTour.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1783649569865,
-      "type": "file"
-    },
-    {
-      "path": "components/inbox/bid-wizard/BidWizard.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1783649783000,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/coachmarks/useAnchorRect.ts",
-      "accessCount": 4,
-      "lastAccessed": 1783649503204,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/coachmarks/CoachmarkOverlay.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1783649412010,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/tutorial/__tests__/useTutorialKeyboardLock.test.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1783649634082,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/tutorial/useTutorialKeyboardLock.ts",
-      "accessCount": 2,
-      "lastAccessed": 1783649661479,
-      "type": "file"
-    },
-    {
-      "path": "lib/onboarding/__tests__/tutorial-fixtures.test.ts",
-      "accessCount": 2,
-      "lastAccessed": 1783649723071,
-      "type": "file"
-    },
-    {
-      "path": "components/inbox/bid-wizard/bid-wizard-validation.ts",
-      "accessCount": 2,
-      "lastAccessed": 1783649761673,
-      "type": "file"
-    },
-    {
-      "path": "TODOS.md",
-      "accessCount": 2,
-      "lastAccessed": 1783650454027,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/tutorial/tours.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783648431837,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/coachmarks/types.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783648433230,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/tutorial/PgTutorialFlow.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783648439086,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/tutorial/BuyerTutorialFlow.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783648439684,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/coachmarks/__tests__/useAnchorRect.test.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783649456527,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/coachmarks/__tests__/CoachmarkTour.test.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783649461135,
-      "type": "file"
-    },
-    {
-      "path": "components/inbox/bid-wizard/__tests__/BidWizard.tutorial.test.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783649740914,
-      "type": "file"
-    },
-    {
-      "path": "e2e/_helpers.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783649879307,
-      "type": "file"
-    },
-    {
-      "path": "e2e/tutorial-click-through.spec.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783649979311,
-      "type": "file"
-    },
-    {
-      "path": "CHANGELOG.md",
-      "accessCount": 1,
-      "lastAccessed": 1783650376979,
-      "type": "file"
-    }
-  ],
+  "hotPaths": [],
   "userDirectives": []
 }
