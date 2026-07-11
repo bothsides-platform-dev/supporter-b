@@ -288,6 +288,13 @@
       "keyFiles": []
     }
   },
-  "hotPaths": [],
+  "hotPaths": [
+    {
+      "path": "lib/http.ts",
+      "accessCount": 1,
+      "lastAccessed": 1783770644941,
+      "type": "file"
+    }
+  ],
   "userDirectives": []
 }
