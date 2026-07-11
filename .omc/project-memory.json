@@ -57,8 +57,8 @@
     "runtime": "Node.js 22"
   },
   "build": {
-    "buildCommand": "pnpm tsc --noEmit 2>&1 | tail -3 && pnpm lint 2>&1 | tail -3 && echo HEALTH_OK",
-    "testCommand": "pnpm test > /private/tmp/claude-501/-Users-yeonseong-project-bidit/c0f8c3cd-6e97-40e2-be16-65e83b503c32/scratchpad/full-suite-rerun.log 2>&1; echo \"EXIT=$?\"",
+    "buildCommand": "COREPACK_INTEGRITY_KEYS=0 timeout 500 corepack pnpm@9 tsc --noEmit 2>&1 | tail -8; echo \"TSC_EXIT=${PIPESTATUS[0]:-$?}\"",
+    "testCommand": "npx vitest run lib/integrations/__tests__/nts.test.ts components/rfp/__tests__/nts-lookup.test.ts components/rfp/__tests__/BizLookupField.test.tsx lib/server/actions/rfp/__tests__/lookup.test.ts components/auth/__tests__/BuyerWorkspaceForm.test.tsx components/auth/__tests__/PgWorkspacePage.test.tsx components/settings/__tests__/WorkspaceBizNoForm.test.tsx 2>&1 | tail -25",
     "lintCommand": "pnpm lint",
     "devCommand": "pnpm dev",
     "scripts": {
@@ -291,20 +291,86 @@
   "hotPaths": [
     {
       "path": "lib/integrations/nts.ts",
-      "accessCount": 5,
-      "lastAccessed": 1783778605947,
+      "accessCount": 10,
+      "lastAccessed": 1783781367337,
       "type": "file"
     },
     {
       "path": "lib/integrations/__tests__/nts.test.ts",
-      "accessCount": 5,
-      "lastAccessed": 1783778607006,
+      "accessCount": 7,
+      "lastAccessed": 1783781236546,
+      "type": "file"
+    },
+    {
+      "path": "lib/server/actions/rfp/lookupBizNoAction.ts",
+      "accessCount": 4,
+      "lastAccessed": 1783781368128,
+      "type": "file"
+    },
+    {
+      "path": "components/rfp/BizLookupField.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1783781367151,
+      "type": "file"
+    },
+    {
+      "path": "components/auth/BuyerWorkspaceForm.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1783781369423,
+      "type": "file"
+    },
+    {
+      "path": "components/settings/WorkspaceBizNoForm.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1783781369627,
+      "type": "file"
+    },
+    {
+      "path": "components/rfp/nts-lookup.ts",
+      "accessCount": 2,
+      "lastAccessed": 1783781370843,
       "type": "file"
     },
     {
       "path": "lib/http.ts",
       "accessCount": 1,
       "lastAccessed": 1783770644941,
+      "type": "file"
+    },
+    {
+      "path": "lib/server/actions/rfp/__tests__/lookup.test.ts",
+      "accessCount": 1,
+      "lastAccessed": 1783781185921,
+      "type": "file"
+    },
+    {
+      "path": "components/rfp/__tests__/BizLookupField.test.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1783781191504,
+      "type": "file"
+    },
+    {
+      "path": "components/settings/__tests__/WorkspaceBizNoForm.test.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1783781192473,
+      "type": "file"
+    },
+    {
+      "path": "components/auth/__tests__/PgWorkspacePage.test.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1783781192749,
+      "type": "file"
+    },
+    {
+      "path": "components/auth/__tests__/BuyerWorkspaceForm.test.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1783781226680,
+      "type": "file"
+    },
+    {
+      "path": "app/(public)/signup/pg/workspace/PgWorkspaceStep.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1783781369525,
       "type": "file"
     }
   ],
