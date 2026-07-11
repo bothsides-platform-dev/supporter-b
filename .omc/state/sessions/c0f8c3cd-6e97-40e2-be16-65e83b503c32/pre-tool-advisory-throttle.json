@@ -1,6 +1,10 @@
 {
   "version": 1,
   "entries": {
+    "7b8d6c8229ff6e3ab47a3b83137cbc96c98ec0872d81fedfbf2d1bbbc11960b6": {
+      "last_emitted_at_ms": 1783789740669,
+      "message": "Spawning agent: general-purpose (inherit) | Task: 리뷰: red team"
+    },
     "466399dafa2d20f60587180bad0a07358eb7f2bce724df0ff682f038ad33f5ad": {
       "last_emitted_at_ms": 1783788199157,
       "message": "Read multiple files in parallel when possible for faster analysis."
@@ -14,5 +18,5 @@
       "message": "Spawning agent: general-purpose (sonnet) | Task: 리뷰: testing 스페셜리스트 재실행"
     }
   },
-  "updated_at": "2026-07-11T16:43:19.157Z"
+  "updated_at": "2026-07-11T17:09:00.669Z"
 }

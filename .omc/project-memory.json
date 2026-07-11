@@ -291,8 +291,8 @@
   "hotPaths": [
     {
       "path": "lib/integrations/nts.ts",
-      "accessCount": 11,
-      "lastAccessed": 1783788224499,
+      "accessCount": 12,
+      "lastAccessed": 1783789760757,
       "type": "file"
     },
     {
