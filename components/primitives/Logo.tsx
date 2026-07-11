@@ -107,9 +107,9 @@ export function Logo({ variant = 'default', className, href, animated }: LogoPro
         className,
       )}
     >
-      {/* items-baseline로 정렬하고 size는 워드마크 font-size(22px)와 맞춘다 — 픽셀 매직넘버 대신
-          표준 아이콘+텍스트 정렬 방식(baseline)을 써서 폰트/굵기 변경에도 깨지지 않게 한다. */}
-      <Mark size={22} />
+      {/* baseline 정렬 + 잉크 매칭 — 22px Pretendard black 한글 잉크는 baseline 위 ~18px·아래 ~2px(총 ~20px).
+          SVG는 bottom이 baseline에 앉으므로 size=20 + 2px 하강으로 잉크 상·하단을 글자와 일치시킨다(실측 보정). */}
+      <Mark size={20} className="translate-y-[2px]" />
       <SupportBWordmark className="text-[22px]" />
     </Link>
   )

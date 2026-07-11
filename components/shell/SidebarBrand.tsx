@@ -56,14 +56,16 @@ export function SidebarBrand({ className }: { className?: string }) {
       href="/home"
       aria-label="서포트비 홈"
       className={cn(
-        'group inline-flex items-center gap-3 rounded-md',
+        'group inline-flex items-baseline gap-3 rounded-md',
         'transition-opacity duration-[140ms] hover:opacity-70',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-on-surface)]',
         className,
       )}
     >
-      {/* icon mark — "B" 브랜드 마크, ink on transparent. 하드 로드 시 1회 draw-on 등장 */}
-      <AnimatedBrandMark className="shrink-0" />
+      {/* icon mark — "B" 브랜드 마크, ink on transparent. 하드 로드 시 1회 draw-on 등장.
+          baseline 정렬 + 잉크 매칭 — 22px Pretendard black 한글 잉크는 baseline 위 ~18px·아래 ~2px(총 ~20px).
+          SVG는 bottom이 baseline에 앉으므로 size=20 + 2px 하강으로 잉크 상·하단을 글자와 일치시킨다(실측 보정). */}
+      <AnimatedBrandMark className="shrink-0 translate-y-[2px]" size={20} />
       <motion.span
         aria-hidden="true"
         initial={false}
