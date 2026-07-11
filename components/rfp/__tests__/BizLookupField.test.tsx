@@ -1,11 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BizLookupField } from '../BizLookupField';
+import { BizLookupField, type LookupResponse } from '../BizLookupField';
 
-type DeferredResponse =
-  | { valid: true; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed' }
-  | { valid: false; error?: string };
+type DeferredResponse = LookupResponse;
 
 describe('BizLookupField', () => {
   it('calls onLookup with the formatted bizNo and emits a slim result', async () => {
@@ -316,5 +314,32 @@ describe('BizLookupField — 동시성/레이스', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: '조회' })).toBeInTheDocument(),
     );
+  });
+
+  // resolve 경로뿐 아니라 reject 경로의 stale 가드도 검증 — 입력 수정 후
+  // 도착한 이전 조회의 '실패'가 새 idle 상태를 오류로 덮어쓰면 안 된다.
+  it('ignores a stale in-flight rejection after the input is edited', async () => {
+    const user = userEvent.setup();
+    const rejecters: Array<(e: unknown) => void> = [];
+    const onLookup = vi.fn(
+      () => new Promise<DeferredResponse>((_resolve, reject) => rejecters.push(reject)),
+    );
+    const onResult = vi.fn();
+
+    render(
+      <BizLookupField onLookup={onLookup} onResult={onResult} onReset={() => {}} />,
+    );
+    const input = screen.getByLabelText('사업자 등록번호');
+    await user.type(input, '1234567890');
+    await user.click(screen.getByRole('button', { name: '조회' })); // in-flight
+    await user.type(input, '{Backspace}'); // 조회 중 입력 수정 → idle 리셋
+
+    await act(async () => {
+      rejecters[0]!(new Error('network'));
+    });
+
+    expect(onResult).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull(); // stale 오류 메시지 미표시
+    expect(screen.getByRole('button', { name: '조회' })).toBeInTheDocument();
   });
 });

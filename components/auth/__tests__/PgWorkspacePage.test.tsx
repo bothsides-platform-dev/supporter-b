@@ -251,6 +251,9 @@ describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
       await screen.findByText(/사업자번호 조회 중 오류가 발생했어요/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/찾지 못했어요/)).not.toBeInTheDocument();
+    // 오류 시 bizProfile 이 세팅되면 안 된다 — 제출 게이트 불변식.
+    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('레이트리밋 시 재시도 안내 메시지를 표시한다', async () => {
@@ -264,5 +267,7 @@ describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
     expect(
       await screen.findByText(/요청이 너무 많아요/),
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

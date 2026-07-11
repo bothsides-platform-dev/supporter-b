@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TimeoutError } from 'ky';
+
 import {
   NtsError,
   RealNtsClient,
   __resetNtsRateLimitForTest,
+  __setNtsClockForTest,
 } from '../nts';
 
 // fetch 전체 스텁 — ky가 Response.clone()/headers 등에 접근하므로 실제 Response를 사용한다.
@@ -233,10 +236,14 @@ describe('RealNtsClient.lookup — upstream 429 auto-retry (ky)', () => {
 describe('RealNtsClient.lookup — local rate-limit bucket bounded wait', () => {
   beforeEach(() => {
     vi.stubEnv('NTS_SERVICE_KEY', 'test-key');
+    // 실시간 경과로 토큰이 리필되면 호출 횟수 단언이 느린 CI에서 플레이크된다
+    // — 클록을 고정해 리필을 차단한다.
+    __setNtsClockForTest(() => 5_000_000);
     __resetNtsRateLimitForTest();
   });
 
   afterEach(() => {
+    __setNtsClockForTest(undefined);
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
@@ -283,5 +290,107 @@ describe('RealNtsClient.lookup — local rate-limit bucket bounded wait', () => 
     expect(fetchSpy).not.toHaveBeenCalled();
     // 최대 10회 × 100ms 대기 예산을 모두 소진했다.
     expect(sleep).toHaveBeenCalledTimes(10);
+  });
+});
+
+describe('RealNtsClient.lookup — 헤더 인증·재시도 정책 강화 (pre-landing review)', () => {
+  const client = new RealNtsClient({ retryDelay: () => 0, sleep: async () => {} });
+
+  beforeEach(() => {
+    vi.stubEnv('NTS_SERVICE_KEY', 'test-key');
+    __resetNtsRateLimitForTest();
+  });
+
+  afterEach(() => {
+    __setNtsClockForTest(undefined);
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  // 서비스키가 URL 쿼리에 실리면 Sentry breadcrumb 등 요청 URL을 수집하는
+  // 모든 로그 표면으로 샌다 — odcloud 표준 Authorization: Infuser 헤더로만 전달.
+  it('sends the service key via Authorization: Infuser header, never in the URL', async () => {
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, ntsRow({ b_stt_cd: '01', tax_type: '부가가치세 일반과세자' })),
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await client.lookup('1234567890');
+
+    const [arg] = fetchSpy.mock.calls[0] as unknown as [Request | string | URL];
+    const req = arg instanceof Request ? arg : new Request(arg);
+    expect(req.url).not.toContain('serviceKey');
+    expect(req.headers.get('Authorization')).toBe('Infuser test-key');
+  });
+
+  // '429만 재시도' 요구사항 — ky 기본 로직은 일반 네트워크 오류(TypeError)도
+  // 재시도하므로, shouldRetry 가 명시적으로 차단해야 한다.
+  it('does not retry generic network errors (TypeError)', async () => {
+    const fetchSpy = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await expect(client.lookup('1234567890')).rejects.toMatchObject({
+      code: 'NTS_NETWORK',
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // RFC 7231 Retry-After 는 HTTP-date 형식도 허용 — 초 단위 형식과 동일하게
+  // 예산 초과 fail-fast 가 적용되어야 한다.
+  it('fails fast on an HTTP-date Retry-After beyond the wait budget', async () => {
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(429, {}, { 'Retry-After': 'Fri, 31 Dec 2099 23:59:59 GMT' }),
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const err = await client.lookup('1234567890').catch((e) => e);
+    expect(err).toBeInstanceOf(NtsError);
+    expect(err.code).toBe('NTS_RATE_LIMIT');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // ky 실제 타임아웃은 ky TimeoutError 클래스로 도착한다 — instanceof 분기 직접 검증.
+  it('maps ky TimeoutError to NTS_NETWORK', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TimeoutError(new Request('https://nts.test/status'));
+      }),
+    );
+    await expect(client.lookup('1234567890')).rejects.toMatchObject({
+      code: 'NTS_NETWORK',
+    });
+  });
+
+  // 재시도도 발신 1회다 — 시도(재시도 포함)당 토큰 1개를 소모해야 10 req/s
+  // 상한이 429 폭풍에서도 유지된다. 클록을 고정해 리필을 차단하고 계량한다.
+  it('consumes one bucket token per retry attempt (throttle applies to retries)', async () => {
+    __setNtsClockForTest(() => 1_000_000);
+    __resetNtsRateLimitForTest();
+
+    const fail429 = vi.fn(async () => jsonResponse(429, {}));
+    vi.stubGlobal('fetch', fail429);
+    await expect(client.lookup('1234567890')).rejects.toMatchObject({
+      code: 'NTS_RATE_LIMIT',
+    });
+    // 초기 시도 1 + 재시도 3 = 총 4회 발신 → 토큰 4개 소모 (10 → 6)
+    expect(fail429).toHaveBeenCalledTimes(4);
+
+    const ok200 = vi.fn(async () =>
+      jsonResponse(200, ntsRow({ b_stt_cd: '01', tax_type: '부가가치세 일반과세자' })),
+    );
+    vi.stubGlobal('fetch', ok200);
+    let successes = 0;
+    for (;;) {
+      try {
+        await client.lookup('1234567890');
+        successes += 1;
+      } catch {
+        break;
+      }
+    }
+    expect(successes).toBe(6);
   });
 });

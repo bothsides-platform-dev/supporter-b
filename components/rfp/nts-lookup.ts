@@ -1,14 +1,5 @@
 import { lookupBizNoAction } from '@/lib/server/actions/rfp';
-
-// BizLookupField.onLookup 이 기대하는 응답 형태 (BizLookupField.tsx 의
-// LookupResponse 와 구조 동일).
-export type NtsLookupResponse =
-  | {
-      valid: true;
-      taxType: 'general' | 'simple' | 'exempt';
-      status: 'active' | 'suspended' | 'closed';
-    }
-  | { valid: false; error?: string };
+import type { LookupResponse } from './BizLookupField';
 
 /**
  * BizLookupField 공용 조회 어댑터 — 구매사 가입·PG 가입·설정 3개 폼이 공유.
@@ -20,7 +11,7 @@ export type NtsLookupResponse =
  *   - taxType 매핑 불가    → '지원되지 않는 사업자 유형' (비영리·고유번호 단체 등;
  *                            저장 액션의 z.enum 이 거부하므로 여기서 선차단)
  */
-export async function ntsLookup(bizNo: string): Promise<NtsLookupResponse> {
+export async function ntsLookup(bizNo: string): Promise<LookupResponse> {
   const r = await lookupBizNoAction(bizNo);
   if (!r.ok) {
     return {

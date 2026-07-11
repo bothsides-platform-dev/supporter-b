@@ -5,18 +5,24 @@
 // `b_stt_cd`/`tax_type` 코드를 BizProfile 슬림 형태로 매핑한다.
 //
 // 의존성/제약:
-//   - `NTS_SERVICE_KEY` 환경변수 필수. 없으면 `NTS_NO_KEY` throw.
-//   - HTTP 클라이언트는 `ky`(시도당 5초 timeout). 429(Rate Limit)만 자동
+//   - `NTS_SERVICE_KEY` 환경변수 필수. 없으면 `NTS_NO_KEY` throw. 키는 URL
+//     쿼리가 아닌 `Authorization: Infuser` 헤더로만 전달한다 (쿼리에 실으면
+//     Sentry breadcrumb 등 요청 URL 로그 표면으로 유출).
+//   - HTTP 클라이언트는 `ky`(시도당 5초 timeout). **429(Rate Limit)만** 자동
 //     재시도한다 — 최대 3회, 지수 백오프 300/600/1200ms(≈3초 예산).
-//     `Retry-After` 헤더가 1.5초(`MAX_RETRY_AFTER_MS`) 예산을 초과하면
-//     (공급사 쿼터 소진으로 판단) 재시도 없이 즉시 `NTS_RATE_LIMIT` throw —
-//     ky의 내장 `retry.maxRetryAfter`는 초과 시에도 delay만 캡하고 재시도를
-//     계속하므로(캡&재시도, fail-fast 아님) 이 fail-fast는 커스텀
-//     `shouldRetry` 콜백으로 직접 구현했다. 401/403/5xx/timeout은 재시도 없음.
+//     401/403/5xx/timeout은 물론 일반 네트워크 오류(TypeError)도 재시도하지
+//     않는다(ky 기본은 네트워크 오류 재시도 — shouldRetry가 명시 차단).
+//     `Retry-After` 헤더(초 단위·HTTP-date 모두)가 1.5초(`MAX_RETRY_AFTER_MS`)
+//     예산을 초과하면(공급사 쿼터 소진으로 판단) 재시도 없이 즉시
+//     `NTS_RATE_LIMIT` throw — ky의 내장 `retry.maxRetryAfter`는 초과 시에도
+//     delay만 캡하고 재시도를 계속하므로(캡&재시도, fail-fast 아님) 이
+//     fail-fast는 커스텀 `shouldRetry` 콜백으로 직접 구현했다.
 //   - leaky-bucket 10 req/s in-process 토큰버킷으로 호출자 throttle. 토큰이
 //     없으면 즉시 실패하지 않고 최대 10회 × 100ms(≈1초 예산) bounded 대기 후
 //     재획득을 시도한다 — 100ms마다 토큰이 1개씩 회복되므로 현실적인 버스트는
 //     대부분 이 안에서 구제된다. 예산을 다 써도 토큰을 못 얻으면 `NTS_RATE_LIMIT`.
+//     **재시도도 발신 1회로 계량** — shouldRetry가 재시도 직전마다 토큰을
+//     소모하므로 429 폭풍에서도 10 req/s 상한이 유지된다.
 //
 // ⚠️ leaky-bucket 한계
 // 토큰버킷이 모듈 스코프 Map 으로 들어 있어 **단일 Node 인스턴스 안에서만**
@@ -61,8 +67,12 @@ const rateState = {
   lastRefillMs: Date.now(),
 };
 
+// 테스트에서 클록을 고정할 수 있게 주입점을 둔다 — 실시간 경과로 토큰이
+// 리필되면 호출 횟수 단언이 느린 CI에서 플레이크된다.
+let _now: () => number = Date.now;
+
 function tryConsumeToken(): boolean {
-  const now = Date.now();
+  const now = _now();
   const elapsed = now - rateState.lastRefillMs;
   if (elapsed >= RATE_REFILL_MS) {
     const refill = Math.floor(elapsed / RATE_REFILL_MS);
@@ -142,19 +152,26 @@ export class RealNtsClient implements NtsClient {
         statusCodes: [429],
         backoffLimit: 1200,
         ...(opts.retryDelay ? { delay: opts.retryDelay } : {}),
-        shouldRetry: ({ error }) => {
+        shouldRetry: async ({ error }) => {
+          // '429만 재시도' — ky 기본 로직은 일반 네트워크 오류(TypeError)도
+          // 재시도하므로 위임(undefined) 대신 명시적으로 차단한다.
           if (!(error instanceof HTTPError) || error.response.status !== 429) {
-            return undefined; // 기본 로직에 위임(429 외 상태코드는 statusCodes 필터에서 걸러져 재시도 안 함)
+            return false;
           }
           const retryAfter = error.response.headers.get('Retry-After');
           if (retryAfter) {
             const seconds = Number(retryAfter);
-            const afterMs = Number.isFinite(seconds) ? seconds * 1000 : Number.NaN;
+            // RFC 7231: 초 단위 또는 HTTP-date — 두 형식 모두 예산을 검사한다.
+            const afterMs = Number.isFinite(seconds)
+              ? seconds * 1000
+              : Date.parse(retryAfter) - Date.now();
             if (Number.isFinite(afterMs) && afterMs > MAX_RETRY_AFTER_MS) {
               return false; // 쿼터 소진으로 판단 — 재시도 없이 즉시 실패
             }
           }
-          return true;
+          // 재시도도 발신 1회다 — 시도당 토큰을 소모해 10 req/s 상한을
+          // 재시도에도 적용한다 (토큰 고갈 시 재시도 포기 → 429 그대로 실패).
+          return acquireTokenBounded(this.sleep);
         },
       },
     });
@@ -169,11 +186,17 @@ export class RealNtsClient implements NtsClient {
     }
 
     const digits = bizNo.replace(/\D/g, '');
-    const url = `${NTS_BASE_URL}?serviceKey=${encodeURIComponent(key)}`;
 
     try {
-      const res = await this.http.post(url, {
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      const res = await this.http.post(NTS_BASE_URL, {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          // 서비스키는 URL 쿼리가 아닌 헤더로만 전달한다 — 쿼리에 실으면
+          // Sentry breadcrumb 등 요청 URL을 수집하는 모든 로그 표면으로 샌다.
+          // odcloud 표준 헤더 인증. 헤더 값은 원문 그대로(URL 인코딩 금지).
+          Authorization: `Infuser ${key}`,
+        },
         body: JSON.stringify({ b_no: [digits] }),
       });
 
@@ -239,5 +262,10 @@ export function __setNtsClientForTest(client: NtsClient | undefined): void {
 // 테스트 전용 — leaky-bucket 누적 상태 초기화.
 export function __resetNtsRateLimitForTest(): void {
   rateState.tokens = RATE_BUCKET_MAX;
-  rateState.lastRefillMs = Date.now();
+  rateState.lastRefillMs = _now();
+}
+
+// 테스트 전용 — 버킷 리필 클록 주입 (undefined 로 원복).
+export function __setNtsClockForTest(fn: (() => number) | undefined): void {
+  _now = fn ?? Date.now;
 }

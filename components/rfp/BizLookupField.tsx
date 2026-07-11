@@ -6,25 +6,23 @@ import { Label } from '@/components/primitives/Label';
 import { cn } from '@/lib/utils';
 
 // Slim BizProfile-shaped result (matches lib/types/biz-profile + DB schema).
-// The component owns no mock import — callers inject `onLookup` so Step 7 can
-// swap the live `lookupBizNoAction` in without touching this file.
+// The component owns no data fetching — callers inject `onLookup` (실서비스는
+// components/rfp/nts-lookup.ts 의 공용 어댑터 `ntsLookup`).
 export type BizLookupResult = {
   bizNo: string;
   taxType: 'general' | 'simple' | 'exempt';
   status: 'active' | 'suspended' | 'closed';
 };
 
-type LookupResponse =
+// onLookup 응답 계약의 단일 출처 — 공용 어댑터(nts-lookup.ts)와 테스트가 공유.
+export type LookupResponse =
   | { valid: true; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed' }
   | { valid: false; error?: string };
 
 type Status = 'idle' | 'loading' | 'found' | 'notfound';
 
 type Props = {
-  /**
-   * Caller-supplied lookup. Step 7 will inject `lookupBizNoAction` at call
-   * sites; for now sign-up + RFP-create use a stub.
-   */
+  /** 호출측 주입 조회 함수 — 실서비스는 공용 어댑터 `ntsLookup` 을 주입한다. */
   onLookup: (bizNo: string) => Promise<LookupResponse>;
   onResult: (profile: BizLookupResult) => void;
   onReset: () => void;
