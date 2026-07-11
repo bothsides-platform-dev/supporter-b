@@ -303,26 +303,38 @@
     },
     {
       "path": "lib/server/actions/rfp/lookupBizNoAction.ts",
-      "accessCount": 4,
-      "lastAccessed": 1783781368128,
+      "accessCount": 5,
+      "lastAccessed": 1783781376411,
       "type": "file"
     },
     {
       "path": "components/rfp/BizLookupField.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1783781367151,
-      "type": "file"
-    },
-    {
-      "path": "components/auth/BuyerWorkspaceForm.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1783781369423,
+      "accessCount": 5,
+      "lastAccessed": 1783781386911,
       "type": "file"
     },
     {
       "path": "components/settings/WorkspaceBizNoForm.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1783781369627,
+      "accessCount": 3,
+      "lastAccessed": 1783781391624,
+      "type": "file"
+    },
+    {
+      "path": "lib/server/actions/rfp/__tests__/lookup.test.ts",
+      "accessCount": 3,
+      "lastAccessed": 1783781403017,
+      "type": "file"
+    },
+    {
+      "path": "components/auth/BuyerWorkspaceForm.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1783781417273,
+      "type": "file"
+    },
+    {
+      "path": "components/auth/__tests__/PgWorkspacePage.test.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1783781462221,
       "type": "file"
     },
     {
@@ -332,45 +344,39 @@
       "type": "file"
     },
     {
+      "path": "components/rfp/__tests__/BizLookupField.test.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1783781391181,
+      "type": "file"
+    },
+    {
+      "path": "app/(public)/signup/pg/workspace/PgWorkspaceStep.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1783781417744,
+      "type": "file"
+    },
+    {
+      "path": "components/auth/__tests__/BuyerWorkspaceForm.test.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1783781448539,
+      "type": "file"
+    },
+    {
+      "path": "components/settings/__tests__/WorkspaceBizNoForm.test.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1783781456414,
+      "type": "file"
+    },
+    {
       "path": "lib/http.ts",
       "accessCount": 1,
       "lastAccessed": 1783770644941,
       "type": "file"
     },
     {
-      "path": "lib/server/actions/rfp/__tests__/lookup.test.ts",
+      "path": "lib/observability/capture.ts",
       "accessCount": 1,
-      "lastAccessed": 1783781185921,
-      "type": "file"
-    },
-    {
-      "path": "components/rfp/__tests__/BizLookupField.test.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783781191504,
-      "type": "file"
-    },
-    {
-      "path": "components/settings/__tests__/WorkspaceBizNoForm.test.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783781192473,
-      "type": "file"
-    },
-    {
-      "path": "components/auth/__tests__/PgWorkspacePage.test.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783781192749,
-      "type": "file"
-    },
-    {
-      "path": "components/auth/__tests__/BuyerWorkspaceForm.test.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783781226680,
-      "type": "file"
-    },
-    {
-      "path": "app/(public)/signup/pg/workspace/PgWorkspaceStep.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783781369525,
+      "lastAccessed": 1783781381299,
       "type": "file"
     }
   ],

@@ -1,6 +1,10 @@
 {
   "version": 1,
   "entries": {
+    "466399dafa2d20f60587180bad0a07358eb7f2bce724df0ff682f038ad33f5ad": {
+      "last_emitted_at_ms": 1783781402811,
+      "message": "Read multiple files in parallel when possible for faster analysis."
+    },
     "7e46ed53ede310bea9bfb4fab236a5231128b5809e9c2c66ae4a5ffebfca0dd0": {
       "last_emitted_at_ms": 1783781347398,
       "message": "Spawning agent: general-purpose (sonnet) | Task: 리뷰: design 스페셜리스트"
@@ -33,10 +37,6 @@
       "last_emitted_at_ms": 1783781166946,
       "message": "Spawning agent: general-purpose (inherit) [BACKGROUND] | Task: Ship 커버리지 감사"
     },
-    "466399dafa2d20f60587180bad0a07358eb7f2bce724df0ff682f038ad33f5ad": {
-      "last_emitted_at_ms": 1783781097107,
-      "message": "Read multiple files in parallel when possible for faster analysis."
-    },
     "445ed27a3872b681d98190bae61ccb84954e1bc4e140df5370be958dee776b3a": {
       "last_emitted_at_ms": 1783780158203,
       "message": "Verify changes work after editing. Test functionality before marking complete."
@@ -46,5 +46,5 @@
       "message": "Spawning agent: general-purpose (sonnet) | Task: ky 기반 NTS 429 재시도 구현"
     }
   },
-  "updated_at": "2026-07-11T14:49:07.398Z"
+  "updated_at": "2026-07-11T14:50:02.811Z"
 }
