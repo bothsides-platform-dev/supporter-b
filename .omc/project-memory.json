@@ -57,8 +57,8 @@
     "runtime": "Node.js 22"
   },
   "build": {
-    "buildCommand": "pnpm build",
-    "testCommand": "pnpm test",
+    "buildCommand": "pnpm tsc --noEmit -p . 2>&1 | grep -E \"nts\\.(ts|test\\.ts)\" | head -50; echo \"exit: $?\"",
+    "testCommand": "pnpm test lib/integrations/__tests__/nts.test.ts 2>&1 | tail -20",
     "lintCommand": "pnpm lint",
     "devCommand": "pnpm dev",
     "scripts": {
@@ -290,21 +290,21 @@
   },
   "hotPaths": [
     {
-      "path": "lib/http.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783770644941,
+      "path": "lib/integrations/__tests__/nts.test.ts",
+      "accessCount": 4,
+      "lastAccessed": 1783778388050,
       "type": "file"
     },
     {
       "path": "lib/integrations/nts.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783777984245,
+      "accessCount": 4,
+      "lastAccessed": 1783778454454,
       "type": "file"
     },
     {
-      "path": "lib/integrations/__tests__/nts.test.ts",
+      "path": "lib/http.ts",
       "accessCount": 1,
-      "lastAccessed": 1783777989545,
+      "lastAccessed": 1783770644941,
       "type": "file"
     }
   ],
