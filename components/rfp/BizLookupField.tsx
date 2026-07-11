@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { cn } from '@/lib/utils';
@@ -64,12 +64,19 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
   const formatted = formatBizNo(raw);
   const isComplete = formatted.replace(/-/g, '').length === 10;
 
+  // 단조 증가 시퀀스 — 입력 수정/리셋 시 bump 해서 in-flight 응답을 무효화.
+  // 없으면 조회 중 번호를 고치고 나서 이전 번호의 결과가 뒤늦게 found 로
+  // 덮어써 화면 입력값과 onResult 로 커밋된 번호가 어긋난다.
+  const lookupSeqRef = useRef(0);
+
   const handleLookup = async () => {
-    if (!isComplete) return;
+    if (!isComplete || status === 'loading') return;
+    const seq = ++lookupSeqRef.current;
     setStatus('loading');
     setError('');
     try {
       const response = await onLookup(formatted);
+      if (seq !== lookupSeqRef.current) return; // stale 응답 폐기
       if (response.valid) {
         const profile: BizLookupResult = {
           bizNo: formatted,
@@ -93,12 +100,14 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
         setError(response.error ?? '사업자번호를 찾지 못했어요.');
       }
     } catch {
+      if (seq !== lookupSeqRef.current) return; // stale 오류도 폐기
       setStatus('idle');
       setError('조회 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
     }
   };
 
   const handleReset = () => {
+    lookupSeqRef.current += 1;
     setRaw('');
     setStatus('idle');
     setResult(null);
@@ -115,6 +124,7 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
             type="text"
             value={formatted}
             onChange={(e) => {
+              lookupSeqRef.current += 1; // 진행 중 조회 무효화
               setRaw(e.target.value);
               if (status !== 'idle') {
                 setStatus('idle');

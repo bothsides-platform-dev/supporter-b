@@ -236,4 +236,33 @@ describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
     expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
     expect(mockPush).not.toHaveBeenCalled();
   });
+
+  // 인프라 오류(키/네트워크)를 '찾지 못했어요'로 뭉개면 사용자가 자기 번호가
+  // 잘못됐다고 오인한다 — 시스템 오류 메시지로 구분해야 한다.
+  it('NTS 인프라 오류 시 시스템 오류 메시지를 표시한다 (찾지 못했어요 아님)', async () => {
+    mockLookupBizNo.mockResolvedValue({ ok: false, error: 'NTS_NETWORK' });
+    const user = userEvent.setup();
+    await openManualMode(user);
+
+    await user.type(screen.getByLabelText('사업자 등록번호'), '1248100998');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    expect(
+      await screen.findByText(/사업자번호 조회 중 오류가 발생했어요/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/찾지 못했어요/)).not.toBeInTheDocument();
+  });
+
+  it('레이트리밋 시 재시도 안내 메시지를 표시한다', async () => {
+    mockLookupBizNo.mockResolvedValue({ ok: false, error: 'NTS_RATE_LIMIT' });
+    const user = userEvent.setup();
+    await openManualMode(user);
+
+    await user.type(screen.getByLabelText('사업자 등록번호'), '1248100998');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    expect(
+      await screen.findByText(/요청이 너무 많아요/),
+    ).toBeInTheDocument();
+  });
 });

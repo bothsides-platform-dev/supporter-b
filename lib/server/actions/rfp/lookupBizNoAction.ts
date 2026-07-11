@@ -30,8 +30,11 @@ export async function lookupBizNoAction(
     return { ok: true, ...result };
   } catch (e) {
     if (e instanceof NtsError) {
-      // Expected upstream outcomes (no key, invalid key, network) — categorized,
-      // not reported.
+      // 키 누락/만료는 조회 전면 차단으로 이어지는 운영 장애 — 관측 필수.
+      // 일시적 네트워크/레이트리밋은 카테고리만 반환하고 보고하지 않는다.
+      if (e.code === 'NTS_NO_KEY' || e.code === 'NTS_INVALID_KEY') {
+        captureActionError('lookupBizNoAction', e);
+      }
       return { ok: false, error: e.code };
     }
     // Unexpected (e.g. a parse/contract failure inside the client) — report it.

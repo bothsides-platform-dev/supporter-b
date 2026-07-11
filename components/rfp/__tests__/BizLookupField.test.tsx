@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BizLookupField } from '../BizLookupField';
+
+type DeferredResponse =
+  | { valid: true; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed' }
+  | { valid: false; error?: string };
 
 describe('BizLookupField', () => {
   it('calls onLookup with the formatted bizNo and emits a slim result', async () => {
@@ -259,5 +263,58 @@ describe('BizLookupField — blockedStatuses', () => {
       taxType: 'general',
       status: 'closed',
     });
+  });
+});
+
+describe('BizLookupField — 동시성/레이스', () => {
+  it('does not re-fire onLookup when Enter is pressed during loading', async () => {
+    const user = userEvent.setup();
+    const resolvers: Array<(v: DeferredResponse) => void> = [];
+    const onLookup = vi.fn(
+      () => new Promise<DeferredResponse>((resolve) => resolvers.push(resolve)),
+    );
+
+    render(
+      <BizLookupField onLookup={onLookup} onResult={() => {}} onReset={() => {}} />,
+    );
+    const input = screen.getByLabelText('사업자 등록번호');
+    await user.type(input, '1234567890');
+    await user.type(input, '{Enter}'); // 조회 시작 → loading
+    await user.type(input, '{Enter}{Enter}'); // 로딩 중 연타 — 무시되어야 한다
+
+    expect(onLookup).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolvers[0]!({ valid: false });
+    });
+    expect(await screen.findByText(/사업자번호를 찾지 못했어요/)).toBeInTheDocument();
+  });
+
+  it('ignores a stale in-flight result after the input is edited', async () => {
+    const user = userEvent.setup();
+    const resolvers: Array<(v: DeferredResponse) => void> = [];
+    const onLookup = vi.fn(
+      () => new Promise<DeferredResponse>((resolve) => resolvers.push(resolve)),
+    );
+    const onResult = vi.fn();
+
+    render(
+      <BizLookupField onLookup={onLookup} onResult={onResult} onReset={() => {}} />,
+    );
+    const input = screen.getByLabelText('사업자 등록번호');
+    await user.type(input, '1234567890');
+    await user.click(screen.getByRole('button', { name: '조회' })); // in-flight
+    await user.type(input, '{Backspace}'); // 조회 중 입력 수정 → idle 리셋
+
+    // 이전 번호의 응답이 뒤늦게 도착 — 폐기되어야 한다.
+    await act(async () => {
+      resolvers[0]!({ valid: true, taxType: 'general', status: 'active' });
+    });
+
+    expect(onResult).not.toHaveBeenCalled();
+    expect(screen.queryByText('NTS — 국세청 자동 조회')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '조회' })).toBeInTheDocument(),
+    );
   });
 });

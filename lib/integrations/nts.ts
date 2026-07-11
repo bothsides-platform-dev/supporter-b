@@ -27,7 +27,6 @@ export type NtsErrorCode =
   | 'NTS_NO_KEY'
   | 'NTS_INVALID_KEY'
   | 'NTS_RATE_LIMIT'
-  | 'NTS_NOT_FOUND'
   | 'NTS_NETWORK';
 
 export class NtsError extends Error {
@@ -125,15 +124,16 @@ export class RealNtsClient implements NtsClient {
           end_dt?: string;
         }>;
       };
+      // 미등록 사업자번호는 HTTP 200 + b_stt_cd 빈값으로 온다. 오류가 아닌
+      // 정상 결과이므로 valid:false 반환 — MockNtsClient·액션 docstring과
+      // 같은 계약 (throw 하면 UI가 '시스템 오류'로 오안내).
       const row = json?.data?.[0];
       if (!row || !row.b_stt_cd) {
-        throw new NtsError('NTS_NOT_FOUND');
+        return { valid: false };
       }
       const status = statusFromCode(row.b_stt_cd);
       const taxType = taxTypeFromText(row.tax_type);
-      // 등록되지 않은 사업자번호는 b_stt_cd='국세청에 등록되지...' 형태가 아닌
-      // 일반 응답 안에서 status undefined 로 나타나는 케이스 — NOT_FOUND.
-      if (!status) throw new NtsError('NTS_NOT_FOUND');
+      if (!status) return { valid: false };
       return { valid: true, taxType, status };
     } catch (e) {
       if (e instanceof NtsError) throw e;

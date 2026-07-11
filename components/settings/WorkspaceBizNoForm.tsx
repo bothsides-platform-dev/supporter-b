@@ -8,24 +8,9 @@ import {
   BizLookupField,
   type BizLookupResult,
 } from '@/components/rfp/BizLookupField';
-import {
-  lookupBizNoAction,
-  updateWorkspaceBizProfileAction,
-} from '@/lib/server/actions/rfp';
+import { ntsLookup } from '@/components/rfp/nts-lookup';
+import { updateWorkspaceBizProfileAction } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
-
-const ntsLookup = async (bizNo: string) => {
-  const r = await lookupBizNoAction(bizNo);
-  if (!r.ok) {
-    const msg =
-      r.error === 'NTS_RATE_LIMIT'
-        ? '요청이 너무 많아요. 잠시 후 다시 시도해주세요.'
-        : '사업자번호 조회 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.';
-    return { valid: false as const, error: msg };
-  }
-  if (!r.valid) return { valid: false as const };
-  return { valid: true as const, taxType: r.taxType!, status: r.status! };
-};
 
 type Props = {
   /** null = 사업자번호 미등록 (초기 등록 모드로 진입) */

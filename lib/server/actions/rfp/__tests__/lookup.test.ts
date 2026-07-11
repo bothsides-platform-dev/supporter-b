@@ -52,6 +52,11 @@ describe('lookupBizNoAction', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error).toBe('NTS_NO_KEY');
+    // 키 미설정은 운영 장애 — Sentry로 관측되어야 한다.
+    expect(captureActionError).toHaveBeenCalledWith(
+      'lookupBizNoAction',
+      expect.objectContaining({ code: 'NTS_NO_KEY' }),
+    );
   });
 
   it('returns NTS_INVALID_KEY when upstream rejects auth', async () => {
@@ -63,6 +68,11 @@ describe('lookupBizNoAction', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error).toBe('NTS_INVALID_KEY');
+    // 키 만료/오설정도 운영 장애 — Sentry로 관측되어야 한다.
+    expect(captureActionError).toHaveBeenCalledWith(
+      'lookupBizNoAction',
+      expect.objectContaining({ code: 'NTS_INVALID_KEY' }),
+    );
   });
 
   it('returns NTS_NETWORK on transport failure', async () => {
@@ -86,14 +96,17 @@ describe('lookupBizNoAction', () => {
     expect(captureActionError).toHaveBeenCalledWith('lookupBizNoAction', boom);
   });
 
-  it('does not capture expected NtsError failures', async () => {
-    __setNtsClientForTest({
-      lookup: () => Promise.reject(new NtsError('NTS_NETWORK', 'timeout')),
-    });
-    const r = await lookupBizNoAction('1234567890');
-    expect(r.ok).toBe(false);
-    expect(captureActionError).not.toHaveBeenCalled();
-  });
+  it.each(['NTS_NETWORK', 'NTS_RATE_LIMIT'] as const)(
+    'does not capture transient %s failures',
+    async (code) => {
+      __setNtsClientForTest({
+        lookup: () => Promise.reject(new NtsError(code)),
+      });
+      const r = await lookupBizNoAction('1234567890');
+      expect(r.ok).toBe(false);
+      expect(captureActionError).not.toHaveBeenCalled();
+    },
+  );
 
   it('reuses MockNtsClient default after test override', async () => {
     __setNtsClientForTest(new MockNtsClient());
