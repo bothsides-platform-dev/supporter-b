@@ -57,8 +57,8 @@
     "runtime": "Node.js 22"
   },
   "build": {
-    "buildCommand": "pnpm tsc --noEmit -p . 2>&1 | grep -E \"nts\\.(ts|test\\.ts)\" | head -50; echo \"exit: $?\"",
-    "testCommand": "pnpm test lib/integrations/__tests__/nts.test.ts 2>&1 | tail -20",
+    "buildCommand": "pnpm tsc --noEmit 2>&1 | tail -3 && pnpm lint 2>&1 | tail -3 && echo HEALTH_OK",
+    "testCommand": "pnpm test > /private/tmp/claude-501/-Users-yeonseong-project-bidit/c0f8c3cd-6e97-40e2-be16-65e83b503c32/scratchpad/full-suite-rerun.log 2>&1; echo \"EXIT=$?\"",
     "lintCommand": "pnpm lint",
     "devCommand": "pnpm dev",
     "scripts": {
@@ -290,15 +290,15 @@
   },
   "hotPaths": [
     {
-      "path": "lib/integrations/__tests__/nts.test.ts",
-      "accessCount": 4,
-      "lastAccessed": 1783778388050,
+      "path": "lib/integrations/nts.ts",
+      "accessCount": 5,
+      "lastAccessed": 1783778605947,
       "type": "file"
     },
     {
-      "path": "lib/integrations/nts.ts",
-      "accessCount": 4,
-      "lastAccessed": 1783778454454,
+      "path": "lib/integrations/__tests__/nts.test.ts",
+      "accessCount": 5,
+      "lastAccessed": 1783778607006,
       "type": "file"
     },
     {
