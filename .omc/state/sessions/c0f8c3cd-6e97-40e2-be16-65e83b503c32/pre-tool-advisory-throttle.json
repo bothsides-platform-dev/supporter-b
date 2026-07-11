@@ -1,6 +1,10 @@
 {
   "version": 1,
   "entries": {
+    "79a93d4a2f8f50b95f852280616242fee1855dc99a3c75211917f55e72e95fae": {
+      "last_emitted_at_ms": 1783790270326,
+      "message": "Use parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests)."
+    },
     "7b8d6c8229ff6e3ab47a3b83137cbc96c98ec0872d81fedfbf2d1bbbc11960b6": {
       "last_emitted_at_ms": 1783789740669,
       "message": "Spawning agent: general-purpose (inherit) | Task: 리뷰: red team"
@@ -9,14 +13,10 @@
       "last_emitted_at_ms": 1783788199157,
       "message": "Read multiple files in parallel when possible for faster analysis."
     },
-    "79a93d4a2f8f50b95f852280616242fee1855dc99a3c75211917f55e72e95fae": {
-      "last_emitted_at_ms": 1783788183746,
-      "message": "Use parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests)."
-    },
     "48cbc8d791544e08efdcdf934ffa88e7de90a87e1cc5cda631df37c997713241": {
       "last_emitted_at_ms": 1783788161716,
       "message": "Spawning agent: general-purpose (sonnet) | Task: 리뷰: testing 스페셜리스트 재실행"
     }
   },
-  "updated_at": "2026-07-11T17:09:00.669Z"
+  "updated_at": "2026-07-11T17:17:50.326Z"
 }
