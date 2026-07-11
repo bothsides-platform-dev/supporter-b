@@ -314,27 +314,45 @@
       "type": "file"
     },
     {
+      "path": "components/auth/__tests__/PgWorkspacePage.test.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1783788230718,
+      "type": "file"
+    },
+    {
+      "path": "lib/server/actions/rfp/__tests__/lookup.test.ts",
+      "accessCount": 4,
+      "lastAccessed": 1783788231662,
+      "type": "file"
+    },
+    {
+      "path": "components/auth/BuyerWorkspaceForm.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1783788295693,
+      "type": "file"
+    },
+    {
       "path": "components/settings/WorkspaceBizNoForm.tsx",
       "accessCount": 3,
       "lastAccessed": 1783781391624,
       "type": "file"
     },
     {
-      "path": "lib/server/actions/rfp/__tests__/lookup.test.ts",
+      "path": "components/settings/__tests__/WorkspaceBizNoForm.test.tsx",
       "accessCount": 3,
-      "lastAccessed": 1783781403017,
+      "lastAccessed": 1783788231214,
       "type": "file"
     },
     {
-      "path": "components/auth/BuyerWorkspaceForm.tsx",
+      "path": "components/auth/__tests__/BuyerWorkspaceForm.test.tsx",
       "accessCount": 3,
-      "lastAccessed": 1783781417273,
+      "lastAccessed": 1783788302516,
       "type": "file"
     },
     {
-      "path": "components/auth/__tests__/PgWorkspacePage.test.tsx",
+      "path": "components/rfp/__tests__/BizLookupField.test.tsx",
       "accessCount": 3,
-      "lastAccessed": 1783781462221,
+      "lastAccessed": 1783788347409,
       "type": "file"
     },
     {
@@ -344,27 +362,15 @@
       "type": "file"
     },
     {
-      "path": "components/rfp/__tests__/BizLookupField.test.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1783781391181,
-      "type": "file"
-    },
-    {
       "path": "app/(public)/signup/pg/workspace/PgWorkspaceStep.tsx",
       "accessCount": 2,
       "lastAccessed": 1783781417744,
       "type": "file"
     },
     {
-      "path": "components/auth/__tests__/BuyerWorkspaceForm.test.tsx",
+      "path": "lib/observability/scrubber.ts",
       "accessCount": 2,
-      "lastAccessed": 1783781448539,
-      "type": "file"
-    },
-    {
-      "path": "components/settings/__tests__/WorkspaceBizNoForm.test.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1783781456414,
+      "lastAccessed": 1783788418346,
       "type": "file"
     },
     {
@@ -383,6 +389,12 @@
       "path": "sentry.server.config.ts",
       "accessCount": 1,
       "lastAccessed": 1783788199420,
+      "type": "file"
+    },
+    {
+      "path": "lib/integrations/nts.mock.ts",
+      "accessCount": 1,
+      "lastAccessed": 1783788360948,
       "type": "file"
     }
   ],
