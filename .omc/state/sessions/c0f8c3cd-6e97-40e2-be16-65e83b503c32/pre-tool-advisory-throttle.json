@@ -1,14 +1,10 @@
 {
   "version": 1,
   "entries": {
-    "466399dafa2d20f60587180bad0a07358eb7f2bce724df0ff682f038ad33f5ad": {
-      "last_emitted_at_ms": 1783770644740,
-      "message": "Read multiple files in parallel when possible for faster analysis."
-    },
-    "79a93d4a2f8f50b95f852280616242fee1855dc99a3c75211917f55e72e95fae": {
-      "last_emitted_at_ms": 1783770621060,
-      "message": "Use parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests)."
+    "5ca5803f761234c1d4a792b7379e5314ba42d97e01caa26c44d03dd05b1bb1be": {
+      "last_emitted_at_ms": 1783777975449,
+      "message": "Spawning agent: general-purpose (sonnet) | Task: ky 기반 NTS 429 재시도 구현"
     }
   },
-  "updated_at": "2026-07-11T11:50:44.740Z"
+  "updated_at": "2026-07-11T13:52:55.449Z"
 }
