@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { BRAND_MARK_PATH } from '@/lib/brand/brand-mark-path'
+import { AnimatedBrandMark } from '@/components/primitives/AnimatedBrandMark'
 
 type LogoVariant = 'default' | 'compact'
 
@@ -8,6 +9,8 @@ type LogoProps = {
   variant?: LogoVariant
   className?: string
   href?: string
+  /** true면 마운트 시 1회 draw-on 애니메이션 마크(AnimatedBrandMark)를 쓴다 — 랜딩 헤더 전용 옵트인. */
+  animated?: boolean
 }
 
 export function BrandMark({
@@ -69,7 +72,9 @@ export function SupportBWordmark({
   )
 }
 
-export function Logo({ variant = 'default', className, href }: LogoProps) {
+export function Logo({ variant = 'default', className, href, animated }: LogoProps) {
+  const Mark = animated ? AnimatedBrandMark : BrandMark
+
   if (variant === 'compact') {
     return (
       <Link
@@ -95,14 +100,16 @@ export function Logo({ variant = 'default', className, href }: LogoProps) {
       href={href ?? '/'}
       aria-label="서포트비 홈"
       className={cn(
-        'group inline-flex items-center gap-3',
+        'group inline-flex items-baseline gap-3',
         'opacity-100 hover:opacity-70 transition-opacity duration-[140ms]',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-on-surface)]',
         'rounded-md',
         className,
       )}
     >
-      <BrandMark />
+      {/* baseline 정렬 + 잉크 매칭 — 22px Pretendard black 한글 잉크는 baseline 위 ~18px·아래 ~2px(총 ~20px).
+          SVG는 bottom이 baseline에 앉으므로 size=20 + 2px 하강으로 잉크 상·하단을 글자와 일치시킨다(실측 보정). */}
+      <Mark size={20} className="translate-y-[2px]" />
       <SupportBWordmark className="text-[22px]" />
     </Link>
   )
