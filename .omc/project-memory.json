@@ -290,6 +290,12 @@
   },
   "hotPaths": [
     {
+      "path": "app/(public)/login/page.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1784019836004,
+      "type": "file"
+    },
+    {
       "path": "lib/site-routing.ts",
       "accessCount": 1,
       "lastAccessed": 1784010691628,
@@ -332,15 +338,21 @@
       "type": "file"
     },
     {
-      "path": "app/(public)/login/page.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1784014944402,
-      "type": "file"
-    },
-    {
       "path": "docker-compose.yml",
       "accessCount": 1,
       "lastAccessed": 1784015318095,
+      "type": "file"
+    },
+    {
+      "path": "lib/auth/page-access.ts",
+      "accessCount": 1,
+      "lastAccessed": 1784019863247,
+      "type": "file"
+    },
+    {
+      "path": "proxy.ts",
+      "accessCount": 1,
+      "lastAccessed": 1784019874237,
       "type": "file"
     }
   ],
