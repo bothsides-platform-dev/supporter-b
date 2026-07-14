@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"for i in $(seq 1 10); do\\n  status=$(docker inspect --format='{{.State.Health.Status}}' supporter-b-pg 2>/dev/null)\\n  echo \\\"attempt $i: $status\\\"\\n  [ \\\"$status\\\" = \\\"healthy\\\" ] && brea...",
+  "error": "Exit code 1\n(eval):2: read-only variable: status",
+  "timestamp": "2026-07-14T07:49:42.069Z",
+  "retry_count": 1
+}
