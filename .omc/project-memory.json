@@ -384,6 +384,12 @@
       "accessCount": 1,
       "lastAccessed": 1784020750434,
       "type": "file"
+    },
+    {
+      "path": "components/onboarding/coachmarks/CoachmarkOverlay.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1784021005228,
+      "type": "file"
     }
   ],
   "userDirectives": []
