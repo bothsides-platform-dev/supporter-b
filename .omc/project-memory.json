@@ -288,6 +288,13 @@
       "keyFiles": []
     }
   },
-  "hotPaths": [],
+  "hotPaths": [
+    {
+      "path": "lib/site-routing.ts",
+      "accessCount": 1,
+      "lastAccessed": 1784010691628,
+      "type": "file"
+    }
+  ],
   "userDirectives": []
 }
