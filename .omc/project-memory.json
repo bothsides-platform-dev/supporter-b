@@ -354,6 +354,36 @@
       "accessCount": 1,
       "lastAccessed": 1784019874237,
       "type": "file"
+    },
+    {
+      "path": "app/(app)/tutorial/page.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1784020726778,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/WelcomeModal.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1784020733132,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/tutorial/BuyerTutorialFlow.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1784020739129,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/TutorialNudge.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1784020743032,
+      "type": "file"
+    },
+    {
+      "path": "components/onboarding/tutorial/PgTutorialFlow.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1784020750434,
+      "type": "file"
     }
   ],
   "userDirectives": []
