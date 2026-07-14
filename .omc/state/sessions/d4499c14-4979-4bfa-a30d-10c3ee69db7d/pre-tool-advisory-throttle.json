@@ -1,10 +1,18 @@
 {
   "version": 1,
   "entries": {
+    "466399dafa2d20f60587180bad0a07358eb7f2bce724df0ff682f038ad33f5ad": {
+      "last_emitted_at_ms": 1784014802791,
+      "message": "Read multiple files in parallel when possible for faster analysis."
+    },
+    "79a93d4a2f8f50b95f852280616242fee1855dc99a3c75211917f55e72e95fae": {
+      "last_emitted_at_ms": 1784014800933,
+      "message": "Use parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests)."
+    },
     "04675efef510c0fc76f9e1e7260820dcedfd9208b6827540cccd1000ee849a0c": {
       "last_emitted_at_ms": 1784014797296,
       "message": "Spawning agent: Explore (inherit) | Task: Investigate login failure root cause"
     }
   },
-  "updated_at": "2026-07-14T07:39:57.296Z"
+  "updated_at": "2026-07-14T07:40:02.791Z"
 }

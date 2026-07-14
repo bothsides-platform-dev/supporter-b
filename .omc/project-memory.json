@@ -294,6 +294,48 @@
       "accessCount": 1,
       "lastAccessed": 1784010691628,
       "type": "file"
+    },
+    {
+      "path": "lib/server/actions/auth/loginAction.ts",
+      "accessCount": 1,
+      "lastAccessed": 1784014803002,
+      "type": "file"
+    },
+    {
+      "path": "lib/auth/shell-access.ts",
+      "accessCount": 1,
+      "lastAccessed": 1784014841691,
+      "type": "file"
+    },
+    {
+      "path": "instrumentation.ts",
+      "accessCount": 1,
+      "lastAccessed": 1784014847201,
+      "type": "file"
+    },
+    {
+      "path": "lib/server/auth/login-rate-limit.ts",
+      "accessCount": 1,
+      "lastAccessed": 1784014847549,
+      "type": "file"
+    },
+    {
+      "path": "scripts/seed.ts",
+      "accessCount": 1,
+      "lastAccessed": 1784014855048,
+      "type": "file"
+    },
+    {
+      "path": "lib/observability/logger.ts",
+      "accessCount": 1,
+      "lastAccessed": 1784014898531,
+      "type": "file"
+    },
+    {
+      "path": "app/(public)/login/page.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1784014944402,
+      "type": "file"
     }
   ],
   "userDirectives": []
