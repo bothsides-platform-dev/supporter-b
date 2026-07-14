@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1783758645452,
-  "projectRoot": "/Users/yeonseong/project/bidit/.claude/worktrees/fix-biz-lookup-nts-errors",
+  "lastScanned": 1784002415130,
+  "projectRoot": "/Users/yeonseong/project/bidit",
   "techStack": {
     "languages": [
       {
@@ -57,8 +57,8 @@
     "runtime": "Node.js 22"
   },
   "build": {
-    "buildCommand": "COREPACK_INTEGRITY_KEYS=0 timeout 500 corepack pnpm@9 tsc --noEmit 2>&1 | tail -8; echo \"TSC_EXIT=${PIPESTATUS[0]:-$?}\"",
-    "testCommand": "npx vitest run lib/integrations/__tests__/nts.test.ts components/rfp/__tests__/nts-lookup.test.ts components/rfp/__tests__/BizLookupField.test.tsx lib/server/actions/rfp/__tests__/lookup.test.ts components/auth/__tests__/BuyerWorkspaceForm.test.tsx components/auth/__tests__/PgWorkspacePage.test.tsx components/settings/__tests__/WorkspaceBizNoForm.test.tsx 2>&1 | tail -25",
+    "buildCommand": "pnpm build",
+    "testCommand": "pnpm test",
     "lintCommand": "pnpm lint",
     "devCommand": "pnpm dev",
     "scripts": {
@@ -112,7 +112,7 @@
       "path": "app",
       "purpose": "Application code",
       "fileCount": 13,
-      "lastAccessed": 1783758645420,
+      "lastAccessed": 1784002415110,
       "keyFiles": [
         "apple-icon.png",
         "favicon.ico",
@@ -125,14 +125,14 @@
       "path": "components",
       "purpose": "UI components",
       "fileCount": 0,
-      "lastAccessed": 1783758645422,
+      "lastAccessed": 1784002415111,
       "keyFiles": []
     },
     "deploy": {
       "path": "deploy",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1783758645437,
+      "lastAccessed": 1784002415116,
       "keyFiles": [
         "Caddyfile"
       ]
@@ -141,7 +141,7 @@
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 1,
-      "lastAccessed": 1783758645438,
+      "lastAccessed": 1784002415117,
       "keyFiles": [
         "DEPLOY_LIGHTSAIL.md"
       ]
@@ -150,7 +150,7 @@
       "path": "e2e",
       "purpose": null,
       "fileCount": 13,
-      "lastAccessed": 1783758645439,
+      "lastAccessed": 1784002415117,
       "keyFiles": [
         "_helpers.ts",
         "bid-detail-pdf-preview.spec.ts",
@@ -163,7 +163,7 @@
       "path": "lib",
       "purpose": "Library code",
       "fileCount": 7,
-      "lastAccessed": 1783758645439,
+      "lastAccessed": 1784002415117,
       "keyFiles": [
         "glossary.ts",
         "http.ts",
@@ -176,7 +176,7 @@
       "path": "public",
       "purpose": "Public files",
       "fileCount": 1,
-      "lastAccessed": 1783758645440,
+      "lastAccessed": 1784002415118,
       "keyFiles": [
         "naverc0e607e11bc419371519800f1235a0b4.html"
       ]
@@ -185,7 +185,7 @@
       "path": "scripts",
       "purpose": "Build/utility scripts",
       "fileCount": 12,
-      "lastAccessed": 1783758645440,
+      "lastAccessed": 1784002415118,
       "keyFiles": [
         "backfill-kanban-columns.ts",
         "backfill-logo-updated-at.ts",
@@ -198,7 +198,7 @@
       "path": "styles",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1783758645441,
+      "lastAccessed": 1784002415118,
       "keyFiles": [
         "tokens.css"
       ]
@@ -207,14 +207,14 @@
       "path": "tests",
       "purpose": "Test files",
       "fileCount": 0,
-      "lastAccessed": 1783758645442,
+      "lastAccessed": 1784002415119,
       "keyFiles": []
     },
     "types": {
       "path": "types",
       "purpose": "Type definitions",
       "fileCount": 1,
-      "lastAccessed": 1783758645442,
+      "lastAccessed": 1784002415119,
       "keyFiles": [
         "next-auth.d.ts"
       ]
@@ -223,7 +223,7 @@
       "path": "app/__tests__",
       "purpose": "Test files",
       "fileCount": 4,
-      "lastAccessed": 1783758645443,
+      "lastAccessed": 1784002415120,
       "keyFiles": [
         "layout.test.ts",
         "logout-route.test.ts",
@@ -234,14 +234,14 @@
       "path": "app/api",
       "purpose": "API routes",
       "fileCount": 0,
-      "lastAccessed": 1783758645444,
+      "lastAccessed": 1784002415120,
       "keyFiles": []
     },
     "deploy/__tests__": {
       "path": "deploy/__tests__",
       "purpose": "Test files",
       "fileCount": 3,
-      "lastAccessed": 1783758645447,
+      "lastAccessed": 1784002415121,
       "keyFiles": [
         "centrifugo-allowed-origins.test.ts",
         "centrifugo-presence-namespace.test.ts",
@@ -252,7 +252,7 @@
       "path": "docs/migrations",
       "purpose": "Database migrations",
       "fileCount": 3,
-      "lastAccessed": 1783758645449,
+      "lastAccessed": 1784002415123,
       "keyFiles": [
         "2026-07-cleanup-sample-data.sql",
         "activate-existing-workspaces.sql",
@@ -263,7 +263,7 @@
       "path": "lib/__tests__",
       "purpose": "Test files",
       "fileCount": 10,
-      "lastAccessed": 1783758645450,
+      "lastAccessed": 1784002415128,
       "keyFiles": [
         "deadline.test.ts",
         "format.test.ts",
@@ -274,7 +274,7 @@
       "path": "scripts/__tests__",
       "purpose": "Test files",
       "fileCount": 2,
-      "lastAccessed": 1783758645451,
+      "lastAccessed": 1784002415129,
       "keyFiles": [
         "pg-logo-assets.test.ts",
         "seed.test.ts"
@@ -284,119 +284,10 @@
       "path": "scripts/assets",
       "purpose": "Static assets",
       "fileCount": 0,
-      "lastAccessed": 1783758645451,
+      "lastAccessed": 1784002415129,
       "keyFiles": []
     }
   },
-  "hotPaths": [
-    {
-      "path": "lib/integrations/nts.ts",
-      "accessCount": 12,
-      "lastAccessed": 1783789760757,
-      "type": "file"
-    },
-    {
-      "path": "lib/integrations/__tests__/nts.test.ts",
-      "accessCount": 8,
-      "lastAccessed": 1783789999459,
-      "type": "file"
-    },
-    {
-      "path": "lib/server/actions/rfp/lookupBizNoAction.ts",
-      "accessCount": 7,
-      "lastAccessed": 1783789913191,
-      "type": "file"
-    },
-    {
-      "path": "components/rfp/BizLookupField.tsx",
-      "accessCount": 7,
-      "lastAccessed": 1783790047576,
-      "type": "file"
-    },
-    {
-      "path": "lib/server/actions/rfp/__tests__/lookup.test.ts",
-      "accessCount": 5,
-      "lastAccessed": 1783790168688,
-      "type": "file"
-    },
-    {
-      "path": "components/auth/__tests__/PgWorkspacePage.test.tsx",
-      "accessCount": 4,
-      "lastAccessed": 1783788230718,
-      "type": "file"
-    },
-    {
-      "path": "components/auth/BuyerWorkspaceForm.tsx",
-      "accessCount": 4,
-      "lastAccessed": 1783788295693,
-      "type": "file"
-    },
-    {
-      "path": "components/settings/WorkspaceBizNoForm.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1783781391624,
-      "type": "file"
-    },
-    {
-      "path": "components/settings/__tests__/WorkspaceBizNoForm.test.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1783788231214,
-      "type": "file"
-    },
-    {
-      "path": "components/auth/__tests__/BuyerWorkspaceForm.test.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1783788302516,
-      "type": "file"
-    },
-    {
-      "path": "components/rfp/__tests__/BizLookupField.test.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1783788347409,
-      "type": "file"
-    },
-    {
-      "path": "components/rfp/nts-lookup.ts",
-      "accessCount": 2,
-      "lastAccessed": 1783781370843,
-      "type": "file"
-    },
-    {
-      "path": "app/(public)/signup/pg/workspace/PgWorkspaceStep.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1783781417744,
-      "type": "file"
-    },
-    {
-      "path": "lib/observability/scrubber.ts",
-      "accessCount": 2,
-      "lastAccessed": 1783788418346,
-      "type": "file"
-    },
-    {
-      "path": "lib/http.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783770644941,
-      "type": "file"
-    },
-    {
-      "path": "lib/observability/capture.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783781381299,
-      "type": "file"
-    },
-    {
-      "path": "sentry.server.config.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783788199420,
-      "type": "file"
-    },
-    {
-      "path": "lib/integrations/nts.mock.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783788360948,
-      "type": "file"
-    }
-  ],
+  "hotPaths": [],
   "userDirectives": []
 }
