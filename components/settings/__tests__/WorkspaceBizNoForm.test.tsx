@@ -103,6 +103,30 @@ describe('WorkspaceBizNoForm', () => {
     expect(screen.queryByText(/저장됨/)).toBeNull();
   });
 
+  // 비영리법인·고유번호 단체 등 taxType 미매핑 케이스 — 저장 액션의 z.enum 이
+  // 거부하므로 조회 단계에서 선차단되어야 한다 (원인 불명 INVALID_INPUT 방지).
+  it('지원되지 않는 사업자 유형(taxType 미매핑)은 확인 처리하지 않고 안내한다', async () => {
+    const user = userEvent.setup();
+    lookupBizNoAction.mockResolvedValue({
+      ok: true,
+      valid: true,
+      taxType: undefined,
+      status: 'active',
+    });
+
+    render(<WorkspaceBizNoForm currentBizNo={CURRENT} />);
+    await user.click(screen.getByRole('button', { name: '수정' }));
+
+    await user.type(screen.getByLabelText('사업자 등록번호'), '2223334444');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    expect(
+      await screen.findByText(/지원되지 않는 사업자 유형이에요/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '변경 적용' })).toBeDisabled();
+    expect(updateWorkspaceBizProfileAction).not.toHaveBeenCalled();
+  });
+
   it('disables 변경 적용 when the looked-up bizNo equals the current one', async () => {
     const user = userEvent.setup();
     lookupBizNoAction.mockResolvedValue({

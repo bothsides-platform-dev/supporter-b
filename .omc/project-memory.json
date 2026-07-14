@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1783605459710,
-  "projectRoot": "/Users/yeonseong/project/bidit/.claude/worktrees/feat+tutorial-click-through",
+  "lastScanned": 1783758645452,
+  "projectRoot": "/Users/yeonseong/project/bidit/.claude/worktrees/fix-biz-lookup-nts-errors",
   "techStack": {
     "languages": [
       {
@@ -57,8 +57,8 @@
     "runtime": "Node.js 22"
   },
   "build": {
-    "buildCommand": "cat /tmp/ship_tests2.txt; COREPACK_INTEGRITY_KEYS=0 corepack pnpm@9 lint 2>&1 | tail -2; echo LINT_EXIT=$?; COREPACK_INTEGRITY_KEYS=0 corepack pnpm@9 tsc --noEmit 2>&1 | tail -2; echo TSC_EXIT=$?",
-    "testCommand": "pnpm test",
+    "buildCommand": "COREPACK_INTEGRITY_KEYS=0 timeout 500 corepack pnpm@9 tsc --noEmit 2>&1 | tail -8; echo \"TSC_EXIT=${PIPESTATUS[0]:-$?}\"",
+    "testCommand": "npx vitest run lib/integrations/__tests__/nts.test.ts components/rfp/__tests__/nts-lookup.test.ts components/rfp/__tests__/BizLookupField.test.tsx lib/server/actions/rfp/__tests__/lookup.test.ts components/auth/__tests__/BuyerWorkspaceForm.test.tsx components/auth/__tests__/PgWorkspacePage.test.tsx components/settings/__tests__/WorkspaceBizNoForm.test.tsx 2>&1 | tail -25",
     "lintCommand": "pnpm lint",
     "devCommand": "pnpm dev",
     "scripts": {
@@ -112,7 +112,7 @@
       "path": "app",
       "purpose": "Application code",
       "fileCount": 13,
-      "lastAccessed": 1783605459668,
+      "lastAccessed": 1783758645420,
       "keyFiles": [
         "apple-icon.png",
         "favicon.ico",
@@ -125,14 +125,14 @@
       "path": "components",
       "purpose": "UI components",
       "fileCount": 0,
-      "lastAccessed": 1783605459669,
+      "lastAccessed": 1783758645422,
       "keyFiles": []
     },
     "deploy": {
       "path": "deploy",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1783605459695,
+      "lastAccessed": 1783758645437,
       "keyFiles": [
         "Caddyfile"
       ]
@@ -141,7 +141,7 @@
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 1,
-      "lastAccessed": 1783605459698,
+      "lastAccessed": 1783758645438,
       "keyFiles": [
         "DEPLOY_LIGHTSAIL.md"
       ]
@@ -149,8 +149,8 @@
     "e2e": {
       "path": "e2e",
       "purpose": null,
-      "fileCount": 12,
-      "lastAccessed": 1783605459700,
+      "fileCount": 13,
+      "lastAccessed": 1783758645439,
       "keyFiles": [
         "_helpers.ts",
         "bid-detail-pdf-preview.spec.ts",
@@ -163,7 +163,7 @@
       "path": "lib",
       "purpose": "Library code",
       "fileCount": 7,
-      "lastAccessed": 1783605459700,
+      "lastAccessed": 1783758645439,
       "keyFiles": [
         "glossary.ts",
         "http.ts",
@@ -176,7 +176,7 @@
       "path": "public",
       "purpose": "Public files",
       "fileCount": 1,
-      "lastAccessed": 1783605459700,
+      "lastAccessed": 1783758645440,
       "keyFiles": [
         "naverc0e607e11bc419371519800f1235a0b4.html"
       ]
@@ -185,7 +185,7 @@
       "path": "scripts",
       "purpose": "Build/utility scripts",
       "fileCount": 12,
-      "lastAccessed": 1783605459701,
+      "lastAccessed": 1783758645440,
       "keyFiles": [
         "backfill-kanban-columns.ts",
         "backfill-logo-updated-at.ts",
@@ -198,7 +198,7 @@
       "path": "styles",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1783605459701,
+      "lastAccessed": 1783758645441,
       "keyFiles": [
         "tokens.css"
       ]
@@ -207,14 +207,14 @@
       "path": "tests",
       "purpose": "Test files",
       "fileCount": 0,
-      "lastAccessed": 1783605459703,
+      "lastAccessed": 1783758645442,
       "keyFiles": []
     },
     "types": {
       "path": "types",
       "purpose": "Type definitions",
       "fileCount": 1,
-      "lastAccessed": 1783605459704,
+      "lastAccessed": 1783758645442,
       "keyFiles": [
         "next-auth.d.ts"
       ]
@@ -223,7 +223,7 @@
       "path": "app/__tests__",
       "purpose": "Test files",
       "fileCount": 4,
-      "lastAccessed": 1783605459704,
+      "lastAccessed": 1783758645443,
       "keyFiles": [
         "layout.test.ts",
         "logout-route.test.ts",
@@ -234,14 +234,14 @@
       "path": "app/api",
       "purpose": "API routes",
       "fileCount": 0,
-      "lastAccessed": 1783605459706,
+      "lastAccessed": 1783758645444,
       "keyFiles": []
     },
     "deploy/__tests__": {
       "path": "deploy/__tests__",
       "purpose": "Test files",
       "fileCount": 3,
-      "lastAccessed": 1783605459707,
+      "lastAccessed": 1783758645447,
       "keyFiles": [
         "centrifugo-allowed-origins.test.ts",
         "centrifugo-presence-namespace.test.ts",
@@ -252,7 +252,7 @@
       "path": "docs/migrations",
       "purpose": "Database migrations",
       "fileCount": 3,
-      "lastAccessed": 1783605459707,
+      "lastAccessed": 1783758645449,
       "keyFiles": [
         "2026-07-cleanup-sample-data.sql",
         "activate-existing-workspaces.sql",
@@ -263,7 +263,7 @@
       "path": "lib/__tests__",
       "purpose": "Test files",
       "fileCount": 10,
-      "lastAccessed": 1783605459708,
+      "lastAccessed": 1783758645450,
       "keyFiles": [
         "deadline.test.ts",
         "format.test.ts",
@@ -274,7 +274,7 @@
       "path": "scripts/__tests__",
       "purpose": "Test files",
       "fileCount": 2,
-      "lastAccessed": 1783605459708,
+      "lastAccessed": 1783758645451,
       "keyFiles": [
         "pg-logo-assets.test.ts",
         "seed.test.ts"
@@ -284,129 +284,117 @@
       "path": "scripts/assets",
       "purpose": "Static assets",
       "fileCount": 0,
-      "lastAccessed": 1783605459709,
+      "lastAccessed": 1783758645451,
       "keyFiles": []
     }
   },
   "hotPaths": [
     {
-      "path": "components/onboarding/coachmarks/__tests__/CoachmarkOverlay.test.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1783649369598,
+      "path": "lib/integrations/nts.ts",
+      "accessCount": 12,
+      "lastAccessed": 1783789760757,
       "type": "file"
     },
     {
-      "path": "components/onboarding/coachmarks/CoachmarkTour.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1783649569865,
+      "path": "lib/integrations/__tests__/nts.test.ts",
+      "accessCount": 8,
+      "lastAccessed": 1783789999459,
       "type": "file"
     },
     {
-      "path": "components/inbox/bid-wizard/BidWizard.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1783649783000,
+      "path": "lib/server/actions/rfp/lookupBizNoAction.ts",
+      "accessCount": 7,
+      "lastAccessed": 1783789913191,
       "type": "file"
     },
     {
-      "path": "components/onboarding/coachmarks/useAnchorRect.ts",
+      "path": "components/rfp/BizLookupField.tsx",
+      "accessCount": 7,
+      "lastAccessed": 1783790047576,
+      "type": "file"
+    },
+    {
+      "path": "lib/server/actions/rfp/__tests__/lookup.test.ts",
+      "accessCount": 5,
+      "lastAccessed": 1783790168688,
+      "type": "file"
+    },
+    {
+      "path": "components/auth/__tests__/PgWorkspacePage.test.tsx",
       "accessCount": 4,
-      "lastAccessed": 1783649503204,
+      "lastAccessed": 1783788230718,
       "type": "file"
     },
     {
-      "path": "components/onboarding/coachmarks/CoachmarkOverlay.tsx",
+      "path": "components/auth/BuyerWorkspaceForm.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1783788295693,
+      "type": "file"
+    },
+    {
+      "path": "components/settings/WorkspaceBizNoForm.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1783781391624,
+      "type": "file"
+    },
+    {
+      "path": "components/settings/__tests__/WorkspaceBizNoForm.test.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1783788231214,
+      "type": "file"
+    },
+    {
+      "path": "components/auth/__tests__/BuyerWorkspaceForm.test.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1783788302516,
+      "type": "file"
+    },
+    {
+      "path": "components/rfp/__tests__/BizLookupField.test.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1783788347409,
+      "type": "file"
+    },
+    {
+      "path": "components/rfp/nts-lookup.ts",
       "accessCount": 2,
-      "lastAccessed": 1783649412010,
+      "lastAccessed": 1783781370843,
       "type": "file"
     },
     {
-      "path": "components/onboarding/tutorial/__tests__/useTutorialKeyboardLock.test.tsx",
+      "path": "app/(public)/signup/pg/workspace/PgWorkspaceStep.tsx",
       "accessCount": 2,
-      "lastAccessed": 1783649634082,
+      "lastAccessed": 1783781417744,
       "type": "file"
     },
     {
-      "path": "components/onboarding/tutorial/useTutorialKeyboardLock.ts",
+      "path": "lib/observability/scrubber.ts",
       "accessCount": 2,
-      "lastAccessed": 1783649661479,
+      "lastAccessed": 1783788418346,
       "type": "file"
     },
     {
-      "path": "lib/onboarding/__tests__/tutorial-fixtures.test.ts",
-      "accessCount": 2,
-      "lastAccessed": 1783649723071,
-      "type": "file"
-    },
-    {
-      "path": "components/inbox/bid-wizard/bid-wizard-validation.ts",
-      "accessCount": 2,
-      "lastAccessed": 1783649761673,
-      "type": "file"
-    },
-    {
-      "path": "TODOS.md",
-      "accessCount": 2,
-      "lastAccessed": 1783650454027,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/tutorial/tours.ts",
+      "path": "lib/http.ts",
       "accessCount": 1,
-      "lastAccessed": 1783648431837,
+      "lastAccessed": 1783770644941,
       "type": "file"
     },
     {
-      "path": "components/onboarding/coachmarks/types.ts",
+      "path": "lib/observability/capture.ts",
       "accessCount": 1,
-      "lastAccessed": 1783648433230,
+      "lastAccessed": 1783781381299,
       "type": "file"
     },
     {
-      "path": "components/onboarding/tutorial/PgTutorialFlow.tsx",
+      "path": "sentry.server.config.ts",
       "accessCount": 1,
-      "lastAccessed": 1783648439086,
+      "lastAccessed": 1783788199420,
       "type": "file"
     },
     {
-      "path": "components/onboarding/tutorial/BuyerTutorialFlow.tsx",
+      "path": "lib/integrations/nts.mock.ts",
       "accessCount": 1,
-      "lastAccessed": 1783648439684,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/coachmarks/__tests__/useAnchorRect.test.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783649456527,
-      "type": "file"
-    },
-    {
-      "path": "components/onboarding/coachmarks/__tests__/CoachmarkTour.test.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783649461135,
-      "type": "file"
-    },
-    {
-      "path": "components/inbox/bid-wizard/__tests__/BidWizard.tutorial.test.tsx",
-      "accessCount": 1,
-      "lastAccessed": 1783649740914,
-      "type": "file"
-    },
-    {
-      "path": "e2e/_helpers.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783649879307,
-      "type": "file"
-    },
-    {
-      "path": "e2e/tutorial-click-through.spec.ts",
-      "accessCount": 1,
-      "lastAccessed": 1783649979311,
-      "type": "file"
-    },
-    {
-      "path": "CHANGELOG.md",
-      "accessCount": 1,
-      "lastAccessed": 1783650376979,
+      "lastAccessed": 1783788360948,
       "type": "file"
     }
   ],

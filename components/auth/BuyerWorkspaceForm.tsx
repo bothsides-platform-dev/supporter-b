@@ -7,25 +7,7 @@ import {
   BizLookupField,
   type BizLookupResult,
 } from '@/components/rfp/BizLookupField';
-import { lookupBizNoAction } from '@/lib/server/actions/rfp';
-
-// Adapter: BizLookupField expects { valid, taxType?, status? }
-// lookupBizNoAction returns { ok, valid?, taxType?, status?, error? }
-const ntsLookup = async (bizNo: string) => {
-  const r = await lookupBizNoAction(bizNo);
-  if (!r.ok) {
-    const msg =
-      r.error === 'NTS_RATE_LIMIT'
-        ? '요청이 너무 많아요. 잠시 후 다시 시도해주세요.'
-        : '사업자번호 조회 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.';
-    return { valid: false as const, error: msg };
-  }
-  if (!r.valid) return { valid: false as const };
-  if (!r.taxType) {
-    return { valid: false as const, error: '지원되지 않는 사업자 유형이에요. 고객센터로 문의해 주세요.' };
-  }
-  return { valid: true as const, taxType: r.taxType, status: r.status! };
-};
+import { ntsLookup } from '@/components/rfp/nts-lookup';
 
 type BizProfilePayload = {
   bizNo: string;

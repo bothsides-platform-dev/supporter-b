@@ -1,0 +1,7 @@
+{
+  "tool_name": "Agent",
+  "tool_input_preview": "{\"description\":\"리뷰: testing 스페셜리스트\",\"prompt\":\"You are a specialist code reviewer (specialist: testing). Work in `/Users/yeonseong/project/bidit/.claude/worktrees/fix-biz-lookup-nts-errors` (git worktr...",
+  "error": "Agent terminated early due to an API error: You've hit your session limit · resets 1:40am (Asia/Seoul)",
+  "timestamp": "2026-07-11T14:51:48.108Z",
+  "retry_count": 1
+}
