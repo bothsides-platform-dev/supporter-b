@@ -176,4 +176,38 @@ describe('useAnchorRect', () => {
     });
     expect(result.current.rect?.top).toBe(600);
   });
+
+  it('타깃 버튼이 disabled면 disabled=true, 해제되면 폴링 tick에서 false로 갱신한다', async () => {
+    vi.useFakeTimers();
+    const btn = document.createElement('button');
+    btn.setAttribute('data-coachmark', 'dis-target');
+    btn.disabled = true;
+    btn.scrollIntoView = vi.fn();
+    document.body.appendChild(btn);
+
+    const { result } = renderHook(() => useAnchorRect('dis-target'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('found');
+    expect(result.current.disabled).toBe(true);
+
+    btn.disabled = false;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(result.current.disabled).toBe(false);
+  });
+
+  it('aria-disabled="true"도 disabled로 판정한다', async () => {
+    const el = document.createElement('div');
+    el.setAttribute('data-coachmark', 'aria-target');
+    el.setAttribute('aria-disabled', 'true');
+    el.scrollIntoView = vi.fn();
+    document.body.appendChild(el);
+
+    const { result } = renderHook(() => useAnchorRect('aria-target'));
+    await waitFor(() => expect(result.current.status).toBe('found'));
+    expect(result.current.disabled).toBe(true);
+  });
 });
