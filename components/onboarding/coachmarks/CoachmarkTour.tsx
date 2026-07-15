@@ -8,7 +8,14 @@ import type { CoachmarkStep } from './types';
 
 export type CoachmarkTourProps = {
   steps: CoachmarkStep[];
+  /** 투어 자연 종료(마지막 step 완료·notFound 타임아웃 소진) — 로컬 닫힘 처리용. */
   onFinish?: () => void;
+  /**
+   * 오버레이의 건너뛰기 버튼 클릭 전용(전역 키 바인딩 없음). 의미는 호출자가
+   * 정의한다 — 튜토리얼 플로우에서는 "튜토리얼 전체를 completed 처리하고 done
+   * 화면으로 점프"라는 비가역 동작이므로, 새 소비자는 이 prop을 "이 투어만
+   * 닫기"로 오독하지 말 것(그 용도는 onFinish 쪽 계약).
+   */
   onSkip?: () => void;
   /** 각 step의 target 탐색 타임아웃(ms). 기본값은 useAnchorRect 기본값을 따른다. */
   timeoutMs?: number;
