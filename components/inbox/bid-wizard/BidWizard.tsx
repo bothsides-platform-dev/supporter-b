@@ -241,16 +241,20 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
 
   const handleSubmit = useCallback(() => {
     // 발송 버튼은 막지 않는다. 미충족 단계가 있으면 hint 토스트 + 그 단계로 이동 + ✗ 표시.
-    const incomplete = getFirstIncompleteBidStep({ cycleNum, anyFeeFilled });
-    if (incomplete) {
-      toast(incomplete.hint, { type: 'error' });
-      markFailed(incomplete.num);
-      setCurrentStep(incomplete.num);
-      return;
+    // 샘플(튜토리얼) 모드는 가드를 건너뛴다 — 코치마크 투어가 제출 클릭에서 종료되므로
+    // 여기서 막히면 안내 없이 좌초된다(버이어 위저드의 onSampleSubmit 선행 라우팅과 대칭).
+    if (!onSampleSubmit) {
+      const incomplete = getFirstIncompleteBidStep({ cycleNum, anyFeeFilled });
+      if (incomplete) {
+        toast(incomplete.hint, { type: 'error' });
+        markFailed(incomplete.num);
+        setCurrentStep(incomplete.num);
+        return;
+      }
     }
     setSubmitError(null);
     setSubmitConfirmOpen(true);
-  }, [cycleNum, anyFeeFilled, markFailed]);
+  }, [onSampleSubmit, cycleNum, anyFeeFilled, markFailed]);
 
   // 4단계가 공유하는 컨텍스트 값 — prop-drilling 제거. 안정 참조(useCallback)
   // 액션 + 폼 상태를 묶어 useMemo 로 캐싱해, 무관한 단계의 리렌더를 줄인다.

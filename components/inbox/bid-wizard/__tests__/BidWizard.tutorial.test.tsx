@@ -145,4 +145,22 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     expect(uploadAttachmentMock).not.toHaveBeenCalled();
     expect(toastMock).toHaveBeenCalledWith('튜토리얼에서는 업로드되지 않아요');
   });
+
+  it('샘플 모드에서는 필수값이 비어도 제출 클릭이 확인 다이얼로그로 진행한다 (좌초 방지)', async () => {
+    const user = userEvent.setup();
+    // initialDraft 없이 렌더 — 수수료가 전혀 채워지지 않은 기본 폼(anyFeeFilled=false)으로
+    // 4단계(검토·발송)까지 이동한다. 실 모드라면 여기서 제출 가드가 막아야 정상이지만,
+    // 샘플(튜토리얼) 모드는 코치마크 투어가 제출 클릭에서 종료되므로 가드에 막히면 안내
+    // 없이 좌초된다 — 확인 다이얼로그로 진행해야 한다.
+    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" onSampleSubmit={() => {}} />);
+
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+
+    expect(await screen.findByText('견적을 보낼까요?')).toBeInTheDocument();
+    expect(toastMock).not.toHaveBeenCalledWith('수수료를 1칸 이상 입력해주세요', expect.anything());
+  });
 });
