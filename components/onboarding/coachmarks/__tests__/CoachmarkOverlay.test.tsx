@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { CoachmarkOverlay } from '../CoachmarkOverlay';
@@ -18,15 +18,6 @@ function makeRect(overrides: Partial<DOMRect> = {}): DOMRect {
     toJSON() {},
     ...overrides,
   } as DOMRect;
-}
-
-// jsdom은 AnimationEvent를 구현하지 않아 fireEvent.animationEnd의 eventInit
-// animationName이 이벤트 객체에 실리지 않는다 — 일반 Event에 프로퍼티를 직접 실어
-// 디스패치한다(컴포넌트의 네이티브 리스너가 animationName으로 필터링하므로 필수).
-function fireAnimationEndWithName(el: HTMLElement, animationName: string) {
-  const event = new Event('animationend', { bubbles: true });
-  Object.assign(event, { animationName });
-  fireEvent(el, event);
 }
 
 const step: CoachmarkStep = {
@@ -162,26 +153,6 @@ describe('CoachmarkOverlay', () => {
     vi.unstubAllGlobals();
   });
 
-  it('실드는 배경색 없는 투명 클릭 실드다 (dim 스크림 제거)', () => {
-    const { container } = render(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={step}
-        stepIndex={0}
-        stepCount={3}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-    const shields = container.querySelectorAll<HTMLElement>('[data-slot="coachmark-shield"]');
-    expect(shields.length).toBe(4);
-    shields.forEach((shield) => {
-      expect(shield.className ?? '').not.toContain('bg-black/40');
-      expect(shield.className ?? '').not.toContain('dark:bg-white/10');
-    });
-  });
-
   it('일반 모션에서는 링에 소프트 펄스 클래스가 붙는다', () => {
     const matchMediaMock = vi.fn().mockReturnValue({ matches: false });
     vi.stubGlobal('matchMedia', matchMediaMock);
@@ -218,211 +189,6 @@ describe('CoachmarkOverlay', () => {
     const ring = container.querySelector('[data-slot="coachmark-ring"]') as HTMLElement;
     expect(ring.className ?? '').not.toContain('coachmark-pulse');
     vi.unstubAllGlobals();
-  });
-
-  it('info 스텝에서 말풍선 밖(root) 클릭 시 말풍선 내부 래퍼에 유도 플래시(coachmark-nudge)가 등장한다', async () => {
-    const user = userEvent.setup();
-    const { container } = render(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={step}
-        stepIndex={0}
-        stepCount={3}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-    const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
-    await user.click(root);
-    // nudge는 dialog 자체가 아니라 내부 래퍼(coachmark-bubble-flash)에 붙는다 —
-    // dialog(role=dialog)는 리마운트되지 않아야 하므로 nudge 클래스를 직접 갖지 않는다.
-    const flash = container.querySelector('[data-slot="coachmark-bubble-flash"]') as HTMLElement;
-    expect(flash.className).toContain('coachmark-nudge');
-  });
-
-  it('밖 클릭으로 유도 플래시가 붙어도 dialog(role=dialog) DOM 노드는 리마운트되지 않는다 (포커스 안전)', async () => {
-    const user = userEvent.setup();
-    const { container } = render(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={step}
-        stepIndex={0}
-        stepCount={3}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-    const dialogBefore = screen.getByRole('dialog');
-    const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
-    await user.click(root);
-    const dialogAfter = screen.getByRole('dialog');
-    expect(dialogAfter).toBe(dialogBefore);
-    expect(dialogAfter.className).not.toContain('coachmark-nudge');
-  });
-
-  it('유도 플래시 애니메이션 종료(animationend) 후 클래스가 제거되고, 다시 밖 클릭하면 재부착되어 재생된다 (리마운트 없는 replay)', async () => {
-    const user = userEvent.setup();
-    const { container } = render(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={step}
-        stepIndex={0}
-        stepCount={3}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-    const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
-    await user.click(root);
-    const flash = container.querySelector('[data-slot="coachmark-bubble-flash"]') as HTMLElement;
-    expect(flash.className).toContain('coachmark-nudge');
-
-    fireAnimationEndWithName(flash, 'coachmark-nudge');
-    expect(flash.className).not.toContain('coachmark-nudge');
-
-    await user.click(root);
-    expect(flash.className).toContain('coachmark-nudge');
-  });
-
-  it('다른 애니메이션의 animationend(자손 버블링 포함)는 유도 플래시를 리셋하지 않는다', async () => {
-    const user = userEvent.setup();
-    const { container } = render(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={step}
-        stepIndex={0}
-        stepCount={3}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-    const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
-    await user.click(root);
-    const flash = container.querySelector('[data-slot="coachmark-bubble-flash"]') as HTMLElement;
-    expect(flash.className).toContain('coachmark-nudge');
-
-    // 래퍼 자손(예: 버튼)의 무관한 애니메이션 종료가 버블링돼도 넛지는 유지되어야 한다.
-    fireAnimationEndWithName(flash, 'enter');
-    expect(flash.className).toContain('coachmark-nudge');
-  });
-
-  it('info 스텝에서 밖 클릭은 링에는 유도 플래시를 붙이지 않는다 (말풍선에만)', async () => {
-    const user = userEvent.setup();
-    const { container } = render(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={step}
-        stepIndex={0}
-        stepCount={3}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-    const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
-    await user.click(root);
-    const ring = container.querySelector('[data-slot="coachmark-ring"]') as HTMLElement;
-    expect(ring.className ?? '').not.toContain('coachmark-nudge');
-  });
-
-  it('step 전환(target도 바뀜) 시 이전 step의 유도 플래시가 새 step으로 이어지지 않는다', async () => {
-    const user = userEvent.setup();
-    const stepA: CoachmarkStep = { ...step, target: 'a', title: 'A 제목' };
-    const stepB: CoachmarkStep = { ...step, target: 'b', title: 'B 제목' };
-    const { container, rerender } = render(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={stepA}
-        stepIndex={0}
-        stepCount={2}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-    const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
-    await user.click(root);
-    expect(
-      (container.querySelector('[data-slot="coachmark-bubble-flash"]') as HTMLElement).className,
-    ).toContain('coachmark-nudge');
-
-    rerender(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={stepB}
-        stepIndex={1}
-        stepCount={2}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-
-    const dialogB = screen.getByRole('dialog');
-    expect(dialogB).toHaveAttribute('aria-label', 'B 제목');
-    const flashB = container.querySelector('[data-slot="coachmark-bubble-flash"]') as HTMLElement;
-    expect(flashB.className).not.toContain('coachmark-nudge');
-  });
-
-  it('같은 target을 쓰는 연속 step이라도 stepIndex가 바뀌면 이전 step의 유도 플래시가 새 step으로 이어지지 않는다', async () => {
-    const user = userEvent.setup();
-    // target은 동일하고 stepIndex만 바뀌는 케이스 — target 비교만으로는 새지만
-    // stepIndex 비교로는 리셋되어야 한다(버그4 재발 방지 회귀 테스트).
-    const stepSame: CoachmarkStep = { ...step, target: 'same', title: '같은 타깃' };
-    const { container, rerender } = render(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={stepSame}
-        stepIndex={0}
-        stepCount={2}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-    const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
-    await user.click(root);
-    expect(
-      (container.querySelector('[data-slot="coachmark-bubble-flash"]') as HTMLElement).className,
-    ).toContain('coachmark-nudge');
-
-    rerender(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={stepSame}
-        stepIndex={1}
-        stepCount={2}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-
-    const flashAfter = container.querySelector('[data-slot="coachmark-bubble-flash"]') as HTMLElement;
-    expect(flashAfter.className).not.toContain('coachmark-nudge');
-  });
-
-  it('info 스텝에서 말풍선 내부 클릭은 유도 플래시를 발동시키지 않는다', async () => {
-    const user = userEvent.setup();
-    const { container } = render(
-      <CoachmarkOverlay
-        rect={makeRect()}
-        step={step}
-        stepIndex={0}
-        stepCount={3}
-        onNext={() => {}}
-        onSkip={() => {}}
-        isLast={false}
-      />,
-    );
-    const dialog = screen.getByRole('dialog');
-    await user.click(dialog);
-    const flash = container.querySelector('[data-slot="coachmark-bubble-flash"]') as HTMLElement;
-    expect(flash.className).not.toContain('coachmark-nudge');
   });
 
   it('건너뛰기 버튼 클릭 시 onSkip을 호출한다', async () => {
@@ -480,107 +246,6 @@ describe('CoachmarkOverlay', () => {
       expect(root.className).toContain('pointer-events-none');
     });
 
-    it('구멍 주위 4개 클릭 실드를 렌더하고 각각 pointer-events:auto로 밖 클릭을 흡수한다', () => {
-      const { container } = render(
-        <CoachmarkOverlay
-          rect={makeRect()}
-          step={actionStep}
-          stepIndex={0}
-          stepCount={3}
-          onNext={() => {}}
-          onSkip={() => {}}
-          isLast={false}
-        />,
-      );
-      const shields = container.querySelectorAll('[data-slot="coachmark-shield"]');
-      expect(shields).toHaveLength(4);
-      shields.forEach((shield) => {
-        expect((shield as HTMLElement).style.pointerEvents).toBe('auto');
-      });
-    });
-
-    it('실드(밖) 클릭 시 링에 유도 플래시(coachmark-nudge) 클래스가 등장한다', async () => {
-      const user = userEvent.setup();
-      const { container } = render(
-        <CoachmarkOverlay
-          rect={makeRect()}
-          step={actionStep}
-          stepIndex={0}
-          stepCount={3}
-          onNext={() => {}}
-          onSkip={() => {}}
-          isLast={false}
-        />,
-      );
-      const shields = container.querySelectorAll('[data-slot="coachmark-shield"]');
-      await user.click(shields[0]);
-      const ring = container.querySelector('[data-slot="coachmark-ring"]') as HTMLElement;
-      expect(ring.className).toContain('coachmark-nudge');
-    });
-
-    it('실드(밖) 클릭은 말풍선에는 유도 플래시를 붙이지 않는다 (링에만)', async () => {
-      const user = userEvent.setup();
-      const { container } = render(
-        <CoachmarkOverlay
-          rect={makeRect()}
-          step={actionStep}
-          stepIndex={0}
-          stepCount={3}
-          onNext={() => {}}
-          onSkip={() => {}}
-          isLast={false}
-        />,
-      );
-      const shields = container.querySelectorAll('[data-slot="coachmark-shield"]');
-      await user.click(shields[0]);
-      const flash = container.querySelector('[data-slot="coachmark-bubble-flash"]') as HTMLElement;
-      expect(flash.className).not.toContain('coachmark-nudge');
-    });
-
-    it('같은 target에서 밖 클릭을 반복하면 링이 리마운트되어 유도 플래시가 다시 재생된다 (key에 count 반영)', async () => {
-      const user = userEvent.setup();
-      const { container } = render(
-        <CoachmarkOverlay
-          rect={makeRect()}
-          step={actionStep}
-          stepIndex={0}
-          stepCount={3}
-          onNext={() => {}}
-          onSkip={() => {}}
-          isLast={false}
-        />,
-      );
-      const shields = container.querySelectorAll('[data-slot="coachmark-shield"]');
-      await user.click(shields[0]);
-      const ringAfterFirst = container.querySelector('[data-slot="coachmark-ring"]');
-      await user.click(shields[0]);
-      const ringAfterSecond = container.querySelector('[data-slot="coachmark-ring"]');
-      expect(ringAfterSecond).not.toBe(ringAfterFirst);
-      expect((ringAfterSecond as HTMLElement).className).toContain('coachmark-nudge');
-    });
-
-    it('prefers-reduced-motion이어도 밖 클릭 시 유도 플래시 클래스는 여전히 붙는다 (정지는 CSS 미디어 쿼리 담당, JS는 게이트하지 않음)', async () => {
-      const matchMediaMock = vi.fn().mockReturnValue({ matches: true });
-      vi.stubGlobal('matchMedia', matchMediaMock);
-      const user = userEvent.setup();
-      const { container } = render(
-        <CoachmarkOverlay
-          rect={makeRect()}
-          step={actionStep}
-          stepIndex={0}
-          stepCount={3}
-          onNext={() => {}}
-          onSkip={() => {}}
-          isLast={false}
-        />,
-      );
-      const shields = container.querySelectorAll('[data-slot="coachmark-shield"]');
-      await user.click(shields[0]);
-      const ring = container.querySelector('[data-slot="coachmark-ring"]') as HTMLElement;
-      expect(ring.className).toContain('coachmark-nudge');
-      vi.unstubAllGlobals();
-    });
-
     it('다음/확인 버튼이 없고 건너뛰기만 있다', () => {
       render(
         <CoachmarkOverlay
@@ -615,24 +280,6 @@ describe('CoachmarkOverlay', () => {
       expect(ring.style.pointerEvents).toBe('none');
     });
 
-    it('info step(기본)은 전 화면 클릭 흡수를 유지한다 — root가 클릭 가능(비 pointer-events-none)이고 다음 버튼이 있다', () => {
-      const { container } = render(
-        <CoachmarkOverlay
-          rect={makeRect()}
-          step={step}
-          stepIndex={0}
-          stepCount={3}
-          onNext={() => {}}
-          onSkip={() => {}}
-          isLast={false}
-        />,
-      );
-      const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
-      expect(root.className).not.toContain('pointer-events-none');
-      // 클릭 실드 구조는 action과 동일한 4-rect로 통일 (9999px box-shadow 제거)
-      expect(container.querySelectorAll('[data-slot="coachmark-shield"]')).toHaveLength(4);
-      expect(screen.getByRole('button', { name: '다음' })).toBeInTheDocument();
-    });
   });
 
   it('타깃이 거의 풀폭이라 좌우 플립이 모두 넘칠 때도 말풍선 left는 뷰포트 안으로 클램프된다', () => {
@@ -652,5 +299,76 @@ describe('CoachmarkOverlay', () => {
     const left = parseFloat(String((bubble as HTMLElement).style.left));
     expect(left).toBeGreaterThanOrEqual(8);
     expect(left).toBeLessThanOrEqual(1024 - 280 - 8);
+  });
+});
+
+describe('오픈 샌드박스 (차단 없음)', () => {
+  it('클릭 실드를 렌더하지 않는다 (action/info 공통)', () => {
+    for (const kind of ['action', 'info'] as const) {
+      const { unmount } = render(
+        <CoachmarkOverlay
+          rect={{ top: 100, left: 100, width: 120, height: 32, right: 220, bottom: 132 } as DOMRect}
+          step={{ target: 't', kind, title: '제목', body: '본문', placement: 'top' }}
+          stepIndex={0}
+          stepCount={2}
+          onNext={() => {}}
+          onSkip={() => {}}
+          isLast={false}
+        />,
+      );
+      expect(document.querySelectorAll('[data-slot="coachmark-shield"]')).toHaveLength(0);
+      unmount();
+    }
+  });
+
+  it('info 스텝 root도 pointer-events-none — 밖 클릭을 흡수하지 않는다', () => {
+    render(
+      <CoachmarkOverlay
+        rect={{ top: 100, left: 100, width: 120, height: 32, right: 220, bottom: 132 } as DOMRect}
+        step={{ target: 't', kind: 'info', title: '제목', body: '본문', placement: 'top' }}
+        stepIndex={0}
+        stepCount={2}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+    const root = document.querySelector('[data-slot="coachmark-overlay"]')!;
+    expect(root.className).toContain('pointer-events-none');
+  });
+
+  it('말풍선은 두 kind 모두 pointer-events:auto — 버튼이 눌린다', () => {
+    for (const kind of ['action', 'info'] as const) {
+      const { unmount } = render(
+        <CoachmarkOverlay
+          rect={{ top: 100, left: 100, width: 120, height: 32, right: 220, bottom: 132 } as DOMRect}
+          step={{ target: 't', kind, title: '제목', body: '본문', placement: 'top' }}
+          stepIndex={0}
+          stepCount={2}
+          onNext={() => {}}
+          onSkip={() => {}}
+          isLast={false}
+        />,
+      );
+      const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
+      expect(dialog.style.pointerEvents).toBe('auto');
+      unmount();
+    }
+  });
+
+  it('coachmark-nudge 클래스는 어디에도 등장하지 않는다', () => {
+    render(
+      <CoachmarkOverlay
+        rect={{ top: 100, left: 100, width: 120, height: 32, right: 220, bottom: 132 } as DOMRect}
+        step={{ target: 't', kind: 'action', title: '제목', body: '본문', placement: 'top' }}
+        stepIndex={0}
+        stepCount={2}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+    expect(document.querySelector('.coachmark-nudge')).toBeNull();
+    expect(document.querySelector('[data-slot="coachmark-bubble-flash"]')).toBeNull();
   });
 });
