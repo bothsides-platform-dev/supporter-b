@@ -66,15 +66,9 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep?.target, currentStep?.kind, status, isLast]);
 
-  useEffect(() => {
-    if (!hasSteps) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onSkip?.();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasSteps]);
+  // Esc 전역 리스너는 두지 않는다 — onSkip이 튜토리얼 완료 처리(비가역)와 묶이면서
+  // 코치마크 미표시 구간·⌘K 닫기 등 오발 Esc 한 번이 영구 완료가 되는 사고를 막는다.
+  // 스킵은 오버레이의 건너뛰기 버튼 클릭으로만 발동한다.
 
   if (!hasSteps || !currentStep) return null;
   if (status !== 'found' || !rect) return null;

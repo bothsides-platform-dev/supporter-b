@@ -58,6 +58,7 @@ export function PgTutorialFlow() {
 
   // 제출(정상 완주)과 코치마크 건너뛰기 모두 같은 종착지 — completed 스탬프 + done 화면.
   const handleComplete = () => {
+    if (phase === 'done') return;
     void updateOnboardingAction({ key: 'pgTutorial', event: 'completed' });
     setPhase('done');
   };
