@@ -34,7 +34,7 @@ describe('useTutorialKeyboardLock', () => {
     expect(input.value).toBe('프리필');
   });
 
-  it('Escape 키는 window 리스너까지 전파된다 (코치마크 스킵용)', async () => {
+  it('Escape 키는 window 리스너까지 전파된다 (다이얼로그·팝오버 닫기용 — 코치마크는 Esc 무반응)', async () => {
     const user = userEvent.setup();
     const onEscape = vi.fn();
     const handler = (event: KeyboardEvent) => {

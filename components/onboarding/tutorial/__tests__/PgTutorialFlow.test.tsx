@@ -16,12 +16,21 @@ vi.mock('@/lib/hooks/useCelebrationConfetti', () => ({
 }));
 
 vi.mock('@/components/onboarding/coachmarks', () => ({
-  CoachmarkTour: ({ steps, onFinish }: { steps: { target: string }[]; onFinish?: () => void }) => (
+  CoachmarkTour: ({
+    steps,
+    onFinish,
+    onSkip,
+  }: {
+    steps: { target: string }[];
+    onFinish?: () => void;
+    onSkip?: () => void;
+  }) => (
     <div
       data-testid={`tour-${steps[0]?.target}`}
       data-targets={steps.map((s) => s.target).join(',')}
     >
       <button type="button" onClick={onFinish}>{`tour-finish-${steps[0]?.target}`}</button>
+      <button type="button" onClick={onSkip}>{`tour-skip-${steps[0]?.target}`}</button>
     </div>
   ),
 }));
@@ -153,6 +162,70 @@ describe('PgTutorialFlow (pg 튜토리얼 여정)', () => {
       event: 'dismissed',
     });
     expect(mockPush).toHaveBeenCalledWith('/home');
+  });
+
+  it('invite phase에서 코치마크 건너뛰기 시 completed 스탬프 + done phase(4/4)로 점프한다', async () => {
+    const user = userEvent.setup();
+    render(<PgTutorialFlow />);
+
+    await user.click(screen.getByRole('button', { name: 'tour-skip-tutorial-invite-cta' }));
+
+    expect(updateOnboardingActionMock).toHaveBeenCalledWith({
+      key: 'pgTutorial',
+      event: 'completed',
+    });
+    expect(screen.getByText('튜토리얼을 완료했어요')).toBeInTheDocument();
+    expect(screen.getByText(/4\s*\/\s*4/)).toBeInTheDocument();
+  });
+
+  it('brief phase에서 코치마크 건너뛰기 시 done phase로 점프한다', async () => {
+    const user = userEvent.setup();
+    render(<PgTutorialFlow />);
+    await user.click(screen.getByRole('button', { name: 'invite-proceed' }));
+
+    await user.click(screen.getByRole('button', { name: 'tour-skip-tutorial-brief-panel' }));
+
+    expect(updateOnboardingActionMock).toHaveBeenCalledWith({
+      key: 'pgTutorial',
+      event: 'completed',
+    });
+    expect(screen.getByText(/4\s*\/\s*4/)).toBeInTheDocument();
+  });
+
+  it('write phase(마지막 단계)에서 코치마크 건너뛰기 시에도 done phase로 점프한다', async () => {
+    const user = userEvent.setup();
+    render(<PgTutorialFlow />);
+    await user.click(screen.getByRole('button', { name: 'invite-proceed' }));
+    await user.click(screen.getByRole('button', { name: '견적 작성하기' }));
+
+    await user.click(screen.getByRole('button', { name: 'tour-skip-tutorial-bid-form' }));
+
+    expect(updateOnboardingActionMock).toHaveBeenCalledWith({
+      key: 'pgTutorial',
+      event: 'completed',
+    });
+    expect(screen.getByText(/4\s*\/\s*4/)).toBeInTheDocument();
+  });
+
+  it('코치마크 자연 종료(onFinish)는 스탬프 없이 현재 phase에 머문다 (skip과 분기)', async () => {
+    const user = userEvent.setup();
+    render(<PgTutorialFlow />);
+
+    await user.click(screen.getByRole('button', { name: 'tour-finish-tutorial-invite-cta' }));
+
+    expect(updateOnboardingActionMock).not.toHaveBeenCalled();
+    expect(screen.getByText('INVITE')).toBeInTheDocument();
+    expect(screen.getByText(/1\s*\/\s*4/)).toBeInTheDocument();
+  });
+
+  it('건너뛰기로 done 진입 시에도 컨페티 캔버스가 마운트된다', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<PgTutorialFlow />);
+    expect(container.querySelector('canvas')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'tour-skip-tutorial-invite-cta' }));
+
+    expect(container.querySelector('canvas')).not.toBeNull();
   });
 
   it('brief 진입 시 요청 조건 투어를 표시한다', async () => {

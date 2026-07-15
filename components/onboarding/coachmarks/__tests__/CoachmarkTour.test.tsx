@@ -87,7 +87,7 @@ describe('CoachmarkTour', () => {
     expect(onSkip).toHaveBeenCalledTimes(1);
   });
 
-  it('Esc 키 입력 시 onSkip을 호출한다', async () => {
+  it('Esc 키는 아무 동작도 하지 않는다 (스킵은 버튼 클릭만 — 오발 방지)', async () => {
     const user = userEvent.setup();
     appendTarget('a');
     const onSkip = vi.fn();
@@ -95,7 +95,8 @@ describe('CoachmarkTour', () => {
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     await user.keyboard('{Escape}');
-    expect(onSkip).toHaveBeenCalledTimes(1);
+    expect(onSkip).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('현재 step의 target을 타임아웃 내 찾지 못하면 자동으로 다음 step으로 넘어간다', async () => {
@@ -201,7 +202,7 @@ describe('CoachmarkTour', () => {
       );
     });
 
-    it('action step 중에도 Esc는 onSkip을 호출한다', async () => {
+    it('action step 중에도 Esc는 아무 동작도 하지 않는다', async () => {
       const user = userEvent.setup();
       appendTarget('a');
       const onSkip = vi.fn();
@@ -209,7 +210,8 @@ describe('CoachmarkTour', () => {
 
       await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
       await user.keyboard('{Escape}');
-      expect(onSkip).toHaveBeenCalledTimes(1);
+      expect(onSkip).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
 
     it('info → action 혼합 시퀀스가 동작한다', async () => {
