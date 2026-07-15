@@ -75,7 +75,7 @@ export const buyerCompareTour: CoachmarkStep[] = [
 ];
 
 // pg 튜토리얼(PgTutorialFlow) 코치마크 투어 데이터. target은 InviteScene/RfpBriefPanel/
-// BidWizard에 심어둔 data-coachmark 속성과 매칭된다. buyer와 동일하게 클릭-온리.
+// BidWizard에 심어둔 data-coachmark 속성과 매칭된다. buyer와 동일하게 오픈 샌드박스.
 export const pgInviteTour: CoachmarkStep[] = [
   {
     target: 'tutorial-invite-cta',

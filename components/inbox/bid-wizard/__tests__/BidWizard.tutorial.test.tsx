@@ -12,6 +12,13 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 vi.mock('@/lib/http', () => ({ http: { post: vi.fn() } }));
 vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('use http client')));
 
+const { uploadAttachmentMock } = vi.hoisted(() => ({
+  uploadAttachmentMock: vi.fn(),
+}));
+vi.mock('@/lib/attachments/upload-client', () => ({
+  uploadAttachment: (...a: unknown[]) => uploadAttachmentMock(...a),
+}));
+
 const pushMock = vi.fn();
 const refreshMock = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
@@ -47,6 +54,7 @@ beforeEach(() => {
   localStorage.clear();
   toastMock.mockClear();
   saveQuoteTemplateActionMock.mockClear();
+  uploadAttachmentMock.mockReset();
 });
 afterEach(cleanup);
 
@@ -121,5 +129,20 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
 
     expect(saveQuoteTemplateActionMock).not.toHaveBeenCalled();
     expect(toastMock).toHaveBeenCalledWith('튜토리얼에서는 저장되지 않아요');
+  });
+
+  it('onSampleSubmit 모드에서 견적서 PDF 선택은 실 업로드(uploadAttachment)를 부르지 않고 안내 토스트만 띄운다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" onSampleSubmit={() => {}} />);
+
+    // 3단계(견적서)로 이동 — 푸터 "다음" 버튼을 순서대로.
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, new File(['x'], 'proposal.pdf', { type: 'application/pdf' }));
+
+    expect(uploadAttachmentMock).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledWith('튜토리얼에서는 업로드되지 않아요');
   });
 });

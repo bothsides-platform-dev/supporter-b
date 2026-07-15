@@ -155,6 +155,11 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
         setProposal({ name: file.name, status: 'error', error: 'PDF만 업로드 가능합니다.' });
         return;
       }
+      if (onSampleSubmit) {
+        // 튜토리얼 샌드박스 — 실 업로드(presign→R2)를 만들지 않는다.
+        toast('튜토리얼에서는 업로드되지 않아요');
+        return;
+      }
       setProposal({ name: file.name, status: 'uploading' });
       try {
         const body = await uploadAttachment(file, { ownerKind: 'bid_proposal', ownerId: rfpId });
@@ -168,7 +173,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
         setProposal({ name: file.name, status: 'error', error });
       }
     },
-    [rfpId],
+    [rfpId, onSampleSubmit],
   );
   const clearProposal = useCallback(() => setProposal(null), []);
   // 처음부터 다시: 초안 삭제 + baseline 으로 폼 리셋 + 견적서 선택 해제 + 1단계로.

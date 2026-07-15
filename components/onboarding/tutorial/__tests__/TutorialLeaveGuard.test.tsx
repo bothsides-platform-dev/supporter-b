@@ -21,8 +21,12 @@ import { TutorialLeaveGuard } from '../TutorialLeaveGuard';
 
 // jsdom은 실제 내비게이션이 없으므로 pass-through 케이스의 콘솔 에러를 막기 위해
 // 링크에 버블 단계 preventDefault를 단다(가드는 capture 단계라 영향 없음).
-function renderWithLink(href: string, attrs: Record<string, string> = {}) {
-  render(<TutorialLeaveGuard variant="buyer" />);
+function renderWithLink(
+  href: string,
+  attrs: Record<string, string> = {},
+  variant: 'buyer' | 'pg' = 'buyer',
+) {
+  render(<TutorialLeaveGuard variant={variant} />);
   const a = document.createElement('a');
   a.href = href;
   a.textContent = 'link';
@@ -54,6 +58,14 @@ describe('TutorialLeaveGuard', () => {
     await userEvent.click(a);
     await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
     expect(updateOnboardingMock).toHaveBeenCalledWith({ key: 'buyerTutorial', event: 'dismissed' });
+    expect(pushMock).toHaveBeenCalledWith('/home');
+  });
+
+  it('pg variant: 나중에 하기 → pgTutorial 키로 dismissed 스탬프 후 목적지로 이동한다', async () => {
+    const a = renderWithLink('/home', {}, 'pg');
+    await userEvent.click(a);
+    await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
+    expect(updateOnboardingMock).toHaveBeenCalledWith({ key: 'pgTutorial', event: 'dismissed' });
     expect(pushMock).toHaveBeenCalledWith('/home');
   });
 
