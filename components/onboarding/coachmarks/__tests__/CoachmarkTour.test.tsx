@@ -275,4 +275,22 @@ describe('CoachmarkTour', () => {
     expect(onFinish).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
+
+  it('action 타깃이 disabled면 말풍선에 막힘 힌트가 나타난다', async () => {
+    const btn = document.createElement('button');
+    btn.setAttribute('data-coachmark', 'stuck');
+    btn.disabled = true;
+    // jsdom은 scrollIntoView를 구현하지 않는다 — 파일 기존 관례(stubRect)를 재사용.
+    stubRect(btn);
+    document.body.appendChild(btn);
+
+    render(
+      <CoachmarkTour
+        steps={[{ target: 'stuck', kind: 'action', title: 'T', body: 'B', placement: 'top' }]}
+      />,
+    );
+    expect(
+      await screen.findByText('입력이 비었거나 형식이 달라요. 고치면 계속 진행할 수 있어요.'),
+    ).toBeInTheDocument();
+  });
 });

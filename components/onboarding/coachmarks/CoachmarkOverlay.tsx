@@ -21,6 +21,8 @@ export type CoachmarkOverlayProps = {
   onNext: () => void;
   onSkip: () => void;
   isLast: boolean;
+  /** action 타깃이 disabled(:disabled/aria-disabled)면 true — 막힘 감지 힌트를 노출한다. */
+  targetDisabled?: boolean;
 };
 
 export function CoachmarkOverlay({
@@ -31,6 +33,7 @@ export function CoachmarkOverlay({
   onNext,
   onSkip,
   isLast,
+  targetDisabled,
 }: CoachmarkOverlayProps) {
   const [reducedMotion, setReducedMotion] = useState(false);
 
@@ -71,6 +74,11 @@ export function CoachmarkOverlay({
     >
       <p className="text-sm font-semibold text-foreground">{step.title}</p>
       <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
+      {isAction && targetDisabled && (
+        <p className="mt-2 text-[12px] text-[var(--md-sys-color-error)]">
+          입력이 비었거나 형식이 달라요. 고치면 계속 진행할 수 있어요.
+        </p>
+      )}
       <div className="mt-3 flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
           {stepIndex + 1}/{stepCount}

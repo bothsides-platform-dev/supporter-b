@@ -372,3 +372,47 @@ describe('오픈 샌드박스 (차단 없음)', () => {
     expect(document.querySelector('[data-slot="coachmark-bubble-flash"]')).toBeNull();
   });
 });
+
+describe('막힘 감지 힌트', () => {
+  const base = {
+    rect: { top: 100, left: 100, width: 120, height: 32, right: 220, bottom: 132 } as DOMRect,
+    stepIndex: 0,
+    stepCount: 2,
+    onNext: () => {},
+    onSkip: () => {},
+    isLast: false,
+  };
+  const HINT = '입력이 비었거나 형식이 달라요. 고치면 계속 진행할 수 있어요.';
+
+  it('action 스텝 + targetDisabled면 힌트를 렌더한다', () => {
+    render(
+      <CoachmarkOverlay
+        {...base}
+        step={{ target: 't', kind: 'action', title: '제목', body: '본문', placement: 'top' }}
+        targetDisabled
+      />,
+    );
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+  });
+
+  it('targetDisabled가 아니면 힌트가 없다', () => {
+    render(
+      <CoachmarkOverlay
+        {...base}
+        step={{ target: 't', kind: 'action', title: '제목', body: '본문', placement: 'top' }}
+      />,
+    );
+    expect(screen.queryByText(HINT)).not.toBeInTheDocument();
+  });
+
+  it('info 스텝은 targetDisabled여도 힌트가 없다 (진행이 말풍선 버튼이므로)', () => {
+    render(
+      <CoachmarkOverlay
+        {...base}
+        step={{ target: 't', kind: 'info', title: '제목', body: '본문', placement: 'top' }}
+        targetDisabled
+      />,
+    );
+    expect(screen.queryByText(HINT)).not.toBeInTheDocument();
+  });
+});

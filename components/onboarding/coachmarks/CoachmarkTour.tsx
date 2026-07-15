@@ -32,7 +32,7 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
   const currentStep = hasSteps ? steps[stepIndex] : null;
   const isLast = stepIndex === steps.length - 1;
 
-  const { rect, status } = useAnchorRect(currentStep?.target ?? null, { timeoutMs });
+  const { rect, status, disabled } = useAnchorRect(currentStep?.target ?? null, { timeoutMs });
 
   useEffect(() => {
     if (status !== 'notFound') return;
@@ -97,6 +97,7 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
       onNext={handleNext}
       onSkip={() => onSkip?.()}
       isLast={isLast}
+      targetDisabled={disabled}
     />
   );
 }
