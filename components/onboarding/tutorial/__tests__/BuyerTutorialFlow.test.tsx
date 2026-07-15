@@ -195,6 +195,64 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
     expect(screen.getByText(/4\s*\/\s*4/)).toBeInTheDocument();
   });
 
+  it('compare phase(마지막 단계)에서 코치마크 건너뛰기 시에도 done phase로 점프한다', async () => {
+    const user = userEvent.setup();
+    render(<BuyerTutorialFlow />);
+    await user.click(screen.getByRole('button', { name: 'wizard-submit' }));
+    await user.click(screen.getByRole('button', { name: 'arrival-proceed' }));
+
+    await user.click(screen.getByRole('button', { name: 'tour-skip-tutorial-compare-header' }));
+
+    expect(updateOnboardingActionMock).toHaveBeenCalledWith({
+      key: 'buyerTutorial',
+      event: 'completed',
+    });
+    expect(screen.getByText(/4\s*\/\s*4/)).toBeInTheDocument();
+  });
+
+  it('코치마크 자연 종료(onFinish)는 스탬프 없이 현재 phase에 머문다 (skip과 분기)', async () => {
+    const user = userEvent.setup();
+    render(<BuyerTutorialFlow />);
+
+    await user.click(screen.getByRole('button', { name: 'tour-finish-tutorial-wizard-content' }));
+
+    expect(updateOnboardingActionMock).not.toHaveBeenCalled();
+    expect(screen.getByText('WIZARD')).toBeInTheDocument();
+    expect(screen.getByText(/1\s*\/\s*4/)).toBeInTheDocument();
+  });
+
+  it('건너뛰기로 done 진입 시에도 컨페티 캔버스가 마운트된다', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<BuyerTutorialFlow />);
+    expect(container.querySelector('canvas')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'tour-skip-tutorial-wizard-content' }));
+
+    expect(container.querySelector('canvas')).not.toBeNull();
+  });
+
+  it('건너뛰기로 done 진입 후 "실제 견적 요청 보내기" 클릭 시 draft를 복원하고 /rfp-create로 이동한다', async () => {
+    const user = userEvent.setup();
+    render(<BuyerTutorialFlow />);
+    await user.click(screen.getByRole('button', { name: 'tour-skip-tutorial-wizard-content' }));
+
+    await user.click(screen.getByRole('button', { name: '실제 견적 요청 보내기' }));
+
+    expect(restoreMock).toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/rfp-create');
+  });
+
+  it('건너뛰기로 done 진입 후 "홈으로" 클릭 시 draft를 복원하고 /home으로 이동한다', async () => {
+    const user = userEvent.setup();
+    render(<BuyerTutorialFlow />);
+    await user.click(screen.getByRole('button', { name: 'tour-skip-tutorial-wizard-content' }));
+
+    await user.click(screen.getByRole('button', { name: '홈으로' }));
+
+    expect(restoreMock).toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/home');
+  });
+
   it('create 투어는 단일 연속 투어로 제출 버튼(tutorial-wizard-submit)에서 끝난다', () => {
     render(<BuyerTutorialFlow />);
     const tour = screen.getByTestId('tour-tutorial-wizard-content');
