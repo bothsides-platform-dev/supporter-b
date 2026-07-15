@@ -19,8 +19,11 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh:
 vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: vi.fn(async () => ({ ok: true as const, bidId: 'b1' })),
 }));
+const { saveQuoteTemplateActionMock } = vi.hoisted(() => ({
+  saveQuoteTemplateActionMock: vi.fn(async () => ({ ok: true as const, templateId: 't1' })),
+}));
 vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
-  saveQuoteTemplateAction: vi.fn(async () => ({ ok: true as const, templateId: 't1' })),
+  saveQuoteTemplateAction: saveQuoteTemplateActionMock,
 }));
 const toastMock = vi.fn();
 vi.mock('@/lib/toast', () => ({ toast: (...args: unknown[]) => toastMock(...args) }));
@@ -43,6 +46,7 @@ const rfp = {
 beforeEach(() => {
   localStorage.clear();
   toastMock.mockClear();
+  saveQuoteTemplateActionMock.mockClear();
 });
 afterEach(cleanup);
 
@@ -99,5 +103,23 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
       '이전에 작성하던 내용을 그대로 불러왔어요',
       expect.anything(),
     );
+  });
+
+  it('onSampleSubmit 모드에서 템플릿 저장은 실 액션을 부르지 않고 안내 토스트만 띄운다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" onSampleSubmit={() => {}} />);
+
+    // 4단계(검토·발송)로 이동 — 푸터 "다음" 버튼을 순서대로(기존 테스트와 동일 패턴).
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
+    // 템플릿 저장 폼 오픈
+    await user.click(screen.getByRole('button', { name: '템플릿으로 저장' }));
+    await user.type(screen.getByPlaceholderText('템플릿 이름'), '내 템플릿');
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(saveQuoteTemplateActionMock).not.toHaveBeenCalled();
+    expect(toastMock).toHaveBeenCalledWith('튜토리얼에서는 저장되지 않아요');
   });
 });

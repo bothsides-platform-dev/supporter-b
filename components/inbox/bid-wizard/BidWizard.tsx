@@ -217,6 +217,11 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
 
   const onSaveTemplate = useCallback(
     async (name: string) => {
+      if (onSampleSubmit) {
+        // 튜토리얼 샌드박스 — 실 워크스페이스에 템플릿을 만들지 않는다.
+        toast('튜토리얼에서는 저장되지 않아요');
+        return { ok: true as const };
+      }
       const r = await saveQuoteTemplateAction({
         name,
         settleCycle,
@@ -226,7 +231,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
       });
       return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
     },
-    [settleCycle, settleLimit, guaranteeInsurance, fees, feeInputMethods],
+    [onSampleSubmit, settleCycle, settleLimit, guaranteeInsurance, fees, feeInputMethods],
   );
 
   const handleSubmit = useCallback(() => {
