@@ -40,11 +40,6 @@ vi.mock('@/components/onboarding/coachmarks', () => ({
   ),
 }));
 
-const keyboardLockMock = vi.fn();
-vi.mock('../useTutorialKeyboardLock', () => ({
-  useTutorialKeyboardLock: () => keyboardLockMock(),
-}));
-
 vi.mock('@/components/rfp/RfpCreateWizard', () => ({
   RfpCreateWizard: ({
     onSampleSubmit,
@@ -267,10 +262,5 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
     render(<BuyerTutorialFlow />);
     await user.click(screen.getByRole('button', { name: 'wizard-submit' }));
     expect(screen.getByTestId('tour-tutorial-arrival-cta')).toBeInTheDocument();
-  });
-
-  it('튜토리얼 전 구간에서 키보드 락이 마운트된다 (클릭 전용)', () => {
-    render(<BuyerTutorialFlow />);
-    expect(keyboardLockMock).toHaveBeenCalled();
   });
 });

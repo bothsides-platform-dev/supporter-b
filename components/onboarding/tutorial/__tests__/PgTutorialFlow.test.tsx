@@ -35,11 +35,6 @@ vi.mock('@/components/onboarding/coachmarks', () => ({
   ),
 }));
 
-const keyboardLockMock = vi.fn();
-vi.mock('../useTutorialKeyboardLock', () => ({
-  useTutorialKeyboardLock: () => keyboardLockMock(),
-}));
-
 vi.mock('../InviteScene', () => ({
   InviteScene: ({ onProceed }: { onProceed: () => void }) => (
     <div>
@@ -77,7 +72,6 @@ describe('PgTutorialFlow (pg 튜토리얼 여정)', () => {
     updateOnboardingActionMock.mockClear();
     confettiFireMock.mockClear();
     bidWizardPropsSpy.mockClear();
-    keyboardLockMock.mockClear();
     localStorage.clear();
   });
 
@@ -275,10 +269,5 @@ describe('PgTutorialFlow (pg 튜토리얼 여정)', () => {
     await user.click(screen.getByRole('button', { name: '견적 작성하기' }));
 
     expect(localStorage.getItem('bid-draft:tutorial-rfp')).toBeNull();
-  });
-
-  it('튜토리얼 전 구간에서 키보드 락이 마운트된다 (클릭 전용)', () => {
-    render(<PgTutorialFlow />);
-    expect(keyboardLockMock).toHaveBeenCalled();
   });
 });

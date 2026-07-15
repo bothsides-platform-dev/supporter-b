@@ -10,7 +10,7 @@
  * 검증 포인트:
  *   - buyer: 위저드 1→4 다음 버튼 → 제출 → 도착 CTA → 선정 → 완료 화면
  *   - pg: 초대 CTA → 조건 확인 → BidWizard 1→4 → 견적 보내기 → 확인 → 완료 화면
- *   - 키보드 락: 프리필 입력에 타이핑해도 값 불변 (편집 요소만 차단)
+ *   - 오픈 샌드박스: 프리필 입력에 타이핑하면 값이 실제로 바뀐다 (수정 후 원상 복구)
  *   - 완료 시 users.onboarding 에 completed 스탬프
  */
 import { test, expect, type Page } from 'playwright/test';
@@ -71,13 +71,15 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
     await dismissInfo(page);
     await clickThrough(page, 'tutorial-wizard-next-1');
 
-    // 키보드 락: 2단계 제목 입력은 프리필돼 있고 타이핑해도 값이 안 바뀐다.
+    // 오픈 샌드박스: 프리필 값을 자유롭게 수정할 수 있다 (수정 후 원상 복구해 진행).
     const title = page.locator('input').first();
     await title.waitFor({ state: 'visible' });
     const before = await title.inputValue();
     expect(before).not.toBe('');
     await title.click({ force: true });
-    await page.keyboard.type('해킹');
+    await title.press('End');
+    await page.keyboard.type('!');
+    expect(await title.inputValue()).toBe(`${before}!`);
     await page.keyboard.press('Backspace');
     expect(await title.inputValue()).toBe(before);
 
