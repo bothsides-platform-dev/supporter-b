@@ -13,6 +13,7 @@ import { RfpCreateWizard } from '@/components/rfp/RfpCreateWizard';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
 import { BidsArrivalScene } from './BidsArrivalScene';
+import { TutorialLeaveGuard } from './TutorialLeaveGuard';
 import { useIsolatedRfpDraft } from './useIsolatedRfpDraft';
 import { buyerCreateTour, buyerArrivalTour, buyerCompareTour } from './tours';
 import { useCelebrationConfetti } from '@/lib/hooks/useCelebrationConfetti';
@@ -67,6 +68,7 @@ export function BuyerTutorialFlow() {
 
   return (
     <div className="flex flex-1 flex-col">
+      {phase !== 'done' && <TutorialLeaveGuard variant="buyer" />}
       {/* useCelebrationConfetti 는 캔버스 마운트 시 자동 발사하는 계약(축하 순간에
           마운트되는 화면용) — 상시 마운트하면 튜토리얼 시작 시 터진다. done 에서만. */}
       {phase === 'done' && (
