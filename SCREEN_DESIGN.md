@@ -62,7 +62,7 @@ Authenticated AppShell
 │  ├─ /inbox/:rfpId                (딜룸 — `@modal` 인터셉트 모달 + 정식 페이지)
 │  └─ /inbox/:rfpId/submitted
 ├─ /opportunities                (pg — 오픈 RFP 게시판)
-├─ /tutorial                     (buyer+pg — 온보딩 튜토리얼. 홈 환영 모달/재유도 배너의 진입점. buyer는 BuyerTutorialFlow가 실제 여정(작성→도착연출→비교·선정→완료) 제공, pg는 PgTutorialFlow가 실제 여정(초대 수신→요청 조건 확인→견적 작성·제출→완료) 제공. 무입력 클릭-스루: 전부 프리필 + 코치마크 action 스포트라이트가 실제 버튼 클릭 유도, 키보드 편집 차단. 완료 시 /home 리다이렉트)
+├─ /tutorial                     (buyer+pg — 온보딩 튜토리얼. 홈 환영 모달/재유도 배너의 진입점. buyer는 BuyerTutorialFlow가 실제 여정(작성→도착연출→비교·선정→완료) 제공, pg는 PgTutorialFlow가 실제 여정(초대 수신→요청 조건 확인→견적 작성·제출→완료) 제공. 오픈 샌드박스: 전부 프리필 + 코치마크가 실제 버튼 클릭을 안내(차단 없음 — 자유 입력·탐색 허용, 이탈은 확인 다이얼로그). 완료 시 /home 리다이렉트)
 ├─ /notifications
 ├─ /messages
 ├─ /workspace/new
