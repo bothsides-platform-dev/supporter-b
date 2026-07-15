@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { CoachmarkOverlay } from './CoachmarkOverlay';
+import { coachmarkSelector } from './coachmark-selector';
 import { useAnchorRect } from './useAnchorRect';
 import type { CoachmarkStep } from './types';
 
@@ -48,10 +49,7 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
     // 재발할 수 있다.
     if (stepIndex > 0) {
       const prev = steps[stepIndex - 1];
-      if (
-        prev.kind === 'action' &&
-        document.querySelector(`[data-coachmark="${CSS.escape(prev.target)}"]`)
-      ) {
+      if (prev.kind === 'action' && document.querySelector(coachmarkSelector(prev.target))) {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- 막힌 클릭(위저드 검증 등)으로 코치마크만 앞서 나간 경우 직전 action step으로 되돌아가는 의도된 반응
         setStepIndex(stepIndex - 1);
         return;
@@ -82,7 +80,7 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
     // 이중 소비하지 않는다.
     const handleClick = (event: MouseEvent) => {
       const el = event.target instanceof Element ? event.target : null;
-      if (!el?.closest(`[data-coachmark="${CSS.escape(target)}"]`)) return;
+      if (!el?.closest(coachmarkSelector(target))) return;
       if (advanceIsLast) {
         onFinish?.();
       } else {

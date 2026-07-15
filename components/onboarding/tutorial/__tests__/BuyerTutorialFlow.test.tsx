@@ -78,6 +78,10 @@ vi.mock('@/components/deal-room/DealRoomContext', () => ({
   DealRoomProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+vi.mock('../TutorialLeaveGuard', () => ({
+  TutorialLeaveGuard: () => <div data-testid="leave-guard" />,
+}));
+
 import { BuyerTutorialFlow } from '../BuyerTutorialFlow';
 
 afterEach(cleanup);
@@ -262,5 +266,17 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
     render(<BuyerTutorialFlow />);
     await user.click(screen.getByRole('button', { name: 'wizard-submit' }));
     expect(screen.getByTestId('tour-tutorial-arrival-cta')).toBeInTheDocument();
+  });
+
+  it('이탈 가드는 phase!==done 동안 마운트되고, done phase에서는 사라진다', async () => {
+    const user = userEvent.setup();
+    render(<BuyerTutorialFlow />);
+    expect(screen.getByTestId('leave-guard')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'wizard-submit' }));
+    await user.click(screen.getByRole('button', { name: 'arrival-proceed' }));
+    await user.click(screen.getByRole('button', { name: 'compare-award' }));
+
+    expect(screen.queryByTestId('leave-guard')).not.toBeInTheDocument();
   });
 });

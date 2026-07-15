@@ -61,6 +61,10 @@ vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({
   },
 }));
 
+vi.mock('../TutorialLeaveGuard', () => ({
+  TutorialLeaveGuard: () => <div data-testid="leave-guard" />,
+}));
+
 import { PgTutorialFlow } from '../PgTutorialFlow';
 import { tutorialBidDraftSeed } from '@/lib/onboarding/tutorial-fixtures';
 
@@ -269,5 +273,17 @@ describe('PgTutorialFlow (pg 튜토리얼 여정)', () => {
     await user.click(screen.getByRole('button', { name: '견적 작성하기' }));
 
     expect(localStorage.getItem('bid-draft:tutorial-rfp')).toBeNull();
+  });
+
+  it('이탈 가드는 phase!==done 동안 마운트되고, done phase에서는 사라진다', async () => {
+    const user = userEvent.setup();
+    render(<PgTutorialFlow />);
+    expect(screen.getByTestId('leave-guard')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'invite-proceed' }));
+    await user.click(screen.getByRole('button', { name: '견적 작성하기' }));
+    await user.click(screen.getByRole('button', { name: 'bid-submit' }));
+
+    expect(screen.queryByTestId('leave-guard')).not.toBeInTheDocument();
   });
 });

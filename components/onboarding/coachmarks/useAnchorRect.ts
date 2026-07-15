@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { coachmarkSelector } from './coachmark-selector';
+
 export type AnchorStatus = 'searching' | 'found' | 'notFound';
 
 export type AnchorRectResult = {
@@ -13,9 +15,7 @@ export type AnchorRectResult = {
 const DEFAULT_TIMEOUT_MS = 3000;
 
 function queryTarget(target: string): HTMLElement | null {
-  // CoachmarkTour의 클릭 매칭(closest)과 동일하게 CSS.escape로 이스케이프 —
-  // 특수문자 target이 querySelector SyntaxError로 폴링 tick을 죽이지 않게.
-  return document.querySelector(`[data-coachmark="${CSS.escape(target)}"]`);
+  return document.querySelector(coachmarkSelector(target));
 }
 
 function isDisabledEl(el: HTMLElement): boolean {

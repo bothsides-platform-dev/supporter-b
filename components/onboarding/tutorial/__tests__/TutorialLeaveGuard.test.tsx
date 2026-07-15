@@ -113,4 +113,35 @@ describe('TutorialLeaveGuard', () => {
     await user.keyboard('{/Meta}');
     expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument();
   });
+
+  it('외부 URL(http로 시작) 링크는 가로채지 않는다', async () => {
+    const a = renderWithLink('https://example.com');
+    await userEvent.click(a);
+    expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('download 속성이 있는 내부 링크는 가로채지 않는다', async () => {
+    const a = renderWithLink('/home', { download: '' });
+    await userEvent.click(a);
+    expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('Esc로 닫으면 스탬프·이동 없이 dialog만 닫히고, 같은 링크 재클릭 시 다시 열린다', async () => {
+    const a = renderWithLink('/home');
+    await userEvent.click(a);
+    expect(await screen.findByText('튜토리얼을 나갈까요?')).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument(),
+    );
+    expect(updateOnboardingMock).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+
+    // pendingHref가 비워졌으므로 가드는 여전히 무장 상태 — 같은 링크 재클릭 시 다시 열린다.
+    await userEvent.click(a);
+    expect(await screen.findByText('튜토리얼을 나갈까요?')).toBeInTheDocument();
+  });
 });

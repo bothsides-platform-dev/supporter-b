@@ -339,6 +339,28 @@ describe('CoachmarkTour', () => {
     vi.useRealTimers();
   });
 
+  it('직전 action 스텝 타깃이 이미 사라졌으면 복귀하지 않고 전방 스킵한다', async () => {
+    const onFinish = vi.fn();
+    const a = appendTarget('gone-a');
+    render(
+      <CoachmarkTour
+        steps={[
+          { target: 'gone-a', kind: 'action', title: 'A', body: 'a', placement: 'top' },
+          { target: 'gone-b', kind: 'action', title: 'B', body: 'b', placement: 'top' },
+        ]}
+        onFinish={onFinish}
+        timeoutMs={300}
+      />,
+    );
+    await screen.findByText('A');
+    await userEvent.click(a);
+    // t1('gone-a')를 실제로 DOM에서 제거 — 복귀 검증(prev 타깃이 여전히 존재하는지)이
+    // false를 반환해야 하므로, notFound 타임아웃이 떠도 복귀하지 않고 전방 스킵해야 한다.
+    a.remove();
+    await waitFor(() => expect(onFinish).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it('action 타깃이 disabled면 말풍선에 막힘 힌트가 나타난다', async () => {
     const btn = document.createElement('button');
     btn.setAttribute('data-coachmark', 'stuck');

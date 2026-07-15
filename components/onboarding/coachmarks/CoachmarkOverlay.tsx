@@ -63,9 +63,7 @@ export function CoachmarkOverlay({
 
   const bubble = (
     <div
-      // key는 step.target 고정 — 밖 클릭이 있어도 말풍선(dialog)은 리마운트 대상이
-      // 아니다: 리마운트하면 dialog 안의 포커스가 body로 유실되고 스크린리더가
-      // 재공지해 접근성이 나빠진다.
+      // key는 step.target 고정 — step 리렌더에도 dialog가 리마운트되지 않아 포커스/스크린리더 재공지를 피한다.
       key={`bubble-${step.target}`}
       role="dialog"
       aria-label={step.title}
