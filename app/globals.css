@@ -141,6 +141,63 @@
   to   { transform: rotate(360deg); }
 }
 
+/*
+  .coachmark-pulse — 코치마크 스포트라이트 링(온보딩 시선 유도) 소프트 펄스, 루프.
+  dim 스크림을 없앤 뒤(배경은 밝게 유지) 타깃 강조가 2px 프라이머리 링뿐이라, 은은한
+  opacity 호흡으로 시선을 보강한다. opacity 전용(layout 불변, DESIGN.md 모션 하드룰).
+  등장 페이드(coachmark-fade-in)도 이 클래스가 직접 소유한다 — tw-animate의
+  animate-in(레이어드 유틸)과 충돌해 페이드가 재생 안 되는 문제를 피하기 위해 author
+  CSS 하나로 통일했다(구 fadeClass 분기 제거).
+  - prefers-reduced-motion: animation: none (컴포넌트 쪽에서도 reducedMotion 분기로
+    클래스 자체를 붙이지 않음 — 기존 fadeClass 분기와 동일 패턴)
+*/
+@keyframes coachmark-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes coachmark-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+/*
+  .coachmark-nudge — 코치마크 타깃 밖 클릭 시 1회성 유도 플래시(action→링, info→말풍선).
+  "여기를 클릭해야 한다"를 opacity 블링크로 안내한다. opacity 전용(layout 불변) —
+  scale/transform은 넣지 않는다: 말풍선은 배치에 따라 인라인 transform(예:
+  translateY(-100%))을 이미 쓰고 있어, 애니메이션이 transform을 함께 쓰면 그 인라인
+  값을 애니메이션 동안 덮어써 버블이 튀는 버그가 있었다.
+  .coachmark-pulse(링)와 같은 요소에 공존할 때는 전용 합성 셀렉터
+  (.coachmark-pulse.coachmark-nudge)로 넛지 400ms 재생 후 펄스가 이어 재개되게
+  한다 — 단독으로는 400ms 1회성(원샷)으로 끝난다(말풍선은 펄스가 없으므로 무한
+  루프로 새지 않는다).
+  - prefers-reduced-motion: animation: none
+*/
+@keyframes coachmark-nudge {
+  0%   { opacity: 1; }
+  40%  { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .coachmark-pulse {
+    animation: coachmark-fade-in 150ms ease-out, coachmark-pulse 1.8s ease-in-out infinite;
+  }
+  .coachmark-nudge {
+    animation: coachmark-nudge 400ms ease-out;
+  }
+  .coachmark-pulse.coachmark-nudge {
+    animation: coachmark-nudge 400ms ease-out, coachmark-pulse 1.8s ease-in-out 400ms infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coachmark-pulse,
+  .coachmark-nudge,
+  .coachmark-pulse.coachmark-nudge {
+    animation: none;
+  }
+}
+
 /* Landing in-page anchor nav — smooth scroll scoped to the landing (class
    toggled on <html> while mounted) so app keyboard/list/chat scrolls stay
    instant. Fixed-header offset is handled per-section via scroll-mt. */
