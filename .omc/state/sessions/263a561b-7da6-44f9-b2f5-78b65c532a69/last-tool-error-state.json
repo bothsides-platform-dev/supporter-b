@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"mkcert -install 2>&1\",\"timeout\":60000,\"description\":\"Install mkcert local root CA into system trust store\"}",
-  "error": "Exit code 1\nCreated a new local CA 💥\nERROR: failed to execute \"security add-trusted-cert\": exit status 1\n\nsudo: a terminal is required to read the password; either use the -S option to read from standard input or configure an askpass helper\nsudo: a password is required",
-  "timestamp": "2026-07-14T06:32:36.817Z",
-  "retry_count": 1
-}

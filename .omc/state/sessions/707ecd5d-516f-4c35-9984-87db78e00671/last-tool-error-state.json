@@ -1,7 +1,0 @@
-{
-  "tool_name": "ScheduleWakeup",
-  "tool_input_preview": "{\"delaySeconds\":270,\"reason\":\"wait for full test suite to finish on merge commit\"}",
-  "error": "`prompt` is required when `stop` is not true.",
-  "timestamp": "2026-07-09T07:47:44.169Z",
-  "retry_count": 1
-}

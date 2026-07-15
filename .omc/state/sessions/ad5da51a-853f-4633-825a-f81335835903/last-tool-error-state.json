@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"ls e2e/ | head -20; echo ---; grep -rn \\\"tutorial\\\\|onboarding\\\" e2e/*.ts | head -5; echo ---; sed -n 1,50p e2e/helpers.ts 2>/dev/null || ls e2e/helpers* e2e/fixtures* e2e/support* 2>/dev/...",
-  "error": "Exit code 1\n_helpers.ts\nbid-detail-pdf-preview.spec.ts\nchat-rail-team-chat.spec.ts\nglobal-setup.ts\nglobal-teardown.ts\nrfp-detail-navigation.spec.ts\nscenario-a-buyer-rfp.spec.ts\nscenario-b-pg-bid.spec.ts\nscenario-c-buyer-award.spec.ts\nscenario-d-buyer-add-pg.spec.ts\nscenario-e-requote.spec.ts\ntheme-persistence.spec.ts\n---\ne2e/scenario-b-pg-bid.spec.ts:87:    // the /signup/pg/verify funnel (first-time PG onboarding). The toss\n---\n(eval):1: no matches found: e2e/helpers*",
-  "timestamp": "2026-07-10T02:17:51.804Z",
-  "retry_count": 1
-}

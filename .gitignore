@@ -63,6 +63,7 @@ next-env.d.ts
 /.claude/scheduled_tasks.lock
 /.serena/memories/
 /.superpowers/
+/.omc/
 
 # Visual brainstorm companion (superpowers)
 .superpowers/

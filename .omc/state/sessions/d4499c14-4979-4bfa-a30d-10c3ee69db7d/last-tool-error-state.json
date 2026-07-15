@@ -1,7 +1,0 @@
-{
-  "tool_name": "mcp__claude-in-chrome__browser_batch",
-  "tool_input_preview": "{\"actions\":[{\"name\":\"computer\",\"input\":{\"action\":\"triple_click\",\"ref\":\"ref_4\",\"tabId\":967594714}},{\"name\":\"computer\",\"input\":{\"action\":\"key\",\"text\":\"cmd+a\",\"tabId\":967594714}},{\"name\":\"computer\",\"inpu...",
-  "error": "actions[0] (computer:triple_click) failed: No element found with reference: \"ref_4\". The element may have been removed from the page. (0 completed, 8 remaining)",
-  "timestamp": "2026-07-14T09:03:17.871Z",
-  "retry_count": 1
-}
