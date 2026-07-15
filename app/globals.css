@@ -141,6 +141,53 @@
   to   { transform: rotate(360deg); }
 }
 
+/*
+  .coachmark-pulse — 코치마크 스포트라이트 링(온보딩 시선 유도) 소프트 펄스, 루프.
+  dim 스크림을 없앤 뒤(배경은 밝게 유지) 타깃 강조가 2px 프라이머리 링뿐이라, 은은한
+  opacity 호흡으로 시선을 보강한다. opacity 전용(layout 불변, DESIGN.md 모션 하드룰).
+  - prefers-reduced-motion: animation: none (컴포넌트 쪽에서도 reducedMotion 분기로
+    클래스 자체를 붙이지 않음 — 기존 fadeClass 분기와 동일 패턴)
+*/
+@keyframes coachmark-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .coachmark-pulse {
+    animation: coachmark-pulse 1.8s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coachmark-pulse {
+    animation: none;
+  }
+}
+
+/*
+  .coachmark-nudge — 코치마크 타깃 밖 클릭 시 1회성 유도 플래시(action→링, info→말풍선).
+  "여기를 클릭해야 한다"를 opacity 블링크 + 미세 scale로 안내한다. opacity/transform
+  전용(layout 불변). .coachmark-pulse와 같은 요소에 공존할 수 있어 animation을 쉼표로
+  병기해 충돌을 피한다(nudge 400ms 재생 후 pulse가 이어서 루프).
+  - prefers-reduced-motion: animation: none
+*/
+@keyframes coachmark-nudge {
+  0%   { opacity: 1; transform: scale(1); }
+  40%  { opacity: 0.3; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .coachmark-nudge {
+    animation: coachmark-nudge 400ms ease-out, coachmark-pulse 1.8s ease-in-out 400ms infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coachmark-nudge {
+    animation: none;
+  }
+}
+
 /* Landing in-page anchor nav — smooth scroll scoped to the landing (class
    toggled on <html> while mounted) so app keyboard/list/chat scrolls stay
    instant. Fixed-header offset is handled per-section via scroll-mt. */

@@ -183,6 +183,8 @@ surface-container-highest #E4E5E9               #202123
 
 > **추가 키프레임**(`app/globals.css`): `spin-once`(0.6s 1회전 — 리프레시 클릭), `process-progress`(5s scaleX — 스텝퍼 자동 전환, `prefers-reduced-motion: no-preference` 게이트). 모두 transform/opacity만 만진다.
 
+> **코치마크 스포트라이트 링 소프트 펄스**(`.coachmark-pulse`, `app/globals.css`): 온보딩 코치마크의 타깃 강조 링에 opacity 호흡 루프(1.8s ease-in-out infinite)를 더해 시선 유도를 보강한다. opacity 전용, `prefers-reduced-motion: reduce` 존중(저감 시 정지). 타깃 밖 클릭 시 1회성 유도 플래시(`.coachmark-nudge`)도 같은 원칙(opacity/transform 전용, reduced-motion 존중)을 따른다.
+
 ---
 
 ## 7. 컴포넌트 시스템

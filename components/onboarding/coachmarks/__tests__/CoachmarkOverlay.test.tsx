@@ -150,7 +150,7 @@ describe('CoachmarkOverlay', () => {
     vi.unstubAllGlobals();
   });
 
-  it('dim 스크림은 테마 인지 유틸 클래스를 쓴다 (다크모드 반전)', () => {
+  it('실드는 배경색 없는 투명 클릭 실드다 (dim 스크림 제거)', () => {
     const { container } = render(
       <CoachmarkOverlay
         rect={makeRect()}
@@ -162,12 +162,87 @@ describe('CoachmarkOverlay', () => {
         isLast={false}
       />,
     );
-    const dims = container.querySelectorAll<HTMLElement>('[data-slot="coachmark-dim"]');
-    expect(dims.length).toBe(4);
-    dims.forEach((dim) => {
-      expect(dim.className).toContain('bg-black/40');
-      expect(dim.className).toContain('dark:bg-white/10');
+    const shields = container.querySelectorAll<HTMLElement>('[data-slot="coachmark-shield"]');
+    expect(shields.length).toBe(4);
+    shields.forEach((shield) => {
+      expect(shield.className ?? '').not.toContain('bg-black/40');
+      expect(shield.className ?? '').not.toContain('dark:bg-white/10');
     });
+  });
+
+  it('일반 모션에서는 링에 소프트 펄스 클래스가 붙는다', () => {
+    const matchMediaMock = vi.fn().mockReturnValue({ matches: false });
+    vi.stubGlobal('matchMedia', matchMediaMock);
+    const { container } = render(
+      <CoachmarkOverlay
+        rect={makeRect()}
+        step={step}
+        stepIndex={0}
+        stepCount={3}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+    const ring = container.querySelector('[data-slot="coachmark-ring"]') as HTMLElement;
+    expect(ring.className).toContain('coachmark-pulse');
+    vi.unstubAllGlobals();
+  });
+
+  it('prefers-reduced-motion이면 링 펄스 클래스를 붙이지 않는다', () => {
+    const matchMediaMock = vi.fn().mockReturnValue({ matches: true });
+    vi.stubGlobal('matchMedia', matchMediaMock);
+    const { container } = render(
+      <CoachmarkOverlay
+        rect={makeRect()}
+        step={step}
+        stepIndex={0}
+        stepCount={3}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+    const ring = container.querySelector('[data-slot="coachmark-ring"]') as HTMLElement;
+    expect(ring.className ?? '').not.toContain('coachmark-pulse');
+    vi.unstubAllGlobals();
+  });
+
+  it('info 스텝에서 말풍선 밖(root) 클릭 시 말풍선에 유도 플래시(coachmark-nudge)가 등장한다', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <CoachmarkOverlay
+        rect={makeRect()}
+        step={step}
+        stepIndex={0}
+        stepCount={3}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+    const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
+    await user.click(root);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).toContain('coachmark-nudge');
+  });
+
+  it('info 스텝에서 말풍선 내부 클릭은 유도 플래시를 발동시키지 않는다', async () => {
+    const user = userEvent.setup();
+    render(
+      <CoachmarkOverlay
+        rect={makeRect()}
+        step={step}
+        stepIndex={0}
+        stepCount={3}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+    const dialog = screen.getByRole('dialog');
+    await user.click(dialog);
+    expect(dialog.className).not.toContain('coachmark-nudge');
   });
 
   it('건너뛰기 버튼 클릭 시 onSkip을 호출한다', async () => {
@@ -225,7 +300,7 @@ describe('CoachmarkOverlay', () => {
       expect(root.className).toContain('pointer-events-none');
     });
 
-    it('구멍 주위 4개 dim rect를 렌더하고 각각 pointer-events:auto로 밖 클릭을 흡수한다', () => {
+    it('구멍 주위 4개 클릭 실드를 렌더하고 각각 pointer-events:auto로 밖 클릭을 흡수한다', () => {
       const { container } = render(
         <CoachmarkOverlay
           rect={makeRect()}
@@ -237,11 +312,30 @@ describe('CoachmarkOverlay', () => {
           isLast={false}
         />,
       );
-      const dims = container.querySelectorAll('[data-slot="coachmark-dim"]');
-      expect(dims).toHaveLength(4);
-      dims.forEach((dim) => {
-        expect((dim as HTMLElement).style.pointerEvents).toBe('auto');
+      const shields = container.querySelectorAll('[data-slot="coachmark-shield"]');
+      expect(shields).toHaveLength(4);
+      shields.forEach((shield) => {
+        expect((shield as HTMLElement).style.pointerEvents).toBe('auto');
       });
+    });
+
+    it('실드(밖) 클릭 시 링에 유도 플래시(coachmark-nudge) 클래스가 등장한다', async () => {
+      const user = userEvent.setup();
+      const { container } = render(
+        <CoachmarkOverlay
+          rect={makeRect()}
+          step={actionStep}
+          stepIndex={0}
+          stepCount={3}
+          onNext={() => {}}
+          onSkip={() => {}}
+          isLast={false}
+        />,
+      );
+      const shields = container.querySelectorAll('[data-slot="coachmark-shield"]');
+      await user.click(shields[0]);
+      const ring = container.querySelector('[data-slot="coachmark-ring"]') as HTMLElement;
+      expect(ring.className).toContain('coachmark-nudge');
     });
 
     it('다음/확인 버튼이 없고 건너뛰기만 있다', () => {
@@ -292,8 +386,8 @@ describe('CoachmarkOverlay', () => {
       );
       const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
       expect(root.className).not.toContain('pointer-events-none');
-      // 스크림 표현은 action과 동일한 4-rect dim으로 통일 (9999px box-shadow 제거)
-      expect(container.querySelectorAll('[data-slot="coachmark-dim"]')).toHaveLength(4);
+      // 클릭 실드 구조는 action과 동일한 4-rect로 통일 (9999px box-shadow 제거)
+      expect(container.querySelectorAll('[data-slot="coachmark-shield"]')).toHaveLength(4);
       expect(screen.getByRole('button', { name: '다음' })).toBeInTheDocument();
     });
   });

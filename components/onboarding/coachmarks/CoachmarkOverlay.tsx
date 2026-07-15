@@ -12,9 +12,6 @@ const BUBBLE_OFFSET = 8;
 const BUBBLE_WIDTH = 280;
 const VIEWPORT_MARGIN = 8;
 const OVERLAY_Z = 50;
-// 스크림은 토큰이 아니라 유틸로(DESIGN.md §스크림) — 스포트라이트는 command palette
-// 급의 짙은 스크림, 다크모드에선 white/10으로 반전해 구멍 대비를 유지한다.
-const DIM_SCRIM_CLASS = 'bg-black/40 dark:bg-white/10';
 
 export type CoachmarkOverlayProps = {
   rect: DOMRect;
@@ -36,6 +33,10 @@ export function CoachmarkOverlay({
   isLast,
 }: CoachmarkOverlayProps) {
   const [reducedMotion, setReducedMotion] = useState(false);
+  // 타깃 밖 클릭 1회성 유도 플래시 상태. target을 함께 저장해 step 전환 시 이전
+  // step의 nudge가 새 step에 잘못 이어붙지 않게 한다(리셋 effect 없이 비교만으로 해소 —
+  // CoachmarkTour가 key 없이 같은 오버레이 인스턴스를 재사용하므로 상태가 자연 초기화되지 않음).
+  const [nudge, setNudge] = useState({ target: step.target, count: 0 });
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 matchMedia를 1회 읽어 반영하는 의도된 동기화(SSR엔 window 없음)
@@ -43,6 +44,14 @@ export function CoachmarkOverlay({
   }, []);
 
   const isAction = step.kind === 'action';
+  const isNudging = nudge.target === step.target && nudge.count > 0;
+
+  const handleNudge = () => {
+    setNudge((prev) => ({
+      target: step.target,
+      count: prev.target === step.target ? prev.count + 1 : 1,
+    }));
+  };
 
   const padded = {
     top: rect.top - SPOTLIGHT_PADDING,
@@ -52,21 +61,30 @@ export function CoachmarkOverlay({
   };
 
   // 모션 하드룰(DESIGN.md): 레이아웃 속성은 애니메이션하지 않는다. 위치는 항상 즉시
-  // 반영(스크롤 추종 시 dim 구멍이 타깃과 어긋나 클릭을 삼키는 문제도 함께 방지),
+  // 반영(스크롤 추종 시 실드 구멍이 타깃과 어긋나 클릭을 삼키는 문제도 함께 방지),
   // step 전환의 등장만 opacity 페이드 — key={step.target} 리마운트로 재생한다.
   const fadeClass = reducedMotion ? '' : 'animate-in fade-in-0 duration-150';
+  // 스포트라이트 링 소프트 펄스(온보딩 시선 유도) — opacity 전용, reduced-motion 존중
+  // (DESIGN.md §6). CSS media 게이트로도 충분하지만, fadeClass와 동일하게 컴포넌트
+  // 쪽에서도 분기해 reduced 시 클래스 자체를 붙이지 않는다.
+  const pulseClass = reducedMotion ? '' : 'coachmark-pulse';
+  // 밖 클릭 유도 플래시 — action은 링, info는 말풍선에 붙인다(진행 수단이 다르므로).
+  const ringNudgeClass = isAction && isNudging ? 'coachmark-nudge' : '';
+  const bubbleNudgeClass = !isAction && isNudging ? 'coachmark-nudge' : '';
 
   const bubble = (
     <div
-      key={`bubble-${step.target}`}
+      key={`bubble-${step.target}-${bubbleNudgeClass ? nudge.count : 0}`}
       role="dialog"
       aria-label={step.title}
+      // 말풍선 내부 클릭(버튼 포함)이 root까지 버블돼 유도 플래시가 오발되지 않게 막는다.
+      onClick={(event) => event.stopPropagation()}
       style={
         isAction
           ? { ...computeBubbleStyle(rect, step.placement), pointerEvents: 'auto' }
           : computeBubbleStyle(rect, step.placement)
       }
-      className={`rounded-md border border-[var(--md-sys-color-outline-variant)] bg-[var(--color-popover)] p-3 shadow-md ring-1 ring-foreground/10 ${fadeClass}`}
+      className={`rounded-md border border-[var(--md-sys-color-outline-variant)] bg-[var(--color-popover)] p-3 shadow-md ring-1 ring-foreground/10 ${fadeClass} ${bubbleNudgeClass}`}
     >
       <p className="text-sm font-semibold text-foreground">{step.title}</p>
       <p className="mt-1 text-sm text-muted-foreground">{step.body}</p>
@@ -89,9 +107,10 @@ export function CoachmarkOverlay({
     </div>
   );
 
-  // 구멍 주위 4-rect dim — info/action 공통 스크림 표현(9999px box-shadow 리페인트 제거).
-  // action에서는 각 rect가 pointer-events:auto로 밖 클릭을 흡수하고 구멍(요소 없음)만
-  // 실제 타깃으로 클릭을 통과시킨다. info에서는 root가 전 화면을 흡수하므로 시각 전용.
+  // 구멍 주위 4-rect 클릭 실드 — 배경색 없는 투명 실드(dim 스크림 제거, 배경은 밝게
+  // 유지). action에서는 각 rect가 pointer-events:auto로 밖 클릭을 흡수하고 구멍(요소
+  // 없음)만 실제 타깃으로 클릭을 통과시킨다. info에서는 root가 전 화면을 흡수하므로
+  // 실드는 구조 통일을 위해서만 존재한다. 두 모드 모두 밖 클릭은 유도 플래시를 튕긴다.
   const dimBase: CSSProperties = {
     position: 'fixed',
     pointerEvents: 'auto',
@@ -107,18 +126,20 @@ export function CoachmarkOverlay({
   const dims = dimRects.map((style, index) => (
     <div
       key={index}
-      data-slot="coachmark-dim"
-      className={DIM_SCRIM_CLASS}
+      data-slot="coachmark-shield"
       style={style}
-      onClick={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        handleNudge();
+      }}
     />
   ));
 
   const ring = (
     <div
-      key={`ring-${step.target}`}
+      key={`ring-${step.target}-${ringNudgeClass ? nudge.count : 0}`}
       data-slot="coachmark-ring"
-      className={fadeClass}
+      className={`${fadeClass} ${pulseClass} ${ringNudgeClass}`}
       style={{
         position: 'fixed',
         ...padded,
@@ -147,8 +168,11 @@ export function CoachmarkOverlay({
       data-slot="coachmark-overlay"
       className="fixed inset-0 z-50"
       // 스포트라이트 밖 전체 화면 클릭도 흡수한다 — "읽고 다음" 모델(투어를 우회해
-      // 뒤 화면 요소를 조작하지 못하게).
-      onClick={(event) => event.stopPropagation()}
+      // 뒤 화면 요소를 조작하지 못하게). 밖 클릭은 말풍선 유도 플래시도 튕긴다.
+      onClick={(event) => {
+        event.stopPropagation();
+        handleNudge();
+      }}
     >
       {dims}
       {ring}
