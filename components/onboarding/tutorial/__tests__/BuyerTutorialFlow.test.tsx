@@ -21,12 +21,21 @@ vi.mock('@/lib/hooks/useCelebrationConfetti', () => ({
 }));
 
 vi.mock('@/components/onboarding/coachmarks', () => ({
-  CoachmarkTour: ({ steps, onFinish }: { steps: { target: string }[]; onFinish?: () => void }) => (
+  CoachmarkTour: ({
+    steps,
+    onFinish,
+    onSkip,
+  }: {
+    steps: { target: string }[];
+    onFinish?: () => void;
+    onSkip?: () => void;
+  }) => (
     <div
       data-testid={`tour-${steps[0]?.target}`}
       data-targets={steps.map((s) => s.target).join(',')}
     >
       <button type="button" onClick={onFinish}>{`tour-finish-${steps[0]?.target}`}</button>
+      <button type="button" onClick={onSkip}>{`tour-skip-${steps[0]?.target}`}</button>
     </div>
   ),
 }));
@@ -156,6 +165,34 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
     });
     expect(restoreMock).toHaveBeenCalled();
     expect(mockPush).toHaveBeenCalledWith('/home');
+  });
+
+  it('create phase에서 코치마크 건너뛰기 시 completed 스탬프 + done phase(4/4)로 점프한다', async () => {
+    const user = userEvent.setup();
+    render(<BuyerTutorialFlow />);
+
+    await user.click(screen.getByRole('button', { name: 'tour-skip-tutorial-wizard-content' }));
+
+    expect(updateOnboardingActionMock).toHaveBeenCalledWith({
+      key: 'buyerTutorial',
+      event: 'completed',
+    });
+    expect(screen.getByText('튜토리얼을 완료했어요')).toBeInTheDocument();
+    expect(screen.getByText(/4\s*\/\s*4/)).toBeInTheDocument();
+  });
+
+  it('arrival phase에서 코치마크 건너뛰기 시 done phase로 점프한다', async () => {
+    const user = userEvent.setup();
+    render(<BuyerTutorialFlow />);
+    await user.click(screen.getByRole('button', { name: 'wizard-submit' }));
+
+    await user.click(screen.getByRole('button', { name: 'tour-skip-tutorial-arrival-cta' }));
+
+    expect(updateOnboardingActionMock).toHaveBeenCalledWith({
+      key: 'buyerTutorial',
+      event: 'completed',
+    });
+    expect(screen.getByText(/4\s*\/\s*4/)).toBeInTheDocument();
   });
 
   it('create 투어는 단일 연속 투어로 제출 버튼(tutorial-wizard-submit)에서 끝난다', () => {

@@ -61,7 +61,8 @@ export function BuyerTutorialFlow() {
     leaveTutorial('/home');
   };
 
-  const handleAward = () => {
+  // 선정(정상 완주)과 코치마크 건너뛰기 모두 같은 종착지 — completed 스탬프 + done 화면.
+  const handleComplete = () => {
     void updateOnboardingAction({ key: 'buyerTutorial', event: 'completed' });
     setPhase('done');
   };
@@ -102,7 +103,7 @@ export function BuyerTutorialFlow() {
                 이어진다. 마지막 action(제출) 클릭은 onFinish와 phase 전환(onSampleSubmit)을
                 동시에 일으키지만 onFinish는 로컬 state만 닫으므로 충돌 없음. */}
             {!createTourDone && (
-              <CoachmarkTour steps={buyerCreateTour} onFinish={() => setCreateTourDone(true)} onSkip={() => setCreateTourDone(true)} />
+              <CoachmarkTour steps={buyerCreateTour} onFinish={() => setCreateTourDone(true)} onSkip={handleComplete} />
             )}
           </>
         )}
@@ -115,7 +116,7 @@ export function BuyerTutorialFlow() {
             />
             {/* CTA가 도착 연출 스태거(~1.8s) 후에 등장하므로 기본 3s보다 넉넉히 기다린다. */}
             {!arrivalTourDone && (
-              <CoachmarkTour steps={buyerArrivalTour} timeoutMs={5000} onFinish={() => setArrivalTourDone(true)} onSkip={() => setArrivalTourDone(true)} />
+              <CoachmarkTour steps={buyerArrivalTour} timeoutMs={5000} onFinish={() => setArrivalTourDone(true)} onSkip={handleComplete} />
             )}
           </>
         )}
@@ -140,11 +141,11 @@ export function BuyerTutorialFlow() {
                 customPaymentMethods={tutorialBuyerRfp.customPaymentMethods}
                 rfpId={tutorialBuyerRfp.id}
                 rfpCode={tutorialBuyerRfp.code}
-                onSampleAward={handleAward}
+                onSampleAward={handleComplete}
               />
             </div>
             {!compareTourDone && (
-              <CoachmarkTour steps={buyerCompareTour} onFinish={() => setCompareTourDone(true)} onSkip={() => setCompareTourDone(true)} />
+              <CoachmarkTour steps={buyerCompareTour} onFinish={() => setCompareTourDone(true)} onSkip={handleComplete} />
             )}
           </DealRoomProvider>
         )}

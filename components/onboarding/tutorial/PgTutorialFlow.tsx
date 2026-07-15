@@ -56,7 +56,8 @@ export function PgTutorialFlow() {
     router.push('/home');
   };
 
-  const handleSampleSubmit = () => {
+  // 제출(정상 완주)과 코치마크 건너뛰기 모두 같은 종착지 — completed 스탬프 + done 화면.
+  const handleComplete = () => {
     void updateOnboardingAction({ key: 'pgTutorial', event: 'completed' });
     setPhase('done');
   };
@@ -94,7 +95,7 @@ export function PgTutorialFlow() {
               onProceed={() => setPhase('brief')}
             />
             {!inviteTourDone && (
-              <CoachmarkTour steps={pgInviteTour} onFinish={() => setInviteTourDone(true)} onSkip={() => setInviteTourDone(true)} />
+              <CoachmarkTour steps={pgInviteTour} onFinish={() => setInviteTourDone(true)} onSkip={handleComplete} />
             )}
           </>
         )}
@@ -118,7 +119,7 @@ export function PgTutorialFlow() {
               </div>
             </div>
             {!briefTourDone && (
-              <CoachmarkTour steps={pgBriefTour} onFinish={() => setBriefTourDone(true)} onSkip={() => setBriefTourDone(true)} />
+              <CoachmarkTour steps={pgBriefTour} onFinish={() => setBriefTourDone(true)} onSkip={handleComplete} />
             )}
           </>
         )}
@@ -129,13 +130,13 @@ export function PgTutorialFlow() {
               rfp={tutorialBuyerRfp}
               buyerName={tutorialBuyerName}
               initialDraft={tutorialBidDraftSeed}
-              onSampleSubmit={handleSampleSubmit}
+              onSampleSubmit={handleComplete}
             />
             {/* 단일 연속 투어 — 위저드 각 단계의 다음 버튼(action)을 실제로 클릭하며
                 제출까지 이어진다. 제출 클릭 후 ConfirmDialog는 자체 포커스 모달이라
                 별도 코치마크가 필요 없다(투어는 제출 클릭에서 끝나 오버레이가 언마운트). */}
             {!writeTourDone && (
-              <CoachmarkTour steps={pgWriteTour} onFinish={() => setWriteTourDone(true)} onSkip={() => setWriteTourDone(true)} />
+              <CoachmarkTour steps={pgWriteTour} onFinish={() => setWriteTourDone(true)} onSkip={handleComplete} />
             )}
           </>
         )}
