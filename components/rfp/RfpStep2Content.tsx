@@ -42,11 +42,9 @@ type Props = {
   showFieldErrors?: boolean;
   /** 서버가 거부한 홈페이지 URL — 현재 store URL 과 같으면 필드 에러를 표시 */
   websiteRejected?: string;
-  /** 튜토리얼 샌드박스 — 첨부를 가상 처리 */
-  sampleMode?: boolean;
 };
 
-export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteRejected, sampleMode }: Props) {
+export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteRejected }: Props) {
   const draft = useRfpDraftStore();
   const [localAttempted, setLocalAttempted] = useState(false);
 
@@ -283,7 +281,6 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
       <RfpAttachmentDropzone
         value={draft.rfpFiles}
         onChange={(files) => draft.setField('rfpFiles', files)}
-        sampleMode={sampleMode}
       />
 
       <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">

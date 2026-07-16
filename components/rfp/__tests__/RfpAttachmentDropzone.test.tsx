@@ -67,20 +67,4 @@ describe('RfpAttachmentDropzone 파일 업로드', () => {
       expect(screen.getByTitle('지원되지 않는 파일 형식입니다 (PDF/PNG/JPEG만 허용)')).toBeInTheDocument(),
     )
   })
-
-  it('sampleMode에서는 업로드 호출 없이 즉시 ready 행으로 추가한다 (튜토리얼 샌드박스)', async () => {
-    const onChange = vi.fn();
-    render(<RfpAttachmentDropzone value={[]} onChange={onChange} sampleMode />);
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
-    await userEvent.upload(input, new File(['x'], 'sample.pdf', { type: 'application/pdf' }));
-
-    expect(uploadAttachment).not.toHaveBeenCalled();
-    expect(screen.getByText('sample.pdf')).toBeInTheDocument();
-    expect(screen.queryByText('UPLOADING…')).not.toBeInTheDocument();
-    await waitFor(() =>
-      expect(onChange).toHaveBeenCalledWith([
-        expect.objectContaining({ name: 'sample.pdf', status: 'ready' }),
-      ]),
-    );
-  })
 })

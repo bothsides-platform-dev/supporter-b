@@ -12,8 +12,6 @@ import { cn } from '@/lib/utils';
 type Props = {
   value: RfpMockFile[];
   onChange: (files: RfpMockFile[]) => void;
-  /** 튜토리얼 샌드박스 — 드롭한 파일을 실제 업로드 없이 로컬 ready 행으로만 처리한다. */
-  sampleMode?: boolean;
 };
 
 const MAX_FILES = 5;
@@ -33,7 +31,7 @@ type RowState = RfpMockFile & {
   error?: string;
 };
 
-export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
+export function RfpAttachmentDropzone({ value, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   // Local row state — extends the parent value with upload progress and
@@ -104,24 +102,14 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
       // Cheap client checks (server still re-validates).
       if (!ACCEPTED_MIMES.has(f.type)) continue;
       if (f.size > MAX_BYTES) continue;
-      if (sampleMode) {
-        // 튜토리얼 샌드박스 — 서버 업로드 없이 로컬 행만 만든다(실 R2 흔적 금지).
-        additions.push({
-          id: `sample-${Math.random().toString(36).slice(2, 10)}`,
-          name: f.name,
-          size: f.size,
-          status: 'ready',
-        });
-      } else {
-        const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
-        additions.push({
-          id: tempId,
-          name: f.name,
-          size: f.size,
-          status: 'uploading',
-        });
-        void uploadOne(f, tempId);
-      }
+      const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
+      additions.push({
+        id: tempId,
+        name: f.name,
+        size: f.size,
+        status: 'uploading',
+      });
+      void uploadOne(f, tempId);
     }
     if (additions.length > 0) setRows((prev) => [...prev, ...additions]);
   };

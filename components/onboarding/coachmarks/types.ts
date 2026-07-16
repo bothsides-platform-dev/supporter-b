@@ -1,5 +1,5 @@
-// 온보딩 코치마크 프리미티브 공용 타입. 실제 투어 데이터(steps 배열)는
-// components/onboarding/tutorial/tours.ts 가 정의하고 각 튜토리얼 플로우가 연결한다.
+// 온보딩 코치마크 프리미티브 공용 타입. 실제 투어 데이터(steps 배열)는 각 코치마크
+// 컴포넌트(예: components/onboarding/FirstRfpCoachmark.tsx)가 직접 정의해 연결한다.
 
 export type CoachmarkPlacement = 'top' | 'bottom' | 'left' | 'right';
 

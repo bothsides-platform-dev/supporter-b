@@ -1,8 +1,8 @@
 'use client';
 
 // buyer 홈의 첫 견적 코치마크 — "견적 요청하기" CTA(home-create-rfp)를 가리키는
-// 단일 action step. /tutorial 샌드박스와 달리 실제 CTA 클릭이 곧 진행이라 onFinish는
-// completed를, 건너뛰기는 dismissed를 스탬프한다(둘 다 유저 단위 buyerFirstRfp 태스크).
+// 단일 action step. 실제 CTA 클릭이 곧 진행이라 onFinish는 completed를, 건너뛰기는
+// dismissed를 스탬프한다(둘 다 유저 단위 buyerFirstRfp 태스크).
 import { useRef, useState } from 'react';
 
 import { CoachmarkTour } from '@/components/onboarding/coachmarks';
