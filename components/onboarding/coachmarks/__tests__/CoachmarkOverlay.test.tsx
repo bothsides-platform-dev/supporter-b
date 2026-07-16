@@ -51,6 +51,38 @@ describe('CoachmarkOverlay', () => {
     expect(screen.getByText('1/3')).toBeInTheDocument();
   });
 
+  it('스텝 안내를 role=status 라이브 리전으로 공지한다 (리졸버 점프 포함 비시각 전달)', async () => {
+    const { rerender } = render(
+      <CoachmarkOverlay
+        rect={makeRect()}
+        step={step}
+        stepIndex={0}
+        stepCount={3}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+
+    // 마운트 후 effect가 채우는 라이브 리전 — 첫 스텝도 공지된다.
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('1단계 제목');
+
+    // 스텝이 바뀌면(오프코스 점프 포함) 내용이 갱신돼 폴라이트 공지된다.
+    rerender(
+      <CoachmarkOverlay
+        rect={makeRect()}
+        step={{ target: 'next', title: '2단계 제목', body: '다음 설명', placement: 'top', kind: 'action' }}
+        stepIndex={1}
+        stepCount={3}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={false}
+      />,
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent('2단계 제목');
+  });
+
   it('마지막 step이면 다음 버튼이 "확인"으로 표시된다', () => {
     render(
       <CoachmarkOverlay
