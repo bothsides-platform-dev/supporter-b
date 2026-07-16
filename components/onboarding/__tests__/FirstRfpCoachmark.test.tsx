@@ -57,6 +57,14 @@ describe('FirstRfpCoachmark', () => {
     });
   });
 
+  it('onFinish가 중복 발화해도 스탬프는 1회만 보낸다', async () => {
+    const user = userEvent.setup();
+    render(<FirstRfpCoachmark />);
+    await user.click(screen.getByRole('button', { name: 'tour-finish' }));
+    await user.click(screen.getByRole('button', { name: 'tour-finish' }));
+    expect(updateOnboardingActionMock).toHaveBeenCalledTimes(1);
+  });
+
   it('onSkip 발화 시 dismissed를 스탬프하고 코치마크를 즉시 숨긴다', async () => {
     const user = userEvent.setup();
     render(<FirstRfpCoachmark />);
