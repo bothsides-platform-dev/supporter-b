@@ -4,7 +4,7 @@ import { listInboxForViewer } from '@/lib/server/actions/chat/inboxLoader';
 import { buildHomeMessagesSnapshot } from '@/lib/server/dashboard/homeMessages';
 import { HomeDashboard } from '@/components/home/HomeDashboard';
 import { getUserRepo } from '@/lib/server/repositories/factory';
-import { resolveWelcomeState } from '@/lib/onboarding/visibility';
+import { shouldShowFirstRfpCoachmark } from '@/lib/onboarding/visibility';
 
 export async function BuyerHome({ workspaceId, userId }: { workspaceId: string; userId: string }) {
   const [dashboard, allItems, onboarding] = await Promise.all([
@@ -13,7 +13,7 @@ export async function BuyerHome({ workspaceId, userId }: { workspaceId: string; 
     (await getUserRepo()).getOnboarding(userId),
   ]);
   const { items, unreadCount } = buildHomeMessagesSnapshot(allItems);
-  const welcomeState = resolveWelcomeState(onboarding, 'buyerTutorial');
+  const showFirstRfpCoachmark = shouldShowFirstRfpCoachmark(onboarding, dashboard.hasAnyRfp ?? false);
   return (
     <PageEnter className="px-8 py-10">
       <HomeDashboard
@@ -21,7 +21,7 @@ export async function BuyerHome({ workspaceId, userId }: { workspaceId: string; 
         workspaceType="buyer"
         items={items}
         unreadCount={unreadCount}
-        welcomeState={welcomeState}
+        showFirstRfpCoachmark={showFirstRfpCoachmark}
       />
     </PageEnter>
   );

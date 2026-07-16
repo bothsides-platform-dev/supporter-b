@@ -138,3 +138,19 @@ describe('buildBuyerDashboard — no open RFP discovery', () => {
     expect(dash.openRfps).toBeUndefined();
   });
 });
+
+describe('buildBuyerDashboard — hasAnyRfp', () => {
+  it('rfps가 0건이면 false', () => {
+    const dash = buildBuyerDashboard([], new Map(), NOW);
+    expect(dash.hasAnyRfp).toBe(false);
+  });
+
+  it('draft 1건이라도 있으면 true', () => {
+    const dash = buildBuyerDashboard(
+      [rfp({ id: 'D', code: 'P-D', title: 'D', status: 'draft', deadline: fromNow(20) })],
+      new Map(),
+      NOW,
+    );
+    expect(dash.hasAnyRfp).toBe(true);
+  });
+});

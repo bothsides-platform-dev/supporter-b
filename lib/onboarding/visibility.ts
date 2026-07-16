@@ -28,3 +28,9 @@ export function resolveWelcomeState(
 export function isTutorialCompleted(onboarding: UserOnboarding, key: OnboardingKey): boolean {
   return !!onboarding[key]?.completedAt;
 }
+
+/** buyer 홈의 첫 견적 코치마크 노출 여부 — RFP가 하나도 없고 완료/닫기 스탬프가 없는 동안만. */
+export function shouldShowFirstRfpCoachmark(onboarding: UserOnboarding, hasAnyRfp: boolean): boolean {
+  const s = onboarding.buyerFirstRfp;
+  return !hasAnyRfp && !s?.completedAt && !s?.dismissedAt;
+}

@@ -40,29 +40,47 @@ afterEach(() => {
 });
 
 describe('BuyerHome', () => {
-  it('buyerTutorial 태스크가 미완료면 welcomeState="welcome"을 HomeDashboard에 전달한다', async () => {
+  it('buyerFirstRfp 무스탬프 + hasAnyRfp=false면 showFirstRfpCoachmark=true를 전달한다', async () => {
     getOnboardingMock.mockResolvedValue({ _v: 1 });
+    loadBuyerDashboardMock.mockResolvedValue({ kpis: [], groups: [], hasAnyRfp: false });
     render(await BuyerHome({ workspaceId: 'ws-1', userId: 'u-1' }));
     expect(screen.getByText('HomeDashboard')).toBeInTheDocument();
     expect(getOnboardingMock).toHaveBeenCalledWith('u-1');
     expect(homeDashboardPropsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ welcomeState: 'welcome', workspaceType: 'buyer' }),
+      expect.objectContaining({ showFirstRfpCoachmark: true, workspaceType: 'buyer' }),
     );
   });
 
-  it('buyerTutorial 태스크가 dismissed면 welcomeState="nudge"를 전달한다', async () => {
-    getOnboardingMock.mockResolvedValue({ _v: 1, buyerTutorial: { dismissedAt: '2026-01-01T00:00:00Z' } });
+  it('hasAnyRfp=true면 showFirstRfpCoachmark=false를 전달한다', async () => {
+    getOnboardingMock.mockResolvedValue({ _v: 1 });
+    loadBuyerDashboardMock.mockResolvedValue({ kpis: [], groups: [], hasAnyRfp: true });
     render(await BuyerHome({ workspaceId: 'ws-1', userId: 'u-1' }));
     expect(homeDashboardPropsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ welcomeState: 'nudge' }),
+      expect.objectContaining({ showFirstRfpCoachmark: false }),
     );
   });
 
-  it('buyerTutorial 태스크가 completed면 welcomeState="none"을 전달한다', async () => {
-    getOnboardingMock.mockResolvedValue({ _v: 1, buyerTutorial: { completedAt: '2026-01-01T00:00:00Z' } });
+  it('buyerFirstRfp가 dismissed면 hasAnyRfp=false여도 showFirstRfpCoachmark=false를 전달한다', async () => {
+    getOnboardingMock.mockResolvedValue({
+      _v: 1,
+      buyerFirstRfp: { dismissedAt: '2026-01-01T00:00:00Z' },
+    });
+    loadBuyerDashboardMock.mockResolvedValue({ kpis: [], groups: [], hasAnyRfp: false });
     render(await BuyerHome({ workspaceId: 'ws-1', userId: 'u-1' }));
     expect(homeDashboardPropsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ welcomeState: 'none' }),
+      expect.objectContaining({ showFirstRfpCoachmark: false }),
+    );
+  });
+
+  it('buyerFirstRfp가 completed면 hasAnyRfp=false여도 showFirstRfpCoachmark=false를 전달한다', async () => {
+    getOnboardingMock.mockResolvedValue({
+      _v: 1,
+      buyerFirstRfp: { completedAt: '2026-01-01T00:00:00Z' },
+    });
+    loadBuyerDashboardMock.mockResolvedValue({ kpis: [], groups: [], hasAnyRfp: false });
+    render(await BuyerHome({ workspaceId: 'ws-1', userId: 'u-1' }));
+    expect(homeDashboardPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ showFirstRfpCoachmark: false }),
     );
   });
 });

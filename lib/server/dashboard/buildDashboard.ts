@@ -15,6 +15,8 @@ export type Dashboard = {
   groups: ActionGroup[];
   // PG 게시판 탐색 목록 (오픈 RFP). buyer dashboard 에는 없음.
   openRfps?: OpportunityListing[];
+  // buyer 전용 — 워크스페이스에 RFP가 하나라도 있는지(draft 포함). 첫 견적 코치마크 노출 판단용.
+  hasAnyRfp?: boolean;
 };
 
 const DAY = 86_400_000;
@@ -75,7 +77,7 @@ export function buildBuyerDashboard(
     { id: 'unanswered', label: '견적 미도착', items: unansweredItems },
   ].filter((g) => g.items.length > 0);
 
-  return { kpis, groups };
+  return { kpis, groups, hasAnyRfp: rfps.length > 0 };
 }
 
 export type PgDashRow = {

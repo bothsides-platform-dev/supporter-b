@@ -2,18 +2,17 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 
 vi.mock('next/link', () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  default: ({ children, href, ...rest }: { children: React.ReactNode; href: string }) => (
+    <a href={href} {...rest}>{children}</a>
+  ),
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 // Mock the server-action barrel so the jsdom suite doesn't load next-auth
 // (pulled transitively via the OpportunityRequestDialog in the discovery section).
 vi.mock('@/lib/server/actions/rfp', () => ({ createPgRequestAction: vi.fn() }));
 vi.mock('@/lib/features/open-board', () => ({ OPEN_BOARD_ENABLED: true }));
-vi.mock('@/components/onboarding/WelcomeModal', () => ({
-  WelcomeModal: ({ variant }: { variant: string }) => <div>WelcomeModal:{variant}</div>,
-}));
-vi.mock('@/components/onboarding/TutorialNudge', () => ({
-  TutorialNudge: () => <div>TutorialNudge</div>,
+vi.mock('@/components/onboarding/FirstRfpCoachmark', () => ({
+  FirstRfpCoachmark: () => <div>FirstRfpCoachmark</div>,
 }));
 
 import { HomeDashboard } from '../HomeDashboard';
@@ -103,37 +102,50 @@ describe('HomeDashboard', () => {
     expect(kpi.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('welcomeState="welcome"이면 variant=workspaceType의 WelcomeModal을 렌더한다', () => {
+  it('showFirstRfpCoachmark=true + buyer면 FirstRfpCoachmark를 렌더한다', () => {
     render(
       <HomeDashboard
         dashboard={withGroups}
         workspaceType="buyer"
         items={[]}
         unreadCount={0}
-        welcomeState="welcome"
+        showFirstRfpCoachmark
       />,
     );
-    expect(screen.getByText('WelcomeModal:buyer')).toBeInTheDocument();
-    expect(screen.queryByText('TutorialNudge')).not.toBeInTheDocument();
+    expect(screen.getByText('FirstRfpCoachmark')).toBeInTheDocument();
   });
 
-  it('welcomeState="nudge"이면 TutorialNudge를 렌더한다', () => {
+  it('showFirstRfpCoachmark=false면 렌더하지 않는다', () => {
+    render(
+      <HomeDashboard
+        dashboard={withGroups}
+        workspaceType="buyer"
+        items={[]}
+        unreadCount={0}
+        showFirstRfpCoachmark={false}
+      />,
+    );
+    expect(screen.queryByText('FirstRfpCoachmark')).not.toBeInTheDocument();
+  });
+
+  it('showFirstRfpCoachmark=true여도 pg면 렌더하지 않는다', () => {
     render(
       <HomeDashboard
         dashboard={withGroups}
         workspaceType="pg"
         items={[]}
         unreadCount={0}
-        welcomeState="nudge"
+        showFirstRfpCoachmark
       />,
     );
-    expect(screen.getByText('TutorialNudge')).toBeInTheDocument();
-    expect(screen.queryByText(/WelcomeModal/)).not.toBeInTheDocument();
+    expect(screen.queryByText('FirstRfpCoachmark')).not.toBeInTheDocument();
   });
 
-  it('welcomeState="none"/미지정이면 둘 다 렌더하지 않는다', () => {
+  it('buyer CTA Link에 data-coachmark="home-create-rfp"가 있다', () => {
     render(<HomeDashboard dashboard={withGroups} workspaceType="buyer" items={[]} unreadCount={0} />);
-    expect(screen.queryByText(/WelcomeModal/)).not.toBeInTheDocument();
-    expect(screen.queryByText('TutorialNudge')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /견적 요청하기/ })).toHaveAttribute(
+      'data-coachmark',
+      'home-create-rfp',
+    );
   });
 });

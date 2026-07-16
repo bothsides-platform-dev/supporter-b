@@ -27,8 +27,8 @@ export async function updateOnboardingAction(
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
-  const actor =
-    parsed.data.key === 'buyerTutorial' ? await requireBuyerActor() : await requirePgActor();
+  const isBuyerKey = parsed.data.key === 'buyerTutorial' || parsed.data.key === 'buyerFirstRfp';
+  const actor = isBuyerKey ? await requireBuyerActor() : await requirePgActor();
   if (!actor.ok) return actor;
 
   const service = await getOnboardingService();

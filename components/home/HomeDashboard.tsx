@@ -4,8 +4,7 @@ import { ActionQueue } from './ActionQueue';
 import { RecentMessagesPanel } from './RecentMessagesPanel';
 import { HomeHeaderActionsRegistrar } from './HomeHeaderActionsRegistrar';
 import { OpportunityList } from '@/components/opportunities/OpportunityList';
-import { WelcomeModal } from '@/components/onboarding/WelcomeModal';
-import { TutorialNudge } from '@/components/onboarding/TutorialNudge';
+import { FirstRfpCoachmark } from '@/components/onboarding/FirstRfpCoachmark';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -27,30 +26,29 @@ export function HomeDashboard({
   workspaceType,
   items,
   unreadCount,
-  welcomeState = 'none',
+  showFirstRfpCoachmark = false,
 }: {
   dashboard: Dashboard;
   workspaceType: 'buyer' | 'pg';
   items: InboxListItem[];
   unreadCount: number;
-  welcomeState?: 'welcome' | 'nudge' | 'none';
+  showFirstRfpCoachmark?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-4">
       <HomeHeaderActionsRegistrar />
-      {welcomeState === 'welcome' && <WelcomeModal variant={workspaceType} />}
+      {showFirstRfpCoachmark && workspaceType === 'buyer' && <FirstRfpCoachmark />}
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           <KpiStrip kpis={dashboard.kpis} />
           {/* 구매사가 새 견적을 만들 수 있도록 /rfp 헤더의 "견적 요청하기" CTA를
               재사용해 상시 노출. KPI strip(선정 완료) 바로 아래에 풀-width 큰
-              버튼으로 강조한다. */}
+              버튼으로 강조한다. data-coachmark는 FirstRfpCoachmark의 action step 타깃. */}
           {workspaceType === 'buyer' && (
-            <Link href="/rfp-create" className="block">
+            <Link href="/rfp-create" className="block" data-coachmark="home-create-rfp">
               <Button size="lg" fullWidth icon={<PlusIcon />}>견적 요청하기</Button>
             </Link>
           )}
-          {welcomeState === 'nudge' && <TutorialNudge />}
           {dashboard.groups.length > 0 ? (
             <ActionQueue groups={dashboard.groups} />
           ) : (

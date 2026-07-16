@@ -11,13 +11,14 @@ export type UserOnboardingV1 = {
   _v: 1;
   buyerTutorial?: OnboardingTaskState;
   pgTutorial?: OnboardingTaskState;
+  buyerFirstRfp?: OnboardingTaskState;
 };
 
 // 현재 정규형(현재는 v1 단일). 미래: UserOnboardingV1 | UserOnboardingV2 …
 export type UserOnboarding = UserOnboardingV1;
 
 // 온보딩 태스크 키 어휘 — 타입이 이 단일 배열에서 파생된다(드리프트 방지).
-export const ONBOARDING_KEYS = ['buyerTutorial', 'pgTutorial'] as const;
+export const ONBOARDING_KEYS = ['buyerTutorial', 'pgTutorial', 'buyerFirstRfp'] as const;
 export type OnboardingKey = (typeof ONBOARDING_KEYS)[number];
 
 /**

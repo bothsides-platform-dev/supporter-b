@@ -191,6 +191,21 @@ describe('CoachmarkOverlay', () => {
     vi.unstubAllGlobals();
   });
 
+  it('stepCount===1이면 카운터("1/1")를 표시하지 않는다', () => {
+    render(
+      <CoachmarkOverlay
+        rect={makeRect()}
+        step={step}
+        stepIndex={0}
+        stepCount={1}
+        onNext={() => {}}
+        onSkip={() => {}}
+        isLast={true}
+      />,
+    );
+    expect(screen.queryByText('1/1')).not.toBeInTheDocument();
+  });
+
   it('건너뛰기 버튼 클릭 시 onSkip을 호출한다', async () => {
     const user = userEvent.setup();
     const onSkip = vi.fn();

@@ -78,9 +78,13 @@ export function CoachmarkOverlay({
         </p>
       )}
       <div className="mt-3 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          {stepIndex + 1}/{stepCount}
-        </span>
+        {stepCount > 1 ? (
+          <span className="text-xs text-muted-foreground">
+            {stepIndex + 1}/{stepCount}
+          </span>
+        ) : (
+          <span />
+        )}
         <div className="flex gap-1.5">
           <Button type="button" variant="text" size="sm" onClick={onSkip}>
             건너뛰기

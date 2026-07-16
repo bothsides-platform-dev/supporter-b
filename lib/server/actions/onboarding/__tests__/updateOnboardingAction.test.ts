@@ -29,6 +29,16 @@ describe('updateOnboardingAction', () => {
     expect(spy).toHaveBeenCalledWith({ userId: 'u1' }, 'buyerTutorial', 'completed');
   });
 
+  it('key=buyerFirstRfp delegates to OnboardingService.mark with the buyer actor', async () => {
+    const spy = vi.fn(async () => ({ ok: true as const }));
+    const fake = Object.assign(Object.create(OnboardingService.prototype), { mark: spy });
+    __setOnboardingServiceForTest(fake);
+
+    const res = await updateOnboardingAction({ key: 'buyerFirstRfp', event: 'dismissed' });
+    expect(res).toEqual({ ok: true });
+    expect(spy).toHaveBeenCalledWith({ userId: 'u1' }, 'buyerFirstRfp', 'dismissed');
+  });
+
   it('key=pgTutorial delegates to OnboardingService.mark with the PG actor', async () => {
     const spy = vi.fn(async () => ({ ok: true as const }));
     const fake = Object.assign(Object.create(OnboardingService.prototype), { mark: spy });

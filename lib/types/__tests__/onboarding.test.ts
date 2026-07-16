@@ -13,7 +13,7 @@ describe('USER_ONBOARDING_VERSION', () => {
 
 describe('ONBOARDING_KEYS', () => {
   it('buyerTutorial과 pgTutorial 두 키를 갖는다', () => {
-    expect(ONBOARDING_KEYS).toEqual(['buyerTutorial', 'pgTutorial']);
+    expect(ONBOARDING_KEYS).toEqual(['buyerTutorial', 'pgTutorial', 'buyerFirstRfp']);
   });
 });
 
@@ -50,5 +50,13 @@ describe('migrateUserOnboarding', () => {
   it('멱등하다 — 한 번 정규화한 문서를 다시 넣어도 동일', () => {
     const once = migrateUserOnboarding({ buyerTutorial: { completedAt: '2026-07-01T00:00:00.000Z' } });
     expect(migrateUserOnboarding(once)).toEqual(once);
+  });
+
+  it('buyerFirstRfp 키를 보존한다', () => {
+    const out = migrateUserOnboarding({
+      buyerFirstRfp: { dismissedAt: '2026-07-01T00:00:00.000Z' },
+    });
+    expect(out.buyerFirstRfp).toEqual({ dismissedAt: '2026-07-01T00:00:00.000Z' });
+    expect(out._v).toBe(1);
   });
 });
