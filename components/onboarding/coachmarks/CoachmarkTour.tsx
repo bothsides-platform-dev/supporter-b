@@ -24,7 +24,11 @@ export type CoachmarkTourProps = {
    * 닫기"로 오독하지 말 것(그 용도는 onFinish 쪽 계약).
    */
   onSkip?: () => void;
-  /** 각 step의 target 탐색 타임아웃(ms). 기본값은 useAnchorRect 기본값을 따른다. */
+  /**
+   * 각 step의 target 탐색 타임아웃(ms). 기본값은 useAnchorRect 기본값을 따른다.
+   * 주의: 오프코스 리졸버의 복귀 지연(~0.5s)보다 짧게 주면 notFound 전방 스킵이
+   * 리졸버 복귀를 앞질러 막힌-클릭 복귀가 무력화된다 — 1000ms 미만은 피할 것.
+   */
   timeoutMs?: number;
 };
 
@@ -44,15 +48,16 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
   useEffect(() => {
     if (status !== 'notFound') return;
 
-    // 막힌 클릭 복귀: action step 클릭이 실제로 접수됐지만(코치마크는 진행) 위저드
-    // 검증 등으로 실제 진행이 막힌 경우(예: 프리필 제목을 지운 채 다음 클릭 —
-    // 위저드는 토스트+필드 에러로 그 자리에 머문다), 다음 step의 타깃은 영원히
-    // 나타나지 않아 notFound 타임아웃이 뜬다. 이때 그대로 전방 스킵하면 사용자는
-    // 안내를 잃는다. 직전 step이 action이고 그 타깃이 아직 DOM에 있으면(클릭이
-    // 실제로는 진행되지 않았다는 증거) 그 step으로 되돌아간다. 복귀 시점에 타깃이
-    // 이미 존재하므로 useAnchorRect가 즉시 found로 전환돼 재-notFound 루프는
-    // 발생하지 않는다 — 다음 notFound는 오직 사용자의 다음 실제 클릭 이후에만
-    // 재발할 수 있다.
+    // 막힌 클릭 복귀 — 폴백 경로: 평상시엔 오프코스 리졸버가 ~0.5s에 먼저 복귀시켜
+    // 여기까지 오지 않는다(리졸버가 관망하는 모호/단일-action 상황에서만 의미).
+    // action step 클릭이 실제로 접수됐지만(코치마크는 진행) 위저드 검증 등으로
+    // 실제 진행이 막힌 경우(예: 프리필 제목을 지운 채 다음 클릭 — 위저드는
+    // 토스트+필드 에러로 그 자리에 머문다), 다음 step의 타깃은 영원히 나타나지
+    // 않아 notFound 타임아웃이 뜬다. 이때 그대로 전방 스킵하면 사용자는 안내를
+    // 잃는다. 직전 step이 action이고 그 타깃이 아직 DOM에 있으면(클릭이 실제로는
+    // 진행되지 않았다는 증거) 그 step으로 되돌아간다. 복귀 시점에 타깃이 이미
+    // 존재하므로 useAnchorRect가 즉시 found로 전환돼 재-notFound 루프는 발생하지
+    // 않는다 — 다음 notFound는 오직 사용자의 다음 실제 클릭 이후에만 재발할 수 있다.
     if (stepIndex > 0) {
       const prev = steps[stepIndex - 1];
       if (prev.kind === 'action' && document.querySelector(coachmarkSelector(prev.target))) {
@@ -79,15 +84,27 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
   // 오프코스 리졸버: 사용자가 안내 코스를 벗어나 화면을 직접 바꿔도(위저드 이전/
   // 스텝 인디케이터 점프, info 안내 무시하고 실제 버튼 클릭, 검증에 막힌 클릭 등)
   // 코치마크가 현재 화면에 맞는 스텝으로 즉시 따라온다. 구조적 전제: 한 화면에는
-  // 이 투어의 action 앵커가 최대 1개만 존재한다(위저드 next-N은 스텝별 상호배타).
+  // 이 투어의 action 앵커가 최대 1개만 존재한다(위저드 next-N은 스텝별 상호배타 —
+  // tours 드리프트 가드 테스트가 못박는다). 투어 형태 제약: action 뒤에 낀 info
+  // 스텝(action→info→action)은 직전 action 앵커가 화면에 남아 있으면 되끌릴 수
+  // 있다 — 현행 투어는 전부 info가 action 앞에만 오는 형태라 해당 없음.
   // 규칙 — 지금 DOM에 실재하는 action 앵커(candidate)가 투어가 기다리는 action
   // 스텝(expected = stepIndex 이후 첫 action)과 다르면 candidate로 점프한다.
   // 앵커가 0개(전환 중)거나 2개 이상(전제 붕괴 — 모호)이면 아무것도 하지 않고,
   // expected가 없으면(마지막 action 이후) 점프하지 않는다 — 방금 클릭한 앵커가
   // 화면에 남아 있는 것만으로 뒤로 끌려가는 역행을 막는다.
+  //
+  // 의존성은 steps의 "정체성"이 아니라 action target 내용 키다 — 소비자가 인라인
+  // 배열을 넘겨 렌더마다 정체성이 바뀌어도 인터벌·히스테리시스 카운터가 리셋되지
+  // 않는다(정체성 의존이면 리졸버가 조용히 무력화된다).
+  const actionTargetsKey = steps
+    .map((s) => (s.kind === 'action' ? s.target : ''))
+    .join('|');
   useEffect(() => {
     const actionIndexes = steps.flatMap((s, i) => (s.kind === 'action' ? [i] : []));
-    if (actionIndexes.length === 0) return;
+    // action이 1개면 expected가 항상 그 스텝이라 점프 경로가 수학적으로 도달 불가 —
+    // 인터벌을 만들지 않는다(단일 action 투어에서 무의미한 4Hz 폴 방지).
+    if (actionIndexes.length < 2) return;
 
     let mismatchIndex = -1;
     let mismatchTicks = 0;
@@ -113,7 +130,8 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
     }, RESOLVER_INTERVAL_MS);
     return () => clearInterval(intervalId);
     // stepIndex 변경(점프 포함) 시 인터벌이 재생성되며 히스테리시스 카운터도 리셋된다.
-  }, [steps, stepIndex]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- steps 내용은 actionTargetsKey가 대표(정체성 변화로 리졸버가 리셋되지 않게 의도)
+  }, [actionTargetsKey, stepIndex]);
 
   useEffect(() => {
     if (!currentStep || currentStep.kind !== 'action' || status !== 'found') return;
