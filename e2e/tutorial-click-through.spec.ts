@@ -103,6 +103,38 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
       .toBeTruthy();
   });
 
+  test('buyer 오프코스: 안내 무시 직진·이전 후퇴에도 코치마크가 현재 화면을 따라온다', async ({ page }) => {
+    await resetOnboarding(EMAILS.buyer);
+    await enterTutorial(page, 'buyer');
+
+    const dialog = page.locator('[role="dialog"]');
+
+    // (1) 인트로 info(1/5)를 무시하고 실제 다음 버튼을 직접 클릭 — 위저드는 2단계로
+    // 넘어가지만 코치마크는 info에 머문다 → 오프코스 리졸버가 2단계 action(3/5)으로
+    // 전방 점프해야 한다.
+    const next1 = page.locator('[data-coachmark="tutorial-wizard-next-1"]');
+    await next1.waitFor({ state: 'visible', timeout: 15_000 });
+    await next1.click();
+    await expect(dialog).toContainText('3/5', { timeout: 15_000 });
+
+    // (2) 안내를 따라 3단계 도달(4/5).
+    await clickThrough(page, 'tutorial-wizard-next-2');
+    await expect(dialog).toContainText('4/5', { timeout: 15_000 });
+
+    // (3) "이전"으로 후퇴 — 코치마크가 2단계 스텝(3/5)으로 복귀해야 한다.
+    await page.getByRole('button', { name: '이전' }).click();
+    await expect(dialog).toContainText('3/5', { timeout: 15_000 });
+
+    // (4) 복귀한 안내를 따라 끝까지 완주 가능해야 한다 — 오프코스가 투어를 죽이지 않는다.
+    await clickThrough(page, 'tutorial-wizard-next-2');
+    await clickThrough(page, 'tutorial-wizard-next-3');
+    await clickThrough(page, 'tutorial-wizard-submit');
+    await clickThrough(page, 'tutorial-arrival-cta');
+    await dismissInfo(page);
+    await clickThrough(page, 'tutorial-award-cta');
+    await expect(page.getByText('튜토리얼을 완료했어요')).toBeVisible({ timeout: 15_000 });
+  });
+
   test('pg: 무입력 클릭만으로 초대→조건→작성→제출→완료', async ({ page }) => {
     await resetOnboarding(EMAILS['pg-toss']);
     await enterTutorial(page, 'pg-toss');

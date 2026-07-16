@@ -7,6 +7,12 @@ import { coachmarkSelector } from './coachmark-selector';
 import { useAnchorRect } from './useAnchorRect';
 import type { CoachmarkStep } from './types';
 
+// 오프코스 리졸버 폴링 주기 — useAnchorRect의 보정 폴링(250ms)과 같은 리듬.
+const RESOLVER_INTERVAL_MS = 250;
+// 연속 N틱 동안 같은 불일치가 관찰돼야 점프한다 — 위저드 전환 한 프레임 사이의
+// 과도기(이전 앵커 잔존/다음 앵커 미등장)에 오점프하지 않기 위한 히스테리시스.
+const RESOLVER_CONFIRM_TICKS = 2;
+
 export type CoachmarkTourProps = {
   steps: CoachmarkStep[];
   /** 투어 자연 종료(마지막 step 완료·notFound 타임아웃 소진) — 로컬 닫힘 처리용. */
@@ -69,6 +75,45 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  // 오프코스 리졸버: 사용자가 안내 코스를 벗어나 화면을 직접 바꿔도(위저드 이전/
+  // 스텝 인디케이터 점프, info 안내 무시하고 실제 버튼 클릭, 검증에 막힌 클릭 등)
+  // 코치마크가 현재 화면에 맞는 스텝으로 즉시 따라온다. 구조적 전제: 한 화면에는
+  // 이 투어의 action 앵커가 최대 1개만 존재한다(위저드 next-N은 스텝별 상호배타).
+  // 규칙 — 지금 DOM에 실재하는 action 앵커(candidate)가 투어가 기다리는 action
+  // 스텝(expected = stepIndex 이후 첫 action)과 다르면 candidate로 점프한다.
+  // 앵커가 0개(전환 중)거나 2개 이상(전제 붕괴 — 모호)이면 아무것도 하지 않고,
+  // expected가 없으면(마지막 action 이후) 점프하지 않는다 — 방금 클릭한 앵커가
+  // 화면에 남아 있는 것만으로 뒤로 끌려가는 역행을 막는다.
+  useEffect(() => {
+    const actionIndexes = steps.flatMap((s, i) => (s.kind === 'action' ? [i] : []));
+    if (actionIndexes.length === 0) return;
+
+    let mismatchIndex = -1;
+    let mismatchTicks = 0;
+    const intervalId = setInterval(() => {
+      const existing = actionIndexes.filter((i) =>
+        document.querySelector(coachmarkSelector(steps[i].target)),
+      );
+      const expected = actionIndexes.find((i) => i >= stepIndex);
+      if (existing.length !== 1 || expected === undefined || existing[0] === expected) {
+        mismatchIndex = -1;
+        mismatchTicks = 0;
+        return;
+      }
+      if (existing[0] !== mismatchIndex) {
+        mismatchIndex = existing[0];
+        mismatchTicks = 1;
+        return;
+      }
+      mismatchTicks += 1;
+      if (mismatchTicks >= RESOLVER_CONFIRM_TICKS) {
+        setStepIndex(mismatchIndex);
+      }
+    }, RESOLVER_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+    // stepIndex 변경(점프 포함) 시 인터벌이 재생성되며 히스테리시스 카운터도 리셋된다.
+  }, [steps, stepIndex]);
 
   useEffect(() => {
     if (!currentStep || currentStep.kind !== 'action' || status !== 'found') return;
