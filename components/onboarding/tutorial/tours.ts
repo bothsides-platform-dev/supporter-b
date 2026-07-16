@@ -4,8 +4,9 @@
 // FocusComparison/AwardCtaBar에 심어둔 data-coachmark 속성과 매칭된다.
 import type { CoachmarkStep } from '@/components/onboarding/coachmarks/types';
 
-// 튜토리얼은 입력 없이 클릭만으로 진행한다 — action step의 스포트라이트 구멍을
-// 통해 사용자가 실제 버튼을 클릭하면 다음 step으로 넘어간다. 다음 버튼 앵커는
+// 튜토리얼은 오픈 샌드박스로 진행한다 — 폼은 프리필돼 있지만 차단이 없어 사용자가
+// 값을 바꾸거나 화면을 자유롭게 탐색할 수 있다. action step은 타깃 버튼 클릭을
+// 기다리다가(진행 로직은 그대로) 클릭되면 다음 step으로 넘어간다. 다음 버튼 앵커는
 // 스텝별로 다른 target(tutorial-wizard-next-N)이라 각 스텝 도달 시 useAnchorRect가
 // 새로 탐색한다(아직 없는 타깃은 MutationObserver로 등장을 기다림).
 export const buyerCreateTour: CoachmarkStep[] = [
@@ -14,7 +15,7 @@ export const buyerCreateTour: CoachmarkStep[] = [
     kind: 'info',
     title: '견적 요청을 작성해요',
     placement: 'right',
-    body: '실제로 사용하는 화면 그대로예요. 모든 내용이 미리 채워져 있으니, 안내를 따라 클릭만 하면 돼요.',
+    body: '실제로 사용하는 화면 그대로예요. 모든 내용이 미리 채워져 있어요 — 자유롭게 바꿔보거나 눌러봐도 되고, 안내만 따라가도 돼요.',
   },
   {
     target: 'tutorial-wizard-next-1',
@@ -74,7 +75,7 @@ export const buyerCompareTour: CoachmarkStep[] = [
 ];
 
 // pg 튜토리얼(PgTutorialFlow) 코치마크 투어 데이터. target은 InviteScene/RfpBriefPanel/
-// BidWizard에 심어둔 data-coachmark 속성과 매칭된다. buyer와 동일하게 클릭-온리.
+// BidWizard에 심어둔 data-coachmark 속성과 매칭된다. buyer와 동일하게 오픈 샌드박스.
 export const pgInviteTour: CoachmarkStep[] = [
   {
     target: 'tutorial-invite-cta',
@@ -108,7 +109,7 @@ export const pgWriteTour: CoachmarkStep[] = [
     kind: 'info',
     title: '견적을 작성해요',
     placement: 'right',
-    body: '실제로 사용하는 화면 그대로예요. 정산조건과 수수료가 미리 채워져 있어요.',
+    body: '실제로 사용하는 화면 그대로예요. 정산조건과 수수료가 미리 채워져 있어요 — 자유롭게 바꿔봐도 돼요.',
   },
   {
     target: 'tutorial-bid-next-1',

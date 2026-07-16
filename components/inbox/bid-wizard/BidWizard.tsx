@@ -155,6 +155,11 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
         setProposal({ name: file.name, status: 'error', error: 'PDF만 업로드 가능합니다.' });
         return;
       }
+      if (onSampleSubmit) {
+        // 튜토리얼 샌드박스 — 실 업로드(presign→R2)를 만들지 않는다.
+        toast('튜토리얼에서는 업로드되지 않아요');
+        return;
+      }
       setProposal({ name: file.name, status: 'uploading' });
       try {
         const body = await uploadAttachment(file, { ownerKind: 'bid_proposal', ownerId: rfpId });
@@ -168,7 +173,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
         setProposal({ name: file.name, status: 'error', error });
       }
     },
-    [rfpId],
+    [rfpId, onSampleSubmit],
   );
   const clearProposal = useCallback(() => setProposal(null), []);
   // 처음부터 다시: 초안 삭제 + baseline 으로 폼 리셋 + 견적서 선택 해제 + 1단계로.
@@ -217,6 +222,11 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
 
   const onSaveTemplate = useCallback(
     async (name: string) => {
+      if (onSampleSubmit) {
+        // 튜토리얼 샌드박스 — 실 워크스페이스에 템플릿을 만들지 않는다.
+        toast('튜토리얼에서는 저장되지 않아요');
+        return { ok: true as const };
+      }
       const r = await saveQuoteTemplateAction({
         name,
         settleCycle,
@@ -226,21 +236,25 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
       });
       return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
     },
-    [settleCycle, settleLimit, guaranteeInsurance, fees, feeInputMethods],
+    [onSampleSubmit, settleCycle, settleLimit, guaranteeInsurance, fees, feeInputMethods],
   );
 
   const handleSubmit = useCallback(() => {
     // 발송 버튼은 막지 않는다. 미충족 단계가 있으면 hint 토스트 + 그 단계로 이동 + ✗ 표시.
-    const incomplete = getFirstIncompleteBidStep({ cycleNum, anyFeeFilled });
-    if (incomplete) {
-      toast(incomplete.hint, { type: 'error' });
-      markFailed(incomplete.num);
-      setCurrentStep(incomplete.num);
-      return;
+    // 샘플(튜토리얼) 모드는 가드를 건너뛴다 — 코치마크 투어가 제출 클릭에서 종료되므로
+    // 여기서 막히면 안내 없이 좌초된다(버이어 위저드의 onSampleSubmit 선행 라우팅과 대칭).
+    if (!onSampleSubmit) {
+      const incomplete = getFirstIncompleteBidStep({ cycleNum, anyFeeFilled });
+      if (incomplete) {
+        toast(incomplete.hint, { type: 'error' });
+        markFailed(incomplete.num);
+        setCurrentStep(incomplete.num);
+        return;
+      }
     }
     setSubmitError(null);
     setSubmitConfirmOpen(true);
-  }, [cycleNum, anyFeeFilled, markFailed]);
+  }, [onSampleSubmit, cycleNum, anyFeeFilled, markFailed]);
 
   // 4단계가 공유하는 컨텍스트 값 — prop-drilling 제거. 안정 참조(useCallback)
   // 액션 + 폼 상태를 묶어 useMemo 로 캐싱해, 무관한 단계의 리렌더를 줄인다.

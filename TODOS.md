@@ -97,10 +97,13 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ## Onboarding / Tutorial
 
 ### 튜토리얼 플로우 셸 중복 추출 (P3)
-`BuyerTutorialFlow`와 `PgTutorialFlow`가 phase 상태머신 스캐폴딩(PHASE_ORDER/LABELS, 진행 헤더+나가기 버튼, done 전용 컨페티 캔버스)을 거의 그대로 중복. 공용 `TutorialFlowShell`/`useTutorialPhase` 추출 검토. 두 플로우 테스트의 CoachmarkTour/키보드락 mock 중복도 같은 작업에서 공용 test-double로 추출. (발견: /ship maintainability 리뷰 v0.2.76.0, 2026-07-07 · mock 중복 추가: v0.2.79.0, 2026-07-10)
+`BuyerTutorialFlow`와 `PgTutorialFlow`가 phase 상태머신 스캐폴딩(PHASE_ORDER/LABELS, 진행 헤더+나가기 버튼, done 전용 컨페티 캔버스)을 거의 그대로 중복. 공용 `TutorialFlowShell`/`useTutorialPhase` 추출 검토. 두 플로우 테스트의 CoachmarkTour mock 중복도 같은 작업에서 공용 test-double로 추출(키보드락은 v0.3.4.0에서 삭제됨). (발견: /ship maintainability 리뷰 v0.2.76.0, 2026-07-07 · mock 중복 추가: v0.2.79.0, 2026-07-10)
 
 ### updateOnboardingAction fire-and-forget 경화 — 실패 무시 + read-after-write 레이스 (P3)
-`handleComplete`/`handleExit` 6곳이 `void updateOnboardingAction(...)`으로 발사 후 결과를 읽지 않는다: ① 네트워크 단절/세션 만료 시 unhandled rejection + 미영속(유저는 완료 화면을 봤는데 DB엔 스탬프 없음 → 환영 모달 재노출), ② `{ok:false}` 무시, ③ done CTA가 쓰기 완료를 기다리지 않아 `/home` RSC의 `getOnboarding()` 읽기가 쓰기를 앞지르면 완료 직후 환영 모달이 뜰 수 있음(스킵 경로에서 더 잦음). await+에러 토스트 또는 최소 `.catch` + `revalidatePath` 검토. (발견: /ship 적대 리뷰 v0.3.2.0, 2026-07-15)
+`handleComplete`/`handleExit` 6곳이 `void updateOnboardingAction(...)`으로 발사 후 결과를 읽지 않는다: ① 네트워크 단절/세션 만료 시 unhandled rejection + 미영속(유저는 완료 화면을 봤는데 DB엔 스탬프 없음 → 환영 모달 재노출), ② `{ok:false}` 무시, ③ done CTA가 쓰기 완료를 기다리지 않아 `/home` RSC의 `getOnboarding()` 읽기가 쓰기를 앞지르면 완료 직후 환영 모달이 뜰 수 있음(스킵 경로에서 더 잦음). await+에러 토스트 또는 최소 `.catch` + `revalidatePath` 검토. v0.3.4.0의 `TutorialLeaveGuard.leave`(dismissed/completed 스탬프 후 즉시 router.push)도 같은 패턴 2곳 추가 — 경화 시 함께. (발견: /ship 적대 리뷰 v0.3.2.0, 2026-07-15 · 가드 추가: v0.3.4.0, 2026-07-16)
+
+### 오픈 샌드박스 후속 폴리시 — 복귀 공백·저장 신호·href 경화 (P4)
+v0.3.4.0 /ship 리뷰(레드팀·적대·부록)에서 나온 비차단 폴리시 묶음: ① 막힌 클릭 후 코치마크가 notFound 타임아웃(기본 3s)을 기다렸다 복귀하는 동안 안내가 비어 보임 — 타임아웃 단축 또는 클릭 직후 타깃 잔존 즉시 감지 검토(레드팀 conf4). ② 샘플 모드 템플릿 저장이 패널 닫힘(성공 신호)과 "저장되지 않아요" 토스트를 동시에 냄 — 신호 일치 검토(conf3). ③ `TutorialLeaveGuard`의 내부 링크 판정이 protocol-relative(`//host`) href를 통과시킴 — 현재 앵커가 전부 앱 통제라 비악용, 방어적 거부만 추가 검토(보안 conf3).
 
 ### 온보딩 e2e — 진입면(환영 모달·재유도 배너) 여정 (P4)
-클릭-스루 본여정(buyer 작성→도착→선정 / PG 초대→조건→제출)은 `e2e/tutorial-click-through.spec.ts`가 커버(v0.2.79.0, 2026-07-10). 남은 유예분: 홈 환영 모달→체험 시작, '나중에 하기'→재유도 배너→재진입, 완주 후 배너 소멸, 건너뛰기→완료 화면+DB completed 스탬프(+완료 후 /tutorial 재진입이 /home으로 바운스)(유예: 건너뛰기 개편 v0.3.2.0). (유예: 온보딩 재구축 v0.2.76.0)
+클릭-스루 본여정(buyer 작성→도착→선정 / PG 초대→조건→제출)은 `e2e/tutorial-click-through.spec.ts`가 커버(v0.2.79.0, 2026-07-10). 남은 유예분: 홈 환영 모달→체험 시작, '나중에 하기'→재유도 배너→재진입, 완주 후 배너 소멸, 건너뛰기→완료 화면+DB completed 스탬프(+완료 후 /tutorial 재진입이 /home으로 바운스)(유예: 건너뛰기 개편 v0.3.2.0), 이탈 가드 여정(사이드바 클릭→다이얼로그→나중에 하기/건너뛰기 각 스탬프+이동, 오픈 샌드박스 v0.3.4.0 유예). (유예: 온보딩 재구축 v0.2.76.0)

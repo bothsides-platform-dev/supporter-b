@@ -19,7 +19,7 @@ import { RfpBriefPanel } from '@/components/inbox/RfpBriefPanel';
 import { BidWizard } from '@/components/inbox/bid-wizard/BidWizard';
 import { clearStoredBidDraft } from '@/components/inbox/useBidDraft';
 import { InviteScene } from './InviteScene';
-import { useTutorialKeyboardLock } from './useTutorialKeyboardLock';
+import { TutorialLeaveGuard } from './TutorialLeaveGuard';
 import { pgInviteTour, pgBriefTour, pgWriteTour } from './tours';
 import { useCelebrationConfetti } from '@/lib/hooks/useCelebrationConfetti';
 import { updateOnboardingAction } from '@/lib/server/actions/onboarding/updateOnboardingAction';
@@ -46,8 +46,6 @@ export function PgTutorialFlow() {
   const [briefTourDone, setBriefTourDone] = useState(false);
   const [writeTourDone, setWriteTourDone] = useState(false);
   const { canvasRef } = useCelebrationConfetti();
-  // 튜토리얼은 클릭 전용 — 프리필 값을 키보드로 지우거나 덮어쓸 수 없게 잠근다.
-  useTutorialKeyboardLock();
 
   const stepNum = PHASE_ORDER.indexOf(phase) + 1;
 
@@ -65,6 +63,7 @@ export function PgTutorialFlow() {
 
   return (
     <div className="flex flex-1 flex-col">
+      {phase !== 'done' && <TutorialLeaveGuard variant="pg" />}
       {/* useCelebrationConfetti 는 캔버스 마운트 시 자동 발사하는 계약(축하 순간에
           마운트되는 화면용) — 상시 마운트하면 튜토리얼 시작 시 터진다. done 에서만. */}
       {phase === 'done' && (

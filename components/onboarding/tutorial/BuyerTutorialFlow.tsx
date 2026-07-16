@@ -13,8 +13,8 @@ import { RfpCreateWizard } from '@/components/rfp/RfpCreateWizard';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
 import { BidsArrivalScene } from './BidsArrivalScene';
+import { TutorialLeaveGuard } from './TutorialLeaveGuard';
 import { useIsolatedRfpDraft } from './useIsolatedRfpDraft';
-import { useTutorialKeyboardLock } from './useTutorialKeyboardLock';
 import { buyerCreateTour, buyerArrivalTour, buyerCompareTour } from './tours';
 import { useCelebrationConfetti } from '@/lib/hooks/useCelebrationConfetti';
 import { updateOnboardingAction } from '@/lib/server/actions/onboarding/updateOnboardingAction';
@@ -46,8 +46,6 @@ export function BuyerTutorialFlow() {
   const [compareTourDone, setCompareTourDone] = useState(false);
   const { canvasRef } = useCelebrationConfetti();
   const { restore } = useIsolatedRfpDraft(tutorialRfpDraftSeed);
-  // 튜토리얼은 클릭 전용 — 프리필 값을 키보드로 지우거나 덮어쓸 수 없게 잠근다.
-  useTutorialKeyboardLock();
 
   const stepNum = PHASE_ORDER.indexOf(phase) + 1;
 
@@ -70,6 +68,7 @@ export function BuyerTutorialFlow() {
 
   return (
     <div className="flex flex-1 flex-col">
+      {phase !== 'done' && <TutorialLeaveGuard variant="buyer" />}
       {/* useCelebrationConfetti 는 캔버스 마운트 시 자동 발사하는 계약(축하 순간에
           마운트되는 화면용) — 상시 마운트하면 튜토리얼 시작 시 터진다. done 에서만. */}
       {phase === 'done' && (

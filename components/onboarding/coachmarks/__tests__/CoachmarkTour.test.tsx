@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup, act, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, act, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.stubGlobal(
@@ -274,5 +274,108 @@ describe('CoachmarkTour', () => {
 
     expect(onFinish).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
+  });
+
+  it('action 클릭 후 다음 타깃이 나타나지 않으면(notFound) 직전 action 스텝으로 복귀한다', async () => {
+    vi.useFakeTimers();
+    const onFinish = vi.fn();
+    const a = appendTarget('a'); // t1 — 존재
+    // t2('b')는 DOM에 없음 — 위저드 검증이 클릭을 막아 실제로 진행되지 않은 상황을 흉내낸다.
+    const retreatSteps: CoachmarkStep[] = [
+      { target: 'a', title: '여기를 눌러 A', body: 'A 설명', placement: 'bottom', kind: 'action' },
+      { target: 'b', title: '여기를 눌러 B', body: 'B 설명', placement: 'bottom', kind: 'action' },
+    ];
+    render(<CoachmarkTour steps={retreatSteps} onFinish={onFinish} timeoutMs={100} />);
+
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A');
+
+    fireEvent.click(a);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // t2 notFound 타임아웃 → 직전 action step(t1)으로 복귀: 말풍선이 다시 보이고 onFinish는 호출되지 않는다.
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A');
+    expect(onFinish).not.toHaveBeenCalled();
+
+    // 복귀 후 t1 클릭이 다시 가능함 — 재클릭 시 다시 t2를 기다리는 상태로 진행한다.
+    fireEvent.click(a);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
+  it('직전 스텝이 info면 복귀하지 않고 기존 전방 스킵을 유지한다', async () => {
+    vi.useFakeTimers();
+    const onFinish = vi.fn();
+    const p0 = appendTarget('p0'); // action, 존재
+    appendTarget('p1'); // info, 존재
+    // p2(action)는 DOM에 없음
+    const mixedSteps: CoachmarkStep[] = [
+      { target: 'p0', title: 'P0 제목', body: '설명', placement: 'bottom', kind: 'action' },
+      { target: 'p1', title: 'P1 제목', body: '설명', placement: 'bottom' },
+      { target: 'p2', title: 'P2 제목', body: '설명', placement: 'bottom', kind: 'action' },
+    ];
+    render(<CoachmarkTour steps={mixedSteps} onFinish={onFinish} timeoutMs={100} />);
+
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', 'P0 제목');
+
+    fireEvent.click(p0);
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', 'P1 제목');
+
+    // info step은 말풍선 다음 버튼으로 진행 — p2로 이동하지만 p2는 DOM에 없다.
+    fireEvent.click(screen.getByRole('button', { name: '다음' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // 전방 스킵으로 종료(onFinish) — 직전 스텝이 info이므로 p1로 복귀하지 않는다.
+    // (만약 잘못 복귀했다면 p1은 DOM에 이미 존재하므로 즉시 found 상태가 되어 다이얼로그가 다시 보였을 것)
+    expect(onFinish).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
+  it('직전 action 스텝 타깃이 이미 사라졌으면 복귀하지 않고 전방 스킵한다', async () => {
+    const onFinish = vi.fn();
+    const a = appendTarget('gone-a');
+    render(
+      <CoachmarkTour
+        steps={[
+          { target: 'gone-a', kind: 'action', title: 'A', body: 'a', placement: 'top' },
+          { target: 'gone-b', kind: 'action', title: 'B', body: 'b', placement: 'top' },
+        ]}
+        onFinish={onFinish}
+        timeoutMs={300}
+      />,
+    );
+    await screen.findByText('A');
+    await userEvent.click(a);
+    // t1('gone-a')를 실제로 DOM에서 제거 — 복귀 검증(prev 타깃이 여전히 존재하는지)이
+    // false를 반환해야 하므로, notFound 타임아웃이 떠도 복귀하지 않고 전방 스킵해야 한다.
+    a.remove();
+    await waitFor(() => expect(onFinish).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('action 타깃이 disabled면 말풍선에 막힘 힌트가 나타난다', async () => {
+    const btn = document.createElement('button');
+    btn.setAttribute('data-coachmark', 'stuck');
+    btn.disabled = true;
+    // jsdom은 scrollIntoView를 구현하지 않는다 — 파일 기존 관례(stubRect)를 재사용.
+    stubRect(btn);
+    document.body.appendChild(btn);
+
+    render(
+      <CoachmarkTour
+        steps={[{ target: 'stuck', kind: 'action', title: 'T', body: 'B', placement: 'top' }]}
+      />,
+    );
+    expect(
+      await screen.findByText('입력이 비었거나 형식이 달라요. 고치면 계속 진행할 수 있어요.'),
+    ).toBeInTheDocument();
   });
 });

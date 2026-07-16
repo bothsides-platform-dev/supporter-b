@@ -178,7 +178,7 @@ export const tutorialBids: Bid[] = [
 
 /**
  * BidWizard(pg 튜토리얼) 프리필 시드 — tutorialBids[0](튜토리얼페이 A)와 동일 조건.
- * pg 튜토리얼도 입력 없이 클릭만으로 진행한다(키보드는 useTutorialKeyboardLock이 차단).
+ * pg 튜토리얼도 입력 없이 클릭만으로 진행 가능하다(오픈 샌드박스 — 타이핑도 자유롭게 허용).
  * fees 키 규약: 구간제 수단(card·간편결제)은 "<method>:<tier>" percent 문자열,
  * 정액 수단(virtual_account)은 건당 원 정수 문자열.
  */
@@ -213,7 +213,7 @@ const tutorialPgWorkspaceItems: PgWorkspaceItem[] = TUTORIAL_PG_IDS.map((id) => 
 /**
  * useRfpDraftStore 시드 — 모든 스텝을 프리필한다. 튜토리얼은 입력 없이
  * "여기를 눌러" 코치마크를 따라 클릭만으로 진행하는 가이드 투어다
- * (키보드 입력은 useTutorialKeyboardLock이 차단).
+ * (오픈 샌드박스 — 프리필 값은 자유롭게 타이핑으로 수정할 수 있다).
  */
 export const tutorialRfpDraftSeed: RfpDraftSeedFields = {
   title: tutorialBuyerRfp.title,

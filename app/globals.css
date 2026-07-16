@@ -161,39 +161,13 @@
   50%      { opacity: 0.55; }
 }
 
-/*
-  .coachmark-nudge — 코치마크 타깃 밖 클릭 시 1회성 유도 플래시(action→링, info→말풍선).
-  "여기를 클릭해야 한다"를 opacity 블링크로 안내한다. opacity 전용(layout 불변) —
-  scale/transform은 넣지 않는다: 말풍선은 배치에 따라 인라인 transform(예:
-  translateY(-100%))을 이미 쓰고 있어, 애니메이션이 transform을 함께 쓰면 그 인라인
-  값을 애니메이션 동안 덮어써 버블이 튀는 버그가 있었다.
-  .coachmark-pulse(링)와 같은 요소에 공존할 때는 전용 합성 셀렉터
-  (.coachmark-pulse.coachmark-nudge)로 넛지 400ms 재생 후 펄스가 이어 재개되게
-  한다 — 단독으로는 400ms 1회성(원샷)으로 끝난다(말풍선은 펄스가 없으므로 무한
-  루프로 새지 않는다).
-  - prefers-reduced-motion: animation: none
-*/
-@keyframes coachmark-nudge {
-  0%   { opacity: 1; }
-  40%  { opacity: 0.3; }
-  100% { opacity: 1; }
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .coachmark-pulse {
     animation: coachmark-fade-in 150ms ease-out, coachmark-pulse 1.8s ease-in-out infinite;
   }
-  .coachmark-nudge {
-    animation: coachmark-nudge 400ms ease-out;
-  }
-  .coachmark-pulse.coachmark-nudge {
-    animation: coachmark-nudge 400ms ease-out, coachmark-pulse 1.8s ease-in-out 400ms infinite;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .coachmark-pulse,
-  .coachmark-nudge,
-  .coachmark-pulse.coachmark-nudge {
+  .coachmark-pulse {
     animation: none;
   }
 }

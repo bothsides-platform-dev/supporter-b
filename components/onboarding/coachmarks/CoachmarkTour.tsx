@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { CoachmarkOverlay } from './CoachmarkOverlay';
+import { coachmarkSelector } from './coachmark-selector';
 import { useAnchorRect } from './useAnchorRect';
 import type { CoachmarkStep } from './types';
 
@@ -32,10 +33,29 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
   const currentStep = hasSteps ? steps[stepIndex] : null;
   const isLast = stepIndex === steps.length - 1;
 
-  const { rect, status } = useAnchorRect(currentStep?.target ?? null, { timeoutMs });
+  const { rect, status, disabled } = useAnchorRect(currentStep?.target ?? null, { timeoutMs });
 
   useEffect(() => {
     if (status !== 'notFound') return;
+
+    // 막힌 클릭 복귀: action step 클릭이 실제로 접수됐지만(코치마크는 진행) 위저드
+    // 검증 등으로 실제 진행이 막힌 경우(예: 프리필 제목을 지운 채 다음 클릭 —
+    // 위저드는 토스트+필드 에러로 그 자리에 머문다), 다음 step의 타깃은 영원히
+    // 나타나지 않아 notFound 타임아웃이 뜬다. 이때 그대로 전방 스킵하면 사용자는
+    // 안내를 잃는다. 직전 step이 action이고 그 타깃이 아직 DOM에 있으면(클릭이
+    // 실제로는 진행되지 않았다는 증거) 그 step으로 되돌아간다. 복귀 시점에 타깃이
+    // 이미 존재하므로 useAnchorRect가 즉시 found로 전환돼 재-notFound 루프는
+    // 발생하지 않는다 — 다음 notFound는 오직 사용자의 다음 실제 클릭 이후에만
+    // 재발할 수 있다.
+    if (stepIndex > 0) {
+      const prev = steps[stepIndex - 1];
+      if (prev.kind === 'action' && document.querySelector(coachmarkSelector(prev.target))) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- 막힌 클릭(위저드 검증 등)으로 코치마크만 앞서 나간 경우 직전 action step으로 되돌아가는 의도된 반응
+        setStepIndex(stepIndex - 1);
+        return;
+      }
+    }
+
     // 같은 target 문자열을 쓰는 연속 step은 함께 건너뛴다 — target이 안 바뀌면
     // useAnchorRect가 리셋되지 않아 status가 notFound에 머물러 투어가 조용히
     // 멈추기 때문(zombie). 다른 target에 도달하면 hook이 리셋되어 재탐색한다.
@@ -45,7 +65,6 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
     if (next >= steps.length) {
       onFinish?.();
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- notFound 타임아웃 시 다음 step으로 자동 스킵하는 의도된 반응(투어가 멈추지 않는 것이 불변식)
       setStepIndex(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,7 +80,7 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
     // 이중 소비하지 않는다.
     const handleClick = (event: MouseEvent) => {
       const el = event.target instanceof Element ? event.target : null;
-      if (!el?.closest(`[data-coachmark="${CSS.escape(target)}"]`)) return;
+      if (!el?.closest(coachmarkSelector(target))) return;
       if (advanceIsLast) {
         onFinish?.();
       } else {
@@ -97,6 +116,7 @@ export function CoachmarkTour({ steps, onFinish, onSkip, timeoutMs }: CoachmarkT
       onNext={handleNext}
       onSkip={() => onSkip?.()}
       isLast={isLast}
+      targetDisabled={disabled}
     />
   );
 }

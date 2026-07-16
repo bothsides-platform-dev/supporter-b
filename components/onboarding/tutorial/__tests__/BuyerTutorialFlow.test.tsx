@@ -40,11 +40,6 @@ vi.mock('@/components/onboarding/coachmarks', () => ({
   ),
 }));
 
-const keyboardLockMock = vi.fn();
-vi.mock('../useTutorialKeyboardLock', () => ({
-  useTutorialKeyboardLock: () => keyboardLockMock(),
-}));
-
 vi.mock('@/components/rfp/RfpCreateWizard', () => ({
   RfpCreateWizard: ({
     onSampleSubmit,
@@ -81,6 +76,10 @@ vi.mock('@/components/rfp/comparison/FocusComparison', () => ({
 
 vi.mock('@/components/deal-room/DealRoomContext', () => ({
   DealRoomProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock('../TutorialLeaveGuard', () => ({
+  TutorialLeaveGuard: () => <div data-testid="leave-guard" />,
 }));
 
 import { BuyerTutorialFlow } from '../BuyerTutorialFlow';
@@ -269,8 +268,15 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
     expect(screen.getByTestId('tour-tutorial-arrival-cta')).toBeInTheDocument();
   });
 
-  it('튜토리얼 전 구간에서 키보드 락이 마운트된다 (클릭 전용)', () => {
+  it('이탈 가드는 phase!==done 동안 마운트되고, done phase에서는 사라진다', async () => {
+    const user = userEvent.setup();
     render(<BuyerTutorialFlow />);
-    expect(keyboardLockMock).toHaveBeenCalled();
+    expect(screen.getByTestId('leave-guard')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'wizard-submit' }));
+    await user.click(screen.getByRole('button', { name: 'arrival-proceed' }));
+    await user.click(screen.getByRole('button', { name: 'compare-award' }));
+
+    expect(screen.queryByTestId('leave-guard')).not.toBeInTheDocument();
   });
 });

@@ -2,19 +2,24 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { coachmarkSelector } from './coachmark-selector';
+
 export type AnchorStatus = 'searching' | 'found' | 'notFound';
 
 export type AnchorRectResult = {
   rect: DOMRect | null;
   status: AnchorStatus;
+  disabled: boolean;
 };
 
 const DEFAULT_TIMEOUT_MS = 3000;
 
 function queryTarget(target: string): HTMLElement | null {
-  // CoachmarkTour의 클릭 매칭(closest)과 동일하게 CSS.escape로 이스케이프 —
-  // 특수문자 target이 querySelector SyntaxError로 폴링 tick을 죽이지 않게.
-  return document.querySelector(`[data-coachmark="${CSS.escape(target)}"]`);
+  return document.querySelector(coachmarkSelector(target));
+}
+
+function isDisabledEl(el: HTMLElement): boolean {
+  return el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true';
 }
 
 /**
@@ -27,13 +32,17 @@ export function useAnchorRect(
   options?: { timeoutMs?: number },
 ): AnchorRectResult {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const [result, setResult] = useState<AnchorRectResult>({ rect: null, status: 'searching' });
+  const [result, setResult] = useState<AnchorRectResult>({
+    rect: null,
+    status: 'searching',
+    disabled: false,
+  });
   const scrolledRef = useRef(false);
 
   useEffect(() => {
     scrolledRef.current = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- target 변경 시 이전 결과를 즉시 리셋하는 의도된 동기화
-    setResult({ rect: null, status: 'searching' });
+    setResult({ rect: null, status: 'searching', disabled: false });
 
     if (!target) return;
 
@@ -62,7 +71,7 @@ export function useAnchorRect(
             if (pollId) clearInterval(pollId);
             window.removeEventListener('resize', updateRect);
             window.removeEventListener('scroll', updateRect, { capture: true });
-            setResult({ rect: null, status: 'notFound' });
+            setResult({ rect: null, status: 'notFound', disabled: false });
           }
           return; // 다음 tick에서 재시도
         }
@@ -74,11 +83,13 @@ export function useAnchorRect(
         detachedSinceMs = null;
       }
       const rect = trackedEl.getBoundingClientRect();
+      const disabled = isDisabledEl(trackedEl);
       // 동일 rect 재-set 방지 — 폴링이 매 tick 불필요한 리렌더를 만들지 않도록.
-      const key = `${rect.top},${rect.left},${rect.width},${rect.height}`;
+      // disabled를 key에 포함해, rect는 그대로인데 disabled만 토글된 경우에도 갱신되게 한다.
+      const key = `${rect.top},${rect.left},${rect.width},${rect.height},${disabled}`;
       if (key === lastKey) return;
       lastKey = key;
-      setResult({ rect, status: 'found' });
+      setResult({ rect, status: 'found', disabled });
     };
 
     const attach = (el: HTMLElement) => {
@@ -120,7 +131,7 @@ export function useAnchorRect(
       timeoutId = setTimeout(() => {
         if (cancelled || trackedEl) return;
         mutationObserver?.disconnect();
-        setResult({ rect: null, status: 'notFound' });
+        setResult({ rect: null, status: 'notFound', disabled: false });
       }, timeoutMs);
     }
 
