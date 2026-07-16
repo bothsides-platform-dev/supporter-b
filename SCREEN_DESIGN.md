@@ -62,7 +62,6 @@ Authenticated AppShell
 │  ├─ /inbox/:rfpId                (딜룸 — `@modal` 인터셉트 모달 + 정식 페이지)
 │  └─ /inbox/:rfpId/submitted
 ├─ /opportunities                (pg — 오픈 RFP 게시판)
-├─ /tutorial                     (buyer+pg — 온보딩 튜토리얼. 홈 환영 모달/재유도 배너의 진입점. buyer는 BuyerTutorialFlow가 실제 여정(작성→도착연출→비교·선정→완료) 제공, pg는 PgTutorialFlow가 실제 여정(초대 수신→요청 조건 확인→견적 작성·제출→완료) 제공. 오픈 샌드박스: 전부 프리필 + 코치마크가 실제 버튼 클릭을 안내(차단 없음 — 자유 입력·탐색 허용, 이탈은 확인 다이얼로그). 완료 시 /home 리다이렉트)
 ├─ /notifications
 ├─ /messages
 ├─ /workspace/new
@@ -87,7 +86,7 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
-| B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget` |
+| B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동. **첫 견적 코치마크**: 워크스페이스에 RFP가 0건이고 아직 완료/건너뛰기 스탬프가 없을 때만, CTA("견적 요청하기")를 가리키는 단일 action-kind 스텝을 노출한다(`FirstRfpCoachmark`, 표시 판정은 `lib/onboarding/visibility.ts`). CTA(`home-create-rfp`)를 실제로 클릭하면 `/rfp-create`로 이동하며 `users.onboarding.buyerFirstRfp.completedAt`을 스탬프; 말풍선의 건너뛰기를 누르면 즉시 닫히고 `dismissedAt`을 스탬프한다(둘 다 1회성 — 이후 재노출 없음). PG 워크스페이스용 온보딩 코치마크는 아직 없음 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget`, `FirstRfpCoachmark`, `CoachmarkTour` |
 | B2 | `/rfp` | RFP 목록. 진행중/마감 탭 (v0.2.54.0에서 '선정 완료' 탭이 '마감'으로 통합됨 — 결과는 마감 컬럼 안의 칩(선정완료·미선정·취소)으로 구분. 작성중 단계는 제거 — draft RFP는 `?status=draft` URL/표로만 접근). | `RfpList`, `DataTable`, `Tag` |
 | B3 | `/rfp/new` | 사업자 조회 (선택), 등급 확인 (선택), RFP 첨부, PG 워크스페이스 검색·선택, 발송. **마운트 시 draft 재조정**: 화면 진입 시 localStorage draft를 자동 정리 — (1) 현재 서버 PG 목록에 없는 PG 워크스페이스 제거, (2) 만료된 마감일 초기화, (3) 24h 이후 서버에서 sweep된 첨부파일 제거. 각 정리 항목은 info toast로 안내(`verifyDraftFilesAction` — DB unclaimed 검증). | `BizLookupField`, `GradeConfirmPanel`, `RfpCreateForm` (인라인 Popover+cmdk PG 검색), `RfpAttachmentDropzone`, `RfpCreateWizard` |
 | B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **진입**: 목록(B1) 행 클릭 시 블러 모달 딜룸(`@modal` 인터셉트), 새로고침·딥링크는 정식 페이지 — 둘 다 `DealRoomFull`/`DealRoomShell` 공유. 좌측 76px 아이콘 액션 레일(`DealRoomActionRail`) + 중앙 탭(`DealRoomCenter`). **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / PG 초대·게시판 관리). 게시판 공개 여부는 아코디언 내 `RfpBoardVisibilityStatus` 읽기전용 칩(변경 불가 — 작성 시 확정)으로 표시되며, 동일 칩이 상세 화면 헤더에도 노출된다. 견적별 '내 메모'는 제거 — 팀 메모는 딜룸 '팀 채팅'으로 일원화(첨부 지원). 표·보드·칸반 제거. **딜룸 채팅**(`DealRoomChat`→`ChatPanel`; lg+ 우측 aside, lg 미만 `DealRoomChatFab` 하단 시트): 탭 [상대방 채팅(FocusComparison 이 `useDealRoom().setCounterparty` 로 포커스 PG 추종, 전송에 RFP 태그 기본값) \| 팀 채팅(워크스페이스 내부 스레드, PDF·이미지 첨부)]. **선정 종료 후(결과 통합형)**: RFP `awarded` 시 `견적 비교` 탭 최상단 결과 패널 `DealResultHeader`(award, `"<PG>를 선정했어요"`, subtitle `"담당처와 연락을 이어나가보세요."`, tertiary)가 선정 PG 담당자 `ContactBlock`(아바타·이름·상대칩·이메일/전화 + `CopyButton` 복사)을 감싼다 — 딜룸 상단 별도 배너가 아니라 비교 탭 안에 함께 노출된다. | `DealRoomModal`, `DealRoomFull`, `DealRoomShell`, `BuyerDealRoomBody`, `DealRoomActionRail`, `DealRoomCenter`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `AwardResult`, `BidPdfPane`, `DealRoomChat`, `DealRoomChatFab`, `ChatPanel`, `DealRoomContext`, `TeamThreadView`, `MessageAttachmentGrid`, `RfpBoardVisibilityStatus`, `DealResultHeader`, `ContactBlock`, `CopyButton` |
