@@ -285,7 +285,6 @@ export function RfpStep4Review({
         </Button>
         <Button
           data-demo-cursor
-          data-coachmark="tutorial-wizard-submit"
           type="button"
           size="lg"
           disabled={submitting}

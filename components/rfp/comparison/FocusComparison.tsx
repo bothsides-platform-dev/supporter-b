@@ -162,7 +162,7 @@ export function FocusComparison(props: Props) {
   return (
     <section>
       {!props.hideHeader && (
-        <div className="flex items-center gap-3 mb-4" data-coachmark="tutorial-compare-header">
+        <div className="flex items-center gap-3 mb-4">
           <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
             견적 비교
           </span>

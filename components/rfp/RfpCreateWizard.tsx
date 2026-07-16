@@ -272,7 +272,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
           />
         )}
 
-        <div className="flex-1 px-6 py-6" data-coachmark="tutorial-wizard-content">
+        <div className="flex-1 px-6 py-6">
           {/* Step header */}
           {!hideNav && (
             <div className="flex items-center gap-3 mb-6">

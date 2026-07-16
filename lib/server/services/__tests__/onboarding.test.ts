@@ -21,36 +21,36 @@ afterEach(() => {
 describe('OnboardingService.mark', () => {
   it('stamps completedAt on the given key', async () => {
     const u = await seedUser(db);
-    const res = await svc.mark({ userId: u.id }, 'buyerTutorial', 'completed');
+    const res = await svc.mark({ userId: u.id }, 'buyerFirstRfp', 'completed');
     expect(res.ok).toBe(true);
 
     const { DrizzleUserRepository } = await import('@/lib/server/repositories/drizzle/user');
     const userRepo = new DrizzleUserRepository(db);
     const onboarding = await userRepo.getOnboarding(u.id);
-    expect(onboarding.buyerTutorial?.completedAt).toBeTruthy();
-    expect(onboarding.buyerTutorial?.dismissedAt).toBeUndefined();
+    expect(onboarding.buyerFirstRfp?.completedAt).toBeTruthy();
+    expect(onboarding.buyerFirstRfp?.dismissedAt).toBeUndefined();
   });
 
   it('stamps dismissedAt on the given key', async () => {
     const u = await seedUser(db);
-    const res = await svc.mark({ userId: u.id }, 'pgTutorial', 'dismissed');
+    const res = await svc.mark({ userId: u.id }, 'buyerFirstRfp', 'dismissed');
     expect(res.ok).toBe(true);
 
     const { DrizzleUserRepository } = await import('@/lib/server/repositories/drizzle/user');
     const userRepo = new DrizzleUserRepository(db);
     const onboarding = await userRepo.getOnboarding(u.id);
-    expect(onboarding.pgTutorial?.dismissedAt).toBeTruthy();
+    expect(onboarding.buyerFirstRfp?.dismissedAt).toBeTruthy();
   });
 
   it('is idempotent — marking the same key/event twice keeps a single stamp shape', async () => {
     const u = await seedUser(db);
-    await svc.mark({ userId: u.id }, 'buyerTutorial', 'completed');
-    const res2 = await svc.mark({ userId: u.id }, 'buyerTutorial', 'completed');
+    await svc.mark({ userId: u.id }, 'buyerFirstRfp', 'completed');
+    const res2 = await svc.mark({ userId: u.id }, 'buyerFirstRfp', 'completed');
     expect(res2.ok).toBe(true);
 
     const { DrizzleUserRepository } = await import('@/lib/server/repositories/drizzle/user');
     const userRepo = new DrizzleUserRepository(db);
     const onboarding = await userRepo.getOnboarding(u.id);
-    expect(onboarding.buyerTutorial?.completedAt).toBeTruthy();
+    expect(onboarding.buyerFirstRfp?.completedAt).toBeTruthy();
   });
 });

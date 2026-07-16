@@ -9,8 +9,6 @@ export type OnboardingTaskState = { completedAt?: string; dismissedAt?: string }
 // v1 모양. 모든 키 optional → 키 추가는 non-breaking.
 export type UserOnboardingV1 = {
   _v: 1;
-  buyerTutorial?: OnboardingTaskState;
-  pgTutorial?: OnboardingTaskState;
   buyerFirstRfp?: OnboardingTaskState;
 };
 
@@ -18,7 +16,7 @@ export type UserOnboardingV1 = {
 export type UserOnboarding = UserOnboardingV1;
 
 // 온보딩 태스크 키 어휘 — 타입이 이 단일 배열에서 파생된다(드리프트 방지).
-export const ONBOARDING_KEYS = ['buyerTutorial', 'pgTutorial', 'buyerFirstRfp'] as const;
+export const ONBOARDING_KEYS = ['buyerFirstRfp'] as const;
 export type OnboardingKey = (typeof ONBOARDING_KEYS)[number];
 
 /**

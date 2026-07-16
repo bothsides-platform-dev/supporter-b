@@ -44,12 +44,4 @@ describe('RfpStep1BizProfile', () => {
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(onNext).toHaveBeenCalledOnce();
   });
-
-  it('다음 버튼에 튜토리얼 코치마크 앵커가 있다', () => {
-    render(<RfpStep1BizProfile onNext={vi.fn()} />);
-    expect(screen.getByRole('button', { name: '다음' })).toHaveAttribute(
-      'data-coachmark',
-      'tutorial-wizard-next-1',
-    );
-  });
 });

@@ -414,7 +414,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
             <WizardProgressBar currentStep={currentStep} completed={completed} failedAt={failedAt} onStepClick={goToStep} steps={BID_WIZARD_STEPS} />
 
-            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6" data-coachmark="tutorial-bid-form">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
               <div className="flex items-center gap-3 mb-6">
                 <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                   {String(currentStep).padStart(2, '0')} — {BID_WIZARD_STEPS[currentStep - 1].label}
@@ -473,7 +473,6 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
                 {currentStep < TOTAL_STEPS ? (
                   <Button
                     type="button"
-                    data-coachmark={`tutorial-bid-next-${currentStep}`}
                     onClick={advance}
                     trailingIcon={<span aria-hidden>→</span>}
                   >
@@ -483,7 +482,6 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
                   <Button
                     type="button"
                     size="lg"
-                    data-coachmark="tutorial-bid-submit"
                     onClick={handleSubmit}
                     disabled={pending || !!proposalUploading}
                   >

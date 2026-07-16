@@ -12,8 +12,8 @@ describe('USER_ONBOARDING_VERSION', () => {
 });
 
 describe('ONBOARDING_KEYS', () => {
-  it('buyerTutorial과 pgTutorial 두 키를 갖는다', () => {
-    expect(ONBOARDING_KEYS).toEqual(['buyerTutorial', 'pgTutorial', 'buyerFirstRfp']);
+  it('buyerFirstRfp 단일 키를 갖는다', () => {
+    expect(ONBOARDING_KEYS).toEqual(['buyerFirstRfp']);
   });
 });
 
@@ -26,29 +26,31 @@ describe('migrateUserOnboarding', () => {
 
   it('알려진 키를 보존하고 _v를 현재 버전으로 정규화한다', () => {
     const out = migrateUserOnboarding({
-      buyerTutorial: { completedAt: '2026-07-01T00:00:00.000Z' },
+      buyerFirstRfp: { completedAt: '2026-07-01T00:00:00.000Z' },
     });
-    expect(out.buyerTutorial).toEqual({ completedAt: '2026-07-01T00:00:00.000Z' });
+    expect(out.buyerFirstRfp).toEqual({ completedAt: '2026-07-01T00:00:00.000Z' });
     expect(out._v).toBe(1);
   });
 
   it('알 수 없는 키/가비지 입력은 무시한다', () => {
     const out = migrateUserOnboarding({
-      buyerTutorial: { completedAt: '2026-07-01T00:00:00.000Z' },
+      buyerFirstRfp: { completedAt: '2026-07-01T00:00:00.000Z' },
       unknownKey: { completedAt: '2026-07-01T00:00:00.000Z' },
       garbage: 'not-an-object',
     });
-    expect(out).toEqual({ _v: 1, buyerTutorial: { completedAt: '2026-07-01T00:00:00.000Z' } });
+    expect(out).toEqual({ _v: 1, buyerFirstRfp: { completedAt: '2026-07-01T00:00:00.000Z' } });
   });
 
-  it('_v가 없는 레거시 블롭도 v1로 간주해 정규화한다 (읽기는 관대)', () => {
-    const out = migrateUserOnboarding({ pgTutorial: { dismissedAt: '2026-07-02T00:00:00.000Z' } });
-    expect(out._v).toBe(1);
-    expect(out.pgTutorial).toEqual({ dismissedAt: '2026-07-02T00:00:00.000Z' });
+  it('구 buyerTutorial/pgTutorial 스탬프는 더 이상 알려진 키가 아니므로 폐기된다', () => {
+    const out = migrateUserOnboarding({
+      buyerTutorial: { completedAt: '2026-07-01T00:00:00.000Z' },
+      pgTutorial: { dismissedAt: '2026-07-02T00:00:00.000Z' },
+    });
+    expect(out).toEqual({ _v: 1 });
   });
 
   it('멱등하다 — 한 번 정규화한 문서를 다시 넣어도 동일', () => {
-    const once = migrateUserOnboarding({ buyerTutorial: { completedAt: '2026-07-01T00:00:00.000Z' } });
+    const once = migrateUserOnboarding({ buyerFirstRfp: { completedAt: '2026-07-01T00:00:00.000Z' } });
     expect(migrateUserOnboarding(once)).toEqual(once);
   });
 
