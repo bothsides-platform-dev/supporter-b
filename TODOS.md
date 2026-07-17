@@ -43,6 +43,9 @@
 
 ## Design
 
+### AnimatedBrandMark 진입 애니메이션 — DESIGN.md 예외 미문서화 (P4)
+`components/primitives/AnimatedBrandMark.tsx`(v0.3.0.0, `SidebarBrand`가 인증 앱 셸에 마운트)의 1회성 SVG `pathLength`/`fillOpacity` draw-on 진입 연출이 DESIGN.md §9의 `(app)/**` 두 예외(축하 모먼트·테마 전환 리빌) 어디에도 명시되지 않았다(같은 릴리스 범위의 `.coachmark-pulse`는 예외로 문서화됨과 대비). 기능적 결함은 아님 — 세 번째 예외로 DESIGN.md에 명문화할지, `/design-review`로 하드룰 위반 여부를 재검토할지 정책 결정 필요. (발견: /ship 문서 동기화 점검, dev→main 릴리스 컷 2026-07-17)
+
 ### font-mono uppercase tracking on non-numeric UI labels (C4) (P3)
 `font-mono text-[10px] tracking-[0.1em] uppercase` 패턴이 폼 라벨·버튼·nav 링크 등 비수치 UI 요소 ~180곳에 남아 있음 (DESIGN.md 하드 룰 위반: "no `font-mono uppercase tracking` on labels/nav"). 대표 파일: `app/(public)/login`·`signup`·`password`·`auth`·`invite`, `components/auth/PasswordField`·`PhoneVerificationField`·`ResendCountdown`, `components/inbox/bid-wizard/BidContextStrip`, `components/settings/*`, `components/rfp/*`. 수정 방향: `font-mono text-[10px] tracking-[0.1em] uppercase` → `font-sans text-[11px] tracking-tight` + sentence case. 별도 worktree 권장(시각 변경 광범위). 또한 `font-mono tabular-nums` 직접 사용이 `md-numeric` 미전환 상태로 ~30건 잔존(`components/settings/`, `components/rfp/`, `components/landing/` 등) — C4 스윕 시 병행 정리. (도입: font-system audit PR#280 v0.2.35.1, 2026-06-22)
 
