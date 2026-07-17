@@ -132,3 +132,32 @@ CoachmarkTour의 capture 클릭 리스너가 마지막 action 클릭 즉시 `onF
 
 ### Retry-After 헤더 malformed 값 폴백 미검증 (P3)
 `lib/integrations/nts.ts`의 429 `shouldRetry` 분기에서 `Retry-After` 헤더가 숫자도 유효 HTTP-date도 아닌 값(`'garbage'` 등)이면 `afterMs=NaN`이 되어 조용히 일반 재시도 경로로 폴백한다 — 이 폴백 자체는 안전해 보이지만 테스트가 숫자/유효 date 케이스만 커버하고 malformed 값과 "헤더는 있지만 budget 이내인" 케이스는 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
+
+## E-Contract
+
+### PAdES/TSA 암호서명·공인 타임스탬프 미적용 (P3)
+현재 전자계약 서명은 서명 이미지(PNG)+동의 문구+IP+일시 기록으로 전자서명법 §3 요건은 충족하지만, PAdES(PDF 내장 전자서명)나 공인 타임스탬프(TSA)는 적용하지 않는다. 분쟁 시 증거력을 더 높이려면 암호학적 서명·타임스탬프 도입이 필요하다 — PDF 최종 확정(finalize) 단일 진입점에 삽입 지점은 이미 확보돼 있다. (발견: e-contract 문서 동기화 점검(Wave 8), 2026-07-18)
+
+### 모바일 실명인증 미적용 — 현재는 이메일 인증 수준 (P3)
+서명자 본인확인은 현재 이메일 인증 레벨에 머무른다. 법적 증거력을 강화하려면 본인확인기관 연동 기반 모바일 실명인증 도입을 검토할 것. (발견: e-contract 문서 동기화 점검(Wave 8), 2026-07-18)
+
+### buyer 측 계약 템플릿 업로드 미지원 (P3)
+계약서 PDF 템플릿 업로드·관리(`/contract-templates`)는 PG 전용이다. buyer가 자체 표준계약서를 올려 쓰는 시나리오는 이번 릴리스 범위 밖 — 필요해지면 buyer 워크스페이스용 템플릿 관리 화면 추가를 검토할 것. (발견: e-contract 문서 동기화 점검(Wave 8), 2026-07-18)
+
+### 서명 리마인더 알림 부재 (P3)
+계약 만료가 임박해도 미서명 당사자에게 리마인더 알림을 보내는 기능이 없다 — 발송/서명/완료/반려/회수/만료/재지정 7종 알림에 리마인더는 포함되지 않는다. 만료·재발송 부담을 줄이려면 도입을 검토할 것. (발견: e-contract 문서 동기화 점검(Wave 8), 2026-07-18)
+
+### admin 콘솔 계약 현황 노출 없음 (P4)
+admin 콘솔(별도 레포 `admin-supporter-b`)에 전자계약 현황(발송·서명·만료 등) 조회 화면이 없다. 운영 모니터링 필요성이 커지면 admin 레포 쪽에서 별도로 다룰 것. (발견: e-contract 문서 동기화 점검(Wave 8), 2026-07-18)
+
+### R2 버킷 object lock/versioning 미적용 — 오브젝트 레벨 불변성 부재 (P3)
+계약 문서 PDF(base/final)는 R2에 저장되지만 버킷에 object lock/versioning이 걸려 있지 않다. 현재는 삭제 API 자체가 없고 FK도 `NO ACTION`이라 애플리케이션 경로로는 삭제·변조가 불가능하지만, 버킷 레벨의 오브젝트 불변성(WORM)까지는 아니다 — 증거 문서 보존 요구가 커지면 R2 object lock 적용을 검토할 것. (발견: e-contract 문서 동기화 점검(Wave 8), 2026-07-18)
+
+### 스토리지 계층 stale 주석 3건 (P4)
+전자계약 문서가 302 리다이렉트 후 R2(cross-origin)에서 presigned URL로 서빙되는데, 아래 3개 주석은 여전히 same-origin·비-presigned 가정을 전제로 쓰여 있어 갱신이 필요하다: `lib/security-headers.ts:6-8`(same-origin iframe 가정 — 실제로는 302 이후 cross-origin R2), `lib/server/storage/r2.ts:7-9`("rather than via a signed R2 URL" — presignGet 실사용과 모순), `lib/server/storage/index.ts:8-10`(동일 문구). (발견: e-contract 문서 동기화 점검(Wave 8), 2026-07-18)
+
+### 향후 CSP 도입 시 frame-src에 R2 origin 필요 (P4)
+계약 문서 뷰어가 `/api/contract-docs/[id]/file` 302 → R2 presigned URL을 iframe으로 렌더한다. 아직 CSP를 도입하지 않아 지금은 무해하지만, 추후 CSP를 도입할 때 `frame-src`에 R2 origin을 포함하지 않으면 뷰어가 깨진다. (발견: e-contract 문서 동기화 점검(Wave 8), 2026-07-18)
+
+### PDF 별지 코드/해시/일시 폰트 — Pretendard 대신 JetBrains Mono 필요 (P4)
+[별지1]/[별지2]의 문서번호(`CT-YYMM-NNNN`)·SHA-256 해시·일시 값이 현재 Pretendard로 렌더링돼 하이픈·콜론 어드밴스가 넓어 보이는 코스메틱 이슈가 있다. 화면의 `.md-numeric`과 같은 원칙으로 JetBrains Mono 렌더를 검토할 것. (발견: e-contract 문서 동기화 점검(Wave 8), 2026-07-18)

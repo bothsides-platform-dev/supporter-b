@@ -72,6 +72,10 @@ Authenticated AppShell
    ├─ /settings/notifications
    └─ /settings/audit-log         (admin 전용 — 워크스페이스 활동 기록)
 ├─ /quote-templates               (pg only — 견적 템플릿)
+├─ /contracts                       (buyer+pg 공용 — 전자계약 목록)
+│  ├─ /contracts/new                  (pg 전용 — 계약서 발송)
+│  └─ /contracts/:id                  (뷰어 + 서명, 위변조 검증 배지)
+├─ /contract-templates              (pg 전용 — 계약서 PDF 템플릿 관리)
 
 Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.tsx)
 ├─ /admin/login
@@ -107,6 +111,8 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처). **사용자 섹션**: 프로필 사진 업로드·삭제(`UserAvatarForm`) | `UserAvatarForm`, `WorkspaceProfileForm` |
 | P6 | `/settings/members` | 같은 워크스페이스 멤버 관리 (도메인 자동 합류 없음 — 초대만) | `MemberTable` |
 | P8 | `/quote-templates` | PG 워크스페이스 공유 견적 템플릿(요율표) 관리 — 정산조건+결제수단별 수수료율 프리셋 CRUD. 견적 작성(P3)에서 불러와 한 번에 채움 (최대 20개). 구간 수수료(카드·네이버페이·카카오페이·토스페이) 직접 편집 지원. nav top 레벨 (G→Q). | `QuoteTemplateList`, `QuoteTemplateDrawer` |
+| P9 | `/contracts/new` | PG 전용 — 계약서 발송(`?rfp=` 쿼리로 대상 RFP 지정). 저장된 계약서 템플릿 선택 → 본문 + [별지1] 계약 개요 + [별지2] 서명·감사추적 확인서 자동 합성 미리보기 → 서명자 지정 → 발송. | `ContractCreateForm` |
+| P10 | `/contract-templates` | PG 전용 — 계약서 PDF 템플릿 관리(attachments arc 업로드, 워크스페이스당 최대 20개). 계약서 발송(P9)에서 불러와 선택. nav top 레벨 (G→E). | `ContractTemplateList`, `ContractTemplateUploadDrawer` |
 
 ### 0.3a 공용 화면 (buyer · pg 공통)
 
@@ -114,6 +120,8 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 |---|---|---|---|
 | S2 | `/settings/audit-log` | **활동 기록** (admin 전용) — 워크스페이스 감사 로그 최신순 목록. 행위자 이름 · '견적' 언어 행위 라벨 · RFP 코드 링크(buyer는 `/rfp/`, pg는 `/inbox/`) · 시각. 커서 기반 '더 보기'(50건). member 에겐 안내 문구만. 기록은 서비스 레이어가 각 작업 트랜잭션 안에서 `audit_logs` 에 남긴다(rfp.create/send_invitations/award/cancel/close/requote/board_visibility, bid.submit/withdraw, workspace.create/member_invite/invite_accept/member_role_change/member_remove; auth.* 는 워크스페이스 무관이라 목록 비노출) | `AuditLogPanel`, `listAuditLogsAction` |
 | S1 | `/messages` | 워크스페이스 페어(구매사↔PG) **라이브 채팅**. 2-컬럼: 좌측 대화 목록(미읽음 점) + 우측 스레드(말풍선·날짜 구분·읽음 영수증·프레즌스·타이핑). RFP는 메시지 태그로 표시(스레드 말풍선에 RFP 칩 — 로더가 `rfpById` 제공). **통합 메시지함**: 좌측 목록은 상대방 대화(쌍 단위·RFP 무관)와 RFP 팀 채팅(`rfp_team_messages`, 워크스페이스 내부)을 `[전체 \| 상대방 \| 팀]` 필터로 한데 보여준다. 팀 스레드도 읽음상태(`rfp_team_message_reads`)·안읽음·인앱/이메일 알림까지 상대방 채팅과 동등(풀 패리티), `?t=<rfpId>` 딥링크로 연다(딜룸 '팀 채팅' 탭의 "메시지함에서 열기" + 홈 위젯 행에서 진입). 리치 작성 드로어(저장 템플릿/첨부/이메일·인앱 알림 토글). `MessageComposeButton`으로 RFP 상세·입찰표에서 진입(ComingSoon 제거). 구매사↔PG만(PG 상호 비공개 유지), 이메일 조회로 콜드 컨택 가능. **스레드 시각 규칙**: 중앙 날짜 구분선(라인 없음)·타임스탬프는 버블 옆 단일 출처·셀프 버블 `primary-container`. `ThreadView`/`ThreadPane`은 `variant='rail'`로 상세 화면 채팅 레일에 재사용(갤러리는 오버레이). **전송 morph**(카카오톡 스타일): 내가 텍스트를 보내면 입력창 글이 body-portal 클론으로 떠올라 말풍선으로 변신하며 자기 자리에 안착한다(transform·opacity만 애니메이트, 레포 기존 진입 ease 재사용). 내가 보낸 텍스트에만 적용되고 상대 메시지·첨부 전용·`prefers-reduced-motion`·측정 실패 시 즉시 표시로 폴백. 상대방·팀 채팅 양쪽, 메시지함·딜룸 레일 어디서나 동작(순수 로직 `message-morph.ts` + 상태 훅 `useMessageMorph` + 오버레이 `MorphFlightLayer`) | `MessageInbox`, `ConversationList`, `ThreadView`, `TeamThreadView`, `TeamThreadPane`, `MorphFlightLayer`, `useMessageMorph`, `MessageComposeButton`, `NewConversationSheet`, `useChatChannel`, `listInboxForViewer`, `markTeamThreadReadAction` |
+| S3 | `/contracts` | 전자계약 문서 목록(buyer+pg 공용). 선정 후 PG가 발송한 계약서 상태를 추적 — `발송됨`(서명 대기) → `서명 완료` / `반려`(buyer) / `회수`(PG) / `만료`(기본 14일 lazy 만료, 1~90 설정). RFP당 활성 문서 1건, 완료 후 재발송(변경계약)은 허용. **마스터 계정 전용 노출**(`E_CONTRACT_ALL=1` 시 전체 공개 킬스위치). nav top 레벨 (G→K). | `ContractList`, `ContractStatusChip` |
+| S4 | `/contracts/:id` | 계약 문서 뷰어 + 서명 — iframe PDF(`/api/contract-docs/[id]/file` 302 presign) + `SignDialog`/`SignaturePad` 서명 + 위변조 검증 배지(SHA-256 재계산) + 이벤트 타임라인(감사추적). 양측 서명 완료 시 `서명 완료` 칩으로 전환. | `ContractDocView`, `SignDialog`, `SignaturePad`, `IntegrityBadge`, `ContractAuditTrail` |
 
 > 실시간 전송은 Centrifugo(자체호스팅 WS) — 미설정 환경에선 정적 로드로 graceful degrade. 이메일 알림은 presence 억제 + 윈도우 digest로 폭주 방지. `/notifications`·`/workspace/new` 도 buyer·pg 공통.
 >
