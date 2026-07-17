@@ -13,7 +13,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, rfps, rfpInvitations } from '@/lib/db/schema';
+import { attachments, contractTemplates, rfps, rfpInvitations } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
@@ -304,6 +304,54 @@ describe('GET /api/files/[id]', () => {
     expect((await callGet(chatAttId)).status).toBe(403);
   });
 
+  it('200 for contract_template attachment — owning PG ws; 403 for buyer and a different PG ws', async () => {
+    const s = await seedScenario();
+
+    const templateId = randomUUID();
+    await db.insert(contractTemplates).values({
+      id: templateId,
+      pgWsId: s.pgWsId,
+      name: '표준 계약서',
+      description: '',
+      createdBy: s.pgUserId,
+    });
+    const templateAttId = randomUUID();
+    await db.insert(attachments).values({
+      id: templateAttId,
+      contractTemplateId: templateId,
+      name: 'template.pdf',
+      size: PDF_HEAD.length,
+      mimeType: 'application/pdf',
+      uploadedBy: s.pgUserId,
+    });
+    await storage.save(templateAttId, PDF_HEAD, 'application/pdf');
+
+    // Owning PG ws member (not the uploader) — ALLOW.
+    const pgPeer = await seedUser(db, { email: 'peer@toss.im' });
+    await seedMembership(db, s.pgWsId, pgPeer.id, 'member');
+    sessionRef.value = {
+      user: { id: pgPeer.id, email: 'peer@toss.im', workspaceId: s.pgWsId, workspaceType: 'pg', role: 'member' },
+    };
+    expect((await callGet(templateAttId)).status).toBe(302);
+
+    // Buyer ws — DENY.
+    sessionRef.value = {
+      user: {
+        id: s.buyerUserId,
+        email: 'buyer@buy.com',
+        workspaceId: s.buyerWsId,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+    expect((await callGet(templateAttId)).status).toBe(403);
+
+    // Unrelated stranger — DENY.
+    sessionRef.value = {
+      user: { id: s.strangerId, email: 'rando@x.com' },
+    };
+    expect((await callGet(templateAttId)).status).toBe(403);
+  });
 });
 
 describe('GET /api/files/[id] — master account', () => {

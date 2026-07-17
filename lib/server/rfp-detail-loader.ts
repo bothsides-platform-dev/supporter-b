@@ -8,6 +8,7 @@ import {
   getAttachmentRepo,
   getBidQuoteTemplateRepo,
   getBidRepo,
+  getContractDocRepo,
   getInvitationRepo,
   getPgRequestRepo,
   getRfpRepo,
@@ -20,8 +21,35 @@ import type { RFP } from '@/lib/types/rfp';
 import { STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
 import type { Bid } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
+import type { ContractDocStatus, ContractParty } from '@/lib/types/contract-doc';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
+
+/** awarded RFP의 최신 전자계약 문서 요약 — 딜룸/목록 배지용. */
+export type ContractDocSummary = {
+  id: string;
+  code: string;
+  status: ContractDocStatus;
+  /** status==='sent' 이고 내 party(buyer/pg) 서명자가 아직 서명 전이면 true. */
+  mySignPending: boolean;
+};
+
+/** 한 RFP의 최신 전자계약 문서 요약 — 없으면 null. myParty 기준으로 mySignPending 파생. */
+async function buildContractDocSummary(
+  rfpId: string,
+  myParty: ContractParty,
+): Promise<ContractDocSummary | null> {
+  const repo = await getContractDocRepo();
+  const doc = await repo.findLatestByRfp(rfpId);
+  if (!doc) return null;
+
+  let mySignPending = false;
+  if (doc.status === 'sent') {
+    const signers = await repo.getSigners(doc.id);
+    mySignPending = !signers.find((s) => s.party === myParty)?.signedAt;
+  }
+  return { id: doc.id, code: doc.code, status: doc.status, mySignPending };
+}
 
 /** 선정 후 교환되는 담당자 연락처 — 회사명 + 개인 이름·이메일·전화(nullable). */
 export type DealContact = {
@@ -52,6 +80,12 @@ export type BuyerRfpDetailData = {
   authorName: string;
   /** awarded 일 때만 — 선정된 PG 담당자 연락처. 그 외 상태는 null. */
   awardedPgContact: DealContact | null;
+  /**
+   * awarded 일 때만 조회 — 최신 전자계약 문서 요약. 그 외 상태는 null(조회 자체를 안 함).
+   * optional — 이 필드 도입 이전에 작성된 리터럴(다른 웨이브의 픽스처 등)과 구조적으로
+   * 호환되도록 선택 필드로 둔다. 이 로더는 항상 채워서 반환한다.
+   */
+  contractDocSummary?: ContractDocSummary | null;
 };
 
 export type PgRfpDetailData = {
@@ -73,6 +107,11 @@ export type PgRfpDetailData = {
   awardedToMe: boolean;
   /** awardedToMe 일 때만 — 구매사 담당자 연락처. 미선정/선정 전은 null(누출 방지). */
   buyerContact: DealContact | null;
+  /**
+   * awardedToMe 일 때만 조회 — 최신 전자계약 문서 요약. 그 외는 null(조회 자체를 안 함).
+   * optional — BuyerRfpDetailData.contractDocSummary 와 동일 사유(다른 웨이브 픽스처 호환).
+   */
+  contractDocSummary?: ContractDocSummary | null;
 };
 
 
@@ -258,6 +297,10 @@ export async function loadBuyerRfpDetail(args: {
     }
   }
 
+  // awarded 일 때만 최신 전자계약 문서 요약을 조회(그 외 상태는 조회 자체를 안 함).
+  const contractDocSummary =
+    rfp.status === 'awarded' ? await buildContractDocSummary(rfp.id, 'buyer') : null;
+
   const canEdit = rfp.status === 'sent' && new Date(rfp.deadline).getTime() > Date.now();
 
   return {
@@ -275,6 +318,7 @@ export async function loadBuyerRfpDetail(args: {
     authorId: args.userId,
     authorName: args.userName,
     awardedPgContact,
+    contractDocSummary,
   };
 }
 
@@ -351,6 +395,9 @@ export async function loadPgRfpDetail(args: {
     if (contact) buyerContact = { workspaceName: buyerName, ...contact };
   }
 
+  // awardedToMe 일 때만 최신 전자계약 문서 요약을 조회(미선정 PG 는 조회 자체를 안 함).
+  const contractDocSummary = awardedToMe ? await buildContractDocSummary(rfp.id, 'pg') : null;
+
   // 본 PG 워크스페이스 공유 견적 템플릿(요율표) — 폼 채우기용 직렬화 부분집합.
   const templates = await (await getBidQuoteTemplateRepo()).listByWorkspace(
     args.workspaceId,
@@ -364,5 +411,15 @@ export async function loadPgRfpDetail(args: {
     paymentFees: t.paymentFees,
   }));
 
-  return { rfp, myBid, pendingRequote, buyerName, buyerLogoUpdatedAt, quoteTemplates, awardedToMe, buyerContact };
+  return {
+    rfp,
+    myBid,
+    pendingRequote,
+    buyerName,
+    buyerLogoUpdatedAt,
+    quoteTemplates,
+    awardedToMe,
+    buyerContact,
+    contractDocSummary,
+  };
 }

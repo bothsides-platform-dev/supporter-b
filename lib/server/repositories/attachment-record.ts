@@ -21,6 +21,7 @@ export type AttachmentRecord = Attachment & {
   bidNoteId?: string;
   chatMessageId?: string;
   rfpTeamMessageId?: string;
+  contractTemplateId?: string;
   uploadedBy: string;
   // Optional on write (save() defaults to 'ready' for pre-Stage-2 call sites
   // that don't yet know about two-phase upload); always populated on read.

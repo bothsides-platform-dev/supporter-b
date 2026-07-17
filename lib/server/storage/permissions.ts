@@ -2,8 +2,8 @@
  * `canAccessAttachment` — single source of truth for file route ACLs.
  *
  * Ownership is exclusive-arc (C4): an attachment carries at most one of
- * rfpId / bidId / bidNoteId / chatMessageId / rfpTeamMessageId. Rules per
- * owner column:
+ * rfpId / bidId / bidNoteId / chatMessageId / rfpTeamMessageId /
+ * contractTemplateId. Rules per owner column:
  *
  *   `rfpId` set (RFP PDFs attached to a buyer-side RFP)
  *     - Buyer ws of the RFP owner (session.workspaceId === rfp.buyerWsId): ALLOW
@@ -36,6 +36,12 @@
  *     - **Other workspaces (buyer↔PG, PG↔PG): DENY** — sealed-bid: each side's
  *       team thread is disjoint.
  *
+ *   `contractTemplateId` set (계약서 PDF 템플릿 attached to a PG's contract template)
+ *     - Members of the owning PG workspace: ALLOW
+ *     - Uploader themselves: ALLOW (via top-level fast-path)
+ *     - **Buyers and other PG workspaces: DENY** — a template is private to the
+ *       PG workspace that authored it.
+ *
  *   None set (draft, uploaded before its owner row exists)
  *     - Only the uploader: ALLOW
  *
@@ -59,6 +65,7 @@ import type {
   BidRepo,
   ChatConversationRepo,
   ChatMessageRepo,
+  ContractTemplateRepo,
   InvitationRepo,
   RfpRepo,
   RfpTeamMessageRepo,
@@ -81,6 +88,7 @@ export type RepoBundleForAttachment = {
   chatMessage: ChatMessageRepo;
   chatConversation: ChatConversationRepo;
   rfpTeamMessage: RfpTeamMessageRepo;
+  contractTemplate: ContractTemplateRepo;
 };
 
 /**
@@ -171,6 +179,15 @@ export async function canAccessAttachment(
 
     if (!wsId) return false;
     if (conv.buyerWsId !== wsId && conv.pgWsId !== wsId) return false;
+    return true;
+  }
+
+  if (att.contractTemplateId) {
+    // contract_template attachment (계약서 PDF 템플릿) — only members of the
+    // owning PG workspace may read it. Buyers never see a PG's template PDF.
+    const template = await repos.contractTemplate.findById(att.contractTemplateId, tx);
+    if (!template) return false;
+    if (!wsId || template.pgWsId !== wsId) return false;
     return true;
   }
 

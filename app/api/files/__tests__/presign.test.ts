@@ -24,6 +24,7 @@ import {
   seedBizProfile,
   seedBuyerWorkspace,
   seedMembership,
+  seedPgWorkspace,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
@@ -249,9 +250,6 @@ describe('POST /api/files/presign', () => {
     const biz = await seedBizProfile(db);
     const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
     await seedMembership(db, buyerWs.id, buyer.id, 'admin');
-    const { seedPgWorkspace } = await import(
-      '@/lib/server/repositories/drizzle/__tests__/_seed'
-    );
     const pgWs = await seedPgWorkspace(db, 'toss.im');
     const pg = await seedUser(db, { email: 'sales@toss.im' });
     await seedMembership(db, pgWs.id, pg.id, 'admin');
@@ -307,6 +305,95 @@ describe('POST /api/files/presign', () => {
     expect(row?.bidId).toBeNull();
     expect(row?.uploadedBy).toBe(pg.id);
     expect(row?.status).toBe('pending');
+  });
+
+  it('403 when a buyer session presigns a contract_template upload', async () => {
+    await seedBuyerSession();
+    const r = await callPresign({
+      ownerKind: 'contract_template',
+      ownerId: '__draft__',
+      name: 'template.pdf',
+      size: 1234,
+      mime: 'application/pdf',
+    });
+    expect(r.status).toBe(403);
+  });
+
+  it('happy path — contract_template draft: pg session, ownerless pending row inserted', async () => {
+    const pgWs = await seedPgWorkspace(db, 'toss.im');
+    const pg = await seedUser(db, { email: 'sales@toss.im' });
+    await seedMembership(db, pgWs.id, pg.id, 'admin');
+    sessionRef.value = {
+      user: { id: pg.id, email: pg.email, workspaceId: pgWs.id, workspaceType: 'pg', role: 'admin' },
+    };
+    const r = await callPresign({
+      ownerKind: 'contract_template',
+      ownerId: '__draft__',
+      name: 'template.pdf',
+      size: 1234,
+      mime: 'application/pdf',
+    });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { id: string };
+    const [row] = await db
+      .select()
+      .from(attachments)
+      .where(eq(attachments.id, body.id))
+      .limit(1);
+    expect(row?.uploadedBy).toBe(pg.id);
+    expect(row?.status).toBe('pending');
+    expect(row?.rfpId).toBeNull();
+    expect(row?.contractTemplateId).toBeNull();
+  });
+
+  it('403 when a contract_template upload uses a non-draft ownerId — must NOT fall through to the bid_proposal invitation-gate branch', async () => {
+    // Mirrors the bid_proposal happy-path fixture exactly (an accepted invitation
+    // for this exact (rfpId, pgWs) pair) so that if `contract_template` silently
+    // fell into the `else` (bid_proposal) branch, invRepo.canAccess would return
+    // true and this would wrongly 200. The explicit branch requires
+    // ownerId === DRAFT_OWNER_ID regardless, so it must 403 instead.
+    const buyer = await seedUser(db, { email: 'b2@buy.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+    const pgWs = await seedPgWorkspace(db, 'toss.im');
+    const pg = await seedUser(db, { email: 'sales2@toss.im' });
+    await seedMembership(db, pgWs.id, pg.id, 'admin');
+    const { generateToken, hashToken, addMinutes } = await import('@/lib/server/token');
+    const rfpId = randomUUID();
+    await db.insert(rfps).values({
+      id: rfpId,
+      code: 'P-2605-0902',
+      buyerWsId: buyerWs.id,
+      bizProfileId: biz.id,
+      title: 'contract template non-draft ownerId test',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: buyer.id,
+      sentAt: new Date(),
+    });
+    await db.insert(rfpInvitations).values({
+      id: randomUUID(),
+      rfpId,
+      pgWsId: pgWs.id,
+      acceptedByUserId: pg.id,
+      tokenHash: hashToken(generateToken()),
+      sentAt: new Date(),
+      expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
+      status: 'accepted',
+    });
+    sessionRef.value = {
+      user: { id: pg.id, email: pg.email, workspaceId: pgWs.id, workspaceType: 'pg', role: 'admin' },
+    };
+    const r = await callPresign({
+      ownerKind: 'contract_template',
+      ownerId: rfpId, // non-draft ownerId — invalid for contract_template
+      name: 'template.pdf',
+      size: 1234,
+      mime: 'application/pdf',
+    });
+    expect(r.status).toBe(403);
   });
 
   it('500 + row removed when presignPut throws', async () => {

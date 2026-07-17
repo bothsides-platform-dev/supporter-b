@@ -6,7 +6,20 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
-import { bids, bidNotes, columns, rfpAllowedPg, rfpInvitations, rfpPgRequests, rfpRequoteRequests, rfps, users } from '@/lib/db/schema';
+import {
+  bids,
+  bidNotes,
+  columns,
+  contractDocSigners,
+  contractDocs,
+  rfpAllowedPg,
+  rfpInvitations,
+  rfpPgRequests,
+  rfpRequoteRequests,
+  rfps,
+  users,
+} from '@/lib/db/schema';
+import { PARTIES_FIXTURE, TERMS_FIXTURE } from '@/lib/server/contracts/__tests__/_fixtures';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
@@ -154,7 +167,9 @@ async function setup() {
 
 // 선정 시나리오: 승자 PG=toss, 패자 PG=inicis. PG 담당자(pgUser)에 이름·전화를 부여하고
 // 구매사 담당자(buyer)는 전화 없음(기본). opts.awarded 면 rfp 를 awarded 로 전이한다.
-async function seedAwardScenario(opts: { awarded: boolean }): Promise<{ code: string }> {
+async function seedAwardScenario(
+  opts: { awarded: boolean },
+): Promise<{ code: string; rfpId: string; winnerBidId: string }> {
   await ctx.db
     .update(users)
     .set({ name: '토스 담당자', phone: '010-9999-0000' })
@@ -172,7 +187,69 @@ async function seedAwardScenario(opts: { awarded: boolean }): Promise<{ code: st
       .set({ status: 'awarded', awardedBidId: winnerBid })
       .where(eq(rfps.id, rfpId));
   }
-  return { code: 'AWARD-1' };
+  return { code: 'AWARD-1', rfpId, winnerBidId: winnerBid };
+}
+
+// 전자계약 문서 1건(+서명자 2행) 직접 시드 — 승자(toss) 기준 buyerWs/pgWs 로 고정.
+// signedAt 을 채우면 DB CHECK(signed_consistency) 상 signatureImage 도 함께 채운다.
+async function seedContractDoc(
+  rfpId: string,
+  bidId: string,
+  opts: {
+    status?: 'sent' | 'completed' | 'declined' | 'canceled' | 'expired';
+    buyerSigned?: boolean;
+    pgSigned?: boolean;
+  } = {},
+): Promise<{ docId: string; docCode: string }> {
+  const docId = randomUUID();
+  const docCode = 'CT-2607-0001';
+  const status = opts.status ?? 'sent';
+  const completed = status === 'completed';
+  await ctx.db.insert(contractDocs).values({
+    id: docId,
+    code: docCode,
+    rfpId,
+    bidId,
+    buyerWsId: ctx.buyerWsId,
+    pgWsId: ctx.tossId,
+    status,
+    title: '전자계약서',
+    parties: PARTIES_FIXTURE,
+    termsSnapshot: TERMS_FIXTURE,
+    basePdfKey: `contract-docs/${docId}/base.pdf`,
+    basePdfSha256: 'a'.repeat(64),
+    basePdfSize: 100,
+    // contract_docs_final_on_complete CHECK: completed 문서는 final PDF 3종 필수.
+    finalPdfKey: completed ? `contract-docs/${docId}/final.pdf` : null,
+    finalPdfSha256: completed ? 'b'.repeat(64) : null,
+    finalPdfSize: completed ? 120 : null,
+    createdBy: ctx.pgUserId,
+    expiresAt: new Date(Date.now() + 14 * 86_400_000),
+    completedAt: completed ? new Date() : null,
+  });
+  await ctx.db.insert(contractDocSigners).values([
+    {
+      id: randomUUID(),
+      docId,
+      party: 'buyer',
+      userId: ctx.buyerId,
+      name: ctx.buyerName,
+      email: 'buyer@buy.com',
+      signedAt: opts.buyerSigned ? new Date() : null,
+      signatureImage: opts.buyerSigned ? Buffer.from('sig') : null,
+    },
+    {
+      id: randomUUID(),
+      docId,
+      party: 'pg',
+      userId: ctx.pgUserId,
+      name: '토스 담당자',
+      email: 'pg@toss.im',
+      signedAt: opts.pgSigned ? new Date() : null,
+      signatureImage: opts.pgSigned ? Buffer.from('sig') : null,
+    },
+  ]);
+  return { docId, docCode };
 }
 
 beforeEach(async () => {
@@ -605,5 +682,122 @@ describe('연락처 교환 (awarded)', () => {
     // 느슨한 '010-' 접두만 보면 무작위 UUID 세그먼트('…-4010-…')에 충돌해 거짓 실패한다.
     expect(JSON.stringify(data)).not.toContain('buyer@buy.com');
     expect(JSON.stringify(data)).not.toContain('010-9999-0000');
+  });
+});
+
+describe('contractDocSummary (awarded 전자계약 요약)', () => {
+  it('구매사 로더: awarded + sent 문서 + 내(buyer) 미서명 → mySignPending=true', async () => {
+    const { code, rfpId, winnerBidId } = await seedAwardScenario({ awarded: true });
+    const { docId, docCode } = await seedContractDoc(rfpId, winnerBidId, { status: 'sent' });
+    const data = await loadBuyerRfpDetail({
+      code,
+      workspaceId: ctx.buyerWsId,
+      userId: ctx.buyerId,
+      userName: ctx.buyerName,
+    });
+    expect(data?.contractDocSummary).toEqual({
+      id: docId,
+      code: docCode,
+      status: 'sent',
+      mySignPending: true,
+    });
+  });
+
+  it('구매사 로더: buyer 가 이미 서명했으면 mySignPending=false', async () => {
+    const { code, rfpId, winnerBidId } = await seedAwardScenario({ awarded: true });
+    const { docId, docCode } = await seedContractDoc(rfpId, winnerBidId, {
+      status: 'sent',
+      buyerSigned: true,
+    });
+    const data = await loadBuyerRfpDetail({
+      code,
+      workspaceId: ctx.buyerWsId,
+      userId: ctx.buyerId,
+      userName: ctx.buyerName,
+    });
+    expect(data?.contractDocSummary).toEqual({
+      id: docId,
+      code: docCode,
+      status: 'sent',
+      mySignPending: false,
+    });
+  });
+
+  it('구매사 로더: 완료된 문서는 status="completed"·mySignPending=false', async () => {
+    const { code, rfpId, winnerBidId } = await seedAwardScenario({ awarded: true });
+    const { docId, docCode } = await seedContractDoc(rfpId, winnerBidId, {
+      status: 'completed',
+      buyerSigned: true,
+      pgSigned: true,
+    });
+    const data = await loadBuyerRfpDetail({
+      code,
+      workspaceId: ctx.buyerWsId,
+      userId: ctx.buyerId,
+      userName: ctx.buyerName,
+    });
+    expect(data?.contractDocSummary).toEqual({
+      id: docId,
+      code: docCode,
+      status: 'completed',
+      mySignPending: false,
+    });
+  });
+
+  it('구매사 로더: awarded 여도 아직 계약서가 없으면 null', async () => {
+    const { code } = await seedAwardScenario({ awarded: true });
+    const data = await loadBuyerRfpDetail({
+      code,
+      workspaceId: ctx.buyerWsId,
+      userId: ctx.buyerId,
+      userName: ctx.buyerName,
+    });
+    expect(data?.contractDocSummary).toBeNull();
+  });
+
+  it('구매사 로더: 미선정(sent) RFP는 항상 null(전자계약 조회조차 하지 않는다)', async () => {
+    const { code } = await seedAwardScenario({ awarded: false });
+    const data = await loadBuyerRfpDetail({
+      code,
+      workspaceId: ctx.buyerWsId,
+      userId: ctx.buyerId,
+      userName: ctx.buyerName,
+    });
+    expect(data?.contractDocSummary).toBeNull();
+  });
+
+  it('PG 로더: awardedToMe + sent 문서 + 내(pg) 미서명 → mySignPending=true', async () => {
+    const { code, rfpId, winnerBidId } = await seedAwardScenario({ awarded: true });
+    const { docId, docCode } = await seedContractDoc(rfpId, winnerBidId, { status: 'sent' });
+    const data = await loadPgRfpDetail({ code, workspaceId: ctx.tossId });
+    expect(data?.contractDocSummary).toEqual({
+      id: docId,
+      code: docCode,
+      status: 'sent',
+      mySignPending: true,
+    });
+  });
+
+  it('PG 로더: pg 가 이미 서명했으면 mySignPending=false', async () => {
+    const { code, rfpId, winnerBidId } = await seedAwardScenario({ awarded: true });
+    const { docId, docCode } = await seedContractDoc(rfpId, winnerBidId, {
+      status: 'sent',
+      pgSigned: true,
+    });
+    const data = await loadPgRfpDetail({ code, workspaceId: ctx.tossId });
+    expect(data?.contractDocSummary).toEqual({
+      id: docId,
+      code: docCode,
+      status: 'sent',
+      mySignPending: false,
+    });
+  });
+
+  it('PG 로더: 미선정 PG(inicis)는 awardedToMe=false → contractDocSummary=null(조회 자체를 안 한다)', async () => {
+    const { code, rfpId, winnerBidId } = await seedAwardScenario({ awarded: true });
+    await seedContractDoc(rfpId, winnerBidId, { status: 'sent' });
+    const data = await loadPgRfpDetail({ code, workspaceId: ctx.inicisId });
+    expect(data?.awardedToMe).toBe(false);
+    expect(data?.contractDocSummary).toBeNull();
   });
 });

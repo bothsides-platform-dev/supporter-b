@@ -20,6 +20,7 @@ function rowToAttachment(row: AttachRow): AttachmentRecord {
     bidNoteId: row.bidNoteId ?? undefined,
     chatMessageId: row.chatMessageId ?? undefined,
     rfpTeamMessageId: row.rfpTeamMessageId ?? undefined,
+    contractTemplateId: row.contractTemplateId ?? undefined,
     uploadedBy: row.uploadedBy,
     status: row.status as AttachmentStatus,
   };

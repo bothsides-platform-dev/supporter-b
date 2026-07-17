@@ -18,6 +18,7 @@ import {
   attachments,
   bidNotes,
   bids,
+  contractTemplates,
   rfpInvitations,
   rfps,
 } from '@/lib/db/schema';
@@ -29,6 +30,7 @@ import {
   getBidRepo,
   getChatConversationRepo,
   getChatMessageRepo,
+  getContractTemplateRepo,
   getInvitationRepo,
   getRfpRepo,
   getRfpTeamMessageRepo,
@@ -239,6 +241,7 @@ async function repos() {
     chatMessage: await getChatMessageRepo(),
     chatConversation: await getChatConversationRepo(),
     rfpTeamMessage: await getRfpTeamMessageRepo(),
+    contractTemplate: await getContractTemplateRepo(),
   };
 }
 
@@ -835,5 +838,130 @@ describe('canAccessAttachment — rfpTeamMessageId branch (sealed-bid)', () => {
       await repos(),
     );
     expect(ok).toBe(true);
+  });
+});
+
+describe('canAccessAttachment — contractTemplateId branch', () => {
+  async function seedTemplateAtt(opts: {
+    pgWsId: string;
+    createdBy: string;
+    uploadedBy: string;
+  }): Promise<AttachmentRow> {
+    const templateId = randomUUID();
+    await db.insert(contractTemplates).values({
+      id: templateId,
+      pgWsId: opts.pgWsId,
+      name: '표준 계약서',
+      description: '',
+      createdBy: opts.createdBy,
+    });
+    const attId = randomUUID();
+    await db.insert(attachments).values({
+      id: attId,
+      contractTemplateId: templateId,
+      name: 'template.pdf',
+      size: 90,
+      mimeType: 'application/pdf',
+      uploadedBy: opts.uploadedBy,
+    });
+    return {
+      id: attId,
+      contractTemplateId: templateId,
+      name: 'template.pdf',
+      size: 90,
+      mimeType: 'application/pdf',
+      url: '',
+      uploadedBy: opts.uploadedBy,
+    };
+  }
+
+  it('ALLOW for a member of the owning PG workspace (not the uploader)', async () => {
+    const s = await seedScenario();
+    const att = await seedTemplateAtt({
+      pgWsId: s.pgWsId,
+      createdBy: s.pgUserId,
+      uploadedBy: s.pgUserId,
+    });
+    const ok = await canAccessAttachment(
+      att,
+      { user: { id: s.pgPeerUserId, workspaceId: s.pgWsId, workspaceType: 'pg' } },
+      await repos(),
+    );
+    expect(ok).toBe(true);
+  });
+
+  it('DENY for a different PG workspace', async () => {
+    const s = await seedScenario();
+    const att = await seedTemplateAtt({
+      pgWsId: s.pgWsId,
+      createdBy: s.pgUserId,
+      uploadedBy: s.pgUserId,
+    });
+    const ok = await canAccessAttachment(
+      att,
+      { user: { id: s.otherPgUserId, workspaceId: s.otherPgWsId, workspaceType: 'pg' } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+
+  it('DENY for the buyer workspace', async () => {
+    const s = await seedScenario();
+    const att = await seedTemplateAtt({
+      pgWsId: s.pgWsId,
+      createdBy: s.pgUserId,
+      uploadedBy: s.pgUserId,
+    });
+    const ok = await canAccessAttachment(
+      att,
+      { user: { id: s.buyerUserId, workspaceId: s.buyerWsId, workspaceType: 'buyer' } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
+  });
+
+  it('DENY for a random unrelated user (no wsId)', async () => {
+    const s = await seedScenario();
+    const att = await seedTemplateAtt({
+      pgWsId: s.pgWsId,
+      createdBy: s.pgUserId,
+      uploadedBy: s.pgUserId,
+    });
+    const ok = await canAccessAttachment(att, { user: { id: s.randomUserId } }, await repos());
+    expect(ok).toBe(false);
+  });
+
+  it('ALLOW for the uploader regardless of workspace (draft window before save)', async () => {
+    const s = await seedScenario();
+    const att = await seedTemplateAtt({
+      pgWsId: s.pgWsId,
+      createdBy: s.pgUserId,
+      uploadedBy: s.pgUserId,
+    });
+    const ok = await canAccessAttachment(
+      att,
+      { user: { id: s.pgUserId, workspaceId: s.otherPgWsId, workspaceType: 'pg' } },
+      await repos(),
+    );
+    expect(ok).toBe(true);
+  });
+
+  it('DENY when the referenced template row is missing (orphan contractTemplateId)', async () => {
+    const s = await seedScenario();
+    const orphanAtt: AttachmentRow = {
+      id: randomUUID(),
+      contractTemplateId: randomUUID(),
+      name: 'template.pdf',
+      size: 90,
+      mimeType: 'application/pdf',
+      url: '',
+      uploadedBy: s.buyerUserId, // not the requesting user — fast-path does not fire
+    };
+    const ok = await canAccessAttachment(
+      orphanAtt,
+      { user: { id: s.pgUserId, workspaceId: s.pgWsId, workspaceType: 'pg' } },
+      await repos(),
+    );
+    expect(ok).toBe(false);
   });
 });

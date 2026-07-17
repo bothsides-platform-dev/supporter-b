@@ -48,6 +48,7 @@ import {
   getBidRepo,
   getChatConversationRepo,
   getChatMessageRepo,
+  getContractTemplateRepo,
   getInvitationRepo,
   getRfpRepo,
   getRfpTeamMessageRepo,
@@ -92,6 +93,7 @@ export async function GET(
     chatMessage: await getChatMessageRepo(),
     chatConversation: await getChatConversationRepo(),
     rfpTeamMessage: await getRfpTeamMessageRepo(),
+    contractTemplate: await getContractTemplateRepo(),
   };
 
   const allowed = await canAccessAttachment(

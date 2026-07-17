@@ -24,6 +24,7 @@ export const OWNER_KINDS = [
   'bid_note',
   'chat',
   'team_message',
+  'contract_template',
 ] as const;
 export type OwnerKind = (typeof OWNER_KINDS)[number];
 
@@ -104,6 +105,15 @@ export async function authorizeAttachmentUpload(
       if (!(await invRepo.canAccess(input.ownerId, wsId))) {
         return { ok: false, status: 403, error: 'FORBIDDEN' };
       }
+    }
+  } else if (input.ownerKind === 'contract_template') {
+    // 계약서 PDF 템플릿 — PG-only. 템플릿 row 가 아직 없는 draft 창(rfp draft
+    // 전례와 동일 패턴) 업로드만 허용 — 저장 액션(saveContractTemplateAction)이
+    // 이후 첨부를 claim 한다. ownerId 가 draft 센티널이 아니면 무조건 거부(이
+    // 분기가 없으면 else 폴백(bid_proposal)으로 떨어져 ownerId 를 RFP id 로
+    // 오인하고 초대 게이트를 잘못 통과시킬 수 있다 — 반드시 명시 분기 유지).
+    if (wsType !== 'pg' || !wsId || input.ownerId !== DRAFT_OWNER_ID) {
+      return { ok: false, status: 403, error: 'FORBIDDEN' };
     }
   } else {
     // bid_proposal — PG-only, must be a member of an invited PG ws for ownerId.
