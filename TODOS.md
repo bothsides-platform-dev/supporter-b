@@ -124,5 +124,8 @@ CoachmarkTour의 capture 클릭 리스너가 마지막 action 클릭 즉시 `onF
 
 ## NTS / 사업자번호 조회
 
+### lookupBizNoAction — 재시도+bounded wait 누적이 비인증 엔드포인트 요청 홀드시간을 증폭 (P1)
+`lib/integrations/nts.ts`의 429 재시도(최대 3회, ky 백오프 300/600/1200ms)와 leaky-bucket bounded 대기(재시도마다 최대 ~1000ms)가 서로 누적된다 — 429 폭풍 시나리오(빠른 429 응답 기준) 최대 ~6초, 개별 시도가 5초 timeout까지 늘어지는 최악의 경우 이론상 ~27초까지 단일 요청이 열려 있을 수 있다. `lookupBizNoAction`은 가입 플로우용으로 **의도적으로 비인증**이며, Caddy 엣지에도 별도 rate limit이 없어(`deploy/Caddyfile` 확인) 유일한 방어선은 이 in-process 전역 leaky-bucket(IP 단위 아님)뿐이다. 데이터 유출·인증 우회는 아니고 단일 Lightsail VM에서의 리소스 소모(soft DoS) 증폭 이슈. 수정 방향: `lookup()` 전체를 `AbortController`/전체 데드라인(예: 6~8초 캡)으로 감싸 재시도+bounded wait 누적과 무관하게 총 홀드시간을 제한하거나, 이 액션에 한해 엣지/게이트웨이 레벨 IP별 rate limit 추가 검토. (발견: /ship 적대 리뷰, dev→main 릴리스 컷 2026-07-17 — 유저 확인 후 이번 릴리스는 블로킹하지 않기로 결정)
+
 ### Retry-After 헤더 malformed 값 폴백 미검증 (P3)
 `lib/integrations/nts.ts`의 429 `shouldRetry` 분기에서 `Retry-After` 헤더가 숫자도 유효 HTTP-date도 아닌 값(`'garbage'` 등)이면 `afterMs=NaN`이 되어 조용히 일반 재시도 경로로 폴백한다 — 이 폴백 자체는 안전해 보이지만 테스트가 숫자/유효 date 케이스만 커버하고 malformed 값과 "헤더는 있지만 budget 이내인" 케이스는 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
