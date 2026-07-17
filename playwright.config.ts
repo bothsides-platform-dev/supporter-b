@@ -92,6 +92,9 @@ export default defineConfig({
       R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? '',
       R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? '',
       R2_BUCKET: process.env.R2_BUCKET ?? '',
+      // e-contract 런치 게이트(lib/features/e-contract.ts) 해제 — 시드 계정은
+      // 비마스터라 기본값(isMaster only)으로는 /contracts* 라우트가 전부 리다이렉트된다.
+      E_CONTRACT_ALL: '1',
       // Isolate this dev server's build dir + lock so it can boot alongside a
       // developer's local `pnpm dev` on :3000. Next 16's `<distDir>/dev/lock`
       // is per-distDir (not per-port) — sharing `.next` makes the second

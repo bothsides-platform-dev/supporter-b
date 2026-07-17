@@ -9,7 +9,7 @@
  * for any direct DB access (see scenario-a/b/c). We mirror that pattern.
  */
 import type { Page } from 'playwright/test';
-import { eq, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
 import { db } from '@/lib/db/client';
@@ -195,3 +195,42 @@ export async function attachTossProposalPdf(rfpCode: string): Promise<string> {
   return attachmentId;
 }
 
+/** Award the toss-submitted bid on the given RFP directly via DB — bypasses
+ *  RfpService.award() (no notification/outbox fanout, no audit row). Mirrors
+ *  the row shape RfpService.award() writes (lib/server/services/rfp.ts —
+ *  rfps.status/awarded_bid_id + a `contracts` award record) so the e-contract
+ *  create flow, which only reads rfps.status/awardedBidId + the winning bid's
+ *  pgWsId (lib/server/contract-loader.ts loadContractCreateData), sees a
+ *  consistent awarded state. Idempotent — safe to call repeatedly (upserts
+ *  the `contracts` row by its unique rfp_id). */
+export async function awardRfpDirect(rfpCode: string): Promise<void> {
+  const rfpId = await rfpUuidFromCode(rfpCode);
+
+  const [tossBid] = await db
+    .select({ id: bids.id })
+    .from(bids)
+    .where(
+      sql`${bids.rfpId} = ${rfpId} AND ${bids.status} = 'submitted' AND ${bids.pgWsId} = (
+        SELECT id FROM workspaces WHERE name = '서포터 B 페이'
+      )`,
+    )
+    .orderBy(desc(bids.submittedAt))
+    .limit(1);
+  if (!tossBid) {
+    throw new Error(`[e2e helpers] no submitted toss bid found on ${rfpCode}`);
+  }
+
+  await db.execute(
+    sql`UPDATE rfps SET status = 'awarded', awarded_bid_id = ${tossBid.id} WHERE id = ${rfpId}`,
+  );
+
+  const contractId = randomUUID();
+  await db.execute(sql`
+    INSERT INTO contracts (id, rfp_id, bid_id, awarded_by)
+    VALUES (
+      ${contractId}, ${rfpId}, ${tossBid.id},
+      (SELECT id FROM users WHERE email = 'yeonseong.dev@gmail.com')
+    )
+    ON CONFLICT (rfp_id) DO UPDATE SET bid_id = EXCLUDED.bid_id, awarded_by = EXCLUDED.awarded_by
+  `);
+}
