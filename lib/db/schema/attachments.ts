@@ -6,13 +6,15 @@ import { bids } from './bids';
 import { bidNotes } from './bid-notes';
 import { chatMessages } from './chat-messages';
 import { rfpTeamMessages } from './rfp-team-messages';
+import { contractTemplates } from './contract-templates';
 
 // Exclusive-arc ownership (C3) — replaces the polymorphic (owner_kind, owner_id)
 // pair. Exactly one of rfp_id / bid_id / bid_note_id / chat_message_id /
-// rfp_team_message_id is set once linked; all NULL is allowed for draft uploads
-// (file uploaded before its owner row exists). CHECK enforces "at most one" so an
-// attachment can never point at multiple owners. Bytes live in Cloudflare R2
-// under `attachments/<id>` keyed by this id (C4) — see lib/server/storage/r2.ts.
+// rfp_team_message_id / contract_template_id is set once linked; all NULL is
+// allowed for draft uploads (file uploaded before its owner row exists). CHECK
+// enforces "at most one" so an attachment can never point at multiple owners.
+// Bytes live in Cloudflare R2 under `attachments/<id>` keyed by this id (C4) —
+// see lib/server/storage/r2.ts.
 export const attachments = pgTable(
   'attachments',
   {
@@ -32,6 +34,10 @@ export const attachments = pgTable(
     rfpTeamMessageId: uuid('rfp_team_message_id').references(() => rfpTeamMessages.id, {
       onDelete: 'cascade',
     }),
+    // 계약서 템플릿 PDF 연결 (전자계약) — contract_templates 삭제 시 함께 정리.
+    contractTemplateId: uuid('contract_template_id').references(() => contractTemplates.id, {
+      onDelete: 'cascade',
+    }),
     uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().default(sql`now()`),
     // Two-phase presigned upload (Stage 2): row is created at presign time as
     // 'pending' (bytes not yet verified in R2), then flipped to 'ready' by the
@@ -45,7 +51,7 @@ export const attachments = pgTable(
   (t) => [
     check(
       'attachments_single_owner',
-      sql`num_nonnulls(${t.rfpId}, ${t.bidId}, ${t.bidNoteId}, ${t.chatMessageId}, ${t.rfpTeamMessageId}) <= 1`,
+      sql`num_nonnulls(${t.rfpId}, ${t.bidId}, ${t.bidNoteId}, ${t.chatMessageId}, ${t.rfpTeamMessageId}, ${t.contractTemplateId}) <= 1`,
     ),
     check('attachments_status_check', sql`${t.status} in ('pending','ready')`),
     index('attachments_rfp_idx').on(t.rfpId).where(sql`${t.rfpId} IS NOT NULL`),
@@ -59,6 +65,9 @@ export const attachments = pgTable(
     index('attachments_rfp_team_message_idx')
       .on(t.rfpTeamMessageId)
       .where(sql`${t.rfpTeamMessageId} IS NOT NULL`),
+    index('attachments_contract_template_idx')
+      .on(t.contractTemplateId)
+      .where(sql`${t.contractTemplateId} IS NOT NULL`),
     // Sweeper lookup: find pending rows older than a cutoff to reclaim/delete.
     index('attachments_pending_idx').on(t.uploadedAt).where(sql`${t.status} = 'pending'`),
   ],

@@ -106,6 +106,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
         bidNoteId?: string;
         chatMessageId?: string;
         rfpTeamMessageId?: string;
+        contractTemplateId?: string;
       };
       uploadedBy?: string;
     },
@@ -121,6 +122,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
     if (owner.bidNoteId !== undefined) patch.bidNoteId = owner.bidNoteId;
     if (owner.chatMessageId !== undefined) patch.chatMessageId = owner.chatMessageId;
     if (owner.rfpTeamMessageId !== undefined) patch.rfpTeamMessageId = owner.rfpTeamMessageId;
+    if (owner.contractTemplateId !== undefined) patch.contractTemplateId = owner.contractTemplateId;
 
     // 모든 owner 컬럼 IS NULL 가드 — 이미 링크된 행 re-parent 방지.
     // status='ready' 가드 — 검증 안 된 pending 첨부는 owner에 연결될 수 없다(fail-closed).
@@ -131,6 +133,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       isNull(attachments.bidNoteId),
       isNull(attachments.chatMessageId),
       isNull(attachments.rfpTeamMessageId),
+      isNull(attachments.contractTemplateId),
       eq(attachments.status, 'ready'),
     ];
     if (params.uploadedBy !== undefined) {

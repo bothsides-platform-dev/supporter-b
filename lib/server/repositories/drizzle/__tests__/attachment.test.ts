@@ -6,7 +6,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, chatConversations, chatMessages, rfpTeamMessages } from '@/lib/db/schema';
+import {
+  attachments,
+  chatConversations,
+  chatMessages,
+  rfpTeamMessages,
+  contractTemplates,
+} from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { DrizzleAttachmentRepository } from '../attachment';
@@ -373,6 +379,7 @@ async function readOwnerCols(db: PgliteDB, id: string) {
       bidNoteId: attachments.bidNoteId,
       chatMessageId: attachments.chatMessageId,
       rfpTeamMessageId: attachments.rfpTeamMessageId,
+      contractTemplateId: attachments.contractTemplateId,
     })
     .from(attachments)
     .where(eq(attachments.id, id))
@@ -757,5 +764,61 @@ describe('DrizzleAttachmentRepository.deleteStalePending', () => {
 
   it('returns [] when no stale pending rows exist', async () => {
     expect(await ctx.repo.deleteStalePending(new Date('2020-01-01T00:00:00Z'))).toEqual([]);
+  });
+});
+
+// ── contract_template_id (6th exclusive-arc owner) ──────────────────────────
+
+async function insertContractTemplate(db: PgliteDB, uploaderId: string) {
+  const id = randomUUID();
+  await db.insert(contractTemplates).values({
+    id,
+    pgWsId: (await seedPgWorkspace(db, 'PG사')).id,
+    name: '표준 계약서',
+    description: '',
+    createdBy: uploaderId,
+  });
+  return id;
+}
+
+describe('DrizzleAttachmentRepository.claim — contract template owner (6th arc)', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('links a draft attachment to a contract template, leaving other owner columns null', async () => {
+    const templateId = await insertContractTemplate(ctx.db, ctx.uploader.id);
+    const att = await insertAttachment(ctx.db, ctx.uploader.id);
+
+    await ctx.repo.claim({
+      ids: [att],
+      owner: { contractTemplateId: templateId },
+      uploadedBy: ctx.uploader.id,
+    });
+
+    const cols = await readOwnerCols(ctx.db, att);
+    expect(cols.contractTemplateId).toBe(templateId);
+    expect(cols.rfpId).toBeNull();
+    expect(cols.bidId).toBeNull();
+  });
+
+  it('DB CHECK: setting two owner columns at once (rfpId + contractTemplateId) is rejected', async () => {
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, { buyerWsId: ws.id, createdBy: ctx.uploader.id });
+    const templateId = await insertContractTemplate(ctx.db, ctx.uploader.id);
+
+    await expect(
+      ctx.db.insert(attachments).values({
+        id: randomUUID(),
+        name: 'dual-owner.pdf',
+        size: 100,
+        mimeType: 'application/pdf',
+        uploadedBy: ctx.uploader.id,
+        rfpId: rfp.id,
+        contractTemplateId: templateId,
+      }),
+    ).rejects.toThrow();
   });
 });

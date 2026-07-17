@@ -14,7 +14,9 @@ import type {
   ChatReadRepo,
   ChatTemplateRepo,
   ColumnRepo,
+  ContractDocRepo,
   ContractRepo,
+  ContractTemplateRepo,
   InvitationRepo,
   LoginAttemptRepo,
   NotificationRepo,
@@ -49,6 +51,8 @@ type RepoBundle = {
   column: ColumnRepo;
   notification: NotificationRepo;
   contract: ContractRepo;
+  contractTemplate: ContractTemplateRepo;
+  contractDoc: ContractDocRepo;
   verificationToken: VerificationTokenRepo;
   attachment: AttachmentRepo;
   outbox: OutboxRepo;
@@ -75,7 +79,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 14;
+const BUNDLE_VERSION = 15;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +99,8 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleColumnRepository } = await import('./drizzle/column');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
+  const { DrizzleContractTemplateRepository } = await import('./drizzle/contract-template');
+  const { DrizzleContractDocRepository } = await import('./drizzle/contract-doc');
   const { DrizzleVerificationTokenRepository } = await import(
     './drizzle/verification-token'
   );
@@ -135,6 +141,8 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     column: new DrizzleColumnRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),
+    contractTemplate: new DrizzleContractTemplateRepository(db),
+    contractDoc: new DrizzleContractDocRepository(db),
     verificationToken: new DrizzleVerificationTokenRepository(db),
     attachment: new DrizzleAttachmentRepository(db),
     outbox: new DrizzleOutboxRepository(db),
@@ -217,6 +225,12 @@ export async function getNotificationRepo(): Promise<NotificationRepo> {
 }
 export async function getContractRepo(): Promise<ContractRepo> {
   return (await getBundle()).contract;
+}
+export async function getContractTemplateRepo(): Promise<ContractTemplateRepo> {
+  return (await getBundle()).contractTemplate;
+}
+export async function getContractDocRepo(): Promise<ContractDocRepo> {
+  return (await getBundle()).contractDoc;
 }
 export async function getVerificationTokenRepo(): Promise<VerificationTokenRepo> {
   return (await getBundle()).verificationToken;

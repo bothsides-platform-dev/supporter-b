@@ -77,6 +77,13 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'membership.rejected',
   'chat.message',
   'team_chat.message',
+  'contract.sent',
+  'contract.signed',
+  'contract.completed',
+  'contract.declined',
+  'contract.canceled',
+  'contract.expired',
+  'contract.signer_reassigned',
 ]);
 
 export const workspaceInvitationStatusEnum = pgEnum('workspace_invitation_status', [

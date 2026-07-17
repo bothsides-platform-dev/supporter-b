@@ -6,6 +6,8 @@ import {
   workspaceMembers,
   bizProfiles,
   rfps,
+  rfpInvitations,
+  bids,
 } from '@/lib/db/schema';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -115,4 +117,42 @@ export async function seedRfp(
     createdBy: opts.createdBy,
   });
   return { id, code };
+}
+
+// Minimal accepted invitation — satisfies bids.invitationId FK (bid.test.ts
+// inlines the same shape; factored here for contract-doc tests that just need
+// a valid (rfp, pg) pair to hang a bid off of).
+export async function seedInvitation(
+  db: PgliteDB,
+  opts: { rfpId: string; pgWsId: string },
+): Promise<{ id: string }> {
+  const id = randomUUID();
+  await db.insert(rfpInvitations).values({
+    id,
+    rfpId: opts.rfpId,
+    pgWsId: opts.pgWsId,
+    tokenHash: randomUUID(), // placeholder — hash contents unused by these tests
+    expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+    status: 'accepted',
+  });
+  return { id };
+}
+
+export async function seedBid(
+  db: PgliteDB,
+  opts: { rfpId: string; pgWsId: string; invitationId: string; submittedBy: string },
+): Promise<{ id: string }> {
+  const id = randomUUID();
+  await db.insert(bids).values({
+    id,
+    rfpId: opts.rfpId,
+    pgWsId: opts.pgWsId,
+    invitationId: opts.invitationId,
+    settleCycle: 'D+1',
+    settleLimit: '0',
+    guaranteeInsurance: '0',
+    paymentFees: {},
+    submittedBy: opts.submittedBy,
+  });
+  return { id };
 }

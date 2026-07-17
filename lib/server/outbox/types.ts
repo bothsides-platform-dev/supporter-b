@@ -13,7 +13,14 @@ export type OutboxEvent =
   | 'workspace.rejected'
   | 'chat.message'
   | 'team_chat.message'
-  | 'rfp.requote_requested';
+  | 'rfp.requote_requested'
+  | 'contract.sent'
+  | 'contract.signed'
+  | 'contract.completed'
+  | 'contract.declined'
+  | 'contract.canceled'
+  | 'contract.expired'
+  | 'contract.signer_reassigned';
 
 export type OutboxEntry = {
   id: string;

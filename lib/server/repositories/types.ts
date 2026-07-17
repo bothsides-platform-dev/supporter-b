@@ -21,6 +21,15 @@ import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { BoardColumn, ColumnKind } from '@/lib/types/column';
 import type { Attachment } from '@/lib/types/common';
 import type { Contract } from '@/lib/types/contract';
+import type {
+  ContractDoc,
+  ContractDocEvent,
+  ContractDocEventType,
+  ContractDocSigner,
+  ContractParty,
+  ContractSignatureMethod,
+  ContractTemplate,
+} from '@/lib/types/contract-doc';
 import type { Notification, NotificationChannel } from '@/lib/types/notification';
 import type { AttachmentRecord } from './attachment-record';
 import type { VerificationToken } from '@/lib/types/auth';
@@ -696,6 +705,124 @@ export interface ContractRepo {
   findByRfp(rfpId: string, tx?: Tx): Promise<Contract | undefined>;
 }
 
+// ── ContractTemplate (전자계약 템플릿) ─────────────────────────────────
+export interface ContractTemplateRepo {
+  /** 템플릿 생성. */
+  create(
+    t: { id: string; pgWsId: string; name: string; description: string; createdBy: string },
+    tx?: Tx,
+  ): Promise<void>;
+  /** id 단건 조회 — ready 첨부가 있으면 attachment 필드 hydrate(없으면 null). */
+  findById(id: string, tx?: Tx): Promise<ContractTemplate | undefined>;
+  /** 한 PG 워크스페이스의 템플릿 목록 — createdAt desc, 첨부 조인. */
+  listByWorkspace(pgWsId: string, tx?: Tx): Promise<ContractTemplate[]>;
+  /** 한 PG 워크스페이스의 템플릿 수 — MAX_CONTRACT_TEMPLATES 게이트용. */
+  countByWorkspace(pgWsId: string, tx?: Tx): Promise<number>;
+  /** 단건 삭제. */
+  delete(id: string, tx?: Tx): Promise<void>;
+}
+
+// ── ContractDoc (전자계약 문서) ────────────────────────────────────────
+/** listForWorkspace 반환 행 — 서명자 + 양측 워크스페이스명(표시용) 동봉. */
+export type ContractDocListItem = {
+  doc: ContractDoc;
+  signers: ContractDocSigner[];
+  buyerWsName: string;
+  pgWsName: string;
+};
+
+/** createDoc 입력 — DB/서비스가 채우는 시간·종결 필드는 제외. */
+export type NewContractDocInput = Omit<
+  ContractDoc,
+  | 'sentAt'
+  | 'updatedAt'
+  | 'completedAt'
+  | 'declinedAt'
+  | 'canceledAt'
+  | 'finalPdfKey'
+  | 'finalPdfSha256'
+  | 'finalPdfSize'
+  | 'declineReason'
+> & { expiresAt: string };
+
+export interface ContractDocRepo {
+  /** YYMM 카운터 원자 증가 — 다음 계약서 번호 발급용 순번(rfp.reserveNextCode 미러). */
+  reserveNextCode(yearMonth: string, tx: Tx): Promise<number>;
+  /** 문서 1행 + 서명자(buyer/pg) 2행을 원자적으로 생성. */
+  createDoc(
+    doc: NewContractDocInput,
+    signers: Array<{ id: string; party: ContractParty; userId: string; name: string; email: string }>,
+    tx: Tx,
+  ): Promise<void>;
+  /** id 단건 조회. */
+  findById(id: string, tx?: Tx): Promise<ContractDoc | undefined>;
+  /** SELECT … FOR UPDATE — 상태 전이 동시성 가드. tx 필수. */
+  findByIdForUpdate(id: string, tx: Tx): Promise<ContractDoc | undefined>;
+  /** 한 RFP 의 가장 최근 문서 — sentAt desc limit 1. */
+  findLatestByRfp(rfpId: string, tx?: Tx): Promise<ContractDoc | undefined>;
+  /** 워크스페이스(구매사 또는 PG) 목록 — buyer_ws_id=ws OR pg_ws_id=ws, sentAt desc, 상대 워크스페이스명 조인. */
+  listForWorkspace(wsId: string, tx?: Tx): Promise<ContractDocListItem[]>;
+  /** 문서의 서명자 목록 — signature_image(bytea) 미포함. */
+  getSigners(docId: string, tx?: Tx): Promise<ContractDocSigner[]>;
+  /** 서명 이미지 바이트 단건 조회 — (docId, party). 없으면 undefined. */
+  getSignerImage(docId: string, party: ContractParty, tx?: Tx): Promise<Buffer | undefined>;
+  /** 서명 완료 반영(동의·서명 시각/이미지/방법/IP 등). */
+  markSigned(
+    signerId: string,
+    s: {
+      consentAt: string;
+      consentTextVersion: string;
+      signedAt: string;
+      signatureImage: Buffer;
+      signatureMethod: ContractSignatureMethod;
+      signIp: string | null;
+      signUserAgent: string | null;
+    },
+    tx: Tx,
+  ): Promise<void>;
+  /** 체결 완료 — `WHERE status='sent'` 가드. 전이됐으면 true, 이미 종결이면 false. */
+  complete(
+    docId: string,
+    f: { finalPdfKey: string; finalPdfSha256: string; finalPdfSize: number; completedAt: string },
+    tx: Tx,
+  ): Promise<boolean>;
+  /** 반려 — `WHERE status='sent'` 가드. */
+  decline(docId: string, d: { reason: string; declinedAt: string }, tx: Tx): Promise<boolean>;
+  /** 회수 — `WHERE status='sent'` 가드. */
+  cancel(docId: string, canceledAt: string, tx: Tx): Promise<boolean>;
+  /** 기한 만료 — `WHERE status='sent'` 가드, status→'expired'. */
+  expire(docId: string, tx: Tx): Promise<boolean>;
+  /** 구매사측 서명자 재지정 — party='buyer' 행 갱신 + 재지정 메타 스탬프. */
+  reassignBuyerSigner(
+    docId: string,
+    r: { userId: string; name: string; email: string; reassignedBy: string; reassignedAt: string },
+    tx: Tx,
+  ): Promise<void>;
+  /** 이벤트 삽입(append-only). */
+  insertEvent(
+    ev: {
+      id: string;
+      docId: string;
+      type: ContractDocEventType;
+      actorUserId?: string | null;
+      actorParty?: ContractParty | null;
+      ip?: string | null;
+      userAgent?: string | null;
+      metadata?: Record<string, unknown> | null;
+    },
+    tx: Tx,
+  ): Promise<void>;
+  /** 같은 (docId, type='viewed', actorParty) 이벤트가 이미 있으면 no-op(false), 없으면 삽입(true). */
+  insertViewedEventIfAbsent(
+    docId: string,
+    party: ContractParty,
+    meta: { actorUserId: string; ip: string | null; userAgent: string | null },
+    tx: Tx,
+  ): Promise<boolean>;
+  /** 이벤트 타임라인 — createdAt asc. */
+  listEvents(docId: string, tx?: Tx): Promise<ContractDocEvent[]>;
+}
+
 // ── VerificationToken ─────────────────────────────────────────────────
 export interface VerificationTokenRepo {
   /** 발급 — raw 비저장, hash만. */
@@ -797,6 +924,7 @@ export interface AttachmentRepo {
         bidNoteId?: string;
         chatMessageId?: string;
         rfpTeamMessageId?: string;
+        contractTemplateId?: string;
       };
       uploadedBy?: string;
     },

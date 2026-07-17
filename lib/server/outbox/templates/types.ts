@@ -98,3 +98,50 @@ export interface RfpRequoteRequestedProps {
   deadline: string;
   inboxUrl: string;
 }
+
+export interface ContractSentProps {
+  code: string;
+  title: string;
+  pgWorkspaceName: string;
+  expiresAtLabel: string;
+  ctaUrl: string;
+}
+
+export interface ContractSignedProps {
+  code: string;
+  title: string;
+  signerName: string;
+  ctaUrl: string;
+}
+
+export interface ContractCompletedProps {
+  code: string;
+  title: string;
+  ctaUrl: string;
+}
+
+export interface ContractDeclinedProps {
+  code: string;
+  title: string;
+  reason: string;
+  ctaUrl: string;
+}
+
+export interface ContractCanceledProps {
+  code: string;
+  title: string;
+  pgWorkspaceName: string;
+  ctaUrl: string;
+}
+
+export interface ContractExpiredProps {
+  code: string;
+  title: string;
+  ctaUrl: string;
+}
+
+export interface ContractSignerReassignedProps {
+  code: string;
+  title: string;
+  ctaUrl: string;
+}
