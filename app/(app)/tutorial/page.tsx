@@ -1,5 +1,5 @@
 // /tutorial — 진입 가드(인증·워크스페이스·완료 여부) + phase 콘텐츠. buyer는
-// BuyerTutorialFlow(PR3), pg는 PgTutorialFlow(PR4)가 각각 실제 여정을 채운다.
+// BuyerTutorialFlow, pg는 PgTutorialFlow가 각각 실제 여정을 채운다.
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { getUserRepo } from '@/lib/server/repositories/factory';

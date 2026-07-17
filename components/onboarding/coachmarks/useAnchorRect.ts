@@ -13,6 +13,8 @@ export type AnchorRectResult = {
 };
 
 const DEFAULT_TIMEOUT_MS = 3000;
+// 형제 리플로우 보정 폴링 주기 — CoachmarkTour의 오프코스 리졸버가 같은 리듬으로 동기화한다.
+export const COACHMARK_POLL_MS = 250;
 
 function queryTarget(target: string): HTMLElement | null {
   return document.querySelector(coachmarkSelector(target));
@@ -125,7 +127,7 @@ export function useAnchorRect(
 
       // 스크롤/리사이즈 이벤트 없이 형제 요소 리플로우로 타깃 "위치"만 밀리는 경우
       // (ResizeObserver 는 타깃 자신의 크기 변화만 감지) — 저빈도 폴링으로 보정한다.
-      pollId = setInterval(updateRect, 250);
+      pollId = setInterval(updateRect, COACHMARK_POLL_MS);
     };
 
     const existing = queryTarget(target);

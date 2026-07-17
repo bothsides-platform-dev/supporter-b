@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { BRAND_MARK_PATH } from '@/lib/brand/brand-mark-path'
+import { BRAND_MARK_PATH, BRAND_MARK_SIZE_PX } from '@/lib/brand/brand-mark-path'
 import { AnimatedBrandMark } from '@/components/primitives/AnimatedBrandMark'
 
 type LogoVariant = 'default' | 'compact'
@@ -107,9 +107,9 @@ export function Logo({ variant = 'default', className, href, animated }: LogoPro
         className,
       )}
     >
-      {/* baseline 정렬 + 잉크 매칭 — 22px Pretendard black 한글 잉크는 baseline 위 ~18px·아래 ~2px(총 ~20px).
-          SVG는 bottom이 baseline에 앉으므로 size=20 + 2px 하강으로 잉크 상·하단을 글자와 일치시킨다(실측 보정). */}
-      <Mark size={20} className="translate-y-[2px]" />
+      {/* baseline 정렬 + 잉크 매칭 실측 보정 — 근거는 lib/brand/brand-mark-path.ts 참조
+          (SidebarBrand.tsx와 값 공유, translate-y는 Tailwind 정적 추출 제약상 리터럴 유지). */}
+      <Mark size={BRAND_MARK_SIZE_PX} className="translate-y-[2px]" />
       <SupportBWordmark className="text-[22px]" />
     </Link>
   )

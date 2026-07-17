@@ -1,8 +1,8 @@
 'use client';
 
 // 첫 홈 진입 시 자동으로 뜨는 환영 모달 — /tutorial 진입 CTA와 '나중에 하기'(dismiss)를
-// 제공한다. 완주/이탈 시점의 완료 스탬프는 튜토리얼 화면(후속 PR)이 찍는다 — 이 모달은
-// dismissed 만 찍는다.
+// 제공한다. 완주/이탈 시점의 완료 스탬프는 BuyerTutorialFlow/PgTutorialFlow/
+// TutorialLeaveGuard가 찍는다 — 이 모달은 dismissed 만 찍는다.
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {

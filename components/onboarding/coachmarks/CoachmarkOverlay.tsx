@@ -12,6 +12,10 @@ const BUBBLE_OFFSET = 8;
 const BUBBLE_WIDTH = 280;
 const VIEWPORT_MARGIN = 8;
 const OVERLAY_Z = 50;
+// top/bottom 배치 뒤집기 판정 여유값.
+const FLIP_MARGIN_PX = 40;
+// 좌/우 배치 세로 클램프용 대략적 말풍선 높이 여유.
+const BUBBLE_HEIGHT_ESTIMATE_PX = 160;
 
 export type CoachmarkOverlayProps = {
   rect: DOMRect;
@@ -158,9 +162,9 @@ function computeBubbleStyle(
 
   let effectivePlacement = placement;
   // 뷰포트 밖으로 나가면 반대편으로 뒤집는 최소한의 클램프.
-  if (placement === 'bottom' && rect.bottom + BUBBLE_OFFSET + 40 > viewportHeight) {
+  if (placement === 'bottom' && rect.bottom + BUBBLE_OFFSET + FLIP_MARGIN_PX > viewportHeight) {
     effectivePlacement = 'top';
-  } else if (placement === 'top' && rect.top - BUBBLE_OFFSET - 40 < 0) {
+  } else if (placement === 'top' && rect.top - BUBBLE_OFFSET - FLIP_MARGIN_PX < 0) {
     effectivePlacement = 'bottom';
   } else if (placement === 'right' && rect.right + BUBBLE_OFFSET + BUBBLE_WIDTH > viewportWidth) {
     effectivePlacement = 'left';
@@ -205,9 +209,9 @@ function clamp(left: number, viewportWidth: number): number {
 }
 
 // 좌/우 배치에서 타깃이 뷰포트 위(rect.top<0)나 아래로 걸치면 말풍선이 화면 밖으로
-// 잘린다 — 세로 위치를 뷰포트 안으로 클램프한다(대략적 말풍선 높이 여유 160px).
+// 잘린다 — 세로 위치를 뷰포트 안으로 클램프한다.
 function clampTop(top: number, viewportHeight: number): number {
   const min = VIEWPORT_MARGIN;
-  const max = Math.max(min, viewportHeight - 160);
+  const max = Math.max(min, viewportHeight - BUBBLE_HEIGHT_ESTIMATE_PX);
   return Math.min(Math.max(top, min), max);
 }

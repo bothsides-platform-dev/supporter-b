@@ -5,6 +5,7 @@ import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { AnimatedBrandMark } from '@/components/primitives/AnimatedBrandMark';
 import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import { BRAND_MARK_SIZE_PX } from '@/lib/brand/brand-mark-path';
 
 const WORDMARK = '서포트비';
 const EASE_DECEL = [0.05, 0.7, 0.1, 1] as const;
@@ -63,9 +64,9 @@ export function SidebarBrand({ className }: { className?: string }) {
       )}
     >
       {/* icon mark — "B" 브랜드 마크, ink on transparent. 하드 로드 시 1회 draw-on 등장.
-          baseline 정렬 + 잉크 매칭 — 22px Pretendard black 한글 잉크는 baseline 위 ~18px·아래 ~2px(총 ~20px).
-          SVG는 bottom이 baseline에 앉으므로 size=20 + 2px 하강으로 잉크 상·하단을 글자와 일치시킨다(실측 보정). */}
-      <AnimatedBrandMark className="shrink-0 translate-y-[2px]" size={20} />
+          baseline 정렬 + 잉크 매칭 실측 보정 — 근거는 lib/brand/brand-mark-path.ts 참조
+          (Logo.tsx와 값 공유, translate-y는 Tailwind 정적 추출 제약상 리터럴 유지). */}
+      <AnimatedBrandMark className="shrink-0 translate-y-[2px]" size={BRAND_MARK_SIZE_PX} />
       <motion.span
         aria-hidden="true"
         initial={false}

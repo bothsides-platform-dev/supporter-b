@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 
 import { CoachmarkOverlay } from './CoachmarkOverlay';
 import { coachmarkSelector } from './coachmark-selector';
-import { useAnchorRect } from './useAnchorRect';
+import { COACHMARK_POLL_MS, useAnchorRect } from './useAnchorRect';
 import type { CoachmarkStep } from './types';
 
-// 오프코스 리졸버 폴링 주기 — useAnchorRect의 보정 폴링(250ms)과 같은 리듬.
-const RESOLVER_INTERVAL_MS = 250;
+// 오프코스 리졸버 폴링 주기 — useAnchorRect의 보정 폴링과 같은 리듬으로 동기화.
+const RESOLVER_INTERVAL_MS = COACHMARK_POLL_MS;
 // 연속 N틱 동안 같은 불일치가 관찰돼야 점프한다 — 위저드 전환 한 프레임 사이의
 // 과도기(이전 앵커 잔존/다음 앵커 미등장)에 오점프하지 않기 위한 히스테리시스.
 const RESOLVER_CONFIRM_TICKS = 2;

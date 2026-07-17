@@ -12,7 +12,7 @@ export type CoachmarkStep = {
   body: string;
   placement: CoachmarkPlacement;
   /**
-   * 'info'(기본): 전 화면 클릭을 흡수하고 말풍선 '다음' 버튼으로 진행.
+   * 'info'(기본): 클릭은 어디서나 그대로 통과하고(차단 없음) 말풍선 '다음' 버튼으로 진행.
    * 'action': 스포트라이트 구멍이 클릭-스루 — 사용자가 실제 타깃을 클릭하면 진행.
    */
   kind?: CoachmarkStepKind;

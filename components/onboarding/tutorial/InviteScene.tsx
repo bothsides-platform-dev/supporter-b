@@ -8,6 +8,8 @@ import { Button } from '@/components/primitives/Button';
 import { formatDate, formatDeadline } from '@/lib/utils/format';
 import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 
+const ENTRANCE_DELAY_MS = 60;
+
 export function InviteScene({
   buyerName,
   rfpTitle,
@@ -23,7 +25,7 @@ export function InviteScene({
 
   useEffect(() => {
     if (prefersReducedMotion()) return;
-    const timer = setTimeout(() => setVisible(true), 60);
+    const timer = setTimeout(() => setVisible(true), ENTRANCE_DELAY_MS);
     return () => clearTimeout(timer);
   }, []);
 
