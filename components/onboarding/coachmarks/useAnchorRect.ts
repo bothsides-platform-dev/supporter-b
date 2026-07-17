@@ -100,7 +100,17 @@ export function useAnchorRect(
 
       if (!scrolledRef.current) {
         scrolledRef.current = true;
-        el.scrollIntoView({ block: 'center' });
+        // 이미 뷰포트에 걸쳐 보이는 타깃은 재센터링하지 않는다 — 오프코스 리졸버
+        // 점프가 자유 탐색 중인 사용자의 스크롤 위치를 당기지 않도록, 완전히
+        // 밖일 때만 스크롤한다(안내 가시성은 유지). right/bottom은 스텁 rect에서
+        // 누락될 수 있어 left/top+width/height로 계산한다.
+        const r = el.getBoundingClientRect();
+        const inViewport =
+          r.top + r.height > 0 &&
+          r.top < window.innerHeight &&
+          r.left + r.width > 0 &&
+          r.left < window.innerWidth;
+        if (!inViewport) el.scrollIntoView({ block: 'center' });
       }
 
       updateRect();

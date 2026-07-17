@@ -47,6 +47,21 @@ describe('useAnchorRect', () => {
     await waitFor(() => expect(result.current.status).toBe('found'));
     expect(result.current.rect?.top).toBe(10);
     expect(result.current.rect?.width).toBe(100);
+    // 이미 뷰포트에 걸쳐 보이는 타깃은 재센터링하지 않는다 — 오프코스 리졸버 점프가
+    // 사용자의 스크롤 위치를 당기지 않도록(D1 결정: 완전히 밖일 때만 스크롤).
+    expect(el.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('뷰포트 완전히 밖의 타깃은 center로 스크롤한다 (안내 가시성)', async () => {
+    const el = document.createElement('div');
+    el.setAttribute('data-coachmark', 'below-fold');
+    stubRect(el, { top: 2000, left: 20, width: 100, height: 50 });
+    el.scrollIntoView = vi.fn();
+    document.body.appendChild(el);
+
+    const { result } = renderHook(() => useAnchorRect('below-fold'));
+
+    await waitFor(() => expect(result.current.status).toBe('found'));
     expect(el.scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
   });
 

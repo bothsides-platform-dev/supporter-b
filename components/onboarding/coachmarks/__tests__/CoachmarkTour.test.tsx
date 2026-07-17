@@ -44,6 +44,9 @@ const steps: CoachmarkStep[] = [
 ];
 
 afterEach(() => {
+  // fake-timer 테스트의 단언 실패가 타이머를 누수시켜 뒤 테스트를 연쇄 오염하지 않도록
+  // 복원을 teardown에서 무조건 수행한다(개별 테스트 본문의 복원 호출에 의존하지 않음).
+  vi.useRealTimers();
   cleanup();
   document.body.innerHTML = '';
 });
@@ -111,7 +114,6 @@ describe('CoachmarkTour', () => {
     });
 
     expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', 'B 제목');
-    vi.useRealTimers();
   });
 
   describe('action step (실클릭 진행)', () => {
@@ -256,7 +258,6 @@ describe('CoachmarkTour', () => {
     });
 
     expect(onFinish).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
   });
 
   it('마지막 step까지 target을 못 찾으면 onFinish를 호출한다', async () => {
@@ -273,7 +274,6 @@ describe('CoachmarkTour', () => {
     });
 
     expect(onFinish).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
   });
 
   it('action 클릭 후 다음 타깃이 나타나지 않으면(notFound) 직전 action 스텝으로 복귀한다', async () => {
@@ -303,7 +303,6 @@ describe('CoachmarkTour', () => {
     fireEvent.click(a);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    vi.useRealTimers();
   });
 
   it('직전 스텝이 info면 복귀하지 않고 기존 전방 스킵을 유지한다', async () => {
@@ -336,7 +335,6 @@ describe('CoachmarkTour', () => {
     expect(onFinish).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    vi.useRealTimers();
   });
 
   it('직전 action 스텝 타깃이 이미 사라졌으면 복귀하지 않고 전방 스킵한다', async () => {
@@ -359,6 +357,233 @@ describe('CoachmarkTour', () => {
     a.remove();
     await waitFor(() => expect(onFinish).toHaveBeenCalledTimes(1), { timeout: 3000 });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  describe('오프코스 리졸버 (화면 상태 기반 즉시 점프·복귀)', () => {
+    // 실제 앱 구조를 흉내낸다: 화면(위저드 스텝)마다 action 앵커는 정확히 1개만
+    // 존재하고, info 앵커(위저드 컨테이너)는 모든 화면에 상존한다.
+    const wizardSteps: CoachmarkStep[] = [
+      { target: 'content', title: '소개', body: '설명', placement: 'right' },
+      { target: 'n1', title: '여기를 눌러 1', body: '설명', placement: 'top', kind: 'action' },
+      { target: 'n2', title: '여기를 눌러 2', body: '설명', placement: 'top', kind: 'action' },
+    ];
+
+    it('info 표시 중 사용자가 실제 버튼으로 화면을 넘기면 그 화면의 action 스텝으로 점프한다', async () => {
+      vi.useFakeTimers();
+      appendTarget('content');
+      const n1 = appendTarget('n1');
+      render(<CoachmarkTour steps={wizardSteps} timeoutMs={10000} />);
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '소개');
+
+      // 사용자가 info 말풍선을 무시하고 실제 다음 버튼을 직접 클릭 — 화면이 스텝 2로
+      // 넘어간다(n1 제거, n2 등장). 코치마크는 info(0)에 머물러 있고 content는 상존.
+      fireEvent.click(n1);
+      n1.remove();
+      appendTarget('n2');
+
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 2');
+    });
+
+    it('사용자가 이전으로 화면을 되돌리면 그 화면의 action 스텝으로 복귀한다', async () => {
+      vi.useFakeTimers();
+      appendTarget('content');
+      const n1 = appendTarget('n1');
+      const n2 = appendTarget('n2');
+      render(<CoachmarkTour steps={wizardSteps} timeoutMs={10000} />);
+
+      // info → 다음 버튼으로 n1 스텝 진입 → n1 실클릭으로 n2 스텝 진입(화면도 전환).
+      fireEvent.click(screen.getByRole('button', { name: '다음' }));
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 1');
+      fireEvent.click(n1);
+      n1.remove();
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 2');
+
+      // 사용자가 "이전" 클릭 — 화면이 스텝 1로 돌아간다(n2 제거, n1 재등장).
+      n2.remove();
+      const n1Again = appendTarget('n1');
+
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 1');
+
+      // 복귀한 스텝은 다시 실클릭으로 진행 가능해야 한다.
+      appendTarget('n2');
+      fireEvent.click(n1Again);
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 2');
+    });
+
+    it('막힌 클릭(진행 실패)은 notFound 타임아웃을 기다리지 않고 ~0.5s 안에 직전 action 스텝으로 복귀한다', async () => {
+      vi.useFakeTimers();
+      const onFinish = vi.fn();
+      const a = appendTarget('blocked-a');
+      // 'blocked-b'는 끝내 등장하지 않는다 — 위저드 검증이 진행을 막은 상황.
+      const blockedSteps: CoachmarkStep[] = [
+        { target: 'blocked-a', title: '여기를 눌러 A', body: 'a', placement: 'top', kind: 'action' },
+        { target: 'blocked-b', title: '여기를 눌러 B', body: 'b', placement: 'top', kind: 'action' },
+      ];
+      // timeoutMs=10000 — notFound 복귀 경로가 아니라 리졸버가 복귀시켰음을 증명한다.
+      render(<CoachmarkTour steps={blockedSteps} onFinish={onFinish} timeoutMs={10000} />);
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A');
+      fireEvent.click(a);
+
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A');
+      expect(onFinish).not.toHaveBeenCalled();
+    });
+
+    it('한 틱짜리 일시적 불일치(빠른 화면 전환 중)는 점프하지 않는다', async () => {
+      vi.useFakeTimers();
+      appendTarget('content');
+      const n1 = appendTarget('n1');
+      render(<CoachmarkTour steps={wizardSteps} timeoutMs={10000} />);
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '소개');
+
+      // 리렌더 과도기 흉내: n1이 잠깐 사라지고 n2가 한 틱 동안만 보였다가 원상복구.
+      n1.remove();
+      const n2 = appendTarget('n2');
+      await act(async () => {
+        vi.advanceTimersByTime(250); // 1틱 — 불일치 관찰되지만 아직 점프 금지
+      });
+      n2.remove();
+      appendTarget('n1');
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '소개');
+    });
+
+    it('action 앵커가 동시에 2개 이상 보이면(모호) 점프하지 않는다', async () => {
+      vi.useFakeTimers();
+      appendTarget('amb-a');
+      appendTarget('amb-b');
+      const ambiguous: CoachmarkStep[] = [
+        { target: 'amb-a', title: '여기를 눌러 A', body: 'a', placement: 'top', kind: 'action' },
+        { target: 'amb-b', title: '여기를 눌러 B', body: 'b', placement: 'top', kind: 'action' },
+      ];
+      render(<CoachmarkTour steps={ambiguous} timeoutMs={10000} />);
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A');
+
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A');
+    });
+
+    it('steps 배열 정체성이 렌더마다 바뀌어도(인라인 배열) 리졸버가 동작한다', async () => {
+      vi.useFakeTimers();
+      appendTarget('content');
+      const n1 = appendTarget('n1');
+      const { rerender } = render(
+        <CoachmarkTour steps={[...wizardSteps]} timeoutMs={10000} />,
+      );
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '소개');
+
+      // 오프코스 상태 진입: n1 제거, n2 등장 — info(0)에 머문 코치마크가 점프해야 한다.
+      fireEvent.click(n1);
+      n1.remove();
+      appendTarget('n2');
+
+      // 부모 리렌더 흉내: 매 250ms마다 "새 배열 정체성"의 같은 내용 steps를 다시 넘긴다.
+      // 정체성 기반 의존성이면 인터벌·카운터가 매번 리셋돼 점프가 영원히 불가능해진다.
+      for (let i = 0; i < 4; i += 1) {
+        await act(async () => {
+          vi.advanceTimersByTime(250);
+        });
+        rerender(<CoachmarkTour steps={[...wizardSteps]} timeoutMs={10000} />);
+      }
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 2');
+    });
+
+    it('action 스텝이 1개뿐인 투어는 리졸버 인터벌을 만들지 않는다 (점프 경로 도달 불가)', async () => {
+      vi.useFakeTimers();
+      const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+      appendTarget('solo');
+      render(
+        <CoachmarkTour
+          steps={[{ target: 'solo', title: '단독', body: 'b', placement: 'top', kind: 'action' }]}
+          timeoutMs={10000}
+        />,
+      );
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '단독');
+      // 250ms 인터벌은 useAnchorRect의 rect 보정 폴 1개뿐이어야 한다 —
+      // action이 1개면 expected가 항상 그 스텝이라 리졸버 점프 경로가 도달 불가하므로
+      // 인터벌 자체를 만들지 않는다.
+      expect(setIntervalSpy.mock.calls.filter((c) => c[1] === 250)).toHaveLength(1);
+      setIntervalSpy.mockRestore();
+    });
+
+    it('언마운트 시 리졸버 인터벌이 정리된다 (타이머 잔존 0)', async () => {
+      vi.useFakeTimers();
+      appendTarget('content');
+      appendTarget('n1');
+      const { unmount } = render(<CoachmarkTour steps={wizardSteps} timeoutMs={10000} />);
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '소개');
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('마지막 action 이후(후행 info 스텝)에는 방금 클릭한 앵커가 남아 있어도 역행하지 않는다', async () => {
+      vi.useFakeTimers();
+      const a = appendTarget('trail-a');
+      appendTarget('trail-info');
+      const trailingInfo: CoachmarkStep[] = [
+        { target: 'trail-a', title: '여기를 눌러 A', body: 'a', placement: 'top', kind: 'action' },
+        { target: 'trail-info', title: '마무리 안내', body: 'b', placement: 'top' },
+      ];
+      render(<CoachmarkTour steps={trailingInfo} timeoutMs={10000} />);
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A');
+      // A 클릭 → 후행 info로 진행. A 앵커는 화면에 그대로 남는다(예: 제출 버튼 잔존).
+      fireEvent.click(a);
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '마무리 안내');
+
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      // expected가 없으므로(마지막 action 이후) A로 되끌려가지 않는다.
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '마무리 안내');
+    });
+
+    it('두 action 스텝이 같은 target을 공유하면(전제 붕괴) 점프하지 않는다', async () => {
+      vi.useFakeTimers();
+      appendTarget('dup');
+      const dupSteps: CoachmarkStep[] = [
+        { target: 'dup', title: '여기를 눌러 A', body: 'a', placement: 'top', kind: 'action' },
+        { target: 'dup', title: '여기를 눌러 B', body: 'b', placement: 'top', kind: 'action' },
+      ];
+      render(<CoachmarkTour steps={dupSteps} timeoutMs={10000} />);
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A');
+
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      // 두 스텝이 같은 요소에 매칭돼 상시 "모호(2개)" — 리졸버는 관망하고 투어는 그대로.
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 A');
+    });
   });
 
   it('action 타깃이 disabled면 말풍선에 막힘 힌트가 나타난다', async () => {

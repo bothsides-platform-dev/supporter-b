@@ -36,11 +36,21 @@ export function CoachmarkOverlay({
   targetDisabled,
 }: CoachmarkOverlayProps) {
   const [reducedMotion, setReducedMotion] = useState(false);
+  // 스크린리더 공지 텍스트 — 마운트 "후" effect로 채워야 첫 스텝도 라이브 리전
+  // 변경으로 공지된다(내용을 품은 채 마운트된 리전은 공지되지 않음).
+  const [announcement, setAnnouncement] = useState('');
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 마운트 시 matchMedia를 1회 읽어 반영하는 의도된 동기화(SSR엔 window 없음)
     setReducedMotion(prefersReducedMotion());
   }, []);
+
+  useEffect(() => {
+    // 스텝 전환은 사용자 클릭 없이도 일어난다(오프코스 리졸버 점프) — 시각 링만으로는
+    // 비시각 사용자에게 전달되지 않으므로 폴라이트 라이브 리전으로 현재 안내를 공지한다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 라이브 리전은 마운트 후 텍스트가 "변경"돼야 공지되는 의도된 동기화
+    setAnnouncement(`${step.title} ${step.body}`);
+  }, [step.title, step.body]);
 
   const isAction = step.kind === 'action';
 
@@ -124,6 +134,9 @@ export function CoachmarkOverlay({
     <div data-slot="coachmark-overlay" className="fixed inset-0 z-50 pointer-events-none">
       {ring}
       {bubble}
+      <div role="status" className="sr-only">
+        {announcement}
+      </div>
     </div>
   );
 }
