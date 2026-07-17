@@ -91,4 +91,44 @@ describe('BidWizard onSampleSubmit (가상 샘플 온보딩 — PG 투어)', () 
     await waitFor(() => expect(onSampleSubmit).toHaveBeenCalledTimes(1));
     expect(submitBidMock).not.toHaveBeenCalled();
   });
+
+  it('initialDraft가 있으면 타이핑 없이 클릭만으로 제출까지 간다 (pg 튜토리얼 클릭 전용)', async () => {
+    const { tutorialBidDraftSeed } = await import('@/lib/onboarding/tutorial-fixtures');
+    const seededRfp = {
+      id: 'tutorial-rfp',
+      code: 'TUTORIAL',
+      requiredPaymentMethods: ['card', 'virtual_account', 'naver_pay'] as PaymentMethod[],
+      customPaymentMethods: [],
+    } as never;
+    const onSampleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BidWizard
+        rfp={seededRfp}
+        buyerName="튜토리얼 쇼핑몰"
+        initialDraft={tutorialBidDraftSeed}
+        onSampleSubmit={onSampleSubmit}
+      />,
+    );
+
+    // 타이핑 없이 네비게이션 클릭만으로 제출.
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+
+    await waitFor(() => expect(onSampleSubmit).toHaveBeenCalledTimes(1));
+    expect(submitBidMock).not.toHaveBeenCalled();
+  });
+
+  it('샘플 제출 시 로컬 draft를 정리한다 (bid-draft:<rfpId> 잔존 방지)', async () => {
+    const onSampleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="샘플 쇼핑몰" onSampleSubmit={onSampleSubmit} />);
+    await driveToSubmit(user);
+
+    await waitFor(() => expect(onSampleSubmit).toHaveBeenCalledTimes(1));
+    expect(localStorage.getItem('bid-draft:sample-rfp')).toBeNull();
+  });
 });

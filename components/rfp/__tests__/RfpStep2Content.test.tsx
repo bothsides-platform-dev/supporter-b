@@ -502,4 +502,12 @@ describe('RfpStep2Content', () => {
       expect(screen.getAllByText('입력 완료').length).toBeGreaterThan(0);
     });
   });
+
+  it('다음 버튼에 튜토리얼 코치마크 앵커가 있다', () => {
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    expect(screen.getByRole('button', { name: '다음' })).toHaveAttribute(
+      'data-coachmark',
+      'tutorial-wizard-next-2',
+    );
+  });
 });

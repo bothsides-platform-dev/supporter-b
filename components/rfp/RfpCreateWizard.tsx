@@ -35,11 +35,15 @@ type Props = {
   onStepChange?: (step: number) => void;
   // guest 종결 "보내기" 오버라이드 (랜딩 데모). 없으면 기존 draft 핸드오프 동작.
   onGuestSubmit?: () => void;
+  // 가상 샘플 온보딩(buyer 튜토리얼) 종결 "보내기" 오버라이드 — 주어지면 실제
+  // createRfpAction/draft 핸드오프 대신 이 콜백만 호출한다(fixture rfp에는 실제
+  // PG/워크스페이스가 없어 실 액션을 태우면 깨진다). BidWizard의 onSampleSubmit과 대칭.
+  onSampleSubmit?: () => void;
   // 내부 네비(사이드바/진행바/스텝 헤더)를 숨긴다 — 랜딩 데모가 자체 스테퍼를 제공할 때.
   hideNav?: boolean;
 };
 
-export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step, onStepChange, onGuestSubmit, hideNav }: Props) {
+export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav }: Props) {
   const router = useRouter();
   const draft = useRfpDraftStore();
 
@@ -57,6 +61,11 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
 
   // 마운트 시 localStorage draft의 stale 데이터 정리.
   useEffect(() => {
+    // 샘플 모드(buyer 튜토리얼)에서는 전부 스킵 — React는 자식 effect를 부모보다 먼저
+    // 실행하므로, 이 정리가 튜토리얼(부모)의 draft 격리 스냅샷보다 먼저 fixture pgList
+    // 기준으로 실제 draft를 훼손할 수 있다. 튜토리얼에선 seed가 곧 정답이라 정리 불필요.
+    if (onSampleSubmit) return;
+
     const { allowedPgWorkspaceIds, deadline, rfpFiles, pgSelectionInitialized, setField } =
       useRfpDraftStore.getState();
 
@@ -145,6 +154,12 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
 
   const handleSubmit = async () => {
     if (submitting) return;
+
+    // 가상 샘플 온보딩(buyer 튜토리얼): 서버 제출 없이 콜백만 호출한다.
+    if (onSampleSubmit) {
+      onSampleSubmit();
+      return;
+    }
 
     if (guest) {
       // 랜딩 데모(격리 draft)는 onGuestSubmit으로 위임 — 실제 draft 핸드오프를 타지 않는다.
@@ -257,7 +272,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
           />
         )}
 
-        <div className="flex-1 px-6 py-6">
+        <div className="flex-1 px-6 py-6" data-coachmark="tutorial-wizard-content">
           {/* Step header */}
           {!hideNav && (
             <div className="flex items-center gap-3 mb-6">
@@ -277,7 +292,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
             />
           )}
           {currentStep === 2 && (
-            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} />
+            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={Boolean(onSampleSubmit)} />
           )}
           {currentStep === 3 && (
             <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} showFieldErrors={failedSteps.has(3)} />

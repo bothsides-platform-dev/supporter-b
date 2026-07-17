@@ -141,6 +141,37 @@
   to   { transform: rotate(360deg); }
 }
 
+/*
+  .coachmark-pulse — 코치마크 스포트라이트 링(온보딩 시선 유도) 소프트 펄스, 루프.
+  dim 스크림을 없앤 뒤(배경은 밝게 유지) 타깃 강조가 2px 프라이머리 링뿐이라, 은은한
+  opacity 호흡으로 시선을 보강한다. opacity 전용(layout 불변, DESIGN.md 모션 하드룰).
+  등장 페이드(coachmark-fade-in)도 이 클래스가 직접 소유한다 — tw-animate의
+  animate-in(레이어드 유틸)과 충돌해 페이드가 재생 안 되는 문제를 피하기 위해 author
+  CSS 하나로 통일했다(구 fadeClass 분기 제거).
+  - prefers-reduced-motion: animation: none (컴포넌트 쪽에서도 reducedMotion 분기로
+    클래스 자체를 붙이지 않음 — 기존 fadeClass 분기와 동일 패턴)
+*/
+@keyframes coachmark-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes coachmark-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .coachmark-pulse {
+    animation: coachmark-fade-in 150ms ease-out, coachmark-pulse 1.8s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coachmark-pulse {
+    animation: none;
+  }
+}
+
 /* Landing in-page anchor nav — smooth scroll scoped to the landing (class
    toggled on <html> while mounted) so app keyboard/list/chat scrolls stay
    instant. Fixed-header offset is handled per-section via scroll-mt. */

@@ -48,6 +48,7 @@ vi.mock('motion/react', () => {
     useScroll: () => ({ scrollYProgress: { on: vi.fn() } }),
     useMotionValueEvent: vi.fn(),
     useTransform: () => 1,
+    useReducedMotion: () => false,
   };
 });
 

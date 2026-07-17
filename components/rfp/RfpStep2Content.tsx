@@ -42,9 +42,11 @@ type Props = {
   showFieldErrors?: boolean;
   /** 서버가 거부한 홈페이지 URL — 현재 store URL 과 같으면 필드 에러를 표시 */
   websiteRejected?: string;
+  /** 튜토리얼 샌드박스 — 첨부를 가상 처리 */
+  sampleMode?: boolean;
 };
 
-export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteRejected }: Props) {
+export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteRejected, sampleMode }: Props) {
   const draft = useRfpDraftStore();
   const [localAttempted, setLocalAttempted] = useState(false);
 
@@ -281,13 +283,14 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
       <RfpAttachmentDropzone
         value={draft.rfpFiles}
         onChange={(files) => draft.setField('rfpFiles', files)}
+        sampleMode={sampleMode}
       />
 
       <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
-        <Button data-demo-cursor type="button" size="md" onClick={() => { setLocalAttempted(true); onNext(); }}>
+        <Button data-demo-cursor data-coachmark="tutorial-wizard-next-2" type="button" size="md" onClick={() => { setLocalAttempted(true); onNext(); }}>
           다음
         </Button>
       </div>

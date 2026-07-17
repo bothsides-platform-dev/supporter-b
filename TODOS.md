@@ -43,6 +43,9 @@
 
 ## Design
 
+### AnimatedBrandMark 진입 애니메이션 — DESIGN.md 예외 미문서화 (P4)
+`components/primitives/AnimatedBrandMark.tsx`(v0.3.0.0, `SidebarBrand`가 인증 앱 셸에 마운트)의 1회성 SVG `pathLength`/`fillOpacity` draw-on 진입 연출이 DESIGN.md §9의 `(app)/**` 두 예외(축하 모먼트·테마 전환 리빌) 어디에도 명시되지 않았다(같은 릴리스 범위의 `.coachmark-pulse`는 예외로 문서화됨과 대비). 기능적 결함은 아님 — 세 번째 예외로 DESIGN.md에 명문화할지, `/design-review`로 하드룰 위반 여부를 재검토할지 정책 결정 필요. (발견: /ship 문서 동기화 점검, dev→main 릴리스 컷 2026-07-17)
+
 ### font-mono uppercase tracking on non-numeric UI labels (C4) (P3)
 `font-mono text-[10px] tracking-[0.1em] uppercase` 패턴이 폼 라벨·버튼·nav 링크 등 비수치 UI 요소 ~180곳에 남아 있음 (DESIGN.md 하드 룰 위반: "no `font-mono uppercase tracking` on labels/nav"). 대표 파일: `app/(public)/login`·`signup`·`password`·`auth`·`invite`, `components/auth/PasswordField`·`PhoneVerificationField`·`ResendCountdown`, `components/inbox/bid-wizard/BidContextStrip`, `components/settings/*`, `components/rfp/*`. 수정 방향: `font-mono text-[10px] tracking-[0.1em] uppercase` → `font-sans text-[11px] tracking-tight` + sentence case. 별도 worktree 권장(시각 변경 광범위). 또한 `font-mono tabular-nums` 직접 사용이 `md-numeric` 미전환 상태로 ~30건 잔존(`components/settings/`, `components/rfp/`, `components/landing/` 등) — C4 스윕 시 병행 정리. (도입: font-system audit PR#280 v0.2.35.1, 2026-06-22)
 
@@ -93,3 +96,39 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### changeMemberRole — LAST_ADMIN 오탐: pending_approval admin 강등 (P1)
 `WorkspaceService.changeMemberRole` 의 LAST_ADMIN 가드(`if (input.role === 'member' && target.role === 'admin')`)가 `countAdmins`(승인된 admin 만 집계)를 호출하기 전에 `target.approvalStatus`를 검사하지 않는다. 결과: 유일한 승인 admin 이 아직 미승인(pending_approval) admin 을 member 로 강등하려 하면 — 그 미승인 admin 은 실질 권한을 행사한 적 없음에도 — 거짓 `LAST_ADMIN` 에러가 발생한다. **수정**: `changeMemberRole` line 279 조건에 `&& target.approvalStatus === 'approved'` 추가. TDD: pending_approval target 강등 시 LAST_ADMIN 없이 성공하는 회귀 테스트 먼저 작성. (발견: /ship adversarial v0.2.51.0, 2026-06-28)
 
+
+## Onboarding / Tutorial
+
+### 튜토리얼 플로우 셸 중복 추출 (P3)
+`BuyerTutorialFlow`와 `PgTutorialFlow`가 phase 상태머신 스캐폴딩(PHASE_ORDER/LABELS, 진행 헤더+나가기 버튼, done 전용 컨페티 캔버스)을 거의 그대로 중복. 공용 `TutorialFlowShell`/`useTutorialPhase` 추출 검토. 두 플로우 테스트의 CoachmarkTour mock 중복도 같은 작업에서 공용 test-double로 추출(키보드락은 v0.3.4.0에서 삭제됨). (발견: /ship maintainability 리뷰 v0.2.76.0, 2026-07-07 · mock 중복 추가: v0.2.79.0, 2026-07-10)
+
+### updateOnboardingAction fire-and-forget 경화 — 실패 무시 + read-after-write 레이스 (P3)
+`handleComplete`/`handleExit` 6곳이 `void updateOnboardingAction(...)`으로 발사 후 결과를 읽지 않는다: ① 네트워크 단절/세션 만료 시 unhandled rejection + 미영속(유저는 완료 화면을 봤는데 DB엔 스탬프 없음 → 환영 모달 재노출), ② `{ok:false}` 무시, ③ done CTA가 쓰기 완료를 기다리지 않아 `/home` RSC의 `getOnboarding()` 읽기가 쓰기를 앞지르면 완료 직후 환영 모달이 뜰 수 있음(스킵 경로에서 더 잦음). await+에러 토스트 또는 최소 `.catch` + `revalidatePath` 검토. v0.3.4.0의 `TutorialLeaveGuard.leave`(dismissed/completed 스탬프 후 즉시 router.push)도 같은 패턴 2곳 추가 — 경화 시 함께. (발견: /ship 적대 리뷰 v0.3.2.0, 2026-07-15 · 가드 추가: v0.3.4.0, 2026-07-16)
+
+### 오픈 샌드박스 후속 폴리시 — 저장 신호·href 경화 (P4)
+v0.3.4.0 /ship 리뷰(레드팀·적대·부록)에서 나온 비차단 폴리시 묶음. ~~① 막힌 클릭 복귀 공백(notFound 3s 대기)~~ — **v0.3.5.0 오프코스 리졸버가 해소**(타깃 잔존 즉시 감지, ~0.5s 복귀). ② 샘플 모드 템플릿 저장이 패널 닫힘(성공 신호)과 "저장되지 않아요" 토스트를 동시에 냄 — 신호 일치 검토(conf3). ③ `TutorialLeaveGuard`의 내부 링크 판정이 protocol-relative(`//host`) href를 통과시킴 — 현재 앵커가 전부 앱 통제라 비악용, 방어적 거부만 추가 검토(보안 conf3).
+
+### 마지막 action 스텝의 막힌 클릭·확인창 취소 좌초 (P3)
+CoachmarkTour의 capture 클릭 리스너가 마지막 action 클릭 즉시 `onFinish`를 부르고 플로우가 투어를 언마운트하므로, 마지막 action(제출)의 실패는 어떤 복귀 장치(오프코스 리졸버·notFound 폴백)도 커버하지 못한다. 실사례: PG 제출 확인창(ConfirmDialog)을 취소하면 코치마크 없이 BidWizard 4단계에 남는다(유일 출구: 튜토리얼 나가기). 마지막 action은 클릭이 아니라 "성공 신호"(phase 전환 콜백) 시점에 finish하는 설계 검토. 선존재 동작(v0.3.2.0~)이며 CLAUDE.md에 미적용 예외로 명시됨. (발견: /ship 적대 리뷰 F2, v0.3.5.0)
+
+### useAnchorRect가 data-coachmark 속성 변이를 미감지 (P4)
+`trackedEl.isConnected`만 검사하고 selector 재매칭(`el.matches`)은 하지 않아, BidWizard처럼 같은 버튼의 앵커 값이 변이하면(`tutorial-bid-next-${currentStep}`) 낡은 스텝 말풍선이 새 앵커를 최대 ~0.5s(리졸버 개입 전) 링한다 — 구 notFound 경로에선 3s였으니 개선됐지만 근본 원인은 잔존. poll tick에 `matches(coachmarkSelector(target))` 재검증 추가 검토. (발견: /ship 적대 리뷰 F5a, v0.3.5.0)
+
+### 온보딩 e2e — 진입면(환영 모달·재유도 배너) 여정 (P4)
+클릭-스루 본여정(buyer 작성→도착→선정 / PG 초대→조건→제출)은 `e2e/tutorial-click-through.spec.ts`가 커버(v0.2.79.0, 2026-07-10). 남은 유예분: 홈 환영 모달→체험 시작, '나중에 하기'→재유도 배너→재진입, 완주 후 배너 소멸, 건너뛰기→완료 화면+DB completed 스탬프(+완료 후 /tutorial 재진입이 /home으로 바운스)(유예: 건너뛰기 개편 v0.3.2.0), 이탈 가드 여정(사이드바 클릭→다이얼로그→나중에 하기/건너뛰기 각 스탬프+이동, 오픈 샌드박스 v0.3.4.0 유예). (유예: 온보딩 재구축 v0.2.76.0)
+
+### useIsolatedRfpDraft restore() — 비동기 rehydrate 분기 미검증 (P2)
+`restore()`가 `store.setState(snapshot)`(동기) 직후 `void store.persist.rehydrate()`(비동기, fire-and-forget)를 호출한다 — 의도는 튜토리얼 동안 다른 탭이 실제 draft를 편집했어도 localStorage 최신값을 반영하는 것(주석에 명시). 그런데 `useIsolatedRfpDraft.test.ts` 5개 테스트 전부 localStorage와 스냅샷을 동일하게 유지한 채 `restore()`를 호출해, 정작 이 분기(스냅샷≠localStorage일 때 rehydrate가 최신값으로 덮어씀)가 한 번도 실행되지 않는다. 복원 직후 같은 틱에 동기 편집이 있고 그 후 rehydrate가 resolve되면 그 편집을 덮어쓸 수 있는지도 미검증. dev→main 릴리스 컷 /ship 리뷰(테스트 스페셜리스트)에서 발견 — restore() 호출부가 `/tutorial` 언마운트라는 라우트 전환 경계라 동틱 레이스 가능성은 낮다고 판단해 이번 릴리스는 블로킹하지 않음. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
+
+## Bid Wizard
+
+### deriveAnyFeeFilled 경계값 전용 테스트 부재 (P3)
+`components/inbox/bid-wizard/bid-wizard-validation.ts`의 `deriveAnyFeeFilled`(BidWizard.tsx에서 분리된 공용 함수, 튜토리얼 fixture 검증과 공유)에 전용 단위 테스트가 없다 — `fee='0'`(포함돼야 함), `fee='-1'`(제외돼야 함), 공백 문자열(`parseFloat`→NaN, 제외돼야 함), 다중 tier 중 하나만 채워진 경우, 빈 fees/methods 등 경계값이 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
+
+## NTS / 사업자번호 조회
+
+### lookupBizNoAction — 재시도+bounded wait 누적이 비인증 엔드포인트 요청 홀드시간을 증폭 (P1)
+`lib/integrations/nts.ts`의 429 재시도(최대 3회, ky 백오프 300/600/1200ms)와 leaky-bucket bounded 대기(재시도마다 최대 ~1000ms)가 서로 누적된다 — 429 폭풍 시나리오(빠른 429 응답 기준) 최대 ~6초, 개별 시도가 5초 timeout까지 늘어지는 최악의 경우 이론상 ~27초까지 단일 요청이 열려 있을 수 있다. `lookupBizNoAction`은 가입 플로우용으로 **의도적으로 비인증**이며, Caddy 엣지에도 별도 rate limit이 없어(`deploy/Caddyfile` 확인) 유일한 방어선은 이 in-process 전역 leaky-bucket(IP 단위 아님)뿐이다. 데이터 유출·인증 우회는 아니고 단일 Lightsail VM에서의 리소스 소모(soft DoS) 증폭 이슈. 수정 방향: `lookup()` 전체를 `AbortController`/전체 데드라인(예: 6~8초 캡)으로 감싸 재시도+bounded wait 누적과 무관하게 총 홀드시간을 제한하거나, 이 액션에 한해 엣지/게이트웨이 레벨 IP별 rate limit 추가 검토. (발견: /ship 적대 리뷰, dev→main 릴리스 컷 2026-07-17 — 유저 확인 후 이번 릴리스는 블로킹하지 않기로 결정)
+
+### Retry-After 헤더 malformed 값 폴백 미검증 (P3)
+`lib/integrations/nts.ts`의 429 `shouldRetry` 분기에서 `Retry-After` 헤더가 숫자도 유효 HTTP-date도 아닌 값(`'garbage'` 등)이면 `afterMs=NaN`이 되어 조용히 일반 재시도 경로로 폴백한다 — 이 폴백 자체는 안전해 보이지만 테스트가 숫자/유효 date 케이스만 커버하고 malformed 값과 "헤더는 있지만 budget 이내인" 케이스는 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)

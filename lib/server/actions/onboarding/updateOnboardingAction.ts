@@ -19,7 +19,7 @@ export type UpdateOnboardingResult = ActionResult;
 
 /**
  * 유저 단위 온보딩 태스크 완료/닫기 스탬프. key 에 따라 세션 게이트가 갈린다 —
- * buyerSample 은 buyer 세션, pgSample 은 PG 세션. 스탬프 자체(멱등)는 서비스가 담당.
+ * buyerTutorial 은 buyer 세션, pgTutorial 은 PG 세션. 스탬프 자체(멱등)는 서비스가 담당.
  */
 export async function updateOnboardingAction(
   input: UpdateOnboardingInput,
@@ -28,7 +28,7 @@ export async function updateOnboardingAction(
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
   const actor =
-    parsed.data.key === 'buyerSample' ? await requireBuyerActor() : await requirePgActor();
+    parsed.data.key === 'buyerTutorial' ? await requireBuyerActor() : await requirePgActor();
   if (!actor.ok) return actor;
 
   const service = await getOnboardingService();

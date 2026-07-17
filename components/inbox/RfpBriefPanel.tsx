@@ -21,7 +21,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
   const pgCardFee = rfp.currentFeeVisibleToPg === false ? undefined : rfp.currentFeeRate;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-coachmark="tutorial-brief-panel">
       {/* Header */}
       <div>
         <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{rfp.id}</span>

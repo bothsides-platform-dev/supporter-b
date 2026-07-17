@@ -40,21 +40,29 @@ afterEach(() => {
 });
 
 describe('BuyerHome', () => {
-  it('buyerSample 태스크가 미완료면 showSampleEntry=true를 HomeDashboard에 전달한다', async () => {
+  it('buyerTutorial 태스크가 미완료면 welcomeState="welcome"을 HomeDashboard에 전달한다', async () => {
     getOnboardingMock.mockResolvedValue({ _v: 1 });
     render(await BuyerHome({ workspaceId: 'ws-1', userId: 'u-1' }));
     expect(screen.getByText('HomeDashboard')).toBeInTheDocument();
     expect(getOnboardingMock).toHaveBeenCalledWith('u-1');
     expect(homeDashboardPropsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ showSampleEntry: true, workspaceType: 'buyer' }),
+      expect.objectContaining({ welcomeState: 'welcome', workspaceType: 'buyer' }),
     );
   });
 
-  it('buyerSample 태스크가 completed면 showSampleEntry=false를 전달한다', async () => {
-    getOnboardingMock.mockResolvedValue({ _v: 1, buyerSample: { completedAt: '2026-01-01T00:00:00Z' } });
+  it('buyerTutorial 태스크가 dismissed면 welcomeState="nudge"를 전달한다', async () => {
+    getOnboardingMock.mockResolvedValue({ _v: 1, buyerTutorial: { dismissedAt: '2026-01-01T00:00:00Z' } });
     render(await BuyerHome({ workspaceId: 'ws-1', userId: 'u-1' }));
     expect(homeDashboardPropsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ showSampleEntry: false }),
+      expect.objectContaining({ welcomeState: 'nudge' }),
+    );
+  });
+
+  it('buyerTutorial 태스크가 completed면 welcomeState="none"을 전달한다', async () => {
+    getOnboardingMock.mockResolvedValue({ _v: 1, buyerTutorial: { completedAt: '2026-01-01T00:00:00Z' } });
+    render(await BuyerHome({ workspaceId: 'ws-1', userId: 'u-1' }));
+    expect(homeDashboardPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ welcomeState: 'none' }),
     );
   });
 });

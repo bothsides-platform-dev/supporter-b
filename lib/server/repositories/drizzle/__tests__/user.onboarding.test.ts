@@ -23,27 +23,27 @@ describe('DrizzleUserRepository onboarding', () => {
     const { db, repo } = await setup();
     const { id } = await seedUser(db);
 
-    await repo.markOnboarding(id, 'buyerSample', { completedAt: '2026-07-01T00:00:00.000Z' });
+    await repo.markOnboarding(id, 'buyerTutorial', { completedAt: '2026-07-01T00:00:00.000Z' });
 
     const onboarding = await repo.getOnboarding(id);
     expect(onboarding).toEqual({
       _v: 1,
-      buyerSample: { completedAt: '2026-07-01T00:00:00.000Z' },
+      buyerTutorial: { completedAt: '2026-07-01T00:00:00.000Z' },
     });
   });
 
-  it('다른 키(pgSample)는 서로 덮어쓰지 않는다', async () => {
+  it('다른 키(pgTutorial)는 서로 덮어쓰지 않는다', async () => {
     const { db, repo } = await setup();
     const { id } = await seedUser(db);
 
-    await repo.markOnboarding(id, 'buyerSample', { completedAt: '2026-07-01T00:00:00.000Z' });
-    await repo.markOnboarding(id, 'pgSample', { dismissedAt: '2026-07-02T00:00:00.000Z' });
+    await repo.markOnboarding(id, 'buyerTutorial', { completedAt: '2026-07-01T00:00:00.000Z' });
+    await repo.markOnboarding(id, 'pgTutorial', { dismissedAt: '2026-07-02T00:00:00.000Z' });
 
     const onboarding = await repo.getOnboarding(id);
     expect(onboarding).toEqual({
       _v: 1,
-      buyerSample: { completedAt: '2026-07-01T00:00:00.000Z' },
-      pgSample: { dismissedAt: '2026-07-02T00:00:00.000Z' },
+      buyerTutorial: { completedAt: '2026-07-01T00:00:00.000Z' },
+      pgTutorial: { dismissedAt: '2026-07-02T00:00:00.000Z' },
     });
   });
 
@@ -51,11 +51,11 @@ describe('DrizzleUserRepository onboarding', () => {
     const { db, repo } = await setup();
     const { id } = await seedUser(db);
 
-    await repo.markOnboarding(id, 'buyerSample', { completedAt: '2026-07-01T00:00:00.000Z' });
-    await repo.markOnboarding(id, 'buyerSample', { dismissedAt: '2026-07-03T00:00:00.000Z' });
+    await repo.markOnboarding(id, 'buyerTutorial', { completedAt: '2026-07-01T00:00:00.000Z' });
+    await repo.markOnboarding(id, 'buyerTutorial', { dismissedAt: '2026-07-03T00:00:00.000Z' });
 
     const onboarding = await repo.getOnboarding(id);
-    expect(onboarding.buyerSample).toEqual({
+    expect(onboarding.buyerTutorial).toEqual({
       completedAt: '2026-07-01T00:00:00.000Z',
       dismissedAt: '2026-07-03T00:00:00.000Z',
     });
@@ -65,13 +65,13 @@ describe('DrizzleUserRepository onboarding', () => {
     const { db, repo } = await setup();
     const { id } = await seedUser(db);
 
-    await repo.markOnboarding(id, 'buyerSample', { completedAt: '2026-07-01T00:00:00.000Z' });
-    await repo.markOnboarding(id, 'buyerSample', { completedAt: '2026-07-01T00:00:00.000Z' });
+    await repo.markOnboarding(id, 'buyerTutorial', { completedAt: '2026-07-01T00:00:00.000Z' });
+    await repo.markOnboarding(id, 'buyerTutorial', { completedAt: '2026-07-01T00:00:00.000Z' });
 
     const onboarding = await repo.getOnboarding(id);
     expect(onboarding).toEqual({
       _v: 1,
-      buyerSample: { completedAt: '2026-07-01T00:00:00.000Z' },
+      buyerTutorial: { completedAt: '2026-07-01T00:00:00.000Z' },
     });
   });
 });

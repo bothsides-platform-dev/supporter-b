@@ -135,4 +135,12 @@ describe('RfpStep3PgSelect', () => {
     await user.click(screen.getByRole('button', { name: '전체 선택' }));
     expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toHaveLength(0);
   });
+
+  it('다음 버튼에 튜토리얼 코치마크 앵커가 있다', () => {
+    render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+    expect(screen.getByRole('button', { name: '다음' })).toHaveAttribute(
+      'data-coachmark',
+      'tutorial-wizard-next-3',
+    );
+  });
 });

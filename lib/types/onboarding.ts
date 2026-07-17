@@ -9,15 +9,15 @@ export type OnboardingTaskState = { completedAt?: string; dismissedAt?: string }
 // v1 모양. 모든 키 optional → 키 추가는 non-breaking.
 export type UserOnboardingV1 = {
   _v: 1;
-  buyerSample?: OnboardingTaskState;
-  pgSample?: OnboardingTaskState;
+  buyerTutorial?: OnboardingTaskState;
+  pgTutorial?: OnboardingTaskState;
 };
 
 // 현재 정규형(현재는 v1 단일). 미래: UserOnboardingV1 | UserOnboardingV2 …
 export type UserOnboarding = UserOnboardingV1;
 
 // 온보딩 태스크 키 어휘 — 타입이 이 단일 배열에서 파생된다(드리프트 방지).
-export const ONBOARDING_KEYS = ['buyerSample', 'pgSample'] as const;
+export const ONBOARDING_KEYS = ['buyerTutorial', 'pgTutorial'] as const;
 export type OnboardingKey = (typeof ONBOARDING_KEYS)[number];
 
 /**
@@ -34,8 +34,4 @@ export function migrateUserOnboarding(raw: unknown): UserOnboarding {
     }
   }
   return out;
-}
-
-export function isOnboardingTaskDone(s: OnboardingTaskState | undefined): boolean {
-  return !!(s && (s.completedAt || s.dismissedAt));
 }

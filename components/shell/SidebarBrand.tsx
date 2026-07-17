@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { motion, useReducedMotion, type Variants } from 'motion/react';
-import { BrandMark } from '@/components/primitives/Logo';
+import { AnimatedBrandMark } from '@/components/primitives/AnimatedBrandMark';
 import { useSidebar } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import { BRAND_MARK_SIZE_PX } from '@/lib/brand/brand-mark-path';
 
 const WORDMARK = '서포트비';
 const EASE_DECEL = [0.05, 0.7, 0.1, 1] as const;
@@ -56,14 +57,16 @@ export function SidebarBrand({ className }: { className?: string }) {
       href="/home"
       aria-label="서포트비 홈"
       className={cn(
-        'group inline-flex items-center gap-3 rounded-md',
+        'group inline-flex items-baseline gap-3 rounded-md',
         'transition-opacity duration-[140ms] hover:opacity-70',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-on-surface)]',
         className,
       )}
     >
-      {/* icon mark — "B" 브랜드 마크, ink on transparent (Logo default variant과 동일) */}
-      <BrandMark className="shrink-0" />
+      {/* icon mark — "B" 브랜드 마크, ink on transparent. 하드 로드 시 1회 draw-on 등장.
+          baseline 정렬 + 잉크 매칭 실측 보정 — 근거는 lib/brand/brand-mark-path.ts 참조
+          (Logo.tsx와 값 공유, translate-y는 Tailwind 정적 추출 제약상 리터럴 유지). */}
+      <AnimatedBrandMark className="shrink-0 translate-y-[2px]" size={BRAND_MARK_SIZE_PX} />
       <motion.span
         aria-hidden="true"
         initial={false}
