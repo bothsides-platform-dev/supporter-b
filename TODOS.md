@@ -113,3 +113,16 @@ CoachmarkTour의 capture 클릭 리스너가 마지막 action 클릭 즉시 `onF
 
 ### 온보딩 e2e — 진입면(환영 모달·재유도 배너) 여정 (P4)
 클릭-스루 본여정(buyer 작성→도착→선정 / PG 초대→조건→제출)은 `e2e/tutorial-click-through.spec.ts`가 커버(v0.2.79.0, 2026-07-10). 남은 유예분: 홈 환영 모달→체험 시작, '나중에 하기'→재유도 배너→재진입, 완주 후 배너 소멸, 건너뛰기→완료 화면+DB completed 스탬프(+완료 후 /tutorial 재진입이 /home으로 바운스)(유예: 건너뛰기 개편 v0.3.2.0), 이탈 가드 여정(사이드바 클릭→다이얼로그→나중에 하기/건너뛰기 각 스탬프+이동, 오픈 샌드박스 v0.3.4.0 유예). (유예: 온보딩 재구축 v0.2.76.0)
+
+### useIsolatedRfpDraft restore() — 비동기 rehydrate 분기 미검증 (P2)
+`restore()`가 `store.setState(snapshot)`(동기) 직후 `void store.persist.rehydrate()`(비동기, fire-and-forget)를 호출한다 — 의도는 튜토리얼 동안 다른 탭이 실제 draft를 편집했어도 localStorage 최신값을 반영하는 것(주석에 명시). 그런데 `useIsolatedRfpDraft.test.ts` 5개 테스트 전부 localStorage와 스냅샷을 동일하게 유지한 채 `restore()`를 호출해, 정작 이 분기(스냅샷≠localStorage일 때 rehydrate가 최신값으로 덮어씀)가 한 번도 실행되지 않는다. 복원 직후 같은 틱에 동기 편집이 있고 그 후 rehydrate가 resolve되면 그 편집을 덮어쓸 수 있는지도 미검증. dev→main 릴리스 컷 /ship 리뷰(테스트 스페셜리스트)에서 발견 — restore() 호출부가 `/tutorial` 언마운트라는 라우트 전환 경계라 동틱 레이스 가능성은 낮다고 판단해 이번 릴리스는 블로킹하지 않음. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
+
+## Bid Wizard
+
+### deriveAnyFeeFilled 경계값 전용 테스트 부재 (P3)
+`components/inbox/bid-wizard/bid-wizard-validation.ts`의 `deriveAnyFeeFilled`(BidWizard.tsx에서 분리된 공용 함수, 튜토리얼 fixture 검증과 공유)에 전용 단위 테스트가 없다 — `fee='0'`(포함돼야 함), `fee='-1'`(제외돼야 함), 공백 문자열(`parseFloat`→NaN, 제외돼야 함), 다중 tier 중 하나만 채워진 경우, 빈 fees/methods 등 경계값이 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
+
+## NTS / 사업자번호 조회
+
+### Retry-After 헤더 malformed 값 폴백 미검증 (P3)
+`lib/integrations/nts.ts`의 429 `shouldRetry` 분기에서 `Retry-After` 헤더가 숫자도 유효 HTTP-date도 아닌 값(`'garbage'` 등)이면 `afterMs=NaN`이 되어 조용히 일반 재시도 경로로 폴백한다 — 이 폴백 자체는 안전해 보이지만 테스트가 숫자/유효 date 케이스만 커버하고 malformed 값과 "헤더는 있지만 budget 이내인" 케이스는 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
