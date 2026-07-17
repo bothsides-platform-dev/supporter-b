@@ -15,6 +15,7 @@ import { resolveShellAccess } from '@/lib/auth/shell-access';
 import { getDbSessionVersion, getDbEmailVerified } from '@/lib/auth/session-version-db';
 import { setSentryUser } from '@/lib/observability/sentry-user';
 import { appOrigins, resolveHostRedirect } from '@/lib/site-routing';
+import { isEContractVisible } from '@/lib/features/e-contract';
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -94,6 +95,10 @@ export default async function AppLayout({
   };
   setSentryUser(sentryUser);
 
+  // 전자계약 런치 게이트 — 마스터 계정에만 노출(E_CONTRACT_ALL=1 이면 전체 공개).
+  // env 읽기가 필요해 서버에서 한 번만 계산해 클라이언트 nav 컴포넌트에 boolean 으로 내린다.
+  const eContractVisible = isEContractVisible({ isMaster: user.isMaster ?? false });
+
   return (
     <ToasterProvider>
       <WorkspacePresenceProvider>
@@ -110,6 +115,7 @@ export default async function AppLayout({
             workspaces,
             current: { id: active.id, name: active.name, type: active.type, logoUpdatedAt: active.logoUpdatedAt },
             isMaster: user.isMaster ?? false,
+            eContract: eContractVisible,
           }}
           header={{
             user: {
@@ -124,7 +130,7 @@ export default async function AppLayout({
         >
           {children}
         </AppSidebarLayout>
-        <CommandPalette workspaceType={active.type} />
+        <CommandPalette workspaceType={active.type} eContract={eContractVisible} />
         <PresenceClient workspaceId={active.id} />
         <GlobalShortcuts />
         <SentryUserContext user={sentryUser} />

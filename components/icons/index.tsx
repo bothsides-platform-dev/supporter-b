@@ -212,8 +212,16 @@ export function InfoIcon({ size = 16, ...p }: IconProps) {
   );
 }
 
-import { LayoutTemplate } from 'lucide-react';
+import { LayoutTemplate, FileSignature, FileStack } from 'lucide-react';
 
 export function LayoutTemplateIcon({ size = 20, ...p }: IconProps) {
   return <LayoutTemplate width={size} height={size} {...p} />;
+}
+
+export function FileSignatureIcon({ size = 20, ...p }: IconProps) {
+  return <FileSignature width={size} height={size} {...p} />;
+}
+
+export function FileStackIcon({ size = 20, ...p }: IconProps) {
+  return <FileStack width={size} height={size} {...p} />;
 }

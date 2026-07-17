@@ -32,21 +32,25 @@ export type SidebarProps = {
   workspaces: WorkspaceMembershipSummary[];
   current: { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null };
   isMaster?: boolean;
+  /** 전자계약 마스터 게이트 — 서버(app/(app)/layout.tsx)가 isEContractVisible() 로 계산해 내려준다. */
+  eContract?: boolean;
 };
 
 function SidebarNav({
   workspaceType,
   workspaceId,
+  eContract,
   onNavigate,
 }: {
   workspaceType: WorkspaceType;
   workspaceId: string;
+  eContract?: boolean;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   // 현재 워크스페이스 id 를 넘겨 전환 시 알림 싱글턴이 리셋되게 한다(Phase 7b).
   const { unreadCount } = useNotifications(workspaceId);
-  const { top, sections } = getNavConfig(workspaceType);
+  const { top, sections } = getNavConfig(workspaceType, { eContract });
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -86,6 +90,7 @@ function SidebarBody({
   workspaces,
   current,
   isMaster,
+  eContract,
   onNavigate,
 }: SidebarProps & { onNavigate?: () => void }) {
   return (
@@ -109,6 +114,7 @@ function SidebarBody({
             <SidebarNav
               workspaceType={workspaceType}
               workspaceId={current.id}
+              eContract={eContract}
               onNavigate={onNavigate}
             />
           </Suspense>
@@ -131,8 +137,8 @@ function SidebarBody({
 export function Sidebar(props: SidebarProps) {
   const { setOpenMobile } = useSidebar();
   const chordMap = useMemo(
-    () => getChordMap(props.workspaceType),
-    [props.workspaceType],
+    () => getChordMap(props.workspaceType, { eContract: props.eContract }),
+    [props.workspaceType, props.eContract],
   );
   useGoToShortcut(chordMap);
 

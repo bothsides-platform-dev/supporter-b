@@ -22,7 +22,7 @@ export function ContractCompleted({
           letterSpacing: '-0.01em',
         }}
       >
-        계약 체결 완료
+        서명 완료 알림
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
         양측 서명이 모두 끝나 계약이 완료됐어요. 완료된 계약서(전자서명·감사추적 확인서 포함)를 내려받을 수 있어요.

@@ -7,9 +7,15 @@ import {
   InboxIcon,
   SettingsIcon,
   LayoutTemplateIcon,
+  FileSignatureIcon,
+  FileStackIcon,
 } from '@/components/icons';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
+
+// getNavConfig 등에 넘기는 게이트 옵션 — 값 자체는 서버(app/(app)/layout.tsx)가
+// isEContractVisible() 로 미리 계산해 내려온다(env 읽기는 서버 전용).
+export type NavConfigOpts = { eContract?: boolean };
 
 export type IconComponent = ComponentType<
   SVGProps<SVGSVGElement> & { size?: number }
@@ -177,6 +183,24 @@ const QUOTE_TEMPLATES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'q' },
 };
 
+// 전자계약은 마스터 게이트(lib/features/e-contract.ts) 뒤에서만 노출 — buyer+pg 공통.
+const CONTRACTS: NavLeaf = {
+  id: 'contracts',
+  label: '전자계약',
+  href: '/contracts',
+  icon: FileSignatureIcon,
+  shortcut: { kind: 'chord', lead: 'g', key: 'k' },
+};
+
+// 계약 템플릿은 PG 전용 — 전자계약과 같은 마스터 게이트를 공유.
+const CONTRACT_TEMPLATES: NavLeaf = {
+  id: 'contract-templates',
+  label: '계약 템플릿',
+  href: '/contract-templates',
+  icon: FileStackIcon,
+  shortcut: { kind: 'chord', lead: 'g', key: 'e' },
+};
+
 // 오픈게시판이 꺼져 있으면 PG inbox 섹션에서 '참여 가능한 견적'(opportunities)
 // 진입점을 제거한다. getNavConfig 를 통해 사이드바·단축키·팔레트 nav 가 한 번에 반영된다.
 function inboxSection(): NavSection {
@@ -187,12 +211,19 @@ function inboxSection(): NavSection {
   };
 }
 
-export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
+export function getNavConfig(workspaceType: WorkspaceType, opts?: NavConfigOpts): NavConfig {
   const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : inboxSection();
+  const eContract = opts?.eContract ?? false;
   const top: NavLeaf[] =
     workspaceType === 'pg'
-      ? [HOME, NOTIFICATIONS, MESSAGES, QUOTE_TEMPLATES]
-      : [HOME, NOTIFICATIONS, MESSAGES];
+      ? [
+          HOME,
+          NOTIFICATIONS,
+          MESSAGES,
+          QUOTE_TEMPLATES,
+          ...(eContract ? [CONTRACTS, CONTRACT_TEMPLATES] : []),
+        ]
+      : [HOME, NOTIFICATIONS, MESSAGES, ...(eContract ? [CONTRACTS] : [])];
 
   return {
     top,
@@ -215,8 +246,8 @@ export type NavCommand = {
 // is emitted only when it isn't already one of that section's links — so
 // /settings (an alias for the profile link) doesn't double-emit, while /rfp
 // (a distinct list page) does. Deduped by href as a safety net.
-export function getNavCommands(workspaceType: WorkspaceType): NavCommand[] {
-  const { top, sections } = getNavConfig(workspaceType);
+export function getNavCommands(workspaceType: WorkspaceType, opts?: NavConfigOpts): NavCommand[] {
+  const { top, sections } = getNavConfig(workspaceType, opts);
   const out: NavCommand[] = [];
   const seen = new Set<string>();
   const push = (cmd: NavCommand) => {
@@ -285,6 +316,11 @@ export function getBreadcrumbSegments(
   if (pathname === '/messages') return [{ label: '메시지' }];
   if (pathname === '/quote-templates') return [{ label: '견적 템플릿' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
+  if (pathname === '/contracts') return [{ label: '전자계약' }];
+  if (pathname === '/contracts/new') {
+    return [{ label: '전자계약', href: '/contracts' }, { label: '계약서 보내기' }];
+  }
+  if (pathname === '/contract-templates') return [{ label: '계약 템플릿' }];
   if (pathname === '/rfp-create') {
     return [{ label: '견적 요청', href: '/rfp' }, { label: '새 견적 요청' }];
   }
@@ -309,8 +345,11 @@ export function getBreadcrumbSegments(
 }
 
 // Map of the second chord key → destination, for "G then X" navigation.
-export function getChordMap(workspaceType: WorkspaceType): Record<string, string> {
-  const { top, sections } = getNavConfig(workspaceType);
+export function getChordMap(
+  workspaceType: WorkspaceType,
+  opts?: NavConfigOpts,
+): Record<string, string> {
+  const { top, sections } = getNavConfig(workspaceType, opts);
   const map: Record<string, string> = {};
   for (const item of [...top, ...sections]) {
     if (item.shortcut?.kind === 'chord') map[item.shortcut.key] = item.href;

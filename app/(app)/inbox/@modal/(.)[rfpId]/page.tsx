@@ -11,6 +11,7 @@ import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { pgRequestChip } from '@/lib/rfp/rfp-status';
+import { isEContractVisible } from '@/lib/features/e-contract';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,7 @@ export default async function InboxDealRoomModalPage({ params }: Props) {
   if (!session?.user?.id || !session.user.workspaceId) {
     redirect(`/login?next=/inbox/${rfpCode}`);
   }
+  const eContractVisible = isEContractVisible({ isMaster: session.user.isMaster ?? false });
 
   const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: session.user.workspaceId });
   // 삭제됐거나 접근 불가한 코드 — notFound()는 모달을 넘어 목록까지 날리므로, 닫을
@@ -72,7 +74,7 @@ export default async function InboxDealRoomModalPage({ params }: Props) {
           />
         }
       >
-        <PgDealRoomBody data={data} />
+        <PgDealRoomBody data={data} eContractVisible={eContractVisible} />
       </DealRoomModal>
     </>
   );

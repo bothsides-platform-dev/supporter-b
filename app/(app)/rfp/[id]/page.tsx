@@ -9,6 +9,7 @@ import { DealRoomPageSkeleton } from '@/components/skeletons';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { rfpStatusChip } from '@/lib/rfp/rfp-status';
+import { isEContractVisible } from '@/lib/features/e-contract';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,8 @@ export default async function RfpDetailPage({ params }: Props) {
   const { id } = await params;
   const session = await requireBuyerPage(`/rfp/${id}`);
 
-  const { workspaceId, id: userId, name, email } = session.user;
+  const { workspaceId, id: userId, name, email, isMaster } = session.user;
+  const eContractVisible = isEContractVisible({ isMaster: isMaster ?? false });
 
   return (
     <Suspense fallback={<DealRoomPageSkeleton />}>
@@ -27,6 +29,7 @@ export default async function RfpDetailPage({ params }: Props) {
         wsId={workspaceId}
         userId={userId}
         userName={name ?? email ?? '구매사 담당자'}
+        eContractVisible={eContractVisible}
       />
     </Suspense>
   );
@@ -37,11 +40,13 @@ async function RfpDetailLoader({
   wsId,
   userId,
   userName,
+  eContractVisible,
 }: {
   id: string;
   wsId: string;
   userId: string;
   userName: string;
+  eContractVisible: boolean;
 }) {
   const data = await loadBuyerRfpDetail({
     code: id,
@@ -83,7 +88,7 @@ async function RfpDetailLoader({
         />
       }
     >
-      <BuyerDealRoomBody data={data} />
+      <BuyerDealRoomBody data={data} eContractVisible={eContractVisible} />
     </DealRoomFull>
   );
 }

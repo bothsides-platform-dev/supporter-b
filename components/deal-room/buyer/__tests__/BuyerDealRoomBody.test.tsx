@@ -42,6 +42,11 @@ vi.mock('@/lib/server/actions/rfp', () => ({
   closeRfpAction: vi.fn(),
   cancelRfpAction: vi.fn(),
 }));
+vi.mock('@/components/contracts/ContractDealCard', () => ({
+  ContractDealCard: ({ kind, rfpCode }: { kind: string; rfpCode: string }) => (
+    <div data-testid="contract-deal-card">{kind}:{rfpCode}</div>
+  ),
+}));
 
 const mq = vi.hoisted(() => ({ lgUp: true }));
 vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
@@ -166,5 +171,30 @@ describe('BuyerDealRoomBody — 선정 결과 패널', () => {
     expect(focusComp.parentElement).toContainElement(
       screen.getByText('담당처와 연락을 이어나가보세요.'),
     );
+  });
+});
+
+describe('BuyerDealRoomBody — 전자계약 카드 게이트', () => {
+  const awardedPgContact = { workspaceName: '토스페이먼츠', name: '김영업', email: 'sales@toss.im', phone: '010-1234-5678' };
+
+  it('eContractVisible=true + awarded 면 ContractDealCard(kind=buyer)를 렌더한다', () => {
+    render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      awardedPgContact,
+    })} eContractVisible />);
+    expect(screen.getByTestId('contract-deal-card')).toHaveTextContent('buyer:P-2605-0042');
+  });
+
+  it('eContractVisible 미전달(기본 off)이면 awarded 여도 카드를 렌더하지 않는다', () => {
+    render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      awardedPgContact,
+    })} />);
+    expect(screen.queryByTestId('contract-deal-card')).not.toBeInTheDocument();
+  });
+
+  it('eContractVisible=true 여도 아직 선정 전(sent)이면 카드를 렌더하지 않는다', () => {
+    render(<BuyerDealRoomBody data={buildData()} eContractVisible />);
+    expect(screen.queryByTestId('contract-deal-card')).not.toBeInTheDocument();
   });
 });

@@ -17,6 +17,11 @@ vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({ BidWizard: () => <di
 vi.mock('@/components/inbox/RequoteBanner', () => ({ RequoteBanner: () => <div data-testid="requote-banner" /> }));
 vi.mock('@/components/attachments/AttachmentPreviewList', () => ({ AttachmentPreviewList: () => <div data-testid="attachments" /> }));
 vi.mock('@/lib/server/actions/bid/withdrawBidAction', () => ({ withdrawBidAction: vi.fn() }));
+vi.mock('@/components/contracts/ContractDealCard', () => ({
+  ContractDealCard: ({ kind, rfpCode }: { kind: string; rfpCode: string }) => (
+    <div data-testid="contract-deal-card">{kind}:{rfpCode}</div>
+  ),
+}));
 
 // useIsLgUp mock — PgDealRoomBody 자신은 lgUp 을 쓰지 않지만
 // DealRoomActionRail/Center 가 렌더되는 컨텍스트에서 안전하게 고정.
@@ -141,5 +146,34 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
     expect(screen.queryByText('이 견적이 선정됐어요')).not.toBeInTheDocument();
     expect(screen.queryByText('이번엔 선정되지 않았어요')).not.toBeInTheDocument();
+  });
+});
+
+describe('PgDealRoomBody — 전자계약 카드 게이트', () => {
+  const awardedData = {
+    rfp: { ...baseRfp, status: 'awarded' as const },
+    myBid: submittedBid,
+    awardedToMe: true,
+    buyerContact: { workspaceName: '(주)테스트', name: '구매 담당자', email: 'buyer@buy.com', phone: null },
+  };
+
+  it('eContractVisible=true + awardedToMe 면 ContractDealCard(kind=pg)를 렌더한다', () => {
+    render(<PgDealRoomBody data={buildData(awardedData)} eContractVisible />);
+    expect(screen.getByTestId('contract-deal-card')).toHaveTextContent('pg:P-2605-0042');
+  });
+
+  it('eContractVisible 미전달(기본 off)이면 awardedToMe 여도 카드를 렌더하지 않는다', () => {
+    render(<PgDealRoomBody data={buildData(awardedData)} />);
+    expect(screen.queryByTestId('contract-deal-card')).not.toBeInTheDocument();
+  });
+
+  it('eContractVisible=true 여도 awardedToMe 가 아니면 카드를 렌더하지 않는다', () => {
+    render(
+      <PgDealRoomBody
+        data={buildData({ rfp: { ...baseRfp, status: 'awarded' }, myBid: submittedBid, awardedToMe: false })}
+        eContractVisible
+      />,
+    );
+    expect(screen.queryByTestId('contract-deal-card')).not.toBeInTheDocument();
   });
 });

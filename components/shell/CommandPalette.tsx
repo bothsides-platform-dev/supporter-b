@@ -25,7 +25,14 @@ const ITEM_CLASS =
 const ENTITY_ITEM_CLASS =
   'flex flex-col items-start gap-0.5 px-4 py-2.5 cursor-pointer aria-selected:bg-[var(--md-sys-color-surface-container-high)]';
 
-export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType }) {
+export function CommandPalette({
+  workspaceType,
+  eContract,
+}: {
+  workspaceType: WorkspaceType;
+  /** 전자계약 마스터 게이트 — 서버(app/(app)/layout.tsx)가 isEContractVisible() 로 계산해 내려준다. */
+  eContract?: boolean;
+}) {
   const { commandPaletteOpen, closeCommandPalette } = useUIStore();
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -33,7 +40,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
   const [loading, setLoading] = useState(false);
   const [confirmingLogout, setConfirmingLogout] = useState(false);
 
-  const navCommands = getNavCommands(workspaceType);
+  const navCommands = getNavCommands(workspaceType, { eContract });
   const accountCommands = getAccountCommands();
 
   useEffect(() => {

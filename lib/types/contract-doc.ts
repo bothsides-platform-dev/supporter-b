@@ -35,7 +35,7 @@ export const CONTRACT_EVENT_LABELS: Record<ContractDocEventType, string> = {
   viewed: '계약서 열람',
   signed: '서명 완료',
   signer_reassigned: '서명자 변경',
-  completed: '계약 체결 완료',
+  completed: '모든 서명 완료',
   declined: '반려',
   canceled: '회수',
   expired: '기한 만료',

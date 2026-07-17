@@ -24,9 +24,17 @@ import { withdrawBidAction } from '@/lib/server/actions/bid/withdrawBidAction';
 import { toast } from '@/lib/toast';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
+import { ContractDealCard } from '@/components/contracts/ContractDealCard';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
-export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
+export function PgDealRoomBody({
+  data,
+  eContractVisible,
+}: {
+  data: PgRfpDetailData;
+  /** 전자계약 마스터 게이트 — 호출 페이지가 isEContractVisible() 로 계산해 내려준다. */
+  eContractVisible?: boolean;
+}) {
   const { rfp, myBid, buyerName, quoteTemplates, pendingRequote, awardedToMe, buyerContact } = data;
   const router = useRouter();
   const [tab, setTab] = useState('write');
@@ -52,6 +60,9 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
         >
           {buyerContact && <ContactBlock contact={buyerContact} counterpartyKind="buyer" />}
         </DealResultHeader>
+        {eContractVisible && (
+          <ContractDealCard kind="pg" summary={data.contractDocSummary} rfpCode={rfp.code} />
+        )}
         {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(rfp, myBid)} />}
       </div>
     );

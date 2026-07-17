@@ -11,6 +11,7 @@ import { BuyerDealRoomBody } from '@/components/deal-room/buyer/BuyerDealRoomBod
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { rfpStatusChip } from '@/lib/rfp/rfp-status';
+import { isEContractVisible } from '@/lib/features/e-contract';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,8 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
   const { id } = await params;
   const session = await requireBuyerPage(`/rfp/${id}`);
 
-  const { workspaceId, id: userId, name, email } = session.user;
+  const { workspaceId, id: userId, name, email, isMaster } = session.user;
+  const eContractVisible = isEContractVisible({ isMaster: isMaster ?? false });
 
   const data = await loadBuyerRfpDetail({
     code: id,
@@ -63,7 +65,7 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
         />
       }
     >
-      <BuyerDealRoomBody data={data} />
+      <BuyerDealRoomBody data={data} eContractVisible={eContractVisible} />
     </DealRoomModal>
   );
 }

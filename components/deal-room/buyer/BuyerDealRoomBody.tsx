@@ -38,12 +38,20 @@ import { closeRfpAction, cancelRfpAction } from '@/lib/server/actions/rfp';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
+import { ContractDealCard } from '@/components/contracts/ContractDealCard';
 import { josa } from 'es-hangul';
 import { toast } from '@/lib/toast';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
-export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
+export function BuyerDealRoomBody({
+  data,
+  eContractVisible,
+}: {
+  data: BuyerRfpDetailData;
+  /** 전자계약 마스터 게이트 — 호출 페이지가 isEContractVisible() 로 계산해 내려준다. */
+  eContractVisible?: boolean;
+}) {
   const {
     rfp,
     bids,
@@ -90,6 +98,11 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
               >
                 <ContactBlock contact={awardedPgContact} counterpartyKind="pg" />
               </DealResultHeader>
+              {eContractVisible && (
+                <div className="mt-4">
+                  <ContractDealCard kind="buyer" summary={data.contractDocSummary} rfpCode={rfp.code} />
+                </div>
+              )}
             </div>
           )}
           <FocusComparison

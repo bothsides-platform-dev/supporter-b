@@ -12,6 +12,7 @@ import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { DealRoomPageSkeleton } from '@/components/skeletons';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 import { pgRequestChip } from '@/lib/rfp/rfp-status';
+import { isEContractVisible } from '@/lib/features/e-contract';
 
 type Props = { params: Promise<{ rfpId: string }> };
 
@@ -25,12 +26,17 @@ export default async function InboxDetailPage({ params }: Props) {
   if (!session?.user?.id || !session.user.workspaceId) {
     redirect(`/login?next=/inbox/${rfpCode}`);
   }
+  const eContractVisible = isEContractVisible({ isMaster: session.user.isMaster ?? false });
 
   return (
     <>
       <MarkInboxViewed rfpId={rfpCode} />
       <Suspense fallback={<DealRoomPageSkeleton />}>
-        <PgRfpDetailLoader rfpCode={rfpCode} wsId={session.user.workspaceId} />
+        <PgRfpDetailLoader
+          rfpCode={rfpCode}
+          wsId={session.user.workspaceId}
+          eContractVisible={eContractVisible}
+        />
       </Suspense>
     </>
   );
@@ -39,9 +45,11 @@ export default async function InboxDetailPage({ params }: Props) {
 async function PgRfpDetailLoader({
   rfpCode,
   wsId,
+  eContractVisible,
 }: {
   rfpCode: string;
   wsId: string;
+  eContractVisible: boolean;
 }) {
   const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: wsId });
   if (!data) notFound();
@@ -77,7 +85,7 @@ async function PgRfpDetailLoader({
         />
       }
     >
-      <PgDealRoomBody data={data} />
+      <PgDealRoomBody data={data} eContractVisible={eContractVisible} />
     </DealRoomFull>
   );
 }
