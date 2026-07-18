@@ -8,6 +8,8 @@ export type PaymentMethod =
   | 'naver_pay'
   | 'kakao_pay'
   | 'toss_pay'
+  | 'apple_pay'
+  | 'samsung_pay'
   | 'mobile'
   | 'gift_card';
 
@@ -19,6 +21,8 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   naver_pay: '네이버페이',
   kakao_pay: '카카오페이',
   toss_pay: '토스페이',
+  apple_pay: '애플페이',
+  samsung_pay: '삼성페이',
   mobile: '휴대폰결제',
   gift_card: '상품권',
 };
@@ -29,7 +33,7 @@ export const PAYMENT_METHOD_CATEGORIES: {
 }[] = [
   { label: '카드', methods: ['card', 'overseas_card'] },
   { label: '계좌', methods: ['virtual_account', 'bank_transfer'] },
-  { label: '간편결제', methods: ['naver_pay', 'kakao_pay', 'toss_pay'] },
+  { label: '간편결제', methods: ['naver_pay', 'kakao_pay', 'toss_pay', 'apple_pay', 'samsung_pay'] },
   { label: '기타', methods: ['mobile', 'gift_card'] },
 ];
 

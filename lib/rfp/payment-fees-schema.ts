@@ -29,6 +29,8 @@ export const PaymentFeesSchema = z
     naver_pay: feeField,
     kakao_pay: feeField,
     toss_pay: feeField,
+    apple_pay: feeField,
+    samsung_pay: feeField,
     mobile: feeField,
     gift_card: feeField,
   })

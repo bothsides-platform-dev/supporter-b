@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
-import { PAYMENT_METHOD_CATEGORIES, isFlatFeeMethod } from '@/lib/types/bid';
+import { PAYMENT_METHOD_LABELS, isFlatFeeMethod, type PaymentMethod } from '@/lib/types/bid';
 
-const ALL_METHODS = PAYMENT_METHOD_CATEGORIES.flatMap((c) => c.methods);
+// PAYMENT_METHOD_LABELS는 Record<PaymentMethod,string>이라 컴파일러가 전체 유니온을
+// 강제한다 — PAYMENT_METHOD_CATEGORIES(카테고리 배열)에서 파생하면 카테고리 배치를
+// 빠뜨린 신규 수단이 조용히 누락될 수 있어, 반드시 이 컴파일타임 완전성 소스를 쓴다.
+const ALL_METHODS = Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[];
 
 describe('PaymentFeesSchema — 가상계좌 정액(건당 원)', () => {
   it('가상계좌는 1을 초과하는 정수 원 금액을 허용한다 (예: 300원)', () => {
@@ -41,6 +44,24 @@ describe('PaymentFeesSchema — 정률(%) 수단은 0~1 소수 유지', () => {
   it('카드 구간맵(TierRates)도 그대로 허용한다', () => {
     expect(
       PaymentFeesSchema.safeParse({ card: { sole: 0.005, general: 0.018 } }).success,
+    ).toBe(true);
+  });
+});
+
+describe('PaymentFeesSchema — 애플페이·삼성페이 (간편결제, 정률)', () => {
+  it('애플페이·삼성페이는 0~1 소수 요율을 허용하고 1 초과는 거부한다', () => {
+    expect(PaymentFeesSchema.safeParse({ apple_pay: 0.023 }).success).toBe(true);
+    expect(PaymentFeesSchema.safeParse({ samsung_pay: 0.021 }).success).toBe(true);
+    expect(PaymentFeesSchema.safeParse({ apple_pay: 1.5 }).success).toBe(false);
+    expect(PaymentFeesSchema.safeParse({ samsung_pay: 1.5 }).success).toBe(false);
+  });
+
+  it('애플페이·삼성페이 구간맵(TierRates)도 그대로 허용한다', () => {
+    expect(
+      PaymentFeesSchema.safeParse({ apple_pay: { sole: 0.005, general: 0.018 } }).success,
+    ).toBe(true);
+    expect(
+      PaymentFeesSchema.safeParse({ samsung_pay: { sole: 0.004, general: 0.017 } }).success,
     ).toBe(true);
   });
 });

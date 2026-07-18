@@ -53,6 +53,14 @@ describe('BidStepFees 구간 매트릭스', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('1만원 결제 시 125원');
   });
 
+  it('애플페이·삼성페이도 간편결제와 동일하게 5구간 매트릭스로 렌더한다', () => {
+    setup({ feeInputMethods: ['card', 'apple_pay', 'samsung_pay'] });
+    expect(screen.getByText('애플페이')).toBeInTheDocument();
+    expect(screen.getByText('삼성페이')).toBeInTheDocument();
+    expect(screen.getByTestId('fee-cell-apple_pay-sole')).toBeInTheDocument();
+    expect(screen.getByTestId('fee-cell-samsung_pay-general')).toBeInTheDocument();
+  });
+
   it('요청 안 된 카드 카테고리 수단(해외카드)은 렌더하지 않는다', () => {
     setup();
     expect(screen.queryByText('해외카드')).toBeNull();

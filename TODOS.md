@@ -96,6 +96,9 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### changeMemberRole — LAST_ADMIN 오탐: pending_approval admin 강등 (P1)
 `WorkspaceService.changeMemberRole` 의 LAST_ADMIN 가드(`if (input.role === 'member' && target.role === 'admin')`)가 `countAdmins`(승인된 admin 만 집계)를 호출하기 전에 `target.approvalStatus`를 검사하지 않는다. 결과: 유일한 승인 admin 이 아직 미승인(pending_approval) admin 을 member 로 강등하려 하면 — 그 미승인 admin 은 실질 권한을 행사한 적 없음에도 — 거짓 `LAST_ADMIN` 에러가 발생한다. **수정**: `changeMemberRole` line 279 조건에 `&& target.approvalStatus === 'approved'` 추가. TDD: pending_approval target 강등 시 LAST_ADMIN 없이 성공하는 회귀 테스트 먼저 작성. (발견: /ship adversarial v0.2.51.0, 2026-06-28)
 
+### createRfpAction — requiredPaymentMethods 배열 길이 상한 없음 (P4)
+`allowedPgWorkspaceIds`(`.max(50)`)·`customPaymentMethods`(`.max(20)`)와 달리 `requiredPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).optional().default([])`에는 개수 상한이 없다. 각 원소는 고정 enum이라 개별 값은 유효하지만, 동일 값을 대량 중복 제출해도 zod를 통과해 `rfps.required_payment_methods`(text[])에 그대로 저장된다. Next.js 서버 액션 기본 바디 제한(1MB)이 사실상 상한 역할을 하긴 하나 명시적 가드는 아님. **수정**: `.max(11)`(캐논니컬 결제수단 총 개수) + 중복 제거(`Array.from(new Set(...))`) 추가. (발견: /ship adversarial 리뷰, 애플페이·삼성페이 추가 PR, 2026-07-19)
+
 
 ## Onboarding / Tutorial
 

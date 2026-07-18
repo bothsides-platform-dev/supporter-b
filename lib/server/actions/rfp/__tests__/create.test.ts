@@ -53,6 +53,7 @@ vi.mock('@/lib/observability/log', () => ({
 
 import { createRfpAction } from '../createRfpAction';
 import { migrateCurrentTerms, STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
+import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
 
 let db: PgliteDB;
 let buyerUserId: string;
@@ -278,6 +279,40 @@ describe('createRfpAction', () => {
     const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
     expect(row.requiredPaymentMethods).toEqual(['card', 'bank_transfer']);
   });
+
+  it('apple_pay·samsung_pay 도 유효한 결제수단으로 허용한다', async () => {
+    const r = await createRfpAction({
+      title: '애플페이 삼성페이 결제수단',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      requiredPaymentMethods: ['apple_pay', 'samsung_pay'],
+      send: false,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    expect(row.requiredPaymentMethods).toEqual(['apple_pay', 'samsung_pay']);
+  });
+
+  // 드리프트 가드 — createRfpAction의 PAYMENT_METHODS 배열은 lib/types/bid.ts의
+  // PaymentMethod 캐논니컬 목록을 손으로 복제한 것이라, 둘이 어긋나면 유효한 결제수단이
+  // 조용히 거부(INVALID_INPUT)될 수 있다. PAYMENT_METHOD_LABELS는 Record<PaymentMethod,_>라
+  // 컴파일러가 전체 유니온을 강제하므로, 이 컴파일타임 완전성 소스로 캐논니컬 목록 전체를
+  // 순회해 매번 통과하는지 고정한다.
+  it.each(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[])(
+    '%s — PAYMENT_METHODS 배열 드리프트 가드 (캐논니컬 목록 전체 허용)',
+    async (method) => {
+      const r = await createRfpAction({
+        title: '결제수단 드리프트 가드',
+        deadline: new Date(Date.now() + 86_400_000).toISOString(),
+        allowedPgWorkspaceIds: [pgWsId],
+        requiredPaymentMethods: [method],
+        send: false,
+      });
+      expect(r.ok).toBe(true);
+    },
+  );
 
   it('customPaymentMethods label 입력 → 서버가 {id,label} 발급해 저장', async () => {
     const r = await createRfpAction({

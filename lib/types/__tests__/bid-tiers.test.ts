@@ -21,6 +21,8 @@ describe('isTieredMethod', () => {
     expect(isTieredMethod('naver_pay')).toBe(true);
     expect(isTieredMethod('kakao_pay')).toBe(true);
     expect(isTieredMethod('toss_pay')).toBe(true);
+    expect(isTieredMethod('apple_pay')).toBe(true);
+    expect(isTieredMethod('samsung_pay')).toBe(true);
   });
   it('해외카드는 우대수수료 구간 대상이 아니라 false', () => {
     // 영세·중소 우대수수료는 국내 카드결제만 적용 — 해외카드는 단일요율.
@@ -46,6 +48,8 @@ describe('isFlatFeeMethod', () => {
     expect(isFlatFeeMethod('naver_pay')).toBe(false);
     expect(isFlatFeeMethod('mobile')).toBe(false);
     expect(isFlatFeeMethod('gift_card')).toBe(false);
+    expect(isFlatFeeMethod('apple_pay')).toBe(false);
+    expect(isFlatFeeMethod('samsung_pay')).toBe(false);
   });
   it('정액 수단은 구간(tiered) 수단과 상호배타', () => {
     expect(isTieredMethod('virtual_account')).toBe(false);
