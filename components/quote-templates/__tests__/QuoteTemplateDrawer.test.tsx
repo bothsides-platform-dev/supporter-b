@@ -150,4 +150,31 @@ describe('QuoteTemplateDrawer', () => {
     expect(screen.getByRole('combobox')).toHaveValue('M');
     expect(screen.getByPlaceholderText('1')).toHaveValue('2');
   });
+
+  it('가입비 (원/최초 1회) 라벨의 금액 입력을 보여준다', () => {
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    expect(screen.getByText('가입비 (원/최초 1회)')).toBeInTheDocument();
+  });
+
+  it('기존 템플릿의 가입비가 입력에 프리필된다', () => {
+    const t: QuoteTemplateOption = {
+      id: 't4', name: '가입비 템플릿', settleCycle: 'D+1',
+      settleLimit: 0, guaranteeInsurance: 0, signupFee: 120000, paymentFees: {},
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    expect(screen.getByDisplayValue('120,000')).toBeInTheDocument();
+  });
+
+  it('저장 시 signupFee를 숫자로 전달한다', async () => {
+    const user = userEvent.setup();
+    const t: QuoteTemplateOption = {
+      id: 't5', name: '가입비 저장 템플릿', settleCycle: 'D+1',
+      settleLimit: 0, guaranteeInsurance: 0, signupFee: 120000, paymentFees: {},
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(saveMock).toHaveBeenCalled());
+    const call = saveMock.mock.calls[0][0] as { signupFee: number };
+    expect(call.signupFee).toBe(120000);
+  });
 });
