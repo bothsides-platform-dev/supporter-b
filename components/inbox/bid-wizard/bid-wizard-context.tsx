@@ -22,6 +22,7 @@ export type BidWizardContextValue = {
   cycleNum: string;
   settleLimit: string;
   guaranteeInsurance: string;
+  signupFee: string;
   fees: Record<string, string>;
   memo: string;
   // 파생값

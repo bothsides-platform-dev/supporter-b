@@ -15,6 +15,7 @@ function makeValue(over: Partial<BidWizardContextValue> = {}): BidWizardContextV
     cycleNum: '1',
     settleLimit: '0',
     guaranteeInsurance: '0',
+    signupFee: '0',
     fees: {},
     memo: '',
     settleCycle: 'D+1',

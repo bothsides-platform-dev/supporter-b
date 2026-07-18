@@ -191,6 +191,7 @@ export const tutorialBidDraftSeed: BidDraft = {
   cycleNum: '2',
   settleLimit: '50000000',
   guaranteeInsurance: '5000000',
+  signupFee: '0',
   fees: {
     'card:sole': '0.5',
     'card:sme1': '0.8',

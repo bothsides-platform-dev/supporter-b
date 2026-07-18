@@ -158,6 +158,21 @@ describe('bidToDraft', () => {
     });
   });
 
+  describe('signupFee → string', () => {
+    it('numeric signupFee is stringified: 550000 -> "550000"', () => {
+      const draft = bidToDraft(makeBid({ signupFee: 550000 }));
+      expect(draft.signupFee).toBe('550000');
+    });
+
+    it('bid missing signupFee (legacy shape) defaults to "0"', () => {
+      const legacyBid = makeBid();
+      // @ts-expect-error — simulate a pre-feature Bid shape without signupFee
+      delete legacyBid.signupFee;
+      const draft = bidToDraft(legacyBid);
+      expect(draft.signupFee).toBe('0');
+    });
+  });
+
   describe('memo passthrough', () => {
     it('memo string is passed through as-is', () => {
       const draft = bidToDraft(makeBid({ memo: '협의 가능합니다' }));

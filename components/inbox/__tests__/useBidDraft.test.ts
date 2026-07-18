@@ -11,6 +11,7 @@ const SAMPLE_DRAFT = {
   cycleNum: '1',
   settleLimit: '10000000',
   guaranteeInsurance: '500000',
+  signupFee: '300000',
   fees: { bank_transfer: '0.50', card: '1.25' },
   memo: '메모',
 };
@@ -88,6 +89,24 @@ describe('useBidDraft', () => {
     const { result } = renderHook(() => useBidDraft('rfp-y'));
     expect(result.current.draft?.fees['card:sole']).toBe('0.5');
     expect(result.current.draft?.fees.virtual_account).toBe('300');
+  });
+
+  it('signupFee 키 없는 __v=3 draft(가입비 도입 전 저장분)는 폐기하지 않고 signupFee="0"으로 백필한다', () => {
+    localStorage.setItem(
+      'bid-draft:rfp-legacy-signupfee',
+      JSON.stringify({
+        __v: 3,
+        cycleUnit: 'D',
+        cycleNum: '1',
+        settleLimit: '0',
+        guaranteeInsurance: '0',
+        fees: { card: '1.2' },
+        memo: '',
+      }),
+    );
+    const { result } = renderHook(() => useBidDraft('rfp-legacy-signupfee'));
+    expect(result.current.draft).not.toBeNull();
+    expect(result.current.draft?.signupFee).toBe('0');
   });
 
   it('구버전(bankPct/cardPct) 드래프트는 무시하고 항목을 삭제한다', () => {
@@ -246,5 +265,13 @@ describe('isPristineDraft / EMPTY_BID_DRAFT', () => {
     const baseline = { ...EMPTY_BID_DRAFT, cycleUnit: 'M' as const, cycleNum: '2', fees: { card: '0.5' } };
     expect(isPristineDraft({ ...baseline }, baseline)).toBe(true);
     expect(isPristineDraft({ ...baseline, fees: { card: '0.9' } }, baseline)).toBe(false);
+  });
+
+  it('signupFee만 baseline과 달라도 pristine 아님', () => {
+    expect(isPristineDraft({ ...EMPTY_BID_DRAFT, signupFee: '50000' }, EMPTY_BID_DRAFT)).toBe(false);
+  });
+
+  it("signupFee '0'과 ''는 동일하게 취급한다", () => {
+    expect(isPristineDraft({ ...EMPTY_BID_DRAFT, signupFee: '' }, EMPTY_BID_DRAFT)).toBe(true);
   });
 });
