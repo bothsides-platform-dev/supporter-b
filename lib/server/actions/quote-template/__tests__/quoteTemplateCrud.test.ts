@@ -116,6 +116,23 @@ describe('saveQuoteTemplateAction (create)', () => {
     expect(loaded?.paymentFees.card).toEqual({ sole: 0.005, general: 0.018 });
   });
 
+  it('signupFee: -1 → INVALID_INPUT', async () => {
+    await setupPg();
+    const r = await saveQuoteTemplateAction({ ...VALID, signupFee: -1 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('signupFee 생략 시 0으로 저장된다 (zod default)', async () => {
+    await setupPg();
+    const { signupFee: _signupFee, ...rest } = VALID;
+    const r = await saveQuoteTemplateAction({ ...rest });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const t = await (await getBidQuoteTemplateRepo()).findById(r.templateId);
+    expect(t?.signupFee).toBe(0);
+  });
+
   it('rejects an empty name', async () => {
     await setupPg();
     const r = await saveQuoteTemplateAction({ ...VALID, name: '' });
