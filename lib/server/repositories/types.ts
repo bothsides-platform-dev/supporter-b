@@ -26,6 +26,13 @@ import type { AttachmentRecord } from './attachment-record';
 import type { VerificationToken } from '@/lib/types/auth';
 import type { BatchSender, OutboxEntry, OutboxEvent } from '../outbox/types';
 import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
+import type {
+  PgSigningTemplate,
+  SigningContract,
+  SigningContractPatch,
+  SigningParticipant,
+  SigningParticipantPatch,
+} from '@/lib/types/signing';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
 // `any` generics are localised here so individual method signatures stay clean.
@@ -160,6 +167,39 @@ export interface RfpRequoteRequestRepo {
   findPendingByPgWs(pgWsId: string, tx?: Tx): Promise<RfpRequoteRequest[]>;
   /** pending → responded 원자 전이(`WHERE status='pending'`). */
   markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
+}
+
+// ── PgSigningTemplate (PG가 링크한 SnowSign 서명 템플릿, org 스코프) ──────
+export interface PgSigningTemplateRepo {
+  /** 템플릿 링크 1건 생성 — (workspace, snowsign_template) UNIQUE 위배 시 throw. */
+  create(t: PgSigningTemplate, tx?: Tx): Promise<void>;
+  /** 소유 PG 워크스페이스의 링크 템플릿 — createdAt desc. */
+  findByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate[]>;
+  /** org 스코핑: id 와 소유 workspaceId 가 함께 일치할 때만 반환(타 PG 차단). */
+  findByIdScoped(id: string, workspaceId: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
+  /** 워크스페이스의 기본 템플릿 — award 시 자동 선택. 없으면 undefined. */
+  findDefaultByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
+}
+
+// ── SigningContract (전자서명 계약 aggregate: 계약 + 참여자) ──────────────
+export interface SigningContractRepo {
+  /** 계약 + 참여자 원자 생성 — 활성 partial unique 위배 시 throw. */
+  create(contract: SigningContract, participants: SigningParticipant[], tx?: Tx): Promise<void>;
+  /** id 로 계약 + 참여자 조회. 없으면 undefined. */
+  findById(
+    id: string,
+    tx?: Tx,
+  ): Promise<{ contract: SigningContract; participants: SigningParticipant[] } | undefined>;
+  /** RFP의 활성(awaiting/sent/in_progress) 계약 — 없으면 undefined. */
+  findActiveByRfp(rfpId: string, tx?: Tx): Promise<SigningContract | undefined>;
+  /** RFP의 모든 계약(라운드 포함) — createdAt desc. */
+  findByRfp(rfpId: string, tx?: Tx): Promise<SigningContract[]>;
+  /** 폴링 대상(sent/in_progress) — 오래 안 본 순(nulls first) limit 건. */
+  findPollable(limit: number, tx?: Tx): Promise<SigningContract[]>;
+  /** 계약 가변 필드 부분 갱신. */
+  patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void>;
+  /** 참여자 가변 필드 부분 갱신. */
+  patchParticipant(id: string, patch: SigningParticipantPatch, tx?: Tx): Promise<void>;
 }
 
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────
