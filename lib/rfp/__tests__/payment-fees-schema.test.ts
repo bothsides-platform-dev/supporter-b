@@ -45,6 +45,24 @@ describe('PaymentFeesSchema — 정률(%) 수단은 0~1 소수 유지', () => {
   });
 });
 
+describe('PaymentFeesSchema — 애플페이·삼성페이 (간편결제, 정률)', () => {
+  it('애플페이·삼성페이는 0~1 소수 요율을 허용하고 1 초과는 거부한다', () => {
+    expect(PaymentFeesSchema.safeParse({ apple_pay: 0.023 }).success).toBe(true);
+    expect(PaymentFeesSchema.safeParse({ samsung_pay: 0.021 }).success).toBe(true);
+    expect(PaymentFeesSchema.safeParse({ apple_pay: 1.5 }).success).toBe(false);
+    expect(PaymentFeesSchema.safeParse({ samsung_pay: 1.5 }).success).toBe(false);
+  });
+
+  it('애플페이·삼성페이 구간맵(TierRates)도 그대로 허용한다', () => {
+    expect(
+      PaymentFeesSchema.safeParse({ apple_pay: { sole: 0.005, general: 0.018 } }).success,
+    ).toBe(true);
+    expect(
+      PaymentFeesSchema.safeParse({ samsung_pay: { sole: 0.004, general: 0.017 } }).success,
+    ).toBe(true);
+  });
+});
+
 // 드리프트 가드 — FLAT_FEE_METHODS(isFlatFeeMethod)와 스키마의 단위가 따로 관리되므로,
 // 둘 중 하나만 바꾸면 단위가 어긋난다. 모든 수단에 대해 스키마가 isFlatFeeMethod 과
 // 같은 단위(정액=정수 원 / 정률=0~1 소수)로 검증하는지 행위로 고정한다.
