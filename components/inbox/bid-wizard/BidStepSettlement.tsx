@@ -11,6 +11,7 @@ type Props = {
   cycleNum: string;
   settleLimit: string;
   guaranteeInsurance: string;
+  signupFee: string;
   onField: SetBidField;
   /** 제출 시도 후 true — 정산주기 미입력을 빨강으로 escalate(구매사 attempted 모델 미러). */
   attempted?: boolean;
@@ -21,6 +22,7 @@ export function BidStepSettlement({
   cycleNum,
   settleLimit,
   guaranteeInsurance,
+  signupFee,
   onField,
   attempted = false,
 }: Props) {
@@ -63,6 +65,13 @@ export function BidStepSettlement({
           infoTerm="보증보험"
           value={guaranteeInsurance}
           onChange={(v) => onField('guaranteeInsurance', v)}
+          placeholder="0"
+        />
+        <CurrencyInput
+          label="가입비 (원/최초 1회)"
+          infoTerm="가입비"
+          value={signupFee}
+          onChange={(v) => onField('signupFee', v)}
           placeholder="0"
         />
       </div>

@@ -90,6 +90,7 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
     cycleNum: String(Math.min(rawNum, 99)),
     settleLimit: String(b.settleLimit ?? 0),
     guaranteeInsurance: String(b.guaranteeInsurance ?? 0),
+    signupFee: String(b.signupFee ?? 0),
     fees,
     memo: b.memo ?? '',
   };
@@ -133,7 +134,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
       setFields((f) => ({ ...f, fees: { ...f.fees, [key]: value } })),
     [],
   );
-  const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, fees, memo } = fields;
+  const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, signupFee, fees, memo } = fields;
 
   useEffect(() => {
     saveDraft(fields);
@@ -205,6 +206,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
       cycleNum: num,
       settleLimit: String(t.settleLimit),
       guaranteeInsurance: String(t.guaranteeInsurance),
+      signupFee: String(t.signupFee),
       fees: { ...f.fees, ...decoded },
     }));
     toast(`‘${t.name}’ 템플릿을 불러왔어요`);
@@ -232,11 +234,12 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
         settleCycle,
         settleLimit: parseInt(settleLimit) || 0,
         guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
+        signupFee: parseInt(signupFee) || 0,
         paymentFees: buildPaymentFees(fees, feeInputMethods),
       });
       return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
     },
-    [onSampleSubmit, settleCycle, settleLimit, guaranteeInsurance, fees, feeInputMethods],
+    [onSampleSubmit, settleCycle, settleLimit, guaranteeInsurance, signupFee, fees, feeInputMethods],
   );
 
   const handleSubmit = useCallback(() => {
@@ -264,6 +267,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
       cycleNum,
       settleLimit,
       guaranteeInsurance,
+      signupFee,
       fees,
       memo,
       settleCycle,
@@ -288,6 +292,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
       cycleNum,
       settleLimit,
       guaranteeInsurance,
+      signupFee,
       fees,
       memo,
       settleCycle,
@@ -334,6 +339,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
         settleCycle,
         settleLimit: parseInt(settleLimit) || 0,
         guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
+        signupFee: parseInt(signupFee) || 0,
         paymentFees,
         customFees,
         proposalAttachmentId: proposalReady ? proposal.id : undefined,

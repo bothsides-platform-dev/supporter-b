@@ -9,6 +9,7 @@ export const BidStepReviewContainer = memo(function BidStepReviewContainer() {
     settleCycle,
     settleLimit,
     guaranteeInsurance,
+    signupFee,
     feeInputMethods,
     customPaymentMethods,
     fees,
@@ -20,6 +21,7 @@ export const BidStepReviewContainer = memo(function BidStepReviewContainer() {
       settleCycle={settleCycle}
       settleLimit={settleLimit}
       guaranteeInsurance={guaranteeInsurance}
+      signupFee={signupFee}
       feeInputMethods={feeInputMethods}
       customPaymentMethods={customPaymentMethods}
       fees={fees}

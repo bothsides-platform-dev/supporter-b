@@ -238,7 +238,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
               aria-pressed={draft.currentSolution === value}
               onClick={() => {
                 draft.setField('currentSolution', draft.currentSolution === value ? '' : value);
-                if (value !== 'self' && value !== 'other') {
+                if (value !== 'other') {
                   draft.setField('currentSolutionDetail', '');
                 }
               }}
@@ -253,12 +253,12 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
             </button>
           ))}
         </div>
-        {(draft.currentSolution === 'self' || draft.currentSolution === 'other') && (
+        {draft.currentSolution === 'other' && (
           <input
             type="text"
             value={draft.currentSolutionDetail}
             onChange={(e) => draft.setField('currentSolutionDetail', e.target.value)}
-            placeholder={draft.currentSolution === 'self' ? '독립몰 이름' : '솔루션 이름'}
+            placeholder="솔루션 이름"
             className={underlineInputClass}
           />
         )}

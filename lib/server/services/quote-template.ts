@@ -21,6 +21,7 @@ export type SaveQuoteTemplateServiceInput = {
   settleCycle: string;
   settleLimit: number;
   guaranteeInsurance: number;
+  signupFee: number;
   paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
 };
 
@@ -43,8 +44,15 @@ export class QuoteTemplateService {
     input: SaveQuoteTemplateServiceInput,
     actor: Actor,
   ): Promise<ServiceResult<{ templateId: string }>> {
-    const { id, name, settleCycle, settleLimit, guaranteeInsurance, paymentFees } =
-      input;
+    const {
+      id,
+      name,
+      settleCycle,
+      settleLimit,
+      guaranteeInsurance,
+      signupFee,
+      paymentFees,
+    } = input;
 
     if (id) {
       const owned = await this.requireOwned(id, actor.workspaceId);
@@ -54,6 +62,7 @@ export class QuoteTemplateService {
         settleCycle,
         settleLimit,
         guaranteeInsurance,
+        signupFee,
         paymentFees,
       });
       return { ok: true, templateId: id };
@@ -70,6 +79,7 @@ export class QuoteTemplateService {
       settleCycle,
       settleLimit,
       guaranteeInsurance,
+      signupFee,
       paymentFees,
       createdBy: actor.userId,
     });
@@ -102,6 +112,7 @@ export class QuoteTemplateService {
       settleCycle: template.settleCycle,
       settleLimit: template.settleLimit,
       guaranteeInsurance: template.guaranteeInsurance,
+      signupFee: template.signupFee,
       paymentFees: { ...template.paymentFees },
       createdBy: actor.userId,
     });

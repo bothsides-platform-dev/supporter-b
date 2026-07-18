@@ -39,6 +39,7 @@ function makeBid(over: Partial<Bid> = {}): Bid {
     settleCycle: 'D+1',
     settleLimit: 50_000_000,
     guaranteeInsurance: 0,
+    signupFee: 0,
     paymentFees: { card: 0.021 }, // 소수 요율 = 2.1% (paymentFees 스케일)
     customFees: {},
     proposalPdfs: [],

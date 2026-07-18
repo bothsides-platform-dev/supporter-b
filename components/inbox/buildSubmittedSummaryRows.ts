@@ -29,6 +29,7 @@ export function buildSubmittedSummaryRows(rfp: RFP, bid: Bid): [string, string][
     ['정산 주기', bid.settleCycle],
     ['정산한도', formatKRW(bid.settleLimit)],
     ['월 보증보험', formatKRW(bid.guaranteeInsurance)],
+    ['가입비', formatKRW(bid.signupFee)],
     ...Object.entries(bid.paymentFees).flatMap(([m, fee]) => {
       const label = PAYMENT_METHOD_LABELS[m as PaymentMethod];
       if (typeof fee === 'object' && fee !== null) {

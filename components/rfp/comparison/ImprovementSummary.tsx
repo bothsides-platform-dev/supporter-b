@@ -105,6 +105,7 @@ export function ImprovementSummary({
           proposedText={formatKRW(bid.guaranteeInsurance)}
           trailing={badgeNode(krwBadge(current.guaranteeInsurance, bid.guaranteeInsurance, 'lower'))}
         />
+        <MetricRow testId="metric-row-signup" label="가입비" proposedText={formatKRW(bid.signupFee)} />
       </div>
     </section>
   );

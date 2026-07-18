@@ -16,6 +16,7 @@ const Input = z
     settleCycle: z.string().regex(SETTLE_CYCLE_RE),
     settleLimit: z.number().nonnegative(),
     guaranteeInsurance: z.number().nonnegative(),
+    signupFee: z.number().nonnegative().default(0),
     paymentFees: PaymentFeesSchema,
   })
   .strict();

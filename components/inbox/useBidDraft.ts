@@ -9,6 +9,7 @@ export type BidDraft = {
   cycleNum: string;
   settleLimit: string;
   guaranteeInsurance: string;
+  signupFee: string;
   // key: PaymentMethod | customId, value: 사용자가 입력한 "%" 문자열
   fees: Record<string, string>;
   memo: string;
@@ -20,6 +21,7 @@ export const EMPTY_BID_DRAFT: BidDraft = {
   cycleNum: '1',
   settleLimit: '0',
   guaranteeInsurance: '0',
+  signupFee: '0',
   fees: {},
   memo: '',
 };
@@ -53,6 +55,7 @@ export function isPristineDraft(d: BidDraft, baseline: BidDraft): boolean {
     d.cycleNum === baseline.cycleNum &&
     normNum(d.settleLimit) === normNum(baseline.settleLimit) &&
     normNum(d.guaranteeInsurance) === normNum(baseline.guaranteeInsurance) &&
+    normNum(d.signupFee) === normNum(baseline.signupFee) &&
     d.memo === baseline.memo &&
     feesEqual(d.fees, baseline.fees)
   );
@@ -92,7 +95,8 @@ function readDraft(rfpId: string): BidDraft | null {
       localStorage.removeItem(draftKey(rfpId));
       return null;
     }
-    return parsed as BidDraft;
+    // 가입비 도입 전 저장된 __v:3 드래프트는 signupFee 키가 없다 — 폐기하지 않고 백필한다.
+    return { ...(parsed as BidDraft), signupFee: (parsed as { signupFee?: string }).signupFee ?? '0' };
   } catch {
     localStorage.removeItem(draftKey(rfpId));
     return null;

@@ -9,14 +9,22 @@ import { useBidWizardContext } from './bid-wizard-context';
  * BidWizard 의 prop-drilling 만 제거한다.
  */
 export const BidStepSettlementContainer = memo(function BidStepSettlementContainer() {
-  const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, setField, settlementAttempted } =
-    useBidWizardContext();
+  const {
+    cycleUnit,
+    cycleNum,
+    settleLimit,
+    guaranteeInsurance,
+    signupFee,
+    setField,
+    settlementAttempted,
+  } = useBidWizardContext();
   return (
     <BidStepSettlement
       cycleUnit={cycleUnit}
       cycleNum={cycleNum}
       settleLimit={settleLimit}
       guaranteeInsurance={guaranteeInsurance}
+      signupFee={signupFee}
       onField={setField}
       attempted={settlementAttempted}
     />

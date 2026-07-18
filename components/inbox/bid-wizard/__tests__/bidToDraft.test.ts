@@ -29,6 +29,7 @@ function makeBid(overrides: Partial<Bid> = {}): NonNullable<Parameters<typeof bi
     settleCycle: 'D+1',
     settleLimit: 0,
     guaranteeInsurance: 0,
+    signupFee: 0,
     paymentFees: {},
     customFees: {},
     proposalPdfs: [],
@@ -154,6 +155,21 @@ describe('bidToDraft', () => {
       const draft = bidToDraft(makeBid({ settleLimit: 0, guaranteeInsurance: 0 }));
       expect(draft.settleLimit).toBe('0');
       expect(draft.guaranteeInsurance).toBe('0');
+    });
+  });
+
+  describe('signupFee → string', () => {
+    it('numeric signupFee is stringified: 550000 -> "550000"', () => {
+      const draft = bidToDraft(makeBid({ signupFee: 550000 }));
+      expect(draft.signupFee).toBe('550000');
+    });
+
+    it('bid missing signupFee (legacy shape) defaults to "0"', () => {
+      const legacyBid = makeBid();
+      // @ts-expect-error — simulate a pre-feature Bid shape without signupFee
+      delete legacyBid.signupFee;
+      const draft = bidToDraft(legacyBid);
+      expect(draft.signupFee).toBe('0');
     });
   });
 

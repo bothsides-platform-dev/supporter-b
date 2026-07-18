@@ -15,12 +15,14 @@ afterEach(() => {
 });
 
 describe('RfpPaymentMethodSelect', () => {
-  it('9종 결제수단 라벨과 카테고리를 렌더한다', () => {
+  it('11종 결제수단 라벨과 카테고리를 렌더한다', () => {
     render(<RfpPaymentMethodSelect />);
     expect(screen.getByText('간편결제')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '카드' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '가상계좌' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '네이버페이' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '애플페이' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '삼성페이' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '상품권' })).toBeInTheDocument();
   });
 
@@ -35,6 +37,18 @@ describe('RfpPaymentMethodSelect', () => {
     expect(useRfpDraftStore.getState().requiredPaymentMethods).toEqual([
       'card',
       'virtual_account',
+    ]);
+  });
+
+  it('애플페이·삼성페이 토글 시 store.requiredPaymentMethods에 추가된다', async () => {
+    const user = userEvent.setup();
+    render(<RfpPaymentMethodSelect />);
+
+    await user.click(screen.getByRole('button', { name: '애플페이' }));
+    await user.click(screen.getByRole('button', { name: '삼성페이' }));
+    expect(useRfpDraftStore.getState().requiredPaymentMethods).toEqual([
+      'apple_pay',
+      'samsung_pay',
     ]);
   });
 

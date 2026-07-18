@@ -19,6 +19,7 @@ function makeBid(over: Partial<Bid>): Bid {
     settleCycle: 'D+2',
     settleLimit: 500_000_000,
     guaranteeInsurance: 1_000_000,
+    signupFee: 0,
     paymentFees: { card: 0.028 },
     customFees: {},
     proposalPdfs: [],

@@ -35,6 +35,7 @@ type EditorState = {
   settleCycle: string;
   settleLimit: string;
   guaranteeInsurance: string;
+  signupFee: string;
   /** flat fees map: "method" → pct string for single-rate, "method:tier" → pct string for tiered */
   fees: Record<string, string>;
 };
@@ -45,6 +46,7 @@ function blankEditor(): EditorState {
     settleCycle: 'D+1',
     settleLimit: '0',
     guaranteeInsurance: '0',
+    signupFee: '0',
     fees: {},
   };
 }
@@ -56,6 +58,7 @@ function editorFromTemplate(t: QuoteTemplateOption): EditorState {
     settleCycle: t.settleCycle,
     settleLimit: String(t.settleLimit),
     guaranteeInsurance: String(t.guaranteeInsurance),
+    signupFee: String(t.signupFee),
     fees: templateFeesToFlat(t.paymentFees, ALL_PAYMENT_METHODS),
   };
 }
@@ -106,6 +109,7 @@ export function QuoteTemplateDrawer({
       settleCycle,
       settleLimit: parseInt(editor.settleLimit) || 0,
       guaranteeInsurance: parseInt(editor.guaranteeInsurance) || 0,
+      signupFee: parseInt(editor.signupFee) || 0,
       paymentFees,
     };
 
@@ -176,6 +180,12 @@ export function QuoteTemplateDrawer({
             label="월 보증보험 (원/연)"
             value={editor.guaranteeInsurance}
             onChange={(v) => setField('guaranteeInsurance', v)}
+            placeholder="0"
+          />
+          <CurrencyInput
+            label="가입비 (원/최초 1회)"
+            value={editor.signupFee}
+            onChange={(v) => setField('signupFee', v)}
             placeholder="0"
           />
         </div>
