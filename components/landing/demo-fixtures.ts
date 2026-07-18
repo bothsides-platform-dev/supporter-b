@@ -37,6 +37,7 @@ export const fixtureBid: Bid = {
   settleCycle: 'D+1',
   settleLimit: 1_000_000_000,
   guaranteeInsurance: 0,
+  signupFee: 0,
   paymentFees: { card: 0.022 },
   customFees: {},
   proposalPdfs: [],

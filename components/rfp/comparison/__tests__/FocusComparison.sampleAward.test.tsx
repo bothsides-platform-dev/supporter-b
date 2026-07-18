@@ -37,7 +37,7 @@ beforeAll(() => {
 function bid(id: string, pgWsId: string): Bid {
   return {
     id, rfpId: 'r1', pgWsId, invitationId: 'i1', round: 1,
-    settleCycle: 'D+1', settleLimit: 50000000, guaranteeInsurance: 0,
+    settleCycle: 'D+1', settleLimit: 50000000, guaranteeInsurance: 0, signupFee: 0,
     paymentFees: { card: 0.018 }, customFees: {}, proposalPdfs: [],
     status: 'submitted', submittedBy: 'u1',
   };

@@ -53,6 +53,7 @@ const VALID = {
   settleCycle: 'M+1',
   settleLimit: 5_000_000,
   guaranteeInsurance: 500_000,
+  signupFee: 200_000,
   paymentFees: { card: 0.0125, virtual_account: 300 },
 } as const;
 
@@ -93,6 +94,7 @@ describe('saveQuoteTemplateAction (create)', () => {
         settleCycle: 'M+1',
         settleLimit: 5_000_000,
         guaranteeInsurance: 500_000,
+        signupFee: 200_000,
         paymentFees: { card: 0.0125, virtual_account: 300 },
         createdBy: user.id,
       });
@@ -112,6 +114,23 @@ describe('saveQuoteTemplateAction (create)', () => {
     if (!res.ok) return;
     const loaded = await (await getBidQuoteTemplateRepo()).findById(res.templateId);
     expect(loaded?.paymentFees.card).toEqual({ sole: 0.005, general: 0.018 });
+  });
+
+  it('signupFee: -1 → INVALID_INPUT', async () => {
+    await setupPg();
+    const r = await saveQuoteTemplateAction({ ...VALID, signupFee: -1 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('signupFee 생략 시 0으로 저장된다 (zod default)', async () => {
+    await setupPg();
+    const { signupFee: _signupFee, ...rest } = VALID;
+    const r = await saveQuoteTemplateAction({ ...rest });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const t = await (await getBidQuoteTemplateRepo()).findById(r.templateId);
+    expect(t?.signupFee).toBe(0);
   });
 
   it('rejects an empty name', async () => {
@@ -192,6 +211,7 @@ describe('saveQuoteTemplateAction (update)', () => {
       settleCycle: 'D+2',
       settleLimit: 1_000,
       guaranteeInsurance: 0,
+      signupFee: 350_000,
       paymentFees: { card: 0.02 },
     });
     expect(updated.ok).toBe(true);
@@ -206,6 +226,7 @@ describe('saveQuoteTemplateAction (update)', () => {
         name: 'after',
         settleCycle: 'D+2',
         settleLimit: 1_000,
+        signupFee: 350_000,
         paymentFees: { card: 0.02 },
       });
     }
@@ -223,6 +244,7 @@ describe('saveQuoteTemplateAction (update)', () => {
       settleCycle: 'M+1',
       settleLimit: 0,
       guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: {},
       createdBy: otherUser.id,
     });
@@ -263,6 +285,7 @@ describe('listQuoteTemplatesAction', () => {
       settleCycle: 'M+1',
       settleLimit: 0,
       guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: {},
       createdBy: otherUser.id,
     });
@@ -317,6 +340,7 @@ describe('deleteQuoteTemplateAction', () => {
       settleCycle: 'M+1',
       settleLimit: 0,
       guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: {},
       createdBy: otherUser.id,
     });
@@ -371,6 +395,7 @@ describe('duplicateQuoteTemplateAction', () => {
     const dup = all.find((t) => t.name === '표준 요율 복제')!;
     expect(dup.settleCycle).toBe(VALID.settleCycle);
     expect(dup.settleLimit).toBe(VALID.settleLimit);
+    expect(dup.signupFee).toBe(VALID.signupFee);
   });
 
   it('20개 한도 초과 시 LIMIT_REACHED 반환', async () => {

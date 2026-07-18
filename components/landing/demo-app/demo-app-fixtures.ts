@@ -65,6 +65,7 @@ function bid(o: {
     settleCycle: o.settleCycle,
     settleLimit: o.settleLimit,
     guaranteeInsurance: o.guarantee,
+    signupFee: 0,
     paymentFees: fees,
     customFees: {},
     proposalPdfs: [],

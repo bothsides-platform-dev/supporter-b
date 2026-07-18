@@ -440,6 +440,7 @@ describe('loadPgRfpDetail', () => {
       settleCycle: 'M+1',
       settleLimit: 5_000_000,
       guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: { card: 0.0125 },
       createdBy: ctx.buyerId,
     });
@@ -449,6 +450,7 @@ describe('loadPgRfpDetail', () => {
       settleCycle: 'D+1',
       settleLimit: 0,
       guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: {},
       createdBy: ctx.buyerId,
     });
@@ -462,6 +464,7 @@ describe('loadPgRfpDetail', () => {
         settleCycle: 'M+1',
         settleLimit: 5_000_000,
         guaranteeInsurance: 0,
+        signupFee: 0,
         paymentFees: { card: 0.0125 },
       },
     ]);

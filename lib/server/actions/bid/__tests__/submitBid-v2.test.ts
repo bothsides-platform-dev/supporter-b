@@ -310,4 +310,48 @@ describe('submitBidAction v2 — payment_fees model', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('PAYMENT_METHOD_NOT_REQUESTED');
   });
+
+  it('signupFee 전달 시 그대로 저장된다', async () => {
+    const s = await seedSetup('general', ['bank_transfer']);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      signupFee: 330000,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(Number(row.signupFee)).toBe(330000);
+  });
+
+  it('signupFee: -1 → INVALID_INPUT', async () => {
+    const s = await seedSetup('general', ['bank_transfer']);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      signupFee: -1,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('signupFee 생략 시 0으로 저장된다 (zod default)', async () => {
+    const s = await seedSetup('general', ['bank_transfer']);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(Number(row.signupFee)).toBe(0);
+  });
 });

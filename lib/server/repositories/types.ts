@@ -1071,6 +1071,7 @@ export type BidQuoteTemplate = {
   settleCycle: string;
   settleLimit: number;
   guaranteeInsurance: number;
+  signupFee: number;
   paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
   createdBy: string;
   createdAt: Date;
@@ -1087,6 +1088,7 @@ export interface BidQuoteTemplateRepo {
       settleCycle: string;
       settleLimit: number;
       guaranteeInsurance: number;
+      signupFee: number;
       paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
       createdBy: string;
     },
@@ -1100,6 +1102,7 @@ export interface BidQuoteTemplateRepo {
       settleCycle: string;
       settleLimit: number;
       guaranteeInsurance: number;
+      signupFee: number;
       paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
     },
     tx?: Tx,

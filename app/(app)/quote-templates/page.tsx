@@ -32,6 +32,7 @@ export default async function QuoteTemplatesPage() {
     settleCycle: t.settleCycle,
     settleLimit: t.settleLimit,
     guaranteeInsurance: t.guaranteeInsurance,
+    signupFee: t.signupFee,
     paymentFees: t.paymentFees,
   }));
 

@@ -21,6 +21,7 @@ const baseBid: Bid = {
   settleCycle: 'D+2',
   settleLimit: 100_000_000,
   guaranteeInsurance: 0,
+  signupFee: 0,
 };
 
 const tieredRow = {

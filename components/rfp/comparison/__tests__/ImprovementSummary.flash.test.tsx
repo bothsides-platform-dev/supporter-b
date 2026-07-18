@@ -12,6 +12,7 @@ const bid: Bid = {
   settleCycle: 'D+2',
   settleLimit: 100_000_000,
   guaranteeInsurance: 0,
+  signupFee: 0,
   paymentFees: { card: { sole: 0.008, sme1: 0.012, sme2: 0.014, sme3: 0.016, general: 0.02 } },
   customFees: {},
   proposalPdfs: [],

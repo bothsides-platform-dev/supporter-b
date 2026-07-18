@@ -93,6 +93,7 @@ const BASE = {
   settleCycle: 'D+1' as const,
   settleLimit: 0,
   guaranteeInsurance: 0,
+  signupFee: 0,
   paymentFees: {} as Record<string, number>,
   customFees: {} as Record<string, number>,
 };
@@ -182,6 +183,18 @@ describe('BidService.submit', () => {
     const rows = await db.select().from(bids).where(eq(bids.id, r.bidId));
     expect(rows).toHaveLength(1);
     expect(rows[0]!.pgWsId).toBe(s.pgWs.id);
+  });
+
+  it('persists the given signupFee on the saved bid', async () => {
+    const s = await seedSubmitEnv();
+    const r = await service.submit(
+      { ...BASE, rfpId: s.rfpId, signupFee: 330000 },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const rows = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(Number(rows[0]!.signupFee)).toBe(330000);
   });
 
   it('dispatches in-app notification to buyer members', async () => {
