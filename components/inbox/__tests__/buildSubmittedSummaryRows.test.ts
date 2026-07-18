@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildSubmittedSummaryRows } from '../buildSubmittedSummaryRows';
+import { formatKRW } from '@/lib/utils/format';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 
@@ -55,5 +56,12 @@ describe('buildSubmittedSummaryRows', () => {
     const map = new Map(buildSubmittedSummaryRows(rfp, flatBid));
     expect(map.get('가상계좌 (건당)')).toBe('300원');
     expect(map.has('가상계좌')).toBe(false);
+  });
+
+  it('가입비 행이 월 보증보험 행 바로 다음에 온다', () => {
+    const signupFeeBid: Bid = { ...bid, signupFee: 550000 };
+    const rows = buildSubmittedSummaryRows(rfp, signupFeeBid);
+    const insuranceIdx = rows.findIndex(([k]) => k === '월 보증보험');
+    expect(rows[insuranceIdx + 1]).toEqual(['가입비', formatKRW(550000)]);
   });
 });
