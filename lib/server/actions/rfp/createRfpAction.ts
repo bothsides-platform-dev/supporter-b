@@ -18,6 +18,8 @@ const PAYMENT_METHODS = [
   'naver_pay',
   'kakao_pay',
   'toss_pay',
+  'apple_pay',
+  'samsung_pay',
   'mobile',
   'gift_card',
 ] as const;

@@ -53,7 +53,7 @@ vi.mock('@/lib/observability/log', () => ({
 
 import { createRfpAction } from '../createRfpAction';
 import { migrateCurrentTerms, STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
-import { PAYMENT_METHOD_CATEGORIES } from '@/lib/types/bid';
+import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
 
 let db: PgliteDB;
 let buyerUserId: string;
@@ -297,8 +297,10 @@ describe('createRfpAction', () => {
 
   // 드리프트 가드 — createRfpAction의 PAYMENT_METHODS 배열은 lib/types/bid.ts의
   // PaymentMethod 캐논니컬 목록을 손으로 복제한 것이라, 둘이 어긋나면 유효한 결제수단이
-  // 조용히 거부(INVALID_INPUT)될 수 있다. 캐논니컬 목록 전체를 순회해 매번 통과하는지 고정.
-  it.each(PAYMENT_METHOD_CATEGORIES.flatMap((c) => c.methods))(
+  // 조용히 거부(INVALID_INPUT)될 수 있다. PAYMENT_METHOD_LABELS는 Record<PaymentMethod,_>라
+  // 컴파일러가 전체 유니온을 강제하므로, 이 컴파일타임 완전성 소스로 캐논니컬 목록 전체를
+  // 순회해 매번 통과하는지 고정한다.
+  it.each(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[])(
     '%s — PAYMENT_METHODS 배열 드리프트 가드 (캐논니컬 목록 전체 허용)',
     async (method) => {
       const r = await createRfpAction({
