@@ -23,6 +23,7 @@ export type SubmitBidServiceInput = {
   settleCycle: string;
   settleLimit: number;
   guaranteeInsurance: number;
+  signupFee: number;
   paymentFees: Record<string, number | import('@/lib/types/bid').TierRates>;
   customFees: Record<string, number>;
   proposalAttachmentId?: string;
@@ -158,7 +159,7 @@ export class BidService {
           settleCycle: input.settleCycle,
           settleLimit: input.settleLimit,
           guaranteeInsurance: input.guaranteeInsurance,
-          signupFee: 0,
+          signupFee: input.signupFee,
           paymentFees: input.paymentFees,
           customFees: input.customFees,
           proposalPdfs: [],
