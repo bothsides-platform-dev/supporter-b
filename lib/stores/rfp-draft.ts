@@ -84,7 +84,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       storage: createJSONStorage(() => localStorage),
       // 계약 유형 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
       // 백필하므로 진행 중인 draft가 폐기되지 않는다.
-      version: 7,
+      version: 8,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<RfpDraftStore>;
         if (version < 1) {
@@ -130,6 +130,15 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
           return {
             ...state,
             pgSelectionInitialized: state.pgSelectionInitialized ?? true,
+          };
+        }
+        if (version < 8) {
+          // 자체 개발(self) 선택 시 독립몰 이름을 더 이상 받지 않게 되면서,
+          // 그 UI 변경 이전에 저장된 draft가 잔존 상세값을 그대로 제출하지
+          // 않도록 self를 other와 동일하게 정리한다.
+          return {
+            ...state,
+            currentSolutionDetail: state.currentSolution === 'other' ? state.currentSolutionDetail : '',
           };
         }
         return state;

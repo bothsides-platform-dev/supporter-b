@@ -71,6 +71,23 @@ describe('RfpStep2Content', () => {
     expect(screen.getByPlaceholderText('솔루션 이름')).toBeInTheDocument();
   });
 
+  it('자체 개발 선택 시 상세 입력 필드가 렌더되지 않는다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '자체 개발' }));
+    expect(screen.queryByPlaceholderText('독립몰 이름')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('솔루션 이름')).not.toBeInTheDocument();
+  });
+
+  it('기타에 상세값을 입력한 후 자체 개발로 전환하면 상세값이 삭제된다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '기타' }));
+    await user.type(screen.getByPlaceholderText('솔루션 이름'), 'ABC몰');
+    await user.click(screen.getByRole('button', { name: '자체 개발' }));
+    expect(useRfpDraftStore.getState().currentSolutionDetail).toBe('');
+  });
+
   it('현재 정산주기 입력 시 숫자만 입력되어 D+N 형식으로 저장된다', async () => {
     const user = userEvent.setup();
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
