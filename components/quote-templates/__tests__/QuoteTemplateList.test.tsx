@@ -31,6 +31,7 @@ const tmpl = (over: Partial<QuoteTemplateOption> = {}): QuoteTemplateOption => (
   settleCycle: 'D+1',
   settleLimit: 5_000_000,
   guaranteeInsurance: 0,
+  signupFee: 0,
   paymentFees: { card: 0.0125, virtual_account: 300 },
   ...over,
 });

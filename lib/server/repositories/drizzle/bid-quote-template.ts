@@ -14,6 +14,7 @@ const TEMPLATE_COLUMNS = {
   settleCycle: bidQuoteTemplates.settleCycle,
   settleLimit: bidQuoteTemplates.settleLimit,
   guaranteeInsurance: bidQuoteTemplates.guaranteeInsurance,
+  signupFee: bidQuoteTemplates.signupFee,
   paymentFees: bidQuoteTemplates.paymentFees,
   createdBy: bidQuoteTemplates.createdBy,
   createdAt: bidQuoteTemplates.createdAt,
@@ -32,6 +33,7 @@ function rowToTemplate(row: TemplateRow): BidQuoteTemplate {
     settleCycle: row.settleCycle,
     settleLimit: Number(row.settleLimit),
     guaranteeInsurance: Number(row.guaranteeInsurance),
+    signupFee: Number(row.signupFee),
     paymentFees: (row.paymentFees ?? {}) as Partial<Record<PaymentMethod, number | TierRates>>,
     createdBy: row.createdBy,
     createdAt: row.createdAt,
@@ -56,6 +58,7 @@ export class DrizzleBidQuoteTemplateRepository implements BidQuoteTemplateRepo {
       settleCycle: string;
       settleLimit: number;
       guaranteeInsurance: number;
+      signupFee: number;
       paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
       createdBy: string;
     },
@@ -69,6 +72,7 @@ export class DrizzleBidQuoteTemplateRepository implements BidQuoteTemplateRepo {
       settleCycle: template.settleCycle,
       settleLimit: String(template.settleLimit),
       guaranteeInsurance: String(template.guaranteeInsurance),
+      signupFee: String(template.signupFee),
       paymentFees: template.paymentFees,
       createdBy: template.createdBy,
     });
@@ -81,6 +85,7 @@ export class DrizzleBidQuoteTemplateRepository implements BidQuoteTemplateRepo {
       settleCycle: string;
       settleLimit: number;
       guaranteeInsurance: number;
+      signupFee: number;
       paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
     },
     tx?: Tx,
@@ -93,6 +98,7 @@ export class DrizzleBidQuoteTemplateRepository implements BidQuoteTemplateRepo {
         settleCycle: fields.settleCycle,
         settleLimit: String(fields.settleLimit),
         guaranteeInsurance: String(fields.guaranteeInsurance),
+        signupFee: String(fields.signupFee),
         paymentFees: fields.paymentFees,
         updatedAt: new Date(),
       })

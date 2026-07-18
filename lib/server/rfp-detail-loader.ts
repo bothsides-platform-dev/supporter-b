@@ -361,6 +361,7 @@ export async function loadPgRfpDetail(args: {
     settleCycle: t.settleCycle,
     settleLimit: t.settleLimit,
     guaranteeInsurance: t.guaranteeInsurance,
+    signupFee: t.signupFee,
     paymentFees: t.paymentFees,
   }));
 

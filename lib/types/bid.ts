@@ -134,5 +134,6 @@ export type QuoteTemplateOption = {
   settleCycle: string;
   settleLimit: number;
   guaranteeInsurance: number;
+  signupFee: number;
   paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
 };

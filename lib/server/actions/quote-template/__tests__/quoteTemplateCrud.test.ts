@@ -53,6 +53,7 @@ const VALID = {
   settleCycle: 'M+1',
   settleLimit: 5_000_000,
   guaranteeInsurance: 500_000,
+  signupFee: 200_000,
   paymentFees: { card: 0.0125, virtual_account: 300 },
 } as const;
 
@@ -93,6 +94,7 @@ describe('saveQuoteTemplateAction (create)', () => {
         settleCycle: 'M+1',
         settleLimit: 5_000_000,
         guaranteeInsurance: 500_000,
+        signupFee: 200_000,
         paymentFees: { card: 0.0125, virtual_account: 300 },
         createdBy: user.id,
       });
@@ -192,6 +194,7 @@ describe('saveQuoteTemplateAction (update)', () => {
       settleCycle: 'D+2',
       settleLimit: 1_000,
       guaranteeInsurance: 0,
+      signupFee: 350_000,
       paymentFees: { card: 0.02 },
     });
     expect(updated.ok).toBe(true);
@@ -206,6 +209,7 @@ describe('saveQuoteTemplateAction (update)', () => {
         name: 'after',
         settleCycle: 'D+2',
         settleLimit: 1_000,
+        signupFee: 350_000,
         paymentFees: { card: 0.02 },
       });
     }
@@ -223,6 +227,7 @@ describe('saveQuoteTemplateAction (update)', () => {
       settleCycle: 'M+1',
       settleLimit: 0,
       guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: {},
       createdBy: otherUser.id,
     });
@@ -263,6 +268,7 @@ describe('listQuoteTemplatesAction', () => {
       settleCycle: 'M+1',
       settleLimit: 0,
       guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: {},
       createdBy: otherUser.id,
     });
@@ -317,6 +323,7 @@ describe('deleteQuoteTemplateAction', () => {
       settleCycle: 'M+1',
       settleLimit: 0,
       guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: {},
       createdBy: otherUser.id,
     });
@@ -371,6 +378,7 @@ describe('duplicateQuoteTemplateAction', () => {
     const dup = all.find((t) => t.name === '표준 요율 복제')!;
     expect(dup.settleCycle).toBe(VALID.settleCycle);
     expect(dup.settleLimit).toBe(VALID.settleLimit);
+    expect(dup.signupFee).toBe(VALID.signupFee);
   });
 
   it('20개 한도 초과 시 LIMIT_REACHED 반환', async () => {

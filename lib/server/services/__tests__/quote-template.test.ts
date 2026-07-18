@@ -40,6 +40,7 @@ class FakeQuoteTemplateRepo implements BidQuoteTemplateRepo {
     settleCycle: string;
     settleLimit: number;
     guaranteeInsurance: number;
+    signupFee: number;
     paymentFees: BidQuoteTemplate['paymentFees'];
     createdBy: string;
   }) {
@@ -50,6 +51,7 @@ class FakeQuoteTemplateRepo implements BidQuoteTemplateRepo {
       settleCycle: template.settleCycle,
       settleLimit: template.settleLimit,
       guaranteeInsurance: template.guaranteeInsurance,
+      signupFee: template.signupFee,
       paymentFees: template.paymentFees,
       createdBy: template.createdBy,
       createdAt: new Date(),
@@ -64,6 +66,7 @@ class FakeQuoteTemplateRepo implements BidQuoteTemplateRepo {
     settleCycle: string;
     settleLimit: number;
     guaranteeInsurance: number;
+    signupFee: number;
     paymentFees: BidQuoteTemplate['paymentFees'];
   }) {
     this.updated.push({ id, fields });
@@ -94,6 +97,7 @@ const VALID: SaveQuoteTemplateServiceInput = {
   settleCycle: 'M+1',
   settleLimit: 5_000_000,
   guaranteeInsurance: 500_000,
+  signupFee: 200_000,
   paymentFees: { card: 0.0125, virtual_account: 300 },
 };
 
@@ -108,6 +112,7 @@ function seededTemplate(
     settleCycle: 'D+1',
     settleLimit: 1_000,
     guaranteeInsurance: 0,
+    signupFee: 0,
     paymentFees: { card: 0.01 },
     createdBy: 'user-a',
     createdAt: new Date(),
@@ -134,6 +139,7 @@ describe('QuoteTemplateService.save (create)', () => {
     expect(created.pgWsId).toBe(WS_A);
     expect(created.createdBy).toBe('user-a');
     expect(created.name).toBe('표준 요율');
+    expect(created.signupFee).toBe(200_000);
     expect(created.paymentFees).toEqual({ card: 0.0125, virtual_account: 300 });
   });
 
@@ -161,13 +167,17 @@ describe('QuoteTemplateService.save (create)', () => {
 describe('QuoteTemplateService.save (update)', () => {
   it('updates an owned template in place (no new row)', async () => {
     const t = seededTemplate(repo);
-    const r = await svc.save({ id: t.id, ...VALID, name: 'after' }, actorA);
+    const r = await svc.save(
+      { id: t.id, ...VALID, name: 'after', signupFee: 350_000 },
+      actorA,
+    );
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.templateId).toBe(t.id);
     expect(repo.created).toHaveLength(0);
     expect(repo.updated).toHaveLength(1);
     expect(repo.updated[0].id).toBe(t.id);
     expect(repo.updated[0].fields.name).toBe('after');
+    expect(repo.updated[0].fields.signupFee).toBe(350_000);
   });
 
   it('rejects updating another workspace template → FORBIDDEN', async () => {
@@ -189,6 +199,7 @@ describe('QuoteTemplateService.duplicate', () => {
   it('copies an owned template as "<name> 복제", deep-copies paymentFees, stamps actor as created_by', async () => {
     const t = seededTemplate(repo, {
       name: '표준 요율',
+      signupFee: 150_000,
       paymentFees: { card: { sole: 0.005, general: 0.018 } },
     });
     const r = await svc.duplicate(t.id, actorA);
@@ -201,6 +212,7 @@ describe('QuoteTemplateService.duplicate', () => {
     expect(dup.createdBy).toBe('user-a');
     expect(dup.settleCycle).toBe(t.settleCycle);
     expect(dup.settleLimit).toBe(t.settleLimit);
+    expect(dup.signupFee).toBe(150_000);
     expect(dup.paymentFees).toEqual({ card: { sole: 0.005, general: 0.018 } });
     // deep copy — not the same object reference as the source.
     expect(dup.paymentFees).not.toBe(t.paymentFees);

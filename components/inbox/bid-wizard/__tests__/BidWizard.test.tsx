@@ -191,6 +191,7 @@ describe('BidWizard 템플릿 적용(1단계)', () => {
     const user = userEvent.setup();
     const tmpl: QuoteTemplateOption = {
       id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: { card: 0.005 },
     };
     render(<BidWizard rfp={rfp} buyerName="토스" templates={[tmpl]} />);
@@ -207,6 +208,7 @@ describe('BidWizard 템플릿 적용(1단계)', () => {
     localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ 'card:general': '0.40' })));
     const tmpl: QuoteTemplateOption = {
       id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: { card: 0.005 },
     };
     render(<BidWizard rfp={rfp} buyerName="토스" templates={[tmpl]} />);
@@ -231,6 +233,7 @@ describe('BidWizard 템플릿 적용(1단계)', () => {
     const user = userEvent.setup();
     const tmpl: QuoteTemplateOption = {
       id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: { card: 0.005 },
     };
     render(<BidWizard rfp={rfp} buyerName="토스" templates={[tmpl]} />);

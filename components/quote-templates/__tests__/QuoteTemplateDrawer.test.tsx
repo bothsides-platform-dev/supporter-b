@@ -22,6 +22,7 @@ const tieredTmpl: QuoteTemplateOption = {
   settleCycle: 'D+1',
   settleLimit: 0,
   guaranteeInsurance: 0,
+  signupFee: 0,
   paymentFees: {
     card: { sole: 0.008, sme1: 0.011, sme2: 0.0125, sme3: 0.015, general: 0.0195 },
   },
@@ -44,6 +45,7 @@ describe('QuoteTemplateDrawer', () => {
     const t: QuoteTemplateOption = {
       id: 't2', name: '표준 요율', settleCycle: 'M+2',
       settleLimit: 1_000_000, guaranteeInsurance: 500_000,
+      signupFee: 0,
       paymentFees: { overseas_card: 0.018 },
     };
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
@@ -63,6 +65,7 @@ describe('QuoteTemplateDrawer', () => {
     const t: QuoteTemplateOption = {
       id: 'va', name: '가상계좌 요율', settleCycle: 'D+1',
       settleLimit: 0, guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: { virtual_account: 300 },
     };
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
@@ -94,7 +97,7 @@ describe('QuoteTemplateDrawer', () => {
     const user = userEvent.setup();
     const t: QuoteTemplateOption = {
       id: 'edit-id', name: '기존 요율', settleCycle: 'D+1',
-      settleLimit: 0, guaranteeInsurance: 0, paymentFees: {},
+      settleLimit: 0, guaranteeInsurance: 0, signupFee: 0, paymentFees: {},
     };
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
     await user.click(screen.getByRole('button', { name: '저장' }));
@@ -141,7 +144,7 @@ describe('QuoteTemplateDrawer', () => {
   it('기존 M+2 템플릿 로드 시 M 단위와 2가 표시된다', () => {
     const t: QuoteTemplateOption = {
       id: 't3', name: '월 주기', settleCycle: 'M+2',
-      settleLimit: 0, guaranteeInsurance: 0, paymentFees: {},
+      settleLimit: 0, guaranteeInsurance: 0, signupFee: 0, paymentFees: {},
     };
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
     expect(screen.getByRole('combobox')).toHaveValue('M');
