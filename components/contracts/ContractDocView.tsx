@@ -120,7 +120,7 @@ export function ContractDocView(props: ContractDocViewProps) {
     }
     setSignOpen(false);
     toast(
-      r.completed ? '서명 완료 — 양측 서명이 모두 끝나 계약이 체결됐어요.' : '서명 완료',
+      r.completed ? '서명 완료 — 양측 서명이 모두 끝났어요. 완료된 계약서를 확인해 보세요.' : '서명 완료',
       { type: 'success' },
     );
     router.refresh();

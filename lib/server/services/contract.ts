@@ -470,9 +470,9 @@ export class ContractService {
       await this.fanout(tx, pendingEmits, docId, recips, {
         type: 'contract.completed',
         event: 'contract.completed',
-        title: `[${doc.code}] 계약이 체결됐어요`,
-        body: '양측 서명이 완료돼 계약이 체결됐어요.',
-        subject: `[서포트비 · ${doc.code}] 계약이 체결됐어요`,
+        title: `[${doc.code}] 서명이 모두 완료됐어요`,
+        body: '양측 서명이 끝났어요. 완료된 계약서를 내려받을 수 있어요.',
+        subject: `[서포트비 · ${doc.code}] 서명이 모두 완료됐어요`,
         kind: 'completed',
         render: (ctaUrl) => renderContractCompleted({ code: doc.code, title: doc.title, ctaUrl }),
       });
