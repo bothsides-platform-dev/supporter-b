@@ -125,4 +125,27 @@ describe('ImprovementSummary', () => {
     // no improvement badges
     expect(screen.queryByText(/%p/)).not.toBeInTheDocument();
   });
+
+  it('renders bid.signupFee as a plain, non-ranked info row (label + value only)', () => {
+    render(<ImprovementSummary bid={makeBid({ signupFee: 550_000 })} current={fullCurrent} />);
+    const signup = within(screen.getByTestId('metric-row-signup'));
+    expect(signup.getByText('가입비')).toBeInTheDocument();
+    expect(signup.getByText('550,000원')).toBeInTheDocument();
+  });
+
+  it('does not show a comparison arrow or delta badge on the signup fee row', () => {
+    render(<ImprovementSummary bid={makeBid({ signupFee: 550_000 })} current={fullCurrent} />);
+    const signup = within(screen.getByTestId('metric-row-signup'));
+    expect(signup.queryByTestId('metric-arrow')).not.toBeInTheDocument();
+    expect(signup.queryByText(/↓/)).not.toBeInTheDocument();
+    expect(signup.queryByText(/↑/)).not.toBeInTheDocument();
+  });
+
+  it('does not let a large signupFee affect the "좋아져요" heading verdict', () => {
+    // 다른 모든 비교 지표는 개선되고, signupFee 만 크게(990,000) 잡아도 헤딩은 그대로 "좋아져요" 여야 한다.
+    render(
+      <ImprovementSummary bid={makeBid({ signupFee: 990_000 })} current={fullCurrent} />,
+    );
+    expect(screen.getByText('지금 조건보다 이만큼 좋아져요')).toBeInTheDocument();
+  });
 });
