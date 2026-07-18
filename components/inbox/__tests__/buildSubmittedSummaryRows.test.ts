@@ -27,6 +27,7 @@ const bid: Bid = {
   settleCycle: 'D+1',
   settleLimit: 0,
   guaranteeInsurance: 0,
+  signupFee: 0,
   // card 는 구간 요율(TierRates), 'custom-1' 은 커스텀 단일 요율.
   paymentFees: { card: { sole: 1.5 } },
   customFees: { 'custom-1': 2 },

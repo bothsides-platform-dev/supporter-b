@@ -69,6 +69,7 @@ const submittedBid: Bid = {
   settleCycle: 'D+1',
   settleLimit: 0,
   guaranteeInsurance: 0,
+  signupFee: 0,
   paymentFees: { card: 1.5 },
   customFees: {},
   proposalPdfs: [],

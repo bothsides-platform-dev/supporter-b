@@ -347,6 +347,7 @@ describe('DrizzleBidRepository round', () => {
       settleCycle: 'D+1',
       settleLimit: 0,
       guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: {},
       customFees: {},
       proposalPdfs: [],
@@ -376,6 +377,7 @@ describe('DrizzleBidRepository round', () => {
       settleCycle: 'D+1',
       settleLimit: 0,
       guaranteeInsurance: 0,
+      signupFee: 0,
       paymentFees: {},
       customFees: {},
       proposalPdfs: [],
@@ -389,6 +391,39 @@ describe('DrizzleBidRepository round', () => {
 
     const rows = await repo.findByPgWs(pgWs.id);
     expect(rows.map((b) => b.round)).toEqual([1, 2]);
+  });
+});
+
+describe('DrizzleBidRepository signupFee', () => {
+  it('round-trips signupFee', async () => {
+    const db = await createPgliteDb();
+    const repo = new DrizzleBidRepository(db);
+    const buyer = await seedUser(db);
+    const buyerWs = await seedBuyerWorkspace(db);
+    const pgWs = await seedPgWorkspace(db, 'pg3.io');
+    const { rfpId, invId } = await seedInvited(db, buyerWs.id, buyer.id, pgWs.id);
+
+    const bidId = randomUUID();
+    await repo.save({
+      id: bidId,
+      rfpId,
+      pgWsId: pgWs.id,
+      invitationId: invId,
+      round: 1,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      signupFee: 550000,
+      paymentFees: {},
+      customFees: {},
+      proposalPdfs: [],
+      status: 'submitted',
+      submittedBy: buyer.id,
+      submittedAt: new Date().toISOString(),
+    });
+
+    const bid = await repo.findById(bidId);
+    expect(bid!.signupFee).toBe(550000);
   });
 });
 

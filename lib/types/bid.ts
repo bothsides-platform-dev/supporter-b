@@ -110,6 +110,8 @@ export type Bid = {
   settleLimit: number;
   // 월 보증보험 (원/연)
   guaranteeInsurance: number;
+  // one-time sign-up fee (KRW)
+  signupFee: number;
   // 결제수단별 수수료 (key: PaymentMethod). value 의 단위는 수단이 결정한다:
   //  · 정률(%) 수단 → 0~1 소수 요율(number) 또는 구간맵(TierRates)
   //  · 정액(건당) 수단(isFlatFeeMethod) → '원' 단위 정수(number, 구간맵 없음)

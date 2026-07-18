@@ -120,6 +120,7 @@ export const tutorialBids: Bid[] = [
     settleCycle: 'D+2',
     settleLimit: 50_000_000,
     guaranteeInsurance: 5_000_000,
+    signupFee: 0,
     paymentFees: {
       card: tierRates({ sole: 0.005, sme1: 0.008, sme2: 0.011, sme3: 0.013, general: 0.018 }),
       virtual_account: 300,
@@ -141,6 +142,7 @@ export const tutorialBids: Bid[] = [
     settleCycle: 'D+1',
     settleLimit: 100_000_000,
     guaranteeInsurance: 3_000_000,
+    signupFee: 300_000,
     paymentFees: {
       card: tierRates({ sole: 0.006, sme1: 0.009, sme2: 0.012, sme3: 0.015, general: 0.02 }),
       virtual_account: 250,
@@ -162,6 +164,7 @@ export const tutorialBids: Bid[] = [
     settleCycle: 'D+1',
     settleLimit: 80_000_000,
     guaranteeInsurance: 0,
+    signupFee: 500_000,
     paymentFees: {
       card: tierRates({ sole: 0.007, sme1: 0.01, sme2: 0.013, sme3: 0.016, general: 0.022 }),
       virtual_account: 200,

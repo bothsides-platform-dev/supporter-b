@@ -158,6 +158,7 @@ export class BidService {
           settleCycle: input.settleCycle,
           settleLimit: input.settleLimit,
           guaranteeInsurance: input.guaranteeInsurance,
+          signupFee: 0,
           paymentFees: input.paymentFees,
           customFees: input.customFees,
           proposalPdfs: [],
