@@ -132,3 +132,14 @@ CoachmarkTour의 capture 클릭 리스너가 마지막 action 클릭 즉시 `onF
 
 ### Retry-After 헤더 malformed 값 폴백 미검증 (P3)
 `lib/integrations/nts.ts`의 429 `shouldRetry` 분기에서 `Retry-After` 헤더가 숫자도 유효 HTTP-date도 아닌 값(`'garbage'` 등)이면 `afterMs=NaN`이 되어 조용히 일반 재시도 경로로 폴백한다 — 이 폴백 자체는 안전해 보이지만 테스트가 숫자/유효 date 케이스만 커버하고 malformed 값과 "헤더는 있지만 budget 이내인" 케이스는 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
+
+## Quote / 가입비 후속
+
+### QuoteTemplateOption 매퍼 중복 (P4)
+projection(id~paymentFees)이 `lib/server/rfp-detail-loader.ts`와 `app/(app)/quote-templates/page.tsx`에 verbatim 중복 — 공용 `toQuoteTemplateOption` 매퍼로 추출하면 다음 필드 추가가 한 곳 수정으로 끝난다. (발견: v0.3.6.0 /ship review army)
+
+### 정산 그리드 고아 셀 (P4)
+`BidStepSettlement`·`QuoteTemplateDrawer`의 2열 그리드에 단일-스팬 필드 3개(정산한도·보증보험·가입비)라 마지막 행에 빈 셀이 남는다. /design-review로 시각 판정 후 정리. (발견: v0.3.6.0 /ship design specialist)
+
+### 가입비 표시 폴리시 — ₩0 행·판정 캐비앗 (P3)
+ImprovementSummary 가입비 행이 ₩0에도 상시 렌더(보증보험과 동일 패턴)되고, 정렬·'좋아져요' 판정에서는 의도적으로 제외된다(테스트로 고정). 고액 가입비가 헤드라인 판정에 영향을 주지 않는 것이 맞는지 프로덕트 결정 필요 — 필요시 행 옆 중립 캐비앗 표기. (발견: v0.3.6.0 /ship red-team + opus review)
