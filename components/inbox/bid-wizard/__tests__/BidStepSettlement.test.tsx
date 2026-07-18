@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // InfoTip mounts a base-ui Popover which requires ResizeObserver
@@ -22,6 +22,7 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepSettlement>
       cycleNum="1"
       settleLimit="0"
       guaranteeInsurance="0"
+      signupFee="0"
       onField={onField}
       {...over}
     />,
@@ -59,6 +60,16 @@ describe('BidStepSettlement', () => {
       .filter((c) => c[0] === 'cycleNum')
       .map((c) => c[1]);
     expect(cycleVals.some((v: string) => v.includes('.'))).toBe(false);
+  });
+
+  it('가입비 (원/최초 1회) 입력 필드가 렌더되고, 입력 시 onField(signupFee) 호출', async () => {
+    const user = userEvent.setup();
+    const { onField } = renderStep({ signupFee: '' });
+    const label = screen.getByText('가입비 (원/최초 1회)');
+    const wrapper = label.closest('.space-y-1') as HTMLElement;
+    const input = within(wrapper).getByRole('textbox');
+    await user.type(input, '5');
+    expect(onField).toHaveBeenCalledWith('signupFee', '5');
   });
 
 });

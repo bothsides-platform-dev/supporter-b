@@ -33,6 +33,7 @@ type Props = {
   settleCycle: string;
   settleLimit: string;
   guaranteeInsurance: string;
+  signupFee: string;
   feeInputMethods: PaymentMethod[];
   customPaymentMethods: CustomPaymentMethod[];
   fees: Record<string, string>;
@@ -53,6 +54,7 @@ export function BidStepReview({
   settleCycle,
   settleLimit,
   guaranteeInsurance,
+  signupFee,
   feeInputMethods,
   customPaymentMethods,
   fees,
@@ -110,6 +112,7 @@ export function BidStepReview({
           <Row label="정산 주기" value={settleCycle} />
           <Row label="정산한도" value={formatKRW(parseInt(settleLimit) || 0)} />
           <Row label="월 보증보험" value={formatKRW(parseInt(guaranteeInsurance) || 0)} />
+          <Row label="가입비" value={formatKRW(parseInt(signupFee) || 0)} />
           {feeRows.map(([label, value]) => (
             <Row key={label} label={label} value={value} />
           ))}

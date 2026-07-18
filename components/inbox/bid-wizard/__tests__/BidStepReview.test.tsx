@@ -3,6 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BidStepReview } from '../BidStepReview';
 import type { PaymentMethod } from '@/lib/types/bid';
+import { formatKRW } from '@/lib/utils/format';
 
 afterEach(cleanup);
 
@@ -13,6 +14,7 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepReview>> = 
       settleCycle="D+1"
       settleLimit="0"
       guaranteeInsurance="0"
+      signupFee="0"
       feeInputMethods={['card'] as PaymentMethod[]}
       customPaymentMethods={[]}
       fees={{ card: '1.5' }}
@@ -39,10 +41,16 @@ describe('BidStepReview', () => {
     expect(onSaveTemplate).toHaveBeenCalledWith('기본요율');
   });
 
+  it('가입비 행을 KRW 포맷으로 보여준다', () => {
+    renderStep({ signupFee: '550000' });
+    expect(screen.getByText('가입비')).toBeInTheDocument();
+    expect(screen.getByText(formatKRW(550000))).toBeInTheDocument();
+  });
+
   it('정액(건당) 수단은 % 가 아니라 원으로 요약 표시한다', () => {
     render(
       <BidStepReview
-        settleCycle="D+1" settleLimit="0" guaranteeInsurance="0"
+        settleCycle="D+1" settleLimit="0" guaranteeInsurance="0" signupFee="0"
         feeInputMethods={['virtual_account'] as PaymentMethod[]}
         customPaymentMethods={[]}
         fees={{ virtual_account: '300' }}
@@ -58,7 +66,7 @@ describe('BidStepReview', () => {
   it('구간 수단은 구간별 요율을 요약 표시한다', () => {
     render(
       <BidStepReview
-        settleCycle="D+1" settleLimit="0" guaranteeInsurance="0"
+        settleCycle="D+1" settleLimit="0" guaranteeInsurance="0" signupFee="0"
         feeInputMethods={['card'] as PaymentMethod[]}
         customPaymentMethods={[]}
         fees={{ 'card:sole': '0.5', 'card:general': '1.8' }}
