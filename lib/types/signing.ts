@@ -89,3 +89,9 @@ export type SigningParticipantPatch = Partial<
     'status' | 'signedAt' | 'providerParticipantRef' | 'phone' | 'securityMethod'
   >
 >;
+
+/** 딜룸 UI 로 내려주는 직렬화 가능한 서명 상태 뷰(계약 + 참여자). */
+export type SigningView = {
+  contract: SigningContract;
+  participants: SigningParticipant[];
+};
