@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { signingContracts, signingParticipants } from '@/lib/db/schema';
 import type {
   SigningContract,
@@ -208,12 +208,51 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return rows.length > 0;
   }
 
+  async transitionIfActive(
+    id: string,
+    toStatus: 'canceled' | 'declined' | 'expired',
+    at: Date,
+    opts?: { cancelReason?: string },
+    tx?: Tx,
+  ): Promise<boolean> {
+    const set: Record<string, unknown> = { status: toStatus };
+    if (toStatus === 'canceled') {
+      set.canceledAt = at;
+      if (opts?.cancelReason !== undefined) set.cancelReason = opts.cancelReason;
+    }
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set(set)
+      .where(and(eq(signingContracts.id, id), inArray(signingContracts.status, ACTIVE_STATUSES)))
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
   async findAwaiting(tx?: Tx): Promise<SigningContract[]> {
     const rows = (await this.h(tx)
       .select()
       .from(signingContracts)
       .where(eq(signingContracts.status, 'awaiting_pg_template'))
       .orderBy(asc(signingContracts.createdAt))) as CRow[];
+    return rows.map(rowToContract);
+  }
+
+  async findStaleAwaiting(nudgeBefore: Date, limit: number, tx?: Tx): Promise<SigningContract[]> {
+    const rows = (await this.h(tx)
+      .select()
+      .from(signingContracts)
+      .where(
+        and(
+          eq(signingContracts.status, 'awaiting_pg_template'),
+          lt(signingContracts.createdAt, nudgeBefore),
+          or(
+            isNull(signingContracts.lastPolledAt),
+            lt(signingContracts.lastPolledAt, nudgeBefore),
+          ),
+        ),
+      )
+      .orderBy(asc(signingContracts.createdAt))
+      .limit(limit)) as CRow[];
     return rows.map(rowToContract);
   }
 

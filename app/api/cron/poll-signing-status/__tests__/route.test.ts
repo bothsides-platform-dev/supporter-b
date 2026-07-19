@@ -36,12 +36,26 @@ describe('POST /api/cron/poll-signing-status', () => {
     expect(res.status).toBe(401);
   });
 
-  it('drives pollPending when authorized', async () => {
+  it('rejects the secret in a URL query param (header-only — no secret in logs)', async () => {
+    const res = await POST(
+      new Request('http://localhost/api/cron/poll-signing-status?secret=test-secret', {
+        method: 'POST',
+      }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('drives pollPending and nudgeStaleAwaiting when authorized', async () => {
     const pollPending = vi.fn(async () => ({ polled: 3 }));
-    __setContractSigningServiceForTest({ pollPending } as unknown as ContractSigningService);
+    const nudgeStaleAwaiting = vi.fn(async () => ({ nudged: 1 }));
+    __setContractSigningServiceForTest({
+      pollPending,
+      nudgeStaleAwaiting,
+    } as unknown as ContractSigningService);
     const res = await POST(req({ secret: 'test-secret' }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ polled: 3 });
+    expect(await res.json()).toEqual({ polled: 3, nudged: 1 });
     expect(pollPending).toHaveBeenCalledWith(50);
+    expect(nudgeStaleAwaiting).toHaveBeenCalled();
   });
 });

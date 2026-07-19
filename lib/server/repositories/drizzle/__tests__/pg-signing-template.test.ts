@@ -61,6 +61,18 @@ describe('DrizzlePgSigningTemplateRepository', () => {
     expect((await repo.findByIdScoped(tmplA.id, pgA.id))?.id).toBe(tmplA.id);
   });
 
+  it('findBySnowsignTemplateId finds the owner across workspaces (cross-tenant link guard)', async () => {
+    const repo = new DrizzlePgSigningTemplateRepository(db);
+    const user = await seedUser(db);
+    const pgA = await seedPgWorkspace(db, 'a.io');
+    const tmplA = makeTemplate(pgA.id, user.id, { snowsignTemplateId: 'tmpl_shared' });
+    await repo.create(tmplA);
+
+    const owner = await repo.findBySnowsignTemplateId('tmpl_shared');
+    expect(owner?.workspaceId).toBe(pgA.id);
+    expect(await repo.findBySnowsignTemplateId('tmpl_unlinked')).toBeUndefined();
+  });
+
   it('findDefaultByWorkspace returns the default template', async () => {
     const repo = new DrizzlePgSigningTemplateRepository(db);
     const user = await seedUser(db);

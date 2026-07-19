@@ -11,11 +11,13 @@
  * 폴링 cron(poll-signing-status)은 웹훅 유실(SnowSign auto-retry 없음) 백스톱으로 유지.
  *
  * Auth(fail-closed): SNOWSIGN_WEBHOOK_SECRET 미설정 또는 서명 불일치면 401(재조회 없음).
- * 성공 응답은 항상 빠르게 반환한다(SnowSign 5초 타임아웃 — reconcile 은 단일 조회+짧은
- * tx). 서명 통과 후에는 파싱·재조회 실패도 200 으로 ack 한다(재전송 로그 방지 — 폴링 보완).
+ * 응답은 항상 즉시 200 으로 반환하고, 실제 재조회(getContract 재조회 — 느린/재시도되는
+ * 아웃바운드 호출)는 after() 로 응답 이후에 돌린다. SnowSign 5초 웹훅 예산을 넘기지 않도록
+ * ack 를 블로킹하지 않으며, 재조회가 유실/실패해도 폴링 cron 이 백스톱한다. 서명 통과 후
+ * 파싱 실패도 200 ack(재전송 로그 방지).
  * runtime='nodejs' — 서비스가 postgres-js 를 전이 import + crypto HMAC.
  */
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/observability/logger';
 import { verifySnowSignWebhook } from '@/lib/server/signing/webhook';
@@ -41,13 +43,17 @@ export async function POST(request: Request): Promise<NextResponse> {
   const contractId = payload.data?.contract_id;
   // test 이벤트/계약 무관 이벤트는 재조회 대상이 없다 — 즉시 ack.
   if (payload.event && payload.event !== 'test' && contractId) {
-    try {
-      const { getContractSigningService } = await import('@/lib/server/services/contract-signing');
-      await (await getContractSigningService()).reconcileByProviderRef(contractId);
-    } catch (e) {
-      // 재조회 실패는 폴링 cron 이 보완 — 웹훅은 항상 ack 해 재전송 로그를 남기지 않는다.
-      logger.warn('signing.webhook_reconcile_failed', { err: String(e) });
-    }
+    // 응답을 먼저 반환하고 재조회는 응답 이후에 실행(5초 예산 보호). 실패는 폴링이 보완.
+    after(async () => {
+      try {
+        const { getContractSigningService } = await import(
+          '@/lib/server/services/contract-signing'
+        );
+        await (await getContractSigningService()).reconcileByProviderRef(contractId);
+      } catch (e) {
+        logger.warn('signing.webhook_reconcile_failed', { err: String(e) });
+      }
+    });
   }
   return NextResponse.json({ received: true });
 }

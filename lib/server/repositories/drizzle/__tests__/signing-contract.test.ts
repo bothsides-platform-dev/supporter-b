@@ -83,6 +83,68 @@ describe('DrizzleSigningContractRepository', () => {
     expect(await repo.findByProviderRef('does-not-exist')).toBeUndefined();
   });
 
+  it('transitionIfActive moves an active contract to a terminal state and returns true', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'sent' });
+    await repo.create(c, []);
+    const at = new Date('2026-03-01T00:00:00Z');
+    const did = await repo.transitionIfActive(c.id, 'canceled', at, { cancelReason: '재발송' });
+    expect(did).toBe(true);
+    const after = await repo.findById(c.id);
+    expect(after?.contract.status).toBe('canceled');
+    expect(after?.contract.canceledAt).toBe(at.toISOString());
+    expect(after?.contract.cancelReason).toBe('재발송');
+  });
+
+  it('transitionIfActive is a no-op (returns false) when the contract already reached a terminal state', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'sent' });
+    await repo.create(c, []);
+    // completed is terminal — a concurrent cancel must NOT clobber it.
+    await repo.finalizeIfNotFinal(c.id, new Date());
+    const did = await repo.transitionIfActive(c.id, 'canceled', new Date(), { cancelReason: 'x' });
+    expect(did).toBe(false);
+    expect((await repo.findById(c.id))?.contract.status).toBe('completed');
+  });
+
+  it('transitionIfActive claims exactly once under repeated calls (serialization)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'in_progress' });
+    await repo.create(c, []);
+    const first = await repo.transitionIfActive(c.id, 'canceled', new Date());
+    const second = await repo.transitionIfActive(c.id, 'canceled', new Date());
+    expect(first).toBe(true);
+    expect(second).toBe(false); // already canceled — second claimant loses
+  });
+
+  it('findStaleAwaiting returns old awaiting contracts that were not recently nudged', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const stale = makeContract(rfpId, buyer.id, {
+      status: 'awaiting_pg_template',
+      createdAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+    });
+    await repo.create(stale, []);
+    const cutoff = new Date('2026-02-01T00:00:00Z');
+    expect((await repo.findStaleAwaiting(cutoff, 10)).map((c) => c.id)).toContain(stale.id);
+  });
+
+  it('findStaleAwaiting excludes a recently-nudged awaiting contract (throttle)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, {
+      status: 'awaiting_pg_template',
+      createdAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+      lastPolledAt: new Date('2026-02-15T00:00:00Z').toISOString(), // nudged after the cutoff
+    });
+    await repo.create(c, []);
+    const cutoff = new Date('2026-02-01T00:00:00Z');
+    expect(await repo.findStaleAwaiting(cutoff, 10)).toHaveLength(0);
+  });
+
   it('only one ACTIVE contract per RFP (partial unique)', async () => {
     const repo = new DrizzleSigningContractRepository(db);
     const { buyer, rfpId } = await setup();

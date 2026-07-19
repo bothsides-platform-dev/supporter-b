@@ -39,5 +39,7 @@ export const signingContracts = pgTable(
       .where(sql`status in ('awaiting_pg_template','sent','in_progress')`),
     // cron 폴링: 진행 중 계약을 오래 안 본 순으로 스캔.
     index('signing_contracts_status_polled_idx').on(t.status, t.lastPolledAt),
+    // 웹훅 트리거 조회 키: findByProviderRef(provider_ref) — 시퀀셜 스캔 방지.
+    index('signing_contracts_provider_ref_idx').on(t.providerRef),
   ],
 );

@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 
+// after() has no request scope in a unit test, so capture its callbacks and run
+// them manually — this also proves the reconcile is scheduled post-response.
+const { afterCbs } = vi.hoisted(() => ({ afterCbs: [] as Array<() => Promise<void> | void> }));
+vi.mock('next/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/server')>();
+  return { ...actual, after: (fn: () => Promise<void> | void) => afterCbs.push(fn) };
+});
+async function flushAfter(): Promise<void> {
+  for (const cb of afterCbs.splice(0)) await cb();
+}
+
 import { POST } from '../route';
 import {
   __resetContractSigningServiceForTest,
@@ -25,6 +36,7 @@ describe('POST /api/signing/webhook', () => {
   let reconcileByProviderRef: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     vi.stubEnv('SNOWSIGN_WEBHOOK_SECRET', SECRET);
+    afterCbs.length = 0;
     reconcileByProviderRef = vi.fn(async () => ({ ok: true }));
     __setContractSigningServiceForTest({
       reconcileByProviderRef,
@@ -56,9 +68,12 @@ describe('POST /api/signing/webhook', () => {
     expect(reconcileByProviderRef).not.toHaveBeenCalled();
   });
 
-  it('triggers reconcile by provider ref for a contract event', async () => {
+  it('acks 200 immediately and reconciles by provider ref after the response (via after())', async () => {
     const res = await POST(signed({ event: 'contract.completed', data: { contract_id: 'ct_1' } }));
     expect(res.status).toBe(200);
+    // Reconcile is deferred to after() — not run before the response is returned.
+    expect(reconcileByProviderRef).not.toHaveBeenCalled();
+    await flushAfter();
     expect(reconcileByProviderRef).toHaveBeenCalledWith('ct_1');
   });
 

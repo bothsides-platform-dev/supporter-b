@@ -64,6 +64,18 @@ export class DrizzlePgSigningTemplateRepository implements PgSigningTemplateRepo
     return row ? rowToTemplate(row) : undefined;
   }
 
+  async findBySnowsignTemplateId(
+    snowsignTemplateId: string,
+    tx?: Tx,
+  ): Promise<PgSigningTemplate | undefined> {
+    const [row] = (await this.h(tx)
+      .select()
+      .from(pgSigningTemplates)
+      .where(eq(pgSigningTemplates.snowsignTemplateId, snowsignTemplateId))
+      .limit(1)) as Row[];
+    return row ? rowToTemplate(row) : undefined;
+  }
+
   async findDefaultByWorkspace(
     workspaceId: string,
     tx?: Tx,

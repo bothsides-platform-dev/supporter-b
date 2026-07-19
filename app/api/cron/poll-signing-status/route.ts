@@ -10,6 +10,8 @@
  * Auth(fail-closed): CRON_SECRET 비어있거나 불일치면 항상 401.
  * runtime='nodejs' — 서비스가 postgres-js 를 전이 import.
  */
+import { timingSafeEqual } from 'node:crypto';
+
 import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/observability/logger';
@@ -19,11 +21,19 @@ export const runtime = 'nodejs';
 const POLL_LIMIT = 50;
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const secret = process.env.CRON_SECRET;
-  const provided =
-    request.headers.get('x-cron-secret') ?? new URL(request.url).searchParams.get('secret');
+  // 헤더 전용 + 상수시간 비교(쿼리 파라미터 미지원 — 시크릿이 접근 로그에 남지 않도록,
+  // 웹훅 검증과 동일 패턴). 길이 가드 후 항상 timingSafeEqual 을 실행해 타이밍 오라클 차단.
+  const secret = process.env.CRON_SECRET ?? '';
+  const provided = request.headers.get('x-cron-secret') ?? '';
+  const secretBuf = Buffer.from(secret);
+  const cmpBuf = Buffer.alloc(secretBuf.length, 0);
+  Buffer.from(provided).copy(cmpBuf);
+  const match =
+    secret.length > 0 &&
+    provided.length === secret.length &&
+    timingSafeEqual(secretBuf, cmpBuf);
 
-  if (!secret || provided !== secret) {
+  if (!match) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
@@ -31,7 +41,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     const { getContractSigningService } = await import('@/lib/server/services/contract-signing');
     const service = await getContractSigningService();
     const result = await service.pollPending(POLL_LIMIT);
-    return NextResponse.json(result);
+    // 방치된 awaiting_pg_template 계약 재넛지(7일 스로틀) — 같은 주기에 백스톱.
+    const nudge = await service.nudgeStaleAwaiting();
+    return NextResponse.json({ ...result, ...nudge });
   } catch (e) {
     logger.error('cron.poll_signing_failed', { err: String(e) });
     return NextResponse.json({ error: 'poll_failed' }, { status: 500 });

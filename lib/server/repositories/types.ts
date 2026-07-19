@@ -177,6 +177,14 @@ export interface PgSigningTemplateRepo {
   findByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate[]>;
   /** org 스코핑: id 와 소유 workspaceId 가 함께 일치할 때만 반환(타 PG 차단). */
   findByIdScoped(id: string, workspaceId: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
+  /**
+   * snowsign_template_id 로 소유 링크를 조회(워크스페이스 무관). 크로스-테넌트 링크
+   * 가드용 — 이미 다른 PG 가 링크한 템플릿인지 판별한다. 없으면 undefined.
+   */
+  findBySnowsignTemplateId(
+    snowsignTemplateId: string,
+    tx?: Tx,
+  ): Promise<PgSigningTemplate | undefined>;
   /** 워크스페이스의 기본 템플릿 — award 시 자동 선택. 없으면 undefined. */
   findDefaultByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
 }
@@ -208,8 +216,27 @@ export interface SigningContractRepo {
    * 이미 종결이면 false(no-op). 동시 폴링 중복 완료를 막는다.
    */
   finalizeIfNotFinal(id: string, at: Date, tx?: Tx): Promise<boolean>;
+  /**
+   * 활성(awaiting_pg_template/sent/in_progress) 계약만 지정 terminal 상태로 원자 전이한다.
+   * 이미 종결(completed/canceled/declined/expired)이면 전이하지 않고 false 를 반환한다.
+   * declined/expired 알림 멱등화 + resend 클레임 직렬화(경쟁 상황에서 완료본 클로버 방지)에
+   * 쓴다. canceled 전이는 canceledAt/cancelReason 도 함께 세팅한다.
+   */
+  transitionIfActive(
+    id: string,
+    toStatus: 'canceled' | 'declined' | 'expired',
+    at: Date,
+    opts?: { cancelReason?: string },
+    tx?: Tx,
+  ): Promise<boolean>;
   /** awaiting_pg_template 상태 계약 전부 — 템플릿 링크 후 자동 발송 대상 탐색. */
   findAwaiting(tx?: Tx): Promise<SigningContract[]>;
+  /**
+   * 오래 방치된 awaiting_pg_template 계약 — createdAt 이 nudgeBefore 이전이고 최근
+   * (nudgeBefore 이후) 재넛지되지 않은(lastPolledAt null 또는 nudgeBefore 이전) 것만,
+   * 오래된 순. 재넛지 스로틀 마커로 lastPolledAt 을 재사용한다(awaiting 은 폴링 대상이 아님).
+   */
+  findStaleAwaiting(nudgeBefore: Date, limit: number, tx?: Tx): Promise<SigningContract[]>;
   /** 기존 계약에 참여자 추가 — awaiting→sent 전이 시 사용. */
   insertParticipants(participants: SigningParticipant[], tx?: Tx): Promise<void>;
 }

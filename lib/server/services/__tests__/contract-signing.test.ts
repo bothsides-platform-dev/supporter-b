@@ -28,6 +28,7 @@ import {
   pgSigningTemplates,
   rfpInvitations,
   rfps,
+  signingContracts,
 } from '@/lib/db/schema';
 import type {
   SnowSignClient,
@@ -669,5 +670,173 @@ describe('ContractSigningService.getTemplateDetail', () => {
     const service = await buildService(client);
     const r = await service.getTemplateDetail({ userId: 'u', workspaceId: 'ws' }, 'tmpl_x');
     expect(r).toEqual({ ok: false, error: 'SNOWSIGN_NOT_FOUND' });
+  });
+});
+
+describe('ContractSigningService — review hardening', () => {
+  it('getForActor denies a non-party with FORBIDDEN even when no contract exists (no award-existence oracle)', async () => {
+    const env = await seedAwarded({ withTemplate: true });
+    const service = await buildService(mockClient());
+    // No onAward — no signing contract for this RFP. A non-party must not be able
+    // to distinguish "no contract" (404) from "forbidden".
+    const stranger = { userId: randomUUID(), workspaceId: randomUUID() };
+    const r = await service.getForActor(env.rfpId, stranger);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN');
+  });
+
+  // NOTE: red-team finding #9 (onTemplateReady sends for a reverted award) is a
+  // FALSE POSITIVE — the rfps `awarded_consistency` check constraint
+  // `(awardedBidId IS NULL) OR (status = 'awarded')` makes a non-null awardedBidId
+  // imply status='awarded', so onTemplateReady's `if (!rfp?.awardedBidId) continue`
+  // already guarantees the RFP is awarded. No fix needed (verified against schema).
+
+  it('linkTemplate rejects a snowsign template already linked by another workspace', async () => {
+    const service = await buildService(mockClient());
+    const env = await seedAwarded({ withTemplate: false });
+    const otherWs = await seedPgWorkspace(db, `other-${randomUUID().slice(0, 6)}.io`);
+    await db.insert(pgSigningTemplates).values({
+      id: randomUUID(), workspaceId: otherWs.id, snowsignTemplateId: 'tmpl_victim', name: 'victim',
+      roleMapping: { 구매사: 'buyer', PG: 'pg' }, variableMapping: {}, isDefault: true, createdBy: env.pgUserId,
+    });
+    const r = await service.linkTemplate(
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { snowsignTemplateId: 'tmpl_victim', name: 'mine', roleMapping: { 구매사: 'buyer', PG: 'pg' } },
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('TEMPLATE_ALREADY_LINKED');
+  });
+
+  it('getTemplateDetail denies reading a template linked by another workspace', async () => {
+    const client = mockClient();
+    (client.getTemplate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      templateId: 'tmpl_victim', name: 'victim', signers: [], variables: [],
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded({ withTemplate: false });
+    const otherWs = await seedPgWorkspace(db, `o2-${randomUUID().slice(0, 6)}.io`);
+    await db.insert(pgSigningTemplates).values({
+      id: randomUUID(), workspaceId: otherWs.id, snowsignTemplateId: 'tmpl_victim', name: 'victim',
+      roleMapping: { 구매사: 'buyer', PG: 'pg' }, variableMapping: {}, isDefault: true, createdBy: env.pgUserId,
+    });
+    const r = await service.getTemplateDetail({ userId: env.pgUserId, workspaceId: env.pgWsId }, 'tmpl_victim');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN');
+  });
+
+  it('reconcile mirrors a participant even when the provider echoes a different-case email', async () => {
+    const env = await seedAwarded({ withTemplate: true });
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    const buyerEmail = (await signingRepo.findById(active!.id))!.participants.find((p) => p.role === 'buyer')!.email;
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({
+      contractId: 'ct_1', status: 'in_progress',
+      participants: [{ name: '구매담당', email: buyerEmail.toUpperCase(), status: 'signed', signedAt: '2026-02-01T00:00:00Z' }],
+    });
+    await service.reconcileStatus(active!.id);
+    const after = await signingRepo.findById(active!.id);
+    expect(after!.participants.find((p) => p.role === 'buyer')?.status).toBe('signed');
+  });
+
+  it('reconcile transitions to declined and notifies both parties (idempotent on repeat)', async () => {
+    const env = await seedAwarded({ withTemplate: true });
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({ contractId: 'ct_1', status: 'rejected', participants: [] });
+
+    await service.reconcileStatus(active!.id);
+    expect((await signingRepo.findById(active!.id))!.contract.status).toBe('declined');
+    const first = await db.select().from(notifications).where(eq(notifications.type, 'signing.declined'));
+    expect(first.length).toBeGreaterThan(0);
+    await service.reconcileStatus(active!.id); // repeat poll — must not re-notify
+    const second = await db.select().from(notifications).where(eq(notifications.type, 'signing.declined'));
+    expect(second.length).toBe(first.length);
+  });
+
+  it('reconcile swallows a provider error, bumps lastPolledAt, and keeps status', async () => {
+    const env = await seedAwarded({ withTemplate: true });
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    (client.getContract as ReturnType<typeof vi.fn>).mockRejectedValue(new SnowSignError('SNOWSIGN_NETWORK'));
+    const r = await service.reconcileStatus(active!.id);
+    expect(r.ok).toBe(true);
+    const after = await signingRepo.findById(active!.id);
+    expect(after!.contract.status).toBe('sent');
+    expect(after!.contract.lastPolledAt).toBeTruthy();
+  });
+
+  it('performSend compensating-cancels the SnowSign contract when local persist fails (no orphan)', async () => {
+    const env = await seedAwarded({ withTemplate: true });
+    const client = mockClient(); // createContractFromTemplate → ct_1, sendContract ok, cancel = spy
+    const [signingRepo, templateRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo] =
+      await Promise.all([
+        getSigningContractRepo(),
+        getPgSigningTemplateRepo(),
+        getRfpRepo(),
+        getBidRepo(),
+        getUserRepo(),
+        getWorkspaceRepo(),
+        getAuditLogRepo(),
+      ]);
+    // Real repos for everything, but make the local persist throw AFTER SnowSign send.
+    const throwingSigning = Object.create(signingRepo);
+    throwingSigning.create = async () => {
+      throw new Error('persist boom');
+    };
+    const svc = new ContractSigningService(
+      db,
+      throwingSigning,
+      templateRepo,
+      rfpRepo,
+      bidRepo,
+      userRepo,
+      wsRepo,
+      auditRepo,
+      client,
+    );
+    const r = await svc.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('PERSIST_FAILED');
+    // The already-sent SnowSign contract must be compensating-canceled (no orphan).
+    expect(client.cancel).toHaveBeenCalledWith('ct_1', expect.any(String));
+  });
+
+  it('nudgeStaleAwaiting re-notifies the PG for a stuck awaiting contract and throttles repeats', async () => {
+    const env = await seedAwarded({ withTemplate: false });
+    const service = await buildService(mockClient());
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    expect(active?.status).toBe('awaiting_pg_template');
+    // Backdate so it counts as "stuck", and clear the nudge marker.
+    await db
+      .update(signingContracts)
+      .set({ createdAt: new Date('2026-01-01T00:00:00Z'), lastPolledAt: null })
+      .where(eq(signingContracts.id, active!.id));
+
+    const before = (
+      await db.select().from(notifications).where(eq(notifications.type, 'signing.awaiting_template'))
+    ).length;
+    const r = await service.nudgeStaleAwaiting();
+    expect(r.nudged).toBe(1);
+    const after = (
+      await db.select().from(notifications).where(eq(notifications.type, 'signing.awaiting_template'))
+    ).length;
+    expect(after).toBeGreaterThan(before);
+
+    // Throttled: an immediate second run re-nudges nothing (lastPolledAt just bumped).
+    expect((await service.nudgeStaleAwaiting()).nudged).toBe(0);
   });
 });
