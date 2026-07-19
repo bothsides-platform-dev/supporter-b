@@ -429,3 +429,65 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(active?.status).toBe('sent');
   });
 });
+
+describe('ContractSigningService — PG template setup', () => {
+  it('linkTemplate creates a scoped template and auto-sends this PG awaiting contracts', async () => {
+    const client = mockClient();
+    const service = await buildService(client);
+    const env = await seedAwarded({ withTemplate: false });
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('awaiting_pg_template');
+
+    const r = await service.linkTemplate(
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      {
+        snowsignTemplateId: 'tmpl_x',
+        name: '표준',
+        roleMapping: { 구매사: 'buyer', PG: 'pg' },
+        variableMapping: { 정산주기: 'bid.settleCycle' },
+      },
+    );
+    expect(r.ok).toBe(true);
+
+    const templateRepo = await getPgSigningTemplateRepo();
+    expect(await templateRepo.findByWorkspace(env.pgWsId)).toHaveLength(1);
+    // awaiting → sent
+    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('sent');
+  });
+
+  it('linkTemplate rejects a role mapping missing a side', async () => {
+    const service = await buildService(mockClient());
+    const env = await seedAwarded({ withTemplate: false });
+    const r = await service.linkTemplate(
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { snowsignTemplateId: 't', name: 'n', roleMapping: { 구매사: 'buyer' } },
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('ROLE_MAPPING_INCOMPLETE');
+  });
+
+  it('listTemplates is scoped to the actor workspace', async () => {
+    const service = await buildService(mockClient());
+    const env = await seedAwarded({ withTemplate: true });
+    const r = await service.listTemplates({ userId: env.pgUserId, workspaceId: env.pgWsId });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.templates).toHaveLength(1);
+    // a different workspace sees none
+    const other = await service.listTemplates({ userId: env.buyerId, workspaceId: env.buyerWsId });
+    if (other.ok) expect(other.templates).toHaveLength(0);
+  });
+
+  it('createTemplateEmbedSession returns an iframe url', async () => {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({
+        sessionId: 's1',
+        iframeUrl: 'https://app.snowsign/embed',
+      })),
+    });
+    const service = await buildService(client);
+    const r = await service.createTemplateEmbedSession({ userId: 'u', workspaceId: 'ws' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.iframeUrl).toBe('https://app.snowsign/embed');
+  });
+});

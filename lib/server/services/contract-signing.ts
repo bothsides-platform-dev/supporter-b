@@ -272,6 +272,68 @@ export class ContractSigningService {
     return { ok: true, contract: found.contract, participants: found.participants };
   }
 
+  // ─── PG 템플릿 설정 ───────────────────────────────────────────────────────
+
+  /** template_draft Embed 세션 발급 — PG가 앱 안 iframe에서 자사 계약서를 1회 등록. */
+  async createTemplateEmbedSession(
+    actor: Actor,
+  ): Promise<ServiceResult<{ iframeUrl: string; sessionId: string }>> {
+    const origin = process.env.NEXT_PUBLIC_PARTNER_ORIGIN ?? 'http://localhost:3000';
+    try {
+      const s = await this.snowsign.createEmbedSession({
+        purpose: 'contract_create',
+        allowedOrigins: [origin],
+        flows: ['template_draft'],
+        externalSystem: 'supporter-b',
+        externalId: `ws:${actor.workspaceId}`,
+      });
+      return { ok: true, iframeUrl: s.iframeUrl, sessionId: s.sessionId };
+    } catch (e) {
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+  }
+
+  /** PG 워크스페이스에 링크된 서명 템플릿 목록(org 스코프). */
+  async listTemplates(actor: Actor): Promise<ServiceResult<{ templates: PgSigningTemplate[] }>> {
+    const templates = await this.templateRepo.findByWorkspace(actor.workspaceId);
+    return { ok: true, templates };
+  }
+
+  /**
+   * SnowSign 템플릿을 PG 워크스페이스에 링크(역할/변수 매핑 포함) 후, 이 PG가 낙찰한
+   * awaiting 계약을 자동 발송한다. roleMapping 은 buyer·pg 양측을 모두 포함해야 한다.
+   */
+  async linkTemplate(
+    actor: Actor,
+    input: {
+      snowsignTemplateId: string;
+      name: string;
+      roleMapping: Record<string, Party>;
+      variableMapping?: Record<string, string>;
+      isDefault?: boolean;
+    },
+  ): Promise<ServiceResult<{ templateId: string }>> {
+    const sides = new Set(Object.values(input.roleMapping));
+    if (!sides.has('buyer') || !sides.has('pg')) {
+      return { ok: false, error: 'ROLE_MAPPING_INCOMPLETE' };
+    }
+    const templateId = randomUUID();
+    await this.templateRepo.create({
+      id: templateId,
+      workspaceId: actor.workspaceId,
+      snowsignTemplateId: input.snowsignTemplateId,
+      name: input.name,
+      roleMapping: input.roleMapping,
+      variableMapping: input.variableMapping ?? {},
+      isDefault: input.isDefault ?? true,
+      createdBy: actor.userId,
+      createdAt: new Date().toISOString(),
+    });
+    // 링크 직후 이 PG 낙찰 awaiting 계약을 자동 발송.
+    await this.onTemplateReady(actor.workspaceId, actor);
+    return { ok: true, templateId };
+  }
+
   /**
    * 폴링(딜룸 lazy + cron)으로 SnowSign 상태를 로컬에 반영한다. 참여자 단위 상태를
    * 미러링하고 계약 상태를 전이한다. 완료는 멱등 ensureFinalized 로 위임한다.
