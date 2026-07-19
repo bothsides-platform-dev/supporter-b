@@ -192,6 +192,8 @@ export interface SigningContractRepo {
   ): Promise<{ contract: SigningContract; participants: SigningParticipant[] } | undefined>;
   /** RFP의 활성(awaiting/sent/in_progress) 계약 — 없으면 undefined. */
   findActiveByRfp(rfpId: string, tx?: Tx): Promise<SigningContract | undefined>;
+  /** SnowSign provider_ref(계약 id)로 로컬 계약 조회 — webhook 트리거용. 없으면 undefined. */
+  findByProviderRef(providerRef: string, tx?: Tx): Promise<SigningContract | undefined>;
   /** RFP의 모든 계약(라운드 포함) — createdAt desc. */
   findByRfp(rfpId: string, tx?: Tx): Promise<SigningContract[]>;
   /** 폴링 대상(sent/in_progress) — 오래 안 본 순(nulls first) limit 건. */

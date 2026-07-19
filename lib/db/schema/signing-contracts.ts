@@ -7,7 +7,7 @@ import { users } from './users';
 /**
  * 선정 후 전자서명 계약 1건(SnowSign Templates 기반). 레거시 `contracts`(선정 기록)와
  * 별개·불변. `provider_ref` = SnowSign contract_id(생성 후 세팅), `snowsign_template_id` =
- * 사용한 PG 템플릿. 상태 폴링으로 SnowSign과 동기화(webhook 없음).
+ * 사용한 PG 템플릿. SnowSign 웹훅(저지연 트리거) + 폴링(백스톱)으로 상태 동기화.
  */
 export const signingContracts = pgTable(
   'signing_contracts',

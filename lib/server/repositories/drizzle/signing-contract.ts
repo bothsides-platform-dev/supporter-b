@@ -135,6 +135,15 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return row ? rowToContract(row) : undefined;
   }
 
+  async findByProviderRef(providerRef: string, tx?: Tx): Promise<SigningContract | undefined> {
+    const [row] = (await this.h(tx)
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.providerRef, providerRef))
+      .limit(1)) as CRow[];
+    return row ? rowToContract(row) : undefined;
+  }
+
   async findByRfp(rfpId: string, tx?: Tx): Promise<SigningContract[]> {
     const rows = (await this.h(tx)
       .select()

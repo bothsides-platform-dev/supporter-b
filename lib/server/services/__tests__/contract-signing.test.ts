@@ -332,6 +332,39 @@ describe('ContractSigningService.reconcileStatus', () => {
   });
 });
 
+describe('ContractSigningService.reconcileByProviderRef (webhook trigger)', () => {
+  it('reconciles the local contract identified by its SnowSign provider ref', async () => {
+    const env = await seedAwarded({ withTemplate: true });
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    expect(active?.providerRef).toBe('ct_1');
+
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({
+      contractId: 'ct_1',
+      status: 'completed',
+      participants: [],
+    });
+
+    const r = await service.reconcileByProviderRef('ct_1');
+    expect(r.ok).toBe(true);
+    expect(client.getContract).toHaveBeenCalledWith('ct_1');
+
+    const after = await signingRepo.findById(active!.id);
+    expect(after!.contract.status).toBe('completed');
+  });
+
+  it('is a no-op ack for an unknown provider ref (never throws, no provider call)', async () => {
+    const client = mockClient();
+    const service = await buildService(client);
+    const r = await service.reconcileByProviderRef('ct_unknown');
+    expect(r.ok).toBe(true);
+    expect(client.getContract).not.toHaveBeenCalled();
+  });
+});
+
 describe('ContractSigningService.onTemplateReady', () => {
   it('sends an awaiting contract once the PG links a template', async () => {
     const client = mockClient();

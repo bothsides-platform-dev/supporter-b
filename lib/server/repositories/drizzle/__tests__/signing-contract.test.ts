@@ -67,6 +67,22 @@ describe('DrizzleSigningContractRepository', () => {
     expect(found?.participants.map((p) => p.role).sort()).toEqual(['buyer', 'pg']);
   });
 
+  it('findByProviderRef returns the contract matching a SnowSign provider ref', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { providerRef: 'ct_webhook_1' });
+    await repo.create(c, []);
+    const found = await repo.findByProviderRef('ct_webhook_1');
+    expect(found?.id).toBe(c.id);
+    expect(found?.providerRef).toBe('ct_webhook_1');
+  });
+
+  it('findByProviderRef returns undefined for an unknown ref', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    await setup();
+    expect(await repo.findByProviderRef('does-not-exist')).toBeUndefined();
+  });
+
   it('only one ACTIVE contract per RFP (partial unique)', async () => {
     const repo = new DrizzleSigningContractRepository(db);
     const { buyer, rfpId } = await setup();

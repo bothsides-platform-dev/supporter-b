@@ -512,6 +512,18 @@ export class ContractSigningService {
     await this.reconcileStatus(contractId);
   }
 
+  /**
+   * SnowSign 웹훅 트리거 — provider_ref(SnowSign contract_id)로 로컬 계약을 찾아
+   * reconcileStatus 로 위임한다. 웹훅은 상태 소스가 아니라 저지연 폴링 트리거이므로
+   * payload 본문을 신뢰하지 않고 getContract 로 재조회한다(상태 매핑 단일 경로 유지).
+   * 추적하지 않는 ref 는 멱등 ack(ok) — SnowSign 재전송 로그를 남기지 않는다.
+   */
+  async reconcileByProviderRef(providerRef: string): Promise<ServiceResult> {
+    const contract = await this.signingRepo.findByProviderRef(providerRef);
+    if (!contract) return { ok: true };
+    return this.reconcileStatus(contract.id);
+  }
+
   // ─── private ────────────────────────────────────────────────────────────────
 
   private async performSend(
