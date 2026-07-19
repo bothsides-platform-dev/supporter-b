@@ -198,4 +198,18 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .returning({ id: signingContracts.id })) as Array<{ id: string }>;
     return rows.length > 0;
   }
+
+  async findAwaiting(tx?: Tx): Promise<SigningContract[]> {
+    const rows = (await this.h(tx)
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.status, 'awaiting_pg_template'))
+      .orderBy(asc(signingContracts.createdAt))) as CRow[];
+    return rows.map(rowToContract);
+  }
+
+  async insertParticipants(participants: SigningParticipant[], tx?: Tx): Promise<void> {
+    if (participants.length === 0) return;
+    await this.h(tx).insert(signingParticipants).values(participants.map(participantToRow));
+  }
 }

@@ -330,3 +330,102 @@ describe('ContractSigningService.reconcileStatus', () => {
     expect(done.length).toBe(1); // finalize audited exactly once
   });
 });
+
+describe('ContractSigningService.onTemplateReady', () => {
+  it('sends an awaiting contract once the PG links a template', async () => {
+    const client = mockClient();
+    const service = await buildService(client);
+    const env = await seedAwarded({ withTemplate: false });
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('awaiting_pg_template');
+
+    await db.insert(pgSigningTemplates).values({
+      id: randomUUID(),
+      workspaceId: env.pgWsId,
+      snowsignTemplateId: 'tmpl_link',
+      name: 't',
+      roleMapping: { 구매사: 'buyer', PG: 'pg' },
+      variableMapping: {},
+      isDefault: true,
+      createdBy: env.pgUserId,
+    });
+
+    const r = await service.onTemplateReady(env.pgWsId, { userId: env.pgUserId, workspaceId: env.pgWsId });
+    expect(r.ok).toBe(true);
+
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    expect(active?.status).toBe('sent');
+    expect(active?.providerRef).toBe('ct_1');
+    expect(active?.snowsignTemplateId).toBe('tmpl_link');
+    const found = await signingRepo.findById(active!.id);
+    expect(found?.participants).toHaveLength(2);
+    expect(client.createContractFromTemplate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ContractSigningService.cancel / remind / getForActor / resend', () => {
+  async function sentContract(client: SnowSignClient) {
+    const service = await buildService(client);
+    const env = await seedAwarded({ withTemplate: true });
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    return { service, env, signingRepo, contractId: active!.id };
+  }
+
+  it('cancel propagates to SnowSign and marks the contract canceled', async () => {
+    const client = mockClient();
+    const { service, env, signingRepo, contractId } = await sentContract(client);
+
+    const r = await service.cancel(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId }, '재작성');
+    expect(r.ok).toBe(true);
+    expect(client.cancel).toHaveBeenCalledWith('ct_1', '재작성');
+    const after = await signingRepo.findById(contractId);
+    expect(after?.contract.status).toBe('canceled');
+    expect(after?.contract.cancelReason).toBe('재작성');
+  });
+
+  it('cancel rejects a foreign workspace', async () => {
+    const client = mockClient();
+    const { service, contractId } = await sentContract(client);
+    const r = await service.cancel(contractId, { userId: randomUUID(), workspaceId: randomUUID() });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN');
+    expect(client.cancel).not.toHaveBeenCalled();
+  });
+
+  it('remind calls SnowSign remind for an authorized party', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    const r = await service.remind(contractId, { userId: env.pgUserId, workspaceId: env.pgWsId });
+    expect(r.ok).toBe(true);
+    expect(client.remind).toHaveBeenCalledWith('ct_1');
+  });
+
+  it('getForActor returns the contract for both parties, denies others', async () => {
+    const client = mockClient();
+    const { service, env } = await sentContract(client);
+    const asBuyer = await service.getForActor(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(asBuyer.ok).toBe(true);
+    if (asBuyer.ok) expect(asBuyer.contract.status).toBe('sent');
+    const asPg = await service.getForActor(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId });
+    expect(asPg.ok).toBe(true);
+    const asStranger = await service.getForActor(env.rfpId, { userId: randomUUID(), workspaceId: randomUUID() });
+    expect(asStranger.ok).toBe(false);
+  });
+
+  it('resend cancels the active contract and starts a new round', async () => {
+    const client = mockClient();
+    const { service, env, signingRepo } = await sentContract(client);
+
+    const r = await service.resend(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(r.ok).toBe(true);
+    expect(client.cancel).toHaveBeenCalledTimes(1); // old round canceled
+    const all = await signingRepo.findByRfp(env.rfpId);
+    expect(all).toHaveLength(2);
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    expect(active?.round).toBe(2);
+    expect(active?.status).toBe('sent');
+  });
+});

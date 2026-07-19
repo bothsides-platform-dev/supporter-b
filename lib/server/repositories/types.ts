@@ -206,6 +206,10 @@ export interface SigningContractRepo {
    * 이미 종결이면 false(no-op). 동시 폴링 중복 완료를 막는다.
    */
   finalizeIfNotFinal(id: string, at: Date, tx?: Tx): Promise<boolean>;
+  /** awaiting_pg_template 상태 계약 전부 — 템플릿 링크 후 자동 발송 대상 탐색. */
+  findAwaiting(tx?: Tx): Promise<SigningContract[]>;
+  /** 기존 계약에 참여자 추가 — awaiting→sent 전이 시 사용. */
+  insertParticipants(participants: SigningParticipant[], tx?: Tx): Promise<void>;
 }
 
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────
