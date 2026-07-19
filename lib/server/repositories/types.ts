@@ -200,6 +200,12 @@ export interface SigningContractRepo {
   patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void>;
   /** 참여자 가변 필드 부분 갱신. */
   patchParticipant(id: string, patch: SigningParticipantPatch, tx?: Tx): Promise<void>;
+  /**
+   * 멱등 완료 진입점 — 아직 종결(completed/canceled/declined/expired)되지 않은
+   * 계약만 completed 로 원자 전이한다. 실제 전이했으면 true(호출자가 알림/감사),
+   * 이미 종결이면 false(no-op). 동시 폴링 중복 완료를 막는다.
+   */
+  finalizeIfNotFinal(id: string, at: Date, tx?: Tx): Promise<boolean>;
 }
 
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────

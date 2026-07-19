@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { signingContracts, signingParticipants } from '@/lib/db/schema';
 import type {
   SigningContract,
@@ -183,5 +183,19 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     if (patch.securityMethod !== undefined) set.securityMethod = patch.securityMethod;
     if (Object.keys(set).length === 0) return;
     await this.h(tx).update(signingParticipants).set(set).where(eq(signingParticipants.id, id));
+  }
+
+  async finalizeIfNotFinal(id: string, at: Date, tx?: Tx): Promise<boolean> {
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ status: 'completed', completedAt: at })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          notInArray(signingContracts.status, ['completed', 'canceled', 'declined', 'expired']),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
   }
 }
