@@ -189,4 +189,97 @@ describe('RealSnowSignClient', () => {
     expect(res.downloadUrl).toBe('https://s3/x.pdf');
     expect(res.filename).toBe('c.pdf');
   });
+
+  // ── 비정상값 내성 (A1) ────────────────────────────────────────────────────
+  it('getContract throws SNOWSIGN_MALFORMED on a 2xx body missing the data envelope', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, { success: true }))); // no `data`
+    const e = (await client.getContract('ct_1').catch((x: unknown) => x)) as SnowSignError;
+    expect(e).toBeInstanceOf(SnowSignError);
+    expect(e.code).toBe('SNOWSIGN_MALFORMED');
+  });
+
+  it('getContract coerces a participant with a missing email to "" instead of throwing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(
+          200,
+          ok({
+            contract_id: 'ct_1',
+            status: 'in_progress',
+            participants: [{ name: 'A', status: 'signed' }], // email 누락
+          }),
+        ),
+      ),
+    );
+    const res = await client.getContract('ct_1');
+    expect(res.participants[0]!.email).toBe('');
+    expect(res.participants[0]!.name).toBe('A');
+    expect(res.participants[0]!.status).toBe('signed');
+  });
+
+  it('downloadUrl throws SNOWSIGN_MALFORMED when download_url is missing', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, ok({ filename: 'c.pdf' })))); // no url
+    const e = (await client.downloadUrl('ct_1').catch((x: unknown) => x)) as SnowSignError;
+    expect(e).toBeInstanceOf(SnowSignError);
+    expect(e.code).toBe('SNOWSIGN_MALFORMED');
+  });
+
+  it('downloadUrl throws SNOWSIGN_MALFORMED when download_url is not an absolute URL', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, ok({ download_url: '/relative/x.pdf' }))));
+    const e = (await client.downloadUrl('ct_1').catch((x: unknown) => x)) as SnowSignError;
+    expect(e).toBeInstanceOf(SnowSignError);
+    expect(e.code).toBe('SNOWSIGN_MALFORMED');
+  });
+
+  it('sendContract falls back to the input contractId when the 2xx body drifts (does not throw)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, ok({})))); // no contract_id/status
+    const res = await client.sendContract('ct_input');
+    expect(res.contractId).toBe('ct_input');
+    expect(res.status).toBe('sent');
+  });
+
+  it('createContractFromTemplate throws SNOWSIGN_MALFORMED when contract_id is missing', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(201, ok({ status: 'draft' })))); // no contract_id
+    const e = (await client
+      .createContractFromTemplate('tmpl_1', {
+        title: 'T',
+        participants: [{ name: 'A', email: 'a@x.com', role: 'r' }],
+      })
+      .catch((x: unknown) => x)) as SnowSignError;
+    expect(e).toBeInstanceOf(SnowSignError);
+    expect(e.code).toBe('SNOWSIGN_MALFORMED');
+  });
+
+  it('createEmbedSession throws SNOWSIGN_MALFORMED when session_id is missing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, ok({ iframe_url: 'https://app.snowsign/embed' }))),
+    );
+    const e = (await client
+      .createEmbedSession({ purpose: 'contract_create', allowedOrigins: ['https://x'], flows: ['template_draft'] })
+      .catch((x: unknown) => x)) as SnowSignError;
+    expect(e).toBeInstanceOf(SnowSignError);
+    expect(e.code).toBe('SNOWSIGN_MALFORMED');
+  });
+
+  it('getTemplate throws SNOWSIGN_MALFORMED on a 2xx body missing the data envelope', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, { success: true }))); // no data
+    const e = (await client.getTemplate('tmpl_1').catch((x: unknown) => x)) as SnowSignError;
+    expect(e).toBeInstanceOf(SnowSignError);
+    expect(e.code).toBe('SNOWSIGN_MALFORMED');
+  });
+
+  it('listTemplates returns [] when the data envelope is not an array', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, ok({ oops: true })))); // object, not array
+    const res = await client.listTemplates();
+    expect(res).toEqual([]);
+  });
+
+  it('auditCertificateUrl throws SNOWSIGN_MALFORMED when download_url is missing', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, ok({ filename: 'a.pdf' }))));
+    const e = (await client.auditCertificateUrl('ct_1').catch((x: unknown) => x)) as SnowSignError;
+    expect(e).toBeInstanceOf(SnowSignError);
+    expect(e.code).toBe('SNOWSIGN_MALFORMED');
+  });
 });

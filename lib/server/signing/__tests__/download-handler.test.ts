@@ -55,4 +55,23 @@ describe('handleSigningDownload', () => {
     } as unknown as ContractSigningService);
     expect((await handleSigningDownload('c1', 'audit')).status).toBe(409);
   });
+
+  it('returns 502 (not a 500) when the SnowSign URL is malformed (A3)', async () => {
+    __setContractSigningServiceForTest({
+      getDownloadUrl: vi.fn(async () => ({ ok: true as const, url: '::not-a-url' })),
+    } as unknown as ContractSigningService);
+    const res = await handleSigningDownload('c1', 'document');
+    expect(res.status).toBe(502);
+  });
+
+  it('renders a friendly Korean error page with no raw code on a provider failure (U2)', async () => {
+    __setContractSigningServiceForTest({
+      getDownloadUrl: vi.fn(async () => ({ ok: false as const, error: 'SNOWSIGN_NETWORK' })),
+    } as unknown as ContractSigningService);
+    const res = await handleSigningDownload('c1', 'document');
+    expect(res.status).toBe(502);
+    const body = await res.text();
+    expect(body).not.toContain('SNOWSIGN_NETWORK'); // raw 코드 미노출
+    expect(body).toMatch(/[가-힣]/); // 한글 안내
+  });
 });

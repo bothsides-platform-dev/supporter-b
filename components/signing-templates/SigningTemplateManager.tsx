@@ -19,6 +19,7 @@ import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
 import { Select } from '@/components/primitives/Select';
 import { toast } from '@/lib/toast';
+import { signingErrorMessage } from '@/lib/signing/error-messages';
 import { issueSigningTemplateEmbedSessionAction } from '@/lib/server/actions/signing/issueSigningTemplateEmbedSessionAction';
 import { getSigningTemplateDetailAction } from '@/lib/server/actions/signing/getSigningTemplateDetailAction';
 import { linkSigningTemplateAction } from '@/lib/server/actions/signing/linkSigningTemplateAction';
@@ -125,7 +126,7 @@ export function SigningTemplateManager({
     const r = await issueSigningTemplateEmbedSessionAction();
     setBusy(false);
     if (!r.ok) {
-      toast(`계약서 등록 화면을 열지 못했어요 — ${r.error ?? ''}`.trim(), { type: 'error' });
+      toast(signingErrorMessage(r.error, '계약서 등록 화면을 열지 못했어요'), { type: 'error' });
       return;
     }
     setIframeUrl(r.iframeUrl);
@@ -139,7 +140,7 @@ export function SigningTemplateManager({
     const r = await getSigningTemplateDetailAction({ snowsignTemplateId: tid });
     setBusy(false);
     if (!r.ok) {
-      toast(`템플릿 정보를 불러오지 못했어요 — ${r.error ?? ''}`.trim(), { type: 'error' });
+      toast(signingErrorMessage(r.error, '템플릿 정보를 불러오지 못했어요'), { type: 'error' });
       return;
     }
     setSnowsignTemplateId(tid);
@@ -173,7 +174,7 @@ export function SigningTemplateManager({
     });
     setBusy(false);
     if (!r.ok) {
-      toast(`저장하지 못했어요 — ${r.error ?? ''}`.trim(), { type: 'error' });
+      toast(signingErrorMessage(r.error, '저장하지 못했어요'), { type: 'error' });
       return;
     }
     toast('서명 템플릿을 저장했어요', { type: 'success' });

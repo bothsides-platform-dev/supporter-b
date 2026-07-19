@@ -20,6 +20,7 @@
 import { after, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/observability/logger';
+import { captureSigningError } from '@/lib/server/signing/observability';
 import { verifySnowSignWebhook } from '@/lib/server/signing/webhook';
 
 export const runtime = 'nodejs';
@@ -40,9 +41,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ received: true });
   }
 
-  const contractId = payload.data?.contract_id;
+  // payload 가 null/원시값(진위 검증은 통과했으나 비정상 본문)이어도 500 없이 200 ack.
+  const contractId = payload?.data?.contract_id;
   // test 이벤트/계약 무관 이벤트는 재조회 대상이 없다 — 즉시 ack.
-  if (payload.event && payload.event !== 'test' && contractId) {
+  if (payload?.event && payload.event !== 'test' && contractId) {
     // 응답을 먼저 반환하고 재조회는 응답 이후에 실행(5초 예산 보호). 실패는 폴링이 보완.
     after(async () => {
       try {
@@ -52,6 +54,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         await (await getContractSigningService()).reconcileByProviderRef(contractId);
       } catch (e) {
         logger.warn('signing.webhook_reconcile_failed', { err: String(e) });
+        captureSigningError('signing.webhook_reconcile_failed', e, { providerRef: contractId });
       }
     });
   }

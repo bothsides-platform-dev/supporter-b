@@ -21,6 +21,17 @@ vi.mock('@/lib/auth/session', () => ({
     sessionRef.value ? Promise.resolve(sessionRef.value) : Promise.reject(new Error('FORBIDDEN_BUYER')),
 }));
 
+// after() has no request scope in a unit test — capture its callbacks and run them
+// manually. This also proves signing initiation is deferred to after the response.
+const { afterCbs } = vi.hoisted(() => ({ afterCbs: [] as Array<() => Promise<void> | void> }));
+vi.mock('next/server', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('next/server')>();
+  return { ...actual, after: (fn: () => Promise<void> | void) => afterCbs.push(fn) };
+});
+async function flushAfter(): Promise<void> {
+  for (const cb of afterCbs.splice(0)) await cb();
+}
+
 import { awardRfpAction } from '../awardRfpAction';
 import {
   __resetRfpServiceForTest,
@@ -49,6 +60,7 @@ const buyer = {
 describe('awardRfpAction → onAward hook', () => {
   beforeEach(() => {
     sessionRef.value = buyer;
+    afterCbs.length = 0;
   });
   afterEach(() => {
     __resetRfpServiceForTest();
@@ -63,6 +75,7 @@ describe('awardRfpAction → onAward hook', () => {
 
     const r = await awardRfpAction({ rfpId: RFP_ID, awardedBidId: BID_ID });
     expect(r.ok).toBe(true);
+    await flushAfter();
     expect(onAward).toHaveBeenCalledWith(RFP_ID, BID_ID, { userId: 'u1', workspaceId: 'ws1' });
   });
 
@@ -88,5 +101,21 @@ describe('awardRfpAction → onAward hook', () => {
 
     const r = await awardRfpAction({ rfpId: RFP_ID, awardedBidId: BID_ID });
     expect(r.ok).toBe(true);
+    // after() 콜백이 onAward 의 throw 를 안에서 삼킨다 — flush 가 reject 되지 않는다.
+    await expect(flushAfter()).resolves.toBeUndefined();
+  });
+
+  it('defers onAward to after() — award returns before signing starts (a SnowSign hang cannot block it)', async () => {
+    __setRfpServiceForTest({ award: vi.fn(async () => ({ ok: true as const })) } as unknown as RfpService);
+    const onAward = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({ onAward } as unknown as ContractSigningService);
+
+    const r = await awardRfpAction({ rfpId: RFP_ID, awardedBidId: BID_ID });
+    expect(r.ok).toBe(true);
+    // 응답 전에는 onAward 가 실행되지 않는다(after() 로 지연) — SnowSign hang 이 award 응답을 막지 못한다.
+    expect(onAward).not.toHaveBeenCalled();
+
+    await flushAfter();
+    expect(onAward).toHaveBeenCalledWith(RFP_ID, BID_ID, { userId: 'u1', workspaceId: 'ws1' });
   });
 });

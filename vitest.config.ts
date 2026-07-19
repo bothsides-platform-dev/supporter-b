@@ -71,6 +71,7 @@ export default defineConfig({
             "lib/seo/**/*.{test,spec}.{ts,tsx}",
             "lib/features/**/*.{test,spec}.{ts,tsx}",
             "lib/brand/**/*.{test,spec}.{ts,tsx}",
+            "lib/signing/**/*.{test,spec}.{ts,tsx}",
             "scripts/**/*.{test,spec}.{ts,tsx}",
             "deploy/**/*.{test,spec}.{ts,tsx}",
             "app/api/**/*.{test,spec}.{ts,tsx}",

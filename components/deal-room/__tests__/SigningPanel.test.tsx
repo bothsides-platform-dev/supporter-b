@@ -16,6 +16,7 @@ vi.mock('@/lib/server/actions/signing/resendSigningAction', () => ({
 
 import { SigningPanel } from '../SigningPanel';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
+import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
 import type {
   SigningContractStatus,
   SigningParticipant,
@@ -99,5 +100,12 @@ describe('SigningPanel', () => {
     render(<SigningPanel rfpCode="P-1" signing={view('declined')} />);
     expect(screen.getByText('서명이 거절됐어요')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '다시 발송' })).toBeInTheDocument();
+  });
+
+  it('send_failed → 시작 실패 안내 + 다시 시작(resend) (U3)', async () => {
+    render(<SigningPanel rfpCode="P-1" signing={view('send_failed')} />);
+    expect(screen.getByText('전자서명을 시작하지 못했어요')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '다시 시작' }));
+    expect(resendSigningAction).toHaveBeenCalledWith({ rfpCode: 'P-1' });
   });
 });

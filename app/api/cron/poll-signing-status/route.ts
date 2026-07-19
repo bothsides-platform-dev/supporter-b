@@ -15,6 +15,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/observability/logger';
+import { captureSigningError } from '@/lib/server/signing/observability';
 
 export const runtime = 'nodejs';
 
@@ -46,6 +47,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ...result, ...nudge });
   } catch (e) {
     logger.error('cron.poll_signing_failed', { err: String(e) });
+    captureSigningError('cron.poll_signing_failed', e);
     return NextResponse.json({ error: 'poll_failed' }, { status: 500 });
   }
 }

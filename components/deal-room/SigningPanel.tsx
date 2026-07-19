@@ -23,6 +23,7 @@ import { Button } from '@/components/primitives/Button';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
+import { signingErrorMessage } from '@/lib/signing/error-messages';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
@@ -51,6 +52,8 @@ function contractChip(status: SigningContractStatus): { color: ChipColor; label:
       return { color: 'error', label: '만료됨' };
     case 'canceled':
       return { color: 'surface', label: '취소됨' };
+    case 'send_failed':
+      return { color: 'error', label: '시작 실패' };
   }
 }
 
@@ -127,7 +130,7 @@ export function SigningPanel({ rfpCode, signing }: { rfpCode: string; signing: S
     const r = await fn();
     setBusy(false);
     if (!r.ok) {
-      toast(`${failMsg} — ${r.error ?? ''}`.trim(), { type: 'error' });
+      toast(signingErrorMessage(r.error, failMsg), { type: 'error' });
       return;
     }
     toast(okMsg, { type: 'success' });
@@ -272,6 +275,33 @@ export function SigningPanel({ rfpCode, signing }: { rfpCode: string; signing: S
                 }
               >
                 다시 발송
+              </Button>
+            </div>
+          </>
+        )}
+
+        {contract.status === 'send_failed' && (
+          <>
+            <div className="flex items-start gap-2.5 rounded-lg bg-[var(--md-sys-color-error-container)] px-3.5 py-3 text-[var(--md-sys-color-on-error-container)]">
+              <AlertTriangle className="mt-px size-[18px] shrink-0" />
+              <div>
+                <div className="text-[13px] font-semibold">전자서명을 시작하지 못했어요</div>
+                <div className="mt-0.5 text-[12.5px] opacity-90">
+                  전자서명 서비스에 일시적인 문제가 있었어요. 선정은 그대로 유지돼요 — 다시 시작해 주세요.
+                </div>
+              </div>
+            </div>
+            <div className="mt-3.5 flex flex-wrap gap-2">
+              <Button
+                variant="filled"
+                size="sm"
+                icon={<RefreshCw />}
+                disabled={busy}
+                onClick={() =>
+                  run(() => resendSigningAction({ rfpCode }), '다시 시작했어요', '다시 시작하지 못했어요')
+                }
+              >
+                다시 시작
               </Button>
             </div>
           </>

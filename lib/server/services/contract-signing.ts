@@ -14,6 +14,7 @@ import { notify } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { logger } from '@/lib/observability/logger';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
+import { captureSigningError } from '@/lib/server/signing/observability';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { Notification } from '@/lib/types/notification';
@@ -57,8 +58,13 @@ function resolveVariables(
   return out;
 }
 
+// 알려진 non-terminal(무시해도 되는) provider status — 미지값 경고에서 제외.
+const KNOWN_NOOP_PROVIDER_STATUSES = new Set(['draft', 'pending', 'sent']);
+
 function mapProviderContractStatus(s: string): SigningContractStatus | undefined {
-  switch (s) {
+  // 대소문자·공백 변형('COMPLETED', ' Completed ')도 인식한다. synonym 추정은 하지
+  // 않는다(계약 완료는 금융 행위 — 임의 매핑 위험). 정규화만 한다.
+  switch (s.trim().toLowerCase()) {
     case 'in_progress':
       return 'in_progress';
     case 'completed':
@@ -72,12 +78,23 @@ function mapProviderContractStatus(s: string): SigningContractStatus | undefined
     case 'canceled':
       return 'canceled';
     default:
-      return undefined; // draft/pending/sent — 변화 없음
+      return undefined; // draft/pending/sent 등 — 변화 없음
   }
 }
 
-function mapProviderParticipantStatus(s: string): SigningParticipantStatus {
-  switch (s) {
+// 참여자 상태 단조 순위(역행 방지). rejected 는 signed 와 동급의 종결 상태.
+const PARTICIPANT_RANK: Record<SigningParticipantStatus, number> = {
+  pending: 0,
+  viewed: 1,
+  signed: 2,
+  rejected: 2,
+};
+const FINAL_PARTICIPANT_STATUSES = new Set<SigningParticipantStatus>(['signed', 'rejected']);
+
+function mapProviderParticipantStatus(s: string): SigningParticipantStatus | undefined {
+  // 대소문자 정규화 + 미지값은 undefined(변화 없음) — 강제 'pending' 으로 이미 서명·열람한
+  // 참여자를 되돌리지 않는다.
+  switch (s.trim().toLowerCase()) {
     case 'signed':
       return 'signed';
     case 'viewed':
@@ -85,7 +102,7 @@ function mapProviderParticipantStatus(s: string): SigningParticipantStatus {
     case 'rejected':
       return 'rejected';
     default:
-      return 'pending';
+      return undefined;
   }
 }
 
@@ -123,12 +140,29 @@ export class ContractSigningService {
     const template = await this.templateRepo.findDefaultByWorkspace(bid.pgWsId);
     const contractId = randomUUID();
     if (!template) return this.persistAwaiting(contractId, rfp, bid.pgWsId, actor);
-    return this.performSend(rfp, bid, template, actor, {
+    const sent = await this.performSend(rfp, bid, template, actor, {
       contractId,
       mode: 'create',
       round: 1,
       createdBy: actor.userId,
     });
+    // SnowSign 발송 실패(다운 등)면 서명 행이 아예 안 생겨 buyer 가 아무 표시도 못 받는
+    // dead-end 가 된다 — send_failed 로 기록해 딜룸에 '다시 시작'을 노출하고 buyer 에게
+    // 알린다(U3). resend 가 새 라운드로 복구한다.
+    if (!sent.ok) {
+      // best-effort — 기록 자체가 실패해도(예: 로컬 DB 장애가 PERSIST_FAILED 와 함께 온
+      // 경우) onAward 결과(performSend 결과)를 바꾸지 않는다.
+      try {
+        await this.persistSendFailed(contractId, rfp, actor);
+      } catch (e) {
+        logger.error('signing.start_failed_persist_failed', { rfpId: rfp.id, err: String(e) });
+        captureSigningError('signing.start_failed_persist_failed', e, {
+          contractId,
+          rfpCode: rfp.code,
+        });
+      }
+    }
+    return sent;
   }
 
   /** PG가 서명 템플릿을 링크한 뒤 호출 — 이 PG가 낙찰한 awaiting 계약들을 발송한다. */
@@ -171,6 +205,10 @@ export class ContractSigningService {
         await this.snowsign.cancel(found.contract.providerRef, reason);
       } catch (e) {
         logger.warn('signing.cancel_provider_failed', { contractId, err: String(e) });
+        captureSigningError('signing.cancel_provider_failed', e, {
+          contractId,
+          providerRef: found.contract.providerRef,
+        });
       }
     }
 
@@ -249,6 +287,10 @@ export class ContractSigningService {
           await this.snowsign.cancel(active.providerRef, '재발송');
         } catch (e) {
           logger.warn('signing.resend_cancel_failed', { contractId: active.id, err: String(e) });
+          captureSigningError('signing.resend_cancel_failed', e, {
+            contractId: active.id,
+            providerRef: active.providerRef,
+          });
         }
       }
     }
@@ -438,6 +480,14 @@ export class ContractSigningService {
     }
 
     const nextStatus = mapProviderContractStatus(detail.status);
+    if (
+      nextStatus === undefined &&
+      !KNOWN_NOOP_PROVIDER_STATUSES.has(detail.status.trim().toLowerCase())
+    ) {
+      // 진짜 미지 status(제공자 신규 상태·오탈자 변형) — 매핑되지 않아 무한 정체할 수
+      // 있으므로 조용히 남기지 않고 관측에 노출한다(폴 경로는 Axiom 만, Sentry 제외).
+      logger.warn('signing.unknown_provider_status', { contractId, status: detail.status });
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
       for (const pp of detail.participants) {
@@ -446,11 +496,19 @@ export class ContractSigningService {
         const local = participants.find(
           (lp) => lp.email.toLowerCase() === pp.email.toLowerCase(),
         );
-        const mappedStatus = mapProviderParticipantStatus(pp.status);
-        if (local && local.status !== mappedStatus) {
+        const mapped = mapProviderParticipantStatus(pp.status);
+        // 단조 전이만 반영: 미지값(undefined)·이미 종결(signed/rejected)·역행(순위 하락)은
+        // 무시해 비정상/재전송 스냅샷이 이미 서명한 참여자를 pending 으로 되돌리지 못하게 한다.
+        if (
+          local &&
+          mapped &&
+          mapped !== local.status &&
+          !FINAL_PARTICIPANT_STATUSES.has(local.status) &&
+          PARTICIPANT_RANK[mapped] >= PARTICIPANT_RANK[local.status]
+        ) {
           await this.signingRepo.patchParticipant(
             local.id,
-            { status: mappedStatus, signedAt: pp.signedAt ?? undefined },
+            { status: mapped, signedAt: pp.signedAt ?? undefined },
             tx,
           );
         }
@@ -493,15 +551,19 @@ export class ContractSigningService {
 
   /** 멱등 완료 진입점 — 실제 전이한 경우에만 감사·알림. 중복 폴링 안전. */
   async ensureFinalized(contractId: string): Promise<ServiceResult> {
-    const transitioned = await this.signingRepo.finalizeIfNotFinal(contractId, new Date());
-    if (!transitioned) return { ok: true };
-
-    const found = await this.signingRepo.findById(contractId);
-    if (!found) return { ok: true };
-    const rfp = await this.rfpRepo.findById(found.contract.rfpId);
     const pendingEmits: Notification[] = [];
+    // CAS 를 감사·알림과 같은 tx 로 묶는다 — 알림/감사 영속이 실패하면 completed 전이도
+    // 함께 롤백돼 다음 폴링이 깨끗이 재시도한다(완료 알림 영구 유실 방지). 동시 완료 이중
+    // 알림은 finalizeIfNotFinal 의 `WHERE status NOT IN (terminal) RETURNING` 행-락 재평가로
+    // 여전히 한 tx 만 통과한다(멱등 보존).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
+      const transitioned = await this.signingRepo.finalizeIfNotFinal(contractId, new Date(), tx);
+      if (!transitioned) return;
+      const found = await this.signingRepo.findById(contractId, tx);
+      if (!found) return;
+      // tx 안 조회는 반드시 tx 를 전달한다(PGlite 단일 커넥션 데드락 방지).
+      const rfp = await this.rfpRepo.findById(found.contract.rfpId, tx);
       await this.auditRepo.insert(
         {
           actorUserId: found.contract.createdBy,
@@ -540,7 +602,19 @@ export class ContractSigningService {
     const pending = await this.signingRepo.findPollable(limit);
     let polled = 0;
     for (const c of pending) {
-      await this.reconcileStatus(c.id);
+      try {
+        await this.reconcileStatus(c.id);
+      } catch (e) {
+        // 한 계약의 예기치 않은 throw(비정상값이 tx 안에서 TypeError 등)가 배치 전체를
+        // 무너뜨리지 않도록 격리한다. lastPolledAt 를 전진시켜(findPollable = asc nulls
+        // first) 실패한 계약이 큐 선두에 고착(starvation)돼 나머지를 굶기지 않게 한다.
+        logger.error('signing.poll_item_failed', { contractId: c.id, err: String(e) });
+        try {
+          await this.signingRepo.patchContract(c.id, { lastPolledAt: new Date().toISOString() });
+        } catch (pe) {
+          logger.error('signing.poll_mark_failed', { contractId: c.id, err: String(pe) });
+        }
+      }
       polled += 1;
     }
     return { polled };
@@ -655,12 +729,21 @@ export class ContractSigningService {
           await this.snowsign.cancel(providerRef, 'send failed');
         } catch (ce) {
           logger.error('signing.orphan_cancel_failed', { providerRef, err: String(ce) });
+          captureSigningError('signing.orphan_cancel_failed', ce, {
+            contractId: opts.contractId,
+            providerRef,
+          });
         }
       }
       logger.error('signing.send_failed', {
         rfpId: rfp.id,
         contractId: opts.contractId,
         err: e instanceof SnowSignError ? e.code : String(e),
+      });
+      captureSigningError('signing.send_failed', e, {
+        contractId: opts.contractId,
+        providerRef,
+        rfpCode: rfp.code,
       });
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
@@ -746,11 +829,20 @@ export class ContractSigningService {
         await this.snowsign.cancel(providerRef, 'local persist failed');
       } catch (ce) {
         logger.error('signing.orphan_cancel_failed', { providerRef, err: String(ce) });
+        captureSigningError('signing.orphan_cancel_failed', ce, {
+          contractId: opts.contractId,
+          providerRef,
+        });
       }
       logger.error('signing.persist_failed_after_send', {
         contractId: opts.contractId,
         providerRef,
         err: String(e),
+      });
+      captureSigningError('signing.persist_failed_after_send', e, {
+        contractId: opts.contractId,
+        providerRef,
+        rfpCode: rfp.code,
       });
       return { ok: false, error: 'PERSIST_FAILED' };
     }
@@ -811,6 +903,55 @@ export class ContractSigningService {
     });
     if (result.ok) emitAfterCommit(pendingEmits);
     return result;
+  }
+
+  /**
+   * award 시 SnowSign 발송이 전면 실패하면 send_failed 로 기록한다(providerRef 없음 —
+   * 라이브 계약 없음). 딜룸은 이 행을 latest 로 보여주며 '다시 시작'(resend)을 노출하고,
+   * buyer 는 인앱 알림으로 상황을 안다(무-표시 dead-end 방지, U3).
+   */
+  private async persistSendFailed(contractId: string, rfp: RFP, actor: Actor): Promise<void> {
+    const pendingEmits: Notification[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this._db.transaction(async (tx: any) => {
+      await this.signingRepo.create(
+        {
+          id: contractId,
+          rfpId: rfp.id,
+          status: 'send_failed',
+          round: 1,
+          createdBy: actor.userId,
+          createdAt: new Date().toISOString(),
+        },
+        [],
+        tx,
+      );
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'signing.start_failed',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { contractId },
+        },
+        tx,
+      );
+      const buyerMembers = await this.workspaceRepo.approvedMemberRecipients(rfp.buyerWsId, tx);
+      for (const m of buyerMembers) {
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: [{ userId: m.userId, workspaceId: rfp.buyerWsId, email: m.email }],
+            channels: ['inapp'],
+            type: 'signing.start_failed',
+            title: `[${rfp.code}] 전자서명을 시작하지 못했어요`,
+            body: '전자서명 서비스에 연결하지 못했어요. 딜룸에서 다시 시작할 수 있어요.',
+            linkUrl: `/rfp/${rfp.code}`,
+          })),
+        );
+      }
+    });
+    emitAfterCommit(pendingEmits);
   }
 
   private async notifyTerminal(rfpId: string, status: 'declined' | 'expired'): Promise<void> {
