@@ -42,4 +42,17 @@ describe('captureSigningError', () => {
     expect(opts.tags).toMatchObject({ area: 'signing', event: 'signing.persist_failed_after_send' });
     expect(opts.tags.code).toBeUndefined();
   });
+
+  it('does not forward a raw error message to Sentry (US-region PII safety)', () => {
+    // A DB error message could embed a participant row value (name/email). The scrubber
+    // does not mask exception .message, and sendDefaultPii is on — so the message must be
+    // normalized away for non-SnowSign errors.
+    captureSigningError(
+      'signing.persist_failed_after_send',
+      new Error('duplicate key value ... (john.doe@example.com)'),
+      { contractId: 'c1' },
+    );
+    const [errArg] = captureException.mock.calls[0] as [Error];
+    expect(errArg.message).not.toContain('john.doe@example.com');
+  });
 });

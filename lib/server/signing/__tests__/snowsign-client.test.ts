@@ -282,4 +282,28 @@ describe('RealSnowSignClient', () => {
     expect(e).toBeInstanceOf(SnowSignError);
     expect(e.code).toBe('SNOWSIGN_MALFORMED');
   });
+
+  it('getStatus throws SNOWSIGN_MALFORMED on a 2xx body missing the data envelope', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, { success: true }))); // no data
+    const e = (await client.getStatus('ct_1').catch((x: unknown) => x)) as SnowSignError;
+    expect(e).toBeInstanceOf(SnowSignError);
+    expect(e.code).toBe('SNOWSIGN_MALFORMED');
+  });
+
+  it('getTemplate throws SNOWSIGN_MALFORMED when a signer role_name is missing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, ok({ template_id: 't1', name: 'T', signers: [{ role_name: '' }] }))),
+    );
+    const e = (await client.getTemplate('t1').catch((x: unknown) => x)) as SnowSignError;
+    expect(e).toBeInstanceOf(SnowSignError);
+    expect(e.code).toBe('SNOWSIGN_MALFORMED');
+  });
+
+  it('downloadUrl throws SNOWSIGN_MALFORMED for a non-http(s) scheme (redirect-target defense)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, ok({ download_url: 'javascript:alert(1)' }))));
+    const e = (await client.downloadUrl('ct_1').catch((x: unknown) => x)) as SnowSignError;
+    expect(e).toBeInstanceOf(SnowSignError);
+    expect(e.code).toBe('SNOWSIGN_MALFORMED');
+  });
 });

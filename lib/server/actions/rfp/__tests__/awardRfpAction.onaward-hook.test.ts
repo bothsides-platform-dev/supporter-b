@@ -23,10 +23,19 @@ vi.mock('@/lib/auth/session', () => ({
 
 // after() has no request scope in a unit test — capture its callbacks and run them
 // manually. This also proves signing initiation is deferred to after the response.
-const { afterCbs } = vi.hoisted(() => ({ afterCbs: [] as Array<() => Promise<void> | void> }));
+const { afterCbs, afterState } = vi.hoisted(() => ({
+  afterCbs: [] as Array<() => Promise<void> | void>,
+  afterState: { throws: false },
+}));
 vi.mock('next/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('next/server')>();
-  return { ...actual, after: (fn: () => Promise<void> | void) => afterCbs.push(fn) };
+  return {
+    ...actual,
+    after: (fn: () => Promise<void> | void) => {
+      if (afterState.throws) throw new Error('`after` was called outside a request scope.');
+      afterCbs.push(fn);
+    },
+  };
 });
 async function flushAfter(): Promise<void> {
   for (const cb of afterCbs.splice(0)) await cb();
@@ -61,6 +70,7 @@ describe('awardRfpAction → onAward hook', () => {
   beforeEach(() => {
     sessionRef.value = buyer;
     afterCbs.length = 0;
+    afterState.throws = false;
   });
   afterEach(() => {
     __resetRfpServiceForTest();
@@ -117,5 +127,19 @@ describe('awardRfpAction → onAward hook', () => {
 
     await flushAfter();
     expect(onAward).toHaveBeenCalledWith(RFP_ID, BID_ID, { userId: 'u1', workspaceId: 'ws1' });
+  });
+
+  it('falls back to fire-and-forget when after() is unavailable (no request scope) — award still returns', async () => {
+    __setRfpServiceForTest({ award: vi.fn(async () => ({ ok: true as const })) } as unknown as RfpService);
+    const onAward = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({ onAward } as unknown as ContractSigningService);
+    afterState.throws = true; // after() throws outside a request scope
+
+    const r = await awardRfpAction({ rfpId: RFP_ID, awardedBidId: BID_ID });
+    expect(r.ok).toBe(true); // award unaffected by after() throwing
+    // fallback ran onAward fire-and-forget (not deferred to afterCbs).
+    await vi.waitFor(() =>
+      expect(onAward).toHaveBeenCalledWith(RFP_ID, BID_ID, { userId: 'u1', workspaceId: 'ws1' }),
+    );
   });
 });

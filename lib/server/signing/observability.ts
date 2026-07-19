@@ -35,7 +35,16 @@ export function captureSigningError(
     if (ctx.contractId) extra.contractId = ctx.contractId;
     if (ctx.providerRef) extra.providerRef = ctx.providerRef;
     if (ctx.rfpCode) extra.rfpCode = ctx.rfpCode;
-    Sentry.captureException(err, { tags, extra });
+    // SnowSignError 메시지는 구조상 PII-free(`HTTP {n}`/`timeout`/`invalid {field}`)라 그대로
+    // 보낸다. 그 외(특히 DB 오류)는 .message 에 참여자 row 값(name/email)이 섞일 수 있고,
+    // scrubber 는 예외 message 를 마스킹하지 않으며 sendDefaultPii=true 이므로, 타입/이름만 남긴
+    // Error 로 정규화해 US-region Sentry 로 PII 가 새지 않게 한다(진단 컨텍스트는 event/code/
+    // contractId 태그가 이미 담고 있다).
+    const safe =
+      err instanceof SnowSignError
+        ? err
+        : new Error(err instanceof Error ? err.name : 'signing_error');
+    Sentry.captureException(safe, { tags, extra });
   } catch {
     // 텔레메트리는 절대 호출자를 깨뜨리지 않는다.
   }

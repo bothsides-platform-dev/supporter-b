@@ -351,7 +351,9 @@ export class RealSnowSignClient implements SnowSignClient {
       deadlineDays: d?.deadline_days,
       signers: (d?.signers ?? []).map((s) => ({
         uuid: s?.uuid,
-        roleName: asString(s?.role_name),
+        // roleName 은 roleMapping 키 + SnowSign participant role 로 그대로 쓰이는 제어흐름
+        // 필수값이라 coerce 하지 않고 검증한다(비면 구조적으로 깨진 템플릿 — 링크 차단).
+        roleName: reqString(s?.role_name, 'role_name'),
         signingOrder: s?.signing_order,
         securityMethod: s?.security_method,
         mobileAlimtalkEnabled: s?.mobile_alimtalk_enabled,
@@ -419,15 +421,14 @@ export class RealSnowSignClient implements SnowSignClient {
   }
 
   async getStatus(contractId: string): Promise<SnowSignStatus> {
-    const d = await this.request<{
-      contract_id?: string;
-      status: string;
-      participants_status?: { total: number; signed: number; pending: number };
-    }>('GET', `/v1/contracts/${encodeURIComponent(contractId)}/status`);
+    const d = await this.request<
+      | { contract_id?: string; status: string; participants_status?: { total: number; signed: number; pending: number } }
+      | undefined
+    >('GET', `/v1/contracts/${encodeURIComponent(contractId)}/status`);
     return {
-      contractId: d.contract_id,
-      status: d.status,
-      participantsStatus: d.participants_status,
+      contractId: d?.contract_id,
+      status: reqString(d?.status, 'status'),
+      participantsStatus: d?.participants_status,
     };
   }
 
