@@ -491,3 +491,42 @@ describe('ContractSigningService — PG template setup', () => {
     if (r.ok) expect(r.iframeUrl).toBe('https://app.snowsign/embed');
   });
 });
+
+describe('ContractSigningService — polling', () => {
+  const benign = (status = 'sent') =>
+    ({ contractId: 'ct_1', status, participants: [] }) as SnowSignContractDetail;
+
+  it('pollPending reconciles only sent/in_progress contracts', async () => {
+    const client = mockClient({ getContract: vi.fn(async () => benign('sent')) });
+    const service = await buildService(client);
+    const a = await seedAwarded({ withTemplate: true });
+    const b = await seedAwarded({ withTemplate: true });
+    await service.onAward(a.rfpId, a.bidId, { userId: a.buyerId, workspaceId: a.buyerWsId });
+    await service.onAward(b.rfpId, b.bidId, { userId: b.buyerId, workspaceId: b.buyerWsId });
+
+    const r = await service.pollPending(50);
+    expect(r.polled).toBe(2);
+    expect(client.getContract).toHaveBeenCalledTimes(2);
+  });
+
+  it('reconcileIfStale skips a freshly polled contract and runs an old one', async () => {
+    const client = mockClient({ getContract: vi.fn(async () => benign('sent')) });
+    const service = await buildService(client);
+    const env = await seedAwarded({ withTemplate: true });
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+
+    // fresh (just polled) → skip
+    await signingRepo.patchContract(active!.id, { lastPolledAt: new Date().toISOString() });
+    await service.reconcileIfStale(active!.id, 60_000);
+    expect(client.getContract).not.toHaveBeenCalled();
+
+    // stale → run
+    await signingRepo.patchContract(active!.id, {
+      lastPolledAt: new Date(Date.now() - 120_000).toISOString(),
+    });
+    await service.reconcileIfStale(active!.id, 60_000);
+    expect(client.getContract).toHaveBeenCalledTimes(1);
+  });
+});

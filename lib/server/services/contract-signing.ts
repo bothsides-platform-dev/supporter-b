@@ -433,6 +433,26 @@ export class ContractSigningService {
     return { ok: true };
   }
 
+  /** cron 폴링 드라이버 — 진행 중(sent/in_progress) 계약을 오래 안 본 순으로 동기화. */
+  async pollPending(limit: number): Promise<{ polled: number }> {
+    const pending = await this.signingRepo.findPollable(limit);
+    let polled = 0;
+    for (const c of pending) {
+      await this.reconcileStatus(c.id);
+      polled += 1;
+    }
+    return { polled };
+  }
+
+  /** 딜룸 진입 lazy 폴링 — staleMs 이상 안 봤을 때만 동기화(throttle). */
+  async reconcileIfStale(contractId: string, staleMs = 30_000): Promise<void> {
+    const found = await this.signingRepo.findById(contractId);
+    if (!found || TERMINAL.has(found.contract.status) || !found.contract.providerRef) return;
+    const last = found.contract.lastPolledAt ? new Date(found.contract.lastPolledAt).getTime() : 0;
+    if (Date.now() - last < staleMs) return;
+    await this.reconcileStatus(contractId);
+  }
+
   // ─── private ────────────────────────────────────────────────────────────────
 
   private async performSend(
