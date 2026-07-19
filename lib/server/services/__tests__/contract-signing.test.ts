@@ -530,3 +530,71 @@ describe('ContractSigningService — polling', () => {
     expect(client.getContract).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ContractSigningService.getDownloadUrl', () => {
+  async function completed(client: SnowSignClient) {
+    const service = await buildService(client);
+    const env = await seedAwarded({ withTemplate: true });
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    await signingRepo.patchContract(active!.id, {
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+    });
+    return { service, env, contractId: active!.id };
+  }
+
+  it('returns the SnowSign document URL for an authorized party', async () => {
+    const client = mockClient({
+      downloadUrl: vi.fn(async () => ({ downloadUrl: 'https://s3/x.pdf', filename: 'c.pdf' })),
+    });
+    const { service, env, contractId } = await completed(client);
+    const r = await service.getDownloadUrl(contractId, 'document', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.url).toBe('https://s3/x.pdf');
+  });
+
+  it('uses the audit-certificate endpoint for kind=audit', async () => {
+    const client = mockClient({
+      auditCertificateUrl: vi.fn(async () => ({ downloadUrl: 'https://s3/audit.pdf' })),
+    });
+    const { service, env, contractId } = await completed(client);
+    const r = await service.getDownloadUrl(contractId, 'audit', {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.url).toBe('https://s3/audit.pdf');
+    expect(client.auditCertificateUrl).toHaveBeenCalled();
+  });
+
+  it('denies a foreign workspace and a non-completed contract', async () => {
+    const client = mockClient({
+      downloadUrl: vi.fn(async () => ({ downloadUrl: 'https://s3/x.pdf' })),
+    });
+    const { service, contractId } = await completed(client);
+    const foreign = await service.getDownloadUrl(contractId, 'document', {
+      userId: randomUUID(),
+      workspaceId: randomUUID(),
+    });
+    expect(foreign.ok).toBe(false);
+    if (!foreign.ok) expect(foreign.error).toBe('FORBIDDEN');
+
+    // a sent (not completed) contract
+    const env2 = await seedAwarded({ withTemplate: true });
+    const svc2 = await buildService(client);
+    await svc2.onAward(env2.rfpId, env2.bidId, { userId: env2.buyerId, workspaceId: env2.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const sent = await signingRepo.findActiveByRfp(env2.rfpId);
+    const notDone = await svc2.getDownloadUrl(sent!.id, 'document', {
+      userId: env2.buyerId,
+      workspaceId: env2.buyerWsId,
+    });
+    expect(notDone.ok).toBe(false);
+    if (!notDone.ok) expect(notDone.error).toBe('NOT_COMPLETED');
+  });
+});

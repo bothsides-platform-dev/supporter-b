@@ -272,6 +272,33 @@ export class ContractSigningService {
     return { ok: true, contract: found.contract, participants: found.participants };
   }
 
+  /**
+   * 완료본/감사추적인증서 다운로드 URL — ACL(양측) + completed 게이트 + SnowSign
+   * 온디맨드(1시간 URL). 로컬 보관 없음 — SnowSign 에 위임.
+   */
+  async getDownloadUrl(
+    contractId: string,
+    kind: 'document' | 'audit',
+    actor: Actor,
+  ): Promise<ServiceResult<{ url: string; filename?: string }>> {
+    const found = await this.signingRepo.findById(contractId);
+    if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    const rfp = await this.rfpRepo.findById(found.contract.rfpId);
+    if (!rfp || !(await this.resolvePartyByRfp(rfp, actor))) return { ok: false, error: 'FORBIDDEN' };
+    if (found.contract.status !== 'completed' || !found.contract.providerRef) {
+      return { ok: false, error: 'NOT_COMPLETED' };
+    }
+    try {
+      const d =
+        kind === 'audit'
+          ? await this.snowsign.auditCertificateUrl(found.contract.providerRef)
+          : await this.snowsign.downloadUrl(found.contract.providerRef);
+      return { ok: true, url: d.downloadUrl, filename: d.filename };
+    } catch (e) {
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+  }
+
   // ─── PG 템플릿 설정 ───────────────────────────────────────────────────────
 
   /** template_draft Embed 세션 발급 — PG가 앱 안 iframe에서 자사 계약서를 1회 등록. */
