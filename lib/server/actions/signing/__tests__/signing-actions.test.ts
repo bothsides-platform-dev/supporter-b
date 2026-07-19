@@ -38,6 +38,7 @@ import {
   type ContractSigningService,
 } from '@/lib/server/services/contract-signing';
 import { linkSigningTemplateAction } from '../linkSigningTemplateAction';
+import { getSigningTemplateDetailAction } from '../getSigningTemplateDetailAction';
 import { cancelSigningAction } from '../cancelSigningAction';
 import { getSigningStatusAction } from '../getSigningStatusAction';
 
@@ -85,6 +86,30 @@ describe('signing actions wiring', () => {
       name: 'n',
       roleMapping: { 구매사: 'buyer', PG: 'pg' },
     });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
+  });
+
+  it('getSigningTemplateDetailAction requires a PG session and delegates to getTemplateDetail', async () => {
+    const getTemplateDetail = vi.fn(async () => ({
+      ok: true as const,
+      name: '표준 가맹계약서',
+      roleNames: ['구매사', 'PG'],
+      variables: [],
+    }));
+    __setContractSigningServiceForTest({ getTemplateDetail } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const r = await getSigningTemplateDetailAction({ snowsignTemplateId: 'tmpl_1' });
+    expect(r.ok).toBe(true);
+    expect(getTemplateDetail).toHaveBeenCalledWith({ userId: 'u1', workspaceId: 'pgws' }, 'tmpl_1');
+  });
+
+  it('getSigningTemplateDetailAction rejects a buyer session', async () => {
+    __setContractSigningServiceForTest({
+      getTemplateDetail: vi.fn(),
+    } as unknown as ContractSigningService);
+    sessionRef.value = buyerSession();
+    const r = await getSigningTemplateDetailAction({ snowsignTemplateId: 'tmpl_1' });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
   });

@@ -217,3 +217,15 @@ import { LayoutTemplate } from 'lucide-react';
 export function LayoutTemplateIcon({ size = 20, ...p }: IconProps) {
   return <LayoutTemplate width={size} height={size} {...p} />;
 }
+
+export function FileSignatureIcon({ size = 20, ...p }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
+      <path d="M11 2.5H5a1 1 0 00-1 1V11" />
+      <path d="M11 2.5V6h3.5" />
+      <path d="M15 6v2.5" />
+      <path d="M3 16.5c.9 0 1.2-1 2-1 .7 0 .9 1 1.6 1s1-1 1.7-1c.6 0 .8.6 1.2.8" />
+      <path d="M10.6 13.2l3.9-3.9a1 1 0 011.5 1.5l-3.9 3.9-1.8.3.3-1.8z" />
+    </svg>
+  );
+}

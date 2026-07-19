@@ -33,6 +33,7 @@ import type {
   SnowSignClient,
   SnowSignContractDetail,
 } from '@/lib/server/signing/snowsign-client';
+import { SnowSignError } from '@/lib/server/signing/snowsign-client';
 import { ContractSigningService } from '../contract-signing';
 
 let db: PgliteDB;
@@ -596,5 +597,44 @@ describe('ContractSigningService.getDownloadUrl', () => {
     });
     expect(notDone.ok).toBe(false);
     if (!notDone.ok) expect(notDone.error).toBe('NOT_COMPLETED');
+  });
+});
+
+describe('ContractSigningService.getTemplateDetail', () => {
+  it('provider getTemplate 결과를 중립 형태(name/roleNames/variables)로 반환한다', async () => {
+    const client = mockClient({
+      getTemplate: vi.fn(async () => ({
+        templateId: 'tmpl_1',
+        name: '표준 가맹계약서',
+        signers: [{ roleName: '구매사' }, { roleName: 'PG' }],
+        variables: [
+          { name: '정산주기', label: '정산 주기', isRequired: true },
+          { name: '수수료율' },
+        ],
+      })),
+    });
+    const service = await buildService(client);
+    const r = await service.getTemplateDetail({ userId: 'u', workspaceId: 'ws' }, 'tmpl_1');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.name).toBe('표준 가맹계약서');
+      expect(r.roleNames).toEqual(['구매사', 'PG']);
+      expect(r.variables).toEqual([
+        { name: '정산주기', label: '정산 주기', required: true },
+        { name: '수수료율', label: undefined, required: false },
+      ]);
+    }
+    expect(client.getTemplate).toHaveBeenCalledWith('tmpl_1');
+  });
+
+  it('SnowSign 에러를 코드로 매핑한다', async () => {
+    const client = mockClient({
+      getTemplate: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NOT_FOUND');
+      }),
+    });
+    const service = await buildService(client);
+    const r = await service.getTemplateDetail({ userId: 'u', workspaceId: 'ws' }, 'tmpl_x');
+    expect(r).toEqual({ ok: false, error: 'SNOWSIGN_NOT_FOUND' });
   });
 });

@@ -327,6 +327,38 @@ export class ContractSigningService {
   }
 
   /**
+   * SnowSign 템플릿 detail 을 매핑 UI 용 중립 형태로 반환한다(역할명·변수명). 임베드
+   * 등록 직후 이 PG 가 링크하려는 템플릿의 필드를 채우는 데 쓴다. actor 는 PG 세션
+   * 검증용(요청 진입점 ACL); 아직 링크 전이라 org 스코프 대신 세션 게이트만 둔다.
+   */
+  async getTemplateDetail(
+    _actor: Actor,
+    snowsignTemplateId: string,
+  ): Promise<
+    ServiceResult<{
+      name: string;
+      roleNames: string[];
+      variables: { name: string; label?: string; required: boolean }[];
+    }>
+  > {
+    try {
+      const d = await this.snowsign.getTemplate(snowsignTemplateId);
+      return {
+        ok: true,
+        name: d.name,
+        roleNames: d.signers.map((s) => s.roleName),
+        variables: d.variables.map((v) => ({
+          name: v.name,
+          label: v.label,
+          required: v.isRequired ?? false,
+        })),
+      };
+    } catch (e) {
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+  }
+
+  /**
    * SnowSign 템플릿을 PG 워크스페이스에 링크(역할/변수 매핑 포함) 후, 이 PG가 낙찰한
    * awaiting 계약을 자동 발송한다. roleMapping 은 buyer·pg 양측을 모두 포함해야 한다.
    */
