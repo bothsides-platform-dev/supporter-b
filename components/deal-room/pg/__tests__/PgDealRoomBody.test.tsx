@@ -54,6 +54,7 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     pendingRequote: null,
     awardedToMe: false,
     buyerContact: null,
+    signing: null,
     ...over,
   };
 }
