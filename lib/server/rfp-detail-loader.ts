@@ -11,6 +11,7 @@ import {
   getInvitationRepo,
   getPgRequestRepo,
   getRfpRepo,
+  getSigningContractRepo,
   getUserRepo,
   getWorkspaceRepo,
   getRfpRequoteRequestRepo,
@@ -22,6 +23,7 @@ import type { Bid } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
+import type { SigningView } from '@/lib/types/signing';
 
 /** 선정 후 교환되는 담당자 연락처 — 회사명 + 개인 이름·이메일·전화(nullable). */
 export type DealContact = {
@@ -52,6 +54,8 @@ export type BuyerRfpDetailData = {
   authorName: string;
   /** awarded 일 때만 — 선정된 PG 담당자 연락처. 그 외 상태는 null. */
   awardedPgContact: DealContact | null;
+  /** 선정 후 전자서명 상태(활성 없으면 최신). 계약이 없으면 null. */
+  signing: SigningView | null;
 };
 
 export type PgRfpDetailData = {
@@ -73,7 +77,32 @@ export type PgRfpDetailData = {
   awardedToMe: boolean;
   /** awardedToMe 일 때만 — 구매사 담당자 연락처. 미선정/선정 전은 null(누출 방지). */
   buyerContact: DealContact | null;
+  /** awardedToMe 일 때만 — 전자서명 상태. 미낙찰 PG 는 null(봉인 경계). */
+  signing: SigningView | null;
 };
+
+/**
+ * 딜룸 전자서명 상태 로드 — 활성 계약(없으면 최신 라운드) + 참여자. 없으면 null.
+ * ACL 은 호출자(buyer 소유 / PG awardedToMe)가 이미 검증했다는 전제. 진행 중
+ * (sent/in_progress + providerRef)이면 진입 시 SnowSign 과 lazy reconcile 한다
+ * (best-effort — 폴링 실패가 화면을 막지 않는다).
+ */
+async function loadSigningView(rfpId: string): Promise<SigningView | null> {
+  const repo = await getSigningContractRepo();
+  const active = await repo.findActiveByRfp(rfpId);
+  const latest = active ?? (await repo.findByRfp(rfpId))[0];
+  if (!latest) return null;
+  if ((latest.status === 'sent' || latest.status === 'in_progress') && latest.providerRef) {
+    try {
+      const { getContractSigningService } = await import('./services/contract-signing');
+      await (await getContractSigningService()).reconcileIfStale(latest.id);
+    } catch {
+      // 폴링 실패는 무시 — 마지막으로 동기화된 상태를 그대로 보여준다.
+    }
+  }
+  const found = await repo.findById(latest.id);
+  return found ? { contract: found.contract, participants: found.participants } : null;
+}
 
 
 // 봉인입찰 strip allowlist — 경로 → RFP 페이로드 변이. PG_STRIP 의 키 집합이 곧 처리 가능한
@@ -260,6 +289,9 @@ export async function loadBuyerRfpDetail(args: {
 
   const canEdit = rfp.status === 'sent' && new Date(rfp.deadline).getTime() > Date.now();
 
+  // 전자서명 상태 — 구매사는 자기 RFP 계약을 항상 본다(소유 가드는 위에서 통과).
+  const signing = await loadSigningView(rfp.id);
+
   return {
     rfp,
     bids,
@@ -275,6 +307,7 @@ export async function loadBuyerRfpDetail(args: {
     authorId: args.userId,
     authorName: args.userName,
     awardedPgContact,
+    signing,
   };
 }
 
@@ -365,5 +398,8 @@ export async function loadPgRfpDetail(args: {
     paymentFees: t.paymentFees,
   }));
 
-  return { rfp, myBid, pendingRequote, buyerName, buyerLogoUpdatedAt, quoteTemplates, awardedToMe, buyerContact };
+  // 전자서명 상태 — 낙찰 PG(awardedToMe)만 조회. 미낙찰 PG 는 조회조차 안 함(봉인 경계).
+  const signing = awardedToMe ? await loadSigningView(rfp.id) : null;
+
+  return { rfp, myBid, pendingRequote, buyerName, buyerLogoUpdatedAt, quoteTemplates, awardedToMe, buyerContact, signing };
 }

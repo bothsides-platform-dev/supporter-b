@@ -104,6 +104,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     requoteByPg: {},
     priorBidByPg: {},
     awardedPgContact: null,
+    signing: null,
     ...over,
   };
 }
