@@ -209,6 +209,17 @@ CRON_SECRET=붙여넣을-시크릿
 
 > **주의 — cron 은 셸 프로필도 `.env.production` 도 읽지 않는다.** 시크릿은 위처럼 **crontab 상단 한 줄**(또는 `/etc/cron.d/` 파일 상단의 `CRON_SECRET=...`)로 정의한다. ⚠️ `* * * * * CRON_SECRET=… curl … -H "x-cron-secret: $CRON_SECRET"` 처럼 **명령 줄 앞에 인라인 대입**하는 형태는 동작하지 않는다 — POSIX 셸은 대입을 적용하기 *전에* `$CRON_SECRET` 를 (아직 비어 있는) 현재 환경으로 펼치므로 빈 헤더가 간다. 빈 값이면 라우트가 fail-closed 로 401 → **메일이 조용히 안 나간다**(우회는 안 되지만 flush 도 안 됨). 정 인라인 대입이 싫고 변수도 안 쓰고 싶으면 헤더에 시크릿 리터럴을 직접 박아도 된다(시크릿은 어차피 같은 호스트 `.env.production` 에 있다). 값은 `.env.production` 의 `CRON_SECRET` 와 **동일**해야 하고, 헤더 이름은 `x-cron-secret` 로 라우트와 정확히 일치시킬 것.
 
+## 전자서명 상태 폴링 (poll-signing-status cron)
+
+스노우싸인(SnowSign)은 webhook 을 주지 않으므로, 진행 중(sent/in_progress) 전자서명 계약의 상태(열람·서명·완료·거절·만료)는 **폴링**으로 동기화한다. 딜룸 진입 시 lazy reconcile(`last_polled_at` throttle)도 있지만, 아무도 딜룸을 안 열어도 완료/거절/만료가 반영되고 완료 알림이 나가도록 crontab 이 주기적으로 `POST /api/cron/poll-signing-status` 를 친다(오래 안 본 순 배치, 429 백오프, stuck 복구, 멱등 `ensureFinalized`). flush-outbox 와 **동일한 `CRON_SECRET`/`x-cron-secret` 규약**(위 crontab 상단 한 줄을 공유). 서명은 분 단위 긴박함이 없어 2분 주기로 충분하다.
+
+```cron
+# (위 CRON_SECRET 정의를 공유 — 같은 crontab 상단 한 줄이면 된다)
+*/2 * * * * flock -n /tmp/poll-signing.lock curl -fsS -XPOST localhost:3000/api/cron/poll-signing-status -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
+```
+
+> **전제: `.env.production` 에 `SNOWSIGN_API_KEY` 를 설정**해야 폴링이 SnowSign 을 호출해 상태를 움직인다(미설정이면 서비스가 에러를 삼켜 `last_polled_at` 만 갱신되고 상태는 정체). `flock` 은 이전 tick 이 안 끝났을 때 겹침을 막는다.
+
 ## 채팅 활성화 — 기존 운영 서버 마이그레이션 체크리스트
 
 `feat+realtime-chat` 이 `main` 에 처음 머지·배포될 때 한 번만 필요한 추가 작업. 일반 `lightsail-deploy.sh` 단독으로는 부족하다 — Centrifugo 시크릿, DB 스키마 4개 신규 테이블, Caddyfile `/connection/*` 라우트, crontab 이 모두 새로 생겼기 때문.
