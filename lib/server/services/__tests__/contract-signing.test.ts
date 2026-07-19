@@ -759,6 +759,24 @@ describe('ContractSigningService — review hardening', () => {
     expect(second.length).toBe(first.length);
   });
 
+  it('reconcile mirrors a provider-side cancellation to local canceled (stops polling)', async () => {
+    const env = await seedAwarded({ withTemplate: true });
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({
+      contractId: 'ct_1',
+      status: 'cancelled',
+      participants: [],
+    });
+    await service.reconcileStatus(active!.id);
+    expect((await signingRepo.findById(active!.id))!.contract.status).toBe('canceled');
+    // canceled is terminal → no longer pollable
+    expect(await signingRepo.findPollable(10)).toHaveLength(0);
+  });
+
   it('reconcile swallows a provider error, bumps lastPolledAt, and keeps status', async () => {
     const env = await seedAwarded({ withTemplate: true });
     const client = mockClient();
@@ -810,6 +828,50 @@ describe('ContractSigningService — review hardening', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('PERSIST_FAILED');
     // The already-sent SnowSign contract must be compensating-canceled (no orphan).
+    expect(client.cancel).toHaveBeenCalledWith('ct_1', expect.any(String));
+  });
+
+  it('cancel does not clobber a contract that completes mid-cancel (atomic claim, no flip-flop)', async () => {
+    const env = await seedAwarded({ withTemplate: true });
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    // A completion webhook lands DURING the cancel's SnowSign round-trip.
+    (client.cancel as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({
+        contractId: 'ct_1',
+        status: 'completed',
+        participants: [],
+      });
+      await service.reconcileStatus(active!.id);
+    });
+    await service.cancel(active!.id, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const status = (await signingRepo.findById(active!.id))!.contract.status;
+    const completed = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.completed'));
+    // Exactly one terminal outcome — cancel claimed first atomically, so the mid-cancel
+    // completion is a no-op. No completed→canceled flip-flop, no duplicate terminal notify.
+    expect(status).toBe('canceled');
+    expect(completed.length).toBe(0);
+  });
+
+  it('performSend cancels the draft when SnowSign send fails (no unsent-draft orphan)', async () => {
+    const env = await seedAwarded({ withTemplate: true });
+    const client = mockClient();
+    (client.sendContract as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new SnowSignError('SNOWSIGN_NETWORK'),
+    );
+    const service = await buildService(client);
+    const r = await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(r.ok).toBe(false);
+    // create succeeded (ct_1) but send threw → the draft must be compensating-canceled.
     expect(client.cancel).toHaveBeenCalledWith('ct_1', expect.any(String));
   });
 

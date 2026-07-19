@@ -157,7 +157,14 @@ export class ContractSigningService {
     if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     const rfp = await this.rfpRepo.findById(found.contract.rfpId);
     if (!rfp || !(await this.resolvePartyByRfp(rfp, actor))) return { ok: false, error: 'FORBIDDEN' };
-    if (TERMINAL.has(found.contract.status)) return { ok: true };
+
+    // 원자 클레임 먼저 — 활성일 때만 canceled 로 전이한다. 완료 웹훅/폴링과 경쟁해도
+    // 완료본을 덮어쓰지 않는다(이미 종결이면 no-op·멱등, 알림·감사 없음). resend/reconcile
+    // 과 동일한 CAS 경로.
+    const claimed = await this.signingRepo.transitionIfActive(contractId, 'canceled', new Date(), {
+      cancelReason: reason,
+    });
+    if (!claimed) return { ok: true };
 
     if (found.contract.providerRef) {
       try {
@@ -173,11 +180,7 @@ export class ContractSigningService {
     const pendingEmits: Notification[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
-      await this.signingRepo.patchContract(
-        contractId,
-        { status: 'canceled', canceledAt: new Date().toISOString(), cancelReason: reason },
-        tx,
-      );
+      // 상태 전이는 위 원자 클레임에서 이미 완료 — tx 는 감사·알림만 수행한다.
       await this.auditRepo.insert(
         {
           actorUserId: actor.userId,
@@ -478,6 +481,13 @@ export class ContractSigningService {
       );
       if (transitioned) await this.notifyTerminal(contract.rfpId, nextStatus);
     }
+    if (nextStatus === 'canceled') {
+      // 제공자 측 외부 취소(SnowSign 콘솔 등)를 로컬에도 반영해 폴링을 멈춘다. 앱 자체
+      // 취소(cancel())는 별도로 알림을 보내므로 여기선 상태 전이만 한다(원자, 멱등).
+      await this.signingRepo.transitionIfActive(contractId, 'canceled', new Date(), {
+        cancelReason: '제공자 측 취소',
+      });
+    }
     return { ok: true };
   }
 
@@ -620,7 +630,7 @@ export class ContractSigningService {
     });
     const variables = resolveVariables(template.variableMapping, buildVariableSources(rfp, bid));
 
-    let providerRef: string;
+    let providerRef: string | undefined;
     try {
       const created = await this.snowsign.createContractFromTemplate(template.snowsignTemplateId, {
         title: `${rfp.title} 전자계약`,
@@ -638,6 +648,15 @@ export class ContractSigningService {
       providerRef = created.contractId;
       await this.snowsign.sendContract(providerRef);
     } catch (e) {
+      // create 는 성공했는데 send 가 실패하면 발송 안 된 draft 가 SnowSign 에 남는다 —
+      // 보상 취소해 고아 draft 를 남기지 않는다(발송 전이라 메일·라이브 계약은 없음).
+      if (providerRef) {
+        try {
+          await this.snowsign.cancel(providerRef, 'send failed');
+        } catch (ce) {
+          logger.error('signing.orphan_cancel_failed', { providerRef, err: String(ce) });
+        }
+      }
       logger.error('signing.send_failed', {
         rfpId: rfp.id,
         contractId: opts.contractId,
@@ -645,6 +664,8 @@ export class ContractSigningService {
       });
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
+    // providerRef 는 위에서 반드시 세팅됨(실패 시 catch 가 return) — 타입 좁히기.
+    if (!providerRef) return { ok: false, error: 'SNOWSIGN_ERROR' };
 
     const now = new Date();
     const participants: SigningParticipant[] = mapped.map((m) => ({
