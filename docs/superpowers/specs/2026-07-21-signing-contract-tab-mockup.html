@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>전자서명 '계약' 탭 — 시안</title>
+<style>
+:root{
+  --primary:#0061A4; --on-primary:#fff; --primary-container:#D1E4FF; --on-primary-container:#001D36;
+  --tertiary:#1F9D55; --tertiary-container:#D6F5E3; --on-tertiary-container:#06351C;
+  --error:#E5484D; --error-container:#FFE5E5; --on-error-container:#5A1115;
+  --warning:#D9730D; --warning-container:#FCEBD2; --on-warning-container:#4A2A05;
+  --surface:#FBFBFC; --sc-lowest:#FFFFFF; --sc-low:#F7F8F9; --sc:#F1F2F4; --sc-high:#EBECEF;
+  --on-surface:#1F2023; --on-surface-variant:#6B7079; --outline:#D4D6DC; --outline-variant:#E8E9EC;
+  --background:#FFFFFF;
+}
+html[data-theme="dark"]{
+  --primary:#9ECAFF; --on-primary:#003258; --primary-container:#004A77; --on-primary-container:#D1E4FF;
+  --tertiary:#3FBF73; --tertiary-container:#134F30; --on-tertiary-container:#B8F0CF;
+  --error:#FF6166; --error-container:#7A1D22; --on-error-container:#FFD9DA;
+  --warning:#E8983D; --warning-container:#5A3A0A; --on-warning-container:#FCE0BC;
+  --surface:#0F1011; --sc-lowest:#08090A; --sc-low:#141517; --sc:#161718; --sc-high:#1C1D1F;
+  --on-surface:#F7F8F8; --on-surface-variant:#8A8F98; --outline:#2E3033; --outline-variant:#23252A;
+  --background:#08090A;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Pretendard Variable",Pretendard,"Segoe UI",sans-serif;
+  background:var(--background); color:var(--on-surface);
+  font-size:14px; line-height:1.5; letter-spacing:-0.01em;
+  padding:28px 24px 80px;
+}
+.num{font-family:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums;}
+.wrap{max-width:1180px;margin:0 auto}
+h1{font-size:19px;font-weight:650;letter-spacing:-0.02em}
+.lede{color:var(--on-surface-variant);font-size:13px;margin-top:6px;max-width:70ch}
+.bar{display:flex;align-items:center;gap:10px;margin-bottom:26px}
+.toggle{margin-left:auto;height:28px;padding:0 12px;border-radius:6px;border:1px solid var(--outline);
+  background:transparent;color:var(--on-surface-variant);font:inherit;font-size:12.5px;cursor:pointer}
+.toggle:hover{background:var(--sc)}
+h2{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--on-surface-variant);
+  margin:38px 0 12px;display:flex;align-items:center;gap:10px}
+h2::after{content:"";flex:1;height:1px;background:var(--outline-variant)}
+.cap{font-size:12.5px;color:var(--on-surface-variant);margin:-4px 0 14px}
+
+/* ── deal room frame ─────────────────────────────── */
+.room{display:flex;border:1px solid var(--outline-variant);border-radius:10px;overflow:hidden;background:var(--surface)}
+.rail{width:76px;flex:none;border-right:1px solid var(--outline-variant);padding:8px 0;background:var(--surface)}
+.rail button{width:calc(100% - 8px);margin:0 4px;display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:9px 2px;border:0;border-radius:6px;background:transparent;color:var(--on-surface-variant);
+  font:inherit;font-size:11px;letter-spacing:-.01em;cursor:pointer;position:relative}
+.rail button:hover{background:var(--sc);color:var(--on-surface)}
+.rail button.pri{color:var(--primary)}
+.rail button.on{background:var(--sc);color:var(--on-surface)}
+.rail svg{width:19px;height:19px}
+.rail .dot{position:absolute;top:7px;right:16px;width:7px;height:7px;border-radius:9999px;
+  box-shadow:0 0 0 2px var(--surface)}
+.center{flex:1;min-width:0;background:var(--background)}
+.tabs{display:flex;border-bottom:1px solid var(--outline-variant);padding:0 16px}
+.tabs button{position:relative;height:36px;padding:0 12px;border:0;background:transparent;font:inherit;
+  font-size:13px;font-weight:500;color:var(--on-surface-variant);cursor:pointer;display:flex;align-items:center;gap:6px}
+.tabs button:hover{color:var(--on-surface)}
+.tabs button[aria-selected="true"]{color:var(--on-surface)}
+.tabs button[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--primary)}
+.tabs .dot{width:6px;height:6px;border-radius:9999px}
+.body{padding:20px 24px}
+
+/* ── card ────────────────────────────────────────── */
+.card{border:1px solid var(--outline-variant);border-radius:10px;background:var(--sc-lowest);overflow:hidden}
+.card > .hd{display:flex;align-items:flex-start;gap:10px;padding:13px 16px;border-bottom:1px solid var(--outline-variant)}
+.hd .ico{width:18px;height:18px;flex:none;margin-top:1px}
+.hd .t{font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+.hd .s{font-size:12.5px;color:var(--on-surface-variant);margin-top:2px}
+.hd .grow{flex:1}
+.chip{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:4px;font-size:11.5px;
+  font-weight:500;white-space:nowrap;border:1px solid transparent}
+.c-pri{background:var(--primary-container);color:var(--on-primary-container)}
+.c-ter{background:var(--tertiary-container);color:var(--on-tertiary-container)}
+.c-warn{background:var(--warning-container);color:var(--on-warning-container)}
+.c-err{background:var(--error-container);color:var(--on-error-container)}
+.c-sur{background:var(--sc-low);color:var(--on-surface-variant)}
+
+/* ── timeline ────────────────────────────────────── */
+.tl{padding:6px 16px 10px}
+.node{display:flex;gap:12px;position:relative;min-height:38px}
+.gut{width:28px;flex:none;display:flex;flex-direction:column;align-items:center}
+.line{width:0;flex:1;border-left:1.5px solid var(--outline-variant);margin:3px 0}
+.line.done{border-left-style:solid;border-left-color:var(--tertiary)}
+.line.wait{border-left-style:dotted;border-left-color:var(--outline)}
+.mark{width:10px;height:10px;border-radius:9999px;margin-top:9px;flex:none}
+.m-done{background:var(--tertiary)}
+.m-wait{background:transparent;box-shadow:inset 0 0 0 1.5px var(--outline)}
+.m-fail{background:var(--error)}
+.disc{width:28px;height:28px;border-radius:9999px;margin-top:2px;flex:none;display:grid;place-items:center;
+  font-size:11.5px;font-weight:600;letter-spacing:0}
+.d-done{background:var(--tertiary-container);color:var(--on-tertiary-container)}
+.d-active{background:transparent;color:var(--on-surface-variant);box-shadow:inset 0 0 0 1.5px var(--primary)}
+.d-wait{background:transparent;color:var(--on-surface-variant);box-shadow:inset 0 0 0 1.5px var(--outline)}
+.d-fail{background:var(--error-container);color:var(--on-error-container)}
+.nb{flex:1;min-width:0;padding:6px 0 10px;display:flex;align-items:flex-start;gap:10px}
+.node:last-child .nb{padding-bottom:4px}
+.nl{flex:1;min-width:0}
+.nl .n1{font-size:13px;font-weight:500}
+.nl .n1 .sub{font-weight:400;color:var(--on-surface-variant)}
+.nl .n2{font-size:12px;color:var(--on-surface-variant);margin-top:1px}
+.muted .n1{color:var(--on-surface-variant);font-weight:400}
+.right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none}
+.time{font-size:11.5px;color:var(--on-surface-variant);font-family:ui-monospace,"JetBrains Mono",Menlo,monospace;font-variant-numeric:tabular-nums}
+
+/* ── action bar ──────────────────────────────────── */
+.ab{display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--outline-variant);
+  background:var(--sc-low)}
+.ab .note{flex:1;font-size:12px;color:var(--on-surface-variant);min-width:0}
+.btn{height:28px;padding:0 11px;border-radius:6px;font:inherit;font-size:12.5px;font-weight:500;
+  display:inline-flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;border:1px solid transparent;transition:background .08s}
+.btn svg{width:14px;height:14px}
+.b-filled{background:var(--primary);color:var(--on-primary)}
+.b-filled:hover{filter:brightness(1.08)}
+.b-out{background:transparent;border-color:var(--outline);color:var(--on-surface)}
+.b-out:hover{background:var(--sc)}
+.b-text{background:transparent;color:var(--on-surface-variant)}
+.b-text:hover{background:var(--sc);color:var(--on-surface)}
+.b-err{color:var(--error)}
+.b-err:hover{background:var(--error-container)}
+
+/* ── document rows ───────────────────────────────── */
+.docs{padding:4px 16px 14px}
+.doc{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--outline-variant)}
+.doc:last-child{border-bottom:0}
+.doc .fi{width:30px;height:30px;border-radius:6px;background:var(--sc);display:grid;place-items:center;flex:none;color:var(--on-surface-variant)}
+.doc .fi svg{width:15px;height:15px}
+.doc .dn{flex:1;min-width:0}
+.doc .dn b{font-size:13px;font-weight:500;display:block}
+.doc .dn span{font-size:12px;color:var(--on-surface-variant)}
+.doc .dl{width:28px;height:28px;border-radius:6px;border:1px solid var(--outline-variant);background:transparent;
+  display:grid;place-items:center;cursor:pointer;color:var(--on-surface-variant)}
+.doc .dl:hover{background:var(--sc);color:var(--on-surface)}
+.doc .dl svg{width:14px;height:14px}
+
+/* ── summary strip / result header ───────────────── */
+.res h3{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:var(--tertiary)}
+.res p{margin-top:6px;padding-left:28px;font-size:12px;color:var(--on-surface-variant)}
+.strip{display:flex;align-items:center;gap:10px;width:100%;margin:14px 0 18px;padding:0 12px;height:38px;
+  border:1px solid var(--outline-variant);border-radius:8px;background:var(--sc-lowest);
+  font:inherit;font-size:12.5px;color:var(--on-surface);cursor:pointer;text-align:left;transition:background .08s}
+.strip:hover{background:var(--sc-low)}
+.strip .lbl{font-weight:500}
+.strip .st{color:var(--on-surface-variant)}
+.strip .go{margin-left:auto;color:var(--on-surface-variant);font-size:12px;display:flex;align-items:center;gap:2px}
+.strip svg{width:15px;height:15px;color:var(--on-surface-variant)}
+.ctx{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;color:var(--on-surface-variant)}
+.ctx svg{width:17px;height:17px;flex:none}
+.ctx .who{font-weight:600;color:var(--on-surface)}
+.ctx .sep{position:relative;padding-left:11px}
+.ctx .sep::before{content:"·";position:absolute;left:3px}
+.ghost{border:1px dashed var(--outline);border-radius:8px;padding:26px;text-align:center;
+  color:var(--on-surface-variant);font-size:12.5px;margin-top:4px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:16px}
+.lab{font-size:11.5px;font-weight:600;color:var(--on-surface-variant);margin-bottom:7px;letter-spacing:.02em}
+@media (max-width:640px){body{padding:20px 14px 60px}.rail{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="bar">
+  <div>
+    <h1>선정 후 전자서명 — '계약' 탭 시안</h1>
+    <div class="lede">전용 탭 + 요약 스트립 방향. 실제 Linear 토큰(light/dark) 사용, 폰트만 시스템 대체.</div>
+  </div>
+  <button class="toggle" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">라이트 / 다크 전환</button>
+</div>
+
+<h2>1 · 딜룸에서 본 모습 (구매사 · 서명 진행 중)</h2>
+<div class="cap">계약 탭은 맨 앞에 놓이고, 선정된 견적 요청을 열면 이 탭이 먼저 열립니다. 결과 헤더가 뒤 탭으로 밀리므로, 카드 위에 선정 PG · 담당자 한 줄을 남깁니다.</div>
+<div class="room">
+  <nav class="rail">
+    <button class="on pri"><span class="dot" style="background:var(--primary)"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 20h-6M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3"/><path d="M14.5 5.5 18 9"/></svg>계약</button>
+    <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>견적 비교</button>
+    <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>재요청</button>
+    <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>PG 관리</button>
+    <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>요청 조건</button>
+  </nav>
+  <div class="center">
+    <div class="tabs">
+      <button aria-selected="true">계약 <span class="dot" style="background:var(--primary)"></span></button>
+      <button>견적 비교</button>
+      <button>요청 조건</button>
+      <button>첨부</button>
+      <button>PG 관리</button>
+    </div>
+    <div class="body">
+      <div class="ctx">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--tertiary)" stroke-width="1.9"><circle cx="12" cy="12" r="10"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
+        <span class="who">나이스페이먼츠</span><span class="sep">선정 완료</span>
+        <span class="sep">담당자 김민수</span>
+        <button class="btn b-out" style="margin-left:auto">메시지</button>
+      </div>
+      <div class="card">
+        <div class="hd">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.7"><path d="M20 20h-6M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3"/><path d="M14.5 5.5 18 9"/></svg>
+          <div class="grow">
+            <div class="t">서명을 기다리는 중이에요</div>
+            <div class="s">양측 담당자에게 이메일로 서명 링크를 보냈어요.</div>
+          </div>
+          <span class="chip c-pri">서명 진행 중</span>
+        </div>
+        <div class="tl">
+          <div class="node">
+            <div class="gut"><span class="mark m-done"></span><span class="line done"></span></div>
+            <div class="nb"><div class="nl muted"><div class="n1">서명 요청을 보냈어요</div></div>
+              <div class="right"><span class="time">07-20 14:02</span></div></div>
+          </div>
+          <div class="node">
+            <div class="gut"><span class="disc d-done">김</span><span class="line done"></span></div>
+            <div class="nb"><div class="nl"><div class="n1">김민수 <span class="sub">· 구매사</span></div>
+              <div class="n2">minsoo@acme.co.kr · 휴대폰 간편인증</div></div>
+              <div class="right"><span class="chip c-ter">서명 완료</span><span class="time">07-20 15:10</span></div></div>
+          </div>
+          <div class="node">
+            <div class="gut"><span class="disc d-active">박</span><span class="line wait"></span></div>
+            <div class="nb"><div class="nl"><div class="n1">박지은 <span class="sub">· PG</span></div>
+              <div class="n2">jieun@nicepay.co.kr · 이메일 인증</div></div>
+              <div class="right"><span class="chip c-sur">서명 대기</span></div></div>
+          </div>
+          <div class="node">
+            <div class="gut"><span class="mark m-wait"></span></div>
+            <div class="nb"><div class="nl muted"><div class="n1">계약 완료</div></div></div>
+          </div>
+        </div>
+        <div class="ab">
+          <span class="note">서명은 이메일 링크의 스노우싸인 페이지에서 진행돼요.</span>
+          <button class="btn b-out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>리마인더 보내기</button>
+          <button class="btn b-text b-err">취소</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>2 · 견적 비교 탭으로 넘어갔을 때 — 한 줄 요약 스트립</h2>
+<div class="cap">결과 헤더와 담당자 연락 블록은 지금 형태 그대로 여기 남습니다. 그 아래 38px 한 줄이 서명 상태를 알려주고, 클릭하면 계약 탭으로 돌아가요.</div>
+<div class="room"><div class="center" style="border-radius:10px">
+  <div class="tabs">
+    <button>계약 <span class="dot" style="background:var(--primary)"></span></button><button aria-selected="true">견적 비교</button><button>요청 조건</button><button>첨부</button><button>PG 관리</button>
+  </div>
+  <div class="body">
+    <div class="res">
+      <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="10"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>나이스페이먼츠를 선정했어요</h3>
+      <p>담당처와 연락을 이어나가보세요.</p>
+    </div>
+    <button class="strip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 20h-6M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3"/><path d="M14.5 5.5 18 9"/></svg>
+      <span class="lbl">전자서명</span>
+      <span class="st">서명 진행 중 · <span class="num">1</span>/<span class="num">2</span></span>
+      <span class="go">보기 ›</span>
+    </button>
+    <div class="ghost">견적 비교표 …</div>
+  </div>
+</div></div>
+
+<h2>3 · 상태 6종 — 같은 골격, 내용만 교체</h2>
+<div class="cap">헤더 · 타임라인 · 액션 바의 자리와 높이가 고정이라 상태가 바뀌어도 화면이 출렁이지 않아요.</div>
+<div class="grid">
+
+  <div>
+    <div class="lab">계약서 준비 중 — 구매사가 볼 때</div>
+    <div class="card">
+      <div class="hd">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <div class="grow"><div class="t">PG사가 계약서를 준비하고 있어요</div>
+          <div class="s">준비되면 자동으로 양측에 서명 링크가 발송돼요.</div></div>
+        <span class="chip c-warn">계약서 준비 중</span>
+      </div>
+      <div class="tl">
+        <div class="node"><div class="gut"><span class="mark m-done"></span><span class="line done"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">견적을 선정했어요</div></div><div class="right"><span class="time">07-20 13:40</span></div></div></div>
+        <div class="node"><div class="gut"><span class="mark" style="background:var(--warning);width:10px;height:10px;border-radius:9999px;margin-top:9px"></span><span class="line wait"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">계약서 준비</div><div class="n2">나이스페이먼츠가 계약서를 등록하는 단계예요</div></div></div></div>
+        <div class="node"><div class="gut"><span class="mark m-wait"></span><span class="line wait"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">양측 서명</div></div></div></div>
+        <div class="node"><div class="gut"><span class="mark m-wait"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">계약 완료</div></div></div></div>
+      </div>
+      <div class="ab"><span class="note">선정은 이미 확정됐어요 — 서명 준비와 무관하게 유지돼요.</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="lab">계약서 준비 중 — 선정된 PG가 볼 때 (역할별 분기 지점)</div>
+    <div class="card">
+      <div class="hd">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="1.7"><path d="M12 9v4"/><path d="M10.3 3.9 2.6 17a1.6 1.6 0 0 0 1.4 2.4h16a1.6 1.6 0 0 0 1.4-2.4L13.7 3.9a1.6 1.6 0 0 0-2.8 0z"/><path d="M12 17h.01"/></svg>
+        <div class="grow"><div class="t">계약서 템플릿을 등록해 주세요</div>
+          <div class="s">등록하는 즉시 이 계약의 서명이 자동으로 시작돼요.</div></div>
+        <span class="chip c-warn">등록 필요</span>
+      </div>
+      <div class="tl">
+        <div class="node"><div class="gut"><span class="mark m-done"></span><span class="line done"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">이 견적이 선정됐어요</div></div><div class="right"><span class="time">07-20 13:40</span></div></div></div>
+        <div class="node"><div class="gut"><span class="mark" style="background:var(--warning);width:10px;height:10px;border-radius:9999px;margin-top:9px"></span><span class="line wait"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">계약서 등록</div><div class="n2">자사 계약서를 한 번만 등록하면 다음 선정부터도 자동으로 쓰여요</div></div></div></div>
+        <div class="node"><div class="gut"><span class="mark m-wait"></span><span class="line wait"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">양측 서명</div></div></div></div>
+        <div class="node"><div class="gut"><span class="mark m-wait"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">계약 완료</div></div></div></div>
+      </div>
+      <div class="ab"><span class="note">서명칸 배치는 스노우싸인 화면에서 이뤄져요.</span>
+        <button class="btn b-filled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>서명 템플릿 등록하기</button></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="lab">서명 완료</div>
+    <div class="card">
+      <div class="hd">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--tertiary)" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>
+        <div class="grow"><div class="t">모든 서명이 완료됐어요</div>
+          <div class="s">7월 21일 오전 10:24에 계약이 완결됐어요.</div></div>
+        <span class="chip c-ter">서명 완료</span>
+      </div>
+      <div class="tl">
+        <div class="node"><div class="gut"><span class="mark m-done"></span><span class="line done"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">서명 요청을 보냈어요</div></div><div class="right"><span class="time">07-20 14:02</span></div></div></div>
+        <div class="node"><div class="gut"><span class="disc d-done">김</span><span class="line done"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">김민수 <span class="sub">· 구매사</span></div></div>
+            <div class="right"><span class="chip c-ter">서명 완료</span><span class="time">07-20 15:10</span></div></div></div>
+        <div class="node"><div class="gut"><span class="disc d-done">박</span><span class="line done"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">박지은 <span class="sub">· PG</span></div></div>
+            <div class="right"><span class="chip c-ter">서명 완료</span><span class="time">07-21 10:24</span></div></div></div>
+        <div class="node"><div class="gut"><span class="mark m-done"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">계약 완료</div></div><div class="right"><span class="time">07-21 10:24</span></div></div></div>
+      </div>
+      <div class="docs">
+        <div class="doc"><span class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="dn"><b>계약서</b><span>양측 서명이 담긴 완료본 PDF</span></span>
+          <button class="dl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/></svg></button></div>
+        <div class="doc"><span class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="dn"><b>감사추적인증서</b><span>열람·서명 이력과 타임스탬프</span></span>
+          <button class="dl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/></svg></button></div>
+      </div>
+      <div class="ab"><span class="note">다운로드 링크는 열 때마다 새로 발급돼요.</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="lab">서명 거절</div>
+    <div class="card">
+      <div class="hd">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/></svg>
+        <div class="grow"><div class="t">서명이 거절됐어요</div>
+          <div class="s">조건을 다시 맞춘 뒤 새로 발송할 수 있어요.</div></div>
+        <span class="chip c-err">거절됨</span>
+      </div>
+      <div class="tl">
+        <div class="node"><div class="gut"><span class="mark m-done"></span><span class="line done"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">서명 요청을 보냈어요</div></div><div class="right"><span class="time">07-20 14:02</span></div></div></div>
+        <div class="node"><div class="gut"><span class="disc d-done">김</span><span class="line done"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">김민수 <span class="sub">· 구매사</span></div></div>
+            <div class="right"><span class="chip c-ter">서명 완료</span><span class="time">07-20 15:10</span></div></div></div>
+        <div class="node"><div class="gut"><span class="disc d-fail">박</span><span class="line wait"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">박지은 <span class="sub">· PG</span></div></div>
+            <div class="right"><span class="chip c-err">거절</span><span class="time">07-20 16:31</span></div></div></div>
+        <div class="node"><div class="gut"><span class="mark m-fail"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">서명이 중단됐어요</div></div></div></div>
+      </div>
+      <div class="ab"><span class="note">선정 결과는 그대로예요.</span>
+        <button class="btn b-filled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>다시 발송</button></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="lab">기한 만료</div>
+    <div class="card">
+      <div class="hd">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <div class="grow"><div class="t">서명 기한이 지났어요</div>
+          <div class="s">서명 링크가 만료됐어요. 다시 발송하면 새 링크가 나가요.</div></div>
+        <span class="chip c-err">만료됨</span>
+      </div>
+      <div class="tl">
+        <div class="node"><div class="gut"><span class="mark m-done"></span><span class="line done"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">서명 요청을 보냈어요</div></div><div class="right"><span class="time">07-06 14:02</span></div></div></div>
+        <div class="node"><div class="gut"><span class="disc d-wait">김</span><span class="line wait"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">김민수 <span class="sub">· 구매사</span></div></div>
+            <div class="right"><span class="chip c-sur">서명 안 함</span></div></div></div>
+        <div class="node"><div class="gut"><span class="disc d-wait">박</span><span class="line wait"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">박지은 <span class="sub">· PG</span></div></div>
+            <div class="right"><span class="chip c-sur">서명 안 함</span></div></div></div>
+        <div class="node"><div class="gut"><span class="mark m-fail"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">기한이 지났어요</div></div><div class="right"><span class="time">07-20 23:59</span></div></div></div>
+      </div>
+      <div class="ab"><span class="note">선정 결과는 그대로예요.</span>
+        <button class="btn b-filled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>다시 발송</button></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="lab">취소됨</div>
+    <div class="card">
+      <div class="hd">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--on-surface-variant)" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6 18.4 18.4"/></svg>
+        <div class="grow"><div class="t">전자서명이 취소됐어요</div>
+          <div class="s">진행 중이던 서명이 중단됐어요.</div></div>
+        <span class="chip c-sur">취소됨</span>
+      </div>
+      <div class="tl">
+        <div class="node"><div class="gut"><span class="mark m-done"></span><span class="line done"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">서명 요청을 보냈어요</div></div><div class="right"><span class="time">07-20 14:02</span></div></div></div>
+        <div class="node"><div class="gut"><span class="disc d-wait">김</span><span class="line wait"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">김민수 <span class="sub">· 구매사</span></div></div>
+            <div class="right"><span class="chip c-sur">서명 안 함</span></div></div></div>
+        <div class="node"><div class="gut"><span class="disc d-wait">박</span><span class="line wait"></span></div>
+          <div class="nb"><div class="nl"><div class="n1">박지은 <span class="sub">· PG</span></div></div>
+            <div class="right"><span class="chip c-sur">서명 안 함</span></div></div></div>
+        <div class="node"><div class="gut"><span class="mark m-wait"></span></div>
+          <div class="nb"><div class="nl muted"><div class="n1">취소했어요</div></div><div class="right"><span class="time">07-20 17:05</span></div></div></div>
+      </div>
+      <div class="ab"><span class="note">필요하면 다시 발송할 수 있어요.</span>
+        <button class="btn b-filled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>다시 발송</button></div>
+    </div>
+  </div>
+
+</div>
+
+<h2>4 · 지금 화면과 무엇이 달라지나</h2>
+<div class="grid">
+  <div>
+    <div class="lab">현재</div>
+    <div class="card"><div style="padding:16px;font-size:12.5px;color:var(--on-surface-variant);line-height:1.9">
+      · 견적 비교표와 한 스크롤에 섞여 있음<br>
+      · 상태마다 색면 배너 / 진행바 / 리스트 / 버튼 조합이 제각각<br>
+      · 진행바와 참여자 리스트가 같은 정보를 두 번 말함<br>
+      · PG도 "PG사가 준비 중"이라는 3인칭 안내를 받음<br>
+      · 템플릿 등록으로 가는 길이 화면에 없음
+    </div></div>
+  </div>
+  <div>
+    <div class="lab">시안</div>
+    <div class="card"><div style="padding:16px;font-size:12.5px;color:var(--on-surface);line-height:1.9">
+      · 맨 앞 전용 탭이 선정 후 기본으로 열림 — 서명이 주인공<br>
+      · 레일 도트 + 견적 비교 탭의 한 줄 스트립이 상태를 계속 알림<br>
+      · 6개 상태가 헤더 · 타임라인 · 액션 바 하나의 골격 공유<br>
+      · 진행바를 없애고 타임라인 하나가 순서 · 사람 · 시각을 함께 전달<br>
+      · 준비 중 상태만 역할별로 문구 · 액션이 갈림<br>
+      · PG에게는 등록 CTA가 현재 단계 자리에 놓임
+    </div></div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
