@@ -1,6 +1,7 @@
 'use server';
 
 import { requireSession } from '@/lib/auth/session';
+import { isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 
 export type WorkspaceStub = { id: string; name: string };
@@ -38,10 +39,9 @@ export async function getDeleteAccountStatus(): Promise<GetDeleteAccountStatusRe
 
     if (allMembers.length === 1) {
       soloWorkspaces.push(stub);
-    } else if (membership.role === 'admin' && membership.approvalStatus === 'approved') {
+    } else if (isApprovedAdmin(membership)) {
       const otherAdmins = allMembers.filter(
-        (m: { userId: string; role: string; approvalStatus: string }) =>
-          m.userId !== userId && m.role === 'admin' && m.approvalStatus === 'approved',
+        (m) => m.userId !== userId && isApprovedAdmin(m),
       );
       if (otherAdmins.length === 0) {
         blockingWorkspaces.push(stub);

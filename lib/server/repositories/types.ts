@@ -491,6 +491,12 @@ export interface WorkspaceRepo {
   >;
   /** 워크스페이스의 admin 역할 멤버 수 — 마지막 admin 강등 가드(LAST_ADMIN). */
   countAdmins(workspaceId: string, tx?: Tx): Promise<number>;
+  /**
+   * `countAdmins` 와 같은 수를 세되 승인된 admin 행에 `FOR UPDATE` 잠금을 건다.
+   * 마지막 admin 가드처럼 "세고 나서 쓰는" 경로는 반드시 이 쪽을 트랜잭션 안에서
+   * 써야 한다 — 그렇지 않으면 동시 강등 둘이 서로를 못 보고 통과해 admin 이 0명이 된다.
+   */
+  countApprovedAdminsForUpdate(workspaceId: string, tx?: Tx): Promise<number>;
   /** 멤버 역할 변경. */
   updateMemberRole(
     params: { workspaceId: string; userId: string; role: 'admin' | 'member' },
