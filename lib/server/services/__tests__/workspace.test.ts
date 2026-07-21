@@ -113,6 +113,30 @@ describe('WorkspaceService.changeMemberRole', () => {
     expect(result).toEqual({ ok: false, error: 'LAST_ADMIN' });
   });
 
+  // 미승인 admin 은 countAdmins 집계 대상이 아니므로 강등해도 마지막 admin 이 사라지지 않는다.
+  it('demotes a pending_approval admin without LAST_ADMIN', async () => {
+    const admin = await seedUser(db, { email: 'admin@test.com' });
+    const pending = await seedUser(db, { email: 'pending@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, pending.id, 'admin', {
+      approvalStatus: 'pending_approval',
+    });
+
+    const result = await service.changeMemberRole(
+      { targetUserId: pending.id, role: 'member' },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+
+    expect(result.ok).toBe(true);
+
+    const [row] = await db
+      .select({ role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, pending.id)));
+    expect(row.role).toBe('member');
+  });
+
   it('returns FORBIDDEN_NOT_ADMIN when caller is not admin', async () => {
     const member = await seedUser(db, { email: 'member@test.com' });
     const target = await seedUser(db, { email: 'target@test.com' });

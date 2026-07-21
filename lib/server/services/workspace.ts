@@ -278,7 +278,13 @@ export class WorkspaceService {
     );
     if (!target) return { ok: false, error: 'MEMBER_NOT_FOUND' };
 
-    if (input.role === 'member' && target.role === 'admin') {
+    // countAdmins 는 승인된 admin 만 집계하므로, 미승인 admin 강등은 마지막 admin 을
+    // 없애지 못한다 — 대상이 승인된 admin 일 때만 LAST_ADMIN 가드를 건다.
+    if (
+      input.role === 'member' &&
+      target.role === 'admin' &&
+      target.approvalStatus === 'approved'
+    ) {
       const adminCount = await this.workspaceRepo.countAdmins(actor.workspaceId);
       if (adminCount <= 1) return { ok: false, error: 'LAST_ADMIN' };
     }
