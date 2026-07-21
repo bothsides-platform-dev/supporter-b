@@ -103,6 +103,43 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
   }
+
+  /*
+    .md-label-{small,medium,large} — DESIGN.md §3 Label 롤 3종.
+
+    메타 라벨·<th>·legend·폼 라벨의 표준 정착지. §9 하드룰이 금지하는
+    `font-mono uppercase wide-tracking` 조합을 대체한다 — mono 스택
+    (JetBrains Mono → ui-monospace → SF Mono)에는 한글 글리프가 없어
+    한글 라벨이 Pretendard 대신 OS 기본 한글 폰트로 폴백하고, uppercase는
+    한글에 무효라 넓은 양수 자간만 남아 Linear 밀도와 반대로 간다.
+
+    @layer base 배치는 의도적이다(.md-numeric 과 동일 계약): Tailwind
+    utilities 레이어가 이겨서 사이트별 `font-normal`·`text-[13px]` 오버라이드가
+    그대로 유효하다.
+  */
+  .md-label-small {
+    font-family: var(--font-sans);
+    font-size: var(--md-typescale-label-small-size);
+    font-weight: var(--md-typescale-label-small-weight);
+    line-height: var(--md-typescale-label-small-line-height);
+    letter-spacing: var(--md-typescale-label-small-tracking);
+  }
+
+  .md-label-medium {
+    font-family: var(--font-sans);
+    font-size: var(--md-typescale-label-medium-size);
+    font-weight: var(--md-typescale-label-medium-weight);
+    line-height: var(--md-typescale-label-medium-line-height);
+    letter-spacing: var(--md-typescale-label-medium-tracking);
+  }
+
+  .md-label-large {
+    font-family: var(--font-sans);
+    font-size: var(--md-typescale-label-large-size);
+    font-weight: var(--md-typescale-label-large-weight);
+    line-height: var(--md-typescale-label-large-line-height);
+    letter-spacing: var(--md-typescale-label-large-tracking);
+  }
 }
 
 /*
