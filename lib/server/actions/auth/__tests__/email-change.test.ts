@@ -81,6 +81,24 @@ describe('emailChangeRequestAction', () => {
     expect(out).toHaveLength(0);
   });
 
+  // 가입 5경로(signupEmail·signupComplete·signupViaWorkspaceInvite·
+  // joinCanonicalPgWorkspace·checkEmailAvailable)는 모두 **목적지 이메일**이 마스터
+  // 앨로우리스트인지 검사해 MASTER_ACCOUNT_EMAILS 신원을 선점하지 못하게 막는다.
+  // 이메일 변경은 users.email 을 쓰는 유일한 나머지 경로인데 그 검사가 빠져 있었다
+  // (요청자가 마스터인지만 봤다). users_email_unique 가 최종 방어선이지만, 그건
+  // 마스터 row 가 이미 존재할 때만 유효하다.
+  it('마스터 앨로우리스트 주소로는 변경할 수 없다 → MASTER_EMAIL', async () => {
+    process.env.MASTER_ACCOUNT_EMAILS = 'ops@support-b.com';
+    const userId = await seedUser('member@example.com');
+    sessionRef.value = { user: { id: userId } };
+
+    const r = await emailChangeRequestAction({ newEmail: 'OPS@support-b.com' });
+
+    expect(r).toEqual({ ok: false, error: 'MASTER_EMAIL' });
+    const out = await db.select().from(outboxEntries);
+    expect(out).toHaveLength(0);
+  });
+
   it('issues a token + outbox row to the new address', async () => {
     const userId = await seedUser('old@example.com');
     sessionRef.value = { user: { id: userId } };

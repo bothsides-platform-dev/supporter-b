@@ -62,4 +62,13 @@ describe('solutionLabel', () => {
     expect(solutionLabel(undefined)).toBeUndefined();
     expect(solutionLabel('')).toBeUndefined();
   });
+
+  // 저장값이 free-form 이라 Object.prototype 의 키 이름이 그대로 들어올 수 있다.
+  // 맵 조회가 프로토타입 체인을 타면 'constructor' 는 함수를 돌려주고 `?? 원문` 폴백이
+  // 발동하지 않아, 화면에 함수가 문자열로 새어나간다.
+  it('Object.prototype 키 이름도 원문으로 돌려준다 (프로토타입 체인 미조회)', () => {
+    expect(solutionLabel('constructor')).toBe('constructor');
+    expect(solutionLabel('toString')).toBe('toString');
+    expect(solutionLabel('__proto__')).toBe('__proto__');
+  });
 });

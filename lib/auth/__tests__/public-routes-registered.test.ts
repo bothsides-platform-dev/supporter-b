@@ -7,9 +7,15 @@ import { decideRoute } from '../route-decision';
 
 // route-decision 의 PUBLIC_PREFIXES/ALWAYS_PASSTHROUGH_PREFIXES 는 손으로 관리하는
 // 목록이고, 실제 공개 페이지는 app/(public) 폴더다. 둘은 자동으로 연결되지 않는다 —
-// 새 공개 페이지를 폴더로만 추가하면 비로그인 방문자가 조용히 /login 으로 튕긴다.
-// (같은 클래스로 이미 두 번 사고: /llms.txt 프록시 매처, PG 랜딩 이미지 경로.)
+// 새 공개 페이지를 폴더로만 추가하면 방문자가 조용히 /home 이나 /login 으로 튕긴다.
 // 목록 상수를 export 해 비교하는 대신, 폴더를 순회해 실제 판정 동작으로 고정한다.
+//
+// 범위 한정(과대평가 금지): 이 가드는 `app/(public)` **안**만 걷는다. 그 폴더는 정의상
+// PUBLIC_PREFIXES 로 덮이므로, 잡을 수 있는 건 인증 축 누락(ALWAYS_PASSTHROUGH 등록을
+// 빠뜨린 매직링크류)이다. `(public)` **밖**에 생긴 공개 표면(루트 라우트 핸들러 등)이나
+// `lib/auth/proxy-matcher.ts` 의 EXCLUDED_SEGMENTS 누락은 여기서 잡히지 않는다 —
+// 그건 별개 클래스이고 proxy-matcher 쪽 가드 소관이다. 또 prefix 매칭이라 과대 등록
+// (`/auth/x` 하위 전체 통과)도 이 스펙에는 통과로 보인다.
 
 const PUBLIC_DIR = resolve(__dirname, '../../../app/(public)');
 

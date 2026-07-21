@@ -17,13 +17,39 @@ export function baseUrl(): string {
   );
 }
 
-/** Origins per workspace type, from env. In local/dev both default to the same host (routing disabled). */
+/**
+ * Origins per workspace type, from env. In local/dev BOTH are unset and collapse to the
+ * same host, which correctly disables host routing.
+ *
+ * **Partial configuration throws — it is never a valid deploy.** Setting only one per-type
+ * origin used to let the other fall back to a value that could equal it, making a
+ * misconfigured deploy indistinguishable from single-host dev: `hostServes` returned null
+ * for every host, and with it `shouldNoindexHost` (partner `X-Robots-Tag`), `robots.ts`
+ * (which resolves an unknown host to the *buyer* allow-policy via `seoHostContext`), and
+ * `opsLoginRedirectTarget` (the host-only OAuth PKCE pin, cf. PR#361) all failed open at
+ * once — silently. A broken staging deploy must announce itself instead.
+ */
 export function appOrigins(): AppOrigins {
+  const buyer = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+  const pg = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+
+  if (buyer && !pg) {
+    throw new Error(
+      'NEXT_PUBLIC_BUYER_ORIGIN is set but NEXT_PUBLIC_PARTNER_ORIGIN is not. ' +
+        'Host routing needs both or neither — a partial config silently disables the ' +
+        'partner-host noindex and the /login/ops PKCE host pin.',
+    );
+  }
+  if (pg && !buyer) {
+    throw new Error(
+      'NEXT_PUBLIC_PARTNER_ORIGIN is set but NEXT_PUBLIC_BUYER_ORIGIN is not. ' +
+        'Host routing needs both or neither — a partial config silently disables the ' +
+        'partner-host noindex and the /login/ops PKCE host pin.',
+    );
+  }
+
   const fallback = baseUrl();
-  return {
-    buyer: process.env.NEXT_PUBLIC_BUYER_ORIGIN ?? fallback,
-    pg: process.env.NEXT_PUBLIC_PARTNER_ORIGIN ?? fallback,
-  };
+  return { buyer: buyer ?? fallback, pg: pg ?? fallback };
 }
 
 /** Which workspace type a request host serves, or null if unknown / routing disabled. */

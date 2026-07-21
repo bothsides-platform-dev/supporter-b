@@ -175,28 +175,42 @@ describe('부분 설정에서도 호스트 가드가 살아있다', () => {
     );
   });
 
-  it('partner 만 설정돼 buyer 가 폴백으로 붕괴하면 두 가드가 꺼진다 (현행 동작 고정)', () => {
-    // buyer 가 NEXT_PUBLIC_BASE_URL(=partner) 로 폴백 → 두 오리진이 동일 → 라우팅 off.
+  // fail-closed — per-type 오리진을 하나만 설정한 상태는 유효한 배포가 아니다. 예전엔
+  // 나머지 하나가 폴백으로 채워지며 "두 오리진이 같다 = 단일 호스트 dev" 로 위장했고,
+  // 그 결과 partner noindex(+ robots.ts 의 buyer 폴백)와 ops PKCE 핀이 한꺼번에 조용히
+  // 꺼졌다. 이제는 조용히 지나가는 대신 던진다 — 잘못 설정된 배포가 즉시 드러나야 한다.
+  it('per-type 오리진을 하나만 설정하면 조용히 붕괴하지 않고 던진다', () => {
     setEnv({
       NEXT_PUBLIC_PARTNER_ORIGIN: 'https://partner.support-b.com',
       NEXT_PUBLIC_BASE_URL: 'https://partner.support-b.com',
       AUTH_URL: 'https://support-b.com',
     });
-    const o = appOrigins();
-    expect(o.buyer).toBe(o.pg);
-    expect(hostServes('partner.support-b.com', o)).toBeNull();
-    expect(shouldNoindexHost('partner.support-b.com', o)).toBe(false);
-    expect(opsLoginRedirectTarget('partner.support-b.com', o)).toBeNull();
+    expect(() => appOrigins()).toThrow(/NEXT_PUBLIC_BUYER_ORIGIN/);
   });
 
-  it('두 오리진이 서로 다르면 폴백이 끼어들어도 가드가 유지된다', () => {
+  it('buyer 만 설정한 반대 방향도 던진다', () => {
+    setEnv({ NEXT_PUBLIC_BUYER_ORIGIN: 'https://support-b.com' });
+    expect(() => appOrigins()).toThrow(/NEXT_PUBLIC_PARTNER_ORIGIN/);
+  });
+
+  it('둘 다 없으면 단일 호스트 dev 로 그대로 통과한다 (라우팅 off 가 정상)', () => {
+    setEnv({ AUTH_URL: 'http://localhost:3000' });
+    const o = appOrigins();
+    expect(o.buyer).toBe(o.pg);
+    expect(hostServes('localhost', o)).toBeNull();
+  });
+
+  it('per-type 오리진이 둘 다 있으면 무관한 폴백 env 가 있어도 가드가 유지된다', () => {
     setEnv({
+      NEXT_PUBLIC_BUYER_ORIGIN: 'https://support-b.com',
       NEXT_PUBLIC_PARTNER_ORIGIN: 'https://partner.support-b.com',
-      NEXT_PUBLIC_BASE_URL: 'https://support-b.com',
-      AUTH_URL: 'https://elsewhere.example.com',
+      // 폴백은 per-type 이 다 있으면 쓰이지 않는다 — 엉뚱한 값이어도 무해해야 한다.
+      NEXT_PUBLIC_BASE_URL: 'https://elsewhere.example.com',
+      AUTH_URL: 'https://another.example.com',
     });
     const o = appOrigins();
     expect(o.buyer).toBe('https://support-b.com');
+    expect(o.pg).toBe('https://partner.support-b.com');
     expect(shouldNoindexHost('partner.support-b.com', o)).toBe(true);
     expect(opsLoginRedirectTarget('partner.support-b.com', o)).toBe(
       'https://support-b.com/login/ops',

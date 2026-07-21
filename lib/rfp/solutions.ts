@@ -34,5 +34,9 @@ export const SOLUTION_OPTIONS: readonly { value: SolutionValue; label: string }[
  */
 export function solutionLabel(solution?: string | null): string | undefined {
   if (!solution) return undefined;
-  return SOLUTION_LABELS[solution as SolutionValue] ?? solution;
+  // hasOwn 필수 — 맵 조회가 프로토타입 체인을 타면 'constructor'·'toString' 같은 저장값이
+  // 함수를 돌려주고 아래 원문 폴백이 발동하지 않는다(화면에 함수가 문자열로 샌다).
+  return Object.hasOwn(SOLUTION_LABELS, solution)
+    ? SOLUTION_LABELS[solution as SolutionValue]
+    : solution;
 }
