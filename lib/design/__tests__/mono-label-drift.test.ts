@@ -23,7 +23,10 @@ import { MONO_LABEL_ALLOWLIST } from '../design-hardrule-allowlist.mjs';
 // since the check exists to stop copy-paste propagation of the exact pattern.
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url)); // repo root
-const SCAN_ROOTS = ['app', 'components'];
+// `lib` is scanned too: it holds no Tailwind components today (the .tsx there is
+// email templates, which must use inline styles), but scoping the guard to
+// app+components would silently exempt any future component that lands there.
+const SCAN_ROOTS = ['app', 'components', 'lib'];
 
 type Violation = { file: string; line: number; rule: string; text: string };
 

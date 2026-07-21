@@ -127,17 +127,18 @@ surface-container-highest #E4E5E9               #202123
 ```
 적용 대상: ₩ 금액, % 수수료, 건수, 제안번호(`P-2605-0042`), 날짜, 이메일 주소 같은 식별 데이터. **내비게이션·라벨·버튼 텍스트에는 적용하지 않는다.**
 
-### 라벨 유틸리티 — `.md-label-{small,medium,large}`
+### 라벨 유틸리티 — `.md-label-{small,medium}`
 
-위 표의 Label 3롤을 그대로 구현한 유틸리티(`app/globals.css`). 메타 라벨·`<th>`·`<legend>`·폼 라벨·상태 문구의 표준 정착지다.
+위 표의 Label 롤을 그대로 구현한 유틸리티(`app/globals.css`). 메타 라벨·`<th>`·`<legend>`·폼 라벨·상태 문구의 표준 정착지다.
 
 ```css
-.md-label-small  { font-family: var(--font-sans); /* 11px · 500 · 0.01em  */ }
-.md-label-medium { font-family: var(--font-sans); /* 12px · 500 · 0       */ }
-.md-label-large  { font-family: var(--font-sans); /* 13px · 500 · -0.006em */ }
+.md-label-small  { font-family: var(--font-sans); /* 11px · 500 · 0.01em */ }
+.md-label-medium { font-family: var(--font-sans); /* 12px · 500 · 0      */ }
 ```
 
-셋 다 `--md-typescale-label-*` 토큰만 소비하므로 값의 단일 출처는 `styles/tokens.css`다. `.md-numeric`과 같이 `@layer base`에 있어 **Tailwind utilities 레이어가 항상 이긴다** — 사이트별 `font-normal`·`text-[13px]` 오버라이드는 그대로 유효하다.
+**Label Large(13px)는 아직 유틸리티가 없다** — 현재 소비처가 없어 YAGNI로 정의하지 않았다. 13px 라벨이 필요해지면 같은 패턴으로 `.md-label-large`를 추가한다(버튼·nav·Chip 은 이미 토큰 나열형을 쓰고 있어 그쪽을 흡수할 때가 자연스러운 시점이다).
+
+둘 다 `--md-typescale-label-*` 토큰만 소비하므로 값의 단일 출처는 `styles/tokens.css`다. `.md-numeric`과 같이 `@layer base`에 있어 **Tailwind utilities 레이어가 항상 이긴다** — 사이트별 `font-normal`·`text-[13px]` 오버라이드는 그대로 유효하다.
 
 이 유틸리티는 §9가 금지하는 `font-mono uppercase wide-tracking` 라벨 조합의 대체재다. 그 조합이 특히 나쁜 이유는 취향 문제가 아니다: `--font-mono` 스택(JetBrains Mono → ui-monospace → SF Mono → Menlo)에는 **한글 글리프가 하나도 없어** 한글 라벨이 Pretendard가 아닌 OS 기본 한글 폰트로 폴백하고, `uppercase`는 한글에 무효라 넓은 양수 자간만 남아 Linear 밀도와 정면으로 어긋난다. 강제 수단은 `lib/design/__tests__/mono-label-drift.test.ts`(fs-walk 드리프트 가드) + `lib/design/design-hardrule-allowlist.mjs`(면제 SSOT).
 
