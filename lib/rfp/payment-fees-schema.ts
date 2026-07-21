@@ -1,13 +1,15 @@
 import { z } from 'zod';
 
+import { MERCHANT_TIERS } from '@/lib/types/bid';
+
+// 구간 키는 MERCHANT_TIERS 에서 파생한다 — 여기서 따로 나열하면 새 등급 추가 시
+// .strict() 가 그 등급의 요율을 "알 수 없는 키"로 조용히 거부한다(입력이 저장되지 않음).
 const tierRatesSchema = z
-  .object({
-    sole: z.number().min(0).max(1).optional(),
-    sme1: z.number().min(0).max(1).optional(),
-    sme2: z.number().min(0).max(1).optional(),
-    sme3: z.number().min(0).max(1).optional(),
-    general: z.number().min(0).max(1).optional(),
-  })
+  .object(
+    Object.fromEntries(
+      MERCHANT_TIERS.map((tier) => [tier, z.number().min(0).max(1).optional()]),
+    ) as Record<(typeof MERCHANT_TIERS)[number], z.ZodOptional<z.ZodNumber>>,
+  )
   .strict();
 
 const feeField = z.union([z.number().min(0).max(1), tierRatesSchema]).optional();
