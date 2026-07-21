@@ -1336,16 +1336,21 @@ git commit -m "feat(signing): SigningPanel → SigningTab 3구역 셸로 교체"
 계약 탭 밖에서 상태를 알리는 38px 한 줄(`SigningSummaryStrip`)과, 계약 탭 상단에서 결과 헤더를 대신하는 한 줄(`AwardContextLine`).
 
 **Files:**
+- Create: `lib/hooks/useStartConversation.ts`
 - Create: `components/deal-room/signing/SigningSummaryStrip.tsx`
 - Create: `components/deal-room/signing/AwardContextLine.tsx`
+- Modify: `components/rfp/comparison/AwardResult.tsx` (자체 `startMessage` → 공용 훅)
 - Test: `components/deal-room/signing/__tests__/SigningSummaryStrip.test.tsx`
 - Test: `components/deal-room/signing/__tests__/AwardContextLine.test.tsx`
 
 **Interfaces:**
 - Consumes: `buildSigningSummary` (Task 1), `TONE_COLOR_VAR` (Task 2), `getOrCreateConversationAction` (기존)
 - Produces:
+  - `export function useStartConversation(): { starting: boolean; start: (counterpartyWsId: string) => Promise<void> }`
   - `export function SigningSummaryStrip({ signing, side, onOpen }: { signing: SigningView; side: SigningSide; onOpen: () => void })`
   - `export function AwardContextLine({ workspaceName, contactName, counterpartyWsId }: { workspaceName: string; contactName?: string; counterpartyWsId?: string })`
+
+> **계획 수정(2026-07-21)**: 메시지 시작 로직은 `AwardResult.tsx`의 `startMessage`와 같은 코드다. 새로 복제하지 말고 `lib/hooks/useStartConversation.ts` 공용 훅으로 뽑아 **두 곳이 함께 쓴다**. `AwardResult`의 동작(성공 시 `/messages?c=<id>`, 실패·throw 시 `/messages`, `starting` 동안 버튼 비활성)은 그대로 유지되어야 하며 기존 `AwardResult.test.tsx`가 green 이어야 한다.
 
 - [ ] **Step 1: 실패하는 테스트를 작성한다**
 
@@ -1515,41 +1520,27 @@ export function SigningSummaryStrip({
 }
 ```
 
-`components/deal-room/signing/AwardContextLine.tsx`:
+`lib/hooks/useStartConversation.ts` — 기존 `AwardResult.startMessage` 를 그대로 옮긴다:
 
-```tsx
+```ts
 'use client';
 
 /**
- * AwardContextLine — 계약 탭 상단 한 줄(선정 상대 · 담당자 · 메시지).
- *
- * 계약 탭이 기본으로 열리면서 DealResultHeader 가 뒤 탭으로 밀리므로, 최소한의
- * 맥락만 여기 남긴다. 전화·이메일까지 담은 전체 ContactBlock 은 결과 탭에 그대로 있다.
- * 박스를 두르지 않아 카드가 하나 더 늘어난 것처럼 보이지 않게 한다.
+ * 상대 워크스페이스와의 대화를 보장하고 메시지로 이동한다. 선정 결과 화면
+ * (AwardResult)과 계약 탭 컨텍스트 줄(AwardContextLine)이 공유한다.
+ * 실패·throw 시에도 사용자를 LOADING… 에 가두지 않고 메시지 목록으로 보낸다.
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2 } from 'lucide-react';
 
-import { Button } from '@/components/primitives/Button';
 import { getOrCreateConversationAction } from '@/lib/server/actions/chat/getOrCreateConversationAction';
 
-const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
-
-export function AwardContextLine({
-  workspaceName,
-  contactName,
-  counterpartyWsId,
-}: {
-  workspaceName: string;
-  contactName?: string;
-  counterpartyWsId?: string;
-}) {
+export function useStartConversation() {
   const router = useRouter();
   const [starting, setStarting] = useState(false);
 
-  const startMessage = async () => {
-    if (!counterpartyWsId || starting) return;
+  const start = async (counterpartyWsId: string) => {
+    if (starting) return;
     setStarting(true);
     try {
       const r = await getOrCreateConversationAction(counterpartyWsId);
@@ -1564,6 +1555,51 @@ export function AwardContextLine({
     router.push('/messages');
   };
 
+  return { starting, start };
+}
+```
+
+`components/rfp/comparison/AwardResult.tsx` — 자체 `startMessage`·`starting` state·관련 임포트를 지우고 훅을 쓴다:
+
+```tsx
+import { useStartConversation } from '@/lib/hooks/useStartConversation';
+
+// …컴포넌트 안에서
+  const { starting, start } = useStartConversation();
+```
+
+기존 `onClick={startMessage}` 는 `onClick={() => start(pgWsId)}` 로 바꾼다. `starting` 을 쓰던 버튼 라벨·disabled 는 그대로 둔다.
+
+`components/deal-room/signing/AwardContextLine.tsx`:
+
+```tsx
+'use client';
+
+/**
+ * AwardContextLine — 계약 탭 상단 한 줄(선정 상대 · 담당자 · 메시지).
+ *
+ * 계약 탭이 기본으로 열리면서 DealResultHeader 가 뒤 탭으로 밀리므로, 최소한의
+ * 맥락만 여기 남긴다. 전화·이메일까지 담은 전체 ContactBlock 은 결과 탭에 그대로 있다.
+ * 박스를 두르지 않아 카드가 하나 더 늘어난 것처럼 보이지 않게 한다.
+ */
+import { CheckCircle2 } from 'lucide-react';
+
+import { Button } from '@/components/primitives/Button';
+import { useStartConversation } from '@/lib/hooks/useStartConversation';
+
+const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
+
+export function AwardContextLine({
+  workspaceName,
+  contactName,
+  counterpartyWsId,
+}: {
+  workspaceName: string;
+  contactName?: string;
+  counterpartyWsId?: string;
+}) {
+  const { starting, start } = useStartConversation();
+
   return (
     <div className={'mb-3.5 flex items-center gap-2 text-[13px] ' + dim}>
       <CheckCircle2
@@ -1577,7 +1613,12 @@ export function AwardContextLine({
       {contactName && <span className="truncate">· 담당자 {contactName}</span>}
       {counterpartyWsId && (
         <span className="ml-auto shrink-0">
-          <Button variant="outlined" size="sm" disabled={starting} onClick={startMessage}>
+          <Button
+            variant="outlined"
+            size="sm"
+            disabled={starting}
+            onClick={() => start(counterpartyWsId)}
+          >
             메시지
           </Button>
         </span>
@@ -1589,14 +1630,14 @@ export function AwardContextLine({
 
 - [ ] **Step 4: 테스트가 통과하는지 확인한다**
 
-Run: `pnpm test components/deal-room/signing`
-Expected: PASS — 4개 스위트 전부 green
+Run: `pnpm test components/deal-room/signing components/rfp/comparison/AwardResult.test.tsx`
+Expected: PASS — 신규 4개 스위트 + 기존 `AwardResult` 스위트 전부 green(훅 추출 후에도 선정 결과 화면 동작 불변)
 
 - [ ] **Step 5: 커밋한다**
 
 ```bash
-git add components/deal-room/signing/
-git commit -m "feat(signing): 요약 스트립 + 선정 컨텍스트 한 줄"
+git add lib/hooks/useStartConversation.ts components/deal-room/signing/ components/rfp/comparison/AwardResult.tsx
+git commit -m "feat(signing): 요약 스트립 + 선정 컨텍스트 한 줄 (대화 시작 훅 공용화)"
 ```
 
 ---
