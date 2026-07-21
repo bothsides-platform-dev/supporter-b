@@ -27,7 +27,7 @@ export function Footer() {
           {/* Nav links */}
           <nav className="flex flex-col sm:flex-row gap-6 sm:gap-12">
             <div className="flex flex-col gap-2">
-              <span className="md-label-small mb-1 text-[var(--md-sys-color-outline)]">
+              <span className="md-label-small mb-1 text-[var(--md-sys-color-on-surface-variant)]">
                 서비스
               </span>
               {[
@@ -45,7 +45,7 @@ export function Footer() {
               ))}
             </div>
             <div className="flex flex-col gap-2">
-              <span className="md-label-small mb-1 text-[var(--md-sys-color-outline)]">
+              <span className="md-label-small mb-1 text-[var(--md-sys-color-on-surface-variant)]">
                 법적 고지
               </span>
               {[
@@ -64,7 +64,7 @@ export function Footer() {
               ))}
             </div>
             <div className="flex flex-col gap-2">
-              <span className="md-label-small mb-1 text-[var(--md-sys-color-outline)]">
+              <span className="md-label-small mb-1 text-[var(--md-sys-color-on-surface-variant)]">
                 고객지원
               </span>
               {[
