@@ -111,6 +111,27 @@ function personNodes(
   }));
 }
 
+/** declined/expired/canceled 공통 "다시 발송" 액션 — 세 분기가 동일한 문구를 쓴다. */
+const RESEND_ACTION: SigningAction = {
+  id: 'resend',
+  label: '다시 발송',
+  variant: 'filled',
+  okMsg: '다시 발송했어요',
+  failMsg: '다시 발송하지 못했어요',
+};
+
+/** send_failed 전용 "다시 시작" 액션 — resend 와 id 는 같지만 문구가 다르다. */
+const RESTART_ACTION: SigningAction = {
+  id: 'resend',
+  label: '다시 시작',
+  variant: 'filled',
+  okMsg: '다시 시작했어요',
+  failMsg: '다시 시작하지 못했어요',
+};
+
+/** declined/expired/send_failed 공통 안내 — 선정 결과는 서명과 무관하게 유지됨(canceled 는 문구가 달라 별도). */
+const AWARD_UNCHANGED_NOTE = '선정 결과는 그대로예요.';
+
 /** 참여자가 아직 없는 상태(awaiting/send_failed)의 자리지기 2노드. */
 function placeholderPair(): SigningNode[] {
   return [
@@ -266,16 +287,8 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
           { key: 'terminal', kind: 'milestone', label: '서명이 중단됐어요', state: 'failed' },
         ],
         docs: [],
-        actions: [
-          {
-            id: 'resend',
-            label: '다시 발송',
-            variant: 'filled',
-            okMsg: '다시 발송했어요',
-            failMsg: '다시 발송하지 못했어요',
-          },
-        ],
-        note: '선정 결과는 그대로예요.',
+        actions: [RESEND_ACTION],
+        note: AWARD_UNCHANGED_NOTE,
       };
 
     case 'expired':
@@ -297,16 +310,8 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
           },
         ],
         docs: [],
-        actions: [
-          {
-            id: 'resend',
-            label: '다시 발송',
-            variant: 'filled',
-            okMsg: '다시 발송했어요',
-            failMsg: '다시 발송하지 못했어요',
-          },
-        ],
-        note: '선정 결과는 그대로예요.',
+        actions: [RESEND_ACTION],
+        note: AWARD_UNCHANGED_NOTE,
       };
 
     case 'canceled':
@@ -328,15 +333,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
           },
         ],
         docs: [],
-        actions: [
-          {
-            id: 'resend',
-            label: '다시 발송',
-            variant: 'filled',
-            okMsg: '다시 발송했어요',
-            failMsg: '다시 발송하지 못했어요',
-          },
-        ],
+        actions: [RESEND_ACTION],
         note: '필요하면 다시 발송할 수 있어요.',
       };
 
@@ -359,16 +356,8 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
           ...placeholderPair(),
         ],
         docs: [],
-        actions: [
-          {
-            id: 'resend',
-            label: '다시 시작',
-            variant: 'filled',
-            okMsg: '다시 시작했어요',
-            failMsg: '다시 시작하지 못했어요',
-          },
-        ],
-        note: '선정 결과는 그대로예요.',
+        actions: [RESTART_ACTION],
+        note: AWARD_UNCHANGED_NOTE,
       };
 
     default: {

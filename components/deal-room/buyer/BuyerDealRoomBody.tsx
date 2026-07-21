@@ -20,7 +20,6 @@ import {
   Paperclip,
   Lock,
   XCircle,
-  FileSignature,
 } from 'lucide-react';
 
 import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
@@ -39,10 +38,8 @@ import { closeRfpAction, cancelRfpAction } from '@/lib/server/actions/rfp';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
-import { SigningTab } from '@/components/deal-room/signing/SigningTab';
 import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSummaryStrip';
-import { AwardContextLine } from '@/components/deal-room/signing/AwardContextLine';
-import { buildSigningSummary } from '@/components/deal-room/signing/signing-view-model';
+import { buildContractTabEntries } from '@/components/deal-room/signing/build-contract-tab-entries';
 import { josa } from 'es-hangul';
 import { toast } from '@/lib/toast';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
@@ -84,27 +81,17 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
   const canAward = rfp.status === 'sent';
   const isOpenStatus = rfp.status === 'sent';
 
+  const contractTab = buildContractTabEntries({
+    rfpCode: rfp.code,
+    signing,
+    side: 'buyer',
+    contact: awardedPgContact,
+    counterpartyWsId: awardedPgWsId,
+    onSelect: () => setTab('contract'),
+  });
+
   const tabs: DealRoomTab[] = [
-    ...(signing
-      ? [
-          {
-            id: 'contract',
-            label: '계약',
-            content: (
-              <>
-                {awardedPgContact && (
-                  <AwardContextLine
-                    workspaceName={awardedPgContact.workspaceName}
-                    contactName={awardedPgContact.name}
-                    counterpartyWsId={awardedPgWsId}
-                  />
-                )}
-                <SigningTab rfpCode={rfp.code} signing={signing} side="buyer" />
-              </>
-            ),
-          } satisfies DealRoomTab,
-        ]
-      : []),
+    ...contractTab.tabs,
     {
       id: 'compare',
       label: '견적 비교',
@@ -168,18 +155,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
   ];
 
   const actions: RailAction[] = [
-    ...(signing
-      ? [
-          {
-            id: 'contract',
-            label: '계약',
-            icon: <FileSignature />,
-            dot: buildSigningSummary(signing, 'buyer').dot,
-            dotLabel: buildSigningSummary(signing, 'buyer').label,
-            onSelect: () => setTab('contract'),
-          } satisfies RailAction,
-        ]
-      : []),
+    ...contractTab.actions,
     {
       id: 'award',
       label: '선정',

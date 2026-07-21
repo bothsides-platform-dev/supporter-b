@@ -9,7 +9,7 @@
  */
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, FileText, Paperclip, Undo2, FileSignature } from 'lucide-react';
+import { Pencil, FileText, Paperclip, Undo2 } from 'lucide-react';
 
 import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
@@ -25,10 +25,8 @@ import { withdrawBidAction } from '@/lib/server/actions/bid/withdrawBidAction';
 import { toast } from '@/lib/toast';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
-import { SigningTab } from '@/components/deal-room/signing/SigningTab';
 import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSummaryStrip';
-import { AwardContextLine } from '@/components/deal-room/signing/AwardContextLine';
-import { buildSigningSummary } from '@/components/deal-room/signing/signing-view-model';
+import { buildContractTabEntries } from '@/components/deal-room/signing/build-contract-tab-entries';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
@@ -94,45 +92,26 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
     writeContent = <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} />;
   }
 
+  // signing 이 아니라 contractVisible 을 넘긴다 — 위 봉인입찰 방어(미선정 PG 에겐
+  // null)가 여기서도 그대로 이어져야 계약 탭·레일 액션이 낙찰자 상태를 새지 않는다.
+  const contractTab = buildContractTabEntries({
+    rfpCode: rfp.code,
+    signing: contractVisible,
+    side: 'pg',
+    contact: buyerContact,
+    counterpartyWsId: rfp.buyerWsId,
+    onSelect: () => setTab('contract'),
+  });
+
   const tabs: DealRoomTab[] = [
-    ...(contractVisible
-      ? [
-          {
-            id: 'contract',
-            label: '계약',
-            content: (
-              <>
-                {buyerContact && (
-                  <AwardContextLine
-                    workspaceName={buyerContact.workspaceName}
-                    contactName={buyerContact.name}
-                    counterpartyWsId={rfp.buyerWsId}
-                  />
-                )}
-                <SigningTab rfpCode={rfp.code} signing={contractVisible} side="pg" />
-              </>
-            ),
-          } satisfies DealRoomTab,
-        ]
-      : []),
+    ...contractTab.tabs,
     { id: 'write', label: '견적 작성', content: writeContent },
     { id: 'request', label: '요청 조건', content: <RfpBriefPanel rfp={rfp} buyerName={buyerName} /> },
     { id: 'attach', label: '첨부', content: <AttachmentPreviewList files={rfp.rfpFiles} /> },
   ];
 
   const actions: RailAction[] = [
-    ...(contractVisible
-      ? [
-          {
-            id: 'contract',
-            label: '계약',
-            icon: <FileSignature />,
-            dot: buildSigningSummary(contractVisible, 'pg').dot,
-            dotLabel: buildSigningSummary(contractVisible, 'pg').label,
-            onSelect: () => setTab('contract'),
-          } satisfies RailAction,
-        ]
-      : []),
+    ...contractTab.actions,
     { id: 'write', label: '견적 작성', icon: <Pencil />, primary: true, onSelect: () => setTab('write') },
     { id: 'request', label: '요청 보기', icon: <FileText />, onSelect: () => setTab('request') },
     { id: 'attach', label: '첨부', icon: <Paperclip />, onSelect: () => setTab('attach') },
