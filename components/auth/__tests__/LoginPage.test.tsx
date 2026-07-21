@@ -197,4 +197,32 @@ describe('LoginPage — 서버 LOCKED 응답', () => {
         .disabled,
     ).toBe(true);
   });
+
+  // The lock box mixes a label ("남은 시간") with a live countdown. DESIGN.md §3
+  // puts the label on .md-label-small and the VALUE on .md-numeric (mono +
+  // tabular-nums) so the digits don't jitter as the timer ticks down. Pin the
+  // split so a future refactor can't collapse them back into one mono blob.
+  it('락 박스의 남은 시간 수치는 .md-numeric 으로 분리 렌더된다', async () => {
+    const lockedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    loginActionMock.mockResolvedValueOnce({ ok: false, error: 'LOCKED', lockedUntil });
+
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText('이메일'), {
+      target: { value: 'kim@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('비밀번호'), {
+      target: { value: 'whatever' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+
+    const lockBox = await screen.findByTestId('login-lock');
+    // Label text survives the span split (matcher must ignore element bounds).
+    expect(lockBox.textContent).toMatch(/남은 시간\s*\d{1,2}:\d{2}/);
+
+    const numeric = lockBox.querySelector('.md-numeric');
+    expect(numeric).not.toBeNull();
+    expect(numeric?.textContent).toMatch(/^\d{1,2}:\d{2}$/);
+    // The label itself must NOT be inside the numeric carve-out.
+    expect(numeric?.textContent).not.toContain('남은 시간');
+  });
 });

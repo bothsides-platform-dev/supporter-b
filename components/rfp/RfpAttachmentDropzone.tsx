@@ -154,10 +154,10 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
             dragging ? 'bg-[var(--md-sys-color-surface-container-high)] border-[var(--md-sys-color-on-surface)]' : 'hover:border-[var(--md-sys-color-on-surface-variant)]',
           )}
         >
-          <p className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             파일을 끌어다 놓거나 클릭하여 첨부
           </p>
-          <p className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--md-sys-color-outline)] mt-1">
+          <p className="md-label-small text-[var(--md-sys-color-outline)] mt-1">
             PDF / PNG / JPEG · 최대 {MAX_FILES}개 · 20MB 이내
           </p>
         </div>
@@ -177,22 +177,22 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
           {rows.map((file, i) => (
             <div key={file.id} className="py-2.5 flex items-center justify-between">
               <div className="flex items-center gap-3 min-w-0">
-                <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] shrink-0">
+                <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)] shrink-0">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <span className="text-[13px] text-[var(--md-sys-color-on-surface)] truncate">{file.name}</span>
-                <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-outline)] shrink-0">
+                <span className="md-numeric text-[11px] text-[var(--md-sys-color-outline)] shrink-0">
                   {formatSize(file.size)}
                 </span>
                 {file.status === 'uploading' && (
-                  <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-outline)] shrink-0">
+                  <span className="md-label-small text-[var(--md-sys-color-outline)] shrink-0">
                     UPLOADING…
                   </span>
                 )}
                 {file.status === 'error' && (
                   <span
                     title={file.error}
-                    className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)] shrink-0"
+                    className="md-label-small text-[var(--md-sys-color-error)] shrink-0"
                   >
                     ERROR
                   </span>
@@ -201,7 +201,7 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
               <button
                 type="button"
                 onClick={() => removeRow(file.id)}
-                className="font-mono text-[11px] text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-error)] transition-colors px-1 shrink-0"
+                className="md-label-small text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-error)] transition-colors px-1 shrink-0"
               >
                 ×
               </button>

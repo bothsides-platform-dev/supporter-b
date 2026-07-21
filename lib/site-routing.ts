@@ -2,13 +2,54 @@ import type { WorkspaceType } from '@/lib/types/workspace';
 
 export type AppOrigins = Record<WorkspaceType, string>;
 
-/** Origins per workspace type, from env. In local/dev both default to the same host (routing disabled). */
+/**
+ * 앱 자신의 오리진 — per-type 오리진이 없을 때의 공통 폴백. 오리진 해석기가 둘이라
+ * (여기 appOrigins = 호스트 라우팅 판정, lib/server/env.ts baseUrlFor = 이메일 등 절대
+ * 링크) 폴백 사슬이 갈리면 같은 환경에서 서로 다른 오리진을 기준 삼는다. 이 함수가
+ * 사슬의 단일 출처이며 baseUrlFor 도 이걸 쓴다(lib/server/__tests__/env-baseurl 가 고정).
+ *
+ * NEXT_PUBLIC_ 접두 변수를 먼저 보는 것이 중요하다 — appOrigins 는 클라이언트
+ * 컴포넌트에서도 호출되는데, 브라우저 번들에서 AUTH_URL 은 undefined 다.
+ */
+export function baseUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_BASE_URL ?? process.env.AUTH_URL ?? 'http://localhost:3000'
+  );
+}
+
+/**
+ * Origins per workspace type, from env. In local/dev BOTH are unset and collapse to the
+ * same host, which correctly disables host routing.
+ *
+ * **Partial configuration throws — it is never a valid deploy.** Setting only one per-type
+ * origin used to let the other fall back to a value that could equal it, making a
+ * misconfigured deploy indistinguishable from single-host dev: `hostServes` returned null
+ * for every host, and with it `shouldNoindexHost` (partner `X-Robots-Tag`), `robots.ts`
+ * (which resolves an unknown host to the *buyer* allow-policy via `seoHostContext`), and
+ * `opsLoginRedirectTarget` (the host-only OAuth PKCE pin, cf. PR#361) all failed open at
+ * once — silently. A broken staging deploy must announce itself instead.
+ */
 export function appOrigins(): AppOrigins {
-  const fallback = process.env.AUTH_URL ?? 'http://localhost:3000';
-  return {
-    buyer: process.env.NEXT_PUBLIC_BUYER_ORIGIN ?? fallback,
-    pg: process.env.NEXT_PUBLIC_PARTNER_ORIGIN ?? fallback,
-  };
+  const buyer = process.env.NEXT_PUBLIC_BUYER_ORIGIN;
+  const pg = process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
+
+  if (buyer && !pg) {
+    throw new Error(
+      'NEXT_PUBLIC_BUYER_ORIGIN is set but NEXT_PUBLIC_PARTNER_ORIGIN is not. ' +
+        'Host routing needs both or neither — a partial config silently disables the ' +
+        'partner-host noindex and the /login/ops PKCE host pin.',
+    );
+  }
+  if (pg && !buyer) {
+    throw new Error(
+      'NEXT_PUBLIC_PARTNER_ORIGIN is set but NEXT_PUBLIC_BUYER_ORIGIN is not. ' +
+        'Host routing needs both or neither — a partial config silently disables the ' +
+        'partner-host noindex and the /login/ops PKCE host pin.',
+    );
+  }
+
+  const fallback = baseUrl();
+  return { buyer: buyer ?? fallback, pg: pg ?? fallback };
 }
 
 /** Which workspace type a request host serves, or null if unknown / routing disabled. */

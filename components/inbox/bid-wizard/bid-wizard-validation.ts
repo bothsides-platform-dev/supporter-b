@@ -26,12 +26,21 @@ export function isCycleValid(cycleNum: string): boolean {
  * 픽스처 검증 테스트가 공유한다(재구현 드리프트 방지). fees 키 규약:
  * 구간제 수단은 `"<method>:<tier>"`, 정액/정률 단일 수단·커스텀은 그대로.
  */
+/**
+ * 수수료 칸 하나가 "채워졌다"의 단일 판정. 진행률 표시(BidStepFees)와 제출 가능
+ * 판정(deriveAnyFeeFilled)이 공유한다 — 기준이 갈리면 진행률 100% 인데 제출은
+ * 막히는 어긋남이 난다. 0 은 유효(무료 수수료 제안), 음수·빈칸은 미입력.
+ */
+export function isFeeFilled(fees: Record<string, string>, key: string): boolean {
+  return (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
+}
+
 export function deriveAnyFeeFilled(
   fees: Record<string, string>,
   feeInputMethods: readonly PaymentMethod[],
   customPaymentMethods: readonly { id: string }[],
 ): boolean {
-  const feeFilled = (key: string) => (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
+  const feeFilled = (key: string) => isFeeFilled(fees, key);
   const anyTieredFilled = feeInputMethods.some(
     (m) => isTieredMethod(m) && MERCHANT_TIERS.some((t) => feeFilled(`${m}:${t}`)),
   );

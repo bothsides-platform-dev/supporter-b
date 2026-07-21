@@ -126,12 +126,12 @@ export function RequoteDialog({
             value={deadline}
             min={tomorrow}
             onChange={(e) => setDeadline(e.target.value)}
-            className="block bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] font-mono tabular-nums focus:outline-none focus:border-[var(--md-sys-color-on-surface)]"
+            className="block bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] md-numeric focus:outline-none focus:border-[var(--md-sys-color-on-surface)]"
           />
         </div>
 
         {error && (
-          <p role="alert" className={cn('font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]')}>
+          <p role="alert" className={cn('md-label-small text-[var(--md-sys-color-error)]')}>
             {error}
           </p>
         )}

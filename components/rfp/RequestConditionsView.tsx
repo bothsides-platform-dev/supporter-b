@@ -6,11 +6,11 @@ import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import { Divider } from '@/components/primitives/Divider';
-import { SOLUTION_LABELS } from '@/lib/rfp/solutions';
+import { solutionLabel } from '@/lib/rfp/solutions';
 
 function formatSolution(solution?: string | null, detail?: string | null): string | undefined {
-  if (!solution) return undefined;
-  const label = SOLUTION_LABELS[solution] ?? solution;
+  const label = solutionLabel(solution);
+  if (!label) return undefined;
   return (solution === 'self' || solution === 'other') && detail
     ? `${label} (${detail})`
     : label;
@@ -23,7 +23,7 @@ function Rows({ rows }: { rows: [string, string | undefined][] }) {
     <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
       {present.map(([label, value]) => (
         <div key={label} className="flex items-baseline justify-between py-2">
-          <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             {label}
           </span>
           <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">{value}</span>

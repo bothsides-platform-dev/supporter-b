@@ -45,7 +45,7 @@ function FeeComparisonRowsImpl({
         const delay = shouldFlash ? flashIndex++ * 40 : 0;
         return (
           <div key={row.key} className="py-2 flex items-center justify-between">
-            <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+            <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
               {row.label}
             </span>
             <MetricComparePopover

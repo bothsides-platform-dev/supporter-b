@@ -45,7 +45,7 @@ export function InviteScene({
           transform: visible ? 'translateY(0)' : 'translateY(8px)',
         }}
       >
-        <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           견적 요청 초대
         </p>
         <p className="mt-1 text-[15px] font-medium text-[var(--md-sys-color-on-surface)]">

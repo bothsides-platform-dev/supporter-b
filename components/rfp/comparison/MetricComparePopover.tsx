@@ -50,7 +50,7 @@ export function MetricComparePopover({
             )}
           >
             <div className="px-2 pb-1.5 flex items-center justify-between gap-3">
-              <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                 {label}
               </span>
               {baselineText ? (

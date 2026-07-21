@@ -1,13 +1,20 @@
 import { z } from 'zod';
 
+import {
+  MERCHANT_TIERS,
+  PAYMENT_METHODS,
+  isFlatFeeMethod,
+  type PaymentMethod,
+} from '@/lib/types/bid';
+
+// 구간 키는 MERCHANT_TIERS 에서 파생한다 — 여기서 따로 나열하면 새 등급 추가 시
+// .strict() 가 그 등급의 요율을 "알 수 없는 키"로 조용히 거부한다(입력이 저장되지 않음).
 const tierRatesSchema = z
-  .object({
-    sole: z.number().min(0).max(1).optional(),
-    sme1: z.number().min(0).max(1).optional(),
-    sme2: z.number().min(0).max(1).optional(),
-    sme3: z.number().min(0).max(1).optional(),
-    general: z.number().min(0).max(1).optional(),
-  })
+  .object(
+    Object.fromEntries(
+      MERCHANT_TIERS.map((tier) => [tier, z.number().min(0).max(1).optional()]),
+    ) as Record<(typeof MERCHANT_TIERS)[number], z.ZodOptional<z.ZodNumber>>,
+  )
   .strict();
 
 const feeField = z.union([z.number().min(0).max(1), tierRatesSchema]).optional();
@@ -20,18 +27,15 @@ const flatFeeField = z
   .refine((v) => typeof v === 'number', { message: '정액(건당) 수단은 구간맵을 가질 수 없습니다' })
   .optional();
 
+// 수단 목록도 단위 분기도 파생한다 — 수단을 손으로 나열하면 신규 수단이 .strict() 에
+// 조용히 거부되고, 단위를 손으로 고르면 isFlatFeeMethod 와 어긋난다(둘 다 가드 존재).
 export const PaymentFeesSchema = z
-  .object({
-    card: feeField,
-    overseas_card: feeField,
-    virtual_account: flatFeeField,
-    bank_transfer: feeField,
-    naver_pay: feeField,
-    kakao_pay: feeField,
-    toss_pay: feeField,
-    apple_pay: feeField,
-    samsung_pay: feeField,
-    mobile: feeField,
-    gift_card: feeField,
-  })
+  .object(
+    Object.fromEntries(
+      PAYMENT_METHODS.map((method) => [
+        method,
+        isFlatFeeMethod(method) ? flatFeeField : feeField,
+      ]),
+    ) as Record<PaymentMethod, typeof feeField | typeof flatFeeField>,
+  )
   .strict();

@@ -129,7 +129,7 @@ function PgSignupEmailForm() {
       {/* 초대 맥락 안내 */}
       {isInvited && inviteWorkspaceName && (
         <div className="rounded border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-variant)] px-4 py-3">
-          <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-primary)] mb-1">
+          <p className="md-label-small text-[var(--md-sys-color-primary)] mb-1">
             워크스페이스 초대
           </p>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -152,7 +152,7 @@ function PgSignupEmailForm() {
         <div className="space-y-1">
           <label
             htmlFor="email"
-            className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+            className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
           >
             이메일
           </label>
@@ -220,7 +220,7 @@ function PgSignupEmailForm() {
         <div className="text-center space-y-2">
           <Link
             href="/login"
-            className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+            className="block md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
           >
             이미 계정이 있어요? 로그인 →
           </Link>
@@ -234,7 +234,7 @@ export default function PgSignupEmailPage() {
   return (
     <Suspense
       fallback={
-        <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">
+        <p className="md-label-medium text-center">
           LOADING…
         </p>
       }

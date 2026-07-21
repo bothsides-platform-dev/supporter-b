@@ -60,6 +60,10 @@ surface-container-highest #E4E5E9               #202123
 
 > 계층 끝단·기타: `surface-bright`(라이트 `#FFFFFF` / 다크 `#202123`)·`surface-dim`(라이트 `#ECEDF0` / 다크 `#08090A`)은 명도 계층의 양극단. `surface-container-lowest`(라이트 `#FFFFFF` / 다크 `#08090A`)는 **popover·dropdown 배경**(`--color-popover`). 스켈레톤 바는 `surface-container-high`.
 
+**브라우저 크롬·PWA 색은 캔버스(`background`)를 따른다.** 모바일 상태바(`viewport.themeColor`, `app/layout.tsx`)와 PWA 스플래시(`theme_color`·`background_color`, `app/manifest.ts`)가 캔버스와 다르면 앱 진입 시 색이 튄다. 라이트 `#FFFFFF` / 다크 `#08090A`이며, web app manifest 는 라이트/다크 변형을 담지 못하므로 라이트 기준 단일값으로 고정한다. `app/__tests__/chrome-colors.test.ts` 가 `styles/tokens.css` 를 직접 읽어 일치를 고정하므로, 캔버스 토큰을 바꾸면 이 두 파일도 함께 갱신해야 한다.
+
+> 범위 주의: `themeColor` 는 `prefers-color-scheme`(OS 설정)으로만 분기하는 **정적** 선언이다. 앱의 인앱 테마 토글로 OS 설정과 다른 테마를 고르면 캔버스와 상태바가 어긋날 수 있는데, 이는 알고 둔 상태다 — 크롬 색을 런타임에 따라가게 하려면 테마 토글이 `<meta name="theme-color">` 를 함께 갱신해야 한다(TODOS.md ## Design 참조).
+
 ### 텍스트 · 보더
 | 토큰 | 라이트 | 다크 | 용도 |
 |---|---|---|---|
@@ -125,7 +129,22 @@ surface-container-highest #E4E5E9               #202123
 ```css
 .md-numeric { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 ```
-적용 대상: ₩ 금액, % 수수료, 건수, 제안번호(`P-2605-0042`), 날짜. **내비게이션·라벨·버튼 텍스트에는 적용하지 않는다.**
+적용 대상: ₩ 금액, % 수수료, 건수, 제안번호(`P-2605-0042`), 날짜, 이메일 주소 같은 식별 데이터. **내비게이션·라벨·버튼 텍스트에는 적용하지 않는다.**
+
+### 라벨 유틸리티 — `.md-label-{small,medium}`
+
+위 표의 Label 롤을 그대로 구현한 유틸리티(`app/globals.css`). 메타 라벨·`<th>`·`<legend>`·폼 라벨·상태 문구의 표준 정착지다.
+
+```css
+.md-label-small  { font-family: var(--font-sans); /* 11px · 500 · 0.01em */ }
+.md-label-medium { font-family: var(--font-sans); /* 12px · 500 · 0      */ }
+```
+
+**Label Large(13px)는 아직 유틸리티가 없다** — 현재 소비처가 없어 YAGNI로 정의하지 않았다. 13px 라벨이 필요해지면 같은 패턴으로 `.md-label-large`를 추가한다(버튼·nav·Chip 은 이미 토큰 나열형을 쓰고 있어 그쪽을 흡수할 때가 자연스러운 시점이다).
+
+둘 다 `--md-typescale-label-*` 토큰만 소비하므로 값의 단일 출처는 `styles/tokens.css`다. `.md-numeric`과 같이 `@layer base`에 있어 **Tailwind utilities 레이어가 항상 이긴다** — 사이트별 `font-normal`·`text-[13px]` 오버라이드는 그대로 유효하다.
+
+이 유틸리티는 §9가 금지하는 `font-mono uppercase wide-tracking` 라벨 조합의 대체재다. 그 조합이 특히 나쁜 이유는 취향 문제가 아니다: `--font-mono` 스택(JetBrains Mono → ui-monospace → SF Mono → Menlo)에는 **한글 글리프가 하나도 없어** 한글 라벨이 Pretendard가 아닌 OS 기본 한글 폰트로 폴백하고, `uppercase`는 한글에 무효라 넓은 양수 자간만 남아 Linear 밀도와 정면으로 어긋난다. 강제 수단은 `lib/design/__tests__/mono-label-drift.test.ts`(fs-walk 드리프트 가드) + `lib/design/design-hardrule-allowlist.mjs`(면제 SSOT).
 
 ---
 
@@ -179,7 +198,7 @@ surface-container-highest #E4E5E9               #202123
 
 ### 로딩 모션 — 기능적 모션 허용
 
-넓은 영역의 로딩은 **펄스 스켈레톤**(`animate-pulse`, `components/ui/skeleton.tsx` — `surface-container-high` 바·`rounded-md`), 인라인·작은 자리(타이핑 인디케이터·전송 대기 점)는 **펄스 점**으로 표시한다. 둘 다 `prefers-reduced-motion: reduce`를 존중해 저감 시 정지/단순화한다. 스피너는 새 표면에 도입하지 않되, 기존 사용처(`RefreshHeaderButton` 의 `--animate-spin`/`--animate-spin-once`, 첨부 업로드 칩)는 유지한다. 짧은 진행 표시로 `LOADING…` 텍스트(body-medium)도 그대로 둔다. **장식적** 컨페티·강한 모멘텀 모션 금지는 §9에서 유지된다(세 예외: 축하 모먼트·테마 전환 리빌·랜딩/마케팅 모션). 이 갱신은 코드 현실(스켈레톤이 이미 광범위 사용 중)과 문서를 정합시킨 것이다.
+넓은 영역의 로딩은 **펄스 스켈레톤**(`animate-pulse`, `components/ui/skeleton.tsx` — `surface-container-high` 바·`rounded-md`), 인라인·작은 자리(타이핑 인디케이터·전송 대기 점)는 **펄스 점**으로 표시한다. 둘 다 `prefers-reduced-motion: reduce`를 존중해 저감 시 정지/단순화한다. 스피너는 새 표면에 도입하지 않되, 기존 사용처(`RefreshHeaderButton` 의 `--animate-spin`/`--animate-spin-once`, 첨부 업로드 칩)는 유지한다. 짧은 진행 표시로 `LOADING…` 텍스트(body-medium)도 그대로 둔다. **장식적** 컨페티·강한 모멘텀 모션 금지는 §9에서 유지된다(네 예외: 축하 모먼트·테마 전환 리빌·브랜드 마크 진입·랜딩/마케팅 모션). 이 갱신은 코드 현실(스켈레톤이 이미 광범위 사용 중)과 문서를 정합시킨 것이다.
 
 > **추가 키프레임**(`app/globals.css`): `spin-once`(0.6s 1회전 — 리프레시 클릭), `process-progress`(5s scaleX — 스텝퍼 자동 전환, `prefers-reduced-motion: no-preference` 게이트). 모두 transform/opacity만 만진다.
 
@@ -322,11 +341,11 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - **No** 과도한 고도/스큐어모픽 그림자 — 대부분 보더 또는 elevation-1, 큰 그림자는 floating에만.
 - **No** 강한(고대비) 디바이더 — 기본은 `outline-variant`(저대비).
 - **No** 네온/글로우/글래스모피즘/블러 오브 — 단 하나의 좁은 예외: **랜딩 히어로 다크 씬의 소프트 블룸**(아래 "랜딩·마케팅 모션" 예외 블록 ⑤에 등록).
-- **No** 내비/라벨에 font-mono uppercase wide-tracking — sentence case + 약한 음수 자간. `.md-numeric`은 금융 수치에만.
+- **No** 내비/라벨에 font-mono uppercase wide-tracking — sentence case + 약한 음수 자간. 라벨은 §3의 `.md-label-{small,medium,large}`, `.md-numeric`은 금융 수치에만. 아래 "랜딩·마케팅 타이포" 예외 하나만 인정된다.
 - **No** 큰 본문(16px+) — 앱 본문은 14px, 조밀하게.
 - **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + JetBrains Mono만.
 - **No** 브래킷 상태 태그 `[ 결재중 ]` — Chip 사용.
-- **No** 장식적 컨페티·강한 모멘텀 모션 — 아래 세 예외(축하 모먼트·테마 전환 리빌·랜딩/마케팅 모션)를 제외하고 허용하지 않는다. **단 기능적 로딩 모션은 허용**: 넓은 영역은 펄스 스켈레톤(`ui/skeleton.tsx`), 인라인·타이핑 인디케이터는 펄스 점. 모두 `prefers-reduced-motion: reduce`를 존중한다(저감 시 정지). 자세한 원칙은 §6 "로딩 모션" 참조.
+- **No** 장식적 컨페티·강한 모멘텀 모션 — 아래 네 예외(축하 모먼트·테마 전환 리빌·브랜드 마크 진입·랜딩/마케팅 모션)를 제외하고 허용하지 않는다. **단 기능적 로딩 모션은 허용**: 넓은 영역은 펄스 스켈레톤(`ui/skeleton.tsx`), 인라인·타이핑 인디케이터는 펄스 점. 모두 `prefers-reduced-motion: reduce`를 존중한다(저감 시 정지). 자세한 원칙은 §6 "로딩 모션" 참조.
 
 > **예외 — 축하 모먼트 (Celebration Moment).** 위 장식적 컨페티·강한 모션 금지에는
 > 단 하나의 좁은 예외가 있다. 다음 4조건을 **모두** 만족하는 종결 성공 순간에 한해
@@ -350,6 +369,28 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 > 구현: `lib/theme/view-transition.ts` (`applyThemeWithTransition`) ←
 > `components/shell/ThemeToggle.tsx`. CSS: `app/globals.css` `::view-transition-*` 규칙.
 
+> **예외 — 브랜드 마크 진입 (Brand Mark Entrance).** 인증 앱 셸의 브랜드 마크는
+> 마운트 시 1회성 SVG draw-on(외곽선을 그린 뒤 fill 페이드) 연출을 허용한다.
+> 구현: `components/primitives/AnimatedBrandMark.tsx` ← `components/shell/SidebarBrand.tsx`,
+> `components/primitives/Logo.tsx`(`animated` 옵트인 — 랜딩 헤더). 인정 조건:
+> ① 하드 로드(새로고침·최초 진입)에서만 재생 — 클라이언트 라우트 전환은 셸을
+>    리마운트하지 않으므로 반복 발화하지 않는다,
+> ② `prefers-reduced-motion: reduce` 시 애니메이션 없이 정적 렌더(`BrandMark`와 동일 결과),
+> ③ `pathLength`(stroke-dasharray)와 `fillOpacity`만 구동 — 실 DOM 레이아웃 불변,
+> ④ 색은 `--md-sys-color-*` 브랜드 컬러 단일 — 네온·그라데이션 없음.
+> 애니메이션 완료 후에는 순수 `<path>`로 정착해 잔여 dash 속성이 볼드 스트로크를
+> 열화시키지 않는다. 새 마운트 지점을 늘릴 때는 위 4조건 충족을 PR에서 명시할 것.
+
+> **예외 — 랜딩·마케팅 타이포 (Landing / Marketing Typography).** 비인증 랜딩·마케팅 면
+> (`components/landing/**`, `app/page.tsx`)은 위 "내비/라벨에 font-mono uppercase
+> wide-tracking 금지" 하드룰에서 면제된다. 이어브로우·비교표 헤더·계산기 라벨의
+> mono + wide-tracking 은 기술적 마케팅 룩을 노린 제품 결정이며, 해당 문구가
+> 대부분 짧은 라틴 문자열이라 한글 폴백 문제(§3 라벨 유틸리티 항 참조)도 일어나지
+> 않는다. 인증 앱 면(`(app)/**`·`(public)/**`)에는 적용되지 않는다 — 그쪽은
+> `.md-label-*`/`.md-numeric` 만 쓴다. 경계는 코드로 강제된다:
+> `lib/design/design-hardrule-allowlist.mjs`(면제 SSOT) +
+> `lib/design/__tests__/mono-label-drift.test.ts`(fs-walk 드리프트 가드).
+
 > **예외 — 랜딩·마케팅 모션 (Landing / Marketing Surfaces).** 비인증 랜딩·마케팅 면
 > (`components/landing/**`, `app/page.tsx`)은 위 "장식적·강한 모멘텀 모션 금지"와 §1·§6의
 > "transform/opacity만 애니메이트 + `prefers-reduced-motion` 존중" 하드룰에서 **전면 면제**된다.
@@ -359,7 +400,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 > ③ 누적 등장·크로스페이드·스크램블 조립(`components/landing/hero/ScrambleText.tsx` — 히어로 헤드라인 순환 문구, 배경 ASCII 필드와 같은 글리프 팔레트)·캐러셀,
 > ④ **`prefers-reduced-motion: reduce`를 존중하지 않고 모바일 포함 항상 재생해도 된다**(랜딩 한정 제품 결정),
 > ⑤ **히어로 다크 오프닝 씬의 소프트 블룸·앰비언트 글로우**(`components/landing/hero/HeroAsciiField.tsx` — 커서 궤적 글로우 + 앰비언트 워시). 모션 규칙이 아니라 위 "네온/글로우 금지" 시각 하드룰의 **사용자 승인 예외**로, 랜딩 히어로 다크 씬에 한정된다. 커서 궤적 글로우는 포인터 이동(`pointermove`)에 반응해서만 그려지므로 터치 기기는 실제 드래그 중에만 나타나고, ④와 동일하게 **동작 줄이기 선호와 무관하게 항상 활성화**된다 — 정적 베이스 필드 폴백은 SSR·jsdom(matchMedia 미지원 테스트 환경)에서만 적용된다. 같은 예외 범위 안에서 **셀별 색 지터**(`HUE_OFFSETS` — resolved `--md-sys-color-inverse-primary` 기준 채널당 ±18 안팎의 하늘/시안/보라 미세 편차)도 허용한다 — 단일 액센트 컬러 원칙의 위반이 아니라 같은 블룸 예외의 연장(고정 팔레트 사용, 하드코딩 색 없음, 눈으로 튜닝된 은은한 폭).
-> 인증 앱 면(`(app)/**`)에는 적용되지 않는다 — 그쪽은 §6 하드룰과 축하 모먼트·테마 전환 리빌 두 예외만 유효하다.
+> 인증 앱 면(`(app)/**`)에는 적용되지 않는다 — 그쪽은 §6 하드룰과 축하 모먼트·테마 전환 리빌·브랜드 마크 진입 세 예외만 유효하다.
 
 ---
 

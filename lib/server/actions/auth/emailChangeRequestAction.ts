@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { requireSession } from '@/lib/auth/session';
+import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import { normalizeEmail, type AuthActionResult } from './_shared';
 import { getAuthService } from '@/lib/server/services/auth';
 
@@ -22,6 +23,11 @@ export async function emailChangeRequestAction(
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
   const newEmail = normalizeEmail(parsed.data.newEmail);
+  // 목적지도 막는다 — 가입 5경로와 같은 규칙. 요청자가 마스터가 아니어도 마스터
+  // 앨로우리스트 주소를 자기 계정에 가져오면 그 신원을 선점하게 된다.
+  // users_email_unique 는 마스터 row 가 이미 있을 때만 막아주므로 최종 방어선일 뿐이다.
+  if (isMasterEmail(newEmail)) return { ok: false, error: 'MASTER_EMAIL' };
+
   const svc = await getAuthService();
   return svc.requestEmailChange({ userId: session.user.id, newEmail });
 }

@@ -143,7 +143,7 @@ export function QuoteTemplateDrawer({
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {error && (
-          <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-error)]">
+          <p className="md-label-small text-[var(--md-sys-color-error)]">
             {ERROR_LABELS[error] ?? error}
           </p>
         )}
@@ -192,7 +192,7 @@ export function QuoteTemplateDrawer({
 
         {/* Payment fees */}
         <div className="space-y-3">
-          <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             결제수단별 수수료
           </span>
           <div className="space-y-5">
@@ -201,13 +201,13 @@ export function QuoteTemplateDrawer({
                 // 5-tier grid
                 return (
                   <div key={method} className="space-y-2">
-                    <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                    <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                       {PAYMENT_METHOD_LABELS[method]} 수수료 (구간별)
                     </span>
                     <div className="grid grid-cols-5 gap-2">
                       {MERCHANT_TIERS.map((tier) => (
                         <div key={tier} className="space-y-1">
-                          <span className="font-mono text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
+                          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                             {MERCHANT_TIER_LABELS[tier]}
                           </span>
                           <div className="flex items-end gap-0.5">
@@ -220,7 +220,7 @@ export function QuoteTemplateDrawer({
                               placeholder="0.00"
                               className={cn(numericInputClass, 'flex-1 min-w-0')}
                             />
-                            <span className="font-mono text-[11px] text-[var(--md-sys-color-on-surface-variant)] pb-2">
+                            <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] pb-2">
                               %
                             </span>
                           </div>

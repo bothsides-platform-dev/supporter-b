@@ -47,7 +47,7 @@ export function PasswordField({
     <div className="space-y-2">
       <label
         htmlFor={inputId}
-        className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+        className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
       >
         {label}
       </label>
