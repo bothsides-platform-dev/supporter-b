@@ -113,6 +113,22 @@ describe('WorkspaceService.changeMemberRole', () => {
     expect(result).toEqual({ ok: false, error: 'LAST_ADMIN' });
   });
 
+  // 미승인 admin 은 잔여 admin 으로 쳐주지 않는다 — 가드가 느슨해지지 않았음을 못박는다.
+  it('still returns LAST_ADMIN for the sole approved admin when a pending decoy admin exists', async () => {
+    const admin = await seedUser(db, { email: 'admin@test.com' });
+    const decoy = await seedUser(db, { email: 'decoy@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, decoy.id, 'admin', { approvalStatus: 'pending_approval' });
+
+    const result = await service.changeMemberRole(
+      { targetUserId: admin.id, role: 'member' },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'LAST_ADMIN' });
+  });
+
   it('demotes an approved admin when another approved admin remains', async () => {
     const admin = await seedUser(db, { email: 'admin@test.com' });
     const coAdmin = await seedUser(db, { email: 'coadmin@test.com' });
@@ -172,6 +188,12 @@ describe('WorkspaceService.changeMemberRole', () => {
     );
 
     expect(result.ok).toBe(true);
+
+    const [row] = await db
+      .select({ role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, rejected.id)));
+    expect(row.role).toBe('member');
   });
 
   it('returns FORBIDDEN_NOT_ADMIN when caller is not admin', async () => {
