@@ -370,6 +370,8 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 #### 이메일 변경 확인 `/auth/email-change?token=...`
 - 토큰 검증 → "이메일이 {new}로 변경되었습니다." 안내 + 자동 재로그인 요청
 - 만료/무효 분기 동일
+- **로그인 상태에서도 반드시 통과해야 한다** — 정상 경로가 곧 인증 상태다(설정 화면에서 본인이 요청 → 새 주소로 받은 링크를 같은 브라우저에서 연다). `/auth/verify` 와 함께 `lib/auth/route-decision.ts` 의 `ALWAYS_PASSTHROUGH_PREFIXES` 에 등록돼 있으며, 빠지면 공개 프리픽스 규칙에 걸려 `/home` 으로 튕기고 확인 액션이 실행되지 않아 변경이 조용히 완료되지 않는다(v0.4.3.0 회귀 수정). `lib/auth/__tests__/public-routes-registered.test.ts` 가 `app/(public)` 폴더를 순회해 이 축을 고정한다 — 새 매직링크류 공개 페이지를 추가할 때 이 목록도 함께 갱신할 것.
+- 목적지 주소가 마스터 allowlist(`MASTER_ACCOUNT_EMAILS`)에 있으면 요청 단계(`emailChangeRequestAction`)에서 `MASTER_EMAIL` 로 거부된다 — 가입 5경로와 같은 규칙(v0.4.3.0).
 
 #### 로그아웃 `/logout`
 - POST 핸들러: 세션 쿠키 삭제 → `/login` redirect

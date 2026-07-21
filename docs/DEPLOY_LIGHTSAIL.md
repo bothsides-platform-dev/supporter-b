@@ -87,6 +87,7 @@ pm2 save
 - `AUTH_SECRET` — `openssl rand -base64 32`
 - `AUTH_TRUST_HOST=true` — 프록시 뒤에서 Auth.js 가 호스트를 신뢰하도록
 - `NEXT_PUBLIC_BASE_URL=https://<YOUR_DOMAIN>` — **빌드 타임에 인라인**되므로 deploy(빌드) 전에 설정
+- `NEXT_PUBLIC_BUYER_ORIGIN` / `NEXT_PUBLIC_PARTNER_ORIGIN` — 호스트 라우팅(buyer ↔ partner 서브도메인)용. **both-or-neither**: 둘 다 설정하거나 둘 다 비운다. 하나만 설정하면 `appOrigins()` 가 throw 해 앱이 뜨지 않는다(v0.4.3.0~ fail-closed). 상세와 컷오버 절차는 아래 "partner.support-b.com 서브도메인 (PG 호스트 라우팅) 롤아웃" 절 참조. **빌드 타임 인라인**.
 - **Centrifugo(채팅)** — `CENTRIFUGO_TOKEN_HMAC_SECRET`, `CENTRIFUGO_API_KEY` 는 `openssl rand -base64 48` 로 강하게 생성. **이름 브리지 주의**: 이 값들은 `docker-compose.prod.yml` 가 컨테이너에 v6 환경변수명(`CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` / `CENTRIFUGO_HTTP_API_KEY`)으로 다시 주입한다 — **한 번만 설정하면 앱과 컨테이너가 같은 값을 공유**. `CENTRIFUGO_HTTP_API_URL=http://127.0.0.1:8000/api`, `NEXT_PUBLIC_CENTRIFUGO_WS_URL=wss://<YOUR_DOMAIN>/connection/websocket`(빌드 타임 인라인 — deploy 전에 설정). 컨테이너의 `allowed_origins` 는 `APP_DOMAIN` 에서 자동 도출.
 - `AXIOM_TOKEN` / `AXIOM_DATASET` — 둘 다 설정하면 운영 로그(pino)가 Axiom으로 전송된다. 미설정 시 `pm2 logs bidit` 으로만 확인.
 - **마스터/운영자 계정 (Google OAuth 전용)** — `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`(Google OAuth 클라이언트, 승인된 리디렉션 URI = `https://support-b.com/api/auth/callback/google` 1개), `MASTER_ACCOUNT_EMAILS`(쉼표로 구분된 운영자 Google 이메일 allowlist — 복수 가능), `NEXT_PUBLIC_MASTER_OAUTH_ENABLED=true`(숨겨진 `/login/ops` 라우트 활성화 — **빌드 타임 인라인**, deploy 전 설정). 라우트는 이 플래그가 true이고 `AUTH_GOOGLE_ID` 도 설정됐을 때만 렌더(아니면 404). 운영자는 `/login/ops` 주소를 직접 입력해 Google로만 로그인하며, allowlist에 없는 Google 계정은 거부된다. **보안 경계는 라우트 404가 아니라 allowlist default-deny** — `AUTH_GOOGLE_ID` 가 설정된 한 OAuth 콜백 엔드포인트는 플래그와 무관하게 존재하지만 allowlist 이메일만 로그인 완료 가능. 기능을 완전히 끄려면 `AUTH_GOOGLE_ID` 를 비운다. **시드 스크립트 불필요** — 최초 로그인 시 users 행이 자동 생성된다. `AUTH_GOOGLE_ID` 가 비어 있으면 Google 프로바이더 자체가 비활성. 스키마는 `is_master` 컬럼 없이 env allowlist 로만 판정하므로 추가 DDL 은 `workspaces_status_idx`(additive) 뿐.
@@ -436,12 +437,15 @@ partner.support-b.com  A  <Lightsail 고정 IP>
 > **⚠️ `NEXT_PUBLIC_*` 는 빌드 타임 인라인** — 값 변경 후 `pnpm build` 없이 `pm2 reload` 만 해서는 반영 안 됨. `AUTH_COOKIE_DOMAIN` 은 런타임 변수라 restart 만으로 충분.
 >
 > **⚠️ `AUTH_COOKIE_DOMAIN` 설정은 기존 사용자 전원을 1회 로그아웃** 시킨다. Caddy 리로드·DNS 컷오버와 같은 시점에 진행할 것.
+>
+> **⚠️ 두 오리진은 반드시 함께 설정하거나 둘 다 비운다 (v0.4.3.0~).** 하나만 설정하면 `appOrigins()`(`lib/site-routing.ts`)가 **예외를 던진다**. 예전에는 나머지가 폴백으로 채워지며 "단일 호스트 dev" 와 구별되지 않았고, 그 상태에서 partner 호스트의 비색인(`robots.txt` + `X-Robots-Tag`)과 `/login/ops` 의 OAuth PKCE 호스트 핀이 **동시에 조용히 꺼졌다**. 이제는 그런 반쪽 설정이 배포 즉시 드러난다.
 
 ```bash
 # 런타임 변수 (restart 로 반영)
 AUTH_COOKIE_DOMAIN=.support-b.com
 
 # 빌드 타임 변수 (변경 후 반드시 pnpm build 재실행)
+# — 아래 둘은 both-or-neither. 한 줄만 남기면 앱이 부팅 시 throw 한다.
 NEXT_PUBLIC_BUYER_ORIGIN=https://support-b.com
 NEXT_PUBLIC_PARTNER_ORIGIN=https://partner.support-b.com
 ```
@@ -463,7 +467,7 @@ sudo systemctl reload caddy
 bash scripts/deploy/lightsail-deploy.sh
 ```
 
-`NEXT_PUBLIC_BUYER_ORIGIN` / `NEXT_PUBLIC_PARTNER_ORIGIN` 이 `.env.production` 에 설정된 상태에서 빌드돼야 한다.
+`NEXT_PUBLIC_BUYER_ORIGIN` / `NEXT_PUBLIC_PARTNER_ORIGIN` 이 **둘 다** `.env.production` 에 설정된 상태에서 빌드돼야 한다. 하나만 설정된 채로 배포하면 `appOrigins()` 가 throw 하며 앱이 뜨지 않는다 — 롤백은 두 줄을 모두 채우거나 모두 지운 뒤 재빌드다(둘 다 비우면 호스트 라우팅이 꺼진 단일 호스트 모드로 정상 동작).
 
 ### 5. 수동 확인 체크리스트
 
@@ -489,4 +493,5 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 - **빌드 중 OOM/멈춤**: `swapon --show` 로 swap 확인. `NODE_BUILD_HEAP_MB=1280 bash scripts/deploy/lightsail-deploy.sh` 로 더 낮춰 재시도.
 - **`docker: permission denied`**: bootstrap 후 재접속(또는 `newgrp docker`)으로 docker 그룹 반영.
 - **DB 접속 실패**: `DATABASE_URL` 의 자격증명이 `.env.production` 의 `POSTGRES_*` 와 일치하는지, 컨테이너가 떴는지(`docker compose -f docker-compose.prod.yml ps`) 확인.
+- **배포 직후 앱이 안 뜸 + 로그에 `NEXT_PUBLIC_..._ORIGIN is set but ... is not`**: 두 오리진 중 하나만 `.env.production` 에 남은 상태다. `appOrigins()` 가 의도적으로 throw 한다(v0.4.3.0~) — 반쪽 설정은 partner 호스트 비색인과 `/login/ops` PKCE 호스트 핀을 조용히 함께 꺼뜨리기 때문. 고치는 법: 두 줄을 모두 채우거나 모두 지운 뒤 **재빌드**(`NEXT_PUBLIC_*` 는 빌드 타임 인라인이라 `pm2 reload` 만으론 반영 안 됨).
 - **채팅 메시지가 실시간으로 안 옴(새로고침해야 보임)**: (1) `journalctl`/`docker compose logs centrifugo` 에 `namespace not found` 면 config 의 `chat` 네임스페이스 누락 — 채널은 `chat:conversation:<id>` 라 첫 콜론 앞 `chat` 네임스페이스가 정의돼 있어야 한다. (2) 구독이 전부 거부되면 subscribe proxy 가 앱에 못 닿는 것 — `host.docker.internal` 매핑(`extra_hosts: host-gateway`)과 앱이 3000 에 떠 있는지 확인. (3) WS 연결 자체가 안 되면 Caddy `/connection/*` 라우트와 `NEXT_PUBLIC_CENTRIFUGO_WS_URL`(빌드 타임 인라인 — 바뀌면 재빌드) 확인. (4) `allowed_origins` 불일치(브라우저 Origin ≠ `https://<APP_DOMAIN>`)면 연결 거부 — `APP_DOMAIN` 확인.

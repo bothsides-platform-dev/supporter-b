@@ -165,6 +165,8 @@ CoachmarkTour의 capture 클릭 리스너가 마지막 action 클릭 즉시 `onF
 ### deriveAnyFeeFilled 경계값 전용 테스트 부재 (P3)
 `components/inbox/bid-wizard/bid-wizard-validation.ts`의 `deriveAnyFeeFilled`(BidWizard.tsx에서 분리된 공용 함수, 튜토리얼 fixture 검증과 공유)에 전용 단위 테스트가 없다 — `fee='0'`(포함돼야 함), `fee='-1'`(제외돼야 함), 공백 문자열(`parseFloat`→NaN, 제외돼야 함), 다중 tier 중 하나만 채워진 경우, 빈 fees/methods 등 경계값이 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
 
+**부분 해소 (v0.4.3.0)**: 스칼라 판정이 `isFeeFilled` 로 추출돼(진행률 표시 `BidStepFees` 와 공유 — 기준 갈림 자체를 제거) `0`·`-1`·빈 문자열·미입력 키 4개 경계값은 `__tests__/bid-wizard-validation.test.ts` 가 커버한다. **남은 것은 조합 축**: 다중 tier 중 하나만 채워진 경우, 커스텀 수단, 빈 fees/methods 에서의 `deriveAnyFeeFilled` 자체 동작.
+
 ## NTS / 사업자번호 조회
 
 ### lookupBizNoAction — 재시도+bounded wait 누적이 비인증 엔드포인트 요청 홀드시간을 증폭 (P1)
