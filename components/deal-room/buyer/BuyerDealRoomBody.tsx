@@ -20,6 +20,7 @@ import {
   Paperclip,
   Lock,
   XCircle,
+  FileSignature,
 } from 'lucide-react';
 
 import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
@@ -39,6 +40,9 @@ import { useDealRoom } from '@/components/deal-room/DealRoomContext';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
 import { SigningTab } from '@/components/deal-room/signing/SigningTab';
+import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSummaryStrip';
+import { AwardContextLine } from '@/components/deal-room/signing/AwardContextLine';
+import { buildSigningSummary } from '@/components/deal-room/signing/signing-view-model';
 import { josa } from 'es-hangul';
 import { toast } from '@/lib/toast';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
@@ -59,7 +63,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
     signing,
   } = data;
   const router = useRouter();
-  const [tab, setTab] = useState('compare');
+  const [tab, setTab] = useState(signing ? 'contract' : 'compare');
   const [awardOpen, setAwardOpen] = useState(false);
   const [requoteOpen, setRequoteOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
@@ -73,11 +77,34 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
   const focusedBid = focusedWsId
     ? bids.find((b) => b.pgWsId === focusedWsId)
     : undefined;
+  const awardedPgWsId = rfp.awardedBidId
+    ? bids.find((b) => b.id === rfp.awardedBidId)?.pgWsId
+    : undefined;
   const pgName = (wsId?: string) => (wsId ? (pgWsNameMap[wsId] ?? wsId) : '');
   const canAward = rfp.status === 'sent';
   const isOpenStatus = rfp.status === 'sent';
 
   const tabs: DealRoomTab[] = [
+    ...(signing
+      ? [
+          {
+            id: 'contract',
+            label: '계약',
+            content: (
+              <>
+                {awardedPgContact && (
+                  <AwardContextLine
+                    workspaceName={awardedPgContact.workspaceName}
+                    contactName={awardedPgContact.name}
+                    counterpartyWsId={awardedPgWsId}
+                  />
+                )}
+                <SigningTab rfpCode={rfp.code} signing={signing} side="buyer" />
+              </>
+            ),
+          } satisfies DealRoomTab,
+        ]
+      : []),
     {
       id: 'compare',
       label: '견적 비교',
@@ -95,9 +122,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
             </div>
           )}
           {signing && (
-            <div className="mb-4">
-              <SigningTab rfpCode={rfp.code} signing={signing} side="buyer" />
-            </div>
+            <SigningSummaryStrip signing={signing} side="buyer" onOpen={() => setTab('contract')} />
           )}
           <FocusComparison
             bids={bids}
@@ -143,6 +168,17 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
   ];
 
   const actions: RailAction[] = [
+    ...(signing
+      ? [
+          {
+            id: 'contract',
+            label: '계약',
+            icon: <FileSignature />,
+            dot: buildSigningSummary(signing, 'buyer').dot,
+            onSelect: () => setTab('contract'),
+          } satisfies RailAction,
+        ]
+      : []),
     {
       id: 'award',
       label: '선정',

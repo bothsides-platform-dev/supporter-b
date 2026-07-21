@@ -1,7 +1,15 @@
 // BuyerDealRoomBody — 구매사 딜룸 본문(레일 + 탭).
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render as rtlRender, screen, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
+
+vi.mock('@/components/deal-room/signing/SigningTab', () => ({
+  SigningTab: () => <div data-testid="signing-tab" />,
+}));
+vi.mock('@/components/deal-room/signing/AwardContextLine', () => ({
+  AwardContextLine: () => <div data-testid="award-context" />,
+}));
 
 class ResizeObserverStub {
   observe() {}
@@ -168,5 +176,46 @@ describe('BuyerDealRoomBody — 선정 결과 패널', () => {
     expect(focusComp.parentElement).toContainElement(
       screen.getByText('담당처와 연락을 이어나가보세요.'),
     );
+  });
+});
+
+import type { SigningView } from '@/lib/types/signing';
+
+function signingView(): SigningView {
+  return {
+    contract: {
+      id: 'c1',
+      rfpId: 'r1',
+      status: 'in_progress',
+      round: 1,
+      createdBy: 'u',
+      createdAt: '2026-07-20T04:40:00Z',
+    },
+    participants: [],
+  };
+}
+
+describe('BuyerDealRoomBody — 계약 탭', () => {
+  it('signing 이 없으면 계약 탭이 없고 견적 비교가 기본이다', () => {
+    render(<BuyerDealRoomBody data={buildData()} />);
+    expect(screen.queryByRole('tab', { name: /계약/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '견적 비교' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('signing 이 있으면 계약 탭이 첫 번째이고 기본으로 열린다', () => {
+    render(<BuyerDealRoomBody data={buildData({ signing: signingView() })} />);
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs[0]).toHaveTextContent('계약');
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('signing-tab')).toBeInTheDocument();
+  });
+
+  it('견적 비교 탭의 요약 스트립을 누르면 계약 탭으로 간다', async () => {
+    const user = userEvent.setup();
+    render(<BuyerDealRoomBody data={buildData({ signing: signingView() })} />);
+    await user.click(screen.getByRole('tab', { name: '견적 비교' }));
+    await user.click(screen.getByRole('button', { name: /전자서명/ }));
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('signing-tab')).toBeInTheDocument();
   });
 });
