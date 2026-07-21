@@ -172,7 +172,7 @@ export function SigningTab({
         onOpenChange={(o) => !busy && setCancelOpen(o)}
         title="전자서명을 취소할까요?"
         description="취소하면 진행 중인 서명이 중단돼요. 필요하면 나중에 다시 발송할 수 있어요."
-        confirmLabel="취소"
+        confirmLabel="취소하기"
         variant="danger"
         loading={busy}
         onConfirm={async () => {

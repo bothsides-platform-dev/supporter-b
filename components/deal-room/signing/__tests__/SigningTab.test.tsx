@@ -110,11 +110,9 @@ describe('SigningTab', () => {
     await user.click(screen.getByRole('button', { name: '취소' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('전자서명을 취소할까요?')).toBeInTheDocument();
-    // ConfirmDialog 자체 dismiss 버튼(cancelLabel)과 confirm 버튼(confirmLabel)이
-    // 둘 다 '취소' 라벨이라 이름만으로는 구분되지 않는다 — 풋터 렌더 순서(dismiss가
-    // 먼저, confirm이 나중)로 확정 버튼을 특정한다.
-    const dialogButtons = within(dialog).getAllByRole('button', { name: '취소' });
-    await user.click(dialogButtons[dialogButtons.length - 1]);
+    // dismiss(취소)와 확정(취소하기)은 접근성 이름으로 구분된다 — 견적 요청 취소
+    // 다이얼로그(BuyerDealRoomBody)와 같은 관례.
+    await user.click(within(dialog).getByRole('button', { name: '취소하기' }));
     expect(cancelSigningAction).toHaveBeenCalledWith({ contractId: 'c1' });
     expect(toast).toHaveBeenCalledWith('전자서명을 취소했어요', { type: 'success' });
   });
