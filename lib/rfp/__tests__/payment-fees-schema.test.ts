@@ -87,6 +87,14 @@ describe('PaymentFeesSchema 구간 ↔ MERCHANT_TIERS 드리프트 가드', () =
   it('어휘 밖 구간 키는 거부한다 (.strict 유지)', () => {
     expect(PaymentFeesSchema.safeParse({ card: { platinum: 0.015 } }).success).toBe(false);
   });
+
+  // 최상위 .strict() 도 함께 고정 — 스키마가 Object.fromEntries 로 조립되도록 바뀌면서
+  // .strict() 가 빠져도 아무 테스트도 깨지지 않는 상태였다. 빠지면 임의 키가 저장되는
+  // paymentFees 에 그대로 섞여 들어간다.
+  it('어휘 밖 결제수단 키는 거부한다 (최상위 .strict 유지)', () => {
+    expect(PaymentFeesSchema.safeParse({ bitcoin: 0.01 }).success).toBe(false);
+    expect(PaymentFeesSchema.safeParse({ card: 0.025, bitcoin: 0.01 }).success).toBe(false);
+  });
 });
 
 // 드리프트 가드 — FLAT_FEE_METHODS(isFlatFeeMethod)와 스키마의 단위가 따로 관리되므로,
