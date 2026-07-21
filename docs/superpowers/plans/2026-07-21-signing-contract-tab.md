@@ -209,6 +209,15 @@ describe('buildSigningCardView', () => {
     }
   });
 
+  it('canceled — 종결 노드는 중립 종결(ended) + 취소 시각', () => {
+    const v = buildSigningCardView(view('canceled', bothPending), 'buyer');
+    expect(v.nodes[3]).toMatchObject({
+      key: 'terminal',
+      state: 'ended',
+      at: '2026-07-20T08:05:00Z',
+    });
+  });
+
   it('send_failed — 발송 노드가 failed, 다시 시작 액션', () => {
     const v = buildSigningCardView(view('send_failed'), 'buyer');
     expect(v.nodes[1]).toMatchObject({ key: 'send', state: 'failed' });
@@ -259,7 +268,12 @@ import type { ChipColor } from '@/components/primitives/Chip';
 import type { SigningContract, SigningParticipant, SigningView } from '@/lib/types/signing';
 
 export type SigningSide = 'buyer' | 'pg';
-export type SigningNodeState = 'done' | 'active' | 'pending' | 'failed';
+/**
+ * done/failed 는 시각(`at`)을 동반하는 종결, pending/active 는 아직 오지 않은 단계.
+ * ended 는 실패도 완료도 아닌 중립 종결(취소) — 일어난 일이라 시각을 갖지만
+ * 성공으로 칠해지지 않는다.
+ */
+export type SigningNodeState = 'done' | 'active' | 'pending' | 'failed' | 'ended';
 export type SigningIcon = 'clock' | 'alert' | 'pen' | 'check' | 'x' | 'slash';
 export type SigningActionId = 'remind' | 'cancel' | 'resend' | 'template';
 
@@ -370,6 +384,17 @@ function sentNode(contract: SigningContract): SigningNode {
   };
 }
 
+/** 아직 발송 전(awaiting/send_failed)의 첫 노드 — 선정 사실. */
+function awardedNode(contract: SigningContract, isPg: boolean): SigningNode {
+  return {
+    key: 'awarded',
+    kind: 'milestone',
+    label: isPg ? '이 견적이 선정됐어요' : '견적을 선정했어요',
+    state: 'done',
+    at: contract.createdAt,
+  };
+}
+
 export function buildSigningCardView(signing: SigningView, side: SigningSide): SigningCardView {
   const { contract, participants } = signing;
   const isPg = side === 'pg';
@@ -385,13 +410,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
           : '준비되면 자동으로 양측에 서명 링크가 발송돼요.',
         chip: { color: 'warning', label: isPg ? '등록 필요' : '계약서 준비 중' },
         nodes: [
-          {
-            key: 'awarded',
-            kind: 'milestone',
-            label: isPg ? '이 견적이 선정됐어요' : '견적을 선정했어요',
-            state: 'done',
-            at: contract.createdAt,
-          },
+          awardedNode(contract, isPg),
           {
             key: 'prepare',
             kind: 'milestone',
@@ -513,7 +532,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
             key: 'terminal',
             kind: 'milestone',
             label: '취소했어요',
-            state: 'pending',
+            state: 'ended',
             at: contract.canceledAt,
           },
         ],
@@ -530,13 +549,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         description: '전자서명 서비스에 일시적인 문제가 있었어요.',
         chip: { color: 'error', label: '시작 실패' },
         nodes: [
-          {
-            key: 'awarded',
-            kind: 'milestone',
-            label: isPg ? '이 견적이 선정됐어요' : '견적을 선정했어요',
-            state: 'done',
-            at: contract.createdAt,
-          },
+          awardedNode(contract, isPg),
           {
             key: 'send',
             kind: 'milestone',
@@ -774,6 +787,17 @@ describe('SigningTimeline', () => {
     expect(items[3]).toHaveTextContent('계약 완료');
   });
 
+  it('중립 종결(ended) 노드도 시각을 그린다', () => {
+    render(
+      <SigningTimeline
+        nodes={[
+          { key: 'terminal', kind: 'milestone', label: '취소했어요', state: 'ended', at: '2026-07-20T08:05:00Z' },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('listitem')).toHaveTextContent('07-20');
+  });
+
   it('마일스톤의 설명(detail)도 노출한다', () => {
     render(
       <SigningTimeline
@@ -819,13 +843,17 @@ const discClass: Record<SigningNode['state'], string> = {
   pending:
     'text-[var(--md-sys-color-on-surface-variant)] shadow-[inset_0_0_0_1.5px_var(--md-sys-color-outline)]',
   failed: 'bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)]',
+  ended:
+    'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]',
 };
 
+// ended(취소)는 일어난 일이므로 pending 의 빈 링이 아니라 중립색으로 채운다.
 const markClass: Record<SigningNode['state'], string> = {
   done: 'bg-[var(--md-sys-color-tertiary)]',
   active: 'bg-[var(--md-sys-color-warning)]',
   pending: 'shadow-[inset_0_0_0_1.5px_var(--md-sys-color-outline)]',
   failed: 'bg-[var(--md-sys-color-error)]',
+  ended: 'bg-[var(--md-sys-color-outline)]',
 };
 
 export function SigningTimeline({ nodes }: { nodes: SigningNode[] }) {
