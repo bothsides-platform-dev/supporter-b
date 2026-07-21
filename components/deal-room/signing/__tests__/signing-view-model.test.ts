@@ -86,7 +86,7 @@ describe('buildSigningCardView', () => {
   it('awaiting_pg_template — PG는 등록 CTA를 받는다', () => {
     const v = buildSigningCardView(view('awaiting_pg_template'), 'pg');
     expect(v.title).toBe('계약서 템플릿을 등록해 주세요');
-    expect(v.chip).toEqual({ color: 'warning', label: '등록 필요' });
+    expect(v.chip).toEqual({ color: 'warning', label: '계약서 등록 필요' });
     expect(v.actions).toEqual([
       { id: 'template', label: '서명 템플릿 등록하기', variant: 'filled' },
     ]);
@@ -129,6 +129,7 @@ describe('buildSigningCardView', () => {
       view('declined', [part('buyer', 'signed'), part('pg', 'rejected')]),
       'buyer',
     );
+    expect(v.chip).toEqual({ color: 'error', label: '서명 거절' });
     expect(v.nodes[2]).toMatchObject({ state: 'failed' });
     expect(v.nodes[2].chip).toEqual({ color: 'error', label: '거절' });
     expect(v.nodes[3]).toMatchObject({ key: 'terminal', state: 'failed' });
@@ -152,11 +153,17 @@ describe('buildSigningCardView', () => {
 
   it('canceled — 종결 노드는 중립 종결(ended) + 취소 시각', () => {
     const v = buildSigningCardView(view('canceled', bothPending), 'buyer');
+    expect(v.chip).toEqual({ color: 'surface', label: '서명 취소' });
     expect(v.nodes[3]).toMatchObject({
       key: 'terminal',
       state: 'ended',
       at: '2026-07-20T08:05:00Z',
     });
+  });
+
+  it('expired — 칩 라벨이 능동형 용어집 표현을 쓴다', () => {
+    const v = buildSigningCardView(view('expired', bothPending), 'buyer');
+    expect(v.chip).toEqual({ color: 'error', label: '서명 기한 지남' });
   });
 
   it('canceled — 발송 전(참여자 0, sentAt 없음) 취소도 4노드이고 발송 사실을 주장하지 않는다', () => {
@@ -237,7 +244,7 @@ describe('buildSigningSummary', () => {
       dot: 'tertiary',
     });
     expect(buildSigningSummary(view('awaiting_pg_template'), 'pg')).toEqual({
-      label: '등록 필요',
+      label: '계약서 등록 필요',
       dot: 'warning',
     });
   });

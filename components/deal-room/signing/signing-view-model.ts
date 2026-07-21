@@ -170,7 +170,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         description: isPg
           ? '등록하는 즉시 이 계약의 서명이 자동으로 시작돼요.'
           : '준비되면 자동으로 양측에 서명 링크가 발송돼요.',
-        chip: { color: 'warning', label: isPg ? '등록 필요' : 'PG사가 계약서 준비 중' },
+        chip: { color: 'warning', label: isPg ? '계약서 등록 필요' : 'PG사가 계약서 준비 중' },
         nodes: [
           awardedNode(contract, isPg),
           {
@@ -259,7 +259,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         tone: 'error',
         title: '서명이 거절됐어요',
         description: '조건을 다시 맞춘 뒤 새로 발송할 수 있어요.',
-        chip: { color: 'error', label: '거절됨' },
+        chip: { color: 'error', label: '서명 거절' },
         nodes: [
           openingNode(contract, isPg),
           ...participantOrPlaceholderNodes(participants, '서명 안 함'),
@@ -284,7 +284,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         tone: 'error',
         title: '서명 기한이 지났어요',
         description: '서명 링크가 만료됐어요. 다시 발송하면 새 링크가 나가요.',
-        chip: { color: 'error', label: '만료됨' },
+        chip: { color: 'error', label: '서명 기한 지남' },
         nodes: [
           openingNode(contract, isPg),
           ...participantOrPlaceholderNodes(participants, '서명 안 함'),
@@ -315,7 +315,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         tone: 'surface',
         title: '전자서명이 취소됐어요',
         description: '진행 중이던 서명이 중단됐어요.',
-        chip: { color: 'surface', label: '취소됨' },
+        chip: { color: 'surface', label: '서명 취소' },
         nodes: [
           openingNode(contract, isPg),
           ...participantOrPlaceholderNodes(participants, '서명 안 함'),
