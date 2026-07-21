@@ -65,13 +65,19 @@
 ### `outline` 토큰이 텍스트 색으로 쓰이는 32곳 — WCAG AA 미달 (P2)
 `text-[var(--md-sys-color-outline)]`(#D4D6DC)은 라이트 배경에서 **1.35:1**이라 본문 대비 기준(4.5:1)에 한참 못 미치는데, `md-label-*`와 함께 라벨·플레이스홀더·보조 문구 32곳에 쓰이고 있다. DESIGN.md §2가 명문화한 저대비 예외는 **보더**(`outline-variant`, 비텍스트 3:1) 한정이라 텍스트에는 적용되지 않는다. 대표: `components/shell/Footer.tsx`(저작권 줄), `components/inbox/bid-wizard/BidStepProposal.tsx`(× 제거 버튼), `components/rfp/RfpInviteManager.tsx`, `components/settings/InviteMemberForm.tsx`. 판단 필요: ① 전부 `on-surface-variant`로 올릴지, ② 라벨 성격만 올리고 플레이스홀더(`—`)·hover 있는 컨트롤은 남길지, ③ `outline`을 텍스트에 쓰지 않는 규칙을 DESIGN.md에 명문화하고 드리프트 가드에 추가할지. 계층 역전이 명확했던 푸터 컬럼 헤딩 3곳은 v0.4.4.0에서 선반영(FINDING-001). (발견: /design-review, C4 스윕 PR 2026-07-21)
 
+### 인앱 테마 토글이 브라우저 크롬 색을 안 따라감 (P3)
+`app/layout.tsx` 의 `viewport.themeColor` 는 `prefers-color-scheme`(OS 설정)으로만 분기하는 정적 선언이라, 사용자가 인앱 테마 토글로 OS 와 다른 테마를 고르면 캔버스는 다크인데 모바일 상태바는 라이트(또는 반대)로 남는다. 값 자체는 캔버스 토큰과 일치하며(`app/__tests__/chrome-colors.test.ts` 가 고정), DESIGN.md §2 에 범위 한정 문구로 명문화해 둔 상태 — 기능 결함이 아니라 미구현 축이다. 닫는 법: 테마 스토어가 클래스를 토글할 때 `<meta name="theme-color">` 의 content 도 함께 갱신해 크롬이 실효 캔버스를 따라가게 한다. (발견: /ship design 리뷰 2026-07-21)
+
+### AnimatedBrandMark 진입 애니메이션 — DESIGN.md 예외 미문서화 (P4)
+`components/primitives/AnimatedBrandMark.tsx`(v0.3.0.0, `SidebarBrand`가 인증 앱 셸에 마운트)의 1회성 SVG `pathLength`/`fillOpacity` draw-on 진입 연출이 DESIGN.md §9의 `(app)/**` 두 예외(축하 모먼트·테마 전환 리빌) 어디에도 명시되지 않았다(같은 릴리스 범위의 `.coachmark-pulse`는 예외로 문서화됨과 대비). 기능적 결함은 아님 — 세 번째 예외로 DESIGN.md에 명문화할지, `/design-review`로 하드룰 위반 여부를 재검토할지 정책 결정 필요. (발견: /ship 문서 동기화 점검, dev→main 릴리스 컷 2026-07-17)
+
 ### 라벨 타이포 표기가 두 가지 — `.md-label-*` vs 토큰 나열형 (P3)
 `.md-label-{small,medium,large}`(v0.4.4.0 신설)와, 같은 결과를 내는 기존 나열형 `text-[length:var(--md-typescale-label-*-size)] font-[number:...] leading-[...] tracking-[...]`이 공존한다(나열형 36곳, 주로 `components/shell/**`). 기능 차이는 없지만 한 가지를 두 가지로 쓰는 상태라 다음 사람이 어느 쪽을 따라야 할지 모호하다. 나열형을 `.md-label-*`로 흡수하면 라벨 타이포가 한 출처로 모인다. (발견: /design-review, C4 스윕 PR 2026-07-21)
 
 ## SEO / Branding
 
 ### 브랜드명 리터럴 하드코딩 — SSOT 미참조 (P3)
-`서포트 B`→`서포트비` 전환(v0.2.78.0) 과정에서 확인됨: 이메일/SMS 제목 템플릿 11개 파일(`lib/server/services/{rfp,bid,chat,team-chat,auth,workspace}.ts`, `lib/server/outbox/{chat-digest-flush,team-chat-digest-flush}.ts`, `lib/server/outbox/templates/_layout.tsx`, `lib/server/actions/auth/sendPhoneOtpAction.ts`, `lib/server/notifications/admin-signup.ts`)와 `scripts/generate-og-image.ts`가 브랜드명을 `siteConfig.name`/`PRODUCT_NAME`(SSOT) 참조 없이 리터럴로 하드코딩한다. 이번 리네임에서 12개 파일을 find/replace로 손대야 했던 것이 비용 증거. 후속: 공유 상수를 각 subject 템플릿에 interpolate하도록 리팩터(별도 PR — 템플릿 로직 변경이라 문구 교체보다 범위가 큼). (발견: /ship maintainability+adversarial 리뷰 2026-07-07, 브랜드 전환 PR — 두 리뷰어가 독립적으로 동일 패턴 지적)
+`서포트 B`→`서포트비` 전환(v0.2.78.0) 과정에서 확인됨: 이메일/SMS 제목 템플릿 11개 파일(`lib/server/services/{rfp,bid,chat,team-chat,auth,workspace}.ts`, `lib/server/outbox/{chat-digest-flush,team-chat-digest-flush}.ts`, `lib/server/outbox/templates/_layout.tsx`, `lib/server/actions/auth/sendPhoneOtpAction.ts`, `lib/server/notifications/admin-signup.ts`)와 `scripts/generate-og-image.ts`가 브랜드명을 SSOT 참조 없이 리터럴로 하드코딩한다(SSOT 는 `siteConfig.name` 하나 — v0.4.3.0 에서 `PRODUCT_NAME` 이 거기서 파생하도록 정리됐다). 이번 리네임에서 12개 파일을 find/replace로 손대야 했던 것이 비용 증거. 후속: 공유 상수를 각 subject 템플릿에 interpolate하도록 리팩터(별도 PR — 템플릿 로직 변경이라 문구 교체보다 범위가 큼). (발견: /ship maintainability+adversarial 리뷰 2026-07-07, 브랜드 전환 PR — 두 리뷰어가 독립적으로 동일 패턴 지적)
 
 ## Landing
 
@@ -98,6 +104,18 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 `scripts/sweep-r2-orphans.ts` — ListObjectsV2(prefix `attachments/`) → `attachmentRepo.findExistingIds` 배치 대사 → row 없는 키 중 LastModified 24h 초과만 DeleteObjects. `--dry-run` 지원, PM2 cron(일 1회) 등록. 고아 발생 경로: RFP 삭제 cascade(`rfpRepo.deleteById`, `_purgeUnverifiedSignup`) + sweep-uploads 의 객체 삭제 실패 잔존분. bid_note 삭제는 bid.ts가 storage.delete() 명시 호출로 이미 커버. **주의**: 이 sweeper는 "row 없는 객체" 방향만 정리한다. 반대 방향 중 **pending row(업로드 미완료)는 presigned 전환으로 `/api/cron/sweep-uploads` 가 이미 커버** — 남는 미커버는 "ready row인데 객체가 없는" 희귀 케이스(현재 R2 presigned URL 이 NoSuchKey 를 반환)뿐. (발견: /ship adversarial 리뷰 2026-07-05, presigned 전환 반영 2026-07-05)
 
 ## 견적 확장 (current_terms)
+
+### 오픈보드 공개 범위 제품 검토 — 특히 customPaymentMethodLabels (P2)
+문서가 오랫동안 "구매사명·제목·홈페이지만"이라 서술해 온 탓에 가려져 있었지만, 오픈보드는 실제로 9필드를 공개해 왔다(코드·가드 테스트는 처음부터 일관, 산문만 스테일 — v0.4.3.0 에서 정정). 추가 6필드는 전부 비경쟁 정보라는 판단이지만 **`customPaymentMethodLabels` 는 구매사가 직접 입력한 자유 텍스트가 비초대 PG 전원에게 브로드캐스트되는 유일한 필드**다. 구매사가 거기에 내부 명칭·거래처명 같은 걸 적을 수 있어 노출 적절성은 코드 문제가 아니라 제품 결정이다. 검토 축: ① 그대로 공개, ② 게시판에서만 제거(초대 PG 에겐 유지), ③ 입력 시 공개 사실을 고지. (발견: /ship 적대적 리뷰 2026-07-21)
+
+### 요청조건 뷰 솔루션 표기 무테스트 (P3)
+`components/rfp/RequestConditionsView.tsx` 의 `formatSolution` — `self`/`other` + `currentSolutionDetail` 이면 `자체 개발 (ABC몰)` 처럼 상세를 괄호로 덧붙이는데, 이 컴포넌트는 전용 테스트 파일이 없고 딜룸 스위트 두 곳에서 `vi.mock` 으로 대체돼 어느 계층에서도 검증되지 않는다. 로직 자체(`solutionLabel`)는 커버됨 — 빠진 건 상세 접미사 분기와 렌더 경로. (발견: /ship 커버리지 감사 2026-07-21)
+
+### createRfpAction 어휘 밖 입력 거부 미검증 (P4)
+`currentSolution`·`requiredPaymentMethods` 는 캐논니컬 어휘 전체가 통과하는지는 순회 가드로 고정돼 있으나, **어휘 밖 값이 거부되는지**는 zod 기본 동작에 의존할 뿐 테스트가 없다. `z.enum` 이 실수로 `z.string()` 으로 느슨해지면 아무것도 깨지지 않는다. (발견: /ship 커버리지 감사 2026-07-21)
+
+### SCREEN_DESIGN 이 삭제된 컬럼을 아직 문서화 (P4)
+`SCREEN_DESIGN.md` 의 현재 카드 수수료 opt-out 설명이 `current_fee_visible_to_pg` 를 컬럼으로 서술하는데, 이 컬럼은 v0.2.26.2 에서 DROP 됐고 `current_terms` JSONB + `hidden_from_pg` 가 유일한 저장소다(CLAUDE.md 는 이미 정확). 문서만 갱신하면 되는 건이지만 스키마 서술이라 오해 비용이 있다. (발견: /ship maintainability 리뷰 2026-07-21)
 
 ### (조건부) hidden_from_pg write-edge 검증
 **Priority:** P3
@@ -146,6 +164,8 @@ CoachmarkTour의 capture 클릭 리스너가 마지막 action 클릭 즉시 `onF
 
 ### deriveAnyFeeFilled 경계값 전용 테스트 부재 (P3)
 `components/inbox/bid-wizard/bid-wizard-validation.ts`의 `deriveAnyFeeFilled`(BidWizard.tsx에서 분리된 공용 함수, 튜토리얼 fixture 검증과 공유)에 전용 단위 테스트가 없다 — `fee='0'`(포함돼야 함), `fee='-1'`(제외돼야 함), 공백 문자열(`parseFloat`→NaN, 제외돼야 함), 다중 tier 중 하나만 채워진 경우, 빈 fees/methods 등 경계값이 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
+
+**부분 해소 (v0.4.3.0)**: 스칼라 판정이 `isFeeFilled` 로 추출돼(진행률 표시 `BidStepFees` 와 공유 — 기준 갈림 자체를 제거) `0`·`-1`·빈 문자열·미입력 키 4개 경계값은 `__tests__/bid-wizard-validation.test.ts` 가 커버한다. **남은 것은 조합 축**: 다중 tier 중 하나만 채워진 경우, 커스텀 수단, 빈 fees/methods 에서의 `deriveAnyFeeFilled` 자체 동작.
 
 ## NTS / 사업자번호 조회
 

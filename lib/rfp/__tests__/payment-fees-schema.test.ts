@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
-import { PAYMENT_METHOD_LABELS, isFlatFeeMethod, type PaymentMethod } from '@/lib/types/bid';
+import {
+  MERCHANT_TIERS,
+  PAYMENT_METHOD_LABELS,
+  isFlatFeeMethod,
+  type PaymentMethod,
+} from '@/lib/types/bid';
 
 // PAYMENT_METHOD_LABELS는 Record<PaymentMethod,string>이라 컴파일러가 전체 유니온을
 // 강제한다 — PAYMENT_METHOD_CATEGORIES(카테고리 배열)에서 파생하면 카테고리 배치를
@@ -63,6 +68,32 @@ describe('PaymentFeesSchema — 애플페이·삼성페이 (간편결제, 정률
     expect(
       PaymentFeesSchema.safeParse({ samsung_pay: { sole: 0.004, general: 0.017 } }).success,
     ).toBe(true);
+  });
+});
+
+// 드리프트 가드 — 구간맵의 키 집합은 lib/types/bid.ts 의 MERCHANT_TIERS 가 캐논니컬이다.
+// 스키마가 구간을 따로 나열하면 새 등급을 추가했을 때 .strict() 가 그 등급의 요율을
+// "알 수 없는 키"로 조용히 거부해, PG 가 입력한 우대수수료가 저장되지 않는다.
+describe('PaymentFeesSchema 구간 ↔ MERCHANT_TIERS 드리프트 가드', () => {
+  it.each([...MERCHANT_TIERS])('%s 구간 요율을 수용한다', (tier) => {
+    expect(PaymentFeesSchema.safeParse({ card: { [tier]: 0.015 } }).success).toBe(true);
+  });
+
+  it('전 구간을 한 번에 담은 구간맵을 수용한다', () => {
+    const allTiers = Object.fromEntries(MERCHANT_TIERS.map((t) => [t, 0.015]));
+    expect(PaymentFeesSchema.safeParse({ card: allTiers }).success).toBe(true);
+  });
+
+  it('어휘 밖 구간 키는 거부한다 (.strict 유지)', () => {
+    expect(PaymentFeesSchema.safeParse({ card: { platinum: 0.015 } }).success).toBe(false);
+  });
+
+  // 최상위 .strict() 도 함께 고정 — 스키마가 Object.fromEntries 로 조립되도록 바뀌면서
+  // .strict() 가 빠져도 아무 테스트도 깨지지 않는 상태였다. 빠지면 임의 키가 저장되는
+  // paymentFees 에 그대로 섞여 들어간다.
+  it('어휘 밖 결제수단 키는 거부한다 (최상위 .strict 유지)', () => {
+    expect(PaymentFeesSchema.safeParse({ bitcoin: 0.01 }).success).toBe(false);
+    expect(PaymentFeesSchema.safeParse({ card: 0.025, bitcoin: 0.01 }).success).toBe(false);
   });
 });
 

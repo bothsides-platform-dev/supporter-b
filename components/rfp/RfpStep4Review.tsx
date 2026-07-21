@@ -18,7 +18,7 @@ import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
 import { FieldError } from '@/components/primitives/FieldError';
 import { Divider } from '@/components/primitives/Divider';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
-import { SOLUTION_LABELS } from '@/lib/rfp/solutions';
+import { solutionLabel } from '@/lib/rfp/solutions';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -90,6 +90,14 @@ export function RfpStep4Review({
     ...draft.requiredPaymentMethods.map((m) => PAYMENT_METHOD_LABELS[m]),
     ...draft.customPaymentMethods.map((c) => c.label),
   ].join(', ');
+
+  // solutionLabel 은 값이 없을 때만 undefined 를 돌려주므로, 라벨을 먼저 구하고
+  // 그 유무로 분기한다(빈 문자열 폴백은 도달 불가능한 죽은 가지였다).
+  const solutionLabelText = solutionLabel(draft.currentSolution);
+  const solutionSummary = solutionLabelText
+    ? solutionLabelText +
+      (draft.currentSolutionDetail ? ` — ${draft.currentSolutionDetail}` : '')
+    : '';
 
   return (
     <div className="space-y-6">
@@ -186,18 +194,7 @@ export function RfpStep4Review({
             label="배송 및 서비스 기간"
             value={draft.deliveryServicePeriod}
           />
-          <ReviewRow
-            label="현재 솔루션"
-            value={
-              draft.currentSolution
-                ? (SOLUTION_LABELS[draft.currentSolution] ??
-                    draft.currentSolution) +
-                  (draft.currentSolutionDetail
-                    ? ` — ${draft.currentSolutionDetail}`
-                    : '')
-                : ''
-            }
-          />
+          <ReviewRow label="현재 솔루션" value={solutionSummary} />
           <ReviewRow label="견적 결제수단" value={paymentMethodSummary} />
         </div>
       </div>

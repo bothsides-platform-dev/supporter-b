@@ -3,7 +3,30 @@ import {
   getBidWizardValidity,
   getFirstIncompleteBidStep,
   isCycleValid,
+  isFeeFilled,
 } from '../bid-wizard-validation';
+
+// 수수료 칸이 "채워졌다"의 판정 — 진행률 표시(BidStepFees)와 제출 가능 판정
+// (deriveAnyFeeFilled)이 같은 기준을 써야 한다. 다르면 진행률은 100%인데 제출은
+// 막히는(또는 그 반대) 어긋남이 난다.
+describe('isFeeFilled', () => {
+  it('값이 있으면 채워진 것으로 본다', () => {
+    expect(isFeeFilled({ card: '2.5' }, 'card')).toBe(true);
+  });
+
+  it('0 도 채워진 것으로 본다 (무료 수수료는 유효한 제안)', () => {
+    expect(isFeeFilled({ card: '0' }, 'card')).toBe(true);
+  });
+
+  it('빈 문자열·미입력 키는 채워지지 않은 것으로 본다', () => {
+    expect(isFeeFilled({ card: '' }, 'card')).toBe(false);
+    expect(isFeeFilled({}, 'card')).toBe(false);
+  });
+
+  it('음수는 채워지지 않은 것으로 본다', () => {
+    expect(isFeeFilled({ card: '-1' }, 'card')).toBe(false);
+  });
+});
 
 describe('getBidWizardValidity', () => {
   it('정산주기 미입력 + 수수료 없음 → 1·2단계 미완료, 3·4단계 완료', () => {
