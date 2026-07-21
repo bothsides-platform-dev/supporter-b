@@ -113,6 +113,27 @@ describe('WorkspaceService.changeMemberRole', () => {
     expect(result).toEqual({ ok: false, error: 'LAST_ADMIN' });
   });
 
+  it('demotes an approved admin when another approved admin remains', async () => {
+    const admin = await seedUser(db, { email: 'admin@test.com' });
+    const coAdmin = await seedUser(db, { email: 'coadmin@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, coAdmin.id, 'admin');
+
+    const result = await service.changeMemberRole(
+      { targetUserId: coAdmin.id, role: 'member' },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+
+    expect(result.ok).toBe(true);
+
+    const [row] = await db
+      .select({ role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, coAdmin.id)));
+    expect(row.role).toBe('member');
+  });
+
   // 미승인 admin 은 countAdmins 집계 대상이 아니므로 강등해도 마지막 admin 이 사라지지 않는다.
   it('demotes a pending_approval admin without LAST_ADMIN', async () => {
     const admin = await seedUser(db, { email: 'admin@test.com' });
@@ -135,6 +156,22 @@ describe('WorkspaceService.changeMemberRole', () => {
       .from(workspaceMembers)
       .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, pending.id)));
     expect(row.role).toBe('member');
+  });
+
+  // 가드는 'approved' 인지로 판정한다 — 'pending_approval 이 아님' 이 아니라.
+  it('demotes a rejected admin without LAST_ADMIN', async () => {
+    const admin = await seedUser(db, { email: 'admin@test.com' });
+    const rejected = await seedUser(db, { email: 'rejected@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, rejected.id, 'admin', { approvalStatus: 'rejected' });
+
+    const result = await service.changeMemberRole(
+      { targetUserId: rejected.id, role: 'member' },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+
+    expect(result.ok).toBe(true);
   });
 
   it('returns FORBIDDEN_NOT_ADMIN when caller is not admin', async () => {
