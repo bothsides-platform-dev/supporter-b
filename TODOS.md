@@ -133,6 +133,18 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 
 **부분 해소 (v0.2.48.0)**: admin 권한 표면(WorkspaceService invite/resend/cancel/changeRole/removeMember + renameWorkspace + listAuditLogs + audit-log 페이지)은 `isApprovedAdmin`(role=admin AND approvalStatus=approved)로 서버에서 차단했고, countAdmins·deleteAccount last-admin 판정은 승인된 admin 만 집계. **v0.2.73.0 갱신**: rfp 초대 메일 수신자는 admin 한정(`adminRecipients`, 이후 제거됨)에서 승인된 멤버 전원(`approvedMemberRecipients`)으로 확장됨 — 여전히 `approvalStatus='approved'` 필터는 유지. **남은 범위**: 비-admin pg 서버액션 전반에 대한 blanket `requirePgSession()` 승인 게이트는 여전히 미구현.
 
+### approval_status 컬럼에 enum/CHECK 제약 없음 — 드리프트 시 3곳 fail-open (P2)
+`lib/db/schema/workspace-members.ts` 에서 `role` 은 진짜 pg enum(`memberRoleEnum`)인데 `approval_status` 는 제약 없는 `text` + `default 'approved'` 다. 이 컬럼을 쓰는 어드민 콘솔은 **별도 레포**(`admin-supporter-b`)라 타입으로 묶여 있지 않다. 값이 드리프트하면(`'Approved'`·`'active'`·`''`) `isApprovedAdmin` 이 false 가 되는데, 권한 게이트 6곳은 fail-closed 로 안전한 반면 **fail-open 이 3곳** 있다: `changeMemberRole` 의 LAST_ADMIN 가드(안 걸림), `AuthService.deleteAccount`·`getDeleteAccountStatus` 의 blocking 판정(마지막 실 admin 이 탈퇴 가능 → 워크스페이스 고아화). **수정**: `CHECK (approval_status IN ('approved','pending_approval','rejected'))` 추가 또는 pg enum 승격(어드민 레포와 동시 배포 조율 필요). (발견: /ship 적대 리뷰 F3, v0.4.7.0)
+
+### listMembershipsWithMembers 의 `as` 캐스트가 projection 드리프트를 세탁 (P3)
+`lib/server/repositories/drizzle/workspace.ts` 의 members 서브쿼리가 `as { userId; role; approvalStatus }[]` 로 단언돼 있어, 누가 select 에서 `approvalStatus` 를 빼도 타입 에러가 안 난다 — 런타임에 `undefined` 가 되고 `isApprovedAdmin` 이 조용히 false 를 반환해 deleteAccount 의 마지막-admin 차단이 fail-open 된다. **수정**: 캐스트를 걷어내고 추론 타입을 그대로 쓰면 드리프트가 컴파일 에러가 된다. (발견: /ship 적대 리뷰 F4, v0.4.7.0 — 선존재)
+
+### deleteAccount 의 solo/blocking 판정이 미승인 멤버를 참여자로 셈 (P3)
+`AuthService.deleteAccount`·`getDeleteAccountStatus` 의 `allMembers.length === 1` 분기는 `listMembershipsWithMembers` 의 필터 없는 members 를 쓴다 — `pending_approval`·`rejected` 멤버와 시스템 계정까지 센다(`hydrate()` 는 시스템 계정을 제외하는 것과 대비). 결과: 승인 admin 1명 + 미승인 canonical-PG 합류자 1명인 워크스페이스는 solo 도 아니고(자동 삭제 안 됨) 탈퇴도 안 된다(LAST_ADMIN). 탈출구는 있고(미승인 멤버 먼저 제거) 0-admin 을 막는다는 점에선 fail-closed 라 정책 판단 사항. v0.4.7.0 이 `changeMemberRole` 에서 없앤 것과 같은 계열의 오탐. (발견: /ship 적대 리뷰 F5, v0.4.7.0 — 선존재)
+
+### removeMember 의 0-admin 안전성이 문서화되지 않은 창발 속성 (P4)
+`WorkspaceService.removeMember` 에는 마지막-admin 가드가 아예 없다 — 승인 admin 이 다른 승인 admin 을 무조건 제거할 수 있다. 지금 안전한 이유는 호출자가 승인 admin 이어야 하고(`isApprovedAdmin`) `SELF_REMOVAL` 이 자기 제거를 막아 최소 1명이 남기 때문인데, 이 불변식이 어디에도 적혀 있지 않다. `SELF_REMOVAL` 을 푸는 순간 0-admin 경로가 된다. **수정**: 최소한 주석으로 불변식 명시, 또는 `changeMemberRole` 과 같은 트랜잭션-내 카운트 가드 적용. (발견: /ship 적대 리뷰 F7, v0.4.7.0 — 선존재)
+
 ### createRfpAction — requiredPaymentMethods 배열 길이 상한 없음 (P4)
 `allowedPgWorkspaceIds`(`.max(50)`)·`customPaymentMethods`(`.max(20)`)와 달리 `requiredPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).optional().default([])`에는 개수 상한이 없다. 각 원소는 고정 enum이라 개별 값은 유효하지만, 동일 값을 대량 중복 제출해도 zod를 통과해 `rfps.required_payment_methods`(text[])에 그대로 저장된다. Next.js 서버 액션 기본 바디 제한(1MB)이 사실상 상한 역할을 하긴 하나 명시적 가드는 아님. **수정**: `.max(11)`(캐논니컬 결제수단 총 개수) + 중복 제거(`Array.from(new Set(...))`) 추가. (발견: /ship adversarial 리뷰, 애플페이·삼성페이 추가 PR, 2026-07-19)
 
