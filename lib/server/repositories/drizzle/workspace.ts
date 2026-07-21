@@ -535,7 +535,12 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       name: string;
       role: string;
       approvalStatus: MemberApprovalStatus;
-      members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
+      members: {
+        userId: string;
+        role: string;
+        approvalStatus: MemberApprovalStatus;
+        isSystemAccount: boolean;
+      }[];
     }[]
   > {
     const db = this.h(tx);
@@ -559,7 +564,12 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       name: string;
       role: string;
       approvalStatus: MemberApprovalStatus;
-      members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
+      members: {
+        userId: string;
+        role: string;
+        approvalStatus: MemberApprovalStatus;
+        isSystemAccount: boolean;
+      }[];
     }[] = [];
     for (const m of myMemberships) {
       const members = await db
@@ -567,8 +577,13 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           userId: workspaceMembers.userId,
           role: workspaceMembers.role,
           approvalStatus: workspaceMembers.approvalStatus,
+          // Needed by the account-deletion pre-check: system accounts are
+          // hidden from every UI member list, so they must not be offered as
+          // someone to hand admin over to.
+          isSystemAccount: usersTable.isSystemAccount,
         })
         .from(workspaceMembers)
+        .innerJoin(usersTable, eq(usersTable.id, workspaceMembers.userId))
         .where(eq(workspaceMembers.workspaceId, m.workspaceId));
       result.push({
         workspaceId: m.workspaceId,

@@ -1,13 +1,14 @@
 'use server';
 
 import { requireSession } from '@/lib/auth/session';
-import { isApprovedAdmin } from '@/lib/auth/active-workspace';
+import { classifyAccountDeletion } from '@/lib/auth/account-deletion';
+import type { BlockingWorkspace, WorkspaceStub } from '@/lib/auth/account-deletion';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 
-export type WorkspaceStub = { id: string; name: string };
+export type { BlockingWorkspace, WorkspaceStub };
 
 export type GetDeleteAccountStatusResult =
-  | { ok: true; blockingWorkspaces: WorkspaceStub[]; soloWorkspaces: WorkspaceStub[] }
+  | { ok: true; blockingWorkspaces: BlockingWorkspace[]; soloWorkspaces: WorkspaceStub[] }
   | { ok: false; error: string };
 
 /**
@@ -29,25 +30,9 @@ export async function getDeleteAccountStatus(): Promise<GetDeleteAccountStatusRe
     await getWorkspaceRepo()
   ).listMembershipsWithMembers(userId);
 
-  const blockingWorkspaces: WorkspaceStub[] = [];
-  const soloWorkspaces: WorkspaceStub[] = [];
-
-  for (const membership of myMemberships) {
-    const allMembers = membership.members;
-
-    const stub: WorkspaceStub = { id: membership.workspaceId, name: membership.name };
-
-    if (allMembers.length === 1) {
-      soloWorkspaces.push(stub);
-    } else if (isApprovedAdmin(membership)) {
-      const otherAdmins = allMembers.filter(
-        (m) => m.userId !== userId && isApprovedAdmin(m),
-      );
-      if (otherAdmins.length === 0) {
-        blockingWorkspaces.push(stub);
-      }
-    }
-  }
+  // Same classifier the enforcing `AuthService.deleteAccount` path runs, so the
+  // dialog can never promise something the server then refuses (or vice versa).
+  const { blockingWorkspaces, soloWorkspaces } = classifyAccountDeletion(myMemberships, userId);
 
   return { ok: true, blockingWorkspaces, soloWorkspaces };
 }

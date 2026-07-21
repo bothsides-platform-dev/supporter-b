@@ -63,7 +63,7 @@ describe('DeleteAccountSection', () => {
   it('shows blocking workspaces when user is last admin', async () => {
     getDeleteAccountStatus.mockResolvedValue({
       ok: true,
-      blockingWorkspaces: [{ id: 'ws1', name: '구매사A' }],
+      blockingWorkspaces: [{ id: 'ws1', name: '구매사A', hasDelegatableMember: true }],
       soloWorkspaces: [],
     });
     const user = userEvent.setup();
@@ -75,6 +75,58 @@ describe('DeleteAccountSection', () => {
       expect(screen.getByText('구매사A')).toBeDefined(),
     );
     expect(screen.queryByLabelText('비밀번호')).toBeNull();
+  });
+
+  it('tells the user to hand over the role when a delegatable member exists', async () => {
+    getDeleteAccountStatus.mockResolvedValue({
+      ok: true,
+      blockingWorkspaces: [{ id: 'ws1', name: '구매사A', hasDelegatableMember: true }],
+      soloWorkspaces: [],
+    });
+    const user = userEvent.setup();
+
+    render(<DeleteAccountSection />);
+    await user.click(screen.getByRole('button', { name: '탈퇴하기' }));
+
+    await waitFor(() => expect(screen.getByText('구매사A')).toBeDefined());
+    expect(screen.getByText(/다른 멤버에게 관리자 권한을 넘겨주세요/)).toBeDefined();
+  });
+
+  // The old copy said "delegate admin to another member" unconditionally, which
+  // is impossible advice when every remaining member is pending, rejected, or a
+  // system account the member list does not even show.
+  it('tells the user to add an eligible member when nobody can take the role', async () => {
+    getDeleteAccountStatus.mockResolvedValue({
+      ok: true,
+      blockingWorkspaces: [{ id: 'ws1', name: '구매사A', hasDelegatableMember: false }],
+      soloWorkspaces: [],
+    });
+    const user = userEvent.setup();
+
+    render(<DeleteAccountSection />);
+    await user.click(screen.getByRole('button', { name: '탈퇴하기' }));
+
+    await waitFor(() => expect(screen.getByText('구매사A')).toBeDefined());
+    expect(screen.getByText(/권한을 넘길 수 있는 멤버가 없어요/)).toBeDefined();
+    expect(screen.queryByText(/다른 멤버에게 관리자 권한을 넘겨주세요/)).toBeNull();
+  });
+
+  it('never exposes the raw English role name to users', async () => {
+    getDeleteAccountStatus.mockResolvedValue({
+      ok: true,
+      blockingWorkspaces: [{ id: 'ws1', name: '구매사A', hasDelegatableMember: true }],
+      soloWorkspaces: [],
+    });
+    const user = userEvent.setup();
+
+    render(<DeleteAccountSection />);
+    await user.click(screen.getByRole('button', { name: '탈퇴하기' }));
+
+    await waitFor(() => expect(screen.getByText('구매사A')).toBeDefined());
+    // Read from document.body, not the render container: Base-UI portals the
+    // dialog out of the container, so asserting on `container` would pass
+    // vacuously no matter what the dialog says.
+    expect(document.body.textContent).not.toMatch(/admin/i);
   });
 
   it('shows password field and solo workspace warning when clear', async () => {

@@ -365,7 +365,13 @@ export interface WorkspaceRepo {
       name: string;
       role: string;
       approvalStatus: MemberApprovalStatus;
-      members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
+      members: {
+        userId: string;
+        role: string;
+        approvalStatus: MemberApprovalStatus;
+        /** UI 멤버 목록에서 숨겨지는 계정 — 권한 위임 대상으로 제안하면 안 된다. */
+        isSystemAccount: boolean;
+      }[];
     }[]
   >;
   /** bizProfile 포인터 갱신. */

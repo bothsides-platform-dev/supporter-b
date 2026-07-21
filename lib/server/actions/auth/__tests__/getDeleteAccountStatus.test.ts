@@ -79,7 +79,8 @@ describe('getDeleteAccountStatus', () => {
     const r = await getDeleteAccountStatus();
     expect(r).toEqual({
       ok: true,
-      blockingWorkspaces: [{ id: ws.id, name: '구매사P' }],
+      // 남은 멤버가 승인 대기 admin 뿐 — 권한을 넘길 상대가 없으므로 안내가 갈린다.
+      blockingWorkspaces: [{ id: ws.id, name: '구매사P', hasDelegatableMember: false }],
       soloWorkspaces: [],
     });
   });
@@ -95,7 +96,7 @@ describe('getDeleteAccountStatus', () => {
     const r = await getDeleteAccountStatus();
     expect(r).toEqual({
       ok: true,
-      blockingWorkspaces: [{ id: ws.id, name: '구매사A' }],
+      blockingWorkspaces: [{ id: ws.id, name: '구매사A', hasDelegatableMember: true }],
       soloWorkspaces: [],
     });
   });

@@ -368,8 +368,13 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(result[0].members).toHaveLength(2);
       expect(result[0].members).toEqual(
         expect.arrayContaining([
-          { userId: me.id, role: 'admin', approvalStatus: 'approved' },
-          { userId: other.id, role: 'member', approvalStatus: 'approved' },
+          { userId: me.id, role: 'admin', approvalStatus: 'approved', isSystemAccount: false },
+          {
+            userId: other.id,
+            role: 'member',
+            approvalStatus: 'approved',
+            isSystemAccount: false,
+          },
         ]),
       );
     });
@@ -381,7 +386,9 @@ describe('DrizzleWorkspaceRepository', () => {
 
       const result = await repo.listMembershipsWithMembers(me.id);
       expect(result).toHaveLength(1);
-      expect(result[0].members).toEqual([{ userId: me.id, role: 'admin', approvalStatus: 'approved' }]);
+      expect(result[0].members).toEqual([
+        { userId: me.id, role: 'admin', approvalStatus: 'approved', isSystemAccount: false },
+      ]);
     });
 
     it('returns empty array when the user belongs to no workspace', async () => {
@@ -1163,6 +1170,22 @@ describe('DrizzleWorkspaceRepository', () => {
       const memberships = await repo.listMembershipsWithMembers(a.id);
       const m = memberships.find((x) => x.workspaceId === ws.id);
       expect(m?.members.find((mm) => mm.userId === p.id)?.approvalStatus).toBe('pending_approval');
+    });
+
+    // The account-deletion pre-check needs this to avoid telling a user to
+    // delegate admin to a system account, which no member list renders.
+    it('listMembershipsWithMembers flags system accounts per member', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const a = await seedUser(db, { email: 'a@sys.test' });
+      const sys = await seedUser(db, { email: 'sys@sys.test', isSystemAccount: true });
+      await seedMembership(db, ws.id, a.id, 'admin');
+      await seedMembership(db, ws.id, sys.id, 'member');
+
+      const memberships = await repo.listMembershipsWithMembers(a.id);
+      const m = memberships.find((x) => x.workspaceId === ws.id);
+
+      expect(m?.members.find((mm) => mm.userId === sys.id)?.isSystemAccount).toBe(true);
+      expect(m?.members.find((mm) => mm.userId === a.id)?.isSystemAccount).toBe(false);
     });
   });
 });

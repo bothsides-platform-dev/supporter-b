@@ -112,7 +112,7 @@ describe('deleteAccountAction', () => {
     expect(r).toEqual({
       ok: false,
       error: 'LAST_ADMIN',
-      blockingWorkspaces: [{ id: ws.id, name: '구매사A' }],
+      blockingWorkspaces: [{ id: ws.id, name: '구매사A', hasDelegatableMember: true }],
     });
     expect(await isDeleted(admin.id)).toBe(false);
     expect(await isMember(ws.id, admin.id)).toBe(true);
