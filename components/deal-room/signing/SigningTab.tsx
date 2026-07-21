@@ -24,6 +24,7 @@ import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
+import { captureActionError } from '@/lib/observability/capture';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
@@ -33,6 +34,7 @@ import { SigningTimeline } from './SigningTimeline';
 import {
   buildSigningCardView,
   type SigningAction,
+  type SigningActionId,
   type SigningIcon,
   type SigningSide,
 } from './signing-view-model';
@@ -68,6 +70,11 @@ export function SigningTab({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  // 취소 확인 다이얼로그는 언마운트되지 않고 계약 상태가 바뀔 수 있다(웹훅+refresh
+  // 로 completed/declined/expired 전이) — 확정 시점에 v.actions 를 다시 찾으면
+  // 'cancel' 액션이 사라져 일반 폴백 문구('완료했어요')로 잘못 안내한다. 다이얼로그를
+  // 여는 시점의 문구를 그대로 들고 가 이 드리프트를 막는다.
+  const [cancelCopy, setCancelCopy] = useState<{ okMsg: string; failMsg: string } | null>(null);
 
   const { contract } = signing;
   const v = buildSigningCardView(signing, side);
@@ -77,6 +84,7 @@ export function SigningTab({
     fn: () => Promise<{ ok: boolean; error?: string }>,
     okMsg: string,
     failMsg: string,
+    actionId: SigningActionId,
   ) {
     setBusy(true);
     try {
@@ -87,7 +95,8 @@ export function SigningTab({
       }
       toast(okMsg, { type: 'success' });
       router.refresh();
-    } catch {
+    } catch (err) {
+      captureActionError('signing.tab_action', err, null, { actionId });
       toast(signingErrorMessage(undefined, failMsg), { type: 'error' });
     } finally {
       setBusy(false);
@@ -102,18 +111,17 @@ export function SigningTab({
         router.push('/signing-templates');
         return;
       case 'remind':
-        void run(() => remindSigningAction({ contractId: contract.id }), okMsg, failMsg);
+        void run(() => remindSigningAction({ contractId: contract.id }), okMsg, failMsg, 'remind');
         return;
       case 'cancel':
+        setCancelCopy({ okMsg, failMsg });
         setCancelOpen(true);
         return;
       case 'resend':
-        void run(() => resendSigningAction({ rfpCode }), okMsg, failMsg);
+        void run(() => resendSigningAction({ rfpCode }), okMsg, failMsg, 'resend');
         return;
     }
   }
-
-  const cancelAction = v.actions.find((a) => a.id === 'cancel');
 
   return (
     <section className="rounded-[10px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)]">
@@ -178,8 +186,9 @@ export function SigningTab({
         onConfirm={async () => {
           await run(
             () => cancelSigningAction({ contractId: contract.id }),
-            cancelAction?.okMsg ?? '완료했어요',
-            cancelAction?.failMsg ?? '처리하지 못했어요',
+            cancelCopy?.okMsg ?? '완료했어요',
+            cancelCopy?.failMsg ?? '처리하지 못했어요',
+            'cancel',
           );
           setCancelOpen(false);
         }}

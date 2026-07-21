@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { getOrCreateConversationAction } from '@/lib/server/actions/chat/getOrCreateConversationAction';
+import { captureActionError } from '@/lib/observability/capture';
 
 export function useStartConversation() {
   const router = useRouter();
@@ -23,8 +24,10 @@ export function useStartConversation() {
         router.push(`/messages?c=${r.conversationId}`);
         return;
       }
-    } catch {
-      // 액션이 throw 해도 사용자를 LOADING… 에 가두지 않는다.
+    } catch (err) {
+      // 액션이 throw 해도 사용자를 LOADING… 에 가두지 않는다 — 다만 조용히 삼키지
+      // 않고 관측 신호는 남긴다.
+      captureActionError('chat.start_conversation', err, null);
     }
     setStarting(false);
     router.push('/messages');

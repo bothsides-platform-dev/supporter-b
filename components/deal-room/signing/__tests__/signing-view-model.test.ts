@@ -38,6 +38,7 @@ function view(status: SigningContractStatus, participants: SigningParticipant[] 
       sentAt: '2026-07-20T05:02:00Z',
       ...(status === 'completed' ? { completedAt: '2026-07-21T01:24:00Z' } : {}),
       ...(status === 'canceled' ? { canceledAt: '2026-07-20T08:05:00Z' } : {}),
+      ...(status === 'expired' ? { expiresAt: '2026-07-27T05:02:00Z' } : {}),
     },
     participants,
   };
@@ -175,6 +176,15 @@ describe('buildSigningCardView', () => {
     expect(v.chip).toEqual({ color: 'error', label: '서명 기한 지남' });
   });
 
+  it('expired — 종결 노드가 만료 시각(expiresAt)을 담는다', () => {
+    const v = buildSigningCardView(view('expired', bothPending), 'buyer');
+    expect(v.nodes[3]).toMatchObject({
+      key: 'terminal',
+      state: 'failed',
+      at: '2026-07-27T05:02:00Z',
+    });
+  });
+
   it('canceled — 발송 전(참여자 0, sentAt 없음) 취소도 4노드이고 발송 사실을 주장하지 않는다', () => {
     const neverSent: SigningView = {
       contract: {
@@ -252,6 +262,20 @@ describe('buildSigningCardView', () => {
       okMsg: '다시 발송했어요',
       failMsg: '다시 발송하지 못했어요',
     });
+  });
+
+  it('알 수 없는 상태 — 서버가 새 status 를 내려도 안전한 대체 뷰를 돌려준다(4노드, 액션 없음)', () => {
+    const bogusStatus = 'bogus_future_status' as unknown as SigningContractStatus;
+    const v = buildSigningCardView(view(bogusStatus, bothPending), 'buyer');
+    expect(v.tone).toBe('surface');
+    expect(v.icon).toBe('slash');
+    expect(v.chip).toEqual({ color: 'surface', label: '상태 확인 필요' });
+    expect(v.title).toBe('전자서명 상태를 불러오지 못했어요');
+    expect(v.description).toBe('화면을 새로고침해도 그대로면 문의해 주세요.');
+    expect(v.docs).toEqual([]);
+    expect(v.actions).toEqual([]);
+    expect(v.note).toBe('선정 결과는 그대로예요.');
+    expect(v.nodes).toHaveLength(4);
   });
 });
 

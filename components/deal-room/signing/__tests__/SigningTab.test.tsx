@@ -14,9 +14,11 @@ vi.mock('@/lib/server/actions/signing/cancelSigningAction', () => ({
 vi.mock('@/lib/server/actions/signing/resendSigningAction', () => ({
   resendSigningAction: vi.fn(async () => ({ ok: false, error: 'CONTRACT_BUSY' })),
 }));
+vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 
 import { SigningTab } from '../SigningTab';
 import { toast } from '@/lib/toast';
+import { captureActionError } from '@/lib/observability/capture';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
@@ -211,7 +213,8 @@ describe('SigningTab', () => {
   });
 
   it('서버 액션이 reject되면 에러 토스트를 띄우고 버튼을 다시 활성화한다', async () => {
-    vi.mocked(resendSigningAction).mockRejectedValueOnce(new Error('boom'));
+    const boom = new Error('boom');
+    vi.mocked(resendSigningAction).mockRejectedValueOnce(boom);
     const user = userEvent.setup();
     render(
       <SigningTab
@@ -224,5 +227,53 @@ describe('SigningTab', () => {
     await user.click(button);
     expect(toast).toHaveBeenCalledWith('다시 발송하지 못했어요', { type: 'error' });
     expect(button).not.toBeDisabled();
+  });
+
+  it('서버 액션이 throw 하면 Sentry 로 관측 신호를 보낸다(조용히 삼키지 않는다)', async () => {
+    const boom = new Error('boom');
+    vi.mocked(resendSigningAction).mockRejectedValueOnce(boom);
+    const user = userEvent.setup();
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('declined', [part('buyer', 'signed'), part('pg', 'rejected')])}
+        side="buyer"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '다시 발송' }));
+    expect(captureActionError).toHaveBeenCalledWith(
+      'signing.tab_action',
+      boom,
+      null,
+      expect.objectContaining({ actionId: 'resend' }),
+    );
+  });
+
+  it('취소 다이얼로그를 연 뒤 계약이 종결 상태로 바뀌어도(웹훅+refresh), 취소 확정 토스트는 처음 열었을 때의 문구를 유지한다', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')])}
+        side="buyer"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '취소' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('전자서명을 취소할까요?')).toBeInTheDocument();
+
+    // 다이얼로그가 열린 채로 계약이 completed 로 전이(예: 웹훅 반영 후 router.refresh())
+    // — 컴포넌트는 리마운트되지 않고 signing prop 만 갱신된다.
+    rerender(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('completed', [part('buyer', 'signed'), part('pg', 'signed')])}
+        side="buyer"
+      />,
+    );
+
+    await user.click(within(dialog).getByRole('button', { name: '취소하기' }));
+    expect(cancelSigningAction).toHaveBeenCalledWith({ contractId: 'c1' });
+    expect(toast).toHaveBeenCalledWith('전자서명을 취소했어요', { type: 'success' });
   });
 });

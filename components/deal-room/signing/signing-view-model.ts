@@ -370,6 +370,30 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         ],
         note: '선정 결과는 그대로예요.',
       };
+
+    default: {
+      // 컴파일 타임 소진성 체크 — 8개 상태를 전부 처리했으므로 이 분기의 status 는
+      // 이론상 `never`다. 유니온에 새 상태가 추가되고 위 case 들이 갱신되지 않으면
+      // 여기서 타입 에러가 나 빌드가 깨진다(런타임 폴백은 별개로 계속 동작).
+      const _exhaustive: never = contract.status;
+      console.error(`buildSigningCardView: unhandled signing contract status "${String(_exhaustive)}"`);
+      return {
+        icon: 'slash',
+        tone: 'surface',
+        title: '전자서명 상태를 불러오지 못했어요',
+        description: '화면을 새로고침해도 그대로면 문의해 주세요.',
+        chip: { color: 'surface', label: '상태 확인 필요' },
+        nodes: [
+          { key: 'unknown-1', kind: 'milestone', label: '상태 확인 필요', state: 'pending' },
+          { key: 'unknown-2', kind: 'milestone', label: '상태 확인 필요', state: 'pending' },
+          { key: 'unknown-3', kind: 'milestone', label: '상태 확인 필요', state: 'pending' },
+          { key: 'unknown-4', kind: 'milestone', label: '상태 확인 필요', state: 'pending' },
+        ],
+        docs: [],
+        actions: [],
+        note: '선정 결과는 그대로예요.',
+      };
+    }
   }
 }
 
