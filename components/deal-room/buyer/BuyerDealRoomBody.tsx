@@ -175,6 +175,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
             label: '계약',
             icon: <FileSignature />,
             dot: buildSigningSummary(signing, 'buyer').dot,
+            dotLabel: buildSigningSummary(signing, 'buyer').label,
             onSelect: () => setTab('contract'),
           } satisfies RailAction,
         ]

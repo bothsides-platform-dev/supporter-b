@@ -128,6 +128,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
             label: '계약',
             icon: <FileSignature />,
             dot: buildSigningSummary(contractVisible, 'pg').dot,
+            dotLabel: buildSigningSummary(contractVisible, 'pg').label,
             onSelect: () => setTab('contract'),
           } satisfies RailAction,
         ]

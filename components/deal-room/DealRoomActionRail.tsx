@@ -23,6 +23,13 @@ export type RailAction = {
   disabled?: boolean;
   /** 상태 표식 — 아이콘 우상단 점(전자서명 진행 상태 등). */
   dot?: ChipColor;
+  /**
+   * `dot`이 전달하는 상태를 색 외 텍스트로도 전달 — `dot`이 유일한 상태 표식인
+   * 탭(요청 조건·첨부·PG 관리 등 SigningSummaryStrip이 없는 화면)에서 스크린리더
+   * 사용자가 아무 신호도 못 받는 문제를 막는다. sr-only 로 렌더되어 버튼 접근성
+   * 이름에 "계약 서명 진행 중"처럼 실린다.
+   */
+  dotLabel?: string;
 };
 
 export function DealRoomActionRail({ actions }: { actions: RailAction[] }) {
@@ -58,6 +65,12 @@ export function DealRoomActionRail({ actions }: { actions: RailAction[] }) {
           )}
           {a.icon}
           <span>{a.label}</span>
+          {a.dotLabel && (
+            <>
+              {' '}
+              <span className="sr-only">{a.dotLabel}</span>
+            </>
+          )}
         </button>
       ))}
     </nav>

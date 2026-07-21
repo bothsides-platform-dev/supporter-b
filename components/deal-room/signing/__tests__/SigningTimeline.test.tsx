@@ -1,8 +1,9 @@
 import { afterEach, describe, it, expect } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
 
 import { SigningTimeline } from '../SigningTimeline';
 import type { SigningNode } from '../signing-view-model';
+import { formatDateTime } from '@/lib/utils/format';
 
 afterEach(cleanup);
 
@@ -45,7 +46,12 @@ describe('SigningTimeline', () => {
     expect(items[3]).toHaveTextContent('계약 완료');
   });
 
-  it('중립 종결(ended) 노드도 시각을 그린다', () => {
+  it('중립 종결(ended) 노드도 시각을 그린다', async () => {
+    // LocalTime 은 mount 후 테스트 프로세스의 실제 timezone 으로 포맷을 다시 계산한다
+    // (하이드레이션 안전을 위해 첫 렌더는 Asia/Seoul 고정). UTC-9 이서보다 서쪽에서
+    // 실행되면 날짜가 하루 밀릴 수 있어, 하드코딩 대신 시스템 timezone 기준으로 기대값을 계산한다.
+    const systemTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const expected = formatDateTime('2026-07-20T08:05:00Z', systemTz, 'MM-dd HH:mm');
     render(
       <SigningTimeline
         nodes={[
@@ -53,7 +59,9 @@ describe('SigningTimeline', () => {
         ]}
       />,
     );
-    expect(screen.getByRole('listitem')).toHaveTextContent('07-20');
+    await waitFor(() => {
+      expect(screen.getByRole('listitem')).toHaveTextContent(expected);
+    });
   });
 
   it('마일스톤의 설명(detail)도 노출한다', () => {

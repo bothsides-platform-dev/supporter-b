@@ -60,4 +60,31 @@ describe('DealRoomActionRail', () => {
     // jsdom 은 CSS 변수 값을 계산하지 않으므로 style 속성 문자열로 검증한다.
     expect(dots[0].getAttribute('style')).toContain('--md-sys-color-warning');
   });
+
+  it('dotLabel 이 있으면 색으로만 전달되던 상태가 접근성 이름에도 실린다', () => {
+    render(
+      <DealRoomActionRail
+        actions={[
+          {
+            id: 'contract',
+            label: '계약',
+            icon: <span />,
+            onSelect: vi.fn(),
+            dot: 'primary',
+            dotLabel: '서명 진행 중',
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('button', { name: '계약 서명 진행 중' })).toBeInTheDocument();
+  });
+
+  it('dotLabel 이 없으면 버튼 접근성 이름은 라벨만이다(기존 동작 유지)', () => {
+    render(
+      <DealRoomActionRail
+        actions={[{ id: 'award', label: '선정', icon, onSelect: vi.fn() }]}
+      />,
+    );
+    expect(screen.getByRole('button', { name: '선정' })).toBeInTheDocument();
+  });
 });
