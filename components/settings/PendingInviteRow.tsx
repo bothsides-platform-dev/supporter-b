@@ -27,11 +27,11 @@ function PendingInviteRowImpl({
 }: Props) {
   return (
     <div className="py-3 flex items-center gap-4">
-      <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-outline)] w-8">
+      <span className="md-numeric text-[11px] text-[var(--md-sys-color-outline)] w-8">
         {String(i + 1).padStart(2, '0')}
       </span>
       <div className="flex-1 min-w-0">
-        <span className="font-mono text-[13px] tabular-nums text-[var(--md-sys-color-on-surface)]">
+        <span className="md-numeric text-[13px] text-[var(--md-sys-color-on-surface)]">
           {p.email}
         </span>
       </div>

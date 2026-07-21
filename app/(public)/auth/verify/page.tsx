@@ -62,18 +62,18 @@ function VerifyContent() {
             인증 메일을 보냈습니다
           </h2>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-            <span className="font-mono tabular-nums">{displayEmail}</span>
+            <span className="md-numeric">{displayEmail}</span>
           </p>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
             메일의 [인증하기] 버튼을 눌러주세요.<br />
-            <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">15분 내 만료됩니다.</span>
+            <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">15분 내 만료됩니다.</span>
           </p>
         </div>
         <div className="space-y-3">
           <ResendCountdown onResend={() => {}} />
           <Link
             href="/signup"
-            className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+            className="block md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
           >
             다른 이메일로 변경
           </Link>
@@ -88,13 +88,13 @@ function VerifyContent() {
 
   // Token verification view.
   if (state === 'loading') {
-    return <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)] text-center">LOADING…</p>;
+    return <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)] text-center">LOADING…</p>;
   }
   if (state === 'expired') {
     return (
       <div className="space-y-4 text-center">
         <p className="text-[13px] text-[var(--md-sys-color-error)]">링크가 만료되었습니다.</p>
-        <Link href="/signup" className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--md-sys-color-on-surface)] hover:text-[var(--md-sys-color-on-surface-variant)]">재발송 →</Link>
+        <Link href="/signup" className="md-label-small text-[var(--md-sys-color-on-surface)] hover:text-[var(--md-sys-color-on-surface-variant)]">재발송 →</Link>
       </div>
     );
   }
@@ -103,7 +103,7 @@ function VerifyContent() {
 
 export default function AuthVerifyPage() {
   return (
-    <Suspense fallback={<p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">LOADING…</p>}>
+    <Suspense fallback={<p className="md-label-medium text-center">LOADING…</p>}>
       <VerifyContent />
     </Suspense>
   );

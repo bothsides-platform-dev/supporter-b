@@ -32,7 +32,7 @@ export function WorkspaceInviteEmailMismatch({ inviteEmail, token }: Props) {
       </div>
 
       <div className="space-y-2">
-        <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           다른 이메일로 초대를 받으셨어요
         </p>
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">

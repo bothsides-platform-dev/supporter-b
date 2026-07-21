@@ -45,7 +45,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
 
       {bizNoMissing && (
         <div className="border border-[var(--md-sys-color-outline-variant)] px-4 py-3 space-y-1">
-          <div className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <div className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             [ 사업자번호 미입력 ]
           </div>
           <p className="text-[12px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
@@ -72,7 +72,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
             ['대표자', '—'],
           ].map(([label, value]) => (
             <div key={label} className="py-2.5 flex items-baseline justify-between">
-              <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">{label}</span>
+              <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">{label}</span>
               <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">{value}</span>
             </div>
           ))}
@@ -93,7 +93,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
             ) : (
               <>
                 <Chip label="미정" color="surface" />
-                <span className="font-mono text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
                   등급 미입력
                 </span>
               </>
@@ -125,7 +125,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
               .filter(([, v]) => v)
               .map(([label, value]) => (
                 <div key={label} className="py-2.5 flex items-baseline justify-between">
-                  <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">{label}</span>
+                  <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">{label}</span>
                   <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">{value}</span>
                 </div>
               ))}

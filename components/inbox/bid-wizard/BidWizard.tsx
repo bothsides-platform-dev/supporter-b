@@ -402,13 +402,13 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
                     <button
                       type="button"
                       onClick={() => setResetConfirmOpen(true)}
-                      className="self-start font-mono text-[10px] text-[var(--md-sys-color-outline)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface-variant)]"
+                      className="self-start md-label-small text-[var(--md-sys-color-outline)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface-variant)]"
                     >
                       초기화
                     </button>
                   )}
                   {savedAt ? (
-                    <span className="font-mono text-[10px] text-[var(--md-sys-color-outline)]">
+                    <span className="md-label-small text-[var(--md-sys-color-outline)]">
                       💾 자동저장됨 · {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
                     </span>
                   ) : null}
@@ -422,7 +422,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
 
             <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6" data-coachmark="tutorial-bid-form">
               <div className="flex items-center gap-3 mb-6">
-                <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                   {String(currentStep).padStart(2, '0')} — {BID_WIZARD_STEPS[currentStep - 1].label}
                 </span>
                 <Divider />

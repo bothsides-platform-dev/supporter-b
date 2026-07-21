@@ -49,7 +49,7 @@ export function InviteAuthedClient({ token }: { token: string }) {
   if (error) {
     return (
       <div className="py-12 max-w-[420px] mx-auto text-center space-y-3">
-        <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-error)]">
+        <p className="md-label-small text-[var(--md-sys-color-error)]">
           초대 처리 실패
         </p>
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -61,7 +61,7 @@ export function InviteAuthedClient({ token }: { token: string }) {
 
   return (
     <div className="py-8 text-center">
-      <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+      <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
         LOADING…
       </p>
       <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">

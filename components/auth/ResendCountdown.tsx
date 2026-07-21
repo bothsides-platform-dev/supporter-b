@@ -36,7 +36,7 @@ export function ResendCountdown({
       disabled={seconds > 0}
       onClick={handleResend}
       className={cn(
-        'font-mono text-[11px] tracking-[0.1em] uppercase transition-colors',
+        'md-label-small transition-colors',
         seconds > 0
           ? 'text-[var(--md-sys-color-on-surface-variant)] cursor-default'
           : 'text-[var(--md-sys-color-on-surface)] hover:text-[var(--md-sys-color-on-surface-variant)] cursor-pointer',

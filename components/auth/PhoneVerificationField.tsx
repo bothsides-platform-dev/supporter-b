@@ -124,7 +124,7 @@ export function PhoneVerificationField({ onVerified }: Props) {
   }
 
   const labelClass =
-    'font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]';
+    'md-label-small text-[var(--md-sys-color-on-surface-variant)]';
   const inputClass =
     'block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] md-numeric text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors disabled:opacity-40';
 
@@ -156,13 +156,13 @@ export function PhoneVerificationField({ onVerified }: Props) {
               type="button"
               onClick={handleSend}
               disabled={!isCompletePhone(phone) || sending}
-              className="shrink-0 px-3 py-1.5 text-[11px] font-mono tracking-[0.1em] uppercase border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] rounded-[6px] disabled:opacity-40 hover:border-[var(--md-sys-color-on-surface)] transition-colors"
+              className="shrink-0 px-3 py-1.5 md-label-small border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] rounded-[6px] disabled:opacity-40 hover:border-[var(--md-sys-color-on-surface)] transition-colors"
             >
               {sending ? 'LOADING…' : step === 'otp' ? '재전송' : '인증하기'}
             </button>
           )}
           {step === 'verified' && (
-            <span className="shrink-0 text-[12px] font-mono text-[var(--md-sys-color-tertiary)]">
+            <span className="shrink-0 md-label-medium text-[var(--md-sys-color-tertiary)]">
               인증 완료 ✓
             </span>
           )}
@@ -179,8 +179,8 @@ export function PhoneVerificationField({ onVerified }: Props) {
             <label htmlFor="otp-code" className={labelClass}>
               인증번호
             </label>
-            <span className="font-mono text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-              {countdown > 0 ? `${mm}:${ss}` : (
+            <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+              {countdown > 0 ? <span className="md-numeric">{`${mm}:${ss}`}</span> : (
                 <button
                   type="button"
                   onClick={handleResend}
@@ -215,7 +215,7 @@ export function PhoneVerificationField({ onVerified }: Props) {
               type="button"
               onClick={handleVerify}
               disabled={otpCode.length !== 6 || verifying || countdown === 0}
-              className="shrink-0 px-3 py-1.5 text-[11px] font-mono tracking-[0.1em] uppercase border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] rounded-[6px] disabled:opacity-40 hover:border-[var(--md-sys-color-on-surface)] transition-colors"
+              className="shrink-0 px-3 py-1.5 md-label-small border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] rounded-[6px] disabled:opacity-40 hover:border-[var(--md-sys-color-on-surface)] transition-colors"
             >
               {verifying ? 'LOADING…' : '확인'}
             </button>

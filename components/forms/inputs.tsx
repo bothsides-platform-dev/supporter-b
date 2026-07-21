@@ -73,10 +73,10 @@ export function PercentInput({
           placeholder={placeholder}
           className={cn(numericInputClass, 'flex-1')}
         />
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
+        <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
       </div>
       {hint && (
-        <p className="font-mono text-[11px] text-[var(--md-sys-color-tertiary)] mt-1">
+        <p className="md-label-small text-[var(--md-sys-color-tertiary)] mt-1">
           {hint}
         </p>
       )}
@@ -150,7 +150,7 @@ export function FeeRateCell({
         <div
           id={tooltipId}
           role="tooltip"
-          className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface)] shadow-md ${tooltipPositionClass}`}
+          className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 md-numeric text-[11px] text-[var(--md-sys-color-on-surface)] shadow-md ${tooltipPositionClass}`}
         >
           {hint}
         </div>
@@ -201,10 +201,10 @@ export function CurrencyInput({
           placeholder={placeholder}
           className={cn(numericInputClass, 'flex-1')}
         />
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">원</span>
+        <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">원</span>
       </div>
       {hint && (
-        <p className="font-mono text-[11px] text-[var(--md-sys-color-tertiary)] mt-1">
+        <p className="md-label-small text-[var(--md-sys-color-tertiary)] mt-1">
           {hint}
         </p>
       )}
@@ -265,7 +265,7 @@ export function DayOffsetInput({
           onChange={(t) => { setType(t); emit(t, numeric); }}
           className="w-[100px] h-8 text-[13px]"
         />
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)]">+</span>
+        <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">+</span>
         <NumericFormat
           decimalScale={0}
           allowNegative={false}

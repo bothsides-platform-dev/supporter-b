@@ -126,7 +126,7 @@ export default function BuyerProfilePage() {
         <div className="space-y-1">
           <label
             htmlFor="name"
-            className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+            className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
           >
             이름
           </label>

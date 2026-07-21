@@ -10,7 +10,7 @@ export function MarkAllReadButton() {
     <button
       type="button"
       onClick={() => { void markAllRead().then(() => router.refresh()); }}
-      className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+      className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
     >
       모두 읽음
     </button>

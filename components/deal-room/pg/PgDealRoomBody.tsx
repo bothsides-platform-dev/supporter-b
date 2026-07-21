@@ -71,7 +71,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   } else if (myBid) {
     writeContent = (
       <div className="space-y-4">
-        <p className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-tertiary)]">
+        <p className="md-label-small text-[var(--md-sys-color-tertiary)]">
           ✓ 견적을 보냈어요
         </p>
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">

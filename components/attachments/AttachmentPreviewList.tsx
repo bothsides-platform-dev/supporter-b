@@ -23,7 +23,7 @@ export function AttachmentPreviewList({ files }: { files: Attachment[] }) {
   return (
     <div>
       <div className="flex items-center gap-3 mb-3">
-        <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           첨부파일 ({files.length})
         </span>
         <Divider />
@@ -111,14 +111,14 @@ function AttachmentPreviewDialog({
           <>
             <div className="flex shrink-0 items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-2.5">
               <FileTextIcon size={14} />
-              <span className="flex-1 truncate font-mono text-[11px] tracking-[0.08em] text-[var(--md-sys-color-on-surface-variant)]">
+              <span className="flex-1 truncate md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                 {attachment.name}
               </span>
               <a
                 href={attachment.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mr-8 shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--md-sys-color-on-surface)] hover:underline"
+                className="mr-8 shrink-0 md-label-small text-[var(--md-sys-color-on-surface)] hover:underline"
               >
                 새 창 열기 →
               </a>
@@ -147,7 +147,7 @@ function ImagePreview({ attachment }: { attachment: Attachment }) {
     return (
       <div className="flex flex-col items-center gap-2 px-8 text-center text-[var(--md-sys-color-on-surface-variant)]">
         <FileTextIcon size={28} />
-        <p className="font-mono text-[11px] uppercase tracking-[0.1em]">
+        <p className="md-label-small">
           미리보기 불가
         </p>
       </div>

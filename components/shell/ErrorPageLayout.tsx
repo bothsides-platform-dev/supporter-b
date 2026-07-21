@@ -75,7 +75,7 @@ export function ErrorPageLayout({
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] gap-5 px-6 text-center">
       <p
-        className={`font-mono text-[80px] font-bold leading-none tracking-[-3px] ${codeClass}`}
+        className={`md-numeric text-[80px] font-bold leading-none tracking-[-3px] ${codeClass}`}
       >
         {code}
       </p>

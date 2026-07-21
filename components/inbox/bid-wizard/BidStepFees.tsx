@@ -75,7 +75,7 @@ export function BidStepFees({
         </p>
         <span
           data-testid="fees-count"
-          className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)]"
+          className="md-numeric text-[10px] text-[var(--md-sys-color-outline)]"
         >
           {filledUnits}/{totalUnits}
         </span>
@@ -87,7 +87,7 @@ export function BidStepFees({
 
       {tieredGroups.map((group) => (
         <div key={group.label} className="space-y-2">
-          <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             {group.label} · 구간별 우대수수료
           </span>
           <table className="w-full border-collapse">
@@ -97,7 +97,7 @@ export function BidStepFees({
                 {MERCHANT_TIERS.map((t) => (
                   <th
                     key={t}
-                    className="text-center font-mono text-[10px] tracking-[0.08em] text-[var(--md-sys-color-on-surface-variant)] pb-1"
+                    className="text-center md-label-small text-[var(--md-sys-color-on-surface-variant)] pb-1"
                   >
                     {MERCHANT_TIER_LABELS[t]}
                   </th>
@@ -140,7 +140,7 @@ export function BidStepFees({
 
       {(singleMethods.length > 0 || customPaymentMethods.length > 0) && (
         <div className="space-y-2">
-          <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             계좌 · 기타 (단일요율)
           </span>
           <div className="grid grid-cols-2 gap-x-6 gap-y-5">
