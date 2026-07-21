@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  PAYMENT_METHODS,
+  PAYMENT_METHOD_CATEGORIES,
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
   isTieredMethod,
@@ -70,5 +72,20 @@ describe('getMethodRate', () => {
   });
   it('undefined면 undefined', () => {
     expect(getMethodRate(undefined, 'general')).toBeUndefined();
+  });
+});
+
+// 드리프트 가드 — PAYMENT_METHOD_CATEGORIES 는 위저드 렌더링과 isTieredMethod 판정을
+// 구동한다. PAYMENT_METHODS 에만 수단을 추가하고 카테고리 배치를 빠뜨리면 zod·라벨은
+// 통과하는데 화면엔 아예 안 그려지고 우대수수료 구간도 조용히 비활성된다.
+describe('PAYMENT_METHODS ↔ PAYMENT_METHOD_CATEGORIES 완전성', () => {
+  const placed = PAYMENT_METHOD_CATEGORIES.flatMap((c) => c.methods);
+
+  it('모든 결제수단이 카테고리에 정확히 한 번 배치된다', () => {
+    expect([...placed].sort()).toEqual([...PAYMENT_METHODS].sort());
+  });
+
+  it('카테고리에 중복 배치된 수단이 없다', () => {
+    expect(placed.length).toBe(new Set(placed).size);
   });
 });

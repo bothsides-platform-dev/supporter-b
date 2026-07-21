@@ -7,23 +7,9 @@ import { getRfpService } from '@/lib/server/services/rfp';
 import { logBusinessEvent } from '@/lib/observability/log';
 import { isValidWebsiteUrl, isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { isContractTypeValid, isMainProductsValid, isAnnualPgVolumeSatisfied } from '@/lib/rfp/required-fields';
-import { MERCHANT_TIERS } from '@/lib/types/bid';
+import { MERCHANT_TIERS, PAYMENT_METHODS } from '@/lib/types/bid';
 import { SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 import type { RfpActionResult } from './_shared';
-
-const PAYMENT_METHODS = [
-  'card',
-  'overseas_card',
-  'virtual_account',
-  'bank_transfer',
-  'naver_pay',
-  'kakao_pay',
-  'toss_pay',
-  'apple_pay',
-  'samsung_pay',
-  'mobile',
-  'gift_card',
-] as const;
 
 const Input = z
   .object({

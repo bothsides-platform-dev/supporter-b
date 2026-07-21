@@ -1,17 +1,25 @@
 import type { Attachment } from './common';
 
-export type PaymentMethod =
-  | 'card'
-  | 'overseas_card'
-  | 'virtual_account'
-  | 'bank_transfer'
-  | 'naver_pay'
-  | 'kakao_pay'
-  | 'toss_pay'
-  | 'apple_pay'
-  | 'samsung_pay'
-  | 'mobile'
-  | 'gift_card';
+/**
+ * 결제수단 어휘의 단일 출처. zod 스키마가 `z.enum()` 에 그대로 넣을 수 있도록 런타임
+ * 튜플로 둔다 — 타입 유니온만 있으면 서버 액션·스키마가 배열을 손으로 복제하게 된다.
+ * 새 수단 추가 = 이 배열 + 아래 LABELS/CATEGORIES(둘 다 컴파일러가 누락을 잡는다).
+ */
+export const PAYMENT_METHODS = [
+  'card',
+  'overseas_card',
+  'virtual_account',
+  'bank_transfer',
+  'naver_pay',
+  'kakao_pay',
+  'toss_pay',
+  'apple_pay',
+  'samsung_pay',
+  'mobile',
+  'gift_card',
+] as const;
+
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   card: '카드',
