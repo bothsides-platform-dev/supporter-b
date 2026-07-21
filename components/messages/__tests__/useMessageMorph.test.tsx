@@ -132,6 +132,21 @@ describe('useMessageMorph', () => {
     expect(result.current.isMorphing('k1')).toBe(false);
   });
 
+  // 앞선 클론의 착륙(onDone)이 뒤이어 예약된 다른 메시지의 morph 를 죽이면 안 된다.
+  // 예약 취소는 키가 일치할 때만 — 연속 전송에서 뒤 메시지가 조용히 사라지는 것을 막는다.
+  it('다른 키로 endFlight 해도 대기 중인 예약은 살아남는다', () => {
+    const { listRef, composer } = setupDom('k2');
+    const { result } = renderHook(() => useMessageMorph({ listRef }));
+
+    act(() => {
+      result.current.scheduleFlight(composer, 'k2', '뒤이어 보낸 메시지');
+      result.current.endFlight('k1'); // 앞선 비행의 착륙 — k2 예약과 무관
+    });
+
+    expect(result.current.layerProps.flights).toHaveLength(1);
+    expect(result.current.isMorphing('k2')).toBe(true);
+  });
+
   it('발동 후 endFlight 하면 클론이 걷힌다', () => {
     const { listRef, composer } = setupDom();
     const { result } = renderHook(() => useMessageMorph({ listRef }));
