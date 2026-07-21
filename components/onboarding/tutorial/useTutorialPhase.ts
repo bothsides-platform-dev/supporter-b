@@ -9,8 +9,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateOnboardingAction } from '@/lib/server/actions/onboarding/updateOnboardingAction';
-
-type OnboardingKey = 'buyerTutorial' | 'pgTutorial';
+import type { OnboardingKey } from '@/lib/types/onboarding';
 
 type Options<P extends string> = {
   /** 진행 순서. 마지막 원소가 done phase 다. */

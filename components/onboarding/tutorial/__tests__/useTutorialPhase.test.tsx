@@ -23,7 +23,10 @@ function setup(onLeave?: () => void) {
 
 describe('useTutorialPhase', () => {
   beforeEach(() => {
-    mockPush.mockClear();
+    // mockReset(전체 초기화) — 아래 onLeave 순서 테스트가 mockImplementation 을 심는데
+    // mockClear 는 구현을 남겨 다음 테스트로 새어나간다. mockPush 는 기본 구현이 없어
+    // reset 이 안전하다(updateOnboardingActionMock 은 구현이 있으므로 clear 유지).
+    mockPush.mockReset();
     updateOnboardingActionMock.mockClear();
   });
 
