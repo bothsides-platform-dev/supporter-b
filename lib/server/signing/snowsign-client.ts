@@ -28,6 +28,7 @@ export type SnowSignErrorCode =
   | 'SNOWSIGN_PDF_REJECTED' // PDF_REJECTED
   | 'SNOWSIGN_INVALID_STATUS' // INVALID_CONTRACT_STATUS
   | 'SNOWSIGN_RATE_LIMIT' // 429
+  | 'SNOWSIGN_MALFORMED' // 2xx 인데 제어흐름 필수 필드 없음/비정상(envelope drift·부분 응답)
   | 'SNOWSIGN_NETWORK'; // 5xx / timeout / 기타
 
 export class SnowSignError extends Error {
@@ -81,6 +82,36 @@ function mapNetworkError(e: unknown): SnowSignError {
     return new SnowSignError('SNOWSIGN_NETWORK', undefined, 'timeout');
   }
   return new SnowSignError('SNOWSIGN_NETWORK', undefined, (e as Error)?.message);
+}
+
+// ── 응답 값 검증 (fail-safe, not fail-strict) ─────────────────────────────
+// 2xx 응답을 `as T` 로 캐스팅한 뒤 매퍼가 필드를 dereference 하므로, 제어흐름에
+// 쓰는 필수 필드가 없거나(envelope drift·부분 응답) 타입이 어긋나면 하류에서
+// 정체불명 TypeError 로 터진다. 여기서 필수 필드만 검증해 typed SNOWSIGN_MALFORMED
+// 로 승격하고(호출부의 기존 try/catch 가 우아하게 처리), 비필수 필드는 관대하게
+// coerce 한다. 전체 스키마 엄격 검증은 하지 않는다(Phase 11 실 sandbox 전 — 정상
+// 응답을 거부하면 오히려 새 취약점).
+function reqString(v: unknown, field: string): string {
+  if (typeof v !== 'string' || v === '') {
+    throw new SnowSignError('SNOWSIGN_MALFORMED', undefined, `invalid ${field}`);
+  }
+  return v;
+}
+function asString(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+function reqAbsoluteUrl(v: unknown, field: string): string {
+  const s = reqString(v, field);
+  let u: URL;
+  try {
+    u = new URL(s);
+  } catch {
+    throw new SnowSignError('SNOWSIGN_MALFORMED', undefined, `invalid ${field}`);
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    throw new SnowSignError('SNOWSIGN_MALFORMED', undefined, `invalid ${field}`);
+  }
+  return s;
 }
 
 // ── I/O 타입 (얕은 매핑, snake→camel) ────────────────────────────────────
@@ -266,30 +297,33 @@ export class RealSnowSignClient implements SnowSignClient {
     if (input.externalSystem) body.external_system = input.externalSystem;
     if (input.externalId) body.external_id = input.externalId;
     if (input.referenceId) body.reference_id = input.referenceId;
-    const d = await this.request<{ session_id: string; iframe_url: string; code_expires_at?: string }>(
-      'POST',
-      '/v1/embed-sessions',
-      body,
-    );
-    return { sessionId: d.session_id, iframeUrl: d.iframe_url, codeExpiresAt: d.code_expires_at };
+    const d = await this.request<
+      { session_id?: string; iframe_url?: string; code_expires_at?: string } | undefined
+    >('POST', '/v1/embed-sessions', body);
+    return {
+      sessionId: reqString(d?.session_id, 'session_id'),
+      iframeUrl: reqString(d?.iframe_url, 'iframe_url'),
+      codeExpiresAt: d?.code_expires_at,
+    };
   }
 
   async listTemplates(): Promise<SnowSignTemplateSummary[]> {
     const d = await this.request<
-      Array<{
-        template_id: string;
-        name: string;
-        description?: string;
-        signing_order?: string;
-        deadline_days?: number;
-      }>
+      | Array<{
+          template_id: string;
+          name: string;
+          description?: string;
+          signing_order?: string;
+          deadline_days?: number;
+        }>
+      | undefined
     >('GET', '/v1/templates?per_page=100');
-    return (d ?? []).map((t) => ({
-      templateId: t.template_id,
-      name: t.name,
-      description: t.description,
-      signingOrder: t.signing_order,
-      deadlineDays: t.deadline_days,
+    return (Array.isArray(d) ? d : []).map((t) => ({
+      templateId: asString(t?.template_id),
+      name: asString(t?.name),
+      description: t?.description,
+      signingOrder: t?.signing_order,
+      deadlineDays: t?.deadline_days,
     }));
   }
 
@@ -308,25 +342,27 @@ export class RealSnowSignClient implements SnowSignClient {
         mobile_alimtalk_enabled?: boolean;
       }>;
       variables?: Array<{ name: string; label?: string; value_type?: string; is_required?: boolean }>;
-    }>('GET', `/v1/templates/${encodeURIComponent(templateId)}`);
+    } | undefined>('GET', `/v1/templates/${encodeURIComponent(templateId)}`);
     return {
-      templateId: d.template_id,
-      name: d.name,
-      description: d.description,
-      signingOrder: d.signing_order,
-      deadlineDays: d.deadline_days,
-      signers: (d.signers ?? []).map((s) => ({
-        uuid: s.uuid,
-        roleName: s.role_name,
-        signingOrder: s.signing_order,
-        securityMethod: s.security_method,
-        mobileAlimtalkEnabled: s.mobile_alimtalk_enabled,
+      templateId: reqString(d?.template_id, 'template_id'),
+      name: asString(d?.name),
+      description: d?.description,
+      signingOrder: d?.signing_order,
+      deadlineDays: d?.deadline_days,
+      signers: (d?.signers ?? []).map((s) => ({
+        uuid: s?.uuid,
+        // roleName 은 roleMapping 키 + SnowSign participant role 로 그대로 쓰이는 제어흐름
+        // 필수값이라 coerce 하지 않고 검증한다(비면 구조적으로 깨진 템플릿 — 링크 차단).
+        roleName: reqString(s?.role_name, 'role_name'),
+        signingOrder: s?.signing_order,
+        securityMethod: s?.security_method,
+        mobileAlimtalkEnabled: s?.mobile_alimtalk_enabled,
       })),
-      variables: (d.variables ?? []).map((v) => ({
-        name: v.name,
-        label: v.label,
-        valueType: v.value_type,
-        isRequired: v.is_required,
+      variables: (d?.variables ?? []).map((v) => ({
+        name: asString(v?.name),
+        label: v?.label,
+        valueType: v?.value_type,
+        isRequired: v?.is_required,
       })),
     };
   }
@@ -347,12 +383,10 @@ export class RealSnowSignClient implements SnowSignClient {
     if (input.description) body.description = input.description;
     if (input.variables) body.variables = input.variables;
     if (input.signingOrder) body.signing_order = input.signingOrder;
-    const d = await this.request<{ contract_id: string; title?: string; status: string }>(
-      'POST',
-      `/v1/templates/${encodeURIComponent(templateId)}/create-contract`,
-      body,
-    );
-    return { contractId: d.contract_id, title: d.title, status: d.status };
+    const d = await this.request<
+      { contract_id?: string; title?: string; status?: string } | undefined
+    >('POST', `/v1/templates/${encodeURIComponent(templateId)}/create-contract`, body);
+    return { contractId: reqString(d?.contract_id, 'contract_id'), title: d?.title, status: asString(d?.status) };
   }
 
   async getContract(contractId: string): Promise<SnowSignContractDetail> {
@@ -369,59 +403,70 @@ export class RealSnowSignClient implements SnowSignClient {
         signed_at?: string | null;
         security_method?: string;
       }>;
-    }>('GET', `/v1/contracts/${encodeURIComponent(contractId)}`);
+    } | undefined>('GET', `/v1/contracts/${encodeURIComponent(contractId)}`);
     return {
-      contractId: d.contract_id,
-      title: d.title,
-      status: d.status,
-      expiresAt: d.expires_at,
-      participants: (d.participants ?? []).map((p) => ({
-        name: p.name,
-        email: p.email,
-        phone: p.phone ?? undefined,
-        status: p.status,
-        signedAt: p.signed_at ?? undefined,
-        securityMethod: p.security_method,
+      contractId: reqString(d?.contract_id, 'contract_id'),
+      title: d?.title,
+      status: reqString(d?.status, 'status'),
+      expiresAt: d?.expires_at,
+      participants: (d?.participants ?? []).map((p) => ({
+        name: asString(p?.name),
+        email: asString(p?.email),
+        phone: p?.phone ?? undefined,
+        status: asString(p?.status),
+        signedAt: p?.signed_at ?? undefined,
+        securityMethod: p?.security_method,
       })),
     };
   }
 
   async getStatus(contractId: string): Promise<SnowSignStatus> {
-    const d = await this.request<{
-      contract_id?: string;
-      status: string;
-      participants_status?: { total: number; signed: number; pending: number };
-    }>('GET', `/v1/contracts/${encodeURIComponent(contractId)}/status`);
+    const d = await this.request<
+      | { contract_id?: string; status: string; participants_status?: { total: number; signed: number; pending: number } }
+      | undefined
+    >('GET', `/v1/contracts/${encodeURIComponent(contractId)}/status`);
     return {
-      contractId: d.contract_id,
-      status: d.status,
-      participantsStatus: d.participants_status,
+      contractId: d?.contract_id,
+      status: reqString(d?.status, 'status'),
+      participantsStatus: d?.participants_status,
     };
   }
 
   async sendContract(contractId: string, message?: string): Promise<SnowSignContractRef> {
-    const d = await this.request<{ contract_id: string; status: string; sent_at?: string }>(
-      'POST',
-      `/v1/contracts/${encodeURIComponent(contractId)}/send`,
-      message ? { message } : {},
-    );
-    return { contractId: d.contract_id, status: d.status, sentAt: d.sent_at };
+    const d = await this.request<
+      { contract_id?: string; status?: string; sent_at?: string } | undefined
+    >('POST', `/v1/contracts/${encodeURIComponent(contractId)}/send`, message ? { message } : {});
+    // 발송 성공(2xx)이면 body 가 drift 해도 실패로 오분류하지 않는다(이미 발송된
+    // 라이브 계약을 보상 취소해 고아로 만드는 것 방지) — 입력 contractId 로 fallback.
+    return {
+      contractId: asString(d?.contract_id) || contractId,
+      status: asString(d?.status) || 'sent',
+      sentAt: d?.sent_at,
+    };
   }
 
   async downloadUrl(contractId: string): Promise<SnowSignDownload> {
-    const d = await this.request<DownloadRow>(
+    const d = await this.request<DownloadRow | undefined>(
       'GET',
       `/v1/contracts/${encodeURIComponent(contractId)}/download`,
     );
-    return { downloadUrl: d.download_url, filename: d.filename, expiresAt: d.expires_at };
+    return {
+      downloadUrl: reqAbsoluteUrl(d?.download_url, 'download_url'),
+      filename: d?.filename,
+      expiresAt: d?.expires_at,
+    };
   }
 
   async auditCertificateUrl(contractId: string): Promise<SnowSignDownload> {
-    const d = await this.request<DownloadRow>(
+    const d = await this.request<DownloadRow | undefined>(
       'GET',
       `/v1/contracts/${encodeURIComponent(contractId)}/audit-certificate`,
     );
-    return { downloadUrl: d.download_url, filename: d.filename, expiresAt: d.expires_at };
+    return {
+      downloadUrl: reqAbsoluteUrl(d?.download_url, 'download_url'),
+      filename: d?.filename,
+      expiresAt: d?.expires_at,
+    };
   }
 
   async remind(contractId: string, participantUuids?: string[], message?: string): Promise<void> {

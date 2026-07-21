@@ -8,7 +8,8 @@ export type SigningContractStatus =
   | 'completed' // 전원 서명
   | 'declined' // 참여자 거절
   | 'expired' // 마감 초과
-  | 'canceled'; // 취소
+  | 'canceled' // 취소
+  | 'send_failed'; // award 됐으나 SnowSign 발송 실패 — 딜룸에서 다시 시작 가능
 
 export type SigningParticipantRole = 'buyer' | 'pg';
 

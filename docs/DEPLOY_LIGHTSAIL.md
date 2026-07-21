@@ -107,6 +107,11 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > `docs/migrations/rename-merchant-grade-small-to-sole.sql` 을 먼저 실행해야 push 가
 > enum diff 를 보지 않는다(미적용 시 push partial-fail + 기존 'small' row 고립).
 >
+> **v0.4.2.0 enum ADD VALUE**: `signing_contract_status` 에 `send_failed`(전자서명 발송
+> 실패 상태)를 추가한다 — `docs/migrations/2026-07-add-send-failed-signing-status.sql`
+> (`ALTER TYPE … ADD VALUE IF NOT EXISTS`)을 **`db:push`·배포 전에** psql 로 적용한다.
+> 미적용 시 award 후 `send_failed` insert 가 invalid enum value 로 실패한다.
+>
 > **v0.2.54.0 one-shot migration**: 칸반 '선정 완료' 컬럼이 '마감'으로 통합됨. 기존 워크스페이스에 남아 있는 `lifecycle_key='awarded'` 컬럼을 정리하려면 배포 후 1회 실행:
 > ```bash
 > cd bidit && tsx scripts/remove-awarded-kanban-columns.ts

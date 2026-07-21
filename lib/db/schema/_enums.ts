@@ -134,6 +134,7 @@ export const signingContractStatusEnum = pgEnum('signing_contract_status', [
   'declined',
   'expired',
   'canceled',
+  'send_failed',
 ]);
 export const signingParticipantRoleEnum = pgEnum('signing_participant_role', ['buyer', 'pg']);
 export const signingSecurityMethodEnum = pgEnum('signing_security_method', ['easy_cert', 'email']);

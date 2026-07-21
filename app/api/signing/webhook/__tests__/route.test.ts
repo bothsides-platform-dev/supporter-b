@@ -82,4 +82,10 @@ describe('POST /api/signing/webhook', () => {
     expect(res.status).toBe(200);
     expect(reconcileByProviderRef).not.toHaveBeenCalled();
   });
+
+  it('acks 200 (not 500) for an authentic body of literal null', async () => {
+    const res = await POST(signed(null));
+    expect(res.status).toBe(200);
+    expect(reconcileByProviderRef).not.toHaveBeenCalled();
+  });
 });

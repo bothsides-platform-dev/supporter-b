@@ -22,6 +22,11 @@
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
 선정 연락처 교환(`CounterpartyContactCard`)은 `findContactById`가 fail-closed라, 구매사 담당자(RFP `createdBy`)가 탈퇴/시스템계정이면 `buyerContact=null`이 된다. 승자 PG 분기는 `awardedToMe && buyerContact`로 카드를, `awarded && !awardedToMe`로 미선정 안내를 그리므로 — 승자인데 buyerContact만 null이면 카드도 안내도 안 떠 빈 화면이 된다(드묾·누출 아님·정상 fail-closed). 후속: 연락처 없음 안내 폴백 또는 워크스페이스 대표 담당자 폴백 검토. (발견: /ship 적대 리뷰 2026-06-27)
 
+## Settings / Account
+
+### DeleteAccountSection INVALID_PASSWORD 테스트 실패 (dev 선존재) (P0)
+`components/settings/__tests__/DeleteAccountSection.test.tsx > shows inline error on INVALID_PASSWORD` 이 "비밀번호가 올바르지 않아요." 텍스트를 못 찾아 실패한다. **clean dev(main repo root)에서도 동일하게 실패** — 이 브랜치와 무관한 선행 이슈(단독 실행도 실패). Base-UI 다이얼로그(`data-base-ui-inert`)의 인라인 에러 렌더/타이밍 문제로 보인다. 회귀 아님(diff와 무관)이지만 전체 스위트가 red 라 추적 필요. 확인: 로컬 jsdom/Base-UI 버전 상호작용 vs CI 통과 여부. (발견: /ship 테스트 트리아지 2026-07-20, v0.4.2.0)
+
 ## Signing (선정 후 전자서명 / SnowSign)
 
 ### Phase 11 — 실 SnowSign sandbox 스모크 + e2e (P1)
@@ -35,6 +40,9 @@
 
 ### 상용 하드닝 잔여 (감사·쿼터·cascade) (P3)
 플랜의 상용 요건 중 PARTIAL: ① 감사 로그가 sent/awaiting/completed/canceled 만 남고 template-link·viewed·per-participant-sign 은 미기록, ② org 월 발송 쿼터 근접 선제 알림 없음(`QUOTA_EXCEEDED` 는 반응형 에러로만 노출), ③ RFP 삭제 시 DB cascade 는 로컬 행만 지우고 활성 SnowSign 계약에 `cancel` 을 전파하지 않음, ④ deadline↔expires 정렬(provider `expiresAt`/`deadlineDays` 로컬 미영속). (발견: /ship plan-completion 감사 2026-07-19, v0.4.1.0)
+
+### 완료본 다운로드 프록시 하드닝 — 호스트 allowlist + ACL-first (P3, 선존재)
+`download-handler.ts`가 302 리다이렉트하는 `download_url`은 이제 `reqAbsoluteUrl`로 http/https 절대 URL만 허용하지만 **호스트 제약이 없고 `http:`도 통과**한다(제공자 신뢰값이라 user-controllable 아님·SSRF 아님 — 방어심층만). 또 `getDownloadUrl`은 `getForActor`와 달리 존재검사→ACL 순서라 비당사자가 404/403로 계약 존재를 구분할 수 있다(unguessable UUID라 실위험 negligible, 이번 diff는 오히려 raw 코드 대신 친절 페이지로 누출 축소). 검토: SnowSign/S3 다운로드 호스트 pin(+https 강제), `getDownloadUrl` ACL-first 정합. (발견: /ship security 리뷰 2026-07-20, v0.4.2.0)
 
 ## Chat / Realtime
 
