@@ -71,11 +71,11 @@ export function UserAvatarForm({ userId, name, avatarUpdatedAt }: Props) {
         onChange={handleFileChange}
       />
       {loading === 'upload' ? (
-        <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           업로드 중…
         </span>
       ) : loading === 'delete' ? (
-        <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           삭제 중…
         </span>
       ) : (

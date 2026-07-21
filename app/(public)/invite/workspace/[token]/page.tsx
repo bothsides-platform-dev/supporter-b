@@ -46,7 +46,7 @@ export default async function WorkspaceInvitePage({ params }: Props) {
     if (!row || row.status !== 'pending' || row.expiresAt < new Date()) {
       return (
         <div className="py-12 max-w-[420px] mx-auto text-center space-y-3">
-          <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-error)]">
+          <p className="md-label-small text-[var(--md-sys-color-error)]">
             초대 링크 오류
           </p>
           <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -73,7 +73,7 @@ export default async function WorkspaceInvitePage({ params }: Props) {
   if (!row || row.status !== 'pending' || row.expiresAt < new Date()) {
     return (
       <div className="py-12 max-w-[420px] mx-auto text-center space-y-3">
-        <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-error)]">
+        <p className="md-label-small text-[var(--md-sys-color-error)]">
           초대 링크 오류
         </p>
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">

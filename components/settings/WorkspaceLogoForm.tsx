@@ -70,7 +70,7 @@ export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt }: Props) {
 
   const kvRowClass = 'py-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4';
   const kvLabelClass =
-    'font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]';
+    'md-label-small text-[var(--md-sys-color-on-surface-variant)]';
 
   return (
     <div className={kvRowClass}>
@@ -92,11 +92,11 @@ export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt }: Props) {
         />
 
         {loading === 'upload' ? (
-          <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             업로드 중…
           </span>
         ) : loading === 'delete' ? (
-          <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             삭제 중…
           </span>
         ) : (

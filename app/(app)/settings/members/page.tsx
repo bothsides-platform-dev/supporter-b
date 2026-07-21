@@ -20,7 +20,7 @@ export default async function MembersPage() {
   if (!ws) {
     return (
       <div className="px-8 py-8">
-        <p className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+        <p className="md-label-small text-[var(--md-sys-color-outline)]">
           워크스페이스를 찾을 수 없습니다.
         </p>
       </div>

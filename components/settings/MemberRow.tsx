@@ -48,11 +48,11 @@ function MemberRowImpl({
             </span>
           )}
         </p>
-        <span className="font-mono text-[11px] text-[var(--md-sys-color-on-surface-variant)] tabular-nums">
+        <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
           {m.email}
         </span>
       </div>
-      <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)] hidden md:inline">
+      <span className="md-numeric text-[10px] text-[var(--md-sys-color-outline)] hidden md:inline">
         {m.lastSeenAt ? <LocalDate iso={m.lastSeenAt} /> : '—'}
       </span>
 

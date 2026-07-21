@@ -71,7 +71,7 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
       {error && (
         <p
           role="alert"
-          className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
+          className="md-label-small text-[var(--md-sys-color-error)]"
         >
           {error}
         </p>

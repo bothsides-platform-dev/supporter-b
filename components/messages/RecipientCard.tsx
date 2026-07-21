@@ -30,7 +30,7 @@ export function RecipientCard({ counterparty, rfpContext }: Props) {
         {rfpContext && (rfpContext.code || rfpContext.title) && (
           <p className="mt-0.5 truncate text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
             {rfpContext.code && (
-              <span className="font-mono tabular-nums">{rfpContext.code}</span>
+              <span className="md-numeric">{rfpContext.code}</span>
             )}
             {rfpContext.code && rfpContext.title && ' · '}
             {rfpContext.title}

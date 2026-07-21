@@ -33,14 +33,14 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
   if (confirmed) {
     return (
       <div className="flex items-center gap-3 py-2">
-        <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           등급 확정
         </span>
         <Chip label={MERCHANT_TIER_LABELS[grade]} color="surface" />
         <button
           type="button"
           onClick={() => setConfirmed(false)}
-          className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface-variant)] transition-colors ml-auto"
+          className="md-label-small text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface-variant)] transition-colors ml-auto"
         >
           수정
         </button>
@@ -50,7 +50,7 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
 
   return (
     <fieldset className="space-y-3" data-testid="grade-confirm-panel">
-      <legend className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)] mb-1">
+      <legend className="md-label-small text-[var(--md-sys-color-on-surface-variant)] mb-1">
         가맹점 등급 (자기신고)
       </legend>
       <div className="border border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)]">
@@ -74,7 +74,7 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
               <span className="text-[13px] text-[var(--md-sys-color-on-surface)] font-medium min-w-[3rem]">
                 {MERCHANT_TIER_LABELS[g]}
               </span>
-              <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] flex-1">
+              <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] flex-1">
                 {REVENUE_HINT[g]}
               </span>
             </label>
@@ -82,7 +82,7 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
         })}
       </div>
       <div className="flex items-center justify-between gap-3">
-        <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+        <p className="md-label-small text-[var(--md-sys-color-outline)]">
           등급은 PG에게 전달되는 참고 정보예요 — 카드 수수료는 모두 협상 대상.
         </p>
         <Button

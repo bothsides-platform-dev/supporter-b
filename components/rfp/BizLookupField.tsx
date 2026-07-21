@@ -135,7 +135,7 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
             placeholder="000-00-00000"
             aria-label="사업자 등록번호"
             className={cn(
-              'flex-1 bg-transparent border-0 border-b py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none transition-colors',
+              'flex-1 bg-transparent border-0 border-b py-2 text-[14px] md-numeric text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none transition-colors',
               status === 'found'
                 ? 'border-[var(--md-sys-color-on-surface)] opacity-60'
                 : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',
@@ -145,7 +145,7 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
             <button
               type="button"
               onClick={handleReset}
-              className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] transition-colors pb-2"
+              className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] transition-colors pb-2"
             >
               초기화
             </button>
@@ -164,7 +164,7 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
         {error && (
           <p
             role="alert"
-            className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
+            className="md-label-small text-[var(--md-sys-color-error)]"
           >
             {error}
           </p>
@@ -174,11 +174,11 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
       {status === 'found' && result && (
         <div className="border border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)]">
           <div className="px-4 py-2 flex items-center justify-between">
-            <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+            <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
               NTS — 국세청 자동 조회
             </span>
             {!blockedStatuses.includes(result.status) && (
-              <span className="font-mono text-[10px] tracking-[0.1em] text-[var(--md-sys-color-tertiary)]">
+              <span className="md-label-small text-[var(--md-sys-color-tertiary)]">
                 ✓ 확인됨
               </span>
             )}
@@ -192,11 +192,11 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
               key={label}
               className="px-4 py-2.5 flex items-baseline justify-between"
             >
-              <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                 {label}
               </span>
               <span className={cn(
-                'text-[13px] font-medium font-mono tabular-nums',
+                'text-[13px] font-medium md-numeric',
                 isError
                   ? 'text-[var(--md-sys-color-error)]'
                   : 'text-[var(--md-sys-color-on-surface)]',

@@ -58,7 +58,7 @@ export function ImprovementSummary({
   return (
     <section>
       <div className="flex items-center gap-3 mb-3">
-        <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           {heading}
         </span>
         <Divider />
@@ -170,7 +170,7 @@ function MetricRow({
       data-testid={testId}
       className="col-span-full grid grid-cols-subgrid items-center py-2.5"
     >
-      <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
         {label}
       </span>
       {currentText ? (

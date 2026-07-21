@@ -75,7 +75,7 @@ export function PgTutorialFlow() {
       )}
       <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-3">
         <div className="flex items-center gap-3">
-          <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             {stepNum} / {PHASE_ORDER.length} — {PHASE_LABELS[phase]}
           </span>
           <Divider />
