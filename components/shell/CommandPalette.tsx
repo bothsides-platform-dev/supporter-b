@@ -19,7 +19,7 @@ import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 const EMPTY_RESULTS: SearchResults = { rfps: [], bids: [], opportunities: [] };
 
 const HEADING_CLASS =
-  'px-4 py-1 block font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]';
+  'px-4 py-1 block md-label-small text-[var(--md-sys-color-on-surface-variant)]';
 const ITEM_CLASS =
   'flex items-center justify-between px-4 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface)] cursor-pointer aria-selected:bg-[var(--md-sys-color-surface-container-high)]';
 const ENTITY_ITEM_CLASS =
@@ -179,7 +179,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
             </IconButton>
           </div>
           <Command.List className="max-h-80 overflow-y-auto py-2">
-            <Command.Empty className="py-8 text-center font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+            <Command.Empty className="py-8 text-center md-label-small text-[var(--md-sys-color-on-surface-variant)]">
               결과 없음
             </Command.Empty>
 
@@ -233,7 +233,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
                 )}
 
                 {loading && (
-                  <span className="px-4 py-3 block font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                  <span className="px-4 py-3 block md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                     LOADING…
                   </span>
                 )}
@@ -264,7 +264,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
                               )}
                             </span>
                             {item.sub && (
-                              <span className="text-[11px] font-mono text-[var(--md-sys-color-on-surface-variant)] truncate max-w-[540px]">
+                              <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)] truncate max-w-[540px]">
                                 {item.sub}
                               </span>
                             )}

@@ -38,7 +38,7 @@ export function WorkspaceInviteUnauthClient({ token, inviteEmail, workspaceName 
 
   return (
     <div className="py-8 text-center">
-      <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+      <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
         LOADING…
       </p>
       <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">

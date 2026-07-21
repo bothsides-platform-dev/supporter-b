@@ -111,7 +111,7 @@ export function EmailVerifySection({
     <div className="w-full max-w-sm space-y-3 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] p-4 text-left">
       <div className="space-y-1">
         <p className="text-body-small text-on-surface-variant">
-          <span className="font-mono">{email}</span> 으로 보낸 메일의 [인증하기] 버튼을 누르거나,
+          <span className="md-numeric">{email}</span> 으로 보낸 메일의 [인증하기] 버튼을 누르거나,
           아래에 6자리 코드를 입력해요.
         </p>
       </div>
@@ -119,7 +119,7 @@ export function EmailVerifySection({
       <form onSubmit={handleSubmit} className="space-y-2">
         <label
           htmlFor="approvalEmailCode"
-          className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+          className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
         >
           인증 코드 (6자리)
         </label>
@@ -131,7 +131,7 @@ export function EmailVerifySection({
           value={code}
           onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
           placeholder="000000"
-          className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[18px] font-mono tracking-[0.3em] text-center text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+          className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 md-numeric text-[18px] tracking-[0.3em] text-center text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
         />
         {error && (
           <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
@@ -148,7 +148,7 @@ export function EmailVerifySection({
           type="button"
           onClick={handleResend}
           disabled={cooldown > 0}
-          className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-[var(--md-sys-color-on-surface-variant)]"
+          className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:text-[var(--md-sys-color-on-surface-variant)]"
         >
           {cooldown > 0 ? `${cooldown}초 후 다시 보낼 수 있어요` : '인증 메일 다시 보내기'}
         </button>

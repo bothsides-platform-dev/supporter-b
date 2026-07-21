@@ -24,13 +24,13 @@ function InviteContent() {
         <Avatar name="샘플테크" color="primary" size="lg" />
         <div>
           <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">(주)샘플테크</p>
-          <p className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] mt-0.5">멤버 1명</p>
+          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)] mt-0.5">멤버 1명</p>
         </div>
       </div>
       <div className="space-y-3">
         <Button fullWidth size="lg" onClick={() => router.push(`/signup/pg?token=${token}`)}>가입하고 합류</Button>
         <Button fullWidth variant="outlined" size="md" onClick={() => router.push('/login')}>로그인 후 합류</Button>
-        <button type="button" className="block w-full text-center font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface-variant)] transition-colors">
+        <button type="button" className="block w-full text-center md-label-small text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface-variant)] transition-colors">
           거절하기
         </button>
       </div>
@@ -40,7 +40,7 @@ function InviteContent() {
 
 export default function InvitePage() {
   return (
-    <Suspense fallback={<p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">LOADING…</p>}>
+    <Suspense fallback={<p className="md-label-medium text-center">LOADING…</p>}>
       <InviteContent />
     </Suspense>
   );

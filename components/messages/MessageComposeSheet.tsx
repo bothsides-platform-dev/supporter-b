@@ -226,14 +226,14 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
                       {formatSize(r.size ?? 0)}
                     </span>
                     {r.status === 'uploading' && (
-                      <span className="shrink-0 font-mono text-[10px] tracking-[0.12em] text-[var(--md-sys-color-outline)]">
+                      <span className="shrink-0 md-label-small text-[var(--md-sys-color-outline)]">
                         UPLOADING…
                       </span>
                     )}
                     {r.status === 'error' && (
                       <span
                         title={r.error}
-                        className="shrink-0 font-mono text-[10px] tracking-[0.12em] text-[var(--md-sys-color-error)]"
+                        className="shrink-0 md-label-small text-[var(--md-sys-color-error)]"
                       >
                         ERROR
                       </span>

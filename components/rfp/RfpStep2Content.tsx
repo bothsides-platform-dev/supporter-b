@@ -175,7 +175,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
             placeholder="3.4"
             className={cn(numericInputClass, 'flex-1')}
           />
-          <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
+          <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
         </div>
         {/* 현재 카드 수수료 PG 노출(opt-out) — 기본 공개(true). 끄면 PG 견적 화면에서 숨김. */}
         <div className="flex items-start gap-3 pt-1">
