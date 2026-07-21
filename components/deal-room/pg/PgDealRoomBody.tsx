@@ -3,12 +3,13 @@
 /**
  * PgDealRoomBody — PG 딜룸 본문(좌측 액션 레일 + 가운데 탭).
  *
- * 탭: 견적작성(BidWizard / 재요청 prefill / 제출완료 안내) · 요청조건(RfpBriefPanel)
- *     · 첨부. 레일: 견적작성·요청보기·첨부(탭 전환) · 철회(ConfirmDialog → withdraw).
+ * 탭: (signing 있을 때) 계약(SigningTab, 맨 앞·기본 활성) · 견적작성(BidWizard / 재요청
+ *     prefill / 제출완료 안내) · 요청조건(RfpBriefPanel) · 첨부. 레일: 계약(signing 있을
+ *     때만)·견적작성·요청보기·첨부(탭 전환) · 철회(ConfirmDialog → withdraw).
  */
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, FileText, Paperclip, Undo2 } from 'lucide-react';
+import { Pencil, FileText, Paperclip, Undo2, FileSignature } from 'lucide-react';
 
 import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
@@ -25,12 +26,15 @@ import { toast } from '@/lib/toast';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
 import { SigningTab } from '@/components/deal-room/signing/SigningTab';
+import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSummaryStrip';
+import { AwardContextLine } from '@/components/deal-room/signing/AwardContextLine';
+import { buildSigningSummary } from '@/components/deal-room/signing/signing-view-model';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   const { rfp, myBid, buyerName, quoteTemplates, pendingRequote, awardedToMe, buyerContact, signing } = data;
   const router = useRouter();
-  const [tab, setTab] = useState('write');
+  const [tab, setTab] = useState(signing ? 'contract' : 'write');
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -53,7 +57,9 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
         >
           {buyerContact && <ContactBlock contact={buyerContact} counterpartyKind="buyer" />}
         </DealResultHeader>
-        {signing && <SigningTab rfpCode={rfp.code} signing={signing} side="pg" />}
+        {signing && (
+          <SigningSummaryStrip signing={signing} side="pg" onOpen={() => setTab('contract')} />
+        )}
         {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(rfp, myBid)} />}
       </div>
     );
@@ -85,12 +91,43 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   }
 
   const tabs: DealRoomTab[] = [
+    ...(signing
+      ? [
+          {
+            id: 'contract',
+            label: '계약',
+            content: (
+              <>
+                {buyerContact && (
+                  <AwardContextLine
+                    workspaceName={buyerContact.workspaceName}
+                    contactName={buyerContact.name}
+                    counterpartyWsId={rfp.buyerWsId}
+                  />
+                )}
+                <SigningTab rfpCode={rfp.code} signing={signing} side="pg" />
+              </>
+            ),
+          } satisfies DealRoomTab,
+        ]
+      : []),
     { id: 'write', label: '견적 작성', content: writeContent },
     { id: 'request', label: '요청 조건', content: <RfpBriefPanel rfp={rfp} buyerName={buyerName} /> },
     { id: 'attach', label: '첨부', content: <AttachmentPreviewList files={rfp.rfpFiles} /> },
   ];
 
   const actions: RailAction[] = [
+    ...(signing
+      ? [
+          {
+            id: 'contract',
+            label: '계약',
+            icon: <FileSignature />,
+            dot: buildSigningSummary(signing, 'pg').dot,
+            onSelect: () => setTab('contract'),
+          } satisfies RailAction,
+        ]
+      : []),
     { id: 'write', label: '견적 작성', icon: <Pencil />, primary: true, onSelect: () => setTab('write') },
     { id: 'request', label: '요청 보기', icon: <FileText />, onSelect: () => setTab('request') },
     { id: 'attach', label: '첨부', icon: <Paperclip />, onSelect: () => setTab('attach') },

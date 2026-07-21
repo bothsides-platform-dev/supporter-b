@@ -1,6 +1,14 @@
 // PgDealRoomBody — PG 딜룸 본문(레일 + 탭).
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+vi.mock('@/components/deal-room/signing/SigningTab', () => ({
+  SigningTab: () => <div data-testid="signing-tab" />,
+}));
+vi.mock('@/components/deal-room/signing/AwardContextLine', () => ({
+  AwardContextLine: () => <div data-testid="award-context" />,
+}));
 
 class ResizeObserverStub {
   observe() {}
@@ -143,5 +151,59 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
     expect(screen.queryByText('이 견적이 선정됐어요')).not.toBeInTheDocument();
     expect(screen.queryByText('이번엔 선정되지 않았어요')).not.toBeInTheDocument();
+  });
+});
+
+import type { SigningView } from '@/lib/types/signing';
+
+function signingView(): SigningView {
+  return {
+    contract: {
+      id: 'c1',
+      rfpId: 'r1',
+      status: 'awaiting_pg_template',
+      round: 1,
+      createdBy: 'u',
+      createdAt: '2026-07-20T04:40:00Z',
+    },
+    participants: [],
+  };
+}
+
+describe('PgDealRoomBody — 계약 탭', () => {
+  const awarded = (over: Partial<PgRfpDetailData> = {}) =>
+    buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      myBid: submittedBid,
+      awardedToMe: true,
+      buyerContact: {
+        workspaceName: '(주)테스트',
+        name: '구매 담당자',
+        email: 'buyer@buy.com',
+        phone: null,
+      },
+      ...over,
+    });
+
+  it('선정 + signing 이면 계약 탭이 첫 번째이고 기본으로 열린다', () => {
+    render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs[0]).toHaveTextContent('계약');
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('signing-tab')).toBeInTheDocument();
+  });
+
+  it('signing 이 없으면 계약 탭이 없고 견적 작성이 기본이다', () => {
+    render(<PgDealRoomBody data={awarded()} />);
+    expect(screen.queryByRole('tab', { name: /계약/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('견적 작성 탭의 요약 스트립을 누르면 계약 탭으로 간다', async () => {
+    const user = userEvent.setup();
+    render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
+    await user.click(screen.getByRole('tab', { name: '견적 작성' }));
+    await user.click(screen.getByRole('button', { name: /전자서명/ }));
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
   });
 });
