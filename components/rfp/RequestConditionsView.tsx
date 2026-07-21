@@ -6,11 +6,11 @@ import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import { Divider } from '@/components/primitives/Divider';
-import { SOLUTION_LABELS } from '@/lib/rfp/solutions';
+import { solutionLabel } from '@/lib/rfp/solutions';
 
 function formatSolution(solution?: string | null, detail?: string | null): string | undefined {
-  if (!solution) return undefined;
-  const label = SOLUTION_LABELS[solution] ?? solution;
+  const label = solutionLabel(solution);
+  if (!label) return undefined;
   return (solution === 'self' || solution === 'other') && detail
     ? `${label} (${detail})`
     : label;

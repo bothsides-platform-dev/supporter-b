@@ -8,6 +8,7 @@ import { logBusinessEvent } from '@/lib/observability/log';
 import { isValidWebsiteUrl, isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { isContractTypeValid, isMainProductsValid, isAnnualPgVolumeSatisfied } from '@/lib/rfp/required-fields';
 import { MERCHANT_TIERS } from '@/lib/types/bid';
+import { SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 import type { RfpActionResult } from './_shared';
 
 const PAYMENT_METHODS = [
@@ -60,7 +61,7 @@ const Input = z
     deliveryServicePeriod: z.string().max(100).optional(),
     boardVisible: z.boolean().optional().default(true),
     currentFeeVisibleToPg: z.boolean().optional().default(true),
-    currentSolution: z.enum(['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other']).optional(),
+    currentSolution: z.enum(SOLUTION_VALUES).optional(),
     currentSolutionDetail: z.string().max(100).optional(),
     contractType: z.enum(['new', 'renewal']).nullable().optional(),
   })

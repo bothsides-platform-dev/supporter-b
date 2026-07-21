@@ -18,7 +18,7 @@ import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
 import { FieldError } from '@/components/primitives/FieldError';
 import { Divider } from '@/components/primitives/Divider';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
-import { SOLUTION_LABELS } from '@/lib/rfp/solutions';
+import { solutionLabel } from '@/lib/rfp/solutions';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -190,8 +190,7 @@ export function RfpStep4Review({
             label="현재 솔루션"
             value={
               draft.currentSolution
-                ? (SOLUTION_LABELS[draft.currentSolution] ??
-                    draft.currentSolution) +
+                ? (solutionLabel(draft.currentSolution) ?? '') +
                   (draft.currentSolutionDetail
                     ? ` — ${draft.currentSolutionDetail}`
                     : '')

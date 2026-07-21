@@ -54,6 +54,7 @@ vi.mock('@/lib/observability/log', () => ({
 import { createRfpAction } from '../createRfpAction';
 import { migrateCurrentTerms, STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
+import { SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 
 let db: PgliteDB;
 let buyerUserId: string;
@@ -308,6 +309,24 @@ describe('createRfpAction', () => {
         deadline: new Date(Date.now() + 86_400_000).toISOString(),
         allowedPgWorkspaceIds: [pgWsId],
         requiredPaymentMethods: [method],
+        send: false,
+      });
+      expect(r.ok).toBe(true);
+    },
+  );
+
+  // 드리프트 가드 — createRfpAction의 currentSolution z.enum 은 lib/types/rfp-terms.ts 의
+  // SOLUTION_VALUES 를 손으로 복제한 인라인 리터럴이라, 어긋나면 위저드에서 고를 수 있는
+  // 솔루션이 서버에서 조용히 거부(INVALID_INPUT)된다. 캐논니컬 어휘 전체를 순회해 고정한다.
+  it.each([...SOLUTION_VALUES])(
+    '%s — currentSolution 드리프트 가드 (캐논니컬 어휘 전체 허용)',
+    async (solution) => {
+      const r = await createRfpAction({
+        title: '솔루션 드리프트 가드',
+        deadline: new Date(Date.now() + 86_400_000).toISOString(),
+        allowedPgWorkspaceIds: [pgWsId],
+        requiredPaymentMethods: ['card'],
+        currentSolution: solution,
         send: false,
       });
       expect(r.ok).toBe(true);
