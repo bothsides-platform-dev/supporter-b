@@ -3,6 +3,7 @@
 // postgres-js client); MUST NOT be imported by auth.config.ts, which stays
 // edge-safe.
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import type { MemberApprovalStatus } from '@/lib/types/workspace';
 
 export type ActiveMembership = {
   workspaceId: string;
@@ -11,13 +12,23 @@ export type ActiveMembership = {
   approvalStatus: 'approved' | 'pending_approval' | 'rejected';
 };
 
+/** `isApprovedAdmin` 이 판정할 수 있는 최소 멤버십 형태 — role + 승인 상태만 본다. */
+export type ApprovedAdminCandidate = {
+  role: string;
+  approvalStatus: MemberApprovalStatus;
+};
+
 /**
  * 효과적인(authority 를 행사할 수 있는) admin 인가? — role='admin' AND
  * approvalStatus='approved'. canonical-PG 합류자는 승인 전까지 role='admin' 이지만
  * pending_approval 이며, shell 가드는 RSC 렌더만 막고 서버액션은 막지 않으므로
  * admin 권한 게이트는 반드시 이 헬퍼로 승인까지 확인해야 한다.
+ *
+ * "실효 admin" 판정의 단일 출처 — 호출자(권한 게이트)뿐 아니라 **대상**(마지막 admin
+ * 판정, 잔여 admin 집계)에도 같은 기준을 써야 한다. `workspaceRepo.countAdmins` 의
+ * `approvalStatus='approved'` 필터가 이 헬퍼의 SQL 쌍이므로 둘은 함께 움직여야 한다.
  */
-export function isApprovedAdmin(membership: ActiveMembership | null): boolean {
+export function isApprovedAdmin(membership: ApprovedAdminCandidate | null): boolean {
   return membership?.role === 'admin' && membership.approvalStatus === 'approved';
 }
 

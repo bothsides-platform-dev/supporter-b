@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 
 import { normalizeEmail, bucket15Min } from './_service-utils';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
+import { isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { baseUrl } from '@/lib/server/env';
 import { addMinutes, generateToken, hashToken } from '@/lib/server/token';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
@@ -255,10 +256,9 @@ export class AuthService {
 
       if (allMembers.length === 1) {
         soloWorkspaceIds.push(membership.workspaceId);
-      } else if (membership.role === 'admin' && membership.approvalStatus === 'approved') {
+      } else if (isApprovedAdmin(membership)) {
         const otherAdmins = allMembers.filter(
-          (m: { userId: string; role: string; approvalStatus: string }) =>
-            m.userId !== input.userId && m.role === 'admin' && m.approvalStatus === 'approved',
+          (m) => m.userId !== input.userId && isApprovedAdmin(m),
         );
         if (otherAdmins.length === 0) {
           blockingWorkspaces.push({ id: membership.workspaceId, name: membership.name });
