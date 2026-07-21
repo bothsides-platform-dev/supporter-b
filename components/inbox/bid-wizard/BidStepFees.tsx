@@ -2,6 +2,7 @@
 
 import { PercentInput, CurrencyInput, FeeRateCell } from '@/components/forms/inputs';
 import { FieldError } from '@/components/primitives/FieldError';
+import { isFeeFilled } from './bid-wizard-validation';
 import {
   PAYMENT_METHOD_CATEGORIES,
   PAYMENT_METHOD_LABELS,
@@ -47,7 +48,7 @@ export function BidStepFees({
   // 단일요율 수단(계좌·기타 등 비-구간 요청수단)
   const singleMethods = feeInputMethods.filter((m) => !isTieredMethod(m));
 
-  const feeFilled = (key: string) => (fees[key] ?? '') !== '' && parseFloat(fees[key]) >= 0;
+  const feeFilled = (key: string) => isFeeFilled(fees, key);
   const tieredCellCount = tieredGroups.reduce(
     (n, g) => n + g.methods.length * MERCHANT_TIERS.length,
     0,
