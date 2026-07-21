@@ -10,9 +10,10 @@ import type { SigningContract, SigningParticipant, SigningView } from '@/lib/typ
 
 export type SigningSide = 'buyer' | 'pg';
 /**
- * done/failed 는 시각(`at`)을 동반하는 종결, pending/active 는 아직 오지 않은 단계.
- * ended 는 실패도 완료도 아닌 중립 종결(취소) — 일어난 일이라 시각을 갖지만
- * 성공으로 칠해지지 않는다.
+ * done/failed/ended 는 이미 일어난 일에 붙는 종결류 상태 — `at`(시각)이 실릴 수
+ * 있지만 모든 인스턴스가 갖는 건 아니다(예: declined 종결 노드나 rejected 참여자는
+ * `at` 없이도 종결/실패로 칠해진다). pending/active 는 아직 오지 않은 단계라 `at`이
+ * 없다. ended 는 실패도 완료도 아닌 중립 종결(취소)이다.
  */
 export type SigningNodeState = 'done' | 'active' | 'pending' | 'failed' | 'ended';
 export type SigningIcon = 'clock' | 'alert' | 'pen' | 'check' | 'x' | 'slash';
@@ -139,6 +140,23 @@ function awardedNode(contract: SigningContract, isPg: boolean): SigningNode {
   };
 }
 
+/**
+ * 발송 후 상태(declined/expired/canceled 등)의 첫 노드 — 정상 경로는 발송 사실
+ * (sentNode)이지만, 발송 전(awaiting_pg_template)에 취소된 계약처럼 sentAt 이
+ * 없는 경우엔 "보냈어요"를 주장하지 않고 선정 사실(awardedNode)로 대체한다.
+ */
+function openingNode(contract: SigningContract, isPg: boolean): SigningNode {
+  return contract.sentAt ? sentNode(contract) : awardedNode(contract, isPg);
+}
+
+/** 참여자가 있으면 실제 참여자 노드, 없으면(발송 전 취소 등) 자리지기 2노드. */
+function participantOrPlaceholderNodes(
+  participants: SigningParticipant[],
+  unsignedLabel: string,
+): SigningNode[] {
+  return participants.length === 0 ? placeholderPair() : personNodes(participants, unsignedLabel);
+}
+
 export function buildSigningCardView(signing: SigningView, side: SigningSide): SigningCardView {
   const { contract, participants } = signing;
   const isPg = side === 'pg';
@@ -152,7 +170,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         description: isPg
           ? '등록하는 즉시 이 계약의 서명이 자동으로 시작돼요.'
           : '준비되면 자동으로 양측에 서명 링크가 발송돼요.',
-        chip: { color: 'warning', label: isPg ? '등록 필요' : '계약서 준비 중' },
+        chip: { color: 'warning', label: isPg ? '등록 필요' : 'PG사가 계약서 준비 중' },
         nodes: [
           awardedNode(contract, isPg),
           {
@@ -243,8 +261,8 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         description: '조건을 다시 맞춘 뒤 새로 발송할 수 있어요.',
         chip: { color: 'error', label: '거절됨' },
         nodes: [
-          sentNode(contract),
-          ...personNodes(participants, '서명 안 함'),
+          openingNode(contract, isPg),
+          ...participantOrPlaceholderNodes(participants, '서명 안 함'),
           { key: 'terminal', kind: 'milestone', label: '서명이 중단됐어요', state: 'failed' },
         ],
         docs: [],
@@ -268,8 +286,8 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         description: '서명 링크가 만료됐어요. 다시 발송하면 새 링크가 나가요.',
         chip: { color: 'error', label: '만료됨' },
         nodes: [
-          sentNode(contract),
-          ...personNodes(participants, '서명 안 함'),
+          openingNode(contract, isPg),
+          ...participantOrPlaceholderNodes(participants, '서명 안 함'),
           {
             key: 'terminal',
             kind: 'milestone',
@@ -299,8 +317,8 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         description: '진행 중이던 서명이 중단됐어요.',
         chip: { color: 'surface', label: '취소됨' },
         nodes: [
-          sentNode(contract),
-          ...personNodes(participants, '서명 안 함'),
+          openingNode(contract, isPg),
+          ...participantOrPlaceholderNodes(participants, '서명 안 함'),
           {
             key: 'terminal',
             kind: 'milestone',
@@ -350,7 +368,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
             failMsg: '다시 시작하지 못했어요',
           },
         ],
-        note: '선정은 그대로 유지돼요.',
+        note: '선정 결과는 그대로예요.',
       };
   }
 }

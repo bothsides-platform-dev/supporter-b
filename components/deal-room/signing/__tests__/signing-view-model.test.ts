@@ -71,9 +71,16 @@ describe('buildSigningCardView', () => {
   it('awaiting_pg_template — 구매사는 대기 안내만, 액션이 없다', () => {
     const v = buildSigningCardView(view('awaiting_pg_template'), 'buyer');
     expect(v.title).toBe('PG사가 계약서를 준비하고 있어요');
-    expect(v.chip).toEqual({ color: 'warning', label: '계약서 준비 중' });
+    expect(v.chip).toEqual({ color: 'warning', label: 'PG사가 계약서 준비 중' });
     expect(v.actions).toEqual([]);
     expect(v.nodes[1]).toMatchObject({ key: 'prepare', state: 'active' });
+  });
+
+  it('awaiting_pg_template — 첫 노드 라벨이 역할별로 갈린다(선정 사실, 발송 전)', () => {
+    const buyerV = buildSigningCardView(view('awaiting_pg_template'), 'buyer');
+    expect(buyerV.nodes[0]).toMatchObject({ key: 'awarded', label: '견적을 선정했어요' });
+    const pgV = buildSigningCardView(view('awaiting_pg_template'), 'pg');
+    expect(pgV.nodes[0]).toMatchObject({ key: 'awarded', label: '이 견적이 선정됐어요' });
   });
 
   it('awaiting_pg_template — PG는 등록 CTA를 받는다', () => {
@@ -152,6 +159,28 @@ describe('buildSigningCardView', () => {
     });
   });
 
+  it('canceled — 발송 전(참여자 0, sentAt 없음) 취소도 4노드이고 발송 사실을 주장하지 않는다', () => {
+    const neverSent: SigningView = {
+      contract: {
+        id: 'c1',
+        rfpId: 'r1',
+        status: 'canceled',
+        round: 1,
+        createdBy: 'u',
+        createdAt: '2026-07-20T04:40:00Z',
+        canceledAt: '2026-07-20T08:05:00Z',
+      },
+      participants: [],
+    };
+    const v = buildSigningCardView(neverSent, 'buyer');
+    expect(v.nodes).toHaveLength(4);
+    expect(v.nodes[0]).toMatchObject({ key: 'awarded', label: '견적을 선정했어요' });
+    expect(v.nodes[0].label).not.toMatch(/보냈어요/);
+    expect(v.nodes[1]).toMatchObject({ key: 'sign', state: 'pending' });
+    expect(v.nodes[2]).toMatchObject({ key: 'done', state: 'pending' });
+    expect(v.nodes[3]).toMatchObject({ key: 'terminal', state: 'ended', at: '2026-07-20T08:05:00Z' });
+  });
+
   it('send_failed — 발송 노드가 failed, 다시 시작 액션', () => {
     const v = buildSigningCardView(view('send_failed'), 'buyer');
     expect(v.nodes[1]).toMatchObject({ key: 'send', state: 'failed' });
@@ -164,6 +193,11 @@ describe('buildSigningCardView', () => {
         failMsg: '다시 시작하지 못했어요',
       },
     ]);
+  });
+
+  it('send_failed — 안내 문구가 declined/expired 와 같은 실패-재보증 문구를 쓴다', () => {
+    const v = buildSigningCardView(view('send_failed'), 'buyer');
+    expect(v.note).toBe('선정 결과는 그대로예요.');
   });
 
   it('send_failed — 다시 시작 액션의 토스트 문구는 "시작" 어휘를 쓴다', () => {
