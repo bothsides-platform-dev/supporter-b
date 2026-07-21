@@ -9,6 +9,7 @@
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
+import { TONE_COLOR_VAR, type ChipColor } from '@/components/primitives/Chip';
 
 export type RailAction = {
   id: string;
@@ -20,6 +21,15 @@ export type RailAction = {
   /** 주요 작업(선정·작성) — primary 색. */
   primary?: boolean;
   disabled?: boolean;
+  /** 상태 표식 — 아이콘 우상단 점(전자서명 진행 상태 등). */
+  dot?: ChipColor;
+  /**
+   * `dot`이 전달하는 상태를 색 외 텍스트로도 전달 — `dot`이 유일한 상태 표식인
+   * 탭(요청 조건·첨부·PG 관리 등 SigningSummaryStrip이 없는 화면)에서 스크린리더
+   * 사용자가 아무 신호도 못 받는 문제를 막는다. sr-only 로 렌더되어 버튼 접근성
+   * 이름에 "계약 서명 진행 중"처럼 실린다.
+   */
+  dotLabel?: string;
 };
 
 export function DealRoomActionRail({ actions }: { actions: RailAction[] }) {
@@ -35,7 +45,7 @@ export function DealRoomActionRail({ actions }: { actions: RailAction[] }) {
           onClick={a.onSelect}
           disabled={a.disabled}
           className={cn(
-            'mx-1 flex flex-col items-center gap-1.5 rounded-[var(--md-sys-shape-small)] px-1 py-2.5 text-[11px] tracking-[-0.01em] transition-colors max-lg:mx-0 max-lg:shrink-0 max-lg:px-3',
+            'relative mx-1 flex flex-col items-center gap-1.5 rounded-[var(--md-sys-shape-small)] px-1 py-2.5 text-[11px] tracking-[-0.01em] transition-colors max-lg:mx-0 max-lg:shrink-0 max-lg:px-3',
             'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
             'disabled:pointer-events-none disabled:opacity-40',
             a.primary &&
@@ -45,8 +55,22 @@ export function DealRoomActionRail({ actions }: { actions: RailAction[] }) {
             '[&_svg]:size-[19px]',
           )}
         >
+          {a.dot && (
+            <span
+              data-testid="rail-dot"
+              aria-hidden
+              className="absolute top-[7px] right-[16px] size-[7px] rounded-full ring-2 ring-[var(--md-sys-color-surface)] max-lg:right-[8px]"
+              style={{ background: TONE_COLOR_VAR[a.dot] }}
+            />
+          )}
           {a.icon}
           <span>{a.label}</span>
+          {a.dotLabel && (
+            <>
+              {' '}
+              <span className="sr-only">{a.dotLabel}</span>
+            </>
+          )}
         </button>
       ))}
     </nav>

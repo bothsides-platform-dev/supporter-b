@@ -32,4 +32,10 @@ describe('DealRoomCenter', () => {
     await user.click(screen.getByRole('tab', { name: '요청 조건' }));
     expect(onChange).toHaveBeenCalledWith('request');
   });
+
+  it('탭 바 wrapper 가 overflow-x-auto 로 소형 화면에서 가로 스크롤을 허용한다', () => {
+    render(<DealRoomCenter tabs={tabs} activeId="compare" onChange={() => {}} />);
+    const tablist = screen.getByRole('tablist');
+    expect(tablist.parentElement?.className).toMatch(/overflow-x-auto/);
+  });
 });

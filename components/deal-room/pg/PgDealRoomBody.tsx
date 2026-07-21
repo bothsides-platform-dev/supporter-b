@@ -3,8 +3,9 @@
 /**
  * PgDealRoomBody — PG 딜룸 본문(좌측 액션 레일 + 가운데 탭).
  *
- * 탭: 견적작성(BidWizard / 재요청 prefill / 제출완료 안내) · 요청조건(RfpBriefPanel)
- *     · 첨부. 레일: 견적작성·요청보기·첨부(탭 전환) · 철회(ConfirmDialog → withdraw).
+ * 탭: (signing 있을 때) 계약(SigningTab, 맨 앞·기본 활성) · 견적작성(BidWizard / 재요청
+ *     prefill / 제출완료 안내) · 요청조건(RfpBriefPanel) · 첨부. 레일: 계약(signing 있을
+ *     때만)·견적작성·요청보기·첨부(탭 전환) · 철회(ConfirmDialog → withdraw).
  */
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -24,17 +25,22 @@ import { withdrawBidAction } from '@/lib/server/actions/bid/withdrawBidAction';
 import { toast } from '@/lib/toast';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
-import { SigningPanel } from '@/components/deal-room/SigningPanel';
+import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSummaryStrip';
+import { buildContractTabEntries } from '@/components/deal-room/signing/build-contract-tab-entries';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   const { rfp, myBid, buyerName, quoteTemplates, pendingRequote, awardedToMe, buyerContact, signing } = data;
   const router = useRouter();
-  const [tab, setTab] = useState('write');
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   const isAwarded = rfp.status === 'awarded';
+  // 봉인입찰 방어 — 로더가 이미 awardedToMe 일 때만 signing 을 내리지만, 컴포넌트도
+  // 같은 불변식을 지켜 미선정 PG 에게 낙찰자의 계약 상태가 새지 않게 한다.
+  const contractVisible = awardedToMe ? signing : null;
+
+  const [tab, setTab] = useState(contractVisible ? 'contract' : 'write');
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   let writeContent: ReactNode;
   if (pendingRequote) {
     writeContent = (
@@ -53,7 +59,9 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
         >
           {buyerContact && <ContactBlock contact={buyerContact} counterpartyKind="buyer" />}
         </DealResultHeader>
-        {signing && <SigningPanel rfpCode={rfp.code} signing={signing} />}
+        {contractVisible && (
+          <SigningSummaryStrip signing={contractVisible} side="pg" onOpen={() => setTab('contract')} />
+        )}
         {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(rfp, myBid)} />}
       </div>
     );
@@ -84,13 +92,26 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
     writeContent = <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} />;
   }
 
+  // signing 이 아니라 contractVisible 을 넘긴다 — 위 봉인입찰 방어(미선정 PG 에겐
+  // null)가 여기서도 그대로 이어져야 계약 탭·레일 액션이 낙찰자 상태를 새지 않는다.
+  const contractTab = buildContractTabEntries({
+    rfpCode: rfp.code,
+    signing: contractVisible,
+    side: 'pg',
+    contact: buyerContact,
+    counterpartyWsId: rfp.buyerWsId,
+    onSelect: () => setTab('contract'),
+  });
+
   const tabs: DealRoomTab[] = [
+    ...contractTab.tabs,
     { id: 'write', label: '견적 작성', content: writeContent },
     { id: 'request', label: '요청 조건', content: <RfpBriefPanel rfp={rfp} buyerName={buyerName} /> },
     { id: 'attach', label: '첨부', content: <AttachmentPreviewList files={rfp.rfpFiles} /> },
   ];
 
   const actions: RailAction[] = [
+    ...contractTab.actions,
     { id: 'write', label: '견적 작성', icon: <Pencil />, primary: true, onSelect: () => setTab('write') },
     { id: 'request', label: '요청 보기', icon: <FileText />, onSelect: () => setTab('request') },
     { id: 'attach', label: '첨부', icon: <Paperclip />, onSelect: () => setTab('attach') },

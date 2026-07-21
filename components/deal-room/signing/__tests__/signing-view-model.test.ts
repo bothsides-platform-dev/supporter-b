@@ -1,0 +1,301 @@
+import { describe, it, expect } from 'vitest';
+
+import { buildSigningCardView, buildSigningSummary } from '../signing-view-model';
+import type {
+  SigningContractStatus,
+  SigningParticipant,
+  SigningParticipantRole,
+  SigningParticipantStatus,
+  SigningView,
+} from '@/lib/types/signing';
+
+function part(
+  role: SigningParticipantRole,
+  status: SigningParticipantStatus,
+  over: Partial<SigningParticipant> = {},
+): SigningParticipant {
+  return {
+    id: role,
+    contractId: 'c1',
+    name: role === 'buyer' ? '김구매' : '이대행',
+    email: `${role}@x.com`,
+    role,
+    securityMethod: 'easy_cert',
+    status,
+    ...over,
+  };
+}
+
+function view(status: SigningContractStatus, participants: SigningParticipant[] = []): SigningView {
+  return {
+    contract: {
+      id: 'c1',
+      rfpId: 'r1',
+      status,
+      round: 1,
+      createdBy: 'u',
+      createdAt: '2026-07-20T04:40:00Z',
+      sentAt: '2026-07-20T05:02:00Z',
+      ...(status === 'completed' ? { completedAt: '2026-07-21T01:24:00Z' } : {}),
+      ...(status === 'canceled' ? { canceledAt: '2026-07-20T08:05:00Z' } : {}),
+      ...(status === 'expired' ? { expiresAt: '2026-07-27T05:02:00Z' } : {}),
+    },
+    participants,
+  };
+}
+
+const bothPending = [part('buyer', 'pending'), part('pg', 'pending')];
+
+describe('buildSigningCardView', () => {
+  it('모든 상태가 노드 4개와 헤더·안내문을 채운다', () => {
+    const statuses: SigningContractStatus[] = [
+      'awaiting_pg_template',
+      'sent',
+      'in_progress',
+      'completed',
+      'declined',
+      'expired',
+      'canceled',
+      'send_failed',
+    ];
+    for (const status of statuses) {
+      for (const side of ['buyer', 'pg'] as const) {
+        const v = buildSigningCardView(view(status, bothPending), side);
+        expect(v.nodes, `${status}/${side}`).toHaveLength(4);
+        expect(v.title.length, `${status}/${side}`).toBeGreaterThan(0);
+        expect(v.note.length, `${status}/${side}`).toBeGreaterThan(0);
+        expect(v.chip.label.length, `${status}/${side}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('awaiting_pg_template — 구매사는 대기 안내만, 액션이 없다', () => {
+    const v = buildSigningCardView(view('awaiting_pg_template'), 'buyer');
+    expect(v.title).toBe('PG사가 계약서를 준비하고 있어요');
+    expect(v.chip).toEqual({ color: 'warning', label: 'PG사가 계약서 준비 중' });
+    expect(v.actions).toEqual([]);
+    expect(v.nodes[1]).toMatchObject({ key: 'prepare', state: 'active' });
+  });
+
+  it('awaiting_pg_template — 첫 노드 라벨이 역할별로 갈린다(선정 사실, 발송 전)', () => {
+    const buyerV = buildSigningCardView(view('awaiting_pg_template'), 'buyer');
+    expect(buyerV.nodes[0]).toMatchObject({ key: 'awarded', label: '견적을 선정했어요' });
+    const pgV = buildSigningCardView(view('awaiting_pg_template'), 'pg');
+    expect(pgV.nodes[0]).toMatchObject({ key: 'awarded', label: '이 견적이 선정됐어요' });
+  });
+
+  it('awaiting_pg_template — PG는 등록 CTA를 받는다', () => {
+    const v = buildSigningCardView(view('awaiting_pg_template'), 'pg');
+    expect(v.title).toBe('계약서 템플릿을 등록해 주세요');
+    expect(v.chip).toEqual({ color: 'warning', label: '계약서 등록 필요' });
+    expect(v.actions).toEqual([
+      { id: 'template', label: '서명 템플릿 등록하기', variant: 'filled' },
+    ]);
+  });
+
+  it('in_progress — 발송·참여자·완료 노드를 순서대로 만든다', () => {
+    const v = buildSigningCardView(
+      view('in_progress', [
+        part('buyer', 'signed', { signedAt: '2026-07-20T06:10:00Z' }),
+        part('pg', 'pending'),
+      ]),
+      'buyer',
+    );
+    expect(v.nodes.map((n) => n.kind)).toEqual(['milestone', 'person', 'person', 'milestone']);
+    expect(v.nodes[0]).toMatchObject({ key: 'sent', state: 'done', at: '2026-07-20T05:02:00Z' });
+    expect(v.nodes[1]).toMatchObject({ state: 'done', at: '2026-07-20T06:10:00Z', initial: '김' });
+    expect(v.nodes[1].chip).toEqual({ color: 'tertiary', label: '서명 완료' });
+    expect(v.nodes[2]).toMatchObject({ state: 'pending' });
+    expect(v.nodes[2].chip).toEqual({ color: 'surface', label: '서명 대기' });
+    expect(v.nodes[3]).toMatchObject({ key: 'done', state: 'pending' });
+    expect(v.actions.map((a) => a.id)).toEqual(['remind', 'cancel']);
+  });
+
+  it('in_progress — viewed 참여자는 "열람함" 칩과 active 상태를 받는다', () => {
+    const v = buildSigningCardView(
+      view('in_progress', [part('buyer', 'viewed'), part('pg', 'pending')]),
+      'buyer',
+    );
+    expect(v.nodes[1]).toMatchObject({ state: 'active' });
+    expect(v.nodes[1].chip).toEqual({ color: 'primary', label: '열람함' });
+  });
+
+  it('completed — 전 노드 완료 + 문서 2개', () => {
+    const v = buildSigningCardView(
+      view('completed', [
+        part('buyer', 'signed', { signedAt: '2026-07-20T06:10:00Z' }),
+        part('pg', 'signed', { signedAt: '2026-07-21T01:24:00Z' }),
+      ]),
+      'pg',
+    );
+    expect(v.nodes.every((n) => n.state === 'done')).toBe(true);
+    expect(v.nodes[3].at).toBe('2026-07-21T01:24:00Z');
+    expect(v.docs.map((d) => d.id)).toEqual(['document', 'audit']);
+    expect(v.actions).toEqual([]);
+  });
+
+  it('declined — 거절 참여자와 종결 노드가 failed', () => {
+    const v = buildSigningCardView(
+      view('declined', [part('buyer', 'signed'), part('pg', 'rejected')]),
+      'buyer',
+    );
+    expect(v.chip).toEqual({ color: 'error', label: '서명 거절' });
+    expect(v.nodes[2]).toMatchObject({ state: 'failed' });
+    expect(v.nodes[2].chip).toEqual({ color: 'error', label: '거절' });
+    expect(v.nodes[3]).toMatchObject({ key: 'terminal', state: 'failed' });
+    expect(v.actions).toEqual([
+      {
+        id: 'resend',
+        label: '다시 발송',
+        variant: 'filled',
+        okMsg: '다시 발송했어요',
+        failMsg: '다시 발송하지 못했어요',
+      },
+    ]);
+  });
+
+  it('expired·canceled — 미서명 참여자 칩이 "서명 안 함"', () => {
+    for (const status of ['expired', 'canceled'] as const) {
+      const v = buildSigningCardView(view(status, bothPending), 'buyer');
+      expect(v.nodes[1].chip, status).toEqual({ color: 'surface', label: '서명 안 함' });
+    }
+  });
+
+  it('canceled — 종결 노드는 중립 종결(ended) + 취소 시각', () => {
+    const v = buildSigningCardView(view('canceled', bothPending), 'buyer');
+    expect(v.chip).toEqual({ color: 'surface', label: '서명 취소' });
+    expect(v.nodes[3]).toMatchObject({
+      key: 'terminal',
+      state: 'ended',
+      at: '2026-07-20T08:05:00Z',
+    });
+  });
+
+  it('expired — 칩 라벨이 능동형 용어집 표현을 쓴다', () => {
+    const v = buildSigningCardView(view('expired', bothPending), 'buyer');
+    expect(v.chip).toEqual({ color: 'error', label: '서명 기한 지남' });
+  });
+
+  it('expired — 종결 노드가 만료 시각(expiresAt)을 담는다', () => {
+    const v = buildSigningCardView(view('expired', bothPending), 'buyer');
+    expect(v.nodes[3]).toMatchObject({
+      key: 'terminal',
+      state: 'failed',
+      at: '2026-07-27T05:02:00Z',
+    });
+  });
+
+  it('canceled — 발송 전(참여자 0, sentAt 없음) 취소도 4노드이고 발송 사실을 주장하지 않는다', () => {
+    const neverSent: SigningView = {
+      contract: {
+        id: 'c1',
+        rfpId: 'r1',
+        status: 'canceled',
+        round: 1,
+        createdBy: 'u',
+        createdAt: '2026-07-20T04:40:00Z',
+        canceledAt: '2026-07-20T08:05:00Z',
+      },
+      participants: [],
+    };
+    const v = buildSigningCardView(neverSent, 'buyer');
+    expect(v.nodes).toHaveLength(4);
+    expect(v.nodes[0]).toMatchObject({ key: 'awarded', label: '견적을 선정했어요' });
+    expect(v.nodes[0].label).not.toMatch(/보냈어요/);
+    expect(v.nodes[1]).toMatchObject({ key: 'sign', state: 'pending' });
+    expect(v.nodes[2]).toMatchObject({ key: 'done', state: 'pending' });
+    expect(v.nodes[3]).toMatchObject({ key: 'terminal', state: 'ended', at: '2026-07-20T08:05:00Z' });
+  });
+
+  it('canceled — 발송 전 취소(pg)는 첫 노드 라벨이 "이 견적이 선정됐어요"다', () => {
+    const neverSent: SigningView = {
+      contract: {
+        id: 'c1',
+        rfpId: 'r1',
+        status: 'canceled',
+        round: 1,
+        createdBy: 'u',
+        createdAt: '2026-07-20T04:40:00Z',
+        canceledAt: '2026-07-20T08:05:00Z',
+      },
+      participants: [],
+    };
+    const v = buildSigningCardView(neverSent, 'pg');
+    expect(v.nodes[0].label).toBe('이 견적이 선정됐어요');
+  });
+
+  it('send_failed — 발송 노드가 failed, 다시 시작 액션', () => {
+    const v = buildSigningCardView(view('send_failed'), 'buyer');
+    expect(v.nodes[1]).toMatchObject({ key: 'send', state: 'failed' });
+    expect(v.actions).toEqual([
+      {
+        id: 'resend',
+        label: '다시 시작',
+        variant: 'filled',
+        okMsg: '다시 시작했어요',
+        failMsg: '다시 시작하지 못했어요',
+      },
+    ]);
+  });
+
+  it('send_failed — 안내 문구가 declined/expired 와 같은 실패-재보증 문구를 쓴다', () => {
+    const v = buildSigningCardView(view('send_failed'), 'buyer');
+    expect(v.note).toBe('선정 결과는 그대로예요.');
+  });
+
+  it('send_failed — 다시 시작 액션의 토스트 문구는 "시작" 어휘를 쓴다', () => {
+    const v = buildSigningCardView(view('send_failed'), 'buyer');
+    const resend = v.actions.find((a) => a.id === 'resend');
+    expect(resend).toMatchObject({
+      okMsg: '다시 시작했어요',
+      failMsg: '다시 시작하지 못했어요',
+    });
+  });
+
+  it('declined — 다시 발송 액션의 토스트 문구는 "발송" 어휘를 쓴다', () => {
+    const v = buildSigningCardView(
+      view('declined', [part('buyer', 'signed'), part('pg', 'rejected')]),
+      'buyer',
+    );
+    const resend = v.actions.find((a) => a.id === 'resend');
+    expect(resend).toMatchObject({
+      okMsg: '다시 발송했어요',
+      failMsg: '다시 발송하지 못했어요',
+    });
+  });
+
+  it('알 수 없는 상태 — 서버가 새 status 를 내려도 안전한 대체 뷰를 돌려준다(4노드, 액션 없음)', () => {
+    const bogusStatus = 'bogus_future_status' as unknown as SigningContractStatus;
+    const v = buildSigningCardView(view(bogusStatus, bothPending), 'buyer');
+    expect(v.tone).toBe('surface');
+    expect(v.icon).toBe('slash');
+    expect(v.chip).toEqual({ color: 'surface', label: '상태 확인 필요' });
+    expect(v.title).toBe('전자서명 상태를 불러오지 못했어요');
+    expect(v.description).toBe('화면을 새로고침해도 그대로면 문의해 주세요.');
+    expect(v.docs).toEqual([]);
+    expect(v.actions).toEqual([]);
+    expect(v.note).toBe('선정 결과는 그대로예요.');
+    expect(v.nodes).toHaveLength(4);
+  });
+});
+
+describe('buildSigningSummary', () => {
+  it('진행 중이면 서명 수를 함께 돌려준다', () => {
+    const s = buildSigningSummary(
+      view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')]),
+      'buyer',
+    );
+    expect(s).toEqual({ label: '서명 진행 중', dot: 'primary', signed: 1, total: 2 });
+  });
+
+  it('진행 중이 아니면 개수 없이 상태 라벨만', () => {
+    expect(buildSigningSummary(view('completed'), 'buyer')).toEqual({
+      label: '서명 완료',
+      dot: 'tertiary',
+    });
+    expect(buildSigningSummary(view('awaiting_pg_template'), 'pg')).toEqual({
+      label: '계약서 등록 필요',
+      dot: 'warning',
+    });
+  });
+});

@@ -2,7 +2,7 @@
 //
 // 서버 액션은 { ok:false, error:'CODE' } 를 돌려주지만 사용자에게 raw 코드(SNOWSIGN_NETWORK
 // 등)를 보이면 안 된다 — UX_WRITING §에러 원칙("무엇이 문제인지 + 어떻게 해결하는지").
-// 서명 UI 토스트(SigningPanel/SigningTemplateManager)와 다운로드 프록시가 함께 소비하므로
+// 서명 UI 토스트(SigningTab/SigningTemplateManager)와 다운로드 프록시가 함께 소비하므로
 // 순수 함수로 둔다(클라·서버 공용 — server-only import 금지).
 
 const MESSAGES: Record<string, string> = {

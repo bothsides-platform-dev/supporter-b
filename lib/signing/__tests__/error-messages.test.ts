@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { signingErrorMessage } from '../error-messages';
 
-// 서명 UI(SigningPanel/SigningTemplateManager)·다운로드 프록시가 사용자에게 보이는 에러
+// 서명 UI(SigningTab/SigningTemplateManager)·다운로드 프록시가 사용자에게 보이는 에러
 // 코드 전부. raw 코드가 사용자에게 새면 안 된다(UX_WRITING §에러 원칙).
 const KNOWN_CODES = [
   'SNOWSIGN_NETWORK',
