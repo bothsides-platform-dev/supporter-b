@@ -60,6 +60,14 @@
 ### 빠른 연속 전송 시 단일 예약 슬롯 (P3)
 `useMessageMorph`의 `pending`이 단일 state 슬롯이라 같은 틱에 두 번 전송하면 마지막 것만 morph(앞 메시지는 애니메이션 없이 즉시 표시 — 안전, 정합성 문제 없음). 연속 전송 일관성을 원하면 큐/배열로 전환 — 와이어링 추출 이후 슬롯이 훅 한 곳에만 있어 1파일 변경으로 끝난다. (발견: /ship adversarial 2026-06-22; 슬롯 위치 갱신 2026-07-21)
 
+## Design
+
+### `outline` 토큰이 텍스트 색으로 쓰이는 32곳 — WCAG AA 미달 (P2)
+`text-[var(--md-sys-color-outline)]`(#D4D6DC)은 라이트 배경에서 **1.35:1**이라 본문 대비 기준(4.5:1)에 한참 못 미치는데, `md-label-*`와 함께 라벨·플레이스홀더·보조 문구 32곳에 쓰이고 있다. DESIGN.md §2가 명문화한 저대비 예외는 **보더**(`outline-variant`, 비텍스트 3:1) 한정이라 텍스트에는 적용되지 않는다. 대표: `components/shell/Footer.tsx`(저작권 줄), `components/inbox/bid-wizard/BidStepProposal.tsx`(× 제거 버튼), `components/rfp/RfpInviteManager.tsx`, `components/settings/InviteMemberForm.tsx`. 판단 필요: ① 전부 `on-surface-variant`로 올릴지, ② 라벨 성격만 올리고 플레이스홀더(`—`)·hover 있는 컨트롤은 남길지, ③ `outline`을 텍스트에 쓰지 않는 규칙을 DESIGN.md에 명문화하고 드리프트 가드에 추가할지. 계층 역전이 명확했던 푸터 컬럼 헤딩 3곳은 v0.4.4.0에서 선반영(FINDING-001). (발견: /design-review, C4 스윕 PR 2026-07-21)
+
+### 라벨 타이포 표기가 두 가지 — `.md-label-*` vs 토큰 나열형 (P3)
+`.md-label-{small,medium,large}`(v0.4.4.0 신설)와, 같은 결과를 내는 기존 나열형 `text-[length:var(--md-typescale-label-*-size)] font-[number:...] leading-[...] tracking-[...]`이 공존한다(나열형 36곳, 주로 `components/shell/**`). 기능 차이는 없지만 한 가지를 두 가지로 쓰는 상태라 다음 사람이 어느 쪽을 따라야 할지 모호하다. 나열형을 `.md-label-*`로 흡수하면 라벨 타이포가 한 출처로 모인다. (발견: /design-review, C4 스윕 PR 2026-07-21)
+
 ## SEO / Branding
 
 ### 브랜드명 리터럴 하드코딩 — SSOT 미참조 (P3)
