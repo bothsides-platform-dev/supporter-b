@@ -110,6 +110,15 @@ describe('buildSigningCardView', () => {
     expect(v.actions.map((a) => a.id)).toEqual(['remind', 'cancel']);
   });
 
+  it('in_progress — viewed 참여자는 "열람함" 칩과 active 상태를 받는다', () => {
+    const v = buildSigningCardView(
+      view('in_progress', [part('buyer', 'viewed'), part('pg', 'pending')]),
+      'buyer',
+    );
+    expect(v.nodes[1]).toMatchObject({ state: 'active' });
+    expect(v.nodes[1].chip).toEqual({ color: 'primary', label: '열람함' });
+  });
+
   it('completed — 전 노드 완료 + 문서 2개', () => {
     const v = buildSigningCardView(
       view('completed', [
@@ -186,6 +195,23 @@ describe('buildSigningCardView', () => {
     expect(v.nodes[1]).toMatchObject({ key: 'sign', state: 'pending' });
     expect(v.nodes[2]).toMatchObject({ key: 'done', state: 'pending' });
     expect(v.nodes[3]).toMatchObject({ key: 'terminal', state: 'ended', at: '2026-07-20T08:05:00Z' });
+  });
+
+  it('canceled — 발송 전 취소(pg)는 첫 노드 라벨이 "이 견적이 선정됐어요"다', () => {
+    const neverSent: SigningView = {
+      contract: {
+        id: 'c1',
+        rfpId: 'r1',
+        status: 'canceled',
+        round: 1,
+        createdBy: 'u',
+        createdAt: '2026-07-20T04:40:00Z',
+        canceledAt: '2026-07-20T08:05:00Z',
+      },
+      participants: [],
+    };
+    const v = buildSigningCardView(neverSent, 'pg');
+    expect(v.nodes[0].label).toBe('이 견적이 선정됐어요');
   });
 
   it('send_failed — 발송 노드가 failed, 다시 시작 액션', () => {

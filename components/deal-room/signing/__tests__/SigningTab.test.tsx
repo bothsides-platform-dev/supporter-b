@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup, within } from '@testing-library/react';
+import { render, screen, cleanup, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
@@ -117,6 +117,23 @@ describe('SigningTab', () => {
     expect(toast).toHaveBeenCalledWith('전자서명을 취소했어요', { type: 'success' });
   });
 
+  it('in_progress — 취소 버튼→확인 다이얼로그 dismiss 시 취소 액션을 호출하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')])}
+        side="buyer"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '취소' }));
+    const dialog = await screen.findByRole('dialog');
+    // dismiss(취소)와 확정(취소하기)은 접근성 이름으로 구분된다.
+    await user.click(within(dialog).getByRole('button', { name: '취소' }));
+    expect(cancelSigningAction).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
+  });
+
   it('completed — 완료 안내 + 문서 다운로드 링크', () => {
     render(
       <SigningTab
@@ -165,6 +182,32 @@ describe('SigningTab', () => {
     render(<SigningTab rfpCode="P-2607-0001" signing={view('send_failed')} side="pg" />);
     await user.click(screen.getByRole('button', { name: '다시 시작' }));
     expect(toast).toHaveBeenCalledWith('다시 시작했어요', { type: 'success' });
+  });
+
+  it('in_progress — 액션 처리 중엔 버튼이 비활성화되고, 끝나면 다시 활성화된다', async () => {
+    let resolveRemind!: (v: { ok: true }) => void;
+    vi.mocked(remindSigningAction).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRemind = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')])}
+        side="buyer"
+      />,
+    );
+    const remindButton = screen.getByRole('button', { name: '리마인더 보내기' });
+    const cancelButton = screen.getByRole('button', { name: '취소' });
+    await user.click(remindButton);
+    expect(remindButton).toBeDisabled();
+    expect(cancelButton).toBeDisabled();
+    resolveRemind({ ok: true });
+    await waitFor(() => expect(remindButton).not.toBeDisabled());
+    expect(cancelButton).not.toBeDisabled();
+    expect(toast).toHaveBeenCalledWith('리마인더를 보냈어요', { type: 'success' });
   });
 
   it('서버 액션이 reject되면 에러 토스트를 띄우고 버튼을 다시 활성화한다', async () => {

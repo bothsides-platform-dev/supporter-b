@@ -9,7 +9,14 @@ vi.mock('@/components/deal-room/signing/SigningTab', () => ({
   ),
 }));
 vi.mock('@/components/deal-room/signing/AwardContextLine', () => ({
-  AwardContextLine: () => <div data-testid="award-context" />,
+  AwardContextLine: (p: { workspaceName: string; contactName?: string; counterpartyWsId?: string }) => (
+    <div
+      data-testid="award-context"
+      data-ws-name={p.workspaceName}
+      data-contact={p.contactName}
+      data-counterparty={p.counterpartyWsId}
+    />
+  ),
 }));
 
 class ResizeObserverStub {
@@ -158,12 +165,12 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
 
 import type { SigningView } from '@/lib/types/signing';
 
-function signingView(): SigningView {
+function signingView(status: SigningView['contract']['status'] = 'awaiting_pg_template'): SigningView {
   return {
     contract: {
       id: 'c1',
       rfpId: 'r1',
-      status: 'awaiting_pg_template',
+      status,
       round: 1,
       createdBy: 'u',
       createdAt: '2026-07-20T04:40:00Z',
@@ -214,6 +221,25 @@ describe('PgDealRoomBody — 계약 탭', () => {
     await user.click(screen.getByRole('button', { name: /전자서명/ }));
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('signing-tab')).toHaveAttribute('data-side', 'pg');
+  });
+
+  it('계약 탭 상단 줄에 구매사 워크스페이스 id 를 상대로 전달한다', () => {
+    render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
+    const ctx = screen.getByTestId('award-context');
+    expect(ctx).toHaveAttribute('data-counterparty', baseRfp.buyerWsId);
+    expect(ctx).toHaveAttribute('data-ws-name', '(주)테스트');
+  });
+
+  it('레일의 계약 상태 점은 서명 진행 상태에 따라 색이 바뀐다', () => {
+    render(<PgDealRoomBody data={awarded({ signing: signingView('in_progress') })} />);
+    expect(screen.getByTestId('rail-dot').getAttribute('style')).toContain(
+      '--md-sys-color-primary',
+    );
+    cleanup();
+    render(<PgDealRoomBody data={awarded({ signing: signingView('awaiting_pg_template') })} />);
+    expect(screen.getByTestId('rail-dot').getAttribute('style')).toContain(
+      '--md-sys-color-warning',
+    );
   });
 
   it('미선정 PG 는 signing 이 (오류로) 채워져 있어도 계약 탭을 보지 못한다(봉인입찰 방어)', () => {

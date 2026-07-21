@@ -11,7 +11,14 @@ vi.mock('@/components/deal-room/signing/SigningTab', () => ({
   ),
 }));
 vi.mock('@/components/deal-room/signing/AwardContextLine', () => ({
-  AwardContextLine: () => <div data-testid="award-context" />,
+  AwardContextLine: (p: { workspaceName: string; contactName?: string; counterpartyWsId?: string }) => (
+    <div
+      data-testid="award-context"
+      data-ws-name={p.workspaceName}
+      data-contact={p.contactName}
+      data-counterparty={p.counterpartyWsId}
+    />
+  ),
 }));
 
 class ResizeObserverStub {
@@ -182,12 +189,12 @@ describe('BuyerDealRoomBody — 선정 결과 패널', () => {
   });
 });
 
-function signingView(): SigningView {
+function signingView(status: SigningView['contract']['status'] = 'in_progress'): SigningView {
   return {
     contract: {
       id: 'c1',
       rfpId: 'r1',
-      status: 'in_progress',
+      status,
       round: 1,
       createdBy: 'u',
       createdAt: '2026-07-20T04:40:00Z',
@@ -195,6 +202,13 @@ function signingView(): SigningView {
     participants: [],
   };
 }
+
+const awardedPgContactForContractTab = {
+  workspaceName: '토스페이먼츠',
+  name: '김영업',
+  email: 'sales@toss.im',
+  phone: '010-1234-5678',
+};
 
 describe('BuyerDealRoomBody — 계약 탭', () => {
   it('signing 이 없으면 계약 탭이 없고 견적 비교가 기본이다', () => {
@@ -224,5 +238,37 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
     await user.click(screen.getByRole('button', { name: /전자서명/ }));
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('signing-tab')).toHaveAttribute('data-side', 'buyer');
+  });
+
+  it('계약 탭 상단 줄에 선정 bid 의 pgWsId 를 상대 워크스페이스로 전달한다', () => {
+    render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded', awardedBidId: aBid.id },
+      awardedPgContact: awardedPgContactForContractTab,
+      signing: signingView(),
+    })} />);
+    const ctx = screen.getByTestId('award-context');
+    expect(ctx).toHaveAttribute('data-counterparty', aBid.pgWsId);
+    expect(ctx).toHaveAttribute('data-ws-name', awardedPgContactForContractTab.workspaceName);
+  });
+
+  it('선정된 bid 가 bids 목록에 없으면 counterpartyWsId 를 전달하지 않는다', () => {
+    render(<BuyerDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'awarded', awardedBidId: 'bid-not-in-list' },
+      awardedPgContact: awardedPgContactForContractTab,
+      signing: signingView(),
+    })} />);
+    expect(screen.getByTestId('award-context')).not.toHaveAttribute('data-counterparty');
+  });
+
+  it('레일의 계약 상태 점은 서명 진행 상태에 따라 색이 바뀐다', () => {
+    render(<BuyerDealRoomBody data={buildData({ signing: signingView('in_progress') })} />);
+    expect(screen.getByTestId('rail-dot').getAttribute('style')).toContain(
+      '--md-sys-color-primary',
+    );
+    cleanup();
+    render(<BuyerDealRoomBody data={buildData({ signing: signingView('awaiting_pg_template') })} />);
+    expect(screen.getByTestId('rail-dot').getAttribute('style')).toContain(
+      '--md-sys-color-warning',
+    );
   });
 });

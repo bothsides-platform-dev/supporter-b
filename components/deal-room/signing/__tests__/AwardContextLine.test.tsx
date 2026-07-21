@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
@@ -9,6 +9,7 @@ vi.mock('@/lib/server/actions/chat/getOrCreateConversationAction', () => ({
 }));
 
 import { AwardContextLine } from '../AwardContextLine';
+import { getOrCreateConversationAction } from '@/lib/server/actions/chat/getOrCreateConversationAction';
 
 afterEach(() => {
   cleanup();
@@ -38,5 +39,30 @@ describe('AwardContextLine', () => {
   it('상대 워크스페이스가 없으면 메시지 버튼을 그리지 않는다', () => {
     render(<AwardContextLine workspaceName="나이스페이먼츠" />);
     expect(screen.queryByRole('button', { name: '메시지' })).not.toBeInTheDocument();
+  });
+
+  it('메시지 버튼을 연속으로 두 번 눌러도 대화 생성 액션은 한 번만 호출된다', async () => {
+    let resolveConv!: (v: { ok: true; conversationId: string }) => void;
+    vi.mocked(getOrCreateConversationAction).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveConv = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <AwardContextLine
+        workspaceName="나이스페이먼츠"
+        contactName="김민수"
+        counterpartyWsId="11111111-1111-1111-1111-111111111111"
+      />,
+    );
+    const button = screen.getByRole('button', { name: '메시지' });
+    await user.click(button);
+    // 첫 클릭으로 starting=true 가 되어 버튼이 비활성화되지만, useStartConversation
+    // 의 `if (starting) return` 가드 자체도 함께 검증하기 위해 다시 클릭을 시도한다.
+    await user.click(button).catch(() => {});
+    resolveConv({ ok: true, conversationId: 'conv-1' });
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/messages?c=conv-1'));
+    expect(getOrCreateConversationAction).toHaveBeenCalledTimes(1);
   });
 });
