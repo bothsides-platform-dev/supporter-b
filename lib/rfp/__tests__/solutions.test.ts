@@ -27,12 +27,21 @@ describe('SOLUTION 단일 출처', () => {
     }
   });
 
-  // 드리프트 가드 — solution 어휘의 캐논니컬 출처는 lib/types/rfp-terms.ts 다(zod
-  // current-terms 가 여기서 파생). UI 측 solutions.ts 가 별도 리터럴을 들고 있으면
-  // 한쪽에만 값을 추가했을 때 위저드에선 고를 수 있는데 서버가 거부하는(또는 그 반대)
-  // 어긋남이 조용히 생긴다. 두 선언이 항상 동일 어휘·동일 순서임을 못박는다.
-  it('SOLUTION_VALUES 는 rfp-terms 의 캐논니컬 어휘와 동일하다', () => {
+  // 재복제 가드 — solutions.ts 는 현재 rfp-terms 의 SOLUTION_VALUES 를 그대로 재export
+  // 하므로 이 단언은 같은 바인딩끼리 비교하는 항등식이고, 값 드리프트를 "탐지"하지는
+  // 못한다(구조적으로 불가능하다). 잡는 건 하나뿐이지만 그게 핵심이다 — 누군가
+  // solutions.ts 에 리터럴 배열을 다시 선언해 두 출처로 갈라놓는 회귀.
+  it('SOLUTION_VALUES 를 재선언하지 않고 rfp-terms 를 그대로 쓴다', () => {
     expect([...SOLUTION_VALUES]).toEqual([...TERMS_SOLUTION_VALUES]);
+  });
+
+  // 이쪽은 진짜 드리프트 가드다 — SOLUTION_LABELS 는 이 파일이 손으로 유지하는
+  // 유일한 부분이라 어휘가 늘면 실제로 어긋날 수 있다.
+  it('SOLUTION_LABELS 는 캐논니컬 어휘를 정확히 덮는다', () => {
+    expect(Object.keys(SOLUTION_LABELS).sort()).toEqual([...TERMS_SOLUTION_VALUES].sort());
+    for (const v of TERMS_SOLUTION_VALUES) {
+      expect(SOLUTION_LABELS[v]).toBeTruthy();
+    }
   });
 });
 

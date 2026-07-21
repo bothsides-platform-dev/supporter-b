@@ -37,13 +37,39 @@ const fillDynamic = (route: string) => route.replace(/\[([^\]]+)\]/g, 'sample-va
 
 const PUBLIC_ROUTES = collectRoutes(PUBLIC_DIR).map(fillDynamic).sort();
 
+/**
+ * 로그인 상태에서 /home 으로 되돌리는 것이 **의도된** 경로들. 이미 인증된 사용자에게
+ * 로그인·가입·비밀번호 재설정 화면은 의미가 없다. 여기 없는 공개 경로는 인증 여부와
+ * 무관하게 통과해야 한다 — 목록에 추가하는 것은 의식적인 결정이어야 한다.
+ *
+ * `/invite` 는 현행 동작을 그대로 박아둔 것이다(초대 수락은 `/invite/rfp` 만 인증
+ * 상태로 통과하고, 나머지는 /home 으로 보낸 뒤 별도 흐름이 처리한다).
+ */
+const AUTHED_BOUNCE_INTENDED = ['/login', '/signup', '/password', '/invite'];
+const CLAIMABLE_WHILE_AUTHED = ['/invite/rfp'];
+
+const bounceIntended = (route: string) =>
+  !CLAIMABLE_WHILE_AUTHED.some((p) => route.startsWith(p)) &&
+  AUTHED_BOUNCE_INTENDED.some((p) => route.startsWith(p));
+
 describe('app/(public) 라우트 ↔ route-decision 공개 목록 등록 가드', () => {
   it('공개 페이지를 하나 이상 찾는다 (경로 파싱이 조용히 깨지면 이 스펙이 공허해진다)', () => {
     expect(PUBLIC_ROUTES.length).toBeGreaterThan(5);
   });
 
-  it.each(PUBLIC_ROUTES)('%s — 비로그인 방문자가 /login 으로 튕기지 않는다', (route) => {
-    const decision = decideRoute(route, '', false);
-    expect(decision.kind).not.toBe('redirect');
+  // `not.toBe('redirect')` 가 아니라 `toBe('next')` 로 본다 — 잘못 등록된 rewrite 도 잡는다.
+  it.each(PUBLIC_ROUTES)('%s — 비로그인 방문자가 그대로 통과한다', (route) => {
+    expect(decideRoute(route, '', false).kind).toBe('next');
+  });
+
+  // ALWAYS_PASSTHROUGH_PREFIXES 는 사실상 이 축을 위해 존재한다. 비인증 축만 보면
+  // 여기 등록을 빠뜨려도 초록으로 남는다 — 이메일 매직링크류가 정확히 그 사각이다.
+  it.each(PUBLIC_ROUTES)('%s — 로그인 상태에서 의도한 판정을 받는다', (route) => {
+    const decision = decideRoute(route, '', true);
+    if (bounceIntended(route)) {
+      expect(decision).toEqual({ kind: 'redirect', to: '/home' });
+    } else {
+      expect(decision.kind).toBe('next');
+    }
   });
 });

@@ -4,6 +4,10 @@
 // 어휘(값 목록) 자체의 캐논니컬 출처는 lib/types/rfp-terms.ts 의 SOLUTION_VALUES 다 —
 // zod(current-terms.ts)·서버 액션이 거기서 파생하므로, 이 파일은 라벨만 얹고 값은 재선언하지
 // 않는다. 새 솔루션 추가 = rfp-terms.ts 에 값 추가 + 아래 SOLUTION_LABELS 에 라벨 추가.
+//
+// 임포트 경로 규약: **UI 는 이 파일 하나만 임포트한다**(값·라벨·옵션을 함께 쓰므로).
+// 서버·검증 계층은 rfp-terms.ts 에서 직접 가져온다. 아래 재export 는 그 규약을 위한 것이지
+// 두 번째 출처가 아니다.
 import { SOLUTION_VALUES, type SolutionValue } from '@/lib/types/rfp-terms';
 
 export { SOLUTION_VALUES };

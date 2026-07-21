@@ -3,7 +3,11 @@ import { baseUrl } from '@/lib/site-routing';
 
 // 폴백 사슬의 단일 출처는 lib/site-routing.ts 다 — 호스트 라우팅에 쓰는 appOrigins 와
 // 같은 답을 내야 하기 때문. site-routing 은 클라이언트에서도 쓰여 이쪽을 참조할 수 없으므로
-// 방향이 이렇게 잡혀 있다. 기존 호출처 호환을 위해 여기서 그대로 재export 한다.
+// 방향이 이렇게 잡혀 있다.
+/**
+ * @deprecated 기존 호출처(각 도메인 `_shared.ts` 재export 체인) 호환용 hop 이다.
+ * 새 코드는 `@/lib/site-routing` 에서 직접 임포트한다.
+ */
 export { baseUrl };
 
 /** Absolute origin for the admin console (admin.support-b.com). */

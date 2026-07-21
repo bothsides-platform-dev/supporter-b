@@ -62,6 +62,8 @@ surface-container-highest #E4E5E9               #202123
 
 **브라우저 크롬·PWA 색은 캔버스(`background`)를 따른다.** 모바일 상태바(`viewport.themeColor`, `app/layout.tsx`)와 PWA 스플래시(`theme_color`·`background_color`, `app/manifest.ts`)가 캔버스와 다르면 앱 진입 시 색이 튄다. 라이트 `#FFFFFF` / 다크 `#08090A`이며, web app manifest 는 라이트/다크 변형을 담지 못하므로 라이트 기준 단일값으로 고정한다. `app/__tests__/chrome-colors.test.ts` 가 `styles/tokens.css` 를 직접 읽어 일치를 고정하므로, 캔버스 토큰을 바꾸면 이 두 파일도 함께 갱신해야 한다.
 
+> 범위 주의: `themeColor` 는 `prefers-color-scheme`(OS 설정)으로만 분기하는 **정적** 선언이다. 앱의 인앱 테마 토글로 OS 설정과 다른 테마를 고르면 캔버스와 상태바가 어긋날 수 있는데, 이는 알고 둔 상태다 — 크롬 색을 런타임에 따라가게 하려면 테마 토글이 `<meta name="theme-color">` 를 함께 갱신해야 한다(TODOS.md ## Design 참조).
+
 ### 텍스트 · 보더
 | 토큰 | 라이트 | 다크 | 용도 |
 |---|---|---|---|

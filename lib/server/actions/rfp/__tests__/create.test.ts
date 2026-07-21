@@ -52,9 +52,8 @@ vi.mock('@/lib/observability/log', () => ({
 }));
 
 import { createRfpAction } from '../createRfpAction';
-import { migrateCurrentTerms, STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
+import { migrateCurrentTerms, STRIP_PATH_FEE_RATE, SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
-import { SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 
 let db: PgliteDB;
 let buyerUserId: string;
@@ -296,11 +295,11 @@ describe('createRfpAction', () => {
     expect(row.requiredPaymentMethods).toEqual(['apple_pay', 'samsung_pay']);
   });
 
-  // 드리프트 가드 — createRfpAction의 PAYMENT_METHODS 배열은 lib/types/bid.ts의
-  // PaymentMethod 캐논니컬 목록을 손으로 복제한 것이라, 둘이 어긋나면 유효한 결제수단이
-  // 조용히 거부(INVALID_INPUT)될 수 있다. PAYMENT_METHOD_LABELS는 Record<PaymentMethod,_>라
-  // 컴파일러가 전체 유니온을 강제하므로, 이 컴파일타임 완전성 소스로 캐논니컬 목록 전체를
-  // 순회해 매번 통과하는지 고정한다.
+  // 회귀 가드 — 결제수단 어휘도 이제 z.enum(PAYMENT_METHODS) 로 파생한다(과거엔 액션 안에
+  // 배열을 손으로 복제했다). 어휘 일치는 구조적으로 보장되므로 여기서 고정하는 건 캐논니컬
+  // 목록 전체가 액션 끝까지 실제로 통과하는지다. 순회 소스로 PAYMENT_METHOD_LABELS 를 쓰는
+  // 이유는 Record<PaymentMethod,_> 라 컴파일러가 유니온 전체를 강제하기 때문(카테고리 배열은
+  // 배치 누락이 있으면 조용히 빠진다).
   it.each(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[])(
     '%s — PAYMENT_METHODS 배열 드리프트 가드 (캐논니컬 목록 전체 허용)',
     async (method) => {
@@ -315,9 +314,10 @@ describe('createRfpAction', () => {
     },
   );
 
-  // 드리프트 가드 — createRfpAction의 currentSolution z.enum 은 lib/types/rfp-terms.ts 의
-  // SOLUTION_VALUES 를 손으로 복제한 인라인 리터럴이라, 어긋나면 위저드에서 고를 수 있는
-  // 솔루션이 서버에서 조용히 거부(INVALID_INPUT)된다. 캐논니컬 어휘 전체를 순회해 고정한다.
+  // 회귀 가드 — currentSolution 은 이제 z.enum(SOLUTION_VALUES) 로 파생하므로 어휘 자체는
+  // 구조적으로 어긋날 수 없다. 여기서 고정하는 건 그 아래 계층이다: 캐논니컬 어휘의 모든
+  // 값이 superRefine·서비스까지 실제로 통과하는지(그리고 누군가 인라인 리터럴로 되돌리면
+  // 깨지는지). 어긋나면 위저드에서 고른 솔루션이 서버에서 조용히 INVALID_INPUT 이 된다.
   it.each([...SOLUTION_VALUES])(
     '%s — currentSolution 드리프트 가드 (캐논니컬 어휘 전체 허용)',
     async (solution) => {

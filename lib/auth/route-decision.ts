@@ -32,7 +32,12 @@ const ALWAYS_PASSTHROUGH_PREFIXES = [
   '/admin',
   '/pending-approval',
   '/suspended',
-  '/auth/verify', // 이메일 매직링크는 인증 상태와 무관하게 항상 접근 가능해야 함
+  // 이메일 매직링크는 인증 상태와 무관하게 항상 접근 가능해야 함. email-change 는 특히
+  // 로그인 상태에서 클릭되는 게 정상 경로다(설정 화면에서 본인이 요청 → 새 주소로 받은
+  // 링크를 같은 브라우저에서 연다) — 여기 없으면 /auth 공개 프리픽스에 걸려 /home 으로
+  // 튕기고 확인 액션이 아예 실행되지 않아 변경이 조용히 완료되지 않는다.
+  '/auth/verify',
+  '/auth/email-change',
   '/pg-landing', // PG 호스트 "/" 의 rewrite 대상 — 직접 접근도 항상 공개
 ];
 

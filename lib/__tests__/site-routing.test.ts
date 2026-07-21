@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
+  appOrigins,
   hostServes,
   resolveHostRedirect,
   workspaceSwitchTarget,
@@ -131,5 +132,74 @@ describe('shouldNoindexHost', () => {
   it('is false for an unknown host or in single-host local/dev', () => {
     expect(shouldNoindexHost('52.78.126.178', PROD)).toBe(false);
     expect(shouldNoindexHost('localhost', LOCAL)).toBe(false);
+  });
+});
+
+// 부분 설정 회귀 가드 — appOrigins 의 폴백은 NEXT_PUBLIC_BASE_URL 우선이다. per-type
+// 오리진을 **하나만** 설정한 환경에서는 buyer/pg 가 같은 값으로 붕괴할 수 있고, 그러면
+// hostServes 가 전부 null 을 돌려주면서 보안 성격의 두 가드가 조용히 무력화된다:
+// partner 호스트의 noindex 와, 마스터 로그인을 buyer 호스트에서 시작시키는 PKCE 핀.
+// prod 는 두 오리진을 모두 설정해 이 경로를 타지 않지만(.env.production.example),
+// 스테이징·프리뷰는 탄다. 동작을 바꾸지 않고 회귀만 못박는다.
+describe('부분 설정에서도 호스트 가드가 살아있다', () => {
+  const env = { ...process.env };
+  afterEach(() => {
+    process.env = { ...env };
+  });
+
+  const setEnv = (v: Record<string, string | undefined>) => {
+    for (const k of [
+      'NEXT_PUBLIC_BUYER_ORIGIN',
+      'NEXT_PUBLIC_PARTNER_ORIGIN',
+      'NEXT_PUBLIC_BASE_URL',
+      'AUTH_URL',
+    ]) {
+      delete process.env[k];
+    }
+    for (const [k, val] of Object.entries(v)) {
+      if (val !== undefined) process.env[k] = val;
+    }
+  };
+
+  it('per-type 오리진이 둘 다 있으면 partner 가드가 동작한다 (기준선)', () => {
+    setEnv({
+      NEXT_PUBLIC_BUYER_ORIGIN: 'https://support-b.com',
+      NEXT_PUBLIC_PARTNER_ORIGIN: 'https://partner.support-b.com',
+      AUTH_URL: 'https://support-b.com',
+      NEXT_PUBLIC_BASE_URL: 'https://partner.support-b.com',
+    });
+    const o = appOrigins();
+    expect(shouldNoindexHost('partner.support-b.com', o)).toBe(true);
+    expect(opsLoginRedirectTarget('partner.support-b.com', o)).toBe(
+      'https://support-b.com/login/ops',
+    );
+  });
+
+  it('partner 만 설정돼 buyer 가 폴백으로 붕괴하면 두 가드가 꺼진다 (현행 동작 고정)', () => {
+    // buyer 가 NEXT_PUBLIC_BASE_URL(=partner) 로 폴백 → 두 오리진이 동일 → 라우팅 off.
+    setEnv({
+      NEXT_PUBLIC_PARTNER_ORIGIN: 'https://partner.support-b.com',
+      NEXT_PUBLIC_BASE_URL: 'https://partner.support-b.com',
+      AUTH_URL: 'https://support-b.com',
+    });
+    const o = appOrigins();
+    expect(o.buyer).toBe(o.pg);
+    expect(hostServes('partner.support-b.com', o)).toBeNull();
+    expect(shouldNoindexHost('partner.support-b.com', o)).toBe(false);
+    expect(opsLoginRedirectTarget('partner.support-b.com', o)).toBeNull();
+  });
+
+  it('두 오리진이 서로 다르면 폴백이 끼어들어도 가드가 유지된다', () => {
+    setEnv({
+      NEXT_PUBLIC_PARTNER_ORIGIN: 'https://partner.support-b.com',
+      NEXT_PUBLIC_BASE_URL: 'https://support-b.com',
+      AUTH_URL: 'https://elsewhere.example.com',
+    });
+    const o = appOrigins();
+    expect(o.buyer).toBe('https://support-b.com');
+    expect(shouldNoindexHost('partner.support-b.com', o)).toBe(true);
+    expect(opsLoginRedirectTarget('partner.support-b.com', o)).toBe(
+      'https://support-b.com/login/ops',
+    );
   });
 });

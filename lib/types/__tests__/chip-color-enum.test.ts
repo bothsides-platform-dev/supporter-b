@@ -18,8 +18,10 @@ describe('chip_color enum ↔ ChipColorRole 드리프트 가드', () => {
   });
 
   it('APP_CHIP_COLORS 는 ChipColorRole 을 빠짐없이 덮는다', () => {
-    // 유니온의 모든 멤버가 배열에 있어야 이 대입이 성립한다 — 하나라도 빠지면 컴파일 에러.
-    const exhaustive: ChipColorRole = APP_CHIP_COLORS[0];
+    // 완전성은 아래 Record<ChipColorRole, true> 의 매핑 타입이 강제한다 — 유니온 멤버를
+    // 하나라도 빠뜨리면 컴파일 에러다. 단 vitest 는 타입을 벗겨내고 실행하므로 이 강제는
+    // `pnpm tsc --noEmit`(pre-commit 훅 포함)에서만 발동하고, 아래 런타임 단언은 배열과
+    // 키 집합이 어긋나는 경우를 잡는다.
     const covered: Record<ChipColorRole, true> = {
       primary: true,
       tertiary: true,
@@ -28,6 +30,5 @@ describe('chip_color enum ↔ ChipColorRole 드리프트 가드', () => {
       surface: true,
     };
     expect(Object.keys(covered).sort()).toEqual([...APP_CHIP_COLORS].sort());
-    expect(APP_CHIP_COLORS).toContain(exhaustive);
   });
 });
