@@ -60,6 +60,8 @@ surface-container-highest #E4E5E9               #202123
 
 > 계층 끝단·기타: `surface-bright`(라이트 `#FFFFFF` / 다크 `#202123`)·`surface-dim`(라이트 `#ECEDF0` / 다크 `#08090A`)은 명도 계층의 양극단. `surface-container-lowest`(라이트 `#FFFFFF` / 다크 `#08090A`)는 **popover·dropdown 배경**(`--color-popover`). 스켈레톤 바는 `surface-container-high`.
 
+**브라우저 크롬·PWA 색은 캔버스(`background`)를 따른다.** 모바일 상태바(`viewport.themeColor`, `app/layout.tsx`)와 PWA 스플래시(`theme_color`·`background_color`, `app/manifest.ts`)가 캔버스와 다르면 앱 진입 시 색이 튄다. 라이트 `#FFFFFF` / 다크 `#08090A`이며, web app manifest 는 라이트/다크 변형을 담지 못하므로 라이트 기준 단일값으로 고정한다. `app/__tests__/chrome-colors.test.ts` 가 `styles/tokens.css` 를 직접 읽어 일치를 고정하므로, 캔버스 토큰을 바꾸면 이 두 파일도 함께 갱신해야 한다.
+
 ### 텍스트 · 보더
 | 토큰 | 라이트 | 다크 | 용도 |
 |---|---|---|---|

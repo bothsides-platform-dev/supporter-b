@@ -63,9 +63,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // 캔버스 토큰(styles/tokens.css --md-sys-color-background)과 동일해야 한다 —
+  // 어긋나면 앱 진입 시 상태바 색이 튄다. app/__tests__/chrome-colors.test.ts 가 고정.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F9F9FF" },
-    { media: "(prefers-color-scheme: dark)",  color: "#1A1C1E" },
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)",  color: "#08090A" },
   ],
   width: "device-width",
   initialScale: 1,
