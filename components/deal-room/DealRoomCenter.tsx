@@ -20,9 +20,9 @@ export function DealRoomCenter({ tabs, activeId, onChange }: Props) {
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-background)]">
-      <div className="shrink-0 border-b border-[var(--md-sys-color-outline-variant)] px-4">
+      <div className="shrink-0 overflow-x-auto border-b border-[var(--md-sys-color-outline-variant)] px-4">
         <Tabs
-          className="border-b-0"
+          className="w-max min-w-full border-b-0"
           tabs={tabs.map((t) => ({ id: t.id, label: t.label }))}
           active={activeId}
           onChange={onChange}

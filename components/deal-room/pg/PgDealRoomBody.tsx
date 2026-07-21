@@ -61,8 +61,8 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
         >
           {buyerContact && <ContactBlock contact={buyerContact} counterpartyKind="buyer" />}
         </DealResultHeader>
-        {signing && (
-          <SigningSummaryStrip signing={signing} side="pg" onOpen={() => setTab('contract')} />
+        {contractVisible && (
+          <SigningSummaryStrip signing={contractVisible} side="pg" onOpen={() => setTab('contract')} />
         )}
         {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(rfp, myBid)} />}
       </div>
