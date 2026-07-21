@@ -61,6 +61,71 @@ describe('auth proxy matcher', () => {
   });
 });
 
+describe('auth proxy matcher — segment boundary', () => {
+  // Without a trailing `(?:/|$)` the lookahead matched a bare *prefix*, so any
+  // future real route whose first segment merely starts with an excluded word
+  // would silently skip the auth proxy entirely. These are the plausible
+  // collisions for the current list.
+  it.each([
+    '/landing-editor',
+    '/api-docs',
+    '/monitoring-dashboard',
+    '/fonts-preview',
+    '/iconography',
+  ])('processes %s (an excluded word is a prefix, not a whole segment)', (path) => {
+    expect(proxyRuns(path)).toBe(true);
+  });
+
+  // Next.js serves the static metadata files in `app/` with their extension
+  // (`app/opengraph-image.png` → `/opengraph-image.png`), so these entries must
+  // keep matching an extension suffix even once segment boundaries are enforced.
+  // Getting this wrong sends social-card crawlers and iOS touch-icon requests to
+  // /login instead of the asset.
+  it.each([
+    '/opengraph-image.png',
+    '/opengraph-image.alt.txt',
+    '/apple-icon.png',
+    '/icon.svg',
+    '/favicon.ico',
+  ])('still skips the Next.js metadata asset %s', (path) => {
+    expect(proxyRuns(path)).toBe(false);
+  });
+
+  // The relaxed boundary is `[-.]` + rest-of-segment — it must not decay back
+  // into a bare prefix match.
+  it('does not let the metadata prefixes match an arbitrary suffix', () => {
+    expect(proxyRuns('/apple-iconXpng')).toBe(true);
+    expect(proxyRuns('/opengraph-images')).toBe(true);
+  });
+
+  it('keeps excluding the exact segments and their subpaths', () => {
+    expect(proxyRuns('/monitoring')).toBe(false);
+    expect(proxyRuns('/_axiom/logs')).toBe(false);
+    expect(proxyRuns('/api/auth/session')).toBe(false);
+    expect(proxyRuns('/_next/static/chunk.js')).toBe(false);
+    expect(proxyRuns('/fonts/PretendardVariable.woff2')).toBe(false);
+  });
+});
+
+describe('auth proxy matcher — dead create-next-app segments', () => {
+  // `file`/`globe`/`next`/`vercel`/`window` were added for create-next-app's
+  // default SVGs (`public/next.svg` etc). Those files are long gone — `public/`
+  // now holds only `fonts/` and the Naver site-verification file — so the
+  // entries excluded nothing while reserving five common English words that a
+  // real route could collide with.
+  it.each(['/file', '/globe', '/next', '/vercel', '/window'])(
+    'processes %s (dead exclusion removed)',
+    (path) => {
+      expect(proxyRuns(path)).toBe(true);
+    },
+  );
+
+  it('still processes routes that merely start with those words', () => {
+    expect(proxyRuns('/next-steps')).toBe(true);
+    expect(proxyRuns('/files/report.pdf')).toBe(true);
+  });
+});
+
 describe('auth proxy config (proxy.ts)', () => {
   // Next.js statically analyzes the `config` export at build time WITHOUT
   // executing the module, so `config.matcher` entries must be string/object

@@ -18,7 +18,15 @@ const Input = z
     deadline: z.string().datetime({ offset: true }),
     allowedPgWorkspaceIds: z.array(z.string().uuid()).max(50),
     rfpAttachmentIds: z.array(z.string().uuid()).optional(),
-    requiredPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).optional().default([]),
+    // 상한은 캐논니컬 개수에서 파생한다 — 손으로 적은 숫자는 결제수단이 하나
+    // 늘어나는 순간 스스로 거짓이 된다. 상한은 중복 제거 *전* 배열에 걸어야
+    // 의미가 있다(중복부터 접으면 어떤 입력도 상한에 닿지 못해 가드가 죽는다).
+    requiredPaymentMethods: z
+      .array(z.enum(PAYMENT_METHODS))
+      .max(PAYMENT_METHODS.length)
+      .optional()
+      .default([])
+      .transform((methods) => Array.from(new Set(methods))),
     customPaymentMethods: z
       .array(z.object({ label: z.string().min(1).max(50) }))
       .max(20)

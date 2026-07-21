@@ -164,7 +164,7 @@ describe('BizLookupField — blockedStatuses', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument(),
     );
     expect(onResult).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert').textContent).toMatch(/가입할 수 없어요/);
+    expect(screen.getByRole('alert').textContent).toMatch(/사용할 수 없어요/);
     expect(screen.getByText(statusLabel)).toBeInTheDocument();
     expect(screen.queryByText('✓ 확인됨')).not.toBeInTheDocument();
   });

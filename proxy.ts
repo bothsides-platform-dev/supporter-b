@@ -58,6 +58,12 @@ export default auth(async (req) => {
 // anonymous landing-page visitors, and next/image's own internal optimizer
 // fetch, which re-requests local sources unauthenticated).
 //
+// Every entry is anchored to a segment boundary ('/' or end of path) so an
+// excluded word can never match as a bare prefix of a real route
+// ('/landing-editor' must NOT skip the proxy). The metadata *image* conventions
+// are the one exception: they arrive with an extension appended
+// ('/opengraph-image.png'), so they get a relaxed suffix boundary.
+//
 // Inlined as a string literal: Next.js statically analyzes `config.matcher` at
 // build time WITHOUT executing the module, so an imported/computed value fails
 // the build with "matcher[0] need to be static strings or static objects". The
@@ -66,6 +72,6 @@ export default auth(async (req) => {
 // two cannot drift.
 export const config = {
   matcher: [
-    '/((?!monitoring|_axiom|api|_next|favicon\\.ico|icon\\.svg|apple-icon|opengraph-image|twitter-image|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|naverc0e607e11bc419371519800f1235a0b4\\.html|landing|fonts|file|globe|next|vercel|window).*)',
+    '/((?!(?:monitoring|_axiom|api|_next|favicon\\.ico|icon\\.svg|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|naverc0e607e11bc419371519800f1235a0b4\\.html|landing|fonts)(?:/|$)|(?:opengraph-image|twitter-image|apple-icon)(?:[-.][^/]*)?(?:/|$)).*)',
   ],
 };
