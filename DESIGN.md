@@ -131,20 +131,23 @@ surface-container-highest #E4E5E9               #202123
 ```
 적용 대상: ₩ 금액, % 수수료, 건수, 제안번호(`P-2605-0042`), 날짜, 이메일 주소 같은 식별 데이터. **내비게이션·라벨·버튼 텍스트에는 적용하지 않는다.**
 
-### 라벨 유틸리티 — `.md-label-{small,medium}`
+### 라벨 유틸리티 — `.md-label-{small,medium,large}`
 
 위 표의 Label 롤을 그대로 구현한 유틸리티(`app/globals.css`). 메타 라벨·`<th>`·`<legend>`·폼 라벨·상태 문구의 표준 정착지다.
 
 ```css
-.md-label-small  { font-family: var(--font-sans); /* 11px · 500 · 0.01em */ }
-.md-label-medium { font-family: var(--font-sans); /* 12px · 500 · 0      */ }
+.md-label-small  { font-family: var(--font-sans); /* 11px · 500 · 0.01em  */ }
+.md-label-medium { font-family: var(--font-sans); /* 12px · 500 · 0       */ }
+.md-label-large  { font-family: var(--font-sans); /* 13px · 500 · -0.006em */ }
 ```
 
-**Label Large(13px)는 아직 유틸리티가 없다** — 현재 소비처가 없어 YAGNI로 정의하지 않았다. 13px 라벨이 필요해지면 같은 패턴으로 `.md-label-large`를 추가한다(버튼·nav·Chip 은 이미 토큰 나열형을 쓰고 있어 그쪽을 흡수할 때가 자연스러운 시점이다).
+**라벨 타이포는 이 유틸리티가 유일한 표기다.** 같은 값을 토큰 나열형(`text-[length:var(--md-typescale-label-*-size)] font-[number:…-weight] leading-[…] tracking-[…]`)으로 다시 쓰지 않는다 — 렌더 결과가 같아 둘 다 살아남으면 다음 사람이 어느 쪽을 따를지 모른다. `components/primitives/Label.tsx`도 이 클래스를 얹을 뿐이다.
 
-둘 다 `--md-typescale-label-*` 토큰만 소비하므로 값의 단일 출처는 `styles/tokens.css`다. `.md-numeric`과 같이 `@layer base`에 있어 **Tailwind utilities 레이어가 항상 이긴다** — 사이트별 `font-normal`·`text-[13px]` 오버라이드는 그대로 유효하다.
+**단일 축만 쓰는 조합은 예외가 아니라 다른 얘기다.** 버튼·칩·아바타·탭·nav 항목처럼 **크기 토큰 하나만 가져다 쓰고 굵기·행간은 컴포넌트가 직접 소유**하는 경우(`text-[length:var(--md-typescale-label-large-size)] font-medium …`)는 경쟁 표기가 아니라 정당한 토큰 소비다. 여기에 `.md-label-*`를 씌우면 라벨용 행간·자간까지 딸려와 컨트롤 밀도가 흐트러진다. 드리프트 가드가 금지하는 것은 **크기와 굵기를 함께 손으로 박은 줄**(= 라벨 역할 전체를 나열형으로 재현한 줄)뿐이다.
 
-이 유틸리티는 §9가 금지하는 `font-mono uppercase wide-tracking` 라벨 조합의 대체재다. 그 조합이 특히 나쁜 이유는 취향 문제가 아니다: `--font-mono` 스택(JetBrains Mono → ui-monospace → SF Mono → Menlo)에는 **한글 글리프가 하나도 없어** 한글 라벨이 Pretendard가 아닌 OS 기본 한글 폰트로 폴백하고, `uppercase`는 한글에 무효라 넓은 양수 자간만 남아 Linear 밀도와 정면으로 어긋난다. 강제 수단은 `lib/design/__tests__/mono-label-drift.test.ts`(fs-walk 드리프트 가드) + `lib/design/design-hardrule-allowlist.mjs`(면제 SSOT).
+셋 다 `--md-typescale-label-*` 토큰만 소비하므로 값의 단일 출처는 `styles/tokens.css`다. `.md-numeric`과 같이 `@layer base`에 있어 **Tailwind utilities 레이어가 항상 이긴다** — 사이트별 `font-normal`·`text-[13px]` 오버라이드는 그대로 유효하다.
+
+이 유틸리티는 §9가 금지하는 `font-mono uppercase wide-tracking` 라벨 조합의 대체재다. 그 조합이 특히 나쁜 이유는 취향 문제가 아니다: `--font-mono` 스택(JetBrains Mono → ui-monospace → SF Mono → Menlo)에는 **한글 글리프가 하나도 없어** 한글 라벨이 Pretendard가 아닌 OS 기본 한글 폰트로 폴백하고, `uppercase`는 한글에 무효라 넓은 양수 자간만 남아 Linear 밀도와 정면으로 어긋난다. 강제 수단은 `lib/design/__tests__/mono-label-drift.test.ts`(fs-walk 드리프트 가드 — mono 라벨 조합 2종 + 위의 "크기+굵기 나열형" 1종, 총 3개 불변식) + `lib/design/design-hardrule-allowlist.mjs`(면제 SSOT).
 
 ---
 

@@ -105,8 +105,7 @@
   }
 
   /*
-    .md-label-{small,medium} — DESIGN.md §3 Label 롤.
-    Label Large(13px)는 소비처가 생길 때 추가한다 — 지금 정의하면 미사용 CSS다.
+    .md-label-{small,medium,large} — DESIGN.md §3 Label 롤.
 
     메타 라벨·<th>·legend·폼 라벨의 표준 정착지. §9 하드룰이 금지하는
     `font-mono uppercase wide-tracking` 조합을 대체한다 — mono 스택
@@ -132,6 +131,14 @@
     font-weight: var(--md-typescale-label-medium-weight);
     line-height: var(--md-typescale-label-medium-line-height);
     letter-spacing: var(--md-typescale-label-medium-tracking);
+  }
+
+  .md-label-large {
+    font-family: var(--font-sans);
+    font-size: var(--md-typescale-label-large-size);
+    font-weight: var(--md-typescale-label-large-weight);
+    line-height: var(--md-typescale-label-large-line-height);
+    letter-spacing: var(--md-typescale-label-large-tracking);
   }
 
 }

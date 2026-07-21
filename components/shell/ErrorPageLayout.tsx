@@ -37,7 +37,9 @@ function ActionButton({
       : 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]'
     : 'border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)]';
 
-  const className = `px-4 h-8 inline-flex items-center rounded-[var(--md-sys-shape-small)] text-[length:var(--md-typescale-label-large-size)] font-[number:var(--md-typescale-label-large-weight)] transition-opacity hover:opacity-90 ${filledClass}`;
+  // 라벨이 아니라 버튼이라 `.md-label-large`(라벨 line-height·자간 동반)를 씌우지
+  // 않는다 — Button.tsx 와 같이 크기 토큰만 쓰고 굵기는 직접 지정한다(500 동일값).
+  const className = `px-4 h-8 inline-flex items-center rounded-[var(--md-sys-shape-small)] text-[length:var(--md-typescale-label-large-size)] font-medium transition-opacity hover:opacity-90 ${filledClass}`;
 
   if (config.href) {
     return (

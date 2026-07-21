@@ -20,7 +20,7 @@ const deltaColor = {
 export function KpiCell({ label, value, delta, className }: KpiCellProps) {
   return (
     <div className={cn('flex flex-col gap-1', className)}>
-      <span className="text-[length:var(--md-typescale-label-medium-size)] font-[number:var(--md-typescale-label-medium-weight)] text-[var(--md-sys-color-on-surface-variant)]">
+      <span className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
         {label}
       </span>
       <span className="md-numeric text-[length:var(--md-typescale-display-small-size)] font-[number:var(--md-typescale-display-small-weight)] text-[var(--md-sys-color-on-surface)] leading-[var(--md-typescale-display-small-line-height)]">
