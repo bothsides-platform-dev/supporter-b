@@ -31,11 +31,11 @@ export function AwardContextLine({
         className="size-[17px] shrink-0 text-[var(--md-sys-color-tertiary)]"
         aria-hidden
       />
-      <span className="truncate font-semibold text-[var(--md-sys-color-on-surface)]">
+      <span className="min-w-0 truncate font-semibold text-[var(--md-sys-color-on-surface)]">
         {workspaceName}
       </span>
       <span className="shrink-0">· 선정 완료</span>
-      {contactName && <span className="truncate">· 담당자 {contactName}</span>}
+      {contactName && <span className="min-w-0 truncate">· 담당자 {contactName}</span>}
       {counterpartyWsId && (
         <span className="ml-auto shrink-0">
           <Button
