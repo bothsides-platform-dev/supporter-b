@@ -24,8 +24,8 @@
 
 ## Settings / Account
 
-### DeleteAccountSection INVALID_PASSWORD 테스트 실패 (dev 선존재) (P0)
-`components/settings/__tests__/DeleteAccountSection.test.tsx > shows inline error on INVALID_PASSWORD` 이 "비밀번호가 올바르지 않아요." 텍스트를 못 찾아 실패한다. **clean dev(main repo root)에서도 동일하게 실패** — 이 브랜치와 무관한 선행 이슈(단독 실행도 실패). Base-UI 다이얼로그(`data-base-ui-inert`)의 인라인 에러 렌더/타이밍 문제로 보인다. 회귀 아님(diff와 무관)이지만 전체 스위트가 red 라 추적 필요. 확인: 로컬 jsdom/Base-UI 버전 상호작용 vs CI 통과 여부. (발견: /ship 테스트 트리아지 2026-07-20, v0.4.2.0)
+### DeleteAccountSection INVALID_PASSWORD 테스트가 플레이크 (P3)
+`components/settings/__tests__/DeleteAccountSection.test.tsx > shows inline error on INVALID_PASSWORD` 이 "비밀번호가 올바르지 않아요." 텍스트를 못 찾아 간헐 실패한다. **항상 실패하는 것은 아니다** — 2026-07-21 재확인 시 clean dev 에서 6/6 통과했고, 같은 날 워크트리에서 파일에 테스트를 추가한 직후 1회 실패(1050ms 소요) 후 재실행에서 9/9 통과했다. 즉 v0.4.2.0 당시의 "항상 red" 진단은 더 이상 유효하지 않고, 실제 성격은 타이밍/순서 의존 플레이크(P0 → P3 하향). Base-UI 다이얼로그의 인라인 에러 렌더 타이밍으로 추정. 관련: `[[reference_userevent-type-baseui-focus-trap]]`(다이얼로그 안 입력은 `fireEvent.change` 사용), 그리고 이 다이얼로그는 body 로 portal 되므로 `container.textContent` 단언은 무조건 통과한다는 함정도 같은 파일에서 확인됨. (발견: /ship 테스트 트리아지 2026-07-20, v0.4.2.0 · 재분류: v0.4.8.0)
 
 ## Signing (선정 후 전자서명 / SnowSign)
 
@@ -133,17 +133,11 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 
 **부분 해소 (v0.2.48.0)**: admin 권한 표면(WorkspaceService invite/resend/cancel/changeRole/removeMember + renameWorkspace + listAuditLogs + audit-log 페이지)은 `isApprovedAdmin`(role=admin AND approvalStatus=approved)로 서버에서 차단했고, countAdmins·deleteAccount last-admin 판정은 승인된 admin 만 집계. **v0.2.73.0 갱신**: rfp 초대 메일 수신자는 admin 한정(`adminRecipients`, 이후 제거됨)에서 승인된 멤버 전원(`approvedMemberRecipients`)으로 확장됨 — 여전히 `approvalStatus='approved'` 필터는 유지. **남은 범위**: 비-admin pg 서버액션 전반에 대한 blanket `requirePgSession()` 승인 게이트는 여전히 미구현.
 
-### approval_status 컬럼에 enum/CHECK 제약 없음 — 드리프트 시 3곳 fail-open (P2)
-`lib/db/schema/workspace-members.ts` 에서 `role` 은 진짜 pg enum(`memberRoleEnum`)인데 `approval_status` 는 제약 없는 `text` + `default 'approved'` 다. 이 컬럼을 쓰는 어드민 콘솔은 **별도 레포**(`admin-supporter-b`)라 타입으로 묶여 있지 않다. 값이 드리프트하면(`'Approved'`·`'active'`·`''`) `isApprovedAdmin` 이 false 가 되는데, 권한 게이트 6곳은 fail-closed 로 안전한 반면 **fail-open 이 3곳** 있다: `changeMemberRole` 의 LAST_ADMIN 가드(안 걸림), `AuthService.deleteAccount`·`getDeleteAccountStatus` 의 blocking 판정(마지막 실 admin 이 탈퇴 가능 → 워크스페이스 고아화). **수정**: `CHECK (approval_status IN ('approved','pending_approval','rejected'))` 추가 또는 pg enum 승격(어드민 레포와 동시 배포 조율 필요). (발견: /ship 적대 리뷰 F3, v0.4.7.0)
+### 승인된 admin 인 시스템 계정이 "다른 admin" 으로 집계됨 (P3)
+`classifyAccountDeletion`(v0.4.8.0)은 `isApprovedAdmin` 인 멤버를 잔여 admin 으로 세는데 여기서 시스템 계정(`isSystemAccount`)을 제외하지 않는다 — master/ops 가 승인된 admin 으로 들어 있는 워크스페이스는 유일한 사람 admin 이 탈퇴해도 차단되지 않아 **사람 admin 0명** 상태가 될 수 있다. 현행 동작은 `lib/auth/__tests__/account-deletion.test.ts` 가 박아 두었다(의도적 유지 — v0.4.8.0 은 판정을 안 건드리고 안내만 개선하기로 결정). 판단 축: ① 시스템 계정을 잔여 admin 집계에서 제외해 fail-closed 강화(그러면 그 워크스페이스는 아무도 탈퇴 못 하므로 별도 출구 필요), ② 현행 유지하고 플랫폼이 admin 을 대행한다고 명문화. 어드민 레포가 master 멤버십을 어떤 role/approval_status 로 insert 하는지 확인이 선행돼야 한다. (발견: F5 수정 중, v0.4.8.0)
 
-### listMembershipsWithMembers 의 `as` 캐스트가 projection 드리프트를 세탁 (P3)
-`lib/server/repositories/drizzle/workspace.ts` 의 members 서브쿼리가 `as { userId; role; approvalStatus }[]` 로 단언돼 있어, 누가 select 에서 `approvalStatus` 를 빼도 타입 에러가 안 난다 — 런타임에 `undefined` 가 되고 `isApprovedAdmin` 이 조용히 false 를 반환해 deleteAccount 의 마지막-admin 차단이 fail-open 된다. **수정**: 캐스트를 걷어내고 추론 타입을 그대로 쓰면 드리프트가 컴파일 에러가 된다. (발견: /ship 적대 리뷰 F4, v0.4.7.0 — 선존재)
-
-### deleteAccount 의 solo/blocking 판정이 미승인 멤버를 참여자로 셈 (P3)
-`AuthService.deleteAccount`·`getDeleteAccountStatus` 의 `allMembers.length === 1` 분기는 `listMembershipsWithMembers` 의 필터 없는 members 를 쓴다 — `pending_approval`·`rejected` 멤버와 시스템 계정까지 센다(`hydrate()` 는 시스템 계정을 제외하는 것과 대비). 결과: 승인 admin 1명 + 미승인 canonical-PG 합류자 1명인 워크스페이스는 solo 도 아니고(자동 삭제 안 됨) 탈퇴도 안 된다(LAST_ADMIN). 탈출구는 있고(미승인 멤버 먼저 제거) 0-admin 을 막는다는 점에선 fail-closed 라 정책 판단 사항. v0.4.7.0 이 `changeMemberRole` 에서 없앤 것과 같은 계열의 오탐. (발견: /ship 적대 리뷰 F5, v0.4.7.0 — 선존재)
-
-### removeMember 의 0-admin 안전성이 문서화되지 않은 창발 속성 (P4)
-`WorkspaceService.removeMember` 에는 마지막-admin 가드가 아예 없다 — 승인 admin 이 다른 승인 admin 을 무조건 제거할 수 있다. 지금 안전한 이유는 호출자가 승인 admin 이어야 하고(`isApprovedAdmin`) `SELF_REMOVAL` 이 자기 제거를 막아 최소 1명이 남기 때문인데, 이 불변식이 어디에도 적혀 있지 않다. `SELF_REMOVAL` 을 푸는 순간 0-admin 경로가 된다. **수정**: 최소한 주석으로 불변식 명시, 또는 `changeMemberRole` 과 같은 트랜잭션-내 카운트 가드 적용. (발견: /ship 적대 리뷰 F7, v0.4.7.0 — 선존재)
+### repo 계층 쿼리빌더가 `any` — projection 드리프트 전면 미검출 (P2)
+`drizzle/*.ts` 34개 중 **29개가 `private h(tx?: Tx): any`** 이고, `Db` 를 쓰는 나머지도 `type Db = any` 별칭이라 결국 같다. 즉 이 계층의 모든 `.select({...})` projection 이 타입 미검사이며, select 에서 컬럼을 빼도 tsc 가 통과하고 런타임에 `undefined` 가 흐른다(v0.4.8.0 에서 F4 를 고치다 실측 확인 — 캐스트 제거만으로는 아무것도 잡히지 않았다). `workspace.ts` 는 `h(): Tx` 로 전환했고 **파일 전체 에러가 1건**뿐이었다(그 1건도 진짜 버그였다 — `addMember` 가 인터페이스의 `MemberApprovalStatus` 를 `string` 으로 넓힘). 나머지 28개 파일도 같은 방식으로 전환 가능해 보이며, 파일당 독립적이라 점진 적용된다. `[[project_drizzle-select-schema-drift]]` 와 같은 계열. (발견: F4 수정 중, v0.4.8.0)
 
 ### createRfpAction — requiredPaymentMethods 배열 길이 상한 없음 (P4)
 `allowedPgWorkspaceIds`(`.max(50)`)·`customPaymentMethods`(`.max(20)`)와 달리 `requiredPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).optional().default([])`에는 개수 상한이 없다. 각 원소는 고정 enum이라 개별 값은 유효하지만, 동일 값을 대량 중복 제출해도 zod를 통과해 `rfps.required_payment_methods`(text[])에 그대로 저장된다. Next.js 서버 액션 기본 바디 제한(1MB)이 사실상 상한 역할을 하긴 하나 명시적 가드는 아님. **수정**: `.max(11)`(캐논니컬 결제수단 총 개수) + 중복 제거(`Array.from(new Set(...))`) 추가. (발견: /ship adversarial 리뷰, 애플페이·삼성페이 추가 PR, 2026-07-19)
