@@ -74,9 +74,6 @@
 ### AnimatedBrandMark 진입 애니메이션 — DESIGN.md 예외 미문서화 (P4)
 `components/primitives/AnimatedBrandMark.tsx`(v0.3.0.0, `SidebarBrand`가 인증 앱 셸에 마운트)의 1회성 SVG `pathLength`/`fillOpacity` draw-on 진입 연출이 DESIGN.md §9의 `(app)/**` 두 예외(축하 모먼트·테마 전환 리빌) 어디에도 명시되지 않았다(같은 릴리스 범위의 `.coachmark-pulse`는 예외로 문서화됨과 대비). 기능적 결함은 아님 — 세 번째 예외로 DESIGN.md에 명문화할지, `/design-review`로 하드룰 위반 여부를 재검토할지 정책 결정 필요. (발견: /ship 문서 동기화 점검, dev→main 릴리스 컷 2026-07-17)
 
-### 라벨 타이포 표기가 두 가지 — `.md-label-*` vs 토큰 나열형 (P3)
-`.md-label-{small,medium,large}`(v0.4.4.0 신설)와, 같은 결과를 내는 기존 나열형 `text-[length:var(--md-typescale-label-*-size)] font-[number:...] leading-[...] tracking-[...]`이 공존한다(나열형 36곳, 주로 `components/shell/**`). 기능 차이는 없지만 한 가지를 두 가지로 쓰는 상태라 다음 사람이 어느 쪽을 따라야 할지 모호하다. 나열형을 `.md-label-*`로 흡수하면 라벨 타이포가 한 출처로 모인다. (발견: /design-review, C4 스윕 PR 2026-07-21)
-
 ## SEO / Branding
 
 ### 브랜드명 리터럴 하드코딩 — SSOT 미참조 (P3)
@@ -101,32 +98,7 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### proxy-matcher 죽은 제외 항목 4개 정리 (P4)
 `file`·`globe`·`next`·`vercel`·`window` 는 create-next-app 기본 SVG 에셋(`public/next.svg` 등) 때문에 추가됐던 항목인데, 해당 파일들은 이미 삭제되어 `public/`에 `fonts/`·`landing/`만 남아 있다. 지금은 아무것도 제외하지 않으면서 흔한 영어 단어라 미래 라우트와 충돌 여지만 남기는 상태. 제거 검토(단, 위 세그먼트 경계 이슈와 함께 처리하는 게 효율적). (발견: /ship adversarial 리뷰 2026-07-01, `fix/pg-landing-image-auth-redirect`)
 
-## Storage / R2
-
-### R2 고아 객체 sweeper (P3)
-`scripts/sweep-r2-orphans.ts` — ListObjectsV2(prefix `attachments/`) → `attachmentRepo.findExistingIds` 배치 대사 → row 없는 키 중 LastModified 24h 초과만 DeleteObjects. `--dry-run` 지원, PM2 cron(일 1회) 등록. 고아 발생 경로: RFP 삭제 cascade(`rfpRepo.deleteById`, `_purgeUnverifiedSignup`) + sweep-uploads 의 객체 삭제 실패 잔존분. bid_note 삭제는 bid.ts가 storage.delete() 명시 호출로 이미 커버. **주의**: 이 sweeper는 "row 없는 객체" 방향만 정리한다. 반대 방향 중 **pending row(업로드 미완료)는 presigned 전환으로 `/api/cron/sweep-uploads` 가 이미 커버** — 남는 미커버는 "ready row인데 객체가 없는" 희귀 케이스(현재 R2 presigned URL 이 NoSuchKey 를 반환)뿐. (발견: /ship adversarial 리뷰 2026-07-05, presigned 전환 반영 2026-07-05)
-
-## 견적 확장 (current_terms)
-
-### 오픈보드 공개 범위 제품 검토 — 특히 customPaymentMethodLabels (P2)
-문서가 오랫동안 "구매사명·제목·홈페이지만"이라 서술해 온 탓에 가려져 있었지만, 오픈보드는 실제로 9필드를 공개해 왔다(코드·가드 테스트는 처음부터 일관, 산문만 스테일 — v0.4.3.0 에서 정정). 추가 6필드는 전부 비경쟁 정보라는 판단이지만 **`customPaymentMethodLabels` 는 구매사가 직접 입력한 자유 텍스트가 비초대 PG 전원에게 브로드캐스트되는 유일한 필드**다. 구매사가 거기에 내부 명칭·거래처명 같은 걸 적을 수 있어 노출 적절성은 코드 문제가 아니라 제품 결정이다. 검토 축: ① 그대로 공개, ② 게시판에서만 제거(초대 PG 에겐 유지), ③ 입력 시 공개 사실을 고지. (발견: /ship 적대적 리뷰 2026-07-21)
-
-### 요청조건 뷰 솔루션 표기 무테스트 (P3)
-`components/rfp/RequestConditionsView.tsx` 의 `formatSolution` — `self`/`other` + `currentSolutionDetail` 이면 `자체 개발 (ABC몰)` 처럼 상세를 괄호로 덧붙이는데, 이 컴포넌트는 전용 테스트 파일이 없고 딜룸 스위트 두 곳에서 `vi.mock` 으로 대체돼 어느 계층에서도 검증되지 않는다. 로직 자체(`solutionLabel`)는 커버됨 — 빠진 건 상세 접미사 분기와 렌더 경로. (발견: /ship 커버리지 감사 2026-07-21)
-
-### createRfpAction 어휘 밖 입력 거부 미검증 (P4)
-`currentSolution`·`requiredPaymentMethods` 는 캐논니컬 어휘 전체가 통과하는지는 순회 가드로 고정돼 있으나, **어휘 밖 값이 거부되는지**는 zod 기본 동작에 의존할 뿐 테스트가 없다. `z.enum` 이 실수로 `z.string()` 으로 느슨해지면 아무것도 깨지지 않는다. (발견: /ship 커버리지 감사 2026-07-21)
-
-### SCREEN_DESIGN 이 삭제된 컬럼을 아직 문서화 (P4)
-`SCREEN_DESIGN.md` 의 현재 카드 수수료 opt-out 설명이 `current_fee_visible_to_pg` 를 컬럼으로 서술하는데, 이 컬럼은 v0.2.26.2 에서 DROP 됐고 `current_terms` JSONB + `hidden_from_pg` 가 유일한 저장소다(CLAUDE.md 는 이미 정확). 문서만 갱신하면 되는 건이지만 스키마 서술이라 오해 비용이 있다. (발견: /ship maintainability 리뷰 2026-07-21)
-
-### (조건부) hidden_from_pg write-edge 검증
-**Priority:** P3
-현재는 hidden_from_pg 가 hiddenFromPgFromVisibility(수수료 공개여부)로만 채워져 안전. **추후 buyer 가 임의 필드를 숨길 수 있게 되면** write-edge 에서 HIDEABLE_PG_PATHS 검증 추가 필요 — 안 하면 PG_STRIP 핸들러 없는 숨김 경로 fail-open 누출. (선택, doc-edge 채택 시 함께)
-
-### currentTermsFromDiscrete 빈문자열 정규화
-**Priority:** P3
-'' 입력을 문서에 그대로 담음(현재 falsy 라 UI 무해). omit 으로 정규화하면 더 깔끔. (발견: /ship 리뷰 2026-06-18)
+## Workspace / Members
 
 ### PG 멤버십 승인 서버 데이터 경계 강제 (P2)
 `joinCanonicalPgWorkspace` 경로로 생성된 `approval_status = 'pending_approval'` 멤버는 UI 게이트(shell guard + `/pending-approval` 분기)로 차단되지만, 서버 액션/API 라우트(`requirePgSession()`) 레벨에서는 `memberApprovalStatus`를 검증하지 않아 직접 POST 요청으로 우회 가능. PR#199 emailVerified 유예와 동일 패턴 — 이번 PR에서 의도적으로 후속 유예. **구현 시 `requirePgSession()`에 `getMemberApprovalStatus` 체크 추가 또는 별도 미들웨어 gate.** (발견: 최종 코드 리뷰 2026-06-18)
@@ -145,14 +117,35 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### removeMember 의 0-admin 안전성이 문서화되지 않은 창발 속성 (P4)
 `WorkspaceService.removeMember` 에는 마지막-admin 가드가 아예 없다 — 승인 admin 이 다른 승인 admin 을 무조건 제거할 수 있다. 지금 안전한 이유는 호출자가 승인 admin 이어야 하고(`isApprovedAdmin`) `SELF_REMOVAL` 이 자기 제거를 막아 최소 1명이 남기 때문인데, 이 불변식이 어디에도 적혀 있지 않다. `SELF_REMOVAL` 을 푸는 순간 0-admin 경로가 된다. **수정**: 최소한 주석으로 불변식 명시, 또는 `changeMemberRole` 과 같은 트랜잭션-내 카운트 가드 적용. (발견: /ship 적대 리뷰 F7, v0.4.7.0 — 선존재)
 
+## Storage / R2
+
+### R2 고아 객체 sweeper (P3)
+`scripts/sweep-r2-orphans.ts` — ListObjectsV2(prefix `attachments/`) → `attachmentRepo.findExistingIds` 배치 대사 → row 없는 키 중 LastModified 24h 초과만 DeleteObjects. `--dry-run` 지원, PM2 cron(일 1회) 등록. 고아 발생 경로: RFP 삭제 cascade(`rfpRepo.deleteById`, `_purgeUnverifiedSignup`) + sweep-uploads 의 객체 삭제 실패 잔존분. bid_note 삭제는 bid.ts가 storage.delete() 명시 호출로 이미 커버. **주의**: 이 sweeper는 "row 없는 객체" 방향만 정리한다. 반대 방향 중 **pending row(업로드 미완료)는 presigned 전환으로 `/api/cron/sweep-uploads` 가 이미 커버** — 남는 미커버는 "ready row인데 객체가 없는" 희귀 케이스(현재 R2 presigned URL 이 NoSuchKey 를 반환)뿐. (발견: /ship adversarial 리뷰 2026-07-05, presigned 전환 반영 2026-07-05)
+
+## 견적 확장 (current_terms)
+
+### 오픈보드 공개 범위 제품 검토 — 특히 customPaymentMethodLabels (P2)
+문서가 오랫동안 "구매사명·제목·홈페이지만"이라 서술해 온 탓에 가려져 있었지만, 오픈보드는 실제로 9필드를 공개해 왔다(코드·가드 테스트는 처음부터 일관, 산문만 스테일 — v0.4.3.0 에서 정정). 추가 6필드는 전부 비경쟁 정보라는 판단이지만 **`customPaymentMethodLabels` 는 구매사가 직접 입력한 자유 텍스트가 비초대 PG 전원에게 브로드캐스트되는 유일한 필드**다. 구매사가 거기에 내부 명칭·거래처명 같은 걸 적을 수 있어 노출 적절성은 코드 문제가 아니라 제품 결정이다. 검토 축: ① 그대로 공개, ② 게시판에서만 제거(초대 PG 에겐 유지), ③ 입력 시 공개 사실을 고지. (발견: /ship 적대적 리뷰 2026-07-21)
+
+### 요청조건 뷰 솔루션 표기 무테스트 (P3)
+`components/rfp/RequestConditionsView.tsx` 의 `formatSolution` — `self`/`other` + `currentSolutionDetail` 이면 `자체 개발 (ABC몰)` 처럼 상세를 괄호로 덧붙이는데, 이 컴포넌트는 전용 테스트 파일이 없고 딜룸 스위트 두 곳에서 `vi.mock` 으로 대체돼 어느 계층에서도 검증되지 않는다. 로직 자체(`solutionLabel`)는 커버됨 — 빠진 건 상세 접미사 분기와 렌더 경로. (발견: /ship 커버리지 감사 2026-07-21)
+
+### createRfpAction 어휘 밖 입력 거부 미검증 (P4)
+`currentSolution`·`requiredPaymentMethods` 는 캐논니컬 어휘 전체가 통과하는지는 순회 가드로 고정돼 있으나, **어휘 밖 값이 거부되는지**는 zod 기본 동작에 의존할 뿐 테스트가 없다. `z.enum` 이 실수로 `z.string()` 으로 느슨해지면 아무것도 깨지지 않는다. (발견: /ship 커버리지 감사 2026-07-21)
+
 ### createRfpAction — requiredPaymentMethods 배열 길이 상한 없음 (P4)
 `allowedPgWorkspaceIds`(`.max(50)`)·`customPaymentMethods`(`.max(20)`)와 달리 `requiredPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).optional().default([])`에는 개수 상한이 없다. 각 원소는 고정 enum이라 개별 값은 유효하지만, 동일 값을 대량 중복 제출해도 zod를 통과해 `rfps.required_payment_methods`(text[])에 그대로 저장된다. Next.js 서버 액션 기본 바디 제한(1MB)이 사실상 상한 역할을 하긴 하나 명시적 가드는 아님. **수정**: `.max(11)`(캐논니컬 결제수단 총 개수) + 중복 제거(`Array.from(new Set(...))`) 추가. (발견: /ship adversarial 리뷰, 애플페이·삼성페이 추가 PR, 2026-07-19)
 
+### SCREEN_DESIGN 이 삭제된 컬럼을 아직 문서화 (P4)
+`SCREEN_DESIGN.md` 의 현재 카드 수수료 opt-out 설명이 `current_fee_visible_to_pg` 를 컬럼으로 서술하는데, 이 컬럼은 v0.2.26.2 에서 DROP 됐고 `current_terms` JSONB + `hidden_from_pg` 가 유일한 저장소다(CLAUDE.md 는 이미 정확). 문서만 갱신하면 되는 건이지만 스키마 서술이라 오해 비용이 있다. (발견: /ship maintainability 리뷰 2026-07-21)
+
+### (조건부) hidden_from_pg write-edge 검증 (P3)
+현재는 hidden_from_pg 가 hiddenFromPgFromVisibility(수수료 공개여부)로만 채워져 안전. **추후 buyer 가 임의 필드를 숨길 수 있게 되면** write-edge 에서 HIDEABLE_PG_PATHS 검증 추가 필요 — 안 하면 PG_STRIP 핸들러 없는 숨김 경로 fail-open 누출. (선택, doc-edge 채택 시 함께)
+
+### currentTermsFromDiscrete 빈문자열 정규화 (P3)
+'' 입력을 문서에 그대로 담음(현재 falsy 라 UI 무해). omit 으로 정규화하면 더 깔끔. (발견: /ship 리뷰 2026-06-18)
 
 ## Onboarding / Tutorial
-
-### 튜토리얼 플로우 셸 중복 추출 (P3)
-`BuyerTutorialFlow`와 `PgTutorialFlow`가 phase 상태머신 스캐폴딩(PHASE_ORDER/LABELS, 진행 헤더+나가기 버튼, done 전용 컨페티 캔버스)을 거의 그대로 중복. 공용 `TutorialFlowShell`/`useTutorialPhase` 추출 검토. 두 플로우 테스트의 CoachmarkTour mock 중복도 같은 작업에서 공용 test-double로 추출(키보드락은 v0.3.4.0에서 삭제됨). (발견: /ship maintainability 리뷰 v0.2.76.0, 2026-07-07 · mock 중복 추가: v0.2.79.0, 2026-07-10)
 
 ### updateOnboardingAction fire-and-forget 경화 — 실패 무시 + read-after-write 레이스 (P3)
 `handleComplete`/`handleExit` 6곳이 `void updateOnboardingAction(...)`으로 발사 후 결과를 읽지 않는다: ① 네트워크 단절/세션 만료 시 unhandled rejection + 미영속(유저는 완료 화면을 봤는데 DB엔 스탬프 없음 → 환영 모달 재노출), ② `{ok:false}` 무시, ③ done CTA가 쓰기 완료를 기다리지 않아 `/home` RSC의 `getOnboarding()` 읽기가 쓰기를 앞지르면 완료 직후 환영 모달이 뜰 수 있음(스킵 경로에서 더 잦음). await+에러 토스트 또는 최소 `.catch` + `revalidatePath` 검토. v0.3.4.0의 `TutorialLeaveGuard.leave`(dismissed/completed 스탬프 후 즉시 router.push)도 같은 패턴 2곳 추가 — 경화 시 함께. (발견: /ship 적대 리뷰 v0.3.2.0, 2026-07-15 · 가드 추가: v0.3.4.0, 2026-07-16)
@@ -188,9 +181,6 @@ CoachmarkTour의 capture 클릭 리스너가 마지막 action 클릭 즉시 `onF
 `lib/integrations/nts.ts`의 429 `shouldRetry` 분기에서 `Retry-After` 헤더가 숫자도 유효 HTTP-date도 아닌 값(`'garbage'` 등)이면 `afterMs=NaN`이 되어 조용히 일반 재시도 경로로 폴백한다 — 이 폴백 자체는 안전해 보이지만 테스트가 숫자/유효 date 케이스만 커버하고 malformed 값과 "헤더는 있지만 budget 이내인" 케이스는 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
 
 ## Quote / 가입비 후속
-
-### QuoteTemplateOption 매퍼 중복 (P4)
-projection(id~paymentFees)이 `lib/server/rfp-detail-loader.ts`와 `app/(app)/quote-templates/page.tsx`에 verbatim 중복 — 공용 `toQuoteTemplateOption` 매퍼로 추출하면 다음 필드 추가가 한 곳 수정으로 끝난다. (발견: v0.3.6.0 /ship review army)
 
 ### 정산 그리드 고아 셀 (P4)
 `BidStepSettlement`·`QuoteTemplateDrawer`의 2열 그리드에 단일-스팬 필드 3개(정산한도·보증보험·가입비)라 마지막 행에 빈 셀이 남는다. /design-review로 시각 판정 후 정리. (발견: v0.3.6.0 /ship design specialist)

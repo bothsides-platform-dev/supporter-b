@@ -6,6 +6,8 @@ import {
   getBidQuoteTemplateRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
+import { toQuoteTemplateOption } from '@/lib/server/quote-template-option';
+import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { QuoteTemplateList } from '@/components/quote-templates/QuoteTemplateList';
 
@@ -26,15 +28,7 @@ export default async function QuoteTemplatesPage() {
     (await getWorkspaceRepo()).findById(wsId),
   ]);
 
-  const initialTemplates = templates.map((t) => ({
-    id: t.id,
-    name: t.name,
-    settleCycle: t.settleCycle,
-    settleLimit: t.settleLimit,
-    guaranteeInsurance: t.guaranteeInsurance,
-    signupFee: t.signupFee,
-    paymentFees: t.paymentFees,
-  }));
+  const initialTemplates: QuoteTemplateOption[] = templates.map(toQuoteTemplateOption);
 
   return (
     <PageEnter className="px-4 py-6 md:px-8 md:py-8">

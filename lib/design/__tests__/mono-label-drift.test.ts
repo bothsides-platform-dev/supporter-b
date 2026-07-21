@@ -73,6 +73,48 @@ function scanAll(): Violation[] {
   return found;
 }
 
+/**
+ * Lines that spell a whole label typescale out longhand instead of using the
+ * `.md-label-*` utility.
+ *
+ * The signature is size AND weight from the label typescale on one line — that
+ * combination only appears when someone is dressing a full label role, which is
+ * exactly what the utility exists for. Consuming a SINGLE axis stays legal:
+ * Button/Chip/Avatar/NavItem take `text-[length:var(--md-typescale-label-*-size)]`
+ * and own their own weight and leading, so they are composing a token, not
+ * spelling a competing label notation.
+ *
+ * Known blind spot, same as the mono rules above: this is line-scoped, so a
+ * `cn()` call that puts each utility on its own line slips through. Chip and
+ * Tabs do exactly that today and stay deliberately — they are fixed-height flex
+ * controls where a label's line-height is a no-op, which is why they omit it.
+ * The guard exists to stop copy-paste of the one-line label nailing, not to
+ * police every token combination.
+ */
+function findLabelNailings(file: string): Violation[] {
+  const found: Violation[] = [];
+  const lines = readFileSync(`${ROOT}${file}`, 'utf8').split('\n');
+  lines.forEach((text, i) => {
+    if (
+      text.includes('length:var(--md-typescale-label-') &&
+      text.includes('number:var(--md-typescale-label-')
+    ) {
+      found.push({ file, line: i + 1, rule: 'label typescale longhand', text: text.trim() });
+    }
+  });
+  return found;
+}
+
+function scanAllLabelNailings(): Violation[] {
+  const found: Violation[] = [];
+  for (const root of SCAN_ROOTS) {
+    for (const file of walk(root)) {
+      found.push(...findLabelNailings(file));
+    }
+  }
+  return found;
+}
+
 describe('DESIGN.md §9 — no font-mono label treatment on app surfaces', () => {
   it('no non-allowlisted file pairs font-mono with uppercase or tabular-nums', () => {
     const offenders = scanAll();
@@ -83,6 +125,20 @@ describe('DESIGN.md §9 — no font-mono label treatment on app surfaces', () =>
         '.md-numeric (app/globals.css). A surface that genuinely needs the mono look ' +
         'must be added to lib/design/design-hardrule-allowlist.mjs with a DESIGN.md §9 ' +
         'exception recorded.',
+    ).toEqual([]);
+  });
+
+  // Third invariant, same walk: one label notation, not two. `.md-label-*` and a
+  // longhand token nailing render identically, so both survived side by side —
+  // leaving the next person to guess which one to follow. The guard picks one.
+  it('no file spells a full label typescale longhand instead of .md-label-*', () => {
+    const offenders = scanAllLabelNailings();
+    expect(
+      offenders.map((v) => `${v.file}:${v.line}`),
+      'These lines nail size AND weight from the label typescale by hand. Use the ' +
+        '.md-label-{small,medium,large} utility (app/globals.css) — see DESIGN.md §3. ' +
+        'Consuming one axis alone (size only) is still fine; it is the whole-label ' +
+        'longhand that competes with the utility.',
     ).toEqual([]);
   });
 

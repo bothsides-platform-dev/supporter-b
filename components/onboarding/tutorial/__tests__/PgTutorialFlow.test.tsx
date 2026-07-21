@@ -15,24 +15,8 @@ vi.mock('@/lib/hooks/useCelebrationConfetti', () => ({
   useCelebrationConfetti: () => ({ canvasRef: { current: null }, fire: confettiFireMock }),
 }));
 
-vi.mock('@/components/onboarding/coachmarks', () => ({
-  CoachmarkTour: ({
-    steps,
-    onFinish,
-    onSkip,
-  }: {
-    steps: { target: string }[];
-    onFinish?: () => void;
-    onSkip?: () => void;
-  }) => (
-    <div
-      data-testid={`tour-${steps[0]?.target}`}
-      data-targets={steps.map((s) => s.target).join(',')}
-    >
-      <button type="button" onClick={onFinish}>{`tour-finish-${steps[0]?.target}`}</button>
-      <button type="button" onClick={onSkip}>{`tour-skip-${steps[0]?.target}`}</button>
-    </div>
-  ),
+vi.mock('@/components/onboarding/coachmarks', async () => ({
+  CoachmarkTour: (await import('./coachmark-tour-stub')).CoachmarkTourStub,
 }));
 
 vi.mock('../InviteScene', () => ({
