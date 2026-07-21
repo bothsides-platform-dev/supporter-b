@@ -880,6 +880,26 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return value;
   }
 
+  async countApprovedAdminsForUpdate(workspaceId: string, tx?: Tx): Promise<number> {
+    const db = this.h(tx);
+    // 집계 대신 행을 뽑아 세는 이유: Postgres 는 aggregate 쿼리에 FOR UPDATE 를 허용하지
+    // 않는다. 잠금이 목적이므로 admin 행 자체를 잠가야 한다 — READ COMMITTED 에서
+    // FOR UPDATE 는 대기 후 술어를 재평가하므로, 앞선 강등이 커밋되면 그 행은
+    // role='admin' 조건에서 빠져 카운트가 정확히 줄어든다.
+    const rows = await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.role, 'admin'),
+          eq(workspaceMembers.approvalStatus, 'approved'),
+        ),
+      )
+      .for('update');
+    return rows.length;
+  }
+
   async updateMemberRole(
     params: { workspaceId: string; userId: string; role: 'admin' | 'member' },
     tx?: Tx,

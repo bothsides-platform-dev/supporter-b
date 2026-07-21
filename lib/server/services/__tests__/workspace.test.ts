@@ -111,6 +111,14 @@ describe('WorkspaceService.changeMemberRole', () => {
     );
 
     expect(result).toEqual({ ok: false, error: 'LAST_ADMIN' });
+
+    // 가드가 트랜잭션 안으로 들어갔으므로, 거절 시 역할·감사로그 모두 쓰이지 않아야 한다.
+    const [row] = await db
+      .select({ role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, admin.id)));
+    expect(row.role).toBe('admin');
+    expect(await db.select({ id: auditLogs.id }).from(auditLogs)).toHaveLength(0);
   });
 
   // 미승인 admin 은 잔여 admin 으로 쳐주지 않는다 — 가드가 느슨해지지 않았음을 못박는다.

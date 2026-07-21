@@ -28,7 +28,7 @@ export type ApprovedAdminCandidate = {
  * 판정, 잔여 admin 집계)에도 같은 기준을 써야 한다. `workspaceRepo.countAdmins` 의
  * `approvalStatus='approved'` 필터가 이 헬퍼의 SQL 쌍이므로 둘은 함께 움직여야 한다.
  */
-export function isApprovedAdmin(membership: ApprovedAdminCandidate | null | undefined): boolean {
+export function isApprovedAdmin(membership: ApprovedAdminCandidate | null): boolean {
   return membership?.role === 'admin' && membership.approvalStatus === 'approved';
 }
 

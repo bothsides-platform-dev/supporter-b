@@ -958,6 +958,36 @@ describe('DrizzleWorkspaceRepository', () => {
     });
   });
 
+  // 마지막 admin 가드용 잠금 카운트 — 동시 강등이 서로를 못 보고 둘 다 통과하는
+  // TOCTOU 를 막으려면 카운트가 admin 행에 FOR UPDATE 를 걸어야 한다. 레이스 자체는
+  // PGlite 단일 커넥션으로 재현 불가 — 여기서는 카운트 의미가 countAdmins 와
+  // 동일한지(승인된 admin 만)를 못박는다.
+  describe('countApprovedAdminsForUpdate', () => {
+    it('counts only approved admins, matching countAdmins', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const a1 = await seedUser(db, { email: 'a1@lock-count.test' });
+      const a2 = await seedUser(db, { email: 'a2@lock-count.test' });
+      const pending = await seedUser(db, { email: 'p@lock-count.test' });
+      const rejected = await seedUser(db, { email: 'r@lock-count.test' });
+      const member = await seedUser(db, { email: 'm@lock-count.test' });
+      await seedMembership(db, ws.id, a1.id, 'admin');
+      await seedMembership(db, ws.id, a2.id, 'admin');
+      await seedMembership(db, ws.id, pending.id, 'admin', { approvalStatus: 'pending_approval' });
+      await seedMembership(db, ws.id, rejected.id, 'admin', { approvalStatus: 'rejected' });
+      await seedMembership(db, ws.id, member.id, 'member');
+
+      expect(await repo.countApprovedAdminsForUpdate(ws.id)).toBe(2);
+      expect(await repo.countApprovedAdminsForUpdate(ws.id)).toBe(await repo.countAdmins(ws.id));
+    });
+
+    it('returns 0 when there are no approved admins', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const p = await seedUser(db, { email: 'only-pending@lock-count.test' });
+      await seedMembership(db, ws.id, p.id, 'admin', { approvalStatus: 'pending_approval' });
+      expect(await repo.countApprovedAdminsForUpdate(ws.id)).toBe(0);
+    });
+  });
+
   describe('updateMemberRole', () => {
     it('changes a member role', async () => {
       const ws = await seedBuyerWorkspace(db);
