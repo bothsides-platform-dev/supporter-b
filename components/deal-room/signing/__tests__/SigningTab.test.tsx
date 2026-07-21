@@ -138,4 +138,28 @@ describe('SigningTab', () => {
     expect(screen.getByText('전자서명을 시작하지 못했어요')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '다시 시작' })).toBeInTheDocument();
   });
+
+  it('send_failed — 다시 시작 성공 시 "다시 시작했어요" 토스트를 띄운다', async () => {
+    vi.mocked(resendSigningAction).mockResolvedValueOnce({ ok: true });
+    const user = userEvent.setup();
+    render(<SigningTab rfpCode="P-2607-0001" signing={view('send_failed')} side="pg" />);
+    await user.click(screen.getByRole('button', { name: '다시 시작' }));
+    expect(toast).toHaveBeenCalledWith('다시 시작했어요', { type: 'success' });
+  });
+
+  it('서버 액션이 reject되면 에러 토스트를 띄우고 버튼을 다시 활성화한다', async () => {
+    vi.mocked(resendSigningAction).mockRejectedValueOnce(new Error('boom'));
+    const user = userEvent.setup();
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('declined', [part('buyer', 'signed'), part('pg', 'rejected')])}
+        side="buyer"
+      />,
+    );
+    const button = screen.getByRole('button', { name: '다시 발송' });
+    await user.click(button);
+    expect(toast).toHaveBeenCalledWith('다시 발송하지 못했어요', { type: 'error' });
+    expect(button).not.toBeDisabled();
+  });
 });

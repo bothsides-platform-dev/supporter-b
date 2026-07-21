@@ -79,40 +79,41 @@ export function SigningTab({
     failMsg: string,
   ) {
     setBusy(true);
-    const r = await fn();
-    setBusy(false);
-    if (!r.ok) {
-      toast(signingErrorMessage(r.error, failMsg), { type: 'error' });
-      return;
+    try {
+      const r = await fn();
+      if (!r.ok) {
+        toast(signingErrorMessage(r.error, failMsg), { type: 'error' });
+        return;
+      }
+      toast(okMsg, { type: 'success' });
+      router.refresh();
+    } catch {
+      toast(signingErrorMessage(undefined, failMsg), { type: 'error' });
+    } finally {
+      setBusy(false);
     }
-    toast(okMsg, { type: 'success' });
-    router.refresh();
   }
 
   function onAction(a: SigningAction) {
+    const okMsg = a.okMsg ?? '완료했어요';
+    const failMsg = a.failMsg ?? '처리하지 못했어요';
     switch (a.id) {
       case 'template':
         router.push('/signing-templates');
         return;
       case 'remind':
-        void run(
-          () => remindSigningAction({ contractId: contract.id }),
-          '리마인더를 보냈어요',
-          '리마인더를 보내지 못했어요',
-        );
+        void run(() => remindSigningAction({ contractId: contract.id }), okMsg, failMsg);
         return;
       case 'cancel':
         setCancelOpen(true);
         return;
       case 'resend':
-        void run(
-          () => resendSigningAction({ rfpCode }),
-          '다시 발송했어요',
-          '다시 발송하지 못했어요',
-        );
+        void run(() => resendSigningAction({ rfpCode }), okMsg, failMsg);
         return;
     }
   }
+
+  const cancelAction = v.actions.find((a) => a.id === 'cancel');
 
   return (
     <section className="rounded-[10px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)]">
@@ -177,8 +178,8 @@ export function SigningTab({
         onConfirm={async () => {
           await run(
             () => cancelSigningAction({ contractId: contract.id }),
-            '전자서명을 취소했어요',
-            '취소하지 못했어요',
+            cancelAction?.okMsg ?? '완료했어요',
+            cancelAction?.failMsg ?? '처리하지 못했어요',
           );
           setCancelOpen(false);
         }}

@@ -39,6 +39,9 @@ export type SigningAction = {
   label: string;
   variant: 'filled' | 'outlined' | 'text';
   danger?: boolean;
+  /** 실행 결과 토스트 — 버튼 라벨과 일관된 문구를 뷰모델이 소유한다. */
+  okMsg?: string;
+  failMsg?: string;
 };
 
 export type SigningDoc = { id: 'document' | 'audit'; title: string; caption: string };
@@ -187,8 +190,21 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         ],
         docs: [],
         actions: [
-          { id: 'remind', label: '리마인더 보내기', variant: 'outlined' },
-          { id: 'cancel', label: '취소', variant: 'text', danger: true },
+          {
+            id: 'remind',
+            label: '리마인더 보내기',
+            variant: 'outlined',
+            okMsg: '리마인더를 보냈어요',
+            failMsg: '리마인더를 보내지 못했어요',
+          },
+          {
+            id: 'cancel',
+            label: '취소',
+            variant: 'text',
+            danger: true,
+            okMsg: '전자서명을 취소했어요',
+            failMsg: '취소하지 못했어요',
+          },
         ],
         note: '서명은 이메일 링크의 스노우싸인 페이지에서 진행돼요.',
       };
@@ -232,7 +248,15 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
           { key: 'terminal', kind: 'milestone', label: '서명이 중단됐어요', state: 'failed' },
         ],
         docs: [],
-        actions: [{ id: 'resend', label: '다시 발송', variant: 'filled' }],
+        actions: [
+          {
+            id: 'resend',
+            label: '다시 발송',
+            variant: 'filled',
+            okMsg: '다시 발송했어요',
+            failMsg: '다시 발송하지 못했어요',
+          },
+        ],
         note: '선정 결과는 그대로예요.',
       };
 
@@ -255,7 +279,15 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
           },
         ],
         docs: [],
-        actions: [{ id: 'resend', label: '다시 발송', variant: 'filled' }],
+        actions: [
+          {
+            id: 'resend',
+            label: '다시 발송',
+            variant: 'filled',
+            okMsg: '다시 발송했어요',
+            failMsg: '다시 발송하지 못했어요',
+          },
+        ],
         note: '선정 결과는 그대로예요.',
       };
 
@@ -278,7 +310,15 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
           },
         ],
         docs: [],
-        actions: [{ id: 'resend', label: '다시 발송', variant: 'filled' }],
+        actions: [
+          {
+            id: 'resend',
+            label: '다시 발송',
+            variant: 'filled',
+            okMsg: '다시 발송했어요',
+            failMsg: '다시 발송하지 못했어요',
+          },
+        ],
         note: '필요하면 다시 발송할 수 있어요.',
       };
 
@@ -301,7 +341,15 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
           ...placeholderPair(),
         ],
         docs: [],
-        actions: [{ id: 'resend', label: '다시 시작', variant: 'filled' }],
+        actions: [
+          {
+            id: 'resend',
+            label: '다시 시작',
+            variant: 'filled',
+            okMsg: '다시 시작했어요',
+            failMsg: '다시 시작하지 못했어요',
+          },
+        ],
         note: '선정은 그대로 유지돼요.',
       };
   }

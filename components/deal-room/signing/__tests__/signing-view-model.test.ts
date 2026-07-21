@@ -125,7 +125,15 @@ describe('buildSigningCardView', () => {
     expect(v.nodes[2]).toMatchObject({ state: 'failed' });
     expect(v.nodes[2].chip).toEqual({ color: 'error', label: '거절' });
     expect(v.nodes[3]).toMatchObject({ key: 'terminal', state: 'failed' });
-    expect(v.actions).toEqual([{ id: 'resend', label: '다시 발송', variant: 'filled' }]);
+    expect(v.actions).toEqual([
+      {
+        id: 'resend',
+        label: '다시 발송',
+        variant: 'filled',
+        okMsg: '다시 발송했어요',
+        failMsg: '다시 발송하지 못했어요',
+      },
+    ]);
   });
 
   it('expired·canceled — 미서명 참여자 칩이 "서명 안 함"', () => {
@@ -147,7 +155,36 @@ describe('buildSigningCardView', () => {
   it('send_failed — 발송 노드가 failed, 다시 시작 액션', () => {
     const v = buildSigningCardView(view('send_failed'), 'buyer');
     expect(v.nodes[1]).toMatchObject({ key: 'send', state: 'failed' });
-    expect(v.actions).toEqual([{ id: 'resend', label: '다시 시작', variant: 'filled' }]);
+    expect(v.actions).toEqual([
+      {
+        id: 'resend',
+        label: '다시 시작',
+        variant: 'filled',
+        okMsg: '다시 시작했어요',
+        failMsg: '다시 시작하지 못했어요',
+      },
+    ]);
+  });
+
+  it('send_failed — 다시 시작 액션의 토스트 문구는 "시작" 어휘를 쓴다', () => {
+    const v = buildSigningCardView(view('send_failed'), 'buyer');
+    const resend = v.actions.find((a) => a.id === 'resend');
+    expect(resend).toMatchObject({
+      okMsg: '다시 시작했어요',
+      failMsg: '다시 시작하지 못했어요',
+    });
+  });
+
+  it('declined — 다시 발송 액션의 토스트 문구는 "발송" 어휘를 쓴다', () => {
+    const v = buildSigningCardView(
+      view('declined', [part('buyer', 'signed'), part('pg', 'rejected')]),
+      'buyer',
+    );
+    const resend = v.actions.find((a) => a.id === 'resend');
+    expect(resend).toMatchObject({
+      okMsg: '다시 발송했어요',
+      failMsg: '다시 발송하지 못했어요',
+    });
   });
 });
 
