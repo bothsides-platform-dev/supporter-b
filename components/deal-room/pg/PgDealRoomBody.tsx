@@ -24,7 +24,7 @@ import { withdrawBidAction } from '@/lib/server/actions/bid/withdrawBidAction';
 import { toast } from '@/lib/toast';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
-import { SigningPanel } from '@/components/deal-room/SigningPanel';
+import { SigningTab } from '@/components/deal-room/signing/SigningTab';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
@@ -53,7 +53,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
         >
           {buyerContact && <ContactBlock contact={buyerContact} counterpartyKind="buyer" />}
         </DealResultHeader>
-        {signing && <SigningPanel rfpCode={rfp.code} signing={signing} />}
+        {signing && <SigningTab rfpCode={rfp.code} signing={signing} side="pg" />}
         {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(rfp, myBid)} />}
       </div>
     );

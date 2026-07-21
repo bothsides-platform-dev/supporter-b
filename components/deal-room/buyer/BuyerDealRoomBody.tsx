@@ -38,7 +38,7 @@ import { closeRfpAction, cancelRfpAction } from '@/lib/server/actions/rfp';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
-import { SigningPanel } from '@/components/deal-room/SigningPanel';
+import { SigningTab } from '@/components/deal-room/signing/SigningTab';
 import { josa } from 'es-hangul';
 import { toast } from '@/lib/toast';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
@@ -96,7 +96,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           )}
           {signing && (
             <div className="mb-4">
-              <SigningPanel rfpCode={rfp.code} signing={signing} />
+              <SigningTab rfpCode={rfp.code} signing={signing} side="buyer" />
             </div>
           )}
           <FocusComparison
