@@ -4,7 +4,9 @@ import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/components/deal-room/signing/SigningTab', () => ({
-  SigningTab: () => <div data-testid="signing-tab" />,
+  SigningTab: (p: { side: string; rfpCode: string }) => (
+    <div data-testid="signing-tab" data-side={p.side} data-rfp={p.rfpCode} />
+  ),
 }));
 vi.mock('@/components/deal-room/signing/AwardContextLine', () => ({
   AwardContextLine: () => <div data-testid="award-context" />,
@@ -185,12 +187,14 @@ describe('PgDealRoomBody — 계약 탭', () => {
       ...over,
     });
 
-  it('선정 + signing 이면 계약 탭이 첫 번째이고 기본으로 열린다', () => {
+  it('선정 + signing 이면 계약 탭이 첫 번째이고 기본으로 열리며 pg side + 올바른 rfpCode 로 렌더된다', () => {
     render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
     const tabs = screen.getAllByRole('tab');
     expect(tabs[0]).toHaveTextContent('계약');
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('signing-tab')).toBeInTheDocument();
+    const signingTab = screen.getByTestId('signing-tab');
+    expect(signingTab).toHaveAttribute('data-side', 'pg');
+    expect(signingTab).toHaveAttribute('data-rfp', baseRfp.code);
   });
 
   it('signing 이 없으면 계약 탭이 없고 견적 작성이 기본이다', () => {
@@ -203,8 +207,13 @@ describe('PgDealRoomBody — 계약 탭', () => {
     const user = userEvent.setup();
     render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
     await user.click(screen.getByRole('tab', { name: '견적 작성' }));
+    // SigningTab 은 목이지만 SigningSummaryStrip 은 실제 컴포넌트라 side='pg' 로
+    // 파생된 실제 상태 라벨(awaiting_pg_template → '계약서 등록 필요')을 그린다 —
+    // side 배선의 두 번째(무료) 검증.
+    expect(screen.getByText(/계약서 등록 필요/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /전자서명/ }));
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('signing-tab')).toHaveAttribute('data-side', 'pg');
   });
 
   it('미선정 PG 는 signing 이 (오류로) 채워져 있어도 계약 탭을 보지 못한다(봉인입찰 방어)', () => {

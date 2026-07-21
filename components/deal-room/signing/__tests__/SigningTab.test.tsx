@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
@@ -18,6 +18,7 @@ vi.mock('@/lib/server/actions/signing/resendSigningAction', () => ({
 import { SigningTab } from '../SigningTab';
 import { toast } from '@/lib/toast';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
+import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
 import type {
   SigningContractStatus,
@@ -95,6 +96,27 @@ describe('SigningTab', () => {
     expect(screen.getByText('서명 대기')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '리마인더 보내기' }));
     expect(remindSigningAction).toHaveBeenCalledWith({ contractId: 'c1' });
+  });
+
+  it('in_progress — 취소 버튼→확인 다이얼로그 확정 시 취소 액션을 호출하고 성공 토스트를 띄운다', async () => {
+    const user = userEvent.setup();
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')])}
+        side="buyer"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '취소' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('전자서명을 취소할까요?')).toBeInTheDocument();
+    // ConfirmDialog 자체 dismiss 버튼(cancelLabel)과 confirm 버튼(confirmLabel)이
+    // 둘 다 '취소' 라벨이라 이름만으로는 구분되지 않는다 — 풋터 렌더 순서(dismiss가
+    // 먼저, confirm이 나중)로 확정 버튼을 특정한다.
+    const dialogButtons = within(dialog).getAllByRole('button', { name: '취소' });
+    await user.click(dialogButtons[dialogButtons.length - 1]);
+    expect(cancelSigningAction).toHaveBeenCalledWith({ contractId: 'c1' });
+    expect(toast).toHaveBeenCalledWith('전자서명을 취소했어요', { type: 'success' });
   });
 
   it('completed — 완료 안내 + 문서 다운로드 링크', () => {

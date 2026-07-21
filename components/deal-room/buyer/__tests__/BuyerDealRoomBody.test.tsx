@@ -3,9 +3,12 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render as rtlRender, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
+import type { SigningView } from '@/lib/types/signing';
 
 vi.mock('@/components/deal-room/signing/SigningTab', () => ({
-  SigningTab: () => <div data-testid="signing-tab" />,
+  SigningTab: (p: { side: string; rfpCode: string }) => (
+    <div data-testid="signing-tab" data-side={p.side} data-rfp={p.rfpCode} />
+  ),
 }));
 vi.mock('@/components/deal-room/signing/AwardContextLine', () => ({
   AwardContextLine: () => <div data-testid="award-context" />,
@@ -179,8 +182,6 @@ describe('BuyerDealRoomBody — 선정 결과 패널', () => {
   });
 });
 
-import type { SigningView } from '@/lib/types/signing';
-
 function signingView(): SigningView {
   return {
     contract: {
@@ -202,20 +203,26 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
     expect(screen.getByRole('tab', { name: '견적 비교' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('signing 이 있으면 계약 탭이 첫 번째이고 기본으로 열린다', () => {
+  it('signing 이 있으면 계약 탭이 첫 번째이고 기본으로 열리며 buyer side + 올바른 rfpCode 로 렌더된다', () => {
     render(<BuyerDealRoomBody data={buildData({ signing: signingView() })} />);
     const tabs = screen.getAllByRole('tab');
     expect(tabs[0]).toHaveTextContent('계약');
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('signing-tab')).toBeInTheDocument();
+    const signingTab = screen.getByTestId('signing-tab');
+    expect(signingTab).toHaveAttribute('data-side', 'buyer');
+    expect(signingTab).toHaveAttribute('data-rfp', baseRfp.code);
   });
 
   it('견적 비교 탭의 요약 스트립을 누르면 계약 탭으로 간다', async () => {
     const user = userEvent.setup();
     render(<BuyerDealRoomBody data={buildData({ signing: signingView() })} />);
     await user.click(screen.getByRole('tab', { name: '견적 비교' }));
+    // SigningTab 은 목이지만 SigningSummaryStrip 은 실제 컴포넌트라 side='buyer' 로
+    // 파생된 실제 상태 라벨(진행 중 계약 → '서명 진행 중')을 그린다 — side 배선의
+    // 두 번째(무료) 검증.
+    expect(screen.getByText(/서명 진행 중/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /전자서명/ }));
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('signing-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('signing-tab')).toHaveAttribute('data-side', 'buyer');
   });
 });
