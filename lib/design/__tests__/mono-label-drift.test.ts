@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
@@ -88,7 +88,11 @@ describe('DESIGN.md §9 — no font-mono label treatment on app surfaces', () =>
 
   it('every allowlist prefix still shelters a real exemption (no stale entries)', () => {
     for (const prefix of MONO_LABEL_ALLOWLIST) {
-      const hits = [...walk(prefix)].flatMap(findViolations);
+      // `isAllowlisted` accepts a single file path as well as a directory prefix,
+      // so this check has to too — walking a file path would throw ENOTDIR and
+      // turn a stale-entry report into a confusing crash.
+      const targets = statSync(`${ROOT}${prefix}`).isDirectory() ? [...walk(prefix)] : [prefix];
+      const hits = targets.flatMap(findViolations);
       expect(
         hits.length,
         `"${prefix}" is allowlisted but no longer uses the mono label treatment — ` +
