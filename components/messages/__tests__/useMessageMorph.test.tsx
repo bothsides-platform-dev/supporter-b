@@ -132,6 +132,20 @@ describe('useMessageMorph', () => {
     expect(result.current.isMorphing('k1')).toBe(false);
   });
 
+  // 목록이 아직/이미 마운트되지 않은 순간(탭 전환·언마운트 레이스)에도 조용히 폴백해야 한다.
+  it('목록 ref 가 비어 있어도 터지지 않고 발동만 건너뛴다', () => {
+    const { composer } = setupDom();
+    const emptyListRef: { current: HTMLElement | null } = { current: null };
+    const { result } = renderHook(() => useMessageMorph({ listRef: emptyListRef }));
+
+    act(() => {
+      result.current.scheduleFlight(composer, 'k1', '안녕하세요');
+    });
+
+    expect(result.current.layerProps.flights).toHaveLength(0);
+    expect(result.current.isMorphing('k1')).toBe(false);
+  });
+
   // 앞선 클론의 착륙(onDone)이 뒤이어 예약된 다른 메시지의 morph 를 죽이면 안 된다.
   // 예약 취소는 키가 일치할 때만 — 연속 전송에서 뒤 메시지가 조용히 사라지는 것을 막는다.
   it('다른 키로 endFlight 해도 대기 중인 예약은 살아남는다', () => {

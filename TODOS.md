@@ -57,8 +57,8 @@
 ### prop-resync 중 localKey 유실 → 일시적 이중 말풍선 (P3)
 `ThreadView`의 `prevMessages !== messages` 리싱크가 서버 행(localKey 없음)으로 교체 → flight 진행 중이면 행이 realId로 키잉되어 `isMorphing(realId)=false`로 실 말풍선이 즉시 보이고 클론도 비행 중 → 최대 0.34s 이중 표시(클론 완료 시 self-heal). 드문 레이스. 해소: 리싱크 시 활성 flight 전부 clear(hook에 `clearFlights()` 노출). TeamThreadView는 remount라 무영향. (발견: /ship adversarial 2026-06-22)
 
-### 빠른 연속 전송 시 단일 pendingFlight 슬롯 (P3)
-`pendingFlight`가 단일 state 슬롯이라 같은 틱에 두 번 전송하면 마지막 것만 morph(앞 메시지는 애니메이션 없이 즉시 표시 — 안전, 정합성 문제 없음). 연속 전송 일관성을 원하면 큐/배열로 전환. (발견: /ship adversarial 2026-06-22)
+### 빠른 연속 전송 시 단일 예약 슬롯 (P3)
+`useMessageMorph`의 `pending`이 단일 state 슬롯이라 같은 틱에 두 번 전송하면 마지막 것만 morph(앞 메시지는 애니메이션 없이 즉시 표시 — 안전, 정합성 문제 없음). 연속 전송 일관성을 원하면 큐/배열로 전환 — 와이어링 추출 이후 슬롯이 훅 한 곳에만 있어 1파일 변경으로 끝난다. (발견: /ship adversarial 2026-06-22; 슬롯 위치 갱신 2026-07-21)
 
 ## Design
 
