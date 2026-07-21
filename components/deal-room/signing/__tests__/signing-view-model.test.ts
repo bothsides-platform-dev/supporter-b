@@ -135,6 +135,15 @@ describe('buildSigningCardView', () => {
     }
   });
 
+  it('canceled — 종결 노드는 중립 종결(ended) + 취소 시각', () => {
+    const v = buildSigningCardView(view('canceled', bothPending), 'buyer');
+    expect(v.nodes[3]).toMatchObject({
+      key: 'terminal',
+      state: 'ended',
+      at: '2026-07-20T08:05:00Z',
+    });
+  });
+
   it('send_failed — 발송 노드가 failed, 다시 시작 액션', () => {
     const v = buildSigningCardView(view('send_failed'), 'buyer');
     expect(v.nodes[1]).toMatchObject({ key: 'send', state: 'failed' });
