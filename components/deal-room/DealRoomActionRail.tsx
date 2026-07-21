@@ -9,6 +9,7 @@
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/utils';
+import { TONE_COLOR_VAR, type ChipColor } from '@/components/primitives/Chip';
 
 export type RailAction = {
   id: string;
@@ -20,6 +21,8 @@ export type RailAction = {
   /** 주요 작업(선정·작성) — primary 색. */
   primary?: boolean;
   disabled?: boolean;
+  /** 상태 표식 — 아이콘 우상단 점(전자서명 진행 상태 등). */
+  dot?: ChipColor;
 };
 
 export function DealRoomActionRail({ actions }: { actions: RailAction[] }) {
@@ -35,7 +38,7 @@ export function DealRoomActionRail({ actions }: { actions: RailAction[] }) {
           onClick={a.onSelect}
           disabled={a.disabled}
           className={cn(
-            'mx-1 flex flex-col items-center gap-1.5 rounded-[var(--md-sys-shape-small)] px-1 py-2.5 text-[11px] tracking-[-0.01em] transition-colors max-lg:mx-0 max-lg:shrink-0 max-lg:px-3',
+            'relative mx-1 flex flex-col items-center gap-1.5 rounded-[var(--md-sys-shape-small)] px-1 py-2.5 text-[11px] tracking-[-0.01em] transition-colors max-lg:mx-0 max-lg:shrink-0 max-lg:px-3',
             'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
             'disabled:pointer-events-none disabled:opacity-40',
             a.primary &&
@@ -45,6 +48,14 @@ export function DealRoomActionRail({ actions }: { actions: RailAction[] }) {
             '[&_svg]:size-[19px]',
           )}
         >
+          {a.dot && (
+            <span
+              data-testid="rail-dot"
+              aria-hidden
+              className="absolute top-[7px] right-[16px] size-[7px] rounded-full ring-2 ring-[var(--md-sys-color-surface)] max-lg:right-[8px]"
+              style={{ background: TONE_COLOR_VAR[a.dot] }}
+            />
+          )}
           {a.icon}
           <span>{a.label}</span>
         </button>

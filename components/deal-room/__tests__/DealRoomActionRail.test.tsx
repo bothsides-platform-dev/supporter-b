@@ -45,4 +45,19 @@ describe('DealRoomActionRail', () => {
     await user.click(btn).catch(() => {});
     expect(onSelect).not.toHaveBeenCalled();
   });
+
+  it('dot 이 있으면 상태 점을 그린다', () => {
+    render(
+      <DealRoomActionRail
+        actions={[
+          { id: 'contract', label: '계약', icon: <span />, onSelect: vi.fn(), dot: 'warning' },
+          { id: 'compare', label: '견적 비교', icon: <span />, onSelect: vi.fn() },
+        ]}
+      />,
+    );
+    const dots = screen.getAllByTestId('rail-dot');
+    expect(dots).toHaveLength(1);
+    // jsdom 은 CSS 변수 값을 계산하지 않으므로 style 속성 문자열로 검증한다.
+    expect(dots[0].getAttribute('style')).toContain('--md-sys-color-warning');
+  });
 });
