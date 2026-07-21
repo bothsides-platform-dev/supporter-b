@@ -206,4 +206,15 @@ describe('PgDealRoomBody — 계약 탭', () => {
     await user.click(screen.getByRole('button', { name: /전자서명/ }));
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
   });
+
+  it('미선정 PG 는 signing 이 (오류로) 채워져 있어도 계약 탭을 보지 못한다(봉인입찰 방어)', () => {
+    render(
+      <PgDealRoomBody
+        data={awarded({ awardedToMe: false, buyerContact: null, signing: signingView() })}
+      />,
+    );
+    expect(screen.queryByRole('tab', { name: /계약/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('signing-tab')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+  });
 });

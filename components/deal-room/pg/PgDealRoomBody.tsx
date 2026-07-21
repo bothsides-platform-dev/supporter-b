@@ -34,11 +34,15 @@ import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   const { rfp, myBid, buyerName, quoteTemplates, pendingRequote, awardedToMe, buyerContact, signing } = data;
   const router = useRouter();
-  const [tab, setTab] = useState(signing ? 'contract' : 'write');
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   const isAwarded = rfp.status === 'awarded';
+  // 봉인입찰 방어 — 로더가 이미 awardedToMe 일 때만 signing 을 내리지만, 컴포넌트도
+  // 같은 불변식을 지켜 미선정 PG 에게 낙찰자의 계약 상태가 새지 않게 한다.
+  const contractVisible = awardedToMe ? signing : null;
+
+  const [tab, setTab] = useState(contractVisible ? 'contract' : 'write');
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   let writeContent: ReactNode;
   if (pendingRequote) {
     writeContent = (
@@ -91,7 +95,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   }
 
   const tabs: DealRoomTab[] = [
-    ...(signing
+    ...(contractVisible
       ? [
           {
             id: 'contract',
@@ -105,7 +109,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
                     counterpartyWsId={rfp.buyerWsId}
                   />
                 )}
-                <SigningTab rfpCode={rfp.code} signing={signing} side="pg" />
+                <SigningTab rfpCode={rfp.code} signing={contractVisible} side="pg" />
               </>
             ),
           } satisfies DealRoomTab,
@@ -117,13 +121,13 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   ];
 
   const actions: RailAction[] = [
-    ...(signing
+    ...(contractVisible
       ? [
           {
             id: 'contract',
             label: '계약',
             icon: <FileSignature />,
-            dot: buildSigningSummary(signing, 'pg').dot,
+            dot: buildSigningSummary(contractVisible, 'pg').dot,
             onSelect: () => setTab('contract'),
           } satisfies RailAction,
         ]
