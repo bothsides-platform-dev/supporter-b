@@ -49,6 +49,12 @@ export type AccountDeletionClassification = {
  * Deliberately fail-closed: a workspace with any other member is never treated
  * as solo, so deletion never silently destroys a workspace somebody else is
  * still waiting to join.
+ *
+ * "Member" here means a person. `listMembershipsWithMembers` excludes
+ * system-managed accounts (master/ops) before this runs, matching what member
+ * lists render — so a workspace whose only other member is one of those IS
+ * solo, and goes away with the account rather than surviving with no human
+ * admin.
  */
 export function classifyAccountDeletion(
   memberships: DeletionMembership[],

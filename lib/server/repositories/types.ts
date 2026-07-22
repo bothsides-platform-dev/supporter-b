@@ -353,7 +353,7 @@ export interface WorkspaceRepo {
     { workspaceId: string; role: string; type: WorkspaceType; approvalStatus: MemberApprovalStatus } | undefined
   >;
   /**
-   * 유저의 모든 멤버십 + 각 워크스페이스의 전체 멤버 — 탈퇴 상태 화면(마지막 admin / solo 판정).
+   * 유저의 모든 멤버십 + 각 워크스페이스의 사람 멤버 — 탈퇴 상태 화면(마지막 admin / solo 판정).
    * createdAt 순서 미보장; 호출부가 멤버 수·역할로 분기한다.
    */
   listMembershipsWithMembers(
