@@ -94,6 +94,9 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
             onLookup={ntsLookup}
             onResult={(profile) => setNext(profile)}
             onReset={() => setNext(null)}
+            // 가입 폼(BuyerWorkspaceForm)과 같은 차단 목록 — 없으면 정상 사업자로
+            // 가입한 뒤 이 화면에서 폐업·휴업 번호로 갈아끼울 수 있다.
+            blockedStatuses={['closed', 'suspended']}
           />
 
           {next && next.bizNo === currentBizNo && (

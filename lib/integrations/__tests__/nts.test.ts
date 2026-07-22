@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TimeoutError } from 'ky';
 
 import {
+  NTS_LOOKUP_DEADLINE_MS,
   NtsError,
   RealNtsClient,
   __resetNtsRateLimitForTest,
@@ -392,5 +393,139 @@ describe('RealNtsClient.lookup — 헤더 인증·재시도 정책 강화 (pre-l
       }
     }
     expect(successes).toBe(6);
+  });
+});
+
+// `lookupBizNoAction` 은 가입 플로우용이라 의도적으로 비인증이고, Caddy 엣지에도
+// IP 단위 rate limit 이 없다. 재시도 예산(3회 × 백오프)과 leaky-bucket bounded
+// 대기(재시도마다 최대 ~1s)가 서로 누적되면 단일 요청이 20초 넘게 열려 있을 수
+// 있어, 소수의 요청만으로 단일 VM 의 커넥션을 묶어둘 수 있었다. 총 홀드시간을
+// 재시도·대기 구성과 무관하게 캡으로 잘라낸다.
+describe('RealNtsClient.lookup — 총 홀드시간 데드라인', () => {
+  // 주입 클록을 테스트가 직접 전진시켜, 느린 업스트림을 실시간 대기 없이 재현한다.
+  let now = 0;
+
+  beforeEach(() => {
+    vi.stubEnv('NTS_SERVICE_KEY', 'test-key');
+    now = 1_000_000;
+    __setNtsClockForTest(() => now);
+    __resetNtsRateLimitForTest();
+  });
+
+  afterEach(() => {
+    __setNtsClockForTest(undefined);
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('느린 429 가 반복되면 재시도 예산이 남아도 데드라인에서 끊는다', async () => {
+    const client = new RealNtsClient({ retryDelay: () => 0, sleep: async () => {} });
+    // 매 시도가 5초를 잡아먹는 429 — 재시도 한도(3회)를 다 쓰면 20초를 넘긴다.
+    const perAttemptMs = 5_000;
+    const fetchSpy = vi.fn(async () => {
+      now += perAttemptMs;
+      return jsonResponse(429, {});
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const startedAt = now;
+    const err = await client.lookup('1234567890').catch((e) => e);
+
+    expect(err).toBeInstanceOf(NtsError);
+    expect(err.code).toBe('NTS_RATE_LIMIT');
+    // 데드라인을 넘긴 시점에 재시도를 포기해야 한다 — limit:3 를 그대로 소진하면 4회.
+    const attemptsWithinDeadline = Math.ceil(NTS_LOOKUP_DEADLINE_MS / perAttemptMs);
+    expect(fetchSpy).toHaveBeenCalledTimes(attemptsWithinDeadline);
+    // 총 홀드시간은 캡 + 진행 중이던 마지막 시도 하나를 넘지 않는다.
+    expect(now - startedAt).toBeLessThanOrEqual(NTS_LOOKUP_DEADLINE_MS + perAttemptMs);
+  });
+
+  // isExpired 체크는 재시도 *사이*에서만 동작한다 — 응답이 영영 오지 않는 단일
+  // 요청은 체크 지점에 도달조차 못 하므로, AbortSignal 로 된 하드 실링이 따로
+  // 필요하다. 실제 abort 를 검증해야 해서 여기서만 진짜 타이머를 쓴다(50ms).
+  it('응답이 오지 않는 요청도 데드라인에서 잘라낸다', async () => {
+    __setNtsClockForTest(undefined); // 실시간 경과가 필요한 유일한 케이스
+    const client = new RealNtsClient({ deadlineMs: 50, retryDelay: () => 0, sleep: async () => {} });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (input: Request) =>
+          new Promise((_resolve, reject) => {
+            input.signal.addEventListener('abort', () => {
+              reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+            });
+          }),
+      ),
+    );
+
+    const startedAt = Date.now();
+    const err = await client.lookup('1234567890').catch((e) => e);
+
+    expect(err).toBeInstanceOf(NtsError);
+    expect(err.code).toBe('NTS_NETWORK');
+    // ky 자체 timeout(5s)이 아니라 우리 데드라인이 먼저 끊었다는 증거.
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+  });
+
+  it('데드라인 안에서 끝나는 느린 요청은 그대로 성공한다', async () => {
+    const client = new RealNtsClient({ retryDelay: () => 0, sleep: async () => {} });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        now += NTS_LOOKUP_DEADLINE_MS - 1_000;
+        return jsonResponse(200, ntsRow({ b_stt_cd: '01', tax_type: '부가가치세 일반과세자' }));
+      }),
+    );
+
+    await expect(client.lookup('1234567890')).resolves.toEqual({
+      valid: true,
+      taxType: 'general',
+      status: 'active',
+    });
+  });
+});
+
+describe('RealNtsClient.lookup — Retry-After 파싱 경계', () => {
+  const client = new RealNtsClient({ retryDelay: () => 0, sleep: async () => {} });
+
+  beforeEach(() => {
+    vi.stubEnv('NTS_SERVICE_KEY', 'test-key');
+    __resetNtsRateLimitForTest();
+  });
+
+  afterEach(() => {
+    __setNtsClockForTest(undefined);
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  // 숫자도 유효 HTTP-date 도 아니면 afterMs 가 NaN 이 되어 예산 검사를 건너뛰고
+  // 일반 재시도 경로로 폴백한다 — 안전한 방향이지만 아무 테스트도 고정하지 않아
+  // 반대로 뒤집혀도(즉시 실패) 조용히 통과했다.
+  it.each([['garbage'], [''], ['NaN']])(
+    'malformed Retry-After (%s) 는 일반 재시도 경로로 폴백한다',
+    async (headerValue) => {
+      const fetchSpy = vi.fn(async () =>
+        jsonResponse(429, {}, { 'Retry-After': headerValue }),
+      );
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const err = await client.lookup('1234567890').catch((e) => e);
+      expect(err).toBeInstanceOf(NtsError);
+      expect(err.code).toBe('NTS_RATE_LIMIT');
+      // fail-fast 가 아니라 재시도 소진 — 최초 1회 + 재시도 3회.
+      expect(fetchSpy).toHaveBeenCalledTimes(4);
+    },
+  );
+
+  it('예산 이내의 Retry-After 는 fail-fast 하지 않고 재시도한다', async () => {
+    // MAX_RETRY_AFTER_MS(1500ms) 이내 — 공급사가 곧 풀어준다는 신호이므로 재시도.
+    const fetchSpy = vi.fn(async () => jsonResponse(429, {}, { 'Retry-After': '1' }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const err = await client.lookup('1234567890').catch((e) => e);
+    expect(err).toBeInstanceOf(NtsError);
+    expect(err.code).toBe('NTS_RATE_LIMIT');
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
   });
 });

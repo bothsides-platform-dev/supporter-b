@@ -53,7 +53,7 @@ vi.mock('@/lib/observability/log', () => ({
 
 import { createRfpAction } from '../createRfpAction';
 import { migrateCurrentTerms, STRIP_PATH_FEE_RATE, SOLUTION_VALUES } from '@/lib/types/rfp-terms';
-import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
 
 let db: PgliteDB;
 let buyerUserId: string;
@@ -1085,5 +1085,101 @@ describe('createRfpAction', () => {
       if (savedPartner === undefined) delete process.env.NEXT_PUBLIC_PARTNER_ORIGIN;
       else process.env.NEXT_PUBLIC_PARTNER_ORIGIN = savedPartner;
     }
+  });
+
+  // allowedPgWorkspaceIds(.max(50))·customPaymentMethods(.max(20)) 와 달리
+  // requiredPaymentMethods 에는 개수 상한이 없어, 같은 값을 대량 중복 제출해도
+  // zod 를 통과해 rfps.required_payment_methods(text[]) 에 그대로 저장됐다.
+  describe('requiredPaymentMethods — 개수 상한·중복 제거', () => {
+    const base = () => ({
+      title: '결제수단 상한',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false as const,
+    });
+
+    it('캐논니컬 개수를 넘는 배열은 INVALID_INPUT', async () => {
+      const r = await createRfpAction({
+        ...base(),
+        requiredPaymentMethods: Array.from(
+          { length: PAYMENT_METHODS.length + 1 },
+          () => 'card' as const,
+        ),
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('캐논니컬 어휘 전체(중복 없음)는 그대로 통과한다', async () => {
+      const r = await createRfpAction({
+        ...base(),
+        requiredPaymentMethods: [...PAYMENT_METHODS],
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+
+      const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+      expect(row.requiredPaymentMethods).toEqual([...PAYMENT_METHODS]);
+    });
+
+    it('중복 값은 순서를 보존한 채 하나로 접힌다', async () => {
+      const r = await createRfpAction({
+        ...base(),
+        requiredPaymentMethods: ['card', 'bank_transfer', 'card'],
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+
+      const [row] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+      expect(row.requiredPaymentMethods).toEqual(['card', 'bank_transfer']);
+    });
+  });
+
+  // 캐논니컬 어휘가 통과하는지는 위 순회 가드가 고정한다. 여기서 고정하는 건
+  // 반대 방향 — 어휘 밖 값이 실제로 거부되는지다. 지금은 z.enum 의 기본 동작에만
+  // 기대고 있어서, 누가 z.string() 으로 느슨하게 바꿔도 아무 테스트도 깨지지 않는다.
+  describe('어휘 밖 입력 거부', () => {
+    const base = () => ({
+      title: '어휘 밖 입력',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [pgWsId],
+      send: false as const,
+    });
+
+    it('requiredPaymentMethods 에 어휘 밖 값이 있으면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({
+        ...base(),
+        requiredPaymentMethods: ['card', 'bitcoin'] as unknown as PaymentMethod[],
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('currentSolution 이 어휘 밖이면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({
+        ...base(),
+        currentSolution: 'wordpress' as never,
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('gradeOverride 가 어휘 밖이면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({
+        ...base(),
+        gradeOverride: 'platinum' as never,
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
+
+    it('contractType 이 어휘 밖이면 INVALID_INPUT', async () => {
+      const r = await createRfpAction({
+        ...base(),
+        contractType: 'extension' as never,
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    });
   });
 });
