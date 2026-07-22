@@ -535,12 +535,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       name: string;
       role: string;
       approvalStatus: MemberApprovalStatus;
-      members: {
-        userId: string;
-        role: string;
-        approvalStatus: MemberApprovalStatus;
-        isSystemAccount: boolean;
-      }[];
+      members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
     }[]
   > {
     const db = this.h(tx);
@@ -564,12 +559,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       name: string;
       role: string;
       approvalStatus: MemberApprovalStatus;
-      members: {
-        userId: string;
-        role: string;
-        approvalStatus: MemberApprovalStatus;
-        isSystemAccount: boolean;
-      }[];
+      members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
     }[] = [];
     for (const m of myMemberships) {
       const members = await db
@@ -577,14 +567,20 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           userId: workspaceMembers.userId,
           role: workspaceMembers.role,
           approvalStatus: workspaceMembers.approvalStatus,
-          // Needed by the account-deletion pre-check: system accounts are
-          // hidden from every UI member list, so they must not be offered as
-          // someone to hand admin over to.
-          isSystemAccount: usersTable.isSystemAccount,
         })
         .from(workspaceMembers)
         .innerJoin(usersTable, eq(usersTable.id, workspaceMembers.userId))
-        .where(eq(workspaceMembers.workspaceId, m.workspaceId));
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, m.workspaceId),
+            // Same exclusion `hydrate()` applies to UI member lists. A
+            // system-managed account is not a person: it can neither take over
+            // the admin role nor be seen by the user being told to hand it
+            // over. Counting it made a workspace whose only human is leaving
+            // look populated.
+            eq(usersTable.isSystemAccount, false),
+          ),
+        );
       result.push({
         workspaceId: m.workspaceId,
         name: m.name,

@@ -100,9 +100,6 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 
 **부분 해소 (v0.2.48.0)**: admin 권한 표면(WorkspaceService invite/resend/cancel/changeRole/removeMember + renameWorkspace + listAuditLogs + audit-log 페이지)은 `isApprovedAdmin`(role=admin AND approvalStatus=approved)로 서버에서 차단했고, countAdmins·deleteAccount last-admin 판정은 승인된 admin 만 집계. **v0.2.73.0 갱신**: rfp 초대 메일 수신자는 admin 한정(`adminRecipients`, 이후 제거됨)에서 승인된 멤버 전원(`approvedMemberRecipients`)으로 확장됨 — 여전히 `approvalStatus='approved'` 필터는 유지. **남은 범위**: 비-admin pg 서버액션 전반에 대한 blanket `requirePgSession()` 승인 게이트는 여전히 미구현.
 
-### 승인된 admin 인 시스템 계정이 "다른 admin" 으로 집계됨 (P3)
-`classifyAccountDeletion`(v0.4.8.0)은 `isApprovedAdmin` 인 멤버를 잔여 admin 으로 세는데 여기서 시스템 계정(`isSystemAccount`)을 제외하지 않는다 — master/ops 가 승인된 admin 으로 들어 있는 워크스페이스는 유일한 사람 admin 이 탈퇴해도 차단되지 않아 **사람 admin 0명** 상태가 될 수 있다. 현행 동작은 `lib/auth/__tests__/account-deletion.test.ts` 가 박아 두었다(의도적 유지 — v0.4.8.0 은 판정을 안 건드리고 안내만 개선하기로 결정). 판단 축: ① 시스템 계정을 잔여 admin 집계에서 제외해 fail-closed 강화(그러면 그 워크스페이스는 아무도 탈퇴 못 하므로 별도 출구 필요), ② 현행 유지하고 플랫폼이 admin 을 대행한다고 명문화. 어드민 레포가 master 멤버십을 어떤 role/approval_status 로 insert 하는지 확인이 선행돼야 한다. (발견: F5 수정 중, v0.4.8.0)
-
 ### repo 계층 쿼리빌더가 `any` — projection 드리프트 전면 미검출 (P2)
 `drizzle/*.ts` 34개 중 **29개가 `private h(tx?: Tx): any`** 이고, `Db` 를 쓰는 나머지도 `type Db = any` 별칭이라 결국 같다. 즉 이 계층의 모든 `.select({...})` projection 이 타입 미검사이며, select 에서 컬럼을 빼도 tsc 가 통과하고 런타임에 `undefined` 가 흐른다(v0.4.8.0 에서 F4 를 고치다 실측 확인 — 캐스트 제거만으로는 아무것도 잡히지 않았다). `workspace.ts` 는 `h(): Tx` 로 전환했고 **파일 전체 에러가 1건**뿐이었다(그 1건도 진짜 버그였다 — `addMember` 가 인터페이스의 `MemberApprovalStatus` 를 `string` 으로 넓힘). 나머지 28개 파일도 같은 방식으로 전환 가능해 보이며, 파일당 독립적이라 점진 적용된다. `[[project_drizzle-select-schema-drift]]` 와 같은 계열. (발견: F4 수정 중, v0.4.8.0)
 

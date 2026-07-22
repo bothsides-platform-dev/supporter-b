@@ -10,7 +10,6 @@ export type DeletionMember = {
   userId: string;
   role: string;
   approvalStatus: MemberApprovalStatus;
-  isSystemAccount: boolean;
 };
 
 export type DeletionMembership = {
@@ -26,10 +25,10 @@ export type WorkspaceStub = { id: string; name: string };
 export type BlockingWorkspace = WorkspaceStub & {
   /**
    * Is there anyone the user could actually hand admin over to? False when every
-   * remaining member is pending/rejected (cannot hold effective admin) or a
-   * system account (filtered out of every member list in the UI). The dialog
-   * uses this to avoid telling people to delegate to somebody who cannot take
-   * the role, or whom they cannot even see.
+   * remaining member is pending or rejected — neither can hold effective admin.
+   * The dialog uses this to avoid telling people to delegate to somebody who
+   * cannot take the role. (System accounts never reach here: the repository
+   * excludes them, matching the UI member lists.)
    */
   hasDelegatableMember: boolean;
 };
@@ -74,9 +73,7 @@ export function classifyAccountDeletion(
 
     blockingWorkspaces.push({
       ...stub,
-      hasDelegatableMember: others.some(
-        (m) => m.approvalStatus === 'approved' && !m.isSystemAccount,
-      ),
+      hasDelegatableMember: others.some((m) => m.approvalStatus === 'approved'),
     });
   }
 

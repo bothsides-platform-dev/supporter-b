@@ -33,7 +33,6 @@ function member(overrides: Partial<DeletionMembership['members'][number]> = {}) 
     userId: 'other-user-id',
     role: 'member' as const,
     approvalStatus: 'approved' as const,
-    isSystemAccount: false,
     ...overrides,
   };
 }
@@ -123,43 +122,19 @@ describe('classifyAccountDeletion', () => {
     ]);
   });
 
-  it('blocks with NO delegatable member when the only other member is a hidden system account', () => {
+  // System accounts never reach this function — `listMembershipsWithMembers`
+  // excludes them, the same rule `hydrate()` applies to UI member lists (pinned
+  // by `drizzle/__tests__/workspace.test.ts`). So a workspace whose only other
+  // member is a system account arrives here as a one-member list and is solo:
+  // deleting the account takes the workspace with it, rather than leaving it
+  // alive with zero human admins.
+  it('treats a workspace as solo once system accounts are excluded upstream', () => {
     const result = classifyAccountDeletion(
-      [
-        membership({
-          members: [
-            member({ userId: ME, role: 'admin' }),
-            member({ userId: 'sys', role: 'member', isSystemAccount: true }),
-          ],
-        }),
-      ],
+      [membership({ members: [member({ userId: ME, role: 'admin' })] })],
       ME,
     );
 
-    // System accounts are filtered out of every member list in the UI, so the
-    // user would be told to delegate to somebody they cannot see.
-    expect(result.blockingWorkspaces).toEqual([
-      { id: 'ws-1', name: '구매사', hasDelegatableMember: false },
-    ]);
-  });
-
-  // Pins CURRENT behaviour, which this change deliberately leaves alone: an
-  // approved-admin system account still counts as "another admin", so deletion
-  // is allowed and the workspace is left with no human admin. Changing that is
-  // a product decision, not a copy fix — tracked in TODOS.
-  it('does not block when an approved-admin system account remains (current behaviour)', () => {
-    const result = classifyAccountDeletion(
-      [
-        membership({
-          members: [
-            member({ userId: ME, role: 'admin' }),
-            member({ userId: 'master', role: 'admin', isSystemAccount: true }),
-          ],
-        }),
-      ],
-      ME,
-    );
-
+    expect(result.soloWorkspaces).toEqual([{ id: 'ws-1', name: '구매사' }]);
     expect(result.blockingWorkspaces).toEqual([]);
   });
 

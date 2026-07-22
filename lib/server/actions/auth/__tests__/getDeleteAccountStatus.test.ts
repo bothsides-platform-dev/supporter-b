@@ -85,6 +85,31 @@ describe('getDeleteAccountStatus', () => {
     });
   });
 
+  // End-to-end for the system-account exclusion: master/ops accounts hold real
+  // memberships but are hidden from every member list, so a workspace whose
+  // only other member is one of them has no humans left once this user goes.
+  // It must read as solo (deleted along with the account) — not as a populated
+  // workspace that either survives with zero human admins or blocks the user
+  // with a "delegate to someone" message naming nobody they can see.
+  it('treats a workspace holding only the user and a system account as solo', async () => {
+    const ws = await seedBuyerWorkspace(db, { name: '구매사S' });
+    const admin = await seedUser(db, { email: 'lastadmin@example.com' });
+    const master = await seedUser(db, {
+      email: 'master@example.com',
+      isSystemAccount: true,
+    });
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, master.id, 'admin');
+    sessionRef.value = { user: { id: admin.id, workspaceId: ws.id } };
+
+    const r = await getDeleteAccountStatus();
+    expect(r).toEqual({
+      ok: true,
+      blockingWorkspaces: [],
+      soloWorkspaces: [{ id: ws.id, name: '구매사S' }],
+    });
+  });
+
   it('returns workspace in blockingWorkspaces when user is last admin with other members', async () => {
     const ws = await seedBuyerWorkspace(db, { name: '구매사A' });
     const admin = await seedUser(db, { email: 'admin@example.com' });
