@@ -52,7 +52,7 @@ function MemberRowImpl({
           {m.email}
         </span>
       </div>
-      <span className="md-numeric text-[10px] text-[var(--md-sys-color-outline)] hidden md:inline">
+      <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)] hidden md:inline">
         {m.lastSeenAt ? <LocalDate iso={m.lastSeenAt} /> : '—'}
       </span>
 

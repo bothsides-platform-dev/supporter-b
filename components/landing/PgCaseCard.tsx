@@ -35,7 +35,7 @@ export function PgCaseCard({ metric, metricCaption, quote, role }: PgCaseCardPro
         &ldquo;{quote}&rdquo;
       </blockquote>
 
-      <figcaption className="relative mt-auto font-mono text-[var(--text-2xs)] tracking-[0.06em] uppercase text-[var(--md-sys-color-outline)]">
+      <figcaption className="relative mt-auto font-mono text-[var(--text-2xs)] tracking-[0.06em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
         {role}
       </figcaption>
     </figure>

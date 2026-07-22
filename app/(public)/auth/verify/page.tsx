@@ -54,7 +54,7 @@ function VerifyContent() {
     const displayEmail = emailQuery || readSignupDraft().email || 'your@email.com';
     return (
       <div className="space-y-8 text-center">
-        <div className="flex justify-center text-[var(--md-sys-color-outline)]">
+        <div className="flex justify-center text-[var(--md-sys-color-on-surface-variant)]">
           <EnvelopeSvg size={80} />
         </div>
         <div className="space-y-3">

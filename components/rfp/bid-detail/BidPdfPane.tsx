@@ -20,7 +20,7 @@ function PdfPreview({ pdf }: { pdf?: Attachment }) {
         <p className="mt-3 md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           견적서 미첨부
         </p>
-        <p className="mt-1 text-[12px] text-[var(--md-sys-color-outline)]">
+        <p className="mt-1 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
           PG가 견적을 보낼 때 PDF를 함께 업로드해요.
         </p>
       </div>

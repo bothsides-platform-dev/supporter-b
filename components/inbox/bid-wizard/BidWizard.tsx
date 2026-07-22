@@ -402,13 +402,13 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
                     <button
                       type="button"
                       onClick={() => setResetConfirmOpen(true)}
-                      className="self-start md-label-small text-[var(--md-sys-color-outline)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface-variant)]"
+                      className="self-start md-label-small text-[var(--md-sys-color-on-surface-variant)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface-variant)]"
                     >
                       초기화
                     </button>
                   )}
                   {savedAt ? (
-                    <span className="md-label-small text-[var(--md-sys-color-outline)]">
+                    <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                       💾 자동저장됨 · {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
                     </span>
                   ) : null}

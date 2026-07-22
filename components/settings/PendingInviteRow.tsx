@@ -27,7 +27,7 @@ function PendingInviteRowImpl({
 }: Props) {
   return (
     <div className="py-3 flex items-center gap-4">
-      <span className="md-numeric text-[11px] text-[var(--md-sys-color-outline)] w-8">
+      <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] w-8">
         {String(i + 1).padStart(2, '0')}
       </span>
       <div className="flex-1 min-w-0">
