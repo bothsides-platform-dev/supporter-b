@@ -402,7 +402,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
                     <button
                       type="button"
                       onClick={() => setResetConfirmOpen(true)}
-                      className="self-start md-label-small text-[var(--md-sys-color-on-surface-variant)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface-variant)]"
+                      className="self-start md-label-small text-[var(--md-sys-color-on-surface-variant)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface)]"
                     >
                       초기화
                     </button>

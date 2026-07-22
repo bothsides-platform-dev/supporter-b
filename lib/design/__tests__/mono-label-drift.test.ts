@@ -1,9 +1,13 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
 import { MONO_LABEL_ALLOWLIST } from '../design-hardrule-allowlist.mjs';
+import { ROOT, type Violation, allowlistTargets, isAllowlisted, walkAll } from './_source-scan';
+
+// Every finding this guard emits names which of its rules fired, so the failure
+// message can print it. Narrowing here keeps `[undefined]` out of that message.
+type RuledViolation = Violation & { rule: string };
 
 // Drift guard for the DESIGN.md §9 typography hard rule:
 //
@@ -22,33 +26,9 @@ import { MONO_LABEL_ALLOWLIST } from '../design-hardrule-allowlist.mjs';
 // is that a className split across source lines could slip through — acceptable,
 // since the check exists to stop copy-paste propagation of the exact pattern.
 
-const ROOT = fileURLToPath(new URL('../../../', import.meta.url)); // repo root
-// `lib` is scanned too: it holds no Tailwind components today (the .tsx there is
-// email templates, which must use inline styles), but scoping the guard to
-// app+components would silently exempt any future component that lands there.
-const SCAN_ROOTS = ['app', 'components', 'lib'];
-
-type Violation = { file: string; line: number; rule: string; text: string };
-
-function* walk(relDir: string): Generator<string> {
-  for (const entry of readdirSync(`${ROOT}${relDir}`, { withFileTypes: true })) {
-    const rel = `${relDir}/${entry.name}`;
-    if (entry.isDirectory()) {
-      if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
-      yield* walk(rel);
-    } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.(test|spec)\.(ts|tsx)$/.test(entry.name)) {
-      yield rel;
-    }
-  }
-}
-
-function isAllowlisted(file: string): boolean {
-  return MONO_LABEL_ALLOWLIST.some((prefix) => file === prefix || file.startsWith(`${prefix}/`));
-}
-
 /** Lines where `font-mono` sits beside a banned companion utility. */
-function findViolations(file: string): Violation[] {
-  const found: Violation[] = [];
+function findViolations(file: string): RuledViolation[] {
+  const found: RuledViolation[] = [];
   const lines = readFileSync(`${ROOT}${file}`, 'utf8').split('\n');
   lines.forEach((text, i) => {
     if (!text.includes('font-mono')) return;
@@ -62,13 +42,11 @@ function findViolations(file: string): Violation[] {
   return found;
 }
 
-function scanAll(): Violation[] {
-  const found: Violation[] = [];
-  for (const root of SCAN_ROOTS) {
-    for (const file of walk(root)) {
-      if (isAllowlisted(file)) continue;
-      found.push(...findViolations(file));
-    }
+function scanAll(): RuledViolation[] {
+  const found: RuledViolation[] = [];
+  for (const file of walkAll()) {
+    if (isAllowlisted(file, MONO_LABEL_ALLOWLIST)) continue;
+    found.push(...findViolations(file));
   }
   return found;
 }
@@ -91,8 +69,8 @@ function scanAll(): Violation[] {
  * The guard exists to stop copy-paste of the one-line label nailing, not to
  * police every token combination.
  */
-function findLabelNailings(file: string): Violation[] {
-  const found: Violation[] = [];
+function findLabelNailings(file: string): RuledViolation[] {
+  const found: RuledViolation[] = [];
   const lines = readFileSync(`${ROOT}${file}`, 'utf8').split('\n');
   lines.forEach((text, i) => {
     if (
@@ -105,13 +83,9 @@ function findLabelNailings(file: string): Violation[] {
   return found;
 }
 
-function scanAllLabelNailings(): Violation[] {
-  const found: Violation[] = [];
-  for (const root of SCAN_ROOTS) {
-    for (const file of walk(root)) {
-      found.push(...findLabelNailings(file));
-    }
-  }
+function scanAllLabelNailings(): RuledViolation[] {
+  const found: RuledViolation[] = [];
+  for (const file of walkAll()) found.push(...findLabelNailings(file));
   return found;
 }
 
@@ -144,11 +118,17 @@ describe('DESIGN.md §9 — no font-mono label treatment on app surfaces', () =>
 
   it('every allowlist prefix still shelters a real exemption (no stale entries)', () => {
     for (const prefix of MONO_LABEL_ALLOWLIST) {
-      // `isAllowlisted` accepts a single file path as well as a directory prefix,
-      // so this check has to too — walking a file path would throw ENOTDIR and
-      // turn a stale-entry report into a confusing crash.
-      const targets = statSync(`${ROOT}${prefix}`).isDirectory() ? [...walk(prefix)] : [prefix];
-      const hits = targets.flatMap(findViolations);
+      // `allowlistTargets` accepts a single file path as well as a directory
+      // prefix — walking a file path would throw ENOTDIR — and returns null for
+      // a path that no longer exists, so a deleted target reports as a stale
+      // entry instead of dying on a raw ENOENT stack.
+      const targets = allowlistTargets(prefix);
+      expect(
+        targets,
+        `"${prefix}" is allowlisted but no longer exists — remove it from ` +
+          'lib/design/design-hardrule-allowlist.mjs.',
+      ).not.toBeNull();
+      const hits = targets!.flatMap(findViolations);
       expect(
         hits.length,
         `"${prefix}" is allowlisted but no longer uses the mono label treatment — ` +

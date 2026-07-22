@@ -78,6 +78,8 @@ surface-container-highest #E4E5E9               #202123
 >
 > **3차 텍스트 톤은 색으로 만들지 않는다.** `on-surface-variant` 보다 옅으면서 AA 를 통과하는 색은 사실상 존재하지 않는다 — 라이트 `surface` 위에서 4.5:1 을 지키는 상대휘도 상한이 L≤0.175 인데 `on-surface-variant` 가 이미 L=0.161 이다. 보조 텍스트 아래 위계는 색이 아니라 **타입스케일(크기·굵기)** 로 만든다.
 >
+> **측정 기준은 `surface` 다 — 컨테이너 계층 위에서는 아직 AA 를 못 채운다.** `on-surface-variant`(#6B7079) 는 `surface`(#FBFBFC) 4.81:1 · `surface-container-low` 4.68:1 로 통과하지만, 배경이 짙어질수록 떨어져 `surface-container` 4.44:1 · `surface-dim` 4.25:1 · `surface-container-high` 4.21:1 · `surface-container-highest` 3.95:1 · 각종 `*-container` 3.85~4.29:1 로 **본문 기준 4.5:1 에 미달**한다. 즉 위 하드룰은 "`outline` 보다 낫다"를 보장하지, "모든 배경에서 AA"를 보장하지 않는다 — 드리프트 가드도 토큰 *이름*만 보지 대비를 계산하지 않는다. 짙은 컨테이너 위 보조 텍스트의 처리(더 짙은 보조 토큰 신설 vs 표면별 쌍 도입)는 미해결이며 TODOS.md 에 있다.
+>
 > 유일한 예외는 **AT 에서 완전히 배제된 순수 장식 구분자**(`aria-hidden`)다 — WCAG 1.4.3 의 장식 예외에 해당한다. 현재 breadcrumb 의 `/` 와 딜룸 헤더의 `·` 두 곳뿐이며, `lib/design/design-hardrule-allowlist.mjs` 의 `OUTLINE_TEXT_ALLOWLIST` 에 등재돼 있다. `lib/design/__tests__/outline-text-drift.test.ts` 가 `app/**`·`components/**`·`lib/**` 를 훑어 이 규칙과 예외의 `aria-hidden` 조건을 모두 강제한다.
 
 ### Inverse · Scrim · 유틸

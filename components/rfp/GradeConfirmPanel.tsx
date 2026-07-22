@@ -40,7 +40,7 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
         <button
           type="button"
           onClick={() => setConfirmed(false)}
-          className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface-variant)] transition-colors ml-auto"
+          className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors ml-auto"
         >
           수정
         </button>
