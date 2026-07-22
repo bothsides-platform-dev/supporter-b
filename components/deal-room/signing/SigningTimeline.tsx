@@ -9,7 +9,7 @@
  */
 import { Chip } from '@/components/primitives/Chip';
 import { LocalTime } from '@/components/primitives/LocalTime';
-import type { SigningNode } from './signing-view-model';
+import { nodeStatusLabel, type SigningNode } from './signing-view-model';
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
 
@@ -91,7 +91,13 @@ export function SigningTimeline({ nodes }: { nodes: SigningNode[] }) {
                 {n.sub && <div className={'mt-px truncate text-[12px] ' + dim}>{n.sub}</div>}
               </div>
               <div className="flex flex-none flex-col items-end gap-1">
-                {n.chip && <Chip color={n.chip.color} label={n.chip.label} />}
+                {/* 점·디스크는 aria-hidden 이라 Chip 이 없는 노드(마일스톤)는 상태가
+                    색으로만 전달된다 — 상태어를 sr-only 로 보완한다. */}
+                {n.chip ? (
+                  <Chip color={n.chip.color} label={n.chip.label} />
+                ) : (
+                  <span className="sr-only">{nodeStatusLabel(n.state)}</span>
+                )}
                 {n.at && (
                   <span className={'md-numeric text-[11.5px] ' + dim}>
                     <LocalTime iso={n.at} format="MM-dd HH:mm" />
