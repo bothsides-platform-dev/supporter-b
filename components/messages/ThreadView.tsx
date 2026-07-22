@@ -33,6 +33,7 @@ import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-t
 import { computeMessageGrouping } from './message-grouping';
 import { MorphFlightLayer } from './MorphFlightLayer';
 import { useMessageMorph } from './useMessageMorph';
+import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 
 type Props = {
   conversationId: string;
@@ -111,6 +112,7 @@ function renderBody(body: string): React.ReactNode {
         className="underline underline-offset-2 hover:opacity-80"
       >
         {part}
+        <span className="sr-only">{NEW_TAB_NOTICE}</span>
       </a>
     ) : (
       <span key={i}>{part}</span>

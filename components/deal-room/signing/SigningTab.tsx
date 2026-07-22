@@ -26,6 +26,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
 import { captureActionError } from '@/lib/observability/capture';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
+import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
@@ -40,9 +41,6 @@ import {
 } from './signing-view-model';
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
-
-/** 완료본 링크의 새 창·다운로드 고지 — 링크 텍스트의 일부라 접근성 이름에 실린다. */
-const NEW_TAB_DOWNLOAD_NOTICE = '새 탭에서 내려받아요';
 
 const ICONS: Record<SigningIcon, typeof Clock> = {
   clock: Clock,

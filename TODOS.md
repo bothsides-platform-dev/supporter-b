@@ -17,11 +17,6 @@
 ### 알림 소소한 정합성 묶음 (P4)
 ① 알림 페이지 RSC는 100건, 훅 스토어(`useNotifications`)는 API 50건 하이드레이트 — 51~100번째 항목에서 배지/읽음 처리 불일치 가능. ② 인앱 알림 row는 `pending→read`만 전이하는데 렌더러(`NotificationActivityList`)와 `unreadCount`에 도달 불가능한 `sent`/`failed` 분기(빨간색 미읽음 렌더 포함)가 남아 있음. ③ 알림 `type`이 free-form text로 SSOT enum이 없고 렌더러에 타입별 라벨/아이콘 매핑도 없음. (발견: 알림 시스템 전수 조사 2026-07-07)
 
-## Accessibility
-
-### `target="_blank"` 새 창 고지 누락 4파일 5링크 (P3)
-②(계약 탭 다운로드 링크)를 고치면서 전수 조사한 결과, 같은 결함이 남아 있는 곳: `components/messages/MessageAttachmentGrid.tsx:22`, `components/messages/ThreadView.tsx:109`, `components/opportunities/OpportunityList.tsx:76`(구매사 홈페이지), `components/auth/AgreementCheckboxes.tsx:62,79`(약관·개인정보 처리방침). 이미 고지가 있는 곳은 `components/rfp/bid-detail/BidPdfPane.tsx:42` 와 `components/attachments/AttachmentPreviewList.tsx:123` 으로, 둘 다 **visible `새 창 열기 →`** 텍스트를 쓴다 — 링크 자체가 "새 창으로 열기" 액션이라 그 문구가 곧 링크 라벨이기 때문이다. 반면 계약 탭 다운로드 링크는 라벨이 문서명(`계약서`)이고 아이콘이 affordance 라 `sr-only` 를 골랐다. **일괄 처리하지 말 것** — 링크마다 라벨 성격이 달라 visible/sr-only 선택이 갈린다. 특히 `AgreementCheckboxes` 는 가입 동의 흐름이라 visible 이 나을 수 있다. (발견: ② 수정 중 전수 조사 2026-07-22)
-
 ## Deal Room / Award
 
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
