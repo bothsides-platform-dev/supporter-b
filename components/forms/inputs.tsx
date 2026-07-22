@@ -18,8 +18,22 @@ import { cn } from '@/lib/utils';
  * is the single source. Numeric fields (Percent/Currency) add mono + tabular
  * nums on top per the Linear `.md-numeric` rule.
  */
-export const underlineInputClass =
-  'block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors';
+/**
+ * The underline field without its border colour.
+ *
+ * Split out because several fields drive the border from state — an errored
+ * password, a resolved business number, a read-only invited email — and used to
+ * hand-copy the whole class list just to swap those two utilities. Compose with
+ * `underlineInputBorder` for the default look, or with your own border clause.
+ */
+export const underlineInputBase =
+  'block w-full bg-transparent border-0 border-b py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none transition-colors';
+
+/** Resting + focus border for an underline field. */
+export const underlineInputBorder =
+  'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]';
+
+export const underlineInputClass = cn(underlineInputBase, underlineInputBorder);
 
 export const numericInputClass = cn(underlineInputClass, 'md-numeric');
 

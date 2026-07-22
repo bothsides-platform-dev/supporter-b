@@ -16,6 +16,7 @@ import {
 } from '@/lib/auth/password-validation';
 import { checkEmailAvailableAction } from '@/lib/server/actions/auth';
 import { safeInternalNext } from '@/lib/auth/safe-next';
+import { underlineInputClass } from '@/components/forms/inputs';
 
 type AgreementState = { terms: boolean; privacy: boolean; marketing: boolean };
 
@@ -137,7 +138,7 @@ function BuyerSignupEmailForm() {
             onBlur={handleEmailBlur}
             autoComplete="email"
             placeholder="your@company.com"
-            className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+            className={underlineInputClass}
           />
           {emailTaken && (
             <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)] mt-1">

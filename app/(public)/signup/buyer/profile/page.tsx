@@ -8,6 +8,7 @@ import { SignupStepper } from '@/components/auth/SignupStepper';
 import { useSignupDraftStore } from '@/lib/stores/signup-draft';
 import { readSignupDraft, writeSignupDraft, isSignupStorageAvailable } from '@/lib/auth/signup-storage';
 import { finalizeSignup } from '@/lib/auth/finalize-signup';
+import { underlineInputClass } from '@/components/forms/inputs';
 
 export default function BuyerProfilePage() {
   const router = useRouter();
@@ -136,7 +137,7 @@ export default function BuyerProfilePage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
-            className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+            className={underlineInputClass}
           />
           {nameError && (
             <p className="text-[11px] text-[var(--md-sys-color-error)]">{nameError}</p>

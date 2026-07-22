@@ -6,6 +6,7 @@ import { EnvelopeSvg } from '@/components/auth/EnvelopeSvg';
 import { ResendCountdown } from '@/components/auth/ResendCountdown';
 import Link from 'next/link';
 import { passwordForgotAction } from '@/lib/server/actions/auth';
+import { underlineInputClass } from '@/components/forms/inputs';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -45,7 +46,7 @@ export default function ForgotPasswordPage() {
         <div className="space-y-1">
           <label htmlFor="email" className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">이메일</label>
           <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email"
-            className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+            className={underlineInputClass}
             placeholder="your@email.com" />
         </div>
         <Button type="submit" fullWidth size="lg" disabled={submitting || !email.trim()}>
