@@ -6,6 +6,7 @@ import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
 import { cn } from '@/lib/utils';
 import { Chip } from '@/components/primitives/Chip';
 import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
+import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 
 // 마감 임박(D-2 이하)을 빨강으로 강조하는 칩 — PG 화면 공통 신호.
 function DeadlineChip({ deadline }: { deadline: string }) {
@@ -78,6 +79,7 @@ export function OpportunityList({
                       className="truncate text-[var(--md-sys-color-primary)] hover:underline"
                     >
                       {it.websiteUrl.replace(/^https?:\/\//, '')}
+                      <span className="sr-only">{NEW_TAB_NOTICE}</span>
                     </a>
                   )}
                   <span className="md-numeric text-[var(--md-sys-color-on-surface-variant)]">{it.rfpCode}</span>

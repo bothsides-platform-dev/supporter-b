@@ -26,6 +26,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
 import { captureActionError } from '@/lib/observability/capture';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
+import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
@@ -152,6 +153,10 @@ export function SigningTab({
               <span className="min-w-0 flex-1">
                 <span className="block text-[13px] font-medium">{d.title}</span>
                 <span className={'block text-[12px] ' + dim}>{d.caption}</span>
+                {/* 새 탭으로 열리고 실제로는 302 로 파일이 내려온다. 시각적으로는 옆의
+                    Download 아이콘이 그 사실을 알리지만 아이콘은 aria-hidden 이라,
+                    접근성 이름에 실리도록 같은 뜻을 sr-only 로 덧붙인다. */}
+                <span className="sr-only">{NEW_TAB_DOWNLOAD_NOTICE}</span>
               </span>
               <Download className={'size-[15px] shrink-0 ' + dim} aria-hidden />
             </a>

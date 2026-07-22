@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, waitFor, act, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UseChatChannelResult } from '@/lib/hooks/useChatChannel';
+import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 
 class ResizeObserverStub {
   observe() {}
@@ -426,11 +427,40 @@ describe('ThreadView', () => {
         ],
       }),
     );
-    const first = screen.getByRole('link', { name: 'https://example.com/rfp' });
-    const second = screen.getByRole('link', { name: 'https://example.com/bid' });
+    // 접근성 이름 = URL + sr-only 새 탭 고지. URL 자체가 라벨이라 정확 일치가 아닌
+    // 부분 일치로 찾는다.
+    const first = screen.getByRole('link', { name: /^https:\/\/example\.com\/rfp/ });
+    const second = screen.getByRole('link', { name: /^https:\/\/example\.com\/bid/ });
     expect(first).toHaveAttribute('href', 'https://example.com/rfp');
     expect(first).toHaveAttribute('rel', expect.stringContaining('noopener'));
     expect(second).toHaveAttribute('href', 'https://example.com/bid');
+  });
+
+  it('본문 자동 링크가 새 탭으로 열린다는 사실을 접근성 이름에 싣는다', () => {
+    render(
+      base({
+        messages: [
+          {
+            id: 'm5',
+            authorUserId: 'u-pg',
+            authorName: 'OO페이담당',
+            authorEmail: 'sales@pg.com',
+            authorAvatarUpdatedAt: null,
+            sender: 'other',
+            body: '여기 https://example.com/rfp 보세요',
+            rfpId: null,
+            createdAt: '2026-05-26T05:00:00.000Z',
+            readByCounterparty: false,
+            attachments: [],
+          },
+        ],
+      }),
+    );
+    // 라벨이 URL 문자열 자체라 새 탭 여부를 알 방법이 없었다. 보이는 문구를 덧붙이면
+    // 메시지마다 URL 뒤에 안내가 붙어 본문을 해치므로 sr-only 로만 싣는다.
+    const link = screen.getByRole('link', { name: new RegExp(NEW_TAB_NOTICE) });
+    expect(link).toHaveAttribute('href', 'https://example.com/rfp');
+    expect(screen.getByText(NEW_TAB_NOTICE)).toHaveClass('sr-only');
   });
 
   it('보내기를 누르면 conversationId 와 본문으로 sendChatMessageAction 을 호출하고 입력을 비운다', async () => {
