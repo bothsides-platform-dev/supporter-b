@@ -22,11 +22,6 @@
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
 선정 연락처 교환(`CounterpartyContactCard`)은 `findContactById`가 fail-closed라, 구매사 담당자(RFP `createdBy`)가 탈퇴/시스템계정이면 `buyerContact=null`이 된다. 승자 PG 분기는 `awardedToMe && buyerContact`로 카드를, `awarded && !awardedToMe`로 미선정 안내를 그리므로 — 승자인데 buyerContact만 null이면 카드도 안내도 안 떠 빈 화면이 된다(드묾·누출 아님·정상 fail-closed). 후속: 연락처 없음 안내 폴백 또는 워크스페이스 대표 담당자 폴백 검토. (발견: /ship 적대 리뷰 2026-06-27)
 
-## Settings / Account
-
-### DeleteAccountSection INVALID_PASSWORD 테스트가 플레이크 (P3)
-`components/settings/__tests__/DeleteAccountSection.test.tsx > shows inline error on INVALID_PASSWORD` 이 "비밀번호가 올바르지 않아요." 텍스트를 못 찾아 간헐 실패한다. **항상 실패하는 것은 아니다** — 2026-07-21 재확인 시 clean dev 에서 6/6 통과했고, 같은 날 워크트리에서 파일에 테스트를 추가한 직후 1회 실패(1050ms 소요) 후 재실행에서 9/9 통과했다. 즉 v0.4.2.0 당시의 "항상 red" 진단은 더 이상 유효하지 않고, 실제 성격은 타이밍/순서 의존 플레이크(P0 → P3 하향). Base-UI 다이얼로그의 인라인 에러 렌더 타이밍으로 추정. 관련: `[[reference_userevent-type-baseui-focus-trap]]`(다이얼로그 안 입력은 `fireEvent.change` 사용), 그리고 이 다이얼로그는 body 로 portal 되므로 `container.textContent` 단언은 무조건 통과한다는 함정도 같은 파일에서 확인됨. (발견: /ship 테스트 트리아지 2026-07-20, v0.4.2.0 · 재분류: v0.4.8.0)
-
 ## Signing (선정 후 전자서명 / SnowSign)
 
 ### 계약 탭 잔여 폴리시 4건 (P3)

@@ -58,8 +58,6 @@ export function mapUniqueViolationToEmailTaken<T extends object = object>(err: u
   throw err;
 }
 
-export type WorkspaceStub = { id: string; name: string };
-
 export class AuthService {
   constructor(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
