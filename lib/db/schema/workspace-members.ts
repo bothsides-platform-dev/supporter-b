@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { memberRoleEnum } from './_enums';
 import { workspaces } from './workspaces';
 import { users } from './users';
+import type { MemberApprovalStatus } from '@/lib/types/workspace';
 
 export const workspaceMembers = pgTable(
   'workspace_members',
@@ -14,7 +15,14 @@ export const workspaceMembers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     role: memberRoleEnum('role').notNull().default('member'),
-    approvalStatus: text('approval_status').notNull().default('approved'),
+    // `$type` narrows the inferred `string` to the canonical union so callers
+    // need no `as MemberApprovalStatus` cast — and, more importantly, dropping
+    // this column from a repo projection becomes a compile error instead of a
+    // silent `undefined` that flips `isApprovedAdmin` to false.
+    approvalStatus: text('approval_status')
+      .$type<MemberApprovalStatus>()
+      .notNull()
+      .default('approved'),
     joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().default(sql`now()`),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   },

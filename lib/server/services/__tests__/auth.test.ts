@@ -260,7 +260,7 @@ describe('AuthService.deleteAccount', () => {
     expect(r).toEqual({
       ok: false,
       error: 'LAST_ADMIN',
-      blockingWorkspaces: [{ id: ws.id, name: 'WS' }],
+      blockingWorkspaces: [{ id: ws.id, name: 'WS', hasDelegatableMember: true }],
     });
   });
 
