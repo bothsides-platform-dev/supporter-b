@@ -17,6 +17,11 @@
 ### 알림 소소한 정합성 묶음 (P4)
 ① 알림 페이지 RSC는 100건, 훅 스토어(`useNotifications`)는 API 50건 하이드레이트 — 51~100번째 항목에서 배지/읽음 처리 불일치 가능. ② 인앱 알림 row는 `pending→read`만 전이하는데 렌더러(`NotificationActivityList`)와 `unreadCount`에 도달 불가능한 `sent`/`failed` 분기(빨간색 미읽음 렌더 포함)가 남아 있음. ③ 알림 `type`이 free-form text로 SSOT enum이 없고 렌더러에 타입별 라벨/아이콘 매핑도 없음. (발견: 알림 시스템 전수 조사 2026-07-07)
 
+## Accessibility
+
+### `target="_blank"` 새 창 고지 누락 4파일 5링크 (P3)
+②(계약 탭 다운로드 링크)를 고치면서 전수 조사한 결과, 같은 결함이 남아 있는 곳: `components/messages/MessageAttachmentGrid.tsx:22`, `components/messages/ThreadView.tsx:109`, `components/opportunities/OpportunityList.tsx:76`(구매사 홈페이지), `components/auth/AgreementCheckboxes.tsx:62,79`(약관·개인정보 처리방침). 이미 고지가 있는 곳은 `components/rfp/bid-detail/BidPdfPane.tsx:42` 와 `components/attachments/AttachmentPreviewList.tsx:123` 으로, 둘 다 **visible `새 창 열기 →`** 텍스트를 쓴다 — 링크 자체가 "새 창으로 열기" 액션이라 그 문구가 곧 링크 라벨이기 때문이다. 반면 계약 탭 다운로드 링크는 라벨이 문서명(`계약서`)이고 아이콘이 affordance 라 `sr-only` 를 골랐다. **일괄 처리하지 말 것** — 링크마다 라벨 성격이 달라 visible/sr-only 선택이 갈린다. 특히 `AgreementCheckboxes` 는 가입 동의 흐름이라 visible 이 나을 수 있다. (발견: ② 수정 중 전수 조사 2026-07-22)
+
 ## Deal Room / Award
 
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
@@ -29,8 +34,8 @@
 
 ## Signing (선정 후 전자서명 / SnowSign)
 
-### 계약 탭 잔여 폴리시 3건 (P3)
-딜룸 '계약' 탭 재설계(v0.4.6.0) 최종 리뷰가 남긴 후속. (① 타임라인 마일스톤 상태의 스크린리더 미노출은 **해결됨** — `nodeStatusLabel`이 노드 상태어를 파생하고 `SigningTimeline`이 Chip 없는 노드에 `sr-only`로 붙인다. 2026-07-22) ② **완료본 다운로드 링크(`target="_blank"`)에 새 창·다운로드 고지가 없다**(`rel="noopener"`는 있음). ③ **계약 탭이 종결 계약에도 항상 기본 탭이 된다** — 몇 달 전 완료·취소된 계약이라도 딜룸을 열 때마다 견적 비교를 뒤로 밀어낸다. 스펙대로의 동작이라 결함은 아니지만 종결 상태에선 기본 탭을 양보할지 제품 판단 필요. (발견: /superpowers 최종 브랜치 리뷰 2026-07-21) ④ **계약 탭 기본 활성은 마운트 시점 1회 결정(useState 초기값)** — 선정 직후 router.refresh() 로 계약이 생겨도 이미 열려 있는 딜룸의 탭은 바뀌지 않는다(사용자가 보던 탭을 시스템이 뺏지 않는다는 판단, /ship 리뷰에서 확인). 딜룸을 다시 열면 계약 탭이 기본이다.
+### 계약 탭 잔여 폴리시 2건 (P3)
+딜룸 '계약' 탭 재설계(v0.4.6.0) 최종 리뷰가 남긴 후속. (① 타임라인 마일스톤 상태의 스크린리더 미노출은 **해결됨** — `nodeStatusLabel`이 노드 상태어를 파생하고 `SigningTimeline`이 Chip 없는 노드에 `sr-only`로 붙인다. 2026-07-22) (② 완료본 다운로드 링크의 새 창·다운로드 고지 누락은 **해결됨** — 링크 텍스트에 `sr-only` 로 '새 탭에서 내려받아요'를 넣어 접근성 이름에 싣는다. 시각적으로는 기존 Download 아이콘이 그대로 알린다. 2026-07-22) ③ **계약 탭이 종결 계약에도 항상 기본 탭이 된다** — 몇 달 전 완료·취소된 계약이라도 딜룸을 열 때마다 견적 비교를 뒤로 밀어낸다. 스펙대로의 동작이라 결함은 아니지만 종결 상태에선 기본 탭을 양보할지 제품 판단 필요. (발견: /superpowers 최종 브랜치 리뷰 2026-07-21) ④ **계약 탭 기본 활성은 마운트 시점 1회 결정(useState 초기값)** — 선정 직후 router.refresh() 로 계약이 생겨도 이미 열려 있는 딜룸의 탭은 바뀌지 않는다(사용자가 보던 탭을 시스템이 뺏지 않는다는 판단, /ship 리뷰에서 확인). 딜룸을 다시 열면 계약 탭이 기본이다.
 
 ### Phase 11 — 실 SnowSign sandbox 스모크 + e2e (P1)
 단위/PGlite/HTTP-mock 은 전 경로 커버(4971 green)지만, 실 SnowSign API 검증은 계정/키가 있는 환경으로 미뤄져 있다. 필요: ① env-gated sandbox 스모크(실 `listTemplates`/`getTemplate`/`createContractFromTemplate`/`getContract`/`download` 가 유닛 mock 페이로드와 일치하는지), ② 임베드 완료 postMessage 이벤트 형태 확정(현재 수동 폴백은 무관하게 동작), ③ 웹훅 HMAC 서명이 실 시크릿으로 우리 검증을 통과하는지, ④ e2e happy(템플릿 링크→award→발송→완료→다운로드)+edge(미설정·거절·만료·취소·재발송·타 PG 템플릿 차단). (발견: 기능 계획 Phase 11, v0.4.1.0 — 실 creds 대기)

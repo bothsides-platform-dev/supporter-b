@@ -41,6 +41,9 @@ import {
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
 
+/** 완료본 링크의 새 창·다운로드 고지 — 링크 텍스트의 일부라 접근성 이름에 실린다. */
+const NEW_TAB_DOWNLOAD_NOTICE = '새 탭에서 내려받아요';
+
 const ICONS: Record<SigningIcon, typeof Clock> = {
   clock: Clock,
   alert: AlertTriangle,
@@ -152,6 +155,10 @@ export function SigningTab({
               <span className="min-w-0 flex-1">
                 <span className="block text-[13px] font-medium">{d.title}</span>
                 <span className={'block text-[12px] ' + dim}>{d.caption}</span>
+                {/* 새 탭으로 열리고 실제로는 302 로 파일이 내려온다. 시각적으로는 옆의
+                    Download 아이콘이 그 사실을 알리지만 아이콘은 aria-hidden 이라,
+                    접근성 이름에 실리도록 같은 뜻을 sr-only 로 덧붙인다. */}
+                <span className="sr-only">{NEW_TAB_DOWNLOAD_NOTICE}</span>
               </span>
               <Download className={'size-[15px] shrink-0 ' + dim} aria-hidden />
             </a>

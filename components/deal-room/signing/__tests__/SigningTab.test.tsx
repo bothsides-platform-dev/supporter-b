@@ -155,6 +155,32 @@ describe('SigningTab', () => {
     );
   });
 
+  it('completed — 다운로드 링크가 새 탭·내려받기임을 접근성 이름으로 알린다', () => {
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('completed', [part('buyer', 'signed'), part('pg', 'signed')])}
+        side="buyer"
+      />,
+    );
+    // target="_blank" 이고 실제로는 302 로 파일이 내려오는데, 그 사실을 시각적으로
+    // 알리는 Download 아이콘은 aria-hidden 이라 접근성 이름에 실리지 않았다.
+    expect(screen.getAllByRole('link', { name: /새 탭에서 내려받아요/ })).toHaveLength(2);
+  });
+
+  it('completed — 새 탭 고지는 시각적으로 숨긴다 (아이콘이 이미 알려준다)', () => {
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('completed', [part('buyer', 'signed'), part('pg', 'signed')])}
+        side="buyer"
+      />,
+    );
+    for (const el of screen.getAllByText('새 탭에서 내려받아요')) {
+      expect(el).toHaveClass('sr-only');
+    }
+  });
+
   it('declined — 다시 발송 실패 시 친절한 문구로 알린다', async () => {
     const user = userEvent.setup();
     render(
