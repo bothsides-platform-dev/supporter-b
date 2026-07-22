@@ -692,3 +692,19 @@ describe('TeamThreadView — 멘션', () => {
     expect(el).toHaveAttribute('data-self-mention', 'true');
   });
 });
+
+// 팀 채팅도 딜룸 모달 안에 임베드된다(TeamThreadPane). 전송 morph 클론이 최상위 z 로
+// body 에 portal 되므로, 패널 경계를 표시해 클론이 모달 헤더 위로 새지 않게 한다.
+describe('TeamThreadView — 전송 morph', () => {
+  it('채팅 패널에 morph 경계를 달아 클론이 목록·입력창 밖으로 새지 않게 한다', () => {
+    render(base());
+
+    const bounds = document.querySelector('[data-morph-bounds]');
+    expect(bounds).not.toBeNull();
+    // 경계는 morph 의 두 끝점(도착=말풍선 목록, 출발=입력창)을 모두 품어야 한다.
+    expect(bounds).toContainElement(document.querySelector('[data-message-list]'));
+    expect(bounds).toContainElement(
+      screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…'),
+    );
+  });
+});

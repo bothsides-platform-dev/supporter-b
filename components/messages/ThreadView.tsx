@@ -154,11 +154,9 @@ export function ThreadView({
   // (MessageInbox renders [] first, then the loaded thread for the SAME
   // conversationId — no remount). setState during render causes React to
   // restart the render immediately with no extra committed paint.
+  // 리싱크 자체는 아래 morph 훅 선언 뒤에서 수행한다(clearFlights 를 함께 불러야 하고,
+  // useMessageMorph 는 useStickToBottom 뒤라는 선언 순서 불변식이 있다).
   const [prevMessages, setPrevMessages] = useState<ThreadMessage[]>(messages);
-  if (prevMessages !== messages) {
-    setPrevMessages(messages);
-    setLocalMessages(messages);
-  }
   // Live read watermark (ms epoch): the counterparty's "read" event carries no
   // timestamp, so treat its arrival time as "read up to now".
   const [readAt, setReadAt] = useState(0);
@@ -174,6 +172,16 @@ export function ThreadView({
   // 실행돼야 하므로 useStickToBottom *뒤*에 선언한다(listRef 의존이 이를 강제).
   const morph = useMessageMorph({ listRef });
   const composerRef = useRef<HTMLDivElement>(null);
+
+  // messages prop 리싱크(위 prevMessages 선언 참조). setState during render 라 React 가
+  // 추가 페인트 없이 렌더를 즉시 재시작한다. 교체된 서버 행에는 localKey 가 없어 morph
+  // 타깃 키가 끊기므로, 진행 중인 클론을 함께 거둬야 실 말풍선과 겹치지 않는다
+  // (clearFlights 는 비어 있으면 같은 참조를 돌려줘 렌더 중 호출해도 루프가 없다).
+  if (prevMessages !== messages) {
+    setPrevMessages(messages);
+    setLocalMessages(messages);
+    morph.clearFlights();
+  }
 
   // Live presence — driven by WorkspacePresenceProvider (not useChatChannel).
   const { online } = useWorkspacePresence(counterparty.workspaceId);
@@ -333,7 +341,10 @@ export function ThreadView({
   return (
     <>
     <div className="flex h-full min-h-0 min-w-0 flex-1">
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    {/* data-morph-bounds — 전송 morph 클론을 가둘 경계. 클론은 최상위 z 로 body 에
+        portal 되므로(목록 overflow 회피), 이 표시가 없으면 딜룸 모달 헤더 같은 바깥
+        크롬 위를 가로지른다. 출발(입력창)·도착(목록) 두 끝점을 모두 품어야 한다. */}
+    <div data-morph-bounds className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {/* 헤더 — 상대 워크스페이스 + 타입 + 프레즌스 + 타이핑 */}
       <header className="flex shrink-0 items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
         {onBack && (

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { bubbleSurfaceClass } from './MessageBubble';
-import type { Flight } from './message-morph';
+import { clipInset, type Flight } from './message-morph';
 
 // 레포 기존 진입 ease(FadeInView/ProcessSection) — 부드러운 감속(cubic-bezier).
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -16,6 +16,10 @@ const MORPH_DURATION_S = 0.34;
 // 스크롤 컨테이너 클리핑·딜룸 블러 모달 스택 컨텍스트를 피하려고 body 로 portal(fixed, 최상위 z,
 // pointer-events 차단). 클론은 `to`(말풍선 최종 위치) 에 두고 transform 으로 `from`(입력창)에서
 // 출발해 identity 로 이동 → 실제 말풍선(이동 중 opacity:0)로 seamless 핸드오프.
+//
+// 최상위 z 는 딜룸 모달(z-50) 도 넘으므로, 클론마다 채팅 패널 경계(`clip`)로 잘라낸 박스
+// 안에서만 그린다 — 0.34s 비행이 모달 헤더 위를 덮는 것을 막는다. 클리핑 박스는 레이어와
+// 같은 viewport 좌표계(absolute inset-0)라 클론 좌표 계산은 그대로다.
 export function MorphFlightLayer({
   flights,
   onDone,
@@ -27,21 +31,29 @@ export function MorphFlightLayer({
 }) {
   if (typeof document === 'undefined' || flights.length === 0) return null;
 
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+
   return createPortal(
     <div className="pointer-events-none fixed inset-0 z-[100]">
       {flights.map((f) => (
-        <motion.div
+        <div
           key={f.key}
-          className="absolute"
-          style={{ left: f.to.left, top: f.to.top, width: f.to.width, transformOrigin: 'top left' }}
-          initial={{ x: f.dx, y: f.dy, scale: f.scale }}
-          animate={{ x: 0, y: 0, scale: 1 }}
-          transition={{ duration: MORPH_DURATION_S, ease: EASE_OUT }}
-          onAnimationComplete={() => onDone(f.key)}
+          data-morph-clip
+          className="absolute inset-0"
+          style={{ clipPath: clipInset(f.clip, viewport) }}
         >
-          {/* 클론은 측정된 말풍선 폭(to.width)에 꽉 차게 — 행 기준 max-w-[78%] 는 해제. */}
-          <div className={cn(bubbleSurfaceClass(true), 'w-full max-w-none')}>{renderText(f.text)}</div>
-        </motion.div>
+          <motion.div
+            className="absolute"
+            style={{ left: f.to.left, top: f.to.top, width: f.to.width, transformOrigin: 'top left' }}
+            initial={{ x: f.dx, y: f.dy, scale: f.scale }}
+            animate={{ x: 0, y: 0, scale: 1 }}
+            transition={{ duration: MORPH_DURATION_S, ease: EASE_OUT }}
+            onAnimationComplete={() => onDone(f.key)}
+          >
+            {/* 클론은 측정된 말풍선 폭(to.width)에 꽉 차게 — 행 기준 max-w-[78%] 는 해제. */}
+            <div className={cn(bubbleSurfaceClass(true), 'w-full max-w-none')}>{renderText(f.text)}</div>
+          </motion.div>
+        </div>
       ))}
     </div>,
     document.body,

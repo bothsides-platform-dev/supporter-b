@@ -28,18 +28,26 @@ function stubRect(el: HTMLElement, box: Box): void {
 
 // 입력창(from) 과 말풍선(to) 을 갖춘 최소 DOM. 말풍선은 listRef 컨테이너 안에
 // data-bubble-key 로 심어 훅이 셀렉터로 찾게 한다(MessageBubble 과 동일 계약).
-function setupDom(bubbleKey = 'k1') {
+// 목록/입력창은 [data-morph-bounds] 패널로 감싼다 — 실제 ThreadView 구조와 동일하고,
+// 훅이 클론을 가둘 경계를 여기서 잰다. withBounds:false 면 경계 없는 표면을 흉내낸다.
+function setupDom(bubbleKeys: string | string[] = 'k1', { withBounds = true } = {}) {
+  const panel = document.createElement('div');
+  if (withBounds) panel.setAttribute('data-morph-bounds', '');
   const list = document.createElement('div');
-  const bubble = document.createElement('div');
-  bubble.setAttribute('data-bubble-key', bubbleKey);
-  list.appendChild(bubble);
+  for (const key of [bubbleKeys].flat()) {
+    const bubble = document.createElement('div');
+    bubble.setAttribute('data-bubble-key', key);
+    list.appendChild(bubble);
+    stubRect(bubble, { left: 100, top: 400, width: 200, height: 40 });
+  }
   const composer = document.createElement('div');
-  document.body.append(list, composer);
+  panel.append(list, composer);
+  document.body.append(panel);
 
-  stubRect(bubble, { left: 100, top: 400, width: 200, height: 40 });
+  stubRect(panel, { left: 0, top: 300, width: 400, height: 400 });
   stubRect(composer, { left: 20, top: 600, width: 300, height: 32 });
 
-  return { listRef: { current: list }, composer };
+  return { listRef: { current: list }, composer, panel };
 }
 
 beforeEach(() => {
@@ -190,6 +198,90 @@ describe('useMessageMorph', () => {
     });
 
     expect(result.current.layerProps.flights).toHaveLength(1);
+  });
+
+  // 예약 슬롯이 하나뿐이면 같은 틱의 두 번째 전송이 첫 번째를 덮어써, 앞 메시지가
+  // 애니메이션 없이 튀어나온다. 예약은 큐여야 한다.
+  it('같은 틱에 두 건을 스케줄해도 둘 다 발동한다(연속 전송)', () => {
+    const { listRef, composer } = setupDom(['k1', 'k2']);
+    const { result } = renderHook(() => useMessageMorph({ listRef }));
+
+    act(() => {
+      result.current.scheduleFlight(composer, 'k1', '첫 번째');
+      result.current.scheduleFlight(composer, 'k2', '두 번째');
+    });
+
+    expect(result.current.layerProps.flights).toHaveLength(2);
+    expect(result.current.isMorphing('k1')).toBe(true);
+    expect(result.current.isMorphing('k2')).toBe(true);
+  });
+
+  // ThreadView 의 messages prop 리싱크는 낙관적 행(localKey 보유)을 서버 행으로 통째
+  // 교체해 morph 타깃 키를 잃는다. 그 순간 진행 중인 클론을 거둬야 실 말풍선과
+  // 클론이 동시에 보이는 이중 표시를 막는다.
+  it('clearFlights 는 진행 중인 클론을 거둔다', () => {
+    const { listRef, composer } = setupDom(['k1', 'k2']);
+    const { result } = renderHook(() => useMessageMorph({ listRef }));
+
+    act(() => {
+      result.current.scheduleFlight(composer, 'k1', '첫 번째');
+      result.current.scheduleFlight(composer, 'k2', '두 번째');
+    });
+    expect(result.current.layerProps.flights).toHaveLength(2);
+
+    act(() => {
+      result.current.clearFlights();
+    });
+
+    expect(result.current.layerProps.flights).toHaveLength(0);
+    expect(result.current.isMorphing('k1')).toBe(false);
+    expect(result.current.isMorphing('k2')).toBe(false);
+  });
+
+  // clearFlights 가 예약 큐까지 비우지 않아도 되는 근거 — 목록이 갈리면 예약이 노리던
+  // 말풍선도 함께 사라져 측정이 실패한다. 덕분에 clearFlights 는 setState 하나로 끝나
+  // 렌더 도중(리싱크 분기) 호출해도 안전하다.
+  it('말풍선이 사라진 예약은 스스로 취소된다(목록 교체)', () => {
+    const { listRef, composer } = setupDom();
+    const { result } = renderHook(() => useMessageMorph({ listRef }));
+
+    act(() => {
+      result.current.scheduleFlight(composer, 'k1', '안녕하세요');
+      // 측정 effect 가 돌기 전에 목록이 갈린다 — 낙관적 말풍선이 서버 행으로 교체돼
+      // data-bubble-key="k1" 이 사라지는 상황.
+      listRef.current.querySelector('[data-bubble-key="k1"]')?.remove();
+    });
+
+    expect(result.current.layerProps.flights).toHaveLength(0);
+  });
+
+  // 딜룸 모달처럼 채팅이 더 큰 표면에 임베드되면, 최상위 z 로 portal 된 클론이 모달
+  // 헤더 위를 가로지를 수 있다. 발동 시 패널 경계를 실어 레이어가 잘라내게 한다.
+  it('flight 에 [data-morph-bounds] 패널 경계를 clip 으로 싣는다', () => {
+    const { listRef, composer } = setupDom();
+    const { result } = renderHook(() => useMessageMorph({ listRef }));
+
+    act(() => {
+      result.current.scheduleFlight(composer, 'k1', '안녕하세요');
+    });
+
+    expect(result.current.layerProps.flights[0].clip).toEqual({
+      left: 0,
+      top: 300,
+      width: 400,
+      height: 400,
+    });
+  });
+
+  it('경계 엘리먼트가 없으면 clip 은 null 이다(클리핑 없음 폴백)', () => {
+    const { listRef, composer } = setupDom('k1', { withBounds: false });
+    const { result } = renderHook(() => useMessageMorph({ listRef }));
+
+    act(() => {
+      result.current.scheduleFlight(composer, 'k1', '안녕하세요');
+    });
+
+    expect(result.current.layerProps.flights[0].clip).toBeNull();
   });
 
   // MorphFlightLayer 로 그대로 스프레드하는 표면 — onDone 은 endFlight 와 같은 정리 경로.
