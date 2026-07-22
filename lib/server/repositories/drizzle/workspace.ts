@@ -57,8 +57,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 
@@ -483,9 +482,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         ),
       )
       .limit(1);
-    return row
-      ? { ...row, approvalStatus: row.approvalStatus as MemberApprovalStatus }
-      : undefined;
+    return row;
   }
 
   async getMemberApprovalStatus(
@@ -504,7 +501,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         ),
       )
       .limit(1);
-    return row?.approvalStatus as MemberApprovalStatus | undefined;
+    return row?.approvalStatus;
   }
 
   async findInitialMembership(
@@ -526,9 +523,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(eq(workspaceMembers.userId, userId))
       .orderBy(asc(workspaceMembers.joinedAt))
       .limit(1);
-    return row
-      ? { ...row, approvalStatus: row.approvalStatus as MemberApprovalStatus }
-      : undefined;
+    return row;
   }
 
   async listMembershipsWithMembers(
@@ -544,7 +539,11 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     }[]
   > {
     const db = this.h(tx);
-    const myMemberships = (await db
+    // No `as` cast: the inferred projection type IS the contract. If anyone
+    // drops `approvalStatus` from either select below, this stops compiling
+    // rather than silently yielding `undefined` (which would flip
+    // `isApprovedAdmin` to false and fail-open the last-admin block).
+    const myMemberships = await db
       .select({
         workspaceId: workspaceMembers.workspaceId,
         role: workspaceMembers.role,
@@ -553,12 +552,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-      .where(eq(workspaceMembers.userId, userId))) as {
-      workspaceId: string;
-      role: string;
-      approvalStatus: MemberApprovalStatus;
-      name: string;
-    }[];
+      .where(eq(workspaceMembers.userId, userId));
 
     const result: {
       workspaceId: string;
@@ -568,18 +562,25 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
     }[] = [];
     for (const m of myMemberships) {
-      const members = (await db
+      const members = await db
         .select({
           userId: workspaceMembers.userId,
           role: workspaceMembers.role,
           approvalStatus: workspaceMembers.approvalStatus,
         })
         .from(workspaceMembers)
-        .where(eq(workspaceMembers.workspaceId, m.workspaceId))) as {
-        userId: string;
-        role: string;
-        approvalStatus: MemberApprovalStatus;
-      }[];
+        .innerJoin(usersTable, eq(usersTable.id, workspaceMembers.userId))
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, m.workspaceId),
+            // Same exclusion `hydrate()` applies to UI member lists. A
+            // system-managed account is not a person: it can neither take over
+            // the admin role nor be seen by the user being told to hand it
+            // over. Counting it made a workspace whose only human is leaving
+            // look populated.
+            eq(usersTable.isSystemAccount, false),
+          ),
+        );
       result.push({
         workspaceId: m.workspaceId,
         name: m.name,
@@ -661,7 +662,15 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   }
 
   async addMember(
-    params: { workspaceId: string; userId: string; role: string; approvalStatus?: string },
+    // `approvalStatus` matches the `WorkspaceRepo` interface exactly — the impl
+    // used to widen it to `string`, which let an arbitrary value reach the
+    // column and silently flip `isApprovedAdmin` to false for that member.
+    params: {
+      workspaceId: string;
+      userId: string;
+      role: string;
+      approvalStatus?: MemberApprovalStatus;
+    },
     tx?: Tx,
   ): Promise<void> {
     const db = this.h(tx);

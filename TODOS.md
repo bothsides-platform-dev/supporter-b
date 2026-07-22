@@ -83,6 +83,16 @@
 
 ## Signup / Auth
 
+### approval_status 에 CHECK 제약 없음 — 현재 노출 0, 방어심층만 (P4)
+`workspace_members.approval_status` 는 제약 없는 `text` 라서, 값이 드리프트하면(`'Approved'`·`'active'`·`''`) `isApprovedAdmin` 이 false 가 되고 fail-open 이 생긴다. **다만 v0.4.10.0 에서 쓰기 경로를 전수 조사한 결과 드리프트를 만들 수 있는 코드가 없다** — 양쪽 레포 통틀어 쓰기는 5곳이고 전부 캐논니컬 리터럴 아니면 컬럼 default 다: 메인 `workspace.ts` `addMember`(`MemberApprovalStatus` 로 타입 강제됨), 메인 `auth.ts` canonical-PG 합류(`'pending_approval'` 리터럴), 컬럼 default(`'approved'`), 어드민 `approveMemberAction`/`rejectMemberAction`(각각 `'approved'`·`'rejected'` 리터럴 + `WHERE approval_status='pending_approval'` CAS 가드). 어드민 레포에는 `drizzle.config.ts` 도 db 스크립트도 없어 push 로 스키마를 바꿀 수도 없다(스키마 파일은 쿼리 타이핑용 읽기 전용 미러).
+
+즉 **원래 이 항목이 P2 로 적혔던 근거(“별도 레포라 타입에 안 묶여 드리프트 가능”)는 사실이 아니다.** 남는 위험은 수동 psql 실수, 또는 앞으로 어느 레포든 새 쓰기 경로가 생기는 경우뿐이다.
+
+붙일 때 참고: `attachments.status`·biz-profiles·rfps 가 이미 같은 패턴(text + CHECK)을 쓰므로 관례에는 부합한다. 데이터가 깨끗하면 `pnpm db:push` 한 번으로 끝나고(additive), 붙이기 전 `SELECT approval_status, count(*) FROM workspace_members GROUP BY approval_status;` 로 분포만 확인하면 된다. 드리프트 행이 있으면 **임의로 `'approved'` 로 덮지 말 것** — 승인된 적 없는 멤버에게 실효 admin 을 주게 된다. 어드민 레포 스키마 미러에도 같이 반영해야 나중에 db:push 가 생겨도 안 지워진다. (재검토: v0.4.10.0 — P2 → P4 하향)
+
+### shell 가드가 알 수 없는 approval_status 값에 fail-open (P3)
+`lib/auth/shell-access.ts:90,93` 은 `=== 'pending_approval'` 과 `=== 'rejected'` 두 값만 검사하고 그 외 값은 통과시킨다 — `isApprovedAdmin` 이 `=== 'approved'` 로 fail-closed 인 것과 방향이 반대다. 따라서 값이 드리프트하면 미승인 성격의 멤버가 앱에 진입한다. 위 항목대로 현재 드리프트 원천이 없어 실제 노출은 0 이지만, 두 게이트가 같은 컬럼을 반대 방향으로 해석하는 것 자체가 함정이다. 수정: `!== 'approved'` 로 뒤집기(동작 변화가 생기므로 canonical-PG 합류 플로우 회귀 확인 필요). (발견: CHECK 제약 필요성 재검토 중, v0.4.10.0)
+
 ### 사업자 상태 차단이 클라이언트 전용 — 서버가 클라 status 를 그대로 신뢰 (P2)
 `BizLookupField` 의 `blockedStatuses` 는 폐업·휴업이면 `onResult` 를 호출하지 않아 제출 버튼을 잠그는 **UI 게이트**다. 서버는 이를 재검증하지 않는다 — `updateWorkspaceBizProfileAction` 의 `BizProfilePatch` 는 `status: z.enum(['active','suspended','closed'])` 로 세 값을 모두 받고, 저장 시 `status: bizPatch?.status ?? base!.status` 로 **클라이언트가 보낸 값을 그대로 영속**한다. 따라서 액션을 직접 호출하면 폐업 사업자번호가 저장된다. 구매사 가입 경로(`BuyerWorkspaceForm`)도 v0.4.9.0 이전부터 동일한 구조라 신규 결함이 아니라 **선존재 아키텍처 갭**이다.
 
@@ -98,17 +108,8 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 
 **부분 해소 (v0.2.48.0)**: admin 권한 표면(WorkspaceService invite/resend/cancel/changeRole/removeMember + renameWorkspace + listAuditLogs + audit-log 페이지)은 `isApprovedAdmin`(role=admin AND approvalStatus=approved)로 서버에서 차단했고, countAdmins·deleteAccount last-admin 판정은 승인된 admin 만 집계. **v0.2.73.0 갱신**: rfp 초대 메일 수신자는 admin 한정(`adminRecipients`, 이후 제거됨)에서 승인된 멤버 전원(`approvedMemberRecipients`)으로 확장됨 — 여전히 `approvalStatus='approved'` 필터는 유지. **남은 범위**: 비-admin pg 서버액션 전반에 대한 blanket `requirePgSession()` 승인 게이트는 여전히 미구현.
 
-### approval_status 컬럼에 enum/CHECK 제약 없음 — 드리프트 시 3곳 fail-open (P2)
-`lib/db/schema/workspace-members.ts` 에서 `role` 은 진짜 pg enum(`memberRoleEnum`)인데 `approval_status` 는 제약 없는 `text` + `default 'approved'` 다. 이 컬럼을 쓰는 어드민 콘솔은 **별도 레포**(`admin-supporter-b`)라 타입으로 묶여 있지 않다. 값이 드리프트하면(`'Approved'`·`'active'`·`''`) `isApprovedAdmin` 이 false 가 되는데, 권한 게이트 6곳은 fail-closed 로 안전한 반면 **fail-open 이 3곳** 있다: `changeMemberRole` 의 LAST_ADMIN 가드(안 걸림), `AuthService.deleteAccount`·`getDeleteAccountStatus` 의 blocking 판정(마지막 실 admin 이 탈퇴 가능 → 워크스페이스 고아화). **수정**: `CHECK (approval_status IN ('approved','pending_approval','rejected'))` 추가 또는 pg enum 승격(어드민 레포와 동시 배포 조율 필요). (발견: /ship 적대 리뷰 F3, v0.4.7.0)
-
-### listMembershipsWithMembers 의 `as` 캐스트가 projection 드리프트를 세탁 (P3)
-`lib/server/repositories/drizzle/workspace.ts` 의 members 서브쿼리가 `as { userId; role; approvalStatus }[]` 로 단언돼 있어, 누가 select 에서 `approvalStatus` 를 빼도 타입 에러가 안 난다 — 런타임에 `undefined` 가 되고 `isApprovedAdmin` 이 조용히 false 를 반환해 deleteAccount 의 마지막-admin 차단이 fail-open 된다. **수정**: 캐스트를 걷어내고 추론 타입을 그대로 쓰면 드리프트가 컴파일 에러가 된다. (발견: /ship 적대 리뷰 F4, v0.4.7.0 — 선존재)
-
-### deleteAccount 의 solo/blocking 판정이 미승인 멤버를 참여자로 셈 (P3)
-`AuthService.deleteAccount`·`getDeleteAccountStatus` 의 `allMembers.length === 1` 분기는 `listMembershipsWithMembers` 의 필터 없는 members 를 쓴다 — `pending_approval`·`rejected` 멤버와 시스템 계정까지 센다(`hydrate()` 는 시스템 계정을 제외하는 것과 대비). 결과: 승인 admin 1명 + 미승인 canonical-PG 합류자 1명인 워크스페이스는 solo 도 아니고(자동 삭제 안 됨) 탈퇴도 안 된다(LAST_ADMIN). 탈출구는 있고(미승인 멤버 먼저 제거) 0-admin 을 막는다는 점에선 fail-closed 라 정책 판단 사항. v0.4.7.0 이 `changeMemberRole` 에서 없앤 것과 같은 계열의 오탐. (발견: /ship 적대 리뷰 F5, v0.4.7.0 — 선존재)
-
-### removeMember 의 0-admin 안전성이 문서화되지 않은 창발 속성 (P4)
-`WorkspaceService.removeMember` 에는 마지막-admin 가드가 아예 없다 — 승인 admin 이 다른 승인 admin 을 무조건 제거할 수 있다. 지금 안전한 이유는 호출자가 승인 admin 이어야 하고(`isApprovedAdmin`) `SELF_REMOVAL` 이 자기 제거를 막아 최소 1명이 남기 때문인데, 이 불변식이 어디에도 적혀 있지 않다. `SELF_REMOVAL` 을 푸는 순간 0-admin 경로가 된다. **수정**: 최소한 주석으로 불변식 명시, 또는 `changeMemberRole` 과 같은 트랜잭션-내 카운트 가드 적용. (발견: /ship 적대 리뷰 F7, v0.4.7.0 — 선존재)
+### repo 계층 쿼리빌더가 `any` — projection 드리프트 전면 미검출 (P2)
+`drizzle/*.ts` 34개 중 **29개가 `private h(tx?: Tx): any`** 이고, `Db` 를 쓰는 나머지도 `type Db = any` 별칭이라 결국 같다. 즉 이 계층의 모든 `.select({...})` projection 이 타입 미검사이며, select 에서 컬럼을 빼도 tsc 가 통과하고 런타임에 `undefined` 가 흐른다(v0.4.8.0 에서 F4 를 고치다 실측 확인 — 캐스트 제거만으로는 아무것도 잡히지 않았다). `workspace.ts` 는 `h(): Tx` 로 전환했고 **파일 전체 에러가 1건**뿐이었다(그 1건도 진짜 버그였다 — `addMember` 가 인터페이스의 `MemberApprovalStatus` 를 `string` 으로 넓힘). 나머지 28개 파일도 같은 방식으로 전환 가능해 보이며, 파일당 독립적이라 점진 적용된다. `[[project_drizzle-select-schema-drift]]` 와 같은 계열. (발견: F4 수정 중, v0.4.8.0)
 
 ## Storage / R2
 

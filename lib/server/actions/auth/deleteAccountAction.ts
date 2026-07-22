@@ -2,12 +2,12 @@
 
 import { requireSession } from '@/lib/auth/session';
 import { getAuthService } from '@/lib/server/services/auth';
-import type { WorkspaceStub } from './getDeleteAccountStatus';
+import type { BlockingWorkspace } from './getDeleteAccountStatus';
 
 export type DeleteAccountResult =
   | { ok: true }
   | { ok: false; error: 'UNAUTHENTICATED' | 'INVALID_PASSWORD' | 'MASTER_ACCOUNT' }
-  | { ok: false; error: 'LAST_ADMIN'; blockingWorkspaces: WorkspaceStub[] };
+  | { ok: false; error: 'LAST_ADMIN'; blockingWorkspaces: BlockingWorkspace[] };
 
 export async function deleteAccountAction(input: {
   password: string;
