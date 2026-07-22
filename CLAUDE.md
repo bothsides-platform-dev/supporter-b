@@ -129,6 +129,7 @@ These are non-negotiable visual decisions enforced across all screens. The desig
 - **No** hover shadow promotion — hover is a background-lightness shift only.
 - **No** heavy/skeuomorphic shadows — most surfaces use a 1px border or elevation-1; big shadows only on floating elements (popover, dropdown, toast, dialog, command palette).
 - **No** high-contrast dividers — default to `outline-variant` (the deliberately low-contrast border). The faint border IS the Linear look, not a bug.
+- **No** `outline` token as text/icon color — it's a **border** token (1.41:1 light / 1.45:1 dark against `surface`, fails AA). Use `on-surface-variant` for secondary text/icons. Sole exception: purely decorative `aria-hidden` separators, enumerated in `OUTLINE_TEXT_ALLOWLIST` (`lib/design/design-hardrule-allowlist.mjs`) and enforced by `lib/design/__tests__/outline-text-drift.test.ts`. `on-surface-variant` itself still misses AA on container-tier backgrounds — see DESIGN.md §2 and TODOS.md.
 - **No** body text ≥ 16px — app body is 14px, dense (~32px rows, 28–36px buttons / default 32px).
 - **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`. (단 하나의 좁은 예외: 랜딩 히어로 다크 씬 소프트 블룸 — DESIGN.md §9 랜딩·마케팅 예외 ⑤.)
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
