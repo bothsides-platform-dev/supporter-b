@@ -61,6 +61,23 @@ export type SigningCardView = {
   note: string;
 };
 
+/**
+ * 노드 상태의 한국어 상태어.
+ *
+ * 마일스톤 노드는 aria-hidden 인 점 하나로만 그려져 색·모양이 유일한 상태 신호다
+ * (사람 노드는 Chip 이 상태를 읽어준다). 렌더 쪽에서 Chip 이 없는 노드에 sr-only 로
+ * 붙여, 색을 보지 못하는 사용자도 완료/대기를 구별할 수 있게 한다.
+ */
+const NODE_STATUS_LABEL: Record<SigningNodeState, string> = {
+  done: '완료',
+  active: '진행 중',
+  pending: '대기',
+  failed: '실패',
+  ended: '종료',
+};
+
+export const nodeStatusLabel = (state: SigningNodeState): string => NODE_STATUS_LABEL[state];
+
 const roleLabel = (r: SigningParticipant['role']) => (r === 'buyer' ? '구매사' : 'PG');
 const securityLabel = (m: SigningParticipant['securityMethod']) =>
   m === 'easy_cert' ? '휴대폰 간편인증' : '이메일 인증';

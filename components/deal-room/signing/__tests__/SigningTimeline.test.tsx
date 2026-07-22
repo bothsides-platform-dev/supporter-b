@@ -64,6 +64,53 @@ describe('SigningTimeline', () => {
     });
   });
 
+  it('마일스톤 노드의 상태를 스크린리더용 텍스트로 노출한다', () => {
+    // 마일스톤은 aria-hidden 인 점 하나로만 그려져 색·모양이 유일한 상태 신호였다.
+    // 사람 노드의 Chip 과 달리 읽히는 상태어가 없어 완료/대기 구분이 불가능했다.
+    render(
+      <SigningTimeline
+        nodes={[
+          { key: 'sent', kind: 'milestone', label: '서명 요청을 보냈어요', state: 'done' },
+          { key: 'prepare', kind: 'milestone', label: '계약서 준비', state: 'active' },
+          { key: 'sign', kind: 'milestone', label: '양측 서명', state: 'pending' },
+        ]}
+      />,
+    );
+    const items = screen.getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('완료');
+    expect(items[1]).toHaveTextContent('진행 중');
+    expect(items[2]).toHaveTextContent('대기');
+  });
+
+  it('상태어는 시각적으로 숨긴다 — 점의 색이 계속 유일한 시각 신호다', () => {
+    render(
+      <SigningTimeline
+        nodes={[{ key: 'sent', kind: 'milestone', label: '서명 요청을 보냈어요', state: 'done' }]}
+      />,
+    );
+    expect(screen.getByText('완료')).toHaveClass('sr-only');
+  });
+
+  it('사람 노드는 칩이 상태를 읽어주므로 상태어를 중복해 넣지 않는다', () => {
+    render(
+      <SigningTimeline
+        nodes={[
+          {
+            key: 'p1',
+            kind: 'person',
+            label: '김구매',
+            detail: '구매사',
+            state: 'done',
+            chip: { color: 'tertiary', label: '서명 완료' },
+            initial: '김',
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('서명 완료')).toBeInTheDocument();
+    expect(screen.queryByText('완료')).not.toBeInTheDocument();
+  });
+
   it('마일스톤의 설명(detail)도 노출한다', () => {
     render(
       <SigningTimeline

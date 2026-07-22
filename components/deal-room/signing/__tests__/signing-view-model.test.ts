@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 
-import { buildSigningCardView, buildSigningSummary } from '../signing-view-model';
+import {
+  buildSigningCardView,
+  buildSigningSummary,
+  nodeStatusLabel,
+  type SigningNodeState,
+} from '../signing-view-model';
 import type {
   SigningContractStatus,
   SigningParticipant,
@@ -297,5 +302,21 @@ describe('buildSigningSummary', () => {
       label: '계약서 등록 필요',
       dot: 'warning',
     });
+  });
+});
+
+describe('nodeStatusLabel', () => {
+  it('노드 상태마다 한국어 상태어를 준다', () => {
+    expect(nodeStatusLabel('done')).toBe('완료');
+    expect(nodeStatusLabel('active')).toBe('진행 중');
+    expect(nodeStatusLabel('pending')).toBe('대기');
+    expect(nodeStatusLabel('failed')).toBe('실패');
+    expect(nodeStatusLabel('ended')).toBe('종료');
+  });
+
+  it('상태어가 서로 겹치지 않는다 — 겹치면 색을 못 보는 사용자가 단계를 구별할 수 없다', () => {
+    const states: SigningNodeState[] = ['done', 'active', 'pending', 'failed', 'ended'];
+    const labels = states.map(nodeStatusLabel);
+    expect(new Set(labels).size).toBe(states.length);
   });
 });
