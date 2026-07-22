@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, primaryKey, text, index, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, primaryKey, text, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { memberRoleEnum } from './_enums';
 import { workspaces } from './workspaces';
@@ -28,15 +28,6 @@ export const workspaceMembers = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.workspaceId, t.userId] }),
-    // `role` is a real pg enum; `approval_status` is text, and the admin console
-    // that writes it lives in a separate repo (`admin-supporter-b`) with no
-    // shared types. A drifted value makes `isApprovedAdmin` false, which is
-    // fail-OPEN at the deleteAccount last-admin block (workspace orphaning).
-    // This CHECK is the one place both repos are forced through.
-    check(
-      'workspace_members_approval_status_check',
-      sql`${t.approvalStatus} in ('approved','pending_approval','rejected')`,
-    ),
     index('workspace_members_user_idx').on(t.userId),
   ],
 );

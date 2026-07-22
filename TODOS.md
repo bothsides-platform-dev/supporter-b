@@ -81,6 +81,16 @@
 
 ## Signup / Auth
 
+### approval_status 에 CHECK 제약 없음 — 현재 노출 0, 방어심층만 (P4)
+`workspace_members.approval_status` 는 제약 없는 `text` 라서, 값이 드리프트하면(`'Approved'`·`'active'`·`''`) `isApprovedAdmin` 이 false 가 되고 fail-open 이 생긴다. **다만 v0.4.10.0 에서 쓰기 경로를 전수 조사한 결과 드리프트를 만들 수 있는 코드가 없다** — 양쪽 레포 통틀어 쓰기는 5곳이고 전부 캐논니컬 리터럴 아니면 컬럼 default 다: 메인 `workspace.ts` `addMember`(`MemberApprovalStatus` 로 타입 강제됨), 메인 `auth.ts` canonical-PG 합류(`'pending_approval'` 리터럴), 컬럼 default(`'approved'`), 어드민 `approveMemberAction`/`rejectMemberAction`(각각 `'approved'`·`'rejected'` 리터럴 + `WHERE approval_status='pending_approval'` CAS 가드). 어드민 레포에는 `drizzle.config.ts` 도 db 스크립트도 없어 push 로 스키마를 바꿀 수도 없다(스키마 파일은 쿼리 타이핑용 읽기 전용 미러).
+
+즉 **원래 이 항목이 P2 로 적혔던 근거(“별도 레포라 타입에 안 묶여 드리프트 가능”)는 사실이 아니다.** 남는 위험은 수동 psql 실수, 또는 앞으로 어느 레포든 새 쓰기 경로가 생기는 경우뿐이다.
+
+붙일 때 참고: `attachments.status`·biz-profiles·rfps 가 이미 같은 패턴(text + CHECK)을 쓰므로 관례에는 부합한다. 데이터가 깨끗하면 `pnpm db:push` 한 번으로 끝나고(additive), 붙이기 전 `SELECT approval_status, count(*) FROM workspace_members GROUP BY approval_status;` 로 분포만 확인하면 된다. 드리프트 행이 있으면 **임의로 `'approved'` 로 덮지 말 것** — 승인된 적 없는 멤버에게 실효 admin 을 주게 된다. 어드민 레포 스키마 미러에도 같이 반영해야 나중에 db:push 가 생겨도 안 지워진다. (재검토: v0.4.10.0 — P2 → P4 하향)
+
+### shell 가드가 알 수 없는 approval_status 값에 fail-open (P3)
+`lib/auth/shell-access.ts:90,93` 은 `=== 'pending_approval'` 과 `=== 'rejected'` 두 값만 검사하고 그 외 값은 통과시킨다 — `isApprovedAdmin` 이 `=== 'approved'` 로 fail-closed 인 것과 방향이 반대다. 따라서 값이 드리프트하면 미승인 성격의 멤버가 앱에 진입한다. 위 항목대로 현재 드리프트 원천이 없어 실제 노출은 0 이지만, 두 게이트가 같은 컬럼을 반대 방향으로 해석하는 것 자체가 함정이다. 수정: `!== 'approved'` 로 뒤집기(동작 변화가 생기므로 canonical-PG 합류 플로우 회귀 확인 필요). (발견: CHECK 제약 필요성 재검토 중, v0.4.10.0)
+
 ### 설정 페이지 WorkspaceBizNoForm blockedStatuses 누락 (P2)
 워크스페이스 설정의 사업자번호 변경 폼(`WorkspaceBizNoForm.tsx`)이 `BizLookupField` 를 `blockedStatuses` 없이 사용한다. 기존 구매사 회원이 폐업·휴업 상태 번호로 변경할 수 있는 경로. `blockedStatuses={['closed', 'suspended']}` 를 추가해 설정 경로도 닫아야 한다. (발견: v0.2.27.2 adversarial 2026-06-20)
 
