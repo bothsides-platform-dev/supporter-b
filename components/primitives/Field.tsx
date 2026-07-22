@@ -19,7 +19,7 @@ export function Field({ label, htmlFor, hint, required, className, children }: F
     <div data-field className={cn('space-y-1', className)}>
       <label
         htmlFor={htmlFor}
-        className="text-[length:var(--md-typescale-label-medium-size)] font-[number:var(--md-typescale-label-medium-weight)] leading-[var(--md-typescale-label-medium-line-height)] tracking-[var(--md-typescale-label-medium-tracking)] text-[var(--md-sys-color-on-surface)]"
+        className="md-label-medium text-[var(--md-sys-color-on-surface)]"
       >
         {label}
         {required && <span aria-hidden="true" className="ml-0.5 text-[var(--md-sys-color-error)]">*</span>}

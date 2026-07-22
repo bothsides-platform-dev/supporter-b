@@ -10,10 +10,12 @@ type LabelProps = {
   as?: 'span' | 'p' | 'label' | 'legend' | 'div';
 };
 
+// DESIGN.md §3 라벨 유틸리티(app/globals.css). 같은 값을 토큰 나열형으로 다시
+// 쓰지 않는다 — 표기가 둘이 되면 다음 사람이 어느 쪽을 따를지 모른다.
 const sizeMap: Record<LabelSize, string> = {
-  lg: 'text-[length:var(--md-typescale-label-large-size)] font-[number:var(--md-typescale-label-large-weight)] leading-[var(--md-typescale-label-large-line-height)] tracking-[var(--md-typescale-label-large-tracking)]',
-  md: 'text-[length:var(--md-typescale-label-medium-size)] font-[number:var(--md-typescale-label-medium-weight)] leading-[var(--md-typescale-label-medium-line-height)] tracking-[var(--md-typescale-label-medium-tracking)]',
-  sm: 'text-[length:var(--md-typescale-label-small-size)] font-[number:var(--md-typescale-label-small-weight)] leading-[var(--md-typescale-label-small-line-height)] tracking-[var(--md-typescale-label-small-tracking)]',
+  lg: 'md-label-large',
+  md: 'md-label-medium',
+  sm: 'md-label-small',
 };
 
 export function Label({ children, size = 'md', className, muted = true, as: Tag = 'span' }: LabelProps) {

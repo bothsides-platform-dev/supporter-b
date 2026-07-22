@@ -16,6 +16,7 @@ import {
   getWorkspaceRepo,
   getRfpRequoteRequestRepo,
 } from './repositories/factory';
+import { toQuoteTemplateOption } from './quote-template-option';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
 import { STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
@@ -388,15 +389,7 @@ export async function loadPgRfpDetail(args: {
   const templates = await (await getBidQuoteTemplateRepo()).listByWorkspace(
     args.workspaceId,
   );
-  const quoteTemplates: QuoteTemplateOption[] = templates.map((t) => ({
-    id: t.id,
-    name: t.name,
-    settleCycle: t.settleCycle,
-    settleLimit: t.settleLimit,
-    guaranteeInsurance: t.guaranteeInsurance,
-    signupFee: t.signupFee,
-    paymentFees: t.paymentFees,
-  }));
+  const quoteTemplates: QuoteTemplateOption[] = templates.map(toQuoteTemplateOption);
 
   // 전자서명 상태 — 낙찰 PG(awardedToMe)만 조회. 미낙찰 PG 는 조회조차 안 함(봉인 경계).
   const signing = awardedToMe ? await loadSigningView(rfp.id) : null;
