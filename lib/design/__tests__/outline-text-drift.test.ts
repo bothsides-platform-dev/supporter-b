@@ -3,7 +3,15 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { OUTLINE_TEXT_ALLOWLIST } from '../design-hardrule-allowlist.mjs';
-import { ROOT, type Violation, allowlistTargets, isAllowlisted, walkAll } from './_source-scan';
+import { classSites } from './_class-alternatives';
+import {
+  ROOT,
+  type Violation,
+  allowlistTargets,
+  isAllowlisted,
+  walkAll,
+  walkStyles,
+} from './_source-scan';
 
 // Drift guard for the DESIGN.md §2 token contract:
 //
@@ -17,15 +25,14 @@ import { ROOT, type Violation, allowlistTargets, isAllowlisted, walkAll } from '
 // only; it has never extended to text.
 //
 // KNOWN LIMITS (deliberate — this is a lint-style guardrail, not a proof):
-//   * Line-scoped, like the sibling `mono-label-drift` guard. A className split
-//     across source lines, built by concatenation, or held in a shared constant
-//     can slip past. It stops copy-paste propagation, which is how the 82-site
-//     spread actually happened.
-//   * Source files only (`.ts`/`.tsx`). A CSS utility class declared in
-//     `app/globals.css` that paints `color: var(--md-sys-color-outline)` is NOT
-//     seen. See TODOS.md "디자인 하드룰 가드 커버리지 확장".
+//   * A className built by string concatenation or held in a shared constant
+//     that another file composes can slip past. Multi-line `cn()` calls do NOT
+//     slip past: the dead-variant scan joins each composition before matching.
 //   * `--color-*` theme aliases are enumerated by hand below; a NEW alias
 //     pointing at `outline` would need adding here.
+//   * The stylesheet pass matches `color: var(--outline)` declarations. A CSS
+//     rule that reaches the same colour through a chain of intermediate custom
+//     properties is not resolved.
 
 // Every spelling that resolves to "paint text with the outline token".
 // `--color-input` is a `@theme inline` alias declared in app/globals.css, so
@@ -67,6 +74,29 @@ function scanAll(): Violation[] {
 }
 
 /**
+ * A stylesheet rule painting text with the border-only token.
+ *
+ * `border-color`/`outline-color`/`--color-border` style declarations are the
+ * token's legitimate job, so only `color:` (and its shorthand-free longhand
+ * cousins) count. The `@theme` alias block that declares `--color-input:
+ * var(--md-sys-color-outline)` is itself fine — it is the `text-input` USE of
+ * that alias, caught by TEXT_COLOR_SPELLINGS above, that is not.
+ */
+const CSS_TEXT_COLOR = /(?<!-)\bcolor:\s*var\(\s*--md-sys-color-outline\s*\)/;
+
+function scanStyles(): Violation[] {
+  const found: Violation[] = [];
+  for (const file of walkStyles()) {
+    readFileSync(`${ROOT}${file}`, 'utf8')
+      .split('\n')
+      .forEach((text, i) => {
+        if (CSS_TEXT_COLOR.test(text)) found.push({ file, line: i + 1, text: text.trim() });
+      });
+  }
+  return found;
+}
+
+/**
  * The JSX opening tag that encloses `line` (1-based), as one string.
  *
  * Scoped to the ELEMENT, not a fixed line window. A ±N-line window is worse
@@ -94,43 +124,32 @@ function enclosingOpeningTag(lines: string[], line: number): string {
 // `group-hover/name`, `data-[state=open]`, `group-data-[over-dark]/lheader`,
 // or a fully arbitrary `[&:hover]`.
 const VARIANT_SEGMENT = String.raw`(?:\[[^\]]*\]|[\w-]+(?:-\[[^\]]*\])?(?:\/[\w-]+)?):`;
+// All three spellings the sibling rule enumerates, so a codemod that rewrites
+// `text-[var(--x)]` into the v4 shorthand cannot launder a dead variant past
+// this scan while the outline rule still catches the token itself.
+const TEXT_TOKEN_BODY = String.raw`(?:text-\[var\((--md-sys-color-[\w-]+)\)\]|text-\((--md-sys-color-[\w-]+)\)|\[color:var\((--md-sys-color-[\w-]+)\)\])`;
 const TEXT_TOKEN_UTILITY = new RegExp(
-  String.raw`((?:${VARIANT_SEGMENT})*)text-\[var\((--md-sys-color-[\w-]+)\)\]`,
+  String.raw`((?:${VARIANT_SEGMENT})*)${TEXT_TOKEN_BODY}`,
   'g',
 );
 
-/** A `disabled:`-family variant restoring the resting tone is intentional. */
-const DISABLED_VARIANT = /(?:^|:)(?:peer-|group-)?disabled:/;
-
-/** Is `text-[var(<token>)]` present on this line WITHOUT a variant prefix? */
-function hasRestingDeclaration(text: string, token: string): boolean {
-  const idx = text.indexOf(`text-[var(${token})]`);
-  if (idx < 0) return false;
-  // Start-of-line is a word boundary too — a class string continued onto its
-  // own source line is still a resting declaration.
-  return idx === 0 || /[\s"'`]/.test(text[idx - 1]);
+/** The captured token name, whichever of the three spellings matched. */
+function matchedToken(m: RegExpMatchArray): string {
+  return m[2] ?? m[3] ?? m[4];
 }
 
 /**
- * The lines of the `cn(...)`/className composition containing `line` (1-based).
+ * Variants that legitimately repeat the resting tone.
  *
- * Approximated by walking out to the nearest boundaries rather than parsing
- * JSX. Used ONLY to suppress findings (the intentional-override escape below),
- * never to add them, so an over-wide block costs recall, not precision.
+ * `disabled:` (and its peer/group forms) exist precisely to CANCEL a hover back
+ * to the resting colour, so equality is the point.
+ *
+ * `placeholder:` is not a state of this element's text at all — it paints a
+ * different pseudo-element. "Same value as the resting text" is a category
+ * error there, not a dead transition. (Whether a placeholder should be
+ * distinguishable from a typed value is a real question, but a separate rule.)
  */
-function compositionLines(lines: string[], line: number): string[] {
-  let start = line - 1;
-  let end = line - 1;
-  while (start > 0 && lines[start - 1].trim() !== '' && !lines[start - 1].includes('className'))
-    start--;
-  // Advance BEFORE testing the terminator, so a `)}` produced by a template
-  // interpolation on the hit line itself (`${size(x)}`) cannot collapse the
-  // block to one line and hide the very sibling we are looking for.
-  do {
-    end++;
-  } while (end < lines.length && lines[end - 1].trim() !== '' && !lines[end - 1].includes(')}'));
-  return lines.slice(start, Math.min(end, lines.length));
-}
+const EXEMPT_VARIANT = /(?:^|:)(?:(?:peer-|group-)?disabled|placeholder):/;
 
 /**
  * Lines where an element paints its resting text color and a state variant of
@@ -141,39 +160,38 @@ function compositionLines(lines: string[], line: number): string[] {
  * moment <muted> is promoted to <less-muted>. Three controls broke exactly that
  * way when `outline` was retired as a text color, and nothing failed.
  *
- * KNOWN LIMIT: resting and variant must sit on the SAME source line, and only
- * the `text-[var(--md-sys-color-*)]` spelling is understood. Multi-line `cn()`,
- * `cva()` variant maps, `clsx` object syntax, shared class constants, and
- * non-token colors (`text-muted-foreground`) are all invisible to it. See
- * TODOS.md "디자인 하드룰 가드 커버리지 확장".
+ * Resolved per className expression via the TypeScript AST, so a multi-line
+ * `cn()` is analysed as one unit while a ternary's two arms stay separate.
+ * KNOWN LIMIT: a class string held in an identifier declared in ANOTHER module
+ * resolves to empty — cross-module constant folding is out of scope.
  */
 function findDeadStateVariants(file: string): Violation[] {
   const found: Violation[] = [];
-  const lines = readFileSync(`${ROOT}${file}`, 'utf8').split('\n');
-  lines.forEach((text, i) => {
-    for (const match of text.matchAll(TEXT_TOKEN_UTILITY)) {
-      const [, variant, token] = match;
-      if (!variant) continue; // this IS the resting declaration
-      if (DISABLED_VARIANT.test(variant)) continue;
-      if (!hasRestingDeclaration(text, token)) continue;
-
-      // Intentional-override escape: inside a multi-clause `cn()`, a later
-      // conditional clause may re-assert BOTH the resting and the variant tone
-      // purely to beat an earlier clause's different variant value. That pair is
-      // load-bearing, not dead. Detect it by looking for another clause in the
-      // same composition declaring the same variant with a DIFFERENT token.
-      const overridden = compositionLines(lines, i + 1).some((sibling, k) =>
-        [...sibling.matchAll(TEXT_TOKEN_UTILITY)].some(
-          ([, sVariant, sToken]) =>
-            sVariant === variant && sToken !== token && !(sibling === text && k === 0),
-        ),
+  for (const site of classSites(file)) {
+    // Each alternative is one class list the element can actually render. A
+    // ternary's two arms never appear in the same alternative, so mutually
+    // exclusive states are never compared against each other.
+    for (const classes of site.alternatives) {
+      const declarations = [...classes.matchAll(new RegExp(TEXT_TOKEN_UTILITY.source, 'g'))].map(
+        (m) => ({ variant: m[1] ?? '', token: matchedToken(m) }),
       );
-      if (overridden) continue;
-
-      found.push({ file, line: i + 1, text: text.trim() });
-      return;
+      const dead = declarations.find(
+        (d) =>
+          d.variant &&
+          !EXEMPT_VARIANT.test(d.variant) &&
+          // Same token painted with no variant → the state never changes anything.
+          declarations.some((o) => !o.variant && o.token === d.token) &&
+          // …unless a later clause in this same alternative re-points that
+          // variant at a different token, in which case the pair is a
+          // deliberate override, not dead weight.
+          !declarations.some((o) => o.variant === d.variant && o.token !== d.token),
+      );
+      if (dead) {
+        found.push({ file, line: site.line, text: classes.trim() });
+        break;
+      }
     }
-  });
+  }
   return found;
 }
 
@@ -190,6 +208,21 @@ describe('DESIGN.md §2 — outline is a border token, never a text color', () =
         'no AA-passing shade left between on-surface-variant and the surface. A ' +
         'purely decorative aria-hidden separator glyph may be added to ' +
         'lib/design/design-hardrule-allowlist.mjs (OUTLINE_TEXT_ALLOWLIST).',
+    ).toEqual([]);
+  });
+
+  it('no stylesheet paints text with --md-sys-color-outline', () => {
+    // The Tailwind scan above cannot see CSS. A hand-written utility in
+    // app/globals.css — where `.md-label-*` and `.md-numeric` already live — is
+    // the obvious way to reintroduce the whole problem without touching a
+    // single `.tsx` file.
+    const offenders = scanStyles();
+    expect(
+      offenders.map((v) => `${v.file}:${v.line}`),
+      'These CSS rules paint text with the border-only --md-sys-color-outline ' +
+        'token (~1.4:1 against the surface). Use --md-sys-color-on-surface-variant. ' +
+        'Declaring the token for border-color/outline-color is fine — only `color:` ' +
+        'is flagged.',
     ).toEqual([]);
   });
 

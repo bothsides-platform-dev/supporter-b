@@ -19,21 +19,44 @@ export const SCAN_ROOTS = ['app', 'components', 'lib'];
 export type Violation = { file: string; line: number; rule?: string; text: string };
 
 /** Repo-relative paths of every non-test source file under `relDir`. */
-export function* walk(relDir: string): Generator<string> {
+export function* walk(relDir: string, exts = SOURCE_EXTS): Generator<string> {
   for (const entry of readdirSync(`${ROOT}${relDir}`, { withFileTypes: true })) {
     const rel = `${relDir}/${entry.name}`;
     if (entry.isDirectory()) {
       if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
-      yield* walk(rel);
-    } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.(test|spec)\.(ts|tsx)$/.test(entry.name)) {
+      yield* walk(rel, exts);
+    } else if (exts.test(entry.name) && !/\.(test|spec)\.(ts|tsx)$/.test(entry.name)) {
       yield rel;
     }
   }
 }
 
+const SOURCE_EXTS = /\.(ts|tsx)$/;
+const STYLE_EXTS = /\.css$/;
+
 /** Every non-test source file under all `SCAN_ROOTS`. */
 export function* walkAll(): Generator<string> {
   for (const root of SCAN_ROOTS) yield* walk(root);
+}
+
+/**
+ * Every stylesheet a design hard rule can be violated in.
+ *
+ * Separate from `walkAll` because the guards match Tailwind class syntax in
+ * `.tsx`, which does not appear in CSS — a stylesheet expresses the same
+ * violation as a raw `color: var(--token)` declaration instead. Without this,
+ * a `.tertiary-text { color: var(--md-sys-color-outline) }` utility added to
+ * `app/globals.css` would reintroduce an entire class of violation with zero
+ * guard coverage. `styles/` is included explicitly: it sits outside SCAN_ROOTS.
+ */
+export function* walkStyles(): Generator<string> {
+  for (const root of [...SCAN_ROOTS, 'styles']) {
+    try {
+      yield* walk(root, STYLE_EXTS);
+    } catch {
+      // A scan root with no stylesheets (or no directory at all) is fine.
+    }
+  }
 }
 
 /**
