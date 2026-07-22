@@ -42,7 +42,7 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
         className={cn(
           'text-[13px] md-numeric',
           empty
-            ? 'text-[var(--md-sys-color-outline)]'
+            ? 'text-[var(--md-sys-color-on-surface-variant)]'
             : 'text-[var(--md-sys-color-on-surface)]',
         )}
       >
@@ -207,7 +207,7 @@ export function RfpStep4Review({
             {draft.memo}
           </p>
         ) : (
-          <p className="text-[13px] text-[var(--md-sys-color-outline)] border border-[var(--md-sys-color-outline-variant)] p-4">
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] border border-[var(--md-sys-color-outline-variant)] p-4">
             미입력
           </p>
         )}
@@ -223,20 +223,20 @@ export function RfpStep4Review({
                 key={file.id}
                 className="py-2 flex items-center gap-3 min-w-0"
               >
-                <span className="md-numeric text-[10px] text-[var(--md-sys-color-outline)] shrink-0">
+                <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)] shrink-0">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <span className="text-[13px] text-[var(--md-sys-color-on-surface)] truncate">
                   {file.name}
                 </span>
-                <span className="md-numeric text-[11px] text-[var(--md-sys-color-outline)] shrink-0 ml-auto">
+                <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] shrink-0 ml-auto">
                   {formatSize(file.size)}
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-[13px] text-[var(--md-sys-color-outline)] border-t border-[var(--md-sys-color-outline-variant)] py-2">
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] border-t border-[var(--md-sys-color-outline-variant)] py-2">
             첨부파일이 없어요
           </p>
         )}
@@ -248,7 +248,7 @@ export function RfpStep4Review({
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           {draft.allowedPgWorkspaceIds.map((ws, i) => (
             <div key={ws.id} className="py-2 flex items-center gap-3">
-              <span className="md-numeric text-[10px] text-[var(--md-sys-color-outline)]">
+              <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
                 {String(i + 1).padStart(2, '0')}
               </span>
               {/* 로고는 장식 — 옆 텍스트가 이미 PG명을 알리므로 a11y 트리에서 숨김 */}

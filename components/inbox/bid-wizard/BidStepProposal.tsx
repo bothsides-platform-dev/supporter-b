@@ -54,13 +54,13 @@ export function BidStepProposal({
               <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                 PDF 업로드 (클릭)
               </p>
-              <p className="md-label-small text-[var(--md-sys-color-outline)] mt-1">
+              <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)] mt-1">
                 20MB 이내
               </p>
             </button>
           )}
           {proposal && 'status' in proposal && proposal.status === 'uploading' && (
-            <p className="md-label-small text-[var(--md-sys-color-outline)]">
+            <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
               {proposal.name} — UPLOADING…
             </p>
           )}
@@ -72,7 +72,7 @@ export function BidStepProposal({
               <button
                 type="button"
                 onClick={onClear}
-                className="md-label-small text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-error)] px-1"
+                className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] px-1"
               >
                 ×
               </button>
@@ -85,7 +85,7 @@ export function BidStepProposal({
                 <button
                   type="button"
                   onClick={onClear}
-                  className="md-label-small text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-error)] px-1 shrink-0"
+                  className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] px-1 shrink-0"
                 >
                   ×
                 </button>

@@ -85,7 +85,7 @@ export function PgHeroProductWindow() {
           ))}
         </div>
 
-        <p className="font-mono text-[10px] tracking-[0.06em] leading-relaxed text-[var(--md-sys-color-outline)]">
+        <p className="font-mono text-[10px] tracking-[0.06em] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
           * 표시 값은 이해를 돕기 위한 예시입니다.
         </p>
       </div>

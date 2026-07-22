@@ -97,7 +97,7 @@ export function CreateWorkspaceForm() {
               value={name}
               maxLength={200}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-1 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+              className="w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-1 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
             />
           </div>
 

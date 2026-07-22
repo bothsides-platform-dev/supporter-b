@@ -137,7 +137,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
                       <span className="text-[var(--text-sm)] font-medium text-[var(--md-sys-color-on-surface-variant)]">
                         {item.label}
                       </span>
-                      <span className="text-[var(--text-2xs)] leading-snug text-[var(--md-sys-color-outline)]">
+                      <span className="text-[var(--text-2xs)] leading-snug text-[var(--md-sys-color-on-surface-variant)]">
                         {item.desc}
                       </span>
                     </span>

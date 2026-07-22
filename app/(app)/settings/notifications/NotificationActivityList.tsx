@@ -67,7 +67,7 @@ function NotificationRow({
 
   const body = (
     <>
-      <span className="md-numeric text-[10px] text-[var(--md-sys-color-outline)] w-8 mt-0.5 shrink-0">
+      <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)] w-8 mt-0.5 shrink-0">
         {String(indexFromEnd).padStart(3, '0')}
       </span>
       <div className="flex-1 min-w-0">
@@ -83,7 +83,7 @@ function NotificationRow({
           {notif.body}
         </p>
         <div className="mt-2 flex items-center gap-3">
-          <span className="md-numeric text-[10px] text-[var(--md-sys-color-outline)]">
+          <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
             <LocalTime iso={notif.createdAt} />
           </span>
         </div>

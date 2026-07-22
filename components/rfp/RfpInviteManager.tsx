@@ -107,7 +107,7 @@ export function RfpInviteManager({
           <Divider />
         </div>
         {invitations.length === 0 ? (
-          <p className="md-label-small text-[var(--md-sys-color-outline)]">
+          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             초대한 PG가 없어요.
           </p>
         ) : (
@@ -118,7 +118,7 @@ export function RfpInviteManager({
                 className="py-2 flex items-center justify-between gap-3"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="md-numeric text-[10px] text-[var(--md-sys-color-outline)]">
+                  <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   <CounterpartyProfileCard
@@ -146,12 +146,12 @@ export function RfpInviteManager({
             ) : pgList.length === 0 ? (
               <p
                 role="status"
-                className="md-label-small text-[var(--md-sys-color-outline)]"
+                className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
               >
                 불러오는 중…
               </p>
             ) : availablePgs.length === 0 ? (
-              <p className="md-label-small text-[var(--md-sys-color-outline)]">
+              <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                 모든 PG를 이미 추가했어요.
               </p>
             ) : (
@@ -184,7 +184,7 @@ export function RfpInviteManager({
                 {inputError}
               </p>
             )}
-            <p className="md-label-small text-[var(--md-sys-color-outline)]">
+            <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
               칩을 누르면 &ldquo;대기중&rdquo;으로 쌓여요. 아래 &ldquo;초대 보내기&rdquo;를
               누르면 메일이 나가요.
             </p>

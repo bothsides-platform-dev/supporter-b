@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
  * nums on top per the Linear `.md-numeric` rule.
  */
 export const underlineInputClass =
-  'block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors';
+  'block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors';
 
 export const numericInputClass = cn(underlineInputClass, 'md-numeric');
 

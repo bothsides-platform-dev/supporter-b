@@ -137,7 +137,7 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
             placeholder="000-00-00000"
             aria-label="사업자 등록번호"
             className={cn(
-              'flex-1 bg-transparent border-0 border-b py-2 text-[14px] md-numeric text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none transition-colors',
+              'flex-1 bg-transparent border-0 border-b py-2 text-[14px] md-numeric text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none transition-colors',
               status === 'found'
                 ? 'border-[var(--md-sys-color-on-surface)] opacity-60'
                 : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',
