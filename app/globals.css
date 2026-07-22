@@ -4,6 +4,12 @@
 
 @source not "../**/*.md";
 @source not "../**/*.mdx";
+/* 드리프트 가드 테스트는 클래스 패턴을 문서화하려고 `text-[length:var(--md-typescale-label-*-size)]`
+   같은 **자리표시자**를 주석에 적는다. Tailwind 스캐너는 그걸 실제 유틸리티 후보로 읽어
+   `font-size: var(--md-typescale-label-*-size)` 라는 파싱 불가 CSS 를 뱉고, dev/build 가 통째로
+   500 으로 죽는다. 테스트 파일은 프로덕션 유틸리티의 출처가 아니므로 스캔 대상에서 뺀다.
+   (위 .md 제외도 같은 이유로 이미 있었다 — DESIGN.md 가 같은 자리표시자를 싣는다.) */
+@source not "../**/__tests__/**";
 
 @custom-variant dark (&:is(.dark *));
 
