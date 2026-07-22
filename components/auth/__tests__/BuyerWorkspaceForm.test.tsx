@@ -89,7 +89,7 @@ describe('BuyerWorkspaceForm — 폐업/휴업 사업자 차단', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument(),
     );
 
-    expect(screen.getByRole('alert').textContent).toMatch(/가입할 수 없어요/);
+    expect(screen.getByRole('alert').textContent).toMatch(/사용할 수 없어요/);
     expect(screen.getByRole('button', { name: '워크스페이스 만들기' })).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: '워크스페이스 만들기' }));

@@ -211,6 +211,52 @@ describe('WorkspaceBizNoForm', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  // 가입 폼(BuyerWorkspaceForm)은 폐업·휴업 사업자를 blockedStatuses 로 막는데
+  // 설정의 변경 폼은 그 prop 없이 BizLookupField 를 써서, 정상 사업자로 가입한
+  // 뒤 폐업 번호로 갈아끼우는 경로가 열려 있었다.
+  it.each([
+    ['closed', '폐업'] as const,
+    ['suspended', '휴업'] as const,
+  ])('폐업·휴업(%s) 사업자번호로는 변경할 수 없다', async (status, label) => {
+    const user = userEvent.setup();
+    lookupBizNoAction.mockResolvedValue({
+      ok: true,
+      valid: true,
+      taxType: 'general',
+      status,
+    });
+
+    render(<WorkspaceBizNoForm currentBizNo={CURRENT} />);
+    await user.click(screen.getByRole('button', { name: '수정' }));
+
+    await user.type(screen.getByLabelText('사업자 등록번호'), '2223334444');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      new RegExp(`${label} 상태인 사업자`),
+    );
+    expect(screen.getByRole('button', { name: '변경 적용' })).toBeDisabled();
+    expect(updateWorkspaceBizProfileAction).not.toHaveBeenCalled();
+  });
+
+  it('최초 등록 모드에서도 폐업 사업자번호는 등록할 수 없다', async () => {
+    const user = userEvent.setup();
+    lookupBizNoAction.mockResolvedValue({
+      ok: true,
+      valid: true,
+      taxType: 'general',
+      status: 'closed',
+    });
+
+    render(<WorkspaceBizNoForm currentBizNo={null} />);
+    await user.type(screen.getByLabelText('사업자 등록번호'), '2223334444');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '사업자번호 등록' })).toBeDisabled();
+    expect(updateWorkspaceBizProfileAction).not.toHaveBeenCalled();
+  });
+
   it('NTS 조회 실패 시 "찾지 못했어요"가 아닌 오류 메시지를 표시한다', async () => {
     const user = userEvent.setup();
     lookupBizNoAction.mockResolvedValue({ ok: false, error: 'NTS_NETWORK' });
