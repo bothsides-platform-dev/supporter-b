@@ -72,6 +72,6 @@ export default auth(async (req) => {
 // two cannot drift.
 export const config = {
   matcher: [
-    '/((?!(?:monitoring|_axiom|api|_next|favicon\\.ico|icon\\.svg|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|naverc0e607e11bc419371519800f1235a0b4\\.html|landing|fonts)(?:/|$)|(?:opengraph-image|twitter-image|apple-icon)(?:[-.][^/]*)?(?:/|$)).*)',
+    '/((?!(?:monitoring|_axiom|api|_next|favicon\\.ico|icon\\.svg|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|naverc0e607e11bc419371519800f1235a0b4\\.html|landing|fonts)(?:/|$)|(?:opengraph-image|twitter-image|apple-icon)(?:[-.][^/]*)?$).*)',
   ],
 };

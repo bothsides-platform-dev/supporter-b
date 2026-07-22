@@ -48,6 +48,10 @@ const EXCLUDED_SEGMENTS = [
  * its companion alt text at '/opengraph-image.alt.txt'). These therefore need a
  * relaxed boundary that tolerates an extension — but only after a `.` or `-`,
  * so it cannot decay back into the bare prefix match rule 2 above removes.
+ *
+ * They are also always *terminal*: there is no '/apple-icon.png/<something>'.
+ * Anchoring them to end-of-path (rather than reusing SEGMENT_END) keeps the
+ * relaxed suffix from handing every path beneath the prefix a free auth skip.
  */
 const EXCLUDED_ASSET_PREFIXES = ['opengraph-image', 'twitter-image', 'apple-icon'] as const;
 
@@ -55,7 +59,9 @@ const EXCLUDED_ASSET_PREFIXES = ['opengraph-image', 'twitter-image', 'apple-icon
 const SEGMENT_END = '(?:/|$)';
 // '.png', '.alt.txt', '-<buildhash>.png' — an extension/hash suffix, not a word.
 const ASSET_SUFFIX = '(?:[-.][^/]*)?';
+// Metadata assets are terminal — end of path only, never a subpath.
+const PATH_END = '$';
 
 export const PROXY_MATCHER =
   `/((?!(?:${EXCLUDED_SEGMENTS.join('|')})${SEGMENT_END}` +
-  `|(?:${EXCLUDED_ASSET_PREFIXES.join('|')})${ASSET_SUFFIX}${SEGMENT_END}).*)`;
+  `|(?:${EXCLUDED_ASSET_PREFIXES.join('|')})${ASSET_SUFFIX}${PATH_END}).*)`;

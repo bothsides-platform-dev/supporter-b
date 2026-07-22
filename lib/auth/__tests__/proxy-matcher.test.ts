@@ -98,6 +98,16 @@ describe('auth proxy matcher — segment boundary', () => {
     expect(proxyRuns('/opengraph-images')).toBe(true);
   });
 
+  // The metadata assets are always terminal — Next serves '/apple-icon.png',
+  // never '/apple-icon.png/<something>'. Letting the relaxed boundary accept a
+  // following '/' would hand every path under that prefix a free auth bypass,
+  // which is exactly the prefix-matching bug this whole change removes.
+  it('does not exclude subpaths beneath a metadata asset', () => {
+    expect(proxyRuns('/apple-icon.png/admin')).toBe(true);
+    expect(proxyRuns('/opengraph-image.png/settings/members')).toBe(true);
+    expect(proxyRuns('/apple-icon/rfp')).toBe(true);
+  });
+
   it('keeps excluding the exact segments and their subpaths', () => {
     expect(proxyRuns('/monitoring')).toBe(false);
     expect(proxyRuns('/_axiom/logs')).toBe(false);
