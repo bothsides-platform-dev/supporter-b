@@ -108,17 +108,14 @@ export function ImprovementSummary({
         {/* 가입비는 나머지 네 지표와 성격이 다르다 — 구매사가 "현재 가입비"를 적는 곳이
             없어(CurrentTermsV1 에 키 자체가 없다) 비교 기준선이 없고, 1회성이라 반복 비용인
             수수료와 같은 축에 놓이지도 않는다. 그래서 배지도, 위 헤딩의 개선 판정도 붙지
-            않는다. 그 범위를 행이 스스로 알리도록 '1회성 비용' 을 상시 병기한다. */}
+            않는다. 캐비앗은 **라벨 밑**에 둔다 — 마지막 열은 개선폭 전용이라 거기에 분류
+            문구를 끼우면 세로로 훑을 때 판정으로 오독된다(가입비가 그만큼 좋아졌다는 식). */}
         <MetricRow
           testId="metric-row-signup"
           label="가입비"
+          labelNote="한 번만 내는 비용이라 위 비교에 넣지 않았어요"
           proposedText={bid.signupFee > 0 ? formatKRW(bid.signupFee) : '없어요'}
           proposedNumeric={bid.signupFee > 0}
-          trailing={
-            <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-              1회성 비용
-            </span>
-          }
         />
       </div>
     </section>
@@ -165,6 +162,7 @@ function qualityNode(quality: 'faster' | 'same' | 'slower' | null): ReactNode {
 function MetricRow({
   testId,
   label,
+  labelNote,
   currentText,
   proposedText,
   trailing,
@@ -174,6 +172,8 @@ function MetricRow({
 }: {
   testId: string;
   label: string;
+  /** 라벨 밑 한 줄 단서 — 이 지표가 왜 다른지. 개선폭 열을 오염시키지 않는 자리다. */
+  labelNote?: string;
   currentText?: string | null;
   proposedText: string;
   trailing?: ReactNode;
@@ -189,6 +189,11 @@ function MetricRow({
     >
       <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
         {label}
+        {labelNote && (
+          <span className="block text-[12px] font-normal text-[var(--md-sys-color-on-surface-variant)]">
+            {labelNote}
+          </span>
+        )}
       </span>
       {currentText ? (
         <span className="md-numeric text-[13px] text-right text-[var(--md-sys-color-on-surface-variant)]">

@@ -178,17 +178,31 @@ describe('ImprovementSummary', () => {
     );
   });
 
-  it('marks the signup fee as a one-time cost so the headline verdict scope stays honest', () => {
+  it('says outright that the signup fee sits outside the headline verdict', () => {
     // 헤딩("좋아져요")은 반복 지표 네 개로만 판정한다. 가입비가 그 판정 밖이라는 사실을
     // 행 자체가 알리지 않으면, 고액 가입비가 붙은 견적도 무조건 "좋아져요" 로만 읽힌다.
+    // 캐비앗은 성격('1회성')만 말해선 부족하다 — 판정에서 빠졌다는 것까지 말해야 한다.
     render(<ImprovementSummary bid={makeBid({ signupFee: 550_000 })} current={fullCurrent} />);
-    expect(within(screen.getByTestId('metric-row-signup')).getByText('1회성 비용')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('metric-row-signup')).getByText(/위 비교에 넣지 않았어요/),
+    ).toBeInTheDocument();
   });
 
-  it('keeps the one-time-cost caveat on the row even when there is no signup fee', () => {
+  it('keeps the caveat on the row even when there is no signup fee', () => {
     // 캐비앗이 금액 유무에 따라 나타났다 사라지면 "가입비가 있을 때만 예외" 로 오독된다.
     // 이 행은 금액과 무관하게 판정 밖이므로 캐비앗도 상시 붙는다.
     render(<ImprovementSummary bid={makeBid({ signupFee: 0 })} current={fullCurrent} />);
-    expect(within(screen.getByTestId('metric-row-signup')).getByText('1회성 비용')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('metric-row-signup')).getByText(/위 비교에 넣지 않았어요/),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the improvement column empty on the signup row', () => {
+    // 마지막 열은 개선폭 전용이다 — 위 네 행이 전부 비교 판정(↓0.60%p·더 빠름)을 싣는다.
+    // 거기에 분류 문구를 끼우면 세로로 훑을 때 다섯 번째도 판정으로 읽혀(=가입비가
+    // '1회성 비용'만큼 좋아졌다) 열의 의미가 무너진다. 캐비앗은 라벨 밑으로 간다.
+    render(<ImprovementSummary bid={makeBid({ signupFee: 550_000 })} current={fullCurrent} />);
+    const row = screen.getByTestId('metric-row-signup');
+    expect(row.lastElementChild?.textContent).toBe('');
   });
 });
