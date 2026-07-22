@@ -163,6 +163,52 @@ describe('classifyAccountDeletion', () => {
     expect(result.blockingWorkspaces).toEqual([]);
   });
 
+  // The loop must keep classifying after each verdict. If a `continue` ever
+  // became a `return`, every single-workspace test above would still pass while
+  // real users with several workspaces silently lost a blocker or a solo entry.
+  it('classifies every workspace, not just the first', () => {
+    const result = classifyAccountDeletion(
+      [
+        membership({
+          workspaceId: 'ws-solo',
+          name: '1인 회사',
+          members: [member({ userId: ME, role: 'admin' })],
+        }),
+        membership({
+          workspaceId: 'ws-safe',
+          name: '동료 있는 회사',
+          members: [
+            member({ userId: ME, role: 'admin' }),
+            member({ userId: 'co-admin', role: 'admin' }),
+          ],
+        }),
+        membership({
+          workspaceId: 'ws-blocked',
+          name: '나만 관리자',
+          members: [
+            member({ userId: ME, role: 'admin' }),
+            member({ userId: 'teammate', role: 'member' }),
+          ],
+        }),
+        membership({
+          workspaceId: 'ws-stuck',
+          name: '넘길 사람 없음',
+          members: [
+            member({ userId: ME, role: 'admin' }),
+            member({ userId: 'joiner', approvalStatus: 'pending_approval' }),
+          ],
+        }),
+      ],
+      ME,
+    );
+
+    expect(result.soloWorkspaces).toEqual([{ id: 'ws-solo', name: '1인 회사' }]);
+    expect(result.blockingWorkspaces).toEqual([
+      { id: 'ws-blocked', name: '나만 관리자', hasDelegatableMember: true },
+      { id: 'ws-stuck', name: '넘길 사람 없음', hasDelegatableMember: false },
+    ]);
+  });
+
   it('ignores workspaces where the user is not an approved admin', () => {
     const result = classifyAccountDeletion(
       [

@@ -13,6 +13,8 @@
 // the constraint that actually holds.
 
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 
 import { workspaceMembers } from '@/lib/db/schema';
@@ -67,4 +69,42 @@ describe('workspace_members.approval_status', () => {
       ).rejects.toThrow();
     },
   );
+
+  // The tests above prove the constraint holds in PGlite, which is built from
+  // the Drizzle schema. Production gets the constraint from a hand-written
+  // `docs/migrations/*.sql` instead (a CHECK cannot be added by `db:push` when
+  // drifted rows already exist). Two sources, one invariant — so pin them
+  // together, or a future edit to the allowed values lands in only one and
+  // production silently enforces something the test suite never exercised.
+  it('keeps the deploy migration SQL in sync with the schema constraint', () => {
+    const repoRoot = join(__dirname, '../../../../..');
+    const schemaSrc = readFileSync(
+      join(repoRoot, 'lib/db/schema/workspace-members.ts'),
+      'utf8',
+    );
+    const migrationSrc = readFileSync(
+      join(
+        repoRoot,
+        'docs/migrations/2026-07-workspace-members-approval-status-check.sql',
+      ),
+      'utf8',
+    );
+
+    const values = (src: string) =>
+      [...src.matchAll(/'(approved|pending_approval|rejected|[a-z_]+)'/gi)]
+        .map((m) => m[1])
+        .filter((v) => ['approved', 'pending_approval', 'rejected'].includes(v));
+
+    // Both files must name the constraint identically — otherwise the
+    // idempotency guard in the migration checks for a constraint that the
+    // schema never creates, and re-running would add a duplicate.
+    expect(schemaSrc).toContain('workspace_members_approval_status_check');
+    expect(migrationSrc).toContain('workspace_members_approval_status_check');
+
+    const schemaValues = new Set(values(schemaSrc));
+    const migrationValues = new Set(values(migrationSrc));
+
+    expect(schemaValues.size).toBe(3);
+    expect([...migrationValues].sort()).toEqual([...schemaValues].sort());
+  });
 });
