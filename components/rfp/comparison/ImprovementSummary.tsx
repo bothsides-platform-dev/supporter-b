@@ -105,7 +105,21 @@ export function ImprovementSummary({
           proposedText={formatKRW(bid.guaranteeInsurance)}
           trailing={badgeNode(krwBadge(current.guaranteeInsurance, bid.guaranteeInsurance, 'lower'))}
         />
-        <MetricRow testId="metric-row-signup" label="가입비" proposedText={formatKRW(bid.signupFee)} />
+        {/* 가입비는 나머지 네 지표와 성격이 다르다 — 구매사가 "현재 가입비"를 적는 곳이
+            없어(CurrentTermsV1 에 키 자체가 없다) 비교 기준선이 없고, 1회성이라 반복 비용인
+            수수료와 같은 축에 놓이지도 않는다. 그래서 배지도, 위 헤딩의 개선 판정도 붙지
+            않는다. 그 범위를 행이 스스로 알리도록 '1회성 비용' 을 상시 병기한다. */}
+        <MetricRow
+          testId="metric-row-signup"
+          label="가입비"
+          proposedText={bid.signupFee > 0 ? formatKRW(bid.signupFee) : '없어요'}
+          proposedNumeric={bid.signupFee > 0}
+          trailing={
+            <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+              1회성 비용
+            </span>
+          }
+        />
       </div>
     </section>
   );
@@ -156,6 +170,7 @@ function MetricRow({
   trailing,
   proposedFlash,
   proposedFlashTestId,
+  proposedNumeric = true,
 }: {
   testId: string;
   label: string;
@@ -164,6 +179,8 @@ function MetricRow({
   trailing?: ReactNode;
   proposedFlash?: boolean;
   proposedFlashTestId?: string;
+  /** 제안값이 금액·요율이 아니라 상태어('없어요')면 false — mono/tabular 를 벗긴다. */
+  proposedNumeric?: boolean;
 }) {
   return (
     <div
@@ -190,7 +207,8 @@ function MetricRow({
       <span
         data-testid={proposedFlashTestId}
         className={cn(
-          'md-numeric text-[13px] font-[600] text-[var(--md-sys-color-on-surface)]',
+          'text-[13px] font-[600] text-[var(--md-sys-color-on-surface)]',
+          proposedNumeric && 'md-numeric',
           proposedFlash && 'tier-flash',
         )}
       >

@@ -148,4 +148,47 @@ describe('ImprovementSummary', () => {
     );
     expect(screen.getByText('지금 조건보다 이만큼 좋아져요')).toBeInTheDocument();
   });
+
+  // 가입비는 나머지 네 지표와 성격이 다르다: 구매사가 "현재 가입비"를 입력하는 곳이
+  // 없어(CurrentTermsV1 에 키 자체가 없다) 비교 기준선이 존재하지 않고, 1회성이라
+  // 반복 비용인 수수료와 같은 축에 놓을 수도 없다. 그래서 배지도 헤딩 판정도 못 붙는다.
+  // 아래 두 테스트는 그 사실을 화면에서 정직하게 알리는 방식을 고정한다.
+  it('reads ₩0 signup fee as 없어요 rather than a bare 0원', () => {
+    // ₩0 은 구매사에게 잡음이 아니라 강점이다 — 금액 0 이 아니라 부재로 읽혀야 한다.
+    render(<ImprovementSummary bid={makeBid({ signupFee: 0 })} current={fullCurrent} />);
+    const signup = within(screen.getByTestId('metric-row-signup'));
+
+    expect(signup.getByText('없어요')).toBeInTheDocument();
+    expect(signup.queryByText('0원')).not.toBeInTheDocument();
+  });
+
+  it('drops the numeric type treatment when the signup fee row reads 없어요', () => {
+    // .md-numeric 은 mono + tabular-nums 라 한글에 얹으면 안 된다(DESIGN.md 하드룰:
+    // 숫자에만, 라벨에는 절대). 금액일 때는 그대로 유지되는지도 함께 고정한다.
+    const { rerender } = render(
+      <ImprovementSummary bid={makeBid({ signupFee: 0 })} current={fullCurrent} />,
+    );
+    expect(within(screen.getByTestId('metric-row-signup')).getByText('없어요')).not.toHaveClass(
+      'md-numeric',
+    );
+
+    rerender(<ImprovementSummary bid={makeBid({ signupFee: 550_000 })} current={fullCurrent} />);
+    expect(within(screen.getByTestId('metric-row-signup')).getByText('550,000원')).toHaveClass(
+      'md-numeric',
+    );
+  });
+
+  it('marks the signup fee as a one-time cost so the headline verdict scope stays honest', () => {
+    // 헤딩("좋아져요")은 반복 지표 네 개로만 판정한다. 가입비가 그 판정 밖이라는 사실을
+    // 행 자체가 알리지 않으면, 고액 가입비가 붙은 견적도 무조건 "좋아져요" 로만 읽힌다.
+    render(<ImprovementSummary bid={makeBid({ signupFee: 550_000 })} current={fullCurrent} />);
+    expect(within(screen.getByTestId('metric-row-signup')).getByText('1회성 비용')).toBeInTheDocument();
+  });
+
+  it('keeps the one-time-cost caveat on the row even when there is no signup fee', () => {
+    // 캐비앗이 금액 유무에 따라 나타났다 사라지면 "가입비가 있을 때만 예외" 로 오독된다.
+    // 이 행은 금액과 무관하게 판정 밖이므로 캐비앗도 상시 붙는다.
+    render(<ImprovementSummary bid={makeBid({ signupFee: 0 })} current={fullCurrent} />);
+    expect(within(screen.getByTestId('metric-row-signup')).getByText('1회성 비용')).toBeInTheDocument();
+  });
 });
