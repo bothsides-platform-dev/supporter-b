@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { sendPhoneOtpAction } from '@/lib/server/actions/auth/sendPhoneOtpAction';
 import { verifyPhoneOtpAction } from '@/lib/server/actions/auth/verifyPhoneOtpAction';
 import { formatPhoneInput, isCompletePhone } from '@/lib/utils/phone';
+import { underlineInputClass } from '@/components/forms/inputs';
+import { cn } from '@/lib/utils';
 
 const OTP_TTL_SECONDS = 5 * 60;
 
@@ -125,8 +127,7 @@ export function PhoneVerificationField({ onVerified }: Props) {
 
   const labelClass =
     'md-label-small text-[var(--md-sys-color-on-surface-variant)]';
-  const inputClass =
-    'block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] md-numeric text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors disabled:opacity-40';
+  const inputClass = cn(underlineInputClass, 'md-numeric disabled:opacity-40');
 
   const mm = String(Math.floor(countdown / 60)).padStart(2, '0');
   const ss = String(countdown % 60).padStart(2, '0');

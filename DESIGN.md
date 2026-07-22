@@ -68,7 +68,7 @@ surface-container-highest #E4E5E9               #202123
 | 토큰 | 라이트 | 다크 | 용도 |
 |---|---|---|---|
 | `--md-sys-color-on-surface` | `#1F2023` | `#F7F8F8` | 주 텍스트 |
-| `--md-sys-color-on-surface-variant` | `#6B7079` | `#8A8F98` | 보조/메타 텍스트, 아이콘 |
+| `--md-sys-color-on-surface-variant` | `#5F646D` | `#8A8F98` | 보조/메타 텍스트, 아이콘 |
 | `--md-sys-color-outline` | `#D4D6DC` | `#2E3033` | 강한 보더 (인풋 포커스 전) |
 | `--md-sys-color-outline-variant` | `#E8E9EC` | `#23252A` | **저대비 보더/디바이더 (기본)** |
 
@@ -78,7 +78,7 @@ surface-container-highest #E4E5E9               #202123
 >
 > **3차 텍스트 톤은 색으로 만들지 않는다.** `on-surface-variant` 보다 옅으면서 AA 를 통과하는 색은 사실상 존재하지 않는다 — 라이트 `surface` 위에서 4.5:1 을 지키는 상대휘도 상한이 L≤0.175 인데 `on-surface-variant` 가 이미 L=0.161 이다. 보조 텍스트 아래 위계는 색이 아니라 **타입스케일(크기·굵기)** 로 만든다.
 >
-> **측정 기준은 `surface` 다 — 컨테이너 계층 위에서는 아직 AA 를 못 채운다.** `on-surface-variant`(#6B7079) 는 `surface`(#FBFBFC) 4.81:1 · `surface-container-low` 4.68:1 로 통과하지만, 배경이 짙어질수록 떨어져 `surface-container` 4.44:1 · `surface-dim` 4.25:1 · `surface-container-high` 4.21:1 · `surface-container-highest` 3.95:1 · 각종 `*-container` 3.85~4.29:1 로 **본문 기준 4.5:1 에 미달**한다. 즉 위 하드룰은 "`outline` 보다 낫다"를 보장하지, "모든 배경에서 AA"를 보장하지 않는다 — 드리프트 가드도 토큰 *이름*만 보지 대비를 계산하지 않는다. 짙은 컨테이너 위 보조 텍스트의 처리(더 짙은 보조 토큰 신설 vs 표면별 쌍 도입)는 미해결이며 TODOS.md 에 있다.
+> **AA 는 `surface` 하나가 아니라 모든 표면 계층에서 성립해야 한다.** 라이트 `on-surface-variant` 는 원래 `#6B7079` 였는데 `surface`(#FBFBFC) 위 4.81:1 로는 통과하면서 배경이 짙어지면 `surface-container` 4.44:1 · `surface-container-high` 4.21:1 · `surface-container-highest` 3.95:1 로 본문 기준 아래로 떨어졌다. 가장 짙은 계층에서도 통과하도록 **`#5F646D`(최악 4.73:1) 로 조정**했다. 다크 `#8A8F98` 은 이미 최악 4.96:1 이라 그대로다. 이 불변식은 `lib/design/__tests__/text-contrast.test.ts` 가 `styles/tokens.css` 를 직접 읽어 여덟 개 표면 토큰 전부에 대해 계산하므로, 토큰을 만지면 주장이 아니라 측정으로 검증된다. 표면 토큰을 새로 추가하면 그 목록에도 넣는다.
 >
 > 유일한 예외는 **AT 에서 완전히 배제된 순수 장식 구분자**(`aria-hidden`)다 — WCAG 1.4.3 의 장식 예외에 해당한다. 현재 breadcrumb 의 `/` 와 딜룸 헤더의 `·` 두 곳뿐이며, `lib/design/design-hardrule-allowlist.mjs` 의 `OUTLINE_TEXT_ALLOWLIST` 에 등재돼 있다. `lib/design/__tests__/outline-text-drift.test.ts` 가 `app/**`·`components/**`·`lib/**` 를 훑어 이 규칙과 예외의 `aria-hidden` 조건을 모두 강제한다.
 
