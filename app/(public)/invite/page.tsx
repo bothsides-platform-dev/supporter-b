@@ -30,7 +30,7 @@ function InviteContent() {
       <div className="space-y-3">
         <Button fullWidth size="lg" onClick={() => router.push(`/signup/pg?token=${token}`)}>가입하고 합류</Button>
         <Button fullWidth variant="outlined" size="md" onClick={() => router.push('/login')}>로그인 후 합류</Button>
-        <button type="button" className="block w-full text-center md-label-small text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface-variant)] transition-colors">
+        <button type="button" className="block w-full text-center md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors">
           거절하기
         </button>
       </div>

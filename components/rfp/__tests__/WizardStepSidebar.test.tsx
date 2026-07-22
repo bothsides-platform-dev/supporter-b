@@ -200,4 +200,57 @@ describe('WizardStepSidebar', () => {
     const pgButton = screen.getByText('PG 선택').closest('button');
     expect(pgButton).toHaveClass('cursor-not-allowed', 'opacity-50');
   });
+
+  // ── 라벨 색 위계 ─────────────────────────────────────────────────────────
+  // 활성만 주 텍스트 톤이고 완료·실패·미방문은 한 톤으로 모인다. 세 상태의 구분은
+  // 왼쪽 배지(✓/✗/번호 + 배경색)가 지므로 라벨 색은 의도적으로 같다.
+  // 저대비 `outline` 을 라벨에 쓰던 시절의 위계를 되살리지 못하도록 못박는다
+  // (DESIGN.md §2 — outline 은 보더 전용).
+  it('활성 step 라벨만 주 텍스트 톤이고 완료·실패·미방문 라벨은 동일한 보조 톤이다', () => {
+    // Step 1: 활성 / Step 2: 비활성+완료(✓) / Step 3: 비활성+미완료+실패이력(✗) / Step 4: 미방문
+    render(
+      <WizardStepSidebar
+        currentStep={1}
+        completed={[true, true, false, false]}
+        failedAt={[false, false, true, false]}
+        onStepClick={vi.fn()}
+      />,
+    );
+    const labelOf = (text: string) => screen.getByText(text);
+
+    expect(labelOf('사업자 확인')).toHaveClass('text-[var(--md-sys-color-on-surface)]');
+    expect(labelOf('사업자 확인')).toHaveClass('font-semibold');
+
+    for (const label of ['견적 내용', 'PG 선택', '최종 견적 요청 정보 확인']) {
+      expect(labelOf(label), `${label} 라벨은 보조 톤이어야 한다`).toHaveClass(
+        'text-[var(--md-sys-color-on-surface-variant)]',
+      );
+      expect(labelOf(label), `${label} 라벨에 저대비 outline 이 되살아났다`).not.toHaveClass(
+        'text-[var(--md-sys-color-outline)]',
+      );
+    }
+  });
+
+  // 위 테스트가 라벨 색을 한 톤으로 묶어도 되는 근거는 "배지가 상태를 구분한다" 하나뿐이다.
+  // 그 전제 자체를 잠가 두지 않으면 배지 배경색을 지워도 두 테스트가 모두 통과하면서
+  // 완료·실패·미방문이 화면에서 완전히 구별 불가능해진다.
+  it('상태 구분은 배지가 진다 — 완료·실패·미방문 배지가 서로 다른 배경색을 갖는다', () => {
+    render(
+      <WizardStepSidebar
+        currentStep={1}
+        completed={[true, true, false, false]}
+        failedAt={[false, false, true, false]}
+        onStepClick={vi.fn()}
+      />,
+    );
+    const badgeOf = (label: string) =>
+      screen.getByText(label).closest('button')!.querySelector('span')!;
+
+    expect(badgeOf('사업자 확인')).toHaveClass('bg-[var(--md-sys-color-primary)]');
+    expect(badgeOf('견적 내용')).toHaveClass('bg-[var(--md-sys-color-tertiary)]');
+    expect(badgeOf('PG 선택')).toHaveClass('bg-[var(--md-sys-color-error)]');
+    expect(badgeOf('최종 견적 요청 정보 확인')).toHaveClass(
+      'bg-[var(--md-sys-color-surface-container-high)]',
+    );
+  });
 });

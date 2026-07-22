@@ -167,7 +167,7 @@ function PgSignupEmailForm() {
             autoComplete="email"
             placeholder="your@pgcompany.com"
             className={[
-              'block w-full bg-transparent border-0 border-b py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none transition-colors',
+              'block w-full bg-transparent border-0 border-b py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none transition-colors',
               isInvited
                 ? 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] cursor-default select-all'
                 : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',

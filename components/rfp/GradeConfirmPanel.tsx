@@ -40,7 +40,7 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
         <button
           type="button"
           onClick={() => setConfirmed(false)}
-          className="md-label-small text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-on-surface-variant)] transition-colors ml-auto"
+          className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors ml-auto"
         >
           수정
         </button>
@@ -82,7 +82,7 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
         })}
       </div>
       <div className="flex items-center justify-between gap-3">
-        <p className="md-label-small text-[var(--md-sys-color-outline)]">
+        <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           등급은 PG에게 전달되는 참고 정보예요 — 카드 수수료는 모두 협상 대상.
         </p>
         <Button

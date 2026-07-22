@@ -222,11 +222,11 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
                     <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--md-sys-color-on-surface)]">
                       {r.name}
                     </span>
-                    <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-outline)]">
+                    <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
                       {formatSize(r.size ?? 0)}
                     </span>
                     {r.status === 'uploading' && (
-                      <span className="shrink-0 md-label-small text-[var(--md-sys-color-outline)]">
+                      <span className="shrink-0 md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                         UPLOADING…
                       </span>
                     )}
@@ -242,7 +242,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
                       type="button"
                       aria-label={`${r.name} 제거`}
                       onClick={() => removeRow(r.id)}
-                      className="shrink-0 rounded-[var(--md-sys-shape-small)] p-0.5 text-[var(--md-sys-color-outline)] transition-colors hover:text-[var(--md-sys-color-error)]"
+                      className="shrink-0 rounded-[var(--md-sys-shape-small)] p-0.5 text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:text-[var(--md-sys-color-error)]"
                     >
                       <XIcon size={13} />
                     </button>

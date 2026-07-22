@@ -26,7 +26,7 @@ function FeeMatrixTablesImpl({ active }: { active: Bid }) {
             <thead>
               <tr>
                 {MERCHANT_TIERS.map((t) => (
-                  <th key={t} className="text-center md-label-small text-[var(--md-sys-color-outline)] pb-0.5">
+                  <th key={t} className="text-center md-label-small text-[var(--md-sys-color-on-surface-variant)] pb-0.5">
                     {MERCHANT_TIER_LABELS[t]}
                   </th>
                 ))}

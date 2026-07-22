@@ -88,7 +88,7 @@ export function Footer() {
 
         {/* Bottom row: copyright + theme */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <span className="md-label-small text-[var(--md-sys-color-outline)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             © {year} 서포트비 CORP. ALL RIGHTS RESERVED.
           </span>
           <ThemeToggle />

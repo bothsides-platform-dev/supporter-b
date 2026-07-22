@@ -62,7 +62,7 @@ export function PasswordField({
           placeholder={placeholder}
           aria-invalid={error ? 'true' : 'false'}
           className={cn(
-            'block w-full bg-transparent border-0 border-b py-2 pr-10 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none transition-colors',
+            'block w-full bg-transparent border-0 border-b py-2 pr-10 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none transition-colors',
             error
               ? 'border-[var(--md-sys-color-error)] focus:border-[var(--md-sys-color-error)]'
               : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',

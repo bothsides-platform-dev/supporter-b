@@ -71,7 +71,7 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
               </div>
             ))}
           </div>
-          <p className="md-label-small text-[var(--md-sys-color-outline)]">
+          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             사업자 정보 갱신은 설정 → 프로필에서 가능합니다.
           </p>
         </>
@@ -80,7 +80,7 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
           <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)]">
             가입 후 사업자 정보가 자동으로 연동돼요.
           </p>
-          <p className="md-label-small text-[var(--md-sys-color-outline)]">
+          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             견적 요청 내용을 먼저 작성한 뒤, 보낼 때 가입 페이지로 이동해요.
           </p>
         </InfoBox>
@@ -89,7 +89,7 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
           <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)]">
             사업자번호 없이 작성 중입니다.
           </p>
-          <p className="md-label-small text-[var(--md-sys-color-outline)]">
+          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             법인 설립 후에는 설정 → 프로필에서 사업자번호를 등록할 수 있습니다.
           </p>
         </InfoBox>

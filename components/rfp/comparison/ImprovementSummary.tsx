@@ -181,7 +181,7 @@ function MetricRow({
         <span />
       )}
       {currentText ? (
-        <span data-testid="metric-arrow" className="text-center text-[var(--md-sys-color-outline)]">
+        <span data-testid="metric-arrow" className="text-center text-[var(--md-sys-color-on-surface-variant)]">
           →
         </span>
       ) : (

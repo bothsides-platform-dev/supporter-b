@@ -149,7 +149,7 @@ export function InboxList({
                       보낸 견적
                     </Link>
                   ) : (
-                    <span className="md-label-small text-[var(--md-sys-color-outline)]">—</span>
+                    <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">—</span>
                   )}
                 </td>
               </tr>

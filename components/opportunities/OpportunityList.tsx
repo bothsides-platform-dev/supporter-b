@@ -80,7 +80,7 @@ export function OpportunityList({
                       {it.websiteUrl.replace(/^https?:\/\//, '')}
                     </a>
                   )}
-                  <span className="md-numeric text-[var(--md-sys-color-outline)]">{it.rfpCode}</span>
+                  <span className="md-numeric text-[var(--md-sys-color-on-surface-variant)]">{it.rfpCode}</span>
                   <span className="md-numeric">{formatDate(it.deadline)}</span>
                 </span>
               </div>

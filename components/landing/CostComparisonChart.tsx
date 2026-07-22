@@ -22,7 +22,7 @@ export function CostComparisonChart({
         <span className="font-mono text-[var(--text-2xs)] tracking-[0.06em] md:tracking-[0.18em] uppercase whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">
           ANNUAL PG COST
         </span>
-        <span className="font-mono text-[var(--text-2xs)] tracking-[0.04em] md:tracking-[0.1em] whitespace-nowrap text-[var(--md-sys-color-outline)]">
+        <span className="font-mono text-[var(--text-2xs)] tracking-[0.04em] md:tracking-[0.1em] whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">
           단위 ₩ / 연
         </span>
       </div>
