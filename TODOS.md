@@ -22,6 +22,11 @@
 ### 선정 후 구매사 담당자(createdBy) 탈퇴 시 승자 PG가 빈 딜룸 (P3)
 선정 연락처 교환(`CounterpartyContactCard`)은 `findContactById`가 fail-closed라, 구매사 담당자(RFP `createdBy`)가 탈퇴/시스템계정이면 `buyerContact=null`이 된다. 승자 PG 분기는 `awardedToMe && buyerContact`로 카드를, `awarded && !awardedToMe`로 미선정 안내를 그리므로 — 승자인데 buyerContact만 null이면 카드도 안내도 안 떠 빈 화면이 된다(드묾·누출 아님·정상 fail-closed). 후속: 연락처 없음 안내 폴백 또는 워크스페이스 대표 담당자 폴백 검토. (발견: /ship 적대 리뷰 2026-06-27)
 
+## Settings / Account
+
+### 계정 탈퇴 Enter 제출 경로 무커버리지 (P3)
+`DeleteAccountSection.tsx` 의 비밀번호 입력은 `onKeyDown` 으로 Enter 제출을 지원하는데(`e.key === 'Enter'` → `handleSubmit`), 이 경로를 타는 테스트가 없다. 선존재 갭이며 v0.4.9.1 의 플레이크 수정과 무관하다 — 기존 테스트도 `user.type('wrong')` 만 했지 Enter 를 누른 적이 없다. 탈퇴는 비가역 동작이라 Enter 오타 제출 방지(빈 비밀번호·submitting 중 재진입)까지 함께 커버하는 게 좋다. (발견: /ship 적대 리뷰 2026-07-22, v0.4.9.1)
+
 ## Signing (선정 후 전자서명 / SnowSign)
 
 ### 계약 탭 잔여 폴리시 4건 (P3)
