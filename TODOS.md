@@ -24,8 +24,8 @@
 
 ## Settings / Account
 
-### DeleteAccountSection INVALID_PASSWORD 테스트 실패 (dev 선존재) (P0)
-`components/settings/__tests__/DeleteAccountSection.test.tsx > shows inline error on INVALID_PASSWORD` 이 "비밀번호가 올바르지 않아요." 텍스트를 못 찾아 실패한다. **clean dev(main repo root)에서도 동일하게 실패** — 이 브랜치와 무관한 선행 이슈(단독 실행도 실패). Base-UI 다이얼로그(`data-base-ui-inert`)의 인라인 에러 렌더/타이밍 문제로 보인다. 회귀 아님(diff와 무관)이지만 전체 스위트가 red 라 추적 필요. 확인: 로컬 jsdom/Base-UI 버전 상호작용 vs CI 통과 여부. (발견: /ship 테스트 트리아지 2026-07-20, v0.4.2.0)
+### 계정 탈퇴 Enter 제출 경로 무커버리지 (P3)
+`DeleteAccountSection.tsx` 의 비밀번호 입력은 `onKeyDown` 으로 Enter 제출을 지원하는데(`e.key === 'Enter'` → `handleSubmit`), 이 경로를 타는 테스트가 없다. 선존재 갭이며 v0.4.9.1 의 플레이크 수정과 무관하다 — 기존 테스트도 `user.type('wrong')` 만 했지 Enter 를 누른 적이 없다. 탈퇴는 비가역 동작이라 Enter 오타 제출 방지(빈 비밀번호·submitting 중 재진입)까지 함께 커버하는 게 좋다. (발견: /ship 적대 리뷰 2026-07-22, v0.4.9.1)
 
 ## Signing (선정 후 전자서명 / SnowSign)
 
