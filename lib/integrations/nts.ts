@@ -89,9 +89,13 @@ function tryConsumeToken(): boolean {
 // 구제된다. 예산을 다 쓰면 false — 호출자가 NTS_RATE_LIMIT 을 throw 한다.
 const RATE_WAIT_MAX_ATTEMPTS = 10;
 
-async function acquireTokenBounded(sleep: (ms: number) => Promise<void>): Promise<boolean> {
+async function acquireTokenBounded(
+  sleep: (ms: number) => Promise<void>,
+  isExpired: () => boolean = () => false,
+): Promise<boolean> {
   if (tryConsumeToken()) return true;
   for (let attempt = 0; attempt < RATE_WAIT_MAX_ATTEMPTS; attempt += 1) {
+    if (isExpired()) return false;
     await sleep(RATE_REFILL_MS);
     if (tryConsumeToken()) return true;
   }
@@ -127,6 +131,20 @@ const NTS_BASE_URL =
 // 로 직접 판단한다.
 const MAX_RETRY_AFTER_MS = 1500;
 
+/**
+ * `lookup()` 한 번이 열어 둘 수 있는 총 홀드시간 상한.
+ *
+ * 재시도 예산(3회 × 백오프 ≈3초)과 leaky-bucket bounded 대기(재시도마다 최대
+ * ~1초)는 각자 bounded 지만 서로 누적되고, 개별 시도가 5초 timeout 까지 늘어지면
+ * 단일 요청이 20초 넘게 살아 있을 수 있었다. `lookupBizNoAction` 은 가입 플로우용
+ * 이라 의도적으로 비인증이고 Caddy 엣지에도 IP 단위 rate limit 이 없어(유일한
+ * 방어선이 이 in-process 전역 버킷이다), 소수의 요청만으로 단일 VM 의 커넥션을
+ * 묶어둘 수 있는 증폭 경로였다. 캡은 재시도·대기 구성과 무관하게 총합을 자른다.
+ *
+ * 5초(시도당 timeout)보다 넉넉히 커서, 느리지만 정상인 단일 조회는 그대로 성공한다.
+ */
+export const NTS_LOOKUP_DEADLINE_MS = 8000;
+
 export type RealNtsClientOpts = {
   /** 테스트 전용 — ky 재시도 딜레이를 결정적으로 만든다 (예: () => 0).
    *  미지정 시 ky 기본 지수 백오프(300/600/1200ms, backoffLimit 1200 캡). */
@@ -134,61 +152,83 @@ export type RealNtsClientOpts = {
   /** 테스트 전용 — leaky-bucket bounded 대기의 sleep 을 주입한다.
    *  미지정 시 실제 setTimeout. */
   sleep?: (ms: number) => Promise<void>;
+  /** 테스트 전용 — 총 홀드시간 데드라인을 줄여 실제 abort 를 짧게 검증한다.
+   *  미지정 시 `NTS_LOOKUP_DEADLINE_MS`. */
+  deadlineMs?: number;
 };
 
 export class RealNtsClient implements NtsClient {
   private readonly http: KyInstance;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly retryDelay?: (attemptCount: number) => number;
+  private readonly deadlineMs: number;
 
   constructor(opts: RealNtsClientOpts = {}) {
     this.sleep = opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-    this.http = ky.create({
-      timeout: 5000,
-      retry: {
-        limit: 3,
-        // POST는 ky 기본 재시도 대상 메서드가 아니다 — 명시하지 않으면
-        // 429를 받아도 재시도 없이 그대로 throw 된다.
-        methods: ['post'],
-        statusCodes: [429],
-        backoffLimit: 1200,
-        ...(opts.retryDelay ? { delay: opts.retryDelay } : {}),
-        shouldRetry: async ({ error }) => {
-          // '429만 재시도' — ky 기본 로직은 일반 네트워크 오류(TypeError)도
-          // 재시도하므로 위임(undefined) 대신 명시적으로 차단한다.
-          if (!(error instanceof HTTPError) || error.response.status !== 429) {
-            return false;
-          }
-          const retryAfter = error.response.headers.get('Retry-After');
-          if (retryAfter) {
-            const seconds = Number(retryAfter);
-            // RFC 7231: 초 단위 또는 HTTP-date — 두 형식 모두 예산을 검사한다.
-            const afterMs = Number.isFinite(seconds)
-              ? seconds * 1000
-              : Date.parse(retryAfter) - Date.now();
-            if (Number.isFinite(afterMs) && afterMs > MAX_RETRY_AFTER_MS) {
-              return false; // 쿼터 소진으로 판단 — 재시도 없이 즉시 실패
-            }
-          }
-          // 재시도도 발신 1회다 — 시도당 토큰을 소모해 10 req/s 상한을
-          // 재시도에도 적용한다 (토큰 고갈 시 재시도 포기 → 429 그대로 실패).
-          return acquireTokenBounded(this.sleep);
-        },
-      },
-    });
+    this.retryDelay = opts.retryDelay;
+    this.deadlineMs = opts.deadlineMs ?? NTS_LOOKUP_DEADLINE_MS;
+    // 재시도 설정은 호출별로 넘긴다 — shouldRetry 가 그 호출의 데드라인을
+    // 클로저로 잡아야 해서, 클라이언트에 붙이면 `getNtsClient()` 싱글턴을
+    // 공유하는 동시 조회끼리 서로의 데드라인을 덮어쓴다.
+    this.http = ky.create({ timeout: 5000 });
   }
 
   async lookup(bizNo: string): Promise<NtsLookupResult> {
     const key = process.env.NTS_SERVICE_KEY;
     if (!key) throw new NtsError('NTS_NO_KEY');
 
-    if (!(await acquireTokenBounded(this.sleep))) {
+    // 데드라인은 주입 클록 기준 — 재시도 사이 체크는 테스트에서 결정적으로
+    // 구동할 수 있어야 한다. 실시간 하드 실링은 아래 AbortController 가 맡는다.
+    const startedAt = _now();
+    const isExpired = () => _now() - startedAt >= this.deadlineMs;
+
+    if (!(await acquireTokenBounded(this.sleep, isExpired))) {
       throw new NtsError('NTS_RATE_LIMIT');
     }
 
     const digits = bizNo.replace(/\D/g, '');
 
+    // isExpired 는 재시도 *사이*에서만 평가된다 — 응답이 영영 오지 않는 단일
+    // 요청은 그 체크 지점에 닿지 못하므로, 실시간 abort 로 하드 실링을 둔다.
+    const controller = new AbortController();
+    const deadlineTimer = setTimeout(() => controller.abort(), this.deadlineMs);
+
     try {
       const res = await this.http.post(NTS_BASE_URL, {
+        signal: controller.signal,
+        retry: {
+          limit: 3,
+          // POST는 ky 기본 재시도 대상 메서드가 아니다 — 명시하지 않으면
+          // 429를 받아도 재시도 없이 그대로 throw 된다.
+          methods: ['post'],
+          statusCodes: [429],
+          backoffLimit: 1200,
+          ...(this.retryDelay ? { delay: this.retryDelay } : {}),
+          shouldRetry: async ({ error }) => {
+            // '429만 재시도' — ky 기본 로직은 일반 네트워크 오류(TypeError)도
+            // 재시도하므로 위임(undefined) 대신 명시적으로 차단한다.
+            if (!(error instanceof HTTPError) || error.response.status !== 429) {
+              return false;
+            }
+            // 남은 예산이 없으면 재시도 한도가 남아 있어도 여기서 끝낸다 —
+            // 재시도 예산과 대기 예산이 누적돼 총 홀드시간이 늘어나는 경로.
+            if (isExpired()) return false;
+            const retryAfter = error.response.headers.get('Retry-After');
+            if (retryAfter) {
+              const seconds = Number(retryAfter);
+              // RFC 7231: 초 단위 또는 HTTP-date — 두 형식 모두 예산을 검사한다.
+              const afterMs = Number.isFinite(seconds)
+                ? seconds * 1000
+                : Date.parse(retryAfter) - Date.now();
+              if (Number.isFinite(afterMs) && afterMs > MAX_RETRY_AFTER_MS) {
+                return false; // 쿼터 소진으로 판단 — 재시도 없이 즉시 실패
+              }
+            }
+            // 재시도도 발신 1회다 — 시도당 토큰을 소모해 10 req/s 상한을
+            // 재시도에도 적용한다 (토큰 고갈 시 재시도 포기 → 429 그대로 실패).
+            return acquireTokenBounded(this.sleep, isExpired);
+          },
+        },
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
@@ -236,6 +276,8 @@ export class RealNtsClient implements NtsClient {
         throw new NtsError('NTS_NETWORK', 'timeout');
       }
       throw new NtsError('NTS_NETWORK', (e as Error).message);
+    } finally {
+      clearTimeout(deadlineTimer);
     }
   }
 }

@@ -86,8 +86,10 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
         if (blockedStatuses.includes(response.status)) {
           // 패널은 렌더(status='found')하되 onResult를 호출하지 않아 부모의
           // bizProfile 이 null 로 유지된다 → canSubmit 게이트 자동 비활성화.
+          // 가입 폼과 설정의 사업자번호 변경 폼이 같은 문구를 공유하므로
+          // '가입'이 아니라 문맥 중립적인 '사용'으로 안내한다.
           setError(
-            `${STATUS_LABEL[response.status]} 상태인 사업자는 가입할 수 없어요. 정상 영업 중인 사업자번호를 입력해주세요.`,
+            `${STATUS_LABEL[response.status]} 상태인 사업자번호는 사용할 수 없어요. 정상 영업 중인 사업자번호를 입력해주세요.`,
           );
         } else {
           onResult(profile);
