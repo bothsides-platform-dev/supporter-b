@@ -11,7 +11,10 @@ const SPOTLIGHT_PADDING = 4;
 const BUBBLE_OFFSET = 8;
 const BUBBLE_WIDTH = 280;
 const VIEWPORT_MARGIN = 8;
-const OVERLAY_Z = 50;
+// ui/dialog(backdrop·panel)의 z-50보다 높아야 한다 — pgWriteTour 마지막 스텝이
+// 제출 ConfirmDialog "안"의 확인 버튼을 링하는데, 다이얼로그는 body 끝 포털이라
+// 같은 z면 문서 순서로 이겨 링·말풍선이 불투명 패널에 가려진다.
+const OVERLAY_Z = 60;
 // top/bottom 배치 뒤집기 판정 여유값.
 const FLIP_MARGIN_PX = 40;
 // 좌/우 배치 세로 클램프용 대략적 말풍선 높이 여유.
@@ -135,7 +138,11 @@ export function CoachmarkOverlay({
   // 감지, info: 말풍선의 다음/확인 버튼). 말풍선만 pointer-events:auto로 버튼을 누를
   // 수 있게 한다.
   return (
-    <div data-slot="coachmark-overlay" className="fixed inset-0 z-50 pointer-events-none">
+    <div
+      data-slot="coachmark-overlay"
+      className="fixed inset-0 pointer-events-none"
+      style={{ zIndex: OVERLAY_Z }}
+    >
       {ring}
       {bubble}
       <div role="status" className="sr-only">
