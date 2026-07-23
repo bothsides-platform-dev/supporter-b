@@ -49,8 +49,11 @@
 
 ## Chat / Realtime
 
-### presence:ws subscribe-proxy ACL 전환 — THREAT_MODEL §2.6 트리거 충족 시 (P4)
-관찰자 신원 노출(AR-1)의 위협 모델 문서화는 완료 — `docs/THREAT_MODEL.md` §2.3 이 진술·전제·수용 근거를, §2.6 이 ACL 전환의 실행-준비 설계를 기록한다(4-테이블 관계 술어 `canObserve` = 멤버십∨대화∨초대∨pending 콜드피치 — 대화 게이트만으로는 대화-이전 표면 5곳의 점이 죽는다; 관찰자 ws 는 `wsRepo.listForUser` DB 파생 — v6 proxy 페이로드에 connInfo 미포함; config 는 proxy 활성 + `allow_subscribe_for_client` 제거 필수; 앱 먼저→config 나중 배포 순서 — 역순은 전면 블랙아웃; presence 드리프트 가드 반전 동반). 재검토 트리거(실제 악용 관찰·presence 페이로드 PII 추가·가입 게이트 완화) 충족 전에는 착수하지 않는다. (발견: online-presence M1 whole-branch review 2026-06-21; 문서화 축 해소 + P3→P4 하향 2026-07-23)
+### presence M2 착수 시 — history 잉여 표면 재평가 + deriveActivity 실배선 (P4)
+presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴 후속 두 가지. ① `history_size: 1`/`history_ttl: 60s`/`allow_history_for_subscriber` 는 현재 소비 코드 0곳(`.history()` 호출 부재 — config 주석의 late-observer 복구는 aspirational)이라 관계-내 내용 주입의 60초 보관 표면만 남긴다. M2 활동 레이어가 실제로 history 를 쓰지 않기로 하면 세 키를 제거(드리프트 가드 갱신 동반). ② `deriveActivity` 의 `{state}` enum 검증은 publication 핸들러가 없어 도달 불가능한 코드 — M2 에서 publication 소비를 배선할 때 이것이 계획된 게이트임을 THREAT_MODEL §2.4 가 명기한다. (발견: /ship 적대 리뷰 2026-07-23)
+
+### connection-token load-shed 가 malformed env 에 조용히 비활성화 (P4)
+`app/api/centrifugo/connection-token/route.ts` 의 `MAX_INFLIGHT` 는 `Number(process.env.CENTRIFUGO_TOKEN_MAX_INFLIGHT)` 파싱이라 env 가 `'abc'` 같은 값이면 `NaN` → `inFlight >= NaN` 항상 false → load-shed 전체가 소리 없이 꺼진다. `Number.isFinite` 가드 + 기본값 폴백 필요. (발견: /ship 적대 리뷰 2026-07-23 — 리뷰 범위 밖 선존재)
 
 ## Design
 

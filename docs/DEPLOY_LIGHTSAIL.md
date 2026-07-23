@@ -167,11 +167,18 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 - **포트 노출 없음**: `127.0.0.1:8000` 바인딩이라 Lightsail 콘솔 방화벽에 **8000 을 열지 않는다**. 외부는 오직 Caddy `wss://<도메인>/connection/websocket` 로만 도달.
 - **subscribe proxy = 보안 경계**: 컨테이너가 구독 시도마다 앱(`host.docker.internal:3000/api/centrifugo/subscribe`)을 server↔server 로 호출해 워크스페이스 멤버십 ACL 로 허용/거부한다. 이 경로는 공개 노출 대상이 **아니다**(Caddy 미경유). `host.docker.internal` 는 compose 의 `extra_hosts: host-gateway` 로 Linux/Lightsail 에서 호스트로 매핑됨.
 - **config.yaml 변경 후 재시작 필요**: `deploy/centrifugo/config.yaml` 은 read-only 마운트라 컨테이너 재시작(`docker compose -f docker-compose.prod.yml restart centrifugo`)으로 반영.
-- **시크릿은 env 만**: config.yaml 에는 시크릿 없음(Centrifugo 는 `${VAR}` 보간 안 함). `.env.production` 의 `CENTRIFUGO_*` 를 compose 가 v6 키명으로 주입. §환경변수 참조.
+- **presence ACL 컷오버 순서 (2026-07-23 관계 게이트 전환)**: presence 네임스페이스가 subscribe-proxy 를 타므로 **앱 먼저 배포 → centrifugo 재시작** 순서를 지킨다. 역순이면 구 앱이 presence 구독을 전부 거부해 재시작~앱 배포 사이 전 플랫폼 점이 꺼진다. 재시작 후 확인: 관계 계정 2종(대화/초대 상대)의 점이 켜지고, 무관 계정의 raw 클라이언트 구독은 거부되는지. 롤백은 config 의 presence 블록 되돌리기 + 재시작 — 단 그것은 공개 모델(관찰자 신원 노출, `docs/THREAT_MODEL.md` §2.3) 복원이므로 의식적 보안 결정으로만.
+- **시크릿은 env 만**: config.yaml 에 시크릿 리터럴 없음. 스칼라 키는 Centrifugo 가 `${VAR}` 를 보간하지 않아 env 키명 주입(`CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` 등)을 쓰고, **유일한 예외로 map 필드(proxy `http.static_headers`)는 v6.3.0+ 가 `${CENTRIFUGO_VAR_*}` 를 보간**한다 — proxy secret 은 이 경로(`CENTRIFUGO_VAR_PROXY_SECRET`, compose 브리지)로 들어간다. `.env.production` 의 `CENTRIFUGO_*` 를 compose 가 주입. §환경변수 참조.
 
 ### 로컬 dev — Centrifugo 한 컨테이너
 
-운영 compose 는 Postgres+Centrifugo 를 묶지만 로컬 dev 에서는 **Centrifugo 만** 따로 띄우면 된다 (앱은 `pnpm dev`, DB 는 기존 로컬 방식). 운영 config 를 재사용해 한 줄로 기동:
+운영 compose 는 Postgres+Centrifugo 를 묶지만 로컬 dev 에서는 **Centrifugo 만** 따로 띄우면 된다 (앱은 `pnpm dev`, DB 는 기존 로컬 방식). 기본 경로는 dev compose 의 realtime 프로필:
+
+```bash
+docker compose --profile realtime up -d centrifugo
+```
+
+(`docker-compose.yml` 이 `deploy/centrifugo/config.yaml` 을 마운트하고 dev 기본 env — `dev-secret`/`dev-api-key`/`http://localhost:3000` — 와 `CENTRIFUGO_VAR_PROXY_SECRET` 브리지까지 주입한다.) compose 없이 단독 실행이 필요하면 동등한 `docker run`:
 
 ```bash
 docker run --rm -p 127.0.0.1:8000:8000 \
@@ -179,6 +186,7 @@ docker run --rm -p 127.0.0.1:8000:8000 \
   -e CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY=dev-secret \
   -e CENTRIFUGO_HTTP_API_KEY=dev-api-key \
   -e CENTRIFUGO_CLIENT_ALLOWED_ORIGINS=http://localhost:3000 \
+  -e CENTRIFUGO_VAR_PROXY_SECRET="${CENTRIFUGO_PROXY_SECRET:-}" \
   --add-host host.docker.internal:host-gateway \
   centrifugo/centrifugo:v6 centrifugo -c /centrifugo/config.yaml
 ```
