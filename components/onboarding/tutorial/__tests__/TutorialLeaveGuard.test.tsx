@@ -12,10 +12,16 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 const pushMock = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
 
-const updateOnboardingMock = vi.fn(async (_i: unknown) => ({ ok: true as const }));
+const updateOnboardingMock = vi.fn(
+  async (_i: unknown): Promise<{ ok: boolean; error?: string }> => ({ ok: true }),
+);
 vi.mock('@/lib/server/actions/onboarding/updateOnboardingAction', () => ({
   updateOnboardingAction: (i: unknown) => updateOnboardingMock(i),
 }));
+
+const toastMock = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (...args: unknown[]) => toastMock(...args) }));
+vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 
 import { TutorialLeaveGuard } from '../TutorialLeaveGuard';
 
@@ -39,6 +45,7 @@ function renderWithLink(
 beforeEach(() => {
   pushMock.mockClear();
   updateOnboardingMock.mockClear();
+  toastMock.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -75,6 +82,19 @@ describe('TutorialLeaveGuard', () => {
     await userEvent.click(await screen.findByRole('button', { name: '건너뛰기' }));
     expect(updateOnboardingMock).toHaveBeenCalledWith({ key: 'buyerTutorial', event: 'completed' });
     expect(pushMock).toHaveBeenCalledWith('/rfp');
+  });
+
+  it('스탬프가 {ok:false}로 실패해도 이동은 진행되고 에러 토스트로 알린다', async () => {
+    updateOnboardingMock.mockImplementationOnce(async () => ({
+      ok: false,
+      error: 'FORBIDDEN_BUYER',
+    }));
+    const a = renderWithLink('/home');
+    await userEvent.click(a);
+    await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/home'));
+    expect(toastMock).toHaveBeenCalledWith('체험 기록을 저장하지 못했어요', { type: 'error' });
   });
 
   it('계속 체험하기 → 잔류(스탬프·이동 없음)', async () => {

@@ -17,7 +17,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/primitives/Button';
-import { updateOnboardingAction } from '@/lib/server/actions/onboarding/updateOnboardingAction';
+import { stampOnboarding } from '@/components/onboarding/stamp-onboarding';
 import type { OnboardingKey } from '@/lib/types/onboarding';
 
 const KEY_FOR_VARIANT: Record<'buyer' | 'pg', OnboardingKey> = {
@@ -50,12 +50,13 @@ export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
     return () => document.removeEventListener('click', handleClick, { capture: true });
   }, []);
 
-  const leave = (eventType: 'dismissed' | 'completed') => {
+  // stamp-then-move — 스탬프 쓰기가 settle 된 뒤에만 이동한다(같은 틱 push 는
+  // /home RSC 읽기가 쓰기를 앞질러 환영 모달을 재노출시킬 수 있다). 실패해도
+  // 이동은 진행 — stampOnboarding 이 토스트로 알리고 절대 reject 하지 않는다.
+  const leave = async (eventType: 'dismissed' | 'completed') => {
     const href = pendingHref;
     if (!href) return;
-    void updateOnboardingAction({ key: KEY_FOR_VARIANT[variant], event: eventType }).catch(
-      () => {},
-    );
+    await stampOnboarding({ key: KEY_FOR_VARIANT[variant], event: eventType });
     setPendingHref(null);
     router.push(href);
   };
@@ -68,10 +69,10 @@ export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
           <DialogDescription>지금 나가도 홈에서 언제든 다시 시작할 수 있어요.</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="text" size="sm" onClick={() => leave('completed')}>
+          <Button variant="text" size="sm" onClick={() => void leave('completed')}>
             건너뛰기
           </Button>
-          <Button variant="outlined" size="sm" onClick={() => leave('dismissed')}>
+          <Button variant="outlined" size="sm" onClick={() => void leave('dismissed')}>
             나중에 하기
           </Button>
           <Button size="sm" onClick={() => setPendingHref(null)}>

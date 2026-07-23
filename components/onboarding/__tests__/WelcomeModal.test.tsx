@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 class ResizeObserverStub {
@@ -12,16 +12,23 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 const pushMock = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
 
-const updateOnboardingMock = vi.fn(async (_i: unknown) => ({ ok: true as const }));
+const updateOnboardingMock = vi.fn(
+  async (_i: unknown): Promise<{ ok: boolean; error?: string }> => ({ ok: true }),
+);
 vi.mock('@/lib/server/actions/onboarding/updateOnboardingAction', () => ({
   updateOnboardingAction: (i: unknown) => updateOnboardingMock(i),
 }));
+
+const toastMock = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (...args: unknown[]) => toastMock(...args) }));
+vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 
 import { WelcomeModal } from '../WelcomeModal';
 
 beforeEach(() => {
   pushMock.mockClear();
   updateOnboardingMock.mockClear();
+  toastMock.mockClear();
 });
 afterEach(cleanup);
 
@@ -65,5 +72,20 @@ describe('WelcomeModal', () => {
 
     expect(updateOnboardingMock).toHaveBeenCalledWith({ key: 'buyerTutorial', event: 'dismissed' });
     expect(updateOnboardingMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('스탬프가 {ok:false}로 실패하면 에러 토스트로 알린다 (모달 닫힘은 그대로)', async () => {
+    updateOnboardingMock.mockImplementationOnce(async () => ({
+      ok: false,
+      error: 'FORBIDDEN_BUYER',
+    }));
+    const user = userEvent.setup();
+    render(<WelcomeModal variant="buyer" />);
+    await user.click(screen.getByRole('button', { name: '나중에 하기' }));
+
+    expect(screen.queryByRole('button', { name: '체험 시작하기' })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('체험 기록을 저장하지 못했어요', { type: 'error' }),
+    );
   });
 });
