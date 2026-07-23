@@ -141,6 +141,23 @@ describe('TutorialLeaveGuard', () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
+  // protocol-relative(//host)는 '/'로 시작하지만 외부 오리진이다 — 내부로 오판해
+  // 가로채면 [나중에 하기/건너뛰기]가 router.push('//evil…')로 외부 이동까지
+  // 수행하게 된다. 백슬래시 변형(/\host)도 브라우저가 //로 정규화하므로 함께 거부.
+  it('protocol-relative(//host) href는 가로채지 않는다', async () => {
+    const a = renderWithLink('//evil.example.com/path');
+    await userEvent.click(a);
+    expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('백슬래시 변형(/\\host) href는 가로채지 않는다', async () => {
+    const a = renderWithLink('/\\evil.example.com/path');
+    await userEvent.click(a);
+    expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
   it('download 속성이 있는 내부 링크는 가로채지 않는다', async () => {
     const a = renderWithLink('/home', { download: '' });
     await userEvent.click(a);

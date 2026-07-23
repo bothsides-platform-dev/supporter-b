@@ -39,7 +39,9 @@ export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
       if (!anchor) return;
       if (anchor.getAttribute('target') === '_blank' || anchor.hasAttribute('download')) return;
       const href = anchor.getAttribute('href') ?? '';
-      if (!href.startsWith('/')) return;
+      // '/'로 시작하는 경로만 내부로 본다 — protocol-relative(//host)와 백슬래시
+      // 변형(/\host)은 외부 오리진이라 가드 미개입(브라우저 기본 동작에 맡김).
+      if (!/^\/(?![/\\])/.test(href)) return;
       if (href === '/tutorial' || href.startsWith('/tutorial/') || href.startsWith('/tutorial?'))
         return;
       event.preventDefault();
