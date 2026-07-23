@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { PaymentMethod } from '@/lib/types/bid';
 
@@ -113,7 +113,7 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     );
   });
 
-  it('onSampleSubmit 모드에서 템플릿 저장은 실 액션을 부르지 않고 안내 토스트만 띄운다', async () => {
+  it('onSampleSubmit 모드에서 템플릿 저장은 실 액션 없이 안내 토스트를 띄우고 패널을 닫는다', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" onSampleSubmit={() => {}} />);
 
@@ -128,7 +128,15 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     await user.click(screen.getByRole('button', { name: '저장' }));
 
     expect(saveQuoteTemplateActionMock).not.toHaveBeenCalled();
-    expect(toastMock).toHaveBeenCalledWith('튜토리얼에서는 저장되지 않아요');
+    // 문구는 안내형 — 패널 닫힘(성공 신호)과 모순되는 "저장되지 않아요" 실패
+    // 뉘앙스를 내지 않는다(오픈 샌드박스: 제스처는 실 화면과 동일하게 성공).
+    expect(toastMock).toHaveBeenCalledWith(
+      '체험이라 실제로 저장하지는 않았어요 — 실제 견적에서는 여기서 템플릿이 저장돼요',
+    );
+    // {ok:true} 반환 계약 — 패널이 성공 경로로 닫힌다.
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText('템플릿 이름')).not.toBeInTheDocument(),
+    );
   });
 
   it('onSampleSubmit 모드에서 견적서 PDF 선택은 실 업로드(uploadAttachment)를 부르지 않고 안내 토스트만 띄운다', async () => {

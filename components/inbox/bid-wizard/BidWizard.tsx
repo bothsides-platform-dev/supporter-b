@@ -225,8 +225,10 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
   const onSaveTemplate = useCallback(
     async (name: string) => {
       if (onSampleSubmit) {
-        // 튜토리얼 샌드박스 — 실 워크스페이스에 템플릿을 만들지 않는다.
-        toast('튜토리얼에서는 저장되지 않아요');
+        // 튜토리얼 샌드박스 — 실 워크스페이스에 템플릿을 만들지 않는다. 패널은
+        // 성공 경로({ok:true})로 닫히므로 문구도 실패 뉘앙스가 아닌 안내형으로
+        // 맞춘다(닫힘=성공 신호와 "저장되지 않아요"가 모순되던 것을 해소).
+        toast('체험이라 실제로 저장하지는 않았어요 — 실제 견적에서는 여기서 템플릿이 저장돼요');
         return { ok: true as const };
       }
       const r = await saveQuoteTemplateAction({
