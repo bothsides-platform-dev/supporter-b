@@ -134,6 +134,75 @@ describe('useAnchorRect', () => {
     expect(replacement.scrollIntoView).not.toHaveBeenCalled();
   });
 
+  it('추적 요소의 data-coachmark가 다른 값으로 변이하면 같은 target의 새 요소로 재부착한다', async () => {
+    vi.useFakeTimers();
+    const el = document.createElement('div');
+    el.setAttribute('data-coachmark', 'step-mutate');
+    stubRect(el, { top: 100, left: 100, width: 120, height: 32 });
+    el.scrollIntoView = vi.fn();
+    document.body.appendChild(el);
+
+    const { result } = renderHook(() => useAnchorRect('step-mutate'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.rect?.top).toBe(100);
+
+    // BidWizard 푸터 패턴 — 같은 DOM 노드가 다음 스텝 앵커로 속성만 갈아끼운다.
+    // isConnected는 계속 true라 속성 재검증 없이는 낡은 노드를 계속 추적한다.
+    el.setAttribute('data-coachmark', 'step-mutate-next');
+    const fresh = document.createElement('div');
+    fresh.setAttribute('data-coachmark', 'step-mutate');
+    stubRect(fresh, { top: 400, left: 100, width: 120, height: 32 });
+    fresh.scrollIntoView = vi.fn();
+    document.body.appendChild(fresh);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(result.current.rect?.top).toBe(400);
+    expect(result.current.status).toBe('found');
+  });
+
+  it('data-coachmark 변이 후 대체 요소가 없으면 timeoutMs 내 notFound로 전환한다', async () => {
+    vi.useFakeTimers();
+    const el = document.createElement('div');
+    el.setAttribute('data-coachmark', 'step-mutate-gone');
+    stubRect(el, { top: 100, left: 100, width: 120, height: 32 });
+    el.scrollIntoView = vi.fn();
+    document.body.appendChild(el);
+
+    const { result } = renderHook(() => useAnchorRect('step-mutate-gone', { timeoutMs: 1000 }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('found');
+
+    el.setAttribute('data-coachmark', 'other-step');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(result.current.status).toBe('notFound');
+    expect(result.current.rect).toBeNull();
+  });
+
+  it('이미 있던 요소가 나중에 data-coachmark를 획득해도 발견한다 (속성 변이 등장)', async () => {
+    const el = document.createElement('div');
+    stubRect(el, { top: 10, left: 10, width: 40, height: 40 });
+    el.scrollIntoView = vi.fn();
+    document.body.appendChild(el);
+
+    const { result } = renderHook(() => useAnchorRect('late-attr'));
+    expect(result.current.status).toBe('searching');
+
+    await act(async () => {
+      el.setAttribute('data-coachmark', 'late-attr');
+    });
+
+    await waitFor(() => expect(result.current.status).toBe('found'));
+    expect(result.current.rect?.top).toBe(10);
+  });
+
   it('특수문자가 든 target도 안전하게 매칭한다 (CSS.escape)', async () => {
     const el = document.createElement('div');
     el.setAttribute('data-coachmark', 'weird"target]');

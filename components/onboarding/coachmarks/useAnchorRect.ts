@@ -61,8 +61,10 @@ export function useAnchorRect(
       if (cancelled || !trackedEl) return;
       // 같은 target 문자열이 유지된 채 요소가 리마운트되면(위저드 리렌더) 추적이
       // 분리된 요소에 남아 rect가 동결된다 — 폴 tick에서 재query해 재부착한다.
+      // 같은 노드의 data-coachmark 속성만 변이하는 경우(BidWizard 푸터 버튼)도
+      // isConnected는 계속 true라 matches 재검증으로 잡는다.
       // scrollIntoView는 재발사하지 않는다(scrolledRef가 이미 true).
-      if (!trackedEl.isConnected) {
+      if (!trackedEl.isConnected || !trackedEl.matches(coachmarkSelector(target))) {
         const replacement = queryTarget(target);
         if (!replacement) {
           // 대체 요소가 영원히 안 나타나면 스포트라이트가 허공에 얼어붙는다 —
@@ -138,7 +140,14 @@ export function useAnchorRect(
         const found = queryTarget(target);
         if (found) attach(found);
       });
-      mutationObserver.observe(document.body, { childList: true, subtree: true });
+      // attributes도 관찰 — 기존 노드가 data-coachmark를 획득하며 앵커가 "되는"
+      // 순수 속성 변이 등장(childList 변화 없음)을 놓치지 않도록.
+      mutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['data-coachmark'],
+      });
 
       timeoutId = setTimeout(() => {
         if (cancelled || trackedEl) return;
