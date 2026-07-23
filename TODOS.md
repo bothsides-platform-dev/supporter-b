@@ -128,11 +128,6 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### currentTermsFromDiscrete 빈문자열 정규화 (P3)
 '' 입력을 문서에 그대로 담음(현재 falsy 라 UI 무해). omit 으로 정규화하면 더 깔끔. (발견: /ship 리뷰 2026-06-18)
 
-## Onboarding / Tutorial
-
-### 온보딩 e2e — 진입면(환영 모달·재유도 배너) 여정 (P4)
-클릭-스루 본여정(buyer 작성→도착→선정 / PG 초대→조건→제출)은 `e2e/tutorial-click-through.spec.ts`가 커버(v0.2.79.0, 2026-07-10). 남은 유예분: 홈 환영 모달→체험 시작, '나중에 하기'→재유도 배너→재진입, 완주 후 배너 소멸, 건너뛰기→완료 화면+DB completed 스탬프(+완료 후 /tutorial 재진입이 /home으로 바운스)(유예: 건너뛰기 개편 v0.3.2.0), 이탈 가드 여정(사이드바 클릭→다이얼로그→나중에 하기/건너뛰기 각 스탬프+이동, 오픈 샌드박스 v0.3.4.0 유예). (유예: 온보딩 재구축 v0.2.76.0)
-
 ## Bid Wizard
 
 ### deriveAnyFeeFilled 경계값 전용 테스트 부재 (P3)
