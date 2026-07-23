@@ -20,6 +20,8 @@ interface ConfirmDialogProps {
   variant?: 'danger' | 'default';
   onConfirm: () => void | Promise<void>;
   loading?: boolean;
+  /** 확인 버튼에 달 코치마크 앵커(data-coachmark) — 튜토리얼 투어가 확인창 안까지 이어질 때 지정. */
+  confirmDataCoachmark?: string;
 }
 
 export function ConfirmDialog({
@@ -32,6 +34,7 @@ export function ConfirmDialog({
   variant = 'default',
   onConfirm,
   loading,
+  confirmDataCoachmark,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => !loading && onOpenChange(o)}>
@@ -56,6 +59,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             disabled={loading}
             color={variant === 'danger' ? 'error' : 'primary'}
+            data-coachmark={confirmDataCoachmark}
           >
             {loading ? 'LOADING…' : confirmLabel}
           </Button>

@@ -372,6 +372,9 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
         variant="default"
         onConfirm={doSubmit}
         loading={pending}
+        // 튜토리얼 pgWriteTour의 마지막 action 앵커 — 실 인박스에선 투어가 없어 inert.
+        // (다른 앵커들처럼 무조건 달아 화면 상태와 무관하게 존재를 보장한다.)
+        confirmDataCoachmark="tutorial-bid-confirm"
       />
       <ConfirmDialog
         open={resetConfirmOpen}

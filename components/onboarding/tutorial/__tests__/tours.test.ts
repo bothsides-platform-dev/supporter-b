@@ -57,6 +57,9 @@ describe('tours 드리프트 가드', () => {
     const expected = [
       ...Array.from({ length: stepCount - 1 }, (_, i) => `tutorial-bid-next-${i + 1}`),
       'tutorial-bid-submit',
+      // 제출 ConfirmDialog의 확인 버튼 — 마지막 action이 확인창 안까지 이어져,
+      // 취소 시 리졸버가 제출 스텝으로 복귀시킨다(좌초 방지).
+      'tutorial-bid-confirm',
     ];
     expect(actionTargets(pgWriteTour)).toEqual(expected);
   });
