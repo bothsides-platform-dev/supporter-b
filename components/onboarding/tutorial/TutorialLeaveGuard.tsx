@@ -6,7 +6,7 @@
 // router.push 프로그래매틱 이동·브라우저 뒤로가기는 잡지 않는다(수용한 한계 —
 // 무스탬프 이탈은 다음 홈 방문 시 환영 모달 재노출로 흡수). Next Link는
 // defaultPrevented를 존중하므로 capture preventDefault로 내비게이션이 멈춘다.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dialog,
@@ -17,7 +17,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/primitives/Button';
-import { stampOnboarding } from '@/components/onboarding/stamp-onboarding';
+import { stampOnboarding, stampSettled } from '@/components/onboarding/stamp-onboarding';
 import type { OnboardingKey } from '@/lib/types/onboarding';
 
 const KEY_FOR_VARIANT: Record<'buyer' | 'pg', OnboardingKey> = {
@@ -28,6 +28,9 @@ const KEY_FOR_VARIANT: Record<'buyer' | 'pg', OnboardingKey> = {
 export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
   const router = useRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  // in-flight 가드 — 스탬프 대기 중 재클릭(다른 버튼 포함)이 상충 이벤트
+  // (completed vs dismissed)를 이중 발사하지 않게. WelcomeModal stampedRef 패턴.
+  const leavingRef = useRef(false);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
@@ -53,12 +56,14 @@ export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
   }, []);
 
   // stamp-then-move — 스탬프 쓰기가 settle 된 뒤에만 이동한다(같은 틱 push 는
-  // /home RSC 읽기가 쓰기를 앞질러 환영 모달을 재노출시킬 수 있다). 실패해도
-  // 이동은 진행 — stampOnboarding 이 토스트로 알리고 절대 reject 하지 않는다.
+  // /home RSC 읽기가 쓰기를 앞질러 환영 모달을 재노출시킬 수 있다). 대기는
+  // stampSettled 상한으로 저속 네트워크 프리즈를 막고, 실패해도 이동은 진행 —
+  // stampOnboarding 이 토스트로 알리고 절대 reject 하지 않는다.
   const leave = async (eventType: 'dismissed' | 'completed') => {
     const href = pendingHref;
-    if (!href) return;
-    await stampOnboarding({ key: KEY_FOR_VARIANT[variant], event: eventType });
+    if (!href || leavingRef.current) return;
+    leavingRef.current = true;
+    await stampSettled(stampOnboarding({ key: KEY_FOR_VARIANT[variant], event: eventType }));
     setPendingHref(null);
     router.push(href);
   };

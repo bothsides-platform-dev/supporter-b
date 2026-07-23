@@ -12,6 +12,25 @@ import type { OnboardingKey } from '@/lib/types/onboarding';
 
 const FAIL_MESSAGE = '체험 기록을 저장하지 못했어요';
 
+// 이동 게이트의 대기 상한 — stamp-then-move 는 쓰기 settle 을 기다려 /home RSC
+// 읽기 레이스를 막지만, 저속 네트워크에서 이탈 클릭이 무한정 얼어붙으면 안 된다.
+// 상한 초과 시 이동을 진행해도 dismissed 유실은 환영 모달 재노출로 자기치유된다.
+export const STAMP_MOVE_DEADLINE_MS = 800;
+
+/** 스탬프 settle 또는 deadline 중 먼저 오는 쪽에 resolve — 절대 reject 하지 않는다. */
+export function stampSettled(
+  stamp: Promise<unknown>,
+  deadlineMs: number = STAMP_MOVE_DEADLINE_MS,
+): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, deadlineMs);
+    void stamp.finally(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 export async function stampOnboarding(input: {
   key: OnboardingKey;
   event: 'completed' | 'dismissed';

@@ -15,7 +15,7 @@ vi.mock('@/lib/observability/capture', () => ({
   captureActionError: (...args: unknown[]) => captureMock(...args),
 }));
 
-import { stampOnboarding } from '../stamp-onboarding';
+import { stampOnboarding, stampSettled } from '../stamp-onboarding';
 
 describe('stampOnboarding', () => {
   beforeEach(() => {
@@ -63,6 +63,27 @@ describe('stampOnboarding', () => {
     expect(captureMock).toHaveBeenCalledWith('onboarding.stamp', err, null, {
       key: 'buyerTutorial',
       event: 'dismissed',
+    });
+  });
+
+  describe('stampSettled (이동 게이트 대기 상한)', () => {
+    it('스탬프가 settle 되면 즉시 resolve 한다', async () => {
+      await expect(stampSettled(Promise.resolve(true))).resolves.toBeUndefined();
+    });
+
+    it('스탬프가 pending 이어도 deadline 이 지나면 resolve 한다 — 이탈 클릭이 얼어붙지 않게', async () => {
+      vi.useFakeTimers();
+      const never = new Promise(() => {});
+      let settled = false;
+      void stampSettled(never, 800).then(() => {
+        settled = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(799);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toBe(true);
+      vi.useRealTimers();
     });
   });
 });

@@ -8,7 +8,7 @@
 // 복원) 하나뿐이라 그 둘만 주입받는다.
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { stampOnboarding } from '@/components/onboarding/stamp-onboarding';
+import { stampOnboarding, stampSettled } from '@/components/onboarding/stamp-onboarding';
 import type { OnboardingKey } from '@/lib/types/onboarding';
 
 type Options<P extends string> = {
@@ -39,7 +39,8 @@ export function useTutorialPhase<P extends string>({
   const isDone = phase === donePhase;
 
   const navigate = async (route: string) => {
-    await pendingStampRef.current;
+    // settle 대기에 상한(stampSettled) — 저속 네트워크에서 클릭이 얼어붙지 않게.
+    await stampSettled(pendingStampRef.current);
     onLeave?.();
     router.push(route);
   };

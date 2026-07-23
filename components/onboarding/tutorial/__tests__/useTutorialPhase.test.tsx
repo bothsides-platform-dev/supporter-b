@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 const mockPush = vi.fn();
@@ -35,6 +35,11 @@ describe('useTutorialPhase', () => {
     mockPush.mockReset();
     updateOnboardingActionMock.mockReset();
     updateOnboardingActionMock.mockImplementation(async () => ({ ok: true }));
+  });
+
+  afterEach(() => {
+    // deadline 테스트의 fake timer 가 단언 실패 시에도 다음 테스트를 오염하지 않게.
+    vi.useRealTimers();
   });
 
   it('첫 phase 에서 시작하고 진행 파생값을 계산한다', () => {
@@ -156,6 +161,22 @@ describe('useTutorialPhase', () => {
       result.current.handleExit();
     });
 
+    expect(mockPush).toHaveBeenCalledWith('/home');
+  });
+
+  it('스탬프가 deadline 내 settle 되지 않으면 push 는 진행된다 — 이탈 클릭 프리즈 방지', async () => {
+    vi.useFakeTimers();
+    updateOnboardingActionMock.mockImplementation(() => new Promise(() => {}));
+    const { result } = setup();
+
+    act(() => {
+      result.current.handleExit();
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
     expect(mockPush).toHaveBeenCalledWith('/home');
   });
 
