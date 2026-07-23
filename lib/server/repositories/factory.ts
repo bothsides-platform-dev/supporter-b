@@ -22,6 +22,7 @@ import type {
   PgProfileRepo,
   PgRequestRepo,
   PhoneOtpRepo,
+  PresenceAccessRepo,
   RfpAllowedPgRepo,
   RfpRepo,
   RfpRequoteRequestRepo,
@@ -70,6 +71,7 @@ type RepoBundle = {
   loginAttempt: LoginAttemptRepo;
   pgSigningTemplate: PgSigningTemplateRepo;
   signingContract: SigningContractRepo;
+  presenceAccess: PresenceAccessRepo;
   // Version for HMR stale detection — bump when adding repos/methods.
   __version: number;
 };
@@ -79,7 +81,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 15;
+const BUNDLE_VERSION = 16;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,6 +128,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleLoginAttemptRepository } = await import('./drizzle/login-attempt');
   const { DrizzlePgSigningTemplateRepository } = await import('./drizzle/pg-signing-template');
   const { DrizzleSigningContractRepository } = await import('./drizzle/signing-contract');
+  const { DrizzlePresenceAccessRepository } = await import('./drizzle/presence-access');
 
   return {
     rfp: new DrizzleRfpRepository(db),
@@ -160,6 +163,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     loginAttempt: new DrizzleLoginAttemptRepository(db),
     pgSigningTemplate: new DrizzlePgSigningTemplateRepository(db),
     signingContract: new DrizzleSigningContractRepository(db),
+    presenceAccess: new DrizzlePresenceAccessRepository(db),
     __version: BUNDLE_VERSION,
   };
 }
@@ -282,6 +286,9 @@ export async function getPgSigningTemplateRepo(): Promise<PgSigningTemplateRepo>
 }
 export async function getSigningContractRepo(): Promise<SigningContractRepo> {
   return (await getBundle()).signingContract;
+}
+export async function getPresenceAccessRepo(): Promise<PresenceAccessRepo> {
+  return (await getBundle()).presenceAccess;
 }
 
 // For tests only — clear the cache so the bundle rebuilds on next use.

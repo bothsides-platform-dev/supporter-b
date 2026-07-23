@@ -6,17 +6,23 @@ fields. Inline comments live in `config.yaml` itself (YAML supports `#` comments
 
 ## Secrets come from env, never config.yaml
 
-Centrifugo does **not** interpolate `${VAR}` inside `config.yaml` — it would sign
-with the literal string. So `config.yaml` carries only non-secret structure;
-secrets and the public origin are injected as env vars. `docker-compose.prod.yml`
-bridges the app-named vars (set once in `.env.production`) to Centrifugo's v6
-nested-key env names (same value, two consumers):
+For **scalar** keys Centrifugo does not interpolate `${VAR}` inside
+`config.yaml` — it would sign with the literal string — so those are injected
+via Centrifugo's nested-key env names. The **one exception is map fields**
+(e.g. proxy `http.static_headers`): Centrifugo v6.3.0+ extrapolates
+`${CENTRIFUGO_VAR_*}` env vars INTO map values at boot — that is how the
+subscribe-proxy secret gets in without a literal. Either way `config.yaml`
+carries only non-secret structure. Both `docker-compose.prod.yml` and the dev
+`docker-compose.yml` (realtime profile) bridge the app-named vars (set once in
+`.env.production` / `.env`) to the names Centrifugo reads (same value, two
+consumers):
 
-| `.env.production` (app) | Centrifugo v6 env override | config.yaml key |
+| `.env.production` (app) | Centrifugo env name | config.yaml key |
 |---|---|---|
 | `CENTRIFUGO_TOKEN_HMAC_SECRET` | `CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` | `client.token.hmac_secret_key` |
 | `CENTRIFUGO_API_KEY` | `CENTRIFUGO_HTTP_API_KEY` | `http_api.key` |
 | `APP_DOMAIN` → `https://<domain>` | `CENTRIFUGO_CLIENT_ALLOWED_ORIGINS` | `client.allowed_origins` |
+| `CENTRIFUGO_PROXY_SECRET` | `CENTRIFUGO_VAR_PROXY_SECRET` (v6.3.0+ map extrapolation) | `channel.proxy.subscribe.http.static_headers` |
 
 The `hmac_secret_key`/`key` empty-string and empty `allowed_origins` array in
 `config.yaml` are placeholders — the env overrides above always replace them in

@@ -23,9 +23,16 @@ import {
   chatChannel,
   teamChatChannel,
   presenceWsChannel,
+  PRESENCE_CHANNEL_PREFIX,
   TEAM_CHANNEL_PREFIX,
 } from '@/lib/realtime/channels';
-export { chatChannel, teamChatChannel, presenceWsChannel, TEAM_CHANNEL_PREFIX };
+export {
+  chatChannel,
+  teamChatChannel,
+  presenceWsChannel,
+  PRESENCE_CHANNEL_PREFIX,
+  TEAM_CHANNEL_PREFIX,
+};
 
 /** Shared best-effort publish body — both channel families fan out the same way. */
 async function publishToChannel(

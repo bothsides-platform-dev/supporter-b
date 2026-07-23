@@ -271,6 +271,15 @@ export interface PgRequestRepo {
 // ── Workspace ─────────────────────────────────────────────────────────
 export type TeamMember = { userId: string; name: string; joinedAt: string; avatarUpdatedAt: string | null };
 
+export interface PresenceAccessRepo {
+  /**
+   * presence:ws:<targetWsId> subscribe-proxy ACL 관계 술어 — 멤버십 ∨ 대화 ∨
+   * RFP 초대 쌍 ∨ pending 콜드피치 쌍(방향 대칭). 관찰자의 활성 워크스페이스는
+   * 프록시가 알 수 없으므로 전 멤버십 기준. rejected 콜드피치는 허가하지 않는다.
+   */
+  canObserve(userId: string, targetWsId: string, tx?: Tx): Promise<boolean>;
+}
+
 export interface WorkspaceRepo {
   /** 워크스페이스 + 멤버 동기화. */
   save(ws: Workspace, tx?: Tx): Promise<void>;

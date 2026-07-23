@@ -11,9 +11,11 @@
  * Protocol (Centrifugo v6 proxy docs):
  *   - Request body: { client, transport, protocol, encoding, user, channel }.
  *     We only read `user` and `channel`.
- *   - Channel conventions (single sources: chatChannel() / teamChatChannel()):
+ *   - Channel conventions (single sources: chatChannel() / teamChatChannel() /
+ *     presenceWsChannel()):
  *       chat:conversation:<conversationId>
  *       team:rfp:<rfpId>:<workspaceId>
+ *       presence:ws:<workspaceId>
  *   - Allow response body: { result: {} }
  *   - Deny  response body: { error: { code, message } }
  *   - HTTP status is ALWAYS 200. A non-200 is interpreted by Centrifugo as a
@@ -29,6 +31,11 @@
  *   segment keeps buyer/PG team threads on disjoint channels: a user with
  *   legitimate access to the SAME RFP from the other side must still deny
  *   (sealed-bid invariant).
+ *   presence — allow iff `user` has a business relationship with <workspaceId>:
+ *   membership ∨ conversation ∨ RFP-invitation pair ∨ pending cold-pitch pair
+ *   (PresenceAccessRepo.canObserve, 방향 대칭). D1 의 완전 공개 모델을 대체 —
+ *   공개 채널의 presence() 맵이 "이 구매사 딜을 지금 보는 PG 집합"(경쟁사-집합
+ *   신호)을 노출하던 것을 닫는다. docs/THREAT_MODEL.md §2.3(AR-1)·§2.6 참조.
  *
  * Every reject — non-member, missing/unknown conversation or rfp, non-chat
  * channel, malformed channel, missing field, bad JSON — returns the SAME
@@ -43,11 +50,13 @@ import { z } from 'zod';
 import {
   getChatConversationRepo,
   getInvitationRepo,
+  getPresenceAccessRepo,
   getRfpRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
   chatChannel,
+  PRESENCE_CHANNEL_PREFIX,
   TEAM_CHANNEL_PREFIX,
 } from '@/lib/server/realtime/centrifugo';
 import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
@@ -108,6 +117,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     return authorizeTeamChannel(user, channel);
   }
 
+  if (channel.startsWith(PRESENCE_CHANNEL_PREFIX)) {
+    return authorizePresenceChannel(user, channel);
+  }
+
   // Reverse-parse the channel via the single-source convention.
   if (!channel.startsWith(CHANNEL_PREFIX)) return deny();
   const conversationId = channel.slice(CHANNEL_PREFIX.length);
@@ -127,6 +140,26 @@ export async function POST(request: Request): Promise<NextResponse> {
       (await wsRepo.isMember(user, conv.pgWsId));
 
     return isMember ? allow() : deny();
+  } catch {
+    // Any unexpected error → deny (fail closed). Never leak details.
+    return deny();
+  }
+}
+
+// presence:ws:<workspaceId> — 관계 게이트 presence ACL (header doc 참조).
+async function authorizePresenceChannel(
+  user: string,
+  channel: string,
+): Promise<NextResponse> {
+  const workspaceId = channel.slice(PRESENCE_CHANNEL_PREFIX.length);
+  // uuid-gate BEFORE Postgres (22P02 guard) — zod .uuid() 는 전체 문자열 검증이라
+  // 꼬리 세그먼트(`<uuid>:extra`)·공백도 여기서 걸러진다.
+  if (!z.string().uuid().safeParse(workspaceId).success) return deny();
+
+  try {
+    const presenceRepo = await getPresenceAccessRepo();
+    const allowed = await presenceRepo.canObserve(user, workspaceId);
+    return allowed ? allow() : deny();
   } catch {
     // Any unexpected error → deny (fail closed). Never leak details.
     return deny();
