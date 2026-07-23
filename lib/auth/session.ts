@@ -11,7 +11,11 @@
 import type { Session } from 'next-auth';
 import { auth } from '@/auth';
 import { isSessionVersionStale } from '@/lib/auth/session-version';
-import { getDbEmailVerified, getDbSessionVersion } from '@/lib/auth/session-version-db';
+import {
+  getDbEmailVerified,
+  getDbMemberApprovalStatus,
+  getDbSessionVersion,
+} from '@/lib/auth/session-version-db';
 
 export type AuthedSession = Session & {
   user: NonNullable<Session['user']> & { id: string };
@@ -81,6 +85,20 @@ export async function requirePgSession(): Promise<PgSession> {
     !session.user.workspaceId ||
     !session.user.role
   ) {
+    throw new Error('FORBIDDEN_PG');
+  }
+  // Membership approval gate — joinCanonicalPgWorkspace creates members with
+  // approval_status='pending_approval' whose JWT is otherwise fully valid
+  // (workspaceType 'pg', role 'admin'). The shell guard only covers page loads;
+  // this is the data boundary for server actions / API routes. Read live from
+  // the DB (the JWT has no approval claim) and fail closed: anything but
+  // 'approved' — including an absent row — is rejected. PG-only on purpose:
+  // no buyer flow writes a non-approved status.
+  const approval = await getDbMemberApprovalStatus(
+    session.user.id,
+    session.user.workspaceId,
+  );
+  if (approval !== 'approved') {
     throw new Error('FORBIDDEN_PG');
   }
   return session as PgSession;

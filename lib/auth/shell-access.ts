@@ -87,10 +87,9 @@ export function resolveShellAccess(
   // Membership-level approval gate — joinCanonicalPgWorkspace 로 합류한 PG 담당자
   // 계정이 admin 승인을 받을 때까지 앱 진입을 차단한다.
   // email 인증 게이트(위)가 먼저 평가되므로, 여기 도달하면 이메일은 인증된 상태.
-  if (active.memberApprovalStatus === 'pending_approval') {
-    return { kind: 'redirect', to: '/pending-approval' };
-  }
-  if (active.memberApprovalStatus === 'rejected') {
+  // fail-closed: 컬럼이 CHECK 제약 없는 text 라 enum 밖 드리프트 값은 approved 로
+  // 취급하지 않고 승인 대기로 보낸다 (isApprovedAdmin 의 === 'approved' 와 동일 방향).
+  if (active.memberApprovalStatus !== 'approved') {
     return { kind: 'redirect', to: '/pending-approval' };
   }
 

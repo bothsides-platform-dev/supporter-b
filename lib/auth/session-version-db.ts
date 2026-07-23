@@ -11,7 +11,8 @@
  */
 import { cache } from 'react';
 
-import { getUserRepo } from '@/lib/server/repositories/factory';
+import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import type { MemberApprovalStatus } from '@/lib/types/workspace';
 
 export async function fetchSessionVersion(userId: string): Promise<number | null> {
   const repo = await getUserRepo();
@@ -39,3 +40,23 @@ export async function fetchEmailVerified(userId: string): Promise<boolean> {
 export const getDbEmailVerified = cache(async (userId: string): Promise<boolean> => {
   return fetchEmailVerified(userId);
 });
+
+/**
+ * Membership approval status for the server-side PG data boundary
+ * (requirePgSession). Read live from the DB (NOT the JWT — the claim doesn't
+ * exist there) so an admin approval takes effect without re-login, mirroring
+ * getDbEmailVerified. Absent membership row → null (callers fail closed).
+ */
+export async function fetchMemberApprovalStatus(
+  userId: string,
+  workspaceId: string,
+): Promise<MemberApprovalStatus | null> {
+  const repo = await getWorkspaceRepo();
+  return (await repo.getMemberApprovalStatus(userId, workspaceId)) ?? null;
+}
+
+export const getDbMemberApprovalStatus = cache(
+  async (userId: string, workspaceId: string): Promise<MemberApprovalStatus | null> => {
+    return fetchMemberApprovalStatus(userId, workspaceId);
+  },
+);
