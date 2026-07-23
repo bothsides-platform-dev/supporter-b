@@ -31,7 +31,18 @@ export function MorphFlightLayer({
 }) {
   if (typeof document === 'undefined' || flights.length === 0) return null;
 
-  const viewport = { width: window.innerWidth, height: window.innerHeight };
+  // clip 계산의 분모 — inset()이 적용되는 `data-morph-clip` 박스(`fixed inset-0`)와 같은
+  // 좌표계여야 한다. 그 박스는 ICB(레이아웃 뷰포트, 스크롤바 제외)에 맞춰지므로 분모도
+  // documentElement.clientWidth/Height(스크롤바 제외·레이아웃 뷰포트)를 쓴다 — window.inner*
+  // 는 스크롤바 폭을 포함하고 모바일에선 비주얼 뷰포트(키보드로 줄어듦)를 따라 ICB 와
+  // 어긋난다. jsdom 은 레이아웃이 없어 clientWidth 가 0 이므로 window.inner* 로 폴백한다.
+  // 남는 근사는 렌더 스냅샷이라는 점뿐 — 340ms 비행 중 리사이즈는 반영 안 되지만 clip rect
+  // 자체도 같은 시점 스냅샷이라 함께 스테일하고, 짧은 창이라 무해하다.
+  const doc = document.documentElement;
+  const viewport = {
+    width: doc.clientWidth || window.innerWidth,
+    height: doc.clientHeight || window.innerHeight,
+  };
 
   return createPortal(
     <div className="pointer-events-none fixed inset-0 z-[100]">

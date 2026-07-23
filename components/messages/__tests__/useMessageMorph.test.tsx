@@ -238,6 +238,25 @@ describe('useMessageMorph', () => {
     expect(result.current.isMorphing('k2')).toBe(false);
   });
 
+  // clearFlights 의 렌더-중-호출 안전성 계약을 못박는다: 이미 비어 있으면 setFlights 가
+  // 같은 배열 참조를 돌려줘 React 가 업데이트를 bail out 한다(재렌더 루프 없음). ThreadView
+  // 의 리싱크 분기가 렌더 도중 이걸 부르므로, 빈 상태에서 새 []를 반환하도록 회귀하면
+  // 이 불변식이 깨진다 — 그런데 flights 를 가진 케이스만으론 그 회귀를 못 잡는다.
+  it('clearFlights 는 이미 비어 있으면 같은 배열 참조를 유지한다(bail-out)', () => {
+    const { listRef } = setupDom();
+    const { result } = renderHook(() => useMessageMorph({ listRef }));
+
+    const before = result.current.layerProps.flights;
+    expect(before).toHaveLength(0);
+
+    act(() => {
+      result.current.clearFlights();
+    });
+
+    // 새 []가 아니라 같은 참조여야 React 가 렌더를 bail out 한다.
+    expect(result.current.layerProps.flights).toBe(before);
+  });
+
   // clearFlights 가 예약 큐까지 비우지 않아도 되는 근거 — 목록이 갈리면 예약이 노리던
   // 말풍선도 함께 사라져 측정이 실패한다. 덕분에 clearFlights 는 setState 하나로 끝나
   // 렌더 도중(리싱크 분기) 호출해도 안전하다.

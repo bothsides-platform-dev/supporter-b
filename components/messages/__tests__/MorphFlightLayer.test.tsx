@@ -46,6 +46,30 @@ describe('MorphFlightLayer', () => {
     expect(clipBox.style.clipPath).toBe('');
   });
 
+  // 분모는 window.inner*(스크롤바 포함·모바일 비주얼 뷰포트)가 아니라 documentElement의
+  // clientWidth/Height(스크롤바 제외·레이아웃 뷰포트=ICB)를 우선한다 — inset()이 적용되는
+  // fixed 박스와 좌표계를 맞추기 위함. 이 선호가 window.inner* 로 회귀하지 않도록 못박는다.
+  it('가용하면 documentElement 뷰포트를 분모로 쓴다(스크롤바/키보드 델타 회피)', () => {
+    const doc = document.documentElement;
+    const cw = Object.getOwnPropertyDescriptor(doc, 'clientWidth');
+    const ch = Object.getOwnPropertyDescriptor(doc, 'clientHeight');
+    // window.inner*(1024×768)와 다른 값 — 어느 쪽을 읽는지 구별된다.
+    Object.defineProperty(doc, 'clientWidth', { value: 1000, configurable: true });
+    Object.defineProperty(doc, 'clientHeight', { value: 700, configurable: true });
+    try {
+      const [clipBox] = renderLayer([
+        flight({ clip: { left: 0, top: 300, width: 400, height: 400 } }),
+      ]);
+      // documentElement 값 기준: right = 1000-400 = 600, bottom = 700-700 = 0
+      expect(clipBox.style.clipPath).toBe('inset(300px 600px 0px 0px)');
+    } finally {
+      if (cw) Object.defineProperty(doc, 'clientWidth', cw);
+      else delete (doc as unknown as Record<string, unknown>).clientWidth;
+      if (ch) Object.defineProperty(doc, 'clientHeight', ch);
+      else delete (doc as unknown as Record<string, unknown>).clientHeight;
+    }
+  });
+
   it('flight 마다 자기 경계로 잘라낸다', () => {
     const boxes = renderLayer([
       flight({ key: 'k1', clip: { left: 0, top: 0, width: 1024, height: 768 } }),
