@@ -469,6 +469,13 @@ describe('CoachmarkTour', () => {
       });
       expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 확정해요');
 
+      // 다이얼로그가 열려 제출·확인 앵커가 공존하는 동안(2개=모호)은 리졸버가
+      // 관망한다 — 히스테리시스 2틱을 넘겨도 제출 스텝으로 되끌리지 않는다.
+      await act(async () => {
+        vi.advanceTimersByTime(750);
+      });
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 확정해요');
+
       // 취소 — 확인 앵커 소멸, 제출 앵커만 잔존 → 리졸버 2틱(~0.5s) 복귀.
       confirm.remove();
       await act(async () => {

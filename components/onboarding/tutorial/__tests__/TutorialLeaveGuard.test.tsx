@@ -118,6 +118,32 @@ describe('TutorialLeaveGuard', () => {
     expect(pushMock).toHaveBeenCalledTimes(1);
   });
 
+  it('스탬프 대기 중 "계속 체험하기"를 누르면 settle 후에도 이동하지 않는다 (잔류 의사 존중)', async () => {
+    let resolveAction!: (v: { ok: boolean }) => void;
+    updateOnboardingMock.mockImplementationOnce(
+      () =>
+        new Promise<{ ok: boolean }>((res) => {
+          resolveAction = res;
+        }),
+    );
+    const a = renderWithLink('/home');
+    await userEvent.click(a);
+    await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
+    // 스탬프 in-flight — 마음을 바꿔 잔류를 선택.
+    await userEvent.click(screen.getByRole('button', { name: '계속 체험하기' }));
+
+    resolveAction({ ok: true });
+    await waitFor(() =>
+      expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument(),
+    );
+    expect(pushMock).not.toHaveBeenCalled();
+
+    // 잔류 후에도 가드는 재무장 상태 — 같은 링크 재클릭 시 다시 가로채고 이동 가능.
+    await userEvent.click(a);
+    await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/home'));
+  });
+
   // stamp-then-move — 같은 틱 push 는 /home RSC 읽기가 쓰기를 앞질러 환영 모달을
   // 재노출시킬 수 있다. await 를 지우면 이 테스트가 잡는다(순서 단언).
   it('이동은 스탬프 쓰기가 settle 된 뒤에만 일어난다 (stamp-then-move)', async () => {

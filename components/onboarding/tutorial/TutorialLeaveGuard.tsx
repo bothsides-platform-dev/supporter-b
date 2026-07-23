@@ -27,7 +27,14 @@ const KEY_FOR_VARIANT: Record<'buyer' | 'pg', OnboardingKey> = {
 
 export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
   const router = useRouter();
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [pendingHref, setPendingHrefState] = useState<string | null>(null);
+  // state 미러 — async leave 가 await 후 "아직도 이동 의사인지"를 최신값으로
+  // 재확인하기 위한 ref (클로저의 state 는 stale).
+  const pendingHrefRef = useRef<string | null>(null);
+  const setPendingHref = (next: string | null) => {
+    pendingHrefRef.current = next;
+    setPendingHrefState(next);
+  };
   // in-flight 가드 — 스탬프 대기 중 재클릭(다른 버튼 포함)이 상충 이벤트
   // (completed vs dismissed)를 이중 발사하지 않게. WelcomeModal stampedRef 패턴.
   const leavingRef = useRef(false);
@@ -64,6 +71,12 @@ export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
     if (!href || leavingRef.current) return;
     leavingRef.current = true;
     await stampSettled(stampOnboarding({ key: KEY_FOR_VARIANT[variant], event: eventType }));
+    // 대기 중 '계속 체험하기'(또는 Esc)로 잔류를 선택했으면 이동하지 않는다 —
+    // 스탬프는 이미 발사됐지만(멱등·무해) 내비게이션은 최신 의사를 따른다.
+    if (pendingHrefRef.current !== href) {
+      leavingRef.current = false; // 재무장 — 다음 이탈 시도는 다시 정상 동작
+      return;
+    }
     setPendingHref(null);
     router.push(href);
   };

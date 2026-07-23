@@ -129,7 +129,13 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
     // 확인창 취소 좌초 복귀 — 취소하면 확인 앵커가 사라지고 오프코스 리졸버가
     // 제출 스텝(5/6) 말풍선으로 복귀시킨다.
     await page.locator('[data-coachmark="tutorial-bid-confirm"]').waitFor({ state: 'visible', timeout: 15_000 });
-    await page.getByRole('button', { name: '취소' }).click();
+    // 확인 다이얼로그로 스코프 — BidWizard 4단계엔 템플릿 저장 패널의 취소 버튼도
+    // 존재할 수 있어(닫혀 있어도 여정 변경 시) 무스코프 로케이터는 strict 위반 지뢰.
+    await page
+      .locator('[role="dialog"]')
+      .filter({ hasText: '견적을 보낼까요?' })
+      .getByRole('button', { name: '취소' })
+      .click();
     await expect(
       page.locator('[data-slot="coachmark-overlay"] [role="dialog"]'),
     ).toContainText('5/6', { timeout: 15_000 });
