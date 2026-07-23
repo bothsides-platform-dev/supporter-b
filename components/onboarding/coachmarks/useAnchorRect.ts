@@ -16,10 +16,6 @@ const DEFAULT_TIMEOUT_MS = 3000;
 // 형제 리플로우 보정 폴링 주기 — CoachmarkTour의 오프코스 리졸버가 같은 리듬으로 동기화한다.
 export const COACHMARK_POLL_MS = 250;
 
-function queryTarget(target: string): HTMLElement | null {
-  return document.querySelector(coachmarkSelector(target));
-}
-
 function isDisabledEl(el: HTMLElement): boolean {
   return el.matches(':disabled') || el.getAttribute('aria-disabled') === 'true';
 }
@@ -48,6 +44,11 @@ export function useAnchorRect(
 
     if (!target) return;
 
+    // target 은 이펙트 수명 동안 상수 — 셀렉터 문자열(CSS.escape 포함)을 한 번만
+    // 만들어 스크롤/폴 tick 마다 재조립하지 않는다.
+    const selector = coachmarkSelector(target);
+    const queryTarget = () => document.querySelector<HTMLElement>(selector);
+
     let cancelled = false;
     let mutationObserver: MutationObserver | undefined;
     let resizeObserver: ResizeObserver | undefined;
@@ -61,9 +62,11 @@ export function useAnchorRect(
       if (cancelled || !trackedEl) return;
       // 같은 target 문자열이 유지된 채 요소가 리마운트되면(위저드 리렌더) 추적이
       // 분리된 요소에 남아 rect가 동결된다 — 폴 tick에서 재query해 재부착한다.
+      // 같은 노드의 data-coachmark 속성만 변이하는 경우(BidWizard 푸터 버튼)도
+      // isConnected는 계속 true라 matches 재검증으로 잡는다.
       // scrollIntoView는 재발사하지 않는다(scrolledRef가 이미 true).
-      if (!trackedEl.isConnected) {
-        const replacement = queryTarget(target);
+      if (!trackedEl.isConnected || !trackedEl.matches(selector)) {
+        const replacement = queryTarget();
         if (!replacement) {
           // 대체 요소가 영원히 안 나타나면 스포트라이트가 허공에 얼어붙는다 —
           // timeoutMs 경과 시 notFound로 전환해 투어의 자동 스킵 불변식에 합류.
@@ -130,15 +133,22 @@ export function useAnchorRect(
       pollId = setInterval(updateRect, COACHMARK_POLL_MS);
     };
 
-    const existing = queryTarget(target);
+    const existing = queryTarget();
     if (existing) {
       attach(existing);
     } else {
       mutationObserver = new MutationObserver(() => {
-        const found = queryTarget(target);
+        const found = queryTarget();
         if (found) attach(found);
       });
-      mutationObserver.observe(document.body, { childList: true, subtree: true });
+      // attributes도 관찰 — 기존 노드가 data-coachmark를 획득하며 앵커가 "되는"
+      // 순수 속성 변이 등장(childList 변화 없음)을 놓치지 않도록.
+      mutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['data-coachmark'],
+      });
 
       timeoutId = setTimeout(() => {
         if (cancelled || trackedEl) return;

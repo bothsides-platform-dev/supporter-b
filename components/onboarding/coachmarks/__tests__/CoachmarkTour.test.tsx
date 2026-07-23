@@ -442,6 +442,49 @@ describe('CoachmarkTour', () => {
       expect(onFinish).not.toHaveBeenCalled();
     });
 
+    it('마지막 직전 action(제출) 클릭 → 확인 스텝 진입, 확인 앵커가 사라지면(취소) 제출 스텝으로 복귀한다', async () => {
+      // pgWriteTour 제출→확정 패턴의 특성화 가드 — 확인창 취소 좌초 방지가 새로
+      // 의존하게 된 리졸버 복귀 경로를 못박는다(신규 동작의 RED는 tours/
+      // PgTutorialFlow/ConfirmDialog 테스트가 담당).
+      vi.useFakeTimers();
+      const onFinish = vi.fn();
+      const submit = appendTarget('cd-submit');
+      const confirmSteps: CoachmarkStep[] = [
+        { target: 'cd-submit', title: '여기를 눌러 보내요', body: 's', placement: 'top', kind: 'action' },
+        { target: 'cd-confirm', title: '여기를 눌러 확정해요', body: 'c', placement: 'top', kind: 'action' },
+      ];
+      // timeoutMs=10000 — notFound 복귀 경로가 아니라 리졸버 소행임을 증명한다.
+      render(<CoachmarkTour steps={confirmSteps} onFinish={onFinish} timeoutMs={10000} />);
+
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 보내요');
+
+      // 제출 클릭 — 마지막 스텝이 아니므로 onFinish 없이 확인 스텝으로 진행.
+      fireEvent.click(submit);
+      expect(onFinish).not.toHaveBeenCalled();
+
+      // 확인 다이얼로그 열림 — 확인 버튼 앵커 등장(제출 앵커와 공존 = 관망 구간).
+      const confirm = appendTarget('cd-confirm');
+      await act(async () => {
+        vi.advanceTimersByTime(250);
+      });
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 확정해요');
+
+      // 다이얼로그가 열려 제출·확인 앵커가 공존하는 동안(2개=모호)은 리졸버가
+      // 관망한다 — 히스테리시스 2틱을 넘겨도 제출 스텝으로 되끌리지 않는다.
+      await act(async () => {
+        vi.advanceTimersByTime(750);
+      });
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 확정해요');
+
+      // 취소 — 확인 앵커 소멸, 제출 앵커만 잔존 → 리졸버 2틱(~0.5s) 복귀.
+      confirm.remove();
+      await act(async () => {
+        vi.advanceTimersByTime(750);
+      });
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-label', '여기를 눌러 보내요');
+      expect(onFinish).not.toHaveBeenCalled();
+    });
+
     it('한 틱짜리 일시적 불일치(빠른 화면 전환 중)는 점프하지 않는다', async () => {
       vi.useFakeTimers();
       appendTarget('content');

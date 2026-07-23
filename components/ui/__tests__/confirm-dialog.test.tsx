@@ -132,4 +132,36 @@ describe('ConfirmDialog', () => {
     expect(screen.getByRole('button', { name: 'LOADING…' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '취소' })).toBeDisabled();
   });
+
+  it('confirmDataCoachmark 지정 시 확인 버튼에 data-coachmark를 단다', () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={vi.fn()}
+        title="견적을 보낼까요?"
+        confirmLabel="견적 보내기"
+        onConfirm={vi.fn()}
+        confirmDataCoachmark="tutorial-bid-confirm"
+      />,
+    );
+    expect(screen.getByRole('button', { name: '견적 보내기' })).toHaveAttribute(
+      'data-coachmark',
+      'tutorial-bid-confirm',
+    );
+    // 취소 버튼에는 달리지 않는다.
+    expect(screen.getByRole('button', { name: '취소' })).not.toHaveAttribute('data-coachmark');
+  });
+
+  it('confirmDataCoachmark 미지정 시 확인 버튼에 data-coachmark가 없다', () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={vi.fn()}
+        title="삭제"
+        confirmLabel="삭제"
+        onConfirm={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: '삭제' })).not.toHaveAttribute('data-coachmark');
+  });
 });

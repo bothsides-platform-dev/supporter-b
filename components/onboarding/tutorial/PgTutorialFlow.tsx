@@ -104,8 +104,9 @@ export function PgTutorialFlow() {
             onSampleSubmit={handleComplete}
           />
           {/* 단일 연속 투어 — 위저드 각 단계의 다음 버튼(action)을 실제로 클릭하며
-              제출까지 이어진다. 제출 클릭 후 ConfirmDialog는 자체 포커스 모달이라
-              별도 코치마크가 필요 없다(투어는 제출 클릭에서 끝나 오버레이가 언마운트). */}
+              제출 ConfirmDialog의 확인 버튼(tutorial-bid-confirm)까지 이어진다.
+              확인창에서 취소하면 확인 앵커가 사라져 오프코스 리졸버가 제출 스텝으로
+              복귀시킨다(좌초 방지). 확정 클릭이 onSampleSubmit → handleComplete. */}
           {!writeTourDone && (
             <CoachmarkTour steps={pgWriteTour} onFinish={() => setWriteTourDone(true)} onSkip={handleComplete} />
           )}

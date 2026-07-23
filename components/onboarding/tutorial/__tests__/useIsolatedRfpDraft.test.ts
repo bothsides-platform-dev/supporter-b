@@ -9,6 +9,9 @@ import { useIsolatedRfpDraft } from '../useIsolatedRfpDraft';
 import type { RfpDraftSeedFields } from '@/lib/onboarding/tutorial-fixtures';
 
 const LS_KEY = 'support-b-rfp-draft';
+// persist 버전을 리터럴로 베끼지 않는다 — 스토어 버전이 오르면 구버전 blob 이 되어
+// migrate 경로가 끼어들고, 의도한 순수 rehydrate 분기 커버리지가 조용히 사라진다.
+const PERSIST_VERSION = useRfpDraftStore.persist.getOptions().version;
 
 const seed: RfpDraftSeedFields = {
   title: '',
@@ -51,7 +54,7 @@ describe('useIsolatedRfpDraft (persist 무력화 격리)', () => {
     // 실제 draft가 localStorage에 영속돼 있는 상황을 재현.
     localStorage.setItem(
       LS_KEY,
-      JSON.stringify({ state: { title: '실제 작성중이던 제목' }, version: 3 }),
+      JSON.stringify({ state: { title: '실제 작성중이던 제목' }, version: PERSIST_VERSION }),
     );
   });
 
@@ -100,5 +103,28 @@ describe('useIsolatedRfpDraft (persist 무력화 격리)', () => {
     unmount(); // cleanup의 restore가 다시 스냅샷을 덮어쓰면 안 된다.
 
     expect(useRfpDraftStore.getState().title).toBe('복원 후 사용자 편집');
+  });
+
+  it('restore()는 튜토리얼 동안 다른 탭이 편집한 localStorage 최신값을 반영한다', () => {
+    const { result } = renderHook(() => useIsolatedRfpDraft(seed));
+
+    // 튜토리얼 동안 다른 탭이 실제 draft를 편집한 상황. version 은 스토어 현재
+    // 버전에서 파생 — 낮으면 migrate 경로가 끼어들어 검증이 흐려진다.
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify({ state: { title: '다른 탭이 편집한 제목' }, version: PERSIST_VERSION }),
+    );
+    result.current.restore();
+
+    expect(useRfpDraftStore.getState().title).toBe('다른 탭이 편집한 제목');
+  });
+
+  it('localStorage가 비어 있으면 restore()는 스냅샷을 유지한다', () => {
+    const { result } = renderHook(() => useIsolatedRfpDraft(seed));
+
+    localStorage.removeItem(LS_KEY);
+    result.current.restore();
+
+    expect(useRfpDraftStore.getState().title).toBe('실제 작성중이던 제목');
   });
 });

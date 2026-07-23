@@ -6,7 +6,7 @@
 // router.push 프로그래매틱 이동·브라우저 뒤로가기는 잡지 않는다(수용한 한계 —
 // 무스탬프 이탈은 다음 홈 방문 시 환영 모달 재노출로 흡수). Next Link는
 // defaultPrevented를 존중하므로 capture preventDefault로 내비게이션이 멈춘다.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dialog,
@@ -17,7 +17,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/primitives/Button';
-import { updateOnboardingAction } from '@/lib/server/actions/onboarding/updateOnboardingAction';
+import { stampOnboarding, stampSettled } from '@/components/onboarding/stamp-onboarding';
 import type { OnboardingKey } from '@/lib/types/onboarding';
 
 const KEY_FOR_VARIANT: Record<'buyer' | 'pg', OnboardingKey> = {
@@ -27,7 +27,17 @@ const KEY_FOR_VARIANT: Record<'buyer' | 'pg', OnboardingKey> = {
 
 export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
   const router = useRouter();
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [pendingHref, setPendingHrefState] = useState<string | null>(null);
+  // state 미러 — async leave 가 await 후 "아직도 이동 의사인지"를 최신값으로
+  // 재확인하기 위한 ref (클로저의 state 는 stale).
+  const pendingHrefRef = useRef<string | null>(null);
+  const setPendingHref = (next: string | null) => {
+    pendingHrefRef.current = next;
+    setPendingHrefState(next);
+  };
+  // in-flight 가드 — 스탬프 대기 중 재클릭(다른 버튼 포함)이 상충 이벤트
+  // (completed vs dismissed)를 이중 발사하지 않게. WelcomeModal stampedRef 패턴.
+  const leavingRef = useRef(false);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
@@ -39,7 +49,9 @@ export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
       if (!anchor) return;
       if (anchor.getAttribute('target') === '_blank' || anchor.hasAttribute('download')) return;
       const href = anchor.getAttribute('href') ?? '';
-      if (!href.startsWith('/')) return;
+      // '/'로 시작하는 경로만 내부로 본다 — protocol-relative(//host)와 백슬래시
+      // 변형(/\host)은 외부 오리진이라 가드 미개입(브라우저 기본 동작에 맡김).
+      if (!/^\/(?![/\\])/.test(href)) return;
       if (href === '/tutorial' || href.startsWith('/tutorial/') || href.startsWith('/tutorial?'))
         return;
       event.preventDefault();
@@ -50,12 +62,21 @@ export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
     return () => document.removeEventListener('click', handleClick, { capture: true });
   }, []);
 
-  const leave = (eventType: 'dismissed' | 'completed') => {
+  // stamp-then-move — 스탬프 쓰기가 settle 된 뒤에만 이동한다(같은 틱 push 는
+  // /home RSC 읽기가 쓰기를 앞질러 환영 모달을 재노출시킬 수 있다). 대기는
+  // stampSettled 상한으로 저속 네트워크 프리즈를 막고, 실패해도 이동은 진행 —
+  // stampOnboarding 이 토스트로 알리고 절대 reject 하지 않는다.
+  const leave = async (eventType: 'dismissed' | 'completed') => {
     const href = pendingHref;
-    if (!href) return;
-    void updateOnboardingAction({ key: KEY_FOR_VARIANT[variant], event: eventType }).catch(
-      () => {},
-    );
+    if (!href || leavingRef.current) return;
+    leavingRef.current = true;
+    await stampSettled(stampOnboarding({ key: KEY_FOR_VARIANT[variant], event: eventType }));
+    // 대기 중 '계속 체험하기'(또는 Esc)로 잔류를 선택했으면 이동하지 않는다 —
+    // 스탬프는 이미 발사됐지만(멱등·무해) 내비게이션은 최신 의사를 따른다.
+    if (pendingHrefRef.current !== href) {
+      leavingRef.current = false; // 재무장 — 다음 이탈 시도는 다시 정상 동작
+      return;
+    }
     setPendingHref(null);
     router.push(href);
   };
@@ -68,10 +89,10 @@ export function TutorialLeaveGuard({ variant }: { variant: 'buyer' | 'pg' }) {
           <DialogDescription>지금 나가도 홈에서 언제든 다시 시작할 수 있어요.</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="text" size="sm" onClick={() => leave('completed')}>
+          <Button variant="text" size="sm" onClick={() => void leave('completed')}>
             건너뛰기
           </Button>
-          <Button variant="outlined" size="sm" onClick={() => leave('dismissed')}>
+          <Button variant="outlined" size="sm" onClick={() => void leave('dismissed')}>
             나중에 하기
           </Button>
           <Button size="sm" onClick={() => setPendingHref(null)}>
