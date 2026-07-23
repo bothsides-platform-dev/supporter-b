@@ -35,7 +35,11 @@ import {
 } from '@/lib/server/actions/rfp/__tests__/_setup';
 import { rfpInvitations } from '@/lib/db/schema';
 import { getChatConversationRepo } from '@/lib/server/repositories/factory';
-import { chatChannel, teamChatChannel } from '@/lib/server/realtime/centrifugo';
+import {
+  chatChannel,
+  presenceWsChannel,
+  teamChatChannel,
+} from '@/lib/server/realtime/centrifugo';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 import { POST } from '../route';
@@ -409,6 +413,78 @@ describe('POST /api/centrifugo/subscribe (subscribe proxy ACL)', () => {
       const res = await call({ user: buyerUser.id, channel: chatChannel(conv.id) });
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ result: {} });
+    });
+  });
+
+  // presence:ws:<workspaceId> — 관계 게이트 ACL (멤버십∨대화∨초대∨pending 콜드피치).
+  // D1 공개 모델을 대체(AR-1 완화, docs/THREAT_MODEL.md §2.3). 거부는 다른 분기와
+  // byte-identical generic deny — 워크스페이스 존재/관계 오라클 금지.
+  describe('presence channel ACL', () => {
+    it('(p1) 자기 워크스페이스 멤버 → allow (자기 브로드캐스트)', async () => {
+      const { buyerUser, buyerWs } = await seedPairWithMembers();
+      const res = await call({ user: buyerUser.id, channel: presenceWsChannel(buyerWs.id) });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ result: {} });
+    });
+
+    it('(p2) 대화 상대 워크스페이스 → allow (양방향)', async () => {
+      const { buyerUser, pgUser, buyerWs, pgWs } = await seedPairWithMembers();
+      const r1 = await call({ user: pgUser.id, channel: presenceWsChannel(buyerWs.id) });
+      expect(await r1.json()).toEqual({ result: {} });
+      const r2 = await call({ user: buyerUser.id, channel: presenceWsChannel(pgWs.id) });
+      expect(await r2.json()).toEqual({ result: {} });
+    });
+
+    it('(p3) 대화 없이 RFP 초대 쌍만 있어도 → allow (PG가 구매사 관찰)', async () => {
+      const buyerUser = await seedUser(db, { email: 'b2@b.com' });
+      const buyerWs = await seedBuyerWorkspace(db, { name: '구매사2' });
+      await seedMembership(db, buyerWs.id, buyerUser.id, 'admin');
+      const pgUser = await seedUser(db, { email: 'p2@pg.com' });
+      const pgWs = await seedPgWorkspace(db, 'PG2', { name: '페이2' });
+      await seedMembership(db, pgWs.id, pgUser.id, 'admin');
+      const rfp = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyerUser.id });
+      await db.insert(rfpInvitations).values({
+        rfpId: rfp.id,
+        pgWsId: pgWs.id,
+        tokenHash: `th-${randomUUID()}`,
+        expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+      });
+
+      const res = await call({ user: pgUser.id, channel: presenceWsChannel(buyerWs.id) });
+      expect(await res.json()).toEqual({ result: {} });
+    });
+
+    it('(p4) 무관한 사용자 → generic deny (chat deny 와 byte-identical)', async () => {
+      const { buyerWs, conv } = await seedPairWithMembers();
+      const outsiderWs = await seedPgWorkspace(db, 'OUT2', { name: '외부PG2' });
+      const outsider = await seedUser(db, { email: 'out2@pg.com' });
+      await seedMembership(db, outsiderWs.id, outsider.id, 'admin');
+
+      const presenceDeny = await call({
+        user: outsider.id,
+        channel: presenceWsChannel(buyerWs.id),
+      });
+      const chatDeny = await call({ user: outsider.id, channel: chatChannel(conv.id) });
+      expect(presenceDeny.status).toBe(200);
+      expect(await presenceDeny.json()).toEqual(await chatDeny.json());
+    });
+
+    it('(p5) malformed suffix — 비uuid·빈값·꼬리 세그먼트·프리픽스 스머글링 전부 deny, no throw', async () => {
+      const { buyerUser, buyerWs } = await seedPairWithMembers();
+      const channels = [
+        'presence:ws:garbage',
+        'presence:ws:',
+        `presence:ws:${buyerWs.id}:extra`,
+        `x:presence:ws:${buyerWs.id}`,
+        `presence:ws:${buyerWs.id} `,
+      ];
+      for (const channel of channels) {
+        const res = await call({ user: buyerUser.id, channel });
+        expect(res.status).toBe(200);
+        const json = (await res.json()) as { result?: unknown; error?: unknown };
+        expect(json.result).toBeUndefined();
+        expect(json.error).toBeDefined();
+      }
     });
   });
 });
