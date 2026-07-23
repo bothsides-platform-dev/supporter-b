@@ -19,54 +19,24 @@
  * 오프코스 테스트는 serial 블록 "끝"에 둔다 — 신생·타이밍 민감 테스트가 실패해도
  * 기본 클릭-스루 회귀 커버리지(buyer·pg)를 skip시키지 않도록.
  */
-import { test, expect, type Page } from 'playwright/test';
-import { sql } from 'drizzle-orm';
-import { db } from '@/lib/db/client';
-import { loginAs, type Role } from './_helpers';
+import { test, expect } from 'playwright/test';
+import {
+  clickThrough,
+  dismissInfo,
+  emailFor,
+  enterTutorial,
+  onboardingDoc,
+  resetOnboarding,
+} from './_helpers';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
 const EMAILS: Record<'buyer' | 'pg-toss', string> = {
-  buyer: 'yeonseong.dev@gmail.com',
-  'pg-toss': 'ws-toss-admin@example.com',
+  buyer: emailFor('buyer'),
+  'pg-toss': emailFor('pg-toss'),
 };
-
-/** /tutorial 은 완료 스탬프가 있으면 /home 으로 돌려보낸다 — 각 여정 전 초기화. */
-async function resetOnboarding(email: string): Promise<void> {
-  await db.execute(sql`UPDATE users SET onboarding = '{}'::jsonb WHERE email = ${email}`);
-}
-
-async function onboardingDoc(email: string): Promise<Record<string, unknown>> {
-  const rows = (await db.execute(
-    sql`SELECT onboarding FROM users WHERE email = ${email}`,
-  )) as unknown as Array<{ onboarding: Record<string, unknown> }>;
-  return rows[0]?.onboarding ?? {};
-}
-
-/** 코치마크가 해당 타깃을 가리킬 때(링 표시) 실제 버튼을 클릭한다. */
-async function clickThrough(page: Page, target: string): Promise<void> {
-  const el = page.locator(`[data-coachmark="${target}"]`);
-  await el.waitFor({ state: 'visible', timeout: 15_000 });
-  await page
-    .locator('[data-slot="coachmark-ring"]')
-    .waitFor({ state: 'visible', timeout: 15_000 });
-  await el.click();
-}
-
-/** info 말풍선(읽고 다음 모델)을 닫는다. */
-async function dismissInfo(page: Page): Promise<void> {
-  const next = page.locator('[role="dialog"]').getByRole('button', { name: /^(다음|확인)$/ });
-  await next.waitFor({ state: 'visible', timeout: 15_000 });
-  await next.click();
-}
-
-async function enterTutorial(page: Page, role: Role): Promise<void> {
-  await loginAs(page, role);
-  await page.goto('/tutorial');
-  await page.waitForURL(/\/tutorial$/, { timeout: 30_000 });
-}
 
 test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
   test('buyer: 무입력 클릭만으로 작성→제출→도착→선정→완료', async ({ page }) => {
