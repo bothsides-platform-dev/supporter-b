@@ -11,11 +11,8 @@
 import type { Session } from 'next-auth';
 import { auth } from '@/auth';
 import { isSessionVersionStale } from '@/lib/auth/session-version';
-import {
-  getDbEmailVerified,
-  getDbMemberApprovalStatus,
-  getDbSessionVersion,
-} from '@/lib/auth/session-version-db';
+import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
+import { getDbEmailVerified, getDbSessionVersion } from '@/lib/auth/session-version-db';
 
 export type AuthedSession = Session & {
   user: NonNullable<Session['user']> & { id: string };
@@ -87,18 +84,10 @@ export async function requirePgSession(): Promise<PgSession> {
   ) {
     throw new Error('FORBIDDEN_PG');
   }
-  // Membership approval gate — joinCanonicalPgWorkspace creates members with
-  // approval_status='pending_approval' whose JWT is otherwise fully valid
-  // (workspaceType 'pg', role 'admin'). The shell guard only covers page loads;
-  // this is the data boundary for server actions / API routes. Read live from
-  // the DB (the JWT has no approval claim) and fail closed: anything but
-  // 'approved' — including an absent row — is rejected. PG-only on purpose:
-  // no buyer flow writes a non-approved status.
-  const approval = await getDbMemberApprovalStatus(
-    session.user.id,
-    session.user.workspaceId,
-  );
-  if (approval !== 'approved') {
+  // Membership approval gate — 미승인(pending_approval/rejected/행 부재) PG
+  // 멤버는 유효한 JWT 로도 차단한다. 판정·마스터 예외·근거는
+  // lib/auth/pg-membership-gate.ts (requireActiveWorkspace 와 공유) 참조.
+  if (await isPgMembershipBlocked(session)) {
     throw new Error('FORBIDDEN_PG');
   }
   return session as PgSession;

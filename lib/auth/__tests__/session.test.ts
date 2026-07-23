@@ -162,6 +162,22 @@ describe('requirePgSession — 멤버십 승인 게이트', () => {
     await expect(requirePgSession()).rejects.toThrow('FORBIDDEN_PG');
   });
 
+  it('마스터 계정(synthetic admin, 멤버십 row 없음)은 승인 게이트를 우회한다', async () => {
+    const prev = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'ops@support-b.com';
+    try {
+      const session = {
+        user: { ...pgUser, email: 'ops@support-b.com' },
+      };
+      authMock.mockResolvedValue(session);
+      getDbMemberApprovalStatusMock.mockResolvedValue(null); // row 없음
+      await expect(requirePgSession()).resolves.toBe(session);
+      expect(getDbMemberApprovalStatusMock).not.toHaveBeenCalled();
+    } finally {
+      process.env.MASTER_ACCOUNT_EMAILS = prev;
+    }
+  });
+
   it('requireBuyerSession 은 승인 상태를 읽지 않는다 (pending 을 만드는 경로가 PG 뿐)', async () => {
     const session = {
       user: { ...pgUser, workspaceId: 'ws-buyer', workspaceType: 'buyer' },
