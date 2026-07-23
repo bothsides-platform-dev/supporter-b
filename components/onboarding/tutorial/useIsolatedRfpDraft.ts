@@ -11,8 +11,9 @@
 // 방식은 탭 한정 백업이 죽으면 fixture가 영속 스토어에 남는 데이터 손실 결함 —
 // 적대적 리뷰에서 발견되어 이 방식으로 교체.)
 //
-// 종료 시(restore/언마운트): persist 원복 → 스냅샷 복원 → rehydrate로 localStorage의
-// 최신 영속 상태를 다시 읽는다(튜토리얼 동안 다른 탭이 실제 draft를 편집했어도 보존).
+// 종료 시(restore/언마운트): 스냅샷 복원(persist 아직 no-op — LS 무접촉) → persist
+// 원복 → rehydrate로 localStorage의 최신 영속 상태를 다시 읽는다(튜토리얼 동안
+// 다른 탭이 실제 draft를 편집했어도 보존).
 import { useEffect, useRef } from 'react';
 import { createJSONStorage } from 'zustand/middleware';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
@@ -39,8 +40,11 @@ export function useIsolatedRfpDraft(seed: RfpDraftSeedFields): { restore: () => 
     restoreRef.current = () => {
       if (restored) return;
       restored = true;
-      store.persist.setOptions({ storage: originalStorage });
+      // noop storage가 아직 활성 — 스냅샷 복원이 localStorage를 건드리지 않는다.
+      // (persist를 먼저 원복하면 이 setState가 LS를 스냅샷으로 덮어써, 아래
+      // rehydrate가 방금 쓴 값을 되읽는 no-op이 된다.)
       store.setState(snapshot);
+      store.persist.setOptions({ storage: originalStorage });
       // localStorage가 진실의 원천 — 튜토리얼 동안 다른 탭이 편집한 내용까지 반영.
       void store.persist.rehydrate();
     };
