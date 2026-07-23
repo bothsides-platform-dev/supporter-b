@@ -97,6 +97,27 @@ describe('TutorialLeaveGuard', () => {
     expect(toastMock).toHaveBeenCalledWith('체험 기록을 저장하지 못했어요', { type: 'error' });
   });
 
+  // stamp-then-move — 같은 틱 push 는 /home RSC 읽기가 쓰기를 앞질러 환영 모달을
+  // 재노출시킬 수 있다. await 를 지우면 이 테스트가 잡는다(순서 단언).
+  it('이동은 스탬프 쓰기가 settle 된 뒤에만 일어난다 (stamp-then-move)', async () => {
+    let resolveAction!: (v: { ok: boolean }) => void;
+    updateOnboardingMock.mockImplementationOnce(
+      () =>
+        new Promise<{ ok: boolean }>((res) => {
+          resolveAction = res;
+        }),
+    );
+    const a = renderWithLink('/home');
+    await userEvent.click(a);
+    await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
+
+    expect(updateOnboardingMock).toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled(); // settle 전 push 금지
+
+    resolveAction({ ok: true });
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/home'));
+  });
+
   it('계속 체험하기 → 잔류(스탬프·이동 없음)', async () => {
     const a = renderWithLink('/home');
     await userEvent.click(a);

@@ -125,7 +125,16 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
     await clickThrough(page, 'tutorial-bid-next-3');
     await clickThrough(page, 'tutorial-bid-submit');
 
-    // 제출 확인 다이얼로그 — 투어가 확인 버튼(마지막 action)까지 이어진다.
+    // 확인창 취소 좌초 복귀 — 취소하면 확인 앵커가 사라지고 오프코스 리졸버가
+    // 제출 스텝(5/6) 말풍선으로 복귀시킨다.
+    await page.locator('[data-coachmark="tutorial-bid-confirm"]').waitFor({ state: 'visible', timeout: 15_000 });
+    await page.getByRole('button', { name: '취소' }).click();
+    await expect(
+      page.locator('[data-slot="coachmark-overlay"] [role="dialog"]'),
+    ).toContainText('5/6', { timeout: 15_000 });
+
+    // 복귀한 안내를 따라 다시 제출 → 확인 버튼(마지막 action)으로 완주.
+    await clickThrough(page, 'tutorial-bid-submit');
     await clickThrough(page, 'tutorial-bid-confirm');
 
     await expect(page.getByText('튜토리얼을 완료했어요')).toBeVisible({ timeout: 15_000 });

@@ -76,6 +76,24 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     expect(document.querySelector('[data-coachmark="tutorial-bid-submit"]')).toBeInTheDocument();
   });
 
+  it('제출 확인 다이얼로그가 열리면 확인 버튼에 tutorial-bid-confirm 앵커가 붙는다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" onSampleSubmit={() => {}} />);
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
+    // 다이얼로그 열기 전엔 확인 앵커가 없다.
+    expect(document.querySelector('[data-coachmark="tutorial-bid-confirm"]')).not.toBeInTheDocument();
+
+    await user.click(document.querySelector('[data-coachmark="tutorial-bid-submit"]') as HTMLElement);
+
+    // pgWriteTour 마지막 스텝이 링하는 앵커 — 배선이 빠지면 e2e까지 가야 잡히므로 여기서 고정.
+    const confirmAnchor = document.querySelector('[data-coachmark="tutorial-bid-confirm"]');
+    expect(confirmAnchor).toBeInTheDocument();
+    expect(confirmAnchor).toHaveTextContent('견적 보내기');
+  });
+
   it('푸터 다음 버튼에 스텝별 tutorial-bid-next-N 앵커가 붙는다', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="튜토리얼 쇼핑몰" />);
