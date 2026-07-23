@@ -145,7 +145,11 @@ export function CoachmarkOverlay({
     >
       {ring}
       {bubble}
-      <div role="status" className="sr-only">
+      {/* aria-live 명시 — Base-UI modal(제출 확인창)이 열리면 포털 밖 전부가
+          aria-hidden 마킹되는데, 명시적 [aria-live] 요소만 제외돼 확인 스텝의
+          전환 공지가 살아남는다. 그 동안 말풍선·건너뛰기는 포커스 트랩 밖(수용) —
+          키보드 탈출로는 다이얼로그 Esc→취소→리졸버가 제출 스텝으로 복귀. */}
+      <div role="status" aria-live="polite" className="sr-only">
         {announcement}
       </div>
     </div>

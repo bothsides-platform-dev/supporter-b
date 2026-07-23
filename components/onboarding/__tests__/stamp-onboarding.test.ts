@@ -71,6 +71,19 @@ describe('stampOnboarding', () => {
       await expect(stampSettled(Promise.resolve(true))).resolves.toBeUndefined();
     });
 
+    it('reject 하는 스탬프에도 resolve 하고 unhandled rejection 을 누수하지 않는다', async () => {
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      try {
+        await expect(stampSettled(Promise.reject(new Error('boom')))).resolves.toBeUndefined();
+        // 마이크로태스크 큐를 비워 늦게 도착하는 unhandledRejection 까지 관찰.
+        await new Promise((r) => setTimeout(r, 0));
+        expect(unhandled).not.toHaveBeenCalled();
+      } finally {
+        process.off('unhandledRejection', unhandled);
+      }
+    });
+
     it('스탬프가 pending 이어도 deadline 이 지나면 resolve 한다 — 이탈 클릭이 얼어붙지 않게', async () => {
       vi.useFakeTimers();
       const never = new Promise(() => {});

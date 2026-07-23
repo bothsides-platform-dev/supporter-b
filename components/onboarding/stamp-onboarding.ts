@@ -24,10 +24,14 @@ export function stampSettled(
 ): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, deadlineMs);
-    void stamp.finally(() => {
+    const settle = () => {
       clearTimeout(timer);
       resolve();
-    });
+    };
+    // then(settle, settle) — finally 는 원 promise 의 reject 를 그대로 흘려보내
+    // (void 처리 시) unhandled rejection 을 누수한다. stampOnboarding 은 reject 하지
+    // 않는 계약이지만 시그니처는 일반 Promise 라 여기서 방어한다.
+    void stamp.then(settle, settle);
   });
 }
 
