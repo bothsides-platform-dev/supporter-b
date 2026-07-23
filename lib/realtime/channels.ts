@@ -16,7 +16,11 @@ export function teamChatChannel(rfpId: string, workspaceId: string): string {
 }
 
 /** Channel name for a workspace's presence broadcast. Single source so the
- *  self-broadcast client and observers stay in lockstep. PUBLIC namespace. */
+ *  self-broadcast client and observers stay in lockstep. PUBLIC namespace —
+ *  accepted risk AR-1 (observer-identity exposure): any authenticated raw WS
+ *  client knowing a workspace UUID can enumerate its online userIds + observer
+ *  identities via sub.presence(). See docs/THREAT_MODEL.md §2.3 (deferred
+ *  proxy-ACL design: §2.6). */
 export function presenceWsChannel(workspaceId: string): string {
   return `presence:ws:${workspaceId}`;
 }

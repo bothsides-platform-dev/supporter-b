@@ -49,8 +49,8 @@
 
 ## Chat / Realtime
 
-### Presence: document observer-identity exposure in the threat model (P3)
-공개 presence(`presence:ws:<V>`, D1)에서 raw `sub.presence()` 페이로드는 co-subscriber의 `user`(userId)+`connInfo.workspaceId`를 노출한다. 앱 UI 는 새지 않는다 — 회사 점은 owner 필터 binary online, 사람 점(UserProfileCard)은 ACL 로더가 내려준 `presenceWorkspaceId`(본인·같은 팀·대화 상대 한정)에 대해서만 per-user online 을 읽는다. 다만 raw WS 클라이언트는 워크스페이스 UUID 만 알면 `sub.presence()` 로 그 채널의 online userId 를 열거 가능(이 노출은 D1 공개 채널의 성질이지 앱 코드 때문이 아님). 봉인 입찰 데이터(수수료·경쟁사 수)는 무관. 위협 모델 문서에 한 줄 명기 + 장기적으로 presence:ws 를 subscribe-proxy(멤버십/대화 게이트)로 ACL 하는 것 검토. (발견: online-presence M1 whole-branch review 2026-06-21; per-user 소비 추가: v0.2.38.0 아바타 신원 카드)
+### presence:ws subscribe-proxy ACL 전환 — THREAT_MODEL §2.6 트리거 충족 시 (P4)
+관찰자 신원 노출(AR-1)의 위협 모델 문서화는 완료 — `docs/THREAT_MODEL.md` §2.3 이 진술·전제·수용 근거를, §2.6 이 ACL 전환의 실행-준비 설계를 기록한다(4-테이블 관계 술어 `canObserve` = 멤버십∨대화∨초대∨pending 콜드피치 — 대화 게이트만으로는 대화-이전 표면 5곳의 점이 죽는다; 관찰자 ws 는 `wsRepo.listForUser` DB 파생 — v6 proxy 페이로드에 connInfo 미포함; config 는 proxy 활성 + `allow_subscribe_for_client` 제거 필수; 앱 먼저→config 나중 배포 순서 — 역순은 전면 블랙아웃; presence 드리프트 가드 반전 동반). 재검토 트리거(실제 악용 관찰·presence 페이로드 PII 추가·가입 게이트 완화) 충족 전에는 착수하지 않는다. (발견: online-presence M1 whole-branch review 2026-06-21; 문서화 축 해소 + P3→P4 하향 2026-07-23)
 
 ## Design
 

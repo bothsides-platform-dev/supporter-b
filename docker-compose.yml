@@ -39,11 +39,11 @@ services:
     image: centrifugo/centrifugo:v6
     container_name: supporter-b-centrifugo
     profiles: ["realtime"]
-    command: centrifugo -c /centrifugo/config.json
+    command: centrifugo -c /centrifugo/config.yaml
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      - ./deploy/centrifugo/config.json:/centrifugo/config.json:ro
+      - ./deploy/centrifugo/config.yaml:/centrifugo/config.yaml:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:

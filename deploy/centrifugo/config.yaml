@@ -76,7 +76,9 @@ channel:
 
     # presence namespace — channel convention: presence:ws:<workspaceId>.
     # Fully PUBLIC (no ACL, design D1): any authenticated connection may observe
-    # any workspace's online status. v6 denies client subscribe/publish by
+    # any workspace's online status — accepted risk AR-1 (observer-identity
+    # exposure), recorded in docs/THREAT_MODEL.md §2.3; the deferred proxy-ACL
+    # design lives in §2.6. v6 denies client subscribe/publish by
     # default, so both are opened explicitly. NO presence_ttl (not a v6 key →
     # unknown-key footgun); freshness is governed by client.ping_interval/pong.
     - name: presence
