@@ -29,6 +29,7 @@ function read(relFromHere: string): string {
 
 const config = read('../centrifugo/config.yaml');
 const compose = read('../../docker-compose.prod.yml');
+const devCompose = read('../../docker-compose.yml');
 
 describe('Centrifugo subscribe-proxy secret header (v6)', () => {
   it('does NOT use the dead v5 key static_http_headers (the footgun)', () => {
@@ -57,6 +58,16 @@ describe('Centrifugo subscribe-proxy secret header (v6)', () => {
     // extrapolates (CENTRIFUGO_VAR_PROXY_SECRET). If config references the var,
     // compose MUST define it, or the header is empty and the footgun returns.
     expect(compose).toMatch(
+      /CENTRIFUGO_VAR_PROXY_SECRET:\s*\$\{CENTRIFUGO_PROXY_SECRET(:-)?\}/,
+    );
+  });
+
+  it('dev compose bridges the SAME var — the realtime profile mounts the SAME config.yaml', () => {
+    // docker-compose.yml (--profile realtime) mounts deploy/centrifugo/config.yaml,
+    // which references ${CENTRIFUGO_VAR_PROXY_SECRET}. Without this bridge, a dev
+    // who sets CENTRIFUGO_PROXY_SECRET locally gets a header-less container → the
+    // app denies EVERY subscribe → chat/presence silently dead in dev.
+    expect(devCompose).toMatch(
       /CENTRIFUGO_VAR_PROXY_SECRET:\s*\$\{CENTRIFUGO_PROXY_SECRET(:-)?\}/,
     );
   });
