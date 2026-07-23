@@ -205,7 +205,10 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
 
   return (
     <>
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    {/* data-morph-bounds — 전송 morph 클론을 가둘 경계(ThreadView 와 동일 계약).
+        클론은 최상위 z 로 body 에 portal 되므로, 이 표시가 없으면 딜룸 모달 헤더 같은
+        바깥 크롬 위를 가로지른다. */}
+    <div data-morph-bounds className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {/* 말풍선 목록 */}
       <div
         ref={listRef}
