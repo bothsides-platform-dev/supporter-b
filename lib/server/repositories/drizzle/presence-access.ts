@@ -6,7 +6,6 @@ import {
   rfps,
   workspaceMembers,
 } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { PresenceAccessRepo, Tx } from '../types';
 
 /**
@@ -19,8 +18,8 @@ import type { PresenceAccessRepo, Tx } from '../types';
  * 거절된 콜드피치(rejected)는 절대 허가로 승격하지 않는다(거절은 영구).
  */
 export class DrizzlePresenceAccessRepository implements PresenceAccessRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
+
+  constructor(private readonly _db: Tx) {}
 
   private h(tx?: Tx): Tx {
     return tx ?? this._db;

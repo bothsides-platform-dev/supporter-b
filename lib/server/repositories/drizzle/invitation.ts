@@ -1,6 +1,5 @@
 import { and, eq, exists, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { rfpInvitations, rfps, bizProfiles, workspaces } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { RfpInvitation, InvitationStatus } from '@/lib/types/invitation';
 import type { RFP } from '@/lib/types/rfp';
 import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
@@ -92,11 +91,10 @@ function rowToInvitation(row: InvRow): RfpInvitation {
 }
 
 export class DrizzleInvitationRepository implements InvitationRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

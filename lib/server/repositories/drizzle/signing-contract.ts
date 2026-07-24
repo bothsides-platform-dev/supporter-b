@@ -8,8 +8,8 @@ import type {
   SigningParticipantPatch,
 } from '@/lib/types/signing';
 import type { SigningContractRepo, Tx } from '../types';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
+
+type Db = Tx;
 
 type CRow = typeof signingContracts.$inferSelect;
 type PRow = typeof signingParticipants.$inferSelect;

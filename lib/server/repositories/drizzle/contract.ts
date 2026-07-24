@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm';
 import { contracts } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { Contract } from '@/lib/types/contract';
 import type { ContractRepo, Tx } from '../types';
 
@@ -17,11 +16,10 @@ function rowToContract(row: ContractRow): Contract {
 }
 
 export class DrizzleContractRepository implements ContractRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

@@ -1,14 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { userAvatarBlobs } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { UserAvatarRepo, Tx } from '../types';
 
 export class DrizzleUserAvatarRepository implements UserAvatarRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

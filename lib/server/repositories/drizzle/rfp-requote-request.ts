@@ -2,8 +2,8 @@ import { and, asc, eq } from 'drizzle-orm';
 import { rfpRequoteRequests } from '@/lib/db/schema';
 import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
 import type { RfpRequoteRequestRepo, Tx } from '../types';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
+
+type Db = Tx;
 
 type Row = typeof rfpRequoteRequests.$inferSelect;
 

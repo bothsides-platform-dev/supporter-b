@@ -1,6 +1,5 @@
 import { and, desc, eq, gte, isNull, or, sql } from 'drizzle-orm';
 import { notifications } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type {
   Notification,
   NotificationChannel,
@@ -41,11 +40,10 @@ function rowToNotification(row: NotifRow): Notification {
 }
 
 export class DrizzleNotificationRepository implements NotificationRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

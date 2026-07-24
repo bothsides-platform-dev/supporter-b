@@ -1,6 +1,5 @@
 import { and, asc, desc, eq, ilike, inArray, or } from 'drizzle-orm';
 import { bids, attachments, rfps, workspaces } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { BidRepo, Tx } from '../types';
@@ -79,17 +78,15 @@ function rowToBid(row: BidRow, proposalPdfs: Attachment[]): Bid {
 }
 
 export class DrizzleBidRepository implements BidRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 
   private async proposalsByBid(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    db: any,
+    db: Tx,
     bidIds: string[],
   ): Promise<Map<string, Attachment[]>> {
     const map = new Map<string, Attachment[]>();

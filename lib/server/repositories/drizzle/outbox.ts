@@ -4,7 +4,6 @@
 // commit callers don't double-deliver.
 import { desc, eq, isNotNull, sql, lte, and, inArray, notInArray } from 'drizzle-orm';
 import { outboxEntries } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { BatchSender, OutboxEntry, OutboxEvent } from '../../outbox/types';
 import { computeBackoff } from '../../outbox/backoff';
 import { sendEntriesInBatches } from '../../outbox/batch-send';
@@ -30,11 +29,10 @@ function rowToEntry(row: OutboxRow): OutboxEntry {
 }
 
 export class DrizzleOutboxRepository implements OutboxRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 
@@ -253,8 +251,7 @@ export class DrizzleOutboxRepository implements OutboxRepo {
     let ok = 0;
     let failed = 0;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const claimed: OutboxEntry[] = await db.transaction(async (tx: any) => {
+    const claimed: OutboxEntry[] = await db.transaction(async (tx: Tx) => {
       const rows = await tx
         .select()
         .from(outboxEntries)

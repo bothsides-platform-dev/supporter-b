@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { chatConversations } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ChatConversation, ChatConversationRepo, Tx } from '../types';
 
@@ -16,11 +15,10 @@ const CONVERSATION_COLUMNS = {
 } as const;
 
 export class DrizzleChatConversationRepository implements ChatConversationRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

@@ -1,15 +1,13 @@
 import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import { auditLogs, users } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import type { AuditLogCursor, AuditLogRecord, AuditLogRepo, NewAuditLog, Tx } from '../types';
 
 export class DrizzleAuditLogRepository implements AuditLogRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 
@@ -60,8 +58,7 @@ export class DrizzleAuditLogRepository implements AuditLogRepo {
       .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
       .limit(opts.limit);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return rows.map((r: any) => {
+    return rows.map((r) => {
       // actorEmail은 viaMaster 유도에만 쓰고 결과에서 제외한다 (운영자 이메일 비노출).
       const { actorEmail, ...rest } = r;
       return {

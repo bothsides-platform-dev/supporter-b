@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm';
 import { bizProfiles } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { BizProfileRepo, Tx } from '../types';
 
@@ -22,11 +21,10 @@ function rowToProfile(row: BizRow): BizProfile & { id: string } {
 }
 
 export class DrizzleBizProfileRepository implements BizProfileRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

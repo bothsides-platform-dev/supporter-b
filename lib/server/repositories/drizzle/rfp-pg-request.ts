@@ -1,6 +1,5 @@
 import { and, asc, eq, gt, notExists, sql } from 'drizzle-orm';
 import { rfps, rfpAllowedPg, rfpPgRequests, workspaces } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { PgRequest, PgRequestStatus, OpportunityListing } from '@/lib/types/pg-request';
 import type { PgRequestRepo, Tx } from '../types';
 
@@ -21,11 +20,10 @@ function rowToPgRequest(row: ReqRow): PgRequest {
 }
 
 export class DrizzleRfpRequestRepository implements PgRequestRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

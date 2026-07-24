@@ -1,6 +1,5 @@
 import { and, eq } from 'drizzle-orm';
 import { rfpTeamMessageReads } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { RfpTeamMessageRead, RfpTeamMessageReadRepo, Tx } from '../types';
 
 const READ_COLUMNS = {
@@ -11,10 +10,10 @@ const READ_COLUMNS = {
 } as const;
 
 export class DrizzleRfpTeamMessageReadRepository implements RfpTeamMessageReadRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any { return tx ?? this._db; }
+
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx { return tx ?? this._db; }
 
   async upsert(rfpId: string, workspaceId: string, userId: string, at: Date, tx?: Tx): Promise<void> {
     const db = this.h(tx);

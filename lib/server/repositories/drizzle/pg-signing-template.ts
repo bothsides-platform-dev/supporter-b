@@ -2,8 +2,8 @@ import { and, desc, eq } from 'drizzle-orm';
 import { pgSigningTemplates } from '@/lib/db/schema';
 import type { PgSigningTemplate } from '@/lib/types/signing';
 import type { PgSigningTemplateRepo, Tx } from '../types';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
+
+type Db = Tx;
 
 type Row = typeof pgSigningTemplates.$inferSelect;
 
