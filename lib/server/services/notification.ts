@@ -1,21 +1,15 @@
 import type { NotificationRepo, OutboxRepo, UserRepo } from '@/lib/server/repositories/types';
 import type { ServiceResult } from './types';
-import type { OutboxEvent } from '@/lib/server/outbox/types';
+import { OUTBOX_EVENTS, type OutboxEvent } from '@/lib/server/outbox/types';
 import {
   getNotificationRepo,
   getOutboxRepo,
   getUserRepo,
 } from '@/lib/server/repositories/factory';
 
-const ALLOWED_OUTBOX_EVENTS = new Set<string>([
-  'auth.verify',
-  'auth.reset',
-  'auth.email-change',
-  'rfp.invited',
-  'rfp.sent',
-  'bid.submitted',
-  'rfp.awarded',
-]);
+// outbox enum(런타임 튜플)에서 파생 — 손으로 나열하면 새 이메일 이벤트가
+// 재시도 불가(NO_EMAIL)로 조용히 빠진다 (requote 가 실제 그랬다).
+const ALLOWED_OUTBOX_EVENTS = new Set<string>(OUTBOX_EVENTS);
 
 type NotifActor = { userId: string };
 

@@ -472,4 +472,22 @@ describe('DrizzleOutboxRepository.findLatestFailed / requeue (retryEmail)', () =
     expect(row.attempts).toBe(5);
     expect(row.lastError).toBe('SMTP down');
   });
+
+  it('requeue 는 백오프로 미래에 밀린 scheduled_at 을 now 로 되돌린다 (수동 재시도 즉시 발송)', async () => {
+    const { db, repo } = await setup();
+    // 백오프가 1시간 뒤로 밀어둔 실패 행 — 리셋 없이는 그 시각까지 발송되지 않는다.
+    const future = new Date(Date.now() + 60 * 60 * 1000);
+    await seedFailed(db, { to: 'u@e.com', event: 'rfp.invited', scheduledAt: future });
+    const found = await repo.findLatestFailed({ to: 'u@e.com', event: 'rfp.invited' });
+
+    await repo.requeue(found!.id);
+
+    const [row] = await db
+      .select({ status: outboxEntries.status, scheduledAt: outboxEntries.scheduledAt })
+      .from(outboxEntries)
+      .where(eq(outboxEntries.id, found!.id));
+    expect(row.status).toBe('pending');
+    // now() 로 리셋 — 폴러의 scheduled_at <= now 조건에 즉시 걸린다 (5초 슬랙).
+    expect(new Date(row.scheduledAt).getTime()).toBeLessThanOrEqual(Date.now() + 5_000);
+  });
 });

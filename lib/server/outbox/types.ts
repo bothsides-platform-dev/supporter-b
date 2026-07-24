@@ -1,19 +1,26 @@
 export type OutboxStatus = 'pending' | 'sent' | 'failed';
 
-export type OutboxEvent =
-  | 'auth.verify'
-  | 'auth.reset'
-  | 'auth.email-change'
-  | 'rfp.invited'
-  | 'rfp.sent'
-  | 'bid.submitted'
-  | 'rfp.awarded'
-  | 'workspace.invited'
-  | 'workspace.approved'
-  | 'workspace.rejected'
-  | 'chat.message'
-  | 'team_chat.message'
-  | 'rfp.requote_requested';
+// 런타임 튜플이 SSOT — 타입은 여기서 파생한다. retryEmail 화이트리스트
+// (lib/server/services/notification.ts)가 이 튜플을 그대로 소비하므로,
+// 새 이벤트를 추가하면 재시도 허용 목록에 자동 반영된다(수동 나열 드리프트
+// 로 requote 재시도가 NO_EMAIL 로 죽던 계열의 재발 방지).
+export const OUTBOX_EVENTS = [
+  'auth.verify',
+  'auth.reset',
+  'auth.email-change',
+  'rfp.invited',
+  'rfp.sent',
+  'bid.submitted',
+  'rfp.awarded',
+  'workspace.invited',
+  'workspace.approved',
+  'workspace.rejected',
+  'chat.message',
+  'team_chat.message',
+  'rfp.requote_requested',
+] as const;
+
+export type OutboxEvent = (typeof OUTBOX_EVENTS)[number];
 
 export type OutboxEntry = {
   id: string;

@@ -16,6 +16,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import { issueCentrifugoConnectionToken } from '@/lib/server/realtime/token';
+import { resolveMaxInflight } from './_max-inflight';
 import type { Session } from 'next-auth';
 
 export const runtime = 'nodejs';
@@ -53,11 +54,9 @@ async function checkGates(session: Session, now: number): Promise<Gate> {
 // The counter is in-process = per PM2 instance, which matches the deployment
 // (single `next start`). Tune the cap relative to the Postgres pool size via
 // CENTRIFUGO_TOKEN_MAX_INFLIGHT after a reconnect-storm load test.
-const rawMaxInflight = process.env.CENTRIFUGO_TOKEN_MAX_INFLIGHT;
-const MAX_INFLIGHT =
-  rawMaxInflight !== undefined && rawMaxInflight !== ''
-    ? Number(rawMaxInflight)
-    : 25;
+// finite ≥ 0 가드 — malformed env 가 NaN 비교로 load-shed 를 조용히 끄지
+// 않도록 파싱은 _max-inflight.ts (단위 테스트 대상) 로 분리.
+const MAX_INFLIGHT = resolveMaxInflight(process.env.CENTRIFUGO_TOKEN_MAX_INFLIGHT);
 let inFlight = 0;
 
 export async function POST() {
