@@ -237,5 +237,25 @@ describe('resolveShellAccess — (app) shell auth guard contract', () => {
         ),
       ).toEqual({ kind: 'redirect', to: '/pending-approval' });
     });
+
+    // fail-closed: 컬럼은 CHECK 제약 없는 text 라 값이 드리프트할 수 있다.
+    // enum 밖 값은 approved 로 취급하지 말고 승인 대기로 보낸다
+    // (isApprovedAdmin 의 === 'approved' 방향과 일치).
+    it('enum 밖 드리프트 값 + 이메일 인증 완료 → /pending-approval (fail-closed)', () => {
+      expect(
+        resolveShellAccess(
+          { user: completeUser },
+          [
+            ws({
+              status: 'active',
+              memberApprovalStatus:
+                'Approved' as WorkspaceMembershipSummary['memberApprovalStatus'],
+            }),
+          ],
+          undefined,
+          true,
+        ),
+      ).toEqual({ kind: 'redirect', to: '/pending-approval' });
+    });
   });
 });

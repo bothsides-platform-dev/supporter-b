@@ -7,12 +7,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import { users } from '@/lib/db/schema';
+import { users, workspaces, workspaceMembers } from '@/lib/db/schema';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
 } from '@/lib/server/repositories/factory';
-import { fetchSessionVersion, fetchEmailVerified } from '../session-version-db';
+import {
+  fetchSessionVersion,
+  fetchEmailVerified,
+  fetchMemberApprovalStatus,
+} from '../session-version-db';
 
 let db: PgliteDB;
 
@@ -68,5 +72,50 @@ describe('fetchEmailVerified', () => {
     expect(
       await fetchEmailVerified('00000000-0000-4000-8000-000000000000'),
     ).toBe(false);
+  });
+});
+
+describe('fetchMemberApprovalStatus', () => {
+  async function seedMembership(
+    email: string,
+    approvalStatus?: 'approved' | 'pending_approval' | 'rejected',
+  ): Promise<{ userId: string; workspaceId: string }> {
+    const userId = await seedUser(email);
+    const [w] = await db
+      .insert(workspaces)
+      .values({ type: 'pg', name: 'PG Co', status: 'active' })
+      .returning({ id: workspaces.id });
+    await db.insert(workspaceMembers).values({
+      workspaceId: w.id,
+      userId,
+      role: 'admin',
+      ...(approvalStatus ? { approvalStatus } : {}),
+    });
+    return { userId, workspaceId: w.id };
+  }
+
+  it('컬럼 기본값 멤버는 approved 를 반환한다', async () => {
+    const { userId, workspaceId } = await seedMembership('m-default@example.com');
+    expect(await fetchMemberApprovalStatus(userId, workspaceId)).toBe('approved');
+  });
+
+  it('canonical-PG 합류 멤버는 pending_approval 을 반환한다', async () => {
+    const { userId, workspaceId } = await seedMembership(
+      'm-pending@example.com',
+      'pending_approval',
+    );
+    expect(await fetchMemberApprovalStatus(userId, workspaceId)).toBe(
+      'pending_approval',
+    );
+  });
+
+  it('멤버십 행이 없으면 null 을 반환한다', async () => {
+    const userId = await seedUser('m-none@example.com');
+    expect(
+      await fetchMemberApprovalStatus(
+        userId,
+        '00000000-0000-4000-8000-000000000000',
+      ),
+    ).toBeNull();
   });
 });
