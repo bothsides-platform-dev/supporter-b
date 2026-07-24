@@ -7,7 +7,6 @@ import {
   users as usersTable,
   bizProfiles,
 } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type {
   MemberApprovalStatus,
   Workspace,
@@ -54,8 +53,8 @@ function rowToUser(u: UserRow, m: MemberRow): User {
 }
 
 export class DrizzleWorkspaceRepository implements WorkspaceRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
+
+  constructor(private readonly _db: Tx) {}
 
   private h(tx?: Tx): Tx {
     return tx ?? this._db;
@@ -63,8 +62,8 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
 
   // Hydrate one workspace's members + biz profile with two cheap queries.
   // Inlined twice across finders would invite drift — kept private here.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async hydrate(db: any, ws: WsRow): Promise<Workspace> {
+
+  private async hydrate(db: Tx, ws: WsRow): Promise<Workspace> {
     const memberRows = (await db
       .select({ m: workspaceMembers, u: usersTable })
       .from(workspaceMembers)

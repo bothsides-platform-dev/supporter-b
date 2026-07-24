@@ -1,6 +1,5 @@
 import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { rfps, bizProfiles, rfpAllowedPg } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import {
   migrateCurrentTerms,
@@ -70,17 +69,16 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
 }
 
 export class DrizzleRfpRepository implements RfpRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 
   // Batched allowlist hydration — one query for all rfp ids (no N+1).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async allowedByRfp(db: any, rfpIds: string[]): Promise<Map<string, string[]>> {
+
+  private async allowedByRfp(db: Tx, rfpIds: string[]): Promise<Map<string, string[]>> {
     const map = new Map<string, string[]>();
     if (rfpIds.length === 0) return map;
     const rows = await db
@@ -96,8 +94,8 @@ export class DrizzleRfpRepository implements RfpRepo {
   }
 
   // Replace the allowlist join rows for one RFP with the given workspace ids.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async syncAllowlist(db: any, rfpId: string, pgWsIds: string[]): Promise<void> {
+
+  private async syncAllowlist(db: Tx, rfpId: string, pgWsIds: string[]): Promise<void> {
     await db.delete(rfpAllowedPg).where(eq(rfpAllowedPg.rfpId, rfpId));
     if (pgWsIds.length > 0) {
       // Dedupe to respect the (rfp_id, pg_ws_id) PK.
@@ -261,8 +259,7 @@ export class DrizzleRfpRepository implements RfpRepo {
     assertTransition(current.status, to);
 
     // Atomic update with `WHERE status=$prev` concurrency guard.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const setPatch: any = { status: to, updatedAt: new Date() };
+    const setPatch: Partial<typeof rfps.$inferInsert> = { status: to, updatedAt: new Date() };
     if (patch?.awardedBidId !== undefined) setPatch.awardedBidId = patch.awardedBidId;
     if (patch?.sentAt !== undefined)
       setPatch.sentAt = patch.sentAt ? new Date(patch.sentAt) : null;

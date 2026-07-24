@@ -92,9 +92,6 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### 미승인 PG 멤버의 인라인-게이트 API 라우트 잔여 노출 (P4)
 승인 게이트(2026-07-24, `isPgMembershipBlocked` — `requirePgSession` + `requireActiveWorkspace` 이중 배선으로 PG 전용 표면과 채팅·보드·계약 라이프사이클 등 양측 공용 액션까지 차단)가 닫고 남은 표면: `auth()`+3층 인라인 게이트를 직접 쓰는 공유 라우트(`app/api/files/presign`·`files/[id]/complete`, `centrifugo/connection-token`)와 세션 없는 server-to-server `centrifugo/subscribe`(멤버십 row 기준)는 `approval_status` 를 읽지 않는다. 실행 가능한 동작은 첨부 presign·WS 연결/구독 정도로 실익이 낮고(상태 변경 액션은 전부 게이트됨), connection-token 은 route-local TTL 캐시와의 staleness 트레이드오프가 있어 별도 판단 필요. (발견: 서버 데이터 경계 구현 중 2026-07-24 — 원 P2 항목의 잔여 분리, red-team 리뷰로 requireActiveWorkspace 갭 소급 종결)
 
-### repo 계층 쿼리빌더가 `any` — projection 드리프트 전면 미검출 (P2)
-`drizzle/*.ts` 34개 중 **29개가 `private h(tx?: Tx): any`** 이고, `Db` 를 쓰는 나머지도 `type Db = any` 별칭이라 결국 같다. 즉 이 계층의 모든 `.select({...})` projection 이 타입 미검사이며, select 에서 컬럼을 빼도 tsc 가 통과하고 런타임에 `undefined` 가 흐른다(v0.4.8.0 에서 F4 를 고치다 실측 확인 — 캐스트 제거만으로는 아무것도 잡히지 않았다). `workspace.ts` 는 `h(): Tx` 로 전환했고 **파일 전체 에러가 1건**뿐이었다(그 1건도 진짜 버그였다 — `addMember` 가 인터페이스의 `MemberApprovalStatus` 를 `string` 으로 넓힘). 나머지 28개 파일도 같은 방식으로 전환 가능해 보이며, 파일당 독립적이라 점진 적용된다. `[[project_drizzle-select-schema-drift]]` 와 같은 계열. (발견: F4 수정 중, v0.4.8.0)
-
 ## Storage / R2
 
 ### R2 고아 객체 sweeper (P3)

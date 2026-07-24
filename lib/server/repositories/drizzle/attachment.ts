@@ -1,6 +1,5 @@
-import { and, asc, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, inArray, isNull, lt } from 'drizzle-orm';
 import { attachments, chatMessages } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { Attachment } from '@/lib/types/common';
 import type { AttachmentRecord, AttachmentStatus } from '../attachment-record';
 import type { AttachmentRepo, Tx } from '../types';
@@ -32,11 +31,10 @@ function toPublicAttachment(row: AttachRow): Attachment {
 }
 
 export class DrizzleAttachmentRepository implements AttachmentRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 
@@ -89,7 +87,9 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
   async findByConversationId(conversationId: string, tx?: Tx): Promise<Attachment[]> {
     const db = this.h(tx);
     const rows: AttachRow[] = await db
-      .select({ ...attachments })
+      // 테이블 스프레드({ ...attachments })는 h(): any 시절에만 타입이 통과하던
+      // 형태 — 조인 셀렉트에서 한 테이블의 전 컬럼만 뽑는 정석은 getTableColumns.
+      .select(getTableColumns(attachments))
       .from(attachments)
       .innerJoin(chatMessages, eq(attachments.chatMessageId, chatMessages.id))
       .where(and(eq(chatMessages.conversationId, conversationId), eq(attachments.status, 'ready')))
