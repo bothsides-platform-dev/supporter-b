@@ -346,10 +346,12 @@ export class DrizzleOutboxRepository implements OutboxRepo {
 
   async requeue(id: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
-    // status 만 failed → pending. attempts/lastError 는 보존 (서비스 retryEmail 패턴).
+    // failed → pending + scheduled_at 리셋. 백오프가 미래로 밀어둔 행은 리셋
+    // 없이는 수동 재시도해도 그 시각까지 발송되지 않는다(폴러 조건이
+    // scheduled_at <= now). attempts/lastError 는 보존 (서비스 retryEmail 패턴).
     await db
       .update(outboxEntries)
-      .set({ status: 'pending' })
+      .set({ status: 'pending', scheduledAt: sql`now()` })
       .where(eq(outboxEntries.id, id));
   }
 }
