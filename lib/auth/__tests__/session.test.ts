@@ -13,18 +13,29 @@ vi.mock('@/auth', () => ({
 
 const getDbSessionVersionMock = vi.fn();
 const getDbEmailVerifiedMock = vi.fn();
+const getDbMemberApprovalStatusMock = vi.fn();
 vi.mock('@/lib/auth/session-version-db', () => ({
   getDbSessionVersion: (userId: string) => getDbSessionVersionMock(userId),
   getDbEmailVerified: (userId: string) => getDbEmailVerifiedMock(userId),
+  getDbMemberApprovalStatus: (userId: string, workspaceId: string) =>
+    getDbMemberApprovalStatusMock(userId, workspaceId),
 }));
 
-import { requireSession, isSessionRevoked, isEmailUnverified } from '../session';
+import {
+  requireSession,
+  requireBuyerSession,
+  requirePgSession,
+  isSessionRevoked,
+  isEmailUnverified,
+} from '../session';
 
 beforeEach(() => {
   authMock.mockReset();
   getDbSessionVersionMock.mockReset();
   getDbEmailVerifiedMock.mockReset();
+  getDbMemberApprovalStatusMock.mockReset();
   getDbEmailVerifiedMock.mockResolvedValue(true); // default: 인증 완료
+  getDbMemberApprovalStatusMock.mockResolvedValue('approved'); // default: 승인 완료
 });
 
 describe('requireSession — sessionVersion revocation', () => {
@@ -108,6 +119,73 @@ describe('requireSession — emailVerified gate', () => {
     getDbSessionVersionMock.mockResolvedValue(1);
     getDbEmailVerifiedMock.mockResolvedValue(true);
     await expect(requireSession()).resolves.toBe(session);
+  });
+});
+
+describe('requirePgSession — 멤버십 승인 게이트', () => {
+  const pgUser = {
+    id: 'u-1',
+    email: 'a@b.c',
+    sessionVersion: 1,
+    workspaceId: 'ws-pg',
+    workspaceType: 'pg',
+    role: 'admin',
+  };
+
+  beforeEach(() => {
+    getDbSessionVersionMock.mockResolvedValue(1);
+  });
+
+  it('approved 멤버는 세션을 반환한다', async () => {
+    const session = { user: pgUser };
+    authMock.mockResolvedValue(session);
+    getDbMemberApprovalStatusMock.mockResolvedValue('approved');
+    await expect(requirePgSession()).resolves.toBe(session);
+    expect(getDbMemberApprovalStatusMock).toHaveBeenCalledWith('u-1', 'ws-pg');
+  });
+
+  it('pending_approval 멤버(canonical-PG 합류 직후) → FORBIDDEN_PG', async () => {
+    authMock.mockResolvedValue({ user: pgUser });
+    getDbMemberApprovalStatusMock.mockResolvedValue('pending_approval');
+    await expect(requirePgSession()).rejects.toThrow('FORBIDDEN_PG');
+  });
+
+  it('rejected 멤버 → FORBIDDEN_PG', async () => {
+    authMock.mockResolvedValue({ user: pgUser });
+    getDbMemberApprovalStatusMock.mockResolvedValue('rejected');
+    await expect(requirePgSession()).rejects.toThrow('FORBIDDEN_PG');
+  });
+
+  it('멤버십 행이 없으면(null — stale JWT) → FORBIDDEN_PG (fail-closed)', async () => {
+    authMock.mockResolvedValue({ user: pgUser });
+    getDbMemberApprovalStatusMock.mockResolvedValue(null);
+    await expect(requirePgSession()).rejects.toThrow('FORBIDDEN_PG');
+  });
+
+  it('마스터 계정(synthetic admin, 멤버십 row 없음)은 승인 게이트를 우회한다', async () => {
+    const prev = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'ops@support-b.com';
+    try {
+      const session = {
+        user: { ...pgUser, email: 'ops@support-b.com' },
+      };
+      authMock.mockResolvedValue(session);
+      getDbMemberApprovalStatusMock.mockResolvedValue(null); // row 없음
+      await expect(requirePgSession()).resolves.toBe(session);
+      expect(getDbMemberApprovalStatusMock).not.toHaveBeenCalled();
+    } finally {
+      process.env.MASTER_ACCOUNT_EMAILS = prev;
+    }
+  });
+
+  it('requireBuyerSession 은 승인 상태를 읽지 않는다 (pending 을 만드는 경로가 PG 뿐)', async () => {
+    const session = {
+      user: { ...pgUser, workspaceId: 'ws-buyer', workspaceType: 'buyer' },
+    };
+    authMock.mockResolvedValue(session);
+    getDbMemberApprovalStatusMock.mockResolvedValue('pending_approval');
+    await expect(requireBuyerSession()).resolves.toBe(session);
+    expect(getDbMemberApprovalStatusMock).not.toHaveBeenCalled();
   });
 });
 
