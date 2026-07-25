@@ -62,7 +62,11 @@ surface-container-highest #E4E5E9               #202123
 
 **브라우저 크롬·PWA 색은 캔버스(`background`)를 따른다.** 모바일 상태바(`viewport.themeColor`, `app/layout.tsx`)와 PWA 스플래시(`theme_color`·`background_color`, `app/manifest.ts`)가 캔버스와 다르면 앱 진입 시 색이 튄다. 라이트 `#FFFFFF` / 다크 `#08090A`이며, web app manifest 는 라이트/다크 변형을 담지 못하므로 라이트 기준 단일값으로 고정한다. `app/__tests__/chrome-colors.test.ts` 가 `styles/tokens.css` 를 직접 읽어 일치를 고정하므로, 캔버스 토큰을 바꾸면 이 두 파일도 함께 갱신해야 한다.
 
-> 범위 주의: `themeColor` 는 `prefers-color-scheme`(OS 설정)으로만 분기하는 **정적** 선언이다. 앱의 인앱 테마 토글로 OS 설정과 다른 테마를 고르면 캔버스와 상태바가 어긋날 수 있는데, 이는 알고 둔 상태다 — 크롬 색을 런타임에 따라가게 하려면 테마 토글이 `<meta name="theme-color">` 를 함께 갱신해야 한다(TODOS.md ## Design 참조).
+> 크롬 색은 **런타임에 실효 테마를 따라간다.** `viewport.themeColor` 의 정적 선언은 `prefers-color-scheme`(OS 설정)으로만 분기하므로 그것만으로는 인앱 토글로 OS 와 다른 테마를 고른 사용자의 상태바가 캔버스와 어긋난다. `lib/theme/chrome-color.ts` 의 `syncChromeColor` 가 그 간극을 닫는다.
+>
+> 방식은 **media 없는 `<meta name="theme-color">` 하나를 `<head>` 맨 앞에 만들어 소유하는 것**이다. HTML 은 "tree order 상 `media` 가 매치되는 **첫** theme-color 태그"를 쓰므로, media 가 없어 항상 매치되는 태그를 맨 앞에 두면 뒤따르는 Next 의 media 스코프 태그 두 개를 항상 이긴다. 그 둘은 손대지 않은 채 JS 이전 첫 페인트·무JS 환경의 OS 기준 폴백으로 남는다. **Next 가 소유한 태그를 직접 덮어쓰면 안 된다** — 하이드레이션에서 React 가 서버 렌더 값과 달라진 태그를 매칭하지 못해 같은 name 의 스테일 태그를 되살린다(초안에서 theme-color 3개가 관측됐고, `e2e/theme-persistence.spec.ts` 의 "하이드레이션 후에도 …" 케이스가 이 회귀를 잠근다).
+>
+> 호출 지점은 둘이다: 테마 스토어의 단일 초크포인트 `applyTheme`(`lib/stores/theme.ts` — 명시 set·system resolve·matchMedia change·rehydrate 가 전부 여기로 모인다)과 `app/layout.tsx` 의 FOUC 방지 인라인 스크립트(하이드레이션 전 구간 담당, 번들 이전에 실행돼야 해 모듈을 import 할 수 없어 같은 로직이 인라인으로 한 벌 더 있다). 캔버스 hex 의 JS 사본은 `lib/theme/canvas-colors.ts` 하나이며, `app/__tests__/chrome-colors.test.ts` 가 tokens.css → `CANVAS_COLOR` → viewport/manifest 체인과 "layout·manifest 에 hex 리터럴 없음"을 함께 고정한다.
 
 ### 텍스트 · 보더
 | 토큰 | 라이트 | 다크 | 용도 |

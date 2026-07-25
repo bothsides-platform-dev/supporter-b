@@ -83,8 +83,24 @@ v0.4.12.0 이 `outline` 을 텍스트에서 걷어내면서 텍스트 색이 2�
 
 (발견: Design TODO 조사 2026-07-26 — 위 항목 ① 의 실제 원인)
 
-### 인앱 테마 토글이 브라우저 크롬 색을 안 따라감 (P3)
+### ~~인앱 테마 토글이 브라우저 크롬 색을 안 따라감 (P3)~~ — 해결 (v0.4.26.0)
+`lib/theme/chrome-color.ts` 의 `syncChromeColor` 를 테마 스토어의 단일 초크포인트 `applyTheme`(`lib/stores/theme.ts`)과 `app/layout.tsx` 의 FOUC 방지 인라인 스크립트 두 곳에서 호출한다. 스토어 쪽 한 지점으로 명시 set·`system` resolve·`matchMedia change`·rehydrate 네 갈래가 전부 덮이고, 인라인 스크립트가 하이드레이션 전 구간을 맡는다.
+
+**media 없는 태그 하나를 head 맨 앞에 만들어 소유한다.** HTML 은 "tree order 상 `media` 가 매치되는 **첫** theme-color 태그"를 쓰므로, 항상 매치되는 태그를 맨 앞에 두면 Next 의 media 스코프 태그 두 개를 늘 이긴다. 그 둘은 손대지 않고 JS 이전 첫 페인트·무JS 환경의 OS 기준 폴백으로 남는다.
+
+**처음 구현은 Next 의 두 태그를 직접 덮어썼고, e2e 가 그것을 잡았다.** 하이드레이션에서 React 가 서버 렌더 값과 달라진 태그를 매칭하지 못해 같은 name 의 태그를 하나 더 끼워 넣는다 — 실측으로 theme-color 가 3개(우리가 덮은 light/dark + React 가 되살린 스테일 light)가 됐다. React 가 소유한 노드를 건드리지 않는 것이 교훈이고, `e2e/theme-persistence.spec.ts` 의 "하이드레이션 후에도 크롬 색이 인앱 테마를 유지한다" 가 이 회귀를 잠근다. 유닛 테스트만으로는 절대 잡히지 않았을 종류다.
+
+**뷰 트랜지션은 훅하지 않았다.** `applyTheme` 안(t=0)에서 갱신한다. `transition.finished` 를 훅하면 크롬 갱신 경로가 둘로 갈리고, 폴백 3개(`startViewTransition` 부재·reduced-motion·`inFlight` 재진입)에 각각 호출을 달아야 한다. 크롬 색은 애니메이트되지 않으므로 얻는 것도 없다.
+
+**로직이 두 벌인 것은 의도다.** 인라인 스크립트는 번들 이전에 실행돼야 해서 `lib/theme/chrome-color.ts` 를 import 할 수 없다. 값은 양쪽 모두 `CANVAS_COLOR` 를 보간하므로 색 리터럴은 갈리지 않는다.
+
+부수 정리: 캔버스 hex 의 JS 사본을 `lib/theme/canvas-colors.ts` 하나로 모았다(이전엔 `app/layout.tsx`·`app/manifest.ts` 에 흩어져 있었다). `app/__tests__/chrome-colors.test.ts` 가 tokens.css → `CANVAS_COLOR` → viewport/manifest 체인과 "두 파일에 hex 리터럴 없음"을 함께 고정한다. (발견: /ship design 리뷰 2026-07-21 · 해결 v0.4.26.0)
+
+<details><summary>원문</summary>
+
 `app/layout.tsx` 의 `viewport.themeColor` 는 `prefers-color-scheme`(OS 설정)으로만 분기하는 정적 선언이라, 사용자가 인앱 테마 토글로 OS 와 다른 테마를 고르면 캔버스는 다크인데 모바일 상태바는 라이트(또는 반대)로 남는다. 값 자체는 캔버스 토큰과 일치하며(`app/__tests__/chrome-colors.test.ts` 가 고정), DESIGN.md §2 에 범위 한정 문구로 명문화해 둔 상태 — 기능 결함이 아니라 미구현 축이다. 닫는 법: 테마 스토어가 클래스를 토글할 때 `<meta name="theme-color">` 의 content 도 함께 갱신해 크롬이 실효 캔버스를 따라가게 한다. (발견: /ship design 리뷰 2026-07-21)
+
+</details>
 
 ### ~~AnimatedBrandMark 진입 애니메이션 — DESIGN.md 예외 미문서화 (P4)~~ — 해결 (v0.4.25.0, 문서만)
 이 항목이 열려 있는 동안 문서는 이미 따라잡혀 있었다. DESIGN.md §9 에 세 번째 예외 `> **예외 — 브랜드 마크 진입 (Brand Mark Entrance).**` 이 4조건(하드 로드 1회 · reduced-motion 정적 렌더 · `pathLength`/`fillOpacity` 만 구동 · 브랜드 컬러 단일)과 함께 명문화돼 있고, §9 의 하드룰 문장·닫는 문장과 §6 "로딩 모션", CLAUDE.md 의 Motion 항목이 모두 네 예외를 같은 순서로 열거한다. 4조건은 전부 `components/primitives/__tests__/AnimatedBrandMark.test.tsx` 10 테스트(SSOT 경로 · aria-hidden · reduced-motion 정적 렌더 · 엘리먼트 타입 무교체 · `pathLength` 0→1 · 타이밍 · 순수 `<path>` 정착 · dash 시작점 · `DRAW_PATH`↔`BRAND_MARK_PATH` 기하 동일성)가 잠근다.
