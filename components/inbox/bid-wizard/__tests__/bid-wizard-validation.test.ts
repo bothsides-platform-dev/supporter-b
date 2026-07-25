@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  deriveAnyFeeFilled,
   getBidWizardValidity,
   getFirstIncompleteBidStep,
   isCycleValid,
@@ -25,6 +26,50 @@ describe('isFeeFilled', () => {
 
   it('음수는 채워지지 않은 것으로 본다', () => {
     expect(isFeeFilled({ card: '-1' }, 'card')).toBe(false);
+  });
+});
+
+// 조합 축 — 스칼라 판정(isFeeFilled)이 아니라 "선택된 수단·구간·커스텀 수단을
+// 어떻게 순회하는가"를 고정한다. fees 키 규약: 구간제 수단은 `"<method>:<tier>"`,
+// 단일 수단·커스텀은 키 그대로.
+describe('deriveAnyFeeFilled', () => {
+  it('빈 fees·수단 없음 → false', () => {
+    expect(deriveAnyFeeFilled({}, [], [])).toBe(false);
+  });
+
+  it('구간제 수단은 여러 구간 중 하나만 채워져도 true', () => {
+    expect(deriveAnyFeeFilled({ 'card:sme2': '1.2' }, ['card'], [])).toBe(true);
+  });
+
+  it('구간제 수단에 구간 없는 평키만 채우면 false (키 규약 위반은 미입력)', () => {
+    expect(deriveAnyFeeFilled({ card: '1.2' }, ['card'], [])).toBe(false);
+  });
+
+  it('선택되지 않은 수단의 값은 무시된다', () => {
+    expect(deriveAnyFeeFilled({ 'card:sole': '0.8' }, ['virtual_account'], [])).toBe(false);
+    expect(deriveAnyFeeFilled({ virtual_account: '300' }, ['card'], [])).toBe(false);
+  });
+
+  it('비구간 단일 수단은 키 그대로 채우면 true', () => {
+    expect(deriveAnyFeeFilled({ virtual_account: '300' }, ['virtual_account'], [])).toBe(true);
+  });
+
+  it('커스텀 수단은 id 키로 채우면 true', () => {
+    expect(deriveAnyFeeFilled({ 'custom-1': '2.0' }, [], [{ id: 'custom-1' }])).toBe(true);
+  });
+
+  it('커스텀 수단이 있어도 값이 비면 false', () => {
+    expect(deriveAnyFeeFilled({ 'custom-1': '' }, [], [{ id: 'custom-1' }])).toBe(false);
+  });
+
+  it('여러 수단 중 하나라도 채워지면 true (음수·빈칸은 미입력)', () => {
+    expect(
+      deriveAnyFeeFilled(
+        { 'card:sole': '-1', virtual_account: '', 'custom-1': '0' },
+        ['card', 'virtual_account'],
+        [{ id: 'custom-1' }],
+      ),
+    ).toBe(true);
   });
 });
 

@@ -61,7 +61,9 @@ export function DeleteAccountSection() {
   };
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    // 버튼은 disabled 로 막히지만 Enter 는 버튼을 거치지 않는다 — 빈 비밀번호
+    // 제출은 여기서 한 번 더 막아야 한다(탈퇴는 비가역).
+    if (submitting || !password) return;
     setPasswordError('');
     setSubmitting(true);
 
