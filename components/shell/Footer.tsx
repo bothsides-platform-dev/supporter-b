@@ -69,7 +69,7 @@ export function Footer() {
               </span>
               {[
                 { label: '공지사항', href: '#' },
-                { label: '문의하기', href: 'mailto:support@supporter-b.io' },
+                { label: '문의하기', href: 'mailto:help@support-b.com' },
               ].map((link) => (
                 <a
                   key={link.label}
