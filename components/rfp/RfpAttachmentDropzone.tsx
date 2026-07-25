@@ -154,7 +154,9 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
             dragging ? 'bg-[var(--md-sys-color-surface-container-high)] border-[var(--md-sys-color-on-surface)]' : 'hover:border-[var(--md-sys-color-on-surface-variant)]',
           )}
         >
-          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+          {/* 지시문(주 톤·라벨 라지) / 힌트(보조 톤·라벨 스몰) 2단 —
+              같은 톤·크기로 붙으면 위계가 사라진다(DESIGN.md §2). */}
+          <p className="md-label-large text-[var(--md-sys-color-on-surface)]">
             파일을 끌어다 놓거나 클릭하여 첨부
           </p>
           <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)] mt-1">
