@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { describe, it, expect } from 'vitest';
@@ -62,5 +62,16 @@ describe('초대 서브트리 noindex 계약', () => {
   // 레이아웃 자체를 금지해 이 테스트가 거짓 안심을 주지 못하게 한다.
   it('noindex 를 덮어쓸 수 있는 중첩 레이아웃이 없다', () => {
     expect(collectNestedLayouts(INVITE_DIR)).toEqual([]);
+  });
+
+  // 중첩 레이아웃과 완전히 같은 구멍이 페이지 쪽에도 있다. Next 는 metadata 를
+  // 체인 따라 얕게 병합하므로, 하위 page 가 `robots` 를 직접 선언하면(정적
+  // metadata 든 generateMetadata 든) 부모 레이아웃 값을 덮어쓴다 — 그러면 위
+  // 세 단언은 전부 통과하면서 실제 페이지는 색인될 수 있다. 한쪽 문만 잠그면
+  // 오히려 거짓 안심을 주므로 같이 잠근다. 제목만 선언하는 것은 무해하니
+  // (robots 미지정 시 부모 값 유지) `robots` 만 좁게 본다.
+  it.each(PAGE_DIRS)('%s 페이지가 robots 를 스스로 선언하지 않는다', (dir) => {
+    const src = readFileSync(resolve(INVITE_DIR, dir, 'page.tsx'), 'utf8');
+    expect(src).not.toMatch(/robots/);
   });
 });
