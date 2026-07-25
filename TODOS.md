@@ -53,14 +53,45 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 
 **주의 — `lib/auth/route-decision.ts` 의 `/invite` 는 지우면 안 된다.** 그것은 bare 페이지용 등록이 아니라 `PUBLIC_PREFIXES` 의 **서브트리 프리픽스**이고, 실 초대 경로 두 개가 여기에 의존한다 — 빼면 비인증 방문자의 워크스페이스 초대 링크가 `/login?next=...` 로 튕긴다. 같은 이유로 `app/(public)/invite/layout.tsx` 도 남겼다: 하위 두 페이지가 자기 metadata 를 선언하지 않아 그 레이아웃이 **토큰 URL 의 유일한 noindex 출처**다(파일에 주석으로 명시). (발견: /ship 적대 리뷰 F14, 2026-07-22, v0.4.11.0 · 해결 v0.4.24.0)
 
-### 3차 텍스트 톤 소멸에 따른 위계 재설계 — 육안 확인 필요 (P3)
+### ~~3차 텍스트 톤 소멸에 따른 위계 재설계 — 육안 확인 필요 (P3)~~ — 해결 (v0.4.25.0, ①은 원인 이관)
+세 후보의 처리가 갈렸다.
+
+- **② 업로드 지시문 / 용량 힌트 (`BidStepProposal.tsx`·`RfpAttachmentDropzone.tsx`) — 고침.** 지시문을 `md-label-large` + `on-surface` 로 승격해 13px/주톤 위 11px/보조톤의 2축 단차를 만들었다. `md-label-large` 를 고른 근거는 크기 확보가 아니라 역할이다 — 두 요소 모두 실제 컨트롤(`<button>` / `role="button"`)의 라벨이고 DESIGN.md §3 이 Label Large 를 "버튼·nav·Chip"에 배정한다. 톤은 2단으로 유지했으므로 `WizardStepSidebar`·`PgProcessStepRail` 선례와 같은 문법이다. 두 파일 모두 "두 단이 같은 표기로 다시 붙으면 실패"하는 회귀 테스트로 잠갔다.
+- **③ `ProblemCard.tsx` 장식 숫자 — 고침.** `clamp(28px,4vw,44px)` → `clamp(18px,2vw,24px)`. 모든 뷰포트에서 자기 `h3`(`clamp(20px,2.8vw,30px)`)보다 작도록 잡았다(18<20 · 2vw<2.8vw · 24<30, 교차 없음). TODO 가 열어 둔 opacity 선택지는 **반려**했다 — DESIGN.md §12 가 `opacity-38` 을 disabled 전용으로 잡아 두어 같은 화면에서 반투명이 두 의미를 갖게 되고, 더 구조적으로는 대비 가드(`lib/design/__tests__/text-contrast.test.ts`)가 `tokens.css` 의 hex 를 읽어 비율을 계산하므로 합성색을 볼 수 없다. §2 가 색으로 만들기를 거부한 sub-AA 톤을, 하필 가드가 눈먼 지점에 만드는 셈이다. §2 의 처방("색이 아니라 타입스케일")이 곧 크기 축소다.
+- **① `CostComparisonChart.tsx:22/25` — 위계 문제가 아니었다.** 원인은 아래 "랜딩 `text-[var(--text-*)]`" 실버그이고, 그 항목으로 이관한다. 두 줄은 지금 조상 크기(14px)를 상속하고 색 토큰까지 덮여 있어 "같은 색·크기·서체"로 보였을 뿐이다. 애초에 둘은 같은 baseline 행의 좌측 차트 제목 / 우측 단위 주석이라 **동급이 맞다** — 위계를 세울 쌍이 아니라 공간 분리가 구분을 지는 쌍이다.
+
+(발견: /ship design 리뷰 2026-07-22, v0.4.11.0 · 해결 v0.4.25.0)
+
+<details><summary>원문</summary>
+
 v0.4.12.0 이 `outline` 을 텍스트에서 걷어내면서 텍스트 색이 2단(`on-surface`/`on-surface-variant`)으로 줄었다(같은 릴리스에서 라이트 `on-surface-variant` 를 `#5F646D` 로 어둡게 조정해 대비 자체는 전 표면 계층에서 AA 를 넘겼다 — 남은 것은 위계 문제다). AA 를 통과하면서 `on-surface-variant` 보다 옅은 색은 만들 수 없으므로(상한 L≤0.175 vs 실제 L=0.161) 그 아래 위계는 타입스케일로 만들어야 하는데, 스윕은 색만 올렸고 크기·굵기는 손대지 않았다. 명시적으로 접은 두 곳(`WizardStepSidebar` 라벨·`PgProcessStepRail` 제목 — 배지·도트가 상태를 대신 진다) 외에 리뷰가 지목한 잔여 후보: ① `components/landing/CostComparisonChart.tsx:25` 이어브로우와 단위 라벨이 같은 색·크기·서체가 됨, ② `BidStepProposal.tsx:57`·`RfpAttachmentDropzone.tsx:160` 의 "업로드 지시문 / 용량 힌트" 두 단이 한 톤으로 붙음, ③ `ProblemCard.tsx:13` 의 clamp(28–44px) 장식 숫자가 워터마크에서 읽히는 2차 요소로 바뀜(대형 텍스트라 AA 기준은 3:1 이므로 opacity 로 되돌릴 여지 있음). 전부 신뢰도 3–4 의 육안 판단 건이라 `/design-review` 로 실제 화면을 보고 결정한다. (발견: /ship design 리뷰 2026-07-22, v0.4.11.0)
+
+</details>
+
+### 랜딩 `text-[var(--text-*)]` 36곳이 폰트 크기를 적용하지 않고 색 토큰까지 덮는다 (P2)
+`components/landing/**` 36곳이 폰트 크기를 `text-[var(--text-2xs)]` 형태로 쓴다. 두 겹으로 깨져 있다.
+
+① **Tailwind v4 는 `text-[var(--x)]` 의 타입을 추론하지 못하고 무조건 `color:` 로 컴파일한다.** 빌드 산출물로 확인했다 — `.text-\[var\(--text-2xs\)\] { color: var(--text-2xs); }` (named `text-sm` 은 정상적으로 `font-size:` 를 낸다). 즉 36곳 전부 **폰트 크기가 한 번도 적용된 적이 없고** 조상 크기(body 14px)를 상속한다. ② **`--text-2xs`·`--text-md` 는 정의 자체가 없다** — `styles/tokens.css`·`app/globals.css`·Tailwind 기본 테마 어디에도 없다. `--text-xs/-sm/-base` 는 Tailwind 기본값으로 존재해 `color: 0.875rem` 같은 선언이 된다. 어느 쪽이든 computed-value 시점에 무효라 `color` 가 상속으로 떨어지고, 생성된 `.text-[var(--text-*)]` 규칙이 같은 레이어에서 `.text-[var(--md-sys-color-*)]` 보다 **뒤에** 와서 **의도한 색 토큰까지 조용히 덮는다.**
+
+원인은 토큰 삭제 고아다: `3108b3a3`("Korean Editorial Modernism 토큰 → MD3 교체", 2026-05-10)가 구 스케일(`--text-2xs:0.625rem` … `--text-md:0.875rem`)을 지웠는데 사용처가 남았다.
+
+**실제 대비 결함 3건**: `LandingNav.tsx:76` 헤더 CTA 의 `on-primary` 흰색이 덮여 파란 버튼 위 어두운 글자 · `CustomerTypesGrid.tsx:24`, `PgLanding.tsx:117` 의 primary 블루 강조 숫자가 본문 색으로 렌더.
+
+**수정 방침 (사용자 결정, 2026-07-26): 크기 변화 없이 간다.** 36곳을 현재 렌더 크기와 같은 `text-sm`(14px)으로 고정해 무효 유틸리티와 색 클로버만 고친다 — 시각 델타는 색 복구뿐. 구 스케일(10/12/14px 3단) 복원은 별건으로 분리하고 `/design-review` 시각 승인을 받는다. **`--text-xs/-sm/-base` 를 `@theme` 에서 재정의하면 안 된다** — 그 세 이름은 Tailwind 기본값(12/14/16px)이고 앱 면 29곳(랜딩엔 0곳)이 named 유틸리티로 그 값에 의존한다.
+
+**동반 가드**: `text-[var(--x)]` 의 var 가 색 토큰(`--md-sys-color-*`)이 아니면 실패하는 드리프트 가드를 `lib/design/__tests__/` 에 추가한다(`_source-scan.ts` 재사용, 접두어 SSOT 는 `design-hardrule-allowlist.mjs`). 주의 둘: 정식 표기 `text-[length:var(--md-typescale-*)]`(앱 20+곳)를 잡으면 안 되고, 클래스 리터럴은 반드시 `__tests__/` 안에만 둔다(`app/globals.css:12` 의 `@source not` 제외 대상 — 밖에 두면 Tailwind 스캐너가 읽어 `next dev` 가 500 으로 죽는다, `build` 는 exit 0 이라 CI 로 못 잡는다). 더 센 가드로 "className 안의 모든 `var(--x)` 가 정의돼 있는지" 검사하는 고아-변수 가드도 가능하다(전 레포 미정의 이름 14개뿐). 다만 착지 전 부수 수정 3건이 필요하다 — `--md-sys-color-surface-variant`(존재한 적 없는 토큰; `app/(public)/signup/pg/page.tsx:132`·`.../workspace/PgWorkspaceStep.tsx:95` 의 안내 박스에 배경이 없고 hover 가 죽어 있다), `components/ui/sidebar.tsx:484` 의 shadcn v3 잔재 `hsl(var(--sidebar-border))`, 그리고 인라인 `style` 로 주입되는 `--sidebar-width`/`--sidebar-width-icon` allowlist.
+
+(발견: Design TODO 조사 2026-07-26 — 위 항목 ① 의 실제 원인)
 
 ### 인앱 테마 토글이 브라우저 크롬 색을 안 따라감 (P3)
 `app/layout.tsx` 의 `viewport.themeColor` 는 `prefers-color-scheme`(OS 설정)으로만 분기하는 정적 선언이라, 사용자가 인앱 테마 토글로 OS 와 다른 테마를 고르면 캔버스는 다크인데 모바일 상태바는 라이트(또는 반대)로 남는다. 값 자체는 캔버스 토큰과 일치하며(`app/__tests__/chrome-colors.test.ts` 가 고정), DESIGN.md §2 에 범위 한정 문구로 명문화해 둔 상태 — 기능 결함이 아니라 미구현 축이다. 닫는 법: 테마 스토어가 클래스를 토글할 때 `<meta name="theme-color">` 의 content 도 함께 갱신해 크롬이 실효 캔버스를 따라가게 한다. (발견: /ship design 리뷰 2026-07-21)
 
-### AnimatedBrandMark 진입 애니메이션 — DESIGN.md 예외 미문서화 (P4)
-`components/primitives/AnimatedBrandMark.tsx`(v0.3.0.0, `SidebarBrand`가 인증 앱 셸에 마운트)의 1회성 SVG `pathLength`/`fillOpacity` draw-on 진입 연출이 DESIGN.md §9의 `(app)/**` 두 예외(축하 모먼트·테마 전환 리빌) 어디에도 명시되지 않았다(같은 릴리스 범위의 `.coachmark-pulse`는 예외로 문서화됨과 대비). 기능적 결함은 아님 — 세 번째 예외로 DESIGN.md에 명문화할지, `/design-review`로 하드룰 위반 여부를 재검토할지 정책 결정 필요. (발견: /ship 문서 동기화 점검, dev→main 릴리스 컷 2026-07-17)
+### ~~AnimatedBrandMark 진입 애니메이션 — DESIGN.md 예외 미문서화 (P4)~~ — 해결 (v0.4.25.0, 문서만)
+이 항목이 열려 있는 동안 문서는 이미 따라잡혀 있었다. DESIGN.md §9 에 세 번째 예외 `> **예외 — 브랜드 마크 진입 (Brand Mark Entrance).**` 이 4조건(하드 로드 1회 · reduced-motion 정적 렌더 · `pathLength`/`fillOpacity` 만 구동 · 브랜드 컬러 단일)과 함께 명문화돼 있고, §9 의 하드룰 문장·닫는 문장과 §6 "로딩 모션", CLAUDE.md 의 Motion 항목이 모두 네 예외를 같은 순서로 열거한다. 4조건은 전부 `components/primitives/__tests__/AnimatedBrandMark.test.tsx` 10 테스트(SSOT 경로 · aria-hidden · reduced-motion 정적 렌더 · 엘리먼트 타입 무교체 · `pathLength` 0→1 · 타이밍 · 순수 `<path>` 정착 · dash 시작점 · `DRAW_PATH`↔`BRAND_MARK_PATH` 기하 동일성)가 잠근다.
+
+이번에 실제로 고친 것은 **미문서화 마운트 지점 하나**다: `SidebarBrand` 는 랜딩 데모 셸(`components/landing/demo-app/DemoSidebar.tsx`)도 마운트하는데 §9 구현 노트에 없었다. 랜딩 면이지만 이 컴포넌트는 §9 "랜딩·마케팅 모션"의 reduced-motion 면제를 **취하지 않는다**는 사실도 함께 적었다(나중에 "최적화"로 그 가드가 지워지는 것을 막기 위해).
+
+**CLAUDE.md↔DESIGN.md 예외목록 드리프트 가드는 의도적으로 두지 않는다(YAGNI).** 이 항목이 스테일로 남아 막았을 실패는 *TODO 한 줄*이지 출하된 결함이 아니다. 문서 텍스트 테스트는 churn 대비 신호가 가장 낮아 — 한국어 문장을 다듬을 때마다 빨개지면 매처를 무의미해질 때까지 느슨하게 만드는 훈련이 된다. 기존 가드들(`mono-label-drift`·`outline-text-drift`·`text-contrast`)이 값을 하는 이유는 전부 **소스**를 걸으며 사람이 눈으로 검증할 수 없는 사실을 단언하기 때문이다. "네 예외" 개수 불일치는 10초면 눈에 띈다. (발견: /ship 문서 동기화 점검, dev→main 릴리스 컷 2026-07-17 · 해결 v0.4.25.0)
 
 ## SEO / Branding
 

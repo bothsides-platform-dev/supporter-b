@@ -382,8 +382,11 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 
 > **예외 — 브랜드 마크 진입 (Brand Mark Entrance).** 인증 앱 셸의 브랜드 마크는
 > 마운트 시 1회성 SVG draw-on(외곽선을 그린 뒤 fill 페이드) 연출을 허용한다.
-> 구현: `components/primitives/AnimatedBrandMark.tsx` ← `components/shell/SidebarBrand.tsx`,
-> `components/primitives/Logo.tsx`(`animated` 옵트인 — 랜딩 헤더). 인정 조건:
+> 구현: `components/primitives/AnimatedBrandMark.tsx` ← `components/shell/SidebarBrand.tsx`
+> (인증 앱 셸, 그리고 랜딩 데모 셸 `components/landing/demo-app/DemoSidebar.tsx` 가 같은
+> 컴포넌트를 마운트한다 — 랜딩 면이지만 아래 ②의 reduced-motion 정적 렌더를 그대로 지키며
+> §9 "랜딩·마케팅 모션"의 면제를 취하지 않는다),
+> `components/primitives/Logo.tsx`(`animated` 옵트인 — 랜딩 헤더 `components/landing/LandingHeader.tsx`). 인정 조건:
 > ① 하드 로드(새로고침·최초 진입)에서만 재생 — 클라이언트 라우트 전환은 셸을
 >    리마운트하지 않으므로 반복 발화하지 않는다,
 > ② `prefers-reduced-motion: reduce` 시 애니메이션 없이 정적 렌더(`BrandMark`와 동일 결과),
